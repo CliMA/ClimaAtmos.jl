@@ -466,14 +466,14 @@ function edmfx_sgs_diffusive_flux_tendency!(
         end
 
         cloud_tracers = (
-            (@name(c.ρq_liq), @name(q_liq)),
-            (@name(c.ρq_ice), @name(q_ice)),
-            (@name(c.ρn_liq), @name(n_liq)),
+            (@name(c.ρq_liq), @name(q_liq), @name(c.sgsʲs.:(1).q_liq)),
+            (@name(c.ρq_ice), @name(q_ice), @name(c.sgsʲs.:(1).q_ice)),
+            (@name(c.ρn_liq), @name(n_liq), @name(c.sgsʲs.:(1).n_liq)),
         )
         precip_tracers = (
-            (@name(c.ρq_rai), @name(q_rai)),
-            (@name(c.ρq_sno), @name(q_sno)),
-            (@name(c.ρn_rai), @name(n_rai)),
+            (@name(c.ρq_rai), @name(q_rai), @name(c.sgsʲs.:(1).q_ice)),
+            (@name(c.ρq_sno), @name(q_sno), @name(c.sgsʲs.:(1).q_sno)),
+            (@name(c.ρn_rai), @name(n_rai), @name(c.sgsʲs.:(1).n_rai)),
         )
 
         α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
@@ -482,19 +482,42 @@ function edmfx_sgs_diffusive_flux_tendency!(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
-        MatrixFields.unrolled_foreach(cloud_tracers) do (ρχ_name, χ_name)
+        n = n_mass_flux_subdomains(turbconv_model)
+
+        MatrixFields.unrolled_foreach(cloud_tracers) do (ρχ_name, χ_name, χʲ_name)
             MatrixFields.has_field(Y, ρχ_name) || return
-            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))))
+
             ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+            for j in 1:n
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                @. ᶜρχₜ_diffusion =
+                    ᶜdivᵥ_ρq(-(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜχʲ)))
+                @. ᶜρχₜ -= ᶜρχₜ_diffusion
+            end
+
+            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜχ⁰)))
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
-        MatrixFields.unrolled_foreach(precip_tracers) do (ρχ_name, χ_name)
+        MatrixFields.unrolled_foreach(precip_tracers) do (ρχ_name, χ_name, χʲ_name)
             MatrixFields.has_field(Y, ρχ_name) || return
-            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-            @. ᶜρχₜ_diffusion =
-                ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_tracer * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))))
+
             ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+            for j in 1:n
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
+                    -(
+                        ᶠinterp(Y.c.sgsʲs.:($$j).ρa) * ᶠinterp(ᶜK_h) *
+                        α_vert_diff_tracer * ᶠgradᵥ(ᶜχʲ)
+                    ),
+                )
+                @. ᶜρχₜ -= ᶜρχₜ_diffusion
+            end
+
+            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
+                -(ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h) * α_vert_diff_tracer * ᶠgradᵥ(ᶜχ⁰)),
+            )
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
 
