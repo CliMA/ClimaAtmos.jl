@@ -6,6 +6,25 @@ import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
 import ClimaCore: Geometry
 
+function smagorinsky_mixing_length(Y, p)
+    c_s = CAP.c_smag(p.params)
+    # For equal spacings, L = c_s Δ
+    # For unequal spacings, Deardorff employed an equivalent length scale Δ_eq = (Δx Δy Δz)^(1/3)
+    # For highly anisotropic grids, we follow Scotti 1993, which suggests
+    # L = c_s Δ_eq * f(a_1, a_2), where a_1 = Δ_1 / Δ_max, a_2 = Δ_2 / Δ_max, and
+    h_space = Spaces.horizontal_space(axes(Y.c))
+    Δx = Δy = Spaces.node_horizontal_length_scale(h_space) # scalar value TODO: Get Δx and Δy separately?
+    Δ_max = max(Δx, Δy)
+    ᶜΔz = Fields.Δz_field(Y.c)
+    a₁ = @. lazy(ᶜΔz / Δ_max)
+    a₂ = min(Δx, Δy) / Δ_max  # isotropic in horizontal
+    f = @. lazy(cosh(√(4//27 * (log(a₁)^2 - log(a₁) * log(a₂) + log(a₂)^2))))  # Scotti 1993, Eq 19
+
+    Δ_eq = @. lazy(∛(Δx * Δy * ᶜΔz))
+    L = @. lazy(c_s * Δ_eq * f)  # Smagorinsky mixing length
+    return L
+end
+
 """
     set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
@@ -27,8 +46,8 @@ These quantities are computed for both cell centers and faces, with prefixes `�
 """
 function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
-    (; atmos, precomputed, scratch, params) = p
-    c_smag = CAP.c_smag(params)
+    (; precomputed, scratch, params) = p
+    # c_smag = CAP.c_smag(params)
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(params))
     (; ᶜu, ᶠu³, ᶜts, ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶠD_smag) = precomputed
     FT = eltype(Y)
@@ -69,16 +88,17 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
     ᶜS_norm = @. ᶜtemp_scalar_2 = √(2 * CA.norm_sqr(ᶜS))
 
     ᶜRi = @. ᶜtemp_scalar = ᶜN² / (ᶜS_norm^2 + eps(FT))  # Ri = N² / |S|²
-    ᶜfb = @. ᶜtemp_scalar = ifelse(ᶜRi ≤ 0, 1, max(0, 1 - ᶜRi / Pr_t)^(1 / 4))
+    # ᶜfb = @. ᶜtemp_scalar = ifelse(ᶜRi ≤ 0, 1, max(0, 1 - ᶜRi / Pr_t)^(1 / 4))
 
     # filter scale
-    h_space = Spaces.horizontal_space(axes(Y.c))
-    Δ_xy = Spaces.node_horizontal_length_scale(h_space)^2 # Δ_x * Δ_y
-    ᶜΔ_z = Fields.Δz_field(Y.c)
-    ᶜΔ = @. ᶜtemp_scalar = ∛(Δ_xy * ᶜΔ_z) * ᶜfb
+    # h_space = Spaces.horizontal_space(axes(Y.c))
+    # Δ_xy = Spaces.node_horizontal_length_scale(h_space)^2 # Δ_x * Δ_y
+    # ᶜΔ_z = Fields.Δz_field(Y.c)
+    # ᶜΔ = @. ᶜtemp_scalar = ∛(Δ_xy * ᶜΔ_z) * ᶜfb
 
     # Smagorinsky-Lilly eddy viscosity
-    ᶜνₜ = @. ᶜtemp_scalar = c_smag^2 * ᶜΔ^2 * ᶜS_norm
+    L = smagorinsky_mixing_length(Y, p)
+    ᶜνₜ = @. ᶜtemp_scalar = L^2 * ᶜS_norm
     ᶠνₜ = @. ᶠtemp_scalar = ᶠinterp(ᶜνₜ)
 
     # Subgrid-scale momentum flux tensor, `τ = -2 νₜ ∘ S`
