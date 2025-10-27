@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.6"
+julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "12784bf0b21aee2b4075f2bb64383303b89e8560"
+project_hash = "610e513af36f873a952c1e4776e8b8f675aeeb31"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "27cecae79e5cc9935255f90c53bb831cc3c870d7"
@@ -2622,7 +2622,9 @@ version = "1.0.2"
 
 [[deps.Thermodynamics]]
 deps = ["DocStringExtensions", "ForwardDiff", "KernelAbstractions", "Random", "RootSolvers"]
-git-tree-sha1 = "bae39665e42c36e2e6bf5b814631915ec7d90232"
+git-tree-sha1 = "95ce218c3435a3fbc2133b7951392da51c39ebe5"
+repo-rev = "zs/remove_ft"
+repo-url = "https://github.com/CliMA/Thermodynamics.jl.git"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 version = "0.15.0"
 weakdeps = ["ClimaParams"]
