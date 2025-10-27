@@ -39,7 +39,8 @@ function edmfx_sgs_mass_flux_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_sgsflux_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; edmfx_upwinding, tracer_upwinding) = p.atmos.numerics
+    # (; edmfx_sgsflux_upwinding, tracer_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
@@ -65,59 +66,75 @@ function edmfx_sgs_mass_flux_tendency!(
             ),
         )
         for j in 1:n
-            @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
+            @. ᶠu³_diff = ᶠu³ʲs.:($$j)
+            # @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
             @. ᶜa_scalar =
-                (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot) *
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j)) #*
+            # (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot) *
+            # draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
             vtt = vertical_transport(
-                ᶜρʲs.:($j),
+                Y.c.sgsʲs.:($j).ρa,
+                # ᶜρʲs.:($j),
                 ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
-                edmfx_sgsflux_upwinding,
+                edmfx_upwinding,
+                # edmfx_sgsflux_upwinding,
             )
             @. Yₜ.c.ρe_tot += vtt
         end
         # Add the environment fluxes
-        @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
+        @. ᶠu³_diff = ᶠu³⁰
+        # @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
         ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-        @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
+        @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰) #* draft_area(ᶜρa⁰, ᶜρ⁰)
+        # @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
         vtt = vertical_transport(
-            ᶜρ⁰,
+            ᶜρa⁰,
+            # ᶜρ⁰,
             ᶠu³_diff,
             ᶜa_scalar,
             dt,
-            edmfx_sgsflux_upwinding,
+            edmfx_upwinding,
+            # edmfx_sgsflux_upwinding,
         )
         @. Yₜ.c.ρe_tot += vtt
 
         if !(p.atmos.moisture_model isa DryModel)
             # Specific humidity fluxes: First sum up the draft fluxes
             for j in 1:n
-                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
+                @. ᶠu³_diff = ᶠu³ʲs.:($$j)
+                # @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                 @. ᶜa_scalar =
-                    (Y.c.sgsʲs.:($$j).q_tot - specific(Y.c.ρq_tot, Y.c.ρ)) *
-                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                    (Y.c.sgsʲs.:($$j).q_tot) #*
+                # (Y.c.sgsʲs.:($$j).q_tot - specific(Y.c.ρq_tot, Y.c.ρ)) *
+                # draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                 vtt = vertical_transport(
-                    ᶜρʲs.:($j),
+                    Y.c.sgsʲs.:($j).ρa,
+                    # ᶜρʲs.:($j),
                     ᶠu³_diff,
                     ᶜa_scalar,
                     dt,
-                    edmfx_sgsflux_upwinding,
+                    edmfx_upwinding,
+                    # edmfx_sgsflux_upwinding,
                 )
                 @. Yₜ.c.ρq_tot += vtt
             end
             # Add the environment fluxes
             ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-            @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
+            @. ᶠu³_diff = ᶠu³⁰
+            # @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar =
-                (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
+                (ᶜq_tot⁰) #* draft_area(ᶜρa⁰, ᶜρ⁰)
+            # (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
-                ᶜρ⁰,
+                ᶜρa⁰,
+                # ᶜρ⁰,
                 ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
-                edmfx_sgsflux_upwinding,
+                edmfx_upwinding,
+                # edmfx_sgsflux_upwinding,
             )
             @. Yₜ.c.ρq_tot += vtt
         end

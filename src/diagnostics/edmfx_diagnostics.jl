@@ -128,9 +128,9 @@ function compute_taup!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.air_temperature.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        return 0 .* TD.air_temperature.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     else
-        out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        out .= 0 .* TD.air_temperature.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     end
 end
 

@@ -129,12 +129,17 @@ add_diagnostic_variable!(
     standard_name = "air_temperature",
     units = "K",
     compute! = (out, state, cache, time) -> begin
-        thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
-            return TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
+            return (cache.precomputed.ᶜρʲs.:(1) .- state.c.ρ) #./ 5e-6
         else
-            out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
+            out .= (cache.precomputed.ᶜρʲs.:(1) .- state.c.ρ) #./ 5e-6
         end
+        # thermo_params = CAP.thermodynamics_params(cache.params)
+        # if isnothing(out)
+        #     return TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
+        # else
+        #     out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
+        # end
     end,
 )
 
