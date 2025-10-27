@@ -1,4 +1,10 @@
-## Installation instructions
+## Installing Julia
+
+ClimaAtmos is provided as a Julia package, so it requires having Julia installed. Information about Julia packages is available on the [Julia website](https://julialang.org).
+
+First, download and install Julia by following the instructions at [https://julialang.org/downloads/](https://julialang.org/downloads/). Then, you can launch a Julia REPL by running `$ julia --project`
+
+## Installing ClimaAtmos.jl
 
 ClimaAtmos.jl is a [registered Julia package](https://julialang.org/packages/). To install
 
@@ -38,3 +44,12 @@ The following terms are frequently used within the source code and between colla
        conditions, precipitation fluxes), atmospheric model configurations, and
        slab model properties.
 - `t`: Current simulation time.
+
+The state `Y` is not assigned by default. If you want to explore the state variable, you can follow the steps below. Note that all but the last step below are executed by the [driver](.buildkite/ci_driver.jl).
+
+```Julia
+import ClimaAtmos as CA
+config = CA.AtmosConfig([your_path_to_config_file])
+simulation = CA.get_simulation(config)
+Y = simulation.integrator.u
+```
