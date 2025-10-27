@@ -39,7 +39,7 @@ function edmfx_sgs_mass_flux_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; tracer_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; edmfx_upwinding, tracer_upwinding) = p.atmos.numerics
     # (; edmfx_sgsflux_upwinding, tracer_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
@@ -78,7 +78,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
-                tracer_upwinding,
+                edmfx_upwinding,
                 # edmfx_sgsflux_upwinding,
             )
             @. Yₜ.c.ρe_tot += vtt
@@ -95,7 +95,7 @@ function edmfx_sgs_mass_flux_tendency!(
             ᶠu³_diff,
             ᶜa_scalar,
             dt,
-            tracer_upwinding,
+            edmfx_upwinding,
             # edmfx_sgsflux_upwinding,
         )
         @. Yₜ.c.ρe_tot += vtt
@@ -115,7 +115,7 @@ function edmfx_sgs_mass_flux_tendency!(
                     ᶠu³_diff,
                     ᶜa_scalar,
                     dt,
-                    tracer_upwinding,
+                    edmfx_upwinding,
                     # edmfx_sgsflux_upwinding,
                 )
                 @. Yₜ.c.ρq_tot += vtt
@@ -133,7 +133,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
-                tracer_upwinding,
+                edmfx_upwinding,
                 # edmfx_sgsflux_upwinding,
             )
             @. Yₜ.c.ρq_tot += vtt
