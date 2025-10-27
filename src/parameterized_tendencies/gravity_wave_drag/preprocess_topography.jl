@@ -171,8 +171,6 @@ function _diagnostics(datafile_rll)
         yreversed = false,
     )
 
-    # @Main.infiltrate
-
     CairoMakie.save(joinpath(output_dir, "diagnostics.png"), fig)
 end
 
@@ -180,8 +178,6 @@ if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()
     config = CA.AtmosConfig(config_file; job_id)
 end
-
-# simulation = CA.get_simulation(config)
 
 sim_info = CA.get_sim_info(config)
 params = CA.ClimaAtmosParameters(config)
@@ -228,6 +224,3 @@ datafile_cg, weightfile = _save_nc_data(output_filename, topo_cg, spaces)
 
 datafile_rll = _remap_nc_data()
 _diagnostics(datafile_rll)
-
-# after saving the HDF5 files, load the HDF5 output and do a remapping
-# For this, we need ...
