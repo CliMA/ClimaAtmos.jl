@@ -57,26 +57,26 @@ function set_precipitation_velocities!(
     thp = CAP.thermodynamics_params(p.params)
 
     # compute the precipitation terminal velocity [m/s]
-    @. ᶜwᵣ = CM1.terminal_velocity(
+    @. ᶜwᵣ = 0*CM1.terminal_velocity(
         cmp.pr,
         cmp.tv.rain,
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
     )
-    @. ᶜwₛ = CM1.terminal_velocity(
+    @. ᶜwₛ = 0*CM1.terminal_velocity(
         cmp.ps,
         cmp.tv.snow,
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_sno / Y.c.ρ),
     )
     # compute sedimentation velocity for cloud condensate [m/s]
-    @. ᶜwₗ = CMNe.terminal_velocity(
+    @. ᶜwₗ = 0*CMNe.terminal_velocity(
         cmc.liquid,
         cmc.Ch2022.rain,
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_liq / Y.c.ρ),
     )
-    @. ᶜwᵢ = CMNe.terminal_velocity(
+    @. ᶜwᵢ = 0*CMNe.terminal_velocity(
         cmc.ice,
         cmc.Ch2022.small_ice,
         Y.c.ρ,

@@ -37,11 +37,14 @@ using JLD2
 using NCDatasets
 using ClimaTimeSteppers
 using Test
+using CUDA
 import Tar
 import Base.Filesystem: rm
 import Statistics: mean
 import LinearAlgebra: norm_sqr, diag, UniformScaling
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
+
+CUDA.set_runtime_version!
 
 ref_job_id = config.parsed_args["reference_job_id"]
 reference_job_id = isnothing(ref_job_id) ? simulation.job_id : ref_job_id

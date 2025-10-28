@@ -74,7 +74,8 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLill
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
 
     ## Momentum tendencies
-    ᶜS_norm = projected_strain_rate_norm(ᶜS, Geometry.UVAxis())
+    ᶜS_proj = @. lazy(Geometry.project((Geometry.UVAxis(),), ᶜS, (Geometry.UVAxis(),)))
+    ᶜS_norm = @. lazy(√(2 * norm_sqr(ᶜS_proj)))
     @. p.precomputed.ᶜstrain_rate_norm_h = ᶜS_norm  # save to diagnostics
 
     # Smagorinsky eddy viscosity
@@ -134,7 +135,8 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     )
 
     ## Momentum tendencies
-    ᶜS_norm = projected_strain_rate_norm(ᶜS, Geometry.WAxis())
+    ᶜS_proj = @. lazy(Geometry.project((Geometry.WAxis(),), ᶜS, (Geometry.WAxis(),)))
+    ᶜS_norm = @. lazy(√(2 * norm_sqr(ᶜS_proj)))
     @. p.precomputed.ᶜstrain_rate_norm_v = ᶜS_norm  # save to diagnostics
 
     # Smagorinsky eddy viscosity

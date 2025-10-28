@@ -1308,7 +1308,8 @@ function make_plots(
         "wa", "ua", "va", "ta", "thetaa", "ha", "hus", "hur", "cl", "clw", "cli",
         "Dh_smag", "dtmaxh_smag", "strainrateh_smag",  # smag horizontal
         "Dv_smag", "dtmaxv_smag", "strainratev_smag",  # smag vertical
-        "edt"  # DecayWithHeight vertical diffusivity
+        "edt",  # DecayWithHeight vertical diffusivity
+        "husra", "hussn" # precip
     ]
     short_names = short_names ∩ collect(keys(simdirs[1].vars))
 

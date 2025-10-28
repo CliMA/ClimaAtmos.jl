@@ -1,0 +1,69 @@
+reference_job_id: les_box  # for plotting
+surface_setup: DefaultMoninObukhov
+output_dir: "/glade/derecho/scratch/oalcabes/rce_tests"
+surface_temperature: RCEMIPII
+insolation: rcemipii
+config: box
+rad: allskywithclear
+co2_model: fixed
+approximate_linear_solve_iters: 2  # only valid when implicit_diffusion=true
+rayleigh_sponge: true
+# diffusion
+smagorinsky_vertical: false
+smagorinsky_horizontal: true
+hyperdiff: "false"  # check w/ Tapio if this should be off (Anna: should be correct)
+implicit_diffusion: true  # this is the default. Check w/ Tapio if this should be true. (Anna: should be correct)
+
+# Reference diffusion setup
+vert_diff: "DecayWithHeightDiffusion"
+# hyperdiff: "true"
+
+# microphysics
+moist: nonequil
+precip_model: 1M #nothing #2M
+cloud_model: grid_scale
+# spatial discretization
+# x_max: 96000.0  # 96km
+# y_max: 96000.0  # 96km
+x_max: 48000.0  # 96km
+y_max: 48000.0  # 96km
+z_max: 30000.0  # 30km
+nh_poly: 3  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
+x_elem: 8
+y_elem: 8
+z_elem: 43  # Note: Set sponge height (`zd_viscous`) in toml file to cover top ~5 points
+dz_bottom: 30.0
+# Time
+dt: 2secs  # limited by horizontal soundwaves (treated explicitly) ~ x_max / Nh / x_elem / 343m/s
+t_end: 5days
+
+## >> During debugging, reduce these as appropriate
+dt_save_state_to_disk: 1days
+dt_rad: 1hours  # same as `dt_save_state_to_disk` for reproducibility
+check_nan_every: 1  # for debugging: set to check NaNs every `n` iterations
+log_to_file: true
+## <<
+
+toml: [toml/rcemipii_box.toml]
+
+# enable_diagnostics: false
+output_default_diagnostics: false  # adds various 1h diagnostics. Only use if `dt_save_state_to_disk` is a multiple of 1hr
+diagnostics:
+  - short_name: [
+      wa, ua, va, ta, thetaa, ha, # dynamics & thermodynamics
+      hus, hur, cl, clw, cli, lwp, clivi, # liquid
+      pr,  # precipitation
+      ke,  # kinetic energy for spectrum
+      # Smagorinsky diagnostics
+      Dh_smag, strainrateh_smag, dtmaxh_smag,  # horizontal
+      # Dv_smag, strainratev_smag, dtmaxv_smag,  # vertical
+      # DecayWithHeight diffusion coefficient
+      edt,
+    ]
+    period: 1hours
+  # 1M microphsics
+  - short_name: [husra, hussn]
+    period: 1hours
+  # 2M microphysics
+  # - short_name: [cdnc, ncra]
+  #   period: 10mins
