@@ -7,7 +7,6 @@ implicit_diffusion: true
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 1
-edmfx_upwinding: "first_order"
 rayleigh_sponge: true
 edmfx_entr_model: "PiGroups"
 edmfx_detr_model: "PiGroups"

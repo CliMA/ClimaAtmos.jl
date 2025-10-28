@@ -13,7 +13,6 @@ max_newton_iters_ode: 3
 use_auto_jacobian: true
 update_jacobian_every: dt
 debug_jacobian: true
-edmfx_upwinding: "first_order"
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
