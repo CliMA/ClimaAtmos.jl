@@ -344,6 +344,46 @@ add_diagnostic_variable!(
 )
 
 ###
+# Smagorinsky Lilly diffusivity
+###
+add_diagnostic_variable!(
+    short_name = "Dh_smag",
+    long_name = "Horizontal smagorinsky diffusivity",
+    units = "m^2 s^-1",
+    compute! = (out, _, cache, _) -> begin
+        (; ᶜD_h) = cache.precomputed
+        isnothing(out) ? copy(ᶜD_h) : (out .= ᶜD_h)
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "Dv_smag",
+    long_name = "Vertical smagorinsky diffusivity",
+    units = "m^2 s^-1",
+    compute! = (out, _, cache, _) -> begin
+        (; ᶜD_v) = cache.precomputed
+        isnothing(out) ? copy(ᶜD_v) : (out .= ᶜD_v)
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "strainh_smag",
+    long_name = "Horizontal strain rate magnitude (for Smagorinsky)",
+    units = "s",
+    compute! = (out, state, cache, _) -> begin
+        (; ᶜS_norm_h) = cache.precomputed
+        isnothing(out) ? copy(ᶜS_norm_h) : (out .= ᶜS_norm_h)
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "strainv_smag",
+    long_name = "Vertical strain rate magnitude (for Smagorinsky)",
+    units = "s",
+    compute! = (out, state, cache, _) -> begin
+        (; ᶜS_norm_v) = cache.precomputed
+        isnothing(out) ? copy(ᶜS_norm_v) : (out .= ᶜS_norm_v)
+    end,
+)
+
+###
 # Relative humidity (3d)
 ###
 compute_hur!(out, state, cache, time) =

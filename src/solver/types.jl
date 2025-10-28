@@ -239,7 +239,48 @@ Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
 end
 
 abstract type AbstractEddyViscosityModel end
-struct SmagorinskyLilly <: AbstractEddyViscosityModel end
+"""
+    SmagorinskyLilly{AXES}
+
+Smagorinsky-Lilly eddy viscosity model.
+
+`AXES` is a symbol indicating along which axes the model is applied. It can be
+- `:UVW` (all axes)
+- `:UV` (horizontal axes)
+- `:W` (vertical axis)
+"""
+struct SmagorinskyLilly{AXES} <: AbstractEddyViscosityModel end
+
+"""
+    is_smagorinsky_UVW_coupled(model)
+
+Check if the Smagorinsky model is coupled in all directions.
+"""
+is_smagorinsky_UVW_coupled(::SmagorinskyLilly{AXES}) where {AXES} = AXES == :UVW
+is_smagorinsky_UVW_coupled(::Nothing) = false
+
+"""
+    is_smagorinsky_vertical(model)
+
+Check if the Smagorinsky model is applied in the vertical direction.
+
+See also [`is_smagorinsky_horizontal`](@ref).
+"""
+is_smagorinsky_vertical(::SmagorinskyLilly{AXES}) where {AXES} =
+    AXES == :UVW
+is_smagorinsky_vertical(::Nothing) = false
+
+"""
+    is_smagorinsky_horizontal(model)
+
+Check if the Smagorinsky model is applied in the horizontal directions.
+
+See also [`is_smagorinsky_vertical`](@ref).
+"""
+is_smagorinsky_horizontal(::SmagorinskyLilly{AXES}) where {AXES} =
+    AXES == :UVW
+is_smagorinsky_horizontal(::Nothing) = false
+
 struct AnisotropicMinimumDissipation{FT} <: AbstractEddyViscosityModel
     c_amd::FT
 end
