@@ -449,7 +449,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                         ᶜtke⁰,
                         ᶜmixing_length_field,
                     ),
-                    Y.c.sgs⁰.ρatke / float(dt),
+                    Y.c.sgs⁰.ρatke / FT(dt),
                 )
         end
         if !(p.atmos.moisture_model isa DryModel)
@@ -591,7 +591,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                         ᶜtke⁰,
                         ᶜmixing_length_field,
                     ),
-                    Y.c.sgs⁰.ρatke / float(dt),
+                    Y.c.sgs⁰.ρatke / FT(dt),
                 )
         end
 
