@@ -56,8 +56,8 @@ diagnostics:
       pr,  # precipitation
       ke,  # kinetic energy for spectrum
       # Smagorinsky diagnostics
-      Dh_smag, strainrateh_smag, dtmaxh_smag,  # horizontal
-      # Dv_smag, strainratev_smag, dtmaxv_smag,  # vertical
+      Dh_smag, strainh_smag,  # horizontal
+      # Dv_smag, strainv_smag,  # vertical
       # DecayWithHeight diffusion coefficient
       edt,
     ]
