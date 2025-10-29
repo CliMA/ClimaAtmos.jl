@@ -277,6 +277,7 @@ function surface_state_to_conditions(
                 parameterization.z0b,
                 gustiness,
                 beta,
+                SF.CharnockRoughness()
             )
         else
             if parameterization.fluxes isa HeatFluxes
