@@ -19,7 +19,7 @@ function print_jacobian_summary(integrator)
 
     FT = eltype(Y)
     γs = filter(!iszero, CA.LinearAlgebra.diag(tableau_coefficients))
-    dtγ = FT(float(dt) * γs[end])
+    dtγ = FT(dt) * FT(γs[end])
     scalar_names = CA.scalar_field_names(Y)
     block_keys = Iterators.product(scalar_names, scalar_names)
 
