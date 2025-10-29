@@ -176,12 +176,15 @@ Get the Smagorinsky-Lilly turbulence model based on `parsed_args["smagorinsky_li
 
 The possible model configurations flags are:
 - `UVW`: Applies the model to all spatial directions.
+- `UV`: Applies the model to the horizontal direction only.
+- `W`: Applies the model to the vertical direction only.
+- `UV_W`: Applies the model to the horizontal and vertical directions separately.
 """
 function get_smagorinsky_lilly_model(parsed_args)
     smag = parsed_args["smagorinsky_lilly"]
     isnothing(smag) && return nothing
     smag_symbol = Symbol(smag)
-    @assert smag_symbol in (:UVW,)
+    @assert smag_symbol in (:UVW, :UV, :W, :UV_W)
     return SmagorinskyLilly{smag_symbol}()
 end
 
