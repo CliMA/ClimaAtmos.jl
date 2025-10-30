@@ -565,16 +565,21 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         #            p.precomputed.ᶜwₜqₜ / ᶜq_tot,
         #        ),
         #    ) - (I,)
-
         MatrixFields.unrolled_foreach(tracer_info) do (ρχₚ_name, wₚ_name)
             MatrixFields.has_field(Y, ρχₚ_name) || return
             ∂ᶜρχₚ_err_∂ᶜρχₚ = matrix[ρχₚ_name, ρχₚ_name]
             ᶜwₚ = MatrixFields.get_field(p.precomputed, wₚ_name)
+            # TODO: Maybe just reinterpret an existing scratch field to avoid adding 2 new ones
+            # TODO: come up with read-able names for the intermediate computations...
+            @. p.scratch.ᶜbidiagonal_adjoint_matrix_c3 =
+                -(ClimaAtmos.ᶜprecipdivᵥ_matrix()) ⋅
+                DiagonalMatrixRow(ClimaAtmos.ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
+            @. p.scratch.ᶠband_matrix_wvec =
+                ClimaAtmos.ᶠright_bias_matrix() ⋅
+                DiagonalMatrixRow(ClimaCore.Geometry.WVector(-(ᶜwₚ) / ᶜρ))
             @. ∂ᶜρχₚ_err_∂ᶜρχₚ =
-                dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-                DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅
-                ᶠright_bias_matrix() ⋅
-                DiagonalMatrixRow(-Geometry.WVector(ᶜwₚ) / ᶜρ) - (I,)
+                dtγ * p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
+                p.scratch.ᶠband_matrix_wvec - (I,)
         end
 
     end
