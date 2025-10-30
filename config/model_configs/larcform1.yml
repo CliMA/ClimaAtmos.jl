@@ -23,7 +23,7 @@ x_elem: 2
 y_elem: 2
 dt: 2secs
 dt_rad: 10mins
-t_end: 20days # full run length is 20days
+t_end: 1days # full run length is 20days
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage : true
 toml: [toml/larcform1.toml]
@@ -39,10 +39,10 @@ log_to_file: true
 
 diagnostics: 
   - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, prsn, hus, hur, ua, va, wa, rlu, rld, rhoa] # profiles (2D)
-    period: 1hours
+    period: 6hours
     reduction: average
   - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs, hfss, hfls, ts]  # time-series (1D)
-    period: 1hours
+    period: 6hours
     reduction: average
 
 # TODO:
