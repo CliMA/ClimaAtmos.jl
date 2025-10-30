@@ -31,7 +31,7 @@ end
 
 function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
     cb! = AtmosCallback(f!, EveryΔt(dt))
-    @assert Float64(dt) ≠ Inf "Adding callback that never gets called!"
+    @assert float(dt) ≠ Inf "Adding callback that never gets called!"
     next_t = Ref{typeof(dt)}()
     affect! = function (integrator)
         cb!(integrator)

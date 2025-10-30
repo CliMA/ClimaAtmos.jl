@@ -680,7 +680,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶜmixing_length_field .= ᶜmixing_length(Y, p)
 
             @inline tke_dissipation_rate_tendency(tke⁰, mixing_length) =
-                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / mixing_length : 1 / typeof(tke⁰)(dt)
+                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / mixing_length : 1 / float(dt)
             @inline ∂tke_dissipation_rate_tendency_∂tke⁰(tke⁰, mixing_length) =
                 tke⁰ > 0 ? c_d / (2 * mixing_length * sqrt(tke⁰)) :
                 typeof(tke⁰)(0)

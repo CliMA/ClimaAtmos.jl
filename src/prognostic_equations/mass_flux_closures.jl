@@ -232,13 +232,12 @@ function edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; dt) = p
-    FT = eltype(p.params)
 
     if p.atmos.edmfx_model.filter isa Val{true}
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                C3(min(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0)) / FT(dt)
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= min(Y.c.sgsʲs.:($$j).ρa, 0) / FT(dt)
+                C3(min(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0)) / float(dt)
+            @. Yₜ.c.sgsʲs.:($$j).ρa -= min(Y.c.sgsʲs.:($$j).ρa, 0) / float(dt)
         end
     end
 end

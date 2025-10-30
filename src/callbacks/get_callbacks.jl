@@ -338,7 +338,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
             FT(time_to_seconds(parsed_args["dt_rad"]))
         dt_rad, _, _, _ = promote(dt_rad, t_start, dt, t_end)
         # We use Millisecond to support fractional seconds, eg. 0.1
-        dt_rad_ms = Dates.Millisecond(1_000 * FT(dt_rad))
+        dt_rad_ms = Dates.Millisecond(1_000 * float(dt_rad))
         if parsed_args["dt_save_state_to_disk"] != "Inf" &&
            !CA.isdivisible(dt_save_state_to_disk_dates, dt_rad_ms)
             @warn "Radiation period ($(dt_rad_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
@@ -355,7 +355,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
             FT(time_to_seconds(parsed_args["dt_nogw"]))
         dt_nogw, _, _, _ = promote(dt_nogw, t_start, dt, sim_info.t_end)
         # We use Millisecond to support fractional seconds, eg. 0.1
-        dt_nogw_ms = Dates.Millisecond(1_000 * FT(dt_nogw))
+        dt_nogw_ms = Dates.Millisecond(1_000 * float(dt_nogw))
         if parsed_args["dt_save_state_to_disk"] != "Inf" &&
            !CA.isdivisible(dt_save_state_to_disk_dates, dt_nogw_ms)
             @warn "Non-orographic gravity wave period ($(dt_nogw_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"

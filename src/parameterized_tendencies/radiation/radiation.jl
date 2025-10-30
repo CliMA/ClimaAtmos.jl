@@ -542,7 +542,7 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     ᶜρ = Y.c.ρ
     ᶜts_gm = p.precomputed.ᶜts
     zc = Fields.coordinate_field(axes(ᶜρ)).z
-    @. ᶜdTdt_rad = rad(FT(t), zc)
+    @. ᶜdTdt_rad = rad(FT(float(t)), zc)
     @. Yₜ.c.ρe_tot += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
     return nothing
 end
