@@ -557,7 +557,7 @@ Dₛ = -ρ w χ ∂a/∂z.
 Lateral detrainment tendency of tracer `χ` due to sedimentation.
 """
 function sedimentation_detrainment(ᶜρ, ᶜw, ᶜχ, ᶜ∂a∂z)
-    return @. lazy(ifelse(ᶜ∂a∂z < 0, 0, -1 * ᶜρ * ᶜw * ᶜχ * ᶜ∂a∂z))
+    return @. lazy(-1 * ᶜρ * ᶜw * ᶜχ * max(0, ᶜ∂a∂z))
 end
 
 function turbulent_entrainment(turbconv_params, ᶜaʲ)

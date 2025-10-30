@@ -400,9 +400,9 @@ function edmfx_sgs_vertical_advection_tendency!(
             @. lazy(ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa))))
 
         # Flux form vertical advection of area farction with the grid mean velocity
-        ᶜ∂ρ∂t =
+        vtt =
             vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_mse_q_tot_upwinding)
-        @. Yₜ.c.sgsʲs.:($$j).ρa += ᶜ∂ρ∂t
+        @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
 
         # Advective form advection of mse and q_tot with the grid mean velocity
         # Note: This allocates because the function is too long
@@ -464,15 +464,13 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
                 ᶜaqʲ = (@. lazy(ᶜa * ᶜqʲ))
 
-                # Flux form advection of tracers with updraft velocity
-                vtt = vertical_transport(
-                    ᶜρʲs.:($j),
+                # Advective form advection of tracers with updraft velocity
+                va = vertical_advection(
                     ᶠu³ʲs.:($j),
-                    ᶜaqʲ,
-                    dt,
+                    ᶜqʲ,
                     edmfx_tracer_upwinding,
                 )
-                @. ᶜqʲₜ += ᶜinv_ρ̂ * (vtt - ᶜqʲ * ᶜ∂ρ∂t)
+                @. ᶜqʲₜ += va
 
                 # Flux form sedimentation of tracers
                 vtt = vertical_transport_sedimentation(
@@ -556,15 +554,13 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
                 ᶜaχʲ = (@. lazy(ᶜa * ᶜχʲ))
 
-                # Flux form advection of tracers with updraft velocity
-                vtt = vertical_transport(
-                    ᶜρʲs.:($j),
+                # Advective form advection of tracers with updraft velocity
+                va = vertical_transport(
                     ᶠu³ʲs.:($j),
-                    ᶜaχʲ,
-                    dt,
+                    ᶜχʲ,
                     edmfx_tracer_upwinding,
                 )
-                @. ᶜχʲₜ += ᶜinv_ρ̂ * (vtt - ᶜχʲ * ᶜ∂ρ∂t)
+                @. ᶜχʲₜ += va
 
                 # Flux form sedimentation of tracers
                 vtt = vertical_transport_sedimentation(
