@@ -82,7 +82,7 @@ function atmos_surface_field(surface_space, ::SlabOceanSST)
             sfc = map(
                 coord -> (;
                     T = Geometry.float_type(coord)(
-                        271 + 29 * exp(-coord.lat^2 / (2 * 26^2)),
+                        270#271 + 29 * exp(-coord.lat^2 / (2 * 26^2)),
                     ),
                     water = Geometry.float_type(coord)(0),
                 ),
@@ -93,7 +93,7 @@ function atmos_surface_field(surface_space, ::SlabOceanSST)
         return (;
             sfc = map(
                 coord -> (;
-                    T = Geometry.float_type(coord)(300),
+                    T = Geometry.float_type(coord)(270),
                     water = Geometry.float_type(coord)(0),
                 ),
                 Fields.coordinate_field(surface_space),
