@@ -1,6 +1,6 @@
 agents:
   modules: "climacommon/2025_03_18"
-  queue: "new-central"
+  queue: "central"
 steps:
   - label: "init :computer:"
     key: "init_cpu_env"
@@ -24,7 +24,7 @@ steps:
           slurm_time: "1:00:00"
           slurm_cpus_per_task: 1
           slurm_tasks_per_node: 16
-          queue: "new-central"
+          queue: "central"
           slurm_nodes: 1
           slurm_exclusive: true
           slurm_mem: 0
@@ -38,7 +38,7 @@ steps:
           slurm_time: "1:00:00"
           slurm_cpus_per_task: 1
           slurm_tasks_per_node: 16
-          queue: "new-central"
+          queue: "central"
           slurm_nodes: 2
           slurm_exclusive: true
           slurm_mem: 0
@@ -52,7 +52,7 @@ steps:
           slurm_time: "1:00:00"
           slurm_cpus_per_task: 1
           slurm_tasks_per_node: 16
-          queue: "new-central"
+          queue: "central"
           slurm_nodes: 4
           slurm_exclusive: true
           slurm_mem: 0
@@ -68,7 +68,7 @@ steps:
           slurm_time: "1:00:00"
           slurm_cpus_per_task: 1
           slurm_tasks_per_node: 16
-          queue: "new-central"
+          queue: "central"
           slurm_nodes: 1
           slurm_exclusive: true
           slurm_mem: 0
@@ -82,7 +82,7 @@ steps:
           slurm_time: "1:00:00"
           slurm_cpus_per_task: 1
           slurm_tasks_per_node: 16
-          queue: "new-central"
+          queue: "central"
           slurm_nodes: 2
           slurm_exclusive: true
           slurm_mem: 0
@@ -96,7 +96,7 @@ steps:
           slurm_time: "1:00:00"
           slurm_cpus_per_task: 1
           slurm_tasks_per_node: 16
-          queue: "new-central"
+          queue: "central"
           slurm_nodes: 4
           slurm_exclusive: true
           slurm_mem: 0
