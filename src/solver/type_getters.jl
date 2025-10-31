@@ -590,7 +590,7 @@ function setup_output_dir(
         style = output_dir_style_obj,
     )
 
-    return output_dir, restart_file
+    return output_dir, final_restart_file
 end
 
 function get_sim_info(config::AtmosConfig)
