@@ -305,7 +305,6 @@ end
     obukhov_length,
     ᶜstrain_rate_norm,
     ᶜPr,
-    ᶜtke_exch,
     scale_blending_method,
 )
 
@@ -321,7 +320,6 @@ where:
 - `obukhov_length`: Surface Monin-Obukhov length [m].
 - `ᶜstrain_rate_norm`: Frobenius norm of strain rate tensor [1/s].
 - `ᶜPr`: Turbulent Prandtl number [-].
-- `ᶜtke_exch`: TKE exchange term [m^2/s^3].
 - `scale_blending_method`: The method to use for blending physical scales.
 
 Point-wise calculation of the turbulent mixing length, limited by physical constraints (wall distance,
@@ -346,7 +344,6 @@ function mixing_length_lopez_gomez_2020(
     obukhov_length,
     ᶜstrain_rate_norm,
     ᶜPr,
-    ᶜtke_exch,
     scale_blending_method,
 )
 
@@ -451,43 +448,12 @@ function mixing_length_lopez_gomez_2020(
     # For the quadratic expression below, c_neg ≡ c_d · k^{3/2}.
     c_neg = c_d * tke_pos * sqrt_tke_pos
 
-    l_TKE = FT(0)
     # Solve for l_TKE in
-    #     a_pd · l_TKE − c_neg / l_TKE + ᶜtke_exch = 0
-    #  ⇒  a_pd · l_TKE² + ᶜtke_exch · l_TKE − c_neg = 0
+    #     a_pd · l_TKE − c_neg / l_TKE = 0
+    #  ⇒  a_pd · l_TKE² − c_neg = 0
     # yielding
-    #     l_TKE = (−ᶜtke_exch ± √(ᶜtke_exch² + 4 a_pd c_neg)) / (2 a_pd).
-    if abs(a_pd) > eps_FT # If net of shear and buoyancy production (a_pd) is non-zero
-        discriminant = ᶜtke_exch * ᶜtke_exch + 4 * a_pd * c_neg
-        if discriminant >= FT(0) # Ensure real solution exists
-            # Select the physically admissible (positive) root for l_TKE.
-            # When a_pd > 0 (production exceeds dissipation) the root
-            #     (−ᶜtke_exch + √D) / (2 a_pd)
-            # is positive.  For a_pd < 0 the opposite root is required.
-            l_TKE_sol1 = (-(ᶜtke_exch) + sqrt(discriminant)) / (2 * a_pd)
-            # For a_pd < 0 (local destruction exceeds production) use
-            #     (−ᶜtke_exch − √D) / (2 a_pd).
-            if a_pd > FT(0)
-                l_TKE = l_TKE_sol1
-            else # a_pd < FT(0)
-                l_TKE = (-(ᶜtke_exch) - sqrt(discriminant)) / (2 * a_pd)
-            end
-            l_TKE = max(l_TKE, FT(0)) # Ensure it's non-negative
-        end
-    elseif abs(ᶜtke_exch) > eps_FT # If a_pd is zero, balance is between exchange and dissipation
-        # ᶜtke_exch = c_neg / l_TKE  => l_TKE = c_neg / ᶜtke_exch
-        # Ensure division is safe and result is positive
-        if ᶜtke_exch > eps_FT # Assuming positive exchange means TKE sink from env perspective
-            l_TKE = c_neg / ᶜtke_exch # if c_neg is positive, l_TKE is positive
-        elseif ᶜtke_exch < -eps_FT # Negative exchange means TKE source for env
-            # -|ᶜtke_exch| = c_neg / l_TKE. If c_neg > 0, this implies l_TKE < 0, which is unphysical.
-            # This case (a_pd=0, tke_exch < 0, c_neg > 0) implies TKE source and dissipation, no production.
-            # Dissipation = Source. So, c_d * k_sqrt_k / l = -tke_exch. l = c_d * k_sqrt_k / (-tke_exch)
-            l_TKE = c_neg / (-(ᶜtke_exch))
-        end
-        l_TKE = max(l_TKE, FT(0))
-    end
-    # If a_pd = 0 and ᶜtke_exch = 0 (or c_neg = 0), l_TKE remains zero.
+    #     l_TKE = √c_neg / a_pd.
+    l_TKE = ifelse(a_pd > eps_FT, sqrt(c_neg / max(a_pd, eps_FT)), FT(0))
 
     # --- l_N: Static-stability length scale (buoyancy limit), constrained by l_z ---
     N_eff_sq = max(ᶜN²_eff, FT(0)) # Use N^2 only if stable (N^2 > 0)
@@ -572,7 +538,6 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
             obukhov_length,
             ᶜstrain_rate_norm,
             ᶜprandtl_nvec,
-            ᶜtke_exch,
             p.atmos.edmfx_model.scale_blending_method,
         ),
     )
