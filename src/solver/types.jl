@@ -239,7 +239,49 @@ Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
 end
 
 abstract type AbstractEddyViscosityModel end
-struct SmagorinskyLilly <: AbstractEddyViscosityModel end
+"""
+    SmagorinskyLilly{AXES}
+
+Smagorinsky-Lilly eddy viscosity model.
+
+`AXES` is a symbol indicating along which axes the model is applied. It can be
+- `:UVW` (all axes)
+- `:UV` (horizontal axes)
+- `:W` (vertical axis)
+- `:UV_W` (horizontal and vertical axes treated separately).
+"""
+struct SmagorinskyLilly{AXES} <: AbstractEddyViscosityModel end
+
+"""
+    is_smagorinsky_UVW_coupled(model)
+
+Check if the Smagorinsky model is coupled along all axes.
+"""
+is_smagorinsky_UVW_coupled(::SmagorinskyLilly{AXES}) where {AXES} = AXES == :UVW
+is_smagorinsky_UVW_coupled(::Nothing) = false
+
+"""
+    is_smagorinsky_vertical(model)
+
+Check if the Smagorinsky model is applied along the vertical axis.
+
+See also [`is_smagorinsky_horizontal`](@ref).
+"""
+is_smagorinsky_vertical(::SmagorinskyLilly{AXES}) where {AXES} =
+    AXES == :UVW || AXES == :W || AXES == :UV_W
+is_smagorinsky_vertical(::Nothing) = false
+
+"""
+    is_smagorinsky_horizontal(model)
+
+Check if the Smagorinsky model is applied along the horizontal axes.
+
+See also [`is_smagorinsky_vertical`](@ref).
+"""
+is_smagorinsky_horizontal(::SmagorinskyLilly{AXES}) where {AXES} =
+    AXES == :UVW || AXES == :UV || AXES == :UV_W
+is_smagorinsky_horizontal(::Nothing) = false
+
 struct AnisotropicMinimumDissipation{FT} <: AbstractEddyViscosityModel
     c_amd::FT
 end
@@ -307,7 +349,7 @@ end
 
 """
     ExternalDrivenTVForcing
-    
+
 Forcing specified by external forcing file.
 """
 struct ExternalDrivenTVForcing{FT}
@@ -470,13 +512,14 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, TDC, LIM, DM, HD}
+Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, LIM, DM, HD}
 
     """Enable specific upwinding schemes for specific equations"""
-    energy_upwinding::EN_UP
+    energy_q_tot_upwinding::EN_UP
     tracer_upwinding::TR_UP
-    edmfx_upwinding::ED_UP
+    edmfx_mse_q_tot_upwinding::ED_UP
     edmfx_sgsflux_upwinding::SG_UP
+    edmfx_tracer_upwinding::ED_TR_UP
 
     """Add NaNs to certain equations to track down problems"""
     test_dycore_consistency::TDC
@@ -732,9 +775,9 @@ end
 
 Create an AtmosModel with sensible defaults.
 
-This constructor provides sensible defaults for a minimal dry atmospheric model with full customization through keyword arguments. 
+This constructor provides sensible defaults for a minimal dry atmospheric model with full customization through keyword arguments.
 
-All model components are automatically organized into appropriate grouped sub-structs 
+All model components are automatically organized into appropriate grouped sub-structs
 internally:
 - [`AtmosWater`](@ref)
 - [`SCMSetup`](@ref)
@@ -763,9 +806,9 @@ model = AtmosModel()  # Creates a basic dry atmospheric model
 ```julia
 model = AtmosModel(;
     radiation_mode = HeldSuarezForcing(),
-    hyperdiff = ClimaHyperdiffusion(; 
-        ν₄_vorticity_coeff = 1e15, 
-        ν₄_scalar_coeff = 1e15, 
+    hyperdiff = ClimaHyperdiffusion(;
+        ν₄_vorticity_coeff = 1e15,
+        ν₄_scalar_coeff = 1e15,
         divergence_damping_factor = 1.0
     )
 )
@@ -825,7 +868,7 @@ Internal testing and calibration components for single-column setups:
 - `amd_les`: nothing or AnisotropicMinimumDissipation()
 
 ## AtmosGravityWave
-- `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave()  
+- `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave()
 - `orographic_gravity_wave`: nothing or OrographicGravityWave()
 
 ## AtmosSponge
@@ -838,13 +881,13 @@ Internal testing and calibration components for single-column setups:
 - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
 
 ## AtmosNumerics
-- `energy_upwinding`, `tracer_upwinding`, `edmfx_upwinding`, `edmfx_sgsflux_upwinding`: Val() upwinding schemes
+- `energy_q_tot_upwinding`, `tracer_upwinding`, `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`: Val() upwinding schemes
 - `test_dycore_consistency`: nothing or TestDycoreConsistency() for debugging
 - `limiter`: nothing or QuasiMonotoneLimiter()
 - `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
 - `hyperdiff`: nothing or ClimaHyperdiffusion()
 
-## Top-level Options  
+## Top-level Options
 - `vertical_diffusion`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
 - `disable_surface_flux_tendency`: Bool
 """
@@ -923,10 +966,11 @@ const _DEFAULT_ATMOS_MODEL_KWARGS = (
     insolation = IdealizedInsolation(),
 
     # AtmosNumerics defaults
-    energy_upwinding = Val(:first_order),
-    tracer_upwinding = Val(:first_order),
-    edmfx_upwinding = Val(:first_order),
+    energy_q_tot_upwinding = Val(:vanleer_limiter),
+    tracer_upwinding = Val(:vanleer_limiter),
+    edmfx_mse_q_tot_upwinding = Val(:first_order),
     edmfx_sgsflux_upwinding = Val(:none),
+    edmfx_tracer_upwinding = Val(:first_order),
     test_dycore_consistency = nothing,
     limiter = nothing,
     diff_mode = Explicit(),

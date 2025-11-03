@@ -6,7 +6,6 @@ implicit_diffusion: false
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
-edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "SmoothArea"
 edmfx_sgs_mass_flux: false

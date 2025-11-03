@@ -41,11 +41,9 @@ jacobian_cache(alg, Y, atmos; verbose) = jacobian_cache(alg, Y, atmos)
 # Jacobian can be very expensive to allocate).
 Base.zero(jacobian::Jacobian) = jacobian
 
-safe_float(dtγ, Y) = eltype(Y)(float(dtγ)) # Convert dtγ to the eltype of Y.
-
 # ClimaTimeSteppers.jl calls this to set the Jacobian before each linear solve.
 NVTX.@annotate update_jacobian!(jacobian, Y, p, dtγ, t) =
-    update_jacobian!(jacobian.alg, jacobian.cache, Y, p, safe_float(dtγ, Y), t)
+    update_jacobian!(jacobian.alg, jacobian.cache, Y, p, eltype(Y)(dtγ), t)
 
 # ClimaTimeSteppers.jl calls this to perform each linear solve.
 NVTX.@annotate LinearAlgebra.ldiv!(

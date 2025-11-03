@@ -15,7 +15,7 @@ ws_procspernode = 16 # number of MPI processes per node
 
 import YAML
 
-agents = Dict("modules" => "climacommon/2024_12_16", "queue" => "new-central")
+agents = Dict("modules" => "climacommon/2024_12_16", "queue" => "central")
 env = Dict(
     "SLURM_KILL_BAD_EXIT" => 1,
     "OPENBLAS_NUM_THREADS" => 1,
@@ -52,7 +52,7 @@ function generate_step_ws(nodes::Int, helems::Int, procspernode::Int)
         "key" => "ws_$(nodes)_nodes",
         "agents" => Dict(
             "slurm_constraint" => CPU_TYPE,
-            "queue" => "new-central",
+            "queue" => "central",
             "slurm_nodes" => nodes,
             "slurm_tasks_per_node" => procspernode,
             "slurm_cpus_per_task" => 1,
@@ -72,7 +72,7 @@ function generate_step_ss(nodes::Int, helems::Int, procspernode::Int)
         "key" => "ss_$(nodes)_nodes",
         "agents" => Dict(
             "slurm_constraint" => CPU_TYPE,
-            "queue" => "new-central",
+            "queue" => "central",
             "slurm_nodes" => nodes,
             "slurm_tasks_per_node" => procspernode,
             "slurm_cpus_per_task" => 1,

@@ -59,7 +59,7 @@ function (::GABLS)(params)
         _FT = eltype(surface_coordinates) # do not capture FT
         SurfaceState(;
             parameterization,
-            T = 265 - _FT(0.25) * _FT(float(t)) / 3600,
+            T = 265 - _FT(0.25) * _FT(t) / 3600,
             p,
             q_vap,
         )
@@ -232,7 +232,7 @@ function (::TRMM_LBA)(params)
     ustar = FT(0.28) # 0.28 is taken from Bomex. TODO: Approximate from LES TKE.
     function surface_state(surface_coordinates, interior_z, t)
         _FT = eltype(surface_coordinates) # do not capture FT
-        value = cos(_FT(π) / 2 * (1 - _FT(float(t)) / (_FT(5.25) * 3600)))
+        value = cos(_FT(π) / 2 * (1 - _FT(t) / (_FT(5.25) * 3600)))
         shf = 270 * max(0, value)^_FT(1.5)
         lhf = 554 * max(0, value)^_FT(1.3)
         fluxes = HeatFluxes(; shf, lhf)
