@@ -320,17 +320,18 @@ function hypsography_function_from_topography(
     comms_ctx,
 )
     return function (h_grid, z_grid)
+        topography isa NoTopography && return Hypsography.Flat()
+
         # Create horizontal space to work with topography
-        h_topology = Spaces.topology(Spaces.SpectralElementSpace1D(h_grid))
         h_space = if h_grid isa Grids.SpectralElementGrid1D
-            Spaces.SpectralElementSpace1D(h_topology, h_grid.quadrature_style)
+            Spaces.SpectralElementSpace1D(h_grid)
+        elseif h_grid isa Grids.SpectralElementGrid2D
+            Spaces.SpectralElementSpace2D(h_grid)
         else
-            Spaces.SpectralElementSpace2D(h_topology, h_grid.quadrature_style)
+            error("Unsupported horizontal grid type $(typeof(h_grid))")
         end
 
-        if topography isa NoTopography
-            z_surface = zeros(h_space)
-        elseif topography isa EarthTopography
+        if topography isa EarthTopography
             z_surface = SpaceVaryingInput(
                 AA.earth_orography_file_path(;
                     context = ClimaComms.context(h_space),
@@ -344,9 +345,7 @@ function hypsography_function_from_topography(
             @info "Using $(nameof(typeof(topography))) orography"
         end
 
-        if topography isa NoTopography
-            hypsography = Hypsography.Flat()
-        elseif topography isa EarthTopography
+        if topography isa EarthTopography
             mask(x::FT) where {FT} = x * FT(x > 0)
             z_surface = @. mask(z_surface)
             # diff_cfl = νΔt/Δx²
