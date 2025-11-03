@@ -120,12 +120,29 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜu) = p.precomputed
 
+    new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    if (minimum(new_Y.c.ρq_liq)) < 0
+        @info("q_liq minimum in horizontal tracer adv, not including ylim: $(minimum(new_Y.c.ρq_liq))")
+    end
+
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
     end
 
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
-        @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
+        @. Yₜ.c.:($$ρχ_name) -= wdivₕ(max(Y.c.:($$ρχ_name),0) * ᶜu)
+        # @. new_Y:($$ρχ_name) = Y.c.:($$ρχ_name) - dt * wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
+    end
+
+    # Fields.column(Fields.level(Y.c.ρq_liq, v), i, j, h)
+    # Geometry.UVWVector.(Fields.column(Fields.level(ᶜu, v), i, j, h))
+    
+    new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    if (minimum(new_Y.c.ρq_liq)) < 0
+        (v, i, j, _, h) = Tuple(findfirst(==(minimum(new_Y.c.ρq_liq)), parent(new_Y.c.ρq_liq)))
+        @info("q_liq minimum after wdiv term in horizontal tracer: $(minimum(new_Y.c.ρq_liq))")
+        @info("the u that went into wdiv: $(Geometry.UVWVector.(Fields.column(Fields.level(ᶜu, v), i, j, h)))")
+        @info("the qliq that went into wdiv: $(Fields.column(Fields.level(Y.c.ρq_liq, v), i, j, h))")
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX

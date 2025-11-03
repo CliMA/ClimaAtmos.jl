@@ -62,15 +62,74 @@ Returns:
 - `Yₜ`: The populated main tendency state vector.
 """
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+
+    # @info("""explicit minimums:
+    # q_tot: $(minimum(Y.c.ρq_tot)),
+    # q_liq: $(minimum(Y.c.ρq_liq)), 
+    # q_ice: $(minimum(Y.c.ρq_ice)), 
+    # q_rai: $(minimum(Y.c.ρq_rai)), 
+    # q_sno: $(minimum(Y.c.ρq_sno))""")
+
+    # @assert minimum(Y.c.ρq_tot) >= -eps(eltype(Y))*100 """q_tot, $t,
+    #                                                   $(minimum(Y.c.ρq_tot)),
+    #                                                   $(minimum(Y.c.ρq_liq)), 
+    #                                                   $(minimum(Y.c.ρq_ice)), 
+    #                                                   $(minimum(Y.c.ρq_rai)), 
+    #                                                   $(minimum(Y.c.ρq_sno))"""
+    @assert minimum(Y.c.ρq_liq) >= -eps(eltype(Y))*100 "q_liq, $t"
+    @assert minimum(Y.c.ρq_ice) >= -eps(eltype(Y))*100 "q_ice, $t"
+    @assert minimum(Y.c.ρq_rai) >= -eps(eltype(Y))*100 "q_rai, $t"
+    @assert minimum(Y.c.ρq_sno) >= -eps(eltype(Y))*100 "q_sno, $t"
+
+    if (minimum(Y.c.ρq_liq)) < 0
+        @info("explicit minimum $(minimum(Y.c.ρq_liq))")
+    end
+    
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     Yₜ .= zero(eltype(Yₜ))
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
+
+    new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
+    if (minimum(new_Y.c.ρq_liq)) < 0
+        @info("q_liq minimum after horizontal tracer advection: $(minimum(new_Y.c.ρq_liq))")
+    end
+
     fill_with_nans!(p)  # TODO: would be better to limit this to debug mode (e.g., if p.debug_mode...)
     horizontal_dynamics_tendency!(Yₜ, Y, p, t)
+
+    new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
+    if (minimum(new_Y.c.ρq_liq)) < 0
+        @info("q_liq minimum after horizontal dynamics: $(minimum(new_Y.c.ρq_liq))")
+    end
+
     hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+
+    new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
+    if (minimum(new_Y.c.ρq_liq)) < 0
+        @info("q_liq minimum after hyperdiffusion: $(minimum(new_Y.c.ρq_liq))")
+    end
+
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+
+    new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
+    if (minimum(new_Y.c.ρq_liq)) < 0
+        @info("q_liq minimum after vertical advection: $(minimum(new_Y.c.ρq_liq))")
+    end
+
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
+
+    new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
+    if (minimum(new_Y.c.ρq_liq)) < 0
+        @info("q_liq minimum after vertical advection of water: $(minimum(new_Y.c.ρq_liq))")
+    end
+
     additional_tendency!(Yₜ, Y, p, t)
+
+    new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
+    if (minimum(new_Y.c.ρq_liq)) < 0
+        @info("q_liq minimum after additional: $(minimum(new_Y.c.ρq_liq))")
+    end
+
     return Yₜ
 end
 
@@ -257,6 +316,11 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     external_forcing_tendency!(Yₜ, Y, p, t, p.atmos.external_forcing)
 
+    # new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after external forcing: $(minimum(new_Y.c.ρq_liq))")
+    # end
+
     if p.atmos.sgs_adv_mode == Explicit()
         edmfx_sgs_vertical_advection_tendency!(
             Yₜ,
@@ -278,9 +342,25 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
+    # new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after vertical diffusion boundary layer tendency: $(minimum(new_Y.c.ρq_liq))")
+    # end
+
     surface_flux_tendency!(Yₜ, Y, p, t)
 
+    # new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after surface flux tendency: $(minimum(new_Y.c.ρq_liq))")
+    # end
+
     radiation_tendency!(Yₜ, Y, p, t, p.atmos.radiation_mode)
+
+    # new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after radiation: $(minimum(new_Y.c.ρq_liq))")
+    # end
+
     if p.atmos.sgs_entr_detr_mode == Explicit()
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
@@ -307,6 +387,11 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         )
     end
 
+    # new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after cloud condensate: $(minimum(new_Y.c.ρq_liq))")
+    # end
+
     edmfx_precipitation_tendency!(
         Yₜ,
         Y,
@@ -325,6 +410,11 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         p.atmos.turbconv_model,
     )
 
+    # new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after precipitation: $(minimum(new_Y.c.ρq_liq))")
+    # end
+
     # TODO: make bycolumn-able
     non_orographic_gravity_wave_tendency!(
         Yₜ,
@@ -341,23 +431,49 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         p.atmos.orographic_gravity_wave,
     )
 
+    #  new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after orographic gravity wave: $(minimum(new_Y.c.ρq_liq))")
+    # end
+
     # NOTE: Precipitation tendencies should be applied before calling this function,
     # because precipitation cache is used in this function
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
 
+    # new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after surface temp: $(minimum(new_Y.c.ρq_liq))")
+    # end
+
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+
+    # new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after pressure work: $(minimum(new_Y.c.ρq_liq))")
+    # end
 
     sl = p.atmos.smagorinsky_lilly
     horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
     vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
 
+    # new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after smagorinsky lilly: $(minimum(new_Y.c.ρq_liq))")
+    # end
+
     amd = p.atmos.amd_les
     horizontal_amd_tendency!(Yₜ, Y, p, t, amd)
     vertical_amd_tendency!(Yₜ, Y, p, t, amd)
+
+    # new_Y = Y + Yₜ * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after horizontal amd: $(minimum(new_Y.c.ρq_liq))")
+    # end
 
     # NOTE: This will zero out all momentum tendencies in the EDMFX advection test, 
     # where velocities do not evolve
     # DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)
+
 end

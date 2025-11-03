@@ -37,6 +37,7 @@ NVTX.@annotate function set_cloud_fraction!(
     (; params) = p
     (; turbconv_model) = p.atmos
     (; ᶜts, cloud_diagnostics_tuple) = p.precomputed
+    FT = eltype(p.params)
     thermo_params = CAP.thermodynamics_params(params)
 
     if isnothing(turbconv_model)
@@ -62,7 +63,7 @@ NVTX.@annotate function set_cloud_fraction!(
         q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
         q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
         @. cloud_diagnostics_tuple =
-            make_named_tuple(ifelse(q_liq + q_ice > 0, 1, 0), q_liq, q_ice)
+            make_named_tuple(ifelse(q_liq + q_ice > eps(FT), 1, 0), q_liq, q_ice)
     end
 end
 

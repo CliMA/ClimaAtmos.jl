@@ -6,6 +6,30 @@ import ClimaCore
 import ClimaCore: Fields, Geometry
 
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
+
+    # @info("""implicit minimums:
+    # q_tot: $(minimum(Y.c.ρq_tot)),
+    # q_liq: $(minimum(Y.c.ρq_liq)), 
+    # q_ice: $(minimum(Y.c.ρq_ice)), 
+    # q_rai: $(minimum(Y.c.ρq_rai)), 
+    # q_sno: $(minimum(Y.c.ρq_sno))""")
+
+    # @assert minimum(Y.c.ρq_tot) >= -eps(eltype(Y))*100 """q_tot, $t,
+    #                                                   $(minimum(Y.c.ρq_tot)),
+    #                                                   $(minimum(Y.c.ρq_liq)), 
+    #                                                   $(minimum(Y.c.ρq_ice)), 
+    #                                                   $(minimum(Y.c.ρq_rai)), 
+    #                                                   $(minimum(Y.c.ρq_sno))"""
+
+    if (minimum(Y.c.ρq_liq)) < 0
+        @info("implicit minimum $(minimum(Y.c.ρq_liq))")
+    end
+
+    @assert minimum(Y.c.ρq_liq) >= -eps(eltype(Y))*100 "q_liq, $t"
+    @assert minimum(Y.c.ρq_ice) >= -eps(eltype(Y))*100 "q_ice, $t"
+    @assert minimum(Y.c.ρq_rai) >= -eps(eltype(Y))*100 "q_rai, $t"
+    @assert minimum(Y.c.ρq_sno) >= -eps(eltype(Y))*100 "q_sno, $t"
+
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
