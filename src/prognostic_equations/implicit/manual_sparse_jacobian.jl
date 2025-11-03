@@ -626,11 +626,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         FT = eltype(params)
         (; vertical_diffusion, smagorinsky_lilly) = p.atmos
         (; ᶜp) = p.precomputed
+        ᶜK_u = p.scratch.ᶜtemp_scalar_4
+        ᶜK_h = p.scratch.ᶜtemp_scalar_5
         if vertical_diffusion isa DecayWithHeightDiffusion
-            ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
+            ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
             ᶜK_u = ᶜK_h
         elseif vertical_diffusion isa VerticalDiffusion
-            ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
+            ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
             ᶜK_u = ᶜK_h
         elseif is_smagorinsky_vertical(smagorinsky_lilly)
             set_smagorinsky_lilly_precomputed_quantities!(Y, p, smagorinsky_lilly)
@@ -650,22 +652,19 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
         end
 
-
-        @. p.scratch.ᶜbidiagonal_adjoint_matrix_c3 =
-            ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h))
+        ᶠρK_h = p.scratch.ᶠtemp_scalar
+        @. ᶠρK_h = ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)
         @. ᶜdiffusion_h_matrix =
-            p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ ᶠgradᵥ_matrix()
-
+            ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠρK_h) ⋅ ᶠgradᵥ_matrix()
         if (
             MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke)) ||
             !isnothing(p.atmos.turbconv_model) ||
             !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         )
-            @. p.scratch.ᶜbidiagonal_adjoint_matrix_c3 =
-                ᶜadvdivᵥ_matrix() ⋅
-                DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u))
+            ᶠρK_u = p.scratch.ᶠtemp_scalar
+            @. ᶠρK_u = ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)
             @. ᶜdiffusion_u_matrix =
-                p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ ᶠgradᵥ_matrix()
+                ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠρK_u) ⋅ ᶠgradᵥ_matrix()
         end
 
         ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
