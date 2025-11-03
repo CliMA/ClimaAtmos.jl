@@ -343,7 +343,7 @@ If `χ_name` has internal structure (e.g. a composite name), the function
 recurses into the child names and prepends `ρ` at the lowest level.
 """
 function get_ρχ_name(χ_name)
-    parent_name = MatrixFields.extract_first(χ_name)
+    parent_name = MatrixFields.FieldName(MatrixFields.extract_first(χ_name))
     child_name = MatrixFields.drop_first(χ_name)
     ρχ_name =
         (child_name == MatrixFields.@name()) ?
@@ -351,6 +351,35 @@ function get_ρχ_name(χ_name)
         MatrixFields.append_internal_name(parent_name, get_ρχ_name(child_name))
 
     return ρχ_name
+end
+
+"""
+    get_χʲ_name_from_ρχ_name(ρχ_name::FieldName)
+
+Construct the `FieldName` corresponding to the specific tracer in the updraft 
+(`χʲ` with j = 1) associated with a given density-weighted tracer on the grid mean (`ρ·χ`).
+
+Given the name of a density-weighted tracer `ρχ_name`, this function returns the 
+corresponding name of the specific tracer in the first subgrid updraft.
+
+The function operates recursively on hierarchical field names:  
+- If `ρχ_name` is a base name (no children), it replaces the `ρ` prefix with the 
+  appropriate updraft-specific prefix (e.g. `sgsʲs.:(1)`) and converts the variable 
+  to its specific form.
+- If `ρχ_name` has internal structure (e.g. a composite name), the function 
+  recurses into the child names and applies the transformation at the lowest level.
+"""
+function get_χʲ_name_from_ρχ_name(ρχ_name)
+    parent_name = MatrixFields.FieldName(MatrixFields.extract_first(ρχ_name))
+    child_name = MatrixFields.drop_first(ρχ_name)
+    χʲ_name =
+        (child_name == MatrixFields.@name()) ?
+        MatrixFields.append_internal_name(
+            @name(sgsʲs.:(1)),
+            specific_tracer_name(ρχ_name),
+        ) :
+        MatrixFields.append_internal_name(parent_name, get_χʲ_name_from_ρχ_name(child_name))
+    return χʲ_name
 end
 
 """

@@ -9,6 +9,7 @@ implicit_sgs_advection: true
 implicit_sgs_entr_detr: true
 implicit_nh_pressure: true
 implicit_sgs_vertdiff: true
+implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
 edmfx_entr_model: "Generalized"
@@ -30,7 +31,7 @@ y_elem: 2
 z_elem: 100
 z_stretch: false
 perturb_initstate: false
-dt: "50secs"
+dt: "100secs"
 t_end: "24hours"
 dt_save_state_to_disk: "60mins"
 toml: [toml/prognostic_edmfx_1M.toml]
