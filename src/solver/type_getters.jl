@@ -728,12 +728,12 @@ function get_mesh_warp_type(s)
     end
 end
 
-function get_grid(parsed_args, params, comms_ctx)
+function get_grid(parsed_args, params, context)
     FT = eltype(params)
     if parsed_args["config"] == "sphere"
         SphereGrid(
-            FT,
-            comms_ctx;
+            FT;
+            context,
             radius = CAP.planet_radius(params),
             h_elem = parsed_args["h_elem"],
             nh_poly = parsed_args["nh_poly"],
@@ -752,8 +752,8 @@ function get_grid(parsed_args, params, comms_ctx)
         )
     elseif parsed_args["config"] == "column"
         ColGrid(
-            FT,
-            comms_ctx;
+            FT;
+            context,
             z_elem = parsed_args["z_elem"],
             z_max = parsed_args["z_max"],
             z_stretch = parsed_args["z_stretch"],
@@ -761,8 +761,8 @@ function get_grid(parsed_args, params, comms_ctx)
         )
     elseif parsed_args["config"] == "box"
         BoxGrid(
-            FT,
-            comms_ctx;
+            FT;
+            context,
             x_elem = parsed_args["x_elem"],
             x_max = parsed_args["x_max"],
             y_elem = parsed_args["y_elem"],
@@ -785,8 +785,8 @@ function get_grid(parsed_args, params, comms_ctx)
         )
     elseif parsed_args["config"] == "plane"
         PlaneGrid(
-            FT,
-            comms_ctx;
+            FT;
+            context,
             x_elem = parsed_args["x_elem"],
             x_max = parsed_args["x_max"],
             z_elem = parsed_args["z_elem"],

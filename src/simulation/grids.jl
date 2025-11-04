@@ -1,10 +1,3 @@
-"""
-Grid constructors that replace the domain-based approach with direct ClimaCore.CommonGrids usage.
-
-These constructors handle topography integration and provide the same interface as the previous
-domain system but use ClimaCore grids directly.
-"""
-
 using ClimaCore: Geometry, Hypsography, Fields, Spaces, Meshes
 using ClimaCore.CommonGrids:
     ExtrudedCubedSphereGrid, ColumnGrid, Box3DGrid, SliceXZGrid, DefaultZMesh
@@ -20,15 +13,15 @@ struct LinearWarp <: MeshWarpType end
 struct SLEVEWarp <: MeshWarpType end
 
 """
-    SphereGrid(FT,  comms_ctx; kwargs...)
+    SphereGrid(FT; kwargs...)
 
 Create an ExtrudedCubedSphereGrid with topography support.
 
 # Arguments
 - `FT`: Floating point type
-- `comms_ctx`: Communications context
 
 # Keyword Arguments
+- `context`: Communications context
 - `z_elem::Int`: Number of vertical elements
 - `z_max::Real`: Maximum height
 - `z_stretch::Bool`: Whether to use vertical stretching
@@ -46,8 +39,8 @@ Create an ExtrudedCubedSphereGrid with topography support.
 - `topo_smoothing::Bool`: Apply topography smoothing
 """
 function SphereGrid(
-    FT,
-    comms_ctx;
+    FT;
+    context = ClimaComms.context(),
     z_elem::Int = 10,
     z_max::Real = 30000.0,
     z_stretch::Bool = true,
@@ -71,7 +64,7 @@ function SphereGrid(
 
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type,
-        sleve_eta, sleve_s, topo_smoothing, comms_ctx,
+        sleve_eta, sleve_s, topo_smoothing,
     )
 
     global_geometry = if deep_atmosphere
@@ -84,8 +77,8 @@ function SphereGrid(
         FT;
         z_elem, z_min = 0, z_max, radius, h_elem,
         n_quad_points,
-        device = ClimaComms.device(comms_ctx),
-        context = comms_ctx,
+        device = ClimaComms.device(context),
+        context,
         stretch,
         hypsography_fun,
         global_geometry,
@@ -96,23 +89,23 @@ function SphereGrid(
 end
 
 """
-    ColGrid(FT,  comms_ctx; kwargs...)
+    ColGrid(FT; kwargs...)
 
 Create a ColumnGrid.
 
 # Arguments
 - `FT`: Floating point type
-- `comms_ctx`: Communications context
 
 # Keyword Arguments
+- `context`: Communications context
 - `z_elem::Int`: Number of vertical elements
 - `z_max::Real`: Maximum height
 - `z_stretch::Bool`: Whether to use vertical stretching
 - `dz_bottom::Real`: Bottom layer thickness for stretching
 """
 function ColGrid(
-    FT,
-    comms_ctx;
+    FT;
+    context = ClimaComms.context(),
     z_elem::Int = 10,
     z_max::Real = 30000.0,
     z_stretch::Bool = true,
@@ -130,8 +123,8 @@ function ColGrid(
     grid = ColumnGrid(
         FT;
         z_elem, z_min = 0, z_max, z_mesh,
-        device = ClimaComms.device(comms_ctx),
-        context = comms_ctx,
+        device = ClimaComms.device(context),
+        context,
         stretch,
     )
 
@@ -139,15 +132,15 @@ function ColGrid(
 end
 
 """
-    BoxGrid(FT,  comms_ctx; kwargs...)
+    BoxGrid(FT; kwargs...)
 
 Create a Box3DGrid with topography support.
 
 # Arguments
 - `FT`: Floating point type
-- `comms_ctx`: Communications context
 
 # Keyword Arguments
+- `context`: Communications context
 - `x_elem::Int`: Number of x elements
 - `x_max::Real`: Maximum x coordinate
 - `y_elem::Int`: Number of y elements
@@ -169,8 +162,8 @@ Create a Box3DGrid with topography support.
 - `topo_smoothing::Bool`: Apply topography smoothing
 """
 function BoxGrid(
-    FT,
-    comms_ctx;
+    FT;
+    context = ClimaComms.context(),
     x_elem::Int = 6,
     x_max::Real = 300000.0,
     y_elem::Int = 6,
@@ -198,7 +191,7 @@ function BoxGrid(
 
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type,
-        sleve_eta, sleve_s, topo_smoothing, comms_ctx,
+        sleve_eta, sleve_s, topo_smoothing,
     )
     z_mesh = DefaultZMesh(
         FT;
@@ -211,8 +204,8 @@ function BoxGrid(
         FT;
         z_elem, x_min = 0, x_max, y_min = 0, y_max, z_min = 0, z_max, z_mesh,
         periodic_x, periodic_y, n_quad_points, x_elem, y_elem,
-        device = ClimaComms.device(comms_ctx),
-        context = comms_ctx,
+        device = ClimaComms.device(context),
+        context,
         stretch,
         hypsography_fun,
         global_geometry = Geometry.CartesianGlobalGeometry(),
@@ -223,15 +216,15 @@ function BoxGrid(
 end
 
 """
-    PlaneGrid(FT,  comms_ctx; kwargs...)
+    PlaneGrid(FT; kwargs...)
 
 Create a SliceXZGrid with topography support.
 
 # Arguments
 - `FT`: Floating point type
-- `comms_ctx`: Communications context
 
 # Keyword Arguments
+- `context`: Communications context
 - `x_elem::Int`: Number of x elements
 - `x_max::Real`: Maximum x coordinate
 - `z_elem::Int`: Number of vertical elements
@@ -250,8 +243,8 @@ Create a SliceXZGrid with topography support.
 - `topo_smoothing::Bool`: Apply topography smoothing
 """
 function PlaneGrid(
-    FT,
-    comms_ctx;
+    FT;
+    context = ClimaComms.context(),
     x_elem::Int = 6,
     x_max::Real = 300000.0,
     z_elem::Int = 10,
@@ -276,7 +269,7 @@ function PlaneGrid(
 
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type,
-        sleve_eta, sleve_s, topo_smoothing, comms_ctx,
+        sleve_eta, sleve_s, topo_smoothing,
     )
 
     z_mesh = DefaultZMesh(
@@ -292,8 +285,8 @@ function PlaneGrid(
         z_elem, x_elem, x_min = 0, x_max, z_min = 0, z_max, z_mesh,
         periodic_x,
         n_quad_points,
-        device = ClimaComms.device(comms_ctx),
-        context = comms_ctx,
+        device = ClimaComms.device(context),
+        context,
         stretch,
         hypsography_fun,
         global_geometry = Geometry.CartesianGlobalGeometry(),
@@ -305,7 +298,7 @@ end
 """
     hypsography_function_from_topography(
         topography, topography_damping_factor, mesh_warp_type, 
-        sleve_eta, sleve_s, topo_smoothing, comms_ctx)
+        sleve_eta, sleve_s, topo_smoothing, context)
 
 Create a hypsography function that handles topography integration.
 """
@@ -317,7 +310,6 @@ function hypsography_function_from_topography(
     sleve_eta::Real,
     sleve_s::Real,
     topo_smoothing::Bool,
-    comms_ctx,
 )
     return function (h_grid, z_grid)
         topography isa NoTopography && return Hypsography.Flat()
@@ -332,10 +324,9 @@ function hypsography_function_from_topography(
         end
 
         if topography isa EarthTopography
+            context = ClimaComms.context(h_space)
             z_surface = SpaceVaryingInput(
-                AA.earth_orography_file_path(;
-                    context = ClimaComms.context(h_space),
-                ),
+                AA.earth_orography_file_path(; context),
                 "z",
                 h_space,
             )

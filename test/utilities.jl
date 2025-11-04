@@ -355,10 +355,10 @@ end
     (; cent_space, face_space, xlim, zlim, velem, helem, npoly, quad) =
         get_cartesian_spaces()
     device = ClimaComms.CPUSingleThreaded()
-    comms_ctx = ClimaComms.context(device)
+    context = ClimaComms.context(device)
     grid = CA.BoxGrid(
-        Float32,
-        comms_ctx;
+        Float32;
+        context,
         x_elem = helem,
         x_max = xlim[2],
         y_elem = helem,
@@ -371,7 +371,7 @@ end
         periodic_x = true,
         periodic_y = true,
     )
-    (; center_space, face_space) = CA.get_spaces(grid, comms_ctx)
+    (; center_space, face_space) = CA.get_spaces(grid, context)
     @test center_space == cent_space
     @test face_space == face_space
 end
