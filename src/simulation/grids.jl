@@ -202,13 +202,14 @@ function BoxGrid(
     )
     grid = Box3DGrid(
         FT;
-        z_elem, x_min = 0, x_max, y_min = 0, y_max, z_min = 0, z_max, z_mesh,
+        z_elem, x_min = 0, x_max, y_min = 0, y_max, z_min = 0, z_max,
         periodic_x, periodic_y, n_quad_points, x_elem, y_elem,
         device = ClimaComms.device(context),
         context,
         stretch,
         hypsography_fun,
         global_geometry = Geometry.CartesianGlobalGeometry(),
+        z_mesh,
         enable_bubble = bubble,
     )
 
@@ -390,3 +391,4 @@ function hypsography_function_from_topography(
         return hypsography
     end
 end
+
