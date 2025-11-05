@@ -12,9 +12,9 @@ include(
     joinpath(pkgdir(ClimaAtmos), "post_processing/remap", "remap_helpers.jl"),
 )
 
-comms_ctx = ClimaComms.SingletonCommsContext()
+context = ClimaComms.SingletonCommsContext()
 (; config_file, job_id) = CA.commandline_kwargs()
-config = CA.AtmosConfig(config_file; job_id, comms_ctx)
+config = CA.AtmosConfig(config_file; job_id, comms_ctx = context)
 config.parsed_args["topography"] = "NoWarp"
 
 # Create meshes and spaces
@@ -25,8 +25,8 @@ z_elem = 1
 radius = 6.371229e6
 
 grid = CA.SphereGrid(
-    FT,
-    comms_ctx;
+    FT;
+    context,
     z_elem,
     z_max,
     z_stretch = false,
@@ -35,8 +35,8 @@ grid = CA.SphereGrid(
     nh_poly,
     bubble = false,
 )
-(; center_space, face_space) = CA.get_spaces(grid, comms_ctx)
-
+(; center_space, face_space) = CA.get_spaces(grid, context)
+h_space = Spaces.horizontal_space(center_space)
 ᶜlocal_geometry = Fields.local_geometry_field(center_space)
 ᶠlocal_geometry = Fields.local_geometry_field(face_space)
 
