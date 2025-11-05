@@ -17,13 +17,6 @@ include(
 include("../gw_plotutils.jl")
 
 context = ClimaComms.SingletonCommsContext()
-(; config_file, job_id) = CA.commandline_kwargs()
-config = CA.AtmosConfig(config_file; job_id, comms_ctx = context)
-
-config.parsed_args["topography"] = "Earth";
-config.parsed_args["topo_smoothing"] = false;
-config.parsed_args["mesh_warp_type"] = "Linear";
-(; parsed_args) = config
 
 # load gfdl data
 include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
@@ -97,6 +90,10 @@ grid = CA.SphereGrid(
     h_elem,
     nh_poly,
     bubble = false,
+    topography = CA.EarthTopography(),
+    topography_damping_factor = 5,
+    mesh_warp_type = CA.LinearWarp(),
+    topo_smoothing = false,
 )
 (; center_space, face_space) = CA.get_spaces(grid, context)
 

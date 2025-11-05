@@ -13,9 +13,6 @@ include(
 )
 
 context = ClimaComms.SingletonCommsContext()
-(; config_file, job_id) = CA.commandline_kwargs()
-config = CA.AtmosConfig(config_file; job_id, comms_ctx = context)
-config.parsed_args["topography"] = "NoWarp"
 
 # Create meshes and spaces
 h_elem = 6
@@ -34,6 +31,7 @@ grid = CA.SphereGrid(
     h_elem,
     nh_poly,
     bubble = false,
+    topography = CA.NoTopography(),
 )
 (; center_space, face_space) = CA.get_spaces(grid, context)
 h_space = Spaces.horizontal_space(center_space)
