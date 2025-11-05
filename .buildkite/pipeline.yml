@@ -15,7 +15,6 @@ env:
   GPU_CONFIG_PATH: "config/gpu_configs"
   PERF_CONFIG_PATH: "config/perf_configs"
   MPI_CONFIG_PATH: "config/mpi_configs"
-  CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
 
 steps:
   - label: "init :computer:"
@@ -1259,6 +1258,7 @@ steps:
         artifact_paths: "bm_baroclinic_wave_moist_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 16G
           slurm_gpus: 1
@@ -1280,6 +1280,7 @@ steps:
           --job_id bm_default_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
@@ -1292,6 +1293,7 @@ steps:
           --job_id bm_diag_edmf_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
@@ -1304,6 +1306,7 @@ steps:
           --job_id bm_prog_edmf_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
