@@ -67,26 +67,25 @@ function cloud_sources(
         TD.saturation_vapor_pressure(thp, T, TD.Liquid()),
     )
 
-    if qᵥ + qₗ > FT(0)
-        S = CMNe.conv_q_vap_to_q_lcl_icl_MM2015(
-            cm_params,
-            thp,
-            qₜ,
-            qₗ,
-            qᵢ,
-            qᵣ,
-            qₛ,
-            ρ,
-            T,
-        )
-    else
-        S = FT(0)
+    S = CMNe.conv_q_vap_to_q_lcl_icl_MM2015(
+         cm_params,
+         thp,
+         qₜ,
+         qₗ,
+         qᵢ,
+         qᵣ,
+         qₛ,
+         ρ,
+         T,
+    )
+    if S <= FT(0) && qₗ== FT(0)
+        return FT(0)
     end
 
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ - qₛₗ, dt, 2), limit(qₗ, dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(qₗ, dt, 2), limit(qᵥ - qₛₗ, dt, 2)),
+        triangle_inequality_limiter(S, limit(qᵥ, dt, 2), limit(qₗ, dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(qₗ, dt, 2), limit(qᵥ, dt, 2)),
     )
 end
 function cloud_sources(
@@ -111,32 +110,32 @@ function cloud_sources(
         TD.saturation_vapor_pressure(thp, T, TD.Ice()),
     )
 
-    if qᵥ + qᵢ > FT(0)
-        S = CMNe.conv_q_vap_to_q_lcl_icl_MM2015(
-            cm_params,
-            thp,
-            qₜ,
-            qₗ,
-            qᵢ,
-            qᵣ,
-            qₛ,
-            ρ,
-            T,
-        )
-    else
-        S = FT(0)
-    end
+    S = CMNe.conv_q_vap_to_q_lcl_icl_MM2015(
+        cm_params,
+        thp,
+        qₜ,
+        qₗ,
+        qᵢ,
+        qᵣ,
+        qₛ,
+        ρ,
+        T,
+    )
 
     # Additional condition to avoid creating ice in conditions above freezing
     # Representing the lack of INPs in warm temperatures
     if T > thp.T_freeze && S > FT(0)
-        S = FT(0)
+        return FT(0)
+    end
+
+    if S <= FT(0) && qᵢ == FT(0)
+        return FT(0)
     end
 
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ - qₛᵢ, dt, 2), limit(qᵢ, dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2), limit(qᵥ - qₛᵢ, dt, 2)),
+        triangle_inequality_limiter(S, limit(qᵥ, dt, 2), limit(qᵢ, dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2), limit(qᵥ, dt, 2)),
     )
 end
 
