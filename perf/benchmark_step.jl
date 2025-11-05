@@ -27,8 +27,9 @@ config = CA.AtmosConfig(config_file; job_id)
 simulation = CA.get_simulation(config)
 (; integrator) = simulation;
 Y₀ = deepcopy(integrator.u);
+# Run one step to compile
 @info "Compiling benchmark_step!..."
-CA.benchmark_step!(integrator, Y₀); # compile first
+CA.benchmark_step!(integrator, Y₀);
 
 @info "Running benchmark_step!..."
 comms_ctx = ClimaComms.context(integrator.u.c)
