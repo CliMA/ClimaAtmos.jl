@@ -71,8 +71,6 @@ end
 
 # TODO: All of these should use dtγ instead of dt, but dtγ is not available in
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
-# TODO: Can we rewrite ᶠfct_boris_book and ᶠfct_zalesak so that their broadcast
-# expressions are less convoluted?
 
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
@@ -98,37 +96,7 @@ function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind3(ᶠu³, ᶜχ))))
 end
-function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:boris_book})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(
-        -(ᶜadvdivᵥ(
-            ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * (
-                ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_boris_book(
-                    ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
-                    ᶜχ / dt -
-                    ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
-                )
-            ),
-        )),
-    )
-end
-function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(
-        -(ᶜadvdivᵥ(
-            ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * (
-                ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_zalesak(
-                    ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
-                    ᶜχ / dt,
-                    ᶜχ / dt -
-                    ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
-                )
-            ),
-        )),
-    )
-end
+
 function vertical_transport_sedimentation(
     ᶜρ,
     ᶜw,
