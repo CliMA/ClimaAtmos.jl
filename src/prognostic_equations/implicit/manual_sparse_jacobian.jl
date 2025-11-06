@@ -434,7 +434,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             adjoint(ᶜuₕ) + CT12(adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ)),
         )
     else
-        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(ᶜuₕ))
+        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CT12(ᶜuₕ)))
     end
     @. ∂ᶜK_∂ᶠu₃ =
         ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
