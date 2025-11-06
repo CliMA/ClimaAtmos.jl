@@ -27,7 +27,7 @@ config = CA.AtmosConfig(config_file; job_id)
 simulation = CA.get_simulation(config)
 (; integrator) = simulation;
 Y₀ = deepcopy(integrator.u);
-# Run one step to compile
+# Run step to compile
 @info "Compiling benchmark_step!..."
 CA.benchmark_step!(integrator, Y₀);
 
