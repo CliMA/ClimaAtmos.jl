@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.3"
 manifest_format = "2.0"
 project_hash = "a02b63ced3bdbe408d22f92b8643eda97b136c88"
 
@@ -1858,7 +1858,7 @@ version = "2.5.4+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.5+0"
+version = "0.8.1+2"
 
 [[deps.OpenMPI_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Hwloc_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "TOML", "Zlib_jll"]
@@ -2545,9 +2545,7 @@ version = "7.7.0+0"
 
 [[deps.SurfaceFluxes]]
 deps = ["DocStringExtensions", "RootSolvers", "Thermodynamics"]
-git-tree-sha1 = "fe3fb0b59545dd579a9f4dda0554be9636ca440b"
-repo-rev = "as/charnock-roughness"
-repo-url = "https://github.com/CliMA/SurfaceFluxes.jl.git"
+path = "../../SurfaceFluxes.jl"
 uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
 version = "0.13.1"
 weakdeps = ["ClimaParams"]
