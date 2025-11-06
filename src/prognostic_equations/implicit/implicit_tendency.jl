@@ -21,14 +21,14 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     #                                                   $(minimum(Y.c.ρq_rai)), 
     #                                                   $(minimum(Y.c.ρq_sno))"""
 
-    if (minimum(Y.c.ρq_liq)) < 0
-        @info("implicit minimum $(minimum(Y.c.ρq_liq))")
-    end
+    # if (minimum(Y.c.ρq_liq)) < 0
+    #     @info("implicit minimum $(minimum(Y.c.ρq_liq))")
+    # end
 
-    @assert minimum(Y.c.ρq_liq) >= -eps(eltype(Y))*100 "q_liq, $t"
-    @assert minimum(Y.c.ρq_ice) >= -eps(eltype(Y))*100 "q_ice, $t"
-    @assert minimum(Y.c.ρq_rai) >= -eps(eltype(Y))*100 "q_rai, $t"
-    @assert minimum(Y.c.ρq_sno) >= -eps(eltype(Y))*100 "q_sno, $t"
+    # @assert minimum(Y.c.ρq_liq) >= -eps(eltype(Y))*100 "q_liq, $t"
+    # @assert minimum(Y.c.ρq_ice) >= -eps(eltype(Y))*100 "q_ice, $t"
+    # @assert minimum(Y.c.ρq_rai) >= -eps(eltype(Y))*100 "q_rai, $t"
+    # @assert minimum(Y.c.ρq_sno) >= -eps(eltype(Y))*100 "q_sno, $t"
 
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))

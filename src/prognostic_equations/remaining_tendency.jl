@@ -76,59 +76,59 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     #                                                   $(minimum(Y.c.ρq_ice)), 
     #                                                   $(minimum(Y.c.ρq_rai)), 
     #                                                   $(minimum(Y.c.ρq_sno))"""
-    @assert minimum(Y.c.ρq_liq) >= -eps(eltype(Y))*100 "q_liq, $t"
-    @assert minimum(Y.c.ρq_ice) >= -eps(eltype(Y))*100 "q_ice, $t"
-    @assert minimum(Y.c.ρq_rai) >= -eps(eltype(Y))*100 "q_rai, $t"
-    @assert minimum(Y.c.ρq_sno) >= -eps(eltype(Y))*100 "q_sno, $t"
+    # @assert minimum(Y.c.ρq_liq) >= -eps(eltype(Y))*100 "q_liq, $t"
+    # @assert minimum(Y.c.ρq_ice) >= -eps(eltype(Y))*100 "q_ice, $t"
+    # @assert minimum(Y.c.ρq_rai) >= -eps(eltype(Y))*100 "q_rai, $t"
+    # @assert minimum(Y.c.ρq_sno) >= -eps(eltype(Y))*100 "q_sno, $t"
 
-    if (minimum(Y.c.ρq_liq)) < 0
-        @info("explicit minimum $(minimum(Y.c.ρq_liq))")
-    end
+    # if (minimum(Y.c.ρq_liq)) < 0
+    #     @info("explicit minimum $(minimum(Y.c.ρq_liq))")
+    # end
     
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     Yₜ .= zero(eltype(Yₜ))
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
 
-    new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
-    if (minimum(new_Y.c.ρq_liq)) < 0
-        @info("q_liq minimum after horizontal tracer advection: $(minimum(new_Y.c.ρq_liq))")
-    end
+    # new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after horizontal tracer advection: $(minimum(new_Y.c.ρq_liq))")
+    # end
 
     fill_with_nans!(p)  # TODO: would be better to limit this to debug mode (e.g., if p.debug_mode...)
     horizontal_dynamics_tendency!(Yₜ, Y, p, t)
 
-    new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
-    if (minimum(new_Y.c.ρq_liq)) < 0
-        @info("q_liq minimum after horizontal dynamics: $(minimum(new_Y.c.ρq_liq))")
-    end
+    # new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after horizontal dynamics: $(minimum(new_Y.c.ρq_liq))")
+    # end
 
     hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 
-    new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
-    if (minimum(new_Y.c.ρq_liq)) < 0
-        @info("q_liq minimum after hyperdiffusion: $(minimum(new_Y.c.ρq_liq))")
-    end
+    # new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after hyperdiffusion: $(minimum(new_Y.c.ρq_liq))")
+    # end
 
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
-    new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
-    if (minimum(new_Y.c.ρq_liq)) < 0
-        @info("q_liq minimum after vertical advection: $(minimum(new_Y.c.ρq_liq))")
-    end
+    # new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after vertical advection: $(minimum(new_Y.c.ρq_liq))")
+    # end
 
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
-    new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
-    if (minimum(new_Y.c.ρq_liq)) < 0
-        @info("q_liq minimum after vertical advection of water: $(minimum(new_Y.c.ρq_liq))")
-    end
+    # new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after vertical advection of water: $(minimum(new_Y.c.ρq_liq))")
+    # end
 
     additional_tendency!(Yₜ, Y, p, t)
 
-    new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
-    if (minimum(new_Y.c.ρq_liq)) < 0
-        @info("q_liq minimum after additional: $(minimum(new_Y.c.ρq_liq))")
-    end
+    # new_Y = Y + (Yₜ + Yₜ_lim) * eltype(Yₜ)(10)
+    # if (minimum(new_Y.c.ρq_liq)) < 0
+    #     @info("q_liq minimum after additional: $(minimum(new_Y.c.ρq_liq))")
+    # end
 
     return Yₜ
 end
@@ -464,7 +464,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     amd = p.atmos.amd_les
     horizontal_amd_tendency!(Yₜ, Y, p, t, amd)
-    vertical_amd_tendency!(Yₜ, Y, p, t, amd)
+    # vertical_amd_tendency!(Yₜ, Y, p, t, amd)
 
     # new_Y = Y + Yₜ * eltype(Yₜ)(10)
     # if (minimum(new_Y.c.ρq_liq)) < 0

@@ -9,11 +9,15 @@ output_dir: "/scratch/olivia/rce_noneq"
 approximate_linear_solve_iters: 2  # only valid when implicit_diffusion=true
 rayleigh_sponge: true  # set sponge level in toml file
 # diffusion
-smagorinsky_lilly: "UV_W"
+# smagorinsky_lilly: "UV_W"
+# smagorinsky_lilly: "UV"
+amd_les: true
+# c_amd: 0.29
+c_amd: 100.0
 implicit_diffusion: true
 
 # Reference diffusion setup
-# vert_diff: "DecayWithHeightDiffusion"
+vert_diff: "DecayWithHeightDiffusion"
 hyperdiff: "false"
 
 # microphysics
@@ -26,8 +30,8 @@ moist: nonequil
 # precip_model: 1M
 precip_model: 1M
 ### spatial discretization ###
-x_max: 96000.0  # 96km
-y_max: 96000.0  # 96km
+# x_max: 96000.0  # 96km
+# y_max: 96000.0  # 96km
 z_max: 30000.0  # 30km
 nh_poly: 3  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
 z_elem: 43  # Note: Set sponge height (`zd_viscous`) in toml file to cover top ~5 points
@@ -51,6 +55,7 @@ dt: 10secs
 # dt: 1secs
 
 t_end: 2days
+# t_end: 5days
 # t_end: 21days
 
 ## >> During debugging, reduce these as appropriate
@@ -71,14 +76,16 @@ diagnostics:
       pr,  # precipitation
       ke,  # kinetic energy for spectrum
       # Smagorinsky diagnostics
-      Dh_smag, strainh_smag,  # horizontal
-      Dv_smag, strainv_smag,  # vertical
+      # Dh_smag, strainh_smag,  # horizontal
+      # Dv_smag, strainv_smag,  # vertical
       # DecayWithHeight diffusion coefficient
-      # edt,
+      edt,
     ]
+    # period: 10mins
     period: 1hours
   ## 1M microphsics
   - short_name: [husra, hussn]
+    # period: 10mins
     period: 1hours
   # 2M microphysics
   # - short_name: [cdnc, ncra]
