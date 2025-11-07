@@ -412,24 +412,6 @@ function ρa⁰(ρ, sgsʲs, turbconv_model)
     end
 end
 
-
-"""
-    specific_tke(ρ, ρatke, ρa⁰, turbconv_model)
-
-Computes the grid-meanspecific turbulent kinetic energy (TKE).
-
-Arguments:
-- `ρ`: Grid-mean density.
-- `ρatke`: Area-weighted TKE density in the environment.
-- `ρa⁰`: Area-weighted density of the environment.
-- `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`, or others).
-
-Returns:
-- The specific TKE of the environment (`tke⁰`).
-"""
-# TODO: Remove this function once we are confident about the TKE equation
-specific_tke(ρ, ρatke, ρa⁰, turbconv_model) = specific(ρatke, ρ)
-
 """
     ᶜspecific_env_mse(Y, p)
 
