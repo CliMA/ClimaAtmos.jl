@@ -19,7 +19,7 @@ const FT = Float64
 include(
     joinpath(pkgdir(ClimaAtmos), "post_processing/remap", "remap_helpers.jl"),
 )
-include("../gw_plotutils.jl")
+include("../gw_remap_plot_utils.jl")
 
 comms_ctx = ClimaComms.SingletonCommsContext()
 @show CUDA.functional()
@@ -278,119 +278,81 @@ ENV["GKSwstype"] = "nul"
 output_dir = "orographic_gravity_wave_test_3d"
 mkpath(output_dir)
 
-# remap uforcing and vforcing to regular lat/lon grid
-REMAP_DIR = joinpath(@__DIR__, "ogwd_3d", "remap_data/")
-if !isdir(REMAP_DIR)
-    mkpath(REMAP_DIR)
-end
-timestamp = Dates.format(now(), "yyyymmdd_HHMMSS")
-datafile_cg = joinpath(REMAP_DIR, "data_cg_$(timestamp).nc")
-nc = NCDataset(datafile_cg, "c")
-def_space_coord(nc, ᶜspace, type = "cgll")
-nc_time = def_time_coord(nc)
-nc_ogwd_uforcing = defVar(nc, "ogwd_u", FT, ᶜspace, ("time",))
-nc_ogwd_vforcing = defVar(nc, "ogwd_v", FT, ᶜspace, ("time",))
-nc_gfdl_udt_topo = defVar(nc, "gfdl_udt_topo", FT, ᶜspace, ("time",))
-nc_gfdl_vdt_topo = defVar(nc, "gfdl_vdt_topo", FT, ᶜspace, ("time",))
-nc_z_3d = defVar(nc, "z_3d", FT, ᶜspace, ("time",))
-nc_time[1] = 1
-nc_ogwd_uforcing[:, 1] = uforcing_cpu
-nc_ogwd_vforcing[:, 1] = vforcing_cpu
-nc_gfdl_udt_topo[:, 1] = gfdl_ca_udt_topo_cpu
-nc_gfdl_vdt_topo[:, 1] = gfdl_ca_vdt_topo_cpu
-nc_z_3d[:, 1] = ᶜz_cpu
-close(nc)
 
-nlat = 90
-nlon = 180
-weightfile = joinpath(REMAP_DIR, "remap_weights.nc")
-create_weightfile(weightfile, axes(Y_cpu.c), axes(Y_cpu.f), nlat, nlon, mono = true)
-
-datafile_rll = joinpath(REMAP_DIR, "data_rll.nc")
-apply_remap(
-    datafile_rll,
-    datafile_cg,
-    weightfile,
-    ["ogwd_u", "ogwd_v", "gfdl_udt_topo", "gfdl_vdt_topo", "z_3d"],
+# Prepare field data dictionary
+field_data = Dict(
+    "ogwd_u" => uforcing_cpu,
+    "ogwd_v" => vforcing_cpu,
+    "gfdl_udt_topo" => gfdl_ca_udt_topo_cpu,
+    "gfdl_vdt_topo" => gfdl_ca_vdt_topo_cpu,
+    "z_3d" => ᶜz_cpu,
 )
 
-# Plot the zonal and meridional components of the base flux
-nt = NCDataset(datafile_rll) do ds
-    lon = Array(ds["lon"])
-    lat = Array(ds["lat"])
-    z_coord = Array(ds["z"])
-    z_center = Array(ds["z_3d"])
-    ogwd_u = Array(ds["ogwd_u"])
-    ogwd_v = Array(ds["ogwd_v"])
-    gfdl_udt_topo = Array(ds["gfdl_udt_topo"])
-    gfdl_vdt_topo = Array(ds["gfdl_vdt_topo"])
-    (;
-        lon,
-        lat,
-        z_coord,
-        z_center,
-        ogwd_u,
-        ogwd_v,
-        gfdl_udt_topo,
-        gfdl_vdt_topo,
-    )
-end
-(; lon, lat, z_coord, z_center, ogwd_u, ogwd_v, gfdl_udt_topo, gfdl_vdt_topo) =
-    nt
+# Define all panel configurations
+u_panels = [
+    PlotPanel("ogwd_u", "climaatmos at z = {z}", (1, 1); scale_factor = 86400),
+    PlotPanel("gfdl_udt_topo", "gfdl at z = {z}", (2, 1); scale_factor = 86400),
+]
 
-# Plot on lat-lon grid
-for k in [21, 31]
-    fig = generate_empty_figure()
-    title = "climaatmos at z = " * string(z_coord[k])
-    create_plot!(
-        fig;
-        X = lon,
-        Y = lat,
-        Z = ogwd_u[:, :, k, 1] .* 86400,
-        levels = range(-10, 10; length = 20),
-        title,
-        p_loc = (1, 1),
-        yreversed = false,
-    )
+v_panels = [
+    PlotPanel("ogwd_v", "climaatmos at z = {z}", (1, 1); scale_factor = 86400),
+    PlotPanel("gfdl_vdt_topo", "gfdl at z = {z}", (2, 1); scale_factor = 86400),
+]
 
-    title = "gfdl at z = " * string(z_coord[k])
-    create_plot!(
-        fig;
-        X = lon,
-        Y = lat,
-        Z = gfdl_udt_topo[:, :, k, 1] .* 86400,
-        levels = range(-10, 10; length = 20),
-        title,
-        p_loc = (2, 1),
-        yreversed = false,
-    )
-    CairoMakie.save(joinpath(output_dir, "uforcing_$k.png"), fig)
-end
+# Configure plots
+config = PlotConfig(
+    vertical_levels = [21, 31],
+    contour_levels = range(-10, 10; length = 20),
+    nlat = 90,
+    nlon = 180,
+    yreversed = false,
+)
 
-for k in [21, 31]
-    fig = generate_empty_figure()
-    title = "climaatmos at z = " * string(z_coord[k])
-    create_plot!(
-        fig;
-        X = lon,
-        Y = lat,
-        Z = ogwd_v[:, :, k, 1] .* 86400,
-        levels = range(-10, 10; length = 20),
-        title,
-        p_loc = (1, 1),
-        yreversed = false,
-    )
+# Generate all figures efficiently (remaps only once!)
+figure_specs = Dict(
+    "uforcing" => u_panels,
+    "vforcing" => v_panels,
+)
 
-    title = "gfdl at z = " * string(z_coord[k])
-    create_plot!(
-        fig;
-        X = lon,
-        Y = lat,
-        Z = gfdl_vdt_topo[:, :, k, 1] .* 86400,
-        levels = range(-10, 10; length = 20),
-        title,
-        p_loc = (2, 1),
-        yreversed = false,
-    )
-    CairoMakie.save(joinpath(output_dir, "vforcing_$k.png"), fig)
-end
+create_figure_set(
+    output_dir,
+    collect(keys(field_data)),
+    field_data,
+    Y_cpu,
+    ᶜspace,
+    figure_specs,
+    config;
+    remap_dir = joinpath(@__DIR__, "ogwd_3d", "remap_data/"),
+    FT = FT,
+)
+
+# That's it! Lines reduced from ~125 to ~40, and much more flexible!
+
+##############################################################################
+# BONUS: Additional plots you can easily add now
+##############################################################################
+
+# Example: Add a 4-panel comparison
+uv_comparison_panels = [
+    PlotPanel("ogwd_u", "CA u-forcing", (1, 1); scale_factor = 86400),
+    PlotPanel("gfdl_udt_topo", "GFDL u-forcing", (1, 2); scale_factor = 86400),
+    PlotPanel("ogwd_v", "CA v-forcing", (2, 1); scale_factor = 86400),
+    PlotPanel("gfdl_vdt_topo", "GFDL v-forcing", (2, 2); scale_factor = 86400),
+]
+
+# Just add to figure_specs to include in the batch!
+# figure_specs["uv_comparison"] = uv_comparison_panels
+
+# Example: Add difference plots
+# field_data["u_diff"] = uforcing_cpu .- gfdl_ca_udt_topo_cpu
+# field_data["v_diff"] = vforcing_cpu .- gfdl_ca_vdt_topo_cpu
+#
+# diff_panels = [
+#     PlotPanel("u_diff", "u difference at z = {z}", (1, 1);
+#               scale_factor = 86400, colormap = :balance),
+#     PlotPanel("v_diff", "v difference at z = {z}", (2, 1);
+#               scale_factor = 86400, colormap = :balance),
+# ]
+# figure_specs["differences"] = diff_panels
+
+# end
