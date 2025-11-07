@@ -64,9 +64,10 @@ Base.@kwdef struct SurfaceTemperatureParameters{FT} <: ASTP
     SST_wavelength_latitude::FT
 end
 
-Base.@kwdef struct NonOrographicGravityWaveParameters{FT} <: AGWP
-    placeholder::FT = FT(0.0) # Placeholder for future parameters
-end
+### Todo: NOGW Params
+# Base.@kwdef struct NonOrographicGravityWaveParameters{FT} <: AGWP
+#     placeholder::FT = FT(0.0) # Placeholder for future parameters
+# end
 
 Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
     γ::FT                    # mountain_height_width_exponent: L ∝ h^γ (equation 14, paper suggests γ ≈ 0.4)
@@ -96,7 +97,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     STP,
     VDP,
     EFP,
-    NOGWP,
+    # NOGWP, ### Todo: NOGW Params
     OGWP,
 } <: ACAP
     thermodynamics_params::TP
@@ -113,7 +114,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     surface_temp_params::STP
     vert_diff_params::VDP
     external_forcing_params::EFP
-    non_orographic_gravity_wave_params::NOGWP
+    # non_orographic_gravity_wave_params::NOGWP ### Todo: NOGW Params
     orographic_gravity_wave_params::OGWP
     Omega::FT
     f_plane_coriolis_frequency::FT
