@@ -8,7 +8,7 @@ import ClimaComms
 using NCDatasets
 using ClimaCoreTempestRemap # for apply_remap
 
-const FT = Float32
+# const FT = Float32
 
 include(
     joinpath(pkgdir(CA), "post_processing/remap", "remap_helpers.jl"),
@@ -179,6 +179,7 @@ if !(@isdefined config)
     config = CA.AtmosConfig(config_file; job_id)
 end
 
+config.parsed_args["topography"] = "Earth";
 sim_info = CA.get_sim_info(config)
 params = CA.ClimaAtmosParameters(config)
 atmos = CA.get_atmos(config, params)
