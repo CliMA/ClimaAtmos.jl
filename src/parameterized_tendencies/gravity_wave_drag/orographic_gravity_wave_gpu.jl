@@ -256,7 +256,7 @@ function orographic_gravity_wave_forcing!(
     parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl) .- 0.5 .* parent(Δz_bot)
     topo_ᶠz_pbl = topo_ᶠz_pbl.components.data.:1
 
-    # compute base flux at k_pbl
+    # compute base flux at the planetary boundary layer height
     calc_base_flux!(
         topo_τ_x,
         topo_τ_y,
@@ -490,6 +490,42 @@ function calc_propagate_forcing!(
     return nothing
 end
 
+"""
+    get_pbl_z!(result, ᶜp, ᶜT, ᶜz, grav, cp_d)
+
+Calculate the planetary boundary layer (PBL) height for each atmospheric column.
+
+The PBL height is determined by finding the highest level where both pressure and
+temperature lapse rate criteria are satisfied. This uses a thermodynamic approach
+to identify the transition from the well-mixed boundary layer to the stratified
+free atmosphere above.
+
+# Arguments
+- `result`: Output field to store the computed PBL heights (modified in-place)
+- `ᶜp`: Cell-centered pressure field [Pa]
+- `ᶜT`: Cell-centered temperature field [K]
+- `ᶜz`: Cell-centered geometric height field [m]
+- `grav`: Gravitational acceleration [m/s²]
+- `cp_d`: Specific heat capacity at constant pressure for dry air [J/(kg·K)]
+
+# Algorithm
+The function uses a column reduction operation that iterates upward through each
+atmospheric column. At each level, it checks:
+1. **Pressure criterion**: p ≥ 0.5 × p_surface (limits search to lower atmosphere)
+2. **Temperature lapse rate criterion**: (T_sfc + 1.5 - T) > (g/cp_d) × (z - z_sfc)
+
+The PBL height is set to the highest level where both conditions are met.
+
+# Physical interpretation
+The temperature criterion compares the actual temperature profile against a dry
+adiabatic lapse rate (g/cp_d) with a 1.5 K offset. This effectively detects where
+the atmosphere transitions from the convectively mixed boundary layer to the more
+stable free atmosphere above.
+
+# Implementation notes
+- Uses `Operators.column_reduce!` for GPU compatibility
+- Initializes with surface height if no levels satisfy the criteria
+"""
 function get_pbl_z!(result, ᶜp, ᶜT, ᶜz, grav, cp_d)
     FT = eltype(ᶜp)
 
@@ -869,8 +905,8 @@ function compute_ogw_drag(
         # 1. load orography on lat-lon grid and subtract from z_surface
         # 2. use clima grid info, e.g., grid area
 
-        # to be replaced by an artifact 
-        filename = "computed_drag_Earth_true_5_16"
+        # to be replaced by an artifact ; fn by fn_gen
+        filename = "computed_drag_Earth_false_5_6"
         topo_info = load_preprocessed_topography(filename)
         return set_topo_info_target_space(topo_info, ᶜsurface_space)
 
