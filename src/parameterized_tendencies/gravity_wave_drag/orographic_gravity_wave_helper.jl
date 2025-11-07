@@ -358,7 +358,7 @@ function move_topo_info_to_gpu(topo_info, ᶜtarget_space)
     hmin = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info.hmin)
     hmax = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info.hmax)
 
-    return set_target_spaces(
+    return set_topo_info_target_space(
         (; t11, t12, t21, t22, hmin, hmax),
         ᶜtarget_space,
     )
