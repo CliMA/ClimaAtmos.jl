@@ -29,8 +29,7 @@ function edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model::EDOnlyEDMFX)
     (; params) = p
     (; ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
     turbconv_params = CAP.turbconv_params(p.params)
-    ᶜρa⁰ = Y.c.ρ # EDOnly
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
     ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
     ᶜmixing_length_field .= ᶜmixing_length(Y, p)
     ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
@@ -57,20 +56,13 @@ function edmfx_tke_tendency!(
     turbconv_params = CAP.turbconv_params(p.params)
     FT = eltype(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜρa⁰ =
-        turbconv_model isa PrognosticEDMFX ?
-        (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
 
     if use_prognostic_tke(turbconv_model)
         (; ᶜρʲs) = p.precomputed
         ᶠz = Fields.coordinate_field(Y.f).z
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
         ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜρa⁰ =
-            turbconv_model isa PrognosticEDMFX ?
-            (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
-        ᶜtke⁰ =
-            @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+        ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
         ᶜK_u = @. lazy(
             eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field),
         )
@@ -98,6 +90,7 @@ function edmfx_tke_tendency!(
         end
         # Note: Adding the following tendency breaks bm_aquaplanet_progedmf_dense_autodiff
         if turbconv_model isa PrognosticEDMFX
+            ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
             (; ᶜts⁰) = p.precomputed
             ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
             @. Yₜ.c.sgs⁰.ρatke -=
