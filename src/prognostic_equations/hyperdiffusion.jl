@@ -114,10 +114,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. ᶜ∇²specific_energy = wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ - ᶜh_ref))
 
     if diffuse_tke
-        ᶜρa⁰ =
-            turbconv_model isa PrognosticEDMFX ?
-            (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
-        ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+        ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
         (; ᶜ∇²tke⁰) = p.hyperdiff
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜtke⁰))
     end

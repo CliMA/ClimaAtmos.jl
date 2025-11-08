@@ -153,8 +153,7 @@ function edmfx_vertical_diffusion_tendency!(
         ))
 
         (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-        ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+        ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
         # scratch to prevent GPU Kernel parameter memory error
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
         ᶜmixing_length_field .= ᶜmixing_length(Y, p)
