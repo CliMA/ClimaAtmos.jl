@@ -523,8 +523,6 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     @. ᶜprandtl_nvec =
         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
-    ᶜtke_exch = ᶜtke_exchange(Y, p)
-
     ᶜmixing_length_tuple = @. lazy(
         mixing_length_lopez_gomez_2020(
             params,
