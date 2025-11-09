@@ -16,7 +16,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     ᶠuₕ³,
     t,
 )
-    @assert !(p.atmos.moisture_model isa DryModel)
 
     thermo_params = CAP.thermodynamics_params(p.params)
     (; turbconv_model) = p.atmos
@@ -66,8 +65,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     ᶠuₕ³,
     t,
 )
-    (; moisture_model, turbconv_model) = p.atmos
-    @assert !(moisture_model isa DryModel)
+    (; moisture_model, turbconv_model, microphysics_model) = p.atmos
 
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -85,9 +83,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         ᶜρʲ = ᶜρʲs.:($j)
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
+        if moisture_model isa NonEquilMoistModel && (
+            microphysics_model isa Microphysics1Moment ||
+            microphysics_model isa Microphysics2Moment
         )
             ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
             ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
@@ -97,9 +95,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
 
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
+        if moisture_model isa NonEquilMoistModel && (
+            microphysics_model isa Microphysics1Moment ||
+            microphysics_model isa Microphysics2Moment
         )
             @. ᶜtsʲ = TD.PhaseNonEquil_phq(
                 thermo_params,
@@ -129,8 +127,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
     p,
     t,
 )
-    (; moisture_model, turbconv_model) = p.atmos
-    @assert !(moisture_model isa DryModel)
+    (; moisture_model, turbconv_model, microphysics_model) = p.atmos
 
     FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
@@ -145,9 +142,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
         ᶜtsʲ = ᶜtsʲs.:($j)
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
+        if moisture_model isa NonEquilMoistModel && (
+            microphysics_model isa Microphysics1Moment ||
+            microphysics_model isa Microphysics2Moment
         )
             ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
             ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
@@ -226,9 +223,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
         # Then overwrite the prognostic variables at first inetrior point.
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
         ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
+        if moisture_model isa NonEquilMoistModel && (
+            microphysics_model isa Microphysics1Moment ||
+            microphysics_model isa Microphysics2Moment
         )
             ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
             ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
@@ -275,8 +272,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_implicit_clos
     t,
 )
 
-    (; moisture_model, turbconv_model) = p.atmos
-    @assert !(moisture_model isa DryModel)
+    (; turbconv_model) = p.atmos
 
     (; params) = p
     n = n_mass_flux_subdomains(turbconv_model)
@@ -315,7 +311,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 )
 
     (; moisture_model, turbconv_model) = p.atmos
-    @assert !(moisture_model isa DryModel)
 
     (; params) = p
     (; dt) = p
@@ -487,7 +482,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     p,
     ::Microphysics0Moment,
 )
-    @assert !(p.atmos.moisture_model isa DryModel)
 
     (; params, dt) = p
     thp = CAP.thermodynamics_params(params)
@@ -515,7 +509,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     p,
     ::Microphysics1Moment,
 )
-    @assert (p.atmos.moisture_model isa NonEquilMoistModel)
 
     (; params, dt) = p
     thp = CAP.thermodynamics_params(params)

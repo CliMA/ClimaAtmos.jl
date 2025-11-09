@@ -211,7 +211,6 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     end
 
     sgs_advection_blocks = if atmos.turbconv_model isa PrognosticEDMFX
-        @assert n_prognostic_mass_flux_subdomains(atmos.turbconv_model) == 1
         if use_derivative(sgs_advection_flag)
             (
                 MatrixFields.unrolled_map(
@@ -264,7 +263,6 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     end
 
     sgs_massflux_blocks = if atmos.turbconv_model isa PrognosticEDMFX
-        @assert n_prognostic_mass_flux_subdomains(atmos.turbconv_model) == 1
         if use_derivative(sgs_mass_flux_flag)
             (
                 MatrixFields.unrolled_map(

@@ -469,7 +469,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
             p.atmos.microphysics_model isa Microphysics1Moment ||
             p.atmos.microphysics_model isa Microphysics2Moment
         )
-            @assert n_prognostic_mass_flux_subdomains(turbconv_model) == 1
             α_precip = CAP.α_vert_diff_tracer(params)
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq = Operators.DivergenceF2C(
