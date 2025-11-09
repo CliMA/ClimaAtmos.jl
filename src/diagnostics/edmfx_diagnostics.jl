@@ -1398,7 +1398,7 @@ function compute_tke!(
     end
 
     ᶜtke = @. lazy(
-        specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+        specific(state.c.sgs⁰.ρatke, state.c.ρ),
     )
     if isnothing(out)
         return Base.materialize(ᶜtke)
@@ -1574,7 +1574,7 @@ function compute_edt!(
         turbconv_model isa PrognosticEDMFX ?
         (@. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))) : state.c.ρ
     ᶜtke⁰ = @. lazy(
-        specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+        specific(state.c.sgs⁰.ρatke, state.c.ρ),
     )
     ᶜmixing_length_field = ᶜmixing_length(state, cache)
     ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
@@ -1663,7 +1663,7 @@ function compute_evu!(
         turbconv_model isa PrognosticEDMFX ?
         (@. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))) : state.c.ρ
     ᶜtke⁰ = @. lazy(
-        specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+        specific(state.c.sgs⁰.ρatke, state.c.ρ),
     )
     ᶜmixing_length_field = ᶜmixing_length(state, cache)
     ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
