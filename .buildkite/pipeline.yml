@@ -675,24 +675,6 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Diagnostic EDMFX Bomex stretched grid in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_stretched_box.yml
-          --job_id diagnostic_edmfx_bomex_stretched_box
-        artifact_paths: "diagnostic_edmfx_bomex_stretched_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Diagnostic EDMFX DYCOMS_RF01 in a box (explicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_explicit_box.yml
-          --job_id diagnostic_edmfx_dycoms_rf01_explicit_box
-        artifact_paths: "diagnostic_edmfx_dycoms_rf01_explicit_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
       - label: ":genie: Diagnostic EDMFX DYCOMS_RF01 in a box"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -948,15 +930,6 @@ steps:
         agents:
           slurm_mem: 12GB
         soft_fail: true
-
-      - label: ":genie: Prognostic EDMFX Bomex in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
-          --job_id prognostic_edmfx_bomex_box
-        artifact_paths: "prognostic_edmfx_bomex_box/*"
-        agents:
-          slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMFX aquaplanet"
         command: >
