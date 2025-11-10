@@ -9,8 +9,10 @@ implicit_sgs_advection: true
 implicit_sgs_entr_detr: true
 implicit_nh_pressure: true
 implicit_sgs_vertdiff: true
+implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
+debug_jacobian: true
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true

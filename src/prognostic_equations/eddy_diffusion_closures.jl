@@ -512,18 +512,12 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜdz = Fields.Δz_field(axes(Y.c))
 
-    turbconv_model = p.atmos.turbconv_model
-    ᶜρa⁰ =
-        turbconv_model isa PrognosticEDMFX ?
-        (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
     sfc_tke = Fields.level(ᶜtke⁰, 1)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
     @. ᶜprandtl_nvec =
         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
-
-    ᶜtke_exch = ᶜtke_exchange(Y, p)
 
     ᶜmixing_length_tuple = @. lazy(
         mixing_length_lopez_gomez_2020(
@@ -627,62 +621,6 @@ function turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
     # though the formula should typically yield positive values if Pr_n > 0.
     # Also ensure that it's not larger than the Pr_max parameter.
     return min(max(prandtl_nvec, eps_FT), Pr_max)
-end
-
-
-"""
-    ᶜtke_exchange(Y, p)
-
-Calculates the turbulent kinetic energy (TKE) exchange tendency between the
-environment and updrafts due to detrainment.
-
-Arguments:
-- `Y`: The prognostic state vector.
-- `p`: Cache
-
-Returns:
-- The TKE exchange tendency term [m²/s³].
-"""
-function ᶜtke_exchange(Y, p)
-    (; turbconv_model) = p.atmos
-    n = n_mass_flux_subdomains(turbconv_model)
-    ᶜρa⁰ =
-        p.atmos.turbconv_model isa PrognosticEDMFX ?
-        (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
-
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜdetrʲs, ᶠu³⁰, ᶠu³ʲs) = p.precomputed
-        ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
-        @. ᶜtke_exch = 0
-        for j in 1:n
-            @. ᶜtke_exch +=
-                Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰ * (
-                    1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) -
-                    ᶜtke⁰
-                )
-        end
-
-        return ᶜtke_exch
-    elseif p.atmos.turbconv_model isa DiagnosticEDMFX
-        (; ᶜdetrʲs, ᶠu³⁰, ᶠu³ʲs, ᶜρaʲs) = p.precomputed
-        ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
-        @. ᶜtke_exch = 0
-        for j in 1:n
-            @. ᶜtke_exch +=
-                ᶜρaʲs.:($$j) * ᶜdetrʲs.:($$j) / ᶜρa⁰ * (
-                    1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) -
-                    ᶜtke⁰
-                )
-        end
-
-        return ᶜtke_exch
-        # ED only or none-EDMF model does not have updrafts (or detrainment),
-        # so tke exchange is 0
-    else
-        return 0
-    end
-
 end
 
 """

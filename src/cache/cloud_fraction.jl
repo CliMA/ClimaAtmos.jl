@@ -309,8 +309,6 @@ function quad_loop(
 
     function f(x1_hat, x2_hat)
         FT = eltype(x1_hat)
-        @assert(x1_hat >= FT(0))
-        @assert(x2_hat >= FT(0))
         _ts = thermo_state(thermo_params; p = p_c, θ = x1_hat, q_tot = x2_hat)
         hc = TD.has_condensate(thermo_params, _ts)
 

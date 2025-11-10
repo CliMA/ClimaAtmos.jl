@@ -394,7 +394,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
@@ -469,7 +469,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
             p.atmos.microphysics_model isa Microphysics1Moment ||
             p.atmos.microphysics_model isa Microphysics2Moment
         )
-            @assert n_prognostic_mass_flux_subdomains(turbconv_model) == 1
             α_precip = CAP.α_vert_diff_tracer(params)
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq = Operators.DivergenceF2C(
@@ -535,7 +534,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ᶜu, ᶜts) = p.precomputed
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, Y.c.ρ, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 

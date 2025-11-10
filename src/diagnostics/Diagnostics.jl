@@ -67,7 +67,7 @@ import ..turbulent_prandtl_number
 import ..smagorinsky_lilly_length
 import ..ᶜcompute_eddy_diffusivity_coefficient
 import ..ρa⁰
-import ..specific_tke
+import ..specific
 import ..ᶜspecific_env_value
 
 

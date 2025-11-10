@@ -78,14 +78,6 @@ const ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
     bottom = Operators.ThirdOrderOneSided(),
     top = Operators.ThirdOrderOneSided(),
 )
-const ᶠfct_boris_book = Operators.FCTBorisBook(
-    bottom = Operators.FirstOrderOneSided(),
-    top = Operators.FirstOrderOneSided(),
-)
-const ᶠfct_zalesak = Operators.FCTZalesak(
-    bottom = Operators.FirstOrderOneSided(),
-    top = Operators.FirstOrderOneSided(),
-)
 @static if pkgversion(ClimaCore) ≥ v"0.14.22"
     const ᶠlin_vanleer = Operators.LinVanLeerC2F(
         bottom = Operators.FirstOrderOneSided(),
