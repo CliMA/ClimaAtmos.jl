@@ -2,6 +2,7 @@ initial_condition: TRMM_LBA
 rad: TRMM_LBA
 surface_setup: TRMM_LBA
 turbconv: prognostic_edmfx
+tracer_upwinding: first_order
 implicit_diffusion: true
 implicit_sgs_advection: true
 implicit_sgs_entr_detr: true
@@ -13,7 +14,6 @@ max_newton_iters_ode: 3
 use_auto_jacobian: true
 update_jacobian_every: dt
 debug_jacobian: true
-edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true

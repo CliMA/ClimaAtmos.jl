@@ -1,7 +1,7 @@
 reference_job_id: "les_box"
 initial_condition: "DryDensityCurrentProfile"
 config: "box"
-smagorinsky_lilly: true
+smagorinsky_lilly: "UVW"
 discrete_hydrostatic_balance: true
 hyperdiff: "false"
 x_max: 51200.0

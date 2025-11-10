@@ -169,10 +169,23 @@ function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     end
 end
 
+"""
+    get_smagorinsky_lilly_model(parsed_args)
+
+Get the Smagorinsky-Lilly turbulence model based on `parsed_args["smagorinsky_lilly"]`
+
+The possible model configurations flags are:
+- `UVW`: Applies the model to all spatial directions.
+- `UV`: Applies the model to the horizontal direction only.
+- `W`: Applies the model to the vertical direction only.
+- `UV_W`: Applies the model to the horizontal and vertical directions separately.
+"""
 function get_smagorinsky_lilly_model(parsed_args)
-    is_model_active = parsed_args["smagorinsky_lilly"]
-    @assert is_model_active in (true, false)
-    return is_model_active ? SmagorinskyLilly() : nothing
+    smag = parsed_args["smagorinsky_lilly"]
+    isnothing(smag) && return nothing
+    smag_symbol = Symbol(smag)
+    @assert smag_symbol in (:UVW, :UV, :W, :UV_W)
+    return SmagorinskyLilly{smag_symbol}()
 end
 
 function get_amd_les_model(parsed_args, ::Type{FT}) where {FT}

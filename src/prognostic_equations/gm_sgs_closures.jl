@@ -84,8 +84,7 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
     # TODO: move strain rate calculation to separate function
     ᶠu = p.scratch.ᶠtemp_C123
     @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-    ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
-    ᶜstrain_rate .= compute_strain_rate_center(ᶠu)
+    ᶜstrain_rate = compute_strain_rate_center_vertical(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_2

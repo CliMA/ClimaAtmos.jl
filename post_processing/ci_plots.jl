@@ -1310,17 +1310,11 @@ function make_plots(
 
     reduction = "inst"
     short_names = [
-        "wa",
-        "ua",
-        "va",
-        "ta",
-        "thetaa",
-        "ha",
-        "hus",
-        "hur",
-        "cl",
-        "clw",
-        "cli",
+        "wa", "ua", "va", "ta", "thetaa", "ha",
+        "hus", "hur", "cl", "clw", "cli", "ke",
+        "Dh_smag", "strainh_smag",  # smag horizontal
+        "Dv_smag", "strainv_smag",  # smag vertical
+        "edt",  # DecayWithHeight vertical diffusivity
     ]
     short_names = short_names ∩ collect(keys(simdirs[1].vars))
 
@@ -1333,10 +1327,7 @@ function make_plots(
         window_end = last(var.dims["time"])
         window_start = window_end - 2hours
         var_window = ClimaAnalysis.window(
-            var,
-            "time";
-            left = window_start,
-            right = window_end,
+            var, "time"; left = window_start, right = window_end,
         )
         var_reduced = horizontal_average(average_time(var_window))
         return var_reduced
@@ -1406,6 +1397,7 @@ EDMFBoxPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_implicit_column},
     Val{:prognostic_edmfx_rico_column_2M},
     Val{:prognostic_edmfx_trmm_column},
+    Val{:prognostic_edmfx_trmm_implicit_column},
     Val{:prognostic_edmfx_trmm_column_sparse_autodiff},
     Val{:prognostic_edmfx_dycoms_rf02_column},
     Val{:prognostic_edmfx_dycoms_rf02_column_sparse_autodiff},

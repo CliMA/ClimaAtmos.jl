@@ -39,7 +39,7 @@ function edmfx_sgs_mass_flux_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_sgsflux_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; edmfx_sgsflux_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
@@ -153,7 +153,7 @@ function edmfx_sgs_mass_flux_tendency!(
                         ᶠu³ʲs.:($j),
                         ᶜa_scalar,
                         dt,
-                        tracer_upwinding,
+                        edmfx_tracer_upwinding,
                     )
                     ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
                     @. ᶜρχₜ += vtt
@@ -172,7 +172,7 @@ function edmfx_sgs_mass_flux_tendency!(
                     ᶠu³⁰,
                     ᶜa_scalar,
                     dt,
-                    tracer_upwinding,
+                    edmfx_tracer_upwinding,
                 )
                 ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
                 @. ᶜρχₜ += vtt
@@ -194,7 +194,7 @@ function edmfx_sgs_mass_flux_tendency!(
     turbconv_params = CAP.turbconv_params(p.params)
     a_max = CAP.max_area(turbconv_params)
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_sgsflux_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; edmfx_sgsflux_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
     (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜts) = p.precomputed
     (; dt) = p
@@ -305,7 +305,7 @@ function edmfx_sgs_mass_flux_tendency!(
                         ᶠu³ʲs.:($j),
                         ᶜa_scalar,
                         dt,
-                        tracer_upwinding,
+                        edmfx_tracer_upwinding,
                     )
                     ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
                     @. ᶜρχₜ += vtt
@@ -394,7 +394,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
@@ -449,7 +449,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                         ᶜtke⁰,
                         ᶜmixing_length_field,
                     ),
-                    Y.c.sgs⁰.ρatke / float(dt),
+                    Y.c.sgs⁰.ρatke / FT(dt),
                 )
         end
         if !(p.atmos.moisture_model isa DryModel)
@@ -465,42 +465,51 @@ function edmfx_sgs_diffusive_flux_tendency!(
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
         end
 
-        cloud_tracers = (
-            (@name(c.ρq_liq), @name(q_liq)),
-            (@name(c.ρq_ice), @name(q_ice)),
-            (@name(c.ρn_liq), @name(n_liq)),
+        if p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
         )
-        precip_tracers = (
-            (@name(c.ρq_rai), @name(q_rai)),
-            (@name(c.ρq_sno), @name(q_sno)),
-            (@name(c.ρn_rai), @name(n_rai)),
-        )
+            α_precip = CAP.α_vert_diff_tracer(params)
+            ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
+            ᶜdivᵥ_ρq = Operators.DivergenceF2C(
+                top = Operators.SetValue(C3(FT(0))),
+                bottom = Operators.SetValue(C3(FT(0))),
+            )
 
-        α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
-        ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-        ᶜdivᵥ_ρq = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
-        MatrixFields.unrolled_foreach(cloud_tracers) do (ρχ_name, χ_name)
-            MatrixFields.has_field(Y, ρχ_name) || return
-            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))))
-            ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-            @. ᶜρχₜ -= ᶜρχₜ_diffusion
-        end
-        MatrixFields.unrolled_foreach(precip_tracers) do (ρχ_name, χ_name)
-            MatrixFields.has_field(Y, ρχ_name) || return
-            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-            @. ᶜρχₜ_diffusion =
-                ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_tracer * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))))
-            ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-            @. ᶜρχₜ -= ᶜρχₜ_diffusion
+            microphysics_tracers = (
+                (@name(c.ρq_liq), @name(c.sgsʲs.:(1).q_liq), @name(q_liq), FT(1)),
+                (@name(c.ρq_ice), @name(c.sgsʲs.:(1).q_ice), @name(q_ice), FT(1)),
+                (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai), @name(q_rai), α_precip),
+                (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno), @name(q_sno), α_precip),
+                (@name(c.ρn_liq), @name(c.sgsʲs.:(1).n_liq), @name(n_liq), FT(1)),
+                (@name(c.ρn_rai), @name(c.sgsʲs.:(1).n_rai), @name(n_rai), α_precip),
+            )
+
+            MatrixFields.unrolled_foreach(
+                microphysics_tracers,
+            ) do (ρχ_name, χʲ_name, χ_name, α)
+                MatrixFields.has_field(Y, ρχ_name) || return
+
+                ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+
+                # add updraft diffusion
+                @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
+                    -(ᶠinterp(Y.c.sgsʲs.:(1).ρa) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ)),
+                )
+                @. ᶜρχₜ -= ᶜρχₜ_diffusion
+
+                # add environment diffusion
+                @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
+                    -(ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχ⁰)),
+                )
+                @. ᶜρχₜ -= ᶜρχₜ_diffusion
+            end
         end
 
         # Momentum diffusion
-        ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
-        ᶠstrain_rate .= compute_strain_rate_face(ᶜu⁰)
+        ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu⁰)
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
     end
     return nothing
@@ -525,7 +534,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ᶜu, ᶜts) = p.precomputed
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, Y.c.ρ, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
@@ -581,7 +590,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                         ᶜtke⁰,
                         ᶜmixing_length_field,
                     ),
-                    Y.c.sgs⁰.ρatke / float(dt),
+                    Y.c.sgs⁰.ρatke / FT(dt),
                 )
         end
 
@@ -625,8 +634,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
         end
 
         # Momentum diffusion
-        ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
-        ᶠstrain_rate .= compute_strain_rate_face(ᶜu)
+        ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
     end
 
