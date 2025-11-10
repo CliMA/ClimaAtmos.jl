@@ -45,7 +45,7 @@ The following terms are frequently used within the source code and between colla
        slab model properties.
 - `t`: Current simulation time.
 
-The state `Y` is not assigned by default. If you want to explore the state variable, you can follow the steps below. Note that all but the last step below are executed by the [driver](.buildkite/ci_driver.jl).
+The state `Y` is not assigned by default. If you want to explore the state variable, you can follow the steps below. Note that all but the last step below are executed by the [driver](https://github.com/CliMA/ClimaAtmos.jl/blob/main/.buildkite/ci_driver.jl).
 
 ```Julia
 import ClimaAtmos as CA
