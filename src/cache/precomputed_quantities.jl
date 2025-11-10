@@ -80,11 +80,15 @@ function precomputed_quantities(Y, atmos)
             !(atmos.turbconv_model isa PrognosticEDMFX)
     @assert isnothing(atmos.turbconv_model) ||
             isnothing(atmos.vertical_diffusion)
+    @assert !(atmos.moisture_model isa NonEquilMoistModel) ||
+            !(atmos.microphysics_model isa Microphysics0Moment)
     TST = thermo_state_type(atmos.moisture_model, FT)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
     fspace = axes(Y.f)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
+    n_prog = n_prognostic_mass_flux_subdomains(atmos.turbconv_model)
+    @assert !(atmos.turbconv_model isa PrognosticEDMFX) || n_prog == 1
     gs_quantities = (;
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),

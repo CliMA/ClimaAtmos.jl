@@ -180,7 +180,6 @@ function edmfx_vertical_diffusion_tendency!(
             p.atmos.microphysics_model isa Microphysics1Moment ||
             p.atmos.microphysics_model isa Microphysics2Moment
         )
-            @assert n_prognostic_mass_flux_subdomains(turbconv_model) == 1
             α_precip = CAP.α_vert_diff_tracer(params)
             ᶜρaʲ = Y.c.sgsʲs.:(1).ρa
             ᶜdivᵥ_q = Operators.DivergenceF2C(
