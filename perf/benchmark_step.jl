@@ -21,32 +21,6 @@ import ClimaAtmos as CA
 import ClimaComms
 import CUDA
 
-# Robustly parse boolean-like environment variables
-function _getenv_bool(var::AbstractString; default::Bool = false)
-    raw = get(ENV, var, nothing)
-    raw === nothing && return default
-    s = lowercase(strip(String(raw)))
-    if s in ("1", "true", "t", "yes", "y", "on")
-        return true
-    elseif s in ("0", "false", "f", "no", "n", "off")
-        return false
-    else
-        # fall back to parse as integer (non-zero -> true)
-        try
-            return parse(Int, s) != 0
-        catch
-            @warn "Unrecognized boolean env var value; using default" var = var val = raw default =
-                default
-            return default
-        end
-    end
-end
-
-if _getenv_bool("CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE"; default = false)
-    ext = Base.get_extension(ClimaCore, :ClimaCoreCUDAExt)
-    ext.name_kernels_from_stack_trace() = true
-end
-
 include("common.jl")
 (; config_file, job_id) = CA.commandline_kwargs()
 config = CA.AtmosConfig(config_file; job_id)
