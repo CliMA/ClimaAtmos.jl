@@ -644,18 +644,17 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
         end
 
-        ∂ᶠρχ_dif_flux_∂ᶜχ = ᶠp_grad_matrix
-        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
-        @. ᶜdiffusion_h_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
+        @. ᶜadvection_matrix =
+            ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h))
+        @. ᶜdiffusion_h_matrix = ᶜadvection_matrix ⋅ ᶠgradᵥ_matrix()
         if (
             MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke)) ||
             !isnothing(p.atmos.turbconv_model) ||
             !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         )
-            @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-                DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅ ᶠgradᵥ_matrix()
-            @. ᶜdiffusion_u_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
+            @. ᶜadvection_matrix =
+                ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u))
+            @. ᶜdiffusion_u_matrix = ᶜadvection_matrix ⋅ ᶠgradᵥ_matrix()
         end
 
         ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
