@@ -368,13 +368,13 @@ function set_topo_info_target_space(topo_info, ᶜtarget_space)
     (; t11, t12, t21, t22, hmin, hmax) = topo_info
     FT = eltype(t11)
 
-    val = FT(0.01)
+    val = FT(1.0)
     t11 = Fields.Field(Fields.field_values(t11), ᶜtarget_space) .* val
     t12 = Fields.Field(Fields.field_values(t12), ᶜtarget_space) .* val
     t21 = Fields.Field(Fields.field_values(t21), ᶜtarget_space) .* val
     t22 = Fields.Field(Fields.field_values(t22), ᶜtarget_space) .* val
-    hmin = Fields.Field(Fields.field_values(hmin), ᶜtarget_space) .* FT(3.0)
-    hmax = Fields.Field(Fields.field_values(hmax), ᶜtarget_space) 
+    hmin = Fields.Field(Fields.field_values(hmin), ᶜtarget_space) .* val
+    hmax = Fields.Field(Fields.field_values(hmax), ᶜtarget_space) .* val
 
     topo_info = (; 
         t11 = t11,

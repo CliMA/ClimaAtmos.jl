@@ -146,7 +146,7 @@ v_pbl_cpu = to_cpu(v_pbl)
 N_pbl_cpu = to_cpu(N_pbl)
 ᶜz_cpu = to_cpu(ᶜz)
 Y_cpu  = to_cpu(Y)
-center_space = axes(Y_cpu.c)
+ᶜspace = axes(Y_cpu.c)
 
 ENV["GKSwstype"] = "nul"
 output_dir = "orographic_gravity_wave_test_3d"
@@ -188,7 +188,7 @@ create_figure_set(
     collect(keys(field_data)),
     field_data,
     Y_cpu,
-    center_space,
+    ᶜspace,
     figure_specs,
     config;
     remap_dir = joinpath(@__DIR__, "ogwd_3d", "remap_data/"),
