@@ -42,7 +42,9 @@ end
 
 
 function _save_nc_data(output_filename, topo_cg, spaces)
+    FT = eltype(topo_cg.hmax)
     hspace = Spaces.horizontal_space(spaces.center_space)
+    # @Main.infiltrate
 
     datafile_cg = joinpath(@__DIR__, "$(output_filename).nc")
     nc = NCDataset(datafile_cg, "c")
@@ -72,16 +74,15 @@ function _save_nc_data(output_filename, topo_cg, spaces)
     return datafile_cg, weightfile
 end
 
-
-function _remap_nc_data()
+function _remap_nc_data(output_filename)
     # remap from clima grid to lat/lon grid
-    datafile_rll = joinpath(@__DIR__, "data_rll.nc")
+    datafile_rll = joinpath(@__DIR__, "data_rll_$(output_filename).nc")
     apply_remap(datafile_rll, datafile_cg, weightfile, ["hmax", "hmin", "t11", "t12", "t21", "t22"])
 
     return datafile_rll
 end
 
-function _diagnostics(datafile_rll)
+function diagnostics(datafile_rll)
     nt = NCDataset(datafile_rll) do ds
         lon = Array(ds["lon"])
         lat = Array(ds["lat"])
@@ -93,9 +94,11 @@ function _diagnostics(datafile_rll)
         t22 = Array(ds["t22"])
         (; lon, lat, hmax, hmin, t11, t12, t21, t22)
     end
-    
-    (; lon, lat, hmax, hmin, t11, t12, t21, t22) = nt
 
+    return nt
+end
+
+function plot_diagnostics(lon, lat, hmax, hmin, t11, t12, t21, t22)
     @. hmax = max(0, hmax)
     @. hmin = max(0, hmin)
 
@@ -173,55 +176,3 @@ function _diagnostics(datafile_rll)
 
     CairoMakie.save(joinpath(output_dir, "diagnostics.png"), fig)
 end
-
-if !(@isdefined config)
-    (; config_file, job_id) = CA.commandline_kwargs()
-    config = CA.AtmosConfig(config_file; job_id)
-end
-
-config.parsed_args["topography"] = "Earth";
-sim_info = CA.get_sim_info(config)
-params = CA.ClimaAtmosParameters(config)
-atmos = CA.get_atmos(config, params)
-spaces = CA.get_spaces(config.parsed_args, params, config.comms_ctx)
-initial_condition = CA.get_initial_condition(config.parsed_args, atmos)
-surface_setup = CA.get_surface_setup(config.parsed_args)
-hspace = Spaces.horizontal_space(spaces.center_space)
-
-Y = CA.ICs.atmos_state(
-    initial_condition(params),
-    atmos,
-    spaces.center_space,
-    spaces.face_space,
-)
-
-parsed_args = config.parsed_args
-
-if parsed_args["topography"] != "Earth"
-    error("Topography must be 'Earth', got: $(parsed_args["topography"])")
-end
-
-earth_radius = Spaces.topology(hspace).mesh.domain.radius
-
-(; γ, h_frac) = params.orographic_gravity_wave_params
-
-elevation_data =
-    CA.AA.earth_orography_file_path(; context = ClimaComms.context(Y.c))
-
-load_preprocessed_topography = false
-
-if load_preprocessed_topography
-    (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem) = CA.gen_fn(parsed_args)
-    topo_cg = CA.load_preprocessed_topography(
-        parsed_args,
-    )
-else
-    topo_cg = CA.compute_OGW_info(Y, elevation_data, earth_radius, γ, h_frac)
-end
-
-output_filename = _write_computed_drag!(topo_cg, parsed_args, config)
-
-datafile_cg, weightfile = _save_nc_data(output_filename, topo_cg, spaces)
-
-datafile_rll = _remap_nc_data()
-_diagnostics(datafile_rll)

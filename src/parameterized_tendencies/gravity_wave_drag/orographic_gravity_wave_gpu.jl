@@ -29,11 +29,14 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
         topo_path = @clima_artifact("topo_drag", ClimaComms.context(Y.c))
         orographic_info_rll = joinpath(topo_path, "topo_drag.res.nc")
         topo_info = regrid_OGW_info(Y, orographic_info_rll)
+        # @Main.infiltrate
     elseif ogw.topo_info == Val(:raw_topo)
         earth_radius =
             Spaces.topology(
                 Spaces.horizontal_space(axes(Y.c)),
             ).mesh.domain.radius
+
+        # @Main.infiltrate
 
         topo_info = compute_ogw_drag(
             Y,
@@ -41,7 +44,7 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
             ogw.topography,
             ogw.h_frac,
         )
-
+        # @Main.infiltrate
     elseif ogw.topo_info == Val(:linear)
         # For user-defined analytical tests
         topo_info = initialize_drag_input_as_fields(Y, ogw.drag_input)
@@ -256,6 +259,8 @@ function orographic_gravity_wave_forcing!(
     parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl) .- 0.5 .* parent(Δz_bot)
     topo_ᶠz_pbl = topo_ᶠz_pbl.components.data.:1
 
+    # @Main.infiltrate
+
     # compute base flux at the planetary boundary layer height
     calc_base_flux!(
         topo_τ_x,
@@ -283,6 +288,8 @@ function orographic_gravity_wave_forcing!(
         ᶜbuoyancy_frequency,
     )
 
+    # @Main.infiltrate
+
     calc_saturation_profile!(
         topo_ᶠτ_sat,
         topo_ᶠVτ,
@@ -308,6 +315,8 @@ function orographic_gravity_wave_forcing!(
         ᶜz,
     )
 
+    # @Main.infiltrate
+
     # compute drag tendencies due to propagating part
     ᶜdτ_sat_dz = p.scratch.ᶜtemp_scalar
     calc_propagate_forcing!(
@@ -320,6 +329,8 @@ function orographic_gravity_wave_forcing!(
         ᶜdτ_sat_dz,
         ᶜρ,
     )
+
+    # @Main.infiltrate
 
     ᶜweights = p.scratch.ᶜtemp_scalar
     ᶜdiff = p.scratch.ᶜtemp_scalar_2
@@ -350,6 +361,8 @@ function orographic_gravity_wave_forcing!(
         ᶠdz,
         grav,
     )
+
+    # @Main.infiltrate
 
     # constrain forcing
     @. ᶜuforcing = max(FT(-3e-3), min(FT(3e-3), ᶜuforcing))
@@ -760,6 +773,8 @@ function calc_saturation_profile!(
         ),
     )
 
+    # @Main.infiltrate
+
     # Calculate derivatives for ᶠd2Vτdz
     # QN: Is the Julia compiler smart enough to inline these?
     # Lazy this (done)
@@ -851,6 +866,8 @@ function calc_saturation_profile!(
         return (tau_sat_val, U_sat_val)
     end
 
+    # @Main.infiltrate
+
     top_values = Fields.level(ᶜτ_sat, Spaces.nlevels(axes(ᶜτ_sat)))
     p_surf = Fields.level(ᶜp, 1)
     p_top = Fields.level(ᶜp, Spaces.nlevels(axes(ᶜp)))
@@ -878,6 +895,8 @@ function calc_saturation_profile!(
     @. ᶠτ_sat = ᶠinterp(ᶜτ_sat)
     @. ᶠVτ = ᶠinterp(ᶜVτ)
 
+    # @Main.infiltrate
+
     return nothing
 end
 
@@ -890,6 +909,7 @@ function compute_ogw_drag(
     )
     FT = eltype(Y)
     center_space = Fields.axes(Y.c)
+    h_elem = center_space.grid.horizontal_grid.topology.mesh.ne
     face_space = Fields.axes(Y.f)
     ᶜsurface_space = Fields.level(center_space, 1)
     J_bot = Fields.level(Fields.local_geometry_field(face_space).J, half)
@@ -906,7 +926,7 @@ function compute_ogw_drag(
         # 2. use clima grid info, e.g., grid area
 
         # to be replaced by an artifact ; fn by fn_gen
-        filename = "computed_drag_Earth_false_5_6"
+        filename = "computed_drag_Earth_false_1_$(h_elem)"
         topo_info = load_preprocessed_topography(filename)
         return set_topo_info_target_space(topo_info, ᶜsurface_space)
 
