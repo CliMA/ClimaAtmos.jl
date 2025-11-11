@@ -201,7 +201,7 @@ a0 = 0.9
 a1 = 3.0
 Fr_crit = 0.7
 topo_info = Val(:gfdl_restart)
-topography = "Earth"
+topography = Val(:Earth)
 ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
 
 topo_info = CA.get_topo_info(Y, ogw)

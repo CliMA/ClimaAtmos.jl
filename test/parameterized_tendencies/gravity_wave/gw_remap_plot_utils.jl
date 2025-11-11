@@ -368,18 +368,14 @@ function create_multipanel_figure(
             title = panel.title_template  # No z-value replacement for horizontal slices
         end
 
-        # Determine contour levels for this panel
-        plot_levels = panel.colorrange !== nothing ?
-            range(panel.colorrange[1], panel.colorrange[2]; length = 20) :
-            config.contour_levels
-
         # Create the plot
         create_plot!(
             fig;
             X = data["lon"],
             Y = data["lat"],
             Z = panel_data,
-            levels = plot_levels,
+            levels = config.contour_levels,
+            colorrange = panel.colorrange,
             title = title,
             p_loc = panel.position,
             yreversed = config.yreversed,
