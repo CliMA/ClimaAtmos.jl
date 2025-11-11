@@ -97,18 +97,6 @@ function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind3(ᶠu³, ᶜχ))))
 end
 
-function vertical_transport_sedimentation(
-    ᶜρ,
-    ᶜw,
-    ᶜχ,
-    ᶠJ,
-)
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    return @. lazy(
-        -(ᶜprecipdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(-(ᶜw)) * ᶜχ))),
-    )
-end
-
 vertical_advection(ᶠu³, ᶜχ, ::Val{:none}) =
     @. lazy(-(ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
 vertical_advection(ᶠu³, ᶜχ, ::Val{:first_order}) =
