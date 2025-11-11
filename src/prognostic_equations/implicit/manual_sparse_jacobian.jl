@@ -627,7 +627,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         (; vertical_diffusion, smagorinsky_lilly) = p.atmos
         (; ᶜp) = p.precomputed
         ᶜK_u = p.scratch.ᶜtemp_scalar_4
-        ᶜK_h = p.scratch.ᶜtemp_scalar_5
+        ᶜK_h = p.scratch.ᶜtemp_scalar_6
         if vertical_diffusion isa DecayWithHeightDiffusion
             ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
             ᶜK_u = ᶜK_h
