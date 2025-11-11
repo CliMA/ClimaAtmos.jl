@@ -406,8 +406,8 @@ weakdeps = ["CUDA", "MPI"]
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LazyBroadcast", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "UnrolledUtilities"]
-git-tree-sha1 = "0f4f6e09d049852d114b2ae48854333af1ae2151"
-repo-rev = "504dbf71efd48f45f4f9ba406a480c9942b830c2"
+git-tree-sha1 = "8f848bf337b790a5d559ffc34d182ccfde350c25"
+repo-rev = "60fba14802afac985eb439e0328c5fb72ec8315e"
 repo-url = "https://github.com/CliMA/ClimaCore.jl"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
 version = "0.14.41"
