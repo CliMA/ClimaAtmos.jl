@@ -1633,3 +1633,47 @@ function (initial_condition::ISDAC)(params)
         )
     end
 end
+
+"""
+    ShipwayHill2012
+
+The `InitialCondition` described in [ShipwayHill2012](@cite), but with a hydrostatically
+balanced pressure profile.
+
+B. J. Shipway and A. A. Hill. 
+Diagnosis of systematic differences between multiple parametrizations of warm rain microphysics using a kinematic framework. 
+Quarterly Journal of the Royal Meteorological Society 138, 2196-2211 (2012).
+"""
+Base.@kwdef struct ShipwayHill2012 <: InitialCondition end
+
+function (initial_condition::ShipwayHill2012)(params)
+    FT = eltype(params)
+
+    ## Initialize the profile
+    z_0, z_1, z_2 = FT(0), FT(740), FT(3260)  # m
+    rv_0, rv_1, rv_2 = FT(0.015), FT(0.0138), FT(0.0024)  # kg/kg
+    θ_0, θ_1, θ_2 = FT(297.9), FT(297.9), FT(312.66)  # K
+
+    # profile of water vapour mixing ratio
+    linear_profile(z₀, z₁, x₀, x₁, z) = x₀ + (x₁ - x₀) / (z₁ - z₀) * (z - z₀)
+    rv(z) = if z < z_1
+        linear_profile(z_0, z_1, rv_0, rv_1, z)
+    else
+        linear_profile(z_1, z_2, rv_1, rv_2, z)
+    end
+    q_tot(z) = rv(z) / (1 + rv(z))
+    # profile of potential temperature
+    θ(z) = z < z_1 ? θ_0 : linear_profile(z_1, z_2, θ_1, θ_2, z)
+    ## 
+    thermo_params = CAP.thermodynamics_params(params)
+    p_0 = FT(100700) # Pa
+    p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
+    function local_state(local_geometry)
+        (; z) = local_geometry.coordinates
+        return LocalState(; params, geometry = local_geometry,
+            thermo_state = TD.PhaseEquil_pθq(thermo_params, p(z), θ(z), q_tot(z)),
+            precip_state = PrecipStateMassNum(; q_rai = FT(0), q_sno = FT(0)),
+        )
+    end
+    return local_state
+end

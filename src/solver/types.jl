@@ -6,6 +6,11 @@ import Dates
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
 
+abstract type AbstractPrescribedFlow end
+@kwdef struct PrescribedFlow
+    prescribed_u₃::Function
+end
+
 abstract type AbstractMoistureModel end
 abstract type AbstractMoistModel <: AbstractMoistureModel end
 struct DryModel <: AbstractMoistureModel end
@@ -680,11 +685,12 @@ Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
-struct AtmosModel{W, SCM, R, TC, GW, VD, SP, SU, NU}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
     water::W
     scm_setup::SCM
     radiation::R
     turbconv::TC
+    prescribed_flow::PF
     gravity_wave::GW
     vertical_diffusion::VD
     sponge::SP
@@ -700,6 +706,7 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosWater, :water),
     (AtmosRadiation, :radiation),
     (AtmosTurbconv, :turbconv),
+    (PrescribedFlow, :prescribed_flow),
     (AtmosGravityWave, :gravity_wave),
     (AtmosSponge, :sponge),
     (AtmosSurface, :surface),
@@ -917,11 +924,14 @@ function AtmosModel(; kwargs...)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
 
+    prescribed_flow = get(atmos_model_kwargs, :prescribed_flow, nothing)
+
     return AtmosModel{
         typeof(water),
         typeof(scm_setup),
         typeof(radiation),
         typeof(turbconv),
+        typeof(prescribed_flow),
         typeof(gravity_wave),
         typeof(vertical_diffusion),
         typeof(sponge),
@@ -932,6 +942,7 @@ function AtmosModel(; kwargs...)
         scm_setup,
         radiation,
         turbconv,
+        prescribed_flow,
         gravity_wave,
         vertical_diffusion,
         sponge,

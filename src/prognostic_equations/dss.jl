@@ -77,8 +77,22 @@ dss!(Y_state, params, t_current)
 """
 
 NVTX.@annotate function dss!(Y, p, t)
-    if do_dss(axes(Y.c))
-        Spaces.weighted_dss!(Y.c => p.ghost_buffer.c, Y.f => p.ghost_buffer.f)
-    end
+    # if do_dss(axes(Y.c))
+    #     Spaces.weighted_dss!(Y.c => p.ghost_buffer.c, Y.f => p.ghost_buffer.f)
+    # end
+    prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
+    return nothing
+end
+
+prescribe_flow!(Y, p, t, ::Nothing) = nothing
+function prescribe_flow!(Y, p, t, flow::PrescribedFlow)
+    FT = eltype(p.params)
+    # (; uₕ, u₃, ρ, p) = flow
+    (; prescribed_u₃) = flow
+    lg = Fields.local_geometry_field(Y.f)
+    @. Y.f.u₃ = C3(Geometry.WVector(prescribed_u₃(FT, t)), lg)
+    # @. Y.c.uₕ = uₕ(t)
+    # @. Y.c.ρ = ρ₀  # move to IC
+    # @. Y.c.p = p₀  # move to IC
     return nothing
 end
