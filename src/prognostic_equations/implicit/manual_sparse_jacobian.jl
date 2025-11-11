@@ -626,7 +626,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶜK_u = ᶜK_h
         elseif vertical_diffusion isa VerticalDiffusion
             ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
-            ᶜK_u .= ᶜK_h
+            ᶜK_u = ᶜK_h
         elseif is_smagorinsky_vertical(smagorinsky_lilly)
             set_smagorinsky_lilly_precomputed_quantities!(Y, p, smagorinsky_lilly)
             ᶜK_u .= p.precomputed.ᶜνₜ_v
