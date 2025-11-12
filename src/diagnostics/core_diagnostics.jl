@@ -1660,11 +1660,26 @@ function compute_mslp!(out, state, cache, time)
     )
     z_level = Fields.level(Fields.coordinate_field(state.c.ρ).z, 1)
 
-    # compute sea level pressure using the hypsometric equation
+    # Reduce to mean sea level using a standard-lapse hypsometric formulation (ERA-style)
+    # Using constant lapse rate Γ = 6.5 K/km, with virtual temperature
+    # represented via R_m_surf. This more closely matches ERA5's msl computation and
+    # reduces biases over very cold or very warm high-topography regions.
+    FT = Spaces.undertype(Fields.axes(state.c.ρ))
+    Γ = FT(6.5e-3) # K m^-1
+    ϵ = FT(1e-6)   # small floor to avoid non-positive base
+
+    # bracket = max(ϵ, 1 + Γ z / T(z))
+    bracket = similar(t_level)
+    @. bracket = max(ϵ, 1 + Γ * z_level / t_level)
+
+    # exponent = g / (R_m Γ)
+    exponent = similar(R_m_surf)
+    @. exponent = g / (R_m_surf * Γ)
+
     if isnothing(out)
-        return @. p_level * exp(g * z_level / (R_m_surf * t_level))
+        return p_level .* (bracket .^ exponent)
     else
-        @. out = p_level * exp(g * z_level / (R_m_surf * t_level))
+        out .= p_level .* (bracket .^ exponent)
     end
 end
 
