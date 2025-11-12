@@ -390,7 +390,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜK, ᶜu⁰, ᶜK⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜts) = p.precomputed
+    (; ᶜK, ᶜu⁰, ᶜK⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜρʲs, ᶜts, ᶜts⁰) = p.precomputed
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
@@ -475,6 +475,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
             )
+            ᶜρʲ = ᶜρʲs.:(1)
+            ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
 
             microphysics_tracers = (
                 (@name(c.ρq_liq), @name(c.sgsʲs.:(1).q_liq), @name(q_liq), FT(1)),
@@ -495,15 +497,19 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
 
                 # add updraft diffusion
-                @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
-                    -(ᶠinterp(Y.c.sgsʲs.:(1).ρa) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ)),
-                )
+                @. ᶜρχₜ_diffusion =
+                    draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲ) *
+                    ᶜdivᵥ_ρq(
+                        -(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ)),
+                    )
                 @. ᶜρχₜ -= ᶜρχₜ_diffusion
 
                 # add environment diffusion
-                @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
-                    -(ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχ⁰)),
-                )
+                @. ᶜρχₜ_diffusion =
+                    draft_area(ᶜρa⁰, ᶜρ⁰) *
+                    ᶜdivᵥ_ρq(
+                        -(ᶠinterp(ᶜρ⁰) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχ⁰)),
+                    )
                 @. ᶜρχₜ -= ᶜρχₜ_diffusion
             end
         end
