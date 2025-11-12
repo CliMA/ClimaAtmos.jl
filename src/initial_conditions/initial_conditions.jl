@@ -447,73 +447,233 @@ function overwrite_initial_conditions!(
     )
 end
 
+"""
+    correct_surface_pressure_for_topography!(
+        p_sfc,
+        file_path,
+        face_space,
+        Y,
+        ᶜT,
+        ᶜq_tot,
+        thermo_params,
+        regridder_kwargs;
+        surface_altitude_var = "z_sfc",
+    )
+
+Adjusts the surface pressure field `p_sfc` to account for mismatches between
+ERA5 (file) surface altitude and the model orography when specifying pressure.
+
+    Δz = z_model_surface - z_sfc
+
+and applies a hydrostatic correction at the surface using the local moist gas
+constant and temperature at the surface:
+
+    p_sfc .= p_sfc .* exp.(-Δz * g ./ (R_m_sfc .* T_sfc))
+
+where:
+- `g` is gravitational acceleration from `thermo_params`
+- `R_m_sfc` is the moist-air gas constant evaluated from `ᶜq_tot` at the surface
+- `T_sfc` is the air temperature from `ᶜT` at the surface
+
+Returns `true` if the correction is applied; returns `false` if the surface
+altitude field cannot be loaded.
+
+Arguments
+- `p_sfc`: face field of surface pressure to be corrected (modified in-place)
+- `file_path`: path to the ERA5-derived initialization NetCDF file
+- `face_space`: face space of the model grid (for reading/regridding)
+- `Y`: prognostic state, used to obtain model surface height
+- `ᶜT`: center field of temperature
+- `ᶜq_tot`: center field of total specific humidity
+- `thermo_params`: thermodynamics parameter set
+- `regridder_kwargs`: keyword arguments forwarded to the regridder
+- `surface_altitude_var`: variable name for surface altitude (default `"z_sfc"`)
+"""
+function correct_surface_pressure_for_topography!(
+    p_sfc,
+    file_path,
+    face_space,
+    Y,
+    ᶜT,
+    ᶜq_tot,
+    thermo_params,
+    regridder_kwargs;
+    surface_altitude_var = "z_sfc",
+)
+    regridder_type = :InterpolationsRegridder
+    ᶠz_surface = Fields.level(
+        SpaceVaryingInputs.SpaceVaryingInput(
+            file_path,
+            surface_altitude_var,
+            face_space;
+            regridder_type,
+            regridder_kwargs = regridder_kwargs,
+        ),
+        Fields.half,
+    )
+
+    if ᶠz_surface === nothing
+        return false
+    end
+
+    FT = eltype(thermo_params)
+    grav = thermo_params.grav
+
+    ᶠz_model_surface = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    ᶠΔz = zeros(face_space)
+    @. ᶠΔz = ᶠz_model_surface - ᶠz_surface
+
+    ᶠR_m = ᶠinterp.(TD.gas_constant_air.(thermo_params, TD.PhasePartition.(ᶜq_tot)))
+    ᶠR_m_sfc = Fields.level(ᶠR_m, Fields.half)
+
+    ᶠT = ᶠinterp.(ᶜT)
+    ᶠT_sfc = Fields.level(ᶠT, Fields.half)
+
+    @. p_sfc = p_sfc * exp(FT(-1) * ᶠΔz * grav / (ᶠR_m_sfc * ᶠT_sfc))
+
+    @info "Adjusted surface pressure to account for ERA5/model surface-height differences."
+    return true
+end
+
 # WeatherModel function using the shared implementation
+"""
+    overwrite_initial_conditions!(initial_condition::WeatherModel, Y, thermo_params; use_full_pressure=false)
+
+Overwrite the prognostic state `Y` with ERA5-derived initial conditions on the model grid.
+
+
+- Derives the model's target vertical levels from `Y.c` (on CPU).
+- Obtains the ERA5-derived IC NetCDF path via `weather_model_data_path` (with
+  any caller-provided kwargs forwarded there), then constructs `SpaceVaryingInput`
+  fields to regrid ERA5 variables onto the model's center and face spaces.
+- Populates the thermodynamic state, density, velocity components, total energy,
+  and moisture. If EDMF subdomains exist, initializes those as well.
+
+Pressure initialization (`use_full_pressure`):
+- If `use_full_pressure == true` and the IC file contains a 3D pressure field
+  `p_3d(lon,lat,z)`, then pressure is taken directly from `p_3d` and regridded.
+- Otherwise, pressure is obtained by hydrostatic integration starting from the
+  surface pressure `p(lon,lat)` (broadcast in `z` in the IC file), using the
+  regridded temperature `t` and specific humidity `q`. If the dataset provides
+  surface altitude `z_sfc` (derived from ERA5 surface geopotential), the surface
+  pressure is first corrected for model-versus-ERA5 topographic differences
+  in order to adjust the reported ERA5 surface pressure.
+
+Expected variables in the IC file:
+- 3D: `u`, `v`, `w`, `t`, `q` (and optionally `p_3d`, cloud water variables)
+- 2D broadcast in `z`: `p` (surface pressure), `skt` (skin temperature), and
+  optionally `z_sfc` (surface altitude)
+
+Notes:
+- When generating 3D ICs (via `to_z_levels(...; interp3d=true)` in
+  `weather_model_data_path`), the file can include `p_3d` and a `z_physical`
+  field on the target grid, enabling the full-pressure path described above.
+"""
 function overwrite_initial_conditions!(
     initial_condition::WeatherModel,
     Y,
-    thermo_params,
+    thermo_params;
+    use_full_pressure::Bool = false,
 )
+    regridder_type = :InterpolationsRegridder
+    interpolation_method = Intp.Linear()
     extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
 
-    # Extract face coordinates and compute center midpoints
-    # Compute target levels on CPU to avoid GPU reductions
-    z_arr_cpu = Array(Fields.field2array(Fields.coordinate_field(Y.c).z))
-    icol = argmin(z_arr_cpu[1, :])
-    target_levels = z_arr_cpu[:, icol]
+    # target_levels defines vertical z for 1D interp,
+    # if upstream processed ERA5 init file is missing, it is generated with to_z_levels_1d.
+    z_arr = Array(Fields.field2array(Fields.coordinate_field(Y.c).z))
+    z_top = round(maximum(z_arr))
+    target_levels = collect(0.0:300.0:z_top)
+
+    @info "Calling weather_model_data_path" (
+        start_date = initial_condition.start_date,
+        era5_dir = initial_condition.era5_initial_condition_dir,
+    )
 
     file_path = weather_model_data_path(
         initial_condition.start_date,
         target_levels,
-        initial_condition.era5_initial_condition_dir,
+        initial_condition.era5_initial_condition_dir;
     )
 
-    regridder_kwargs = (; extrapolation_bc)
+    regridder_kwargs = (; extrapolation_bc, interpolation_method)
+
     isfile(file_path) || error("$(file_path) is not a file")
     @info "Overwriting initial conditions with data from file $(file_path)"
 
     center_space = Fields.axes(Y.c)
     face_space = Fields.axes(Y.f)
 
-    # Using surface pressure, air temperature and specific humidity
-    # from the dataset, compute air pressure.
-    p_sfc = Fields.level(
-        SpaceVaryingInputs.SpaceVaryingInput(
-            file_path,
-            "p",
-            face_space,
-            regridder_kwargs = regridder_kwargs,
-        ),
-        Fields.half,
-    )
     ᶜT = SpaceVaryingInputs.SpaceVaryingInput(
         file_path,
         "t",
-        center_space,
+        center_space;
+        regridder_type,
         regridder_kwargs = regridder_kwargs,
     )
     ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(
         file_path,
         "q",
-        center_space,
+        center_space;
+        regridder_type,
         regridder_kwargs = regridder_kwargs,
     )
 
-    # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile,
-    # recompute the pressure levels assuming hydrostatic balance is maintained.
-    # Uses the ClimaCore `column_integral_indefinite!` function to solve
-    # ∂(ln𝑝)/∂z = -g/(Rₘ(q)T), where
-    # p is the local pressure
-    # g is the gravitational constant
-    # q is the specific humidity
-    # Rₘ is the gas constant for moist air
-    # T is the air temperature
-    # p is then updated with the integral result, given p_sfc,
-    # following which the thermodynamic state is constructed.
-    ᶜ∂lnp∂z = @. -thermo_params.grav /
-       (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
-    ᶠlnp_over_psfc = zeros(face_space)
-    Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
-    ᶠp = p_sfc .* exp.(ᶠlnp_over_psfc)
+    use_p3d = use_full_pressure && NC.NCDataset(file_path) do ds
+        haskey(ds, "p_3d")
+    end
+    ᶠp = if use_p3d
+        SpaceVaryingInputs.SpaceVaryingInput(
+            file_path,
+            "p_3d",
+            face_space;
+            regridder_type,
+            regridder_kwargs = regridder_kwargs,
+        )
+    else
+        if use_full_pressure
+            @warn "Requested full pressure initialization, but variable `p_3d` is missing in $(file_path). Falling back to hydrostatic integration from surface pressure."
+        end
+        # Using surface pressure, air temperature and specific humidity
+        # from the dataset, compute air pressure by hydrostatic integration.
+        p_sfc = Fields.level(
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "p",
+                face_space;
+                regridder_type,
+                regridder_kwargs = regridder_kwargs,
+            ),
+            Fields.half,
+        )
+        # Apply hydrostatic surface-pressure correction only if surface altitude is available
+        surface_altitude_var = "z_sfc"
+        has_surface_altitude = NC.NCDataset(file_path) do ds
+            haskey(ds, surface_altitude_var)
+        end
+        if has_surface_altitude
+            correct_surface_pressure_for_topography!(
+                p_sfc,
+                file_path,
+                face_space,
+                Y,
+                ᶜT,
+                ᶜq_tot,
+                thermo_params,
+                regridder_kwargs;
+                surface_altitude_var = surface_altitude_var,
+            )
+        else
+            @warn "Skipping topographic correction because variable `$surface_altitude_var` is missing from $(file_path)."
+        end
+        # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile,
+        # recompute the pressure levels assuming hydrostatic balance is maintained.
+        ᶜ∂lnp∂z = @. -thermo_params.grav /
+           (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
+        ᶠlnp_over_psfc = zeros(face_space)
+        Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
+        p_sfc .* exp.(ᶠlnp_over_psfc)
+    end
     ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp.(ᶠp), ᶜT, ᶜq_tot)
 
     # Assign prognostic variables from equilibrium moisture models
@@ -525,19 +685,22 @@ function overwrite_initial_conditions!(
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "u",
-                center_space,
+                center_space;
+                regridder_type,
                 regridder_kwargs = regridder_kwargs,
             ),
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "v",
-                center_space,
+                center_space;
+                regridder_type,
                 regridder_kwargs = regridder_kwargs,
             ),
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "w",
-                center_space,
+                center_space;
+                regridder_type,
                 regridder_kwargs = regridder_kwargs,
             ),
         )
@@ -569,14 +732,16 @@ function overwrite_initial_conditions!(
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "cswc",
-                center_space,
+                center_space;
+                regridder_type,
                 regridder_kwargs = regridder_kwargs,
             ) .* Y.c.ρ
         Y.c.ρq_rai .=
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "crwc",
-                center_space,
+                center_space;
+                regridder_type,
                 regridder_kwargs = regridder_kwargs,
             ) .* Y.c.ρ
     end
