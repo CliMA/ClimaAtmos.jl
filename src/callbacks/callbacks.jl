@@ -128,7 +128,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
     t = integrator.t
-
+    FT = eltype(Y)
     (; params) = p
     (; ᶠradiation_flux, rrtmgp_model) = p.radiation
     (; radiation_mode) = p.atmos
@@ -138,7 +138,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     set_insolation_variables!(Y, p, t, p.atmos.insolation)
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
-    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(floor(t / integrator.p.dt)))
+    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(floor(FT(t) / integrator.p.dt)))
     Fields.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
     return nothing
 end

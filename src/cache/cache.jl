@@ -1,5 +1,5 @@
 struct AtmosCache{
-    TT,
+    FT,
     AM,
     NUM,
     CAP,
@@ -20,7 +20,7 @@ struct AtmosCache{
     CONSCHECK,
 }
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
-    dt::TT
+    dt::FT
 
     """AtmosModel"""
     atmos::AM
@@ -94,6 +94,7 @@ function build_cache(
 )
     (; dt, start_date, output_dir) = sim_info
     FT = eltype(params)
+    dt = FT(dt)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates

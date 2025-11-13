@@ -25,15 +25,14 @@ end
 # Helper function to compute the limit of the tendency in the traingle limiter.
 # The limit is defined as the available amont / n times model time step.
 function limit(q, dt, n::Int)
-    FT = eltype(q)
-    return q / FT(dt) / n
+    return q / dt / n
 end
 
 function moisture_fixer(q, qᵥ, dt)
     FT = eltype(q)
     return triangle_inequality_limiter(
-        -min(FT(0), q / FT(dt)),
-        limit(qᵥ, FT(dt), 5),
+        -min(FT(0), q / dt),
+        limit(qᵥ, dt, 5),
         FT(0),
     )
 end
@@ -161,10 +160,9 @@ Returns the qₜ source term due to precipitation formation
 defined as Δm_tot / (m_dry + m_tot) for the 0-moment scheme
 """
 function q_tot_0M_precipitation_sources(thp, cmp::CMP.Parameters0M, dt, qₜ, ts)
-    FT = eltype(qₜ)
     return -triangle_inequality_limiter(
         -CM0.remove_precipitation(cmp, PP(thp, ts)),
-        qₜ / FT(dt),
+        qₜ / dt,
     )
 end
 
@@ -570,7 +568,7 @@ function aerosol_activation_sources(
     return ifelse(
         S_max < S || isnan(n_act) || n_act < nₗ,
         FT(0),
-        (n_act - nₗ) / FT(dt),
+        (n_act - nₗ) / dt,
     )
 end
 
