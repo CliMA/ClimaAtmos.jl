@@ -3,6 +3,74 @@
 #####
 
 """
+    sgs_scalar_flux_bc(
+        z_sfc, ρ_sfc, χ_sfc, ᶜχ_int, ᶜaʲ_int, ᶜχʲ_int,
+        ρ_flux_χ, ustar, obukhov_length, sfc_local_geometry,
+    )
+
+Computes the surface scalar flux for an EDMF updraft subdomain based on the
+grid-mean scalar flux and an estimated subgrid (SGS) scalar fluctuation at the
+surface.
+
+This function takes the resolved (grid-mean) surface flux of a scalar `χ`
+(e.g., `mse` or `q_tot`) and returns the corresponding flux for an EDMF updraft.
+The updraft scalar value at the surface is approximated as 
+χʲ_sfc = χ_sfc + C * σ,
+where `χ_sfc` is the grid-mean surface scalar, `σ` is the estimated SGS scalar
+variance at the surface (computed from Monin–Obukhov similarity), and `C` is a
+coefficient based on the updraft fractional area. The resulting updraft flux is
+obtained by scaling the grid-mean flux according to the ratio of surface–interior
+scalar contrasts in the updraft and grid-mean fields.
+
+# Arguments
+- `z_sfc`: Surface height of the scalar exchange level.
+- `ρ_sfc`: Air density at the surface.
+- `χ_sfc`: Grid-mean scalar value at the surface.
+- `ᶜχ_int`: Grid-mean interior scalar value at the first model level.
+- `ᶜaʲ_int`: Updraft fractional area at the first model level.
+- `ᶜχʲ_int`: Updraft interior scalar value at the first model level.
+- `ρ_flux_χ`: Grid-mean surface flux of the scalar (mass flux form).
+- `ustar`: Friction velocity.
+- `obukhov_length`: Obukhov length for surface stability.
+- `sfc_local_geometry`: Local geometric factors for the surface exchange.
+
+# Returns
+- Updraft surface flux for scalar `χ` (same units as `ρ_flux_χ`).
+"""
+function sgs_scalar_flux_bc(
+    z_sfc::FT,
+    ρ_sfc,
+    χ_sfc,
+    ᶜχ_int,
+    ᶜaʲ_int,
+    ᶜχʲ_int,
+    ρ_flux_χ,
+    ustar,
+    obukhov_length,
+    sfc_local_geometry,
+) where {FT}
+
+    kinematic_sfc_flux_χ = ρ_flux_χ / ρ_sfc # Convert to kinematic flux [K m/s]
+
+    χ_sfc_var = get_scalar_variance(
+        kinematic_sfc_flux_χ,
+        ustar,
+        z_sfc,
+        obukhov_length,
+        sfc_local_geometry,
+    )
+
+    # TODO: This assumes that there is only one updraft, or that ᶜaʲ_int
+    #       is the specific area fraction for the updraft being considered when
+    #       sampling from the tail of the combined subgrid + grid-mean distribution.
+    #       The percentile range [1 - ᶜaʲ_int, 1] samples the top ᶜaʲ_int fraction.
+    χʲ_sfc_coeff = percentile_bounds_mean_norm(1 - ᶜaʲ_int, FT(1))
+    χʲ_sfc = χ_sfc + χʲ_sfc_coeff * sqrt(χ_sfc_var)
+
+    return (χʲ_sfc - ᶜχʲ_int) / (χ_sfc - ᶜχ_int) * ρ_flux_χ
+end
+
+"""
     sgs_scalar_first_interior_bc(
         ᶜz_int::FT,
         ᶜρ_int,
@@ -66,7 +134,7 @@ function sgs_scalar_first_interior_bc(
 
     kinematic_sfc_flux_scalar = sfc_ρ_flux_scalar / ᶜρ_int # Convert to kinematic flux [K m/s]
 
-    scalar_var = get_first_interior_variance(
+    scalar_var = get_scalar_variance(
         kinematic_sfc_flux_scalar,
         ustar,
         ᶜz_int,
@@ -86,7 +154,7 @@ function sgs_scalar_first_interior_bc(
 end
 
 """
-    get_first_interior_variance(
+    get_scalar_variance(
         kinematic_scalar_flux,
         ustar::FT,
         z,
@@ -115,7 +183,7 @@ Arguments:
 Returns:
 - The estimated variance of the scalar quantity [K² or (kg/kg)²].
 """
-function get_first_interior_variance(
+function get_scalar_variance(
     kinematic_scalar_flux,
     ustar::FT,
     z,
