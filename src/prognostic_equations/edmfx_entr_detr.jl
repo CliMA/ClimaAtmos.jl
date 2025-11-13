@@ -580,6 +580,139 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     return nothing
 end
 
+"""
+    edmfx_first_interior_entr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
+
+Apply first-interior–level entrainment tendencies for each EDMF updraft.
+
+This routine (1) seeds a small positive updraft area fraction when surface
+buoyancy flux is positive—allowing the plume to grow from zero—and  
+(2) adds entrainment tendencies for moist static energy (`mse`) and total
+humidity (`q_tot`) in the first model cell.  
+The entrained tracer value is taken from `sgs_scalar_first_interior_bc`.
+"""
+edmfx_first_interior_entr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+function edmfx_first_interior_entr_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    turbconv_model::PrognosticEDMFX,
+)
+
+    (; params, dt) = p
+    (; ᶜK, ᶜρʲs, ᶜentrʲs, ᶜts) = p.precomputed
+
+    FT = eltype(params)
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    thermo_params = CAP.thermodynamics_params(params)
+    turbconv_params = CAP.turbconv_params(params)
+    ᶜaʲ_int_val = p.scratch.temp_data_level
+    ᶜmse_buoyant_air_int_val = p.scratch.temp_data_level_2
+    ᶜq_tot_buoyant_air_int_val = p.scratch.temp_data_level_3
+
+    (;
+        ustar,
+        obukhov_length,
+        buoyancy_flux,
+        ρ_flux_h_tot,
+        ρ_flux_q_tot,
+        ustar,
+        obukhov_length,
+    ) =
+        p.precomputed.sfc_conditions
+
+    ᶜz_int_val = Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
+    z_sfc_val =
+        Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, Fields.half))
+    ᶜρ_int_val = Fields.field_values(Fields.level(Y.c.ρ, 1))
+
+    buoyancy_flux_val = Fields.field_values(buoyancy_flux)
+    ρ_flux_h_tot_val = Fields.field_values(ρ_flux_h_tot)
+    ρ_flux_q_tot_val = Fields.field_values(ρ_flux_q_tot)
+
+    ustar_val = Fields.field_values(ustar)
+    obukhov_length_val = Fields.field_values(obukhov_length)
+    sfc_local_geometry_val = Fields.field_values(
+        Fields.local_geometry_field(Fields.level(Y.f, Fields.half)),
+    )
+
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
+    ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
+    ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
+    ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
+    env_mse_int_val = Fields.field_values(Fields.level(ᶜmse⁰, 1))
+
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    ᶜq_tot_int_val = Fields.field_values(Fields.level(ᶜq_tot, 1))
+    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+    env_q_tot_int_val = Fields.field_values(Fields.level(ᶜq_tot⁰, 1))
+
+    for j in 1:n
+
+        # Seed a small positive updraft area fraction when surface buoyancy flux is positive.
+        # This perturbation prevents the plume area from staying identically zero,
+        # allowing entrainment to grow it to the prescribed surface area.
+        sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
+        sgsʲs_ρa_int_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
+        sgsʲs_ρaₜ_int_val = Fields.field_values(Fields.level(Yₜ.c.sgsʲs.:($j).ρa, 1))
+        @. sgsʲs_ρaₜ_int_val += ifelse(buoyancy_flux_val < 0,
+            0,
+            max(0, (sgsʲs_ρ_int_val * $(eps(FT)) - sgsʲs_ρa_int_val) / FT(dt)),
+        )
+
+        # Apply entrainment tendencies in the first model cell for moist static energy (mse) 
+        # and total humidity (q_tot). The entrained fluid is assumed to have a scalar value 
+        # given by `sgs_scalar_first_interior_bc` (mean + SGS perturbation). Since 
+        # `edmfx_entr_detr_tendency!` computes entrainment based on the environment–updraft 
+        # contrast, we supply the high-value (entrained) tracer minus the environment value 
+        # here to form the correct tendency.
+        entr_int_val = Fields.field_values(Fields.level(ᶜentrʲs.:($j), 1))
+        @. ᶜaʲ_int_val = max(
+            FT(turbconv_params.surface_area),
+            draft_area(sgsʲs_ρa_int_val, sgsʲs_ρ_int_val),
+        )
+
+        sgsʲs_mseₜ_int_val =
+            Fields.field_values(Fields.level(Yₜ.c.sgsʲs.:($j).mse, 1))
+        @. ᶜmse_buoyant_air_int_val = sgs_scalar_first_interior_bc(
+            ᶜz_int_val - z_sfc_val,
+            ᶜρ_int_val,
+            ᶜaʲ_int_val,
+            ᶜh_tot_int_val - ᶜK_int_val,
+            buoyancy_flux_val,
+            ρ_flux_h_tot_val,
+            ustar_val,
+            obukhov_length_val,
+            sfc_local_geometry_val,
+        )
+        @. sgsʲs_mseₜ_int_val += entr_int_val * (ᶜmse_buoyant_air_int_val - env_mse_int_val)
+
+        sgsʲs_q_totₜ_int_val =
+            Fields.field_values(Fields.level(Yₜ.c.sgsʲs.:($j).q_tot, 1))
+        @. ᶜq_tot_buoyant_air_int_val = sgs_scalar_first_interior_bc(
+            ᶜz_int_val - z_sfc_val,
+            ᶜρ_int_val,
+            ᶜaʲ_int_val,
+            ᶜq_tot_int_val,
+            buoyancy_flux_val,
+            ρ_flux_q_tot_val,
+            ustar_val,
+            obukhov_length_val,
+            sfc_local_geometry_val,
+        )
+        @. sgsʲs_q_totₜ_int_val +=
+            entr_int_val * (ᶜq_tot_buoyant_air_int_val - env_q_tot_int_val)
+
+    end
+end
+
 # limit entrainment and detrainment rates for prognostic EDMFX
 # limit rates approximately below the inverse timescale 1/dt
 limit_entrainment(entr::FT, a, dt) where {FT} = max(

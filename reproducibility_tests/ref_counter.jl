@@ -1,4 +1,4 @@
-275
+276
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+276
+- Update prognostic EDMF boundary conditions: apply equal surface fluxes to the
+  updraft and grid mean, and enable entrainment of buoyant air in the first cell.
+
 275
 - Change order of GPU calculations for better performance, but it
   results in slightly different floating point rounding.  Artifacts

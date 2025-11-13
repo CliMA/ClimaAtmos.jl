@@ -556,9 +556,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities_part1!(Y, p, t)
             ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
     end
 
-    if turbconv_model isa PrognosticEDMFX
-        set_prognostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
-    elseif turbconv_model isa DiagnosticEDMFX
+    if turbconv_model isa DiagnosticEDMFX
         set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
     elseif !(isnothing(turbconv_model))
         # Do nothing for other turbconv models for now

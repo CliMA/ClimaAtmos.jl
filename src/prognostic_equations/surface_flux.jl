@@ -105,6 +105,7 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
 
     FT = eltype(Y)
     (; params) = p
+    (; turbconv_model) = p.atmos
     (; sfc_conditions, ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
 
@@ -123,6 +124,12 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
     )
     btt = boundary_tendency_scalar(ᶜh_tot, sfc_conditions.ρ_flux_h_tot)
     @. Yₜ.c.ρe_tot -= btt
+
+    if turbconv_model isa PrognosticEDMFX
+        # assuming one updraft
+        @. Yₜ.c.sgsʲs.:(1).mse -= specific(btt, p.precomputed.ᶜρʲs.:(1))
+    end
+
     ρ_flux_χ = p.scratch.sfc_temp_C3
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
@@ -135,6 +142,12 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
         @. ᶜρχₜ -= btt
         if ρχ_name == @name(ρq_tot)
             @. Yₜ.c.ρ -= btt
+        end
+
+        if turbconv_model isa PrognosticEDMFX
+            # assuming one updraft
+            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c, get_χʲ_name_from_ρχ_name(ρχ_name))
+            @. ᶜχʲₜ -= specific(btt, p.precomputed.ᶜρʲs.:(1))
         end
     end
 end
