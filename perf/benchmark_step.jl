@@ -14,11 +14,9 @@ include(joinpath("perf", "benchmark_step.jl"));
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaComms
 ClimaComms.@import_required_backends
-import ClimaCore
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
-import ClimaComms
 import CUDA
 
 include("common.jl")
