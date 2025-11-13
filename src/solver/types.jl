@@ -142,7 +142,56 @@ abstract type AbstractSurfaceTemperature end
 struct PrescribedSST <: AbstractSurfaceTemperature end
 Base.@kwdef struct SlabOceanSST{FT} <: AbstractSurfaceTemperature
     # optional slab ocean parameters:
-    depth_ocean::FT = 1 #40 # ocean mixed layer depth [m]
+    depth_ocean::FT = 40 # ocean mixed layer depth [m]
+    ρ_ocean::FT = 1020 # ocean density [kg / m³]
+    cp_ocean::FT = 4184 # ocean heat capacity [J/(kg * K)]
+    q_flux::Bool = false # use Q-flux (parameterization of horizontal ocean mixing of energy)
+    Q₀::FT = -20 # Q-flux maximum mplitude [W/m²]
+    ϕ₀::FT = 16 # Q-flux meridional scale [deg]
+end
+
+"""
+    EisenmanSeaIce <: AbstractSurfaceTemperature
+
+Thermodynamic 0-layer sea ice model based on Semtner 1976, refined by
+Eisenman 2009 and Zhang et. al. 2021. Includes prognostic ice thickness,
+mixed layer temperature, and surface temperature.
+
+## Assumptions and simplifications:
+- Constant ocean mixed layer depth
+- No horizontal ocean heat transport (besides optional Q-flux)
+- No snow cover. 
+- Water will freeze at at freshwater melting temperature of 273.16 K.
+- Constant Latent heat of fusion of ice is used: L_ice = 3.0*10^8 J/m³.
+
+Parameters:
+- z0m: roughness length for momentum [m]
+- z0b: roughness length for buoyancy [m]  
+- C0_base: ice base transfer coefficient [W/m²/K]
+- T_base: ice base temperature [K]
+- L_ice: latent heat coefficient for ice [J/m³]
+- T_freeze: freezing point temperature [K]
+- k_ice: thermal conductivity of ice [W/m/K]
+- α_ice: ice albedo
+- α_ocean: ocean albedo
+- h_ml: mixed layer depth [m]
+- ρ_ocean: mixed layer density [kg/m³]
+- c_ocean: mixed layer heat capacity [J/kg/K]
+"""
+Base.@kwdef struct EisenmanSeaIce{FT} <: AbstractSurfaceTemperature
+    # sea ice parameters
+    z0m::FT = 1e-3
+    z0b::FT = 1e-5
+    C0_base::FT = 120
+    T_base::FT = 273.16
+    L_ice::FT = 3e8
+    T_freeze::FT = 273.16
+    k_ice::FT = 2
+    #α_ice::FT = 0.70
+    #α_ocean::FT = 0.1 # (set elsewhere as idealized_ocean_albedo)
+
+    # ocean mixed layer parameters
+    depth_ocean::FT = 1 # 40 # ocean mixed layer depth [m]
     ρ_ocean::FT = 1020 # ocean density [kg / m³]
     cp_ocean::FT = 4184 # ocean heat capacity [J/(kg * K)]
     q_flux::Bool = false # use Q-flux (parameterization of horizontal ocean mixing of energy)
