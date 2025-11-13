@@ -396,8 +396,6 @@ function edmfx_sgs_vertical_advection_tendency!(
 
     for j in 1:n
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
-        ᶜright_biased_∂a∂z =
-            @. lazy(ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa))))
 
         # Flux form vertical advection of area farction with the grid mean velocity
         vtt =
@@ -462,7 +460,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜqʲ = MatrixFields.get_field(Y, qʲ_name)
                 ᶜqʲₜ = MatrixFields.get_field(Yₜ, qʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-                ᶜaqʲ = (@. lazy(ᶜa * ᶜqʲ))
 
                 # Advective form advection of tracers with updraft velocity
                 va = vertical_advection(
@@ -473,21 +470,16 @@ function edmfx_sgs_vertical_advection_tendency!(
                 @. ᶜqʲₜ += va
 
                 # Flux form sedimentation of tracers
-                vtt = vertical_transport_sedimentation(
+                vtt = updraft_sedimentation(
                     ᶜρʲs.:($j),
                     ᶜwʲ,
-                    ᶜaqʲ,
+                    ᶜa,
+                    ᶜqʲ,
                     ᶠJ,
                 )
-                sed_detr = sedimentation_detrainment(
-                    ᶜρʲs.:($j),
-                    ᶜwʲ,
-                    ᶜqʲ,
-                    ᶜright_biased_∂a∂z,
-                )
-                @. ᶜqʲₜ += ᶜinv_ρ̂ * (vtt + sed_detr)
-                @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * (vtt + sed_detr)
-                @. ᶜ∂ρ∂t_sed += (vtt + sed_detr)
+                @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
+                @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
+                @. ᶜ∂ρ∂t_sed += vtt
 
                 # Flux form sedimentation of energy
                 if name in (@name(q_liq), @name(q_rai))
@@ -501,19 +493,15 @@ function edmfx_sgs_vertical_advection_tendency!(
                 else
                     error("Unsupported moisture tracer variable")
                 end
-                vtt = vertical_transport_sedimentation(
+                vtt = updraft_sedimentation(
                     ᶜρʲs.:($j),
                     ᶜwʲ,
-                    ᶜaqʲ .* ᶜmse_li,
+                    ᶜa,
+                    ᶜqʲ .* ᶜmse_li,
                     ᶠJ,
                 )
-                sed_detr = sedimentation_detrainment(
-                    ᶜρʲs.:($j),
-                    ᶜwʲ,
-                    ᶜqʲ .* ᶜmse_li,
-                    ᶜright_biased_∂a∂z,
-                )
-                @. Yₜ.c.sgsʲs.:($$j).mse += ᶜinv_ρ̂ * (vtt + sed_detr)
+                @. Yₜ.c.sgsʲs.:($$j).mse +=
+                    ᶜinv_ρ̂ * vtt
             end
 
             # Contribution of density variation due to sedimentation
@@ -552,7 +540,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-                ᶜaχʲ = (@. lazy(ᶜa * ᶜχʲ))
 
                 # Advective form advection of tracers with updraft velocity
                 va = vertical_transport(
@@ -563,23 +550,76 @@ function edmfx_sgs_vertical_advection_tendency!(
                 @. ᶜχʲₜ += va
 
                 # Flux form sedimentation of tracers
-                vtt = vertical_transport_sedimentation(
+                vtt = updraft_sedimentation(
                     ᶜρʲs.:($j),
                     ᶜwʲ,
-                    ᶜaχʲ,
+                    ᶜa,
+                    ᶜχʲ,
                     ᶠJ,
                 )
-                sed_detr = sedimentation_detrainment(
-                    ᶜρʲs.:($j),
-                    ᶜwʲ,
-                    ᶜχʲ,
-                    ᶜright_biased_∂a∂z,
-                )
-                @. ᶜχʲₜ += ᶜinv_ρ̂ * (vtt + sed_detr)
+                @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
 
                 # Contribution of density variation due to sedimentation
                 @. ᶜχʲₜ -= ᶜinv_ρ̂ * ᶜχʲ * ᶜ∂ρ∂t_sed
             end
         end
     end
+end
+
+"""
+    updraft_sedimentation(ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ)
+
+Compute the sedimentation tendency of tracer `χ` within an updraft, including lateral 
+detrainment when the updraft area increases with height.
+
+# Description
+Sedimenting particles fall with velocity `w` through an updraft of fractional area `a(z)`.  
+The vertical flux divergence gives a tendency of ``∂(ρ w a χ)/∂z``.  
+When `∂a/∂z > 0`, some sedimenting mass exits laterally through the expanding sides, 
+producing a detrainment tendency of ``-ρ w χ ∂a/∂z``.  
+The resulting net tendency in this case is ``a * ∂(ρ w χ)/∂z``.
+
+# Equation
+The lateral flux through the updraft side surface `S` within one grid column is  
+``F_side = ∫_S (ρ χ (w · n)) dS ≈ ρ χ (w · n) A_side,``  
+where `n` is the outward unit normal and `A_side` the side area.  
+For predominantly vertical sedimentation,  
+``w·n A_side ≈ w A_grid [a(z+Δz) - a(z)] = w A_grid Δa.``  
+Dividing by the grid column volume `A_grid·Δz` gives the flux divergence (tendency):  
+``tendency ≈ ρ χ w ∂a/∂z.``  
+A negative sign is applied to represent the loss (detrainment) from the updraft:  
+``Dₛ = -ρ w χ ∂a/∂z.``
+
+# Arguments
+- `ᶜρ`: air density  
+- `ᶜw`: sedimentation velocity (positive downward)  
+- `ᶜa`: updraft area fraction  
+- `ᶜχ`: tracer mixing ratio  
+- `ᶠJ`: face Jacobian (grid geometry)
+
+# Returns
+Tracer tendency due to sedimentation and lateral detrainment.
+"""
+function updraft_sedimentation(
+    ᶜρ,
+    ᶜw,
+    ᶜa,
+    ᶜχ,
+    ᶠJ,
+)
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
+    ∂a∂z = @. lazy(ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa))))
+    return @. lazy(
+        ifelse(
+            ∂a∂z < 0,
+            -(ᶜprecipdivᵥ(
+                ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(-(ᶜw)) * ᶜa * ᶜχ),
+            )),
+            -(
+                ᶜa * ᶜprecipdivᵥ(
+                    ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(-(ᶜw)) * ᶜχ),
+                )
+            ),
+        ),
+    )
 end

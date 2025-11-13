@@ -871,15 +871,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             DiagonalMatrixRow(ᶜχʲ) ⋅ ᶜadvdivᵥ_matrix()
                         ) ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
 
-                    # precipitation
+                    # sedimentation
                     @. ᶜtridiagonal_matrix_scalar =
-                        dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-                        DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
-                        ᶠright_bias_matrix() ⋅
-                        DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ) * ᶜa)
-                    # precipitation detrainment
-                    @. ᶜtridiagonal_matrix_scalar +=
-                        dtγ * -DiagonalMatrixRow(ᶜρʲs.:(1) * ᶜwʲ * max(0, ᶜ∂a∂z))
+                        dtγ * ifelse(ᶜ∂a∂z < 0,
+                            -(ᶜprecipdivᵥ_matrix()) ⋅
+                            DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
+                            ᶠright_bias_matrix() ⋅
+                            DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ) * ᶜa),
+                            -DiagonalMatrixRow(ᶜa) ⋅ ᶜprecipdivᵥ_matrix() ⋅
+                            DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
+                            ᶠright_bias_matrix() ⋅
+                            DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ)),
+                        )
 
                     @. ∂ᶜχʲ_err_∂ᶜχʲ +=
                         DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar

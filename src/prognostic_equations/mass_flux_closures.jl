@@ -129,9 +129,8 @@ function edmfx_vertical_diffusion_tendency!(
 )
     if p.atmos.edmfx_model.vertical_diffusion isa Val{true}
         (; params) = p
-        (; ᶜts, ᶜK, ᶜρʲs) = p.precomputed
+        (; ᶜρʲs) = p.precomputed
         FT = eltype(p.params)
-        thermo_params = CAP.thermodynamics_params(params)
         turbconv_params = CAP.turbconv_params(params)
         n = n_mass_flux_subdomains(turbconv_model)
         ᶜdivᵥ_mse = Operators.DivergenceF2C(
@@ -142,15 +141,6 @@ function edmfx_vertical_diffusion_tendency!(
             top = Operators.SetValue(C3(0)),
             bottom = Operators.SetValue(C3(0)),
         )
-        ᶜinv_ρ̂ = (@. lazy(
-            specific(
-                FT(1),
-                Y.c.sgsʲs.:(1).ρa,
-                FT(0),
-                ᶜρʲs.:(1),
-                turbconv_model,
-            ),
-        ))
 
         (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
         ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
@@ -165,7 +155,6 @@ function edmfx_vertical_diffusion_tendency!(
 
         for j in 1:n
             ᶜρʲ = ᶜρʲs.:($j)
-            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
             ᶜmseʲ = Y.c.sgsʲs.:($j).mse
             ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
             # Note: For this and other diffusive tendencies, we should use ρaʲ instead of ρʲ,
@@ -181,7 +170,7 @@ function edmfx_vertical_diffusion_tendency!(
             p.atmos.microphysics_model isa Microphysics2Moment
         )
             α_precip = CAP.α_vert_diff_tracer(params)
-            ᶜρaʲ = Y.c.sgsʲs.:(1).ρa
+            ᶜρʲ = ᶜρʲs.:(1)
             ᶜdivᵥ_q = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
@@ -205,8 +194,7 @@ function edmfx_vertical_diffusion_tendency!(
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
 
-                @. ᶜχʲₜ -=
-                    ᶜinv_ρ̂ * ᶜdivᵥ_q(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ)))
+                @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
             end
         end
     end

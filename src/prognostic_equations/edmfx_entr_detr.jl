@@ -526,40 +526,6 @@ function detrainment(
     return max(detr, 0)
 end
 
-"""
-    sedimentation_detrainment(ᶜρ, ᶜw, ᶜχ, ᶜ∂a∂z)
-
-Compute the lateral detrainment tendency of a sedimenting tracer `χ` within a tilted updraft.
-
-# Description
-Sedimenting particles moving downward through an updraft with a height-varying area fraction `a(z)` 
-can exit laterally through its sloping sides. When the updraft area increases with height (`∂a/∂z > 0`), 
-this produces a lateral outflow (detrainment) of tracer mass proportional to the local air density `ρ`, 
-sedimentation velocity `w`, tracer mixing ratio `χ`, and the vertical gradient of area fraction `∂a/∂z`.
-
-# Equation
-The lateral flux through the updraft side surface `S` within one grid column is  
-F_side = ∫_S (ρ χ (w · n)) dS ≈ ρ χ (w · n) A_side,  
-where `n` is the outward unit normal and `A_side` the side area.  
-For predominantly vertical sedimentation,  
-w·n A_side ≈ w A_grid [a(z+Δz) - a(z)] = w A_grid Δa.  
-Dividing by the grid column volume `A_grid·Δz` gives the flux divergence (tendency):  
-tendency ≈ ρ χ w ∂a/∂z. A negative sign is applied to represent the loss (detrainment) from the updraft:  
-Dₛ = -ρ w χ ∂a/∂z.
-
-# Arguments
-- `ᶜρ`: air density at cell center  
-- `ᶜw`: sedimentation velocity (positive downward)  
-- `ᶜχ`: tracer mixing ratio  
-- `ᶜ∂a∂z`: vertical derivative of updraft area fraction  
-
-# Returns
-Lateral detrainment tendency of tracer `χ` due to sedimentation.
-"""
-function sedimentation_detrainment(ᶜρ, ᶜw, ᶜχ, ᶜ∂a∂z)
-    return @. lazy(-1 * ᶜρ * ᶜw * ᶜχ * max(0, ᶜ∂a∂z))
-end
-
 function turbulent_entrainment(turbconv_params, ᶜaʲ)
     turb_entr_param_vec = CAP.turb_entr_param_vec(turbconv_params)
     return max(turb_entr_param_vec[1] * exp(-turb_entr_param_vec[2] * ᶜaʲ), 0)
