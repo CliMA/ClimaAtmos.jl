@@ -206,6 +206,7 @@ end
 Apply EDMF filters:
  - Relax u_3 to zero when it is negative
  - Relax ρa to zero when it is negative
+ - Relax ρa to ρ when a is larger than one
 
 This function modifies the tendency `Yₜ` in place based on the current state `Y`,
 parameters `p`, time `t`, and the turbulence convection model `turbconv_model`.
@@ -225,6 +226,8 @@ function edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
                 C3(min(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0)) / FT(dt)
             @. Yₜ.c.sgsʲs.:($$j).ρa -= min(Y.c.sgsʲs.:($$j).ρa, 0) / FT(dt)
+            @. Yₜ.c.sgsʲs.:($$j).ρa -=
+                max(Y.c.sgsʲs.:($$j).ρa - p.precomputed.ᶜρʲs.:($$j), 0) / FT(dt)
         end
     end
 end

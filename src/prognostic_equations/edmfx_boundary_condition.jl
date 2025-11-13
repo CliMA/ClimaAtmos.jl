@@ -3,6 +3,54 @@
 #####
 
 """
+    sgs_scalar_flux_bc(
+        χ_sfc, ᶜχ_int, ᶜχʲ_int, ᶜaʲ_int, ρ_flux_χ
+    )
+
+Computes the surface scalar flux for an EDMF updraft subdomain by scaling the
+grid-mean surface flux according to the relative surface–interior scalar
+contrasts in the updraft and the grid mean.
+
+In this simplified formulation, the updraft scalar value at the surface is
+assumed to equal the grid-mean surface value (`χ_sfc`). The updraft flux is
+obtained by multiplying the grid-mean scalar flux (`ρ_flux_χ`) by the ratio
+(χ_sfc - ᶜχʲ_int)/(χ_sfc - ᶜχ_int), with appropriate limiting for numerical 
+stability. If the surface–interior contrast in the grid mean is negligible, 
+the grid-mean flux is returned to avoid division by zero.
+
+# Arguments
+- `χ_sfc`: Scalar value at the surface (same for grid-mean and updraft).
+- `ᶜχ_int`: Grid-mean interior scalar at the first model level.
+- `ᶜχʲ_int`: Updraft interior scalar at the first model level.
+- `ᶜaʲ_int`: Updraft fractional area at the first model level.
+- `ρ_flux_χ`: Grid-mean surface scalar flux (mass-flux form).
+
+# Returns
+- Updraft surface scalar flux for `χ` (same units as `ρ_flux_χ`), scaled by the
+  limited ratio of updraft to grid-mean scalar contrasts.
+"""
+
+function sgs_scalar_flux_bc(
+    χ_sfc::FT,
+    ᶜχ_int,
+    ᶜχʲ_int,
+    ᶜaʲ_int,
+    ρ_flux_χ,
+) where {FT}
+
+    # when surface-interior difference on the grid mean is zero (negligible), 
+    # return grid mean flux (which is zero or negligible) to avoid division by zero
+    if abs(χ_sfc - ᶜχ_int) < sqrt(floatmin(FT))
+        return ρ_flux_χ
+    end
+
+    # we limit the ratio of sgs to gs scalar flux for numerical stability; physically we don't need a limit
+    limit = max(0, 1 / ᶜaʲ_int)
+    sgs_to_gs_flux_ratio = max(-limit, min(limit, (χ_sfc - ᶜχʲ_int) / (χ_sfc - ᶜχ_int)))
+    return sgs_to_gs_flux_ratio * ρ_flux_χ
+end
+
+"""
     sgs_scalar_first_interior_bc(
         ᶜz_int::FT,
         ᶜρ_int,

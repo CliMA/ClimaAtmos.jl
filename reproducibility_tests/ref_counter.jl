@@ -1,4 +1,4 @@
-274
+275
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+275
+- Change boundary conditions for prognostic EDMF; updraft surface fluxes are
+  computed based on surface-interior tracer contrasts and grid-mean fluxes
+
 274
 - Remove unused calculation of TKE exchange in mixing length
 

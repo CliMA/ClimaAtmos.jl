@@ -129,132 +129,19 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
 
     FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
-    thermo_params = CAP.thermodynamics_params(p.params)
     turbconv_params = CAP.turbconv_params(p.params)
+    ᶜaʲ_int_val = p.scratch.temp_data_level
 
-    (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜK, ᶜtsʲs, ᶜρʲs, ᶜts) = p.precomputed
-    (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
+    (; ᶜρʲs) = p.precomputed
 
     for j in 1:n
-        ᶜtsʲ = ᶜtsʲs.:($j)
-        ᶜmseʲ = Y.c.sgsʲs.:($j).mse
-        ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
-        if moisture_model isa NonEquilMoistModel && (
-            microphysics_model isa Microphysics1Moment ||
-            microphysics_model isa Microphysics2Moment
-        )
-            ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
-            ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
-            ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
-            ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
-        end
-
-        # We need field_values everywhere because we are mixing
-        # information from surface and first interior inside the
-        # sgs_scalar_first_interior_bc call.
-        ᶜz_int_val =
-            Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
-        z_sfc_val = Fields.field_values(
-            Fields.level(Fields.coordinate_field(Y.f).z, Fields.half),
-        )
-        ᶜρ_int_val = Fields.field_values(Fields.level(Y.c.ρ, 1))
-        ᶜp_int_val = Fields.field_values(Fields.level(ᶜp, 1))
-        (; ρ_flux_h_tot, ρ_flux_q_tot, ustar, obukhov_length) =
-            p.precomputed.sfc_conditions
-
-        buoyancy_flux_val = Fields.field_values(buoyancy_flux)
-        ρ_flux_h_tot_val = Fields.field_values(ρ_flux_h_tot)
-        ρ_flux_q_tot_val = Fields.field_values(ρ_flux_q_tot)
-
-        ustar_val = Fields.field_values(ustar)
-        obukhov_length_val = Fields.field_values(obukhov_length)
-        sfc_local_geometry_val = Fields.field_values(
-            Fields.local_geometry_field(Fields.level(Y.f, Fields.half)),
-        )
-
-        # Based on boundary conditions for updrafts we overwrite
-        # the first interior point for EDMFX ᶜmseʲ...
-        ᶜaʲ_int_val = p.scratch.temp_data_level
-        # TODO: replace this with the actual surface area fraction when
-        # using prognostic surface area
-        @. ᶜaʲ_int_val = FT(turbconv_params.surface_area)
-        ᶜh_tot = @. lazy(
-            TD.total_specific_enthalpy(
-                thermo_params,
-                ᶜts,
-                specific(Y.c.ρe_tot, Y.c.ρ),
-            ),
-        )
-        ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
-        ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
-        ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))
-        @. ᶜmseʲ_int_val = sgs_scalar_first_interior_bc(
-            ᶜz_int_val - z_sfc_val,
-            ᶜρ_int_val,
-            ᶜaʲ_int_val,
-            ᶜh_tot_int_val - ᶜK_int_val,
-            buoyancy_flux_val,
-            ρ_flux_h_tot_val,
-            ustar_val,
-            obukhov_length_val,
-            sfc_local_geometry_val,
-        )
-
-        # ... and the first interior point for EDMFX ᶜq_totʲ.
-
-        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        ᶜq_tot_int_val = Fields.field_values(Fields.level(ᶜq_tot, 1))
-        ᶜq_totʲ_int_val = Fields.field_values(Fields.level(ᶜq_totʲ, 1))
-        @. ᶜq_totʲ_int_val = sgs_scalar_first_interior_bc(
-            ᶜz_int_val - z_sfc_val,
-            ᶜρ_int_val,
-            ᶜaʲ_int_val,
-            ᶜq_tot_int_val,
-            buoyancy_flux_val,
-            ρ_flux_q_tot_val,
-            ustar_val,
-            obukhov_length_val,
-            sfc_local_geometry_val,
-        )
-
-        # Then overwrite the prognostic variables at first inetrior point.
-        ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
-        ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
-        if moisture_model isa NonEquilMoistModel && (
-            microphysics_model isa Microphysics1Moment ||
-            microphysics_model isa Microphysics2Moment
-        )
-            ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
-            ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
-            ᶜq_raiʲ_int_val = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
-            ᶜq_snoʲ_int_val = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
-            @. ᶜtsʲ_int_val = TD.PhaseNonEquil_phq(
-                thermo_params,
-                ᶜp_int_val,
-                ᶜmseʲ_int_val - ᶜΦ_int_val,
-                TD.PhasePartition(
-                    ᶜq_totʲ_int_val,
-                    ᶜq_liqʲ_int_val + ᶜq_raiʲ_int_val,
-                    ᶜq_iceʲ_int_val + ᶜq_snoʲ_int_val,
-                ),
-            )
-        else
-            @. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
-                thermo_params,
-                ᶜp_int_val,
-                ᶜmseʲ_int_val - ᶜΦ_int_val,
-                ᶜq_totʲ_int_val,
-            )
-        end
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
         sgsʲs_ρa_int_val =
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
+        @. ᶜaʲ_int_val = draft_area(sgsʲs_ρa_int_val, sgsʲs_ρ_int_val)
 
-        @. sgsʲs_ρ_int_val = TD.air_density(thermo_params, ᶜtsʲ_int_val)
         @. sgsʲs_ρa_int_val =
-            $(FT(turbconv_params.surface_area)) *
-            TD.air_density(thermo_params, ᶜtsʲ_int_val)
+            $(FT(turbconv_params.surface_area)) * sgsʲs_ρ_int_val
     end
     return nothing
 end
