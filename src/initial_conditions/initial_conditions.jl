@@ -386,6 +386,136 @@ function overwrite_initial_conditions!(
     )
 end
 
+"""
+    correct_surface_pressure_for_topography!(
+        p_sfc,
+        file_path,
+        face_space,
+        Y,
+        ᶜT,
+        ᶜq_tot,
+        thermo_params,
+        regridder_kwargs,
+    )
+
+Adjusts the surface pressure field `p_sfc` to account for mismatches between
+ERA5 (file) surface altitude and the model orography when specifying pressure.
+
+    Δz = z_model_surface - z_sfc
+
+and applies a hydrostatic correction at the surface using the local moist gas
+constant and temperature at the surface:
+
+    p_sfc .= p_sfc .* exp.(-Δz * g ./ (R_m_sfc .* T_sfc))
+
+where:
+- `g` is gravitational acceleration from `thermo_params`
+- `R_m_sfc` is the moist-air gas constant evaluated from `ᶜq_tot` at the surface
+- `T_sfc` is the air temperature from `ᶜT` at the surface
+
+A small floor is applied to the denominator `R_m_sfc .* T_sfc` to avoid
+numerical blow-ups, and non-finite `Δz` entries leave `p_sfc` unchanged.
+
+Returns `true` if the correction is applied. If `z_sfc` is missing in the
+provided file, the function logs a warning and returns `false` without
+modifying `p_sfc`.
+
+Arguments
+- `p_sfc`: face field of surface pressure to be corrected (modified in-place)
+- `file_path`: path to the ERA5-derived initialization NetCDF file
+- `face_space`: face space of the model grid (for reading/regridding)
+- `Y`: prognostic state, used to obtain model surface height
+- `ᶜT`: center field of temperature
+- `ᶜq_tot`: center field of total specific humidity
+- `thermo_params`: thermodynamics parameter set
+- `regridder_kwargs`: keyword arguments forwarded to the regridder
+
+Notes
+- Expects `z_sfc` units in meters; if the variable is not present, the
+  correction is skipped.
+"""
+function correct_surface_pressure_for_topography!(
+    p_sfc,
+    file_path,
+    face_space,
+    Y,
+    ᶜT,
+    ᶜq_tot,
+    thermo_params,
+    regridder_kwargs,
+)
+    var_name = "z_sfc"
+    ᶠz_surface = nothing
+    # Explicitly check if `z_sfc` exists in the input file; skip if not found
+    has_z_sfc = NC.NCDataset(file_path) do ds
+        haskey(ds, var_name)
+    end
+    if !has_z_sfc
+        @warn "Skipping topographic correction because variable `$var_name` is missing from $(file_path)."
+        return false
+    end
+    ᶠz_surface = Fields.level(
+        SpaceVaryingInputs.SpaceVaryingInput(
+            file_path,
+            var_name,
+            face_space,
+            regridder_kwargs = regridder_kwargs,
+        ),
+        Fields.half,
+    )
+
+    if ᶠz_surface === nothing
+        return false
+    end
+
+    FT = eltype(thermo_params)
+    grav = thermo_params.grav
+
+    # Log initial surface pressure statistics
+    p_sfc_arr = Array(Fields.field2array(p_sfc))
+    p_sfc_finite = filter(isfinite, p_sfc_arr)
+
+    ᶠz_model_surface = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    ᶠΔz = zeros(face_space)
+    @. ᶠΔz = ᶠz_model_surface - ᶠz_surface
+
+    # Log surface height statistics
+    z_surface_arr = Array(Fields.field2array(ᶠz_surface))
+    z_model_arr = Array(Fields.field2array(ᶠz_model_surface))
+    Δz_arr = Array(Fields.field2array(ᶠΔz))
+
+    ᶜphase_partition = TD.PhasePartition.(ᶜq_tot)
+    ᶜR_m = TD.gas_constant_air.(thermo_params, ᶜphase_partition)
+    ᶠR_m = ᶠinterp.(ᶜR_m)
+    ᶠR_m_sfc = Fields.level(ᶠR_m, Fields.half)
+
+    ᶠT = ᶠinterp.(ᶜT)
+    ᶠT_sfc = Fields.level(ᶠT, Fields.half)
+
+    denom = copy(ᶠR_m_sfc)
+    @. denom = ᶠR_m_sfc * ᶠT_sfc
+    denom_floor = FT(10)
+    @. denom = ifelse(isfinite(denom) && denom > denom_floor, denom, denom_floor)
+
+    correction_factor = similar(ᶠΔz)
+    @. correction_factor = ifelse(
+        isfinite(ᶠΔz),
+        exp(FT(-1) * ᶠΔz * grav / denom),
+        one(FT),
+    )
+
+    @. p_sfc =
+        p_sfc *
+        ifelse(
+            isfinite(ᶠΔz),
+            exp(FT(-1) * ᶠΔz * grav / denom),
+            one(FT),
+        )
+
+    @info "Adjusted surface pressure to account for ERA5/model surface-height differences."
+    return true
+end
+
 # WeatherModel function using the shared implementation
 function overwrite_initial_conditions!(
     initial_condition::WeatherModel,
@@ -435,6 +565,16 @@ function overwrite_initial_conditions!(
         "q",
         center_space,
         regridder_kwargs = regridder_kwargs,
+    )
+    correct_surface_pressure_for_topography!(
+        p_sfc,
+        file_path,
+        face_space,
+        Y,
+        ᶜT,
+        ᶜq_tot,
+        thermo_params,
+        regridder_kwargs,
     )
 
     # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile,
