@@ -81,7 +81,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
     if !(p.atmos.disable_surface_flux_tendency)
         turb_e_flux_sfc_to_atm =
             Geometry.WVector.(
-                p.precomputed.sfc_conditions.ρ_flux_h_tot
+                p.precomputed.sfc_conditions.ρ_flux_h_tot,
             ).components.data.:1
     else
         turb_e_flux_sfc_to_atm = 0
@@ -121,7 +121,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
         if !(p.atmos.disable_surface_flux_tendency)
             sfc_turb_w_flux =
                 Geometry.WVector.(
-                    p.precomputed.sfc_conditions.ρ_flux_q_tot
+                    p.precomputed.sfc_conditions.ρ_flux_q_tot,
                 ).components.data.:1
         else
             sfc_turb_w_flux = 0
@@ -137,4 +137,94 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
         @. Yₜ.sfc.water -= P_liq + P_snow + sfc_turb_w_flux
     end
 
+end
+
+
+function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
+    FT = eltype(Y)
+    params = p.params
+
+    depth_ocean = slab.depth_ocean
+    ρ_ocean = slab.ρ_ocean
+    cp_ocean = slab.cp_ocean
+    q_flux_enabled = slab.q_flux
+
+    # --- ENERGY BALANCE ---
+    # Denominator for temperature tendency
+    surface_heat_capacity_per_area = ρ_ocean * cp_ocean * depth_ocean
+
+    # 1. Radiative energy surface fluxes
+    if !isnothing(p.atmos.radiation_mode)
+        # ᶠradiation_flux is positive for net upward flux at the surface 
+        # (SW_up - SW_down + LW_up - LW_down)
+        (; ᶠradiation_flux) = p.radiation
+        sfc_rad_e_flux = Spaces.level(ᶠradiation_flux, half).components.data.:1
+    else
+        sfc_rad_e_flux = 0
+    end
+
+    # 2. Turbulent surface energy fluxes (sensible + latent heat) from surface to atmosphere
+    if !(p.atmos.disable_surface_flux_tendency)
+        turb_e_flux_sfc_to_atm =
+            Geometry.WVector.(
+                p.precomputed.sfc_conditions.ρ_flux_h_tot,
+            ).components.data.:1
+    else
+        turb_e_flux_sfc_to_atm = 0
+    end
+
+    # 3. Idealized Q-fluxes (parameterization of horizontal ocean energy flux divergence),
+    # following Merlis et al. (2013), "Hadley Circulation Response to Orbital Precession. 
+    # Part II: Subtropical Continent.", J. Climate, 26, https://doi.org/10.1175/JCLI-D-12-00149.1
+    if q_flux_enabled
+        ϕ₀ = slab.ϕ₀
+        Q₀ = slab.Q₀
+        ϕ = deg2rad.(Fields.level(Fields.coordinate_field(Y.f).lat, half))
+        ϕ₀ʳ = FT(deg2rad(ϕ₀))
+        Q = @. Q₀ * (1 - 2ϕ^2 / ϕ₀ʳ^2) * exp(-(ϕ^2 / ϕ₀ʳ^2)) / cos(ϕ)
+    else
+        Q = FT(0)
+    end
+
+    # 4. Energy tendency due to precipitation accumulation        
+    if !(p.atmos.moisture_model isa DryModel)
+
+        pet = p.conservation_check.col_integrated_precip_energy_tendency
+
+    else
+        pet = FT(0)
+    end
+
+    # Total energy tendency for surface temperature:
+    # dT/dt = -(NetRad_upward + TurbFlux_sfc_to_atm + Q_div - PrecipEnergySource) / HeatCapacity
+    @. Yₜ.sfc.T -=
+        (sfc_rad_e_flux + turb_e_flux_sfc_to_atm + Q + pet) /
+        surface_heat_capacity_per_area
+
+    # --- WATER BALANCE (if moisture is active) ---
+    if !(p.atmos.moisture_model isa DryModel)
+        # 1. Turbulent surface water fluxes (evaporation/condensation)
+        if !(p.atmos.disable_surface_flux_tendency)
+            sfc_turb_w_flux =
+                Geometry.WVector.(
+                    p.precomputed.sfc_conditions.ρ_flux_q_tot,
+                ).components.data.:1
+        else
+            sfc_turb_w_flux = 0
+        end
+
+        # 2. Precipitation (rain and snow, defined negative downward, so positive flux 
+        # from surface to atmosphere)
+        P_liq = p.precomputed.surface_rain_flux
+        P_snow = p.precomputed.surface_snow_flux
+
+        # Total water tendency for surface water:
+        # d(water)/dt = -(Precip_up + Precip_snow_up + TurbFlux_water_atm_to_sfc) [kg/m²/s]
+        @. Yₜ.sfc.water -= P_liq + P_snow + sfc_turb_w_flux
+    end
+
+    # --- SEA-ICE THICKNESS BALANCE ---
+    # Placeholder for sea-ice thermodynamics: track ice thickness as prognostic.
+    # For now, we set the tendency to zero until a physical model is added.
+    @. Yₜ.sfc.h_ice += 0
 end
