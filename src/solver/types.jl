@@ -604,12 +604,13 @@ end
 
 Groups moisture-related models and types.
 """
-Base.@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS}
+Base.@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS, MF}
     moisture_model::MM = nothing
     microphysics_model::PM = nothing
     cloud_model::CM = nothing
     noneq_cloud_formation_mode::NCFM = nothing
     call_cloud_diagnostics_per_stage::CCDPS = nothing
+    moisture_fixer::MF = false
 end
 
 """

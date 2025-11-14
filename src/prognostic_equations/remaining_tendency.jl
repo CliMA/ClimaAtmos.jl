@@ -7,7 +7,7 @@ state vector `Y`.
 This function follows a sequence:
 1. Prepares hyperdiffusion tendencies for tracers (stored in `Yₜ_lim`).
 2. Prepares hyperdiffusion tendencies for other state variables (e.g., momentum, energy, stored in `Yₜ`).
-3. If Direct Stiffness Summation (DSS) is required and hyperdiffusion is active, performs DSS on the 
+3. If Direct Stiffness Summation (DSS) is required and hyperdiffusion is active, performs DSS on the
    prepared hyperdiffusion tendencies.
 4. Applies the (potentially DSSed) hyperdiffusion tendencies to `Yₜ_lim` and `Yₜ`.
 
@@ -356,7 +356,30 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     horizontal_amd_tendency!(Yₜ, Y, p, t, amd)
     vertical_amd_tendency!(Yₜ, Y, p, t, amd)
 
-    # NOTE: This will zero out all momentum tendencies in the EDMFX advection test, 
+    if moisture_model isa NonEquilMoistModel &&
+       microphysics_model isa Microphysics1Moment &&
+       p.atmos.water.moisture_fixer
+        moisture_species = (@name(c.ρq_liq), @name(c.ρq_ice),
+            @name(c.ρq_rai), @name(c.ρq_sno),
+        )
+        qᵥ = @. lazy(
+            specific(Y.c.ρq_tot - Y.c.ρq_liq - Y.c.ρq_ice - Y.c.ρq_rai - Y.c.ρq_sno,
+                Y.c.ρ),
+        )
+
+        MatrixFields.unrolled_foreach(
+            moisture_species,
+        ) do (ρq_name)
+            ᶜρq = MatrixFields.get_field(Y, ρq_name)
+            ᶜρqₜ = MatrixFields.get_field(Yₜ, ρq_name)
+            ᶜq = @. lazy(specific(ᶜρq, Y.c.ρ))
+            # Increase the grid mean small tracers if negative,
+            # using mass from grid mean vapor.
+            @. ᶜρqₜ += Y.c.ρ * moisture_fixer(ᶜq, qᵥ, p.dt)
+        end
+    end
+
+    # NOTE: This will zero out all momentum tendencies in the EDMFX advection test,
     # where velocities do not evolve
     # DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)
