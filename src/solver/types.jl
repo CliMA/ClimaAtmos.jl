@@ -610,6 +610,7 @@ Base.@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS}
     cloud_model::CM = nothing
     noneq_cloud_formation_mode::NCFM = nothing
     call_cloud_diagnostics_per_stage::CCDPS = nothing
+    moisture_fixer::Bool = false
 end
 
 """
