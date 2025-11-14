@@ -72,8 +72,7 @@ function get_atmos(config::AtmosConfig, params)
         forcing_type isa HeldSuarezForcing ? forcing_type : radiation_mode
     # Note: when disable_momentum_vertical_diffusion is true, the surface flux tendency
     # for momentum is not applied.
-    disable_momentum_vertical_diffusion =
-        final_radiation_mode isa HeldSuarezForcing
+    disable_momentum_vertical_diffusion = final_radiation_mode isa HeldSuarezForcing
 
     advection_test = parsed_args["advection_test"]
     @assert advection_test in (false, true)
@@ -108,10 +107,7 @@ function get_atmos(config::AtmosConfig, params)
     )
 
     vertical_diffusion = get_vertical_diffusion_model(
-        disable_momentum_vertical_diffusion,
-        parsed_args,
-        params,
-        FT,
+        disable_momentum_vertical_diffusion, parsed_args, params, FT,
     )
 
     atmos = AtmosModel(;

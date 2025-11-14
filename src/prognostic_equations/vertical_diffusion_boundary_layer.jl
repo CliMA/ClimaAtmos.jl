@@ -105,9 +105,7 @@ function vertical_diffusion_boundary_layer_tendency!(
 
     if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
-        @. Yₜ.c.uₕ -= C12(
-            ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠstrain_rate) / Y.c.ρ,
-        ) # assumes ᶜK_u = ᶜK_h
+        @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠstrain_rate) / Y.c.ρ)  # assumes ᶜK_u = ᶜK_h
     end
 
     ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
