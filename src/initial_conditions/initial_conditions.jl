@@ -48,6 +48,21 @@ struct ColumnInterpolatableField{F, D}
 end
 (f::ColumnInterpolatableField)(z) = Spaces.undertype(axes(f.f))(f.data(z))
 
+function Base.show(io::IO, x::ColumnInterpolatableField)
+    # Extract z grid from the wrapped column field
+    z = Fields.coordinate_field(x.f).z
+    nz = Spaces.nlevels(z)
+    zmin, zmax = extrema(z)
+    val_eltype = eltype(x.f)
+    # These are fixed by the constructor
+    interp_str = "Linear"
+    extrap_str = "Flat"
+    print(io,
+        "ColumnInterpolatableField(Nz=$nz, z∈[$zmin, $zmax], value_eltype=$val_eltype, ",
+        "interpolation=$interp_str, extrapolation=$extrap_str)",
+    )
+end
+
 import ClimaComms
 import ClimaCore.Domains as Domains
 import ClimaCore.Meshes as Meshes

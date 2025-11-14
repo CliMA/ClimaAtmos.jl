@@ -780,7 +780,7 @@ function get_simulation(config::AtmosConfig)
     CP.log_parameter_information(
         config.toml_dict,
         joinpath(output_dir, "$(job_id)_parameters.toml"),
-        strict = true,
+        strict = config.parsed_args["strict_params"],
     )
     YAML.write_file(joinpath(output_dir, "$job_id.yml"), config.parsed_args)
 

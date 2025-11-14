@@ -289,6 +289,9 @@ subsidence:
 toml:
   help: "TOML file(s) used to override model parameters"
   value: []
+strict_params:
+  help: "Raise an error if any overridden parameters are unused."
+  value: true
 prognostic_tke:
   help: "A flag for prognostic TKE [`false` (default), `true`]"
   value: false
