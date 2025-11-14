@@ -78,8 +78,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     BidiagonalRow_C3 = BidiagonalMatrixRow{C3{FT}}
     TridiagonalRow_ACTh = TridiagonalMatrixRow{Adjoint{FT, CTh{FT}}}
     BidiagonalRow_ACT3 = BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
-    BidiagonalRow_C3xACTh =
-        BidiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CTh{FT})')}
+    BidiagonalRow_C3xACT12 =
+        BidiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT12{FT})')}
     DiagonalRow_C3xACT3 =
         DiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT3{FT})')}
     TridiagonalRow_C3xACT3 =
@@ -162,7 +162,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
             active_scalar_names,
         )...,
-        (@name(f.u₃), @name(c.uₕ)) => similar(Y.f, BidiagonalRow_C3xACTh),
+        (@name(f.u₃), @name(c.uₕ)) => similar(Y.f, BidiagonalRow_C3xACT12),
         (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
 
@@ -396,7 +396,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     rs = p.atmos.rayleigh_sponge
 
     FT = Spaces.undertype(axes(Y.c))
-    CTh = CTh_vector_type(axes(Y.c))
     one_C3xACT3 = C3(FT(1)) * CT3(FT(1))'
 
     cv_d = FT(CAP.cv_d(params))
@@ -442,10 +441,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     if use_derivative(topography_flag)
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
-            adjoint(CTh(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ),
+            adjoint(ᶜuₕ) + CT12(adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ)),
         )
     else
-        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CTh(ᶜuₕ)))
+        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CT12(ᶜuₕ)))
     end
     @. ∂ᶜK_∂ᶠu₃ =
         ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
