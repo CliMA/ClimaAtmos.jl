@@ -20,7 +20,7 @@ steps:
   - label: "init :computer:"
     key: "init_cpu_env"
     concurrency: 1
-    concurrency_group: 'depot/climaatmos-ci'
+    concurrency_group: "depot/climaatmos-ci"
     command:
       - "echo $$JULIA_DEPOT_PATH"
 
@@ -41,13 +41,11 @@ steps:
 
   - group: "Reproducibility infrastructure"
     steps:
-
       - label: ":computer: Test reproducibility infrastructure"
         command: "julia --color=yes --project=.buildkite test/unit_reproducibility_infra.jl"
 
   - group: "Radiation"
     steps:
-
       - label: ":computer: single column radiative equilibrium gray"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -98,7 +96,6 @@ steps:
 
   - group: "Gravity wave"
     steps:
-
       - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl"
         artifact_paths: "nonorographic_gravity_wave_test_3d/*"
@@ -132,7 +129,6 @@ steps:
 
   - group: "Column Examples"
     steps:
-
       - label: ":computer: single column hydrostatic balance float64"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -149,7 +145,6 @@ steps:
 
   - group: "Box Examples"
     steps:
-
       - label: ":computer: Box hydrostatic balance"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -188,7 +183,6 @@ steps:
 
   - group: "Plane Examples"
     steps:
-
       - label: ":computer: Density current experiment"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -287,7 +281,6 @@ steps:
 
   - group: "Conservation check"
     steps:
-
       - label: ":computer: baroclinic wave check conservation"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_conservation.yml
@@ -324,7 +317,6 @@ steps:
 
   - group: "Sphere Examples (Dycore)"
     steps:
-
       - label: ":computer: hydrostatic balance float64"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -394,7 +386,6 @@ steps:
 
   - group: "Sphere Examples (Aquaplanet)"
     steps:
-
       - label: ":umbrella: aquaplanet nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -462,7 +453,6 @@ steps:
 
   - group: "Sphere Examples (Topography)"
     steps:
-
       - label: ":computer: baroclinic wave topography (dcmip)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -489,7 +479,6 @@ steps:
 
   - group: "Restarting"
     steps:
-
       - label: ":computer: test restart"
         command: >
           julia --color=yes --project=.buildkite test/restart.jl
@@ -554,7 +543,6 @@ steps:
 
   - group: "MPI Examples"
     steps:
-
       - label: ":computer: Prep restart for MPI"
         key: "mpi_baro_wave_make_restart"
         command: >
@@ -624,7 +612,6 @@ steps:
 
   - group: "EDOnlyEDMFX"
     steps:
-
       - label: ":man_in_business_suit_levitating: EDOnly EDMFX aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -647,7 +634,6 @@ steps:
 
   - group: "Diagnostic EDMFX"
     steps:
-
       - label: ":genie: Diagnostic EDMFX test in a box"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -746,14 +732,12 @@ steps:
 
   - group: "Prognostic EDMFX"
     steps:
-
       - label: ":genie: Prognostic EDMFX advection test in a column"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_column.yml
           --job_id prognostic_edmfx_adv_test_column
         artifact_paths: "prognostic_edmfx_adv_test_column/output_active/*"
-
         agents:
           slurm_mem: 20GB
 
@@ -948,7 +932,6 @@ steps:
 
   - group: "Autodiff"
     steps:
-
       - label: "baroclinic wave moist check conservation float64 sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_ft64_sparse_autodiff.yml
@@ -1044,7 +1027,6 @@ steps:
 
   - group: "GPU"
     steps:
-
       - label: "GPU: Gravity waves"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -1112,7 +1094,6 @@ steps:
         depends_on:
           - "baroclinic_wave"
           - "baroclinic_wave_gpu"
-
 
       - label: "GPU: baroclinic wave - 2 gpus"
         key: "baroclinic_wave_2gpu"
@@ -1233,7 +1214,6 @@ steps:
 
   - group: "Benchmarks"
     steps:
-
       - label: ":computer: Benchmark: CPU baroclinic wave moist"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark_step.jl
@@ -1251,6 +1231,7 @@ steps:
         artifact_paths: "bm_baroclinic_wave_moist_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 16G
           slurm_gpus: 1
@@ -1272,6 +1253,7 @@ steps:
           --job_id bm_default_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
@@ -1284,6 +1266,7 @@ steps:
           --job_id bm_diag_edmf_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
@@ -1296,13 +1279,13 @@ steps:
           --job_id bm_prog_edmf_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
 
   - group: "Flame graphs"
     steps:
-
       - label: ":fire: Flame graph: gpu job"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
@@ -1420,7 +1403,6 @@ steps:
 
   - group: "Checkbounds/Inference/Invalidations"
     steps:
-
       # TODO: we should somehow decouple this unit test from the perf env / scripts
       # Checkbounds
       - label: ":computer: checkbounds"
