@@ -43,25 +43,9 @@ SurfaceState(;
     v::FTN5 = nothing,
     gustiness::FTN6 = nothing,
     beta::FTN7 = nothing,
-) where {
-    SFP <: SurfaceParameterization,
-    FTN1,
-    FTN2,
-    FTN3,
-    FTN4,
-    FTN5,
-    FTN6,
-    FTN7,
-} =
+) where {SFP <: SurfaceParameterization, FTN1, FTN2, FTN3, FTN4, FTN5, FTN6, FTN7} =
     SurfaceState{float_type(SFP), SFP, FTN1, FTN2, FTN3, FTN4, FTN5, FTN6, FTN7}(
-        parameterization,
-        T,
-        p,
-        q_vap,
-        u,
-        v,
-        gustiness,
-        beta,
+        parameterization, T, p, q_vap, u, v, gustiness, beta,
     )
 
 """
@@ -71,8 +55,7 @@ Container for heat fluxes
  - shf: Sensible heat flux
  - lhf: Latent heat flux
 """
-Base.@kwdef struct HeatFluxes{FT, FTN <: Union{FT, Nothing}} <:
-                   PrescribedFluxes{FT}
+Base.@kwdef struct HeatFluxes{FT, FTN <: Union{FT, Nothing}} <: PrescribedFluxes{FT}
     shf::FT
     lhf::FTN = nothing
 end
@@ -82,8 +65,7 @@ end
 
 Container for quantities used to calculate sensible and latent heat fluxes.
 """
-Base.@kwdef struct θAndQFluxes{FT, FTN <: Union{FT, Nothing}} <:
-                   PrescribedFluxes{FT}
+Base.@kwdef struct θAndQFluxes{FT, FTN <: Union{FT, Nothing}} <: PrescribedFluxes{FT}
     θ_flux::FT
     q_flux::FTN = nothing
 end
@@ -133,11 +115,8 @@ struct MoninObukhov{
 end
 
 function MoninObukhov(;
-    z0 = nothing,
-    z0m = nothing,
-    z0b = nothing,
-    fluxes = nothing,
-    ustar = nothing,
+    z0 = nothing, z0m = nothing, z0b = nothing,
+    fluxes = nothing, ustar = nothing,
 )
     if !isnothing(z0)
         if isnothing(z0m) && isnothing(z0b)
