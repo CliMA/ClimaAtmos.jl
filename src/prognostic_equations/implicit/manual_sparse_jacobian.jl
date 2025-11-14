@@ -619,11 +619,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         FT = eltype(params)
         (; vertical_diffusion, smagorinsky_lilly) = p.atmos
         (; ᶜp) = p.precomputed
+        ᶜK_u = p.scratch.ᶜtemp_scalar_4
+        ᶜK_h = p.scratch.ᶜtemp_scalar_6
         if vertical_diffusion isa DecayWithHeightDiffusion
-            ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
+            ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
             ᶜK_u = ᶜK_h
         elseif vertical_diffusion isa VerticalDiffusion
-            ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
+            ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
             ᶜK_u = ᶜK_h
         elseif is_smagorinsky_vertical(smagorinsky_lilly)
             set_smagorinsky_lilly_precomputed_quantities!(Y, p, smagorinsky_lilly)
@@ -634,24 +636,26 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
             ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
             ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-            ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
+            @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+
             ᶜprandtl_nvec = @. lazy(
                 turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
             )
-            ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+            @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
         end
 
-        @. ᶜdiffusion_h_matrix =
-            ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅
-            ᶠgradᵥ_matrix()
+        ∂ᶠρχ_dif_flux_∂ᶜχ = ᶠp_grad_matrix
+        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
+        @. ᶜdiffusion_h_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
         if (
             MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke)) ||
             !isnothing(p.atmos.turbconv_model) ||
             !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         )
-            @. ᶜdiffusion_u_matrix =
-                ᶜadvdivᵥ_matrix() ⋅
+            @. ∂ᶠρχ_dif_flux_∂ᶜχ =
                 DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅ ᶠgradᵥ_matrix()
+            @. ᶜdiffusion_u_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
         end
 
         ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
