@@ -50,6 +50,12 @@ function sgs_scalar_flux_bc(
     sfc_local_geometry,
 ) where {FT}
 
+    # when surface-interior difference on the grid mean is zero (negligible), 
+    # return grid mean flux (which is zero or negligible) to avoid division by zero
+    if abs(χ_sfc - ᶜχ_int) < sqrt(floatmin(FT))
+        return ρ_flux_χ
+    end
+
     kinematic_sfc_flux_χ = ρ_flux_χ / ρ_sfc # Convert to kinematic flux [K m/s]
 
     χ_sfc_var = get_scalar_variance(
