@@ -189,10 +189,12 @@ function get_smagorinsky_lilly_model(parsed_args)
 end
 
 function get_amd_les_model(parsed_args, ::Type{FT}) where {FT}
-    is_model_active = parsed_args["amd_les"]
-    @assert is_model_active in (true, false)
-    return is_model_active ? AnisotropicMinimumDissipation{FT}(parsed_args["c_amd"]) :
-           nothing
+    amd = parsed_args["amd_les"]
+    isnothing(amd) && return nothing
+    amd_symbol = Symbol(amd)
+    @assert amd_symbol in (:UVW, :UV, :W, :UV_W)
+    c_amd = FT(parsed_args["amd_coefficient"])
+    return AnisotropicMinimumDissipation{amd_symbol, FT}(; c_amd)
 end
 
 function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
