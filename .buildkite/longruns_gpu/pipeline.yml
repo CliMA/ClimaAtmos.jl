@@ -218,24 +218,6 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_allsky_tvinsol_0M_slabocean"
 
-  - group: "DYAMOND"
-
-    steps:
-
-      - label: ":computer: aquaplanet dyamond"
-        command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze63.yml
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml 
-          --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_dyamond"
-
   - group: "atmos-only coupler runs"
 
     steps:
