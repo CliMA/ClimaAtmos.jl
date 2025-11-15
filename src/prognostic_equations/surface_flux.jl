@@ -123,6 +123,7 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
     )
     btt = boundary_tendency_scalar(ᶜh_tot, sfc_conditions.ρ_flux_h_tot)
     @. Yₜ.c.ρe_tot -= btt
+
     ρ_flux_χ = p.scratch.sfc_temp_C3
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
@@ -137,4 +138,123 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.ρ -= btt
         end
     end
+end
+
+"""
+    edmfx_surface_flux_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
+
+Applies surface–flux tendencies to EDMF updraft prognostic variables when the
+turbulent convection scheme is the `PrognosticEDMFX` model.
+
+This function computes and adds contributions from surface fluxes of moist
+static energy (`mse`) and total specific humidity (`q_tot`) to the corresponding
+updraft subdomain tendencies in `Yₜ`. For each EDMF subdomain, it evaluates
+subgrid scalar fluxes using `sgs_scalar_flux_bc` and converts these fluxes into
+tendencies localized to the surface-adjacent grid cell via
+`boundary_tendency_scalar`.
+
+# Arguments
+- `Yₜ`: Tendency state vector, modified in place.
+- `Y`: Current state vector.
+- `p`: Cache containing parameters, thermodynamic settings, precomputed fields,
+       and EDMF configuration information.
+- `t`: Current simulation time.
+- `turbconv_model::PrognosticEDMFX`: Dispatch selector specifying the EDMF scheme.
+"""
+edmfx_surface_flux_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+function edmfx_surface_flux_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
+    p.atmos.disable_surface_flux_tendency && return
+
+    (; params) = p
+    (; ᶜρʲs, ᶜK, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(params)
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+
+    (; ρ_flux_h_tot, ustar, obukhov_length, ts) =
+        p.precomputed.sfc_conditions
+
+    ᶜaʲ = p.scratch.ᶜtemp_scalar
+    ρ_flux_χʲ = p.scratch.sfc_temp_C3
+    # We need field_values everywhere because we are mixing
+    # information from surface and first interior inside the
+    # sgs_scalar_flux_bc call.
+    ρ_flux_χʲ_val = Fields.field_values(ρ_flux_χʲ)
+
+    ustar_val = Fields.field_values(ustar)
+    obukhov_length_val = Fields.field_values(obukhov_length)
+    sfc_local_geometry_val = Fields.field_values(
+        Fields.local_geometry_field(Fields.level(Y.f, Fields.half)),
+    )
+
+    z_sfc_val =
+        Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, Fields.half))
+    ρ_sfc = @. lazy(TD.air_density(thermo_params, ts))
+    ρ_sfc_val = Fields.field_values(ρ_sfc)
+
+    # Based on boundary conditions for updrafts we compute
+    # the tendency due to the surface flux for EDMFX ᶜmseʲ...
+    ρ_flux_h_tot_val = Fields.field_values(ρ_flux_h_tot)
+    h_tot_sfc = @. lazy(TD.specific_enthalpy(thermo_params, ts))
+    h_tot_sfc_val = Fields.field_values(h_tot_sfc)
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
+    ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
+    ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
+
+    for j in 1:n
+        @. ᶜaʲ = draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+        ᶜaʲ_int_val = Fields.field_values(Fields.level(ᶜaʲ, 1))
+        ᶜmseʲ_int_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).mse, 1))
+
+        @. ρ_flux_χʲ_val = sgs_scalar_flux_bc(
+            z_sfc_val,
+            ρ_sfc_val,
+            h_tot_sfc_val,
+            ᶜh_tot_int_val - ᶜK_int_val,
+            ᶜaʲ_int_val,
+            ᶜmseʲ_int_val,
+            ρ_flux_h_tot_val,
+            ustar_val,
+            obukhov_length_val,
+            sfc_local_geometry_val,
+        )
+        btt = boundary_tendency_scalar(Y.c.sgsʲs.:(1).mse, ρ_flux_χʲ)
+        @. Yₜ.c.sgsʲs.:($$j).mse -= btt / p.precomputed.ᶜρʲs.:($$j)
+    end
+
+    # ... and the tendency for EDMFX ᶜq_totʲ.
+    if !(p.atmos.moisture_model isa DryModel)
+        ρ_flux_q_tot_val = Fields.field_values(p.precomputed.sfc_conditions.ρ_flux_q_tot)
+        q_tot_sfc = @. lazy(TD.total_specific_humidity(thermo_params, ts))
+        q_tot_sfc_val = Fields.field_values(q_tot_sfc)
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+        ᶜq_tot_int_val = Fields.field_values(Fields.level(ᶜq_tot, 1))
+
+        for j in 1:n
+            @. ᶜaʲ = draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+            ᶜaʲ_int_val = Fields.field_values(Fields.level(ᶜaʲ, 1))
+            ᶜq_totʲ_int_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).q_tot, 1))
+
+            @. ρ_flux_χʲ_val = sgs_scalar_flux_bc(
+                z_sfc_val,
+                ρ_sfc_val,
+                q_tot_sfc_val,
+                ᶜq_tot_int_val,
+                ᶜaʲ_int_val,
+                ᶜq_totʲ_int_val,
+                ρ_flux_q_tot_val,
+                ustar_val,
+                obukhov_length_val,
+                sfc_local_geometry_val,
+            )
+            btt = boundary_tendency_scalar(Y.c.sgsʲs.:(1).q_tot, ρ_flux_χʲ)
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -= btt / p.precomputed.ᶜρʲs.:($$j)
+        end
+    end
+
 end
