@@ -1,0 +1,25 @@
+## Model
+prescribed_flow: true
+initial_condition: "ShipwayHill2012"
+surface_setup: "ShipwayHill2012"
+tracer_upwinding: first_order
+moist: "nonequil"
+cloud_model: "grid_scale"
+call_cloud_diagnostics_per_stage: true
+precip_model: "1M"
+config: "column"
+## Simulation
+z_max: 4e3
+z_elem: 100
+z_stretch: false
+dt: "1secs"
+t_end: "1hours"
+# t_end: "10secs"
+dt_save_state_to_disk: "1hours"
+toml: [toml/kinematic_driver.toml]
+check_nan_every: 1
+## Diagnostics
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [ta, thetaa, ha, rhoa, wa, hur, hus, cl, clw, cli, husra, hussn]
+    period: 10secs

@@ -242,6 +242,23 @@ function (::TRMM_LBA)(params)
     return surface_state
 end
 
+struct ShipwayHill2012 end
+function (::ShipwayHill2012)(params)
+    function surface_state(surface_coordinates, interior_z, t)
+        FT = eltype(surface_coordinates)
+        T = FT(297.9)  # surface temperature (K)
+        p = FT(100700)  # surface pressure (Pa)
+        rv₀ = FT(0.015)  # water vapour mixing ratio at surface (kg/kg)
+        q_vap = rv₀ / (1 + rv₀)  # specific humidity at surface, assuming unsaturated surface air (kg/kg)
+        w(t) = t < 600 ? 2sin(π * t / 600) : zero(t)
+        fluxes = θAndQFluxes(; θ_flux = w(t) * T, q_flux = w(t) * q_vap)
+        parameterization = MoninObukhov(; fluxes, z0 = FT(1e-5))
+        return SurfaceState(; parameterization, T, p, q_vap)
+        # In `surface_state_to_conditions`
+    end
+    return surface_state
+end
+
 struct SimplePlume end
 function (::SimplePlume)(params)
     FT = eltype(params)
