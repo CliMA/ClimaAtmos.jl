@@ -140,6 +140,17 @@ The magnitude of diffusion acting on precipitation tracers can be scaled using t
   `tracer_vertical_diffusion_factor`.
 There is no such scaling applied when using the Smagorinsky-Lilly or AMD models.
 
+### Moisture Fixer
+
+The moisture fixer is an optional grid-mean tendency correction that can be enabled for
+  nonequilibrium moisture models with 1-moment microphysics.
+When enabled (via the `moisture_fixer` configuration option), the fixer adjusts small negative
+  tracer values by transferring mass from water vapor to the affected microphysics tracers
+  (cloud liquid, cloud ice, rain, and snow).
+This provides an additional safeguard against numerical errors that may produce negative tracer values,
+  complementing the limiters and diffusion schemes described above.
+The fixer operates on the grid-mean tendencies and conserves total water mass.
+
 ## Aerosol Activation for 2-Moment Microphysics
 
 Aerosol activation uses functions from the [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl) library, based on the Abdul-Razzak and Ghan (ARG) parameterization. ARG predicts the number of activated cloud droplets assuming a parcel of clear air rising adiabatically. This formulation is traditionally applied only at cloud base, where the maximum supersaturation typically occurs.

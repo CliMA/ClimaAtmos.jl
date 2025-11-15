@@ -2,6 +2,7 @@ FLOAT_TYPE: "Float32"
 initial_condition: "MoistBaroclinicWave"
 t_end: "5days"
 moist: "nonequil"
+moisture_fixer: true
 surface_setup: DefaultMoninObukhov
 prognostic_surface: "SlabOceanSST"
 rad: "clearsky"

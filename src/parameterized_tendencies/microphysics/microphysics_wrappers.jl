@@ -29,6 +29,15 @@ function limit(q, dt, n::Int)
     return q / FT(dt) / n
 end
 
+function moisture_fixer(q, qᵥ, dt)
+    FT = eltype(q)
+    return triangle_inequality_limiter(
+        -min(FT(0), q / dt),
+        limit(qᵥ, dt, 5),
+        FT(0),
+    )
+end
+
 """
     cloud_sources(cm_params, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ, dt)
 
