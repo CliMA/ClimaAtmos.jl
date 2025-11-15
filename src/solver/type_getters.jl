@@ -72,8 +72,7 @@ function get_atmos(config::AtmosConfig, params)
         forcing_type isa HeldSuarezForcing ? forcing_type : radiation_mode
     # Note: when disable_momentum_vertical_diffusion is true, the surface flux tendency
     # for momentum is not applied.
-    disable_momentum_vertical_diffusion =
-        final_radiation_mode isa HeldSuarezForcing
+    disable_momentum_vertical_diffusion = final_radiation_mode isa HeldSuarezForcing
 
     advection_test = parsed_args["advection_test"]
     @assert advection_test in (false, true)
@@ -108,10 +107,7 @@ function get_atmos(config::AtmosConfig, params)
     )
 
     vertical_diffusion = get_vertical_diffusion_model(
-        disable_momentum_vertical_diffusion,
-        parsed_args,
-        params,
-        FT,
+        disable_momentum_vertical_diffusion, parsed_args, params, FT,
     )
 
     atmos = AtmosModel(;
@@ -736,24 +732,34 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     saveat = [t_begin, t_end]
     args = (problem, ode_algo)
     allow_custom_kwargs = (; kwargshandle = CTS.DiffEqBase.KeywordArgSilent)
-    kwargs =
-        (; saveat, callback, dt, adjustfinal = true, allow_custom_kwargs...)
+    kwargs = (; saveat, callback, dt, adjustfinal = true, allow_custom_kwargs...)
     return (args, kwargs)
 end
 
 import ClimaComms, Logging, NVTX
+"""
+    get_comms_context(parsed_args)
+
+Returns the comms context for the simulation based on the value of `parsed_args["device"]`.
+
+The possible values for `parsed_args["device"]` are:
+- "auto": use the device specified in the environment variable `CLIMACOMMS_DEVICE`
+- "CUDADevice": use the CUDA device
+- "CPUMultiThreaded": use the CPU device with multiple threads
+- "CPUSingleThreaded": use the CPU device with a single thread
+
+There is special handling for buildkite builds.
+"""
 function get_comms_context(parsed_args)
-    device =
-        if !haskey(parsed_args, "device") || parsed_args["device"] === "auto"
-            ClimaComms.device()
-        elseif parsed_args["device"] == "CUDADevice"
-            ClimaComms.CUDADevice()
-        elseif parsed_args["device"] == "CPUMultiThreaded" ||
-               Threads.nthreads() > 1
-            ClimaComms.CPUMultiThreaded()
-        else
-            ClimaComms.CPUSingleThreaded()
-        end
+    device = if !haskey(parsed_args, "device") || parsed_args["device"] === "auto"
+        ClimaComms.device()
+    elseif parsed_args["device"] == "CUDADevice"
+        ClimaComms.CUDADevice()
+    elseif parsed_args["device"] == "CPUMultiThreaded" || Threads.nthreads() > 1
+        ClimaComms.CPUMultiThreaded()
+    else
+        ClimaComms.CPUSingleThreaded()
+    end
     comms_ctx = ClimaComms.context(device)
     ClimaComms.init(comms_ctx)
 
@@ -786,11 +792,7 @@ function get_simulation(config::AtmosConfig)
 
     if sim_info.restart
         s = @timed_str begin
-            (Y, t_start) = get_state_restart(
-                config,
-                sim_info.restart_file,
-                hash(atmos),
-            )
+            (Y, t_start) = get_state_restart(config, sim_info.restart_file, hash(atmos))
             spaces = get_spaces_restart(Y)
             # Fix the t_start in sim_info with the one from the restart
             sim_info = merge(sim_info, (; t_start))
@@ -802,13 +804,9 @@ function get_simulation(config::AtmosConfig)
     initial_condition = get_initial_condition(config.parsed_args, atmos)
     surface_setup = get_surface_setup(config.parsed_args)
     if !sim_info.restart
+        (; center_space, face_space) = spaces
         s = @timed_str begin
-            Y = ICs.atmos_state(
-                initial_condition(params),
-                atmos,
-                spaces.center_space,
-                spaces.face_space,
-            )
+            Y = ICs.atmos_state(initial_condition(params), atmos, center_space, face_space)
         end
         @info "Allocating Y: $s"
 
@@ -818,26 +816,17 @@ function get_simulation(config::AtmosConfig)
         # in `Y` (specific to `initial_condition`) with those computed using the
         # `SpaceVaryingInputs` tool.
         CA.InitialConditions.overwrite_initial_conditions!(
-            initial_condition,
-            Y,
-            params.thermodynamics_params,
+            initial_condition, Y, params.thermodynamics_params,
         )
     end
 
     tracers = get_tracers(config.parsed_args)
 
-    steady_state_velocity =
-        get_steady_state_velocity(params, Y, config.parsed_args)
+    steady_state_velocity = get_steady_state_velocity(params, Y, config.parsed_args)
 
     s = @timed_str begin
-        p = build_cache(
-            Y,
-            atmos,
-            params,
-            surface_setup,
-            sim_info,
-            tracers.aerosol_names,
-            steady_state_velocity,
+        p = build_cache(Y, atmos, params, surface_setup, sim_info,
+            tracers.aerosol_names, steady_state_velocity,
         )
     end
     @info "Allocating cache (p): $s"
@@ -861,14 +850,7 @@ function get_simulation(config::AtmosConfig)
     if config.parsed_args["enable_diagnostics"]
         s = @timed_str begin
             scheduled_diagnostics, writers, periods_reductions =
-                get_diagnostics(
-                    config.parsed_args,
-                    atmos,
-                    Y,
-                    p,
-                    sim_info,
-                    output_dir,
-                )
+                get_diagnostics(config.parsed_args, atmos, Y, p, sim_info, output_dir)
         end
         @info "initializing diagnostics: $s"
 
@@ -882,8 +864,7 @@ function get_simulation(config::AtmosConfig)
                 x -> !CA.isdivisible(checkpoint_frequency, x),
                 periods_reductions,
             )
-                accum_str =
-                    join(CA.promote_period.(collect(periods_reductions)), ", ")
+                accum_str = join(CA.promote_period.(collect(periods_reductions)), ", ")
                 checkpt_str = CA.promote_period(checkpoint_frequency)
                 @warn "The checkpointing frequency (dt_save_state_to_disk = $checkpt_str) should be an integer multiple of all diagnostics accumulation periods ($accum_str) so simulations can be safely restarted from any checkpoint"
             end
@@ -896,8 +877,7 @@ function get_simulation(config::AtmosConfig)
     discrete_callbacks = callback
 
     s = @timed_str begin
-        all_callbacks =
-            SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
+        all_callbacks = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
     end
     @info "Prepared SciMLBase.CallbackSet callbacks: $s"
     steps_cycle_non_diag = n_steps_per_cycle_per_cb(all_callbacks, sim_info.dt)
@@ -908,12 +888,7 @@ function get_simulation(config::AtmosConfig)
     tspan = (sim_info.t_start, sim_info.t_end)
     s = @timed_str begin
         integrator_args, integrator_kwargs = args_integrator(
-            config.parsed_args,
-            Y,
-            p,
-            tspan,
-            ode_algo,
-            all_callbacks,
+            config.parsed_args, Y, p, tspan, ode_algo, all_callbacks,
         )
     end
 
@@ -925,8 +900,7 @@ function get_simulation(config::AtmosConfig)
     if config.parsed_args["enable_diagnostics"]
         s = @timed_str begin
             integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
-                integrator,
-                scheduled_diagnostics,
+                integrator, scheduled_diagnostics,
             )
         end
         @info "Added diagnostics: $s"
@@ -935,12 +909,7 @@ function get_simulation(config::AtmosConfig)
     reset_graceful_exit(output_dir)
 
     return AtmosSimulation(
-        job_id,
-        output_dir,
-        sim_info.start_date,
-        sim_info.t_end,
-        writers,
-        integrator,
+        job_id, output_dir, sim_info.start_date, sim_info.t_end, writers, integrator,
     )
 end
 
