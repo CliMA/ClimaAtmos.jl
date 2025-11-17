@@ -122,6 +122,7 @@ function get_atmos(config::AtmosConfig, params)
         noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
                                      Implicit() : Explicit(),
         call_cloud_diagnostics_per_stage,
+        moisture_fixer = parsed_args["moisture_fixer"],
 
         # SCMSetup - Single-Column Model components
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
