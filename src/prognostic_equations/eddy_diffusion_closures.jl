@@ -493,6 +493,7 @@ function mixing_length_lopez_gomez_2020(
     # provides a conservative lower bound.
     # minimum mixing length
     l_final = max(l_final, FT(1)) # TODO: make a climaparam
+    #l_final = l_z
 
     return MixingLength(l_final, l_W, l_TKE, l_N, l_grid)
 end
