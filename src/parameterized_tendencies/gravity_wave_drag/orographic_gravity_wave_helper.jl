@@ -84,6 +84,8 @@ end
 function calc_velocity_potential(elev, lon, lat, earth_radius)
     @info "Computing velocity potential..."
     FT = eltype(elev)
+    
+    # Ensure non-negative elevation
     @. elev = max(0, elev)
 
     dlat = lat[2] - lat[1]
@@ -97,15 +99,12 @@ function calc_velocity_potential(elev, lon, lat, earth_radius)
     ilon_range =
         min.(
             Int.(trunc.(scale ./ (deg2rad(dlon) .* cosd.(lat)))),
-            ilat_range,
+            Int(round(length(lon) / 8)),
         )
 
     # @Main.infiltrate
 
     χ = zeros(size(elev))
-    wts_sum = zeros(size(elev))
-    arc1_sum = zeros(size(elev))
-    arc_sum = zeros(size(elev))
     for (i, ilon) in enumerate(lon)
         for (j, jlat) in enumerate(lat)
             if abs(jlat) > 89
@@ -137,21 +136,16 @@ function calc_velocity_potential(elev, lon, lat, earth_radius)
 
             arc1 = arc ./ max.(arc, scale[j])
             # @Main.infiltrate
+            # Compute weights: cos(latitude) / arc * Blackman_window(arc1)
+            # Note: cosd.(lat[jrange])' creates a row vector that broadcasts across longitude dimension
             wts =
-                reshape(
-                    repeat(cosd.(lat[jrange]), length(irange)),
-                    length(jrange),
-                    :,
-                )' ./ (arc .+ eps(FT)) .* (
+                cosd.(lat[jrange]') ./ (arc .+ eps(FT)) .* (
                     FT(0.42) .+ FT(0.50) .* cos.(pi * arc1) .+
                     FT(0.08) .* cos.(FT(2) * pi * arc1)
                 )
             @. wts[arc < 1e-9] = 0.0
             # calculate the spatial integration
             χ[i, j] = sum(wts .* elev[irange, jrange])
-            wts_sum[i, j] = sum(wts)
-            arc1_sum[i, j] = sum(arc1)
-            arc_sum[i, j] = sum(arc)
             # @Main.infiltrate
         end
     end
@@ -206,7 +200,7 @@ function calc_hpoz_latlon(elev, lon, lat, earth_radius)
     ilon_range =
         min.(
             Int.(round.(scale ./ (deg2rad(dlon) .* cosd.(lat)))),
-            Int(round(length(lon) / 8)),
+            Int(round(length(lon) / 16)),
         )
 
     hmax = zeros(size(elev))
@@ -404,8 +398,8 @@ end
 
 
 function load_preprocessed_topography(parsed_args::Dict{String, Any})
-    @info "loading topography drag vector"
     (; output_filename,) = gen_fn(parsed_args)
+    @info "loading topography drag vector: $(output_filename)"
 
     reader = InputOutput.HDF5Reader(
         joinpath(@__DIR__, "../../../$(output_filename).hdf5"),
@@ -419,7 +413,7 @@ end
 
 # For direct filename
 function load_preprocessed_topography(filename::String)
-    @info "loading topography drag vector"
+    @info "loading topography drag vector: $(filename)"
     reader = InputOutput.HDF5Reader(
         joinpath(@__DIR__, "../../../$(filename).hdf5"),
         ClimaComms.SingletonCommsContext(),
