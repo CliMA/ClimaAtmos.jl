@@ -11,7 +11,7 @@ value = 0
 value = 0
 
 [detr_vertdiv_coeff]
-value = 0.6
+value = 0
 
 [detr_buoy_coeff]
 value = 0.12

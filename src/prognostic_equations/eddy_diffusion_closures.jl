@@ -153,7 +153,8 @@ function buoyancy_gradients(
         end
 
         phase_part = TD.PhasePartition(thermo_params, ts_sat)
-        lh = TD.latent_heat_liq_ice(thermo_params, phase_part)
+        #lh = TD.latent_heat_liq_ice(thermo_params, phase_part)
+        lh = FT(2.5e6)
         cp_m = TD.cp_m(thermo_params, ts_sat)
         t_sat = get_t_sat(thermo_params, bg_model)
         qv_sat = get_qv_sat(thermo_params, bg_model)
@@ -493,6 +494,7 @@ function mixing_length_lopez_gomez_2020(
     # provides a conservative lower bound.
     # minimum mixing length
     l_final = max(l_final, FT(1)) # TODO: make a climaparam
+    #l_final = l_z
 
     return MixingLength(l_final, l_W, l_TKE, l_N, l_grid)
 end
