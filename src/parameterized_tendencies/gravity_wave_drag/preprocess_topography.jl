@@ -44,7 +44,6 @@ end
 function _save_nc_data(output_filename, topo_cg, spaces)
     FT = eltype(topo_cg.hmax)
     hspace = Spaces.horizontal_space(spaces.center_space)
-    # @Main.infiltrate
 
     datafile_cg = joinpath(@__DIR__, "$(output_filename).nc")
     nc = NCDataset(datafile_cg, "c")
