@@ -589,6 +589,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 ᶜq_raiʲ = ᶜq_raiʲs.:($j)
                 ᶜq_snoʲ = ᶜq_snoʲs.:($j)
 
+                ᶜS_q_χʲs = p.precomputed.ᶜSqᵪᵖʲs.:($j)
                 ᶜS_q_liqʲ = p.precomputed.ᶜSqₗᵖʲs.:($j)
                 ᶜS_q_iceʲ = p.precomputed.ᶜSqᵢᵖʲs.:($j)
                 ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵖʲs.:($j)
@@ -652,6 +653,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 q_snoʲ_prev_level =
                     Fields.field_values(Fields.level(ᶜq_snoʲ, i - 1))
 
+                S_q_χʲs_prev_level =
+                    Fields.field_values(Fields.level(ᶜS_q_χʲs, i - 1))
                 S_q_liqʲ_prev_level =
                     Fields.field_values(Fields.level(ᶜS_q_liqʲ, i - 1))
                 S_q_iceʲ_prev_level =
@@ -775,24 +778,25 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             elseif moisture_model isa NonEquilMoistModel &&
                    microphysics_model isa Microphysics1Moment
                 # Rain formation from the updrafts
-                compute_precipitation_sources!(
-                    Sᵖ_prev_level,
-                    Sᵖ_snow_prev_level,
-                    S_q_liqʲ_prev_level,
-                    S_q_iceʲ_prev_level,
-                    S_q_raiʲ_prev_level,
-                    S_q_snoʲ_prev_level,
+                microphys_1m_params_tuple = tuple(microphys_1m_params)
+                @. S_q_χʲs_prev_level = compute_precipitation_sources(
                     ρʲ_prev_level,
-                    q_totʲ_prev_level,
                     q_liqʲ_prev_level,
                     q_iceʲ_prev_level,
                     q_raiʲ_prev_level,
                     q_snoʲ_prev_level,
                     tsʲ_prev_level,
                     dt,
-                    microphys_1m_params,
+                    microphys_1m_params_tuple,
                     thermo_params,
                 )
+
+                @. S_q_liqʲ_prev_level = S_q_χʲs_prev_level.liq
+                @. S_q_iceʲ_prev_level = S_q_χʲs_prev_level.ice
+                @. S_q_raiʲ_prev_level = S_q_χʲs_prev_level.rai
+                @. S_q_snoʲ_prev_level = S_q_χʲs_prev_level.sno
+
+
                 # Rain sinks from the updrafts
                 compute_precipitation_sinks!(
                     Sᵖ_prev_level,
@@ -1443,29 +1447,30 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     cloud_params = CAP.microphysics_cloud_params(p.params)
     (; dt) = p
 
-    (; ᶜts, ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+    (; ᶜts, ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜSqᵪᵖ⁰s) = p.precomputed
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
     # Environment precipitation sources (to be applied to grid mean)
-    compute_precipitation_sources!(
-        ᶜSᵖ,
-        ᶜSᵖ_snow,
-        ᶜSqₗᵖ⁰,
-        ᶜSqᵢᵖ⁰,
-        ᶜSqᵣᵖ⁰,
-        ᶜSqₛᵖ⁰,
+    @info "in set_diagnostic_edmf_precomputed_quantities_bottom_env_precipitation" typeof(microphys_1m_params)
+    @info "more..." typeof thermo_params
+    microphys_1m_params_tuple = tuple(microphys_1m_params)
+    @. ᶜSqᵪᵖ⁰s = compute_precipitation_sources(
         Y.c.ρ,
-        specific.(Y.c.ρq_tot, Y.c.ρ),
-        specific.(Y.c.ρq_liq, Y.c.ρ),
-        specific.(Y.c.ρq_ice, Y.c.ρ),
-        specific.(Y.c.ρq_rai, Y.c.ρ),
-        specific.(Y.c.ρq_sno, Y.c.ρ),
+        specific(Y.c.ρq_liq, Y.c.ρ),
+        specific(Y.c.ρq_ice, Y.c.ρ),
+        specific(Y.c.ρq_rai, Y.c.ρ),
+        specific(Y.c.ρq_sno, Y.c.ρ),
         ᶜts,
         dt,
-        microphys_1m_params,
+        microphys_1m_params_tuple,
         thermo_params,
     )
+    @. ᶜSqₗᵖ⁰ = ᶜSqᵪᵖ⁰s.liq
+    @. ᶜSqᵢᵖ⁰ = ᶜSqᵪᵖ⁰s.ice
+    @. ᶜSqᵣᵖ⁰ = ᶜSqᵪᵖ⁰s.rai
+    @. ᶜSqₛᵖ⁰ = ᶜSqᵪᵖ⁰s.sno
+
     # Rain sinks from the updrafts
     compute_precipitation_sinks!(
         ᶜSᵖ,

@@ -26,7 +26,7 @@ end
 # The limit is defined as the available amont / n times model time step.
 function limit(q, dt, n::Int)
     FT = eltype(q)
-    return q / FT(dt) / n
+    return max(FT(0), q) / float(dt) / n
 end
 
 """
@@ -85,8 +85,8 @@ function cloud_sources(
 
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ - qₛₗ, dt, 2), limit(qₗ, dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(qₗ, dt, 2), limit(qᵥ - qₛₗ, dt, 2)),
+        triangle_inequality_limiter(S, limit(qᵥ - qₛₗ, dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(qₗ, dt, 2)),
     )
 end
 function cloud_sources(
@@ -135,8 +135,8 @@ function cloud_sources(
 
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ - qₛᵢ, dt, 2), limit(qᵢ, dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2), limit(qᵥ - qₛᵢ, dt, 2)),
+        triangle_inequality_limiter(S, limit(qᵥ - qₛᵢ, dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2)),
     )
 end
 
@@ -152,10 +152,9 @@ Returns the qₜ source term due to precipitation formation
 defined as Δm_tot / (m_dry + m_tot) for the 0-moment scheme
 """
 function q_tot_0M_precipitation_sources(thp, cmp::CMP.Parameters0M, dt, qₜ, ts)
-    FT = eltype(qₜ)
     return -triangle_inequality_limiter(
         -CM0.remove_precipitation(cmp, PP(thp, ts)),
-        qₜ / FT(dt),
+        max(qₜ, 0) / float(dt),
     )
 end
 
@@ -179,134 +178,107 @@ function e_tot_0M_precipitation_sources_helper(thp, ts, Φ)
 end
 
 """
-    compute_precipitation_sources!(Sᵖ, Sᵖ_snow, Sqₗᵖ, Sqᵢᵖ, Sqᵣᵖ, Sqₛᵖ, ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, ts, dt, mp, thp)
+    compute_precipitation_sources(ρ, qₗ, qᵢ, qᵣ, qₛ, ts, dt, mp, thp)
 
- - Sᵖ, Sᵖ_snow - temporary containters to help compute precipitation source terms
- - Sqₗᵖ, Sqᵢᵖ, Sqᵣᵖ, Sqₛᵖ - cached storage for precipitation source terms
  - ρ - air density
- - qₜ, qₗ, qᵢ, qᵣ, qₛ - total water, liquid and ice, rain and snow specific humidity
+ - qₗ, qᵢ, qᵣ, qₛ - total water, liquid and ice, rain and snow specific humidity
  - ts - thermodynamic state (see td package for details)
  - dt - model time step
  - thp, cmp - structs with thermodynamic and microphysics parameters
 
-Returns the q source terms due to precipitation formation from the 1-moment scheme.
+Returns the q source terms due to precipitation formation from the 1-moment scheme
+as a NamedTuple.
 The specific humidity source terms are defined as Δmᵢ / (m_dry + m_tot)
 where i stands for total, rain or snow.
 Also returns the total energy source term due to the microphysics processes.
 """
-function compute_precipitation_sources!(
-    Sᵖ,
-    Sᵖ_snow,
-    Sqₗᵖ,
-    Sqᵢᵖ,
-    Sqᵣᵖ,
-    Sqₛᵖ,
+function compute_precipitation_sources(
     ρ,
-    qₜ,
     qₗ,
     qᵢ,
     qᵣ,
     qₛ,
     ts,
     dt,
-    mp,
+    mp::MP1M,
     thp,
-)
+)  where {MP1M}
     FT = eltype(thp)
-    @. Sqₗᵖ = FT(0)
-    @. Sqᵢᵖ = FT(0)
-    @. Sqᵣᵖ = FT(0)
-    @. Sqₛᵖ = FT(0)
+    Sᵖ_l2r =
+        # ! format: off
+        # rain autoconversion: q_liq -> q_rain
+        ifelse(
+            mp.Ndp <= 0,
+            CM1.conv_q_lcl_to_q_rai(mp.pr.acnv1M, qₗ, true),
+            CM2.conv_q_lcl_to_q_rai(mp.var, qₗ, ρ, mp.Ndp),
+        )
+    Sᵖ_l2r = 
+        triangle_inequality_limiter(Sᵖ_l2r, limit(qₗ, dt, 5))
 
-    #! format: off
-    # rain autoconversion: q_liq -> q_rain
-    @. Sᵖ = ifelse(
-        mp.Ndp <= 0,
-        CM1.conv_q_lcl_to_q_rai(mp.pr.acnv1M, qₗ, true),
-        CM2.conv_q_lcl_to_q_rai(mp.var, qₗ, ρ, mp.Ndp),
-    )
-    @. Sᵖ = triangle_inequality_limiter(Sᵖ, limit(qₗ, dt, 5), limit(qᵣ, dt, 5))
-    @. Sqₗᵖ -= Sᵖ
-    @. Sqᵣᵖ += Sᵖ
-
-    # snow autoconversion assuming no supersaturation: q_ice -> q_snow
-    @. Sᵖ = triangle_inequality_limiter(
-        CM1.conv_q_icl_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ, true),
-        limit(qᵢ, dt, 5),
-        limit(qₛ, dt, 5),
-    )
-    @. Sqᵢᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
+    Sᵖ_i2s = 
+        # snow autoconversion assuming no supersaturation: q_ice -> q_snow
+        triangle_inequality_limiter(
+            CM1.conv_q_icl_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ, true),
+            limit(qᵢ, dt, 5),
+        )
 
     # accretion: q_liq + q_rain -> q_rain
-    @. Sᵖ = triangle_inequality_limiter(
+    Sᵖ_lr2r = triangle_inequality_limiter(
         CM1.accretion(mp.cl, mp.pr, mp.tv.rain, mp.ce, qₗ, qᵣ, ρ),
         limit(qₗ, dt, 5),
-        limit(qᵣ, dt, 5),
     )
-    @. Sqₗᵖ -= Sᵖ
-    @. Sqᵣᵖ += Sᵖ
 
     # accretion: q_ice + q_snow -> q_snow
-    @. Sᵖ = triangle_inequality_limiter(
+    Sᵖ_is2s = triangle_inequality_limiter(
         CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ, qₛ, ρ),
         limit(qᵢ, dt, 5),
-        limit(qₛ, dt, 5),
     )
-    @. Sqᵢᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
 
     # accretion: q_liq + q_sno -> q_sno or q_rai
     # sink of cloud water via accretion cloud water + snow
-    @. Sᵖ = triangle_inequality_limiter(
+    Sᵖ_ls2sr = triangle_inequality_limiter(
         CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ, qₛ, ρ),
         limit(qₗ, dt, 5),
     )
     # if T < T_freeze cloud droplets freeze to become snow
     # else the snow melts and both cloud water and snow become rain
     α(thp, ts) = TD.Parameters.cv_l(thp) / TD.latent_heat_fusion(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
-    @. Sᵖ_snow = ifelse(
+    Sᵖ_snow = ifelse(
         Tₐ(thp, ts) < mp.ps.T_freeze,
-        Sᵖ,
-        FT(-1) * triangle_inequality_limiter(Sᵖ * α(thp, ts), limit(qₛ, dt, 5)),
+        Sᵖ_ls2sr,
+        FT(-1) * triangle_inequality_limiter(Sᵖ_ls2sr * α(thp, ts), limit(qₛ, dt, 5)),
     )
-    @. Sqₛᵖ += Sᵖ_snow
-    @. Sqₗᵖ -= Sᵖ
-    @. Sqᵣᵖ += ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
 
     # accretion: q_ice + q_rai -> q_sno
-    @. Sᵖ = triangle_inequality_limiter(
+    Sᵖ_ir2s = triangle_inequality_limiter(
         CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ, qᵣ, ρ),
         limit(qᵢ, dt, 5),
-        limit(qₛ, dt, 5),
     )
-    @. Sqᵢᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
     # sink of rain via accretion cloud ice - rain
-    @. Sᵖ = triangle_inequality_limiter(
+    Sᵖ_2ir = triangle_inequality_limiter(
         CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ, qᵣ, ρ),
         limit(qᵣ, dt, 5),
-        limit(qₛ, dt, 5),
     )
-    @. Sqᵣᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
 
     # accretion: q_rai + q_sno -> q_rai or q_sno
-    @. Sᵖ = ifelse(
+    Sᵖ_rs2rs = ifelse(
         Tₐ(thp, ts) < mp.ps.T_freeze,
         triangle_inequality_limiter(
             CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
             limit(qᵣ, dt, 5),
-            limit(qₛ, dt, 5),
         ),
         -triangle_inequality_limiter(
             CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ, qₛ, ρ),
             limit(qₛ, dt, 5),
-            limit(qᵣ, dt, 5),
         ),
     )
-    @. Sqₛᵖ += Sᵖ
-    @. Sqᵣᵖ -= Sᵖ
+
+    Sqₗᵖ = - Sᵖ_l2r - Sᵖ_lr2r - Sᵖ_ls2sr
+    Sqᵢᵖ = - Sᵖ_i2s - Sᵖ_is2s - Sᵖ_ir2s
+    Sqᵣᵖ =   Sᵖ_l2r + Sᵖ_lr2r - Sᵖ_2ir - Sᵖ_rs2rs + ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ_ls2sr - Sᵖ_snow)
+    Sqₛᵖ =   Sᵖ_i2s + Sᵖ_is2s + Sᵖ_snow + Sᵖ_ir2s + Sᵖ_2ir + Sᵖ_rs2rs
+    
+    return (; liq = Sqₗᵖ, ice = Sqᵢᵖ, rai = Sqᵣᵖ, sno = Sqₛᵖ)
     #! format: on
 end
 
@@ -350,7 +322,6 @@ function compute_precipitation_sinks!(
     @. Sᵖ = -triangle_inequality_limiter(
         -CM1.evaporation_sublimation(rps..., qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ(thp, ts)),
         limit(qᵣ, dt, 5),
-        limit(qᵥ(thp, ts), dt, 5),
     )
     @. Sqᵣᵖ += Sᵖ
 
@@ -358,7 +329,6 @@ function compute_precipitation_sinks!(
     @. Sᵖ = triangle_inequality_limiter(
         CM1.snow_melt(sps..., qₛ, ρ, Tₐ(thp, ts)),
         limit(qₛ, dt, 5),
-        limit(qᵣ, dt, 5),
     )
     @. Sqᵣᵖ += Sᵖ
     @. Sqₛᵖ -= Sᵖ
@@ -367,8 +337,8 @@ function compute_precipitation_sinks!(
     @. Sᵖ = CM1.evaporation_sublimation(sps..., qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ(thp, ts))
     @. Sᵖ = ifelse(
         Sᵖ > FT(0),
-        triangle_inequality_limiter(Sᵖ, limit(qᵥ(thp, ts), dt, 5), limit(qₛ, dt, 5)),
-        -triangle_inequality_limiter(FT(-1) * Sᵖ, limit(qₛ, dt, 5), limit(qᵥ(thp, ts), dt, 5)),
+        triangle_inequality_limiter(Sᵖ, limit(qᵥ(thp, ts), dt, 5)),
+        -triangle_inequality_limiter(FT(-1) * Sᵖ, limit(qₛ, dt, 5)),
     )
     @. Sqₛᵖ += Sᵖ
     #! format: on
@@ -561,7 +531,7 @@ function aerosol_activation_sources(
     return ifelse(
         S_max < S || isnan(n_act) || n_act < nₗ,
         FT(0),
-        (n_act - nₗ) / FT(dt),
+        (n_act - nₗ) / float(dt),
     )
 end
 
@@ -618,7 +588,6 @@ function compute_warm_precipitation_sources_2M!(
             ρ * nₗ,
         ).dq_rai_dt,
         limit(qₗ, dt, 5), # cap rate to at most 20% of qₗ per timestep to ensure stability
-        limit(qᵣ, dt, 5),
     )
     @. Sqₗᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
@@ -665,7 +634,6 @@ function compute_warm_precipitation_sources_2M!(
     @. Sᵖ = triangle_inequality_limiter(
         CM2.accretion(mp.sb, qₗ, qᵣ, ρ, ρ * nₗ).dq_rai_dt,
         limit(qₗ, dt, 5),
-        limit(qᵣ, dt, 5),
     )
     @. Sqₗᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
@@ -695,7 +663,6 @@ function compute_warm_precipitation_sources_2M!(
                 Tₐ(thp, ts),
             ).evap_rate_1,
             limit(qᵣ, dt, 5),
-            limit(qᵥ(thp, ts), dt, 5),
         )
     @. Sqᵣᵖ += Sᵖ
 
@@ -763,31 +730,4 @@ function compute_warm_precipitation_sources_2M!(
         )
     @. Snᵣᵖ += Sᵖ + S₂ᵖ
 
-end
-
-function compute_cold_precipitation_sources_P3!(
-    ᶜScoll,         # NamedTuple-valued Field with P3 liquid-ice collision sources
-    params_2mp3,    # Parameters for 2M and P3 schemes, see `get_microphysics_2m_p3_parameters`
-    thermo_params,  # An instance of `Thermodynamics.Parameters.ThermodynamicsParameters`
-    ᶜY_reduced,     # A reduced set of prognostic variables needed for P3 sources
-    ᶜts,            # Thermodynamic state
-    ᶜlogλ,          # Logarithm of the P3 distribution slope parameter
-)
-
-    (; warm, cold) = params_2mp3
-    (; ρ, ρq_liq, ρn_liq, ρq_rai, ρn_rai, ρq_ice, ρn_ice, ρq_rim, ρb_rim) = ᶜY_reduced
-
-    ᶜF_rim = @. lazy(ρq_rim / ρq_ice)
-    ᶜρ_rim = @. lazy(ρq_rim / ρb_rim)
-
-    @. ᶜScoll = CMP3.bulk_liquid_ice_collision_sources(cold.params, ᶜlogλ,
-        ρq_ice, max(0, ρn_ice),
-        ᶜF_rim, ᶜρ_rim,
-        warm.sb.pdf_c, warm.sb.pdf_r,
-        ρq_liq, ρn_liq, ρq_rai, ρn_rai,
-        warm.aps, thermo_params, (cold.velocity_params,),
-        ρ, Tₐ(thermo_params, ᶜts),
-    )
-
-    return nothing
 end

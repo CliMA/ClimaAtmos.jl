@@ -513,14 +513,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     cmp = CAP.microphysics_1m_params(params)
     cmc = CAP.microphysics_cloud_params(params)
 
-    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
-    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜts⁰) = p.precomputed
+    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜSqᵪᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
+    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜSqᵪᵖ⁰s, ᶜts⁰) = p.precomputed
 
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs) = p.precomputed
 
     # TODO - can I re-use them between js and env?
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
@@ -554,15 +553,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         )
 
         # Precipitation sources and sinks from the updrafts
-        compute_precipitation_sources!(
-            ᶜSᵖ,
-            ᶜSᵖ_snow,
-            ᶜSqₗᵖʲs.:($j),
-            ᶜSqᵢᵖʲs.:($j),
-            ᶜSqᵣᵖʲs.:($j),
-            ᶜSqₛᵖʲs.:($j),
+        @. ᶜSqᵪᵖʲs.:($j) = compute_precipitation_sources(
             ᶜρʲs.:($j),
-            Y.c.sgsʲs.:($j).q_tot,
             Y.c.sgsʲs.:($j).q_liq,
             Y.c.sgsʲs.:($j).q_ice,
             Y.c.sgsʲs.:($j).q_rai,
@@ -572,6 +564,11 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             cmp,
             thp,
         )
+        @. ᶜSqₗᵖʲs.:($j) = ᶜSqᵪᵖʲs.:($j).liq
+        @. ᶜSqᵢᵖʲs.:($j) = ᶜSqᵪᵖʲs.:($j).ice
+        @. ᶜSqᵣᵖʲs.:($j) = ᶜSqᵪᵖʲs.:($j).rai
+        @. ᶜSqₛᵖʲs.:($j) = ᶜSqᵪᵖʲs.:($j).sno
+
         compute_precipitation_sinks!(
             ᶜSᵖ,
             ᶜSqᵣᵖʲs.:($j),
@@ -621,15 +618,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜts⁰))
-    compute_precipitation_sources!(
-        ᶜSᵖ,
-        ᶜSᵖ_snow,
-        ᶜSqₗᵖ⁰,
-        ᶜSqᵢᵖ⁰,
-        ᶜSqᵣᵖ⁰,
-        ᶜSqₛᵖ⁰,
+    @. ᶜSqᵪᵖ⁰s = compute_precipitation_sources(
         ᶜρ⁰,
-        ᶜq_tot⁰,
         ᶜq_liq⁰,
         ᶜq_ice⁰,
         ᶜq_rai⁰,
@@ -639,6 +629,11 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         cmp,
         thp,
     )
+    @. ᶜSqₗᵖ⁰ = ᶜSqᵪᵖ⁰s.liq
+    @. ᶜSqᵢᵖ⁰ = ᶜSqᵪᵖ⁰s.ice
+    @. ᶜSqᵣᵖ⁰ = ᶜSqᵪᵖ⁰s.rai
+    @. ᶜSqₛᵖ⁰ = ᶜSqᵪᵖ⁰s.sno
+
     compute_precipitation_sinks!(
         ᶜSᵖ,
         ᶜSqᵣᵖ⁰,

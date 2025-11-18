@@ -116,6 +116,7 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵢᵖ = similar(Y.c, FT),
             ᶜSqᵣᵖ = similar(Y.c, FT),
             ᶜSqₛᵖ = similar(Y.c, FT),
+            ᶜSqᵪᵖs = similar(Y.c, NamedTuple{(:liq, :ice, :rai, :sno), NTuple{4, FT}})
         )
     elseif atmos.microphysics_model isa Union{Microphysics2Moment, Microphysics2MomentP3}
         # 2-moment microphysics
@@ -160,6 +161,7 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵢᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵣᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₛᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqᵪᵖʲs = similar(Y.c, NTuple{n, NamedTuple{(:liq, :ice, :rai, :sno), NTuple{4, FT}}}),
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
@@ -168,6 +170,7 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵢᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵣᵖ⁰ = similar(Y.c, FT),
             ᶜSqₛᵖ⁰ = similar(Y.c, FT),
+            ᶜSqᵪᵖ⁰s = similar(Y.c, NamedTuple{(:liq, :ice, :rai, :sno), NTuple{4, FT}}),
         ) :
         atmos.microphysics_model isa Microphysics2Moment ?
         (;

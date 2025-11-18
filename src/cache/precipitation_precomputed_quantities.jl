@@ -671,7 +671,7 @@ end
 function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     (; dt) = p
     (; ᶜts, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
-    (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
+    (; ᶜSqᵪᵖs) = p.precomputed
 
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
@@ -688,16 +688,10 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     cmp = CAP.microphysics_1m_params(params)
     thp = CAP.thermodynamics_params(params)
 
+    # Main.@infiltrate
     # compute precipitation source terms on the grid mean
-    compute_precipitation_sources!(
-        ᶜSᵖ,
-        ᶜSᵖ_snow,
-        ᶜSqₗᵖ,
-        ᶜSqᵢᵖ,
-        ᶜSqᵣᵖ,
-        ᶜSqₛᵖ,
+    @. ᶜSqᵪᵖs = compute_precipitation_sources(
         Y.c.ρ,
-        ᶜq_tot,
         ᶜq_liq,
         ᶜq_ice,
         ᶜq_rai,
@@ -711,8 +705,8 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     # compute precipitation sinks on the grid mean
     compute_precipitation_sinks!(
         ᶜSᵖ,
-        ᶜSqᵣᵖ,
-        ᶜSqₛᵖ,
+        ᶜSqᵪᵖs.rai,
+        ᶜSqᵪᵖs.sno,
         Y.c.ρ,
         ᶜq_tot,
         ᶜq_liq,
