@@ -116,6 +116,10 @@ include(
     ),
 )
 include(
+    joinpath(
+        "parameterized_tendencies", "microphysics", "moisture_fixer.jl"),
+)
+include(
     joinpath("prognostic_equations", "vertical_diffusion_boundary_layer.jl"),
 )
 include(joinpath("prognostic_equations", "surface_flux.jl"))
