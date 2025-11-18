@@ -188,9 +188,9 @@ end
             interior_values,
             surface_values,
             FT(z0m),
-            FT(z0b),
-            FT(gustiness),
-            FT(beta),
+            FT(z0b);
+            gustiness = FT(gustiness),
+            beta = FT(beta),
         )
         return SF.surface_conditions(surface_params, surface_inputs)
     end
