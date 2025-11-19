@@ -779,7 +779,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                    microphysics_model isa Microphysics1Moment
                 # Rain formation from the updrafts
                 microphys_1m_params_tuple = tuple(microphys_1m_params)
-                @. S_q_χʲs_prev_level = compute_precipitation_sources(
+                @info "first call:" typeof(microphys_1m_params)
+                @info "first call:" typeof(microphys_1m_params_tuple)
+                # Main.@exfiltrate
+                my_S_q_χʲs_prev_level = @. compute_precipitation_sources(
                     ρʲ_prev_level,
                     q_liqʲ_prev_level,
                     q_iceʲ_prev_level,
@@ -790,11 +793,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     microphys_1m_params_tuple,
                     thermo_params,
                 )
+                @info "After first call" my_S_q_χʲs_prev_level
 
-                @. S_q_liqʲ_prev_level = S_q_χʲs_prev_level.liq
-                @. S_q_iceʲ_prev_level = S_q_χʲs_prev_level.ice
-                @. S_q_raiʲ_prev_level = S_q_χʲs_prev_level.rai
-                @. S_q_snoʲ_prev_level = S_q_χʲs_prev_level.sno
+                @. S_q_liqʲ_prev_level = my_S_q_χʲs_prev_level.liq
+                @. S_q_iceʲ_prev_level = my_S_q_χʲs_prev_level.ice
+                @. S_q_raiʲ_prev_level = my_S_q_χʲs_prev_level.rai
+                @. S_q_snoʲ_prev_level = my_S_q_χʲs_prev_level.sno
 
 
                 # Rain sinks from the updrafts

@@ -204,81 +204,90 @@ function compute_precipitation_sources(
     thp,
 )  where {MP1M}
     FT = eltype(thp)
-    Sᵖ_l2r =
+    Sᵖ_l2r = FT(0)
         # ! format: off
         # rain autoconversion: q_liq -> q_rain
-        ifelse(
-            mp.Ndp <= 0,
-            CM1.conv_q_lcl_to_q_rai(mp.pr.acnv1M, qₗ, true),
-            CM2.conv_q_lcl_to_q_rai(mp.var, qₗ, ρ, mp.Ndp),
-        )
-    Sᵖ_l2r = 
-        triangle_inequality_limiter(Sᵖ_l2r, limit(qₗ, dt, 5))
+        # ifelse(
+        #     mp.Ndp <= 0,
+        #     CM1.conv_q_lcl_to_q_rai(mp.pr.acnv1M, qₗ, true),
+        #     CM2.conv_q_lcl_to_q_rai(mp.var, qₗ, ρ, mp.Ndp),
+        # )
+        # CM1.conv_q_lcl_to_q_rai(mp.pr.acnv1M, qₗ, true)
+    # Sᵖ_l2r =
+    #     triangle_inequality_limiter(Sᵖ_l2r, limit(qₗ, dt, 5))
 
-    Sᵖ_i2s = 
+    Sᵖ_i2s = FT(0)
         # snow autoconversion assuming no supersaturation: q_ice -> q_snow
-        triangle_inequality_limiter(
-            CM1.conv_q_icl_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ, true),
-            limit(qᵢ, dt, 5),
-        )
+        # triangle_inequality_limiter(
+        #     CM1.conv_q_icl_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ, true),
+        #     limit(qᵢ, dt, 5),
+        # )
 
     # accretion: q_liq + q_rain -> q_rain
-    Sᵖ_lr2r = triangle_inequality_limiter(
-        CM1.accretion(mp.cl, mp.pr, mp.tv.rain, mp.ce, qₗ, qᵣ, ρ),
-        limit(qₗ, dt, 5),
-    )
+    Sᵖ_lr2r = FT(0)
+    # Sᵖ_lr2r = triangle_inequality_limiter(
+    #     CM1.accretion(mp.cl, mp.pr, mp.tv.rain, mp.ce, qₗ, qᵣ, ρ),
+    #     limit(qₗ, dt, 5),
+    # )
 
     # accretion: q_ice + q_snow -> q_snow
-    Sᵖ_is2s = triangle_inequality_limiter(
-        CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ, qₛ, ρ),
-        limit(qᵢ, dt, 5),
-    )
+    Sᵖ_is2s = FT(0)
+    # Sᵖ_is2s = triangle_inequality_limiter(
+    #     CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ, qₛ, ρ),
+    #     limit(qᵢ, dt, 5),
+    # )
 
     # accretion: q_liq + q_sno -> q_sno or q_rai
     # sink of cloud water via accretion cloud water + snow
-    Sᵖ_ls2sr = triangle_inequality_limiter(
-        CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ, qₛ, ρ),
-        limit(qₗ, dt, 5),
-    )
+    Sᵖ_ls2sr = FT(0)
+    # Sᵖ_ls2sr = triangle_inequality_limiter(
+    #     CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ, qₛ, ρ),
+    #     limit(qₗ, dt, 5),
+    # )
     # if T < T_freeze cloud droplets freeze to become snow
     # else the snow melts and both cloud water and snow become rain
-    α(thp, ts) = TD.Parameters.cv_l(thp) / TD.latent_heat_fusion(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
-    Sᵖ_snow = ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
-        Sᵖ_ls2sr,
-        FT(-1) * triangle_inequality_limiter(Sᵖ_ls2sr * α(thp, ts), limit(qₛ, dt, 5)),
-    )
+    # α(thp, ts) = TD.Parameters.cv_l(thp) / TD.latent_heat_fusion(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
+    # Sᵖ_snow = ifelse(
+    #     Tₐ(thp, ts) < mp.ps.T_freeze,
+    #     Sᵖ_ls2sr,
+    #     FT(-1) * triangle_inequality_limiter(Sᵖ_ls2sr * α(thp, ts), limit(qₛ, dt, 5)),
+    # )
+    Sᵖ_snow = Sᵖ_ls2sr
 
     # accretion: q_ice + q_rai -> q_sno
-    Sᵖ_ir2s = triangle_inequality_limiter(
-        CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ, qᵣ, ρ),
-        limit(qᵢ, dt, 5),
-    )
+    # Sᵖ_ir2s = triangle_inequality_limiter(
+    #     CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ, qᵣ, ρ),
+    #     limit(qᵢ, dt, 5),
+    # )
+    Sᵖ_ir2s = FT(0)
     # sink of rain via accretion cloud ice - rain
-    Sᵖ_2ir = triangle_inequality_limiter(
-        CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ, qᵣ, ρ),
-        limit(qᵣ, dt, 5),
-    )
-
+    # Sᵖ_2ir = triangle_inequality_limiter(
+    #     CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ, qᵣ, ρ),
+    #     limit(qᵣ, dt, 5),
+    # )
+    Sᵖ_2ir = FT(0)
     # accretion: q_rai + q_sno -> q_rai or q_sno
-    Sᵖ_rs2rs = ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
-        triangle_inequality_limiter(
-            CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
-            limit(qᵣ, dt, 5),
-        ),
-        -triangle_inequality_limiter(
-            CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ, qₛ, ρ),
-            limit(qₛ, dt, 5),
-        ),
-    )
+    # Sᵖ_rs2rs = ifelse(
+    #     Tₐ(thp, ts) < mp.ps.T_freeze,
+    #     triangle_inequality_limiter(
+    #         CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
+    #         limit(qᵣ, dt, 5),
+    #     ),
+    #     -triangle_inequality_limiter(
+    #         CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ, qₛ, ρ),
+    #         limit(qₛ, dt, 5),
+    #     ),
+    # )
+    Sᵖ_rs2rs = FT(0)
 
-    Sqₗᵖ = - Sᵖ_l2r - Sᵖ_lr2r - Sᵖ_ls2sr
-    Sqᵢᵖ = - Sᵖ_i2s - Sᵖ_is2s - Sᵖ_ir2s
-    Sqᵣᵖ =   Sᵖ_l2r + Sᵖ_lr2r - Sᵖ_2ir - Sᵖ_rs2rs + ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ_ls2sr - Sᵖ_snow)
-    Sqₛᵖ =   Sᵖ_i2s + Sᵖ_is2s + Sᵖ_snow + Sᵖ_ir2s + Sᵖ_2ir + Sᵖ_rs2rs
+    # Sqₗᵖ = - Sᵖ_l2r - Sᵖ_lr2r - Sᵖ_ls2sr
+    # Sqᵢᵖ = - Sᵖ_i2s - Sᵖ_is2s - Sᵖ_ir2s
+    # # Sqᵣᵖ =   Sᵖ_l2r + Sᵖ_lr2r - Sᵖ_2ir - Sᵖ_rs2rs + ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ_ls2sr - Sᵖ_snow)
+    # Sqᵣᵖ =   Sᵖ_l2r + Sᵖ_lr2r - Sᵖ_2ir - Sᵖ_rs2rs + FT(0)
+    # Sqₛᵖ =   Sᵖ_i2s + Sᵖ_is2s + Sᵖ_snow + Sᵖ_ir2s + Sᵖ_2ir + Sᵖ_rs2rs
     
-    return (; liq = Sqₗᵖ, ice = Sqᵢᵖ, rai = Sqᵣᵖ, sno = Sqₛᵖ)
+    # return (; liq = FT(Sqₗᵖ), ice = Sqᵢᵖ, rai = FT(Sqᵣᵖ), sno = Sqₛᵖ)
+    return (; liq = FT(0), ice = FT(0), rai = FT(0), sno = FT(0))
     #! format: on
 end
 
