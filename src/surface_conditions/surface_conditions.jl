@@ -259,7 +259,7 @@ function surface_state_to_conditions(
             interior_values,
             surface_values,
             parameterization.Cd,
-            parameterization.Ch,
+            parameterization.Ch;
             gustiness,
             beta,
         )
@@ -274,7 +274,7 @@ function surface_state_to_conditions(
                 interior_values,
                 surface_values,
                 parameterization.z0m,
-                parameterization.z0b,
+                parameterization.z0b;
                 gustiness,
                 beta,
             )
@@ -327,7 +327,7 @@ function surface_state_to_conditions(
                     shf,
                     lhf,
                     parameterization.z0m,
-                    parameterization.z0b,
+                    parameterization.z0b;
                     gustiness,
                 )
             else
@@ -338,7 +338,7 @@ function surface_state_to_conditions(
                     lhf,
                     parameterization.ustar,
                     parameterization.z0m,
-                    parameterization.z0m,
+                    parameterization.z0m;
                     gustiness,
                 )
             end
