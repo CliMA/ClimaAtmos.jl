@@ -12,7 +12,7 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 edmfx_filter: true
-prognostic_surface: "SlabOceanSST" # TODO implement sea ice
+prognostic_surface: "EisenmanSeaIce" #"SlabOceanSST" # TODO implement sea ice
 moist: "equil"
 config: "column"
 z_max: 9000.0
