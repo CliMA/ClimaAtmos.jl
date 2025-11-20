@@ -82,7 +82,7 @@ function atmos_surface_field(surface_space, ::SlabOceanSST)
             sfc = map(
                 coord -> (;
                     T = Geometry.float_type(coord)(
-                        270#271 + 29 * exp(-coord.lat^2 / (2 * 26^2)),
+                        271 + 29 * exp(-coord.lat^2 / (2 * 26^2)), # changed for use in Larcform1 case
                     ),
                     water = Geometry.float_type(coord)(0),
                 ),
@@ -93,13 +93,28 @@ function atmos_surface_field(surface_space, ::SlabOceanSST)
         return (;
             sfc = map(
                 coord -> (;
-                    T = Geometry.float_type(coord)(270),
+                    T = Geometry.float_type(coord)(271),
                     water = Geometry.float_type(coord)(0),
                 ),
                 Fields.coordinate_field(surface_space),
             )
         )
     end
+end
+
+function atmos_surface_field(surface_space, ::EisenmanSeaIce)
+    # Initialize sea-ice surface state. Add ice thickness as an additional
+    # prognostic surface variable alongside T and water.
+    return (;
+        sfc = map(
+            coord -> (;
+                T = Geometry.float_type(coord)(250),
+                water = Geometry.float_type(coord)(0),
+                h_ice = Geometry.float_type(coord)(1.0), # initial ice thickness [m]
+            ),
+            Fields.coordinate_field(surface_space),
+        )
+    )
 end
 
 function moisture_variables(ls, ::DryModel)
