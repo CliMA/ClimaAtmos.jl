@@ -82,7 +82,7 @@ function atmos_surface_field(surface_space, ::SlabOceanSST)
             sfc = map(
                 coord -> (;
                     T = Geometry.float_type(coord)(
-                        271 + 29 * exp(-coord.lat^2 / (2 * 26^2)), # changed for use in Larcform1 case
+                        271 + 29 * exp(-coord.lat^2 / (2 * 26^2)), 
                     ),
                     water = Geometry.float_type(coord)(0),
                 ),
