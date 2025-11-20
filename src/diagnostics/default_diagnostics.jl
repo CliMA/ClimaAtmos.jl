@@ -184,7 +184,7 @@ function core_default_diagnostics(output_writer, duration, start_date; topograph
             ),
             average_func(core_diagnostics...; output_writer, start_date)...,
             min_func("ts"; output_writer, start_date),
-            max_func("ts"; output_writer, start_date),]
+            max_func("ts"; output_writer, start_date)]
     else
         [
             average_func(core_diagnostics...; output_writer, start_date)...,
