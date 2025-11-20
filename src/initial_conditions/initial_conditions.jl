@@ -1683,12 +1683,12 @@ function (initial_condition::GCMDriven)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = ts = TD.PhaseEquil_ρTq(
+            thermo_state =  ts = TD.PhaseEquil_ρTq(
                 thermo_params,
                 FT(ρ₀(z)),
                 FT(T(z)),
                 FT(q_tot(z)),
-            ),
+            ) ,
             velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
             turbconv_state = EDMFState(; tke = FT(0)),
         )
@@ -1739,12 +1739,12 @@ function (initial_condition::InterpolatedColumnProfile)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = ts = TD.PhaseEquil_ρTq(
+            thermo_state =  ts = TD.PhaseEquil_ρTq(
                 thermo_params,
                 FT(ρ₀(z)),
                 FT(T(z)),
                 FT(q_tot(z)),
-            ),
+            ) ,
             velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
             turbconv_state = EDMFState(; tke = FT(0)),
         )
@@ -1849,10 +1849,10 @@ function (initial_condition::Larcform1)(params)
     q_tot = APL.Larcform1_q_tot(FT) #FT(0) # TODO 
     T=APL.Larcform1_T(FT)
     p = hydrostatic_pressure_profile(;
-    thermo_params,
-    p_0,
-    T, # Issue with type here
-    q_tot
+        thermo_params,
+        p_0,
+        T, # Issue with type here
+        q_tot,
     )  # Pa
     u = APL.Larcform1_geostrophic_u(FT)
     v = APL.Larcform1_geostrophic_v(FT)
