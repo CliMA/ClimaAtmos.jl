@@ -28,16 +28,7 @@ steps:
       - julia --check-bounds=yes -e 'using TOML; @assert TOML.parsefile(".buildkite/Manifest-v1.11.toml")["deps"]["ClimaAtmos"][1]["path"] == ".."'
 
       - echo "--- Instantiate .buildkite"
-      - julia --project=.buildkite -e '
-          using Pkg;
-          Pkg.Registry.update();
-          Pkg.add(PackageSpec(name="ClimaCore",      url="https://github.com/CliMA/ClimaCore.jl",      rev="ne/fd_grid"));
-          Pkg.add(PackageSpec(name="ClimaUtilities", url="https://github.com/CliMA/ClimaUtilities.jl", rev="main"));
-          Pkg.instantiate();
-          Pkg.precompile(; strict=true);
-          using CUDA; CUDA.precompile_runtime();
-          Pkg.status()
-        '
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.precompile(;strict=true); using CUDA; CUDA.precompile_runtime(); Pkg.status()'"
 
     agents:
       slurm_cpus_per_task: 8
