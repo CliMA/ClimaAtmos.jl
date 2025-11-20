@@ -279,6 +279,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     end
 
     surface_flux_tendency!(Yₜ, Y, p, t)
+    edmfx_surface_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     radiation_tendency!(Yₜ, Y, p, t, p.atmos.radiation_mode)
     if p.atmos.sgs_entr_detr_mode == Explicit()
