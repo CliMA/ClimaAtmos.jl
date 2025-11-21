@@ -414,6 +414,7 @@ function (initial_condition::RCEMIPIIProfile)(params)
                 q = q_0 * exp(-(z/z_q1)) * exp(-(z/z_q2)^FT(2))
             elseif z > z_t
                 q = q_t
+            return q
         end
 
         q = q_func(z)
@@ -425,6 +426,7 @@ function (initial_condition::RCEMIPIIProfile)(params)
                 T_v = T_v0 - Γ*z
             elseif z > z_t
                 T_v = T_vt
+            return T_v
         end
 
         T_v = T_v_func(z)
@@ -440,6 +442,7 @@ function (initial_condition::RCEMIPIIProfile)(params)
                 p = p_0 * ((T_v0 - Γ*z)/(T_v0))^(grav / (R_d * Γ))
             elseif z > z_t
                 p = p_t * exp( - (grav*(z-z_t)) / (R_d * T_vt))
+            return p
         end
 
         p = p_func(z)
