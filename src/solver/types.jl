@@ -499,6 +499,15 @@ struct RadiationTRMM_LBA{R}
     end
 end
 
+abstract type PrescribedFlow end
+
+struct ShipwayHill2012VelocityProfile{FT} <: PrescribedFlow end
+function (::ShipwayHill2012VelocityProfile{FT})(z, t) where {FT}
+    w1 = FT(1.5)
+    t1 = FT(600)
+    return t < t1 ? w1 * sinpi(FT(t) / t1) : FT(0)
+end
+
 struct TestDycoreConsistency end
 
 abstract type AbstractTimesteppingMode end
@@ -682,11 +691,12 @@ Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
-struct AtmosModel{W, SCM, R, TC, GW, VD, SP, SU, NU}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
     water::W
     scm_setup::SCM
     radiation::R
     turbconv::TC
+    prescribed_flow::PF
     gravity_wave::GW
     vertical_diffusion::VD
     sponge::SP
@@ -702,6 +712,7 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosWater, :water),
     (AtmosRadiation, :radiation),
     (AtmosTurbconv, :turbconv),
+    (ShipwayHill2012VelocityProfile, :prescribed_flow),
     (AtmosGravityWave, :gravity_wave),
     (AtmosSponge, :sponge),
     (AtmosSurface, :surface),
@@ -919,11 +930,14 @@ function AtmosModel(; kwargs...)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
 
+    prescribed_flow = get(atmos_model_kwargs, :prescribed_flow, nothing)
+
     return AtmosModel{
         typeof(water),
         typeof(scm_setup),
         typeof(radiation),
         typeof(turbconv),
+        typeof(prescribed_flow),
         typeof(gravity_wave),
         typeof(vertical_diffusion),
         typeof(sponge),
@@ -934,6 +948,7 @@ function AtmosModel(; kwargs...)
         scm_setup,
         radiation,
         turbconv,
+        prescribed_flow,
         gravity_wave,
         vertical_diffusion,
         sponge,
