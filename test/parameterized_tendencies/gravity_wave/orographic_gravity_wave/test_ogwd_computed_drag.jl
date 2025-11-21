@@ -8,6 +8,13 @@ include(
 )
 include("../gw_remap_plot_utils.jl")
 
+ENV["CLIMACOMMS_DEVICE"] = "CPU"
+
+import ClimaComms
+import ClimaComms.@import_required_backends
+
+comms_ctx = ClimaComms.SingletonCommsContext()
+@show ClimaComms.device(comms_ctx)
 
 if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()

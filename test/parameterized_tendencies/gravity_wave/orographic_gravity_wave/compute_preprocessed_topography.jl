@@ -1,5 +1,20 @@
 import ClimaAtmos as CA
 
+include(
+    joinpath(
+        pkgdir(CA),
+        "src/parameterized_tendencies/gravity_wave_drag",
+        "preprocess_topography.jl",
+    ),
+)
+
+ENV["CLIMACOMMS_DEVICE"] = "CPU"
+
+import ClimaComms
+import ClimaComms.@import_required_backends
+
+comms_ctx = ClimaComms.SingletonCommsContext()
+@show ClimaComms.device(comms_ctx)
 
 if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()
@@ -46,14 +61,14 @@ if load_preprocessed_topography
         parsed_args,
     )
 else
-    topo_cg = CA.compute_OGW_info(Y, elevation_data, earth_radius, γ, h_frac)
+    topo_cg = CA.compute_OGW_info(Y, elevation_data, earth_radius, γ, h_frac; n_smoothing_cells = 3.0)
 end
 
-output_filename = _write_computed_drag!(topo_cg, parsed_args, config)
+output_filename = write_computed_drag!(topo_cg, parsed_args, config)
 
-datafile_cg, weightfile = _save_nc_data(output_filename, topo_cg, spaces)
+datafile_cg, weightfile = save_nc_data(output_filename, topo_cg, spaces)
 
-datafile_rll = _remap_nc_data(output_filename)
+datafile_rll = remap_nc_data(output_filename)
 (; lon, lat, hmax, hmin, t11, t12, t21, t22) = diagnostics(datafile_rll)
 plot_diagnostics(lon, lat, hmax, hmin, t11, t12, t21, t22);
 

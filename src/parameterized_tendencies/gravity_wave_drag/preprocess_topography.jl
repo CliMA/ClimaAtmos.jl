@@ -18,7 +18,7 @@ include(
 
 # Always CPU...
 
-function _write_computed_drag!(computed_drag, parsed_args, config)
+function write_computed_drag!(computed_drag, parsed_args, config)
     (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem) = CA.gen_fn(parsed_args)
     # initialize HDF5 output
     hdfwriter = InputOutput.HDF5Writer("$(output_filename).hdf5", config.comms_ctx)
@@ -41,7 +41,7 @@ function _write_computed_drag!(computed_drag, parsed_args, config)
 end
 
 
-function _save_nc_data(output_filename, topo_cg, spaces)
+function save_nc_data(output_filename, topo_cg, spaces)
     FT = eltype(topo_cg.hmax)
     hspace = Spaces.horizontal_space(spaces.center_space)
 
@@ -73,7 +73,7 @@ function _save_nc_data(output_filename, topo_cg, spaces)
     return datafile_cg, weightfile
 end
 
-function _remap_nc_data(output_filename)
+function remap_nc_data(output_filename)
     # remap from clima grid to lat/lon grid
     datafile_rll = joinpath(@__DIR__, "data_rll_$(output_filename).nc")
     apply_remap(datafile_rll, datafile_cg, weightfile, ["hmax", "hmin", "t11", "t12", "t21", "t22"])

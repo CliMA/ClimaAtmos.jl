@@ -19,7 +19,7 @@ Where:
 """
 
 import CUDA
-ENV["CLIMACOMMS_DEVICE"] = "CUDA"
+ENV["CLIMACOMMS_DEVICE"] = "CPU"
 
 import ClimaComms
 import ClimaComms.@import_required_backends
@@ -40,7 +40,7 @@ import GeometryBasics
 
 include("../gw_remap_plot_utils.jl")
 
-const FT = Float64
+FT = Float64
 ᶜgradᵥ = Operators.GradientF2C()
 ᶠinterp = Operators.InterpolateC2F(
     bottom = Operators.Extrapolate(),
