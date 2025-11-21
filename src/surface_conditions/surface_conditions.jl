@@ -381,11 +381,11 @@ end
 #For non-RCEMIPII box models with prescribed surface temp, assume that the latitude is 0.
 function surface_temperature(
     ::Union{ZonallySymmetricSST, ZonallyAsymmetricSST},
-    coordinates::Union{Geometry.XZPoint, Geometry.XYZPoint},
+    coordinates::Union{Geometry.XZPoint, Geometry.XYZPoint, Geometry.ZPoint},
     surface_temp_params,
 )
-    (; x) = coordinates
-    FT = eltype(x)
+    (; z) = coordinates
+    FT = eltype(z)
     return FT(300)
 end
 

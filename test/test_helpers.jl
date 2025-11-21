@@ -28,6 +28,30 @@ function generate_test_simulation(config)
     return (; Y = Y, p = p, params = p.params, simulation = simulation)
 end
 
+function periodic_line_mesh(; x_max, x_elem)
+    domain = Domains.IntervalDomain(
+        Geometry.XPoint(zero(x_max)),
+        Geometry.XPoint(x_max);
+        periodic = true,
+    )
+    return Meshes.IntervalMesh(domain; nelems = x_elem)
+end
+
+function periodic_rectangle_mesh(; x_max, y_max, x_elem, y_elem)
+    x_domain = Domains.IntervalDomain(
+        Geometry.XPoint(zero(x_max)),
+        Geometry.XPoint(x_max);
+        periodic = true,
+    )
+    y_domain = Domains.IntervalDomain(
+        Geometry.YPoint(zero(y_max)),
+        Geometry.YPoint(y_max);
+        periodic = true,
+    )
+    domain = Domains.RectangleDomain(x_domain, y_domain)
+    return Meshes.RectilinearMesh(domain, x_elem, y_elem)
+end
+
 function get_spherical_spaces(; FT = Float32)
     context = ClimaComms.SingletonCommsContext()
     radius = FT(10π)
