@@ -1,4 +1,4 @@
-274
+275
 
 # **README**
 #
@@ -20,6 +20,11 @@
 
 
 #=
+275
+- Change order of GPU calculations for better performance, but it
+  results in slightly different floating point rounding.  Artifacts
+  all look the same.
+
 274
 - Remove unused calculation of TKE exchange in mixing length
 
