@@ -32,8 +32,8 @@ end
 function moisture_fixer(q, qᵥ, dt)
     FT = eltype(q)
     return triangle_inequality_limiter(
-        -min(FT(0), q / dt),
-        limit(qᵥ, dt, 5),
+        -min(FT(0), q / FT(dt)),
+        limit(qᵥ, FT(dt), 5),
         FT(0),
     )
 end

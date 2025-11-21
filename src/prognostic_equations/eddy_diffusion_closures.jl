@@ -152,10 +152,20 @@ function buoyancy_gradients(
             error("Unsupported moisture model")
         end
 
-        phase_part = TD.PhasePartition(thermo_params, ts_sat)
-        lh = TD.latent_heat_liq_ice(thermo_params, phase_part)
-        cp_m = TD.cp_m(thermo_params, ts_sat)
         t_sat = get_t_sat(thermo_params, bg_model)
+        phase_part = TD.PhasePartition(thermo_params, ts_sat)
+        lh =
+            (
+                get_ql_sat(thermo_params, bg_model) *
+                TD.latent_heat_vapor(thermo_params, t_sat) +
+                get_qi_sat(thermo_params, bg_model) *
+                TD.latent_heat_sublim(thermo_params, t_sat)
+            ) /
+            (
+                get_ql_sat(thermo_params, bg_model) +
+                get_qi_sat(thermo_params, bg_model) + sqrt(eps(FT))
+            )
+        cp_m = TD.cp_m(thermo_params, ts_sat)
         qv_sat = get_qv_sat(thermo_params, bg_model)
         ∂b∂θli_sat = (
             ∂b∂θv *
@@ -257,8 +267,8 @@ end
 Calculates the surface flux of TKE, a C3 vector used by
 ClimaAtmos operator boundary conditions.
 
-The flux magnitude is modeled as 
-  c_k * ρa_sfc * ustar^3`, 
+The flux magnitude is modeled as
+  c_k * ρa_sfc * ustar^3`,
 directed along the surface upward normal.
 
 Details:
@@ -323,12 +333,12 @@ where:
 - `scale_blending_method`: The method to use for blending physical scales.
 
 Point-wise calculation of the turbulent mixing length, limited by physical constraints (wall distance,
-TKE balance, stability) and grid resolution. Based on 
-Lopez‐Gomez, I., Cohen, Y., He, J., Jaruga, A., & Schneider, T. (2020). 
-A generalized mixing length closure for eddy‐diffusivity mass‐flux schemes of turbulence and convection. 
+TKE balance, stability) and grid resolution. Based on
+Lopez‐Gomez, I., Cohen, Y., He, J., Jaruga, A., & Schneider, T. (2020).
+A generalized mixing length closure for eddy‐diffusivity mass‐flux schemes of turbulence and convection.
 Journal of Advances in Modeling Earth Systems, 12, e2020MS002161. https://doi.org/ 10.1029/2020MS002161
 
-Returns a `MixingLength{FT}` struct containing the final blended mixing length (`master`) 
+Returns a `MixingLength{FT}` struct containing the final blended mixing length (`master`)
 and its constituent physical scales.
 """
 
@@ -370,8 +380,8 @@ function mixing_length_lopez_gomez_2020(
     # Ensure l_z is non-negative when ᶜz is numerically smaller than z_sfc.
     l_z = max(l_z, FT(0))
 
-    # l_W: Wall-constrained length scale (near-surface limit, to match 
-    # Monin-Obukhov Similarity Theory in the surface layer, with Businger-Dyer 
+    # l_W: Wall-constrained length scale (near-surface limit, to match
+    # Monin-Obukhov Similarity Theory in the surface layer, with Businger-Dyer
     # type stability functions)
     tke_sfc_safe = max(sfc_tke, eps_FT)
     ustar_sq_safe = max(ustar * ustar, eps_FT) # ustar^2 may vanish in certain LES setups
