@@ -359,6 +359,67 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
 end
 
 """
+    RCEMIPIIProfile(temperature, humidity)
+
+An `InitialCondition` following the sounding to initialize simulations for
+RCEMIPII as described by Wing et. al. (2018)
+(https://doi.org/10.5194/gmd-11-793-2018). There are three input profiles:
+RCEMIPIIProfile_295, RCEMIPIIProfile_300, and RCEMIPIIProfile_305, that specify
+three different SST temperatures and different initial specific humidity
+profiles. Note: this should be used for RCE_small and NOT
+RCE_large - RCE_large must be initialized with the final state of RCE_small.
+"""
+struct RCEMIPIIProfile{FT} <: InitialCondition
+    temperature::FT
+    humidity::FT
+end
+
+RCEMIPIIProfile_295() = RCEMIPIIProfile(295.0, 12e-3)
+RCEMIPIIProfile_300() = RCEMIPIIProfile(300.0, 18.65e-3)
+RCEMIPIIProfile_305() = RCEMIPIIProfile(305.0, 24e-3)
+
+function (initial_condition::RCEMIPIIProfile)(params)
+    (; temperature, humidity) = initial_condition
+    function local_state(local_geometry)
+        FT = eltype(params)
+        R_d = CAP.R_d(params)
+        grav = CAP.grav(params)
+        thermo_params = CAP.thermodynamics_params(params)
+
+        T_0 = FT(temperature)
+        q_0 = FT(humidity)
+
+        q_t = FT(10^(-14)) # kg kg -1
+        z_q1 = FT(4000) # m
+        z_q2 = FT(7500) # m
+        z_t = FT(15000) # m
+        Γ = FT(0.0067) # K m-1
+        p_0 = FT(101480) # Pa
+
+        T_v0 = T_0 * (1 + FT(0.608) * q_0)
+        T_vt = T_v0 - Γ * z_t
+
+        p_t = p_0 * (T_vt / T_v0)^(grav / (R_d * Γ))
+
+        (; z) = local_geometry.coordinates
+
+        q = z ≤ z_t ? q_0 * exp(-z / z_q1) * exp(-(z / z_q2)^2) : q_t
+        T_v = z ≤ z_t ? T_v0 - Γ * z : T_vt
+        T = T_v / (1 + FT(0.608) * q)
+        p =
+            z ≤ z_t ? p_0 * ((T_v0 - Γ * z) / T_v0)^(grav / (R_d * Γ)) :
+            p_t * exp(-grav * (z - z_t) / (R_d * T_vt))
+
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q),
+        )
+    end
+    return local_state
+end
+
+"""
     overwrite_initial_conditions!(initial_condition, args...)
 
 Do-nothing fallback method for the operation overwriting initial conditions
