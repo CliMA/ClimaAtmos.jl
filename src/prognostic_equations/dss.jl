@@ -20,7 +20,7 @@ Perform a weighted Direct Stiffness Summation (DSS) on components of the state `
 This function applies DSS to `ClimaCore.Field`s (or structures of `Field`s)
 typically named `.c` (center-located) and `.f` (face-located) within the state
 object `Y`. The DSS operation is essential in `ClimaCore` for ensuring that
-fields are C0 continuous across element boundaries. It correctly sums contributions 
+fields are C0 continuous across element boundaries. It correctly sums contributions
 to degrees of freedom that are shared between different processes (MPI ranks).
 
 The operation is performed in-place, modifying the fields within `Y` (e.g., `Y.c`, `Y.f`).
@@ -80,5 +80,17 @@ NVTX.@annotate function dss!(Y, p, t)
     if do_dss(axes(Y.c))
         Spaces.weighted_dss!(Y.c => p.ghost_buffer.c, Y.f => p.ghost_buffer.f)
     end
+    FT = eltype(Y.c.ρq_tot)
+    @. Y.c.ρq_tot = max(FT(0), Y.c.ρq_tot)
+    @. Y.c.ρq_liq = max(FT(0), Y.c.ρq_liq)
+    @. Y.c.ρq_ice = max(FT(0), Y.c.ρq_ice)
+    @. Y.c.ρq_rai = max(FT(0), Y.c.ρq_rai)
+    @. Y.c.ρq_sno = max(FT(0), Y.c.ρq_sno)
+
+    @. p.precomputed.ᶜq_totʲs.:(1) = max(FT(0), p.precomputed.ᶜq_totʲs.:(1))
+    @. p.precomputed.ᶜq_liqʲs.:(1) = max(FT(0), p.precomputed.ᶜq_liqʲs.:(1))
+    @. p.precomputed.ᶜq_iceʲs.:(1) = max(FT(0), p.precomputed.ᶜq_iceʲs.:(1))
+    @. p.precomputed.ᶜq_raiʲs.:(1) = max(FT(0), p.precomputed.ᶜq_raiʲs.:(1))
+    @. p.precomputed.ᶜq_snoʲs.:(1) = max(FT(0), p.precomputed.ᶜq_snoʲs.:(1))
     return nothing
 end
