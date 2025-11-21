@@ -154,17 +154,10 @@ function buoyancy_gradients(
 
         t_sat = get_t_sat(thermo_params, bg_model)
         phase_part = TD.PhasePartition(thermo_params, ts_sat)
+        λ = TD.liquid_fraction(thermo_params, ts_sat)
         lh =
-            (
-                get_ql_sat(thermo_params, bg_model) *
-                TD.latent_heat_vapor(thermo_params, t_sat) +
-                get_qi_sat(thermo_params, bg_model) *
-                TD.latent_heat_sublim(thermo_params, t_sat)
-            ) /
-            (
-                get_ql_sat(thermo_params, bg_model) +
-                get_qi_sat(thermo_params, bg_model) + sqrt(eps(FT))
-            )
+            λ * TD.latent_heat_vapor(thermo_params, t_sat) +
+            (1 - λ) * TD.latent_heat_sublim(thermo_params, t_sat)
         cp_m = TD.cp_m(thermo_params, ts_sat)
         qv_sat = get_qv_sat(thermo_params, bg_model)
         ∂b∂θli_sat = (
