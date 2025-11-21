@@ -254,8 +254,10 @@ function (::ShipwayHill2012)(params)
         # Adjust the coefficients from 20 m to the actual value of z.
         z0 = FT(1.5e-4)
         adjustment = (log(20 / z0) / log(interior_z / z0))^2
-        Cd = FT(0.001229) * adjustment
-        Ch = FT(0.001094) * adjustment
+        # Cd = FT(0.001229) * adjustment
+        # Ch = FT(0.001094) * adjustment
+        Cd = FT(0.0)
+        Ch = FT(0.0)
         parameterization = ExchangeCoefficients(; Cd, Ch)
         # <<<
         return SurfaceState(; parameterization, T, p, q_vap)

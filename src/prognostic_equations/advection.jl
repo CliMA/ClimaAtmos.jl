@@ -286,6 +286,10 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, FT(dt), energy_q_tot_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, FT(dt), Val(:none))
+        if energy_q_tot_upwinding == Val(:first_order_kid)
+            vtt = vertical_transport_kid(ᶜρ, ᶠu³, ᶜq_tot, FT(dt), FT(t))
+            vtt_central = NullBroadcasted()  # turn off implicit advection
+        end
         @. Yₜ.c.ρq_tot += vtt - vtt_central
     end
 

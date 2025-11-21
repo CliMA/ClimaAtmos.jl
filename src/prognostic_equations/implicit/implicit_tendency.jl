@@ -82,6 +82,22 @@ function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order})
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))))
 end
+vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order_kid}) =
+    vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, Val(:first_order))  # transport e.g. ρe_tot as usual
+function vertical_transport_kid(ᶜρ, ᶠu³, ᶜχ, dt, t)
+    FT = eltype(ᶜρ)
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
+    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+    ρ_sfc = FT(1.1650101)  # TODO: Get from initial conditions or state
+    q_tot_sfc = FT(0.014778325)  # TODO: Get from initial conditions or state
+    u₃_sfc = ShipwayHill2012VelocityProfile{FT}()(FT(0), t)
+    
+    bottom_bc = Geometry.WVector(ρ_sfc * q_tot_sfc * u₃_sfc)
+    ᶜadvdivᵥ_kid = Operators.DivergenceF2C(
+        bottom = Operators.SetValue(bottom_bc), top = Operators.Extrapolate(),
+    )
+    return @. lazy(-(ᶜadvdivᵥ_kid(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))))
+end
 @static if pkgversion(ClimaCore) ≥ v"0.14.22"
     function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
         ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
@@ -131,6 +147,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     if !(moisture_model isa DryModel)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
+        if p.atmos.numerics.energy_q_tot_upwinding == Val(:first_order_kid)
+            vtt = NullBroadcasted()  # Turn off implicit energy q_tot advection
+        end
         @. Yₜ.c.ρq_tot += vtt
     end
 

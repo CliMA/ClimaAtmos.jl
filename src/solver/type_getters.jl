@@ -115,13 +115,7 @@ function get_atmos(config::AtmosConfig, params)
     )
 
     if parsed_args["prescribed_flow"]
-        function prescribed_u₃(FT::Type{<:Real}, _t)
-            t = FT(_t)
-            w1 = FT(2)
-            t1 = FT(600)  # 10 minutes
-            return t < t1 ? w1 * sin(π * t / t1) : FT(0)
-        end
-        prescribed_flow = PrescribedFlow(; prescribed_u₃)
+        prescribed_flow = ShipwayHill2012VelocityProfile{FT}()
     else
         prescribed_flow = nothing
     end

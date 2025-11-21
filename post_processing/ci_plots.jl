@@ -1699,7 +1699,7 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
         return var
     end
     simdirs = SimDir.(output_paths)
-    short_names = ["hus", "clw", "husra", "ta", "thetaa", "wa", "cli", "hussn"]
+    short_names = ["hus", "clw", "husra", "rhoa", "ta", "thetaa", "wa", "cli", "hussn", "ua", "va", "ke"]
     short_names = short_names ∩ collect(keys(simdirs[1].vars))
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         var = slice(get(simdir; short_name), x = 0, y = 0)

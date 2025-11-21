@@ -6,11 +6,6 @@ import Dates
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
 
-abstract type AbstractPrescribedFlow end
-@kwdef struct PrescribedFlow
-    prescribed_u₃::Function
-end
-
 abstract type AbstractMoistureModel end
 abstract type AbstractMoistModel <: AbstractMoistureModel end
 struct DryModel <: AbstractMoistureModel end
@@ -504,6 +499,15 @@ struct RadiationTRMM_LBA{R}
     end
 end
 
+abstract type PrescribedFlow end
+
+struct ShipwayHill2012VelocityProfile{FT} <: PrescribedFlow end
+function (::ShipwayHill2012VelocityProfile{FT})(z, t) where {FT}
+    w1 = FT(1.5)
+    t1 = FT(600)
+    return t < t1 ? w1 * sinpi(FT(t) / t1) : FT(0)
+end
+
 struct TestDycoreConsistency end
 
 abstract type AbstractTimesteppingMode end
@@ -708,7 +712,7 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosWater, :water),
     (AtmosRadiation, :radiation),
     (AtmosTurbconv, :turbconv),
-    (PrescribedFlow, :prescribed_flow),
+    (ShipwayHill2012VelocityProfile, :prescribed_flow),
     (AtmosGravityWave, :gravity_wave),
     (AtmosSponge, :sponge),
     (AtmosSurface, :surface),
