@@ -31,7 +31,7 @@ y_elem: 2
 z_elem: 100
 z_stretch: false
 perturb_initstate: false
-dt: "100secs"
+dt: "60secs"
 t_end: "24hours"
 dt_save_state_to_disk: "60mins"
 toml: [toml/prognostic_edmfx_1M.toml]
