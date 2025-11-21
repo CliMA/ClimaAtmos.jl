@@ -442,10 +442,20 @@ function (initial_condition::RCEMIPIIProfile)(params)
                 p = p_t * exp( - (grav*(z-z_t)) / (R_d * T_vt))
         end
 
+        p = p_func(z)
+
+        if params.moist_model isa EquilMoistModel
+            ts = TD.PhaseEquil_pTq(thermo_params, p, T, q)
+        elseif params.moist_model isa NonEquilMoistModel
+            ts = TD.PhaseNonEquil_pθq(thermo_params, p, T, q) # but this isn't theta? is this the right way to do this?
+        else
+            @info("Need to specify moisture model as either equil or nonequil")
+        end
+
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+            thermo_state = ts,
         )
     end
     return local_state
