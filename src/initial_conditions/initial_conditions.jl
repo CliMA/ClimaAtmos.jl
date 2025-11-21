@@ -359,6 +359,118 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
 end
 
 """
+    RCEMIPIIProfile(; temperature = 300)
+
+An `InitialCondition` following the sounding to initialize simulations for
+RCEMIPII as described by Wing et. al. (2018). Note - this should be used
+for RCE_small and NOT RCE_large - RCE_large must be initialized with the
+final state of RCE_small. Temperature options are 295, 300, and 305.
+"""
+Base.@kwdef struct RCEMIPIIProfile{T} <: InitialCondition
+    temperature::T = 300 
+end
+
+function (initial_condition::RCEMIPIIProfile)(params)
+    (; T_0) = initial_condition
+    function local_state(local_geometry)
+        FT = eltype(params)
+        R_d = CAP.R_d(params)
+        grav = CAP.grav(params)
+        thermo_params = CAP.thermodynamics_params(params)
+
+        (; z) = local_geometry.coordinates
+        q_t = FT(10^(-14)) # kg kg -1
+        z_q1 = FT(4000) # m
+        z_q2 = FT(7500) # m
+        z_t = FT(15000) # m
+        Γ = FT(0.0067) # K m-1
+        p_0 = FT(1014.8) # hPa
+
+        # constants based on the temp options
+        if T_0 == FT(295)
+            q_0 = FT(12e-3) # kg kg-1
+        elseif T_0 == FT(300)
+            q_0 = FT(18.65e-3) # kg kg-1
+        elseif T_0 == FT(305)
+            q_0 = FT(24e-3) # kg kg-1
+        else
+            @info(
+                "Please specify an RCEMIPII temperature of either
+                295K, 300K, or 305K."
+            )
+        end
+
+        T_v0 = T_0 * (FT(1)+FT(0.608)*q_0)
+        T_vt = T_v0 - Γ*z_t
+
+        p_t = p_0 * (T_vt / T_v0)^(grav / (R_d * Γ))
+
+        # i could probably wrap these all into the same function?
+
+        # q(z)
+
+        function q_func(z)
+            if FT(0) <= z <= FT(z_t)
+                q = q_0 * exp(-(z/z_q1)) * exp(-(z/z_q2)^FT(2))
+            elseif z > z_t
+                q = q_t
+            end
+
+            return q
+        end
+
+        q = q_func(z)
+
+        # T_v(z)
+
+        function T_v_func(z)
+            if FT(0) <= z <= z_t
+                T_v = T_v0 - Γ*z
+            elseif z > z_t
+                T_v = T_vt
+            end
+
+            return T_v
+        end
+
+        T_v = T_v_func(z)
+        
+        # T(z)
+        T = T_v / (FT(1)+FT(0.608)*q)
+
+        # p(z)
+
+        function p_func(z)
+            if FT(0) <= z <= z_t
+                p = p_0 * ((T_v0 - Γ*z)/(T_v0))^(grav / (R_d * Γ))
+            elseif z > z_t
+                p = p_t * exp( - (grav*(z-z_t)) / (R_d * T_vt))
+            end
+
+            return p
+        end
+
+        p = p_func(z)
+
+        if params.moist_model isa EquilMoistModel
+            ts = TD.PhaseEquil_pTq(thermo_params, p, T, q)
+        elseif params.moist_model isa NonEquilMoistModel
+            ts = TD.PhaseNonEquil_ρTq(thermo_params, p, T, q)
+        else
+            @info("Need to specify moisture model as either equil or nonequil")
+        end
+
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = ts,
+        )
+    end
+    return local_state
+end
+
+
+"""
     overwrite_initial_conditions!(initial_condition, args...)
 
 Do-nothing fallback method for the operation overwriting initial conditions

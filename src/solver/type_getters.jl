@@ -416,6 +416,10 @@ function get_initial_condition(parsed_args, atmos)
         "PrecipitatingColumn",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
+    elseif parsed_args["initial_condition"] == "RCEMIPIIProfile"
+        ICs.RCEMIPIIProfile(
+            parsed_args["rcemipii_initial_temperature"],
+        )
     elseif isfile(parsed_args["initial_condition"])
         return ICs.MoistFromFile(parsed_args["initial_condition"])
     elseif parsed_args["initial_condition"] == "GCM"
