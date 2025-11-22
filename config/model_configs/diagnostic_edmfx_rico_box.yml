@@ -32,7 +32,7 @@ netcdf_interpolation_num_points: [8, 8, 100]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
     period: 10mins
-  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, husraup, hussnup, tke]
+  - short_name: [husra_w, arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, husraup, hussnup, tke]
     period: 10mins
   - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
     period: 10mins

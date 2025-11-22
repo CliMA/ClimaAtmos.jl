@@ -59,16 +59,18 @@ function set_precipitation_velocities!(
     # compute the precipitation terminal velocity [m/s]
     @. ᶜwᵣ = CM1.terminal_velocity(
         cmp.pr,
-        cmp.tv.rain,
+        cmp.Ch2022.rain,
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
     )
     @. ᶜwₛ = CM1.terminal_velocity(
         cmp.ps,
-        cmp.tv.snow,
+        cmp.Ch2022.large_ice,
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_sno / Y.c.ρ),
     )
+    @. p.scratch.ᶜtemp_scalar_term_vel_tmp = ᶜwᵣ
+
     # compute sedimentation velocity for cloud condensate [m/s]
     @. ᶜwₗ = CMNe.terminal_velocity(
         cmc.liquid,
@@ -123,13 +125,13 @@ function set_precipitation_velocities!(
     # scratch to compute env velocities
     ᶜw⁰ = p.scratch.ᶜtemp_scalar
     # scratch to add positive masses of subdomains
-    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities 
-    # over subdomains once negative subdomain mass issues are resolved 
+    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities
+    # over subdomains once negative subdomain mass issues are resolved
     ᶜρχ = p.scratch.ᶜtemp_scalar_2
     # scratch for adding energy fluxes over subdomains
     ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
 
-    # Compute gs sedimentation velocity based on subdomain velocities (assuming gs flux 
+    # Compute gs sedimentation velocity based on subdomain velocities (assuming gs flux
     # equals sum of sgs fluxes)
 
     ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
@@ -346,13 +348,13 @@ function set_precipitation_velocities!(
     # scratch to compute env velocities
     ᶜw⁰ = p.scratch.ᶜtemp_scalar
     # scratch to add positive masses of subdomains
-    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities 
-    # over subdomains once negative subdomain mass issues are resolved 
+    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities
+    # over subdomains once negative subdomain mass issues are resolved
     ᶜρχ = p.scratch.ᶜtemp_scalar_2
     # scratch for adding energy fluxes over subdomains
     ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
 
-    # Compute gs sedimentation velocity based on subdomain velocities (assuming gs flux 
+    # Compute gs sedimentation velocity based on subdomain velocities (assuming gs flux
     # equals sum of sgs fluxes)
 
     ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)

@@ -958,6 +958,36 @@ add_diagnostic_variable!(
     compute! = compute_prsn!,
 )
 
+compute_husra_w!(out, state, cache, time) =
+    compute_husra_w!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_husra_w!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("husra", model)
+
+function compute_husra_w!(
+    out,
+    state,
+    cache,
+    time,
+    microphysics_model::Union{
+        Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3,
+    },
+)
+    if isnothing(out)
+        return cache.scratch.ᶜtemp_scalar_term_vel_tmp
+    else
+        out .= cache.scratch.ᶜtemp_scalar_term_vel_tmp
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "husra_w",
+    long_name = "Rain sedimentation velocity",
+    standard_name = "rain_sedi_vel",
+    units = "m s^-1",
+    comments = """tmp for debugging  """,
+    compute! = compute_husra_w!,
+)
+
 ###
 # Precipitation (3d)
 ###
@@ -1052,7 +1082,7 @@ add_diagnostic_variable!(
     standard_name = "number_concentration_of_cloud_liquid_water_particles_in_air",
     units = "m^-3",
     comments = """
-    This is calculated as the number of cloud liquid water droplets in the grid 
+    This is calculated as the number of cloud liquid water droplets in the grid
     cell divided by the cell volume.
     """,
     compute! = compute_cdnc!,
@@ -1616,7 +1646,7 @@ function compute_cape!(out, state, cache, time)
     ᶜbuoyancy = cache.scratch.ᶜtemp_scalar
     ᶜbuoyancy .= g .* (parcel_Tv .- env_Tv) ./ env_Tv
 
-    # restrict to tropospheric buoyancy (generously below 20km) TODO: integrate from LFC to LNB 
+    # restrict to tropospheric buoyancy (generously below 20km) TODO: integrate from LFC to LNB
     FT = Spaces.undertype(axes(ᶜbuoyancy))
     ᶜbuoyancy .=
         ᶜbuoyancy .*
