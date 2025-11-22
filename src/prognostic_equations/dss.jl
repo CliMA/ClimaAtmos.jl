@@ -20,7 +20,7 @@ Perform a weighted Direct Stiffness Summation (DSS) on components of the state `
 This function applies DSS to `ClimaCore.Field`s (or structures of `Field`s)
 typically named `.c` (center-located) and `.f` (face-located) within the state
 object `Y`. The DSS operation is essential in `ClimaCore` for ensuring that
-fields are C0 continuous across element boundaries. It correctly sums contributions 
+fields are C0 continuous across element boundaries. It correctly sums contributions
 to degrees of freedom that are shared between different processes (MPI ranks).
 
 The operation is performed in-place, modifying the fields within `Y` (e.g., `Y.c`, `Y.f`).

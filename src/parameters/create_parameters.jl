@@ -167,6 +167,7 @@ microphys_1m_parameters(toml_dict::CP.ParamDict) = (;
     ps = CM.Parameters.Snow(toml_dict),
     ce = CM.Parameters.CollisionEff(toml_dict),
     tv = CM.Parameters.Blk1MVelType(toml_dict),
+    Ch2022 = CM.Parameters.Chen2022VelType(toml_dict),
     aps = CM.Parameters.AirProperties(toml_dict),
     var = CM.Parameters.VarTimescaleAcnv(toml_dict),
     Ndp = CP.get_parameter_values(
