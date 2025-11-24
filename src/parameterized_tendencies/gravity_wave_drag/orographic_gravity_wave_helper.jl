@@ -210,14 +210,16 @@ function calc_velocity_potential(
 
         # Pre-compute weights for all latitude offsets and longitude offsets
         # wt[i_offset, j1] stores weight for longitude offset i_offset and latitude index j1
+        # Note: Using ja+1:jb so array size is (jb - ja)
         max_i_offset = min(ilon_range[j], max_ilon_offset)
-        wt = zeros(FT, max_i_offset + 1, jb - ja + 1)  # +1 for zero offset
+        wt = zeros(FT, max_i_offset + 1, jb - ja)  # +1 for zero offset in first dim
 
         cj = cosphi[j]
         sj = sinphi[j]
 
         # Compute weights once per latitude row (OPTIMIZATION: moved outside i-loop)
-        for (j1_idx, j1) in enumerate(ja:jb)
+        # Note: Fortran uses ja+1:jb (skips first element), we match that here
+        for (j1_idx, j1) in enumerate(ja+1:jb)
             cj1 = cosphi[j1]
             sj1 = sinphi[j1]
             ccj = cj * cj1  # cos(lat_j) * cos(lat_j1)
@@ -228,24 +230,27 @@ function calc_velocity_potential(
                 # arc = acos(cos(lat1)*cos(lat2)*cos(dlon) + sin(lat1)*sin(lat2))
                 arc = acos(min(FT(1), ccj * cosdlam[i2 + 1] + ssj))
 
-                # Blackman window taper
+                # Blackman window taper (matches Fortran exactly)
+                # Fortran: arc1 = arc/max(arc, scale(j)) - clamps arc1 to max of 1.0
+                # This prevents Blackman from going negative for arc > scale
                 arc1 = arc / max(arc, scale[j])
-                blackman =
-                    FT(0.42) + FT(0.50) * cos(pi * arc1) + FT(0.08) * cos(FT(2) * pi * arc1)
+                blackman = FT(0.42) +
+                           FT(0.50) * cos(FT(π) * arc1) +
+                           FT(0.08) * cos(FT(2π) * arc1)
 
                 # Weight: cos(lat) / arc * Blackman_window
-                # Latitude-dependent regularization: more at high latitudes, less at low
-                # At high latitudes (|lat| > 70°), use larger min_arc to prevent blow-up
-                # At low latitudes, use smaller min_arc to preserve detail
-                lat_factor = max(FT(0.01), abs(sind(lat[j])) / FT(10))  # Ranges from 1% to 10%
-                min_arc = max(scale[j] * lat_factor, dlat_rad * lat_factor)
+                # CRITICAL: Use latitude-dependent regularization to prevent polar blow-up
+                # Fortran uses tiny=1e-12 which causes blow-up at high latitudes for the Julia version
+                # At poles: grid compression makes arc very small, need larger min_arc
+                lat_factor = FT(0.02) + abs(sind(lat[j])) * FT(0.08)  # 2% to 10%
+                min_arc = scale[j] * lat_factor
                 wt[i2 + 1, j1_idx] = cj1 / (arc + min_arc) * blackman
             end
-        end
 
-        # Zero out singularity (when j == j1 and i_offset == 0)
-        if j >= ja && j <= jb
-            wt[1, j - ja + 1] = FT(0)
+            # Zero out singularity (when j == j1 and i_offset == 0)
+            if j == j1
+                wt[1, j1_idx] = FT(0)
+            end
         end
 
         # Now loop over all longitudes at this latitude
@@ -257,9 +262,9 @@ function calc_velocity_potential(
             sum_val = FT(0)
 
             # Accumulate weighted sum over window
-            for j1 in ja:jb
-                j1_idx = j1 - ja + 1
-                for i1 in ia:ib
+            # Note: Fortran uses ja+1:jb and ia+1:ib (skips first elements)
+            for (j1_idx, j1) in enumerate(ja+1:jb)
+                for i1 in ia+1:ib
                     # Handle periodic longitude boundaries
                     i1_wrapped = mod1(i1, nlon)  # Julia's mod1 handles periodic wrapping
 
@@ -286,6 +291,7 @@ function calc_velocity_potential(
     end
 
     # Apply area element scaling
+    # The weights already include cos(lat) normalization (cj1 term)
     χ .*= (dlon_rad * dlat_rad)
     # Debug: find where the huge values are
     max_val, max_idx = findmax(abs.(χ))
@@ -470,7 +476,12 @@ function compute_OGW_info(
     # obtain lat, lon, elevation from the elev_data
     FT = Spaces.undertype(Spaces.axes(Y.c))
     # downsample to elev dims (3600×1800)
-    skip_pt = 6
+    # Below I hard-coded the skip_pt and n_smoothing_cells
+    # to reproduce Garner's Figures as closely as possible.
+    # If things work, we should use skip_pt = 1 and choose
+    # n_smoothing_cells ~ 100 km to match Fortran code or
+    # tune it as needed.
+    skip_pt = 3
     nt = NCDataset(elev_data, "r") do ds
         lon = FT.(Array(ds["lon"]))[1:skip_pt:end]
         lat = FT.(Array(ds["lat"]))[1:skip_pt:end]
@@ -481,6 +492,7 @@ function compute_OGW_info(
     FT = eltype(elev)
 
     # compute hmax and hmin (with grid-aware smoothing)
+    n_smoothing_cells = FT(6)
     hpoz = calc_hpoz_latlon(
         elev,
         lon,
@@ -498,6 +510,7 @@ function compute_OGW_info(
     hmin = hmax .* h_frac
 
     # compute χ (with grid-aware smoothing)
+    n_smoothing_cells = FT(3)
     χ = calc_velocity_potential(
         elev,
         lon,
