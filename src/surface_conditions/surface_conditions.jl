@@ -5,7 +5,6 @@ Updates the value of `p.precomputed.sfc_conditions` based on the current state `
 `t`. This function will only update the surface conditions if the surface_setup
 is not a PrescribedSurface.
 """
-
 function update_surface_conditions!(Y, p, t)
     # Need to extract the field values so that we can do
     # a DataLayout broadcast rather than a Field broadcast
@@ -22,17 +21,13 @@ function update_surface_conditions!(Y, p, t)
     surface_temp_params = CAP.surface_temp_params(params)
     int_ts_values = Fields.field_values(Fields.level(ᶜts, 1))
     int_u_values = Fields.field_values(Fields.level(ᶜu, 1))
-    int_z_values =
-        Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
+    int_z_values = Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
     sfc_conditions_values = Fields.field_values(sfc_conditions)
     wrapped_sfc_setup = sfc_setup_wrapper(sfc_setup)
     if p.atmos.sfc_temperature isa ExternalTVColumnSST
-        evaluate!(
-            p.external_forcing.surface_inputs.ts,
-            p.external_forcing.surface_timevaryinginputs.ts,
-            t,
-        )
-        sfc_temp_var = Fields.field_values(p.external_forcing.surface_inputs.ts)
+        (; surface_inputs, surface_timevaryinginputs) = p.external_forcing
+        evaluate!(surface_inputs.ts, surface_timevaryinginputs.ts, t)
+        sfc_temp_var = Fields.field_values(surface_inputs.ts)
     elseif p.atmos.surface_model isa SlabOceanSST
         sfc_temp_var = Fields.field_values(Y.sfc.T)
     else
@@ -72,10 +67,7 @@ end
 surface_state(sfc_setup_wrapper::SurfaceState, _, _, _) = sfc_setup_wrapper
 
 surface_state(
-    wrapped_sfc_setup::F,
-    sfc_local_geometry_values,
-    int_z_values,
-    t,
+    wrapped_sfc_setup::F, sfc_local_geometry_values, int_z_values, t,
 ) where {F <: Function} =
     wrapped_sfc_setup(sfc_local_geometry_values.coordinates, int_z_values, t)
 
@@ -97,10 +89,7 @@ function set_dummy_surface_conditions!(p)
         @. sfc_conditions.ts = TD.PhaseDry_ρT(thermo_params, FT(1), FT(300))
     else
         @. sfc_conditions.ts = TD.PhaseNonEquil_ρTq(
-            thermo_params,
-            FT(1),
-            FT(300),
-            TD.PhasePartition(FT(0)),
+            thermo_params, FT(1), FT(300), TD.PhasePartition(FT(0)),
         )
         @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
     end
@@ -110,8 +99,7 @@ function set_dummy_surface_conditions!(p)
     c = p.scratch.ᶠtemp_scalar
     # elsewhere known as 𝒢
     sfc_local_geometry = Fields.level(Fields.local_geometry_field(c), half)
-    @. sfc_conditions.ρ_flux_uₕ =
-        tensor_from_components(0, 0, sfc_local_geometry)
+    @. sfc_conditions.ρ_flux_uₕ = tensor_from_components(0, 0, sfc_local_geometry)
 end
 
 """
@@ -137,9 +125,7 @@ function set_surface_conditions!(p, surface_conditions, surface_ts)
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(ᶠtemp_scalar), Fields.half)
     @. sfc_conditions = atmos_surface_conditions(
-        surface_conditions,
-        surface_ts,
-        sfc_local_geometry,
+        surface_conditions, surface_ts, sfc_local_geometry,
     )
 end
 
@@ -179,8 +165,7 @@ function surface_state_to_conditions(
     sfc_temp_var,
     t,
 ) where {WSS}
-    surf_state =
-        surface_state(wrapped_sfc_setup, surface_local_geometry, interior_z, t)
+    surf_state = surface_state(wrapped_sfc_setup, surface_local_geometry, interior_z, t)
     parameterization = surf_state.parameterization
     (; coordinates) = surface_local_geometry
     FT = eltype(thermo_params)
@@ -190,11 +175,7 @@ function surface_state_to_conditions(
 
     T = if isnothing(sfc_temp_var)
         if isnothing(surf_state.T)
-            surface_temperature(
-                atmos.sfc_temperature,
-                coordinates,
-                surface_temp_params,
-            )
+            surface_temperature(atmos.sfc_temperature, coordinates, surface_temp_params)
         else
             surf_state.T
         end
@@ -216,8 +197,7 @@ function surface_state_to_conditions(
         else
             # Assume that the surface is water with saturated air directly
             # above it.
-            q_vap_sat =
-                TD.q_vap_saturation_generic(thermo_params, T, ρ, TD.Liquid())
+            q_vap_sat = TD.q_vap_saturation_generic(thermo_params, T, ρ, TD.Liquid())
             q_vap = ifelsenothing(surf_state.q_vap, q_vap_sat)
             q = TD.PhasePartition(q_vap)
             ts = TD.PhaseNonEquil_ρTq(thermo_params, ρ, T, q)
@@ -231,11 +211,9 @@ function surface_state_to_conditions(
                 # Assume that the surface is water with saturated air directly
                 # above it.
                 phase = TD.Liquid()
-                p_sat =
-                    TD.saturation_vapor_pressure(thermo_params, T, phase)
+                p_sat = TD.saturation_vapor_pressure(thermo_params, T, phase)
                 ϵ_v =
-                    TD.Parameters.R_d(thermo_params) /
-                    TD.Parameters.R_v(thermo_params)
+                    TD.Parameters.R_d(thermo_params) / TD.Parameters.R_v(thermo_params)
                 ϵ_v * p_sat / (p - p_sat * (1 - ϵ_v))
             else
                 surf_state.q_vap
@@ -247,9 +225,7 @@ function surface_state_to_conditions(
 
     surface_values = SF.StateValues(coordinates.z, SA.SVector(u, v), ts)
     interior_values = SF.StateValues(
-        interior_z,
-        SA.SVector(interior_u, interior_v),
-        interior_ts,
+        interior_z, SA.SVector(interior_u, interior_v), interior_ts,
     )
 
     if parameterization isa ExchangeCoefficients
@@ -302,11 +278,7 @@ function surface_state_to_conditions(
             end
             if isnothing(surf_state.gustiness)
                 buoyancy_flux = SF.compute_buoyancy_flux(
-                    surface_fluxes_params,
-                    shf,
-                    lhf,
-                    interior_ts,
-                    ts,
+                    surface_fluxes_params, shf, lhf, interior_ts, ts,
                     SF.PointValueScheme(),
                 )
                 # TODO: We are assuming that the average mixed layer depth is
@@ -322,23 +294,14 @@ function surface_state_to_conditions(
             )
             if isnothing(parameterization.ustar)
                 inputs = SF.Fluxes(
-                    interior_values,
-                    surface_values,
-                    shf,
-                    lhf,
-                    parameterization.z0m,
-                    parameterization.z0b;
+                    interior_values, surface_values, shf, lhf,
+                    parameterization.z0m, parameterization.z0b;
                     gustiness,
                 )
             else
                 inputs = SF.FluxesAndFrictionVelocity(
-                    interior_values,
-                    surface_values,
-                    shf,
-                    lhf,
-                    parameterization.ustar,
-                    parameterization.z0m,
-                    parameterization.z0m;
+                    interior_values, surface_values, shf, lhf,
+                    parameterization.ustar, parameterization.z0m, parameterization.z0m;
                     gustiness,
                 )
             end
@@ -360,7 +323,6 @@ function surface_temperature(
 )
     (; lat) = coordinates
     (; SST_mean, SST_delta, SST_wavelength_latitude) = surface_temp_params
-    FT = eltype(lat)
     T = SST_mean + SST_delta / 2 * cosd(360 * lat / SST_wavelength_latitude)
     return T
 end
@@ -373,8 +335,7 @@ function surface_temperature(
 )
     (; x) = coordinates
     (; SST_mean, SST_delta, SST_wavelength) = surface_temp_params
-    FT = eltype(x)
-    T = SST_mean - SST_delta / 2 * cos(2 * FT(pi) * x / SST_wavelength)
+    T = SST_mean - SST_delta / 2 * cospi(2 * x / SST_wavelength)
     return T
 end
 
@@ -401,23 +362,14 @@ function surface_temperature(
 end
 
 """
-    atmos_surface_conditions(
-        surface_conditions,
-        ts,
-        surface_local_geometry
-    )
+    atmos_surface_conditions(surface_conditions, ts, surface_local_geometry)
 
 Adds local geometry information to the `SurfaceFluxes.SurfaceFluxConditions` struct
 along with information about the thermodynamic state. The resulting values are the
 ones actually used by ClimaAtmos operator boundary conditions.
 """
-function atmos_surface_conditions(
-    surface_conditions,
-    ts,
-    surface_local_geometry,
-)
-    (; ustar, L_MO, buoy_flux, ρτxz, ρτyz, shf, lhf, evaporation) =
-        surface_conditions
+function atmos_surface_conditions(surface_conditions, ts, surface_local_geometry)
+    (; ustar, L_MO, buoy_flux, ρτxz, ρτyz, shf, lhf, evaporation) = surface_conditions
 
     # surface normal
     z = surface_normal(surface_local_geometry)
@@ -433,12 +385,7 @@ function atmos_surface_conditions(
         obukhov_length = L_MO,
         buoyancy_flux = buoy_flux,
         # This drops the C3 component of ρ_flux_u, need to add ρ_flux_u₃
-        ρ_flux_uₕ = tensor_from_components(
-            ρτxz,
-            ρτyz,
-            surface_local_geometry,
-            z,
-        ),
+        ρ_flux_uₕ = tensor_from_components(ρτxz, ρτyz, surface_local_geometry, z),
         energy_flux...,
         moisture_flux...,
     )
@@ -467,21 +414,12 @@ function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     # NOTE: Technically ρ_flux_q_tot is not really needed for a dry model, but
     # SF always has evaporation
     moisture_flux_names = (:ρ_flux_q_tot,)
-    names = (
-        :ts,
-        :ustar,
-        :obukhov_length,
-        :buoyancy_flux,
-        :ρ_flux_uₕ,
-        energy_flux_names...,
-        moisture_flux_names...,
+    names = (:ts, :ustar, :obukhov_length, :buoyancy_flux, :ρ_flux_uₕ,
+        energy_flux_names..., moisture_flux_names...,
     )
     type_tuple = Tuple{
-        atmos.moisture_model isa DryModel ? TD.PhaseDry{FT} :
-        TD.PhaseNonEquil{FT},
-        FT,
-        FT,
-        FT,
+        atmos.moisture_model isa DryModel ? TD.PhaseDry{FT} : TD.PhaseNonEquil{FT},
+        FT, FT, FT,
         typeof(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
         ntuple(_ -> C3{FT}, Val(length(energy_flux_names)))...,
         ntuple(_ -> C3{FT}, Val(length(moisture_flux_names)))...,

@@ -52,13 +52,8 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
@@ -297,13 +292,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # ... and upwinding correction of energy and total water.
     # (The central advection of energy and total water is done implicitly.)
     if energy_q_tot_upwinding != Val(:none)
-        ᶜh_tot = @. lazy(
-            TD.total_specific_enthalpy(
-                thermo_params,
-                ᶜts,
-                specific(Y.c.ρe_tot, Y.c.ρ),
-            ),
-        )
+        ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+        ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, Val(:none))
         @. Yₜ.c.ρe_tot += vtt - vtt_central
