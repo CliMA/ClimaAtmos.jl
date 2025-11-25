@@ -430,16 +430,6 @@ ts_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ) =
         ρ,
     )
 
-function eddy_diffusivity_coefficient_H(D₀, H, z_sfc, z)
-    return D₀ * exp(-(z - z_sfc) / H)
-end
-function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
-    p_pbl = 85000
-    p_strato = 10000
-    K_E = C_E * norm_v_a * z_a
-    return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
-end
-
 """
     set_implicit_precomputed_quantities!(Y, p, t)
 
