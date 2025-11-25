@@ -135,29 +135,27 @@ function edmfx_sgs_mass_flux_tendency!(
                 (@name(c.ρn_liq), @name(c.sgsʲs.:(1).n_liq), @name(n_liq)),
                 (@name(c.ρn_rai), @name(c.sgsʲs.:(1).n_rai), @name(n_rai)),
             )
-            for j in 1:n
-                # TODO using unrolled_foreach here allocates! (breaks the flame tests
-                # even though they use 0M microphysics)
-                # MatrixFields.unrolled_foreach(
-                #     microphysics_tracers,
-                # ) do (ρχ_name, χʲ_name, _)
-                for (ρχ_name, χʲ_name, _) in microphysics_tracers
-                    MatrixFields.has_field(Y, ρχ_name) || continue
+            # TODO using unrolled_foreach here allocates! (breaks the flame tests
+            # even though they use 0M microphysics)
+            # MatrixFields.unrolled_foreach(
+            #     microphysics_tracers,
+            # ) do (ρχ_name, χʲ_name, _)
+            for (ρχ_name, χʲ_name, _) in microphysics_tracers
+                MatrixFields.has_field(Y, ρχ_name) || continue
 
-                    ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-                    @. ᶜa_scalar =
-                        ᶜχʲ *
-                        draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-                    vtt = vertical_transport(
-                        ᶜρʲs.:($j),
-                        ᶠu³ʲs.:($j),
-                        ᶜa_scalar,
-                        dt,
-                        edmfx_tracer_upwinding,
-                    )
-                    ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-                    @. ᶜρχₜ += vtt
-                end
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                @. ᶜa_scalar =
+                    ᶜχʲ *
+                    draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))
+                vtt = vertical_transport(
+                    ᶜρʲs.:(1),
+                    ᶠu³ʲs.:(1),
+                    ᶜa_scalar,
+                    dt,
+                    edmfx_tracer_upwinding,
+                )
+                ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+                @. ᶜρχₜ += vtt
             end
             # MatrixFields.unrolled_foreach(
             #     microphysics_tracers,
@@ -276,40 +274,41 @@ function edmfx_sgs_mass_flux_tendency!(
                 (@name(c.ρn_liq), @name(ᶜn_liqʲs.:(1))),
                 (@name(c.ρn_rai), @name(ᶜn_raiʲs.:(1))),
             )
-            for j in 1:n
-                # TODO using unrolled_foreach here allocates! (breaks the flame tests
-                # even though they use 0M microphysics)
-                # MatrixFields.unrolled_foreach(
-                #     microphysics_tracers,
-                # ) do (ρχ_name, χʲ_name)
-                for (ρχ_name, χʲ_name) in microphysics_tracers
-                    MatrixFields.has_field(Y, ρχ_name) || continue
+            # TODO using unrolled_foreach here allocates! (breaks the flame tests
+            # even though they use 0M microphysics)
+            # MatrixFields.unrolled_foreach(
+            #     microphysics_tracers,
+            # ) do (ρχ_name, χʲ_name)
+            @. ᶠu³_diff = ᶠu³ʲs.:(1) - ᶠu³
+            for (ρχ_name, χʲ_name) in microphysics_tracers
+                MatrixFields.has_field(Y, ρχ_name) || continue
 
-                    ᶜχʲ = MatrixFields.get_field(p.precomputed, χʲ_name)
-                    # @. ᶜa_scalar =
-                    #     ᶜχʲ *
-                    #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
-                    # TODO: remove this filter when mass flux is treated implicitly
-                    @. ᶜa_scalar =
-                        ᶜχʲ * min(
-                            min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
-                            FT(0.02) / max(
-                                Geometry.WVector(
-                                    ᶜinterp(ᶠu³_diff),
-                                ).components.data.:1,
-                                eps(FT),
-                            ),
-                        )
-                    vtt = vertical_transport(
-                        ᶜρʲs.:($j),
-                        ᶠu³ʲs.:($j),
-                        ᶜa_scalar,
-                        dt,
-                        edmfx_tracer_upwinding,
+                ᶜχʲ = MatrixFields.get_field(p.precomputed, χʲ_name)
+                ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+                ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
+                # @. ᶜa_scalar =
+                #     (ᶜχʲ - ᶜχ) *
+                #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
+                # TODO: remove this filter when mass flux is treated implicitly
+                @. ᶜa_scalar =
+                    (ᶜχʲ - ᶜχ) * min(
+                        min(draft_area(ᶜρaʲs.:(1), ᶜρʲs.:(1)), a_max),
+                        FT(0.02) / max(
+                            Geometry.WVector(
+                                ᶜinterp(ᶠu³_diff),
+                            ).components.data.:1,
+                            eps(FT),
+                        ),
                     )
-                    ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-                    @. ᶜρχₜ += vtt
-                end
+                vtt = vertical_transport(
+                    ᶜρʲs.:(1),
+                    ᶠu³_diff,
+                    ᶜa_scalar,
+                    dt,
+                    edmfx_sgsflux_upwinding,
+                )
+                ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+                @. ᶜρχₜ += vtt
             end
         end
         # TODO: the following adds the environment flux to the tendency
