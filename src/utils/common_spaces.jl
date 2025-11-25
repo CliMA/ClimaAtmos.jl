@@ -102,7 +102,7 @@ function make_hybrid_spaces(
         @info "No surface orography warp applied"
     elseif topography isa EarthTopography
         z_surface = SpaceVaryingInput(
-            AA.earth_orography_file_path(;
+            AA.earth_orography_30arcsecond_file_path(;
                 context = ClimaComms.context(h_space),
             ),
             "z",

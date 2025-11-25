@@ -45,7 +45,7 @@ function generate_spaces(;
     @assert h_space isa CC.Spaces.SpectralElementSpace2D
     coords = CC.Fields.coordinate_field(h_space)
     elev_from_file = SpaceVaryingInputs.SpaceVaryingInput(
-        AA.earth_orography_file_path(; context = comms_ctx),
+        AA.earth_orography_30arcsecond_file_path(; context = comms_ctx),
         "z",
         h_space,
     )
