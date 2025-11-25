@@ -7,28 +7,6 @@ import Thermodynamics.Parameters as TDP
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 
-get_t_sat(thermo_params, x::EnvBuoyGradVars) =
-    TD.air_temperature(thermo_params, x.ts)
-get_p(thermo_params, x::EnvBuoyGradVars) = TD.air_pressure(thermo_params, x.ts)
-get_ρ(thermo_params, x::EnvBuoyGradVars) = TD.air_density(thermo_params, x.ts)
-get_en_cld_frac(thermo_params, x::EnvBuoyGradVars) =
-    ifelse(TD.has_condensate(thermo_params, x.ts), 1, 0)
-get_θ_liq_ice_sat(thermo_params, x::EnvBuoyGradVars) =
-    TD.liquid_ice_pottemp(thermo_params, x.ts)
-get_qt_sat(thermo_params, x::EnvBuoyGradVars) =
-    TD.total_specific_humidity(thermo_params, x.ts)
-get_ql_sat(thermo_params, x::EnvBuoyGradVars) =
-    TD.liquid_specific_humidity(thermo_params, x.ts)
-get_qi_sat(thermo_params, x::EnvBuoyGradVars) =
-    TD.ice_specific_humidity(thermo_params, x.ts)
-get_qv_sat(thermo_params, x::EnvBuoyGradVars) =
-    TD.vapor_specific_humidity(thermo_params, x.ts)
-get_θ_sat(thermo_params, x::EnvBuoyGradVars) =
-    TD.dry_pottemp(thermo_params, x.ts)
-get_∂θli∂z_sat(_, x::EnvBuoyGradVars) = x.∂θli∂z_sat
-get_∂qt∂z_sat(_, x::EnvBuoyGradVars) = x.∂qt∂z_sat
-get_∂θv∂z_unsat(_, x::EnvBuoyGradVars) = x.∂θv∂z_unsat
-
 """
     buoyancy_gradients(
         closure::AbstractEnvBuoyGradClosure,
@@ -124,54 +102,27 @@ function buoyancy_gradients(
     R_d = TDP.R_d(thermo_params)
     R_v = TDP.R_v(thermo_params)
 
-    phase_part = TD.PhasePartition(FT(0), FT(0), FT(0)) # assuming R_m = R_d
-    p = get_p(thermo_params, bg_model)
-    Π = TD.exner_given_pressure(thermo_params, p, phase_part)
+    ts = bg_model.ts
+    p = TD.air_pressure(thermo_params, ts)
+    Π = TD.exner_given_pressure(thermo_params, p)
+    ∂b∂θv = g * (R_d * TD.air_density(thermo_params, ts) / p) * Π
 
-    ∂b∂θv = g * (R_d * get_ρ(thermo_params, bg_model) / p) * Π
-    θ_liq_ice_sat = get_θ_liq_ice_sat(thermo_params, bg_model)
-    qt_sat = get_qt_sat(thermo_params, bg_model)
-
-    if get_en_cld_frac(thermo_params, bg_model) > 0.0
-        ts_sat = if moisture_model isa DryModel
-            TD.PhaseDry_pθ(thermo_params, p, θ_liq_ice_sat)
-        elseif moisture_model isa EquilMoistModel
-            TD.PhaseEquil_pθq(thermo_params, p, θ_liq_ice_sat, qt_sat)
-        elseif moisture_model isa NonEquilMoistModel
-            TD.PhaseNonEquil_pθq(
-                thermo_params,
-                p,
-                θ_liq_ice_sat,
-                TD.PhasePartition(
-                    qt_sat,
-                    get_ql_sat(thermo_params, bg_model),
-                    get_qi_sat(thermo_params, bg_model),
-                ),
-            )
-        else
-            error("Unsupported moisture model")
-        end
-
-        t_sat = get_t_sat(thermo_params, bg_model)
-        phase_part = TD.PhasePartition(thermo_params, ts_sat)
-        λ = TD.liquid_fraction(thermo_params, ts_sat)
-        lh =
-            λ * TD.latent_heat_vapor(thermo_params, t_sat) +
-            (1 - λ) * TD.latent_heat_sublim(thermo_params, t_sat)
-        cp_m = TD.cp_m(thermo_params, ts_sat)
-        qv_sat = get_qv_sat(thermo_params, bg_model)
-        ∂b∂θli_sat = (
-            ∂b∂θv *
-            (1 + Rv_over_Rd * (1 + lh / R_v / t_sat) * qv_sat - qt_sat) /
-            (1 + lh * lh / cp_m / R_v / t_sat / t_sat * qv_sat)
-        )
-        ∂b∂qt_sat =
-            (lh / cp_m / t_sat * ∂b∂θli_sat - ∂b∂θv) *
-            get_θ_sat(thermo_params, bg_model)
-    else
-        ∂b∂θli_sat = FT(0)
-        ∂b∂qt_sat = FT(0)
-    end
+    t_sat = TD.air_temperature(thermo_params, ts)
+    λ = TD.liquid_fraction(thermo_params, ts)
+    lh =
+        λ * TD.latent_heat_vapor(thermo_params, t_sat) +
+        (1 - λ) * TD.latent_heat_sublim(thermo_params, t_sat)
+    cp_m = TD.cp_m(thermo_params, ts)
+    qv_sat = TD.vapor_specific_humidity(thermo_params, ts)
+    qt_sat = TD.total_specific_humidity(thermo_params, ts)
+    ∂b∂θli_sat = (
+        ∂b∂θv *
+        (1 + Rv_over_Rd * (1 + lh / R_v / t_sat) * qv_sat - qt_sat) /
+        (1 + lh * lh / cp_m / R_v / t_sat / t_sat * qv_sat)
+    )
+    ∂b∂qt_sat =
+        (lh / cp_m / t_sat * ∂b∂θli_sat - ∂b∂θv) *
+        TD.dry_pottemp(thermo_params, ts)
 
     ∂b∂z = buoyancy_gradient_chain_rule(
         ebgc,
@@ -203,12 +154,12 @@ This function takes the partial derivatives of buoyancy with respect to:
 - total specific humidity (`∂b/∂qₜ,sat`) for the saturated part.
 
 It then multiplies these by the respective vertical gradients of `θᵥ`, `θₗᵢ`, and `qₜ`
-(obtained from `bg_model` via `get_∂θv∂z_unsat`, `get_∂θli∂z_sat`, `get_∂qt∂z_sat`)
+(obtained from `bg_model`)
 to get the buoyancy gradients for the unsaturated (`∂b∂z_unsat`) and saturated
 (`∂b∂z_sat`) parts of the environment.
 Finally, it returns a single mean buoyancy gradient by linearly combining
 `∂b∂z_unsat` and `∂b∂z_sat` weighted by the environmental cloud fraction
-(also obtained from `bg_model` via `get_en_cld_frac`).
+(also obtained from `bg_model`).
 
 Arguments:
 - `closure`: The environmental buoyancy gradient closure type.
@@ -229,21 +180,13 @@ function buoyancy_gradient_chain_rule(
     ∂b∂θli_sat,
     ∂b∂qt_sat,
 )
-    FT = eltype(thermo_params)
-    en_cld_frac = get_en_cld_frac(thermo_params, bg_model)
-    if en_cld_frac > FT(0)
-        ∂b∂z_θl_sat = ∂b∂θli_sat * get_∂θli∂z_sat(thermo_params, bg_model)
-        ∂b∂z_qt_sat = ∂b∂qt_sat * get_∂qt∂z_sat(thermo_params, bg_model)
-    else
-        ∂b∂z_θl_sat = FT(0)
-        ∂b∂z_qt_sat = FT(0)
-    end
+    en_cld_frac = ifelse(TD.has_condensate(thermo_params, bg_model.ts), 1, 0)
 
-    ∂b∂z_unsat =
-        en_cld_frac < FT(1) ? ∂b∂θv * get_∂θv∂z_unsat(thermo_params, bg_model) :
-        FT(0)
-
+    ∂b∂z_θl_sat = ∂b∂θli_sat * bg_model.∂θli∂z_sat
+    ∂b∂z_qt_sat = ∂b∂qt_sat * bg_model.∂qt∂z_sat
     ∂b∂z_sat = ∂b∂z_θl_sat + ∂b∂z_qt_sat
+    ∂b∂z_unsat = ∂b∂θv * bg_model.∂θv∂z_unsat
+
     ∂b∂z = (1 - en_cld_frac) * ∂b∂z_unsat + en_cld_frac * ∂b∂z_sat
 
     return ∂b∂z
