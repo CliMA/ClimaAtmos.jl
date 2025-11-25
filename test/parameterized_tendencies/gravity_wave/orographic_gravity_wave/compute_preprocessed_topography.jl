@@ -8,8 +8,9 @@ include(
     ),
 )
 
-ENV["CLIMACOMMS_DEVICE"] = "CPU"
+ENV["CLIMACOMMS_DEVICE"] = "CUDA"
 
+import CUDA
 import ClimaComms
 import ClimaComms.@import_required_backends
 
@@ -51,7 +52,7 @@ earth_radius = Spaces.topology(hspace).mesh.domain.radius
 (; γ, h_frac) = params.orographic_gravity_wave_params
 
 elevation_data =
-    CA.AA.earth_orography_file_path(; context = ClimaComms.context(Y.c))
+    CA.AA.earth_orography_30arcsecond_file_path(; context = ClimaComms.context(Y.c))
 
 load_preprocessed_topography = false
 
@@ -64,6 +65,7 @@ else
     topo_cg = CA.compute_OGW_info(Y, elevation_data, earth_radius, γ, h_frac; n_smoothing_cells = 3.0)
 end
 
+# @Main.infiltrate
 output_filename = write_computed_drag!(topo_cg, parsed_args, config)
 
 datafile_cg, weightfile = save_nc_data(output_filename, topo_cg, spaces)

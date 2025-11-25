@@ -1,6 +1,7 @@
 using NCDatasets
 import Interpolations
 using Statistics: mean
+import ClimaUtilities.SpaceVaryingInputs: SpaceVaryingInput
 
 """
     calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
@@ -481,7 +482,7 @@ function compute_OGW_info(
     # If things work, we should use skip_pt = 1 and choose
     # n_smoothing_cells ~ 100 km to match Fortran code or
     # tune it as needed.
-    skip_pt = 3
+    skip_pt = 8
     nt = NCDataset(elev_data, "r") do ds
         lon = FT.(Array(ds["lon"]))[1:skip_pt:end]
         lat = FT.(Array(ds["lat"]))[1:skip_pt:end]
@@ -493,6 +494,8 @@ function compute_OGW_info(
 
     # compute hmax and hmin (with grid-aware smoothing)
     n_smoothing_cells = FT(6)
+    @debug "skip_pt = $skip_pt"
+    @debug "n_smoothing_cells for calc_hpoz_latlon = $n_smoothing_cells" 
     hpoz = calc_hpoz_latlon(
         elev,
         lon,
@@ -511,6 +514,7 @@ function compute_OGW_info(
 
     # compute χ (with grid-aware smoothing)
     n_smoothing_cells = FT(3)
+    @debug "n_smoothing_cells for calc_velocity_potential = $n_smoothing_cells" 
     χ = calc_velocity_potential(
         elev,
         lon,
@@ -529,6 +533,7 @@ function compute_OGW_info(
     # @info "χ range before final scaling: min=$(minimum(χ)), max=$(maximum(χ))"
     t11, t21, t12, t22 = calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
 
+
     topo_ll = (; hmax, hmin, t11, t12, t21, t22)
 
     # create ClimaCore.Fields
@@ -544,31 +549,117 @@ function compute_OGW_info(
         axes(Fields.level(Y.c.ρ, 1)),
     )
 
-    cg_lat = Fields.level(Fields.coordinate_field(Y.c).lat, 1)
-    cg_lon = Fields.level(Fields.coordinate_field(Y.c).long, 1)
+    # cg_lat = Fields.level(Fields.coordinate_field(Y.c).lat, 1)
+    # cg_lon = Fields.level(Fields.coordinate_field(Y.c).long, 1)
 
-    # NOTE: GFDL may incorporate some smoothing when inerpolate it to model grid
-    for varname in (:hmax, :hmin, :t11, :t12, :t21, :t22)
-        li_obj = Interpolations.linear_interpolation(
-            (lon, lat),
-            getproperty(topo_ll, varname),
-            extrapolation_bc = (
-                Interpolations.Periodic(),
-                Interpolations.Flat(),
-            ),
-        )
-        Fields.bycolumn(axes(Y.c.ρ)) do colidx
-            parent(getproperty(topo_cg, varname)[colidx]) .=
-                FT.(li_obj(parent(cg_lon[colidx]), parent(cg_lat[colidx])))
-        end
-    end
+    # # NOTE: GFDL may incorporate some smoothing when inerpolate it to model grid
+    # for varname in (:hmax, :hmin, :t11, :t12, :t21, :t22)
+    #     li_obj = Interpolations.linear_interpolation(
+    #         (lon, lat),
+    #         getproperty(topo_ll, varname),
+    #         extrapolation_bc = (
+    #             Interpolations.Periodic(),
+    #             Interpolations.Flat(),
+    #         ),
+    #     )
+    #     Fields.bycolumn(axes(Y.c.ρ)) do colidx
+    #         parent(getproperty(topo_cg, varname)[colidx]) .=
+    #             FT.(li_obj(parent(cg_lon[colidx]), parent(cg_lat[colidx])))
+    #     end
+    # end
+
+    # Save the computed lat-lon data to a temporary NetCDF file
+    # This allows us to use the GPU-compatible SpaceVaryingInput infrastructure
+    # Using the pattern from remap_helpers.jl for consistency
+    # @Main.infiltrate
+    temp_nc_file = tempname() * ".nc"
+    nc = NCDataset(temp_nc_file, "c")
+
+    # Define dimensions
+    defDim(nc, "lon", length(lon))
+    defDim(nc, "lat", length(lat))
+
+    # Define coordinate variables (required for SpaceVaryingInput)
+    nc_lon = defVar(nc, "lon", FT, ("lon",))
+    nc_lat = defVar(nc, "lat", FT, ("lat",))
+
+    # Define data variables with chunking and compression for large arrays
+    # This prevents HDF5 errors when writing full-resolution data (skip_pt=1)
+    chunk_size = (min(360, length(lon)), min(180, length(lat)))
+    nc_hmax = defVar(nc, "hmax", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_hmin = defVar(nc, "hmin", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t11 = defVar(nc, "t11", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t12 = defVar(nc, "t12", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t21 = defVar(nc, "t21", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t22 = defVar(nc, "t22", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+
+    # Write coordinate data
+    nc_lon[:] = lon
+    nc_lat[:] = lat
+
+    # @Main.infiltrate
+    # Write field data
+    nc_hmax[:, :] = hmax
+    nc_hmin[:, :] = hmin
+    nc_t11[:, :] = t11
+    nc_t12[:, :] = t12
+    nc_t21[:, :] = t21
+    nc_t22[:, :] = t22
+
+    close(nc)
+
+    # Use the GPU-compatible regrid_OGW_info function to remap the data
+    topo_cg = regrid_OGW_info(Y, temp_nc_file)
+
+    # Clean up temporary file
+    rm(temp_nc_file; force = true)
+
     return topo_cg
 end
 
 function regrid_OGW_info(Y, orographic_info_rll)
     FT = Spaces.undertype(axes(Y.c))
 
+    # Read data from NetCDF - this handles both 2D and 3D arrays (slicing if needed)
     lon, lat, topo_ll = get_topo_ll(orographic_info_rll)
+
+    # Create a temporary 2D NetCDF file for SpaceVaryingInput
+    # This is necessary because GFDL restart files have 3D arrays with singleton dimensions
+    # which are not supported by the Interpolations package used by SpaceVaryingInput
+    temp_nc_file = tempname() * ".nc"
+    nc = NCDataset(temp_nc_file, "c")
+
+    # Define dimensions
+    defDim(nc, "lon", length(lon))
+    defDim(nc, "lat", length(lat))
+
+    # Define coordinate variables (required for SpaceVaryingInput)
+    nc_lon = defVar(nc, "lon", FT, ("lon",))
+    nc_lat = defVar(nc, "lat", FT, ("lat",))
+
+    # Define data variables with chunking and compression for large arrays
+    # This prevents HDF5 errors when writing full-resolution data (skip_pt=1)
+    chunk_size = (min(360, length(lon)), min(180, length(lat)))
+    nc_hmax = defVar(nc, "hmax", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_hmin = defVar(nc, "hmin", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t11 = defVar(nc, "t11", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t12 = defVar(nc, "t12", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t21 = defVar(nc, "t21", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t22 = defVar(nc, "t22", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+
+    # Write coordinate data
+    nc_lon[:] = lon
+    nc_lat[:] = lat
+
+    # Write field data (already sliced to 2D by get_topo_ll)
+    nc_hmax[:, :] = topo_ll.hmax
+    nc_hmin[:, :] = topo_ll.hmin
+    nc_t11[:, :] = topo_ll.t11
+    nc_t12[:, :] = topo_ll.t12
+    nc_t21[:, :] = topo_ll.t21
+    nc_t22[:, :] = topo_ll.t22
+
+    close(nc)
 
     topo_cg = fill(
         (;
@@ -582,23 +673,66 @@ function regrid_OGW_info(Y, orographic_info_rll)
         axes(Fields.level(Y.c.ρ, 1)),
     )
 
-    cg_lat = Fields.level(Fields.coordinate_field(Y.c).lat, 1)
-    cg_lon = Fields.level(Fields.coordinate_field(Y.c).long, 1)
+    # Get the horizontal space (2D surface)
+    hspace = axes(Fields.level(Y.c.ρ, 1))
 
-    for varname in (:hmax, :hmin, :t11, :t12, :t21, :t22)
-        li_obj = Interpolations.linear_interpolation(
-            (lon, lat),
-            getproperty(topo_ll, varname),
-            extrapolation_bc = (
-                Interpolations.Periodic(),
-                Interpolations.Flat(),
-            ),
-        )
-        Fields.bycolumn(axes(Y.c.ρ)) do colidx
-            parent(getproperty(topo_cg, varname)[colidx]) .=
-                FT.(li_obj(parent(cg_lon[colidx]), parent(cg_lat[colidx])))
-        end
-    end
+    # Set up regridder with periodic longitude and flat latitude boundary conditions
+    extrapolation_bc = (Interpolations.Periodic(), Interpolations.Flat())
+    regridder_kwargs = (; extrapolation_bc)
+
+    # Use SpaceVaryingInput to remap each variable from the temporary NetCDF file
+    # This is GPU-compatible and handles the interpolation efficiently
+    hmax_field = SpaceVaryingInput(
+        temp_nc_file,
+        "hmax",
+        hspace;
+        regridder_kwargs,
+    )
+    hmin_field = SpaceVaryingInput(
+        temp_nc_file,
+        "hmin",
+        hspace;
+        regridder_kwargs,
+    )
+    t11_field = SpaceVaryingInput(
+        temp_nc_file,
+        "t11",
+        hspace;
+        regridder_kwargs,
+    )
+    t12_field = SpaceVaryingInput(
+        temp_nc_file,
+        "t12",
+        hspace;
+        regridder_kwargs,
+    )
+    t21_field = SpaceVaryingInput(
+        temp_nc_file,
+        "t21",
+        hspace;
+        regridder_kwargs,
+    )
+    t22_field = SpaceVaryingInput(
+        temp_nc_file,
+        "t22",
+        hspace;
+        regridder_kwargs,
+    )
+
+    # Create the output named tuple with the remapped fields
+    # Use identity broadcast to force evaluation of SpaceVaryingInput into concrete Fields
+    # The .+ 0 operation triggers the lazy wrapper to materialize into an actual Field
+    # which can then be serialized to HDF5
+    @. topo_cg.hmax = hmax_field
+    @. topo_cg.hmin = hmin_field
+    @. topo_cg.t11 = t11_field
+    @. topo_cg.t12 = t12_field
+    @. topo_cg.t21 = t21_field
+    @. topo_cg.t22 = t22_field
+
+    # Clean up temporary file
+    rm(temp_nc_file; force = true)
+
     return topo_cg
 end
 
