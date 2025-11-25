@@ -1,7 +1,7 @@
 import ClimaDiagnostics.Writers:
     HDF5Writer
 import ClimaAtmos as CA
-import ClimaCore: InputOutput, Spaces, Fields
+import ClimaCore: InputOutput, Spaces, Fields, to_cpu
 import ClimaComms
 
 # Save the computed drag data to a NetCDF file for diagnostics
@@ -42,12 +42,15 @@ end
 
 
 function save_nc_data(output_filename, topo_cg, spaces)
+    topo_cg = to_cpu(topo_cg)
     FT = eltype(topo_cg.hmax)
-    hspace = Spaces.horizontal_space(spaces.center_space)
+    hspace = to_cpu(Spaces.horizontal_space(spaces.center_space))
+    center_space = to_cpu(spaces.center_space)
+    face_space = to_cpu(spaces.face_space)
 
     datafile_cg = joinpath(@__DIR__, "$(output_filename).nc")
     nc = NCDataset(datafile_cg, "c")
-    def_space_coord(nc, spaces.center_space, type = "cgll")
+    def_space_coord(nc, center_space, type = "cgll")
     nc_time = def_time_coord(nc)
     nc_hmax = defVar(nc, "hmax", FT, hspace, ("time",))
     nc_hmin = defVar(nc, "hmin", FT, hspace, ("time",))
@@ -68,7 +71,7 @@ function save_nc_data(output_filename, topo_cg, spaces)
     nlat = 90
     nlon = 180
     weightfile = joinpath(@__DIR__, "remap_weights.nc")
-    create_weightfile(weightfile, spaces.center_space, spaces.face_space, nlat, nlon)
+    create_weightfile(weightfile, center_space, face_space, nlat, nlon)
 
     return datafile_cg, weightfile
 end
