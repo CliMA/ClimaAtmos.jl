@@ -114,6 +114,12 @@ function get_atmos(config::AtmosConfig, params)
         FT,
     )
 
+    if parsed_args["prescribed_flow"]
+        prescribed_flow = ShipwayHill2012VelocityProfile{FT}()
+    else
+        prescribed_flow = nothing
+    end
+
     atmos = AtmosModel(;
         # AtmosWater - Moisture, Precipitation & Clouds
         moisture_model,
@@ -130,6 +136,9 @@ function get_atmos(config::AtmosConfig, params)
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
         advection_test,
         scm_coriolis = get_scm_coriolis(parsed_args, FT),
+
+        # PrescribedFlow
+        prescribed_flow,
 
         # AtmosRadiation
         radiation_mode = final_radiation_mode,
@@ -434,6 +443,8 @@ function get_initial_condition(parsed_args, atmos)
             parsed_args["start_date"],
             parsed_args["era5_initial_condition_dir"],
         )
+    elseif parsed_args["initial_condition"] == "ShipwayHill2012"
+        return ICs.ShipwayHill2012()
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
