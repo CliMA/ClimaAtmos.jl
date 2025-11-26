@@ -1,4 +1,4 @@
-278
+279
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+279
+- Use partial cloud fraction in buoyancy gradient calculation
+
 278
 - Add ∂/∂q elements to Jacobian
 

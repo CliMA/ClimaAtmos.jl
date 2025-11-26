@@ -22,7 +22,6 @@ end
    Compute the grid scale cloud fraction based on sub-grid scale properties
 """
 NVTX.@annotate function set_cloud_fraction!(Y, p, ::DryModel, _)
-    (; turbconv_model) = p.atmos
     FT = eltype(p.params)
 
     p.precomputed.cloud_diagnostics_tuple .=
@@ -35,23 +34,9 @@ NVTX.@annotate function set_cloud_fraction!(
     ::GridScaleCloud,
 )
     (; params) = p
-    (; turbconv_model) = p.atmos
     (; ᶜts, cloud_diagnostics_tuple) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
 
-    if isnothing(turbconv_model)
-        if p.atmos.call_cloud_diagnostics_per_stage isa
-           CallCloudDiagnosticsPerStage
-            (; ᶜgradᵥ_θ_virt, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
-            thermo_params = CAP.thermodynamics_params(p.params)
-            @. ᶜgradᵥ_θ_virt =
-                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))
-            @. ᶜgradᵥ_q_tot =
-                ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
-            @. ᶜgradᵥ_θ_liq_ice =
-                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
-        end
-    end
     if moist_model isa EquilMoistModel
         @. cloud_diagnostics_tuple = make_named_tuple(
             ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0),
@@ -83,10 +68,8 @@ NVTX.@annotate function set_cloud_fraction!(
     if isnothing(turbconv_model)
         if p.atmos.call_cloud_diagnostics_per_stage isa
            CallCloudDiagnosticsPerStage
-            (; ᶜgradᵥ_θ_virt, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
+            (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
             thermo_params = CAP.thermodynamics_params(p.params)
-            @. ᶜgradᵥ_θ_virt =
-                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))
             @. ᶜgradᵥ_q_tot =
                 ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
             @. ᶜgradᵥ_θ_liq_ice =

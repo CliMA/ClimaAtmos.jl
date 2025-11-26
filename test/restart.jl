@@ -456,6 +456,7 @@ else
             "output_dir" => joinpath(amip_output_loc, amip_job_id),
             "dt_cloud_fraction" => "1secs",
             "rad" => "allskywithclear",
+            "cloud_model" => "grid_scale",
             "toml" => [
                 joinpath(@__DIR__, "../toml/longrun_aquaplanet_diagedmf.toml"),
             ],

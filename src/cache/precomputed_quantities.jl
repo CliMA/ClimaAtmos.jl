@@ -85,7 +85,6 @@ function precomputed_quantities(Y, atmos)
     TST = thermo_state_type(atmos.moisture_model, FT)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
-    fspace = axes(Y.f)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     n_prog = n_prognostic_mass_flux_subdomains(atmos.turbconv_model)
     @assert !(atmos.turbconv_model isa PrognosticEDMFX) || n_prog == 1
@@ -98,6 +97,8 @@ function precomputed_quantities(Y, atmos)
     )
     cloud_diagnostics_tuple =
         similar(Y.c, @NamedTuple{cf::FT, q_liq::FT, q_ice::FT})
+    # Cloud fraction is used to calculate buoyancy gradient, so we initialize it to 0 here.
+    @. cloud_diagnostics_tuple.cf = FT(0)
     surface_precip_fluxes = (;
         surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
         surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
@@ -200,7 +201,6 @@ function precomputed_quantities(Y, atmos)
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜgradᵥ_θ_virt = Fields.Field(C3{FT}, cspace),
             ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
             ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
             ᶠnh_pressure₃_buoyʲs = similar(Y.f, NTuple{n, C3{FT}}),
@@ -212,7 +212,6 @@ function precomputed_quantities(Y, atmos)
         (; ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),) : (;)
 
     sgs_quantities = (;
-        ᶜgradᵥ_θ_virt = Fields.Field(C3{FT}, cspace),
         ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
         ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
     )
@@ -548,8 +547,6 @@ NVTX.@annotate function set_explicit_precomputed_quantities_part1!(Y, p, t)
     end
 
     if turbconv_model isa AbstractEDMF
-        @. p.precomputed.ᶜgradᵥ_θ_virt =
-            ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))
         @. p.precomputed.ᶜgradᵥ_q_tot =
             ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
         @. p.precomputed.ᶜgradᵥ_θ_liq_ice =
@@ -567,6 +564,15 @@ end
 NVTX.@annotate function set_explicit_precomputed_quantities_part2!(Y, p, t)
     (; turbconv_model, moisture_model, cloud_model) = p.atmos
     (; call_cloud_diagnostics_per_stage) = p.atmos
+
+    # The buoyancy gradient depends on the cloud fraction, and the cloud fraction 
+    # depends on the mixing length, which depends on the buoyancy gradient. 
+    # We break this circular dependency by using cloud fraction from the previous time step in the 
+    # buoyancy gradient calculation. This breaks reproducible restart in general, 
+    # but we support reproducible restart with grid-scale cloud by recalculating the cloud fraction here.
+    if p.atmos.cloud_model isa GridScaleCloud
+        set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model)
+    end
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
