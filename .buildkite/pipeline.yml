@@ -32,8 +32,7 @@ steps:
 
           using Pkg;
           Pkg.Registry.update();
-          Pkg.add(PackageSpec(name="ClimaCore",      url="https://github.com/CliMA/ClimaCore.jl",      rev="ne/fd_grid"));
-          Pkg.add(PackageSpec(name="ClimaUtilities", url="https://github.com/CliMA/ClimaUtilities.jl", rev="main"));
+          Pkg.add(PackageSpec(name="ClimaCore", url="https://github.com/CliMA/ClimaCore.jl", rev="ne/fd_grid"));
           Pkg.instantiate();
           Pkg.precompile(; strict=true);
           using CUDA; CUDA.precompile_runtime();
