@@ -75,9 +75,8 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
         p.atmos.moisture_model,
         ᶜts,
         C3,
-        p.precomputed.ᶜgradᵥ_θ_virt,    # ∂θv∂z_unsat
-        p.precomputed.ᶜgradᵥ_q_tot,     # ∂qt∂z_sat
-        p.precomputed.ᶜgradᵥ_θ_liq_ice, # ∂θl∂z_sat
+        p.precomputed.ᶜgradᵥ_q_tot,
+        p.precomputed.ᶜgradᵥ_θ_liq_ice,
         ᶜlg,
     )
 
