@@ -30,7 +30,7 @@ z_elem: 82
 z_stretch: false
 dz_bottom: 30
 dt: 150secs
-t_end: 6hours
+t_end: 12hours
 toml: [toml/prognostic_edmfx_implicit_scm_calibrated_5_cases_shallow_deep_v1.toml]
 netcdf_interpolation_num_points: [8, 8, 82]
 diagnostics:
