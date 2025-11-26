@@ -23,17 +23,18 @@ function flux_accumulation!(integrator)
     Y = integrator.u
     p = integrator.p
     Δt = integrator.dt
+    FT = eltype(p.params)
     if !isnothing(p.atmos.radiation_mode)
         (; ᶠradiation_flux) = p.radiation
         (; net_energy_flux_toa, net_energy_flux_sfc) = p
         nlevels = Spaces.nlevels(axes(Y.c))
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
-            float(Δt)
+            FT(Δt)
         if p.atmos.surface_model isa PrescribedSST
             net_energy_flux_sfc[] +=
                 horizontal_integral_at_boundary(ᶠradiation_flux, half) *
-                float(Δt)
+                FT(Δt)
         end
     end
     return nothing
@@ -81,7 +82,6 @@ function external_driven_single_column!(integrator)
         ᶜdqtdt_fluc,
         ᶜdTdt_hadv,
         ᶜdqtdt_hadv,
-        ᶜdTdt_rad, # we skip radiation because we're using RRTMGP, but this can be changed for simpler setups
         ᶜT_nudge,
         ᶜqt_nudge,
         ᶜu_nudge,
@@ -250,9 +250,10 @@ end
 NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
     Y = u
+    FT = eltype(p.params)
 
     # TODO: Use ITime here
-    t = float(t)
+    t = FT(t)
     day = floor(Int, t / (60 * 60 * 24))
     sec = floor(Int, t % (60 * 60 * 24))
     @info "Saving state to HDF5 file on day $day second $sec"

@@ -33,8 +33,10 @@ function get_atmos(config::AtmosConfig, params)
                 Union{NoPrecipitation, Microphysics0Moment}
     end
     if moisture_model isa NonEquilMoistModel
-        @assert microphysics_model isa
-                Union{NoPrecipitation, Microphysics1Moment, Microphysics2Moment}
+        @assert microphysics_model isa Union{
+            NoPrecipitation, Microphysics1Moment,
+            Microphysics2Moment, Microphysics2MomentP3,
+        }
     end
     if microphysics_model isa NoPrecipitation
         @warn "Running simulations without any precipitation formation."
@@ -68,6 +70,8 @@ function get_atmos(config::AtmosConfig, params)
     # HeldSuarezForcing can be set via radiation_mode or legacy forcing option for now
     final_radiation_mode =
         forcing_type isa HeldSuarezForcing ? forcing_type : radiation_mode
+    # Note: when disable_momentum_vertical_diffusion is true, the surface flux tendency
+    # for momentum is not applied.
     disable_momentum_vertical_diffusion =
         final_radiation_mode isa HeldSuarezForcing
 
@@ -86,6 +90,9 @@ function get_atmos(config::AtmosConfig, params)
     implicit_sgs_nh_pressure = parsed_args["implicit_sgs_nh_pressure"]
     @assert implicit_sgs_nh_pressure in (true, false)
 
+    implicit_sgs_vertdiff = parsed_args["implicit_sgs_vertdiff"]
+    @assert implicit_sgs_vertdiff in (true, false)
+
     implicit_sgs_mass_flux = parsed_args["implicit_sgs_mass_flux"]
     @assert implicit_sgs_mass_flux in (true, false)
 
@@ -95,6 +102,7 @@ function get_atmos(config::AtmosConfig, params)
         sgs_mass_flux = Val(parsed_args["edmfx_sgs_mass_flux"]),
         sgs_diffusive_flux = Val(parsed_args["edmfx_sgs_diffusive_flux"]),
         nh_pressure = Val(parsed_args["edmfx_nh_pressure"]),
+        vertical_diffusion = Val(parsed_args["edmfx_vertical_diffusion"]),
         filter = Val(parsed_args["edmfx_filter"]),
         scale_blending_method = get_scale_blending_method(parsed_args),
     )
@@ -114,6 +122,7 @@ function get_atmos(config::AtmosConfig, params)
         noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
                                      Implicit() : Explicit(),
         call_cloud_diagnostics_per_stage,
+        moisture_fixer = parsed_args["moisture_fixer"],
 
         # SCMSetup - Single-Column Model components
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
@@ -135,8 +144,10 @@ function get_atmos(config::AtmosConfig, params)
         sgs_entr_detr_mode = implicit_sgs_entr_detr ? Implicit() : Explicit(),
         sgs_nh_pressure_mode = implicit_sgs_nh_pressure ? Implicit() :
                                Explicit(),
+        sgs_vertdiff_mode = implicit_sgs_vertdiff ? Implicit() : Explicit(),
         sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
         smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
+        amd_les = get_amd_les_model(parsed_args, FT),
 
         # AtmosGravityWave
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
@@ -185,14 +196,14 @@ function get_numerics(parsed_args, FT)
         parsed_args["test_dycore_consistency"] ? TestDycoreConsistency() :
         nothing
 
-    energy_upwinding = Val(Symbol(parsed_args["energy_upwinding"]))
+    energy_q_tot_upwinding = Val(Symbol(parsed_args["energy_q_tot_upwinding"]))
     tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"]))
 
     # Compat
     if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
-       energy_upwinding == Val(:vanleer_limiter)
-        energy_upwinding = Val(:none)
-        @warn "energy_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting energy_upwinding to :none"
+       energy_q_tot_upwinding == Val(:vanleer_limiter)
+        energy_q_tot_upwinding = Val(:none)
+        @warn "energy_q_tot_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting energy_q_tot_upwinding to :none"
     end
     if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
        tracer_upwinding == Val(:vanleer_limiter)
@@ -200,9 +211,11 @@ function get_numerics(parsed_args, FT)
         @warn "tracer_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting tracer_upwinding to :none"
     end
 
-    edmfx_upwinding = Val(Symbol(parsed_args["edmfx_upwinding"]))
+    edmfx_mse_q_tot_upwinding = Val(Symbol(parsed_args["edmfx_mse_q_tot_upwinding"]))
     edmfx_sgsflux_upwinding =
         Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
+    edmfx_tracer_upwinding =
+        Val(Symbol(parsed_args["edmfx_tracer_upwinding"]))
 
     limiter = parsed_args["apply_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
@@ -212,10 +225,11 @@ function get_numerics(parsed_args, FT)
     hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
 
     numerics = AtmosNumerics(;
-        energy_upwinding,
+        energy_q_tot_upwinding,
         tracer_upwinding,
-        edmfx_upwinding,
+        edmfx_mse_q_tot_upwinding,
         edmfx_sgsflux_upwinding,
+        edmfx_tracer_upwinding,
         limiter,
         test_dycore_consistency = test_dycore,
         diff_mode,
@@ -416,12 +430,31 @@ function get_initial_condition(parsed_args, atmos)
             parsed_args["start_date"],
         )
     elseif parsed_args["initial_condition"] == "WeatherModel"
-        return ICs.WeatherModel(parsed_args["start_date"])
+        return ICs.WeatherModel(
+            parsed_args["start_date"],
+            parsed_args["era5_initial_condition_dir"],
+        )
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
         )
     end
+end
+
+function get_topography(FT, parsed_args)
+    topo_str = parsed_args["topography"]
+    topo_types = Dict("NoWarp" => NoTopography(),
+        "Cosine2D" => CosineTopography{2, FT}(),
+        "Cosine3D" => CosineTopography{3, FT}(),
+        "Agnesi" => AgnesiTopography{FT}(),
+        "Schar" => ScharTopography{FT}(),
+        "Earth" => EarthTopography(),
+        "Hughes2023" => Hughes2023Topography(),
+        "DCMIP200" => DCMIP200Topography(),
+    )
+
+    @assert topo_str in keys(topo_types)
+    return topo_types[topo_str]
 end
 
 function get_steady_state_velocity(params, Y, parsed_args)
@@ -430,30 +463,15 @@ function get_steady_state_velocity(params, Y, parsed_args)
         parsed_args["mesh_warp_type"] == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
-    topography = parsed_args["topography"]
-    steady_state_velocity = if topography == "NoWarp"
-        steady_state_velocity_no_warp
-    elseif topography == "Cosine2D"
-        steady_state_velocity_cosine_2d
-    elseif topography == "Cosine3D"
-        steady_state_velocity_cosine_3d
-    elseif topography == "Agnesi"
-        steady_state_velocity_agnesi
-    elseif topography == "Schar"
-        steady_state_velocity_schar
-    else
-        error("The steady-state velocity for $topography topography cannot \
-               be computed analytically")
-    end
+    topo = get_topography(eltype(params), parsed_args)
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half
     z_top = Fields.level(Fields.coordinate_field(Y.f).z, top_level)
 
-    # TODO: This can be very expensive! It should be moved to a separate CI job.
     @info "Approximating steady-state velocity"
     s = @timed_str begin
-        ᶜu = steady_state_velocity.(params, Fields.coordinate_field(Y.c), z_top)
+        ᶜu = steady_state_velocity.(topo, params, Fields.coordinate_field(Y.c), z_top)
         ᶠu =
-            steady_state_velocity.(params, Fields.coordinate_field(Y.f), z_top)
+            steady_state_velocity.(topo, params, Fields.coordinate_field(Y.f), z_top)
     end
     @info "Steady-state velocity approximation completed: $s"
     return (; ᶜu, ᶠu)
@@ -481,6 +499,7 @@ function get_jacobian(ode_algo, Y, atmos, parsed_args)
             DerivativeFlag(atmos.sgs_entr_detr_mode),
             DerivativeFlag(atmos.sgs_mf_mode),
             DerivativeFlag(atmos.sgs_nh_pressure_mode),
+            DerivativeFlag(atmos.sgs_vertdiff_mode),
             parsed_args["approximate_linear_solve_iters"],
         )
         parsed_args["use_auto_jacobian"] ?
@@ -762,7 +781,7 @@ function get_simulation(config::AtmosConfig)
     CP.log_parameter_information(
         config.toml_dict,
         joinpath(output_dir, "$(job_id)_parameters.toml"),
-        strict = true,
+        strict = config.parsed_args["strict_params"],
     )
     YAML.write_file(joinpath(output_dir, "$job_id.yml"), config.parsed_args)
 
@@ -807,6 +826,7 @@ function get_simulation(config::AtmosConfig)
     end
 
     tracers = get_tracers(config.parsed_args)
+
     steady_state_velocity =
         get_steady_state_velocity(params, Y, config.parsed_args)
 

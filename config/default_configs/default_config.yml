@@ -159,12 +159,21 @@ reference_job_id:
   value: ~
 vert_diff:
   help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `DecayWithHeightDiffusion`]"
-  value: false
+  value: "false"
 hyperdiff:
   help: "Hyperdiffusion. Use `CAM_SE` for sensible default values and ClimaHyperdiffusion for user control. [`CAM_SE` (default), `ClimaHyperdiffusion` (or `true`), `none` (or `false`)]"
   value: "CAM_SE"
+amd_les:
+  help: "AMD LES closure [`true`, `false` (default)]"
+  value: false
+c_amd:
+  help: "Model coefficient for AMD-LES closure (TODO: Move to parameters.toml)"
+  value: 0.29
 smagorinsky_lilly:
-  help: "Smagorinsky-Lilly diffusive closure [`false` (default), `true`]"
+  help: "Smagorinsky-Lilly diffusive closure [`nothing` (default), `UVW`, `UV`, `W`, `UV_W_decoupled`]"
+  value: ~
+moisture_fixer:
+  help: "A flag to switch on a grid mean tendency that moves mass from vapor to adjust small negative tracer values [false (default), true]"
   value: false
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
@@ -172,6 +181,9 @@ bubble:
 start_date:
   help: "Start date and time of the simulation. Specified as either yyyymmdd (defaults to midnight) or yyyymmdd-HHMM. Examples: [`20100101`, `20100101-0000`]"
   value: "20100101"
+era5_initial_condition_dir:
+  help: "Directory containing ERA5 initial condition files. Filenames inferred from start_date [none (default)]. Generated with `https://github.com/CliMA/WeatherQuest`."
+  value: ~
 forcing:
   help: "Forcing [`nothing` (default), `held_suarez`]"
   value: ~
@@ -227,10 +239,10 @@ viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false
 tracer_upwinding:
-  help: "Tracer upwinding mode [`none`, `first_order` , `third_order`, `boris_book`, `zalesak`, `vanleer_limiter` (default)]"
+  help: "Tracer upwinding mode [`none`, `first_order` , `third_order`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
-energy_upwinding:
-  help: "Energy upwinding mode [`none`, `first_order` , `third_order`, `boris_book`, `zalesak`, `vanleer_limiter` (default)]"
+energy_q_tot_upwinding:
+  help: "Energy upwinding mode [`none`, `first_order` , `third_order`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
 orographic_gravity_wave:
   help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`]"
@@ -271,18 +283,24 @@ site_latitude:
 site_longitude:
   help: "Site longitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`-149.0` (default)]"
   value: -149.0
+era5_diurnal_warming:
+  help: Applies a warming scenario by adding a constant temperature offset (in Kelvin). Supported only by the `ReanalysisMonthlyAveragedDiurnal` forcing model. This affects the target surface temperature for the entire simulation, the initial atmospheric temperature profile, and the relaxation temperature profile above `gcmdriven_relaxation_minimum_height`. Specific humidity is increased to hold relative humidity constant in the initial and relaxation profiles.
+  value: ~
 subsidence:
   help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`, `ISDAC`]"
   value: ~
 toml:
   help: "TOML file(s) used to override model parameters"
   value: []
+strict_params:
+  help: "Raise an error if any overridden parameters are unused."
+  value: true
 prognostic_tke:
   help: "A flag for prognostic TKE [`false` (default), `true`]"
   value: false
 prognostic_surface:
   help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `SlabOceanSST`, `PrescribedSST`]"
-  value: false
+  value: "false"
 albedo_model:
   help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`, `CouplerAlbedo`]"
   value: "ConstantAlbedo"
@@ -349,9 +367,12 @@ implicit_sgs_entr_detr:
   help: "Whether to treat the subgrid-scale entrainment and detrainment tendency implicitly [`false` (default), `true`]. Setting it to true only works if implicit_sgs_advection is set to true."
   value: false
 implicit_sgs_nh_pressure:
-  help: "Whether to treat the subgrid-scale nonhydrostatic pressure closure implicitly. Setting it to true only works if 
-  `implicit_sgs_advection` is set to true. This flag only controls whether the drag term in the pressure closure is treated implicitly. 
+  help: "Whether to treat the subgrid-scale nonhydrostatic pressure closure implicitly. Setting it to true only works if
+  `implicit_sgs_advection` is set to true. This flag only controls whether the drag term in the pressure closure is treated implicitly.
   The buoyancy term is always treated implicitly. [`false` (default), `true`]"
+  value: false
+implicit_sgs_vertdiff:
+  help: "Whether to treat the subgrid-scale vertical diffusion tendency implicitly [`false` (default), `true`]. Setting it to true only works if implicit_sgs_advection is set to true."
   value: false
 implicit_sgs_mass_flux:
   help: "Whether to treat the subgrid-scale mass flux tendency implicitly or explicitly in grid-mean equations. Currently updraft only with Jacobian terms 0. [`false` (default), `true`]. Setting it to true only works if both implicit_sgs_advection and implicit_diffusion are set to true."
@@ -363,8 +384,11 @@ edmfx_filter:
   help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
   value: false
 edmfx_nh_pressure:
-  help: "If set to true, it switches on EDMFX pressure drag closure.  For prognostic EDMF, this only controls the drag term 
+  help: "If set to true, it switches on EDMFX pressure drag closure.  For prognostic EDMF, this only controls the drag term
   in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
+  value: false
+edmfx_vertical_diffusion:
+  help: "If set to true, it switches on vertical diffusion of prognostic EDMFX updrafts. [`true`, `false` (default)]"
   value: false
 edmfx_entr_model:
   help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
@@ -372,9 +396,12 @@ edmfx_entr_model:
 edmfx_detr_model:
   help: "EDMFX detrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
   value: ~
-edmfx_upwinding:
-  help: "EDMFX upwinding mode [`none` (default), `first_order`, `third_order`]"
-  value: none
+edmfx_mse_q_tot_upwinding:
+  help: "EDMFX upwinding mode [`none`, `first_order` (default), `third_order`]"
+  value: first_order
+edmfx_tracer_upwinding:
+  help: "EDMFX tracer upwinding mode [`none`, `first_order` (default)]"
+  value: first_order
 edmfx_sgsflux_upwinding:
   help: "EDMFX SGS mass flux upwinding mode [`none` (default), `first_order`, `third_order`]"
   value: none

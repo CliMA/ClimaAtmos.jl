@@ -87,8 +87,8 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
         # the fact that we have a very unrealistic initial condition
         max_relative_humidity = FT(0.6)
         t_increasing_humidity = FT(60 * 60 * 24 * 30)
-        if float(t) < t_increasing_humidity
-            max_relative_humidity *= float(t) / t_increasing_humidity
+        if FT(t) < t_increasing_humidity
+            max_relative_humidity *= FT(t) / t_increasing_humidity
         end
         @. ᶜrh = max_relative_humidity
 

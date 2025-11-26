@@ -2,10 +2,10 @@ initial_condition: TRMM_LBA
 rad: TRMM_LBA
 surface_setup: TRMM_LBA
 turbconv: diagnostic_edmfx
+tracer_upwinding: first_order
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 prognostic_tke: true
-edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true

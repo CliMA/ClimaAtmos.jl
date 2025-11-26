@@ -1,5 +1,4 @@
 import StaticArrays: @SVector
-
 background_u(::Type{FT}) where {FT} = FT(10)
 background_N(::Type{FT}) where {FT} = FT(0.01) # This needs to be a small value.
 background_T_sfc(::Type{FT}) where {FT} = FT(288)
@@ -167,29 +166,30 @@ end
 ## Steady-state solutions for periodic topography
 ##
 
-function steady_state_velocity_no_warp(params, coord, z_top)
+function steady_state_velocity(::NoTopography, params, coord, z_top)
     FT = eltype(params)
     u = background_u(FT)
     return UVW(u, FT(0), FT(0))
 end
 
-function steady_state_velocity_cosine_2d(params, coord, z_top)
+function steady_state_velocity(t::CosineTopography{2}, params, coord, z_top)
     FT = eltype(params)
-    (; λ) = cosine_params(FT)
     (; x, z) = coord
-    return steady_state_velocity_cosine(params, x, FT(0), z, λ, FT(Inf), z_top)
+    return steady_state_velocity_cosine(
+        params,
+        x, FT(0), z,
+        t.λ, oftype(t.λ, Inf), z_top, t.h_max,
+    )
 end
 
-function steady_state_velocity_cosine_3d(params, coord, z_top)
+function steady_state_velocity(t::CosineTopography{3}, params, coord, z_top)
     FT = eltype(params)
-    (; λ) = cosine_params(FT)
     (; x, y, z) = coord
-    return steady_state_velocity_cosine(params, x, y, z, λ, λ, z_top)
+    return steady_state_velocity_cosine(params, x, y, z, t.λ, t.λ, z_top, t.h_max)
 end
 
-function steady_state_velocity_cosine(params, x, y, z, λ_x, λ_y, z_top)
+function steady_state_velocity_cosine(params, x, y, z, λ_x, λ_y, z_top, h_max)
     FT = eltype(params)
-    (; h_max) = cosine_params(FT)
     u = background_u(FT)
     h = topography_cosine(x, y, λ_x, λ_y, h_max)
     η = (z - h) / (1 - h / z_top)
@@ -253,14 +253,14 @@ function steady_state_velocity_mountain_2d(
     return UVW(u + Δu, Δv, Δw)
 end
 
-function steady_state_velocity_agnesi(params, coord, z_top)
+function steady_state_velocity(t::AgnesiTopography, params, coord, z_top)
     FT = eltype(params)
-    (; h_max, x_center, a) = agnesi_params(FT)
+    (; h_max, x_center, a) = t
     topography_agnesi_Fh(k_x) = h_max * a / 2 * exp(-a * abs(k_x))
     n_efolding_intervals = -log(eps(FT))
     k_x_max = n_efolding_intervals / a
     return steady_state_velocity_mountain_2d(
-        topography_agnesi,
+        topography_function(t),
         topography_agnesi_Fh,
         params,
         coord,
@@ -270,9 +270,9 @@ function steady_state_velocity_agnesi(params, coord, z_top)
     )
 end
 
-function steady_state_velocity_schar(params, coord, z_top)
+function steady_state_velocity(t::ScharTopography, params, coord, z_top)
     FT = eltype(params)
-    (; h_max, x_center, λ, a) = schar_params(FT)
+    (; h_max, x_center, λ, a) = t
     k_peak = 2 * FT(π) / λ
     Fh_coef = h_max * a / (8 * sqrt(FT(π)))
     topography_schar_Fh(k_x) =
@@ -284,7 +284,7 @@ function steady_state_velocity_schar(params, coord, z_top)
     n_efolding_intervals = -log(eps(FT))
     k_x_max = k_peak + 2 * sqrt(n_efolding_intervals) / a
     return steady_state_velocity_mountain_2d(
-        topography_schar,
+        topography_function(t),
         topography_schar_Fh,
         params,
         coord,

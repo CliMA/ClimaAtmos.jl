@@ -80,11 +80,15 @@ function precomputed_quantities(Y, atmos)
             !(atmos.turbconv_model isa PrognosticEDMFX)
     @assert isnothing(atmos.turbconv_model) ||
             isnothing(atmos.vertical_diffusion)
+    @assert !(atmos.moisture_model isa NonEquilMoistModel) ||
+            !(atmos.microphysics_model isa Microphysics0Moment)
     TST = thermo_state_type(atmos.moisture_model, FT)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
     fspace = axes(Y.f)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
+    n_prog = n_prognostic_mass_flux_subdomains(atmos.turbconv_model)
+    @assert !(atmos.turbconv_model isa PrognosticEDMFX) || n_prog == 1
     gs_quantities = (;
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
@@ -113,7 +117,8 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵣᵖ = similar(Y.c, FT),
             ᶜSqₛᵖ = similar(Y.c, FT),
         )
-    elseif atmos.microphysics_model isa Microphysics2Moment
+    elseif atmos.microphysics_model isa Union{Microphysics2Moment, Microphysics2MomentP3}
+        # 2-moment microphysics
         precipitation_quantities = (;
             ᶜwᵣ = similar(Y.c, FT),
             ᶜwₛ = similar(Y.c, FT),
@@ -126,6 +131,23 @@ function precomputed_quantities(Y, atmos)
             ᶜSnₗᵖ = similar(Y.c, FT),
             ᶜSnᵣᵖ = similar(Y.c, FT),
         )
+        # Add additional quantities for 2M + P3
+        if atmos.microphysics_model isa Microphysics2MomentP3
+            precipitation_quantities = (;
+                # liquid quantities (2M warm rain)
+                precipitation_quantities...,
+                # ice quantities (P3)
+                ᶜwᵢ = similar(Y.c, FT),
+                ᶜwnᵢ = similar(Y.c, FT),
+                ᶜlogλ = similar(Y.c, FT),
+                ᶜScoll = similar(Y.c,
+                    @NamedTuple{
+                        ∂ₜq_c::FT, ∂ₜq_r::FT, ∂ₜN_c::FT, ∂ₜN_r::FT,
+                        ∂ₜL_rim::FT, ∂ₜL_ice::FT, ∂ₜB_rim::FT,
+                    }
+                ),
+            )
+        end
     else
         precipitation_quantities = (;)
     end
@@ -142,8 +164,6 @@ function precomputed_quantities(Y, atmos)
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₜʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₕʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₗᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵢᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵣᵖ⁰ = similar(Y.c, FT),
@@ -161,8 +181,6 @@ function precomputed_quantities(Y, atmos)
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₜʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₕʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₙₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₙᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₗᵖ⁰ = similar(Y.c, FT),
@@ -235,10 +253,24 @@ function precomputed_quantities(Y, atmos)
         if atmos.smagorinsky_lilly isa SmagorinskyLilly
             uvw_vec = UVW(FT(0), FT(0), FT(0))
             (;
-                ᶜτ_smag = similar(Y.c, typeof(uvw_vec * uvw_vec')),
-                ᶠτ_smag = similar(Y.f, typeof(uvw_vec * uvw_vec')),
-                ᶜD_smag = similar(Y.c, FT),
-                ᶠD_smag = similar(Y.f, FT),
+                ᶜS = similar(Y.c, typeof(uvw_vec * uvw_vec')),
+                ᶠS = similar(Y.f, typeof(uvw_vec * uvw_vec')),
+                ᶜS_norm_h = similar(Y.c, FT), ᶜS_norm_v = similar(Y.c, FT),
+                ᶜL_h = similar(Y.c, FT), ᶜL_v = similar(Y.c, FT),
+                ᶜνₜ_h = similar(Y.c, FT), ᶜνₜ_v = similar(Y.c, FT),
+                ᶜD_h = similar(Y.c, FT), ᶜD_v = similar(Y.c, FT),
+            )
+        else
+            (;)
+        end
+    amd_les_quantities =
+        if atmos.amd_les isa AnisotropicMinimumDissipation
+            uvw_vec = UVW(FT(0), FT(0), FT(0))
+            (;
+                ᶜτ_amd = similar(Y.c, typeof(uvw_vec * uvw_vec')),
+                ᶠτ_amd = similar(Y.f, typeof(uvw_vec * uvw_vec')),
+                ᶜD_amd = similar(Y.c, FT),
+                ᶠD_amd = similar(Y.f, FT),
             )
         else
             (;)
@@ -256,7 +288,7 @@ function precomputed_quantities(Y, atmos)
         surface_precip_fluxes...,
         cloud_diagnostics_tuple,
         smagorinsky_lilly_quantities...,
-    )
+        amd_les_quantities...)
 end
 
 # Interpolates the third contravariant component of Y.c.uₕ to cell faces.
@@ -509,9 +541,10 @@ NVTX.@annotate function set_explicit_precomputed_quantities_part1!(Y, p, t)
     (; turbconv_model) = p.atmos
     (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
+    FT = eltype(p.params)
 
     if !isnothing(p.sfc_setup)
-        SurfaceConditions.update_surface_conditions!(Y, p, float(t))
+        SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
     end
 
     if turbconv_model isa AbstractEDMF
@@ -582,8 +615,10 @@ NVTX.@annotate function set_explicit_precomputed_quantities_part2!(Y, p, t)
         set_cloud_fraction!(Y, p, moisture_model, cloud_model)
     end
 
-    if p.atmos.smagorinsky_lilly isa SmagorinskyLilly
-        set_smagorinsky_lilly_precomputed_quantities!(Y, p)
+    set_smagorinsky_lilly_precomputed_quantities!(Y, p, p.atmos.smagorinsky_lilly)
+
+    if p.atmos.amd_les isa AnisotropicMinimumDissipation
+        set_amd_precomputed_quantities!(Y, p)
     end
 
     return nothing

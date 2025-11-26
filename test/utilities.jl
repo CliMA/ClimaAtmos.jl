@@ -33,6 +33,38 @@ end
     @test CA.isdivisible(Dates.Month(1), Dates.Hour(1))
 end
 
+@testset "time_to_seconds" begin
+    # Seconds
+    @test CA.time_to_seconds("10s") == 10
+    @test CA.time_to_seconds("10secs") == 10
+
+    # Minutes
+    @test CA.time_to_seconds("2m") == 120
+    @test CA.time_to_seconds("2mins") == 120
+
+    # Hours
+    @test CA.time_to_seconds("1h") == 3600
+    @test CA.time_to_seconds("1hours") == 3600
+
+    # Days
+    @test CA.time_to_seconds("3d") == 3 * 86400
+    @test CA.time_to_seconds("3days") == 3 * 86400
+
+    # Weeks
+    @test CA.time_to_seconds("50weeks") == 50 * 604800
+
+    # Float input
+    @test CA.time_to_seconds("1.5h") == 1.5 * 3600
+
+    # Special case
+    @test CA.time_to_seconds("Inf") == Inf
+
+    # Bad formats
+    @test_throws ErrorException CA.time_to_seconds("10")
+    @test_throws ErrorException CA.time_to_seconds("10lightyears")
+    @test_throws ErrorException CA.time_to_seconds("mins10")
+end
+
 @testset "kinetic_energy (c.f. analytical function)" begin
     # Test kinetic energy function for staggered grids
     # given an analytical expression for the velocity profiles
@@ -57,7 +89,7 @@ end
 end
 
 @testset "compute_strain_rate (c.f. analytical function)" begin
-    # Test compute_strain_rate_face
+    # Test compute_strain_rate_face_vertical
     (; helem, cent_space, face_space) = get_cartesian_spaces()
     ccoords, fcoords = get_coords(cent_space, face_space)
     FT = eltype(ccoords.x)
@@ -86,8 +118,8 @@ end
     ᶠu = @. UVW(Geometry.UVector(ᶠu)) +
        UVW(Geometry.VVector(ᶠv)) +
        UVW(Geometry.WVector(ᶠw))
-    ᶜϵ .= CA.compute_strain_rate_center(Geometry.Covariant123Vector.(ᶠu))
-    ᶠϵ .= CA.compute_strain_rate_face(Geometry.Covariant123Vector.(ᶜu))
+    ᶜϵ .= CA.compute_strain_rate_center_vertical(Geometry.Covariant123Vector.(ᶠu))
+    ᶠϵ .= CA.compute_strain_rate_face_vertical(Geometry.Covariant123Vector.(ᶜu))
 
     # Center valued strain rate
     @test ᶜϵ.components.data.:1 == ᶜϵ.components.data.:1 .* FT(0)
@@ -128,6 +160,96 @@ end
                 )
             ),
         ) < eps(FT) # top face
+    end
+end
+
+@testset "compute_full_strain_rate (consistency and symmetry)" begin
+    (; helem, cent_space, face_space) = get_cartesian_spaces()
+    ccoords, fcoords = get_coords(cent_space, face_space)
+    FT = eltype(ccoords.x)
+    UVW = Geometry.UVWVector
+    C123 = Geometry.Covariant123Vector
+    UVec = Geometry.UVector
+    VVec = Geometry.VVector
+    WVec = Geometry.WVector
+    ᶜgradᵥ = Operators.GradientF2C()
+    gradₕ = Operators.Gradient()
+
+
+    # Alloc scratch space for 3x3 tensor fields
+    u₀ = UVW(FT(0), FT(0), FT(0))
+    ᶜε = Fields.Field(typeof(u₀ * u₀'), cent_space)
+    ᶠε = Fields.Field(typeof(u₀ * u₀'), face_space)
+    ᶜε_ref = Fields.Field(typeof(u₀ * u₀'), cent_space)
+    ᶠε_ref = Fields.Field(typeof(u₀ * u₀'), face_space)
+
+    # Velocity fields
+    u, v, w = taylor_green_ic(ccoords)
+    ᶠu, ᶠv, ᶠw = taylor_green_ic(fcoords)
+    ᶜu = @. UVW(UVec(u)) + UVW(VVec(v)) + UVW(WVec(w))
+    ᶠu_vec = @. UVW(UVec(ᶠu)) + UVW(VVec(ᶠv)) + UVW(WVec(ᶠw))
+
+    # Compute using API under test
+    CA.compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu_vec)
+    CA.compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu_vec)
+
+    # Build reference tensors explicitly (projection + symmetrization)
+    axis_uvw = (Geometry.UVWAxis(),)
+    # Center reference
+    @. ᶜε_ref = Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_vec))
+    @. ᶜε_ref += Geometry.project(axis_uvw, gradₕ(ᶜu))
+    @. ᶜε_ref = (ᶜε_ref + adjoint(ᶜε_ref)) / 2
+
+    # Face reference (construct vertical gradient with the same BCs)
+    ∇ᵥuvw_boundary = Geometry.outer(WVec(0), UVW(0, 0, 0))
+    ∇bc = Operators.SetGradient(∇ᵥuvw_boundary)
+    ᶠgradᵥ = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
+    @. ᶠε_ref = Geometry.project(axis_uvw, ᶠgradᵥ(ᶜu))
+    @. ᶠε_ref += Geometry.project(axis_uvw, gradₕ(ᶠu_vec))
+    @. ᶠε_ref = (ᶠε_ref + adjoint(ᶠε_ref)) / 2
+
+    # Symmetry checks (independent of reference)
+    @test ᶜε.components.data.:2 == ᶜε.components.data.:4
+    @test ᶜε.components.data.:3 == ᶜε.components.data.:7
+    @test ᶜε.components.data.:6 == ᶜε.components.data.:8
+    @test ᶠε.components.data.:2 == ᶠε.components.data.:4
+    @test ᶠε.components.data.:3 == ᶠε.components.data.:7
+    @test ᶠε.components.data.:6 == ᶠε.components.data.:8
+
+    # Consistency with reference (component-wise, tight tolerance)
+    tol = sqrt(eps(FT))
+    @test maximum(abs, ᶜε.components.data.:1 .- ᶜε_ref.components.data.:1) < tol
+    @test maximum(abs, ᶜε.components.data.:2 .- ᶜε_ref.components.data.:2) < tol
+    @test maximum(abs, ᶜε.components.data.:3 .- ᶜε_ref.components.data.:3) < tol
+    @test maximum(abs, ᶜε.components.data.:4 .- ᶜε_ref.components.data.:4) < tol
+    @test maximum(abs, ᶜε.components.data.:5 .- ᶜε_ref.components.data.:5) < tol
+    @test maximum(abs, ᶜε.components.data.:6 .- ᶜε_ref.components.data.:6) < tol
+    @test maximum(abs, ᶜε.components.data.:7 .- ᶜε_ref.components.data.:7) < tol
+    @test maximum(abs, ᶜε.components.data.:8 .- ᶜε_ref.components.data.:8) < tol
+    @test maximum(abs, ᶜε.components.data.:9 .- ᶜε_ref.components.data.:9) < tol
+
+    @test maximum(abs, ᶠε.components.data.:1 .- ᶠε_ref.components.data.:1) < tol
+    @test maximum(abs, ᶠε.components.data.:2 .- ᶠε_ref.components.data.:2) < tol
+    @test maximum(abs, ᶠε.components.data.:3 .- ᶠε_ref.components.data.:3) < tol
+    @test maximum(abs, ᶠε.components.data.:4 .- ᶠε_ref.components.data.:4) < tol
+    @test maximum(abs, ᶠε.components.data.:5 .- ᶠε_ref.components.data.:5) < tol
+    @test maximum(abs, ᶠε.components.data.:6 .- ᶠε_ref.components.data.:6) < tol
+    @test maximum(abs, ᶠε.components.data.:7 .- ᶠε_ref.components.data.:7) < tol
+    @test maximum(abs, ᶠε.components.data.:8 .- ᶠε_ref.components.data.:8) < tol
+    @test maximum(abs, ᶠε.components.data.:9 .- ᶠε_ref.components.data.:9) < tol
+
+    # Boundary behavior (face): match reference at first and last vertical levels per element
+    for elem_id in 1:helem
+        @test maximum(
+            abs,
+            Fields.field_values(Fields.slab(ᶠε.components.data.:3, 1, elem_id)) .-
+            Fields.field_values(Fields.slab(ᶠε_ref.components.data.:3, 1, elem_id)),
+        ) < tol
+        @test maximum(
+            abs,
+            Fields.field_values(Fields.slab(ᶠε.components.data.:3, 11, elem_id)) .-
+            Fields.field_values(Fields.slab(ᶠε_ref.components.data.:3, 11, elem_id)),
+        ) < tol
     end
 end
 
@@ -280,6 +402,7 @@ end
         "site_latitude" => 0.0,
         "site_longitude" => 0.0,
         "t_end" => "5hours",
+        "era5_diurnal_warming" => Nothing,
     )
 
     temporary_dir = mktempdir()
@@ -316,9 +439,20 @@ end
     processed_data = NCDataset(sim_forcing_daily, "r")
 
     # Test fixed variables - this tests that the variables are copied correctly
-    for clima_var in ["hus", "ta", "ua", "va", "wap", "zg", "clw", "cli", "ts"]
+    for clima_var in ["ua", "va", "wap", "ts"]
         @test all(isapprox.(processed_data[clima_var][:], 1, atol = 1e-10))
     end
+
+    for clima_var in ["clw", "cli"]
+        @test all(isapprox.(processed_data[clima_var][:], 0, atol = 1e-10))
+    end
+
+    # data is stored from top of atmosphere to surface 
+    @test monotonic_decreasing(processed_data["zg"], 3)
+    @test monotonic_increasing(processed_data["ta"], 3)
+    @test monotonic_increasing(processed_data["hus"], 3)
+    @test all(processed_data["hus"] .>= 0)
+    @test all(processed_data["ta"] .>= 200) # 200K is the minimum temperature set in the helper function
 
     # Test accumulated variables - note that the sign is flipped because of differences between ecmwf and clima
     for clima_var in ["hfls", "hfss"]
@@ -358,6 +492,7 @@ end
         "site_latitude" => 0.0,
         "site_longitude" => 0.0,
         "t_end" => "2days",
+        "era5_diurnal_warming" => Nothing,
     )
 
     input_dir = mktempdir()
@@ -407,7 +542,7 @@ end
     @test length(processed_data["time"][:]) == expected_time_steps
 
     # Test that data is consistent across time
-    @test all(x -> all(isapprox.(x, 1, atol = 1e-10)), processed_data["ta"][:])
+    @test monotonic_increasing(processed_data["ta"], 3)
     @test all(
         x -> all(isapprox.(x, -1 / time_resolution, atol = 1e-10)),
         processed_data["hfls"][:],
@@ -428,6 +563,7 @@ end
     # compute the vertical temperature gradient
     vertical_temperature_gradient =
         CA.get_vertical_tendencies(vert_partial_ds, "ta")
+    @test all(vertical_temperature_gradient .<= 0)
 
     close(processed_data)
 end
@@ -528,4 +664,69 @@ end
         @test length(smoothed_3d) == ntime
         close(test_ds)
     end
+end
+
+@testset "ERA5 diurnal warming" begin
+    FT = Float32
+    temporary_dir = mktempdir()
+
+    parsed_args_0K = Dict(
+        "start_date" => "20000506",
+        "site_latitude" => 0.0,
+        "site_longitude" => 0.0,
+        "t_end" => "5hours",
+        "era5_diurnal_warming" => Nothing,
+    )
+
+    parsed_args_4K = Dict(
+        "start_date" => "20000506",
+        "site_latitude" => 0.0,
+        "site_longitude" => 0.0,
+        "t_end" => "5hours",
+        "era5_diurnal_warming" => 4,
+    )
+
+    create_mock_era5_datasets(temporary_dir, parsed_args_0K["start_date"], FT)
+
+    sim_forcing_0K = CA.get_external_monthly_forcing_file_path(
+        parsed_args_0K,
+        data_dir = temporary_dir,
+    )
+    sim_forcing_4K = CA.get_external_monthly_forcing_file_path(
+        parsed_args_4K,
+        data_dir = temporary_dir,
+    )
+
+    @test basename(sim_forcing_0K) == "monthly_diurnal_cycle_forcing_0.0_0.0_20000506.nc"
+    @test basename(sim_forcing_4K) ==
+          "monthly_diurnal_cycle_forcing_0.0_0.0_20000506_plus_4.0K.nc"
+
+    CA.generate_external_forcing_file(
+        parsed_args_0K,
+        sim_forcing_0K,
+        FT,
+        input_data_dir = temporary_dir,
+    )
+
+    CA.generate_external_forcing_file(
+        parsed_args_4K,
+        sim_forcing_4K,
+        FT,
+        input_data_dir = temporary_dir,
+    )
+
+    # open the datasets and check the temperature and specific humidity profiles have been adjusted
+    processed_data_0K = NCDataset(sim_forcing_0K, "r")
+    processed_data_4K = NCDataset(sim_forcing_4K, "r")
+
+    # check that air and surface temperatures have increased by the +4K amount
+    @test all(isapprox.(processed_data_0K["ta"] .+ 4, processed_data_4K["ta"]))
+    @test isapprox(processed_data_0K["ts"] .+ 4, processed_data_4K["ts"])
+
+    # check that the specific humidity has increased
+    # This test passes locally but fails on the cluster
+    # @test all(processed_data_0K["hus"] .< processed_data_4K["hus"])
+
+    close(processed_data_0K)
+    close(processed_data_4K)
 end

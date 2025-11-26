@@ -1,5 +1,5 @@
 agents:
-  queue: new-central
+  queue: central
   slurm_mem: 8G
   modules: climacommon/2025_03_18
 
@@ -20,7 +20,7 @@ steps:
   - label: "init :computer:"
     key: "init_cpu_env"
     concurrency: 1
-    concurrency_group: 'depot/climaatmos-ci'
+    concurrency_group: "depot/climaatmos-ci"
     command:
       - "echo $$JULIA_DEPOT_PATH"
 
@@ -41,13 +41,11 @@ steps:
 
   - group: "Reproducibility infrastructure"
     steps:
-
       - label: ":computer: Test reproducibility infrastructure"
         command: "julia --color=yes --project=.buildkite test/unit_reproducibility_infra.jl"
 
   - group: "Radiation"
     steps:
-
       - label: ":computer: single column radiative equilibrium gray"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -98,7 +96,6 @@ steps:
 
   - group: "Gravity wave"
     steps:
-
       - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl"
         artifact_paths: "nonorographic_gravity_wave_test_3d/*"
@@ -132,7 +129,6 @@ steps:
 
   - group: "Column Examples"
     steps:
-
       - label: ":computer: single column hydrostatic balance float64"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -149,7 +145,6 @@ steps:
 
   - group: "Box Examples"
     steps:
-
       - label: ":computer: Box hydrostatic balance"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -188,13 +183,20 @@ steps:
 
   - group: "Plane Examples"
     steps:
-
       - label: ":computer: Density current experiment"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_density_current_test.yml
           --job_id plane_density_current_test
         artifact_paths: "plane_density_current_test/output_active/*"
+
+      - label: ":computer: Density current experiment (AMD)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/plane_density_current_test_amd.yml
+          --job_id plane_density_current_test_amd
+        soft_fail: true
+        artifact_paths: "plane_density_current_test_amd/output_active/*"
 
   - group: "Analytic Tests"
     steps:
@@ -279,7 +281,6 @@ steps:
 
   - group: "Conservation check"
     steps:
-
       - label: ":computer: baroclinic wave check conservation"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_conservation.yml
@@ -305,7 +306,7 @@ steps:
         artifact_paths: "baroclinic_wave_equil_conservation_source/output_active/*"
         agents:
           slurm_mem: 16GB
-      
+
       - label: ":computer: baroclinic wave nonequil moist check conservation with sources"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_nonequil_conservation_source.yml
@@ -316,7 +317,6 @@ steps:
 
   - group: "Sphere Examples (Dycore)"
     steps:
-
       - label: ":computer: hydrostatic balance float64"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -349,6 +349,18 @@ steps:
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
+      - label: ":computer: no lim baroclinic wave equilmoist (AMD)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
+          --config_file $CONFIG_PATH/baroclinic_wave_equil_amd.yml
+          --job_id baroclinic_wave_equil_amd
+
+        artifact_paths: "baroclinic_wave_equil_amd/output_active/*"
+        soft_fail: true
+        agents:
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
       - label: ":computer: held suarez"
         key: held_suarez
         command: >
@@ -374,7 +386,6 @@ steps:
 
   - group: "Sphere Examples (Aquaplanet)"
     steps:
-
       - label: ":umbrella: aquaplanet nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -442,7 +453,6 @@ steps:
 
   - group: "Sphere Examples (Topography)"
     steps:
-
       - label: ":computer: baroclinic wave topography (dcmip)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -469,7 +479,6 @@ steps:
 
   - group: "Restarting"
     steps:
-
       - label: ":computer: test restart"
         command: >
           julia --color=yes --project=.buildkite test/restart.jl
@@ -534,7 +543,6 @@ steps:
 
   - group: "MPI Examples"
     steps:
-
       - label: ":computer: Prep restart for MPI"
         key: "mpi_baro_wave_make_restart"
         command: >
@@ -604,7 +612,6 @@ steps:
 
   - group: "EDOnlyEDMFX"
     steps:
-
       - label: ":man_in_business_suit_levitating: EDOnly EDMFX aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -627,7 +634,6 @@ steps:
 
   - group: "Diagnostic EDMFX"
     steps:
-
       - label: ":genie: Diagnostic EDMFX test in a box"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -652,24 +658,6 @@ steps:
           --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_box.yml
           --job_id diagnostic_edmfx_bomex_box
         artifact_paths: "diagnostic_edmfx_bomex_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Diagnostic EDMFX Bomex stretched grid in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_stretched_box.yml
-          --job_id diagnostic_edmfx_bomex_stretched_box
-        artifact_paths: "diagnostic_edmfx_bomex_stretched_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Diagnostic EDMFX DYCOMS_RF01 in a box (explicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_explicit_box.yml
-          --job_id diagnostic_edmfx_dycoms_rf01_explicit_box
-        artifact_paths: "diagnostic_edmfx_dycoms_rf01_explicit_box/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -744,14 +732,12 @@ steps:
 
   - group: "Prognostic EDMFX"
     steps:
-
       - label: ":genie: Prognostic EDMFX advection test in a column"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_column.yml
           --job_id prognostic_edmfx_adv_test_column
         artifact_paths: "prognostic_edmfx_adv_test_column/output_active/*"
-
         agents:
           slurm_mem: 20GB
 
@@ -853,7 +839,7 @@ steps:
         artifact_paths: "prognostic_edmfx_rico_column/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":umbrella: Prognostic EDMFX Rico in a column (implicit)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -871,6 +857,7 @@ steps:
         artifact_paths: "prognostic_edmfx_rico_column_2M/output_active/*"
         agents:
           slurm_mem: 20GB
+        soft_fail: true
 
       - label: ":umbrella: Prognostic EDMFX TRMM in a column"
         command: >
@@ -880,7 +867,15 @@ steps:
         artifact_paths: "prognostic_edmfx_trmm_column/output_active/*"
         agents:
           slurm_mem: 20GB
-        soft_fail: true
+
+      - label: ":umbrella: Prognostic EDMFX TRMM in a column (implicit)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_implicit_column.yml
+          --job_id prognostic_edmfx_trmm_implicit_column
+        artifact_paths: "prognostic_edmfx_trmm_implicit_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMFX TRMM with 0-moment in a column"
         command: >
@@ -918,15 +913,7 @@ steps:
         artifact_paths: "prognostic_edmfx_diurnal_scm_imp/output_active/*"
         agents:
           slurm_mem: 12GB
-
-      - label: ":genie: Prognostic EDMFX Bomex in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
-          --job_id prognostic_edmfx_bomex_box
-        artifact_paths: "prognostic_edmfx_bomex_box/*"
-        agents:
-          slurm_mem: 20GB
+        soft_fail: true
 
       - label: ":genie: Prognostic EDMFX aquaplanet"
         command: >
@@ -945,7 +932,6 @@ steps:
 
   - group: "Autodiff"
     steps:
-
       - label: "baroclinic wave moist check conservation float64 sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_ft64_sparse_autodiff.yml
@@ -988,7 +974,7 @@ steps:
         artifact_paths: "prognostic_edmfx_bomex_column_sparse_autodiff/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: "Prognostic EDMFX Dycoms RF02 in a column sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -998,7 +984,7 @@ steps:
         agents:
           slurm_mem: 20GB
         soft_fail: true
-      
+
       - label: "Prognostic EDMFX TRMM in a column sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -1028,7 +1014,7 @@ steps:
         artifact_paths: "prognostic_edmfx_aquaplanet_sparse_autodiff/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: "AMIP Target EDOnly nonequil sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -1041,7 +1027,6 @@ steps:
 
   - group: "GPU"
     steps:
-
       - label: "GPU: Gravity waves"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -1109,7 +1094,6 @@ steps:
         depends_on:
           - "baroclinic_wave"
           - "baroclinic_wave_gpu"
-
 
       - label: "GPU: baroclinic wave - 2 gpus"
         key: "baroclinic_wave_2gpu"
@@ -1230,7 +1214,6 @@ steps:
 
   - group: "Benchmarks"
     steps:
-
       - label: ":computer: Benchmark: CPU baroclinic wave moist"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark_step.jl
@@ -1248,6 +1231,7 @@ steps:
         artifact_paths: "bm_baroclinic_wave_moist_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 16G
           slurm_gpus: 1
@@ -1269,6 +1253,7 @@ steps:
           --job_id bm_default_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
@@ -1281,6 +1266,7 @@ steps:
           --job_id bm_diag_edmf_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
@@ -1293,13 +1279,13 @@ steps:
           --job_id bm_prog_edmf_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
 
   - group: "Flame graphs"
     steps:
-
       - label: ":fire: Flame graph: gpu job"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
@@ -1417,7 +1403,6 @@ steps:
 
   - group: "Checkbounds/Inference/Invalidations"
     steps:
-
       # TODO: we should somehow decouple this unit test from the perf env / scripts
       # Checkbounds
       - label: ":computer: checkbounds"

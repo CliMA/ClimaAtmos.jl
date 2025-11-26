@@ -804,7 +804,10 @@ function make_plots(
 end
 
 function make_plots(
-    ::Val{:plane_density_current_test},
+    ::Union{
+        Val{:plane_density_current_test},
+        Val{:plane_density_current_test_amd},
+    },
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -887,7 +890,9 @@ function make_plots(
 end
 
 MoistBaroWavePlots =
-    Union{Val{:baroclinic_wave_equil}, Val{:baroclinic_wave_equil_deepatmos}}
+    Union{Val{:baroclinic_wave_equil},
+        Val{:baroclinic_wave_equil_amd},
+        Val{:baroclinic_wave_equil_deepatmos}}
 
 function make_plots(
     ::MoistBaroWavePlots,
@@ -995,7 +1000,7 @@ function make_plots(
     simdirs = SimDir.(output_paths)
 
     short_names_3D, reduction = ["ua", "ta", "hus"], "average"
-    short_names_2D = ["hfes", "evspsbl", "pr"]
+    short_names_2D = ["hfss", "hfls", "pr"]
     vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
         get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
     end
@@ -1035,8 +1040,8 @@ function make_plots(
         "rlds",
         "rlut",
         "rlus",
-        "hfes",
-        "evspsbl",
+        "hfss",
+        "hfls",
         "pr",
     ]
     available_periods = ClimaAnalysis.available_periods(
@@ -1114,8 +1119,8 @@ function make_plots(
         "rlds",
         "rlut",
         "rlus",
-        "hfes",
-        "evspsbl",
+        "hfss",
+        "hfls",
         "ts",
         "pr",
     ]
@@ -1174,8 +1179,8 @@ function make_plots(
         "rlds",
         "rlut",
         "rlus",
-        "hfes",
-        "evspsbl",
+        "hfss",
+        "hfls",
         "pr",
     ]
     available_periods = ClimaAnalysis.available_periods(
@@ -1233,8 +1238,8 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
         "rlds",
         "rlut",
         "rlus",
-        "hfes",
-        "evspsbl",
+        "hfss",
+        "hfls",
         "pr",
     ]
     available_periods = ClimaAnalysis.available_periods(
@@ -1305,17 +1310,11 @@ function make_plots(
 
     reduction = "inst"
     short_names = [
-        "wa",
-        "ua",
-        "va",
-        "ta",
-        "thetaa",
-        "ha",
-        "hus",
-        "hur",
-        "cl",
-        "clw",
-        "cli",
+        "wa", "ua", "va", "ta", "thetaa", "ha",
+        "hus", "hur", "cl", "clw", "cli", "ke",
+        "Dh_smag", "strainh_smag",  # smag horizontal
+        "Dv_smag", "strainv_smag",  # smag vertical
+        "edt",  # DecayWithHeight vertical diffusivity
     ]
     short_names = short_names ∩ collect(keys(simdirs[1].vars))
 
@@ -1328,10 +1327,7 @@ function make_plots(
         window_end = last(var.dims["time"])
         window_start = window_end - 2hours
         var_window = ClimaAnalysis.window(
-            var,
-            "time";
-            left = window_start,
-            right = window_end,
+            var, "time"; left = window_start, right = window_end,
         )
         var_reduced = horizontal_average(average_time(var_window))
         return var_reduced
@@ -1401,6 +1397,7 @@ EDMFBoxPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_implicit_column},
     Val{:prognostic_edmfx_rico_column_2M},
     Val{:prognostic_edmfx_trmm_column},
+    Val{:prognostic_edmfx_trmm_implicit_column},
     Val{:prognostic_edmfx_trmm_column_sparse_autodiff},
     Val{:prognostic_edmfx_dycoms_rf02_column},
     Val{:prognostic_edmfx_dycoms_rf02_column_sparse_autodiff},
@@ -1552,13 +1549,9 @@ function make_plots(
         short_name = short_names[1],
         reduction,
     )
-    if "5m" in available_periods
-        period = "5m"
-    elseif "10m" in available_periods
-        period = "10m"
-    elseif "30m" in available_periods
-        period = "30m"
-    end
+    # choose the shortest available period
+    available_periods = collect(available_periods) # ensure vector for indexing
+    period = available_periods[argmin(CA.time_to_seconds.(available_periods))]
 
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =

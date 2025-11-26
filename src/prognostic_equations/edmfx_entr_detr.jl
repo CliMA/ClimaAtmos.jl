@@ -139,9 +139,12 @@ function entrainment(
     ::PiGroupsEntrainment,
 )
     FT = eltype(thermo_params)
-    # Entrainment is not well-defined or should be zero if updraft area is negligible.
+    entr_inv_tau = CAP.entr_inv_tau(turbconv_params)
+    limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
+    # Entrainment is not well-defined if updraft area is negligible.
+    # Fix at limit_inv_tau to ensure some mixing with the environment.
     if ᶜaʲ <= eps(FT)
-        return 0
+        return limit_inv_tau
     end
 
     elev_above_sfc = ᶜz - z_sfc
@@ -168,7 +171,6 @@ function entrainment(
     )
 
     entr_param_vec = CAP.entr_param_vec(turbconv_params)
-    entr_inv_tau = CAP.entr_inv_tau(turbconv_params)
     pi_sum =
         entr_param_vec[1] * abs(Π₁) +
         entr_param_vec[2] * abs(Π₂) +
@@ -211,11 +213,12 @@ function entrainment(
     min_area_limiter_scale = CAP.min_area_limiter_scale(turbconv_params)
     min_area_limiter_power = CAP.min_area_limiter_power(turbconv_params)
     a_min = CAP.min_area(turbconv_params)
+    limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
 
-    # Entrainment is not well-defined or should be zero if updraft area is negligible,
+    # Entrainment is not well-defined if updraft area is negligible,
     # as some limiters depend on ᶜaʲ.
     if ᶜaʲ <= eps(FT) && min_area_limiter_scale == FT(0) # If no area and no base min_area_limiter
-        return 0
+        return limit_inv_tau
     end
 
     min_area_limiter =
@@ -386,12 +389,12 @@ function detrainment(
     ::PiGroupsDetrainment,
 )
     FT = eltype(thermo_params)
+    limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
 
-    # If ᶜρaʲ (updraft effective density) is zero or negligible,
-    # detrainment is considered zero. This also protects division by ᶜρaʲ later.
-    # This condition implies the updraft area (ᶜaʲ) is also likely negligible.
-    if ᶜρaʲ <= eps(FT)
-        return 0
+    # If ᶜaʲ (updraft area fraction) is negligible, detrainment is considered
+    # to be fixed at limit_inv_tau. This also protects division by ᶜρaʲ later.
+    if ᶜaʲ <= eps(FT)
+        return limit_inv_tau
     end
 
     elev_above_sfc = ᶜz - z_sfc
@@ -465,10 +468,12 @@ function detrainment(
     max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
     max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
     a_max = CAP.max_area(turbconv_params)
+    limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
 
-    # If ᶜρaʲ (updraft effective density) is zero or negligible, detrainment is zero.
-    if ᶜρaʲ <= eps(FT) # Consistent check
-        return 0
+    # If ᶜaʲ (updraft area fraction) is negligible, detrainment is not well defined.
+    # Fix at limit_inv_tau to ensure some mixing with the environment.
+    if ᶜaʲ <= eps(FT)
+        return limit_inv_tau
     end
 
     max_area_limiter =
@@ -508,8 +513,12 @@ function detrainment(
     ::SmoothAreaDetrainment,
 )
     FT = eltype(thermo_params)
-    # If ᶜρaʲ is negligible or vertical velocity divergence term is non-negative, detrainment is zero.
-    if (ᶜρaʲ <= eps(FT)) || (ᶜw_vert_div >= 0) # Consistent check for ᶜρaʲ
+    limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
+    # If ᶜaʲ is negligible detrainment is fixed at limit_inv_tau.
+    if (ᶜaʲ <= eps(FT)) # Consistent check for ᶜaʲ
+        detr = limit_inv_tau
+        # If vertical velocity divergence term is non-negative detrainment is zero.
+    elseif (ᶜw_vert_div >= 0)
         detr = FT(0)
     else
         detr = ᶜentr - ᶜw_vert_div
@@ -576,16 +585,16 @@ end
 limit_entrainment(entr::FT, a, dt) where {FT} = max(
     min(
         entr,
-        FT(0.9) * (1 - a) / max(a, eps(FT)) / float(dt),
-        FT(0.9) * 1 / float(dt),
+        FT(0.9) * (1 - a) / max(a, eps(FT)) / FT(dt),
+        FT(0.9) * 1 / FT(dt),
     ),
     0,
 )
 limit_detrainment(detr::FT, a, dt) where {FT} =
-    max(min(detr, FT(0.9) * 1 / float(dt)), 0)
+    max(min(detr, FT(0.9) * 1 / FT(dt)), 0)
 
 function limit_turb_entrainment(dyn_entr::FT, turb_entr, dt) where {FT}
-    return max(min((FT(0.9) * 1 / float(dt)) - dyn_entr, turb_entr), 0)
+    return max(min((FT(0.9) * 1 / FT(dt)) - dyn_entr, turb_entr), 0)
 end
 
 # limit entrainment and detrainment rates for diagnostic EDMF

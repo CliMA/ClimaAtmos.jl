@@ -4,6 +4,16 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+v0.31.5
+-------
+PR [#3975](https://github.com/CliMA/ClimaAtmos.jl/pull/3975) updates the pressure gradient formulation to subtract a reference state and use the Exner pressure.
+
+v0.31.4
+-------
+
+v0.31.3
+-------
+
 v0.31.2
 -------
 
@@ -13,7 +23,7 @@ PR [#3946](https://github.com/CliMA/ClimaAtmos.jl/pull/3946) adds rainwater path
 v0.31.1
 -------
 
-PR [#3917](https://github.com/CliMA/ClimaAtmos.jl/pull/3917) adds common numerics configs for different resolutions. 
+PR [#3917](https://github.com/CliMA/ClimaAtmos.jl/pull/3917) adds common numerics configs for different resolutions.
 These configurations are intended to serve as the default settings. Please modify them only if you are certain of the implications.
 
 v0.31.0

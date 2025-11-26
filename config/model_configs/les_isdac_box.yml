@@ -14,7 +14,7 @@ implicit_diffusion: false
 approximate_linear_solve_iters: 2
 hyperdiff: "false"
 apply_limiter: false
-smagorinsky_lilly: true
+smagorinsky_lilly: "UVW"
 # time- and spatial discretization
 x_elem: 10
 x_max: 3.2e3
@@ -28,13 +28,13 @@ toml: [toml/les_isdac.toml]  # sponge height
 dt: "0.05secs"
 t_end: "2mins"
 dt_cloud_fraction: "10mins"
-restart_file: "/groups/esm/hervik/climaatmos-les-artifacts/les_isdac_day0.0.hdf5"
+restart_file: "/resnick/groups/esm/hervik/climaatmos-les-artifacts/les_isdac_day0.0.hdf5"
 # diagnostics
 dt_save_state_to_disk: "1mins"
 netcdf_interpolation_num_points: [30, 30, 150]
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, husra, cl, clw, cli, hussfc, evspsbl, hfes, pr]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, husra, cl, clw, cli, hussfc, hfss, hfls, evspsbl, pr]
     period: 10mins
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, husra, cl, clw, cli, hussfc, evspsbl, hfes, pr]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, husra, cl, clw, cli, hussfc, hfss, hfls, evspsbl, pr]
     reduction_time: average
     period: 60mins

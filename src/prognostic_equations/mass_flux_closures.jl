@@ -118,6 +118,88 @@ function edmfx_nh_pressure_drag_tendency!(
     end
 end
 
+edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+
+function edmfx_vertical_diffusion_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    turbconv_model::PrognosticEDMFX,
+)
+    if p.atmos.edmfx_model.vertical_diffusion isa Val{true}
+        (; params) = p
+        (; ᶜρʲs) = p.precomputed
+        FT = eltype(p.params)
+        turbconv_params = CAP.turbconv_params(params)
+        n = n_mass_flux_subdomains(turbconv_model)
+        ᶜdivᵥ_mse = Operators.DivergenceF2C(
+            top = Operators.SetValue(C3(0)),
+            bottom = Operators.SetValue(C3(0)),
+        )
+        ᶜdivᵥ_q_tot = Operators.DivergenceF2C(
+            top = Operators.SetValue(C3(0)),
+            bottom = Operators.SetValue(C3(0)),
+        )
+
+        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+        ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
+        # scratch to prevent GPU Kernel parameter memory error
+        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+        ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
+        ᶜprandtl_nvec = @. lazy(
+            turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+        )
+        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+
+        for j in 1:n
+            ᶜρʲ = ᶜρʲs.:($j)
+            ᶜmseʲ = Y.c.sgsʲs.:($j).mse
+            ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+            # Note: For this and other diffusive tendencies, we should use ρaʲ instead of ρʲ,
+            # but it causes stability issues when ρaʲ is small
+            @. Yₜ.c.sgsʲs.:($$j).mse -=
+                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
+                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
+        end
+
+        if p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
+        )
+            α_precip = CAP.α_vert_diff_tracer(params)
+            ᶜρʲ = ᶜρʲs.:(1)
+            ᶜdivᵥ_q = Operators.DivergenceF2C(
+                top = Operators.SetValue(C3(FT(0))),
+                bottom = Operators.SetValue(C3(FT(0))),
+            )
+
+            microphysics_tracers = (
+                (@name(c.sgsʲs.:(1).q_liq), FT(1)),
+                (@name(c.sgsʲs.:(1).q_ice), FT(1)),
+                (@name(c.sgsʲs.:(1).q_rai), α_precip),
+                (@name(c.sgsʲs.:(1).q_sno), α_precip),
+                (@name(c.sgsʲs.:(1).n_liq), FT(1)),
+                (@name(c.sgsʲs.:(1).n_rai), α_precip),
+            )
+
+            # TODO: using unrolled_foreach here allocates! (breaks the flame tests
+            # even though they use 0M microphysics)
+            # MatrixFields.unrolled_foreach(cloud_tracers) do χʲ_name
+            for (χʲ_name, α) in microphysics_tracers
+                MatrixFields.has_field(Y, χʲ_name) || continue
+
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
+
+                @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
+            end
+        end
+    end
+end
+
 """
     edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model)
 
@@ -136,12 +218,13 @@ function edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; dt) = p
+    FT = eltype(p.params)
 
     if p.atmos.edmfx_model.filter isa Val{true}
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                C3(min(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0)) / float(dt)
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= min(Y.c.sgsʲs.:($$j).ρa, 0) / float(dt)
+                C3(min(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0)) / FT(dt)
+            @. Yₜ.c.sgsʲs.:($$j).ρa -= min(Y.c.sgsʲs.:($$j).ρa, 0) / FT(dt)
         end
     end
 end

@@ -23,7 +23,7 @@ ClimaAtmosParameters(::Type{FT}) where {FT <: AbstractFloat} =
 function ClimaAtmosParameters(
     toml_dict::TD,
     parsed_args = nothing,
-) where {TD <: CP.AbstractTOMLDict}
+) where {TD <: CP.ParamDict}
     FT = CP.float_type(toml_dict)
 
     turbconv_params = TurbulenceConvectionParameters(toml_dict)
@@ -54,6 +54,7 @@ function ClimaAtmosParameters(
     microphysics_0m_params = CM.Parameters.Parameters0M(toml_dict)
     microphysics_1m_params = microphys_1m_parameters(toml_dict)
     microphysics_2m_params = microphys_2m_parameters(toml_dict)
+    microphysics_2mp3_params = get_microphysics_2m_p3_parameters(toml_dict)
 
     # If parsed_args is provided, we can save parameter space by only loading parameters
     # needed for the microphysics model that is actually used.
@@ -62,11 +63,14 @@ function ClimaAtmosParameters(
         cm_model isa Microphysics0Moment || (microphysics_0m_params = nothing)
         cm_model isa Union{Microphysics1Moment, Microphysics2Moment} ||
             (microphysics_1m_params = nothing)
-        cm_model isa Microphysics2Moment || (microphysics_2m_params = nothing)
+        cm_model isa Union{Microphysics2Moment, Microphysics2MomentP3} ||
+            (microphysics_2m_params = nothing)
+        cm_model isa Microphysics2MomentP3 || (microphysics_2mp3_params = nothing)
     end
     MP0M = typeof(microphysics_0m_params)
     MP1M = typeof(microphysics_1m_params)
     MP2M = typeof(microphysics_2m_params)
+    MP2MP3 = typeof(microphysics_2mp3_params)
 
     vert_diff_params = vert_diff_parameters(toml_dict)
     VDP = typeof(vert_diff_params)
@@ -85,6 +89,7 @@ function ClimaAtmosParameters(
         MP0M,
         MP1M,
         MP2M,
+        MP2MP3,
         SFP,
         TCP,
         STP,
@@ -99,6 +104,7 @@ function ClimaAtmosParameters(
         microphysics_0m_params,
         microphysics_1m_params,
         microphysics_2m_params,
+        microphysics_2mp3_params,
         surface_fluxes_params,
         turbconv_params,
         surface_temp_params,
@@ -139,7 +145,7 @@ atmos_name_map = (;
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     cloud_parameters(CP.create_toml_dict(FT))
 
-cloud_parameters(toml_dict::CP.AbstractTOMLDict) = (;
+cloud_parameters(toml_dict::CP.ParamDict) = (;
     liquid = CM.Parameters.CloudLiquid(toml_dict),
     ice = CM.Parameters.CloudIce(toml_dict),
     Ch2022 = CM.Parameters.Chen2022VelType(toml_dict),
@@ -154,7 +160,7 @@ cloud_parameters(toml_dict::CP.AbstractTOMLDict) = (;
 microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     microphys_1m_parameters(CP.create_toml_dict(FT))
 
-microphys_1m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
+microphys_1m_parameters(toml_dict::CP.ParamDict) = (;
     cl = CM.Parameters.CloudLiquid(toml_dict),
     ci = CM.Parameters.CloudIce(toml_dict),
     pr = CM.Parameters.Rain(toml_dict),
@@ -173,7 +179,7 @@ microphys_1m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
 microphys_2m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     microphys_2m_parameters(CP.create_toml_dict(FT))
 
-microphys_2m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
+microphys_2m_parameters(toml_dict::CP.ParamDict) = (;
     sb = CM.Parameters.SB2006(toml_dict),
     aps = CM.Parameters.AirProperties(toml_dict),
     ctv = CM.Parameters.StokesRegimeVelType(toml_dict),
@@ -183,6 +189,29 @@ microphys_2m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
     arg = CM.Parameters.AerosolActivationParameters(toml_dict),
     aerosol = prescribed_aerosol_parameters(toml_dict),
 )
+
+get_microphysics_2m_p3_parameters(::Type{FT}) where {FT <: AbstractFloat} =
+    get_microphysics_2m_p3_parameters(CP.create_toml_dict(FT))
+
+"""
+    get_microphysics_2m_p3_parameters(FT)
+    get_microphysics_2m_p3_parameters(toml_dict)
+
+Get the parameters for the 2-moment warm rain + P3 ice microphysics scheme.
+
+# Arguments
+ - `FT`: The floating point type to use for the parameters, `Float32` or `Float64`.
+ - `toml_dict`: A TOML dictionary containing the parameters, see [`CP.create_toml_dict()`](@ref).
+"""
+function get_microphysics_2m_p3_parameters(toml_dict::CP.ParamDict)
+    return (;
+        warm = microphys_2m_parameters(toml_dict),
+        cold = (;
+            params = CM.Parameters.ParametersP3(toml_dict; slope_law = :constant),
+            velocity_params = CM.Parameters.Chen2022VelType(toml_dict),
+        ),
+    )
+end
 
 function vert_diff_parameters(toml_dict)
     name_map = (; :C_E => :C_E, :H_diffusion => :H, :D_0_diffusion => :D₀)
@@ -243,7 +272,7 @@ TurbulenceConvectionParameters(
     TurbulenceConvectionParameters(CP.create_toml_dict(FT), overrides)
 
 function TurbulenceConvectionParameters(
-    toml_dict::CP.AbstractTOMLDict,
+    toml_dict::CP.ParamDict,
     overrides = NamedTuple(),
 )
     name_map = (;
@@ -279,6 +308,7 @@ function TurbulenceConvectionParameters(
             :pressure_normalmode_buoy_coeff1,
         :detr_inv_tau => :detr_inv_tau,
         :entr_inv_tau => :entr_inv_tau,
+        :entr_detr_limit_inv_tau => :entr_detr_limit_inv_tau,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     parameters = merge(parameters, overrides)
@@ -296,7 +326,7 @@ SurfaceTemperatureParameters(
     SurfaceTemperatureParameters(CP.create_toml_dict(FT), overrides)
 
 function SurfaceTemperatureParameters(
-    toml_dict::CP.AbstractTOMLDict,
+    toml_dict::CP.ParamDict,
     overrides = NamedTuple(),
 )
     name_map = (;

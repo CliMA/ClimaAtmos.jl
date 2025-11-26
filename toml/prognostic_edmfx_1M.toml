@@ -23,7 +23,7 @@ value = 0.1
 value = 0
 
 [detr_inv_tau]
-value = 0
+value = 0.0001
 
 [detr_coeff]
 value = 0

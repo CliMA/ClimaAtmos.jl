@@ -1,4 +1,4 @@
-260
+275
 
 # **README**
 #
@@ -20,6 +20,56 @@
 
 
 #=
+275
+- Change order of GPU calculations for better performance, but it
+  results in slightly different floating point rounding.  Artifacts
+  all look the same.
+
+274
+- Remove unused calculation of TKE exchange in mixing length
+
+273
+- Updated deps
+
+272
+- Remove contribution from tke exchange in mixing length
+
+271
+- Change float(dt) to FT(dt) to improve type stability
+
+270
+- Introduce double sided limiters for microphysics
+
+269
+- Use the same time scale parameter for entrainment and detrainment when area fraction
+  is negligible
+
+268
+- Updated deps, specifically SurfaceFluxes.jl
+
+267
+- Changed the pressure-gradient formulation to use the Exner function
+  and virtual potential temperature.
+
+266
+- No behavior change, but some new diagnostics are added, and the reference
+  simulations don't have those diagnostics for plotting
+
+265
+- Modify advection to discretely conserve vorticity
+
+264
+- Allow entrainment and detrainment when updraft area fraction is negligible
+
+263
+- Make vertical diffusion of updrafts implicit
+
+262
+- Add vertical diffusion to prognostic EDMF updrafts
+
+261
+- Ignore the implicit solver Jacobian for the tracer-density block from diffusion
+
 260
 - Change environment TKE to grid-mean TKE
 

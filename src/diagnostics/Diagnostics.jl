@@ -35,6 +35,7 @@ import ..NoPrecipitation
 import ..Microphysics0Moment
 import ..Microphysics1Moment
 import ..Microphysics2Moment
+import ..Microphysics2MomentP3
 
 # radiation
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
@@ -66,7 +67,7 @@ import ..turbulent_prandtl_number
 import ..smagorinsky_lilly_length
 import ..ᶜcompute_eddy_diffusivity_coefficient
 import ..ρa⁰
-import ..specific_tke
+import ..specific
 import ..ᶜspecific_env_value
 
 

@@ -39,6 +39,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2} <: ATCP
     pressure_normalmode_drag_coeff::FT
     entr_inv_tau::FT
     entr_coeff::FT
+    entr_detr_limit_inv_tau::FT
     detr_inv_tau::FT
     detr_coeff::FT
     detr_buoy_coeff::FT
@@ -69,6 +70,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     MP0M,
     MP1M,
     MP2M,
+    MP2MP3,
     SFP,
     TCP,
     STP,
@@ -82,6 +84,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     microphysics_0m_params::MP0M
     microphysics_1m_params::MP1M
     microphysics_2m_params::MP2M
+    microphysics_2mp3_params::MP2MP3
     surface_fluxes_params::SFP
     turbconv_params::TCP
     surface_temp_params::STP

@@ -169,10 +169,30 @@ function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     end
 end
 
+"""
+    get_smagorinsky_lilly_model(parsed_args)
+
+Get the Smagorinsky-Lilly turbulence model based on `parsed_args["smagorinsky_lilly"]`
+
+The possible model configurations flags are:
+- `UVW`: Applies the model to all spatial directions.
+- `UV`: Applies the model to the horizontal direction only.
+- `W`: Applies the model to the vertical direction only.
+- `UV_W`: Applies the model to the horizontal and vertical directions separately.
+"""
 function get_smagorinsky_lilly_model(parsed_args)
-    is_model_active = parsed_args["smagorinsky_lilly"]
+    smag = parsed_args["smagorinsky_lilly"]
+    isnothing(smag) && return nothing
+    smag_symbol = Symbol(smag)
+    @assert smag_symbol in (:UVW, :UV, :W, :UV_W)
+    return SmagorinskyLilly{smag_symbol}()
+end
+
+function get_amd_les_model(parsed_args, ::Type{FT}) where {FT}
+    is_model_active = parsed_args["amd_les"]
     @assert is_model_active in (true, false)
-    return is_model_active ? SmagorinskyLilly() : nothing
+    return is_model_active ? AnisotropicMinimumDissipation{FT}(parsed_args["c_amd"]) :
+           nothing
 end
 
 function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
@@ -325,6 +345,8 @@ function get_microphysics_model(parsed_args)
         Microphysics1Moment()
     elseif microphysics_model == "2M"
         Microphysics2Moment()
+    elseif microphysics_model == "2MP3"
+        Microphysics2MomentP3()
     else
         error("Invalid microphysics_model $(microphysics_model)")
     end
@@ -465,6 +487,10 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
        ("ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal")
         @assert parsed_args["config"] == "column" "ReanalysisTimeVarying and ReanalysisMonthlyAveragedDiurnal are only supported in column mode."
         @assert all(reanalysis_required_fields .== "ReanalysisTimeVarying") "All of external_forcing, surface_setup, surface_temperature and initial_condition must be set to ReanalysisTimeVarying."
+    end
+    if !isnothing(parsed_args["era5_diurnal_warming"])
+        @assert external_forcing == "ReanalysisMonthlyAveragedDiurnal" "era5_diurnal_warming is only supported for ReanalysisMonthlyAveragedDiurnal."
+        @assert parsed_args["era5_diurnal_warming"] isa Number "era5_diurnal_warming is expected to be a number, but was supplied as a $(typeof(parsed_args["era5_diurnal_warming"]))"
     end
     return if isnothing(external_forcing)
         nothing
@@ -629,6 +655,9 @@ function check_case_consistency(parsed_args)
     moist = parsed_args["moist"]
     ls_adv = parsed_args["ls_adv"]
     extf = parsed_args["external_forcing"]
+    imp_vert_diff = parsed_args["implicit_diffusion"]
+    vert_diff = parsed_args["vert_diff"]
+    turbconv = parsed_args["turbconv"]
 
     ISDAC_mandatory = (ic, subs, surf, rad, extf)
     if "ISDAC" in ISDAC_mandatory
@@ -637,6 +666,13 @@ function check_case_consistency(parsed_args)
             all(isnothing, (cor, forc, ls_adv)) &&
             moist != "dry",
             "ISDAC setup not consistent"
+        )
+    elseif imp_vert_diff
+        # Implicit vertical diffusion is only supported for specific models:
+        @assert(
+            !isnothing(turbconv) || !isnothing(vert_diff),
+            "Implicit vertical diffusion is only supported when using a " *
+            "turbulence convection model or vertical diffusion model.",
         )
     end
 end

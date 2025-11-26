@@ -55,6 +55,10 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         edmfx_nh_pressure_drag_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
+    if p.atmos.sgs_vertdiff_mode == Implicit()
+        edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    end
+
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
@@ -67,38 +71,16 @@ end
 
 # TODO: All of these should use dtγ instead of dt, but dtγ is not available in
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
-# TODO: Can we rewrite ᶠfct_boris_book and ᶠfct_zalesak so that their broadcast
-# expressions are less convoluted?
 
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ))))
 end
-function vertical_transport_precip_massflux(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(
-        -(ᶜprecip_massflux_divᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ))),
-    )
-end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))))
-end
-function vertical_transport_precip_massflux(
-    ᶜρ,
-    ᶠu³,
-    ᶜχ,
-    dt,
-    ::Val{:first_order},
-)
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(
-        -(ᶜprecip_massflux_divᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))),
-    )
 end
 @static if pkgversion(ClimaCore) ≥ v"0.14.22"
     function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
@@ -114,37 +96,6 @@ function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind3(ᶠu³, ᶜχ))))
 end
-function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:boris_book})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(
-        -(ᶜadvdivᵥ(
-            ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * (
-                ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_boris_book(
-                    ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
-                    ᶜχ / dt -
-                    ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
-                )
-            ),
-        )),
-    )
-end
-function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(
-        -(ᶜadvdivᵥ(
-            ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * (
-                ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_zalesak(
-                    ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
-                    ᶜχ / dt,
-                    ᶜχ / dt -
-                    ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
-                )
-            ),
-        )),
-    )
-end
 
 vertical_advection(ᶠu³, ᶜχ, ::Val{:none}) =
     @. lazy(-(ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
@@ -156,13 +107,14 @@ vertical_advection(ᶠu³, ᶜχ, ::Val{:third_order}) =
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; moisture_model, turbconv_model, rayleigh_sponge, microphysics_model) =
         p.atmos
-    (; dt) = p
+    (; params, dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶠu³, ᶜp, ᶜts) = p.precomputed
-    thermo_params = CAP.thermodynamics_params(p.params)
+    thermo_params = CAP.thermodynamics_params(params)
+    cp_d = CAP.cp_d(params)
     ᶜh_tot = @. lazy(
         TD.total_specific_enthalpy(
             thermo_params,
@@ -235,11 +187,28 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
+    if microphysics_model isa Microphysics2MomentP3
+        (; ρ, ρn_ice, ρq_rim, ρb_rim) = Y.c
+        ᶜwnᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwnᵢ))
+        ᶜwᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwᵢ))
+        ᶠρ = @. lazy(ᶠinterp(ρ * ᶜJ) / ᶠJ)
+
+        # Note: `ρq_ice` is handled above, in `moisture_model isa NonEquilMoistModel`
+        @. Yₜ.c.ρn_ice -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwnᵢ * specific(ρn_ice, ρ)))
+        @. Yₜ.c.ρq_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρq_rim, ρ)))
+        @. Yₜ.c.ρb_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρb_rim, ρ)))
+    end
 
     # TODO - decide if this needs to be explicit or implicit
     #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
-    @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ_ᶜΦ
+    # This is equivalent to grad_v(Φ) + grad_v(p) / ρ
+    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜts))
+    ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜts))
+    ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜts))
+    ᶜΠ = @. lazy(dry_exner_function(thermo_params, ᶜts))
+    @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) +
+                  cp_d * (ᶠinterp(ᶜθ_v - ᶜθ_vr)) * ᶠgradᵥ(ᶜΠ)
 
     if rayleigh_sponge isa RayleighSponge
         ᶠz = Fields.coordinate_field(Y.f).z

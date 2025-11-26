@@ -31,11 +31,6 @@ const ᶜadvdivᵥ = Operators.DivergenceF2C(
     top = Operators.SetValue(CT3(0)),
 )
 
-const ᶜprecip_massflux_divᵥ = Operators.DivergenceF2C(
-    bottom = Operators.SetDivergence(0),
-    top = Operators.SetValue(CT3(0)),
-)
-
 # Subsidence has extrapolated tendency at the top, and has no flux at the bottom.
 # TODO: This is not accurate and causes some issues at the domain top.
 const ᶜsubdivᵥ = Operators.DivergenceF2C(
@@ -82,14 +77,6 @@ const ᶠupwind1 = Operators.UpwindBiasedProductC2F()
 const ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
     bottom = Operators.ThirdOrderOneSided(),
     top = Operators.ThirdOrderOneSided(),
-)
-const ᶠfct_boris_book = Operators.FCTBorisBook(
-    bottom = Operators.FirstOrderOneSided(),
-    top = Operators.FirstOrderOneSided(),
-)
-const ᶠfct_zalesak = Operators.FCTZalesak(
-    bottom = Operators.FirstOrderOneSided(),
-    top = Operators.FirstOrderOneSided(),
 )
 @static if pkgversion(ClimaCore) ≥ v"0.14.22"
     const ᶠlin_vanleer = Operators.LinVanLeerC2F(

@@ -199,7 +199,7 @@ add_diagnostic_variable!(
     units = "s^-1",
     comments = "Vertical component of relative vorticity",
     compute! = (out, state, cache, time) -> begin
-        vort = @. w_component.(Geometry.WVector(curlₕ(cache.precomputed.ᶜu)))
+        vort = @. w_component.(Geometry.WVector(wcurlₕ(cache.precomputed.ᶜu)))
         # We need to ensure smoothness, so we call DSS
         Spaces.weighted_dss!(vort)
         if isnothing(out)
@@ -340,6 +340,46 @@ add_diagnostic_variable!(
         else
             out .= cache.precomputed.ᶜstrain_rate_norm
         end
+    end,
+)
+
+###
+# Smagorinsky Lilly diffusivity
+###
+add_diagnostic_variable!(
+    short_name = "Dh_smag",
+    long_name = "Horizontal smagorinsky diffusivity",
+    units = "m^2 s^-1",
+    compute! = (out, _, cache, _) -> begin
+        (; ᶜD_h) = cache.precomputed
+        isnothing(out) ? copy(ᶜD_h) : (out .= ᶜD_h)
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "Dv_smag",
+    long_name = "Vertical smagorinsky diffusivity",
+    units = "m^2 s^-1",
+    compute! = (out, _, cache, _) -> begin
+        (; ᶜD_v) = cache.precomputed
+        isnothing(out) ? copy(ᶜD_v) : (out .= ᶜD_v)
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "strainh_smag",
+    long_name = "Horizontal strain rate magnitude (for Smagorinsky)",
+    units = "s",
+    compute! = (out, state, cache, _) -> begin
+        (; ᶜS_norm_h) = cache.precomputed
+        isnothing(out) ? copy(ᶜS_norm_h) : (out .= ᶜS_norm_h)
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "strainv_smag",
+    long_name = "Vertical strain rate magnitude (for Smagorinsky)",
+    units = "s",
+    compute! = (out, state, cache, _) -> begin
+        (; ᶜS_norm_v) = cache.precomputed
+        isnothing(out) ? copy(ᶜS_norm_v) : (out .= ᶜS_norm_v)
     end,
 )
 
@@ -721,6 +761,96 @@ add_diagnostic_variable!(
 )
 
 ###
+# Latent heat flux (2d)
+###
+compute_hfls!(out, state, cache, time) =
+    compute_hfls!(out, state, cache, time, cache.atmos.moisture_model)
+compute_hfls!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("hfls", model)
+
+function compute_hfls!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    (; ρ_flux_q_tot) = cache.precomputed.sfc_conditions
+    (; surface_ct3_unit) = cache.core
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    LH_v0 = TD.Parameters.LH_v0(thermo_params)
+
+    if isnothing(out)
+        return dot.(ρ_flux_q_tot, surface_ct3_unit) .* LH_v0
+    else
+        out .= dot.(ρ_flux_q_tot, surface_ct3_unit) .* LH_v0
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "hfls",
+    long_name = "Surface Upward Latent Heat Flux",
+    standard_name = "surface_upward_latent_heat_flux",
+    units = "W m^-2",
+    compute! = compute_hfls!,
+)
+
+###
+# Sensible heat flux (2d)
+###
+compute_hfss!(out, state, cache, time) =
+    compute_hfss!(out, state, cache, time, cache.atmos.moisture_model)
+compute_hfss!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("hfss", model)
+
+function compute_hfss!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: DryModel}
+    (; ρ_flux_h_tot) = cache.precomputed.sfc_conditions
+    (; surface_ct3_unit) = cache.core
+
+    if isnothing(out)
+        return dot.(ρ_flux_h_tot, surface_ct3_unit)
+    else
+        out .= dot.(ρ_flux_h_tot, surface_ct3_unit)
+    end
+end
+
+function compute_hfss!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    (; ρ_flux_h_tot, ρ_flux_q_tot) = cache.precomputed.sfc_conditions
+    (; surface_ct3_unit) = cache.core
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    LH_v0 = TD.Parameters.LH_v0(thermo_params)
+
+    if isnothing(out)
+        return dot.(ρ_flux_h_tot, surface_ct3_unit) .-
+               dot.(ρ_flux_q_tot, surface_ct3_unit) .* LH_v0
+    else
+        out .=
+            dot.(ρ_flux_h_tot, surface_ct3_unit) .-
+            dot.(ρ_flux_q_tot, surface_ct3_unit) .* LH_v0
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "hfss",
+    long_name = "Surface Upward Sensible Heat Flux",
+    standard_name = "surface_upward_sensible_heat_flux",
+    units = "W m^-2",
+    compute! = compute_hfss!,
+)
+
+###
 # Precipitation (2d)
 ###
 compute_pr!(out, state, cache, time) =
@@ -738,6 +868,7 @@ function compute_pr!(
         Microphysics0Moment,
         Microphysics1Moment,
         Microphysics2Moment,
+        Microphysics2MomentP3,
     },
 )
     if isnothing(out)
@@ -774,6 +905,7 @@ function compute_prra!(
         Microphysics0Moment,
         Microphysics1Moment,
         Microphysics2Moment,
+        Microphysics2MomentP3,
     },
 )
     if isnothing(out)
@@ -807,6 +939,7 @@ function compute_prsn!(
         Microphysics0Moment,
         Microphysics1Moment,
         Microphysics2Moment,
+        Microphysics2MomentP3,
     },
 )
     if isnothing(out)
@@ -838,7 +971,9 @@ function compute_husra!(
     state,
     cache,
     time,
-    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{
+        Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3,
+    },
 )
     if isnothing(out)
         return state.c.ρq_rai ./ state.c.ρ
@@ -869,7 +1004,9 @@ function compute_hussn!(
     state,
     cache,
     time,
-    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{
+        Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3,
+    },
 )
     if isnothing(out)
         return state.c.ρq_sno ./ state.c.ρ
@@ -900,7 +1037,7 @@ function compute_cdnc!(
     state,
     cache,
     time,
-    microphysics_model::Microphysics2Moment,
+    microphysics_model::Union{Microphysics2Moment, Microphysics2MomentP3},
 )
     if isnothing(out)
         return state.c.ρn_liq
@@ -931,7 +1068,7 @@ function compute_ncra!(
     state,
     cache,
     time,
-    microphysics_model::Microphysics2Moment,
+    microphysics_model::Union{Microphysics2Moment, Microphysics2MomentP3},
 )
     if isnothing(out)
         return state.c.ρn_rai
@@ -1554,7 +1691,7 @@ function compute_rwp!(
     cache,
     time,
     moisture_model::T,
-) where {T <: Union{Microphysics1Moment, Microphysics2Moment}}
+) where {T <: Union{Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3}}
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         rw = cache.scratch.ᶜtemp_scalar

@@ -7,7 +7,7 @@ state vector `Y`.
 This function follows a sequence:
 1. Prepares hyperdiffusion tendencies for tracers (stored in `Yₜ_lim`).
 2. Prepares hyperdiffusion tendencies for other state variables (e.g., momentum, energy, stored in `Yₜ`).
-3. If Direct Stiffness Summation (DSS) is required and hyperdiffusion is active, performs DSS on the 
+3. If Direct Stiffness Summation (DSS) is required and hyperdiffusion is active, performs DSS on the
    prepared hyperdiffusion tendencies.
 4. Applies the (potentially DSSed) hyperdiffusion tendencies to `Yₜ_lim` and `Yₜ`.
 
@@ -290,6 +290,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     if p.atmos.sgs_nh_pressure_mode == Explicit()
         edmfx_nh_pressure_drag_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
+    if p.atmos.sgs_vertdiff_mode == Explicit()
+        edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    end
     edmfx_filter_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
@@ -349,7 +352,15 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
     vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
 
-    # NOTE: This will zero out all momentum tendencies in the EDMFX advection test, 
+    amd = p.atmos.amd_les
+    horizontal_amd_tendency!(Yₜ, Y, p, t, amd)
+    vertical_amd_tendency!(Yₜ, Y, p, t, amd)
+
+    # Optional tendency to bring negative small tracers back from negative
+    # at the cost of water vapor.
+    moisture_fixer_tendency!(Yₜ, Y, p, t, moisture_model, microphysics_model)
+
+    # NOTE: This will zero out all momentum tendencies in the EDMFX advection test,
     # where velocities do not evolve
     # DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)

@@ -449,7 +449,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
-    dt = float(dt)
+    dt = FT(dt)
     (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
     (; ᶜp, ᶠu³, ᶜts, ᶜK) = p.precomputed
     (;
@@ -505,7 +505,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         ),
     )
 
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, Y.c.ρ, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
 
     for i in 2:Spaces.nlevels(axes(Y.c))
         ρ_level = Fields.field_values(Fields.level(Y.c.ρ, i))
@@ -1376,8 +1376,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     # TODO: Currently the shear production only includes vertical gradients
     ᶠu = p.scratch.ᶠtemp_C123
     @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-    ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
-    ᶜstrain_rate .= compute_strain_rate_center(ᶠu)
+    ᶜstrain_rate = compute_strain_rate_center_vertical(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
