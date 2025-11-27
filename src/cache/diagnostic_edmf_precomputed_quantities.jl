@@ -1367,9 +1367,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
         moisture_model,
         ᶜts,
         C3,
-        p.precomputed.ᶜgradᵥ_θ_virt,    # ∂θv∂z_unsat
-        p.precomputed.ᶜgradᵥ_q_tot,     # ∂qt∂z_sat
-        p.precomputed.ᶜgradᵥ_θ_liq_ice, # ∂θl∂z_sat
+        p.precomputed.ᶜgradᵥ_q_tot,
+        p.precomputed.ᶜgradᵥ_θ_liq_ice,
         ᶜlg,
     )
 

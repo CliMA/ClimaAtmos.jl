@@ -15,7 +15,6 @@ import ClimaCore.Fields as Fields
         # Arguments for the first method (most commonly called):
         ts::TD.ThermodynamicState,
         ::Type{C3}, # Covariant3 vector type, for projecting gradients
-        ∂θv∂z_unsat::AbstractField, # Vertical gradient of virtual potential temperature in unsaturated part
         ∂qt∂z_sat::AbstractField,   # Vertical gradient of total specific humidity in saturated part
         ∂θli∂z_sat::AbstractField,   # Vertical gradient of liquid-ice potential temperature in saturated part
         local_geometry::Fields.LocalGeometry,
@@ -50,7 +49,6 @@ Arguments:
 - `moisture_model`: Moisture model (e.g., `EquilMoistModel`, `NonEquilMoistModel`).
 - `ts`: Center-level thermodynamic state of the environment.
 - `C3`: The `ClimaCore.Geometry.Covariant3Vector` type, used for projecting input vertical gradients.
-- `∂θv∂z_unsat`: Field of vertical gradients of virtual potential temperature in the unsaturated part.
 - `∂qt∂z_sat`: Field of vertical gradients of total specific humidity in the saturated part.
 - `∂θli∂z_sat`: Field of vertical gradients of liquid-ice potential temperature in the saturated part.
 - `local_geometry`: Field of local geometry at cell centers, used for gradient projection.
@@ -66,8 +64,8 @@ function buoyancy_gradients(
     thermo_params,
     moisture_model,
     ts,
+    cf,
     ::Type{C3},
-    ∂θv∂z_unsat,
     ∂qt∂z_sat,
     ∂θli∂z_sat,
     ᶜlg,
@@ -78,9 +76,9 @@ function buoyancy_gradients(
         moisture_model,
         EnvBuoyGradVars(
             ts,
+            cf,
             projected_vector_buoy_grad_vars(
                 C3,
-                ∂θv∂z_unsat,
                 ∂qt∂z_sat,
                 ∂θli∂z_sat,
                 ᶜlg,
@@ -99,13 +97,10 @@ function buoyancy_gradients(
 
     g = TDP.grav(thermo_params)
     Rv_over_Rd = TDP.Rv_over_Rd(thermo_params)
-    R_d = TDP.R_d(thermo_params)
     R_v = TDP.R_v(thermo_params)
 
     ts = bg_model.ts
-    p = TD.air_pressure(thermo_params, ts)
-    Π = TD.exner_given_pressure(thermo_params, p)
-    ∂b∂θv = g * (R_d * TD.air_density(thermo_params, ts) / p) * Π
+    ∂b∂θv = g / TD.virtual_pottemp(thermo_params, ts)
 
     t_sat = TD.air_temperature(thermo_params, ts)
     λ = TD.liquid_fraction(thermo_params, ts)
@@ -115,20 +110,25 @@ function buoyancy_gradients(
     cp_m = TD.cp_m(thermo_params, ts)
     qv_sat = TD.vapor_specific_humidity(thermo_params, ts)
     qt_sat = TD.total_specific_humidity(thermo_params, ts)
+    θ = TD.dry_pottemp(thermo_params, ts)
+    ∂b∂θli_unsat = ∂b∂θv * (1 + (Rv_over_Rd - 1) * qt_sat)
+    ∂b∂qt_unsat = ∂b∂θv * (Rv_over_Rd - 1) * θ
     ∂b∂θli_sat = (
         ∂b∂θv *
         (1 + Rv_over_Rd * (1 + lh / R_v / t_sat) * qv_sat - qt_sat) /
-        (1 + lh * lh / cp_m / R_v / t_sat / t_sat * qv_sat)
+        (1 + lh^2 / cp_m / R_v / t_sat^2 * qv_sat)
     )
     ∂b∂qt_sat =
         (lh / cp_m / t_sat * ∂b∂θli_sat - ∂b∂θv) *
-        TD.dry_pottemp(thermo_params, ts)
+        θ
 
     ∂b∂z = buoyancy_gradient_chain_rule(
         ebgc,
         bg_model,
         thermo_params,
         ∂b∂θv,
+        ∂b∂θli_unsat,
+        ∂b∂qt_unsat,
         ∂b∂θli_sat,
         ∂b∂qt_sat,
     )
@@ -177,15 +177,19 @@ function buoyancy_gradient_chain_rule(
     bg_model::EnvBuoyGradVars,
     thermo_params,
     ∂b∂θv,
+    ∂b∂θli_unsat,
+    ∂b∂qt_unsat,
     ∂b∂θli_sat,
     ∂b∂qt_sat,
 )
     en_cld_frac = ifelse(TD.has_condensate(thermo_params, bg_model.ts), 1, 0)
 
+    ∂b∂z_θli_unsat = ∂b∂θli_unsat * bg_model.∂θli∂z_sat
+    ∂b∂z_qt_unsat = ∂b∂qt_unsat * bg_model.∂qt∂z_sat
+    ∂b∂z_unsat = ∂b∂z_θli_unsat + ∂b∂z_qt_unsat
     ∂b∂z_θl_sat = ∂b∂θli_sat * bg_model.∂θli∂z_sat
     ∂b∂z_qt_sat = ∂b∂qt_sat * bg_model.∂qt∂z_sat
     ∂b∂z_sat = ∂b∂z_θl_sat + ∂b∂z_qt_sat
-    ∂b∂z_unsat = ∂b∂θv * bg_model.∂θv∂z_unsat
 
     ∂b∂z = (1 - en_cld_frac) * ∂b∂z_unsat + en_cld_frac * ∂b∂z_sat
 
