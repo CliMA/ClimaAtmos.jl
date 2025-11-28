@@ -158,13 +158,29 @@ function to_z_levels(source_file, target_file, target_levels, FT)
     end
 
     # Write 2D surface variables - extend to all levels (TODO: accept 2D variables in atmos)
-    # Simply repeat the surface values for all levels
-    surf_map = Dict("skt" => "skt", "sp" => "p")
+    # Duplicate 2D surface field across all target vertical levels
+    surf_map = Dict("skt" => "skt", "sp" => "p", "surface_geopotential" => "z_sfc")
     for (src_name, dst_name) in surf_map
-        var_obj =
-            defVar(ncout, dst_name, FT, ("lon", "lat", "z"), attrib = ncin[src_name].attrib)
+        # Choose attributes; for z_sfc, set clean altitude attributes
+        var_attrib = if dst_name == "z_sfc"
+            Dict(
+                "standard_name" => "surface_altitude",
+                "long_name" => "surface altitude derived from ERA5",
+                "units" => "m",
+                "source_variable" => src_name,
+            )
+        else
+            ncin[src_name].attrib
+        end
+        var_obj = defVar(ncout, dst_name, FT, ("lon", "lat", "z"), attrib = var_attrib)
+        # Read first time slice and coalesce; follow same convention as sp (use [:, :, 1])
+        data2d = FT.(coalesce.(ncin[src_name][:, :, 1], NaN))
+        # Convert geopotential to meters if necessary
+        if dst_name == "z_sfc"
+            data2d .= data2d ./ grav
+        end
         for k in 1:length(target_levels)
-            var_obj[:, :, k] = FT.(ncin[src_name][:, :, 1])
+            var_obj[:, :, k] = data2d
         end
     end
 
