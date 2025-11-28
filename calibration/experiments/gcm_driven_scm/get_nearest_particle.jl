@@ -15,16 +15,19 @@ include("helper_funcs.jl")
 
 
 # output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_43" # path to calibration output
-output_dir = "/central/scratch/cchristo/edmf_impl_dev3/exp11" # path to calibration output
-iteration = 5
-prefix = ""
+output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/output_progedmf_cal_v1/exp12" # path to calibration output
+iteration = 4
+prefix = "prog_1M"
 
 
-# write_optimal_toml_dir = "./calibrated_tomls/pert_pres"
-# param_overrides_path = "./scm_tomls/prognostic_edmfx.toml"
+
+# write_optimal_toml_dir = "./scm_runner/optimal_tomls"
+# param_overrides_path = "./scm_tomls/diagnostic_edmfx.toml"
 
 write_optimal_toml_dir = "./scm_runner/optimal_tomls"
 param_overrides_path = "./scm_tomls/prognostic_edmfx.toml"
+
+
 
 
 const config_dict =
@@ -70,7 +73,7 @@ param_overrides = TOML.parsefile(param_overrides_path)
 merged_params = merge(param_nearest, param_overrides)
 
 # write optimal toml to file 
-exp_match = match(r"exp_(\d+)", output_dir)
+exp_match = match(r"exp(\d+)", output_dir)
 exp_number =
     exp_match !== nothing ? "exp" * exp_match.captures[1] : "exp_unknown"
 file_name = "parameters_nearest_neig_particle_i$(iteration)_m$(col_index)_$(exp_number)$(prefix).toml"

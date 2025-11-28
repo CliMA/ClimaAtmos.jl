@@ -135,7 +135,7 @@ JLD2.jldsave(
 )
 
 ### get LES obs (Y) and norm factors
-ref_paths, _ = get_les_calibration_library()
+ref_paths, _ = get_les_calibration_library(max_cases = 10, models = "HadGEM2-A")
 obs_vec = []
 
 for ref_path in ref_paths
