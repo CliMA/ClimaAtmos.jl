@@ -86,6 +86,8 @@ end
     function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
         ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
         ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+        FT = eltype(ᶠJ)
+        dt = FT(dt)
         return @. lazy(
             -(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠlin_vanleer(ᶠu³, ᶜχ, dt))),
         )
