@@ -274,9 +274,10 @@ function surface_state_to_conditions(
                 interior_values,
                 surface_values,
                 parameterization.z0m,
-                parameterization.z0b,
+                parameterization.z0b;
                 gustiness,
                 beta,
+                roughness_model=SF.ScalarRoughness(),
             )
         else
             if parameterization.fluxes isa HeatFluxes
