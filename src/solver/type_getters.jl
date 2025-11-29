@@ -14,6 +14,13 @@ import ClimaUtilities.TimeManager: ITime
 
 import ClimaDiagnostics
 
+"""
+    get_atmos(config::AtmosConfig, params)::AtmosModel
+
+Create an `AtmosModel` from the configuration and parameters.
+
+Use [`AtmosConfig`](@ref) to create a configuration.
+"""
 function get_atmos(config::AtmosConfig, params)
     (; turbconv_params) = params
     (; parsed_args) = config
@@ -42,15 +49,13 @@ function get_atmos(config::AtmosConfig, params)
         @warn "Running simulations without any precipitation formation."
     end
 
-    implicit_noneq_cloud_formation =
-        parsed_args["implicit_noneq_cloud_formation"]
+    implicit_noneq_cloud_formation = parsed_args["implicit_noneq_cloud_formation"]
     @assert implicit_noneq_cloud_formation in (true, false)
 
     ozone = get_ozone(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
-    call_cloud_diagnostics_per_stage =
-        get_call_cloud_diagnostics_per_stage(parsed_args)
+    call_cloud_diagnostics_per_stage = get_call_cloud_diagnostics_per_stage(parsed_args)
 
     if isnothing(ozone) && radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         @warn "prescribe_ozone is set to nothing with an RRTMGP model. Resetting to IdealizedOzone. This behavior will stop being supported in some future release"
@@ -59,21 +64,17 @@ function get_atmos(config::AtmosConfig, params)
     co2 = get_co2(parsed_args)
     with_rrtmgp = radiation_mode isa RRTMGPI.AbstractRRTMGPMode
     if with_rrtmgp && isnothing(co2)
-        @warn (
-            "co2_model set to nothing with an RRTMGP model. Resetting to FixedCO2"
-        )
+        @warn("co2_model set to nothing with an RRTMGP model. Resetting to FixedCO2")
         co2 = FixedCO2()
     end
-    (!isnothing(co2) && !with_rrtmgp) &&
-        @warn ("$(co2) does nothing if RRTMGP is not used")
+    (!isnothing(co2) && !with_rrtmgp) && @warn("$(co2) does nothing if RRTMGP is not used")
 
     # HeldSuarezForcing can be set via radiation_mode or legacy forcing option for now
     final_radiation_mode =
         forcing_type isa HeldSuarezForcing ? forcing_type : radiation_mode
     # Note: when disable_momentum_vertical_diffusion is true, the surface flux tendency
     # for momentum is not applied.
-    disable_momentum_vertical_diffusion =
-        final_radiation_mode isa HeldSuarezForcing
+    disable_momentum_vertical_diffusion = final_radiation_mode isa HeldSuarezForcing
 
     advection_test = parsed_args["advection_test"]
     @assert advection_test in (false, true)
@@ -108,10 +109,7 @@ function get_atmos(config::AtmosConfig, params)
     )
 
     vertical_diffusion = get_vertical_diffusion_model(
-        disable_momentum_vertical_diffusion,
-        parsed_args,
-        params,
-        FT,
+        disable_momentum_vertical_diffusion, parsed_args, params, FT,
     )
 
     atmos = AtmosModel(;
@@ -151,13 +149,9 @@ function get_atmos(config::AtmosConfig, params)
 
         # AtmosGravityWave
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
-            parsed_args,
-            FT,
+            parsed_args, FT,
         ),
-        orographic_gravity_wave = get_orographic_gravity_wave_model(
-            parsed_args,
-            FT,
-        ),
+        orographic_gravity_wave = get_orographic_gravity_wave_model(parsed_args, FT),
 
         # AtmosSponge
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
@@ -191,6 +185,11 @@ function get_scale_blending_method(parsed_args)
     end
 end
 
+"""
+    get_numerics(parsed_args, FT)
+
+Returns the model numerics
+"""
 function get_numerics(parsed_args, FT)
     test_dycore =
         parsed_args["test_dycore_consistency"] ? TestDycoreConsistency() :
@@ -203,19 +202,21 @@ function get_numerics(parsed_args, FT)
     if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
        energy_q_tot_upwinding == Val(:vanleer_limiter)
         energy_q_tot_upwinding = Val(:none)
-        @warn "energy_q_tot_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting energy_q_tot_upwinding to :none"
+        @warn "energy_q_tot_upwinding=vanleer_limiter is not supported for ClimaCore \
+               $(pkgversion(ClimaCore)), please upgrade.\
+               Setting energy_q_tot_upwinding to :none"
     end
     if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
        tracer_upwinding == Val(:vanleer_limiter)
         tracer_upwinding = Val(:none)
-        @warn "tracer_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting tracer_upwinding to :none"
+        @warn "tracer_upwinding=vanleer_limiter is not supported for ClimaCore \
+               $(pkgversion(ClimaCore)), please upgrade.\
+               Setting tracer_upwinding to :none"
     end
 
     edmfx_mse_q_tot_upwinding = Val(Symbol(parsed_args["edmfx_mse_q_tot_upwinding"]))
-    edmfx_sgsflux_upwinding =
-        Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
-    edmfx_tracer_upwinding =
-        Val(Symbol(parsed_args["edmfx_tracer_upwinding"]))
+    edmfx_sgsflux_upwinding = Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
+    edmfx_tracer_upwinding = Val(Symbol(parsed_args["edmfx_tracer_upwinding"]))
 
     limiter = parsed_args["apply_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
@@ -225,11 +226,8 @@ function get_numerics(parsed_args, FT)
     hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
 
     numerics = AtmosNumerics(;
-        energy_q_tot_upwinding,
-        tracer_upwinding,
-        edmfx_mse_q_tot_upwinding,
-        edmfx_sgsflux_upwinding,
-        edmfx_tracer_upwinding,
+        energy_q_tot_upwinding, tracer_upwinding,
+        edmfx_mse_q_tot_upwinding, edmfx_sgsflux_upwinding, edmfx_tracer_upwinding,
         limiter,
         test_dycore_consistency = test_dycore,
         diff_mode,
@@ -240,6 +238,12 @@ function get_numerics(parsed_args, FT)
     return numerics
 end
 
+"""
+    get_spaces(parsed_args, params, comms_ctx)
+
+Returns a `NamedTuple` with spaces and mesh information for the model.
+Called by [`get_simulation`](@ref) during model initialization.
+"""
 function get_spaces(parsed_args, params, comms_ctx)
 
     FT = eltype(params)
@@ -255,8 +259,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         nh_poly = parsed_args["nh_poly"]
         quad = Quadratures.GLL{nh_poly + 1}()
         horizontal_mesh = cubed_sphere_mesh(; radius, h_elem)
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
+        h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
         z_stretch = if parsed_args["z_stretch"]
             Meshes.HyperbolicTangentStretching(dz_bottom)
         else
@@ -266,20 +269,16 @@ function get_spaces(parsed_args, params, comms_ctx)
     elseif parsed_args["config"] == "column" # single column
         @warn "perturb_initstate flag is ignored for single column configuration"
         FT = eltype(params)
-        Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
+        x_max = y_max = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
         quad = Quadratures.GL{1}()
-        horizontal_mesh = periodic_rectangle_mesh(;
-            x_max = Δx,
-            y_max = Δx,
-            x_elem = 1,
-            y_elem = 1,
-        )
+        horizontal_mesh =
+            periodic_rectangle_mesh(; x_max, y_max, x_elem = 1, y_elem = 1)
         if bubble
-            @warn "Bubble correction not compatible with single column configuration. It will be switched off."
+            @warn "Bubble correction not compatible with single column configuration. \
+                   It will be switched off."
             bubble = false
         end
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
+        h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
         z_stretch = if parsed_args["z_stretch"]
             Meshes.HyperbolicTangentStretching(dz_bottom)
         else
@@ -294,14 +293,8 @@ function get_spaces(parsed_args, params, comms_ctx)
         x_max = FT(parsed_args["x_max"])
         y_elem = Int(parsed_args["y_elem"])
         y_max = FT(parsed_args["y_max"])
-        horizontal_mesh = periodic_rectangle_mesh(;
-            x_max = x_max,
-            y_max = y_max,
-            x_elem = x_elem,
-            y_elem = y_elem,
-        )
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
+        horizontal_mesh = periodic_rectangle_mesh(; x_max, y_max, x_elem, y_elem)
+        h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
         z_stretch = if parsed_args["z_stretch"]
             Meshes.HyperbolicTangentStretching(dz_bottom)
         else
@@ -314,10 +307,8 @@ function get_spaces(parsed_args, params, comms_ctx)
         quad = Quadratures.GLL{nh_poly + 1}()
         x_elem = Int(parsed_args["x_elem"])
         x_max = FT(parsed_args["x_max"])
-        horizontal_mesh =
-            periodic_line_mesh(; x_max = x_max, x_elem = x_elem)
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
+        horizontal_mesh = periodic_line_mesh(; x_max, x_elem)
+        h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
         z_stretch = if parsed_args["z_stretch"]
             Meshes.HyperbolicTangentStretching(dz_bottom)
         else
@@ -332,15 +323,7 @@ function get_spaces(parsed_args, params, comms_ctx)
     Nq = Quadratures.degrees_of_freedom(quad_style)
 
     @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
-    return (;
-        center_space,
-        face_space,
-        horizontal_mesh,
-        quad,
-        z_max,
-        z_elem,
-        z_stretch,
-    )
+    return (; center_space, face_space, horizontal_mesh, quad, z_max, z_elem, z_stretch)
 end
 
 function get_spaces_restart(Y)
@@ -435,9 +418,7 @@ function get_initial_condition(parsed_args, atmos)
             parsed_args["era5_initial_condition_dir"],
         )
     else
-        error(
-            "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
-        )
+        error("Unknown `initial_condition`: $(parsed_args["initial_condition"])")
     end
 end
 
@@ -470,8 +451,7 @@ function get_steady_state_velocity(params, Y, parsed_args)
     @info "Approximating steady-state velocity"
     s = @timed_str begin
         ᶜu = steady_state_velocity.(topo, params, Fields.coordinate_field(Y.c), z_top)
-        ᶠu =
-            steady_state_velocity.(topo, params, Fields.coordinate_field(Y.f), z_top)
+        ᶠu = steady_state_velocity.(topo, params, Fields.coordinate_field(Y.f), z_top)
     end
     @info "Steady-state velocity approximation completed: $s"
     return (; ᶜu, ᶠu)
@@ -479,8 +459,7 @@ end
 
 function get_surface_setup(parsed_args)
     parsed_args["surface_setup"] == "GCM" && return SurfaceConditions.GCMDriven(
-        parsed_args["external_forcing_file"],
-        parsed_args["cfsite_number"],
+        parsed_args["external_forcing_file"], parsed_args["cfsite_number"],
     )
 
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
@@ -513,11 +492,11 @@ function get_jacobian(ode_algo, Y, atmos, parsed_args)
     return Jacobian(jacobian_algorithm, Y, atmos; verbose)
 end
 
-#=
-    ode_configuration(Y, parsed_args)
+"""
+    ode_configuration(::Type{FT}, parsed_args)
 
 Returns the ode algorithm
-=#
+"""
 function ode_configuration(::Type{FT}, parsed_args) where {FT}
     ode_name = parsed_args["ode_algo"]
     ode_algo_name = getproperty(CTS, Symbol(ode_name))
@@ -547,9 +526,7 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
             krylov_method = if parsed_args["use_krylov_method"]
                 CTS.KrylovMethod(;
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;
-                        step_adjustment = FT(
-                            parsed_args["jvp_step_adjustment"],
-                        ),
+                        step_adjustment = FT(parsed_args["jvp_step_adjustment"]),
                     ),
                     forcing_term = if parsed_args["use_dynamic_krylov_rtol"]
                         α = FT(parsed_args["eisenstat_walker_forcing_alpha"])
@@ -562,9 +539,7 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
                 nothing
             end,
             convergence_checker = if parsed_args["use_newton_rtol"]
-                norm_condition = CTS.MaximumRelativeError(
-                    FT(parsed_args["newton_rtol"]),
-                )
+                norm_condition = CTS.MaximumRelativeError(FT(parsed_args["newton_rtol"]))
                 CTS.ConvergenceChecker(; norm_condition)
             else
                 nothing
@@ -576,8 +551,7 @@ end
 
 thermo_state_type(::DryModel, ::Type{FT}) where {FT} = TD.PhaseDry{FT}
 thermo_state_type(::EquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseEquil{FT}
-thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
-    TD.PhaseNonEquil{FT}
+thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseNonEquil{FT}
 
 auto_detect_restart_file(::OutputPathGenerator.OutputPathGeneratorStyle, _) =
     error("auto_detect_restart_file works only with ActiveLink")
@@ -593,10 +567,7 @@ names for output folders generated by `ActiveLinkStyle` and for restart files
 means that the simulation cannot be automatically restarted. If a folder is found, look
 inside it and return the latest restart file (latest measured by the time in the file name).
 """
-function auto_detect_restart_file(
-    output_dir_style::OutputPathGenerator.ActiveLinkStyle,
-    base_output_dir,
-)
+function auto_detect_restart_file(::OutputPathGenerator.ActiveLinkStyle, base_output_dir)
     # if base_output_dir does not exist, we return restart_file = nothing because there is
     # no restart file to be detected
     isdir(base_output_dir) || return nothing
@@ -606,8 +577,7 @@ function auto_detect_restart_file(
     restart_file_rx = r"day\d+\.\w+\.hdf5"
     restart_file = nothing
 
-    existing_outputs =
-        filter(x -> !isnothing(match(name_rx, x)), readdir(base_output_dir))
+    existing_outputs = filter(x -> !isnothing(match(name_rx, x)), readdir(base_output_dir))
 
     isempty(existing_outputs) && return nothing
 
@@ -627,6 +597,12 @@ function auto_detect_restart_file(
     return restart_file
 end
 
+"""
+    get_sim_info(config::AtmosConfig)
+
+Return a `NamedTuple` containing information about the simulation,
+including the output directory, restart file, job ID, and time information.
+"""
 function get_sim_info(config::AtmosConfig)
     (; comms_ctx, parsed_args) = config
     FT = eltype(config)
@@ -669,16 +645,15 @@ function get_sim_info(config::AtmosConfig)
     if comms_ctx isa ClimaComms.SingletonCommsContext
         @info "Setting up single-process ClimaAtmos run"
     else
-        @info "Setting up distributed ClimaAtmos run" nprocs =
-            ClimaComms.nprocs(comms_ctx)
+        @info "Setting up distributed ClimaAtmos run" nprocs = ClimaComms.nprocs(comms_ctx)
     end
 
-    isnothing(restart_file) ||
-        @info "Restarting simulation from file $restart_file"
+    isnothing(restart_file) || @info "Restarting simulation from file $restart_file"
     epoch = parse_date(parsed_args["start_date"])
     t_start_int = time_to_seconds(parsed_args["t_start"])
     if !isnothing(restart_file) && t_start_int != 0
-        @warn "Non zero `t_start` passed with a restarting simulation. The provided `t_start` will be ignored."
+        @warn "Non zero `t_start` passed with a restarting simulation.\
+               The provided `t_start` will be ignored."
     end
     if parsed_args["use_itime"]
         dt = ITime(time_to_seconds(parsed_args["dt"]))
@@ -692,14 +667,9 @@ function get_sim_info(config::AtmosConfig)
         t_end = FT(time_to_seconds(parsed_args["t_end"]))
     end
     sim = (;
-        output_dir,
-        restart = !isnothing(restart_file),
-        restart_file,
-        job_id,
-        dt = dt,
-        start_date = epoch,
-        t_start = t_start,
-        t_end = t_end,
+        output_dir, job_id,
+        restart = !isnothing(restart_file), restart_file,
+        dt, start_date = epoch, t_start, t_end,
     )
     n_steps = floor(Int, (sim.t_end - sim.t_start) / sim.dt)
     @info(
@@ -737,24 +707,35 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     saveat = [t_begin, t_end]
     args = (problem, ode_algo)
     allow_custom_kwargs = (; kwargshandle = CTS.DiffEqBase.KeywordArgSilent)
-    kwargs =
-        (; saveat, callback, dt, adjustfinal = true, allow_custom_kwargs...)
+    kwargs = (; saveat, callback, dt, adjustfinal = true, allow_custom_kwargs...)
     return (args, kwargs)
 end
 
 import ClimaComms, Logging, NVTX
+
+"""
+    get_comms_context(parsed_args)
+
+Returns the comms context for the simulation based on the value of `parsed_args["device"]`.
+
+The possible values for `parsed_args["device"]` are:
+- "auto": use the device specified in the environment variable `CLIMACOMMS_DEVICE`
+- "CUDADevice": use the CUDA device
+- "CPUMultiThreaded": use the CPU device with multiple threads
+- "CPUSingleThreaded": use the CPU device with a single thread
+
+There is also special handling for buildkite builds.
+"""
 function get_comms_context(parsed_args)
-    device =
-        if !haskey(parsed_args, "device") || parsed_args["device"] === "auto"
-            ClimaComms.device()
-        elseif parsed_args["device"] == "CUDADevice"
-            ClimaComms.CUDADevice()
-        elseif parsed_args["device"] == "CPUMultiThreaded" ||
-               Threads.nthreads() > 1
-            ClimaComms.CPUMultiThreaded()
-        else
-            ClimaComms.CPUSingleThreaded()
-        end
+    device = if !haskey(parsed_args, "device") || parsed_args["device"] === "auto"
+        ClimaComms.device()
+    elseif parsed_args["device"] == "CUDADevice"
+        ClimaComms.CUDADevice()
+    elseif parsed_args["device"] == "CPUMultiThreaded" || Threads.nthreads() > 1
+        ClimaComms.CPUMultiThreaded()
+    else
+        ClimaComms.CPUSingleThreaded()
+    end
     comms_ctx = ClimaComms.context(device)
     ClimaComms.init(comms_ctx)
 
@@ -770,6 +751,15 @@ function get_comms_context(parsed_args)
     return comms_ctx
 end
 
+"""
+    get_simulation(config::AtmosConfig)
+
+Return the simulation object for the given configuration.
+
+`config` is typically obtained from `AtmosConfig(config_dict)`,
+where `config_dict` is a dictionary containing the configuration parameters.
+See [`AtmosConfig`](@ref) for more details.
+"""
 function get_simulation(config::AtmosConfig)
     sim_info = get_sim_info(config)
     params = ClimaAtmosParameters(config)
@@ -787,11 +777,7 @@ function get_simulation(config::AtmosConfig)
 
     if sim_info.restart
         s = @timed_str begin
-            (Y, t_start) = get_state_restart(
-                config,
-                sim_info.restart_file,
-                hash(atmos),
-            )
+            (Y, t_start) = get_state_restart(config, sim_info.restart_file, hash(atmos))
             spaces = get_spaces_restart(Y)
             # Fix the t_start in sim_info with the one from the restart
             sim_info = merge(sim_info, (; t_start))
@@ -803,13 +789,9 @@ function get_simulation(config::AtmosConfig)
     initial_condition = get_initial_condition(config.parsed_args, atmos)
     surface_setup = get_surface_setup(config.parsed_args)
     if !sim_info.restart
+        (; center_space, face_space) = spaces
         s = @timed_str begin
-            Y = ICs.atmos_state(
-                initial_condition(params),
-                atmos,
-                spaces.center_space,
-                spaces.face_space,
-            )
+            Y = ICs.atmos_state(initial_condition(params), atmos, center_space, face_space)
         end
         @info "Allocating Y: $s"
 
@@ -819,26 +801,17 @@ function get_simulation(config::AtmosConfig)
         # in `Y` (specific to `initial_condition`) with those computed using the
         # `SpaceVaryingInputs` tool.
         CA.InitialConditions.overwrite_initial_conditions!(
-            initial_condition,
-            Y,
-            params.thermodynamics_params,
+            initial_condition, Y, params.thermodynamics_params,
         )
     end
 
     tracers = get_tracers(config.parsed_args)
 
-    steady_state_velocity =
-        get_steady_state_velocity(params, Y, config.parsed_args)
+    steady_state_velocity = get_steady_state_velocity(params, Y, config.parsed_args)
 
     s = @timed_str begin
-        p = build_cache(
-            Y,
-            atmos,
-            params,
-            surface_setup,
-            sim_info,
-            tracers.aerosol_names,
-            steady_state_velocity,
+        p = build_cache(Y, atmos, params, surface_setup, sim_info,
+            tracers.aerosol_names, steady_state_velocity,
         )
     end
     @info "Allocating cache (p): $s"
@@ -862,14 +835,7 @@ function get_simulation(config::AtmosConfig)
     if config.parsed_args["enable_diagnostics"]
         s = @timed_str begin
             scheduled_diagnostics, writers, periods_reductions =
-                get_diagnostics(
-                    config.parsed_args,
-                    atmos,
-                    Y,
-                    p,
-                    sim_info,
-                    output_dir,
-                )
+                get_diagnostics(config.parsed_args, atmos, Y, p, sim_info, output_dir)
         end
         @info "initializing diagnostics: $s"
 
@@ -883,10 +849,11 @@ function get_simulation(config::AtmosConfig)
                 x -> !CA.isdivisible(checkpoint_frequency, x),
                 periods_reductions,
             )
-                accum_str =
-                    join(CA.promote_period.(collect(periods_reductions)), ", ")
+                accum_str = join(CA.promote_period.(collect(periods_reductions)), ", ")
                 checkpt_str = CA.promote_period(checkpoint_frequency)
-                @warn "The checkpointing frequency (dt_save_state_to_disk = $checkpt_str) should be an integer multiple of all diagnostics accumulation periods ($accum_str) so simulations can be safely restarted from any checkpoint"
+                @warn "The checkpointing frequency (dt_save_state_to_disk = $checkpt_str)\
+                       should be an integer multiple of all diagnostics accumulation periods ($accum_str)\
+                       so simulations can be safely restarted from any checkpoint"
             end
         end
     else
@@ -897,8 +864,7 @@ function get_simulation(config::AtmosConfig)
     discrete_callbacks = callback
 
     s = @timed_str begin
-        all_callbacks =
-            SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
+        all_callbacks = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
     end
     @info "Prepared SciMLBase.CallbackSet callbacks: $s"
     steps_cycle_non_diag = n_steps_per_cycle_per_cb(all_callbacks, sim_info.dt)
@@ -909,12 +875,7 @@ function get_simulation(config::AtmosConfig)
     tspan = (sim_info.t_start, sim_info.t_end)
     s = @timed_str begin
         integrator_args, integrator_kwargs = args_integrator(
-            config.parsed_args,
-            Y,
-            p,
-            tspan,
-            ode_algo,
-            all_callbacks,
+            config.parsed_args, Y, p, tspan, ode_algo, all_callbacks,
         )
     end
 
@@ -926,8 +887,7 @@ function get_simulation(config::AtmosConfig)
     if config.parsed_args["enable_diagnostics"]
         s = @timed_str begin
             integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
-                integrator,
-                scheduled_diagnostics,
+                integrator, scheduled_diagnostics,
             )
         end
         @info "Added diagnostics: $s"
@@ -936,12 +896,7 @@ function get_simulation(config::AtmosConfig)
     reset_graceful_exit(output_dir)
 
     return AtmosSimulation(
-        job_id,
-        output_dir,
-        sim_info.start_date,
-        sim_info.t_end,
-        writers,
-        integrator,
+        job_id, output_dir, sim_info.start_date, sim_info.t_end, writers, integrator,
     )
 end
 
