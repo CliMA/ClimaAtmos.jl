@@ -19,7 +19,7 @@ const output_dir = experiment_config_dict["output_dir"]
 const model_config = experiment_config_dict["model_config"]
 const batch_size = experiment_config_dict["batch_size"]
 
-@everywhere function run_atmos_simulation(atmos_config)
+function run_atmos_simulation(atmos_config)
     simulation = CA.get_simulation(atmos_config)
     sol_res = CA.solve_atmos!(simulation)
     if sol_res.ret_code == :simulation_crashed

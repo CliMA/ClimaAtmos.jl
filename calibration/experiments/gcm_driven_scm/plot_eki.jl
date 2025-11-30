@@ -8,12 +8,14 @@ import ClimaCalibrate as CAL
 using Plots
 using LinearAlgebra
 using DataFrames
+using BSON
 
 # output_dir = "output/exp_1"
 # output_dir= "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_40"
 # output_dir= "/central/scratch/cchristo/output_ml_mix2/exp_6"
-output_dir = "/central/scratch/cchristo/output_ml_mix2/exp_8"
-iterations = 0:5
+# output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v4/exp12_nn_all_params"
+output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v4/exp13_nn_all_params_ind_noise"
+iterations = 0:10
 # iterations = nothing
 
 include("helper_funcs.jl")

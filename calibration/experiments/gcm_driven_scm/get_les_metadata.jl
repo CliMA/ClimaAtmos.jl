@@ -10,15 +10,17 @@ CFSITE_TYPES = Dict(
         (collect(30:33)..., collect(66:70)..., 82, 92, 94, 96, 99, 100),
 )
 
-function get_les_calibration_library()
+function get_les_calibration_library_tmp()
     les_library = get_shallow_LES_library()
     # AMIP data: July, NE Pacific
     # cfsite_numbers = (17, 18, 22, 23, 30, 94)
     # cfsite_numbers = (17, 22, 23, 30, 33, 94)
     # cfsite_numbers = (17, 21, 23, 30, 33)# 94)
     # cfsite_numbers = (17, 23, 94) #baseline run
-    cfsite_numbers = (17, 18, 21, 22, 23, 30, 94) #baseline run
+    # cfsite_numbers = (17, 18, 21, 22, 23, 30, 94) #baseline run
     # cfsite_numbers = (17, 18, 19, 21, 22, 23, 30, 33, 94)# 94)
+
+    cfsite_numbers = (18, 23, 33) #baseline run
 
     # cfsite_numbers = (17, 30,)# 94)
     les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")
@@ -27,6 +29,73 @@ function get_les_calibration_library()
         cfsite_number in cfsite_numbers
     ]
     return (ref_paths, cfsite_numbers)
+end
+
+"""
+    get_les_calibration_library(; max_cases = nothing, models = nothing)
+
+Collect AMIP LES stats paths and cfSite numbers across shallow and deep cases.
+Returns a tuple `(ref_dirs, cfsite_numbers)` where `ref_dirs::Vector{String}`
+are paths to stats files and `cfsite_numbers::Vector{Int}` are corresponding
+site IDs. Optionally limit to the first `max_cases` and/or a subset of models.
+
+Arguments:
+- max_cases: Optional `Int`. If provided, only the first N cases are returned.
+- models: Optional `String` or iterable of `String`. Restrict to these models.
+
+Examples:
+```julia
+# All models
+paths, sites = get_les_calibration_library()
+
+# Limit number of cases
+paths, sites = get_les_calibration_library(max_cases = 50)
+
+# Single model
+paths, sites = get_les_calibration_library(models = "HadGEM2-A")
+
+# Multiple models
+paths, sites = get_les_calibration_library(models = ["HadGEM2-A", "CNRM-CM5"])
+```
+"""
+function get_les_calibration_library(; max_cases = 20, models = "HadGEM2-A")
+    les_library = get_LES_library()
+
+    models_iter = models === nothing ? collect(keys(les_library)) :
+                 (isa(models, AbstractString) ? [models] : collect(models))
+    for m in models_iter
+        @assert haskey(les_library, m) "Model $(m) not found in LES library."
+    end
+
+    ref_dirs = []
+    cfsite_numbers = Int[]
+    for model in models_iter
+        for month in keys(les_library[model])
+            cfsite_numbers_month = map(
+                k -> parse(Int, k),
+                collect(keys(les_library[model][month]["cfsite_numbers"])),
+            )
+            les_kwargs = (
+                forcing_model = model,
+                month = parse(Int, month),
+                experiment = "amip",
+            )
+            paths_for_month = [
+                get_stats_path(
+                    get_cfsite_les_dir(cfsite_number; les_kwargs...),
+                ) for cfsite_number in cfsite_numbers_month
+            ]
+            append!(ref_dirs, paths_for_month)
+            append!(cfsite_numbers, cfsite_numbers_month)
+        end
+    end
+
+    if max_cases !== nothing
+        n = min(max_cases, length(ref_dirs))
+        ref_dirs = ref_dirs[1:n]
+        cfsite_numbers = cfsite_numbers[1:n]
+    end
+    return (ref_dirs, cfsite_numbers)
 end
 
 function get_cfsite_type(i, cfsite_numbers)
@@ -290,6 +359,7 @@ end
 
 function get_all_les_paths()
     NUM_LES_CASES = 176
+
     les_library = get_shallow_LES_library()
 
     ref_dirs = []

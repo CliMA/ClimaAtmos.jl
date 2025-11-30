@@ -1,6 +1,7 @@
 
 using NCDatasets
 using Statistics
+using Distributions
 using LinearAlgebra
 import ClimaAtmos as CA
 import ClimaCalibrate as CAL
@@ -10,8 +11,11 @@ using Logging
 using TOML
 using Flux
 using JLD2
+using BSON
+const EKTOML = EKP.TOMLInterface
 
-include("nn_helpers.jl")
+# include("nn_helpers.jl")
+include("nn_helpers_lux.jl")
 
 import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
@@ -1011,50 +1015,163 @@ function get_batch_indicies_in_iteration(iteration, output_dir::AbstractString)
 end
 
 
+"""
+    MixingLengthNN
 
+Container for a Lux neural network model with its parameters and state.
+
+# Fields
+- `model` :: Lux.Chain - The neural network model
+- `ps` :: NamedTuple - Model parameters
+- `st` :: NamedTuple - Model state
+- `axes` :: Optional axes for parameter flattening/unflattening
+"""
+struct MixingLengthNN{M, P, S, A}
+    model::M
+    ps::P
+    st::S
+    axes::A
+end
 
 function create_prior_with_nn(
     prior_path,
     pretrained_nn_path;
     arc = [8, 20, 15, 10, 1],
+    noise_type = nothing, #[:correlated, :mvnormal]
 )
 
     prior_dict = TOML.parsefile(prior_path)
     parameter_names = keys(prior_dict)
 
-    prior_vec =
-        Vector{EKP.ParameterDistribution}(undef, length(parameter_names))
-    for (i, n) in enumerate(parameter_names)
-        prior_vec[i] = CAL.get_parameter_distribution(prior_dict, n)
+    # Use a heterogeneous container for parameter distributions to allow
+    # pushing different `ParameterDistribution` parametric types (e.g., scalar vs vectorized)
+    prior_vec = EKP.ParameterDistribution[]
+    for n in parameter_names
+        push!(prior_vec, EKTOML.get_parameter_distribution(prior_dict, n))
     end
 
-    @load pretrained_nn_path serialized_weights
-    num_nn_params = length(serialized_weights)
+
+    # prior_vec =
+    #     Vector{EKP.ParameterDistribution}(undef, length(parameter_names))
+    # for (i, n) in enumerate(parameter_names)
+    #     prior_vec[i] = CAL.get_parameter_distribution(prior_dict, n)
+    # end
 
 
-    # nn_model = construct_fully_connected_nn(arc, deepcopy(serialized_weights); biases_bool = true, output_layer_activation_function = Flux.identity)
-    nn_model = construct_fully_connected_nn(
-        arc,
-        deepcopy(serialized_weights);
-        biases_bool = true,
-        activation_function = Flux.leakyrelu,
-        output_layer_activation_function = Flux.identity,
-    )
+    nn_prior = let
+        # Normalize noise_type to a Symbol so it can be passed as String from YAML.
+        noise_type_sym = Symbol(noise_type)
 
-    # serialized_stds = serialize_std_model(nn_model; std_weight = 0.05, std_bias = 0.005)
-    serialized_stds =
-        serialize_std_model(nn_model; std_weight = 0.1, std_bias = 0.00001)
+        # First, try to interpret the file as BSON and use a stored mean_vec if available.
+        bson_data = try
+            BSON.load(pretrained_nn_path)
+        catch
+            nothing
+        end
 
-    nn_mean_std = EKP.VectorOfParameterized([
-        Normal(serialized_weights[ii], serialized_stds[ii]) for
-        ii in 1:num_nn_params
-    ])
-    nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
-    nn_prior = EKP.ParameterDistribution(
-        nn_mean_std,
-        nn_constraint,
-        "mixing_length_param_vec",
-    )
+        if bson_data !== nothing && haskey(bson_data, :mean_vec)
+            @info "Loading pretrained NN (mean_vec) from $pretrained_nn_path with noise_type=$noise_type_sym"
+            mean_vec = Vector{Float64}(bson_data[:mean_vec])
+
+            if noise_type_sym in (:correlated, :mvnormal)
+                # Correlated noise using sqrt_cov_mat, as before.
+                haskey(bson_data, :sqrt_cov_mat) ||
+                    error(
+                        "BSON reconstructor file $(pretrained_nn_path) is missing :sqrt_cov_mat required for correlated noise.",
+                    )
+                sqrt_cov_mat = Matrix{Float64}(bson_data[:sqrt_cov_mat])
+                size(sqrt_cov_mat, 1) == length(mean_vec) ||
+                    error(
+                        "BSON reconstructor file $(pretrained_nn_path) has inconsistent dimensions: length(mean_vec)=$(length(mean_vec)) but size(sqrt_cov_mat)=$(size(sqrt_cov_mat)).",
+                    )
+
+                covariance = Symmetric(sqrt_cov_mat * sqrt_cov_mat')
+                distribution = EKP.Parameterized(MvNormal(mean_vec, covariance))
+                constraints = repeat([EKP.no_constraint()], length(mean_vec))
+                EKP.ParameterDistribution(
+                    distribution,
+                    constraints,
+                    "mixing_length_param_vec",
+                )
+            else
+                # Independent noise around mean_vec using serialize_std_model.
+                serialized_weights = copy(mean_vec)
+                nn_model = construct_fully_connected_nn_lux(
+                    arc,
+                    deepcopy(serialized_weights);
+                    biases_bool = true,
+                    activation_function = Flux.leakyrelu,
+                    output_layer_activation_function = Flux.identity,
+                )
+                serialized_stds = serialize_std_model(
+                    nn_model,
+                    serialized_weights;
+                    std_weight = 0.006,
+                    std_bias = 2.0,
+                )
+                num_nn_params = length(serialized_weights)
+                nn_mean_std = EKP.VectorOfParameterized([
+                    Normal(serialized_weights[ii], serialized_stds[ii]) for
+                    ii in 1:num_nn_params
+                ])
+                nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
+                EKP.ParameterDistribution(
+                    nn_mean_std,
+                    nn_constraint,
+                    "mixing_length_param_vec",
+                )
+            end
+        elseif bson_data !== nothing && haskey(bson_data, :nn_model)
+            @info "Loading legacy nn_model from $pretrained_nn_path with independent noise"
+            nn_model = bson_data[:nn_model]
+            serialized_weights = serialize_ml_model(nn_model)
+            serialized_stds = serialize_std_model(
+                nn_model,
+                serialized_weights;
+                std_weight = 0.006,
+                std_bias = 2.0,
+            )
+            num_nn_params = length(serialized_weights)
+            nn_mean_std = EKP.VectorOfParameterized([
+                Normal(serialized_weights[ii], serialized_stds[ii]) for
+                ii in 1:num_nn_params
+            ])
+            nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
+            EKP.ParameterDistribution(
+                nn_mean_std,
+                nn_constraint,
+                "mixing_length_param_vec",
+            )
+        else
+            # Fall back to treating the file as a JLD2 file containing serialized_weights.
+            @info "Loading pretrained NN from $pretrained_nn_path as JLD2/serialized_weights with independent noise"
+            @load pretrained_nn_path serialized_weights
+            nn_model = construct_fully_connected_nn_lux(
+                arc,
+                deepcopy(serialized_weights);
+                biases_bool = true,
+                activation_function = Flux.leakyrelu,
+                output_layer_activation_function = Flux.identity,
+            )
+            serialized_stds = serialize_std_model(
+                nn_model,
+                serialized_weights;
+                std_weight = 0.006,
+                std_bias = 2.0,
+            )
+            num_nn_params = length(serialized_weights)
+            nn_mean_std = EKP.VectorOfParameterized([
+                Normal(serialized_weights[ii], serialized_stds[ii]) for
+                ii in 1:num_nn_params
+            ])
+            nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
+            EKP.ParameterDistribution(
+                nn_mean_std,
+                nn_constraint,
+                "mixing_length_param_vec",
+            )
+        end
+    end
     push!(prior_vec, nn_prior)
 
     prior = EKP.combine_distributions(prior_vec)

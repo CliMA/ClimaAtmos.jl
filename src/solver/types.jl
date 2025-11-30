@@ -631,8 +631,7 @@ end
 
 Groups turbulence convection-related models and types.
 """
-Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD}
-Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, MLNN, MLB}
+Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD, MLNN, MLB}
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     sgs_adv_mode::SAM = nothing
@@ -700,6 +699,7 @@ Base.broadcastable(x::MixingLengthNN) = tuple(x)
 abstract type AbstractMixingLengthType end
 struct PhysicalMixingLengthType <: AbstractMixingLengthType end
 struct SymEqn1MixingLengthType <: AbstractMixingLengthType end
+struct LinearEqn1MixingLengthType <: AbstractMixingLengthType end
 struct NeuralNetworkMixingLengthType <: AbstractMixingLengthType end
 
 struct AtmosModel{W, SCM, R, TC, GW, VD, SP, SU, NU}

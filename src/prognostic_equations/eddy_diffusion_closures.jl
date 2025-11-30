@@ -8,6 +8,96 @@ import Thermodynamics.Parameters as TDP
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 
+const LINEAR_EQN1_FEATURE_ORDER = (
+    :bgrad,
+    :strain,
+    :tke,
+    :mix_len_pi1,
+    :mix_len_pi2,
+    :mix_len_pi3,
+    :z_obu,
+    :res_obu,
+    :bgrad_slog1p,
+    :strain_slog1p,
+    :tke_slog1p,
+    :mix_len_pi1_slog1p,
+    :mix_len_pi2_slog1p,
+    :mix_len_pi3_slog1p,
+    :z_obu_slog1p,
+    :res_obu_slog1p,
+)
+
+const LINEAR_EQN1_EXPECTED_PARAM_LENGTH =
+    length(LINEAR_EQN1_FEATURE_ORDER) + 1
+const SYM_EQN1_PARAM_COUNT = 5
+
+const LINEAR_EQN1_MEANS = NamedTuple{LINEAR_EQN1_FEATURE_ORDER}((
+    5.082637653686106e-05,
+    2.2808653739048168e-05,
+    0.24866291880607605,
+    -1.0863544940948486,
+    -14.831830978393555,
+    1.0883108377456665,
+    -39.594970703125,
+    -4.873882293701172,
+    5.082637524710884e-05,
+    2.280865347833197e-05,
+    0.222250648226703,
+    -0.7352520975355456,
+    -2.760693474229933,
+    0.7372262688331963,
+    -3.704753971779477,
+    -1.7692407264060654,
+))
+
+const LINEAR_EQN1_STDS = NamedTuple{LINEAR_EQN1_FEATURE_ORDER}((
+    0.0014844609540887177,
+    0.0004074893149663694,
+    2.8298795223236084,
+    66.78991794586182,
+    1325.919189453125,
+    45.556983947753906,
+    2584.10400390625,
+    236.17761611938477,
+    0.0014844609540887177,
+    0.0004074893149663694,
+    2.2657163633550213,
+    32.02409003305618,
+    83.7823805840645,
+    21.81734874850377,
+    63.66186165226027,
+    40.21037228818965,
+))
+
+@inline symmetric_log1p(x) = sign(x) * log1p(abs(x))
+
+@inline function convert_namedtuple(::Type{FT}, data::NamedTuple{N}) where {FT, N}
+    return NamedTuple{N}(map(FT, Tuple(data)))
+end
+
+@inline function linear_eqn1_coefficients(::Type{FT}, vec) where {FT}
+    n_features = length(LINEAR_EQN1_FEATURE_ORDER)
+    expected_len = LINEAR_EQN1_EXPECTED_PARAM_LENGTH
+    offset = if length(vec) == expected_len
+        0
+    elseif length(vec) >= SYM_EQN1_PARAM_COUNT + expected_len
+        SYM_EQN1_PARAM_COUNT
+    else
+        error(
+            "LinearEqn1MixingLengthType expects mixing_length_param_vec length " *
+            "≥ $(expected_len) (or ≥ $(SYM_EQN1_PARAM_COUNT + expected_len) when sharing with SymEqn1); got $(length(vec)).",
+        )
+    end
+    coeff_slice = @view vec[(offset + 1):(offset + n_features)]
+    coeffs = NamedTuple{LINEAR_EQN1_FEATURE_ORDER}(ntuple(
+        i -> FT(coeff_slice[i]),
+        n_features,
+    ))
+    intercept = FT(vec[offset + expected_len])
+    return coeffs, intercept
+end
+
+
 """
     buoyancy_gradients(
         closure::AbstractEnvBuoyGradClosure,
@@ -534,6 +624,135 @@ function ᶜmixing_length(Y, p, ::Val{:sym_eqn1})
     return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, Val{:master}()))
 end
 
+function ᶜmixing_length(Y, p, ::Val{:linear_eqn1})
+    (; params) = p
+    (; obukhov_length) = p.precomputed.sfc_conditions
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    turbconv_model = p.atmos.turbconv_model
+    ᶜρa⁰ =
+        turbconv_model isa PrognosticEDMFX ?
+        (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+
+    turbconv_params = CAP.turbconv_params(params)
+    ml_param_vec = CAP.mixing_length_param_vec(turbconv_params)
+
+    FT = eltype(ᶜz)
+    eps_FT = eps(FT)
+
+    coeffs, intercept = linear_eqn1_coefficients(FT, ml_param_vec)
+    means = convert_namedtuple(FT, LINEAR_EQN1_MEANS)
+    stds = convert_namedtuple(FT, LINEAR_EQN1_STDS)
+
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    n_up = n_mass_flux_subdomains(turbconv_model)
+
+    ᶜdelta_w_sq = nothing
+    if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
+        (; ᶜu⁰, ᶜuʲs) = p.precomputed
+        ᶜw_env = @. lazy(get_physical_w(ᶜu⁰, ᶜlg))
+        if n_up > 0
+            ᶜw_up = @. lazy(get_physical_w(ᶜuʲs.:1, ᶜlg))
+        else
+            ᶜw_up = ᶜw_env
+        end
+        ᶜdelta_w = @. lazy(ᶜw_up - ᶜw_env)
+        ᶜdelta_w_sq = @. lazy(max(ᶜdelta_w * ᶜdelta_w, eps_FT))
+    else
+        ᶜdelta_w_sq = p.scratch.ᶜtemp_scalar_4
+        @. ᶜdelta_w_sq = eps_FT
+    end
+
+    ᶜmix_len_pi1_raw =
+        @. lazy(ᶜstrain_rate_norm / (ᶜlinear_buoygrad + eps_FT))
+    ᶜmix_len_pi2_raw =
+        @. lazy(ᶜtke⁰ / (ᶜlinear_buoygrad * ᶜz * ᶜz + eps_FT))
+    ᶜmix_len_pi3_raw = @. lazy(ᶜtke⁰ / ᶜdelta_w_sq)
+
+    ᶜmix_len_pi1 = @. lazy(clamp(ᶜmix_len_pi1_raw, -FT(100), FT(100)))
+    ᶜmix_len_pi2 = @. lazy(clamp(ᶜmix_len_pi2_raw, -FT(1e4), FT(1e4)))
+    ᶜmix_len_pi3 = @. lazy(clamp(ᶜmix_len_pi3_raw, -FT(100), FT(100)))
+    ᶜbgrad = @. lazy(clamp(ᶜlinear_buoygrad, -FT(0.02), FT(0.02)))
+    ᶜstrain = @. lazy(clamp(ᶜstrain_rate_norm, -FT(1e-3), FT(1e-3)))
+    ᶜtke = ᶜtke⁰
+    ᶜz_obu =
+        @. lazy(clamp(ᶜz / (obukhov_length + eps_FT), -FT(3e4), FT(3e4)))
+    ᶜres_obu =
+        @. lazy(clamp(ᶜdz / (obukhov_length + eps_FT), -FT(2500), FT(2500)))
+
+    ᶜbgrad_slog1p = @. lazy(symmetric_log1p(ᶜbgrad))
+    ᶜstrain_slog1p = @. lazy(symmetric_log1p(ᶜstrain))
+    ᶜtke_slog1p = @. lazy(symmetric_log1p(ᶜtke))
+    ᶜmix_len_pi1_slog1p = @. lazy(symmetric_log1p(ᶜmix_len_pi1))
+    ᶜmix_len_pi2_slog1p = @. lazy(symmetric_log1p(ᶜmix_len_pi2))
+    ᶜmix_len_pi3_slog1p = @. lazy(symmetric_log1p(ᶜmix_len_pi3))
+    ᶜz_obu_slog1p = @. lazy(symmetric_log1p(ᶜz_obu))
+    ᶜres_obu_slog1p = @. lazy(symmetric_log1p(ᶜres_obu))
+
+    ᶜz_bgrad = @. lazy((ᶜbgrad - means.bgrad) / stds.bgrad)
+    ᶜz_strain = @. lazy((ᶜstrain - means.strain) / stds.strain)
+    ᶜz_tke = @. lazy((ᶜtke - means.tke) / stds.tke)
+    ᶜz_mix_len_pi1 =
+        @. lazy((ᶜmix_len_pi1 - means.mix_len_pi1) / stds.mix_len_pi1)
+    ᶜz_mix_len_pi2 =
+        @. lazy((ᶜmix_len_pi2 - means.mix_len_pi2) / stds.mix_len_pi2)
+    ᶜz_mix_len_pi3 =
+        @. lazy((ᶜmix_len_pi3 - means.mix_len_pi3) / stds.mix_len_pi3)
+    ᶜz_z_obu = @. lazy((ᶜz_obu - means.z_obu) / stds.z_obu)
+    ᶜz_res_obu = @. lazy((ᶜres_obu - means.res_obu) / stds.res_obu)
+    ᶜz_bgrad_slog1p =
+        @. lazy((ᶜbgrad_slog1p - means.bgrad_slog1p) / stds.bgrad_slog1p)
+    ᶜz_strain_slog1p =
+        @. lazy((ᶜstrain_slog1p - means.strain_slog1p) / stds.strain_slog1p)
+    ᶜz_tke_slog1p =
+        @. lazy((ᶜtke_slog1p - means.tke_slog1p) / stds.tke_slog1p)
+    ᶜz_mix_len_pi1_slog1p = @. lazy(
+        (ᶜmix_len_pi1_slog1p - means.mix_len_pi1_slog1p) /
+        stds.mix_len_pi1_slog1p,
+    )
+    ᶜz_mix_len_pi2_slog1p = @. lazy(
+        (ᶜmix_len_pi2_slog1p - means.mix_len_pi2_slog1p) /
+        stds.mix_len_pi2_slog1p,
+    )
+    ᶜz_mix_len_pi3_slog1p = @. lazy(
+        (ᶜmix_len_pi3_slog1p - means.mix_len_pi3_slog1p) /
+        stds.mix_len_pi3_slog1p,
+    )
+    ᶜz_z_obu_slog1p =
+        @. lazy((ᶜz_obu_slog1p - means.z_obu_slog1p) / stds.z_obu_slog1p)
+    ᶜz_res_obu_slog1p =
+        @. lazy((ᶜres_obu_slog1p - means.res_obu_slog1p) / stds.res_obu_slog1p)
+
+    ᶜlmix = @. lazy(
+        intercept +
+        coeffs.bgrad * ᶜz_bgrad +
+        coeffs.strain * ᶜz_strain +
+        coeffs.tke * ᶜz_tke +
+        coeffs.mix_len_pi1 * ᶜz_mix_len_pi1 +
+        coeffs.mix_len_pi2 * ᶜz_mix_len_pi2 +
+        coeffs.mix_len_pi3 * ᶜz_mix_len_pi3 +
+        coeffs.z_obu * ᶜz_z_obu +
+        coeffs.res_obu * ᶜz_res_obu +
+        coeffs.bgrad_slog1p * ᶜz_bgrad_slog1p +
+        coeffs.strain_slog1p * ᶜz_strain_slog1p +
+        coeffs.tke_slog1p * ᶜz_tke_slog1p +
+        coeffs.mix_len_pi1_slog1p * ᶜz_mix_len_pi1_slog1p +
+        coeffs.mix_len_pi2_slog1p * ᶜz_mix_len_pi2_slog1p +
+        coeffs.mix_len_pi3_slog1p * ᶜz_mix_len_pi3_slog1p +
+        coeffs.z_obu_slog1p * ᶜz_z_obu_slog1p +
+        coeffs.res_obu_slog1p * ᶜz_res_obu_slog1p,
+    )
+
+    ᶜlmix_pos = @. lazy(max(ᶜlmix, FT(0)))
+    l_z = @. lazy(max(ᶜz - z_sfc, FT(0)))
+    ᶜℓ_clip = @. lazy(min(ᶜlmix_pos, l_z, ᶜdz))
+    ᶜmixing_length_tuple = @. lazy(MixingLength(ᶜℓ_clip, ᶜℓ_clip, ᶜℓ_clip, ᶜℓ_clip, ᶜdz))
+    return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, Val{:master}()))
+end
+
 function ᶜmixing_length(Y, p, ::Val{:nn})
     # Neural network closure (Lux-based)
     (; params, atmos) = p
@@ -555,7 +774,11 @@ function ᶜmixing_length(Y, p, ::Val{:nn})
     ᶜlg = Fields.local_geometry_field(Y.c)
     n_up = n_mass_flux_subdomains(turbconv_model)
     ᶜw_env = @. lazy(get_physical_w(p.precomputed.ᶜu⁰, ᶜlg))
-    ᶜw_up = n_up > 0 ? @. lazy(get_physical_w(p.precomputed.ᶜuʲs.:1, ᶜlg)) : ᶜw_env
+    if n_up > 0
+        ᶜw_up = @. lazy(get_physical_w(ᶜuʲs.:1, ᶜlg))
+    else
+        ᶜw_up = ᶜw_env
+    end
     l_z = @. lazy(max(ᶜz - z_sfc, FT(0)))
     ᶜdelta_w_sq = @. lazy(max((ᶜw_up - ᶜw_env) * (ᶜw_up - ᶜw_env), eps_FT))
     X_1 = @. lazy(ᶜstrain_rate_norm / (ᶜlinear_buoygrad + eps_FT))
@@ -624,8 +847,12 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
         return ᶜmixing_length(Y, p, Val{:master}())
     elseif t isa SymEqn1MixingLengthType
         return ᶜmixing_length(Y, p, Val{:sym_eqn1}())
-    else
+    elseif t isa LinearEqn1MixingLengthType
+        return ᶜmixing_length(Y, p, Val{:linear_eqn1}())
+    elseif t isa NeuralNetworkMixingLengthType
         return ᶜmixing_length(Y, p, Val{:nn}())
+    else
+        error("Unsupported mixing length type $(typeof(t))")
     end
 end
 

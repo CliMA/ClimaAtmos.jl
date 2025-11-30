@@ -12,11 +12,13 @@ using Logging
 
 import JLD2
 using LinearAlgebra
+using BSON
 
 include("helper_funcs.jl")
 include("observation_map.jl")
 include("get_les_metadata.jl")
-include("nn_helpers.jl")
+# include("nn_helpers.jl")
+include("nn_helpers_lux.jl")
 
 # load configs
 experiment_dir = dirname(Base.active_project())
@@ -50,6 +52,7 @@ addprocs(
     import ClimaAtmos as CA
     import JLD2
     import YAML
+    import BSON
 
     include("observation_map.jl")
 
@@ -135,7 +138,7 @@ JLD2.jldsave(
 )
 
 ### get LES obs (Y) and norm factors
-ref_paths, _ = get_les_calibration_library()
+ref_paths, _ = get_les_calibration_library(max_cases = 10, models = "HadGEM2-A")
 obs_vec = []
 
 for ref_path in ref_paths
@@ -187,15 +190,17 @@ series_names = [ref_paths[i] for i in 1:length(ref_paths)]
 
 # @show minibatch_inds
 
-rfs_minibatcher =
-    EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
+### Random fixed 
+rfs_minibatcher = EKP.RandomFixedSizeMinibatcher(experiment_config["batch_size"], "trim")
+observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
+### no minibatching
 # rfs_minibatcher =
 #     EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
+## rfs_minibatcher = EKP.no_minibatcher(experiment_config["batch_size"])
+# observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
-# rfs_minibatcher = EKP.no_minibatcher(experiment_config["batch_size"])
 
-observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
 ###  EKI hyperparameters/settings
 @info "Initializing calibration" n_iterations ensemble_size output_dir
@@ -208,7 +213,9 @@ eki = CAL.calibrate(
     nothing, # noise alread sprecified in observations
     prior,
     output_dir;
-    scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+    # scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+    scheduler = EKP.DataMisfitController(terminate_at = 100.0),
+    # scheduler   = EKP.DefaultScheduler(20.0),
     localization_method = EKP.Localizers.NoLocalization(),
     ## localization_method = EKP.Localizers.SECNice(nice_loc_ug, nice_loc_gg),
     failure_handler_method = EKP.SampleSuccGauss(),
