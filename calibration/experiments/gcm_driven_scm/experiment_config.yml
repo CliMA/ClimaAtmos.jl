@@ -1,24 +1,28 @@
 # prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_0M_v1.toml
 # prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_dev.toml
-prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_dev_lmix_eqn1.toml
+# prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_dev_lmix_eqn1.toml
 # prior_path: prior_prognostic.toml
-ensemble_size: 100
+# prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_0M_v4_mixing_len.toml
+# prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_0M_v4_mixing_len_mix_len_only.toml
+prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_0M_v4_mixing_len_mix_len_and_all_params.toml
+ensemble_size: 200
 # ensemble_size: 30
 n_iterations: 12
 # batch_size: 3 # number of cases per iteration
-batch_size: 7 # number of cases per iteration
+batch_size: 10 # number of cases per iteration
 # model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
 model_config : model_config_prognostic_impl.yml
 # model_config : model_config_prognostic.yml
 # output_dir : /central/scratch/cchristo/debug/exp36_eqn1_tke
-output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v3/exp36_eqn1_tke
+output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v4/exp13_nn_all_params_ind_noise
 
 # Slurm resource configuration
-slurm_time: "08:00:00"
+slurm_time: "12:00:00"
 slurm_mem_per_cpu: "25G"
 slurm_cpus_per_task: 1
 
-y_var_names: [thetaa, hus, clw]  # calibration variables clw clw]
+# y_var_names: [thetaa, hus, clw]  # calibration variables clw clw]
+y_var_names: [thetaa, hus]  # calibration variables clw clw]
 log_vars: ["clw"] # take log(var) when forming y, g
 # log_vars: []
 
@@ -54,16 +58,20 @@ norm_factors_by_var:
   # cli: [-11.697, 1.304] # log norm factors
 
 const_noise_by_var:
-  thetaa: 0.0016
-  hus: 0.0016
+  thetaa: 0.0005
+  hus: 0.0005
   clw: 0.0045
+  # thetaa: 0.0016
+  # hus: 0.0016
+  # clw: 0.0045
   # clw: 0.0016
   # cli: 0.01
   # thetaa: 0.0008
   # hus: 0.0008
   # clw: 0.0035
 
-pretrained_nn_path: "/home/cchristo/ml_mixing_length/nn_666p_leaky_relu.jld2"
+# pretrained_nn_path: "/home/cchristo/ml_mixing_length/nn_666p_leaky_relu.jld2"
+pretrained_nn_path: "/home/cchristo/ml_mixing_length/nn_666p_leaky_relu_lux.bson"
 
 # Config files for deep and shallow cases
 forcing_toml_files:

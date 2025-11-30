@@ -9,15 +9,17 @@ using Plots
 using LinearAlgebra
 using DataFrames
 using Statistics
+using BSON
 
 
 include("helper_funcs.jl")
 
 
 # output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_43" # path to calibration output
-output_dir = "/central/scratch/cchristo/edmf_impl_dev3/exp11" # path to calibration output
-iteration = 5
-prefix = ""
+output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v4/exp5_nn_ind_noise" # path to calibration output
+iteration = 7
+prefix = "nn_ind_noise"
+EXP_DIR_PATTERN = r"exp(\d+)"
 
 
 # write_optimal_toml_dir = "./calibrated_tomls/pert_pres"
@@ -34,11 +36,19 @@ const pretrained_nn_path = config_dict["pretrained_nn_path"]
 
 prior_path = joinpath(output_dir, "configs", "prior.toml")
 
-# if no nn
-const prior = CAL.get_prior(prior_path)
+# Select prior consistent with calibration setup (NN vs physical)
+model_config_path = joinpath(output_dir, "configs", "model_config.yml")
+model_config_dict = YAML.load_file(model_config_path)
 
-# if nn
-# prior = create_prior_with_nn(prior_path, pretrained_nn_path)
+prior = if get(model_config_dict, "mixing_length_model", "") == "nn"
+    create_prior_with_nn(
+        prior_path,
+        pretrained_nn_path;
+        arc = [8, 20, 15, 10, 1],
+    )
+else
+    CAL.get_prior(prior_path)
+end
 
 iter_path = CAL.path_to_iteration(output_dir, iteration)
 eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
@@ -70,10 +80,10 @@ param_overrides = TOML.parsefile(param_overrides_path)
 merged_params = merge(param_nearest, param_overrides)
 
 # write optimal toml to file 
-exp_match = match(r"exp_(\d+)", output_dir)
+exp_match = match(EXP_DIR_PATTERN, output_dir)
 exp_number =
     exp_match !== nothing ? "exp" * exp_match.captures[1] : "exp_unknown"
-file_name = "parameters_nearest_neig_particle_i$(iteration)_m$(col_index)_$(exp_number)$(prefix).toml"
+file_name = "parameters_nearest_neig_particle_i$(iteration)_m$(col_index)_$(exp_number)_$(prefix).toml"
 output_toml_path = joinpath(write_optimal_toml_dir, file_name)
 open(output_toml_path, "w") do file
     TOML.print(file, merged_params)

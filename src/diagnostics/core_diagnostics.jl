@@ -660,6 +660,25 @@ add_diagnostic_variable!(
 )
 
 ###
+# Obukhov length scale (2d)
+###
+function compute_obulen!(out, state, cache, time)
+    if isnothing(out)
+        return copy(cache.precomputed.sfc_conditions.obukhov_length)
+    else
+        out .= cache.precomputed.sfc_conditions.obukhov_length
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "obulen",
+    long_name = "Obukhov Length Scale",
+    standard_name = "Obukhov length scale",
+    units = "m",
+    compute! = compute_obulen!,
+)
+
+###
 # Eastward and northward surface drag component (2d)
 ###
 function compute_tau!(out, state, cache, component)

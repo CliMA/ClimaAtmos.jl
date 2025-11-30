@@ -20,6 +20,12 @@ cloud_model: "quadrature_sgs"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
+## nn mixing length
+mixing_length_model: "nn"
+# mixing_length_model: "linear_eqn1"
+# bson_reconst_path: "/home/cchristo/ml_mixing_length/nn_666p_leaky_relu_lux.bson"
+# bson_reconst_path: "/home/cchristo/ml_mixing_length/prior_network_generator_hess-gauss.bson"
+# prev
 # edmfx_nh_pressure_type : physical
 # edmfx_nh_pressure_type : linear
 edmfx_filter: true
@@ -40,10 +46,12 @@ dt_rad: "1hours"
 t_end: "72hours"
 call_cloud_diagnostics_per_stage : true
 toml: [scm_tomls/prognostic_edmfx.toml]
+# toml: [scm_tomls/prognostic_edmfx_lmix_only_v1.toml]
+
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 diagnostics:
 - short_name: [thetaa, hus, cl, clw, cli, pr]
   period: 10mins
-- short_name: [entr, detr, lmix, turbentr, tke, arup, waup, edt] #nh_pressure]
+- short_name: [entr, detr, lmix, turbentr, tke, arup, waup, edt, obulen, bgrad] #nh_pressure]
   period: 10mins

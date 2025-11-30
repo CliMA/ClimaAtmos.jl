@@ -5,7 +5,10 @@ value = 1.0e-5
 value = 0.7
 
 [entr_inv_tau]
-value = 0
+value = 0.00001
+
+[tracer_vertical_diffusion_factor]
+value = 0.0
 
 [min_area_limiter_scale]
 value = 0

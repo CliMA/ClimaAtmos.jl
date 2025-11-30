@@ -16,14 +16,6 @@ import ClimaDiagnostics
 import Functors
 
 """
-    build_mixing_length_nn_model(parsed_args, params)
-
-Construct and return a `MixingLengthNN` if NN mixing length is enabled in the parsed args.
-Weights are taken from `CAP.mixing_length_param_vec` and mapped into a Lux Dense Chain
-matching the historical architecture [8, 20, 15, 10, 1] (8 inputs).
-Returns `nothing` when not enabled.
-"""
-"""
     num_params_from_arc(nn_arc::AbstractArray{Int})
 
 Count number of parameters in fully-connected NN model given Array specifying architecture following
@@ -55,6 +47,7 @@ num_biases_from_arc(nn_arc::AbstractArray{Int}) =
         biases_bool::Bool = false,
         activation_function = Lux.relu,
         output_layer_activation_function = Lux.relu,
+        reconstructor = nothing,
     ) where {FT <: Real}
 
 Given network architecture and parameter vectors, construct Lux NN model and unpack weights (and biases if `biases_bool` is true).
@@ -66,6 +59,8 @@ Returns a MixingLengthNN struct containing the model, parameters, and state.
 - `biases_bool` :: bool specifying whether `params` includes biases (default: false)
 - `activation_function` :: activation function for hidden layers (default: Lux.relu)
 - `output_layer_activation_function` :: activation function for output layer (default: Lux.relu)
+- `reconstructor` :: optional callable (e.g., `Optimisers.Restructure`) that maps flat parameter vectors
+  to Lux parameter structures. When `nothing`, a reconstructor is derived from the supplied architecture.
 """
 function construct_fully_connected_nn_lux(
     arc::AbstractArray{Int},
@@ -73,29 +68,14 @@ function construct_fully_connected_nn_lux(
     biases_bool::Bool = false,
     activation_function = nothing,
     output_layer_activation_function = nothing,
+    reconstructor = nothing,
 ) where {FT <: Real}
 
-    # Lazy import Lux only if required to avoid global dependency here
-    @static if Base.find_package("Lux") === nothing
-        error("Lux.jl is required for NN but is not in the environment")
-    end
-    Lux = Base.require(Base.PkgId(Base.UUID("b3a3368c-0fb4-4e24-a23c-5fc06d4f2c83"), "Lux"))
 
     # Set default activation functions
     act_fn = activation_function === nothing ? Lux.relu : activation_function
     out_act_fn = output_layer_activation_function === nothing ? Lux.relu : output_layer_activation_function
 
-    # Check consistency of architecture and parameters
-    if biases_bool
-        n_params_nn = num_params_from_arc(arc)
-        n_params_vect = length(params)
-    else
-        n_params_nn = num_weights_from_arc(arc)
-        n_params_vect = length(params)
-    end
-    if n_params_nn != n_params_vect
-        error("Incorrect number of parameters ($n_params_vect) for requested NN architecture ($n_params_nn)!")
-    end
 
     # Build Lux model with specified architecture
     layers = Any[]
@@ -109,14 +89,19 @@ function construct_fully_connected_nn_lux(
     rng = Random.default_rng()
     ps_tmpl, st = Lux.setup(rng, model)
 
-    # Flatten template and unflatten with provided vector
-    flat, unflatten = Functors.flatten(ps_tmpl)
-    
-    # Double-check parameter count matches (should always be true given earlier check)
-    length(flat) == length(params) || error(
-        "Parameter count mismatch: expected $(length(flat)), got $(length(params))")
-    
-    ps = unflatten(FT.(params))
+    flat_template, default_reconstructor = Optimisers.destructure(ps_tmpl)
+    expected_length = length(flat_template)
+
+    # Validate provided param vector length and reconstruct
+    param_vec_ft = FT.(params)
+    expected_length == length(param_vec_ft) || error(
+        "Parameter count mismatch: expected $(expected_length), got $(length(param_vec_ft))",
+    )
+
+    reconstruction_fn =
+        isnothing(reconstructor) ? default_reconstructor : reconstructor
+
+    ps = reconstruction_fn(param_vec_ft)
 
     # Capture axes for future serialization
     axes = nothing
@@ -138,7 +123,33 @@ function build_mixing_length_nn_model(parsed_args, params)
     @static if Base.find_package("Lux") === nothing
         error("Lux.jl is required for NN mixing_length but is not in the environment")
     end
-    Lux = Base.require(Base.PkgId(Base.UUID("b3a3368c-0fb4-4e24-a23c-5fc06d4f2c83"), "Lux"))
+
+    # Optionally load reconstructor from BSON if provided
+    reconstructor = nothing
+    bson_reconst_path = get(parsed_args, "bson_reconst_path", nothing)
+    if bson_reconst_path isa AbstractString
+        stripped_path = strip(bson_reconst_path)
+        bson_reconst_path = stripped_path == "" ? nothing : stripped_path
+    elseif !isnothing(bson_reconst_path)
+        error(
+            "Invalid `bson_reconst_path` configuration: expected a string or nothing, got $(typeof(bson_reconst_path))",
+        )
+    end
+    if !isnothing(bson_reconst_path)
+        @static if Base.find_package("BSON") === nothing
+            error(
+                "BSON.jl is required to load `bson_reconst_path` but is not in the environment",
+            )
+        end
+        bson_module = Base.require(:BSON)
+        path = expanduser(String(bson_reconst_path))
+        isfile(path) || error("BSON reconstructor path not found: $path")
+        bson_data = bson_module.load(path)
+        haskey(bson_data, :reconstructor) || error(
+            "BSON file $path does not contain a :reconstructor entry",
+        )
+        reconstructor = bson_data[:reconstructor]
+    end
 
     # Pull flat weights from CAP; ensure type FT
     param_vec = FT.(CAP.mixing_length_param_vec(CAP.turbconv_params(params)))
@@ -150,6 +161,7 @@ function build_mixing_length_nn_model(parsed_args, params)
         biases_bool = false,
         activation_function = Lux.leakyrelu,
         output_layer_activation_function = Lux.identity,
+        reconstructor = reconstructor,
     )
 end
 
@@ -169,6 +181,8 @@ function get_mixing_length_type(parsed_args)
         NeuralNetworkMixingLengthType()
     elseif name == "sym_eqn1"
         SymEqn1MixingLengthType()
+    elseif name == "linear_eqn1"
+        LinearEqn1MixingLengthType()
     else
         PhysicalMixingLengthType()
     end
