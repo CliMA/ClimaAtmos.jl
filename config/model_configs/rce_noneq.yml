@@ -2,8 +2,8 @@ reference_job_id: les_box  # for plotting
 surface_setup: DefaultMoninObukhov
 surface_temperature: RCEMIPII
 insolation: rcemipii
-initial_condition: RCEMPIIProfile
-rce_initial_temperature: 300
+initial_condition: RCEMIPIIProfile
+rcemipii_initial_temperature: 300
 config: box
 rad: allskywithclear
 co2_model: fixed
