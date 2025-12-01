@@ -371,14 +371,16 @@ Base.@kwdef struct RCEMIPIIProfile{T} <: InitialCondition
 end
 
 function (initial_condition::RCEMIPIIProfile)(params)
-    (; T_0) = initial_condition
+    (; temperature) = initial_condition
     function local_state(local_geometry)
         FT = eltype(params)
         R_d = CAP.R_d(params)
         grav = CAP.grav(params)
         thermo_params = CAP.thermodynamics_params(params)
 
+        T_0 = FT(temperature)
         (; z) = local_geometry.coordinates
+        
         q_t = FT(10^(-14)) # kg kg -1
         z_q1 = FT(4000) # m
         z_q2 = FT(7500) # m
