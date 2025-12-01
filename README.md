@@ -52,7 +52,7 @@ Condensed water path from a global simulation using diagnostic EDMF and 0M micro
 
 ## Installation instructions
 
-Recommended Julia: Stable release v1.10.0
+Recommended Julia: Stable release v1.11.6
 
 ClimaAtmos.jl is a [registered Julia package](https://julialang.org/packages/). To install
 
