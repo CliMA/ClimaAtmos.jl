@@ -220,6 +220,9 @@ perturb_initstate:
 discrete_hydrostatic_balance:
   help: "Set the initial state to discrete hydrostatic balance"
   value: false
+rcemipii_initial_temperature:
+  help: "Surface temperature for the RCEMIPII simulations [`295`, `300` (default), `305`]"
+  value: 300
 apply_limiter:
   help: "Apply a horizontal limiter to every tracer [`false` (default), `true`]"
   value: false
