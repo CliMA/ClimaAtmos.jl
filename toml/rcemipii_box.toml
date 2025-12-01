@@ -1,13 +1,13 @@
 # toml/rcemipii_box.toml
 
 [c_smag]
-value = 4.0
+value = 1.0
 
 [condensation_evaporation_timescale]
-value = 10
+value = 50
 
 [sublimation_deposition_timescale]
-value = 10
+value = 50
 
 [angular_velocity_planet_rotation]
 value = 0
@@ -23,3 +23,12 @@ value = 5
 
 [H_diffusion]
 value = 800
+
+[SST_mean]
+value = 300
+
+[SST_delta]
+value = 3
+
+[SST_wavelength]
+value = 6e6
