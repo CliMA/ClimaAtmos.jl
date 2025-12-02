@@ -368,7 +368,6 @@ final state of RCE_small. Temperature options are 295, 300, and 305.
 """
 Base.@kwdef struct RCEMIPIIProfile{T} <: InitialCondition
     temperature::T = 300
-    moisture_model::String = "nonequil"
 end
 
 function (initial_condition::RCEMIPIIProfile)(params)
@@ -449,9 +448,9 @@ function (initial_condition::RCEMIPIIProfile)(params)
 
         q_pt = TD.PhasePartition(q)
 
-        if moisture_model == "equil"
+        if params.moisture_model isa EquilMoistModel
             ts = TD.PhaseEquil_pTq(thermo_params, p, T, q_pt)
-        elseif moisture_model == "nonequil"
+        elseif params.moisture_model == NonEquilMoistModel
             ts = TD.PhaseNonEquil_ρTq(thermo_params, p, T, q_pt)
         else
             @info("Need to specify moisture model as either equil or nonequil")
