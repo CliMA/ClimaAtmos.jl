@@ -1,5 +1,5 @@
 initial_condition: "Larcform1"
-surface_setup: DefaultMoninObukhov     #"Larcform1_test"     # hijacked for const surface temperature
+surface_setup: Larcform1 #DefaultMoninObukhov     #"Larcform1_test"     # hijacked for const surface temperature
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
@@ -19,8 +19,8 @@ z_max: 9000.0
 dz_bottom: 20.0
 z_elem: 40
 z_stretch: true
-x_elem: 2
-y_elem: 2
+x_elem: 1
+y_elem: 1
 dt: 2secs
 dt_rad: 10mins
 t_end: 1days # full run length is 20days
@@ -40,10 +40,10 @@ log_to_file: true
 diagnostics: 
   - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, prsn, hus, hur, ua, va, wa, rlu, rld, rhoa] # profiles (2D)
     period: 6hours
-    reduction: average
+    reduction_time: average
   - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs, hfss, hfls, ts]  # time-series (1D)
     period: 6hours
-    reduction: average
+    reduction_time: average
 
 # TODO:
 # prognostic surface_temperature // sea-ice model
