@@ -371,73 +371,72 @@ Base.@kwdef struct RCEMIPIIProfile{T} <: InitialCondition
 end
 
 function (initial_condition::RCEMIPIIProfile)(params)
-    (; temperature, moisture_model) = initial_condition
-    FT = eltype(params)
-    R_d = CAP.R_d(params)
-    grav = CAP.grav(params)
-    thermo_params = CAP.thermodynamics_params(params)
-
-    T_0 = FT(temperature)
-    
-    q_t = FT(10^(-14)) # kg kg -1
-    z_q1 = FT(4000) # m
-    z_q2 = FT(7500) # m
-    z_t = FT(15000) # m
-    Γ = FT(0.0067) # K m-1
-    p_0 = FT(1014.8) # hPa
-
-    # constants based on the temp options
-    if T_0 == FT(295)
-        q_0 = FT(12e-3) # kg kg-1
-    elseif T_0 == FT(300)
-        q_0 = FT(18.65e-3) # kg kg-1
-    elseif T_0 == FT(305)
-        q_0 = FT(24e-3) # kg kg-1
-    else
-        @info(
-            "Please specify an RCEMIPII temperature of either
-            295K, 300K, or 305K."
-        )
-    end
-
-    T_v0 = T_0 * (FT(1)+FT(0.608)*q_0)
-    T_vt = T_v0 - Γ*z_t
-
-    p_t = p_0 * (T_vt / T_v0)^(grav / (R_d * Γ))
-
-    # i could probably wrap these all into the same function?
-
-    function q_func(z)
-        if FT(0) <= z <= FT(z_t)
-            q = q_0 * exp(-(z/z_q1)) * exp(-(z/z_q2)^FT(2))
-        elseif z > z_t
-            q = q_t
-        end
-
-        return q
-    end
-
-    function T_v_func(z)
-        if FT(0) <= z <= z_t
-            T_v = T_v0 - Γ*z
-        elseif z > z_t
-            T_v = T_vt
-        end
-
-        return T_v
-    end
-
-    function p_func(z)
-        if FT(0) <= z <= z_t
-            p = p_0 * ((T_v0 - Γ*z)/(T_v0))^(grav / (R_d * Γ))
-        elseif z > z_t
-            p = p_t * exp( - (grav*(z-z_t)) / (R_d * T_vt))
-        end
-
-        return p
-    end
-
+    (; temperature) = initial_condition
     function local_state(local_geometry)
+        FT = eltype(params)
+        R_d = CAP.R_d(params)
+        grav = CAP.grav(params)
+        thermo_params = CAP.thermodynamics_params(params)
+
+        T_0 = FT(temperature)
+        
+        q_t = FT(10^(-14)) # kg kg -1
+        z_q1 = FT(4000) # m
+        z_q2 = FT(7500) # m
+        z_t = FT(15000) # m
+        Γ = FT(0.0067) # K m-1
+        p_0 = FT(1014.8) # hPa
+
+        # constants based on the temp options
+        if T_0 == FT(295)
+            q_0 = FT(12e-3) # kg kg-1
+        elseif T_0 == FT(300)
+            q_0 = FT(18.65e-3) # kg kg-1
+        elseif T_0 == FT(305)
+            q_0 = FT(24e-3) # kg kg-1
+        else
+            @info(
+                "Please specify an RCEMIPII temperature of either
+                295K, 300K, or 305K."
+            )
+        end
+
+        T_v0 = T_0 * (FT(1)+FT(0.608)*q_0)
+        T_vt = T_v0 - Γ*z_t
+
+        p_t = p_0 * (T_vt / T_v0)^(grav / (R_d * Γ))
+
+        # i could probably wrap these all into the same function?
+
+        function q_func(z)
+            if FT(0) <= z <= FT(z_t)
+                q = q_0 * exp(-(z/z_q1)) * exp(-(z/z_q2)^FT(2))
+            elseif z > z_t
+                q = q_t
+            end
+
+            return q
+        end
+
+        function T_v_func(z)
+            if FT(0) <= z <= z_t
+                T_v = T_v0 - Γ*z
+            elseif z > z_t
+                T_v = T_vt
+            end
+
+            return T_v
+        end
+
+        function p_func(z)
+            if FT(0) <= z <= z_t
+                p = p_0 * ((T_v0 - Γ*z)/(T_v0))^(grav / (R_d * Γ))
+            elseif z > z_t
+                p = p_t * exp( - (grav*(z-z_t)) / (R_d * T_vt))
+            end
+
+            return p
+        end
 
         (; z) = local_geometry.coordinates
 
@@ -448,13 +447,13 @@ function (initial_condition::RCEMIPIIProfile)(params)
 
         q_pt = TD.PhasePartition(q)
 
-        if params.moisture_model isa EquilMoistModel
-            ts = TD.PhaseEquil_pTq(thermo_params, p, T, q_pt)
-        elseif params.moisture_model == NonEquilMoistModel
-            ts = TD.PhaseNonEquil_ρTq(thermo_params, p, T, q_pt)
-        else
-            @info("Need to specify moisture model as either equil or nonequil")
-        end
+        # if params.moisture_model isa EquilMoistModel
+        #     ts = TD.PhaseEquil_pTq(thermo_params, p, T, q_pt)
+        # elseif params.moisture_model == NonEquilMoistModel
+        ts = TD.PhaseNonEquil_ρTq(thermo_params, p, T, q_pt)
+        # else
+        #     @info("Need to specify moisture model as either equil or nonequil")
+        # end
 
         return LocalState(;
             params,
