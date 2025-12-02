@@ -419,6 +419,7 @@ function get_initial_condition(parsed_args, atmos)
     elseif parsed_args["initial_condition"] == "RCEMIPIIProfile"
         ICs.RCEMIPIIProfile(
             parsed_args["rcemipii_initial_temperature"],
+            parsed_args["moist"],
         )
     elseif isfile(parsed_args["initial_condition"])
         return ICs.MoistFromFile(parsed_args["initial_condition"])
