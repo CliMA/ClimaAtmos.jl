@@ -448,13 +448,13 @@ function (initial_condition::RCEMIPIIProfile)(params)
 
         q_pt = TD.PhasePartition(q)
 
-        if moisture_model isa EquilMoistModel
-            ts = TD.PhaseEquil_pTq(thermo_params, p, T, q_pt)
-        elseif moisture_model isa NonEquilMoistModel
-            ts = TD.PhaseNonEquil_ρTq(thermo_params, p, T, q_pt)
-        else
-            @info("Need to specify moisture model as either equil or nonequil")
-        end
+        # if moisture_model isa EquilMoistModel
+        #     ts = TD.PhaseEquil_pTq(thermo_params, p, T, q_pt)
+        # elseif moisture_model isa NonEquilMoistModel
+        ts = TD.PhaseNonEquil_ρTq(thermo_params, p, T, q_pt)
+        # else
+        #     @info("Need to specify moisture model as either equil or nonequil")
+        # end
 
         return LocalState(;
             params,
