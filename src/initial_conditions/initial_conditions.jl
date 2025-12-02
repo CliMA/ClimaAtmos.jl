@@ -475,6 +475,38 @@ function correct_surface_pressure_for_topography!(
 end
 
 # WeatherModel function using the shared implementation
+"""
+    overwrite_initial_conditions!(initial_condition::WeatherModel, Y, thermo_params; use_full_pressure=false)
+
+Overwrite the prognostic state `Y` with ERA5-derived initial conditions on the model grid.
+
+
+- Derives the model's target vertical levels from `Y.c` (on CPU).
+- Obtains the ERA5-derived IC NetCDF path via `weather_model_data_path` (with
+  any caller-provided kwargs forwarded there), then constructs `SpaceVaryingInput`
+  fields to regrid ERA5 variables onto the model's center and face spaces.
+- Populates the thermodynamic state, density, velocity components, total energy,
+  and moisture. If EDMF subdomains exist, initializes those as well.
+
+Pressure initialization (controlled by `use_full_pressure`):
+- If `use_full_pressure == true` and the IC file contains a 3D pressure field
+  `p_3d(lon,lat,z)`, then pressure is taken directly from `p_3d` and regridded.
+- Otherwise, pressure is obtained by hydrostatic integration starting from the
+  surface pressure `p(lon,lat)` (broadcast in `z` in the IC file), using the
+  regridded temperature `t` and specific humidity `q`. If the dataset provides
+  surface altitude `z_sfc` (derived from ERA5 surface geopotential), the surface
+  pressure is first corrected for model-versus-ERA5 topographic differences.
+
+Expected variables in the IC file:
+- 3D: `u`, `v`, `w`, `t`, `q` (and optionally `p_3d`, cloud water variables)
+- 2D broadcast in `z`: `p` (surface pressure), `skt` (skin temperature), and
+  optionally `z_sfc` (surface altitude)
+
+Notes:
+- When generating 3D ICs (via `to_z_levels(...; interp3d=true)` in
+  `weather_model_data_path`), the file can include `p_3d` and a `z_physical`
+  field on the target grid, enabling the full-pressure path described above.
+"""
 function overwrite_initial_conditions!(
     initial_condition::WeatherModel,
     Y,
@@ -482,7 +514,6 @@ function overwrite_initial_conditions!(
     use_full_pressure::Bool = false,
 )
     regridder_type = :InterpolationsRegridder
-    # regridder_type = nothing
     interpolation_method = Intp.Linear()
     extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
 
@@ -492,23 +523,85 @@ function overwrite_initial_conditions!(
     icol = argmin(z_arr_cpu[1, :])
     target_levels = z_arr_cpu[:, icol]
 
+    # Gather lon/lat from model coordinates for 3D arrays-mode interpolation
+    zc_coords = Fields.coordinate_field(Y.c)
+    @assert hasproperty(zc_coords, :lat) && hasproperty(zc_coords, :long) "Model coordinates must have `lat` and `long` for 3D IC generation."
+    # lat_vals = Array(Fields.field2array(zc_coords.lat))[1, :]
+    # lon_vals = Array(Fields.field2array(zc_coords.long))[1, :]
+    # grid_lon = sort(unique(lon_vals))
+    # grid_lat = sort(unique(lat_vals))
+
+    lon_flat = vec(Array(Fields.field2array(zc_coords.long))[1, :])
+    lat_flat = vec(Array(Fields.field2array(zc_coords.lat))[1, :])
+
+    # Derive a rectilinear lon/lat grid by binning model columns.
+    lon_norm = mod.(lon_flat .+ 360, 360)
+    lon_u = sort(unique(lon_norm))
+    lat_u = sort(unique(lat_flat))
+    # Choose a median grid spacing from curvilinear grid.
+    function _median_step(u)
+        if length(u) < 2
+            return 1.0
+        end
+        d = diff(u)
+        sd = sort(d)
+        mid = (length(sd) + 1) ÷ 2
+        return sd[mid]
+    end
+    est_deg = max(_median_step(lon_u), _median_step(lat_u))
+    nice_bins = collect(0.25:0.25:3.0)
+    _, nice_idx = findmin(abs.(nice_bins .- est_deg))
+    bin_deg = nice_bins[nice_idx]
+    # Build contiguous rectilinear ranges snapped to bin edges
+    lon_min = max(0.0, floor(minimum(lon_norm) / bin_deg) * bin_deg)
+    lon_max = min(360.0, ceil(maximum(lon_norm) / bin_deg) * bin_deg)
+    lat_min = max(-90.0, floor(minimum(lat_flat) / bin_deg) * bin_deg)
+    lat_max = min(90.0, ceil(maximum(lat_flat) / bin_deg) * bin_deg)
+    T = promote_type(eltype(lon_norm), eltype(lat_flat))
+    grid_lon = T.(collect(lon_min:bin_deg:lon_max))
+    grid_lat = T.(collect(lat_min:bin_deg:lat_max))
+    @info "Chosen rectilinear grid from model columns" (
+        bin_deg = bin_deg,
+        nlon = length(grid_lon),
+        nlat = length(grid_lat),
+        lonmin = minimum(grid_lon),
+        lonmax = maximum(grid_lon),
+        latmin = minimum(grid_lat),
+        latmax = maximum(grid_lat),
+    )
+
+    # Additional diagnostics to catch bad lon/lat setups before interpolation
+    raw_lonmin, raw_lonmax = extrema(lon_flat)
+    norm_lonmin, norm_lonmax = extrema(lon_norm)
+    raw_latmin, raw_latmax = extrema(lat_flat)
+    @info "3D IC lon/lat diagnostics" (
+        raw_lon_min = raw_lonmin,
+        raw_lon_max = raw_lonmax,
+        norm_lon_min = norm_lonmin,
+        norm_lon_max = norm_lonmax,
+        raw_lat_min = raw_latmin,
+        raw_lat_max = raw_latmax,
+        using_lon_0_360 = true,
+    )
+
+    @info "Calling weather_model_data_path for 3D IC generation" (
+        start_date = initial_condition.start_date,
+        era5_dir = initial_condition.era5_initial_condition_dir,
+        interp3d = true,
+        use_custom_z = true,
+    )
+
     file_path = weather_model_data_path(
         initial_condition.start_date,
         target_levels,
-        initial_condition.era5_initial_condition_dir,
+        initial_condition.era5_initial_condition_dir;
+        interp3d = true,
+        grid_lon = grid_lon,
+        grid_lat = grid_lat,
+        use_custom_z = true,
     )
 
     regridder_kwargs = (; extrapolation_bc, interpolation_method)
-    # regridder_kwargs = (; extrapolation_bc)
-
-    # file_reader_kwargs = (
-    #     latitude_name  = "lat",
-    #     longitude_name = "lon",
-    #     vertical_name  = "z",
-    #     # time_name      = ,
-    # )
-
-    # maybe regridder_type = :InterpolationsRegridder, ??
 
     isfile(file_path) || error("$(file_path) is not a file")
     @info "Overwriting initial conditions with data from file $(file_path)"
@@ -522,7 +615,6 @@ function overwrite_initial_conditions!(
         center_space;
         regridder_type,
         regridder_kwargs = regridder_kwargs,
-        # file_reader_kwargs = file_reader_kwargs,
     )
     ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(
         file_path,
