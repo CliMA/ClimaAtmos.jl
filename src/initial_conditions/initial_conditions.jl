@@ -359,7 +359,7 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
 end
 
 """
-    RCEMIPIIProfile(; temperature = 300)
+    RCEMIPIIProfile(; temperature = 300, moisture_model)
 
 An `InitialCondition` following the sounding to initialize simulations for
 RCEMIPII as described by Wing et. al. (2018). Note - this should be used
@@ -450,7 +450,7 @@ function (initial_condition::RCEMIPIIProfile)(params)
 
         if moisture_model isa EquilMoistModel
             ts = TD.PhaseEquil_pTq(thermo_params, p, T, q_pt)
-        elseif moisture_model == NonEquilMoistModel
+        elseif moisture_model isa NonEquilMoistModel
             ts = TD.PhaseNonEquil_ρTq(thermo_params, p, T, q_pt)
         else
             @info("Need to specify moisture model as either equil or nonequil")
