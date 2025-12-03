@@ -1,4 +1,4 @@
-277
+278
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+278
+- Add ∂/∂q elements to Jacobian
+
 277
 - Update to use SurfaceFluxes.jl@0.14.1. Supports Charnock-parameterization for aerodynamic roughness (default is still user-prescribed ScalarRoughness). SurfaceFluxes catch for neutrally-stable boundary layers (ζ ≈ 0) removed. 
 

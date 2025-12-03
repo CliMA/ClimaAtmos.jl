@@ -49,9 +49,10 @@ function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     # TODO: Replace turbconv_model struct by parameters, and include a_half in
     # parameters, not in config
     weight = sgs_weight_function(ρa / ρ, turbconv_model.a_half)
-    # If ρa is exactly zero, the weight function will be zero, causing the first
-    # term to be NaN (0 * ... / 0). The ifelse handles this case explicitly.
-    return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
+    # If ρa is exactly zero, the weight is zero, making the first term NaN (0 * … / 0).
+    # For negligible ρa the weight is also zero, and autodiff can still produce NaNs.
+    # The ifelse handles both cases explicitly by returning the grid-mean value when ρa < eps.
+    return ρa < eps(typeof(ρ)) ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
 end
 
 # Internal method that checks if its input is @name(ρχ) for some variable χ.
