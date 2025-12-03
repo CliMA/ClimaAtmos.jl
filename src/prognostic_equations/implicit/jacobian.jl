@@ -46,7 +46,7 @@ NVTX.@annotate update_jacobian!(jacobian, Y, p, dtγ, t) =
     update_jacobian!(jacobian.alg, jacobian.cache, Y, p, eltype(Y)(dtγ), t)
 
 # ClimaTimeSteppers.jl calls this to perform each linear solve.
-NVTX.@annotate LinearAlgebra.ldiv!(
+LinearAlgebra.ldiv!(
     ΔY::Fields.FieldVector,
     jacobian::Jacobian,
     R::Fields.FieldVector,
