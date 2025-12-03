@@ -1,11 +1,19 @@
 """
-Reproduce Figures 1 and 2 from Garner (2005):
+Reproduce Figures 1, 2, 4, and 5 from Garner (2005):
 "A Topographic Drag Closure Built on an Analytical Base Flux"
 Journal of the Atmospheric Sciences, Vol. 62, pp. 2302-2315
 
 Figure 1: Drag over North and South America with tropical wind = -7 m/s,
           mid-latitude wind = 13 m/s
 Figure 2: Drag over Asia with uniform zonal wind = 10 m/s
+Figure 4: Linear drag comparison over Northern Hemisphere:
+          - Top panel: Analytical drag D = (ρ̄/ρr) V̄ max(|T₁|, |T₂|)
+          - Middle panel: τ_l from GFDL restart (traditional dimensional estimate)
+          - Bottom panel: τ_l from raw topography (new dimensional estimate)
+Figure 5: Normalized drag curves showing D/D* vs h_max/h_c:
+          - Propagating drag ⟨D_p⟩/D* (dashed lines)
+          - Total drag (D_p + D_np)/D* (solid lines)
+          - Two cases: h_min = 0 and h_min = h_max
 
 The drag formula from Garner (2005) is:
     τ = (ρ̄N̄)/(ρᵣNᵣ) ⟨T⟩V̄
@@ -16,6 +24,14 @@ Where:
 - ρᵣ, Nᵣ: reference density and buoyancy frequency
 - ⟨T⟩: orographic stress tensor (t11, t12, t21, t22)
 - V̄: surface wind vector (u, v)
+
+For Figure 4, the scalar drag uses equation (19):
+    D = (ρ̄/ρr) V̄ max(|T₁|, |T₂|)
+where T₁ and T₂ are eigenvalues of the tensor T.
+
+For Figure 5, the dimensional estimate D* from equation (16) is:
+    D* = τ_l (linear drag, used for normalization)
+with parameters γ = 0.4, β = 0.5, ε = 0, a_1/a_0 = 9.0
 """
 
 import CUDA
@@ -51,6 +67,38 @@ comms_ctx = ClimaComms.SingletonCommsContext()
 @show CUDA.functional()
 @show ClimaComms.device(comms_ctx)
 
+#######################################
+# Helper function: Compute max absolute eigenvalue of 2x2 tensor
+#######################################
+
+"""
+    compute_tensor_eigenvalue_max(t11, t12, t21, t22)
+
+Compute the maximum absolute eigenvalue of a 2×2 tensor field [[t11, t12], [t21, t22]].
+
+For a 2×2 matrix, eigenvalues are:
+    λ = (t11 + t22)/2 ± sqrt(((t11 - t22)/2)² + t12 * t21)
+
+Returns a field containing max(|λ₁|, |λ₂|) at each point.
+"""
+function compute_tensor_eigenvalue_max(t11, t12, t21, t22)
+    FT = eltype(t11)
+
+    # Compute eigenvalues of 2x2 tensor
+    # For [[a, b], [c, d]], eigenvalues are: (a+d)/2 ± sqrt(((a-d)/2)^2 + bc)
+    trace_half = @. (t11 + t22) / FT(2)
+    discriminant = @. ((t11 - t22) / FT(2))^2 + t12 * t21
+
+    # Handle potential numerical issues with sqrt of negative values
+    sqrt_disc = @. sqrt(max(discriminant, FT(0)))
+
+    λ1 = @. trace_half + sqrt_disc
+    λ2 = @. trace_half - sqrt_disc
+
+    # Return max absolute eigenvalue
+    return @. max(abs(λ1), abs(λ2))
+end
+
 # Setup simulation
 (; config_file, job_id) = CA.commandline_kwargs()
 config = CA.AtmosConfig(config_file; job_id, comms_ctx)
@@ -85,8 +133,8 @@ thermo_params = CAP.thermodynamics_params(params)
 
 #######################################
 # FIGURE 1: Americas
-# Wind: -7 m/s in tropics (|lat| <= 23.5°), +13 m/s elsewhere
-# ρ = 1.0 kg/m³, N = 0.01 s⁻¹
+# Wind: -7 m/s in tropics (|lat| <= 30.0°), +13 m/s elsewhere
+# ρᵣ = 1.0 kg/m³, Nᵣ = 0.01 s⁻¹
 #######################################
 
 println("\n" * "="^70)
@@ -103,7 +151,7 @@ function garner_fig1_wind!(u_phy, v_phy)
 
     # @Main.infiltrate
     @. u_phy = ifelse(
-        abs(coord_field.lat) <= FT(23.5),
+        abs(coord_field.lat) <= FT(30.0),
         FT(-7.0),   # Tropical: -7 m/s
         FT(13.0),   # Mid-latitudes: +13 m/s
     )
@@ -115,9 +163,11 @@ garner_fig1_wind!(u_phy, v_phy)
 
 # Set constant density and buoyancy frequency for idealized test
 # In the full model, these would come from thermodynamics
-# For Garner reproduction: ρ = 1.0 kg/m³, N = 0.01 s⁻¹
+# For Garner reproduction: ρᵣ = 1.0 kg/m³, Nᵣ = 0.01 s⁻¹
 @. Y.c.ρ = FT(1.0)
 @. ᶜbuoyancy_frequency = FT(0.01)
+
+# @Main.infiltrate
 
 # Compute base flux (this extracts values at PBL and computes τ_x, τ_y)
 CA.calc_base_flux!(
@@ -445,6 +495,455 @@ function plot_garner_quiver(
     return fig
 end
 
+"""
+    plot_garner_contour(
+        output_file, datafile_rll, var_name;
+        lon_range, lat_range, title, colormap, normalize
+    )
+
+Create a Garner-style contour plot with coastlines showing scalar field.
+
+# Arguments
+- `output_file`: Path to save the figure
+- `datafile_rll`: Path to remapped NetCDF file
+- `var_name`: Variable name for scalar field
+- `lon_range`: Tuple (lon_min, lon_max) in degrees
+- `lat_range`: Tuple (lat_min, lat_max) in degrees
+- `title`: Plot title
+- `colormap`: Colormap for contours (default :grays)
+- `normalize`: Whether to normalize by global maximum (default true)
+"""
+function plot_garner_contour(
+    output_file::String,
+    datafile_rll::String,
+    var_name::String;
+    lon_range::Tuple{Real,Real} = (-180.0, 180.0),
+    lat_range::Tuple{Real,Real} = (-90.0, 90.0),
+    title::String = "Linear Drag",
+    colormap::Symbol = :grays,
+    normalize::Bool = true,
+)
+    println("Creating contour plot: $output_file")
+
+    # Load data directly using NCDatasets
+    lon, lat, data = NCDatasets.NCDataset(datafile_rll, "r") do ds
+        # Read coordinates
+        lon_all = Array(ds["lon"][:])
+        lat_all = Array(ds["lat"][:])
+
+        # Read data (squeeze time dimension)
+        data_all = Array(ds[var_name][:, :, 1])
+
+        # Apply geographic windowing
+        lon_mask = (lon_all .>= lon_range[1]) .& (lon_all .<= lon_range[2])
+        lat_mask = (lat_all .>= lat_range[1]) .& (lat_all .<= lat_range[2])
+
+        lon = lon_all[lon_mask]
+        lat = lat_all[lat_mask]
+        data = data_all[lon_mask, lat_mask]
+
+        return lon, lat, data
+    end
+
+    # Normalize by global maximum if requested
+    if normalize
+        global_max = maximum(abs.(data))
+        if global_max > 0
+            data = data ./ global_max
+        end
+    end
+
+    # Create figure with white background
+    fig = Figure(size = (1000, 600), fontsize = 14, backgroundcolor = :white)
+    ax = Axis(
+        fig[1, 1],
+        xlabel = "Longitude",
+        ylabel = "Latitude",
+        title = title,
+        aspect = DataAspect(),
+        backgroundcolor = :white,
+    )
+
+    # Create contour plot
+    # data is (lon, lat), contourf expects z[i,j] where i indexes x (lon) and j indexes y (lat)
+    hm = contourf!(
+        ax,
+        lon,
+        lat,
+        data,
+        colormap = colormap,
+        levels = range(0, 1, length = 11),
+    )
+
+    # Add colorbar
+    Colorbar(fig[1, 2], hm, label = normalize ? "Normalized" : var_name)
+
+    # Add coastlines using GeoMakie
+    try
+        coastline_data = GeoMakie.coastlines()
+
+        # Transform coastline coordinates if needed
+        if lon_range[1] > 180  # Using 0-360 format
+            transformed_coastlines = []
+            for geom in coastline_data
+                coords = GeometryBasics.coordinates(geom)
+                if isempty(coords)
+                    continue
+                end
+
+                current_segment = GeometryBasics.Point2f[]
+                for i in eachindex(coords)
+                    clon = coords[i][1]
+                    clat = coords[i][2]
+                    lon_shifted = clon < 0 ? clon + 360 : clon
+
+                    if i > 1
+                        prev_lon_shifted = coords[i-1][1] < 0 ? coords[i-1][1] + 360 : coords[i-1][1]
+                        if abs(lon_shifted - prev_lon_shifted) > 180
+                            if length(current_segment) > 1
+                                push!(transformed_coastlines, GeometryBasics.LineString(current_segment))
+                            end
+                            current_segment = GeometryBasics.Point2f[]
+                        end
+                    end
+
+                    if (lon_shifted >= lon_range[1] - 10) && (lon_shifted <= lon_range[2] + 10)
+                        push!(current_segment, GeometryBasics.Point2f(lon_shifted, clat))
+                    elseif !isempty(current_segment)
+                        if length(current_segment) > 1
+                            push!(transformed_coastlines, GeometryBasics.LineString(current_segment))
+                        end
+                        current_segment = GeometryBasics.Point2f[]
+                    end
+                end
+
+                if length(current_segment) > 1
+                    push!(transformed_coastlines, GeometryBasics.LineString(current_segment))
+                end
+            end
+            lines!(ax, transformed_coastlines, color = :black, linewidth = 1)
+        else
+            lines!(ax, coastline_data, color = :black, linewidth = 1)
+        end
+    catch e
+        @warn "Could not plot coastlines with GeoMakie: $e"
+    end
+
+    # Set axis limits
+    xlims!(ax, lon_range...)
+    ylims!(ax, lat_range...)
+
+    save(output_file, fig)
+    println("  Saved: $output_file")
+
+    return fig
+end
+
+"""
+    plot_garner_fig4_tripanel(
+        output_file, datafile_rll, var_names, titles;
+        lon_range, lat_range, colormap
+    )
+
+Create a 3-panel Garner Figure 4 style plot showing linear drag from three methods.
+Each panel is normalized by its respective global maximum.
+
+# Arguments
+- `output_file`: Path to save the figure
+- `datafile_rll`: Path to remapped NetCDF file
+- `var_names`: Vector of 3 variable names [analytical, gfdl, raw_topo]
+- `titles`: Vector of 3 panel titles
+- `lon_range`: Tuple (lon_min, lon_max) in degrees
+- `lat_range`: Tuple (lat_min, lat_max) in degrees
+- `colormap`: Colormap for contours (default :grays)
+"""
+function plot_garner_fig4_tripanel(
+    output_file::String,
+    datafile_rll::String,
+    var_names::Vector{String},
+    titles::Vector{String};
+    lon_range::Tuple{Real,Real} = (0.0, 360.0),
+    lat_range::Tuple{Real,Real} = (-90.0, 90.0),
+    colormap::Symbol = :viridis,
+)
+    println("Creating Figure 4 tripanel plot: $output_file")
+
+    # Load all three datasets
+    lon, lat, data_all = NCDatasets.NCDataset(datafile_rll, "r") do ds
+        lon_all = Array(ds["lon"][:])
+        lat_all = Array(ds["lat"][:])
+
+        # Apply geographic windowing
+        lon_mask = (lon_all .>= lon_range[1]) .& (lon_all .<= lon_range[2])
+        lat_mask = (lat_all .>= lat_range[1]) .& (lat_all .<= lat_range[2])
+
+        lon = lon_all[lon_mask]
+        lat = lat_all[lat_mask]
+
+        data_all = []
+        for var_name in var_names
+            data = Array(ds[var_name][:, :, 1])
+            push!(data_all, data[lon_mask, lat_mask])
+        end
+
+        return lon, lat, data_all
+    end
+
+    # Normalize each dataset by its global maximum
+    data_normalized = []
+    for data in data_all
+        global_max = maximum(abs.(data))
+        if global_max > 0
+            push!(data_normalized, data ./ global_max)
+        else
+            push!(data_normalized, data)
+        end
+    end
+
+    # Create figure with 3 panels (vertical stack)
+    fig = Figure(size = (1000, 1200), fontsize = 12, backgroundcolor = :white)
+
+    for (i, (data, panel_title)) in enumerate(zip(data_normalized, titles))
+        ax = Axis(
+            fig[i, 1],
+            xlabel = i == 3 ? "Longitude" : "",
+            ylabel = "Latitude",
+            title = panel_title,
+            aspect = DataAspect(),
+            backgroundcolor = :white,
+        )
+
+        # Create contour plot
+        # data is (lon, lat), contourf expects z[i,j] where i indexes x (lon) and j indexes y (lat)
+        hm = contourf!(
+            ax,
+            lon,
+            lat,
+            data,
+            colormap = colormap,
+            levels = range(0, 1, length = 11),
+        )
+
+        # Add coastlines
+        try
+            coastline_data = GeoMakie.coastlines()
+
+            if lon_range[1] >= 0 && lon_range[2] <= 180
+                # Standard -180:180 format works
+                lines!(ax, coastline_data, color = :black, linewidth = 0.5)
+            else
+                # Need to transform for 0-360 format
+                transformed_coastlines = []
+                for geom in coastline_data
+                    coords = GeometryBasics.coordinates(geom)
+                    if isempty(coords)
+                        continue
+                    end
+
+                    current_segment = GeometryBasics.Point2f[]
+                    for j in eachindex(coords)
+                        clon = coords[j][1]
+                        clat = coords[j][2]
+                        lon_shifted = clon < 0 ? clon + 360 : clon
+
+                        if j > 1
+                            prev_lon_shifted = coords[j-1][1] < 0 ? coords[j-1][1] + 360 : coords[j-1][1]
+                            if abs(lon_shifted - prev_lon_shifted) > 180
+                                if length(current_segment) > 1
+                                    push!(transformed_coastlines, GeometryBasics.LineString(current_segment))
+                                end
+                                current_segment = GeometryBasics.Point2f[]
+                            end
+                        end
+
+                        if (lon_shifted >= lon_range[1] - 10) && (lon_shifted <= lon_range[2] + 10) &&
+                           (clat >= lat_range[1]) && (clat <= lat_range[2])
+                            push!(current_segment, GeometryBasics.Point2f(lon_shifted, clat))
+                        elseif !isempty(current_segment)
+                            if length(current_segment) > 1
+                                push!(transformed_coastlines, GeometryBasics.LineString(current_segment))
+                            end
+                            current_segment = GeometryBasics.Point2f[]
+                        end
+                    end
+
+                    if length(current_segment) > 1
+                        push!(transformed_coastlines, GeometryBasics.LineString(current_segment))
+                    end
+                end
+                lines!(ax, transformed_coastlines, color = :black, linewidth = 0.5)
+            end
+        catch e
+            @warn "Could not plot coastlines: $e"
+        end
+
+        xlims!(ax, lon_range...)
+        ylims!(ax, lat_range...)
+
+        # Add colorbar only to the last panel
+        if i == 3
+            Colorbar(fig[1:3, 2], hm, label = "Normalized by global max")
+        end
+    end
+
+    save(output_file, fig)
+    println("  Saved: $output_file")
+
+    return fig
+end
+
+"""
+    compute_theoretical_drag(h_max, h_min, V, N, ρ; params...)
+
+Compute theoretical drag values for given parameters, implementing Garner (2005) formulas.
+Returns (τ_l, τ_p, τ_np) - linear, propagating, and non-propagating drag components.
+
+This function implements the same formulas as calc_base_flux! but for scalar inputs,
+bypassing the column_reduce! machinery.
+
+# Arguments
+- `h_max`: Maximum subgrid terrain height (m)
+- `h_min`: Minimum subgrid terrain height (m)
+- `V`: Wind speed (m/s)
+- `N`: Buoyancy frequency (s⁻¹)
+- `ρ`: Air density (kg/m³)
+
+# Keyword Arguments
+- `γ`: Exponent parameter (default 0.4)
+- `β`: Saturation parameter (default 0.5)
+- `ϵ`: Additional exponent (default 0.0)
+- `Fr_crit`: Critical Froude number (default 0.7)
+- `a0`: Propagating drag coefficient (default 0.9)
+- `a1`: Non-propagating drag coefficient (default 8.1)
+- `ρscale`: Reference density scale (default 1.2)
+- `L0`: Length scale (default 80000.0)
+"""
+function compute_theoretical_drag(
+    h_max::FT,
+    h_min::FT,
+    V::FT,
+    N::FT,
+    ρ::FT;
+    γ::FT = FT(0.4),
+    β::FT = FT(0.5),
+    ϵ::FT = FT(0.0),
+    Fr_crit::FT = FT(0.7),
+    a0::FT = FT(0.9),
+    a1::FT = FT(8.1),
+    ρscale::FT = FT(1.2),
+    L0::FT = FT(80000.0),
+) where {FT}
+    # Compute Froude numbers
+    # Fr = h * N / V (inverse of the non-dimensional wind speed)
+    Fr_max = max(FT(0), h_max) * N / V
+    Fr_min = max(FT(0), h_min) * N / V
+
+    # Compute U_sat - saturation velocity scale
+    # U_sat = sqrt(ρ/ρscale * V^3 / N / L0)
+    U_sat = sqrt(ρ / ρscale * V^3 / N / L0)
+
+    # Compute FrU values (Froude number times U_sat)
+    FrU_sat = Fr_crit * U_sat
+    FrU_min = Fr_min * U_sat
+    FrU_max = max(Fr_max * U_sat, FrU_min + eps(FT))
+    FrU_clp = clamp(FrU_sat, FrU_min, FrU_max)
+
+    # Exponents
+    exp1 = 2 + γ - ϵ  # = 2.4 for default params
+    exp2 = γ - ϵ - β  # = -0.1 for default params
+    exp3 = 1 + γ - ϵ  # = 1.4 for default params
+    exp4 = β + 2      # = 2.5 for default params
+    exp5 = β + 1      # = 1.5 for default params
+
+    # Linear drag (D* for normalization)
+    τ_l = (FrU_max^exp1 - FrU_min^exp1) / exp1
+
+    # Propagating drag
+    τ_p = a0 * (
+        (FrU_clp^exp1 - FrU_min^exp1) / exp1 +
+        FrU_sat^exp4 * (FrU_max^exp2 - FrU_clp^exp2) / exp2
+    )
+
+    # Non-propagating drag
+    τ_np = a1 * U_sat / (1 + β) * (
+        (FrU_max^exp3 - FrU_clp^exp3) / exp3 -
+        FrU_sat^exp5 * (FrU_max^exp2 - FrU_clp^exp2) / exp2
+    )
+
+    # Scale non-propagating drag
+    τ_np = τ_np / max(Fr_crit, Fr_max)
+
+    return (τ_l, τ_p, τ_np)
+end
+
+"""
+    plot_garner_fig5(
+        output_file, x_values, Dp_hmin0, Dp_hmin_eq_hmax,
+        total_hmin0, total_hmin_eq_hmax; params...
+    )
+
+Create a Garner Figure 5 style plot showing normalized drag curves D/D* vs h_max/h_c.
+
+# Arguments
+- `output_file`: Path to save the figure
+- `x_values`: Vector of h_max/h_c values (x-axis)
+- `Dp_hmin0`: Vector of ⟨D_p⟩/D* for h_min = 0 case
+- `Dp_hmin_eq_hmax`: Vector of ⟨D_p⟩/D* for h_min = h_max case
+- `total_hmin0`: Vector of (D_p + D_np)/D* for h_min = 0 case
+- `total_hmin_eq_hmax`: Vector of (D_p + D_np)/D* for h_min = h_max case
+- `γ`, `β`: Parameters shown in plot annotation (default 0.4, 0.5)
+"""
+function plot_garner_fig5(
+    output_file::String,
+    x_values::Vector,
+    Dp_hmin0::Vector,
+    Dp_hmin_eq_hmax::Vector,
+    total_hmin0::Vector,
+    total_hmin_eq_hmax::Vector;
+    γ::Real = 0.4,
+    β::Real = 0.5,
+)
+    println("Creating Figure 5 plot: $output_file")
+
+    # Create figure matching paper style
+    fig = Figure(size = (600, 500), fontsize = 14, backgroundcolor = :white)
+    ax = Axis(
+        fig[1, 1],
+        xlabel = "hₘₐₓ/hc",
+        ylabel = "D/D*",
+        title = "Figure 5: Normalized Drag vs Mountain Height (Garner 2005)",
+        backgroundcolor = :white,
+    )
+
+    # Plot total drag (solid lines) - different colors
+    lines!(ax, x_values, total_hmin_eq_hmax, color = :blue, linewidth = 2,
+           label = "Total (hₘᵢₙ = hₘₐₓ)")
+    lines!(ax, x_values, total_hmin0, color = :red, linewidth = 2,
+           linestyle = :solid, label = "Total (hₘᵢₙ = 0)")
+
+    # Plot propagating drag (dashed lines) - different colors
+    lines!(ax, x_values, Dp_hmin_eq_hmax, color = :blue, linewidth = 1.5,
+           linestyle = :dash, label = "⟨Dₚ⟩ (hₘᵢₙ = hₘₐₓ)")
+    lines!(ax, x_values, Dp_hmin0, color = :red, linewidth = 1.5,
+           linestyle = :dash, label = "⟨Dₚ⟩ (hₘᵢₙ = 0)")
+
+    # Add parameter annotations (matching paper style)
+    text!(ax, 4.0, 2.3, text = "γ = $γ", fontsize = 12)
+    text!(ax, 4.0, 2.1, text = "β = $β", fontsize = 12)
+
+    # Add legend
+    axislegend(ax, position = :lt, framevisible = true, labelsize = 10)
+
+    # Set axis limits to match paper
+    xlims!(ax, 0, 5)
+    ylims!(ax, 0, 2.5)
+
+    save(output_file, fig)
+    println("  Saved: $output_file")
+
+    return fig
+end
+
 # Use existing remap infrastructure
 output_dir = "garner2005_reproduction"
 mkpath(output_dir)
@@ -528,7 +1027,338 @@ plot_garner_quiver(
     reference_arrow = 2.0,
 )
 
+#######################################
+# FIGURE 4: Linear Drag Comparison
+# Three panels showing:
+#   Top: Analytical drag D = (ρ̄/ρr) * V̄ * max(|T₁|, |T₂|)
+#   Middle: Linear drag τ_l from GFDL restart topo_info
+#   Bottom: Linear drag τ_l from raw_topo
+# All with uniform wind V̄ = 10 m/s, ρ̄/ρr = 1.0
+#######################################
+
+println("\n" * "="^70)
+println("FIGURE 4: Linear Drag Comparison")
+println("="^70)
+
+# Set uniform wind for Figure 4 (10 m/s zonal)
+@. u_phy = FT(10.0)
+@. v_phy = FT(0.0)
+@. Y.c.ρ = FT(1.0)
+@. ᶜbuoyancy_frequency = FT(0.01)
+
+#--- Panel 1: Analytical scalar drag from eigenvalues ---
+println("\nComputing analytical scalar drag (eigenvalue method)...")
+
+# Compute max absolute eigenvalue of the tensor from raw_topo
+max_eigenvalue = compute_tensor_eigenvalue_max(
+    topo_info.t11,
+    topo_info.t12,
+    topo_info.t21,
+    topo_info.t22,
+)
+
+# Analytical drag: D = (ρ̄/ρr) * V̄ * max(|T₁|, |T₂|)
+# With ρ̄/ρr = 1.0 and V̄ = 10.0 m/s
+V_mag = FT(10.0)  # Wind magnitude
+ρ_ratio = FT(1.0)  # Density ratio
+analytical_drag = similar(max_eigenvalue)
+@. analytical_drag = ρ_ratio * V_mag * max_eigenvalue
+
+analytical_drag_cpu = to_cpu(analytical_drag)
+println("  Analytical drag range: $(minimum(parent(analytical_drag_cpu))) to $(maximum(parent(analytical_drag_cpu)))")
+
+#--- Panel 2: Linear drag from GFDL restart ---
+println("\nComputing linear drag from GFDL restart...")
+
+# Create OGW configuration for GFDL restart
+γ_gfdl = FT(0.4)
+ϵ_gfdl = FT(0.0)
+β_gfdl = FT(0.5)
+h_frac_gfdl = FT(0.1)
+ρscale_gfdl = FT(1.2)
+L0_gfdl = FT(80000.0)
+a0_gfdl = FT(0.9)
+a1_gfdl = FT(3.0)
+Fr_crit_gfdl = FT(0.7)
+topo_info_type_gfdl = Val(:gfdl_restart)
+topography_type_gfdl = Val(:Earth)
+
+ogw_gfdl = CA.FullOrographicGravityWave{FT, typeof(topo_info_type_gfdl), typeof(topography_type_gfdl)}(;
+    γ = γ_gfdl,
+    ϵ = ϵ_gfdl,
+    β = β_gfdl,
+    h_frac = h_frac_gfdl,
+    ρscale = ρscale_gfdl,
+    L0 = L0_gfdl,
+    a0 = a0_gfdl,
+    a1 = a1_gfdl,
+    Fr_crit = Fr_crit_gfdl,
+    topo_info = topo_info_type_gfdl,
+    topography = topography_type_gfdl,
+)
+
+# Load GFDL topo_info
+topo_info_gfdl = CA.get_topo_info(Y, ogw_gfdl)
+
+# Create scratch fields for GFDL computation
+τ_x_gfdl = similar(topo_τ_x)
+τ_y_gfdl = similar(topo_τ_y)
+τ_l_gfdl = similar(topo_τ_l)
+τ_p_gfdl = similar(topo_τ_p)
+τ_np_gfdl = similar(topo_τ_np)
+U_sat_gfdl = similar(topo_U_sat)
+FrU_sat_gfdl = similar(topo_FrU_sat)
+FrU_clp_gfdl = similar(topo_FrU_clp)
+FrU_max_gfdl = similar(topo_FrU_max)
+FrU_min_gfdl = similar(topo_FrU_min)
+
+# Compute linear drag from GFDL data
+CA.calc_base_flux!(
+    τ_x_gfdl,
+    τ_y_gfdl,
+    τ_l_gfdl,
+    τ_p_gfdl,
+    τ_np_gfdl,
+    U_sat_gfdl,
+    FrU_sat_gfdl,
+    FrU_clp_gfdl,
+    FrU_max_gfdl,
+    FrU_min_gfdl,
+    topo_ᶜz_pbl,
+    values_at_z_pbl,
+    ogw_params,
+    topo_info_gfdl,
+    Y.c.ρ,
+    u_phy,
+    v_phy,
+    ᶜz,
+    ᶜbuoyancy_frequency,
+)
+
+τ_l_gfdl_cpu = to_cpu(τ_l_gfdl)
+println("  GFDL τ_l range: $(minimum(parent(τ_l_gfdl_cpu))) to $(maximum(parent(τ_l_gfdl_cpu)))")
+
+#--- Panel 3: Linear drag from raw_topo ---
+println("\nComputing linear drag from raw_topo...")
+
+# Setup simulation
+(; config_file, job_id) = CA.commandline_kwargs()
+config = CA.AtmosConfig(config_file; job_id, comms_ctx)
+config.parsed_args["orographic_gravity_wave"] = "raw_topo"
+config.parsed_args["topography"] = "Earth"
+(; parsed_args) = config
+
+simulation = CA.get_simulation(config)
+p = simulation.integrator.p
+Y = simulation.integrator.u
+
+# Prepare physical uv input variables
+u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
+v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+ᶜz = Fields.coordinate_field(Y.c).z
+
+# Unpack cache and scratch vars
+ᶜT = p.scratch.ᶜtemp_scalar
+(; topo_ᶜz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
+    p.orographic_gravity_wave
+(; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
+    p.orographic_gravity_wave
+(; values_at_z_pbl, topo_info) = p.orographic_gravity_wave
+(; ᶜdTdz, ᶜbuoyancy_frequency) = p.orographic_gravity_wave
+(; ᶜts) = p.precomputed
+(; params) = p
+
+# Extract parameters
+ogw_params = p.orographic_gravity_wave.ogw_params
+grav = CAP.grav(params)
+thermo_params = CAP.thermodynamics_params(params)
+
+# Compute linear drag using raw_topo (already loaded as topo_info)
+CA.calc_base_flux!(
+    topo_τ_x,
+    topo_τ_y,
+    topo_τ_l,
+    topo_τ_p,
+    topo_τ_np,
+    topo_U_sat,
+    topo_FrU_sat,
+    topo_FrU_clp,
+    topo_FrU_max,
+    topo_FrU_min,
+    topo_ᶜz_pbl,
+    values_at_z_pbl,
+    ogw_params,
+    topo_info,
+    Y.c.ρ,
+    u_phy,
+    v_phy,
+    ᶜz,
+    ᶜbuoyancy_frequency,
+)
+
+τ_l_raw_cpu = to_cpu(topo_τ_l)
+println("  Raw topo τ_l range: $(minimum(parent(τ_l_raw_cpu))) to $(maximum(parent(τ_l_raw_cpu)))")
+
+#--- Prepare data for Figure 4 plotting ---
+println("\nRemapping Figure 4 data...")
+
+field_data_fig4 = Dict(
+    "D_analytical" => analytical_drag_cpu,
+    "τ_l_gfdl" => τ_l_gfdl_cpu,
+    "τ_l_raw" => τ_l_raw_cpu,
+)
+
+remap_dir_fig4 = joinpath(output_dir, "remap_fig4/")
+datafile_fig4 = remap_to_latlon(
+    remap_dir_fig4,
+    ["D_analytical", "τ_l_gfdl", "τ_l_raw"],
+    field_data_fig4,
+    Y_cpu,
+    ᶜspace;
+    config = config_remap,
+    FT = FT,
+)
+
+#--- Create Figure 4 tripanel plot ---
+println("\n" * "="^70)
+println("Creating Figure 4 tripanel plot...")
+println("="^70)
+
+plot_garner_fig4_tripanel(
+    joinpath(output_dir, "garner_fig4_linear_drag.png"),
+    datafile_fig4,
+    ["D_analytical", "τ_l_gfdl", "τ_l_raw"],
+    [
+        "Analytical: D = V̄ max(|T₁|, |T₂|)",
+        "GFDL Restart: τ_l",
+        "Raw Topography: τ_l",
+    ];
+    lon_range = (0.0, 360.0),
+    lat_range = (-90.0, 90.0),
+    colormap = :cividis,
+)
+
+#######################################
+# FIGURE 5: Normalized Drag Curves
+# Shows D/D* vs h_max/h_c for:
+#   - Propagating drag ⟨D_p⟩ (dashed lines)
+#   - Total drag (D_p + D_np) (solid lines)
+#   - Two cases: h_min = 0 and h_min = h_max
+# Parameters: γ = 0.4, β = 0.5, ε = 0, a_1/a_0 = 9.0
+#######################################
+
+println("\n" * "="^70)
+println("FIGURE 5: Normalized Drag Curves")
+println("="^70)
+
+# Physical parameters for Figure 5
+V_fig5 = FT(10.0)   # Wind speed (m/s)
+N_fig5 = FT(0.01)   # Buoyancy frequency (s⁻¹)
+ρ_fig5 = FT(1.0)    # Density (kg/m³)
+
+# OGW parameters for Figure 5 (from paper)
+γ_fig5 = FT(0.4)
+β_fig5 = FT(0.5)
+ϵ_fig5 = FT(0.0)
+Fr_crit_fig5 = FT(0.7)
+a0_fig5 = FT(0.9)
+a1_fig5 = FT(9.0) * a0_fig5  # a_1/a_0 = 9.0, so a_1 = 8.1
+
+# Other OGW parameters (use existing values)
+h_frac_fig5 = FT(0.1)
+ρscale_fig5 = FT(1.2)
+L0_fig5 = FT(80000.0)
+
+# Critical height: h_c = Fr_crit * V / N
+h_c = Fr_crit_fig5 * V_fig5 / N_fig5  # = 0.7 * 10 / 0.01 = 700 m
+println("  Critical height h_c = $(h_c) m")
+
+# Range of h_max/h_c values (x-axis)
+n_points = 100
+x_range = range(FT(0.05), FT(5.0), length = n_points)  # Start from 0.05 to avoid div by zero
+
+# Storage arrays for the four curves
+Dp_hmin0 = zeros(FT, n_points)
+Dp_hmin_eq_hmax = zeros(FT, n_points)
+total_hmin0 = zeros(FT, n_points)
+total_hmin_eq_hmax = zeros(FT, n_points)
+
+println("  Computing drag curves for $(n_points) points using theoretical formulas...")
+
+# Loop over h_max/h_c values using scalar theoretical computation
+for (i, x) in enumerate(x_range)
+    h_max_val = x * h_c
+
+    #--- Case A: h_min = 0 ---
+    (τ_l, τ_p, τ_np) = compute_theoretical_drag(
+        h_max_val, FT(0.0), V_fig5, N_fig5, ρ_fig5;
+        γ = γ_fig5,
+        β = β_fig5,
+        ϵ = ϵ_fig5,
+        Fr_crit = Fr_crit_fig5,
+        a0 = a0_fig5,
+        a1 = a1_fig5,
+        ρscale = ρscale_fig5,
+        L0 = L0_fig5,
+    )
+
+    # Normalize by τ_l (= D*)
+    if τ_l > eps(FT)
+        Dp_hmin0[i] = τ_p / τ_l
+        total_hmin0[i] = (τ_p + τ_np) / τ_l
+    else
+        Dp_hmin0[i] = FT(0.0)
+        total_hmin0[i] = FT(0.0)
+    end
+
+    #--- Case B: h_min = h_max ---
+    (τ_l, τ_p, τ_np) = compute_theoretical_drag(
+        h_max_val, h_max_val, V_fig5, N_fig5, ρ_fig5;
+        γ = γ_fig5,
+        β = β_fig5,
+        ϵ = ϵ_fig5,
+        Fr_crit = Fr_crit_fig5,
+        a0 = a0_fig5,
+        a1 = a1_fig5,
+        ρscale = ρscale_fig5,
+        L0 = L0_fig5,
+    )
+
+    # Normalize by τ_l (= D*)
+    if τ_l > eps(FT)
+        Dp_hmin_eq_hmax[i] = τ_p / τ_l
+        total_hmin_eq_hmax[i] = (τ_p + τ_np) / τ_l
+    else
+        Dp_hmin_eq_hmax[i] = FT(0.0)
+        total_hmin_eq_hmax[i] = FT(0.0)
+    end
+end
+
+println("  Done computing drag curves.")
+println("  ⟨Dp⟩/D* range (h_min=0): $(minimum(Dp_hmin0)) to $(maximum(Dp_hmin0))")
+println("  ⟨Dp⟩/D* range (h_min=h_max): $(minimum(Dp_hmin_eq_hmax)) to $(maximum(Dp_hmin_eq_hmax))")
+println("  Total/D* range (h_min=0): $(minimum(total_hmin0)) to $(maximum(total_hmin0))")
+println("  Total/D* range (h_min=h_max): $(minimum(total_hmin_eq_hmax)) to $(maximum(total_hmin_eq_hmax))")
+
+# Create Figure 5 plot
+println("\n" * "="^70)
+println("Creating Figure 5 plot...")
+println("="^70)
+
+plot_garner_fig5(
+    joinpath(output_dir, "garner_fig5_normalized_drag.png"),
+    collect(x_range),
+    Dp_hmin0,
+    Dp_hmin_eq_hmax,
+    total_hmin0,
+    total_hmin_eq_hmax;
+    γ = γ_fig5,
+    β = β_fig5,
+)
+
 println("\n" * "="^70)
 println("Garner 2005 reproduction complete!")
 println("Output directory: $output_dir")
 println("="^70)
+
+
