@@ -300,12 +300,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     end
 
     (; ᶜgradᵥ_θ_virt, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
-    # First order approximation: Use environmental mean fields.
-    @. ᶜgradᵥ_θ_virt = ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))       # ∂θv∂z_unsat
-    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot))                                        # ∂qt∂z_sat
-    @. ᶜgradᵥ_θ_liq_ice =
-        ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))                    # ∂θl∂z_sat
     @. ᶜlinear_buoygrad = buoyancy_gradients( # TODO - do we need to modify buoyancy gradients based on NonEq + 1M tracers?
         BuoyGradMean(),
         thermo_params,
