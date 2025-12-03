@@ -699,7 +699,7 @@ function calc_base_flux!(
     Fr_min = @. lazy(max(FT(0), hmin) * N_pbl / Vτ)
 
     # Calculate U_sat
-    @. U_sat = sqrt.(ρ_pbl / topo_ρscale * @. Vτ^3 / N_pbl / topo_L0)
+    @. U_sat = sqrt(ρ_pbl / topo_ρscale * Vτ^3 / N_pbl / topo_L0)
 
     # Calculate FrU values
     @. FrU_sat = Fr_crit * U_sat
