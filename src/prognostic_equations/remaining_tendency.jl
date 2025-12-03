@@ -355,7 +355,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     amd = p.atmos.amd_les
     horizontal_amd_tendency!(Yₜ, Y, p, t, amd)
-    vertical_amd_tendency!(Yₜ, Y, p, t, amd)
+    #vertical_amd_tendency!(Yₜ, Y, p, t, amd)
 
     # Optional tendency to bring negative small tracers back from negative
     # at the cost of water vapor.
