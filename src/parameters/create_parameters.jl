@@ -39,7 +39,7 @@ function ClimaAtmosParameters(
     IP = typeof(insolation_params)
 
     surface_fluxes_params =
-        SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
+        SurfaceFluxesParameters(toml_dict, UF.GryanikParams)
     SFP = typeof(surface_fluxes_params)
 
     # Fetch Gryanik b_m coefficient (since surface_fluxes_params defaults to BusingerParams)
