@@ -1,7 +1,6 @@
 dt: 120secs
 surface_setup: DefaultMoninObukhov
 rad: clearsky
-co2_model: fixed
 turbconv: diagnostic_edmfx
 prognostic_tke: true
 edmfx_entr_model: "Generalized"

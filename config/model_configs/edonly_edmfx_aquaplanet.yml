@@ -1,7 +1,6 @@
 dt: 120secs
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
-co2_model: fixed
 edmfx_sgs_diffusive_flux: true
 turbconv: edonly_edmfx
 moist: equil
