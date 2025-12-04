@@ -20,7 +20,8 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
     # NOTE: Everything has to be lowercase in ALLOWED_REDUCTIONS (so that we can match
     # "max" and "Max")
     ALLOWED_REDUCTIONS = Dict(
-        "nothing" => (nothing, nothing), # nothing is: just dump the variable
+        "inst" => (nothing, nothing), # nothing is: just dump the variable
+        "nothing" => (nothing, nothing),
         "max" => (max, nothing),
         "min" => (min, nothing),
         "average" => ((+), CAD.average_pre_output_hook!),
