@@ -65,6 +65,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     FT,
     TP,
     RP,
+    TG,
     IP,
     MPC,
     MP0M,
@@ -79,6 +80,7 @@ Base.@kwdef struct ClimaAtmosParameters{
 } <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
+    trace_gas_params::TG
     insolation_params::IP
     microphysics_cloud_params::MPC
     microphysics_0m_params::MP0M

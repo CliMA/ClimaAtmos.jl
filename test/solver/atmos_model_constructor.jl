@@ -45,8 +45,6 @@ end
 
             # Advanced physics defaults (should be nothing/disabled)
             :radiation_mode => nothing,
-            :ozone => nothing,
-            :co2 => nothing,
             :turbconv_model => nothing,
             :non_orographic_gravity_wave => nothing,
             :orographic_gravity_wave => nothing,
@@ -76,8 +74,6 @@ end
                 false,
                 false,
             ),
-            ozone = CA.IdealizedOzone(),
-            co2 = CA.FixedCO2(),
             hyperdiff = CA.ClimaHyperdiffusion(;
                 ν₄_vorticity_coeff = 1e15,
                 ν₄_scalar_coeff = 1e15,
@@ -91,8 +87,6 @@ end
         @test model.microphysics_model isa CA.Microphysics1Moment
         @test model.cloud_model isa CA.QuadratureCloud
         @test model.radiation_mode isa RRTMGPI.ClearSkyRadiation
-        @test model.ozone isa CA.IdealizedOzone
-        @test model.co2 isa CA.FixedCO2
         @test model.hyperdiff isa CA.ClimaHyperdiffusion
         @test model.numerics.hyperdiff isa CA.ClimaHyperdiffusion
         @test model.disable_surface_flux_tendency == true
@@ -140,13 +134,10 @@ end
                 false,
                 false,
             ),
-            ozone = CA.IdealizedOzone(),
-            co2 = CA.FixedCO2(),
         )
         @test moist_model.moisture_model isa CA.EquilMoistModel
         @test moist_model.microphysics_model isa CA.Microphysics0Moment
         @test moist_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
-        @test moist_model.ozone isa CA.IdealizedOzone
 
         # Test HeldSuarezForcing as radiation mode
         held_suarez_model =

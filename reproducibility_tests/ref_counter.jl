@@ -1,4 +1,4 @@
-288
+289
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+289
+- Merging the trace gases PR again, which does change behavior slightly as a
+result of reading values from params rather than from a file.
+
 288
 - Revert PR 4153, which changed ref_counter to 287
 

@@ -14,7 +14,7 @@ insolation: "timevarying"
 non_orographic_gravity_wave: true
 orographic_gravity_wave: "gfdl_restart"
 surface_setup: "DefaultMoninObukhov"
-prescribe_ozone: true
+time_varying_trace_gases: ["O3"]
 reproducibility_test: true
 prescribed_aerosols: ["SO4", "CB1", "OC1", "DST01", "SSLT01"]
 toml: [toml/sphere_aquaplanet_1M.toml]
