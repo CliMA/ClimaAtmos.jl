@@ -148,21 +148,13 @@ abstract type AbstractCO2 end
 """
     FixedCO2
 
-Implement a static CO2 profile as read from disk.
-
-The data used is the one distributed with `RRTMGP.jl`.
-
-By default, this is 397.547 parts per million.
-
-This is the volume mixing ratio.
+Implement a static CO2 profile using the CO2_fixed_value (ppm) from toml file. By default, this is 397.547 parts per million. This is the volume mixing ratio.
 """
 struct FixedCO2{FT} <: AbstractCO2
     value::FT
-
-    function FixedCO2(; FT = Float64, value = FT(397.547e-6))
-        return new{FT}(value)
-    end
 end
+FixedCO2{FT}(; value_ppm = 397.547) where {FT} =
+    FixedCO2{FT}(value_ppm / 10^6)
 
 """
     MuanaLoaCO2

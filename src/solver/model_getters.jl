@@ -371,11 +371,11 @@ function get_ozone(parsed_args)
     return parsed_args["prescribe_ozone"] ? PrescribedOzone() : IdealizedOzone()
 end
 
-function get_co2(parsed_args)
+function get_co2(parsed_args, params, ::Type{FT}) where {FT}
     if isnothing(parsed_args["co2_model"])
         return nothing
     elseif lowercase(parsed_args["co2_model"]) == "fixed"
-        return FixedCO2()
+        return FixedCO2{FT}(; value_ppm = params.CO2_fixed_value)
     elseif lowercase(parsed_args["co2_model"]) == "maunaloa"
         return MaunaLoaCO2()
     else

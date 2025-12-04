@@ -56,7 +56,7 @@ function get_atmos(config::AtmosConfig, params)
         @warn "prescribe_ozone is set to nothing with an RRTMGP model. Resetting to IdealizedOzone. This behavior will stop being supported in some future release"
         ozone = IdealizedOzone()
     end
-    co2 = get_co2(parsed_args)
+    co2 = get_co2(parsed_args, params, FT)
     with_rrtmgp = radiation_mode isa RRTMGPI.AbstractRRTMGPMode
     if with_rrtmgp && isnothing(co2)
         @warn (
