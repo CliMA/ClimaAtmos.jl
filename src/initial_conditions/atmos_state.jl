@@ -108,9 +108,10 @@ function atmos_surface_field(surface_space, ::EisenmanSeaIce)
     return (;
         sfc = map(
             coord -> (;
-                T = Geometry.float_type(coord)(250),
-                water = Geometry.float_type(coord)(0),
+                T_ice = Geometry.float_type(coord)(250.0), # TODO: double check with Pithan2016
+                T_ml = Geometry.float_type(coord)(271.0), # TODO: double check with Pithan2016
                 h_ice = Geometry.float_type(coord)(1.0), # initial ice thickness [m]
+                water = Geometry.float_type(coord)(0),
             ),
             Fields.coordinate_field(surface_space),
         )
