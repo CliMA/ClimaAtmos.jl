@@ -556,10 +556,9 @@ function ᶜmixing_length(Y, p, ::Val{:master})
     ᶜρa⁰ =
         turbconv_model isa PrognosticEDMFX ?
         (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
     sfc_tke = Fields.level(ᶜtke⁰, 1)
     ᶜprandtl_nvec = @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
-    ᶜtke_exch = ᶜtke_exchange(Y, p)
     ᶜmixing_length_tuple = @. lazy(
         mixing_length_lopez_gomez_2020(
             params,
@@ -573,7 +572,6 @@ function ᶜmixing_length(Y, p, ::Val{:master})
             obukhov_length,
             ᶜstrain_rate_norm,
             ᶜprandtl_nvec,
-            ᶜtke_exch,
             p.atmos.edmfx_model.scale_blending_method,
         ),
     )
@@ -592,7 +590,7 @@ function ᶜmixing_length(Y, p, ::Val{:sym_eqn1})
     ᶜρa⁰ =
         turbconv_model isa PrognosticEDMFX ?
         (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
     sfc_tke = Fields.level(ᶜtke⁰, 1)
     turbconv_params = CAP.turbconv_params(params)
     ml_param_vec = CAP.mixing_length_param_vec(turbconv_params)
@@ -643,7 +641,7 @@ function ᶜmixing_length(Y, p, ::Val{:linear_eqn1})
     ᶜρa⁰ =
         turbconv_model isa PrognosticEDMFX ?
         (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
 
     turbconv_params = CAP.turbconv_params(params)
     ml_param_vec = CAP.mixing_length_param_vec(turbconv_params)
@@ -775,7 +773,7 @@ function ᶜmixing_length(Y, p, ::Val{:nn})
     ᶜρa⁰ =
         turbconv_model isa PrognosticEDMFX ?
         (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
     sfc_tke = Fields.level(ᶜtke⁰, 1)
     FT = eltype(ᶜz)
     eps_FT = eps(FT)

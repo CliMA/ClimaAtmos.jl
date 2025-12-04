@@ -58,7 +58,7 @@ paths, sites = get_les_calibration_library(models = "HadGEM2-A")
 paths, sites = get_les_calibration_library(models = ["HadGEM2-A", "CNRM-CM5"])
 ```
 """
-function get_les_calibration_library(; max_cases = 20, models = "HadGEM2-A")
+function get_les_calibration_library(; max_cases = 10, models = "HadGEM2-A")
     les_library = get_LES_library()
 
     models_iter = models === nothing ? collect(keys(les_library)) :
@@ -297,7 +297,7 @@ function get_cfsite_les_dir(
 )
     month = string(month, pad = 2)
     cfsite_number = string(cfsite_number)
-    root_dir = "/resnick/groups/esm/zhaoyi/GCMForcedLES/cfsite/$month/$forcing_model/$experiment/"
+    root_dir = "/groups/esm/zhaoyi//GCMForcedLES/cfsite/$month/$forcing_model/$experiment/"
     rel_dir = join(
         [
             "Output.cfsite$cfsite_number",

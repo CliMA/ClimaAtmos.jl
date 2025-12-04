@@ -13,11 +13,18 @@ function suppress_logs(f, args...; kwargs...)
     end
 end
 
+# Snapshot the experiment configuration at file load time so that a running
+# calibration is not affected if `experiment_config.yml` is edited later
+# (e.g. to launch another calibration from the same directory).
+# Default argument expressions are evaluated on every call in Julia, 
+# so we avoid re-reading the YAML file by stashing as a `const`.
+const DEFAULT_EXPERIMENT_CONFIG_DICT = YAML.load_file(
+    joinpath(dirname(Base.active_project()), "experiment_config.yml"),
+)
+
 function CAL.observation_map(
     iteration;
-    config_dict = YAML.load_file(
-        joinpath(dirname(Base.active_project()), "experiment_config.yml"),
-    ),
+    config_dict = DEFAULT_EXPERIMENT_CONFIG_DICT,
 )
 
     full_dim =
