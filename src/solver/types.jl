@@ -97,9 +97,11 @@ end
 """
     CloudML
 
-Compute the cloud fraction using a machine learning model.
+Compute the cloud fraction using a machine learning model. Continue to use 
+quadrature sampling for sub-grid variability of q_liq, q_ice.
 """
-struct CloudML <: AbstractCloudModel 
+struct CloudML{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel 
+    SG_quad::SGQ
     model
 end
 

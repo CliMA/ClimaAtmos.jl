@@ -365,10 +365,12 @@ end
 NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
-    moist_model::Union{EquilMoistModel, NonEquilMoistModel},
+    ::Union{EquilMoistModel, NonEquilMoistModel},
     cloud_ml::CloudML,
 )
+    SG_quad = cloud_ml.SG_quad
     (; params) = p
+    (; turbconv_model) = p.atmos
     (; ᶜts, cloud_diagnostics_tuple) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     FT = eltype(p.params)
@@ -411,7 +413,45 @@ NVTX.@annotate function set_cloud_fraction!(
     q_liq = TD.PhasePartition.(thermo_params, ᶜts).liq
     q_ice = TD.PhasePartition.(thermo_params, ᶜts).ice
 
-    @. p.precomputed.cloud_diagnostics_tuple .= NamedTuple{(:cf, :q_liq, :q_ice)}(tuple(cf, q_liq, q_ice))
+    #@. p.precomputed.cloud_diagnostics_tuple .= NamedTuple{(:cf, :q_liq, :q_ice)}(tuple(cf, q_liq, q_ice))
+
+
+    diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
+
+
+    @. cloud_diagnostics_tuple = quad_loop(
+        SG_quad,
+        ᶜts,
+        Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
+        Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice),
+        diagnostic_covariance_coeff,
+        ᶜmixing_length_field,
+        thermo_params,
+    )
+    # overwrite with the ML computed cloud fraction, leaving q_liq, q_ice computed via quadrature
+    p.precomputed.cloud_diagnostics_tuple.cf .= cf
+
+
+    n = n_mass_flux_subdomains(turbconv_model)
+    if n > 0
+        (; ᶜρʲs, ᶜtsʲs) = p.precomputed
+    end
+
+    for j in 1:n
+        @. cloud_diagnostics_tuple += NamedTuple{(:cf, :q_liq, :q_ice)}(
+            tuple(
+                ifelse(
+                    TD.has_condensate(thermo_params, ᶜtsʲs.:($$j)),
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                    0,
+                ),
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)) *
+                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)) *
+                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
+            ),
+        )
+    end
     # p.precomputed.cloud_diagnostics_tuple .=
     #     ((; cf = cf, q_liq = q_liq, q_ice = q_ice),)
 end

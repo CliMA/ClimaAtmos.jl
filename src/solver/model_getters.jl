@@ -371,7 +371,7 @@ function get_cloud_model(parsed_args)
         params = jld2data["params"]
         # add model to the cache 
         cf_nn_model = re(params)
-        CloudML(cf_nn_model)
+        CloudML(SGSQuadrature(FT), cf_nn_model)
     else
         error("Invalid cloud_model $(cloud_model)")
     end
