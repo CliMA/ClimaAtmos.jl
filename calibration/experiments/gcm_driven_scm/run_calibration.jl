@@ -26,6 +26,12 @@ const model_interface = joinpath(experiment_dir, "model_interface.jl")
 const experiment_config =
     YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
+# Set a deterministic RNG seed for reproducible minibatching and any other randomness.
+# Can be overridden by specifying `rng_seed` in `experiment_config.yml`.
+const RNG_SEED = get(experiment_config, "rng_seed", 1234)
+Random.seed!(RNG_SEED)
+@info "Random seed set" RNG_SEED
+
 
 # unpack experiment_config vars into scope 
 for (key, value) in experiment_config
@@ -138,7 +144,7 @@ JLD2.jldsave(
 )
 
 ### get LES obs (Y) and norm factors
-ref_paths, _ = get_les_calibration_library(max_cases = 10, models = "HadGEM2-A")
+ref_paths, _ = get_les_calibration_library()
 obs_vec = []
 
 for ref_path in ref_paths

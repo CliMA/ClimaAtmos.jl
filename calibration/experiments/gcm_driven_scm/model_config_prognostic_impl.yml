@@ -25,6 +25,7 @@ mixing_length_model: "nn"
 # mixing_length_model: "linear_eqn1"
 # bson_reconst_path: "/home/cchristo/ml_mixing_length/nn_666p_leaky_relu_lux.bson"
 # bson_reconst_path: "/home/cchristo/ml_mixing_length/prior_network_generator_hess-gauss.bson"
+bson_recont_path: "/home/cchristo/ml_mixing_length/prior_hess_ollie/data/prior_network_generator_hess-gauss.bson"
 # prev
 # edmfx_nh_pressure_type : physical
 # edmfx_nh_pressure_type : linear

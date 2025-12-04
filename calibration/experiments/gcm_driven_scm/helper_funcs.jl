@@ -1037,7 +1037,9 @@ function create_prior_with_nn(
     prior_path,
     pretrained_nn_path;
     arc = [8, 20, 15, 10, 1],
-    noise_type = nothing, #[:correlated, :mvnormal]
+    noise_type = nothing,
+    # noise_type = :correlated, #[:correlated, :mvnormal]
+    # noise_type = :correlated, #[:correlated, :mvnormal]
 )
 
     prior_dict = TOML.parsefile(prior_path)
@@ -1062,6 +1064,13 @@ function create_prior_with_nn(
         # Normalize noise_type to a Symbol so it can be passed as String from YAML.
         noise_type_sym = Symbol(noise_type)
 
+        @info "Creating NN prior" (
+            prior_path = prior_path,
+            pretrained_nn_path = pretrained_nn_path,
+            arc = arc,
+            noise_type = noise_type_sym,
+        )
+
         # First, try to interpret the file as BSON and use a stored mean_vec if available.
         bson_data = try
             BSON.load(pretrained_nn_path)
@@ -1070,7 +1079,11 @@ function create_prior_with_nn(
         end
 
         if bson_data !== nothing && haskey(bson_data, :mean_vec)
-            @info "Loading pretrained NN (mean_vec) from $pretrained_nn_path with noise_type=$noise_type_sym"
+            @info "Detected BSON reconstructor file with :mean_vec" (
+                path = pretrained_nn_path,
+                keys = collect(keys(bson_data)),
+                noise_type = noise_type_sym,
+            )
             mean_vec = Vector{Float64}(bson_data[:mean_vec])
 
             if noise_type_sym in (:correlated, :mvnormal)
@@ -1085,8 +1098,17 @@ function create_prior_with_nn(
                         "BSON reconstructor file $(pretrained_nn_path) has inconsistent dimensions: length(mean_vec)=$(length(mean_vec)) but size(sqrt_cov_mat)=$(size(sqrt_cov_mat)).",
                     )
 
+                @info "Building correlated MvNormal prior from BSON reconstructor" (
+                    path = pretrained_nn_path,
+                    n_params = length(mean_vec),
+                    sqrt_cov_size = size(sqrt_cov_mat),
+                    noise_type = noise_type_sym,
+                )
+
                 covariance = Symmetric(sqrt_cov_mat * sqrt_cov_mat')
-                distribution = EKP.Parameterized(MvNormal(mean_vec, covariance))
+                covariance_posdef = EKP.posdef_correct(covariance)
+                distribution = EKP.Parameterized(MvNormal(mean_vec, covariance_posdef))
+                # distribution = EKP.Parameterized(MvNormal(mean_vec, covariance))
                 constraints = repeat([EKP.no_constraint()], length(mean_vec))
                 EKP.ParameterDistribution(
                     distribution,
@@ -1095,6 +1117,11 @@ function create_prior_with_nn(
                 )
             else
                 # Independent noise around mean_vec using serialize_std_model.
+                @info "Building independent Normal prior around mean_vec from BSON reconstructor" (
+                    path = pretrained_nn_path,
+                    n_params = length(mean_vec),
+                    noise_type = noise_type_sym,
+                )
                 serialized_weights = copy(mean_vec)
                 nn_model = construct_fully_connected_nn_lux(
                     arc,
@@ -1122,9 +1149,13 @@ function create_prior_with_nn(
                 )
             end
         elseif bson_data !== nothing && haskey(bson_data, :nn_model)
-            @info "Loading legacy nn_model from $pretrained_nn_path with independent noise"
             nn_model = bson_data[:nn_model]
             serialized_weights = serialize_ml_model(nn_model)
+            @info "Loading legacy nn_model from BSON with independent noise" (
+                path = pretrained_nn_path,
+                n_params = length(serialized_weights),
+                noise_type = noise_type_sym,
+            )
             serialized_stds = serialize_std_model(
                 nn_model,
                 serialized_weights;
@@ -1144,8 +1175,15 @@ function create_prior_with_nn(
             )
         else
             # Fall back to treating the file as a JLD2 file containing serialized_weights.
-            @info "Loading pretrained NN from $pretrained_nn_path as JLD2/serialized_weights with independent noise"
+            @info "Loading pretrained NN as JLD2/serialized_weights with independent noise" (
+                path = pretrained_nn_path,
+                noise_type = noise_type_sym,
+            )
             @load pretrained_nn_path serialized_weights
+            @info "Loaded serialized_weights from JLD2" (
+                path = pretrained_nn_path,
+                n_params = length(serialized_weights),
+            )
             nn_model = construct_fully_connected_nn_lux(
                 arc,
                 deepcopy(serialized_weights);
