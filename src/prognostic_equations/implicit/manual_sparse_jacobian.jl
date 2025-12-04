@@ -91,11 +91,16 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
-    condensate_names = (
+    condensate_mass_names = (
         @name(c.ρq_liq),
         @name(c.ρq_ice),
         @name(c.ρq_rai),
         @name(c.ρq_sno),
+    )
+    available_condensate_mass_names =
+        MatrixFields.unrolled_filter(is_in_Y, condensate_mass_names)
+    condensate_names = (
+        condensate_mass_names...,
         @name(c.ρn_liq),
         @name(c.ρn_rai),
         # P3 frozen
@@ -161,6 +166,10 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
             active_scalar_names,
         )...,
+        MatrixFields.unrolled_map(
+            name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
+            available_condensate_mass_names,
+        )...,
         (@name(f.u₃), @name(c.uₕ)) => similar(Y.f, BidiagonalRow_C3xACT12),
         (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
@@ -182,6 +191,10 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                     (@name(c.ρe_tot), @name(c.ρq_tot)) =>
                         similar(Y.c, TridiagonalRow),
                 ) : ()
+            )...,
+            MatrixFields.unrolled_map(
+                name -> (@name(c.ρe_tot), name) => similar(Y.c, TridiagonalRow),
+                available_condensate_mass_names,
             )...,
             (@name(c.uₕ), @name(c.uₕ)) =>
                 !isnothing(atmos.turbconv_model) ||
@@ -333,7 +346,10 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
            use_derivative(sgs_advection_flag) ||
            !(atmos.moisture_model isa DryModel)
             gs_scalar_subalg = if !(atmos.moisture_model isa DryModel)
-                MatrixFields.BlockLowerTriangularSolve(@name(c.ρq_tot))
+                MatrixFields.BlockLowerTriangularSolve(
+                    @name(c.ρq_tot),
+                    available_condensate_mass_names...,
+                )
             else
                 MatrixFields.BlockDiagonalSolve()
             end
@@ -377,6 +393,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     return (; matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, full_alg))
 end
 
+# TODO: There are a few for loops in this function. This is because
+# using unrolled_foreach allocates (breaks the flame tests)
 function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     (;
         topography_flag,
@@ -421,10 +439,14 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     LH_s0 = FT(CAP.LH_s0(params))
     Δcp_l = FT(CAP.cp_l(params) - CAP.cp_v(params))
     Δcp_i = FT(CAP.cp_i(params) - CAP.cp_v(params))
+    Δcv_l = FT(CAP.cp_l(params) - CAP.cv_v(params))
+    Δcv_i = FT(CAP.cp_i(params) - CAP.cv_v(params))
+    e_int_v0 = FT(CAP.e_int_v0(params))
+    e_int_s0 = FT(CAP.e_int_i0(params)) + e_int_v0
     # This term appears a few times in the Jacobian, and is technically
     # minus ∂e_int_∂q_tot
-    thermo_params = CAP.thermodynamics_params(params)
     ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - e_int_v0
+    thermo_params = CAP.thermodynamics_params(params)
     ᶜh_tot = @. lazy(
         TD.total_specific_enthalpy(
             thermo_params,
@@ -530,6 +552,26 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
         @. ∂ᶠu₃_err_∂ᶜρq_tot =
             dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜ∂p∂ρq_tot)
+    end
+
+    microphysics_tracers =
+        p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
+        ) ?
+        (
+            (@name(c.ρq_liq), e_int_v0, Δcv_l),
+            (@name(c.ρq_ice), e_int_s0, Δcv_i),
+            (@name(c.ρq_rai), e_int_v0, Δcv_l),
+            (@name(c.ρq_sno), e_int_s0, Δcv_i),
+        ) : (;)
+
+    for (q_name, e_int_q, ∂cv∂q) in microphysics_tracers
+        MatrixFields.has_field(Y, q_name) || continue
+        ∂ᶠu₃_err_∂ᶜρq = matrix[@name(f.u₃), q_name]
+        @. ∂ᶠu₃_err_∂ᶜρq =
+            dtγ * ᶠp_grad_matrix ⋅
+            DiagonalMatrixRow(ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T)
     end
 
     ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
@@ -688,6 +730,14 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
+        end
+
+        for (q_name, e_int_q, ∂cv∂q) in microphysics_tracers
+            MatrixFields.has_field(Y, q_name) || continue
+            ∂ᶜρe_tot_err_∂ᶜρq = matrix[@name(c.ρe_tot), q_name]
+            @. ∂ᶜρe_tot_err_∂ᶜρq =
+                dtγ * ᶜdiffusion_h_matrix ⋅
+                DiagonalMatrixRow((ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T) / ᶜρ)
         end
 
         MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, _, α)
@@ -913,10 +963,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ) : (
                     (@name(c.sgsʲs.:(1).q_tot), -LH_v0, Δcp_v, ΔR_v),
                 )
-            # TODO using unrolled_foreach here allocates! (breaks the flame tests)
-            # MatrixFields.unrolled_foreach(
-            #     sgs_microphysics_tracers,
-            # ) do (qʲ_name, LH, ∂cp∂q, ∂Rm∂q)
+
             for (qʲ_name, LH, ∂cp∂q, ∂Rm∂q) in sgs_microphysics_tracers
                 MatrixFields.has_field(Y, qʲ_name) || continue
 
@@ -1217,6 +1264,16 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
                     p.scratch.ᶜtridiagonal_matrix_scalar ⋅
                     DiagonalMatrixRow(ᶜ∂p∂ρq_tot / ᶜρ)
+
+                for (q_name, e_int_q, ∂cv∂q) in microphysics_tracers
+                    MatrixFields.has_field(Y, q_name) || continue
+                    ∂ᶜρe_tot_err_∂ᶜρq = matrix[@name(c.ρe_tot), q_name]
+                    @. ∂ᶜρe_tot_err_∂ᶜρq +=
+                        p.scratch.ᶜtridiagonal_matrix_scalar ⋅
+                        DiagonalMatrixRow(
+                            (ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T) / ᶜρ,
+                        )
+                end
 
                 @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
                     p.scratch.ᶜtridiagonal_matrix_scalar ⋅
