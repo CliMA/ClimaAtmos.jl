@@ -29,7 +29,6 @@ edmfx_vertical_diffusion: false
 edmfx_filter: true
 prognostic_tke: true
 precip_model: "0M"
-prescribe_ozone: false
 moist: "equil"
 config: "column"
 z_max: 60e3

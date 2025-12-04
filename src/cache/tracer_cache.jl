@@ -4,8 +4,7 @@ import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs: TimeVaryingInput, LinearInterpolation
 import Interpolations as Intp
 
-ozone_cache(_, _, _) = (;)
-function ozone_cache(::PrescribedOzone, Y, start_date)
+function ozone_cache(Y, start_date)
     o3 = similar(Y.c.ρ)
     extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
     prescribed_o3_timevaryinginput = TimeVaryingInput(
@@ -20,8 +19,7 @@ function ozone_cache(::PrescribedOzone, Y, start_date)
     return (; o3, prescribed_o3_timevaryinginput)
 end
 
-co2_cache(_, _, _) = (;)
-function co2_cache(::MaunaLoaCO2, Y, start_date)
+function co2_cache(Y, start_date)
     FT = Spaces.undertype(axes(Y.c))
     # ClimaUtilities < v0.1.21 can only write to Arrays that are on the same
     # device as the space
@@ -57,7 +55,7 @@ function co2_cache(::MaunaLoaCO2, Y, start_date)
     return (; co2, prescribed_co2_timevaryinginput)
 end
 
-function tracer_cache(Y, atmos, prescribed_aerosol_names, start_date)
+function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, start_date)
     if !isempty(prescribed_aerosol_names)
         target_space = axes(Y.c)
 
@@ -104,7 +102,9 @@ function tracer_cache(Y, atmos, prescribed_aerosol_names, start_date)
     else
         aerosol_cache = (;)
     end
-    o3_cache = ozone_cache(atmos.ozone, Y, start_date)
-    co2_cache_nt = co2_cache(atmos.co2, Y, start_date)
+
+    o3_cache = :O3 ∈ Symbol.(time_varying_trace_gases) ? ozone_cache(Y, start_date) : (;)
+    co2_cache_nt = :CO2 ∈ Symbol.(time_varying_trace_gases) ? co2_cache(Y, start_date) : (;)
+
     return (; aerosol_cache..., o3_cache..., co2_cache_nt...)
 end

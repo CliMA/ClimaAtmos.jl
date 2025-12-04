@@ -5,7 +5,6 @@ insolation: rcemipii
 initial_condition: RCEMIPIIProfile_300
 config: box
 rad: allskywithclear
-co2_model: fixed
 approximate_linear_solve_iters: 2  # only valid when implicit_diffusion=true
 rayleigh_sponge: true  # set sponge level in toml file
 smagorinsky_lilly: "UV"
