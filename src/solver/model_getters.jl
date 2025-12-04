@@ -369,23 +369,6 @@ function get_cloud_model(parsed_args)
     end
 end
 
-function get_ozone(parsed_args)
-    isnothing(parsed_args["prescribe_ozone"]) && return nothing
-    return parsed_args["prescribe_ozone"] ? PrescribedOzone() : IdealizedOzone()
-end
-
-function get_co2(parsed_args)
-    if isnothing(parsed_args["co2_model"])
-        return nothing
-    elseif lowercase(parsed_args["co2_model"]) == "fixed"
-        return FixedCO2()
-    elseif lowercase(parsed_args["co2_model"]) == "maunaloa"
-        return MaunaLoaCO2()
-    else
-        error("The CO2 models supported are $(subtypes(AbstractCO2))")
-    end
-end
-
 function get_cloud_in_radiation(parsed_args)
     isnothing(parsed_args["prescribe_clouds_in_radiation"]) && return nothing
     return parsed_args["prescribe_clouds_in_radiation"] ?
@@ -644,7 +627,8 @@ end
 
 function get_tracers(parsed_args)
     aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
-    return (; aerosol_names)
+    time_varying_trace_gas_names = Tuple(parsed_args["time_varying_trace_gases"])
+    return (; aerosol_names, time_varying_trace_gas_names)
 end
 
 function check_case_consistency(parsed_args)
