@@ -42,7 +42,8 @@ function ClimaAtmosParameters(
         SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
     SFP = typeof(surface_fluxes_params)
 
-    # Fetch Gryanik b_m coefficient (since surface_fluxes_params defaults to BusingerParams)
+    # Fetch Gryanik coefficients (since surface_fluxes_params defaults to BusingerParams)
+    coeff_a_m_gryanik_val = UF.GryanikParams(FT).a_m
     coeff_b_m_gryanik_val = UF.GryanikParams(FT).b_m
 
     surface_temp_params = SurfaceTemperatureParameters(toml_dict)
@@ -110,6 +111,7 @@ function ClimaAtmosParameters(
         surface_temp_params,
         vert_diff_params,
         external_forcing_params,
+        coeff_a_m_gryanik = coeff_a_m_gryanik_val,
         coeff_b_m_gryanik = coeff_b_m_gryanik_val,
     )
 end

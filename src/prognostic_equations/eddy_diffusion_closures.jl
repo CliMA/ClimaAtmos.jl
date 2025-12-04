@@ -309,7 +309,8 @@ function mixing_length_lopez_gomez_2020(
     # MOST stability function coefficients
     most_a_m = sf_params.ufp.a_m # Businger a_m
     most_b_m = sf_params.ufp.b_m # Businger b_m
-    most_g_m = CAP.coefficient_b_m_gryanik(params)  # Gryanik b_m
+    gryanik_a_m = CAP.coefficient_a_m_gryanik(params)  # Gryanik a_m
+    gryanik_b_m = CAP.coefficient_b_m_gryanik(params)  # Gryanik b_m
 
     # l_z: Geometric distance from the surface
     l_z = ᶜz - z_sfc
@@ -359,16 +360,14 @@ function mixing_length_lopez_gomez_2020(
         zeta = l_z / obukhov_len_safe_stable # zeta >= 0
 
         # Stable/neutral-regime correction after Gryanik (2020):
-        #     φ_m = 1 + a_m ζ / (1 + g_m ζ)^(2/3),
+        #     φ_m = 1 + a_m ζ / (1 + b_m ζ)^(2/3),
         # a nonlinear refinement to the Businger formulation.
-        phi_m_denom_term = (1 + most_g_m * zeta)
+        # Optimization: (1+b_m*ζ)^(2/3) -> cbrt((1+b_m*ζ)^2)
         # Guard against a negative base in the fractional power
-        # (theoretically impossible for ζ ≥ 0 and g_m > 0, retained for robustness).
-        phi_m_denom_cubed_sqrt = cbrt(phi_m_denom_term)
-        phi_m_denom =
-            max(phi_m_denom_cubed_sqrt * phi_m_denom_cubed_sqrt, eps_FT) # (val)^(2/3)
+        # (theoretically impossible for ζ ≥ 0 and b_m > 0, retained for robustness).
+        phi_m_denom = max(cbrt((1 + gryanik_b_m * zeta)^2), eps_FT)
 
-        phi_m = 1 + (most_a_m * zeta) / phi_m_denom
+        phi_m = 1 + (gryanik_a_m * zeta) / phi_m_denom
 
         # Stable-regime correction factor: 1 / φ_m.
         # phi_m should be >= 1 for stable/neutral
