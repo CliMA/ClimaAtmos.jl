@@ -99,7 +99,9 @@ end
 
 Compute the cloud fraction using a machine learning model.
 """
-struct CloudML <: AbstractCloudModel end
+struct CloudML <: AbstractCloudModel 
+    model
+end
 
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end

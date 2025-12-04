@@ -366,79 +366,52 @@ NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
     moist_model::Union{EquilMoistModel, NonEquilMoistModel},
-    ::CloudML,
+    cloud_ml::CloudML,
 )
     (; params) = p
     (; ᶜts, cloud_diagnostics_tuple) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     FT = eltype(p.params)
 
+    # quantities needed to form pi groups 
+    #Main.@infiltrate
+
     # mixing length
     ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
     ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+    q_sat = TD.q_vap_saturation.(thermo_params, ᶜts)
+    Δq = @. q_sat - specific(Y.c.ρq_tot, Y.c.ρ)
+    #dqt_dz
+    ᶜ∇q = Geometry.WVector.(p.precomputed.ᶜgradᵥ_q_tot) 
+    #dθli_dz
+    ᶜ∇θ = Geometry.WVector.(p.precomputed.ᶜgradᵥ_θ_liq_ice) 
 
-    # z
-    z = p.scratch.ᶜtemp_scalar_2
-    z .= Fields.coordinate_field(Y.c.ρ).z
+    θli = p.scratch.ᶜtemp_scalar_2
+    θli .= TD.liquid_ice_pottemp.(thermo_params, ᶜts)
+    delta_θli = FT(0.1)
+    #
+    ts_plus = TD.PhaseEquil_pθq.(thermo_params, ᶜts.p, θli .+ delta_θli, ᶜts.q_tot)
+    q_sat_plus = TD.q_vap_saturation.(thermo_params, ts_plus) 
+    dqsatdθli = (q_sat_plus .- q_sat) ./ delta_θli
+    Δθli = @. (q_sat - specific(Y.c.ρq_tot, Y.c.ρ)) / dqsatdθli
+    θli_sat = θli .+ Δθli
 
-    # t
-    t = p.scratch.ᶜtemp_scalar_3
-    t .= TD.air_temperature.(
-        CAP.thermodynamics_params(p.params),
-        p.precomputed.ᶜts,
-    )
+    # form the pi groups 
+    π_1 = Δq ./ q_sat
+    π_2 = Δθli ./ θli_sat
+    π_3 = @. ((dqsatdθli * ᶜ∇θ - ᶜ∇q) * ᶜmixing_length_field) / q_sat
+    π_4 = @. (ᶜ∇θ * ᶜmixing_length_field) / θli_sat
 
-    # specific humidity
-    q = p.scratch.ᶜtemp_scalar_4
-    @. q = Y.c.ρq_tot / Y.c.ρ
+    # Main.@infiltrate
+    cf = p.scratch.ᶜtemp_scalar_3
+    cf_arr = Fields.field2array(cf) # get view of underlying array so we can overwrite 
+    cf_arr .= clamp.(reshape(cloud_ml.model(hcat(Fields.field2array(π_1), Fields.field2array(π_2), Fields.field2array(π_3), Fields.field2array(π_4))'), size(cf_arr)), FT(0), FT(1))
 
-    # buoyancy_freq
-    N² = p.scratch.ᶜtemp_scalar_5
-    ᶜθ = TD.dry_pottemp.(CAP.thermodynamics_params(p.params), p.precomputed.ᶜts) # TODO allocation
-    ᶜ∇θ = Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜθ))).components.data.:1 # TODO allocation
-    N² .= CAP.grav(params) ./ ᶜθ .* ᶜ∇θ
-
-    #TODO strain rate
-    # ᶠu = p.scratch.ᶠtemp_C123
-    # @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(p.precomputed.ᶠu³)
-    # ᶜstrain_rate = compute_strain_rate_center_vertical(ᶠu)
-
-
-    # q_lengthscale
-    q_lengthscale = TD.q_vap_saturation.(thermo_params, ᶜts) .- q
-
-    function dqsatdt(thermo_params, ts)
-        ts_hi = deepcopy(ts)
-        ts_lo = deepcopy(ts)
-        ts_hi.T .+= FT(1)
-        ts_lo.T .-= FT(1)
-        return (TD.q_vap_saturation.(thermo_params, ts_hi) .-
-                TD.q_vap_saturation.(thermo_params, ts_lo)) ./ FT(2)
-    end
-
-    # theta lengthscale
-    T_lengthscale = ᶜθ ./ t .*(TD.q_vap_saturation.(thermo_params, ᶜts) .- q) ./
-                    dqsatdt(thermo_params, ᶜts)
-
-
-    ᶜtke = specific.(Y.c.sgs⁰.ρatke, Y.c.ρ)
-
-    # quantities to be used in the regression
-    ᶜ∇q = Geometry.WVector.(p.precomputed.ᶜgradᵥ_q_tot⁰) # TODO computed on the fly now
-    ᶜ∇θ = Geometry.WVector.(p.precomputed.ᶜgradᵥ_θ_liq_ice⁰) # TODO computed on the fly now
-
-    q′q′ = unweighted_covariance_from_grad.(ᶜmixing_length, ᶜ∇q, ᶜ∇q)
-    θ′θ′ = unweighted_covariance_from_grad.(ᶜmixing_length, ᶜ∇θ, ᶜ∇θ)
-    θ′q′ = unweighted_covariance_from_grad.(ᶜmixing_length, ᶜ∇θ, ᶜ∇q)
-
-    # get saturation specific humidity, ice and liquid water content
+    # TODO either need ml model for qliq, qice or default back to quadrature. 
     q_liq = TD.PhasePartition.(thermo_params, ᶜts).liq
     q_ice = TD.PhasePartition.(thermo_params, ᶜts).ice
-    q_sat = TD.q_vap_saturation.(thermo_params, ᶜts)
 
-    # TODO: Add ML model parameters to atmos model
-    # TODO: Add ML model inference here
-    # For now, return zeros as placeholder
-    p.precomputed.cloud_diagnostics_tuple .=
-        ((; cf = FT(0), q_liq = q_liq, q_ice = q_ice),)
+    @. p.precomputed.cloud_diagnostics_tuple .= NamedTuple{(:cf, :q_liq, :q_ice)}(tuple(cf, q_liq, q_ice))
+    # p.precomputed.cloud_diagnostics_tuple .=
+    #     ((; cf = cf, q_liq = q_liq, q_ice = q_ice),)
 end

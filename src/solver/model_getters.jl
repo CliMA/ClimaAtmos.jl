@@ -1,3 +1,6 @@
+using Flux
+import JLD2
+
 function get_moisture_model(parsed_args)
     moisture_name = parsed_args["moist"]
     @assert moisture_name in ("dry", "equil", "nonequil")
@@ -362,7 +365,13 @@ function get_cloud_model(parsed_args)
     elseif cloud_model == "quadrature_sgs"
         SGSQuadratureCloud(SGSQuadrature(FT))
     elseif cloud_model == "cloud_ml"
-        CloudML()
+        nn_filename = "/Users/julianschmitt/Downloads/cloud_fraction_NN_v3" # v3 has 121 parameters
+        jld2data = JLD2.load("$(nn_filename).jld2") # give re, params,
+        re = jld2data["re"]
+        params = jld2data["params"]
+        # add model to the cache 
+        cf_nn_model = re(params)
+        CloudML(cf_nn_model)
     else
         error("Invalid cloud_model $(cloud_model)")
     end
