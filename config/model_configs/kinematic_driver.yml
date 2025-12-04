@@ -1,0 +1,41 @@
+## Model
+prescribed_flow: true
+initial_condition: "ShipwayHill2012"
+surface_setup: "ShipwayHill2012"
+energy_q_tot_upwinding: first_order
+tracer_upwinding: first_order
+# moist: "nonequil"
+# precip_model: "1M"
+moist: "equil"
+precip_model: "0M"
+cloud_model: "grid_scale"
+call_cloud_diagnostics_per_stage: true
+config: "column"
+hyperdiff: "false"
+## Simulation
+z_max: 2e3
+z_elem: 128
+z_stretch: false
+use_auto_jacobian: true # Needed!! (+only 1 Newton iteration, which is the default)
+# ode_algo: "ARS111" # try: Explicit Euler
+dt: "1secs"
+# t_end: "1hours"
+t_end: "20mins"
+dt_save_state_to_disk: "1hours"
+toml: [toml/kinematic_driver.toml]
+check_nan_every: 1
+## Diagnostics
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [
+      # (z,t) fields
+      ta, thetaa, ha, rhoa, wa, hur, hus, cl, clw, cli, ua, va, ke,
+      # (t,) fields
+      lwp, pr,
+      # 1M
+      # (z,t) fields
+      # husra, hussn,
+      # (t,) fields
+      # rwp,
+    ]
+    period: 10secs
