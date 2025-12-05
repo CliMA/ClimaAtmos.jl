@@ -565,7 +565,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities_part1!(Y, p, t)
     return nothing
 end
 NVTX.@annotate function set_explicit_precomputed_quantities_part2!(Y, p, t)
-    (; turbconv_model, moisture_model, cloud_model) = p.atmos
+    (; turbconv_model, moisture_model, cloud_model, microphysics_model) = p.atmos
     (; call_cloud_diagnostics_per_stage) = p.atmos
 
     if turbconv_model isa PrognosticEDMFX
@@ -573,7 +573,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities_part2!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_precipitation!(
             Y,
             p,
-            p.atmos.microphysics_model,
+            microphysics_model,
         )
     end
     if turbconv_model isa DiagnosticEDMFX
@@ -584,7 +584,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities_part2!(Y, p, t)
             Y,
             p,
             t,
-            p.atmos.microphysics_model,
+            microphysics_model,
         )
     end
     if turbconv_model isa EDOnlyEDMFX
@@ -595,22 +595,22 @@ NVTX.@annotate function set_explicit_precomputed_quantities_part2!(Y, p, t)
     set_precipitation_velocities!(
         Y,
         p,
-        p.atmos.moisture_model,
-        p.atmos.microphysics_model,
-        p.atmos.turbconv_model,
+        moisture_model,
+        microphysics_model,
+        turbconv_model,
     )
     # Needs to be done after edmf precipitation is computed in sub-domains
     set_precipitation_cache!(
         Y,
         p,
-        p.atmos.microphysics_model,
-        p.atmos.turbconv_model,
+        microphysics_model,
+        turbconv_model,
     )
-    set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
+    set_precipitation_surface_fluxes!(Y, p, microphysics_model)
 
     # TODO
     if call_cloud_diagnostics_per_stage isa CallCloudDiagnosticsPerStage
-        set_cloud_fraction!(Y, p, moisture_model, cloud_model)
+        set_cloud_fraction!(Y, p, moisture_model, cloud_model, microphysics_model, turbconv_model)
     end
 
     set_smagorinsky_lilly_precomputed_quantities!(Y, p, p.atmos.smagorinsky_lilly)
