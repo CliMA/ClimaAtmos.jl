@@ -7,7 +7,7 @@ tracer_upwinding: first_order
 implicit_diffusion: true
 implicit_sgs_advection: true
 implicit_sgs_entr_detr: true
-implicit_nh_pressure: true
+implicit_sgs_nh_pressure: true
 implicit_sgs_vertdiff: true
 implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
@@ -31,7 +31,7 @@ x_elem: 2
 y_elem: 2
 z_elem: 82
 z_stretch: false
-dt: 50secs
+dt: 150secs
 t_end: 12hours
 dt_save_state_to_disk: 60mins
 toml: [toml/prognostic_edmfx_1M.toml]
