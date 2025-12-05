@@ -1,7 +1,7 @@
 ## Model
-prescribed_flow: true
-initial_condition: "ShipwayHill2012"
-surface_setup: "ShipwayHill2012"
+prescribed_flow: ShipwayHill2012
+initial_condition: ShipwayHill2012
+surface_setup: ShipwayHill2012
 energy_q_tot_upwinding: first_order
 tracer_upwinding: first_order
 # moist: "nonequil"
@@ -13,8 +13,10 @@ call_cloud_diagnostics_per_stage: true
 config: "column"
 hyperdiff: "false"
 ## Simulation
-z_max: 2e3
-z_elem: 128
+# z_max: 2e3  # TODO: Update top boundary condition for ρu₃qₜ to allow lower z_max
+# z_elem: 128
+z_max: 8e3
+z_elem: 512
 z_stretch: false
 use_auto_jacobian: true # Needed!! (+only 1 Newton iteration, which is the default)
 # ode_algo: "ARS111" # try: Explicit Euler

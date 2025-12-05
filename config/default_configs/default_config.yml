@@ -426,5 +426,5 @@ use_itime:
   2. Time dependent forcing/tendencies use time rounded to the nearest unit of time for dt"
   value: false
 prescribed_flow:
-  help: "Prescribe a flow field [`nothing` (default), `true`]"
+  help: "Prescribe a flow field [`nothing` (default), `ShipwayHill2012`]"
   value: ~
