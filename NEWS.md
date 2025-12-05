@@ -4,6 +4,9 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+PR [#4021](https://github.com/CliMA/ClimaAtmos.jl/pull/4021) uses ClimaCore
+convenience constructors to create spaces without an AtmosConfig.
+
 v0.31.5
 -------
 PR [#3975](https://github.com/CliMA/ClimaAtmos.jl/pull/3975) updates the pressure gradient formulation to subtract a reference state and use the Exner pressure.
