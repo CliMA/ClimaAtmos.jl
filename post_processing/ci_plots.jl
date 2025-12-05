@@ -1566,7 +1566,7 @@ function make_plots(
 
     make_plots_generic(
         output_paths,
-        vcat(var_groups_zt...),
+        vcat((var_groups_zt...)...),
         plot_fn = plot_parsed_attribute_title!,
         summary_files = [tmp_file],
         MAX_NUM_COLS = 2,

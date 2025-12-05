@@ -6,28 +6,34 @@ import ClimaComms
 export SphereGrid, ColumnGrid, BoxGrid, PlaneGrid
 
 """
-    SphereGrid(FT; kwargs...)
+    SphereGrid(::Type{FT}; kwargs...)
 
 Create an ExtrudedCubedSphereGrid with topography support.
 
 # Arguments
-- `FT`: Floating point type
+- `FT`: the floating-point type [`Float32`, `Float64`]
 
 # Keyword Arguments
-- `context`: Communications context
-- `z_elem`: Number of vertical elements
-- `z_max`: Maximum height
-- `z_stretch`: Whether to use vertical stretching
-- `dz_bottom`: Bottom layer thickness for stretching
-- `radius`: Earth radius
-- `h_elem`: Number of horizontal elements per panel
-- `nh_poly`: Polynomial order
-- `bubble`: Enable bubble correction
-- `deep_atmosphere`: Enable deep atmosphere
-- `topography`: Topography type
-- `topography_damping_factor`: Topography damping
-- `mesh_warp_type`: Mesh warping type ([`SLEVEWarp`](@ref) or [`LinearWarp`](@ref))
-- `topo_smoothing`: Apply topography smoothing
+- `context = ClimaComms.context()`: the ClimaComms communications context
+- `z_elem = 10`: the number of z-points
+- `z_max = 30000.0`: the domain maximum along the z-direction
+- `z_stretch = true`: whether to use vertical stretching
+- `dz_bottom = 500.0`: bottom layer thickness for stretching
+- `radius = 6.371229e6`: the radius of the cubed sphere
+- `h_elem = 6`: the number of horizontal elements per side of every panel (6
+  panels in total)
+- `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
+  1D within each horizontal element is then `n_quad_points = nh_poly + 1`
+- `bubble = false`: enables the "bubble correction" for more accurate element
+  areas when computing the spectral element space
+- `deep_atmosphere = true`: use deep atmosphere equations and metric terms,
+  otherwise assume columns are cylindrical (shallow atmosphere)
+- `topography = NoTopography()`: topography type
+- `topography_damping_factor = 5.0`: factor by which smallest resolved
+  length-scale is to be damped
+- `mesh_warp_type = SLEVEWarp{FT}()`: mesh warping type ([`SLEVEWarp`](@ref) or
+  [`LinearWarp`](@ref))
+- `topo_smoothing = false`: apply topography smoothing
 """
 function SphereGrid(
     ::Type{FT};
@@ -47,10 +53,8 @@ function SphereGrid(
     topo_smoothing = false,
 ) where {FT}
     n_quad_points = nh_poly + 1
-
     stretch =
         z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
-
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing,
     )
@@ -77,19 +81,19 @@ function SphereGrid(
 end
 
 """
-    ColumnGrid(FT; kwargs...)
+    ColumnGrid(::Type{FT}; kwargs...)
 
 Create a ColumnGrid.
 
 # Arguments
-- `FT`: Floating point type
+- `FT`: the floating-point type [`Float32`, `Float64`]
 
 # Keyword Arguments
-- `context`: Communications context
-- `z_elem`: Number of vertical elements
-- `z_max`: Maximum height
-- `z_stretch`: Whether to use vertical stretching
-- `dz_bottom`: Bottom layer thickness for stretching
+- `context = ClimaComms.context()`: the ClimaComms communications context
+- `z_elem = 10`: the number of z-points
+- `z_max = 30000.0`: the domain maximum along the z-direction
+- `z_stretch = true`: whether to use vertical stretching
+- `dz_bottom = 500.0`: bottom layer thickness for stretching
 """
 function ColumnGrid(
     ::Type{FT};
@@ -101,13 +105,7 @@ function ColumnGrid(
 ) where {FT}
     stretch =
         z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
-    z_mesh = DefaultZMesh(
-        FT;
-        z_min = 0,
-        z_max,
-        z_elem,
-        stretch,
-    )
+    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem, stretch)
     grid = CommonGrids.ColumnGrid(
         FT;
         z_elem, z_min = 0, z_max, z_mesh,
@@ -120,31 +118,35 @@ function ColumnGrid(
 end
 
 """
-    BoxGrid(FT; kwargs...)
+    BoxGrid(::Type{FT}; kwargs...)
 
 Create a Box3DGrid with topography support.
 
 # Arguments
-- `FT`: Floating point type
+- `FT`: the floating-point type [`Float32`, `Float64`]
 
 # Keyword Arguments
-- `context`: Communications context
-- `x_elem`: Number of x elements
-- `x_max`: Maximum x coordinate
-- `y_elem`: Number of y elements
-- `y_max`: Maximum y coordinate
-- `z_elem`: Number of vertical elements
-- `z_max`: Maximum height
-- `nh_poly`: Polynomial order
-- `z_stretch`: Whether to use vertical stretching
-- `dz_bottom`: Bottom layer thickness for stretching
-- `bubble`: Enable bubble correction
-- `periodic_x`: Periodic in x direction
-- `periodic_y`: Periodic in y direction
-- `topography`: Topography type
-- `topography_damping_factor`: Topography damping
-- `mesh_warp_type`: Mesh warping type ([`SLEVEWarp`](@ref) or [`LinearWarp`](@ref))
-- `topo_smoothing`: Apply topography smoothing
+- `context = ClimaComms.context()`: the ClimaComms communications context
+- `x_elem = 6`: the number of x-points
+- `x_max = 300000.0`: the domain maximum along the x-direction
+- `y_elem = 6`: the number of y-points
+- `y_max = 300000.0`: the domain maximum along the y-direction
+- `z_elem = 10`: the number of z-points
+- `z_max = 30000.0`: the domain maximum along the z-direction
+- `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
+  1D within each horizontal element is then `n_quad_points = nh_poly + 1`
+- `z_stretch = true`: whether to use vertical stretching
+- `dz_bottom = 500.0`: bottom layer thickness for stretching
+- `bubble = false`: enables the "bubble correction" for more accurate element
+  areas when computing the spectral element space.
+- `periodic_x = true`: use periodic domain along x-direction
+- `periodic_y = true`: use periodic domain along y-direction
+- `topography = NoTopography()`: topography type
+- `topography_damping_factor = 5.0`: factor by which smallest resolved
+  length-scale is to be damped
+- `mesh_warp_type = LinearWarp()`: mesh warping type ([`SLEVEWarp`](@ref) or
+  [`LinearWarp`](@ref))
+- `topo_smoothing = false`: apply topography smoothing
 """
 function BoxGrid(
     ::Type{FT};
@@ -167,21 +169,13 @@ function BoxGrid(
     topo_smoothing = false,
 ) where {FT}
     n_quad_points = nh_poly + 1
-
     stretch =
         z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
-
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing,
     )
-    z_mesh = Meshes.DefaultZMesh(
-        FT;
-        z_min = 0,
-        z_max,
-        z_elem,
-        stretch,
-    )
-    grid = Box3DGrid(
+    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem, stretch)
+    grid = CommonGrids.Box3DGrid(
         FT;
         z_elem, x_min = 0, x_max, y_min = 0, y_max, z_min = 0, z_max,
         periodic_x, periodic_y, n_quad_points, x_elem, y_elem,
@@ -198,28 +192,33 @@ function BoxGrid(
 end
 
 """
-    PlaneGrid(FT; kwargs...)
+    PlaneGrid(::Type{FT}; kwargs...)
 
 Create a SliceXZGrid with topography support.
 
 # Arguments
-- `FT`: Floating point type
+- `FT`: the floating-point type [`Float32`, `Float64`]
 
 # Keyword Arguments
-- `context`: Communications context
-- `x_elem`: Number of x elements
-- `x_max`: Maximum x coordinate
-- `z_elem`: Number of vertical elements
-- `z_max`: Maximum height
-- `nh_poly`: Polynomial order
-- `z_stretch`: Whether to use vertical stretching
-- `dz_bottom`: Bottom layer thickness for stretching
-- `bubble`: Enable bubble correction
-- `periodic_x`: Periodic in x direction
-- `topography`: Topography type
-- `topography_damping_factor`: Topography damping
-- `mesh_warp_type`: Mesh warping type ([`SLEVEWarp`](@ref) or [`LinearWarp`](@ref))
-- `topo_smoothing`: Apply topography smoothing
+- `context = ClimaComms.context()`: the ClimaComms communications context
+- `x_elem = 6`: the number of x-points
+- `x_max = 300000.0`: the domain maximum along the x-direction
+- `z_elem = 10`: the number of z-points
+- `z_max = 30000.0`: the domain maximum along the z-direction
+- `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
+  1D within each horizontal element is then `n_quad_points = nh_poly + 1`
+- `z_stretch = true`: whether to use vertical stretching
+- `dz_bottom = 500.0`: bottom layer thickness for stretching
+- `bubble = false`: enables the "bubble correction" for more accurate element
+  areas when computing the spectral element space. Note: Currently not supported
+  by SliceXZGrid in ClimaCore.
+- `periodic_x = true`: use periodic domain along x-direction
+- `topography = NoTopography()`: topography type
+- `topography_damping_factor = 5.0`: factor by which smallest resolved
+  length-scale is to be damped
+- `mesh_warp_type = LinearWarp()`: mesh warping type ([`SLEVEWarp`](@ref) or
+  [`LinearWarp`](@ref))
+- `topo_smoothing = false`: apply topography smoothing
 """
 function PlaneGrid(
     ::Type{FT};
@@ -239,21 +238,12 @@ function PlaneGrid(
     topo_smoothing = false,
 ) where {FT}
     n_quad_points = nh_poly + 1
-
     stretch =
         z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
-
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing,
     )
-
-    z_mesh = Meshes.DefaultZMesh(
-        FT;
-        z_min = 0,
-        z_max,
-        z_elem,
-        stretch,
-    )
+    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem, stretch)
 
     grid = CommonGrids.SliceXZGrid(
         FT;
@@ -269,15 +259,6 @@ function PlaneGrid(
 
     return grid
 end
-
-# TODO: Could this work? seems overengineered
-# struct HypsographyFunction{FT}
-#     f::Function
-# end
-
-# function (hf::HypsographyFunction{FT})(h_grid, z_grid) where {FT}
-#     return hf.f(FT, h_grid, z_grid)
-# end
 
 """
     hypsography_function_from_topography(
@@ -319,16 +300,16 @@ function hypsography_function_from_topography(
         end
 
         if topography isa EarthTopography
-            # Diffuse Earth topography to remove small-scale features
-            # Using a diffusion Courant number (CFL = νΔt/Δx²) to control smoothing
+            # Diffuse Earth topography to remove small-scale features Using a
+            # diffusion Courant number (CFL = νΔt/Δx²) to control smoothing
             diff_courant = FT(0.05)
             Δh_scale = Spaces.node_horizontal_length_scale(h_space)
             κ = FT(diff_courant * Δh_scale^2)
             maxiter = Int(round(log(topography_damping_factor) / diff_courant))
             Hypsography.diffuse_surface_elevation!(z_surface; κ, dt = FT(1), maxiter)
             # Coefficient for horizontal diffusion may alternatively be
-            # determined from the empirical parameters suggested by
-            # E3SM v1/v2 Topography documentation found here: 
+            # determined from the empirical parameters suggested by E3SM v1/v2
+            # Topography documentation found here:
             # https://acme-climate.atlassian.net/wiki/spaces/DOC/pages/1456603764/V1+Topography+GLL+grids
             @. z_surface = max(z_surface, 0)
         elseif topo_smoothing

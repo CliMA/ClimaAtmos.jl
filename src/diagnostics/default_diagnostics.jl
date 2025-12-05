@@ -169,8 +169,8 @@ function core_default_diagnostics(output_writer, duration, start_date; topograph
         min_func = (args...; kwargs...) -> hourly_min(FT, args...; kwargs...)
         max_func = (args...; kwargs...) -> hourly_max(FT, args...; kwargs...)
     end
-    # Common diagnostics for all cases
-    common_diagnostics = [
+    # Base diagnostics for all cases
+    base_diagnostics = [
         average_func(core_diagnostics...; output_writer, start_date)...,
         min_func("ts"; output_writer, start_date),
         max_func("ts"; output_writer, start_date),
@@ -185,10 +185,10 @@ function core_default_diagnostics(output_writer, duration, start_date; topograph
             output_writer,
             output_short_name = "orog_inst",
         )
-        pushfirst!(common_diagnostics, orog_diagnostic)
+        return [orog_diagnostic, base_diagnostics...]
+    else
+        return base_diagnostics
     end
-
-    return common_diagnostics
 end
 
 ##################

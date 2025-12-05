@@ -332,7 +332,7 @@ end
     line_mesh = periodic_line_mesh(; x_max = zlim[2], x_elem = velem)
     @test line_mesh isa Meshes.AbstractMesh1D
     horz_plane_space =
-        CA.make_horizontal_space(line_mesh, quad, comms_ctx, true)
+        make_horizontal_space(line_mesh, quad, comms_ctx, true)
     @test Spaces.column(horz_plane_space, 1, 1) isa Spaces.PointSpace
 
     # 2D Space
@@ -344,7 +344,7 @@ end
     )
     @test rectangle_mesh isa Meshes.AbstractMesh2D
     horz_plane_space =
-        CA.make_horizontal_space(rectangle_mesh, quad, comms_ctx, true)
+        make_horizontal_space(rectangle_mesh, quad, comms_ctx, true)
     @test Spaces.nlevels(horz_plane_space) == 1
     @test Spaces.node_horizontal_length_scale(horz_plane_space) ==
           FT(π / npoly / 5)
