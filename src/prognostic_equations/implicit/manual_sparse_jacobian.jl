@@ -446,13 +446,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     @. ᶜkappa_m =
         TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
 
-    ᶜ∂kappa_m∂q_tot = p.scratch.ᶜtemp_scalar_2
+    T = p.scratch.ᶜtemp_scalar_3
+    @. T = TD.air_temperature(thermo_params, ᶜts)
+    ᶜ∂RmT∂q = p.scratch.ᶜtemp_scalar_2
     # Using abs2 because ^2 results in allocation
-    @. ᶜ∂kappa_m∂q_tot =
-        (
-            ΔR_v * TD.cv_m(thermo_params, ᶜts) -
-            Δcv_v * TD.gas_constant_air(thermo_params, ᶜts)
-        ) / abs2(TD.cv_m(thermo_params, ᶜts))
+    @. ᶜ∂RmT∂q = ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (T - T_0)) + ΔR_v * T
 
     if use_derivative(topography_flag)
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
@@ -527,15 +525,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         )
     @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m)
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    T = p.scratch.ᶜtemp_scalar_3
-    @. T = TD.air_temperature(thermo_params, ᶜts)
+    
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
         @. ∂ᶠu₃_err_∂ᶜρq_tot =
-            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow((
-                ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (T - T_0)) + ΔR_v * T
-            ))
+            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜ∂RmT∂q)
     end
     microphysics_tracers = (
         (@name(c.ρq_liq), e_int_v0, Δcv_l),
@@ -705,11 +700,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
             ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
             @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
-                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((
-                    ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ +
-                    ᶜ∂kappa_m∂q_tot *
-                    (cp_d * T_0 + ᶜe_tot - ᶜK - ᶜΦ + ∂e_int_∂q_tot * ᶜq_tot)
-                ))
+                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(ᶜ∂RmT∂q / ᶜρ)
             @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
