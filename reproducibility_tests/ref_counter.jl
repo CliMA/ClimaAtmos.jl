@@ -4,7 +4,7 @@
 #
 # What is the ref_counter?
 #
-# The ref_counter is part of reproducability tests. The counter identifies a
+# The ref_counter is part of reproducibility tests. The counter identifies a
 # particular snapshot of our code, a "reference". Each PR is tested against this
 # reference to check if it reproduces the expected behavior. This allows us to
 # check that PRs that are expected to not modify the behavior do indeed preserve

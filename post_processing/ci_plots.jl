@@ -1494,90 +1494,6 @@ function make_plots(
     sim_type::Union{
         EDMFBoxPlots,
         DiagEDMFBoxPlotsWithPrecip,
-    },
-    output_paths::Vector{<:AbstractString},
-)
-    simdirs = SimDir.(output_paths)
-
-    if sim_type isa DiagEDMFBoxPlotsWithPrecip
-        precip_names = ("husra", "hussn", "husraup", "hussnup")
-    else
-        precip_names = ()
-    end
-
-    short_names = [
-        "wa",
-        "waup",
-        "ta",
-        "taup",
-        "hus",
-        "husup",
-        "arup",
-        "tke",
-        "ua",
-        "thetaa",
-        "thetaaup",
-        "ha",
-        "haup",
-        "hur",
-        "hurup",
-        "lmix",
-        "cl",
-        "clw",
-        "clwup",
-        "cli",
-        "cliup",
-        precip_names...,
-    ]
-    reduction = "inst"
-
-    available_periods = ClimaAnalysis.available_periods(
-        simdirs[1];
-        short_name = short_names[1],
-        reduction,
-    )
-    # choose the shortest available period
-    available_periods = collect(available_periods) # ensure vector for indexing
-    period = available_periods[argmin(CA.time_to_seconds.(available_periods))]
-
-    short_name_tuples = pair_edmf_names(short_names)
-    var_groups_zt =
-        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
-            return [
-                slice(
-                    get(simdir; short_name, reduction, period),
-                    x = 0.0,
-                    y = 0.0,
-                ) for short_name in name_tuple
-            ]
-        end
-
-    var_groups_z = [
-        ([slice(v, time = LAST_SNAP) for v in group]...,) for
-        group in var_groups_zt
-    ]
-
-    tmp_file = make_plots_generic(
-        output_paths,
-        output_name = "tmp",
-        var_groups_z;
-        plot_fn = plot_edmf_vert_profile!,
-        MAX_NUM_COLS = 2,
-        MAX_NUM_ROWS = 4,
-    )
-
-    make_plots_generic(
-        output_paths,
-        vcat(var_groups_zt...),
-        plot_fn = plot_parsed_attribute_title!,
-        summary_files = [tmp_file],
-        MAX_NUM_COLS = 2,
-        MAX_NUM_ROWS = 4,
-    )
-end
-
-function make_plots(
-    sim_type::Union{
         EDMFColumnPlots,
         EDMFColumnPlotsWithPrecip,
     },
@@ -1585,21 +1501,17 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
 
-    if sim_type isa EDMFColumnPlotsWithPrecip
+    # Determine if this is a box or column type
+    is_box = sim_type isa Union{EDMFBoxPlots, DiagEDMFBoxPlotsWithPrecip}
+
+    # Determine precipitation names based on type
+    if sim_type isa DiagEDMFBoxPlotsWithPrecip
+        precip_names = ("husra", "hussn", "husraup", "hussnup")
+    elseif sim_type isa EDMFColumnPlotsWithPrecip
         if sim_type isa Val{:prognostic_edmfx_rico_column_2M}
             precip_names = (
-                "husra",
-                "hussn",
-                "husraup",
-                "hussnup",
-                "husraen",
-                "hussnen",
-                "cdnc",
-                "ncra",
-                "cdncup",
-                "ncraup",
-                "cdncen",
-                "ncraen",
+                "husra", "hussn", "husraup", "hussnup", "husraen", "hussnen",
+                "cdnc", "ncra", "cdncup", "ncraup", "cdncen", "ncraen",
             )
         else
             precip_names =
@@ -1610,27 +1522,9 @@ function make_plots(
     end
 
     short_names = [
-        "wa",
-        "waup",
-        "ta",
-        "taup",
-        "hus",
-        "husup",
-        "arup",
-        "tke",
-        "ua",
-        "thetaa",
-        "thetaaup",
-        "ha",
-        "haup",
-        "hur",
-        "hurup",
-        "lmix",
-        "cl",
-        "clw",
-        "clwup",
-        "cli",
-        "cliup",
+        "wa", "waup", "ta", "taup", "hus", "husup", "arup", "tke", "ua",
+        "thetaa", "thetaaup", "ha", "haup", "hur", "hurup", "lmix",
+        "cl", "clw", "clwup", "cli", "cliup",
         precip_names...,
     ]
     reduction = "inst"
@@ -1647,9 +1541,13 @@ function make_plots(
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
-            return [
-                get(simdir; short_name, reduction, period) for short_name in name_tuple
-            ]
+            vars = map(short_name -> get(simdir; short_name, reduction, period), name_tuple)
+            # For box types, slice to a point (x=0, y=0)
+            if is_box
+                return map(var -> slice(var, x = 0.0, y = 0.0), vars)
+            else
+                return vars
+            end
         end
 
     var_groups_z = [

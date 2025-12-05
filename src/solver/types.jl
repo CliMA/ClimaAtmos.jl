@@ -1268,7 +1268,7 @@ function AtmosConfig(
 end
 
 """
-    maybe_resolve_and_acquire_artifacts(input_str::AbstractString, context::ClimaComms.AbstractCommsContext)
+    maybe_resolve_and_acquire_artifacts(input_str::AbstractString, context)
 
 When given a string of the form `artifact"name"/something/else`, resolve the
 artifact path and download it (if not already available).
@@ -1277,7 +1277,7 @@ In all the other cases, return the input unchanged.
 """
 function maybe_resolve_and_acquire_artifacts(
     input_str::AbstractString,
-    context::ClimaComms.AbstractCommsContext,
+    context,
 )
     matched = match(r"artifact\"([a-zA-Z0-9_]+)\"(\/.*)?", input_str)
     if isnothing(matched)
@@ -1293,20 +1293,20 @@ end
 
 function maybe_resolve_and_acquire_artifacts(
     input,
-    _::ClimaComms.AbstractCommsContext,
+    _,
 )
     return input
 end
 
 """
-    config_with_resolved_and_acquired_artifacts(input_str::AbstractString, context::ClimaComms.AbstractCommsContext)
+    config_with_resolved_and_acquired_artifacts(input_str::AbstractString, context)
 
 Substitute strings of the form `artifact"name"/something/else` with the actual
 artifact path.
 """
 function config_with_resolved_and_acquired_artifacts(
     config::AbstractDict,
-    context::ClimaComms.AbstractCommsContext,
+    context,
 )
     return Dict(
         k => maybe_resolve_and_acquire_artifacts(v, context) for

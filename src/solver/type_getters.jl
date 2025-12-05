@@ -597,7 +597,7 @@ function get_sim_info(config::AtmosConfig)
 
     (; job_id) = config
 
-    output_dir, restart_file = CA.setup_output_dir(
+    output_dir, restart_file = setup_output_dir(
         job_id,
         parsed_args["output_dir"],
         parsed_args["output_dir_style"],
@@ -722,8 +722,8 @@ function get_mesh_warp_type(FT, parsed_args)
     warp_type_str = parsed_args["mesh_warp_type"]
     if warp_type_str == "SLEVE"
         return SLEVEWarp{FT}(
-            eta = FT(parsed_args["sleve_eta"]),
-            s = FT(parsed_args["sleve_s"]),
+            eta = parsed_args["sleve_eta"],
+            s = parsed_args["sleve_s"],
         )
     elseif warp_type_str == "Linear"
         return LinearWarp()
@@ -736,34 +736,42 @@ end
 
 function get_grid(parsed_args, params, context)
     FT = eltype(params)
-    if parsed_args["config"] == "sphere"
+    config = parsed_args["config"]
+
+    # Common vertical discretization parameters
+    kwargs = (
+        z_elem = parsed_args["z_elem"],
+        z_max = parsed_args["z_max"],
+        z_stretch = parsed_args["z_stretch"],
+        dz_bottom = parsed_args["dz_bottom"],
+    )
+
+    # Add topography parameters for non-column grids
+    if config != "column"
+        kwargs = (
+            kwargs...,
+            topography = get_topography(FT, parsed_args),
+            topography_damping_factor = parsed_args["topography_damping_factor"],
+            mesh_warp_type = get_mesh_warp_type(FT, parsed_args),
+            topo_smoothing = parsed_args["topo_smoothing"],
+        )
+    end
+
+    # Grid-specific construction
+    if config == "sphere"
         SphereGrid(
             FT;
             context,
             radius = CAP.planet_radius(params),
             h_elem = parsed_args["h_elem"],
             nh_poly = parsed_args["nh_poly"],
-            z_elem = parsed_args["z_elem"],
-            z_max = parsed_args["z_max"],
-            z_stretch = parsed_args["z_stretch"],
-            dz_bottom = parsed_args["dz_bottom"],
             bubble = parsed_args["bubble"],
             deep_atmosphere = parsed_args["deep_atmosphere"],
-            topography = get_topography(FT, parsed_args),
-            topography_damping_factor = parsed_args["topography_damping_factor"],
-            mesh_warp_type = get_mesh_warp_type(FT, parsed_args),
-            topo_smoothing = parsed_args["topo_smoothing"],
+            kwargs...,
         )
-    elseif parsed_args["config"] == "column"
-        ColGrid(
-            FT;
-            context,
-            z_elem = parsed_args["z_elem"],
-            z_max = parsed_args["z_max"],
-            z_stretch = parsed_args["z_stretch"],
-            dz_bottom = parsed_args["dz_bottom"],
-        )
-    elseif parsed_args["config"] == "box"
+    elseif config == "column"
+        ColumnGrid(FT; context, kwargs...)
+    elseif config == "box"
         BoxGrid(
             FT;
             context,
@@ -771,36 +779,22 @@ function get_grid(parsed_args, params, context)
             x_max = parsed_args["x_max"],
             y_elem = parsed_args["y_elem"],
             y_max = parsed_args["y_max"],
-            z_elem = parsed_args["z_elem"],
-            z_max = parsed_args["z_max"],
             nh_poly = parsed_args["nh_poly"],
-            z_stretch = parsed_args["z_stretch"],
-            dz_bottom = parsed_args["dz_bottom"],
             bubble = parsed_args["bubble"],
             periodic_x = true,
             periodic_y = true,
-            topography = get_topography(FT, parsed_args),
-            topography_damping_factor = parsed_args["topography_damping_factor"],
-            mesh_warp_type = get_mesh_warp_type(FT, parsed_args),
-            topo_smoothing = parsed_args["topo_smoothing"],
+            kwargs...,
         )
-    elseif parsed_args["config"] == "plane"
+    elseif config == "plane"
         PlaneGrid(
             FT;
             context,
             x_elem = parsed_args["x_elem"],
             x_max = parsed_args["x_max"],
-            z_elem = parsed_args["z_elem"],
-            z_max = parsed_args["z_max"],
             nh_poly = parsed_args["nh_poly"],
-            z_stretch = parsed_args["z_stretch"],
-            dz_bottom = parsed_args["dz_bottom"],
             bubble = parsed_args["bubble"],
             periodic_x = true,
-            topography = get_topography(FT, parsed_args),
-            topography_damping_factor = parsed_args["topography_damping_factor"],
-            mesh_warp_type = get_mesh_warp_type(FT, parsed_args),
-            topo_smoothing = parsed_args["topo_smoothing"],
+            kwargs...,
         )
     end
 end
