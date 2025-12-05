@@ -164,7 +164,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     t,
 )
 
-    (; moisture_model, turbconv_model) = p.atmos
+    (; turbconv_model) = p.atmos
 
     (; params) = p
     (; dt) = p
@@ -299,14 +299,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         )
     end
 
-    (; ᶜgradᵥ_θ_virt, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
+    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, cloud_diagnostics_tuple) =
+        p.precomputed
     @. ᶜlinear_buoygrad = buoyancy_gradients( # TODO - do we need to modify buoyancy gradients based on NonEq + 1M tracers?
         BuoyGradMean(),
         thermo_params,
-        moisture_model,
         ᶜts,
+        cloud_diagnostics_tuple.cf,
         C3,
-        ᶜgradᵥ_θ_virt,
         ᶜgradᵥ_q_tot,
         ᶜgradᵥ_θ_liq_ice,
         ᶜlg,

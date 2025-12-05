@@ -376,17 +376,18 @@ Variables used in the environmental buoyancy gradient computation.
 """
 Base.@kwdef struct EnvBuoyGradVars{FT, TS}
     ts::TS
-    ∂θv∂z_unsat::FT
-    ∂qt∂z_sat::FT
-    ∂θli∂z_sat::FT
+    cf::FT
+    ∂qt∂z::FT
+    ∂θli∂z::FT
 end
 
 function EnvBuoyGradVars(
     ts::TD.ThermodynamicState,
-    ∂θv∂z_unsat_∂qt∂z_sat_∂θli∂z_sat,
+    cf,
+    ∂qt∂z_∂θli∂z,
 )
-    (; ∂θv∂z_unsat, ∂qt∂z_sat, ∂θli∂z_sat) = ∂θv∂z_unsat_∂qt∂z_sat_∂θli∂z_sat
-    return EnvBuoyGradVars(ts, ∂θv∂z_unsat, ∂qt∂z_sat, ∂θli∂z_sat)
+    (; ∂qt∂z, ∂θli∂z) = ∂qt∂z_∂θli∂z
+    return EnvBuoyGradVars(ts, cf, ∂qt∂z, ∂θli∂z)
 end
 
 Base.eltype(::EnvBuoyGradVars{FT}) where {FT} = FT
