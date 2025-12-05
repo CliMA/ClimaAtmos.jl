@@ -225,8 +225,7 @@ Base.@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
     H::FT
     D₀::FT
 end
-disable_momentum_vertical_diffusion(::DecayWithHeightDiffusion{DM}) where {DM} =
-    DM
+disable_momentum_vertical_diffusion(::DecayWithHeightDiffusion{DM}) where {DM} = DM
 disable_momentum_vertical_diffusion(::Nothing) = false
 
 struct SurfaceFlux end
@@ -897,23 +896,14 @@ function AtmosModel(; kwargs...)
 
     # Create grouped structs - use provided complete objects or create from individual fields
     water = _create_grouped_struct(AtmosWater, atmos_model_kwargs, group_kwargs)
-    scm_setup =
-        _create_grouped_struct(SCMSetup, atmos_model_kwargs, group_kwargs)
-    radiation =
-        _create_grouped_struct(AtmosRadiation, atmos_model_kwargs, group_kwargs)
-    turbconv =
-        _create_grouped_struct(AtmosTurbconv, atmos_model_kwargs, group_kwargs)
-    gravity_wave = _create_grouped_struct(
-        AtmosGravityWave,
-        atmos_model_kwargs,
-        group_kwargs,
-    )
-    sponge =
-        _create_grouped_struct(AtmosSponge, atmos_model_kwargs, group_kwargs)
-    surface =
-        _create_grouped_struct(AtmosSurface, atmos_model_kwargs, group_kwargs)
-    numerics =
-        _create_grouped_struct(AtmosNumerics, atmos_model_kwargs, group_kwargs)
+    scm_setup = _create_grouped_struct(SCMSetup, atmos_model_kwargs, group_kwargs)
+    radiation = _create_grouped_struct(AtmosRadiation, atmos_model_kwargs, group_kwargs)
+    turbconv = _create_grouped_struct(AtmosTurbconv, atmos_model_kwargs, group_kwargs)
+    gravity_wave =
+        _create_grouped_struct(AtmosGravityWave, atmos_model_kwargs, group_kwargs)
+    sponge = _create_grouped_struct(AtmosSponge, atmos_model_kwargs, group_kwargs)
+    surface = _create_grouped_struct(AtmosSurface, atmos_model_kwargs, group_kwargs)
+    numerics = _create_grouped_struct(AtmosNumerics, atmos_model_kwargs, group_kwargs)
 
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     disable_surface_flux_tendency =
@@ -1053,7 +1043,11 @@ Create a dry atmospheric model with sensible defaults for dry simulations.
 ```julia
 model = DryAtmosModel(;
     radiation_mode = HeldSuarezForcing(),
-    hyperdiff = ClimaHyperdiffusion(; ν₄_vorticity_coeff = 1e15, ν₄_scalar_coeff = 1e15, divergence_damping_factor = 1.0)
+    hyperdiff = ClimaHyperdiffusion(; 
+        ν₄_vorticity_coeff = 1e15,
+        ν₄_scalar_coeff = 1e15,
+        divergence_damping_factor = 1.0,
+    )
 )
 ```
 """
@@ -1174,19 +1168,17 @@ function maybe_add_default(config_files, default_config_file)
 end
 
 """
-    AtmosConfig(
-        config_file::String = default_config_file;
-        job_id = config_id_from_config_file(config_file),
-        comms_ctx = nothing,
-    )
-    AtmosConfig(
-        config_files::Union{NTuple{<:Any, String} ,Vector{String}};
-        job_id = config_id_from_config_files(config_files),
-        comms_ctx = nothing,
-    )
+    AtmosConfig(config_files; [job_id], [comms_ctx])
 
-Helper function for the AtmosConfig constructor. Reads a YAML file into a Dict
-and passes it to the AtmosConfig constructor.
+Helper function for the AtmosConfig constructor. 
+Reads a YAML file into a Dict and passes it to the AtmosConfig constructor.
+
+# Arguments
+- `config_files`: The path(s) to the YAML file(s) to read.
+- `job_id`: The job ID to use for the simulation.
+            By default `config_id_from_config_file(config_files)`.
+- `comms_ctx`: The communication context to use for the simulation.
+            If not set, the context is inferred from the environment.
 """
 AtmosConfig(
     config_file::String = default_config_file;
@@ -1200,37 +1192,22 @@ function AtmosConfig(
     comms_ctx = nothing,
 )
 
-    all_config_files =
-        normrelpath.(maybe_add_default(config_files, default_config_file))
+    all_config_files = normrelpath.(maybe_add_default(config_files, default_config_file))
     configs = map(all_config_files) do config_file
         strip_help_messages(load_yaml_file(config_file))
     end
-    return AtmosConfig(
-        configs;
-        comms_ctx,
-        config_files = all_config_files,
-        job_id,
-    )
+    return AtmosConfig(configs; comms_ctx, config_files = all_config_files, job_id)
 end
 
 """
-    AtmosConfig(
-        configs::Union{NTuple{<:Any, Dict} ,Vector{Dict}};
-        comms_ctx = nothing,
-        config_files,
-        job_id
-    )
+    AtmosConfig(configs; [comms_ctx], [config_files], [job_id])
 
-Constructs the AtmosConfig from the Dicts passed in. This Dict overrides all of
-the default configurations set in `default_config_dict()`.
+Constructs the AtmosConfig from the provided `configs` dictionary.
+This dictionary overrides all of the default configurations set in `default_config_dict()`.
 """
-AtmosConfig(configs::AbstractDict; kwargs...) =
-    AtmosConfig((configs,); kwargs...)
-function AtmosConfig(
-    configs::TupleOrVector(AbstractDict);
-    comms_ctx = nothing,
-    config_files = [default_config_file],
-    job_id = "",
+AtmosConfig(configs::AbstractDict; kwargs...) = AtmosConfig((configs,); kwargs...)
+function AtmosConfig(configs::TupleOrVector(AbstractDict);
+    comms_ctx = nothing, config_files = [default_config_file], job_id = "",
 )
     config_files = map(x -> normrelpath(x), config_files)
 
@@ -1242,14 +1219,10 @@ function AtmosConfig(
     config = override_default_config(config)
 
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
-    toml_dict = CP.create_toml_dict(
-        FT;
-        override_file = CP.merge_toml_files(config["toml"]),
-    )
+    toml_dict = CP.create_toml_dict(FT; override_file = CP.merge_toml_files(config["toml"]))
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
 
-    isempty(job_id) &&
-        @warn "`job_id` is empty and likely not passed to AtmosConfig"
+    isempty(job_id) && @warn "`job_id` is empty and likely not passed to AtmosConfig"
 
     @info "Making AtmosConfig with config files: $(sprint(config_summary, config_files))"
 
@@ -1257,12 +1230,7 @@ function AtmosConfig(
     TD = typeof(toml_dict)
     PA = typeof(config)
     CF = typeof(config_files)
-    return AtmosConfig{FT, TD, PA, C, CF}(
-        toml_dict,
-        config,
-        comms_ctx,
-        config_files,
-        job_id,
+    return AtmosConfig{FT, TD, PA, C, CF}(toml_dict, config, comms_ctx, config_files, job_id,
     )
 end
 
@@ -1275,8 +1243,7 @@ artifact path and download it (if not already available).
 In all the other cases, return the input unchanged.
 """
 function maybe_resolve_and_acquire_artifacts(
-    input_str::AbstractString,
-    context::ClimaComms.AbstractCommsContext,
+    input_str::AbstractString, context::ClimaComms.AbstractCommsContext,
 )
     matched = match(r"artifact\"([a-zA-Z0-9_]+)\"(\/.*)?", input_str)
     if isnothing(matched)
@@ -1289,13 +1256,7 @@ function maybe_resolve_and_acquire_artifacts(
         )
     end
 end
-
-function maybe_resolve_and_acquire_artifacts(
-    input,
-    _::ClimaComms.AbstractCommsContext,
-)
-    return input
-end
+maybe_resolve_and_acquire_artifacts(input, ::ClimaComms.AbstractCommsContext) = input
 
 """
     config_with_resolved_and_acquired_artifacts(input_str::AbstractString, context::ClimaComms.AbstractCommsContext)
@@ -1304,8 +1265,7 @@ Substitute strings of the form `artifact"name"/something/else` with the actual
 artifact path.
 """
 function config_with_resolved_and_acquired_artifacts(
-    config::AbstractDict,
-    context::ClimaComms.AbstractCommsContext,
+    config::AbstractDict, context::ClimaComms.AbstractCommsContext,
 )
     return Dict(
         k => maybe_resolve_and_acquire_artifacts(v, context) for
