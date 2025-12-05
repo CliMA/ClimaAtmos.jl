@@ -1,6 +1,7 @@
 ### BoilerPlate Code
 using IntervalSets
 
+import ClimaComms
 import ClimaCore:
     ClimaCore,
     Domains,
@@ -50,6 +51,80 @@ function periodic_rectangle_mesh(; x_max, y_max, x_elem, y_elem)
     )
     domain = Domains.RectangleDomain(x_domain, y_domain)
     return Meshes.RectilinearMesh(domain, x_elem, y_elem)
+end
+
+"""
+    make_horizontal_space(mesh, quad, comms_ctx::ClimaComms.SingletonCommsContext, bubble)
+
+Create a horizontal spectral element space from a mesh and quadrature.
+
+For 1D meshes, creates a `SpectralElementSpace1D`.
+For 2D meshes, creates a `SpectralElementSpace2D` with optional bubble correction.
+
+# Arguments
+- `mesh`: The horizontal mesh (1D or 2D)
+- `quad`: The quadrature style
+- `comms_ctx`: Communications context (must be `SingletonCommsContext` for 1D meshes)
+- `bubble`: Enable bubble correction for 2D spaces
+
+# Returns
+- A horizontal spectral element space
+"""
+function make_horizontal_space(
+    mesh,
+    quad,
+    comms_ctx::ClimaComms.SingletonCommsContext,
+    bubble,
+)
+    space = if mesh isa Meshes.AbstractMesh1D
+        topology = Topologies.IntervalTopology(comms_ctx, mesh)
+        Spaces.SpectralElementSpace1D(topology, quad)
+    elseif mesh isa Meshes.AbstractMesh2D
+        topology = Topologies.Topology2D(
+            comms_ctx,
+            mesh,
+            Topologies.spacefillingcurve(mesh),
+        )
+        Spaces.SpectralElementSpace2D(topology, quad; enable_bubble = bubble)
+    end
+    return space
+end
+
+"""
+    make_horizontal_space(mesh, quad, comms_ctx, bubble)
+
+Create a horizontal spectral element space from a mesh and quadrature (distributed version).
+
+For distributed contexts, only 2D meshes are supported.
+
+# Arguments
+- `mesh`: The horizontal mesh (must be 2D for distributed contexts)
+- `quad`: The quadrature style
+- `comms_ctx`: Communications context (distributed)
+- `bubble`: Enable bubble correction
+
+# Returns
+- A horizontal spectral element space
+
+# Throws
+- `ErrorException` if a 1D mesh is provided (distributed mode doesn't support 1D spaces)
+"""
+function make_horizontal_space(mesh, quad, comms_ctx, bubble)
+    if mesh isa Meshes.AbstractMesh1D
+        error("Distributed mode does not work with 1D horizontal spaces.")
+    elseif mesh isa Meshes.AbstractMesh2D
+        topology = Topologies.DistributedTopology2D(
+            comms_ctx,
+            mesh,
+            Topologies.spacefillingcurve(mesh),
+        )
+        space = Spaces.SpectralElementSpace2D(
+            topology,
+            quad;
+            enable_bubble = bubble,
+        )
+    end
+    return space
 end
 
 function get_spherical_spaces(; FT = Float32)
