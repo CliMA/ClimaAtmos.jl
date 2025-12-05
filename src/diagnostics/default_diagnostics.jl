@@ -30,6 +30,7 @@ function default_diagnostics(
     duration,
     start_date::DateTime;
     output_writer,
+    topography = true,
 )
     # Unfortunately, [] is not treated nicely in a map (we would like it to be "excluded"),
     # so we need to manually filter out the submodels that don't have defaults associated
@@ -48,7 +49,7 @@ function default_diagnostics(
     # We use a map because we want to ensure that diagnostics is a well defined type, not
     # Any. This reduces latency.
     return vcat(
-        core_default_diagnostics(output_writer, duration, start_date),
+        core_default_diagnostics(output_writer, duration, start_date; topography),
         map(non_empty_fields) do field
             default_diagnostics(
                 getfield(model, field),
@@ -131,7 +132,7 @@ end
 ########
 # Core #
 ########
-function core_default_diagnostics(output_writer, duration, start_date)
+function core_default_diagnostics(output_writer, duration, start_date; topography = true)
     core_diagnostics = [
         "ts",
         "ta",
@@ -168,22 +169,26 @@ function core_default_diagnostics(output_writer, duration, start_date)
         min_func = (args...; kwargs...) -> hourly_min(FT, args...; kwargs...)
         max_func = (args...; kwargs...) -> hourly_max(FT, args...; kwargs...)
     end
+    # Base diagnostics for all cases
+    base_diagnostics = [
+        average_func(core_diagnostics...; output_writer, start_date)...,
+        min_func("ts"; output_writer, start_date),
+        max_func("ts"; output_writer, start_date),
+    ]
 
-    return [
-        # We need to compute the topography at the beginning of the simulation (and only at
-        # the beginning), so we set output/compute_schedule_func to false. It is still
-        # computed at the very beginning
-        ScheduledDiagnostic(;
+    # Prepend orography diagnostic if topography is enabled
+    if topography
+        orog_diagnostic = ScheduledDiagnostic(;
             variable = get_diagnostic_variable("orog"),
             output_schedule_func = (integrator) -> false,
             compute_schedule_func = (integrator) -> false,
             output_writer,
             output_short_name = "orog_inst",
-        ),
-        average_func(core_diagnostics...; output_writer, start_date)...,
-        min_func("ts"; output_writer, start_date),
-        max_func("ts"; output_writer, start_date),
-    ]
+        )
+        return [orog_diagnostic, base_diagnostics...]
+    else
+        return base_diagnostics
+    end
 end
 
 ##################

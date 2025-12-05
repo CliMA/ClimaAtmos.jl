@@ -168,6 +168,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
                 FT(time_to_seconds(parsed_args["t_end"]) - t_start),
                 start_date;
                 output_writer = netcdf_writer,
+                topography = has_topography(axes(Y.c)),
             )...,
             diagnostics...,
         ]
