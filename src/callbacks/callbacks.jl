@@ -117,8 +117,9 @@ NVTX.@annotate function cloud_fraction_model_callback!(integrator)
         @. ᶜgradᵥ_θ_liq_ice =
             ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
     end
-    set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model)
+    set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model, p.atmos.turbconv_model)
 end
+
 
 NVTX.@annotate function rrtmgp_model_callback!(integrator)
     Y = integrator.u

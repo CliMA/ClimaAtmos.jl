@@ -527,10 +527,10 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
             ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
     end
 
-    # The buoyancy gradient depends on the cloud fraction, and the cloud fraction 
-    # depends on the mixing length, which depends on the buoyancy gradient. 
-    # We break this circular dependency by using cloud fraction from the previous time step in the 
-    # buoyancy gradient calculation. This breaks reproducible restart in general, 
+    # The buoyancy gradient depends on the cloud fraction, and the cloud fraction
+    # depends on the mixing length, which depends on the buoyancy gradient.
+    # We break this circular dependency by using cloud fraction from the previous time step in the
+    # buoyancy gradient calculation. This breaks reproducible restart in general,
     # but we support reproducible restart with grid-scale cloud by recalculating the cloud fraction here.
     if p.atmos.cloud_model isa GridScaleCloud
         set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model)
@@ -541,7 +541,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_precipitation!(
             Y,
             p,
-            p.atmos.microphysics_model,
+            microphysics_model,
         )
     end
     if turbconv_model isa DiagnosticEDMFX
@@ -553,7 +553,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
             Y,
             p,
             t,
-            p.atmos.microphysics_model,
+            microphysics_model,
         )
     end
     if turbconv_model isa EDOnlyEDMFX
@@ -564,22 +564,22 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     set_precipitation_velocities!(
         Y,
         p,
-        p.atmos.moisture_model,
-        p.atmos.microphysics_model,
-        p.atmos.turbconv_model,
+        moisture_model,
+        microphysics_model,
+        turbconv_model,
     )
     # Needs to be done after edmf precipitation is computed in sub-domains
     set_precipitation_cache!(
         Y,
         p,
-        p.atmos.microphysics_model,
-        p.atmos.turbconv_model,
+        microphysics_model,
+        turbconv_model,
     )
-    set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
+    set_precipitation_surface_fluxes!(Y, p, microphysics_model)
 
     # TODO
     if call_cloud_diagnostics_per_stage isa CallCloudDiagnosticsPerStage
-        set_cloud_fraction!(Y, p, moisture_model, cloud_model)
+        set_cloud_fraction!(Y, p, moisture_model, cloud_model, microphysics_model, turbconv_model)
     end
 
     set_smagorinsky_lilly_precomputed_quantities!(Y, p, p.atmos.smagorinsky_lilly)
