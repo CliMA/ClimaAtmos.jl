@@ -1,11 +1,9 @@
-using ClimaCore: Geometry, Hypsography, Fields, Spaces, Meshes, Grids
-using ClimaCore.CommonGrids:
-    ExtrudedCubedSphereGrid, ColumnGrid, Box3DGrid, SliceXZGrid, DefaultZMesh
+import ClimaCore: Geometry, Hypsography, Fields, Spaces, Meshes, Grids, CommonGrids
 using ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 import .AtmosArtifacts as AA
 import ClimaComms
 
-export SphereGrid, ColGrid, BoxGrid, PlaneGrid
+export SphereGrid, ColumnGrid, BoxGrid, PlaneGrid
 
 """
     SphereGrid(FT; kwargs...)
@@ -32,7 +30,7 @@ Create an ExtrudedCubedSphereGrid with topography support.
 - `topo_smoothing`: Apply topography smoothing
 """
 function SphereGrid(
-    FT;
+    ::Type{FT};
     context = ClimaComms.context(),
     z_elem = 10,
     z_max = 30000.0,
@@ -47,7 +45,7 @@ function SphereGrid(
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = SLEVEWarp{FT}(),
     topo_smoothing = false,
-)
+) where {FT}
     n_quad_points = nh_poly + 1
 
     stretch =
@@ -63,7 +61,7 @@ function SphereGrid(
         Geometry.ShallowSphericalGlobalGeometry{FT}(radius)
     end
 
-    grid = ExtrudedCubedSphereGrid(
+    grid = CommonGrids.ExtrudedCubedSphereGrid(
         FT;
         z_elem, z_min = 0, z_max, radius, h_elem,
         n_quad_points,
@@ -79,7 +77,7 @@ function SphereGrid(
 end
 
 """
-    ColGrid(FT; kwargs...)
+    ColumnGrid(FT; kwargs...)
 
 Create a ColumnGrid.
 
@@ -93,14 +91,14 @@ Create a ColumnGrid.
 - `z_stretch`: Whether to use vertical stretching
 - `dz_bottom`: Bottom layer thickness for stretching
 """
-function ColGrid(
-    FT;
+function ColumnGrid(
+    ::Type{FT};
     context = ClimaComms.context(),
     z_elem = 10,
     z_max = 30000.0,
     z_stretch = true,
     dz_bottom = 500.0,
-)
+) where {FT}
     stretch =
         z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
     z_mesh = DefaultZMesh(
@@ -110,7 +108,7 @@ function ColGrid(
         z_elem,
         stretch,
     )
-    grid = ColumnGrid(
+    grid = CommonGrids.ColumnGrid(
         FT;
         z_elem, z_min = 0, z_max, z_mesh,
         device = ClimaComms.device(context),
@@ -149,7 +147,7 @@ Create a Box3DGrid with topography support.
 - `topo_smoothing`: Apply topography smoothing
 """
 function BoxGrid(
-    FT;
+    ::Type{FT};
     context = ClimaComms.context(),
     x_elem = 6,
     x_max = 300000.0,
@@ -167,7 +165,7 @@ function BoxGrid(
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = LinearWarp(),
     topo_smoothing = false,
-)
+) where {FT}
     n_quad_points = nh_poly + 1
 
     stretch =
@@ -176,7 +174,7 @@ function BoxGrid(
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing,
     )
-    z_mesh = DefaultZMesh(
+    z_mesh = Meshes.DefaultZMesh(
         FT;
         z_min = 0,
         z_max,
@@ -224,7 +222,7 @@ Create a SliceXZGrid with topography support.
 - `topo_smoothing`: Apply topography smoothing
 """
 function PlaneGrid(
-    FT;
+    ::Type{FT};
     context = ClimaComms.context(),
     x_elem = 6,
     x_max = 300000.0,
@@ -239,7 +237,7 @@ function PlaneGrid(
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = LinearWarp(),
     topo_smoothing = false,
-)
+) where {FT}
     n_quad_points = nh_poly + 1
 
     stretch =
@@ -249,7 +247,7 @@ function PlaneGrid(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing,
     )
 
-    z_mesh = DefaultZMesh(
+    z_mesh = Meshes.DefaultZMesh(
         FT;
         z_min = 0,
         z_max,
@@ -257,7 +255,7 @@ function PlaneGrid(
         stretch,
     )
 
-    grid = SliceXZGrid(
+    grid = CommonGrids.SliceXZGrid(
         FT;
         z_elem, x_elem, x_min = 0, x_max, z_min = 0, z_max, z_mesh,
         periodic_x,
@@ -272,6 +270,15 @@ function PlaneGrid(
     return grid
 end
 
+# TODO: Could this work? seems overengineered
+# struct HypsographyFunction{FT}
+#     f::Function
+# end
+
+# function (hf::HypsographyFunction{FT})(h_grid, z_grid) where {FT}
+#     return hf.f(FT, h_grid, z_grid)
+# end
+
 """
     hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing)
@@ -279,13 +286,13 @@ end
 Create a hypsography function that handles topography integration.
 """
 function hypsography_function_from_topography(
-    FT::Type{<:AbstractFloat},
+    ::Type{FT},
     topography::AbstractTopography,
     topography_damping_factor,
     mesh_warp_type::MeshWarpType,
     topo_smoothing,
-)
-    return function (h_grid, z_grid)
+) where {FT}
+    function hypsography(h_grid, z_grid)
         topography isa NoTopography && return Hypsography.Flat()
 
         # Create horizontal space to work with topography
@@ -311,10 +318,7 @@ function hypsography_function_from_topography(
             @info "Using $(nameof(typeof(topography))) orography"
         end
 
-        # Apply topography-specific processing
         if topography isa EarthTopography
-            mask(x::FT) where {FT} = x * FT(x > 0)
-            z_surface = @. mask(z_surface)
             # Diffuse Earth topography to remove small-scale features
             # Using a diffusion Courant number (CFL = νΔt/Δx²) to control smoothing
             diff_courant = FT(0.05)
@@ -326,7 +330,7 @@ function hypsography_function_from_topography(
             # determined from the empirical parameters suggested by
             # E3SM v1/v2 Topography documentation found here: 
             # https://acme-climate.atlassian.net/wiki/spaces/DOC/pages/1456603764/V1+Topography+GLL+grids
-            z_surface = @. mask(z_surface)
+            @. z_surface = max(z_surface, 0)
         elseif topo_smoothing
             # Apply optional smoothing for other topography types
             Hypsography.diffuse_surface_elevation!(z_surface)
@@ -349,4 +353,5 @@ function hypsography_function_from_topography(
 
         return hypsography
     end
+    return hypsography
 end

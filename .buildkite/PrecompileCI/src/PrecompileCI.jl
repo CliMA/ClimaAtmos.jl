@@ -25,21 +25,26 @@ import ClimaParams
 
         sphere_grid = CA.SphereGrid(
             FT;
-            context, radius, h_elem, nh_poly, z_elem, z_max, z_stretch,
-            dz_bottom, bubble,
-            topography,
+            context,
+            radius, h_elem, nh_poly,
+            z_elem, z_max, z_stretch, dz_bottom,
+            bubble, topography,
         )
         box_grid = CA.BoxGrid(
-            FT; context, x_elem, x_max, y_elem, y_max, z_elem, z_max, nh_poly,
-            z_stretch, dz_bottom, bubble,
-            periodic_x = true, periodic_y = true, topography,
+            FT;
+            context,
+            x_elem, x_max, y_elem, y_max, nh_poly, periodic_x = true, periodic_y = true,
+            z_elem, z_max, z_stretch, dz_bottom,
+            bubble, topography,
         )
         plane_grid = CA.PlaneGrid(
-            FT; context, x_elem, x_max, z_elem, z_max, nh_poly, z_stretch,
-            dz_bottom, bubble, periodic_x = true,
-            topography,
+            FT;
+            context,
+            x_elem, x_max, nh_poly, periodic_x = true,
+            z_elem, z_max, z_stretch, dz_bottom,
+            bubble, topography,
         )
-        column_grid = CA.ColGrid(
+        column_grid = CA.ColumnGrid(
             FT; context, z_elem, z_max, z_stretch, dz_bottom,
         )
         all_grids = (sphere_grid, box_grid, plane_grid, column_grid)

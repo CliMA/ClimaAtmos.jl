@@ -52,7 +52,7 @@ ClimaAtmos.InitialConditions.ColumnInterpolatableField
 ## Grids
 
 ```@docs
-ClimaAtmos.ColGrid
+ClimaAtmos.ColumnGrid
 ClimaAtmos.SphereGrid
 ClimaAtmos.PlaneGrid
 ClimaAtmos.BoxGrid

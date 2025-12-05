@@ -14,10 +14,56 @@ import ClimaCoreSpectra: power_spectrum_2d
 
 const AA = AtmosArtifacts
 
+using ClimaCore:
+    Geometry, Domains, Meshes, Topologies, Spaces, Grids, Hypsography, Fields
+using ClimaComms
+using ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 
-function mask(x::FT) where {FT}
-    return x * FT(x > 0)
+# h_elem is the number of elements per side of every panel (6 panels in total)
+function cubed_sphere_mesh(; radius, h_elem)
+    domain = Domains.SphereDomain(radius)
+    return Meshes.EquiangularCubedSphere(domain, h_elem)
 end
+
+function make_horizontal_space(
+    mesh,
+    quad,
+    comms_ctx::ClimaComms.SingletonCommsContext,
+    bubble,
+)
+
+    space = if mesh isa Meshes.AbstractMesh1D
+        topology = Topologies.IntervalTopology(comms_ctx, mesh)
+        Spaces.SpectralElementSpace1D(topology, quad)
+    elseif mesh isa Meshes.AbstractMesh2D
+        topology = Topologies.Topology2D(
+            comms_ctx,
+            mesh,
+            Topologies.spacefillingcurve(mesh),
+        )
+        Spaces.SpectralElementSpace2D(topology, quad; enable_bubble = bubble)
+    end
+    return space
+end
+
+function make_horizontal_space(mesh, quad, comms_ctx, bubble)
+    if mesh isa Meshes.AbstractMesh1D
+        error("Distributed mode does not work with 1D horizontal spaces.")
+    elseif mesh isa Meshes.AbstractMesh2D
+        topology = Topologies.DistributedTopology2D(
+            comms_ctx,
+            mesh,
+            Topologies.spacefillingcurve(mesh),
+        )
+        space = Spaces.SpectralElementSpace2D(
+            topology,
+            quad;
+            enable_bubble = bubble,
+        )
+    end
+    return space
+end
+
 
 """
     generate_spaces(; h_elem=16)
@@ -37,10 +83,10 @@ function generate_spaces(;
 )
     FT = Float32
     cubed_sphere_mesh =
-        CA.cubed_sphere_mesh(; radius = FT(planet_radius), h_elem)
+        cubed_sphere_mesh(; radius = FT(planet_radius), h_elem)
     quad = Quadratures.GLL{4}()
     comms_ctx = ClimaComms.context()
-    h_space = CA.make_horizontal_space(cubed_sphere_mesh, quad, comms_ctx, true)
+    h_space = make_horizontal_space(cubed_sphere_mesh, quad, comms_ctx, true)
     Δh_scale = Spaces.node_horizontal_length_scale(h_space)
     @assert h_space isa CC.Spaces.SpectralElementSpace2D
     coords = CC.Fields.coordinate_field(h_space)
@@ -49,7 +95,7 @@ function generate_spaces(;
         "z",
         h_space,
     )
-    elev_from_file = @. mask(elev_from_file)
+    elev_from_file = @. max(elev_from_file, 0)
     # Fractional damping of smallest resolved scale
     # Approximated as k₀ ≈ 1/Δx, with n_attenuation 
     # the factor by which we wish to damp wavenumber
@@ -58,7 +104,7 @@ function generate_spaces(;
     κ = diff_courant * Δh_scale^2
     maxiter = Int(round(log(n_attenuation) / diff_courant))
     diffuse_surface_elevation!(elev_from_file; κ, dt = FT(1), maxiter)
-    elev_from_file = @. mask(elev_from_file)
+    elev_from_file = @. max(elev_from_file, 0)
     return elev_from_file
 end
 
