@@ -366,10 +366,6 @@ function get_cloud_model(parsed_args)
     end
 end
 
-function get_ozone(parsed_args)
-    isnothing(parsed_args["prescribe_ozone"]) && return nothing
-    return parsed_args["prescribe_ozone"] ? PrescribedOzone() : IdealizedOzone()
-end
 
 function get_co2(parsed_args, params, ::Type{FT}) where {FT}
     if isnothing(parsed_args["co2_model"])
@@ -381,6 +377,9 @@ function get_co2(parsed_args, params, ::Type{FT}) where {FT}
     else
         error("The CO2 models supported are $(subtypes(AbstractCO2))")
     end
+end
+
+function get_trace_gases(parsed_args)
 end
 
 function get_cloud_in_radiation(parsed_args)

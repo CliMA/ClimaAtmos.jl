@@ -99,6 +99,18 @@ center_vmr_co2(co2::FixedCO2) = co2.value
 # Initialized in callback
 center_vmr_co2(::MaunaLoaCO2) = NaN
 
+#######
+# CH4 #
+#######
+
+center_vmr_ch4(ch4::FixedCH4) = ch4.value
+
+#######
+# N20 #
+#######
+
+center_vmr_n2o(n2o::FixeN20) = n2o.value
+
 function rrtmgp_model_kwargs(
     space,
     radiation_mode::RRTMGPI.GrayRadiation,
@@ -141,9 +153,9 @@ end
 
 function rrtmgp_model_kwargs(
     space,
+    params,
+    time_varying_gases,
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
-    ozone::AbstractOzone,
-    co2::AbstractCO2,
     include_z::Bool,
 )
     ᶜspace = Spaces.center_space(space)
@@ -165,7 +177,6 @@ function rrtmgp_model_kwargs(
     kwargs = NamedTuple()
     (; aerosol_radiation) = radiation_mode
     NC.Dataset(RRTMGP.ArtifactPaths.get_input_filename(:gas, :lw)) do input_data
-        center_volume_mixing_ratio_o3 = center_vmr_o3(ozone, ᶜz)
 
         # FT is needed in case FixedCO2 is being used with an inconsistent
         # floating point type
@@ -293,6 +304,40 @@ function rrtmgp_model_kwargs(
             end
         end
     end
+    trace_gas_names = (
+        :co2,
+        :n2o,
+        :co,
+        :ch4,
+        :o2,
+        :n2,
+        :ccl4,
+        :cfc11,
+        :cfc12,
+        :cfc22,
+        :hfc143a,
+        :hfc125,
+        :hfc23,
+        :hfc32,
+        :hfc134a,
+        :cf4,
+        :no2,
+    )
+    trace_gas_vmr_names =
+        map(gas_name -> Symbol(:volume_mixing_ratio_, gas_name), trace_gas_names)
+    trace_gas_vmrs = map(trace_gas_names) do gas_name
+        if gas_name in Symbol.(lowercase.(time_varying_trace_gases))
+            NaN
+        else
+            Parameters.whatever(params, gas_name) # TODO Figure out
+        end
+    end
+    kwargs = (;
+        kwargs...,
+        center_volume_mixing_ratio_o3 =
+            Fields.field2array(idealized_ozone.(ᶜz)),
+        NamedTuple{trace_gas_names}(trace_gas_vmrs)...,
+    )
     return kwargs
 end
 
