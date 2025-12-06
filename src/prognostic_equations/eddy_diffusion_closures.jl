@@ -6,6 +6,7 @@ import StaticArrays as SA
 import Thermodynamics.Parameters as TDP
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
+import SurfaceFluxes.UniversalFunctions as UF
 
 """
     buoyancy_gradients(
@@ -294,16 +295,8 @@ function mixing_length_lopez_gomez_2020(
 
     c_m = CAP.tke_ed_coeff(turbconv_params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    smin_ub = CAP.smin_ub(turbconv_params)
-    smin_rm = CAP.smin_rm(turbconv_params)
     c_b = CAP.static_stab_coeff(turbconv_params)
     vkc = CAP.von_karman_const(params)
-
-    # MOST stability function coefficients
-    most_a_m = sf_params.ufp.a_m # Businger a_m
-    most_b_m = sf_params.ufp.b_m # Businger b_m
-    gryanik_a_m = CAP.coefficient_a_m_gryanik(params)  # Gryanik a_m
-    gryanik_b_m = CAP.coefficient_b_m_gryanik(params)  # Gryanik b_m
 
     # l_z: Geometric distance from the surface
     l_z = ᶜz - z_sfc
@@ -330,45 +323,12 @@ function mixing_length_lopez_gomez_2020(
     # and approaches 0 when l_z → 0.
     l_W_base = vkc * l_z / l_W_denom
 
-    if obukhov_length < FT(0) # Unstable case
-        obukhov_len_safe = min(obukhov_length, -eps_FT) # Ensure L < 0
-        zeta = l_z / obukhov_len_safe # Stability parameter zeta = z/L (<0)
+    obukhov_len_safe =
+        obukhov_length < FT(0) ? min(obukhov_length, -eps_FT) : max(obukhov_length, eps_FT)
+    zeta = l_z / obukhov_len_safe # Stability parameter zeta
+    phi_m = UF.phi(sf_params.ufp, zeta, UF.MomentumTransport())
+    l_W = l_W_base / max(phi_m, eps_FT)
 
-        # Calculate MOST term (1 - b_m * zeta)
-        # Since zeta is negative, this term is > 1
-        inner_term = 1 - most_b_m * zeta
-
-        # Numerical safety check – by theory the value is ≥ 1.
-        inner_term_safe = max(inner_term, eps_FT)
-
-        # Unstable-regime correction factor:
-        #     (1 − b_m ζ)^(1/4) = φ_m⁻¹,
-        # where φ_m is the Businger stability function φ_m = (1 − b_m ζ)^(-1/4).
-        stability_correction = sqrt(sqrt(inner_term_safe))
-        l_W = l_W_base * stability_correction
-
-    else # Neutral or stable case
-        # Ensure L > 0 for Monin-Obukhov length
-        obukhov_len_safe_stable = max(obukhov_length, eps_FT)
-        zeta = l_z / obukhov_len_safe_stable # zeta >= 0
-
-        # Stable/neutral-regime correction after Gryanik (2020):
-        #     φ_m = 1 + a_m ζ / (1 + b_m ζ)^(2/3),
-        # a nonlinear refinement to the Businger formulation.
-        # Optimization: (1+b_m*ζ)^(2/3) -> cbrt((1+b_m*ζ)^2)
-        # Guard against a negative base in the fractional power
-        # (theoretically impossible for ζ ≥ 0 and b_m > 0, retained for robustness).
-        phi_m_denom = max(cbrt((1 + gryanik_b_m * zeta)^2), eps_FT)
-
-        phi_m = 1 + (gryanik_a_m * zeta) / phi_m_denom
-
-        # Stable-regime correction factor: 1 / φ_m.
-        # phi_m should be >= 1 for stable/neutral
-        stability_correction = 1 / max(phi_m, eps_FT)
-
-        # Apply the correction factor
-        l_W = l_W_base * stability_correction
-    end
     l_W = max(l_W, FT(0)) # Ensure non-negative
 
     # --- l_TKE: TKE production-dissipation balance scale ---
