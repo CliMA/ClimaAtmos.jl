@@ -713,8 +713,8 @@ function get_sim_info(config::AtmosConfig)
     return sim
 end
 
-function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
-    (; atmos, dt) = p
+function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback, dt_integrator)
+    (; atmos) = p
     s = @timed_str begin
         T_imp! = SciMLBase.ODEFunction(
             implicit_tendency!;
@@ -732,7 +732,9 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     end
     @info "Define ode function: $s"
     problem = SciMLBase.ODEProblem(tendency_function, Y, tspan, p)
-    t_begin, t_end, _ = promote(tspan[1], tspan[2], p.dt)
+    # Promote to ensure t_begin, t_end, and dt_integrator all have the same type
+    # dt_integrator can be ITime when use_itime=true, while p.dt is always FT
+    t_begin, t_end, dt = promote(tspan[1], tspan[2], dt_integrator)
     # Save solution to integrator.sol at the beginning and end
     saveat = [t_begin, t_end]
     args = (problem, ode_algo)
@@ -915,6 +917,7 @@ function get_simulation(config::AtmosConfig)
             tspan,
             ode_algo,
             all_callbacks,
+            sim_info.dt,  # Pass original dt (can be ITime) separately from p.dt (always FT)
         )
     end
 

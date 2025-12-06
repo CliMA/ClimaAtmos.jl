@@ -580,8 +580,6 @@ sources from the sub-domains.
 set_precipitation_cache!(Y, p, _, _) = nothing
 function set_precipitation_cache!(Y, p, ::Microphysics0Moment, _)
     (; params, dt) = p
-    FT = eltype(p.params)
-    dt = FT(dt)
     (; ᶜts) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; ᶜΦ) = p.core

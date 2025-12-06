@@ -265,7 +265,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
             if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
                 ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-                vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, FT(dt), tracer_upwinding)
+                vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
                 @. ᶜρχₜ += vtt
             end
         end
@@ -280,15 +280,15 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 specific(Y.c.ρe_tot, Y.c.ρ),
             ),
         )
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, FT(dt), energy_q_tot_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, FT(dt), Val(:none))
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, Val(:none))
         @. Yₜ.c.ρe_tot += vtt - vtt_central
     end
 
     if !(p.atmos.moisture_model isa DryModel) && energy_q_tot_upwinding != Val(:none)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, FT(dt), energy_q_tot_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, FT(dt), Val(:none))
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, energy_q_tot_upwinding)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt - vtt_central
     end
 

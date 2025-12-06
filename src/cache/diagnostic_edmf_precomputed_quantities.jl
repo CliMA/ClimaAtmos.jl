@@ -449,7 +449,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
-    dt = FT(dt)
     (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
     (; ᶜp, ᶠu³, ᶜts, ᶜK) = p.precomputed
     (;
