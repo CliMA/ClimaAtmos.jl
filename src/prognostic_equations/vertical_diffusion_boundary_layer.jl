@@ -67,26 +67,14 @@ Arguments:
 Modifies components of tendency vector `Yₜ.c` (e.g., `Yₜ.c.uₕ`, `Yₜ.c.ρe_tot`, `Yₜ.c.ρ`, and
 various tracer fields such as `Yₜ.c.ρq_tot`).
 """
-
 vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t) =
-    vertical_diffusion_boundary_layer_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        p.atmos.vertical_diffusion,
-    )
+    vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, p.atmos.vertical_diffusion)
 
-vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+vertical_diffusion_boundary_layer_tendency!(_, _, _, _, ::Nothing) = nothing
 
-function vertical_diffusion_boundary_layer_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
+function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, _,
     ::Union{VerticalDiffusion, DecayWithHeightDiffusion},
 )
-    FT = eltype(Y)
     (; vertical_diffusion) = p.atmos
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -96,33 +84,20 @@ function vertical_diffusion_boundary_layer_tendency!(
     if vertical_diffusion isa DecayWithHeightDiffusion
         ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
     elseif vertical_diffusion isa VerticalDiffusion
-        ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(
-            Y.c.uₕ,
-            ᶜp,
-            vertical_diffusion,
-        )
+        ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
     end
 
     if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
-        @. Yₜ.c.uₕ -= C12(
-            ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠstrain_rate) / Y.c.ρ,
-        ) # assumes ᶜK_u = ᶜK_h
+        @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠstrain_rate) / Y.c.ρ)  # assumes ᶜK_u = ᶜK_h
     end
 
-    ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
-        top = Operators.SetValue(C3(0)),
-        bottom = Operators.SetValue(C3(0)),
-    )
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
-    @. Yₜ.c.ρe_tot -=
-        ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜh_tot)))
+    top = bottom = Operators.SetValue(C3(0))
+    ᶜdivᵥ_ρχ = Operators.DivergenceF2C(; top, bottom)
+
+    e_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, e_tot))
+    @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜh_tot)))
 
     ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_2
     ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_3
@@ -133,17 +108,8 @@ function vertical_diffusion_boundary_layer_tendency!(
         else
             @. ᶜK_h_scaled = ᶜK_h
         end
-        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(0)),
-            bottom = Operators.SetValue(C3(0)),
-        )
-        @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρχ(
-            -(
-                ᶠinterp(Y.c.ρ) *
-                ᶠinterp(ᶜK_h_scaled) *
-                ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))
-            ),
-        )
+        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+        @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h_scaled) * ᶠgradᵥ(ᶜχ)))
         @. ᶜρχₜ -= ᶜρχₜ_diffusion
         # Only add contribution from total water diffusion to mass tendency
         # (exclude contributions from diffusion of condensate, precipitation)
