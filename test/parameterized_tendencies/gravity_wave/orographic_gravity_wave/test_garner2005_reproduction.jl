@@ -48,6 +48,7 @@ import ClimaAtmos.Parameters as CAP
 import ClimaCore: Fields, Geometry, DataLayouts, Operators, Spaces, Grids, Utilities, to_cpu
 
 using CairoMakie
+using Statistics
 using NCDatasets
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz, read_var, window
@@ -55,6 +56,21 @@ using GeoMakie
 import GeometryBasics
 
 include("../gw_remap_plot_utils.jl")
+
+#######################################
+# TEST SELECTION
+# Set to true/false to enable/disable individual tests
+#######################################
+const RUN_TESTS = (
+    figure1 = false,    # Figure 1: Drag over Americas
+    figure2 = false,    # Figure 2: Drag over Asia
+    quiver_plots = false,   # Create quiver plots for Figures 1 & 2
+    figure4 = false,    # Figure 4: Linear Drag Comparison (tripanel)
+    figure5 = true,    # Figure 5: Normalized Drag Curves
+)
+
+# Helper to check if a test should run
+should_run(test::Symbol) = getfield(RUN_TESTS, test)
 
 FT = Float64
 ᶜgradᵥ = Operators.GradientF2C()
@@ -137,10 +153,6 @@ thermo_params = CAP.thermodynamics_params(params)
 # ρᵣ = 1.0 kg/m³, Nᵣ = 0.01 s⁻¹
 #######################################
 
-println("\n" * "="^70)
-println("FIGURE 1: Drag over Americas")
-println("="^70)
-
 # Set wind profile for Figure 1 (Garner 2005, Fig 1)
 function garner_fig1_wind!(u_phy, v_phy)
     FT = eltype(u_phy)
@@ -158,50 +170,56 @@ function garner_fig1_wind!(u_phy, v_phy)
     @. v_phy = FT(0.0)  # No meridional component
 end
 
-# Apply Figure 1 wind pattern
-garner_fig1_wind!(u_phy, v_phy)
+if should_run(:figure1)
+    println("\n" * "="^70)
+    println("FIGURE 1: Drag over Americas")
+    println("="^70)
 
-# Set constant density and buoyancy frequency for idealized test
-# In the full model, these would come from thermodynamics
-# For Garner reproduction: ρᵣ = 1.0 kg/m³, Nᵣ = 0.01 s⁻¹
-@. Y.c.ρ = FT(1.0)
-@. ᶜbuoyancy_frequency = FT(0.01)
+    # Apply Figure 1 wind pattern
+    garner_fig1_wind!(u_phy, v_phy)
 
-# @Main.infiltrate
+    # Set constant density and buoyancy frequency for idealized test
+    # In the full model, these would come from thermodynamics
+    # For Garner reproduction: ρᵣ = 1.0 kg/m³, Nᵣ = 0.01 s⁻¹
+    @. Y.c.ρ = FT(1.0)
+    @. ᶜbuoyancy_frequency = FT(0.01)
 
-# Compute base flux (this extracts values at PBL and computes τ_x, τ_y)
-CA.calc_base_flux!(
-    topo_τ_x,
-    topo_τ_y,
-    topo_τ_l,
-    topo_τ_p,
-    topo_τ_np,
-    #
-    topo_U_sat,
-    topo_FrU_sat,
-    topo_FrU_clp,
-    topo_FrU_max,
-    topo_FrU_min,
-    topo_ᶜz_pbl,
-    #
-    values_at_z_pbl,
-    #
-    ogw_params,
-    topo_info,
-    #
-    Y.c.ρ,
-    u_phy,
-    v_phy,
-    ᶜz,
-    ᶜbuoyancy_frequency,
-)
+    # @Main.infiltrate
 
-# Note: calc_base_flux! already computes the drag components:
-#   τ_x = ρ_pbl * N_pbl * (t11 * u_pbl + t21 * v_pbl)
-#   τ_y = ρ_pbl * N_pbl * (t12 * u_pbl + t22 * v_pbl)
-#
-# This is exactly the Garner (2005) formula: τ = (ρ̄N̄)/(ρᵣNᵣ) ⟨T⟩V̄
-# with ρᵣ = Nᵣ = 1 in our case (since we set ρ = 1.0, N = 0.01)
+    # Compute base flux (this extracts values at PBL and computes τ_x, τ_y)
+    CA.calc_base_flux!(
+        topo_τ_x,
+        topo_τ_y,
+        topo_τ_l,
+        topo_τ_p,
+        topo_τ_np,
+        #
+        topo_U_sat,
+        topo_FrU_sat,
+        topo_FrU_clp,
+        topo_FrU_max,
+        topo_FrU_min,
+        topo_ᶜz_pbl,
+        #
+        values_at_z_pbl,
+        #
+        ogw_params,
+        topo_info,
+        #
+        Y.c.ρ,
+        u_phy,
+        v_phy,
+        ᶜz,
+        ᶜbuoyancy_frequency,
+    )
+
+    # Note: calc_base_flux! already computes the drag components:
+    #   τ_x = ρ_pbl * N_pbl * (t11 * u_pbl + t21 * v_pbl)
+    #   τ_y = ρ_pbl * N_pbl * (t12 * u_pbl + t22 * v_pbl)
+    #
+    # This is exactly the Garner (2005) formula: τ = (ρ̄N̄)/(ρᵣNᵣ) ⟨T⟩V̄
+    # with ρᵣ = Nᵣ = 1 in our case (since we set ρ = 1.0, N = 0.01)
+end
 
 #######################################
 # FIGURE 2: Asia
@@ -209,85 +227,90 @@ CA.calc_base_flux!(
 # ρ = 1.0 kg/m³, N = 0.01 s⁻¹
 #######################################
 
-println("\n" * "="^70)
-println("FIGURE 2: Drag over Asia")
-println("="^70)
+if should_run(:figure2)
+    println("\n" * "="^70)
+    println("FIGURE 2: Drag over Asia")
+    println("="^70)
 
-# Set wind profile for Figure 2 (Garner 2005, Fig 2)
-@. u_phy = FT(10.0)  # Uniform 10 m/s zonal wind
-@. v_phy = FT(0.0)   # No meridional component
+    # Set wind profile for Figure 2 (Garner 2005, Fig 2)
+    @. u_phy = FT(10.0)  # Uniform 10 m/s zonal wind
+    @. v_phy = FT(0.0)   # No meridional component
 
-# Density and N remain the same (1.0 and 0.01)
+    # Density and N remain the same (1.0 and 0.01)
 
-# Compute base flux for Figure 2
-CA.calc_base_flux!(
-    topo_τ_x,
-    topo_τ_y,
-    topo_τ_l,
-    topo_τ_p,
-    topo_τ_np,
-    #
-    topo_U_sat,
-    topo_FrU_sat,
-    topo_FrU_clp,
-    topo_FrU_max,
-    topo_FrU_min,
-    topo_ᶜz_pbl,
-    #
-    values_at_z_pbl,
-    #
-    ogw_params,
-    topo_info,
-    #
-    Y.c.ρ,
-    u_phy,
-    v_phy,
-    ᶜz,
-    ᶜbuoyancy_frequency,
-)
+    # Compute base flux for Figure 2
+    CA.calc_base_flux!(
+        topo_τ_x,
+        topo_τ_y,
+        topo_τ_l,
+        topo_τ_p,
+        topo_τ_np,
+        #
+        topo_U_sat,
+        topo_FrU_sat,
+        topo_FrU_clp,
+        topo_FrU_max,
+        topo_FrU_min,
+        topo_ᶜz_pbl,
+        #
+        values_at_z_pbl,
+        #
+        ogw_params,
+        topo_info,
+        #
+        Y.c.ρ,
+        u_phy,
+        v_phy,
+        ᶜz,
+        ᶜbuoyancy_frequency,
+    )
+end
 
 #######################################
 # PLOTTING SECTION
 #######################################
 
-println("\n" * "="^70)
-println("Creating plots...")
-println("="^70)
-
-# Store Figure 2 data (already computed above)
-τ_x_fig2_cpu = to_cpu(topo_τ_x)
-τ_y_fig2_cpu = to_cpu(topo_τ_y)
-
-# Re-run Figure 1 to get its data
-garner_fig1_wind!(u_phy, v_phy)
-CA.calc_base_flux!(
-    topo_τ_x,
-    topo_τ_y,
-    topo_τ_l,
-    topo_τ_p,
-    topo_τ_np,
-    topo_U_sat,
-    topo_FrU_sat,
-    topo_FrU_clp,
-    topo_FrU_max,
-    topo_FrU_min,
-    topo_ᶜz_pbl,
-    values_at_z_pbl,
-    ogw_params,
-    topo_info,
-    Y.c.ρ,
-    u_phy,
-    v_phy,
-    ᶜz,
-    ᶜbuoyancy_frequency,
-)
-τ_x_fig1_cpu = to_cpu(topo_τ_x)
-τ_y_fig1_cpu = to_cpu(topo_τ_y)
-
+# Common setup for plotting (needed by quiver_plots and figure4)
 Y_cpu = to_cpu(Y)
 ᶜspace = axes(Y_cpu.c)
-
 ENV["GKSwstype"] = "nul"
+
+# Data storage for quiver plots (Figure 1 and 2)
+if should_run(:quiver_plots)
+    println("\n" * "="^70)
+    println("Creating plots...")
+    println("="^70)
+
+    # Store Figure 2 data (already computed above)
+    τ_x_fig2_cpu = to_cpu(topo_τ_x)
+    τ_y_fig2_cpu = to_cpu(topo_τ_y)
+
+    # Re-run Figure 1 to get its data
+    garner_fig1_wind!(u_phy, v_phy)
+    CA.calc_base_flux!(
+        topo_τ_x,
+        topo_τ_y,
+        topo_τ_l,
+        topo_τ_p,
+        topo_τ_np,
+        topo_U_sat,
+        topo_FrU_sat,
+        topo_FrU_clp,
+        topo_FrU_max,
+        topo_FrU_min,
+        topo_ᶜz_pbl,
+        values_at_z_pbl,
+        ogw_params,
+        topo_info,
+        Y.c.ρ,
+        u_phy,
+        v_phy,
+        ᶜz,
+        ᶜbuoyancy_frequency,
+    )
+    τ_x_fig1_cpu = to_cpu(topo_τ_x)
+    τ_y_fig1_cpu = to_cpu(topo_τ_y)
+end
 
 #######################################
 # Custom quiver plotting function
@@ -845,8 +868,7 @@ function compute_theoretical_drag(
     # Compute FrU values (Froude number times U_sat)
     FrU_sat = Fr_crit * U_sat
     FrU_min = Fr_min * U_sat
-    FrU_max = max(Fr_max * U_sat, FrU_min + eps(FT))
-    FrU_clp = clamp(FrU_sat, FrU_min, FrU_max)
+    FrU_max = Fr_max * U_sat
 
     # Exponents
     exp1 = 2 + γ - ϵ  # = 2.4 for default params
@@ -855,23 +877,60 @@ function compute_theoretical_drag(
     exp4 = β + 2      # = 2.5 for default params
     exp5 = β + 1      # = 1.5 for default params
 
-    # Linear drag (D* for normalization)
-    τ_l = (FrU_max^exp1 - FrU_min^exp1) / exp1
+    # Check if this is the monochromatic case (h_min ≈ h_max)
+    # In this case, use point-evaluation formulas instead of integrals
+    # The monochromatic formulas are the INTEGRANDS (not integrals) of the broadband case
+    # multiplied by exp1 to account for the distribution normalization
+    if abs(h_max - h_min) < FT(1e-6) * max(abs(h_max), FT(1.0))
+        # Monochromatic case: single mountain height h = h_max
+        FrU = FrU_max
 
-    # Propagating drag
-    τ_p = a0 * (
-        (FrU_clp^exp1 - FrU_min^exp1) / exp1 +
-        FrU_sat^exp4 * (FrU_max^exp2 - FrU_clp^exp2) / exp2
-    )
+        # Linear drag for monochromatic: point value of integrand
+        # Broadband: τ_l = ∫ FrU^exp1 dFrU / exp1 = FrU^exp1 / exp1
+        # Monochromatic: evaluates to FrU^exp1 (the integrand, times d(FrU))
+        # The exp1 factor accounts for derivative of the integral
+        τ_l = FrU^exp1  # Point value
 
-    # Non-propagating drag
-    τ_np = a1 * U_sat / (1 + β) * (
-        (FrU_max^exp3 - FrU_clp^exp3) / exp3 -
-        FrU_sat^exp5 * (FrU_max^exp2 - FrU_clp^exp2) / exp2
-    )
+        if Fr_max <= Fr_crit
+            # Unsaturated regime: all drag is propagating
+            # Broadband: τ_p = a0 * FrU^exp1 / exp1
+            # Monochromatic: τ_p = a0 * FrU^exp1 (integrand value)
+            τ_p = a0 * FrU^exp1
+            τ_np = FT(0.0)
+        else
+            # Saturated regime: Fr_max > Fr_crit
+            # For saturated heights, the propagating drag formula changes
+            # From Garner Eq (14): D_p ~ FrU_sat^(β+2) * FrU^(γ-β)
+            τ_p = a0 * FrU_sat^exp4 * FrU^exp2
 
-    # Scale non-propagating drag
-    τ_np = τ_np / max(Fr_crit, Fr_max)
+            # Non-propagating drag appears for heights above critical
+            # From Garner: D_np ~ [FrU^(1+γ) - FrU_sat^(1+β) * FrU^(γ-β)] / Fr
+            τ_np = a1 * U_sat / (1 + β) * (FrU^exp3 - FrU_sat^exp5 * FrU^exp2)
+            τ_np = τ_np / Fr_max
+        end
+    else
+        # Broadband case: distribution of mountain heights from h_min to h_max
+        FrU_max = max(FrU_max, FrU_min + eps(FT))
+        FrU_clp = clamp(FrU_sat, FrU_min, FrU_max)
+
+        # Linear drag (D* for normalization)
+        τ_l = (FrU_max^exp1 - FrU_min^exp1) / exp1
+
+        # Propagating drag
+        τ_p = a0 * (
+            (FrU_clp^exp1 - FrU_min^exp1) / exp1 +
+            FrU_sat^exp4 * (FrU_max^exp2 - FrU_clp^exp2) / exp2
+        )
+
+        # Non-propagating drag
+        τ_np = a1 * U_sat / (1 + β) * (
+            (FrU_max^exp3 - FrU_clp^exp3) / exp3 -
+            FrU_sat^exp5 * (FrU_max^exp2 - FrU_clp^exp2) / exp2
+        )
+
+        # Scale non-propagating drag
+        τ_np = τ_np / max(Fr_crit, Fr_max)
+    end
 
     return (τ_l, τ_p, τ_np)
 end
@@ -948,16 +1007,7 @@ end
 output_dir = "garner2005_reproduction"
 mkpath(output_dir)
 
-# Prepare field data for Figure 1
-field_data_fig1 = Dict("τ_x" => τ_x_fig1_cpu, "τ_y" => τ_y_fig1_cpu)
-
-# Prepare field data for Figure 2
-field_data_fig2 = Dict("τ_x" => τ_x_fig2_cpu, "τ_y" => τ_y_fig2_cpu)
-
-# Remap to lat/lon (reuse existing utilities)
-# For now, let's create simple plots using the existing plotting infrastructure
-
-# Configure remapping
+# Configure remapping (shared by quiver_plots and figure4)
 config_remap = PlotConfig(
     plot_mode = :horizontal_slice,
     contour_levels = 20,
@@ -966,66 +1016,74 @@ config_remap = PlotConfig(
     yreversed = false,
 )
 
-# Remap Figure 1 data
-println("\nRemapping Figure 1 (Americas) data...")
-remap_dir_fig1 = joinpath(output_dir, "remap_fig1/")
-datafile_fig1 = remap_to_latlon(
-    remap_dir_fig1,
-    ["τ_x", "τ_y"],
-    field_data_fig1,
-    Y_cpu,
-    ᶜspace;
-    config = config_remap,
-    FT = FT,
-)
+if should_run(:quiver_plots)
+    # Prepare field data for Figure 1
+    field_data_fig1 = Dict("τ_x" => τ_x_fig1_cpu, "τ_y" => τ_y_fig1_cpu)
 
-# Remap Figure 2 data
-println("\nRemapping Figure 2 (Asia) data...")
-remap_dir_fig2 = joinpath(output_dir, "remap_fig2/")
-datafile_fig2 = remap_to_latlon(
-    remap_dir_fig2,
-    ["τ_x", "τ_y"],
-    field_data_fig2,
-    Y_cpu,
-    ᶜspace;
-    config = config_remap,
-    FT = FT,
-)
+    # Prepare field data for Figure 2
+    field_data_fig2 = Dict("τ_x" => τ_x_fig2_cpu, "τ_y" => τ_y_fig2_cpu)
 
-# Create Garner-style quiver plots
-println("\n" * "="^70)
-println("Creating Garner-style quiver plots...")
-println("="^70)
+    # Remap Figure 1 data
+    println("\nRemapping Figure 1 (Americas) data...")
+    remap_dir_fig1 = joinpath(output_dir, "remap_fig1/")
+    datafile_fig1 = remap_to_latlon(
+        remap_dir_fig1,
+        ["τ_x", "τ_y"],
+        field_data_fig1,
+        Y_cpu,
+        ᶜspace;
+        config = config_remap,
+        FT = FT,
+    )
 
-# Figure 1: Americas (160°W to 30°W = 200° to 330° in 0-360 notation)
-println("\nFigure 1: Drag over Americas")
-plot_garner_quiver(
-    joinpath(output_dir, "garner_fig1_americas_quiver.png"),
-    datafile_fig1,
-    "τ_x",
-    "τ_y";
-    lon_range = (200.0, 330.0),  # 160°W to 30°W in 0-360 format
-    lat_range = (-90.0, 90.0),
-    title = "Figure 1: Orographic Drag over Americas (Garner 2005)",
-    arrow_skip = 2,
-    arrow_scale = 5.0,
-    reference_arrow = 2.0,
-)
+    # Remap Figure 2 data
+    println("\nRemapping Figure 2 (Asia) data...")
+    remap_dir_fig2 = joinpath(output_dir, "remap_fig2/")
+    datafile_fig2 = remap_to_latlon(
+        remap_dir_fig2,
+        ["τ_x", "τ_y"],
+        field_data_fig2,
+        Y_cpu,
+        ᶜspace;
+        config = config_remap,
+        FT = FT,
+    )
 
-# Figure 2: Asia (45°E to 135°E)
-println("\nFigure 2: Drag over Asia")
-plot_garner_quiver(
-    joinpath(output_dir, "garner_fig2_asia_quiver.png"),
-    datafile_fig2,
-    "τ_x",
-    "τ_y";
-    lon_range = (45.0, 135.0),
-    lat_range = (0.0, 90.0),
-    title = "Figure 2: Orographic Drag over Asia (Garner 2005)",
-    arrow_skip = 2,
-    arrow_scale = 5.0,
-    reference_arrow = 2.0,
-)
+    # Create Garner-style quiver plots
+    println("\n" * "="^70)
+    println("Creating Garner-style quiver plots...")
+    println("="^70)
+
+    # Figure 1: Americas (160°W to 30°W = 200° to 330° in 0-360 notation)
+    println("\nFigure 1: Drag over Americas")
+    plot_garner_quiver(
+        joinpath(output_dir, "garner_fig1_americas_quiver.png"),
+        datafile_fig1,
+        "τ_x",
+        "τ_y";
+        lon_range = (200.0, 330.0),  # 160°W to 30°W in 0-360 format
+        lat_range = (-90.0, 90.0),
+        title = "Figure 1: Orographic Drag over Americas (Garner 2005)",
+        arrow_skip = 2,
+        arrow_scale = 5.0,
+        reference_arrow = 2.0,
+    )
+
+    # Figure 2: Asia (45°E to 135°E)
+    println("\nFigure 2: Drag over Asia")
+    plot_garner_quiver(
+        joinpath(output_dir, "garner_fig2_asia_quiver.png"),
+        datafile_fig2,
+        "τ_x",
+        "τ_y";
+        lon_range = (45.0, 135.0),
+        lat_range = (0.0, 90.0),
+        title = "Figure 2: Orographic Drag over Asia (Garner 2005)",
+        arrow_skip = 2,
+        arrow_scale = 5.0,
+        reference_arrow = 2.0,
+    )
+end
 
 #######################################
 # FIGURE 4: Linear Drag Comparison
@@ -1036,9 +1094,10 @@ plot_garner_quiver(
 # All with uniform wind V̄ = 10 m/s, ρ̄/ρr = 1.0
 #######################################
 
-println("\n" * "="^70)
-println("FIGURE 4: Linear Drag Comparison")
-println("="^70)
+if should_run(:figure4)
+    println("\n" * "="^70)
+    println("FIGURE 4: Linear Drag Comparison")
+    println("="^70)
 
 # Set uniform wind for Figure 4 (10 m/s zonal)
 @. u_phy = FT(10.0)
@@ -1224,19 +1283,20 @@ println("\n" * "="^70)
 println("Creating Figure 4 tripanel plot...")
 println("="^70)
 
-plot_garner_fig4_tripanel(
-    joinpath(output_dir, "garner_fig4_linear_drag.png"),
-    datafile_fig4,
-    ["D_analytical", "τ_l_gfdl", "τ_l_raw"],
-    [
-        "Analytical: D = V̄ max(|T₁|, |T₂|)",
-        "GFDL Restart: τ_l",
-        "Raw Topography: τ_l",
-    ];
-    lon_range = (0.0, 360.0),
-    lat_range = (-90.0, 90.0),
-    colormap = :cividis,
-)
+    plot_garner_fig4_tripanel(
+        joinpath(output_dir, "garner_fig4_linear_drag.png"),
+        datafile_fig4,
+        ["D_analytical", "τ_l_gfdl", "τ_l_raw"],
+        [
+            "Analytical: D = V̄ max(|T₁|, |T₂|)",
+            "GFDL Restart: τ_l",
+            "Raw Topography: τ_l",
+        ];
+        lon_range = (0.0, 360.0),
+        lat_range = (-90.0, 90.0),
+        colormap = :cividis,
+    )
+end
 
 #######################################
 # FIGURE 5: Normalized Drag Curves
@@ -1247,9 +1307,10 @@ plot_garner_fig4_tripanel(
 # Parameters: γ = 0.4, β = 0.5, ε = 0, a_1/a_0 = 9.0
 #######################################
 
-println("\n" * "="^70)
-println("FIGURE 5: Normalized Drag Curves")
-println("="^70)
+if should_run(:figure5)
+    println("\n" * "="^70)
+    println("FIGURE 5: Normalized Drag Curves")
+    println("="^70)
 
 # Physical parameters for Figure 5
 V_fig5 = FT(10.0)   # Wind speed (m/s)
@@ -1267,7 +1328,7 @@ a1_fig5 = FT(9.0) * a0_fig5  # a_1/a_0 = 9.0, so a_1 = 8.1
 # Other OGW parameters (use existing values)
 h_frac_fig5 = FT(0.1)
 ρscale_fig5 = FT(1.2)
-L0_fig5 = FT(80000.0)
+L0_fig5 = FT(1.0)
 
 # Critical height: h_c = Fr_crit * V / N
 h_c = Fr_crit_fig5 * V_fig5 / N_fig5  # = 0.7 * 10 / 0.01 = 700 m
@@ -1283,56 +1344,156 @@ Dp_hmin_eq_hmax = zeros(FT, n_points)
 total_hmin0 = zeros(FT, n_points)
 total_hmin_eq_hmax = zeros(FT, n_points)
 
-println("  Computing drag curves for $(n_points) points using theoretical formulas...")
+println("  Computing drag curves for $(n_points) points using calc_base_flux!...")
 
-# Loop over h_max/h_c values using scalar theoretical computation
+# Create ogw_params for Figure 5 (override default parameters)
+ogw_params_fig5 = (;
+    Fr_crit = Fr_crit_fig5,
+    topo_γ = γ_fig5,
+    topo_β = β_fig5,
+    topo_ϵ = ϵ_fig5,
+    topo_a0 = a0_fig5,
+    topo_a1 = a1_fig5,
+    topo_ρscale = ρscale_fig5,
+    topo_L0 = L0_fig5,
+)
+
+# Save original topo_info values (to restore later)
+orig_hmax = copy(parent(topo_info.hmax))
+orig_hmin = copy(parent(topo_info.hmin))
+orig_t11 = copy(parent(topo_info.t11))
+orig_t12 = copy(parent(topo_info.t12))
+orig_t21 = copy(parent(topo_info.t21))
+orig_t22 = copy(parent(topo_info.t22))
+
+# Set identity tensor so Vτ = V (wind projects directly without rotation)
+@. topo_info.t11 = FT(-1.0)
+@. topo_info.t22 = FT(-1.0)
+@. topo_info.t12 = FT(0.0)
+@. topo_info.t21 = FT(0.0)
+
+# Set constant atmospheric state for Figure 5
+@. u_phy = V_fig5
+@. v_phy = FT(0.0)
+@. Y.c.ρ = ρ_fig5
+@. ᶜbuoyancy_frequency = N_fig5
+
+# Set values_at_z_pbl directly for Figure 5 (bypasses column_reduce!)
+# Format: (ρ_pbl, u_pbl, v_pbl, N_pbl)
+@. values_at_z_pbl.:1 = ρ_fig5      # ρ = 1.0
+@. values_at_z_pbl.:2 = V_fig5      # u = 10.0
+@. values_at_z_pbl.:3 = FT(0.0)     # v = 0.0
+@. values_at_z_pbl.:4 = N_fig5      # N = 0.01
+
+# Loop over h_max/h_c values using calc_base_flux!
 for (i, x) in enumerate(x_range)
     h_max_val = x * h_c
 
-    #--- Case A: h_min = 0 ---
-    (τ_l, τ_p, τ_np) = compute_theoretical_drag(
-        h_max_val, FT(0.0), V_fig5, N_fig5, ρ_fig5;
-        γ = γ_fig5,
-        β = β_fig5,
-        ϵ = ϵ_fig5,
-        Fr_crit = Fr_crit_fig5,
-        a0 = a0_fig5,
-        a1 = a1_fig5,
-        ρscale = ρscale_fig5,
-        L0 = L0_fig5,
+    #--- Case A: h_min = 0 (broadband) ---
+    @. topo_info.hmax = h_max_val
+    @. topo_info.hmin = FT(0.0)
+    println("hmax range after set: ", extrema(parent(topo_info.hmax)), " expected: ", h_max_val)
+    println("hmin range after set: ", extrema(parent(topo_info.hmin)), " expected: 0")
+
+    # @Main.infiltrate
+    CA.calc_base_flux!(
+        topo_τ_x,
+        topo_τ_y,
+        topo_τ_l,
+        topo_τ_p,
+        topo_τ_np,
+        topo_U_sat,
+        topo_FrU_sat,
+        topo_FrU_clp,
+        topo_FrU_max,
+        topo_FrU_min,
+        topo_ᶜz_pbl,
+        values_at_z_pbl,
+        ogw_params_fig5,
+        topo_info,
+        Y.c.ρ,
+        u_phy,
+        v_phy,
+        ᶜz,
+        ᶜbuoyancy_frequency,
     )
 
-    # Normalize by τ_l (= D*)
-    if τ_l > eps(FT)
-        Dp_hmin0[i] = τ_p / τ_l
-        total_hmin0[i] = (τ_p + τ_np) / τ_l
+    println("FrU_max range: ", extrema(parent(topo_FrU_max)))
+    println("FrU_min range: ", extrema(parent(topo_FrU_min)))
+    println("U_sat range: ", extrema(parent(topo_U_sat)))
+    println("topo_τ_x range: ", extrema(parent(topo_τ_x)))
+
+    println("values_at_z_pbl: ", values_at_z_pbl)
+    println("topo_ᶜz_pbl range: ", extrema(parent(topo_ᶜz_pbl)))
+    println("τ_l range: ", extrema(parent(topo_τ_l)))
+    println("u_phy range: ", extrema(parent(u_phy)))
+    println("Y.c.ρ range: ", extrema(parent(Y.c.ρ)))
+
+    # Extract mean values (should be uniform across all columns)
+    τ_l_val = mean(parent(topo_τ_l))
+    τ_p_val = mean(parent(topo_τ_p))
+    τ_np_val = mean(parent(topo_τ_np))
+
+    # Normalize by D* = τ_l
+    D_star = τ_l_val
+    if D_star > eps(FT)
+        Dp_hmin0[i] = τ_p_val / D_star
+        total_hmin0[i] = (τ_p_val + τ_np_val) / D_star
     else
         Dp_hmin0[i] = FT(0.0)
         total_hmin0[i] = FT(0.0)
     end
 
-    #--- Case B: h_min = h_max ---
-    (τ_l, τ_p, τ_np) = compute_theoretical_drag(
-        h_max_val, h_max_val, V_fig5, N_fig5, ρ_fig5;
-        γ = γ_fig5,
-        β = β_fig5,
-        ϵ = ϵ_fig5,
-        Fr_crit = Fr_crit_fig5,
-        a0 = a0_fig5,
-        a1 = a1_fig5,
-        ρscale = ρscale_fig5,
-        L0 = L0_fig5,
+    #--- Case B: h_min = h_max (monochromatic) ---
+    @. topo_info.hmin = h_max_val - FT(100.0)
+
+    CA.calc_base_flux!(
+        topo_τ_x,
+        topo_τ_y,
+        topo_τ_l,
+        topo_τ_p,
+        topo_τ_np,
+        topo_U_sat,
+        topo_FrU_sat,
+        topo_FrU_clp,
+        topo_FrU_max,
+        topo_FrU_min,
+        topo_ᶜz_pbl,
+        values_at_z_pbl,
+        ogw_params_fig5,
+        topo_info,
+        Y.c.ρ,
+        u_phy,
+        v_phy,
+        ᶜz,
+        ᶜbuoyancy_frequency,
     )
 
-    # Normalize by τ_l (= D*)
-    if τ_l > eps(FT)
-        Dp_hmin_eq_hmax[i] = τ_p / τ_l
-        total_hmin_eq_hmax[i] = (τ_p + τ_np) / τ_l
+    # Extract mean values
+    τ_l_mono = mean(parent(topo_τ_l))
+    τ_p_mono = mean(parent(topo_τ_p))
+    τ_np_mono = mean(parent(topo_τ_np))
+
+    # @Main.infiltrate
+
+    # Normalize by D*_mono = τ_l_mono for monochromatic case
+    D_star_mono = τ_l_mono
+    if D_star_mono > eps(FT)
+        Dp_hmin_eq_hmax[i] = τ_p_mono / D_star_mono
+        total_hmin_eq_hmax[i] = (τ_p_mono + τ_np_mono) / D_star_mono
     else
         Dp_hmin_eq_hmax[i] = FT(0.0)
         total_hmin_eq_hmax[i] = FT(0.0)
     end
 end
+
+# Restore original topo_info values
+parent(topo_info.hmax) .= orig_hmax
+parent(topo_info.hmin) .= orig_hmin
+parent(topo_info.t11) .= orig_t11
+parent(topo_info.t12) .= orig_t12
+parent(topo_info.t21) .= orig_t21
+parent(topo_info.t22) .= orig_t22
 
 println("  Done computing drag curves.")
 println("  ⟨Dp⟩/D* range (h_min=0): $(minimum(Dp_hmin0)) to $(maximum(Dp_hmin0))")
@@ -1356,9 +1517,8 @@ plot_garner_fig5(
     β = β_fig5,
 )
 
-println("\n" * "="^70)
-println("Garner 2005 reproduction complete!")
-println("Output directory: $output_dir")
-println("="^70)
-
-
+    println("\n" * "="^70)
+    println("Garner 2005 reproduction complete!")
+    println("Output directory: $output_dir")
+    println("="^70)
+end
