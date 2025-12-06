@@ -3,7 +3,6 @@ module SurfaceConditions
 import ..InitialConditions as ICs
 import ..Parameters as CAP
 import ..DryModel
-import ..ZonallyAsymmetricSST
 import ..ZonallySymmetricSST
 import ..RCEMIPIISST
 import ..ExternalTVColumnSST

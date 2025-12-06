@@ -13,14 +13,11 @@ end
 function get_sfc_temperature_form(parsed_args)
     surface_temperature = parsed_args["surface_temperature"]
     @assert surface_temperature in (
-        "ZonallyAsymmetric",
         "ZonallySymmetric",
         "RCEMIPII",
         "ReanalysisTimeVarying",
     )
-    return if surface_temperature == "ZonallyAsymmetric"
-        ZonallyAsymmetricSST()
-    elseif surface_temperature == "ZonallySymmetric"
+    return if surface_temperature == "ZonallySymmetric"
         ZonallySymmetricSST()
     elseif surface_temperature == "RCEMIPII"
         RCEMIPIISST()

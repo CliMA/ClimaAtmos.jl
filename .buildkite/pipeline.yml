@@ -159,15 +159,6 @@ steps:
           --job_id box_density_current_test
         artifact_paths: "box_density_current_test/output_active/*"
 
-      - label: ":computer: Box rcemipii with diagnostic edmf"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml
-          --job_id rcemipii_box_diagnostic_edmfx
-        artifact_paths: "rcemipii_box_diagnostic_edmfx/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
       - label: ":computer: CRM rcemipii in a box with 1M"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -346,7 +337,7 @@ steps:
           --job_id baroclinic_wave
         artifact_paths: "baroclinic_wave/output_active/*"
 
-      - label: ":computer: no lim baroclinic wave equilmoist"
+      - label: ":computer: baroclinic wave equilmoist"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -360,7 +351,7 @@ steps:
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: no lim baroclinic wave equilmoist (AMD)"
+      - label: ":computer: baroclinic wave equilmoist (AMD)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -381,7 +372,7 @@ steps:
           --job_id held_suarez
         artifact_paths: "held_suarez/output_active/*"
 
-      - label: ":computer: no lim held suarez equilmoist"
+      - label: ":computer: held suarez equilmoist"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -395,24 +386,9 @@ steps:
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-  - group: "Sphere Examples (Aquaplanet)"
+  - group: "Sphere Examples (Aquaplanet with various parameterizations)"
     steps:
-      - label: ":umbrella: aquaplanet nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/aquaplanet_nonequil_allsky_gw_res.yml
-          --job_id aquaplanet_nonequil_allsky_gw_res
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id aquaplanet_nonequil_allsky_gw_res
-          --out_dir aquaplanet_nonequil_allsky_gw_res/output_active
-        artifact_paths: "aquaplanet_nonequil_allsky_gw_res/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
-      - label: ":umbrella: aquaplanet nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 2-moment"
+      - label: ":umbrella: aquaplanet allsky varying insol gravity wave (gfdl_restart) 2-moment"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -427,30 +403,45 @@ steps:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: aquaplanet equil allsky monin_obukhov varying insol gravity wave (raw_topo) high top zonally asymmetric"
+      - label: ":computer: aquaplanet equil allsky varying insol gravity wave (raw_topo)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/aquaplanet_equil_allsky_gw_raw_zonalasym.yml
-          --job_id aquaplanet_equil_allsky_gw_raw_zonalasym
+          --config_file $CONFIG_PATH/aquaplanet_equil_allsky_gw_raw.yml
+          --job_id aquaplanet_equil_allsky_gw_raw
 
           julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id aquaplanet_equil_allsky_gw_raw_zonalasym
-          --out_dir aquaplanet_equil_allsky_gw_raw_zonalasym/output_active
-        artifact_paths: "aquaplanet_equil_allsky_gw_raw_zonalasym/output_active/*"
+          --job_id aquaplanet_equil_allsky_gw_raw
+          --out_dir aquaplanet_equil_allsky_gw_raw/output_active
+        artifact_paths: "aquaplanet_equil_allsky_gw_raw/output_active/*"
         agents:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: aquaplanet for coupler"
+      - label: ":man_in_business_suit_levitating: EDOnly EDMFX aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/aquaplanet_for_coupler.yml
-          --job_id aquaplanet_for_coupler
-        artifact_paths: "aquaplanet_for_coupler/output_active/*"
+          --config_file $CONFIG_PATH/edonly_edmfx_aquaplanet.yml
+          --job_id edonly_edmfx_aquaplanet
+        artifact_paths: "edonly_edmfx_aquaplanet/output_active/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":genie: Diagnostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
+          --job_id diagnostic_edmfx_aquaplanet
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_aquaplanet
+          --out_dir diagnostic_edmfx_aquaplanet/output_active
+        artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":computer: aquaplanet rcemipii with diagnostic edmf"
         command: >
@@ -461,6 +452,21 @@ steps:
         artifact_paths: "rcemipii_sphere_diagnostic_edmfx/output_active/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":genie: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
+          --job_id prognostic_edmfx_aquaplanet
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_aquaplanet
+          --out_dir prognostic_edmfx_aquaplanet/output_active
+        artifact_paths: "prognostic_edmfx_aquaplanet/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
   - group: "Sphere Examples (Topography)"
     steps:
@@ -619,29 +625,7 @@ steps:
 
           julia --color=yes --project=.buildkite post_processing/remap/remap_pipeline.jl
           --data_dir prep_remap/output_active --out_dir remap_pipeline_output
-        artifact_paths: "remap_pipeline_output/*"
-
-  - group: "EDOnlyEDMFX"
-    steps:
-      - label: ":man_in_business_suit_levitating: EDOnly EDMFX aquaplanet"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/edonly_edmfx_aquaplanet.yml
-          --job_id edonly_edmfx_aquaplanet
-        artifact_paths: "edonly_edmfx_aquaplanet/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":man_in_business_suit_levitating: AMIP Target EDOnly nonequil"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
-          --config_file $CONFIG_PATH/amip_target_edonly_nonequil.yml
-          --job_id amip_target_edonly_nonequil
-        artifact_paths: "amip_target_edonly_nonequil/output_active/*"
-        agents:
-          slurm_mem: 20GB
+        artifact_paths: "remap_pipeline_output/*"    
 
   - group: "Diagnostic EDMFX"
     steps:
@@ -725,21 +709,6 @@ steps:
         artifact_paths: "diagnostic_edmfx_trmm_box_0M/output_active/*"
         agents:
           slurm_mem: 20GB
-
-      - label: ":genie: Diagnostic EDMFX aquaplanet"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
-          --job_id diagnostic_edmfx_aquaplanet
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id diagnostic_edmfx_aquaplanet
-          --out_dir diagnostic_edmfx_aquaplanet/output_active
-        artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
 
   - group: "Prognostic EDMFX"
     steps:
@@ -925,21 +894,6 @@ steps:
         agents:
           slurm_mem: 12GB
         soft_fail: true
-
-      - label: ":genie: Prognostic EDMFX aquaplanet"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
-          --job_id prognostic_edmfx_aquaplanet
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id prognostic_edmfx_aquaplanet
-          --out_dir prognostic_edmfx_aquaplanet/output_active
-        artifact_paths: "prognostic_edmfx_aquaplanet/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
 
   - group: "Autodiff"
     steps:
