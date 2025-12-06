@@ -442,31 +442,20 @@ end
 
 """
     set_implicit_precomputed_quantities!(Y, p, t)
-    set_implicit_precomputed_quantities_part1!(Y, p, t)
-    set_implicit_precomputed_quantities_part2!(Y, p, t)
 
-Update the precomputed quantities that are handled implicitly based on the
-current state `Y`. These are called before each evaluation of either
-`implicit_tendency!` or `remaining_tendency!`, and they include quantities used
+Updates the precomputed quantities that are handled implicitly based on the
+current state `Y`. This is called before each evaluation of either
+`implicit_tendency!` or `remaining_tendency!`, and it includes quantities used
 in both tedencies.
 
-These functions also apply a "filter" to `Y` in order to ensure that `ᶠu³` is 0
+This function also applies a "filter" to `Y` in order to ensure that `ᶠu³` is 0
 at the surface (i.e., to enforce the impenetrable boundary condition). If the
 `turbconv_model` is EDMFX, the filter also ensures that `ᶠu³⁰` and `ᶠu³ʲs` are 0
 at the surface. In the future, we will probably want to move this filtering
 elsewhere, but doing it here ensures that it occurs whenever the precomputed
 quantities are updated.
-
-These functions are split into two parts so that the first stage of the implicit
-and explicit calculations can be executed in sequence before completing the
-remaining steps. This ordering is required to correctly compute variables at
-the environment boundary after applying the boundary conditions.
 """
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
-    set_implicit_precomputed_quantities_part1!(Y, p, t)
-    set_implicit_precomputed_quantities_part2!(Y, p, t)
-end
-NVTX.@annotate function set_implicit_precomputed_quantities_part1!(Y, p, t)
     (; turbconv_model, moisture_model, microphysics_model) = p.atmos
     (; ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp) = p.precomputed
@@ -505,16 +494,6 @@ NVTX.@annotate function set_implicit_precomputed_quantities_part1!(Y, p, t)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
-    elseif !(isnothing(turbconv_model))
-        # Do nothing for other turbconv models for now
-    end
-end
-NVTX.@annotate function set_implicit_precomputed_quantities_part2!(Y, p, t)
-    (; turbconv_model) = p.atmos
-    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
-    @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
-
-    if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_implicit_closures!(Y, p, t)
     elseif !(isnothing(turbconv_model))
@@ -523,21 +502,16 @@ NVTX.@annotate function set_implicit_precomputed_quantities_part2!(Y, p, t)
 end
 
 """
-    set_explicit_precomputed_quantities_part1!(Y, p, t)
-    set_explicit_precomputed_quantities_part2!(Y, p, t)
+    set_explicit_precomputed_quantities!(Y, p, t)
 
-Update the precomputed quantities that are handled explicitly based on the
-current state `Y`. These are only called before each evaluation of
-`remaining_tendency!`, though they include quantities used in both
+Updates the precomputed quantities that are handled explicitly based on the
+current state `Y`. This is only called before each evaluation of
+`remaining_tendency!`, though it includes quantities used in both
 `implicit_tendency!` and `remaining_tendency!`.
-
-These functions are split into two parts so that the first stage of the implicit
-and explicit calculations can be executed in sequence before completing the
-remaining steps. This ordering is required to correctly compute variables at
-the environment boundary after applying the boundary conditions.
 """
-NVTX.@annotate function set_explicit_precomputed_quantities_part1!(Y, p, t)
-    (; turbconv_model) = p.atmos
+NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
+    (; turbconv_model, moisture_model, cloud_model) = p.atmos
+    (; call_cloud_diagnostics_per_stage) = p.atmos
     (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
@@ -552,18 +526,6 @@ NVTX.@annotate function set_explicit_precomputed_quantities_part1!(Y, p, t)
         @. p.precomputed.ᶜgradᵥ_θ_liq_ice =
             ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
     end
-
-    if turbconv_model isa DiagnosticEDMFX
-        set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
-    elseif !(isnothing(turbconv_model))
-        # Do nothing for other turbconv models for now
-    end
-
-    return nothing
-end
-NVTX.@annotate function set_explicit_precomputed_quantities_part2!(Y, p, t)
-    (; turbconv_model, moisture_model, cloud_model) = p.atmos
-    (; call_cloud_diagnostics_per_stage) = p.atmos
 
     # The buoyancy gradient depends on the cloud fraction, and the cloud fraction 
     # depends on the mixing length, which depends on the buoyancy gradient. 
@@ -583,6 +545,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities_part2!(Y, p, t)
         )
     end
     if turbconv_model isa DiagnosticEDMFX
+        set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
@@ -634,8 +597,6 @@ end
 Updates all precomputed quantities based on the current state `Y`.
 """
 function set_precomputed_quantities!(Y, p, t)
-    set_implicit_precomputed_quantities_part1!(Y, p, t)
-    set_explicit_precomputed_quantities_part1!(Y, p, t)
-    set_implicit_precomputed_quantities_part2!(Y, p, t)
-    set_explicit_precomputed_quantities_part2!(Y, p, t)
+    set_implicit_precomputed_quantities!(Y, p, t)
+    set_explicit_precomputed_quantities!(Y, p, t)
 end
