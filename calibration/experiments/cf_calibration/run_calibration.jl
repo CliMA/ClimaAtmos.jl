@@ -18,7 +18,7 @@ include("helper_funcs.jl")
 include("observation_map.jl")
 include("get_les_metadata.jl")
 # include("nn_helpers.jl")
-include("nn_helpers_lux.jl")
+include("nn_helpers.jl")
 
 # load configs
 experiment_dir = dirname(Base.active_project())
@@ -72,15 +72,19 @@ addprocs(
 end
 
 
-if get(model_config_dict, "mixing_length_model", "") == "nn"
-    prior = create_prior_with_nn(
-        prior_path,
-        pretrained_nn_path;
-        arc = [8, 20, 15, 10, 1],
-    )
-else
-    const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
-end
+# if get(model_config_dict, "mixing_length_model", "") == "nn"
+#     prior = create_prior_with_nn(
+#         prior_path,
+#         pretrained_nn_path;
+#         arc = [8, 20, 15, 10, 1],
+#     )
+# else
+#     const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
+# end
+prior = cf_prior_with_nn(
+    joinpath(experiment_dir, prior_path),
+    "/resnick/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/cf_calibration/prior_network_generator_indep-gauss.bson",
+)
 
 ### create output directories & copy configs
 mkpath(output_dir)

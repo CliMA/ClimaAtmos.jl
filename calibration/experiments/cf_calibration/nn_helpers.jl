@@ -1,5 +1,35 @@
 using Flux
 
+function construct_fully_connected_nn(
+    params::AbstractArray,
+    model_structure_path::String
+)
+    jld2data = JLD2.load("$(model_structure_path).jld2") # give re, params,
+    architecture = jld2data["re"]
+    return architecture(params) # constructs flux model 
+end
+
+function cf_prior_with_nn(
+    prior_path::String, 
+    offline_cf_nn_path::String
+)
+    # get the other prior from the toml file
+    prior = CAL.get_prior(prior_path)
+    
+    nn_data = BSON.load(offline_cf_nn_path)
+    mean_vec = nn_data[:mean_vec]
+    # ensure covariance matrix is symmetric and positive definite
+    covariance_matrix = EKP.posdef_correct(Symmetric(nn_data[:sqrt_cov_mat] * nn_data[:sqrt_cov_mat]'))
+
+    nn_distribution = EKP.Parameterized(MvNormal(mean_vec, covariance_matrix))
+    constraints = repeat([EKP.no_constraint()], length(mean_vec))
+    nn_prior = EKP.ParameterDistribution(nn_distribution, constraints, "cloud_fraction_param_vec")
+    # return prior, nn_prior
+    # push!(prior, nn_prior)
+
+    prior = EKP.combine_distributions([prior, nn_prior])
+    return prior
+end
 
 """
     Count number of parameters in fully-connected NN model given Array specifying architecture following

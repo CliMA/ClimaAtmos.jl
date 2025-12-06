@@ -11,7 +11,7 @@ model_config : model_config_prognostic_impl.yml
 # output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v4/exp13_nn_all_params_ind_noise
 # output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v5/exp3_nn_all_params_ind_noise
 # output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v5/exp4_nn_all_params_hess_noise
-output_dir : /resnick/esm/jschmitt/climaatmos_scm_calibrations/output_cf_ml_v1/exp1
+output_dir : /resnick/groups/esm/jschmitt/climaatmos_scm_calibrations/output_cf_ml_v1/exp2
 
 # Slurm resource configuration
 slurm_time: "14:00:00"
@@ -69,7 +69,7 @@ const_noise_by_var:
 
 # pretrained_nn_path: "/home/cchristo/ml_mixing_length/nn_666p_leaky_relu.jld2"
 # pretrained_nn_path: "/home/cchristo/ml_mixing_length/nn_666p_leaky_relu_lux.bson"
-pretrained_nn_path: "/home/cchristo/ml_mixing_length/prior_hess_ollie/data/prior_network_generator_hess-gauss.bson"
+# pretrained_nn_path: "/home/cchristo/ml_mixing_length/prior_hess_ollie/data/prior_network_generator_hess-gauss.bson"
   # :reconstructor => Restructure(NamedTuple, ..., 666)
   # :mean_vec      => Float32[0.0231276, -0.0161952, 0.00883911, 0.490049, 0.00326667, 0.00178532, 0.250688, 0.00407117, -0.003050…
   # :sqrt_cov_mat  => Float32[-0.000131849 1.87868f-5 … 2.18495f-7 -1.11167f-6; 1.87832f-5 -2.71298f-6 … -1.92144f-8 1.79404f-7; ……

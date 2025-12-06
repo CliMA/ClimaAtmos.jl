@@ -14,8 +14,8 @@ using JLD2
 using BSON
 const EKTOML = EKP.TOMLInterface
 
-# include("nn_helpers.jl")
-include("nn_helpers_lux.jl")
+include("nn_helpers.jl")
+# include("nn_helpers_lux.jl")
 
 import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends

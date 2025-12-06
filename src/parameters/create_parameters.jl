@@ -309,14 +309,16 @@ function TurbulenceConvectionParameters(
         :detr_inv_tau => :detr_inv_tau,
         :entr_inv_tau => :entr_inv_tau,
         :entr_detr_limit_inv_tau => :entr_detr_limit_inv_tau,
+        :cloud_fraction_param_vec => :cloud_fraction_param_vec,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     parameters = merge(parameters, overrides)
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)
+    VTF3 = typeof(parameters.cloud_fraction_param_vec)
     FT = CP.float_type(toml_dict)
-    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2}(; parameters...)
+    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3}(; parameters...)
 end
 
 SurfaceTemperatureParameters(
