@@ -414,6 +414,9 @@ function get_initial_condition(parsed_args, atmos)
         "DryDensityCurrentProfile",
         "RisingThermalBubbleProfile",
         "PrecipitatingColumn",
+        "RCEMIPIIProfile_295",
+        "RCEMIPIIProfile_300",
+        "RCEMIPIIProfile_305",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
     elseif isfile(parsed_args["initial_condition"])

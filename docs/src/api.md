@@ -41,6 +41,7 @@ ClimaAtmos.InitialConditions.TRMM_LBA
 ClimaAtmos.InitialConditions.LifeCycleTan2018
 ClimaAtmos.InitialConditions.Bomex
 ClimaAtmos.InitialConditions.Soares
+ClimaAtmos.InitialConditions.RCEMIPIIProfile
 ```
 
 ### Helper
