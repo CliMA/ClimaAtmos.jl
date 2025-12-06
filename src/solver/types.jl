@@ -96,7 +96,6 @@ end
 
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
-struct ZonallyAsymmetricSST <: AbstractSST end
 struct RCEMIPIISST <: AbstractSST end
 struct ExternalTVColumnSST <: AbstractSST end
 
@@ -878,7 +877,7 @@ Internal testing and calibration components for single-column setups:
 - `rayleigh_sponge`: nothing or RayleighSponge()
 
 ## AtmosSurface
-- `sfc_temperature`: ZonallySymmetricSST(), ZonallyAsymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
+- `sfc_temperature`: ZonallySymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
 - `surface_model`: PrescribedSST(), SlabOceanSST()
 - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
 

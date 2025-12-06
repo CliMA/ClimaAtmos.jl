@@ -209,7 +209,7 @@ surface_setup:
   help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`]"
   value: "DefaultExchangeCoefficients"
 surface_temperature:
-  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric', 'RCEMIPII', `Reanalysis`, `ReanalysisTimeVarying`]"
+  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'RCEMIPII', `Reanalysis`, `ReanalysisTimeVarying`]"
   value: "ZonallySymmetric"
 initial_condition:
   help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
