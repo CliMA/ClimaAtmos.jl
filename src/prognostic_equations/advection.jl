@@ -282,7 +282,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         )
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, FT(dt), energy_q_tot_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, FT(dt), Val(:none))
-        @. Yₜ.c.ρe_tot += vtt - vtt_central
+        vtt_fake = NullBroadcasted()
+        @. Yₜ.c.ρe_tot += vtt - vtt_central + vtt_fake
     end
 
     if !(p.atmos.moisture_model isa DryModel) && energy_q_tot_upwinding != Val(:none)
