@@ -1647,24 +1647,32 @@ add_diagnostic_variable!(
 function compute_mslp!(out, state, cache, time)
     thermo_params = CAP.thermodynamics_params(cache.params)
     g = TD.Parameters.grav(thermo_params)
-    R_m_surf = Fields.level(
-        lazy.(TD.gas_constant_air.(thermo_params, cache.precomputed.ᶜts)),
-        1,
-    )
+    ts_level = Fields.level(cache.precomputed.ᶜts, 1)
+    R_m_surf = @. lazy(TD.gas_constant_air(thermo_params, ts_level))
 
-    # get pressure, temperature, and height at the lowest atmospheric level
     p_level = Fields.level(cache.precomputed.ᶜp, 1)
-    t_level = Fields.level(
-        lazy.(TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)),
-        1,
-    )
+    t_level = @. lazy(TD.air_temperature(thermo_params, ts_level))
     z_level = Fields.level(Fields.coordinate_field(state.c.ρ).z, 1)
 
-    # compute sea level pressure using the hypsometric equation
+    # Reduce to mean sea level using hypsometric formulation with lapse rate adjustment
+    # Using constant lapse rate Γ = 6.5 K/km, with virtual temperature
+    # represented via R_m_surf. This reduces biases over
+    # very cold or very warm high-topography regions.
+    FT = Spaces.undertype(Fields.axes(state.c.ρ))
+    Γ = FT(6.5e-3) # K m^-1
+
+    #   p_msl = p_z0 * [1 + Γ * z / T_z0]^( g / (R_m Γ))
+    # where:
+    #   - p_z0 pressure at the lowest model level
+    #   - T_z0 air temperature at the lowest model level
+    #   - R_m moist-air gas constant at the surface (R_m_surf), which
+    #     accounts for virtual-temperature effects in the exponent
+    #   - Γ constant lapse rate (6.5 K/km here)
+
     if isnothing(out)
-        return @. p_level * exp(g * z_level / (R_m_surf * t_level))
+        return p_level .* (1 .+ Γ .* z_level ./ t_level) .^ (g / Γ ./ R_m_surf)
     else
-        @. out = p_level * exp(g * z_level / (R_m_surf * t_level))
+        out .= p_level .* (1 .+ Γ .* z_level ./ t_level) .^ (g / Γ ./ R_m_surf)
     end
 end
 
@@ -1673,7 +1681,7 @@ add_diagnostic_variable!(
     long_name = "Mean Sea Level Pressure",
     standard_name = "mean_sea_level_pressure",
     units = "Pa",
-    comments = "Mean sea level pressure computed from the hypsometric equation",
+    comments = "Mean sea level pressure computed using a lapse-rate-dependent hypsometric reduction (ERA-style; Γ=6.5 K/km with virtual temperature via moist gas constant).",
     compute! = compute_mslp!,
 )
 
