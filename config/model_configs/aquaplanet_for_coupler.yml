@@ -1,9 +1,0 @@
-viscous_sponge: false
-t_end: "1days"
-topography: "Earth"
-moist: "equil"
-surface_setup: "DefaultMoninObukhov"
-vert_diff: "DecayWithHeightDiffusion"
-precip_model: "0M"
-cloud_model: "grid_scale"
-toml: [toml/sphere_aquaplanet.toml]

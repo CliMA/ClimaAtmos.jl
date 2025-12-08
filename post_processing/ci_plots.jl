@@ -1021,130 +1021,8 @@ function make_plots(
     )
 end
 
-function make_plots(
-    ::Union{
-        Val{:aquaplanet_equil_allsky_gw_raw_zonalasym},
-        Val{:gpu_aquaplanet_dyamond_summer},
-    },
-    output_paths::Vector{<:AbstractString},
-)
-    simdirs = SimDir.(output_paths)
-
-    reduction = "average"
-    short_names_3D = ["ua", "ta", "hus"]
-    short_names_2D = [
-        "rsdt",
-        "rsds",
-        "rsut",
-        "rsus",
-        "rlds",
-        "rlut",
-        "rlus",
-        "hfss",
-        "hfls",
-        "pr",
-    ]
-    available_periods = ClimaAnalysis.available_periods(
-        simdirs[1];
-        short_name = short_names_3D[1],
-        reduction,
-    )
-    if "1M" in available_periods
-        period = "1M"
-    elseif "30d" in available_periods
-        period = "30d"
-    elseif "10d" in available_periods
-        period = "10d"
-    elseif "1d" in available_periods
-        period = "1d"
-    elseif "1h" in available_periods
-        period = "1h"
-    end
-    vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
-        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon
-    end
-    vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
-        get(simdir; short_name, reduction, period)
-    end
-    make_plots_generic(
-        output_paths,
-        vars_3D,
-        time = LAST_SNAP,
-        more_kwargs = YLINEARSCALE,
-    )
-    make_plots_generic(
-        output_paths,
-        vars_2D,
-        time = LAST_SNAP,
-        output_name = "summary_2D",
-    )
-end
-
-function make_plots(
-    ::Union{
-        Val{:aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
-        Val{:aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64},
-        Val{
-            :longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean,
-        },
-    },
-    output_paths::Vector{<:AbstractString},
-)
-    simdirs = SimDir.(output_paths)
-
-    reduction = "average"
-    short_names_3D =
-        ["ta", "thetaa", "rhoa", "ua", "va", "wa", "hur", "hus", "clw", "cli"]
-    available_periods = ClimaAnalysis.available_periods(
-        simdirs[1];
-        short_name = short_names_3D[1],
-        reduction,
-    )
-    if "1M" in available_periods
-        period = "1M"
-    elseif "30d" in available_periods
-        period = "30d"
-    elseif "10d" in available_periods
-        period = "10d"
-    elseif "1d" in available_periods
-        period = "1d"
-    elseif "12h" in available_periods
-        period = "12h"
-    end
-    short_names_2D = [
-        "rsdt",
-        "rsds",
-        "rsut",
-        "rsus",
-        "rlds",
-        "rlut",
-        "rlus",
-        "hfss",
-        "hfls",
-        "ts",
-        "pr",
-    ]
-    vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
-        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon
-    end
-    vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
-        get(simdir; short_name, reduction, period)
-    end
-    make_plots_generic(
-        output_paths,
-        vars_3D,
-        time = LAST_SNAP,
-        more_kwargs = YLINEARSCALE,
-    )
-    make_plots_generic(
-        output_paths,
-        vars_2D,
-        time = LAST_SNAP,
-        output_name = "summary_2D",
-    )
-end
-
 AquaplanetPlots = Union{
+    Val{:gpu_aquaplanet_dyamond_summer},
     Val{:edonly_edmfx_aquaplanet},
     Val{:mpi_sphere_aquaplanet_rhoe_equil_clearsky},
     Val{:aquaplanet_nonequil_allsky_gw_res},
@@ -1198,6 +1076,8 @@ function make_plots(
         period = "1d"
     elseif "12h" in available_periods
         period = "12h"
+    elseif "1h" in available_periods
+        period = "1h"
     end
     vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
         get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
@@ -1367,7 +1247,6 @@ EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_test_box},
     Val{:diagnostic_edmfx_gabls_box},
     Val{:diagnostic_edmfx_bomex_box},
-    Val{:diagnostic_edmfx_bomex_stretched_box},
     Val{:diagnostic_edmfx_dycoms_rf01_box},
     Val{:diagnostic_edmfx_trmm_box_0M},
     Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
@@ -1378,16 +1257,12 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_bomex_column},
     Val{:prognostic_edmfx_bomex_implicit_column},
     Val{:prognostic_edmfx_bomex_column_sparse_autodiff},
-    Val{:prognostic_edmfx_bomex_stretched_column},
-    Val{:prognostic_edmfx_bomex_pigroup_column},
-    Val{:prognostic_edmfx_bomex_implicit_column},
     Val{:prognostic_edmfx_dycoms_rf01_column},
     Val{:prognostic_edmfx_trmm_column_0M},
     Val{:prognostic_edmfx_simpleplume_column},
     Val{:prognostic_edmfx_gcmdriven_column},
     Val{:prognostic_edmfx_tv_era5driven_column},
     Val{:prognostic_edmfx_bomex_box},
-    Val{:rcemipii_box_diagnostic_edmfx},
     Val{:prognostic_edmfx_soares_column},
     Val{:diagnostic_edmfx_trmm_stretched_box},
 }
