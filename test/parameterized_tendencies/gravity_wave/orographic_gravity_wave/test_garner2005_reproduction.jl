@@ -247,7 +247,6 @@ function garner_fig1_wind!(u_phy, v_phy)
     # Get coordinate field that matches the space of u_phy
     coord_field = Fields.coordinate_field(axes(u_phy))
 
-    # @Main.infiltrate
     @. u_phy = ifelse(
         abs(coord_field.lat) <= FT(30.0),
         FT(-7.0),   # Tropical: -7 m/s
@@ -269,8 +268,6 @@ if should_run(:figure1)
     # For Garner reproduction: ρᵣ = 1.0 kg/m³, Nᵣ = 0.01 s⁻¹
     @. Y.c.ρ = FT(1.0)
     @. ᶜbuoyancy_frequency = FT(0.01)
-
-    # @Main.infiltrate
 
     # Compute base flux (this extracts values at PBL and computes τ_x, τ_y)
     CA.calc_base_flux!(
@@ -1797,7 +1794,6 @@ if should_run(:figure5)
         )
         println("hmin range after set: ", extrema(parent(topo_info.hmin)), " expected: 0")
 
-        # @Main.infiltrate
         CA.calc_base_flux!(
             topo_τ_x,
             topo_τ_y,
@@ -1875,8 +1871,6 @@ if should_run(:figure5)
         τ_l_mono = mean(parent(topo_τ_l))
         τ_p_mono = mean(parent(topo_τ_p))
         τ_np_mono = mean(parent(topo_τ_np))
-
-        # @Main.infiltrate
 
         # Normalize by D*_mono = τ_l_mono for monochromatic case
         D_star_mono = τ_l_mono
