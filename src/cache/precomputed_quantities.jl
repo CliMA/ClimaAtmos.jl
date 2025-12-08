@@ -468,8 +468,10 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
 
     # TODO: We might want to move this to dss! (and rename dss! to something
     # like enforce_constraints!).
-    set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
-    set_velocity_at_top!(Y, turbconv_model)
+    if !(p.atmos.prescribed_flow isa PrescribedFlow)
+        set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
+        set_velocity_at_top!(Y, turbconv_model)
+    end
 
     set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
     ᶜJ = Fields.local_geometry_field(Y.c).J

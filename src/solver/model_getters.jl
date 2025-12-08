@@ -655,6 +655,8 @@ function check_case_consistency(parsed_args)
     imp_vert_diff = parsed_args["implicit_diffusion"]
     vert_diff = parsed_args["vert_diff"]
     turbconv = parsed_args["turbconv"]
+    topography = parsed_args["topography"]
+    prescribed_flow = parsed_args["prescribed_flow"]
 
     ISDAC_mandatory = (ic, subs, surf, rad, extf)
     if "ISDAC" in ISDAC_mandatory
@@ -670,6 +672,21 @@ function check_case_consistency(parsed_args)
             !isnothing(turbconv) || !isnothing(vert_diff),
             "Implicit vertical diffusion is only supported when using a " *
             "turbulence convection model or vertical diffusion model.",
+        )
+    elseif !isnothing(prescribed_flow)
+        @assert(topography == "NoWarp",
+            "Prescribed flow elides `set_velocity_at_surface!` and `set_velocity_at_top!` \
+             which is needed for topography. Thus, prescribed flow must have flat surface."
+        )
+        @assert(
+            !parsed_args["implicit_noneq_cloud_formation"] &&
+            !parsed_args["implicit_diffusion"] &&
+            !parsed_args["implicit_sgs_advection"] &&
+            !parsed_args["implicit_sgs_entr_detr"] &&
+            !parsed_args["implicit_sgs_nh_pressure"] &&
+            !parsed_args["implicit_sgs_vertdiff"] &&
+            !parsed_args["implicit_sgs_mass_flux"],
+            "Prescribed flow does not use the implicit solver."
         )
     end
 end
