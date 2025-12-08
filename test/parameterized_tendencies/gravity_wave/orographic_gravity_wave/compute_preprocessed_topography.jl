@@ -62,10 +62,14 @@ if load_preprocessed_topography
         parsed_args,
     )
 else
-    topo_cg = CA.compute_OGW_info(Y, elevation_data, earth_radius, γ, h_frac; n_smoothing_cells = 3.0)
+    topo_cg = CA.compute_OGW_info(
+        Y, elevation_data, earth_radius, γ, h_frac;
+        skip_pt = 12,
+        n_smoothing_cells_hpoz = 4.0,
+        n_smoothing_cells_chi = 4.0,
+    )
 end
 
-# @Main.infiltrate
 output_filename = write_computed_drag!(topo_cg, parsed_args, config)
 
 datafile_cg, weightfile = save_nc_data(output_filename, topo_cg, spaces)

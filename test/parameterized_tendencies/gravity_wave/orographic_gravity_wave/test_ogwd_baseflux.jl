@@ -1,5 +1,4 @@
 import CUDA
-# CUDA.device!(0)  # Set specific GPU device
 ENV["CLIMACOMMS_DEVICE"] = "CUDA"
 
 import ClimaComms
@@ -194,13 +193,3 @@ create_figure_set(
     remap_dir = joinpath(@__DIR__, "ogwd_3d", "remap_data/"),
     FT = FT,
 )
-
-
-
-# @Main.infiltrate
-# (; integrator) = simulation
-# sol_res = CA.solve_atmos!(simulation)
-
-# (; config_file, job_id) = CA.commandline_kwargs()
-# config = CA.AtmosConfig(config_file; job_id, comms_ctx)
-
