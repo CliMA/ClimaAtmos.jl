@@ -106,6 +106,23 @@ NVTX.@annotate function set_cloud_fraction!(
 end
 
 
+function updraft_cloud_diagnostics(ρʲs, ρaʲs, tsʲs, thermo_params, n)
+    FT = eltype(thermo_params)
+    cf = FT(0)
+    q_liq = FT(0)
+    q_ice = FT(0)
+    for j in 1:n
+        aʲ = draft_area(ρaʲs.:($j), ρʲs.:($j))
+        if TD.has_condensate(thermo_params, tsʲs.:($j))
+            cf += aʲ
+        end
+        (; liq, ice) = TD.PhasePartition(thermo_params, tsʲs.:($j))
+        q_liq += aʲ * liq
+        q_ice += aʲ * ice
+    end
+    return (; cf, q_liq, q_ice)
+end
+
 NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
@@ -142,24 +159,8 @@ NVTX.@annotate function set_cloud_fraction!(
     n = n_mass_flux_subdomains(turbconv_model)
     if n > 0
         (; ᶜρaʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
+        @. cloud_diagnostics_tuple += updraft_cloud_diagnostics(ᶜρaʲs, ᶜρʲs, ᶜtsʲs, thermo_params, n)
     end
-
-    for j in 1:n
-        @. cloud_diagnostics_tuple += NamedTuple{(:cf, :q_liq, :q_ice)}(
-            tuple(
-                ifelse(
-                    TD.has_condensate(thermo_params, ᶜtsʲs.:($$j)),
-                    draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)),
-                    0,
-                ),
-                draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)) *
-                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
-                draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)) *
-                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
-            ),
-        )
-    end
-
 end
 
 NVTX.@annotate function set_cloud_fraction!(
