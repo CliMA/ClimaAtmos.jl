@@ -237,7 +237,7 @@ Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
     κ₂::FT
 end
 
-abstract type AbstractEddyViscosityModel end
+abstract type AbstractEddyViscosityModel{AXES} end
 """
     SmagorinskyLilly{AXES}
 
@@ -249,41 +249,41 @@ Smagorinsky-Lilly eddy viscosity model.
 - `:W` (vertical axis)
 - `:UV_W` (horizontal and vertical axes treated separately).
 """
-struct SmagorinskyLilly{AXES} <: AbstractEddyViscosityModel end
+struct SmagorinskyLilly{AXES} <: AbstractEddyViscosityModel{AXES} end
 
-"""
-    is_smagorinsky_UVW_coupled(model)
-
-Check if the Smagorinsky model is coupled along all axes.
-"""
-is_smagorinsky_UVW_coupled(::SmagorinskyLilly{AXES}) where {AXES} = AXES == :UVW
-is_smagorinsky_UVW_coupled(::Nothing) = false
-
-"""
-    is_smagorinsky_vertical(model)
-
-Check if the Smagorinsky model is applied along the vertical axis.
-
-See also [`is_smagorinsky_horizontal`](@ref).
-"""
-is_smagorinsky_vertical(::SmagorinskyLilly{AXES}) where {AXES} =
-    AXES == :UVW || AXES == :W || AXES == :UV_W
-is_smagorinsky_vertical(::Nothing) = false
-
-"""
-    is_smagorinsky_horizontal(model)
-
-Check if the Smagorinsky model is applied along the horizontal axes.
-
-See also [`is_smagorinsky_vertical`](@ref).
-"""
-is_smagorinsky_horizontal(::SmagorinskyLilly{AXES}) where {AXES} =
-    AXES == :UVW || AXES == :UV || AXES == :UV_W
-is_smagorinsky_horizontal(::Nothing) = false
-
-struct AnisotropicMinimumDissipation{FT} <: AbstractEddyViscosityModel
+struct AnisotropicMinimumDissipation{AXES, FT} <: AbstractEddyViscosityModel{AXES}
     c_amd::FT
 end
+
+"""
+    is_les_UVW_coupled(model)
+
+Check if the LES model is coupled along all axes.
+"""
+is_les_UVW_coupled(::AbstractEddyViscosityModel{AXES}) where {AXES} = AXES == :UVW
+is_les_UVW_coupled(::Nothing) = false
+
+"""
+    is_les_vertical(model)
+
+Check if the LES model is applied along the vertical axis.
+
+See also [`is_les_horizontal`](@ref).
+"""
+is_les_vertical(::AbstractEddyViscosityModel{AXES}) where {AXES} =
+    AXES == :UVW || AXES == :W || AXES == :UV_W
+is_les_vertical(::Nothing) = false
+
+"""
+    is_les_horizontal(model)
+
+Check if the LES model is applied along the horizontal axes.
+
+See also [`is_les_vertical`](@ref).
+"""
+is_les_horizontal(::AbstractEddyViscosityModel{AXES}) where {AXES} =
+    AXES == :UVW || AXES == :UV || AXES == :UV_W
+is_les_horizontal(::Nothing) = false
 
 
 Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge

@@ -262,7 +262,7 @@ function precomputed_quantities(Y, atmos)
         else
             (;)
         end
-    amd_les_quantities =
+    amd_les_quantities =  # TODO: Combine?
         if atmos.amd_les isa AnisotropicMinimumDissipation
             uvw_vec = UVW(FT(0), FT(0), FT(0))
             (;
