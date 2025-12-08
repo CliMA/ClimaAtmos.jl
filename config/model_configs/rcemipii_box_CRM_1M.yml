@@ -76,7 +76,7 @@ diagnostics:
       Dh_smag, strainh_smag,  # horizontal
       # Dv_smag, strainv_smag,  # vertical
       # DecayWithHeight diffusion coefficient
-      edt,
+      edt
     ]
     # period: 10mins
     period: 1hours
