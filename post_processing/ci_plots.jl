@@ -437,8 +437,6 @@ make_plots_generic(
     simulation_path,
     vars,
     time = LAST_SNAP,
-    x = 0.0, # Our columns are still 3D objects...
-    y = 0.0,
     more_kwargs = YLINEARSCALE,
 )
 ```
@@ -453,8 +451,6 @@ make_plots_generic(
     simulation_path,
     vars,
     time = LAST_SNAP,
-    x = 0.0, # Our columns are still 3D objects...
-    y = 0.0,
     more_kwargs = YLINEARSCALE,
 )
 ```
@@ -589,14 +585,23 @@ ColumnPlots = Union{
 function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
     short_names = ["ta", "wa"]
-    vars = map_comparison(get, simdirs, short_names)
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        var = get(simdir; short_name)
+        # For vertical-only (FiniteDifferenceGrid) spaces, the data may have 
+        # extra singleton dimensions. Check and squeeze if needed.
+        if haskey(var.dims, "x") && length(var.dims["x"]) == 1
+            var = slice(var; x = var.dims["x"][1])
+        end
+        if haskey(var.dims, "y") && length(var.dims["y"]) == 1
+            var = slice(var; y = var.dims["y"][1])
+        end
+        return var
+    end
 
     make_plots_generic(
         output_paths,
         vars,
         time = LAST_SNAP,
-        x = 0.0, # Our columns are still 3D objects...
-        y = 0.0,
         MAX_NUM_COLS = length(simdirs),
         more_kwargs = YLINEARSCALE,
     )
@@ -644,7 +649,7 @@ function make_plots(
     end
 
     vars = [
-        slice(get(simdir; short_name), x = 0.0, y = 0.0) for
+        get(simdir; short_name) for
         short_name in short_names
     ]
 
@@ -689,7 +694,7 @@ function make_plots(
     surface_precip = read_var(simdir.variable_paths["pr"]["inst"]["10s"])
     viz.line_plot1D!(
         fig,
-        slice(surface_precip, x = 0.0, y = 0.0);
+        surface_precip;
         p_loc = [pr_row, 1:3],
     )
 
@@ -1250,6 +1255,12 @@ EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_dycoms_rf01_box},
     Val{:diagnostic_edmfx_trmm_box_0M},
     Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
+    Val{:prognostic_edmfx_bomex_box},
+    Val{:rcemipii_box_diagnostic_edmfx},
+    Val{:diagnostic_edmfx_trmm_stretched_box},
+}
+
+EDMFColumnPlots = Union{
     Val{:prognostic_edmfx_adv_test_column},
     Val{:prognostic_edmfx_gabls_column},
     Val{:prognostic_edmfx_gabls_column_sparse_autodiff},
@@ -1262,12 +1273,10 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_simpleplume_column},
     Val{:prognostic_edmfx_gcmdriven_column},
     Val{:prognostic_edmfx_tv_era5driven_column},
-    Val{:prognostic_edmfx_bomex_box},
     Val{:prognostic_edmfx_soares_column},
-    Val{:diagnostic_edmfx_trmm_stretched_box},
 }
 
-EDMFBoxPlotsWithPrecip = Union{
+EDMFColumnPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_rico_implicit_column},
     Val{:prognostic_edmfx_rico_column_2M},
@@ -1360,61 +1369,38 @@ end
 function make_plots(
     sim_type::Union{
         EDMFBoxPlots,
-        EDMFBoxPlotsWithPrecip,
         DiagEDMFBoxPlotsWithPrecip,
+        EDMFColumnPlots,
+        EDMFColumnPlotsWithPrecip,
     },
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
 
-    if sim_type isa EDMFBoxPlotsWithPrecip
+    # Determine if this is a box or column type
+    is_box = sim_type isa Union{EDMFBoxPlots, DiagEDMFBoxPlotsWithPrecip}
+
+    # Determine precipitation names based on type
+    if sim_type isa DiagEDMFBoxPlotsWithPrecip
+        precip_names = ("husra", "hussn", "husraup", "hussnup")
+    elseif sim_type isa EDMFColumnPlotsWithPrecip
         if sim_type isa Val{:prognostic_edmfx_rico_column_2M}
             precip_names = (
-                "husra",
-                "hussn",
-                "husraup",
-                "hussnup",
-                "husraen",
-                "hussnen",
-                "cdnc",
-                "ncra",
-                "cdncup",
-                "ncraup",
-                "cdncen",
-                "ncraen",
+                "husra", "hussn", "husraup", "hussnup", "husraen", "hussnen",
+                "cdnc", "ncra", "cdncup", "ncraup", "cdncen", "ncraen",
             )
         else
             precip_names =
                 ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen")
         end
-    elseif sim_type isa DiagEDMFBoxPlotsWithPrecip
-        precip_names = ("husra", "hussn", "husraup", "hussnup")
     else
         precip_names = ()
     end
 
     short_names = [
-        "wa",
-        "waup",
-        "ta",
-        "taup",
-        "hus",
-        "husup",
-        "arup",
-        "tke",
-        "ua",
-        "thetaa",
-        "thetaaup",
-        "ha",
-        "haup",
-        "hur",
-        "hurup",
-        "lmix",
-        "cl",
-        "clw",
-        "clwup",
-        "cli",
-        "cliup",
+        "wa", "waup", "ta", "taup", "hus", "husup", "arup", "tke", "ua",
+        "thetaa", "thetaaup", "ha", "haup", "hur", "hurup", "lmix",
+        "cl", "clw", "clwup", "cli", "cliup",
         precip_names...,
     ]
     reduction = "inst"
@@ -1431,13 +1417,13 @@ function make_plots(
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
-            return [
-                slice(
-                    get(simdir; short_name, reduction, period),
-                    x = 0.0,
-                    y = 0.0,
-                ) for short_name in name_tuple
-            ]
+            vars = map(short_name -> get(simdir; short_name, reduction, period), name_tuple)
+            # For box types, slice to a point (x=0, y=0)
+            if is_box
+                return map(var -> slice(var, x = 0.0, y = 0.0), vars)
+            else
+                return vars
+            end
         end
 
     var_groups_z = [
@@ -1456,7 +1442,7 @@ function make_plots(
 
     make_plots_generic(
         output_paths,
-        vcat(var_groups_zt...),
+        vcat((var_groups_zt...)...),
         plot_fn = plot_parsed_attribute_title!,
         summary_files = [tmp_file],
         MAX_NUM_COLS = 2,

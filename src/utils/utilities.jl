@@ -5,6 +5,7 @@ import ClimaComms
 import ClimaCore: Spaces, Topologies, Fields, Geometry
 import LinearAlgebra: norm_sqr
 using Dates: DateTime, @dateformat_str
+import StaticArrays: SVector, SMatrix
 
 is_energy_var(symbol) = symbol in (:ρe_tot, :ρae_tot)
 is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :u₃, :ρw)
@@ -222,41 +223,28 @@ Extracts the `g³ʰ` sub-tensor from the `gⁱʲ` tensor.
 """
 function g³ʰ(gⁱʲ)
     full_CT_axis = axes(gⁱʲ)[1]
-    CTh_axis = if full_CT_axis == Geometry.Contravariant123Axis()
-        Geometry.Contravariant12Axis()
-    elseif full_CT_axis == Geometry.Contravariant13Axis()
-        Geometry.Contravariant1Axis()
-    elseif full_CT_axis == Geometry.Contravariant23Axis()
-        Geometry.Contravariant2Axis()
-    else
-        error("$full_CT_axis is missing either vertical or horizontal sub-axes")
-    end
     N = length(full_CT_axis)
-    return Geometry.AxisTensor(
-        (Geometry.Contravariant3Axis(), CTh_axis),
-        view(Geometry.components(gⁱʲ), N:N, 1:(N - 1)),
-    )
-end
-
-"""
-    CTh_vector_type(space)
-
-Extracts the (abstract) horizontal contravariant vector type from the given
-`AbstractSpace`.
-"""
-function CTh_vector_type(space)
-    full_CT_axis = axes(eltype(Fields.local_geometry_field(space).gⁱʲ))[1]
-    return if full_CT_axis == Geometry.Contravariant123Axis()
-        Geometry.Contravariant12Vector
+    gⁱʲ_components = Geometry.components(gⁱʲ)
+    FT = eltype(gⁱʲ_components)
+    g³ʰ_components = if full_CT_axis == Geometry.Contravariant123Axis()
+        @inbounds SMatrix{1, 2, FT, 2}(
+            gⁱʲ_components[N, 1],
+            gⁱʲ_components[N, 2],
+        )
     elseif full_CT_axis == Geometry.Contravariant13Axis()
-        Geometry.Contravariant1Vector
+        @inbounds val = gⁱʲ_components[N, 1]
+        SMatrix{1, 2, FT, 2}(val, zero(FT))
     elseif full_CT_axis == Geometry.Contravariant23Axis()
-        Geometry.Contravariant2Vector
+        @inbounds val = gⁱʲ_components[N, 1]
+        SMatrix{1, 2, FT, 2}(zero(FT), val)
     else
         error("$full_CT_axis is missing either vertical or horizontal sub-axes")
     end
+    axes_tuple = (Geometry.Contravariant3Axis(), Geometry.Contravariant12Axis())
+    return Geometry.AxisTensor(axes_tuple, g³ʰ_components)
 end
 
+has_topography(space::Spaces.FiniteDifferenceSpace) = false
 has_topography(space) = Spaces.grid(space).hypsography != Spaces.Grids.Flat()
 
 """
@@ -350,6 +338,9 @@ function do_dss(space::Spaces.AbstractSpace)
            Quadratures.GLL
 end
 
+function do_dss(::Spaces.FiniteDifferenceSpace)
+    return false
+end
 
 using ClimaComms
 is_distributed(::ClimaComms.SingletonCommsContext) = false
@@ -581,18 +572,8 @@ function parse_date(date_str)
     )
 end
 
-function iscolumn(space)
-    # TODO: Our columns are 2+1D boxes with one element at the base. Fix this
-    isbox =
-        Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
-        Domains.RectangleDomain
-    isbox || return false
-    has_one_element =
-        Meshes.nelements(
-            Spaces.topology(Spaces.horizontal_space(space)).mesh,
-        ) == 1
-    has_one_element && return true
-end
+iscolumn(space::Spaces.FiniteDifferenceSpace) = true
+iscolumn(space) = false
 
 function issphere(space)
     return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa

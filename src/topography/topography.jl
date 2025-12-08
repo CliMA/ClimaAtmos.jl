@@ -1,4 +1,11 @@
 using ClimaCore: Geometry, Spaces, Fields
+export CosineTopography,
+    AgnesiTopography,
+    ScharTopography,
+    EarthTopography,
+    DCMIP200Topography,
+    Hughes2023Topography,
+    LinearWarp, SLEVEWarp
 
 ##
 ## Topography profiles for 2D and 3D boxes
@@ -146,4 +153,36 @@ function topography_hughes2023(coord)
             exp(-(((ϕ - ϕ₂) / d)^6 + (l₂ / c)^2))
         ),
     )
+end
+
+##
+## Mesh warping types for topography
+##
+
+abstract type MeshWarpType end
+
+"""
+    LinearWarp()
+
+Linear mesh warping that uniformly distributes vertical levels between the
+surface and top of the domain.
+"""
+struct LinearWarp <: MeshWarpType end
+
+"""
+    SLEVEWarp(; eta = 0.7, s = 10.0)
+
+Smooth Level Vertical (SLEVE) coordinate warping for terrain-following meshes.
+
+# Arguments
+- `eta`: Threshold parameter (if z/z_top > eta, no warping is applied). Default: 0.7
+- `s`: Decay scale parameter controlling how quickly the warping decays with height. Default: 10.0
+
+# References
+Schär et al. (2002), "A new terrain-following vertical coordinate formulation 
+for atmospheric prediction models", Mon. Wea. Rev.
+"""
+Base.@kwdef struct SLEVEWarp{FT <: AbstractFloat} <: MeshWarpType
+    eta::FT = 0.7
+    s::FT = 10.0
 end
