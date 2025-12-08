@@ -18,11 +18,9 @@ function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
     FT = eltype(elev)
     bfscale = FT(1e-2)
 
-    # @Main.infiltrate
     # compute ∇h
     @. elev = max(0, elev)
     dhdx, dhdy = calc_∇A(elev, lon, lat, earth_radius)
-    # @Main.infiltrate
     # compute ∇χ
     # dχdx, dχdy = -bfscale .* calc_∇A(χ, lon, lat, earth_radius)
     # TODO: This needs to be double checked with Steve Garner.
@@ -30,11 +28,10 @@ function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
     # later divided again when creating the file that contains the actual T tensor
     # being used.
     dχdx, dχdy = .-calc_∇A(χ, lon, lat, earth_radius)
-    # @Main.infiltrate
     # for antarctic
     dχdx[:, lat .< FT(-88)] .= FT(0)
     dχdy[:, lat .< FT(-88)] .= FT(0)
-    # @Main.infiltrate
+
     t11 = dχdx .* dhdx
     t21 = dχdx .* dhdy
     t12 = dχdy .* dhdx
@@ -470,19 +467,15 @@ function compute_OGW_info(
     earth_radius,
     γ,
     h_frac;
+    skip_pt::Int = 12,
+    n_smoothing_cells_hpoz = 4.0,
+    n_smoothing_cells_chi = 4.0,
     smoothing_length_scale = nothing,
-    n_smoothing_cells = nothing,
     min_smoothing_cells = 1.0,
 )
     # obtain lat, lon, elevation from the elev_data
     FT = Spaces.undertype(Spaces.axes(Y.c))
     # downsample to elev dims (3600×1800)
-    # Below I hard-coded the skip_pt and n_smoothing_cells
-    # to reproduce Garner's Figures as closely as possible.
-    # If things work, we should use skip_pt = 1 and choose
-    # n_smoothing_cells ~ 100 km to match Fortran code or
-    # tune it as needed.
-    skip_pt = 8
     nt = NCDataset(elev_data, "r") do ds
         lon = FT.(Array(ds["lon"]))[1:skip_pt:end]
         lat = FT.(Array(ds["lat"]))[1:skip_pt:end]
@@ -493,16 +486,16 @@ function compute_OGW_info(
     FT = eltype(elev)
 
     # compute hmax and hmin (with grid-aware smoothing)
-    n_smoothing_cells = FT(6)
+    # less smoothing -> stronger drag
     @debug "skip_pt = $skip_pt"
-    @debug "n_smoothing_cells for calc_hpoz_latlon = $n_smoothing_cells" 
+    @debug "n_smoothing_cells for calc_hpoz_latlon = $n_smoothing_cells_hpoz"
     hpoz = calc_hpoz_latlon(
         elev,
         lon,
         lat,
         earth_radius;
         smoothing_length_scale,
-        n_smoothing_cells,
+        n_smoothing_cells = n_smoothing_cells_hpoz,
         min_smoothing_cells,
     )
     hpoz = @. max(FT(0), hpoz)^(FT(2) - γ)
@@ -513,15 +506,15 @@ function compute_OGW_info(
     hmin = hmax .* h_frac
 
     # compute χ (with grid-aware smoothing)
-    n_smoothing_cells = FT(3)
-    @debug "n_smoothing_cells for calc_velocity_potential = $n_smoothing_cells" 
+    # less smoothing -> stronger drag
+    @debug "n_smoothing_cells for calc_velocity_potential = $n_smoothing_cells_chi"
     χ = calc_velocity_potential(
         elev,
         lon,
         lat,
         earth_radius;
         smoothing_length_scale,
-        n_smoothing_cells,
+        n_smoothing_cells = n_smoothing_cells_chi,
         min_smoothing_cells,
     )
 
@@ -571,7 +564,6 @@ function compute_OGW_info(
     # Save the computed lat-lon data to a temporary NetCDF file
     # This allows us to use the GPU-compatible SpaceVaryingInput infrastructure
     # Using the pattern from remap_helpers.jl for consistency
-    # @Main.infiltrate
     temp_nc_file = tempname() * ".nc"
     nc = NCDataset(temp_nc_file, "c")
 
@@ -597,7 +589,6 @@ function compute_OGW_info(
     nc_lon[:] = lon
     nc_lat[:] = lat
 
-    # @Main.infiltrate
     # Write field data
     nc_hmax[:, :] = hmax
     nc_hmin[:, :] = hmin
