@@ -371,7 +371,8 @@ NVTX.@annotate function set_cloud_fraction!(
     SG_quad = cloud_ml.SG_quad
     (; params) = p
     (; turbconv_model) = p.atmos
-    (; ᶜts, cloud_diagnostics_tuple) = p.precomputed
+    (; ᶜρʲs, ᶜtsʲs, ᶜts⁰, ᶜts, cloud_diagnostics_tuple) = p.precomputed
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     thermo_params = CAP.thermodynamics_params(params)
     FT = eltype(p.params)
 
@@ -384,9 +385,9 @@ NVTX.@annotate function set_cloud_fraction!(
     q_sat = TD.q_vap_saturation.(thermo_params, ᶜts)
     Δq = @. q_sat - specific(Y.c.ρq_tot, Y.c.ρ)
     #dqt_dz
-    ᶜ∇q = Geometry.WVector.(p.precomputed.ᶜgradᵥ_q_tot) 
+    ᶜ∇q = dot.(Geometry.WVector.(p.precomputed.ᶜgradᵥ_q_tot), Ref(ClimaCore.Geometry.WVector(FT(1.0))))
     #dθli_dz
-    ᶜ∇θ = Geometry.WVector.(p.precomputed.ᶜgradᵥ_θ_liq_ice) 
+    ᶜ∇θ = dot.(Geometry.WVector.(p.precomputed.ᶜgradᵥ_θ_liq_ice), Ref(ClimaCore.Geometry.WVector(FT(1.0))))
 
     θli = p.scratch.ᶜtemp_scalar_2
     θli .= TD.liquid_ice_pottemp.(thermo_params, ᶜts)
@@ -401,13 +402,24 @@ NVTX.@annotate function set_cloud_fraction!(
     # form the pi groups 
     π_1 = Δq ./ q_sat
     π_2 = Δθli ./ θli_sat
-    π_3 = @. ((dqsatdθli * ᶜ∇θ - ᶜ∇q) * ᶜmixing_length_field) / q_sat
+    π_3 = @. (((dqsatdθli * ᶜ∇θ - ᶜ∇q) * ᶜmixing_length_field) / q_sat)
+    # π_3 = LinearAlgebra.dot.(π_3, Ref(ClimaCore.Geometry.WVector(FT(1.0))))
     π_4 = @. (ᶜ∇θ * ᶜmixing_length_field) / θli_sat
+    # π_4 = LinearAlgebra.dot.(π_4, Ref(ClimaCore.Geometry.WVector(FT(1.0))))
+    # Main.@infiltrate
+    function apply_cf_nn(model, π_1::FT, π_2::FT, π_3::FT, π_4::FT) where FT
+        return clamp((model(SA.SVector(π_1, π_2, π_3, π_4))[]), FT(0.), FT(1.))
+    end
 
     # Main.@infiltrate
     cf = p.scratch.ᶜtemp_scalar_3
-    cf_arr = Fields.field2array(cf) # get view of underlying array so we can overwrite 
-    cf_arr .= clamp.(reshape(cloud_ml.model(hcat(Fields.field2array(π_1), Fields.field2array(π_2), Fields.field2array(π_3), Fields.field2array(π_4))'), size(cf_arr)), FT(0), FT(1))
+    #cf_arr = Fields.field2array(cf) # get view of underlying array so we can overwrite 
+    # cf_arr .= clamp.(reshape(cloud_ml.model(hcat(Fields.field2array(π_1), Fields.field2array(π_2), Fields.field2array(π_3), Fields.field2array(π_4))'), size(cf_arr)), FT(0), FT(1))
+    # @. cf = apply_cf_nn(Ref(cloud_ml.model), π_1, π_2, π_3, π_4)
+    # Main.@infiltrate
+    cf .= apply_cf_nn.(Ref(cloud_ml.model), π_1, π_2, π_3, π_4)
+
+    # @. cf = clamp(cloud_ml.model(SA.SVector(π_1, π_2, π_3, π_4)), Ref(FT(0)), Ref(FT(1)))
 
     # TODO either need ml model for qliq, qice or default back to quadrature. 
     q_liq = TD.PhasePartition.(thermo_params, ᶜts).liq
@@ -429,9 +441,18 @@ NVTX.@annotate function set_cloud_fraction!(
         thermo_params,
     )
     # overwrite with the ML computed cloud fraction, leaving q_liq, q_ice computed via quadrature
-    p.precomputed.cloud_diagnostics_tuple.cf .= cf
+    cloud_diagnostics_tuple.cf .= cf
 
+    # weight cloud diagnostics by environmental area
+    @. cloud_diagnostics_tuple *= NamedTuple{(:cf, :q_liq, :q_ice)}(
+        tuple(
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+        ),
+    )
 
+    # add contributions from updrafts
     n = n_mass_flux_subdomains(turbconv_model)
     if n > 0
         (; ᶜρʲs, ᶜtsʲs) = p.precomputed

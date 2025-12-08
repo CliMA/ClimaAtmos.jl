@@ -355,7 +355,7 @@ function get_microphysics_model(parsed_args)
     end
 end
 
-function get_cloud_model(parsed_args)
+function get_cloud_model(parsed_args, params)
     cloud_model = parsed_args["cloud_model"]
     FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     return if cloud_model == "grid_scale"
@@ -368,9 +368,12 @@ function get_cloud_model(parsed_args)
         nn_filename = "/Users/julianschmitt/Downloads/cloud_fraction_NN_v3" # v3 has 121 parameters
         jld2data = JLD2.load("$(nn_filename).jld2") # give re, params,
         re = jld2data["re"]
-        params = jld2data["params"]
+        #params = jld2data["params"]
+        # Main.@infiltrate
+        param_vec = FT.(CAP.cloud_fraction_param_vec(params))
         # add model to the cache 
-        cf_nn_model = re(params)
+        cf_nn_model = re(param_vec)
+        # use quadrature for qliq, qice and nn for cloud fraction
         CloudML(SGSQuadrature(FT), cf_nn_model)
     else
         error("Invalid cloud_model $(cloud_model)")
