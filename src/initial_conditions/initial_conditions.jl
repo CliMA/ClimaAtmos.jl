@@ -1249,6 +1249,7 @@ end
 ##
 # TODO: Get rid of this
 import AtmosphericProfilesLibrary as APL
+import AtmosphericProfilesLibrary: Dycoms_RF02_θ_liq_ice, Dycoms_RF02_q_tot
 
 const FunctionOrSpline =
     Union{Function, APL.AbstractProfile, Intp.Extrapolation}
@@ -1475,6 +1476,7 @@ hydrostatically balanced pressure profile.
 """
 Base.@kwdef struct DYCOMS_RF01 <: InitialCondition
     prognostic_tke::Bool = false
+
 end
 
 """
@@ -1485,7 +1487,28 @@ hydrostatically balanced pressure profile.
 """
 Base.@kwdef struct DYCOMS_RF02 <: InitialCondition
     prognostic_tke::Bool = false
+    q_tot_0_dycoms_rf02::Any
+    theta_0_dycoms_rf02::Any
+    theta_i_dycoms_rf02::Any
+    z_i_dycoms_rf02::Any
 end
+
+""" [Ackerman2009](@cite) """
+Dycoms_RF02_θ_liq_ice(::Type{FT}, theta_0, theta_i, z_i) where {FT} =
+    APL.ZProfile(z -> if z <= z_i
+        FT(theta_0)
+    else
+        FT(theta_i) + (z - FT(z_i))^FT(1.0 / 3.0)
+    end)
+
+""" [Ackerman2009](@cite) """
+Dycoms_RF02_q_tot(::Type{FT}, q_tot_0, z_i) where {FT} = APL.ZProfile(
+    z -> if z <= z_i
+        FT(q_tot_0) / FT(1000.0)
+    else
+        (FT(5) - FT(3) * (FT(1) - exp(-(z - FT(z_i)) / FT(500)))) / FT(1000)
+    end,
+)
 
 for IC in (:Dycoms_RF01, :Dycoms_RF02)
     IC_Type = Symbol(uppercase(string(IC)))
@@ -1494,36 +1517,81 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
     u_func_name = Symbol(IC, IC == :Dycoms_RF01 ? :_u0 : :_u)
     v_func_name = Symbol(IC, IC == :Dycoms_RF01 ? :_v0 : :_v)
     tke_func_name = Symbol(IC, :_tke_prescribed)
-    @eval function (initial_condition::$IC_Type)(params)
-        (; prognostic_tke) = initial_condition
-        FT = eltype(params)
-        thermo_params = CAP.thermodynamics_params(params)
-        p_0 = FT(101780.0)
-        θ = APL.$θ_func_name(FT)
-        q_tot = APL.$q_tot_func_name(FT)
-        p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
-        u = APL.$u_func_name(FT)
-        v = APL.$v_func_name(FT)
-        #tke = APL.$tke_func_name(FT)
-        tke = APL.Dycoms_RF01_tke_prescribed(FT) #TODO - dont have the tke profile for Dycoms_RF02
-        function local_state(local_geometry)
-            (; z) = local_geometry.coordinates
-            return LocalState(;
-                params,
-                geometry = local_geometry,
-                thermo_state = TD.PhaseEquil_pθq(
-                    thermo_params,
-                    p(z),
-                    θ(z),
-                    q_tot(z),
-                ),
-                velocity = Geometry.UVVector(u(z), v(z)),
-                turbconv_state = EDMFState(;
-                    tke = prognostic_tke ? FT(0) : tke(z),
-                ),
+    if IC == :Dycoms_RF02
+        @eval function (initial_condition::$IC_Type)(params)
+            (;
+                prognostic_tke,
+                q_tot_0_dycoms_rf02,
+                theta_0_dycoms_rf02,
+                theta_i_dycoms_rf02,
+                z_i_dycoms_rf02,
+            ) = initial_condition
+            FT = eltype(params)
+            thermo_params = CAP.thermodynamics_params(params)
+            p_0 = FT(101780.0)
+            θ = $θ_func_name(
+                FT,
+                theta_0_dycoms_rf02,
+                theta_i_dycoms_rf02,
+                z_i_dycoms_rf02,
             )
+            q_tot = $q_tot_func_name(FT, q_tot_0_dycoms_rf02, z_i_dycoms_rf02)
+            p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
+            u = APL.$u_func_name(FT)
+            v = APL.$v_func_name(FT)
+            #tke = APL.$tke_func_name(FT)
+            tke = APL.Dycoms_RF01_tke_prescribed(FT) #TODO - dont have the tke profile for Dycoms_RF02
+            function local_state(local_geometry)
+                (; z) = local_geometry.coordinates
+                return LocalState(;
+                    params,
+                    geometry = local_geometry,
+                    thermo_state = TD.PhaseEquil_pθq(
+                        thermo_params,
+                        p(z),
+                        θ(z),
+                        q_tot(z),
+                    ),
+                    velocity = Geometry.UVVector(u(z), v(z)),
+                    turbconv_state = EDMFState(;
+                        tke = prognostic_tke ? FT(0) : tke(z),
+                    ),
+                )
+            end
+            return local_state
         end
-        return local_state
+    else
+        @eval function (initial_condition::$IC_Type)(params)
+            (; prognostic_tke) = initial_condition
+            FT = eltype(params)
+            thermo_params = CAP.thermodynamics_params(params)
+            p_0 = FT(101780.0)
+            θ = APL.$θ_func_name(FT)
+            q_tot = APL.$q_tot_func_name(FT)
+            p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
+            u = APL.$u_func_name(FT)
+            v = APL.$v_func_name(FT)
+            #tke = APL.$tke_func_name(FT)
+            tke = APL.Dycoms_RF01_tke_prescribed(FT) #TODO - dont have the tke profile for Dycoms_RF02
+            function local_state(local_geometry)
+                (; z) = local_geometry.coordinates
+                return LocalState(;
+                    params,
+                    geometry = local_geometry,
+                    thermo_state = TD.PhaseEquil_pθq(
+                        thermo_params,
+                        p(z),
+                        θ(z),
+                        q_tot(z),
+                    ),
+                    velocity = Geometry.UVVector(u(z), v(z)),
+                    turbconv_state = EDMFState(;
+                        tke = prognostic_tke ? FT(0) : tke(z),
+                    ),
+                )
+            end
+            return local_state
+        end
     end
 end
 
