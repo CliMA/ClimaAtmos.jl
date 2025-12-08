@@ -1,4 +1,4 @@
-282
+283
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+283
+- Change the Jacobian terms related to dp_drhoq_tot
+
 282
 - Use ClimaCore.CommonSpaces constructors for Atmos spaces
 

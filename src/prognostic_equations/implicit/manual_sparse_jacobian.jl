@@ -412,18 +412,19 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     Δcv_v = FT(CAP.cv_v(params)) - cv_d
     T_0 = FT(CAP.T_0(params))
     R_d = FT(CAP.R_d(params))
-    ΔR_v = FT(CAP.R_v(params)) - R_d
+    R_v = FT(CAP.R_v(params))
+    ΔR_v = R_v - R_d
     cp_d = FT(CAP.cp_d(params))
     Δcp_v = FT(CAP.cp_v(params)) - cp_d
+    e_int_v0 = FT(CAP.e_int_v0(params))
     LH_v0 = FT(CAP.LH_v0(params))
     LH_s0 = FT(CAP.LH_s0(params))
-    R_v = FT(CAP.R_v(params))
     Δcp_l = FT(CAP.cp_l(params) - CAP.cp_v(params))
     Δcp_i = FT(CAP.cp_i(params) - CAP.cp_v(params))
     # This term appears a few times in the Jacobian, and is technically
     # minus ∂e_int_∂q_tot
     thermo_params = CAP.thermodynamics_params(params)
-    ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - FT(CAP.e_int_v0(params))
+    ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - e_int_v0
     ᶜh_tot = @. lazy(
         TD.total_specific_enthalpy(
             thermo_params,
@@ -446,13 +447,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     @. ᶜkappa_m =
         TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
 
-    ᶜ∂kappa_m∂q_tot = p.scratch.ᶜtemp_scalar_2
-    # Using abs2 because ^2 results in allocation
-    @. ᶜ∂kappa_m∂q_tot =
-        (
-            ΔR_v * TD.cv_m(thermo_params, ᶜts) -
-            Δcv_v * TD.gas_constant_air(thermo_params, ᶜts)
-        ) / abs2(TD.cv_m(thermo_params, ᶜts))
+    T = @. lazy(TD.air_temperature(thermo_params, ᶜts))
+    ᶜ∂p∂ρq_tot = p.scratch.ᶜtemp_scalar_2
+    @. ᶜ∂p∂ρq_tot = ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (T - T_0)) + ΔR_v * T
 
     if use_derivative(topography_flag)
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
@@ -527,15 +524,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         )
     @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m)
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
         @. ∂ᶠu₃_err_∂ᶜρq_tot =
-            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow((
-                ᶜkappa_m * ∂e_int_∂q_tot +
-                ᶜ∂kappa_m∂q_tot *
-                (cp_d * T_0 + ᶜe_tot - ᶜK - ᶜΦ + ∂e_int_∂q_tot * ᶜq_tot)
-            ))
+            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜ∂p∂ρq_tot)
     end
 
     ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
@@ -690,11 +684,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
             ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
             @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
-                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((
-                    ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ +
-                    ᶜ∂kappa_m∂q_tot *
-                    (cp_d * T_0 + ᶜe_tot - ᶜK - ᶜΦ + ∂e_int_∂q_tot * ᶜq_tot)
-                ))
+                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(ᶜ∂p∂ρq_tot / ᶜρ)
             @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
@@ -907,9 +897,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             turbconv_params = CAP.turbconv_params(params)
             α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
-            ᶜTʲ = p.scratch.ᶜtemp_scalar_2
-            @. ᶜTʲ = TD.air_temperature(thermo_params, ᶜtsʲs.:(1))
-            ᶜ∂RmT∂qʲ = p.scratch.ᶜtemp_scalar_3
+            ᶜTʲ = @. lazy(TD.air_temperature(thermo_params, ᶜtsʲs.:(1)))
+            ᶜ∂RmT∂qʲ = p.scratch.ᶜtemp_scalar_2
             sgs_microphysics_tracers =
                 p.atmos.moisture_model isa NonEquilMoistModel && (
                     p.atmos.microphysics_model isa Microphysics1Moment ||
@@ -1210,12 +1199,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     TD.gas_constant_air(thermo_params, ᶜts) /
                     TD.cv_m(thermo_params, ᶜts)
 
-                ᶜ∂kappa_m∂q_tot = p.scratch.ᶜtemp_scalar_2
-                @. ᶜ∂kappa_m∂q_tot =
-                    (
-                        ΔR_v * TD.cv_m(thermo_params, ᶜts) -
-                        Δcv_v * TD.gas_constant_air(thermo_params, ᶜts)
-                    ) / abs2(TD.cv_m(thermo_params, ᶜts))
+                T = @. lazy(TD.air_temperature(thermo_params, ᶜts))
+                ᶜ∂p∂ρq_tot = p.scratch.ᶜtemp_scalar_2
+                @. ᶜ∂p∂ρq_tot =
+                    ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (T - T_0)) + ΔR_v * T
 
                 ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
                 @. ∂ᶜρe_tot_err_∂ᶜρ +=
@@ -1229,13 +1216,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
                 @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
                     p.scratch.ᶜtridiagonal_matrix_scalar ⋅
-                    DiagonalMatrixRow((
-                        ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ +
-                        ᶜ∂kappa_m∂q_tot * (
-                            cp_d * T_0 + ᶜe_tot - ᶜK - ᶜΦ +
-                            ∂e_int_∂q_tot * ᶜq_tot
-                        )
-                    ))
+                    DiagonalMatrixRow(ᶜ∂p∂ρq_tot / ᶜρ)
 
                 @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
                     p.scratch.ᶜtridiagonal_matrix_scalar ⋅
