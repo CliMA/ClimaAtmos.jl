@@ -289,7 +289,7 @@ function hypsography_function_from_topography(
         if topography isa EarthTopography
             context = ClimaComms.context(h_space)
             z_surface = SpaceVaryingInput(
-                AA.earth_orography_file_path(; context),
+                AA.earth_orography_30arcsecond_file_path(; context),
                 "z",
                 h_space,
             )
