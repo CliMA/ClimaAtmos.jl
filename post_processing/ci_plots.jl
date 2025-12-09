@@ -47,7 +47,7 @@ import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
 
-using Poppler_jll: pdfunite
+using Poppler_jll: pdfunite, pdftoppm
 import Base.Filesystem
 import Statistics: mean
 
@@ -190,6 +190,7 @@ function make_plots_generic(
     summary_files = String[],
     MAX_NUM_COLS = 1,
     MAX_NUM_ROWS = min(4, length(vars)),
+    save_jpeg_copy = false,
     kwargs...,
 )
     # When output_path is a Vector with multiple elements, this means that this function is
@@ -273,6 +274,12 @@ function make_plots_generic(
 
     pdfunite() do unite
         run(Cmd([unite, summary_files..., output_file]))
+    end
+
+    if save_jpeg_copy
+        pdftoppm() do exe
+            run(Cmd([exe, "-jpeg", output_file, joinpath(save_path, output_name)]))
+        end
     end
 
     # Cleanup
