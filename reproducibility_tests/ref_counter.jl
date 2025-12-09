@@ -1,4 +1,4 @@
-283
+284
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+284
+- Use universal functions in SurfaceFluxes in the mixing length closure,
+which changes the closure in the stable case (from Gryanik to Businger)
+
 283
 - Change the Jacobian terms related to dp_drhoq_tot
 
@@ -39,7 +43,8 @@
 - Add ∂/∂q elements to Jacobian
 
 277
-- Update to use SurfaceFluxes.jl@0.14.1. Supports Charnock-parameterization for aerodynamic roughness (default is still user-prescribed ScalarRoughness). SurfaceFluxes catch for neutrally-stable boundary layers (ζ ≈ 0) removed. 
+- Update to use SurfaceFluxes.jl@0.14.1. Supports Charnock-parameterization for aerodynamic roughness 
+(default is still user-prescribed ScalarRoughness). SurfaceFluxes catch for neutrally-stable boundary layers (ζ ≈ 0) removed. 
 
 276
 - Update prognostic EDMF boundary conditions: apply equal surface fluxes to the
