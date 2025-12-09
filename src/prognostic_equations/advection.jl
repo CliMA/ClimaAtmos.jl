@@ -165,6 +165,30 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
 end
 
 """
+    ᶜρq_tot_vertical_transport_bc(flow, thermo_params, t, ᶠu³)
+
+Computes the vertical transport of `ρq_tot` at the surface due to prescribed flow.
+
+If the flow is not prescribed, this has no effect.
+
+# Arguments
+- `flow`: The prescribed flow model, see [`PrescribedFlow`](@ref).
+    - If `flow` is `nothing`, this has no effect.
+- `thermo_params`: The thermodynamic parameters, needed to compute surface air density.
+- `t`: The current time.
+- `ᶠu³`: The vertical velocity field.
+
+# Returns
+- The vertical transport of `ρq_tot` at the surface due to prescribed flow.
+"""
+ᶜρq_tot_vertical_transport_bc(::Nothing, _, _, _) = NullBroadcasted()
+function ᶜρq_tot_vertical_transport_bc(flow::PrescribedFlow, thermo_params, t, ᶠu³)
+    ρu₃qₜ_sfc_bc = get_ρu₃qₜ_surface(flow, thermo_params, t)
+    ᶜadvdivᵥ = Operators.DivergenceF2C(; bottom = Operators.SetValue(ρu₃qₜ_sfc_bc))
+    return @. lazy(-(ᶜadvdivᵥ(zero(ᶠu³))))
+end
+
+"""
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
 Computes tendencies due to explicit vertical advection for various grid-mean
@@ -193,7 +217,7 @@ Modifies `Yₜ.c` (various tracers, `ρe_tot`, `ρq_tot`, `uₕ`), `Yₜ.f.u₃`
 `Yₜ.f.sgsʲs` (updraft `u₃`), and `Yₜ.c.sgs⁰.ρatke` as applicable.
 """
 NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    (; turbconv_model) = p.atmos
+    (; turbconv_model, prescribed_flow) = p.atmos
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     advect_tke = use_prognostic_tke(turbconv_model)
     point_type = eltype(Fields.coordinate_field(Y.c))
@@ -290,6 +314,10 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, energy_q_tot_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt - vtt_central
+        if prescribed_flow isa PrescribedFlow
+            vtt_bc = ᶜρq_tot_vertical_transport_bc(prescribed_flow, thermo_params, t, ᶠu³)
+            @. Yₜ.c.ρq_tot += vtt_bc
+        end
     end
 
     if isnothing(ᶠf¹²)

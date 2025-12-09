@@ -114,6 +114,12 @@ function get_atmos(config::AtmosConfig, params)
         FT,
     )
 
+    if parsed_args["prescribed_flow"] == "ShipwayHill2012"
+        prescribed_flow = ShipwayHill2012VelocityProfile{FT}()
+    else
+        prescribed_flow = nothing
+    end
+
     atmos = AtmosModel(;
         # AtmosWater - Moisture, Precipitation & Clouds
         moisture_model,
@@ -130,6 +136,9 @@ function get_atmos(config::AtmosConfig, params)
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
         advection_test,
         scm_coriolis = get_scm_coriolis(parsed_args, FT),
+
+        # PrescribedFlow
+        prescribed_flow,
 
         # AtmosRadiation
         radiation_mode = final_radiation_mode,
@@ -348,6 +357,8 @@ function get_initial_condition(parsed_args, atmos)
             parsed_args["start_date"],
             parsed_args["era5_initial_condition_dir"],
         )
+    elseif parsed_args["initial_condition"] == "ShipwayHill2012"
+        return ICs.ShipwayHill2012()
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
@@ -659,21 +670,40 @@ function get_sim_info(config::AtmosConfig)
     return sim
 end
 
+"""
+    fully_explicit_tendency!
+
+Experimental timestepping mode where all implicit tendencies are treated explicitly.
+"""
+function fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    (; temp_Yₜ_imp) = p.scratch
+    implicit_tendency!(temp_Yₜ_imp, Y, p, t)
+    remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    Yₜ .+= temp_Yₜ_imp
+end
+
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback, dt_integrator)
     (; atmos) = p
     s = @timed_str begin
-        T_imp! = SciMLBase.ODEFunction(
-            implicit_tendency!;
-            jac_prototype = get_jacobian(ode_algo, Y, atmos, parsed_args),
-            Wfact = update_jacobian!,
-        )
+        if isnothing(parsed_args["prescribed_flow"])
+            # This is the default case
+            T_exp_T_lim! = remaining_tendency!
+            T_imp! = SciMLBase.ODEFunction(implicit_tendency!;
+                jac_prototype = get_jacobian(ode_algo, Y, atmos, parsed_args),
+                Wfact = update_jacobian!,
+            )
+            cache_imp! = set_implicit_precomputed_quantities!
+        else
+            # `prescribed_flow` is an experimental case where the flow is prescribed,
+            # so implicit tendencies are treated explicitly to avoid treatment of sound waves
+            T_exp_T_lim! = fully_explicit_tendency!
+            T_imp! = nothing
+            cache_imp! = nothing
+        end
         tendency_function = CTS.ClimaODEFunction(;
-            T_exp_T_lim! = remaining_tendency!,
-            T_imp!,
-            lim! = limiters_func!,
-            dss!,
-            cache! = set_precomputed_quantities!,
-            cache_imp! = set_implicit_precomputed_quantities!,
+            T_exp_T_lim!, T_imp!,
+            cache! = set_precomputed_quantities!, cache_imp!,
+            lim! = limiters_func!, dss!,
         )
     end
     @info "Define ode function: $s"
@@ -685,8 +715,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback, dt_integr
     saveat = [t_begin, t_end]
     args = (problem, ode_algo)
     allow_custom_kwargs = (; kwargshandle = CTS.DiffEqBase.KeywordArgSilent)
-    kwargs =
-        (; saveat, callback, dt, adjustfinal = true, allow_custom_kwargs...)
+    kwargs = (; saveat, callback, dt, adjustfinal = true, allow_custom_kwargs...)
     return (args, kwargs)
 end
 

@@ -425,3 +425,6 @@ use_itime:
   1. Surface conditions that explicitly depend on time (e.g. LifeCycleTan2018, TRMM_LBA, etc.),
   2. Time dependent forcing/tendencies use time rounded to the nearest unit of time for dt"
   value: false
+prescribed_flow:
+  help: "Prescribe a flow field [`nothing` (default), `ShipwayHill2012`]"
+  value: ~

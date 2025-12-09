@@ -1,0 +1,42 @@
+## Model
+prescribed_flow: ShipwayHill2012
+initial_condition: ShipwayHill2012
+surface_setup: ShipwayHill2012
+energy_q_tot_upwinding: first_order
+tracer_upwinding: first_order
+# moist: "nonequil"
+# precip_model: "1M"
+moist: "equil"
+precip_model: "0M"
+cloud_model: "grid_scale"
+call_cloud_diagnostics_per_stage: true
+config: "column"
+hyperdiff: "false"
+## Simulation
+# z_max: 2e3  # TODO: Update top boundary condition for ρu₃qₜ to allow lower z_max
+# z_elem: 128
+z_max: 8e3
+z_elem: 512
+z_stretch: false
+# ode_algo: "ARS111" # try: Explicit Euler
+dt: "1secs"
+# t_end: "1hours"
+t_end: "20mins"
+dt_save_state_to_disk: "1hours"
+toml: [toml/kinematic_driver.toml]
+check_nan_every: 1
+## Diagnostics
+output_default_diagnostics: false
+diagnostics:
+  # core: (z,t) fields
+  - short_name: [ta, thetaa, ha, rhoa, wa, hur, hus, cl, clw, cli, ua, va, ke]
+    period: 10secs
+  # core: (t,) fields
+  - short_name: [lwp, pr]
+    period: 10secs
+  # 1M: (z,t) fields
+  - short_name: [husra, hussn]
+    period: 10secs
+  # 1M: (t,) fields
+  - short_name: [rwp]
+    period: 10secs
