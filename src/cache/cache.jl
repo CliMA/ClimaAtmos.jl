@@ -69,7 +69,67 @@ struct AtmosCache{
 end
 
 # Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
-Adapt.@adapt_structure AtmosCache
+
+function Adapt.adapt(to, cache::AtmosCache)
+    # Manually adapt specific fields
+    dt = Adapt.adapt(to, cache.dt)
+    atmos = Adapt.adapt(to, cache.atmos)
+
+    # For all other fields, use the default adaptation
+    numerics = Adapt.adapt(to, cache.numerics)
+    params = Adapt.adapt(to, cache.params)
+    core = Adapt.adapt(to, cache.core)
+    sfc_setup = Adapt.adapt(to, cache.sfc_setup)
+    ghost_buffer = Adapt.adapt(to, cache.ghost_buffer)
+    precomputed = Adapt.adapt(to, cache.precomputed, Val(:precomputed))
+    scratch = Adapt.adapt(to, cache.scratch)
+    hyperdiff = Adapt.adapt(to, cache.hyperdiff)
+    external_forcing = Adapt.adapt(to, cache.external_forcing)
+    non_orographic_gravity_wave = Adapt.adapt(to, cache.non_orographic_gravity_wave)
+    orographic_gravity_wave = Adapt.adapt(to, cache.orographic_gravity_wave)
+    radiation = Adapt.adapt(to, cache.radiation)
+    tracers = Adapt.adapt(to, cache.tracers)
+    net_energy_flux_toa = Adapt.adapt(to, cache.net_energy_flux_toa)
+    net_energy_flux_sfc = Adapt.adapt(to, cache.net_energy_flux_sfc)
+    steady_state_velocity = Adapt.adapt(to, cache.steady_state_velocity)
+    conservation_check = Adapt.adapt(to, cache.conservation_check)
+
+    args = (
+        dt,
+        atmos,
+        numerics,
+        params,
+        core,
+        sfc_setup,
+        ghost_buffer,
+        precomputed,
+        scratch,
+        hyperdiff,
+        external_forcing,
+        non_orographic_gravity_wave,
+        orographic_gravity_wave,
+        radiation,
+        tracers,
+        net_energy_flux_toa,
+        net_energy_flux_sfc,
+        steady_state_velocity,
+        conservation_check,
+    )
+
+    return AtmosCache{map(typeof, args)...}(args...)
+end
+
+# TODO: This will be recursive and we will call Adapt on each field, but
+# we first must get a grid from any of the ClimaCore field
+function Adapt.adapt(to, precomputed_cache, ::Val{:precomputed})
+    # TODO: Get a horizontal grid first
+    return map(v -> Adapt.adapt(to, v, Val{:precomputed}), precomputed_cache)
+end
+
+# This will be the case where we catch everything
+function Adapt.adapt(to, field::Field, horizontal_grid, ::Val{:precomputed})
+    return Adapt.adapt(to, field::Field, horizontal_grid)
+end
 
 # Functions on which the model depends:
 # CAP.R_d(params)         # dry specific gas constant
@@ -202,7 +262,7 @@ function build_cache(
         steady_state_velocity,
         conservation_check,
     )
-
+    Main.@infiltrate
     return AtmosCache{map(typeof, args)...}(args...)
 end
 

@@ -17,10 +17,12 @@ import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
 
-if !(@isdefined config)
-    (; config_file, job_id) = CA.commandline_kwargs()
-    config = CA.AtmosConfig(config_file; job_id)
-end
+# if !(@isdefined config)
+#     (; config_file, job_id) = CA.commandline_kwargs()
+#     config = CA.AtmosConfig(config_file; job_id)
+# end
+config_file = "/home/kphan/Desktop/work/ClimaAtmos.jl/cache/config/model_configs/baroclinic_wave.yml"
+config = CA.AtmosConfig(config_file)
 simulation = CA.get_simulation(config)
 (; integrator) = simulation
 sol_res = CA.solve_atmos!(simulation)
