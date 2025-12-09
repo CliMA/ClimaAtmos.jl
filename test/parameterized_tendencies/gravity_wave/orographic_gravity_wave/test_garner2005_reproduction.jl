@@ -54,7 +54,6 @@ import ClimaComms.@import_required_backends
 using ClimaCore
 using ClimaCore.CommonSpaces
 import ClimaAtmos as CA
-import Thermodynamics as TD
 import ClimaAtmos.Parameters as CAP
 import ClimaCore: Fields, Geometry, DataLayouts, Operators, Spaces, Grids, Utilities, to_cpu
 
@@ -73,17 +72,20 @@ include("../gw_remap_plot_utils.jl")
 # Set to true/false to enable/disable individual tests
 #######################################
 const RUN_TESTS = (
-    figure1 = false,    # Figure 1: Drag over Americas
-    figure2 = false,    # Figure 2: Drag over Asia
-    quiver_plots = false,   # Create quiver plots for Figures 1 & 2
-    figure4 = false,    # Figure 4: Linear Drag Comparison (tripanel)
-    figure5 = false,    # Figure 5: Normalized Drag Curves
-    figure6 = false,    # Figure 6: Total Drag and Nonlinear Fraction over Americas
+    figure1 = true,    # Figure 1: Drag over Americas
+    figure2 = true,    # Figure 2: Drag over Asia
+    quiver_plots = true,   # Create quiver plots for Figures 1 & 2
+    figure4 = true,    # Figure 4: Linear Drag Comparison (tripanel)
+    figure5 = true,    # Figure 5: Normalized Drag Curves
+    figure6 = true,    # Figure 6: Total Drag and Nonlinear Fraction over Americas
     figure7 = true,     # Figure 7: Vertical Propagation Profile
 )
 
 # Helper to check if a test should run
 should_run(test::Symbol) = getfield(RUN_TESTS, test)
+
+# Debug print control - set to true to enable verbose debug output
+const DEBUG_PRINTS = false
 
 FT = Float64
 ᶜgradᵥ = Operators.GradientF2C()
@@ -204,7 +206,7 @@ config = CA.AtmosConfig(config_file; job_id, comms_ctx)
 config.parsed_args["orographic_gravity_wave"] = "raw_topo"
 config.parsed_args["topography"] = "Earth"
 # Increase vertical resolution for Figure 7 (need smooth profiles up to 40 km)
-config.parsed_args["z_elem"] = 63       # More vertical levels
+config.parsed_args["z_elem"] = 10
 config.parsed_args["z_max"] = 45000.0   # Model top at 45 km
 (; parsed_args) = config
 
@@ -1781,18 +1783,20 @@ if should_run(:figure5)
 
     # Loop over h_max/h_c values using calc_base_flux!
     for (i, x) in enumerate(x_range)
-        h_max_val = x * h_c
+        local h_max_val = x * h_c
 
         #--- Case A: h_min = 0 (broadband) ---
         @. topo_info.hmax = h_max_val
         @. topo_info.hmin = FT(0.0)
-        println(
-            "hmax range after set: ",
-            extrema(parent(topo_info.hmax)),
-            " expected: ",
-            h_max_val,
-        )
-        println("hmin range after set: ", extrema(parent(topo_info.hmin)), " expected: 0")
+        if DEBUG_PRINTS
+            println(
+                "hmax range after set: ",
+                extrema(parent(topo_info.hmax)),
+                " expected: ",
+                h_max_val,
+            )
+            println("hmin range after set: ", extrema(parent(topo_info.hmin)), " expected: 0")
+        end
 
         CA.calc_base_flux!(
             topo_τ_x,
@@ -1816,16 +1820,17 @@ if should_run(:figure5)
             ᶜbuoyancy_frequency,
         )
 
-        println("FrU_max range: ", extrema(parent(topo_FrU_max)))
-        println("FrU_min range: ", extrema(parent(topo_FrU_min)))
-        println("U_sat range: ", extrema(parent(topo_U_sat)))
-        println("topo_τ_x range: ", extrema(parent(topo_τ_x)))
-
-        println("values_at_z_pbl: ", values_at_z_pbl)
-        println("topo_ᶜz_pbl range: ", extrema(parent(topo_ᶜz_pbl)))
-        println("τ_l range: ", extrema(parent(topo_τ_l)))
-        println("u_phy range: ", extrema(parent(u_phy)))
-        println("Y.c.ρ range: ", extrema(parent(Y.c.ρ)))
+        if DEBUG_PRINTS
+            println("FrU_max range: ", extrema(parent(topo_FrU_max)))
+            println("FrU_min range: ", extrema(parent(topo_FrU_min)))
+            println("U_sat range: ", extrema(parent(topo_U_sat)))
+            println("topo_τ_x range: ", extrema(parent(topo_τ_x)))
+            println("values_at_z_pbl: ", values_at_z_pbl)
+            println("topo_ᶜz_pbl range: ", extrema(parent(topo_ᶜz_pbl)))
+            println("τ_l range: ", extrema(parent(topo_τ_l)))
+            println("u_phy range: ", extrema(parent(u_phy)))
+            println("Y.c.ρ range: ", extrema(parent(Y.c.ρ)))
+        end
 
         # Extract mean values (should be uniform across all columns)
         τ_l_val = mean(parent(topo_τ_l))
@@ -1891,17 +1896,19 @@ if should_run(:figure5)
     parent(topo_info.t21) .= orig_t21
     parent(topo_info.t22) .= orig_t22
 
-    println("  Done computing drag curves.")
-    println("  ⟨Dp⟩/D* range (h_min=0): $(minimum(Dp_hmin0)) to $(maximum(Dp_hmin0))")
-    println(
-        "  ⟨Dp⟩/D* range (h_min=h_max): $(minimum(Dp_hmin_eq_hmax)) to $(maximum(Dp_hmin_eq_hmax))",
-    )
-    println(
-        "  Total/D* range (h_min=0): $(minimum(total_hmin0)) to $(maximum(total_hmin0))",
-    )
-    println(
-        "  Total/D* range (h_min=h_max): $(minimum(total_hmin_eq_hmax)) to $(maximum(total_hmin_eq_hmax))",
-    )
+    if DEBUG_PRINTS
+        println("  Done computing drag curves.")
+        println("  ⟨Dp⟩/D* range (h_min=0): $(minimum(Dp_hmin0)) to $(maximum(Dp_hmin0))")
+        println(
+            "  ⟨Dp⟩/D* range (h_min=h_max): $(minimum(Dp_hmin_eq_hmax)) to $(maximum(Dp_hmin_eq_hmax))",
+        )
+        println(
+            "  Total/D* range (h_min=0): $(minimum(total_hmin0)) to $(maximum(total_hmin0))",
+        )
+        println(
+            "  Total/D* range (h_min=h_max): $(minimum(total_hmin_eq_hmax)) to $(maximum(total_hmin_eq_hmax))",
+        )
+    end
 
     # Create Figure 5 plot
     println("\n" * "="^70)
@@ -2049,6 +2056,40 @@ if should_run(:figure7)
     println("FIGURE 7: Vertical Propagation Profile")
     println("="^70)
 
+    # Setup simulation with higher vertical resolution for Figure 7
+    (; config_file, job_id) = CA.commandline_kwargs()
+    config = CA.AtmosConfig(config_file; job_id, comms_ctx)
+    config.parsed_args["orographic_gravity_wave"] = "raw_topo"
+    config.parsed_args["topography"] = "Earth"
+    config.parsed_args["z_elem"] = 64       # High vertical resolution for smooth profiles
+    config.parsed_args["z_max"] = 45000.0   # Model top at 45 km
+    (; parsed_args) = config
+
+    simulation = CA.get_simulation(config)
+    p = simulation.integrator.p
+    Y = simulation.integrator.u
+
+    # Prepare physical uv input variables
+    u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
+    v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+    ᶜz = Fields.coordinate_field(Y.c).z
+
+    # Unpack cache and scratch vars
+    ᶜT = p.scratch.ᶜtemp_scalar
+    (; topo_ᶜz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
+        p.orographic_gravity_wave
+    (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
+        p.orographic_gravity_wave
+    (; values_at_z_pbl, topo_info) = p.orographic_gravity_wave
+    (; ᶜdTdz, ᶜbuoyancy_frequency) = p.orographic_gravity_wave
+    (; ᶜts) = p.precomputed
+    (; params) = p
+
+    # Extract parameters
+    ogw_params = p.orographic_gravity_wave.ogw_params
+    grav = CAP.grav(params)
+    thermo_params = CAP.thermodynamics_params(params)
+
     # Parameters from paper
     H_scale = FT(8000.0)    # Density scale height (m)
     Fr_crit_fig7 = FT(0.7)  # Critical Froude number
@@ -2092,13 +2133,15 @@ if should_run(:figure7)
     z_vec = collect(parent(z_col)[:])
     z_km_vec = z_vec ./ 1000.0
 
-    println("\n  --- Wind Profile Debug ---")
-    println("  Number of levels: $(length(z_vec))")
-    println("  Height range: $(minimum(z_km_vec)) to $(maximum(z_km_vec)) km")
-    println("  Wind range: $(minimum(u_vec)) to $(maximum(u_vec)) m/s")
-    println("\n  Level-by-level:")
-    for (k, (z, u)) in enumerate(zip(z_km_vec, u_vec))
-        println("    k=$k: z=$(round(z, digits=2)) km, V=$(round(u, digits=2)) m/s")
+    if DEBUG_PRINTS
+        println("\n  --- Wind Profile Debug ---")
+        println("  Number of levels: $(length(z_vec))")
+        println("  Height range: $(minimum(z_km_vec)) to $(maximum(z_km_vec)) km")
+        println("  Wind range: $(minimum(u_vec)) to $(maximum(u_vec)) m/s")
+        println("\n  Level-by-level:")
+        for (k, (z, u)) in enumerate(zip(z_km_vec, u_vec))
+            println("    k=$k: z=$(round(z, digits=2)) km, V=$(round(u, digits=2)) m/s")
+        end
     end
 
     # Also compute the analytical profile at high resolution for comparison
