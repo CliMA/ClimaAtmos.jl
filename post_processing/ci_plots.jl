@@ -816,12 +816,12 @@ function make_plots(
                 var = is_3d ? slice(var; y = 0) : var
                 time_values = if endswith(short_name, "predicted")
                     (Inf,) # Predicted values are constant and only need 1 plot.
-                elseif var.dims["time"][end] > 24 * 3600
-                    (1, 2, 24, Inf) .* 3600
-                elseif var.dims["time"][end] > 3 * 3600
-                    (1, 2, 4, Inf) .* 3600
+                elseif var.dims["time"][end] > 23 * 3600
+                    (0, 1, 23, Inf) .* 3600
+                elseif var.dims["time"][end] > 2 * 3600
+                    (0, 1, 3, Inf) .* 3600
                 else
-                    (5, 10, 20, Inf) .* 60
+                    (4, 9, 19, Inf) .* 60
                 end
                 Iterators.map(time -> slice(var; time), time_values)
             end
