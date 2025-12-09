@@ -285,6 +285,10 @@ struct AnisotropicMinimumDissipation{FT} <: AbstractEddyViscosityModel
     c_amd::FT
 end
 
+struct ConstantHorizontalDiffusion{FT} <: AbstractEddyViscosityModel
+    D::FT
+end
+
 
 Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
     zd::FT
@@ -667,7 +671,7 @@ end
 
 Groups turbulence convection-related models and types.
 """
-Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD}
+Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD, CHD}
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     sgs_adv_mode::SAM = nothing
@@ -677,6 +681,7 @@ Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD}
     sgs_mf_mode::SMM = nothing
     smagorinsky_lilly::SL = nothing
     amd_les::AMD = nothing
+    constant_horizontal_diffusion::CHD = nothing
 end
 
 """
@@ -906,6 +911,7 @@ Internal testing and calibration components for single-column setups:
 - `sgs_adv_mode`, `sgs_entr_detr_mode`, `sgs_nh_pressure_mode`, `sgs_vertdiff_mode`, `sgs_mf_mode`: Explicit(), Implicit()
 - `smagorinsky_lilly`: nothing or SmagorinskyLilly()
 - `amd_les`: nothing or AnisotropicMinimumDissipation()
+- `constant_horizontal_diffusion`: nothing or ConstantHorizontalDiffusion()
 
 ## AtmosGravityWave
 - `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave()

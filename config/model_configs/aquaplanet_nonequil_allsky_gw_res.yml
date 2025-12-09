@@ -1,3 +1,4 @@
+constant_horizontal_diffusion: true
 viscous_sponge: false
 dt: "360secs"
 t_end: "1days"

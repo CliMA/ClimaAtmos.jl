@@ -169,6 +169,9 @@ amd_les:
 c_amd:
   help: "Model coefficient for AMD-LES closure (TODO: Move to parameters.toml)"
   value: 0.29
+constant_horizontal_diffusion:
+  help: "Constant horizontal diffusion closure [`true`, `false` (default)]"
+  value: false
 smagorinsky_lilly:
   help: "Smagorinsky-Lilly diffusive closure [`nothing` (default), `UVW`, `UV`, `W`, `UV_W_decoupled`]"
   value: ~

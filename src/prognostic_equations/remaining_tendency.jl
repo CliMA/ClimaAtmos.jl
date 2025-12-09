@@ -357,6 +357,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     horizontal_amd_tendency!(Yₜ, Y, p, t, amd)
     vertical_amd_tendency!(Yₜ, Y, p, t, amd)
 
+    chd = p.atmos.constant_horizontal_diffusion
+    horizontal_constant_diffusion_tendency!(Yₜ, Y, p, t, chd)
+
     # Optional tendency to bring negative small tracers back from negative
     # at the cost of water vapor.
     moisture_fixer_tendency!(Yₜ, Y, p, t, moisture_model, microphysics_model)
