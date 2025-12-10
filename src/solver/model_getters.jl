@@ -209,32 +209,56 @@ end
 
 function get_non_orographic_gravity_wave_model(
     parsed_args,
+    params,
     ::Type{FT},
 ) where {FT}
     nogw_name = parsed_args["non_orographic_gravity_wave"]
     @assert nogw_name in (true, false)
     return if nogw_name == true
-        if parsed_args["config"] == "column"
-            NonOrographicGravityWave{FT}(; Bw = 1.2, Bn = 0.0, Bt_0 = 4e-3)
-        elseif parsed_args["config"] == "sphere"
-            NonOrographicGravityWave{FT}(;
-                Bw = 0.4,
-                Bn = 0.0,
-                cw = 35.0,
-                cw_tropics = 35.0,
-                cn = 2.0,
-                Bt_0 = 0.0043,
-                Bt_n = 0.0,
-                Bt_eq = 0.0043,
-                Bt_s = 0.0,
-                ϕ0_n = 15,
-                ϕ0_s = -15,
-                dϕ_n = 10,
-                dϕ_s = -10,
-            )
-        else
-            error("Uncaught case")
-        end
+        (;
+            source_pressure,
+            damp_pressure,
+            source_height,
+            Bw,
+            Bn,
+            dc,
+            cmax,
+            c0,
+            nk,
+            cw,
+            cw_tropics,
+            cn,
+            Bt_0,
+            Bt_n,
+            Bt_s,
+            Bt_eq,
+            ϕ0_n,
+            ϕ0_s,
+            dϕ_n,
+            dϕ_s,
+        ) = params.non_orographic_gravity_wave_params
+        NonOrographicGravityWave{FT}(;
+            source_pressure,
+            damp_pressure,
+            source_height,
+            Bw,
+            Bn,
+            dc,
+            cmax,
+            c0,
+            nk,
+            cw,
+            cw_tropics,
+            cn,
+            Bt_0,
+            Bt_n,
+            Bt_s,
+            Bt_eq,
+            ϕ0_n,
+            ϕ0_s,
+            dϕ_n,
+            dϕ_s,
+        )
     else
         nothing
     end
