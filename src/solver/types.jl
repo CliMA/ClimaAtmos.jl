@@ -224,26 +224,26 @@ end
 
 abstract type AbstractGravityWave end
 Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
-    source_pressure::FT = 31500
-    damp_pressure::FT = 85
-    source_height::FT = 15000
-    Bw::FT = 1.0
-    Bn::FT = 1.0
-    dc::FT = 0.8
-    cmax::FT = 99.6
-    c0::FT = 0
-    nk::FT = 1
-    cw::FT = 40.0
-    cw_tropics::FT = 40.0
-    cn::FT = 40.0
-    Bt_0::FT = 0.0003
-    Bt_n::FT = 0.0003
-    Bt_s::FT = 0.0003
-    Bt_eq::FT = 0.0003
-    ϕ0_n::FT = 30
-    ϕ0_s::FT = -30
-    dϕ_n::FT = 5
-    dϕ_s::FT = -5
+    source_pressure::FT
+    damp_pressure::FT
+    source_height::FT
+    Bw::FT
+    Bn::FT
+    dc::FT
+    cmax::FT
+    c0::FT
+    nk::FT
+    cw::FT
+    cw_tropics::FT
+    cn::FT
+    Bt_0::FT
+    Bt_n::FT
+    Bt_s::FT
+    Bt_eq::FT
+    ϕ0_n::FT
+    ϕ0_s::FT
+    dϕ_n::FT
+    dϕ_s::FT
 end
 
 abstract type OrographicGravityWave <: AbstractGravityWave end
