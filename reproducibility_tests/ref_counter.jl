@@ -1,4 +1,4 @@
-284
+285
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+285
+- Change trace gas values for the RCE ci test to match Wing et. al. (2018)
+
 284
 - Use universal functions in SurfaceFluxes in the mixing length closure,
 which changes the closure in the stable case (from Gryanik to Businger)
