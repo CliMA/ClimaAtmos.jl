@@ -96,7 +96,6 @@ end
 
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
-struct ZonallyAsymmetricSST <: AbstractSST end
 struct RCEMIPIISST <: AbstractSST end
 struct ExternalTVColumnSST <: AbstractSST end
 
@@ -376,17 +375,18 @@ Variables used in the environmental buoyancy gradient computation.
 """
 Base.@kwdef struct EnvBuoyGradVars{FT, TS}
     ts::TS
-    ∂θv∂z_unsat::FT
-    ∂qt∂z_sat::FT
-    ∂θli∂z_sat::FT
+    cf::FT
+    ∂qt∂z::FT
+    ∂θli∂z::FT
 end
 
 function EnvBuoyGradVars(
     ts::TD.ThermodynamicState,
-    ∂θv∂z_unsat_∂qt∂z_sat_∂θli∂z_sat,
+    cf,
+    ∂qt∂z_∂θli∂z,
 )
-    (; ∂θv∂z_unsat, ∂qt∂z_sat, ∂θli∂z_sat) = ∂θv∂z_unsat_∂qt∂z_sat_∂θli∂z_sat
-    return EnvBuoyGradVars(ts, ∂θv∂z_unsat, ∂qt∂z_sat, ∂θli∂z_sat)
+    (; ∂qt∂z, ∂θli∂z) = ∂qt∂z_∂θli∂z
+    return EnvBuoyGradVars(ts, cf, ∂qt∂z, ∂θli∂z)
 end
 
 Base.eltype(::EnvBuoyGradVars{FT}) where {FT} = FT
@@ -497,6 +497,43 @@ struct RadiationTRMM_LBA{R}
         rad_profile = APL.TRMM_LBA_radiation(FT)
         return new{typeof(rad_profile)}(rad_profile)
     end
+end
+
+abstract type PrescribedFlow{FT} end
+
+struct ShipwayHill2012VelocityProfile{FT} <: PrescribedFlow{FT} end
+function (::ShipwayHill2012VelocityProfile{FT})(z, t) where {FT}
+    w1 = FT(1.5)
+    t1 = FT(600)
+    return t < t1 ? w1 * sinpi(FT(t) / t1) : FT(0)
+end
+
+"""
+    get_ρu₃qₜ_surface(flow::PrescribedFlow{FT}, thermo_params, t) where {FT}
+
+Computes the vertical transport `ρwqₜ` at the surface due to prescribed flow.
+
+# Arguments
+- `flow`: The prescribed flow model, see [`PrescribedFlow`](@ref).
+- `thermo_params`: The thermodynamic parameters, needed to compute surface air density.
+- `t`: The current time.
+"""
+function get_ρu₃qₜ_surface(flow::ShipwayHill2012VelocityProfile, thermo_params, t)
+    # TODO: Get these values from the initial conditions:
+    # lg_sfc = Fields.level(Fields.local_geometry_field(Y.f), CA.half)
+    # ic = CA.InitialConditions.ShipwayHill2012()(p.params)
+    # get_ρ(ls) = ls.ρ
+    # ᶠρ_sfc = @. get_ρ(ic(lg_sfc)) <-- inconvenient since this materializes a Field
+    # For now, just copy the values from the initial conditions:
+    FT = eltype(thermo_params)
+    rv_sfc = FT(0.015)  # water vapour mixing ratio at surface (kg/kg)
+    q_tot_sfc = rv_sfc / (1 + rv_sfc)  # 0.0148 kg/kg
+    p_sfc = FT(100_700)
+    θ_sfc = FT(297.9)
+    ts_sfc = TD.PhaseEquil_pθq(thermo_params, p_sfc, θ_sfc, q_tot_sfc)
+    ρ_sfc = TD.air_density(thermo_params, ts_sfc)  # 1.165 kg/m³
+    w_sfc = Geometry.WVector(flow(0, t))
+    return ρ_sfc * w_sfc * q_tot_sfc
 end
 
 struct TestDycoreConsistency end
@@ -682,11 +719,12 @@ Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
-struct AtmosModel{W, SCM, R, TC, GW, VD, SP, SU, NU}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
     water::W
     scm_setup::SCM
     radiation::R
     turbconv::TC
+    prescribed_flow::PF
     gravity_wave::GW
     vertical_diffusion::VD
     sponge::SP
@@ -702,6 +740,7 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosWater, :water),
     (AtmosRadiation, :radiation),
     (AtmosTurbconv, :turbconv),
+    (ShipwayHill2012VelocityProfile, :prescribed_flow),
     (AtmosGravityWave, :gravity_wave),
     (AtmosSponge, :sponge),
     (AtmosSurface, :surface),
@@ -877,7 +916,7 @@ Internal testing and calibration components for single-column setups:
 - `rayleigh_sponge`: nothing or RayleighSponge()
 
 ## AtmosSurface
-- `sfc_temperature`: ZonallySymmetricSST(), ZonallyAsymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
+- `sfc_temperature`: ZonallySymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
 - `surface_model`: PrescribedSST(), SlabOceanSST()
 - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
 
@@ -919,11 +958,14 @@ function AtmosModel(; kwargs...)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
 
+    prescribed_flow = get(atmos_model_kwargs, :prescribed_flow, nothing)
+
     return AtmosModel{
         typeof(water),
         typeof(scm_setup),
         typeof(radiation),
         typeof(turbconv),
+        typeof(prescribed_flow),
         typeof(gravity_wave),
         typeof(vertical_diffusion),
         typeof(sponge),
@@ -934,6 +976,7 @@ function AtmosModel(; kwargs...)
         scm_setup,
         radiation,
         turbconv,
+        prescribed_flow,
         gravity_wave,
         vertical_diffusion,
         sponge,
@@ -1267,7 +1310,7 @@ function AtmosConfig(
 end
 
 """
-    maybe_resolve_and_acquire_artifacts(input_str::AbstractString, context::ClimaComms.AbstractCommsContext)
+    maybe_resolve_and_acquire_artifacts(input_str::AbstractString, context)
 
 When given a string of the form `artifact"name"/something/else`, resolve the
 artifact path and download it (if not already available).
@@ -1276,7 +1319,7 @@ In all the other cases, return the input unchanged.
 """
 function maybe_resolve_and_acquire_artifacts(
     input_str::AbstractString,
-    context::ClimaComms.AbstractCommsContext,
+    context,
 )
     matched = match(r"artifact\"([a-zA-Z0-9_]+)\"(\/.*)?", input_str)
     if isnothing(matched)
@@ -1292,20 +1335,20 @@ end
 
 function maybe_resolve_and_acquire_artifacts(
     input,
-    _::ClimaComms.AbstractCommsContext,
+    _,
 )
     return input
 end
 
 """
-    config_with_resolved_and_acquired_artifacts(input_str::AbstractString, context::ClimaComms.AbstractCommsContext)
+    config_with_resolved_and_acquired_artifacts(input_str::AbstractString, context)
 
 Substitute strings of the form `artifact"name"/something/else` with the actual
 artifact path.
 """
 function config_with_resolved_and_acquired_artifacts(
     config::AbstractDict,
-    context::ClimaComms.AbstractCommsContext,
+    context,
 )
     return Dict(
         k => maybe_resolve_and_acquire_artifacts(v, context) for

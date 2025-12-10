@@ -24,6 +24,11 @@ particularly useful for
     if that is not the case. When the warning is produced, it is your responsability
     to ensure that what you are doing makes sense.
 
+!!! note
+
+    The simulation can only be restarted in a reproducible way when using `GridScaleCloud`
+    for `cloud_model`.
+
 ### How Restarts Work
 
 `ClimaAtmos` periodically saves the simulation state to a file called a "restart

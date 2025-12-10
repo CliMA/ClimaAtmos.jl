@@ -78,6 +78,256 @@ steps:
           --job_id single_column_radiative_equilibrium_allsky_idealized_clouds
         artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
 
+  - group: "Diagnostic EDMF"
+    steps:
+      - label: ":genie: Diagnostic EDMF test in a box"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_test_box.yml
+          --job_id diagnostic_edmfx_test_box
+        artifact_paths: "diagnostic_edmfx_test_box/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Diagnostic EDMF GABLS in a box"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_gabls_box.yml
+          --job_id diagnostic_edmfx_gabls_box
+        artifact_paths: "diagnostic_edmfx_gabls_box/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Diagnostic EDMF Bomex in a box"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_box.yml
+          --job_id diagnostic_edmfx_bomex_box
+        artifact_paths: "diagnostic_edmfx_bomex_box/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Diagnostic EDMF DYCOMS_RF01 in a box"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_box.yml
+          --job_id diagnostic_edmfx_dycoms_rf01_box
+        artifact_paths: "diagnostic_edmfx_dycoms_rf01_box/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":umbrella: Diagnostic EDMF DYCOMS_RF02 in a box"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf02_box.yml
+          --job_id diagnostic_edmfx_dycoms_rf02_box
+        artifact_paths: "diagnostic_edmfx_dycoms_rf02_box/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":umbrella: Diagnostic EDMF Rico in a box"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_rico_box.yml
+          --job_id diagnostic_edmfx_rico_box
+        artifact_paths: "diagnostic_edmfx_rico_box/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":umbrella: Diagnostic EDMF TRMM in a box"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box.yml
+          --job_id diagnostic_edmfx_trmm_box
+        artifact_paths: "diagnostic_edmfx_trmm_box/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":umbrella: Diagnostic EDMF TRMM stretched grid in a box"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_stretched_box.yml
+          --job_id diagnostic_edmfx_trmm_stretched_box
+        artifact_paths: "diagnostic_edmfx_trmm_stretched_box/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Diagnostic EDMF TRMM 0M in a box"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box_0M.yml
+          --job_id diagnostic_edmfx_trmm_box_0M
+        artifact_paths: "diagnostic_edmfx_trmm_box_0M/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+  - group: "Prognostic EDMF"
+    steps:
+      - label: ":genie: Prognostic EDMF advection test in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_column.yml
+          --job_id prognostic_edmfx_adv_test_column
+        artifact_paths: "prognostic_edmfx_adv_test_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMF simple plume test in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column.yml
+          --job_id prognostic_edmfx_simpleplume_column
+        artifact_paths: "prognostic_edmfx_simpleplume_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMF Soares in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_soares_column.yml
+          --job_id prognostic_edmfx_soares_column
+        artifact_paths: "prognostic_edmfx_soares_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMF GABLS in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column.yml
+          --job_id prognostic_edmfx_gabls_column
+        artifact_paths: "prognostic_edmfx_gabls_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMF Bomex with precribed TKE in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_column.yml
+          --job_id prognostic_edmfx_bomex_fixtke_column
+        artifact_paths: "prognostic_edmfx_bomex_fixtke_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMF Bomex in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
+          --job_id prognostic_edmfx_bomex_column
+        artifact_paths: "prognostic_edmfx_bomex_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMF Bomex in a column (implicit)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+          --job_id prognostic_edmfx_bomex_implicit_column
+        artifact_paths: "prognostic_edmfx_bomex_implicit_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMF Dycoms RF01 in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_column.yml
+          --job_id prognostic_edmfx_dycoms_rf01_column
+        artifact_paths: "prognostic_edmfx_dycoms_rf01_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMF Dycoms RF02 in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf02_column.yml
+          --job_id prognostic_edmfx_dycoms_rf02_column
+        artifact_paths: "prognostic_edmfx_dycoms_rf02_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":umbrella: Prognostic EDMF Rico in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
+          --job_id prognostic_edmfx_rico_column
+        artifact_paths: "prognostic_edmfx_rico_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":umbrella: Prognostic EDMF Rico in a column (implicit)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_rico_implicit_column.yml
+          --job_id prognostic_edmfx_rico_implicit_column
+        artifact_paths: "prognostic_edmfx_rico_implicit_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":umbrella: Prognostic EDMF Rico with 2-moment in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_rico_column_2M.yml
+          --job_id prognostic_edmfx_rico_column_2M
+        artifact_paths: "prognostic_edmfx_rico_column_2M/output_active/*"
+        agents:
+          slurm_mem: 20GB
+        soft_fail: true
+
+      - label: ":umbrella: Prognostic EDMF TRMM in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
+          --job_id prognostic_edmfx_trmm_column
+        artifact_paths: "prognostic_edmfx_trmm_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":umbrella: Prognostic EDMF TRMM in a column (implicit)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_implicit_column.yml
+          --job_id prognostic_edmfx_trmm_implicit_column
+        artifact_paths: "prognostic_edmfx_trmm_implicit_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMF TRMM with 0-moment in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_0M.yml
+          --job_id prognostic_edmfx_trmm_column_0M
+        artifact_paths: "prognostic_edmfx_trmm_column_0M/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMF GCM driven in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_gcmdriven_column.yml
+          --job_id prognostic_edmfx_gcmdriven_column
+        artifact_paths: "prognostic_edmfx_gcmdriven_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+        soft_fail: true
+
+      - label: ":genie: Prognostic EDMF ERA5 Time Varying driven in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_tv_era5driven_column.yml
+          --job_id prognostic_edmfx_tv_era5driven_column
+        artifact_paths: "prognostic_edmfx_tv_era5driven_column/output_active/*"
+        agents:
+          slurm_mem: 12GB
+
+      - label: ":thunder_cloud_and_rain: Prognostic EDMF ERA5 monthly averaged diurnal driven in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_diurnal_scm_imp.yml
+          --job_id prognostic_edmfx_diurnal_scm_imp
+        artifact_paths: "prognostic_edmfx_diurnal_scm_imp/output_active/*"
+        agents:
+          slurm_mem: 12GB
+        soft_fail: true
+
   - group: "Precipitation"
     steps:
       - label: ":umbrella: 1-moment precipitation sanity test single column"
@@ -143,44 +393,6 @@ steps:
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-  - group: "Box Examples"
-    steps:
-      - label: ":computer: Box hydrostatic balance"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/box_hydrostatic_balance.yml
-          --job_id box_hydrostatic_balance
-        artifact_paths: "box_hydrostatic_balance/output_active/*"
-
-      - label: ":computer: 3D density current"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/box_density_current_test.yml
-          --job_id box_density_current_test
-        artifact_paths: "box_density_current_test/output_active/*"
-
-      - label: ":computer: Box rcemipii with diagnostic edmf"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml
-          --job_id rcemipii_box_diagnostic_edmfx
-        artifact_paths: "rcemipii_box_diagnostic_edmfx/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: LES ISDAC in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/les_isdac_box.yml
-          --job_id les_isdac_box
-        artifact_paths: "les_isdac_box/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_mem: 16G
-          slurm_gpus: 1
-        soft_fail: true
-
   - group: "Plane Examples"
     steps:
       - label: ":computer: Density current experiment"
@@ -197,6 +409,46 @@ steps:
           --job_id plane_density_current_test_amd
         soft_fail: true
         artifact_paths: "plane_density_current_test_amd/output_active/*"
+
+  - group: "Box Examples"
+    steps:
+      - label: ":computer: Box hydrostatic balance"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/box_hydrostatic_balance.yml
+          --job_id box_hydrostatic_balance
+        artifact_paths: "box_hydrostatic_balance/output_active/*"
+
+      - label: ":computer: 3D density current"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/box_density_current_test.yml
+          --job_id box_density_current_test
+        artifact_paths: "box_density_current_test/output_active/*"
+
+      - label: ":computer: CRM rcemipii in a box with 1M"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/rcemipii_box_CRM_1M.yml
+          --job_id rcemipii_box_CRM_1M
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          --job_id rcemipii_box_CRM_1M
+          --out_dir rcemipii_box_CRM_1M/output_active
+        artifact_paths: "rcemipii_box_CRM_1M/output_active/*"
+
+      - label: ":genie: LES ISDAC in a box"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/les_isdac_box.yml
+          --job_id les_isdac_box
+        artifact_paths: "les_isdac_box/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_mem: 16G
+          slurm_gpus: 1
+        soft_fail: true
 
   - group: "Analytic Tests"
     steps:
@@ -335,7 +587,7 @@ steps:
           --job_id baroclinic_wave
         artifact_paths: "baroclinic_wave/output_active/*"
 
-      - label: ":computer: no lim baroclinic wave equilmoist"
+      - label: ":computer: baroclinic wave equilmoist"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -349,7 +601,7 @@ steps:
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: no lim baroclinic wave equilmoist (AMD)"
+      - label: ":computer: baroclinic wave equilmoist (AMD)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -370,7 +622,7 @@ steps:
           --job_id held_suarez
         artifact_paths: "held_suarez/output_active/*"
 
-      - label: ":computer: no lim held suarez equilmoist"
+      - label: ":computer: held suarez equilmoist"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -384,24 +636,9 @@ steps:
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-  - group: "Sphere Examples (Aquaplanet)"
+  - group: "Sphere Examples (Aquaplanet with parameterizations)"
     steps:
-      - label: ":umbrella: aquaplanet nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/aquaplanet_nonequil_allsky_gw_res.yml
-          --job_id aquaplanet_nonequil_allsky_gw_res
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id aquaplanet_nonequil_allsky_gw_res
-          --out_dir aquaplanet_nonequil_allsky_gw_res/output_active
-        artifact_paths: "aquaplanet_nonequil_allsky_gw_res/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
-      - label: ":umbrella: aquaplanet nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 2-moment"
+      - label: ":umbrella: aquaplanet allsky varying insol gravity wave (gfdl_restart) 2-moment"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -416,30 +653,45 @@ steps:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: aquaplanet equil allsky monin_obukhov varying insol gravity wave (raw_topo) high top zonally asymmetric"
+      - label: ":computer: aquaplanet equil allsky varying insol gravity wave (raw_topo)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/aquaplanet_equil_allsky_gw_raw_zonalasym.yml
-          --job_id aquaplanet_equil_allsky_gw_raw_zonalasym
+          --config_file $CONFIG_PATH/aquaplanet_equil_allsky_gw_raw.yml
+          --job_id aquaplanet_equil_allsky_gw_raw
 
           julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id aquaplanet_equil_allsky_gw_raw_zonalasym
-          --out_dir aquaplanet_equil_allsky_gw_raw_zonalasym/output_active
-        artifact_paths: "aquaplanet_equil_allsky_gw_raw_zonalasym/output_active/*"
+          --job_id aquaplanet_equil_allsky_gw_raw
+          --out_dir aquaplanet_equil_allsky_gw_raw/output_active
+        artifact_paths: "aquaplanet_equil_allsky_gw_raw/output_active/*"
         agents:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: aquaplanet for coupler"
+      - label: ":man_in_business_suit_levitating: EDOnly EDMF aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/aquaplanet_for_coupler.yml
-          --job_id aquaplanet_for_coupler
-        artifact_paths: "aquaplanet_for_coupler/output_active/*"
+          --config_file $CONFIG_PATH/edonly_edmfx_aquaplanet.yml
+          --job_id edonly_edmfx_aquaplanet
+        artifact_paths: "edonly_edmfx_aquaplanet/output_active/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":genie: Diagnostic EDMF aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
+          --job_id diagnostic_edmfx_aquaplanet
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_aquaplanet
+          --out_dir diagnostic_edmfx_aquaplanet/output_active
+        artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":computer: aquaplanet rcemipii with diagnostic edmf"
         command: >
@@ -450,6 +702,21 @@ steps:
         artifact_paths: "rcemipii_sphere_diagnostic_edmfx/output_active/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":genie: Prognostic EDMF aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
+          --job_id prognostic_edmfx_aquaplanet
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_aquaplanet
+          --out_dir prognostic_edmfx_aquaplanet/output_active
+        artifact_paths: "prognostic_edmfx_aquaplanet/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
   - group: "Sphere Examples (Topography)"
     steps:
@@ -608,327 +875,7 @@ steps:
 
           julia --color=yes --project=.buildkite post_processing/remap/remap_pipeline.jl
           --data_dir prep_remap/output_active --out_dir remap_pipeline_output
-        artifact_paths: "remap_pipeline_output/*"
-
-  - group: "EDOnlyEDMFX"
-    steps:
-      - label: ":man_in_business_suit_levitating: EDOnly EDMFX aquaplanet"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/edonly_edmfx_aquaplanet.yml
-          --job_id edonly_edmfx_aquaplanet
-        artifact_paths: "edonly_edmfx_aquaplanet/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":man_in_business_suit_levitating: AMIP Target EDOnly nonequil"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
-          --config_file $CONFIG_PATH/amip_target_edonly_nonequil.yml
-          --job_id amip_target_edonly_nonequil
-        artifact_paths: "amip_target_edonly_nonequil/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-  - group: "Diagnostic EDMFX"
-    steps:
-      - label: ":genie: Diagnostic EDMFX test in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_test_box.yml
-          --job_id diagnostic_edmfx_test_box
-        artifact_paths: "diagnostic_edmfx_test_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Diagnostic EDMFX GABLS in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_gabls_box.yml
-          --job_id diagnostic_edmfx_gabls_box
-        artifact_paths: "diagnostic_edmfx_gabls_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Diagnostic EDMFX Bomex in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_box.yml
-          --job_id diagnostic_edmfx_bomex_box
-        artifact_paths: "diagnostic_edmfx_bomex_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Diagnostic EDMFX DYCOMS_RF01 in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_box.yml
-          --job_id diagnostic_edmfx_dycoms_rf01_box
-        artifact_paths: "diagnostic_edmfx_dycoms_rf01_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":umbrella: Diagnostic EDMFX DYCOMS_RF02 in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf02_box.yml
-          --job_id diagnostic_edmfx_dycoms_rf02_box
-        artifact_paths: "diagnostic_edmfx_dycoms_rf02_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":umbrella: Diagnostic EDMFX Rico in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_rico_box.yml
-          --job_id diagnostic_edmfx_rico_box
-        artifact_paths: "diagnostic_edmfx_rico_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":umbrella: Diagnostic EDMFX TRMM in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box.yml
-          --job_id diagnostic_edmfx_trmm_box
-        artifact_paths: "diagnostic_edmfx_trmm_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":umbrella: Diagnostic EDMFX TRMM stretched grid in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_stretched_box.yml
-          --job_id diagnostic_edmfx_trmm_stretched_box
-        artifact_paths: "diagnostic_edmfx_trmm_stretched_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Diagnostic EDMFX TRMM 0M in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box_0M.yml
-          --job_id diagnostic_edmfx_trmm_box_0M
-        artifact_paths: "diagnostic_edmfx_trmm_box_0M/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Diagnostic EDMFX aquaplanet"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
-          --job_id diagnostic_edmfx_aquaplanet
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id diagnostic_edmfx_aquaplanet
-          --out_dir diagnostic_edmfx_aquaplanet/output_active
-        artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
-  - group: "Prognostic EDMFX"
-    steps:
-      - label: ":genie: Prognostic EDMFX advection test in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_column.yml
-          --job_id prognostic_edmfx_adv_test_column
-        artifact_paths: "prognostic_edmfx_adv_test_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX simple plume test in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column.yml
-          --job_id prognostic_edmfx_simpleplume_column
-        artifact_paths: "prognostic_edmfx_simpleplume_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX Soares in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_soares_column.yml
-          --job_id prognostic_edmfx_soares_column
-        artifact_paths: "prognostic_edmfx_soares_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX GABLS in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column.yml
-          --job_id prognostic_edmfx_gabls_column
-        artifact_paths: "prognostic_edmfx_gabls_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX Bomex in a column (pi group)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_pigroup_column.yml
-          --job_id prognostic_edmfx_bomex_pigroup_column
-        artifact_paths: "prognostic_edmfx_bomex_pigroup_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX Bomex with precribed TKE in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_column.yml
-          --job_id prognostic_edmfx_bomex_fixtke_column
-        artifact_paths: "prognostic_edmfx_bomex_fixtke_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX Bomex stretched grid in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_stretched_column.yml
-          --job_id prognostic_edmfx_bomex_stretched_column
-        artifact_paths: "prognostic_edmfx_bomex_stretched_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX Bomex in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
-          --job_id prognostic_edmfx_bomex_column
-        artifact_paths: "prognostic_edmfx_bomex_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_implicit_column
-        artifact_paths: "prognostic_edmfx_bomex_implicit_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX Dycoms RF01 in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_column.yml
-          --job_id prognostic_edmfx_dycoms_rf01_column
-        artifact_paths: "prognostic_edmfx_dycoms_rf01_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX Dycoms RF02 in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf02_column.yml
-          --job_id prognostic_edmfx_dycoms_rf02_column
-        artifact_paths: "prognostic_edmfx_dycoms_rf02_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":umbrella: Prognostic EDMFX Rico in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
-          --job_id prognostic_edmfx_rico_column
-        artifact_paths: "prognostic_edmfx_rico_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":umbrella: Prognostic EDMFX Rico in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_rico_implicit_column.yml
-          --job_id prognostic_edmfx_rico_implicit_column
-        artifact_paths: "prognostic_edmfx_rico_implicit_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":umbrella: Prognostic EDMFX Rico with 2-moment in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_rico_column_2M.yml
-          --job_id prognostic_edmfx_rico_column_2M
-        artifact_paths: "prognostic_edmfx_rico_column_2M/output_active/*"
-        agents:
-          slurm_mem: 20GB
-        soft_fail: true
-
-      - label: ":umbrella: Prognostic EDMFX TRMM in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
-          --job_id prognostic_edmfx_trmm_column
-        artifact_paths: "prognostic_edmfx_trmm_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":umbrella: Prognostic EDMFX TRMM in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_implicit_column.yml
-          --job_id prognostic_edmfx_trmm_implicit_column
-        artifact_paths: "prognostic_edmfx_trmm_implicit_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX TRMM with 0-moment in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_0M.yml
-          --job_id prognostic_edmfx_trmm_column_0M
-        artifact_paths: "prognostic_edmfx_trmm_column_0M/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX GCM driven in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_gcmdriven_column.yml
-          --job_id prognostic_edmfx_gcmdriven_column
-        artifact_paths: "prognostic_edmfx_gcmdriven_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-        soft_fail: true
-
-      - label: ":genie: Prognostic EDMFX ERA5 Time Varying driven in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_tv_era5driven_column.yml
-          --job_id prognostic_edmfx_tv_era5driven_column
-        artifact_paths: "prognostic_edmfx_tv_era5driven_column/output_active/*"
-        agents:
-          slurm_mem: 12GB
-
-      - label: ":thunder_cloud_and_rain: Prognostic EDMFX ERA5 monthly averaged diurnal driven in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_diurnal_scm_imp.yml
-          --job_id prognostic_edmfx_diurnal_scm_imp
-        artifact_paths: "prognostic_edmfx_diurnal_scm_imp/output_active/*"
-        agents:
-          slurm_mem: 12GB
-        soft_fail: true
-
-      - label: ":genie: Prognostic EDMFX aquaplanet"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
-          --job_id prognostic_edmfx_aquaplanet
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id prognostic_edmfx_aquaplanet
-          --out_dir prognostic_edmfx_aquaplanet/output_active
-        artifact_paths: "prognostic_edmfx_aquaplanet/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+        artifact_paths: "remap_pipeline_output/*"    
 
   - group: "Autodiff"
     steps:
@@ -957,7 +904,7 @@ steps:
           --job_id baroclinic_wave_sparse_autodiff
         artifact_paths: "baroclinic_wave_sparse_autodiff/output_active/*"
 
-      - label: "Prognostic EDMFX GABLS in a column sparse autodiff"
+      - label: "Prognostic EDMF GABLS in a column sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column_sparse_autodiff.yml
@@ -966,7 +913,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: "Prognostic EDMFX Bomex in a column sparse autodiff"
+      - label: "Prognostic EDMF Bomex in a column sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column_sparse_autodiff.yml
@@ -975,17 +922,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: "Prognostic EDMFX Dycoms RF02 in a column sparse autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf02_column_sparse_autodiff.yml
-          --job_id prognostic_edmfx_dycoms_rf02_column_sparse_autodiff
-        artifact_paths: "prognostic_edmfx_dycoms_rf02_column_sparse_autodiff/output_active/*"
-        agents:
-          slurm_mem: 20GB
-        soft_fail: true
-
-      - label: "Prognostic EDMFX TRMM in a column sparse autodiff"
+      - label: "Prognostic EDMF TRMM in a column sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_sparse_autodiff.yml
@@ -995,7 +932,7 @@ steps:
           slurm_mem: 20GB
         soft_fail: true
 
-      - label: "Prognostic EDMFX aquaplanet dense autodiff"
+      - label: "Prognostic EDMF aquaplanet dense autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -1005,7 +942,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: "Prognostic EDMFX aquaplanet sparse autodiff"
+      - label: "Prognostic EDMF aquaplanet sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -1014,16 +951,6 @@ steps:
         artifact_paths: "prognostic_edmfx_aquaplanet_sparse_autodiff/output_active/*"
         agents:
           slurm_mem: 20GB
-
-      - label: "AMIP Target EDOnly nonequil sparse autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
-          --config_file $CONFIG_PATH/amip_target_edonly_nonequil_sparse_autodiff.yml
-          --job_id amip_target_edonly_nonequil_sparse_autodiff
-        artifact_paths: "amip_target_edonly_nonequil_sparse_autodiff/output_active/*"
-        agents:
-          slurm_mem: 40GB
 
   - group: "GPU"
     steps:
@@ -1133,7 +1060,7 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16GB
 
-      - label: ":earth_americas: GPU: Diagnostic EDMFX ERA5 Weather Model Initial Condition"
+      - label: ":earth_americas: GPU: Diagnostic EDMF ERA5 Weather Model Initial Condition"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -1146,7 +1073,7 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16GB
 
-      - label: "GPU: EDOnly EDMFX aquaplanet"
+      - label: "GPU: EDOnly EDMF aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -1159,7 +1086,7 @@ steps:
           slurm_gpus: 1
           slurm_mem: 20GB
 
-      - label: "GPU: Diagnostic EDMFX aquaplanet"
+      - label: "GPU: Diagnostic EDMF aquaplanet"
         key: "diagnostic_edmfx_aquaplanet_gpu"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -1173,7 +1100,7 @@ steps:
           slurm_gpus: 1
           slurm_mem: 20GB
 
-      - label: "GPU: Prognostic EDMFX aquaplanet"
+      - label: "GPU: Prognostic EDMF aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -1186,7 +1113,7 @@ steps:
           slurm_gpus: 1
           slurm_mem: 20GB
 
-      - label: "GPU: Prognostic EDMFX aquaplanet dense autodiff"
+      - label: "GPU: Prognostic EDMF aquaplanet dense autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -1199,7 +1126,7 @@ steps:
           slurm_gpus: 1
           slurm_mem: 20GB
 
-      - label: "GPU: Prognostic EDMFX aquaplanet sparse autodiff"
+      - label: "GPU: Prognostic EDMF aquaplanet sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -1281,7 +1208,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
-          slurm_mem: 24GB
+          slurm_mem: 28GB
           slurm_gpus: 1
 
   - group: "Flame graphs"

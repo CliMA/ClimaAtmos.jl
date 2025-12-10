@@ -1,4 +1,4 @@
-276
+286
 
 # **README**
 #
@@ -20,6 +20,39 @@
 
 
 #=
+286 
+- We don't know why, but a few (not all) cases seemed to not reproduce the reference.
+  Maybe some files were not moved correctly.
+
+285
+- Use Gryanik surface flux parameters
+
+284
+- Use universal functions in SurfaceFluxes in the mixing length closure,
+which changes the closure in the stable case (from Gryanik to Businger)
+
+283
+- Change the Jacobian terms related to dp_drhoq_tot
+
+282
+- Use ClimaCore.CommonSpaces constructors for Atmos spaces
+
+281
+- Clean up ci, remove some jobs
+
+280
+- Add 1M Cloud Resolving Model (CRM) RCEMIPII in a box test
+
+279
+- Use partial cloud fraction in buoyancy gradient calculation
+
+278
+- Add ∂/∂q elements to Jacobian
+
+277
+- Update to use SurfaceFluxes.jl@0.14.1. Supports Charnock-parameterization for aerodynamic roughness 
+(default is still user-prescribed ScalarRoughness). SurfaceFluxes catch for neutrally-stable boundary layers (ζ ≈ 0) removed. 
+
 276
 - Update prognostic EDMF boundary conditions: apply equal surface fluxes to the
   updraft and grid mean, and enable entrainment of buoyant air in the first cell.

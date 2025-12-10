@@ -47,7 +47,7 @@ import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
 
-using Poppler_jll: pdfunite
+using Poppler_jll: pdfunite, pdftoppm
 import Base.Filesystem
 import Statistics: mean
 
@@ -190,6 +190,7 @@ function make_plots_generic(
     summary_files = String[],
     MAX_NUM_COLS = 1,
     MAX_NUM_ROWS = min(4, length(vars)),
+    save_jpeg_copy = false,
     kwargs...,
 )
     # When output_path is a Vector with multiple elements, this means that this function is
@@ -273,6 +274,12 @@ function make_plots_generic(
 
     pdfunite() do unite
         run(Cmd([unite, summary_files..., output_file]))
+    end
+
+    if save_jpeg_copy
+        pdftoppm() do exe
+            run(Cmd([exe, "-jpeg", output_file, joinpath(save_path, output_name)]))
+        end
     end
 
     # Cleanup
@@ -437,8 +444,6 @@ make_plots_generic(
     simulation_path,
     vars,
     time = LAST_SNAP,
-    x = 0.0, # Our columns are still 3D objects...
-    y = 0.0,
     more_kwargs = YLINEARSCALE,
 )
 ```
@@ -453,8 +458,6 @@ make_plots_generic(
     simulation_path,
     vars,
     time = LAST_SNAP,
-    x = 0.0, # Our columns are still 3D objects...
-    y = 0.0,
     more_kwargs = YLINEARSCALE,
 )
 ```
@@ -589,14 +592,23 @@ ColumnPlots = Union{
 function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
     short_names = ["ta", "wa"]
-    vars = map_comparison(get, simdirs, short_names)
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        var = get(simdir; short_name)
+        # For vertical-only (FiniteDifferenceGrid) spaces, the data may have 
+        # extra singleton dimensions. Check and squeeze if needed.
+        if haskey(var.dims, "x") && length(var.dims["x"]) == 1
+            var = slice(var; x = var.dims["x"][1])
+        end
+        if haskey(var.dims, "y") && length(var.dims["y"]) == 1
+            var = slice(var; y = var.dims["y"][1])
+        end
+        return var
+    end
 
     make_plots_generic(
         output_paths,
         vars,
         time = LAST_SNAP,
-        x = 0.0, # Our columns are still 3D objects...
-        y = 0.0,
         MAX_NUM_COLS = length(simdirs),
         more_kwargs = YLINEARSCALE,
     )
@@ -644,7 +656,7 @@ function make_plots(
     end
 
     vars = [
-        slice(get(simdir; short_name), x = 0.0, y = 0.0) for
+        get(simdir; short_name) for
         short_name in short_names
     ]
 
@@ -689,7 +701,7 @@ function make_plots(
     surface_precip = read_var(simdir.variable_paths["pr"]["inst"]["10s"])
     viz.line_plot1D!(
         fig,
-        slice(surface_precip, x = 0.0, y = 0.0);
+        surface_precip;
         p_loc = [pr_row, 1:3],
     )
 
@@ -1021,130 +1033,8 @@ function make_plots(
     )
 end
 
-function make_plots(
-    ::Union{
-        Val{:aquaplanet_equil_allsky_gw_raw_zonalasym},
-        Val{:gpu_aquaplanet_dyamond_summer},
-    },
-    output_paths::Vector{<:AbstractString},
-)
-    simdirs = SimDir.(output_paths)
-
-    reduction = "average"
-    short_names_3D = ["ua", "ta", "hus"]
-    short_names_2D = [
-        "rsdt",
-        "rsds",
-        "rsut",
-        "rsus",
-        "rlds",
-        "rlut",
-        "rlus",
-        "hfss",
-        "hfls",
-        "pr",
-    ]
-    available_periods = ClimaAnalysis.available_periods(
-        simdirs[1];
-        short_name = short_names_3D[1],
-        reduction,
-    )
-    if "1M" in available_periods
-        period = "1M"
-    elseif "30d" in available_periods
-        period = "30d"
-    elseif "10d" in available_periods
-        period = "10d"
-    elseif "1d" in available_periods
-        period = "1d"
-    elseif "1h" in available_periods
-        period = "1h"
-    end
-    vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
-        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon
-    end
-    vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
-        get(simdir; short_name, reduction, period)
-    end
-    make_plots_generic(
-        output_paths,
-        vars_3D,
-        time = LAST_SNAP,
-        more_kwargs = YLINEARSCALE,
-    )
-    make_plots_generic(
-        output_paths,
-        vars_2D,
-        time = LAST_SNAP,
-        output_name = "summary_2D",
-    )
-end
-
-function make_plots(
-    ::Union{
-        Val{:aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
-        Val{:aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64},
-        Val{
-            :longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean,
-        },
-    },
-    output_paths::Vector{<:AbstractString},
-)
-    simdirs = SimDir.(output_paths)
-
-    reduction = "average"
-    short_names_3D =
-        ["ta", "thetaa", "rhoa", "ua", "va", "wa", "hur", "hus", "clw", "cli"]
-    available_periods = ClimaAnalysis.available_periods(
-        simdirs[1];
-        short_name = short_names_3D[1],
-        reduction,
-    )
-    if "1M" in available_periods
-        period = "1M"
-    elseif "30d" in available_periods
-        period = "30d"
-    elseif "10d" in available_periods
-        period = "10d"
-    elseif "1d" in available_periods
-        period = "1d"
-    elseif "12h" in available_periods
-        period = "12h"
-    end
-    short_names_2D = [
-        "rsdt",
-        "rsds",
-        "rsut",
-        "rsus",
-        "rlds",
-        "rlut",
-        "rlus",
-        "hfss",
-        "hfls",
-        "ts",
-        "pr",
-    ]
-    vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
-        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon
-    end
-    vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
-        get(simdir; short_name, reduction, period)
-    end
-    make_plots_generic(
-        output_paths,
-        vars_3D,
-        time = LAST_SNAP,
-        more_kwargs = YLINEARSCALE,
-    )
-    make_plots_generic(
-        output_paths,
-        vars_2D,
-        time = LAST_SNAP,
-        output_name = "summary_2D",
-    )
-end
-
 AquaplanetPlots = Union{
+    Val{:gpu_aquaplanet_dyamond_summer},
     Val{:edonly_edmfx_aquaplanet},
     Val{:mpi_sphere_aquaplanet_rhoe_equil_clearsky},
     Val{:aquaplanet_nonequil_allsky_gw_res},
@@ -1198,6 +1088,8 @@ function make_plots(
         period = "1d"
     elseif "12h" in available_periods
         period = "12h"
+    elseif "1h" in available_periods
+        period = "1h"
     end
     vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
         get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
@@ -1367,10 +1259,15 @@ EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_test_box},
     Val{:diagnostic_edmfx_gabls_box},
     Val{:diagnostic_edmfx_bomex_box},
-    Val{:diagnostic_edmfx_bomex_stretched_box},
     Val{:diagnostic_edmfx_dycoms_rf01_box},
     Val{:diagnostic_edmfx_trmm_box_0M},
     Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
+    Val{:prognostic_edmfx_bomex_box},
+    Val{:rcemipii_box_diagnostic_edmfx},
+    Val{:diagnostic_edmfx_trmm_stretched_box},
+}
+
+EDMFColumnPlots = Union{
     Val{:prognostic_edmfx_adv_test_column},
     Val{:prognostic_edmfx_gabls_column},
     Val{:prognostic_edmfx_gabls_column_sparse_autodiff},
@@ -1378,21 +1275,15 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_bomex_column},
     Val{:prognostic_edmfx_bomex_implicit_column},
     Val{:prognostic_edmfx_bomex_column_sparse_autodiff},
-    Val{:prognostic_edmfx_bomex_stretched_column},
-    Val{:prognostic_edmfx_bomex_pigroup_column},
-    Val{:prognostic_edmfx_bomex_implicit_column},
     Val{:prognostic_edmfx_dycoms_rf01_column},
     Val{:prognostic_edmfx_trmm_column_0M},
     Val{:prognostic_edmfx_simpleplume_column},
     Val{:prognostic_edmfx_gcmdriven_column},
     Val{:prognostic_edmfx_tv_era5driven_column},
-    Val{:prognostic_edmfx_bomex_box},
-    Val{:rcemipii_box_diagnostic_edmfx},
     Val{:prognostic_edmfx_soares_column},
-    Val{:diagnostic_edmfx_trmm_stretched_box},
 }
 
-EDMFBoxPlotsWithPrecip = Union{
+EDMFColumnPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_rico_implicit_column},
     Val{:prognostic_edmfx_rico_column_2M},
@@ -1485,61 +1376,38 @@ end
 function make_plots(
     sim_type::Union{
         EDMFBoxPlots,
-        EDMFBoxPlotsWithPrecip,
         DiagEDMFBoxPlotsWithPrecip,
+        EDMFColumnPlots,
+        EDMFColumnPlotsWithPrecip,
     },
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
 
-    if sim_type isa EDMFBoxPlotsWithPrecip
+    # Determine if this is a box or column type
+    is_box = sim_type isa Union{EDMFBoxPlots, DiagEDMFBoxPlotsWithPrecip}
+
+    # Determine precipitation names based on type
+    if sim_type isa DiagEDMFBoxPlotsWithPrecip
+        precip_names = ("husra", "hussn", "husraup", "hussnup")
+    elseif sim_type isa EDMFColumnPlotsWithPrecip
         if sim_type isa Val{:prognostic_edmfx_rico_column_2M}
             precip_names = (
-                "husra",
-                "hussn",
-                "husraup",
-                "hussnup",
-                "husraen",
-                "hussnen",
-                "cdnc",
-                "ncra",
-                "cdncup",
-                "ncraup",
-                "cdncen",
-                "ncraen",
+                "husra", "hussn", "husraup", "hussnup", "husraen", "hussnen",
+                "cdnc", "ncra", "cdncup", "ncraup", "cdncen", "ncraen",
             )
         else
             precip_names =
                 ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen")
         end
-    elseif sim_type isa DiagEDMFBoxPlotsWithPrecip
-        precip_names = ("husra", "hussn", "husraup", "hussnup")
     else
         precip_names = ()
     end
 
     short_names = [
-        "wa",
-        "waup",
-        "ta",
-        "taup",
-        "hus",
-        "husup",
-        "arup",
-        "tke",
-        "ua",
-        "thetaa",
-        "thetaaup",
-        "ha",
-        "haup",
-        "hur",
-        "hurup",
-        "lmix",
-        "cl",
-        "clw",
-        "clwup",
-        "cli",
-        "cliup",
+        "wa", "waup", "ta", "taup", "hus", "husup", "arup", "tke", "ua",
+        "thetaa", "thetaaup", "ha", "haup", "hur", "hurup", "lmix",
+        "cl", "clw", "clwup", "cli", "cliup",
         precip_names...,
     ]
     reduction = "inst"
@@ -1556,13 +1424,13 @@ function make_plots(
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
-            return [
-                slice(
-                    get(simdir; short_name, reduction, period),
-                    x = 0.0,
-                    y = 0.0,
-                ) for short_name in name_tuple
-            ]
+            vars = map(short_name -> get(simdir; short_name, reduction, period), name_tuple)
+            # For box types, slice to a point (x=0, y=0)
+            if is_box
+                return map(var -> slice(var, x = 0.0, y = 0.0), vars)
+            else
+                return vars
+            end
         end
 
     var_groups_z = [
@@ -1581,7 +1449,7 @@ function make_plots(
 
     make_plots_generic(
         output_paths,
-        vcat(var_groups_zt...),
+        vcat((var_groups_zt...)...),
         plot_fn = plot_parsed_attribute_title!,
         summary_files = [tmp_file],
         MAX_NUM_COLS = 2,
@@ -1688,4 +1556,41 @@ function make_plots(
         MAX_NUM_COLS = 2,
         output_name = "summary_3D",
     )
+end
+
+function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractString})
+    function rescale_time_to_min(var)
+        if haskey(var.dims, "time")
+            var.dims["time"] .= var.dims["time"] ./ 60
+            var.dim_attributes["time"]["units"] = "min"
+        end
+        return var
+    end
+    simdirs = SimDir.(output_paths)
+    short_names = [
+        "hus", "clw", "husra", "ta", #"thetaa", "rhoa",
+        "wa",
+        # "cli", "hussn",
+        # "ke",
+    ]
+    short_names = short_names ∩ collect(keys(simdirs[1].vars))
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        var = slice(get(simdir; short_name), x = 0, y = 0)
+        if short_name in ["hus", "clw", "husra", "cli", "hussn"]
+            var.data .= var.data .* 1000
+            var.attributes["units"] = "g/kg"
+        end
+        return rescale_time_to_min(var)
+    end
+    file_contour = make_plots_generic(output_paths, vars;
+        output_name = "tmp_contour",
+    )
+
+    short_names_lines = ["lwp", "rwp", "pr"]
+    short_names_lines = short_names_lines ∩ collect(keys(simdirs[1].vars))
+    vars_lines = map_comparison(simdirs, short_names_lines) do simdir, short_name
+        var = slice(get(simdir; short_name), x = 0, y = 0)
+        return rescale_time_to_min(var)
+    end
+    make_plots_generic(output_paths, vars_lines; summary_files = [file_contour])
 end

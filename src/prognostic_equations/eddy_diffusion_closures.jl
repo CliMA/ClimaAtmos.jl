@@ -6,18 +6,18 @@ import StaticArrays as SA
 import Thermodynamics.Parameters as TDP
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
+import SurfaceFluxes.UniversalFunctions as UF
 
 """
     buoyancy_gradients(
         closure::AbstractEnvBuoyGradClosure,
         thermo_params,
-        moisture_model,
+
         # Arguments for the first method (most commonly called):
         ts::TD.ThermodynamicState,
         ::Type{C3}, # Covariant3 vector type, for projecting gradients
-        ∂θv∂z_unsat::AbstractField, # Vertical gradient of virtual potential temperature in unsaturated part
-        ∂qt∂z_sat::AbstractField,   # Vertical gradient of total specific humidity in saturated part
-        ∂θli∂z_sat::AbstractField,   # Vertical gradient of liquid-ice potential temperature in saturated part
+        ∂qt∂z::AbstractField,   # Vertical gradient of total specific humidity
+        ∂θli∂z::AbstractField,   # Vertical gradient of liquid-ice potential temperature
         local_geometry::Fields.LocalGeometry,
         # Argument for the second method (internal use with precomputed EnvBuoyGradVars):
         # bg_model::EnvBuoyGradVars
@@ -47,12 +47,10 @@ variables.
 Arguments:
 - `closure`: The environmental buoyancy gradient closure type (e.g., `BuoyGradMean`).
 - `thermo_params`: Thermodynamic parameters from `CLIMAParameters`.
-- `moisture_model`: Moisture model (e.g., `EquilMoistModel`, `NonEquilMoistModel`).
 - `ts`: Center-level thermodynamic state of the environment.
 - `C3`: The `ClimaCore.Geometry.Covariant3Vector` type, used for projecting input vertical gradients.
-- `∂θv∂z_unsat`: Field of vertical gradients of virtual potential temperature in the unsaturated part.
-- `∂qt∂z_sat`: Field of vertical gradients of total specific humidity in the saturated part.
-- `∂θli∂z_sat`: Field of vertical gradients of liquid-ice potential temperature in the saturated part.
+- `∂qt∂z`: Field of vertical gradients of total specific humidity.
+- `∂θli∂z`: Field of vertical gradients of liquid-ice potential temperature.
 - `local_geometry`: Field of local geometry at cell centers, used for gradient projection.
 The second method takes a precomputed `EnvBuoyGradVars` object instead of `ts` and gradient fields.
 
@@ -64,25 +62,23 @@ function buoyancy_gradients end
 function buoyancy_gradients(
     ebgc::AbstractEnvBuoyGradClosure,
     thermo_params,
-    moisture_model,
     ts,
+    cf,
     ::Type{C3},
-    ∂θv∂z_unsat,
-    ∂qt∂z_sat,
-    ∂θli∂z_sat,
+    ∂qt∂z,
+    ∂θli∂z,
     ᶜlg,
 ) where {C3}
     return buoyancy_gradients(
         ebgc,
         thermo_params,
-        moisture_model,
         EnvBuoyGradVars(
             ts,
+            cf,
             projected_vector_buoy_grad_vars(
                 C3,
-                ∂θv∂z_unsat,
-                ∂qt∂z_sat,
-                ∂θli∂z_sat,
+                ∂qt∂z,
+                ∂θli∂z,
                 ᶜlg,
             ),
         ),
@@ -92,43 +88,42 @@ end
 function buoyancy_gradients(
     ebgc::AbstractEnvBuoyGradClosure,
     thermo_params,
-    moisture_model,
     bg_model::EnvBuoyGradVars,
 )
     FT = eltype(bg_model)
 
     g = TDP.grav(thermo_params)
     Rv_over_Rd = TDP.Rv_over_Rd(thermo_params)
-    R_d = TDP.R_d(thermo_params)
     R_v = TDP.R_v(thermo_params)
 
     ts = bg_model.ts
-    p = TD.air_pressure(thermo_params, ts)
-    Π = TD.exner_given_pressure(thermo_params, p)
-    ∂b∂θv = g * (R_d * TD.air_density(thermo_params, ts) / p) * Π
+    ∂b∂θv = g / TD.virtual_pottemp(thermo_params, ts)
 
-    t_sat = TD.air_temperature(thermo_params, ts)
+    T = TD.air_temperature(thermo_params, ts)
     λ = TD.liquid_fraction(thermo_params, ts)
     lh =
-        λ * TD.latent_heat_vapor(thermo_params, t_sat) +
-        (1 - λ) * TD.latent_heat_sublim(thermo_params, t_sat)
+        λ * TD.latent_heat_vapor(thermo_params, T) +
+        (1 - λ) * TD.latent_heat_sublim(thermo_params, T)
     cp_m = TD.cp_m(thermo_params, ts)
-    qv_sat = TD.vapor_specific_humidity(thermo_params, ts)
-    qt_sat = TD.total_specific_humidity(thermo_params, ts)
+    q_sat = TD.q_vap_saturation(thermo_params, ts)
+    q_tot = TD.total_specific_humidity(thermo_params, ts)
+    θ = TD.dry_pottemp(thermo_params, ts)
+    ∂b∂θli_unsat = ∂b∂θv * (1 + (Rv_over_Rd - 1) * q_tot)
+    ∂b∂qt_unsat = ∂b∂θv * (Rv_over_Rd - 1) * θ
     ∂b∂θli_sat = (
         ∂b∂θv *
-        (1 + Rv_over_Rd * (1 + lh / R_v / t_sat) * qv_sat - qt_sat) /
-        (1 + lh * lh / cp_m / R_v / t_sat / t_sat * qv_sat)
+        (1 + Rv_over_Rd * (1 + lh / R_v / T) * q_sat - q_tot) /
+        (1 + lh^2 / cp_m / R_v / T^2 * q_sat)
     )
     ∂b∂qt_sat =
-        (lh / cp_m / t_sat * ∂b∂θli_sat - ∂b∂θv) *
-        TD.dry_pottemp(thermo_params, ts)
+        (lh / cp_m / T * ∂b∂θli_sat - ∂b∂θv) * θ
 
     ∂b∂z = buoyancy_gradient_chain_rule(
         ebgc,
         bg_model,
         thermo_params,
-        ∂b∂θv,
+        ∂b∂θli_unsat,
+        ∂b∂qt_unsat,
         ∂b∂θli_sat,
         ∂b∂qt_sat,
     )
@@ -140,7 +135,6 @@ end
         closure::AbstractEnvBuoyGradClosure,
         bg_model::EnvBuoyGradVars,
         thermo_params,
-        ∂b∂θv::FT,
         ∂b∂θli_sat::FT,
         ∂b∂qt_sat::FT,
     ) where {FT}
@@ -165,7 +159,6 @@ Arguments:
 - `closure`: The environmental buoyancy gradient closure type.
 - `bg_model`: Precomputed environmental buoyancy gradient variables (`EnvBuoyGradVars`).
 - `thermo_params`: Thermodynamic parameters from `CLIMAParameters`.
-- `∂b∂θv`: Partial derivative of buoyancy w.r.t. virtual potential temperature (unsaturated part).
 - `∂b∂θli_sat`: Partial derivative of buoyancy w.r.t. liquid-ice potential temperature (saturated part).
 - `∂b∂qt_sat`: Partial derivative of buoyancy w.r.t. total specific humidity (saturated part).
 
@@ -176,18 +169,19 @@ function buoyancy_gradient_chain_rule(
     ::AbstractEnvBuoyGradClosure,
     bg_model::EnvBuoyGradVars,
     thermo_params,
-    ∂b∂θv,
+    ∂b∂θli_unsat,
+    ∂b∂qt_unsat,
     ∂b∂θli_sat,
     ∂b∂qt_sat,
 )
-    en_cld_frac = ifelse(TD.has_condensate(thermo_params, bg_model.ts), 1, 0)
-
-    ∂b∂z_θl_sat = ∂b∂θli_sat * bg_model.∂θli∂z_sat
-    ∂b∂z_qt_sat = ∂b∂qt_sat * bg_model.∂qt∂z_sat
+    ∂b∂z_θli_unsat = ∂b∂θli_unsat * bg_model.∂θli∂z
+    ∂b∂z_qt_unsat = ∂b∂qt_unsat * bg_model.∂qt∂z
+    ∂b∂z_unsat = ∂b∂z_θli_unsat + ∂b∂z_qt_unsat
+    ∂b∂z_θl_sat = ∂b∂θli_sat * bg_model.∂θli∂z
+    ∂b∂z_qt_sat = ∂b∂qt_sat * bg_model.∂qt∂z
     ∂b∂z_sat = ∂b∂z_θl_sat + ∂b∂z_qt_sat
-    ∂b∂z_unsat = ∂b∂θv * bg_model.∂θv∂z_unsat
 
-    ∂b∂z = (1 - en_cld_frac) * ∂b∂z_unsat + en_cld_frac * ∂b∂z_sat
+    ∂b∂z = (1 - bg_model.cf) * ∂b∂z_unsat + bg_model.cf * ∂b∂z_sat
 
     return ∂b∂z
 end
@@ -301,15 +295,8 @@ function mixing_length_lopez_gomez_2020(
 
     c_m = CAP.tke_ed_coeff(turbconv_params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    smin_ub = CAP.smin_ub(turbconv_params)
-    smin_rm = CAP.smin_rm(turbconv_params)
     c_b = CAP.static_stab_coeff(turbconv_params)
     vkc = CAP.von_karman_const(params)
-
-    # MOST stability function coefficients
-    most_a_m = sf_params.ufp.a_m # Businger a_m
-    most_b_m = sf_params.ufp.b_m # Businger b_m
-    most_g_m = CAP.coefficient_b_m_gryanik(params)  # Gryanik b_m
 
     # l_z: Geometric distance from the surface
     l_z = ᶜz - z_sfc
@@ -336,47 +323,12 @@ function mixing_length_lopez_gomez_2020(
     # and approaches 0 when l_z → 0.
     l_W_base = vkc * l_z / l_W_denom
 
-    if obukhov_length < FT(0) # Unstable case
-        obukhov_len_safe = min(obukhov_length, -eps_FT) # Ensure L < 0
-        zeta = l_z / obukhov_len_safe # Stability parameter zeta = z/L (<0)
+    obukhov_len_safe =
+        obukhov_length < FT(0) ? min(obukhov_length, -eps_FT) : max(obukhov_length, eps_FT)
+    zeta = l_z / obukhov_len_safe # Stability parameter zeta
+    phi_m = UF.phi(sf_params.ufp, zeta, UF.MomentumTransport())
+    l_W = l_W_base / max(phi_m, eps_FT)
 
-        # Calculate MOST term (1 - b_m * zeta)
-        # Since zeta is negative, this term is > 1
-        inner_term = 1 - most_b_m * zeta
-
-        # Numerical safety check – by theory the value is ≥ 1.
-        inner_term_safe = max(inner_term, eps_FT)
-
-        # Unstable-regime correction factor:
-        #     (1 − b_m ζ)^(1/4) = φ_m⁻¹,
-        # where φ_m is the Businger stability function φ_m = (1 − b_m ζ)^(-1/4).
-        stability_correction = sqrt(sqrt(inner_term_safe))
-        l_W = l_W_base * stability_correction
-
-    else # Neutral or stable case
-        # Ensure L > 0 for Monin-Obukhov length
-        obukhov_len_safe_stable = max(obukhov_length, eps_FT)
-        zeta = l_z / obukhov_len_safe_stable # zeta >= 0
-
-        # Stable/neutral-regime correction after Gryanik (2020):
-        #     φ_m = 1 + a_m ζ / (1 + g_m ζ)^(2/3),
-        # a nonlinear refinement to the Businger formulation.
-        phi_m_denom_term = (1 + most_g_m * zeta)
-        # Guard against a negative base in the fractional power
-        # (theoretically impossible for ζ ≥ 0 and g_m > 0, retained for robustness).
-        phi_m_denom_cubed_sqrt = cbrt(phi_m_denom_term)
-        phi_m_denom =
-            max(phi_m_denom_cubed_sqrt * phi_m_denom_cubed_sqrt, eps_FT) # (val)^(2/3)
-
-        phi_m = 1 + (most_a_m * zeta) / phi_m_denom
-
-        # Stable-regime correction factor: 1 / φ_m.
-        # phi_m should be >= 1 for stable/neutral
-        stability_correction = 1 / max(phi_m, eps_FT)
-
-        # Apply the correction factor
-        l_W = l_W_base * stability_correction
-    end
     l_W = max(l_W, FT(0)) # Ensure non-negative
 
     # --- l_TKE: TKE production-dissipation balance scale ---

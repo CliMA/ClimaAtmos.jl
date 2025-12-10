@@ -41,12 +41,22 @@ ClimaAtmos.InitialConditions.TRMM_LBA
 ClimaAtmos.InitialConditions.LifeCycleTan2018
 ClimaAtmos.InitialConditions.Bomex
 ClimaAtmos.InitialConditions.Soares
+ClimaAtmos.InitialConditions.RCEMIPIIProfile
 ```
 
-### Helper
+## Helper
 
 ```@docs
 ClimaAtmos.InitialConditions.ColumnInterpolatableField
+```
+
+## Grids
+
+```@docs
+ClimaAtmos.ColumnGrid
+ClimaAtmos.SphereGrid
+ClimaAtmos.PlaneGrid
+ClimaAtmos.BoxGrid
 ```
 
 ## Jacobian
@@ -68,6 +78,8 @@ ClimaAtmos.ScharTopography
 ClimaAtmos.EarthTopography
 ClimaAtmos.DCMIP200Topography
 ClimaAtmos.Hughes2023Topography
+ClimaAtmos.SLEVEWarp
+ClimaAtmos.LinearWarp
 ```
 
 ### Internals

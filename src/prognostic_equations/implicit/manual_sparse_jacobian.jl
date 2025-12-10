@@ -71,15 +71,14 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         approximate_solve_iters,
     ) = alg
     FT = Spaces.undertype(axes(Y.c))
-    CTh = CTh_vector_type(axes(Y.c))
 
     DiagonalRow = DiagonalMatrixRow{FT}
     TridiagonalRow = TridiagonalMatrixRow{FT}
     BidiagonalRow_C3 = BidiagonalMatrixRow{C3{FT}}
-    TridiagonalRow_ACTh = TridiagonalMatrixRow{Adjoint{FT, CTh{FT}}}
+    TridiagonalRow_ACT12 = TridiagonalMatrixRow{Adjoint{FT, CT12{FT}}}
     BidiagonalRow_ACT3 = BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
-    BidiagonalRow_C3xACTh =
-        BidiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CTh{FT})')}
+    BidiagonalRow_C3xACT12 =
+        BidiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT12{FT})')}
     DiagonalRow_C3xACT3 =
         DiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT3{FT})')}
     TridiagonalRow_C3xACT3 =
@@ -92,11 +91,16 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
-    condensate_names = (
+    condensate_mass_names = (
         @name(c.ρq_liq),
         @name(c.ρq_ice),
         @name(c.ρq_rai),
         @name(c.ρq_sno),
+    )
+    available_condensate_mass_names =
+        MatrixFields.unrolled_filter(is_in_Y, condensate_mass_names)
+    condensate_names = (
+        condensate_mass_names...,
         @name(c.ρn_liq),
         @name(c.ρn_rai),
         # P3 frozen
@@ -150,7 +154,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             MatrixFields.unrolled_map(
                 name ->
                     (name, @name(c.uₕ)) =>
-                        similar(Y.c, TridiagonalRow_ACTh),
+                        similar(Y.c, TridiagonalRow_ACT12),
                 active_scalar_names,
             ) : ()
         )...,
@@ -162,7 +166,11 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
             active_scalar_names,
         )...,
-        (@name(f.u₃), @name(c.uₕ)) => similar(Y.f, BidiagonalRow_C3xACTh),
+        MatrixFields.unrolled_map(
+            name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
+            available_condensate_mass_names,
+        )...,
+        (@name(f.u₃), @name(c.uₕ)) => similar(Y.f, BidiagonalRow_C3xACT12),
         (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
 
@@ -183,6 +191,10 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                     (@name(c.ρe_tot), @name(c.ρq_tot)) =>
                         similar(Y.c, TridiagonalRow),
                 ) : ()
+            )...,
+            MatrixFields.unrolled_map(
+                name -> (@name(c.ρe_tot), name) => similar(Y.c, TridiagonalRow),
+                available_condensate_mass_names,
             )...,
             (@name(c.uₕ), @name(c.uₕ)) =>
                 !isnothing(atmos.turbconv_model) ||
@@ -233,6 +245,17 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                         (name, @name(f.sgsʲs.:(1).u₃)) =>
                             similar(Y.c, BidiagonalRow_ACT3),
                     available_sgs_scalar_names,
+                )...,
+                MatrixFields.unrolled_map(
+                    name ->
+                        (@name(f.sgsʲs.:(1).u₃), name) =>
+                            similar(Y.f, BidiagonalRow_C3),
+                    available_sgs_condensate_mass_names,
+                )...,
+                MatrixFields.unrolled_map(
+                    name ->
+                        (@name(c.sgsʲs.:(1).mse), name) => similar(Y.c, DiagonalRow),
+                    available_sgs_condensate_mass_names,
                 )...,
                 (@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot)) =>
                     similar(Y.c, DiagonalRow),
@@ -323,7 +346,10 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
            use_derivative(sgs_advection_flag) ||
            !(atmos.moisture_model isa DryModel)
             gs_scalar_subalg = if !(atmos.moisture_model isa DryModel)
-                MatrixFields.BlockLowerTriangularSolve(@name(c.ρq_tot))
+                MatrixFields.BlockLowerTriangularSolve(
+                    @name(c.ρq_tot),
+                    available_condensate_mass_names...,
+                )
             else
                 MatrixFields.BlockDiagonalSolve()
             end
@@ -367,6 +393,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     return (; matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, full_alg))
 end
 
+# TODO: There are a few for loops in this function. This is because
+# using unrolled_foreach allocates (breaks the flame tests)
 function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     (;
         topography_flag,
@@ -396,20 +424,29 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     rs = p.atmos.rayleigh_sponge
 
     FT = Spaces.undertype(axes(Y.c))
-    CTh = CTh_vector_type(axes(Y.c))
     one_C3xACT3 = C3(FT(1)) * CT3(FT(1))'
 
     cv_d = FT(CAP.cv_d(params))
     Δcv_v = FT(CAP.cv_v(params)) - cv_d
     T_0 = FT(CAP.T_0(params))
     R_d = FT(CAP.R_d(params))
-    ΔR_v = FT(CAP.R_v(params)) - R_d
+    R_v = FT(CAP.R_v(params))
+    ΔR_v = R_v - R_d
     cp_d = FT(CAP.cp_d(params))
     Δcp_v = FT(CAP.cp_v(params)) - cp_d
+    e_int_v0 = FT(CAP.e_int_v0(params))
+    LH_v0 = FT(CAP.LH_v0(params))
+    LH_s0 = FT(CAP.LH_s0(params))
+    Δcp_l = FT(CAP.cp_l(params) - CAP.cp_v(params))
+    Δcp_i = FT(CAP.cp_i(params) - CAP.cp_v(params))
+    Δcv_l = FT(CAP.cp_l(params) - CAP.cv_v(params))
+    Δcv_i = FT(CAP.cp_i(params) - CAP.cv_v(params))
+    e_int_v0 = FT(CAP.e_int_v0(params))
+    e_int_s0 = FT(CAP.e_int_i0(params)) + e_int_v0
     # This term appears a few times in the Jacobian, and is technically
     # minus ∂e_int_∂q_tot
+    ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - e_int_v0
     thermo_params = CAP.thermodynamics_params(params)
-    ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - FT(CAP.e_int_v0(params))
     ᶜh_tot = @. lazy(
         TD.total_specific_enthalpy(
             thermo_params,
@@ -432,20 +469,16 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     @. ᶜkappa_m =
         TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
 
-    ᶜ∂kappa_m∂q_tot = p.scratch.ᶜtemp_scalar_2
-    # Using abs2 because ^2 results in allocation
-    @. ᶜ∂kappa_m∂q_tot =
-        (
-            ΔR_v * TD.cv_m(thermo_params, ᶜts) -
-            Δcv_v * TD.gas_constant_air(thermo_params, ᶜts)
-        ) / abs2(TD.cv_m(thermo_params, ᶜts))
+    T = @. lazy(TD.air_temperature(thermo_params, ᶜts))
+    ᶜ∂p∂ρq_tot = p.scratch.ᶜtemp_scalar_2
+    @. ᶜ∂p∂ρq_tot = ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (T - T_0)) + ΔR_v * T
 
     if use_derivative(topography_flag)
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
-            adjoint(CTh(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ),
+            adjoint(CT12(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ),
         )
     else
-        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CTh(ᶜuₕ)))
+        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CT12(ᶜuₕ)))
     end
     @. ∂ᶜK_∂ᶠu₃ =
         ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
@@ -513,15 +546,32 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         )
     @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m)
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
         @. ∂ᶠu₃_err_∂ᶜρq_tot =
-            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow((
-                ᶜkappa_m * ∂e_int_∂q_tot +
-                ᶜ∂kappa_m∂q_tot *
-                (cp_d * T_0 + ᶜe_tot - ᶜK - ᶜΦ + ∂e_int_∂q_tot * ᶜq_tot)
-            ))
+            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜ∂p∂ρq_tot)
+    end
+
+    microphysics_tracers =
+        p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
+        ) ?
+        (
+            (@name(c.ρq_liq), e_int_v0, Δcv_l),
+            (@name(c.ρq_ice), e_int_s0, Δcv_i),
+            (@name(c.ρq_rai), e_int_v0, Δcv_l),
+            (@name(c.ρq_sno), e_int_s0, Δcv_i),
+        ) : (;)
+
+    for (q_name, e_int_q, ∂cv∂q) in microphysics_tracers
+        MatrixFields.has_field(Y, q_name) || continue
+        ∂ᶠu₃_err_∂ᶜρq = matrix[@name(f.u₃), q_name]
+        @. ∂ᶠu₃_err_∂ᶜρq =
+            dtγ * ᶠp_grad_matrix ⋅
+            DiagonalMatrixRow(ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T)
     end
 
     ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
@@ -676,14 +726,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
             ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
             @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
-                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((
-                    ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ +
-                    ᶜ∂kappa_m∂q_tot *
-                    (cp_d * T_0 + ᶜe_tot - ᶜK - ᶜΦ + ∂e_int_∂q_tot * ᶜq_tot)
-                ))
+                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(ᶜ∂p∂ρq_tot / ᶜρ)
             @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
+        end
+
+        for (q_name, e_int_q, ∂cv∂q) in microphysics_tracers
+            MatrixFields.has_field(Y, q_name) || continue
+            ∂ᶜρe_tot_err_∂ᶜρq = matrix[@name(c.ρe_tot), q_name]
+            @. ∂ᶜρe_tot_err_∂ᶜρq =
+                dtγ * ᶜdiffusion_h_matrix ⋅
+                DiagonalMatrixRow((ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T) / ᶜρ)
         end
 
         MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, _, α)
@@ -798,15 +852,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
                 TD.cv_m(thermo_params, ᶜtsʲs.:(1))
 
-            # Note this is the derivative of R_m / cp_m with respect to ᶜq_tot
-            # but we call it ∂kappa_m∂q_totʲ
-            ᶜ∂kappa_m∂q_totʲ = p.scratch.ᶜtemp_scalar_2
-            @. ᶜ∂kappa_m∂q_totʲ =
-                (
-                    ΔR_v * TD.cp_m(thermo_params, ᶜtsʲs.:(1)) -
-                    Δcp_v * TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1))
-                ) / abs2(TD.cp_m(thermo_params, ᶜtsʲs.:(1)))
-
             ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
             @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
@@ -826,6 +871,183 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. ∂ᶜq_totʲ_err_∂ᶠu₃ʲ =
                 dtγ * p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
 
+            ∂ᶜmseʲ_err_∂ᶜmseʲ =
+                matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
+            @. ∂ᶜmseʲ_err_∂ᶜmseʲ =
+                dtγ * (
+                    DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
+                    ᶜadvdivᵥ_matrix() ⋅
+                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) -
+                    DiagonalMatrixRow(
+                        adjoint(ᶜinterp(ᶠu³ʲs.:(1))) *
+                        ᶜgradᵥ_ᶠΦ *
+                        Y.c.ρ *
+                        ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
+                    )
+                ) - (I,)
+            ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
+                matrix[@name(c.sgsʲs.:(1).mse), @name(f.sgsʲs.:(1).u₃)]
+            @. p.scratch.ᶜbidiagonal_adjoint_matrix_c3 =
+                -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                    ᶠset_upwind_bcs(
+                        ᶠupwind(CT3(sign(ᶠu³ʲ_data)), Y.c.sgsʲs.:(1).mse),
+                    ) * adjoint(C3(sign(ᶠu³ʲ_data))),
+                ) + DiagonalMatrixRow(Y.c.sgsʲs.:(1).mse) ⋅ ᶜadvdivᵥ_matrix()
+            @. ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
+                dtγ * p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+
+            ∂ᶜρaʲ_err_∂ᶜρaʲ =
+                matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).ρa)]
+            @. ᶜadvection_matrix =
+                -(ᶜadvdivᵥ_matrix()) ⋅
+                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ)
+            @. ∂ᶜρaʲ_err_∂ᶜρaʲ =
+                dtγ * ᶜadvection_matrix ⋅
+                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
+                DiagonalMatrixRow(1 / ᶜρʲs.:(1)) - (I,)
+
+            ∂ᶜρaʲ_err_∂ᶠu₃ʲ =
+                matrix[@name(c.sgsʲs.:(1).ρa), @name(f.sgsʲs.:(1).u₃)]
+            @. ∂ᶜρaʲ_err_∂ᶠu₃ʲ =
+                dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                    ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ *
+                    ᶠset_upwind_bcs(
+                        ᶠupwind(
+                            CT3(sign(ᶠu³ʲ_data)),
+                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                        ),
+                    ) *
+                    adjoint(C3(sign(ᶠu³ʲ_data))) *
+                    g³³(ᶠgⁱʲ),
+                )
+
+            # contribution of ρʲ variations in vertical transport of ρa and updraft buoyancy eq
+            ∂ᶜρaʲ_err_∂ᶜmseʲ =
+                matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)]
+            @. ᶠbidiagonal_matrix_ct3 =
+                DiagonalMatrixRow(
+                    ᶠset_upwind_bcs(
+                        ᶠupwind(
+                            ᶠu³ʲs.:(1),
+                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                        ),
+                    ) / ᶠJ,
+                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
+                    ᶜJ * ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
+                )
+            @. ᶠbidiagonal_matrix_ct3_2 =
+                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
+                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
+                DiagonalMatrixRow(
+                    Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
+                )
+            @. ∂ᶜρaʲ_err_∂ᶜmseʲ =
+                dtγ * ᶜadvdivᵥ_matrix() ⋅
+                (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
+
+            turbconv_params = CAP.turbconv_params(params)
+            α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
+            ᶜTʲ = @. lazy(TD.air_temperature(thermo_params, ᶜtsʲs.:(1)))
+            ᶜ∂RmT∂qʲ = p.scratch.ᶜtemp_scalar_2
+            sgs_microphysics_tracers =
+                p.atmos.moisture_model isa NonEquilMoistModel && (
+                    p.atmos.microphysics_model isa Microphysics1Moment ||
+                    p.atmos.microphysics_model isa Microphysics2Moment
+                ) ?
+                (
+                    (@name(c.sgsʲs.:(1).q_tot), -LH_v0, Δcp_v, ΔR_v),
+                    (@name(c.sgsʲs.:(1).q_liq), LH_v0, Δcp_l, -R_v),
+                    (@name(c.sgsʲs.:(1).q_ice), LH_s0, Δcp_i, -R_v),
+                    (@name(c.sgsʲs.:(1).q_rai), LH_v0, Δcp_l, -R_v),
+                    (@name(c.sgsʲs.:(1).q_sno), LH_s0, Δcp_i, -R_v),
+                ) : (
+                    (@name(c.sgsʲs.:(1).q_tot), -LH_v0, Δcp_v, ΔR_v),
+                )
+
+            for (qʲ_name, LH, ∂cp∂q, ∂Rm∂q) in sgs_microphysics_tracers
+                MatrixFields.has_field(Y, qʲ_name) || continue
+
+                @. ᶜ∂RmT∂qʲ =
+                    ᶜkappa_mʲ / (ᶜkappa_mʲ + 1) * (LH - ∂cp∂q * (ᶜTʲ - T_0)) + ∂Rm∂q * ᶜTʲ
+
+                # ∂ᶜρaʲ_err_∂ᶜqʲ through ρʲ variations in vertical transport of ρa
+                ∂ᶜρaʲ_err_∂ᶜqʲ = matrix[@name(c.sgsʲs.:(1).ρa), qʲ_name]
+                @. ᶠbidiagonal_matrix_ct3 =
+                    DiagonalMatrixRow(
+                        ᶠset_upwind_bcs(
+                            ᶠupwind(
+                                ᶠu³ʲs.:(1),
+                                draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                            ),
+                        ) / ᶠJ,
+                    ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
+                        ᶜJ * (ᶜρʲs.:(1))^2 / ᶜp * ᶜ∂RmT∂qʲ,
+                    )
+                @. ᶠbidiagonal_matrix_ct3_2 =
+                    DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
+                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
+                    DiagonalMatrixRow(
+                        Y.c.sgsʲs.:(1).ρa / ᶜp * ᶜ∂RmT∂qʲ,
+                    )
+                @. ∂ᶜρaʲ_err_∂ᶜqʲ =
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅
+                    (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
+
+                # ∂ᶠu₃ʲ_err_∂ᶜqʲ through ρʲ variations in updraft buoyancy eq
+                ∂ᶠu₃ʲ_err_∂ᶜqʲ = matrix[@name(f.sgsʲs.:(1).u₃), qʲ_name]
+                @. ∂ᶠu₃ʲ_err_∂ᶜqʲ =
+                    dtγ * DiagonalMatrixRow(
+                        (1 - α_b) * ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) /
+                        (ᶠinterp(ᶜρʲs.:(1)))^2,
+                    ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
+                        (ᶜρʲs.:(1))^2 / ᶜp * ᶜ∂RmT∂qʲ,
+                    )
+
+                # ∂ᶜmseʲ_err_∂ᶜqʲ through ρʲ variations in buoyancy term in mse eq
+                ∂ᶜmseʲ_err_∂ᶜqʲ = matrix[@name(c.sgsʲs.:(1).mse), qʲ_name]
+                @. ∂ᶜmseʲ_err_∂ᶜqʲ =
+                    dtγ * (
+                        -DiagonalMatrixRow(
+                            adjoint(ᶜinterp(ᶠu³ʲs.:(1))) * ᶜgradᵥ_ᶠΦ * Y.c.ρ / ᶜp *
+                            ᶜ∂RmT∂qʲ,
+                        )
+                    )
+            end
+
+            ∂ᶠu₃ʲ_err_∂ᶜmseʲ =
+                matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)]
+            @. ∂ᶠu₃ʲ_err_∂ᶜmseʲ =
+                dtγ * DiagonalMatrixRow(
+                    (1 - α_b) * ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) /
+                    (ᶠinterp(ᶜρʲs.:(1)))^2,
+                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
+                    ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
+                )
+
+            ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
+                matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
+            ᶜu₃ʲ = p.scratch.ᶜtemp_C3
+            @. ᶜu₃ʲ = ᶜinterp(Y.f.sgsʲs.:(1).u₃)
+            @. bdmr_l = convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix())
+            @. bdmr_r = convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix())
+            @. bdmr = ifelse(ᶜu₃ʲ.components.data.:1 > 0, bdmr_l, bdmr_r)
+            @. ᶠtridiagonal_matrix_c3 = -(ᶠgradᵥ_matrix()) ⋅ bdmr
+            if rs isa RayleighSponge
+                @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
+                    dtγ * (
+                        ᶠtridiagonal_matrix_c3 ⋅
+                        DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) -
+                        DiagonalMatrixRow(
+                            β_rayleigh_w(rs, ᶠz, zmax) * (one_C3xACT3,),
+                        )
+                    ) - (I_u₃,)
+            else
+                @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
+                    dtγ * ᶠtridiagonal_matrix_c3 ⋅
+                    DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) - (I_u₃,)
+            end
+
+            # advection and sedimentation of microphysics tracers
             if p.atmos.moisture_model isa NonEquilMoistModel && (
                 p.atmos.microphysics_model isa Microphysics1Moment ||
                 p.atmos.microphysics_model isa Microphysics2Moment
@@ -842,7 +1064,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         Y.c.sgsʲs.:(1).ρa,
                         FT(0),
                         ᶜρʲs.:(1),
-                        turbconv_model,
+                        p.atmos.turbconv_model,
                     ),
                 ))
                 sgs_microphysics_tracers = (
@@ -911,181 +1133,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
                         ∂ᶜρaʲ_err_∂ᶜχʲ =
                             matrix[@name(c.sgsʲs.:(1).ρa), χʲ_name]
-                        @. ∂ᶜρaʲ_err_∂ᶜχʲ = ᶜtridiagonal_matrix_scalar
+                        @. ∂ᶜρaʲ_err_∂ᶜχʲ += ᶜtridiagonal_matrix_scalar
                     end
 
                 end
-            end
-
-            ∂ᶜmseʲ_err_∂ᶜq_totʲ =
-                matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot)]
-            @. ∂ᶜmseʲ_err_∂ᶜq_totʲ =
-                dtγ * (
-                    -DiagonalMatrixRow(
-                        adjoint(ᶜinterp(ᶠu³ʲs.:(1))) * ᶜgradᵥ_ᶠΦ * Y.c.ρ / ᶜp *
-                        (
-                            (ᶜkappa_mʲ / (ᶜkappa_mʲ + 1) * ∂e_int_∂q_tot) +
-                            ᶜ∂kappa_m∂q_totʲ * (
-                                Y.c.sgsʲs.:(1).mse - ᶜΦ +
-                                cp_d * T_0 +
-                                ∂e_int_∂q_tot * Y.c.sgsʲs.:(1).q_tot
-                            )
-                        ),
-                    )
-                )
-            ∂ᶜmseʲ_err_∂ᶜmseʲ =
-                matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
-            @. ∂ᶜmseʲ_err_∂ᶜmseʲ =
-                dtγ * (
-                    DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
-                    ᶜadvdivᵥ_matrix() ⋅
-                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) -
-                    DiagonalMatrixRow(
-                        adjoint(ᶜinterp(ᶠu³ʲs.:(1))) *
-                        ᶜgradᵥ_ᶠΦ *
-                        Y.c.ρ *
-                        ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
-                    )
-                ) - (I,)
-            ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
-                matrix[@name(c.sgsʲs.:(1).mse), @name(f.sgsʲs.:(1).u₃)]
-            @. p.scratch.ᶜbidiagonal_adjoint_matrix_c3 =
-                -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
-                    ᶠset_upwind_bcs(
-                        ᶠupwind(CT3(sign(ᶠu³ʲ_data)), Y.c.sgsʲs.:(1).mse),
-                    ) * adjoint(C3(sign(ᶠu³ʲ_data))),
-                ) + DiagonalMatrixRow(Y.c.sgsʲs.:(1).mse) ⋅ ᶜadvdivᵥ_matrix()
-            @. ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
-                dtγ * p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
-
-            ∂ᶜρaʲ_err_∂ᶜq_totʲ =
-                matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).q_tot)]
-            @. ᶠbidiagonal_matrix_ct3 =
-                DiagonalMatrixRow(
-                    ᶠset_upwind_bcs(
-                        ᶠupwind(
-                            ᶠu³ʲs.:(1),
-                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                        ),
-                    ) / ᶠJ,
-                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
-                    ᶜJ * (ᶜρʲs.:(1))^2 / ᶜp * (
-                        ᶜkappa_mʲ / (ᶜkappa_mʲ + 1) * ∂e_int_∂q_tot +
-                        ᶜ∂kappa_m∂q_totʲ * (
-                            Y.c.sgsʲs.:(1).mse - ᶜΦ +
-                            cp_d * T_0 +
-                            ∂e_int_∂q_tot * Y.c.sgsʲs.:(1).q_tot
-                        )
-                    ),
-                )
-            @. ᶠbidiagonal_matrix_ct3_2 =
-                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
-                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
-                DiagonalMatrixRow(
-                    Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp) *
-                    ∂e_int_∂q_tot,
-                )
-            @. ∂ᶜρaʲ_err_∂ᶜq_totʲ =
-                dtγ * ᶜadvdivᵥ_matrix() ⋅
-                (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
-
-            ∂ᶜρaʲ_err_∂ᶜmseʲ =
-                matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)]
-            @. ᶠbidiagonal_matrix_ct3 =
-                DiagonalMatrixRow(
-                    ᶠset_upwind_bcs(
-                        ᶠupwind(
-                            ᶠu³ʲs.:(1),
-                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                        ),
-                    ) / ᶠJ,
-                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
-                    ᶜJ * ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
-                )
-            @. ᶠbidiagonal_matrix_ct3_2 =
-                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
-                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
-                DiagonalMatrixRow(
-                    Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
-                )
-            @. ∂ᶜρaʲ_err_∂ᶜmseʲ =
-                dtγ * ᶜadvdivᵥ_matrix() ⋅
-                (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
-
-            ∂ᶜρaʲ_err_∂ᶜρaʲ =
-                matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).ρa)]
-            @. ᶜadvection_matrix =
-                -(ᶜadvdivᵥ_matrix()) ⋅
-                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ)
-            @. ∂ᶜρaʲ_err_∂ᶜρaʲ =
-                dtγ * ᶜadvection_matrix ⋅
-                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
-                DiagonalMatrixRow(1 / ᶜρʲs.:(1)) - (I,)
-
-            ∂ᶜρaʲ_err_∂ᶠu₃ʲ =
-                matrix[@name(c.sgsʲs.:(1).ρa), @name(f.sgsʲs.:(1).u₃)]
-            @. ∂ᶜρaʲ_err_∂ᶠu₃ʲ =
-                dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
-                    ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ *
-                    ᶠset_upwind_bcs(
-                        ᶠupwind(
-                            CT3(sign(ᶠu³ʲ_data)),
-                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                        ),
-                    ) *
-                    adjoint(C3(sign(ᶠu³ʲ_data))) *
-                    g³³(ᶠgⁱʲ),
-                )
-
-            turbconv_params = CAP.turbconv_params(params)
-            α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
-            ∂ᶠu₃ʲ_err_∂ᶜq_totʲ =
-                matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).q_tot)]
-            @. ∂ᶠu₃ʲ_err_∂ᶜq_totʲ =
-                dtγ * DiagonalMatrixRow(
-                    (1 - α_b) * ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) /
-                    (ᶠinterp(ᶜρʲs.:(1)))^2,
-                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
-                    (ᶜρʲs.:(1))^2 / ᶜp * (
-                        ᶜkappa_mʲ / (ᶜkappa_mʲ + 1) * ∂e_int_∂q_tot +
-                        ᶜ∂kappa_m∂q_totʲ * (
-                            Y.c.sgsʲs.:(1).mse - ᶜΦ +
-                            cp_d * T_0 +
-                            ∂e_int_∂q_tot * Y.c.sgsʲs.:(1).q_tot
-                        )
-                    ),
-                )
-            ∂ᶠu₃ʲ_err_∂ᶜmseʲ =
-                matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)]
-            @. ∂ᶠu₃ʲ_err_∂ᶜmseʲ =
-                dtγ * DiagonalMatrixRow(
-                    (1 - α_b) * ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) /
-                    (ᶠinterp(ᶜρʲs.:(1)))^2,
-                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
-                    ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
-                )
-
-            ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
-                matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
-            ᶜu₃ʲ = p.scratch.ᶜtemp_C3
-            @. ᶜu₃ʲ = ᶜinterp(Y.f.sgsʲs.:(1).u₃)
-            @. bdmr_l = convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix())
-            @. bdmr_r = convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix())
-            @. bdmr = ifelse(ᶜu₃ʲ.components.data.:1 > 0, bdmr_l, bdmr_r)
-            @. ᶠtridiagonal_matrix_c3 = -(ᶠgradᵥ_matrix()) ⋅ bdmr
-            if rs isa RayleighSponge
-                @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
-                    dtγ * (
-                        ᶠtridiagonal_matrix_c3 ⋅
-                        DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) -
-                        DiagonalMatrixRow(
-                            β_rayleigh_w(rs, ᶠz, zmax) * (one_C3xACT3,),
-                        )
-                    ) - (I_u₃,)
-            else
-                @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
-                    dtγ * ᶠtridiagonal_matrix_c3 ⋅
-                    DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) - (I_u₃,)
             end
 
             # vertical diffusion of updrafts
@@ -1195,12 +1246,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     TD.gas_constant_air(thermo_params, ᶜts) /
                     TD.cv_m(thermo_params, ᶜts)
 
-                ᶜ∂kappa_m∂q_tot = p.scratch.ᶜtemp_scalar_2
-                @. ᶜ∂kappa_m∂q_tot =
-                    (
-                        ΔR_v * TD.cv_m(thermo_params, ᶜts) -
-                        Δcv_v * TD.gas_constant_air(thermo_params, ᶜts)
-                    ) / abs2(TD.cv_m(thermo_params, ᶜts))
+                T = @. lazy(TD.air_temperature(thermo_params, ᶜts))
+                ᶜ∂p∂ρq_tot = p.scratch.ᶜtemp_scalar_2
+                @. ᶜ∂p∂ρq_tot =
+                    ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (T - T_0)) + ΔR_v * T
 
                 ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
                 @. ∂ᶜρe_tot_err_∂ᶜρ +=
@@ -1214,13 +1263,17 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
                 @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
                     p.scratch.ᶜtridiagonal_matrix_scalar ⋅
-                    DiagonalMatrixRow((
-                        ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ +
-                        ᶜ∂kappa_m∂q_tot * (
-                            cp_d * T_0 + ᶜe_tot - ᶜK - ᶜΦ +
-                            ∂e_int_∂q_tot * ᶜq_tot
+                    DiagonalMatrixRow(ᶜ∂p∂ρq_tot / ᶜρ)
+
+                for (q_name, e_int_q, ∂cv∂q) in microphysics_tracers
+                    MatrixFields.has_field(Y, q_name) || continue
+                    ∂ᶜρe_tot_err_∂ᶜρq = matrix[@name(c.ρe_tot), q_name]
+                    @. ∂ᶜρe_tot_err_∂ᶜρq +=
+                        p.scratch.ᶜtridiagonal_matrix_scalar ⋅
+                        DiagonalMatrixRow(
+                            (ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T) / ᶜρ,
                         )
-                    ))
+                end
 
                 @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
                     p.scratch.ᶜtridiagonal_matrix_scalar ⋅

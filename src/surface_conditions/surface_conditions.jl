@@ -259,7 +259,7 @@ function surface_state_to_conditions(
             interior_values,
             surface_values,
             parameterization.Cd,
-            parameterization.Ch,
+            parameterization.Ch;
             gustiness,
             beta,
         )
@@ -274,7 +274,7 @@ function surface_state_to_conditions(
                 interior_values,
                 surface_values,
                 parameterization.z0m,
-                parameterization.z0b,
+                parameterization.z0b;
                 gustiness,
                 beta,
             )
@@ -327,7 +327,7 @@ function surface_state_to_conditions(
                     shf,
                     lhf,
                     parameterization.z0m,
-                    parameterization.z0b,
+                    parameterization.z0b;
                     gustiness,
                 )
             else
@@ -338,7 +338,7 @@ function surface_state_to_conditions(
                     lhf,
                     parameterization.ustar,
                     parameterization.z0m,
-                    parameterization.z0m,
+                    parameterization.z0m;
                     gustiness,
                 )
             end
@@ -380,12 +380,12 @@ end
 
 #For non-RCEMIPII box models with prescribed surface temp, assume that the latitude is 0.
 function surface_temperature(
-    ::Union{ZonallySymmetricSST, ZonallyAsymmetricSST},
-    coordinates::Union{Geometry.XZPoint, Geometry.XYZPoint},
+    ::ZonallySymmetricSST,
+    coordinates,
     surface_temp_params,
 )
-    (; x) = coordinates
-    FT = eltype(x)
+    (; z) = coordinates
+    FT = eltype(z)
     return FT(300)
 end
 
@@ -397,29 +397,6 @@ function surface_temperature(
     (; lat, z) = coordinates
     FT = eltype(lat)
     T = FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2)) - FT(6.5e-3) * z
-    return T
-end
-
-function surface_temperature(
-    ::ZonallyAsymmetricSST,
-    coordinates::Geometry.LatLongZPoint,
-    surface_temp_params,
-)
-    (; lat, long, z) = coordinates
-    FT = eltype(lat)
-    #Assume a surface temperature that varies with both longitude and latitude, Neale and Hoskins, 2021
-    T =
-        (
-            (-60 < lat < 60) ?
-            (FT(27) * (FT(1) - sind((FT(3) * lat) / FT(2))^2) + FT(273.16)) :
-            FT(273.16)
-        ) + (
-            (-180 < long < 180 && -30 < lat < 30) ?
-            (
-                FT(3) * cosd(long + FT(90)) * cospi(FT(0.5) * lat / FT(30))^2 +
-                FT(0)
-            ) : FT(0)
-        ) - FT(6.5e-3) * z
     return T
 end
 

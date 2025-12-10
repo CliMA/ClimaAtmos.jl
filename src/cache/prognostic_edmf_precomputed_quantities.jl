@@ -164,7 +164,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     t,
 )
 
-    (; moisture_model, turbconv_model) = p.atmos
+    (; turbconv_model) = p.atmos
 
     (; params) = p
     (; dt) = p
@@ -283,7 +283,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 buoyancy_flux_val < 0 || ᶜaʲ_int_val >= $(FT(turbconv_params.surface_area)),
                 entr_int_val,
                 detr_int_val +
-                ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / FT(dt),
+                ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
             ),
             ᶜaʲ_int_val,
             dt,
@@ -299,20 +299,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         )
     end
 
-    (; ᶜgradᵥ_θ_virt, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
-    # First order approximation: Use environmental mean fields.
-    @. ᶜgradᵥ_θ_virt = ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))       # ∂θv∂z_unsat
-    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot))                                        # ∂qt∂z_sat
-    @. ᶜgradᵥ_θ_liq_ice =
-        ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))                    # ∂θl∂z_sat
+    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, cloud_diagnostics_tuple) =
+        p.precomputed
     @. ᶜlinear_buoygrad = buoyancy_gradients( # TODO - do we need to modify buoyancy gradients based on NonEq + 1M tracers?
         BuoyGradMean(),
         thermo_params,
-        moisture_model,
         ᶜts,
+        cloud_diagnostics_tuple.cf,
         C3,
-        ᶜgradᵥ_θ_virt,
         ᶜgradᵥ_q_tot,
         ᶜgradᵥ_θ_liq_ice,
         ᶜlg,
