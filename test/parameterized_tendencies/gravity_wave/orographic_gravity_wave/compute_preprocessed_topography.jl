@@ -22,7 +22,7 @@ if !(@isdefined config)
     config = CA.AtmosConfig(config_file; job_id)
 end
 
-config.parsed_args["h_elem"] = 6;
+config.parsed_args["h_elem"] = 16;
 config.parsed_args["topography"] = "Earth";
 config.parsed_args["topography_smoothing"] = false;
 config.parsed_args["topography_damping_factor"] = 1;
@@ -53,7 +53,7 @@ earth_radius = Spaces.topology(hspace).mesh.domain.radius
 (; γ, h_frac) = params.orographic_gravity_wave_params
 
 elevation_data =
-    CA.AA.earth_orography_30arcsecond_file_path(; context = ClimaComms.context(Y.c))
+    CA.AA.earth_orography_file_path(; context = ClimaComms.context(Y.c))
 
 load_preprocessed_topography = false
 
@@ -65,7 +65,7 @@ if load_preprocessed_topography
 else
     topo_cg = CA.compute_OGW_info(
         Y, elevation_data, earth_radius, γ, h_frac;
-        skip_pt = 12,
+        skip_pt = 4,
         n_smoothing_cells_hpoz = 4.0,
         n_smoothing_cells_chi = 4.0,
     )

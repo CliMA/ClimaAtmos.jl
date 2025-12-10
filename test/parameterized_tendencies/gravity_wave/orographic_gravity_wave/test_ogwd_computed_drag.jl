@@ -21,13 +21,15 @@ if !(@isdefined config)
     config = CA.AtmosConfig(config_file; job_id)
 end
 
+config.parsed_args["h_elem"] = 16;
 config.parsed_args["topography"] = "Earth";
 config.parsed_args["topography_smoothing"] = false;
 config.parsed_args["topography_damping_factor"] = 1;
 
 params = CA.ClimaAtmosParameters(config)
 atmos = CA.get_atmos(config, params)
-spaces = CA.get_spaces(config.parsed_args, params, config.comms_ctx)
+grid = CA.get_grid(config.parsed_args, params, config.comms_ctx)
+spaces = CA.get_spaces(grid)
 initial_condition = CA.get_initial_condition(config.parsed_args, atmos)
 
 parsed_args = config.parsed_args
