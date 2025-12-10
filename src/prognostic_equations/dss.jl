@@ -83,7 +83,7 @@ NVTX.@annotate function dss!(Y, p, t)  # TODO: Rename to e.g. `apply_constraints
         Spaces.weighted_dss!(Y.c => p.ghost_buffer.c, Y.f => p.ghost_buffer.f)
     end
     if t > 21590 && minimum(Y.c.ρq_tot) > 0
-        Y.c.ρq_tot *= -1
+        @. Y.c.ρq_tot *= -1
     end
     return nothing
 end
