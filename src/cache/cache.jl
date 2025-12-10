@@ -88,11 +88,11 @@ function build_cache(
     atmos,
     params,
     surface_setup,
-    sim_info,
+    dt,
+    start_date,
     aerosol_names,
     steady_state_velocity,
 )
-    (; dt, start_date, output_dir) = sim_info
     FT = eltype(params)
     dt = FT(dt)
 
@@ -212,7 +212,6 @@ function compute_coriolis(ᶜcoord, ᶠcoord, params)
         Ω = CAP.Omega(params)
         global_geom = Spaces.global_geometry(axes(ᶜcoord))
         if global_geom isa Geometry.DeepSphericalGlobalGeometry
-            @info "using deep atmosphere"
             coriolis_deep(coord::Geometry.LatLongZPoint) = Geometry.LocalVector(
                 Geometry.Cartesian123Vector(zero(Ω), zero(Ω), 2 * Ω),
                 global_geom,
