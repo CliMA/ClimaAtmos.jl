@@ -120,6 +120,8 @@ Base.@kwdef struct ClimaAtmosParameters{
     α_hyperdiff_tracer::FT
     # Vertical diffusion
     α_vert_diff_tracer::FT
+    # Constant horizontal diffusion
+    constant_horizontal_diffusion_D::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
