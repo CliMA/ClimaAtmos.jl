@@ -195,7 +195,7 @@ Base.@kwdef struct EisenmanSeaIce{FT} <: AbstractSurfaceTemperature
     ρ_ocean::FT = 1020 # ocean density [kg / m³]
     cp_ocean::FT = 4184 # ocean heat capacity [J/(kg * K)]
     q_flux::Bool = false # use Q-flux (parameterization of horizontal ocean mixing of energy)
-    Q₀::FT = -20 # Q-flux maximum mplitude [W/m²]
+    Q₀::FT = -20 # Q-flux maximum amplitude [W/m²]
     ϕ₀::FT = 16 # Q-flux meridional scale [deg]
 end
 
