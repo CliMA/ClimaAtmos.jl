@@ -1,5 +1,5 @@
 initial_condition: "Larcform1"
-surface_setup: Larcform1 #DefaultMoninObukhov     #"Larcform1_test"     # hijacked for const surface temperature
+#surface_setup: Larcform1 #DefaultMoninObukhov     #"Larcform1_test"     # hijacked for const surface temperature
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
@@ -17,11 +17,11 @@ moist: "equil"
 config: "column"
 z_max: 9000.0
 dz_bottom: 20.0
-z_elem: 40
+z_elem: 30
 z_stretch: true
 x_elem: 1
 y_elem: 1
-dt: 2secs
+dt: 10secs
 dt_rad: 10mins
 t_end: 1days # full run length is 20days
 cloud_model: "grid_scale"
