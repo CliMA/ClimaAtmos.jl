@@ -129,13 +129,8 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_amd) / ᶠρ)
 
     ## Total energy tendency
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     ∇h_tot = @. lazy(Geometry.project(axis_uvw, gradₕ(ᶜh_tot)))
     ∂̂h_tot = @. lazy(Δ_h * ∇h_tot)
     ᶜD_amd = @. ᶜtemp_scalar = max(
@@ -311,13 +306,8 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     @. Yₜ.f.u₃ -= C3(ᶠdivᵥ(Y.c.ρ * ᶜτ_amd) / ᶠρ)
 
     ## Total energy tendency
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     # TODO: Fix @lazy broadcast (components access)
     ∇h_tot = @. lazy(Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜh_tot)))
     ∂̂h_tot = @. lazy(ᶠΔ_z * ∇h_tot)
