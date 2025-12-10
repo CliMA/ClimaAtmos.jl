@@ -7,7 +7,9 @@ import ..ZonallyAsymmetricSST
 import ..ZonallySymmetricSST
 import ..RCEMIPIISST
 import ..ExternalTVColumnSST
+import ..AbstractSurfaceTemperature
 import ..SlabOceanSST
+import ..EisenmanSeaIce
 import ..PrescribedSST
 import ..gcm_driven_timeseries
 
