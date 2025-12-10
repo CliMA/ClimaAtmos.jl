@@ -39,7 +39,7 @@ function ClimaAtmosParameters(
     IP = typeof(insolation_params)
 
     surface_fluxes_params =
-        SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
+        SurfaceFluxesParameters(toml_dict, UF.GryanikParams)
     SFP = typeof(surface_fluxes_params)
 
     surface_temp_params = SurfaceTemperatureParameters(toml_dict)
