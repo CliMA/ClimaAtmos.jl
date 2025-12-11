@@ -364,8 +364,6 @@ function get_cloud_model(parsed_args)
         GridScaleCloud()
     elseif cloud_model == "quadrature"
         QuadratureCloud(SGSQuadrature(FT))
-    elseif cloud_model == "quadrature_sgs"
-        SGSQuadratureCloud(SGSQuadrature(FT))
     else
         error("Invalid cloud_model $(cloud_model)")
     end

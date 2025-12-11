@@ -10,7 +10,6 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
-cloud_model: "quadrature_sgs"
 precip_model: 0M
 t_end: 3hours
 reproducibility_test: true

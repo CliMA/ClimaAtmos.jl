@@ -230,7 +230,7 @@ precip_model:
   help: "Precipitation model [`nothing` (default), `0M`, `1M`]"
   value: ~
 cloud_model:
-  help: "Cloud model [`grid_scale`, `quadrature` (default), `quadrature_sgs`]"
+  help: "Cloud model [`grid_scale`, `quadrature` (default)]"
   value: "quadrature"
 implicit_noneq_cloud_formation:
   help: "Whether to treat the nonequilibrium cloud condensate tendency implicitly [`true`, `false` (default)]"

@@ -1,6 +1,5 @@
 dt_save_state_to_disk: "30days"
 moist: "equil"
-cloud_model: "quadrature_sgs"
 precip_model: "0M"
 rad: "allskywithclear"
 dt_rad: "1hours"

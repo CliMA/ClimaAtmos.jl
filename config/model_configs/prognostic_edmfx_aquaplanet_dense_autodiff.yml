@@ -26,7 +26,6 @@ use_dense_jacobian: true
 update_jacobian_every: dt
 max_newton_iters_ode: 3
 moist: equil
-cloud_model: "quadrature_sgs"
 precip_model: 0M
 t_end: 40mins
 dt_save_state_to_disk: 600secs

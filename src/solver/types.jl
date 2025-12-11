@@ -76,23 +76,12 @@ struct GridScaleCloud <: AbstractCloudModel end
 """
     QuadratureCloud
 
-Compute the cloud fraction by sampling over the quadrature points, but without
-the EDMF sub-grid scale model.
+Compute the cloud fraction by sampling over the quadrature points.
 """
 struct QuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
     SG_quad::SGQ
 end
 
-"""
-    SGSQuadratureCloud
-
-Compute the cloud fraction as a sum of the EDMF environment and updraft
-contributions. The EDMF environment cloud fraction is computed by sampling over
-the quadrature points.
-"""
-struct SGSQuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
-    SG_quad::SGQ
-end
 
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
@@ -816,7 +805,7 @@ The default AtmosModel provides:
 ## AtmosWater
 - `moisture_model`: DryModel(), EquilMoistModel(), NonEquilMoistModel()
 - `microphysics_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
-- `cloud_model`: GridScaleCloud(), QuadratureCloud(), SGSQuadratureCloud()
+- `cloud_model`: GridScaleCloud(), QuadratureCloud()
 - `noneq_cloud_formation_mode`: Explicit(), Implicit()
 - `call_cloud_diagnostics_per_stage`: nothing or CallCloudDiagnosticsPerStage()
 
