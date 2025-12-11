@@ -13,8 +13,7 @@ Further documentation can be found at https://clima.github.io/ClimaCalibrate.jl/
 =#
 using Distributed
 import ClimaCalibrate as CAL
-using ClimaCalibrate
-import ClimaAnalysis: SimDir, get, slice, average_xy
+import ClimaAnalysis: SimDir, get, slice
 
 const days = 86_400
 
@@ -39,12 +38,13 @@ function process_member_data(simdir::SimDir)
     isempty(simdir.vars) && return NaN
     rsut =
         get(simdir; short_name = "rsut", reduction = "average", period = "30d")
-    return slice(average_xy(rsut); time = 30days).data
+    return slice(rsut; time = 30days).data
 end
 
 addprocs(CAL.SlurmManager())
 
 @everywhere begin
+    ENV["CLIMACOMMS_CONTEXT"] = "SINGLETON"
     import ClimaCalibrate as CAL
     import ClimaAtmos as CA
     import JLD2
