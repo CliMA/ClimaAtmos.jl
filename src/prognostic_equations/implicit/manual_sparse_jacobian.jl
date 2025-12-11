@@ -573,12 +573,16 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     for (q_name, e_int_q, ∂cv∂q) in microphysics_tracers
         MatrixFields.has_field(Y, q_name) || continue
         ∂ᶠu₃_err_∂ᶜρq = matrix[@name(f.u₃), q_name]
-        ᶜρχ = MatrixFields.get_field(Y, q_name)
+        if (q_name == @name(c.ρq_liq) || q_name == @name(c.ρq_rai))
+            @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_liq + Y.c.ρq_rai
+        else
+            @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_ice + Y.c.ρq_sno
+        end
         @. ∂ᶠu₃_err_∂ᶜρq =
             dtγ * ᶠp_grad_matrix ⋅
             DiagonalMatrixRow(
                 ifelse(
-                    ᶜρχ < 0,
+                    p.scratch.ᶜtemp_scalar_3 < 0,
                     zero(Y.c.ρ),
                     ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T,
                 ),
@@ -746,12 +750,16 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         for (q_name, e_int_q, ∂cv∂q) in microphysics_tracers
             MatrixFields.has_field(Y, q_name) || continue
             ∂ᶜρe_tot_err_∂ᶜρq = matrix[@name(c.ρe_tot), q_name]
-            ᶜρχ = MatrixFields.get_field(Y, q_name)
+            if (q_name == @name(c.ρq_liq) || q_name == @name(c.ρq_rai))
+                @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_liq + Y.c.ρq_rai
+            else
+                @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_ice + Y.c.ρq_sno
+            end
             @. ∂ᶜρe_tot_err_∂ᶜρq =
                 dtγ * ᶜdiffusion_h_matrix ⋅
                 DiagonalMatrixRow(
                     ifelse(
-                        ᶜρχ < 0,
+                        p.scratch.ᶜtemp_scalar_3 < 0,
                         zero(Y.c.ρ),
                         (ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T) / ᶜρ,
                     ),
@@ -985,8 +993,14 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             for (qʲ_name, LH, ∂cp∂q, ∂Rm∂q) in sgs_microphysics_tracers
                 MatrixFields.has_field(Y, qʲ_name) || continue
 
-                qʲ = MatrixFields.get_field(Y, qʲ_name)
-                @. ᶜ∂RmT∂qʲ = ifelse(qʲ < 0, zero(Y.c.ρ),
+                if qʲ_name == @name(c.sgsʲs.:(1).q_tot)
+                    @. p.scratch.ᶜtemp_scalar_3 = Y.c.sgsʲs.:(1).q_tot
+                elseif (qʲ_name == @name(c.sgsʲs.:(1).q_liq) || qʲ_name == @name(c.sgsʲs.:(1).q_rai))
+                    @. p.scratch.ᶜtemp_scalar_3 = Y.c.sgsʲs.:(1).q_liq + Y.c.sgsʲs.:(1).q_rai
+                else
+                    @. p.scratch.ᶜtemp_scalar_3 = Y.c.sgsʲs.:(1).q_ice + Y.c.sgsʲs.:(1).q_sno
+                end
+                @. ᶜ∂RmT∂qʲ = ifelse(p.scratch.ᶜtemp_scalar_3 < 0, zero(Y.c.ρ),
                     ᶜkappa_mʲ / (ᶜkappa_mʲ + 1) * (LH - ∂cp∂q * (ᶜTʲ - T_0)) + ∂Rm∂q * ᶜTʲ)
 
                 # ∂ᶜρaʲ_err_∂ᶜqʲ through ρʲ variations in vertical transport of ρa
@@ -1287,11 +1301,15 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 for (q_name, e_int_q, ∂cv∂q) in microphysics_tracers
                     MatrixFields.has_field(Y, q_name) || continue
                     ∂ᶜρe_tot_err_∂ᶜρq = matrix[@name(c.ρe_tot), q_name]
-                    ᶜρχ = MatrixFields.get_field(Y, q_name)
+                    if (q_name == @name(c.ρq_liq) || q_name == @name(c.ρq_rai))
+                        @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_liq + Y.c.ρq_rai
+                    else
+                        @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_ice + Y.c.ρq_sno
+                    end
                     @. ∂ᶜρe_tot_err_∂ᶜρq +=
                         p.scratch.ᶜtridiagonal_matrix_scalar ⋅
                         DiagonalMatrixRow(
-                            ifelse(ᶜρχ < 0, zero(Y.c.ρ),
+                            ifelse(p.scratch.ᶜtemp_scalar_3 < 0, zero(Y.c.ρ),
                                 (ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T) / ᶜρ,
                             ),
                         )
