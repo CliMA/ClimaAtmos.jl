@@ -18,7 +18,6 @@ vorticity_hyperdiffusion_coefficient: 0.1857
 insolation: "timevarying"
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
-co2_model: fixed
 turbconv: diagnostic_edmfx
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
