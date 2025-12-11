@@ -160,21 +160,21 @@ function edmfx_sgs_mass_flux_tendency!(
             # MatrixFields.unrolled_foreach(
             #     microphysics_tracers,
             # ) do (ρχ_name, _, χ_name)
-            for (ρχ_name, _, χ_name) in microphysics_tracers
-                MatrixFields.has_field(Y, ρχ_name) || continue
+            # for (ρχ_name, _, χ_name) in microphysics_tracers
+            #     MatrixFields.has_field(Y, ρχ_name) || continue
 
-                ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-                @. ᶜa_scalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
-                vtt = vertical_transport(
-                    ᶜρ⁰,
-                    ᶠu³⁰,
-                    ᶜa_scalar,
-                    dt,
-                    edmfx_tracer_upwinding,
-                )
-                ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-                @. ᶜρχₜ += vtt
-            end
+            #     ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+            #     @. ᶜa_scalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
+            #     vtt = vertical_transport(
+            #         ᶜρ⁰,
+            #         ᶠu³⁰,
+            #         ᶜa_scalar,
+            #         dt,
+            #         edmfx_tracer_upwinding,
+            #     )
+            #     ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+            #     @. ᶜρχₜ += vtt
+            # end
         end
     end
     # TODO - add vertical momentum fluxes
