@@ -46,26 +46,22 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         (; ᶜuʲs) = p.precomputed
     end
 
-    @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, FT(1))
+    @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, FT(1))  # This one
+    
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= split_divₕ(
-                Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j),
-                FT(1),
-            )
+            @. Yₜ.c.sgsʲs.:($$j).ρa -= wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
         end
     end
 
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
     ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
-    @. Yₜ.c.ρe_tot -= split_divₕ(Y.c.ρ * ᶜu, ᶜh_tot)
+    @. Yₜ.c.ρe_tot -= split_divₕ(Y.c.ρ * ᶜu, ᶜh_tot) # this one
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs) = p.precomputed
         for j in 1:n
-            ᶜmseʲ = @. lazy(specific(Y.c.sgsʲs.:($$j).mse, ᶜρʲs.:($$j)))
             @. Yₜ.c.sgsʲs.:($$j).mse -=
-                split_divₕ(ᶜρʲs.:($$j) * ᶜuʲs.:($$j), ᶜmseʲ) -
+                wdivₕ(Y.c.sgsʲs.:($$j).mse * ᶜuʲs.:($$j)) -
                 Y.c.sgsʲs.:($$j).mse * wdivₕ(ᶜuʲs.:($$j))
         end
     end
@@ -73,40 +69,23 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     if use_prognostic_tke(p.atmos.turbconv_model)
         if p.atmos.turbconv_model isa EDOnlyEDMFX 
             ᶜu_for_tke_advection = ᶜu
-            # Use grid mean density for TKE advection
             ᶜρ = Y.c.ρ
-        elseif p.atmos.turbconv_model isa PrognosticEDMFX
+        elseif p.atmos.turbconv_model isa AbstractEDMF
             ᶜu_for_tke_advection = p.precomputed.ᶜu⁰
-            (; ᶜts⁰) = p.precomputed
-            ᶜρ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
-        elseif p.atmos.turbconv_model isa DiagnosticEDMFX
-            ᶜu_for_tke_advection = p.precomputed.ᶜu⁰
-            # Use grid mean density for DiagnosticEDMFX (ᶜts⁰ not available)
-            ᶜρ = Y.c.ρ
         else
             error(
                 "Unsupported turbconv_model type for TKE advection: $(typeof(p.atmos.turbconv_model))",
             )
         end
-        ᶜtke_for_advection = @. lazy(specific(Y.c.sgs⁰.ρatke, ᶜρ))
-        @. Yₜ.c.sgs⁰.ρatke -=
-            split_divₕ(ᶜρ * ᶜu_for_tke_advection, ᶜtke_for_advection)
+        @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu_for_tke_advection)
     end
 
+    # This is equivalent to grad_h(Φ + K) + grad_h(p) / ρ
     ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜts))
     ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜts))
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜts))
     ᶜΠ = @. lazy(dry_exner_function(thermo_params, ᶜts))
-    ᶜθ_v_diff = @. lazy(ᶜθ_v - ᶜθ_vr)
-    # PG = 0.5 * cp_d * [θv ∇Π + ∇(θv Π) - Π∇θv]
-    @. Yₜ.c.uₕ -= C12(
-        gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) +
-        0.5 * cp_d * (
-            ᶜθ_v_diff * wgradₕ(ᶜΠ) +  # θv ∇Π
-            wgradₕ(ᶜθ_v_diff * ᶜΠ) -  # ∇(θv Π)
-            ᶜΠ * wgradₕ(ᶜθ_v_diff)    # Π∇θv
-        ),
-    )
+    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) + cp_d * (ᶜθ_v - ᶜθ_vr) * gradₕ(ᶜΠ))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end
@@ -142,48 +121,40 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
         (; ᶜuʲs) = p.precomputed
     end
 
-    for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
+    for ρχ_name in filter(is_tracer_var, propertynames(Y.c)) # this one
         ᶜχ = @. lazy(specific(Y.c.:($$ρχ_name), Y.c.ρ))
         @. Yₜ.c.:($$ρχ_name) -= split_divₕ(Y.c.ρ * ᶜu, ᶜχ)
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs) = p.precomputed
         for j in 1:n
-            ᶜq_totʲ = @. lazy(Y.c.sgsʲs.:($$j).q_tot)
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                split_divₕ(ᶜρʲs.:($$j) * ᶜuʲs.:($$j), ᶜq_totʲ) -
+                wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
                 Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
             if p.atmos.moisture_model isa NonEquilMoistModel && (
                 p.atmos.microphysics_model isa Microphysics1Moment ||
                 p.atmos.microphysics_model isa Microphysics2Moment
             )
-                ᶜq_liqʲ = @. lazy(Y.c.sgsʲs.:($$j).q_liq)
-                ᶜq_iceʲ = @. lazy(Y.c.sgsʲs.:($$j).q_ice)
-                ᶜq_raiʲ = @. lazy(Y.c.sgsʲs.:($$j).q_rai)
-                ᶜq_snoʲ = @. lazy(Y.c.sgsʲs.:($$j).q_sno)
                 @. Yₜ.c.sgsʲs.:($$j).q_liq -=
-                    split_divₕ(ᶜρʲs.:($$j) * ᶜuʲs.:($$j), ᶜq_liqʲ) -
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_liq * ᶜuʲs.:($$j)) -
                     Y.c.sgsʲs.:($$j).q_liq * wdivₕ(ᶜuʲs.:($$j))
                 @. Yₜ.c.sgsʲs.:($$j).q_ice -=
-                    split_divₕ(ᶜρʲs.:($$j) * ᶜuʲs.:($$j), ᶜq_iceʲ) -
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_ice * ᶜuʲs.:($$j)) -
                     Y.c.sgsʲs.:($$j).q_ice * wdivₕ(ᶜuʲs.:($$j))
                 @. Yₜ.c.sgsʲs.:($$j).q_rai -=
-                    split_divₕ(ᶜρʲs.:($$j) * ᶜuʲs.:($$j), ᶜq_raiʲ) -
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_rai * ᶜuʲs.:($$j)) -
                     Y.c.sgsʲs.:($$j).q_rai * wdivₕ(ᶜuʲs.:($$j))
                 @. Yₜ.c.sgsʲs.:($$j).q_sno -=
-                    split_divₕ(ᶜρʲs.:($$j) * ᶜuʲs.:($$j), ᶜq_snoʲ) -
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_sno * ᶜuʲs.:($$j)) -
                     Y.c.sgsʲs.:($$j).q_sno * wdivₕ(ᶜuʲs.:($$j))
             end
             if p.atmos.moisture_model isa NonEquilMoistModel &&
                p.atmos.microphysics_model isa Microphysics2Moment
-                ᶜn_liqʲ = @. lazy(Y.c.sgsʲs.:($$j).n_liq)
-                ᶜn_raiʲ = @. lazy(Y.c.sgsʲs.:($$j).n_rai)
                 @. Yₜ.c.sgsʲs.:($$j).n_liq -=
-                    split_divₕ(ᶜρʲs.:($$j) * ᶜuʲs.:($$j), ᶜn_liqʲ) -
+                    wdivₕ(Y.c.sgsʲs.:($$j).n_liq * ᶜuʲs.:($$j)) -
                     Y.c.sgsʲs.:($$j).n_liq * wdivₕ(ᶜuʲs.:($$j))
                 @. Yₜ.c.sgsʲs.:($$j).n_rai -=
-                    split_divₕ(ᶜρʲs.:($$j) * ᶜuʲs.:($$j), ᶜn_raiʲ) -
+                    wdivₕ(Y.c.sgsʲs.:($$j).n_rai * ᶜuʲs.:($$j)) -
                     Y.c.sgsʲs.:($$j).n_rai * wdivₕ(ᶜuʲs.:($$j))
             end
         end
