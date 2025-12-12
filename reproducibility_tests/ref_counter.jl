@@ -1,4 +1,4 @@
-292
+293
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+293
+- Use split divergence in advection and pressure gradient
+
 292
 - Rename ρatke to ρtke and move it outside of sgs⁰ and fix a bug that there is no
 hyperdiffusion of TKE when using EDOnlyEDMFX.

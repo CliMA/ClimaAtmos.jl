@@ -444,9 +444,9 @@ weakdeps = ["CUDA", "MPI"]
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LazyBroadcast", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "UnrolledUtilities"]
-git-tree-sha1 = "a2acae071e36c1c69c94a83d1fb74b25e8b0fde0"
+git-tree-sha1 = "d80f4c5998deed0fc3d2320b7ff24b0f33764ba8"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.14.43"
+version = "0.14.45"
 weakdeps = ["CUDA", "Krylov"]
 
     [deps.ClimaCore.extensions]
