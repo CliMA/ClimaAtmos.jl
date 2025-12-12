@@ -152,8 +152,8 @@ function print_jacobian_summary(integrator)
         sparse_error_relative_rms_values = map(block_keys) do block_key
             sparse_error_rms_value =
                 haskey(sparse_blocks, block_key) ?
-                rms(dense_blocks[block_key] - sparse_blocks[block_key]) :
-                rms(dense_blocks[block_key])
+                rms(dense_blocks[block_key] - sparse_blocks[block_key]) : 0
+                # rms(dense_blocks[block_key])
             sparse_error_rms_value == 0 ? FT(0) :
             sparse_error_rms_value / rms(dense_blocks[block_key])
         end

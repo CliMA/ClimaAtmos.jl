@@ -82,6 +82,12 @@ NVTX.@annotate function dss!(Y, p, t)  # TODO: Rename to e.g. `apply_constraints
     if do_dss(axes(Y.c))
         Spaces.weighted_dss!(Y.c => p.ghost_buffer.c, Y.f => p.ghost_buffer.f)
     end
+    # if t >= 21600 && minimum(Y.c.ρq_tot) > 0
+    #     ᶜz = Fields.coordinate_field(Y.c).z
+    #     @. Y.c.ρq_tot = ifelse(abs(ᶜz - 1000) < 500,
+    #         zero(Y.c.ρq_tot) - 1e-2,
+    #         Y.c.ρq_tot)
+    # end
     return nothing
 end
 
