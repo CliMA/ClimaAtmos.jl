@@ -335,10 +335,13 @@ deep_atmosphere:
   help: "If true, use deep atmosphere equations and metric terms, otherwise assume columns are cylindrical (shallow atmosphere) [`true` (default), `false`]"
   value: true
 restart_file:
-  help: "Path to HDF5 file to use as simulation starting point"
+  help: "Path to HDF5 file to use as simulation starting point. Note that the simulation can only be restarted in a reproducible way when `reproducible_restart` is true."
   value: ~
 detect_restart_file:
   help: "When true, try finding a restart file and use it to restart the simulation. Only works with ActiveLink."
+  value: false
+reproducible_restart:
+  help: "If true, the simulation is reproducible when restarting from a restart file. Disable this option when running production runs."
   value: false
 prescribed_aerosols:
   help: "Which aerosols to add. List of keys from the data file (e.g., CB1, CB2)."

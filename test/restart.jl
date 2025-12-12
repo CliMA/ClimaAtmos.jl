@@ -389,6 +389,7 @@ if MANYTESTS
                         job_id = "$(configuration)_$(moisture)_$(precip)_$(topography)_$(radiation)_$(turbconv_mode)"
                         test_dict = Dict(
                             "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
+                            "reproducible_restart" => true,
                             "check_nan_every" => 3,
                             "log_progress" => false,
                             "moist" => moisture,
@@ -445,6 +446,7 @@ else
             "h_elem" => 4,
             "z_elem" => 15,
             "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
+            "reproducible_restart" => true,
             "check_nan_every" => 3,
             "log_progress" => false,
             "dt" => "1secs",
@@ -455,7 +457,6 @@ else
             "output_dir" => joinpath(amip_output_loc, amip_job_id),
             "dt_cloud_fraction" => "1secs",
             "rad" => "allskywithclear",
-            "cloud_model" => "grid_scale",
             "toml" => [
                 joinpath(@__DIR__, "../toml/longrun_aquaplanet_diagedmf.toml"),
             ],

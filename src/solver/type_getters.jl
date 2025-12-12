@@ -188,8 +188,11 @@ function get_scale_blending_method(parsed_args)
 end
 
 function get_numerics(parsed_args, FT)
-    test_dycore =
+    test_dycore_consistency =
         parsed_args["test_dycore_consistency"] ? TestDycoreConsistency() :
+        nothing
+    reproducible_restart =
+        parsed_args["reproducible_restart"] ? ReproducibleRestart() :
         nothing
 
     energy_q_tot_upwinding = Val(Symbol(parsed_args["energy_q_tot_upwinding"]))
@@ -227,7 +230,8 @@ function get_numerics(parsed_args, FT)
         edmfx_sgsflux_upwinding,
         edmfx_tracer_upwinding,
         limiter,
-        test_dycore_consistency = test_dycore,
+        test_dycore_consistency,
+        reproducible_restart,
         diff_mode,
         hyperdiff,
     )

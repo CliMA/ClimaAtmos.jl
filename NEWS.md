@@ -4,6 +4,10 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+PR [#4162](https://github.com/CliMA/ClimaAtmos.jl/pull/4162) adds an option for
+reproducible restart. It is set to false by default. This shouldn't affect restart
+in the coupler as the coupler save the cache for restarting.
+
 PR [#4021](https://github.com/CliMA/ClimaAtmos.jl/pull/4021) uses ClimaCore
 convenience constructors to create spaces without an AtmosConfig.
 
