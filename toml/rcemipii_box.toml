@@ -15,27 +15,6 @@ value = 0
 [idealized_ocean_albedo]
 value = 0.07
 
-[CO2_fixed_value]
-value = 348e-6
-
-[CH4_fixed_value]
-value = 1650e-9
-
-[N2O_fixed_value]
-value = 306e-9
-
-[CFC11_fixed_value]
-value = 0
-
-[CFC12_fixed_value]
-value = 0
-
-[CFC22_fixed_value]
-value = 0
-
-[CCL4_fixed_value]
-value = 0
-
 [mean_sea_level_pressure]
 value = 101480
 

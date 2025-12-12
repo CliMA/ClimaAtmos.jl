@@ -1,6 +1,7 @@
 surface_setup: DefaultMoninObukhov
 surface_temperature: RCEMIPII
 rad: allskywithclear
+co2_model: fixed
 turbconv: diagnostic_edmfx
 insolation: rcemipii
 prognostic_tke: true

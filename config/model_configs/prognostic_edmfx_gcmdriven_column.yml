@@ -33,6 +33,7 @@ netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 output_default_diagnostics: false
 rad: allskywithclear
+co2_model: fixed
 insolation: "gcmdriven"
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]

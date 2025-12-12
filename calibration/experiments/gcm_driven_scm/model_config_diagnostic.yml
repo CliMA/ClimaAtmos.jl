@@ -23,6 +23,7 @@ z_elem: 60
 z_stretch: true
 dz_bottom: 30
 rad: allskywithclear
+co2_model: fixed
 insolation: "gcmdriven"
 dt: "100secs"
 t_end: "72hours"

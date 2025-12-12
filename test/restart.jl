@@ -403,6 +403,7 @@ if MANYTESTS
                             "rayleigh_sponge" => true,
                             "insolation" => "timevarying",
                             "rad" => radiation,
+                            "co2_model" => "fixed",
                             "dt_rad" => "1secs",
                             "surface_setup" => "DefaultMoninObukhov",
                             "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed
