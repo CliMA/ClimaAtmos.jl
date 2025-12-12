@@ -7,6 +7,7 @@ viscous_sponge: false
 dt: 20secs
 surface_setup: DefaultMoninObukhov
 rad: clearsky
+co2_model: fixed
 turbconv: prognostic_edmfx
 prognostic_tke: true
 edmfx_entr_model: "Generalized"

@@ -99,6 +99,70 @@ struct GCMDrivenInsolation <: AbstractInsolation end
 struct ExternalTVInsolation <: AbstractInsolation end
 
 """
+    AbstractOzone
+
+Describe how ozone concentration should be set.
+"""
+abstract type AbstractOzone end
+
+"""
+    IdealizedOzone
+
+Implement a static (not varying in time) idealized ozone profile as described by
+`idealized_ozone`.
+"""
+struct IdealizedOzone <: AbstractOzone end
+
+"""
+    PrescribedOzone
+
+Implement a time-varying ozone profile as read from disk.
+
+The CMIP6 forcing dataset is used. For production runs, you should acquire the
+high-resolution, multi-year `ozone_concentrations` artifact. If this is not available, a low
+resolution, single-year version will be used.
+
+Refer to ClimaArtifacts for more information on how to obtain the artifact.
+"""
+struct PrescribedOzone <: AbstractOzone end
+
+"""
+    AbstractCO2
+
+Describe how CO2 concentration should be set.
+"""
+abstract type AbstractCO2 end
+
+"""
+    FixedCO2
+
+Implement a static CO2 profile as read from disk.
+
+The data used is the one distributed with `RRTMGP.jl`.
+
+By default, this is 397.547 parts per million.
+
+This is the volume mixing ratio.
+"""
+struct FixedCO2{FT} <: AbstractCO2
+    value::FT
+
+    function FixedCO2(; FT = Float64, value = FT(397.547e-6))
+        return new{FT}(value)
+    end
+end
+
+"""
+    MuanaLoaCO2
+
+Implement a time-varying CO2 profile as read from disk.
+
+The data from the Mauna Loa CO2 measurements is used. It is a assumed that the
+concentration is constant.
+"""
+struct MaunaLoaCO2 <: AbstractCO2 end
+
+"""
     AbstractCloudInRadiation
 
 Describe how cloud properties should be set in radiation.
@@ -587,8 +651,10 @@ end
 
 Groups radiation-related models and types.
 """
-Base.@kwdef struct AtmosRadiation{RM, IN}
+Base.@kwdef struct AtmosRadiation{RM, OZ, CO2, IN}
     radiation_mode::RM = nothing
+    ozone::OZ = nothing
+    co2::CO2 = nothing
     insolation::IN = nothing
 end
 
@@ -791,6 +857,8 @@ model = AtmosModel(;
     moisture_model = EquilMoistModel(),
     microphysics_model = Microphysics0Moment(),
     radiation_mode = RRTMGPI.AllSkyRadiation(),
+    ozone = IdealizedOzone(),
+    co2 = FixedCO2()
 )
 ```
 
@@ -825,6 +893,8 @@ Internal testing and calibration components for single-column setups:
   - Global radiation: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation()
   - Atmospheric forcing: HeldSuarezForcing() (for idealized dynamics)
   - SCM-specific: RadiationDYCOMS(), RadiationISDAC(), RadiationTRMM_LBA()
+- `ozone`: IdealizedOzone(), PrescribedOzone()
+- `co2`: FixedCO2(), MaunaLoaCO2()
 - `insolation`: IdealizedInsolation(), TimeVaryingInsolation(), etc.
 
 ## AtmosTurbconv
@@ -1054,6 +1124,8 @@ function EquilMoistAtmosModel(; kwargs...)
         surface_model = PrescribedSST(),
         sfc_temperature = ZonallySymmetricSST(),
         insolation = IdealizedInsolation(),
+        ozone = IdealizedOzone(),
+        co2 = FixedCO2(),
     )
     return AtmosModel(; defaults..., kwargs...)
 end
@@ -1072,6 +1144,8 @@ function NonEquilMoistAtmosModel(; kwargs...)
         surface_model = PrescribedSST(),
         sfc_temperature = ZonallySymmetricSST(),
         insolation = IdealizedInsolation(),
+        ozone = IdealizedOzone(),
+        co2 = FixedCO2(),
     )
     return AtmosModel(; defaults..., kwargs...)
 end

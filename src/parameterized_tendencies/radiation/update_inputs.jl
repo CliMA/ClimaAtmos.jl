@@ -4,6 +4,7 @@ import ClimaCore.Operators
 import ClimaUtilities.TimeVaryingInputs: evaluate!
 import CloudMicrophysics as CM
 import ..Parameters as CAP
+import ..PrescribedOzone, ..MaunaLoaCO2
 import ..PrescribedCloudInRadiation
 import ..lazy
 
@@ -124,10 +125,11 @@ Update volume mixing ratios.
 """
 function update_volume_mixing_ratios!((; u, p, t)::I) where {I}
     (; rrtmgp_model) = p.radiation
+    # If we have prescribed ozone or aerosols, we need to update them
+    update_o3!(p, t, p.atmos.ozone)
+    update_co2!(p, t, p.atmos.co2)
 
     if :o3 in propertynames(p.tracers)
-        evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, t)
-
         ᶜvmr_o3 = Fields.array2field(
             rrtmgp_model.center_volume_mixing_ratio_o3,
             axes(u.c),
@@ -135,8 +137,6 @@ function update_volume_mixing_ratios!((; u, p, t)::I) where {I}
         @. ᶜvmr_o3 = p.tracers.o3
     end
     if :co2 in propertynames(p.tracers)
-        evaluate!(p.tracers.co2, p.tracers.prescribed_co2_timevaryinginput, t)
-
         if pkgversion(ClimaUtilities) < v"0.1.21"
             rrtmgp_model.volume_mixing_ratio_co2 .= p.tracers.co2
         else
@@ -144,6 +144,18 @@ function update_volume_mixing_ratios!((; u, p, t)::I) where {I}
         end
     end
 
+    return nothing
+end
+
+update_o3!(_, _, _) = nothing
+function update_o3!(p, t, ::PrescribedOzone)
+    evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, t)
+    return nothing
+end
+
+update_co2!(_, _, _) = nothing
+function update_co2!(p, t, ::MaunaLoaCO2)
+    evaluate!(p.tracers.co2, p.tracers.prescribed_co2_timevaryinginput, t)
     return nothing
 end
 
