@@ -38,6 +38,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     (; ᶜΦ) = p.core
     (; ᶜu, ᶜK, ᶜp, ᶜts) = p.precomputed
     (; params) = p
+    FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = thermo_params.cp_d
 
@@ -45,7 +46,8 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         (; ᶜuʲs) = p.precomputed
     end
 
-    @. Yₜ.c.ρ -= wdivₕ(Y.c.ρ * ᶜu)
+    @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, FT(1))  # This one
+    
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).ρa -= wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
@@ -54,7 +56,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
 
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
     ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
-    @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
+    @. Yₜ.c.ρe_tot -= split_divₕ(Y.c.ρ * ᶜu, ᶜh_tot) # this one
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
@@ -65,8 +67,9 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     end
 
     if use_prognostic_tke(p.atmos.turbconv_model)
-        if p.atmos.turbconv_model isa EDOnlyEDMFX
+        if p.atmos.turbconv_model isa EDOnlyEDMFX 
             ᶜu_for_tke_advection = ᶜu
+            ᶜρ = Y.c.ρ
         elseif p.atmos.turbconv_model isa AbstractEDMF
             ᶜu_for_tke_advection = p.precomputed.ᶜu⁰
         else
@@ -75,7 +78,6 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
             )
         end
         @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu_for_tke_advection)
-
     end
 
     # This is equivalent to grad_h(Φ + K) + grad_h(p) / ρ
@@ -83,8 +85,16 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜts))
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜts))
     ᶜΠ = @. lazy(dry_exner_function(thermo_params, ᶜts))
-    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) + cp_d * (ᶜθ_v - ᶜθ_vr) * gradₕ(ᶜΠ))
-    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
+    ᶜθ_v_diff = @. lazy(ᶜθ_v - ᶜθ_vr)
+    # PG = 0.5 * cp_d * [θv ∇Π + ∇(θv Π) - Π∇θv]
+    @. Yₜ.c.uₕ -= C12(
+        gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) +
+        FT(0.5) * cp_d * (
+            ᶜθ_v_diff * gradₕ(ᶜΠ) +  # θv ∇Π
+            gradₕ(ᶜθ_v_diff * ᶜΠ) -  # ∇(θv Π)
+            ᶜΠ * gradₕ(ᶜθ_v_diff)    # Π∇θv
+        ),
+    )    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end
 
@@ -119,8 +129,9 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
         (; ᶜuʲs) = p.precomputed
     end
 
-    for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
-        @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
+    for ρχ_name in filter(is_tracer_var, propertynames(Y.c)) # this one
+        ᶜχ = @. lazy(specific(Y.c.:($$ρχ_name), Y.c.ρ))
+        @. Yₜ.c.:($$ρχ_name) -= split_divₕ(Y.c.ρ * ᶜu, ᶜχ)
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
