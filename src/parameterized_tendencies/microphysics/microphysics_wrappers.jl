@@ -16,10 +16,21 @@ const Pₐ = TD.air_pressure
 const PP = TD.PhasePartition
 const qᵥ = TD.vapor_specific_humidity
 
-# Clip any specific humidity
+"""
+    clip(q)
+    clip(nt)
+
+Clip a value `q` to be non-negative.
+
+If a named tuple `nt` is provided, clip each field of the tuple.
+"""
 function clip(q)
     FT = eltype(q)
     return max(FT(0), q)
+end
+function clip(nt::NamedTuple{names}) where {names}
+    clipped = unrolled_map(clip, values(nt))
+    return NamedTuple{names}(clipped)
 end
 
 import ClimaCore.MatrixFields: @name, FieldName

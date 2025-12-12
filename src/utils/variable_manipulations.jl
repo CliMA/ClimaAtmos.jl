@@ -1,4 +1,4 @@
-import ClimaCore.MatrixFields: @name
+import ClimaCore.MatrixFields: @name, get_field
 import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
 
 """
@@ -311,7 +311,7 @@ Arguments:
 draft_sum(f, sgsʲs...) = unrolled_mapreduce(f, +, sgsʲs...)
 
 """
-    ᶜenv_value(grid_scale_value, f_draft, gs, turbconv_model)
+    ᶜenv_value(grid_scale_value, f_draft, gs)
 
 Computes the value of a quantity `ρaχ` in the environment subdomain by subtracting
 the sum of its values in all draft subdomains from the grid-scale value. Available
@@ -327,8 +327,9 @@ The function handles both PrognosticEDMFX and DiagnosticEDMFX models:
 Arguments:
 - `grid_scale_value`: The `ρa`-weighted grid-scale value of the quantity.
 - `f_draft`: A function that extracts the corresponding value from a draft subdomain state.
-- `gs`: The grid-scale iteration object, which contains the draft subdomain states `gs.sgsʲs` (for PrognosticEDMFX) from the state `Y.c`, or `ᶜρaʲs` in the cache for DiagnosticEDMFX.
-- `turbconv_model`: The turbulence convection model, used to determine how to access draft data.
+- `gs`: The grid-scale iteration object, which contains the draft subdomain states 
+    - `gs.sgsʲs` (for PrognosticEDMFX) from the state `Y.c`, or
+    - `ᶜρaʲs` in the cache for DiagnosticEDMFX.
 """
 function ᶜenv_value(grid_scale_value, f_draft, gs)
     return @. lazy(grid_scale_value - draft_sum(f_draft, gs))
@@ -360,41 +361,42 @@ Arguments:
 Returns:
 - The specific value of the quantity `χ` in the environment.
 """
-function ᶜspecific_env_value(χ_name, Y, p)
-    turbconv_model = p.atmos.turbconv_model
+ᶜspecific_env_value(χ_name, Y, p) = 
+    @. lazy(specific_env_value(χ_name, Y.c, p.atmos.turbconv_model))
 
+"""
+    specific_env_value(χ_name, Yc, turbconv_model)
+
+Pointwise version of [`ᶜspecific_env_value`](@ref).
+
+# Arguments
+- `χ_name`: A tracer name, e.g. `@name(q_liq)`
+- `Yc`: The grid-scale center state
+- `turbconv_model`: The turbulence convection model
+
+# Returns
+- The specific value of the quantity `χ` in the environment.
+"""
+function specific_env_value(χ_name, Yc, turbconv_model::PrognosticEDMFX)
     # Grid-scale density-weighted variable name, e.g., ρq_tot
     ρχ_name = get_ρχ_name(χ_name)
-
-    ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-
+    ρχ = MatrixFields.get_field(Yc, ρχ_name)
     # environment density-area-weighted mse (`ρa⁰χ⁰`).
     # Numerator: ρa⁰χ⁰ = ρχ - (Σ ρaʲ * χʲ)
-    if turbconv_model isa PrognosticEDMFX
-        #Numerator: ρa⁰χ⁰ = ρχ - (Σ sgsʲ.ρa * sgsʲ.χ)
-
-        ᶜρaχ⁰ = ᶜenv_value(
-            ᶜρχ,
-            sgsʲ ->
-                MatrixFields.get_field(sgsʲ, @name(ρa)) *
-                MatrixFields.get_field(sgsʲ, χ_name),
-            Y.c.sgsʲs,
-        )
-        # Denominator: ρa⁰ = ρ - Σ ρaʲ
-        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-
-    elseif turbconv_model isa DiagnosticEDMFX || turbconv_model isa EDOnlyEDMFX
-        error("Not implemented. You should use grid mean values.")
-    end
-
-    return @. lazy(specific(
-        ᶜρaχ⁰,                      # ρaχ for environment
-        ᶜρa⁰,                   # ρa for environment
-        ᶜρχ,               # Fallback ρχ is the grid-mean value
-        Y.c.ρ,                      # Fallback ρ is the grid-mean value
-        turbconv_model,
-    ))
+    ρaχʲ(sgsʲ) = get_field(sgsʲ, @name(ρa)) * get_field(sgsʲ, χ_name)
+    ρaχ⁰ = env_value(ρχ, ρaχʲ, Yc.sgsʲs)
+    # Denominator: ρa⁰ = ρ - Σ ρaʲ
+    ρa⁰_val = ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+    return specific(
+        ρaχ⁰,           # ρaχ for environment
+        ρa⁰_val,        # ρa for environment
+        ρχ,             # Fallback ρχ is the grid-mean value
+        Yc.ρ,           # Fallback ρ is the grid-mean value
+        turbconv_model  # Turbulence convection model
+    )
 end
+specific_env_value(_, _, ::Union{DiagnosticEDMFX, EDOnlyEDMFX}) = 
+    error("Not implemented. You should use grid mean values.")
 
 """
     get_ρχ_name(χ_name::FieldName)
@@ -460,14 +462,18 @@ end
 
 Computes the environment area-weighted density (`ρa⁰`).
 
-This function calculates the environment area-weighted density by subtracting the sum of all draft subdomain area-weighted densities (`ρaʲ`) from the grid-mean density (`ρ`), following the domain decomposition principle (`GridMean = Environment + Sum(Drafts)`).
+This function calculates the environment area-weighted density
+by subtracting the sum of all draft subdomain area-weighted densities (`ρaʲ`)
+from the grid-mean density (`ρ`), following the domain decomposition principle
+(`GridMean = Environment + Sum(Drafts)`).
 
 Arguments:
 - `ρ`: Grid-mean density.
 - `sgsʲs`: Iterable of draft subdomain quantities.
     - For `PrognosticEDMFX`: typically `Y.c.sgsʲs`
     - For `DiagnosticEDMFX`: typically `p.precomputed.ᶜρaʲs`
-- `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`, or others).
+- `turbconv_model`: The turbulence convection model 
+    (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`, or others).
 
 Returns:
 - The area-weighted density of the environment (`ρa⁰`).
