@@ -14,8 +14,6 @@ import NCDatasets
 import YAML
 using Test
 
-import ClimaAtmos.RRTMGPInterface as RRTMGPI
-
 import Random
 Random.seed!(1234)
 
@@ -222,12 +220,12 @@ Test if the restarts are consistent for a simulation defined by the `test_dict` 
 `more_ignore` is a Vector of Symbols that identifies config-specific keys that
 have to be ignored when reading a simulation.
 """
-function test_restart(model, grid; job_id, comms_ctx, more_ignore = Symbol[])
+function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
     ClimaComms.iamroot(comms_ctx) && println("job_id = $(job_id)")
 
     local_success = true
 
-    simulation = CA.AtmosSimulation(; model, grid, job_id, context = comms_ctx)
+    simulation = CA.AtmosSimulation(CA.AtmosConfig(test_dict; job_id, comms_ctx))
     CA.solve_atmos!(simulation)
 
     # Check re-importing the same state
@@ -296,8 +294,13 @@ function test_restart(model, grid; job_id, comms_ctx, more_ignore = Symbol[])
     restart_file = joinpath(simulation.output_dir, "day0.2.hdf5")
     @test isfile(joinpath(restart_dir), "day0.2.hdf5")
     # Restart from specific file
-    simulation_restarted2 =
-        CA.AtmosSimulation(; model, grid, job_id, context = comms_ctx, restart_file)
+    config2 = CA.AtmosConfig(
+        merge(test_dict, Dict("restart_file" => restart_file));
+        job_id,
+        comms_ctx,
+    )
+
+    simulation_restarted2 = CA.AtmosSimulation(config2)
     CA.fill_with_nans!(simulation_restarted2.integrator.p)
 
     CA.solve_atmos!(simulation_restarted2)
@@ -335,51 +338,39 @@ end
 TESTING = Any[]
 
 # Add a configuration with all the bells and whistles
-
-FT = Float32
 if MANYTESTS
-    allsky_radiation =
-        RRTMGPI.AllSkyRadiation(false, false, CA.InteractiveCloudInRadiation(), true, false)
-    diagnostic_edmfx = CA.DiagnosticEDMFX{1, false}(1e-5)
     if comms_ctx isa ClimaComms.SingletonCommsContext
-        grids = (CA.SphereGrid(FT), CA.BoxGrid(FT), CA.ColumnGrid(FT))
+        configurations = ["sphere", "box", "column"]
     else
-        grids = (CA.SphereGrid(FT), CA.BoxGrid(FT))
+        configurations = ["sphere", "box"]
     end
 
-    for grid in grids
-        if grid isa CA.SphereGrid
-            moisture_models = (CA.NonEquilMoistModel(),)
-            precip_models = (CA.Microphysics1Moment(),)
-            topography = CA.EarthTopography()
-            turbconv_models = (nothing, diagnostic_edmfx)
-            radiations = (nothing, allsky_radiation)
+    for configuration in configurations
+        if configuration == "sphere"
+            moistures = ["nonequil"]
+            precips = ["1M"]
+            topography = "Earth"
+            turbconv_models = [nothing, "diagnostic_edmfx"]
+            # turbconv_models = ["prognostic_edmfx"]
+            radiations = [nothing, "allsky"]
         else
-            moisture_models = (CA.EquilMoistModel(),)
-            precip_models = (CA.Microphysics0Moment(),)
-            topography = CA.NoWarpTopography()
-            turbconv_models = (diagnostic_edmfx,)
-            gray_radiation = RRTMGPI.GrayRadiation(true, false)
-            radiation_modes = (gray_radiation, allsky_radiation)
+            moistures = ["equil"]
+            precips = ["0M"]
+            topography = "NoWarp"
+            turbconv_models = ["diagnostic_edmfx"]
+            radiations = ["gray", "allskywithclear"]
         end
 
-        for turbconv_model in turbconv_models
-            for radiation_mode in radiation_modes
-                for moisture_model in moisture_models
-                    for precip_model in precip_models
-                        # EDMF only supports equilibrium moisture
-                        if turbconv_model isa CA.DiagnosticEDMFX &&
-                           moisture_model isa CA.NonEquilMoistModel
-                            continue
+        for turbconv_mode in turbconv_models
+            for radiation in radiations
+                for moisture in moistures
+                    for precip in precips
+                        if !isnothing(turbconv_mode)
+                            # EDMF only supports equilibrium moisture
+                            if occursin("edmfx", turbconv_mode)
+                                moisture == "equil" || continue
+                            end
                         end
-
-                        model = CA.AtmosModel(;
-                            radiation_mode,
-                            moisture_model,
-                            precip,
-                            topography,
-                            turbconv_mode,
-                        )
 
                         # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
                         # hard-code this to be always false for those versions
@@ -396,9 +387,33 @@ if MANYTESTS
                         maybe_wait_filesystem(comms_ctx, output_loc)
 
                         job_id = "$(configuration)_$(moisture)_$(precip)_$(topography)_$(radiation)_$(turbconv_mode)"
+                        test_dict = Dict(
+                            "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
+                            "check_nan_every" => 3,
+                            "log_progress" => false,
+                            "moist" => moisture,
+                            "precip_model" => precip,
+                            "config" => configuration,
+                            "topography" => topography,
+                            "turbconv" => turbconv_mode,
+                            "dt" => "1secs",
+                            "bubble" => bubble,
+                            "viscous_sponge" => true,
+                            "rayleigh_sponge" => true,
+                            "insolation" => "timevarying",
+                            "rad" => radiation,
+                            "co2_model" => "fixed",
+                            "dt_rad" => "1secs",
+                            "surface_setup" => "DefaultMoninObukhov",
+                            "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed
+                            "t_end" => "3secs",
+                            "dt_save_state_to_disk" => "1secs",
+                            "enable_diagnostics" => false,
+                            "output_dir" => joinpath(output_loc, job_id),
+                        )
                         push!(
                             TESTING,
-                            (; model, grid, job_id, more_ignore = Symbol[]),
+                            (; test_dict, job_id, more_ignore = Symbol[]),
                         )
                     end
                 end
@@ -460,6 +475,6 @@ end
 
 # We know that this test is broken for old versions of ClimaCore
 @test all(
-    @time test_restart(t.model, t.grid; comms_ctx, t.job_id, t.more_ignore)[1] for
+    @time test_restart(t.test_dict; comms_ctx, t.job_id, t.more_ignore)[1] for
     t in TESTING
 ) skip = pkgversion(ClimaCore) < v"0.14.18"

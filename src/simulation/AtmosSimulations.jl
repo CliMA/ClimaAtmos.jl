@@ -185,7 +185,7 @@ function AtmosSimulation{FT}(;
     debug_jacobian = false,
     # Misc 
     discrete_hydrostatic_balance = false,
-    checkpoint_frequency = "Inf",
+    checkpoint_frequency = Inf,
 ) where {FT}
     # Set up output directory and restart file detection
     output_dir, restart_file = setup_output_dir(
@@ -238,6 +238,7 @@ function AtmosSimulation{FT}(;
 
     # Combine all callbacks
     discrete_callbacks = if default_callbacks
+        checkpoint_frequency = parse_checkpoint_frequency(checkpoint_frequency)
         (
             default_model_callbacks(
                 model;

@@ -194,43 +194,43 @@ function get_diagnostics(
     return diagnostics, writers, periods_reductions
 end
 
-function str_to_checkpoint_frequency(period_str)
+function parse_checkpoint_frequency(period::Number)
+    period == Inf && return Inf
+    # Treat number as seconds
+    # We use Millisecond to support fractional seconds, eg. 0.1
+    return Dates.Millisecond(1000 * Float64(period))
+end
+function parse_checkpoint_frequency(period_str::AbstractString)
     if occursin("months", period_str)
         months = match(r"^(\d+)months$", period_str)
         isnothing(months) && error(
-            "dt_save_state_to_disk has to be of the form <NUM>months, e.g. 2months for 2 months",
+            "Checkpoint frequency has to be of the form <NUM>months, e.g. \"2months\" for 2 months",
         )
         return Dates.Month(parse(Int, first(months)))
-    else
-        dt_save_state_to_disk_seconds = time_to_seconds(period_str)
-        if !(dt_save_state_to_disk_seconds == Inf)
-            # We use Millisecond to support fractional seconds, eg. 0.1
-            return Dates.Millisecond(1000 * dt_save_state_to_disk_seconds)
-        else
-            return Inf
-        end
     end
+    checkpoint_frequency = time_to_seconds(period_str)
+    checkpoint_frequency == Inf && return Inf
+    # We use Millisecond to support fractional seconds, eg. 0.1
+    return Dates.Millisecond(1000 * checkpoint_frequency)
 end
 
 """
-    validate_checkpoint_diagnostics_consistency(checkpoint_frequency_str, periods_reductions)
+    validate_checkpoint_diagnostics_consistency(checkpoint_frequency, periods_reductions)
 
 Validate that checkpoint frequency is an integer multiple of all diagnostics accumulation periods.
 
 Warns if inconsistent, which could prevent safe restarts from checkpoints.
 """
 function validate_checkpoint_diagnostics_consistency(
-    checkpoint_frequency_str,
+    checkpoint_frequency,
     periods_reductions,
 )
-    checkpoint_frequency = str_to_checkpoint_frequency(checkpoint_frequency_str)
-
     if checkpoint_frequency != Inf
         if any(x -> !CA.isdivisible(checkpoint_frequency, x), periods_reductions)
             accum_str = join(CA.promote_period.(collect(periods_reductions)), ", ")
             checkpt_str = CA.promote_period(checkpoint_frequency)
             @warn """The checkpointing frequency \
-            (dt_save_state_to_disk = $checkpt_str) should be an integer \
+            (checkpoint_frequency = $checkpt_str) should be an integer \
             multiple of all diagnostics accumulation periods ($accum_str) \
             so simulations can be safely restarted from any checkpoint"""
         end
@@ -277,10 +277,9 @@ function checkpoint_callback(
     start_date,
     t_start,
 )
-    dt_save_state_to_disk_dates = str_to_checkpoint_frequency(checkpoint_frequency)
-    if dt_save_state_to_disk_dates != Inf
+    if checkpoint_frequency != Inf
         schedule = CAD.EveryCalendarDtSchedule(
-            dt_save_state_to_disk_dates;
+            checkpoint_frequency;
             reference_date = start_date,
             date_last = t_start isa ITime ?
                         ClimaUtilities.TimeManager.date(t_start) :
@@ -358,12 +357,10 @@ function radiation_callback(
     dt_rad_seconds, _, _, _ = promote(dt_rad_seconds, t_start, dt, t_end)
 
     # Validation against checkpoint frequency
-    dt_save_state_to_disk_dates =
-        str_to_checkpoint_frequency(checkpoint_frequency)
     dt_rad_ms = Dates.Millisecond(1_000 * float(dt_rad_seconds))
-    if dt_save_state_to_disk_dates != Inf &&
-       !CA.isdivisible(dt_save_state_to_disk_dates, dt_rad_ms)
-        @warn "Radiation period ($(dt_rad_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
+    if checkpoint_frequency != Inf &&
+       !CA.isdivisible(checkpoint_frequency, dt_rad_ms)
+        @warn "Radiation period ($(dt_rad_ms)) is not an even divisor of the checkpoint frequency ($checkpoint_frequency)"
         @warn "This simulation will not be reproducible when restarted"
     end
 
@@ -389,12 +386,10 @@ function nogw_callback(
     dt_nogw_seconds, _, _, _ = promote(dt_nogw_seconds, t_start, dt, t_end)
 
     # Validation against checkpoint frequency
-    dt_save_state_to_disk_dates =
-        str_to_checkpoint_frequency(checkpoint_frequency)
     dt_nogw_ms = Dates.Millisecond(1_000 * float(dt_nogw_seconds))
-    if dt_save_state_to_disk_dates != Inf &&
-       !CA.isdivisible(dt_save_state_to_disk_dates, dt_nogw_ms)
-        @warn "Non-orographic gravity wave period ($(dt_nogw_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
+    if checkpoint_frequency != Inf &&
+       !CA.isdivisible(checkpoint_frequency, dt_nogw_ms)
+        @warn "Non-orographic gravity wave period ($(dt_nogw_ms)) is not an even divisor of the checkpoint frequency ($checkpoint_frequency)"
         @warn "This simulation will not be reproducible when restarted"
     end
 
@@ -422,10 +417,11 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
     callbacks = (callbacks..., graceful_exit_callback(output_dir)...)
 
     # Checkpointing
+    checkpoint_frequency = parse_checkpoint_frequency(parsed_args["dt_save_state_to_disk"])
     callbacks = (
         callbacks...,
         checkpoint_callback(
-            parsed_args["dt_save_state_to_disk"],
+            checkpoint_frequency,
             output_dir,
             start_date,
             t_start,
@@ -469,7 +465,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
             dt,
             t_start,
             t_end,
-            parsed_args["dt_save_state_to_disk"],
+            checkpoint_frequency,
         )...,
     )
 
@@ -482,7 +478,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
             dt,
             t_start,
             t_end,
-            parsed_args["dt_save_state_to_disk"],
+            checkpoint_frequency,
         )...,
     )
 

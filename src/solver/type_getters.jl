@@ -1092,7 +1092,7 @@ function get_simulation(config::AtmosConfig)
 
         # Check for consistency between diagnostics and checkpoints
         validate_checkpoint_diagnostics_consistency(
-            config.parsed_args["dt_save_state_to_disk"],
+            parse_checkpoint_frequency(config.parsed_args["dt_save_state_to_disk"]),
             periods_reductions,
         )
     else
