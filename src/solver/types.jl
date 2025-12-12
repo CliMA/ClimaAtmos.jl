@@ -466,6 +466,7 @@ function get_ρu₃qₜ_surface(flow::ShipwayHill2012VelocityProfile, thermo_par
 end
 
 struct TestDycoreConsistency end
+struct ReproducibleRestart end
 
 abstract type AbstractTimesteppingMode end
 struct Explicit <: AbstractTimesteppingMode end
@@ -478,7 +479,7 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, LIM, DM, HD}
+Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_q_tot_upwinding::EN_UP
@@ -489,6 +490,8 @@ Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, LIM,
 
     """Add NaNs to certain equations to track down problems"""
     test_dycore_consistency::TDC
+    """Whether the simulation is reproducible when restarting from a restart file"""
+    reproducible_restart::RR
 
     limiter::LIM
 
@@ -941,6 +944,7 @@ const _DEFAULT_ATMOS_MODEL_KWARGS = (
     edmfx_sgsflux_upwinding = Val(:none),
     edmfx_tracer_upwinding = Val(:first_order),
     test_dycore_consistency = nothing,
+    reproducible_restart = nothing,
     limiter = nothing,
     diff_mode = Explicit(),
     hyperdiff = nothing,

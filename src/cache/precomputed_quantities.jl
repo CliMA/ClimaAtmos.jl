@@ -533,9 +533,9 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # depends on the mixing length, which depends on the buoyancy gradient.
     # We break this circular dependency by using cloud fraction from the previous time step in the
     # buoyancy gradient calculation. This breaks reproducible restart in general,
-    # but we support reproducible restart with grid-scale cloud by recalculating the cloud fraction here.
-    if cloud_model isa GridScaleCloud
-        set_cloud_fraction!(Y, p, moisture_model, cloud_model)
+    # but we support reproducible restart by recalculating the cloud fraction with GridScaleCloud here.
+    if p.atmos.numerics.reproducible_restart isa ReproducibleRestart
+        set_cloud_fraction!(Y, p, moisture_model, GridScaleCloud())
     end
 
     if turbconv_model isa PrognosticEDMFX
