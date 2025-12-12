@@ -16,6 +16,7 @@ const UVW = Geometry.UVWVector
 
 const divₕ = Operators.Divergence()
 const wdivₕ = Operators.WeakDivergence()
+const split_divₕ = Operators.SplitDivergence()
 const gradₕ = Operators.Gradient()
 const wgradₕ = Operators.WeakGradient()
 const curlₕ = Operators.Curl()
