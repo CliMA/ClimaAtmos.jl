@@ -89,10 +89,10 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     # PG = 0.5 * cp_d * [θv ∇Π + ∇(θv Π) - Π∇θv]
     @. Yₜ.c.uₕ -= C12(
         gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) +
-        0.5 * cp_d * (
-            ᶜθ_v_diff * wgradₕ(ᶜΠ) +  # θv ∇Π
-            wgradₕ(ᶜθ_v_diff * ᶜΠ) -  # ∇(θv Π)
-            ᶜΠ * wgradₕ(ᶜθ_v_diff)    # Π∇θv
+        FT(0.5) * cp_d * (
+            ᶜθ_v_diff * gradₕ(ᶜΠ) +  # θv ∇Π
+            gradₕ(ᶜθ_v_diff * ᶜΠ) -  # ∇(θv Π)
+            ᶜΠ * gradₕ(ᶜθ_v_diff)    # Π∇θv
         ),
     )    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
