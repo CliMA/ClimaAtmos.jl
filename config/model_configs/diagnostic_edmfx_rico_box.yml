@@ -13,7 +13,6 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: nonequil
-cloud_model: "quadrature_sgs"
 precip_model: "1M"
 call_cloud_diagnostics_per_stage: true
 config: box
