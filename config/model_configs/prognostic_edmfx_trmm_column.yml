@@ -38,3 +38,6 @@ diagnostics:
     period: 10mins
   - short_name: [husra, hussn, husraup, hussnup, husraen, hussnen]
     period: 10mins
+  - short_name: [env_q_tot_variance, env_theta_liq_ice_variance, env_q_tot_theta_liq_ice_covariance]
+    period: 10mins
+    
