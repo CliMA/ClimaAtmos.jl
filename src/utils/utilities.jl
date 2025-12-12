@@ -194,6 +194,22 @@ function strain_rate_norm(S, axis = Geometry.UVWAxis())
 end
 
 """
+    ᶠface_density(ᶜρ)
+
+Compute the density at cell faces from the density at cell centers.
+
+This reconstruction satisfies a Jacobian-weighted average, see the definition in
+Eq. (104) in Section 5.6 of the dycore paper (Yatunin et al., 2025).
+"""
+function ᶠface_density(ᶜρ)
+    ᶠspace = Spaces.face_space(axes(ᶜρ))
+    ᶠJ = Fields.local_geometry_field(ᶠspace).J
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+
+    @. lazy(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
+end
+
+"""
     g³³_field(space)
 
 Extracts the value of `g³³`, the 3rd component of the metric terms that convert
