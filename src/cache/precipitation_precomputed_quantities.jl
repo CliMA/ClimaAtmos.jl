@@ -71,7 +71,7 @@ function set_precipitation_velocities!(Y, p, ::NonEquilMoistModel, ::Microphysic
         ᶜwᵪ = get_field(p.precomputed, get_ᶜwᵪ_name_from_qᵪ_name(qᵪ_name))
         ᶜqᵪ = ᶜspecific_gs_tracer(Y, qᵪ_name)
         wᵪ = terminal_velocity_func_1M(cmc, cmp, qᵪ_name)
-        calc_hₜ = total_energy_func(qᵪ_name)
+        calc_hₜ = total_energy_fn(qᵪ_name)
         @. ᶜwᵪ = wᵪ(Y.c.ρ, clip(ᶜqᵪ))
         @. ᶜwₜqₜ += WVec(ᶜwᵪ * ᶜqᵪ)
         @. ᶜwₕhₜ += WVec(ᶜwᵪ * ᶜqᵪ * calc_hₜ(thp, ᶜts, ᶜΦ, ᶜwᵪ, ᶜu_uvw))
@@ -83,7 +83,7 @@ function set_precipitation_velocities!(Y, p,
 )
     (; ᶜΦ) = p.core
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
-    (; ᶜts⁰, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ᶜts⁰, ᶜtsʲs) = p.precomputed
     ᶜsgsʲs = Y.c.sgsʲs
     ᶜρ = Y.c.ρ
     cmc = CAP.microphysics_cloud_params(p.params)
@@ -125,8 +125,8 @@ function set_precipitation_velocities!(Y, p,
         @. ᶜwᵪ = ρξw_div_ρξ_bounded(ᶜρaqwᵪ⁰ + draft_sum(ρaqwʲ_clip, ᶜsgsʲs, ᶜtsʲs), ᶜρqᵪ)
 
         # implied environment mass flux: ρqᵪ⋅wᵪ (gm) - ∑ⱼ ρaʲ⋅qᵪʲ⋅wᵪʲ (drafts)
-        ᶜρqᵪ_gm = get_field(Y.c, get_ᶜρqᵪ_name_from_qᵪ_name(qᵪ_name))  # gm
-        ᶜρaqwᵪ⁰_implied = @. lazy(ᶜρqᵪ_gm * ᶜwᵪ) - draft_sum(ρaqwʲ, ᶜsgsʲs, ᶜtsʲs)  # not clipped
+        ᶜρqᵪ_gm = get_field(Y.c, get_ρχ_name(qᵪ_name))  # gm
+        ᶜρaqwᵪ⁰_implied = @. lazy(ᶜρqᵪ_gm * ᶜwᵪ - draft_sum(ρaqwʲ, ᶜsgsʲs, ᶜtsʲs))  # not clipped
 
         # Calculate contribution of tracer `q` to total water and energy advection
         ρaqwₕhₜʲ(Φ) = (ᶜsgsʲ, ᶜtsʲ) -> ρaqwʲ(ᶜsgsʲ, ᶜtsʲ) * calc_hₜ(thp, ᶜtsʲ, Φ)
@@ -154,7 +154,7 @@ function set_precipitation_velocities!(Y, p, ::NonEquilMoistModel, ::Microphysic
         ᶜwₙᵪ = get_field(p.precomputed, get_ᶜwₙᵪ_name_from_qᵪ_name(qᵪ_name))
         wᵪ_func = terminal_velocity_mass_func_2M(cm2p, cmc, cm1p, qᵪ_name)
         wₙᵪ_func = terminal_velocity_number_func_2M(cm2p, cmc, cm1p, qᵪ_name)
-        calc_hₜ = total_energy_func(qᵪ_name)
+        calc_hₜ = total_energy_fn(qᵪ_name)
         # Get tracer fields
         ᶜqᵪ = ᶜspecific_gs_tracer(Y, qᵪ_name)
         ρnᵪ_name = get_ρnᵪ_name_from_qᵪ_name(qᵪ_name)
@@ -300,9 +300,9 @@ function set_precipitation_velocities!(
 
     # compute their contributions to energy and total water advection
     @. ᶜwₜqₜ = WVec(ᶜwₗ * ρq_liq + ᶜwᵢ * ρq_ice + ᶜwᵣ * ρq_rai) / ρ
-    calc_hₗ = total_energy_func(@name(q_liq))
-    calc_hᵢ = total_energy_func(@name(q_ice))
-    calc_hᵣ = total_energy_func(@name(q_rai))
+    calc_hₗ = total_energy_fn(@name(q_liq))
+    calc_hᵢ = total_energy_fn(@name(q_ice))
+    calc_hᵣ = total_energy_fn(@name(q_rai))
     @. ᶜwₕhₜ =
         WVec(
             ᶜwₗ * ρq_liq * (calc_hₗ(thp, ᶜts, ᶜΦ, ᶜwₗ, UVW(ᶜu))) +
@@ -336,7 +336,7 @@ function set_precipitation_cache!(Y, p, ::Microphysics0Moment, _)
     return nothing
 end
 function set_precipitation_cache!(Y, p,
-    ::Microphysics0Moment, turbconv::Union{DiagnosticEDMFX, PrognosticEDMFX},
+    ::Microphysics0Moment, turbconv_model::Union{DiagnosticEDMFX, PrognosticEDMFX},
 )
     (; ᶜΦ) = p.core
     (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs) = p.precomputed
@@ -344,16 +344,18 @@ function set_precipitation_cache!(Y, p,
     (; ᶜtsʲs) = p.precomputed
     thp = CAP.thermodynamics_params(p.params)
     ᶜρ = Y.c.ρ
+    is_pedmf = turbconv_model isa PrognosticEDMFX
 
     # Draft and environment area-weighted densities
-    ᶜsgs_ρaʲs = ᶜρaʲs_list(Y, p, turbconv)
+    ᶜsgs_ρaʲs = is_pedmf ? Y.c.sgsʲs : p.precomputed.ᶜρaʲs  # used to extract env ρa
     ## For environment we multiply by grid mean `ρ` and not by `ᶜρa⁰`, assuming `a⁰ = 1`
-    ᶜρa⁰ = turbconv isa PrognosticEDMFX ? (@. lazy(ρa⁰(ᶜρ, Y.c.sgsʲs, turbconv))) : ᶜρ
-    ᶜts⁰ = turbconv isa PrognosticEDMFX ? p.precomputed.ᶜts⁰ : p.precomputed.ᶜts
+    ᶜρa⁰ = is_pedmf ? (@. lazy(ρa⁰(ᶜρ, Y.c.sgsʲs, turbconv_model))) : ᶜρ
+    ᶜts⁰ = is_pedmf ? p.precomputed.ᶜts⁰ : p.precomputed.ᶜts
 
     e_tot_src(Sqₜ, ρ, ts, Φ) = Sqₜ * ρ * e_tot_0M_precipitation_sources_helper(thp, ts, Φ)
-    e_tot_srcʲ(Φ) = (Sqₜ, ρ, ts) -> e_tot_src(Sqₜ, ρ, ts, Φ)
-    @. ᶜS_ρq_tot = ᶜSqₜᵖ⁰ * ᶜρa⁰ + draft_sum((S, ρ) -> S * ρ, ᶜSqₜᵖʲs, ᶜsgs_ρaʲs)
+    e_tot_srcʲ(Φ) = (Sqₜ, sgs_ρʲ, ts) -> e_tot_src(Sqₜ, ρaʲ(sgs_ρʲ, turbconv_model), ts, Φ)
+    Sqₜρʲ(Sqₜ, sgs_ρʲ) = Sqₜ * ρaʲ(sgs_ρʲ, turbconv_model)
+    @. ᶜS_ρq_tot = ᶜSqₜᵖ⁰ * ᶜρa⁰ + draft_sum(Sqₜρʲ, ᶜSqₜᵖʲs, ᶜsgs_ρaʲs)
     ᶜS_ρe_tot⁰ = @. lazy(e_tot_src(ᶜSqₜᵖ⁰, ᶜρa⁰, ᶜts⁰, ᶜΦ))
     @. ᶜS_ρe_tot = ᶜS_ρe_tot⁰ + draft_sum(e_tot_srcʲ(ᶜΦ), ᶜSqₜᵖʲs, ᶜsgs_ρaʲs, ᶜtsʲs)
     return nothing

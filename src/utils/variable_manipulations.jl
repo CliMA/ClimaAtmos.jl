@@ -362,7 +362,7 @@ Returns:
 - The specific value of the quantity `χ` in the environment.
 """
 ᶜspecific_env_value(χ_name, Y, p) = 
-    @. lazy(specific_env_value(χ_name, Y.c, p.atmos.turbconv_model))
+    @. lazy(specific_env_value((χ_name,), Y.c, p.atmos.turbconv_model))
 
 """
     specific_env_value(χ_name, Yc, turbconv_model)
@@ -483,26 +483,13 @@ Returns:
 ρa⁰(ρ, _, _) = ρ
 
 """
-    ᶜρaʲs_list(Y, p, turbconv_model)
-
-Returns the list of subdomain density containers
-
-Pass each element of the list to [`ρaʲ`](@ref) to get the subdomain density.
-"""
-ᶜρaʲs_list(Y, p, ::PrognosticEDMFX) = Y.c.sgsʲs
-ᶜρaʲs_list(Y, p, ::DiagnosticEDMFX) = p.precomputed.ᶜρaʲs
-
-"""
     ρaʲ(sgsʲ, turbconv_model)
 
 Returns the subdomain density from the subdomain density container.
 
-Use with [`ᶜρaʲs_list`](@ref), which returns the list whose elements
-are the first argument to this function.
-
 # Examples
 ```julia
-ᶜsgs_ρaʲs = ᶜρaʲs_list(Y, p, turbconv_model)
+ᶜsgs_ρaʲs = turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs : p.precomputed.ᶜρaʲs
 draft_sum = draft_sum(ρaʲ, ᶜsgs_ρaʲs)
 ```
 """
