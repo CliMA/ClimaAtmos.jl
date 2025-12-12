@@ -6,6 +6,7 @@ import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
+import ClimaCore.Geometry as Geometry
 
 """
     subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, scheme::Val)
@@ -38,54 +39,65 @@ subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:first_order}) =
 subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. ᶜρχₜ -= ᶜρ * (ᶜsubdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³)) # 3rd-order upwind ρ * (-w * ∂χ/∂z)
 
+function subsidence_velocity_field(ᶠz, ᶠlg, subsidence_profile)
+    return @. lazy(
+        subsidence_profile(ᶠz) * CT3(unit_basis_vector_data(CT3, ᶠlg)),
+    )
+end
 
 """
-    subsidence_tendency!(Yₜ, Y, p, t, subsidence_model::Subsidence)
+    subsidence_tendency_ρe_tot,
+    subsidence_tendency_ρq_tot,
+    subsidence_tendency_ρq_liq,
+    subsidence_tendency_ρq_ice
+
+Lazy subsidence tendency functions. Each computes the tendency for the respective variable using
+first-order upwind advection. Returns `NullBroadcasted()` if `subsidence isa Nothing`.
+All functions take `ᶜρ`, the scalar field (e.g., `ᶜh_tot`, `ᶜq_tot`), `ᶠsubsidence³`, and `subsidence`.
+"""
+function subsidence_tendency_ρe_tot(ᶜρ, ᶜh_tot, ᶠsubsidence³, subsidence)
+    subsidence isa Nothing && return NullBroadcasted()
+    return @. lazy(
+        -ᶜρ * (ᶜsubdivᵥ(ᶠupwind1(ᶠsubsidence³, ᶜh_tot)) - ᶜh_tot * ᶜsubdivᵥ(ᶠsubsidence³)),
+    )
+end
+
+function subsidence_tendency_ρq_tot(ᶜρ, ᶜq_tot, ᶠsubsidence³, subsidence)
+    subsidence isa Nothing && return NullBroadcasted()
+    return @. lazy(
+        -ᶜρ * (ᶜsubdivᵥ(ᶠupwind1(ᶠsubsidence³, ᶜq_tot)) - ᶜq_tot * ᶜsubdivᵥ(ᶠsubsidence³)),
+    )
+end
+
+function subsidence_tendency_ρq_liq(ᶜρ, ᶜq_liq, ᶠsubsidence³, subsidence)
+    subsidence isa Nothing && return NullBroadcasted()
+    return @. lazy(
+        -ᶜρ * (ᶜsubdivᵥ(ᶠupwind1(ᶠsubsidence³, ᶜq_liq)) - ᶜq_liq * ᶜsubdivᵥ(ᶠsubsidence³)),
+    )
+end
+
+function subsidence_tendency_ρq_ice(ᶜρ, ᶜq_ice, ᶠsubsidence³, subsidence)
+    subsidence isa Nothing && return NullBroadcasted()
+    return @. lazy(
+        -ᶜρ * (ᶜsubdivᵥ(ᶠupwind1(ᶠsubsidence³, ᶜq_ice)) - ᶜq_ice * ᶜsubdivᵥ(ᶠsubsidence³)),
+    )
+end
+
+"""
+    subsidence_tendency!(Yₜ, Y, p, t, subsidence)
 
 Applies subsidence tendencies to total energy (`ρe_tot`), total specific humidity
 (`ρq_tot`), and other moisture species (`ρq_liq`, `ρq_ice`) if a `NonEquilMoistModel`
-is used.
-
-The subsidence velocity profile `w_sub(z)` is obtained from `subsidence_model.prof`.
-This profile is used to construct a face-valued vertical velocity field `ᶠsubsidence³`.
-The `subsidence!` helper function is then called (currently with a first-order
-upwind scheme) to compute and apply the vertical advective tendency for each relevant 
-scalar quantity `χ`.
+is used. Uses lazy tendency functions internally.
 
 Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
-- `Y`: The current state vector (used for `Y.c.ρ`).
-- `p`: Cache containing parameters, precomputed fields (`ᶜh_tot`),
-       atmospheric model configurations (`p.atmos.moisture_model`, `p.atmos.subsidence`),
-       and scratch space.
-- `t`: Current simulation time (unused by this specific tendency calculation).
-- `subsidence_model`: A `Subsidence` object containing the subsidence profile function.
-
-If `subsidence_model` is `Nothing`, no subsidence tendency is applied.
-"""
-subsidence_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing    # No subsidence
-
-
-"""
-    subsidence_tendency!(Yₜ, Y, p, t, subsidence_model::Subsidence)
-
-Applies subsidence tendencies to total energy (`ρe_tot`), total specific humidity
-(`ρq_tot`), and other moisture species (`ρq_liq`, `ρq_ice`) if a `NonEquilMoistModel`
-is used.
-
-The subsidence velocity profile `w_sub(z)` is obtained from `subsidence_model.prof`.
-This profile is used to construct a face-valued vertical velocity field `ᶠsubsidence³`.
-The `subsidence!` helper function is then called (currently with a first-order
-upwind scheme) to compute and apply the vertical advective tendency for each relevant 
-scalar quantity `χ`.
-
-Arguments:
-- `Yₜ`: The tendency state vector, modified in place.
-- `Y`: The current state vector, used for density (`ρ`).
-- `p`: Cache containing parameters, and the subsidence model object.
+- `Y`: The current state vector.
+- `p`: Cache containing parameters, precomputed fields, and atmospheric model configurations.
 - `t`: Current simulation time.
-- `subsidence`: The subsidence model object.
+- `subsidence`: A `Subsidence` object or `Nothing`. If `Nothing`, no tendency is applied.
 """
+subsidence_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
     (; moisture_model) = p.atmos
     subsidence_profile = p.atmos.subsidence.prof
@@ -95,37 +107,27 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
     ᶠz = Fields.coordinate_field(axes(Y.f)).z
     ᶠlg = Fields.local_geometry_field(Y.f)
     ᶠsubsidence³ = p.scratch.ᶠtemp_CT3
-    @. ᶠsubsidence³ =
-        subsidence_profile(ᶠz) * CT3(unit_basis_vector_data(CT3, ᶠlg))
+    @. ᶠsubsidence³ = subsidence_velocity_field(ᶠz, ᶠlg, subsidence_profile)
 
-    # LS Subsidence
+    ᶜρ = Y.c.ρ
     ᶜh_tot = @. lazy(
         TD.total_specific_enthalpy(
             thermo_params,
             ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
+            specific(Y.c.ρe_tot, ᶜρ),
         ),
     )
-    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    subsidence!(Yₜ.c.ρe_tot, Y.c.ρ, ᶠsubsidence³, ᶜh_tot, Val{:first_order}())
-    subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠsubsidence³, ᶜq_tot, Val{:first_order}())
+    @. Yₜ.c.ρe_tot += subsidence_tendency_ρe_tot(ᶜρ, ᶜh_tot, ᶠsubsidence³, p.atmos.subsidence)
+
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, ᶜρ))
+    @. Yₜ.c.ρq_tot += subsidence_tendency_ρq_tot(ᶜρ, ᶜq_tot, ᶠsubsidence³, p.atmos.subsidence)
+
     if moisture_model isa NonEquilMoistModel
-        ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-        subsidence!(
-            Yₜ.c.ρq_liq,
-            Y.c.ρ,
-            ᶠsubsidence³,
-            ᶜq_liq,
-            Val{:first_order}(),
-        )
-        ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-        subsidence!(
-            Yₜ.c.ρq_ice,
-            Y.c.ρ,
-            ᶠsubsidence³,
-            ᶜq_ice,
-            Val{:first_order}(),
-        )
+        ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, ᶜρ))
+        @. Yₜ.c.ρq_liq += subsidence_tendency_ρq_liq(ᶜρ, ᶜq_liq, ᶠsubsidence³, p.atmos.subsidence)
+
+        ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, ᶜρ))
+        @. Yₜ.c.ρq_ice += subsidence_tendency_ρq_ice(ᶜρ, ᶜq_ice, ᶠsubsidence³, p.atmos.subsidence)
     end
 
     return nothing
