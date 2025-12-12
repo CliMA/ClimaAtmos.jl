@@ -85,8 +85,16 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜts))
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜts))
     ᶜΠ = @. lazy(dry_exner_function(thermo_params, ᶜts))
-    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) + cp_d * (ᶜθ_v - ᶜθ_vr) * gradₕ(ᶜΠ))
-    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
+    ᶜθ_v_diff = @. lazy(ᶜθ_v - ᶜθ_vr)
+    # PG = 0.5 * cp_d * [θv ∇Π + ∇(θv Π) - Π∇θv]
+    @. Yₜ.c.uₕ -= C12(
+        gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) +
+        0.5 * cp_d * (
+            ᶜθ_v_diff * wgradₕ(ᶜΠ) +  # θv ∇Π
+            wgradₕ(ᶜθ_v_diff * ᶜΠ) -  # ∇(θv Π)
+            ᶜΠ * wgradₕ(ᶜθ_v_diff)    # Π∇θv
+        ),
+    )    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end
 
