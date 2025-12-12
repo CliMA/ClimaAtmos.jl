@@ -38,6 +38,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     (; ᶜΦ) = p.core
     (; ᶜu, ᶜK, ᶜp, ᶜts) = p.precomputed
     (; params) = p
+    FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = thermo_params.cp_d
 
@@ -45,12 +46,12 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         (; ᶜuʲs) = p.precomputed
     end
 
-    @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, (tuple(1)))
+    @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, FT(1))
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).ρa -= split_divₕ(
                 Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j),
-                (tuple(1)),
+                FT(1),
             )
         end
     end
@@ -70,14 +71,18 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     end
 
     if use_prognostic_tke(p.atmos.turbconv_model)
-        if p.atmos.turbconv_model isa EDOnlyEDMFX
+        if p.atmos.turbconv_model isa EDOnlyEDMFX 
             ᶜu_for_tke_advection = ᶜu
             # Use grid mean density for TKE advection
             ᶜρ = Y.c.ρ
-        elseif p.atmos.turbconv_model isa AbstractEDMF
+        elseif p.atmos.turbconv_model isa PrognosticEDMFX
             ᶜu_for_tke_advection = p.precomputed.ᶜu⁰
             (; ᶜts⁰) = p.precomputed
-            @. ᶜρ = lazy(TD.air_density(thermo_params, ᶜts⁰))
+            ᶜρ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
+        elseif p.atmos.turbconv_model isa DiagnosticEDMFX
+            ᶜu_for_tke_advection = p.precomputed.ᶜu⁰
+            # Use grid mean density for DiagnosticEDMFX (ᶜts⁰ not available)
+            ᶜρ = Y.c.ρ
         else
             error(
                 "Unsupported turbconv_model type for TKE advection: $(typeof(p.atmos.turbconv_model))",
