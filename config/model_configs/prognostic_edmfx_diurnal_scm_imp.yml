@@ -40,7 +40,6 @@ perturb_initstate: false
 dt: "50secs"
 dt_rad: "10mins"
 t_end: "30hours"
-cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage: true
 toml: [toml/prognostic_edmfx_calibrated.toml]
 netcdf_output_at_levels: true

@@ -147,13 +147,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜp, sfc_conditions, ᶜts, ᶜK) = p.precomputed
 
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     vst_uₕ = viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
     vst_u₃ = viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge)
     vst_ρe_tot = viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge)
@@ -356,6 +351,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     amd = p.atmos.amd_les
     horizontal_amd_tendency!(Yₜ, Y, p, t, amd)
     vertical_amd_tendency!(Yₜ, Y, p, t, amd)
+
+    chd = p.atmos.constant_horizontal_diffusion
+    horizontal_constant_diffusion_tendency!(Yₜ, Y, p, t, chd)
 
     # Optional tendency to bring negative small tracers back from negative
     # at the cost of water vapor.

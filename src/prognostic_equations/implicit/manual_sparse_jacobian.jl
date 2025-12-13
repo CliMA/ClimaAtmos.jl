@@ -447,13 +447,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     # minus ∂e_int_∂q_tot
     ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - e_int_v0
     thermo_params = CAP.thermodynamics_params(params)
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
@@ -502,17 +497,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     MatrixFields.unrolled_foreach(tracer_info) do ρχ_name
         MatrixFields.has_field(Y, ρχ_name) || return
-        ᶜχ = if ρχ_name === @name(c.ρe_tot)
-            @. lazy(
-                TD.total_specific_enthalpy(
-                    thermo_params,
-                    ᶜts,
-                    specific(Y.c.ρe_tot, Y.c.ρ),
-                ),
-            )
-        else
-            @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        end
+        ᶜχ = ρχ_name === @name(c.ρe_tot) ? ᶜh_tot : (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
 
         if use_derivative(topography_flag)
             ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
@@ -545,7 +530,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶠinterp_matrix()
         )
     @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m)
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
 
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))

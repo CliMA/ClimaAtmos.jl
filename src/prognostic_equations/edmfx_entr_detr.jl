@@ -637,13 +637,8 @@ function edmfx_first_interior_entr_tendency!(
         Fields.local_geometry_field(Fields.level(Y.f, Fields.half)),
     )
 
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
     ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)

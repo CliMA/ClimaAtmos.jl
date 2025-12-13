@@ -496,13 +496,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
     # integral
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
     ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
 

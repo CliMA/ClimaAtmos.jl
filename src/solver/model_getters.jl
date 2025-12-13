@@ -192,6 +192,14 @@ function get_amd_les_model(parsed_args, ::Type{FT}) where {FT}
            nothing
 end
 
+function get_constant_horizontal_diffusion_model(parsed_args, params, ::Type{FT}) where {FT}
+    is_model_active = parsed_args["constant_horizontal_diffusion"]
+    @assert is_model_active in (true, false)
+    return is_model_active ?
+           ConstantHorizontalDiffusion{FT}(CAP.constant_horizontal_diffusion_D(params)) :
+           nothing
+end
+
 function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     rs_name = parsed_args["rayleigh_sponge"]
     return if rs_name in ("false", false)
@@ -356,8 +364,6 @@ function get_cloud_model(parsed_args)
         GridScaleCloud()
     elseif cloud_model == "quadrature"
         QuadratureCloud(SGSQuadrature(FT))
-    elseif cloud_model == "quadrature_sgs"
-        SGSQuadratureCloud(SGSQuadrature(FT))
     else
         error("Invalid cloud_model $(cloud_model)")
     end

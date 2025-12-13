@@ -4,8 +4,31 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
-PR [#4021](https://github.com/CliMA/ClimaAtmos.jl/pull/4021) uses ClimaCore
+
+v0.32.0
+-------
+- ![][badge-💥breaking] Remove the options `co2_model` and `prescribe_ozone`.
+These are both fixed by default now, and can be set to time-varying by
+including one or both in the option `time_varying_trace_gases: ["CO2", "O3]`.
+
+- PR [#4162](https://github.com/CliMA/ClimaAtmos.jl/pull/4162) adds an option for
+reproducible restart. It is set to false by default. This shouldn't affect restart
+in the coupler as the coupler save the cache for restarting.
+
+- PR [#4021](https://github.com/CliMA/ClimaAtmos.jl/pull/4021) uses ClimaCore
 convenience constructors to create spaces without an AtmosConfig.
+
+v0.31.9
+-------
+
+v0.31.8
+-------
+
+v0.31.7
+-------
+
+v0.31.6
+-------
 
 v0.31.5
 -------

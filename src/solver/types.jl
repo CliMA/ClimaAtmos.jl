@@ -76,23 +76,12 @@ struct GridScaleCloud <: AbstractCloudModel end
 """
     QuadratureCloud
 
-Compute the cloud fraction by sampling over the quadrature points, but without
-the EDMF sub-grid scale model.
+Compute the cloud fraction by sampling over the quadrature points.
 """
 struct QuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
     SG_quad::SGQ
 end
 
-"""
-    SGSQuadratureCloud
-
-Compute the cloud fraction as a sum of the EDMF environment and updraft
-contributions. The EDMF environment cloud fraction is computed by sampling over
-the quadrature points.
-"""
-struct SGSQuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
-    SG_quad::SGQ
-end
 
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
@@ -283,6 +272,10 @@ is_smagorinsky_horizontal(::Nothing) = false
 
 struct AnisotropicMinimumDissipation{FT} <: AbstractEddyViscosityModel
     c_amd::FT
+end
+
+struct ConstantHorizontalDiffusion{FT} <: AbstractEddyViscosityModel
+    D::FT
 end
 
 
@@ -537,6 +530,7 @@ function get_ρu₃qₜ_surface(flow::ShipwayHill2012VelocityProfile, thermo_par
 end
 
 struct TestDycoreConsistency end
+struct ReproducibleRestart end
 
 abstract type AbstractTimesteppingMode end
 struct Explicit <: AbstractTimesteppingMode end
@@ -549,7 +543,7 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, LIM, DM, HD}
+Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_q_tot_upwinding::EN_UP
@@ -560,6 +554,8 @@ Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, LIM,
 
     """Add NaNs to certain equations to track down problems"""
     test_dycore_consistency::TDC
+    """Whether the simulation is reproducible when restarting from a restart file"""
+    reproducible_restart::RR
 
     limiter::LIM
 
@@ -667,7 +663,7 @@ end
 
 Groups turbulence convection-related models and types.
 """
-Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD}
+Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD, CHD}
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     sgs_adv_mode::SAM = nothing
@@ -677,6 +673,7 @@ Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD}
     sgs_mf_mode::SMM = nothing
     smagorinsky_lilly::SL = nothing
     amd_les::AMD = nothing
+    constant_horizontal_diffusion::CHD = nothing
 end
 
 """
@@ -879,7 +876,7 @@ The default AtmosModel provides:
 ## AtmosWater
 - `moisture_model`: DryModel(), EquilMoistModel(), NonEquilMoistModel()
 - `microphysics_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
-- `cloud_model`: GridScaleCloud(), QuadratureCloud(), SGSQuadratureCloud()
+- `cloud_model`: GridScaleCloud(), QuadratureCloud()
 - `noneq_cloud_formation_mode`: Explicit(), Implicit()
 - `call_cloud_diagnostics_per_stage`: nothing or CallCloudDiagnosticsPerStage()
 
@@ -906,6 +903,7 @@ Internal testing and calibration components for single-column setups:
 - `sgs_adv_mode`, `sgs_entr_detr_mode`, `sgs_nh_pressure_mode`, `sgs_vertdiff_mode`, `sgs_mf_mode`: Explicit(), Implicit()
 - `smagorinsky_lilly`: nothing or SmagorinskyLilly()
 - `amd_les`: nothing or AnisotropicMinimumDissipation()
+- `constant_horizontal_diffusion`: nothing or ConstantHorizontalDiffusion()
 
 ## AtmosGravityWave
 - `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave()
@@ -1016,6 +1014,7 @@ const _DEFAULT_ATMOS_MODEL_KWARGS = (
     edmfx_sgsflux_upwinding = Val(:none),
     edmfx_tracer_upwinding = Val(:first_order),
     test_dycore_consistency = nothing,
+    reproducible_restart = nothing,
     limiter = nothing,
     diff_mode = Explicit(),
     hyperdiff = nothing,

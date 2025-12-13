@@ -1,4 +1,4 @@
-286
+288
 
 # **README**
 #
@@ -20,6 +20,14 @@
 
 
 #=
+288
+- Revert PR 4153, which changed ref_counter to 287
+
+287
+- Moving fixed trace gas parameters to params resulted in small changes to radiation,
+likely due to slightly different float values. Additionally, added fixed trace gas
+values to the RCE ci case as per Wing et. al. (2018).
+
 286 
 - We don't know why, but a few (not all) cases seemed to not reproduce the reference.
   Maybe some files were not moved correctly.
