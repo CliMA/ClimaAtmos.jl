@@ -90,8 +90,8 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ -= C12(
         gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) +
         FT(0.5) * cp_d * (
-            ᶜθ_v_diff * gradₕ(ᶜΠ) +  # θv ∇Π
-            gradₕ(ᶜθ_v_diff * ᶜΠ) -  # ∇(θv Π)
+            ᶜθ_v_diff * wgradₕ(ᶜΠ) +  # θv ∇Π
+            wgradₕ(ᶜθ_v_diff * ᶜΠ) -  # ∇(θv Π)
             ᶜΠ * gradₕ(ᶜθ_v_diff)    # Π∇θv
         ),
     )    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
