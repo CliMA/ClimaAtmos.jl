@@ -1,5 +1,5 @@
 import ClimaCore:
-    Geometry, Hypsography, Fields, Spaces, Meshes, Grids, CommonGrids, Topologies
+    Geometry, Hypsography, Fields, Spaces, Meshes, Grids, CommonGrids, Topologies, Domains
 using ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 import .AtmosArtifacts as AA
 import ClimaComms
@@ -173,6 +173,7 @@ function BoxGrid(
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = LinearWarp(),
     topo_smoothing = false,
+    vertical_mesh = nothing,
 ) where {FT}
     n_quad_points = nh_poly + 1
     stretch =
@@ -180,7 +181,19 @@ function BoxGrid(
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing,
     )
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem, stretch)
+    z_mesh = if vertical_mesh == "rcemipii"
+        boundary_layer =
+            FT[0, 37, 112, 194, 288, 395, 520, 667, 843, 1062, 1331, 1664, 2055, 2505]
+        n_bl = length(boundary_layer) - 1
+        free_atmosphere = range(3000, FT(z_max), length = z_elem - n_bl)  # z_elem=74, z_max=33_000m --> 500m spacing
+        CT = Geometry.ZPoint{FT}
+        faces = CT.([boundary_layer; free_atmosphere])
+        z_domain =
+            Domains.IntervalDomain(CT(0), CT(z_max); boundary_names = (:bottom, :top))
+        Meshes.IntervalMesh(z_domain, faces)
+    else
+        CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem, stretch)
+    end
     grid = CommonGrids.Box3DGrid(
         FT;
         z_elem, x_min = 0, x_max, y_min = 0, y_max, z_min = 0, z_max,
