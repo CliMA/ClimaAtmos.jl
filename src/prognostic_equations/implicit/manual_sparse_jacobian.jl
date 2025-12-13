@@ -196,6 +196,10 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 name -> (@name(c.ρe_tot), name) => similar(Y.c, TridiagonalRow),
                 available_condensate_mass_names,
             )...,
+            MatrixFields.unrolled_map(
+                name -> (@name(c.ρq_tot), name) => similar(Y.c, TridiagonalRow),
+                available_condensate_mass_names,
+            )...,
             (@name(c.uₕ), @name(c.uₕ)) =>
                 !isnothing(atmos.turbconv_model) ||
                     !disable_momentum_vertical_diffusion(
@@ -212,6 +216,14 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             MatrixFields.unrolled_map(
                 name -> (name, name) => similar(Y.c, TridiagonalRow),
                 diffused_scalar_names,
+            )...,
+            MatrixFields.unrolled_map(
+                name -> (@name(c.ρe_tot), name) => similar(Y.c, TridiagonalRow),
+                available_condensate_mass_names,
+            )...,
+            MatrixFields.unrolled_map(
+                name -> (@name(c.ρq_tot), name) => similar(Y.c, TridiagonalRow),
+                available_condensate_mass_names,
             )...,
             (@name(c.ρe_tot), @name(c.ρq_tot)) =>
                 similar(Y.c, TridiagonalRow),
@@ -347,8 +359,10 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
            !(atmos.moisture_model isa DryModel)
             gs_scalar_subalg = if !(atmos.moisture_model isa DryModel)
                 MatrixFields.BlockLowerTriangularSolve(
-                    @name(c.ρq_tot),
                     available_condensate_mass_names...,
+                    alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                        @name(c.ρq_tot),
+                    ),
                 )
             else
                 MatrixFields.BlockDiagonalSolve()
@@ -588,51 +602,21 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         (@name(c.ρq_rim), @name(ᶜwᵢ), FT(1)),
         (@name(c.ρb_rim), @name(ᶜwᵢ), FT(1)),
     )
+    internal_energy_func(name) =
+        (name == @name(c.ρq_liq) || name == @name(c.ρq_rai)) ? TD.internal_energy_liquid :
+        (name == @name(c.ρq_ice) || name == @name(c.ρq_sno)) ? TD.internal_energy_ice :
+        nothing
     if !(p.atmos.moisture_model isa DryModel) || use_derivative(diffusion_flag)
         ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρe_tot)) - (I,)
     end
 
     if !(p.atmos.moisture_model isa DryModel)
-        #TODO: tetsing explicit vs implicit
-        #@. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
-        #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-        #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
-        #    DiagonalMatrixRow(
-        #        -(1 + ᶜkappa_m) / ᶜρ * ifelse(
-        #            ᶜh_tot == 0,
-        #            (Geometry.WVector(FT(0)),),
-        #            p.precomputed.ᶜwₕhₜ / ᶜh_tot,
-        #        ),
-        #    )
-
         ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
         @. ∂ᶜρe_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρq_tot))
-        #TODO: tetsing explicit vs implicit
-        #@. ∂ᶜρe_tot_err_∂ᶜρq_tot =
-        #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-        #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
-        #    DiagonalMatrixRow(
-        #        -(ᶜkappa_m) * ∂e_int_∂q_tot / ᶜρ * ifelse(
-        #            ᶜh_tot == 0,
-        #            (Geometry.WVector(FT(0)),),
-        #            p.precomputed.ᶜwₕhₜ / ᶜh_tot,
-        #        ),
-        #    )
 
         ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
         @. ∂ᶜρq_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρq_tot_err_∂ᶜρq_tot)) - (I,)
-        #TODO: testing explicit vs implicit
-        #@. ∂ᶜρq_tot_err_∂ᶜρq_tot =
-        #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-        #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
-        #    DiagonalMatrixRow(
-        #        -1 / ᶜρ * ifelse(
-        #           ᶜq_tot == 0,
-        #            (Geometry.WVector(FT(0)),),
-        #            p.precomputed.ᶜwₜqₜ / ᶜq_tot,
-        #        ),
-        #    ) - (I,)
 
         # This scratch variable computation could be skipped if no tracers are present
         @. p.scratch.ᶜbidiagonal_adjoint_matrix_c3 =
@@ -641,6 +625,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
         MatrixFields.unrolled_foreach(tracer_info) do (ρχₚ_name, wₚ_name, _)
             MatrixFields.has_field(Y, ρχₚ_name) || return
+
             ∂ᶜρχₚ_err_∂ᶜρχₚ = matrix[ρχₚ_name, ρχₚ_name]
             ᶜwₚ = MatrixFields.get_field(p.precomputed, wₚ_name)
             # TODO: come up with read-able names for the intermediate computations...
@@ -650,6 +635,24 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. ∂ᶜρχₚ_err_∂ᶜρχₚ =
                 p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
                 p.scratch.ᶠband_matrix_wvec - (I,)
+
+            if ρχₚ_name in
+               (@name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_rai), @name(c.ρq_sno))
+                ∂ᶜρq_tot_err_∂ᶜρq = matrix[@name(c.ρq_tot), ρχₚ_name]
+                @. ∂ᶜρq_tot_err_∂ᶜρq =
+                    p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
+                    p.scratch.ᶠband_matrix_wvec
+
+                ∂ᶜρe_tot_err_∂ᶜρq = matrix[@name(c.ρe_tot), ρχₚ_name]
+                e_int_func = internal_energy_func(ρχₚ_name)
+                @. ∂ᶜρe_tot_err_∂ᶜρq =
+                    p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
+                    p.scratch.ᶠband_matrix_wvec ⋅
+                    DiagonalMatrixRow(
+                        e_int_func(thermo_params, p.precomputed.ᶜts) + ᶜΦ +
+                        $(Kin(ᶜwₚ, p.precomputed.ᶜu)),
+                    )
+            end
         end
 
     end
@@ -719,7 +722,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         for (q_name, e_int_q, ∂cv∂q) in microphysics_tracers
             MatrixFields.has_field(Y, q_name) || continue
             ∂ᶜρe_tot_err_∂ᶜρq = matrix[@name(c.ρe_tot), q_name]
-            @. ∂ᶜρe_tot_err_∂ᶜρq =
+            @. ∂ᶜρe_tot_err_∂ᶜρq +=
                 dtγ * ᶜdiffusion_h_matrix ⋅
                 DiagonalMatrixRow((ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T) / ᶜρ)
         end

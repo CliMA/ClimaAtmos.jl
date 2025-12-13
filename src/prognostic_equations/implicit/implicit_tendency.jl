@@ -194,8 +194,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρb_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρb_rim, ρ)))
     end
 
-    # TODO - decide if this needs to be explicit or implicit
-    #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
+    vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
     # This is equivalent to grad_v(Φ) + grad_v(p) / ρ
     ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜts))
