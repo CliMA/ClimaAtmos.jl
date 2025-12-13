@@ -1724,3 +1724,63 @@ add_diagnostic_variable!(
     """,
     compute! = compute_rwp!,
 )
+
+###
+# Covariances (3d)
+###
+function compute_covariance_diagnostics!(out, state, cache, time, type)
+    turbconv_model = cache.atmos.turbconv_model
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isa(turbconv_model, PrognosticEDMFX) ||
+       isa(turbconv_model, DiagnosticEDMFX)
+        ᶜts = cache.precomputed.ᶜts⁰
+    else
+        ᶜts = cache.precomputed.ᶜts
+    end
+    
+    # Reuse central compute_covariance function
+    (ᶜq′q′, ᶜθ′θ′, ᶜθ′q′) = compute_covariance(
+         state, cache, thermo_params, ᶜts
+    )
+
+    result = if type == :qt_qt
+        ᶜq′q′
+    elseif type == :thtli_thtli
+         ᶜθ′θ′
+    elseif type == :qt_thtli
+        ᶜθ′q′
+    else
+        error("Unknown variance type")
+    end
+
+    if isnothing(out)
+        return Base.materialize(result)
+    else
+        out .= result
+    end
+end
+
+compute_env_qt_qt_cov!(out, state, cache, time) = compute_covariance_diagnostics!(out, state, cache, time, :qt_qt)
+compute_env_thtli_thtli_cov!(out, state, cache, time) = compute_covariance_diagnostics!(out, state, cache, time, :thtli_thtli)
+compute_env_qt_thtli_cov!(out, state, cache, time) = compute_covariance_diagnostics!(out, state, cache, time, :qt_thtli)
+
+add_diagnostic_variable!(
+    short_name = "env_qt_qt_cov",
+    long_name = "Environment Variance of Total Specific Humidity",
+    units = "kg^2 kg^-2",
+    compute! = compute_env_qt_qt_cov!,
+)
+
+add_diagnostic_variable!(
+    short_name = "env_thtli_thtli_cov",
+    long_name = "Environment Variance of Liquid Ice Potential Temperature",
+    units = "K^2",
+    compute! = compute_env_thtli_thtli_cov!,
+)
+
+add_diagnostic_variable!(
+    short_name = "env_qt_thtli_cov",
+    long_name = "Environment Covariance of Total Specific Humidity and Liquid Ice Potential Temperature",
+    units = "kg kg^-1 K",
+    compute! = compute_env_qt_thtli_cov!,
+)

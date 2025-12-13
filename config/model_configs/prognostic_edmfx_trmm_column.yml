@@ -38,3 +38,6 @@ diagnostics:
     period: 10mins
   - short_name: [husra, hussn, husraup, hussnup, husraen, hussnen]
     period: 10mins
+  - short_name: [env_qt_qt_cov, env_thtli_thtli_cov, env_qt_thtli_cov]
+    period: 10mins
+    
