@@ -1,0 +1,14 @@
+t_end: "30days"
+initial_condition: "MoistBaroclinicWave"
+moist: "equil"
+precip_model: "0M"
+dt_save_state_to_disk: "10days"
+disable_surface_flux_tendency: true
+toml: [toml/longrun_baroclinic_wave.toml]
+diagnostics:
+  - short_name: [pfull, wa, va, ua, ta, rhoa, rv, hus, ke, clw, cli]
+    period: 1days
+hyperdiff: ClimaHyperdiffusion
+vorticity_hyperdiffusion_coefficient: 0.1857
+scalar_hyperdiffusion_coefficient: 0.929738
+dt: 180secs

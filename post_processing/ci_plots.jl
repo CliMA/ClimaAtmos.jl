@@ -943,6 +943,12 @@ end
 LongMoistBaroWavePlots = Union{
     Val{:longrun_moist_baroclinic_wave},
     Val{:longrun_moist_baroclinic_wave_he60},
+    Val{:longrun_moist_baroclinic_wave_base},
+    Val{:longrun_moist_baroclinic_wave_dt_90_half_coeff},
+    Val{:longrun_moist_baroclinic_wave_dt_90_quarter_coeff},
+    Val{:longrun_moist_baroclinic_wave_dt_180},
+    Val{:longrun_moist_baroclinic_wave_dt_240},
+    Val{:longrun_moist_baroclinic_wave_dt_300},
 }
 
 function make_plots(
