@@ -92,6 +92,16 @@ function temporary_quantities(Y, atmos)
                 ClimaCore.Geometry.WVector{FT},
             },
         ),
+        ᶠsed_tracer_advection = similar(
+            Y.f,
+            ClimaCore.MatrixFields.BandMatrixRow{
+                ClimaCore.Utilities.PlusHalf{Int64}(0),
+                1,
+                ClimaCore.Geometry.WVector{FT},
+            },
+        ),
+        ᶠtracer_advection = similar(Y.f, BidiagonalMatrixRow{Adjoint{FT, C3{FT}}}),
+        ᶠtracer_advection_upwind = similar(Y.f, TridiagonalMatrixRow{FT}),
         ᶠdiagonal_matrix_ct3xct3 = similar(
             Y.f,
             DiagonalMatrixRow{
@@ -109,6 +119,10 @@ function temporary_quantities(Y, atmos)
         ᶠbidiagonal_matrix_ct3_2 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
         ᶜbidiagonal_matrix_scalar = similar(Y.c, BidiagonalMatrixRow{FT}),
         ᶜadvection_matrix = similar(
+            Y.c,
+            BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
+        ),
+        ᶜadvection_matrix_2 = similar(
             Y.c,
             BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
         ),
