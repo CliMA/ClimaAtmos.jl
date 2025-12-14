@@ -474,7 +474,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
         end
 
         # Momentum diffusion
-        ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
+        ᶠstrain_rate = ᶠcompute_strain_rate_face_vertical(ᶜu)
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
     end
 

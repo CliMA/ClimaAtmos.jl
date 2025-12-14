@@ -253,25 +253,26 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     external_forcing_tendency!(Yₜ, Y, p, t, p.atmos.external_forcing)
 
     if p.atmos.sgs_adv_mode == Explicit()
-        edmfx_sgs_vertical_advection_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.turbconv_model,
-        )
+        edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, t, turbconv_model)
     end
 
+    (; vertical_diffusion, smagorinsky_lilly, amd_les, constant_horizontal_diffusion) = 
+        p.atmos
+
     if p.atmos.diff_mode == Explicit()
-        vertical_diffusion_boundary_layer_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.vertical_diffusion,
-        )
-        edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+        vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, vertical_diffusion)
+        edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
+
+        vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, smagorinsky_lilly)
     end
+    
+    horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, smagorinsky_lilly)
+
+    horizontal_amd_tendency!(Yₜ, Y, p, t, amd_les)
+    vertical_amd_tendency!(Yₜ, Y, p, t, amd_les)
+
+    horizontal_constant_diffusion_tendency!(Yₜ, Y, p, t, constant_horizontal_diffusion)
+
 
     surface_flux_tendency!(Yₜ, Y, p, t)
 
@@ -343,17 +344,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-
-    sl = p.atmos.smagorinsky_lilly
-    horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
-    vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
-
-    amd = p.atmos.amd_les
-    horizontal_amd_tendency!(Yₜ, Y, p, t, amd)
-    vertical_amd_tendency!(Yₜ, Y, p, t, amd)
-
-    chd = p.atmos.constant_horizontal_diffusion
-    horizontal_constant_diffusion_tendency!(Yₜ, Y, p, t, chd)
 
     # Optional tendency to bring negative small tracers back from negative
     # at the cost of water vapor.

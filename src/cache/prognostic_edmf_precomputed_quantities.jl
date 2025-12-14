@@ -316,7 +316,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     # TODO: Currently the shear production only includes vertical gradients
     ᶠu = p.scratch.ᶠtemp_C123
     @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-    ᶜstrain_rate = compute_strain_rate_center_vertical(ᶠu)
+    ᶜstrain_rate = ᶜcompute_strain_rate_center_vertical(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)

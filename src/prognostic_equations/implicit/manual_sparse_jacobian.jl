@@ -677,12 +677,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
             ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
             ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-            ᶜK_u = p.scratch.ᶜtemp_scalar_4
             @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
             ᶜprandtl_nvec = @. lazy(
                 turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
             )
-            ᶜK_h = p.scratch.ᶜtemp_scalar_6
             @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
         end
 
