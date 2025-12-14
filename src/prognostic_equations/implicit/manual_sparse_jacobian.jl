@@ -77,39 +77,30 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     BidiagonalRow_C3 = BidiagonalMatrixRow{C3{FT}}
     TridiagonalRow_ACT12 = TridiagonalMatrixRow{Adjoint{FT, CT12{FT}}}
     BidiagonalRow_ACT3 = BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
-    BidiagonalRow_C3xACT12 =
-        BidiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT12{FT})')}
-    DiagonalRow_C3xACT3 =
-        DiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT3{FT})')}
-    TridiagonalRow_C3xACT3 =
-        TridiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT3{FT})')}
+    BidiagonalRow_C3xACT12 = BidiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT12{FT})')}
+    DiagonalRow_C3xACT3 = DiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT3{FT})')}
+    TridiagonalRow_C3xACT3 = TridiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT3{FT})')}
 
     is_in_Y(name) = MatrixFields.has_field(Y, name)
 
     ρq_tot_if_available = is_in_Y(@name(c.ρq_tot)) ? (@name(c.ρq_tot),) : ()
-    ρatke_if_available =
-        is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
+    ρatke_if_available = is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
     condensate_mass_names = (
-        @name(c.ρq_liq),
-        @name(c.ρq_ice),
-        @name(c.ρq_rai),
-        @name(c.ρq_sno),
+        @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_rai), @name(c.ρq_sno),  # 1M,2M
+        @name(c.ρq_rim)  # P3 frozen
     )
     available_condensate_mass_names =
         MatrixFields.unrolled_filter(is_in_Y, condensate_mass_names)
-    condensate_names = (
-        condensate_mass_names...,
-        @name(c.ρn_liq),
-        @name(c.ρn_rai),
+    condensate_names = (condensate_mass_names...,
+        # 2M number concentrations
+        @name(c.ρn_liq), @name(c.ρn_rai),
         # P3 frozen
-        @name(c.ρn_ice), @name(c.ρq_rim), @name(c.ρb_rim),
+        @name(c.ρn_ice), @name(c.ρb_rim),
     )
-    available_condensate_names =
-        MatrixFields.unrolled_filter(is_in_Y, condensate_names)
-    available_tracer_names =
-        (ρq_tot_if_available..., available_condensate_names...)
+    available_condensate_names = MatrixFields.unrolled_filter(is_in_Y, condensate_names)
+    available_tracer_names = (ρq_tot_if_available..., available_condensate_names...)
 
     # we define the list of condensate masses separately because ρa and q_tot
     # depend on the masses via sedimentation
@@ -134,11 +125,9 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             @name(c.sgsʲs.:(1).mse),
             @name(c.sgsʲs.:(1).ρa)
         )
-    available_sgs_scalar_names =
-        MatrixFields.unrolled_filter(is_in_Y, sgs_scalar_names)
+    available_sgs_scalar_names = MatrixFields.unrolled_filter(is_in_Y, sgs_scalar_names)
 
-    sgs_u³_if_available =
-        is_in_Y(@name(f.sgsʲs.:(1).u₃)) ? (@name(f.sgsʲs.:(1).u₃),) : ()
+    sgs_u³_if_available = is_in_Y(@name(f.sgsʲs.:(1).u₃)) ? (@name(f.sgsʲs.:(1).u₃),) : ()
 
     # Note: We have to use FT(-1) * I instead of -I because inv(-1) == -1.0,
     # which means that multiplying inv(-1) by a Float32 will yield a Float64.
@@ -177,22 +166,19 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     diffused_scalar_names = (@name(c.ρe_tot), available_tracer_names...)
     diffusion_blocks = if use_derivative(diffusion_flag)
         (
-            MatrixFields.unrolled_map(
+            MatrixFields.unrolled_map(  # ∂ρχ / ∂ρ
                 name -> (name, @name(c.ρ)) => similar(Y.c, TridiagonalRow),
                 (diffused_scalar_names..., ρatke_if_available...),
             )...,
-            MatrixFields.unrolled_map(
+            MatrixFields.unrolled_map(  # ∂ρχ / ∂ρχ
                 name -> (name, name) => similar(Y.c, TridiagonalRow),
                 (diffused_scalar_names..., ρatke_if_available...),
             )...,
             (
-                is_in_Y(@name(c.ρq_tot)) ?
-                (
-                    (@name(c.ρe_tot), @name(c.ρq_tot)) =>
-                        similar(Y.c, TridiagonalRow),
-                ) : ()
+                is_in_Y(@name(c.ρq_tot)) ?  # ∂ρe_tot / ∂ρq_tot
+                ((@name(c.ρe_tot), @name(c.ρq_tot)) => similar(Y.c, TridiagonalRow)) : ()
             )...,
-            MatrixFields.unrolled_map(
+            MatrixFields.unrolled_map(  # ∂ρe_tot / ∂ρχ
                 name -> (@name(c.ρe_tot), name) => similar(Y.c, TridiagonalRow),
                 available_condensate_mass_names,
             )...,
@@ -213,8 +199,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 name -> (name, name) => similar(Y.c, TridiagonalRow),
                 diffused_scalar_names,
             )...,
-            (@name(c.ρe_tot), @name(c.ρq_tot)) =>
-                similar(Y.c, TridiagonalRow),
+            (@name(c.ρe_tot), @name(c.ρq_tot)) => similar(Y.c, TridiagonalRow),
             MatrixFields.unrolled_map(
                 name -> (name, name) => FT(-1) * I,
                 (ρatke_if_available..., @name(c.uₕ)),
@@ -691,7 +676,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         if (
             MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke)) ||
             !isnothing(p.atmos.turbconv_model) ||
-            !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
+            !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion) ||
+            is_smagorinsky_vertical(smagorinsky_lilly)
         )
             @. ∂ᶠρχ_dif_flux_∂ᶜχ =
                 DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅ ᶠgradᵥ_matrix()
@@ -727,8 +713,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ∂ᶜρχ_err_∂ᶜρ = matrix[ρχ_name, @name(c.ρ)]
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
             @. ∂ᶜρχ_err_∂ᶜρ = zero(typeof(∂ᶜρχ_err_∂ᶜρ))
-            @. ∂ᶜρχ_err_∂ᶜρχ +=
-                dtγ * α * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
+            @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * α * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
         if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
@@ -779,11 +764,17 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
         if (
             !isnothing(p.atmos.turbconv_model) ||
-            !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
+            !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion) ||
+            is_smagorinsky_vertical(smagorinsky_lilly)
         )
             ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
-            @. ∂ᶜuₕ_err_∂ᶜuₕ =
-                dtγ * DiagonalMatrixRow(1 / ᶜρ) ⋅ ᶜdiffusion_u_matrix - (I,)
+            @. ∂ᶜuₕ_err_∂ᶜuₕ = dtγ * DiagonalMatrixRow(1 / ᶜρ) ⋅ ᶜdiffusion_u_matrix - (I,)
+        end
+
+        if is_smagorinsky_vertical(smagorinsky_lilly)
+            # Factor `2` from: τ=-2νS, where "S₃₃ = ∂u₃/∂z"
+            # in contrast to the horizontal diffusion, where "S₁₃ = ∂u₁/∂z / 2"
+            @. ∂ᶠu₃_err_∂ᶠu₃ += dtγ * DiagonalMatrixRow(1 / ᶜρ) ⋅ (2 * ᶜdiffusion_u_matrix)
         end
 
     end
