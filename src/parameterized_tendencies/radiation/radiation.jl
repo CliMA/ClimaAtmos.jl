@@ -179,7 +179,6 @@ function rrtmgp_model_kwargs(
         end
     end
     kwargs = (;
-        kwargs...,
         use_global_means_for_well_mixed_gases = true,
         center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
         center_relative_humidity = NaN, # initialized in callback
