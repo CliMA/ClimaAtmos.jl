@@ -351,7 +351,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                     available_condensate_mass_names...,
                 )
             else
-                MatrixFields.BlockDiagonalSolve()
+                MatrixFields.BatchedTridiagonalSolve()
             end
             scalar_subalg =
                 if atmos.turbconv_model isa PrognosticEDMFX &&
@@ -516,7 +516,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜts))
     ᶜΠ = @. lazy(dry_exner_function(thermo_params, ᶜts))
-    # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration: 
+    # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration:
     #              grad(p) / ρ + grad(Φ)  =  cp_d * θ_v * grad(Π) + grad(Φ).
     # Here below, we use the old formulation of (grad(Φ) + grad(p) / ρ).
     # This is because the new formulation would require computing the derivative of θ_v.
