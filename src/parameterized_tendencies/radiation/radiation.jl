@@ -184,6 +184,7 @@ function rrtmgp_model_kwargs(
         center_relative_humidity = NaN, # initialized in callback
         center_volume_mixing_ratio_o3,
         NamedTuple{trace_gas_vmr_names}(trace_gas_vmrs)...,
+        latitude,
     )
 
     if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
