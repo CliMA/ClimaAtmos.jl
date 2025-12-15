@@ -111,13 +111,6 @@ function solve_atmos!(simulation)
         @info "Memory currently used (after solve!) by the process (RSS): $maxrss_str"
 
         isnothing(output_writers) || foreach(close, output_writers)
-
-        s = @timed_str begin
-        pfull_diag_handler = simulation.integrator.callback.discrete_callbacks[end].affect!.diagnostics_handler
-        netcdf_writer = output_writers[end]
-        ClimaDiagnostics.Postprocessing.write_h_indices_to_regular_grid(pfull_diag_handler, netcdf_writer)
-        end
-        @info "Writing to pressure coordinates: $s"
     end
 end
 

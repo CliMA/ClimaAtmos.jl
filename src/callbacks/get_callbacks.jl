@@ -1,4 +1,4 @@
-function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
+function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir; pfull_coords = false)
 
     (; dt, t_start, start_date) = sim_info
 
@@ -47,12 +47,15 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
     maybe_add_start_date =
         pkgversion(CAD.ClimaDiagnostics) >= v"0.2.9" ? (; start_date) : (;)
 
+    coords_style = pfull_coords ? ClimaDiagnostics.Writers.PfullCoordsStyle() : ClimaDiagnostics.Writers.NoConversionStyle()
+
     netcdf_writer = CAD.NetCDFWriter(
         axes(Y.c),
         output_dir,
         num_points = num_netcdf_points;
         z_sampling_method,
         sync_schedule = CAD.EveryStepSchedule(),
+        coords_style = coords_style,
         maybe_add_start_date...,
     )
     writers = (dict_writer, hdf5_writer, netcdf_writer)

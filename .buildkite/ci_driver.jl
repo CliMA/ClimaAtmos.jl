@@ -21,7 +21,7 @@ Random.seed!(1234)
 #     (; config_file, job_id) = CA.commandline_kwargs()
 #     config = CA.AtmosConfig(config_file; job_id)
 # end
-config_file = "/home/kphan/Desktop/work_tree/mainRepos/ClimaAtmos.jl/pfull-coords/config/model_configs/baroclinic_wave_equil.yml"
+config_file = "config/model_configs/baroclinic_wave_equil.yml"
 job_id = "42"
 config = CA.AtmosConfig(config_file; job_id)
 simulation = CA.get_simulation(config)

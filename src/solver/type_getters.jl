@@ -879,6 +879,7 @@ function get_simulation(config::AtmosConfig)
                     p,
                     sim_info,
                     output_dir,
+                    pfull_coords = true,
                 )
             pfull_idx =
                 findfirst(sd -> sd.variable.short_name == "pfull", pfull_scheduled_diagnostics)
