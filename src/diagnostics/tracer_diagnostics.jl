@@ -1,251 +1,140 @@
 # This file is included in Diagnostics.jl
+import ClimaCore.MatrixFields: @name, has_field, get_field
 
 # Tracers
 
-function compute_tracer!(out, state, cache, time, tracer_name)
-    tracer_name in propertynames(cache.tracers) ||
-        error("$tracer_name does not exist in the model")
-    if isnothing(out)
-        return copy(getproperty(cache.tracers, tracer_name))
-    else
-        out .= getproperty(cache.tracers, tracer_name)
-    end
+function compute_tracer(state, cache, time, tracer_name)
+    (; tracers) = cache
+    @assert has_field(tracers, tracer_name) "tracer $tracer_name does not exist"
+    return get_field(tracers, tracer_name)
 end
 
-function compute_aerosol!(out, state, cache, time, aerosol_name)
-    :prescribed_aerosols_field in propertynames(cache.tracers) ||
-        error("Aerosols do not exist in the model")
-    aerosol_name in propertynames(cache.tracers.prescribed_aerosols_field) ||
-        error("$aerosol_name does not exist in the model")
-    if isnothing(out)
-        return copy(
-            getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name),
-        )
-    else
-        out .=
-            getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name)
-    end
+function compute_aerosol(state, cache, time, aerosol_name)
+    (; tracers) = cache
+    @assert has_field(tracers, @name(prescribed_aerosols_field)) "Aerosols do not exist in the model"
+    aerosols = tracers.prescribed_aerosols_field
+    @assert has_field(aerosols, aerosol_name) "$aerosol_name does not exist in the model"
+    return get_field(aerosols, aerosol_name)
 end
 
-function compute_dust!(out, state, cache, time)
-    :prescribed_aerosols_field in propertynames(cache.tracers) ||
-        error("Aerosols do not exist in the model")
-    any(
-        x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
-        [:DST01, :DST02, :DST03, :DST04, :DST05],
-    ) || error("Dust does not exist in the model")
-    if isnothing(out)
-        aero_conc = cache.scratch.ᶜtemp_scalar
-        @. aero_conc = 0
-        for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04, :DST05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field
-            end
+function compute_dust(state, cache, time)
+    (; tracers) = cache
+    dust_names = (@name(DST01), @name(DST02), @name(DST03), @name(DST04), @name(DST05))
+    @assert has_field(tracers, @name(prescribed_aerosols_field)) "Aerosols do not exist in the model"
+    aerosols = tracers.prescribed_aerosols_field
+    @assert any(x -> has_field(aerosols, x), dust_names) "Dust does not exist in the model"
+    
+    function dust_sum(aerosols)
+        mapreduce(+, dust_names) do dust_name
+            has_field(aerosols, dust_name) ? get_field(aerosols, dust_name) : 0
         end
-        return aero_conc
-    else
-        aero_conc = cache.scratch.ᶜtemp_scalar
-        @. aero_conc = 0
-        for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04, :DST05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field
-            end
-        end
-        out .= aero_conc
     end
+    return @. lazy(dust_sum(aerosols))
 end
 
-function compute_sea_salt!(out, state, cache, time)
-    :prescribed_aerosols_field in propertynames(cache.tracers) ||
-        error("Aerosols do not exist in the model")
-    any(
-        x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
-        [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05],
-    ) || error("Sea salt does not exist in the model")
-    if isnothing(out)
-        aero_conc = cache.scratch.ᶜtemp_scalar
-        @. aero_conc = 0
-        for prescribed_aerosol_name in
-            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field
-            end
+function compute_sea_salt(state, cache, time)
+    (; tracers) = cache
+    @assert has_field(tracers, @name(prescribed_aerosols_field)) "Aerosols do not exist in the model"
+    aerosols = tracers.prescribed_aerosols_field
+    sea_salt_names = (@name(SSLT01), @name(SSLT02), @name(SSLT03), @name(SSLT04), @name(SSLT05))
+    @assert any(x -> has_field(aerosols, x), sea_salt_names) "Sea salt does not exist in the model"
+
+    function sea_salt_sum(aerosols)
+        mapreduce(+, sea_salt_names) do sea_salt_name
+            has_field(aerosols, sea_salt_name) ? get_field(aerosols, sea_salt_name) : 0
         end
-        return aero_conc
-    else
-        aero_conc = cache.scratch.ᶜtemp_scalar
-        @. aero_conc = 0
-        for prescribed_aerosol_name in
-            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field
-            end
-        end
-        out .= aero_conc
     end
+    return @. lazy(sea_salt_sum(aerosols))
 end
 
 function compute_sea_salt_column!(out, state, cache, time)
-    :prescribed_aerosols_field in propertynames(cache.tracers) ||
-        error("Aerosols do not exist in the model")
-    any(
-        x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
-        [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05],
-    ) || error("Sea salt does not exist in the model")
-    if isnothing(out)
-        out = zeros(axes(Fields.level(state.f, half)))
-        aero_conc = cache.scratch.ᶜtemp_scalar
-        @. aero_conc = 0
-        for prescribed_aerosol_name in
-            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field * state.c.ρ
-            end
-        end
-        Operators.column_integral_definite!(out, aero_conc)
-        return out
-    else
-        aero_conc = cache.scratch.ᶜtemp_scalar
-        @. aero_conc = 0
-        for prescribed_aerosol_name in
-            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field * state.c.ρ
-            end
-        end
-        Operators.column_integral_definite!(out, aero_conc)
-    end
+    out′ = isnothing(out) ? zeros(axes(Fields.level(state.f, half))) : out
+    sea_salt = @. lazy(compute_sea_salt(state, cache, time) * state.c.ρ)
+    Operators.column_integral_definite!(out′, sea_salt)
+    return out′
 end
 
 ###
 # Ozone concentration (3d)
 ###
-add_diagnostic_variable!(
-    short_name = "o3",
+add_diagnostic_variable!(short_name = "o3", units = "mol mol^-1",
     long_name = "Mole Fraction of O3",
     standard_name = "mole_fraction_of_ozone_in_air",
-    units = "mol mol^-1",
-    compute! = (out, u, p, t) -> compute_tracer!(out, u, p, t, :o3),
+    compute = (u, p, t) -> compute_tracer(u, p, t, @name(o3)),
 )
 
 ###
 # Dust concentration (3d)
 ###
-add_diagnostic_variable!(
-    short_name = "mmrdust",
+add_diagnostic_variable!(short_name = "mmrdust", units = "kg kg^-1",
     long_name = "Dust Aerosol Mass Mixing Ratio",
     standard_name = "mass_fraction_of_dust_dry_aerosol_particles_in_air",
-    units = "kg kg^-1",
     comments = "Prescribed dry mass fraction of dust aerosol particles in air.",
-    compute! = (out, u, p, t) -> compute_dust!(out, u, p, t),
+    compute = compute_dust,
 )
 
 ###
 # Sea salt concentration (3d)
 ###
-add_diagnostic_variable!(
-    short_name = "mmrss",
+add_diagnostic_variable!(short_name = "mmrss", units = "kg kg^-1",
     long_name = "Sea-Salt Aerosol Mass Mixing Ratio",
     standard_name = "mass_fraction_of_sea_salt_dry_aerosol_particles_in_air",
-    units = "kg kg^-1",
     comments = "Prescribed dry mass fraction of sea salt aerosol particles in air.",
-    compute! = (out, u, p, t) -> compute_sea_salt!(out, u, p, t),
+    compute = compute_sea_salt,
 )
 
 ###
 # Sulfate concentration (3d)
 ###
-add_diagnostic_variable!(
-    short_name = "mmrso4",
+add_diagnostic_variable!(short_name = "mmrso4", units = "kg kg^-1",
     long_name = "Aerosol Sulfate Mass Mixing Ratio",
     standard_name = "mass_fraction_of_sulfate_dry_aerosol_particles_in_air",
-    units = "kg kg^-1",
     comments = "Prescribed dry mass of sulfate (SO4) in aerosol particles as a fraction of air mass.",
-    compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :SO4),
+    compute = (u, p, t) -> compute_aerosol(u, p, t, @name(SO4)),
 )
 
 ###
 # Hydrophobic black carbon concentration (3d)
 ###
-add_diagnostic_variable!(
-    short_name = "mmrbcpo",
+add_diagnostic_variable!(short_name = "mmrbcpo", units = "kg kg^-1",
     long_name = "Hydrophobic Elemental Carbon Mass Mixing Ratio",
-    units = "kg kg^-1",
     comments = "Prescribed dry mass fraction of hydrophobic black carbon aerosol particles in air.",
-    compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :CB1),
+    compute = (u, p, t) -> compute_aerosol(u, p, t, @name(CB1)),
 )
 
 ###
 # Hydrophilic black carbon concentration (3d)
 ###
-add_diagnostic_variable!(
-    short_name = "mmrbcpi",
+add_diagnostic_variable!(short_name = "mmrbcpi", units = "kg kg^-1",
     long_name = "Hydrophilic Elemental Carbon Mass Mixing Ratio",
-    units = "kg kg^-1",
     comments = "Prescribed dry mass fraction of hydrophilic black carbon aerosol particles in air.",
-    compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :CB2),
+    compute = (u, p, t) -> compute_aerosol(u, p, t, @name(CB2)),
 )
 
 ###
 # Hydrophobic organic carbon concentration (3d)
 ###
-add_diagnostic_variable!(
-    short_name = "mmrocpo",
+add_diagnostic_variable!(short_name = "mmrocpo", units = "kg kg^-1",
     long_name = "Hydrophobic Organic Carbon Mass Mixing Ratio",
-    units = "kg kg^-1",
     comments = "Prescribed dry mass fraction of hydrophobic organic carbon aerosol particles in air.",
-    compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :OC1),
+    compute = (u, p, t) -> compute_aerosol(u, p, t, @name(OC1)),
 )
 
 ###
 # Hydrophilic organic carbon concentration (3d)
 ###
-add_diagnostic_variable!(
-    short_name = "mmrocpi",
+add_diagnostic_variable!(short_name = "mmrocpi", units = "kg kg^-1",
     long_name = "Hydrophilic Organic Carbon Mass Mixing Ratio",
-    units = "kg kg^-1",
     comments = "Prescribed dry mass fraction of hydrophilic organic carbon aerosol particles in air.",
-    compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :OC2),
+    compute = (u, p, t) -> compute_aerosol(u, p, t, @name(OC2)),
 )
 
 ###
 # Sea salt column mass (2d)
 ###
-add_diagnostic_variable!(
-    short_name = "loadss",
+add_diagnostic_variable!(short_name = "loadss", units = "kg m^-2",
     long_name = "Load of Sea-Salt Aerosol",
     standard_name = "atmosphere_mass_content_of_sea_salt_dry_aerosol _particles",
-    units = "kg m^-2",
     comments = "The total dry mass of sea salt aerosol particles per unit area.",
-    compute! = (out, u, p, t) -> compute_sea_salt_column!(out, u, p, t),
+    compute! = compute_sea_salt_column!,
 )
