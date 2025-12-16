@@ -183,7 +183,23 @@ function rrtmgp_model_kwargs(
         center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
         center_relative_humidity = NaN, # initialized in callback
         center_volume_mixing_ratio_o3,
-        NamedTuple{trace_gas_vmr_names}(trace_gas_vmrs)...,
+        volume_mixing_ratio_co2 = 0.000397547,
+        volume_mixing_ratio_hfc143a = 1.525278091430664e-11,
+        volume_mixing_ratio_hfc125 = 1.5355008125305177e-11,
+        volume_mixing_ratio_co = 1.199999957179898e-7,
+        volume_mixing_ratio_ch4 = 1.8314709472656252e-6,
+        volume_mixing_ratio_cfc12 = 5.205809936523438e-10,
+        volume_mixing_ratio_hfc134a = 8.051573181152344e-11,
+        volume_mixing_ratio_cf4 = 8.109249114990234e-11,
+        volume_mixing_ratio_cfc22 = 2.295420684814453e-10,
+        volume_mixing_ratio_n2o = 3.269880065917969e-7,
+        volume_mixing_ratio_no2 = 0,
+        volume_mixing_ratio_n2 = 0.781000018119812,
+        volume_mixing_ratio_o2 = 0.20900000631809235,
+        volume_mixing_ratio_ccl4 = 8.306993103027344e-11,
+        volume_mixing_ratio_cfc11 = 2.330798645019531e-10,
+        volume_mixing_ratio_hfc32 = 8.336969375610351e-12,
+        volume_mixing_ratio_hfc23 = 2.6890436172485352e-11,
         latitude,
     )
 
