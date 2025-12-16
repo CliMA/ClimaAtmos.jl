@@ -955,8 +955,8 @@ function get_simulation(config::AtmosConfig)
             )
             integrator = ClimaDiagnostics.IntegratorWithPfullCoordsDiagnostics(
                 integrator,
-                pfull_scheduled_diagnostics,
-                pfull_compute!)
+                pfull_scheduled_diagnostics
+            )
         end
         @info "Added diagnostics: $s"
     end
