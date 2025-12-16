@@ -7,30 +7,30 @@ import ClimaCore.Operators as Operators
 import ClimaCore: Geometry
 
 """
-    lilly_stratification_correction_inline!(ᶜfb, p, ᶜS, ᶜtemp_scalar)
+    lilly_stratification_correction(p, ᶜS)
 
-Compute the Lilly stratification correction factor in-place based on the local Richardson number.
-This version is optimized to avoid intermediate lazy field allocations.
+Return a lazy representation of the Lilly stratification correction factor
+    based on the local Richardson number.
 
 # Arguments
-- `ᶜfb`: Output array for stratification correction factor
 - `p`: The model parameters, e.g. `AtmosCache`.
 - `ᶜS`: The cell-centered strain rate tensor.
-- `ᶜtemp_scalar`: Temporary scalar field for intermediate calculations.
 """
-function lilly_stratification_correction_inline!(ᶜfb, p, ᶜS, ᶜtemp_scalar)
+function lilly_stratification_correction(p, ᶜS)
     (; ᶜts) = p.precomputed
+    (; ᶜtemp_scalar) = p.scratch
     grav = CAP.grav(p.params)
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(Pr_t)
-    # Stratification correction - compute inline to fuse with length scale calculations
+    # Stratification correction
     ᶜθ_v = @. lazy(TD.virtual_pottemp(thermo_params, ᶜts))
     ᶜ∇ᵥθ = @. ᶜtemp_scalar = Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜθ_v))).components.data.:1
     ᶜN² = @. lazy(grav / ᶜθ_v * ᶜ∇ᵥθ)
     ᶜS_norm = strain_rate_norm(ᶜS, Geometry.WAxis())
+
     ᶜRi = @. lazy(ᶜN² / (ᶜS_norm^2 + eps(FT)))  # Ri = N² / |S|²
-    @. ᶜfb = ifelse(ᶜRi ≤ 0, FT(1), max(0, 1 - ᶜRi / Pr_t)^(1 // 4))
+    ᶜfb = @. lazy(ifelse(ᶜRi ≤ 0, FT(1), max(0, 1 - ᶜRi / Pr_t)^(1 // 4)))
 end
 
 """
@@ -60,7 +60,6 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
         p.precomputed
     (; ᶜtemp_scalar) = p.scratch
     c_smag = CAP.c_smag(p.params)
-    Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
 
     # Precompute 3D strain rate tensor
     compute_strain_rate_center_full!(ᶜS, ᶜu, ᶠu)
@@ -73,47 +72,30 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
     ax_xy = is_smagorinsky_UVW_coupled(model) ? Geometry.UVWAxis() : Geometry.UVAxis()
     ax_z = is_smagorinsky_UVW_coupled(model) ? Geometry.UVWAxis() : Geometry.WAxis()
 
-    # Compute stratification correction in-place to reduce intermediate allocations
-    lilly_stratification_correction_inline!(ᶜL_h, p, ᶜS, ᶜtemp_scalar)
-    ᶜfb = ᶜL_h  # reuse storage for fb temporarily
+    ᶜfb = lilly_stratification_correction(p, ᶜS)
+    if is_smagorinsky_UVW_coupled(model)
+        ᶜL_h = ᶜL_v = @. lazy(c_smag * cbrt(Δx * Δy * ᶜΔz) * ᶜfb)
+    else
+        ᶜL_h = @. lazy(c_smag * Δx)
+        ᶜL_v = @. lazy(c_smag * ᶜΔz * ᶜfb)
+    end
 
-    # Compute strain rate norms once
+    # Cache strain rate norms for diagnostics
     ᶜS_norm_h .= strain_rate_norm(ᶜS, ax_xy)
     ᶜS_norm_v .= strain_rate_norm(ᶜS, ax_z)
 
-    # Fused computation: length scale, viscosity, and diffusivity in single kernels
-    if is_smagorinsky_UVW_coupled(model)
-        # For coupled model: compute length scale combined with viscosity/diffusivity
-        @. ᶜL_h = c_smag * cbrt(Δx * Δy * ᶜΔz) * ᶜfb
-        @. ᶜL_v = ᶜL_h
-        @. ᶜνₜ_h = ᶜL_h^2 * ᶜS_norm_h
-        @. ᶜνₜ_v = ᶜL_v^2 * ᶜS_norm_v
-    else
-        # For decoupled model: compute horizontal and vertical separately
-        @. ᶜL_h = c_smag * Δx
-        @. ᶜνₜ_h = ᶜL_h^2 * ᶜS_norm_h
+    # Smagorinsky eddy viscosity
+    @. ᶜνₜ_h = ᶜL_h^2 * ᶜS_norm_h
+    @. ᶜνₜ_v = ᶜL_v^2 * ᶜS_norm_v
 
-        @. ᶜL_v = c_smag * ᶜΔz * ᶜfb
-        @. ᶜνₜ_v = ᶜL_v^2 * ᶜS_norm_v
-    end
-
-    # Fused diffusivity computation
+    # Turbulent diffusivity
+    Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
     @. ᶜD_h = ᶜνₜ_h / Pr_t
     @. ᶜD_v = ᶜνₜ_v / Pr_t
 
     nothing
 end
 set_smagorinsky_lilly_precomputed_quantities!(Y, p, ::Nothing) = nothing
-
-# Keep backward compatibility with old stratification correction function
-function lilly_stratification_correction(p, ᶜS)
-    (; ᶜts) = p.precomputed
-    (; ᶜtemp_scalar) = p.scratch
-    FT = eltype(ᶜts)
-    ᶜfb = Fields.zeros(ᶜts)
-    lilly_stratification_correction_inline!(ᶜfb, p, ᶜS, ᶜtemp_scalar)
-    return ᶜfb
-end
 
 horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
