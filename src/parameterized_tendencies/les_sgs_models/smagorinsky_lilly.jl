@@ -9,7 +9,7 @@ import ClimaCore: Geometry
 """
     lilly_stratification_correction(p, ᶜS)
 
-Return a lazy representation of the Lilly stratification correction factor 
+Return a lazy representation of the Lilly stratification correction factor
     based on the local Richardson number.
 
 # Arguments
@@ -36,13 +36,13 @@ end
 """
     set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
-Compute the Smagorinsky-Lilly horizontal and vertical quantities needed for 
+Compute the Smagorinsky-Lilly horizontal and vertical quantities needed for
     subgrid-scale diffusive tendencies
 
-The subgrid-scale momentum flux tensor is defined by `τ = -2 νₜ ∘ S`, 
-where `νₜ` is the Smagorinsky-Lilly eddy viscosity and `S` is the strain rate tensor. 
+The subgrid-scale momentum flux tensor is defined by `τ = -2 νₜ ∘ S`,
+where `νₜ` is the Smagorinsky-Lilly eddy viscosity and `S` is the strain rate tensor.
 
-The turbulent diffusivity is defined as `D = νₜ / Pr_t`, 
+The turbulent diffusivity is defined as `D = νₜ / Pr_t`,
 where `Pr_t` is the turbulent Prandtl number for neutral stratification.
 
 This method precomputes and stores in `p.precomputed` the following quantities:
@@ -106,7 +106,6 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_scalar, ᶠtemp_scalar) = p.scratch
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜρ = Y.c.ρ
-    ᶠρ = @. ᶠtemp_scalar = ᶠinterp(ᶜρ)
 
     # Subgrid-scale momentum flux tensor, `τ = -2 νₜ ∘ S`
     ᶠνₜ_h = @. lazy(ᶠinterp(ᶜνₜ_h))
@@ -115,9 +114,9 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
 
     # Apply to tendencies
     ## Horizontal momentum tendency
-    @. Yₜ.c.uₕ -= C12(wdivₕ(ᶜρ * ᶜτ_smag) / ᶜρ)
+    @. Yₜ.c.uₕ -= C12(wdivₕ(ᶜτ_smag))
     ## Vertical momentum tendency
-    @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
+    @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠτ_smag))
 
     ## Total energy tendency
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, ᶜρ))
