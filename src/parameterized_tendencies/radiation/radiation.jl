@@ -178,14 +178,44 @@ function rrtmgp_model_kwargs(
             getfield(trace_gas_params, Symbol(gas_name, :_fixed_value))
         end
     end
+
     kwargs = (;
         use_global_means_for_well_mixed_gases = true,
         center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
         center_relative_humidity = NaN, # initialized in callback
         center_volume_mixing_ratio_o3,
-        NamedTuple{trace_gas_vmr_names}(trace_gas_vmrs)...,
-        latitude,
+        volume_mixing_ratio_co2 = getfield(trace_gas_params, Symbol(:CO2_fixed_value))
+        #NamedTuple{trace_gas_vmr_names}(trace_gas_vmrs)...,
+        #latitude,
     )
+
+    NC.Dataset(RRTMGP.ArtifactPaths.get_input_filename(:gas, :lw)) do input_data
+        # the first value for each global mean volume mixing ratio is the
+        # present-day value
+        input_vmr(name) =
+            input_data[name][1] * parse(FT, input_data[name].attrib["units"])
+        kwargs = (;
+            kwargs...,
+            volume_mixing_ratio_n2o = input_vmr("nitrous_oxide_GM"),
+            volume_mixing_ratio_co = input_vmr("carbon_monoxide_GM"),
+            volume_mixing_ratio_ch4 = input_vmr("methane_GM"),
+            volume_mixing_ratio_o2 = input_vmr("oxygen_GM"),
+            volume_mixing_ratio_n2 = input_vmr("nitrogen_GM"),
+            volume_mixing_ratio_ccl4 = input_vmr("carbon_tetrachloride_GM"),
+            volume_mixing_ratio_cfc11 = input_vmr("cfc11_GM"),
+            volume_mixing_ratio_cfc12 = input_vmr("cfc12_GM"),
+            volume_mixing_ratio_cfc22 = input_vmr("hcfc22_GM"),
+            volume_mixing_ratio_hfc143a = input_vmr("hfc143a_GM"),
+            volume_mixing_ratio_hfc125 = input_vmr("hfc125_GM"),
+            volume_mixing_ratio_hfc23 = input_vmr("hfc23_GM"),
+            volume_mixing_ratio_hfc32 = input_vmr("hfc32_GM"),
+            volume_mixing_ratio_hfc134a = input_vmr("hfc134a_GM"),
+            volume_mixing_ratio_cf4 = input_vmr("cf4_GM"),
+            volume_mixing_ratio_no2 = 0, # not available in input_data
+            latitude,
+        )
+    end
+
 
     if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
         kwargs = (; kwargs..., ice_roughness = 2)
