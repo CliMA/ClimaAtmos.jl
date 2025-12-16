@@ -94,6 +94,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
         turb_e_flux_sfc_to_atm =
             Geometry.WVector.(
                 p.precomputed.sfc_conditions.ρ_flux_h_tot,
+                p.precomputed.sfc_conditions.ρ_flux_h_tot,
             ).components.data.:1
     else
         turb_e_flux_sfc_to_atm = 0
@@ -133,6 +134,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
         if !(p.atmos.disable_surface_flux_tendency)
             sfc_turb_w_flux =
                 Geometry.WVector.(
+                    p.precomputed.sfc_conditions.ρ_flux_q_tot,
                     p.precomputed.sfc_conditions.ρ_flux_q_tot,
                 ).components.data.:1
         else
