@@ -35,6 +35,9 @@ function ClimaAtmosParameters(
     rrtmgp_params = RRTMGPParameters(toml_dict)
     RP = typeof(rrtmgp_params)
 
+    trace_gas_params = trace_gas_parameters(toml_dict)
+    TG = typeof(trace_gas_params)
+
     insolation_params = InsolationParameters(toml_dict)
     IP = typeof(insolation_params)
 
@@ -81,6 +84,7 @@ function ClimaAtmosParameters(
         FT,
         TP,
         RP,
+        TG,
         IP,
         MPC,
         MP0M,
@@ -96,6 +100,7 @@ function ClimaAtmosParameters(
         parameters...,
         thermodynamics_params,
         rrtmgp_params,
+        trace_gas_params,
         insolation_params,
         microphysics_cloud_params,
         microphysics_0m_params,
@@ -254,6 +259,29 @@ function prescribed_aerosol_parameters(toml_dict)
         :sulfate_aerosol_kappa => :sulfate_kappa,
         :sulfate_aerosol_density => :sulfate_density,
         :mam3_stdev_accum => :sulfate_std,
+    )
+    return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+end
+
+function trace_gas_parameters(toml_dict)
+    name_map = (;
+        :CO2_fixed_value => :CO2_fixed_value,
+        :N2O_fixed_value => :N2O_fixed_value,
+        :CO_fixed_value => :CO_fixed_value,
+        :CH4_fixed_value => :CH4_fixed_value,
+        :O2_fixed_value => :O2_fixed_value,
+        :N2_fixed_value => :N2_fixed_value,
+        :CCL4_fixed_value => :CCL4_fixed_value,
+        :CFC11_fixed_value => :CFC11_fixed_value,
+        :CFC12_fixed_value => :CFC12_fixed_value,
+        :CFC22_fixed_value => :CFC22_fixed_value,
+        :HFC143A_fixed_value => :HFC143A_fixed_value,
+        :HFC125_fixed_value => :HFC125_fixed_value,
+        :HFC23_fixed_value => :HFC23_fixed_value,
+        :HFC32_fixed_value => :HFC32_fixed_value,
+        :HFC134A_fixed_value => :HFC134A_fixed_value,
+        :CF4_fixed_value => :CF4_fixed_value,
+        :NO2_fixed_value => :NO2_fixed_value,
     )
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 end

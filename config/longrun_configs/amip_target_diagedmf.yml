@@ -5,8 +5,7 @@ rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 insolation: "timevarying"
-co2_model: maunaloa
-prescribe_ozone: true
+time_varying_trace_gases: ["CO2", "O3"]
 aerosol_radiation: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05", "OC1", "OC2", "SO4", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
 surface_setup: "DefaultMoninObukhov"

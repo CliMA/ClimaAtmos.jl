@@ -46,26 +46,10 @@ function get_atmos(config::AtmosConfig, params)
         parsed_args["implicit_noneq_cloud_formation"]
     @assert implicit_noneq_cloud_formation in (true, false)
 
-    ozone = get_ozone(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
     call_cloud_diagnostics_per_stage =
         get_call_cloud_diagnostics_per_stage(parsed_args)
-
-    if isnothing(ozone) && radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-        @warn "prescribe_ozone is set to nothing with an RRTMGP model. Resetting to IdealizedOzone. This behavior will stop being supported in some future release"
-        ozone = IdealizedOzone()
-    end
-    co2 = get_co2(parsed_args)
-    with_rrtmgp = radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-    if with_rrtmgp && isnothing(co2)
-        @warn (
-            "co2_model set to nothing with an RRTMGP model. Resetting to FixedCO2"
-        )
-        co2 = FixedCO2()
-    end
-    (!isnothing(co2) && !with_rrtmgp) &&
-        @warn ("$(co2) does nothing if RRTMGP is not used")
 
     # HeldSuarezForcing can be set via radiation_mode or legacy forcing option for now
     final_radiation_mode =
@@ -142,8 +126,6 @@ function get_atmos(config::AtmosConfig, params)
 
         # AtmosRadiation
         radiation_mode = final_radiation_mode,
-        ozone,
-        co2,
         insolation = get_insolation_form(parsed_args),
 
         # AtmosTurbconv - Turbulence & Convection
@@ -910,6 +892,7 @@ function get_simulation(config::AtmosConfig)
             surface_setup,
             sim_info,
             tracers.aerosol_names,
+            tracers.time_varying_trace_gas_names,
             steady_state_velocity,
         )
     end

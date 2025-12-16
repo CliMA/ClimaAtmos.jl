@@ -11,7 +11,7 @@ edmfx_sgs_diffusive_flux: true
 surface_setup: "DefaultMoninObukhov"
 t_end: "1hours"
 toml: [toml/longrun_aquaplanet.toml]
-prescribe_ozone: true
+time_varying_trace_gases: ["O3"]
 aerosol_radiation: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05", "OC1", "OC2", "SO4", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
 start_date: "20160801"

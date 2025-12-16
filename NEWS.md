@@ -4,13 +4,15 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+v0.33.0
+-------
+- ![#4169](https://github.com/CliMA/ClimaAtmos.jl/pull/4169) [badge-💥breaking]
+Remove the options `co2_model` and `prescribe_ozone`. These are both fixed by
+default now, and can be set to time-varying by including one or both in the
+option `time_varying_trace_gases: ["CO2", "O3]`.
 
 v0.32.0
 -------
-- ![][badge-💥breaking] Remove the options `co2_model` and `prescribe_ozone`.
-These are both fixed by default now, and can be set to time-varying by
-including one or both in the option `time_varying_trace_gases: ["CO2", "O3]`.
-
 - PR [#4162](https://github.com/CliMA/ClimaAtmos.jl/pull/4162) adds an option for
 reproducible restart. It is set to false by default. This shouldn't affect restart
 in the coupler as the coupler save the cache for restarting.
