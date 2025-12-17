@@ -40,13 +40,13 @@ z_elem: 74
 vertical_mesh: rcemipii
 
 #~8km grid
-x_elem: 4
-y_elem: 4
-dt: 10secs
+# x_elem: 4
+# y_elem: 4
+# dt: 10secs
 # ~4km grid
-# x_elem: 8
-# y_elem: 8
-# dt: 5secs
+x_elem: 8
+y_elem: 8
+dt: 5secs
 # ~2km grid
 # x_elem: 16
 # y_elem: 16
@@ -56,10 +56,10 @@ dt: 10secs
 # y_elem: 32
 # dt: 1secs
 
-t_end: 10hours
+# t_end: 10hours
 # t_end: 2days
 # t_end: 1days
-# t_end: 21days
+t_end: 21days
 
 ## >> During debugging, reduce these as appropriate
 dt_save_state_to_disk: 1days
