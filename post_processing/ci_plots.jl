@@ -50,6 +50,7 @@ import ClimaCoreSpectra: power_spectrum_2d
 using Poppler_jll: pdfunite, pdftoppm
 import Base.Filesystem
 import Statistics: mean
+import Dates
 
 const days = 86400
 
@@ -1176,6 +1177,44 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
     )
 end
 
+UNIT_TO_PERIOD = Dict(
+    # :millisecond => Dates.Millisecond(1),
+    :second      => 1,
+    :minute      => 60,
+    :hour        => 60 * 60,
+    :day         => 60 * 60 * 24,
+    # :month       => 60 * 60 * 24 * 30,
+    # :year        => 60 * 60 * 24 * 30 * 12,
+)
+
+"""
+    get_equispaced_indices(t_ref, ts_raw, n_ticks_ideal)
+
+Get `n_ticks_ideal` equispaced indices from `ts_raw`.
+
+# Returns
+- `equispaced_evenly_divisible_inds`: Indices of the equispaced, evenly divisible indices in `ts_raw`
+    These indices are the ones that are evenly divisible by the unit returned by `time_unit`.
+- `time_unit`: Unit of the equispaced indices
+"""
+function get_equispaced_indices(ts_raw, n_ticks_ideal = 10, t_ref = Dates.DateTime(2010))
+    ts = @. Dates.DateTime(t_ref) + Dates.Second(ts_raw)
+
+    tick_finder = Makie.DateTimeTicks(n_ticks_ideal)
+
+    _, time_unit = Makie.locate_datetime_ticks(tick_finder, extrema(ts)...)
+    
+    # With `time_unit` as the unit, get ~n_ticks_ideal equispaced times from `ts_raw`
+    unit_in_seconds = UNIT_TO_PERIOD[time_unit]
+    evenly_divisible_inds = findall(isinteger, ts_raw ./ unit_in_seconds)
+
+    # Subset `evenly_divisible_inds` to be ~n_ticks_ideal
+    equispaced_inds = unique(round.(Int, range(1, length(evenly_divisible_inds), length = n_ticks_ideal)))
+    equispaced_evenly_divisible_inds = evenly_divisible_inds[equispaced_inds]
+
+    return equispaced_evenly_divisible_inds, time_unit
+end
+
 LESBoxPlots = Union{Val{:les_box}}
 
 """
@@ -1198,6 +1237,79 @@ function plot_les_vert_profile!(grid_loc, var_group)
         CairoMakie.lines!(ax, var.data, z, label = short_name(var))
     end
     length(var_group) > 1 && Makie.axislegend(ax)
+end
+
+function plot_profiles_in_time!(grid_loc, var::ClimaAnalysis.OutputVar)
+    z = var.dims["z"] ./ 1000
+    all_ts = var.dims["time"]
+    units = var.attributes["units"]
+    ax = CairoMakie.Axis(
+        grid_loc[1, 1],
+        # ylabel = "z [$(var.dim_attributes["z"]["units"])]",
+        ylabel = "z [km]",
+        xlabel = "$(short_name(var)) [$units]",
+        title = parse_var_attributes(var),
+    )
+
+    # Get equispaced periods
+    equi_inds, time_unit = get_equispaced_indices(all_ts, 10, var.attributes["start_date"])
+    n_eq_t = length(equi_inds)
+    colormap = Makie.cgrad(:darkrainbow, (0:n_eq_t) / n_eq_t, categorical = true)
+    col_args = (; colormap, colorrange = (0, 1))
+    for (i, t_ind) in enumerate(equi_inds)
+        t = all_ts[t_ind]
+        data = slice(var, time = t)
+        color = (i - 0.5) / n_eq_t
+        CairoMakie.lines!(ax, data.data, z; color, col_args...)
+    end
+    # ylims!(ax, extrema(z))
+    # Add colorbar
+    tloc = ((1:n_eq_t) .- 0.5) / n_eq_t
+    tlab = @. string(all_ts[equi_inds] ./ UNIT_TO_PERIOD[time_unit])
+
+    CairoMakie.Colorbar(grid_loc[1, 2]; 
+        col_args..., width = 20, ticks = (tloc, tlab), label = "Time [$(time_unit)]"
+    )
+    
+end
+
+function les_debug_plots(output_paths::Vector{<:AbstractString})
+    simdirs = SimDir.(output_paths)
+
+    reduction = "inst"
+    short_names = [
+        "wa", "ua", "va", "ta", "thetaa", "ha",
+        "hus", "hur", "cl", "clw", "cli", "ke",
+        "Dh_smag", "strainh_smag",  # smag horizontal
+        "Dv_smag", "strainv_smag",  # smag vertical
+        "edt",  # DecayWithHeight vertical diffusivity
+    ]
+    short_names = short_names ∩ collect(keys(simdirs[1].vars))
+
+    # Select profiles at the center of the domain
+    ref_var = get(simdirs[1]; short_name = short_names[1], reduction)
+    xs, ys = ref_var.dims["x"], ref_var.dims["y"]
+    x_center = (xs[end] - xs[1]) / 2 + xs[1]
+    y_center = (ys[end] - ys[1]) / 2 + ys[1]
+
+    vars_zt_center_edge = map_comparison(simdirs, short_names) do simdir, short_name
+        [
+            slice(get(simdir; short_name, reduction), x = xs[1], y = ys[1]),
+            slice(get(simdir; short_name, reduction), x = x_center, y = y_center),
+        ]
+    end
+    vars_zt_center_edge = vcat(vars_zt_center_edge...)
+
+    tmp_file = make_plots_generic(
+        output_paths,
+        vars_zt_center_edge,
+        output_name = "les_debug";
+        plot_fn = plot_profiles_in_time!,
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+
+    return tmp_file
 end
 
 function make_plots(
