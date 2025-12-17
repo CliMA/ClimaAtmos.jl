@@ -12,15 +12,13 @@ rayleigh_sponge: true  # set sponge level in toml file
 hyperdiff: "false"
 implicit_diffusion: false
 smagorinsky_lilly: "UV_W"  # horizontal + vertical
-# smagorinsky_lilly: "UV"  # horizontal
-# vert_diff: "DecayWithHeightDiffusion"  # vertical
-# implicit_diffusion: true
 
 # Upwinding mode
 tracer_upwinding: vanleer_limiter  # is default (alt: `first_order`)
 energy_q_tot_upwinding: vanleer_limiter  # is default (alt: `first_order`)
 
 reproducibility_test: true
+tracer_nonnegativity_method: "elementwise_constraint"
 
 # microphysics
 ### 0M+Equil option
@@ -30,6 +28,9 @@ reproducibility_test: true
 cloud_model: grid_scale   # Ultimately wanted when `moist: nonequil`
 moist: nonequil
 precip_model: 1M
+
+# implicit_noneq_cloud_formation: true
+# use_auto_jacobian: true
 
 ### spatial discretization ###
 nh_poly: 3  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
@@ -45,13 +46,13 @@ z_elem: 74
 vertical_mesh: rcemipii
 
 #~8km grid
-x_elem: 4
-y_elem: 4
-dt: 10secs
+# x_elem: 4
+# y_elem: 4
+# dt: 10secs
 # ~4km grid
-# x_elem: 8
-# y_elem: 8
-# dt: 5secs
+x_elem: 8
+y_elem: 8
+dt: 5secs
 # ~2km grid
 # x_elem: 16
 # y_elem: 16
@@ -61,10 +62,12 @@ dt: 10secs
 # y_elem: 32
 # dt: 1secs
 
-t_end: 10hours
-# t_end: 2days
+# t_end: 10hours
 # t_end: 1days
-# t_end: 21days
+# t_end: 2days
+# t_end: 4days
+# t_end: 10days
+t_end: 21days
 
 ## >> During debugging, reduce these as appropriate
 dt_save_state_to_disk: 1days
