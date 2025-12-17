@@ -1239,20 +1239,19 @@ function plot_les_vert_profile!(grid_loc, var_group)
     length(var_group) > 1 && Makie.axislegend(ax)
 end
 
-function plot_profiles_in_time!(grid_loc, var::ClimaAnalysis.OutputVar)
+function plot_profiles_in_time!(grid_loc, var::ClimaAnalysis.OutputVar; N_times = 10)
     z = var.dims["z"] ./ 1000
     all_ts = var.dims["time"]
     units = var.attributes["units"]
     ax = CairoMakie.Axis(
         grid_loc[1, 1],
-        # ylabel = "z [$(var.dim_attributes["z"]["units"])]",
         ylabel = "z [km]",
         xlabel = "$(short_name(var)) [$units]",
         title = parse_var_attributes(var),
     )
 
     # Get equispaced periods
-    equi_inds, time_unit = get_equispaced_indices(all_ts, 10, var.attributes["start_date"])
+    equi_inds, time_unit = get_equispaced_indices(all_ts, N_times, var.attributes["start_date"])
     n_eq_t = length(equi_inds)
     colormap = Makie.cgrad(:darkrainbow, (0:n_eq_t) / n_eq_t, categorical = true)
     col_args = (; colormap, colorrange = (0, 1))
@@ -1273,7 +1272,7 @@ function plot_profiles_in_time!(grid_loc, var::ClimaAnalysis.OutputVar)
     
 end
 
-function les_debug_plots(output_paths::Vector{<:AbstractString})
+function les_debug_plots(output_paths::Vector{<:AbstractString}; plot_profiles_kw = (;), kw...)
     simdirs = SimDir.(output_paths)
 
     reduction = "inst"
@@ -1304,9 +1303,10 @@ function les_debug_plots(output_paths::Vector{<:AbstractString})
         output_paths,
         vars_zt_center_edge,
         output_name = "les_debug";
-        plot_fn = plot_profiles_in_time!,
+        plot_fn = (args...) -> plot_profiles_in_time!(args...; plot_profiles_kw...),
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
+        kw...
     )
 
     return tmp_file
