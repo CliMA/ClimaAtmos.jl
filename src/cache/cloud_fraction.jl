@@ -9,13 +9,61 @@ function make_cloud_fraction_named_tuple(t1, t2, t3)
     return NamedTuple{(:cf, :q_liq, :q_ice)}(tuple(t1, t2, t3))
 end
 
-# TODO: write a test with scalars that are linear with z
 """
     Diagnose horizontal covariances based on vertical gradients
     (i.e. taking turbulence production as the only term)
 """
-function covariance_from_grad(coeff, mixing_length, ∇Φ, ∇Ψ)
-    return 2 * coeff * mixing_length^2 * dot(∇Φ, ∇Ψ)
+function compute_covariance(Y, p, thermo_params, ᶜts)
+    coeff = CAP.diagnostic_covariance_coeff(p.params)
+    turbconv_model = p.atmos.turbconv_model
+    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
+
+    # Compute the gradients of total water and liquid ice potential temperature
+    # if they are not already provided by the turbulence model.
+    if isnothing(turbconv_model)
+        if p.atmos.call_cloud_diagnostics_per_stage isa
+           CallCloudDiagnosticsPerStage
+            @. ᶜgradᵥ_q_tot =
+                ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
+            @. ᶜgradᵥ_θ_liq_ice =
+                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
+        end
+    end
+    # Reminder that gradients need to be precomputed when using compute_gm_mixing_length
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field .=
+        turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX ?
+        ᶜmixing_length(Y, p) :
+        compute_gm_mixing_length(Y, p)
+
+    # Compute covaraiance based on gradients and the mixing length
+    cov_from_grad(C, L, ∇Φ, ∇Ψ) = 2 * C * L^2 * dot(∇Φ, ∇Ψ)
+    ᶜq′q′ = @. lazy(
+        cov_from_grad(
+            coeff,
+            ᶜmixing_length_field,
+            Geometry.WVector(ᶜgradᵥ_q_tot),
+            Geometry.WVector(ᶜgradᵥ_q_tot),
+        ),
+    )
+    ᶜθ′θ′ = @. lazy(
+        cov_from_grad(
+            coeff,
+            ᶜmixing_length_field,
+            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+        ),
+    )
+    ᶜθ′q′ = @. lazy(
+        cov_from_grad(
+            coeff,
+            ᶜmixing_length_field,
+            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+            Geometry.WVector(ᶜgradᵥ_q_tot),
+        ),
+    )
+
+    return (ᶜq′q′, ᶜθ′θ′, ᶜθ′q′)
 end
 
 """
@@ -51,18 +99,15 @@ end
 
 """
     function compute_cloud_fraction_quadrature_diagnostics(
-        SG_quad, ts, ᶜ∇q, ᶜ∇θ, coeff, ᶜlength_scale, thermo_params
+        thermo_params, SG_quad, ts, q′q′, θ′θ′, θ′q′
     )
 
 where:
+  - thermo params - thermodynamics parameters
   - SG_quad is a struct containing information about Gaussian quadrature order,
     sampling point values and weights
   - ts is the thermodynamic state
-  - ᶜ∇q, ᶜ∇θ are the gradients of q_tot and liquid ice potential temperature
-  - coeff - a free parameter (to be moved into params)
-  - ᶜlength_scale - mixing length for simulations with EDMF and Smagorinsky
-                    length scale for simulations without EDMF
-  - thermo params - thermodynamics parameters
+  - q′q′, θ′θ′, θ′q′ are the covariances of q_tot and liquid ice potential temperature
 
 The function imposes additional limits on the quadrature points
 to prevent negative values and enforce Cauchy-Schwarz inequality.
@@ -70,27 +115,21 @@ It returns a tuple with cloud fraction, cloud liquid and cloud ice
 computed as a sum over quadrature points with weights.
 """
 function compute_cloud_fraction_quadrature_diagnostics(
+    thermo_params,
     SG_quad::SGSQuadrature,
     ts,
-    ᶜ∇q,
-    ᶜ∇θ,
-    coeff,
-    ᶜlength_scale,
-    thermo_params,
+    q′q′,
+    θ′θ′,
+    θ′q′,
 )
+    # Grab mean pressure, liquid ice potential temperature and total specific humidity
     p_c = TD.air_pressure(thermo_params, ts)
     q_mean = TD.total_specific_humidity(thermo_params, ts)
     θ_mean = TD.liquid_ice_pottemp(thermo_params, ts)
-    # Returns the physical values based on quadrature sampling points
-    # and limited covarainces
+
+    # Return physical values based on quadrature points and limited covarainces
     function get_x_hat(χ1, χ2)
-
-        FT = eltype(χ1)
-
-        q′q′ = covariance_from_grad(coeff, ᶜlength_scale, ᶜ∇q, ᶜ∇q)
-        θ′θ′ = covariance_from_grad(coeff, ᶜlength_scale, ᶜ∇θ, ᶜ∇θ)
-        θ′q′ = covariance_from_grad(coeff, ᶜlength_scale, ᶜ∇θ, ᶜ∇q)
-
+        FT = eltype(thermo_params)
         # Epsilon defined per typical variable fluctuation
         eps_q = eps(FT) * max(eps(FT), q_mean)
         eps_θ = eps(FT)
@@ -118,7 +157,7 @@ function compute_cloud_fraction_quadrature_diagnostics(
     end
 
     function f(x1_hat, x2_hat)
-        FT = eltype(x1_hat)
+        FT = eltype(thermo_params)
         _ts = thermo_state(thermo_params; p = p_c, θ = x1_hat, q_tot = x2_hat)
         hc = TD.has_condensate(thermo_params, _ts)
 
@@ -130,7 +169,6 @@ function compute_cloud_fraction_quadrature_diagnostics(
     end
     return sum_over_quadrature_points(f, get_x_hat, SG_quad)
 end
-
 
 """
    Compute the grid scale cloud fraction based on sub-grid scale properties
@@ -181,39 +219,22 @@ NVTX.@annotate function set_cloud_fraction!(
     qc::QuadratureCloud,
 )
     thermo_params = CAP.thermodynamics_params(p.params)
-    diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(p.params)
     turbconv_model = p.atmos.turbconv_model
 
     ᶜts = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜts⁰ : p.precomputed.ᶜts
 
-    # Compute the gradients of total water and liquid ice potential temperature
-    # if they are not already provided by the turbulence model.
-    if isnothing(turbconv_model)
-        if p.atmos.call_cloud_diagnostics_per_stage isa
-           CallCloudDiagnosticsPerStage
-            @. p.precomputed.ᶜgradᵥ_q_tot =
-                ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
-            @. p.precomputed.ᶜgradᵥ_θ_liq_ice =
-                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
-        end
-    end
-
-    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
-    ᶜmixing_length_field .=
-        turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX ?
-        ᶜmixing_length(Y, p) :
-        compute_gm_mixing_length(Y, p)
+    # Compute covariance based on the gradients of q_tot and theta_liq_ice
+    ᶜq′q′, ᶜθ′θ′, ᶜθ′q′ = compute_covariance(Y, p, thermo_params, ᶜts)
 
     # Compute SGS cloud fraction diagnostics based on environment quadrature points ...
     @. p.precomputed.cloud_diagnostics_tuple =
         compute_cloud_fraction_quadrature_diagnostics(
+            thermo_params,
             qc.SG_quad,
             ᶜts,
-            Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
-            Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice),
-            diagnostic_covariance_coeff,
-            ᶜmixing_length_field,
-            thermo_params,
+            ᶜq′q′,
+            ᶜθ′θ′,
+            ᶜθ′q′,
         )
     # ... weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise) ...
     if turbconv_model isa PrognosticEDMFX
