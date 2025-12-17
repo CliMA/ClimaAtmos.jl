@@ -31,6 +31,15 @@ Then run the simulation with the following command:
 julia --project=.buildkite .buildkite/ci_driver.jl --config_file path_to_mysim.yml
 ```
 
+or interactively from the ClimaAtmos.jl directory:
+```
+julia
+] activate .buildkite
+julia> import ClimaAtmos as CA
+julia> config = CA.AtmosConfig(("config/common_configs/numerics_column_ze63.yml", "path_to_mysim.yml"), job_id = "MyJobName")
+include(".buildkite/ci_driver.jl")
+```
+
 The configuration in the yaml file above can be changed to adjust to the kind of simulation desired. Options such as t\_end can be increased to the desired simulation time. Other arguments such as radiation type can be changed based on the options in `default_config.yml`.
 
 After a simulation is ran the output files should be available in the output folder, where hdf5 files store all the simulation's data, and two mp4s should be produced with a vertical temperature profile and a vertical wind profile which change over time. If you want to quickly access data from the final day of the simulation simply add a -i to the command line input, like so:
