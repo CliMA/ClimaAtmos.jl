@@ -1,7 +1,7 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaAtmos as CA
 import ClimaCore
-import ClimaCore: DataLayouts, Fields, Geometry
+import ClimaCore: DataLayouts, Fields, Geometry, Meshes
 import ClimaCore.Fields: Field, FieldVector, field_values
 import ClimaCore.DataLayouts: AbstractData
 import ClimaCore.Geometry: AxisTensor
@@ -26,6 +26,9 @@ const device = ClimaComms.device()
 const comms_ctx = ClimaComms.context(device)
 ClimaComms.init(comms_ctx)
 
+const secs = 1
+
+
 # This test checks that:
 
 # 1. A simulation, saved to a checkpoint, is read back identically (up to some
@@ -48,7 +51,7 @@ if length(ARGS) > 0
         second_argument = lowercase(get(ARGS, 2, "true"))
         second_argument == "true" && (MANYTESTS = true)
     else
-        error("Argument $argument not recognized")
+        error("Argument $(ARGS[1]) not recognized")
     end
 end
 MANYTESTS && @info "Running multiple tests"
@@ -214,13 +217,15 @@ end
 
 function amip_target_diagedmf(context)
     FT = Float32
-    days = 86400
     start_date = DateTime(2010, 1, 1)
-    
+
     param_dict =
-        ClimaParams.create_toml_dict(FT; override_file = "toml/longrun_aquaplanet_diagedmf.toml")
+        ClimaParams.create_toml_dict(
+            FT;
+            override_file = "toml/longrun_aquaplanet_diagedmf.toml",
+        )
     params = CA.ClimaAtmosParameters(param_dict)
-    
+
     deep_atmosphere = true
     cloud = CA.InteractiveCloudInRadiation()
     rayleigh_sponge = CA.RayleighSponge{FT}(;
@@ -229,15 +234,16 @@ function amip_target_diagedmf(context)
         α_w = params.alpha_rayleigh_w,
         α_sgs_tracer = params.alpha_rayleigh_sgs_tracer,
     )
-    viscous_sponge = CA.ViscousSponge{FT}(; zd = params.zd_viscous, κ₂ = params.kappa_2_sponge)
-    
+    viscous_sponge =
+        CA.ViscousSponge{FT}(; zd = params.zd_viscous, κ₂ = params.kappa_2_sponge)
+
     diff_mode = CA.Implicit()
     hyperdiff = CA.ClimaHyperdiffusion{FT}(;
         ν₄_vorticity_coeff = 0.150 * 1.238,
         ν₄_scalar_coeff = 0.751 * 1.238,
         divergence_damping_factor = 5,
     )
-    
+
     tracers = (
         "CB1", "CB2",
         "DST01", "DST02", "DST03", "DST04", "DST05",
@@ -247,7 +253,7 @@ function amip_target_diagedmf(context)
     )
     microphysics_model = CA.Microphysics0Moment()
     moisture_model = CA.EquilMoistModel()
-    
+
     # Radiation mode
     idealized_h2o = false
     idealized_clouds = false
@@ -263,15 +269,15 @@ function amip_target_diagedmf(context)
         reset_rng_seed,
         deep_atmosphere,
     )
-    
+
     insolation = CA.TimeVaryingInsolation(start_date)
-    
+
     surface_setup = CA.SurfaceConditions.DefaultMoninObukhov()
-    
+
     n_updrafts = 1
     prognostic_tke = true
     turbconv_model = CA.DiagnosticEDMFX{n_updrafts, prognostic_tke}(1e-5)
-    
+
     edmfx_model = CA.EDMFXModel(;
         entr_model = CA.InvZEntrainment(),
         detr_model = CA.BuoyancyVelocityDetrainment(),
@@ -283,11 +289,11 @@ function amip_target_diagedmf(context)
         scale_blending_method = CA.SmoothMinimumBlending(),
     )
     topography = CA.EarthTopography()
-    h_elem = 16
-    z_elem = 63
+    h_elem = 4
+    z_elem = 15
     z_max = 60000.0
     dz_bottom = 30.0
-    
+
     model = CA.AtmosModel(;
         moisture_model,
         microphysics_model,
@@ -299,45 +305,61 @@ function amip_target_diagedmf(context)
         viscous_sponge,
         hyperdiff,
         diff_mode,
+        reproducible_restart = CA.ReproducibleRestart(),
+        test_dycore_consistency = CA.TestDycoreConsistency(),
     )
-    
+
     grid = CA.SphereGrid(FT; topography, h_elem, z_elem, z_max, dz_bottom, context)
-    
+
     # TODO: Use jacobian flags
     approximate_linear_solve_iters = 2
     max_newton_iters_ode = 1
-    
+
     newtons_method = CTS.NewtonsMethod(;
         max_iters = max_newton_iters_ode,
         update_j = CTS.UpdateEvery(CTS.NewNewtonIteration),
     )
-    
+
     ode_config = CTS.IMEXAlgorithm(
         CTS.ARS343(),
         newtons_method,
     )
-    
+
     callback_kwargs = (;
-        dt_rad = "1hours",
-        dt_cloud_fraction = "1hours",
+        dt_rad = "1secs",
+        dt_cloud_fraction = "1secs",
+        call_cloud_diagnostics_per_stage = true,
     )
-    
-    simulation = CA.AtmosSimulation{FT}(;
-        model,
+
+    args = (; model,
         grid,
         tracers,
-        t_end = 120days,
-        checkpoint_frequency = 30days,
+        dt = 1secs,
+        t_end = 3secs,
+        checkpoint_frequency = 1secs,
         approximate_linear_solve_iters,
         callback_kwargs,
         ode_config,
         surface_setup,
         context,
-    )
-    
-    return (simulation, model, grid)
-    
-end    
+        job_id = "amip_target_diagedmf")
+    simulation = CA.AtmosSimulation{FT}(; args...)
+
+    return (; simulation, args)
+
+end
+
+get_edmfx_model(turbconv_model) = nothing
+get_edmfx_model(turbconv_model::CA.DiagnosticEDMFX) = CA.EDMFXModel(;
+    entr_model = CA.InvZEntrainment(),
+    detr_model = CA.BuoyancyVelocityDetrainment(),
+    sgs_mass_flux = Val(true),
+    sgs_diffusive_flux = Val(true),
+    nh_pressure = Val(true),
+    vertical_diffusion = Val(false),
+    filter = Val(false),
+    scale_blending_method = CA.SmoothMinimumBlending(),
+)
 
 # Begin tests
 
@@ -353,8 +375,8 @@ Test if the restarts are consistent for a simulation.
 `more_ignore` is a Vector of Symbols that identifies config-specific keys that
 have to be ignored when reading a simulation.
 """
-function test_restart(simulation, model, grid; job_id, comms_ctx, more_ignore = Symbol[])
-    ClimaComms.iamroot(comms_ctx) && println("job_id = $(job_id)")
+function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
+    ClimaComms.iamroot(comms_ctx) && println("job_id = $(simulation.job_id)")
 
     local_success = true
 
@@ -371,9 +393,7 @@ function test_restart(simulation, model, grid; job_id, comms_ctx, more_ignore = 
     # Recreate simulation with detect_restart_file=true
     FT = typeof(simulation.integrator.p.dt)
     simulation_restarted = CA.AtmosSimulation{FT}(;
-        model,
-        grid,
-        job_id,
+        args...,
         context = comms_ctx,
         detect_restart_file = true,
     )
@@ -429,12 +449,10 @@ function test_restart(simulation, model, grid; job_id, comms_ctx, more_ignore = 
     @test isfile(joinpath(restart_dir, "day0.2.hdf5"))
     # Restart from specific file
     FT = typeof(simulation.integrator.p.dt)
-    simulation_restarted2 = CA.AtmosSimulation{FT}(
-        model = model,
-        grid = grid,
-        job_id = job_id,
+    simulation_restarted2 = CA.AtmosSimulation{FT}(;
+        args...,
         context = comms_ctx,
-        restart_file = restart_file,
+        restart_file,
     )
     CA.fill_with_nans!(simulation_restarted2.integrator.p)
 
@@ -477,25 +495,46 @@ TESTING = Any[]
 FT = Float32
 if MANYTESTS
     allsky_radiation =
-        RRTMGPI.AllSkyRadiation(false, false, CA.InteractiveCloudInRadiation(), true, false)
+        RRTMGPI.AllSkyRadiation(
+            false,
+            false,
+            CA.InteractiveCloudInRadiation(),
+            true,
+            false,
+            false,
+            true,
+        )
     diagnostic_edmfx = CA.DiagnosticEDMFX{1, false}(1e-5)
+    topography = CA.EarthTopography()
     if comms_ctx isa ClimaComms.SingletonCommsContext
-        grids = (CA.SphereGrid(FT; context = comms_ctx), CA.BoxGrid(FT; context = comms_ctx), CA.ColumnGrid(FT; context = comms_ctx))
+        grids = (
+            CA.SphereGrid(FT; topography, context = comms_ctx),
+            CA.BoxGrid(FT; context = comms_ctx),
+            CA.ColumnGrid(FT; context = comms_ctx),
+        )
     else
-        grids = (CA.SphereGrid(FT; context = comms_ctx), CA.BoxGrid(FT; context = comms_ctx))
+        grids = (
+            CA.SphereGrid(FT; topography, context = comms_ctx),
+            CA.BoxGrid(FT; context = comms_ctx),
+        )
     end
 
     for grid in grids
-        if grid isa CA.SphereGrid
+        mesh = if hasproperty(grid, :horizontal_grid)
+            grid.horizontal_grid.topology.mesh
+        else
+            nothing
+        end
+        if mesh isa Meshes.EquiangularCubedSphere
             moisture_models = (CA.NonEquilMoistModel(),)
-            precip_models = (CA.Microphysics1Moment(),)
-            topography = CA.EarthTopography()
+            microphys_models = (CA.Microphysics1Moment(),)
+            topography_type = CA.EarthTopography()
             turbconv_models = (nothing, diagnostic_edmfx)
-            radiations = (nothing, allsky_radiation)
+            radiation_modes = (nothing, allsky_radiation)
         else
             moisture_models = (CA.EquilMoistModel(),)
-            precip_models = (CA.Microphysics0Moment(),)
-            topography = CA.NoWarpTopography()
+            microphys_models = (CA.Microphysics0Moment(),)
+            topography_type = CA.NoTopography()
             turbconv_models = (diagnostic_edmfx,)
             gray_radiation = RRTMGPI.GrayRadiation(true, false)
             radiation_modes = (gray_radiation, allsky_radiation)
@@ -504,19 +543,21 @@ if MANYTESTS
         for turbconv_model in turbconv_models
             for radiation_mode in radiation_modes
                 for moisture_model in moisture_models
-                    for precip_model in precip_models
+                    for microphysics_model in microphys_models
                         # EDMF only supports equilibrium moisture
                         if turbconv_model isa CA.DiagnosticEDMFX &&
                            moisture_model isa CA.NonEquilMoistModel
                             continue
                         end
 
+                        edmfx_model = get_edmfx_model(turbconv_model)
                         model = CA.AtmosModel(;
                             radiation_mode,
                             moisture_model,
-                            microphysics_model = precip_model,
-                            topography,
-                            turbconv_model = turbconv_model,
+                            microphysics_model,
+                            turbconv_model,
+                            edmfx_model,
+                            insolation = CA.IdealizedInsolation(),
                         )
 
                         # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
@@ -534,17 +575,30 @@ if MANYTESTS
                         maybe_wait_filesystem(comms_ctx, output_loc)
 
                         # Create job_id string from configuration
-                        config_name = grid isa CA.SphereGrid ? "sphere" : grid isa CA.BoxGrid ? "box" : "column"
-                        moisture_name = moisture_model isa CA.NonEquilMoistModel ? "nonequil" : "equil"
-                        precip_name = precip_model isa CA.Microphysics1Moment ? "1M" : "0M"
-                        topo_name = topography isa CA.EarthTopography ? "Earth" : "NoWarp"
-                        rad_name = isnothing(radiation_mode) ? "none" : radiation_mode isa RRTMGPI.GrayRadiation ? "gray" : "allsky"
-                        turbconv_name = isnothing(turbconv_model) ? "none" : "diagnostic_edmfx"
+                        config_name =
+                            mesh isa Meshes.EquiangularCubedSphere ? "sphere" :
+                            mesh isa Meshes.RectilinearMesh ? "box" : "column"
+                        moisture_name =
+                            moisture_model isa CA.NonEquilMoistModel ? "nonequil" : "equil"
+                        precip_name =
+                            microphysics_model isa CA.Microphysics1Moment ? "1M" : "0M"
+                        topo_name = string(nameof(typeof(topography_type)))
+                        rad_name =
+                            isnothing(radiation_mode) ? "none" :
+                            radiation_mode isa RRTMGPI.GrayRadiation ? "gray" : "allsky"
+                        turbconv_name =
+                            isnothing(turbconv_model) ? "none" : "diagnostic_edmfx"
                         job_id = "$(config_name)_$(moisture_name)_$(precip_name)_$(topo_name)_$(rad_name)_$(turbconv_name)"
-                        simulation = CA.AtmosSimulation{FT}(; model, grid, job_id, context = comms_ctx)
+                        callback_kwargs = (;
+                            dt_rad = "1secs",
+                            dt_cloud_fraction = "1secs",
+                            call_cloud_diagnostics_per_stage = true,
+                        )
+                        args = (; model, grid, job_id, callback_kwargs)
+                        simulation = CA.AtmosSimulation{FT}(; args..., context = comms_ctx, checkpoint_frequency = 1secs)
                         push!(
                             TESTING,
-                            (; simulation, model, grid, job_id, more_ignore = Symbol[]),
+                            (; simulation, args, more_ignore = Symbol[]),
                         )
                     end
                 end
@@ -558,16 +612,10 @@ else
     # not synced across MPI processes. Let's add an additional check here.
     maybe_wait_filesystem(comms_ctx, amip_output_loc)
 
-    amip_job_id = "amip_target_diagedmf"
-
-    simulation, model, grid = amip_target_diagedmf(comms_ctx)
     push!(
         TESTING,
         (;
-            simulation,
-            model,
-            grid,
-            job_id = amip_job_id,
+            amip_target_diagedmf(comms_ctx)...,
             more_ignore = Symbol[],
         ),
     )
@@ -575,6 +623,11 @@ end
 
 # We know that this test is broken for old versions of ClimaCore
 @test all(
-    @time test_restart(t.simulation, t.model, t.grid; job_id=t.job_id, comms_ctx=comms_ctx, more_ignore=t.more_ignore)[1] for
+    @time test_restart(
+        t.simulation,
+        t.args;
+        comms_ctx = comms_ctx,
+        more_ignore = t.more_ignore,
+    )[1] for
     t in TESTING
 ) skip = pkgversion(ClimaCore) < v"0.14.18"

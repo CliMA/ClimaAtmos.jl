@@ -65,6 +65,7 @@ function setup_diagnostics_and_writers(
             sim_duration,
             start_date;
             output_writer = netcdf_writer,
+            topography = has_topography(axes(Y.c)),
         )
         append!(all_diagnostics, default_diag_list)
         @info "Added $(length(default_diag_list)) default ClimaAtmos diagnostics"
@@ -230,8 +231,8 @@ function AtmosSimulation{FT}(;
     steady_state_velocity = nothing
     time_varying_trace_gas_names = ()
     p = build_cache(
-        Y, model, params, surface_setup, dt, start_date, tracers, 
-        time_varying_trace_gas_names, steady_state_velocity
+        Y, model, params, surface_setup, dt, start_date, tracers,
+        time_varying_trace_gas_names, steady_state_velocity,
     )
     discrete_hydrostatic_balance &&
         set_discrete_hydrostatic_balanced_state!(Y, p)

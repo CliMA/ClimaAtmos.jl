@@ -175,7 +175,16 @@ end
 function steady_state_velocity(t::CosineTopography{2}, params, coord, z_top)
     FT = eltype(params)
     (; x, z) = coord
-    return steady_state_velocity_cosine(params, x, FT(0), z, t.λ, t.λ, z_top, t.h_max)
+    return steady_state_velocity_cosine(
+        params,
+        x,
+        FT(0),
+        z,
+        t.λ,
+        oftype(t.λ, Inf),
+        z_top,
+        t.h_max,
+    )
 end
 
 function steady_state_velocity(t::CosineTopography{3}, params, coord, z_top)

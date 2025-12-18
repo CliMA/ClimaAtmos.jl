@@ -174,7 +174,6 @@ function build_cache(
             time_varying_trace_gas_names,
             atmos.insolation,
         ) : ()
-
     hyperdiff = hyperdiffusion_cache(Y, atmos)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
