@@ -25,19 +25,15 @@ function horizontal_constant_diffusion_tendency!(
     ρD = @. lazy(ρ * D)
 
     # Total energy diffusion
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, ρ),
+    @. Yₜ.c.ρe_tot += wdivₕ(
+        ρD * gradₕ(
+            TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, ρ)),
         ),
     )
-    @. Yₜ.c.ρe_tot += wdivₕ(ρD * gradₕ(ᶜh_tot))
 
     # Tracer diffusion
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        ᶜχ = @. lazy(specific(ᶜρχ, ρ))
-        ᶜρχₜ_diffusion = @. lazy(wdivₕ(ρD * gradₕ(ᶜχ)))
+        ᶜρχₜ_diffusion = @. lazy(wdivₕ(ρD * gradₕ(specific(ᶜρχ, ρ))))
         @. ᶜρχₜ += ᶜρχₜ_diffusion
         if ρχ_name == @name(ρq_tot)
             @. Yₜ.c.ρ += ᶜρχₜ_diffusion
