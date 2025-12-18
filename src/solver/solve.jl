@@ -308,3 +308,39 @@ function write_diagnostics_as_txt(
         end
     end
 end
+
+NVTX.@annotate function CTS.solve_newton!(alg::CTS.NewtonsMethod, cache, x, f!, j! = nothing, prepare_for_f! = nothing)
+    (; max_iters, update_j, krylov_method, convergence_checker, verbose) = alg
+    (; krylov_method_cache, convergence_checker_cache) = cache
+    (; Δx, f, j) = cache
+    if (!isnothing(j)) && CTS.needs_update!(update_j, CTS.NewNewtonSolve())
+        j!(j, x)
+    end
+    for n in 1:max_iters
+
+        # Compute Δx[n].
+        if (!isnothing(j)) && CTS.needs_update!(update_j, CTS.NewNewtonIteration())
+            j!(j, x)
+        end
+        f!(f, x)
+        init_res = norm(f)
+
+        CTS.ldiv!(Δx, j, f)
+
+        d = 1
+        x .-= d * Δx
+        prepare_for_f!(x)
+        f!(f, x)
+        new_res = norm(f)
+        c = 1
+        while new_res > init_res && c <= 5
+            x .+= d * Δx
+            d /= 2
+            x .-= d * Δx
+            prepare_for_f!(x)
+            f!(f, x)
+            new_res = norm(f)
+            c += 1
+        end
+    end
+end
