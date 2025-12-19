@@ -889,7 +889,7 @@ function get_simulation(config::AtmosConfig)
                     sd.variable.short_name == "pfull" || sd.variable.short_name == "ta",
                 pfull_scheduled_diagnostics,
             )
-
+            scheduled_diagnostics = [scheduled_diagnostics..., pfull_scheduled_diagnostics...]
             # TODO: Pfull diagnostics only work with netcdfwriter, so throw error or discard
             # the scheduled diagnostics
             writers = (writers..., pfull_writers...)
@@ -952,10 +952,6 @@ function get_simulation(config::AtmosConfig)
             integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
                 integrator,
                 scheduled_diagnostics,
-            )
-            integrator = ClimaDiagnostics.IntegratorWithPfullCoordsDiagnostics(
-                integrator,
-                pfull_scheduled_diagnostics
             )
         end
         @info "Added diagnostics: $s"
