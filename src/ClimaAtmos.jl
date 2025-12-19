@@ -17,7 +17,6 @@ import .Parameters as CAP
 
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "gpu_compat.jl"))
-include(joinpath("utils", "common_spaces.jl"))
 include(joinpath("solver", "types.jl"))
 include(joinpath("solver", "cli_options.jl"))
 include(joinpath("utils", "utilities.jl"))
@@ -139,6 +138,13 @@ include(
         "anisotropic_minimum_dissipation.jl",
     ),
 )
+include(
+    joinpath(
+        "parameterized_tendencies",
+        "les_sgs_models",
+        "constant_horizontal_diffusion.jl",
+    ),
+)
 include(joinpath("prognostic_equations", "advection.jl"))
 
 include(joinpath("cache", "temporary_quantities.jl"))
@@ -156,6 +162,7 @@ import .Diagnostics as CAD
 include(joinpath("callbacks", "get_callbacks.jl"))
 
 include(joinpath("simulation", "AtmosSimulations.jl"))
+include(joinpath("simulation", "grids.jl"))
 
 include(joinpath("solver", "model_getters.jl")) # high-level (using parsed_args) model getters
 include(joinpath("solver", "type_getters.jl"))

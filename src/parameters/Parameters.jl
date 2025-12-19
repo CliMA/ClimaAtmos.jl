@@ -65,6 +65,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     FT,
     TP,
     RP,
+    TG,
     IP,
     MPC,
     MP0M,
@@ -79,6 +80,7 @@ Base.@kwdef struct ClimaAtmosParameters{
 } <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
+    trace_gas_params::TG
     insolation_params::IP
     microphysics_cloud_params::MPC
     microphysics_0m_params::MP0M
@@ -120,8 +122,8 @@ Base.@kwdef struct ClimaAtmosParameters{
     α_hyperdiff_tracer::FT
     # Vertical diffusion
     α_vert_diff_tracer::FT
-    # Gryanik b_m coefficient
-    coeff_b_m_gryanik::FT
+    # Constant horizontal diffusion
+    constant_horizontal_diffusion_D::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
@@ -140,7 +142,7 @@ for var in fieldnames(TD.Parameters.ThermodynamicsParameters)
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
 end
 # Thermodynamics derived parameters
-for var in [:Rv_over_Rd, :kappa_d, :e_int_v0, :cv_v, :cv_l, :cv_d]
+for var in [:Rv_over_Rd, :kappa_d, :e_int_v0, :e_int_i0, :cv_v, :cv_l, :cv_d]
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
 end
 
@@ -149,10 +151,6 @@ von_karman_const(ps::ACAP) =
     SF.Parameters.von_karman_const(surface_fluxes_params(ps))
 
 # ------ MOST (Monin–Obukhov) stability-function coefficients ------
-
-# Gryanik b_m
-# needed because surface_fluxes_params defaults to BusingerParams
-coefficient_b_m_gryanik(ps::ACAP) = ps.coeff_b_m_gryanik
 
 # Insolation parameters
 day(ps::ACAP) = IP.day(insolation_params(ps))

@@ -169,6 +169,9 @@ amd_les:
 c_amd:
   help: "Model coefficient for AMD-LES closure (TODO: Move to parameters.toml)"
   value: 0.29
+constant_horizontal_diffusion:
+  help: "Constant horizontal diffusion closure [`true`, `false` (default)]"
+  value: false
 smagorinsky_lilly:
   help: "Smagorinsky-Lilly diffusive closure [`nothing` (default), `UVW`, `UV`, `W`, `UV_W_decoupled`]"
   value: ~
@@ -209,7 +212,7 @@ surface_setup:
   help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`]"
   value: "DefaultExchangeCoefficients"
 surface_temperature:
-  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric', 'RCEMIPII', `Reanalysis`, `ReanalysisTimeVarying`]"
+  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'RCEMIPII', `Reanalysis`, `ReanalysisTimeVarying`]"
   value: "ZonallySymmetric"
 initial_condition:
   help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
@@ -227,7 +230,7 @@ precip_model:
   help: "Precipitation model [`nothing` (default), `0M`, `1M`]"
   value: ~
 cloud_model:
-  help: "Cloud model [`grid_scale`, `quadrature` (default), `quadrature_sgs`]"
+  help: "Cloud model [`grid_scale`, `quadrature` (default)]"
   value: "quadrature"
 implicit_noneq_cloud_formation:
   help: "Whether to treat the nonequilibrium cloud condensate tendency implicitly [`true`, `false` (default)]"
@@ -332,19 +335,19 @@ deep_atmosphere:
   help: "If true, use deep atmosphere equations and metric terms, otherwise assume columns are cylindrical (shallow atmosphere) [`true` (default), `false`]"
   value: true
 restart_file:
-  help: "Path to HDF5 file to use as simulation starting point"
-  value: ~
-prescribe_ozone:
-  help: "Prescribe time and spatially varying ozone from a file [`false` (default), `true`]"
-  value: false
-co2_model:
-  help: "What CO2 concentration to use for RRTGMP. When fixed, it is set to 397.547 parts per million. Otherwise, it is read from the MaunaLoa measuraments. [`nothing` (default), `Fixed`, `MaunaLoa`]"
+  help: "Path to HDF5 file to use as simulation starting point. Note that the simulation can only be restarted in a reproducible way when `reproducible_restart` is true."
   value: ~
 detect_restart_file:
   help: "When true, try finding a restart file and use it to restart the simulation. Only works with ActiveLink."
   value: false
+reproducible_restart:
+  help: "If true, the simulation is reproducible when restarting from a restart file. Disable this option when running production runs."
+  value: false
 prescribed_aerosols:
   help: "Which aerosols to add. List of keys from the data file (e.g., CB1, CB2)."
+  value: []
+time_varying_trace_gases:
+  help: "Trace gases that vary in time, e.g. [\"CO2\", \"O3\"]. Currently, only \"CO2\" and \"O3\" are supported. All other trace gases set fixed to default values from ClimaParams."
   value: []
 # TODO: remove once https://github.com/CliMA/ClimaAtmos.jl/issues/2873 is closed
 call_cloud_diagnostics_per_stage:
@@ -425,3 +428,6 @@ use_itime:
   1. Surface conditions that explicitly depend on time (e.g. LifeCycleTan2018, TRMM_LBA, etc.),
   2. Time dependent forcing/tendencies use time rounded to the nearest unit of time for dt"
   value: false
+prescribed_flow:
+  help: "Prescribe a flow field [`nothing` (default), `ShipwayHill2012`]"
+  value: ~

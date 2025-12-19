@@ -1,4 +1,4 @@
-276
+291
 
 # **README**
 #
@@ -20,6 +20,58 @@
 
 
 #=
+291
+- Use grid-mean velocity in the advection of TKE
+
+290
+- Change jacobians related to the derivative of pressure with respect to density
+and fix a bug in EDMF mass flux jacobian.
+
+289
+- Merging the trace gases PR again, which does change behavior slightly as a
+result of reading values from params rather than from a file.
+
+288
+- Revert PR 4153, which changed ref_counter to 287
+
+287
+- Moving fixed trace gas parameters to params resulted in small changes to radiation,
+likely due to slightly different float values. Additionally, added fixed trace gas
+values to the RCE ci case as per Wing et. al. (2018).
+
+286 
+- We don't know why, but a few (not all) cases seemed to not reproduce the reference.
+  Maybe some files were not moved correctly.
+
+285
+- Use Gryanik surface flux parameters
+
+284
+- Use universal functions in SurfaceFluxes in the mixing length closure,
+which changes the closure in the stable case (from Gryanik to Businger)
+
+283
+- Change the Jacobian terms related to dp_drhoq_tot
+
+282
+- Use ClimaCore.CommonSpaces constructors for Atmos spaces
+
+281
+- Clean up ci, remove some jobs
+
+280
+- Add 1M Cloud Resolving Model (CRM) RCEMIPII in a box test
+
+279
+- Use partial cloud fraction in buoyancy gradient calculation
+
+278
+- Add ∂/∂q elements to Jacobian
+
+277
+- Update to use SurfaceFluxes.jl@0.14.1. Supports Charnock-parameterization for aerodynamic roughness 
+(default is still user-prescribed ScalarRoughness). SurfaceFluxes catch for neutrally-stable boundary layers (ζ ≈ 0) removed. 
+
 276
 - Update prognostic EDMF boundary conditions: apply equal surface fluxes to the
   updraft and grid mean, and enable entrainment of buoyant air in the first cell.

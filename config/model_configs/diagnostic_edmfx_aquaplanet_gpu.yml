@@ -1,7 +1,6 @@
 dt: 120secs
 surface_setup: DefaultMoninObukhov
 rad: clearsky
-co2_model: fixed
 turbconv: diagnostic_edmfx
 prognostic_tke: true
 edmfx_entr_model: "Generalized"
@@ -9,8 +8,9 @@ edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
+edmfx_sgsflux_upwinding: "vanleer_limiter"
+edmfx_tracer_upwinding: "vanleer_limiter"
 moist: equil
-cloud_model: "quadrature_sgs"
 precip_model: 0M
 t_end: 12hours
 toml: [toml/diagnostic_edmfx_0M.toml]

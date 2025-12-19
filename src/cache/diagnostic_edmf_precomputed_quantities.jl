@@ -449,7 +449,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
-    dt = FT(dt)
     (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
     (; ᶜp, ᶠu³, ᶜts, ᶜK) = p.precomputed
     (;
@@ -497,13 +496,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
     # integral
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
     ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
 
@@ -1339,14 +1333,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     p,
     t,
 )
-    (; moisture_model, turbconv_model, microphysics_model) = p.atmos
-    n = n_mass_flux_subdomains(turbconv_model)
-    ᶜz = Fields.coordinate_field(Y.c).z
-    ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
-    (; dt) = p
-    (; ᶜp, ᶜu, ᶜts, ᶠu³) = p.precomputed
-    (; ustar, obukhov_length) = p.precomputed.sfc_conditions
+    (; ᶜu, ᶜts, ᶠu³) = p.precomputed
+    (; ustar) = p.precomputed.sfc_conditions
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     (; ρatke_flux) = p.precomputed
     turbconv_params = CAP.turbconv_params(params)
@@ -1355,21 +1344,17 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
 
     if p.atmos.turbconv_model isa DiagnosticEDMFX
         (; ᶠu³⁰, ᶜu⁰) = p.precomputed
-    elseif p.atmos.turbconv_model isa EDOnlyEDMFX
-        ᶠu³⁰ = p.precomputed.ᶠu³
-        ᶜu⁰ = ᶜu
-    end
-    @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))  # Set here, but used in a different function
+        @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
+    end  # Set here, but used in a different function
 
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
         thermo_params,
-        moisture_model,
         ᶜts,
+        p.precomputed.cloud_diagnostics_tuple.cf,
         C3,
-        p.precomputed.ᶜgradᵥ_θ_virt,    # ∂θv∂z_unsat
-        p.precomputed.ᶜgradᵥ_q_tot,     # ∂qt∂z_sat
-        p.precomputed.ᶜgradᵥ_θ_liq_ice, # ∂θl∂z_sat
+        p.precomputed.ᶜgradᵥ_q_tot,
+        p.precomputed.ᶜgradᵥ_θ_liq_ice,
         ᶜlg,
     )
 
@@ -1381,10 +1366,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
     ρ_int_values = Fields.field_values(Fields.level(Y.c.ρ, 1))
-    u_int_values = Fields.field_values(Fields.level(ᶜu, 1))
     ustar_values = Fields.field_values(ustar)
-    int_local_geometry_values =
-        Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
     sfc_local_geometry_values = Fields.field_values(
         Fields.level(Fields.local_geometry_field(Y.f), half),
     )

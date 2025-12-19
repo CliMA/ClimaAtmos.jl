@@ -637,13 +637,8 @@ function edmfx_first_interior_entr_tendency!(
         Fields.local_geometry_field(Fields.level(Y.f, Fields.half)),
     )
 
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
     ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
@@ -664,7 +659,7 @@ function edmfx_first_interior_entr_tendency!(
         sgsʲs_ρaₜ_int_val = Fields.field_values(Fields.level(Yₜ.c.sgsʲs.:($j).ρa, 1))
         @. sgsʲs_ρaₜ_int_val += ifelse(buoyancy_flux_val < 0,
             0,
-            max(0, (sgsʲs_ρ_int_val * $(eps(FT)) - sgsʲs_ρa_int_val) / FT(dt)),
+            max(0, (sgsʲs_ρ_int_val * $(eps(FT)) - sgsʲs_ρa_int_val) / dt),
         )
 
         # Apply entrainment tendencies in the first model cell for moist static energy (mse) 
@@ -718,16 +713,16 @@ end
 limit_entrainment(entr::FT, a, dt) where {FT} = max(
     min(
         entr,
-        FT(0.9) * (1 - a) / max(a, eps(FT)) / FT(dt),
-        FT(0.9) * 1 / FT(dt),
+        FT(0.9) * (1 - a) / max(a, eps(FT)) / dt,
+        FT(0.9) * 1 / dt,
     ),
     0,
 )
 limit_detrainment(detr::FT, a, dt) where {FT} =
-    max(min(detr, FT(0.9) * 1 / FT(dt)), 0)
+    max(min(detr, FT(0.9) * 1 / dt), 0)
 
 function limit_turb_entrainment(dyn_entr::FT, turb_entr, dt) where {FT}
-    return max(min((FT(0.9) * 1 / FT(dt)) - dyn_entr, turb_entr), 0)
+    return max(min((FT(0.9) * 1 / dt) - dyn_entr, turb_entr), 0)
 end
 
 # limit entrainment and detrainment rates for diagnostic EDMF

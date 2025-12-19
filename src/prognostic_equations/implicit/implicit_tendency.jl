@@ -115,13 +115,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶠu³, ᶜp, ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
@@ -199,8 +194,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρb_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρb_rim, ρ)))
     end
 
-    # TODO - decide if this needs to be explicit or implicit
-    #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
+    vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
     # This is equivalent to grad_v(Φ) + grad_v(p) / ρ
     ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜts))

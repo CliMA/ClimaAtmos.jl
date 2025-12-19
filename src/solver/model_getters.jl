@@ -13,14 +13,11 @@ end
 function get_sfc_temperature_form(parsed_args)
     surface_temperature = parsed_args["surface_temperature"]
     @assert surface_temperature in (
-        "ZonallyAsymmetric",
         "ZonallySymmetric",
         "RCEMIPII",
         "ReanalysisTimeVarying",
     )
-    return if surface_temperature == "ZonallyAsymmetric"
-        ZonallyAsymmetricSST()
-    elseif surface_temperature == "ZonallySymmetric"
+    return if surface_temperature == "ZonallySymmetric"
         ZonallySymmetricSST()
     elseif surface_temperature == "RCEMIPII"
         RCEMIPIISST()
@@ -195,6 +192,14 @@ function get_amd_les_model(parsed_args, ::Type{FT}) where {FT}
            nothing
 end
 
+function get_constant_horizontal_diffusion_model(parsed_args, params, ::Type{FT}) where {FT}
+    is_model_active = parsed_args["constant_horizontal_diffusion"]
+    @assert is_model_active in (true, false)
+    return is_model_active ?
+           ConstantHorizontalDiffusion{FT}(CAP.constant_horizontal_diffusion_D(params)) :
+           nothing
+end
+
 function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     rs_name = parsed_args["rayleigh_sponge"]
     return if rs_name in ("false", false)
@@ -359,27 +364,8 @@ function get_cloud_model(parsed_args)
         GridScaleCloud()
     elseif cloud_model == "quadrature"
         QuadratureCloud(SGSQuadrature(FT))
-    elseif cloud_model == "quadrature_sgs"
-        SGSQuadratureCloud(SGSQuadrature(FT))
     else
         error("Invalid cloud_model $(cloud_model)")
-    end
-end
-
-function get_ozone(parsed_args)
-    isnothing(parsed_args["prescribe_ozone"]) && return nothing
-    return parsed_args["prescribe_ozone"] ? PrescribedOzone() : IdealizedOzone()
-end
-
-function get_co2(parsed_args)
-    if isnothing(parsed_args["co2_model"])
-        return nothing
-    elseif lowercase(parsed_args["co2_model"]) == "fixed"
-        return FixedCO2()
-    elseif lowercase(parsed_args["co2_model"]) == "maunaloa"
-        return MaunaLoaCO2()
-    else
-        error("The CO2 models supported are $(subtypes(AbstractCO2))")
     end
 end
 
@@ -641,7 +627,8 @@ end
 
 function get_tracers(parsed_args)
     aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
-    return (; aerosol_names)
+    time_varying_trace_gas_names = Tuple(parsed_args["time_varying_trace_gases"])
+    return (; aerosol_names, time_varying_trace_gas_names)
 end
 
 function check_case_consistency(parsed_args)
@@ -658,6 +645,8 @@ function check_case_consistency(parsed_args)
     imp_vert_diff = parsed_args["implicit_diffusion"]
     vert_diff = parsed_args["vert_diff"]
     turbconv = parsed_args["turbconv"]
+    topography = parsed_args["topography"]
+    prescribed_flow = parsed_args["prescribed_flow"]
 
     ISDAC_mandatory = (ic, subs, surf, rad, extf)
     if "ISDAC" in ISDAC_mandatory
@@ -673,6 +662,21 @@ function check_case_consistency(parsed_args)
             !isnothing(turbconv) || !isnothing(vert_diff),
             "Implicit vertical diffusion is only supported when using a " *
             "turbulence convection model or vertical diffusion model.",
+        )
+    elseif !isnothing(prescribed_flow)
+        @assert(topography == "NoWarp",
+            "Prescribed flow elides `set_velocity_at_surface!` and `set_velocity_at_top!` \
+             which is needed for topography. Thus, prescribed flow must have flat surface."
+        )
+        @assert(
+            !parsed_args["implicit_noneq_cloud_formation"] &&
+            !parsed_args["implicit_diffusion"] &&
+            !parsed_args["implicit_sgs_advection"] &&
+            !parsed_args["implicit_sgs_entr_detr"] &&
+            !parsed_args["implicit_sgs_nh_pressure"] &&
+            !parsed_args["implicit_sgs_vertdiff"] &&
+            !parsed_args["implicit_sgs_mass_flux"],
+            "Prescribed flow does not use the implicit solver."
         )
     end
 end

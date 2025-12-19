@@ -99,13 +99,8 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
         subsidence_profile(ᶠz) * CT3(unit_basis_vector_data(CT3, ᶠlg))
 
     # LS Subsidence
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     subsidence!(Yₜ.c.ρe_tot, Y.c.ρ, ᶠsubsidence³, ᶜh_tot, Val{:first_order}())
     subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠsubsidence³, ᶜq_tot, Val{:first_order}())

@@ -8,7 +8,7 @@ sparse approximations against the dense matrix.
 function print_jacobian_summary(integrator)
     Y = integrator.u
     t = integrator.t
-    (; p, dt) = integrator
+    (; p) = integrator
     timestepper_alg = integrator.alg
     tableau_coefficients =
         timestepper_alg isa CA.CTS.RosenbrockAlgorithm ?
@@ -19,7 +19,7 @@ function print_jacobian_summary(integrator)
 
     FT = eltype(Y)
     γs = filter(!iszero, CA.LinearAlgebra.diag(tableau_coefficients))
-    dtγ = FT(dt) * FT(γs[end])
+    dtγ = p.dt * FT(γs[end])
     scalar_names = CA.scalar_field_names(Y)
     block_keys = Iterators.product(scalar_names, scalar_names)
 

@@ -2,7 +2,6 @@ dt: 120secs
 viscous_sponge: false
 surface_setup: DefaultMoninObukhov
 rad: clearsky
-co2_model: fixed
 turbconv: diagnostic_edmfx
 prognostic_tke: true
 edmfx_entr_model: "Generalized"
@@ -11,7 +10,6 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
-cloud_model: "quadrature_sgs"
 precip_model: 0M
 t_end: 3hours
 reproducibility_test: true

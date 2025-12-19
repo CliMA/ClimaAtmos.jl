@@ -27,14 +27,12 @@ dt: "10secs"
 dt_rad: "30mins"
 t_end: "6hours"
 dt_save_state_to_disk: "6hours"
-cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage : true
 toml: [toml/prognostic_edmfx_gcmdriven.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 output_default_diagnostics: false
 rad: allskywithclear
-co2_model: fixed
 insolation: "gcmdriven"
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]

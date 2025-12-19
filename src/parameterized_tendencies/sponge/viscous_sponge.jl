@@ -13,7 +13,9 @@ import ClimaCore.Spaces as Spaces
     αₘ(s, z) * ζ_viscous(s, z, zmax)
 
 function viscous_sponge_tendency_uₕ(ᶜuₕ, s)
-    s isa Nothing && return NullBroadcasted()
+    if s isa Nothing || axes(ᶜuₕ) isa Spaces.FiniteDifferenceSpace
+        return NullBroadcasted()
+    end
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜuₕ))
     zmax = z_max(axes(ᶠz))
     return @. lazy(

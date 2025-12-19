@@ -1,5 +1,5 @@
 struct AtmosCache{
-    TT,
+    FT,
     AM,
     NUM,
     CAP,
@@ -20,7 +20,7 @@ struct AtmosCache{
     CONSCHECK,
 }
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
-    dt::TT
+    dt::FT
 
     """AtmosModel"""
     atmos::AM
@@ -90,10 +90,12 @@ function build_cache(
     surface_setup,
     sim_info,
     aerosol_names,
+    time_varying_trace_gas_names,
     steady_state_velocity,
 )
     (; dt, start_date, output_dir) = sim_info
     FT = eltype(params)
+    dt = FT(dt)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
@@ -168,9 +170,8 @@ function build_cache(
         (
             start_date,
             params,
-            atmos.ozone,
-            atmos.co2,
             aerosol_names,
+            time_varying_trace_gas_names,
             atmos.insolation,
         ) : ()
 
@@ -178,7 +179,7 @@ function build_cache(
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
-    tracers = tracer_cache(Y, atmos, aerosol_names, start_date)
+    tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
 
     args = (
         dt,

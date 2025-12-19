@@ -16,7 +16,6 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
 moist: nonequil
-cloud_model: "quadrature_sgs"
 precip_model: "1M"
 call_cloud_diagnostics_per_stage: true
 config: column
@@ -39,3 +38,6 @@ diagnostics:
     period: 10mins
   - short_name: [husra, hussn, husraup, hussnup, husraen, hussnen]
     period: 10mins
+  - short_name: [env_q_tot_variance, env_theta_liq_ice_variance, env_q_tot_theta_liq_ice_covariance]
+    period: 10mins
+    

@@ -24,6 +24,15 @@ particularly useful for
     if that is not the case. When the warning is produced, it is your responsability
     to ensure that what you are doing makes sense.
 
+!!! note
+
+    By default, the simulation cannot be restarted in a reproducible way. To
+    enable reproducible restarts, you need to set `reproducible_restart` to `true`. 
+    When `reproducible_restart` is true, `ClimaAtmos` recalculates the grid_scale 
+    cloud fraction and uses it in the buoyancy gradient calculation to ensure deterministic 
+    behavior across restarts. We recommend disabling this option for production runs.
+
+
 ### How Restarts Work
 
 `ClimaAtmos` periodically saves the simulation state to a file called a "restart

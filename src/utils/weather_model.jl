@@ -5,25 +5,31 @@ import ..parse_date
 
 
 """
-    weather_model_data_path(start_date, target_levels, era5_initial_condition_dir])
+    weather_model_data_path(
+        start_date,
+        target_levels,
+        era5_initial_condition_dir=nothing;
+        kwargs...
+    )
 
 Get the path to the weather model data for a given start date and time.
-If the data is not found, will attempt to generate it from raw data. If 
-the raw data is not found, throw an error
+If the data is not found, will attempt to generate it from raw data. If
+the raw data is not found, throw an error.
 
-# Arguments
+Args:
 - `start_date`: Start date as string yyyymmdd or yyyymmdd-HHMM
-- `target_levels`: Vector of target altitude levels (in meters) to interpolate to
+- `target_levels`: Vector of target altitude levels (in meters)
 - `era5_initial_condition_dir`: Optional directory containing preprocessed ERA5
 
-- If `era5_initial_condition_dir` is provided, use
-  `era5_init_processed_internal_YYYYMMDD_0000.nc` from that directory.
-- Otherwise, use the `weather_model_ic` artifact.
+Keywords:
+- `interp_w::Bool=false`: If false, write w=0; if true, interpolate w (1D path)
 """
+
 function weather_model_data_path(
     start_date,
     target_levels,
-    era5_initial_condition_dir = nothing,
+    era5_initial_condition_dir = nothing;
+    interp_w::Bool = false,
 )
     # Parse the date using the existing parse_date function
     dt = parse_date(start_date)
@@ -32,59 +38,93 @@ function weather_model_data_path(
     start_date_str = Dates.format(dt, "yyyymmdd")
     start_time = Dates.format(dt, "HHMM") # Note: this is not the same as `start_time` in the coupler!
 
-    # If user provided a directory with preprocessed initial conditions, use it
+    # Determine source/destination and whether generation is needed
+    local raw_data_path::String
+    local ic_data_path::String
+    local generate_needed::Bool
+
     if !isnothing(era5_initial_condition_dir)
+        # User-provided directory
         ic_data_path = joinpath(
             era5_initial_condition_dir,
             "era5_init_processed_internal_$(start_date_str)_0000.nc", # TODO: generalize for all times once Coupler supports HHMM specification
         )
+        if isfile(ic_data_path)
+            @info "Using existing interpolated IC file: $ic_data_path"
+            return ic_data_path
+        end
         raw_data_path = joinpath(
             era5_initial_condition_dir,
             "era5_raw_$(start_date_str)_0000.nc",
         )
-        if !isfile(ic_data_path)
-            if !isfile(raw_data_path)
-                error(
-                    "Neither preprocessed nor raw initial condition file exist in $(era5_initial_condition_dir).  Please run `python get_initial_conditions.py` in the WeatherQuest repository to download the data.",
-                )
-            end
-            @info "Interpolating raw weather model data onto z-levels from user-provided directory"
-            to_z_levels(raw_data_path, ic_data_path, target_levels, Float32)
-        else
-            @info "Using existing interpolated IC file: $ic_data_path"
+        if !isfile(raw_data_path)
+            error(
+                "Neither preprocessed nor raw initial condition file exist in $(era5_initial_condition_dir).  Please run `python get_initial_conditions.py` in the WeatherQuest repository to download the data.",
+            )
         end
+        generate_needed = true
+    else
+        # Artifact-based paths
+        ic_data_path = joinpath(
+            @clima_artifact("weather_model_ic"),
+            "init",
+            "era5_init_$(start_date_str)_$(start_time).nc",
+        )
         return ic_data_path
     end
 
-    # Otherwise, use artifact-based paths and generate if needed
-    ic_data_path = joinpath(
-        @clima_artifact("weather_model_ic"),
-        "init",
-        "era5_init_$(start_date_str)_$(start_time).nc",
+    # Fallback: generate a 1D-interpolated IC file when processed_internal file absent
+    ic_data_path_1d = joinpath(
+        era5_initial_condition_dir,
+        "era5_init_$(start_date_str)_0000.nc",
     )
-    raw_data_path = joinpath(
-        @clima_artifact("weather_model_ic"),
-        "raw",
-        "era5_raw_$(start_date_str)_$(start_time).nc",
+    @info "Processed 3D IC not found; falling back to 1D interpolation" (
+        raw = raw_data_path,
+        dest = ic_data_path_1d,
+        n_target_levels = length(target_levels),
     )
-
-    return ic_data_path
+    to_z_levels_1d(
+        raw_data_path,
+        ic_data_path_1d,
+        target_levels,
+        Float32;
+        interp_w = interp_w,
+    )
+    return ic_data_path_1d
 end
 
-"""
-    to_z_levels(source_file, target_file, target_levels, FT)
 
-Interpolate ERA5 data from native model levels to specified z-levels. Note that 
-to use _overwrite_initial_conditions_from_file! we rename surface pressure, sp, 
-to p. This allows us to share functionality with the Dyamond setup. We assert the 
-variables are present in the source file, which may be modified if additional
-variables are needed, e.g. for land or ocean models. `target_levels` is a vector 
-of target altitude levels (in meters) to interpolate to.
 """
-function to_z_levels(source_file, target_file, target_levels, FT)
+    to_z_levels_1d(
+        source_file,
+        target_file,
+        target_levels,
+        FT;
+        interp_w=false,
+    )
+
+Interpolate ERA5 data from native model levels to specified 1D z-levels, column-wise in z.
+
+Args:
+- source_file::String: Input ERA5 NetCDF path
+- target_file::String: Output NetCDF path
+- target_levels::AbstractVector: Target 1D z-levels
+- FT::Type{<:AbstractFloat}: Floating-point element type
+
+Keywords:
+- interp_w::Bool=false: If false, write w=0 everywhere; if true, interpolate w
+"""
+function to_z_levels_1d(
+    source_file,
+    target_file,
+    target_levels,
+    FT;
+    interp_w::Bool = false,
+)
 
     param_set = TD.Parameters.ThermodynamicsParameters(FT)
     grav = TD.Parameters.grav(param_set)
+    target_levels = FT.(target_levels)
 
     ncin = Dataset(source_file)
 
@@ -146,7 +186,7 @@ function to_z_levels(source_file, target_file, target_levels, FT)
     for var_name in req3d
         var_obj =
             defVar(ncout, var_name, FT, ("lon", "lat", "z"), attrib = ncin[var_name].attrib)
-        if var_name == "w"
+        if var_name == "w" && !interp_w
             var_obj[:, :, :] = zeros(FT, length(lon), length(lat), length(target_levels))
         else
             data = interpz_3d(target_levels, source_z, FT.(ncin[var_name][:, :, :, 1]))
@@ -157,14 +197,53 @@ function to_z_levels(source_file, target_file, target_levels, FT)
         end
     end
 
+    # Compute 3D pressure on target z-levels (p_3d) by log-pressure interpolation
+    # Assume ERA5 pressure levels are in hPa and convert to Pa
+    plevs_pa = FT.(ncin["pressure_level"][:]) .* FT(100)
+    # Prepare output var and per-column interpolation in log(p)
+    p3d_var_attrib = Dict(
+        "standard_name" => "air_pressure",
+        "long_name" => "air pressure on model z-levels",
+        "units" => "Pa",
+        "source" => "ERA5 pressure levels interpolated in log(p) vs z",
+    )
+    p3d_var = defVar(ncout, "p_3d", FT, ("lon", "lat", "z"), attrib = p3d_var_attrib)
+    nx, ny, _ = size(source_z)
+    p3d = similar(source_z, FT, nx, ny, length(target_levels))
+    logp_src = FT.(log.(plevs_pa))
+    @inbounds for j in 1:ny, i in 1:nx
+        zcol = view(source_z, i, j, :)
+        dest = view(p3d, i, j, :)
+        # Interpolate log(p) along z, then exponentiate
+        interpolate1d!(dest, zcol, target_levels, logp_src, Linear(), Flat())
+        dest .= exp.(dest)
+    end
+    p3d_var[:, :, :] = p3d
+
     # Write 2D surface variables - extend to all levels (TODO: accept 2D variables in atmos)
-    # Simply repeat the surface values for all levels
-    surf_map = Dict("skt" => "skt", "sp" => "p")
+    # Duplicate 2D surface field across all target vertical levels
+    surf_map = Dict("skt" => "skt", "sp" => "p", "surface_geopotential" => "z_sfc")
     for (src_name, dst_name) in surf_map
-        var_obj =
-            defVar(ncout, dst_name, FT, ("lon", "lat", "z"), attrib = ncin[src_name].attrib)
+        # Choose attributes; for z_sfc, set clean altitude attributes
+        var_attrib = if dst_name == "z_sfc"
+            Dict(
+                "standard_name" => "surface_altitude",
+                "long_name" => "surface altitude derived from ERA5",
+                "units" => "m",
+                "source_variable" => src_name,
+            )
+        else
+            ncin[src_name].attrib
+        end
+        var_obj = defVar(ncout, dst_name, FT, ("lon", "lat", "z"), attrib = var_attrib)
+        # Read first time slice and coalesce; follow same convention as sp (use [:, :, 1])
+        data2d = FT.(coalesce.(ncin[src_name][:, :, 1], NaN))
+        # Convert geopotential to meters if necessary
+        if dst_name == "z_sfc"
+            data2d .= data2d ./ grav
+        end
         for k in 1:length(target_levels)
-            var_obj[:, :, k] = FT.(ncin[src_name][:, :, 1])
+            var_obj[:, :, k] = data2d
         end
     end
 

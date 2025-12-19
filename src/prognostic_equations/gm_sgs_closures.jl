@@ -67,17 +67,17 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
 
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
-    (; ᶜts, ᶠu³, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜts, ᶠu³, ᶜlinear_buoygrad, ᶜstrain_rate_norm, cloud_diagnostics_tuple) =
+        p.precomputed
 
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
         thermo_params,
-        p.atmos.moisture_model,
         ᶜts,
+        cloud_diagnostics_tuple.cf,
         C3,
-        p.precomputed.ᶜgradᵥ_θ_virt,    # ∂θv∂z_unsat
-        p.precomputed.ᶜgradᵥ_q_tot,     # ∂qt∂z_sat
-        p.precomputed.ᶜgradᵥ_θ_liq_ice, # ∂θl∂z_sat
+        p.precomputed.ᶜgradᵥ_q_tot,
+        p.precomputed.ᶜgradᵥ_θ_liq_ice,
         ᶜlg,
     )
 

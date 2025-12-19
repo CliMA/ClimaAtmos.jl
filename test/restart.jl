@@ -389,6 +389,7 @@ if MANYTESTS
                         job_id = "$(configuration)_$(moisture)_$(precip)_$(topography)_$(radiation)_$(turbconv_mode)"
                         test_dict = Dict(
                             "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
+                            "reproducible_restart" => true,
                             "check_nan_every" => 3,
                             "log_progress" => false,
                             "moist" => moisture,
@@ -402,7 +403,6 @@ if MANYTESTS
                             "rayleigh_sponge" => true,
                             "insolation" => "timevarying",
                             "rad" => radiation,
-                            "co2_model" => "fixed",
                             "dt_rad" => "1secs",
                             "surface_setup" => "DefaultMoninObukhov",
                             "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed
@@ -446,6 +446,7 @@ else
             "h_elem" => 4,
             "z_elem" => 15,
             "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
+            "reproducible_restart" => true,
             "check_nan_every" => 3,
             "log_progress" => false,
             "dt" => "1secs",

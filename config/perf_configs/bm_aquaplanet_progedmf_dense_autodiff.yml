@@ -27,6 +27,5 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-cloud_model: "quadrature_sgs"
 precip_model: 0M
 toml: [toml/prognostic_edmfx.toml]

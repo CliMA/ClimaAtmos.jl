@@ -28,7 +28,6 @@ function temporary_quantities(Y, atmos)
     center_space, face_space = axes(Y.c), axes(Y.f)
 
     FT = Spaces.undertype(center_space)
-    CTh = CTh_vector_type(Y.c)
     uvw_vec = UVW(FT(0), FT(0), FT(0))
     return (;
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_h
@@ -39,6 +38,7 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_scalar_4 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_5 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_6 = Fields.Field(FT, center_space),
+        ᶜtemp_scalar_7 = Fields.Field(FT, center_space),
         ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
         temp_field_level_2 = Fields.level(Fields.Field(FT, center_space), 1),
@@ -81,7 +81,7 @@ function temporary_quantities(Y, atmos)
         # TODO: Remove this hack
         sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
         # Implicit solver cache:
-        ∂ᶜK_∂ᶜuₕ = similar(Y.c, DiagonalMatrixRow{Adjoint{FT, CTh{FT}}}),
+        ∂ᶜK_∂ᶜuₕ = similar(Y.c, DiagonalMatrixRow{Adjoint{FT, CT12{FT}}}),
         ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
         ᶠp_grad_matrix = similar(Y.f, BidiagonalMatrixRow{C3{FT}}),
         ᶠbidiagonal_matrix_ct3 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
@@ -93,6 +93,15 @@ function temporary_quantities(Y, atmos)
                 ClimaCore.Geometry.WVector{FT},
             },
         ),
+        ᶠsed_tracer_advection = similar(
+            Y.f,
+            ClimaCore.MatrixFields.BandMatrixRow{
+                ClimaCore.Utilities.PlusHalf{Int64}(0),
+                1,
+                ClimaCore.Geometry.WVector{FT},
+            },
+        ),
+        ᶜtracer_advection_matrix = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, C3{FT}}}),
         ᶠdiagonal_matrix_ct3xct3 = similar(
             Y.f,
             DiagonalMatrixRow{
@@ -113,9 +122,11 @@ function temporary_quantities(Y, atmos)
             Y.c,
             BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
         ),
+        ᶜtridiagonal_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜdiffusion_h_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜtridiagonal_matrix_scalar = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶠtridiagonal_matrix_c3 = similar(Y.f, TridiagonalMatrixRow{C3{FT}}),
+        (!isnothing(atmos.prescribed_flow) ? (; temp_Yₜ_imp = similar(Y)) : (;))...,
     )
 end

@@ -1647,24 +1647,32 @@ add_diagnostic_variable!(
 function compute_mslp!(out, state, cache, time)
     thermo_params = CAP.thermodynamics_params(cache.params)
     g = TD.Parameters.grav(thermo_params)
-    R_m_surf = Fields.level(
-        lazy.(TD.gas_constant_air.(thermo_params, cache.precomputed.ᶜts)),
-        1,
-    )
+    ts_level = Fields.level(cache.precomputed.ᶜts, 1)
+    R_m_surf = @. lazy(TD.gas_constant_air(thermo_params, ts_level))
 
-    # get pressure, temperature, and height at the lowest atmospheric level
     p_level = Fields.level(cache.precomputed.ᶜp, 1)
-    t_level = Fields.level(
-        lazy.(TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)),
-        1,
-    )
+    t_level = @. lazy(TD.air_temperature(thermo_params, ts_level))
     z_level = Fields.level(Fields.coordinate_field(state.c.ρ).z, 1)
 
-    # compute sea level pressure using the hypsometric equation
+    # Reduce to mean sea level using hypsometric formulation with lapse rate adjustment
+    # Using constant lapse rate Γ = 6.5 K/km, with virtual temperature
+    # represented via R_m_surf. This reduces biases over
+    # very cold or very warm high-topography regions.
+    FT = Spaces.undertype(Fields.axes(state.c.ρ))
+    Γ = FT(6.5e-3) # K m^-1
+
+    #   p_msl = p_z0 * [1 + Γ * z / T_z0]^( g / (R_m Γ))
+    # where:
+    #   - p_z0 pressure at the lowest model level
+    #   - T_z0 air temperature at the lowest model level
+    #   - R_m moist-air gas constant at the surface (R_m_surf), which
+    #     accounts for virtual-temperature effects in the exponent
+    #   - Γ constant lapse rate (6.5 K/km here)
+
     if isnothing(out)
-        return @. p_level * exp(g * z_level / (R_m_surf * t_level))
+        return p_level .* (1 .+ Γ .* z_level ./ t_level) .^ (g / Γ ./ R_m_surf)
     else
-        @. out = p_level * exp(g * z_level / (R_m_surf * t_level))
+        out .= p_level .* (1 .+ Γ .* z_level ./ t_level) .^ (g / Γ ./ R_m_surf)
     end
 end
 
@@ -1673,7 +1681,7 @@ add_diagnostic_variable!(
     long_name = "Mean Sea Level Pressure",
     standard_name = "mean_sea_level_pressure",
     units = "Pa",
-    comments = "Mean sea level pressure computed from the hypsometric equation",
+    comments = "Mean sea level pressure computed using a lapse-rate-dependent hypsometric reduction (ERA-style; Γ=6.5 K/km with virtual temperature via moist gas constant).",
     compute! = compute_mslp!,
 )
 
@@ -1715,4 +1723,66 @@ add_diagnostic_variable!(
     (not just the area of the cloudy portion of the column).
     """,
     compute! = compute_rwp!,
+)
+
+###
+# Covariances (3d)
+###
+function compute_covariance_diagnostics!(out, state, cache, time, type)
+    turbconv_model = cache.atmos.turbconv_model
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isa(turbconv_model, PrognosticEDMFX)
+        ᶜts = cache.precomputed.ᶜts⁰
+    else
+        ᶜts = cache.precomputed.ᶜts
+    end
+
+    # Reuse central compute_covariance function
+    (ᶜq′q′, ᶜθ′θ′, ᶜθ′q′) = compute_covariance(
+        state, cache, thermo_params, ᶜts,
+    )
+
+    result = if type == :qt_qt
+        ᶜq′q′
+    elseif type == :tht_tht
+        ᶜθ′θ′
+    elseif type == :qt_tht
+        ᶜθ′q′
+    else
+        error("Unknown variance type")
+    end
+
+    if isnothing(out)
+        return Base.materialize(result)
+    else
+        out .= result
+    end
+end
+
+compute_env_q_tot_variance!(out, state, cache, time) =
+    compute_covariance_diagnostics!(out, state, cache, time, :qt_qt)
+compute_env_theta_liq_ice_variance!(out, state, cache, time) =
+    compute_covariance_diagnostics!(out, state, cache, time, :tht_tht)
+compute_env_q_tot_theta_liq_ice_covariance!(out, state, cache, time) =
+    compute_covariance_diagnostics!(out, state, cache, time, :qt_tht)
+
+add_diagnostic_variable!(
+    short_name = "env_q_tot_variance",
+    long_name = "Environment Variance of Total Specific Humidity",
+    units = "kg^2 kg^-2",
+    compute! = compute_env_q_tot_variance!,
+)
+
+add_diagnostic_variable!(
+    short_name = "env_theta_liq_ice_variance",
+    long_name = "Environment Variance of Liquid Ice Potential Temperature",
+    units = "K^2",
+    compute! = compute_env_theta_liq_ice_variance!,
+)
+
+add_diagnostic_variable!(
+    short_name = "env_q_tot_theta_liq_ice_covariance",
+    long_name = "Environment Covariance of Total Specific Humidity and Liquid Ice Potential Temperature",
+    units = "kg kg^-1 K",
+    compute! = compute_env_q_tot_theta_liq_ice_covariance!,
 )

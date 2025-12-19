@@ -76,27 +76,15 @@ struct GridScaleCloud <: AbstractCloudModel end
 """
     QuadratureCloud
 
-Compute the cloud fraction by sampling over the quadrature points, but without
-the EDMF sub-grid scale model.
+Compute the cloud fraction by sampling over the quadrature points.
 """
 struct QuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
     SG_quad::SGQ
 end
 
-"""
-    SGSQuadratureCloud
-
-Compute the cloud fraction as a sum of the EDMF environment and updraft
-contributions. The EDMF environment cloud fraction is computed by sampling over
-the quadrature points.
-"""
-struct SGSQuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
-    SG_quad::SGQ
-end
 
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
-struct ZonallyAsymmetricSST <: AbstractSST end
 struct RCEMIPIISST <: AbstractSST end
 struct ExternalTVColumnSST <: AbstractSST end
 
@@ -109,70 +97,6 @@ end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
 struct ExternalTVInsolation <: AbstractInsolation end
-
-"""
-    AbstractOzone
-
-Describe how ozone concentration should be set.
-"""
-abstract type AbstractOzone end
-
-"""
-    IdealizedOzone
-
-Implement a static (not varying in time) idealized ozone profile as described by
-`idealized_ozone`.
-"""
-struct IdealizedOzone <: AbstractOzone end
-
-"""
-    PrescribedOzone
-
-Implement a time-varying ozone profile as read from disk.
-
-The CMIP6 forcing dataset is used. For production runs, you should acquire the
-high-resolution, multi-year `ozone_concentrations` artifact. If this is not available, a low
-resolution, single-year version will be used.
-
-Refer to ClimaArtifacts for more information on how to obtain the artifact.
-"""
-struct PrescribedOzone <: AbstractOzone end
-
-"""
-    AbstractCO2
-
-Describe how CO2 concentration should be set.
-"""
-abstract type AbstractCO2 end
-
-"""
-    FixedCO2
-
-Implement a static CO2 profile as read from disk.
-
-The data used is the one distributed with `RRTMGP.jl`.
-
-By default, this is 397.547 parts per million.
-
-This is the volume mixing ratio.
-"""
-struct FixedCO2{FT} <: AbstractCO2
-    value::FT
-
-    function FixedCO2(; FT = Float64, value = FT(397.547e-6))
-        return new{FT}(value)
-    end
-end
-
-"""
-    MuanaLoaCO2
-
-Implement a time-varying CO2 profile as read from disk.
-
-The data from the Mauna Loa CO2 measurements is used. It is a assumed that the
-concentration is constant.
-"""
-struct MaunaLoaCO2 <: AbstractCO2 end
 
 """
     AbstractCloudInRadiation
@@ -286,6 +210,10 @@ struct AnisotropicMinimumDissipation{FT} <: AbstractEddyViscosityModel
     c_amd::FT
 end
 
+struct ConstantHorizontalDiffusion{FT} <: AbstractEddyViscosityModel
+    D::FT
+end
+
 
 Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
     zd::FT
@@ -376,17 +304,18 @@ Variables used in the environmental buoyancy gradient computation.
 """
 Base.@kwdef struct EnvBuoyGradVars{FT, TS}
     ts::TS
-    ∂θv∂z_unsat::FT
-    ∂qt∂z_sat::FT
-    ∂θli∂z_sat::FT
+    cf::FT
+    ∂qt∂z::FT
+    ∂θli∂z::FT
 end
 
 function EnvBuoyGradVars(
     ts::TD.ThermodynamicState,
-    ∂θv∂z_unsat_∂qt∂z_sat_∂θli∂z_sat,
+    cf,
+    ∂qt∂z_∂θli∂z,
 )
-    (; ∂θv∂z_unsat, ∂qt∂z_sat, ∂θli∂z_sat) = ∂θv∂z_unsat_∂qt∂z_sat_∂θli∂z_sat
-    return EnvBuoyGradVars(ts, ∂θv∂z_unsat, ∂qt∂z_sat, ∂θli∂z_sat)
+    (; ∂qt∂z, ∂θli∂z) = ∂qt∂z_∂θli∂z
+    return EnvBuoyGradVars(ts, cf, ∂qt∂z, ∂θli∂z)
 end
 
 Base.eltype(::EnvBuoyGradVars{FT}) where {FT} = FT
@@ -499,7 +428,45 @@ struct RadiationTRMM_LBA{R}
     end
 end
 
+abstract type PrescribedFlow{FT} end
+
+struct ShipwayHill2012VelocityProfile{FT} <: PrescribedFlow{FT} end
+function (::ShipwayHill2012VelocityProfile{FT})(z, t) where {FT}
+    w1 = FT(1.5)
+    t1 = FT(600)
+    return t < t1 ? w1 * sinpi(FT(t) / t1) : FT(0)
+end
+
+"""
+    get_ρu₃qₜ_surface(flow::PrescribedFlow{FT}, thermo_params, t) where {FT}
+
+Computes the vertical transport `ρwqₜ` at the surface due to prescribed flow.
+
+# Arguments
+- `flow`: The prescribed flow model, see [`PrescribedFlow`](@ref).
+- `thermo_params`: The thermodynamic parameters, needed to compute surface air density.
+- `t`: The current time.
+"""
+function get_ρu₃qₜ_surface(flow::ShipwayHill2012VelocityProfile, thermo_params, t)
+    # TODO: Get these values from the initial conditions:
+    # lg_sfc = Fields.level(Fields.local_geometry_field(Y.f), CA.half)
+    # ic = CA.InitialConditions.ShipwayHill2012()(p.params)
+    # get_ρ(ls) = ls.ρ
+    # ᶠρ_sfc = @. get_ρ(ic(lg_sfc)) <-- inconvenient since this materializes a Field
+    # For now, just copy the values from the initial conditions:
+    FT = eltype(thermo_params)
+    rv_sfc = FT(0.015)  # water vapour mixing ratio at surface (kg/kg)
+    q_tot_sfc = rv_sfc / (1 + rv_sfc)  # 0.0148 kg/kg
+    p_sfc = FT(100_700)
+    θ_sfc = FT(297.9)
+    ts_sfc = TD.PhaseEquil_pθq(thermo_params, p_sfc, θ_sfc, q_tot_sfc)
+    ρ_sfc = TD.air_density(thermo_params, ts_sfc)  # 1.165 kg/m³
+    w_sfc = Geometry.WVector(flow(0, t))
+    return ρ_sfc * w_sfc * q_tot_sfc
+end
+
 struct TestDycoreConsistency end
+struct ReproducibleRestart end
 
 abstract type AbstractTimesteppingMode end
 struct Explicit <: AbstractTimesteppingMode end
@@ -512,7 +479,7 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, LIM, DM, HD}
+Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_q_tot_upwinding::EN_UP
@@ -523,6 +490,8 @@ Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, LIM,
 
     """Add NaNs to certain equations to track down problems"""
     test_dycore_consistency::TDC
+    """Whether the simulation is reproducible when restarting from a restart file"""
+    reproducible_restart::RR
 
     limiter::LIM
 
@@ -618,10 +587,8 @@ end
 
 Groups radiation-related models and types.
 """
-Base.@kwdef struct AtmosRadiation{RM, OZ, CO2, IN}
+Base.@kwdef struct AtmosRadiation{RM, IN}
     radiation_mode::RM = nothing
-    ozone::OZ = nothing
-    co2::CO2 = nothing
     insolation::IN = nothing
 end
 
@@ -630,7 +597,7 @@ end
 
 Groups turbulence convection-related models and types.
 """
-Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD}
+Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD, CHD}
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     sgs_adv_mode::SAM = nothing
@@ -640,6 +607,7 @@ Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD}
     sgs_mf_mode::SMM = nothing
     smagorinsky_lilly::SL = nothing
     amd_les::AMD = nothing
+    constant_horizontal_diffusion::CHD = nothing
 end
 
 """
@@ -682,11 +650,12 @@ Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
-struct AtmosModel{W, SCM, R, TC, GW, VD, SP, SU, NU}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
     water::W
     scm_setup::SCM
     radiation::R
     turbconv::TC
+    prescribed_flow::PF
     gravity_wave::GW
     vertical_diffusion::VD
     sponge::SP
@@ -702,6 +671,7 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosWater, :water),
     (AtmosRadiation, :radiation),
     (AtmosTurbconv, :turbconv),
+    (ShipwayHill2012VelocityProfile, :prescribed_flow),
     (AtmosGravityWave, :gravity_wave),
     (AtmosSponge, :sponge),
     (AtmosSurface, :surface),
@@ -821,8 +791,6 @@ model = AtmosModel(;
     moisture_model = EquilMoistModel(),
     microphysics_model = Microphysics0Moment(),
     radiation_mode = RRTMGPI.AllSkyRadiation(),
-    ozone = IdealizedOzone(),
-    co2 = FixedCO2()
 )
 ```
 
@@ -840,7 +808,7 @@ The default AtmosModel provides:
 ## AtmosWater
 - `moisture_model`: DryModel(), EquilMoistModel(), NonEquilMoistModel()
 - `microphysics_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
-- `cloud_model`: GridScaleCloud(), QuadratureCloud(), SGSQuadratureCloud()
+- `cloud_model`: GridScaleCloud(), QuadratureCloud()
 - `noneq_cloud_formation_mode`: Explicit(), Implicit()
 - `call_cloud_diagnostics_per_stage`: nothing or CallCloudDiagnosticsPerStage()
 
@@ -857,8 +825,6 @@ Internal testing and calibration components for single-column setups:
   - Global radiation: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation()
   - Atmospheric forcing: HeldSuarezForcing() (for idealized dynamics)
   - SCM-specific: RadiationDYCOMS(), RadiationISDAC(), RadiationTRMM_LBA()
-- `ozone`: IdealizedOzone(), PrescribedOzone()
-- `co2`: FixedCO2(), MaunaLoaCO2()
 - `insolation`: IdealizedInsolation(), TimeVaryingInsolation(), etc.
 
 ## AtmosTurbconv
@@ -867,6 +833,7 @@ Internal testing and calibration components for single-column setups:
 - `sgs_adv_mode`, `sgs_entr_detr_mode`, `sgs_nh_pressure_mode`, `sgs_vertdiff_mode`, `sgs_mf_mode`: Explicit(), Implicit()
 - `smagorinsky_lilly`: nothing or SmagorinskyLilly()
 - `amd_les`: nothing or AnisotropicMinimumDissipation()
+- `constant_horizontal_diffusion`: nothing or ConstantHorizontalDiffusion()
 
 ## AtmosGravityWave
 - `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave()
@@ -877,7 +844,7 @@ Internal testing and calibration components for single-column setups:
 - `rayleigh_sponge`: nothing or RayleighSponge()
 
 ## AtmosSurface
-- `sfc_temperature`: ZonallySymmetricSST(), ZonallyAsymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
+- `sfc_temperature`: ZonallySymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
 - `surface_model`: PrescribedSST(), SlabOceanSST()
 - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
 
@@ -919,11 +886,14 @@ function AtmosModel(; kwargs...)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
 
+    prescribed_flow = get(atmos_model_kwargs, :prescribed_flow, nothing)
+
     return AtmosModel{
         typeof(water),
         typeof(scm_setup),
         typeof(radiation),
         typeof(turbconv),
+        typeof(prescribed_flow),
         typeof(gravity_wave),
         typeof(vertical_diffusion),
         typeof(sponge),
@@ -934,6 +904,7 @@ function AtmosModel(; kwargs...)
         scm_setup,
         radiation,
         turbconv,
+        prescribed_flow,
         gravity_wave,
         vertical_diffusion,
         sponge,
@@ -973,6 +944,7 @@ const _DEFAULT_ATMOS_MODEL_KWARGS = (
     edmfx_sgsflux_upwinding = Val(:none),
     edmfx_tracer_upwinding = Val(:first_order),
     test_dycore_consistency = nothing,
+    reproducible_restart = nothing,
     limiter = nothing,
     diff_mode = Explicit(),
     hyperdiff = nothing,
@@ -1082,8 +1054,6 @@ function EquilMoistAtmosModel(; kwargs...)
         surface_model = PrescribedSST(),
         sfc_temperature = ZonallySymmetricSST(),
         insolation = IdealizedInsolation(),
-        ozone = IdealizedOzone(),
-        co2 = FixedCO2(),
     )
     return AtmosModel(; defaults..., kwargs...)
 end
@@ -1102,8 +1072,6 @@ function NonEquilMoistAtmosModel(; kwargs...)
         surface_model = PrescribedSST(),
         sfc_temperature = ZonallySymmetricSST(),
         insolation = IdealizedInsolation(),
-        ozone = IdealizedOzone(),
-        co2 = FixedCO2(),
     )
     return AtmosModel(; defaults..., kwargs...)
 end
@@ -1267,7 +1235,7 @@ function AtmosConfig(
 end
 
 """
-    maybe_resolve_and_acquire_artifacts(input_str::AbstractString, context::ClimaComms.AbstractCommsContext)
+    maybe_resolve_and_acquire_artifacts(input_str::AbstractString, context)
 
 When given a string of the form `artifact"name"/something/else`, resolve the
 artifact path and download it (if not already available).
@@ -1276,7 +1244,7 @@ In all the other cases, return the input unchanged.
 """
 function maybe_resolve_and_acquire_artifacts(
     input_str::AbstractString,
-    context::ClimaComms.AbstractCommsContext,
+    context,
 )
     matched = match(r"artifact\"([a-zA-Z0-9_]+)\"(\/.*)?", input_str)
     if isnothing(matched)
@@ -1292,20 +1260,20 @@ end
 
 function maybe_resolve_and_acquire_artifacts(
     input,
-    _::ClimaComms.AbstractCommsContext,
+    _,
 )
     return input
 end
 
 """
-    config_with_resolved_and_acquired_artifacts(input_str::AbstractString, context::ClimaComms.AbstractCommsContext)
+    config_with_resolved_and_acquired_artifacts(input_str::AbstractString, context)
 
 Substitute strings of the form `artifact"name"/something/else` with the actual
 artifact path.
 """
 function config_with_resolved_and_acquired_artifacts(
     config::AbstractDict,
-    context::ClimaComms.AbstractCommsContext,
+    context,
 )
     return Dict(
         k => maybe_resolve_and_acquire_artifacts(v, context) for

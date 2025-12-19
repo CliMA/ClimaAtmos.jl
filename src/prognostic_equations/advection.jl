@@ -52,13 +52,8 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
@@ -70,17 +65,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     end
 
     if use_prognostic_tke(p.atmos.turbconv_model)
-        if p.atmos.turbconv_model isa EDOnlyEDMFX
-            ᶜu_for_tke_advection = ᶜu
-        elseif p.atmos.turbconv_model isa AbstractEDMF
-            ᶜu_for_tke_advection = p.precomputed.ᶜu⁰
-        else
-            error(
-                "Unsupported turbconv_model type for TKE advection: $(typeof(p.atmos.turbconv_model))",
-            )
-        end
-        @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu_for_tke_advection)
-
+        @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu)
     end
 
     # This is equivalent to grad_h(Φ + K) + grad_h(p) / ρ
@@ -165,6 +150,30 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
 end
 
 """
+    ᶜρq_tot_vertical_transport_bc(flow, thermo_params, t, ᶠu³)
+
+Computes the vertical transport of `ρq_tot` at the surface due to prescribed flow.
+
+If the flow is not prescribed, this has no effect.
+
+# Arguments
+- `flow`: The prescribed flow model, see [`PrescribedFlow`](@ref).
+    - If `flow` is `nothing`, this has no effect.
+- `thermo_params`: The thermodynamic parameters, needed to compute surface air density.
+- `t`: The current time.
+- `ᶠu³`: The vertical velocity field.
+
+# Returns
+- The vertical transport of `ρq_tot` at the surface due to prescribed flow.
+"""
+ᶜρq_tot_vertical_transport_bc(::Nothing, _, _, _) = NullBroadcasted()
+function ᶜρq_tot_vertical_transport_bc(flow::PrescribedFlow, thermo_params, t, ᶠu³)
+    ρu₃qₜ_sfc_bc = get_ρu₃qₜ_surface(flow, thermo_params, t)
+    ᶜadvdivᵥ = Operators.DivergenceF2C(; bottom = Operators.SetValue(ρu₃qₜ_sfc_bc))
+    return @. lazy(-(ᶜadvdivᵥ(zero(ᶠu³))))
+end
+
+"""
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
 Computes tendencies due to explicit vertical advection for various grid-mean
@@ -193,7 +202,7 @@ Modifies `Yₜ.c` (various tracers, `ρe_tot`, `ρq_tot`, `uₕ`), `Yₜ.f.u₃`
 `Yₜ.f.sgsʲs` (updraft `u₃`), and `Yₜ.c.sgs⁰.ρatke` as applicable.
 """
 NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    (; turbconv_model) = p.atmos
+    (; turbconv_model, prescribed_flow) = p.atmos
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     advect_tke = use_prognostic_tke(turbconv_model)
     point_type = eltype(Fields.coordinate_field(Y.c))
@@ -204,43 +213,19 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; edmfx_mse_q_tot_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; energy_q_tot_upwinding, tracer_upwinding) = p.atmos.numerics
-    FT = eltype(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    ᶠu³⁰ =
-        advect_tke ?
-        (
-            turbconv_model isa EDOnlyEDMFX ? p.precomputed.ᶠu³ :
-            p.precomputed.ᶠu³⁰
-        ) : nothing
-    ᶜρa⁰ =
-        advect_tke ?
-        (
-            turbconv_model isa PrognosticEDMFX ?
-            (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
-        ) : nothing
-    ᶜρ⁰ = if advect_tke
-        if n > 0
-            (; ᶜts⁰) = p.precomputed
-            @. lazy(TD.air_density(thermo_params, ᶜts⁰))
-        else
-            Y.c.ρ
-        end
-    else
-        nothing
-    end
     ᶜtke⁰ =
         advect_tke ?
         (@. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))) :
         nothing
-    ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12
     ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
 
     if point_type <: Geometry.Abstract3DPoint
         @. ᶜω³ = wcurlₕ(Y.c.uₕ)
-    elseif point_type <: Geometry.Abstract2DPoint
+    else
         @. ᶜω³ = zero(ᶜω³)
     end
 
@@ -265,7 +250,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
             if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
                 ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-                vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, FT(dt), tracer_upwinding)
+                vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
                 @. ᶜρχₜ += vtt
             end
         end
@@ -273,23 +258,22 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # ... and upwinding correction of energy and total water.
     # (The central advection of energy and total water is done implicitly.)
     if energy_q_tot_upwinding != Val(:none)
-        ᶜh_tot = @. lazy(
-            TD.total_specific_enthalpy(
-                thermo_params,
-                ᶜts,
-                specific(Y.c.ρe_tot, Y.c.ρ),
-            ),
-        )
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, FT(dt), energy_q_tot_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, FT(dt), Val(:none))
+        ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+        ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, Val(:none))
         @. Yₜ.c.ρe_tot += vtt - vtt_central
     end
 
     if !(p.atmos.moisture_model isa DryModel) && energy_q_tot_upwinding != Val(:none)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, FT(dt), energy_q_tot_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, FT(dt), Val(:none))
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, energy_q_tot_upwinding)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt - vtt_central
+        if prescribed_flow isa PrescribedFlow
+            vtt_bc = ᶜρq_tot_vertical_transport_bc(prescribed_flow, thermo_params, t, ᶠu³)
+            @. Yₜ.c.ρq_tot += vtt_bc
+        end
     end
 
     if isnothing(ᶠf¹²)
@@ -317,8 +301,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
 
     if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
-        @. ᶜa_scalar = ᶜtke⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
-        vtt = vertical_transport(ᶜρ⁰, ᶠu³⁰, ᶜa_scalar, dt, edmfx_mse_q_tot_upwinding)
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜtke⁰, dt, edmfx_mse_q_tot_upwinding)
         @. Yₜ.c.sgs⁰.ρatke += vtt
     end
 end
