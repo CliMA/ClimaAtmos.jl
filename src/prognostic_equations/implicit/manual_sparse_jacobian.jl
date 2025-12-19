@@ -481,9 +481,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     @. ᶜkappa_m =
         TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
 
-    T = @. lazy(TD.air_temperature(thermo_params, ᶜts))
+    ᶜT = @. lazy(TD.air_temperature(thermo_params, ᶜts))
     ᶜ∂p∂ρq_tot = p.scratch.ᶜtemp_scalar_2
-    @. ᶜ∂p∂ρq_tot = ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (T - T_0)) + ΔR_v * T
+    @. ᶜ∂p∂ρq_tot = ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (ᶜT - T_0)) + ΔR_v * ᶜT
 
     if use_derivative(topography_flag)
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
@@ -542,7 +542,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     @. ∂ᶠu₃_err_∂ᶜρ =
         dtγ * (
             ᶠp_grad_matrix ⋅
-            DiagonalMatrixRow(ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ)) +
+            DiagonalMatrixRow(
+                ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ) + (R_d - ᶜkappa_m * cv_d) * ᶜT,
+            ) +
             DiagonalMatrixRow(cp_d * ᶠinterp(ᶜθ_v) * ᶠgradᵥ(ᶜΠ) / ᶠinterp(ᶜρ)) ⋅
             ᶠinterp_matrix()
         )
@@ -572,7 +574,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         ∂ᶠu₃_err_∂ᶜρq = matrix[@name(f.u₃), q_name]
         @. ∂ᶠu₃_err_∂ᶜρq =
             dtγ * ᶠp_grad_matrix ⋅
-            DiagonalMatrixRow(ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T)
+            DiagonalMatrixRow(ᶜkappa_m * (e_int_q - ∂cv∂q * (ᶜT - T_0)) - R_v * ᶜT)
     end
 
     ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
@@ -727,7 +729,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ∂ᶜρe_tot_err_∂ᶜρq = matrix[@name(c.ρe_tot), q_name]
             @. ∂ᶜρe_tot_err_∂ᶜρq +=
                 dtγ * ᶜdiffusion_h_matrix ⋅
-                DiagonalMatrixRow((ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T) / ᶜρ)
+                DiagonalMatrixRow(
+                    (ᶜkappa_m * (e_int_q - ∂cv∂q * (ᶜT - T_0)) - R_v * ᶜT) / ᶜρ,
+                )
         end
 
         MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, _, α)
@@ -1222,7 +1226,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ∂ᶜupdraft_mass_flux_∂ᶜscalar = ᶠbidiagonal_matrix_ct3
                 @. ∂ᶜupdraft_mass_flux_∂ᶜscalar =
                     DiagonalMatrixRow(
-                        (ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) * (ᶠu³ʲs.:(1) - ᶠu³),
+                        (ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) * (ᶠu³ʲs.:(1) - ᶠu³),
                     ) ⋅ ᶠinterp_matrix() ⋅
                     DiagonalMatrixRow(Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1))
                 @. p.scratch.ᶜtridiagonal_matrix_scalar =
@@ -1235,18 +1239,19 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     TD.gas_constant_air(thermo_params, ᶜts) /
                     TD.cv_m(thermo_params, ᶜts)
 
-                T = @. lazy(TD.air_temperature(thermo_params, ᶜts))
+                ᶜT = @. lazy(TD.air_temperature(thermo_params, ᶜts))
                 ᶜ∂p∂ρq_tot = p.scratch.ᶜtemp_scalar_2
                 @. ᶜ∂p∂ρq_tot =
-                    ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (T - T_0)) + ΔR_v * T
+                    ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (ᶜT - T_0)) + ΔR_v * ᶜT
 
                 ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
                 @. ∂ᶜρe_tot_err_∂ᶜρ +=
                     p.scratch.ᶜtridiagonal_matrix_scalar ⋅
                     DiagonalMatrixRow(
                         (
-                            -(1 + ᶜkappa_m) * ᶜe_tot -
-                            ᶜkappa_m * ∂e_int_∂q_tot * ᶜq_tot
+                            -(ᶜh_tot) +
+                            ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ) +
+                            (R_d - ᶜkappa_m * cv_d) * ᶜT
                         ) / ᶜρ,
                     )
 
@@ -1260,7 +1265,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     @. ∂ᶜρe_tot_err_∂ᶜρq +=
                         p.scratch.ᶜtridiagonal_matrix_scalar ⋅
                         DiagonalMatrixRow(
-                            (ᶜkappa_m * (e_int_q - ∂cv∂q * (T - T_0)) - R_v * T) / ᶜρ,
+                            (ᶜkappa_m * (e_int_q - ∂cv∂q * (ᶜT - T_0)) - R_v * ᶜT) / ᶜρ,
                         )
                 end
 

@@ -1344,11 +1344,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
 
     if p.atmos.turbconv_model isa DiagnosticEDMFX
         (; ᶠu³⁰, ᶜu⁰) = p.precomputed
-    elseif p.atmos.turbconv_model isa EDOnlyEDMFX
-        ᶠu³⁰ = p.precomputed.ᶠu³
-        ᶜu⁰ = ᶜu
-    end
-    @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))  # Set here, but used in a different function
+        @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
+    end  # Set here, but used in a different function
 
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
