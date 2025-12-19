@@ -808,30 +808,30 @@ steps:
           slurm_ntasks: 2
           slurm_mem: 24G
 
-      - label: ":computer: test restart_new"
+      - label: ":computer: test restart_AtmosSimulation"
         command: >
-          julia --color=yes --project=.buildkite test/restart_new.jl
+          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
         agents:
           slurm_mem: 16GB
 
-      - label: ":computer: test restart_new GPU"
+      - label: ":computer: test restart_AtmosSimulation GPU"
         command: >
-          julia --color=yes --project=.buildkite test/restart_new.jl
+          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
 
-      - label: ":computer: test restart_new"
+      - label: ":computer: test restart_AtmosSimulation"
         command: >
-          julia --color=yes --project=.buildkite test/restart_new.jl --manytests true
+          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl --manytests true
         agents:
           slurm_mem: 16GB
 
-      - label: ":computer: test restart_new GPU"
+      - label: ":computer: test restart_AtmosSimulation GPU"
         command: >
-          julia --color=yes --project=.buildkite test/restart_new.jl --manytests true
+          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl --manytests true
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:

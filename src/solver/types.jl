@@ -593,7 +593,7 @@ Groups radiation-related models and types.
 """
 Base.@kwdef struct AtmosRadiation{RM, IN}
     radiation_mode::RM = nothing
-    insolation::IN = nothing
+    insolation::IN = IdealizedInsolation()
 end
 
 """
@@ -802,7 +802,7 @@ model = AtmosModel(;
 The default AtmosModel provides:
 - **Dry atmosphere**: DryModel() with NoPrecipitation()
 - **Basic surface**: PrescribedSST() with ZonallySymmetricSST()
-- **Simple clouds**: GridScaleCloud()
+- **Cloud model**: QuadratureCloud() with SGS quadrature
 - **Idealized insolation**: IdealizedInsolation()
 - **Conservative numerics**: First-order upwinding with Explicit() timestepping
 - **No advanced physics**: No radiation, turbulence, or forcing by default
@@ -1029,8 +1029,6 @@ function EquilMoistAtmosModel(; kwargs...)
         surface_model = PrescribedSST(),
         sfc_temperature = ZonallySymmetricSST(),
         insolation = IdealizedInsolation(),
-        ozone = IdealizedOzone(),
-        co2 = FixedCO2(),
     )
     return AtmosModel(; defaults..., kwargs...)
 end
@@ -1045,8 +1043,6 @@ function NonEquilMoistAtmosModel(; kwargs...)
         moisture_model = NonEquilMoistModel(),
         microphysics_model = Microphysics1Moment(),
         noneq_cloud_formation_mode = Explicit(),
-        ozone = IdealizedOzone(),
-        co2 = FixedCO2(),
     )
     return AtmosModel(; defaults..., kwargs...)
 end

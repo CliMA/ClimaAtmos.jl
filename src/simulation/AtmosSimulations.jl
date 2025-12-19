@@ -134,17 +134,6 @@ function AtmosSimulation(config::AtmosConfig)
     return get_simulation(config)
 end
 
-#= TODOs
-- [ ] Improve remaining jacobian configuration
-- [ ] Improve callback configuration - provide simple builders/helper functions?
-- [ ] Add verbose option/logging
-- [ ] steady state velocity
-- [ ] possible FT inconsistency in AtmosSimulation defaults
-- [ ] See what else can be unified between the two constructors
-- [ ] Catalog config that is possible with get_simulation but not with AtmosSimulation
-- [ ] Add unit tests for the AtmosSimulation constructor
-=#
-
 function AtmosSimulation{FT}(;
     model = AtmosModel(),
     params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(FT),
@@ -184,7 +173,6 @@ function AtmosSimulation{FT}(;
     auto_jacobian_padding_bands = 0,
     debug_jacobian = false,
     # Misc 
-    discrete_hydrostatic_balance = false,
     checkpoint_frequency = Inf,
 ) where {FT}
     # Set up output directory and restart file detection
@@ -234,8 +222,6 @@ function AtmosSimulation{FT}(;
         Y, model, params, surface_setup, dt, start_date, tracers,
         time_varying_trace_gas_names, steady_state_velocity,
     )
-    discrete_hydrostatic_balance &&
-        set_discrete_hydrostatic_balanced_state!(Y, p)
 
     # Combine all callbacks
     discrete_callbacks = if default_callbacks
