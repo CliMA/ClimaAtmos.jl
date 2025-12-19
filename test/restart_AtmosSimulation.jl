@@ -13,7 +13,7 @@
 
 include("restart_utils.jl")
 
-function amip_target_diagedmf(context)
+function amip_target_diagedmf(context, output_dir)
     FT = Float32
     start_date = DateTime(2010, 1, 1)
 
@@ -140,7 +140,8 @@ function amip_target_diagedmf(context)
         ode_config,
         surface_setup,
         context,
-        job_id = "amip_target_diagedmf")
+        job_id = "amip_target_diagedmf",
+        output_dir)
     simulation = CA.AtmosSimulation{FT}(; args...)
 
     return (; simulation, args)
@@ -416,16 +417,16 @@ if MANYTESTS
         end
     end
 else
-    amip_output_loc = ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) : ""
-    amip_output_loc = ClimaComms.bcast(comms_ctx, amip_output_loc)
+    output_dir = ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) : ""
+    output_dir = ClimaComms.bcast(comms_ctx, output_dir)
     # Sometimes the shared filesystem doesn't work properly and the folder is
     # not synced across MPI processes. Let's add an additional check here.
-    maybe_wait_filesystem(comms_ctx, amip_output_loc)
+    maybe_wait_filesystem(comms_ctx, output_dir)
 
     push!(
         TESTING,
         (;
-            amip_target_diagedmf(comms_ctx)...,
+            amip_target_diagedmf(comms_ctx, joinpath(output_dir, "amip_target_diagedmf"))...,
             more_ignore = Symbol[],
         ),
     )
