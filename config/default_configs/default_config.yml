@@ -337,12 +337,6 @@ deep_atmosphere:
 restart_file:
   help: "Path to HDF5 file to use as simulation starting point. Note that the simulation can only be restarted in a reproducible way when `reproducible_restart` is true."
   value: ~
-prescribe_ozone:
-  help: "Prescribe time and spatially varying ozone from a file [`false` (default), `true`]"
-  value: false
-co2_model:
-  help: "What CO2 concentration to use for RRTGMP. When fixed, it is set to 397.547 parts per million. Otherwise, it is read from the MaunaLoa measuraments. [`nothing` (default), `Fixed`, `MaunaLoa`]"
-  value: ~
 detect_restart_file:
   help: "When true, try finding a restart file and use it to restart the simulation. Only works with ActiveLink."
   value: false
@@ -351,6 +345,9 @@ reproducible_restart:
   value: false
 prescribed_aerosols:
   help: "Which aerosols to add. List of keys from the data file (e.g., CB1, CB2)."
+  value: []
+time_varying_trace_gases:
+  help: "Trace gases that vary in time, e.g. [\"CO2\", \"O3\"]. Currently, only \"CO2\" and \"O3\" are supported. All other trace gases set fixed to default values from ClimaParams."
   value: []
 # TODO: remove once https://github.com/CliMA/ClimaAtmos.jl/issues/2873 is closed
 call_cloud_diagnostics_per_stage:

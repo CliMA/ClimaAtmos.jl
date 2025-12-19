@@ -1,4 +1,4 @@
-288
+291
 
 # **README**
 #
@@ -20,6 +20,17 @@
 
 
 #=
+291
+- Use grid-mean velocity in the advection of TKE
+
+290
+- Change jacobians related to the derivative of pressure with respect to density
+and fix a bug in EDMF mass flux jacobian.
+
+289
+- Merging the trace gases PR again, which does change behavior slightly as a
+result of reading values from params rather than from a file.
+
 288
 - Revert PR 4153, which changed ref_counter to 287
 

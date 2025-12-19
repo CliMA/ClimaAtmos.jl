@@ -139,7 +139,20 @@ for short names and long names where available. Standard names in the table are 
 ### Compute function
 
 The other piece of information needed to specify a `DiagnosticVariable` is a
-function `compute!`. Schematically, a `compute!` has to look like
+function `compute`. Schematically, a `compute` has to look like
+```julia
+function compute(state, cache, time)
+    return ... # Calculations with the state and the cache
+end
+```
+The function takes the `state`, `cache`, and `time` from the integrator and returns
+the value of the diagnostic variable.
+
+#### In-place computation
+
+You can alternatively provide a `compute!` function. 
+`compute!` takes a fourth argument, `out`, which is used to avoid extra memory allocations.
+
 ```julia
 function compute!(out, state, cache, time)
     if isnothing(out)
@@ -149,56 +162,32 @@ function compute!(out, state, cache, time)
     end
 end
 ```
-The first time `compute!` is called, the function has to allocate memory and
-return its output. All the subsequent times, `out` will be the pre-allocated
-area of memory, so the function has to write the new value in place.
 
-Diagnostics are implemented as callbacks functions which pass the `state`,
-`cache`, and `time` from the integrator to `compute!`.
-
-`compute!` also takes a second argument, `out`, which is used to
-avoid extra memory allocations (which hurt performance). If `out` is `nothing`,
-and new area of memory is allocated. If `out` is a `ClimaCore.Field`, the
-operation is done in-place without additional memory allocations.
+The first time `compute!` is called, `out` is `nothing`, and the function has to
+allocate memory and return its output. All the subsequent times, `out` will be
+the pre-allocated area of memory, so the function has to write the new value in
+place.
 
 If your diagnostic depends on the details of the model, we recommend using
 additional functions so that the correct one can be found through dispatching.
+The following example demonstrates this using the `compute` interface.
 For instance, if you want to compute relative humidity, which does not make
 sense for dry simulations, you should define the functions
 
 ```julia
-function compute_relative_humidity!(
-    out,
-    state,
-    cache,
-    time,
-    moisture_model::T,
-) where {T}
+function compute_relative_humidity(state, cache, time, moisture_model::T) where {T}
     error("Cannot compute relative_humidity with moisture_model = $T")
 end
 
-function compute_relative_humidity!(
-    out,
-    state,
-    cache,
-    time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    if isnothing(out)
-        return TD.relative_humidity.(thermo_params, cache.ᶜts)
-    else
-        out .= TD.relative_humidity.(thermo_params, cache.ᶜts)
-    end
+function compute_relative_humidity(
+    state, cache, time, moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    return @. lazy(TD.relative_humidity(thermo_params, cache.ᶜts))
 end
 
 compute_relative_humidity!(out, state, cache, time) =
-    compute_relative_humidity!(
-        out,
-        state,
-        cache,
-        time,
-        cache.atmos.moisture_model,
-    )
+    compute_relative_humidity!(out, state, cache, time, cache.atmos.moisture_model)
 ```
 
 This will return the correct relative humidity and throw informative errors when
@@ -209,19 +198,11 @@ were computed differently for `EquilMoistModel` and `NonEquilMoistModel`.
 In `ClimaAtmos`, we define some helper functions to produce error messages, so
 the above code can be written as
 ```julia
-function compute_relative_humidity!(
-    out,
-    state,
-    cache,
-    time,
-    ::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+function compute_relative_humidity(
+    state, cache, time, moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+)
     thermo_params = CAP.thermodynamics_params(cache.params)
-    if isnothing(out)
-        return TD.relative_humidity.(thermo_params, cache.ᶜts)
-    else
-        out .= TD.relative_humidity.(thermo_params, cache.ᶜts)
-    end
+    return @. lazy(TD.relative_humidity(thermo_params, cache.ᶜts))
 end
 
 compute_relative_humidity!(out, state, cache, time) =

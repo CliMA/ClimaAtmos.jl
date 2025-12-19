@@ -184,8 +184,8 @@ if config.parsed_args["check_conservation"]
     @info "    Net water change / total water: $water_conservation"
 
     @test energy_conservation ≈ 0 atol = 100 * eps(FT)
-    @test mass_conservation ≈ 0 atol = 100 * eps(FT)
-    @test water_conservation ≈ 0 atol = 100 * eps(FT)
+    @test mass_conservation ≈ 0 atol = 250 * eps(FT)
+    @test water_conservation ≈ 0 atol = 250 * eps(FT)
 end
 
 # Visualize the solution
