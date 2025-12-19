@@ -38,6 +38,7 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_scalar_4 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_5 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_6 = Fields.Field(FT, center_space),
+        ᶜtemp_scalar_7 = Fields.Field(FT, center_space),
         ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
         temp_field_level_2 = Fields.level(Fields.Field(FT, center_space), 1),
@@ -92,6 +93,15 @@ function temporary_quantities(Y, atmos)
                 ClimaCore.Geometry.WVector{FT},
             },
         ),
+        ᶠsed_tracer_advection = similar(
+            Y.f,
+            ClimaCore.MatrixFields.BandMatrixRow{
+                ClimaCore.Utilities.PlusHalf{Int64}(0),
+                1,
+                ClimaCore.Geometry.WVector{FT},
+            },
+        ),
+        ᶜtracer_advection_matrix = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, C3{FT}}}),
         ᶠdiagonal_matrix_ct3xct3 = similar(
             Y.f,
             DiagonalMatrixRow{
@@ -112,6 +122,7 @@ function temporary_quantities(Y, atmos)
             Y.c,
             BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
         ),
+        ᶜtridiagonal_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜdiffusion_h_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜtridiagonal_matrix_scalar = similar(Y.c, TridiagonalMatrixRow{FT}),
