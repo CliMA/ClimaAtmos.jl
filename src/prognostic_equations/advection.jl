@@ -65,17 +65,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     end
 
     if use_prognostic_tke(p.atmos.turbconv_model)
-        if p.atmos.turbconv_model isa EDOnlyEDMFX
-            ᶜu_for_tke_advection = ᶜu
-        elseif p.atmos.turbconv_model isa AbstractEDMF
-            ᶜu_for_tke_advection = p.precomputed.ᶜu⁰
-        else
-            error(
-                "Unsupported turbconv_model type for TKE advection: $(typeof(p.atmos.turbconv_model))",
-            )
-        end
-        @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu_for_tke_advection)
-
+        @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu)
     end
 
     # This is equivalent to grad_h(Φ + K) + grad_h(p) / ρ
@@ -223,36 +213,12 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; edmfx_mse_q_tot_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; energy_q_tot_upwinding, tracer_upwinding) = p.atmos.numerics
-    FT = eltype(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    ᶠu³⁰ =
-        advect_tke ?
-        (
-            turbconv_model isa EDOnlyEDMFX ? p.precomputed.ᶠu³ :
-            p.precomputed.ᶠu³⁰
-        ) : nothing
-    ᶜρa⁰ =
-        advect_tke ?
-        (
-            turbconv_model isa PrognosticEDMFX ?
-            (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
-        ) : nothing
-    ᶜρ⁰ = if advect_tke
-        if n > 0
-            (; ᶜts⁰) = p.precomputed
-            @. lazy(TD.air_density(thermo_params, ᶜts⁰))
-        else
-            Y.c.ρ
-        end
-    else
-        nothing
-    end
     ᶜtke⁰ =
         advect_tke ?
         (@. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))) :
         nothing
-    ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12
     ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
@@ -335,8 +301,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
 
     if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
-        @. ᶜa_scalar = ᶜtke⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
-        vtt = vertical_transport(ᶜρ⁰, ᶠu³⁰, ᶜa_scalar, dt, edmfx_mse_q_tot_upwinding)
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜtke⁰, dt, edmfx_mse_q_tot_upwinding)
         @. Yₜ.c.sgs⁰.ρatke += vtt
     end
 end
