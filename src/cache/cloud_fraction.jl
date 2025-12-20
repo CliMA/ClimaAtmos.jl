@@ -372,6 +372,9 @@ NVTX.@annotate function set_cloud_fraction!(
     (; params) = p
     (; turbconv_model) = p.atmos
     (; ᶜts, cloud_diagnostics_tuple) = p.precomputed
+
+    (; ᶜρʲs, ᶜtsʲs, ᶜts⁰) = p.precomputed
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     thermo_params = CAP.thermodynamics_params(params)
     FT = eltype(p.params)
 
@@ -431,6 +434,14 @@ NVTX.@annotate function set_cloud_fraction!(
     # overwrite with the ML computed cloud fraction, leaving q_liq, q_ice computed via quadrature
     p.precomputed.cloud_diagnostics_tuple.cf .= cf
 
+    # weight cloud diagnostics by environmental area
+    @. cloud_diagnostics_tuple *= NamedTuple{(:cf, :q_liq, :q_ice)}(
+        tuple(
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+        ),
+    )
 
     n = n_mass_flux_subdomains(turbconv_model)
     if n > 0

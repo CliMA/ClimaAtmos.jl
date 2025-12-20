@@ -83,8 +83,9 @@ end
 # end
 prior = cf_prior_with_nn(
     joinpath(experiment_dir, prior_path),
-    "/resnick/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/cf_calibration/prior_network_generator_indep-gauss.bson",
+    "/resnick/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/cf_calibration/prior_network_generator_hess-gauss.bson",
 )
+# prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
 ### create output directories & copy configs
 mkpath(output_dir)

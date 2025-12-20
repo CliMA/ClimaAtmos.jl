@@ -46,6 +46,7 @@ Artifacts.toml
 *.nc
 *.mp4
 *.png
+*.pdf
 *.hdf5
 *.h5
 *.g

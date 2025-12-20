@@ -37,7 +37,7 @@ dt: "30secs"
 dt_rad: "1hours"
 t_end: "72hours"
 call_cloud_diagnostics_per_stage : true
-toml: [scm_tomls/precalibrated_prognostic_edmfx.toml]
+toml: [scm_tomls/prognostic_edmfx.toml]
 # toml: [scm_tomls/prognostic_edmfx_lmix_only_v1.toml]
 
 netcdf_output_at_levels: true
