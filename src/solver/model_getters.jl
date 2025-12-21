@@ -365,16 +365,18 @@ function get_cloud_model(parsed_args, params)
     elseif cloud_model == "quadrature_sgs"
         SGSQuadratureCloud(SGSQuadrature(FT))
     elseif cloud_model == "cloud_ml"
-        nn_filename = "/Users/julianschmitt/Downloads/cloud_fraction_NN_v3" # v3 has 121 parameters
-        jld2data = JLD2.load("$(nn_filename).jld2") # give re, params,
-        re = jld2data["re"]
-        #params = jld2data["params"]
-        # Main.@infiltrate
-        param_vec = FT.(CAP.cloud_fraction_param_vec(params))
-        # add model to the cache 
-        cf_nn_model = re(param_vec)
+        nn_filepath = joinpath(
+            @clima_artifact("cloud_fraction_nn"),
+            "arch_2layers_8nodes.jld2",
+        )
+        nn_model_data = JLD2.load(nn_filepath)
+        nn_architecture = nn_model_data["re"]
+
+        nn_param_vec = FT.(CAP.cloud_fraction_param_vec(params))
+        # build the model
+        cf_nn_model = nn_architecture(nn_param_vec)
         # use quadrature for qliq, qice and nn for cloud fraction
-        CloudML(SGSQuadrature(FT), cf_nn_model)
+        CloudML_constructor(SGSQuadrature(FT), cf_nn_model)
     else
         error("Invalid cloud_model $(cloud_model)")
     end
@@ -536,7 +538,7 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
         external_forcing_file =
             get_external_monthly_forcing_file_path(parsed_args)
         # generate single file from monthly averaged diurnal data if it doesn't exist
-        # we'll use ClimaUtilities.TimeVaryingInputs downstream to repeat the data. 
+        # we'll use ClimaUtilities.TimeVaryingInputs downstream to repeat the data.
         if !isfile(external_forcing_file) ||
            !check_monthly_forcing_times(external_forcing_file, parsed_args)
             generate_external_forcing_file(

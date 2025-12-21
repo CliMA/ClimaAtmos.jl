@@ -2,6 +2,7 @@ import ClimaCore.Quadratures.GaussQuadrature as GQ
 import StaticArrays as SA
 import Thermodynamics as TD
 import Dates
+import Adapt
 
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
@@ -97,13 +98,24 @@ end
 """
     CloudML
 
-Compute the cloud fraction using a machine learning model. Continue to use 
+Compute the cloud fraction using a machine learning model. Continue to use
 quadrature sampling for sub-grid variability of q_liq, q_ice.
 """
-struct CloudML{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel 
+struct CloudML{SGQ <: AbstractSGSamplingType, M} <: AbstractCloudModel
     SG_quad::SGQ
-    model
+    model::M
 end
+
+function CloudML_constructor(SG_quad, model)
+    static_model = Adapt.adapt_structure(SA.SArray, model)
+    return CloudML{typeof(SG_quad), typeof(static_model)}(SG_quad, static_model)
+end
+
+# function Adapt.adapt_structure(to, from::CloudML{SGQ, M}) where {SGQ, M}
+#     adapted_model = Adapt.adapt_structure(SA.SArray, from.model)
+#     adapted_quad = Adapt.adapt_structure(to, from.SG_quad)
+#     return CloudML{SGQ, typeof(adapted_model)}(adapted_quad, adapted_model)
+# end
 
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
