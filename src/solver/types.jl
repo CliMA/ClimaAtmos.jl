@@ -2,7 +2,6 @@ import ClimaCore.Quadratures.GaussQuadrature as GQ
 import StaticArrays as SA
 import Thermodynamics as TD
 import Dates
-import Adapt
 
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
