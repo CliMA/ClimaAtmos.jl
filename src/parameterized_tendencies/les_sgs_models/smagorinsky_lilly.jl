@@ -9,7 +9,7 @@ import ClimaCore: Geometry
 """
     lilly_stratification_correction(p, ᶜS)
 
-Return a lazy representation of the Lilly stratification correction factor 
+Return a lazy representation of the Lilly stratification correction factor
     based on the local Richardson number.
 
 # Arguments
@@ -36,13 +36,13 @@ end
 """
     set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
-Compute the Smagorinsky-Lilly horizontal and vertical quantities needed for 
+Compute the Smagorinsky-Lilly horizontal and vertical quantities needed for
     subgrid-scale diffusive tendencies
 
-The subgrid-scale momentum flux tensor is defined by `τ = -2 νₜ ∘ S`, 
-where `νₜ` is the Smagorinsky-Lilly eddy viscosity and `S` is the strain rate tensor. 
+The subgrid-scale momentum flux tensor is defined by `τ = -2 νₜ ∘ S`,
+where `νₜ` is the Smagorinsky-Lilly eddy viscosity and `S` is the strain rate tensor.
 
-The turbulent diffusivity is defined as `D = νₜ / Pr_t`, 
+The turbulent diffusivity is defined as `D = νₜ / Pr_t`,
 where `Pr_t` is the turbulent Prandtl number for neutral stratification.
 
 This method precomputes and stores in `p.precomputed` the following quantities:
@@ -103,15 +103,15 @@ vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyLilly)
     is_smagorinsky_horizontal(model) || return nothing
     (; ᶜts, ᶜS, ᶠS, ᶜνₜ_h, ᶜD_h) = p.precomputed
-    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_scalar, ᶠtemp_scalar) = p.scratch
+    (; ᶠtemp_UVWxUVW, ᶠtemp_scalar) = p.scratch
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜρ = Y.c.ρ
     ᶠρ = @. ᶠtemp_scalar = ᶠinterp(ᶜρ)
 
     # Subgrid-scale momentum flux tensor, `τ = -2 νₜ ∘ S`
     ᶠνₜ_h = @. lazy(ᶠinterp(ᶜνₜ_h))
-    ᶜτ_smag = @. ᶜtemp_UVWxUVW = -2 * ᶜνₜ_h * ᶜS  # TODO: Lazify once we can mix lazy horizontal & vertical operations
-    ᶠτ_smag = @. ᶠtemp_UVWxUVW = -2 * ᶠνₜ_h * ᶠS
+    ᶜτ_smag = @. lazy(-2 * ᶜνₜ_h * ᶜS)
+    ᶠτ_smag = @. ᶠtemp_UVWxUVW = -2 * ᶠνₜ_h * ᶠS # TODO: Lazify once we can mix lazy horizontal & vertical operations
 
     # Apply to tendencies
     ## Horizontal momentum tendency
