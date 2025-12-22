@@ -367,8 +367,6 @@ function get_cloud_model(parsed_args, params)
         GridScaleCloud()
     elseif cloud_model == "quadrature"
         QuadratureCloud(SGSQuadrature(FT))
-    elseif cloud_model == "quadrature_sgs"
-        SGSQuadratureCloud(SGSQuadrature(FT))
     elseif cloud_model == "cloud_ml"
         nn_filepath = joinpath(
             @clima_artifact("cloud_fraction_nn"),
