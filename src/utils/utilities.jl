@@ -83,6 +83,59 @@ state.
 compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 
 """
+    compute_strain_rate_center_horizontal!(ᶜε, ᶜu)
+
+Compute the horizontal components of the strain rate tensor at cell centers from velocity
+
+This computes only the horizontal (UV x UV) block of the strain rate tensor,
+reducing memory pressure compared to [`compute_strain_rate_center_full!`](@ref).
+
+# Arguments
+ - `ᶜε`: Preallocated `UVW x UVW` tensor field for the strain rate at cell centers
+ - `ᶜu`: Velocity field at cell centers.
+
+See also [`compute_strain_rate_center_full!`](@ref) for the full calculation.
+
+# Notes:
+- This variant only computes horizontal gradients, reducing register pressure and local memory usage
+- Recommended for use when only horizontal diffusion is needed
+"""
+function compute_strain_rate_center_horizontal!(ᶜε, ᶜu)
+    # Project onto full UVW axis to keep tensor axes consistent with ᶜε
+    axis_uvw = (Geometry.UVWAxis(),)
+    @. ᶜε = Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))  # horizontal gradients only
+    @. ᶜε = (ᶜε + adjoint(ᶜε)) / 2
+    return ᶜε
+end
+
+"""
+    compute_strain_rate_face_horizontal!(ᶠε, ᶠu)
+
+Compute the horizontal components of the strain rate tensor at cell faces from velocity
+
+This computes only the horizontal (UV x UV) block of the strain rate tensor,
+reducing memory pressure compared to [`compute_strain_rate_face_full!`](@ref).
+
+# Arguments
+ - `ᶠε`: Preallocated `UVW x UVW` tensor field for the strain rate at cell faces
+ - `ᶠu`: Velocity field at cell faces.
+
+See also [`compute_strain_rate_face_full!`](@ref) for the full calculation.
+
+# Notes:
+- This variant only computes horizontal gradients, reducing register pressure and local memory usage
+- Recommended for use when only horizontal diffusion is needed
+- The calculation assumes zero vertical gradient boundary conditions at the surface
+"""
+function compute_strain_rate_face_horizontal!(ᶠε, ᶠu)
+    # Project onto full UVW axis to keep tensor axes consistent with ᶠε
+    axis_uvw = (Geometry.UVWAxis(),)
+    @. ᶠε = Geometry.project(axis_uvw, gradₕ(UVW(ᶠu)))  # horizontal gradients only
+    @. ᶠε = (ᶠε + adjoint(ᶠε)) / 2
+    return ᶠε
+end
+
+"""
     ϵ .= compute_strain_rate_center_vertical(ᶠu)
 
 Compute the strain rate at cell centers from velocity at cell faces, with vertical gradients only.
@@ -132,7 +185,7 @@ Compute the full strain rate tensor at cell centers from velocity
 See also [`compute_strain_rate_face_full!`](@ref) for the analogous calculation on cell faces.
 
 # Notes:
-- it is recommended to use `ᶠu` and `ᶜu` as computed by 
+- it is recommended to use `ᶠu` and `ᶜu` as computed by
     [`set_velocity_quantities!`](@ref) and [`set_implicit_precomputed_quantities_part1!`](@ref)
 - Because the computation involves both vertical and horizontal gradients, this
     calculation cannot be lazified (for now). It requires a pre-allocated output field.
@@ -158,7 +211,7 @@ Compute the full strain rate tensor at cell faces from velocity
 See also [`compute_strain_rate_center_full!`](@ref) for the analogous calculation on cell centers.
 
 # Notes:
-- it is recommended to use `ᶠu` and `ᶜu` as computed by 
+- it is recommended to use `ᶠu` and `ᶜu` as computed by
     [`set_velocity_quantities!`](@ref) and [`set_implicit_precomputed_quantities_part1!`](@ref)
 - Because the computation involves both vertical and horizontal gradients, this
     calculation cannot be lazified (for now). It requires a pre-allocated output field.
@@ -180,11 +233,11 @@ end
 
 Return a lazy representation of the strain rate norm `|S| = √(2 ∘ S : S)`
 
-If `axis` is provided, project the strain rate tensor `S` onto the specified axis 
-before computing the norm. 
+If `axis` is provided, project the strain rate tensor `S` onto the specified axis
+before computing the norm.
 
-For example, 
-- `axis = Geometry.UVAxis()` computes the horizontal strain rate norm, while 
+For example,
+- `axis = Geometry.UVAxis()` computes the horizontal strain rate norm, while
 - `axis = Geometry.WAxis()` computes the vertical strain rate norm.
 """
 function strain_rate_norm(S, axis = Geometry.UVWAxis())
@@ -289,7 +342,7 @@ time_to_seconds(t::Number) =
 """
     time_to_seconds(s::String)
 
-Convert a string representing a time to seconds. Supported units: seconds, minutes, hours, days, weeks as 
+Convert a string representing a time to seconds. Supported units: seconds, minutes, hours, days, weeks as
 `s`, `secs`, `m`, `mins`, `h`, `hours`, `d`, `days`, `weeks`.
 """
 function time_to_seconds(s::String)
@@ -558,7 +611,7 @@ Parse a date string into a `DateTime` object. Currently, only the following form
 - yyyymmdd-HHMM
 """
 function parse_date(date_str)
-    # Define a mapping between allowed formats and corresponding date format 
+    # Define a mapping between allowed formats and corresponding date format
     date_format_mapping = Dict(
         r"^\d{8}$" => dateformat"yyyymmdd",
         r"^\d{8}-\d{4}$" => dateformat"yyyymmdd-HHMM",

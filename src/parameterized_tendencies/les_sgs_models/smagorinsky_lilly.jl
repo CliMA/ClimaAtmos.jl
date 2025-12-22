@@ -61,9 +61,17 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
     (; ᶜtemp_scalar) = p.scratch
     c_smag = CAP.c_smag(p.params)
 
-    # Precompute 3D strain rate tensor
-    compute_strain_rate_center_full!(ᶜS, ᶜu, ᶠu)
-    compute_strain_rate_face_full!(ᶠS, ᶜu, ᶠu)
+    # Precompute strain rate tensor
+    # If only using UV components, don't do vertical terms
+    if is_smagorinsky_UVW_coupled(model)
+        compute_strain_rate_center_full!(ᶜS, ᶜu, ᶠu)
+        compute_strain_rate_face_full!(ᶠS, ᶜu, ᶠu)
+    else
+        # Horizontal-only variants take two arguments:
+        # centers use ᶜu; faces use ᶠu
+        compute_strain_rate_center_horizontal!(ᶜS, ᶜu)
+        compute_strain_rate_face_horizontal!(ᶠS, ᶠu)
+    end
 
     # filter scale
     h_space = Spaces.horizontal_space(axes(Y.c))
