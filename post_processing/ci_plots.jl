@@ -533,7 +533,7 @@ function plot_contours!(place, var; n_contours = 22, kwargs...)
 
     CairoMakie.Axis(
         place[1, 1];
-        title = var.attributes["long_name"],
+        title = parse_var_attributes(var),
         xlabel = "$dim1_name [$dim1_units]",
         ylabel = "$dim2_name [$dim2_units]",
         limits = (extrema(dim1), extrema(dim2)),
@@ -548,9 +548,17 @@ function plot_contours!(place, var; n_contours = 22, kwargs...)
 
     # Center the contour levels around either 0, the average of the data, or the
     # nearest integer that falls into the data range.
-    data_avg = mean(var.data)
+    all(isfinite, var.data) || begin
+        @warn "Variable $var_name contains only non-finite data; skipping plot."
+        return nothing
+    end
+    finite_data = filter(isfinite, var.data)
+    # data = map(v -> isnan(v) ? missing : v, var.data)
+    data_avg = mean(finite_data)
+    data_min, data_max = extrema(finite_data; init = (-Inf, Inf))
+    # data_avg_int = isnan(data_avg) ? 0 : round(Int, data_avg)
     data_avg_int = round(Int, data_avg)
-    data_min, data_max = extrema(var.data)
+
     data_mid = if data_min < 0 < data_max
         0
     elseif data_min < data_avg_int < data_max
@@ -558,7 +566,7 @@ function plot_contours!(place, var; n_contours = 22, kwargs...)
     else
         data_avg
     end
-    data_delta = maximum(value -> abs(value - data_mid), var.data)
+    data_delta = maximum(value -> abs(value - data_mid), finite_data)
 
     if data_delta == 0
         # For constant data, use a heatmap to avoid Colorbar's LineAxis error.
@@ -571,8 +579,7 @@ function plot_contours!(place, var; n_contours = 22, kwargs...)
             # Center contours around data_mid when data_delta >> |data_mid|.
             data = var.data
             label = "$var_name [$var_units]"
-            levels =
-                range(data_mid - data_delta, data_mid + data_delta, n_contours)
+            levels = range(data_mid - data_delta, data_mid + data_delta, n_contours)
         else
             # Recenter data and contours around 0 when data_delta << |data_mid|.
             data = var.data .- data_mid
@@ -1320,7 +1327,9 @@ function les_debug_plots(output_paths::Vector{<:AbstractString}; plot_profiles_k
 
     reduction = "inst"
     short_names = [
-        "hus", "clw", "cli", "hur", "cl",
+        "hus", "clw", "cli", "hur",
+        "husra", "hussn",
+        "cl",
         "wa", "ua", "va", "ke", "ta", "thetaa", "ha",
         "Dh_smag", "strainh_smag",  # smag horizontal
         "Dv_smag", "strainv_smag",  # smag vertical
@@ -1352,10 +1361,8 @@ function les_debug_plots(output_paths::Vector{<:AbstractString}; plot_profiles_k
         return nothing
     end
 
-    tmp_file = make_plots_generic(
-        output_paths,
-        vars_zt_center_edge,
-        output_name = "les_debug_zt";
+    tmp_file = make_plots_generic(output_paths, vars_zt_center_edge;
+        output_name = "les_debug_zt",
         plot_fn = plot_profiles_in_time_custom_kwargs!,
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
@@ -1364,21 +1371,19 @@ function les_debug_plots(output_paths::Vector{<:AbstractString}; plot_profiles_k
     )
     println("Saved les_debug_zt to $tmp_file")
 
-    vars_xt_center_z4_6_8km = map_comparison(simdirs, short_names) do simdir, short_name
+    vars_xt_center_zs = map_comparison(simdirs, short_names) do simdir, short_name
         var = get(simdir; short_name, reduction)
         rescale_kg_kg_to_g_kg!(var)
         [
-            slice(var, y = y_center, z = 4000),
-            slice(var, y = y_center, z = 6000),
-            slice(var, y = y_center, z = 8000),
+            slice(var, y = y_center, z =    600),
+            slice(var, y = y_center, z =  6_000),
+            slice(var, y = y_center, z = 10_000),
         ]
     end
-    vars_xt_center_z4_6_8km = vcat(vars_xt_center_z4_6_8km...)
+    vars_xt_center_zs = vcat(vars_xt_center_zs...)
 
-    tmp_file = make_plots_generic(
-        output_paths,
-        vars_xt_center_z4_6_8km,
-        output_name = "les_debug_xt";
+    tmp_file = make_plots_generic(output_paths, vars_xt_center_zs;
+        output_name = "les_debug_xt",
         plot_fn = plot_profiles_in_time_custom_kwargs!,
         MAX_NUM_COLS = 3,
         MAX_NUM_ROWS = 4,
@@ -1387,7 +1392,27 @@ function les_debug_plots(output_paths::Vector{<:AbstractString}; plot_profiles_k
     )
     println("Saved les_debug_xt to $tmp_file")
 
-    return tmp_file
+    vars_xy_zs = map_comparison(simdirs, short_names) do simdir, short_name
+        var = get(simdir; short_name, reduction)
+        rescale_kg_kg_to_g_kg!(var)
+        [
+            slice(var, t = Inf, z =    600),
+            slice(var, t = Inf, z =  6_000),
+            slice(var, t = Inf, z = 10_000),
+        ]
+    end
+    vars_xy_zs = vcat(vars_xy_zs...)
+
+    tmp_file = make_plots_generic(output_paths, vars_xy_zs;
+        output_name = "les_debug_xy",
+        plot_fn = plot_contours!,
+        MAX_NUM_COLS = 3,
+        MAX_NUM_ROWS = 4,
+        kw...,  
+    )
+    println("Saved les_debug_xy to $tmp_file")
+
+    nothing
 end
 
 function make_plots(
