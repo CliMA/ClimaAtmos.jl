@@ -285,7 +285,7 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
         topography = Val(Symbol(parsed_args["topography"]))
         FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
     elseif ogw_name == "linear"
-        LinearOrographicGravityWave(; topo_info = "linear")
+        LinearOrographicGravityWave(; topo_info = Val(:linear))
     else
         nothing
     end
