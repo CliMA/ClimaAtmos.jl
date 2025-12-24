@@ -358,6 +358,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # at the cost of water vapor.
     moisture_fixer_tendency!(Yₜ, Y, p, t, moisture_model, microphysics_model)
 
+    microphysics_limiter_tendency!(Yₜ, Y, p, t, moisture_model, microphysics_model)
+
     # NOTE: This will zero out all momentum tendencies in the EDMFX advection test,
     # where velocities do not evolve
     # DO NOT add additional velocity tendencies after this function
