@@ -18,7 +18,7 @@ Specifically, this function calculates:
 - Horizontal advection of EDMFX updraft density-area product (`ρaʲ`).
 - Horizontal advection of total energy (`ρe_tot`) using total enthalpy flux.
 - Horizontal advection of EDMFX updraft moist static energy (`mseʲ`).
-- Horizontal advection of turbulent kinetic energy (`ρatke⁰`) if used.
+- Horizontal advection of turbulent kinetic energy (`ρtke`) if used.
 - Horizontal pressure gradient, kinetic energy gradient, and geopotential gradient
   forces for horizontal momentum (`uₕ`).
 
@@ -31,7 +31,7 @@ Arguments:
 - `t`: Current simulation time (not directly used in calculations).
 
 Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMFX-related fields in
-`Yₜ.c.sgsʲs` and `Yₜ.c.sgs⁰` if applicable.
+`Yₜ.c.sgsʲs` and `Yₜ.c.ρtke` if applicable.
 """
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -65,7 +65,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     end
 
     if use_prognostic_tke(p.atmos.turbconv_model)
-        @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu)
+        @. Yₜ.c.ρtke -= wdivₕ(Y.c.ρtke * ᶜu)
     end
 
     # This is equivalent to grad_h(Φ + K) + grad_h(p) / ρ
@@ -187,7 +187,7 @@ This function handles:
   their central advection might be handled elsewhere or implicitly.
 - Vertical advection terms for horizontal and vertical momentum, differing for
   shallow and deep atmosphere approximations, incorporating Coriolis and vorticity effects.
-- Vertical advection of grid-mean TKE (`ρatke⁰`) if `use_prognostic_tke` is true.
+- Vertical advection of grid-mean TKE (`ρtke`) if `use_prognostic_tke` is true.
 
 Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
@@ -199,7 +199,7 @@ Arguments:
 - `t`: Current simulation time (not directly used in calculations).
 
 Modifies `Yₜ.c` (various tracers, `ρe_tot`, `ρq_tot`, `uₕ`), `Yₜ.f.u₃`,
-`Yₜ.f.sgsʲs` (updraft `u₃`), and `Yₜ.c.sgs⁰.ρatke` as applicable.
+`Yₜ.f.sgsʲs` (updraft `u₃`), and `Yₜ.c.ρtke` as applicable.
 """
 NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; turbconv_model, prescribed_flow) = p.atmos
@@ -215,9 +215,9 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; energy_q_tot_upwinding, tracer_upwinding) = p.atmos.numerics
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    ᶜtke⁰ =
+    ᶜtke =
         advect_tke ?
-        (@. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))) :
+        (@. lazy(specific(Y.c.ρtke, Y.c.ρ))) :
         nothing
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12
@@ -301,8 +301,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
 
     if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜtke⁰, dt, edmfx_mse_q_tot_upwinding)
-        @. Yₜ.c.sgs⁰.ρatke += vtt
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜtke, dt, edmfx_mse_q_tot_upwinding)
+        @. Yₜ.c.ρtke += vtt
     end
 end
 

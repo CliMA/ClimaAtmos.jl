@@ -194,7 +194,7 @@ function precomputed_quantities(Y, atmos)
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
-            ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
+            ρtke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             bdmr_l = similar(Y.c, BidiagonalMatrixRow{FT}),
             bdmr_r = similar(Y.c, BidiagonalMatrixRow{FT}),
             bdmr = similar(Y.c, BidiagonalMatrixRow{FT}),
@@ -209,7 +209,7 @@ function precomputed_quantities(Y, atmos)
 
     edonly_quantities =
         atmos.turbconv_model isa EDOnlyEDMFX ?
-        (; ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),) : (;)
+        (; ρtke_flux = similar(Fields.level(Y.f, half), C3{FT}),) : (;)
 
     sgs_quantities = (;
         ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
@@ -244,7 +244,7 @@ function precomputed_quantities(Y, atmos)
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶜK⁰ = similar(Y.c, FT),
-            ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
+            ρtke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             precipitation_sgs_quantities...,
             diagnostic_precipitation_sgs_quantities...,
         ) : (;)
@@ -488,7 +488,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # circular dependency will prevent us from computing the exact value of
         # ᶜK. For now, we will make the anelastic approximation ᶜρ⁰ ≈ ᶜρʲ ≈ ᶜρ.
         # add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
-        # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
+        # @. ᶜK += Y.c.ρtke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
     @. ᶜts = ts_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)

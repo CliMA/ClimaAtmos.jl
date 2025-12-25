@@ -1,4 +1,4 @@
-291
+292
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+292
+- Rename ρatke to ρtke and move it outside of sgs⁰ and fix a bug that there is no
+hyperdiffusion of TKE when using EDOnlyEDMFX.
+
 291
 - Use grid-mean velocity in the advection of TKE
 

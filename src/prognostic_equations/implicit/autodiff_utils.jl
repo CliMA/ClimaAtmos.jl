@@ -123,8 +123,8 @@ end
 # Set the derivative of sqrt(x) to iszero(x) ? zero(x) : inv(2 * sqrt(x)) in
 # order to properly handle derivatives of x * sqrt(x). Without this change, the
 # derivative of the turbulent kinetic energy dissipation tendency, which is a
-# linear function of ᶜtke⁰ * sqrt(ᶜtke⁰), evaluates to NaN at every point where
-# tke⁰ = 0. In general, this change is valid if all functions of sqrt(x) can be
+# linear function of ᶜtke * sqrt(ᶜtke), evaluates to NaN at every point where
+# tke = 0. In general, this change is valid if all functions of sqrt(x) can be
 # expanded around x = 0 with a leading term of the form c * x^p * sqrt(x), where
 # c and p are constants and p ≥ 1/2. For example, this will be the case for any
 # linear function of f(x) * sqrt(x), where f(x) has a non-constant Taylor

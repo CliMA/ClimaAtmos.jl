@@ -348,7 +348,7 @@ divergence of turbulent fluxes, which are parameterized using eddy diffusivity
 and viscosity closures.
 
 This function parameterizes these fluxes using an eddy-diffusivity/viscosity
-approach (K-theory) for the environment (sgs⁰). Tendencies are calculated for
+approach (K-theory) for the grid-mean. Tendencies are calculated for
 total energy, moisture species, momentum, and optionally TKE.
 The form is typically `- ∂/∂z(-D ∂ϕ/∂z)`, where `D` is an effective SGS eddy
 diffusivity for the quantity `ϕ`.
@@ -380,9 +380,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
     turbconv_params = CAP.turbconv_params(params)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜu, ᶜts) = p.precomputed
-    (; ρatke_flux) = p.precomputed
+    (; ρtke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
-    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
@@ -391,7 +391,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
         ᶜmixing_length_field .= ᶜmixing_length(Y, p)
         ᶜK_u = @. lazy(
-            eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field),
+            eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field),
         )
         ᶜprandtl_nvec = @. lazy(
             turbulent_prandtl_number(
@@ -418,22 +418,22 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         if use_prognostic_tke(turbconv_model)
             # Turbulent TKE transport (diffusion)
-            ᶜdivᵥ_ρatke = Operators.DivergenceF2C(
+            ᶜdivᵥ_ρtke = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
-                bottom = Operators.SetValue(ρatke_flux),
+                bottom = Operators.SetValue(ρtke_flux),
             )
             # Add flux divergence and dissipation term, relaxing TKE to zero
             # in one time step if tke < 0
-            @. Yₜ.c.sgs⁰.ρatke -=
-                ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) + ifelse(
-                    ᶜtke⁰ >= FT(0),
+            @. Yₜ.c.ρtke -=
+                ᶜdivᵥ_ρtke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke))) + ifelse(
+                    ᶜtke >= FT(0),
                     tke_dissipation(
                         turbconv_params,
-                        Y.c.sgs⁰.ρatke,
-                        ᶜtke⁰,
+                        Y.c.ρtke,
+                        ᶜtke,
                         ᶜmixing_length_field,
                     ),
-                    Y.c.sgs⁰.ρatke / dt,
+                    Y.c.ρtke / dt,
                 )
         end
 

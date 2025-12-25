@@ -499,7 +499,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
     ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
-    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
     for i in 2:Spaces.nlevels(axes(Y.c))
         ρ_level = Fields.field_values(Fields.level(Y.c.ρ, i))
@@ -660,7 +660,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     Fields.field_values(Fields.level(ᶜSᵖ_snow, i - 1))
             end
 
-            tke_prev_level = Fields.field_values(Fields.level(ᶜtke⁰, i - 1))
+            tke_prev_level = Fields.field_values(Fields.level(ᶜtke, i - 1))
 
             @. entrʲ_prev_level = entrainment(
                 thermo_params,
@@ -1337,7 +1337,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     (; ᶜu, ᶜts, ᶠu³) = p.precomputed
     (; ustar) = p.precomputed.sfc_conditions
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-    (; ρatke_flux) = p.precomputed
+    (; ρtke_flux) = p.precomputed
     turbconv_params = CAP.turbconv_params(params)
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
@@ -1364,13 +1364,13 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     ᶜstrain_rate = compute_strain_rate_center_vertical(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
-    ρatke_flux_values = Fields.field_values(ρatke_flux)
+    ρtke_flux_values = Fields.field_values(ρtke_flux)
     ρ_int_values = Fields.field_values(Fields.level(Y.c.ρ, 1))
     ustar_values = Fields.field_values(ustar)
     sfc_local_geometry_values = Fields.field_values(
         Fields.level(Fields.local_geometry_field(Y.f), half),
     )
-    @. ρatke_flux_values = surface_flux_tke(
+    @. ρtke_flux_values = surface_flux_tke(
         turbconv_params,
         ρ_int_values,
         ustar_values,

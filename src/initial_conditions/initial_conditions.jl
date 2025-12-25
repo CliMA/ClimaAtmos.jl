@@ -746,9 +746,9 @@ function overwrite_initial_conditions!(
             ) .* Y.c.ρ
     end
 
-    if hasproperty(Y.c, :sgs⁰) && hasproperty(Y.c.sgs⁰, :ρatke)
+    if hasproperty(Y.c, :ρtke)
         # NOTE: This is not the most consistent, but it is better than NaNs
-        fill!(Y.c.sgs⁰.ρatke, 0)
+        fill!(Y.c.ρtke, 0)
     end
 
     return nothing
@@ -879,9 +879,9 @@ function _overwrite_initial_conditions_from_file!(
             ) .* Y.c.ρ
     end
 
-    if hasproperty(Y.c, :sgs⁰) && hasproperty(Y.c.sgs⁰, :ρatke)
+    if hasproperty(Y.c, :ρtke)
         # NOTE: This is not the most consistent, but it is better than NaNs
-        fill!(Y.c.sgs⁰.ρatke, 0)
+        fill!(Y.c.ρtke, 0)
     end
 
     return nothing
