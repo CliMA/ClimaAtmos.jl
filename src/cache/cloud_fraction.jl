@@ -216,7 +216,7 @@ NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
     ::Union{EquilMoistModel, NonEquilMoistModel},
-    qc::QuadratureCloud,
+    qc::Union{QuadratureCloud, CloudML},
 )
     thermo_params = CAP.thermodynamics_params(p.params)
     turbconv_model = p.atmos.turbconv_model
@@ -236,6 +236,19 @@ NVTX.@annotate function set_cloud_fraction!(
             ᶜθ′θ′,
             ᶜθ′q′,
         )
+
+    if qc isa CloudML
+        # overwrite with the ML computed environmental cloud fraction, leaving q_liq, q_ice computed via quadrature
+        p.precomputed.cloud_diagnostics_tuple.cf .= set_ml_cloud_fraction(
+            Y,
+            p,
+            qc,
+            thermo_params,
+            turbconv_model,
+            ᶜts,
+        )
+    end
+
     # ... weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise) ...
     if turbconv_model isa PrognosticEDMFX
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
@@ -273,90 +286,40 @@ NVTX.@annotate function set_cloud_fraction!(
     end
 end
 
-"""
-    Diagnose horizontal covariances based on vertical gradients
-    (i.e. taking turbulence production as the only term)
-    We'll learn the weighting coefficients in the ML closure from data
-    so no need to add the diagnostic_covariance_coeff here
-"""
-# function unweighted_covariance_from_grad(mixing_length, ∇Φ, ∇Ψ)
-#     return 2 * mixing_length^2 * dot(∇Φ, ∇Ψ)
-# end
-
-"""
-    set_cloud_fraction! for machine learning based cloud fraction closure
-"""
-NVTX.@annotate function set_cloud_fraction!(
+NVTX.@annotate function set_ml_cloud_fraction(
     Y,
     p,
-    model::Union{EquilMoistModel, NonEquilMoistModel},
     cloud_ml::CloudML,
+    thermo_params,
+    turbconv_model,
+    ᶜts,
 )
-    ############ SET ENVIRONMENT QL and QI USING QUADRATURE ############
-    thermo_params = CAP.thermodynamics_params(p.params)
-    turbconv_model = p.atmos.turbconv_model
-
-    ᶜts = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜts⁰ : p.precomputed.ᶜts
-
-    # Compute covariance based on the gradients of q_tot and theta_liq_ice
-    ᶜq′q′, ᶜθ′θ′, ᶜθ′q′ = compute_covariance(Y, p, thermo_params, ᶜts)
-
-    # Compute SGS cloud fraction diagnostics based on environment quadrature points ...
-    @. p.precomputed.cloud_diagnostics_tuple =
-        compute_cloud_fraction_quadrature_diagnostics(
-            thermo_params,
-            cloud_ml.SG_quad,
-            ᶜts,
-            ᶜq′q′,
-            ᶜθ′θ′,
-            ᶜθ′q′,
-        )
-    # ... weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise) ...
-    if turbconv_model isa PrognosticEDMFX
-        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
-        @. p.precomputed.cloud_diagnostics_tuple *= NamedTuple{(:cf, :q_liq, :q_ice)}(
-            tuple(
-                draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts)),
-                draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts)),
-                draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts)),
-            ),
-        )
-    end
-
-    (; params) = p
-    # (; ᶜρʲs, ᶜtsʲs, cloud_diagnostics_tuple) = p.precomputed
-    # ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     FT = eltype(p.params)
-
-    # COMPUTE quantities needed to form pi groups 
-
-    # mixing length
     ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
-    ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-    # distance to saturation in q space
-    q_sat = TD.q_vap_saturation.(thermo_params, ᶜts)
-    Δq = @. q_sat - specific(Y.c.ρq_tot, Y.c.ρ)
-    #dqt_dz
-    ᶜ∇q =
-        dot.(
-            Geometry.WVector.(p.precomputed.ᶜgradᵥ_q_tot),
-            Ref(ClimaCore.Geometry.WVector(FT(1.0))),
-        )
-    #dθli_dz
-    ᶜ∇θ =
-        dot.(
-            Geometry.WVector.(p.precomputed.ᶜgradᵥ_θ_liq_ice),
-            Ref(ClimaCore.Geometry.WVector(FT(1.0))),
-        )
+    ᶜmixing_length_field .=
+        turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX ?
+        ᶜmixing_length(Y, p) :
+        compute_gm_mixing_length(Y, p)
+
+    # Vertical gradients of q_tot and θ_liq_ice
+    #ᶜ∇q = p.scratch.ᶜtemp_scalar_2
+    ᶜ∇q = projected_vector_data.(
+        C3,
+        p.precomputed.ᶜgradᵥ_q_tot,
+        Fields.level(Fields.local_geometry_field(Y.c)),
+    )
+    #ᶜ∇θ = p.scratch.ᶜtemp_scalar_3
+    ᶜ∇θ = projected_vector_data.(
+        C3,
+        p.precomputed.ᶜgradᵥ_θ_liq_ice,
+        Fields.level(Fields.local_geometry_field(Y.c)),
+    )
+
+    
+
     # distance to saturation in temperature space 
-    θli = p.scratch.ᶜtemp_scalar_2
-    θli .= TD.liquid_ice_pottemp.(thermo_params, ᶜts)
-    delta_θli = FT(0.1)
-    ts_plus = TD.PhaseEquil_pθq.(thermo_params, ᶜts.p, θli .+ delta_θli, ᶜts.q_tot)
-    q_sat_plus = TD.q_vap_saturation.(thermo_params, ts_plus)
-    dqsatdθli = (q_sat_plus .- q_sat) ./ delta_θli
-    Δθli = @. (q_sat - specific(Y.c.ρq_tot, Y.c.ρ)) / dqsatdθli
-    θli_sat = θli .+ Δθli
+    Δq, q_sat, Δθli, θli_sat, dqsatdθli =
+        saturation_distance(specific.(Y.c.ρq_tot, Y.c.ρ), ᶜts, thermo_params, FT(0.1))
 
     # form the pi groups 
     π_1 = Δq ./ q_sat
@@ -364,38 +327,43 @@ NVTX.@annotate function set_cloud_fraction!(
     π_3 = @. (((dqsatdθli * ᶜ∇θ - ᶜ∇q) * ᶜmixing_length_field) / q_sat)
     π_4 = @. (ᶜ∇θ * ᶜmixing_length_field) / θli_sat
 
-    function apply_cf_nn(model, π_1::FT, π_2::FT, π_3::FT, π_4::FT) where {FT}
-        return clamp((model(SA.SVector(π_1, π_2, π_3, π_4))[]), FT(0.0), FT(1.0))
-    end
-
-    cf = p.scratch.ᶜtemp_scalar_3
+    cf = p.scratch.ᶜtemp_scalar_6
     cf .= apply_cf_nn.(Ref(cloud_ml.model), π_1, π_2, π_3, π_4)
-    #Main.@infiltrate
-    # overwrite with the ML computed cloud fraction, leaving q_liq, q_ice computed via quadrature
-    p.precomputed.cloud_diagnostics_tuple.cf .= cf
+    return cf
+end
 
-    # ... and add contributions from the updrafts if using EDMF.
-    if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
-        n = n_mass_flux_subdomains(turbconv_model)
-        (; ᶜρʲs, ᶜtsʲs) = p.precomputed
-        for j in 1:n
-            ᶜρaʲ =
-                turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
-                p.precomputed.ᶜρaʲs.:($j)
+NVTX.@annotate function saturation_distance(q_v, ᶜts, thermo_params, Δθli_fd)
 
-            @. p.precomputed.cloud_diagnostics_tuple += NamedTuple{(:cf, :q_liq, :q_ice)}(
-                tuple(
-                    ifelse(
-                        TD.has_condensate(thermo_params, ᶜtsʲs.:($$j)),
-                        draft_area(ᶜρaʲ, ᶜρʲs.:($$j)),
-                        0,
-                    ),
-                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)) *
-                    TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
-                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)) *
-                    TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
-                ),
-            )
-        end
-    end
+    # Saturation state at current thermodynamic state
+    q_sat = TD.q_vap_saturation.(thermo_params, ᶜts)
+    Δq = q_sat .- q_v
+
+    # Liquid–ice potential temperature at current thermodynamic state
+    θli = TD.liquid_ice_pottemp.(thermo_params, ᶜts)
+
+    # Finite-difference derivative ∂q_sat / ∂θli
+    ts_perturbed = TD.PhaseEquil_pθq.(
+        thermo_params,
+        ᶜts.p,
+        θli .+ Δθli_fd,
+        ᶜts.q_tot,
+    )
+    q_sat_perturbed = TD.q_vap_saturation.(thermo_params, ts_perturbed)
+    dq_sat_dθli = (q_sat_perturbed .- q_sat) ./ Δθli_fd
+
+    # Newton step to saturation in θli-space
+    Δθli = Δq ./ dq_sat_dθli
+    θli_sat = θli .+ Δθli
+
+    return Δq, q_sat, Δθli, θli_sat, dq_sat_dθli
+end
+
+
+"""
+    apply_cf_nn(model, π_1, π_2, π_3, π_4)
+
+Compute the NN-based cloud fraction given non-dimensional groups.
+"""
+NVTX.@annotate function apply_cf_nn(model, π_1::FT, π_2::FT, π_3::FT, π_4::FT) where {FT}
+    return clamp((model(SA.SVector(π_1, π_2, π_3, π_4))[]), FT(0.0), FT(1.0))
 end
