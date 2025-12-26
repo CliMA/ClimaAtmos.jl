@@ -23,13 +23,8 @@ function horizontal_constant_diffusion_tendency!(
     ᶜD = @. ᶜtemp_scalar = FT(chd.D)
 
     # Total energy diffusion
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD * gradₕ(ᶜh_tot))
 
     # Tracer diffusion

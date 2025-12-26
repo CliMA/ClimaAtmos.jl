@@ -31,17 +31,12 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         )
     end
 
+    (; vertical_diffusion, smagorinsky_lilly) = p.atmos
     if p.atmos.diff_mode == Implicit()
-        vertical_diffusion_boundary_layer_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.vertical_diffusion,
-        )
+        vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, vertical_diffusion)
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+        vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, smagorinsky_lilly)
     end
-
 
     if p.atmos.sgs_entr_detr_mode == Implicit()
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)

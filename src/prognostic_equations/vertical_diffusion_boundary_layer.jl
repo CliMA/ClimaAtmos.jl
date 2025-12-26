@@ -67,82 +67,47 @@ Arguments:
 Modifies components of tendency vector `Yₜ.c` (e.g., `Yₜ.c.uₕ`, `Yₜ.c.ρe_tot`, `Yₜ.c.ρ`, and
 various tracer fields such as `Yₜ.c.ρq_tot`).
 """
-
 vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t) =
-    vertical_diffusion_boundary_layer_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        p.atmos.vertical_diffusion,
-    )
+    vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, p.atmos.vertical_diffusion)
 
-vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+vertical_diffusion_boundary_layer_tendency!(_, _, _, _, ::Nothing) = nothing
 
-function vertical_diffusion_boundary_layer_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
+function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, _,
     ::Union{VerticalDiffusion, DecayWithHeightDiffusion},
 )
-    FT = eltype(Y)
     (; vertical_diffusion) = p.atmos
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜu, ᶜp, ᶜts) = p.precomputed
+    (; ᶜu, ᶜts) = p.precomputed
+    ᶜρ = Y.c.ρ
+    ᶠρ = @. lazy(ᶠinterp(ᶜρ))  # interpolate directly, without jacobian terms
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
     ᶜK_h = p.scratch.ᶜtemp_scalar
-    if vertical_diffusion isa DecayWithHeightDiffusion
-        ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
-    elseif vertical_diffusion isa VerticalDiffusion
-        ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(
-            Y.c.uₕ,
-            ᶜp,
-            vertical_diffusion,
-        )
-    end
+    @. ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(Y.c, vertical_diffusion)
+    ᶠK_h = @. lazy(ᶠinterp(ᶜK_h))
 
     if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
-        ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
-        @. Yₜ.c.uₕ -= C12(
-            ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠstrain_rate) / Y.c.ρ,
-        ) # assumes ᶜK_u = ᶜK_h
+        ᶠstrain_rate = ᶠcompute_strain_rate_face_vertical(ᶜu)
+        @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-2 * ᶠρ * ᶠK_h * ᶠstrain_rate) / ᶜρ)  # assumes ᶜK_u = ᶜK_h
     end
 
-    ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
-        top = Operators.SetValue(C3(0)),
-        bottom = Operators.SetValue(C3(0)),
-    )
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
-    @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜh_tot)))
+    top = bottom = Operators.SetValue(C3(0))
+    ᶜdivᵥ_ρχ = Operators.DivergenceF2C(; top, bottom)
 
-    ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_2
-    ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_3
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, ᶜρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+    @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρχ(-(ᶠρ * ᶠK_h * ᶠgradᵥ(ᶜh_tot)))
 
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        if ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai))
-            @. ᶜK_h_scaled = α_vert_diff_tracer * ᶜK_h
-        else
-            @. ᶜK_h_scaled = ᶜK_h
-        end
-        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(0)),
-            bottom = Operators.SetValue(C3(0)),
-        )
-        @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρχ(
-            -(
-                ᶠinterp(Y.c.ρ) *
-                ᶠinterp(ᶜK_h_scaled) *
-                ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))
-            ),
-        )
-        @. ᶜρχₜ -= ᶜρχₜ_diffusion
+        vert_diff_tracer_names = (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai))
+        α = ifelse(ρχ_name ∈ vert_diff_tracer_names, α_vert_diff_tracer, FT(1))
+        ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
+        ᶜ∇ᵥρKₕ∇χₜ = @. lazy(α * ᶜdivᵥ_ρχ(-(ᶠρ * ᶠK_h * ᶠgradᵥ(ᶜχ))))
+        @. ᶜρχₜ -= ᶜ∇ᵥρKₕ∇χₜ
         # Only add contribution from total water diffusion to mass tendency
         # (exclude contributions from diffusion of condensate, precipitation)
         if ρχ_name == @name(ρq_tot)
-            @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
+            @. Yₜ.c.ρ -= ᶜ∇ᵥρKₕ∇χₜ
         end
     end
 end

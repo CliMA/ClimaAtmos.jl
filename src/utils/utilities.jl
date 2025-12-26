@@ -83,13 +83,13 @@ state.
 compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 
 """
-    ϵ .= compute_strain_rate_center_vertical(ᶠu)
+    ϵ .= ᶜcompute_strain_rate_center_vertical(ᶠu)
 
 Compute the strain rate at cell centers from velocity at cell faces, with vertical gradients only.
 
 Returns a lazy representation of the strain rate tensor.
 """
-function compute_strain_rate_center_vertical(ᶠu)
+function ᶜcompute_strain_rate_center_vertical(ᶠu)
     axis_uvw = Geometry.UVWAxis()
     return @. lazy(
         (
@@ -100,14 +100,14 @@ function compute_strain_rate_center_vertical(ᶠu)
 end
 
 """
-    ϵ .= compute_strain_rate_face_vertical(ᶜu::Field)
+    ϵ .= ᶠcompute_strain_rate_face_vertical(ᶜu::Field)
 
 Compute the strain rate at cell faces from velocity at cell centers, with vertical gradients only.
 
 Returns a lazy representation of the strain rate tensor.
 """
-function compute_strain_rate_face_vertical(ᶜu)
-    ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
+function ᶠcompute_strain_rate_face_vertical(ᶜu)
+    ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
     ∇bc = Operators.SetGradient(∇ᵥuvw_boundary)
     ᶠgradᵥ = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
     axis_uvw = Geometry.UVWAxis()
