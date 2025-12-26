@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 main
 -------
+- PR [#4191](https://github.com/CliMA/ClimaAtmos.jl/pull/4191) renames ρatke to ρtke and move it out of sgs⁰.
+
 - PR [#4175](https://github.com/CliMA/ClimaAtmos.jl/pull/4175) adds support for lazy diagnostics,
 as introduced in [`ClimaDiagnostics.jl`](https://github.com/CliMA/ClimaDiagnostics.jl) v0.2.13.
 

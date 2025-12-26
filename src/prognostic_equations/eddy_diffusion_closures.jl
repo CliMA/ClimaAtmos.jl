@@ -410,8 +410,8 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜdz = Fields.Δz_field(axes(Y.c))
 
-    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
-    sfc_tke = Fields.level(ᶜtke⁰, 1)
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    sfc_tke = Fields.level(ᶜtke, 1)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
     @. ᶜprandtl_nvec =
@@ -426,7 +426,7 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
             ᶜdz,
             sfc_tke,
             ᶜlinear_buoygrad,
-            ᶜtke⁰,
+            ᶜtke,
             obukhov_length,
             ᶜstrain_rate_norm,
             ᶜprandtl_nvec,

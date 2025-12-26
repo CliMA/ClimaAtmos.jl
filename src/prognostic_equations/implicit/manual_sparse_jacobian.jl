@@ -87,8 +87,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     is_in_Y(name) = MatrixFields.has_field(Y, name)
 
     ρq_tot_if_available = is_in_Y(@name(c.ρq_tot)) ? (@name(c.ρq_tot),) : ()
-    ρatke_if_available =
-        is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
+    ρtke_if_available =
+        is_in_Y(@name(c.ρtke)) ? (@name(c.ρtke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
     condensate_mass_names = (
@@ -179,11 +179,11 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         (
             MatrixFields.unrolled_map(
                 name -> (name, @name(c.ρ)) => similar(Y.c, TridiagonalRow),
-                (diffused_scalar_names..., ρatke_if_available...),
+                (diffused_scalar_names..., ρtke_if_available...),
             )...,
             MatrixFields.unrolled_map(
                 name -> (name, name) => similar(Y.c, TridiagonalRow),
-                (diffused_scalar_names..., ρatke_if_available...),
+                (diffused_scalar_names..., ρtke_if_available...),
             )...,
             (
                 is_in_Y(@name(c.ρq_tot)) ?
@@ -209,7 +209,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     elseif atmos.moisture_model isa DryModel
         MatrixFields.unrolled_map(
             name -> (name, name) => FT(-1) * I,
-            (diffused_scalar_names..., ρatke_if_available..., @name(c.uₕ)),
+            (diffused_scalar_names..., ρtke_if_available..., @name(c.uₕ)),
         )
     else
         (
@@ -229,7 +229,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 similar(Y.c, TridiagonalRow),
             MatrixFields.unrolled_map(
                 name -> (name, name) => FT(-1) * I,
-                (ρatke_if_available..., @name(c.uₕ)),
+                (ρtke_if_available..., @name(c.uₕ)),
             )...,
         )
     end
@@ -351,7 +351,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         mass_and_surface_names...,
         available_tracer_names...,
         @name(c.ρe_tot),
-        ρatke_if_available...,
+        ρtke_if_available...,
         available_sgs_scalar_names...,
     )
 
@@ -688,11 +688,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶜK_h = p.precomputed.ᶜD_v
         elseif turbconv_model isa AbstractEDMF
             (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-            ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
+            ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
             ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
             ᶜmixing_length_field .= ᶜmixing_length(Y, p)
             ᶜK_u = p.scratch.ᶜtemp_scalar_4
-            @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+            @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field)
             ᶜprandtl_nvec = @. lazy(
                 turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
             )
@@ -705,7 +705,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
         @. ᶜdiffusion_h_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
         if (
-            MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke)) ||
+            MatrixFields.has_field(Y, @name(c.ρtke)) ||
             !isnothing(p.atmos.turbconv_model) ||
             !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         )
@@ -749,46 +749,46 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 dtγ * α * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
-        if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
+        if MatrixFields.has_field(Y, @name(c.ρtke))
             turbconv_params = CAP.turbconv_params(params)
             c_d = CAP.tke_diss_coeff(turbconv_params)
             (; dt) = p
             turbconv_model = p.atmos.turbconv_model
-            ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
-            ᶜρatke⁰ = Y.c.sgs⁰.ρatke
+            ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+            ᶜρtke = Y.c.ρtke
 
             # scratch to prevent GPU Kernel parameter memory error
             ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
             ᶜmixing_length_field .= ᶜmixing_length(Y, p)
 
-            @inline tke_dissipation_rate_tendency(tke⁰, mixing_length) =
-                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / mixing_length : 1 / typeof(tke⁰)(dt)
-            @inline ∂tke_dissipation_rate_tendency_∂tke⁰(tke⁰, mixing_length) =
-                tke⁰ > 0 ? c_d / (2 * mixing_length * sqrt(tke⁰)) :
-                typeof(tke⁰)(0)
+            @inline tke_dissipation_rate_tendency(tke, mixing_length) =
+                tke >= 0 ? c_d * sqrt(tke) / mixing_length : 1 / typeof(tke)(dt)
+            @inline ∂tke_dissipation_rate_tendency_∂tke(tke, mixing_length) =
+                tke > 0 ? c_d / (2 * mixing_length * sqrt(tke)) :
+                typeof(tke)(0)
 
             ᶜdissipation_matrix_diagonal = p.scratch.ᶜtemp_scalar
             @. ᶜdissipation_matrix_diagonal =
-                ᶜρatke⁰ * ∂tke_dissipation_rate_tendency_∂tke⁰(
-                    ᶜtke⁰,
+                ᶜρtke * ∂tke_dissipation_rate_tendency_∂tke(
+                    ᶜtke,
                     ᶜmixing_length_field,
                 )
 
-            ∂ᶜρatke⁰_err_∂ᶜρ = matrix[@name(c.sgs⁰.ρatke), @name(c.ρ)]
-            ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
-                matrix[@name(c.sgs⁰.ρatke), @name(c.sgs⁰.ρatke)]
-            @. ∂ᶜρatke⁰_err_∂ᶜρ =
+            ∂ᶜρtke_err_∂ᶜρ = matrix[@name(c.ρtke), @name(c.ρ)]
+            ∂ᶜρtke_err_∂ᶜρtke =
+                matrix[@name(c.ρtke), @name(c.ρtke)]
+            @. ∂ᶜρtke_err_∂ᶜρ =
                 dtγ * (
                     DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
-                ) ⋅ DiagonalMatrixRow(ᶜtke⁰ / Y.c.ρ)
-            @. ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
+                ) ⋅ DiagonalMatrixRow(ᶜtke / Y.c.ρ)
+            @. ∂ᶜρtke_err_∂ᶜρtke =
                 dtγ * (
                     (
                         ᶜdiffusion_u_matrix -
                         DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
                     ) ⋅ DiagonalMatrixRow(1 / Y.c.ρ) - DiagonalMatrixRow(
                         tke_dissipation_rate_tendency(
-                            ᶜtke⁰,
+                            ᶜtke,
                             ᶜmixing_length_field,
                         ),
                     )
