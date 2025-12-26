@@ -1,4 +1,4 @@
-import ClimaCore.MatrixFields: @name
+import ClimaCore.MatrixFields: @name, get_field
 import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
 
 """
@@ -86,8 +86,7 @@ gs_tracer_names(Y) =
 `Tuple` of the specific tracer names `@name(χ)` that correspond to the
 density-weighted tracer names `@name(ρχ)` in `gs_tracer_names(Y)`.
 """
-specific_gs_tracer_names(Y) =
-    unrolled_map(specific_tracer_name, gs_tracer_names(Y))
+specific_gs_tracer_names(Y) = unrolled_map(specific_tracer_name, gs_tracer_names(Y))
 
 """
     ᶜempty(Y)
@@ -112,6 +111,17 @@ function ᶜgs_tracers(Y)
 end
 
 """
+    ᶜspecific_gs_tracer(Y, χ_name)
+
+Lazy center `Field` of the specific tracer `χ` that corresponds to the
+grid-scale tracer `ρχ` given by `χ_name`.
+"""
+function ᶜspecific_gs_tracer(Y, χ_name)
+    ρχ = MatrixFields.get_field(Y.c, get_ρχ_name(χ_name))
+    @. lazy(specific(ρχ, Y.c.ρ))
+end
+
+"""
     ᶜspecific_gs_tracers(Y)
 
 Lazy center `Field` of `NamedTuple`s that contain the values of all specific
@@ -119,14 +129,70 @@ grid-scale tracers given by `specific_gs_tracer_names(Y)`.
 """
 function ᶜspecific_gs_tracers(Y)
     isempty(gs_tracer_names(Y)) && return ᶜempty(Y)
-    χ_symbols =
-        unrolled_map(MatrixFields.extract_first, specific_gs_tracer_names(Y))
+    χ_symbols = unrolled_map(MatrixFields.extract_first, specific_gs_tracer_names(Y))
     χ_fields = unrolled_map(gs_tracer_names(Y)) do ρχ_name
-        ρχ_field = MatrixFields.get_field(Y.c, ρχ_name)
-        @. lazy(specific(ρχ_field, Y.c.ρ))
+        ᶜspecific_gs_tracer(Y, specific_tracer_name(ρχ_name))
     end
     return @. lazy(NamedTuple{χ_symbols}(tuple(χ_fields...)))
 end
+
+"""
+    get_ᶜwᵪ_name_from_qᵪ_name(qᵪ_name)
+
+Returns the name of the center `Field` `ᶜwᵪ` that corresponds to the 
+grid-scale tracer `qᵪ_name`:
+- `q_liq` -> `ᶜwₗ`
+- `q_ice` -> `ᶜwᵢ`
+- `q_rai` -> `ᶜwᵣ`
+- `q_sno` -> `ᶜwₛ`
+- otherwise `@name()`
+
+# Examples
+
+```julia-repl
+julia> get_ᶜwᵪ_name_from_qᵪ_name(@name(q_liq))
+@name(ᶜwₗ)
+```
+
+See also [`get_ᶜwₙᵪ_name_from_qᵪ_name`](@ref)
+"""
+get_ᶜwᵪ_name_from_qᵪ_name(qᵪ_name) =
+    qᵪ_name == @name(q_liq) ? @name(ᶜwₗ) :
+    qᵪ_name == @name(q_ice) ? @name(ᶜwᵢ) :
+    qᵪ_name == @name(q_rai) ? @name(ᶜwᵣ) :
+    qᵪ_name == @name(q_sno) ? @name(ᶜwₛ) : @name()
+
+"""
+    get_ᶜwₙᵪ_name_from_qᵪ_name(qᵪ_name)
+
+Returns the name of the center `Field` `ᶜwₙᵪ` that corresponds to the 
+grid-scale tracer `qᵪ_name`:
+- `q_liq` -> `ᶜwₙₗ`
+- `q_rai` -> `ᶜwₙᵣ`
+- otherwise `@name()`
+
+See also [`get_ᶜwᵪ_name_from_qᵪ_name`](@ref)
+"""
+get_ᶜwₙᵪ_name_from_qᵪ_name(qᵪ_name) =
+    qᵪ_name == @name(q_liq) ? @name(ᶜwₙₗ) :
+    qᵪ_name == @name(q_rai) ? @name(ᶜwₙᵣ) : @name()
+
+"""
+    get_nᵪ_name_from_qᵪ_name(qᵪ_name)
+
+Returns the `nᵪ_name` that corresponds to the 
+grid-scale tracer `qᵪ_name`:
+- `q_liq` -> `n_liq`
+- `q_rai` -> `n_rai`
+- otherwise `@name()`
+"""
+get_nᵪ_name_from_qᵪ_name(qᵪ_name) =
+    qᵪ_name == @name(q_liq) ? @name(n_liq) :
+    qᵪ_name == @name(q_rai) ? @name(n_rai) : @name()
+
+get_ρnᵪ_name_from_qᵪ_name(qᵪ_name) =
+    qᵪ_name == @name(q_liq) ? @name(ρn_liq) :
+    qᵪ_name == @name(q_rai) ? @name(ρn_rai) : @name()
 
 """
     foreach_gs_tracer(f, Y_or_similar_values...)
@@ -242,10 +308,10 @@ Arguments:
 - `f`: A function to apply to each element of `sgsʲs`.
 - `sgsʲs`: An iterator over the draft subdomain states.
 """
-draft_sum(f, sgsʲs) = unrolled_sum(f, sgsʲs)
+draft_sum(f, sgsʲs...) = unrolled_mapreduce(f, +, sgsʲs...)
 
 """
-    ᶜenv_value(grid_scale_value, f_draft, gs, turbconv_model)
+    ᶜenv_value(grid_scale_value, f_draft, gs)
 
 Computes the value of a quantity `ρaχ` in the environment subdomain by subtracting
 the sum of its values in all draft subdomains from the grid-scale value. Available
@@ -261,8 +327,9 @@ The function handles both PrognosticEDMFX and DiagnosticEDMFX models:
 Arguments:
 - `grid_scale_value`: The `ρa`-weighted grid-scale value of the quantity.
 - `f_draft`: A function that extracts the corresponding value from a draft subdomain state.
-- `gs`: The grid-scale iteration object, which contains the draft subdomain states `gs.sgsʲs` (for PrognosticEDMFX) from the state `Y.c`, or `ᶜρaʲs` in the cache for DiagnosticEDMFX.
-- `turbconv_model`: The turbulence convection model, used to determine how to access draft data.
+- `gs`: The grid-scale iteration object, which contains the draft subdomain states 
+    - `gs.sgsʲs` (for PrognosticEDMFX) from the state `Y.c`, or
+    - `ᶜρaʲs` in the cache for DiagnosticEDMFX.
 """
 function ᶜenv_value(grid_scale_value, f_draft, gs)
     return @. lazy(grid_scale_value - draft_sum(f_draft, gs))
@@ -294,41 +361,42 @@ Arguments:
 Returns:
 - The specific value of the quantity `χ` in the environment.
 """
-function ᶜspecific_env_value(χ_name, Y, p)
-    turbconv_model = p.atmos.turbconv_model
+ᶜspecific_env_value(χ_name, Y, p) = 
+    @. lazy(specific_env_value((χ_name,), Y.c, p.atmos.turbconv_model))
 
+"""
+    specific_env_value(χ_name, Yc, turbconv_model)
+
+Pointwise version of [`ᶜspecific_env_value`](@ref).
+
+# Arguments
+- `χ_name`: A tracer name, e.g. `@name(q_liq)`
+- `Yc`: The grid-scale center state
+- `turbconv_model`: The turbulence convection model
+
+# Returns
+- The specific value of the quantity `χ` in the environment.
+"""
+function specific_env_value(χ_name, Yc, turbconv_model::PrognosticEDMFX)
     # Grid-scale density-weighted variable name, e.g., ρq_tot
     ρχ_name = get_ρχ_name(χ_name)
-
-    ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-
+    ρχ = MatrixFields.get_field(Yc, ρχ_name)
     # environment density-area-weighted mse (`ρa⁰χ⁰`).
     # Numerator: ρa⁰χ⁰ = ρχ - (Σ ρaʲ * χʲ)
-    if turbconv_model isa PrognosticEDMFX
-        #Numerator: ρa⁰χ⁰ = ρχ - (Σ sgsʲ.ρa * sgsʲ.χ)
-
-        ᶜρaχ⁰ = ᶜenv_value(
-            ᶜρχ,
-            sgsʲ ->
-                MatrixFields.get_field(sgsʲ, @name(ρa)) *
-                MatrixFields.get_field(sgsʲ, χ_name),
-            Y.c.sgsʲs,
-        )
-        # Denominator: ρa⁰ = ρ - Σ ρaʲ
-        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-
-    elseif turbconv_model isa DiagnosticEDMFX || turbconv_model isa EDOnlyEDMFX
-        error("Not implemented. You should use grid mean values.")
-    end
-
-    return @. lazy(specific(
-        ᶜρaχ⁰,                      # ρaχ for environment
-        ᶜρa⁰,                   # ρa for environment
-        ᶜρχ,               # Fallback ρχ is the grid-mean value
-        Y.c.ρ,                      # Fallback ρ is the grid-mean value
-        turbconv_model,
-    ))
+    ρaχʲ(sgsʲ) = get_field(sgsʲ, @name(ρa)) * get_field(sgsʲ, χ_name)
+    ρaχ⁰ = env_value(ρχ, ρaχʲ, Yc.sgsʲs)
+    # Denominator: ρa⁰ = ρ - Σ ρaʲ
+    ρa⁰_val = ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+    return specific(
+        ρaχ⁰,           # ρaχ for environment
+        ρa⁰_val,        # ρa for environment
+        ρχ,             # Fallback ρχ is the grid-mean value
+        Yc.ρ,           # Fallback ρ is the grid-mean value
+        turbconv_model  # Turbulence convection model
+    )
 end
+specific_env_value(_, _, ::Union{DiagnosticEDMFX, EDOnlyEDMFX}) = 
+    error("Not implemented. You should use grid mean values.")
 
 """
     get_ρχ_name(χ_name::FieldName)
@@ -369,6 +437,12 @@ The function operates recursively on hierarchical field names:
   to its specific form.
 - If `ρχ_name` has internal structure (e.g. a composite name), the function 
   recurses into the child names and applies the transformation at the lowest level.
+
+# Examples
+```julia-repl
+julia> get_χʲ_name_from_ρχ_name(@name(ρq_tot))
+@name(sgsʲs.:(1).q_tot)
+```
 """
 function get_χʲ_name_from_ρχ_name(ρχ_name)
     parent_name = MatrixFields.FieldName(MatrixFields.extract_first(ρχ_name))
@@ -388,30 +462,39 @@ end
 
 Computes the environment area-weighted density (`ρa⁰`).
 
-This function calculates the environment area-weighted density by subtracting the sum of all draft subdomain area-weighted densities (`ρaʲ`) from the grid-mean density (`ρ`), following the domain decomposition principle (`GridMean = Environment + Sum(Drafts)`).
+This function calculates the environment area-weighted density
+by subtracting the sum of all draft subdomain area-weighted densities (`ρaʲ`)
+from the grid-mean density (`ρ`), following the domain decomposition principle
+(`GridMean = Environment + Sum(Drafts)`).
 
 Arguments:
 - `ρ`: Grid-mean density.
 - `sgsʲs`: Iterable of draft subdomain quantities.
     - For `PrognosticEDMFX`: typically `Y.c.sgsʲs`
     - For `DiagnosticEDMFX`: typically `p.precomputed.ᶜρaʲs`
-- `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`, or others).
+- `turbconv_model`: The turbulence convection model 
+    (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`, or others).
 
 Returns:
 - The area-weighted density of the environment (`ρa⁰`).
 """
+ρa⁰(ρ, sgsʲs, ::PrognosticEDMFX) = env_value(ρ, sgsʲ -> sgsʲ.ρa, sgsʲs)  # ρ - Σ ρaʲ
+ρa⁰(ρ, sgsʲs, ::DiagnosticEDMFX) = env_value(ρ, ᶜρaʲ -> ᶜρaʲ, sgsʲs)     # ρ - Σ ρaʲ
+ρa⁰(ρ, _, _) = ρ
 
-function ρa⁰(ρ, sgsʲs, turbconv_model)
-    # ρ - Σ ρaʲ
-    if turbconv_model isa PrognosticEDMFX
-        return env_value(ρ, sgsʲ -> sgsʲ.ρa, sgsʲs)
+"""
+    ρaʲ(sgsʲ, turbconv_model)
 
-    elseif turbconv_model isa DiagnosticEDMFX
-        return env_value(ρ, ᶜρaʲ -> ᶜρaʲ, sgsʲs)
-    else
-        return ρ
-    end
-end
+Returns the subdomain density from the subdomain density container.
+
+# Examples
+```julia
+ᶜsgs_ρaʲs = turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs : p.precomputed.ᶜρaʲs
+draft_sum = draft_sum(ρaʲ, ᶜsgs_ρaʲs)
+```
+"""
+ρaʲ(sgsʲ, ::PrognosticEDMFX) = sgsʲ.ρa
+ρaʲ(ᶜρaʲ, ::DiagnosticEDMFX) = ᶜρaʲ
 
 """
     ᶜspecific_env_mse(Y, p)

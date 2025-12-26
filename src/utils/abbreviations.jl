@@ -13,6 +13,7 @@ const CT12 = Geometry.Contravariant12Vector
 const CT3 = Geometry.Contravariant3Vector
 const CT123 = Geometry.Contravariant123Vector
 const UVW = Geometry.UVWVector
+const WVec = Geometry.WVector
 
 const divₕ = Operators.Divergence()
 const wdivₕ = Operators.WeakDivergence()
