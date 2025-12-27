@@ -379,7 +379,7 @@ function get_cloud_model(parsed_args, params)
         # build the model
         cf_nn_model = nn_architecture(nn_param_vec)
         # use quadrature for qliq, qice and nn for cloud fraction
-        CloudML_constructor(SGSQuadrature(FT), cf_nn_model)
+        MLCloud_constructor(SGSQuadrature(FT), cf_nn_model)
     else
         error("Invalid cloud_model $(cloud_model)")
     end

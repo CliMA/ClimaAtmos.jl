@@ -84,26 +84,20 @@ end
 
 
 """
-    CloudML
+    MLCloud
 
 Compute the cloud fraction using a machine learning model. Continue to use
 quadrature sampling for sub-grid variability of q_liq, q_ice.
 """
-struct CloudML{SGQ <: AbstractSGSamplingType, M} <: AbstractCloudModel
+struct MLCloud{SGQ <: AbstractSGSamplingType, M} <: AbstractCloudModel
     SG_quad::SGQ
     model::M
 end
 
-function CloudML_constructor(SG_quad, model)
+function MLCloud_constructor(SG_quad, model)
     static_model = Adapt.adapt_structure(SA.SArray, model)
-    return CloudML{typeof(SG_quad), typeof(static_model)}(SG_quad, static_model)
+    return MLCloud{typeof(SG_quad), typeof(static_model)}(SG_quad, static_model)
 end
-
-# function Adapt.adapt_structure(to, from::CloudML{SGQ, M}) where {SGQ, M}
-#     adapted_model = Adapt.adapt_structure(SA.SArray, from.model)
-#     adapted_quad = Adapt.adapt_structure(to, from.SG_quad)
-#     return CloudML{SGQ, typeof(adapted_model)}(adapted_quad, adapted_model)
-# end
 
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
