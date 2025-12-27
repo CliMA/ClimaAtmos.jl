@@ -286,7 +286,7 @@ NVTX.@annotate function set_cloud_fraction!(
     end
 end
 
-NVTX.@annotate function set_ml_cloud_fraction(
+function set_ml_cloud_fraction(
     Y,
     p,
     cloud_ml::CloudML,
@@ -341,7 +341,7 @@ NVTX.@annotate function set_ml_cloud_fraction(
     return cf
 end
 
-NVTX.@annotate function saturation_distance(q_v, q_sat, ᶜts, θli, thermo_params, Δθli_fd)
+function saturation_distance(q_v, q_sat, ᶜts, θli, thermo_params, Δθli_fd)
 
     # Perturbed thermodynamic states for finite-difference
     ts_perturbed = TD.PhaseEquil_pθq.(
@@ -368,6 +368,6 @@ end
 
 Compute the NN-based cloud fraction given non-dimensional groups.
 """
-NVTX.@annotate function apply_cf_nn(model, π_1::FT, π_2::FT, π_3::FT, π_4::FT) where {FT}
+function apply_cf_nn(model, π_1::FT, π_2::FT, π_3::FT, π_4::FT) where {FT}
     return clamp((model(SA.SVector(π_1, π_2, π_3, π_4))[]), FT(0.0), FT(1.0))
 end
