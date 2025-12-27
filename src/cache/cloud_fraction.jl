@@ -302,27 +302,36 @@ NVTX.@annotate function set_ml_cloud_fraction(
         compute_gm_mixing_length(Y, p)
 
     # Vertical gradients of q_tot and θ_liq_ice
-    #ᶜ∇q = p.scratch.ᶜtemp_scalar_2
-    ᶜ∇q = projected_vector_data.(
-        C3,
-        p.precomputed.ᶜgradᵥ_q_tot,
-        Fields.level(Fields.local_geometry_field(Y.c)),
-    )
-    #ᶜ∇θ = p.scratch.ᶜtemp_scalar_3
-    ᶜ∇θ = projected_vector_data.(
-        C3,
-        p.precomputed.ᶜgradᵥ_θ_liq_ice,
-        Fields.level(Fields.local_geometry_field(Y.c)),
-    )
+    ᶜ∇q = p.scratch.ᶜtemp_scalar_2
+    ᶜ∇q .=
+        projected_vector_data.(
+            C3,
+            p.precomputed.ᶜgradᵥ_q_tot,
+            Fields.level(Fields.local_geometry_field(Y.c)),
+        )
+    ᶜ∇θ = p.scratch.ᶜtemp_scalar_3
+    ᶜ∇θ .=
+        projected_vector_data.(
+            C3,
+            p.precomputed.ᶜgradᵥ_θ_liq_ice,
+            Fields.level(Fields.local_geometry_field(Y.c)),
+        )
 
-    
+    q_v = p.scratch.ᶜtemp_scalar_4
+    q_v .= specific.(Y.c.ρq_tot, Y.c.ρ)
+    # Saturation state at current thermodynamic state
+    q_sat = p.scratch.ᶜtemp_scalar_5
+    q_sat .= TD.q_vap_saturation.(thermo_params, ᶜts)
+
+    # Liquid–ice potential temperature at current thermodynamic state
+    θli = TD.liquid_ice_pottemp.(thermo_params, ᶜts)
 
     # distance to saturation in temperature space 
-    Δq, q_sat, Δθli, θli_sat, dqsatdθli =
-        saturation_distance(specific.(Y.c.ρq_tot, Y.c.ρ), ᶜts, thermo_params, FT(0.1))
+    Δθli, θli_sat, dqsatdθli =
+        saturation_distance(q_v, q_sat, ᶜts, θli, thermo_params, FT(0.1))
 
     # form the pi groups 
-    π_1 = Δq ./ q_sat
+    π_1 = (q_sat .- q_v) ./ q_sat
     π_2 = Δθli ./ θli_sat
     π_3 = @. (((dqsatdθli * ᶜ∇θ - ᶜ∇q) * ᶜmixing_length_field) / q_sat)
     π_4 = @. (ᶜ∇θ * ᶜmixing_length_field) / θli_sat
@@ -332,16 +341,9 @@ NVTX.@annotate function set_ml_cloud_fraction(
     return cf
 end
 
-NVTX.@annotate function saturation_distance(q_v, ᶜts, thermo_params, Δθli_fd)
+NVTX.@annotate function saturation_distance(q_v, q_sat, ᶜts, θli, thermo_params, Δθli_fd)
 
-    # Saturation state at current thermodynamic state
-    q_sat = TD.q_vap_saturation.(thermo_params, ᶜts)
-    Δq = q_sat .- q_v
-
-    # Liquid–ice potential temperature at current thermodynamic state
-    θli = TD.liquid_ice_pottemp.(thermo_params, ᶜts)
-
-    # Finite-difference derivative ∂q_sat / ∂θli
+    # Perturbed thermodynamic states for finite-difference
     ts_perturbed = TD.PhaseEquil_pθq.(
         thermo_params,
         ᶜts.p,
@@ -349,13 +351,15 @@ NVTX.@annotate function saturation_distance(q_v, ᶜts, thermo_params, Δθli_fd
         ᶜts.q_tot,
     )
     q_sat_perturbed = TD.q_vap_saturation.(thermo_params, ts_perturbed)
+
+    # Finite-difference derivative ∂q_sat / ∂θli
     dq_sat_dθli = (q_sat_perturbed .- q_sat) ./ Δθli_fd
 
-    # Newton step to saturation in θli-space
-    Δθli = Δq ./ dq_sat_dθli
+    # Newton step to saturation distance in θli-space
+    Δθli = (q_sat .- q_v) ./ dq_sat_dθli
     θli_sat = θli .+ Δθli
 
-    return Δq, q_sat, Δθli, θli_sat, dq_sat_dθli
+    return Δθli, θli_sat, dq_sat_dθli
 end
 
 

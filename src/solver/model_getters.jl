@@ -367,10 +367,10 @@ function get_cloud_model(parsed_args, params)
         GridScaleCloud()
     elseif cloud_model == "quadrature"
         QuadratureCloud(SGSQuadrature(FT))
-    elseif cloud_model == "cloud_ml"
+    elseif cloud_model == "Schmitt2026ML"
         nn_filepath = joinpath(
             @clima_artifact("cloud_fraction_nn"),
-            "arch_2layers_8nodes.jld2",
+            parsed_args["cloud_nn_architecture"],
         )
         nn_model_data = JLD2.load(nn_filepath)
         nn_architecture = nn_model_data["re"]
