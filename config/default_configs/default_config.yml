@@ -230,8 +230,11 @@ precip_model:
   help: "Precipitation model [`nothing` (default), `0M`, `1M`]"
   value: ~
 cloud_model:
-  help: "Cloud model [`grid_scale`, `quadrature` (default)]"
+  help: "Cloud model [`grid_scale`, `quadrature` (default), `MLCloud`]"
   value: "quadrature"
+cloud_nn_architecture:
+  help: "Cloud neural network architecture to use when `cloud_model` is set to `MLCloud` [`arch_2layers_8nodes.jld2` (default), etc.]"
+  value: "arch_2layers_8nodes.jld2"
 implicit_noneq_cloud_formation:
   help: "Whether to treat the nonequilibrium cloud condensate tendency implicitly [`true`, `false` (default)]"
   value: false
