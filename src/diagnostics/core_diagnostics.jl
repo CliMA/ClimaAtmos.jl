@@ -459,13 +459,26 @@ function compute_clw!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    moisture_model::EquilMoistModel,
+)
     if isnothing(out)
         return copy(cache.precomputed.cloud_diagnostics_tuple.q_liq)
     else
         out .= cache.precomputed.cloud_diagnostics_tuple.q_liq
+    end
+end
+
+function compute_clw!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+)
+    if isnothing(out)
+        return state.c.ρq_liq ./ state.c.ρ
+    else
+        out .= state.c.ρq_liq ./ state.c.ρ
     end
 end
 
@@ -495,13 +508,26 @@ function compute_cli!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    moisture_model::EquilMoistModel,
+)
     if isnothing(out)
         return copy(cache.precomputed.cloud_diagnostics_tuple.q_ice)
     else
         out .= cache.precomputed.cloud_diagnostics_tuple.q_ice
+    end
+end
+
+function compute_cli!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+)
+    if isnothing(out)
+        return state.c.ρq_ice ./ state.c.ρ
+    else
+        out .= state.c.ρq_ice ./ state.c.ρ
     end
 end
 
@@ -1136,8 +1162,8 @@ function compute_clwvi!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    moisture_model::EquilMoistModel,
+)
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         clw = cache.scratch.ᶜtemp_scalar
@@ -1155,6 +1181,26 @@ function compute_clwvi!(
                 cache.precomputed.cloud_diagnostics_tuple.q_liq +
                 cache.precomputed.cloud_diagnostics_tuple.q_ice
             )
+        Operators.column_integral_definite!(out, clw)
+    end
+end
+
+function compute_clwvi!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+)
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        clw = cache.scratch.ᶜtemp_scalar
+        @. clw = state.c.ρq_liq + state.c.ρq_ice
+        Operators.column_integral_definite!(out, clw)
+        return out
+    else
+        clw = cache.scratch.ᶜtemp_scalar
+        @. clw = state.c.ρq_liq + state.c.ρq_ice
         Operators.column_integral_definite!(out, clw)
     end
 end
@@ -1184,8 +1230,8 @@ function compute_lwp!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    moisture_model::EquilMoistModel,
+)
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         lw = cache.scratch.ᶜtemp_scalar
@@ -1195,6 +1241,26 @@ function compute_lwp!(
     else
         lw = cache.scratch.ᶜtemp_scalar
         @. lw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+        Operators.column_integral_definite!(out, lw)
+    end
+end
+
+function compute_lwp!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+)
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        lw = cache.scratch.ᶜtemp_scalar
+        @. lw = state.c.ρq_liq
+        Operators.column_integral_definite!(out, lw)
+        return out
+    else
+        lw = cache.scratch.ᶜtemp_scalar
+        @. lw = state.c.ρq_liq
         Operators.column_integral_definite!(out, lw)
     end
 end
