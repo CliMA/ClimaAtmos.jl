@@ -298,13 +298,9 @@ function get_initial_condition(parsed_args, atmos)
             parsed_args["perturb_initstate"],
         )
     elseif parsed_args["initial_condition"] in [
-        "Nieuwstadt",
         "GABLS",
-        "GATE_III",
         "Soares",
         "Bomex",
-        "LifeCycleTan2018",
-        "ARM_SGP",
         "DYCOMS_RF01",
         "DYCOMS_RF02",
         "Rico",

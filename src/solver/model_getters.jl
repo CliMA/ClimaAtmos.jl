@@ -418,8 +418,6 @@ function get_subsidence_model(parsed_args, radiation_mode, FT)
 
     prof = if subsidence == "Bomex"
         APL.Bomex_subsidence(FT)
-    elseif subsidence == "LifeCycleTan2018"
-        APL.LifeCycleTan2018_subsidence(FT)
     elseif subsidence == "Rico"
         APL.Rico_subsidence(FT)
     elseif subsidence == "DYCOMS"
@@ -441,33 +439,16 @@ function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
 
     (prof_dTdt₀, prof_dqtdt₀) = if ls_adv == "Bomex"
         (APL.Bomex_dTdt(FT), APL.Bomex_dqtdt(FT))
-    elseif ls_adv == "LifeCycleTan2018"
-        (APL.LifeCycleTan2018_dTdt(FT), APL.LifeCycleTan2018_dqtdt(FT))
     elseif ls_adv == "Rico"
         (APL.Rico_dTdt(FT), APL.Rico_dqtdt(FT))
-    elseif ls_adv == "ARM_SGP"
-        (APL.ARM_SGP_dTdt(FT), APL.ARM_SGP_dqtdt(FT))
-    elseif ls_adv == "GATE_III"
-        (APL.GATE_III_dTdt(FT), APL.GATE_III_dqtdt(FT))
     else
         error("Uncaught case")
     end
     # See https://clima.github.io/AtmosphericProfilesLibrary.jl/dev/
     # for which functions accept which arguments.
-    prof_dqtdt = if ls_adv in ("Bomex", "LifeCycleTan2018", "Rico", "GATE_III")
-        (thermo_params, ᶜts, t, z) -> prof_dqtdt₀(z)
-    elseif ls_adv == "ARM_SGP"
-        (thermo_params, ᶜts, t, z) ->
-            prof_dqtdt₀(TD.exner(thermo_params, ᶜts), t, z)
-    end
-    prof_dTdt = if ls_adv in ("Bomex", "LifeCycleTan2018", "Rico")
-        (thermo_params, ᶜts, t, z) ->
-            prof_dTdt₀(TD.exner(thermo_params, ᶜts), z)
-    elseif ls_adv == "ARM_SGP"
-        (thermo_params, ᶜts, t, z) -> prof_dTdt₀(t, z)
-    elseif ls_adv == "GATE_III"
-        (thermo_params, ᶜts, t, z) -> prof_dTdt₀(z)
-    end
+    prof_dqtdt = (thermo_params, ᶜts, t, z) -> prof_dqtdt₀(z)
+    prof_dTdt = (thermo_params, ᶜts, t, z) ->
+        prof_dTdt₀(TD.exner(thermo_params, ᶜts), z)
 
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
@@ -554,12 +535,8 @@ function get_scm_coriolis(parsed_args, ::Type{FT}) where {FT}
     scm_coriolis == nothing && return nothing
     (prof_u, prof_v) = if scm_coriolis == "Bomex"
         (APL.Bomex_geostrophic_u(FT), z -> FT(0))
-    elseif scm_coriolis == "LifeCycleTan2018"
-        (APL.LifeCycleTan2018_geostrophic_u(FT), z -> FT(0))
     elseif scm_coriolis == "Rico"
         (APL.Rico_geostrophic_ug(FT), APL.Rico_geostrophic_vg(FT))
-    elseif scm_coriolis == "ARM_SGP"
-        (z -> FT(10), z -> FT(0))
     elseif scm_coriolis == "DYCOMS_RF01"
         (z -> FT(7), z -> FT(-5.5))
     elseif scm_coriolis == "DYCOMS_RF02"
@@ -572,9 +549,7 @@ function get_scm_coriolis(parsed_args, ::Type{FT}) where {FT}
 
     coriolis_params = Dict()
     coriolis_params["Bomex"] = FT(0.376e-4)
-    coriolis_params["LifeCycleTan2018"] = FT(0.376e-4)
     coriolis_params["Rico"] = FT(4.5e-5)
-    coriolis_params["ARM_SGP"] = FT(8.5e-5)
     coriolis_params["DYCOMS_RF01"] = FT(0) # TODO: check this
     coriolis_params["DYCOMS_RF02"] = FT(0) # TODO: check this
     coriolis_params["GABLS"] = FT(1.39e-4)
