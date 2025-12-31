@@ -424,8 +424,9 @@ function calc_nonpropagating_forcing!(
                 return (z_face, ᶠz_pbl_itr, phase_acc, true)
             end
         end
-        # Always return the accumulator tuple
-        return (z_ref_acc, ᶠz_pbl_acc, phase_acc, false)
+        # Always return the accumulator tuple, tracking current height
+        # If phase never exceeds π, z_ref will end up at model top
+        return (z_face, ᶠz_pbl_itr, phase_acc, false)
     end
 
     eps_val = eps(FT)
@@ -461,7 +462,7 @@ function calc_nonpropagating_forcing!(
     end
 
     if any(isnan, parent(ᶜwtsum)) || any(x -> x == 0, parent(ᶜwtsum))
-        @warn "wtsum contains invalid values!"
+        error("wtsum contains invalid values - this should not happen after z_ref fallback fix")
     end
 
     # compute drag
