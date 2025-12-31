@@ -1,4 +1,4 @@
-t_end: "360days"
+t_end: "60days"
 dt_save_state_to_disk: "10days"
 moist: "nonequil"
 rad: "allskywithclear"
@@ -9,3 +9,6 @@ turbconv: "edonly_edmfx"
 edmfx_sgs_diffusive_flux: true
 precip_model: "1M"
 toml: [toml/longrun_aquaplanet_1M.toml]
+diagnostics:
+  - short_name: [ts, ta, pfull, rhoa, ua, va, wa, hfss, hfls, hur, hus, cl, clw, cli, husra, hussn, pr, tke]
+    period: 1days
