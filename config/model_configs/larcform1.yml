@@ -23,7 +23,7 @@ x_elem: 1
 y_elem: 1
 dt: 10secs
 dt_rad: 10mins
-t_end: 1days # full run length is 20days
+t_end: 10days # full run length is 20days
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage : true
 toml: [toml/larcform1.toml]
