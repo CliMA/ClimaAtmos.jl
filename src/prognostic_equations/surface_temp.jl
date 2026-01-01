@@ -150,7 +150,6 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
     end
 
 end
-
 function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
     # following previous implementation in ClimaCoupler.jl (https://github.com/CliMA/ClimaCoupler.jl/blob/a3b32d169137f7dad2edf33fd2f5e29ebd6d5356/experiments/ClimaEarth/components/ocean/eisenman_seaice.jl#L305)
     FT = eltype(Y)
@@ -163,13 +162,20 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
 
     # Heat capacity of mixed layer
     hρc_ml = ρ_ocean * cp_ocean * depth_ocean
-    
+    if t == 0
+        @info "ocean mixed layer heat capacity per unit area" "hρc_ml = $hρc_ml J/K/m²"
+    end
     # sea ice params
     (; C0_base, T_base, L_ice, T_freeze, k_ice, T_base) = slab
 
     # prognostic variables
     (; T, h_ice, T_ml, water) = Y.sfc
-    T_sfc = T
+    T_sfc = copy(T)
+
+    # TODO: Implement ∂F_atmo/∂T_sfc. For now, use a type-stable zero field.
+    # NOTE: Avoid capturing `FT::DataType` in a local closure and then broadcasting it;
+    # that pattern can trigger ClimaCore.Fields.BroadcastInferenceError (cannot infer eltype).
+    ∂F_atmo∂T_sfc = zero.(T_sfc)
 
     # --- ENERGY BALANCE ---
     # Denominator for temperature tendency
@@ -181,9 +187,9 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
         # ᶠradiation_flux is positive for net upward flux at the surface
         # (SW_up - SW_down + LW_up - LW_down)
         (; ᶠradiation_flux) = p.radiation
-        F_rad = Spaces.level(ᶠradiation_flux, half).components.data.:1
+        F_rad = Spaces.level(ᶠradiation_flux, half).components.data.:1 # same as sfc_rad_e_flux in SlabOceanSST
     else
-        F_rad = 0
+        F_rad = FT(0)
     end
 
     # 2. Turbulent surface energy fluxes (sensible + latent heat) from surface to atmosphere
@@ -192,11 +198,15 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
             Geometry.WVector.(
                 p.precomputed.sfc_conditions.ρ_flux_h_tot,
             ).components.data.:1
+            # where is this computed? We want to take the forward diff.
     else
         F_turb = 0
     end
 
-    # 3. Energy tendency due to precipitation accumulation        
+    #3. No Q-fluxes implemented yet
+    Q = FT(0)
+
+    # 4. Energy tendency due to precipitation accumulation        
     if !(p.atmos.moisture_model isa DryModel)
         pet = p.conservation_check.col_integrated_precip_energy_tendency
     else
@@ -207,7 +217,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
     # Eisenman-Zhang sea ice model thermodynamics
     #======================================================================================#    
 
-    F_atm = @. F_turb + F_rad
+    F_atm = FT(0) #F_rad # FT(0) # @. F_turb + F_rad
     # ice thickness and mixed layer temperature changes due to atmosphereic and ocean fluxes
     ice_covered = parent(h_ice)[1] > 0
     # Note: Ocean Q-fluxes are not implemented
@@ -251,7 +261,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
         println("  h_ice = $(parent(h_ice)[1]) m")
         println("  F_rad = $(parent(F_rad)[1]) W/m²")
         println("  F_turb = $(parent(F_turb)[1]) W/m²")
-        println("  F_atm (total) = $(parent(F_atm)[1]) W/m²")
+        println("  F_atm (total) = ($F_atm)[1] W/m²")
         println("  ice_covered = $ice_covered")
         println("  ΔT_ml = $(parent(ΔT_ml)[1]) K")
         println("  Δh_ice = $(parent(Δh_ice)[1]) m")
@@ -261,6 +271,9 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
     
     # solve for T_sfcs
     remains_ice_covered = (parent(h_ice .+ Δh_ice)[1] > 0)
+    if t%3600 == 0
+        println("    remains_ice_covered = $remains_ice_covered")
+    end
     if remains_ice_covered
         # if ice covered, solve implicity (for now one Newton iteration: ΔT_s = - F(T_s) / dF(T_s)/dT_s )
         h = @. h_ice + Δh_ice
@@ -274,12 +287,12 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
         end
         # surface is ice-covered, so update T_sfc as ice surface temperature
         T_sfc .+= δT_sfc
-        # update surface humidity
-        @. q_sfc = TD.q_vap_saturation_generic.(thermo_params, T_sfc, Ya.ρ_sfc, TD.Ice())
+        # TODO update surface humidity
+        #@. q_sfc = TD.q_vap_saturation_generic.(thermo_params, T_sfc, Ya.ρ_sfc, TD.Ice())
     else # ice-free, so update T_sfc as mixed layer temperature
         T_sfc .= T_ml .+ ΔT_ml
-        # update surface humidity
-        @. q_sfc = TD.q_vap_saturation_generic.(thermo_params, T_sfc, Ya.ρ_sfc, TD.Liquid())
+        # TODO update surface humidity
+        #@. q_sfc = TD.q_vap_saturation_generic.(thermo_params, T_sfc, Ya.ρ_sfc, TD.Liquid())
     end
 
     #Y.T_ml .+= ΔT_ml
