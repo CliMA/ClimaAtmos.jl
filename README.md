@@ -17,7 +17,6 @@ ClimaAtmos.jl
 [![discussions][discussions-img]][discussions-url]
 [![col-prac][col-prac-img]][col-prac-url]
 [![downloads][downloads-img]][downloads-url]
-[![CLA Workflow](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/cla.yml/badge.svg)](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/cla.yml)
 
 [docs-bld-img]: https://github.com/CliMA/ClimaAtmos.jl/workflows/Documentation/badge.svg
 [docs-bld-url]: https://github.com/CliMA/ClimaAtmos.jl/actions?query=workflow%3ADocumentation
