@@ -39,7 +39,7 @@ steps:
   - group: "helem 16 aquaplanet"
     steps:
 
-      - label: ":umbrella: aquaplanet non-equil moisture allsky radiation + 1M microphysics"
+      - label: ":umbrella: aquaplanet equil moisture allsky radiation + 0M microphysics"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
@@ -50,4 +50,17 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_1M"
+          JOB_NAME: "longrun_aquaplanet_allsky_0M"
+
+      # - label: ":umbrella: aquaplanet non-equil moisture allsky radiation + 1M microphysics"
+      #   command: >
+      #     srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
+      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+      #     --job_id $$JOB_NAME
+      #   artifact_paths: "$$JOB_NAME/output_active/*"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_time: 24:00:00
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #     JOB_NAME: "longrun_aquaplanet_allsky_1M"
