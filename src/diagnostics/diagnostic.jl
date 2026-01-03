@@ -6,6 +6,8 @@
 #   conceptually related. The dictionary `ALL_DIAGNOSTICS` should be considered an
 #   implementation detail.
 
+import ClimaUtilities
+import Dates
 
 const ALL_DIAGNOSTICS = Dict{String, DiagnosticVariable}()
 

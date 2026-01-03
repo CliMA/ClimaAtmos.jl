@@ -5,7 +5,7 @@
 # level interfaces, add them here. Feel free to include extra files.
 
 """
-    default_diagnostics(model, duration, start_date; output_writer)
+    default_diagnostics(model, duration, start_date, t_start; output_writer)
 
 Return a list of `ScheduledDiagnostic`s associated with the given `model` that use
 `output_write` to write to disk. `duration` is the expected duration of the simulation and
@@ -18,6 +18,8 @@ We convert time to date as
 current_date = start_date + integrator.t
 ```
 
+`t_start` is the start time of the simulation and `t_start` is not necessarily zero.
+
 The logic is as follows:
 
 If `duration < 1 day` take hourly means,
@@ -28,7 +30,8 @@ If `duration >= 90 year` take monthly means.
 function default_diagnostics(
     model::AtmosModel,
     duration,
-    start_date::DateTime;
+    start_date::DateTime,
+    t_start;
     output_writer,
     topography = true,
 )
@@ -40,7 +43,8 @@ function default_diagnostics(
             default_diagnostics(
                 getfield(model, x),
                 duration,
-                start_date;
+                start_date,
+                t_start;
                 output_writer,
             ) != [],
         fieldnames(AtmosModel),
@@ -49,12 +53,13 @@ function default_diagnostics(
     # We use a map because we want to ensure that diagnostics is a well defined type, not
     # Any. This reduces latency.
     return vcat(
-        core_default_diagnostics(output_writer, duration, start_date; topography),
+        core_default_diagnostics(output_writer, duration, start_date, t_start; topography),
         map(non_empty_fields) do field
             default_diagnostics(
                 getfield(model, field),
                 duration,
-                start_date;
+                start_date,
+                t_start;
                 output_writer,
             )
         end...,
@@ -66,7 +71,7 @@ end
 # that all the default_diagnostics return the same type). This is used by
 # default_diagnostics(model::AtmosModel; output_writer), so that we can ignore defaults for
 # submodels that have no given defaults.
-default_diagnostics(submodel, duration, start_date; output_writer) = []
+default_diagnostics(submodel, duration, start_date, t_start; output_writer) = []
 
 """
     produce_common_diagnostic_function(period, reduction)
@@ -78,9 +83,14 @@ function common_diagnostics(
     reduction,
     output_writer,
     start_date,
+    t_start,
     short_names...;
     pre_output_hook! = nothing,
 )
+    date_last =
+        t_start isa ClimaUtilities.TimeManager.ITime ?
+        ClimaUtilities.TimeManager.date(t_start) :
+        start_date + Dates.Second(t_start)
     return vcat(
         map(short_names) do short_name
             return ScheduledDiagnostic(
@@ -89,6 +99,7 @@ function common_diagnostics(
                 output_schedule_func = EveryCalendarDtSchedule(
                     period;
                     reference_date = start_date,
+                    date_last = date_last,
                 ),
                 reduction_time_func = reduction,
                 output_writer = output_writer,
@@ -132,7 +143,13 @@ end
 ########
 # Core #
 ########
-function core_default_diagnostics(output_writer, duration, start_date; topography = true)
+function core_default_diagnostics(
+    output_writer,
+    duration,
+    start_date,
+    t_start;
+    topography = true,
+)
     core_diagnostics = [
         "ts",
         "ta",
@@ -171,9 +188,9 @@ function core_default_diagnostics(output_writer, duration, start_date; topograph
     end
     # Base diagnostics for all cases
     base_diagnostics = [
-        average_func(core_diagnostics...; output_writer, start_date)...,
-        min_func("ts"; output_writer, start_date),
-        max_func("ts"; output_writer, start_date),
+        average_func(core_diagnostics...; output_writer, start_date, t_start)...,
+        min_func("ts"; output_writer, start_date, t_start),
+        max_func("ts"; output_writer, start_date, t_start),
     ]
 
     # Prepend orography diagnostic if topography is enabled
@@ -197,7 +214,8 @@ end
 function default_diagnostics(
     ::T,
     duration,
-    start_date;
+    start_date,
+    t_start;
     output_writer,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     moist_diagnostics = [
@@ -218,13 +236,14 @@ function default_diagnostics(
         "clivi",
     ]
     average_func = frequency_averages(duration)
-    return [average_func(moist_diagnostics...; output_writer, start_date)...]
+    return [average_func(moist_diagnostics...; output_writer, start_date, t_start)...]
 end
 
 function default_diagnostics(
     atmos_water::AtmosWater,
     duration,
-    start_date;
+    start_date,
+    t_start;
     output_writer,
 )
     diagnostics = []
@@ -233,7 +252,7 @@ function default_diagnostics(
     for model in (atmos_water.moisture_model, atmos_water.microphysics_model)
         !isnothing(model) && append!(
             diagnostics,
-            default_diagnostics(model, duration, start_date; output_writer),
+            default_diagnostics(model, duration, start_date, t_start; output_writer),
         )
     end
 
@@ -246,7 +265,8 @@ end
 function default_diagnostics(
     ::Microphysics0Moment,
     duration,
-    start_date;
+    start_date,
+    t_start;
     output_writer,
 )
     # 0-moment microphysics doesn't have additional diagnostics beyond basic moisture
@@ -256,27 +276,29 @@ end
 function default_diagnostics(
     ::Microphysics1Moment,
     duration,
-    start_date;
+    start_date,
+    t_start;
     output_writer,
 )
     precip_diagnostics = ["husra", "hussn"]
 
     average_func = frequency_averages(duration)
 
-    return [average_func(precip_diagnostics...; output_writer, start_date)...]
+    return [average_func(precip_diagnostics...; output_writer, start_date, t_start)...]
 end
 
 function default_diagnostics(
     ::Microphysics2Moment,
     duration,
-    start_date;
+    start_date,
+    t_start;
     output_writer,
 )
     precip_diagnostics = ["husra", "hussn", "cdnc", "ncra"]
 
     average_func = frequency_averages(duration)
 
-    return [average_func(precip_diagnostics...; output_writer, start_date)...]
+    return [average_func(precip_diagnostics...; output_writer, start_date, t_start)...]
 end
 
 ##################
@@ -285,7 +307,8 @@ end
 function default_diagnostics(
     ::RRTMGPI.AbstractRRTMGPMode,
     duration,
-    start_date;
+    start_date,
+    t_start;
     output_writer,
 )
     rad_diagnostics = [
@@ -304,14 +327,15 @@ function default_diagnostics(
 
     average_func = frequency_averages(duration)
 
-    return [average_func(rad_diagnostics...; output_writer, start_date)...]
+    return [average_func(rad_diagnostics...; output_writer, start_date, t_start)...]
 end
 
 
 function default_diagnostics(
     ::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
     duration,
-    start_date;
+    start_date,
+    t_start;
     output_writer,
 )
     rad_diagnostics = [
@@ -342,8 +366,8 @@ function default_diagnostics(
     average_func = frequency_averages(duration)
 
     return [
-        average_func(rad_diagnostics...; output_writer, start_date)...,
-        average_func(rad_clearsky_diagnostics...; output_writer, start_date)...,
+        average_func(rad_diagnostics...; output_writer, start_date, t_start)...,
+        average_func(rad_clearsky_diagnostics...; output_writer, start_date, t_start)...,
     ]
 end
 
@@ -353,7 +377,8 @@ end
 function default_diagnostics(
     ::PrognosticEDMFX,
     duration,
-    start_date;
+    start_date,
+    t_start;
     output_writer,
 )
     edmfx_draft_diagnostics = [
@@ -386,8 +411,8 @@ function default_diagnostics(
     average_func = frequency_averages(duration)
 
     return [
-        average_func(edmfx_draft_diagnostics...; output_writer, start_date)...,
-        average_func(edmfx_env_diagnostics...; output_writer, start_date)...,
+        average_func(edmfx_draft_diagnostics...; output_writer, start_date, t_start)...,
+        average_func(edmfx_env_diagnostics...; output_writer, start_date, t_start)...,
     ]
 end
 
@@ -395,7 +420,8 @@ end
 function default_diagnostics(
     ::DiagnosticEDMFX,
     duration,
-    start_date;
+    start_date,
+    t_start;
     output_writer,
 )
     diagnostic_edmfx_draft_diagnostics = [
@@ -419,29 +445,32 @@ function default_diagnostics(
             diagnostic_edmfx_draft_diagnostics...;
             output_writer,
             start_date,
+            t_start,
         )...,
         average_func(
             diagnostic_edmfx_env_diagnostics...;
             output_writer,
             start_date,
+            t_start,
         )...,
     ]
 end
 
-function default_diagnostics(::EDOnlyEDMFX, duration, start_date; output_writer)
+function default_diagnostics(::EDOnlyEDMFX, duration, start_date, t_start; output_writer)
     edonly_edmfx_diagnostics = ["tke"]
 
     average_func = frequency_averages(duration)
 
     return [
-        average_func(edonly_edmfx_diagnostics...; output_writer, start_date)...,
+        average_func(edonly_edmfx_diagnostics...; output_writer, start_date, t_start)...,
     ]
 end
 
 function default_diagnostics(
     atmos_radiation::AtmosRadiation,
     duration,
-    start_date;
+    start_date,
+    t_start;
     output_writer,
 )
     # Add radiation mode diagnostics
@@ -449,7 +478,8 @@ function default_diagnostics(
         return default_diagnostics(
             atmos_radiation.radiation_mode,
             duration,
-            start_date;
+            start_date,
+            t_start;
             output_writer,
         )
     else
@@ -460,7 +490,8 @@ end
 function default_diagnostics(
     atmos_turbconv::AtmosTurbconv,
     duration,
-    start_date;
+    start_date,
+    t_start;
     output_writer,
 )
     # Add turbulence convection model diagnostics
@@ -468,7 +499,8 @@ function default_diagnostics(
         return default_diagnostics(
             atmos_turbconv.turbconv_model,
             duration,
-            start_date;
+            start_date,
+            t_start;
             output_writer,
         )
     else
