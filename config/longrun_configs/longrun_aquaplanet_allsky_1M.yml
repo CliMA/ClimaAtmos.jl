@@ -9,7 +9,7 @@ turbconv: "edonly_edmfx"
 edmfx_sgs_diffusive_flux: true
 precip_model: "1M"
 hyperdiff: "ClimaHyperdiffusion"
-scalar_hyperdiffusion_coefficient: 0.2324345
+#scalar_hyperdiffusion_coefficient: 0.2324345
 toml: [toml/longrun_aquaplanet_1M.toml]
 diagnostics:
   - short_name: [ts, ta, pfull, rhoa, ua, va, wa, hfss, hfls, hur, hus, cl, clw, cli, husra, hussn, pr, tke]

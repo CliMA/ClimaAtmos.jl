@@ -1,10 +1,10 @@
-precip_model: "0M"
+precip_model: "1M"
 dt_save_state_to_disk: "2days"
 reproducibility_test: true
 initial_condition: "MoistBaroclinicWave"
 dt: "450secs"
-t_end: "10days"
-moist: "equil"
+t_end: "2days"
+moist: "nonequil"
 disable_surface_flux_tendency: true
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]

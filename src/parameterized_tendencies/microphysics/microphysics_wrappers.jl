@@ -236,14 +236,14 @@ function compute_precipitation_sources!(
     @. Sqₗᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
 
-    # snow autoconversion assuming no supersaturation: q_ice -> q_snow
-    @. Sᵖ = triangle_inequality_limiter(
-        CM1.conv_q_icl_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ, true),
-        limit(qᵢ, dt, 5),
-        limit(qₛ, dt, 5),
-    )
-    @. Sqᵢᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
+    # # snow autoconversion assuming no supersaturation: q_ice -> q_snow
+    # @. Sᵖ = triangle_inequality_limiter(
+    #     CM1.conv_q_icl_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ, true),
+    #     limit(qᵢ, dt, 5),
+    #     limit(qₛ, dt, 5),
+    # )
+    # @. Sqᵢᵖ -= Sᵖ
+    # @. Sqₛᵖ += Sᵖ
 
     # accretion: q_liq + q_rain -> q_rain
     @. Sᵖ = triangle_inequality_limiter(
@@ -254,66 +254,66 @@ function compute_precipitation_sources!(
     @. Sqₗᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
 
-    # accretion: q_ice + q_snow -> q_snow
-    @. Sᵖ = triangle_inequality_limiter(
-        CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ, qₛ, ρ),
-        limit(qᵢ, dt, 5),
-        limit(qₛ, dt, 5),
-    )
-    @. Sqᵢᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
+    # # accretion: q_ice + q_snow -> q_snow
+    # @. Sᵖ = triangle_inequality_limiter(
+    #     CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ, qₛ, ρ),
+    #     limit(qᵢ, dt, 5),
+    #     limit(qₛ, dt, 5),
+    # )
+    # @. Sqᵢᵖ -= Sᵖ
+    # @. Sqₛᵖ += Sᵖ
 
-    # accretion: q_liq + q_sno -> q_sno or q_rai
-    # sink of cloud water via accretion cloud water + snow
-    @. Sᵖ = triangle_inequality_limiter(
-        CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ, qₛ, ρ),
-        limit(qₗ, dt, 5),
-    )
-    # if T < T_freeze cloud droplets freeze to become snow
-    # else the snow melts and both cloud water and snow become rain
-    α(thp, ts) = TD.Parameters.cv_l(thp) / TD.latent_heat_fusion(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
-    @. Sᵖ_snow = ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
-        Sᵖ,
-        FT(-1) * triangle_inequality_limiter(Sᵖ * α(thp, ts), limit(qₛ, dt, 5)),
-    )
-    @. Sqₛᵖ += Sᵖ_snow
-    @. Sqₗᵖ -= Sᵖ
-    @. Sqᵣᵖ += ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
+    # # accretion: q_liq + q_sno -> q_sno or q_rai
+    # # sink of cloud water via accretion cloud water + snow
+    # @. Sᵖ = triangle_inequality_limiter(
+    #     CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ, qₛ, ρ),
+    #     limit(qₗ, dt, 5),
+    # )
+    # # if T < T_freeze cloud droplets freeze to become snow
+    # # else the snow melts and both cloud water and snow become rain
+    # α(thp, ts) = TD.Parameters.cv_l(thp) / TD.latent_heat_fusion(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
+    # @. Sᵖ_snow = ifelse(
+    #     Tₐ(thp, ts) < mp.ps.T_freeze,
+    #     Sᵖ,
+    #     FT(-1) * triangle_inequality_limiter(Sᵖ * α(thp, ts), limit(qₛ, dt, 5)),
+    # )
+    # @. Sqₛᵖ += Sᵖ_snow
+    # @. Sqₗᵖ -= Sᵖ
+    # @. Sqᵣᵖ += ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
 
-    # accretion: q_ice + q_rai -> q_sno
-    @. Sᵖ = triangle_inequality_limiter(
-        CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ, qᵣ, ρ),
-        limit(qᵢ, dt, 5),
-        limit(qₛ, dt, 5),
-    )
-    @. Sqᵢᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
-    # sink of rain via accretion cloud ice - rain
-    @. Sᵖ = triangle_inequality_limiter(
-        CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ, qᵣ, ρ),
-        limit(qᵣ, dt, 5),
-        limit(qₛ, dt, 5),
-    )
-    @. Sqᵣᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
+    # # accretion: q_ice + q_rai -> q_sno
+    # @. Sᵖ = triangle_inequality_limiter(
+    #     CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ, qᵣ, ρ),
+    #     limit(qᵢ, dt, 5),
+    #     limit(qₛ, dt, 5),
+    # )
+    # @. Sqᵢᵖ -= Sᵖ
+    # @. Sqₛᵖ += Sᵖ
+    # # sink of rain via accretion cloud ice - rain
+    # @. Sᵖ = triangle_inequality_limiter(
+    #     CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ, qᵣ, ρ),
+    #     limit(qᵣ, dt, 5),
+    #     limit(qₛ, dt, 5),
+    # )
+    # @. Sqᵣᵖ -= Sᵖ
+    # @. Sqₛᵖ += Sᵖ
 
-    # accretion: q_rai + q_sno -> q_rai or q_sno
-    @. Sᵖ = ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
-        triangle_inequality_limiter(
-            CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
-            limit(qᵣ, dt, 5),
-            limit(qₛ, dt, 5),
-        ),
-        -triangle_inequality_limiter(
-            CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ, qₛ, ρ),
-            limit(qₛ, dt, 5),
-            limit(qᵣ, dt, 5),
-        ),
-    )
-    @. Sqₛᵖ += Sᵖ
-    @. Sqᵣᵖ -= Sᵖ
+    # # accretion: q_rai + q_sno -> q_rai or q_sno
+    # @. Sᵖ = ifelse(
+    #     Tₐ(thp, ts) < mp.ps.T_freeze,
+    #     triangle_inequality_limiter(
+    #         CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
+    #         limit(qᵣ, dt, 5),
+    #         limit(qₛ, dt, 5),
+    #     ),
+    #     -triangle_inequality_limiter(
+    #         CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ, qₛ, ρ),
+    #         limit(qₛ, dt, 5),
+    #         limit(qᵣ, dt, 5),
+    #     ),
+    # )
+    # @. Sqₛᵖ += Sᵖ
+    # @. Sqᵣᵖ -= Sᵖ
     #! format: on
 end
 
@@ -361,23 +361,23 @@ function compute_precipitation_sinks!(
     )
     @. Sqᵣᵖ += Sᵖ
 
-    # melting: q_sno -> q_rai
-    @. Sᵖ = triangle_inequality_limiter(
-        CM1.snow_melt(sps..., qₛ, ρ, Tₐ(thp, ts)),
-        limit(qₛ, dt, 5),
-        limit(qᵣ, dt, 5),
-    )
-    @. Sqᵣᵖ += Sᵖ
-    @. Sqₛᵖ -= Sᵖ
+    # # melting: q_sno -> q_rai
+    # @. Sᵖ = triangle_inequality_limiter(
+    #     CM1.snow_melt(sps..., qₛ, ρ, Tₐ(thp, ts)),
+    #     limit(qₛ, dt, 5),
+    #     limit(qᵣ, dt, 5),
+    # )
+    # @. Sqᵣᵖ += Sᵖ
+    # @. Sqₛᵖ -= Sᵖ
 
-    # deposition/sublimation: q_vap <-> q_sno
-    @. Sᵖ = CM1.evaporation_sublimation(sps..., qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ(thp, ts))
-    @. Sᵖ = ifelse(
-        Sᵖ > FT(0),
-        triangle_inequality_limiter(Sᵖ, limit(qᵥ(thp, ts), dt, 5), limit(qₛ, dt, 5)),
-        -triangle_inequality_limiter(FT(-1) * Sᵖ, limit(qₛ, dt, 5), limit(qᵥ(thp, ts), dt, 5)),
-    )
-    @. Sqₛᵖ += Sᵖ
+    # # deposition/sublimation: q_vap <-> q_sno
+    # @. Sᵖ = CM1.evaporation_sublimation(sps..., qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ(thp, ts))
+    # @. Sᵖ = ifelse(
+    #     Sᵖ > FT(0),
+    #     triangle_inequality_limiter(Sᵖ, limit(qᵥ(thp, ts), dt, 5), limit(qₛ, dt, 5)),
+    #     -triangle_inequality_limiter(FT(-1) * Sᵖ, limit(qₛ, dt, 5), limit(qᵥ(thp, ts), dt, 5)),
+    # )
+    # @. Sqₛᵖ += Sᵖ
     #! format: on
 end
 

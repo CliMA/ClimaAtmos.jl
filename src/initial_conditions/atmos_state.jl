@@ -117,8 +117,8 @@ moisture_variables(ls, ::NonEquilMoistModel) = (;
     ρq_tot = ls.ρ *
              TD.total_specific_humidity(ls.thermo_params, ls.thermo_state),
     ρq_liq = ls.ρ *
-             TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state),
-    ρq_ice = ls.ρ * TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state),
+             TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state) * 0,
+    ρq_ice = ls.ρ * TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state) * 0,
 )
 
 precip_variables(ls, ::NoPrecipitation) = (;)
