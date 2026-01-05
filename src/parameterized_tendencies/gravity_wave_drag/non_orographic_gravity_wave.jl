@@ -331,7 +331,7 @@ function non_orographic_gravity_wave_forcing(
     ᶜv_p1 = p.scratch.ᶜtemp_scalar_4
     ᶜbf_p1 = p.scratch.ᶜtemp_scalar_5
 
-    FT = eltype(ᶜρ) # Define the floating point type 
+    FT = eltype(ᶜρ) # Define the floating point type
 
     # Using interpolate operator, generate the field of ρ,u,v,z with on level shifted up
     ρ_endlevel = Fields.level(ᶜρ, Spaces.nlevels(axes(ᶜρ)))
@@ -375,8 +375,10 @@ function non_orographic_gravity_wave_forcing(
 
     mask_u = StaticBitVector{nc}(_ -> true)
     mask_v = StaticBitVector{nc}(_ -> true)
-    #We use StaticBitVector here because the unrolled_reduce function in Julia can cause memory allocation issues when the mask has more than 32 elements。 
-    #StaticBitVector stores 8 boolean values in a UInt8, allowing efficient storage for up to 256 gravity wave break data.
+    # We use StaticBitVector here because the unrolled_reduce function in Julia can
+    # cause memory allocation issues when the mask has more than 32 elements.
+    # StaticBitVector stores 8 boolean values in a UInt8, allowing efficient storage
+    # for up to 256 gravity wave break data.
     level_end = Spaces.nlevels(axes(ᶜρ))
 
     # Collect all required fields in a broadcasted object
