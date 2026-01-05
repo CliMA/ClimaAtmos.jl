@@ -10,7 +10,7 @@ import LinearAlgebra: tr
 """
     set_amd_precomputed_quantities!(Y, p)
 
-Placeholder for precomputed quantities in the Anisotropic-Minimum-Dissipation method. 
+Placeholder for precomputed quantities in the Anisotropic-Minimum-Dissipation method.
 Returns `nothing`. This function is included for simple extensions in debugging workflows.
 """
 function set_amd_precomputed_quantities!(Y, p)
@@ -107,7 +107,7 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     ᶜ∂ₗuₘ∂ₗuₘ = @. lazy(CA.norm_sqr(∇ᶜu_uvw))
 
     # AMD eddy viscosity
-    # no defined trace method in climacore for axistensors? 
+    # no defined trace method in climacore for axistensors?
     ᶜνₜ = @. ᶜtemp_scalar = max(
         FT(0),
         -c_amd *
@@ -264,7 +264,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     ᶜS = @. ᶜtemp_strain = (∇ᶜu_uvw + adjoint(∇ᶜu_uvw)) / 2
     ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
 
-    # Do we need scratch variables at all? 
+    # Do we need scratch variables at all?
     # Scaled Derivatives ∂̂ᵢ = Δ₍ᵢ₎∂ᵢ
     ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
     @. ᶜ∂̂u_uvw += ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))
@@ -280,7 +280,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
 
     # AMD eddy viscosity
-    # no defined trace method in climacore for axistensors? 
+    # no defined trace method in climacore for axistensors?
     ᶜνₜ = @. ᶜtemp_scalar = max(
         FT(0),
         -c_amd *

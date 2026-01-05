@@ -19,7 +19,7 @@ end
 function update_atmospheric_state!(radiation_mode::R, integrator) where {R}
     # update temperature & pressure
     update_temperature_pressure!(integrator)
-    # update relative humidity 
+    # update relative humidity
     update_relative_humidity!(integrator)
     # update gas concentrations (volume mixing ratios)
     update_volume_mixing_ratios!(integrator)
@@ -68,7 +68,7 @@ end
 """
     update_relative_humidity!(integrator)
 
-Update relative humidity `ᶜrh`. 
+Update relative humidity `ᶜrh`.
 """
 function update_relative_humidity!((; u, p, t)::I) where {I}
     (; radiation_mode) = p.atmos
@@ -150,7 +150,7 @@ end
 """
     update_aerosol_concentrations!((; u, p, t)::I) where {I}
 
-Updates aerosol concentrations for supported aerosol names (dust (5 types), 
+Updates aerosol concentrations for supported aerosol names (dust (5 types),
 sea-salt (5 types), sulfates, black-carbon (2 types), organic-carbon (2 types))
 """
 function update_aerosol_concentrations!((; u, p, t)::I) where {I}
@@ -225,7 +225,7 @@ Updates aerosol properties for the following supported symbols:
     seasalt_names = [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
     dust_names = [:DST01, :DST02, :DST03, :DST04, :DST05]
     SO4_names = [:SO4]
-When prescribed cloud fields are used, time-varying interpolation is applied using 
+When prescribed cloud fields are used, time-varying interpolation is applied using
 `ClimaUtilities` functions.
 No updates are applied when `radiation_mode.idealized_clouds` is true.
 """

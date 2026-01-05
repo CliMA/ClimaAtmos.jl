@@ -423,7 +423,7 @@ function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
     # Apply radiation tendency to updrafts in prognostic EDMF. We use the
     # grid-mean radiation as an approximation for updraft radiation.
-    # Note: Radiation is not applied to updrafts in diagnostic EDMF because updrafts 
+    # Note: Radiation is not applied to updrafts in diagnostic EDMF because updrafts
     # are typically absent in the stratosphere where radiation is more important.
     if turbconv_model isa PrognosticEDMFX
         (; ᶜρʲs) = p.precomputed
