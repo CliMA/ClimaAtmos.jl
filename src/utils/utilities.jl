@@ -160,9 +160,10 @@ See also [`compute_strain_rate_face_full!`](@ref) for the analogous calculation 
 """
 function compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
     axis_uvw = (Geometry.UVWAxis(),)
-    @. ᶜε = Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))  # vertical component
-    @. ᶜε += Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))  # horizontal component
-    @. ᶜε = (ᶜε + adjoint(ᶜε)) / 2
+    ∇ᵥ = @. Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))
+    ∇ₕ = @. Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))
+    ∇ = @. ∇ᵥ + ∇ₕ
+    @. ᶜε = lazy((∇ + adjoint(∇)) / 2)
     return ᶜε
 end
 
