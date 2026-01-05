@@ -162,7 +162,7 @@ function compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
     axis_uvw = (Geometry.UVWAxis(),)
     ∇ᵥ = @. lazy(Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu))))
     ∇ₕ = @. lazy(Geometry.project(axis_uvw, gradₕ(UVW(ᶜu))))
-    ∇ = @. lazy(∇ᵥ + ∇ₕ)
+    ∇ = @. ∇ᵥ + ∇ₕ
     @. ᶜε = (∇ + adjoint(∇)) / 2
     return ᶜε
 end
