@@ -544,6 +544,27 @@ add_diagnostic_variable!(
 )
 
 ###
+# Sea ice thickness (2d)
+###
+add_diagnostic_variable!(
+    short_name = "sithick",
+    long_name = "Sea Ice Thickness",
+    standard_name = "sea_ice_thickness",
+    units = "m",
+    comments = "Sea ice thickness for Eisenman sea ice model",
+    compute! = (out, state, cache, time) -> begin
+        thermo_params = CAP.thermodynamics_params(cache.params)
+        if isnothing(out)
+            return nothing
+        else
+            out .=
+                nothing
+        end
+    end,
+)
+
+
+###
 # Near-surface air temperature (2d)
 ###
 add_diagnostic_variable!(
