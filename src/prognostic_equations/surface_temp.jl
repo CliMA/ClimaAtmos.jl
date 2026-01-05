@@ -217,7 +217,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
     # Eisenman-Zhang sea ice model thermodynamics
     #======================================================================================#    
 
-    F_atm = FT(0) #F_rad # FT(0) # @. F_turb + F_rad
+    F_atm = F_rad # FT(0) # @. F_turb + F_rad
     # ice thickness and mixed layer temperature changes due to atmosphereic and ocean fluxes
     ice_covered = parent(h_ice)[1] > 0
     # Note: Ocean Q-fluxes are not implemented
