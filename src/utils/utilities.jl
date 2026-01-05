@@ -163,7 +163,7 @@ function compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
     ∇ᵥ = @. Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))
     ∇ₕ = @. Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))
     ∇ = @. ∇ᵥ + ∇ₕ
-    @. ᶜε = lazy((∇ + adjoint(∇)) / 2)
+    @. ᶜε = (∇ + adjoint(∇)) / 2
     return ᶜε
 end
 
