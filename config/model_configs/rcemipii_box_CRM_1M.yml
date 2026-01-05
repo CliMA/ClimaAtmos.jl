@@ -49,8 +49,8 @@ dt: 10secs
 # y_elem: 32
 # dt: 1secs
 
-t_end: 10hours
-# t_end: 2days
+# t_end: 10hours
+t_end: 2days
 # t_end: 1days
 # t_end: 21days
 
