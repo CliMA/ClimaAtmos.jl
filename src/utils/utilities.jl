@@ -160,10 +160,9 @@ See also [`compute_strain_rate_face_full!`](@ref) for the analogous calculation 
 """
 function compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
     axis_uvw = (Geometry.UVWAxis(),)
-    ∇ᵥ = @. lazy(Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu))))
-    ∇ₕ = @. lazy(Geometry.project(axis_uvw, gradₕ(UVW(ᶜu))))
-    ∇ = @. ∇ᵥ + ∇ₕ
-    @. ᶜε = (∇ + adjoint(∇)) / 2
+    @. ᶜε = Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))  # vertical component
+    @. ᶜε += Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))  # horizontal component
+    @. ᶜε = (ᶜε + adjoint(ᶜε)) / 2
     return ᶜε
 end
 
@@ -191,10 +190,9 @@ function compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu)
     ∇bc = Operators.SetGradient(∇ᵥuvw_boundary)
     ᶠgradᵥ = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
     axis_uvw = (Geometry.UVWAxis(),)
-    ∇ᵥ = @. lazy(Geometry.project(axis_uvw, ᶠgradᵥ(UVW(ᶜu))))
-    ∇ₕ = @. lazy(Geometry.project(axis_uvw, gradₕ(UVW(ᶠu))))
-    ∇ = @. lazy(∇ᵥ + ∇ₕ)
-    @. ᶠε = (∇ + adjoint(∇)) / 2
+    @. ᶠε = Geometry.project(axis_uvw, ᶠgradᵥ(UVW(ᶜu)))  # vertical component
+    @. ᶠε += Geometry.project(axis_uvw, gradₕ(UVW(ᶠu)))  # horizontal component
+    @. ᶠε = (ᶠε + adjoint(ᶠε)) / 2
     return ᶠε
 end
 
