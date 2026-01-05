@@ -67,10 +67,8 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
         compute_strain_rate_center_full!(ᶜS, ᶜu, ᶠu)
         compute_strain_rate_face_full!(ᶠS, ᶜu, ᶠu)
     else
-        # Horizontal-only variants take two arguments:
-        # centers use ᶜu; faces use ᶠu
-        compute_strain_rate_center_horizontal!(ᶜS, ᶜu)
-        compute_strain_rate_face_horizontal!(ᶠS, ᶠu)
+        ᶜS .= compute_strain_rate_horizontal!(ᶜu)
+        ᶠS .= compute_strain_rate_horizontal!(ᶠu)
     end
 
     # filter scale

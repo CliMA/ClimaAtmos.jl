@@ -83,56 +83,24 @@ state.
 compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 
 """
-    compute_strain_rate_center_horizontal!(ᶜε, ᶜu)
+    compute_strain_rate_horizontal!(u)
 
-Compute the horizontal components of the strain rate tensor at cell centers from velocity
-
-This computes only the horizontal (UV x UV) block of the strain rate tensor,
-reducing memory pressure compared to [`compute_strain_rate_center_full!`](@ref).
-
-# Arguments
- - `ᶜε`: Preallocated `UVW x UVW` tensor field for the strain rate at cell centers
- - `ᶜu`: Velocity field at cell centers.
-
-See also [`compute_strain_rate_center_full!`](@ref) for the full calculation.
-
-# Notes:
-- This variant only computes horizontal gradients, reducing register pressure and local memory usage
-- Recommended for use when only horizontal diffusion is needed
-"""
-function compute_strain_rate_center_horizontal!(ᶜε, ᶜu)
-    # Project onto full UVW axis to keep tensor axes consistent with ᶜε
-    axis_uvw = (Geometry.UVWAxis(),)
-    @. ᶜε = Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))  # horizontal gradients only
-    @. ᶜε = (ᶜε + adjoint(ᶜε)) / 2
-    return ᶜε
-end
-
-"""
-    compute_strain_rate_face_horizontal!(ᶠε, ᶠu)
-
-Compute the horizontal components of the strain rate tensor at cell faces from velocity
+Compute the horizontal components of the strain rate tensor from velocity
 
 This computes only the horizontal (UV x UV) block of the strain rate tensor,
 reducing memory pressure compared to [`compute_strain_rate_face_full!`](@ref).
+Works with values stored at either cell centers or faces.
 
 # Arguments
- - `ᶠε`: Preallocated `UVW x UVW` tensor field for the strain rate at cell faces
- - `ᶠu`: Velocity field at cell faces.
+ - `u`: Velocity field at cell faces.
 
 See also [`compute_strain_rate_face_full!`](@ref) for the full calculation.
-
-# Notes:
-- This variant only computes horizontal gradients, reducing register pressure and local memory usage
-- Recommended for use when only horizontal diffusion is needed
-- The calculation assumes zero vertical gradient boundary conditions at the surface
 """
-function compute_strain_rate_face_horizontal!(ᶠε, ᶠu)
-    # Project onto full UVW axis to keep tensor axes consistent with ᶠε
-    axis_uvw = (Geometry.UVWAxis(),)
-    @. ᶠε = Geometry.project(axis_uvw, gradₕ(UVW(ᶠu)))  # horizontal gradients only
-    @. ᶠε = (ᶠε + adjoint(ᶠε)) / 2
-    return ᶠε
+function compute_strain_rate_horizontal!(u)
+    # Project onto full UVW axis to keep tensor axes consistent with ε
+    axis_uvw = Geometry.UVWAxis()
+    ∇ₕu = @. lazy(Geometry.project((axis_uvw,), gradₕ(UVW(u))))
+    return @. lazy((∇ₕu + adjoint(∇ₕu)) / 2)
 end
 
 """
