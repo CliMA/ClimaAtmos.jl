@@ -85,7 +85,7 @@ NVTX.@annotate function dss!(Y, p, t)  # TODO: Rename to e.g. `apply_constraints
         scalar_names = CA.scalar_field_names(Y)
 
         MF.unrolled_foreach(scalar_names) do (name)
-            if !MF.is_child_name(name, c.uₕ) && !MF.is_child_name(name, f.u₃)
+            if !MF.is_child_name(name, MF.FieldName(Y.c.uₕ)) && !MF.is_child_name(name, MF.FieldName(f.u₃))
                 ᶜscalar = MF.get_field(Y, name)
                 ∑ = sum(Base.Fix2(min, 0), ᶜscalar)
                 if ∑ != 0
