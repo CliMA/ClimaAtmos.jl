@@ -23,6 +23,19 @@ is_tracer_var(symbol) = !(
 fast_pow(x, y) = exp(y * log(x))
 
 """
+    geopotential(grav, z)
+
+Compute the geopotential (Φ) at height `z` using gravitational acceleration `grav`.
+
+Φ = g * z
+
+where:
+- `grav` is the gravitational acceleration
+- `z` is the height
+"""
+geopotential(grav, z) = grav * z
+
+"""
     time_from_filename(file)
 
 Returns the time (Float64) from a given filename

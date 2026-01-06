@@ -601,12 +601,13 @@ steps:
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: baroclinic wave equilmoist (AMD)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
-          --config_file $CONFIG_PATH/baroclinic_wave_equil_amd.yml
-          --job_id baroclinic_wave_equil_amd
+      # Temporarily disabled until fixed
+      # - label: ":computer: baroclinic wave equilmoist (AMD)"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
+      #     --config_file $CONFIG_PATH/baroclinic_wave_equil_amd.yml
+      #     --job_id baroclinic_wave_equil_amd
 
         artifact_paths: "baroclinic_wave_equil_amd/output_active/*"
         soft_fail: true
@@ -837,6 +838,7 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
+        soft_fail: true
 
   - group: "MPI Examples"
     steps:

@@ -100,8 +100,8 @@ function build_cache(
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     grav = FT(CAP.grav(params))
-    ᶜΦ = grav .* ᶜcoord.z
-    ᶠΦ = grav .* ᶠcoord.z
+    ᶜΦ = geopotential.(grav, ᶜcoord.z)
+    ᶠΦ = geopotential.(grav, ᶠcoord.z)
 
     (; ᶜf³, ᶠf¹²) = compute_coriolis(ᶜcoord, ᶠcoord, params)
 

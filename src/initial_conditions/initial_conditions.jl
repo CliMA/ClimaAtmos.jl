@@ -708,7 +708,7 @@ function overwrite_initial_conditions!(
     Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
     e_kin = similar(ᶜT)
     e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
-    e_pot = Fields.coordinate_field(Y.c).z .* thermo_params.grav
+    e_pot = geopotential.(thermo_params.grav, Fields.coordinate_field(Y.c).z)
     Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
     # Initialize prognostic EDMF 0M subdomains if present
     if hasproperty(Y.c, :sgsʲs)
@@ -853,7 +853,7 @@ function _overwrite_initial_conditions_from_file!(
     Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
     e_kin = similar(ᶜT)
     e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
-    e_pot = Fields.coordinate_field(Y.c).z .* thermo_params.grav
+    e_pot = geopotential.(thermo_params.grav, Fields.coordinate_field(Y.c).z)
     Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
     if hasproperty(Y.c, :ρq_tot)
         Y.c.ρq_tot .= ᶜq_tot .* Y.c.ρ
