@@ -81,6 +81,20 @@ NVTX.@annotate function dss!(Y, p, t)  # TODO: Rename to e.g. `apply_constraints
     prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
     if do_dss(axes(Y.c))
         Spaces.weighted_dss!(Y.c => p.ghost_buffer.c, Y.f => p.ghost_buffer.f)
+
+        scalar_names = CA.scalar_field_names(Y)
+
+        MF.unrolled_foreach(scalar_names) do (name)
+            if !MF.is_child_name(name, c.uₕ) && !MF.is_child_name(name, f.u₃)
+                ᶜscalar = MF.get_field(Y, name)
+                ∑ = sum(Base.Fix2(min, 0), ᶜscalar)
+                if ∑ != 0
+                    @info "$name is negative by $(-Σ) at t = $t"
+                    @info(stacktrace()[1:4])
+                end
+            end
+        end
+
     end
     return nothing
 end
