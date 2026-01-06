@@ -61,11 +61,19 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
     (; ᶜtemp_scalar) = p.scratch
     c_smag = CAP.c_smag(p.params)
 
-    # Precompute 3D strain rate tensor
-    compute_strain_rate_center_full!(ᶜS, ᶜu, ᶠu)
-    compute_strain_rate_face_full!(ᶠS, ᶜu, ᶠu)
+    # Precompute strain rate tensor
+    if is_smagorinsky_UVW_coupled(model)
+        compute_strain_rate_center_full!(ᶜS, ᶜu, ᶠu)
+        compute_strain_rate_face_full!(ᶠS, ᶜu, ᶠu)
+    elseif is_smagorinsky_horizontal(model)
+        ᶜS .= compute_strain_rate_horizontal(ᶜu)
+        ᶠS .= compute_strain_rate_horizontal(ᶠu)
+    elseif is_smagorinsky_vertical(model)
+        ᶜS .= compute_strain_rate_center_vertical(ᶜu)
+        ᶠS .= compute_strain_rate_face_vertical(ᶠu)
+    end
 
-    # filter scale
+    # Determine filter length scale
     h_space = Spaces.horizontal_space(axes(Y.c))
     Δx = Δy = Spaces.node_horizontal_length_scale(h_space)
     ᶜΔz = Fields.Δz_field(Y.c)
@@ -75,24 +83,30 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
     ᶜfb = lilly_stratification_correction(p, ᶜS)
     if is_smagorinsky_UVW_coupled(model)
         ᶜL_h = ᶜL_v = @. lazy(c_smag * cbrt(Δx * Δy * ᶜΔz) * ᶜfb)
-    else
+    elseif is_smagorinsky_horizontal(model)
         ᶜL_h = @. lazy(c_smag * Δx)
+    elseif is_smagorinsky_vertical(model)
         ᶜL_v = @. lazy(c_smag * ᶜΔz * ᶜfb)
     end
 
     # Cache strain rate norms for diagnostics
-    ᶜS_norm_h .= strain_rate_norm(ᶜS, ax_xy)
-    ᶜS_norm_v .= strain_rate_norm(ᶜS, ax_z)
+    if is_smagorinsky_UVW_coupled(model) || is_smagorinsky_horizontal(model)
+        ᶜS_norm_h .= strain_rate_norm(ᶜS, ax_xy)
+    end
+    if is_smagorinsky_UVW_coupled(model) || is_smagorinsky_vertical(model)
+        ᶜS_norm_v .= strain_rate_norm(ᶜS, ax_z)
+    end
 
-    # Smagorinsky eddy viscosity
-    @. ᶜνₜ_h = ᶜL_h^2 * ᶜS_norm_h
-    @. ᶜνₜ_v = ᶜL_v^2 * ᶜS_norm_v
-
-    # Turbulent diffusivity
+    # Smagorinsky eddy viscosity and turbulent diffusivity
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
-    @. ᶜD_h = ᶜνₜ_h / Pr_t
-    @. ᶜD_v = ᶜνₜ_v / Pr_t
-
+    if is_smagorinsky_UVW_coupled(model) || is_smagorinsky_horizontal(model)
+        @. ᶜνₜ_h = ᶜL_h^2 * ᶜS_norm_h
+        @. ᶜD_h = ᶜνₜ_h / Pr_t
+    end
+    if is_smagorinsky_UVW_coupled(model) || is_smagorinsky_vertical(model)
+        @. ᶜνₜ_v = ᶜL_v^2 * ᶜS_norm_v
+        @. ᶜD_v = ᶜνₜ_v / Pr_t
+    end
     nothing
 end
 set_smagorinsky_lilly_precomputed_quantities!(Y, p, ::Nothing) = nothing
