@@ -17,6 +17,8 @@ import ClimaCore: DataLayouts, Geometry, Fields
 import ClimaCore.Geometry: ⊗
 import ClimaCore.Utilities: half
 import SurfaceFluxes as SF
+import SurfaceFluxes.Parameters as SFP
+import SurfaceFluxes.UniversalFunctions as UF
 import Thermodynamics as TD
 import ClimaUtilities.TimeVaryingInputs: evaluate!
 
