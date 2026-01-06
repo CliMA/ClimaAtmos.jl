@@ -1365,14 +1365,14 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ρtke_flux_values = Fields.field_values(ρtke_flux)
-    ρ_int_values = Fields.field_values(Fields.level(Y.c.ρ, 1))
+    ρ_sfc_values = Fields.field_values(Fields.level(Y.c.ρ, 1)) # TODO: replace by surface value
     ustar_values = Fields.field_values(ustar)
     sfc_local_geometry_values = Fields.field_values(
         Fields.level(Fields.local_geometry_field(Y.f), half),
     )
     @. ρtke_flux_values = surface_flux_tke(
         turbconv_params,
-        ρ_int_values,
+        ρ_sfc_values,
         ustar_values,
         sfc_local_geometry_values,
     )

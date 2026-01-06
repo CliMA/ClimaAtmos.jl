@@ -220,7 +220,7 @@ Returns:
 """
 function surface_flux_tke(
     turbconv_params,
-    ρa_sfc,
+    ρ_sfc,
     ustar,
     surface_local_geometry,
 )
@@ -229,7 +229,7 @@ function surface_flux_tke(
     # Determine the direction of the flux (normal to the surface)
     # c3_unit is a unit vector in the direction of the surface normal (e.g., C3(0,0,1) for a flat surface)
     c3_unit = C3(unit_basis_vector_data(C3, surface_local_geometry))
-    return c_k * ρa_sfc * ustar^3 * c3_unit
+    return c_k * ρ_sfc * ustar^3 * c3_unit
 end
 
 """
