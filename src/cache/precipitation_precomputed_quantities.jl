@@ -62,31 +62,48 @@ function set_precipitation_velocities!(
     cmp = CAP.microphysics_1m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
 
+    ϵ_num = ϵ_numerics(eltype(p.params))
     # compute the precipitation terminal velocity [m/s]
-    @. ᶜwᵣ = CM1.terminal_velocity(
-        cmp.pr,
-        cmp.tv.rain,
-        Y.c.ρ,
-        max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
+    @. ᶜwᵣ = ifelse(
+        Y.c.ρq_tot > ϵ_num,
+        CM1.terminal_velocity(
+            cmp.pr,
+            cmp.tv.rain,
+            Y.c.ρ,
+            max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
+        ),
+        zero(Y.c.ρ),
     )
-    @. ᶜwₛ = CM1.terminal_velocity(
-        cmp.ps,
-        cmp.tv.snow,
-        Y.c.ρ,
-        max(zero(Y.c.ρ), Y.c.ρq_sno / Y.c.ρ),
+    @. ᶜwₛ = ifelse(
+        Y.c.ρq_tot > ϵ_num,
+        CM1.terminal_velocity(
+            cmp.ps,
+            cmp.tv.snow,
+            Y.c.ρ,
+            max(zero(Y.c.ρ), Y.c.ρq_sno / Y.c.ρ),
+        ),
+        zero(Y.c.ρ),
     )
     # compute sedimentation velocity for cloud condensate [m/s]
-    @. ᶜwₗ = CMNe.terminal_velocity(
-        cmc.liquid,
-        cmc.Ch2022.rain,
-        Y.c.ρ,
-        max(zero(Y.c.ρ), Y.c.ρq_liq / Y.c.ρ),
+    @. ᶜwₗ = ifelse(
+        Y.c.ρq_tot > ϵ_num,
+        CMNe.terminal_velocity(
+            cmc.liquid,
+            cmc.Ch2022.rain,
+            Y.c.ρ,
+            max(zero(Y.c.ρ), Y.c.ρq_liq / Y.c.ρ),
+        ),
+        zero(Y.c.ρ),
     )
-    @. ᶜwᵢ = CMNe.terminal_velocity(
-        cmc.ice,
-        cmc.Ch2022.small_ice,
-        Y.c.ρ,
-        max(zero(Y.c.ρ), Y.c.ρq_ice / Y.c.ρ),
+    @. ᶜwᵢ = ifelse(
+        Y.c.ρq_tot > ϵ_num,
+        CMNe.terminal_velocity(
+            cmc.ice,
+            cmc.Ch2022.small_ice,
+            Y.c.ρ,
+            max(zero(Y.c.ρ), Y.c.ρq_ice / Y.c.ρ),
+        ),
+        zero(Y.c.ρ),
     )
 
     # compute their contributions to energy and total water advection
