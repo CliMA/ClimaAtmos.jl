@@ -322,9 +322,10 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²q_totʲs) = p.hyperdiff
         for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -=
-                ν₄_scalar * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²q_totʲs.:($$j)))
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+            @. Yₜ.c.sgsʲs.:($$j).ρa -=
+                ν₄_scalar * Y.c.sgsʲs.:($$j).ρa / (1 - Y.c.sgsʲs.:($$j).q_tot) *
+                wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
         end
         if moisture_model isa NonEquilMoistModel &&
            microphysics_model isa Microphysics1Moment

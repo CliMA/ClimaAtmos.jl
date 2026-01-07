@@ -1,4 +1,4 @@
-294
+295
 
 # **README**
 #
@@ -20,7 +20,10 @@
 
 
 #=
-284
+295
+- Fix ρa tendencies due to vertical diffusion and hyperdiffusion of q_totʲ for PEDMF
+
+294
 - Use grid-mean density in TKE surface fluxes
 
 293
