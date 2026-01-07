@@ -1,5 +1,6 @@
 initial_condition: "Larcform1"
-#surface_setup: Larcform1 #DefaultMoninObukhov     #"Larcform1_test"     # hijacked for const surface temperature
+surface_setup: DefaultMoninObukhov  #"Larcform1_test"
+#disable_surface_flux_tendency: true # for testing
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
@@ -41,7 +42,7 @@ diagnostics:
   - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, prsn, hus, hur, ua, va, wa, rlu, rld, rhoa] # profiles (2D)
     period: 6hours
     reduction_time: average
-  - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs, hfss, hfls, ts]  # time-series (1D)
+  - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs, hfss, hfls, ts, tas]  # time-series (1D)
     period: 6hours
     reduction_time: average
 
