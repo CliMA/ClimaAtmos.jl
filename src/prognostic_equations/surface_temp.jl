@@ -54,18 +54,6 @@ Modifies surface tendency vector `Yₜ.sfc` in place.
 """
 surface_temp_tendency!(Yₜ, Y, p, t, ::PrescribedSST) = nothing
 
-"""
-    get_∂F_rad_energy∂T_sfc(T_sfc, α, σ)
-
-Calculate the derivative of the radiative flux with respect to the surface temperature
-for the Eisenman sea ice model. This represents the linearization of upward longwave
-radiation: d(σT⁴)/dT = 4σT³, accounting for albedo effects.
-"""
-function get_∂F_rad_energy∂T_sfc(T_sfc, α, σ)
-    FT = eltype(T_sfc)
-    @. FT(4) * (FT(1) - α) * σ * T_sfc^3
-end
-
 function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
     FT = eltype(Y)
     params = p.params
@@ -150,6 +138,22 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
     end
 
 end
+
+"""
+    get_∂F_rad_energy∂T_sfc(T_sfc, α, σ)
+
+Calculate the derivative of the radiative flux with respect to the surface temperature
+for the Eisenman sea ice model. This represents the linearization of upward longwave
+radiation: d(σT⁴)/dT = 4σT³.
+
+Currently assumes surface is a blackbody for the purpose of longwave radiation.
+"""
+function get_∂F_rad_energy∂T_sfc(T_sfc)
+    FT = eltype(T_sfc)
+    σ = FT(5.670367E-8)
+    @. FT(4) * FT(1) * σ * T_sfc^3  
+end
+
 function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
     # following previous implementation in ClimaCoupler.jl (https://github.com/CliMA/ClimaCoupler.jl/blob/a3b32d169137f7dad2edf33fd2f5e29ebd6d5356/experiments/ClimaEarth/components/ocean/eisenman_seaice.jl#L305)
     FT = eltype(Y)
@@ -170,12 +174,17 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
 
     # prognostic variables
     (; T, h_ice, T_ml, water) = Y.sfc
+
+    # Since we are computing tendencies, make local copies to avoid modifying Y during calculations
     T_sfc = copy(T)
+    h_ice = copy(h_ice)
+    T_ml = copy(T_ml)
+    water = copy(water)
 
     # TODO: Implement ∂F_atmo/∂T_sfc. For now, use a type-stable zero field.
     # NOTE: Avoid capturing `FT::DataType` in a local closure and then broadcasting it;
     # that pattern can trigger ClimaCore.Fields.BroadcastInferenceError (cannot infer eltype).
-    ∂F_atmo∂T_sfc = zero.(T_sfc)
+    ∂F_atmo∂T_sfc = get_∂F_rad_energy∂T_sfc.(T_sfc) # zero.(T_sfc) # TODO add turbulent
 
     # --- ENERGY BALANCE ---
     # Denominator for temperature tendency
@@ -189,7 +198,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
         (; ᶠradiation_flux) = p.radiation
         F_rad = Spaces.level(ᶠradiation_flux, half).components.data.:1 # same as sfc_rad_e_flux in SlabOceanSST
     else
-        F_rad = FT(0)
+        F_rad = zeros(FT, size(T_sfc))
     end
 
     # 2. Turbulent surface energy fluxes (sensible + latent heat) from surface to atmosphere
@@ -200,7 +209,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
             ).components.data.:1
             # where is this computed? We want to take the forward diff.
     else
-        F_turb = 0
+        F_turb = zeros(FT, size(T_sfc))
     end
 
     #3. No Q-fluxes implemented yet
@@ -217,7 +226,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
     # Eisenman-Zhang sea ice model thermodynamics
     #======================================================================================#    
 
-    F_atm = F_rad # FT(0) # @. F_turb + F_rad
+    F_atm = F_rad # FT(0) # @. F_turb + F_rad # TODO add turbulent fluxes
     # ice thickness and mixed layer temperature changes due to atmosphereic and ocean fluxes
     ice_covered = parent(h_ice)[1] > 0
     # Note: Ocean Q-fluxes are not implemented
@@ -254,13 +263,13 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
         Δh_ice = @. -h_ice
     end
 
-    if t%3600 == 0
+    if t%(6*3600) == 0
         println("=== EisenmanSeaIce Tendency (t = $t s) ===")
         println("  T_sfc = $(parent(T_sfc)[1]) K")
         println("  T_ml = $(parent(T_ml)[1]) K")
         println("  h_ice = $(parent(h_ice)[1]) m")
         println("  F_rad = $(parent(F_rad)[1]) W/m²")
-        println("  F_turb = $(parent(F_turb)[1]) W/m²")
+        #println("  F_turb = $(parent(F_turb)[1]) W/m²")
         println("  F_atm (total) = ($F_atm)[1] W/m²")
         println("  ice_covered = $ice_covered")
         println("  ΔT_ml = $(parent(ΔT_ml)[1]) K")
@@ -271,7 +280,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
     
     # solve for T_sfcs
     remains_ice_covered = (parent(h_ice .+ Δh_ice)[1] > 0)
-    if t%3600 == 0
+    if t%(6*3600) == 0
         println("    remains_ice_covered = $remains_ice_covered")
     end
     if remains_ice_covered
@@ -294,6 +303,8 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
         # TODO update surface humidity
         #@. q_sfc = TD.q_vap_saturation_generic.(thermo_params, T_sfc, Ya.ρ_sfc, TD.Liquid())
     end
+
+    # TODO check energy balance
 
     #Y.T_ml .+= ΔT_ml
     #Y.h_ice .+= Δh_ice
