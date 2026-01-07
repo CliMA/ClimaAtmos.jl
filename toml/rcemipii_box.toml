@@ -12,6 +12,9 @@ value = 50
 [angular_velocity_planet_rotation]
 value = 0
 
+[cloud_top_q_threshold]
+value = 1e-8
+
 [idealized_ocean_albedo]
 value = 0.07
 
