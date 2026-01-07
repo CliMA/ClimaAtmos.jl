@@ -1,4 +1,4 @@
-295
+296
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+296
+- Fix ρa tendencies due to vertical diffusion and hyperdiffusion of q_totʲ for PEDMF
+
 295
 - Update to SurfaceFluxes.jl v0.14.2
 
