@@ -31,7 +31,9 @@ function interp_vertical_prof(x, xp, fp)
         Intp.interpolate((xp,), fp, Intp.Gridded(Intp.Linear())),
         Intp.Flat(),
     )
-    return spl(vec(x))
+    # Interpolate on a flattened view and reshape back to the original shape.
+    x_data = x isa Fields.Field ? parent(x) : x
+    return reshape(spl(vec(x_data)), size(x_data))
 end
 
 
@@ -187,26 +189,19 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
 
     NC.Dataset(external_forcing_file, "r") do ds
 
-        function setvar!(cc_field, varname, colidx, zc_gcm, zc_forcing)
-            parent(cc_field[colidx]) .= interp_vertical_prof(
+        function setvar!(cc_field, varname, zc_gcm, zc_forcing)
+            parent(cc_field) .= interp_vertical_prof(
                 zc_gcm,
                 zc_forcing,
                 gcm_driven_profile_tmean(ds.group[cfsite_number], varname),
             )
         end
 
-        function setvar_subsidence!(
-            cc_field,
-            varname,
-            colidx,
-            zc_gcm,
-            zc_forcing,
-            params,
-        )
-            # Computes subsidence velocity from the hydrostatic approximation 
-            # w \approx - ω α / g, where ω is pressure velocity and α = 1/ρ is 
+        function setvar_subsidence!(cc_field, varname, zc_gcm, zc_forcing, params)
+            # Computes subsidence velocity from the hydrostatic approximation
+            # w \approx - ω α / g, where ω is pressure velocity and α = 1/ρ is
             # the specific volume
-            parent(cc_field[colidx]) .= interp_vertical_prof(
+            parent(cc_field) .= interp_vertical_prof(
                 zc_gcm,
                 zc_forcing,
                 gcm_driven_profile_tmean(ds.group[cfsite_number], varname) .* .-(
@@ -230,42 +225,31 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
         end
 
         zc_forcing = gcm_height(ds.group[cfsite_number])
-        Fields.bycolumn(axes(Y.c)) do colidx
+        zc_gcm = Fields.coordinate_field(Y.c).z
 
-            zc_gcm = Fields.coordinate_field(Y.c).z[colidx]
+        setvar!(ᶜdTdt_hadv, "tntha", zc_gcm, zc_forcing)
+        setvar!(ᶜdqtdt_hadv, "tnhusha", zc_gcm, zc_forcing)
+        setvar_subsidence!(ᶜls_subsidence, "wap", zc_gcm, zc_forcing, params)
+        # GCM states, used for nudging + vertical eddy advection
+        setvar!(ᶜT_nudge, "ta", zc_gcm, zc_forcing)
+        setvar!(ᶜqt_nudge, "hus", zc_gcm, zc_forcing)
+        setvar!(ᶜu_nudge, "ua", zc_gcm, zc_forcing)
+        setvar!(ᶜv_nudge, "va", zc_gcm, zc_forcing)
 
-            setvar!(ᶜdTdt_hadv, "tntha", colidx, zc_gcm, zc_forcing)
-            setvar!(ᶜdqtdt_hadv, "tnhusha", colidx, zc_gcm, zc_forcing)
-            setvar_subsidence!(
-                ᶜls_subsidence,
-                "wap",
-                colidx,
-                zc_gcm,
-                zc_forcing,
-                params,
-            )
-            # GCM states, used for nudging + vertical eddy advection
-            setvar!(ᶜT_nudge, "ta", colidx, zc_gcm, zc_forcing)
-            setvar!(ᶜqt_nudge, "hus", colidx, zc_gcm, zc_forcing)
-            setvar!(ᶜu_nudge, "ua", colidx, zc_gcm, zc_forcing)
-            setvar!(ᶜv_nudge, "va", colidx, zc_gcm, zc_forcing)
+        # Vertical eddy advection (Shen et al., 2022; eqn. 9,10)
+        # sum of two terms to give total tendency. First term:
+        setvar!(ᶜdTdt_fluc, "tntva", zc_gcm, zc_forcing)
+        setvar!(ᶜdqtdt_fluc, "tnhusva", zc_gcm, zc_forcing)
 
-            # Vertical eddy advection (Shen et al., 2022; eqn. 9,10)
-            # sum of two terms to give total tendency. First term:
-            setvar!(ᶜdTdt_fluc, "tntva", colidx, zc_gcm, zc_forcing)
-            setvar!(ᶜdqtdt_fluc, "tnhusva", colidx, zc_gcm, zc_forcing)
-            # second term (subtract mean vertical advection):
-            gcm_vert_advection!(ᶜdTdt_fluc, ᶜT_nudge, ᶜls_subsidence)
-            gcm_vert_advection!(ᶜdqtdt_fluc, ᶜqt_nudge, ᶜls_subsidence)
+        # subtract mean vertical advection to obtain eddy part:
+        gcm_vert_advection!(ᶜdTdt_fluc, ᶜT_nudge, ᶜls_subsidence)
+        gcm_vert_advection!(ᶜdqtdt_fluc, ᶜqt_nudge, ᶜls_subsidence)
 
-            set_insolation!(insolation)
-            set_cos_zenith!(cos_zenith)
+        set_insolation!(insolation)
+        set_cos_zenith!(cos_zenith)
 
-            @. ᶜinv_τ_wind[colidx] =
-                compute_gcm_driven_momentum_inv_τ(zc_gcm, params)
-            @. ᶜinv_τ_scalar[colidx] =
-                compute_gcm_driven_scalar_inv_τ(zc_gcm, params)
-        end
+        @. ᶜinv_τ_wind = compute_gcm_driven_momentum_inv_τ(zc_gcm, params)
+        @. ᶜinv_τ_scalar = compute_gcm_driven_scalar_inv_τ(zc_gcm, params)
     end
 
     return (;
