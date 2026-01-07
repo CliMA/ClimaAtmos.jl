@@ -113,7 +113,70 @@ end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
 struct ExternalTVInsolation <: AbstractInsolation end
-struct Larcform1Insolation <: AbstractInsolation end
+
+"""
+    AbstractOzone
+
+Describe how ozone concentration should be set.
+"""
+abstract type AbstractOzone end
+
+"""
+    IdealizedOzone
+
+Implement a static (not varying in time) idealized ozone profile as described by
+`idealized_ozone`.
+"""
+struct IdealizedOzone <: AbstractOzone end
+
+"""
+    PrescribedOzone
+
+Implement a time-varying ozone profile as read from disk.
+
+The CMIP6 forcing dataset is used. For production runs, you should acquire the
+high-resolution, multi-year `ozone_concentrations` artifact. If this is not available, a low
+resolution, single-year version will be used.
+
+Refer to ClimaArtifacts for more information on how to obtain the artifact.
+"""
+struct PrescribedOzone <: AbstractOzone end
+
+"""
+    AbstractCO2
+
+Describe how CO2 concentration should be set.
+"""
+abstract type AbstractCO2 end
+
+"""
+    FixedCO2
+
+Implement a static CO2 profile as read from disk.
+
+The data used is the one distributed with `RRTMGP.jl`.
+
+By default, this is 397.547 parts per million.
+
+This is the volume mixing ratio.
+"""
+struct FixedCO2{FT} <: AbstractCO2
+    value::FT
+
+    function FixedCO2(; FT = Float64, value = FT(397.547e-6))
+        return new{FT}(value)
+    end
+end
+
+"""
+    MuanaLoaCO2
+
+Implement a time-varying CO2 profile as read from disk.
+
+The data from the Mauna Loa CO2 measurements is used. It is a assumed that the
+concentration is constant.
+"""
+struct MaunaLoaCO2 <: AbstractCO2 end
 
 """
     AbstractCloudInRadiation
@@ -149,7 +212,6 @@ Base.@kwdef struct SlabOceanSST{FT} <: AbstractSurfaceTemperature
     Q₀::FT = -20 # Q-flux maximum mplitude [W/m²]
     ϕ₀::FT = 16 # Q-flux meridional scale [deg]
 end
-
 """
     EisenmanSeaIce <: AbstractSurfaceTemperature
 
@@ -196,55 +258,6 @@ Base.@kwdef struct EisenmanSeaIce{FT} <: AbstractSurfaceTemperature
     cp_ocean::FT = 4184 # ocean heat capacity [J/(kg * K)]
     q_flux::Bool = false # use Q-flux (parameterization of horizontal ocean mixing of energy)
     Q₀::FT = -20 # Q-flux maximum mplitude [W/m²]
-    ϕ₀::FT = 16 # Q-flux meridional scale [deg]
-end
-
-"""
-    EisenmanSeaIce <: AbstractSurfaceTemperature
-
-Thermodynamic 0-layer sea ice model based on Semtner 1976, refined by
-Eisenman 2009 and Zhang et. al. 2021. Includes prognostic ice thickness,
-mixed layer temperature, and surface temperature.
-
-## Assumptions and simplifications:
-- Constant ocean mixed layer depth
-- No horizontal ocean heat transport (besides optional Q-flux)
-- No snow cover. 
-- Water will freeze at at freshwater melting temperature of 273.16 K.
-- Constant Latent heat of fusion of ice is used: L_ice = 3.0*10^8 J/m³.
-
-Parameters:
-- z0m: roughness length for momentum [m]
-- z0b: roughness length for buoyancy [m]  
-- C0_base: ice base transfer coefficient [W/m²/K]
-- T_base: ice base temperature [K]
-- L_ice: latent heat coefficient for ice [J/m³]
-- T_freeze: freezing point temperature [K]
-- k_ice: thermal conductivity of ice [W/m/K]
-- α_ice: ice albedo
-- α_ocean: ocean albedo
-- h_ml: mixed layer depth [m]
-- ρ_ocean: mixed layer density [kg/m³]
-- c_ocean: mixed layer heat capacity [J/kg/K]
-"""
-Base.@kwdef struct EisenmanSeaIce{FT} <: AbstractSurfaceTemperature
-    # sea ice parameters
-    z0m::FT = 1e-3
-    z0b::FT = 1e-5
-    C0_base::FT = 120
-    T_base::FT = 273.16
-    L_ice::FT = 3e8
-    T_freeze::FT = 273.16
-    k_ice::FT = 2
-    #α_ice::FT = 0.70
-    #α_ocean::FT = 0.1 # (set elsewhere as idealized_ocean_albedo)
-
-    # ocean mixed layer parameters
-    depth_ocean::FT = 40 # 40 # ocean mixed layer depth [m]
-    ρ_ocean::FT = 1020 # ocean density [kg / m³]
-    cp_ocean::FT = 4184 # ocean heat capacity [J/(kg * K)]
-    q_flux::Bool = false # use Q-flux (parameterization of horizontal ocean mixing of energy)
-    Q₀::FT = -20 # Q-flux maximum amplitude [W/m²]
     ϕ₀::FT = 16 # Q-flux meridional scale [deg]
 end
 

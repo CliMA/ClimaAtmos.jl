@@ -1610,4 +1610,3 @@ function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
     )
 
 end
->>>>>>> b3c22d658 (WIP larcform1 ci plots)
