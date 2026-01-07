@@ -587,7 +587,7 @@ ColumnPlots = Union{
     Val{:single_column_radiative_equilibrium_clearsky},
     Val{:single_column_radiative_equilibrium_clearsky_prognostic_surface_temp},
     Val{:single_column_radiative_equilibrium_allsky_idealized_clouds},
-    Val{:larcform1}
+    #Val{:larcform1}
 }
 
 function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
@@ -1560,6 +1560,7 @@ function make_plots(
 end
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractString})
     function rescale_time_to_min(var)
         if haskey(var.dims, "time")
@@ -1598,41 +1599,26 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
 end
 =======
 Larcform1Plots = Val{:larcform1}
+=======
+>>>>>>> 1a823ca91 (tweak larcform1 ci_plots)
 
+
+Larcform1Plots = Val{:larcform1}
 function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
-
-    reduction_avg = "average"
-    reduction_inst = "inst"
-
-    short_names_0D = [
-        "rsut",
-    ]
-    short_names_1D = ["ta", "wa"]
-    #vars_0D = map_comparison(get, simdirs, short_names_0D)
-    #vars_1D = map_comparison(get, simdirs, short_names_1D)
-    vars_0D = map_comparison(simdirs, short_names_0D) do simdir, short_name
-        get(simdir; short_name, reduction)
+    short_names = ["ta", "thetaa", "pfull"]
+    reduction = "inst"
+    period = "10mins"
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction)
     end
-
-    #=
-    # Vertical profiles at time = LAST_SNAP
     make_plots_generic(
         output_paths,
-        vars_1D,
-        time = LAST_SNAP,
+        vars,
         x = 0.0,
         y = 0.0,
-        more_kwargs = Dict(:axis => [:dim_on_y => true]),
-    )
-    =#
-    # Time series
-    make_plots_generic(
-        output_paths,
-        vars_0D,
-        x = 0.0,
-        y = 0.0,
-        more_kwargs = Dict(:axis => [:dim_on_y => true]),
+        time = FIRST_SNAP,
+        more_kwargs = Dict(:axis => Dict(:dim_on_y => true)),
     )
 end
 >>>>>>> b3c22d658 (WIP larcform1 ci plots)
