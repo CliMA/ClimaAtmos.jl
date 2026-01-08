@@ -107,7 +107,6 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     ᶜ∂ₗuₘ∂ₗuₘ = @. lazy(CA.norm_sqr(∇ᶜu_uvw))
 
     # AMD eddy viscosity
-    # no defined trace method in climacore for axistensors?
     ᶜνₜ = @. ᶜtemp_scalar = max(
         FT(0),
         -c_amd *
@@ -275,12 +274,8 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
     ᶠ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶠ∂̂u_uvw * adjoint(ᶠ∂̂u_uvw))
     ᶜ∂ₗuₘ∂ₗuₘ = @. lazy(CA.norm_sqr(∇ᶜu_uvw))
-    # Strain rate tensor
-    ᶜS = @. ᶜtemp_strain = (∇ᶜu_uvw + adjoint(∇ᶜu_uvw)) / 2
-    ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
 
     # AMD eddy viscosity
-    # no defined trace method in climacore for axistensors?
     ᶜνₜ = @. ᶜtemp_scalar = max(
         FT(0),
         -c_amd *
