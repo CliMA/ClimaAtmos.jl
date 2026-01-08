@@ -275,7 +275,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 # MatrixFields.unrolled_map(
                 #     name ->
                 #         (name, @name(c.sgsʲs.:(1).ρa)) => similar(Y.c, TridiagonalRow),
-                #     available_sgs_condensate_mass_names,
+                #     available_sgs_condensate_names,
                 # )...,
                 # (@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).ρa)) =>
                 #     similar(Y.c, TridiagonalRow),
@@ -1023,6 +1023,15 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     (@name(c.sgsʲs.:(1).n_liq), @name(ᶜwₙₗʲs.:(1))),
                     (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
                 )
+                # First make all ∂ᶜχʲ_err_∂ᶜχʲ blocks zero
+                MatrixFields.unrolled_foreach(
+                    sgs_microphysics_tracers,
+                ) do (χʲ_name, _)
+                    MatrixFields.has_field(Y, χʲ_name) || return
+                    ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χʲ_name, χʲ_name]
+                    @. ∂ᶜχʲ_err_∂ᶜχʲ = zero(typeof(∂ᶜχʲ_err_∂ᶜχʲ))
+                end
+                # Now compute them
                 MatrixFields.unrolled_foreach(
                     sgs_microphysics_tracers,
                 ) do (χʲ_name, wʲ_name)
@@ -1032,7 +1041,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
                     # advection
                     ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χʲ_name, χʲ_name]
-                    @. ∂ᶜχʲ_err_∂ᶜχʲ =
+                    @. ∂ᶜχʲ_err_∂ᶜχʲ +=
                         dtγ * (
                             DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
                             ᶜadvdivᵥ_matrix() ⋅
@@ -1075,16 +1084,41 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         @name(c.sgsʲs.:(1).q_rai),
                         @name(c.sgsʲs.:(1).q_sno),
                     )
+                        # q_totʲ
                         ∂ᶜq_totʲ_err_∂ᶜχʲ =
                             matrix[@name(c.sgsʲs.:(1).q_tot), χʲ_name]
                         @. ∂ᶜq_totʲ_err_∂ᶜχʲ =
                             DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar
                         
+                        # mseʲ
                         e_int_func = internal_energy_func(χʲ_name)
                         ∂ᶜmseʲ_err_∂ᶜχʲ =
                             matrix[@name(c.sgsʲs.:(1).mse), χʲ_name]
                         @. ∂ᶜmseʲ_err_∂ᶜχʲ +=
                             DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(e_int_func(thermo_params, ᶜtsʲs.:(1)) + ᶜΦ)
+                        
+                        # contributions due to ρa sedimentation
+                        @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -= 
+                            DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(ᶜχʲ)
+                        @. ∂ᶜq_totʲ_err_∂ᶜχʲ -=
+                            DiagonalMatrixRow(ᶜinv_ρ̂ * Y.c.sgsʲs.:(1).q_tot) ⋅ ᶜtridiagonal_matrix_scalar
+
+                        @. ∂ᶜmseʲ_err_∂ᶜmseʲ -= 
+                            DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(ᶜχʲ)
+                        @. ∂ᶜmseʲ_err_∂ᶜχʲ -=
+                            DiagonalMatrixRow(ᶜinv_ρ̂ * Y.c.sgsʲs.:(1).mse) ⋅ ᶜtridiagonal_matrix_scalar
+
+                        @. ∂ᶜχʲ_err_∂ᶜχʲ -= 
+                            DiagonalMatrixRow(ᶜinv_ρ̂ * ᶜχʲ) ⋅ ᶜtridiagonal_matrix_scalar
+
+                        MatrixFields.unrolled_foreach(
+                            sgs_microphysics_tracers,
+                        ) do (ηʲ_name, _)
+                            MatrixFields.has_field(Y, ηʲ_name) || return
+                            ∂ᶜηʲ_err_∂ᶜηʲ = matrix[ηʲ_name, ηʲ_name]
+                            @. ∂ᶜηʲ_err_∂ᶜηʲ -=
+                                DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(ᶜχʲ)
+                        end
                     end
 
                 end
