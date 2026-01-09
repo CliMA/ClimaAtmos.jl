@@ -882,14 +882,18 @@ function get_simulation(config::AtmosConfig)
                     pfull_coords = true,
                 )
             pfull_idx =
-                findfirst(sd -> sd.variable.short_name == "pfull", pfull_scheduled_diagnostics)
+                findfirst(
+                    sd -> sd.variable.short_name == "pfull",
+                    pfull_scheduled_diagnostics,
+                )
             pfull_compute! = scheduled_diagnostics[pfull_idx].variable.compute!
             pfull_scheduled_diagnostics = filter(
                 sd ->
                     sd.variable.short_name == "pfull" || sd.variable.short_name == "ta",
                 pfull_scheduled_diagnostics,
             )
-            scheduled_diagnostics = [scheduled_diagnostics..., pfull_scheduled_diagnostics...]
+            scheduled_diagnostics =
+                [scheduled_diagnostics..., pfull_scheduled_diagnostics...]
             # TODO: Pfull diagnostics only work with netcdfwriter, so throw error or discard
             # the scheduled diagnostics
             writers = (writers..., pfull_writers...)
