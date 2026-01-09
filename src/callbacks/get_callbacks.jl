@@ -174,6 +174,8 @@ function get_diagnostics(
 
             if isnothing(reduction_time_func)
                 compute_every = compute_schedule
+            elseif pfull_coords
+                compute_every = CAD.DivisorSchedule(30)
             else
                 compute_every = CAD.EveryStepSchedule()
             end
