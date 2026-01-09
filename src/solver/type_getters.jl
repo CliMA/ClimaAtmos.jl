@@ -921,7 +921,30 @@ function get_simulation(config::AtmosConfig)
                     sim_info,
                     output_dir,
                 )
+
+            pfull_scheduled_diagnostics, pfull_writers, _ =
+                get_diagnostics(
+                    config.parsed_args,
+                    atmos,
+                    Y,
+                    p,
+                    sim_info,
+                    output_dir,
+                    pfull_coords = true,
+                )
+            # TODO: Populate this list...
+            pfull_scheduled_diagnostics = filter(
+                sd ->
+                    sd.variable.short_name == "pfull" || sd.variable.short_name == "ta",
+                pfull_scheduled_diagnostics,
+            )
+            scheduled_diagnostics =
+                [scheduled_diagnostics..., pfull_scheduled_diagnostics...]
+            # TODO: Pfull diagnostics only work with netcdfwriter, so throw error or discard
+            # the scheduled diagnostics
+            writers = (writers..., pfull_writers...)
         end
+
         @info "initializing diagnostics: $s"
 
         # Check for consistency between diagnostics and checkpoints

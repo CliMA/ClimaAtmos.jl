@@ -1,4 +1,12 @@
-function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
+function get_diagnostics(
+    parsed_args,
+    atmos_model,
+    Y,
+    p,
+    sim_info,
+    output_dir;
+    pfull_coords = false,
+)
 
     (; dt, t_start, start_date) = sim_info
 
@@ -47,6 +55,24 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
     # not contain the date
     maybe_add_start_date =
         pkgversion(CAD.ClimaDiagnostics) >= v"0.2.9" ? (; start_date) : (;)
+    pfull_compute! =
+        (out, state, cache, time) -> begin
+            if isnothing(out)
+                return copy(cache.precomputed.ᶜp)
+            else
+                out .= cache.precomputed.ᶜp
+            end
+        end
+    # TODO: This would not work with ITime, since I need access to t
+    coords_style =
+        pfull_coords ?
+        ClimaDiagnostics.Writers.PfullCoordsStyle(
+            pfull_compute!,
+            Y,
+            p,
+            sim_info.t_start;
+        ) :
+        ClimaDiagnostics.Writers.NoConversionStyle()
 
     netcdf_writer = CAD.NetCDFWriter(
         axes(Y.c),
@@ -54,6 +80,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
         num_points = num_netcdf_points;
         z_sampling_method,
         sync_schedule = CAD.EveryStepSchedule(),
+        coords_style = coords_style,
         maybe_add_start_date...,
     )
     writers = (dict_writer, hdf5_writer, netcdf_writer)
