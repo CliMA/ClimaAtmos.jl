@@ -1081,9 +1081,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     @. ᶜtridiagonal_matrix =
                         dtγ * ifelse(ᶜ∂a∂z < 0,
                             -(ᶜprecipdivᵥ_matrix()) ⋅ ᶠsed_tracer_advection ⋅
-                            DiagonalMatrixRow(1 / ᶜρʲs.:(1)),
+                            DiagonalMatrixRow(ᶜχʲ / ᶜρʲs.:(1)),
                             -DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜprecipdivᵥ_matrix() ⋅
-                            ᶠsed_tracer_advection,
+                            ᶠsed_tracer_advection ⋅ DiagonalMatrixRow(ᶜχʲ),
                         )
 
                     @. ∂ᶜχʲ_err_∂ᶜχʲ +=
@@ -1094,8 +1094,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         DiagonalMatrixRow(ᶜ∂inv_ρ̂_∂ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅
                         DiagonalMatrixRow(ᶜχʲ)
                     @. ∂ᶜχʲ_err_∂ᶜρaʲ +=
-                        DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix ⋅
-                        DiagonalMatrixRow(ᶜχʲ)
+                        DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix
 
                     if χʲ_name in (
                         @name(c.sgsʲs.:(1).q_liq),
@@ -1113,8 +1112,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             DiagonalMatrixRow(ᶜ∂inv_ρ̂_∂ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅
                             DiagonalMatrixRow(ᶜχʲ)
                         @. ∂ᶜq_totʲ_err_∂ᶜρaʲ +=
-                            DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix ⋅
-                            DiagonalMatrixRow(ᶜχʲ)
+                            DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix
 
                         # mseʲ
                         e_int_func = internal_energy_func(χʲ_name)
@@ -1131,12 +1129,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             )
                         @. ∂ᶜmseʲ_err_∂ᶜρaʲ +=
                             DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix ⋅
-                            DiagonalMatrixRow(
-                                ᶜχʲ * (e_int_func(thermo_params, ᶜtsʲs.:(1)) + ᶜΦ),
-                            )
+                            DiagonalMatrixRow(e_int_func(thermo_params, ᶜtsʲs.:(1)) + ᶜΦ)
 
                         # contributions due to ρa sedimentation
-                        @. ∂ᶜρaʲ_err_∂ᶜρaʲ += ᶜtridiagonal_matrix ⋅ DiagonalMatrixRow(ᶜχʲ)
+                        @. ∂ᶜρaʲ_err_∂ᶜρaʲ += ᶜtridiagonal_matrix
 
                         @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -=
                             DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅
@@ -1149,7 +1145,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(ᶜχʲ)
                         @. ∂ᶜq_totʲ_err_∂ᶜρaʲ -=
                             DiagonalMatrixRow(ᶜinv_ρ̂ * Y.c.sgsʲs.:(1).q_tot) ⋅
-                            ᶜtridiagonal_matrix ⋅ DiagonalMatrixRow(ᶜχʲ)
+                            ᶜtridiagonal_matrix
 
                         @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
                             DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅
@@ -1162,7 +1158,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(ᶜχʲ)
                         @. ∂ᶜmseʲ_err_∂ᶜρaʲ -=
                             DiagonalMatrixRow(ᶜinv_ρ̂ * Y.c.sgsʲs.:(1).mse) ⋅
-                            ᶜtridiagonal_matrix ⋅ DiagonalMatrixRow(ᶜχʲ)
+                            ᶜtridiagonal_matrix
 
                         @. ∂ᶜχʲ_err_∂ᶜχʲ -=
                             DiagonalMatrixRow(ᶜinv_ρ̂ * ᶜχʲ) ⋅ ᶜtridiagonal_matrix_scalar
@@ -1181,8 +1177,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                                 DiagonalMatrixRow(ᶜ∂inv_ρ̂_∂ρ̂ * ᶜχʲ) ⋅
                                 ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(ᶜχʲ)
                             @. ∂ᶜηʲ_err_∂ᶜρaʲ -=
-                                DiagonalMatrixRow(ᶜinv_ρ̂ * ᶜχʲ) ⋅ ᶜtridiagonal_matrix ⋅
-                                DiagonalMatrixRow(ᶜχʲ)
+                                DiagonalMatrixRow(ᶜinv_ρ̂ * ᶜχʲ) ⋅ ᶜtridiagonal_matrix
                         end
                     end
 
