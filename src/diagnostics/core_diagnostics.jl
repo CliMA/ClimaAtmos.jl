@@ -621,14 +621,33 @@ add_diagnostic_variable!(
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
-            return nothing
+            return copy(state.sfc.h_ice)
         else
             out .=
-                nothing
+                state.sfc.h_ice
         end
     end,
 )
 
+###
+# Mixed layer temperature
+### TODO: verify standard name
+add_diagnostic_variable!(
+    short_name = "toml",
+    long_name = "Ocean Mixed Layer Temperature",
+    standard_name = "ocean_mixed_layer_temperature",
+    units = "m",
+    comments = "(nonstandard) Ocean mixed layer temperature for Eisenman sea ice model",
+    compute! = (out, state, cache, time) -> begin
+        thermo_params = CAP.thermodynamics_params(cache.params)
+        if isnothing(out)
+            return copy(state.sfc.T_ml)
+        else
+            out .=
+                state.sfc.T_ml
+        end
+    end,
+)
 
 ###
 # Near-surface air temperature (2d)
