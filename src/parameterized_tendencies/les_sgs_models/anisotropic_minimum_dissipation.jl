@@ -62,7 +62,7 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     grav = CAP.grav(params)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜu, ᶠu³, ᶜts) = precomputed
-    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = scratch
+    (; ᶜtemp_UVWxUVW, ᶜtemp_UVWxUVW_scaled, ᶠtemp_UVWxUVW, ᶠtemp_UVWxUVW_scaled, ᶜtemp_strain, ᶠtemp_strain) = scratch
     (; ᶜtemp_scalar, ᶠtemp_scalar, ᶠtemp_scalar_2, ᶜtemp_UVW, ᶠtemp_UVW) =
         scratch
 
@@ -96,10 +96,10 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
 
     # Scaled Derivatives ∂̂ᵢ = Δ₍ᵢ₎∂ᵢ
-    ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
+    ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW_scaled = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
     @. ᶜ∂̂u_uvw += ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))
 
-    ᶠ∂̂u_uvw = @.ᶠtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))
+    ᶠ∂̂u_uvw = @.ᶠtemp_UVWxUVW_scaled = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))
     @. ᶠ∂̂u_uvw += ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))
 
     ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
@@ -226,7 +226,8 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     ### AMD ###
 
     (; ᶜu, ᶠu³, ᶜts) = p.precomputed
-    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = p.scratch
+    (; ᶜtemp_UVWxUVW, ᶜtemp_UVWxUVW_scaled, 
+       ᶠtemp_UVWxUVW, ᶠtemp_UVWxUVW_scaled, ᶜtemp_strain, ᶠtemp_strain) = p.scratch
     (; ᶜtemp_scalar, ᶠtemp_scalar, ᶜtemp_UVW, ᶠtemp_UVW) =
         p.scratch
 
@@ -266,18 +267,15 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
 
     # Do we need scratch variables at all?
     # Scaled Derivatives ∂̂ᵢ = Δ₍ᵢ₎∂ᵢ
-    ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
+    ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW_scaled = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
     @. ᶜ∂̂u_uvw += ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))
 
-    ᶠ∂̂u_uvw = @.ᶠtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))
+    ᶠ∂̂u_uvw = @.ᶠtemp_UVWxUVW_scaled = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))
     @. ᶠ∂̂u_uvw += ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))
 
     ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
     ᶠ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶠ∂̂u_uvw * adjoint(ᶠ∂̂u_uvw))
     ᶜ∂ₗuₘ∂ₗuₘ = @. lazy(CA.norm_sqr(∇ᶜu_uvw))
-    # Strain rate tensor
-    ᶜS = @. ᶜtemp_strain = (∇ᶜu_uvw + adjoint(∇ᶜu_uvw)) / 2
-    ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
 
     # AMD eddy viscosity
     # no defined trace method in climacore for axistensors?

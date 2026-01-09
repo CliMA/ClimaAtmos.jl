@@ -22,6 +22,7 @@ function implicit_temporary_quantities(Y, atmos)
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜu₃ʲ
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³, ᶠu³_diff
         ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
+        ᶠtemp_UVWxUVW_scaled = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
     )
 end
 function temporary_quantities(Y, atmos)
@@ -75,7 +76,9 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_UVW = Fields.Field(typeof(uvw_vec), center_space), # UVW(ᶜu)
         ᶠtemp_UVW = Fields.Field(typeof(uvw_vec), face_space), # UVW(ᶠu³)
         ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
+        ᶜtemp_UVWxUVW_scaled = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
         ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
+        ᶠtemp_UVWxUVW_scaled = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
         ᶜtemp_strain = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
         ᶠtemp_strain = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
         # TODO: Remove this hack
