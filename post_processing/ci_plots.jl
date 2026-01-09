@@ -1563,17 +1563,16 @@ Larcform1Plots = Val{:larcform1}
 function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
 
-
     short_names_2D = ["ta", "thetaa", "pfull", "clw", "cli", "hus", "hur", "ua", "va", "wa", "rlu", "rld", "rhoa"]
     short_names_1D = ["rlut", "rlus", "rlds", "evspsbl", "lwp", "rsdt", "rlutcs", "rldscs", "cl", "pr", "prsn", "hfss", "hfls", "ts"]
     reduction = "average"
-
+    
     vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
-    slice(get(simdir; short_name, reduction), x=0, y=0)
+        get(simdir; short_name, reduction)
     end
 
     vars_1D = map_comparison(simdirs, short_names_1D) do simdir, short_name
-        slice(get(simdir; short_name, reduction), x=0, y=0)
+        get(simdir; short_name, reduction)
     end
 
     make_plots_generic(
