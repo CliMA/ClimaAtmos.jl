@@ -1020,7 +1020,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     (@name(c.sgsʲs.:(1).n_liq), @name(ᶜwₙₗʲs.:(1))),
                     (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
                 )
-                # First make fill blocks with zero
+                # First fill blocks with zero
                 MatrixFields.unrolled_foreach(
                     sgs_microphysics_tracers,
                 ) do (χʲ_name, _)
