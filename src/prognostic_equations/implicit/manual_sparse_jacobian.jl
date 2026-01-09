@@ -1006,8 +1006,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
                 ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_7
                 @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
-                ᶜinv_ρ̂ = @. lazy(inv_ρa(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1), p.atmos.turbconv_model))
-                
+                ᶜinv_ρ̂ =
+                    @. lazy(inv_ρa(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1), p.atmos.turbconv_model))
+                ᶜ∂inv_ρ̂_∂ρ̂ = @. lazy(
+                    ∂inv_ρa_∂ρa(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1), p.atmos.turbconv_model),
+                )
+
                 sgs_microphysics_tracers = (
                     (@name(c.sgsʲs.:(1).q_liq), @name(ᶜwₗʲs.:(1))),
                     (@name(c.sgsʲs.:(1).q_ice), @name(ᶜwᵢʲs.:(1))),
@@ -1016,14 +1020,21 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     (@name(c.sgsʲs.:(1).n_liq), @name(ᶜwₙₗʲs.:(1))),
                     (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
                 )
-                # First make all ∂ᶜχʲ_err_∂ᶜχʲ blocks zero
+                # First make fill blocks with zero
                 MatrixFields.unrolled_foreach(
                     sgs_microphysics_tracers,
                 ) do (χʲ_name, _)
                     MatrixFields.has_field(Y, χʲ_name) || return
                     ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χʲ_name, χʲ_name]
                     @. ∂ᶜχʲ_err_∂ᶜχʲ = zero(typeof(∂ᶜχʲ_err_∂ᶜχʲ))
+                    ∂ᶜχʲ_err_∂ᶜρaʲ = matrix[χʲ_name, @name(c.sgsʲs.:(1).ρa)]
+                    @. ∂ᶜχʲ_err_∂ᶜρaʲ = zero(typeof(∂ᶜχʲ_err_∂ᶜρaʲ))
                 end
+                ∂ᶜq_totʲ_err_∂ᶜρaʲ =
+                    matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).ρa)]
+                ∂ᶜmseʲ_err_∂ᶜρaʲ = matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).ρa)]
+                @. ∂ᶜq_totʲ_err_∂ᶜρaʲ = zero(typeof(∂ᶜq_totʲ_err_∂ᶜρaʲ))
+                @. ∂ᶜmseʲ_err_∂ᶜρaʲ = zero(typeof(∂ᶜmseʲ_err_∂ᶜρaʲ))
                 # Now compute them
                 MatrixFields.unrolled_foreach(
                     sgs_microphysics_tracers,
@@ -1067,9 +1078,24 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             -DiagonalMatrixRow(ᶜa) ⋅ ᶜprecipdivᵥ_matrix() ⋅
                             ᶠsed_tracer_advection,
                         )
+                    @. ᶜtridiagonal_matrix =
+                        dtγ * ifelse(ᶜ∂a∂z < 0,
+                            -(ᶜprecipdivᵥ_matrix()) ⋅ ᶠsed_tracer_advection ⋅
+                            DiagonalMatrixRow(1 / ᶜρʲs.:(1)),
+                            -DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜprecipdivᵥ_matrix() ⋅
+                            ᶠsed_tracer_advection,
+                        )
 
                     @. ∂ᶜχʲ_err_∂ᶜχʲ +=
                         DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar
+
+                    ∂ᶜχʲ_err_∂ᶜρaʲ = matrix[χʲ_name, @name(c.sgsʲs.:(1).ρa)]
+                    @. ∂ᶜχʲ_err_∂ᶜρaʲ +=
+                        DiagonalMatrixRow(ᶜ∂inv_ρ̂_∂ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅
+                        DiagonalMatrixRow(ᶜχʲ)
+                    @. ∂ᶜχʲ_err_∂ᶜρaʲ +=
+                        DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix ⋅
+                        DiagonalMatrixRow(ᶜχʲ)
 
                     if χʲ_name in (
                         @name(c.sgsʲs.:(1).q_liq),
@@ -1082,26 +1108,63 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             matrix[@name(c.sgsʲs.:(1).q_tot), χʲ_name]
                         @. ∂ᶜq_totʲ_err_∂ᶜχʲ =
                             DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar
-                        
+
+                        @. ∂ᶜq_totʲ_err_∂ᶜρaʲ +=
+                            DiagonalMatrixRow(ᶜ∂inv_ρ̂_∂ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅
+                            DiagonalMatrixRow(ᶜχʲ)
+                        @. ∂ᶜq_totʲ_err_∂ᶜρaʲ +=
+                            DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix ⋅
+                            DiagonalMatrixRow(ᶜχʲ)
+
                         # mseʲ
                         e_int_func = internal_energy_func(χʲ_name)
                         ∂ᶜmseʲ_err_∂ᶜχʲ =
                             matrix[@name(c.sgsʲs.:(1).mse), χʲ_name]
                         @. ∂ᶜmseʲ_err_∂ᶜχʲ +=
-                            DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(e_int_func(thermo_params, ᶜtsʲs.:(1)) + ᶜΦ)
-                        
+                            DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅
+                            DiagonalMatrixRow(e_int_func(thermo_params, ᶜtsʲs.:(1)) + ᶜΦ)
+
+                        @. ∂ᶜmseʲ_err_∂ᶜρaʲ +=
+                            DiagonalMatrixRow(ᶜ∂inv_ρ̂_∂ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅
+                            DiagonalMatrixRow(
+                                ᶜχʲ * (e_int_func(thermo_params, ᶜtsʲs.:(1)) + ᶜΦ),
+                            )
+                        @. ∂ᶜmseʲ_err_∂ᶜρaʲ +=
+                            DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix ⋅
+                            DiagonalMatrixRow(
+                                ᶜχʲ * (e_int_func(thermo_params, ᶜtsʲs.:(1)) + ᶜΦ),
+                            )
+
                         # contributions due to ρa sedimentation
-                        @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -= 
-                            DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(ᶜχʲ)
+                        @. ∂ᶜρaʲ_err_∂ᶜρaʲ += ᶜtridiagonal_matrix ⋅ DiagonalMatrixRow(ᶜχʲ)
+
+                        @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -=
+                            DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅
+                            DiagonalMatrixRow(ᶜχʲ)
                         @. ∂ᶜq_totʲ_err_∂ᶜχʲ -=
-                            DiagonalMatrixRow(ᶜinv_ρ̂ * Y.c.sgsʲs.:(1).q_tot) ⋅ ᶜtridiagonal_matrix_scalar
+                            DiagonalMatrixRow(ᶜinv_ρ̂ * Y.c.sgsʲs.:(1).q_tot) ⋅
+                            ᶜtridiagonal_matrix_scalar
+                        @. ∂ᶜq_totʲ_err_∂ᶜρaʲ -=
+                            DiagonalMatrixRow(ᶜ∂inv_ρ̂_∂ρ̂ * Y.c.sgsʲs.:(1).q_tot) ⋅
+                            ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(ᶜχʲ)
+                        @. ∂ᶜq_totʲ_err_∂ᶜρaʲ -=
+                            DiagonalMatrixRow(ᶜinv_ρ̂ * Y.c.sgsʲs.:(1).q_tot) ⋅
+                            ᶜtridiagonal_matrix ⋅ DiagonalMatrixRow(ᶜχʲ)
 
-                        @. ∂ᶜmseʲ_err_∂ᶜmseʲ -= 
-                            DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(ᶜχʲ)
+                        @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
+                            DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅
+                            DiagonalMatrixRow(ᶜχʲ)
                         @. ∂ᶜmseʲ_err_∂ᶜχʲ -=
-                            DiagonalMatrixRow(ᶜinv_ρ̂ * Y.c.sgsʲs.:(1).mse) ⋅ ᶜtridiagonal_matrix_scalar
+                            DiagonalMatrixRow(ᶜinv_ρ̂ * Y.c.sgsʲs.:(1).mse) ⋅
+                            ᶜtridiagonal_matrix_scalar
+                        @. ∂ᶜmseʲ_err_∂ᶜρaʲ -=
+                            DiagonalMatrixRow(ᶜ∂inv_ρ̂_∂ρ̂ * Y.c.sgsʲs.:(1).mse) ⋅
+                            ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(ᶜχʲ)
+                        @. ∂ᶜmseʲ_err_∂ᶜρaʲ -=
+                            DiagonalMatrixRow(ᶜinv_ρ̂ * Y.c.sgsʲs.:(1).mse) ⋅
+                            ᶜtridiagonal_matrix ⋅ DiagonalMatrixRow(ᶜχʲ)
 
-                        @. ∂ᶜχʲ_err_∂ᶜχʲ -= 
+                        @. ∂ᶜχʲ_err_∂ᶜχʲ -=
                             DiagonalMatrixRow(ᶜinv_ρ̂ * ᶜχʲ) ⋅ ᶜtridiagonal_matrix_scalar
 
                         MatrixFields.unrolled_foreach(
@@ -1110,7 +1173,16 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             MatrixFields.has_field(Y, ηʲ_name) || return
                             ∂ᶜηʲ_err_∂ᶜηʲ = matrix[ηʲ_name, ηʲ_name]
                             @. ∂ᶜηʲ_err_∂ᶜηʲ -=
-                                DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(ᶜχʲ)
+                                DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar ⋅
+                                DiagonalMatrixRow(ᶜχʲ)
+
+                            ∂ᶜηʲ_err_∂ᶜρaʲ = matrix[ηʲ_name, @name(c.sgsʲs.:(1).ρa)]
+                            @. ∂ᶜηʲ_err_∂ᶜρaʲ -=
+                                DiagonalMatrixRow(ᶜ∂inv_ρ̂_∂ρ̂ * ᶜχʲ) ⋅
+                                ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(ᶜχʲ)
+                            @. ∂ᶜηʲ_err_∂ᶜρaʲ -=
+                                DiagonalMatrixRow(ᶜinv_ρ̂ * ᶜχʲ) ⋅ ᶜtridiagonal_matrix ⋅
+                                DiagonalMatrixRow(ᶜχʲ)
                         end
                     end
 

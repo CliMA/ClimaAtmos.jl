@@ -654,7 +654,8 @@ Arguments:
 - `turbconv_model`: The turbulence convection model providing regularization parameters.
 """
 function ∂inv_ρa_∂ρa(ρa, ρ, turbconv_model)
+    FT = typeof(ρ)
     weight = sgs_weight_function(ρa / ρ, turbconv_model.a_half)
     dweight_da = sgs_weight_function_derivative(ρa / ρ, turbconv_model.a_half)
-    return ρa < eps(typeof(ρ)) ? 0 : dweight_da / ρ / ρa - weight / ρa^2
+    return ρa < eps(FT) ? FT(0) : dweight_da / ρ / ρa - weight / ρa^2
 end
