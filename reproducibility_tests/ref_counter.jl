@@ -1,4 +1,4 @@
-296
+297
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+297
+- Add new dataset to reproducibility bundle : `baroclinic_wave_equil_amd/prog_state.hdf5`.
+
 296
 - Fix ρa tendencies due to vertical diffusion and hyperdiffusion of q_totʲ for PEDMF
 
