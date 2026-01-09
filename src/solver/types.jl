@@ -106,6 +106,7 @@ struct ExternalTVColumnSST <: AbstractSST end
 
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
+struct Larcform1Insolation <: AbstractInsolation end
 struct TimeVaryingInsolation <: AbstractInsolation
     # TODO: Remove when we can easily go from time to date
     start_date::Dates.DateTime
@@ -212,6 +213,7 @@ Base.@kwdef struct SlabOceanSST{FT} <: AbstractSurfaceTemperature
     Q₀::FT = -20 # Q-flux maximum mplitude [W/m²]
     ϕ₀::FT = 16 # Q-flux meridional scale [deg]
 end
+
 """
     EisenmanSeaIce <: AbstractSurfaceTemperature
 
