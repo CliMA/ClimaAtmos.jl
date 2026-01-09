@@ -933,9 +933,44 @@ function get_simulation(config::AtmosConfig)
                     pfull_coords = true,
                 )
             # TODO: Populate this list...
+            desired_names = Set([
+                "arup",
+                "clwup",
+                "thetaa",
+                "hus",
+                "rsucs",
+                "rsd",
+                "rlucs",
+                "rsu",
+                "waup",
+                "rhoa",
+                "va",
+                "ta",
+                "rsdcs",
+                "pfull",
+                "rldcs",
+                "tke",
+                "ua",
+                "taup",
+                "waen",
+                "rhoaup",
+                "cli",
+                "clw",
+                "hurup",
+                "cl",
+                "cliup",
+                "husup",
+                "rld",
+                "lmix",
+                "zg",
+                "ha",
+                "hur",
+                "haup",
+                "thetaaup",
+                "rlu",
+            ])
             pfull_scheduled_diagnostics = filter(
-                sd ->
-                    sd.variable.short_name == "pfull" || sd.variable.short_name == "ta",
+                sd -> sd.variable.short_name in desired_names,
                 pfull_scheduled_diagnostics,
             )
             scheduled_diagnostics =
