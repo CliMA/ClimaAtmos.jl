@@ -272,15 +272,15 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                     similar(Y.f, BidiagonalRow_C3),
                 (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) =>
                     similar(Y.f, TridiagonalRow_C3xACT3),
-                # MatrixFields.unrolled_map(
-                #     name ->
-                #         (name, @name(c.sgsʲs.:(1).ρa)) => similar(Y.c, TridiagonalRow),
-                #     available_sgs_condensate_names,
-                # )...,
-                # (@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).ρa)) =>
-                #     similar(Y.c, TridiagonalRow),
-                # (@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).ρa)) =>
-                #     similar(Y.c, TridiagonalRow),
+                MatrixFields.unrolled_map(
+                    name ->
+                        (name, @name(c.sgsʲs.:(1).ρa)) => similar(Y.c, TridiagonalRow),
+                    available_sgs_condensate_names,
+                )...,
+                (@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).ρa)) =>
+                    similar(Y.c, TridiagonalRow),
+                (@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).ρa)) =>
+                    similar(Y.c, TridiagonalRow),
             )
         else
             (
@@ -1006,15 +1006,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
                 ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_7
                 @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
-                ᶜinv_ρ̂ = (@. lazy(
-                    specific(
-                        FT(1),
-                        Y.c.sgsʲs.:(1).ρa,
-                        FT(0),
-                        ᶜρʲs.:(1),
-                        p.atmos.turbconv_model,
-                    ),
-                ))
+                ᶜinv_ρ̂ = @. lazy(inv_ρa(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1), p.atmos.turbconv_model))
+                
                 sgs_microphysics_tracers = (
                     (@name(c.sgsʲs.:(1).q_liq), @name(ᶜwₗʲs.:(1))),
                     (@name(c.sgsʲs.:(1).q_ice), @name(ᶜwᵢʲs.:(1))),

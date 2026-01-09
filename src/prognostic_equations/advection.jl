@@ -431,15 +431,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶜ∂ρ∂t_sed = p.scratch.ᶜtemp_scalar_3
             @. ᶜ∂ρ∂t_sed = 0
 
-            ᶜinv_ρ̂ = (@. lazy(
-                specific(
-                    FT(1),
-                    Y.c.sgsʲs.:($$j).ρa,
-                    FT(0),
-                    ᶜρʲs.:($$j),
-                    turbconv_model,
-                ),
-            ))
+            ᶜinv_ρ̂ = @. lazy(inv_ρa(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j), turbconv_model))
 
             # Sedimentation
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.

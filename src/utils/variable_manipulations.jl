@@ -233,6 +233,21 @@ function sgs_weight_function(a, a_half)
 end
 
 """
+    sgs_weight_function_derivative(a, a_half)
+
+Computes the derivative of sgs_weight_function wrt a (required by Jacobian).
+"""
+function sgs_weight_function_derivative(a, a_half)
+    if a < 0 || a > min(1, 42 * a_half)
+        return zero(a)
+    else
+        p = -1 / log2(1 - a_half)
+        x = 1 - 2(1 - a)^p
+        return (1 - x^2) / (1 + x^2)^2 * 2p * (1 - a)^(p - 1)
+    end
+end
+
+"""
     draft_sum(f, sgsʲs)
 
 Computes the sum of a function `f` applied to each draft subdomain

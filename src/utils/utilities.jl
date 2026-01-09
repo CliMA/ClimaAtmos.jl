@@ -617,3 +617,44 @@ function internal_energy_func(name)
         nothing
     end
 end
+
+"""
+    inv_ρa(ρa, ρ, turbconv_model)
+
+Computes a regularized inverse of the density–area product `ρa`.
+
+This function uses the SGS-regularized form of `specific` to compute `1 / ρa`
+when `ρa` is well-defined, and smoothly transitions the result to zero as `ρa`
+becomes small or vanishes. The grid-mean density `ρ` is used only to define the
+regularization weight; the fallback specific value is zero.
+
+Arguments:
+- `ρa`: The density–area product of the SGS component.
+- `ρ`: The grid-mean density used to construct the regularization weight.
+- `turbconv_model`: The turbulence convection model providing regularization parameters.
+"""
+function inv_ρa(ρa, ρ, turbconv_model)
+    return specific(1, ρa, 0, ρ, turbconv_model)
+end
+
+"""
+    ∂inv_ρa_∂ρa(ρa, ρ, turbconv_model)
+
+Computes the derivative of the regularized inverse density–area product
+`inv_ρa(ρa, ρ, turbconv_model)` with respect to `ρa`.
+
+The derivative is evaluated consistently with the SGS regularization used in
+`inv_ρa`, accounting for the smooth transition to zero as `ρa` becomes small or
+vanishes. This ensures a bounded and numerically stable derivative near
+`ρa → 0`.
+
+Arguments:
+- `ρa`: The density–area product of the SGS component.
+- `ρ`: The grid-mean density used to define the regularization weight.
+- `turbconv_model`: The turbulence convection model providing regularization parameters.
+"""
+function ∂inv_ρa_∂ρa(ρa, ρ, turbconv_model)
+    weight = sgs_weight_function(ρa / ρ, turbconv_model.a_half)
+    dweight_da = sgs_weight_function_derivative(ρa / ρ, turbconv_model.a_half)
+    return ρa < eps(typeof(ρ)) ? 0 : dweight_da / ρ / ρa - weight / ρa^2
+end
