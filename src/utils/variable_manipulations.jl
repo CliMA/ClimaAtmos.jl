@@ -233,6 +233,21 @@ function sgs_weight_function(a, a_half)
 end
 
 """
+    sgs_weight_function_derivative(a, a_half)
+
+Computes the derivative of sgs_weight_function wrt a (required by Jacobian).
+"""
+function sgs_weight_function_derivative(a, a_half)
+    if a < 0 || a > min(1, 42 * a_half)
+        return zero(a)
+    else
+        p = -1 / log2(1 - a_half)
+        x = 1 - 2(1 - a)^p
+        return (1 - x^2) / (1 + x^2)^2 * 2p * (1 - a)^(p - 1)
+    end
+end
+
+"""
     draft_sum(f, sgsʲs)
 
 Computes the sum of a function `f` applied to each draft subdomain
@@ -381,6 +396,27 @@ function get_χʲ_name_from_ρχ_name(ρχ_name)
         ) :
         MatrixFields.append_internal_name(parent_name, get_χʲ_name_from_ρχ_name(child_name))
     return χʲ_name
+end
+
+"""
+    get_base_name(composite_name::FieldName)
+
+Returns the `FieldName` corresponding to the lowest level of composite_name.
+
+Given a composite name `composite_name`, this function returns the new name corresponding to
+the lowest level: If `composite_name` is a base name (no children), it returns the same name.
+If `composite_name` has internal structure, the function recurses into the child names and
+returns the lowest level.
+"""
+function get_base_name(composite_name)
+    parent_name = MatrixFields.FieldName(MatrixFields.extract_first(composite_name))
+    child_name = MatrixFields.drop_first(composite_name)
+    base_name =
+        (child_name == MatrixFields.@name()) ?
+        parent_name :
+        get_base_name(child_name)
+
+    return base_name
 end
 
 """

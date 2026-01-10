@@ -431,15 +431,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶜ∂ρ∂t_sed = p.scratch.ᶜtemp_scalar_3
             @. ᶜ∂ρ∂t_sed = 0
 
-            ᶜinv_ρ̂ = (@. lazy(
-                specific(
-                    FT(1),
-                    Y.c.sgsʲs.:($$j).ρa,
-                    FT(0),
-                    ᶜρʲs.:($$j),
-                    turbconv_model,
-                ),
-            ))
+            ᶜinv_ρ̂ = @. lazy(inv_ρa(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j), turbconv_model))
 
             # Sedimentation
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.
@@ -480,17 +472,8 @@ function edmfx_sgs_vertical_advection_tendency!(
                 @. ᶜ∂ρ∂t_sed += vtt
 
                 # Flux form sedimentation of energy
-                if name in (@name(q_liq), @name(q_rai))
-                    ᶜmse_li = (@. lazy(
-                        TD.internal_energy_liquid(thp, ᶜtsʲs.:($$j)) + ᶜΦ,
-                    ))
-                elseif name in (@name(q_ice), @name(q_sno))
-                    ᶜmse_li = (@. lazy(
-                        TD.internal_energy_ice(thp, ᶜtsʲs.:($$j)) + ᶜΦ,
-                    ))
-                else
-                    error("Unsupported moisture tracer variable")
-                end
+                e_int_func = internal_energy_func(name)
+                ᶜmse_li = @. lazy(e_int_func(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
                 vtt = updraft_sedimentation(
                     ᶜρʲs.:($j),
                     ᶜwʲ,
