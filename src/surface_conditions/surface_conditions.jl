@@ -200,6 +200,7 @@ function surface_state_to_conditions(
         T_int,
         ρ_int,
         T_sfc,
+        Δz,
         q_tot_int,
         q_liq_int,
         q_ice_int,
