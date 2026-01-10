@@ -53,6 +53,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_area_limiter_scale::FT
     max_area_limiter_power::FT
     cloud_fraction_param_vec::VTF3
+    cloud_threshold::FT
 end
 
 Base.@kwdef struct SurfaceTemperatureParameters{FT} <: ASTP

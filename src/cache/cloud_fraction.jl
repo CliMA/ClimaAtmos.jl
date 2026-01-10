@@ -208,7 +208,7 @@ NVTX.@annotate function set_cloud_fraction!(
         q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
         @. p.precomputed.cloud_diagnostics_tuple =
             make_cloud_fraction_named_tuple(
-                ifelse(q_liq + q_ice > 0, FT(1), FT(0)),
+                ifelse(q_liq + q_ice > FT(CAP.cloud_threshold(p.params)), FT(1), FT(0)),
                 q_liq,
                 q_ice,
             )
