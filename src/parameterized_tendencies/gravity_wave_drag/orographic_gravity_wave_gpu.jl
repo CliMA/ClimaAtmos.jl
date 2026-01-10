@@ -423,10 +423,12 @@ function calc_nonpropagating_forcing!(
             if phase_acc > pi_val
                 return (z_face, ᶠz_pbl_itr, phase_acc, true)
             end
+            # Update z_ref only when above z_pbl
+            # If phase never exceeds π, z_ref will end up at model top
+            return (z_face, ᶠz_pbl_itr, phase_acc, false)
         end
-        # Always return the accumulator tuple, tracking current height
-        # If phase never exceeds π, z_ref will end up at model top
-        return (z_face, ᶠz_pbl_itr, phase_acc, false)
+        # Below z_pbl, keep previous z_ref_acc unchanged
+        return (z_ref_acc, ᶠz_pbl_acc, phase_acc, false)
     end
 
     eps_val = eps(FT)
@@ -448,8 +450,13 @@ function calc_nonpropagating_forcing!(
         return ᶠp_ref
     end
 
+    # Include cells that overlap with [z_pbl, z_ref):
+    # - RightBiasedF2C checks upper face > z_pbl (cell extends above z_pbl)
+    # - LeftBiasedF2C checks lower face < z_ref (cell starts below z_ref)
+    # This ensures at least one cell is included when z_ref > z_pbl
     L2 = Operators.LeftBiasedF2C(;)
-    @. ᶜmask = L2.((ᶠz .> ᶠz_pbl) .&& (ᶠz .<= ᶠz_ref))
+    R2 = Operators.RightBiasedF2C(;)
+    @. ᶜmask = R2.((ᶠz .> ᶠz_pbl)) .&& L2.((ᶠz .< ᶠz_ref))
     @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
     @. ᶜdiff = ᶜinterp.(ᶠp_m1 .- ᶠp)
 
@@ -461,13 +468,23 @@ function calc_nonpropagating_forcing!(
         return acc + wtsum_field
     end
 
-    if any(isnan, parent(ᶜwtsum)) || any(x -> x == 0, parent(ᶜwtsum))
-        error("wtsum contains invalid values - this should not happen after z_ref fallback fix")
+    if any(isnan.(parent(ᶜwtsum)))
+        error("NaN encountered in weight sum calculation of orographic gravity wave drag")
     end
 
-    # compute drag
-    @. ᶜuforcing += grav * τ_x * τ_np / τ_l / ᶜwtsum * ᶜweights
-    @. ᶜvforcing += grav * τ_y * τ_np / τ_l / ᶜwtsum * ᶜweights
+    # Compute drag, handling empty mask case (wtsum=0) gracefully
+    # When wtsum=0, the mask is empty (no cells between z_pbl and z_ref),
+    # so we set forcing to 0 for those columns
+    @. ᶜuforcing += ifelse(
+        ᶜwtsum == FT(0),
+        FT(0),
+        grav * τ_x * τ_np / τ_l / ᶜwtsum * ᶜweights,
+    )
+    @. ᶜvforcing += ifelse(
+        ᶜwtsum == FT(0),
+        FT(0),
+        grav * τ_y * τ_np / τ_l / ᶜwtsum * ᶜweights,
+    )
 
 end
 
