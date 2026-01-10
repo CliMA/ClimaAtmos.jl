@@ -5,6 +5,7 @@ insolation: rcemipii
 initial_condition: RCEMIPIIProfile_300
 config: box
 rad: allskywithclear
+output_dir: "/net/sampo/data1/haakon/rcemipii/simulation_output/microphysics_sensitivity_tests/processes_off/rain_and_ice_off/explicit_noneq"
 approximate_linear_solve_iters: 2  # only valid when implicit_diffusion=true
 rayleigh_sponge: true  # set sponge level in toml file
 smagorinsky_lilly: "UV"
@@ -33,13 +34,13 @@ z_elem: 86
 dz_bottom: 30.0
 
 #~8km grid
-x_elem: 4
-y_elem: 4
-dt: 10secs
+# x_elem: 4
+# y_elem: 4
+# dt: 10secs
 # ~4km grid
-# x_elem: 8
-# y_elem: 8
-# dt: 5secs
+x_elem: 8
+y_elem: 8
+dt: 5secs
 # ~2km grid
 # x_elem: 16
 # y_elem: 16
