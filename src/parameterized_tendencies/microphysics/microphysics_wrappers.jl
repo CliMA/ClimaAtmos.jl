@@ -110,42 +110,43 @@ function cloud_sources(
     dt,
 ) where {FT}
 
-    qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
+    # qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
 
-    qₛᵢ = TD.q_vap_from_p_vap(
-        thp,
-        T,
-        ρ,
-        TD.saturation_vapor_pressure(thp, T, TD.Ice()),
-    )
+    # qₛᵢ = TD.q_vap_from_p_vap(
+    #     thp,
+    #     T,
+    #     ρ,
+    #     TD.saturation_vapor_pressure(thp, T, TD.Ice()),
+    # )
 
-    if qᵥ + qᵢ > FT(0)
-        S = CMNe.conv_q_vap_to_q_lcl_icl_MM2015(
-            cm_params,
-            thp,
-            qₜ,
-            qₗ,
-            qᵢ,
-            qᵣ,
-            qₛ,
-            ρ,
-            T,
-        )
-    else
-        S = FT(0)
-    end
+    # if qᵥ + qᵢ > FT(0)
+    #     S = CMNe.conv_q_vap_to_q_lcl_icl_MM2015(
+    #         cm_params,
+    #         thp,
+    #         qₜ,
+    #         qₗ,
+    #         qᵢ,
+    #         qᵣ,
+    #         qₛ,
+    #         ρ,
+    #         T,
+    #     )
+    # else
+    #     S = FT(0)
+    # end
 
-    # Additional condition to avoid creating ice in conditions above freezing
-    # Representing the lack of INPs in warm temperatures
-    if T > thp.T_freeze && S > FT(0)
-        S = FT(0)
-    end
+    # # Additional condition to avoid creating ice in conditions above freezing
+    # # Representing the lack of INPs in warm temperatures
+    # if T > thp.T_freeze && S > FT(0)
+    #     S = FT(0)
+    # end
 
-    return ifelse(
-        S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ - qₛᵢ, dt, 2), limit(qᵢ, dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2), limit(qᵥ - qₛᵢ, dt, 2)),
-    )
+    # return ifelse(
+    #     S > FT(0),
+    #     triangle_inequality_limiter(S, limit(qᵥ - qₛᵢ, dt, 2), limit(qᵢ, dt, 2)),
+    #     -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2), limit(qᵥ - qₛᵢ, dt, 2)),
+    # )
+    return FT(0)
 end
 
 """
