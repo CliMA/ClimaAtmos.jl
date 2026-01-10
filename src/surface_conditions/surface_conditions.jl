@@ -269,10 +269,137 @@ function surface_state_to_conditions(
         end
     end
 
+    # Calculate original surface fluxes
+    original_sfc_conditions = SF.surface_conditions(surface_fluxes_params, inputs)
+    
+    # Increase surface temperature by 0.1 K
+    T_perturbed = T + FT(0.1)
+     
+    # Recalculate thermodynamic state with perturbed temperature
+    if isnothing(surf_state.p)
+        # Assume an adiabatic profile with constant cv and R above the surface.
+        cv = TD.cv_m(thermo_params, interior_ts)
+        R = TD.gas_constant_air(thermo_params, interior_ts)
+        interior_ρ = TD.air_density(thermo_params, interior_ts)
+        interior_T = TD.air_temperature(thermo_params, interior_ts)
+        ρ_perturbed = interior_ρ * (T_perturbed / interior_T)^(cv / R)
+        if atmos.moisture_model isa DryModel
+            ts_perturbed = TD.PhaseDry_ρT(thermo_params, ρ_perturbed, T_perturbed)
+        else
+            # Assume that the surface is water with saturated air directly
+            # above it.
+            q_vap_sat_perturbed =
+                TD.q_vap_saturation_generic(thermo_params, T_perturbed, ρ_perturbed, TD.Liquid())
+            q_vap_perturbed = ifelsenothing(surf_state.q_vap, q_vap_sat_perturbed)
+            q_perturbed = TD.PhasePartition(q_vap_perturbed)
+            ts_perturbed = TD.PhaseNonEquil_ρTq(thermo_params, ρ_perturbed, T_perturbed, q_perturbed)
+        end
+     # else
+     #     p = surf_state.p
+     #     if atmos.moisture_model isa DryModel
+     #         ts_perturbed = TD.PhaseDry_pT(thermo_params, p, T_perturbed)
+     #     else
+     #         q_vap_perturbed = if isnothing(surf_state.q_vap)
+     #             # Assume that the surface is water with saturated air directly
+     #             # above it.
+     #             phase = TD.Liquid()
+     #             p_sat_perturbed =
+     #                 TD.saturation_vapor_pressure(thermo_params, T_perturbed, phase)
+     #             ϵ_v =
+     #                 TD.Parameters.R_d(thermo_params) /
+     #                 TD.Parameters.R_v(thermo_params)
+     #             ϵ_v * p_sat_perturbed / (p - p_sat_perturbed * (1 - ϵ_v))
+     #         else
+     #             surf_state.q_vap
+     #         end
+     #         q_perturbed = TD.PhasePartition(q_vap_perturbed)
+     #         ts_perturbed = TD.PhaseNonEquil_pTq(thermo_params, p, T_perturbed, q_perturbed)
+     #     end
+    end
+     
+    # Recalculate surface values with perturbed temperature
+    surface_values_perturbed = SF.StateValues(coordinates.z, SA.SVector(u, v), ts_perturbed)
+     
+    # Recalculate inputs with perturbed surface_values
+    if parameterization isa MoninObukhov
+        if isnothing(parameterization.fluxes)
+            gustiness = ifelsenothing(surf_state.gustiness, FT(1))
+            beta = ifelsenothing(surf_state.beta, FT(1))
+            isnothing(parameterization.ustar) || error(
+                "ustar cannot be specified when surface fluxes are prescribed",
+            )
+            inputs_perturbed = SF.ValuesOnly(
+                interior_values,
+                surface_values_perturbed,
+                parameterization.z0m,
+                parameterization.z0b,
+                gustiness,
+                beta,
+            )
+        else
+            if isnothing(surf_state.gustiness)
+                buoyancy_flux = SF.compute_buoyancy_flux(
+                    surface_fluxes_params,
+                    shf,
+                    lhf,
+                    interior_ts,
+                    ts_perturbed,
+                    SF.PointValueScheme(),
+                )
+                # TODO: We are assuming that the average mixed layer depth is
+                # always 1000 meters. This needs to be adjusted for deep
+                # convective cases like TRMM.
+                zi = FT(1000)
+                gustiness = cbrt(max(buoyancy_flux * zi, 0))
+            else
+                gustiness = surf_state.gustiness
+            end
+            isnothing(surf_state.beta) || error(
+                "beta cannot be specified when surface fluxes are prescribed",
+            )
+            if isnothing(parameterization.ustar)
+                inputs_perturbed = SF.Fluxes(
+                    interior_values,
+                    surface_values_perturbed,
+                    shf,
+                    lhf,
+                    parameterization.z0m,
+                    parameterization.z0b,
+                    gustiness,
+                )
+            else
+                inputs_perturbed = SF.FluxesAndFrictionVelocity(
+                    interior_values,
+                    surface_values_perturbed,
+                    shf,
+                    lhf,
+                    parameterization.ustar,
+                    parameterization.z0m,
+                    parameterization.z0m,
+                    gustiness,
+                )
+            end
+        end
+    end
+     
+    # Calculate perturbed surface fluxes
+    perturbed_sfc_conditions = SF.surface_conditions(surface_fluxes_params, inputs_perturbed)
+     
+    # Calculate change in surface fluxes
+    (; shf = shf_orig, lhf = lhf_orig) = original_sfc_conditions
+    (; shf = shf_pert, lhf = lhf_pert) = perturbed_sfc_conditions
+     
+    Δshf = shf_pert - shf_orig
+    Δlhf = isnothing(lhf_pert) || isnothing(lhf_orig) ? nothing : lhf_pert - lhf_orig
+     
+    # Calculate change in surface fluxes per degree Kelvin temperature increase
+    Δρ_flux_h_tot_ΔT = ( Δshf + Δlhf ) / FT(0.1)
+
     return atmos_surface_conditions(
-        SF.surface_conditions(surface_fluxes_params, inputs),
+        original_sfc_conditions,
         ts,
-        surface_local_geometry,
+        surface_local_geometry;
+        Δρ_flux_h_tot_ΔT = Δρ_flux_h_tot_ΔT,
     )
 end
 
@@ -329,7 +456,7 @@ Adds local geometry information to the `SurfaceFluxes.SurfaceFluxConditions` str
 along with information about the thermodynamic state. The resulting values are the
 ones actually used by ClimaAtmos operator boundary conditions.
 """
-function atmos_surface_conditions(surface_conditions, ts, surface_local_geometry)
+function atmos_surface_conditions(surface_conditions, ts, surface_local_geometry; Δρ_flux_h_tot_ΔT = nothing)
     (; ustar, L_MO, buoy_flux, ρτxz, ρτyz, shf, lhf, evaporation) = surface_conditions
 
     # surface normal
@@ -340,7 +467,7 @@ function atmos_surface_conditions(surface_conditions, ts, surface_local_geometry
     # NOTE: Technically, ρ_flux_q_tot is not needed when the model is Dry ...
     moisture_flux = (; ρ_flux_q_tot = vector_from_component(evaporation, z))
 
-    return (;
+    base_return = (;
         ts,
         ustar,
         obukhov_length = L_MO,
@@ -350,6 +477,13 @@ function atmos_surface_conditions(surface_conditions, ts, surface_local_geometry
         energy_flux...,
         moisture_flux...,
     )
+
+    # Add Δρ_flux_h_tot_ΔT if provided
+    if !isnothing(Δρ_flux_h_tot_ΔT)
+        return merge(base_return, (; Δρ_flux_h_tot_ΔT = Δρ_flux_h_tot_ΔT))
+    else
+        return base_return
+    end
 end
 
 surface_normal(L::Geometry.LocalGeometry) = C3(unit_basis_vector_data(C3, L))
@@ -376,7 +510,7 @@ function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     # SF always has evaporation
     moisture_flux_names = (:ρ_flux_q_tot,)
     names = (:ts, :ustar, :obukhov_length, :buoyancy_flux, :ρ_flux_uₕ,
-        energy_flux_names..., moisture_flux_names...,
+        energy_flux_names..., moisture_flux_names..., :Δρ_flux_h_tot_ΔT,
     )
     type_tuple = Tuple{
         atmos.moisture_model isa DryModel ? TD.PhaseDry{FT} : TD.PhaseNonEquil{FT},
@@ -384,6 +518,7 @@ function surface_conditions_type(atmos, ::Type{FT}) where {FT}
         typeof(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
         ntuple(_ -> C3{FT}, Val(length(energy_flux_names)))...,
         ntuple(_ -> C3{FT}, Val(length(moisture_flux_names)))...,
+        FT,
     }
     return NamedTuple{names, type_tuple}
 end
