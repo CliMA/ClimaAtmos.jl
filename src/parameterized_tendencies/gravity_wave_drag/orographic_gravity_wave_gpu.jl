@@ -808,6 +808,7 @@ function calc_saturation_profile!(
             U_k_field,
             FrU_max,
             FrU_min,
+            Fr_crit,
             z_surf,
             ᶜz,
             z_pbl,
@@ -823,15 +824,16 @@ function calc_saturation_profile!(
     Operators.column_accumulate!(
         ᶜτ_sat,
         input;
-        init = (FT(0.0), FT(0.0)),
+        init = (FT(0.0), FT(0.0), FT(0.0), FT(0.0)),
         transform = first,
-    ) do (tau_sat_val, U_sat_val),
+    ) do (tau_sat_val, U_sat_val, local_FrU_sat, local_FrU_clp),
     (
         FrU_clp0,
         FrU_sat0,
         U,
         FrU_max,
         FrU_min,
+        Fr_crit_val,
         z_surf,
         z_col,
         z_target,
@@ -845,7 +847,7 @@ function calc_saturation_profile!(
         end
 
         U_sat_val = min(U_sat_val, U)
-        local_FrU_sat = Fr_crit * U_sat_val  # Use local variable instead
+        local_FrU_sat = Fr_crit_val * U_sat_val  # Use local variable instead
         local_FrU_clp = min(FrU_max, max(FrU_min, local_FrU_sat))  # Use local variable instead
 
         if z_col <= z_target
@@ -863,7 +865,7 @@ function calc_saturation_profile!(
                 )
         end
 
-        return (tau_sat_val, U_sat_val)
+        return (tau_sat_val, U_sat_val, local_FrU_sat, local_FrU_clp)
     end
 
     top_values = Fields.level(ᶜτ_sat, Spaces.nlevels(axes(ᶜτ_sat)))
