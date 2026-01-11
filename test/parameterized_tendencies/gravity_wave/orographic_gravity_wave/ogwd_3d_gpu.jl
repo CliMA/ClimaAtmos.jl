@@ -202,7 +202,19 @@ a1 = 3.0
 Fr_crit = 0.7
 topo_info = Val(:gfdl_restart)
 topography = Val(:Earth)
-ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
+ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(;
+    γ,
+    ϵ,
+    β,
+    h_frac,
+    ρscale,
+    L0,
+    a0,
+    a1,
+    Fr_crit,
+    topo_info,
+    topography,
+)
 
 topo_info = CA.get_topo_info(Y, ogw)
 
@@ -230,8 +242,8 @@ topo_info = CA.move_topo_info_to_gpu(topo_info, ᶜtarget_space)
 
 atmos = (; turbconv_model = nothing)
 p = (; scratch = CA.temporary_quantities(Y, atmos),
-    orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info)
-    )
+    orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info),
+)
 
 (; topo_ᶜz_pbl, topo_ᶠz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
     p.orographic_gravity_wave
@@ -288,19 +300,22 @@ p_bottom = Fields.level(ᶠp, half)
 p_second = Fields.level(ᶠp, 1 + half)
 
 # Calculate scale height from the two levels
-scale_height_values = (Fields.field_values(z_second) .- Fields.field_values(z_bottom)) ./ 
-log.(Fields.field_values(p_bottom) ./ Fields.field_values(p_second))
+scale_height_values =
+    (Fields.field_values(z_second) .- Fields.field_values(z_bottom)) ./
+    log.(Fields.field_values(p_bottom) ./ Fields.field_values(p_second))
 
 # Calculate the extrapolated height (one level below bottom)
-z_extrapolated_values = Fields.field_values(z_bottom) .- (Fields.field_values(z_second) .- Fields.field_values(z_bottom))
+z_extrapolated_values =
+    Fields.field_values(z_bottom) .-
+    (Fields.field_values(z_second) .- Fields.field_values(z_bottom))
 
 ᶠdz = Fields.Δz_field(axes(Y.f))
 
 # Extrapolate pressure using barometric formula: p = p₀ * exp(-z/H)
 Boundary_value = Fields.Field(
-    Fields.field_values(p_bottom) .* 
+    Fields.field_values(p_bottom) .*
     exp.((z_extrapolated_values .- Fields.field_values(z_bottom)) ./ scale_height_values),
-    axes(p_bottom)
+    axes(p_bottom),
 )
 
 CA.field_shiftface_down!(ᶠp, ᶠp_m1, Boundary_value)
@@ -418,7 +433,7 @@ vforcing_cpu = ClimaCore.to_cpu(ᶜvforcing)
 gfdl_ca_udt_topo_cpu = ClimaCore.to_cpu(gfdl_ca_udt_topo)
 gfdl_ca_vdt_topo_cpu = ClimaCore.to_cpu(gfdl_ca_vdt_topo)
 ᶜz_cpu = ClimaCore.to_cpu(ᶜz)
-Y_cpu  = ClimaCore.to_cpu(Y)
+Y_cpu = ClimaCore.to_cpu(Y)
 
 ##################
 # plotting!!!!

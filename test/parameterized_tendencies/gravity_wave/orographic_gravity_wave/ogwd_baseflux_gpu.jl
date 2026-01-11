@@ -74,7 +74,19 @@ a1 = 3.0
 Fr_crit = 0.7
 topo_info = Val(:gfdl_restart)
 topography = "Earth"
-ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
+ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(;
+    γ,
+    ϵ,
+    β,
+    h_frac,
+    ρscale,
+    L0,
+    a0,
+    a1,
+    Fr_crit,
+    topo_info,
+    topography,
+)
 topo_info = CA.get_topo_info(Y, ogw)
 
 # Move cache and arrays to the GPU
@@ -85,8 +97,8 @@ topo_info_gpu = CA.move_topo_info_to_gpu(topo_info, ᶜtarget_space)
 atmos = (; turbconv_model = nothing)
 atmos = cu(atmos)
 p = (; scratch = CA.temporary_quantities(Y, atmos),
-    orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info)
-    )
+    orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info),
+)
 
 # Unpack cache vars
 (; topo_ᶜz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
@@ -135,7 +147,7 @@ CA.calc_base_flux!(
 topo_τ_x = ClimaCore.to_cpu(topo_τ_x)
 topo_τ_y = ClimaCore.to_cpu(topo_τ_y)
 # ᶜz_cpu = ClimaCore.to_cpu(ᶜz)
-Y_cpu  = ClimaCore.to_cpu(Y)
+Y_cpu = ClimaCore.to_cpu(Y)
 
 # Remap base flux to regular lat/lon grid for visualization
 TOPO_DIR = joinpath(@__DIR__, "remap_data/")

@@ -172,13 +172,13 @@ gfdl_ca_p = ᶜinterp2CAlevels(gfdl_z_full, gfdl_p, ᶜlocal_geometry)
 
 # create Y
 Yc = map(ᶜlocal_geometry) do lg
-    return (; 
-    ρ = FT(1.0), 
-    uₕ = Geometry.Covariant12Vector(Geometry.UVVector(FT(0), FT(0)), lg), 
-    T = FT(0), 
-    qt = FT(0)
+    return (;
+        ρ = FT(1.0),
+        uₕ = Geometry.Covariant12Vector(Geometry.UVVector(FT(0), FT(0)), lg),
+        T = FT(0),
+        qt = FT(0),
     )
-    end
+end
 Yc.uₕ .= Geometry.Covariant12Vector.(Geometry.UVVector.(gfdl_ca_ucomp, gfdl_ca_vcomp))
 # Yc.uₕ.components.data.:2 .= Geometry.Covariant12Vector.(gfdl_ca_vcomp)
 Yc.T .= gfdl_ca_temp
@@ -207,7 +207,19 @@ Fr_crit = 0.7
 topo_info = Val(:raw_topo)
 topography = Val(:Earth)
 
-ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
+ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(;
+    γ,
+    ϵ,
+    β,
+    h_frac,
+    ρscale,
+    L0,
+    a0,
+    a1,
+    Fr_crit,
+    topo_info,
+    topography,
+)
 
 topo_info = CA.get_topo_info(Y, ogw)
 
@@ -239,12 +251,12 @@ topo_info = CA.move_topo_info_to_gpu(topo_info, ᶜtarget_space)
 atmos = (; turbconv_model = nothing)
 atmos = cu(atmos)
 # atmos = cu(ClimaComms.CUDADevice(), atmos)
-p = (; 
+p = (;
     orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info),
     scratch = CA.temporary_quantities(Y, atmos),
     precomputed = (; ᶜts = ᶜts, ᶜp = ᶜp, thermo_params = thermo_params),
-    params = CA.ClimaAtmosParameters(config)
-    )
+    params = CA.ClimaAtmosParameters(config),
+)
 
 (; topo_ᶜz_pbl, topo_ᶠz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
     p.orographic_gravity_wave
@@ -269,7 +281,7 @@ vforcing_cpu = ClimaCore.to_cpu(ᶜvforcing)
 gfdl_ca_udt_topo_cpu = ClimaCore.to_cpu(gfdl_ca_udt_topo)
 gfdl_ca_vdt_topo_cpu = ClimaCore.to_cpu(gfdl_ca_vdt_topo)
 ᶜz_cpu = ClimaCore.to_cpu(ᶜz)
-Y_cpu  = ClimaCore.to_cpu(Y)
+Y_cpu = ClimaCore.to_cpu(Y)
 
 ##################
 # plotting!!!!

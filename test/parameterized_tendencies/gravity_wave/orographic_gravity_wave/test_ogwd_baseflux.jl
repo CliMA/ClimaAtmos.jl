@@ -100,7 +100,8 @@ thermo_params = CAP.thermodynamics_params(params)
 ᶜdTdz .= Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
 @. ᶜbuoyancy_frequency =
     (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts))
-@. ᶜbuoyancy_frequency = ifelse(ᶜbuoyancy_frequency < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜbuoyancy_frequency))) # to avoid small numbers
+@. ᶜbuoyancy_frequency =
+    ifelse(ᶜbuoyancy_frequency < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜbuoyancy_frequency))) # to avoid small numbers
 
 # Compute base flux
 CA.calc_base_flux!(
@@ -144,7 +145,7 @@ u_pbl_cpu = to_cpu(u_pbl)
 v_pbl_cpu = to_cpu(v_pbl)
 N_pbl_cpu = to_cpu(N_pbl)
 ᶜz_cpu = to_cpu(ᶜz)
-Y_cpu  = to_cpu(Y)
+Y_cpu = to_cpu(Y)
 ᶜspace = axes(Y_cpu.c)
 
 ENV["GKSwstype"] = "nul"

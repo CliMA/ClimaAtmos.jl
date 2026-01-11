@@ -58,7 +58,8 @@ elevation_data =
 load_preprocessed_topography = false
 
 if load_preprocessed_topography
-    (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem) = CA.gen_fn(parsed_args)
+    (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem) =
+        CA.gen_fn(parsed_args)
     topo_cg = CA.load_preprocessed_topography(
         parsed_args,
     )
@@ -78,4 +79,3 @@ datafile_cg, weightfile = save_nc_data(output_filename, topo_cg, spaces)
 datafile_rll = remap_nc_data(output_filename)
 (; lon, lat, hmax, hmin, t11, t12, t21, t22) = diagnostics(datafile_rll)
 plot_diagnostics(lon, lat, hmax, hmin, t11, t12, t21, t22);
-

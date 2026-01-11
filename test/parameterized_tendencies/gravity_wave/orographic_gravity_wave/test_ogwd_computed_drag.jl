@@ -62,7 +62,19 @@ Fr_crit = 0.7
 topo_info = Val(:gfdl_restart)
 topography = Val(:Earth)
 FT = eltype(Y.c.ρ)
-ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
+ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(;
+    γ,
+    ϵ,
+    β,
+    h_frac,
+    ρscale,
+    L0,
+    a0,
+    a1,
+    Fr_crit,
+    topo_info,
+    topography,
+)
 
 topo_info = CA.get_topo_info(Y, ogw)
 
@@ -99,8 +111,12 @@ Compute a shared color range across multiple fields for consistent colormaps.
 - Tuple (min_val, max_val) representing the shared color range
 """
 function compute_shared_colorrange(field_data, var_names...)
-    all_mins = [minimum(parent(field_data[name])) for name in var_names if haskey(field_data, name)]
-    all_maxs = [maximum(parent(field_data[name])) for name in var_names if haskey(field_data, name)]
+    all_mins = [
+        minimum(parent(field_data[name])) for name in var_names if haskey(field_data, name)
+    ]
+    all_maxs = [
+        maximum(parent(field_data[name])) for name in var_names if haskey(field_data, name)
+    ]
     return (minimum(all_mins), maximum(all_maxs))
 end
 
@@ -113,18 +129,18 @@ t21_range = compute_shared_colorrange(field_data, "gfdl_t21", "computed_drag_t21
 t22_range = compute_shared_colorrange(field_data, "gfdl_t22", "computed_drag_t22")
 
 panels = [
-    PlotPanel("gfdl_hmax", "GFDL hmax", (1,1); colorrange=hmax_range),
-    PlotPanel("computed_drag_hmax", "Computed hmax", (1,2); colorrange=hmax_range),
-    PlotPanel("gfdl_hmin", "GFDL hmin", (2,1); colorrange=hmin_range),
-    PlotPanel("computed_drag_hmin", "Computed hmin", (2,2); colorrange=hmin_range),
-    PlotPanel("gfdl_t11", "GFDL t11", (3,1); colorrange=t11_range),
-    PlotPanel("computed_drag_t11", "Computed t11", (3,2); colorrange=t11_range),
-    PlotPanel("gfdl_t12", "GFDL t12", (4,1); colorrange=t12_range),
-    PlotPanel("computed_drag_t12", "Computed t12", (4,2); colorrange=t12_range),
-    PlotPanel("gfdl_t21", "GFDL t21", (5,1); colorrange=t21_range),
-    PlotPanel("computed_drag_t21", "Computed t21", (5,2); colorrange=t21_range),
-    PlotPanel("gfdl_t22", "GFDL t22", (6,1); colorrange=t22_range),
-    PlotPanel("computed_drag_t22", "Computed t22", (6,2); colorrange=t22_range),
+    PlotPanel("gfdl_hmax", "GFDL hmax", (1, 1); colorrange = hmax_range),
+    PlotPanel("computed_drag_hmax", "Computed hmax", (1, 2); colorrange = hmax_range),
+    PlotPanel("gfdl_hmin", "GFDL hmin", (2, 1); colorrange = hmin_range),
+    PlotPanel("computed_drag_hmin", "Computed hmin", (2, 2); colorrange = hmin_range),
+    PlotPanel("gfdl_t11", "GFDL t11", (3, 1); colorrange = t11_range),
+    PlotPanel("computed_drag_t11", "Computed t11", (3, 2); colorrange = t11_range),
+    PlotPanel("gfdl_t12", "GFDL t12", (4, 1); colorrange = t12_range),
+    PlotPanel("computed_drag_t12", "Computed t12", (4, 2); colorrange = t12_range),
+    PlotPanel("gfdl_t21", "GFDL t21", (5, 1); colorrange = t21_range),
+    PlotPanel("computed_drag_t21", "Computed t21", (5, 2); colorrange = t21_range),
+    PlotPanel("gfdl_t22", "GFDL t22", (6, 1); colorrange = t22_range),
+    PlotPanel("computed_drag_t22", "Computed t22", (6, 2); colorrange = t22_range),
 ]
 
 plot_config = PlotConfig(
@@ -151,4 +167,3 @@ create_figure_set(
     remap_dir = joinpath(@__DIR__, "ogwd_3d", "remap_data/"),
     FT = FT,
 )
-

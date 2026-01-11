@@ -47,7 +47,11 @@ function create_plot!(
         # custom_levels is a workaround for plotting constant fields with CairoMakie
         # If colorrange is specified, use it to create levels, otherwise use provided levels
         if colorrange !== nothing
-            custom_levels = range(colorrange[1], colorrange[2]; length = (levels isa Integer ? levels : 25))
+            custom_levels = range(
+                colorrange[1],
+                colorrange[2];
+                length = (levels isa Integer ? levels : 25),
+            )
         elseif minimum(Z) ≈ maximum(Z)
             custom_levels = minimum(Z):0.1:(minimum(Z) + 0.2)
         else

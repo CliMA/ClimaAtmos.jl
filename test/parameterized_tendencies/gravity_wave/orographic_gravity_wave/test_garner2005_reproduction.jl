@@ -1795,7 +1795,11 @@ if should_run(:figure5)
                 " expected: ",
                 h_max_val,
             )
-            println("hmin range after set: ", extrema(parent(topo_info.hmin)), " expected: 0")
+            println(
+                "hmin range after set: ",
+                extrema(parent(topo_info.hmin)),
+                " expected: 0",
+            )
         end
 
         CA.calc_base_flux!(
@@ -2145,7 +2149,7 @@ if should_run(:figure7)
     end
 
     # Also compute the analytical profile at high resolution for comparison
-    z_hires = collect(range(0.0, 40000.0, length=200))
+    z_hires = collect(range(0.0, 40000.0, length = 200))
     u_hires = [garner_fig7_wind_profile(FT(z)) for z in z_hires]
 
     # Plot wind profile comparison
@@ -2158,18 +2162,20 @@ if should_run(:figure7)
 
     # Analytical (high-res) curve
     lines!(ax, u_hires, z_hires ./ 1000.0, color = :blue, linewidth = 2,
-           label = "Analytical (Garner)")
+        label = "Analytical (Garner)")
 
     # Model column values (discrete points)
     scatter!(ax, u_vec, z_km_vec, color = :red, markersize = 10,
-             label = "Model column")
+        label = "Model column")
 
     xlims!(ax, 0, 70)
     ylims!(ax, 0, 40)
     axislegend(ax, position = :rt)
 
     save("garner2005_reproduction/fig7_wind_profile_debug.png", fig_debug)
-    println("\n  Saved wind profile debug plot: garner2005_reproduction/fig7_wind_profile_debug.png")
+    println(
+        "\n  Saved wind profile debug plot: garner2005_reproduction/fig7_wind_profile_debug.png",
+    )
     # =========================================================================
 
     # Set identity tensor so Vτ = V (wind projects directly without rotation)

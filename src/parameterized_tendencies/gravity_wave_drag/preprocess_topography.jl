@@ -14,19 +14,24 @@ include(
     joinpath(pkgdir(CA), "post_processing/remap", "remap_helpers.jl"),
 )
 include(
-    joinpath(pkgdir(CA), "test/parameterized_tendencies/gravity_wave", "gw_plotutils.jl"),)
+    joinpath(pkgdir(CA), "test/parameterized_tendencies/gravity_wave", "gw_plotutils.jl"))
 
 # Always CPU...
 
 function write_computed_drag!(computed_drag, parsed_args, config)
-    (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem) = CA.gen_fn(parsed_args)
+    (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem) =
+        CA.gen_fn(parsed_args)
     # initialize HDF5 output
     hdfwriter = InputOutput.HDF5Writer("$(output_filename).hdf5", config.comms_ctx)
 
     # write attributes to the HDF5 file 
     InputOutput.HDF5.write_attribute(hdfwriter.file, "topography", topography)
     InputOutput.HDF5.write_attribute(hdfwriter.file, "topo_smoothing", topo_smoothing)
-    InputOutput.HDF5.write_attribute(hdfwriter.file, "topo_damping_factor", topo_damping_factor)
+    InputOutput.HDF5.write_attribute(
+        hdfwriter.file,
+        "topo_damping_factor",
+        topo_damping_factor,
+    )
     InputOutput.HDF5.write_attribute(hdfwriter.file, "h_elem", h_elem)
 
     @info "Writing computed drag data to $(output_filename).hdf5"
@@ -79,7 +84,12 @@ end
 function remap_nc_data(output_filename)
     # remap from clima grid to lat/lon grid
     datafile_rll = joinpath(@__DIR__, "data_rll_$(output_filename).nc")
-    apply_remap(datafile_rll, datafile_cg, weightfile, ["hmax", "hmin", "t11", "t12", "t21", "t22"])
+    apply_remap(
+        datafile_rll,
+        datafile_cg,
+        weightfile,
+        ["hmax", "hmin", "t11", "t12", "t21", "t22"],
+    )
 
     return datafile_rll
 end
@@ -108,7 +118,7 @@ function plot_diagnostics(lon, lat, hmax, hmin, t11, t12, t21, t22)
     output_dir = joinpath(@__DIR__, "preprocess_topography")
     mkpath(output_dir)
 
-    fig = generate_empty_figure();
+    fig = generate_empty_figure()
     title = "hmax"
     create_plot!(
         fig;

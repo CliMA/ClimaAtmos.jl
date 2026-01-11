@@ -61,12 +61,12 @@ Specification for a single panel in a multi-panel plot.
 struct PlotPanel
     variable_name::String
     title_template::String
-    position::Tuple{Int,Int}
+    position::Tuple{Int, Int}
     scale_factor::Float64
     offset::Float64
-    custom_process::Union{Function,Nothing}
+    custom_process::Union{Function, Nothing}
     colormap::Symbol
-    colorrange::Union{Nothing,Tuple}
+    colorrange::Union{Nothing, Tuple}
     extendhigh::Symbol
     extendlow::Symbol
 end
@@ -74,12 +74,12 @@ end
 function PlotPanel(
     variable_name::String,
     title_template::String,
-    position::Tuple{Int,Int};
+    position::Tuple{Int, Int};
     scale_factor::Real = 1.0,
     offset::Real = 0.0,
-    custom_process::Union{Function,Nothing} = nothing,
+    custom_process::Union{Function, Nothing} = nothing,
     colormap::Symbol = :vik100,
-    colorrange::Union{Nothing,Tuple} = nothing,
+    colorrange::Union{Nothing, Tuple} = nothing,
     extendhigh::Symbol = :magenta,
     extendlow::Symbol = :cyan,
 )
@@ -120,11 +120,11 @@ Configuration for the entire plotting pipeline.
 struct PlotConfig
     plot_mode::Symbol
     vertical_levels::Vector{Int}
-    contour_levels::Union{Int,AbstractRange}
+    contour_levels::Union{Int, AbstractRange}
     nlat::Int
     nlon::Int
-    figure_size::Tuple{Int,Int}
-    figure_bgcolor::Tuple{Float64,Float64,Float64}
+    figure_size::Tuple{Int, Int}
+    figure_bgcolor::Tuple{Float64, Float64, Float64}
     fontsize::Int
     yreversed::Bool
     output_prefix::String
@@ -136,10 +136,10 @@ end
 function PlotConfig(;
     plot_mode::Symbol = :vertical_slice,
     vertical_levels::Vector{Int} = [1],
-    contour_levels::Union{Int,AbstractRange} = 25,
+    contour_levels::Union{Int, AbstractRange} = 25,
     nlat::Int = 90,
     nlon::Int = 180,
-    figure_size::Tuple{Int,Int} = (2000, 2000),
+    figure_size::Tuple{Int, Int} = (2000, 2000),
     figure_bgcolor::Tuple = (0.98, 0.98, 0.98),
     fontsize::Int = 40,
     yreversed::Bool = false,
@@ -160,7 +160,11 @@ function PlotConfig(;
         nlat,
         nlon,
         figure_size,
-        (Float64(figure_bgcolor[1]), Float64(figure_bgcolor[2]), Float64(figure_bgcolor[3])),
+        (
+            Float64(figure_bgcolor[1]),
+            Float64(figure_bgcolor[2]),
+            Float64(figure_bgcolor[3]),
+        ),
         fontsize,
         yreversed,
         output_prefix,
@@ -196,7 +200,7 @@ Remap ClimaCore fields to a regular lat/lon grid.
 function remap_to_latlon(
     remap_dir::String,
     variable_names::Vector{String},
-    field_data::Dict{String,<:Any},
+    field_data::Dict{String, <:Any},
     Y_cpu,
     ᶜspace;
     config::PlotConfig,
@@ -295,11 +299,11 @@ function create_multipanel_figure(
     datafile_rll::String,
     panels::Vector{PlotPanel},
     config::PlotConfig,
-    vertical_level::Union{Int,Nothing} = nothing,
+    vertical_level::Union{Int, Nothing} = nothing,
 )
     # Read data from remapped file
     data = NCDataset(datafile_rll) do ds
-        result = Dict{String,Any}()
+        result = Dict{String, Any}()
         result["lon"] = Array(ds["lon"])
         result["lat"] = Array(ds["lat"])
         if haskey(ds, "z")
@@ -328,7 +332,9 @@ function create_multipanel_figure(
     z_value = nothing
     if config.plot_mode == :vertical_slice
         if vertical_level === nothing
-            throw(ArgumentError("vertical_level must be specified for :vertical_slice mode"))
+            throw(
+                ArgumentError("vertical_level must be specified for :vertical_slice mode"),
+            )
         end
         if haskey(data, "z")
             z_value = data["z"][vertical_level]
@@ -363,7 +369,8 @@ function create_multipanel_figure(
 
         # Generate title (replace {z} placeholder if present)
         if z_value !== nothing
-            title = replace(panel.title_template, "{z}" => string(round(z_value; digits = 1)))
+            title =
+                replace(panel.title_template, "{z}" => string(round(z_value; digits = 1)))
         else
             title = panel.title_template  # No z-value replacement for horizontal slices
         end
@@ -473,13 +480,13 @@ remap_and_plot_3d(
 function remap_and_plot_3d(
     output_dir::String,
     variable_names::Vector{String},
-    field_data::Dict{String,<:Any},
+    field_data::Dict{String, <:Any},
     Y_cpu,
     ᶜspace,
     panels::Vector{PlotPanel},
     config::PlotConfig;
-    remap_dir::Union{String,Nothing} = nothing,
-    output_prefix::Union{String,Nothing} = nothing,
+    remap_dir::Union{String, Nothing} = nothing,
+    output_prefix::Union{String, Nothing} = nothing,
     FT = Float64,
 )
     # Set up directories
@@ -576,12 +583,12 @@ create_figure_set(output_dir, variable_names, field_data, Y_cpu, ᶜspace,
 function create_figure_set(
     output_dir::String,
     variable_names::Vector{String},
-    field_data::Dict{String,<:Any},
+    field_data::Dict{String, <:Any},
     Y_cpu,
     ᶜspace,
-    figure_specs::Dict{String,Vector{PlotPanel}},
+    figure_specs::Dict{String, Vector{PlotPanel}},
     config::PlotConfig;
-    remap_dir::Union{String,Nothing} = nothing,
+    remap_dir::Union{String, Nothing} = nothing,
     FT = Float64,
 )
     # Set up directories

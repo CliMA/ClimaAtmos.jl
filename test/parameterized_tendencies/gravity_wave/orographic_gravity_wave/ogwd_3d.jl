@@ -451,4 +451,3 @@ for k in [21, 31]
     )
     CairoMakie.save(joinpath(output_dir, "vforcing_$k.png"), fig)
 end
-

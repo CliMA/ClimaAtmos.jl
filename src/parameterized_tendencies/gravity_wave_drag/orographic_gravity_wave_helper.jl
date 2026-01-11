@@ -217,7 +217,7 @@ function calc_velocity_potential(
 
         # Compute weights once per latitude row (OPTIMIZATION: moved outside i-loop)
         # Note: Fortran uses ja+1:jb (skips first element), we match that here
-        for (j1_idx, j1) in enumerate(ja+1:jb)
+        for (j1_idx, j1) in enumerate((ja + 1):jb)
             cj1 = cosphi[j1]
             sj1 = sinphi[j1]
             ccj = cj * cj1  # cos(lat_j) * cos(lat_j1)
@@ -232,9 +232,10 @@ function calc_velocity_potential(
                 # Fortran: arc1 = arc/max(arc, scale(j)) - clamps arc1 to max of 1.0
                 # This prevents Blackman from going negative for arc > scale
                 arc1 = arc / max(arc, scale[j])
-                blackman = FT(0.42) +
-                           FT(0.50) * cos(FT(π) * arc1) +
-                           FT(0.08) * cos(FT(2π) * arc1)
+                blackman =
+                    FT(0.42) +
+                    FT(0.50) * cos(FT(π) * arc1) +
+                    FT(0.08) * cos(FT(2π) * arc1)
 
                 # Weight: cos(lat) / arc * Blackman_window
                 # CRITICAL: Use latitude-dependent regularization to prevent polar blow-up
@@ -261,8 +262,8 @@ function calc_velocity_potential(
 
             # Accumulate weighted sum over window
             # Note: Fortran uses ja+1:jb and ia+1:ib (skips first elements)
-            for (j1_idx, j1) in enumerate(ja+1:jb)
-                for i1 in ia+1:ib
+            for (j1_idx, j1) in enumerate((ja + 1):jb)
+                for i1 in (ia + 1):ib
                     # Handle periodic longitude boundaries
                     i1_wrapped = mod1(i1, nlon)  # Julia's mod1 handles periodic wrapping
 
@@ -316,7 +317,7 @@ function calc_velocity_potential(
                     dlamj * log((rij + dlat_rad) / dlamj) +
                     dlat_rad * log((rij + dlamj) / dlat_rad)
                 )
-    end
+        end
     end
 
     # Final scaling
@@ -578,12 +579,18 @@ function compute_OGW_info(
     # Define data variables with chunking and compression for large arrays
     # This prevents HDF5 errors when writing full-resolution data (skip_pt=1)
     chunk_size = (min(360, length(lon)), min(180, length(lat)))
-    nc_hmax = defVar(nc, "hmax", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_hmin = defVar(nc, "hmin", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_t11 = defVar(nc, "t11", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_t12 = defVar(nc, "t12", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_t21 = defVar(nc, "t21", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_t22 = defVar(nc, "t22", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_hmax =
+        defVar(nc, "hmax", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_hmin =
+        defVar(nc, "hmin", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t11 =
+        defVar(nc, "t11", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t12 =
+        defVar(nc, "t12", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t21 =
+        defVar(nc, "t21", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t22 =
+        defVar(nc, "t22", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
 
     # Write coordinate data
     nc_lon[:] = lon
@@ -631,12 +638,18 @@ function regrid_OGW_info(Y, orographic_info_rll)
     # Define data variables with chunking and compression for large arrays
     # This prevents HDF5 errors when writing full-resolution data (skip_pt=1)
     chunk_size = (min(360, length(lon)), min(180, length(lat)))
-    nc_hmax = defVar(nc, "hmax", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_hmin = defVar(nc, "hmin", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_t11 = defVar(nc, "t11", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_t12 = defVar(nc, "t12", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_t21 = defVar(nc, "t21", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_t22 = defVar(nc, "t22", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_hmax =
+        defVar(nc, "hmax", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_hmin =
+        defVar(nc, "hmin", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t11 =
+        defVar(nc, "t11", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t12 =
+        defVar(nc, "t12", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t21 =
+        defVar(nc, "t21", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
+    nc_t22 =
+        defVar(nc, "t22", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
 
     # Write coordinate data
     nc_lon[:] = lon

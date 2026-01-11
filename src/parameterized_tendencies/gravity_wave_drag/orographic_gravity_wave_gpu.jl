@@ -51,7 +51,7 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
 
 end
 
-function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info=nothing)
+function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info = nothing)
     # For now, the initialisation of the cache is the same for all types of
     # orographic gravity wave drag parameterizations
     @assert Spaces.topology(Spaces.horizontal_space(axes(Y.c))).mesh.domain isa
@@ -93,7 +93,6 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info=
         topo_FrU_max = similar(Fields.level(Y.c.ρ, 1)),
         topo_FrU_min = similar(Fields.level(Y.c.ρ, 1)),
         topo_FrU_clp = similar(Fields.level(Y.c.ρ, 1)),
-
         topo_ᶜz_pbl = similar(Fields.level(Y.c.ρ, 1)),
         topo_ᶠz_pbl = similar(Fields.level(Y.f.u₃, half)),
         values_at_z_pbl = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT}),
@@ -138,7 +137,8 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     ᶜdTdz .= Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
     @. ᶜbuoyancy_frequency =
         (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts))
-    @. ᶜbuoyancy_frequency = ifelse(ᶜbuoyancy_frequency < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜbuoyancy_frequency))) # to avoid small numbers
+    @. ᶜbuoyancy_frequency =
+        ifelse(ᶜbuoyancy_frequency < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜbuoyancy_frequency))) # to avoid small numbers
     @. ᶠbuoyancy_frequency = ᶠinterp(ᶜbuoyancy_frequency)
 
     # compute ᶠp and ᶠp_m1
@@ -156,16 +156,23 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     p_second = Fields.level(ᶠp, 1 + half)
 
     # Calculate scale height from the two levels
-    Fields.field_values(scale_height_values) .= (Fields.field_values(z_second) .- Fields.field_values(z_bottom)) ./ log.(Fields.field_values(p_bottom) ./ Fields.field_values(p_second))
+    Fields.field_values(scale_height_values) .=
+        (Fields.field_values(z_second) .- Fields.field_values(z_bottom)) ./
+        log.(Fields.field_values(p_bottom) ./ Fields.field_values(p_second))
 
     # Calculate the extrapolated height (one level below bottom)
-    z_extrapolated_values .= Fields.field_values(z_bottom) .- (Fields.field_values(z_second) .- Fields.field_values(z_bottom))
+    z_extrapolated_values .=
+        Fields.field_values(z_bottom) .-
+        (Fields.field_values(z_second) .- Fields.field_values(z_bottom))
 
     # Extrapolate pressure using barometric formula: p = p₀ * exp(-z/H)
     Boundary_value = Fields.Field(
-        Fields.field_values(p_bottom) .* 
-        exp.((z_extrapolated_values .- Fields.field_values(z_bottom)) ./ Fields.field_values(scale_height_values)),
-        axes(p_bottom)
+        Fields.field_values(p_bottom) .*
+        exp.(
+            (z_extrapolated_values .- Fields.field_values(z_bottom)) ./
+            Fields.field_values(scale_height_values)
+        ),
+        axes(p_bottom),
     )
 
     field_shiftface_down!(ᶠp, ᶠp_m1, Boundary_value)
@@ -195,7 +202,7 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
         grav,
         cp_d,
         p,
-    ) 
+    )
 end
 
 orographic_gravity_wave_apply_tendency!(Yₜ, p, ::Nothing) = nothing
@@ -206,7 +213,7 @@ function orographic_gravity_wave_apply_tendency!(
     ::OrographicGravityWave,
 )
     (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
-    
+
     @. Yₜ.c.uₕ +=
         Geometry.Covariant12Vector.(Geometry.UVVector.(ᶜuforcing, ᶜvforcing))
 
@@ -214,24 +221,24 @@ end
 
 
 function orographic_gravity_wave_forcing!(
-        u_phy,
-        v_phy,
-        ᶜbuoyancy_frequency,
-        ᶠbuoyancy_frequency,
-        ᶜz,
-        ᶠz,
-        ᶠdz,
-        ᶜuforcing,
-        ᶜvforcing,
-        ᶜρ,
-        ᶜp,
-        ᶠp,
-        ᶠp_m1,
-        ᶜT,
-        grav,
-        cp_d,
-        p,
-    )
+    u_phy,
+    v_phy,
+    ᶜbuoyancy_frequency,
+    ᶠbuoyancy_frequency,
+    ᶜz,
+    ᶠz,
+    ᶠdz,
+    ᶜuforcing,
+    ᶜvforcing,
+    ᶜρ,
+    ᶜp,
+    ᶠp,
+    ᶠp_m1,
+    ᶜT,
+    grav,
+    cp_d,
+    p,
+)
 
     FT = eltype(ᶠbuoyancy_frequency)
     Δz_bot = Fields.level(ᶠdz, half)
@@ -243,7 +250,7 @@ function orographic_gravity_wave_forcing!(
         p.orographic_gravity_wave
     (; topo_ᶠVτ, values_at_z_pbl, topo_info) = p.orographic_gravity_wave
     (; ᶜmask, ᶠp_ref) = p.orographic_gravity_wave
-        
+
     # Extract parameters
     ogw_params = p.orographic_gravity_wave.ogw_params
 
@@ -884,7 +891,7 @@ function calc_saturation_profile!(
     ) do τ_sat_val, (top_values, ᶜτ_sat, p_surf, p_top, ᶜp, zero_val)
 
         τ_sat_val = ᶜτ_sat
-        
+
         if top_values > zero_val
             τ_sat_val -= (top_values * (p_surf - ᶜp) / (p_surf - p_top))
         end
@@ -903,8 +910,8 @@ function compute_ogw_drag(
     Y,
     earth_radius,
     topography,
-    h_frac
-    )
+    h_frac,
+)
     FT = eltype(Y)
     center_space = Fields.axes(Y.c)
     h_elem = center_space.grid.horizontal_grid.topology.mesh.ne
@@ -928,7 +935,7 @@ function compute_ogw_drag(
         topo_info = load_preprocessed_topography(filename)
         return set_topo_info_target_space(topo_info, ᶜsurface_space)
 
-    ### Handle analytical test cases
+        ### Handle analytical test cases
     elseif topography == Val(:DCMIP200)
         topography_function = topography_dcmip200
     elseif topography == Val(:Hughes2023)
@@ -964,8 +971,8 @@ function compute_ogw_drag(
     dhdy = ∇ₕhmax.components.data.:2
 
     # Handle drag vector elements at the antarctic region
-    @. dχdx = ifelse( cg_lat < FT(-88), 0, dχdx)
-    @. dχdy = ifelse( cg_lat < FT(-88), 0, dχdy)
+    @. dχdx = ifelse(cg_lat < FT(-88), 0, dχdx)
+    @. dχdy = ifelse(cg_lat < FT(-88), 0, dχdy)
 
     # We convert the face-centered drag vector elements to cell-centered
     # quantities as these are used to compute the physics associated with the
@@ -988,4 +995,3 @@ end
 ᶜddz(ᶠscalar) = lazy.(Geometry.WVector.(ᶜgradᵥ.(ᶠscalar)).components.data.:1)
 
 ᶠddz(ᶜscalar) = lazy.(Geometry.WVector.(ᶠgradᵥ.(ᶜscalar)).components.data.:1)
-
