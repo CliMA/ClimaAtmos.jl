@@ -321,18 +321,16 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     )
 
     # TODO: make bycolumn-able
-    non_orographic_gravity_wave_tendency!(
+    non_orographic_gravity_wave_apply_tendency!(
         Yₜ,
         Y,
         p,
         t,
         p.atmos.non_orographic_gravity_wave,
     )
-    orographic_gravity_wave_tendency!(
+    orographic_gravity_wave_apply_tendency!(
         Yₜ,
-        Y,
         p,
-        t,
         p.atmos.orographic_gravity_wave,
     )
 

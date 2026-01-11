@@ -1,5 +1,7 @@
 using ClimaCore:
-    Fields, Geometry, Domains, Meshes, Topologies, Spaces, Operators
+    Fields, Geometry, Domains, Meshes, Topologies, Spaces, Operators, DataLayouts, Utilities
+using ClimaCore
+using ClimaCore.CommonSpaces
 using NCDatasets
 import ClimaAtmos
 import ClimaAtmos as CA
@@ -10,13 +12,26 @@ using ClimaCoreTempestRemap
 
 import Interpolations
 
+using CUDA
+using Dates
+
 const FT = Float64
 include(
     joinpath(pkgdir(ClimaAtmos), "post_processing/remap", "remap_helpers.jl"),
 )
 include("../gw_plotutils.jl")
 
-context = ClimaComms.SingletonCommsContext()
+comms_ctx = ClimaComms.SingletonCommsContext()
+@show CUDA.functional()
+@show ClimaComms.device(comms_ctx)
+
+(; config_file, job_id) = CA.commandline_kwargs()
+config = CA.AtmosConfig(config_file; job_id, comms_ctx)
+
+config.parsed_args["topography"] = "Earth";
+config.parsed_args["topo_smoothing"] = false;
+config.parsed_args["mesh_warp_type"] = "Linear";
+(; parsed_args) = config
 
 # load gfdl data
 include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
@@ -79,26 +94,15 @@ z_elem = 33
 dz_bottom = 300.0
 radius = 6.371229e6
 
-grid = CA.SphereGrid(
-    FT;
-    context,
-    z_elem,
-    z_max,
-    z_stretch = true,
-    dz_bottom,
-    radius,
-    h_elem,
-    nh_poly,
-    bubble = false,
-    topography = CA.EarthTopography(),
-    topography_damping_factor = 5,
-    mesh_warp_type = CA.LinearWarp(),
-    topo_smoothing = false,
-)
-(; center_space, face_space) = CA.get_spaces(grid)
+quad = Quadratures.GLL{nh_poly + 1}()
+horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
+h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
+z_stretch = Meshes.HyperbolicTangentStretching(dz_bottom)
+ᶜspace, ᶠspace =
+    CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
 
-ᶜlocal_geometry = Fields.local_geometry_field(center_space)
-ᶠlocal_geometry = Fields.local_geometry_field(face_space)
+ᶜlocal_geometry = Fields.local_geometry_field(ᶜspace)
+ᶠlocal_geometry = Fields.local_geometry_field(ᶠspace)
 
 # interpolation functions
 function ᶜinterp_latlon2cg(lon, lat, datain, ᶜlocal_geometry)
@@ -187,25 +191,73 @@ epsilon = 0.622
 @. Y.c.ρ = gfdl_ca_p / Y.c.T / R_d / (1 - Y.c.qt + Y.c.qt / epsilon)
 
 # Initialize cache vars for orographic gravity wave
-ogw = CA.FullOrographicGravityWave{FT, String}()
-p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
+γ = 0.4
+ϵ = 0.0
+β = 0.5
+h_frac = 0.1
+ρscale = 1.2
+L0 = 80000.0
+a0 = 0.9
+a1 = 3.0
+Fr_crit = 0.7
+topo_info = Val(:gfdl_restart)
+topography = Val(:Earth)
+ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(;
+    γ,
+    ϵ,
+    β,
+    h_frac,
+    ρscale,
+    L0,
+    a0,
+    a1,
+    Fr_crit,
+    topo_info,
+    topography,
+)
 
-(; topo_k_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
-    p.orographic_gravity_wave
-(; topo_ᶠτ_sat, topo_ᶠVτ) = p.orographic_gravity_wave
-(; topo_ᶜτ_sat, topo_ᶜVτ) = p.orographic_gravity_wave
-(; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
-    p.orographic_gravity_wave
-(; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
-(; ᶜdTdz) = p.orographic_gravity_wave
+topo_info = CA.get_topo_info(Y, ogw)
+
+Y = ClimaCore.to_device(ClimaComms.CUDADevice(), copy(Y))
 
 # pre-compute thermal vars
 thermo_params = CA.TD.Parameters.ThermodynamicsParameters(FT)
+# thermo_params = ClimaCore.to_device(ClimaComms.CUDADevice(), thermo_params)
 
-ᶜT = gfdl_ca_temp
-ᶜp = gfdl_ca_p
+ᶜT_cpu = gfdl_ca_temp
+ᶜp_cpu = gfdl_ca_p
+
+ᶜp = ClimaCore.to_device(ClimaComms.CUDADevice(), ᶜp_cpu)
+ᶜT = ClimaCore.to_device(ClimaComms.CUDADevice(), ᶜT_cpu)
+
+ᶜtarget_space = Spaces.axes(Y.c)
+ᶜp = Fields.Field(Fields.field_values(ᶜp), ᶜtarget_space)
+ᶜT = Fields.Field(Fields.field_values(ᶜT), ᶜtarget_space)
+
+topo_info = CA.move_topo_info_to_gpu(topo_info, ᶜtarget_space)
+
 ᶜts = similar(Y.c, CA.TD.PhaseEquil{FT})
-@. ᶜts = CA.TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp, Y.c.qt)
+ᶜts = @. CA.TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp, Y.c.qt)
+ᶜts = Fields.Field(Fields.field_values(ᶜts), ᶜtarget_space)
+
+atmos = (; turbconv_model = nothing)
+p = (; scratch = CA.temporary_quantities(Y, atmos),
+    orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info),
+)
+
+(; topo_ᶜz_pbl, topo_ᶠz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
+    p.orographic_gravity_wave
+(; topo_ᶜτ_sat, topo_ᶠτ_sat) = p.orographic_gravity_wave
+(; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
+    p.orographic_gravity_wave
+(; topo_ᶠVτ, values_at_z_pbl) =
+    p.orographic_gravity_wave
+(; ᶜdTdz) = p.orographic_gravity_wave
+(; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
+(; ᶜmask, ᶠp_ref) = p.orographic_gravity_wave
+
+# Extract parameters
+ogw_params = p.orographic_gravity_wave.ogw_params
 
 # operators
 ᶜgradᵥ = Operators.GradientF2C()
@@ -219,12 +271,15 @@ thermo_params = CA.TD.Parameters.ThermodynamicsParameters(FT)
 ᶠz = Fields.coordinate_field(Y.f).z
 
 # get PBL info
-Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    parent(topo_k_pbl[colidx]) .=
-        CA.get_pbl(ᶜp[colidx], ᶜT[colidx], ᶜz[colidx], grav, cp_d)
-end
+CA.get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
+# we copy the z_pbl from a cell-centered to face array.
+# the z-values don't change, but this is necessary for
+# calc_nonpropagating_forcing! to work on the GPU
+parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl)
+topo_ᶠz_pbl = topo_ᶠz_pbl.components.data.:1
 
 # buoyancy frequency at cell centers
+ᶜdTdz = Fields.Field(FT, axes(Y.c))
 parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
 ᶜN = @. (grav / ᶜT) * (ᶜdTdz + grav / CA.TD.cp_m(thermo_params, ᶜts)) # this is actually ᶜN^2
 ᶜN = @. ifelse(ᶜN < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜN))) # to avoid small numbers
@@ -233,101 +288,152 @@ parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
 u_phy = Y.c.u_phy
 v_phy = Y.c.v_phy
 
-# compute base flux at k_pbl
-Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    CA.calc_base_flux!(
-        topo_τ_x[colidx],
-        topo_τ_y[colidx],
-        topo_τ_l[colidx],
-        topo_τ_p[colidx],
-        topo_τ_np[colidx],
-        topo_U_sat[colidx],
-        topo_FrU_sat[colidx],
-        topo_FrU_max[colidx],
-        topo_FrU_min[colidx],
-        topo_FrU_clp[colidx],
-        p,
-        max(FT(0), parent(hmax[colidx])[1]),
-        max(FT(0), parent(hmin[colidx])[1]),
-        parent(t11[colidx])[1],
-        parent(t12[colidx])[1],
-        parent(t21[colidx])[1],
-        parent(t22[colidx])[1],
-        parent(Y.c.ρ[colidx]),
-        parent(u_phy[colidx]),
-        parent(v_phy[colidx]),
-        parent(ᶜN[colidx]),
-        Int(parent(topo_k_pbl[colidx])[1]),
-    )
-end
+ᶠp = similar(Y.f.u₃).components.data.:1
+ᶠp .= ᶠinterp.(ᶜp)
+ᶠp_m1 = similar(ᶠp)
+
+# explicit scale height approach for pressure extrapolation
+# Fields.level returns by reference
+z_bottom = Fields.level(ᶠz, half)
+z_second = Fields.level(ᶠz, 1 + half)
+p_bottom = Fields.level(ᶠp, half)
+p_second = Fields.level(ᶠp, 1 + half)
+
+# Calculate scale height from the two levels
+scale_height_values =
+    (Fields.field_values(z_second) .- Fields.field_values(z_bottom)) ./
+    log.(Fields.field_values(p_bottom) ./ Fields.field_values(p_second))
+
+# Calculate the extrapolated height (one level below bottom)
+z_extrapolated_values =
+    Fields.field_values(z_bottom) .-
+    (Fields.field_values(z_second) .- Fields.field_values(z_bottom))
+
+ᶠdz = Fields.Δz_field(axes(Y.f))
+
+# Extrapolate pressure using barometric formula: p = p₀ * exp(-z/H)
+Boundary_value = Fields.Field(
+    Fields.field_values(p_bottom) .*
+    exp.((z_extrapolated_values .- Fields.field_values(z_bottom)) ./ scale_height_values),
+    axes(p_bottom),
+)
+
+CA.field_shiftface_down!(ᶠp, ᶠp_m1, Boundary_value)
 
 # buoyancy frequency at cell faces
-ᶠN = ᶠinterp.(ᶜN) # alternatively, can be computed from ᶠT and ᶠdTdz
+ᶠN = similar(ᶠz)
+ᶠN .= ᶠinterp.(ᶜN) # alternatively, can be computed from ᶠT and ᶠdTdz
 
-# compute saturation profile
-Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    CA.calc_saturation_profile!(
-        topo_ᶜτ_sat[colidx],
-        topo_ᶠτ_sat[colidx],
-        topo_U_sat[colidx],
-        topo_FrU_sat[colidx],
-        topo_FrU_clp[colidx],
-        topo_ᶜVτ[colidx],
-        topo_ᶠVτ[colidx],
-        p,
-        topo_FrU_max[colidx],
-        topo_FrU_min[colidx],
-        ᶜN[colidx],
-        topo_τ_x[colidx],
-        topo_τ_y[colidx],
-        topo_τ_p[colidx],
-        u_phy[colidx],
-        v_phy[colidx],
-        Y.c.ρ[colidx],
-        ᶜp[colidx],
-        Int(parent(topo_k_pbl[colidx])[1]),
-    )
-end
+ᶜρ = Y.c.ρ
+ᶜbuoyancy_frequency = ᶜN
+ᶠbuoyancy_frequency = ᶠN
 
-# a place holder to store physical forcing on uv
-uforcing = zeros(axes(u_phy))
-vforcing = zeros(axes(v_phy))
+# compute base flux at k_pbl
+CA.calc_base_flux!(
+    topo_τ_x,
+    topo_τ_y,
+    topo_τ_l,
+    topo_τ_p,
+    topo_τ_np,
+    #
+    topo_U_sat,
+    topo_FrU_sat,
+    topo_FrU_clp,
+    topo_FrU_max,
+    topo_FrU_min,
+    topo_ᶜz_pbl,
+    #
+    values_at_z_pbl,
+    #
+    ogw_params,
+    topo_info,
+    #
+    ᶜρ,
+    u_phy,
+    v_phy,
+    ᶜz,
+    ᶜbuoyancy_frequency,
+)
+
+CA.calc_saturation_profile!(
+    topo_ᶠτ_sat,
+    topo_ᶠVτ,
+    #
+    topo_U_sat,
+    topo_FrU_sat,
+    topo_FrU_clp,
+    topo_FrU_max,
+    topo_FrU_min,
+    topo_ᶜτ_sat,
+    topo_τ_x,
+    topo_τ_y,
+    topo_τ_p,
+    topo_ᶜz_pbl,
+    #
+    ogw_params,
+    #
+    ᶜρ,
+    u_phy,
+    v_phy,
+    ᶜp,
+    ᶜbuoyancy_frequency,
+    ᶜz,
+)
 
 # compute drag tendencies due to propagating part
-Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    CA.calc_propagate_forcing!(
-        uforcing[colidx],
-        vforcing[colidx],
-        topo_τ_x[colidx],
-        topo_τ_y[colidx],
-        topo_τ_l[colidx],
-        topo_ᶠτ_sat[colidx],
-        Y.c.ρ[colidx],
-    )
-end
+ᶜdτ_sat_dz = p.scratch.ᶜtemp_scalar
+CA.calc_propagate_forcing!(
+    ᶜuforcing,
+    ᶜvforcing,
+    topo_τ_x,
+    topo_τ_y,
+    topo_τ_l,
+    topo_ᶠτ_sat,
+    ᶜdτ_sat_dz,
+    ᶜρ,
+)
 
-# compute drag tendencies due to non-propagating part
-Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    CA.calc_nonpropagating_forcing!(
-        uforcing[colidx],
-        vforcing[colidx],
-        ᶠN[colidx],
-        topo_ᶠVτ[colidx],
-        ᶜp[colidx],
-        topo_τ_x[colidx],
-        topo_τ_y[colidx],
-        topo_τ_l[colidx],
-        topo_τ_np[colidx],
-        ᶠz[colidx],
-        ᶜz[colidx],
-        Int(parent(topo_k_pbl[colidx])[1]),
-        grav,
-    )
-end
+ᶜweights = p.scratch.ᶜtemp_scalar
+ᶜdiff = p.scratch.ᶜtemp_scalar_2
+ᶜwtsum = p.scratch.temp_field_level
+ᶠz_ref = p.scratch.ᶠtemp_field_level
+CA.calc_nonpropagating_forcing!(
+    ᶜuforcing,
+    ᶜvforcing,
+    #
+    topo_τ_x,
+    topo_τ_y,
+    topo_τ_l,
+    topo_τ_np,
+    topo_ᶠVτ,
+    topo_ᶠz_pbl,
+    #
+    ᶠz_ref,
+    ᶠp_ref,
+    ᶜmask,
+    ᶜweights,
+    ᶜdiff,
+    ᶜwtsum,
+    #
+    ᶠp,
+    ᶠp_m1,
+    ᶠbuoyancy_frequency,
+    ᶠz,
+    ᶠdz,
+    grav,
+)
 
 # constrain forcing
-@. uforcing = max(FT(-3e-3), min(FT(3e-3), uforcing))
-@. vforcing = max(FT(-3e-3), min(FT(3e-3), vforcing))
+@. ᶜuforcing = max(FT(-3e-3), min(FT(3e-3), ᶜuforcing))
+@. ᶜvforcing = max(FT(-3e-3), min(FT(3e-3), ᶜvforcing))
+
+# Move GPU arrays back to CPU for plotting
+uforcing_cpu = ClimaCore.to_cpu(ᶜuforcing)
+vforcing_cpu = ClimaCore.to_cpu(ᶜvforcing)
+gfdl_ca_udt_topo_cpu = ClimaCore.to_cpu(gfdl_ca_udt_topo)
+gfdl_ca_vdt_topo_cpu = ClimaCore.to_cpu(gfdl_ca_vdt_topo)
+ᶜz_cpu = ClimaCore.to_cpu(ᶜz)
+Y_cpu = ClimaCore.to_cpu(Y)
 
 ##################
 # plotting!!!!
@@ -341,27 +447,28 @@ REMAP_DIR = joinpath(@__DIR__, "ogwd_3d", "remap_data/")
 if !isdir(REMAP_DIR)
     mkpath(REMAP_DIR)
 end
-datafile_cg = joinpath(REMAP_DIR, "data_cg.nc")
+timestamp = Dates.format(now(), "yyyymmdd_HHMMSS")
+datafile_cg = joinpath(REMAP_DIR, "data_cg_$(timestamp).nc")
 nc = NCDataset(datafile_cg, "c")
-def_space_coord(nc, center_space, type = "cgll")
+def_space_coord(nc, ᶜspace, type = "cgll")
 nc_time = def_time_coord(nc)
-nc_ogwd_uforcing = defVar(nc, "ogwd_u", FT, center_space, ("time",))
-nc_ogwd_vforcing = defVar(nc, "ogwd_v", FT, center_space, ("time",))
-nc_gfdl_udt_topo = defVar(nc, "gfdl_udt_topo", FT, center_space, ("time",))
-nc_gfdl_vdt_topo = defVar(nc, "gfdl_vdt_topo", FT, center_space, ("time",))
-nc_z_3d = defVar(nc, "z_3d", FT, center_space, ("time",))
+nc_ogwd_uforcing = defVar(nc, "ogwd_u", FT, ᶜspace, ("time",))
+nc_ogwd_vforcing = defVar(nc, "ogwd_v", FT, ᶜspace, ("time",))
+nc_gfdl_udt_topo = defVar(nc, "gfdl_udt_topo", FT, ᶜspace, ("time",))
+nc_gfdl_vdt_topo = defVar(nc, "gfdl_vdt_topo", FT, ᶜspace, ("time",))
+nc_z_3d = defVar(nc, "z_3d", FT, ᶜspace, ("time",))
 nc_time[1] = 1
-nc_ogwd_uforcing[:, 1] = uforcing
-nc_ogwd_vforcing[:, 1] = vforcing
-nc_gfdl_udt_topo[:, 1] = gfdl_ca_udt_topo
-nc_gfdl_vdt_topo[:, 1] = gfdl_ca_vdt_topo
-nc_z_3d[:, 1] = ᶜz
+nc_ogwd_uforcing[:, 1] = uforcing_cpu
+nc_ogwd_vforcing[:, 1] = vforcing_cpu
+nc_gfdl_udt_topo[:, 1] = gfdl_ca_udt_topo_cpu
+nc_gfdl_vdt_topo[:, 1] = gfdl_ca_vdt_topo_cpu
+nc_z_3d[:, 1] = ᶜz_cpu
 close(nc)
 
 nlat = 90
 nlon = 180
 weightfile = joinpath(REMAP_DIR, "remap_weights.nc")
-create_weightfile(weightfile, axes(Y.c), axes(Y.f), nlat, nlon, mono = true)
+create_weightfile(weightfile, axes(Y_cpu.c), axes(Y_cpu.f), nlat, nlon, mono = true)
 
 datafile_rll = joinpath(REMAP_DIR, "data_rll.nc")
 apply_remap(
