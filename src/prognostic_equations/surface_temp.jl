@@ -263,6 +263,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
         Δh_ice = @. -h_ice
     end
 
+    #=
     if t%(6*3600) == 0
         println("=== EisenmanSeaIce Tendency (t = $t s) ===")
         println("  T_sfc = $(parent(T_sfc)[1]) K")
@@ -276,13 +277,16 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
         println("  Δh_ice = $(parent(Δh_ice)[1]) m")
         println("="^50)
     end
+    =#
 
     
     # solve for T_sfcs
     remains_ice_covered = (parent(h_ice .+ Δh_ice)[1] > 0)
+    #=
     if t%(6*3600) == 0
         println("    remains_ice_covered = $remains_ice_covered")
     end
+    =#
     if remains_ice_covered
         # if ice covered, solve implicity (for now one Newton iteration: ΔT_s = - F(T_s) / dF(T_s)/dT_s )
         h = @. h_ice + Δh_ice
@@ -317,4 +321,98 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
     @. Yₜ.sfc.T = (T_sfc - Y.sfc.T) / FT(Δt)
     @. Yₜ.sfc.water = 0 # water tendency not implemented yet
 
+end
+
+"""
+Zero tendencies for all surface prognostic variables.
+"""
+function surface_temp_tendency!(Yₜ, Y, p, t, slab::FixedSeaIceState)
+    FT = eltype(Y)
+
+    params = p.params
+
+    # ocean params
+    (; depth_ocean, ρ_ocean, cp_ocean) = slab
+
+    # Heat capacity of mixed layer
+    hρc_ml = ρ_ocean * cp_ocean * depth_ocean
+    # sea ice params
+    (; C0_base, T_base, L_ice, T_freeze, k_ice, T_base) = slab
+
+    # prognostic variables
+    (; T, h_ice, T_ml, water) = Y.sfc
+
+    # Since we are computing tendencies, make local copies to avoid modifying Y during calculations
+    T_sfc = copy(T)
+    h_ice = copy(h_ice)
+    T_ml = copy(T_ml)
+    water = copy(water)
+
+    # TODO: Implement ∂F_atmo/∂T_sfc. For now, use a type-stable zero field.
+    # NOTE: Avoid capturing `FT::DataType` in a local closure and then broadcasting it;
+    # that pattern can trigger ClimaCore.Fields.BroadcastInferenceError (cannot infer eltype).
+    ∂F_atmo∂T_sfc = get_∂F_rad_energy∂T_sfc.(T_sfc) # zero.(T_sfc) # TODO add turbulent
+
+    # --- ENERGY BALANCE ---
+    # Denominator for temperature tendency
+    ml_heat_capacity_per_area = ρ_ocean * cp_ocean * depth_ocean
+
+    # Radiative energy surface fluxes
+    # Should we consider difference between ice covered and ice-free here?
+    if !isnothing(p.atmos.radiation_mode)
+        # ᶠradiation_flux is positive for net upward flux at the surface
+        # (SW_up - SW_down + LW_up - LW_down)
+        (; ᶠradiation_flux) = p.radiation
+        F_rad = Spaces.level(ᶠradiation_flux, half).components.data.:1 # same as sfc_rad_e_flux in SlabOceanSST
+    else
+        F_rad = zeros(FT, size(T_sfc))
+    end
+
+    # 2. Turbulent surface energy fluxes (sensible + latent heat) from surface to atmosphere
+    if !(p.atmos.disable_surface_flux_tendency)
+        F_turb =
+            Geometry.WVector.(
+                p.precomputed.sfc_conditions.ρ_flux_h_tot,
+            ).components.data.:1
+            # where is this computed? We want to take the forward diff.
+    else
+        F_turb = zeros(FT, size(T_sfc))
+    end
+
+    #3. No Q-flux
+    Q = FT(0)
+
+    # 4. Energy tendency due to precipitation accumulation        
+    if !(p.atmos.moisture_model isa DryModel)
+        pet = p.conservation_check.col_integrated_precip_energy_tendency
+    else
+        pet = FT(0)
+    end
+
+    # --- WATER BALANCE (if moisture is active) ---
+    if !(p.atmos.moisture_model isa DryModel)
+        # 1. Turbulent surface water fluxes (evaporation/condensation)
+        if !(p.atmos.disable_surface_flux_tendency)
+            sfc_turb_w_flux =
+                Geometry.WVector.(
+                    p.precomputed.sfc_conditions.ρ_flux_q_tot,
+                ).components.data.:1
+        else
+            sfc_turb_w_flux = 0
+        end
+
+        # 2. Precipitation (rain and snow, defined negative downward, so positive flux 
+        # from surface to atmosphere)
+        P_liq = p.precomputed.surface_rain_flux
+        P_snow = p.precomputed.surface_snow_flux
+        @. Yₜ.sfc.water -= P_liq + P_snow + sfc_turb_w_flux
+
+        return nothing
+    end
+
+    # No evolution
+    # TODO evolve surface temperature
+    @. Yₜ.sfc.T     = FT(0)
+    @. Yₜ.sfc.T_ml  = FT(0)
+    @. Yₜ.sfc.h_ice = FT(0)
 end

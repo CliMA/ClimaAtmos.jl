@@ -263,6 +263,27 @@ Base.@kwdef struct EisenmanSeaIce{FT} <: AbstractSurfaceTemperature
     ϕ₀::FT = 16 # Q-flux meridional scale [deg]
 end
 
+"""
+A maximally simple sea-ice surface model:
+- fixed surface temperature (boundary condition)
+- fixed mixed-layer temperature
+- fixed ice thickness
+All surface prognostic tendencies are zero.
+"""
+Base.@kwdef struct FixedSeaIceState{FT}  <: AbstractSurfaceTemperature
+    # sea ice parameters
+    C0_base::FT = FT(120)
+    T_base::FT = FT(273.16)
+    L_ice::FT = FT(3e8)
+    T_freeze::FT = FT(273.16)
+    k_ice::FT = FT(2)
+
+    # ocean mixed layer parameters
+    depth_ocean::FT = 1 # 40 # ocean mixed layer depth [m]
+    ρ_ocean::FT = 1020 # ocean density [kg / m³]
+    cp_ocean::FT = 4184 # ocean heat capacity [J/(kg * K)]
+end
+
 abstract type AbstractHyperdiffusion end
 Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
     ν₄_vorticity_coeff::FT

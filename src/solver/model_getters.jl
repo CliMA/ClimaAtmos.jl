@@ -135,6 +135,9 @@ function get_surface_model(parsed_args)
     elseif lowercase(strip(prognostic_surface_name)) in ("eisenmanseaice", "seaice") # Allows any casing and spacing permutations on these strings
         FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32 # infer FT from parsed_args
         EisenmanSeaIce{FT}()
+    elseif prognostic_surface_name == "FixedSeaIceState"
+        FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32 # infer FT from parsed_args
+        FixedSeaIceState{FT}()
     elseif prognostic_surface_name == "PrognosticSurfaceTemperature"
         @warn "The `PrognosticSurfaceTemperature` option is deprecated. Use `SlabOceanSST` instead."
         SlabOceanSST()
