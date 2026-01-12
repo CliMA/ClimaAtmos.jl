@@ -591,12 +591,11 @@ function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
     short_names = ["ta", "wa"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         var = get(simdir; short_name)
-        # For vertical-only (FiniteDifferenceGrid) spaces, the data may have
-        # extra singleton dimensions. Check and squeeze if needed.
-        if haskey(var.dims, "x") && length(var.dims["x"]) == 1
+        # Column simulations use a minimal box, so slice x,y to get 1D profiles
+        if haskey(var.dims, "x")
             var = slice(var; x = var.dims["x"][1])
         end
-        if haskey(var.dims, "y") && length(var.dims["y"]) == 1
+        if haskey(var.dims, "y")
             var = slice(var; y = var.dims["y"][1])
         end
         return var
@@ -657,6 +656,17 @@ function make_plots(
         short_name in short_names
     ]
 
+    # Column simulations use a minimal box, so slice x,y to get 1D profiles
+    vars = map(vars) do var
+        if haskey(var.dims, "x")
+            var = slice(var; x = var.dims["x"][1])
+        end
+        if haskey(var.dims, "y")
+            var = slice(var; y = var.dims["y"][1])
+        end
+        return var
+    end
+
     # We first prepare the axes with all the nice labels with ClimaAnalysis, then we use
     # CairoMakie to add the additional lines.
     fig = CairoMakie.Figure(; size = figsize)
@@ -696,6 +706,13 @@ function make_plots(
 
     # surface_precipitation
     surface_precip = read_var(simdir.variable_paths["pr"]["inst"]["10s"])
+    # Column simulations use a minimal box, so slice x,y
+    if haskey(surface_precip.dims, "x")
+        surface_precip = slice(surface_precip; x = surface_precip.dims["x"][1])
+    end
+    if haskey(surface_precip.dims, "y")
+        surface_precip = slice(surface_precip; y = surface_precip.dims["y"][1])
+    end
     viz.line_plot1D!(
         fig,
         surface_precip;
@@ -1381,8 +1398,8 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
 
-    # Determine if this is a box or column type
-    is_box = sim_type isa Union{EDMFBoxPlots, DiagEDMFBoxPlotsWithPrecip}
+    # All EDMF simulations use a small box for column mode
+    is_box = true
 
     # Determine precipitation names based on type
     if sim_type isa DiagEDMFBoxPlotsWithPrecip

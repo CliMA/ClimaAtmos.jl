@@ -1,4 +1,4 @@
-298
+299
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+299
+- Change single column simulations to use a minimal BoxGrid (x_elem=1, y_elem=1, nh_poly=1)
+
 298
 - Thermodynamics.jl v0.15.3 has behavioral changes, see: https://github.com/CliMA/Thermodynamics.jl/pull/293
 

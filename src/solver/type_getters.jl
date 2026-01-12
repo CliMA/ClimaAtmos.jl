@@ -786,7 +786,21 @@ function get_grid(parsed_args, params, context)
             kwargs...,
         )
     elseif config == "column"
-        ColumnGrid(FT; context, kwargs...)
+        # Use a minimal BoxGrid for column simulations (x_elem=1, y_elem=1, nh_poly=1)
+        # This provides a 2x2 horizontal grid that behaves like a single column
+        BoxGrid(
+            FT;
+            context,
+            x_elem = 1,
+            x_max = FT(1e5),  # 100 km
+            y_elem = 1,
+            y_max = FT(1e5),
+            nh_poly = 1,
+            bubble = false,
+            periodic_x = true,
+            periodic_y = true,
+            kwargs...,
+        )
     elseif config == "box"
         BoxGrid(
             FT;

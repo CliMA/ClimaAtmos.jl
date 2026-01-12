@@ -580,6 +580,14 @@ function issphere(space)
            Domains.SphereDomain
 end
 
+function isbox(space)
+    h_space = Spaces.horizontal_space(space)
+    return Meshes.domain(Spaces.topology(h_space)) isa Domains.RectangleDomain
+end
+
+# Check if space is a single-column model (true column or minimal box used as column)
+iscolumn_or_box(space) = iscolumn(space) || isbox(space)
+
 """
     clima_to_era5_name_dict()
 
