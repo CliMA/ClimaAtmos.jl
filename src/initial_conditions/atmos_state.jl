@@ -118,6 +118,22 @@ function atmos_surface_field(surface_space, ::EisenmanSeaIce)
     )
 end
 
+function atmos_surface_field(surface_space, ::FixedSeaIceState)
+    # Initialize sea-ice surface state. Add ice thickness as an additional
+    # prognostic surface variable alongside T and water.
+    return (;
+        sfc = map(
+            coord -> (;
+                T = Geometry.float_type(coord)(250.0), # TODO: double check with Pithan2016
+                T_ml = Geometry.float_type(coord)(271.0), # TODO: double check with Pithan2016
+                h_ice = Geometry.float_type(coord)(1.0), # initial ice thickness [m]
+                water = Geometry.float_type(coord)(0),
+            ),
+            Fields.coordinate_field(surface_space),
+        )
+    )
+end
+
 function moisture_variables(ls, ::DryModel)
     @assert ls.thermo_state isa TD.AbstractPhaseDry
     return (;)
