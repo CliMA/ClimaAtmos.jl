@@ -220,7 +220,7 @@ Returns:
 """
 function surface_flux_tke(
     turbconv_params,
-    ρa_sfc,
+    ρ_sfc,
     ustar,
     surface_local_geometry,
 )
@@ -229,7 +229,7 @@ function surface_flux_tke(
     # Determine the direction of the flux (normal to the surface)
     # c3_unit is a unit vector in the direction of the surface normal (e.g., C3(0,0,1) for a flat surface)
     c3_unit = C3(unit_basis_vector_data(C3, surface_local_geometry))
-    return c_k * ρa_sfc * ustar^3 * c3_unit
+    return c_k * ρ_sfc * ustar^3 * c3_unit
 end
 
 """
@@ -410,8 +410,8 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜdz = Fields.Δz_field(axes(Y.c))
 
-    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
-    sfc_tke = Fields.level(ᶜtke⁰, 1)
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    sfc_tke = Fields.level(ᶜtke, 1)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
     @. ᶜprandtl_nvec =
@@ -426,7 +426,7 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
             ᶜdz,
             sfc_tke,
             ᶜlinear_buoygrad,
-            ᶜtke⁰,
+            ᶜtke,
             obukhov_length,
             ᶜstrain_rate_norm,
             ᶜprandtl_nvec,

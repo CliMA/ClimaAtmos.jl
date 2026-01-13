@@ -120,13 +120,20 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
                     CA.promote_period.(Dates.Second(period_seconds))
             end
 
+            (; start_date, t_start) = sim_info
+            date_last =
+                t_start isa ITime ?
+                ClimaUtilities.TimeManager.date(t_start) :
+                start_date + Dates.Second(t_start)
             output_schedule = CAD.EveryCalendarDtSchedule(
                 period_dates;
                 reference_date = start_date,
+                date_last = date_last,
             )
             compute_schedule = CAD.EveryCalendarDtSchedule(
                 period_dates;
                 reference_date = start_date,
+                date_last = date_last,
             )
 
             if isnothing(output_name)
@@ -166,7 +173,8 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
                 sim_info.dt isa ITime ?
                 ITime(time_to_seconds(parsed_args["t_end"])) - t_start :
                 FT(time_to_seconds(parsed_args["t_end"]) - t_start),
-                start_date;
+                start_date,
+                sim_info.t_start;
                 output_writer = netcdf_writer,
                 topography = has_topography(axes(Y.c)),
             )...,

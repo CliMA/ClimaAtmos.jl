@@ -154,9 +154,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     rst_uₕ = rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge)
 
     if use_prognostic_tke(turbconv_model)
-        rst_ρatke =
-            rayleigh_sponge_tendency_sgs_tracer(Y.c.sgs⁰.ρatke, rayleigh_sponge)
-        @. Yₜ.c.sgs⁰.ρatke += rst_ρatke
+        rst_ρtke =
+            rayleigh_sponge_tendency_sgs_tracer(Y.c.ρtke, rayleigh_sponge)
+        @. Yₜ.c.ρtke += rst_ρtke
     end
     if turbconv_model isa PrognosticEDMFX
         ᶜmse = @. lazy(ᶜh_tot - ᶜK)

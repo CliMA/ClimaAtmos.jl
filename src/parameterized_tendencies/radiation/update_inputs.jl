@@ -4,7 +4,6 @@ import ClimaCore.Operators
 import ClimaUtilities.TimeVaryingInputs: evaluate!
 import CloudMicrophysics as CM
 import ..Parameters as CAP
-import ..PrescribedOzone, ..MaunaLoaCO2
 import ..PrescribedCloudInRadiation
 import ..lazy
 
@@ -20,7 +19,7 @@ end
 function update_atmospheric_state!(radiation_mode::R, integrator) where {R}
     # update temperature & pressure
     update_temperature_pressure!(integrator)
-    # update relative humidity 
+    # update relative humidity
     update_relative_humidity!(integrator)
     # update gas concentrations (volume mixing ratios)
     update_volume_mixing_ratios!(integrator)
@@ -69,7 +68,7 @@ end
 """
     update_relative_humidity!(integrator)
 
-Update relative humidity `ᶜrh`. 
+Update relative humidity `ᶜrh`.
 """
 function update_relative_humidity!((; u, p, t)::I) where {I}
     (; radiation_mode) = p.atmos
@@ -125,11 +124,10 @@ Update volume mixing ratios.
 """
 function update_volume_mixing_ratios!((; u, p, t)::I) where {I}
     (; rrtmgp_model) = p.radiation
-    # If we have prescribed ozone or aerosols, we need to update them
-    update_o3!(p, t, p.atmos.ozone)
-    update_co2!(p, t, p.atmos.co2)
 
     if :o3 in propertynames(p.tracers)
+        evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, t)
+
         ᶜvmr_o3 = Fields.array2field(
             rrtmgp_model.center_volume_mixing_ratio_o3,
             axes(u.c),
@@ -137,6 +135,8 @@ function update_volume_mixing_ratios!((; u, p, t)::I) where {I}
         @. ᶜvmr_o3 = p.tracers.o3
     end
     if :co2 in propertynames(p.tracers)
+        evaluate!(p.tracers.co2, p.tracers.prescribed_co2_timevaryinginput, t)
+
         if pkgversion(ClimaUtilities) < v"0.1.21"
             rrtmgp_model.volume_mixing_ratio_co2 .= p.tracers.co2
         else
@@ -147,22 +147,10 @@ function update_volume_mixing_ratios!((; u, p, t)::I) where {I}
     return nothing
 end
 
-update_o3!(_, _, _) = nothing
-function update_o3!(p, t, ::PrescribedOzone)
-    evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, t)
-    return nothing
-end
-
-update_co2!(_, _, _) = nothing
-function update_co2!(p, t, ::MaunaLoaCO2)
-    evaluate!(p.tracers.co2, p.tracers.prescribed_co2_timevaryinginput, t)
-    return nothing
-end
-
 """
     update_aerosol_concentrations!((; u, p, t)::I) where {I}
 
-Updates aerosol concentrations for supported aerosol names (dust (5 types), 
+Updates aerosol concentrations for supported aerosol names (dust (5 types),
 sea-salt (5 types), sulfates, black-carbon (2 types), organic-carbon (2 types))
 """
 function update_aerosol_concentrations!((; u, p, t)::I) where {I}
@@ -237,7 +225,7 @@ Updates aerosol properties for the following supported symbols:
     seasalt_names = [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
     dust_names = [:DST01, :DST02, :DST03, :DST04, :DST05]
     SO4_names = [:SO4]
-When prescribed cloud fields are used, time-varying interpolation is applied using 
+When prescribed cloud fields are used, time-varying interpolation is applied using
 `ClimaUtilities` functions.
 No updates are applied when `radiation_mode.idealized_clouds` is true.
 """
