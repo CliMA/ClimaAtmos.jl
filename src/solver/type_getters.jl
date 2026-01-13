@@ -104,6 +104,12 @@ function get_atmos(config::AtmosConfig, params)
         prescribed_flow = nothing
     end
 
+    moisture_fixer = parsed_args["moisture_fixer"]
+    @assert moisture_fixer in (true, false) 
+
+    enforce_nonnegative_tracers = parsed_args["enforce_nonnegative_tracers"]
+    @assert enforce_nonnegative_tracers in (true, false) 
+    
     atmos = AtmosModel(;
         # AtmosWater - Moisture, Precipitation & Clouds
         moisture_model,
@@ -112,7 +118,8 @@ function get_atmos(config::AtmosConfig, params)
         noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
                                      Implicit() : Explicit(),
         call_cloud_diagnostics_per_stage,
-        moisture_fixer = parsed_args["moisture_fixer"],
+        moisture_fixer,
+        enforce_nonnegative_tracers,
 
         # SCMSetup - Single-Column Model components
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),

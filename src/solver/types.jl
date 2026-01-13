@@ -596,6 +596,7 @@ Base.@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS}
     noneq_cloud_formation_mode::NCFM = nothing
     call_cloud_diagnostics_per_stage::CCDPS = nothing
     moisture_fixer::Bool = false
+    enforce_nonnegative_tracers::Bool = false
 end
 
 """
@@ -827,6 +828,8 @@ The default AtmosModel provides:
 - `cloud_model`: GridScaleCloud(), QuadratureCloud()
 - `noneq_cloud_formation_mode`: Explicit(), Implicit()
 - `call_cloud_diagnostics_per_stage`: nothing or CallCloudDiagnosticsPerStage()
+- `moisture_fixer`: nothing or boolean
+- `enforce_nonnegative_tracers`: nothing or boolean
 
 ## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
 Internal testing and calibration components for single-column setups:

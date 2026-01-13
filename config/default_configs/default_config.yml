@@ -178,6 +178,9 @@ smagorinsky_lilly:
 moisture_fixer:
   help: "A flag to switch on a grid mean tendency that moves mass from vapor to adjust small negative tracer values [false (default), true]"
   value: false
+enforce_nonnegative_tracers:
+  help: "A flag to switch on a constraint (dss) that enforces nonnegative tracer values by moving mass between q_tot and small microphysics tracers [false (default), true]"
+  value: false
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: false

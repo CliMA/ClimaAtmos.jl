@@ -20,7 +20,7 @@ Perform a weighted Direct Stiffness Summation (DSS) on components of the state `
 This function applies DSS to `ClimaCore.Field`s (or structures of `Field`s)
 typically named `.c` (center-located) and `.f` (face-located) within the state
 object `Y`. The DSS operation is essential in `ClimaCore` for ensuring that
-fields are C0 continuous across element boundaries. It correctly sums contributions 
+fields are C0 continuous across element boundaries. It correctly sums contributions
 to degrees of freedom that are shared between different processes (MPI ranks).
 
 The operation is performed in-place, modifying the fields within `Y` (e.g., `Y.c`, `Y.f`).
@@ -79,8 +79,23 @@ dss!(Y_state, params, t_current)
 
 NVTX.@annotate function dss!(Y, p, t)  # TODO: Rename to e.g. `apply_constraints!`
     prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
+    enforce_nonnegative_tracers!(Y, p, t)
     if do_dss(axes(Y.c))
         Spaces.weighted_dss!(Y.c => p.ghost_buffer.c, Y.f => p.ghost_buffer.f)
+    end
+    return nothing
+end
+
+function enforce_nonnegative_tracers!(Y, p, t)
+    if p.atmos.enforce_nonnegative_tracers
+        @assert :ρq_tot in propertynames(Y.c)
+        for tracer_name in (:ρq_liq, :ρq_ice, :ρq_rai, :ρq_sno)
+            if tracer_name in propertynames(Y.c)
+                ρq_tot = Y.c.ρq_tot
+                tracer = getproperty(Y.c, tracer_name)
+                @. tracer += min(max(0, -tracer), max(0, ρq_tot))
+            end
+        end
     end
     return nothing
 end
