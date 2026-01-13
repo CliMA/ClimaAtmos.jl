@@ -386,8 +386,12 @@ function surface_state_to_conditions(
     perturbed_sfc_conditions = SF.surface_conditions(surface_fluxes_params, inputs_perturbed)
      
     # Calculate change in surface fluxes
-    (; shf = shf_orig, lhf = lhf_orig) = original_sfc_conditions
-    (; shf = shf_pert, lhf = lhf_pert) = perturbed_sfc_conditions
+    (; shf , lhf) = original_sfc_conditions
+    shf_orig = shf
+    lhf_orig = lhf
+    (; shf, lhf) = perturbed_sfc_conditions
+    shf_pert = shf
+    lhf_pert = lhf
      
     Δshf = shf_pert - shf_orig
     Δlhf = isnothing(lhf_pert) || isnothing(lhf_orig) ? nothing : lhf_pert - lhf_orig
