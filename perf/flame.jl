@@ -108,7 +108,3 @@ end
               allocs_limit[job_id] * buffer
     end
 end
-
-if config.comms_ctx isa ClimaComms.SingletonCommsContext && !isinteractive()
-    include(joinpath(pkgdir(CA), "perf", "jet_report_nfailures.jl"))
-end

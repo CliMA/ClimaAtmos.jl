@@ -1328,7 +1328,7 @@ steps:
         agents:
           slurm_mem: 24GB
 
-  - group: "Checkbounds/Inference/Invalidations"
+  - group: "Checkbounds/Invalidations"
     steps:
       # TODO: we should somehow decouple this unit test from the perf env / scripts
       # Checkbounds
@@ -1341,16 +1341,6 @@ steps:
         artifact_paths: "checkbounds/output_active/*"
         agents:
           slurm_mem: 20GB
-
-      # Inference
-      - label: ":rocket: JET n-failures (inference)"
-        command: >
-          julia --color=yes --project=.buildkite perf/jet_test_nfailures.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
-          --config_file $PERF_CONFIG_PATH/bm_default.yml
-          --job_id jet_n_failures
-        agents:
-          slurm_mem: 24GB
 
       # Latency
       - label: ":mag::rocket: Invalidations"
