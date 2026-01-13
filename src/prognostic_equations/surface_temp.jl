@@ -316,10 +316,10 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::EisenmanSeaIce)
     #Y.q_sfc .= q_sfc
 
     # compute tendencies
-    @. Yₜ.sfc.T_ml = ΔT_ml / FT(Δt)
-    @. Yₜ.sfc.h_ice = Δh_ice / FT(Δt)
-    @. Yₜ.sfc.T = (T_sfc - Y.sfc.T) / FT(Δt)
-    @. Yₜ.sfc.water = 0 # water tendency not implemented yet
+    Yₜ.sfc.T_ml = @. ΔT_ml / FT(Δt)
+    Yₜ.sfc.h_ice = @. Δh_ice / FT(Δt)
+    Yₜ.sfc.T = @. (T_sfc - Y.sfc.T) / FT(Δt)
+    Yₜ.sfc.water = 0 # water tendency not implemented yet
 
 end
 
