@@ -140,12 +140,12 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         elseif (
             (
                 block_row_name in uₕ_component_names &&
-                block_column_name in (mass_names..., @name(c.sgs⁰.ρatke)) ||
+                block_column_name in (mass_names..., @name(c.ρtke)) ||
                 block_row_name == @name(c.ρe_tot) &&
                 block_column_name in (
                     mass_names...,
                     condensate_names...,
-                    @name(c.sgs⁰.ρatke),
+                    @name(c.ρtke),
                     @name(c.sgsʲs.:(1).q_tot),
                 ) ||
                 block_row_name == @name(c.sgsʲs.:(1).ρa) &&
@@ -159,9 +159,9 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
             # Missing off-diagonal blocks whose entries typically have
             # magnitudes that are larger than (or similar to) diagonal blocks in
             # the same rows:
-            # - ‖∂ᶜuᵢₜ/∂ᶜρ‖, ‖∂ᶜuᵢₜ/∂ᶜρaʲ‖ ≳ ‖∂ᶜuᵢₜ/∂ᶜuᵢ‖, and ‖∂ᶜuᵢₜ/∂ᶜρatke⁰‖
+            # - ‖∂ᶜuᵢₜ/∂ᶜρ‖, ‖∂ᶜuᵢₜ/∂ᶜρaʲ‖ ≳ ‖∂ᶜuᵢₜ/∂ᶜuᵢ‖, and ‖∂ᶜuᵢₜ/∂ᶜρtke‖
             #   where uᵢ is either u₁ or u₂, as long as ‖δᶜρ‖, ‖δᶜρaʲ‖ and
-            #   ‖δᶜρatke⁰‖ are relatively smaller than ‖δᶜuᵢ‖.
+            #   ‖δᶜρtke‖ are relatively smaller than ‖δᶜuᵢ‖.
             # - ‖∂ᶜρe_totₜ/∂ᶜρ‖, ‖∂ᶜρe_totₜ/∂ᶜχ‖, and ‖∂ᶜρe_totₜ/∂ᶜρχ‖ ≳
             #   ‖∂ᶜρe_totₜ/∂ᶜρe_tot‖ when χ is any scalar of order unity, as
             #   long as ‖δᶜρ‖ and ‖δᶜχ‖ are relatively smaller than ‖δᶜρe_tot‖.

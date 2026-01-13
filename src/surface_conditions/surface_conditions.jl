@@ -185,42 +185,21 @@ function surface_state_to_conditions(
     u = ifelsenothing(surf_state.u, FT(0))
     v = ifelsenothing(surf_state.v, FT(0))
 
-    if isnothing(surf_state.p)
-        # Assume an adiabatic profile with constant cv and R above the surface.
-        cv = TD.cv_m(thermo_params, interior_ts)
-        R = TD.gas_constant_air(thermo_params, interior_ts)
-        interior_ρ = TD.air_density(thermo_params, interior_ts)
-        interior_T = TD.air_temperature(thermo_params, interior_ts)
-        ρ = interior_ρ * (T / interior_T)^(cv / R)
-        if atmos.moisture_model isa DryModel
-            ts = TD.PhaseDry_ρT(thermo_params, ρ, T)
-        else
-            # Assume that the surface is water with saturated air directly
-            # above it.
-            q_vap_sat = TD.q_vap_saturation_generic(thermo_params, T, ρ, TD.Liquid())
-            q_vap = ifelsenothing(surf_state.q_vap, q_vap_sat)
-            q = TD.PhasePartition(q_vap)
-            ts = TD.PhaseNonEquil_ρTq(thermo_params, ρ, T, q)
-        end
+    # Assume an adiabatic profile with constant cv and R above the surface.
+    cv = TD.cv_m(thermo_params, interior_ts)
+    R = TD.gas_constant_air(thermo_params, interior_ts)
+    interior_ρ = TD.air_density(thermo_params, interior_ts)
+    interior_T = TD.air_temperature(thermo_params, interior_ts)
+    ρ = interior_ρ * (T / interior_T)^(cv / R)
+    if atmos.moisture_model isa DryModel
+        ts = TD.PhaseDry_ρT(thermo_params, ρ, T)
     else
-        p = surf_state.p
-        if atmos.moisture_model isa DryModel
-            ts = TD.PhaseDry_pT(thermo_params, p, T)
-        else
-            q_vap = if isnothing(surf_state.q_vap)
-                # Assume that the surface is water with saturated air directly
-                # above it.
-                phase = TD.Liquid()
-                p_sat = TD.saturation_vapor_pressure(thermo_params, T, phase)
-                ϵ_v =
-                    TD.Parameters.R_d(thermo_params) / TD.Parameters.R_v(thermo_params)
-                ϵ_v * p_sat / (p - p_sat * (1 - ϵ_v))
-            else
-                surf_state.q_vap
-            end
-            q = TD.PhasePartition(q_vap)
-            ts = TD.PhaseNonEquil_pTq(thermo_params, p, T, q)
-        end
+        # Assume that the surface is water with saturated air directly
+        # above it.
+        q_vap_sat = TD.q_vap_saturation_generic(thermo_params, T, ρ, TD.Liquid())
+        q_vap = ifelsenothing(surf_state.q_vap, q_vap_sat)
+        q = TD.PhasePartition(q_vap)
+        ts = TD.PhaseNonEquil_ρTq(thermo_params, ρ, T, q)
     end
 
     surface_values = SF.StateValues(coordinates.z, SA.SVector(u, v), ts)
@@ -276,35 +255,15 @@ function surface_state_to_conditions(
                 shf = θ_flux * ρ * TD.cp_m(thermo_params, ts)
                 lhf = q_flux * ρ * TD.latent_heat_vapor(thermo_params, ts)
             end
-            if isnothing(surf_state.gustiness)
-                buoyancy_flux = SF.compute_buoyancy_flux(
-                    surface_fluxes_params, shf, lhf, interior_ts, ts,
-                    SF.PointValueScheme(),
-                )
-                # TODO: We are assuming that the average mixed layer depth is
-                # always 1000 meters. This needs to be adjusted for deep
-                # convective cases like TRMM.
-                zi = FT(1000)
-                gustiness = cbrt(max(buoyancy_flux * zi, 0))
-            else
-                gustiness = surf_state.gustiness
-            end
+            gustiness = ifelsenothing(surf_state.gustiness, FT(1))
             isnothing(surf_state.beta) || error(
                 "beta cannot be specified when surface fluxes are prescribed",
             )
-            if isnothing(parameterization.ustar)
-                inputs = SF.Fluxes(
-                    interior_values, surface_values, shf, lhf,
-                    parameterization.z0m, parameterization.z0b;
-                    gustiness,
-                )
-            else
-                inputs = SF.FluxesAndFrictionVelocity(
-                    interior_values, surface_values, shf, lhf,
-                    parameterization.ustar, parameterization.z0m, parameterization.z0m;
-                    gustiness,
-                )
-            end
+            inputs = SF.FluxesAndFrictionVelocity(
+                interior_values, surface_values, shf, lhf,
+                parameterization.ustar, parameterization.z0m, parameterization.z0m;
+                gustiness,
+            )
         end
     end
 

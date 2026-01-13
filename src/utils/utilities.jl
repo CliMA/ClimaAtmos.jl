@@ -7,15 +7,15 @@ import LinearAlgebra: norm_sqr
 using Dates: DateTime, @dateformat_str
 import StaticArrays: SVector, SMatrix
 
-is_energy_var(symbol) = symbol in (:ρe_tot, :ρae_tot)
-is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :u₃, :ρw)
-is_turbconv_var(symbol) = symbol in (:turbconv, :sgsʲs, :sgs⁰)
+is_energy_var(symbol) = symbol in (:ρe_tot,)
+is_momentum_var(symbol) = symbol in (:uₕ, :u₃)
+is_sgs_var(symbol) = symbol in (:sgsʲs,)
 is_tracer_var(symbol) = !(
     symbol == :ρ ||
-    symbol == :ρa ||
+    symbol == :ρtke ||
     is_energy_var(symbol) ||
     is_momentum_var(symbol) ||
-    is_turbconv_var(symbol)
+    is_sgs_var(symbol)
 )
 
 # we may be hitting a slow path:

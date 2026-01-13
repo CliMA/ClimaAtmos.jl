@@ -10,7 +10,7 @@ import Thermodynamics.Parameters as TDP
 """
     calculate_pi_groups(
         elev_above_sfc, ref_H, ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ,
-        ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke⁰
+        ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke
     ) 
 
 Calculates non-dimensional Π-groups used in EDMF entrainment/detrainment models.
@@ -25,7 +25,7 @@ Arguments:
 - `ᶜw⁰`: Environment physical vertical velocity [m/s].
 - `ᶜRH⁰`: Environment relative humidity [-].
 - `ᶜbuoy⁰`: Environment buoyancy [m/s²].
-- `ᶜtke⁰`: Environment turbulent kinetic energy [m²/s²].
+- `ᶜtke`: Turbulent kinetic energy [m²/s²].
 
 Returns a tuple of five Π-groups: (Π₁, Π₂, Π₃, Π₄, Π₅).
 Π₁: Related to buoyancy difference and velocity difference.
@@ -46,12 +46,12 @@ function calculate_pi_groups(
     ᶜw⁰,
     ᶜRH⁰,
     ᶜbuoy⁰,
-    ᶜtke⁰,
+    ᶜtke,
 )
     FT = eltype(elev_above_sfc)
     vel_diff_sq = (ᶜwʲ - ᶜw⁰)^2 + eps(FT)
     Π₁_raw = elev_above_sfc * (ᶜbuoyʲ - ᶜbuoy⁰) / vel_diff_sq
-    Π₂_raw = max(ᶜtke⁰, 0) / vel_diff_sq
+    Π₂_raw = max(ᶜtke, 0) / vel_diff_sq
     Π₃ = sqrt(max(ᶜaʲ, 0))
     Π₄ = ᶜRHʲ - ᶜRH⁰
     Π₅ = elev_above_sfc / max(ref_H, eps(FT))
@@ -64,7 +64,7 @@ end
 """
     entrainment(
         thermo_params, turbconv_params, ᶜz, z_sfc, ᶜp, ᶜρ,
-        ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ, ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke⁰,
+        ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ, ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke,
         model_option::AbstractEntrainmentModel,
     )
 
@@ -92,7 +92,7 @@ Arguments (all cell-centered):
 - `ᶜw⁰`: Environment physical vertical velocity [m/s].
 - `ᶜRH⁰`: Environment relative humidity [-].
 - `ᶜbuoy⁰`: Environment buoyancy [m/s²].
-- `ᶜtke⁰`: Environment turbulent kinetic energy [m²/s²].
+- `ᶜtke`: Turbulent kinetic energy [m²/s²].
 - `model_option`: An object whose type specifies the entrainment model to use
                   (e.g., an instance of `NoEntrainment`, `PiGroupsEntrainment`,
                   or `InvZEntrainment`). This corresponds to the `AbstractEntrainmentModel`
@@ -115,7 +115,7 @@ function entrainment(
     ᶜw⁰,
     ᶜRH⁰,
     ᶜbuoy⁰,
-    ᶜtke⁰,
+    ᶜtke,
     ::NoEntrainment,
 )
     return zero(eltype(thermo_params))
@@ -135,7 +135,7 @@ function entrainment(
     ᶜw⁰,
     ᶜRH⁰,
     ᶜbuoy⁰,
-    ᶜtke⁰,
+    ᶜtke,
     ::PiGroupsEntrainment,
 )
     FT = eltype(thermo_params)
@@ -167,7 +167,7 @@ function entrainment(
         ᶜw⁰,
         ᶜRH⁰,
         ᶜbuoy⁰,
-        ᶜtke⁰,
+        ᶜtke,
     )
 
     entr_param_vec = CAP.entr_param_vec(turbconv_params)
@@ -203,7 +203,7 @@ function entrainment(
     ᶜw⁰,
     ᶜRH⁰,
     ᶜbuoy⁰,
-    ᶜtke⁰,
+    ᶜtke,
     ::InvZEntrainment,
 )
     FT = eltype(thermo_params)
@@ -299,7 +299,7 @@ end
     detrainment(
         thermo_params, turbconv_params, ᶜz, z_sfc, ᶜp, ᶜρ, ᶜρaʲ, ᶜaʲ,
         ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ, ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜentr, ᶜvert_div,
-        ᶜmassflux_vert_div, ᶜw_vert_div, ᶜtke⁰, model_option::AbstractDetrainmentModel
+        ᶜmassflux_vert_div, ᶜw_vert_div, ᶜtke, model_option::AbstractDetrainmentModel
     )
 
 Calculates the detrainment rate [1/s] based on the specified `model_option`.
@@ -332,7 +332,7 @@ Arguments (all cell-centered):
 - `ᶜvert_div`: Grid-mean vertical divergence [1/s].
 - `ᶜmassflux_vert_div`: Vertical divergence of updraft mass flux [kg/m²/s²].
 - `ᶜw_vert_div`: Vertical divergence term related to updraft vertical velocity [1/s].
-- `ᶜtke⁰`: Environment turbulent kinetic energy [m²/s²].
+- `ᶜtke`: Turbulent kinetic energy [m²/s²].
 - `model_option`: An object whose type specifies the detrainment model to use
                   (e.g., an instance of `NoDetrainment`, `PiGroupsDetrainment`, 
                   `BuoyancyVelocityDetrainment`, `SmoothAreaDetrainment`, etc.).
@@ -360,7 +360,7 @@ function detrainment(
     ᶜvert_div,
     ᶜmassflux_vert_div,
     ᶜw_vert_div,
-    ᶜtke⁰,
+    ᶜtke,
     ::NoDetrainment,
 )
     return zero(eltype(thermo_params))
@@ -385,7 +385,7 @@ function detrainment(
     ᶜvert_div,
     ᶜmassflux_vert_div,
     ᶜw_vert_div,
-    ᶜtke⁰,
+    ᶜtke,
     ::PiGroupsDetrainment,
 )
     FT = eltype(thermo_params)
@@ -417,7 +417,7 @@ function detrainment(
         ᶜw⁰,
         ᶜRH⁰,
         ᶜbuoy⁰,
-        ᶜtke⁰,
+        ᶜtke,
     )
 
     entr_param_vec = CAP.entr_param_vec(turbconv_params) # Note: Uses indices 7-12 for detrainment
@@ -455,7 +455,7 @@ function detrainment(
     ᶜvert_div,
     ᶜmassflux_vert_div,
     ᶜw_vert_div,
-    ᶜtke⁰,
+    ᶜtke,
     ::BuoyancyVelocityDetrainment,
 )
     FT = eltype(thermo_params)
@@ -509,7 +509,7 @@ function detrainment(
     ᶜvert_div,
     ᶜmassflux_vert_div,
     ᶜw_vert_div,
-    ᶜtke⁰,
+    ᶜtke,
     ::SmoothAreaDetrainment,
 )
     FT = eltype(thermo_params)

@@ -39,18 +39,6 @@ radiation_tendency!(Yₜ, Y, p, t, ::Union{Nothing, HeldSuarezForcing}) = nothin
 ##### RRTMGP Radiation
 #####
 
-#########
-# Ozone #
-#########
-
-function center_vmr_o3(::IdealizedOzone, ᶜz)
-    ᶜvolume_mixing_ratio_o3_field = idealized_ozone.(ᶜz)
-    return Fields.field2array(ᶜvolume_mixing_ratio_o3_field)
-end
-
-# Initialized in callback
-center_vmr_o3(::PrescribedOzone, _) = NaN
-
 """
     idealized_ozone(z::FT)
 
@@ -90,20 +78,8 @@ function idealized_ozone(z::FT) where {FT}
     return g1 * p^g2 * exp(-p / g3) * PPMV_TO_VMR
 end
 
-#######
-# CO2 #
-#######
-
-center_vmr_co2(co2::FixedCO2) = co2.value
-
-# Initialized in callback
-center_vmr_co2(::MaunaLoaCO2) = NaN
-
 function rrtmgp_model_kwargs(
     space,
-    radiation_mode::RRTMGPI.GrayRadiation,
-    ozone::AbstractOzone,
-    co2::AbstractCO2,
     include_z::Bool,
 )
     ᶜspace = Spaces.center_space(space)
@@ -141,14 +117,16 @@ end
 
 function rrtmgp_model_kwargs(
     space,
+    params,
+    time_varying_trace_gases,
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
-    ozone::AbstractOzone,
-    co2::AbstractCO2,
     include_z::Bool,
 )
     ᶜspace = Spaces.center_space(space)
     ᶠspace = Spaces.face_space(space)
     FT = Spaces.undertype(space)
+
+    trace_gas_params = CAP.trace_gas_params(params)
 
     bottom_coords = Fields.coordinate_field(Spaces.level(ᶜspace, 1))
     ᶜΔz = Fields.Δz_field(ᶜspace)
@@ -164,133 +142,142 @@ function rrtmgp_model_kwargs(
     end
     kwargs = NamedTuple()
     (; aerosol_radiation) = radiation_mode
-    NC.Dataset(RRTMGP.ArtifactPaths.get_input_filename(:gas, :lw)) do input_data
-        center_volume_mixing_ratio_o3 = center_vmr_o3(ozone, ᶜz)
 
-        # FT is needed in case FixedCO2 is being used with an inconsistent
-        # floating point type
-        center_volume_mixing_ratio_co2 = FT(center_vmr_co2(co2))
+    center_volume_mixing_ratio_o3 =
+        :O3 in Symbol.(time_varying_trace_gases) ? NaN :
+        Fields.field2array(idealized_ozone.(ᶜz))
 
-        # the first value for each global mean volume mixing ratio is the
-        # present-day value
-        input_vmr(name) =
-            input_data[name][1] * parse(FT, input_data[name].attrib["units"])
-        kwargs = (;
-            use_global_means_for_well_mixed_gases = true,
-            center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
-            center_relative_humidity = NaN, # initialized in callback
-            center_volume_mixing_ratio_o3,
-            volume_mixing_ratio_co2 = center_volume_mixing_ratio_co2,
-            volume_mixing_ratio_n2o = input_vmr("nitrous_oxide_GM"),
-            volume_mixing_ratio_co = input_vmr("carbon_monoxide_GM"),
-            volume_mixing_ratio_ch4 = input_vmr("methane_GM"),
-            volume_mixing_ratio_o2 = input_vmr("oxygen_GM"),
-            volume_mixing_ratio_n2 = input_vmr("nitrogen_GM"),
-            volume_mixing_ratio_ccl4 = input_vmr("carbon_tetrachloride_GM"),
-            volume_mixing_ratio_cfc11 = input_vmr("cfc11_GM"),
-            volume_mixing_ratio_cfc12 = input_vmr("cfc12_GM"),
-            volume_mixing_ratio_cfc22 = input_vmr("hcfc22_GM"),
-            volume_mixing_ratio_hfc143a = input_vmr("hfc143a_GM"),
-            volume_mixing_ratio_hfc125 = input_vmr("hfc125_GM"),
-            volume_mixing_ratio_hfc23 = input_vmr("hfc23_GM"),
-            volume_mixing_ratio_hfc32 = input_vmr("hfc32_GM"),
-            volume_mixing_ratio_hfc134a = input_vmr("hfc134a_GM"),
-            volume_mixing_ratio_cf4 = input_vmr("cf4_GM"),
-            volume_mixing_ratio_no2 = 0, # not available in input_data
-            latitude,
+    trace_gas_names = (
+        :CO2,
+        :N2O,
+        :CO,
+        :CH4,
+        :O2,
+        :N2,
+        :CCL4,
+        :CFC11,
+        :CFC12,
+        :CFC22,
+        :HFC143A,
+        :HFC125,
+        :HFC23,
+        :HFC32,
+        :HFC134A,
+        :CF4,
+        :NO2,
+    )
+    trace_gas_vmr_names =
+        map(
+            gas_name -> Symbol(:volume_mixing_ratio_, lowercase(String(gas_name))),
+            trace_gas_names,
         )
-        if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
-            kwargs = (; kwargs..., ice_roughness = 2)
-            if radiation_mode.idealized_clouds # icy cloud on top and wet cloud on bottom
-                # TODO: can we avoid using DataLayouts with this?
-                #     `ᶜis_bottom_cloud = similar(ᶜz, Bool)`
-                ᶜis_bottom_cloud = Fields.Field(
-                    DataLayouts.replace_basetype(Fields.field_values(ᶜz), Bool),
-                    ᶜspace,
-                ) # need to fix several ClimaCore bugs in order to simplify this
-                ᶜis_top_cloud = similar(ᶜis_bottom_cloud)
-                @. ᶜis_bottom_cloud = ᶜz > 1e3 && ᶜz < 1.5e3
-                @. ᶜis_top_cloud = ᶜz > 4e3 && ᶜz < 5e3
-                kwargs = (;
-                    kwargs...,
-                    center_cloud_liquid_effective_radius = 12,
-                    center_cloud_ice_effective_radius = 25,
-                    center_cloud_liquid_water_path = Fields.field2array(
-                        @. ifelse(ᶜis_bottom_cloud, FT(0.002) * ᶜΔz, FT(0))
-                    ),
-                    center_cloud_ice_water_path = Fields.field2array(
-                        @. ifelse(ᶜis_top_cloud, FT(0.001) * ᶜΔz, FT(0))
-                    ),
-                    center_cloud_fraction = Fields.field2array(
-                        @. ifelse(
-                            ᶜis_bottom_cloud | ᶜis_top_cloud,
-                            FT(1),
-                            0 * ᶜΔz,
-                        )
-                    ),
-                )
-            else
-                kwargs = (;
-                    kwargs...,
-                    center_cloud_liquid_water_path = NaN, # initialized in callback
-                    center_cloud_ice_water_path = NaN, # initialized in callback
-                    center_cloud_fraction = NaN, # initialized in callback
-                    center_cloud_liquid_effective_radius = NaN, # initialized in callback
-                    center_cloud_ice_effective_radius = NaN, # initialized in callback
-                )
-            end
+    trace_gas_vmrs = map(trace_gas_names) do gas_name
+        if gas_name in Symbol.(time_varying_trace_gases)
+            NaN
+        else
+            getfield(trace_gas_params, Symbol(gas_name, :_fixed_value))
         end
+    end
+    kwargs = (;
+        use_global_means_for_well_mixed_gases = true,
+        center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
+        center_relative_humidity = NaN, # initialized in callback
+        center_volume_mixing_ratio_o3,
+        NamedTuple{trace_gas_vmr_names}(trace_gas_vmrs)...,
+        latitude,
+    )
 
-        if aerosol_radiation
+    if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
+        kwargs = (; kwargs..., ice_roughness = 2)
+        if radiation_mode.idealized_clouds # icy cloud on top and liquid cloud on bottom
+            # TODO: can we avoid using DataLayouts with this?
+            #     `ᶜis_bottom_cloud = similar(ᶜz, Bool)`
+            ᶜis_bottom_cloud = Fields.Field(
+                DataLayouts.replace_basetype(Fields.field_values(ᶜz), Bool),
+                ᶜspace,
+            ) # need to fix several ClimaCore bugs in order to simplify this
+            ᶜis_top_cloud = similar(ᶜis_bottom_cloud)
+            @. ᶜis_bottom_cloud = ᶜz > 1e3 && ᶜz < 1.5e3
+            @. ᶜis_top_cloud = ᶜz > 4e3 && ᶜz < 5e3
             kwargs = (;
                 kwargs...,
-                aod_sw_extinction = NaN,
-                aod_sw_scattering = NaN,
-                # assuming fixed aerosol radius
-                center_dust1_radius = 0.55,
-                center_dust2_radius = 1.4,
-                center_dust3_radius = 2.4,
-                center_dust4_radius = 4.5,
-                center_dust5_radius = 8,
-                center_ss1_radius = 0.55,
-                center_ss2_radius = 1.4,
-                center_ss3_radius = 2.4,
-                center_ss4_radius = 4.5,
-                center_ss5_radius = 8,
-                center_dust1_column_mass_density = NaN, # initialized in callback
-                center_dust2_column_mass_density = NaN, # initialized in callback
-                center_dust3_column_mass_density = NaN, # initialized in callback
-                center_dust4_column_mass_density = NaN, # initialized in callback
-                center_dust5_column_mass_density = NaN, # initialized in callback
-                center_ss1_column_mass_density = NaN, # initialized in callback
-                center_ss2_column_mass_density = NaN, # initialized in callback
-                center_ss3_column_mass_density = NaN, # initialized in callback
-                center_ss4_column_mass_density = NaN, # initialized in callback
-                center_ss5_column_mass_density = NaN, # initialized in callback
-                center_so4_column_mass_density = NaN, # initialized in callback
-                center_bcpi_column_mass_density = NaN, # initialized in callback
-                center_bcpo_column_mass_density = NaN, # initialized in callback
-                center_ocpi_column_mass_density = NaN, # initialized in callback
-                center_ocpo_column_mass_density = NaN, # initialized in callback
+                center_cloud_liquid_effective_radius = 12,
+                center_cloud_ice_effective_radius = 25,
+                center_cloud_liquid_water_path = Fields.field2array(
+                    @. ifelse(ᶜis_bottom_cloud, FT(0.002) * ᶜΔz, FT(0))
+                ),
+                center_cloud_ice_water_path = Fields.field2array(
+                    @. ifelse(ᶜis_top_cloud, FT(0.001) * ᶜΔz, FT(0))
+                ),
+                center_cloud_fraction = Fields.field2array(
+                    @. ifelse(
+                        ᶜis_bottom_cloud | ᶜis_top_cloud,
+                        FT(1),
+                        0 * ᶜΔz,
+                    )
+                ),
+            )
+        else
+            kwargs = (;
+                kwargs...,
+                center_cloud_liquid_water_path = NaN, # initialized in callback
+                center_cloud_ice_water_path = NaN, # initialized in callback
+                center_cloud_fraction = NaN, # initialized in callback
+                center_cloud_liquid_effective_radius = NaN, # initialized in callback
+                center_cloud_ice_effective_radius = NaN, # initialized in callback
             )
         end
+    end
 
-        if include_z
-            if ᶜspace.grid.global_geometry isa
-               Geometry.AbstractSphericalGlobalGeometry
-                kwargs = (;
-                    kwargs...,
-                    center_z = Fields.field2array(ᶜz),
-                    face_z = Fields.field2array(ᶠz),
-                    planet_radius = planet_radius,
-                )
-            else
-                kwargs = (;
-                    kwargs...,
-                    center_z = Fields.field2array(ᶜz),
-                    face_z = Fields.field2array(ᶠz),
-                )
-            end
+    if aerosol_radiation
+        kwargs = (;
+            kwargs...,
+            aod_sw_extinction = NaN,
+            aod_sw_scattering = NaN,
+            # assuming fixed aerosol radius
+            center_dust1_radius = 0.55,
+            center_dust2_radius = 1.4,
+            center_dust3_radius = 2.4,
+            center_dust4_radius = 4.5,
+            center_dust5_radius = 8,
+            center_ss1_radius = 0.55,
+            center_ss2_radius = 1.4,
+            center_ss3_radius = 2.4,
+            center_ss4_radius = 4.5,
+            center_ss5_radius = 8,
+            center_dust1_column_mass_density = NaN, # initialized in callback
+            center_dust2_column_mass_density = NaN, # initialized in callback
+            center_dust3_column_mass_density = NaN, # initialized in callback
+            center_dust4_column_mass_density = NaN, # initialized in callback
+            center_dust5_column_mass_density = NaN, # initialized in callback
+            center_ss1_column_mass_density = NaN, # initialized in callback
+            center_ss2_column_mass_density = NaN, # initialized in callback
+            center_ss3_column_mass_density = NaN, # initialized in callback
+            center_ss4_column_mass_density = NaN, # initialized in callback
+            center_ss5_column_mass_density = NaN, # initialized in callback
+            center_so4_column_mass_density = NaN, # initialized in callback
+            center_bcpi_column_mass_density = NaN, # initialized in callback
+            center_bcpo_column_mass_density = NaN, # initialized in callback
+            center_ocpi_column_mass_density = NaN, # initialized in callback
+            center_ocpo_column_mass_density = NaN, # initialized in callback
+        )
+    end
+
+    if include_z
+        if ᶜspace.grid.global_geometry isa
+           Geometry.AbstractSphericalGlobalGeometry
+            kwargs = (;
+                kwargs...,
+                center_z = Fields.field2array(ᶜz),
+                face_z = Fields.field2array(ᶠz),
+                planet_radius = planet_radius,
+            )
+        else
+            kwargs = (;
+                kwargs...,
+                center_z = Fields.field2array(ᶜz),
+                face_z = Fields.field2array(ᶠz),
+            )
         end
     end
     return kwargs
@@ -301,9 +288,8 @@ function radiation_model_cache(
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
     start_date,
     params,
-    ozone,
-    co2,
     aerosol_names,
+    time_varying_trace_gas_names,
     insolation_mode;
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
@@ -344,8 +330,22 @@ function radiation_model_cache(
         RRTMGPI.requires_z(interpolation) ||
         RRTMGPI.requires_z(bottom_extrapolation)
 
-    kwargs =
-        rrtmgp_model_kwargs(axes(Y.c), radiation_mode, ozone, co2, include_z)
+    if radiation_mode isa RRTMGPI.GrayRadiation
+        kwargs =
+            rrtmgp_model_kwargs(
+                axes(Y.c),
+                include_z,
+            )
+    else
+        kwargs =
+            rrtmgp_model_kwargs(
+                axes(Y.c),
+                params,
+                time_varying_trace_gas_names,
+                radiation_mode,
+                include_z,
+            )
+    end
 
     cos_zenith = weighted_irradiance = NaN # initialized in callback
 
@@ -423,7 +423,7 @@ function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
     # Apply radiation tendency to updrafts in prognostic EDMF. We use the
     # grid-mean radiation as an approximation for updraft radiation.
-    # Note: Radiation is not applied to updrafts in diagnostic EDMF because updrafts 
+    # Note: Radiation is not applied to updrafts in diagnostic EDMF because updrafts
     # are typically absent in the stratosphere where radiation is more important.
     if turbconv_model isa PrognosticEDMFX
         (; ᶜρʲs) = p.precomputed

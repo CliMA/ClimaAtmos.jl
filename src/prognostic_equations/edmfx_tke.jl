@@ -9,7 +9,7 @@
  to the prognostic variables.
 
  This function calculates and applies the changes in the environment TKE
- (`Yₜ.c.sgs⁰.ρatke`) due to various processes within the EDMFX framework,
+ (`Yₜ.c.ρtke`) due to various processes within the EDMFX framework,
  including shear production, buoyancy production, entrainment, detrainment,
  turbulent entrainment, pressure work, and dissipation.
 
@@ -29,19 +29,19 @@ function edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model::EDOnlyEDMFX)
     (; params) = p
     (; ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
     turbconv_params = CAP.turbconv_params(p.params)
-    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
     ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
     ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
     ᶜprandtl_nvec = @. lazy(
         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
     )
     ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
 
     # shear production
-    @. Yₜ.c.sgs⁰.ρatke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
+    @. Yₜ.c.ρtke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
     # buoyancy production
-    @. Yₜ.c.sgs⁰.ρatke -= Y.c.ρ * ᶜK_h * ᶜlinear_buoygrad
+    @. Yₜ.c.ρtke -= Y.c.ρ * ᶜK_h * ᶜlinear_buoygrad
 end
 
 function edmfx_tke_tendency!(
@@ -62,9 +62,9 @@ function edmfx_tke_tendency!(
         ᶠz = Fields.coordinate_field(Y.f).z
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
         ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
+        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
         ᶜK_u = @. lazy(
-            eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field),
+            eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field),
         )
         ᶜprandtl_nvec = @. lazy(
             turbulent_prandtl_number(
@@ -76,14 +76,14 @@ function edmfx_tke_tendency!(
         ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
 
         # shear production
-        @. Yₜ.c.sgs⁰.ρatke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
+        @. Yₜ.c.ρtke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
         # buoyancy production
-        @. Yₜ.c.sgs⁰.ρatke -= Y.c.ρ * ᶜK_h * ᶜlinear_buoygrad
+        @. Yₜ.c.ρtke -= Y.c.ρ * ᶜK_h * ᶜlinear_buoygrad
         for j in 1:n
             ᶜρaʲ =
                 turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
                 p.precomputed.ᶜρaʲs.:($j)
-            @. Yₜ.c.sgs⁰.ρatke -=
+            @. Yₜ.c.ρtke -=
                 ᶜρaʲ * adjoint(CT3(ᶜinterp(ᶠu³ʲs.:($$j) - ᶠu³))) *
                 (ᶜρʲs.:($$j) - Y.c.ρ) *
                 ᶜgradᵥ(CAP.grav(p.params) * ᶠz) / ᶜρʲs.:($$j)
@@ -93,7 +93,7 @@ function edmfx_tke_tendency!(
             ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
             (; ᶜts⁰) = p.precomputed
             ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
-            @. Yₜ.c.sgs⁰.ρatke -=
+            @. Yₜ.c.ρtke -=
                 ᶜρa⁰ * adjoint(CT3(ᶜinterp(ᶠu³⁰ - ᶠu³))) *
                 (ᶜρ⁰ - Y.c.ρ) *
                 ᶜgradᵥ(CAP.grav(p.params) * ᶠz) / ᶜρ⁰
@@ -103,24 +103,24 @@ function edmfx_tke_tendency!(
 end
 
 """
-    tke_dissipation(turbconv_params, ρatke, tke, mixing_length)
+    tke_dissipation(turbconv_params, ρtke, tke, mixing_length)
 
 Returns a scalar value representing the TKE dissipation rate
 per unit volume, ρ * ε_d [kg m^-1 s^-3].
 
 The physical dissipation is calculated as:
-  ρ * ε_d = c_d * ρatke * sqrt(abs(tke)) / mixing_length
+  ρ * ε_d = c_d * ρtke * sqrt(abs(tke)) / mixing_length
 where `c_d` is a parameter.
 
 Arguments:
 - `turbconv_params`: Turbulence and convection model parameters.
-- `ρatke`: ρ_area_weighted * tke [kg m^-2 s^-2].
+- `ρtke`: ρ_area_weighted * tke [kg m^-2 s^-2].
 - `tke`: Turbulent kinetic energy [m^2 s^-2].
 - `mixing_length`: Turbulent mixing length [m].
 """
-function tke_dissipation(turbconv_params, ρatke, tke, mixing_length)
+function tke_dissipation(turbconv_params, ρtke, tke, mixing_length)
     FT = typeof(tke)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    dissipation_rate_vol = c_d * ρatke * sqrt(abs(tke)) / mixing_length
+    dissipation_rate_vol = c_d * ρtke * sqrt(abs(tke)) / mixing_length
     return dissipation_rate_vol
 end

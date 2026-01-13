@@ -18,7 +18,6 @@ vorticity_hyperdiffusion_coefficient: 0.1857
 insolation: "timevarying"
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
-co2_model: fixed
 turbconv: diagnostic_edmfx
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
@@ -29,6 +28,7 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 precip_model: 0M
+cloud_model: MLCloud
 moist: equil
 toml: [toml/diagnostic_edmfx_era5_ic.toml]
 use_itime: true

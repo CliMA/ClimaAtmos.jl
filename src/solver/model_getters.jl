@@ -1,3 +1,6 @@
+using Flux
+import JLD2
+
 function get_moisture_model(parsed_args)
     moisture_name = parsed_args["moist"]
     @assert moisture_name in ("dry", "equil", "nonequil")
@@ -357,32 +360,28 @@ function get_microphysics_model(parsed_args)
     end
 end
 
-function get_cloud_model(parsed_args)
+function get_cloud_model(parsed_args, params)
     cloud_model = parsed_args["cloud_model"]
     FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     return if cloud_model == "grid_scale"
         GridScaleCloud()
     elseif cloud_model == "quadrature"
         QuadratureCloud(SGSQuadrature(FT))
+    elseif cloud_model == "MLCloud"
+        nn_filepath = joinpath(
+            @clima_artifact("cloud_fraction_nn"),
+            parsed_args["cloud_nn_architecture"],
+        )
+        nn_model_data = JLD2.load(nn_filepath)
+        nn_architecture = nn_model_data["re"]
+
+        nn_param_vec = FT.(CAP.cloud_fraction_param_vec(params))
+        # build the model
+        cf_nn_model = nn_architecture(nn_param_vec)
+        # use quadrature for qliq, qice and nn for cloud fraction
+        MLCloud_constructor(SGSQuadrature(FT), cf_nn_model)
     else
         error("Invalid cloud_model $(cloud_model)")
-    end
-end
-
-function get_ozone(parsed_args)
-    isnothing(parsed_args["prescribe_ozone"]) && return nothing
-    return parsed_args["prescribe_ozone"] ? PrescribedOzone() : IdealizedOzone()
-end
-
-function get_co2(parsed_args)
-    if isnothing(parsed_args["co2_model"])
-        return nothing
-    elseif lowercase(parsed_args["co2_model"]) == "fixed"
-        return FixedCO2()
-    elseif lowercase(parsed_args["co2_model"]) == "maunaloa"
-        return MaunaLoaCO2()
-    else
-        error("The CO2 models supported are $(subtypes(AbstractCO2))")
     end
 end
 
@@ -419,8 +418,6 @@ function get_subsidence_model(parsed_args, radiation_mode, FT)
 
     prof = if subsidence == "Bomex"
         APL.Bomex_subsidence(FT)
-    elseif subsidence == "LifeCycleTan2018"
-        APL.LifeCycleTan2018_subsidence(FT)
     elseif subsidence == "Rico"
         APL.Rico_subsidence(FT)
     elseif subsidence == "DYCOMS"
@@ -442,33 +439,16 @@ function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
 
     (prof_dTdt₀, prof_dqtdt₀) = if ls_adv == "Bomex"
         (APL.Bomex_dTdt(FT), APL.Bomex_dqtdt(FT))
-    elseif ls_adv == "LifeCycleTan2018"
-        (APL.LifeCycleTan2018_dTdt(FT), APL.LifeCycleTan2018_dqtdt(FT))
     elseif ls_adv == "Rico"
         (APL.Rico_dTdt(FT), APL.Rico_dqtdt(FT))
-    elseif ls_adv == "ARM_SGP"
-        (APL.ARM_SGP_dTdt(FT), APL.ARM_SGP_dqtdt(FT))
-    elseif ls_adv == "GATE_III"
-        (APL.GATE_III_dTdt(FT), APL.GATE_III_dqtdt(FT))
     else
         error("Uncaught case")
     end
     # See https://clima.github.io/AtmosphericProfilesLibrary.jl/dev/
     # for which functions accept which arguments.
-    prof_dqtdt = if ls_adv in ("Bomex", "LifeCycleTan2018", "Rico", "GATE_III")
-        (thermo_params, ᶜts, t, z) -> prof_dqtdt₀(z)
-    elseif ls_adv == "ARM_SGP"
-        (thermo_params, ᶜts, t, z) ->
-            prof_dqtdt₀(TD.exner(thermo_params, ᶜts), t, z)
-    end
-    prof_dTdt = if ls_adv in ("Bomex", "LifeCycleTan2018", "Rico")
-        (thermo_params, ᶜts, t, z) ->
-            prof_dTdt₀(TD.exner(thermo_params, ᶜts), z)
-    elseif ls_adv == "ARM_SGP"
-        (thermo_params, ᶜts, t, z) -> prof_dTdt₀(t, z)
-    elseif ls_adv == "GATE_III"
-        (thermo_params, ᶜts, t, z) -> prof_dTdt₀(z)
-    end
+    prof_dqtdt = (thermo_params, ᶜts, t, z) -> prof_dqtdt₀(z)
+    prof_dTdt = (thermo_params, ᶜts, t, z) ->
+        prof_dTdt₀(TD.exner(thermo_params, ᶜts), z)
 
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
@@ -525,7 +505,7 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
         external_forcing_file =
             get_external_monthly_forcing_file_path(parsed_args)
         # generate single file from monthly averaged diurnal data if it doesn't exist
-        # we'll use ClimaUtilities.TimeVaryingInputs downstream to repeat the data. 
+        # we'll use ClimaUtilities.TimeVaryingInputs downstream to repeat the data.
         if !isfile(external_forcing_file) ||
            !check_monthly_forcing_times(external_forcing_file, parsed_args)
             generate_external_forcing_file(
@@ -555,12 +535,8 @@ function get_scm_coriolis(parsed_args, ::Type{FT}) where {FT}
     scm_coriolis == nothing && return nothing
     (prof_u, prof_v) = if scm_coriolis == "Bomex"
         (APL.Bomex_geostrophic_u(FT), z -> FT(0))
-    elseif scm_coriolis == "LifeCycleTan2018"
-        (APL.LifeCycleTan2018_geostrophic_u(FT), z -> FT(0))
     elseif scm_coriolis == "Rico"
         (APL.Rico_geostrophic_ug(FT), APL.Rico_geostrophic_vg(FT))
-    elseif scm_coriolis == "ARM_SGP"
-        (z -> FT(10), z -> FT(0))
     elseif scm_coriolis == "DYCOMS_RF01"
         (z -> FT(7), z -> FT(-5.5))
     elseif scm_coriolis == "DYCOMS_RF02"
@@ -573,9 +549,7 @@ function get_scm_coriolis(parsed_args, ::Type{FT}) where {FT}
 
     coriolis_params = Dict()
     coriolis_params["Bomex"] = FT(0.376e-4)
-    coriolis_params["LifeCycleTan2018"] = FT(0.376e-4)
     coriolis_params["Rico"] = FT(4.5e-5)
-    coriolis_params["ARM_SGP"] = FT(8.5e-5)
     coriolis_params["DYCOMS_RF01"] = FT(0) # TODO: check this
     coriolis_params["DYCOMS_RF02"] = FT(0) # TODO: check this
     coriolis_params["GABLS"] = FT(1.39e-4)
@@ -644,7 +618,8 @@ end
 
 function get_tracers(parsed_args)
     aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
-    return (; aerosol_names)
+    time_varying_trace_gas_names = Tuple(parsed_args["time_varying_trace_gases"])
+    return (; aerosol_names, time_varying_trace_gas_names)
 end
 
 function check_case_consistency(parsed_args)

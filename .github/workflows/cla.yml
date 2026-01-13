@@ -1,0 +1,22 @@
+---
+name: CLA Workflow
+
+permissions:
+  contents: write
+  checks: write
+  actions: write
+  pull-requests: write
+
+on:
+  merge_group:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - main
+      - master
+
+jobs:
+  cla:
+    uses: clima/.github/.github/workflows/cla_template.yml@main
+    secrets: inherit
+    

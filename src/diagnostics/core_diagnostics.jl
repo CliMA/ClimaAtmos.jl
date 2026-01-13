@@ -459,13 +459,26 @@ function compute_clw!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    moisture_model::EquilMoistModel,
+)
     if isnothing(out)
         return copy(cache.precomputed.cloud_diagnostics_tuple.q_liq)
     else
         out .= cache.precomputed.cloud_diagnostics_tuple.q_liq
+    end
+end
+
+function compute_clw!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+)
+    if isnothing(out)
+        return state.c.ρq_liq ./ state.c.ρ
+    else
+        out .= state.c.ρq_liq ./ state.c.ρ
     end
 end
 
@@ -495,13 +508,26 @@ function compute_cli!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    moisture_model::EquilMoistModel,
+)
     if isnothing(out)
         return copy(cache.precomputed.cloud_diagnostics_tuple.q_ice)
     else
         out .= cache.precomputed.cloud_diagnostics_tuple.q_ice
+    end
+end
+
+function compute_cli!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+)
+    if isnothing(out)
+        return state.c.ρq_ice ./ state.c.ρ
+    else
+        out .= state.c.ρq_ice ./ state.c.ρ
     end
 end
 
@@ -1136,8 +1162,8 @@ function compute_clwvi!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    moisture_model::EquilMoistModel,
+)
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         clw = cache.scratch.ᶜtemp_scalar
@@ -1155,6 +1181,26 @@ function compute_clwvi!(
                 cache.precomputed.cloud_diagnostics_tuple.q_liq +
                 cache.precomputed.cloud_diagnostics_tuple.q_ice
             )
+        Operators.column_integral_definite!(out, clw)
+    end
+end
+
+function compute_clwvi!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+)
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        clw = cache.scratch.ᶜtemp_scalar
+        @. clw = state.c.ρq_liq + state.c.ρq_ice
+        Operators.column_integral_definite!(out, clw)
+        return out
+    else
+        clw = cache.scratch.ᶜtemp_scalar
+        @. clw = state.c.ρq_liq + state.c.ρq_ice
         Operators.column_integral_definite!(out, clw)
     end
 end
@@ -1184,8 +1230,8 @@ function compute_lwp!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    moisture_model::EquilMoistModel,
+)
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         lw = cache.scratch.ᶜtemp_scalar
@@ -1195,6 +1241,26 @@ function compute_lwp!(
     else
         lw = cache.scratch.ᶜtemp_scalar
         @. lw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+        Operators.column_integral_definite!(out, lw)
+    end
+end
+
+function compute_lwp!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+)
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        lw = cache.scratch.ᶜtemp_scalar
+        @. lw = state.c.ρq_liq
+        Operators.column_integral_definite!(out, lw)
+        return out
+    else
+        lw = cache.scratch.ᶜtemp_scalar
+        @. lw = state.c.ρq_liq
         Operators.column_integral_definite!(out, lw)
     end
 end
@@ -1723,4 +1789,66 @@ add_diagnostic_variable!(
     (not just the area of the cloudy portion of the column).
     """,
     compute! = compute_rwp!,
+)
+
+###
+# Covariances (3d)
+###
+function compute_covariance_diagnostics!(out, state, cache, time, type)
+    turbconv_model = cache.atmos.turbconv_model
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isa(turbconv_model, PrognosticEDMFX)
+        ᶜts = cache.precomputed.ᶜts⁰
+    else
+        ᶜts = cache.precomputed.ᶜts
+    end
+
+    # Reuse central compute_covariance function
+    (ᶜq′q′, ᶜθ′θ′, ᶜθ′q′) = compute_covariance(
+        state, cache, thermo_params, ᶜts,
+    )
+
+    result = if type == :qt_qt
+        ᶜq′q′
+    elseif type == :tht_tht
+        ᶜθ′θ′
+    elseif type == :qt_tht
+        ᶜθ′q′
+    else
+        error("Unknown variance type")
+    end
+
+    if isnothing(out)
+        return Base.materialize(result)
+    else
+        out .= result
+    end
+end
+
+compute_env_q_tot_variance!(out, state, cache, time) =
+    compute_covariance_diagnostics!(out, state, cache, time, :qt_qt)
+compute_env_theta_liq_ice_variance!(out, state, cache, time) =
+    compute_covariance_diagnostics!(out, state, cache, time, :tht_tht)
+compute_env_q_tot_theta_liq_ice_covariance!(out, state, cache, time) =
+    compute_covariance_diagnostics!(out, state, cache, time, :qt_tht)
+
+add_diagnostic_variable!(
+    short_name = "env_q_tot_variance",
+    long_name = "Environment Variance of Total Specific Humidity",
+    units = "kg^2 kg^-2",
+    compute! = compute_env_q_tot_variance!,
+)
+
+add_diagnostic_variable!(
+    short_name = "env_theta_liq_ice_variance",
+    long_name = "Environment Variance of Liquid Ice Potential Temperature",
+    units = "K^2",
+    compute! = compute_env_theta_liq_ice_variance!,
+)
+
+add_diagnostic_variable!(
+    short_name = "env_q_tot_theta_liq_ice_covariance",
+    long_name = "Environment Covariance of Total Specific Humidity and Liquid Ice Potential Temperature",
+    units = "kg kg^-1 K",
+    compute! = compute_env_q_tot_theta_liq_ice_covariance!,
 )
