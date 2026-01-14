@@ -71,15 +71,18 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
+            # Extract fields for this updraft
+            ᶜuʲ = ᶜuʲs.:($j)
+            ᶜmseʲ = Y.c.sgsʲs.:($j).mse
             # Use shock capturing for EDMFX moist static energy advection
             mse_advection = split_divₕ_with_shock_capturing(
-                ᶜuʲs.:($$j),
-                Y.c.sgsʲs.:($$j).mse,
+                ᶜuʲ,
+                ᶜmseʲ,
                 shock_capturing,
             )
             @. Yₜ.c.sgsʲs.:($$j).mse +=
                 mse_advection -
-                Y.c.sgsʲs.:($$j).mse * split_divₕ(ᶜuʲs.:($$j), 1)
+                ᶜmseʲ * split_divₕ(ᶜuʲ, 1)
         end
     end
 
@@ -158,72 +161,83 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
+            # Extract fields for this updraft
+            ᶜuʲ = ᶜuʲs.:($j)
+            ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
             # Use shock capturing for EDMFX tracer advection
             q_tot_advection = split_divₕ_with_shock_capturing(
-                ᶜuʲs.:($$j),
-                Y.c.sgsʲs.:($$j).q_tot,
+                ᶜuʲ,
+                ᶜq_totʲ,
                 shock_capturing,
             )
             @. Yₜ.c.sgsʲs.:($$j).q_tot +=
                 q_tot_advection -
-                Y.c.sgsʲs.:($$j).q_tot * split_divₕ(ᶜuʲs.:($$j), 1)
+                ᶜq_totʲ * split_divₕ(ᶜuʲ, 1)
             if p.atmos.moisture_model isa NonEquilMoistModel && (
                 p.atmos.microphysics_model isa Microphysics1Moment ||
                 p.atmos.microphysics_model isa Microphysics2Moment
             )
+                # Extract moisture fields
+                ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
+                ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
+                ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
+                ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
                 # Use shock capturing for moisture species advection
                 q_liq_advection = split_divₕ_with_shock_capturing(
-                    ᶜuʲs.:($$j),
-                    Y.c.sgsʲs.:($$j).q_liq,
+                    ᶜuʲ,
+                    ᶜq_liqʲ,
                     shock_capturing,
                 )
                 @. Yₜ.c.sgsʲs.:($$j).q_liq +=
                     q_liq_advection -
-                    Y.c.sgsʲs.:($$j).q_liq * split_divₕ(ᶜuʲs.:($$j), 1)
+                    ᶜq_liqʲ * split_divₕ(ᶜuʲ, 1)
                 q_ice_advection = split_divₕ_with_shock_capturing(
-                    ᶜuʲs.:($$j),
-                    Y.c.sgsʲs.:($$j).q_ice,
+                    ᶜuʲ,
+                    ᶜq_iceʲ,
                     shock_capturing,
                 )
                 @. Yₜ.c.sgsʲs.:($$j).q_ice +=
                     q_ice_advection -
-                    Y.c.sgsʲs.:($$j).q_ice * split_divₕ(ᶜuʲs.:($$j), 1)
+                    ᶜq_iceʲ * split_divₕ(ᶜuʲ, 1)
                 q_rai_advection = split_divₕ_with_shock_capturing(
-                    ᶜuʲs.:($$j),
-                    Y.c.sgsʲs.:($$j).q_rai,
+                    ᶜuʲ,
+                    ᶜq_raiʲ,
                     shock_capturing,
                 )
                 @. Yₜ.c.sgsʲs.:($$j).q_rai +=
                     q_rai_advection -
-                    Y.c.sgsʲs.:($$j).q_rai * split_divₕ(ᶜuʲs.:($$j), 1)
+                    ᶜq_raiʲ * split_divₕ(ᶜuʲ, 1)
                 q_sno_advection = split_divₕ_with_shock_capturing(
-                    ᶜuʲs.:($$j),
-                    Y.c.sgsʲs.:($$j).q_sno,
+                    ᶜuʲ,
+                    ᶜq_snoʲ,
                     shock_capturing,
                 )
                 @. Yₜ.c.sgsʲs.:($$j).q_sno +=
                     q_sno_advection -
-                    Y.c.sgsʲs.:($$j).q_sno * split_divₕ(ᶜuʲs.:($$j), 1)
+                    ᶜq_snoʲ * split_divₕ(ᶜuʲ, 1)
             end
             if p.atmos.moisture_model isa NonEquilMoistModel &&
                p.atmos.microphysics_model isa Microphysics2Moment
+                # Extract number concentration fields
+                ᶜn_liqʲ = Y.c.sgsʲs.:($j).n_liq
+                ᶜn_raiʲ = Y.c.sgsʲs.:($j).n_rai
                 # Use shock capturing for number concentration advection
                 n_liq_advection = split_divₕ_with_shock_capturing(
-                    ᶜuʲs.:($$j),
-                    Y.c.sgsʲs.:($$j).n_liq,
+                    ᶜuʲ,
+                    ᶜn_liqʲ,
                     shock_capturing,
                 )
                 @. Yₜ.c.sgsʲs.:($$j).n_liq +=
                     n_liq_advection -
-                    Y.c.sgsʲs.:($$j).n_liq * split_divₕ(ᶜuʲs.:($$j), 1)
+                    ᶜn_liqʲ * split_divₕ(ᶜuʲ, 1)
                 n_rai_advection = split_divₕ_with_shock_capturing(
-                    ᶜuʲs.:($$j),
-                    Y.c.sgsʲs.:($$j).n_rai,
+                    ᶜuʲ,
+                    ᶜn_raiʲ,
                     shock_capturing,
                 )
                 @. Yₜ.c.sgsʲs.:($$j).n_rai +=
                     n_rai_advection -
-                    Y.c.sgsʲs.:($$j).n_rai * split_divₕ(ᶜuʲs.:($$j), 1)
+                    ᶜn_raiʲ * split_divₕ(ᶜuʲ, 1)
             end
         end
     end
