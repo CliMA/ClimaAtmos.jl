@@ -1,4 +1,4 @@
-t_end: "360days"
+t_end: "50days"
 dt_save_state_to_disk: "10days"
 moist: "nonequil"
 rad: "allskywithclear"
@@ -8,4 +8,10 @@ surface_setup: "DefaultMoninObukhov"
 turbconv: "edonly_edmfx"
 edmfx_sgs_diffusive_flux: true
 precip_model: "1M"
+moisture_fixer: false
 toml: [toml/longrun_aquaplanet_1M.toml]
+output_dir: "/scratch/ajaruga/aquaplanet_1M_edonly_constant_diff_1e5_hyperdiff_q_rai_q_sno_vert_diff_small_tracer/"
+constant_horizontal_diffusion: true
+diagnostics:
+  - short_name: [pfull, wa, va, rv, hus, ke, hus, husra, hussn, clw, cli]
+    period: 10days
