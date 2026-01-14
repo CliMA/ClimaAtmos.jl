@@ -230,7 +230,6 @@ struct ConstantHorizontalDiffusion{FT} <: AbstractEddyViscosityModel
     D::FT
 end
 
-
 Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
     zd::FT
     α_uₕ::FT
@@ -495,7 +494,23 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
+Base.@kwdef struct ShockCapturing{FT}
+    """Whether shock capturing is enabled for split_divₕ advection"""
+    enabled::Bool = false
+    """Coefficient for artificial viscosity in shock capturing"""
+    coeff::FT = FT(0.1)
+    """Threshold for gradient magnitude to activate shock capturing"""
+    threshold::FT = FT(1.0)
+    function ShockCapturing{FT}(;
+        enabled::Bool = false,
+        coeff::FT = FT(0.1),
+        threshold::FT = FT(1.0),
+    ) where {FT}
+        return new{FT}(enabled, coeff, threshold)
+    end
+end
+
+Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD, SC}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_q_tot_upwinding::EN_UP
@@ -516,6 +531,9 @@ Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, 
 
     """Hyperdiffusion model: nothing or ClimaHyperdiffusion()"""
     hyperdiff::HD = nothing
+
+    """Shock capturing for split_divₕ advection to prevent oscillations and negative values"""
+    shock_capturing::SC = nothing
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
@@ -870,6 +888,7 @@ Internal testing and calibration components for single-column setups:
 - `limiter`: nothing or QuasiMonotoneLimiter()
 - `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
 - `hyperdiff`: nothing or ClimaHyperdiffusion()
+- `shock_capturing`: nothing or ShockCapturing() for preventing oscillations and negative values in scalar advection
 
 ## Top-level Options
 - `vertical_diffusion`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
@@ -964,6 +983,7 @@ const _DEFAULT_ATMOS_MODEL_KWARGS = (
     limiter = nothing,
     diff_mode = Explicit(),
     hyperdiff = nothing,
+    shock_capturing = nothing,
 
     # Top-level
     disable_surface_flux_tendency = false,

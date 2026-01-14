@@ -17,6 +17,7 @@ import .Parameters as CAP
 
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "gpu_compat.jl"))
+include(joinpath("utils", "shock_capturing.jl"))
 include(joinpath("solver", "types.jl"))
 include(joinpath("solver", "cli_options.jl"))
 include(joinpath("utils", "utilities.jl"))

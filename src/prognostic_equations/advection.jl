@@ -45,6 +45,10 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         (; ᶜuʲs) = p.precomputed
     end
 
+    # Density advection (no shock capturing needed for density itself)
+    # Get shock capturing configuration
+    shock_capturing = p.atmos.numerics.shock_capturing
+    
     @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, 1)
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
@@ -57,19 +61,37 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
 
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
     ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
-    @. Yₜ.c.ρe_tot -= split_divₕ(Y.c.ρ * ᶜu, ᶜh_tot)
+    # Use shock capturing wrapper to prevent oscillations
+    energy_advection = split_divₕ_with_shock_capturing(
+        Y.c.ρ * ᶜu,
+        ᶜh_tot,
+        shock_capturing,
+    )
+    @. Yₜ.c.ρe_tot += energy_advection
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).mse -=
-                split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).mse) -
+            # Use shock capturing for EDMFX moist static energy advection
+            mse_advection = split_divₕ_with_shock_capturing(
+                ᶜuʲs.:($$j),
+                Y.c.sgsʲs.:($$j).mse,
+                shock_capturing,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).mse +=
+                mse_advection -
                 Y.c.sgsʲs.:($$j).mse * split_divₕ(ᶜuʲs.:($$j), 1)
         end
     end
 
     if use_prognostic_tke(p.atmos.turbconv_model)
         ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        @. Yₜ.c.ρtke -= split_divₕ(Y.c.ρ * ᶜu, ᶜtke)
+        # Use shock capturing wrapper to prevent oscillations
+        tke_advection = split_divₕ_with_shock_capturing(
+            Y.c.ρ * ᶜu,
+            ᶜtke,
+            shock_capturing,
+        )
+        @. Yₜ.c.ρtke += tke_advection
     end
 
     ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜts))
@@ -120,40 +142,87 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
         (; ᶜuʲs) = p.precomputed
     end
 
+    # Get shock capturing configuration
+    shock_capturing = p.atmos.numerics.shock_capturing
+    
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
         ᶜχ = @. lazy(specific(Y.c.:($$ρχ_name), Y.c.ρ))
-        @. Yₜ.c.:($$ρχ_name) -= split_divₕ(Y.c.ρ * ᶜu, ᶜχ)
+        # Use shock capturing wrapper to prevent oscillations and negative values
+        advection_tendency = split_divₕ_with_shock_capturing(
+            Y.c.ρ * ᶜu,
+            ᶜχ,
+            shock_capturing,
+        )
+        @. Yₜ.c.:($$ρχ_name) += advection_tendency
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_tot) -
+            # Use shock capturing for EDMFX tracer advection
+            q_tot_advection = split_divₕ_with_shock_capturing(
+                ᶜuʲs.:($$j),
+                Y.c.sgsʲs.:($$j).q_tot,
+                shock_capturing,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_tot +=
+                q_tot_advection -
                 Y.c.sgsʲs.:($$j).q_tot * split_divₕ(ᶜuʲs.:($$j), 1)
             if p.atmos.moisture_model isa NonEquilMoistModel && (
                 p.atmos.microphysics_model isa Microphysics1Moment ||
                 p.atmos.microphysics_model isa Microphysics2Moment
             )
-                @. Yₜ.c.sgsʲs.:($$j).q_liq -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_liq) -
+                # Use shock capturing for moisture species advection
+                q_liq_advection = split_divₕ_with_shock_capturing(
+                    ᶜuʲs.:($$j),
+                    Y.c.sgsʲs.:($$j).q_liq,
+                    shock_capturing,
+                )
+                @. Yₜ.c.sgsʲs.:($$j).q_liq +=
+                    q_liq_advection -
                     Y.c.sgsʲs.:($$j).q_liq * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).q_ice -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_ice) -
+                q_ice_advection = split_divₕ_with_shock_capturing(
+                    ᶜuʲs.:($$j),
+                    Y.c.sgsʲs.:($$j).q_ice,
+                    shock_capturing,
+                )
+                @. Yₜ.c.sgsʲs.:($$j).q_ice +=
+                    q_ice_advection -
                     Y.c.sgsʲs.:($$j).q_ice * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).q_rai -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_rai) -
+                q_rai_advection = split_divₕ_with_shock_capturing(
+                    ᶜuʲs.:($$j),
+                    Y.c.sgsʲs.:($$j).q_rai,
+                    shock_capturing,
+                )
+                @. Yₜ.c.sgsʲs.:($$j).q_rai +=
+                    q_rai_advection -
                     Y.c.sgsʲs.:($$j).q_rai * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).q_sno -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_sno) -
+                q_sno_advection = split_divₕ_with_shock_capturing(
+                    ᶜuʲs.:($$j),
+                    Y.c.sgsʲs.:($$j).q_sno,
+                    shock_capturing,
+                )
+                @. Yₜ.c.sgsʲs.:($$j).q_sno +=
+                    q_sno_advection -
                     Y.c.sgsʲs.:($$j).q_sno * split_divₕ(ᶜuʲs.:($$j), 1)
             end
             if p.atmos.moisture_model isa NonEquilMoistModel &&
                p.atmos.microphysics_model isa Microphysics2Moment
-                @. Yₜ.c.sgsʲs.:($$j).n_liq -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_liq) -
+                # Use shock capturing for number concentration advection
+                n_liq_advection = split_divₕ_with_shock_capturing(
+                    ᶜuʲs.:($$j),
+                    Y.c.sgsʲs.:($$j).n_liq,
+                    shock_capturing,
+                )
+                @. Yₜ.c.sgsʲs.:($$j).n_liq +=
+                    n_liq_advection -
                     Y.c.sgsʲs.:($$j).n_liq * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).n_rai -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_rai) -
+                n_rai_advection = split_divₕ_with_shock_capturing(
+                    ᶜuʲs.:($$j),
+                    Y.c.sgsʲs.:($$j).n_rai,
+                    shock_capturing,
+                )
+                @. Yₜ.c.sgsʲs.:($$j).n_rai +=
+                    n_rai_advection -
                     Y.c.sgsʲs.:($$j).n_rai * split_divₕ(ᶜuʲs.:($$j), 1)
             end
         end
