@@ -47,6 +47,7 @@ PrecompileCI = {path = "PrecompileCI"}
 CairoMakie = "0.11 - 0.15"
 ClimaCoreSpectra = "0.1"
 ClimaCoreTempestRemap = "0.3"
+Poppler_jll = "24"
 PrettyTables = "2"
 ProfileCanvas = "0.1"
 SnoopCompileCore = "3"
