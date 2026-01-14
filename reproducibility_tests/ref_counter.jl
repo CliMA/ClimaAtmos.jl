@@ -1,4 +1,4 @@
-301
+302
 
 # **README**
 #
@@ -20,6 +20,8 @@
 
 
 #=
+302
+- Changing the diffusion used for the RCEMIPII CRM box test changes behavior.
 
 301
 - Using spacefillingcurve in SphereGrid changes order of operations, which
