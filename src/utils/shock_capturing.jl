@@ -63,13 +63,13 @@ function split_divₕ_with_shock_capturing(ρu, χ, shock_capturing)
     shock_indicator = compute_shock_indicator(∇χ_mag, shock_capturing.threshold)
     
     # Artificial viscosity: ν_shock = coeff * indicator
-    ν_shock = @. shock_capturing.coeff * shock_indicator
+    # Materialize to ensure it's a concrete field for multiplication
+    ν_shock = Base.materialize(@. shock_capturing.coeff * shock_indicator)
     
     # Add diffusion term: ∇·(ν_shock ∇χ) using weak divergence
     # This provides stabilization in regions with sharp gradients
-    # Multiply scalar field by vector gradient field with broadcasting
-    ν_shock_∇χ = @. ν_shock * ∇χ
-    diffusion = @. wdivₕ(ν_shock_∇χ)
+    # Use the already-computed gradient ∇χ and multiply inside wdivₕ
+    diffusion = @. wdivₕ(ν_shock * ∇χ)
     
     return @. advection + diffusion
 end
