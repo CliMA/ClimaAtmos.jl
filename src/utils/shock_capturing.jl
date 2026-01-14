@@ -67,7 +67,9 @@ function split_divₕ_with_shock_capturing(ρu, χ, shock_capturing)
     
     # Add diffusion term: ∇·(ν_shock ∇χ) using weak divergence
     # This provides stabilization in regions with sharp gradients
-    diffusion = @. wdivₕ(ν_shock * ∇χ)
+    # Multiply scalar field by vector gradient field with broadcasting
+    ν_shock_∇χ = @. ν_shock * ∇χ
+    diffusion = @. wdivₕ(ν_shock_∇χ)
     
     return @. advection + diffusion
 end
