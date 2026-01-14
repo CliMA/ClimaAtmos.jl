@@ -72,7 +72,8 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
     ax_xy = is_smagorinsky_UVW_coupled(model) ? Geometry.UVWAxis() : Geometry.UVAxis()
     ax_z = is_smagorinsky_UVW_coupled(model) ? Geometry.UVWAxis() : Geometry.WAxis()
 
-    ᶜfb = lilly_stratification_correction(p, ᶜS)
+    #ᶜfb = lilly_stratification_correction(p, ᶜS)
+    ᶜfb = eltype(c_smag)(1)
     if is_smagorinsky_UVW_coupled(model)
         ᶜL_h = ᶜL_v = @. lazy(c_smag * cbrt(Δx * Δy * ᶜΔz) * ᶜfb)
     else
