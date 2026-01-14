@@ -310,7 +310,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # by the limiter. Is this a significant problem?
     foreach_gs_tracer(Yₜ, ᶜ∇²specific_tracers) do ᶜρχₜ, ᶜ∇²χ, ρχ_name
         ν₄_scalar_for_χ =
-            ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai)) ? # , @name(ρq_liq), @name(ρq_ice)) ?
+            ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai), @name(ρq_liq), @name(ρq_ice)) ?
             ν₄_scalar_for_precip : ν₄_scalar
         @. ᶜρχₜ -= ν₄_scalar_for_χ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
 
