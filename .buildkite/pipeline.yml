@@ -32,7 +32,8 @@ steps:
 
     agents:
       slurm_cpus_per_task: 8
-      gres: "gpu:p100:1"
+      slurm_gres: "gpu:p100:1"
+      slurm_partition: "gpu"
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
       JULIA_MAX_NUM_PRECOMPILE_FILES: 50
@@ -447,7 +448,8 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_mem: 16G
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
+          slurm_partition: "gpu"
         soft_fail: true
 
   - group: "Analytic Tests"
@@ -461,7 +463,8 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:nvidia_h200:1"
+          slurm_partition: "gpu"
 
       - label: "GPU: Cosine Hills Test (2D, Float64)"
         command: >
@@ -472,7 +475,8 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
+          slurm_partition: "gpu"
 
       - label: "GPU: Cosine Hills Test (Extruded 2D, Float64)"
         command: >
@@ -483,7 +487,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 48GB
 
       - label: "GPU: Cosine Hills Test (3D, Float64)"
@@ -495,7 +499,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 48GB
 
       - label: "GPU: Agnesi Mountain Test (2D, Float64)"
@@ -507,7 +511,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
 
       - label: "GPU: Schar Mountain Test (2D, Float64)"
         command: >
@@ -518,7 +522,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
 
       - label: "GPU: Schar Mountain Test (2D, Float32)"
         command: >
@@ -529,7 +533,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
 
   - group: "Conservation check"
     steps:
@@ -758,7 +762,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 16G
 
       - label: ":computer: test restart"
@@ -773,7 +777,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 16G
 
       # This job occasionally times out. We add a soft file when the agent is
@@ -805,7 +809,7 @@ steps:
           - exit_status: 255
         agents:
           slurm_gpus_per_task: 1
-          gres: "gpu:p100:2"
+          slurm_gres: "gpu:p100:2"
           slurm_ntasks: 2
           slurm_mem: 24G
 
@@ -964,7 +968,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 16GB
 
       - label: "GPU: baroclinic wave"
@@ -978,7 +982,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 16GB
 
       - label: "GPU: baroclinic wave dense autodiff"
@@ -992,7 +996,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 16GB
 
       - label: "GPU: baroclinic wave sparse autodiff"
@@ -1006,7 +1010,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 16GB
 
       - label: "GPU: compare BW with CPU"
@@ -1045,7 +1049,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus_per_task: 1
-          gres: "gpu:p100:2"
+          slurm_gres: "gpu:p100:2"
           slurm_cpus_per_task: 4
           slurm_ntasks: 2
           slurm_mem: 16GB
@@ -1059,7 +1063,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 16GB
 
       - label: ":earth_americas: GPU: Diagnostic EDMF ERA5 Weather Model Initial Condition"
@@ -1072,7 +1076,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 16GB
 
       - label: "GPU: EDOnly EDMF aquaplanet"
@@ -1085,7 +1089,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 20GB
 
       - label: "GPU: Diagnostic EDMF aquaplanet"
@@ -1099,7 +1103,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 20GB
 
       - label: "GPU: Prognostic EDMF aquaplanet"
@@ -1112,7 +1116,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 20GB
 
       - label: "GPU: Prognostic EDMF aquaplanet dense autodiff"
@@ -1125,7 +1129,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 20GB
 
       - label: "GPU: Prognostic EDMF aquaplanet sparse autodiff"
@@ -1138,7 +1142,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
           slurm_mem: 20GB
 
   - group: "Benchmarks"
@@ -1163,7 +1167,7 @@ steps:
           CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 16G
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
 
       - label: ":computer: Benchmark: CPU default"
         command: >
@@ -1185,7 +1189,7 @@ steps:
           CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 24GB
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
 
       - label: ":computer: Benchmark: GPU diag edmf"
         command: >
@@ -1198,7 +1202,7 @@ steps:
           CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 24GB
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
 
       - label: ":computer: Benchmark: GPU prog edmf"
         command: >
@@ -1211,7 +1215,7 @@ steps:
           CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 28GB
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
 
   - group: "Flame graphs"
     steps:
@@ -1226,7 +1230,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_mem: 48GB
-          gres: "gpu:p100:1"
+          slurm_gres: "gpu:p100:1"
 
       - label: ":fire: Flame graph: perf target "
         command: >
