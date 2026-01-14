@@ -55,7 +55,7 @@ function split_divₕ_with_shock_capturing(ρu, χ, shock_capturing)
         return advection
     end
     
-    # Compute gradient of scalar field
+    # Compute gradient of scalar field for shock indicator
     ∇χ = @. gradₕ(χ)
     ∇χ_mag = @. sqrt(∇χ · ∇χ)
     
@@ -68,8 +68,9 @@ function split_divₕ_with_shock_capturing(ρu, χ, shock_capturing)
     
     # Add diffusion term: ∇·(ν_shock ∇χ) using weak divergence
     # This provides stabilization in regions with sharp gradients
-    # Use the already-computed gradient ∇χ and multiply inside wdivₕ
-    diffusion = @. wdivₕ(ν_shock * ∇χ)
+    # Compute gradient inside wdivₕ and multiply by materialized scalar field
+    # (matching pattern from hyperdiffusion.jl line 169: wdivₕ(ᶜρ * gradₕ(...)))
+    diffusion = @. wdivₕ(ν_shock * gradₕ(χ))
     
     return @. advection + diffusion
 end
