@@ -79,10 +79,43 @@ dss!(Y_state, params, t_current)
 
 NVTX.@annotate function dss!(Y, p, t)  # TODO: Rename to e.g. `apply_constraints!`
     prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
+    tracer_nonnegativity_constraint!(Y, p, t, p.atmos.water.tracer_nonnegativity)
     if do_dss(axes(Y.c))
         Spaces.weighted_dss!(Y.c => p.ghost_buffer.c, Y.f => p.ghost_buffer.f)
     end
     return nothing
+end
+
+function tracer_nonnegativity_constraint!(Y, p, t, 
+    tracer_nonnegativity::TracerNonnegativityConstraint{constrain_qtot}
+) where {constrain_qtot}
+    (; tracer_nonnegativity_limiter) = p.numerics
+    (; ᶜtemp_scalar) = p.scratch
+    ᶜρ = Y.c.ρ
+    ᶜρq_tot = Y.c.ρq_tot
+
+    tracer_mass_names = (
+        @name(ρq_liq), @name(ρq_rai), @name(ρq_ice), @name(ρq_sno),
+        @name(ρq_tot),
+    )
+
+    for name in tracer_mass_names
+        MatrixFields.has_field(Y.c, name) || continue
+        name == @name(ρq_tot) && !constrain_qtot && continue
+        # Compute clipped version of ᶜρq
+        ᶜρq = MatrixFields.get_field(Y.c, name)
+        
+        if tracer_nonnegativity isa TracerNonnegativityElementConstraint
+            ᶜρq_lim = @. ᶜtemp_scalar = max(0, ᶜρq)
+            Limiters.compute_bounds!(tracer_nonnegativity_limiter, ᶜρq_lim, ᶜρ)  # bounds are `extrema(ᶜρq_lim) = (0, max(ᶜρq))`
+            Limiters.apply_limiter!(ᶜρq, ᶜρ, tracer_nonnegativity_limiter)  # ᶜρq is clipped to bounds, effectively ensuring `0 ≤ ᶜρq`
+        elseif tracer_nonnegativity isa TracerNonnegativityVaporConstraint
+            # If `ρq` is negative, set it to 0 (as long as `ρq_tot` is positive), otherwise keep it as is
+            @. ᶜρq = ifelse(ᶜρq_tot > 0, max(0, ᶜρq), ᶜρq)
+        end
+
+    end
+
 end
 
 prescribe_flow!(_, _, _, ::Nothing) = nothing
