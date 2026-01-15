@@ -79,14 +79,15 @@ The tensor ``\textbf{T}``, which contains all relevant information including amp
 ```
 where ``h`` is the earth elevation, and ``\chi = - \frac{\rho N}{2\pi} \frac{h(x')}{|x-x'|} \int \int dx' dy'`` is the velocity potential.
 
-#### ``h_max``
-``h_max`` represents the relation between the local elevation with its surroundings. It is computed as the ``4th`` moments of the local elevation with a certain area.
+#### ``h_{max}``
+``h_{max}`` represents the effective maximum height of the orographic features within a grid cell relative to the mean surface.
+
+**Technical Note:** The definition of ``h_{max}`` depends on the input data mode. In statistical mode (using pre-computed GFDL input), it is derived from higher-order moments (e.g., the 4th moment) of the subgrid terrain distribution to estimate peak obstruction. In raw topography mode, it is calculated directly as the maximum elevation difference within the grid cell.
 
 ### Base flux
 The base momentum flux generated is computed and divided into the propagating and non-propagating components.
 
-Let ``\overline{\cdot}`` represents the mean property of the low-level flow which can be obtained
-as either the average within PBL or the value at the first cell center right above PBL top. Let ``\overline{V} = (\overline{u}, \overline{v})``, ``\overline{N}``, and ``\overline{\rho}`` represent the horizontal wind, buoyancy frequency, and density of the low-level flow. ``\overline{N}`` is computed as 
+Let ``\overline{\cdot}`` represents the mean property of the low-level flow which can be obtained as either the average within PBL or the value at the first cell center right above PBL top. Let ``\overline{V} = (\overline{u}, \overline{v})``, ``\overline{N}``, and ``\overline{\rho}`` represent the horizontal wind, buoyancy frequency, and density of the low-level flow. ``\overline{N}`` is computed as
 ```math
 \overline{N} ^2 = \frac{g}{\overline{T}} * \left( \overline{\frac{dT}{dz}} + \frac{g}{c_p} \right).
 ```
@@ -95,7 +96,7 @@ The base flux is computed as the linear drag following
 ```math
 \tau = \overline{\rho} \overline{N} \langle \textbf{T} \rangle ^T \overline{V},
 ```
-where ``\langle \textbf{T} \rangle = [t_{11}, t_{12}; t_{21}, t_{22}]`` is the tensor that contains orographic information. In the code, we compute the zonal and meridional components separately as 
+where ``\langle \textbf{T} \rangle = [t_{11}, t_{12}; t_{21}, t_{22}]`` is the tensor that contains orographic information. In the code, we compute the zonal and meridional components separately as
 ```math
 \tau_x = \overline{\rho} \overline{N} (t_{11} \overline{u} + t_{21} \overline{v}),
 ```
@@ -118,13 +119,13 @@ We also compute the med Froude number as
 ```math
 Fr_{med} = Fr_{crit} + Fr_{int},
 ```
-where ``Fr_{crit} = 0.7`` is the critical Froude number for nonlinear flow, ``Fr_{int} = 0.5`` is an arbitrary parameter.
+where ``Fr_{crit} = 0.7`` is the critical Froude number for nonlinear flow, and ``Fr_{int} = 0.5`` is an arbitrary parameter. Note that ``Fr_{crit}`` acts as the primary tuning lever for partitioning drag between the low-level blocked flow and the upper-level wave breaking.
 
 The saturation velocity is computed as
 ```math
 U_{sat} = \sqrt{\frac{\overline{\rho}}{\rho_0} \frac{V_{\pmb{\tau}}^3}{\overline{N} L_0}},
 ```
-where ``\rho_0 = 1.2 \mathrm{kg/m^3}`` is the arbitrary density scale, and ``L_0 = 80e3 \mathrm{m}`` is the arbitrary horizontal length scale. 
+where ``\rho_0 = 1.2 \mathrm{kg/m^3}`` is the arbitrary density scale, and ``L_0 = 80e3 \mathrm{m}`` is the arbitrary horizontal length scale.
 
 The following set of intermediate variables (``FrU``'s) are computed to correct the linear base flux:
 ```math
@@ -147,7 +148,7 @@ FrU_0 = \frac{U_0}{V_{\tau}}U_{sat},
 ```
 and ``U_0=1.0 \mathrm{m/s}`` is the arbitrary velocity scale.
 
-Now the correct linear drag is computed as 
+Now the correct linear drag is computed as
 ```math
 \tau_l = \frac{FrU_{max}^{2+\gamma-\epsilon} - FrU_{min}^{2+\gamma-\epsilon}}{2+\gamma-\epsilon},
 ```
@@ -159,7 +160,7 @@ and the propagating and non-propagating parts of the drag are computed as
 \tau_{np} = a_1 \frac{U_{sat}}{1+\beta} \left[ \frac{FrU_{max}^{1+\gamma-\epsilon} - FrU_{clp}^{1+\gamma-\epsilon}}{1+\gamma-\epsilon} - FrU_{sat}^{\beta+1} \frac{FrU_{\max}^{\gamma-\epsilon-\beta} - FrU_{clp}^{\gamma-\epsilon-\beta}}{\gamma-\epsilon-\beta} \right].
 ```
 
-Here, $(\gamma, \epsilon, \beta) = (0.4, 0.0, 0.5)$ are arbitrary parameters that describe the mountain shapes.
+Here, ``(\gamma, \epsilon, \beta) = (0.4, 0.0, 0.5)`` are empirical shape parameters constrained by observations [Garner 2005]. Specifically, ``\gamma=0.4`` is derived from the observed scaling of mountain width versus height.
 
 ### Saturation profiles for the propagating component
 The vertical profiles of saturated momentum flux ``\tau_{sat}`` is computed then so that momentum forcing can be obtained for ``d\overline{V}/dt = -\overline{\rho}^{-1}d\tau_{sat}/dz``. This only applies to the propagating part.
@@ -189,7 +190,7 @@ FrU_{sat0} = FrU_{sat},
 ```math
 FrU_{clp0} = FrU_{clp},
 ```
-and update ``FrU_{sat}`` and ``FrU_{clp}`` as 
+and update ``FrU_{sat}`` and ``FrU_{clp}`` as
 ```math
 FrU_{sat} = Fr_{crit} * U_{sat},
 ```
@@ -197,14 +198,14 @@ FrU_{sat} = Fr_{crit} * U_{sat},
 FrU_{clp} = \min(FrU_{\max}, \max(FrU_{\min}, FrU_{sat})).
 ```
 
-Then, the saturated profile of propagating component of the momentum flux is 
+Then, the saturated profile of propagating component of the momentum flux is
 ```math
 \tau_{sat} = a_0 \left[ \frac{FrU_{clp}^{2+\gamma-\epsilon} - FrU_{\min}^{2+\gamma-\epsilon}}{2+\gamma-\epsilon} + FrU_{sat}^2 FrU_{sat0}^\beta \frac{FrU_{\max}^{\gamma-\epsilon-\beta} - FrU_{clp0}^{\gamma-\epsilon-\beta}}{\gamma-\epsilon-\beta} + FrU_{sat}^2 \frac{FrU_{clp0}^{\gamma-\epsilon} - FrU_{clp}^{\gamma-\epsilon}}{\gamma-\epsilon} \right]
 ```
 
 If the wave does not break and propagates all the way up to the model top, the residual momentum carried by this part will be redistributed throughout the column weighted by pressure to conserve momentum. That is,
 ```math
-\tau_{sat}[k] = \tau_{sat}[k] - \tau_{sat}[end] \frac{^f p[1]-^f p[k]}{^f p[1]-^f p[end]}.
+\tau_{sat}[k] = \tau_{sat}[k] - \tau_{sat}[end] \frac{^f p-^f p[k]}{^f p-^f p[end]}.
 ```
 
 ### Velocity tendencies due to the orographic drag
@@ -232,17 +233,17 @@ The drag forcing due to non-propagating component functions from the PBL top to 
 ```math
 weight[k] = ^c p[k] - ^f p[kref],
 ```
-and the sum of the weights is 
+and the sum of the weights is
 ```math
 wtsum += \frac{^f p[k-1] - ^f p[k]}{weight[k]}.
 ```
 
 For level ``k`` between PBL top and ``kref``, the forcing due to non-propagating component is
 ```math
-^c \left( \frac{du}{dt} [k] \right)_{np} = g \frac{\tau_{np}}{\tau_l} \frac{weight[k]}{wtsum} \tau_x, 
+^c \left( \frac{du}{dt} [k] \right)_{np} = g \frac{\tau_{np}}{\tau_l} \frac{weight[k]}{wtsum} \tau_x,
 ```
 ```math
-^c \left( \frac{dv}{dt} [k] \right)_{np} = g \frac{\tau_{np}}{\tau_l} \frac{weight[k]}{wtsum} \tau_y, 
+^c \left( \frac{dv}{dt} [k] \right)_{np} = g \frac{\tau_{np}}{\tau_l} \frac{weight[k]}{wtsum} \tau_y,
 ```
 where ``(\tau_x, \tau_y, \tau_l, \tau_{np})`` is computed in the base flux calculation.
 
@@ -263,3 +264,53 @@ To avoid instability due to large tendencies from the forcing, let's constrain t
 ```
 
 Here we computed the forcing on the physical velocity (i.e., zonal and meridional wind). They are converted to the Covariant12Vector before being added to ``Y_t`` in the codes.
+
+
+## Implementation Details
+
+### Topography Preprocessing Pipeline
+
+For Earth topography simulations, the orographic information is preprocessed offline before runtime:
+
+1. **Loading**: The ETOPO2022 elevation artifact is loaded onto a regular lat-lon grid.
+
+2. **Computing**: The orographic tensor ``\textbf{T}`` and height limits ``(h_{max}, h_{min})`` are computed on this lat-lon grid using `src/parameterized_tendencies/gravity_wave_drag/preprocess_topography.jl`. The velocity potential ``\chi`` is computed via a 2D Hilbert transform with latitude-dependent smoothing (Blackman window taper).
+
+3. **Interpolating**: The computed quantities are regridded onto the CliMA spectral element grid using `SpaceVaryingInput`.
+
+4. **Saving**: The preprocessed topographic information is saved to HDF5 for efficient loading during simulations.
+
+This separation of preprocessing from runtime avoids expensive tensor calculations during each simulation.
+
+### Cache Initialization
+
+The orographic gravity wave cache is initialized via `orographic_gravity_wave_cache()`, which pre-allocates approximately 30 fields for runtime computation. The initialization follows one of three paths based on the `topo_info` configuration:
+
+| Configuration | Description |
+|--------------|-------------|
+| `Val(:gfdl_restart)` | Load pre-computed orographic data from GFDL artifact |
+| `Val(:raw_topo)` | Compute orographic tensor from raw Earth elevation data |
+| `Val(:linear)` | Use analytical topography functions (DCMIP200, Hughes2023, etc.) |
+
+For analytical test cases, the topographic tensor is computed on-the-fly using the specified topography function (e.g., `topography_dcmip200`, `topography_hughes2023`).
+
+### Runtime Computation
+
+At each timestep, `orographic_gravity_wave_compute_tendency!()` executes the following pipeline:
+
+1. **Buoyancy frequency**: Compute ``N`` from the temperature profile at cell centers and faces.
+2. **PBL detection**: Determine planetary boundary layer height using pressure and temperature criteria via `get_pbl_z!()`.
+3. **Base flux**: Calculate the base momentum flux and Froude numbers via `calc_base_flux!()`.
+4. **Saturation profile**: Build the vertical saturation flux profile via `calc_saturation_profile!()`.
+5. **Propagating forcing**: Compute drag from vertically propagating waves via `calc_propagate_forcing!()`.
+6. **Non-propagating forcing**: Compute drag from blocked flow below the reference level via `calc_nonpropagating_forcing!()`.
+
+The computed tendencies are constrained to ``\pm 3 \times 10^{-3}`` m/s² to ensure numerical stability.
+
+### Testing and Validation
+
+The orographic gravity wave implementation is validated through:
+
+- **Garner 2005 reproduction**: Unit tests that reproduce figures from the reference paper.
+- **3D simulation tests**: Full atmospheric simulations with orographic forcing.
+- **Base flux validation**: Comparison of computed fluxes against expected values for known topographies.
