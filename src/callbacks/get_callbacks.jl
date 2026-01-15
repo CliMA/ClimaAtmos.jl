@@ -63,24 +63,18 @@ function get_diagnostics(
             end
         end
     # TODO: This would not work with ITime, since I need access to t
-    coords_style =
-        pfull_coords ?
-        ClimaDiagnostics.Writers.PfullCoordsStyle(
-            pfull_compute!,
-            Y,
-            p,
-            0.0;
-            pfull_attribs = (; idk = "idk"),
-        ) :
-        ClimaDiagnostics.Writers.NoConversionStyle()
-
+    space = axes(Y.c)
+    if pfull_coords
+        z_sampling_method = ClimaDiagnostics.Writers.RealPressureLevelsMethod(pfull_compute!, Y, p, 0.0)
+        space = z_sampling_method.pfull_intp.vertical_intp.pfull_space
+    end
     netcdf_writer = CAD.NetCDFWriter(
-        axes(Y.c),
+        space,
         output_dir,
         num_points = num_netcdf_points;
         z_sampling_method,
         sync_schedule = CAD.EveryStepSchedule(),
-        coords_style = coords_style,
+        # coords_style = coords_style,
         maybe_add_start_date...,
     )
     writers = (dict_writer, hdf5_writer, netcdf_writer)
@@ -167,6 +161,8 @@ function get_diagnostics(
 
             if isnothing(reduction_time_func)
                 compute_every = compute_schedule
+            elseif pfull_coords
+                compute_every = CAD.DivisorSchedule(5)
             else
                 compute_every = CAD.EveryStepSchedule()
             end
