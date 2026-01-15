@@ -77,6 +77,12 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     ᶜu_uvw = @. ᶜtemp_UVW = UVW(ᶜu)
     ᶠu_uvw = @. ᶠtemp_UVW = UVW(ᶠinterp(Y.c.uₕ)) + UVW(ᶠu³)
 
+    # Extract UV and W components separately
+    ᶜu_uv = @. Geometry.UVWVector(Geometry.UVVector(ᶜu_uvw)) + Geometry.UVWVector(Geometry.WVector(zero(ᶜu_uvw)))
+    ᶜw = @. Geometry.UVWVector(Geometry.WVector(ᶜu_uvw))
+    ᶠu_uv = @. Geometry.UVWVector(Geometry.UVVector(ᶠu_uvw)) + Geometry.UVWVector(Geometry.WVector(zero(ᶠu_uvw)))
+    ᶠw = @. Geometry.UVWVector(Geometry.WVector(ᶠu_uvw))
+
     # filter scales
     h_space = Spaces.horizontal_space(axes(Y.c))
     Δ_h = Spaces.node_horizontal_length_scale(h_space)
@@ -84,27 +90,23 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     ᶠΔ_z = Fields.Δz_field(Y.f)
 
     # Gradients
-    ## cell centers
-    ∇ᶜu_uvw = @. ᶜtemp_UVWxUVW = Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))  # vertical component
-    @. ∇ᶜu_uvw += Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))  # horizontal component
-    ## cell faces
-    ∇ᶠu_uvw = @. ᶠtemp_UVWxUVW = Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))  # vertical component
-    @. ∇ᶠu_uvw += Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))  # horizontal component
+    ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Geometry.project(axis_uvw, gradₕ(ᶜu_uv))
+    @. ᶜ∂̂u_uvw += ᶜΔ_z / Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜw))
+    @. ᶜ∂̂u_uvw += Δ_h / ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uv))
+    @. ᶜ∂̂u_uvw += Geometry.project(axis_uvw, ᶜgradᵥ(ᶠw))
+    
+    ᶠ∂̂u_uvw = @.ᶠtemp_UVWxUVW = Geometry.project(axis_uvw, gradₕ(ᶠu_uv))
+    @. ᶠ∂̂u_uvw += ᶠΔ_z / Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠw))
+    @. ᶠ∂̂u_uvw += Δ_h / ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uv))
+    @. ᶠ∂̂u_uvw += Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜw))
 
     # Strain rate tensor
-    ᶜS = @. ᶜtemp_strain = (∇ᶜu_uvw + adjoint(∇ᶜu_uvw)) / 2
-    ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
-
-    # Scaled Derivatives ∂̂ᵢ = Δ₍ᵢ₎∂ᵢ
-    ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
-    @. ᶜ∂̂u_uvw += ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))
-
-    ᶠ∂̂u_uvw = @.ᶠtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))
-    @. ᶠ∂̂u_uvw += ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))
+    ᶜS = @. ᶜtemp_strain = (ᶜ∂̂u_uvw + adjoint(ᶜ∂̂u_uvw)) / 2
+    ᶠS = @. ᶠtemp_strain = (ᶠ∂̂u_uvw + adjoint(ᶠ∂̂u_uvw)) / 2
 
     ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
     ᶠ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶠ∂̂u_uvw * adjoint(ᶠ∂̂u_uvw))
-    ᶜ∂ₗuₘ∂ₗuₘ = @. lazy(CA.norm_sqr(∇ᶜu_uvw))
+    ᶜ∂ₗuₘ∂ₗuₘ = @. lazy(CA.norm_sqr(ᶜ∂̂u_uvw))
 
     # AMD eddy viscosity
     ᶜνₜ = @. ᶜtemp_scalar = max(
@@ -245,6 +247,12 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     ᶜu_uvw = @. ᶜtemp_UVW = UVW(ᶜu)
     ᶠu_uvw = @. ᶠtemp_UVW = UVW(ᶠinterp(Y.c.uₕ)) + UVW(ᶠu³)
 
+    # Extract UV and W components separately
+    ᶜu_uv = @. Geometry.UVWVector(Geometry.UVVector(ᶜu_uvw)) + Geometry.UVWVector(Geometry.WVector(zero(ᶜu_uvw)))
+    ᶜw = @. Geometry.UVWVector(Geometry.WVector(ᶜu_uvw))
+    ᶠu_uv = @. Geometry.UVWVector(Geometry.UVVector(ᶠu_uvw)) + Geometry.UVWVector(Geometry.WVector(zero(ᶠu_uvw)))
+    ᶠw = @. Geometry.UVWVector(Geometry.WVector(ᶠu_uvw))
+
     # filter scales
     h_space = Spaces.horizontal_space(axes(Y.c))
     Δ_h = Spaces.node_horizontal_length_scale(h_space)
@@ -252,28 +260,24 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     ᶠΔ_z = Fields.Δz_field(Y.f)
 
     # Gradients
-    ## cell centers
-    ∇ᶜu_uvw = @. ᶜtemp_UVWxUVW = Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))  # vertical component
-    @. ∇ᶜu_uvw += Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))  # horizontal component
-    ## cell faces
-    ∇ᶠu_uvw = @. ᶠtemp_UVWxUVW = Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))  # vertical component
-    @. ∇ᶠu_uvw += Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))  # horizontal component
+    ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Geometry.project(axis_uvw, gradₕ(ᶜu_uv))
+    @. ᶜ∂̂u_uvw += ᶜΔ_z / Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜw))
+    @. ᶜ∂̂u_uvw += Δ_h / ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uv))
+    @. ᶜ∂̂u_uvw += Geometry.project(axis_uvw, ᶜgradᵥ(ᶠw))
+    
+    ᶠ∂̂u_uvw = @.ᶠtemp_UVWxUVW = Geometry.project(axis_uvw, gradₕ(ᶠu_uv))
+    @. ᶠ∂̂u_uvw += ᶠΔ_z / Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠw))
+    @. ᶠ∂̂u_uvw += Δ_h / ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uv))
+    @. ᶠ∂̂u_uvw += Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜw))
 
     # Strain rate tensor
-    ᶜS = @. ᶜtemp_strain = (∇ᶜu_uvw + adjoint(∇ᶜu_uvw)) / 2
-    ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
-
-    # Do we need scratch variables at all?
-    # Scaled Derivatives ∂̂ᵢ = Δ₍ᵢ₎∂ᵢ
-    ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
-    @. ᶜ∂̂u_uvw += ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))
-
-    ᶠ∂̂u_uvw = @.ᶠtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))
-    @. ᶠ∂̂u_uvw += ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))
+    ᶜS = @. ᶜtemp_strain = (ᶜ∂̂u_uvw + adjoint(ᶜ∂̂u_uvw)) / 2
+    ᶠS = @. ᶠtemp_strain = (ᶠ∂̂u_uvw + adjoint(ᶠ∂̂u_uvw)) / 2
 
     ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
     ᶠ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶠ∂̂u_uvw * adjoint(ᶠ∂̂u_uvw))
-    ᶜ∂ₗuₘ∂ₗuₘ = @. lazy(CA.norm_sqr(∇ᶜu_uvw))
+    ᶜ∂ₗuₘ∂ₗuₘ = @. lazy(CA.norm_sqr(ᶜ∂̂u_uvw))
+
 
     # AMD eddy viscosity
     ᶜνₜ = @. ᶜtemp_scalar = max(
