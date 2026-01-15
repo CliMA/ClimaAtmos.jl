@@ -15,6 +15,9 @@ const ATCP = AbstractTurbulenceConvectionParameters
 abstract type AbstractSurfaceTemperatureParameters end
 const ASTP = AbstractSurfaceTemperatureParameters
 
+abstract type AbstractGravityWaveParameters end
+const AGWP = AbstractGravityWaveParameters
+
 Base.broadcastable(param_set::ACAP) = tuple(param_set)
 Base.broadcastable(param_set::ATCP) = tuple(param_set)
 Base.broadcastable(param_set::ASTP) = tuple(param_set)
@@ -63,6 +66,41 @@ Base.@kwdef struct SurfaceTemperatureParameters{FT} <: ASTP
     SST_wavelength_latitude::FT
 end
 
+Base.@kwdef struct NonOrographicGravityWaveParameters{FT} <: AGWP
+    source_pressure::FT
+    damp_pressure::FT
+    source_height::FT
+    Bw::FT
+    Bn::FT
+    dc::FT
+    cmax::FT
+    c0::FT
+    nk::FT
+    cw::FT
+    cw_tropics::FT
+    cn::FT
+    Bt_0::FT
+    Bt_n::FT
+    Bt_s::FT
+    Bt_eq::FT
+    ϕ0_n::FT
+    ϕ0_s::FT
+    dϕ_n::FT
+    dϕ_s::FT
+end
+
+Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
+    γ::FT                    # mountain_height_width_exponent: L ∝ h^γ (equation 14, paper suggests γ ≈ 0.4)
+    ϵ::FT                    # number_density_exponent: number density of orography in a grid cell, n(h) ∝ h^(-ε)
+    β::FT                    # mountain_shape_parameter: L(z) = L_b(1 - z/h)^β (equation 12), β=1 for triangular mountains and β<1 for blunt mountains, β>1 for pointy mountains
+    h_frac::FT               # critical_height_threshold: h_crit = h_frac * (V / N), height fraction for blocking threshold
+    ρscale::FT               # density_scale_factor: density scale factor for dimensional analysis
+    L0::FT                   # reference_mountain_width: L_0 = 80 km, reference horizontal scale
+    a0::FT                   # linear_drag_coefficient: a_0 = 0.9, coefficient for propagating wave drag
+    a1::FT                   # nonlinear_drag_coefficient: a_1 = 3.0, coefficient for nonpropagating (blocked) drag
+    Fr_crit::FT              # critical_froude_number: Fr_crit = 0.7, critical Froude number h̃_c = Fr_crit
+end
+
 Base.@kwdef struct ClimaAtmosParameters{
     FT,
     TP,
@@ -80,6 +118,8 @@ Base.@kwdef struct ClimaAtmosParameters{
     VDP,
     EFP,
     PAP,
+    NOGWP,
+    OGWP,
 } <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
@@ -96,6 +136,8 @@ Base.@kwdef struct ClimaAtmosParameters{
     vert_diff_params::VDP
     external_forcing_params::EFP
     prescribed_aerosol_params::PAP
+    non_orographic_gravity_wave_params::NOGWP
+    orographic_gravity_wave_params::OGWP
     Omega::FT
     f_plane_coriolis_frequency::FT
     planet_radius::FT

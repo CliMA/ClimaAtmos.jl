@@ -245,9 +245,6 @@ function non_orographic_gravity_wave_compute_tendency!(
         error("Only sphere and columns are supported")
     end
 
-    ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
-    ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
-
     uforcing .= 0
     vforcing .= 0
 
@@ -273,9 +270,9 @@ function non_orographic_gravity_wave_compute_tendency!(
 
 end
 
-non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+non_orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
-function non_orographic_gravity_wave_tendency!(
+function non_orographic_gravity_wave_apply_tendency!(
     Yₜ,
     Y,
     p,
