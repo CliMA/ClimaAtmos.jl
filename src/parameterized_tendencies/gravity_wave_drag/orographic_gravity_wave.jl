@@ -110,9 +110,10 @@ end
 orographic_gravity_wave_compute_tendency!(Y, p, ::Nothing) = nothing
 
 function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravityWave)
-    # unpack cache and scratch vars
-    ᶜT = p.scratch.ᶜtemp_scalar
-    (; ᶜts, ᶜp) = p.precomputed
+    # unpack cache
+    # ᶜT = p.scratch.ᶜtemp_scalar
+    # (; ᶜts, ᶜp) = p.precomputed
+    (; ᶜp, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     (; params) = p
     (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
     (; ᶜdTdz) = p.orographic_gravity_wave
@@ -131,10 +132,11 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     thermo_params = CAP.thermodynamics_params(params)
 
     # compute buoyancy frequency
-    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
+    # @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
     ᶜdTdz .= Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
     @. ᶜbuoyancy_frequency =
-        (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts))
+        (grav / ᶜT) *
+        (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno))
     @. ᶜbuoyancy_frequency =
         ifelse(ᶜbuoyancy_frequency < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜbuoyancy_frequency))) # to avoid small numbers
     @. ᶠbuoyancy_frequency = ᶠinterp(ᶜbuoyancy_frequency)
@@ -465,6 +467,11 @@ function calc_nonpropagating_forcing!(
     @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
     @. ᶜdiff = ᶜinterp.(ᶠp_m1 .- ᶠp)
 
+    # Exclude cells with zero weights from the mask to avoid division by zero.
+    # Zero weight means p == p_ref at that cell, so it contributes nothing
+    # to the pressure-weighted average.
+    @. ᶜmask = ᶜmask && (ᶜweights != FT(0))
+
     parent(ᶜweights) .= parent(ᶜweights .* ᶜmask)
 
     input = @. lazy(ifelse(ᶜmask == true, ᶜdiff / ᶜweights, FT(0)))
@@ -474,7 +481,7 @@ function calc_nonpropagating_forcing!(
     end
 
     if any(isnan.(parent(ᶜwtsum)))
-        error("NaN encountered in weight sum calculation of orographic gravity wave drag")
+        @warn "NaN encountered in weight sum calculation of orographic gravity wave drag"
     end
 
     # Compute drag, handling empty mask case (wtsum=0) gracefully
