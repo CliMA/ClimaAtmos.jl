@@ -283,6 +283,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
 
     # AMD eddy viscosity
     ᶜδ² = @.  3 * (Δ_h^2 * ᶜΔ_z^2) / (2 * ᶜΔ_z^2 + Δ_h^2)
+    ᶠδ² = @.  3 * (Δ_h^2 * ᶠΔ_z^2) / (2 * ᶠΔ_z^2 + Δ_h^2)
     ᶜνₜ = @. ᶜtemp_scalar = max(
         FT(0),
         -c_amd^2 * ᶜδ² *
@@ -315,7 +316,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     ∂̂h_tot = @. lazy(ᶠΔ_z * ∇h_tot)
     ᶠD_amd = @. ᶠtemp_scalar = max(
         FT(0),
-        -c_amd^2 * ᶜδ² *
+        -c_amd^2 * ᶠδ² *
         (
             (ᶠ∂̂u_uvw * ∂̂h_tot ⊗ ∇h_tot).components.data.:1 +
             (ᶠ∂̂u_uvw * ∂̂h_tot ⊗ ∇h_tot).components.data.:5 +
@@ -337,7 +338,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
         ∂̂ᶜχ = @. lazy(ᶠΔ_z * ∇ᶜχ)
         @. ᶠD_amd = max(
             FT(0),
-            -c_amd^2 * ᶜδ² *
+            -c_amd^2 * ᶠδ² *
             (
                 (ᶠ∂̂u_uvw * ∂̂ᶜχ ⊗ ∇ᶜχ).components.data.:1 +
                 (ᶠ∂̂u_uvw * ∂̂ᶜχ ⊗ ∇ᶜχ).components.data.:5 +
