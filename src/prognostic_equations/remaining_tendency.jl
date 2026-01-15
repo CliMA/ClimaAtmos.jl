@@ -356,7 +356,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     # Optional tendency to bring negative small tracers back from negative
     # at the cost of water vapor.
-    moisture_fixer_tendency!(Yₜ, Y, p, t, moisture_model, microphysics_model)
+    tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, moisture_model, microphysics_model)
 
     # NOTE: This will zero out all momentum tendencies in the EDMFX advection test,
     # where velocities do not evolve

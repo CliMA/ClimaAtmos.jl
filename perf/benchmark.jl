@@ -32,7 +32,7 @@ device = ClimaComms.device(config.comms_ctx)
         "T_imp!",
         "T_exp_T_lim!",
         # "lim!",
-        "dss!",
+        "constrain_state!",
         "cache!",
         "cache_imp!",
         "step!",
@@ -63,7 +63,7 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
         @test compare_mem(trials, "T_imp!", 0)
         @test compare_mem(trials, "T_exp_T_lim!", 190420)
         @test compare_mem(trials, "lim!", 0)
-        @test compare_mem(trials, "dss!", 0)
+        @test compare_mem(trials, "constrain_state!", 0)
         @test compare_mem(trials, "cache!", 120)
         @test compare_mem(trials, "cache_imp!", 160)
 

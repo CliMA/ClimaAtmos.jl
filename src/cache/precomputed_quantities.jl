@@ -466,8 +466,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
 
     @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
 
-    # TODO: We might want to move this to dss! (and rename dss! to something
-    # like enforce_constraints!).
+    # TODO: We might want to move this to constrain_state!
     if !(p.atmos.prescribed_flow isa PrescribedFlow)
         set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
         set_velocity_at_top!(Y, turbconv_model)
