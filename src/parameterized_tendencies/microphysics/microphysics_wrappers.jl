@@ -45,86 +45,38 @@ end
 Returns the condensation/evaporation or deposition/sublimation rate for
 non-equilibrium Morrison and Milbrandt 2015 cloud formation.
 """
-function cloud_sources(
-    cm_params::CMP.CloudLiquid{FT},
-    thp,
-    qₜ,
-    qₗ,
-    qᵢ,
-    qᵣ,
-    qₛ,
-    ρ,
-    T,
-    dt,
-) where {FT}
-
+function cloud_sources(cm_params::CMP.CloudLiquid, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, T, dt)
+    FT = eltype(qₜ)
     qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
-    qₛₗ = TD.q_vap_from_p_vap(
-        thp,
-        T,
-        ρ,
-        TD.saturation_vapor_pressure(thp, T, TD.Liquid()),
-    )
+    pₛᵥ = TD.saturation_vapor_pressure(thp, T, TD.Liquid())
+    qₛₗ = TD.q_vap_from_p_vap(thp, T, ρ, pₛᵥ)
 
-    if qᵥ + qₗ > FT(0)
-        S = CMNe.conv_q_vap_to_q_lcl_icl_MM2015(
-            cm_params,
-            thp,
-            qₜ,
-            qₗ,
-            qᵢ,
-            qᵣ,
-            qₛ,
-            ρ,
-            T,
-        )
-    else
-        S = FT(0)
-    end
+    S_con_evp = CMNe.conv_q_vap_to_q_lcl_icl_MM2015(cm_params, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, T)
 
+    # 
+    S = ifelse(qᵥ + qₗ > FT(0), S_con_evp, FT(0))
+
+    δ_limited = limit(qᵥ - qₛₗ, dt, 2) # supersaturation δ = qᵥ - qₛₗ
+    qₗ_limited = limit(qₗ, dt, 2)
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ - qₛₗ, dt, 2), limit(qₗ, dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(qₗ, dt, 2), limit(qᵥ - qₛₗ, dt, 2)),
+        triangle_inequality_limiter(S, δ_limited, qₗ_limited),  # limited condensation
+        -triangle_inequality_limiter(-S, qₗ_limited, δ_limited),  # limited evaporation
     )
 end
-function cloud_sources(
-    cm_params::CMP.CloudIce{FT},
-    thp,
-    qₜ,
-    qₗ,
-    qᵢ,
-    qᵣ,
-    qₛ,
-    ρ,
-    T,
-    dt,
-) where {FT}
 
+
+function cloud_sources(cm_params::CMP.CloudIce, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, T, dt)
+    FT = eltype(qₜ)
     qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
+    pₛᵥ = TD.saturation_vapor_pressure(thp, T, TD.Ice())
+    qₛᵢ = TD.q_vap_from_p_vap(thp, T, ρ, pₛᵥ)
 
-    qₛᵢ = TD.q_vap_from_p_vap(
-        thp,
-        T,
-        ρ,
-        TD.saturation_vapor_pressure(thp, T, TD.Ice()),
+    S = ifelse(
+        qᵥ + qᵢ > FT(0),
+        CMNe.conv_q_vap_to_q_lcl_icl_MM2015(cm_params, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, T),
+        FT(0),
     )
-
-    if qᵥ + qᵢ > FT(0)
-        S = CMNe.conv_q_vap_to_q_lcl_icl_MM2015(
-            cm_params,
-            thp,
-            qₜ,
-            qₗ,
-            qᵢ,
-            qᵣ,
-            qₛ,
-            ρ,
-            T,
-        )
-    else
-        S = FT(0)
-    end
 
     # Additional condition to avoid creating ice in conditions above freezing
     # Representing the lack of INPs in warm temperatures
@@ -193,22 +145,9 @@ where i stands for total, rain or snow.
 Also returns the total energy source term due to the microphysics processes.
 """
 function compute_precipitation_sources!(
-    Sᵖ,
-    Sᵖ_snow,
-    Sqₗᵖ,
-    Sqᵢᵖ,
-    Sqᵣᵖ,
-    Sqₛᵖ,
-    ρ,
-    qₜ,
-    qₗ,
-    qᵢ,
-    qᵣ,
-    qₛ,
-    ts,
-    dt,
-    mp,
-    thp,
+    Sᵖ, Sᵖ_snow, Sqₗᵖ, Sqᵢᵖ, Sqᵣᵖ, Sqₛᵖ,
+    ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ,
+    ts, dt, mp, thp,
 )
     FT = eltype(thp)
     @. Sqₗᵖ = FT(0)
@@ -325,19 +264,9 @@ where i stands for total, rain or snow.
 Also returns the total energy source term due to the microphysics processes.
 """
 function compute_precipitation_sinks!(
-    Sᵖ,
-    Sqᵣᵖ,
-    Sqₛᵖ,
-    ρ,
-    qₜ,
-    qₗ,
-    qᵢ,
-    qᵣ,
-    qₛ,
-    ts,
-    dt,
-    mp,
-    thp,
+    Sᵖ, Sqᵣᵖ, Sqₛᵖ,
+    ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ,
+    ts, dt, mp, thp,
 )
     FT = eltype(thp)
     sps = (mp.ps, mp.tv.snow, mp.aps, thp)
