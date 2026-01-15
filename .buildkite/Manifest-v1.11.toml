@@ -2,7 +2,7 @@
 
 julia_version = "1.11.6"
 manifest_format = "2.0"
-project_hash = "12784bf0b21aee2b4075f2bb64383303b89e8560"
+project_hash = "963fe041dff55f4d6b3e5b5e32b76e2cfa1ad43e"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -535,12 +535,6 @@ version = "0.29.1"
     [deps.CloudMicrophysics.weakdeps]
     DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
     MLJ = "add582a8-e3ab-11e8-2d5e-e98b27df1bc7"
-
-[[deps.CodeTracking]]
-deps = ["InteractiveUtils", "UUIDs"]
-git-tree-sha1 = "062c5e1a5bf6ada13db96a4ae4749a4c2234f521"
-uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
-version = "1.3.9"
 
 [[deps.ColorBrewer]]
 deps = ["Colors", "JSON"]
@@ -1395,20 +1389,6 @@ git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
 uuid = "82899510-4779-5014-852e-03e436cf321d"
 version = "1.0.0"
 
-[[deps.JET]]
-deps = ["CodeTracking", "InteractiveUtils", "JuliaInterpreter", "JuliaSyntax", "LoweredCodeUtils", "MacroTools", "Pkg", "PrecompileTools", "Preferences", "Test"]
-git-tree-sha1 = "c5afee875b8daa022c09cda641c314c325e7d545"
-uuid = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
-version = "0.9.20"
-
-    [deps.JET.extensions]
-    JETCthulhuExt = "Cthulhu"
-    JETReviseExt = "Revise"
-
-    [deps.JET.weakdeps]
-    Cthulhu = "f68482b8-f384-11e8-15f7-abe071a5a75f"
-    Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
-
 [[deps.JLD2]]
 deps = ["ChunkCodecLibZlib", "ChunkCodecLibZstd", "FileIO", "MacroTools", "Mmap", "OrderedCollections", "PrecompileTools", "ScopedValues"]
 git-tree-sha1 = "8f8ff711442d1f4cfc0d86133e7ee03d62ec9b98"
@@ -1455,22 +1435,11 @@ git-tree-sha1 = "b6893345fd6658c8e475d40155789f4860ac3b21"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
 version = "3.1.4+0"
 
-[[deps.JuliaInterpreter]]
-deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
-git-tree-sha1 = "c47892541d03e5dc63467f8964c9f2b415dfe718"
-uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
-version = "0.9.46"
-
 [[deps.JuliaNVTXCallbacks_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "af433a10f3942e882d3c671aacb203e006a5808f"
 uuid = "9c1d0b0a-7046-5b2e-a33f-ea22f176ac7e"
 version = "0.2.1+0"
-
-[[deps.JuliaSyntax]]
-git-tree-sha1 = "937da4713526b96ac9a178e2035019d3b78ead4a"
-uuid = "70703baa-626e-46a2-a12c-08ffd08c73b4"
-version = "0.4.10"
 
 [[deps.JuliaVariables]]
 deps = ["MLStyle", "NameResolution"]
@@ -1727,12 +1696,6 @@ deps = ["Dates", "Logging"]
 git-tree-sha1 = "f00544d95982ea270145636c181ceda21c4e2575"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.2.0"
-
-[[deps.LoweredCodeUtils]]
-deps = ["JuliaInterpreter"]
-git-tree-sha1 = "39240b5f66956acfa462d7fe12efe08e26d6d70d"
-uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
-version = "3.2.2"
 
 [[deps.Lz4_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
