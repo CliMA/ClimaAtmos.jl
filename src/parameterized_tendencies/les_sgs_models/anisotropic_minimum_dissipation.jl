@@ -144,7 +144,7 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
             (ᶜ∂̂u_uvw * ∂̂h_tot ⊗ ∇h_tot).components.data.:5 +
             (ᶜ∂̂u_uvw * ∂̂h_tot ⊗ ∇h_tot).components.data.:9
         ) /
-        max(eps(FT), CA.norm_sqr(gradₕ(ᶜh_tot))),
+        max(eps(FT), CA.norm_sqr(∂̂h_tot)),
     )
     @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_amd * gradₕ(ᶜh_tot))
 
@@ -161,7 +161,7 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
                 (ᶜ∂̂u_uvw * ∂̂ᶜχ ⊗ ∇ᶜχ).components.data.:5 +
                 (ᶜ∂̂u_uvw * ∂̂ᶜχ ⊗ ∇ᶜχ).components.data.:9
             ) /
-            max(eps(FT), CA.norm_sqr(gradₕ(ᶜχ))),
+            max(eps(FT), CA.norm_sqr(∂̂ᶜχ)),
         )
         ᶜρχₜ_diffusion = @. lazy(wdivₕ(Y.c.ρ * ᶜD_amd * gradₕ(ᶜχ)))
         @. ᶜρχₜ += ᶜρχₜ_diffusion
@@ -321,7 +321,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
             (ᶠ∂̂u_uvw * ∂̂h_tot ⊗ ∇h_tot).components.data.:5 +
             (ᶠ∂̂u_uvw * ∂̂h_tot ⊗ ∇h_tot).components.data.:9
         ) /
-        max(eps(FT), CA.norm_sqr(∇h_tot)),
+        max(eps(FT), CA.norm_sqr(∂̂h_tot)),
     )
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρ * ᶠD_amd * ᶠgradᵥ(ᶜh_tot)))
 
@@ -343,7 +343,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
                 (ᶠ∂̂u_uvw * ∂̂ᶜχ ⊗ ∇ᶜχ).components.data.:5 +
                 (ᶠ∂̂u_uvw * ∂̂ᶜχ ⊗ ∇ᶜχ).components.data.:9
             ) /
-            max(eps(FT), CA.norm_sqr(∇ᶜχ)),
+            max(eps(FT), CA.norm_sqr(∂̂ᶜχ)),
         )
         ᶜ∇ᵥρD∇χₜ =
             @. lazy(ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_amd * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ)))))
