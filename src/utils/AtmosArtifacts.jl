@@ -95,6 +95,21 @@ function earth_orography_file_path(; context = nothing)
 end
 
 """
+    earth_orography_30arcsecond_file_path(; context=nothing)
+
+Construct the file path for the 30arcsecond orography data NetCDF file.
+
+Downloads the 30arc-second dataset by default.
+"""
+function earth_orography_30arcsecond_file_path(; context = nothing)
+    filename = "ETOPO_2022_v1_30s_N90W180_surface.nc"
+    return joinpath(
+        @clima_artifact("earth_orography_30arcseconds", context),
+        filename,
+    )
+end
+
+"""
     co2_concentration_file_path(; context = nothing)
 
 Construct the file path for the co2 concentration CSV file.
