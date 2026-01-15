@@ -49,13 +49,7 @@ function set_precipitation_velocities!(Y, p, _, _, _)
     @. ᶜwₕhₜ = Geometry.WVector(0)
     return nothing
 end
-function set_precipitation_velocities!(
-    Y,
-    p,
-    moisture_model::NonEquilMoistModel,
-    microphysics_model::Microphysics1Moment,
-    _,
-)
+function set_precipitation_velocities!(Y, p, ::NonEquilMoistModel, ::Microphysics1Moment, _)
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
     cmc = CAP.microphysics_cloud_params(p.params)
@@ -106,12 +100,8 @@ function set_precipitation_velocities!(
         ) / Y.c.ρ
     return nothing
 end
-function set_precipitation_velocities!(
-    Y,
-    p,
-    moisture_model::NonEquilMoistModel,
-    microphysics_model::Microphysics1Moment,
-    turbconv_model::PrognosticEDMFX,
+function set_precipitation_velocities!(Y, p,
+    ::NonEquilMoistModel, ::Microphysics1Moment, turbconv_model::PrognosticEDMFX,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     (; ᶜΦ) = p.core

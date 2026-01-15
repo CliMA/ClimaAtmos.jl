@@ -8,61 +8,32 @@ cloud_condensate_tendency!(Yₜ, Y, p, _, _, _) = nothing
 ##### NonEquilMoistModel
 #####
 
-function cloud_condensate_tendency!(
-    Yₜ,
-    Y,
-    p,
-    ::NonEquilMoistModel,
-    ::Union{NoPrecipitation, Microphysics0Moment},
-    _,
-)
-    error(
-        "NonEquilMoistModel can only be run with Microphysics1Moment or Microphysics2Moment precipitation",
-    )
-end
+cloud_condensate_tendency!(
+    Yₜ, Y, p, ::NonEquilMoistModel, ::Union{NoPrecipitation, Microphysics0Moment}, _
+) = error("NonEquilMoistModel can only be run with Microphysics1Moment or \
+           Microphysics2Moment precipitation")
 
-function cloud_condensate_tendency!(
-    Yₜ,
-    Y,
-    p,
-    ::NonEquilMoistModel,
-    ::Microphysics1Moment,
-    _,
+function cloud_condensate_tendency!(Yₜ, Y, p,
+    ::NonEquilMoistModel, ::Microphysics1Moment, _,
 )
     (; ᶜts) = p.precomputed
     (; params, dt) = p
-    FT = eltype(params)
     thp = CAP.thermodynamics_params(params)
     cmc = CAP.microphysics_cloud_params(params)
+    ᶜρ = Y.c.ρ
 
     Tₐ = @. lazy(TD.air_temperature(thp, ᶜts))
 
+    q_tot = @.lazy(specific(Y.c.ρq_tot, ᶜρ))
+    q_liq = @.lazy(specific(Y.c.ρq_liq, ᶜρ))
+    q_ice = @.lazy(specific(Y.c.ρq_ice, ᶜρ))
+    q_rai = @.lazy(specific(Y.c.ρq_rai, ᶜρ))
+    q_sno = @.lazy(specific(Y.c.ρq_sno, ᶜρ))
+
     @. Yₜ.c.ρq_liq +=
-        Y.c.ρ * cloud_sources(
-            cmc.liquid,
-            thp,
-            specific(Y.c.ρq_tot, Y.c.ρ),
-            specific(Y.c.ρq_liq, Y.c.ρ),
-            specific(Y.c.ρq_ice, Y.c.ρ),
-            specific(Y.c.ρq_rai, Y.c.ρ),
-            specific(Y.c.ρq_sno, Y.c.ρ),
-            Y.c.ρ,
-            Tₐ,
-            dt,
-        )
+        ᶜρ * cloud_sources(cmc.liquid, thp, q_tot, q_liq, q_ice, q_rai, q_sno, ᶜρ, Tₐ, dt)
     @. Yₜ.c.ρq_ice +=
-        Y.c.ρ * cloud_sources(
-            cmc.ice,
-            thp,
-            specific(Y.c.ρq_tot, Y.c.ρ),
-            specific(Y.c.ρq_liq, Y.c.ρ),
-            specific(Y.c.ρq_ice, Y.c.ρ),
-            specific(Y.c.ρq_rai, Y.c.ρ),
-            specific(Y.c.ρq_sno, Y.c.ρ),
-            Y.c.ρ,
-            Tₐ,
-            dt,
-        )
+        ᶜρ * cloud_sources(cmc.ice, thp, q_tot, q_liq, q_ice, q_rai, q_sno, ᶜρ, Tₐ, dt)
 end
 
 function cloud_condensate_tendency!(
