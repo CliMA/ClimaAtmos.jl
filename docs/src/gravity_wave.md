@@ -259,3 +259,21 @@ To avoid instability due to large tendencies from the forcing, let's constrain t
 ```
 
 Here we computed the forcing on the physical velocity (i.e., zonal and meridional wind). They are converted to the Covariant12Vector before being added to ``Y_t`` in the codes.
+
+
+## WIP
+
+### Overview
+1. We use the Earth topography loaded via ClimaAtmos config:
+```julia
+sim_info = CA.get_sim_info(config)
+```
+2. This loaded topography is preprocessed on the CPU with `src/parameterized_tendencies/gravity_wave_drag/preprocess_topography.jl` using GFDL inputs (for now). The preprocessing step uses `src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave_helper.jl` to compute the orographic info, i.e., the drag matrix and height limits. The topographic info is then saved, which may be loaded by ClimaAtmos runs.
+
+Note that, in preprocess topography, we load the lat-lon ETOPO2022 artifact and compute the orographic tensor and limits on this lat-lon grid. The lat-lon grid is read from a config file. The computed lat-lon quantities are finally interpolated onto the CliMA grid and before they are saved as the output.
+
+This pipeline of loading -> computing -> interpolating -> saving could be further improved upon, in which we load and interpolate the ETOPO topography onto the CliMA grid before computing and saving.
+
+3. In the initialization of the orographic gravity wave cache, we check if `topo_info` is supplied, e.g., in a unit test. If not, we generate it via `compute_ogw_drag`. For analytical topographic functions, we compute them on the fly. For the Earth topography, we load the preprocessed topography from Point 2.
+
+4. 
