@@ -175,9 +175,15 @@ constant_horizontal_diffusion:
 smagorinsky_lilly:
   help: "Smagorinsky-Lilly diffusive closure [`nothing` (default), `UVW`, `UV`, `W`, `UV_W_decoupled`]"
   value: ~
-moisture_fixer:
-  help: "A flag to switch on a grid mean tendency that moves mass from vapor to adjust small negative tracer values [false (default), true]"
-  value: false
+tracer_nonnegativity_method:
+  help: |
+    Optionally constrain microphysical condensate tracers (q_liq, q_rai, q_ice, q_sno) to be nonnegative. Options:
+    - `elementwise_constraint`: Enforce nonnegativity by instantaneously redistributing tracer mass within an element
+    - `vapor_constraint`: Enforce nonnegativity by instantaneously redistributing tracer mass between vapor (q_tot) and each tracer
+    - `vapor_tendency`: Weakly enforce nonnegativity by applying a tendency to each tracer to redistribute tracer mass between vapor (q_tot) and each tracer
+    - `~` (default): Do not enforce nonnegativity
+    Note: append `_qtot` to the method name to enforce nonnegativity of q_tot as well.
+  value: ~
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: false
