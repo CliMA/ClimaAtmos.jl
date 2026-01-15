@@ -151,7 +151,7 @@ include(joinpath("cache", "temporary_quantities.jl"))
 include(joinpath("cache", "tracer_cache.jl"))
 include(joinpath("cache", "cache.jl"))
 include(joinpath("cache", "eddy_diffusivity_coefficient.jl"))
-include(joinpath("prognostic_equations", "dss.jl"))
+include(joinpath("prognostic_equations", "constrain_state.jl"))
 include(joinpath("prognostic_equations", "limited_tendencies.jl"))
 
 include(joinpath("callbacks", "callbacks.jl"))

@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 -------
+- [#4211](https://github.com/CliMA/ClimaAtmos.jl/pull/4211) 
+  add experimental methods to remove negative microphysical condensate values
+
 v0.34.0
 -------
 - [#4198](https://github.com/CliMA/ClimaAtmos.jl/pull/4198) [badge-💥breaking] modifies surface conditions

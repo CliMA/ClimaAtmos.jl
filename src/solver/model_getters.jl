@@ -360,6 +360,24 @@ function get_microphysics_model(parsed_args)
     end
 end
 
+function get_tracer_nonnegativity_method(parsed_args)
+    method = parsed_args["tracer_nonnegativity_method"]
+    isnothing(method) && return nothing
+    qtot = endswith(method, "_qtot")  # whether to apply tracer nonnegativity to qtot as well
+    method = qtot ? chop(method; tail = 5) : method
+    return if method == "elementwise_constraint"
+        TracerNonnegativityElementConstraint{qtot}()
+    elseif method == "vapor_constraint"
+        TracerNonnegativityVaporConstraint{qtot}()
+    elseif method == "vapor_tendency"
+        qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
+                        `_qtot` suffix. qtot will be ignored.")
+        TracerNonnegativityVaporTendency()
+    else
+        error("Invalid `tracer_nonnegativity_method` $(method)")
+    end
+end
+
 function get_cloud_model(parsed_args, params)
     cloud_model = parsed_args["cloud_model"]
     FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32

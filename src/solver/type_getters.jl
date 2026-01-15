@@ -139,7 +139,7 @@ function get_atmos(config::AtmosConfig, params)
         noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
                                      Implicit() : Explicit(),
         call_cloud_diagnostics_per_stage,
-        moisture_fixer = parsed_args["moisture_fixer"],
+        tracer_nonnegativity_method = get_tracer_nonnegativity_method(parsed_args),
 
         # SCMSetup - Single-Column Model components
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
@@ -845,7 +845,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
         tendency_function = CTS.ClimaODEFunction(;
             T_exp_T_lim!, T_imp!,
             cache! = set_precomputed_quantities!, cache_imp!,
-            lim! = limiters_func!, dss!,
+            lim! = limiters_func!, dss! = constrain_state!,  # TODO: Rename ClimaODEFunction kwarg to `constrain_state!`
         )
     end
     problem = SciMLBase.ODEProblem(tendency_function, Y, tspan, p)

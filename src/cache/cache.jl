@@ -126,7 +126,16 @@ function build_cache(
         Limiters.QuasiMonotoneLimiter(similar(Y.c, FT))
     end
 
-    numerics = (; limiter)
+    nonneg_lim = atmos.water.tracer_nonnegativity_method
+    tracer_nonnegativity_limiter = if nonneg_lim isa TracerNonnegativityElementConstraint
+        Limiters.QuasiMonotoneLimiter(similar(Y.c.ρq_tot, FT);
+            convergence_stats = Limiters.NoConvergenceStats(),
+        )
+    else
+        nothing
+    end
+
+    numerics = (; limiter, tracer_nonnegativity_limiter)
 
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
