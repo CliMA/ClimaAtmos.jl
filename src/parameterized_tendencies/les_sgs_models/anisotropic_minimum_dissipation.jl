@@ -4,18 +4,106 @@
 
 import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
-import ClimaCore: Geometry
+import ClimaCore: Geometry, Spaces
 import LinearAlgebra: tr
 
 """
     set_amd_precomputed_quantities!(Y, p)
 
-Placeholder for precomputed quantities in the Anisotropic-Minimum-Dissipation method.
-Returns `nothing`. This function is included for simple extensions in debugging workflows.
+Compute and cache the common strain rate calculations for the Anisotropic-Minimum-Dissipation
+method. This includes:
+- Scaled velocity gradients (ᶜ∂̂u_uvw, ᶠ∂̂u_uvw)
+- Strain rate tensors (ᶜS, ᶠS)
+- Gradient products (ᶜ∂ₖuᵢ∂ₖuⱼ, ᶠ∂ₖuᵢ∂ₖuⱼ, ᶜ∂ₗuₘ∂ₗuₘ)
+- Filter scales (ᶜδ², ᶠδ²)
+- Eddy viscosity (ᶜνₜ, ᶠνₜ)
+
+These quantities are used by both horizontal_amd_tendency! and vertical_amd_tendency!.
 """
-function set_amd_precomputed_quantities!(Y, p)
-    nothing
+function set_amd_precomputed_quantities!(Y, p, les::AnisotropicMinimumDissipation)
+    (; precomputed, scratch, params) = p
+    FT = eltype(Y)
+    c_amd = les.c_amd
+    (; ᶜu, ᶠu³) = precomputed
+    (; ᶜtemp_UVW, ᶠtemp_UVW) = scratch
+    (;
+        ᶜ∂̂u_uvw,
+        ᶠ∂̂u_uvw,
+        ᶜS,
+        ᶠS,
+        ᶜ∂ₖuᵢ∂ₖuⱼ,
+        ᶠ∂ₖuᵢ∂ₖuⱼ,
+        ᶜ∂ₗuₘ∂ₗuₘ,
+        ᶜδ²,
+        ᶠδ²,
+        ᶜνₜ,
+        ᶠνₜ,
+    ) = precomputed
+
+    ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
+    ᶠgradᵥ_uvw = Operators.GradientC2F(
+        bottom = Operators.SetGradient(∇ᵥuvw_boundary),
+        top = Operators.SetGradient(∇ᵥuvw_boundary),
+    )
+    axis_uvw = (Geometry.UVWAxis(),)
+
+    # Compute UVW velocities
+    ᶜu_uvw = @. ᶜtemp_UVW = UVW(ᶜu)
+    ᶠu_uvw = @. ᶠtemp_UVW = UVW(ᶠinterp(Y.c.uₕ)) + UVW(ᶠu³)
+
+    # Extract UV and W components separately
+    ᶜu_uv = @. Geometry.UVWVector(Geometry.UVVector(ᶜu_uvw)) +
+            Geometry.UVWVector(Geometry.WVector(zero(ᶜu_uvw)))
+    ᶜw = @. Geometry.UVWVector(Geometry.WVector(ᶜu_uvw))
+    ᶠu_uv = @. Geometry.UVWVector(Geometry.UVVector(ᶠu_uvw)) +
+            Geometry.UVWVector(Geometry.WVector(zero(ᶠu_uvw)))
+    ᶠw = @. Geometry.UVWVector(Geometry.WVector(ᶠu_uvw))
+
+    # filter scales
+    h_space = Spaces.horizontal_space(axes(Y.c))
+    Δ_h = Spaces.node_horizontal_length_scale(h_space)
+    ᶜΔ_z = Fields.Δz_field(Y.c)
+    ᶠΔ_z = Fields.Δz_field(Y.f)
+
+    # Scaled gradients
+    @. ᶜ∂̂u_uvw = Geometry.project(axis_uvw, gradₕ(ᶜu_uv))
+    @. ᶜ∂̂u_uvw += ᶜΔ_z / Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜw))
+    @. ᶜ∂̂u_uvw += Δ_h / ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uv))
+    @. ᶜ∂̂u_uvw += Geometry.project(axis_uvw, ᶜgradᵥ(ᶠw))
+
+    @. ᶠ∂̂u_uvw = Geometry.project(axis_uvw, gradₕ(ᶠu_uv))
+    @. ᶠ∂̂u_uvw += ᶠΔ_z / Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠw))
+    @. ᶠ∂̂u_uvw += Δ_h / ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uv))
+    @. ᶠ∂̂u_uvw += Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜw))
+
+    # Strain rate tensor
+    @. ᶜS = (ᶜ∂̂u_uvw + adjoint(ᶜ∂̂u_uvw)) / 2
+    @. ᶠS = (ᶠ∂̂u_uvw + adjoint(ᶠ∂̂u_uvw)) / 2
+
+    # Gradient products
+    @. ᶜ∂ₖuᵢ∂ₖuⱼ = ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw)
+    @. ᶠ∂ₖuᵢ∂ₖuⱼ = ᶠ∂̂u_uvw * adjoint(ᶠ∂̂u_uvw)
+    @. ᶜ∂ₗuₘ∂ₗuₘ = CA.norm_sqr(ᶜ∂̂u_uvw)
+
+    # Filter scales squared
+    @. ᶜδ² = 3 * (Δ_h^2 * ᶜΔ_z^2) / (2 * ᶜΔ_z^2 + Δ_h^2)
+    @. ᶠδ² = 3 * (Δ_h^2 * ᶠΔ_z^2) / (2 * ᶠΔ_z^2 + Δ_h^2)
+
+    # AMD eddy viscosity
+    @. ᶜνₜ = max(
+        FT(0),
+        -c_amd^2 * ᶜδ² *
+        (
+            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:1 +
+            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:5 +
+            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:9
+        ) / max.(eps(FT), ᶜ∂ₗuₘ∂ₗuₘ),
+    )
+    @. ᶠνₜ = ᶠinterp(ᶜνₜ)
+
+    return nothing
 end
+set_amd_precomputed_quantities!(Y, p, ::Nothing) = nothing
 
 horizontal_amd_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_amd_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
@@ -61,69 +149,32 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     c_amd = les.c_amd
     grav = CAP.grav(params)
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜu, ᶠu³, ᶜts) = precomputed
-    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = scratch
-    (; ᶜtemp_scalar, ᶠtemp_scalar, ᶠtemp_scalar_2, ᶜtemp_UVW, ᶠtemp_UVW) =
-        scratch
+    (; ᶜts) = precomputed
+    (; ᶜtemp_scalar, ᶠtemp_scalar_2) = scratch
 
-    ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
-    ᶠgradᵥ_uvw = Operators.GradientC2F(
-        bottom = Operators.SetGradient(∇ᵥuvw_boundary),
-        top = Operators.SetGradient(∇ᵥuvw_boundary),
-    )
+    # Use cached precomputed quantities
+    (;
+        ᶜ∂̂u_uvw,
+        ᶠ∂̂u_uvw,
+        ᶜS,
+        ᶠS,
+        ᶜ∂ₖuᵢ∂ₖuⱼ,
+        ᶜ∂ₗuₘ∂ₗuₘ,
+        ᶜδ²,
+        ᶜνₜ,
+        ᶠνₜ,
+    ) = precomputed
+
     axis_uvw = (Geometry.UVWAxis(),)
 
-    # Compute UVW velocities
-    ᶜu_uvw = @. ᶜtemp_UVW = UVW(ᶜu)
-    ᶠu_uvw = @. ᶠtemp_UVW = UVW(ᶠinterp(Y.c.uₕ)) + UVW(ᶠu³)
-
-    # Extract UV and W components separately
-    ᶜu_uv = @. Geometry.UVWVector(Geometry.UVVector(ᶜu_uvw)) + Geometry.UVWVector(Geometry.WVector(zero(ᶜu_uvw)))
-    ᶜw = @. Geometry.UVWVector(Geometry.WVector(ᶜu_uvw))
-    ᶠu_uv = @. Geometry.UVWVector(Geometry.UVVector(ᶠu_uvw)) + Geometry.UVWVector(Geometry.WVector(zero(ᶠu_uvw)))
-    ᶠw = @. Geometry.UVWVector(Geometry.WVector(ᶠu_uvw))
-
-    # filter scales
+    # Filter scale (needed for energy and tracer diffusion)
     h_space = Spaces.horizontal_space(axes(Y.c))
     Δ_h = Spaces.node_horizontal_length_scale(h_space)
-    ᶜΔ_z = Fields.Δz_field(Y.c)
-    ᶠΔ_z = Fields.Δz_field(Y.f)
-
-    # Gradients
-    ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Geometry.project(axis_uvw, gradₕ(ᶜu_uv))
-    @. ᶜ∂̂u_uvw += ᶜΔ_z / Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜw))
-    @. ᶜ∂̂u_uvw += Δ_h / ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uv))
-    @. ᶜ∂̂u_uvw += Geometry.project(axis_uvw, ᶜgradᵥ(ᶠw))
-    
-    ᶠ∂̂u_uvw = @.ᶠtemp_UVWxUVW = Geometry.project(axis_uvw, gradₕ(ᶠu_uv))
-    @. ᶠ∂̂u_uvw += ᶠΔ_z / Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠw))
-    @. ᶠ∂̂u_uvw += Δ_h / ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uv))
-    @. ᶠ∂̂u_uvw += Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜw))
-
-    # Strain rate tensor
-    ᶜS = @. ᶜtemp_strain = (ᶜ∂̂u_uvw + adjoint(ᶜ∂̂u_uvw)) / 2
-    ᶠS = @. ᶠtemp_strain = (ᶠ∂̂u_uvw + adjoint(ᶠ∂̂u_uvw)) / 2
-
-    ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
-    ᶠ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶠ∂̂u_uvw * adjoint(ᶠ∂̂u_uvw))
-    ᶜ∂ₗuₘ∂ₗuₘ = @. lazy(CA.norm_sqr(ᶜ∂̂u_uvw))
-
-    # AMD eddy viscosity
-    ᶜδ² = @. 3 * (Δ_h^2 * ᶜΔ_z^2) / (2 * ᶜΔ_z^2 + Δ_h^2)
-    ᶜνₜ = @. ᶜtemp_scalar = max(
-        FT(0),
-        -c_amd^2 * ᶜδ² *
-        (
-            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:1 +
-            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:5 +
-            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:9
-        ) / max.(eps(FT), ᶜ∂ₗuₘ∂ₗuₘ),
-    )
-    ᶠνₜ = @. ᶠtemp_scalar = ᶠinterp(ᶜνₜ)
 
     # Subgrid-scale momentum flux tensor, `τ = -2 νₜ ∘ S`
-    ᶜτ_amd = @. lazy(-2 * ᶜνₜ * ᶜS)
-    ᶠτ_amd = @. lazy(-2 * ᶠνₜ * ᶠS)
+    (; ᶜτ_amd, ᶠτ_amd) = precomputed
+    @. ᶜτ_amd = -2 * ᶜνₜ * ᶜS
+    @. ᶠτ_amd = -2 * ᶠνₜ * ᶠS
 
     ## Momentum tendencies
     ᶠρ = @. ᶠtemp_scalar_2 = ᶠinterp(Y.c.ρ)
@@ -228,76 +279,37 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
 
     ### AMD ###
 
-    (; ᶜu, ᶠu³, ᶜts) = p.precomputed
-    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = p.scratch
-    (; ᶜtemp_scalar, ᶠtemp_scalar, ᶜtemp_UVW, ᶠtemp_UVW) =
-        p.scratch
+    (; ᶜts) = p.precomputed
+    (; ᶠtemp_scalar) = p.scratch
 
-    ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
-    ᶠgradᵥ_uvw = Operators.GradientC2F(
-        bottom = Operators.SetGradient(∇ᵥuvw_boundary),
-        top = Operators.SetGradient(∇ᵥuvw_boundary),
-    )
+    # Use cached precomputed quantities
+    (;
+        ᶜ∂̂u_uvw,
+        ᶠ∂̂u_uvw,
+        ᶜS,
+        ᶠS,
+        ᶜδ²,
+        ᶠδ²,
+        ᶜνₜ,
+        ᶠνₜ,
+    ) = p.precomputed
+
+    axis_uvw = (Geometry.UVWAxis(),)
+
+    # Filter scale (needed for energy and tracer diffusion)
+    h_space = Spaces.horizontal_space(axes(Y.c))
+    Δ_h = Spaces.node_horizontal_length_scale(h_space)
+    ᶠΔ_z = Fields.Δz_field(Y.f)
+
     ᶠgradᵥ_scalar = Operators.GradientC2F(
         bottom = Operators.SetGradient(UVW(0, 0, 0)),
         top = Operators.SetGradient(UVW(0, 0, 0)),
     )
 
-    axis_uvw = (Geometry.UVWAxis(),)
-
-    # Compute UVW velocities
-    ᶜu_uvw = @. ᶜtemp_UVW = UVW(ᶜu)
-    ᶠu_uvw = @. ᶠtemp_UVW = UVW(ᶠinterp(Y.c.uₕ)) + UVW(ᶠu³)
-
-    # Extract UV and W components separately
-    ᶜu_uv = @. Geometry.UVWVector(Geometry.UVVector(ᶜu_uvw)) + Geometry.UVWVector(Geometry.WVector(zero(ᶜu_uvw)))
-    ᶜw = @. Geometry.UVWVector(Geometry.WVector(ᶜu_uvw))
-    ᶠu_uv = @. Geometry.UVWVector(Geometry.UVVector(ᶠu_uvw)) + Geometry.UVWVector(Geometry.WVector(zero(ᶠu_uvw)))
-    ᶠw = @. Geometry.UVWVector(Geometry.WVector(ᶠu_uvw))
-
-    # filter scales
-    h_space = Spaces.horizontal_space(axes(Y.c))
-    Δ_h = Spaces.node_horizontal_length_scale(h_space)
-    ᶜΔ_z = Fields.Δz_field(Y.c)
-    ᶠΔ_z = Fields.Δz_field(Y.f)
-
-    # Gradients
-    ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Geometry.project(axis_uvw, gradₕ(ᶜu_uv))
-    @. ᶜ∂̂u_uvw += ᶜΔ_z / Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜw))
-    @. ᶜ∂̂u_uvw += Δ_h / ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uv))
-    @. ᶜ∂̂u_uvw += Geometry.project(axis_uvw, ᶜgradᵥ(ᶠw))
-    
-    ᶠ∂̂u_uvw = @.ᶠtemp_UVWxUVW = Geometry.project(axis_uvw, gradₕ(ᶠu_uv))
-    @. ᶠ∂̂u_uvw += ᶠΔ_z / Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠw))
-    @. ᶠ∂̂u_uvw += Δ_h / ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uv))
-    @. ᶠ∂̂u_uvw += Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜw))
-
-    # Strain rate tensor
-    ᶜS = @. ᶜtemp_strain = (ᶜ∂̂u_uvw + adjoint(ᶜ∂̂u_uvw)) / 2
-    ᶠS = @. ᶠtemp_strain = (ᶠ∂̂u_uvw + adjoint(ᶠ∂̂u_uvw)) / 2
-
-    ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
-    ᶠ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶠ∂̂u_uvw * adjoint(ᶠ∂̂u_uvw))
-    ᶜ∂ₗuₘ∂ₗuₘ = @. lazy(CA.norm_sqr(ᶜ∂̂u_uvw))
-
-
-    # AMD eddy viscosity
-    ᶜδ² = @.  3 * (Δ_h^2 * ᶜΔ_z^2) / (2 * ᶜΔ_z^2 + Δ_h^2)
-    ᶠδ² = @.  3 * (Δ_h^2 * ᶠΔ_z^2) / (2 * ᶠΔ_z^2 + Δ_h^2)
-    ᶜνₜ = @. ᶜtemp_scalar = max(
-        FT(0),
-        -c_amd^2 * ᶜδ² *
-        (
-            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:1 +
-            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:5 +
-            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:9
-        ) / max.(eps(FT), ᶜ∂ₗuₘ∂ₗuₘ),
-    )
-    ᶠνₜ = @. ᶠtemp_scalar = ᶠinterp(ᶜνₜ)
-
     # Subgrid-scale momentum flux tensor, `τ = -2 νₜ ∘ S`
-    ᶜτ_amd = @. lazy(-2 * ᶜνₜ * ᶜS)
-    ᶠτ_amd = @. lazy(-2 * ᶠνₜ * ᶠS)
+    (; ᶜτ_amd, ᶠτ_amd) = p.precomputed
+    @. ᶜτ_amd = -2 * ᶜνₜ * ᶜS
+    @. ᶠτ_amd = -2 * ᶠνₜ * ᶠS
 
     # Apply to tendencies
     ## Horizontal momentum tendency

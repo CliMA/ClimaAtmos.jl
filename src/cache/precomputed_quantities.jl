@@ -270,6 +270,18 @@ function precomputed_quantities(Y, atmos)
                 ᶠτ_amd = similar(Y.f, typeof(uvw_vec * uvw_vec')),
                 ᶜD_amd = similar(Y.c, FT),
                 ᶠD_amd = similar(Y.f, FT),
+                # Cached strain rate calculations
+                ᶜ∂̂u_uvw = similar(Y.c, typeof(uvw_vec * uvw_vec')),
+                ᶠ∂̂u_uvw = similar(Y.f, typeof(uvw_vec * uvw_vec')),
+                ᶜS = similar(Y.c, typeof(uvw_vec * uvw_vec')),
+                ᶠS = similar(Y.f, typeof(uvw_vec * uvw_vec')),
+                ᶜ∂ₖuᵢ∂ₖuⱼ = similar(Y.c, typeof(uvw_vec * uvw_vec')),
+                ᶠ∂ₖuᵢ∂ₖuⱼ = similar(Y.f, typeof(uvw_vec * uvw_vec')),
+                ᶜ∂ₗuₘ∂ₗuₘ = similar(Y.c, FT),
+                ᶜδ² = similar(Y.c, FT),
+                ᶠδ² = similar(Y.f, FT),
+                ᶜνₜ = similar(Y.c, FT),
+                ᶠνₜ = similar(Y.f, FT),
             )
         else
             (;)
@@ -587,7 +599,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     set_smagorinsky_lilly_precomputed_quantities!(Y, p, p.atmos.smagorinsky_lilly)
 
     if p.atmos.amd_les isa AnisotropicMinimumDissipation
-        set_amd_precomputed_quantities!(Y, p)
+        set_amd_precomputed_quantities!(Y, p, p.atmos.amd_les)
     end
 
     return nothing
