@@ -271,15 +271,12 @@ function make_plots_generic(
     end
 
     output_file = joinpath(save_path, "$(output_name).pdf")
-
-    pdfunite() do unite
-        run(Cmd([unite, summary_files..., output_file]))
-    end
+    pdfunite_args = Cmd([summary_files..., output_file])
+    run(`$(pdfunite()) $pdfunite_args`)
 
     if save_jpeg_copy
-        pdftoppm() do exe
-            run(Cmd([exe, "-jpeg", output_file, joinpath(save_path, output_name)]))
-        end
+        pdftoppm_args = Cmd(["-jpeg", output_file, joinpath(save_path, output_name)])
+        run(`$(pdftoppm()) $pdftoppm_args`)
     end
 
     # Cleanup
