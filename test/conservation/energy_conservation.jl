@@ -10,6 +10,8 @@ TODO: Implement tests for:
 
 Reference: In the absence of external forcing (radiation, surface fluxes),
 total energy should be conserved to machine precision.
+
+https://github.com/CliMA/ClimaAtmos.jl/blob/0aab6f91eea5d8fa093359e58de37c23e81b5492/.buildkite/pipeline.yml#L534
 =#
 
 using Test

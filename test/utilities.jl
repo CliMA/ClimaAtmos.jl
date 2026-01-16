@@ -208,39 +208,36 @@ end
     @test ᶜκ_exact ≈ κ
 end
 
-@testset "kinetic_energy (spherical geometry)" begin
-    # Test compute_kinetic on spherical geometry with separable velocity components
+@testset "kinetic_energy (spherical geometry with topography)" begin
+    # Test compute_kinetic on warped spherical geometry (with mountain)
     #
-    # Velocity field (from get_spherical_test_velocities):
-    #   uₕ = U₀ cos(lat)   (zonal, uniform in z)
-    #   w  = W₀ sin(πz/H)  (vertical, uniform in lat/lon)
+    # We define a physical velocity field:
+    #   u_phys = u_zonal = U₀ cos(lat)
+    #   v_phys = 0
+    #   w_phys = W₀ sin(π * z_phys / z_max)
     #
-    # Kinetic energy κ = (1/2)(uₕ² + w²):
-    #   κ = (1/2)[U₀² cos²(lat) + W₀² sin²(πz/H)]
+    # We project this onto a grid with topography.
+    # The kinetic energy should be exactly 0.5 * (u_phys^2 + w_phys^2).
     
-    (; cent_space, face_space, z_max, FT) = get_spherical_extruded_spaces()
+    (; cent_space, face_space, z_max, FT) = get_spherical_extruded_spaces_with_topography()
     
-    # Get velocity fields from helper
+    # Define Physical Velocity and Project
     U₀, W₀ = FT(10), FT(1)
-    uₕ, uᵥ, _ = get_spherical_test_velocities(cent_space, face_space, z_max; U₀ = U₀, W₀ = W₀)
-    
-    # Compute kinetic energy
+    uₕ, uᵥ, _ = get_spherical_test_velocities(cent_space, face_space, z_max; U₀, W₀)
+   
+    # 3. Compute and Verify
     κ = CA.compute_kinetic(uₕ, uᵥ)
     
-    # Analytical solution at cell centers
-    ccoords = Fields.coordinate_field(cent_space)
-    fcoords = Fields.coordinate_field(face_space)
-    lat_rad = @. deg2rad(ccoords.lat)
-    ᶜκ_horizontal = @. (1 // 2) * U₀^2 * cos(lat_rad)^2
+    # helper for exact calc
+    c_coords = Fields.coordinate_field(cent_space)
     
-    # Interpolated vertical contribution (average of face values to center)
-    ᶠw_mag = @. W₀ * sin(FT(π) * fcoords.z / z_max)
-    ᶜinterp = Operators.InterpolateF2C()
-    ᶜw² = @. ᶜinterp(ᶠw_mag^2)
-    ᶜκ_vertical = @. (1 // 2) * ᶜw²
-    ᶜκ_exact = @. ᶜκ_horizontal + ᶜκ_vertical
+    # Exact Kinetic Energy (Scalar)
+    ᶜκ_exact = Fields.Field(FT, cent_space)
+    @. ᶜκ_exact = 0.5 * (
+        (U₀ * cosd(c_coords.lat))^2 +
+        (W₀ * sin(FT(π) * c_coords.z / z_max))^2
+    )
     
-    # Check within reasonable tolerance (interpolation introduces small errors)
     @test maximum(abs.(κ .- ᶜκ_exact)) < FT(0.01) * maximum(abs.(ᶜκ_exact))
 end
 
@@ -415,6 +412,37 @@ end
     # The computed norm should match the analytical solution within numerical tolerance
     # (allowing for some discretization error from the finite difference gradient)
     rel_error = @. abs(ᶜstrain_rate_norm - ᶜstrain_rate_norm_exact) / (abs(ᶜstrain_rate_norm_exact) + eps(FT))
-    @test maximum(parent(rel_error)) < FT(0.1)  # 10% relative tolerance for FD discretization
+    @test maximum(parent(rel_error)) < FT(0.01)  # 1% relative tolerance for FD discretization
 end
 
+@testset "compute_strain_rate (spherical geometry with topography)" begin
+    # Test strain rate computation on spherical geometry with terrain-following coordinates
+    # Uses the same velocity profile as the flat test, but on a warped grid
+    
+    (; cent_space, face_space, z_max, FT) = get_spherical_extruded_spaces_with_topography()
+    
+    # Get velocity fields from helper
+    U₀, W₀ = FT(10), FT(1)
+    _, _, ᶠu = get_spherical_test_velocities(cent_space, face_space, z_max; U₀, W₀)
+    
+    # Compute strain rate
+    ᶜstrain_rate = CA.compute_strain_rate_center_vertical(ᶠu)
+    ᶜstrain_rate_norm = @. norm_sqr(ᶜstrain_rate)
+    
+    # 1. Should be finite everywhere (even on warped grid)
+    @test all(isfinite, parent(ᶜstrain_rate_norm))
+    
+    # 2. Should have nonzero values
+    @test maximum(parent(ᶜstrain_rate_norm)) > FT(0)
+    
+    # 3. Compare against analytical solution (same as flat case)
+    # On a terrain-following grid, z is the physical height, so the formula is the same
+    ccoords = Fields.coordinate_field(cent_space)
+    ᶜz = ccoords.z
+    ᶜε₃₃_exact = @. W₀ * FT(π) / z_max * cos(FT(π) * ᶜz / z_max)
+    ᶜstrain_rate_norm_exact = @. ᶜε₃₃_exact^2
+    
+    # Allow slightly higher tolerance for warped grid discretization
+    rel_error = @. abs(ᶜstrain_rate_norm - ᶜstrain_rate_norm_exact) / (abs(ᶜstrain_rate_norm_exact) + eps(FT))
+    @test maximum(parent(rel_error)) < FT(0.01)  # 1% tolerance
+end

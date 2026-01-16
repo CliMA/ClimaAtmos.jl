@@ -205,6 +205,60 @@ function get_spherical_extruded_spaces(; FT = Float32)
     )
 end
 
+"""
+    get_spherical_extruded_spaces_with_topography(; FT = Float64)
+
+Create 3D extruded spherical spaces with a Gaussian mountain for testing.
+Returns center_space, face_space, and domain parameters (radius, z_max).
+The mountain is centered at (lat=0, lon=0) with height 2000m and lataeral 
+decay scale 10°.
+"""
+function get_spherical_extruded_spaces_with_topography(; FT = Float64)
+    context = ClimaComms.SingletonCommsContext()
+    
+    # Horizontal: coarse cubed sphere
+    radius = FT(6.371e6)
+    ne = 4
+    Nq = 4
+    domain = Domains.SphereDomain(radius)
+    mesh = Meshes.EquiangularCubedSphere(domain, ne)
+    topology = Topologies.Topology2D(context, mesh)
+    quad = Quadratures.GLL{Nq}()
+    h_space = Spaces.SpectralElementSpace2D(topology, quad)
+    horz_grid = Spaces.grid(h_space)
+    
+    # Vertical: finite difference
+    z_max = FT(30e3)
+    vertdomain = Domains.IntervalDomain(
+        Geometry.ZPoint{FT}(0),
+        Geometry.ZPoint{FT}(z_max);
+        boundary_names = (:bottom, :top),
+    )
+    vertmesh = Meshes.IntervalMesh(vertdomain, nelems = 10)
+    vert_topology = Topologies.IntervalTopology(context, vertmesh)
+    vert_grid = Grids.FiniteDifferenceGrid(vert_topology)
+    
+    # Topography: Gaussian mountain
+    z_surface = Fields.Field(Geometry.ZPoint{FT}, h_space)
+    coords = Fields.coordinate_field(h_space)
+    @. z_surface = Geometry.ZPoint(
+        FT(2000) * exp(-(coords.lat^2 + coords.long^2) / (2 * FT(10)^2))
+    )
+    
+    # Warped grid
+    grid = Grids.ExtrudedFiniteDifferenceGrid(horz_grid, vert_grid, Hypsography.LinearAdaption(z_surface))
+    cent_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
+    face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
+    
+    return (;
+        cent_space = cent_space,
+        face_space = face_space,
+        radius = radius,
+        z_max = z_max,
+        FT = FT,
+    )
+end
+
 function get_cartesian_spaces(; FT = Float32)
     xlim = (FT(0), FT(π))
     zlim = (FT(0), FT(π))
@@ -329,19 +383,22 @@ function get_spherical_test_velocities(cent_space, face_space, z_max; U₀ = 10,
     FT = eltype(z_max)
     ccoords = Fields.coordinate_field(cent_space)
     fcoords = Fields.coordinate_field(face_space)
-    
+    c_lg = Fields.local_geometry_field(cent_space)
+    f_lg = Fields.local_geometry_field(face_space)
+
     # Horizontal: zonal wind at cell centers
+    # We project the physical vector onto any local geometry to handle topography
     lat_rad = @. deg2rad(ccoords.lat)
     uₕ_mag = @. FT(U₀) * cos(lat_rad)
-    uₕ = @. Geometry.Covariant12Vector(Geometry.UVVector(uₕ_mag, zero(uₕ_mag)))
+    uₕ = @. Geometry.Covariant12Vector(Geometry.UVVector(uₕ_mag, zero(uₕ_mag)), c_lg)
     
     # Vertical: at cell faces
     ᶠz = fcoords.z
     ᶠw_mag = @. FT(W₀) * sin(FT(π) * ᶠz / z_max)
-    uᵥ = @. Geometry.Covariant3Vector(Geometry.WVector(ᶠw_mag))
+    uᵥ = @. Geometry.Covariant3Vector(Geometry.WVector(ᶠw_mag), f_lg)
     
     # Full 3D velocity on faces as Covariant123Vector (for strain rate tests)
-    ᶠu_C123 = @. Geometry.Covariant123Vector(uᵥ)
+    ᶠu_C123 = @. Geometry.Covariant123Vector(Geometry.UVWVector(zero(ᶠw_mag), zero(ᶠw_mag), ᶠw_mag), f_lg)
     
     return uₕ, uᵥ, ᶠu_C123
 end
