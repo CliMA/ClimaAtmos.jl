@@ -1093,7 +1093,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ᶠright_bias_matrix() ⋅
                         DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ))
                     @. ᶜtridiagonal_matrix_scalar =
-                        dtγ *  DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ 
+                        dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅
                         -(ᶜprecipdivᵥ_matrix()) ⋅ ᶠsed_tracer_advection
 
                     @. ∂ᶜχʲ_err_∂ᶜχʲ += ᶜtridiagonal_matrix_scalar
@@ -1107,15 +1107,15 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         # ρaʲ
                         ∂ᶜρaʲ_err_∂ᶜχʲ =
                             matrix[@name(c.sgsʲs.:(1).ρa), χʲ_name]
-                        @. ∂ᶜρaʲ_err_∂ᶜχʲ += 
-                            DiagonalMatrixRow(Y.c.sgsʲs.:(1).ρa) ⋅ 
+                        @. ∂ᶜρaʲ_err_∂ᶜχʲ +=
+                            DiagonalMatrixRow(Y.c.sgsʲs.:(1).ρa) ⋅
                             ᶜtridiagonal_matrix_scalar
 
                         # q_totʲ
                         ∂ᶜq_totʲ_err_∂ᶜχʲ =
                             matrix[@name(c.sgsʲs.:(1).q_tot), χʲ_name]
-                        @. ∂ᶜq_totʲ_err_∂ᶜχʲ = 
-                            DiagonalMatrixRow(1 - Y.c.sgsʲs.:(1).q_tot) ⋅ 
+                        @. ∂ᶜq_totʲ_err_∂ᶜχʲ =
+                            DiagonalMatrixRow(1 - Y.c.sgsʲs.:(1).q_tot) ⋅
                             ᶜtridiagonal_matrix_scalar
 
                         # mseʲ
@@ -1127,7 +1127,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             DiagonalMatrixRow(e_int_func(thermo_params, ᶜtsʲs.:(1)) + ᶜΦ)
 
                         @. ∂ᶜmseʲ_err_∂ᶜχʲ -=
-                            DiagonalMatrixRow(Y.c.sgsʲs.:(1).mse) ⋅ 
+                            DiagonalMatrixRow(Y.c.sgsʲs.:(1).mse) ⋅
                             ᶜtridiagonal_matrix_scalar
 
                     end

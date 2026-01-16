@@ -542,10 +542,149 @@ function edmfx_sgs_vertical_advection_tendency!(
 end
 
 """
+    edmfx_sgs_explicit_sedimentation_tendency!(Yₜ, Y, p, t, turbconv_model)
+
+Compute the SGS explicit sedimentation tendency of tracers within EDMFX updrafts
+when the updraft area fraction decreases with height.
+
+# Description
+This function computes the remaining sedimentation contribution associated with
+negative vertical gradients of updraft area fraction (``∂a/∂z < 0``), which is not
+captured by the sedimentation treatment in the `edmfx_sgs_vertical_advection_tendency!`
+function.
+
+When the updraft area contracts with height, sedimenting mass average diverges within
+the updraft column, producing an additional tracer tendency
+``∂χ/∂t = (ρ w χ ∂a/∂z) / (ρ a) = w χ ∂a/∂z / a``.
+This term is applied only for ``∂a/∂z < 0``; for expanding updrafts
+(``∂a/∂z > 0``), the corresponding contribution is cancelled by lateral
+detrainment and is therefore omitted.
+
+# Arguments
+- `Yₜ`: tendency state (updated in place)
+- `Y`: prognostic state
+- `p`: parameter and precomputed-field container
+- `t`: current time
+- `turbconv_model`: EDMFX turbulence–convection model configuration
+
+# Notes
+This routine complements `edmfx_sgs_vertical_advection_tendency!`, together providing a complete
+treatment of sedimentation effects for both increasing and decreasing updraft area fractions.
+"""
+edmfx_sgs_explicit_sedimentation_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+function edmfx_sgs_explicit_sedimentation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    turbconv_model::PrognosticEDMFX,
+)
+    (; params, dt) = p
+    n = n_prognostic_mass_flux_subdomains(turbconv_model)
+    (; ᶜρʲs) = p.precomputed
+    FT = eltype(params)
+
+    ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
+    ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+
+    for j in 1:n
+        ᶜneg_∂a∂z_a = @. lazy(
+            min(0,
+                ᶜprecipdivᵥ(
+                    ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(
+                        Geometry.WVector(
+                            max(eps(FT), draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))),
+                        ),
+                    ),
+                ),
+            ) /
+            max(eps(FT), draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))),
+        )
+
+        if p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
+        )
+            thp = CAP.thermodynamics_params(params)
+            (; ᶜΦ) = p.core
+            (; ᶜtsʲs) = p.precomputed
+            ᶜ∂ρ∂t_sed = p.scratch.ᶜtemp_scalar_3
+            @. ᶜ∂ρ∂t_sed = 0
+            vtt = p.scratch.ᶜtemp_scalar_4
+            @. vtt = 0
+
+            # Sedimentation
+            sgs_microphysics_tracers = (
+                (@name(c.sgsʲs.:(1).q_liq), @name(q_liq), @name(ᶜwₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_ice), @name(q_ice), @name(ᶜwᵢʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_rai), @name(q_rai), @name(ᶜwᵣʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_sno), @name(q_sno), @name(ᶜwₛʲs.:(1))),
+            )
+
+            MatrixFields.unrolled_foreach(
+                sgs_microphysics_tracers,
+            ) do (qʲ_name, name, wʲ_name)
+                MatrixFields.has_field(Y, qʲ_name) || return
+
+                ᶜqʲ = MatrixFields.get_field(Y, qʲ_name)
+                ᶜqʲₜ = MatrixFields.get_field(Yₜ, qʲ_name)
+                ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
+
+                @. vtt = min(ᶜwʲ, 0.5 * ᶜdz / dt) * ᶜqʲ * ᶜneg_∂a∂z_a
+                @. ᶜqʲₜ += vtt
+                @. Yₜ.c.sgsʲs.:($$j).q_tot += vtt
+                @. ᶜ∂ρ∂t_sed += vtt
+
+                # Flux form sedimentation of energy
+                e_int_func = internal_energy_func(name)
+                ᶜmse_li = @. lazy(e_int_func(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
+                @. vtt = min(ᶜwʲ, 0.5 * ᶜdz / dt) * ᶜqʲ * ᶜmse_li * ᶜneg_∂a∂z_a
+                @. Yₜ.c.sgsʲs.:($$j).mse += vtt
+            end
+
+            # Contribution of density variation due to sedimentation
+            @. Yₜ.c.sgsʲs.:($$j).ρa += Y.c.sgsʲs.:($$j).ρa * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).mse -= Y.c.sgsʲs.:($$j).mse * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -= Y.c.sgsʲs.:($$j).q_tot * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_liq -= Y.c.sgsʲs.:($$j).q_liq * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_ice -= Y.c.sgsʲs.:($$j).q_ice * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_rai -= Y.c.sgsʲs.:($$j).q_rai * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_sno -= Y.c.sgsʲs.:($$j).q_sno * ᶜ∂ρ∂t_sed
+
+        end
+
+        # Sedimentation of number concentrations for 2M microphysics
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+           p.atmos.microphysics_model isa Microphysics2Moment
+
+            sgs_microphysics_tracers = (
+                (@name(c.sgsʲs.:(1).n_liq), @name(ᶜwₙₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
+            )
+
+            MatrixFields.unrolled_foreach(
+                sgs_microphysics_tracers,
+            ) do (χʲ_name, wʲ_name)
+                MatrixFields.has_field(Y, χʲ_name) || return
+
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
+                ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
+
+                vtt = min(ᶜwʲ, 0.5 * ᶜdz / dt) * ᶜχʲ * ᶜneg_∂a∂z_a
+                @. ᶜχʲₜ += vtt
+                @. ᶜχʲₜ -= ᶜχʲ * ᶜ∂ρ∂t_sed
+            end
+        end
+    end
+end
+
+"""
     updraft_sedimentation(ᶜρ, ᶜw, ᶜχ, ᶠJ)
 
 Compute the sedimentation tendency of tracer `χ` within an updraft, assuming that the 
-updraft area fraction increases with height.
+updraft area fraction doesn't decrease with height.
 
 # Description
 Sedimenting particles fall with velocity `w` through an updraft of fractional area `a(z)`.  
@@ -583,6 +722,7 @@ function updraft_sedimentation(
 )
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     return @. lazy(
-        -1 * ᶜprecipdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(-(ᶜw)) * ᶜχ),) / ᶜρ
+        -1 *
+        ᶜprecipdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(-(ᶜw)) * ᶜχ)) / ᶜρ,
     )
 end
