@@ -29,13 +29,13 @@ cb_4 = CA.call_every_n_steps(
 )
 cb_set = SMB.CallbackSet(cb_1, cb_2, cb_4)
 
-@testset "simple default callback" begin
+@testset "Simple default callback" begin
     @test cb_default.condition.n == 1
     @test cb_default.affect!.f!() == π
 end
 
 # per n steps
-@testset "every n-steps callback" begin
+@testset "Every n-steps callback" begin
     @test cb_1.initialize.skip_first == false
     @test cb_1.condition.n == test_nsteps
     @test cb_1.affect!.f!() == π
@@ -48,7 +48,7 @@ end
 end
 
 # per dt interval
-@testset "dt interval callback" begin
+@testset "Dt interval callback" begin
     @test cb_2 isa SMB.DiscreteCallback
     @test cb_2.affect!.dt == test_dt
     @test cb_2.affect!.cb!.f!() == π
@@ -60,7 +60,7 @@ end
     )
 end
 
-@testset "atmos callbacks and callback sets" begin
+@testset "Atmos callbacks and callback sets" begin
     # atmoscallbacks from discrete callbacks
     @test cb_3.f!() == π
     atmos_cbs = CA.atmos_callbacks(cb_set)

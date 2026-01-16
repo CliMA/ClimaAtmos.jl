@@ -158,6 +158,53 @@ function get_spherical_spaces(; FT = Float32)
     )
 end
 
+"""
+    get_spherical_extruded_spaces(; FT = Float32)
+
+Create 3D extruded spherical spaces (center and face) for testing.
+Returns center_space, face_space, and domain parameters (radius, z_max).
+"""
+function get_spherical_extruded_spaces(; FT = Float32)
+    device = ClimaComms.CPUSingleThreaded()
+    context = ClimaComms.SingletonCommsContext(device)
+    
+    # Horizontal: cubed sphere
+    radius = FT(6.371e6)  # Earth radius
+    ne = 4  # elements per cube face edge
+    Nq = 4  # polynomial degree + 1
+    domain = Domains.SphereDomain(radius)
+    mesh = Meshes.EquiangularCubedSphere(domain, ne)
+    topology = Topologies.Topology2D(context, mesh)
+    quad = Quadratures.GLL{Nq}()
+    h_space = Spaces.SpectralElementSpace2D(topology, quad; enable_bubble = true)
+    horz_grid = Spaces.grid(h_space)
+    
+    # Vertical: finite difference
+    z_max = FT(30000)  # 30 km top
+    velem = 10
+    vertdomain = Domains.IntervalDomain(
+        Geometry.ZPoint{FT}(0),
+        Geometry.ZPoint{FT}(z_max);
+        boundary_names = (:bottom, :top),
+    )
+    vertmesh = Meshes.IntervalMesh(vertdomain, nelems = velem)
+    vert_topology = Topologies.IntervalTopology(context, vertmesh)
+    vert_grid = Grids.FiniteDifferenceGrid(vert_topology)
+    
+    # Extruded grid
+    grid = Grids.ExtrudedFiniteDifferenceGrid(horz_grid, vert_grid)
+    cent_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
+    face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
+    
+    return (;
+        cent_space = cent_space,
+        face_space = face_space,
+        radius = radius,
+        z_max = z_max,
+        FT = FT,
+    )
+end
+
 function get_cartesian_spaces(; FT = Float32)
     xlim = (FT(0), FT(π))
     zlim = (FT(0), FT(π))
@@ -223,41 +270,80 @@ function get_coords(cent_space, face_space)
     return ccoords, fcoords
 end
 
+"""
+    taylor_green_ic(coords)
+
+Return (u, v, w) velocity components for the Taylor-Green vortex initial condition.
+The Taylor-Green vortex is an exact solution to the incompressible Navier-Stokes equations
+that provides a smooth, analytical test case for verifying numerical schemes.
+
+Currently returns zero for the w component (2D flow in x-y plane).
+"""
 function taylor_green_ic(coords)
     u = @. sin(coords.x) * cos(coords.y) * cos(coords.z)
     v = @. -cos(coords.x) * sin(coords.y) * cos(coords.z)
-    #TODO: If a w field is introduced include it here. 
-    return u, v, u .* 0
+    w = @. zero(coords.x)  # 2D Taylor-Green has no vertical velocity
+    return u, v, w
 end
 
 """
-    get_test_functions(cent_space, face_space)
-Given center and face space objects for the staggered grid
-construction, generate velocity profiles defined by  simple
-trigonometric functions (for checks against analytical solutions). 
-This will be generalised to accept arbitrary input profiles 
-(e.g. spherical harmonics) for testing purposes in the future. 
+    get_cartesian_test_velocities(cent_space, face_space)
+
+Generate staggered velocity fields for testing on Cartesian geometry.
+Returns horizontal velocity `uₕ` (Covariant12Vector at centers) and vertical velocity `uᵥ` 
+(Covariant3Vector at faces) based on the Taylor-Green vortex profile.
 """
-function get_test_functions(cent_space, face_space)
+function get_cartesian_test_velocities(cent_space, face_space)
     ccoords, fcoords = get_coords(cent_space, face_space)
-    FT = eltype(ccoords)
-    Q = zero.(ccoords.x)
-    # Exact velocity profiles
+    
+    # Get velocity components from Taylor-Green vortex
     u, v, w = taylor_green_ic(ccoords)
     ᶠu, ᶠv, ᶠw = taylor_green_ic(fcoords)
-    (; x, y, z) = ccoords
+    
+    # Assemble UVW vectors
     UVW = Geometry.UVWVector
-    # Assemble (Cartesian) velocity
-    ᶜu = @. UVW(Geometry.UVector(u)) +
-            UVW(Geometry.VVector(v)) +
-            UVW(Geometry.WVector(w))
-    ᶠu = @. UVW(Geometry.UVector(ᶠu)) +
-       UVW(Geometry.VVector(ᶠv)) +
-       UVW(Geometry.WVector(ᶠw))
-    # Get covariant components
+    ᶜu = @. UVW(Geometry.UVector(u)) + UVW(Geometry.VVector(v)) + UVW(Geometry.WVector(w))
+    ᶠu = @. UVW(Geometry.UVector(ᶠu)) + UVW(Geometry.VVector(ᶠv)) + UVW(Geometry.WVector(ᶠw))
+    
+    # Extract covariant components for staggered grid tests
     uₕ = @. Geometry.Covariant12Vector(ᶜu)
     uᵥ = @. Geometry.Covariant3Vector(ᶠu)
+    
     return uₕ, uᵥ
+end
+
+"""
+    get_spherical_test_velocities(cent_space, face_space, z_max; U₀ = 10, W₀ = 1)
+
+Generate staggered velocity fields for testing on spherical geometry.
+Uses separable velocity components with:
+- Horizontal: zonal wind uₕ = U₀ cos(lat)
+- Vertical: w = W₀ sin(πz/z_max)
+
+Returns:
+- `uₕ`: horizontal velocity (Covariant12Vector at centers)
+- `uᵥ`: vertical velocity (Covariant3Vector at faces)
+- `ᶠu_C123`: full velocity (Covariant123Vector at faces) for strain rate tests
+"""
+function get_spherical_test_velocities(cent_space, face_space, z_max; U₀ = 10, W₀ = 1)
+    FT = eltype(z_max)
+    ccoords = Fields.coordinate_field(cent_space)
+    fcoords = Fields.coordinate_field(face_space)
+    
+    # Horizontal: zonal wind at cell centers
+    lat_rad = @. deg2rad(ccoords.lat)
+    uₕ_mag = @. FT(U₀) * cos(lat_rad)
+    uₕ = @. Geometry.Covariant12Vector(Geometry.UVVector(uₕ_mag, zero(uₕ_mag)))
+    
+    # Vertical: at cell faces
+    ᶠz = fcoords.z
+    ᶠw_mag = @. FT(W₀) * sin(FT(π) * ᶠz / z_max)
+    uᵥ = @. Geometry.Covariant3Vector(Geometry.WVector(ᶠw_mag))
+    
+    # Full 3D velocity on faces as Covariant123Vector (for strain rate tests)
+    ᶠu_C123 = @. Geometry.Covariant123Vector(uᵥ)
+    
+    return uₕ, uᵥ, ᶠu_C123
 end
 
 

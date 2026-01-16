@@ -28,7 +28,7 @@ import ClimaCore:
 
 include("test_helpers.jl")
 
-@testset "test topography functions" begin
+@testset "Topography functions" begin
     (; FT, coords) = get_spherical_spaces()
     @test extrema(CA.topography_dcmip200.(coords)) == (FT(0), FT(2000))
     loc = findmax(parent(CA.topography_dcmip200.(coords)))

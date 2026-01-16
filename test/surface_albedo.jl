@@ -53,7 +53,7 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 end
 
 
-@testset "values of RegressionFunctionAlbedo against Jin et al 2011" begin
+@testset "Values of RegressionFunctionAlbedo against Jin et al 2011" begin
     FT = Float32
 
     # DIRECT
