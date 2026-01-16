@@ -943,6 +943,7 @@ end
 LongMoistBaroWavePlots = Union{
     Val{:longrun_moist_baroclinic_wave},
     Val{:longrun_moist_baroclinic_wave_he60},
+    Val{:spectra_debugging},
 }
 
 function make_plots(
@@ -950,8 +951,8 @@ function make_plots(
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
-    short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
-    short_names_spectra = ["ke", "hus"]
+    short_names, reduction = ["pfull", "va", "wa", "rv", "hus", "ta", "clw"], "inst"
+    short_names_spectra = ["ke", "hus", "ta", "clw", "cli"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         return slice(get(simdir; short_name, reduction), time = 10days)
     end
@@ -964,6 +965,16 @@ function make_plots(
                 z = 1500,
             )
         end
+    
+    vars_spectra_2 =
+        map_comparison(simdirs, short_names_spectra) do simdir, short_name
+            slice(
+                compute_spectrum(
+                    slice(get(simdir; short_name, reduction), time = 10days),
+                ),
+                z = 5000,
+            )
+        end
 
     tmp_file =
         make_plots_generic(output_paths, vars, z = 1500, output_name = "tmp")
@@ -971,6 +982,15 @@ function make_plots(
         output_paths,
         vars_spectra;
         summary_files = [tmp_file],
+        plot_fn = plot_spectrum_with_line!,
+    )
+    
+    tmp_file_2 =
+        make_plots_generic(output_paths, vars, z = 5000, output_name = "tmp_2")
+    make_plots_generic(
+        output_paths,
+        vars_spectra_2;
+        summary_files = [tmp_file_2],
         plot_fn = plot_spectrum_with_line!,
     )
 end
