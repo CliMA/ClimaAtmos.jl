@@ -260,7 +260,7 @@ steps:
           --job_id prognostic_edmfx_rico_implicit_column
         artifact_paths: "prognostic_edmfx_rico_implicit_column/output_active/*"
         agents:
-          slurm_mem: 20GB
+          slurm_mem: 30GB
 
       - label: ":umbrella: Prognostic EDMF Rico with 2-moment in a column"
         command: >
@@ -288,7 +288,7 @@ steps:
           --job_id prognostic_edmfx_trmm_implicit_column
         artifact_paths: "prognostic_edmfx_trmm_implicit_column/output_active/*"
         agents:
-          slurm_mem: 20GB
+          slurm_mem: 35GB
 
       - label: ":genie: Prognostic EDMF TRMM with 0-moment in a column"
         command: >

@@ -15,7 +15,7 @@ non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
 non_orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
 function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
-    if iscolumn(axes(Y.c))
+    if iscolumn_or_box(axes(Y.c))
         FT = Spaces.undertype(axes(Y.c))
         (; source_height, Bw, Bn, Bt_0, dc, cmax, c0, nk, cw, cn) = gw
 
@@ -179,7 +179,7 @@ function non_orographic_gravity_wave_compute_tendency!(
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
-    if iscolumn(axes(Y.c))
+    if iscolumn_or_box(axes(Y.c))
         # source level: the index of the level that is closest to the source height
         (; gw_source_height, source_ρ_z_u_v_level) =
             p.non_orographic_gravity_wave
