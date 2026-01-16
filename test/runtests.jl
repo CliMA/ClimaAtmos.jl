@@ -20,12 +20,12 @@ end
 
 @safetestset "Dependencies" begin @time include("dependencies.jl") end
 @safetestset "Callbacks" begin @time include("callbacks.jl") end
+@safetestset "Configuration tests" begin @time include("config.jl") end
 @safetestset "Utilities" begin @time include("utilities.jl") end
 @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
 @safetestset "Variable manipulations" begin @time include("variable_manipulations_tests.jl") end
-@safetestset "Parameter tests" begin @time include("parameters/parameter_tests.jl") end
+@safetestset "Parameter tests" begin @time include("parameter_tests.jl") end
 @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
-@safetestset "Configuration tests" begin @time include("config.jl") end
 @safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
 @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
 @safetestset "Rayleigh sponge tests" begin @time include("parameterized_tendencies/sponge/rayleigh_sponge.jl") end

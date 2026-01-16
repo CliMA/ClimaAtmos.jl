@@ -10,21 +10,23 @@ import ClimaAtmos.SurfaceConditions: projected_vector_data, CT1, CT2
 import ClimaCore: Spaces, Fields
 import ClimaCore.Utilities: half
 
-const z0m = 1e-3
-const z0b = 1e-5
-const gustiness = 1
-const beta = 1
-const T1 = 300
-const T2 = 290
+# Surface parameters for tests
+const Z0M = 1e-3
+const Z0B = 1e-5
+const GUSTINESS = 1
+const BETA = 1
+const T_SFC_1 = 300.0
+const T_SFC_2 = 290.0
 
-# This file contains two tests that illustrate how the coupler can modify the
-# surface temperature in ClimaAtmos.
-
+# These tests verify that the coupler can modify surface temperature in ClimaAtmos.
+# The "Hacky" version overwrites internal data structures.
+# The "Proper" version uses the public API (set_surface_conditions!).
+#
 # In the first test, the ClimaAtmos "cache" p is overwritten so that it contains
 # a surface field specified by the coupler, and then the internal function
 # set_precomputed_quantities! is called to verify that this surface field is
 # used correctly.
-
+#
 # In the second test, the cache is not overwritten. Instead, the coupler defines
 # its own surface fields, and then it copies the data from those fields into the
 # cache by calling set_surface_conditions!.
@@ -35,8 +37,6 @@ const T2 = 290
 # the pattern demonstrated in the second test is preferable.
 
 @testset "Coupler Compatibility (Hacky Version)" begin
-    # Initialize a model. The value of surface_setup is irrelevant, since it
-    # will get overwritten.
     config = CA.AtmosConfig(
         Dict(
             "initial_condition" => "DryBaroclinicWave",
@@ -51,19 +51,19 @@ const T2 = 290
     FT = eltype(Y)
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    # Override p.sfc_setup with a Field of SurfaceStates. The value of T is
-    # irrelevant, since it will get updated.
+    # Create a surface state field and overwrite p.sfc_setup
     surface_state = CA.SurfaceConditions.SurfaceState(;
         parameterization = CA.SurfaceConditions.MoninObukhov(;
-            z0m = FT(z0m),
-            z0b = FT(z0b),
+            z0m = FT(Z0M),
+            z0b = FT(Z0B),
         ),
         T = FT(NaN),
-        gustiness = FT(gustiness),
-        beta = FT(beta),
+        gustiness = FT(GUSTINESS),
+        beta = FT(BETA),
     )
     sfc_setup = similar(Spaces.level(Y.f, half), typeof(surface_state))
     @. sfc_setup = (surface_state,)
+    
     p_overwritten = CA.AtmosCache(
         p.dt,
         p.atmos,
@@ -86,23 +86,19 @@ const T2 = 290
         p.conservation_check,
     )
 
-    # Test that set_precomputed_quantities! can be used to update the surface
-    # temperature to T1 and then to T2.
-    @. sfc_setup.T = FT(T1)
+    # Verify set_precomputed_quantities! updates surface temperature correctly
+    @. sfc_setup.T = FT(T_SFC_1)
     CA.set_precomputed_quantities!(Y, p_overwritten, t)
-    sfc_T =
-        @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
-    @test all(isequal(T1), parent(sfc_T))
-    @. sfc_setup.T = FT(T2)
+    sfc_T = @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
+    @test all(isequal(T_SFC_1), parent(sfc_T))
+    
+    @. sfc_setup.T = FT(T_SFC_2)
     CA.set_precomputed_quantities!(Y, p_overwritten, t)
-    sfc_T =
-        @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
-    @test all(isequal(T2), parent(sfc_T))
+    sfc_T = @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
+    @test all(isequal(T_SFC_2), parent(sfc_T))
 end
 
 @testset "Coupler Compatibility (Proper Version)" begin
-    # Initialize a model. Set surface_setup to PrescribedSurface to prevent
-    # ClimaAtmos from modifying the surface conditions.
     config = CA.AtmosConfig(
         Dict(
             "initial_condition" => "DryBaroclinicWave",
@@ -124,13 +120,49 @@ end
     FT = eltype(Y)
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    # Allocate fields for storing the thermodynamic state and fluxes at the
-    # surface.
+    # Allocate surface fields
     sfc_ts = similar(Spaces.level(Y.f, half), TD.PhaseDry{FT})
     sfc_conditions = similar(sfc_ts, SF.SurfaceFluxConditions{FT})
 
-    # Define a function for updating these fields, given the temperature at the
-    # surface and the current cache p.
+    # Helper: compute surface thermodynamic state assuming adiabatic profile
+    function surface_ts(surface_T, interior_ts, thermo_params)
+        cv = TD.cv_m(thermo_params, interior_ts)
+        R = TD.gas_constant_air(thermo_params, interior_ts)
+        interior_ρ = TD.air_density(thermo_params, interior_ts)
+        interior_T = TD.air_temperature(thermo_params, interior_ts)
+        surface_ρ = interior_ρ * (surface_T / interior_T)^(cv / R)
+        return TD.PhaseDry_ρT(thermo_params, surface_ρ, surface_T)
+    end
+
+    # Helper: compute surface flux conditions
+    function surface_conditions(
+        surface_ts,
+        surface_z,
+        interior_ts,
+        interior_u,
+        interior_v,
+        interior_z,
+        surface_params,
+    )
+        FT = eltype(surface_ts)
+        surface_values = SF.StateValues(surface_z, SA.SVector(FT(0), FT(0)), surface_ts)
+        interior_values = SF.StateValues(
+            interior_z,
+            SA.SVector(interior_u, interior_v),
+            interior_ts,
+        )
+        surface_inputs = SF.ValuesOnly(
+            interior_values,
+            surface_values,
+            FT(Z0M),
+            FT(Z0B);
+            gustiness = FT(GUSTINESS),
+            beta = FT(BETA),
+        )
+        return SF.surface_conditions(surface_params, surface_inputs)
+    end
+
+    # Update surface fields given temperature
     function update_surface_fields!(sfc_ts, sfc_conditions, surface_T, p)
         (; params) = p
         (; ᶜts, ᶜu) = p.precomputed
@@ -158,63 +190,22 @@ end
             surface_params,
         )
     end
-    function surface_ts(surface_T, interior_ts, thermo_params)
-        # Assume an adiabatic profile with constant cv and R to get surface_ρ.
-        cv = TD.cv_m(thermo_params, interior_ts)
-        R = TD.gas_constant_air(thermo_params, interior_ts)
-        interior_ρ = TD.air_density(thermo_params, interior_ts)
-        interior_T = TD.air_temperature(thermo_params, interior_ts)
-        surface_ρ = interior_ρ * (surface_T / interior_T)^(cv / R)
-        return TD.PhaseDry_ρT(thermo_params, surface_ρ, surface_T)
-    end
-    function surface_conditions(
-        surface_ts,
-        surface_z,
-        interior_ts,
-        interior_u,
-        interior_v,
-        interior_z,
-        surface_params,
-    )
-        FT = eltype(surface_ts)
-        surface_values =
-            SF.StateValues(surface_z, SA.SVector(FT(0), FT(0)), surface_ts)
-        interior_values = SF.StateValues(
-            interior_z,
-            SA.SVector(interior_u, interior_v),
-            interior_ts,
-        )
-        surface_inputs = SF.ValuesOnly(
-            interior_values,
-            surface_values,
-            FT(z0m),
-            FT(z0b);
-            gustiness = FT(gustiness),
-            beta = FT(beta),
-        )
-        return SF.surface_conditions(surface_params, surface_inputs)
-    end
 
-    # Test that set_surface_conditions! can be used to update the surface
-    # temperature to T1 and then to T2.
-    update_surface_fields!(sfc_ts, sfc_conditions, FT(T1), p)
+    # Verify set_surface_conditions! updates surface temperature correctly
+    update_surface_fields!(sfc_ts, sfc_conditions, FT(T_SFC_1), p)
     CA.SurfaceConditions.set_surface_conditions!(p, sfc_conditions, sfc_ts)
-    sfc_T =
-        @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
-    @test all(isequal(T1), parent(sfc_T))
-    update_surface_fields!(sfc_ts, sfc_conditions, FT(T2), p)
+    sfc_T = @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
+    @test all(isequal(T_SFC_1), parent(sfc_T))
+    
+    update_surface_fields!(sfc_ts, sfc_conditions, FT(T_SFC_2), p)
     CA.SurfaceConditions.set_surface_conditions!(p, sfc_conditions, sfc_ts)
-    sfc_T =
-        @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
-    @test all(isequal(T2), parent(sfc_T))
+    sfc_T = @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
+    @test all(isequal(T_SFC_2), parent(sfc_T))
 end
 
 @testset "Coupler Initialization" begin
-    # Verify that using PrescribedSurface does not break the initialization of
-    # RRTMGP or diagnostic EDMF. We currently need a moisture model in order to
-    # use diagnostic EDMF.
-    #
-    # Also verify we can start with a different t_start than 0
+    # Verify PrescribedSurface works with RRTMGP and diagnostic EDMF.
+    # Also verify non-zero t_start works.
     config = CA.AtmosConfig(
         Dict(
             "surface_setup" => "PrescribedSurface",
@@ -222,10 +213,6 @@ end
             "rad" => "clearsky",
             "co2_model" => "fixed",
             "turbconv" => "diagnostic_edmfx",
-            # NOTE: We do not output diagnostics because it leads to problems with Ubuntu on
-            # GitHub actions taking too long to run (for unknown reasons). If you need this,
-            # remove the following line and check that the test runs in less than a few
-            # minutes on GitHub
             "output_default_diagnostics" => false,
             "t_start" => "1secs",
         );
