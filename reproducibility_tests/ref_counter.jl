@@ -1,4 +1,4 @@
-300
+301
 
 # **README**
 #
@@ -20,6 +20,11 @@
 
 
 #=
+
+301
+- Using spacefillingcurve in SphereGrid changes order of operations, which
+  will affect round-off errors in floating point calculations. Qualitatively,
+  the simulations are identical. Hypothesis: this occurs in dss operations.
 
 300
 - Update to SurfaceFluxes v0.15
