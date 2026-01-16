@@ -19,7 +19,7 @@ using Statistics
 
 include("test_helpers.jl")
 
-@testset "array <-> field" begin
+@testset "Array <-> field" begin
     (; bubble_space) = get_spherical_spaces()
     test_field = ones(bubble_space)
     idx = size(parent(test_field)) # IJFH layout
@@ -33,7 +33,7 @@ include("test_helpers.jl")
     @test size(parent(new_field)) == idx
 end
 
-@testset "arithmetic ops" begin
+@testset "Arithmetic ops" begin
     FloatType = (Float32, Float64)
     for FT in FloatType
         _T = [FT(1)]
