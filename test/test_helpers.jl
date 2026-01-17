@@ -167,7 +167,7 @@ Returns center_space, face_space, and domain parameters (radius, z_max).
 function get_spherical_extruded_spaces(; FT = Float32)
     device = ClimaComms.CPUSingleThreaded()
     context = ClimaComms.SingletonCommsContext(device)
-    
+
     # Horizontal: cubed sphere
     radius = FT(6.371e6)  # Earth radius
     ne = 4  # elements per cube face edge
@@ -178,7 +178,7 @@ function get_spherical_extruded_spaces(; FT = Float32)
     quad = Quadratures.GLL{Nq}()
     h_space = Spaces.SpectralElementSpace2D(topology, quad; enable_bubble = true)
     horz_grid = Spaces.grid(h_space)
-    
+
     # Vertical: finite difference
     z_max = FT(30000)  # 30 km top
     velem = 10
@@ -190,12 +190,12 @@ function get_spherical_extruded_spaces(; FT = Float32)
     vertmesh = Meshes.IntervalMesh(vertdomain, nelems = velem)
     vert_topology = Topologies.IntervalTopology(context, vertmesh)
     vert_grid = Grids.FiniteDifferenceGrid(vert_topology)
-    
+
     # Extruded grid
     grid = Grids.ExtrudedFiniteDifferenceGrid(horz_grid, vert_grid)
     cent_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
     face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
-    
+
     return (;
         cent_space = cent_space,
         face_space = face_space,
@@ -215,7 +215,7 @@ decay scale 10°.
 """
 function get_spherical_extruded_spaces_with_topography(; FT = Float64)
     context = ClimaComms.SingletonCommsContext()
-    
+
     # Horizontal: coarse cubed sphere
     radius = FT(6.371e6)
     ne = 4
@@ -226,7 +226,7 @@ function get_spherical_extruded_spaces_with_topography(; FT = Float64)
     quad = Quadratures.GLL{Nq}()
     h_space = Spaces.SpectralElementSpace2D(topology, quad)
     horz_grid = Spaces.grid(h_space)
-    
+
     # Vertical: finite difference
     z_max = FT(30e3)
     vertdomain = Domains.IntervalDomain(
@@ -237,19 +237,23 @@ function get_spherical_extruded_spaces_with_topography(; FT = Float64)
     vertmesh = Meshes.IntervalMesh(vertdomain, nelems = 10)
     vert_topology = Topologies.IntervalTopology(context, vertmesh)
     vert_grid = Grids.FiniteDifferenceGrid(vert_topology)
-    
+
     # Topography: Gaussian mountain
     z_surface = Fields.Field(Geometry.ZPoint{FT}, h_space)
     coords = Fields.coordinate_field(h_space)
     @. z_surface = Geometry.ZPoint(
-        FT(2000) * exp(-(coords.lat^2 + coords.long^2) / (2 * FT(10)^2))
+        FT(2000) * exp(-(coords.lat^2 + coords.long^2) / (2 * FT(10)^2)),
     )
-    
+
     # Warped grid
-    grid = Grids.ExtrudedFiniteDifferenceGrid(horz_grid, vert_grid, Hypsography.LinearAdaption(z_surface))
+    grid = Grids.ExtrudedFiniteDifferenceGrid(
+        horz_grid,
+        vert_grid,
+        Hypsography.LinearAdaption(z_surface),
+    )
     cent_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
     face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
-    
+
     return (;
         cent_space = cent_space,
         face_space = face_space,
@@ -349,20 +353,21 @@ Returns horizontal velocity `uₕ` (Covariant12Vector at centers) and vertical v
 """
 function get_cartesian_test_velocities(cent_space, face_space)
     ccoords, fcoords = get_coords(cent_space, face_space)
-    
+
     # Get velocity components from Taylor-Green vortex
     u, v, w = taylor_green_ic(ccoords)
     ᶠu, ᶠv, ᶠw = taylor_green_ic(fcoords)
-    
+
     # Assemble UVW vectors
     UVW = Geometry.UVWVector
     ᶜu = @. UVW(Geometry.UVector(u)) + UVW(Geometry.VVector(v)) + UVW(Geometry.WVector(w))
-    ᶠu = @. UVW(Geometry.UVector(ᶠu)) + UVW(Geometry.VVector(ᶠv)) + UVW(Geometry.WVector(ᶠw))
-    
+    ᶠu =
+        @. UVW(Geometry.UVector(ᶠu)) + UVW(Geometry.VVector(ᶠv)) + UVW(Geometry.WVector(ᶠw))
+
     # Extract covariant components for staggered grid tests
     uₕ = @. Geometry.Covariant12Vector(ᶜu)
     uᵥ = @. Geometry.Covariant3Vector(ᶠu)
-    
+
     return uₕ, uᵥ
 end
 
@@ -391,15 +396,18 @@ function get_spherical_test_velocities(cent_space, face_space, z_max; U₀ = 10,
     lat_rad = @. deg2rad(ccoords.lat)
     uₕ_mag = @. FT(U₀) * cos(lat_rad)
     uₕ = @. Geometry.Covariant12Vector(Geometry.UVVector(uₕ_mag, zero(uₕ_mag)), c_lg)
-    
+
     # Vertical: at cell faces
     ᶠz = fcoords.z
     ᶠw_mag = @. FT(W₀) * sin(FT(π) * ᶠz / z_max)
     uᵥ = @. Geometry.Covariant3Vector(Geometry.WVector(ᶠw_mag), f_lg)
-    
+
     # Full 3D velocity on faces as Covariant123Vector (for strain rate tests)
-    ᶠu_C123 = @. Geometry.Covariant123Vector(Geometry.UVWVector(zero(ᶠw_mag), zero(ᶠw_mag), ᶠw_mag), f_lg)
-    
+    ᶠu_C123 = @. Geometry.Covariant123Vector(
+        Geometry.UVWVector(zero(ᶠw_mag), zero(ᶠw_mag), ᶠw_mag),
+        f_lg,
+    )
+
     return uₕ, uᵥ, ᶠu_C123
 end
 

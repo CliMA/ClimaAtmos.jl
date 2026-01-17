@@ -17,7 +17,7 @@ Random.seed!(1234)
         config = ClimaAtmos.AtmosConfig(base_config; job_id = "surface_albedo_constant")
         simulation = ClimaAtmos.AtmosSimulation(config)
         (; u, p, t) = simulation.integrator
-        
+
         ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
 
         @test all(p.radiation.rrtmgp_model.direct_sw_surface_albedo .== FT(0.38))
@@ -71,7 +71,7 @@ end
             [0.008, 0.008, 0.009, 0.009, 0.010, 0.014, 0.023, 0.044, 0.093, 0.193, 0],
         ]
 
-        θ_list = FT.(0:(π/20):(π/2))
+        θ_list = FT.(0:(π / 20):(π / 2))
         idx = 0
         for n in FT.([1.34, 1.2])
             for wind in FT.([0, 3, 12])

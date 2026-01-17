@@ -48,7 +48,7 @@ end
 @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
 @safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
 
-# 
+# TODO: update the following tests as needed
 @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
 @safetestset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
 @safetestset "Topography tests" begin @time include("topography.jl") end
