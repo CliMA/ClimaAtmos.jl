@@ -24,8 +24,7 @@ using Aqua
 end
 
 @testset "Aqua tests (all)" begin
-    Aqua.test_all(ClimaAtmos; persistent_tasks = false)
-    # TODO: Set persistent_tasks = true when RecursiveArrayTools releases fix to circular deps
+    Aqua.test_all(ClimaAtmos; persistent_tasks = true)
 end
 
 nothing
