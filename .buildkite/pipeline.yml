@@ -761,13 +761,13 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16G
 
-      - label: ":computer: test restart"
+      - label: ":computer: test restart manytests"
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
         agents:
           slurm_mem: 16GB
 
-      - label: ":computer: test restart GPU"
+      - label: ":computer: test restart GPU manytests"
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
         env:
@@ -807,6 +807,36 @@ steps:
           slurm_gpus_per_task: 1
           slurm_ntasks: 2
           slurm_mem: 24G
+
+      - label: ":computer: test restart_AtmosSimulation"
+        command: >
+          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: test restart_AtmosSimulation GPU"
+        command: >
+          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+
+      - label: ":computer: test restart_AtmosSimulation manytests"
+        command: >
+          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl --manytests true
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: test restart_AtmosSimulation GPU manytests"
+        command: >
+          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl --manytests true
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
 
   - group: "MPI Examples"
     steps:
