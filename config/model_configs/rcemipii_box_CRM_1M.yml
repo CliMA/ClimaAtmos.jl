@@ -20,7 +20,7 @@ tracer_upwinding: vanleer_limiter  # is default (alt: `first_order`)
 energy_q_tot_upwinding: vanleer_limiter  # is default (alt: `first_order`)
 
 reproducibility_test: true
-# moisture_fixer: true
+# tracer_nonnegativity_method: "elementwise_constraint"
 
 # microphysics
 ### 0M+Equil option
