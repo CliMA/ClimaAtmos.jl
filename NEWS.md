@@ -4,6 +4,9 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+v0.33.2
+-------
+
 v0.33.1
 -------
 - PR [#4185](https://github.com/CliMA/ClimaAtmos.jl/pull/4185) adds a new cloud fraction parameterization `MLCloud`. It can be set in the toml under `cloud_model`.
