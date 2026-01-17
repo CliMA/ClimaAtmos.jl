@@ -69,7 +69,7 @@ See also:
 
 # Example structure for Y and p.ghost_buffer:
 # Y_state = (c = center_fields, f = face_fields)
-# params = (ghost_buffer = (c = центр_dss_buffer, f = face_dss_buffer), ...)
+# params = (ghost_buffer = (c = center_dss_buffer, f = face_dss_buffer), ...)
 
 dss!(Y_state, params, t_current)
 # The ClimaCore.Field objects within Y_state.c and Y_state.f are now updated

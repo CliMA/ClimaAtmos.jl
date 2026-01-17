@@ -37,7 +37,7 @@ end
             # Core physics defaults
             :moisture_model => CA.DryModel,
             :microphysics_model => CA.NoPrecipitation,
-            :cloud_model => CA.GridScaleCloud,
+            :cloud_model => CA.QuadratureCloud,
             :surface_model => CA.PrescribedSST,
             :sfc_temperature => CA.ZonallySymmetricSST,
             :insolation => CA.IdealizedInsolation,
@@ -50,7 +50,7 @@ end
             :orographic_gravity_wave => nothing,
             :viscous_sponge => nothing,
             :rayleigh_sponge => nothing,
-            :hyperdiff => nothing,
+            :hyperdiff => CA.ClimaHyperdiffusion,
             :vertical_diffusion => nothing,
         )
 
@@ -59,7 +59,7 @@ end
         # Test numerics structure separately due to nested fields
         @test model.numerics isa CA.AtmosNumerics
         @test model.numerics.diff_mode isa CA.Explicit
-        @test isnothing(model.numerics.hyperdiff)
+        @test model.numerics.hyperdiff isa CA.ClimaHyperdiffusion
     end
 
     @testset "User overrides work correctly" begin
@@ -109,7 +109,7 @@ end
             @test model.moisture_model isa expected_moisture_type
             @test model.surface_model isa CA.PrescribedSST  # default preserved
             @test model.numerics.diff_mode isa CA.Explicit  # default preserved
-            @test isnothing(model.numerics.hyperdiff)  # default preserved
+            @test model.numerics.hyperdiff isa CA.ClimaHyperdiffusion  # default is ClimaHyperdiffusion
         end
     end
 end
