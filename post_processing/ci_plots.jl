@@ -50,6 +50,7 @@ import ClimaCoreSpectra: power_spectrum_2d
 using Poppler_jll: pdfunite, pdftoppm
 import Base.Filesystem
 import Statistics: mean
+import Dates
 
 const days = 86400
 
@@ -133,7 +134,7 @@ function parse_var_attributes(var)
     attr = var.attributes
     name = replace(short_name(var), "up" => "")
 
-    attributes = ["slice_lat", "slice_lon", "slice_x", "slice_y", "slice_time"]
+    attributes = ["slice_lat", "slice_lon", "slice_x", "slice_y", "slice_z", "slice_time"]
     info = [
         replace(key, "slice_" => "") * " = " * get(attr, key, MISSING_STR)
         for key in attributes
@@ -191,6 +192,7 @@ function make_plots_generic(
     MAX_NUM_COLS = 1,
     MAX_NUM_ROWS = min(4, length(vars)),
     save_jpeg_copy = false,
+    layout_fn = Returns(nothing),
     kwargs...,
 )
     # When output_path is a Vector with multiple elements, this means that this function is
@@ -261,6 +263,7 @@ function make_plots_generic(
 
         # Flush current page
         if grid_pos > min(MAX_PLOTS_PER_PAGE, vars_left_to_plot)
+            layout_fn(fig, var, args...; page, kwargs...)
             file_path = joinpath(save_path, "$(output_name)_$page.pdf")
             CairoMakie.resize_to_layout!(fig)
             CairoMakie.save(file_path, fig)
@@ -527,7 +530,7 @@ function plot_contours!(place, var; n_contours = 22, kwargs...)
 
     CairoMakie.Axis(
         place[1, 1];
-        title = var.attributes["long_name"],
+        title = parse_var_attributes(var),
         xlabel = "$dim1_name [$dim1_units]",
         ylabel = "$dim2_name [$dim2_units]",
         limits = (extrema(dim1), extrema(dim2)),
@@ -542,9 +545,17 @@ function plot_contours!(place, var; n_contours = 22, kwargs...)
 
     # Center the contour levels around either 0, the average of the data, or the
     # nearest integer that falls into the data range.
-    data_avg = mean(var.data)
+    all(isfinite, var.data) || begin
+        @warn "Variable $var_name contains only non-finite data; skipping plot."
+        return nothing
+    end
+    finite_data = filter(isfinite, var.data)
+    # data = map(v -> isnan(v) ? missing : v, var.data)
+    data_avg = mean(finite_data)
+    data_min, data_max = extrema(finite_data; init = (-Inf, Inf))
+    # data_avg_int = isnan(data_avg) ? 0 : round(Int, data_avg)
     data_avg_int = round(Int, data_avg)
-    data_min, data_max = extrema(var.data)
+
     data_mid = if data_min < 0 < data_max
         0
     elseif data_min < data_avg_int < data_max
@@ -552,7 +563,7 @@ function plot_contours!(place, var; n_contours = 22, kwargs...)
     else
         data_avg
     end
-    data_delta = maximum(value -> abs(value - data_mid), var.data)
+    data_delta = maximum(value -> abs(value - data_mid), finite_data)
 
     if data_delta == 0
         # For constant data, use a heatmap to avoid Colorbar's LineAxis error.
@@ -565,8 +576,7 @@ function plot_contours!(place, var; n_contours = 22, kwargs...)
             # Center contours around data_mid when data_delta >> |data_mid|.
             data = var.data
             label = "$var_name [$var_units]"
-            levels =
-                range(data_mid - data_delta, data_mid + data_delta, n_contours)
+            levels = range(data_mid - data_delta, data_mid + data_delta, n_contours)
         else
             # Recenter data and contours around 0 when data_delta << |data_mid|.
             data = var.data .- data_mid
@@ -1184,6 +1194,53 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
     )
 end
 
+UNIT_TO_PERIOD = Dict(
+    # :millisecond => Dates.Millisecond(1),
+    :second      => 1,
+    :minute      => 60,
+    :hour        => 60 * 60,
+    :day         => 60 * 60 * 24,
+    # :month       => 60 * 60 * 24 * 30,
+    # :year        => 60 * 60 * 24 * 30 * 12,
+)
+
+"""
+    get_equispaced_indices(t_ref, ts_raw, n_ticks_ideal)
+
+Get `n_ticks_ideal` equispaced indices from `ts_raw`.
+
+# Returns
+- `equispaced_evenly_divisible_inds`: Indices of the equispaced, evenly divisible indices in `ts_raw`
+    These indices are the ones that are evenly divisible by the unit returned by `time_unit`.
+- `time_unit`: Unit of the equispaced indices
+"""
+function get_equispaced_indices(
+    ts_raw,
+    n_ticks_ideal = 10,
+    t_ref = Dates.DateTime(2010);
+    first_time_relative = Dates.Second(0),
+)
+    first_time_relative = first_time_relative / Dates.Second(1)
+    ts_inds_filt = findall(≥(first_time_relative), ts_raw)
+    ts_raw_filt = ts_raw[ts_inds_filt]  # Filter out times before `first_time_relative`
+    ts = @. Dates.DateTime(t_ref) + Dates.Second(ts_raw)
+
+    tick_finder = Makie.DateTimeTicks(n_ticks_ideal)
+    _, time_unit = Makie.locate_datetime_ticks(tick_finder, extrema(ts)...)
+
+    # With `time_unit` as the unit, get ~`n_ticks_ideal` equispaced times from `ts_raw_filt`
+    unit_in_seconds = UNIT_TO_PERIOD[time_unit]
+    evenly_divisible_inds_filt = findall(isinteger, ts_raw_filt ./ unit_in_seconds)
+
+    # Subset `evenly_divisible_inds_filt` to be ~n_ticks_ideal
+    equispaced_inds_filt = unique(round.(Int, range(1, length(evenly_divisible_inds_filt), length = n_ticks_ideal)))
+    equispaced_evenly_divisible_inds_filt = evenly_divisible_inds_filt[equispaced_inds_filt]
+
+    equispaced_evenly_divisible_inds = ts_inds_filt[equispaced_evenly_divisible_inds_filt]
+
+    return equispaced_evenly_divisible_inds, time_unit
+end
+
 LESBoxPlots = Union{Val{:les_box}}
 
 """
@@ -1206,6 +1263,164 @@ function plot_les_vert_profile!(grid_loc, var_group)
         CairoMakie.lines!(ax, var.data, z, label = short_name(var))
     end
     length(var_group) > 1 && Makie.axislegend(ax)
+end
+
+function colorbar_for_profiles_in_time!(var;
+    N_times = 10, first_time_relative = Dates.Second(0),
+    orientation = :vertical,
+)
+    all_ts = var.dims["time"]
+    # Get equispaced periods
+    equi_inds, time_unit = get_equispaced_indices(
+        all_ts, N_times, var.attributes["start_date"]; first_time_relative
+    )
+    ts_equi = all_ts[equi_inds]
+    # Add colorbar
+    n_eq_t = length(ts_equi)
+    colormap = Makie.cgrad(:darkrainbow, (0:n_eq_t) / n_eq_t, categorical = true)
+    
+    tloc = ((1:n_eq_t) .- 0.5) / n_eq_t
+    tlab = @. string(ts_equi ./ UNIT_TO_PERIOD[time_unit])
+
+    colorbar_kwargs = (; colormap, colorrange = (0, 1), ticks = (tloc, tlab), label = "Time [$(time_unit)]")
+    if orientation == :vertical
+        colorbar_kwargs = merge(colorbar_kwargs, (;width=20))
+    elseif orientation == :horizontal
+        colorbar_kwargs = merge(colorbar_kwargs, (;height=20, vertical = false, flipaxis = false))
+    end
+    return ts_equi, colorbar_kwargs
+    # CairoMakie.Colorbar(grid_pos; kwargs...)
+end
+
+function plot_profiles_in_time!(grid_loc, var::ClimaAnalysis.OutputVar;
+    N_times = 10, first_time_relative = Dates.Second(0),
+)
+    @assert haskey(var.dims, "time")
+    ξ_name = filter(!=("time"), keys(var.dims)) |> only  # non-time dimension: should be only 1
+    ξ_is_z = ξ_name == "z"
+    ξ = var.dims[ξ_name] ./ 1000  # km
+    units = var.attributes["units"]
+    ξ_label = "$ξ_name [km]"
+    data_label = "$(short_name(var)) [$units]"
+    ax = CairoMakie.Axis(
+        grid_loc[1, 1],
+        xlabel = ξ_is_z ? data_label : ξ_label,
+        ylabel = ξ_is_z ? ξ_label : data_label,
+        title = parse_var_attributes(var),
+    )
+
+    # Get equispaced periods
+    ts_equi, colorbar_kwargs = colorbar_for_profiles_in_time!(var; N_times, first_time_relative)
+    n_eq_t = length(ts_equi)
+    (; colorrange, colormap) = colorbar_kwargs
+    for (i, t) in enumerate(ts_equi)
+        data = slice(var, time = t)
+        color = (i - 0.5) / n_eq_t
+        (x, y) = ξ_is_z ? (data.data, ξ) : (ξ, data.data)
+        CairoMakie.lines!(ax, x, y; color, colormap, colorrange)
+    end
+end
+
+function les_debug_plots(output_paths::Vector{<:AbstractString}; plot_profiles_kw = (;), kw...)
+
+    plot_profiles_in_time_custom_kwargs! = (args...) -> plot_profiles_in_time!(args...; plot_profiles_kw...)
+    simdirs = SimDir.(output_paths)
+
+    rescale_kg_kg_to_g_kg!(var) = begin
+        # Only rescale if the variable is known to be in kg kg^-1
+        var.attributes["units"] == "kg kg^-1" || return
+        var.data .= var.data .* 1000
+        var.attributes["units"] = "g/kg"
+    end
+
+    reduction = "inst"
+    short_names = [
+        "hus", "clw", "cli", "hur",
+        "husra", "hussn",
+        "cl",
+        "wa", "ua", "va", "ke", "ta", "thetaa", "ha",
+        "Dh_smag", "strainh_smag",  # smag horizontal
+        "Dv_smag", "strainv_smag",  # smag vertical
+        "edt",  # DecayWithHeight vertical diffusivity
+    ]
+    short_names = short_names ∩ collect(keys(simdirs[1].vars))
+
+    # Select profiles at the center of the domain
+    ref_var = get(simdirs[1]; short_name = short_names[1], reduction)
+    xs, ys = ref_var.dims["x"], ref_var.dims["y"]
+    x_center = (xs[end] - xs[1]) / 2 + xs[1]
+    y_center = (ys[end] - ys[1]) / 2 + ys[1]
+
+    vars_zt_center_edge = map_comparison(simdirs, short_names) do simdir, short_name
+        var = get(simdir; short_name, reduction)
+        rescale_kg_kg_to_g_kg!(var)
+        [
+            slice(var, x = xs[1], y = ys[1]),
+            slice(var, x = x_center, y = y_center),
+        ]
+    end
+    vars_zt_center_edge = vcat(vars_zt_center_edge...)
+
+    # Add single colorbar on top of each page
+    first_time_relative = get(plot_profiles_kw, :first_time_relative, Dates.Second(0))
+    function layout_fn(fig, var, args...; kwargs...)
+        _, colorbar_kwargs = colorbar_for_profiles_in_time!(ref_var; N_times=10, first_time_relative, orientation=:horizontal)
+        CairoMakie.Colorbar(fig[end+1, :]; colorbar_kwargs...)
+        return nothing
+    end
+
+    tmp_file = make_plots_generic(output_paths, vars_zt_center_edge;
+        output_name = "les_debug_zt",
+        plot_fn = plot_profiles_in_time_custom_kwargs!,
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+        layout_fn,
+        kw...,
+    )
+    println("Saved les_debug_zt to $tmp_file")
+
+    vars_xt_center_zs = map_comparison(simdirs, short_names) do simdir, short_name
+        var = get(simdir; short_name, reduction)
+        rescale_kg_kg_to_g_kg!(var)
+        [
+            slice(var, y = y_center, z =    600),
+            slice(var, y = y_center, z =  6_000),
+            slice(var, y = y_center, z = 10_000),
+        ]
+    end
+    vars_xt_center_zs = vcat(vars_xt_center_zs...)
+
+    tmp_file = make_plots_generic(output_paths, vars_xt_center_zs;
+        output_name = "les_debug_xt",
+        plot_fn = plot_profiles_in_time_custom_kwargs!,
+        MAX_NUM_COLS = 3,
+        MAX_NUM_ROWS = 4,
+        layout_fn,
+        kw...,
+    )
+    println("Saved les_debug_xt to $tmp_file")
+
+    vars_xy_zs = map_comparison(simdirs, short_names) do simdir, short_name
+        var = get(simdir; short_name, reduction)
+        rescale_kg_kg_to_g_kg!(var)
+        [
+            slice(var, t = Inf, z =    600),
+            slice(var, t = Inf, z =  6_000),
+            slice(var, t = Inf, z = 10_000),
+        ]
+    end
+    vars_xy_zs = vcat(vars_xy_zs...)
+
+    tmp_file = make_plots_generic(output_paths, vars_xy_zs;
+        output_name = "les_debug_xy",
+        plot_fn = plot_contours!,
+        MAX_NUM_COLS = 3,
+        MAX_NUM_ROWS = 4,
+        kw...,  
+    )
+    println("Saved les_debug_xy to $tmp_file")
+
+    nothing
 end
 
 function make_plots(
