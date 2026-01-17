@@ -28,15 +28,18 @@ end
 @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
 @safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
 @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
+
+# Parameterized tendencies
 @safetestset "Rayleigh sponge tests" begin @time include("parameterized_tendencies/sponge/rayleigh_sponge.jl") end
 @safetestset "Viscous sponge tests" begin @time include("parameterized_tendencies/sponge/viscous_sponge.jl") end
 @safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
-@safetestset "Prognostic equations" begin @time include("prognostic_equations.jl") end
+# TODO Update GW tests after new GW implementation is merged
 @safetestset "Non-orographic gravity wave (3D)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl") end
 @safetestset "Non-orographic gravity wave (MiMA)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl") end
 @safetestset "Non-orographic gravity wave (single column)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl") end
 
 # Prognostic equations unit tests (placeholders - TODO: implement)
+@safetestset "Prognostic equations" begin @time include("prognostic_equations.jl") end
 @safetestset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
 @safetestset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
 @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
@@ -45,6 +48,7 @@ end
 @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
 @safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
 
+# 
 @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
 @safetestset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
 @safetestset "Topography tests" begin @time include("topography.jl") end
