@@ -69,7 +69,8 @@ end
 @testset "compound_period" begin
     @test CA.compound_period(3600, Dates.Second) == Dates.Hour(1)
     @test CA.compound_period(86400, Dates.Second) == Dates.Day(1)
-    @test CA.compound_period(1.5, Dates.Hour) == Dates.CompoundPeriod(Dates.Hour(1), Dates.Minute(30))
+    @test CA.compound_period(1.5, Dates.Hour) ==
+          Dates.CompoundPeriod(Dates.Hour(1), Dates.Minute(30))
 end
 
 @testset "time_and_units_str" begin
@@ -155,19 +156,19 @@ end
     #
     # For Taylor-Green vortex: u = sin(x)cos(y), v = -cos(x)sin(y)
     # These are antisymmetric, so their integrals over a periodic domain should be ≈ 0
-    
+
     (; cent_space, face_space) = get_cartesian_spaces()
     _, fcoords = get_coords(cent_space, face_space)
     ᶠu, ᶠv, ᶠw = taylor_green_ic(fcoords)
     FT = eltype(ᶠu)
     halflevel = ClimaCore.Utilities.half
-    
+
     # Method 1: horizontal_integral_at_boundary(field, level)
     # Extracts the level internally and integrates
     @test CA.horizontal_integral_at_boundary(ᶠu, halflevel) <= sqrt(eps(FT))
     @test CA.horizontal_integral_at_boundary(ᶠv, halflevel) <= sqrt(eps(FT))
     @test isfinite(CA.horizontal_integral_at_boundary(ᶠw, halflevel))  # w=0, just check it runs
-    
+
     # Method 2: horizontal_integral_at_boundary(level_field)
     # Takes a pre-extracted 2D horizontal slice
     ᶠuₛ = Fields.level(ᶠu, halflevel)
@@ -192,19 +193,19 @@ end
     #
     # Kinetic energy κ = (1/2)(u² + v² + w²):
     #   κ = (1/2) cos²(z) [sin²(x)cos²(y) + cos²(x)sin²(y)]
-    
+
     (; cent_space, face_space) = get_cartesian_spaces()
     ccoords, fcoords = get_coords(cent_space, face_space)
     uₕ, uᵥ = get_cartesian_test_velocities(cent_space, face_space)
     (; x, y, z) = ccoords
-    
+
     # Compute kinetic energy using the function under test
     κ = zeros(cent_space)
     κ .= CA.compute_kinetic(uₕ, uᵥ)
-    
+
     # Analytical solution (derived above)
     ᶜκ_exact = @. (1 // 2) * cos(z)^2 * (sin(x)^2 * cos(y)^2 + cos(x)^2 * sin(y)^2)
-    
+
     @test ᶜκ_exact ≈ κ
 end
 
@@ -218,26 +219,27 @@ end
     #
     # We project this onto a grid with topography.
     # The kinetic energy should be exactly 0.5 * (u_phys^2 + w_phys^2).
-    
+
     (; cent_space, face_space, z_max, FT) = get_spherical_extruded_spaces_with_topography()
-    
+
     # Define Physical Velocity and Project
     U₀, W₀ = FT(10), FT(1)
     uₕ, uᵥ, _ = get_spherical_test_velocities(cent_space, face_space, z_max; U₀, W₀)
-   
+
     # 3. Compute and Verify
     κ = CA.compute_kinetic(uₕ, uᵥ)
-    
+
     # helper for exact calc
     c_coords = Fields.coordinate_field(cent_space)
-    
+
     # Exact Kinetic Energy (Scalar)
     ᶜκ_exact = Fields.Field(FT, cent_space)
-    @. ᶜκ_exact = 0.5 * (
-        (U₀ * cosd(c_coords.lat))^2 +
-        (W₀ * sin(FT(π) * c_coords.z / z_max))^2
-    )
-    
+    @. ᶜκ_exact =
+        0.5 * (
+            (U₀ * cosd(c_coords.lat))^2 +
+            (W₀ * sin(FT(π) * c_coords.z / z_max))^2
+        )
+
     @test maximum(abs.(κ .- ᶜκ_exact)) < FT(0.01) * maximum(abs.(ᶜκ_exact))
 end
 
@@ -250,87 +252,94 @@ end
     # Analytical off-diagonal components:
     #   ε₁₃ = (1/2) ∂u/∂z = -(1/2) sin(x) cos(y) sin(z)
     #   ε₂₃ = (1/2) ∂v/∂z = (1/2) cos(x) sin(y) sin(z)
-    
+
     (; helem, cent_space, face_space) = get_cartesian_spaces()
     ccoords, fcoords = get_coords(cent_space, face_space)
     FT = eltype(ccoords.x)
-    
+
     # Allocate tensor fields for strain rate output
     UVW = Geometry.UVWVector
     u₀ = UVW(FT(0), FT(0), FT(0))
     ᶜε = Fields.Field(typeof(u₀ * u₀'), cent_space)
     ᶠε = Fields.Field(typeof(u₀ * u₀'), face_space)
-    
+
     # Get velocity from Taylor-Green vortex
     u, v, w = taylor_green_ic(ccoords)
     ᶠu, ᶠv, ᶠw = taylor_green_ic(fcoords)
     ᶜu = @. UVW(Geometry.UVector(u)) + UVW(Geometry.VVector(v)) + UVW(Geometry.WVector(w))
-    ᶠu = @. UVW(Geometry.UVector(ᶠu)) + UVW(Geometry.VVector(ᶠv)) + UVW(Geometry.WVector(ᶠw))
-    
+    ᶠu =
+        @. UVW(Geometry.UVector(ᶠu)) + UVW(Geometry.VVector(ᶠv)) + UVW(Geometry.WVector(ᶠw))
+
     # Compute strain rates
     ᶜε .= CA.compute_strain_rate_center_vertical(Geometry.Covariant123Vector.(ᶠu))
     ᶠε .= CA.compute_strain_rate_face_vertical(Geometry.Covariant123Vector.(ᶜu))
-    
+
     # Symmetry checks: ε_ij = ε_ji (tensor is symmetric)
     @test ᶜε.components.data.:2 == ᶜε.components.data.:4  # ε₁₂ = ε₂₁
     @test ᶜε.components.data.:3 == ᶜε.components.data.:7  # ε₁₃ = ε₃₁
     @test ᶜε.components.data.:6 == ᶜε.components.data.:8  # ε₂₃ = ε₃₂
-    
+
     # Check off-diagonal components against analytical solution at centers
     (; x, y, z) = ccoords
     ᶜε₁₃_computed = ᶜε.components.data.:3
     ᶜε₂₃_computed = ᶜε.components.data.:6
     ᶜε₁₃_exact = @. -(1 // 2) * sin(x) * cos(y) * sin(z)
     ᶜε₂₃_exact = @. (1 // 2) * cos(x) * sin(y) * sin(z)
-    
+
     # Relative error should be small (< 0.5%)
-    @test maximum(abs.(ᶜε₁₃_computed .- ᶜε₁₃_exact) ./ (abs.(ᶜε₁₃_exact) .+ eps(FT))) < FT(0.005)
-    @test maximum(abs.(ᶜε₂₃_computed .- ᶜε₂₃_exact) ./ (abs.(ᶜε₂₃_exact) .+ eps(FT))) < FT(0.005)
-    
+    @test maximum(abs.(ᶜε₁₃_computed .- ᶜε₁₃_exact) ./ (abs.(ᶜε₁₃_exact) .+ eps(FT))) <
+          FT(0.005)
+    @test maximum(abs.(ᶜε₂₃_computed .- ᶜε₂₃_exact) ./ (abs.(ᶜε₂₃_exact) .+ eps(FT))) <
+          FT(0.005)
+
     # Check boundary conditions at faces (top and bottom should match analytical)
     (; x, y, z) = fcoords
     ᶠε₁₃_exact = @. -(1 // 2) * sin(x) * cos(y) * sin(z)
     for elem_id in 1:helem
-        @test maximum(abs.(
-            Fields.field_values(Fields.slab(ᶠε.components.data.:3, 1, elem_id)) .-
-            Fields.field_values(Fields.slab(ᶠε₁₃_exact, 1, elem_id))
-        )) < eps(FT)  # bottom face
-        @test maximum(abs.(
-            Fields.field_values(Fields.slab(ᶠε.components.data.:3, 11, elem_id)) .-
-            Fields.field_values(Fields.slab(ᶠε₁₃_exact, 11, elem_id))
-        )) < eps(FT)  # top face
+        @test maximum(
+            abs.(
+                Fields.field_values(Fields.slab(ᶠε.components.data.:3, 1, elem_id)) .-
+                Fields.field_values(Fields.slab(ᶠε₁₃_exact, 1, elem_id)),
+            ),
+        ) < eps(FT)  # bottom face
+        @test maximum(
+            abs.(
+                Fields.field_values(Fields.slab(ᶠε.components.data.:3, 11, elem_id)) .-
+                Fields.field_values(Fields.slab(ᶠε₁₃_exact, 11, elem_id)),
+            ),
+        ) < eps(FT)  # top face
     end
 end
 
 @testset "compute_full_strain_rate (Cartesian, consistency)" begin
     # Test compute_strain_rate_*_full! by comparing to explicit reference calculation
     # using gradient operators and symmetrization: ε = (1/2)(∇u + (∇u)ᵀ)
-    
+
     (; helem, cent_space, face_space) = get_cartesian_spaces()
     ccoords, fcoords = get_coords(cent_space, face_space)
     FT = eltype(ccoords.x)
-    
+
     # Type aliases
     UVW = Geometry.UVWVector
     UVec, VVec, WVec = Geometry.UVector, Geometry.VVector, Geometry.WVector
-    
+
     # Allocate tensor fields
     u₀ = UVW(FT(0), FT(0), FT(0))
     ᶜε = Fields.Field(typeof(u₀ * u₀'), cent_space)
     ᶠε = Fields.Field(typeof(u₀ * u₀'), face_space)
     ᶜε_ref = Fields.Field(typeof(u₀ * u₀'), cent_space)
     ᶠε_ref = Fields.Field(typeof(u₀ * u₀'), face_space)
-    
+
     # Get velocity from Taylor-Green vortex
     u, v, w = taylor_green_ic(ccoords)
     ᶠu, ᶠv, ᶠw = taylor_green_ic(fcoords)
     ᶜu = @. UVW(UVec(u)) + UVW(VVec(v)) + UVW(WVec(w))
     ᶠu_vec = @. UVW(UVec(ᶠu)) + UVW(VVec(ᶠv)) + UVW(WVec(ᶠw))
-    
+
     # Compute using functions under test
     CA.compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu_vec)
     CA.compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu_vec)
-    
+
     # Build reference: ε = (1/2)(∇u + (∇u)ᵀ)
     axis_uvw = (Geometry.UVWAxis(),)
     ᶜgradᵥ = Operators.GradientF2C()
@@ -338,14 +347,14 @@ end
     @. ᶜε_ref = Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_vec))
     @. ᶜε_ref += Geometry.project(axis_uvw, gradₕ(ᶜu))
     @. ᶜε_ref = (ᶜε_ref + adjoint(ᶜε_ref)) / 2
-    
+
     # Face reference with zero-gradient BCs
     ∇bc = Operators.SetGradient(Geometry.outer(WVec(0), UVW(0, 0, 0)))
     ᶠgradᵥ = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
     @. ᶠε_ref = Geometry.project(axis_uvw, ᶠgradᵥ(ᶜu))
     @. ᶠε_ref += Geometry.project(axis_uvw, gradₕ(ᶠu_vec))
     @. ᶠε_ref = (ᶠε_ref + adjoint(ᶠε_ref)) / 2
-    
+
     # Symmetry checks
     @test ᶜε.components.data.:2 == ᶜε.components.data.:4
     @test ᶜε.components.data.:3 == ᶜε.components.data.:7
@@ -353,7 +362,7 @@ end
     @test ᶠε.components.data.:2 == ᶠε.components.data.:4
     @test ᶠε.components.data.:3 == ᶠε.components.data.:7
     @test ᶠε.components.data.:6 == ᶠε.components.data.:8
-    
+
     # Consistency with explicit reference (all 9 tensor components)
     tol = sqrt(eps(FT))
     @test maximum(abs, ᶜε.components.data.:1 .- ᶜε_ref.components.data.:1) < tol
@@ -365,7 +374,7 @@ end
     @test maximum(abs, ᶜε.components.data.:7 .- ᶜε_ref.components.data.:7) < tol
     @test maximum(abs, ᶜε.components.data.:8 .- ᶜε_ref.components.data.:8) < tol
     @test maximum(abs, ᶜε.components.data.:9 .- ᶜε_ref.components.data.:9) < tol
-    
+
     @test maximum(abs, ᶠε.components.data.:1 .- ᶠε_ref.components.data.:1) < tol
     @test maximum(abs, ᶠε.components.data.:2 .- ᶠε_ref.components.data.:2) < tol
     @test maximum(abs, ᶠε.components.data.:3 .- ᶠε_ref.components.data.:3) < tol
@@ -380,27 +389,28 @@ end
 @testset "compute_strain_rate (spherical geometry)" begin
     # Test strain rate computation on spherical geometry
     # Uses get_spherical_test_velocities which provides ᶠu_C123 (Covariant123Vector on faces)
-    
+
     (; cent_space, face_space, z_max, FT) = get_spherical_extruded_spaces()
-    
+
     # Get velocity fields from helper (includes Covariant123Vector for strain rate)
     U₀, W₀ = FT(10), FT(1)
-    _, _, ᶠu = get_spherical_test_velocities(cent_space, face_space, z_max; U₀ = U₀, W₀ = W₀)
-    
+    _, _, ᶠu =
+        get_spherical_test_velocities(cent_space, face_space, z_max; U₀ = U₀, W₀ = W₀)
+
     # Compute strain rate - returns a lazy field
     ᶜstrain_rate = CA.compute_strain_rate_center_vertical(ᶠu)
-    
+
     # Materialize by computing Frobenius norm squared (as done in actual code)
     ᶜstrain_rate_norm = @. norm_sqr(ᶜstrain_rate)
-    
+
     # Basic sanity checks
     # 1. Should be finite everywhere
     @test all(isfinite, parent(ᶜstrain_rate_norm))
-    
+
     # 2. Should have nonzero values (vertical shear exists from w = W₀ sin(πz/H))
     # ∂w/∂z = W₀ π/H cos(πz/H), which is nonzero at most z values
     @test maximum(parent(ᶜstrain_rate_norm)) > FT(0)
-    
+
     # 3. Compare against analytical solution
     # For w = W₀ sin(πz/H), the strain rate tensor has ε₃₃ = ∂w/∂z = W₀ π/H cos(πz/H)
     # So norm_sqr(ε) = ε₃₃² = (W₀ π/H)² cos²(πz/H)
@@ -408,41 +418,43 @@ end
     ᶜz = ccoords.z
     ᶜε₃₃_exact = @. W₀ * FT(π) / z_max * cos(FT(π) * ᶜz / z_max)
     ᶜstrain_rate_norm_exact = @. ᶜε₃₃_exact^2
-    
+
     # The computed norm should match the analytical solution within numerical tolerance
     # (allowing for some discretization error from the finite difference gradient)
-    rel_error = @. abs(ᶜstrain_rate_norm - ᶜstrain_rate_norm_exact) / (abs(ᶜstrain_rate_norm_exact) + eps(FT))
+    rel_error = @. abs(ᶜstrain_rate_norm - ᶜstrain_rate_norm_exact) /
+       (abs(ᶜstrain_rate_norm_exact) + eps(FT))
     @test maximum(parent(rel_error)) < FT(0.01)  # 1% relative tolerance for FD discretization
 end
 
 @testset "compute_strain_rate (spherical geometry with topography)" begin
     # Test strain rate computation on spherical geometry with terrain-following coordinates
     # Uses the same velocity profile as the flat test, but on a warped grid
-    
+
     (; cent_space, face_space, z_max, FT) = get_spherical_extruded_spaces_with_topography()
-    
+
     # Get velocity fields from helper
     U₀, W₀ = FT(10), FT(1)
     _, _, ᶠu = get_spherical_test_velocities(cent_space, face_space, z_max; U₀, W₀)
-    
+
     # Compute strain rate
     ᶜstrain_rate = CA.compute_strain_rate_center_vertical(ᶠu)
     ᶜstrain_rate_norm = @. norm_sqr(ᶜstrain_rate)
-    
+
     # 1. Should be finite everywhere (even on warped grid)
     @test all(isfinite, parent(ᶜstrain_rate_norm))
-    
+
     # 2. Should have nonzero values
     @test maximum(parent(ᶜstrain_rate_norm)) > FT(0)
-    
+
     # 3. Compare against analytical solution (same as flat case)
     # On a terrain-following grid, z is the physical height, so the formula is the same
     ccoords = Fields.coordinate_field(cent_space)
     ᶜz = ccoords.z
     ᶜε₃₃_exact = @. W₀ * FT(π) / z_max * cos(FT(π) * ᶜz / z_max)
     ᶜstrain_rate_norm_exact = @. ᶜε₃₃_exact^2
-    
+
     # Allow slightly higher tolerance for warped grid discretization
-    rel_error = @. abs(ᶜstrain_rate_norm - ᶜstrain_rate_norm_exact) / (abs(ᶜstrain_rate_norm_exact) + eps(FT))
+    rel_error = @. abs(ᶜstrain_rate_norm - ᶜstrain_rate_norm_exact) /
+       (abs(ᶜstrain_rate_norm_exact) + eps(FT))
     @test maximum(parent(rel_error)) < FT(0.01)  # 1% tolerance
 end

@@ -11,7 +11,7 @@ using Base.Broadcast: materialize
     FT = Float64
     z_max = FT(1)
     z_damping = FT(0.5)  # Damping starts at z = 0.5
-    
+
     # Create extruded cubed sphere space
     ᶜspace = ExtrudedCubedSphereSpace(
         FT;
@@ -26,7 +26,7 @@ using Base.Broadcast: materialize
     ᶠspace = Spaces.face_space(ᶜspace)
     ᶜz = Fields.coordinate_field(ᶜspace).z
     ᶠz = Fields.coordinate_field(ᶠspace).z
-    
+
     # Create test velocity fields
     ᶜuₕ = Fields.Field(Geometry.Covariant12Vector{FT}, ᶜspace)
     fill!(parent(ᶜuₕ), FT(1))  # Both components = 1
@@ -34,7 +34,7 @@ using Base.Broadcast: materialize
     fill!(parent(ᶠw), FT(1))
     ᶜχ = ones(ᶜspace)  # Tracer field
     ᶜχʲ = 2 .* ones(ᶜspace)  # Updraft tracer field
-    
+
     @testset "Damping coefficient β" begin
         rs = CA.RayleighSponge(;
             zd = z_damping,
@@ -42,22 +42,22 @@ using Base.Broadcast: materialize
             α_w = FT(2),
             α_sgs_tracer = FT(3),
         )
-        
+
         # β = α * sin²(π/2 * (z - zd) / (zmax - zd)) for z > zd, else 0
         expected_uₕ = @. ifelse(
             ᶜz > z_damping,
             FT(1) * sin(FT(π) / 2 * (ᶜz - z_damping) / (z_max - z_damping))^2,
-            FT(0)
+            FT(0),
         )
         expected_w = @. ifelse(
             ᶠz > z_damping,
             FT(2) * sin(FT(π) / 2 * (ᶠz - z_damping) / (z_max - z_damping))^2,
-            FT(0)
+            FT(0),
         )
-        
+
         @test CA.β_rayleigh_uₕ.(rs, ᶜz, z_max) ≈ expected_uₕ
         @test CA.β_rayleigh_w.(rs, ᶠz, z_max) ≈ expected_w
-        
+
         # Test that damping is zero at z=0 (below z_damping)
         @test CA.β_rayleigh_uₕ(rs, FT(0), z_max) == FT(0)
         @test CA.β_rayleigh_w(rs, FT(0), z_max) == FT(0)
@@ -70,12 +70,12 @@ using Base.Broadcast: materialize
             α_w = FT(1),
             α_sgs_tracer = FT(1),
         )
-        
+
         # Tendency = -β * uₕ
         tendency = CA.rayleigh_sponge_tendency_uₕ(ᶜuₕ, rs)
         β = CA.β_rayleigh_uₕ.(rs, ᶜz, z_max)
         expected = @. -β * ᶜuₕ
-        
+
         @test materialize(tendency) ≈ expected
     end
 
@@ -86,12 +86,12 @@ using Base.Broadcast: materialize
             α_w = FT(1),
             α_sgs_tracer = FT(2),
         )
-        
+
         # Tendency = -β * χ
         tendency = CA.rayleigh_sponge_tendency_sgs_tracer(ᶜχ, rs)
         β = CA.β_rayleigh_sgs_tracer.(rs, ᶜz, z_max)
         expected = @. -β * ᶜχ
-        
+
         @test materialize(tendency) ≈ expected
     end
 
@@ -102,12 +102,12 @@ using Base.Broadcast: materialize
             α_w = FT(1),
             α_sgs_tracer = FT(2),
         )
-        
+
         # Tendency = -β * (χʲ - χ)
         tendency = CA.rayleigh_sponge_tendency_sgs_tracer(ᶜχʲ, ᶜχ, rs)
         β = CA.β_rayleigh_sgs_tracer.(rs, ᶜz, z_max)
         expected = @. -β * (ᶜχʲ - ᶜχ)
-        
+
         # Since ᶜχʲ = 2 and ᶜχ = 1, the difference is 1
         @test materialize(tendency) ≈ expected
     end
