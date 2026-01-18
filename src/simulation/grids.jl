@@ -293,7 +293,6 @@ function hypsography_function_from_topography(
                 "z",
                 h_space,
             )
-            @info "Remapping Earth orography from ETOPO2022 data onto horizontal space"
         else
             z_surface = SpaceVaryingInput(topography_function(topography), h_space)
             @info "Using $(nameof(typeof(topography))) orography"
@@ -318,7 +317,6 @@ function hypsography_function_from_topography(
 
         # Create hypsography from mesh warp type
         if mesh_warp_type isa SLEVEWarp
-            @info "SLEVE mesh warp (eta=$(mesh_warp_type.eta), s=$(mesh_warp_type.s))"
             hypsography = Hypsography.SLEVEAdaption(
                 Geometry.ZPoint.(z_surface),
                 FT(mesh_warp_type.eta),

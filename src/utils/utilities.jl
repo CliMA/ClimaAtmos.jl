@@ -7,20 +7,33 @@ import LinearAlgebra: norm_sqr
 using Dates: DateTime, @dateformat_str
 import StaticArrays: SVector, SMatrix
 
-is_energy_var(symbol) = symbol in (:ρe_tot, :ρae_tot)
-is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :u₃, :ρw)
-is_turbconv_var(symbol) = symbol in (:turbconv, :sgsʲs, :sgs⁰)
+is_energy_var(symbol) = symbol in (:ρe_tot,)
+is_momentum_var(symbol) = symbol in (:uₕ, :u₃)
+is_sgs_var(symbol) = symbol in (:sgsʲs,)
 is_tracer_var(symbol) = !(
     symbol == :ρ ||
-    symbol == :ρa ||
+    symbol == :ρtke ||
     is_energy_var(symbol) ||
     is_momentum_var(symbol) ||
-    is_turbconv_var(symbol)
+    is_sgs_var(symbol)
 )
 
 # we may be hitting a slow path:
 # https://stackoverflow.com/questions/14687665/very-slow-stdpow-for-bases-very-close-to-1
 fast_pow(x, y) = exp(y * log(x))
+
+"""
+    geopotential(grav, z)
+
+Compute the geopotential (Φ) at height `z` using gravitational acceleration `grav`.
+
+Φ = g * z
+
+where:
+- `grav` is the gravitational acceleration
+- `z` is the height
+"""
+geopotential(grav, z) = grav * z
 
 """
     time_from_filename(file)
@@ -579,6 +592,14 @@ function issphere(space)
     return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
            Domains.SphereDomain
 end
+
+function isbox(space)
+    h_space = Spaces.horizontal_space(space)
+    return Meshes.domain(Spaces.topology(h_space)) isa Domains.RectangleDomain
+end
+
+# Check if space is a single-column model (true column or minimal box used as column)
+iscolumn_or_box(space) = iscolumn(space) || isbox(space)
 
 """
     clima_to_era5_name_dict()

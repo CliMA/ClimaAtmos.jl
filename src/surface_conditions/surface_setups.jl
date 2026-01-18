@@ -5,7 +5,6 @@ abstract type SurfaceSetup end
 
 Used to indicate that there is no surface parameterization and
 that the surface conditions will be explicitly prescribed (e.g. by the coupler).
-The surface conditions must be set by calling `set_surface_conditions!`.
 """
 struct PrescribedSurface <: SurfaceSetup end
 (surface_setup::PrescribedSurface)(params) = nothing
@@ -36,17 +35,6 @@ function (::DefaultExchangeCoefficients)(params)
 end
 
 # All of the following are specific to TC cases
-struct Nieuwstadt end
-function (::Nieuwstadt)(params)
-    FT = eltype(params)
-    T = FT(300)
-    p = FT(1e5)
-    q_vap = FT(0)
-    z0 = FT(0.16)
-    θ_flux = FT(0.06)
-    parameterization = MoninObukhov(; z0, fluxes = θAndQFluxes(; θ_flux))
-    return SurfaceState(; parameterization, T, p, q_vap)
-end
 
 struct GABLS end
 function (::GABLS)(params)
@@ -65,21 +53,6 @@ function (::GABLS)(params)
         )
     end
     return surface_state
-end
-
-# TODO: The paper only specifies that T = 299.88. Where did all of these values
-# come from?
-struct GateIII end
-function (::GateIII)(params)
-    FT = eltype(params)
-    T = FT(299.184)
-    p = FT(101300)
-    q_vap = FT(0.0165)
-    Cd = FT(0.0012)
-    Ch = FT(0.0034337)
-    Cq = FT(0.0034337) # TODO: Add support for Cq to SF.Coefficients.
-    parameterization = ExchangeCoefficients(Cd, Ch)
-    return SurfaceState(; parameterization, T, p, q_vap)
 end
 
 struct Soares end
@@ -112,57 +85,6 @@ function (::Bomex)(params)
     return SurfaceState(; parameterization, T, p, q_vap)
 end
 
-struct LifeCycleTan2018 end
-function (::LifeCycleTan2018)(params)
-    FT = eltype(params)
-    T = FT(300.4)
-    p = FT(101500)
-    q_vap = FT(0.02245)
-    θ_flux0 = FT(8e-3)
-    q_flux0 = FT(5.2e-5)
-    z0 = FT(1e-4)
-    ustar = FT(0.28)
-    function surface_state(surface_coordinates, interior_z, t)
-        _FT = eltype(surface_coordinates) # do not capture FT
-        weight = _FT(0.01) + _FT(0.99) * (cos(2 * _FT(π) * t / 3600) + 1) / 2
-        fluxes =
-            θAndQFluxes(; θ_flux = θ_flux0 * weight, q_flux = q_flux0 * weight)
-        parameterization = MoninObukhov(; z0, fluxes, ustar)
-        return SurfaceState(; parameterization, T, p, q_vap)
-    end
-    return surface_state
-end
-
-struct ARM_SGP end
-function (::ARM_SGP)(params)
-    FT = eltype(params)
-    θ = FT(299)
-    p = FT(97000)
-    q_vap = FT(0.0152)
-    t_data = FT[0, 4, 6.5, 7.5, 10, 12.5, 14.5] .* 3600
-    shf_data = FT[-30, 90, 140, 140, 100, -10, -10]
-    lhf_data = FT[5, 250, 450, 500, 420, 180, 0]
-    z0 = FT(1e-4)
-    ustar = FT(0.28) # 0.28 is taken from Bomex. TODO: Approximate from LES TKE.
-    thermo_params = CAP.thermodynamics_params(params)
-    ts = TD.PhaseNonEquil_pθq(thermo_params, p, θ, TD.PhasePartition(q_vap))
-    T = TD.air_temperature(thermo_params, ts)
-    shf = Intp.extrapolate(
-        Intp.interpolate((t_data,), shf_data, Intp.Gridded(Intp.Linear())),
-        Intp.Flat(),
-    )
-    lhf = Intp.extrapolate(
-        Intp.interpolate(t_data, lhf_data, Intp.Gridded(Intp.Linear())),
-        Intp.Flat(),
-    )
-    function surface_state(surface_coordinates, interior_z, t)
-        fluxes = HeatFluxes(; shf = shf(t), lhf = lhf(t))
-        parameterization = MoninObukhov(; z0, fluxes, ustar)
-        return SurfaceState(; parameterization, T, p, q_vap)
-    end
-    return surface_state
-end
-
 struct DYCOMS_RF01 end
 function (::DYCOMS_RF01)(params)
     FT = eltype(params)
@@ -172,7 +94,8 @@ function (::DYCOMS_RF01)(params)
     z0 = FT(1e-4)
     shf = FT(15)
     lhf = FT(115)
-    parameterization = MoninObukhov(; z0, fluxes = HeatFluxes(; shf, lhf))
+    ustar = FT(0.25) # not specified in the literature, taken from DYCOMS_RF02.
+    parameterization = MoninObukhov(; z0, fluxes = HeatFluxes(; shf, lhf), ustar)
     return SurfaceState(; parameterization, T, p, q_vap)
 end
 
@@ -308,8 +231,7 @@ function (::ISDAC)(params)
     FT = eltype(params)
     T = FT(267)  # K
     p = FT(102000)  # Pa
-    lhf = shf = FT(0)  # neglect heat fluxes
     z0 = FT(4e-4)  # m  surface roughness length
-    parameterization = MoninObukhov(; z0, fluxes = HeatFluxes(; lhf, shf))
+    parameterization = MoninObukhov(; z0)
     return SurfaceState(; parameterization, T, p)
 end

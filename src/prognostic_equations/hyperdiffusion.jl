@@ -72,9 +72,9 @@ function hyperdiffusion_cache(
             ᶜ∇²q_totʲs = similar(Y.c, NTuple{n, FT}),
             moisture_sgs_quantities...,
         ) : (;)
-    maybe_ᶜ∇²tke⁰ =
-        use_prognostic_tke(turbconv_model) ? (; ᶜ∇²tke⁰ = similar(Y.c, FT)) : (;)
-    sgs_quantities = (; sgs_quantities..., maybe_ᶜ∇²tke⁰...)
+    maybe_ᶜ∇²tke =
+        use_prognostic_tke(turbconv_model) ? (; ᶜ∇²tke = similar(Y.c, FT)) : (;)
+    sgs_quantities = (; sgs_quantities..., maybe_ᶜ∇²tke...)
     quantities = (; gs_quantities..., sgs_quantities...)
     if do_dss(axes(Y.c))
         quantities = (;
@@ -113,9 +113,9 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. ᶜ∇²specific_energy = wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ - ᶜh_ref))
 
     if diffuse_tke
-        ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
-        (; ᶜ∇²tke⁰) = p.hyperdiff
-        @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜtke⁰))
+        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+        (; ᶜ∇²tke) = p.hyperdiff
+        @. ᶜ∇²tke = wdivₕ(gradₕ(ᶜtke))
     end
 
     # Sub-grid scale hyperdiffusion
@@ -150,7 +150,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
     if use_prognostic_tke(turbconv_model)
-        (; ᶜ∇²tke⁰) = p.hyperdiff
+        (; ᶜ∇²tke) = p.hyperdiff
     end
 
     if turbconv_model isa PrognosticEDMFX
@@ -168,10 +168,10 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     @. Yₜ.c.ρe_tot -= ν₄_scalar * wdivₕ(ᶜρ * gradₕ(ᶜ∇²specific_energy))
 
-    # Sub-grid scale hyperdiffusion continued
-    if (turbconv_model isa PrognosticEDMFX) && diffuse_tke
-        @. Yₜ.c.sgs⁰.ρatke -= ν₄_vorticity * wdivₕ(ᶜρa⁰ * gradₕ(ᶜ∇²tke⁰))
+    if (turbconv_model isa AbstractEDMF) && diffuse_tke
+        @. Yₜ.c.ρtke -= ν₄_vorticity * wdivₕ(ᶜρ * gradₕ(ᶜ∇²tke))
     end
+    # Sub-grid scale hyperdiffusion continued
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n
             if point_type <: Geometry.Abstract3DPoint
@@ -182,10 +182,6 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             # Note: It is more correct to have ρa inside and outside the divergence
             @. Yₜ.c.sgsʲs.:($$j).mse -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²mseʲs.:($$j)))
         end
-    end
-
-    if turbconv_model isa DiagnosticEDMFX && diffuse_tke
-        @. Yₜ.c.sgs⁰.ρatke -= ν₄_vorticity * wdivₕ(ᶜρ * gradₕ(ᶜ∇²tke⁰))
     end
 end
 
@@ -198,13 +194,13 @@ function dss_hyperdiffusion_tendency_pairs(p)
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
     if use_prognostic_tke(turbconv_model)
-        (; ᶜ∇²tke⁰) = p.hyperdiff
+        (; ᶜ∇²tke) = p.hyperdiff
     end
 
     core_dynamics_pairs = (
         ᶜ∇²u => buffer.ᶜ∇²u,
         ᶜ∇²specific_energy => buffer.ᶜ∇²specific_energy,
-        (diffuse_tke ? (ᶜ∇²tke⁰ => buffer.ᶜ∇²tke⁰,) : ())...,
+        (diffuse_tke ? (ᶜ∇²tke => buffer.ᶜ∇²tke,) : ())...,
     )
     tc_dynamics_pairs =
         turbconv_model isa PrognosticEDMFX ?
@@ -326,9 +322,10 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²q_totʲs) = p.hyperdiff
         for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -=
-                ν₄_scalar * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²q_totʲs.:($$j)))
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+            @. Yₜ.c.sgsʲs.:($$j).ρa -=
+                ν₄_scalar * Y.c.sgsʲs.:($$j).ρa / (1 - Y.c.sgsʲs.:($$j).q_tot) *
+                wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
         end
         if moisture_model isa NonEquilMoistModel &&
            microphysics_model isa Microphysics1Moment

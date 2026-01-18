@@ -12,7 +12,7 @@ implicit_sgs_vertdiff: true
 implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
-debug_jacobian: true
+debug_jacobian: false # disabled due to performance on small box
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
@@ -26,15 +26,13 @@ precip_model: "1M"
 call_cloud_diagnostics_per_stage: true
 config: column
 z_max: 16400
-x_elem: 2
-y_elem: 2
 z_elem: 82
 z_stretch: false
 dt: 150secs
 t_end: 12hours
 dt_save_state_to_disk: 60mins
 toml: [toml/prognostic_edmfx_1M.toml]
-netcdf_interpolation_num_points: [8, 8, 82]
+netcdf_interpolation_num_points: [2, 2, 82]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
     period: 10mins

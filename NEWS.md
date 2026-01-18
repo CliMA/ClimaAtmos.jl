@@ -3,8 +3,19 @@ ClimaAtmos.jl Release Notes
 
 main
 -------
-- PR [#4175](https://github.com/CliMA/ClimaAtmos.jl/pull/4175) adds support for lazy diagnostics,
-as introduced in [`ClimaDiagnostics.jl`](https://github.com/CliMA/ClimaDiagnostics.jl) v0.2.13.
+- [#4198](https://github.com/CliMA/ClimaAtmos.jl/pull/4198) [badge-💥breaking] modifies surface conditions
+to use SurfaceFluxes v0.15.
+
+v0.33.2
+-------
+
+v0.33.1
+-------
+- PR [#4185](https://github.com/CliMA/ClimaAtmos.jl/pull/4185) adds a new cloud fraction parameterization `MLCloud`. It can be set in the toml under `cloud_model`.
+
+- PR [#4191](https://github.com/CliMA/ClimaAtmos.jl/pull/4191) renames ρatke to ρtke and move it out of sgs⁰.
+
+- PR [#4175](https://github.com/CliMA/ClimaAtmos.jl/pull/4175) adds support for lazy diagnostics, as introduced in [`ClimaDiagnostics.jl`](https://github.com/CliMA/ClimaDiagnostics.jl) v0.2.13.
 
 v0.33.0
 -------
