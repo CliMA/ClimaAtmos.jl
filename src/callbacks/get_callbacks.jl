@@ -1,9 +1,11 @@
-function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
-
-    (; dt, t_start, start_date) = sim_info
+function get_diagnostics(
+    parsed_args,
+    atmos_model,
+    Y, p, dt,
+    t_start, start_date, output_dir,
+)
 
     FT = Spaces.undertype(axes(Y.c))
-    context = ClimaComms.context(axes(Y.c))
 
     # We either get the diagnostics section in the YAML file, or we return an empty list
     # (which will result in an empty list being created by the map below)
@@ -120,13 +122,19 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
                     CA.promote_period.(Dates.Second(period_seconds))
             end
 
+            date_last =
+                t_start isa ITime ?
+                ClimaUtilities.TimeManager.date(t_start) :
+                start_date + Dates.Second(t_start)
             output_schedule = CAD.EveryCalendarDtSchedule(
                 period_dates;
                 reference_date = start_date,
+                date_last = date_last,
             )
             compute_schedule = CAD.EveryCalendarDtSchedule(
                 period_dates;
                 reference_date = start_date,
+                date_last = date_last,
             )
 
             if isnothing(output_name)
@@ -163,10 +171,11 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
         diagnostics = [
             CAD.default_diagnostics(
                 atmos_model,
-                sim_info.dt isa ITime ?
+                dt isa ITime ?
                 ITime(time_to_seconds(parsed_args["t_end"])) - t_start :
                 FT(time_to_seconds(parsed_args["t_end"]) - t_start),
-                start_date;
+                start_date,
+                t_start;
                 output_writer = netcdf_writer,
                 topography = has_topography(axes(Y.c)),
             )...,
@@ -175,22 +184,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
     end
     diagnostics = collect(diagnostics)
 
-    periods_reductions = Set()
-    for diag in diagnostics
-        isa_reduction = !isnothing(diag.reduction_time_func)
-        isa_reduction || continue
-
-        if diag.output_schedule_func isa CAD.EveryDtSchedule
-            period = Dates.Second(diag.output_schedule_func.dt)
-        elseif diag.output_schedule_func isa CAD.EveryCalendarDtSchedule
-            period = diag.output_schedule_func.dt
-        else
-            continue
-        end
-
-        push!(periods_reductions, period)
-    end
-
+    periods_reductions = extract_diagnostic_periods(diagnostics)
     periods_str = join(CA.promote_period.(periods_reductions), ", ")
     @info "Saving accumulated diagnostics to disk with frequency: $(periods_str)"
 
@@ -207,22 +201,236 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
     return diagnostics, writers, periods_reductions
 end
 
-function checkpoint_frequency_from_parsed_args(dt_save_state_to_disk::String)
-    if occursin("months", dt_save_state_to_disk)
-        months = match(r"^(\d+)months$", dt_save_state_to_disk)
+function parse_checkpoint_frequency(period::Number)
+    period == Inf && return Inf
+    # Treat number as seconds
+    return Dates.Second(round(Int, period))
+end
+function parse_checkpoint_frequency(period_str::AbstractString)
+    if occursin("months", period_str)
+        months = match(r"^(\d+)months$", period_str)
         isnothing(months) && error(
-            "$(period_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
+            "Checkpoint frequency has to be of the form <NUM>months, e.g. \"2months\" for 2 months",
         )
         return Dates.Month(parse(Int, first(months)))
-    else
-        dt_save_state_to_disk = time_to_seconds(dt_save_state_to_disk)
-        if !(dt_save_state_to_disk == Inf)
-            # We use Millisecond to support fractional seconds, eg. 0.1
-            return Dates.Millisecond(1000dt_save_state_to_disk)
-        else
-            return Inf
+    end
+    checkpoint_frequency = time_to_seconds(period_str)
+    checkpoint_frequency == Inf && return Inf
+    return Dates.Second(round(Int, checkpoint_frequency))
+end
+
+"""
+    validate_checkpoint_diagnostics_consistency(checkpoint_frequency, periods_reductions)
+
+Validate that checkpoint frequency is an integer multiple of all diagnostics accumulation periods.
+
+Warns if inconsistent, which could prevent safe restarts from checkpoints.
+"""
+function validate_checkpoint_diagnostics_consistency(
+    checkpoint_frequency,
+    periods_reductions,
+)
+    if checkpoint_frequency != Inf
+        if any(x -> !CA.isdivisible(checkpoint_frequency, x), periods_reductions)
+            accum_str = join(CA.promote_period.(collect(periods_reductions)), ", ")
+            checkpt_str = CA.promote_period(checkpoint_frequency)
+            @warn """The checkpointing frequency \
+            (checkpoint_frequency = $checkpt_str) should be an integer \
+            multiple of all diagnostics accumulation periods ($accum_str) \
+            so simulations can be safely restarted from any checkpoint"""
         end
     end
+end
+
+#####
+##### Reusable callback builder functions
+#####
+
+function progress_logging_callback(dt, t_start, t_end)
+    walltime_info = WallTimeInfo()
+    tot_steps = ceil(Int, (t_end - t_start) / dt)
+    five_percent_steps = ceil(Int, 0.05 * tot_steps)
+    schedule = CappedGeometricSeriesSchedule(five_percent_steps)
+    cond = (u, t, integrator) -> schedule(integrator)
+    affect! = (integrator) -> report_walltime(walltime_info, integrator)
+    return (SciMLBase.DiscreteCallback(cond, affect!),)
+end
+
+function nan_checking_callback(check_nan_every::Int)
+    if check_nan_every > 0
+        return (
+            call_every_n_steps((integrator) -> check_nans(integrator), check_nan_every),
+        )
+    end
+    return ()
+end
+
+function graceful_exit_callback(output_dir)
+    return (
+        call_every_n_steps(
+            terminate!;
+            skip_first = true,
+            condition = (u, t, integrator) ->
+                maybe_graceful_exit(output_dir, integrator),
+        ),
+    )
+end
+
+function checkpoint_callback(
+    checkpoint_frequency,
+    output_dir,
+    start_date,
+    t_start,
+)
+    if checkpoint_frequency != Inf
+        schedule = CAD.EveryCalendarDtSchedule(
+            checkpoint_frequency;
+            reference_date = start_date,
+            date_last = t_start isa ITime ?
+                        ClimaUtilities.TimeManager.date(t_start) :
+                        start_date + Dates.Second(t_start),
+        )
+        cond = (u, t, integrator) -> schedule(integrator)
+        affect! = (integrator) -> save_state_to_disk_func(integrator, output_dir)
+        return (SciMLBase.DiscreteCallback(cond, affect!),)
+    end
+    return ()
+end
+
+function gc_callback(comms_ctx)
+    if is_distributed(comms_ctx)
+        return (
+            call_every_n_steps(
+                gc_func,
+                parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
+                skip_first = true,
+            ),
+        )
+    end
+    return ()
+end
+
+function conservation_checking_callback()
+    return (
+        call_every_n_steps(
+            flux_accumulation!;
+            skip_first = true,
+            call_at_end = true,
+        ),
+    )
+end
+
+function scm_external_forcing_callback()
+    return (
+        call_every_n_steps(
+            external_driven_single_column!;
+            call_at_end = true,
+        ),
+    )
+end
+
+function cloud_fraction_callback(
+    dt_cloud_fraction,
+    dt,
+    t_start,
+    t_end;
+)
+    FT = typeof(dt) <: ITime ? Float64 : (dt isa AbstractFloat ? typeof(dt) : Float64)
+    dt_cf_seconds =
+        dt isa ITime ?
+        ITime(time_to_seconds(dt_cloud_fraction)) :
+        FT(time_to_seconds(dt_cloud_fraction))
+    dt_cf_seconds, _, _, _ = promote(dt_cf_seconds, t_start, dt, t_end)
+    return (call_every_dt(cloud_fraction_model_callback!, dt_cf_seconds),)
+end
+
+function radiation_callback(
+    radiation_mode,
+    dt_rad,
+    dt,
+    t_start,
+    t_end,
+    checkpoint_frequency;
+)
+    radiation_mode isa RRTMGPI.AbstractRRTMGPMode || return ()
+
+    # Determine float type: use Float64 if dt is ITime (since float(ITime) -> Float64),
+    # otherwise preserve the float type of dt or default to Float64
+    FT = typeof(dt) <: ITime ? Float64 : (dt isa AbstractFloat ? typeof(dt) : Float64)
+
+    # Convert dt_rad string to seconds (once)
+    dt_rad_seconds_float = time_to_seconds(dt_rad)
+
+    # Compute float value for validation BEFORE promotion
+    # We need this separate value because after promotion with ITime, we can't easily
+    # extract the numeric value for rounding to Int
+    dt_rad_seconds_val = FT(dt_rad_seconds_float)
+
+    # Create dt_rad_seconds matching the type of dt (ITime if dt is ITime, else FT)
+    # This ensures type consistency before promotion
+    dt_rad_seconds =
+        dt isa ITime ?
+        ITime(dt_rad_seconds_float) :
+        dt_rad_seconds_val
+
+    # Promote dt_rad_seconds with other time values to ensure all have compatible types
+    # (e.g., if dt is ITime, all promoted values will be ITime with matching periods)
+    dt_rad_seconds, _, _, _ = promote(dt_rad_seconds, t_start, dt, t_end)
+
+    # Validation against checkpoint frequency using the float value (before promotion)
+    dt_rad_s = Dates.Second(round(Int, dt_rad_seconds_val))
+    if checkpoint_frequency != Inf &&
+       !CA.isdivisible(checkpoint_frequency, dt_rad_s)
+        @warn "Radiation period ($(dt_rad_s)) is not an even divisor of the checkpoint frequency ($checkpoint_frequency)"
+        @warn "This simulation will not be reproducible when restarted"
+    end
+
+    return (call_every_dt(rrtmgp_model_callback!, dt_rad_seconds),)
+end
+
+
+function nogw_callback(
+    non_orographic_gravity_wave,
+    dt_nogw,
+    dt,
+    t_start,
+    t_end,
+    checkpoint_frequency,
+)
+    non_orographic_gravity_wave isa NonOrographicGravityWave || return ()
+
+    # Determine float type: use Float64 if dt is ITime (since float(ITime) -> Float64),
+    # otherwise preserve the float type of dt or default to Float64
+    FT = typeof(dt) <: ITime ? Float64 : (dt isa AbstractFloat ? typeof(dt) : Float64)
+
+    # Convert dt_nogw string to seconds (once)
+    dt_nogw_seconds_float = time_to_seconds(dt_nogw)
+
+    # Compute float value for validation BEFORE promotion
+    # We need this separate value because after promotion with ITime, we can't easily
+    # extract the numeric value for rounding to Int
+    dt_nogw_seconds_val = FT(dt_nogw_seconds_float)
+
+    # Create dt_nogw_seconds matching the type of dt (ITime if dt is ITime, else FT)
+    # This ensures type consistency before promotion
+    dt_nogw_seconds =
+        dt isa ITime ?
+        ITime(dt_nogw_seconds_float) :
+        dt_nogw_seconds_val
+
+    # Promote dt_nogw_seconds with other time values to ensure all have compatible types
+    # (e.g., if dt is ITime, all promoted values will be ITime with matching periods)
+    dt_nogw_seconds, _, _, _ = promote(dt_nogw_seconds, t_start, dt, t_end)
+
+    # Validation against checkpoint frequency using the float value (before promotion)
+    dt_nogw_s = Dates.Second(round(Int, dt_nogw_seconds_val))
+    if checkpoint_frequency != Inf &&
+       !CA.isdivisible(checkpoint_frequency, dt_nogw_s)
+        @warn "Non-orographic gravity wave period ($(dt_nogw_s)) is not an even divisor of the checkpoint frequency ($checkpoint_frequency)"
+        @warn "This simulation will not be reproducible when restarted"
+    end
+
+    return (call_every_dt(nogw_model_callback!, dt_nogw_seconds),)
 end
 
 
@@ -232,140 +440,212 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
     (; dt, output_dir, start_date, t_start, t_end) = sim_info
 
     callbacks = ()
+
+    # Progress logging
     if parsed_args["log_progress"]
-        @info "Progress logging enabled"
-        walltime_info = WallTimeInfo()
-        tot_steps = ceil(Int, (t_end - t_start) / dt)
-        five_percent_steps = ceil(Int, 0.05 * tot_steps)
-        cond = let schedule = CappedGeometricSeriesSchedule(five_percent_steps)
-            (u, t, integrator) -> schedule(integrator)
-        end
-        affect! = let wt = walltime_info
-            (integrator) -> report_walltime(wt, integrator)
-        end
-        callbacks = (callbacks..., SciMLBase.DiscreteCallback(cond, affect!))
+        callbacks = (callbacks..., progress_logging_callback(dt, t_start, t_end)...)
     end
+
+    # NaN checking
     check_nan_every = parsed_args["check_nan_every"]
-    if check_nan_every > 0
-        @info "Checking NaNs in the state every $(check_nan_every) steps"
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(
-                (integrator) -> check_nans(integrator),
-                check_nan_every,
-            ),
-        )
-    end
+    callbacks = (callbacks..., nan_checking_callback(check_nan_every)...)
+
+    # Graceful exit
+    callbacks = (callbacks..., graceful_exit_callback(output_dir)...)
+
+    # Checkpointing
+    checkpoint_frequency = parse_checkpoint_frequency(parsed_args["dt_save_state_to_disk"])
     callbacks = (
         callbacks...,
-        call_every_n_steps(
-            terminate!;
-            skip_first = true,
-            condition = let output_dir = output_dir
-                (u, t, integrator) ->
-                    maybe_graceful_exit(output_dir, integrator)
-            end,
-        ),
+        checkpoint_callback(
+            checkpoint_frequency,
+            output_dir,
+            start_date,
+            t_start,
+        )...,
     )
 
-    # Save dt_save_state_to_disk as a Dates.Period object. This is used to check
-    # if it is an integer multiple of other frequencies.
-    dt_save_state_to_disk_dates = checkpoint_frequency_from_parsed_args(
-        parsed_args["dt_save_state_to_disk"],
-    )
-    if dt_save_state_to_disk_dates != Inf
-        schedule = CAD.EveryCalendarDtSchedule(
-            dt_save_state_to_disk_dates;
-            reference_date = start_date,
-            date_last = t_start isa ITime ?
-                        ClimaUtilities.TimeManager.date(t_start) :
-                        start_date + Dates.Second(t_start),
-        )
-        cond = let schedule = schedule
-            (u, t, integrator) -> schedule(integrator)
-        end
-        affect! = let output_dir = output_dir
-            (integrator) -> save_state_to_disk_func(integrator, output_dir)
-        end
-        callbacks = (callbacks..., SciMLBase.DiscreteCallback(cond, affect!))
-    end
+    # Garbage collection
+    callbacks = (callbacks..., gc_callback(comms_ctx)...)
 
-    if is_distributed(comms_ctx)
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(
-                gc_func,
-                parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
-                skip_first = true,
-            ),
-        )
-    end
-
+    # Conservation checking
     if parsed_args["check_conservation"]
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(
-                flux_accumulation!;
-                skip_first = true,
-                call_at_end = true,
-            ),
-        )
+        callbacks = (callbacks..., conservation_checking_callback()...)
     end
 
+    # External forcing
     if parsed_args["external_forcing"] in
        ["ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal"] &&
        parsed_args["config"] == "column"
+        callbacks = (callbacks..., scm_external_forcing_callback()...)
+    end
+
+    # Cloud fraction
+    if !parsed_args["call_cloud_diagnostics_per_stage"]
         callbacks = (
             callbacks...,
-            call_every_n_steps(
-                external_driven_single_column!;
-                call_at_end = true,
-            ),
+            cloud_fraction_callback(
+                parsed_args["dt_cloud_fraction"],
+                dt,
+                t_start,
+                t_end,
+            )...,
         )
     end
 
-    if !parsed_args["call_cloud_diagnostics_per_stage"]
-        dt_cf =
-            dt isa ITime ?
-            ITime(time_to_seconds(parsed_args["dt_cloud_fraction"])) :
-            FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
-        dt_cf, _, _, _ = promote(dt_cf, t_start, dt, t_end)
-        callbacks =
-            (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
+    # Radiation
+    callbacks = (
+        callbacks...,
+        radiation_callback(
+            atmos.radiation_mode,
+            parsed_args["dt_rad"],
+            dt,
+            t_start,
+            t_end,
+            checkpoint_frequency,
+        )...,
+    )
+
+    # Non-orographic gravity wave
+    callbacks = (
+        callbacks...,
+        nogw_callback(
+            atmos.non_orographic_gravity_wave,
+            parsed_args["dt_nogw"],
+            dt,
+            t_start,
+            t_end,
+            checkpoint_frequency,
+        )...,
+    )
+
+    return callbacks
+end
+
+"""
+    default_model_callbacks(model::AtmosModel; kwargs...)
+
+Creates the tuple of model callbacks for any AtmosModel by calling
+`default_model_callbacks` on each physics component. 
+
+# Arguments
+- `model::AtmosModel`: The atmospheric model configuration
+
+# Keyword Arguments
+- `start_date`: Simulation start date
+- `dt`: Simulation time step 
+- `t_start`: Start time
+- `t_end`: End time
+- `output_dir`: Output directory
+- `checkpoint_frequency`: Checkpoint frequency
+- Component-specific frequency overrides (dt_rad, dt_nogw, etc.)
+"""
+function default_model_callbacks(model::AtmosModel; kwargs...)
+    callbacks = ()
+    model_component_names =
+        filter(x -> x !== :disable_surface_flux_tendency, propertynames(model))
+    for property in model_component_names
+        component_callbacks =
+            default_model_callbacks(getproperty(model, property); kwargs...)
+        callbacks = (callbacks..., component_callbacks...)
     end
+    return callbacks
+end
 
-    if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-        dt_rad =
-            dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_rad"])) :
-            FT(time_to_seconds(parsed_args["dt_rad"]))
-        dt_rad, _, _, _ = promote(dt_rad, t_start, dt, t_end)
-        # We use Millisecond to support fractional seconds, eg. 0.1
-        dt_rad_ms = Dates.Millisecond(1_000 * FT(dt_rad))
-        if parsed_args["dt_save_state_to_disk"] != "Inf" &&
-           !CA.isdivisible(dt_save_state_to_disk_dates, dt_rad_ms)
-            @warn "Radiation period ($(dt_rad_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
-            @warn "This simulation will not be reproducible when restarted"
-        end
 
-        callbacks =
-            (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
+function default_model_callbacks(component; kwargs...)
+    return ()
+end
+
+function default_model_callbacks(radiation::AtmosRadiation;
+    dt_rad,
+    start_date,
+    dt,
+    t_start,
+    t_end,
+    checkpoint_frequency,
+    kwargs...)
+    return radiation_callback(
+        radiation.radiation_mode,
+        dt_rad,
+        dt,
+        t_start,
+        t_end,
+        checkpoint_frequency;
+    )
+end
+
+# Gravity wave component callbacks
+function default_model_callbacks(gravity_wave::AtmosGravityWave;
+    dt_nogw = "3hours",
+    start_date,
+    dt,
+    t_start,
+    t_end,
+    checkpoint_frequency,
+    kwargs...)
+    return nogw_callback(
+        gravity_wave.non_orographic_gravity_wave,
+        dt_nogw,
+        dt,
+        t_start,
+        t_end,
+        checkpoint_frequency;
+    )
+end
+
+function default_model_callbacks(water::AtmosWater;
+    dt_cloud_fraction,
+    call_cloud_diagnostics_per_stage = false,
+    start_date,
+    dt,
+    t_start,
+    t_end,
+    kwargs...)
+    if !call_cloud_diagnostics_per_stage && !isnothing(water.moisture_model)
+        return cloud_fraction_callback(
+            dt_cloud_fraction,
+            dt,
+            t_start,
+            t_end,
+        )
     end
+    return ()
+end
 
-    if atmos.non_orographic_gravity_wave isa NonOrographicGravityWave
-        dt_nogw =
-            dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_nogw"])) :
-            FT(time_to_seconds(parsed_args["dt_nogw"]))
-        dt_nogw, _, _, _ = promote(dt_nogw, t_start, dt, sim_info.t_end)
-        # We use Millisecond to support fractional seconds, eg. 0.1
-        dt_nogw_ms = Dates.Millisecond(1_000 * FT(dt_nogw))
-        if parsed_args["dt_save_state_to_disk"] != "Inf" &&
-           !CA.isdivisible(dt_save_state_to_disk_dates, dt_nogw_ms)
-            @warn "Non-orographic gravity wave period ($(dt_nogw_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
-            @warn "This simulation will not be reproducible when restarted"
-        end
+"""
+    common_callbacks(dt, output_dir, start_date, t_start, t_end, comms_ctx; kwargs...)
 
-        callbacks = (callbacks..., call_every_dt(nogw_model_callback!, dt_nogw))
-    end
+Get commonly used callbacks like progress logging, NaN checking, conservation, etc.
+These are not model-specific but are frequently needed across simulations.
+
+# Keyword Arguments
+- `progress_logging = false`: Enable progress reporting
+- `checkpoint_frequency`: Frequency for saving state to disk
+- `external_forcing_column = false`: Enable external forcing for single column
+"""
+function common_callbacks(
+    dt, output_dir, start_date, t_start, t_end, comms_ctx, checkpoint_frequency,
+)
+    callbacks = ()
+
+    # Progress logging
+    callbacks = (callbacks..., progress_logging_callback(dt, t_start, t_end)...)
+
+    # NaN checking
+    callbacks = (callbacks..., nan_checking_callback(1024)...)
+
+    # Graceful exit
+    callbacks = (callbacks..., graceful_exit_callback(output_dir)...)
+
+    # Checkpointing
+    callbacks = (
+        callbacks...,
+        checkpoint_callback(checkpoint_frequency, output_dir, start_date, t_start)...,
+    )
+
+    # Garbage collection
+    callbacks = (callbacks..., gc_callback(comms_ctx)...)
 
     return callbacks
 end

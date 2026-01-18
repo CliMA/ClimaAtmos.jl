@@ -9,9 +9,6 @@
 | SOARES | Shallow Cumulus Convection | Shallow Cumulus | [Soares et al. (2004)](https://doi.org/10.1256/qj.03.223) |
 | GABLS | GEWEX Atmospheric Boundary Layer Study | Dry Convective Boundary Layer | [Kosović & Curry (2000)](https://doi.org/10.1175/1520-0469(2000)057<1052:ALESSO>2.0.CO;2) |
 | TRMM | Tropical Rainfall Measuring Mission | Deep Convection | [Grabowski et al. (2006)](https://doi.org/10.1256/qj.04.147) |
-| ARM_SGP | Atmospheric Radiation Measurement Southern Great Plains | Continental Shallow Cumulus | [Brown et al. (2002)](https://doi.org/10.1256/qj.01.202) |
-| LifeCycle | Life Cycle of Shallow Cumulus | Shallow Cumulus Life Cycle | [Tan et al. (2018)](https://doi.org/10.1002/2017MS001162) |
-| GATE_III | GARP Atlantic Tropical Experiment | Tropical Deep Convection | [Khairoutdinov et al. (2009)](https://doi.org/10.3894/JAMES.2009.1.15) |
 
 For example, to run the BOMEX test case execute the following:
 ```bash

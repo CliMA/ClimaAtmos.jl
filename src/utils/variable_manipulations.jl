@@ -73,11 +73,11 @@ end
     gs_tracer_names(Y)
 
 `Tuple` of `@name`s for the grid-scale tracers in the center field `Y.c`
-(excluding `ρ`, `ρe_tot`, velocities, and SGS fields).
+(excluding `ρ`, `ρe_tot`, `ρtke`, velocities, and SGS fields).
 """
 gs_tracer_names(Y) =
     unrolled_filter(MatrixFields.top_level_names(Y.c)) do name
-        is_ρ_weighted_name(name) && !(name in (@name(ρ), @name(ρe_tot)))
+        is_ρ_weighted_name(name) && !(name in (@name(ρ), @name(ρe_tot), @name(ρtke)))
     end
 
 """

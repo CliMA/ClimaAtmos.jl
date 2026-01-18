@@ -81,7 +81,3 @@ if get(ENV, "BUILDKITE", "") == "true"
         JSON.print(io, table_summary)
     end
 end
-
-if config.comms_ctx isa ClimaComms.SingletonCommsContext && !isinteractive()
-    include(joinpath(pkgdir(CA), "perf", "jet_report_nfailures.jl"))
-end

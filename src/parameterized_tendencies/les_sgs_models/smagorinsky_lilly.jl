@@ -9,7 +9,7 @@ import ClimaCore: Geometry
 """
     lilly_stratification_correction(p, ᶜS)
 
-Return a lazy representation of the Lilly stratification correction factor 
+Return a lazy representation of the Lilly stratification correction factor
     based on the local Richardson number.
 
 # Arguments
@@ -36,13 +36,13 @@ end
 """
     set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
-Compute the Smagorinsky-Lilly horizontal and vertical quantities needed for 
+Compute the Smagorinsky-Lilly horizontal and vertical quantities needed for
     subgrid-scale diffusive tendencies
 
-The subgrid-scale momentum flux tensor is defined by `τ = -2 νₜ ∘ S`, 
-where `νₜ` is the Smagorinsky-Lilly eddy viscosity and `S` is the strain rate tensor. 
+The subgrid-scale momentum flux tensor is defined by `τ = -2 νₜ ∘ S`,
+where `νₜ` is the Smagorinsky-Lilly eddy viscosity and `S` is the strain rate tensor.
 
-The turbulent diffusivity is defined as `D = νₜ / Pr_t`, 
+The turbulent diffusivity is defined as `D = νₜ / Pr_t`,
 where `Pr_t` is the turbulent Prandtl number for neutral stratification.
 
 This method precomputes and stores in `p.precomputed` the following quantities:

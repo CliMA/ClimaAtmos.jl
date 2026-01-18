@@ -33,10 +33,10 @@ struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
     """
-    Reset the RNG seed before calling RRTMGP to a known value (the timestep number). 
-    When modeling cloud optics, RRTMGP uses a random number generator. 
-    Resetting the seed every time RRTMGP is called to a deterministic value ensures that 
-    the simulation is fully reproducible and can be restarted in a reproducible way. 
+    Reset the RNG seed before calling RRTMGP to a known value (the timestep number).
+    When modeling cloud optics, RRTMGP uses a random number generator.
+    Resetting the seed every time RRTMGP is called to a deterministic value ensures that
+    the simulation is fully reproducible and can be restarted in a reproducible way.
     Disable this option when running production runs.
     """
     reset_rng_seed::Bool
@@ -51,10 +51,10 @@ struct AllSkyRadiationWithClearSkyDiagnostics{
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
     """
-    Reset the RNG seed before calling RRTMGP to a known value (the timestep number). 
-    When modeling cloud optics, RRTMGP uses a random number generator. 
-    Resetting the seed every time RRTMGP is called to a deterministic value ensures that 
-    the simulation is fully reproducible and can be restarted in a reproducible way. 
+    Reset the RNG seed before calling RRTMGP to a known value (the timestep number).
+    When modeling cloud optics, RRTMGP uses a random number generator.
+    Resetting the seed every time RRTMGP is called to a deterministic value ensures that
+    the simulation is fully reproducible and can be restarted in a reproducible way.
     Disable this option when running production runs.
     """
     reset_rng_seed::Bool
@@ -787,8 +787,8 @@ function _RRTMGPModel(
         set_and_save!(z_lev, "face_z", t..., dict)
         if radiation_mode.deep_atmosphere && :planet_radius in keys(dict)
             planet_radius = pop!(dict, :planet_radius)
-            # Area ratio appears in denominator of RRTMGP scaling functions, 
-            # we therefore pass the multiplicative inverse from ClimaAtmos to 
+            # Area ratio appears in denominator of RRTMGP scaling functions,
+            # we therefore pass the multiplicative inverse from ClimaAtmos to
             # use mult ops instead of div in RRTMGP GPU kernels.
             metric_scaling .=
                 inv.(((z_lev .+ planet_radius) ./ planet_radius) .^ (FT(2)))
@@ -900,7 +900,7 @@ NVTX.@annotate function update_fluxes!(model, seedval)
     model.radiation_mode.add_isothermal_boundary_layer &&
         update_boundary_layer!(model)
     clip_values!(model)
-    # TODO : update_concentrations as part of update_atmospheric_state! 
+    # TODO : update_concentrations as part of update_atmospheric_state!
     update_concentrations!(model.radiation_mode, model)
     update_lw_fluxes!(model.radiation_mode, model)
     update_sw_fluxes!(model.radiation_mode, model)
@@ -948,9 +948,9 @@ update_views(f, mode, outs, ins, others, out_range, in_range1, in_range2) = f(
 
 """
     update_boundary_layer!(model)
-    
-Adds an isothermal boundary layer above the domain and extension (the pressure at the top of this layer 
-is the minimum pressure supported by RRTMGP, while the temperature and volume mixing ratios in this layer 
+
+Adds an isothermal boundary layer above the domain and extension (the pressure at the top of this layer
+is the minimum pressure supported by RRTMGP, while the temperature and volume mixing ratios in this layer
 are the same as in the layer below it)
 """
 function update_boundary_layer!(model)

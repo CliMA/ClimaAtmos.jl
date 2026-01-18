@@ -1376,7 +1376,7 @@ add_diagnostic_variable!(
 )
 
 ###
-# Environment turbulent kinetic energy (3d)
+# Turbulent kinetic energy (3d)
 ###
 compute_tke!(out, state, cache, time) =
     compute_tke!(out, state, cache, time, cache.atmos.turbconv_model)
@@ -1398,7 +1398,7 @@ function compute_tke!(
     end
 
     ᶜtke = @. lazy(
-        specific(state.c.sgs⁰.ρatke, state.c.ρ),
+        specific(state.c.ρtke, state.c.ρ),
     )
     if isnothing(out)
         return Base.materialize(ᶜtke)
@@ -1570,14 +1570,11 @@ function compute_edt!(
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
     (; params) = cache
 
-    ᶜρa⁰ =
-        turbconv_model isa PrognosticEDMFX ?
-        (@. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))) : state.c.ρ
-    ᶜtke⁰ = @. lazy(
-        specific(state.c.sgs⁰.ρatke, state.c.ρ),
+    ᶜtke = @. lazy(
+        specific(state.c.ρtke, state.c.ρ),
     )
     ᶜmixing_length_field = ᶜmixing_length(state, cache)
-    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
     ᶜprandtl_nvec = @. lazy(
         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
     )
@@ -1659,14 +1656,11 @@ function compute_evu!(
 )
     turbconv_params = CAP.turbconv_params(cache.params)
 
-    ᶜρa⁰ =
-        turbconv_model isa PrognosticEDMFX ?
-        (@. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))) : state.c.ρ
-    ᶜtke⁰ = @. lazy(
-        specific(state.c.sgs⁰.ρatke, state.c.ρ),
+    ᶜtke = @. lazy(
+        specific(state.c.ρtke, state.c.ρ),
     )
     ᶜmixing_length_field = ᶜmixing_length(state, cache)
-    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
 
     if isnothing(out)
         return Base.materialize(ᶜK_u)

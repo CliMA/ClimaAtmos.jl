@@ -123,8 +123,8 @@ end
 # Set the derivative of sqrt(x) to iszero(x) ? zero(x) : inv(2 * sqrt(x)) in
 # order to properly handle derivatives of x * sqrt(x). Without this change, the
 # derivative of the turbulent kinetic energy dissipation tendency, which is a
-# linear function of ᶜtke⁰ * sqrt(ᶜtke⁰), evaluates to NaN at every point where
-# tke⁰ = 0. In general, this change is valid if all functions of sqrt(x) can be
+# linear function of ᶜtke * sqrt(ᶜtke), evaluates to NaN at every point where
+# tke = 0. In general, this change is valid if all functions of sqrt(x) can be
 # expanded around x = 0 with a leading term of the form c * x^p * sqrt(x), where
 # c and p are constants and p ≥ 1/2. For example, this will be the case for any
 # linear function of f(x) * sqrt(x), where f(x) has a non-constant Taylor
@@ -166,6 +166,7 @@ for func in (:isequal, :isless, :<, :>, :(==), :!=, :<=, :>=)
 
     # These methods handle combinations of Reals and Duals without ambiguities.
     for R in (ForwardDiff.AMBIGUOUS_TYPES..., AbstractIrrational)
+        R == Real && continue # defining these methods for Real causes ambiguities from StatsBase
         @eval @inline Base.$func(arg1::ForwardDiff.Dual{Jacobian}, arg2::$R) =
             $func(ForwardDiff.value(arg1), arg2)
         @eval @inline Base.$func(arg1::$R, arg2::ForwardDiff.Dual{Jacobian}) =

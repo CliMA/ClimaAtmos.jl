@@ -30,15 +30,11 @@ ClimaAtmos.InitialConditions.MoistAdiabaticProfileEDMFX
 ### Cases from literature
 
 ```@docs
-ClimaAtmos.InitialConditions.Nieuwstadt
 ClimaAtmos.InitialConditions.GABLS
-ClimaAtmos.InitialConditions.GATE_III
-ClimaAtmos.InitialConditions.ARM_SGP
 ClimaAtmos.InitialConditions.DYCOMS_RF01
 ClimaAtmos.InitialConditions.DYCOMS_RF02
 ClimaAtmos.InitialConditions.Rico
 ClimaAtmos.InitialConditions.TRMM_LBA
-ClimaAtmos.InitialConditions.LifeCycleTan2018
 ClimaAtmos.InitialConditions.Bomex
 ClimaAtmos.InitialConditions.Soares
 ClimaAtmos.InitialConditions.RCEMIPIIProfile

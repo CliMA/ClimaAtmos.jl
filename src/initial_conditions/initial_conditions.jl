@@ -708,7 +708,7 @@ function overwrite_initial_conditions!(
     Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
     e_kin = similar(ᶜT)
     e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
-    e_pot = Fields.coordinate_field(Y.c).z .* thermo_params.grav
+    e_pot = geopotential.(thermo_params.grav, Fields.coordinate_field(Y.c).z)
     Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
     # Initialize prognostic EDMF 0M subdomains if present
     if hasproperty(Y.c, :sgsʲs)
@@ -746,9 +746,9 @@ function overwrite_initial_conditions!(
             ) .* Y.c.ρ
     end
 
-    if hasproperty(Y.c, :sgs⁰) && hasproperty(Y.c.sgs⁰, :ρatke)
+    if hasproperty(Y.c, :ρtke)
         # NOTE: This is not the most consistent, but it is better than NaNs
-        fill!(Y.c.sgs⁰.ρatke, 0)
+        fill!(Y.c.ρtke, 0)
     end
 
     return nothing
@@ -853,7 +853,7 @@ function _overwrite_initial_conditions_from_file!(
     Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
     e_kin = similar(ᶜT)
     e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
-    e_pot = Fields.coordinate_field(Y.c).z .* thermo_params.grav
+    e_pot = geopotential.(thermo_params.grav, Fields.coordinate_field(Y.c).z)
     Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
     if hasproperty(Y.c, :ρq_tot)
         Y.c.ρq_tot .= ᶜq_tot .* Y.c.ρ
@@ -879,9 +879,9 @@ function _overwrite_initial_conditions_from_file!(
             ) .* Y.c.ρ
     end
 
-    if hasproperty(Y.c, :sgs⁰) && hasproperty(Y.c.sgs⁰, :ρatke)
+    if hasproperty(Y.c, :ρtke)
         # NOTE: This is not the most consistent, but it is better than NaNs
-        fill!(Y.c.sgs⁰.ρatke, 0)
+        fill!(Y.c.ρtke, 0)
     end
 
     return nothing
@@ -1300,16 +1300,6 @@ function hydrostatic_pressure_profile(;
 end
 
 """
-    Nieuwstadt
-
-The `InitialCondition` described in [Nieuwstadt1993](@cite), but with a
-hydrostatically balanced pressure profile.
-"""
-Base.@kwdef struct Nieuwstadt <: InitialCondition
-    prognostic_tke::Bool = false
-end
-
-"""
     GABLS
 
 The `InitialCondition` described in [Kosovic2000](@cite), but with a hydrostatically
@@ -1319,7 +1309,7 @@ Base.@kwdef struct GABLS <: InitialCondition
     prognostic_tke::Bool = false
 end
 
-for IC in (:Nieuwstadt, :GABLS)
+for IC in (:GABLS,)
     θ_func_name = Symbol(IC, :_θ_liq_ice)
     u_func_name = Symbol(IC, :_u)
     tke_func_name = Symbol(IC, :_tke_prescribed)
@@ -1406,27 +1396,7 @@ Base.@kwdef struct Bomex <: InitialCondition
     prognostic_tke::Bool = false
 end
 
-"""
-    LifeCycleTan2018
-
-The `InitialCondition` described in [Tan2018](@cite), but with a hydrostatically
-balanced pressure profile.
-"""
-Base.@kwdef struct LifeCycleTan2018 <: InitialCondition
-    prognostic_tke::Bool = false
-end
-
-"""
-    ARM_SGP
-
-The `InitialCondition` described in [Brown2002](@cite), but with a
-hydrostatically balanced pressure profile.
-"""
-Base.@kwdef struct ARM_SGP <: InitialCondition
-    prognostic_tke::Bool = false
-end
-
-for IC in (:Soares, :Bomex, :LifeCycleTan2018, :ARM_SGP)
+for IC in (:Soares, :Bomex)
     θ_func_name = Symbol(IC, :_θ_liq_ice)
     q_tot_func_name = Symbol(IC, :_q_tot)
     u_func_name = Symbol(IC, :_u)
@@ -1436,9 +1406,8 @@ for IC in (:Soares, :Bomex, :LifeCycleTan2018, :ARM_SGP)
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
         p_0 = FT(
-            $IC <: Bomex || $IC <: LifeCycleTan2018 ? 101500.0 :
+            $IC <: Bomex ? 101500.0 :
             $IC <: Soares ? 100000.0 :
-            $IC <: ARM_SGP ? 97000.0 :
             error("Invalid Initial Condition : $($IC)"),
         )
         θ = APL.$θ_func_name(FT)

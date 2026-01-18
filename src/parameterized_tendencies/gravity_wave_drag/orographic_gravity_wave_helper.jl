@@ -73,12 +73,12 @@ end
 
 """
     calc_velocity_potential(elev, lon, lat, earth_radius)
-    
+
     Calculate velocity potential
     - elev: surface elevation
     - lon: longitude
     - lat: latitude
-    - earth_radius: radius of the Earth 
+    - earth_radius: radius of the Earth
 """
 function calc_velocity_potential(elev, lon, lat, earth_radius)
     FT = eltype(elev)

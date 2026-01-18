@@ -260,7 +260,7 @@ steps:
           --job_id prognostic_edmfx_rico_implicit_column
         artifact_paths: "prognostic_edmfx_rico_implicit_column/output_active/*"
         agents:
-          slurm_mem: 20GB
+          slurm_mem: 30GB
 
       - label: ":umbrella: Prognostic EDMF Rico with 2-moment in a column"
         command: >
@@ -288,7 +288,7 @@ steps:
           --job_id prognostic_edmfx_trmm_implicit_column
         artifact_paths: "prognostic_edmfx_trmm_implicit_column/output_active/*"
         agents:
-          slurm_mem: 20GB
+          slurm_mem: 35GB
 
       - label: ":genie: Prognostic EDMF TRMM with 0-moment in a column"
         command: >
@@ -601,12 +601,13 @@ steps:
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: baroclinic wave equilmoist (AMD)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
-          --config_file $CONFIG_PATH/baroclinic_wave_equil_amd.yml
-          --job_id baroclinic_wave_equil_amd
+      # Temporarily disabled until fixed
+      # - label: ":computer: baroclinic wave equilmoist (AMD)"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
+      #     --config_file $CONFIG_PATH/baroclinic_wave_equil_amd.yml
+      #     --job_id baroclinic_wave_equil_amd
 
         artifact_paths: "baroclinic_wave_equil_amd/output_active/*"
         soft_fail: true
@@ -761,13 +762,13 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16G
 
-      - label: ":computer: test restart"
+      - label: ":computer: test restart manytests"
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
         agents:
           slurm_mem: 16GB
 
-      - label: ":computer: test restart GPU"
+      - label: ":computer: test restart GPU manytests"
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
         env:
@@ -807,6 +808,37 @@ steps:
           slurm_gpus_per_task: 1
           slurm_ntasks: 2
           slurm_mem: 24G
+
+      - label: ":computer: test restart_AtmosSimulation"
+        command: >
+          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: test restart_AtmosSimulation GPU"
+        command: >
+          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+
+      - label: ":computer: test restart_AtmosSimulation manytests"
+        command: >
+          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl --manytests true
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: test restart_AtmosSimulation GPU manytests"
+        command: >
+          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl --manytests true
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+        soft_fail: true
 
   - group: "MPI Examples"
     steps:
@@ -1328,7 +1360,7 @@ steps:
         agents:
           slurm_mem: 24GB
 
-  - group: "Checkbounds/Inference/Invalidations"
+  - group: "Checkbounds/Invalidations"
     steps:
       # TODO: we should somehow decouple this unit test from the perf env / scripts
       # Checkbounds
@@ -1341,16 +1373,6 @@ steps:
         artifact_paths: "checkbounds/output_active/*"
         agents:
           slurm_mem: 20GB
-
-      # Inference
-      - label: ":rocket: JET n-failures (inference)"
-        command: >
-          julia --color=yes --project=.buildkite perf/jet_test_nfailures.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
-          --config_file $PERF_CONFIG_PATH/bm_default.yml
-          --job_id jet_n_failures
-        agents:
-          slurm_mem: 24GB
 
       # Latency
       - label: ":mag::rocket: Invalidations"

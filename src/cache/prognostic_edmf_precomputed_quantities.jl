@@ -23,10 +23,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; ᶜp, ᶜK) = p.precomputed
     (; ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰) = p.precomputed
 
-    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
-    # @. ᶜK⁰ += ᶜtke⁰
+    # @. ᶜK⁰ += ᶜtke
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
@@ -176,7 +176,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     n = n_mass_flux_subdomains(turbconv_model)
 
     (; ᶜu, ᶜp, ᶠu³, ᶜts, ᶠu³⁰, ᶜts⁰) = p.precomputed
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ρatke_flux) = p.precomputed
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ρtke_flux) = p.precomputed
     (;
         ᶜuʲs,
         ᶜtsʲs,
@@ -196,7 +196,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶠlg = Fields.local_geometry_field(Y.f)
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
     ᶜvert_div = p.scratch.ᶜtemp_scalar
     ᶜmassflux_vert_div = p.scratch.ᶜtemp_scalar_2
@@ -217,7 +217,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             get_physical_w(ᶜu, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             FT(0),
-            max(ᶜtke⁰, 0),
+            max(ᶜtke, 0),
             p.atmos.edmfx_model.entr_model,
         )
 
@@ -258,7 +258,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             ᶜvert_div,
             ᶜmassflux_vert_div,
             ᶜw_vert_div,
-            ᶜtke⁰,
+            ᶜtke,
             p.atmos.edmfx_model.detr_model,
         )
 
@@ -319,15 +319,15 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜstrain_rate = compute_strain_rate_center_vertical(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
-    ρatke_flux_values = Fields.field_values(ρatke_flux)
-    ρa_sfc_values = Fields.field_values(Fields.level(ᶜρa⁰, 1)) # TODO: replace by surface value
+    ρtke_flux_values = Fields.field_values(ρtke_flux)
+    ρ_sfc_values = Fields.field_values(Fields.level(Y.c.ρ, 1)) # TODO: replace by surface value
     ustar_values = Fields.field_values(ustar)
     sfc_local_geometry_values = Fields.field_values(
         Fields.level(Fields.local_geometry_field(Y.f), half),
     )
-    @. ρatke_flux_values = surface_flux_tke(
+    @. ρtke_flux_values = surface_flux_tke(
         turbconv_params,
-        ρa_sfc_values,
+        ρ_sfc_values,
         ustar_values,
         sfc_local_geometry_values,
     )

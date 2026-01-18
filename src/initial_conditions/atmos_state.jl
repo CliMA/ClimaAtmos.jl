@@ -71,7 +71,7 @@ energy_variables(ls) = (;
     ρe_tot = ls.ρ * (
         TD.internal_energy(ls.thermo_params, ls.thermo_state) +
         norm_sqr(ls.velocity) / 2 +
-        CAP.grav(ls.params) * ls.geometry.coordinates.z
+        geopotential(CAP.grav(ls.params), ls.geometry.coordinates.z)
     )
 )
 
@@ -163,14 +163,14 @@ function turbconv_center_variables(
 )
     n = n_mass_flux_subdomains(turbconv_model)
     a_draft = ls.turbconv_state.draft_area
-    sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
+    ρtke = ls.ρ * ls.turbconv_state.tke
     ρa = ls.ρ * a_draft / n
     mse =
         TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
-        CAP.grav(ls.params) * ls.geometry.coordinates.z
+        geopotential(CAP.grav(ls.params), ls.geometry.coordinates.z)
     q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
     sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_tot = q_tot), Val(n))
-    return (; sgs⁰, sgsʲs)
+    return (; ρtke = ρtke, sgsʲs)
 end
 function turbconv_center_variables(
     ls,
@@ -182,11 +182,11 @@ function turbconv_center_variables(
     # TODO - Instead of dispatching, should we unify this with the above function?
     n = n_mass_flux_subdomains(turbconv_model)
     a_draft = ls.turbconv_state.draft_area
-    sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
+    ρtke = ls.ρ * ls.turbconv_state.tke
     ρa = ls.ρ * a_draft / n
     mse =
         TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
-        CAP.grav(ls.params) * ls.geometry.coordinates.z
+        geopotential(CAP.grav(ls.params), ls.geometry.coordinates.z)
     q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
     q_liq = TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state) # - q_rai ?
     q_ice = TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state) # - q_sno ?
@@ -223,7 +223,7 @@ function turbconv_center_variables(
             Val(n),
         )
     end
-    return (; sgs⁰, sgsʲs)
+    return (; ρtke = ρtke, sgsʲs)
 end
 
 function turbconv_center_variables(
@@ -233,8 +233,8 @@ function turbconv_center_variables(
     _,
     gs_vars,
 )
-    sgs⁰ = (; ρatke = ls.ρ * ls.turbconv_state.tke)
-    return (; sgs⁰)
+    ρtke = ls.ρ * ls.turbconv_state.tke
+    return (; ρtke = ρtke)
 end
 
 turbconv_face_variables(ls, ::Nothing) = (;)

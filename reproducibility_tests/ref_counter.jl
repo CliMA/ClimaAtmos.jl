@@ -1,4 +1,4 @@
-291
+300
 
 # **README**
 #
@@ -20,6 +20,35 @@
 
 
 #=
+
+300
+- Update to SurfaceFluxes v0.15
+
+299
+- Change single column simulations to use a minimal BoxGrid (x_elem=1, y_elem=1, nh_poly=1)
+
+298
+- Thermodynamics.jl v0.15.3 has behavioral changes, see: https://github.com/CliMA/Thermodynamics.jl/pull/293
+
+297
+- Add new dataset to reproducibility bundle : `baroclinic_wave_equil_amd/prog_state.hdf5`.
+
+296
+- Fix ρa tendencies due to vertical diffusion and hyperdiffusion of q_totʲ for PEDMF
+
+295
+- Update to SurfaceFluxes.jl v0.14.2
+
+294
+- Use grid-mean density in TKE surface fluxes
+
+293
+- Use split divergence in advection and pressure gradient
+
+292
+- Rename ρatke to ρtke and move it outside of sgs⁰ and fix a bug that there is no
+hyperdiffusion of TKE when using EDOnlyEDMFX.
+
 291
 - Use grid-mean velocity in the advection of TKE
 
@@ -39,7 +68,7 @@ result of reading values from params rather than from a file.
 likely due to slightly different float values. Additionally, added fixed trace gas
 values to the RCE ci case as per Wing et. al. (2018).
 
-286 
+286
 - We don't know why, but a few (not all) cases seemed to not reproduce the reference.
   Maybe some files were not moved correctly.
 
@@ -69,8 +98,8 @@ which changes the closure in the stable case (from Gryanik to Businger)
 - Add ∂/∂q elements to Jacobian
 
 277
-- Update to use SurfaceFluxes.jl@0.14.1. Supports Charnock-parameterization for aerodynamic roughness 
-(default is still user-prescribed ScalarRoughness). SurfaceFluxes catch for neutrally-stable boundary layers (ζ ≈ 0) removed. 
+- Update to use SurfaceFluxes.jl@0.14.1. Supports Charnock-parameterization for aerodynamic roughness
+(default is still user-prescribed ScalarRoughness). SurfaceFluxes catch for neutrally-stable boundary layers (ζ ≈ 0) removed.
 
 276
 - Update prognostic EDMF boundary conditions: apply equal surface fluxes to the
