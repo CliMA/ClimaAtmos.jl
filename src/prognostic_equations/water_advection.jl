@@ -48,10 +48,6 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         (@name(ρq_rai), @name(ᶜwᵣ)),
         (@name(ρq_sno), @name(ᶜwₛ)),
     )
-    internal_energy_func(name) =
-        (name == @name(ρq_liq) || name == @name(ρq_rai)) ? TD.internal_energy_liquid :
-        (name == @name(ρq_ice) || name == @name(ρq_sno)) ? TD.internal_energy_ice :
-        nothing
     MatrixFields.unrolled_foreach(microphysics_tracers) do (ρq_name, w_name)
         MatrixFields.has_field(Y.c, ρq_name) || return
 
@@ -100,7 +96,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             ᶜρq = MatrixFields.get_field(Y.c, get_ρχ_name(q_name))
             ᶜw = MatrixFields.get_field(p.precomputed, w_name)
 
-            e_int_func = internal_energy_func(get_ρχ_name(q_name))
+            e_int_func = internal_energy_func(q_name)
             # TODO do we need to add kinetic energy of subdomains?
             @. Yₜ.c.ρe_tot -=
                 ᶜprecipdivᵥ(

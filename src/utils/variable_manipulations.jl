@@ -384,6 +384,25 @@ function get_χʲ_name_from_ρχ_name(ρχ_name)
 end
 
 """
+    get_base_name(composite_name::FieldName)
+Returns the `FieldName` corresponding to the lowest level of composite_name.
+Given a composite name `composite_name`, this function returns the new name corresponding to
+the lowest level: If `composite_name` is a base name (no children), it returns the same name.
+If `composite_name` has internal structure, the function recurses into the child names and
+returns the lowest level.
+"""
+function get_base_name(composite_name)
+    parent_name = MatrixFields.FieldName(MatrixFields.extract_first(composite_name))
+    child_name = MatrixFields.drop_first(composite_name)
+    base_name =
+        (child_name == MatrixFields.@name()) ?
+        parent_name :
+        get_base_name(child_name)
+
+    return base_name
+end
+
+"""
     ρa⁰(ρ, sgsʲs, turbconv_model)
 
 Computes the environment area-weighted density (`ρa⁰`).

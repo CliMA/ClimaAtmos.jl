@@ -431,16 +431,6 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶜ∂ρ∂t_sed = p.scratch.ᶜtemp_scalar_3
             @. ᶜ∂ρ∂t_sed = 0
 
-            ᶜinv_ρ̂ = (@. lazy(
-                specific(
-                    FT(1),
-                    Y.c.sgsʲs.:($$j).ρa,
-                    FT(0),
-                    ᶜρʲs.:($$j),
-                    turbconv_model,
-                ),
-            ))
-
             # Sedimentation
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.
             sgs_microphysics_tracers = (
@@ -471,45 +461,33 @@ function edmfx_sgs_vertical_advection_tendency!(
                 vtt = updraft_sedimentation(
                     ᶜρʲs.:($j),
                     ᶜwʲ,
-                    ᶜa,
                     ᶜqʲ,
                     ᶠJ,
                 )
-                @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
-                @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
+                @. ᶜqʲₜ += vtt
+                @. Yₜ.c.sgsʲs.:($$j).q_tot += vtt
                 @. ᶜ∂ρ∂t_sed += vtt
 
                 # Flux form sedimentation of energy
-                if name in (@name(q_liq), @name(q_rai))
-                    ᶜmse_li = (@. lazy(
-                        TD.internal_energy_liquid(thp, ᶜtsʲs.:($$j)) + ᶜΦ,
-                    ))
-                elseif name in (@name(q_ice), @name(q_sno))
-                    ᶜmse_li = (@. lazy(
-                        TD.internal_energy_ice(thp, ᶜtsʲs.:($$j)) + ᶜΦ,
-                    ))
-                else
-                    error("Unsupported moisture tracer variable")
-                end
+                e_int_func = internal_energy_func(name)
+                ᶜmse_li = @. lazy(e_int_func(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
                 vtt = updraft_sedimentation(
                     ᶜρʲs.:($j),
                     ᶜwʲ,
-                    ᶜa,
                     ᶜqʲ .* ᶜmse_li,
                     ᶠJ,
                 )
-                @. Yₜ.c.sgsʲs.:($$j).mse +=
-                    ᶜinv_ρ̂ * vtt
+                @. Yₜ.c.sgsʲs.:($$j).mse += vtt
             end
 
             # Contribution of density variation due to sedimentation
-            @. Yₜ.c.sgsʲs.:($$j).ρa += ᶜ∂ρ∂t_sed
-            @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).mse * ᶜ∂ρ∂t_sed
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_tot * ᶜ∂ρ∂t_sed
-            @. Yₜ.c.sgsʲs.:($$j).q_liq -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_liq * ᶜ∂ρ∂t_sed
-            @. Yₜ.c.sgsʲs.:($$j).q_ice -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_ice * ᶜ∂ρ∂t_sed
-            @. Yₜ.c.sgsʲs.:($$j).q_rai -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_rai * ᶜ∂ρ∂t_sed
-            @. Yₜ.c.sgsʲs.:($$j).q_sno -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_sno * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).ρa += Y.c.sgsʲs.:($$j).ρa * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).mse -= Y.c.sgsʲs.:($$j).mse * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -= Y.c.sgsʲs.:($$j).q_tot * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_liq -= Y.c.sgsʲs.:($$j).q_liq * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_ice -= Y.c.sgsʲs.:($$j).q_ice * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_rai -= Y.c.sgsʲs.:($$j).q_rai * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_sno -= Y.c.sgsʲs.:($$j).q_sno * ᶜ∂ρ∂t_sed
 
         end
 
@@ -551,31 +529,170 @@ function edmfx_sgs_vertical_advection_tendency!(
                 vtt = updraft_sedimentation(
                     ᶜρʲs.:($j),
                     ᶜwʲ,
-                    ᶜa,
                     ᶜχʲ,
                     ᶠJ,
                 )
-                @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
+                @. ᶜχʲₜ += vtt
 
                 # Contribution of density variation due to sedimentation
-                @. ᶜχʲₜ -= ᶜinv_ρ̂ * ᶜχʲ * ᶜ∂ρ∂t_sed
+                @. ᶜχʲₜ -= ᶜχʲ * ᶜ∂ρ∂t_sed
             end
         end
     end
 end
 
 """
-    updraft_sedimentation(ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ)
+    edmfx_sgs_explicit_sedimentation_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Compute the sedimentation tendency of tracer `χ` within an updraft, including lateral 
-detrainment when the updraft area increases with height.
+Compute the SGS explicit sedimentation tendency of tracers within EDMFX updrafts
+when the updraft area fraction decreases with height.
+
+# Description
+This function computes the remaining sedimentation contribution associated with
+negative vertical gradients of updraft area fraction (``∂a/∂z < 0``), which is not
+captured by the sedimentation treatment in the `edmfx_sgs_vertical_advection_tendency!`
+function.
+
+When the updraft area contracts with height, sedimenting mass average diverges within
+the updraft column, producing an additional tracer tendency
+``∂χ/∂t = (ρ w χ ∂a/∂z) / (ρ a) = w χ ∂a/∂z / a``.
+This term is applied only for ``∂a/∂z < 0``; for expanding updrafts
+(``∂a/∂z > 0``), the corresponding contribution is cancelled by lateral
+detrainment and is therefore omitted.
+
+# Arguments
+- `Yₜ`: tendency state (updated in place)
+- `Y`: prognostic state
+- `p`: parameter and precomputed-field container
+- `t`: current time
+- `turbconv_model`: EDMFX turbulence–convection model configuration
+
+# Notes
+This routine complements `edmfx_sgs_vertical_advection_tendency!`, together providing a complete
+treatment of sedimentation effects for both increasing and decreasing updraft area fractions.
+"""
+edmfx_sgs_explicit_sedimentation_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+function edmfx_sgs_explicit_sedimentation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    turbconv_model::PrognosticEDMFX,
+)
+    (; params, dt) = p
+    n = n_prognostic_mass_flux_subdomains(turbconv_model)
+    (; ᶜρʲs) = p.precomputed
+    FT = eltype(params)
+
+    ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
+    ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+
+    for j in 1:n
+        ᶜneg_∂a∂z_a = @. lazy(
+            min(0,
+                ᶜprecipdivᵥ(
+                    ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(
+                        Geometry.WVector(
+                            max(eps(FT), draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))),
+                        ),
+                    ),
+                ),
+            ) /
+            max(eps(FT), draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))),
+        )
+
+        if p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
+        )
+            thp = CAP.thermodynamics_params(params)
+            (; ᶜΦ) = p.core
+            (; ᶜtsʲs) = p.precomputed
+            ᶜ∂ρ∂t_sed = p.scratch.ᶜtemp_scalar_3
+            @. ᶜ∂ρ∂t_sed = 0
+            vtt = p.scratch.ᶜtemp_scalar_4
+            @. vtt = 0
+
+            # Sedimentation
+            sgs_microphysics_tracers = (
+                (@name(c.sgsʲs.:(1).q_liq), @name(q_liq), @name(ᶜwₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_ice), @name(q_ice), @name(ᶜwᵢʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_rai), @name(q_rai), @name(ᶜwᵣʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_sno), @name(q_sno), @name(ᶜwₛʲs.:(1))),
+            )
+
+            MatrixFields.unrolled_foreach(
+                sgs_microphysics_tracers,
+            ) do (qʲ_name, name, wʲ_name)
+                MatrixFields.has_field(Y, qʲ_name) || return
+
+                ᶜqʲ = MatrixFields.get_field(Y, qʲ_name)
+                ᶜqʲₜ = MatrixFields.get_field(Yₜ, qʲ_name)
+                ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
+
+                @. vtt = min(ᶜwʲ, 0.5 * ᶜdz / dt) * ᶜqʲ * ᶜneg_∂a∂z_a
+                @. ᶜqʲₜ += vtt
+                @. Yₜ.c.sgsʲs.:($$j).q_tot += vtt
+                @. ᶜ∂ρ∂t_sed += vtt
+
+                # Flux form sedimentation of energy
+                e_int_func = internal_energy_func(name)
+                ᶜmse_li = @. lazy(e_int_func(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
+                @. vtt = min(ᶜwʲ, 0.5 * ᶜdz / dt) * ᶜqʲ * ᶜmse_li * ᶜneg_∂a∂z_a
+                @. Yₜ.c.sgsʲs.:($$j).mse += vtt
+            end
+
+            # Contribution of density variation due to sedimentation
+            @. Yₜ.c.sgsʲs.:($$j).ρa += Y.c.sgsʲs.:($$j).ρa * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).mse -= Y.c.sgsʲs.:($$j).mse * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -= Y.c.sgsʲs.:($$j).q_tot * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_liq -= Y.c.sgsʲs.:($$j).q_liq * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_ice -= Y.c.sgsʲs.:($$j).q_ice * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_rai -= Y.c.sgsʲs.:($$j).q_rai * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_sno -= Y.c.sgsʲs.:($$j).q_sno * ᶜ∂ρ∂t_sed
+
+        end
+
+        # Sedimentation of number concentrations for 2M microphysics
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+           p.atmos.microphysics_model isa Microphysics2Moment
+
+            sgs_microphysics_tracers = (
+                (@name(c.sgsʲs.:(1).n_liq), @name(ᶜwₙₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
+            )
+
+            MatrixFields.unrolled_foreach(
+                sgs_microphysics_tracers,
+            ) do (χʲ_name, wʲ_name)
+                MatrixFields.has_field(Y, χʲ_name) || return
+
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
+                ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
+
+                vtt = min(ᶜwʲ, 0.5 * ᶜdz / dt) * ᶜχʲ * ᶜneg_∂a∂z_a
+                @. ᶜχʲₜ += vtt
+                @. ᶜχʲₜ -= ᶜχʲ * ᶜ∂ρ∂t_sed
+            end
+        end
+    end
+end
+
+"""
+    updraft_sedimentation(ᶜρ, ᶜw, ᶜχ, ᶠJ)
+
+Compute the sedimentation tendency of tracer `χ` within an updraft, assuming that the 
+updraft area fraction doesn't decrease with height.
 
 # Description
 Sedimenting particles fall with velocity `w` through an updraft of fractional area `a(z)`.  
 The vertical flux divergence gives a tendency of ``∂(ρ w a χ)/∂z``.  
 When `∂a/∂z > 0`, some sedimenting mass exits laterally through the expanding sides, 
 producing a detrainment tendency of ``-ρ w χ ∂a/∂z``.  
-The resulting net tendency in this case is ``a * ∂(ρ w χ)/∂z``.
+The resulting net tendency in this case is ``a * ∂(ρ w χ)/∂z``. This function returns 
+``∂χ/∂t = a * ∂(ρ w χ)/∂z / ρa = ∂(ρ w χ)/∂z / ρ``.
 
 # Equation
 The lateral flux through the updraft side surface `S` within one grid column is  
@@ -590,8 +707,7 @@ A negative sign is applied to represent the loss (detrainment) from the updraft:
 
 # Arguments
 - `ᶜρ`: air density  
-- `ᶜw`: sedimentation velocity (positive downward)  
-- `ᶜa`: updraft area fraction  
+- `ᶜw`: sedimentation velocity (positive downward)
 - `ᶜχ`: tracer mixing ratio  
 - `ᶠJ`: face Jacobian (grid geometry)
 
@@ -601,23 +717,12 @@ Tracer tendency due to sedimentation and lateral detrainment.
 function updraft_sedimentation(
     ᶜρ,
     ᶜw,
-    ᶜa,
     ᶜχ,
     ᶠJ,
 )
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ∂a∂z = @. lazy(ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa))))
     return @. lazy(
-        ifelse(
-            ∂a∂z < 0,
-            -(ᶜprecipdivᵥ(
-                ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(-(ᶜw)) * ᶜa * ᶜχ),
-            )),
-            -(
-                ᶜa * ᶜprecipdivᵥ(
-                    ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(-(ᶜw)) * ᶜχ),
-                )
-            ),
-        ),
+        -1 *
+        ᶜprecipdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(-(ᶜw)) * ᶜχ)) / ᶜρ,
     )
 end

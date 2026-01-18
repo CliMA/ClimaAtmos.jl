@@ -260,6 +260,13 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             p.atmos.turbconv_model,
         )
     end
+    edmfx_sgs_explicit_sedimentation_tendency!(
+        Yₜ,
+        Y,
+        p,
+        t,
+        p.atmos.turbconv_model,
+    )
 
     if p.atmos.diff_mode == Explicit()
         vertical_diffusion_boundary_layer_tendency!(
