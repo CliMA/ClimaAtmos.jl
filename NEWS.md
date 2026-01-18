@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 main
 -------
+- [#4198](https://github.com/CliMA/ClimaAtmos.jl/pull/4198) [badge-💥breaking] modifies surface conditions
+to use SurfaceFluxes v0.15.
 
 v0.33.2
 -------

@@ -5,7 +5,6 @@ abstract type SurfaceSetup end
 
 Used to indicate that there is no surface parameterization and
 that the surface conditions will be explicitly prescribed (e.g. by the coupler).
-The surface conditions must be set by calling `set_surface_conditions!`.
 """
 struct PrescribedSurface <: SurfaceSetup end
 (surface_setup::PrescribedSurface)(params) = nothing

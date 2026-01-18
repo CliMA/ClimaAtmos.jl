@@ -16,6 +16,7 @@ import ..ᶠinterp
 import ..C3
 import ..C12
 import ..compute_kinetic
+import ..geopotential
 import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 import ..EDOnlyEDMFX
