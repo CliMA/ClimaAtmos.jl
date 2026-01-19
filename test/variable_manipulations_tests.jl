@@ -57,7 +57,7 @@ end
     ρχ_fallback = 5.0
     ρ_fallback = 1.0
     val = CA.specific(ρaχ, ρa, ρχ_fallback, ρ_fallback, tc_model)
-    @test val ≈ 10.0 rtol = 0.1 # Should be close to SGS value
+    @test val ≈ ρaχ / ρa rtol = 0.1 # Should be close to SGS value
 
     # Case 2: Small area fraction a = 0.1 < a_half (0.5)
     # Weight should be < 0.5, result blended with fallback (5/1 = 5)
@@ -66,7 +66,7 @@ end
     val_small = CA.specific(ρaχ, ρa, ρχ_fallback, ρ_fallback, tc_model)
     # Should be blended between 10 (SGS) and 5 (GridMean)
     # 5.0 comes from specific(ρχ_fallback, ρ_fallback)
-    @test CA.specific(ρχ_fallback, ρ_fallback) < val_small < 10.0
+    @test CA.specific(ρχ_fallback, ρ_fallback) < val_small < ρaχ / ρa
 
     # Case 3: Zero area - should return fallback exactly due to check
     @test CA.specific(1.0, 0.0, 5.0, 1.0, tc_model) == 5.0

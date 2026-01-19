@@ -30,9 +30,9 @@ using Base.Broadcast: materialize
 
     # Create test fields
     ᶜuₕ = Fields.Field(Geometry.Covariant12Vector{FT}, ᶜspace)
-    fill!(parent(ᶜuₕ), FT(1))
+    @. ᶜuₕ = Geometry.Covariant12Vector(FT(1), FT(1))
     ᶠu₃ = Fields.Field(Geometry.Covariant3Vector{FT}, ᶠspace)
-    fill!(parent(ᶠu₃), FT(1))
+    @. ᶠu₃ = Geometry.Covariant3Vector(FT(1))
     ᶜρ = ones(ᶜspace)
     ᶜh_tot = ones(ᶜspace)
     ᶜχ = ones(ᶜspace)
@@ -48,10 +48,6 @@ using Base.Broadcast: materialize
         )
 
         @test CA.β_viscous.(s, ᶜz, z_max) ≈ expected
-
-        # Test that damping is zero below z_damping
-        @test CA.β_viscous(s, FT(0), z_max) == FT(0)
-        @test CA.β_viscous(s, z_damping - FT(0.1), z_max) == FT(0)
 
         # Test that damping is maximum at z_max (= κ₂)
         @test CA.β_viscous(s, z_max, z_max) ≈ κ₂

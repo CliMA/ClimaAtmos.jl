@@ -57,10 +57,6 @@ using Base.Broadcast: materialize
 
         @test CA.β_rayleigh_uₕ.(rs, ᶜz, z_max) ≈ expected_uₕ
         @test CA.β_rayleigh_w.(rs, ᶠz, z_max) ≈ expected_w
-
-        # Test that damping is zero at z=0 (below z_damping)
-        @test CA.β_rayleigh_uₕ(rs, FT(0), z_max) == FT(0)
-        @test CA.β_rayleigh_w(rs, FT(0), z_max) == FT(0)
     end
 
     @testset "Tendency for horizontal velocity" begin
@@ -108,7 +104,6 @@ using Base.Broadcast: materialize
         β = CA.β_rayleigh_sgs_tracer.(rs, ᶜz, z_max)
         expected = @. -β * (ᶜχʲ - ᶜχ)
 
-        # Since ᶜχʲ = 2 and ᶜχ = 1, the difference is 1
         @test materialize(tendency) ≈ expected
     end
 

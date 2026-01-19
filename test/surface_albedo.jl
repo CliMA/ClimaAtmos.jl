@@ -93,11 +93,10 @@ end
             [0.082365, 0.076947, 0.073930, 0.071576, 0.069578, 0.067811],
         ]
 
-        cos_30 = FT(cosd(30))
         for (i, n) in enumerate(FT.([1.2, 1.34, 1.45]))
             albedo_model = ClimaAtmos.RegressionFunctionAlbedo{FT}(; n)
             α_diffuse = ClimaAtmos.surface_albedo_diffuse(albedo_model)
-            computed = [α_diffuse(FT(0), cos_30, wind) for wind in FT.(0:5:25)]
+            computed = [α_diffuse(FT(0), FT(cosd(30)), wind) for wind in FT.(0:5:25)]
             @test all(isapprox.(computed, reference[i]; atol = sqrt(eps(FT))))
         end
     end

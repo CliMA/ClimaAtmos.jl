@@ -167,7 +167,7 @@ end
     # Extracts the level internally and integrates
     @test CA.horizontal_integral_at_boundary(ᶠu, halflevel) <= sqrt(eps(FT))
     @test CA.horizontal_integral_at_boundary(ᶠv, halflevel) <= sqrt(eps(FT))
-    @test isfinite(CA.horizontal_integral_at_boundary(ᶠw, halflevel))  # w=0, just check it runs
+    @test CA.horizontal_integral_at_boundary(ᶠw, halflevel) == 0 # w=0
 
     # Method 2: horizontal_integral_at_boundary(level_field)
     # Takes a pre-extracted 2D horizontal slice
@@ -176,7 +176,7 @@ end
     ᶠwₛ = Fields.level(ᶠw, halflevel)
     @test CA.horizontal_integral_at_boundary(ᶠuₛ) <= sqrt(eps(FT))
     @test CA.horizontal_integral_at_boundary(ᶠvₛ) <= sqrt(eps(FT))
-    @test isfinite(CA.horizontal_integral_at_boundary(ᶠwₛ))
+    @test CA.horizontal_integral_at_boundary(ᶠw, halflevel) == 0 # w=0
 end
 
 #####

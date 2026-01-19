@@ -21,7 +21,7 @@ import Thermodynamics as TD
         @test CAP.R_d(params) ≈ FT(287.0) rtol = 0.01
         # Planet radius ~ 6371 km
         @test CAP.planet_radius(params) ≈ FT(6.371e6) rtol = 0.01
-        # Gravity ~ 9.8 m/s^2
+        # Gravity ~ 9.81 m/s^2
         @test CAP.grav(params) ≈ FT(9.81) rtol = 0.01
     end
 end

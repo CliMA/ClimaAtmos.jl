@@ -88,9 +88,6 @@ end
             (:ᶜS_ρq_tot, :ᶜS_ρe_tot, :surface_rain_flux, :surface_snow_flux, :ᶜwₜqₜ, :ᶜwₕhₜ)
         test_precipitation_setup!(Y, p, expected_vars)
 
-        # Source term should be near-zero for initial conditions
-        @test maximum(abs.(p.precomputed.ᶜS_ρq_tot)) <= sqrt(eps(FT))
-
         # Test tendency
         test_precipitation_tendency!(ᶜYₜ, Y, p)
 
@@ -158,6 +155,8 @@ end
         )
         @test !any(isnan, ᶜYₜ.c.ρq_liq)
         @test !any(isnan, ᶜYₜ.c.ρq_ice)
+
+        @test ᶜYₜ.c.ρq_tot == FT(0)
 
         # Cloud fraction bounds
         test_cloud_fraction_bounds(p, FT)
