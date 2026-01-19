@@ -1,3 +1,31 @@
+import ClimaCore: Limiters
+
+"""
+    _should_apply_limiter_to_tracer(ρχ_name, species)
+
+Helper function to determine if a limiter should be applied to a specific tracer based on
+the species configuration.
+
+Arguments:
+- `ρχ_name`: Symbol name of the tracer variable (e.g., :ρq_tot)
+- `species`: Species configuration - `nothing` (all tracers), `Tuple{Symbol, ...}` (specific tracers),
+             or `Function` (predicate function)
+
+Returns:
+- `true` if the limiter should be applied to this tracer, `false` otherwise
+"""
+function _should_apply_limiter_to_tracer(ρχ_name, species)
+    if isnothing(species)
+        return true  # Apply to all tracers
+    elseif species isa Tuple
+        return ρχ_name in species
+    elseif species isa Function
+        return species(ρχ_name)
+    else
+        error("Invalid species configuration type: $(typeof(species))")
+    end
+end
+
 """
     limiters_func!(Y, p, t, ref_Y)
 
@@ -12,19 +40,48 @@ and `ref_Y.c.ρ`). Subsequently, `ClimaCore.Limiters.apply_limiter!` is called t
 specific quantity `ρχ/ρ` within bounds or if it only modifies `ρχ` based on `ρ`),
 ensuring the tracer quantities adhere to these bounds.
 
+For the VerticalMassBorrowingLimiter (via PR 2383 in ClimaCore.jl), if `p.numerics.vertical_water_borrowing_limiter`
+is configured, it uses that limiter with `p.numerics.vertical_water_borrowing_species` for species selection.
+The limiter instance is created as `Limiters.VerticalMassBorrowingLimiter((0.0,))` in the cache. Unlike
+QuasiMonotoneLimiter, VerticalMassBorrowingLimiter does not require `compute_bounds!` to be called first -
+it handles bounds internally. The species configuration is used to filter which tracers the limiter is
+applied to before calling `apply_limiter!` (since `apply_limiter!` doesn't support a species keyword argument).
+If species is `nothing` (default), the limiter is applied to all tracers. Otherwise, only tracers matching
+the specified criteria (tuple of names or function) will have the limiter applied. The tuple format is used
+for GPU compatibility (Set/Vector are not bitstypes).
+
 Arguments:
 - `Y`: The current state vector (`ClimaCore.Fields.FieldVector`), modified in place.
-- `p`: A cache or parameters object, containing `p.numerics.limiter`.
+- `p`: A cache or parameters object, containing `p.numerics.limiter`, `p.numerics.vertical_water_borrowing_limiter`,
+       and `p.numerics.vertical_water_borrowing_species`.
 - `t`: The current simulation time (often unused by the limiter itself but part of a standard signature).
 - `ref_Y`: A reference state vector (`ClimaCore.Fields.FieldVector`) used to compute the
            tracer bounds (e.g., ensuring positivity or monotonicity relative to this state).
 """
 NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
-    (; limiter) = p.numerics
+    (; limiter, vertical_water_borrowing_limiter, vertical_water_borrowing_species) = p.numerics
+    
+    # Apply general limiter if configured
     if !isnothing(limiter)
         for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
             Limiters.compute_bounds!(limiter, ref_Y.c.:($ρχ_name), ref_Y.c.ρ)
             Limiters.apply_limiter!(Y.c.:($ρχ_name), Y.c.ρ, limiter)
+        end
+    end
+    
+    # Apply vertical water borrowing limiter if configured (PR 2383)
+    # Also note: species filtering is done here, not passed to apply_limiter! (which doesn't support it)
+    if !isnothing(vertical_water_borrowing_limiter)
+        for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
+            # Filter tracers based on species configuration
+            if _should_apply_limiter_to_tracer(ρχ_name, vertical_water_borrowing_species)
+                # PR 2383: Usage: limiter = Limiters.VerticalMassBorrowingLimiter((0.0,))
+                Limiters.apply_limiter!(
+                    Y.c.:($ρχ_name),
+                    Y.c.ρ,
+                    vertical_water_borrowing_limiter,
+                )
+            end
         end
     end
     return nothing

@@ -512,12 +512,20 @@ struct Implicit <: AbstractTimesteppingMode end
 
 struct QuasiMonotoneLimiter end # For dispatching to use the ClimaCore QuasiMonotoneLimiter.
 
+"""
+    VerticalMassBorrowingLimiter
+
+Type marker for the ClimaCore VerticalMassBorrowingLimiter (PR 2383).
+The limiter is created in the cache with the thresholds (stored separately for GPU compatibility).
+"""
+struct VerticalMassBorrowingLimiter end
+
 abstract type AbstractScaleBlendingMethod end
 struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
+Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD, VWB_LIM}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_q_tot_upwinding::EN_UP = Val(:vanleer_limiter)
@@ -532,6 +540,13 @@ Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, 
     reproducible_restart::RR = nothing
 
     limiter::LIM = nothing
+
+    """Vertical water borrowing limiter (VerticalMassBorrowingLimiter from PR 2383).
+    Type marker that gets converted to `Limiters.VerticalMassBorrowingLimiter((0.0,))` in cache.
+    Thresholds and species configuration are stored separately in the cache (not in AtmosModel)
+    for GPU compatibility.
+    """
+    vertical_water_borrowing_limiter::VWB_LIM = nothing
 
     """Timestepping mode for diffusion: Explicit() or Implicit()"""
     diff_mode::DM = Explicit()
@@ -894,6 +909,8 @@ Internal testing and calibration components for single-column setups:
 - `energy_q_tot_upwinding`, `tracer_upwinding`, `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`: Val() upwinding schemes
 - `test_dycore_consistency`: nothing or TestDycoreConsistency() for debugging
 - `limiter`: nothing or QuasiMonotoneLimiter()
+- `vertical_water_borrowing_limiter`: nothing or VerticalMassBorrowingLimiter((0.0,)) (PR 2383)
+- `vertical_water_borrowing_species`: nothing (all tracers) or Set{Symbol}/Vector{Symbol}/Function for species selection
 - `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
 - `hyperdiff`: nothing or ClimaHyperdiffusion()
 

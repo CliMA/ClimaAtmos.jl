@@ -232,6 +232,15 @@ discrete_hydrostatic_balance:
 apply_limiter:
   help: "Apply a horizontal limiter to every tracer [`false` (default), `true`]"
   value: false
+apply_vertical_water_borrowing_limiter:
+  help: "Apply VerticalMassBorrowingLimiter from PR 2383 [`false` (default), `true`]"
+  value: false
+vertical_water_borrowing_thresholds:
+  help: "Thresholds for VerticalMassBorrowingLimiter [`[0.0]` (default), list of numbers]"
+  value: ~
+vertical_water_borrowing_species:
+  help: "Tracers to which the vertical water borrowing limiter is applied [`nothing` (default: all tracers), list of tracer names as strings, e.g., `[\"ρq_tot\", \"ρq_liq\"]`]"
+  value: ~
 precip_model:
   help: "Precipitation model [`nothing` (default), `0M`, `1M`]"
   value: ~

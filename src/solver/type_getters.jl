@@ -245,6 +245,15 @@ function get_numerics(parsed_args, FT)
 
     limiter = parsed_args["apply_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
+    # Parse vertical_water_borrowing_limiter configuration (PR 2383)
+    # Store as empty type marker - thresholds and species stored separately in cache for GPU compatibility
+    vertical_water_borrowing_limiter = if haskey(parsed_args, "apply_vertical_water_borrowing_limiter") &&
+                                           parsed_args["apply_vertical_water_borrowing_limiter"]
+        CA.VerticalMassBorrowingLimiter()
+    else
+        nothing
+    end
+
     # wrap each upwinding mode in a Val for dispatch
     diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
 
@@ -257,6 +266,7 @@ function get_numerics(parsed_args, FT)
         edmfx_sgsflux_upwinding,
         edmfx_tracer_upwinding,
         limiter,
+        vertical_water_borrowing_limiter,
         test_dycore_consistency,
         reproducible_restart,
         diff_mode,
@@ -1051,6 +1061,42 @@ function get_simulation(config::AtmosConfig)
     steady_state_velocity =
         get_steady_state_velocity(params, Y, config.parsed_args)
 
+    FT = Spaces.undertype(axes(Y.c))
+    
+    # Parse vertical_water_borrowing configuration for cache (not stored in AtmosModel for GPU compatibility)
+    vwb_thresholds = if haskey(config.parsed_args, "apply_vertical_water_borrowing_limiter") &&
+                          config.parsed_args["apply_vertical_water_borrowing_limiter"]
+        if haskey(config.parsed_args, "vertical_water_borrowing_thresholds") &&
+           !isnothing(config.parsed_args["vertical_water_borrowing_thresholds"])
+            thresholds_config = config.parsed_args["vertical_water_borrowing_thresholds"]
+            if thresholds_config isa Vector
+                tuple(FT.(thresholds_config)...)
+            else
+                (FT(thresholds_config),)
+            end
+        else
+            (FT(0.0),)  # Default threshold
+        end
+    else
+        nothing
+    end
+    
+    vwb_species = if haskey(config.parsed_args, "apply_vertical_water_borrowing_limiter") &&
+                      config.parsed_args["apply_vertical_water_borrowing_limiter"] &&
+                      haskey(config.parsed_args, "vertical_water_borrowing_species") &&
+                      !isnothing(config.parsed_args["vertical_water_borrowing_species"])
+        species_config = config.parsed_args["vertical_water_borrowing_species"]
+        if species_config isa Vector
+            tuple(Symbol.(species_config)...)
+        elseif species_config isa String
+            (Symbol(species_config),)
+        else
+            error("vertical_water_borrowing_species must be a string or list of strings, got $(typeof(species_config))")
+        end
+    else
+        nothing  # Default: apply to all tracers
+    end
+
     s = @timed_str begin
         p = build_cache(
             Y,
@@ -1062,6 +1108,8 @@ function get_simulation(config::AtmosConfig)
             tracers.aerosol_names,
             tracers.time_varying_trace_gas_names,
             steady_state_velocity,
+            vwb_thresholds,
+            vwb_species,
         )
     end
     @info "Allocating cache (p): $s"

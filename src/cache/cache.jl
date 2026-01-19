@@ -93,6 +93,8 @@ function build_cache(
     aerosol_names,
     time_varying_trace_gas_names,
     steady_state_velocity,
+    vwb_thresholds = nothing,
+    vwb_species = nothing,
 )
     FT = eltype(params)
     dt = FT(dt)
@@ -135,7 +137,23 @@ function build_cache(
         nothing
     end
 
-    numerics = (; limiter, tracer_nonnegativity_limiter)
+    # Parse and create vertical_water_borrowing_limiter if configured
+    # Thresholds and species are passed as function arguments (not stored in AtmosModel for GPU compatibility)
+    vertical_water_borrowing_limiter = nothing
+    vertical_water_borrowing_species = vwb_species
+    
+    if !isnothing(atmos.numerics.vertical_water_borrowing_limiter) &&
+       atmos.numerics.vertical_water_borrowing_limiter isa VerticalMassBorrowingLimiter
+        thresholds = isnothing(vwb_thresholds) ? (FT(0.0),) : vwb_thresholds
+        vertical_water_borrowing_limiter = Limiters.VerticalMassBorrowingLimiter(thresholds)
+    end
+
+    numerics = (;
+        limiter,
+        tracer_nonnegativity_limiter,
+        vertical_water_borrowing_limiter,
+        vertical_water_borrowing_species,
+    )
 
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
