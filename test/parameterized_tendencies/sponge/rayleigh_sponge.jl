@@ -29,9 +29,9 @@ using Base.Broadcast: materialize
 
     # Create test velocity fields
     ᶜuₕ = Fields.Field(Geometry.Covariant12Vector{FT}, ᶜspace)
-    fill!(parent(ᶜuₕ), FT(1))  # Both components = 1
+    @. ᶜuₕ = Geometry.Covariant12Vector(FT(1), FT(1))
     ᶠw = Fields.Field(Geometry.Covariant3Vector{FT}, ᶠspace)
-    fill!(parent(ᶠw), FT(1))
+    @. ᶠw = Geometry.Covariant3Vector(FT(1))
     ᶜχ = ones(ᶜspace)  # Tracer field
     ᶜχʲ = 2 .* ones(ᶜspace)  # Updraft tracer field
 

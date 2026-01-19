@@ -174,7 +174,7 @@ function get_spherical_extruded_spaces(; FT = Float32)
     Nq = 4  # polynomial degree + 1
     domain = Domains.SphereDomain(radius)
     mesh = Meshes.EquiangularCubedSphere(domain, ne)
-    topology = Topologies.Topology2D(context, mesh)
+    topology = Topologies.Topology2D(context, mesh, Topologies.spacefillingcurve(mesh))
     quad = Quadratures.GLL{Nq}()
     h_space = Spaces.SpectralElementSpace2D(topology, quad; enable_bubble = true)
     horz_grid = Spaces.grid(h_space)
