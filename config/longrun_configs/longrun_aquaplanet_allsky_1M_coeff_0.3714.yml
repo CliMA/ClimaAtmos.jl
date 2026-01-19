@@ -10,6 +10,7 @@ edmfx_sgs_diffusive_flux: true
 precip_model: "1M"
 job_id: "spectra_debugging"
 scalar_hyperdiffusion_coefficient: 0.3714
+hyperdiff: "ClimaHyperdiffusion"
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke, clw, ta, cli, husra, hussn]
     period: 10days
