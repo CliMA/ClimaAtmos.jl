@@ -39,7 +39,7 @@ steps:
   - group: "helem 16 aquaplanet"
     steps:
 
-      - label: ":umbrella: aquaplanet allsky 1M coeff 0.09285"
+      - label: ":umbrella: aquaplanet allsky 1M coeff 0.046425"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
@@ -50,9 +50,9 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_1M_coeff_0.09285"
+          JOB_NAME: "longrun_aquaplanet_allsky_1M_coeff_0.046425"
 
-      - label: ":umbrella: aquaplanet allsky 1M coeff 0.1238"
+      - label: ":umbrella: aquaplanet allsky 1M coeff 0.0232125"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
@@ -63,9 +63,9 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_1M_coeff_0.1238"
+          JOB_NAME: "longrun_aquaplanet_allsky_1M_coeff_0.0232125"
 
-      - label: ":umbrella: aquaplanet allsky 1M coeff 0.15475"
+      - label: ":umbrella: aquaplanet allsky 1M coeff 0.01160625"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
@@ -76,9 +76,9 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_1M_coeff_0.15475"
+          JOB_NAME: "longrun_aquaplanet_allsky_1M_coeff_0.01160625"
 
-      - label: ":umbrella: aquaplanet allsky 1M coeff 0.1857"
+      - label: ":umbrella: aquaplanet allsky 1M coeff 0.005803125"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
@@ -89,17 +89,4 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_1M_coeff_0.1857"
-
-      - label: ":umbrella: aquaplanet allsky 1M coeff 0.3714"
-        command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
-          --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_1M_coeff_0.3714"
+          JOB_NAME: "longrun_aquaplanet_allsky_1M_coeff_0.005803125"
