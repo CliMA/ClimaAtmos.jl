@@ -187,19 +187,42 @@ function plot_spectra_comparison(
     figsize = (1200, 800),
     save_format = "pdf",
 )
-    # Set default output directory
+    # Extract coefficient values and create labels, then sort by coefficient value
+    dir_label_pairs = map(output_dirs) do dir
+        # Try to extract coeff_xxxxx pattern from the full path
+        # Look for patterns like "coeff_0.1234" or "coeff_0.12345"
+        coeff_match = match(r"coeff_([\d.]+)", dir)
+        if !isnothing(coeff_match)
+            coeff_value_str = coeff_match.captures[1]
+            coeff_value = tryparse(Float64, coeff_value_str)
+            if !isnothing(coeff_value)
+                # Format as a meaningful label with consistent precision
+                label = "Coeff = $coeff_value_str"
+                return (dir, label, coeff_value)
+            else
+                label = "Coeff = $coeff_value_str"
+                return (dir, label, Inf)  # Put non-numeric at end
+            end
+        else
+            # Fallback to directory name if no coeff pattern found
+            return (dir, basename(dir), Inf)  # Put non-matching at end
+        end
+    end
+
+    # Sort by coefficient value
+    sort!(dir_label_pairs, by = x -> x[3])
+    
+    # Extract sorted directories and labels
+    output_dirs = [pair[1] for pair in dir_label_pairs]
+    labels = [pair[2] for pair in dir_label_pairs]
+
+    # Set default output directory (use first sorted directory)
     if isnothing(output_dir)
         output_dir = output_dirs[1]
     end
 
     # Create SimDir objects
     simdirs = SimDir.(output_dirs)
-
-    # Generate labels from directory names
-    labels = map(output_dirs) do dir
-        # Extract the last directory name or a meaningful identifier
-        basename(dir)
-    end
 
     saved_files = String[]
 
@@ -292,9 +315,13 @@ end
 # Example usage
 if abspath(PROGRAM_FILE) == @__FILE__
     # Example: Compare spectra from two output directories
+    parent_dir = "/Users/akshaysridhar/Research/Data/SpectraHyperdiffusion"
     output_dirs = [
-        "/Users/akshaysridhar/Research/Data/atmos-defaults/output_0002",
-        "/Users/akshaysridhar/Research/Data/atmos-defaults/output_0003",
+        joinpath(parent_dir, "longrun_aquaplanet_allsky_1M_coeff_0.09285", "output_0000"),
+        joinpath(parent_dir, "longrun_aquaplanet_allsky_1M_coeff_0.1238", "output_0000"),
+        joinpath(parent_dir, "longrun_aquaplanet_allsky_1M_coeff_0.15475", "output_0000"),
+        joinpath(parent_dir, "longrun_aquaplanet_allsky_1M_coeff_0.1857", "output_0000"),
+        joinpath(parent_dir, "longrun_aquaplanet_allsky_1M_coeff_0.3714", "output_0000"),
     ]
 
     # Variables to plot
@@ -304,8 +331,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     saved_files = plot_spectra_comparison(
         output_dirs,
         short_names;
-        z_level = 5000.0,
-        time = 10days,
+        z_level = 1500.0,
+        time = 50days,
         reduction = "inst",
         save_format = "pdf",
     )
