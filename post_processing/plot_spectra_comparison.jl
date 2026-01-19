@@ -189,9 +189,14 @@ function plot_spectra_comparison(
 )
     # Extract coefficient values and create labels, then sort by coefficient value
     dir_label_pairs = map(output_dirs) do dir
-        # Try to extract coeff_xxxxx pattern from the full path
+        # Get the parent directory (one level up from output_0000)
+        # This contains the most useful information like "longrun_aquaplanet_allsky_1M_coeff_0.09285"
+        parent_dir = dirname(dir)
+        parent_dirname = basename(parent_dir)
+        
+        # Try to extract coeff_xxxxx pattern from the parent directory name
         # Look for patterns like "coeff_0.1234" or "coeff_0.12345"
-        coeff_match = match(r"coeff_([\d.]+)", dir)
+        coeff_match = match(r"coeff_([\d.]+)", parent_dirname)
         if !isnothing(coeff_match)
             coeff_value_str = coeff_match.captures[1]
             coeff_value = tryparse(Float64, coeff_value_str)
@@ -204,8 +209,8 @@ function plot_spectra_comparison(
                 return (dir, label, Inf)  # Put non-numeric at end
             end
         else
-            # Fallback to directory name if no coeff pattern found
-            return (dir, basename(dir), Inf)  # Put non-matching at end
+            # Fallback to parent directory name if no coeff pattern found
+            return (dir, parent_dirname, Inf)  # Put non-matching at end
         end
     end
 
