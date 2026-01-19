@@ -1,3 +1,29 @@
+import ClimaCore: Limiters
+
+"""
+    _should_apply_limiter_to_tracer(ρχ_name, species)
+
+Helper function to determine if a limiter should be applied to a specific tracer based on
+the species configuration.
+
+Arguments:
+- `ρχ_name`: Symbol name of the tracer variable (e.g., :ρq_tot)
+- `species`: Species configuration — `nothing` (or config omitted/~): apply to all tracers;
+  empty tuple `()`: apply to none; `Tuple{Symbol, ...}` (e.g. from config `["ρq_tot"]`): apply only if ρχ_name is in the tuple.
+
+Returns:
+- `true` if the limiter should be applied to this tracer, `false` otherwise
+"""
+function _should_apply_limiter_to_tracer(ρχ_name, species)
+    if isnothing(species)
+        return true  # Apply to all tracers
+    elseif species isa Tuple
+        return ρχ_name in species
+    else
+        error("Invalid species configuration type: $(typeof(species))")
+    end
+end
+
 """
     limiters_func!(Y, p, t, ref_Y)
 
@@ -5,26 +31,64 @@ Applies tracer limiters to the prognostic state `Y` in place, using parameters `
 time `t`, and a reference state `ref_Y` for bounds determination.
 
 This function iterates over all identified tracer variables within `Y.c`. If a limiter
-is configured in `p.numerics.limiter`, it first calls `ClimaCore.Limiters.compute_bounds!`
+is configured in `p.numerics.sem_quasimonotone_limiter`, it first calls `ClimaCore.Limiters.compute_bounds!`
 to establish the permissible range for each tracer (based on `ref_Y.c.:(ρχ_name)`
 and `ref_Y.c.ρ`). Subsequently, `ClimaCore.Limiters.apply_limiter!` is called to modify
 `Y.c.:(ρχ_name)` (and implicitly `Y.c.ρ` if the limiter adjusts both to maintain the
 specific quantity `ρχ/ρ` within bounds or if it only modifies `ρχ` based on `ρ`),
 ensuring the tracer quantities adhere to these bounds.
 
+For the VerticalMassBorrowingLimiter, if `p.numerics.vertical_water_borrowing_limiter`
+is configured, it uses that limiter with `p.numerics.vertical_water_borrowing_species` for species selection.
+The limiter enforces strict nonnegativity using a single threshold value (0.0) that applies uniformly
+to all tracers for which the limiter is used. The limiter instance is created as
+`Limiters.VerticalMassBorrowingLimiter((0.0,))` in the cache. The species configuration is used to
+filter which tracers the limiter is applied to before calling `apply_limiter!` (since `apply_limiter!`
+doesn't support a species keyword argument). If species is `nothing` (default), the limiter is applied
+to all tracers. Otherwise, only tracers matching the specified tuple of names will have the limiter
+applied. The tuple format for the threshold is required by ClimaCore's API (for GPU compatibility),
+but only a single threshold value is used for all tracers.
+
 Arguments:
 - `Y`: The current state vector (`ClimaCore.Fields.FieldVector`), modified in place.
-- `p`: A cache or parameters object, containing `p.numerics.limiter`.
+- `p`: A cache or parameters object, containing `p.numerics.sem_quasimonotone_limiter`, `p.numerics.vertical_water_borrowing_limiter`,
+       and `p.numerics.vertical_water_borrowing_species`.
 - `t`: The current simulation time (often unused by the limiter itself but part of a standard signature).
 - `ref_Y`: A reference state vector (`ClimaCore.Fields.FieldVector`) used to compute the
            tracer bounds (e.g., ensuring positivity or monotonicity relative to this state).
 """
 NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
-    (; limiter) = p.numerics
-    if !isnothing(limiter)
+    (;
+        sem_quasimonotone_limiter,
+        vertical_water_borrowing_limiter,
+        vertical_water_borrowing_species,
+    ) =
+        p.numerics
+
+    # Apply general limiter if configured
+    if !isnothing(sem_quasimonotone_limiter)
         for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
-            Limiters.compute_bounds!(limiter, ref_Y.c.:($ρχ_name), ref_Y.c.ρ)
-            Limiters.apply_limiter!(Y.c.:($ρχ_name), Y.c.ρ, limiter)
+            Limiters.compute_bounds!(
+                sem_quasimonotone_limiter,
+                ref_Y.c.:($ρχ_name),
+                ref_Y.c.ρ,
+            )
+            Limiters.apply_limiter!(Y.c.:($ρχ_name), Y.c.ρ, sem_quasimonotone_limiter)
+        end
+    end
+
+    # Apply vertical water borrowing limiter if configured
+    # Our state stores ρχ (tracer density). Store χ in scratch, apply limiter, then write ρχ back.
+    # Also note: species filtering is done here, not passed to apply_limiter! (which doesn't support it)
+    if !isnothing(vertical_water_borrowing_limiter)
+        ᶜχ = p.scratch.ᶜtemp_scalar
+        for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
+            if _should_apply_limiter_to_tracer(ρχ_name, vertical_water_borrowing_species)
+                ρχ = getproperty(Y.c, ρχ_name)
+                ᶜχ .= specific.(ρχ, Y.c.ρ)
+                Limiters.apply_limiter!(ᶜχ, Y.c.ρ, vertical_water_borrowing_limiter)
+                ρχ .= ᶜχ .* Y.c.ρ
+            end
         end
     end
     return nothing

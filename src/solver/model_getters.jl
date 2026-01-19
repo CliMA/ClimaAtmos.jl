@@ -373,6 +373,10 @@ function get_tracer_nonnegativity_method(parsed_args)
         qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
                         `_qtot` suffix. qtot will be ignored.")
         TracerNonnegativityVaporTendency()
+    elseif method == "vertical_water_borrowing"
+        qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
+                        `_qtot` suffix. qtot will be ignored.")
+        TracerNonnegativityVerticalWaterBorrowing()
     else
         error("Invalid `tracer_nonnegativity_method` $(method)")
     end

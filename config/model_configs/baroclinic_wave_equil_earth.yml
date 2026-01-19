@@ -6,4 +6,4 @@ t_end: "450secs"
 precip_model: "0M"
 topography: "Earth"
 moist: "equil"
-apply_limiter: true
+apply_sem_quasimonotone_limiter: true

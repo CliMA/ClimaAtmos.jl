@@ -223,6 +223,7 @@ function AtmosSimulation{FT}(;
     p = build_cache(
         Y, model, params, surface_setup, dt, start_date, tracers,
         time_varying_trace_gas_names, steady_state_velocity,
+        nothing,  # vwb_species - not available in this context
     )
 
     # Combine all callbacks

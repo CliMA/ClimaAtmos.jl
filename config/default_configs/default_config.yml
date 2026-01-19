@@ -181,8 +181,9 @@ tracer_nonnegativity_method:
     - `elementwise_constraint`: Enforce nonnegativity by instantaneously redistributing tracer mass within an element
     - `vapor_constraint`: Enforce nonnegativity by instantaneously redistributing tracer mass between vapor (q_tot) and each tracer
     - `vapor_tendency`: Weakly enforce nonnegativity by applying a tendency to each tracer to redistribute tracer mass between vapor (q_tot) and each tracer
+    - `vertical_water_borrowing`: Enforce nonnegativity using VerticalMassBorrowingLimiter, which redistributes tracer mass vertically. Uses a single threshold (0.0) for all tracers to which the limiter is applied.
     - `~` (default): Do not enforce nonnegativity
-    Note: append `_qtot` to the method name to enforce nonnegativity of q_tot as well.
+    Note: append `_qtot` to the method name to enforce nonnegativity of q_tot as well (not applicable to `vertical_water_borrowing`).
   value: ~
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
@@ -226,9 +227,12 @@ initial_condition:
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
   value: true
-apply_limiter:
-  help: "Apply a horizontal limiter to every tracer [`false` (default), `true`]"
+apply_sem_quasimonotone_limiter:
+  help: "Apply a horizontal SEM quasi-monotone limiter to every tracer [`false` (default), `true`]"
   value: false
+vertical_water_borrowing_species:
+  help: "Tracers to which the vertical water borrowing limiter is applied when using `tracer_nonnegativity_method: vertical_water_borrowing`. A single threshold (0.0) applies uniformly to all selected tracers. Omitted or `~` (null): apply to all tracers (ρq_tot, ρq_liq, ρq_ice, etc., as present). Empty list `[]`: apply to no tracers. Specific names: use a string (e.g. `ρq_tot`) or list of strings (e.g. `[\"ρq_tot\"]`, `[\"ρq_tot\", \"ρq_liq\"]`) — only those tracers get the limiter; names must match the state (e.g. ρq_tot, ρq_liq, ρq_rai, ρq_ice, ρq_sno)."
+  value: ~
 precip_model:
   help: "Precipitation model [`nothing` (default), `0M`, `1M`]"
   value: ~

@@ -1,4 +1,4 @@
-apply_limiter: true
+apply_sem_quasimonotone_limiter: true
 h_elem: 12
 z_elem: 25
 rayleigh_sponge: false
