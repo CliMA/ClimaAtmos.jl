@@ -343,10 +343,11 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::FixedSeaIceState)
     (; T, h_ice, T_ml, water) = Y.sfc
 
     # Since we are computing tendencies, make local copies to avoid modifying Y during calculations
-    T_sfc = copy(T)
+    #T_sfc = copy(T)
     h_ice = copy(h_ice)
-    T_ml = copy(T_ml)
-    water = copy(water)
+    #T_ml = copy(T_ml)
+    #water = copy(water)
+    const T_m = 273.15
 
     # TODO: Implement ∂F_atmo/∂T_sfc. For now, use a type-stable zero field.
     # NOTE: Avoid capturing `FT::DataType` in a local closure and then broadcasting it;
@@ -368,51 +369,17 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::FixedSeaIceState)
         F_rad = zeros(FT, size(T_sfc))
     end
 
-    # 2. Turbulent surface energy fluxes (sensible + latent heat) from surface to atmosphere
-    if !(p.atmos.disable_surface_flux_tendency)
-        F_turb =
-            Geometry.WVector.(
-                p.precomputed.sfc_conditions.ρ_flux_h_tot,
-            ).components.data.:1
-            # where is this computed? We want to take the forward diff.
-    else
-        F_turb = zeros(FT, size(T_sfc))
-    end
+    F_atm = F_rad # TODO add turbulent fluxes
 
-    #3. No Q-flux
-    Q = FT(0)
-
-    # 4. Energy tendency due to precipitation accumulation        
-    if !(p.atmos.moisture_model isa DryModel)
-        pet = p.conservation_check.col_integrated_precip_energy_tendency
-    else
-        pet = FT(0)
-    end
-
-    # --- WATER BALANCE (if moisture is active) ---
-    if !(p.atmos.moisture_model isa DryModel)
-        # 1. Turbulent surface water fluxes (evaporation/condensation)
-        if !(p.atmos.disable_surface_flux_tendency)
-            sfc_turb_w_flux =
-                Geometry.WVector.(
-                    p.precomputed.sfc_conditions.ρ_flux_q_tot,
-                ).components.data.:1
-        else
-            sfc_turb_w_flux = 0
-        end
-
-        # 2. Precipitation (rain and snow, defined negative downward, so positive flux 
-        # from surface to atmosphere)
-        P_liq = p.precomputed.surface_rain_flux
-        P_snow = p.precomputed.surface_snow_flux
-        @. Yₜ.sfc.water -= P_liq + P_snow + sfc_turb_w_flux
+    # Solve for diagnstic surface temp
+    T_s_star = 
 
         return nothing
     end
 
     # No evolution
     # TODO evolve surface temperature
-    @. Yₜ.sfc.T     = FT(0)
-    @. Yₜ.sfc.T_ml  = FT(0)
+    #@. Yₜ.sfc.T     = FT(0)
+    #@. Yₜ.sfc.T_ml  = FT(0)
     @. Yₜ.sfc.h_ice = FT(0)
 end
