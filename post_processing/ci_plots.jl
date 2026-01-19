@@ -952,15 +952,16 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv", "hus", "ta", "clw"], "inst"
-    short_names_spectra = ["ke", "hus", "ta", "clw", "cli"]
+    short_names_spectra = ["ke", "hus", "ta"]
+    ndays = 10days
     vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return slice(get(simdir; short_name, reduction), time = 10days)
+        return slice(get(simdir; short_name, reduction), time = ndays)
     end
     vars_spectra =
         map_comparison(simdirs, short_names_spectra) do simdir, short_name
             slice(
                 compute_spectrum(
-                    slice(get(simdir; short_name, reduction), time = 10days),
+                    slice(get(simdir; short_name, reduction), time = ndays),
                 ),
                 z = 1500,
             )
@@ -970,7 +971,7 @@ function make_plots(
         map_comparison(simdirs, short_names_spectra) do simdir, short_name
             slice(
                 compute_spectrum(
-                    slice(get(simdir; short_name, reduction), time = 10days),
+                    slice(get(simdir; short_name, reduction), time = ndays),
                 ),
                 z = 5000,
             )
