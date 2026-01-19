@@ -1,0 +1,17 @@
+t_end: "50days"
+dt_save_state_to_disk: "10days"
+moist: "nonequil"
+rad: "allskywithclear"
+dt_rad: "1hours"
+dt_cloud_fraction: "1hours"
+surface_setup: "DefaultMoninObukhov"
+turbconv: "edonly_edmfx"
+edmfx_sgs_diffusive_flux: true
+precip_model: "1M"
+job_id: "spectra_debugging"
+scalar_hyperdiffusion_coefficient: 0.01160625
+hyperdiff: "ClimaHyperdiffusion"
+diagnostics:
+  - short_name: [pfull, wa, va, rv, hus, ke, clw, ta, cli, husra, hussn]
+    period: 10days
+toml: [toml/longrun_aquaplanet_1M.toml]
