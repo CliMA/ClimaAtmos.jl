@@ -10,51 +10,74 @@ using Test
 # Download test artifacts
 include("download_artifacts.jl")
 
+# Get test group from environment variable (default: run all tests)
+TEST_GROUP = get(ENV, "TEST_GROUP", "all")
+
 #! format: off
 
-# Skip Aqua tests due to precompilation failures in old versions of SciMLBase
-import SciMLBase
-if pkgversion(SciMLBase) > v"2.12.1"
-    @safetestset "Aqua" begin @time include("aqua.jl") end
+# ============================================================================
+# Infrastructure: Configuration, utilities, interfaces, and integration tests
+# ============================================================================
+if TEST_GROUP in ("infrastructure", "all")
+    # Skip Aqua tests due to precompilation failures in old versions of SciMLBase
+    import SciMLBase
+    if pkgversion(SciMLBase) > v"2.12.1"
+        @safetestset "Aqua" begin @time include("aqua.jl") end
+    end
+
+    @safetestset "Dependencies" begin @time include("dependencies.jl") end
+    @safetestset "Callbacks" begin @time include("callbacks.jl") end
+    @safetestset "Configuration tests" begin @time include("config.jl") end
+    @safetestset "Utilities" begin @time include("utilities.jl") end
+    @safetestset "Variable manipulations" begin @time include("variable_manipulations_tests.jl") end
+    @safetestset "Parameter tests" begin @time include("parameter_tests.jl") end
+
+    # Interface tests
+    @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
+    @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
+    @safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
+
+    # Solver and restart tests
+    @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
+    @safetestset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
+    @safetestset "Topography tests" begin @time include("topography.jl") end
+    @safetestset "Restarts" begin @time include("restart.jl") end
+    @safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
+    @safetestset "Init with file" begin @time include("test_init_with_file.jl") end
 end
 
-@safetestset "Dependencies" begin @time include("dependencies.jl") end
-@safetestset "Callbacks" begin @time include("callbacks.jl") end
-@safetestset "Configuration tests" begin @time include("config.jl") end
-@safetestset "Utilities" begin @time include("utilities.jl") end
-@safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
-@safetestset "Variable manipulations" begin @time include("variable_manipulations_tests.jl") end
-@safetestset "Parameter tests" begin @time include("parameter_tests.jl") end
-@safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
-@safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
-@safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
+# ============================================================================
+# Dynamics: Prognostic equations and conservation tests
+# ============================================================================
+if TEST_GROUP in ("dynamics", "all")
+    @safetestset "Prognostic equations" begin @time include("prognostic_equations.jl") end
+    @safetestset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
+    @safetestset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
+    @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
 
-# Parameterized tendencies
-@safetestset "Rayleigh sponge tests" begin @time include("parameterized_tendencies/sponge/rayleigh_sponge.jl") end
-@safetestset "Viscous sponge tests" begin @time include("parameterized_tendencies/sponge/viscous_sponge.jl") end
-@safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
-# TODO Update GW tests after new GW implementation is merged
-@safetestset "Non-orographic gravity wave (3D)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl") end
-@safetestset "Non-orographic gravity wave (MiMA)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl") end
-@safetestset "Non-orographic gravity wave (single column)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl") end
+    # Conservation tests
+    @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
+    @safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
+end
 
-# Prognostic equations unit tests (placeholders - TODO: implement)
-@safetestset "Prognostic equations" begin @time include("prognostic_equations.jl") end
-@safetestset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
-@safetestset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
-@safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
+# ============================================================================
+# Parameterizations: All parameterized tendency tests
+# ============================================================================
+if TEST_GROUP in ("parameterizations", "all")
+    @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
 
-# Conservation tests (placeholders - TODO: implement)
-@safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
-@safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
+    # Sponge layers
+    @safetestset "Rayleigh sponge tests" begin @time include("parameterized_tendencies/sponge/rayleigh_sponge.jl") end
+    @safetestset "Viscous sponge tests" begin @time include("parameterized_tendencies/sponge/viscous_sponge.jl") end
 
-# TODO: update the following tests as needed
-@safetestset "Model getters" begin @time include("solver/model_getters.jl") end
-@safetestset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
-@safetestset "Topography tests" begin @time include("topography.jl") end
-@safetestset "Restarts" begin @time include("restart.jl") end
-@safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
-@safetestset "Init with file" begin @time include("test_init_with_file.jl") end
+    # Microphysics
+    @safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
+
+    # Gravity waves
+    @safetestset "Non-orographic gravity wave (3D)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl") end
+    @safetestset "Non-orographic gravity wave (MiMA)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl") end
+    @safetestset "Non-orographic gravity wave (single column)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl") end
+end
 
 #! format: on
 
