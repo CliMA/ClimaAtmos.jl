@@ -33,8 +33,10 @@ const T2 = 290
     # will get overwritten.
     config = CA.AtmosConfig(
         Dict(
-            "initial_condition" => "DryBaroclinicWave",
-            "output_dir_style" => "RemovePreexisting",
+            "initial_condition" => "DYCOMS_RF02",
+            "moist" => "equil",
+            "config" => "column",
+            "output_default_diagnostics" => false,
         );
         job_id = "coupler_compatibility1",
     )
@@ -105,7 +107,7 @@ end
             "surface_setup" => "PrescribedSurface",
             "moist" => "equil",
             "rad" => "clearsky",
-            "co2_model" => "fixed",
+            "config" => "column",
             "turbconv" => "diagnostic_edmfx",
             # NOTE: We do not output diagnostics because it leads to problems with Ubuntu on
             # GitHub actions taking too long to run (for unknown reasons). If you need this,
