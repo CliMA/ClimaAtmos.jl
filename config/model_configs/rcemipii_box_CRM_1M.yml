@@ -5,7 +5,7 @@ insolation: rcemipii
 initial_condition: RCEMIPIIProfile_300
 config: box
 rad: allskywithclear
-output_dir: "/net/sampo/data1/haakon/rcemipii/simulation_output/dynamics_sensitivity_tests/anisotropic_smag/c_02/21_days"
+output_dir: "/net/sampo/data1/haakon/rcemipii/simulation_output/dynamics_sensitivity_tests/moisture_fixer/vapor_constraint/c_02/21_days"
 approximate_linear_solve_iters: 2  # only valid when implicit_diffusion=true
 rayleigh_sponge: true  # set sponge level in toml file
 
@@ -23,9 +23,10 @@ tracer_upwinding: vanleer_limiter  # is default (alt: `first_order`)
 energy_q_tot_upwinding: vanleer_limiter  # is default (alt: `first_order`)
 
 # dealing with negative tracers -- change this
-moisture_fixer: false
+# moisture_fixer: false
+tracer_nonnegativity_method: "vapor_constraint"
 
-reproducibility_test: true
+# reproducibility_test: true
 
 # microphysics
 ### !! 1M and 2M !!
