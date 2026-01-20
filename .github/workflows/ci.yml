@@ -31,9 +31,9 @@ jobs:
           - windows-latest
         include:
           - version: '1.10'
-            timeout: 45
+            timeout: 70
           - version: '1.11'
-            timeout: 60
+            timeout: 70
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
