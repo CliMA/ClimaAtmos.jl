@@ -37,7 +37,7 @@ end
             # Core physics defaults
             :moisture_model => CA.DryModel,
             :microphysics_model => CA.NoPrecipitation,
-            :cloud_model => CA.GridScaleCloud,
+            :cloud_model => Union{CA.GridScaleCloud, CA.QuadratureCloud},
             :surface_model => CA.PrescribedSST,
             :sfc_temperature => CA.ZonallySymmetricSST,
             :insolation => CA.IdealizedInsolation,
@@ -50,7 +50,7 @@ end
             :orographic_gravity_wave => nothing,
             :viscous_sponge => nothing,
             :rayleigh_sponge => nothing,
-            :hyperdiff => nothing,
+            :hyperdiff => Union{Nothing, CA.ClimaHyperdiffusion},
             :vertical_diffusion => nothing,
         )
 
