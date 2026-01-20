@@ -894,8 +894,7 @@ function set_precipitation_surface_fluxes!(
     p,
     microphysics_model::Microphysics0Moment,
 )
-    ᶜT = p.scratch.ᶜtemp_scalar
-    (; ᶜts) = p.precomputed  # assume ᶜts has been updated
+    (; ᶜts, ᶜT) = p.precomputed  # assume ᶜts has been updated
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency) = p.conservation_check
@@ -909,7 +908,6 @@ function set_precipitation_surface_fluxes!(
     thermo_params = CAP.thermodynamics_params(p.params)
     T_freeze = TD.Parameters.T_freeze(thermo_params)
     FT = eltype(p.params)
-    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
     ᶜ3d_rain = @. lazy(ifelse(ᶜT >= T_freeze, ᶜS_ρq_tot, FT(0)))
     ᶜ3d_snow = @. lazy(ifelse(ᶜT < T_freeze, ᶜS_ρq_tot, FT(0)))
     Operators.column_integral_definite!(surface_rain_flux, ᶜ3d_rain)

@@ -1425,7 +1425,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     cloud_params = CAP.microphysics_cloud_params(p.params)
     (; dt) = p
 
-    (; ᶜts, ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+    (; ᶜts, ᶜT, ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
@@ -1474,7 +1474,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         specific(Y.c.ρq_rai, Y.c.ρ),
         specific(Y.c.ρq_sno, Y.c.ρ),
         Y.c.ρ,
-        TD.air_temperature(thermo_params, ᶜts),
+        ᶜT,
         dt,
     )
     @. ᶜSqᵢᵖ⁰ += cloud_sources(
@@ -1486,7 +1486,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         specific(Y.c.ρq_rai, Y.c.ρ),
         specific(Y.c.ρq_sno, Y.c.ρ),
         Y.c.ρ,
-        TD.air_temperature(thermo_params, ᶜts),
+        ᶜT,
         dt,
     )
     return nothing

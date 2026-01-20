@@ -47,7 +47,7 @@ function update_temperature_pressure!((; u, p, t)::I) where {I}
     T_min = CAP.optics_lookup_temperature_min(params)
     T_max = CAP.optics_lookup_temperature_max(params)
 
-    (; ᶜts, ᶜp, sfc_conditions) = p.precomputed
+    (; ᶜts, ᶜp, ᶜT, sfc_conditions) = p.precomputed
     model = p.radiation.rrtmgp_model
 
     # update surface temperature
@@ -57,11 +57,10 @@ function update_temperature_pressure!((; u, p, t)::I) where {I}
 
     # update layer pressure
     model.center_pressure .= Fields.field2array(p.precomputed.ᶜp)
-    # compute layer temperature
-    ᶜT = Fields.array2field(model.center_temperature, axes(u.c))
+    # compute layer temperature (clamped to RRTMGP bounds)
+    rrtmgp_ᶜT = Fields.array2field(model.center_temperature, axes(u.c))
     # TODO: move this to RRTMGP
-    @. ᶜT =
-        min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
+    @. rrtmgp_ᶜT = min(max(ᶜT, FT(T_min)), FT(T_max))
     return nothing
 end
 

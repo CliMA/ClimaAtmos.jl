@@ -41,6 +41,9 @@ function implicit_precomputed_quantities(Y, atmos)
         ᶠu = similar(Y.f, CT123{FT}),
         ᶜK = similar(Y.c, FT),
         ᶜts = similar(Y.c, TST),
+        ᶜT = similar(Y.c, FT),
+        ᶜq_liq_rai = similar(Y.c, FT),
+        ᶜq_ice_sno = similar(Y.c, FT),
         ᶜp = similar(Y.c, FT),
     )
     sgs_quantities = (;)
@@ -430,6 +433,190 @@ ts_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ) =
         ρ,
     )
 
+"""
+    T_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ)
+
+Compute grid-scale temperature.
+
+For DryModel: Uses `air_temperature(param_set, e_int)`
+For EquilMoistModel: Uses `saturation_adjustment` with `ρe()` formulation
+For NonEquilMoistModel: Uses `air_temperature(param_set, e_int, q_tot, q_liq, q_ice)`
+"""
+function T_gs(
+    thermo_params,
+    moisture_model::DryModel,
+    microphysics_model,
+    ᶜY,
+    K,
+    Φ,
+    ρ,
+)
+    e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ
+    return TD.air_temperature(thermo_params, e_int)
+end
+
+function T_gs(
+    thermo_params,
+    moisture_model::EquilMoistModel,
+    microphysics_model,
+    ᶜY,
+    K,
+    Φ,
+    ρ,
+)
+    e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ
+    q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ)
+    # Use saturation_adjustment with ρe() formulation
+    # maxiter=3 and forced_fixed_iters=true for GPU compatibility
+    sa_result = TD.saturation_adjustment(
+        TD.RS.NewtonsMethod,
+        thermo_params,
+        TD.ρe(),
+        ρ,
+        e_int,
+        q_tot,
+        3,                                     # maxiter
+        eltype(thermo_params)(1e-4),           # tol
+        nothing,                               # T_guess
+        true,                                  # forced_fixed_iters
+    )
+    return sa_result.T
+end
+
+function T_gs(
+    thermo_params,
+    moisture_model::NonEquilMoistModel,
+    microphysics_model,
+    ᶜY,
+    K,
+    Φ,
+    ρ,
+)
+    e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ
+    q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ)
+    q_liq = specific(ᶜY.ρq_liq, ᶜY.ρ) + specific(ᶜY.ρq_rai, ᶜY.ρ)
+    q_ice = specific(ᶜY.ρq_ice, ᶜY.ρ) + specific(ᶜY.ρq_sno, ᶜY.ρ)
+    return TD.air_temperature(thermo_params, e_int, q_tot, q_liq, q_ice)
+end
+
+"""
+    q_liq_rai_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ)
+
+Compute grid-scale liquid specific humidity.
+
+For DryModel: Returns 0
+For EquilMoistModel: Uses `saturation_adjustment` result
+For NonEquilMoistModel: Returns prognostic value (ρq_liq + ρq_rai) / ρ
+"""
+function q_liq_rai_gs(
+    thermo_params,
+    moisture_model::DryModel,
+    microphysics_model,
+    ᶜY,
+    K,
+    Φ,
+    ρ,
+)
+    return zero(eltype(thermo_params))
+end
+
+function q_liq_rai_gs(
+    thermo_params,
+    moisture_model::EquilMoistModel,
+    microphysics_model,
+    ᶜY,
+    K,
+    Φ,
+    ρ,
+)
+    e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ
+    q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ)
+    sa_result = TD.saturation_adjustment(
+        TD.RS.NewtonsMethod,
+        thermo_params,
+        TD.ρe(),
+        ρ,
+        e_int,
+        q_tot,
+        3,                                     # maxiter
+        eltype(thermo_params)(1e-4),           # tol
+        nothing,                               # T_guess
+        true,                                  # forced_fixed_iters
+    )
+    return sa_result.q_liq
+end
+
+function q_liq_rai_gs(
+    thermo_params,
+    moisture_model::NonEquilMoistModel,
+    microphysics_model,
+    ᶜY,
+    K,
+    Φ,
+    ρ,
+)
+    return specific(ᶜY.ρq_liq, ᶜY.ρ) + specific(ᶜY.ρq_rai, ᶜY.ρ)
+end
+
+"""
+    q_ice_sno_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ)
+
+Compute grid-scale ice specific humidity.
+
+For DryModel: Returns 0
+For EquilMoistModel: Uses `saturation_adjustment` result
+For NonEquilMoistModel: Returns prognostic value (ρq_ice + ρq_sno) / ρ
+"""
+function q_ice_sno_gs(
+    thermo_params,
+    moisture_model::DryModel,
+    microphysics_model,
+    ᶜY,
+    K,
+    Φ,
+    ρ,
+)
+    return zero(eltype(thermo_params))
+end
+
+function q_ice_sno_gs(
+    thermo_params,
+    moisture_model::EquilMoistModel,
+    microphysics_model,
+    ᶜY,
+    K,
+    Φ,
+    ρ,
+)
+    e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ
+    q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ)
+    sa_result = TD.saturation_adjustment(
+        TD.RS.NewtonsMethod,
+        thermo_params,
+        TD.ρe(),
+        ρ,
+        e_int,
+        q_tot,
+        3,                                     # maxiter
+        eltype(thermo_params)(1e-4),           # tol
+        nothing,                               # T_guess
+        true,                                  # forced_fixed_iters
+    )
+    return sa_result.q_ice
+end
+
+function q_ice_sno_gs(
+    thermo_params,
+    moisture_model::NonEquilMoistModel,
+    microphysics_model,
+    ᶜY,
+    K,
+    Φ,
+    ρ,
+)
+    return specific(ᶜY.ρq_ice, ᶜY.ρ) + specific(ᶜY.ρq_sno, ᶜY.ρ)
+end
+
 function eddy_diffusivity_coefficient_H(D₀, H, z_sfc, z)
     return D₀ * exp(-(z - z_sfc) / H)
 end
@@ -458,7 +645,7 @@ quantities are updated.
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, moisture_model, microphysics_model) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp) = p.precomputed
+    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜT, ᶜq_liq, ᶜq_ice, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -492,7 +679,11 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # TODO: We should think more about these increments before we use them.
     end
     @. ᶜts = ts_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+    @. ᶜT = T_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
+    @. ᶜq_liq_rai = q_liq_rai_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
+    @. ᶜq_ice_sno = q_ice_sno_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    @. ᶜp = TD.air_pressure(thermo_params, ᶜT, Y.c.ρ, ᶜq_tot, ᶜq_liq_rai, ᶜq_ice_sno)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)

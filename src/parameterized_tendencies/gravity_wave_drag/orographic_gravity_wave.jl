@@ -78,9 +78,8 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
 end
 
 function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWave)
-    ᶜT = p.scratch.ᶜtemp_scalar
     (; params) = p
-    (; ᶜts, ᶜp) = p.precomputed
+    (; ᶜts, ᶜp, ᶜT) = p.precomputed
     (; ᶜdTdz) = p.orographic_gravity_wave
     (;
         topo_k_pbl,
@@ -107,7 +106,6 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     ᶠz = Fields.coordinate_field(Y.f).z
 
     # get PBL info
-    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
         parent(topo_k_pbl[colidx]) .=
             get_pbl(ᶜp[colidx], ᶜT[colidx], ᶜz[colidx], grav, cp_d)
