@@ -156,7 +156,7 @@ end
         @test !any(isnan, ᶜYₜ.c.ρq_liq)
         @test !any(isnan, ᶜYₜ.c.ρq_ice)
 
-        @test all(iszero, ᶜYₜ.c.ρq_tot)
+        @test all(iszero, parent(ᶜYₜ.c.ρq_tot))
 
         # Cloud fraction bounds
         test_cloud_fraction_bounds(p, FT)
@@ -214,7 +214,7 @@ end
         @test !any(isnan, ᶜYₜ.c.ρq_ice)
         @test !any(isnan, ᶜYₜ.c.ρn_liq)
 
-        @test all(iszero, ᶜYₜ.c.ρq_tot)
+        @test all(iszero, parent(ᶜYₜ.c.ρq_tot))
 
         # Cloud fraction bounds
         test_cloud_fraction_bounds(p, FT)
