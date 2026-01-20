@@ -17,6 +17,8 @@ const beta = 1
 const T1 = 300
 const T2 = 290
 
+# TODO: Add surface flux exchange tests after new SurfaceFluxes.jl is integrated
+
 #In this test, the ClimaAtmos "cache" p is overwritten so that it contains
 # a surface field specified by the coupler, and then the internal function
 # set_precomputed_quantities! is called to verify that this surface field is
