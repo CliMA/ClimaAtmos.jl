@@ -48,11 +48,16 @@ function edmfx_precipitation_tendency!(
 
         @. Yₜ.c.sgsʲs.:($$j).ρa += Y.c.sgsʲs.:($$j).ρa * ᶜSqₜᵖʲs.:($$j)
 
+        ᶜTʲ = @. lazy(TD.air_temperature(thermo_params, ᶜtsʲs.:($$j)))
+        ᶜq_liq_raiʲ = @. lazy(TD.liquid_specific_humidity(thermo_params, ᶜtsʲs.:($$j)))
+        ᶜq_ice_snoʲ = @. lazy(TD.ice_specific_humidity(thermo_params, ᶜtsʲs.:($$j)))
         @. Yₜ.c.sgsʲs.:($$j).mse +=
             ᶜSqₜᵖʲs.:($$j) * (
                 e_tot_0M_precipitation_sources_helper(
                     thermo_params,
-                    ᶜtsʲs.:($$j),
+                    ᶜTʲ,
+                    ᶜq_liq_raiʲ,
+                    ᶜq_ice_snoʲ,
                     ᶜΦ,
                 ) - TD.internal_energy(thermo_params, ᶜtsʲs.:($$j))
             )

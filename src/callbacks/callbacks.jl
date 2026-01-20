@@ -109,13 +109,23 @@ end
 NVTX.@annotate function cloud_fraction_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
-    (; ᶜts, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
+    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) =
+        p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     if isnothing(p.atmos.turbconv_model)
-        @. ᶜgradᵥ_q_tot =
-            ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
-        @. ᶜgradᵥ_θ_liq_ice =
-            ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
+        @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
+        @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
+            ᶠinterp(
+                TD.liquid_ice_pottemp(
+                    thermo_params,
+                    ᶜT,
+                    Y.c.ρ,
+                    ᶜq_tot_safe,
+                    ᶜq_liq_rai,
+                    ᶜq_ice_sno,
+                ),
+            ),
+        )
     end
     set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model)
 end

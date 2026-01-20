@@ -112,11 +112,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶠu³, ᶜp, ᶜts) = p.precomputed
+    (; ᶠu³, ᶜp, ᶜh_tot, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
@@ -197,10 +195,11 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
     # This is equivalent to grad_v(Φ) + grad_v(p) / ρ
-    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜts))
-    ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜts))
-    ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜts))
-    ᶜΠ = @. lazy(dry_exner_function(thermo_params, ᶜts))
+    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
+    ᶜθ_v = p.scratch.ᶜtemp_scalar
+    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
+    ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) +
                   cp_d * (ᶠinterp(ᶜθ_v - ᶜθ_vr)) * ᶠgradᵥ(ᶜΠ)
 

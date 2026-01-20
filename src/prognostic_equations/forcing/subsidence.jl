@@ -90,7 +90,7 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
     (; moisture_model) = p.atmos
     subsidence_profile = p.atmos.subsidence.prof
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜts) = p.precomputed
+    (; ᶜh_tot) = p.precomputed
 
     ᶠz = Fields.coordinate_field(axes(Y.f)).z
     ᶠlg = Fields.local_geometry_field(Y.f)
@@ -99,28 +99,29 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
         subsidence_profile(ᶠz) * CT3(unit_basis_vector_data(CT3, ᶠlg))
 
     # LS Subsidence
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
-    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     subsidence!(Yₜ.c.ρe_tot, Y.c.ρ, ᶠsubsidence³, ᶜh_tot, Val{:first_order}())
-    subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠsubsidence³, ᶜq_tot, Val{:first_order}())
-    if moisture_model isa NonEquilMoistModel
-        ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-        subsidence!(
-            Yₜ.c.ρq_liq,
-            Y.c.ρ,
-            ᶠsubsidence³,
-            ᶜq_liq,
-            Val{:first_order}(),
-        )
-        ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-        subsidence!(
-            Yₜ.c.ρq_ice,
-            Y.c.ρ,
-            ᶠsubsidence³,
-            ᶜq_ice,
-            Val{:first_order}(),
-        )
+
+    if !(moisture_model isa DryModel)
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+        subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠsubsidence³, ᶜq_tot, Val{:first_order}())
+        if moisture_model isa NonEquilMoistModel
+            ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+            subsidence!(
+                Yₜ.c.ρq_liq,
+                Y.c.ρ,
+                ᶠsubsidence³,
+                ᶜq_liq,
+                Val{:first_order}(),
+            )
+            ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+            subsidence!(
+                Yₜ.c.ρq_ice,
+                Y.c.ρ,
+                ᶠsubsidence³,
+                ᶜq_ice,
+                Val{:first_order}(),
+            )
+        end
     end
 
     return nothing

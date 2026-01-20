@@ -428,7 +428,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     (; matrix) = cache
     (; params) = p
     (; ᶜΦ, ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
+    (; ᶜu, ᶠu³, ᶜK, ᶜp, ᶜT, ᶜh_tot) = p.precomputed
+    (; ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     (;
         ∂ᶜK_∂ᶜuₕ,
         ∂ᶜK_∂ᶠu₃,
@@ -466,12 +467,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     Δcv_i = FT(CAP.cp_i(params) - CAP.cv_v(params))
     e_int_v0 = FT(CAP.e_int_v0(params))
     e_int_s0 = FT(CAP.e_int_i0(params)) + e_int_v0
-    # This term appears a few times in the Jacobian, and is technically
-    # minus ∂e_int_∂q_tot
-    ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - e_int_v0
     thermo_params = CAP.thermodynamics_params(params)
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
@@ -485,9 +481,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     ᶜkappa_m = p.scratch.ᶜtemp_scalar
     @. ᶜkappa_m =
-        TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
+        TD.gas_constant_air(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) /
+        TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
 
-    ᶜT = @. lazy(TD.air_temperature(thermo_params, ᶜts))
     ᶜ∂p∂ρq_tot = p.scratch.ᶜtemp_scalar_2
     @. ᶜ∂p∂ρq_tot = ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (ᶜT - T_0)) + ΔR_v * ᶜT
 
@@ -537,8 +533,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
 
-    ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜts))
-    ᶜΠ = @. lazy(dry_exner_function(thermo_params, ᶜts))
+    ᶜθ_v = p.scratch.ᶜtemp_scalar_3
+    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration: 
     #              grad(p) / ρ + grad(Φ)  =  cp_d * θ_v * grad(Π) + grad(Φ).
     # Here below, we use the old formulation of (grad(Φ) + grad(p) / ρ).
@@ -660,8 +657,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
                     p.scratch.ᶠband_matrix_wvec ⋅
                     DiagonalMatrixRow(
-                        e_int_func(thermo_params, p.precomputed.ᶜts) + ᶜΦ +
-                        $(Kin(ᶜwₚ, p.precomputed.ᶜu)),
+                        e_int_func(thermo_params, ᶜT) + ᶜΦ + $(Kin(ᶜwₚ, ᶜu)),
                     )
             end
         end
@@ -1257,10 +1253,15 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ## grid-mean ρe_tot
                 ᶜkappa_m = p.scratch.ᶜtemp_scalar
                 @. ᶜkappa_m =
-                    TD.gas_constant_air(thermo_params, ᶜts) /
-                    TD.cv_m(thermo_params, ᶜts)
+                    TD.gas_constant_air(
+                        thermo_params,
+                        ᶜq_tot_safe,
+                        ᶜq_liq_rai,
+                        ᶜq_ice_sno,
+                    ) /
+                    TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
 
-                ᶜT = @. lazy(TD.air_temperature(thermo_params, ᶜts))
+
                 ᶜ∂p∂ρq_tot = p.scratch.ᶜtemp_scalar_2
                 @. ᶜ∂p∂ρq_tot =
                     ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (ᶜT - T_0)) + ΔR_v * ᶜT

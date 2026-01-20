@@ -36,7 +36,7 @@ Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMFX-related fields 
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜK, ᶜp, ᶜts) = p.precomputed
+    (; ᶜu, ᶜK, ᶜp, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = thermo_params.cp_d
@@ -55,8 +55,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+    (; ᶜh_tot) = p.precomputed
     @. Yₜ.c.ρe_tot -= split_divₕ(Y.c.ρ * ᶜu, ᶜh_tot)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
@@ -72,10 +71,12 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρtke -= split_divₕ(Y.c.ρ * ᶜu, ᶜtke)
     end
 
-    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜts))
-    ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜts))
-    ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜts))
-    ᶜΠ = @. lazy(dry_exner_function(thermo_params, ᶜts))
+    (; ᶜq_tot_safe) = p.precomputed
+    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
+    ᶜθ_v = p.scratch.ᶜtemp_scalar
+    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
+    ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     ᶜθ_v_diff = @. lazy(ᶜθ_v - ᶜθ_vr)
     # split form pressure gradient: 0.5 * cp_d * [θv ∇Π + ∇(θv Π) - Π∇θv]
     @. Yₜ.c.uₕ -= C12(
@@ -220,8 +221,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶜK, ᶜts) = p.precomputed
+    (; ᶜf³, ᶠf¹²) = p.core
+    (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_mse_q_tot_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; energy_q_tot_upwinding, tracer_upwinding) = p.atmos.numerics
@@ -270,8 +271,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # ... and upwinding correction of energy and total water.
     # (The central advection of energy and total water is done implicitly.)
     if energy_q_tot_upwinding != Val(:none)
-        ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-        ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+        (; ᶜh_tot) = p.precomputed
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, Val(:none))
         @. Yₜ.c.ρe_tot += vtt - vtt_central

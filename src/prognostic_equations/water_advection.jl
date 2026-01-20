@@ -36,7 +36,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
     (; params) = p
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜts) = p.precomputed
+    (; ᶜu, ᶜT) = p.precomputed
     thp = CAP.thermodynamics_params(params)
 
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -71,7 +71,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρe_tot -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
                 Geometry.WVector(-(ᶜw)) * specific(ᶜρq, Y.c.ρ) *
-                (e_int_func(thp, ᶜts) + ᶜΦ + $(Kin(ᶜw, ᶜu))),
+                (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜu))),
             ),
         )
     end
@@ -108,7 +108,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                         Geometry.WVector(-(ᶜwʲ)) *
                         draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)) * ᶜqʲ *
                         (
-                            e_int_func(thp, ᶜtsʲs.:(1)) - e_int_func(thp, ᶜts) -
+                            e_int_func(thp, ᶜtsʲs.:(1)) - e_int_func(thp, ᶜT) -
                             $(Kin(ᶜw, ᶜu))
                         ),
                     ),
@@ -119,7 +119,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                 -1 * ᶜprecipdivᵥ(
                     ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ * ᶠright_bias(
                         Geometry.WVector(-(ᶜwaq⁰)) *
-                        (e_int_func(thp, ᶜts⁰) - e_int_func(thp, ᶜts) - $(Kin(ᶜw, ᶜu))),
+                        (e_int_func(thp, ᶜts⁰) - e_int_func(thp, ᶜT) - $(Kin(ᶜw, ᶜu))),
                     ),
                 )
         end

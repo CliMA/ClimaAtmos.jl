@@ -2918,9 +2918,9 @@ version = "1.0.2"
 
 [[deps.Thermodynamics]]
 deps = ["ForwardDiff", "Random", "RootSolvers"]
-git-tree-sha1 = "ed3bda4ef913084e1e028d4fb05e26f1b69356f6"
+git-tree-sha1 = "3958121b3ed912e0858960b682de6e98cb4949dd"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-version = "0.15.4"
+version = "0.15.7"
 weakdeps = ["ClimaParams"]
 
     [deps.Thermodynamics.extensions]

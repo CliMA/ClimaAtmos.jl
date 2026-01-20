@@ -609,10 +609,10 @@ steps:
       #     --config_file $CONFIG_PATH/baroclinic_wave_equil_amd.yml
       #     --job_id baroclinic_wave_equil_amd
 
-        artifact_paths: "baroclinic_wave_equil_amd/output_active/*"
-        soft_fail: true
-        agents:
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+      #   artifact_paths: "baroclinic_wave_equil_amd/output_active/*"
+      #   soft_fail: true
+      #   agents:
+      #     slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":computer: held suarez"
         key: held_suarez

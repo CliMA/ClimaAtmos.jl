@@ -175,7 +175,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜu, ᶜp, ᶠu³, ᶜts, ᶠu³⁰, ᶜts⁰) = p.precomputed
+    (; ᶜu, ᶜp, ᶠu³, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno, ᶜts⁰) = p.precomputed
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ρtke_flux) = p.precomputed
     (;
         ᶜuʲs,
@@ -192,10 +192,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
-    ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶠlg = Fields.local_geometry_field(Y.f)
-    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
     ᶜvert_div = p.scratch.ᶜtemp_scalar
@@ -301,10 +298,15 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, cloud_diagnostics_tuple) =
         p.precomputed
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     @. ᶜlinear_buoygrad = buoyancy_gradients( # TODO - do we need to modify buoyancy gradients based on NonEq + 1M tracers?
         BuoyGradMean(),
         thermo_params,
-        ᶜts,
+        ᶜT,
+        Y.c.ρ,
+        ᶜq_tot,
+        ᶜq_liq_rai,
+        ᶜq_ice_sno,
         cloud_diagnostics_tuple.cf,
         C3,
         ᶜgradᵥ_q_tot,
@@ -362,16 +364,22 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
         @. ᶜSqₜᵖʲs.:($$j) = q_tot_0M_precipitation_sources(
-            thp,
             cmp,
             dt,
             Y.c.sgsʲs.:($$j).q_tot,
-            ᶜtsʲs.:($$j),
+            TD.total_specific_humidity(thp, ᶜtsʲs.:($$j)),
+            TD.liquid_specific_humidity(thp, ᶜtsʲs.:($$j)),
+            TD.ice_specific_humidity(thp, ᶜtsʲs.:($$j)),
         )
     end
     # sources from the environment
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-    @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(thp, cmp, dt, ᶜq_tot⁰, ᶜts⁰)
+    @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
+        cmp, dt, ᶜq_tot⁰,
+        TD.total_specific_humidity(thp, ᶜts⁰),
+        TD.liquid_specific_humidity(thp, ᶜts⁰),
+        TD.ice_specific_humidity(thp, ᶜts⁰),
+    )
     return nothing
 end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
@@ -426,6 +434,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         )
 
         # Precipitation sources and sinks from the updrafts
+        Tʲ = @. lazy(TD.air_temperature(thp, ᶜtsʲs.:($$j)))
         compute_precipitation_sources!(
             ᶜSᵖ,
             ᶜSᵖ_snow,
@@ -439,7 +448,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             Y.c.sgsʲs.:($j).q_ice,
             Y.c.sgsʲs.:($j).q_rai,
             Y.c.sgsʲs.:($j).q_sno,
-            ᶜtsʲs.:($j),
+            Tʲ,
             dt,
             cmp,
             thp,
@@ -454,7 +463,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             Y.c.sgsʲs.:($j).q_ice,
             Y.c.sgsʲs.:($j).q_rai,
             Y.c.sgsʲs.:($j).q_sno,
-            ᶜtsʲs.:($j),
+            Tʲ,
             dt,
             cmp,
             thp,
@@ -469,7 +478,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             Y.c.sgsʲs.:($$j).q_rai,
             Y.c.sgsʲs.:($$j).q_sno,
             ᶜρʲs.:($$j),
-            TD.air_temperature(thp, ᶜtsʲs.:($$j)),
+            Tʲ,
             dt,
         )
         @. ᶜSqᵢᵖʲs.:($$j) += cloud_sources(
@@ -481,7 +490,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             Y.c.sgsʲs.:($$j).q_rai,
             Y.c.sgsʲs.:($$j).q_sno,
             ᶜρʲs.:($$j),
-            TD.air_temperature(thp, ᶜtsʲs.:($$j)),
+            Tʲ,
             dt,
         )
     end
@@ -493,6 +502,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜts⁰))
+    T⁰ = @. lazy(TD.air_temperature(thp, ᶜts⁰))
     compute_precipitation_sources!(
         ᶜSᵖ,
         ᶜSᵖ_snow,
@@ -506,7 +516,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜq_ice⁰,
         ᶜq_rai⁰,
         ᶜq_sno⁰,
-        ᶜts⁰,
+        T⁰,
         dt,
         cmp,
         thp,
@@ -521,7 +531,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜq_ice⁰,
         ᶜq_rai⁰,
         ᶜq_sno⁰,
-        ᶜts⁰,
+        T⁰,
         dt,
         cmp,
         thp,
@@ -536,7 +546,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜq_rai⁰,
         ᶜq_sno⁰,
         ᶜρ⁰,
-        TD.air_temperature(thp, ᶜts⁰),
+        T⁰,
         dt,
     )
     @. ᶜSqᵢᵖ⁰ += cloud_sources(
@@ -548,7 +558,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜq_rai⁰,
         ᶜq_sno⁰,
         ᶜρ⁰,
-        TD.air_temperature(thp, ᶜts⁰),
+        T⁰,
         dt,
     )
     return nothing
@@ -665,6 +675,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         )
 
         # Precipitation sources and sinks from the updrafts
+        Tʲ = @. lazy(TD.air_temperature(thp, ᶜtsʲs.:($$j)))
         compute_warm_precipitation_sources_2M!(
             ᶜSᵖ,
             ᶜS₂ᵖ,
@@ -680,7 +691,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             Y.c.sgsʲs.:($j).q_ice,
             Y.c.sgsʲs.:($j).q_rai,
             Y.c.sgsʲs.:($j).q_sno,
-            ᶜtsʲs.:($j),
+            Tʲ,
             dt,
             cm2p,
             thp,
@@ -724,7 +735,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             max(0, w_component.(Geometry.WVector.(ᶜuʲs.:($$j)))),
             (cm2p,),
             thp,
-            ᶜtsʲs.:($$j),
+            TD.air_temperature(thp, ᶜtsʲs.:($$j)),
+            TD.air_pressure(thp, ᶜtsʲs.:($$j)),
             dt,
         )
     end
@@ -738,6 +750,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜts⁰))
+    T⁰ = @. lazy(TD.air_temperature(thp, ᶜts⁰))
     compute_warm_precipitation_sources_2M!(
         ᶜSᵖ,
         ᶜS₂ᵖ,
@@ -753,7 +766,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜq_ice⁰,
         ᶜq_rai⁰,
         ᶜq_sno⁰,
-        ᶜts⁰,
+        T⁰,
         dt,
         cm2p,
         thp,
@@ -797,7 +810,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         w_component.(Geometry.WVector.(ᶜu⁰)),
         (cm2p,),
         thp,
-        ᶜts⁰,
+        TD.air_temperature(thp, ᶜts⁰),
+        TD.air_pressure(thp, ᶜts⁰),
         dt,
     )
     return nothing

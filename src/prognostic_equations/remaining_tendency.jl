@@ -144,10 +144,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     (; ls_adv, scm_coriolis) = p.atmos
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜp, sfc_conditions, ᶜts, ᶜK) = p.precomputed
+    (; ᶜp, ᶜK, ᶜT, ᶜh_tot, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; sfc_conditions) = p.precomputed
 
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     vst_uₕ = viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
     vst_u₃ = viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge)
     vst_ρe_tot = viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge)
@@ -203,11 +202,11 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     end
     # For HeldSuarezForcing, the radiation_mode is used as the forcing parameter
     forcing = radiation_mode isa HeldSuarezForcing ? radiation_mode : nothing
-    hs_args = (ᶜuₕ, ᶜp, params, sfc_conditions.ts, moisture_model, forcing)
+    hs_args = (ᶜuₕ, ᶜp, params, sfc_conditions.T_sfc, moisture_model, forcing)
     hs_tendency_uₕ = held_suarez_forcing_tendency_uₕ(hs_args...)
     hs_tendency_ρe_tot = held_suarez_forcing_tendency_ρe_tot(ᶜρ, hs_args...)
     edmf_cor_tend_uₕ = scm_coriolis_tendency_uₕ(ᶜuₕ, scm_coriolis)
-    lsa_args = (ᶜρ, thermo_params, ᶜts, t, ls_adv)
+    lsa_args = (ᶜρ, thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, t, ls_adv)
     bc_lsa_tend_ρe_tot = large_scale_advection_tendency_ρe_tot(lsa_args...)
 
     # TODO: fuse, once we fix

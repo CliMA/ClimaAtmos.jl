@@ -91,7 +91,6 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     (; params) = p
     (; ᶜΦ) = p.core
-    (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
 
     isnothing(hyperdiff) && return nothing
@@ -108,7 +107,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # Grid scale hyperdiffusion
     @. ᶜ∇²u = C123(wgradₕ(divₕ(ᶜu))) - C123(wcurlₕ(C123(curlₕ(ᶜu))))
 
-    ᶜh_ref = @. lazy(h_dr(thermo_params, ᶜts, ᶜΦ))
+    ᶜh_ref = @. lazy(h_dr(thermo_params, ᶜp, ᶜΦ))
 
     @. ᶜ∇²specific_energy = wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ - ᶜh_ref))
 

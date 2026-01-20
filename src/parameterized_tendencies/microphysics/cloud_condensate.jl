@@ -29,13 +29,11 @@ function cloud_condensate_tendency!(
     ::Microphysics1Moment,
     _,
 )
-    (; ᶜts) = p.precomputed
+    (; ᶜT) = p.precomputed
     (; params, dt) = p
     FT = eltype(params)
     thp = CAP.thermodynamics_params(params)
     cmc = CAP.microphysics_cloud_params(params)
-
-    Tₐ = @. lazy(TD.air_temperature(thp, ᶜts))
 
     @. Yₜ.c.ρq_liq +=
         Y.c.ρ * cloud_sources(
@@ -47,7 +45,7 @@ function cloud_condensate_tendency!(
             specific(Y.c.ρq_rai, Y.c.ρ),
             specific(Y.c.ρq_sno, Y.c.ρ),
             Y.c.ρ,
-            Tₐ,
+            ᶜT,
             dt,
         )
     @. Yₜ.c.ρq_ice +=
@@ -60,7 +58,7 @@ function cloud_condensate_tendency!(
             specific(Y.c.ρq_rai, Y.c.ρ),
             specific(Y.c.ρq_sno, Y.c.ρ),
             Y.c.ρ,
-            Tₐ,
+            ᶜT,
             dt,
         )
 end
@@ -73,12 +71,10 @@ function cloud_condensate_tendency!(
     ::Microphysics2Moment,
     _,
 )
-    (; ᶜts, ᶜu) = p.precomputed
+    (; ᶜT, ᶜp, ᶜu) = p.precomputed
     (; params, dt) = p
     thp = CAP.thermodynamics_params(params)
     cmp = CAP.microphysics_2m_params(params)
-
-    Tₐ = @. lazy(TD.air_temperature(thp, ᶜts))
 
     @. Yₜ.c.ρq_liq +=
         Y.c.ρ * cloud_sources(
@@ -90,7 +86,7 @@ function cloud_condensate_tendency!(
             specific(Y.c.ρq_rai, Y.c.ρ),
             specific(Y.c.ρq_sno, Y.c.ρ),
             Y.c.ρ,
-            Tₐ,
+            ᶜT,
             dt,
         )
     @. Yₜ.c.ρq_ice +=
@@ -103,7 +99,7 @@ function cloud_condensate_tendency!(
             specific(Y.c.ρq_rai, Y.c.ρ),
             specific(Y.c.ρq_sno, Y.c.ρ),
             Y.c.ρ,
-            Tₐ,
+            ᶜT,
             dt,
         )
 
@@ -137,7 +133,8 @@ function cloud_condensate_tendency!(
             w_component.(Geometry.WVector.(ᶜu)),
             (cmp,),
             thp,
-            ᶜts,
+            ᶜT,
+            ᶜp,
             dt,
         )
 end

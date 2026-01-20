@@ -462,21 +462,17 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     (; params) = p
     (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_ρq, ᶠradiation_flux) =
         p.radiation
-    (; ᶜts) = p.precomputed
-    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜq_liq_rai) = p.precomputed
     cp_d = CAP.cp_d(params)
     FT = Spaces.undertype(axes(Y.c))
     NT = NamedTuple{(:z, :ρ, :ρq_tot), NTuple{3, FT}}
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
 
-    # TODO: According to the paper, we should replace liquid_specific_humidity
-    # with TD.mixing_ratios(thermo_params, ᶜts).liq, but this wouldn't
-    # match the original code from TurbulenceConvection.
+    # TODO: According to the paper, we should replace ᶜq_liq_rai
+    # with mixing ratio.
     @. ᶜκρq =
-        radiation_mode.kappa *
-        Y.c.ρ *
-        TD.liquid_specific_humidity(thermo_params, ᶜts)
+        radiation_mode.kappa * Y.c.ρ * ᶜq_liq_rai
 
     Operators.column_integral_definite!(∫_0_∞_κρq, ᶜκρq)
 
@@ -540,10 +536,11 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     thermo_params = CAP.thermodynamics_params(params)
     ᶜdTdt_rad = p.radiation.ᶜdTdt_rad
     ᶜρ = Y.c.ρ
-    ᶜts_gm = p.precomputed.ᶜts
+    (; ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     zc = Fields.coordinate_field(axes(ᶜρ)).z
     @. ᶜdTdt_rad = rad(FT(t), zc)
-    @. Yₜ.c.ρe_tot += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
+    @. Yₜ.c.ρe_tot +=
+        ᶜρ * TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) * ᶜdTdt_rad
     return nothing
 end
 
@@ -555,11 +552,10 @@ radiation_model_cache(Y, radiation_mode::RadiationISDAC; args...) = (;)  # Don't
 function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationISDAC)
     (; F₀, F₁, κ) = radiation_mode
     (; params, precomputed) = p
-    (; ᶜts) = precomputed
-    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜq_liq_rai) = precomputed
 
     ᶜρq = p.scratch.ᶜtemp_scalar
-    @. ᶜρq = Y.c.ρ * TD.liquid_specific_humidity(thermo_params, ᶜts)
+    @. ᶜρq = Y.c.ρ * ᶜq_liq_rai
 
     LWP_zₜ = p.scratch.temp_field_level  # column integral of LWP (zₜ = top-of-domain)
     Operators.column_integral_definite!(LWP_zₜ, ᶜρq)

@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 -------
+- [#4231](https://github.com/CliMA/ClimaAtmos.jl/pull/4231) [badge-💥breaking] removes grid-scale
+thermo state, including ᶜts in p.precomputed.sfc_conditions.
+
 - [#4211](https://github.com/CliMA/ClimaAtmos.jl/pull/4211) 
   add experimental methods to remove negative microphysical condensate values
 
@@ -10,6 +13,7 @@ v0.34.0
 -------
 - [#4198](https://github.com/CliMA/ClimaAtmos.jl/pull/4198) [badge-💥breaking] modifies surface conditions
 to use SurfaceFluxes v0.15.
+
 - [#4220](https://github.com/CliMA/ClimaAtmos.jl/pull/4220) modifies `SphereGrid` to use spacefillingcurve.
 
 v0.33.2

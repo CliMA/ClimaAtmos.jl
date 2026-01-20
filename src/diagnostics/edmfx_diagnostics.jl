@@ -190,9 +190,9 @@ function compute_haup!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        return TD.enthalpy.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     else
-        out .= TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        out .= TD.enthalpy.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     end
 end
 
