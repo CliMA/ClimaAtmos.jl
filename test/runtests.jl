@@ -4,7 +4,6 @@
 # so we force abbreviated stacktraces even in non-interactive runs.
 # (See also Base.type_limited_string_from_context())
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
-using SafeTestsets
 using Test
 
 # Download test artifacts
@@ -22,61 +21,61 @@ if TEST_GROUP in ("infrastructure", "all")
     # Skip Aqua tests due to precompilation failures in old versions of SciMLBase
     import SciMLBase
     if pkgversion(SciMLBase) > v"2.12.1"
-        @safetestset "Aqua" begin @time include("aqua.jl") end
+        @testset "Aqua" begin @time include("aqua.jl") end
     end
 
-    @safetestset "Dependencies" begin @time include("dependencies.jl") end
-    @safetestset "Callbacks" begin @time include("callbacks.jl") end
-    @safetestset "Configuration tests" begin @time include("config.jl") end
-    @safetestset "Utilities" begin @time include("utilities.jl") end
-    @safetestset "Variable manipulations" begin @time include("variable_manipulations_tests.jl") end
-    @safetestset "Parameter tests" begin @time include("parameter_tests.jl") end
+    @testset "Dependencies" begin @time include("dependencies.jl") end
+    @testset "Callbacks" begin @time include("callbacks.jl") end
+    @testset "Configuration tests" begin @time include("config.jl") end
+    @testset "Utilities" begin @time include("utilities.jl") end
+    @testset "Variable manipulations" begin @time include("variable_manipulations_tests.jl") end
+    @testset "Parameter tests" begin @time include("parameter_tests.jl") end
 
     # Interface tests
-    @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
-    @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
-    @safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
+    @testset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
+    @testset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
+    @testset "Surface albedo tests" begin @time include("surface_albedo.jl") end
 
     # Solver and restart tests
-    @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
-    @safetestset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
-    @safetestset "Topography tests" begin @time include("topography.jl") end
-    @safetestset "Restarts" begin @time include("restart.jl") end
-    @safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
-    @safetestset "Init with file" begin @time include("test_init_with_file.jl") end
+    @testset "Model getters" begin @time include("solver/model_getters.jl") end
+    @testset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
+    @testset "Topography tests" begin @time include("topography.jl") end
+    @testset "Restarts" begin @time include("restart.jl") end
+    @testset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
+    @testset "Init with file" begin @time include("test_init_with_file.jl") end
 end
 
 # ============================================================================
 # Dynamics: Prognostic equations and conservation tests
 # ============================================================================
 if TEST_GROUP in ("dynamics", "all")
-    @safetestset "Prognostic equations" begin @time include("prognostic_equations.jl") end
-    @safetestset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
-    @safetestset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
-    @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
+    @testset "Prognostic equations" begin @time include("prognostic_equations.jl") end
+    @testset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
+    @testset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
+    @testset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
 
     # Conservation tests
-    @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
-    @safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
+    @testset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
+    @testset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
 end
 
 # ============================================================================
 # Parameterizations: All parameterized tendency tests
 # ============================================================================
 if TEST_GROUP in ("parameterizations", "all")
-    @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
+    @testset "ERA5 forcing" begin @time include("era5_tests.jl") end
 
     # Sponge layers
-    @safetestset "Rayleigh sponge tests" begin @time include("parameterized_tendencies/sponge/rayleigh_sponge.jl") end
-    @safetestset "Viscous sponge tests" begin @time include("parameterized_tendencies/sponge/viscous_sponge.jl") end
+    @testset "Rayleigh sponge tests" begin @time include("parameterized_tendencies/sponge/rayleigh_sponge.jl") end
+    @testset "Viscous sponge tests" begin @time include("parameterized_tendencies/sponge/viscous_sponge.jl") end
 
     # Microphysics
-    @safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
+    @testset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
 
     # Gravity waves
-    @safetestset "Non-orographic gravity wave (3D)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl") end
-    @safetestset "Non-orographic gravity wave (MiMA)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl") end
-    @safetestset "Non-orographic gravity wave (single column)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl") end
+    @testset "Non-orographic gravity wave (3D)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl") end
+    @testset "Non-orographic gravity wave (MiMA)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl") end
+    @testset "Non-orographic gravity wave (single column)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl") end
 end
 
 #! format: on

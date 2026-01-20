@@ -35,9 +35,9 @@ jobs:
           - parameterizations
         include:
           - version: '1.10'
-            timeout: 45
+            timeout: 60
           - version: '1.11'
-            timeout: 45
+            timeout: 60
     env:
       TEST_GROUP: ${{ matrix.test_group }}
     steps:

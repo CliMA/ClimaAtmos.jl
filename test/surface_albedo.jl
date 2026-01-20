@@ -8,6 +8,9 @@ Random.seed!(1234)
 @testset "set_surface_albedo!" begin
     FT = Float32
     base_config = Dict(
+        "initial_condition" => "DYCOMS_RF02",
+        "moist" => "equil",
+        "config" => "column",
         "rad" => "clearsky",
         "FLOAT_TYPE" => string(FT),
         "output_default_diagnostics" => false,
