@@ -1,3 +1,7 @@
+# Include guard to prevent re-including when tests run in same session
+if !@isdefined(TEST_HELPERS_INCLUDED)
+const TEST_HELPERS_INCLUDED = true
+
 ### BoilerPlate Code
 using IntervalSets
 
@@ -608,3 +612,5 @@ function monotonic_increasing(A, dim)
     all_diffs = mapslices(x -> diff(x), A, dims = dim)
     return all(all_diffs .>= 0)
 end
+
+end # if !@isdefined(TEST_HELPERS_INCLUDED)

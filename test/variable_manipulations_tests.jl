@@ -32,7 +32,7 @@ end
     # Should be monotonically increasing
     a_values = 0.0:0.1:1.0
     w_values = [CA.sgs_weight_function(a, 0.5) for a in a_values]
-    @test all(diff(w_values) .>= 0)
+    @test all(Base.diff(w_values) .>= 0)
 
     # Test with different a_half values
     @test 0 < CA.sgs_weight_function(0.2, 0.1) < 1
