@@ -606,7 +606,7 @@ if !@isdefined(TEST_HELPERS_INCLUDED)
     Check if an array is monotonically decreasing along a given dimension.
     """
     function monotonic_decreasing(A, dim)
-        all_diffs = mapslices(x -> diff(x), A; dims = dim)
+        all_diffs = mapslices(x -> Base.diff(x), A; dims = dim)
         return all(all_diffs .<= 0)
     end
 
@@ -616,7 +616,7 @@ if !@isdefined(TEST_HELPERS_INCLUDED)
     Check if an array is monotonically increasing along a given dimension.
     """
     function monotonic_increasing(A, dim)
-        all_diffs = mapslices(x -> diff(x), A, dims = dim)
+        all_diffs = mapslices(x -> Base.diff(x), A, dims = dim)
         return all(all_diffs .>= 0)
     end
 

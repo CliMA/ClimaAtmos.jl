@@ -33,11 +33,13 @@ jobs:
           - infrastructure
           - dynamics
           - parameterizations
+          - restarts
+          - era5
         include:
           - version: '1.10'
-            timeout: 60
+            timeout: 90
           - version: '1.11'
-            timeout: 60
+            timeout: 90
     env:
       TEST_GROUP: ${{ matrix.test_group }}
     steps:

@@ -36,13 +36,10 @@ if TEST_GROUP in ("infrastructure", "all")
     @testset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
     @testset "Surface albedo tests" begin @time include("surface_albedo.jl") end
 
-    # Solver and restart tests
+    # Solver tests
     @testset "Model getters" begin @time include("solver/model_getters.jl") end
     @testset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
     @testset "Topography tests" begin @time include("topography.jl") end
-    @testset "Restarts" begin @time include("restart.jl") end
-    @testset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
-    @testset "Init with file" begin @time include("test_init_with_file.jl") end
 end
 
 # ============================================================================
@@ -60,11 +57,9 @@ if TEST_GROUP in ("dynamics", "all")
 end
 
 # ============================================================================
-# Parameterizations: All parameterized tendency tests
+# Parameterizations: Parameterized tendency tests (excluding ERA5)
 # ============================================================================
 if TEST_GROUP in ("parameterizations", "all")
-    @testset "ERA5 forcing" begin @time include("era5_tests.jl") end
-
     # Sponge layers
     @testset "Rayleigh sponge tests" begin @time include("parameterized_tendencies/sponge/rayleigh_sponge.jl") end
     @testset "Viscous sponge tests" begin @time include("parameterized_tendencies/sponge/viscous_sponge.jl") end
@@ -76,6 +71,22 @@ if TEST_GROUP in ("parameterizations", "all")
     @testset "Non-orographic gravity wave (3D)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl") end
     @testset "Non-orographic gravity wave (MiMA)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl") end
     @testset "Non-orographic gravity wave (single column)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl") end
+end
+
+# ============================================================================
+# Restarts: Restart and reproducibility tests
+# ============================================================================
+if TEST_GROUP in ("restarts", "all")
+    @testset "Restarts" begin @time include("restart.jl") end
+    @testset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
+    @testset "Init with file" begin @time include("test_init_with_file.jl") end
+end
+
+# ============================================================================
+# ERA5: External forcing data tests (heavy)
+# ============================================================================
+if TEST_GROUP in ("era5", "all")
+    @testset "ERA5 forcing" begin @time include("era5_tests.jl") end
 end
 
 #! format: on
