@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 main
 -------
+v0.34.0
+-------
 - [#4198](https://github.com/CliMA/ClimaAtmos.jl/pull/4198) [badge-💥breaking] modifies surface conditions
 to use SurfaceFluxes v0.15.
 - [#4220](https://github.com/CliMA/ClimaAtmos.jl/pull/4220) modifies `SphereGrid` to use spacefillingcurve.
