@@ -61,9 +61,8 @@ end
 # Parameterizations: Parameterized tendency tests (excluding ERA5)
 # ============================================================================
 if TEST_GROUP in ("parameterizations", "all")
-    # Sponge layers
-    @safetestset "Rayleigh sponge tests" begin @time include("parameterized_tendencies/sponge/rayleigh_sponge.jl") end
-    @safetestset "Viscous sponge tests" begin @time include("parameterized_tendencies/sponge/viscous_sponge.jl") end
+    # Sponge layers (combined for shared space setup)
+    @safetestset "Sponge layers" begin @time include("parameterized_tendencies/sponge/sponge.jl") end
 
     # Microphysics
     @safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
