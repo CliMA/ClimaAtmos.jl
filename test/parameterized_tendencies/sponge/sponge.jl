@@ -117,7 +117,8 @@ using Base.Broadcast: materialize
         @testset "No sponge (nothing) returns NullBroadcasted" begin
             @test CA.rayleigh_sponge_tendency_uₕ(ᶜuₕ, nothing) isa NullBroadcasted
             @test CA.rayleigh_sponge_tendency_sgs_tracer(ᶜχ, nothing) isa NullBroadcasted
-            @test CA.rayleigh_sponge_tendency_sgs_tracer(ᶜχʲ, ᶜχ, nothing) isa NullBroadcasted
+            @test CA.rayleigh_sponge_tendency_sgs_tracer(ᶜχʲ, ᶜχ, nothing) isa
+                  NullBroadcasted
         end
     end
 
