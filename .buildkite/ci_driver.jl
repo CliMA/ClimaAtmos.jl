@@ -1,3 +1,34 @@
+# TODO: Move the following constructor to ClimaCore.
+using ClimaCore: DataLayouts, Geometry
+using LinearAlgebra: det
+@inline function Geometry.LocalGeometry(
+    coordinates,
+    J,
+    WJ,
+    ∂x∂ξ::Geometry.Axis2Tensor{
+        FT,
+        Tuple{Geometry.LocalAxis{I}, Geometry.CovariantAxis{I}},
+        S,
+    },
+) where {FT, I, S}
+    C = typeof(coordinates)
+
+    W = WJ / J
+    J = det(Geometry.components(∂x∂ξ)) # overwrite J value passed to constructor
+    WJ = W * J # overwrite WJ value passed to constructor
+
+    ∂ξ∂x = inv(∂x∂ξ)
+    Jinv = inv(J)
+
+    gᵢⱼ = (∂x∂ξ' * ∂x∂ξ + (∂x∂ξ' * ∂x∂ξ)') / 2 # ensure that gᵢⱼ is symmetric
+    gⁱʲ = inv(gᵢⱼ)
+
+    return DataLayouts.bypass_constructor(
+        Geometry.LocalGeometry{I, C, FT, S},
+        (coordinates, J, WJ, Jinv, ∂x∂ξ, ∂ξ∂x, gⁱʲ, gᵢⱼ),
+    )
+end
+
 # When Julia 1.10+ is used interactively, stacktraces contain reduced type information to make them shorter.
 # On the other hand, the full type information is printed when julia is not run interactively.
 # Given that ClimaCore objects are heavily parametrized, non-abbreviated stacktraces are hard to read,
@@ -27,6 +58,16 @@ sol_res = CA.solve_atmos!(simulation)
 
 (; atmos, params) = integrator.p
 (; p) = integrator
+
+# TODO: Make the following into a unit test in ClimaCore
+ᶜgⁱʲ = Fields.local_geometry_field(integrator.u.c).gⁱʲ
+ᶜgᵢⱼ = Fields.local_geometry_field(integrator.u.c).gᵢⱼ
+ᶠgⁱʲ = Fields.local_geometry_field(integrator.u.f).gⁱʲ
+ᶠgᵢⱼ = Fields.local_geometry_field(integrator.u.f).gᵢⱼ
+@info maximum(parent(@. norm(ᶜgⁱʲ - adjoint(ᶜgⁱʲ))))
+@info maximum(parent(@. norm(ᶜgᵢⱼ - adjoint(ᶜgᵢⱼ))))
+@info maximum(parent(@. norm(ᶠgⁱʲ - adjoint(ᶠgⁱʲ))))
+@info maximum(parent(@. norm(ᶠgᵢⱼ - adjoint(ᶠgᵢⱼ))))
 
 import ClimaCore
 import ClimaCore: Topologies, Quadratures, Spaces, Fields
