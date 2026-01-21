@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   test:
-    name: ci ${{ matrix.version }} - ${{ matrix.os }}
+    name: ci ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.test_group }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
@@ -29,11 +29,19 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
+        test_group:
+          - infrastructure
+          - dynamics
+          - parameterizations
+          - restarts
+          - era5
         include:
           - version: '1.10'
             timeout: 45
           - version: '1.11'
-            timeout: 60
+            timeout: 45
+    env:
+      TEST_GROUP: ${{ matrix.test_group }}
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
