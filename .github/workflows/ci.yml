@@ -17,6 +17,7 @@ permissions:
 jobs:
   test:
     name: ci ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.test_group }}
+    name: ci ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.test_group }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
@@ -35,9 +36,15 @@ jobs:
           - parameterizations
           - restarts
           - era5
+        test_group:
+          - infrastructure
+          - dynamics
+          - parameterizations
+          - restarts
+          - era5
         include:
           - version: '1.10'
-            timeout: 45
+            timeout: 90
           - version: '1.11'
             timeout: 45
     env:
