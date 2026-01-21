@@ -540,7 +540,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
 
                 # Advective form advection of tracers with updraft velocity
-                va = vertical_transport(
+                va = vertical_advection(
                     ᶠu³ʲs.:($j),
                     ᶜχʲ,
                     edmfx_tracer_upwinding,

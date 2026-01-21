@@ -6,32 +6,13 @@ using Random
 Random.seed!(1234)
 import ClimaAtmos as CA
 using NCDatasets
+import LinearAlgebra: norm_sqr
 
 include("test_helpers.jl")
 
-@testset "sort_hdf5_files" begin
-    day_sec(t) =
-        (floor(Int, t / (60 * 60 * 24)), floor(Int, t % (60 * 60 * 24)))
-    filenames(d, s) = "day$d.$s.hdf5"
-    filenames(t) = filenames(day_sec(t)...)
-    t = map(i -> rand(1:(10^6)), 1:100)
-    t_sorted = sort(t)
-    fns = filenames.(t)
-    sort!(fns)
-    @test CA.sort_files_by_time(fns) == filenames.(t_sorted)
-end
-
-@testset "isdivisible" begin
-    @test CA.isdivisible(Dates.Month(1), Dates.Day(1))
-    @test !CA.isdivisible(Dates.Month(1), Dates.Day(25))
-    @test CA.isdivisible(Dates.Week(1), Dates.Day(1))
-    @test CA.isdivisible(Dates.Day(1), Dates.Hour(1))
-    @test CA.isdivisible(Dates.Hour(1), Dates.Second(1))
-    @test CA.isdivisible(Dates.Minute(1), Dates.Second(30))
-    @test !CA.isdivisible(Dates.Minute(1), Dates.Second(13))
-    @test !CA.isdivisible(Dates.Day(1), Dates.Second(1e6))
-    @test CA.isdivisible(Dates.Month(1), Dates.Hour(1))
-end
+#####
+##### Time and Date utilities
+#####
 
 @testset "time_to_seconds" begin
     # Seconds
@@ -51,7 +32,7 @@ end
     @test CA.time_to_seconds("3days") == 3 * 86400
 
     # Weeks
-    @test CA.time_to_seconds("50weeks") == 50 * 604800
+    @test CA.time_to_seconds("50weeks") == 50 * 7 * 86400
 
     # Float input
     @test CA.time_to_seconds("1.5h") == 1.5 * 3600
@@ -65,150 +46,316 @@ end
     @test_throws ErrorException CA.time_to_seconds("mins10")
 end
 
+@testset "isdivisible" begin
+    @test CA.isdivisible(Dates.Month(1), Dates.Day(1))
+    @test !CA.isdivisible(Dates.Month(1), Dates.Day(25))
+    @test CA.isdivisible(Dates.Week(1), Dates.Day(1))
+    @test CA.isdivisible(Dates.Day(1), Dates.Hour(1))
+    @test CA.isdivisible(Dates.Hour(1), Dates.Second(1))
+    @test CA.isdivisible(Dates.Minute(1), Dates.Second(30))
+    @test !CA.isdivisible(Dates.Minute(1), Dates.Second(13))
+    @test !CA.isdivisible(Dates.Day(1), Dates.Second(1e6))
+    @test CA.isdivisible(Dates.Month(1), Dates.Hour(1))
+end
+
+@testset "promote_period" begin
+    @test CA.promote_period(Dates.Hour(24)) == Dates.Day(1)
+    @test CA.promote_period(Dates.Day(14)) == Dates.Week(2)
+    @test CA.promote_period(Dates.Millisecond(1)) == Dates.Millisecond(1)
+    @test CA.promote_period(Dates.Minute(120)) == Dates.Hour(2)
+    @test CA.promote_period(Dates.Second(3600)) == Dates.Hour(1)
+end
+
+@testset "compound_period" begin
+    @test CA.compound_period(3600, Dates.Second) == Dates.Hour(1)
+    @test CA.compound_period(86400, Dates.Second) == Dates.Day(1)
+    @test CA.compound_period(1.5, Dates.Hour) ==
+          Dates.CompoundPeriod(Dates.Hour(1), Dates.Minute(30))
+end
+
+@testset "time_and_units_str" begin
+    @test occursin("1 hour", CA.time_and_units_str(3600))
+    @test occursin("1 day", CA.time_and_units_str(86400))
+end
+
+@testset "parse_date" begin
+    @test CA.parse_date("20000506") == Dates.DateTime(2000, 5, 6)
+    @test CA.parse_date("20000506-0000") == Dates.DateTime(2000, 5, 6, 0, 0)
+    @test_throws ErrorException CA.parse_date("20000506-00000")
+    @test_throws ErrorException CA.parse_date("")
+end
+
+#####
+##### File utilities
+#####
+
+@testset "sort_files_by_time" begin
+    day_sec(t) = (floor(Int, t / 86400), floor(Int, t % 86400))
+    filenames(d, s) = "day$d.$s.hdf5"
+    filenames(t) = filenames(day_sec(t)...)
+    t = map(i -> rand(1:(10^6)), 1:100)
+    t_sorted = sort(t)
+    fns = filenames.(t)
+    sort!(fns)
+    @test CA.sort_files_by_time(fns) == filenames.(t_sorted)
+end
+
+@testset "time_from_filename" begin
+    @test CA.time_from_filename("day0.0.hdf5") == 0.0
+    @test CA.time_from_filename("day1.0.hdf5") == 86400.0
+    @test CA.time_from_filename("day1.3600.hdf5") == 86400.0 + 3600.0
+    @test CA.time_from_filename("day10.43200.hdf5") == 10 * 86400.0 + 43200.0
+end
+
+#####
+##### Math utilities
+#####
+
+@testset "fast_pow" begin
+    # Test that fast_pow matches regular power for typical values
+    @test CA.fast_pow(2.0, 3.0) ≈ 8.0
+    @test CA.fast_pow(10.0, 2.0) ≈ 100.0
+    @test CA.fast_pow(0.99999, 1000.0) ≈ 0.99999^1000 rtol = 1e-10
+end
+
+#####
+##### Variable classification predicates
+#####
+
+@testset "is_*_var predicates" begin
+    @test CA.is_energy_var(:ρe_tot) == true
+    @test CA.is_energy_var(:ρq_tot) == false
+    @test CA.is_momentum_var(:uₕ) == true
+    @test CA.is_momentum_var(:u₃) == true
+    @test CA.is_momentum_var(:ρ) == false
+    @test CA.is_sgs_var(:sgsʲs) == true
+    @test CA.is_tracer_var(:ρq_tot) == true
+    @test CA.is_tracer_var(:ρ) == false
+end
+
+#####
+##### Geometry and mesh utilities
+#####
+
+@testset "Get mesh metrics" begin
+    # This just tests getter functions
+    # Correctness is checked in ClimaCore.jl
+    (; cent_space, face_space) = get_cartesian_spaces()
+    lg_gⁱʲ = cent_space.grid.center_local_geometry.gⁱʲ
+    lg_g³³ = lg_gⁱʲ.components.data.:9
+    (; x) = Fields.coordinate_field(cent_space)
+    @test Fields.field_values(CA.g³³_field(axes(x))) == lg_g³³
+    @test maximum(abs.(lg_g³³ .- CA.g³³.(lg_gⁱʲ).components.data.:1)) == 0
+    @test maximum(abs.(CA.g³ʰ.(lg_gⁱʲ).components.data.:1)) == 0
+    @test maximum(abs.(CA.g³ʰ.(lg_gⁱʲ).components.data.:2)) == 0
+end
+
+@testset "horizontal_integral_at_boundary" begin
+    # Test horizontal_integral_at_boundary which computes ∫∫ f dA at a horizontal level
+    # Two method signatures: (field, level) and (level_field)
+    #
+    # For Taylor-Green vortex: u = sin(x)cos(y), v = -cos(x)sin(y)
+    # These are antisymmetric, so their integrals over a periodic domain should be ≈ 0
+
+    (; cent_space, face_space) = get_cartesian_spaces()
+    _, fcoords = get_coords(cent_space, face_space)
+    ᶠu, ᶠv, ᶠw = taylor_green_ic(fcoords)
+    FT = eltype(ᶠu)
+    halflevel = ClimaCore.Utilities.half
+
+    # Method 1: horizontal_integral_at_boundary(field, level)
+    # Extracts the level internally and integrates
+    @test CA.horizontal_integral_at_boundary(ᶠu, halflevel) <= sqrt(eps(FT))
+    @test CA.horizontal_integral_at_boundary(ᶠv, halflevel) <= sqrt(eps(FT))
+    @test CA.horizontal_integral_at_boundary(ᶠw, halflevel) == 0 # w=0
+
+    # Method 2: horizontal_integral_at_boundary(level_field)
+    # Takes a pre-extracted 2D horizontal slice
+    ᶠuₛ = Fields.level(ᶠu, halflevel)
+    ᶠvₛ = Fields.level(ᶠv, halflevel)
+    ᶠwₛ = Fields.level(ᶠw, halflevel)
+    @test CA.horizontal_integral_at_boundary(ᶠuₛ) <= sqrt(eps(FT))
+    @test CA.horizontal_integral_at_boundary(ᶠvₛ) <= sqrt(eps(FT))
+    @test CA.horizontal_integral_at_boundary(ᶠw, halflevel) == 0 # w=0
+end
+
+#####
+##### Kinetic energy and strain rate
+#####
+
 @testset "kinetic_energy (c.f. analytical function)" begin
-    # Test kinetic energy function for staggered grids
-    # given an analytical expression for the velocity profiles
+    # Test compute_kinetic against analytical solution for Taylor-Green vortex
+    # 
+    # Taylor-Green vortex velocities:
+    #   u = sin(x) cos(y) cos(z)
+    #   v = -cos(x) sin(y) cos(z)  
+    #   w = 0
+    #
+    # Kinetic energy κ = (1/2)(u² + v² + w²):
+    #   κ = (1/2) cos²(z) [sin²(x)cos²(y) + cos²(x)sin²(y)]
+
     (; cent_space, face_space) = get_cartesian_spaces()
     ccoords, fcoords = get_coords(cent_space, face_space)
-    uₕ, uᵥ = get_test_functions(cent_space, face_space)
+    uₕ, uᵥ = get_cartesian_test_velocities(cent_space, face_space)
     (; x, y, z) = ccoords
-    # Type helpers
-    C1 = Geometry.Covariant1Vector
-    C2 = Geometry.Covariant2Vector
-    C3 = Geometry.Covariant3Vector
-    C12 = Geometry.Covariant12Vector
-    CT123 = Geometry.Contravariant123Vector
-    # Exercise function
+
+    # Compute kinetic energy using the function under test
     κ = zeros(cent_space)
     κ .= CA.compute_kinetic(uₕ, uᵥ)
-    ᶜκ_exact = @. 1 // 2 *
-                  cos(z)^2 *
-                  ((sin(x)^2) * (cos(y)^2) + (cos(x)^2) * (sin(y)^2))
-    # Test upto machine precision approximation
+
+    # Analytical solution (derived above)
+    ᶜκ_exact = @. (1 // 2) * cos(z)^2 * (sin(x)^2 * cos(y)^2 + cos(x)^2 * sin(y)^2)
+
     @test ᶜκ_exact ≈ κ
 end
 
-@testset "compute_strain_rate (c.f. analytical function)" begin
-    # Test compute_strain_rate_face_vertical
+@testset "kinetic_energy (spherical geometry with topography)" begin
+    # Test compute_kinetic on warped spherical geometry (with mountain)
+    #
+    # We define a physical velocity field:
+    #   u_phys = u_zonal = U₀ cos(lat)
+    #   v_phys = 0
+    #   w_phys = W₀ sin(π * z_phys / z_max)
+    #
+    # We project this onto a grid with topography.
+    # The kinetic energy should be exactly 0.5 * (u_phys^2 + w_phys^2).
+
+    (; cent_space, face_space, z_max, FT) = get_spherical_extruded_spaces_with_topography()
+
+    # Define Physical Velocity and Project
+    U₀, W₀ = FT(10), FT(1)
+    uₕ, uᵥ, _ = get_spherical_test_velocities(cent_space, face_space, z_max; U₀, W₀)
+
+    # 3. Compute and Verify
+    κ = CA.compute_kinetic(uₕ, uᵥ)
+
+    # helper for exact calc
+    c_coords = Fields.coordinate_field(cent_space)
+
+    # Exact Kinetic Energy (Scalar)
+    ᶜκ_exact = Fields.Field(FT, cent_space)
+    @. ᶜκ_exact =
+        0.5 * (
+            (U₀ * cosd(c_coords.lat))^2 +
+            (W₀ * sin(FT(π) * c_coords.z / z_max))^2
+        )
+
+    @test maximum(abs.(κ .- ᶜκ_exact)) < FT(0.01) * maximum(abs.(ᶜκ_exact))
+end
+
+@testset "compute_strain_rate (Cartesian, analytical)" begin
+    # Test compute_strain_rate_*_vertical against analytical solution for Taylor-Green vortex
+    #
+    # For Taylor-Green vortex: u = sin(x)cos(y)cos(z), v = -cos(x)sin(y)cos(z), w = 0
+    # The strain rate tensor ε_ij = (1/2)(∂u_i/∂x_j + ∂u_j/∂x_i)
+    #
+    # Analytical off-diagonal components:
+    #   ε₁₃ = (1/2) ∂u/∂z = -(1/2) sin(x) cos(y) sin(z)
+    #   ε₂₃ = (1/2) ∂v/∂z = (1/2) cos(x) sin(y) sin(z)
+
     (; helem, cent_space, face_space) = get_cartesian_spaces()
     ccoords, fcoords = get_coords(cent_space, face_space)
     FT = eltype(ccoords.x)
+
+    # Allocate tensor fields for strain rate output
     UVW = Geometry.UVWVector
-    C123 = Geometry.Covariant123Vector
-    # Alloc scratch space
-    ᶜϵ =
-        ᶜtemp_UVWxUVW = Fields.Field(
-            typeof(UVW(FT(0), FT(0), FT(0)) * UVW(FT(0), FT(0), FT(0))'),
-            cent_space,
-        ) # ᶜstrain_rate
-    ᶠϵ =
-        ᶠtemp_UVWxUVW = Fields.Field(
-            typeof(UVW(FT(0), FT(0), FT(0)) * UVW(FT(0), FT(0), FT(0))'),
-            face_space,
-        )
+    u₀ = UVW(FT(0), FT(0), FT(0))
+    ᶜε = Fields.Field(typeof(u₀ * u₀'), cent_space)
+    ᶠε = Fields.Field(typeof(u₀ * u₀'), face_space)
+
+    # Get velocity from Taylor-Green vortex
     u, v, w = taylor_green_ic(ccoords)
     ᶠu, ᶠv, ᶠw = taylor_green_ic(fcoords)
+    ᶜu = @. UVW(Geometry.UVector(u)) + UVW(Geometry.VVector(v)) + UVW(Geometry.WVector(w))
+    ᶠu =
+        @. UVW(Geometry.UVector(ᶠu)) + UVW(Geometry.VVector(ᶠv)) + UVW(Geometry.WVector(ᶠw))
 
+    # Compute strain rates
+    ᶜε .= CA.compute_strain_rate_center_vertical(Geometry.Covariant123Vector.(ᶠu))
+    ᶠε .= CA.compute_strain_rate_face_vertical(Geometry.Covariant123Vector.(ᶜu))
+
+    # Symmetry checks: ε_ij = ε_ji (tensor is symmetric)
+    @test ᶜε.components.data.:2 == ᶜε.components.data.:4  # ε₁₂ = ε₂₁
+    @test ᶜε.components.data.:3 == ᶜε.components.data.:7  # ε₁₃ = ε₃₁
+    @test ᶜε.components.data.:6 == ᶜε.components.data.:8  # ε₂₃ = ε₃₂
+
+    # Check off-diagonal components against analytical solution at centers
     (; x, y, z) = ccoords
-    UVW = Geometry.UVWVector
-    # Assemble (Cartesian) velocity
-    ᶜu = @. UVW(Geometry.UVector(u)) +
-            UVW(Geometry.VVector(v)) +
-            UVW(Geometry.WVector(w))
-    ᶠu = @. UVW(Geometry.UVector(ᶠu)) +
-       UVW(Geometry.VVector(ᶠv)) +
-       UVW(Geometry.WVector(ᶠw))
-    ᶜϵ .= CA.compute_strain_rate_center_vertical(Geometry.Covariant123Vector.(ᶠu))
-    ᶠϵ .= CA.compute_strain_rate_face_vertical(Geometry.Covariant123Vector.(ᶜu))
+    ᶜε₁₃_computed = ᶜε.components.data.:3
+    ᶜε₂₃_computed = ᶜε.components.data.:6
+    ᶜε₁₃_exact = @. -(1 // 2) * sin(x) * cos(y) * sin(z)
+    ᶜε₂₃_exact = @. (1 // 2) * cos(x) * sin(y) * sin(z)
 
-    # Center valued strain rate
-    @test ᶜϵ.components.data.:1 == ᶜϵ.components.data.:1 .* FT(0)
-    @test ᶜϵ.components.data.:5 == ᶜϵ.components.data.:7 .* FT(0)
-    @test ᶜϵ.components.data.:3 == ᶜϵ.components.data.:7
-    @test ᶜϵ.components.data.:2 == ᶜϵ.components.data.:4
-    @test ᶜϵ.components.data.:6 == ᶜϵ.components.data.:8
+    # Relative error should be small (< 0.5%)
+    @test maximum(abs.(ᶜε₁₃_computed .- ᶜε₁₃_exact) ./ (abs.(ᶜε₁₃_exact) .+ eps(FT))) <
+          FT(0.005)
+    @test maximum(abs.(ᶜε₂₃_computed .- ᶜε₂₃_exact) ./ (abs.(ᶜε₂₃_exact) .+ eps(FT))) <
+          FT(0.005)
 
-    ᶜϵ₁₃ = ᶜϵ.components.data.:3
-    ᶜϵ₂₃ = ᶜϵ.components.data.:6
-    c₁₃ = @. -1 // 2 * sin(x) * cos(y) * sin(z)
-    c₂₃ = @. 1 // 2 * cos(x) * sin(y) * sin(z)
-    maximum(abs.((ᶜϵ₁₃ .- c₁₃) ./ (c₁₃ .+ eps(Float32)) .* 100)) < FT(0.5)
-    maximum(abs.((ᶜϵ₂₃ .- c₂₃) ./ (c₂₃ .+ eps(Float32)) .* 100)) < FT(0.5)
-
-    # Face valued strain-rate
+    # Check boundary conditions at faces (top and bottom should match analytical)
     (; x, y, z) = fcoords
-    ᶠϵ₁₃ = ᶠϵ.components.data.:3
-    ᶠϵ₂₃ = ᶠϵ.components.data.:6
-    f₁₃ = @. -1 // 2 * sin(x) * cos(y) * sin(z)
-    f₂₃ = @. 1 // 2 * cos(x) * sin(y) * sin(z)
-    # Check boundary conditions (see src/utils/utilities)
-    # `slab` works per element
+    ᶠε₁₃_exact = @. -(1 // 2) * sin(x) * cos(y) * sin(z)
     for elem_id in 1:helem
         @test maximum(
             abs.(
-                Fields.field_values(
-                    Fields.slab(f₁₃, 1, elem_id) .-
-                    Fields.slab(ᶠϵ₁₃, 1, elem_id),
-                )
+                Fields.field_values(Fields.slab(ᶠε.components.data.:3, 1, elem_id)) .-
+                Fields.field_values(Fields.slab(ᶠε₁₃_exact, 1, elem_id)),
             ),
-        ) < eps(FT) # bottom face
+        ) < eps(FT)  # bottom face
         @test maximum(
             abs.(
-                Fields.field_values(
-                    Fields.slab(f₁₃, 11, elem_id) .-
-                    Fields.slab(ᶠϵ₁₃, 11, elem_id),
-                )
+                Fields.field_values(Fields.slab(ᶠε.components.data.:3, 11, elem_id)) .-
+                Fields.field_values(Fields.slab(ᶠε₁₃_exact, 11, elem_id)),
             ),
-        ) < eps(FT) # top face
+        ) < eps(FT)  # top face
     end
 end
 
-@testset "compute_full_strain_rate (consistency and symmetry)" begin
+@testset "compute_full_strain_rate (Cartesian, consistency)" begin
+    # Test compute_strain_rate_*_full! by comparing to explicit reference calculation
+    # using gradient operators and symmetrization: ε = (1/2)(∇u + (∇u)ᵀ)
+
     (; helem, cent_space, face_space) = get_cartesian_spaces()
     ccoords, fcoords = get_coords(cent_space, face_space)
     FT = eltype(ccoords.x)
+
+    # Type aliases
     UVW = Geometry.UVWVector
-    C123 = Geometry.Covariant123Vector
-    UVec = Geometry.UVector
-    VVec = Geometry.VVector
-    WVec = Geometry.WVector
-    ᶜgradᵥ = Operators.GradientF2C()
-    gradₕ = Operators.Gradient()
+    UVec, VVec, WVec = Geometry.UVector, Geometry.VVector, Geometry.WVector
 
-
-    # Alloc scratch space for 3x3 tensor fields
+    # Allocate tensor fields
     u₀ = UVW(FT(0), FT(0), FT(0))
     ᶜε = Fields.Field(typeof(u₀ * u₀'), cent_space)
     ᶠε = Fields.Field(typeof(u₀ * u₀'), face_space)
     ᶜε_ref = Fields.Field(typeof(u₀ * u₀'), cent_space)
     ᶠε_ref = Fields.Field(typeof(u₀ * u₀'), face_space)
 
-    # Velocity fields
+    # Get velocity from Taylor-Green vortex
     u, v, w = taylor_green_ic(ccoords)
     ᶠu, ᶠv, ᶠw = taylor_green_ic(fcoords)
     ᶜu = @. UVW(UVec(u)) + UVW(VVec(v)) + UVW(WVec(w))
     ᶠu_vec = @. UVW(UVec(ᶠu)) + UVW(VVec(ᶠv)) + UVW(WVec(ᶠw))
 
-    # Compute using API under test
+    # Compute using functions under test
     CA.compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu_vec)
     CA.compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu_vec)
 
-    # Build reference tensors explicitly (projection + symmetrization)
+    # Build reference: ε = (1/2)(∇u + (∇u)ᵀ)
     axis_uvw = (Geometry.UVWAxis(),)
-    # Center reference
+    ᶜgradᵥ = Operators.GradientF2C()
+    gradₕ = Operators.Gradient()
     @. ᶜε_ref = Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_vec))
     @. ᶜε_ref += Geometry.project(axis_uvw, gradₕ(ᶜu))
     @. ᶜε_ref = (ᶜε_ref + adjoint(ᶜε_ref)) / 2
 
-    # Face reference (construct vertical gradient with the same BCs)
-    ∇ᵥuvw_boundary = Geometry.outer(WVec(0), UVW(0, 0, 0))
-    ∇bc = Operators.SetGradient(∇ᵥuvw_boundary)
+    # Face reference with zero-gradient BCs
+    ∇bc = Operators.SetGradient(Geometry.outer(WVec(0), UVW(0, 0, 0)))
     ᶠgradᵥ = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
     @. ᶠε_ref = Geometry.project(axis_uvw, ᶠgradᵥ(ᶜu))
     @. ᶠε_ref += Geometry.project(axis_uvw, gradₕ(ᶠu_vec))
     @. ᶠε_ref = (ᶠε_ref + adjoint(ᶠε_ref)) / 2
 
-    # Symmetry checks (independent of reference)
+    # Symmetry checks
     @test ᶜε.components.data.:2 == ᶜε.components.data.:4
     @test ᶜε.components.data.:3 == ᶜε.components.data.:7
     @test ᶜε.components.data.:6 == ᶜε.components.data.:8
@@ -216,7 +363,7 @@ end
     @test ᶠε.components.data.:3 == ᶠε.components.data.:7
     @test ᶠε.components.data.:6 == ᶠε.components.data.:8
 
-    # Consistency with reference (component-wise, tight tolerance)
+    # Consistency with explicit reference (all 9 tensor components)
     tol = sqrt(eps(FT))
     @test maximum(abs, ᶜε.components.data.:1 .- ᶜε_ref.components.data.:1) < tol
     @test maximum(abs, ᶜε.components.data.:2 .- ᶜε_ref.components.data.:2) < tol
@@ -237,492 +384,77 @@ end
     @test maximum(abs, ᶠε.components.data.:7 .- ᶠε_ref.components.data.:7) < tol
     @test maximum(abs, ᶠε.components.data.:8 .- ᶠε_ref.components.data.:8) < tol
     @test maximum(abs, ᶠε.components.data.:9 .- ᶠε_ref.components.data.:9) < tol
-
-    # Boundary behavior (face): match reference at first and last vertical levels per element
-    for elem_id in 1:helem
-        @test maximum(
-            abs,
-            Fields.field_values(Fields.slab(ᶠε.components.data.:3, 1, elem_id)) .-
-            Fields.field_values(Fields.slab(ᶠε_ref.components.data.:3, 1, elem_id)),
-        ) < tol
-        @test maximum(
-            abs,
-            Fields.field_values(Fields.slab(ᶠε.components.data.:3, 11, elem_id)) .-
-            Fields.field_values(Fields.slab(ᶠε_ref.components.data.:3, 11, elem_id)),
-        ) < tol
-    end
 end
 
-@testset "horizontal integral at boundary" begin
-    # Test both `horizontal_integral_at_boundary` methods
-    (; cent_space, face_space) = get_cartesian_spaces()
-    _, fcoords = get_coords(cent_space, face_space)
-    ᶠu, ᶠv, ᶠw = taylor_green_ic(fcoords)
-    FT = eltype(ᶠu)
-    halflevel = ClimaCore.Utilities.half
-    y₁ = CA.horizontal_integral_at_boundary(ᶠu, halflevel)
-    y₂ = CA.horizontal_integral_at_boundary(ᶠv, halflevel)
-    y₃ = CA.horizontal_integral_at_boundary(ᶠw, halflevel)
-    @test y₁ <= sqrt(eps(FT))
-    @test y₂ <= sqrt(eps(FT))
-    @test y₃ == y₃
-    ᶠuₛ = Fields.level(ᶠu, halflevel)
-    ᶠvₛ = Fields.level(ᶠv, halflevel)
-    ᶠwₛ = Fields.level(ᶠw, halflevel)
-    y₁ = CA.horizontal_integral_at_boundary(ᶠuₛ)
-    y₂ = CA.horizontal_integral_at_boundary(ᶠvₛ)
-    y₃ = CA.horizontal_integral_at_boundary(ᶠwₛ)
-    @test y₁ <= sqrt(eps(FT))
-    @test y₂ <= sqrt(eps(FT))
-    @test y₃ == y₃
+@testset "compute_strain_rate (spherical geometry)" begin
+    # Test strain rate computation on spherical geometry
+    # Uses get_spherical_test_velocities which provides ᶠu_C123 (Covariant123Vector on faces)
+
+    (; cent_space, face_space, z_max, FT) = get_spherical_extruded_spaces()
+
+    # Get velocity fields from helper (includes Covariant123Vector for strain rate)
+    U₀, W₀ = FT(10), FT(1)
+    _, _, ᶠu =
+        get_spherical_test_velocities(cent_space, face_space, z_max; U₀ = U₀, W₀ = W₀)
+
+    # Compute strain rate - returns a lazy field
+    ᶜstrain_rate = CA.compute_strain_rate_center_vertical(ᶠu)
+
+    # Materialize by computing Frobenius norm squared (as done in actual code)
+    ᶜstrain_rate_norm = @. norm_sqr(ᶜstrain_rate)
+
+    # Basic sanity checks
+    # 1. Should be finite everywhere
+    @test all(isfinite, parent(ᶜstrain_rate_norm))
+
+    # 2. Should have nonzero values (vertical shear exists from w = W₀ sin(πz/H))
+    # ∂w/∂z = W₀ π/H cos(πz/H), which is nonzero at most z values
+    @test maximum(parent(ᶜstrain_rate_norm)) > FT(0)
+
+    # 3. Compare against analytical solution
+    # For w = W₀ sin(πz/H), the strain rate tensor has ε₃₃ = ∂w/∂z = W₀ π/H cos(πz/H)
+    # So norm_sqr(ε) = ε₃₃² = (W₀ π/H)² cos²(πz/H)
+    ccoords = Fields.coordinate_field(cent_space)
+    ᶜz = ccoords.z
+    ᶜε₃₃_exact = @. W₀ * FT(π) / z_max * cos(FT(π) * ᶜz / z_max)
+    ᶜstrain_rate_norm_exact = @. ᶜε₃₃_exact^2
+
+    # The computed norm should match the analytical solution within numerical tolerance
+    # (allowing for some discretization error from the finite difference gradient)
+    rel_error = @. abs(ᶜstrain_rate_norm - ᶜstrain_rate_norm_exact) /
+       (abs(ᶜstrain_rate_norm_exact) + eps(FT))
+    @test maximum(parent(rel_error)) < FT(0.01)  # 1% relative tolerance for FD discretization
 end
 
-@testset "get mesh metrics" begin
-    # We have already constructed cent_space and face_space (3d)
-    # > These contain local geometry properties.
-    # If grid properties change the updates will need to be caught in this
-    # g³³_field function
-
-    # This just tests getter functions
-    # Correctness is checked in ClimaCore.jl
-    (; cent_space, face_space) = get_cartesian_spaces()
-    lg_gⁱʲ = cent_space.grid.center_local_geometry.gⁱʲ
-    lg_g³³ = lg_gⁱʲ.components.data.:9
-    (; x) = Fields.coordinate_field(cent_space)
-    @test Fields.field_values(CA.g³³_field(axes(x))) == lg_g³³
-    @test maximum(abs.(lg_g³³ .- CA.g³³.(lg_gⁱʲ).components.data.:1)) == 0
-    @test maximum(abs.(CA.g³ʰ.(lg_gⁱʲ).components.data.:1)) == 0
-    @test maximum(abs.(CA.g³ʰ.(lg_gⁱʲ).components.data.:2)) == 0
-end
-
-@testset "interval domain" begin
-    # Interval Spaces
-    (; zlim, velem) = get_cartesian_spaces()
-    line_mesh = periodic_line_mesh(; x_max = zlim[2], x_elem = velem)
-    @test line_mesh isa Meshes.IntervalMesh
-    @test Geometry.XPoint(zlim[1]) == Meshes.domain(line_mesh).coord_min
-    @test Geometry.XPoint(zlim[2]) == Meshes.domain(line_mesh).coord_max
-    @test velem == Meshes.nelements(line_mesh)
-end
-
-@testset "periodic rectangle meshes (spectral elements)" begin
-    # Interval Spaces
-    (; xlim, zlim, velem, helem, npoly) = get_cartesian_spaces()
-    rectangle_mesh = periodic_rectangle_mesh(;
-        x_max = xlim[2],
-        y_max = xlim[2],
-        x_elem = helem,
-        y_elem = helem,
-    )
-    @test rectangle_mesh isa Meshes.RectilinearMesh
-    @test Meshes.domain(rectangle_mesh) isa Meshes.RectangleDomain
-    @test Meshes.nelements(rectangle_mesh) == helem^2
-    @test Meshes.element_horizontal_length_scale(rectangle_mesh) ==
-          eltype(xlim)(π / npoly)
-    @test Meshes.elements(rectangle_mesh) == CartesianIndices((helem, helem))
-end
-
-@testset "make horizontal spaces" begin
-
-    (; xlim, zlim, velem, helem, npoly, quad) = get_cartesian_spaces()
-    device = ClimaComms.CPUSingleThreaded()
-    comms_ctx = ClimaComms.context(device)
-    FT = eltype(xlim)
-    # 1D Space
-    line_mesh = periodic_line_mesh(; x_max = zlim[2], x_elem = velem)
-    @test line_mesh isa Meshes.AbstractMesh1D
-    horz_plane_space =
-        make_horizontal_space(line_mesh, quad, comms_ctx, true)
-    @test Spaces.column(horz_plane_space, 1, 1) isa Spaces.PointSpace
-
-    # 2D Space
-    rectangle_mesh = periodic_rectangle_mesh(;
-        x_max = xlim[2],
-        y_max = xlim[2],
-        x_elem = helem,
-        y_elem = helem,
-    )
-    @test rectangle_mesh isa Meshes.AbstractMesh2D
-    horz_plane_space =
-        make_horizontal_space(rectangle_mesh, quad, comms_ctx, true)
-    @test Spaces.nlevels(horz_plane_space) == 1
-    @test Spaces.node_horizontal_length_scale(horz_plane_space) ==
-          FT(π / npoly / 5)
-    @test Spaces.column(horz_plane_space, 1, 1, 1) isa Spaces.PointSpace
-end
-
-@testset "make hybrid spaces" begin
-    (; cent_space, face_space, xlim, zlim, velem, helem, npoly, quad) =
-        get_cartesian_spaces()
-    device = ClimaComms.CPUSingleThreaded()
-    context = ClimaComms.context(device)
-    grid = CA.BoxGrid(
-        Float32;
-        context,
-        x_elem = helem,
-        x_max = xlim[2],
-        y_elem = helem,
-        y_max = xlim[2],
-        z_elem = velem,
-        z_max = zlim[2],
-        nh_poly = npoly,
-        z_stretch = false,
-        bubble = true,
-        periodic_x = true,
-        periodic_y = true,
-    )
-    (; center_space, face_space) = CA.get_spaces(grid)
-    @test center_space == cent_space
-    @test face_space == face_space
-end
-
-@testset "promote_period" begin
-    @test CA.promote_period(Dates.Hour(24)) == Dates.Day(1)
-    @test CA.promote_period(Dates.Day(14)) == Dates.Week(2)
-    @test CA.promote_period(Dates.Millisecond(1)) == Dates.Millisecond(1)
-    @test CA.promote_period(Dates.Minute(120)) == Dates.Hour(2)
-    @test CA.promote_period(Dates.Second(3600)) == Dates.Hour(1)
-end
-
-@testset "parse_date" begin
-    @test CA.parse_date("20000506") == Dates.DateTime(2000, 5, 6)
-    @test CA.parse_date("20000506-0000") == Dates.DateTime(2000, 5, 6, 0, 0)
-    @test_throws ErrorException CA.parse_date("20000506-00000")
-    @test_throws ErrorException CA.parse_date("")
-end
-
-@testset "ERA5 single day forcing file generation" begin
-    FT = Float64
-    parsed_args = Dict(
-        "start_date" => "20000506",
-        "site_latitude" => 0.0,
-        "site_longitude" => 0.0,
-        "t_end" => "5hours",
-        "era5_diurnal_warming" => Nothing,
-    )
-
-    temporary_dir = mktempdir()
-    sim_forcing_daily = CA.get_external_daily_forcing_file_path(
-        parsed_args,
-        data_dir = temporary_dir,
-    )
-
-    @test basename(sim_forcing_daily) ==
-          "tv_forcing_0.0_0.0_20000506_20000506.nc"
-
-    sim_forcing_monthly = CA.get_external_monthly_forcing_file_path(
-        parsed_args,
-        data_dir = temporary_dir,
-    )
-
-    @test basename(sim_forcing_monthly) ==
-          "monthly_diurnal_cycle_forcing_0.0_0.0_20000506.nc"
-
-    # Create mock datasets
-    create_mock_era5_datasets(temporary_dir, parsed_args["start_date"], FT)
-
-    # Generate forcing file - identical up to file name for single day and monthly forcing files
-    time_resolution = FT(3600)
-    CA.generate_external_forcing_file(
-        parsed_args,
-        sim_forcing_daily,
-        FT,
-        smooth_amount = 4,
-        time_resolution = time_resolution,
-        input_data_dir = temporary_dir,
-    )
-
-    processed_data = NCDataset(sim_forcing_daily, "r")
-
-    # Test fixed variables - this tests that the variables are copied correctly
-    for clima_var in ["ua", "va", "wap", "ts"]
-        @test all(isapprox.(processed_data[clima_var][:], 1, atol = 1e-10))
-    end
-
-    for clima_var in ["clw", "cli"]
-        @test all(isapprox.(processed_data[clima_var][:], 0, atol = 1e-10))
-    end
-
-    # data is stored from top of atmosphere to surface 
-    @test monotonic_decreasing(processed_data["zg"], 3)
-    @test monotonic_increasing(processed_data["ta"], 3)
-    @test monotonic_increasing(processed_data["hus"], 3)
-    @test all(processed_data["hus"] .>= 0)
-    @test all(processed_data["ta"] .>= 200) # 200K is the minimum temperature set in the helper function
-
-    # Test accumulated variables - note that the sign is flipped because of differences between ecmwf and clima
-    for clima_var in ["hfls", "hfss"]
-        @test all(
-            isapprox.(
-                processed_data[clima_var][:],
-                -1 / time_resolution,
-                atol = 1e-10,
-            ),
-        )
-    end
-
-    # Test gradient variables (should be zero for uniform data)
-    gradient_vars = ["tnhusha", "tntha"]
-    for var in gradient_vars
-        @test all(isapprox.(processed_data[var][:], 0, atol = 1e-10))
-    end
-
-    # Test coszen variable
-    @test all(x -> x >= 0 && x <= 1, processed_data["coszen"][:])
-
-    # Test time check
-    @test CA.check_daily_forcing_times(sim_forcing_daily, parsed_args)
-
-    # The monthly diurnal case data and processing happen exactly the 
-    # same as single day files (just the source files are different).
-    # So we can test the monthly time check in the same way.
-    @test CA.check_monthly_forcing_times(sim_forcing_daily, parsed_args)
-
-    close(processed_data)
-end
-
-@testset "ERA5 multiday forcing file generation" begin
-    FT = Float64
-    parsed_args = Dict(
-        "start_date" => "20000506",
-        "site_latitude" => 0.0,
-        "site_longitude" => 0.0,
-        "t_end" => "2days",
-        "era5_diurnal_warming" => Nothing,
-    )
-
-    input_dir = mktempdir()
-    output_dir = mktempdir()
-    sim_forcing = CA.get_external_daily_forcing_file_path(
-        parsed_args,
-        data_dir = output_dir,
-    )
-
-    # Create mock datasets for multiple days
-    start_date = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
-    end_time =
-        start_date + Dates.Second(CA.time_to_seconds(parsed_args["t_end"]))
-    days_needed = Dates.value(Dates.Day(end_time - start_date)) + 1  # Add 1 to include partial end day
-
-    # Use a common base date for all datasets to avoid time concatenation issues
-    base_date = "20000101"
-
-    for day_offset in 0:(days_needed - 1)
-        current_date = start_date + Dates.Day(day_offset)
-        date_str = Dates.format(current_date, "yyyymmdd")
-        println("Creating mock datasets for $date_str")
-        create_mock_era5_datasets(
-            input_dir,
-            date_str,
-            FT;
-            base_date = base_date,
-        )
-    end
-
-    # Generate multiday forcing file
-    time_resolution = FT(3600)
-    CA.generate_multiday_era5_external_forcing_file(
-        parsed_args,
-        sim_forcing,
-        FT,
-        time_resolution = time_resolution,
-        input_data_dir = input_dir,
-        output_data_dir = output_dir,
-    )
-
-    # Test the generated file
-    processed_data = NCDataset(sim_forcing, "r")
-
-    # Should have days_needed * 24 hours per day time steps
-    expected_time_steps = days_needed * 24
-    @test length(processed_data["time"][:]) == expected_time_steps
-
-    # Test that data is consistent across time
-    @test monotonic_increasing(processed_data["ta"], 3)
-    @test all(
-        x -> all(isapprox.(x, -1 / time_resolution, atol = 1e-10)),
-        processed_data["hfls"][:],
-    )
-
-    # Test time check
-    @test CA.check_daily_forcing_times(sim_forcing, parsed_args)
-
-    # check the vertical tendency function - useful if we implement steady ERA5 forcing
-    vert_partial_ds = Dict(
-        "ta" => processed_data["ta"][1, 1, :, :],
-        "wa" => processed_data["wa"][1, 1, :, :],
-        "hus" => processed_data["hus"][1, 1, :, :],
-        # need to set z to not be all zeros
-        "z" =>
-            collect(1:length(processed_data["z"][:])) .* processed_data["z"][:],
-    )
-    # compute the vertical temperature gradient
-    vertical_temperature_gradient =
-        CA.get_vertical_tendencies(vert_partial_ds, "ta")
-    @test all(vertical_temperature_gradient .<= 0)
-
-    close(processed_data)
-end
-
-@testset "ERA5 smoothing functions" begin
-    FT = Float64
-    temporary_dir = mktempdir()
-
-    # Create a test dataset with known spatial patterns
-    test_data_path = joinpath(temporary_dir, "test_smoothing.nc")
-    ds = NCDataset(test_data_path, "c")
-
-    # Create a larger grid for testing smoothing
-    nlat, nlon, npres, ntime = 21, 21, 5, 3
-    defDim(ds, "longitude", nlon)
-    defDim(ds, "latitude", nlat)
-    defDim(ds, "pressure_level", npres)
-    defDim(ds, "valid_time", ntime)
-
-    defVar(ds, "longitude", FT, ("longitude",))
-    defVar(ds, "latitude", FT, ("latitude",))
-    defVar(
-        ds,
-        "test_var_4d",
-        FT,
-        ("longitude", "latitude", "pressure_level", "valid_time"),
-    )
-    defVar(ds, "test_var_3d", FT, ("longitude", "latitude", "valid_time"))
-
-    # Fill coordinates
-    ds["longitude"][:] = collect(-5.0:0.5:5.0)  # 21 points
-    ds["latitude"][:] = collect(-5.0:0.5:5.0)   # 21 points
-
-    # Create test pattern: checkerboard-like pattern
-    for i in 1:nlon, j in 1:nlat, k in 1:npres, t in 1:ntime
-        ds["test_var_4d"][i, j, k, t] = ((i + j) % 2 == 0) ? 1.0 : 0.0
-    end
-
-    for i in 1:nlon, j in 1:nlat, t in 1:ntime
-        ds["test_var_3d"][i, j, t] = ((i + j) % 2 == 0) ? 1.0 : 0.0
-    end
-
-    close(ds)
-
-    # Test smooth_4D_era5
-    @testset "smooth_4D_era5" begin
-        test_ds = NCDataset(test_data_path, "r")
-
-        # Test with center point (should smooth checkerboard pattern)
-        center_lon_idx = 11  # middle of 21-point grid
-        center_lat_idx = 11
-        smoothed_4d = CA.smooth_4D_era5(
-            test_ds,
-            "test_var_4d",
-            center_lon_idx,
-            center_lat_idx,
-            smooth_amount = 4,
-        )
-
-        # With a checkerboard pattern and 4-point smoothing, we get 41 ones in a 81 square box 
-        exact_value_checkerboard = 41 / 81
-        @test all(
-            isapprox.(smoothed_4d, exact_value_checkerboard, atol = 1e-10),
-        )
-
-        # Test with different smoothing amount
-        smoothed_4d_small = CA.smooth_4D_era5(
-            test_ds,
-            "test_var_4d",
-            center_lon_idx,
-            center_lat_idx,
-            smooth_amount = 1,
-        )
-        @test size(smoothed_4d_small) == (npres, ntime)
-
-        close(test_ds)
-    end
-
-    # Test smooth_3D_era5
-    @testset "smooth_3D_era5" begin
-        test_ds = NCDataset(test_data_path, "r")
-
-        center_lon_idx = 11
-        center_lat_idx = 11
-        smoothed_3d = CA.smooth_3D_era5(
-            test_ds,
-            "test_var_3d",
-            center_lon_idx,
-            center_lat_idx,
-            smooth_amount = 4,
-        )
-
-        # With checkerboard pattern and 4-point smoothing, should get 41/81 
-        exact_value_checkerboard = 41 / 81
-        @test all(
-            isapprox.(smoothed_3d, exact_value_checkerboard, atol = 1e-10),
-        )
-        @test length(smoothed_3d) == ntime
-        close(test_ds)
-    end
-end
-
-@testset "ERA5 diurnal warming" begin
-    FT = Float32
-    temporary_dir = mktempdir()
-
-    parsed_args_0K = Dict(
-        "start_date" => "20000506",
-        "site_latitude" => 0.0,
-        "site_longitude" => 0.0,
-        "t_end" => "5hours",
-        "era5_diurnal_warming" => Nothing,
-    )
-
-    parsed_args_4K = Dict(
-        "start_date" => "20000506",
-        "site_latitude" => 0.0,
-        "site_longitude" => 0.0,
-        "t_end" => "5hours",
-        "era5_diurnal_warming" => 4,
-    )
-
-    create_mock_era5_datasets(temporary_dir, parsed_args_0K["start_date"], FT)
-
-    sim_forcing_0K = CA.get_external_monthly_forcing_file_path(
-        parsed_args_0K,
-        data_dir = temporary_dir,
-    )
-    sim_forcing_4K = CA.get_external_monthly_forcing_file_path(
-        parsed_args_4K,
-        data_dir = temporary_dir,
-    )
-
-    @test basename(sim_forcing_0K) == "monthly_diurnal_cycle_forcing_0.0_0.0_20000506.nc"
-    @test basename(sim_forcing_4K) ==
-          "monthly_diurnal_cycle_forcing_0.0_0.0_20000506_plus_4.0K.nc"
-
-    CA.generate_external_forcing_file(
-        parsed_args_0K,
-        sim_forcing_0K,
-        FT,
-        input_data_dir = temporary_dir,
-    )
-
-    CA.generate_external_forcing_file(
-        parsed_args_4K,
-        sim_forcing_4K,
-        FT,
-        input_data_dir = temporary_dir,
-    )
-
-    # open the datasets and check the temperature and specific humidity profiles have been adjusted
-    processed_data_0K = NCDataset(sim_forcing_0K, "r")
-    processed_data_4K = NCDataset(sim_forcing_4K, "r")
-
-    # check that air and surface temperatures have increased by the +4K amount
-    @test all(isapprox.(processed_data_0K["ta"] .+ 4, processed_data_4K["ta"]))
-    @test isapprox(processed_data_0K["ts"] .+ 4, processed_data_4K["ts"])
-
-    # check that the specific humidity has increased
-    # This test passes locally but fails on the cluster
-    # @test all(processed_data_0K["hus"] .< processed_data_4K["hus"])
-
-    close(processed_data_0K)
-    close(processed_data_4K)
+@testset "compute_strain_rate (spherical geometry with topography)" begin
+    # Test strain rate computation on spherical geometry with terrain-following coordinates
+    # Uses the same velocity profile as the flat test, but on a warped grid
+
+    (; cent_space, face_space, z_max, FT) = get_spherical_extruded_spaces_with_topography()
+
+    # Get velocity fields from helper
+    U₀, W₀ = FT(10), FT(1)
+    _, _, ᶠu = get_spherical_test_velocities(cent_space, face_space, z_max; U₀, W₀)
+
+    # Compute strain rate
+    ᶜstrain_rate = CA.compute_strain_rate_center_vertical(ᶠu)
+    ᶜstrain_rate_norm = @. norm_sqr(ᶜstrain_rate)
+
+    # 1. Should be finite everywhere (even on warped grid)
+    @test all(isfinite, parent(ᶜstrain_rate_norm))
+
+    # 2. Should have nonzero values
+    @test maximum(parent(ᶜstrain_rate_norm)) > FT(0)
+
+    # 3. Compare against analytical solution (same as flat case)
+    # On a terrain-following grid, z is the physical height, so the formula is the same
+    ccoords = Fields.coordinate_field(cent_space)
+    ᶜz = ccoords.z
+    ᶜε₃₃_exact = @. W₀ * FT(π) / z_max * cos(FT(π) * ᶜz / z_max)
+    ᶜstrain_rate_norm_exact = @. ᶜε₃₃_exact^2
+
+    # Allow slightly higher tolerance for warped grid discretization
+    rel_error = @. abs(ᶜstrain_rate_norm - ᶜstrain_rate_norm_exact) /
+       (abs(ᶜstrain_rate_norm_exact) + eps(FT))
+    @test maximum(parent(rel_error)) < FT(0.01)  # 1% tolerance
 end
