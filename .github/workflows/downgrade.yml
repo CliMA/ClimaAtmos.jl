@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   test:
+    name: Downgrade ${{ matrix.version }} - ubuntu-latest
     runs-on: ubuntu-latest
     strategy:
       matrix:

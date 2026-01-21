@@ -3,6 +3,7 @@ using ClimaComms
 ClimaComms.@import_required_backends
 using ClimaCore: Spaces, Fields, Operators, MatrixFields
 
+# Note: This is a debugging tool for the implicit solver. It is currently doing nothing in the tests.
 # TODO: Turn this into a unit test for the implicit solver once the code is more
 # modular.
 

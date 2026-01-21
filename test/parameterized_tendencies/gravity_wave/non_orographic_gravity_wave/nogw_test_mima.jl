@@ -1,3 +1,14 @@
+#=
+Non-orographic gravity wave visualization script (MiMA comparison)
+
+This script compares CliMA gravity wave forcing against MiMA reference data
+and generates comparison plots. It is NOT included in the automated test suite
+because it has no @test assertions - it only generates plots for manual verification.
+
+To run manually:
+    julia --project=test test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl
+=#
+
 using ClimaComms
 ClimaComms.@import_required_backends
 using NCDatasets
