@@ -406,9 +406,9 @@ function thermo_state(
     return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
 end
 
-# GPU-compatible thermo_vars using multiple dispatch instead of runtime isa checks.
-# Each method returns a NamedTuple with the thermodynamic variables needed for the
-# corresponding moisture model.
+# GPU-compatible thermo_vars using multiple dispatch. Each method returns a 
+# NamedTuple with the thermodynamic variables needed for the corresponding 
+# moisture model.
 
 function thermo_vars(::DryModel, ::Any, ᶜY, K, Φ)
     e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ
