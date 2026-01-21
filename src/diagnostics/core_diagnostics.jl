@@ -609,6 +609,7 @@ add_diagnostic_variable!(
     end,
 )
 
+#=
 ###
 # Sea ice thickness (2d)
 ###
@@ -628,6 +629,7 @@ add_diagnostic_variable!(
         end
     end,
 )
+=#
 
 ###
 # Mixed layer temperature
