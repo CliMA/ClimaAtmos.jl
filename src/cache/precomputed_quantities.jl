@@ -406,21 +406,29 @@ function thermo_state(
     return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
 end
 
-function thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)
-    energy_var = (; e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ)
-    moisture_var = if moisture_model isa DryModel
-        (;)
-    elseif moisture_model isa EquilMoistModel
-        (; q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ))
-    elseif moisture_model isa NonEquilMoistModel
-        q_pt_args = (;
-            q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ),
-            q_liq = specific(ᶜY.ρq_liq, ᶜY.ρ) + specific(ᶜY.ρq_rai, ᶜY.ρ),
-            q_ice = specific(ᶜY.ρq_ice, ᶜY.ρ) + specific(ᶜY.ρq_sno, ᶜY.ρ),
-        )
-        (; q_pt = TD.PhasePartition(q_pt_args...))
-    end
-    return (; energy_var..., moisture_var...)
+# GPU-compatible thermo_vars using multiple dispatch. Each method returns a 
+# NamedTuple with the thermodynamic variables needed for the corresponding 
+# moisture model.
+
+function thermo_vars(::DryModel, ::Any, ᶜY, K, Φ)
+    e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ
+    return (; e_int)
+end
+
+function thermo_vars(::EquilMoistModel, ::Any, ᶜY, K, Φ)
+    e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ
+    q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ)
+    return (; e_int, q_tot)
+end
+
+function thermo_vars(::NonEquilMoistModel, ::Any, ᶜY, K, Φ)
+    e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ
+    q_pt_args = (;
+        q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ),
+        q_liq = specific(ᶜY.ρq_liq, ᶜY.ρ) + specific(ᶜY.ρq_rai, ᶜY.ρ),
+        q_ice = specific(ᶜY.ρq_ice, ᶜY.ρ) + specific(ᶜY.ρq_sno, ᶜY.ρ),
+    )
+    return (; e_int, q_pt = TD.PhasePartition(q_pt_args...))
 end
 
 ts_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ) =

@@ -10,32 +10,85 @@ using Test
 # Download test artifacts
 include("download_artifacts.jl")
 
+# Get test group from environment variable (default: run all tests)
+TEST_GROUP = get(ENV, "TEST_GROUP", "all")
+
 #! format: off
 
-# Skip Aqua tests due to precompilation failures in old versions of SciMLBase
-import SciMLBase
-if pkgversion(SciMLBase) > v"2.12.1"
-    @safetestset "Aqua" begin @time include("aqua.jl") end
+# ============================================================================
+# Infrastructure: Configuration, utilities, interfaces, and integration tests
+# ============================================================================
+if TEST_GROUP in ("infrastructure", "all")
+    # Skip Aqua tests due to precompilation failures in old versions of SciMLBase
+    import SciMLBase
+    if pkgversion(SciMLBase) > v"2.12.1"
+        @safetestset "Aqua" begin @time include("aqua.jl") end
+    end
+
+    @safetestset "Dependencies" begin @time include("dependencies.jl") end
+    @safetestset "Callbacks" begin @time include("callbacks.jl") end
+    @safetestset "Configuration tests" begin @time include("config.jl") end
+    @safetestset "Grids" begin @time include("grids.jl") end
+    @safetestset "Utilities" begin @time include("utilities.jl") end
+    @safetestset "Variable manipulations" begin @time include("variable_manipulations_tests.jl") end
+    @safetestset "Parameter tests" begin @time include("parameter_tests.jl") end
+
+    # Interface tests
+    @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
+    @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
+    @safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
+
+    # Solver tests
+    @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
+    @safetestset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
+    @safetestset "Topography tests" begin @time include("topography.jl") end
 end
 
-@safetestset "Dependencies" begin @time include("dependencies.jl") end
-@safetestset "Callbacks" begin @time include("callbacks.jl") end
-@safetestset "Utilities" begin @time include("utilities.jl") end
-@safetestset "Parameter tests" begin @time include("parameters/parameter_tests.jl") end
-@safetestset "Coupler Compatibility" begin @time include("coupler_compatibility.jl") end
-@safetestset "Configuration tests" begin @time include("config.jl") end
-@safetestset "surface albedo tests" begin @time include("surface_albedo.jl") end
-@safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
-@safetestset "Sponge interface tests" begin @time include("parameterized_tendencies/sponge/rayleigh_sponge.jl") end
-@safetestset "Sponge interface tests" begin @time include("parameterized_tendencies/sponge/viscous_sponge.jl") end
-@safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
-@safetestset "Model getters" begin @time include("solver/model_getters.jl") end
-@safetestset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
-@safetestset "Topography tests" begin @time include("topography.jl") end
-@safetestset "Restarts" begin @time include("restart.jl") end
-@safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
-@safetestset "Init with file" begin @time include("test_init_with_file.jl") end
-@safetestset "Grids" begin @time include("grids.jl") end
+# ============================================================================
+# Dynamics: Prognostic equations and conservation tests
+# ============================================================================
+if TEST_GROUP in ("dynamics", "all")
+    @safetestset "Prognostic equations" begin @time include("prognostic_equations.jl") end
+    @safetestset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
+    @safetestset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
+    @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
+
+    # Conservation tests
+    @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
+    @safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
+end
+
+# ============================================================================
+# Parameterizations: Parameterized tendency tests (excluding ERA5)
+# ============================================================================
+if TEST_GROUP in ("parameterizations", "all")
+    # Sponge layers (combined for shared space setup)
+    @safetestset "Sponge layers" begin @time include("parameterized_tendencies/sponge.jl") end
+
+    # Microphysics
+    @safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
+
+    # NOTE: Gravity wave visualization scripts (nogw_test_3d.jl, nogw_test_mima.jl,
+    # nogw_test_single_column.jl, ogwd_3d.jl, ogwd_baseflux.jl) are not included
+    # in the test suite because they have no @test assertions - they only generate
+    # comparison plots for visual verification.
+end
+
+# ============================================================================
+# Restarts: Restart and reproducibility tests
+# ============================================================================
+if TEST_GROUP in ("restarts", "all")
+    @safetestset "Restarts" begin @time include("restart.jl") end
+    @safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
+    @safetestset "Init with file" begin @time include("test_init_with_file.jl") end
+end
+
+# ============================================================================
+# ERA5: External forcing data tests (heavy)
+# ============================================================================
+if TEST_GROUP in ("era5", "all")
+    @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
+end
 
 #! format: on
 
