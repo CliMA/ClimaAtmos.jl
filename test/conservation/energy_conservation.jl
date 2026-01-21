@@ -6,7 +6,6 @@ TODO: Implement tests for:
 - Enthalpy budget in moist simulations
 - Energy conservation under different turbulence closures
 - Radiative energy balance (TOA and surface)
-- Energy conservation in adiabatic limit
 
 Reference: In the absence of external forcing (radiation, surface fluxes),
 total energy should be conserved to machine precision.

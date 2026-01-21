@@ -63,7 +63,7 @@ end
 # ============================================================================
 if TEST_GROUP in ("parameterizations", "all")
     # Sponge layers (combined for shared space setup)
-    @safetestset "Sponge layers" begin @time include("parameterized_tendencies/sponge/sponge.jl") end
+    @safetestset "Sponge layers" begin @time include("parameterized_tendencies/sponge.jl") end
 
     # Microphysics
     @safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end

@@ -5,7 +5,6 @@ TODO: Implement tests for:
 - Global dry air mass conservation
 - Total water mass conservation (vapor + liquid + ice + rain + snow)
 - Tracer mass conservation
-- Mass flux consistency at column boundaries
 - Conservation under different advection schemes
 
 Reference: Total atmospheric mass should be conserved to machine precision
