@@ -1,4 +1,5 @@
-import ClimaCore: Geometry, Hypsography, Fields, Spaces, Meshes, Grids, CommonGrids
+import ClimaCore:
+    Geometry, Hypsography, Fields, Spaces, Meshes, Grids, CommonGrids, Topologies
 using ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 import .AtmosArtifacts as AA
 import ClimaComms
@@ -65,6 +66,10 @@ function SphereGrid(
         Geometry.ShallowSphericalGlobalGeometry{FT}(radius)
     end
 
+    h_mesh = Meshes.EquiangularCubedSphere(Domains.SphereDomain{FT}(radius), h_elem)
+    h_topology =
+        Topologies.Topology2D(context, h_mesh, Topologies.spacefillingcurve(h_mesh))
+
     grid = CommonGrids.ExtrudedCubedSphereGrid(
         FT;
         z_elem, z_min = 0, z_max, radius, h_elem,
@@ -75,6 +80,7 @@ function SphereGrid(
         hypsography_fun,
         global_geometry,
         enable_bubble = bubble,
+        h_topology,
     )
 
     return grid
