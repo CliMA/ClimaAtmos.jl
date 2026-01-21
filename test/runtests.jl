@@ -67,10 +67,10 @@ if TEST_GROUP in ("parameterizations", "all")
     # Microphysics
     @safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
 
-    # Gravity waves
-    @safetestset "Non-orographic gravity wave (3D)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl") end
-    @safetestset "Non-orographic gravity wave (MiMA)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl") end
-    @safetestset "Non-orographic gravity wave (single column)" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl") end
+    # NOTE: Gravity wave visualization scripts (nogw_test_3d.jl, nogw_test_mima.jl,
+    # nogw_test_single_column.jl) are not included in the test suite because they
+    # have no @test assertions - they only generate comparison plots for visual
+    # verification against Alexander & Dunkerton (1999) figures.
 end
 
 # ============================================================================

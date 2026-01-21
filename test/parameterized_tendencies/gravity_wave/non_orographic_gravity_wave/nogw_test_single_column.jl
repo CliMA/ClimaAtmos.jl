@@ -1,3 +1,16 @@
+#=
+Non-orographic gravity wave visualization script (single column)
+
+This script generates Figure 6 from Alexander & Dunkerton (1999) for visual
+comparison (Jan/Apr/Jul/Oct profiles). It is NOT included in the automated test
+suite because it has no @test assertions - it only generates plots for manual verification.
+
+To run manually:
+    julia --project=test test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl
+
+Reference: https://journals.ametsoc.org/view/journals/atsc/56/24/1520-0469_1999_056_4167_aspomf_2.0.co_2.xml
+=#
+
 using ClimaComms
 ClimaComms.@import_required_backends
 using NCDatasets
