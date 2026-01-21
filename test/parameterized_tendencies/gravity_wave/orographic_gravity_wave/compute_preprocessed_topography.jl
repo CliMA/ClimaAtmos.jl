@@ -22,7 +22,7 @@ if !(@isdefined config)
     config = CA.AtmosConfig(config_file; job_id)
 end
 
-config.parsed_args["h_elem"] = 8;
+config.parsed_args["h_elem"] = 32;
 config.parsed_args["topography"] = "Earth";
 config.parsed_args["topography_smoothing"] = false;
 config.parsed_args["topography_damping_factor"] = 1;

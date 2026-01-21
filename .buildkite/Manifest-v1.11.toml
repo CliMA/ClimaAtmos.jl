@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.6"
+julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "12784bf0b21aee2b4075f2bb64383303b89e8560"
+project_hash = "92a67c132e260588856efa0596a41b0f952923d2"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -483,9 +483,9 @@ weakdeps = ["CUDA"]
 
 [[deps.ClimaParams]]
 deps = ["Dates", "TOML"]
-git-tree-sha1 = "faebb273b3a315184f9713b53b8444f17a0eae32"
+path = "/net/sampo/data1/cchristo/clima/ClimaParams.jl"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "1.0.9"
+version = "1.0.10"
 
 [[deps.ClimaReproducibilityTests]]
 deps = ["OrderedCollections", "PrettyTables"]
