@@ -647,5 +647,21 @@ function common_callbacks(
     # Garbage collection
     callbacks = (callbacks..., gc_callback(comms_ctx)...)
 
+    if atmos.orographic_gravity_wave isa OrographicGravityWave
+        dt_ogw =
+            dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_ogw"])) :
+            FT(time_to_seconds(parsed_args["dt_ogw"]))
+        dt_ogw, _, _, _ = promote(dt_ogw, t_start, dt, sim_info.t_end)
+        # We use Millisecond to support fractional seconds, eg. 0.1
+        dt_ogw_ms = Dates.Millisecond(1_000 * float(dt_ogw))
+        if parsed_args["dt_save_state_to_disk"] != "Inf" &&
+           !CA.isdivisible(dt_save_state_to_disk_dates, dt_ogw_ms)
+            @warn "Orographic gravity wave period ($(dt_ogw_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
+            @warn "This simulation will not be reproducible when restarted"
+        end
+
+        callbacks = (callbacks..., call_every_dt(ogw_model_callback!, dt_ogw))
+    end
+
     return callbacks
 end
