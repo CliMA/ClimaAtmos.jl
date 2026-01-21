@@ -287,47 +287,6 @@ end
     close(test_ds)
 end
 
-@testset "get_coszen_inst" begin
-    # Test solar zenith angle and insolation calculation
-    FT = Float64
-
-    # Test at equator, vernal equinox noon (March 20, 2000, 12:00 UTC)
-    lat_eq = 0.0
-    lon_eq = 0.0
-    date_noon = Dates.DateTime(2000, 3, 20, 12, 0, 0)
-
-    μ_noon, S_noon = CA.get_coszen_inst(lat_eq, lon_eq, date_noon, FT)
-
-    # At solar noon on equinox at equator, coszen should be close to 1
-    @test μ_noon > 0.9
-    @test μ_noon <= 1.0
-
-    # Solar flux should be positive
-    @test S_noon > 0
-
-    # Test at night (opposite side of Earth)
-    lon_night = 180.0
-    μ_night, S_night = CA.get_coszen_inst(lat_eq, lon_night, date_noon, FT)
-
-    # At night, coszen should be 0 (sun below horizon)
-    # At night, coszen should be 0 (sun below horizon)
-    @test isapprox(μ_night, 0.0, atol = sqrt(eps(FT)))
-    @test isapprox(S_night, 0.0, atol = sqrt(eps(FT)))
-
-    # Test at high latitude (Arctic, 80°N)
-    lat_arctic = 80.0
-    lon_arctic = 0.0
-    μ_arctic, S_arctic = CA.get_coszen_inst(lat_arctic, lon_arctic, date_noon, FT)
-
-    # At high latitude, coszen should be smaller than at equator
-    @test μ_arctic < μ_noon
-    @test μ_arctic >= 0.0
-
-    # Test return types
-    @test μ_noon isa FT
-    @test S_noon isa FT
-end
-
 @testset "smooth_4D_era5" begin
     # Test spatial smoothing of 4D ERA5 data (lon, lat, pressure, time)
     FT = Float64

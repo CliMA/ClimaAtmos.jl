@@ -156,7 +156,7 @@ This involves:
   temperature and moisture, radiative heating, vertical eddy advection components)
   and GCM state variables (temperature, moisture, winds) for a specified `cfsite_number`.
 - Reading large-scale subsidence (`wap`).
-- Reading TOA insolation and cosine of solar zenith angle.
+- Reading TOA flux and cosine of solar zenith angle.
 - Interpolating these profiles to the model's vertical grid using `interp_vertical_prof`.
 - Computing inverse relaxation timescales for nudging.
 - Calculating the full vertical eddy fluctuation term for temperature and moisture by
@@ -182,7 +182,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
     ᶜinv_τ_wind = similar(Y.c, FT)
     ᶜinv_τ_scalar = similar(Y.c, FT)
     ᶜls_subsidence = similar(Y.c, FT)
-    insolation = similar(Fields.level(Y.c.ρ, 1), FT)
+    toa_flux = similar(Fields.level(Y.c.ρ, 1), FT)
     cos_zenith = similar(Fields.level(Y.c.ρ, 1), FT)
 
     (; external_forcing_file, cfsite_number) = external_forcing
@@ -210,10 +210,10 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
             )
         end
 
-        function set_insolation!(cc_field)
-            # rsdt is TOA insolation on a horizontal plane. We need
-            # total solar irradiance and the solar zenith angle separately. So compute 
-            #`TSI = rsdt/cos(SZA)`.
+        function set_toa_flux!(cc_field)
+            # rsdt is TOA insolation. We need
+            # TOA flux and the solar zenith angle separately. So compute 
+            #`toa_flux = rsdt/cos(SZA)`.
             parent(cc_field) .= mean(
                 ds.group[cfsite_number]["rsdt"][:] ./
                 ds.group[cfsite_number]["coszen"][:],
@@ -245,7 +245,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
         gcm_vert_advection!(ᶜdTdt_fluc, ᶜT_nudge, ᶜls_subsidence)
         gcm_vert_advection!(ᶜdqtdt_fluc, ᶜqt_nudge, ᶜls_subsidence)
 
-        set_insolation!(insolation)
+        set_toa_flux!(toa_flux)
         set_cos_zenith!(cos_zenith)
 
         @. ᶜinv_τ_wind = compute_gcm_driven_momentum_inv_τ(zc_gcm, params)
@@ -264,7 +264,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
         ᶜinv_τ_wind,
         ᶜinv_τ_scalar,
         ᶜls_subsidence,
-        insolation,
+        toa_flux,
         cos_zenith,
     )
 end
@@ -521,7 +521,7 @@ function external_forcing_cache(
             params,
         ),
         ᶜls_subsidence = similar(Y.c, FT),
-        insolation = similar(
+        toa_flux = similar(
             Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
             FT,
         ),
