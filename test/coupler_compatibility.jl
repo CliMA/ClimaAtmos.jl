@@ -17,6 +17,8 @@ const beta = 1
 const T1 = 300
 const T2 = 290
 
+# TODO: Add surface flux exchange tests after new SurfaceFluxes.jl is integrated
+
 #In this test, the ClimaAtmos "cache" p is overwritten so that it contains
 # a surface field specified by the coupler, and then the internal function
 # set_precomputed_quantities! is called to verify that this surface field is
@@ -31,8 +33,10 @@ const T2 = 290
     # will get overwritten.
     config = CA.AtmosConfig(
         Dict(
-            "initial_condition" => "DryBaroclinicWave",
-            "output_dir_style" => "RemovePreexisting",
+            "initial_condition" => "DYCOMS_RF02",
+            "moist" => "equil",
+            "config" => "column",
+            "output_default_diagnostics" => false,
         );
         job_id = "coupler_compatibility1",
     )
@@ -103,7 +107,7 @@ end
             "surface_setup" => "PrescribedSurface",
             "moist" => "equil",
             "rad" => "clearsky",
-            "co2_model" => "fixed",
+            "config" => "column",
             "turbconv" => "diagnostic_edmfx",
             # NOTE: We do not output diagnostics because it leads to problems with Ubuntu on
             # GitHub actions taking too long to run (for unknown reasons). If you need this,
