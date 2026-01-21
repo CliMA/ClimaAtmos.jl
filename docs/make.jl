@@ -30,6 +30,7 @@ makedocs(;
         "Microphysics" => "microphysics.md",
         "EDMF Equations" => "edmf_equations.md",
         "Diagnostics" => "diagnostics.md",
+        "Grids" => "grids.md",
         "Available Diagnostics" => "available_diagnostics.md",
         "Diagnostic EDMF Equations" => "diagnostic_edmf_equations.md",
         "Gravity Wave Drag Parameterizations" => "gravity_wave.md",

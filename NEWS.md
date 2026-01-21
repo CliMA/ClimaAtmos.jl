@@ -5,6 +5,7 @@ main
 -------
 - [#4198](https://github.com/CliMA/ClimaAtmos.jl/pull/4198) [badge-💥breaking] modifies surface conditions
 to use SurfaceFluxes v0.15.
+- [#4220](https://github.com/CliMA/ClimaAtmos.jl/pull/4220) modifies `SphereGrid` to use spacefillingcurve.
 
 v0.33.2
 -------
