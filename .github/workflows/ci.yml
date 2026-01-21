@@ -19,7 +19,7 @@ jobs:
     name: ci ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.test_group }}
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.timeout }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -36,12 +36,6 @@ jobs:
           - parameterizations
           - restarts
           - era5
-
-        include:
-          - version: '1.10'
-            timeout: 45
-          - version: '1.11'
-            timeout: 45
     env:
       TEST_GROUP: ${{ matrix.test_group }}
     steps:
