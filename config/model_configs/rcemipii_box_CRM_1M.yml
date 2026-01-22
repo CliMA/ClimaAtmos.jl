@@ -7,14 +7,20 @@ config: box
 rad: allskywithclear
 approximate_linear_solve_iters: 2  # only valid when implicit_diffusion=true
 rayleigh_sponge: true  # set sponge level in toml file
-smagorinsky_lilly: "UV"
-implicit_diffusion: true
+
+# Diffusion
+hyperdiff: "false"
+implicit_diffusion: false
+smagorinsky_lilly: "UV_W"  # horizontal + vertical
+# smagorinsky_lilly: "UV"  # horizontal
+# vert_diff: "DecayWithHeightDiffusion"  # vertical
+# implicit_diffusion: true
+
+# Upwinding mode
+tracer_upwinding: vanleer_limiter  # is default (alt: `first_order`)
+energy_q_tot_upwinding: vanleer_limiter  # is default (alt: `first_order`)
 
 reproducibility_test: true
-
-# Reference diffusion setup
-vert_diff: "DecayWithHeightDiffusion"
-hyperdiff: "false"
 
 # microphysics
 ### !! 1M and 2M !!
@@ -73,9 +79,9 @@ diagnostics:
       ke,  # kinetic energy for spectrum
       # Smagorinsky diagnostics
       Dh_smag, strainh_smag,  # horizontal
-      # Dv_smag, strainv_smag,  # vertical
+      Dv_smag, strainv_smag  # vertical
       # DecayWithHeight diffusion coefficient
-      edt
+      # edt
     ]
     # period: 10mins
     period: 1hours

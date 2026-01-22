@@ -1,0 +1,42 @@
+initial_condition: RCEMIPIIProfile_300
+surface_setup: DefaultMoninObukhov
+surface_temperature: RCEMIPII
+insolation: rcemipii
+turbconv: "prognostic_edmfx"
+tracer_upwinding: first_order
+implicit_diffusion: true
+implicit_sgs_advection: false
+approximate_linear_solve_iters: 2
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+moist: "nonequil"
+call_cloud_diagnostics_per_stage: true
+precip_model: "1M"
+config: "column"
+z_max: 30000.0  # 30km
+x_elem: 2
+y_elem: 2
+z_elem: 86
+dz_bottom: 30.0
+z_stretch: false
+perturb_initstate: false
+dt: "5secs"
+t_end: "24hours"
+dt_save_state_to_disk: "60mins"
+toml: [toml/rcemip_SCM_prognostic_edmfx_1M.toml]
+netcdf_interpolation_num_points: [8, 8, 100]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, husraup, hussnup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, husraen, hussnen, tke]
+    period: 10mins
+  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
+    period: 10mins
+  - short_name: [husra, hussn]
+    period: 10mins
