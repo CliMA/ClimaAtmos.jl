@@ -26,6 +26,28 @@ Struct used for dispatch to the 2-moment warm rain + P3 ice microphysics paramet
 struct Microphysics2MomentP3 <: AbstractPrecipitationModel end
 
 """
+    TracerNonnegativityConstraint{qtot}
+
+Methods for enforcing tracer nonnegativity. 
+
+`qtot` is a boolean indicating whether q_tot should be constrained to be nonnegative. It can be
+- `true`: Constrain q_tot to be nonnegative
+- `false`: Do not constrain q_tot
+
+There are three methods for enforcing tracer nonnegativity:
+- `TracerNonnegativityElementConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
+    tracer mass within an element (i.e. horizontally)
+- `TracerNonnegativityVaporConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
+    tracer mass between vapor (`q_vap = q_tot - q_cond`) and each tracer
+- `TracerNonnegativityVaporTendency`: Enforce nonnegativity by applying a tendency to each tracer,
+    exchanging tracer mass between vapor (`q_vap`) and each tracer over time
+"""
+abstract type TracerNonnegativityConstraint{qtot} end
+struct TracerNonnegativityElementConstraint{qtot} <: TracerNonnegativityConstraint{qtot} end
+struct TracerNonnegativityVaporConstraint{qtot} <: TracerNonnegativityConstraint{qtot} end
+struct TracerNonnegativityVaporTendency end
+
+"""
 
     AbstractSGSamplingType
 
@@ -593,13 +615,13 @@ end
 
 Groups moisture-related models and types.
 """
-Base.@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS}
+Base.@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS, TNM}
     moisture_model::MM = DryModel()
     microphysics_model::PM = NoPrecipitation()
     cloud_model::CM = QuadratureCloud(SGSQuadrature(Float32))
     noneq_cloud_formation_mode::NCFM = nothing
     call_cloud_diagnostics_per_stage::CCDPS = nothing
-    moisture_fixer::Bool = false
+    tracer_nonnegativity_method::TNM = nothing
 end
 
 """
