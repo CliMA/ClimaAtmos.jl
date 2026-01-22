@@ -15,17 +15,16 @@ an `AtmosModel`.
 abstract type PrecipState{FT} end
 
 """
-    LocalState(; params, geometry, thermo_state, velocity, turbconv_state, precip_state)
+    LocalState(; params, geometry, T, p, velocity, turbconv_state, precip_state, q_tot, q_liq, q_ice)
 
-A generic representation of all the data required to initialize an `AtmosModel`
+A generic representation of the data required to initialize an `AtmosModel`
 at some point in the domain. If `velocity` or `turbconv_state` are omitted, they
-are set to 0.
+are set to 0. Moisture specific humidities default to 0.
 """
 struct LocalState{
     FT,
     P <: CAP.ClimaAtmosParameters{FT},
     G <: Geometry.LocalGeometry{<:Any, <:Any, FT},
-    TS <: TD.ThermodynamicState{FT},
     V <: Geometry.LocalVector{FT},
     TC <: TurbconvState{FT},
     PS <: PrecipState{FT},
@@ -33,34 +32,51 @@ struct LocalState{
 }
     params::P
     geometry::G
-    thermo_state::TS
+    T
+    p
+    q_tot
+    q_liq
+    q_ice
     velocity::V
     turbconv_state::TC
     precip_state::PS
 
     # commonly used values that can be inferred from the values above
     thermo_params::TP
-    ρ::FT
+    ρ
 end
 
 function LocalState(;
     params,
     geometry,
-    thermo_state,
+    T,
+    p,
     velocity = nothing,
     turbconv_state = nothing,
     precip_state = nothing,
+    q_tot = nothing,
+    q_liq = nothing,
+    q_ice = nothing,
 )
     FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    _q_tot = isnothing(q_tot) ? zero(T) : q_tot
+    _q_liq = isnothing(q_liq) ? zero(T) : q_liq
+    _q_ice = isnothing(q_ice) ? zero(T) : q_ice
+    ρ = TD.air_density(thermo_params, T, p, _q_tot, _q_liq, _q_ice)
     return LocalState(
         params,
         geometry,
-        thermo_state,
+        T,
+        p,
+        _q_tot,
+        _q_liq,
+        _q_ice,
         isnothing(velocity) ? Geometry.UVVector(FT(0), FT(0)) : velocity,
         isnothing(turbconv_state) ? NoTurbconvState{FT}() : turbconv_state,
         isnothing(precip_state) ? NoPrecipState{FT}() : precip_state,
-        CAP.thermodynamics_params(params),
-        TD.air_density(CAP.thermodynamics_params(params), thermo_state),
+        thermo_params,
+        ρ,
     )
 end
 

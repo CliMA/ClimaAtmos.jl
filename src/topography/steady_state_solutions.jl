@@ -39,12 +39,9 @@ end
 # Replace η with z in the initial state so that it is hydrostatically balanced.
 function constant_buoyancy_frequency_initial_state(params, coord)
     FT = eltype(params)
-    thermo_state = TD.PhaseDry_pT(
-        CAP.thermodynamics_params(params),
-        background_p_and_T(params, coord.z)...,
-    )
+    (p, T) = background_p_and_T(params, coord.z)
     velocity = Geometry.UVector(background_u(FT))
-    return (; thermo_state, velocity)
+    return (; T, p, velocity)
 end
 
 """
