@@ -857,7 +857,7 @@ function set_precipitation_cache!(Y, p, ::Microphysics2MomentP3, ::Nothing)
     # NOTE: the above function sets `ᶜSqᵢᵖ` to `0`. For P3, need to update `ᶜSqᵢᵖ` below!!
 
     ### Icy processes (P3)
-    (; ᶜScoll, ᶜts, ᶜlogλ) = p.precomputed
+    (; ᶜScoll, ᶜT, ᶜlogλ) = p.precomputed
 
     # get thermodynamics and microphysics params
     (; params) = p
@@ -874,7 +874,7 @@ function set_precipitation_cache!(Y, p, ::Microphysics2MomentP3, ::Nothing)
 
     # compute warm precipitation sources on the grid mean (based on SB2006 2M scheme)
     compute_cold_precipitation_sources_P3!(
-        ᶜScoll, params_2mp3, thermo_params, ᶜY_reduced, ᶜts, ᶜlogλ,
+        ᶜScoll, params_2mp3, thermo_params, ᶜY_reduced, ᶜT, ᶜlogλ,
     )
 
     return nothing

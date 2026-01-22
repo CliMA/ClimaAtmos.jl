@@ -777,7 +777,7 @@ function compute_cold_precipitation_sources_P3!(
     params_2mp3,    # Parameters for 2M and P3 schemes, see `get_microphysics_2m_p3_parameters`
     thermo_params,  # An instance of `Thermodynamics.Parameters.ThermodynamicsParameters`
     ᶜY_reduced,     # A reduced set of prognostic variables needed for P3 sources
-    ᶜts,            # Thermodynamic state
+    ᶜT,             # Air temperature from cache
     ᶜlogλ,          # Logarithm of the P3 distribution slope parameter
 )
 
@@ -793,7 +793,7 @@ function compute_cold_precipitation_sources_P3!(
         warm.sb.pdf_c, warm.sb.pdf_r,
         ρq_liq, ρn_liq, ρq_rai, ρn_rai,
         warm.aps, thermo_params, (cold.velocity_params,),
-        ρ, Tₐ(thermo_params, ᶜts),
+        ρ, ᶜT,
     )
 
     return nothing
