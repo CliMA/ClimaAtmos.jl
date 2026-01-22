@@ -1,4 +1,4 @@
-302
+303
 
 # **README**
 #
@@ -20,6 +20,11 @@
 
 
 #=
+
+303
+- Remove thermo state from initial conditions, which changes the behavior of
+prognostic EDMF case, possibly from the change in `enthalpy` function.
+
 302
 - Changing the diffusion used for the RCEMIPII CRM box test changes behavior.
 

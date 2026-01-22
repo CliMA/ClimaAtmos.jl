@@ -6,7 +6,6 @@ dt: 120secs
 t_end: 12hours
 start_date: "20250627-0000"
 initial_condition: "WeatherModel"
-discrete_hydrostatic_balance: false # TODO: change to true once we fix discrete hydrostatic balance to work with orography
 topo_smoothing: true
 topography: "Earth"
 rayleigh_sponge: true

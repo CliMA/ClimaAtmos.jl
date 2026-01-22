@@ -1066,10 +1066,6 @@ function get_simulation(config::AtmosConfig)
     end
     @info "Allocating cache (p): $s"
 
-    if config.parsed_args["discrete_hydrostatic_balance"]
-        set_discrete_hydrostatic_balanced_state!(Y, p)
-    end
-
     FT = Spaces.undertype(axes(Y.c))
     s = @timed_str begin
         ode_algo = ode_configuration(FT, config.parsed_args)

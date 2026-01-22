@@ -69,7 +69,7 @@ grid_scale_center_variables(ls, atmos_model) = (;
 
 energy_variables(ls) = (;
     ρe_tot = ls.ρ * (
-        TD.internal_energy(ls.thermo_params, ls.thermo_state) +
+        TD.internal_energy(ls.thermo_params, ls.T, ls.q_tot, ls.q_liq, ls.q_ice) +
         norm_sqr(ls.velocity) / 2 +
         geopotential(CAP.grav(ls.params), ls.geometry.coordinates.z)
     )
@@ -103,22 +103,17 @@ function atmos_surface_field(surface_space, ::SlabOceanSST)
 end
 
 function moisture_variables(ls, ::DryModel)
-    @assert ls.thermo_state isa TD.AbstractPhaseDry
+    @assert ls.q_tot == 0 && ls.q_liq == 0 && ls.q_ice == 0
     return (;)
 end
 function moisture_variables(ls, ::EquilMoistModel)
-    @assert !(ls.thermo_state isa TD.AbstractPhaseNonEquil)
-    return (;
-        ρq_tot = ls.ρ *
-                 TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
-    )
+    @assert ls.q_liq == 0 && ls.q_ice == 0 # Equilibrium model: condensate is diagnosed
+    return (; ρq_tot = ls.ρ * ls.q_tot)
 end
 moisture_variables(ls, ::NonEquilMoistModel) = (;
-    ρq_tot = ls.ρ *
-             TD.total_specific_humidity(ls.thermo_params, ls.thermo_state),
-    ρq_liq = ls.ρ *
-             TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state),
-    ρq_ice = ls.ρ * TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state),
+    ρq_tot = ls.ρ * ls.q_tot,
+    ρq_liq = ls.ρ * ls.q_liq,
+    ρq_ice = ls.ρ * ls.q_ice,
 )
 
 precip_variables(ls, ::NoPrecipitation) = (;)
@@ -166,10 +161,9 @@ function turbconv_center_variables(
     ρtke = ls.ρ * ls.turbconv_state.tke
     ρa = ls.ρ * a_draft / n
     mse =
-        TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
+        TD.enthalpy(ls.thermo_params, ls.T, ls.q_tot, ls.q_liq, ls.q_ice) +
         geopotential(CAP.grav(ls.params), ls.geometry.coordinates.z)
-    q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
-    sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_tot = q_tot), Val(n))
+    sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_tot = ls.q_tot), Val(n))
     return (; ρtke = ρtke, sgsʲs)
 end
 function turbconv_center_variables(
@@ -185,11 +179,8 @@ function turbconv_center_variables(
     ρtke = ls.ρ * ls.turbconv_state.tke
     ρa = ls.ρ * a_draft / n
     mse =
-        TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
+        TD.enthalpy(ls.thermo_params, ls.T, ls.q_tot, ls.q_liq, ls.q_ice) +
         geopotential(CAP.grav(ls.params), ls.geometry.coordinates.z)
-    q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
-    q_liq = TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state) # - q_rai ?
-    q_ice = TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state) # - q_sno ?
     q_rai = ls.precip_state.q_rai
     q_sno = ls.precip_state.q_sno
     n_liq = ls.precip_state.n_liq
@@ -199,9 +190,9 @@ function turbconv_center_variables(
             _ -> (;
                 ρa = ρa,
                 mse = mse,
-                q_tot = q_tot,
-                q_liq = q_liq,
-                q_ice = q_ice,
+                q_tot = ls.q_tot,
+                q_liq = ls.q_liq,
+                q_ice = ls.q_ice,
                 q_rai = q_rai,
                 q_sno = q_sno,
             ),
@@ -212,9 +203,9 @@ function turbconv_center_variables(
             _ -> (;
                 ρa = ρa,
                 mse = mse,
-                q_tot = q_tot,
-                q_liq = q_liq,
-                q_ice = q_ice,
+                q_tot = ls.q_tot,
+                q_liq = ls.q_liq,
+                q_ice = ls.q_ice,
                 q_rai = q_rai,
                 q_sno = q_sno,
                 n_liq = n_liq,

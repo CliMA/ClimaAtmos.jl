@@ -1,7 +1,6 @@
 config: "plane"
 FLOAT_TYPE: "Float64"
 initial_condition: "ConstantBuoyancyFrequencyProfile"
-discrete_hydrostatic_balance: true
 mesh_warp_type: "Linear"
 x_max: 100e3
 z_max: 21e3

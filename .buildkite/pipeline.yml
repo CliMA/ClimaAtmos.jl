@@ -452,7 +452,7 @@ steps:
 
   - group: "Analytic Tests"
     steps:
-      - label: "GPU: No Topography Test (2D, Float64, Discrete Balance)"
+      - label: "GPU: No Topography Test (2D, Float64)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_no_topography_float64_test.yml
