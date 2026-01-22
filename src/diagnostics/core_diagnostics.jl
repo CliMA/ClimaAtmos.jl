@@ -610,27 +610,145 @@ add_diagnostic_variable!(
 )
 
 ###
-# Near-surface air temperature (2d)
+# Near-surface air temperature (2d) - 2m temperature using MOST profile recovery
 ###
+
+"""
+    compute_2m_temperature(T_sfc, T_int, z_int, L_MO, z0h, sf_params)
+
+Compute the 2-meter temperature using Monin-Obukhov similarity theory profile recovery.
+
+Uses the relation:
+    T(z) = T_sfc + T_star / κ * (log(z/z0h) - ψ_h(z/L_MO) + ψ_h(z0h/L_MO))
+
+where T_star is the temperature scale derived from the difference between interior
+and surface temperatures.
+"""
+function compute_2m_temperature(
+    T_sfc,
+    T_int,
+    z_int,
+    L_MO,
+    z0h,
+    sf_params,
+)
+    FT = typeof(T_sfc)
+    z_2m = FT(2)
+    κ = SF.Parameters.von_karman_const(sf_params)
+    uf_params = SF.Parameters.uf_params(sf_params)
+
+    # Compute temperature scale T_star from the interior-surface difference
+    # Using MOST: ΔT = T_star / κ * (log(z_int/z0h) - ψ_h(z_int/L_MO) + ψ_h(z0h/L_MO))
+    # Solving for T_star gives us the scale parameter
+
+    # Avoid division by zero for L_MO
+    L_MO_safe = abs(L_MO) < eps(FT) ? eps(FT) * sign(L_MO + eps(FT)) : L_MO
+
+    # Stability correction functions for heat transport
+    ψ_h_int = UF.psi(uf_params, z_int / L_MO_safe, UF.HeatTransport())
+    ψ_h_z0 = UF.psi(uf_params, z0h / L_MO_safe, UF.HeatTransport())
+    ψ_h_2m = UF.psi(uf_params, z_2m / L_MO_safe, UF.HeatTransport())
+
+    # Profile function at interior height
+    F_int = log(z_int / z0h) - ψ_h_int + ψ_h_z0
+
+    # Compute temperature scale from interior-surface difference
+    ΔT = T_int - T_sfc
+    # T_star = ΔT * κ / F_int (when F_int != 0)
+    # Handle near-neutral case where F_int approaches log(z_int/z0h)
+    F_int_safe = abs(F_int) < eps(FT) ? eps(FT) : F_int
+    T_star = ΔT * κ / F_int_safe
+
+    # Now compute temperature at 2m using the recovered profile
+    # T_2m = T_sfc + T_star / κ * (log(z_2m/z0h) - ψ_h_2m + ψ_h_z0)
+    F_2m = log(z_2m / z0h) - ψ_h_2m + ψ_h_z0
+    T_2m = T_sfc + T_star / κ * F_2m
+
+    return T_2m
+end
+
+"""
+    get_z0h_value(sfc_setup, FT)
+
+Extract heat roughness length (z0b/z0h) from surface setup.
+Returns a scalar value - assumes uniform roughness length.
+Falls back to a default value if not using MoninObukhov parameterization or if sfc_setup is nothing.
+"""
+function get_z0h_value(sfc_setup, ::Type{FT}) where {FT}
+    # Handle case where sfc_setup is nothing (e.g., coupler mode)
+    if isnothing(sfc_setup)
+        return FT(1e-4)  # Default roughness length for ocean
+    end
+    # Handle SurfaceState directly
+    if sfc_setup isa SurfaceConditions.SurfaceState
+        param = sfc_setup.parameterization
+        if param isa SurfaceConditions.MoninObukhov
+            return FT(param.z0b)
+        else
+            return FT(1e-4)
+        end
+    end
+    # For function or field types, fall back to default
+    # In coupled mode, roughness varies spatially and we use a typical value
+    return FT(1e-4)
+end
+
 add_diagnostic_variable!(
     short_name = "tas",
     long_name = "Near-Surface Air Temperature",
     standard_name = "air_temperature",
     units = "K",
-    comments = "Temperature at the bottom cell center of the atmosphere",
+    comments = "Temperature at 2 meters above the surface, computed using Monin-Obukhov similarity theory profile recovery",
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
+        sf_params = CAP.surface_fluxes_params(cache.params)
+        FT = eltype(cache.params)
+
+        # Get surface conditions (on surface half-level space)
+        (; sfc_conditions) = cache.precomputed
+        T_sfc_field = TD.air_temperature.(thermo_params, sfc_conditions.ts)
+        L_MO_field = sfc_conditions.obukhov_length
+
+        # Get interior (first level) values (on center level 1 space)
+        ᶜts_1 = Fields.level(cache.precomputed.ᶜts, 1)
+        T_int_field = TD.air_temperature.(thermo_params, ᶜts_1)
+        z_int_field = Fields.level(Fields.coordinate_field(state.c).z, 1)
+
+        # Extract field values to avoid space mismatch in broadcasting
+        # The surface half-level and center level 1 have the same horizontal grid
+        T_sfc_vals = Fields.field_values(T_sfc_field)
+        L_MO_vals = Fields.field_values(L_MO_field)
+        T_int_vals = Fields.field_values(T_int_field)
+        z_int_vals = Fields.field_values(z_int_field)
+
+        # Get z0h from surface setup
+        sfc_setup = cache.sfc_setup
+        z0h = get_z0h_value(sfc_setup, FT)
+
+        # Compute 2m temperature using the field values
+        # Create result field on the same space as T_sfc_field
         if isnothing(out)
-            return TD.air_temperature.(
-                thermo_params,
-                Fields.level(cache.precomputed.ᶜts, 1),
+            result = similar(T_sfc_field)
+            result_vals = Fields.field_values(result)
+            @. result_vals = compute_2m_temperature(
+                T_sfc_vals,
+                T_int_vals,
+                z_int_vals,
+                L_MO_vals,
+                $FT($z0h),
+                $sf_params,
             )
+            return result
         else
-            out .=
-                TD.air_temperature.(
-                    thermo_params,
-                    Fields.level(cache.precomputed.ᶜts, 1),
-                )
+            out_vals = Fields.field_values(out)
+            @. out_vals = compute_2m_temperature(
+                T_sfc_vals,
+                T_int_vals,
+                z_int_vals,
+                L_MO_vals,
+                $FT($z0h),
+                $sf_params,
+            )
         end
     end,
 )

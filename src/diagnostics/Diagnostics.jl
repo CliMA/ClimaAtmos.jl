@@ -10,6 +10,10 @@ import ClimaCore:
 import ClimaCore.Utilities: half
 import ClimaCore.MatrixFields: @name
 import Thermodynamics as TD
+import SurfaceFluxes as SF
+import SurfaceFluxes.UniversalFunctions as UF
+
+import ..SurfaceConditions
 
 # compute lazily to reduce allocations
 import ..lazy
