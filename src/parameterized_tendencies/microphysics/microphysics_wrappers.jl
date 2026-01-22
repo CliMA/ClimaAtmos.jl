@@ -16,11 +16,54 @@ const Pₐ = TD.air_pressure
 const PP = TD.PhasePartition
 const qᵥ = TD.vapor_specific_humidity
 
-# Clip any specific humidity
+"""
+    clip(q)
+    clip(nt)
+
+Clip a value `q` to be non-negative.
+
+If a named tuple `nt` is provided, clip each field of the tuple.
+"""
 function clip(q)
     FT = eltype(q)
     return max(FT(0), q)
 end
+function clip(nt::NamedTuple{names}) where {names}
+    clipped = unrolled_map(clip, values(nt))
+    return NamedTuple{names}(clipped)
+end
+
+import ClimaCore.MatrixFields: @name, FieldName
+
+function terminal_velocity_func_1M(cmc, cmp, q_name)
+    vₗ(ρ, q) = CMNe.terminal_velocity(cmc.liquid, cmc.Ch2022.rain, ρ, q)
+    vᵢ(ρ, q) = CMNe.terminal_velocity(cmc.ice, cmc.Ch2022.small_ice, ρ, q)
+    vᵣ(ρ, q) = CM1.terminal_velocity(cmp.pr, cmp.tv.rain, ρ, q)
+    vₛ(ρ, q) = CM1.terminal_velocity(cmp.ps, cmp.tv.snow, ρ, q)
+    q_name == @name(q_liq) && return vₗ
+    q_name == @name(q_ice) && return vᵢ
+    q_name == @name(q_rai) && return vᵣ
+    q_name == @name(q_sno) && return vₛ
+    throw(ArgumentError("Invalid q_name"))
+end
+
+function _terminal_velocity_func_2M(cm2p, cmc, cm1p, q_name)
+    # TODO: sedimentation of ice is based on the 1M scheme
+    # TODO: sedimentation of snow is based on the 1M scheme
+    vₗ(ρ, q, n) = CM2.cloud_terminal_velocity(cm2p.sb.pdf_c, cm2p.ctv, q, ρ, n)
+    vᵢ(ρ, q, _) = terminal_velocity_func_1M(cmc, cm1p, q_name)(ρ, q)
+    vᵣ(ρ, q, n) = CM2.rain_terminal_velocity(cm2p.sb, cm2p.rtv, q, ρ, n)
+    vₛ(ρ, q, _) = terminal_velocity_func_1M(cmc, cm1p, q_name)(ρ, q)
+    q_name == @name(q_liq) && return vₗ
+    q_name == @name(q_ice) && return vᵢ
+    q_name == @name(q_rai) && return vᵣ
+    q_name == @name(q_sno) && return vₛ
+    throw(ArgumentError("Invalid q_name"))
+end
+terminal_velocity_mass_func_2M(cm2p, cmc, cm1p, q_name) =
+    last ∘ _terminal_velocity_func_2M(cm2p, cmc, cm1p, q_name)
+terminal_velocity_number_func_2M(cm2p, cmc, cm1p, q_name) =
+    first ∘ _terminal_velocity_func_2M(cm2p, cmc, cm1p, q_name)
 
 # Helper function to compute the limit of the tendency in the traingle limiter.
 # The limit is defined as the available amont / n times model time step.
