@@ -78,7 +78,7 @@ function set_precipitation_velocities!(
     # compute sedimentation velocity for cloud condensate [m/s]
     @. ᶜwₗ = CMNe.terminal_velocity(
         cmc.liquid,
-        cmc.Ch2022.rain,
+        cmc.stokes,
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_liq / Y.c.ρ),
     )
@@ -150,7 +150,7 @@ function set_precipitation_velocities!(
     @. ᶜρχ = ᶜρa⁰χ⁰
     @. ᶜwₗ = ᶜρa⁰χ⁰ * CMNe.terminal_velocity(
         cmc.liquid,
-        cmc.Ch2022.rain,
+        cmc.stokes,
         ᶜρ⁰,
         ᶜq_liq⁰,
     )
