@@ -20,6 +20,8 @@ smagorinsky_lilly: "UV_W"  # horizontal + vertical
 tracer_upwinding: vanleer_limiter  # is default (alt: `first_order`)
 energy_q_tot_upwinding: vanleer_limiter  # is default (alt: `first_order`)
 
+tracer_nonnegativity_method: "vertical_water_borrowing"
+
 reproducibility_test: true
 
 # microphysics
@@ -39,13 +41,13 @@ z_elem: 86
 dz_bottom: 30.0
 
 #~8km grid
-x_elem: 4
-y_elem: 4
-dt: 10secs
+# x_elem: 4
+# y_elem: 4
+# dt: 10secs
 # ~4km grid
-# x_elem: 8
-# y_elem: 8
-# dt: 5secs
+x_elem: 8
+y_elem: 8
+dt: 5secs
 # ~2km grid
 # x_elem: 16
 # y_elem: 16
@@ -55,10 +57,10 @@ dt: 10secs
 # y_elem: 32
 # dt: 1secs
 
-t_end: 10hours
+# t_end: 10hours
 # t_end: 2days
 # t_end: 1days
-# t_end: 21days
+t_end: 21days
 
 ## >> During debugging, reduce these as appropriate
 dt_save_state_to_disk: 1days
