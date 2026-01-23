@@ -59,8 +59,9 @@ Arguments:
            tracer bounds (e.g., ensuring positivity or monotonicity relative to this state).
 """
 NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
-    (; limiter, vertical_water_borrowing_limiter, vertical_water_borrowing_species) = p.numerics
-    
+    (; limiter, vertical_water_borrowing_limiter, vertical_water_borrowing_species) =
+        p.numerics
+
     # Apply general limiter if configured
     if !isnothing(limiter)
         for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
@@ -68,7 +69,7 @@ NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
             Limiters.apply_limiter!(Y.c.:($ρχ_name), Y.c.ρ, limiter)
         end
     end
-    
+
     # Apply vertical water borrowing limiter if configured (PR 2383)
     # Also note: species filtering is done here, not passed to apply_limiter! (which doesn't support it)
     if !isnothing(vertical_water_borrowing_limiter)

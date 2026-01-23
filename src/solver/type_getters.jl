@@ -243,15 +243,19 @@ function get_numerics(parsed_args, FT)
     edmfx_tracer_upwinding =
         Val(Symbol(parsed_args["edmfx_tracer_upwinding"]))
 
-    limiter = parsed_args["apply_sem_quasimonotone_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
+    limiter =
+        parsed_args["apply_sem_quasimonotone_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
     # Parse vertical_water_borrowing_limiter configuration (PR 2383)
     # Store as empty type marker - thresholds and species stored separately in cache for GPU compatibility
     # Check if tracer_nonnegativity_method is vertical_water_borrowing
     tracer_nonneg_method = parsed_args["tracer_nonnegativity_method"]
-    is_vertical_water_borrowing = !isnothing(tracer_nonneg_method) &&
-                                  (tracer_nonneg_method == "vertical_water_borrowing" ||
-                                   startswith(tracer_nonneg_method, "vertical_water_borrowing_"))
+    is_vertical_water_borrowing =
+        !isnothing(tracer_nonneg_method) &&
+        (
+            tracer_nonneg_method == "vertical_water_borrowing" ||
+            startswith(tracer_nonneg_method, "vertical_water_borrowing_")
+        )
     vertical_water_borrowing_limiter = if is_vertical_water_borrowing
         CA.VerticalMassBorrowingLimiter()
     else
@@ -1066,14 +1070,17 @@ function get_simulation(config::AtmosConfig)
         get_steady_state_velocity(params, Y, config.parsed_args)
 
     FT = Spaces.undertype(axes(Y.c))
-    
+
     # Parse vertical_water_borrowing configuration for cache (not stored in AtmosModel for GPU compatibility)
     # Check if tracer_nonnegativity_method is vertical_water_borrowing
     tracer_nonneg_method = config.parsed_args["tracer_nonnegativity_method"]
-    is_vertical_water_borrowing = !isnothing(tracer_nonneg_method) &&
-                                  (tracer_nonneg_method == "vertical_water_borrowing" ||
-                                   startswith(tracer_nonneg_method, "vertical_water_borrowing_"))
-    
+    is_vertical_water_borrowing =
+        !isnothing(tracer_nonneg_method) &&
+        (
+            tracer_nonneg_method == "vertical_water_borrowing" ||
+            startswith(tracer_nonneg_method, "vertical_water_borrowing_")
+        )
+
     vwb_thresholds = if is_vertical_water_borrowing
         if haskey(config.parsed_args, "vertical_water_borrowing_thresholds") &&
            !isnothing(config.parsed_args["vertical_water_borrowing_thresholds"])
@@ -1089,21 +1096,24 @@ function get_simulation(config::AtmosConfig)
     else
         nothing
     end
-    
-    vwb_species = if is_vertical_water_borrowing &&
-                      haskey(config.parsed_args, "vertical_water_borrowing_species") &&
-                      !isnothing(config.parsed_args["vertical_water_borrowing_species"])
-        species_config = config.parsed_args["vertical_water_borrowing_species"]
-        if species_config isa Vector
-            tuple(Symbol.(species_config)...)
-        elseif species_config isa String
-            (Symbol(species_config),)
+
+    vwb_species =
+        if is_vertical_water_borrowing &&
+           haskey(config.parsed_args, "vertical_water_borrowing_species") &&
+           !isnothing(config.parsed_args["vertical_water_borrowing_species"])
+            species_config = config.parsed_args["vertical_water_borrowing_species"]
+            if species_config isa Vector
+                tuple(Symbol.(species_config)...)
+            elseif species_config isa String
+                (Symbol(species_config),)
+            else
+                error(
+                    "vertical_water_borrowing_species must be a string or list of strings, got $(typeof(species_config))",
+                )
+            end
         else
-            error("vertical_water_borrowing_species must be a string or list of strings, got $(typeof(species_config))")
+            nothing  # Default: apply to all tracers
         end
-    else
-        nothing  # Default: apply to all tracers
-    end
 
     s = @timed_str begin
         p = build_cache(

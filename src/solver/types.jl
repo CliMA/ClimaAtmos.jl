@@ -528,7 +528,19 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD, VWB_LIM}
+Base.@kwdef struct AtmosNumerics{
+    EN_UP,
+    TR_UP,
+    ED_UP,
+    SG_UP,
+    ED_TR_UP,
+    TDC,
+    RR,
+    LIM,
+    DM,
+    HD,
+    VWB_LIM,
+}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_q_tot_upwinding::EN_UP = Val(:vanleer_limiter)
