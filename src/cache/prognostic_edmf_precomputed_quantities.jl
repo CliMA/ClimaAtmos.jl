@@ -414,7 +414,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         # compute sedimentation velocity for cloud condensate [m/s]
         @. ᶜwₗʲs.:($$j) = CMNe.terminal_velocity(
             cmc.liquid,
-            cmc.Ch2022.rain,
+            cmc.stokes,
             ᶜρʲs.:($$j),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_liq),
         )
