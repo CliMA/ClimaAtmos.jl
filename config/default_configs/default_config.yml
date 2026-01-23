@@ -226,9 +226,6 @@ initial_condition:
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
   value: true
-discrete_hydrostatic_balance:
-  help: "Set the initial state to discrete hydrostatic balance"
-  value: false
 apply_limiter:
   help: "Apply a horizontal limiter to every tracer [`false` (default), `true`]"
   value: false

@@ -6,5 +6,4 @@ approximate_linear_solve_iters: 1
 dt_save_state_to_disk: "10days"
 t_end: "360days"
 perturb_initstate: false
-discrete_hydrostatic_balance: true
 disable_surface_flux_tendency: true

@@ -1,6 +1,7 @@
 import ClimaCore: Grids
 import ClimaUtilities.TimeManager: ITime
 import ClimaAtmos.Diagnostics as CAD
+import .InitialConditions as ICs
 
 struct AtmosSimulation{TT, S1 <: AbstractString, S2 <: AbstractString, OW, OD}
     job_id::S1
