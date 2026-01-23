@@ -7,7 +7,7 @@ value = 0.2
 value = 50
 
 [sublimation_deposition_timescale]
-value = 50
+value = 100
 
 [angular_velocity_planet_rotation]
 value = 0
