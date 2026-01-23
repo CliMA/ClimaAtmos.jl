@@ -139,11 +139,11 @@ function build_cache(
 
     # Parse and create vertical_water_borrowing_limiter if configured
     # Thresholds and species are passed as function arguments (not stored in AtmosModel for GPU compatibility)
+    # Check if tracer_nonnegativity_method is TracerNonnegativityVerticalWaterBorrowing
     vertical_water_borrowing_limiter = nothing
     vertical_water_borrowing_species = vwb_species
     
-    if !isnothing(atmos.numerics.vertical_water_borrowing_limiter) &&
-       atmos.numerics.vertical_water_borrowing_limiter isa VerticalMassBorrowingLimiter
+    if atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVerticalWaterBorrowing
         thresholds = isnothing(vwb_thresholds) ? (FT(0.0),) : vwb_thresholds
         vertical_water_borrowing_limiter = Limiters.VerticalMassBorrowingLimiter(thresholds)
     end

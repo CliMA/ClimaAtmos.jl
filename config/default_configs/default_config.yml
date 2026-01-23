@@ -181,8 +181,9 @@ tracer_nonnegativity_method:
     - `elementwise_constraint`: Enforce nonnegativity by instantaneously redistributing tracer mass within an element
     - `vapor_constraint`: Enforce nonnegativity by instantaneously redistributing tracer mass between vapor (q_tot) and each tracer
     - `vapor_tendency`: Weakly enforce nonnegativity by applying a tendency to each tracer to redistribute tracer mass between vapor (q_tot) and each tracer
+    - `vertical_water_borrowing`: Enforce nonnegativity using VerticalMassBorrowingLimiter (PR 2383), which redistributes tracer mass vertically
     - `~` (default): Do not enforce nonnegativity
-    Note: append `_qtot` to the method name to enforce nonnegativity of q_tot as well.
+    Note: append `_qtot` to the method name to enforce nonnegativity of q_tot as well (not applicable to `vertical_water_borrowing`).
   value: ~
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
@@ -229,17 +230,14 @@ perturb_initstate:
 discrete_hydrostatic_balance:
   help: "Set the initial state to discrete hydrostatic balance"
   value: false
-apply_limiter:
-  help: "Apply a horizontal limiter to every tracer [`false` (default), `true`]"
-  value: false
-apply_vertical_water_borrowing_limiter:
-  help: "Apply VerticalMassBorrowingLimiter from PR 2383 [`false` (default), `true`]"
+apply_sem_quasimonotone_limiter:
+  help: "Apply a horizontal SEM quasi-monotone limiter to every tracer [`false` (default), `true`]"
   value: false
 vertical_water_borrowing_thresholds:
-  help: "Thresholds for VerticalMassBorrowingLimiter [`[0.0]` (default), list of numbers]"
+  help: "Thresholds for VerticalMassBorrowingLimiter when using `tracer_nonnegativity_method: vertical_water_borrowing` [`[0.0]` (default), list of numbers]"
   value: ~
 vertical_water_borrowing_species:
-  help: "Tracers to which the vertical water borrowing limiter is applied [`nothing` (default: all tracers), list of tracer names as strings, e.g., `[\"ρq_tot\", \"ρq_liq\"]`]"
+  help: "Tracers to which the vertical water borrowing limiter is applied when using `tracer_nonnegativity_method: vertical_water_borrowing` [`nothing` (default: all tracers), list of tracer names as strings, e.g., `[\"ρq_tot\", \"ρq_liq\"]`]"
   value: ~
 precip_model:
   help: "Precipitation model [`nothing` (default), `0M`, `1M`]"

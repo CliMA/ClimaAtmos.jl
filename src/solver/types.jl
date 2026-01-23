@@ -34,18 +34,21 @@ Methods for enforcing tracer nonnegativity.
 - `true`: Constrain q_tot to be nonnegative
 - `false`: Do not constrain q_tot
 
-There are three methods for enforcing tracer nonnegativity:
+There are four methods for enforcing tracer nonnegativity:
 - `TracerNonnegativityElementConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
     tracer mass within an element (i.e. horizontally)
 - `TracerNonnegativityVaporConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
     tracer mass between vapor (`q_vap = q_tot - q_cond`) and each tracer
 - `TracerNonnegativityVaporTendency`: Enforce nonnegativity by applying a tendency to each tracer,
     exchanging tracer mass between vapor (`q_vap`) and each tracer over time
+- `TracerNonnegativityVerticalWaterBorrowing`: Enforce nonnegativity using VerticalMassBorrowingLimiter
+    (PR 2383), which redistributes tracer mass vertically. Note: `qtot` parameter is not applicable to this method.
 """
 abstract type TracerNonnegativityConstraint{qtot} end
 struct TracerNonnegativityElementConstraint{qtot} <: TracerNonnegativityConstraint{qtot} end
 struct TracerNonnegativityVaporConstraint{qtot} <: TracerNonnegativityConstraint{qtot} end
 struct TracerNonnegativityVaporTendency end
+struct TracerNonnegativityVerticalWaterBorrowing <: TracerNonnegativityConstraint{false} end
 
 """
 

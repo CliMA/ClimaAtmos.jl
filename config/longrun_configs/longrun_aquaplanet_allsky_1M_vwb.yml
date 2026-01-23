@@ -8,7 +8,7 @@ surface_setup: "DefaultMoninObukhov"
 turbconv: "edonly_edmfx"
 edmfx_sgs_diffusive_flux: true
 precip_model: "1M"
-apply_vertical_water_borrowing_limiter: true
+tracer_nonnegativity_method: "vertical_water_borrowing"
 vertical_water_borrowing_thresholds: [0.0]
 vertical_water_borrowing_species: ["ρq_tot"]
 toml: [toml/longrun_aquaplanet_1M.toml]

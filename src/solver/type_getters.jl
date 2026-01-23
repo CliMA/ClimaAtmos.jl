@@ -243,12 +243,16 @@ function get_numerics(parsed_args, FT)
     edmfx_tracer_upwinding =
         Val(Symbol(parsed_args["edmfx_tracer_upwinding"]))
 
-    limiter = parsed_args["apply_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
+    limiter = parsed_args["apply_sem_quasimonotone_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
     # Parse vertical_water_borrowing_limiter configuration (PR 2383)
     # Store as empty type marker - thresholds and species stored separately in cache for GPU compatibility
-    vertical_water_borrowing_limiter = if haskey(parsed_args, "apply_vertical_water_borrowing_limiter") &&
-                                           parsed_args["apply_vertical_water_borrowing_limiter"]
+    # Check if tracer_nonnegativity_method is vertical_water_borrowing
+    tracer_nonneg_method = parsed_args["tracer_nonnegativity_method"]
+    is_vertical_water_borrowing = !isnothing(tracer_nonneg_method) &&
+                                  (tracer_nonneg_method == "vertical_water_borrowing" ||
+                                   startswith(tracer_nonneg_method, "vertical_water_borrowing_"))
+    vertical_water_borrowing_limiter = if is_vertical_water_borrowing
         CA.VerticalMassBorrowingLimiter()
     else
         nothing
@@ -1064,8 +1068,13 @@ function get_simulation(config::AtmosConfig)
     FT = Spaces.undertype(axes(Y.c))
     
     # Parse vertical_water_borrowing configuration for cache (not stored in AtmosModel for GPU compatibility)
-    vwb_thresholds = if haskey(config.parsed_args, "apply_vertical_water_borrowing_limiter") &&
-                          config.parsed_args["apply_vertical_water_borrowing_limiter"]
+    # Check if tracer_nonnegativity_method is vertical_water_borrowing
+    tracer_nonneg_method = config.parsed_args["tracer_nonnegativity_method"]
+    is_vertical_water_borrowing = !isnothing(tracer_nonneg_method) &&
+                                  (tracer_nonneg_method == "vertical_water_borrowing" ||
+                                   startswith(tracer_nonneg_method, "vertical_water_borrowing_"))
+    
+    vwb_thresholds = if is_vertical_water_borrowing
         if haskey(config.parsed_args, "vertical_water_borrowing_thresholds") &&
            !isnothing(config.parsed_args["vertical_water_borrowing_thresholds"])
             thresholds_config = config.parsed_args["vertical_water_borrowing_thresholds"]
@@ -1081,8 +1090,7 @@ function get_simulation(config::AtmosConfig)
         nothing
     end
     
-    vwb_species = if haskey(config.parsed_args, "apply_vertical_water_borrowing_limiter") &&
-                      config.parsed_args["apply_vertical_water_borrowing_limiter"] &&
+    vwb_species = if is_vertical_water_borrowing &&
                       haskey(config.parsed_args, "vertical_water_borrowing_species") &&
                       !isnothing(config.parsed_args["vertical_water_borrowing_species"])
         species_config = config.parsed_args["vertical_water_borrowing_species"]
