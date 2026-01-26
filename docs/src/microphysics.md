@@ -78,8 +78,7 @@ Most common causes of those errors are:
   - spurious oscillations caused by the high order horizontal transport scheme,
   - time integration of microphysics sources at time-step that is longer than the stability limit,
   - use of hyperdiffusion.
-Our strategy is to minimize the untoward effects of those errors,
-  without aiming for strict positivity.
+Our strategy is to minimize the untoward effects of those errors.
 
 ### Limiters
 
@@ -140,16 +139,43 @@ The magnitude of diffusion acting on precipitation tracers can be scaled using t
   `tracer_vertical_diffusion_factor`.
 There is no such scaling applied when using the Smagorinsky-Lilly or AMD models.
 
-### Moisture Fixer
+### Non-negativity constraints
 
-The moisture fixer is an optional grid-mean tendency correction that can be enabled for
-  nonequilibrium moisture models with 1-moment microphysics.
-When enabled (via the `moisture_fixer` configuration option), the fixer adjusts small negative
-  tracer values by transferring mass from water vapor to the affected microphysics tracers
-  (cloud liquid, cloud ice, rain, and snow).
-This provides an additional safeguard against numerical errors that may produce negative tracer values,
-  complementing the limiters and diffusion schemes described above.
-The fixer operates on the grid-mean tendencies and conserves total water mass.
+Often, the diffusion and limiters described above are not enough to ensure positivity of the microphysics tracers.
+ClimaAtmos supports three additional constraints that can be used to enforce non-negativity of the microphysics tracers.
+This is controlled by the `tracer_nonnegativity_method` in the `AtmosWater` struct.
+The availalble options are:
+
+- `TracerNonnegativityElementConstraint`:
+  This option enforces non-negativity by consistently ensuring that the mass of the tracer is conserved within the element.
+  It uses the `Limiters.compute_bounds!` and `Limiters.apply_limiter!` functions to redistribute the mass of the tracer within the element
+  such that the tracer concentration is non-negative and bounded by the maximum value in the element.
+  Effectively, this method borrows mass from the neighboring nodes within the element to fill the negative holes.
+  This method is conservative and does not introduce any source/sink of total water mass.
+
+- `TracerNonnegativityVaporConstraint`:
+  This option enforces non-negativity by borrowing mass from the water vapor.
+  If a microphysics tracer ``q_x`` becomes negative at a given node, it is set to zero.
+  Since the total water content ``q_{tot}`` is conserved during this operation, and ``q_{tot} = q_{vap} + \sum q_x``,
+  setting a negative ``q_x`` to zero implicitly decreases ``q_{vap}``.
+  ```math
+  q_x = \max(0, q_x)
+  ```
+  This method is applied instantaneously at the end of each time step (or stage).
+  It preserves the total water mass but redistributes it between phases.
+  It should be used with caution as it can lead to negative water vapor if the negative hole in ``q_x`` is large, although
+  usually the negative values are small and there is plenty of water vapor available.
+
+- `TracerNonnegativityVaporTendency`:
+  This option is similar to `TracerNonnegativityVaporConstraint` in that it borrows mass from water vapor,
+  but it does so via a tendency term rather than an instantaneous adjustment.
+  It computes a tendency that tends to restore the tracer to zero over the timestep ``\Delta t``.
+  The tendency is limited by the available water vapor ``q_{vap}`` to avoid creating negative vapor.
+  ```math
+  \frac{\partial q_x}{\partial t} = \dots + \mathcal{S}_{fixer}
+  ```
+  where ``\mathcal{S}_{fixer}`` is positive if ``q_x < 0``.
+  This method is less aggressive than the instantaneous constraint and integrates the correction into the time stepping scheme.
 
 ## Aerosol Activation for 2-Moment Microphysics
 

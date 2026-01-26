@@ -126,7 +126,7 @@ function tracer_nonnegativity_constraint!(Y, p, t,
         if tracer_nonnegativity isa TracerNonnegativityElementConstraint
             ᶜρq_lim = @. ᶜtemp_scalar = max(0, ᶜρq)
             Limiters.compute_bounds!(tracer_nonnegativity_limiter, ᶜρq_lim, ᶜρ)  # bounds are `extrema(ᶜρq_lim) = (0, max(ᶜρq))`
-            Limiters.apply_limiter!(ᶜρq, ᶜρ, tracer_nonnegativity_limiter)  # ᶜρq is clipped to bounds, effectively ensuring `0 ≤ ᶜρq`
+            Limiters.apply_limiter!(ᶜρq, ᶜρ, tracer_nonnegativity_limiter; warn = false)  # ᶜρq is clipped to bounds, effectively ensuring `0 ≤ ᶜρq`
         elseif tracer_nonnegativity isa TracerNonnegativityVaporConstraint
             # If `ρq` is negative, set it to 0 (as long as `ρq_tot` is positive), otherwise keep it as is
             @. ᶜρq = ifelse(ᶜρq_tot > 0, max(0, ᶜρq), ᶜρq)

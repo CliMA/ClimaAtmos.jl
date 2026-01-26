@@ -158,8 +158,14 @@ vert_diff:
   help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `DecayWithHeightDiffusion`]"
   value: "false"
 hyperdiff:
-  help: "Hyperdiffusion. [`ClimaHyperdiffusion` (default), `CAM_SE` (Lauritzen et al. 2018), `none` (or `false`)]"
-  value: "ClimaHyperdiffusion"
+  help: |
+    Fourth-order hyperdiffusion. Options:
+    - `Hyperdiffusion` (default): Use custom coefficients for hyperdiffusion: 
+      set these with the `vorticity_hyperdiffusion_coefficient`, `hyperdiffusion_prandtl_number`, 
+      `divergence_damping_factor` config options.
+    - `CAM_SE` (Lauritzen et al. 2018): Use CAM_SE coefficients for hyperdiffusion
+    - `false`: Disable hyperdiffusion
+  value: "Hyperdiffusion"
 amd_les:
   help: "AMD LES closure [`true`, `false` (default)]"
   value: false
