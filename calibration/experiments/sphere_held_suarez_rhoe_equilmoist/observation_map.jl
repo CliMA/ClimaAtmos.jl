@@ -30,5 +30,9 @@ function process_member_data(simdir::SimDir)
     ta = get(simdir; short_name = "ta", reduction = "average", period = "60d")
     zonal_avg_temp_observations =
         slice(average_lat(average_lon(ta)), z = 242meters)
-    return slice(zonal_avg_temp_observations, time = 240days).data
+    if pkgversion(ClimaDiagnostics) < v"0.3"
+        return slice(zonal_avg_temp_observations, time = 240days).data
+    else
+        return slice(zonal_avg_temp_observations, time = 180days).data
+    end
 end
