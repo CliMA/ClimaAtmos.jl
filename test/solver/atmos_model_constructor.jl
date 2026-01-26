@@ -68,11 +68,11 @@ end
             moisture_model = CA.EquilMoistModel(),
             microphysics_model = CA.Microphysics1Moment(),
             cloud_model = CA.QuadratureCloud(CA.SGSQuadrature(FT)),
-            radiation_mode = RRTMGPI.ClearSkyRadiation(
-                false,
-                false,
-                false,
-                false,
+            radiation_mode = RRTMGPI.ClearSkyRadiation(;
+                idealized_h2o = false,
+                add_isothermal_boundary_layer = false,
+                aerosol_radiation = false,
+                deep_atmosphere = false,
             ),
             hyperdiff = CA.ClimaHyperdiffusion(;
                 ν₄_vorticity_coeff = 1e15,
@@ -128,11 +128,11 @@ end
         moist_model = CA.AtmosModel(;
             moisture_model = CA.EquilMoistModel(),
             microphysics_model = CA.Microphysics0Moment(),
-            radiation_mode = RRTMGPI.ClearSkyRadiation(
-                false,
-                false,
-                false,
-                false,
+            radiation_mode = RRTMGPI.ClearSkyRadiation(;
+                idealized_h2o = false,
+                add_isothermal_boundary_layer = false,
+                aerosol_radiation = false,
+                deep_atmosphere = false,
             ),
         )
         @test moist_model.moisture_model isa CA.EquilMoistModel

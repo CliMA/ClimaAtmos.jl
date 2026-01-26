@@ -3,6 +3,7 @@ import StaticArrays as SA
 import Thermodynamics as TD
 import Dates
 
+import ClimaParams as CP
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
 
@@ -181,6 +182,23 @@ Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
     prandtl_number::FT
 end
 
+"""
+    cam_se_hyperdiffusion(FT)
+
+Create a ClimaHyperdiffusion with CAM_SE preset coefficients.
+
+These coefficients match hyperviscosity coefficients from:
+https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2017MS001257
+for equations A18 and A19, scaled by (1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3 ≈ 1.238
+"""
+function cam_se_hyperdiffusion(::Type{FT}) where {FT}
+    return ClimaHyperdiffusion{FT}(
+        ν₄_vorticity_coeff = FT(0.150 * 1.238),
+        divergence_damping_factor = FT(5),
+        prandtl_number = FT(0.2),
+    )
+end
+
 abstract type AbstractVerticalDiffusion end
 Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
     C_E::FT
@@ -203,6 +221,14 @@ Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
     κ₂::FT
 end
 
+
+function ViscousSponge(params)
+    return ViscousSponge{CP.float_type(params)}(;
+        zd = params.zd_viscous,
+        κ₂ = params.kappa_2_sponge,
+    )
+end
+
 abstract type AbstractEddyViscosityModel end
 """
     SmagorinskyLilly{AXES}
@@ -214,8 +240,22 @@ Smagorinsky-Lilly eddy viscosity model.
 - `:UV` (horizontal axes)
 - `:W` (vertical axis)
 - `:UV_W` (horizontal and vertical axes treated separately).
+
+You can construct it using `SmagorinskyLilly(:UVW)` instead of `SmagorinskyLilly{:UVW}()`.
 """
 struct SmagorinskyLilly{AXES} <: AbstractEddyViscosityModel end
+
+"""
+    SmagorinskyLilly(axes::Symbol)
+
+Create a SmagorinskyLilly model with the specified axes configuration.
+
+`axes` must be one of: `:UVW`, `:UV`, `:W`, or `:UV_W`.
+"""
+function SmagorinskyLilly(axes::Symbol)
+    @assert axes in (:UVW, :UV, :W, :UV_W) "axes must be one of :UVW, :UV, :W, or :UV_W, got :$axes"
+    return SmagorinskyLilly{axes}()
+end
 
 """
     is_smagorinsky_UVW_coupled(model)
@@ -261,6 +301,15 @@ Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
     α_uₕ::FT
     α_w::FT
     α_sgs_tracer::FT
+end
+
+function RayleighSponge(params)
+    return RayleighSponge{CP.float_type(params)}(;
+        zd = params.zd_rayleigh,
+        α_uₕ = params.alpha_rayleigh_uh,
+        α_w = params.alpha_rayleigh_w,
+        α_sgs_tracer = params.alpha_rayleigh_sgs_tracer,
+    )
 end
 
 abstract type AbstractGravityWave end
@@ -399,11 +448,47 @@ end
 PrognosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
     PrognosticEDMFX{N, TKE, FT}(a_half)
 
+"""
+    PrognosticEDMFX(; n_updrafts = 1, prognostic_tke = false, area_fraction)
+
+Create a PrognosticEDMFX model with the specified number of updrafts, TKE configuration, and area fraction.
+
+# Arguments
+- `n_updrafts::Int`: Number of updraft subdomains
+- `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
+- `area_fraction`: Area fraction at half levels (float type is inferred from this value)
+"""
+function PrognosticEDMFX(;
+    n_updrafts = 1,
+    prognostic_tke = false,
+    area_fraction::FT,
+) where {FT}
+    return PrognosticEDMFX{n_updrafts, prognostic_tke, FT}(area_fraction)
+end
+
 struct DiagnosticEDMFX{N, TKE, FT} <: AbstractEDMF
     a_half::FT # WARNING: this should never be used outside of `specific`
 end
-DiagnosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
-    DiagnosticEDMFX{N, TKE, FT}(a_half)
+DiagnosticEDMFX{N, TKE}(area_fraction::FT) where {N, TKE, FT} =
+    DiagnosticEDMFX{N, TKE, FT}(area_fraction)
+
+"""
+    DiagnosticEDMFX(; n_updrafts = 1, prognostic_tke = false, area_fraction)
+
+Create a DiagnosticEDMFX model with the specified number of updrafts, TKE configuration, and area fraction.
+
+# Arguments
+- `n_updrafts::Int`: Number of updraft subdomains
+- `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
+- `area_fraction`: Area fraction at half levels (float type is inferred from this value)
+"""
+function DiagnosticEDMFX(;
+    n_updrafts = 1,
+    prognostic_tke = false,
+    area_fraction::FT,
+) where {FT}
+    return DiagnosticEDMFX{n_updrafts, prognostic_tke, FT}(area_fraction)
+end
 
 n_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
@@ -527,44 +612,82 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{
-    EN_UP,
-    TR_UP,
-    ED_UP,
-    SG_UP,
-    ED_TR_UP,
-    TDC,
-    RR,
-    LIM,
-    DM,
-    HD,
-}
-
+struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
     """Enable specific upwinding schemes for specific equations"""
-    energy_q_tot_upwinding::EN_UP = Val(:vanleer_limiter)
-    tracer_upwinding::TR_UP = Val(:vanleer_limiter)
-    edmfx_mse_q_tot_upwinding::ED_UP = Val(:first_order)
-    edmfx_sgsflux_upwinding::SG_UP = Val(:none)
-    edmfx_tracer_upwinding::ED_TR_UP = Val(:first_order)
-
+    energy_q_tot_upwinding::EN_UP
+    tracer_upwinding::TR_UP
+    edmfx_mse_q_tot_upwinding::ED_UP
+    edmfx_sgsflux_upwinding::SG_UP
+    edmfx_tracer_upwinding::ED_TR_UP
     """Add NaNs to certain equations to track down problems"""
-    test_dycore_consistency::TDC = nothing
+    test_dycore_consistency::TDC
     """Whether the simulation is reproducible when restarting from a restart file"""
-    reproducible_restart::RR = nothing
-
-    limiter::LIM = nothing
-
+    reproducible_restart::RR
+    limiter::LIM
     """Timestepping mode for diffusion: Explicit() or Implicit()"""
-    diff_mode::DM = Explicit()
-
+    diff_mode::DM
     """Hyperdiffusion model: nothing or ClimaHyperdiffusion()"""
-    hyperdiff::HD = ClimaHyperdiffusion{Float32}(;
+    hyperdiff::HD
+end
+Base.broadcastable(x::AtmosNumerics) = tuple(x)
+
+"""
+    AtmosNumerics(; kwargs...)
+
+Create an AtmosNumerics struct. Upwinding schemes can be specified as symbols or strings,
+which will be automatically converted to Val types for compile-time dispatch.
+"""
+function AtmosNumerics(;
+    energy_q_tot_upwinding = :vanleer_limiter,
+    tracer_upwinding = :vanleer_limiter,
+    edmfx_mse_q_tot_upwinding = :first_order,
+    edmfx_sgsflux_upwinding = :none,
+    edmfx_tracer_upwinding = :first_order,
+    test_dycore_consistency = nothing,
+    reproducible_restart = nothing,
+    limiter = nothing,
+    diff_mode = Explicit(),
+    hyperdiff = ClimaHyperdiffusion{Float32}(;
         ν₄_vorticity_coeff = 0.150 * 1.238,
         divergence_damping_factor = 5,
         prandtl_number = 1.0,
+    ),
+    kwargs...,
+)
+    # Helper to convert symbols/strings to Val types, or keep Val types as-is
+    parse_upwinding(x::Union{Symbol, String}) = Val(Symbol(x))
+    parse_upwinding(x::Val) = x
+
+    energy_q_tot_upwinding_val = parse_upwinding(energy_q_tot_upwinding)
+    tracer_upwinding_val = parse_upwinding(tracer_upwinding)
+    edmfx_mse_q_tot_upwinding_val = parse_upwinding(edmfx_mse_q_tot_upwinding)
+    edmfx_sgsflux_upwinding_val = parse_upwinding(edmfx_sgsflux_upwinding)
+    edmfx_tracer_upwinding_val = parse_upwinding(edmfx_tracer_upwinding)
+
+    return AtmosNumerics{
+        typeof(energy_q_tot_upwinding_val),
+        typeof(tracer_upwinding_val),
+        typeof(edmfx_mse_q_tot_upwinding_val),
+        typeof(edmfx_sgsflux_upwinding_val),
+        typeof(edmfx_tracer_upwinding_val),
+        typeof(test_dycore_consistency),
+        typeof(reproducible_restart),
+        typeof(limiter),
+        typeof(diff_mode),
+        typeof(hyperdiff),
+    }(
+        energy_q_tot_upwinding_val,
+        tracer_upwinding_val,
+        edmfx_mse_q_tot_upwinding_val,
+        edmfx_sgsflux_upwinding_val,
+        edmfx_tracer_upwinding_val,
+        test_dycore_consistency,
+        reproducible_restart,
+        limiter,
+        diff_mode,
+        hyperdiff,
     )
 end
-Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
 function Base.summary(io::IO, numerics::AtmosNumerics)
     pns = string.(propertynames(numerics))
@@ -593,7 +716,7 @@ end
 
 const ValTF = Union{Val{true}, Val{false}}
 
-Base.@kwdef struct EDMFXModel{
+struct EDMFXModel{
     EEM,
     EDM,
     ESMF <: ValTF,
@@ -603,14 +726,57 @@ Base.@kwdef struct EDMFXModel{
     EF <: ValTF,
     SBM <: AbstractScaleBlendingMethod,
 }
-    entr_model::EEM = nothing
-    detr_model::EDM = nothing
-    sgs_mass_flux::ESMF = Val(false)
-    sgs_diffusive_flux::ESDF = Val(false)
-    nh_pressure::ENP = Val(false)
-    vertical_diffusion::EVD = Val(false)
-    filter::EF = Val(false)
+    entr_model::EEM
+    detr_model::EDM
+    sgs_mass_flux::ESMF
+    sgs_diffusive_flux::ESDF
+    nh_pressure::ENP
+    vertical_diffusion::EVD
+    filter::EF
     scale_blending_method::SBM
+end
+
+
+# Convenience constructor that converts booleans to Val types
+# This outer constructor allows passing booleans, which are converted to Val types
+function EDMFXModel(;
+    entr_model = nothing,
+    detr_model = nothing,
+    sgs_mass_flux::Union{Bool, ValTF} = false,
+    sgs_diffusive_flux::Union{Bool, ValTF} = false,
+    nh_pressure::Union{Bool, ValTF} = false,
+    vertical_diffusion::Union{Bool, ValTF} = false,
+    filter::Union{Bool, ValTF} = false,
+    scale_blending_method,
+    kwargs...,
+)
+    parse_val_tf(x::Bool) = Val(x)
+    parse_val_tf(x::ValTF) = x
+    # Convert booleans to Val types, keep Val types as-is
+    sgs_mass_flux_val = parse_val_tf(sgs_mass_flux)
+    sgs_diffusive_flux_val = parse_val_tf(sgs_diffusive_flux)
+    nh_pressure_val = parse_val_tf(nh_pressure)
+    vertical_diffusion_val = parse_val_tf(vertical_diffusion)
+    filter_val = parse_val_tf(filter)
+    return EDMFXModel{
+        typeof(entr_model),
+        typeof(detr_model),
+        typeof(sgs_mass_flux_val),
+        typeof(sgs_diffusive_flux_val),
+        typeof(nh_pressure_val),
+        typeof(vertical_diffusion_val),
+        typeof(filter_val),
+        typeof(scale_blending_method),
+    }(
+        entr_model,
+        detr_model,
+        sgs_mass_flux_val,
+        sgs_diffusive_flux_val,
+        nh_pressure_val,
+        vertical_diffusion_val,
+        filter_val,
+        scale_blending_method,
+    )
 end
 
 # Grouped structs to reduce AtmosModel type parameters
