@@ -1445,8 +1445,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     end
 
                     # add env flux contributions
-                    (; ᶠu³⁰, ᶜts⁰) = p.precomputed
-                    ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
+                    (; ᶜp) = p.precomputed
+                    (; ᶠu³⁰, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+                    ᶜρ⁰ = @. lazy(
+                        TD.air_density(
+                            thermo_params,
+                            ᶜT⁰,
+                            ᶜp,
+                            ᶜq_tot_safe⁰,
+                            ᶜq_liq_rai⁰,
+                            ᶜq_ice_sno⁰,
+                        ),
+                    )
                     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
                     ᶠu³⁰_data = ᶠu³⁰.components.data.:1
 

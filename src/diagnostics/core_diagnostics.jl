@@ -130,7 +130,7 @@ add_diagnostic_variable!(
     units = "K",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return cache.precomputed.ᶜT
+            return copy(cache.precomputed.ᶜT)
         else
             out .= cache.precomputed.ᶜT
         end

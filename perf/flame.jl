@@ -7,8 +7,12 @@ import ClimaAtmos as CA
 
 include("common.jl")
 
-(; config_file, job_id) = CA.commandline_kwargs()
-config = CA.AtmosConfig(config_file; job_id)
+# (; config_file, job_id) = CA.commandline_kwargs()
+# config = CA.AtmosConfig(config_file; job_id)
+if !(@isdefined config)
+    (; config_file, job_id) = CA.commandline_kwargs()
+    config = CA.AtmosConfig(config_file; job_id)
+end
 simulation = CA.get_simulation(config)
 device = ClimaComms.device(config.comms_ctx)
 (; integrator) = simulation
