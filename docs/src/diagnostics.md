@@ -44,6 +44,24 @@ The default `writer` is NetCDF. If `writer` is `nc` or `netcdf`, the output is
 remapped non-conservatively on a Cartesian grid and saved to a NetCDF file.
 Currently, only 3D fields on cubed spheres are supported.
 
+#### Writing in pressure coordinates
+
+!!! compat "Compatibility"
+    This is only available in versions after than ClimaAtmos v0.34.0.
+
+You can write diagnostics to NetCDF files in pressure coordinates by setting
+`pressure_coordinates` to true. This replaces the vertical dimension `z` in
+the NetCDF files with the dimension `pressure_level`. For more information about
+writing diagnostics in pressure coordinates, see (TODO: Add link to
+ClimaDiagnostics documentation)
+
+```
+diagnostics:
+  - short_name: [pfull, wa, va, rv, hus, ke]
+    period: 1days
+    pressure_coordinates: true
+```
+
 ### From a script
 
 The simplest way to get started with diagnostics is to use the defaults for your
