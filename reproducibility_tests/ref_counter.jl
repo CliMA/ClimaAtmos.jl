@@ -1,4 +1,4 @@
-304
+305
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+305
+- Remove grid-scale thermo state from precomputed quantities and uses new thermodynamics functions.
+(Fix main branch that is still breaking)
 
 304
 - Remove grid-scale thermo state from precomputed quantities and uses new thermodynamics functions.
