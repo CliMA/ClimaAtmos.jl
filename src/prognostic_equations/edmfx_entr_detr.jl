@@ -255,7 +255,10 @@ function detrainment_from_thermo_state(
     u³ʲ_prev_halflevel,
     local_geometry_prev_halflevel,
     u³_prev_halflevel,
-    ts_prev_level,
+    T_prev_level,
+    q_tot_prev_level,
+    q_liq_prev_level,
+    q_ice_prev_level,
     ᶜbuoy⁰,
     entrʲ_prev_level,
     vert_div_level,
@@ -284,7 +287,14 @@ function detrainment_from_thermo_state(
             local_geometry_prev_halflevel,
         ),
         get_physical_w(u³_prev_halflevel, local_geometry_prev_halflevel),
-        TD.relative_humidity(thermo_params, ts_prev_level),
+        TD.relative_humidity(
+            thermo_params,
+            T_prev_level,
+            p_prev_level,
+            q_tot_prev_level,
+            q_liq_prev_level,
+            q_ice_prev_level,
+        ),
         FT(0),
         entrʲ_prev_level,
         vert_div_level,
@@ -601,7 +611,7 @@ function edmfx_first_interior_entr_tendency!(
 )
 
     (; params, dt) = p
-    (; ᶜK, ᶜρʲs, ᶜentrʲs, ᶜts) = p.precomputed
+    (; ᶜK, ᶜρʲs, ᶜentrʲs) = p.precomputed
 
     FT = eltype(params)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -637,8 +647,7 @@ function edmfx_first_interior_entr_tendency!(
         Fields.local_geometry_field(Fields.level(Y.f, Fields.half)),
     )
 
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+    (; ᶜh_tot) = p.precomputed
     ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
     ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)

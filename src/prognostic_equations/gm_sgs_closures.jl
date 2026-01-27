@@ -54,7 +54,7 @@ This function performs several steps:
 Arguments:
 - `ᶜmixing_length`: Output `ClimaCore.Field` where the computed mixing length will be stored.
 - `Y`: The current state vector (containing `Y.c.uₕ`).
-- `p`: Cache containing parameters (`p.params`), precomputed fields (e.g., `ᶜts`,
+- `p`: Cache containing parameters (`p.params`), precomputed fields (e.g., `ᶜT`,
        `ᶠu³`, vertical gradients of thermodynamic variables), and scratch space.
 
 Modifies `ᶜmixing_length` in place. Also modifies fields in `p.precomputed`
@@ -67,13 +67,26 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
 
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
-    (; ᶜts, ᶠu³, ᶜlinear_buoygrad, ᶜstrain_rate_norm, cloud_diagnostics_tuple) =
+    (;
+        ᶜT,
+        ᶜq_tot_safe,
+        ᶜq_liq_rai,
+        ᶜq_ice_sno,
+        ᶠu³,
+        ᶜlinear_buoygrad,
+        ᶜstrain_rate_norm,
+        cloud_diagnostics_tuple,
+    ) =
         p.precomputed
 
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
         thermo_params,
-        ᶜts,
+        ᶜT,
+        Y.c.ρ,
+        ᶜq_tot_safe,
+        ᶜq_liq_rai,
+        ᶜq_ice_sno,
         cloud_diagnostics_tuple.cf,
         C3,
         p.precomputed.ᶜgradᵥ_q_tot,

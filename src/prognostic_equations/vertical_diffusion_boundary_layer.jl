@@ -90,7 +90,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     (; vertical_diffusion) = p.atmos
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜu, ᶜp, ᶜts) = p.precomputed
+    (; ᶜu, ᶜp, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
     ᶜK_h = p.scratch.ᶜtemp_scalar
     if vertical_diffusion isa DecayWithHeightDiffusion
@@ -114,8 +114,7 @@ function vertical_diffusion_boundary_layer_tendency!(
         top = Operators.SetValue(C3(0)),
         bottom = Operators.SetValue(C3(0)),
     )
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+    (; ᶜh_tot) = p.precomputed
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜh_tot)))
 
     ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_2

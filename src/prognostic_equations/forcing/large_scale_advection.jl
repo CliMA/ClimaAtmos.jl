@@ -8,7 +8,7 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 
 """
-    large_scale_advection_tendency_ρq_tot(ᶜρ, thermo_params, ᶜts, t, ls_adv)
+    large_scale_advection_tendency_ρq_tot(ᶜρ, thermo_params, ᶜp, t, ls_adv)
 
 Computes the tendency of the total water content (`ρq_tot`) due to prescribed
 large-scale advection of total specific humidity (`q_tot`).
@@ -18,14 +18,14 @@ is not active), it returns `NullBroadcasted()`, resulting in no tendency.
 
 Otherwise, it retrieves a profile function `prof_dqtdt` from `ls_adv`. This
 function provides the prescribed advective tendency of `q_tot` (i.e.,
-``(\\partial q_{tot}/\\partial t)_{LS_adv}``) as a function of the thermodynamic
-state (`ᶜts`), time (`t`), and height (`ᶜz`). The final tendency for `ρq_tot`
+``(\\partial q_{tot}/\\partial t)_{LS_adv}``) as a function of pressure (`ᶜp`),
+time (`t`), and height (`ᶜz`). The final tendency for `ρq_tot`
 is then computed as ``ᶜρ * (\\partial q_{tot}/\\partial t)_{LS_adv}``.
 
 Arguments:
 - `ᶜρ`: Cell-center air density field.
 - `thermo_params`: Thermodynamic parameters.
-- `ᶜts`: Cell-center thermodynamic state field.
+- `ᶜp`: Cell-center pressure field.
 - `t`: Current simulation time.
 - `ls_adv`: `LargeScaleAdvection` object containing profile functions for tendencies,
             or another type if large-scale advection is inactive.
@@ -38,19 +38,23 @@ Returns:
 function large_scale_advection_tendency_ρq_tot(
     ᶜρ,
     thermo_params,
-    ᶜts,
+    ᶜT,
+    ᶜp,
+    q_tot,
+    q_liq,
+    q_ice,
     t,
     ls_adv,
 )
     ls_adv isa LargeScaleAdvection || return NullBroadcasted()
     (; prof_dTdt, prof_dqtdt) = ls_adv
     ᶜz = Fields.coordinate_field(axes(ᶜρ)).z
-    ᶜdqtdt_hadv = @. lazy(prof_dqtdt(thermo_params, ᶜts, t, ᶜz))
+    ᶜdqtdt_hadv = @. lazy(prof_dqtdt(thermo_params, ᶜp, t, ᶜz))
     return @. lazy(ᶜρ * ᶜdqtdt_hadv)
 end
 
 """
-    large_scale_advection_tendency_ρe_tot(ᶜρ, thermo_params, ᶜts, t, ls_adv)
+    large_scale_advection_tendency_ρe_tot(ᶜρ, thermo_params, ᶜT, ᶜp, q_tot, q_liq, q_ice, t, ls_adv)
 
 Computes the tendency of total energy (`ρe_tot`) due to prescribed large-scale
 advection of temperature (`T`) and total specific humidity (`q_tot`).
@@ -71,7 +75,9 @@ vapor for this energy calculation).
 Arguments:
 - `ᶜρ`: Cell-center air density field.
 - `thermo_params`: Thermodynamic parameters.
-- `ᶜts`: Cell-center thermodynamic state field.
+- `ᶜT`: Cell-center temperature field.
+- `ᶜp`: Cell-center pressure field.
+- `q_tot`, `q_liq`, `q_ice`: Specific humidity fields.
 - `t`: Current simulation time.
 - `ls_adv`: `LargeScaleAdvection` object containing profile functions for tendencies,
             or another type if large-scale advection is inactive.
@@ -84,22 +90,26 @@ Returns:
 function large_scale_advection_tendency_ρe_tot(
     ᶜρ,
     thermo_params,
-    ᶜts,
+    ᶜT,
+    ᶜp,
+    q_tot,
+    q_liq,
+    q_ice,
     t,
     ls_adv,
 )
     ls_adv isa LargeScaleAdvection || return NullBroadcasted()
     (; prof_dTdt, prof_dqtdt) = ls_adv
     z = Fields.coordinate_field(axes(ᶜρ)).z
-    ᶜdTdt_hadv = @. lazy(prof_dTdt(thermo_params, ᶜts, t, z))
-    ᶜdqtdt_hadv = @. lazy(prof_dqtdt(thermo_params, ᶜts, t, z))
+    ᶜdTdt_hadv = @. lazy(prof_dTdt(thermo_params, ᶜp, t, z))
+    ᶜdqtdt_hadv = @. lazy(prof_dqtdt(thermo_params, ᶜp, t, z))
 
     # Moisture advection term does not contain potential energy because 
     # it's just horizontal advection of specific humidity
     return @. lazy(
         ᶜρ * (
-            TD.cv_m(thermo_params, ᶜts) * ᶜdTdt_hadv +
-            TD.internal_energy_vapor(thermo_params, ᶜts) * ᶜdqtdt_hadv
+            TD.cv_m(thermo_params, q_tot, q_liq, q_ice) * ᶜdTdt_hadv +
+            TD.internal_energy_vapor(thermo_params, ᶜT) * ᶜdqtdt_hadv
         ),
     )
 end

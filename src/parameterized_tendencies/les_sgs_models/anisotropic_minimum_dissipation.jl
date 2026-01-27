@@ -59,9 +59,7 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     (; atmos, precomputed, scratch, params) = p
     FT = eltype(Y)
     c_amd = les.c_amd
-    grav = CAP.grav(params)
-    thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜu, ᶠu³, ᶜts) = precomputed
+    (; ᶜu, ᶠu³) = precomputed
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = scratch
     (; ᶜtemp_scalar, ᶠtemp_scalar, ᶠtemp_scalar_2, ᶜtemp_UVW, ᶠtemp_UVW) =
         scratch
@@ -128,8 +126,7 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_amd) / ᶠρ)
 
     ## Total energy tendency
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+    (; ᶜh_tot) = precomputed
     ∇h_tot = @. lazy(Geometry.project(axis_uvw, gradₕ(ᶜh_tot)))
     ∂̂h_tot = @. lazy(Δ_h * ∇h_tot)
     ᶜD_amd = @. ᶜtemp_scalar = max(
@@ -200,10 +197,6 @@ in `remaining_tendencies.jl`
 """
 function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
     FT = eltype(Y)
-    (; sfc_temp_C3) = p.scratch
-    (; ᶜts, sfc_conditions) = p.precomputed
-    (; ρ_flux_uₕ, ρ_flux_h_tot) = sfc_conditions
-    thermo_params = CAP.thermodynamics_params(p.params)
 
     c_amd = les.c_amd
 
@@ -224,7 +217,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
 
     ### AMD ###
 
-    (; ᶜu, ᶠu³, ᶜts) = p.precomputed
+    (; ᶜu, ᶠu³) = p.precomputed
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = p.scratch
     (; ᶜtemp_scalar, ᶠtemp_scalar, ᶜtemp_UVW, ᶠtemp_UVW) =
         p.scratch
@@ -301,8 +294,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     @. Yₜ.f.u₃ -= C3(ᶠdivᵥ(Y.c.ρ * ᶜτ_amd) / ᶠρ)
 
     ## Total energy tendency
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+    (; ᶜh_tot) = p.precomputed
     # TODO: Fix @lazy broadcast (components access)
     ∇h_tot = @. lazy(Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜh_tot)))
     ∂̂h_tot = @. lazy(ᶠΔ_z * ∇h_tot)

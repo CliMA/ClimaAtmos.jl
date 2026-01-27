@@ -464,9 +464,11 @@ function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     end
     # See https://clima.github.io/AtmosphericProfilesLibrary.jl/dev/
     # for which functions accept which arguments.
-    prof_dqtdt = (thermo_params, ᶜts, t, z) -> prof_dqtdt₀(z)
-    prof_dTdt = (thermo_params, ᶜts, t, z) ->
-        prof_dTdt₀(TD.exner(thermo_params, ᶜts), z)
+    # TODO: do not assume dry air?
+    prof_dqtdt = (thermo_params, ᶜp, t, z) -> prof_dqtdt₀(z)
+    prof_dTdt =
+        (thermo_params, ᶜp, t, z) ->
+            prof_dTdt₀(TD.exner_given_pressure(thermo_params, ᶜp), z)
 
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end

@@ -7,24 +7,34 @@ import ClimaCore.Operators as Operators
 import ClimaCore: Geometry
 
 """
-    lilly_stratification_correction(p, ᶜS)
+    lilly_stratification_correction(Y, p, ᶜS)
 
 Return a lazy representation of the Lilly stratification correction factor
     based on the local Richardson number.
 
 # Arguments
+- `Y`: The model state.
 - `p`: The model parameters, e.g. `AtmosCache`.
 - `ᶜS`: The cell-centered strain rate tensor.
 """
-function lilly_stratification_correction(p, ᶜS)
-    (; ᶜts) = p.precomputed
+function lilly_stratification_correction(Y, p, ᶜS)
+    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     (; ᶜtemp_scalar) = p.scratch
     grav = CAP.grav(p.params)
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(Pr_t)
     # Stratification correction
-    ᶜθ_v = @. lazy(TD.virtual_pottemp(thermo_params, ᶜts))
+    ᶜθ_v = @. lazy(
+        TD.virtual_pottemp(
+            thermo_params,
+            ᶜT,
+            Y.c.ρ,
+            ᶜq_tot_safe,
+            ᶜq_liq_rai,
+            ᶜq_ice_sno,
+        ),
+    )
     ᶜ∇ᵥθ = @. ᶜtemp_scalar = Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜθ_v))).components.data.:1
     ᶜN² = @. lazy(grav / ᶜθ_v * ᶜ∇ᵥθ)
     ᶜS_norm = strain_rate_norm(ᶜS, Geometry.WAxis())
@@ -72,7 +82,7 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
     ax_xy = is_smagorinsky_UVW_coupled(model) ? Geometry.UVWAxis() : Geometry.UVAxis()
     ax_z = is_smagorinsky_UVW_coupled(model) ? Geometry.UVWAxis() : Geometry.WAxis()
 
-    ᶜfb = lilly_stratification_correction(p, ᶜS)
+    ᶜfb = lilly_stratification_correction(Y, p, ᶜS)
     if is_smagorinsky_UVW_coupled(model)
         ᶜL_h = ᶜL_v = @. lazy(c_smag * cbrt(Δx * Δy * ᶜΔz) * ᶜfb)
     else
@@ -102,7 +112,7 @@ vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyLilly)
     is_smagorinsky_horizontal(model) || return nothing
-    (; ᶜts, ᶜS, ᶠS, ᶜνₜ_h, ᶜD_h) = p.precomputed
+    (; ᶜS, ᶠS, ᶜνₜ_h, ᶜD_h) = p.precomputed
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_scalar, ᶠtemp_scalar) = p.scratch
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜρ = Y.c.ρ
@@ -120,8 +130,7 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
 
     ## Total energy tendency
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, ᶜρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+    (; ᶜh_tot) = p.precomputed
     @. Yₜ.c.ρe_tot += wdivₕ(ᶜρ * ᶜD_h * gradₕ(ᶜh_tot))
 
     ## Tracer diffusion and associated mass changes
@@ -139,10 +148,9 @@ end
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyLilly)
     is_smagorinsky_vertical(model) || return nothing
     FT = eltype(Y)
-    (; ᶜts, ᶜS, ᶠS, ᶜνₜ_v) = p.precomputed
+    (; ᶜS, ᶠS, ᶜνₜ_v) = p.precomputed
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶠtemp_scalar, ᶠtemp_scalar_2) = p.scratch
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
-    thermo_params = CAP.thermodynamics_params(p.params)
     ᶜρ = Y.c.ρ
     ᶠρ = @. ᶠtemp_scalar = ᶠinterp(ᶜρ)
 
@@ -172,8 +180,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyL
     @. Yₜ.f.u₃ -= C3(ᶠdivᵥ(ᶜρ * ᶜτ_smag) / ᶠρ)
 
     ## Total energy tendency
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, ᶜρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+    (; ᶜh_tot) = p.precomputed
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜh_tot)))
 
     ## Tracer diffusion and associated mass changes

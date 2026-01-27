@@ -1,4 +1,4 @@
-303
+304
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+304
+- Remove grid-scale thermo state from precomputed quantities and uses new thermodynamics functions.
 
 303
 - Remove thermo state from initial conditions, which changes the behavior of

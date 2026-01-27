@@ -162,7 +162,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜK) = p.precomputed
+    (; ᶜp, ᶠu³, ᶜK, ᶜh_tot) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.precomputed.sfc_conditions
     (; ᶜρaʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
@@ -172,11 +172,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
 
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
-    ᶜts = p.precomputed.ᶜts   #TODO replace
 
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
     uₕ_int_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
@@ -450,7 +447,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; params) = p
     (; dt) = p
     (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜts, ᶜK) = p.precomputed
+    (; ᶜp, ᶠu³, ᶜT, ᶜh_tot, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜK) = p.precomputed
     (;
         ᶜρaʲs,
         ᶠu³ʲs,
@@ -496,8 +493,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
     # integral
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
@@ -533,7 +528,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         K_prev_level = Fields.field_values(Fields.level(ᶜK, i - 1))
         h_tot_prev_level = Fields.field_values(Fields.level(ᶜh_tot, i - 1))
         q_tot_prev_level = Fields.field_values(Fields.level(ᶜq_tot, i - 1))
-        ts_prev_level = Fields.field_values(Fields.level(ᶜts, i - 1))
+        T_prev_level = Fields.field_values(Fields.level(ᶜT, i - 1))
+        q_liq_rai_prev_level = Fields.field_values(Fields.level(ᶜq_liq_rai, i - 1))
+        q_ice_sno_prev_level = Fields.field_values(Fields.level(ᶜq_ice_sno, i - 1))
         p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
         dz_prev_level = Fields.field_values(Fields.level(ᶜdz, i - 1))
@@ -685,7 +682,14 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     u³_prev_halflevel,
                     local_geometry_prev_halflevel,
                 ),
-                TD.relative_humidity(thermo_params, ts_prev_level),
+                TD.relative_humidity(
+                    thermo_params,
+                    T_prev_level,
+                    p_prev_level,
+                    q_tot_prev_level,
+                    q_liq_rai_prev_level,
+                    q_ice_sno_prev_level,
+                ),
                 FT(0),
                 tke_prev_level,
                 p.atmos.edmfx_model.entr_model,
@@ -757,11 +761,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             # 0-moment microphysics: sink of q_tot from precipitation removal
             if microphysics_model isa Microphysics0Moment
                 @. S_q_totʲ_prev_level = q_tot_0M_precipitation_sources(
-                    thermo_params,
                     microphys_0m_params,
                     dt,
                     q_totʲ_prev_level,
-                    tsʲ_prev_level,
+                    TD.total_specific_humidity(thermo_params, tsʲ_prev_level),
+                    TD.liquid_specific_humidity(thermo_params, tsʲ_prev_level),
+                    TD.ice_specific_humidity(thermo_params, tsʲ_prev_level),
                 )
                 # 1-moment microphysics: cloud water (liquid and ice) and
                 # precipitation (rain and snow) sources. q_tot is constant, because
@@ -769,6 +774,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             elseif moisture_model isa NonEquilMoistModel &&
                    microphysics_model isa Microphysics1Moment
                 # Rain formation from the updrafts
+                Tʲ_prev_level = @. lazy(TD.air_temperature(thermo_params, tsʲ_prev_level))
                 compute_precipitation_sources!(
                     Sᵖ_prev_level,
                     Sᵖ_snow_prev_level,
@@ -782,7 +788,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     q_iceʲ_prev_level,
                     q_raiʲ_prev_level,
                     q_snoʲ_prev_level,
-                    tsʲ_prev_level,
+                    Tʲ_prev_level,
                     dt,
                     microphys_1m_params,
                     thermo_params,
@@ -798,7 +804,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     q_iceʲ_prev_level,
                     q_raiʲ_prev_level,
                     q_snoʲ_prev_level,
-                    tsʲ_prev_level,
+                    Tʲ_prev_level,
                     dt,
                     microphys_1m_params,
                     thermo_params,
@@ -813,7 +819,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     q_raiʲ_prev_level,
                     q_snoʲ_prev_level,
                     ρʲ_prev_level,
-                    TD.air_temperature(thermo_params, tsʲ_prev_level),
+                    Tʲ_prev_level,
                     dt,
                 )
                 @. S_q_iceʲ_prev_level += cloud_sources(
@@ -825,7 +831,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     q_raiʲ_prev_level,
                     q_snoʲ_prev_level,
                     ρʲ_prev_level,
-                    TD.air_temperature(thermo_params, tsʲ_prev_level),
+                    Tʲ_prev_level,
                     dt,
                 )
 
@@ -885,7 +891,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 u³ʲ_prev_halflevel,
                 local_geometry_prev_halflevel,
                 u³_prev_halflevel,
-                ts_prev_level,
+                T_prev_level,
+                q_tot_prev_level,
+                q_liq_rai_prev_level,
+                q_ice_sno_prev_level,
                 FT(0),
                 entrʲ_prev_level,
                 vert_div_level,
@@ -986,6 +995,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     mseʲ_prev_level,
                 )
             if microphysics_model isa Microphysics0Moment
+                ᶜTʲ = @. lazy(TD.air_temperature(thermo_params, tsʲ_prev_level))
+                ᶜq_liq_raiʲ =
+                    @. lazy(TD.liquid_specific_humidity(thermo_params, tsʲ_prev_level))
+                ᶜq_ice_snoʲ =
+                    @. lazy(TD.ice_specific_humidity(thermo_params, tsʲ_prev_level))
                 @. ρaʲu³ʲ_datamse += microphysics_sources(
                     local_geometry_halflevel.J,
                     local_geometry_prev_level.J,
@@ -993,7 +1007,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     S_q_totʲ_prev_level *
                     e_tot_0M_precipitation_sources_helper(
                         thermo_params,
-                        tsʲ_prev_level,
+                        ᶜTʲ,
+                        ᶜq_liq_raiʲ,
+                        ᶜq_ice_snoʲ,
                         Φ_prev_level,
                     ),
                 )
@@ -1334,7 +1350,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     t,
 )
     (; params) = p
-    (; ᶜu, ᶜts, ᶠu³) = p.precomputed
+    (; ᶜT, ᶜq_liq_rai, ᶜq_ice_sno, ᶠu³) = p.precomputed
     (; ustar) = p.precomputed.sfc_conditions
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     (; ρtke_flux) = p.precomputed
@@ -1347,10 +1363,15 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
         @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
     end  # Set here, but used in a different function
 
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
         thermo_params,
-        ᶜts,
+        ᶜT,
+        Y.c.ρ,
+        ᶜq_tot,
+        ᶜq_liq_rai,
+        ᶜq_ice_sno,
         p.precomputed.cloud_diagnostics_tuple.cf,
         C3,
         p.precomputed.ᶜgradᵥ_q_tot,
@@ -1398,19 +1419,19 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     t,
     microphysics_model::Microphysics0Moment,
 )
-    thermo_params = CAP.thermodynamics_params(p.params)
     microphys_0m_params = CAP.microphysics_0m_params(p.params)
     (; dt) = p
-    (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
+    (; ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜSqₜᵖ⁰) = p.precomputed
 
     # Environment precipitation sources (to be applied to grid mean)
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
-        thermo_params,
         microphys_0m_params,
         dt,
         ᶜq_tot,
-        ᶜts,
+        ᶜq_tot_safe,
+        ᶜq_liq_rai,
+        ᶜq_ice_sno,
     )
     return nothing
 end
@@ -1425,7 +1446,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     cloud_params = CAP.microphysics_cloud_params(p.params)
     (; dt) = p
 
-    (; ᶜts, ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+    (; ᶜT, ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
@@ -1443,7 +1464,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         specific.(Y.c.ρq_ice, Y.c.ρ),
         specific.(Y.c.ρq_rai, Y.c.ρ),
         specific.(Y.c.ρq_sno, Y.c.ρ),
-        ᶜts,
+        ᶜT,
         dt,
         microphys_1m_params,
         thermo_params,
@@ -1459,7 +1480,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         specific.(Y.c.ρq_ice, Y.c.ρ),
         specific.(Y.c.ρq_rai, Y.c.ρ),
         specific.(Y.c.ρq_sno, Y.c.ρ),
-        ᶜts,
+        ᶜT,
         dt,
         microphys_1m_params,
         thermo_params,
@@ -1474,7 +1495,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         specific(Y.c.ρq_rai, Y.c.ρ),
         specific(Y.c.ρq_sno, Y.c.ρ),
         Y.c.ρ,
-        TD.air_temperature(thermo_params, ᶜts),
+        ᶜT,
         dt,
     )
     @. ᶜSqᵢᵖ⁰ += cloud_sources(
@@ -1486,7 +1507,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         specific(Y.c.ρq_rai, Y.c.ρ),
         specific(Y.c.ρq_sno, Y.c.ρ),
         Y.c.ρ,
-        TD.air_temperature(thermo_params, ᶜts),
+        ᶜT,
         dt,
     )
     return nothing

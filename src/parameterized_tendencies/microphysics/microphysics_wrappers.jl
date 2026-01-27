@@ -12,9 +12,6 @@ import CloudMicrophysics.Parameters as CMP
 
 # Define some aliases and functions to make the code more readable
 const Tₐ = TD.air_temperature
-const Pₐ = TD.air_pressure
-const PP = TD.PhasePartition
-const qᵥ = TD.vapor_specific_humidity
 
 # Clip any specific humidity
 function clip(q)
@@ -29,7 +26,7 @@ function limit(q, dt, n::Int)
 end
 
 """
-    cloud_sources(cm_params, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ, dt)
+    cloud_sources(cm_params, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, T, dt)
 
  - cm_params - CloudMicrophysics parameters struct for cloud water or ice condensate
  - thp - Thermodynamics parameters struct
@@ -39,7 +36,7 @@ end
  - qᵣ - rain specific humidity
  - qₛ - snow specific humidity
  - ρ - air density
- - Tₐ - air temperature
+ - T - air temperature
  - dt - model time step
 
 Returns the condensation/evaporation or deposition/sublimation rate for
@@ -140,50 +137,51 @@ function cloud_sources(
 end
 
 """
-    q_tot_0M_precipitation_sources(thp, cmp, dt, qₜ, ts)
+    q_tot_0M_precipitation_sources(cmp, dt, qₜ, q_tot, q_liq, q_ice)
 
- - thp, cmp - structs with thermodynamic and microphysics parameters
+ - cmp - struct with microphysics parameters
  - dt - model time step
  - qₜ - total water specific humidity
- - ts - thermodynamic state (see Thermodynamics.jl package for details)
+ - q_tot, q_liq, q_ice - phase partition quantities
 
 Returns the qₜ source term due to precipitation formation
 defined as Δm_tot / (m_dry + m_tot) for the 0-moment scheme
 """
-function q_tot_0M_precipitation_sources(thp, cmp::CMP.Parameters0M, dt, qₜ, ts)
+function q_tot_0M_precipitation_sources(cmp::CMP.Parameters0M, dt, qₜ, q_tot, q_liq, q_ice)
     return -triangle_inequality_limiter(
-        -CM0.remove_precipitation(cmp, PP(thp, ts)),
+        -CM0.remove_precipitation(cmp, TD.PhasePartition(q_tot, q_liq, q_ice)),
         qₜ / dt,
     )
 end
 
 """
-    e_tot_0M_precipitation_sources_helper(thp, ts, Φ)
+    e_tot_0M_precipitation_sources_helper(thp, T, q_liq, q_ice, Φ)
 
  - thp - set with thermodynamics parameters
- - ts - thermodynamic state (see td package for details)
+ - T - temperature
+ - q_liq, q_ice - liquid and ice specific humidities
  - Φ - geopotential
 
 Returns the total energy source term multiplier from precipitation formation
 for the 0-moment scheme
 """
-function e_tot_0M_precipitation_sources_helper(thp, ts, Φ)
+function e_tot_0M_precipitation_sources_helper(thp, T, q_liq, q_ice, Φ)
 
-    λ = TD.liquid_fraction(thp, ts)
-    Iₗ = TD.internal_energy_liquid(thp, ts)
-    Iᵢ = TD.internal_energy_ice(thp, ts)
+    λ = TD.liquid_fraction(thp, T, q_liq, q_ice)
+    Iₗ = TD.internal_energy_liquid(thp, T)
+    Iᵢ = TD.internal_energy_ice(thp, T)
 
     return λ * Iₗ + (1 - λ) * Iᵢ + Φ
 end
 
 """
-    compute_precipitation_sources!(Sᵖ, Sᵖ_snow, Sqₗᵖ, Sqᵢᵖ, Sqᵣᵖ, Sqₛᵖ, ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, ts, dt, mp, thp)
+    compute_precipitation_sources!(Sᵖ, Sᵖ_snow, Sqₗᵖ, Sqᵢᵖ, Sqᵣᵖ, Sqₛᵖ, ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, T, dt, mp, thp)
 
  - Sᵖ, Sᵖ_snow - temporary containters to help compute precipitation source terms
  - Sqₗᵖ, Sqᵢᵖ, Sqᵣᵖ, Sqₛᵖ - cached storage for precipitation source terms
  - ρ - air density
  - qₜ, qₗ, qᵢ, qᵣ, qₛ - total water, liquid and ice, rain and snow specific humidity
- - ts - thermodynamic state (see td package for details)
+ - T - air temperature
  - dt - model time step
  - thp, cmp - structs with thermodynamic and microphysics parameters
 
@@ -205,7 +203,7 @@ function compute_precipitation_sources!(
     qᵢ,
     qᵣ,
     qₛ,
-    ts,
+    T,
     dt,
     mp,
     thp,
@@ -262,15 +260,15 @@ function compute_precipitation_sources!(
     )
     # if T < T_freeze cloud droplets freeze to become snow
     # else the snow melts and both cloud water and snow become rain
-    α(thp, ts) = TD.Parameters.cv_l(thp) / TD.latent_heat_fusion(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
+    α(thp, T) = TD.Parameters.cv_l(thp) / TD.latent_heat_fusion(thp, T) * (T - mp.ps.T_freeze)
     @. Sᵖ_snow = ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
+        T < mp.ps.T_freeze,
         Sᵖ,
-        FT(-1) * triangle_inequality_limiter(Sᵖ * α(thp, ts), limit(qₛ, dt, 5)),
+        FT(-1) * triangle_inequality_limiter(Sᵖ * α(thp, T), limit(qₛ, dt, 5)),
     )
     @. Sqₛᵖ += Sᵖ_snow
     @. Sqₗᵖ -= Sᵖ
-    @. Sqᵣᵖ += ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
+    @. Sqᵣᵖ += ifelse(T < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
 
     # accretion: q_ice + q_rai -> q_sno
     @. Sᵖ = triangle_inequality_limiter(
@@ -291,7 +289,7 @@ function compute_precipitation_sources!(
 
     # accretion: q_rai + q_sno -> q_rai or q_sno
     @. Sᵖ = ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
+        T < mp.ps.T_freeze,
         triangle_inequality_limiter(
             CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
             limit(qᵣ, dt, 5),
@@ -309,13 +307,13 @@ function compute_precipitation_sources!(
 end
 
 """
-    compute_precipitation_sinks!(Sᵖ, Sqᵣᵖ, Sqₛᵖ, ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, ts, dt, mp, thp)
+    compute_precipitation_sinks!(Sᵖ, Sqᵣᵖ, Sqₛᵖ, ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, T, dt, mp, thp)
 
  - Sᵖ - a temporary containter to help compute precipitation source terms
  - Sqᵣᵖ, Sqₛᵖ - cached storage for precipitation source terms
  - ρ - air density
  - qₜ, qₗ, qᵢ, qᵣ, qₛ - total water, cloud liquid and ice, rain and snow specific humidities
- - ts - thermodynamic state (see td package for details)
+ - T - air temperature
  - dt - model time step
  - thp, cmp - structs with thermodynamic and microphysics parameters
 
@@ -334,11 +332,12 @@ function compute_precipitation_sinks!(
     qᵢ,
     qᵣ,
     qₛ,
-    ts,
+    T,
     dt,
     mp,
     thp,
 )
+    # TODO: maybe use q_tot_safe, q_liq_rai, q_ice_sno instead of qₜ, qₗ, qᵢ, qᵣ, qₛ
     FT = eltype(thp)
     sps = (mp.ps, mp.tv.snow, mp.aps, thp)
     rps = (mp.pr, mp.tv.rain, mp.aps, thp)
@@ -346,15 +345,15 @@ function compute_precipitation_sinks!(
     #! format: off
     # evaporation: q_rai -> q_vap
     @. Sᵖ = -triangle_inequality_limiter(
-        -CM1.evaporation_sublimation(rps..., qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ(thp, ts)),
+        -CM1.evaporation_sublimation(rps..., qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, T),
         limit(qᵣ, dt, 5),
-        limit(qᵥ(thp, ts), dt, 5),
+        limit(TD.vapor_specific_humidity(qₜ, qₗ + qᵢ, qᵣ + qₛ), dt, 5),
     )
     @. Sqᵣᵖ += Sᵖ
 
     # melting: q_sno -> q_rai
     @. Sᵖ = triangle_inequality_limiter(
-        CM1.snow_melt(sps..., qₛ, ρ, Tₐ(thp, ts)),
+        CM1.snow_melt(sps..., qₛ, ρ, T),
         limit(qₛ, dt, 5),
         limit(qᵣ, dt, 5),
     )
@@ -362,11 +361,11 @@ function compute_precipitation_sinks!(
     @. Sqₛᵖ -= Sᵖ
 
     # deposition/sublimation: q_vap <-> q_sno
-    @. Sᵖ = CM1.evaporation_sublimation(sps..., qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ(thp, ts))
+    @. Sᵖ = CM1.evaporation_sublimation(sps..., qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, T)
     @. Sᵖ = ifelse(
         Sᵖ > FT(0),
-        triangle_inequality_limiter(Sᵖ, limit(qᵥ(thp, ts), dt, 5), limit(qₛ, dt, 5)),
-        -triangle_inequality_limiter(FT(-1) * Sᵖ, limit(qₛ, dt, 5), limit(qᵥ(thp, ts), dt, 5)),
+        triangle_inequality_limiter(Sᵖ, limit(TD.vapor_specific_humidity(qₜ, qₗ + qᵣ, qᵢ + qₛ), dt, 5), limit(qₛ, dt, 5)),
+        -triangle_inequality_limiter(FT(-1) * Sᵖ, limit(qₛ, dt, 5), limit(TD.vapor_specific_humidity(qₜ, qₗ + qᵣ, qᵢ + qₛ), dt, 5)),
     )
     @. Sqₛᵖ += Sᵖ
     #! format: on
@@ -463,7 +462,8 @@ end
         w,
         cmp,
         thermo_params,
-        ts,
+        T,
+        p,
         dt,
     )
 
@@ -484,7 +484,8 @@ velocity. The result is returned as a tendency (per second) of liquid droplet nu
 - `w`: Vertical velocity [m/s].
 - `cmp`: Microphysics parameters
 - `thermo_params`: Thermodynamic parameters for computing saturation, pressure, temperature, etc.
-- `ts`: Thermodynamic state (e.g., prognostic variables) used for evaluating the phase partition.
+- `T`: Air temperature [K].
+- `p`: Air pressure [Pa].
 - `dt`: Time step (s) over which the activation tendency is applied.
 
 # Returns
@@ -502,7 +503,8 @@ function aerosol_activation_sources(
     w,
     cmp,
     thermo_params,
-    ts,
+    T,
+    p,
     dt,
 )
 
@@ -510,8 +512,6 @@ function aerosol_activation_sources(
     air_params = cmp.aps
     arg_params = cmp.arg
     aerosol_params = cmp.aerosol
-    T = Tₐ(thermo_params, ts)
-    p = Pₐ(thermo_params, ts)
     S = CMTDI.supersaturation_over_liquid(thermo_params, qₜ, qₗ, qᵢ, ρ, T)
     n_aer = seasalt_num + sulfate_num
     if S < 0 || n_aer < eps(FT)
@@ -564,14 +564,14 @@ function aerosol_activation_sources(
 end
 
 """
-    compute_warm_precipitation_sources_2M!(Sᵖ, S₂ᵖ, Snₗᵖ, Snᵣᵖ, Sqₗᵖ, Sqᵣᵖ, ρ, nₗ, nᵣ, qₜ, qₗ, qᵢ, qᵣ, qₛ, ts, dt, sb, thp)
+    compute_warm_precipitation_sources_2M!(Sᵖ, S₂ᵖ, Snₗᵖ, Snᵣᵖ, Sqₗᵖ, Sqᵣᵖ, ρ, nₗ, nᵣ, qₜ, qₗ, qᵢ, qᵣ, qₛ, T, dt, sb, thp)
 
  - `Sᵖ`, `S₂ᵖ` - temporary containters to help compute precipitation source terms
  - `Snₗᵖ`, `Snᵣᵖ`, `Sqₗᵖ`, `Sqᵣᵖ` - cached storage for precipitation source terms
  - `ρ` - air density
  - `nₗ`, `nᵣ` - cloud liquid and rain number concentration per mass [1 / kg of moist air]
  - `qₜ`, `qₗ`, `qᵢ`, `qᵣ`, `qₛ` - total water, cloud liquid, cloud ice, rain and snow specific humidity
- - `ts` - thermodynamic state (see td package for details)
+ - `T` - air temperature
  - `dt` - model time step
  - `thp`, `mp` - structs with thermodynamic and microphysics parameters
 
@@ -593,7 +593,7 @@ function compute_warm_precipitation_sources_2M!(
     qᵢ,
     qᵣ,
     qₛ,
-    ts,
+    T,
     dt,
     mp,
     thp,
@@ -690,10 +690,10 @@ function compute_warm_precipitation_sources_2M!(
                 qₛ,
                 ρ,
                 ρ * nᵣ,
-                Tₐ(thp, ts),
+                T,
             ).evap_rate_1,
             limit(qᵣ, dt, 5),
-            limit(qᵥ(thp, ts), dt, 5),
+            limit(TD.vapor_specific_humidity(qₜ, qₗ + qᵣ, qᵢ + qₛ), dt, 5),
         )
     @. Sqᵣᵖ += Sᵖ
 
@@ -711,7 +711,7 @@ function compute_warm_precipitation_sources_2M!(
                 qₛ,
                 ρ,
                 ρ * nᵣ,
-                Tₐ(thp, ts),
+                T,
             ).evap_rate_0 / ρ,
             limit(nᵣ, dt, 5),
         )
@@ -768,7 +768,7 @@ function compute_cold_precipitation_sources_P3!(
     params_2mp3,    # Parameters for 2M and P3 schemes, see `get_microphysics_2m_p3_parameters`
     thermo_params,  # An instance of `Thermodynamics.Parameters.ThermodynamicsParameters`
     ᶜY_reduced,     # A reduced set of prognostic variables needed for P3 sources
-    ᶜts,            # Thermodynamic state
+    ᶜT,             # Air temperature from cache
     ᶜlogλ,          # Logarithm of the P3 distribution slope parameter
 )
 
@@ -784,7 +784,7 @@ function compute_cold_precipitation_sources_P3!(
         warm.sb.pdf_c, warm.sb.pdf_r,
         ρq_liq, ρn_liq, ρq_rai, ρn_rai,
         warm.aps, thermo_params, (cold.velocity_params,),
-        ρ, Tₐ(thermo_params, ᶜts),
+        ρ, ᶜT,
     )
 
     return nothing

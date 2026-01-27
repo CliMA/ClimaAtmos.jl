@@ -18,18 +18,11 @@ function horizontal_constant_diffusion_tendency!(
     FT = eltype(Y)
     thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜtemp_scalar) = p.scratch
-    (; ᶜts) = p.precomputed
 
     ᶜD = @. ᶜtemp_scalar = FT(chd.D)
 
     # Total energy diffusion
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
-    )
+    (; ᶜh_tot) = p.precomputed
     @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD * gradₕ(ᶜh_tot))
 
     # Tracer diffusion

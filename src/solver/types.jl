@@ -340,20 +340,28 @@ Base.broadcastable(x::BuoyGradMean) = tuple(x)
 
 Variables used in the environmental buoyancy gradient computation.
 """
-Base.@kwdef struct EnvBuoyGradVars{FT, TS}
-    ts::TS
+Base.@kwdef struct EnvBuoyGradVars{FT}
+    T::FT
+    ρ::FT
+    q_tot::FT
+    q_liq::FT
+    q_ice::FT
     cf::FT
     ∂qt∂z::FT
     ∂θli∂z::FT
 end
 
 function EnvBuoyGradVars(
-    ts::TD.ThermodynamicState,
+    T,
+    ρ,
+    q_tot,
+    q_liq,
+    q_ice,
     cf,
     ∂qt∂z_∂θli∂z,
 )
     (; ∂qt∂z, ∂θli∂z) = ∂qt∂z_∂θli∂z
-    return EnvBuoyGradVars(ts, cf, ∂qt∂z, ∂θli∂z)
+    return EnvBuoyGradVars(T, ρ, q_tot, q_liq, q_ice, cf, ∂qt∂z, ∂θli∂z)
 end
 
 Base.eltype(::EnvBuoyGradVars{FT}) where {FT} = FT
@@ -370,7 +378,6 @@ end
 function MixingLength(master, wall, tke, buoy, l_grid)
     return MixingLength(promote(master, wall, tke, buoy, l_grid)...)
 end
-
 
 abstract type AbstractEDMF end
 

@@ -14,7 +14,12 @@ import SurfaceFluxes.UniversalFunctions as UF
         thermo_params,
 
         # Arguments for the first method (most commonly called):
-        ts::TD.ThermodynamicState,
+        T,      # Air temperature [K]
+        ρ,      # Air density [kg/m³]
+        q_tot,  # Total specific humidity [kg/kg]
+        q_liq,  # Liquid specific humidity [kg/kg]
+        q_ice,  # Ice specific humidity [kg/kg]
+        cf,     # Cloud fraction
         ::Type{C3}, # Covariant3 vector type, for projecting gradients
         ∂qt∂z::AbstractField,   # Vertical gradient of total specific humidity
         ∂θli∂z::AbstractField,   # Vertical gradient of liquid-ice potential temperature
@@ -36,23 +41,22 @@ fraction. The calculation involves:
    thermodynamic variables (`∂θᵥ/∂z`, `∂θₗᵢ/∂z`, `∂qₜ/∂z`), obtained from
    the input fields after projection.
 3. Blending the resulting unsaturated and saturated buoyancy gradients based on
-   the environmental cloud fraction derived from the thermodynamic state `ts`.
-
-The dispatch on `EnvBuoyGradVars` (used internally by the first method after
-constructing it from `ts` and projected gradients) occurs during its construction.
-The analytical solutions employed are consistent for both mean fields and
-conditional fields derived from assumed distributions over conserved thermodynamic
-variables.
+   the environmental cloud fraction.
 
 Arguments:
 - `closure`: The environmental buoyancy gradient closure type (e.g., `BuoyGradMean`).
 - `thermo_params`: Thermodynamic parameters from `CLIMAParameters`.
-- `ts`: Center-level thermodynamic state of the environment.
+- `T`: Air temperature [K]
+- `ρ`: Air density [kg/m³]
+- `q_tot`: Total specific humidity [kg/kg]
+- `q_liq`: Liquid specific humidity [kg/kg]
+- `q_ice`: Ice specific humidity [kg/kg]
+- `cf`: Cloud fraction
 - `C3`: The `ClimaCore.Geometry.Covariant3Vector` type, used for projecting input vertical gradients.
 - `∂qt∂z`: Field of vertical gradients of total specific humidity.
 - `∂θli∂z`: Field of vertical gradients of liquid-ice potential temperature.
 - `local_geometry`: Field of local geometry at cell centers, used for gradient projection.
-The second method takes a precomputed `EnvBuoyGradVars` object instead of `ts` and gradient fields.
+The second method takes a precomputed `EnvBuoyGradVars` object instead of T, ρ, q_tot, q_liq, q_ice and gradient fields.
 
 Returns:
 - `∂b∂z`: The mean vertical buoyancy gradient [s⁻²], as a field of scalars.
@@ -62,7 +66,11 @@ function buoyancy_gradients end
 function buoyancy_gradients(
     ebgc::AbstractEnvBuoyGradClosure,
     thermo_params,
-    ts,
+    T,
+    ρ,
+    q_tot,
+    q_liq,
+    q_ice,
     cf,
     ::Type{C3},
     ∂qt∂z,
@@ -73,7 +81,11 @@ function buoyancy_gradients(
         ebgc,
         thermo_params,
         EnvBuoyGradVars(
-            ts,
+            T,
+            ρ,
+            max(q_tot, 0),
+            max(q_liq, 0),
+            max(q_ice, 0),
             cf,
             projected_vector_buoy_grad_vars(
                 C3,
@@ -96,18 +108,13 @@ function buoyancy_gradients(
     Rv_over_Rd = TDP.Rv_over_Rd(thermo_params)
     R_v = TDP.R_v(thermo_params)
 
-    ts = bg_model.ts
-    ∂b∂θv = g / TD.virtual_pottemp(thermo_params, ts)
+    (; T, ρ, q_tot, q_liq, q_ice) = bg_model
+    ∂b∂θv = g / TD.virtual_pottemp(thermo_params, T, ρ, q_tot, q_liq, q_ice)
 
-    T = TD.air_temperature(thermo_params, ts)
-    λ = TD.liquid_fraction(thermo_params, ts)
-    lh =
-        λ * TD.latent_heat_vapor(thermo_params, T) +
-        (1 - λ) * TD.latent_heat_sublim(thermo_params, T)
-    cp_m = TD.cp_m(thermo_params, ts)
-    q_sat = TD.q_vap_saturation(thermo_params, ts)
-    q_tot = TD.total_specific_humidity(thermo_params, ts)
-    θ = TD.dry_pottemp(thermo_params, ts)
+    lh = TD.latent_heat(thermo_params, T, q_liq, q_ice)
+    cp_m = TD.cp_m(thermo_params, q_tot, q_liq, q_ice)
+    q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
+    θ = TD.potential_temperature(thermo_params, T, ρ, q_tot, q_liq, q_ice)
     ∂b∂θli_unsat = ∂b∂θv * (1 + (Rv_over_Rd - 1) * q_tot)
     ∂b∂qt_unsat = ∂b∂θv * (Rv_over_Rd - 1) * θ
     ∂b∂θli_sat = (

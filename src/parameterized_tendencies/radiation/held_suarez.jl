@@ -44,15 +44,14 @@ end
 Base.Broadcast.broadcastable(x::HeldSuarezForcingParams) = tuple(x)
 
 function compute_ΔρT(
-    thermo_params::TDP.ThermodynamicsParameters,
-    ts_surf::TD.ThermodynamicState,
+    T_sfc::FT,
     ρ::FT,
     p::FT,
     lat::FT,
     z_surface::FT,
     s::HeldSuarezForcingParams,
 ) where {FT}
-    σ = compute_σ(thermo_params, z_surface, p, ts_surf, s)
+    σ = compute_σ(z_surface, p, T_sfc, s)
     k_a = 1 / (40 * s.day)
     k_s = 1 / (4 * s.day)
 
@@ -71,36 +70,24 @@ function compute_ΔρT(
 end
 
 function compute_σ(
-    thermo_params::TDP.ThermodynamicsParameters,
     z_surface::FT,
     p::FT,
-    ts_surf::TD.ThermodynamicState,
+    T_sfc::FT,
     s::HeldSuarezForcingParams,
 ) where {FT}
-    p / (
-        s.MSLP * exp(
-            -s.grav * z_surface / s.R_d /
-            TD.air_temperature(thermo_params, ts_surf),
-        )
-    )
+    p / (s.MSLP * exp(-s.grav * z_surface / s.R_d / T_sfc))
 end
 
 height_factor(σ::FT, σ_b::FT) where {FT} = max(0, (σ - σ_b) / (1 - σ_b))
-height_factor(
-    thermo_params::TDP.ThermodynamicsParameters,
-    z_surface::FT,
-    p::FT,
-    ts_surf::TD.ThermodynamicState,
-    s::HeldSuarezForcingParams,
-) where {FT} =
-    height_factor(compute_σ(thermo_params, z_surface, p, ts_surf, s), s.σ_b)
+height_factor(z_surface::FT, p::FT, T_sfc::FT, s::HeldSuarezForcingParams) where {FT} =
+    height_factor(compute_σ(z_surface, p, T_sfc, s), s.σ_b)
 
 function held_suarez_forcing_tendency_ρe_tot(
     ᶜρ,
     ᶜuₕ,
     ᶜp,
     params,
-    ts_surf,
+    T_sfc,
     moisture_model,
     forcing,
 )
@@ -120,7 +107,6 @@ function held_suarez_forcing_tendency_ρe_tot(
     grav = FT(CAP.grav(params))
     Δθ_z = FT(CAP.Δθ_z(params))
     T_min = FT(CAP.T_min_hs(params))
-    thermo_params = CAP.thermodynamics_params(params)
     σ_b = CAP.σ_b(params)
     k_f = 1 / day
 
@@ -143,15 +129,7 @@ function held_suarez_forcing_tendency_ρe_tot(
     )
 
     return @. lazy(
-        -compute_ΔρT(
-            thermo_params,
-            ts_surf,
-            ᶜρ,
-            ᶜp,
-            lat,
-            z_surface,
-            hs_params,
-        ) * cv_d,
+        -compute_ΔρT(T_sfc, ᶜρ, ᶜp, lat, z_surface, hs_params) * cv_d,
     )
 end
 
@@ -159,7 +137,7 @@ function held_suarez_forcing_tendency_uₕ(
     ᶜuₕ,
     ᶜp,
     params,
-    ts_surf,
+    T_sfc,
     moisture_model,
     forcing,
 )
@@ -177,7 +155,6 @@ function held_suarez_forcing_tendency_uₕ(
     grav = FT(CAP.grav(params))
     Δθ_z = FT(CAP.Δθ_z(params))
     T_min = FT(CAP.T_min_hs(params))
-    thermo_params = CAP.thermodynamics_params(params)
     σ_b = CAP.σ_b(params)
     k_f = 1 / day
 
@@ -199,10 +176,5 @@ function held_suarez_forcing_tendency_uₕ(
         MSLP,
     )
 
-    return @. lazy(
-        -(
-            k_f *
-            height_factor(thermo_params, z_surface, ᶜp, ts_surf, hs_params)
-        ) * ᶜuₕ,
-    )
+    return @. lazy(-(k_f * height_factor(z_surface, ᶜp, T_sfc, hs_params)) * ᶜuₕ)
 end
