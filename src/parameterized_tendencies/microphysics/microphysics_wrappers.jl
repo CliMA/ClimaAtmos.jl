@@ -291,12 +291,12 @@ function compute_precipitation_sources!(
     @. Sᵖ = ifelse(
         T < mp.ps.T_freeze,
         triangle_inequality_limiter(
-            CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
+            CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.snow, mp.tv.rain, mp.ce, qₛ, qᵣ, ρ),
             limit(qᵣ, dt, 5),
             limit(qₛ, dt, 5),
         ),
         -triangle_inequality_limiter(
-            CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ, qₛ, ρ),
+            CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.rain, mp.tv.snow, mp.ce, qᵣ, qₛ, ρ),
             limit(qₛ, dt, 5),
             limit(qᵣ, dt, 5),
         ),
