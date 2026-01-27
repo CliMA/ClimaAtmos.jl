@@ -3,6 +3,7 @@ surface_setup: DefaultMoninObukhov
 surface_temperature: RCEMIPII
 insolation: rcemipii
 initial_condition: RCEMIPIIProfile_300
+output_dir: "/net/sampo/data1/haakon/rcemipii/simulation_output/RCE_small/1M_noneq"
 config: box
 rad: allskywithclear
 approximate_linear_solve_iters: 2  # only valid when implicit_diffusion=true
@@ -50,24 +51,25 @@ vertical_mesh: rcemipii
 # y_elem: 4
 # dt: 10secs
 # ~4km grid
-x_elem: 8
-y_elem: 8
-dt: 5secs
+# x_elem: 8
+# y_elem: 8
+# dt: 5secs
 # ~2km grid
 # x_elem: 16
 # y_elem: 16
 # dt: 2secs
 # ~1km grid
-# x_elem: 32
-# y_elem: 32
-# dt: 1secs
+x_elem: 32
+y_elem: 32
+dt: 1secs
 
 # t_end: 10hours
 # t_end: 1days
 # t_end: 2days
 # t_end: 4days
 # t_end: 10days
-t_end: 21days
+# t_end: 21days
+t_end: 150days
 
 ## >> During debugging, reduce these as appropriate
 dt_save_state_to_disk: 1days
