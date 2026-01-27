@@ -242,69 +242,6 @@ function entrainment(
     return max(entr, 0) # Ensure non-negative
 end
 
-function detrainment_from_thermo_state(
-    thermo_params,
-    turbconv_params,
-    z_prev_level,
-    z_sfc_halflevel,
-    p_prev_level,
-    ρ_prev_level,
-    ρaʲ_prev_level,
-    tsʲ_prev_level,
-    ρʲ_prev_level,
-    u³ʲ_prev_halflevel,
-    local_geometry_prev_halflevel,
-    u³_prev_halflevel,
-    T_prev_level,
-    q_tot_prev_level,
-    q_liq_prev_level,
-    q_ice_prev_level,
-    ᶜbuoy⁰,
-    entrʲ_prev_level,
-    vert_div_level,
-    ᶜmassflux_vert_div, # mass flux divergence is not implemented for diagnostic edmf
-    w_vert_div_level,
-    tke_prev_level,
-    ᶜgradᵥ_ᶠΦ,
-    edmfx_detr_model,
-)
-    FT = eltype(thermo_params)
-    detrainment(
-        thermo_params,
-        turbconv_params,
-        z_prev_level,
-        z_sfc_halflevel,
-        p_prev_level,
-        ρ_prev_level,
-        ρaʲ_prev_level,
-        draft_area(ρaʲ_prev_level, ρʲ_prev_level),
-        get_physical_w(u³ʲ_prev_halflevel, local_geometry_prev_halflevel),
-        TD.relative_humidity(thermo_params, tsʲ_prev_level),
-        vertical_buoyancy_acceleration(
-            ρ_prev_level,
-            ρʲ_prev_level,
-            ᶜgradᵥ_ᶠΦ,
-            local_geometry_prev_halflevel,
-        ),
-        get_physical_w(u³_prev_halflevel, local_geometry_prev_halflevel),
-        TD.relative_humidity(
-            thermo_params,
-            T_prev_level,
-            p_prev_level,
-            q_tot_prev_level,
-            q_liq_prev_level,
-            q_ice_prev_level,
-        ),
-        FT(0),
-        entrʲ_prev_level,
-        vert_div_level,
-        FT(0), # mass flux divergence is not implemented for diagnostic edmf
-        w_vert_div_level,
-        tke_prev_level,
-        edmfx_detr_model,
-    )
-end
-
 """
     detrainment(
         thermo_params, turbconv_params, ᶜz, z_sfc, ᶜp, ᶜρ, ᶜρaʲ, ᶜaʲ,

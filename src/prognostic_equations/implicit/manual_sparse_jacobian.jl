@@ -805,7 +805,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     if p.atmos.turbconv_model isa PrognosticEDMFX
         if use_derivative(sgs_advection_flag)
             (; ᶜgradᵥ_ᶠΦ) = p.core
-            (; ᶜρʲs, ᶠu³ʲs, ᶜtsʲs, ᶜKʲs, bdmr_l, bdmr_r, bdmr) = p.precomputed
+            (;
+                ᶜρʲs,
+                ᶠu³ʲs,
+                ᶜTʲs,
+                ᶜq_tot_safeʲs,
+                ᶜq_liq_raiʲs,
+                ᶜq_ice_snoʲs,
+                ᶜKʲs,
+                bdmr_l,
+                bdmr_r,
+                bdmr,
+            ) = p.precomputed
 
             # upwinding options for q_tot and mse
             is_third_order =
@@ -845,8 +856,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             ᶜkappa_mʲ = p.scratch.ᶜtemp_scalar
             @. ᶜkappa_mʲ =
-                TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
-                TD.cv_m(thermo_params, ᶜtsʲs.:(1))
+                TD.gas_constant_air(
+                    thermo_params,
+                    ᶜq_tot_safeʲs.:(1),
+                    ᶜq_liq_raiʲs.:(1),
+                    ᶜq_ice_snoʲs.:(1),
+                ) /
+                TD.cv_m(
+                    thermo_params,
+                    ᶜq_tot_safeʲs.:(1),
+                    ᶜq_liq_raiʲs.:(1),
+                    ᶜq_ice_snoʲs.:(1),
+                )
 
             ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
@@ -943,7 +964,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             turbconv_params = CAP.turbconv_params(params)
             α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
-            ᶜTʲ = @. lazy(TD.air_temperature(thermo_params, ᶜtsʲs.:(1)))
             ᶜ∂RmT∂qʲ = p.scratch.ᶜtemp_scalar_2
             sgs_microphysics_tracers =
                 p.atmos.moisture_model isa NonEquilMoistModel && (
@@ -964,7 +984,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 MatrixFields.has_field(Y, qʲ_name) || continue
 
                 @. ᶜ∂RmT∂qʲ =
-                    ᶜkappa_mʲ / (ᶜkappa_mʲ + 1) * (LH - ∂cp∂q * (ᶜTʲ - T_0)) + ∂Rm∂q * ᶜTʲ
+                    ᶜkappa_mʲ / (ᶜkappa_mʲ + 1) * (LH - ∂cp∂q * (ᶜTʲs.:(1) - T_0)) +
+                    ∂Rm∂q * ᶜTʲs.:(1)
 
                 # ∂ᶜρaʲ_err_∂ᶜqʲ through ρʲ variations in vertical transport of ρa
                 ∂ᶜρaʲ_err_∂ᶜqʲ = matrix[@name(c.sgsʲs.:(1).ρa), qʲ_name]
@@ -1445,8 +1466,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     end
 
                     # add env flux contributions
-                    (; ᶠu³⁰, ᶜts⁰) = p.precomputed
-                    ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
+                    (; ᶜp) = p.precomputed
+                    (; ᶠu³⁰, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+                    ᶜρ⁰ = @. lazy(
+                        TD.air_density(
+                            thermo_params,
+                            ᶜT⁰,
+                            ᶜp,
+                            ᶜq_tot_safe⁰,
+                            ᶜq_liq_rai⁰,
+                            ᶜq_ice_sno⁰,
+                        ),
+                    )
                     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
                     ᶠu³⁰_data = ᶠu³⁰.components.data.:1
 

@@ -11,33 +11,31 @@ compute_arup!(_, _, _, _, turbconv_model::T) where {T} =
     error_diagnostic_variable("arup", turbconv_model)
 
 function compute_arup!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         return draft_area.(
             (state.c.sgsʲs.:1).ρa,
-            TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
+            cache.precomputed.ᶜρʲs.:1,
         )
     else
         out .=
             draft_area.(
                 (state.c.sgsʲs.:1).ρa,
-                TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
+                cache.precomputed.ᶜρʲs.:1,
             )
     end
 end
 
 function compute_arup!(out, state, cache, time, turbconv_model::DiagnosticEDMFX)
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         return draft_area.(
             cache.precomputed.ᶜρaʲs.:1,
-            TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
+            cache.precomputed.ᶜρʲs.:1,
         )
     else
         out .=
             draft_area.(
                 cache.precomputed.ᶜρaʲs.:1,
-                TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
+                cache.precomputed.ᶜρʲs.:1,
             )
     end
 end
@@ -65,11 +63,10 @@ function compute_rhoaup!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        return copy(cache.precomputed.ᶜρʲs.:1)
     else
-        out .= TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        out .= cache.precomputed.ᶜρʲs.:1
     end
 end
 
@@ -126,11 +123,10 @@ function compute_taup!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.air_temperature.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        return copy(cache.precomputed.ᶜTʲs.:1)
     else
-        out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        out .= cache.precomputed.ᶜTʲs.:1
     end
 end
 
@@ -158,10 +154,26 @@ function compute_thetaaup!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜTʲs, ᶜp, ᶜρʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = cache.precomputed
     if isnothing(out)
-        return TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        return TD.potential_temperature.(
+            thermo_params,
+            ᶜTʲs.:1,
+            ᶜρʲs.:1,
+            ᶜq_tot_safeʲs.:1,
+            ᶜq_liq_raiʲs.:1,
+            ᶜq_ice_snoʲs.:1,
+        )
     else
-        out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        out .=
+            TD.potential_temperature.(
+                thermo_params,
+                ᶜTʲs.:1,
+                ᶜρʲs.:1,
+                ᶜq_tot_safeʲs.:1,
+                ᶜq_liq_raiʲs.:1,
+                ᶜq_ice_snoʲs.:1,
+            )
     end
 end
 
@@ -189,10 +201,24 @@ function compute_haup!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = cache.precomputed
     if isnothing(out)
-        return TD.enthalpy.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        return TD.enthalpy.(
+            thermo_params,
+            ᶜTʲs.:1,
+            ᶜq_tot_safeʲs.:1,
+            ᶜq_liq_raiʲs.:1,
+            ᶜq_ice_snoʲs.:1,
+        )
     else
-        out .= TD.enthalpy.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        out .=
+            TD.enthalpy.(
+                thermo_params,
+                ᶜTʲs.:1,
+                ᶜq_tot_safeʲs.:1,
+                ᶜq_liq_raiʲs.:1,
+                ᶜq_ice_snoʲs.:1,
+            )
     end
 end
 
@@ -226,6 +252,7 @@ compute_husup!(
     "Can only compute updraft specific humidity with a moist model and with EDMFX",
 )
 
+# TODO: use the actual q_tot
 function compute_husup!(
     out,
     state,
@@ -234,18 +261,10 @@ function compute_husup!(
     moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.total_specific_humidity.(
-            thermo_params,
-            cache.precomputed.ᶜtsʲs.:1,
-        )
+        return copy(cache.precomputed.ᶜq_tot_safeʲs.:1)
     else
-        out .=
-            TD.total_specific_humidity.(
-                thermo_params,
-                cache.precomputed.ᶜtsʲs.:1,
-            )
+        out .= cache.precomputed.ᶜq_tot_safeʲs.:1
     end
 end
 
@@ -288,10 +307,26 @@ function compute_hurup!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜTʲs, ᶜp, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = cache.precomputed
     if isnothing(out)
-        return TD.relative_humidity.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        return TD.relative_humidity.(
+            thermo_params,
+            ᶜTʲs.:1,
+            ᶜp,
+            ᶜq_tot_safeʲs.:1,
+            ᶜq_liq_raiʲs.:1,
+            ᶜq_ice_snoʲs.:1,
+        )
     else
-        out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        out .=
+            TD.relative_humidity.(
+                thermo_params,
+                ᶜTʲs.:1,
+                ᶜp,
+                ᶜq_tot_safeʲs.:1,
+                ᶜq_liq_raiʲs.:1,
+                ᶜq_ice_snoʲs.:1,
+            )
     end
 end
 
@@ -333,18 +368,10 @@ function compute_clwup!(
     moisture_model::EquilMoistModel,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.liquid_specific_humidity.(
-            thermo_params,
-            cache.precomputed.ᶜtsʲs.:1,
-        )
+        return copy(cache.precomputed.ᶜq_liq_raiʲs.:1)
     else
-        out .=
-            TD.liquid_specific_humidity.(
-                thermo_params,
-                cache.precomputed.ᶜtsʲs.:1,
-            )
+        out .= cache.precomputed.ᶜq_liq_raiʲs.:1
     end
 end
 function compute_clwup!(
@@ -462,15 +489,10 @@ function compute_cliup!(
     moisture_model::EquilMoistModel,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.ice_specific_humidity.(
-            thermo_params,
-            cache.precomputed.ᶜtsʲs.:1,
-        )
+        return copy(cache.precomputed.ᶜq_ice_snoʲs.:1)
     else
-        out .=
-            TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
+        out .= cache.precomputed.ᶜq_ice_snoʲs.:1
     end
 end
 function compute_cliup!(
@@ -780,34 +802,30 @@ compute_aren!(_, _, _, _, turbconv_model::T) where {T} =
 function compute_aren!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))
+    (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = cache.precomputed
+    ᶜρ⁰ = @. lazy(
+        TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+    )
     if isnothing(out)
-        return draft_area.(
-            ᶜρa⁰,
-            TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰),
-        )
+        return draft_area.(ᶜρa⁰, ᶜρ⁰)
     else
-        out .=
-            draft_area.(
-                ᶜρa⁰,
-                TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰),
-            )
+        out .= draft_area.(ᶜρa⁰, ᶜρ⁰)
     end
 end
 
 function compute_aren!(out, state, cache, time, turbconv_model::DiagnosticEDMFX)
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         return 1 .-
                draft_area.(
             cache.precomputed.ᶜρaʲs.:1,
-            TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
+            cache.precomputed.ᶜρʲs.:1,
         )
     else
         out .=
-            1.0 -
+            1 -
             draft_area.(
                 cache.precomputed.ᶜρaʲs.:1,
-                TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
+                cache.precomputed.ᶜρʲs.:1,
             )
     end
 end
@@ -835,10 +853,19 @@ function compute_rhoaen!(
     turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = cache.precomputed
     if isnothing(out)
-        return TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰)
+        return TD.air_density.(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_safe⁰,
+            ᶜq_liq_rai⁰,
+            ᶜq_ice_sno⁰,
+        )
     else
-        out .= TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰)
+        out .=
+            TD.air_density.(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰)
     end
 end
 
@@ -888,11 +915,10 @@ compute_taen!(_, _, _, _, turbconv_model::T) where {T} =
     error_diagnostic_variable("taen", turbconv_model)
 
 function compute_taen!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.air_temperature.(thermo_params, cache.precomputed.ᶜts⁰)
+        return copy(cache.precomputed.ᶜT⁰)
     else
-        out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜts⁰)
+        out .= cache.precomputed.ᶜT⁰
     end
 end
 
@@ -919,10 +945,29 @@ function compute_thetaaen!(
     turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = cache.precomputed
+    ᶜρ⁰ = @. lazy(
+        TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+    )
     if isnothing(out)
-        return TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts⁰)
+        return TD.potential_temperature.(
+            thermo_params,
+            ᶜT⁰,
+            ᶜρ⁰,
+            ᶜq_tot_safe⁰,
+            ᶜq_liq_rai⁰,
+            ᶜq_ice_sno⁰,
+        )
     else
-        out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts⁰)
+        out .=
+            TD.potential_temperature.(
+                thermo_params,
+                ᶜT⁰,
+                ᶜρ⁰,
+                ᶜq_tot_safe⁰,
+                ᶜq_liq_rai⁰,
+                ᶜq_ice_sno⁰,
+            )
     end
 end
 
@@ -943,10 +988,20 @@ compute_haen!(_, _, _, _, turbconv_model::T) where {T} =
 
 function compute_haen!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = cache.precomputed
+    ᶜρ⁰ = @. lazy(
+        TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+    )
     if isnothing(out)
-        return TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts⁰)
+        return TD.enthalpy.(
+            thermo_params,
+            ᶜT⁰,
+            ᶜq_tot_safe⁰,
+            ᶜq_liq_rai⁰,
+            ᶜq_ice_sno⁰,
+        )
     else
-        out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts⁰)
+        out .= TD.enthalpy.(thermo_params, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰)
     end
 end
 
@@ -987,15 +1042,10 @@ function compute_husen!(
     moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.total_specific_humidity.(
-            thermo_params,
-            cache.precomputed.ᶜts⁰,
-        )
+        return copy(cache.precomputed.ᶜq_tot_safe⁰)
     else
-        out .=
-            TD.total_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
+        out .= cache.precomputed.ᶜq_tot_safe⁰
     end
 end
 
@@ -1037,10 +1087,26 @@ function compute_huren!(
     turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = cache.precomputed
     if isnothing(out)
-        return TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
+        return TD.relative_humidity.(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_safe⁰,
+            ᶜq_liq_rai⁰,
+            ᶜq_ice_sno⁰,
+        )
     else
-        out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
+        out .=
+            TD.relative_humidity.(
+                thermo_params,
+                ᶜT⁰,
+                ᶜp,
+                ᶜq_tot_safe⁰,
+                ᶜq_liq_rai⁰,
+                ᶜq_ice_sno⁰,
+            )
     end
 end
 
@@ -1081,15 +1147,10 @@ function compute_clwen!(
     moisture_model::EquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.liquid_specific_humidity.(
-            thermo_params,
-            cache.precomputed.ᶜts⁰,
-        )
+        return copy(cache.precomputed.ᶜq_liq_rai⁰)
     else
-        out .=
-            TD.liquid_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
+        out .= cache.precomputed.ᶜq_liq_rai⁰
     end
 end
 
@@ -1196,11 +1257,10 @@ function compute_clien!(
     moisture_model::EquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
+        return copy(cache.precomputed.ᶜq_ice_sno⁰)
     else
-        out .= TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
+        out .= cache.precomputed.ᶜq_ice_sno⁰
     end
 end
 

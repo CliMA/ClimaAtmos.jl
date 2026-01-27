@@ -427,7 +427,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             end
             thp = CAP.thermodynamics_params(params)
             (; ᶜΦ) = p.core
-            (; ᶜtsʲs) = p.precomputed
+            (; ᶜTʲs) = p.precomputed
             ᶜ∂ρ∂t_sed = p.scratch.ᶜtemp_scalar_3
             @. ᶜ∂ρ∂t_sed = 0
 
@@ -482,11 +482,11 @@ function edmfx_sgs_vertical_advection_tendency!(
                 # Flux form sedimentation of energy
                 if name in (@name(q_liq), @name(q_rai))
                     ᶜmse_li = (@. lazy(
-                        TD.internal_energy_liquid(thp, ᶜtsʲs.:($$j)) + ᶜΦ,
+                        TD.internal_energy_liquid(thp, ᶜTʲs.:($$j)) + ᶜΦ,
                     ))
                 elseif name in (@name(q_ice), @name(q_sno))
                     ᶜmse_li = (@. lazy(
-                        TD.internal_energy_ice(thp, ᶜtsʲs.:($$j)) + ᶜΦ,
+                        TD.internal_energy_ice(thp, ᶜTʲs.:($$j)) + ᶜΦ,
                     ))
                 else
                     error("Unsupported moisture tracer variable")

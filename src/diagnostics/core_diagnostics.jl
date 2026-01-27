@@ -130,7 +130,7 @@ add_diagnostic_variable!(
     units = "K",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return cache.precomputed.ᶜT
+            return copy(cache.precomputed.ᶜT)
         else
             out .= cache.precomputed.ᶜT
         end
@@ -147,12 +147,12 @@ add_diagnostic_variable!(
     units = "K",
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
-        (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
+        (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
         if isnothing(out)
             return TD.potential_temperature.(
                 thermo_params,
                 ᶜT,
-                ᶜp,
+                state.c.ρ,
                 ᶜq_tot_safe,
                 ᶜq_liq_rai,
                 ᶜq_ice_sno,
@@ -162,7 +162,7 @@ add_diagnostic_variable!(
                 TD.potential_temperature.(
                     thermo_params,
                     ᶜT,
-                    ᶜp,
+                    state.c.ρ,
                     ᶜq_tot_safe,
                     ᶜq_liq_rai,
                     ᶜq_ice_sno,
@@ -415,12 +415,12 @@ function compute_hur!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
-    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
+    (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
     if isnothing(out)
         return TD.relative_humidity.(
             thermo_params,
             ᶜT,
-            state.c.ρ,
+            ᶜp,
             ᶜq_tot_safe,
             ᶜq_liq_rai,
             ᶜq_ice_sno,
@@ -430,7 +430,7 @@ function compute_hur!(
             TD.relative_humidity.(
                 thermo_params,
                 ᶜT,
-                state.c.ρ,
+                ᶜp,
                 ᶜq_tot_safe,
                 ᶜq_liq_rai,
                 ᶜq_ice_sno,
