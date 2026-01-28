@@ -12,6 +12,7 @@
 # to only many tests instead of comprehensive test.
 
 include("restart_utils.jl")
+import ClimaCore: Grids, CommonGrids
 
 function amip_target_diagedmf(context, output_dir)
     FT = Float32
@@ -144,7 +145,7 @@ function amip_target_diagedmf(context, output_dir)
         output_dir)
     simulation = CA.AtmosSimulation{FT}(; args...)
 
-    return (; simulation, args)
+    return (; simulation, args, grid_constructor = CA.SphereGrid)
 
 end
 
@@ -167,14 +168,28 @@ Logging.disable_logging(Logging.Info)
 
 
 """
-    test_restart(simulation, model, grid; job_id, comms_ctx, more_ignore = Symbol[])
+    construct_new_grid(grid_constructor, FT, comms_ctx)
+
+Construct a fresh grid using the grid constructor.
+"""
+function construct_new_grid(grid_constructor, FT, comms_ctx)
+    if grid_constructor == CA.SphereGrid
+        return grid_constructor(FT; topography = CA.EarthTopography(), context = comms_ctx)
+    else
+        return grid_constructor(FT; context = comms_ctx)
+    end
+end
+
+"""
+    test_restart(simulation, args, grid_constructor; comms_ctx, more_ignore = Symbol[])
 
 Test if the restarts are consistent for a simulation.
 
 `more_ignore` is a Vector of Symbols that identifies config-specific keys that
 have to be ignored when reading a simulation.
+`grid_constructor` is the function used to construct the grid (e.g., CA.SphereGrid).
 """
-function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
+function test_restart(simulation, args, grid_constructor; comms_ctx, more_ignore = Symbol[])
     ClimaComms.iamroot(comms_ctx) && println("job_id = $(simulation.job_id)")
 
     local_success = true
@@ -191,8 +206,11 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
     ClimaComms.iamroot(comms_ctx) && println("    just reading data")
     # Recreate simulation with detect_restart_file=true
     FT = typeof(simulation.integrator.p.dt)
+    # Construct new grid to avoid non-determinism from reuse
+    grid = construct_new_grid(grid_constructor, FT, comms_ctx)
     simulation_restarted = CA.AtmosSimulation{FT}(;
         args...,
+        grid,  # Override grid in args with new grid
         context = comms_ctx,
         detect_restart_file = true,
     )
@@ -248,8 +266,10 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
     @test isfile(joinpath(restart_dir, "day0.2.hdf5"))
     # Restart from specific file
     FT = typeof(simulation.integrator.p.dt)
+    grid = construct_new_grid(grid_constructor, FT, comms_ctx)
     simulation_restarted2 = CA.AtmosSimulation{FT}(;
         args...,
+        grid,  # Override grid in args with fresh grid
         context = comms_ctx,
         restart_file,
     )
@@ -304,27 +324,18 @@ if MANYTESTS
             true,
         )
     diagnostic_edmfx = CA.DiagnosticEDMFX{1, false}(1e-5)
-    topography = CA.EarthTopography()
     if comms_ctx isa ClimaComms.SingletonCommsContext
-        grids = (
-            CA.SphereGrid(FT; topography, context = comms_ctx),
-            CA.BoxGrid(FT; context = comms_ctx),
-            CA.ColumnGrid(FT; context = comms_ctx),
-        )
+        grid_constructors = (CA.SphereGrid, CA.BoxGrid, CA.ColumnGrid)
     else
-        grids = (
-            CA.SphereGrid(FT; topography, context = comms_ctx),
-            CA.BoxGrid(FT; context = comms_ctx),
-        )
+        grid_constructors = (CA.SphereGrid, CA.BoxGrid)
     end
 
-    for grid in grids
-        mesh = if hasproperty(grid, :horizontal_grid)
-            grid.horizontal_grid.topology.mesh
-        else
-            nothing
-        end
-        if mesh isa Meshes.EquiangularCubedSphere
+    for grid_constructor in grid_constructors
+        # Determine mesh type from grid constructor (without constructing grid)
+        is_sphere = grid_constructor == CA.SphereGrid
+        is_box = grid_constructor == CA.BoxGrid
+        is_column = grid_constructor == CA.ColumnGrid
+        if is_sphere
             moisture_models = (CA.NonEquilMoistModel(),)
             microphys_models = (CA.Microphysics1Moment(),)
             topography_type = CA.EarthTopography()
@@ -377,9 +388,7 @@ if MANYTESTS
                         maybe_wait_filesystem(comms_ctx, output_loc)
 
                         # Create job_id string from configuration
-                        config_name =
-                            mesh isa Meshes.EquiangularCubedSphere ? "sphere" :
-                            mesh isa Meshes.RectilinearMesh ? "box" : "column"
+                        config_name = is_sphere ? "sphere" : is_box ? "box" : "column"
                         moisture_name =
                             moisture_model isa CA.NonEquilMoistModel ? "nonequil" : "equil"
                         precip_name =
@@ -396,6 +405,9 @@ if MANYTESTS
                             dt_cloud_fraction = "1secs",
                             call_cloud_diagnostics_per_stage = true,
                         )
+                        # Construct grid fresh for initial simulation
+                        # Always use EarthTopography for sphere grids
+                        grid = construct_new_grid(grid_constructor, FT, comms_ctx)
                         args = (;
                             model,
                             grid,
@@ -409,7 +421,7 @@ if MANYTESTS
                         simulation = CA.AtmosSimulation{FT}(; args..., context = comms_ctx)
                         push!(
                             TESTING,
-                            (; simulation, args, more_ignore = Symbol[]),
+                            (; simulation, args, grid_constructor, more_ignore = Symbol[]),
                         )
                     end
                 end
@@ -439,7 +451,8 @@ end
 @test all(
     @time test_restart(
         t.simulation,
-        t.args;
+        t.args,
+        t.grid_constructor;
         comms_ctx = comms_ctx,
         more_ignore = t.more_ignore,
     )[1] for
