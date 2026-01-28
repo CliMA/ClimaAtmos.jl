@@ -12,8 +12,8 @@ rayleigh_sponge: true
 
 hyperdiff: ClimaHyperdiffusion
 divergence_damping_factor: 50.0 # large value to damp IC waves
-scalar_hyperdiffusion_coefficient: 0.929738
 vorticity_hyperdiffusion_coefficient: 0.1857
+hyperdiffusion_prandtl_number: 0.2
 insolation: "timevarying"
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear

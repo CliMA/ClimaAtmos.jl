@@ -174,8 +174,8 @@ end
 abstract type AbstractHyperdiffusion end
 Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
     ν₄_vorticity_coeff::FT
-    ν₄_scalar_coeff::FT
     divergence_damping_factor::FT
+    prandtl_number::FT
 end
 
 abstract type AbstractVerticalDiffusion end
@@ -546,8 +546,8 @@ Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, 
     """Hyperdiffusion model: nothing or ClimaHyperdiffusion()"""
     hyperdiff::HD = ClimaHyperdiffusion{Float32}(;
         ν₄_vorticity_coeff = 0.150 * 1.238,
-        ν₄_scalar_coeff = 0.751 * 1.238,
         divergence_damping_factor = 5,
+        prandtl_number = 1.0,
     )
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
@@ -828,8 +828,8 @@ model = AtmosModel(;
     radiation_mode = HeldSuarezForcing(),
     hyperdiff = ClimaHyperdiffusion(;
         ν₄_vorticity_coeff = 1e15,
-        ν₄_scalar_coeff = 1e15,
-        divergence_damping_factor = 1.0
+        divergence_damping_factor = 1.0,
+        prandtl_number = 1.0
     )
 )
 ```
@@ -1049,7 +1049,7 @@ Create a dry atmospheric model with sensible defaults for dry simulations.
 ```julia
 model = DryAtmosModel(;
     radiation_mode = HeldSuarezForcing(),
-    hyperdiff = ClimaHyperdiffusion(; ν₄_vorticity_coeff = 1e15, ν₄_scalar_coeff = 1e15, divergence_damping_factor = 1.0)
+    hyperdiff = ClimaHyperdiffusion(; ν₄_vorticity_coeff = 1e15, divergence_damping_factor = 1.0, prandtl_number = 1.0)
 )
 ```
 """

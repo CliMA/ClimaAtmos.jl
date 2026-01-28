@@ -1,4 +1,4 @@
-305
+306
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+306
+- Reduce default scalar hyperdiffusion coefficient (apply prandtl number parameter in the default yaml)
+
 305
 - Remove grid-scale thermo state from precomputed quantities and uses new thermodynamics functions.
 (Fix main branch that is still breaking)
