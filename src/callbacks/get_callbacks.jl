@@ -125,8 +125,12 @@ function get_diagnostics(
 
             if isnothing(reduction_time_func)
                 compute_every = compute_schedule
-            else
+            elseif !("compute_every" in keys(yaml_diag))
                 compute_every = CAD.EveryStepSchedule()
+            else
+                compute_every_str = yaml_diag["compute_every"]
+                compute_every =
+                    parse_frequency_to_schedule(FT, compute_every_str, start_date, t_start)
             end
 
             CAD.ScheduledDiagnostic(
@@ -186,7 +190,7 @@ end
         t_start,
     )
 
-Parse a frequency (e.g. "3months", "10mins") into a schedule for
+Parse a frequency (e.g. "3months", "2steps", "10mins") into a schedule for
 diagnostics.
 """
 function parse_frequency_to_schedule(
@@ -195,6 +199,15 @@ function parse_frequency_to_schedule(
     start_date,
     t_start,
 ) where {FT}
+    if occursin("steps", frequency_str)
+        steps = match(r"^(\d+)steps$", frequency_str)
+        isnothing(steps) && error(
+            "$(frequency_str) has to be of the form <NUM>steps, e.g. 2steps for 2 steps",
+        )
+        steps = parse(Int, first(steps))
+        return CAD.DivisorSchedule(steps)
+    end
+
     if occursin("months", frequency_str)
         months = match(r"^(\d+)months$", frequency_str)
         isnothing(months) && error(

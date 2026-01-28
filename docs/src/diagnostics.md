@@ -18,15 +18,18 @@ diagnostics:
     output_name: a_name
     period: 3hours
     writer: nc
+    compute_every: 1hours
   - reduction_time: average
     short_name: rhoa
     period: 12hours
     writer: h5
+    compute_every: 2steps
 ```
 This adds two diagnostics (both for `rhoa`). The `period` keyword
 identifies the period over which to compute the reduction and how often to save
 to disk. `output_name` is optional, and if provided, it identifies the name of the
-output file.
+output file. The `compute_every` keyword identifies how often the field should
+be computed.
 
 For multiple diagnostics with the same specs, it is also possible to directly
 pass a vector of `short_names`, as in
