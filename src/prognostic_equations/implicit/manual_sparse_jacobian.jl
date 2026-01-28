@@ -1088,15 +1088,20 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ) - (I,)
                     ∂ᶜχʲ_err_∂ᶠu₃ʲ =
                         matrix[χʲ_name, @name(f.sgsʲs.:(1).u₃)]
-                    @. ∂ᶜχʲ_err_∂ᶠu₃ʲ =
+                    # pull out and store for performance
+                    @. ᶜtracer_advection_matrix =
+                        (ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                            ᶠset_tracer_upwind_bcs(
+                                ᶠtracer_upwind(CT3(sign(ᶠu³ʲ_data)), ᶜχʲ),
+                            ) * adjoint(C3(sign(ᶠu³ʲ_data))),
+                        )
+                    @. ᶜtracer_advection_matrix =
                         dtγ * (
-                            -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
-                                ᶠset_tracer_upwind_bcs(
-                                    ᶠtracer_upwind(CT3(sign(ᶠu³ʲ_data)), ᶜχʲ),
-                                ) * adjoint(C3(sign(ᶠu³ʲ_data))),
-                            ) +
                             DiagonalMatrixRow(ᶜχʲ) ⋅ ᶜadvdivᵥ_matrix()
-                        ) ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+                            -
+                            ᶜtracer_advection_matrix)
+                    @. ∂ᶜχʲ_err_∂ᶠu₃ʲ =
+                        ᶜtracer_advection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
 
                     # sedimentation
                     # (pull out common subexpression for performance)
@@ -1470,15 +1475,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
                         ∂ᶜρχ_err_∂ᶜρa =
                             matrix[ρχ_name, @name(c.sgsʲs.:(1).ρa)]
+                        # pull out and store for kernel performance
+                        @. ᶠbidiagonal_matrix_ct3_2 =
+                            ᶠset_tracer_upwind_matrix_bcs(
+                                ᶠtracer_upwind_matrix(CT3(sign(ᶠu³⁰_data))),
+                            ) ⋅ DiagonalMatrixRow(ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰))
                         @. ∂ᶜρχ_err_∂ᶜρa +=
                             dtγ *
                             ᶜtracer_advection_matrix ⋅
                             DiagonalMatrixRow(
                                 (ᶠu³⁰_data - ᶠu³ʲ_data) / ᶠinterp(ᶜρa⁰),
-                            ) ⋅
-                            ᶠset_tracer_upwind_matrix_bcs(
-                                ᶠtracer_upwind_matrix(CT3(sign(ᶠu³⁰_data))),
-                            ) ⋅ DiagonalMatrixRow(ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰))
+                            ) ⋅ ᶠbidiagonal_matrix_ct3_2
+
                         @. ∂ᶜρχ_err_∂ᶜρa +=
                             dtγ *
                             ᶜtridiagonal_matrix ⋅
@@ -1486,14 +1494,16 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
                         ∂ᶜρχ_err_∂ᶠu₃ʲ =
                             matrix[ρχ_name, @name(f.sgsʲs.:(1).u₃)]
+                        # pull out and store in shmem for kernel performance
+                        @. p.scratch.ᶠtemp_CT3_2 = ᶠset_tracer_upwind_bcs(
+                            ᶠtracer_upwind(CT3(sign(ᶠu³⁰_data)),
+                                ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰),
+                            ),
+                        )
                         @. ∂ᶜρχ_err_∂ᶠu₃ʲ +=
                             dtγ * ᶜtracer_advection_matrix ⋅
                             DiagonalMatrixRow(
-                                ᶠset_tracer_upwind_bcs(
-                                    ᶠtracer_upwind(CT3(sign(ᶠu³⁰_data)),
-                                        ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰),
-                                    ),
-                                ) * adjoint(C3(sign(ᶠu³⁰_data))) *
+                                p.scratch.ᶠtemp_CT3_2 * adjoint(C3(sign(ᶠu³⁰_data))) *
                                 ᶠinterp(-1 * Y.c.sgsʲs.:(1).ρa / ᶜρa⁰) * g³³(ᶠgⁱʲ),
                             )
 
