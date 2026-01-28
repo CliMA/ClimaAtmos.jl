@@ -109,33 +109,10 @@ function get_diagnostics(
                 error("period keyword required for diagnostics")
 
             period_str = yaml_diag["period"]
-
-            if occursin("months", period_str)
-                months = match(r"^(\d+)months$", period_str)
-                isnothing(months) && error(
-                    "$(period_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
-                )
-                period_dates = Dates.Month(parse(Int, first(months)))
-            else
-                period_seconds = FT(time_to_seconds(period_str))
-                period_dates =
-                    CA.promote_period.(Dates.Second(period_seconds))
-            end
-
-            date_last =
-                t_start isa ITime ?
-                ClimaUtilities.TimeManager.date(t_start) :
-                start_date + Dates.Second(t_start)
-            output_schedule = CAD.EveryCalendarDtSchedule(
-                period_dates;
-                reference_date = start_date,
-                date_last = date_last,
-            )
-            compute_schedule = CAD.EveryCalendarDtSchedule(
-                period_dates;
-                reference_date = start_date,
-                date_last = date_last,
-            )
+            output_schedule =
+                parse_frequency_to_schedule(FT, period_str, start_date, t_start)
+            compute_schedule =
+                parse_frequency_to_schedule(FT, period_str, start_date, t_start)
 
             if isnothing(output_name)
                 output_short_name = CAD.descriptive_short_name(
@@ -199,6 +176,46 @@ function get_diagnostics(
     end
 
     return diagnostics, writers, periods_reductions
+end
+
+"""
+    parse_frequency_to_schedule(
+        ::Type{FT},
+        frequency_str,
+        start_date,
+        t_start,
+    )
+
+Parse a frequency (e.g. "3months", "10mins") into a schedule for
+diagnostics.
+"""
+function parse_frequency_to_schedule(
+    ::Type{FT},
+    frequency_str,
+    start_date,
+    t_start,
+) where {FT}
+    if occursin("months", frequency_str)
+        months = match(r"^(\d+)months$", frequency_str)
+        isnothing(months) && error(
+            "$(frequency_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
+        )
+        period_dates = Dates.Month(parse(Int, first(months)))
+    else
+        period_seconds = FT(time_to_seconds(frequency_str))
+        period_dates =
+            CA.promote_period.(Dates.Second(period_seconds))
+    end
+
+    date_last =
+        t_start isa ITime ?
+        ClimaUtilities.TimeManager.date(t_start) :
+        start_date + Dates.Second(t_start)
+    return CAD.EveryCalendarDtSchedule(
+        period_dates;
+        reference_date = start_date,
+        date_last = date_last,
+    )
 end
 
 function parse_checkpoint_frequency(period::Number)
