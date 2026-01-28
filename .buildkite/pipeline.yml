@@ -457,6 +457,8 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_no_topography_float64_test.yml
           --job_id gpu_plane_no_topography_float64_test
+
+          rm gpu_plane_no_topography_float64_test/output_active/nc_files.tar
         artifact_paths: "gpu_plane_no_topography_float64_test/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -468,6 +470,8 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_cosine_hills_float64_test.yml
           --job_id gpu_plane_cosine_hills_float64_test
+
+          rm gpu_plane_cosine_hills_float64_test/output_active/nc_files.tar
         artifact_paths: "gpu_plane_cosine_hills_float64_test/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -479,6 +483,8 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/extruded_plane_cosine_hills_float64_test.yml
           --job_id gpu_extruded_plane_cosine_hills_float64_test
+
+          rm gpu_extruded_plane_cosine_hills_float64_test/output_active/nc_files.tar
         artifact_paths: "gpu_extruded_plane_cosine_hills_float64_test/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -491,6 +497,8 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/box_cosine_hills_float64_test.yml
           --job_id gpu_box_cosine_hills_float64_test
+
+          rm gpu_box_cosine_hills_float64_test/output_active/nc_files.tar
         artifact_paths: "gpu_box_cosine_hills_float64_test/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -503,6 +511,8 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_agnesi_mountain_float64_test.yml
           --job_id gpu_plane_agnesi_mountain_float64_test
+
+          rm gpu_plane_agnesi_mountain_float64_test/output_active/nc_files.tar
         artifact_paths: "gpu_plane_agnesi_mountain_float64_test/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -514,6 +524,8 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_schar_mountain_float64_test.yml
           --job_id gpu_plane_schar_mountain_float64_test
+
+          rm gpu_plane_schar_mountain_float64_test/output_active/nc_files.tar
         artifact_paths: "gpu_plane_schar_mountain_float64_test/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -525,6 +537,8 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_schar_mountain_float32_test.yml
           --job_id gpu_plane_schar_mountain_float32_test
+
+          rm gpu_plane_schar_mountain_float32_test/output_active/nc_files.tar
         artifact_paths: "gpu_plane_schar_mountain_float32_test/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -1098,6 +1112,8 @@ steps:
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
           --config_file $CONFIG_PATH/diagnostic_edmfx_era5_initial_condition.yml
           --job_id diagnostic_edmfx_era5_initial_condition
+
+          rm diagnostic_edmfx_era5_initial_condition/output_active/nc_files.tar
         artifact_paths: "diagnostic_edmfx_era5_initial_condition/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
