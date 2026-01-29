@@ -235,13 +235,21 @@ NVTX.@annotate function set_cloud_fraction!(
 
     # For PrognosticEDMFX, use environment state; otherwise use grid-scale
     if turbconv_model isa PrognosticEDMFX
-        ᶜts⁰ = p.precomputed.ᶜts⁰
-        ᶜp_env = @. lazy(TD.air_pressure(thermo_params, ᶜts⁰))
-        ᶜq_mean = @. lazy(TD.total_specific_humidity(thermo_params, ᶜts⁰))
-        ᶜθ_mean = @. lazy(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰))
+        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+        ᶜρ⁰ = @. lazy(
+            TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+        )
+        ᶜθ_mean = @. lazy(
+            TD.liquid_ice_pottemp(
+                thermo_params,
+                ᶜT⁰,
+                ᶜρ⁰,
+                ᶜq_tot_safe⁰,
+                ᶜq_liq_rai⁰,
+                ᶜq_ice_sno⁰,
+            ),
+        )
     else
-        ᶜp_env = ᶜp
-        ᶜq_mean = ᶜq_tot_safe
         ᶜθ_mean = @. lazy(
             TD.liquid_ice_pottemp(
                 thermo_params,
@@ -262,8 +270,8 @@ NVTX.@annotate function set_cloud_fraction!(
         compute_cloud_fraction_quadrature_diagnostics(
             thermo_params,
             qc.SG_quad,
-            ᶜp_env,
-            ᶜq_mean,
+            ᶜp,
+            ᶜq_tot_safe,
             ᶜθ_mean,
             ᶜq′q′,
             ᶜθ′θ′,
@@ -278,8 +286,8 @@ NVTX.@annotate function set_cloud_fraction!(
             qc,
             thermo_params,
             turbconv_model,
-            ᶜp_env,
-            ᶜq_mean,
+            ᶜp,
+            ᶜq_tot_safe,
             ᶜθ_mean,
         )
     end
@@ -287,7 +295,10 @@ NVTX.@annotate function set_cloud_fraction!(
     # ... weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise) ...
     if turbconv_model isa PrognosticEDMFX
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
-        ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, p.precomputed.ᶜts⁰))
+        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+        ᶜρ⁰ = @. lazy(
+            TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+        )
         @. p.precomputed.cloud_diagnostics_tuple *= NamedTuple{(:cf, :q_liq, :q_ice)}(
             tuple(
                 draft_area(ᶜρa⁰, ᶜρ⁰),
@@ -299,7 +310,7 @@ NVTX.@annotate function set_cloud_fraction!(
     # ... and add contributions from the updrafts if using EDMF.
     if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
         n = n_mass_flux_subdomains(turbconv_model)
-        (; ᶜρʲs, ᶜtsʲs) = p.precomputed
+        (; ᶜρʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
         for j in 1:n
             ᶜρaʲ =
                 turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
@@ -308,14 +319,12 @@ NVTX.@annotate function set_cloud_fraction!(
             @. p.precomputed.cloud_diagnostics_tuple += NamedTuple{(:cf, :q_liq, :q_ice)}(
                 tuple(
                     ifelse(
-                        TD.has_condensate(thermo_params, ᶜtsʲs.:($$j)),
+                        TD.has_condensate(ᶜq_liq_raiʲs.:($$j) + ᶜq_ice_snoʲs.:($$j)),
                         draft_area(ᶜρaʲ, ᶜρʲs.:($$j)),
                         0,
                     ),
-                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)) *
-                    TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
-                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)) *
-                    TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
+                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)) * ᶜq_liq_raiʲs.:($$j),
+                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)) * ᶜq_ice_snoʲs.:($$j),
                 ),
             )
         end
@@ -328,7 +337,7 @@ function set_ml_cloud_fraction!(
     ml_cloud::MLCloud,
     thermo_params,
     turbconv_model,
-    ᶜp_env,
+    ᶜp,
     ᶜq_mean,
     ᶜθ_mean,
 )
@@ -362,7 +371,7 @@ function set_ml_cloud_fraction!(
             ᶜ∇q,
             ᶜ∇θ,
             ᶜq_mean,
-            ᶜp_env,
+            ᶜp,
             ᶜθ_mean,
             thermo_params,
         )

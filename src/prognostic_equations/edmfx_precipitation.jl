@@ -40,7 +40,7 @@ function edmfx_precipitation_tendency!(
     microphysics_model::Microphysics0Moment,
 )
     n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶜSqₜᵖʲs, ᶜtsʲs) = p.precomputed
+    (; ᶜSqₜᵖʲs, ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜΦ) = p.core
 
@@ -48,18 +48,15 @@ function edmfx_precipitation_tendency!(
 
         @. Yₜ.c.sgsʲs.:($$j).ρa += Y.c.sgsʲs.:($$j).ρa * ᶜSqₜᵖʲs.:($$j)
 
-        ᶜTʲ = @. lazy(TD.air_temperature(thermo_params, ᶜtsʲs.:($$j)))
-        ᶜq_liq_raiʲ = @. lazy(TD.liquid_specific_humidity(thermo_params, ᶜtsʲs.:($$j)))
-        ᶜq_ice_snoʲ = @. lazy(TD.ice_specific_humidity(thermo_params, ᶜtsʲs.:($$j)))
         @. Yₜ.c.sgsʲs.:($$j).mse +=
             ᶜSqₜᵖʲs.:($$j) * (
                 e_tot_0M_precipitation_sources_helper(
                     thermo_params,
-                    ᶜTʲ,
-                    ᶜq_liq_raiʲ,
-                    ᶜq_ice_snoʲ,
+                    ᶜTʲs.:($$j),
+                    ᶜq_liq_raiʲs.:($$j),
+                    ᶜq_ice_snoʲs.:($$j),
                     ᶜΦ,
-                ) - TD.internal_energy(thermo_params, ᶜtsʲs.:($$j))
+                ) - TD.internal_energy(thermo_params, ᶜTʲs.:($$j))
             )
 
         @. Yₜ.c.sgsʲs.:($$j).q_tot +=

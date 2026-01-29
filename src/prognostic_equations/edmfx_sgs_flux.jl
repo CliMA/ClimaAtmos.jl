@@ -40,13 +40,15 @@ function edmfx_sgs_mass_flux_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
-    (; ᶠu³) = p.precomputed
+    (; ᶜp, ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶠu³⁰, ᶜK⁰, ᶜts⁰) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
     (; dt) = p
 
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
+    ᶜρ⁰ = @. lazy(
+        TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+    )
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}

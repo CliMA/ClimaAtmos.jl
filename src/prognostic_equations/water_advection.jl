@@ -81,9 +81,10 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     # grid-mean energy flux equals the sum of the subdomain (updraft/environment) energy fluxes 
     # by accounting for the energy carried by sedimenting tracers.
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs, ᶜtsʲs, ᶜts⁰) = p.precomputed
+        (; ᶜρʲs, ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
+        (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
 
-        ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜts⁰))
+        ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
 
         # TODO the following code works for only one updraft 
         sgs_microphysics_tracers = (
@@ -108,7 +109,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                         Geometry.WVector(-(ᶜwʲ)) *
                         draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)) * ᶜqʲ *
                         (
-                            e_int_func(thp, ᶜtsʲs.:(1)) - e_int_func(thp, ᶜT) -
+                            e_int_func(thp, ᶜTʲs.:(1)) - e_int_func(thp, ᶜT) -
                             $(Kin(ᶜw, ᶜu))
                         ),
                     ),
@@ -119,7 +120,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                 -1 * ᶜprecipdivᵥ(
                     ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ * ᶠright_bias(
                         Geometry.WVector(-(ᶜwaq⁰)) *
-                        (e_int_func(thp, ᶜts⁰) - e_int_func(thp, ᶜT) - $(Kin(ᶜw, ᶜu))),
+                        (e_int_func(thp, ᶜT⁰) - e_int_func(thp, ᶜT) - $(Kin(ᶜw, ᶜu))),
                     ),
                 )
         end

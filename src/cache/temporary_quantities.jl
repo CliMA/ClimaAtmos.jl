@@ -56,6 +56,12 @@ function temporary_quantities(Y, atmos)
         temp_data_level_3 = Fields.field_values(
             Fields.level(Fields.Field(FT, center_space), 1),
         ), # ρaʲu³ʲ_datah_tot
+        temp_data_level_4 = Fields.field_values(
+            Fields.level(Fields.Field(FT, center_space), 1),
+        ),
+        temp_data_level_5 = Fields.field_values(
+            Fields.level(Fields.Field(FT, center_space), 1),
+        ),
         ᶜtemp_C12 = Fields.Field(C12{FT}, center_space), # ᶜuₕ_mean
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜ∇Φ₃
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
