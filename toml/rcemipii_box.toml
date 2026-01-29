@@ -1,19 +1,27 @@
 # toml/rcemipii_box.toml
+# Surface Setup
 
-[c_smag]
-value = 0.2
+[SST_mean]
+value = 300
 
-[condensation_evaporation_timescale]
-value = 50
+[SST_delta]
+value = 1.25
 
-[sublimation_deposition_timescale]
-value = 50
+[SST_wavelength]
+value = 6e6
+
+[mean_sea_level_pressure]
+value = 101480
+
+[idealized_ocean_albedo]
+value = 0.07
+
+# No rotation
 
 [angular_velocity_planet_rotation]
 value = 0
 
-[idealized_ocean_albedo]
-value = 0.07
+# Trace gases
 
 [CO2_fixed_value]
 value = 348e-6
@@ -36,8 +44,19 @@ value = 0
 [CCL4_fixed_value]
 value = 0
 
-[mean_sea_level_pressure]
-value = 101480
+# Sponge layer
+
+[zd_rayleigh]
+value = 30000
+
+########################
+### Model Parameters ###
+########################
+
+# Diffusion coefficients
+
+[c_smag]
+value = 0.2
 
 [D_0_diffusion]
 value = 5
@@ -45,11 +64,13 @@ value = 5
 [H_diffusion]
 value = 800
 
-[SST_mean]
-value = 300
+# Microphysics
 
-[SST_delta]
-value = 1.25
+[condensation_evaporation_timescale]
+value = 50
 
-[SST_wavelength]
-value = 6e6
+[sublimation_deposition_timescale]
+value = 50
+
+[precipitation_timescale]
+value = 600
