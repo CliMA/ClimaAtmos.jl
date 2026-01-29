@@ -1,8 +1,4 @@
 # toml/rcemipii_box.toml
-
-[c_smag]
-value = 0.2
-
 # Surface Setup
 
 [SST_mean]
@@ -50,7 +46,7 @@ value = 0
 
 # Sponge layer
 
-[zd_viscous]
+[zd_rayleigh]
 value = 30000
 
 ########################
