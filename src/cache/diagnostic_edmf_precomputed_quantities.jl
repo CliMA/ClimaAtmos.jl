@@ -618,7 +618,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ᶠnh_pressure³_dragʲ = ᶠnh_pressure³_dragʲs.:($j)
 
             if microphysics_model isa Microphysics0Moment
-                ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵖʲs.:($j)
+                ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵐʲs.:($j)
             end
             if moisture_model isa NonEquilMoistModel &&
                microphysics_model isa Microphysics1Moment
@@ -627,13 +627,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 ᶜq_raiʲ = ᶜq_raiʲs.:($j)
                 ᶜq_snoʲ = ᶜq_snoʲs.:($j)
 
-                ᶜS_q_liqʲ = p.precomputed.ᶜSqₗᵖʲs.:($j)
-                ᶜS_q_iceʲ = p.precomputed.ᶜSqᵢᵖʲs.:($j)
-                ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵖʲs.:($j)
-                ᶜS_q_snoʲ = p.precomputed.ᶜSqₛᵖʲs.:($j)
+                ᶜS_q_liqʲ = p.precomputed.ᶜSqₗᵐʲs.:($j)
+                ᶜS_q_iceʲ = p.precomputed.ᶜSqᵢᵐʲs.:($j)
+                ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵐʲs.:($j)
+                ᶜS_q_snoʲ = p.precomputed.ᶜSqₛᵐʲs.:($j)
 
-                ᶜSᵖ = p.scratch.ᶜtemp_scalar
-                ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
             end
 
             ρaʲ_level = Fields.field_values(Fields.level(ᶜρaʲ, i))
@@ -705,9 +703,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 S_q_snoʲ_prev_level =
                     Fields.field_values(Fields.level(ᶜS_q_snoʲ, i - 1))
 
-                Sᵖ_prev_level = Fields.field_values(Fields.level(ᶜSᵖ, i - 1))
-                Sᵖ_snow_prev_level =
-                    Fields.field_values(Fields.level(ᶜSᵖ_snow, i - 1))
+
             end
 
             tke_prev_level = Fields.field_values(Fields.level(ᶜtke, i - 1))
@@ -825,27 +821,31 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
             # 0-moment microphysics: sink of q_tot from precipitation removal
             if microphysics_model isa Microphysics0Moment
-                @. S_q_totʲ_prev_level = q_tot_0M_precipitation_sources(
-                    microphys_0m_params,
-                    dt,
-                    q_totʲ_prev_level,
-                    q_tot_safeʲ_prev_level,
-                    q_liq_raiʲ_prev_level,
-                    q_ice_snoʲ_prev_level,
+                @. S_q_totʲ_prev_level = limit_sink(
+                    BMT.bulk_microphysics_tendencies(
+                        BMT.Microphysics0Moment(),
+                        microphys_0m_params,
+                        thermo_params,
+                        Tʲ_prev_level,
+                        q_liq_raiʲ_prev_level,
+                        q_ice_snoʲ_prev_level,
+                    ).dq_tot_dt,
+                    q_totʲ_prev_level, dt, 1,
                 )
                 # 1-moment microphysics: cloud water (liquid and ice) and
-                # precipitation (rain and snow) sources. q_tot is constant, because
+                # precipitation (rain and snow) tendencies. q_tot is constant, because
                 # all the species are considered a part of the working fluid.
             elseif moisture_model isa NonEquilMoistModel &&
                    microphysics_model isa Microphysics1Moment
-                # Rain formation from the updrafts
-                compute_precipitation_sources!(
-                    Sᵖ_prev_level,
-                    Sᵖ_snow_prev_level,
+                # Microphysics tendencies from the updrafts (using fused BMT API)
+                mp_result_prev_level = Fields.field_values(
+                    Fields.level(p.precomputed.ᶜmp_result, i - 1))
+                compute_1m_precipitation_tendencies!(
                     S_q_liqʲ_prev_level,
                     S_q_iceʲ_prev_level,
                     S_q_raiʲ_prev_level,
                     S_q_snoʲ_prev_level,
+                    mp_result_prev_level,
                     ρʲ_prev_level,
                     q_totʲ_prev_level,
                     q_liqʲ_prev_level,
@@ -856,58 +856,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     dt,
                     microphys_1m_params,
                     thermo_params,
-                )
-                q_vap_safeʲ_prev_level = @. lazy(
-                    max(
-                        TD.vapor_specific_humidity(
-                            q_tot_safeʲ_prev_level,
-                            q_liq_raiʲ_prev_level,
-                            q_ice_snoʲ_prev_level,
-                        ),
-                        0,
-                    ),
-                )
-                # Rain sinks from the updrafts
-                compute_precipitation_sinks!(
-                    Sᵖ_prev_level,
-                    S_q_raiʲ_prev_level,
-                    S_q_snoʲ_prev_level,
-                    ρʲ_prev_level,
-                    q_totʲ_prev_level,
-                    q_liqʲ_prev_level,
-                    q_iceʲ_prev_level,
-                    q_raiʲ_prev_level,
-                    q_snoʲ_prev_level,
-                    Tʲ_prev_level,
-                    q_vap_safeʲ_prev_level,
-                    dt,
-                    microphys_1m_params,
-                    thermo_params,
-                )
-                # Cloud formation from the updrafts
-                @. S_q_liqʲ_prev_level += cloud_sources(
-                    cloud_params.liquid,
-                    thermo_params,
-                    q_totʲ_prev_level,
-                    q_liqʲ_prev_level,
-                    q_iceʲ_prev_level,
-                    q_raiʲ_prev_level,
-                    q_snoʲ_prev_level,
-                    ρʲ_prev_level,
-                    Tʲ_prev_level,
-                    dt,
-                )
-                @. S_q_iceʲ_prev_level += cloud_sources(
-                    cloud_params.ice,
-                    thermo_params,
-                    q_totʲ_prev_level,
-                    q_liqʲ_prev_level,
-                    q_iceʲ_prev_level,
-                    q_raiʲ_prev_level,
-                    q_snoʲ_prev_level,
-                    ρʲ_prev_level,
-                    Tʲ_prev_level,
-                    dt,
                 )
 
             end
@@ -1396,16 +1344,16 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
         @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
 
         if microphysics_model isa Microphysics0Moment
-            ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵖʲs.:($j)
+            ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵐʲs.:($j)
             S_q_totʲ_level = Fields.field_values(Fields.level(ᶜS_q_totʲ, i_top))
             @. S_q_totʲ_level = 0
         end
         if microphysics_model isa Microphysics1Moment &&
            moisture_model isa NonEquilMoistModel
-            ᶜS_q_liqʲ = p.precomputed.ᶜSqₗᵖʲs.:($j)
-            ᶜS_q_iceʲ = p.precomputed.ᶜSqᵢᵖʲs.:($j)
-            ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵖʲs.:($j)
-            ᶜS_q_snoʲ = p.precomputed.ᶜSqₛᵖʲs.:($j)
+            ᶜS_q_liqʲ = p.precomputed.ᶜSqₗᵐʲs.:($j)
+            ᶜS_q_iceʲ = p.precomputed.ᶜSqᵢᵐʲs.:($j)
+            ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵐʲs.:($j)
+            ᶜS_q_snoʲ = p.precomputed.ᶜSqₛᵐʲs.:($j)
             S_q_liqʲ_level = Fields.field_values(Fields.level(ᶜS_q_liqʲ, i_top))
             S_q_iceʲ_level = Fields.field_values(Fields.level(ᶜS_q_iceʲ, i_top))
             S_q_raiʲ_level = Fields.field_values(Fields.level(ᶜS_q_raiʲ, i_top))
@@ -1452,7 +1400,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
         ᶜq_tot,
         ᶜq_liq_rai,
         ᶜq_ice_sno,
-        p.precomputed.cloud_diagnostics_tuple.cf,
+        p.precomputed.ᶜcloud_fraction,
         C3,
         p.precomputed.ᶜgradᵥ_q_tot,
         p.precomputed.ᶜgradᵥ_θ_liq_ice,
@@ -1483,7 +1431,7 @@ end
 """
     set_diagnostic_edmf_precomputed_quantities_env_precip!(Y, p, t)
 
-Updates the precipitation sources in precomputed quantities stored in `p` for diagnostic edmfx.
+Updates the microphysics tendency precomputed quantities stored in `p` for diagnostic EDMFX.
 """
 NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipitation!(
     Y,
@@ -1500,99 +1448,93 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     microphysics_model::Microphysics0Moment,
 )
     microphys_0m_params = CAP.microphysics_0m_params(p.params)
+    thermo_params = CAP.thermodynamics_params(p.params)
     (; dt) = p
-    (; ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜSqₜᵖ⁰) = p.precomputed
+    (; ᶜT, ᶜq_liq_rai, ᶜq_ice_sno, ᶜSqₜᵐ⁰) = p.precomputed
 
     # Environment precipitation sources (to be applied to grid mean)
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
-        microphys_0m_params,
-        dt,
-        ᶜq_tot,
-        ᶜq_tot_safe,
-        ᶜq_liq_rai,
-        ᶜq_ice_sno,
+    @. ᶜSqₜᵐ⁰ = limit_sink(
+        BMT.bulk_microphysics_tendencies(
+            BMT.Microphysics0Moment(),
+            microphys_0m_params,
+            thermo_params,
+            ᶜT,
+            ᶜq_liq_rai, ᶜq_ice_sno,
+        ).dq_tot_dt,
+        ᶜq_tot, dt, 1,
     )
     return nothing
 end
+
+"""
+    set_diagnostic_edmf_precomputed_quantities_env_precipitation!(Y, p, t, ::Microphysics1Moment)
+
+Dispatch for bare `Microphysics1Moment` (without explicit `QuadratureMicrophysics` wrapper).
+
+Creates a `QuadratureMicrophysics` wrapper with `GridMeanSGS()` distribution and delegates,
+matching the pattern in `precipitation_precomputed_quantities.jl`.
+"""
 NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipitation!(
     Y,
     p,
     t,
     microphysics_model::Microphysics1Moment,
 )
+    qm = QuadratureMicrophysics(Microphysics1Moment(), GridMeanSGS())
+    return set_diagnostic_edmf_precomputed_quantities_env_precipitation!(Y, p, t, qm)
+end
+
+NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipitation!(
+    Y,
+    p,
+    t,
+    qm::QuadratureMicrophysics{Microphysics1Moment},
+)
     thermo_params = CAP.thermodynamics_params(p.params)
     microphys_1m_params = CAP.microphysics_1m_params(p.params)
-    cloud_params = CAP.microphysics_cloud_params(p.params)
     (; dt) = p
 
-    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) =
-        p.precomputed
-    ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+    (; ᶜT, ᶜp, ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜmp_result) = p.precomputed
 
-    # Environment precipitation sources (to be applied to grid mean)
-    compute_precipitation_sources!(
-        ᶜSᵖ,
-        ᶜSᵖ_snow,
-        ᶜSqₗᵖ⁰,
-        ᶜSqᵢᵖ⁰,
-        ᶜSqᵣᵖ⁰,
-        ᶜSqₛᵖ⁰,
-        Y.c.ρ,
-        specific.(Y.c.ρq_tot, Y.c.ρ),
-        specific.(Y.c.ρq_liq, Y.c.ρ),
-        specific.(Y.c.ρq_ice, Y.c.ρ),
-        specific.(Y.c.ρq_rai, Y.c.ρ),
-        specific.(Y.c.ρq_sno, Y.c.ρ),
-        ᶜT,
-        dt,
+    # Environment specific humidities
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+    ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+
+    # Get T-based covariances (from cache if available)
+    ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
+
+    # Integrate microphysics tendencies over SGS fluctuations
+    # (writes into pre-allocated ᶜmp_result to avoid NamedTuple allocation)
+    @. ᶜmp_result = microphysics_tendencies_quadrature(
+        BMT.Microphysics1Moment(),
+        qm.quadrature,
         microphys_1m_params,
         thermo_params,
-    )
-    # Rain sinks from the updrafts
-    ᶜq_vap_safe =
-        @. lazy(max(TD.vapor_specific_humidity(ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno), 0))
-    compute_precipitation_sinks!(
-        ᶜSᵖ,
-        ᶜSqᵣᵖ⁰,
-        ᶜSqₛᵖ⁰,
         Y.c.ρ,
-        specific.(Y.c.ρq_tot, Y.c.ρ),
-        specific.(Y.c.ρq_liq, Y.c.ρ),
-        specific.(Y.c.ρq_ice, Y.c.ρ),
-        specific.(Y.c.ρq_rai, Y.c.ρ),
-        specific.(Y.c.ρq_sno, Y.c.ρ),
+        ᶜp,
         ᶜT,
-        ᶜq_vap_safe,
-        dt,
-        microphys_1m_params,
-        thermo_params,
+        ᶜq_tot,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜq_rai,
+        ᶜq_sno,
+        ᶜT′T′,
+        ᶜq′q′,
+        ᶜT′q′,
     )
-    # Cloud formation from the updrafts
-    @. ᶜSqₗᵖ⁰ += cloud_sources(
-        cloud_params.liquid,
-        thermo_params,
-        specific(Y.c.ρq_tot, Y.c.ρ),
-        specific(Y.c.ρq_liq, Y.c.ρ),
-        specific(Y.c.ρq_ice, Y.c.ρ),
-        specific(Y.c.ρq_rai, Y.c.ρ),
-        specific(Y.c.ρq_sno, Y.c.ρ),
-        Y.c.ρ,
-        ᶜT,
-        dt,
-    )
-    @. ᶜSqᵢᵖ⁰ += cloud_sources(
-        cloud_params.ice,
-        thermo_params,
-        specific(Y.c.ρq_tot, Y.c.ρ),
-        specific(Y.c.ρq_liq, Y.c.ρ),
-        specific(Y.c.ρq_ice, Y.c.ρ),
-        specific(Y.c.ρq_rai, Y.c.ρ),
-        specific(Y.c.ρq_sno, Y.c.ρ),
-        Y.c.ρ,
-        ᶜT,
-        dt,
-    )
+
+    # Source limits: physically motivated per-species bounds
+    ᶜsat_excess =
+        @. lazy(TD.saturation_excess(thermo_params, ᶜT, Y.c.ρ, ᶜq_tot, ᶜq_liq, ᶜq_ice))
+    @. ᶜSqₗᵐ⁰ =
+        smooth_tendency_limiter(ᶜmp_result.dq_lcl_dt, ᶜsat_excess + ᶜq_ice, ᶜq_liq, dt)
+    @. ᶜSqᵢᵐ⁰ =
+        smooth_tendency_limiter(ᶜmp_result.dq_icl_dt, ᶜsat_excess + ᶜq_liq, ᶜq_ice, dt)
+    @. ᶜSqᵣᵐ⁰ = smooth_tendency_limiter(ᶜmp_result.dq_rai_dt, ᶜq_liq + ᶜq_sno, ᶜq_rai, dt)
+    @. ᶜSqₛᵐ⁰ = smooth_tendency_limiter(ᶜmp_result.dq_sno_dt, ᶜq_ice + ᶜq_rai, ᶜq_sno, dt)
     return nothing
 end
