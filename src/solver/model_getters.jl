@@ -59,12 +59,12 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
         ν₄_vorticity_coeff =
             FT(parsed_args["vorticity_hyperdiffusion_coefficient"])
-        ν₄_scalar_coeff = FT(parsed_args["scalar_hyperdiffusion_coefficient"])
         divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
+        prandtl_number = FT(parsed_args["hyperdiffusion_prandtl_number"])
         return ClimaHyperdiffusion(;
             ν₄_vorticity_coeff,
-            ν₄_scalar_coeff,
             divergence_damping_factor,
+            prandtl_number,
         )
     elseif hyperdiff_name == "CAM_SE"
         # To match hyperviscosity coefficients in:
@@ -73,13 +73,13 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
         # Need to scale by (1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3  ≈ 1.238
         # These are re-scaled by the grid resolution in function ν₄(hyperdiff, Y)
         ν₄_vorticity_coeff = FT(0.150 * 1.238)
-        ν₄_scalar_coeff = FT(0.751 * 1.238)
         divergence_damping_factor = FT(5)
+        prandtl_number = FT(0.2)  # Maintains CAM_SE 5x scalar/vorticity ratio
         # Ensure the user isn't trying to set the values manually from the config as CAM_SE defines a set of hyperdiffusion coefficients
         coeff_pairs = [
             (ν₄_vorticity_coeff, "vorticity_hyperdiffusion_coefficient"),
-            (ν₄_scalar_coeff, "scalar_hyperdiffusion_coefficient"),
             (divergence_damping_factor, "divergence_damping_factor"),
+            (prandtl_number, "hyperdiffusion_prandtl_number"),
         ]
 
         for (cam_coef, config_coef) in coeff_pairs
@@ -89,8 +89,8 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
         end
         return ClimaHyperdiffusion(;
             ν₄_vorticity_coeff,
-            ν₄_scalar_coeff,
             divergence_damping_factor,
+            prandtl_number,
         )
     elseif hyperdiff_name in ("none", "false", false)
         return nothing

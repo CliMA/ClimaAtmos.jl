@@ -9,6 +9,12 @@ thermo state, including ᶜts in p.precomputed.sfc_conditions.
 - [#4211](https://github.com/CliMA/ClimaAtmos.jl/pull/4211) 
   add experimental methods to remove negative microphysical condensate values
 
+- Refactor hyperdiffusion to use Prandtl number parameterization. The scalar hyperdiffusion
+  coefficient is now computed as `ν₄_scalar = ν₄_vorticity / prandtl_number`, replacing the
+  previous direct `ν₄_scalar_coeff` parameter. Configure via `hyperdiffusion_prandtl_number`
+  (default: 1.0). The `CAM_SE` hyperdiffusion configuration maintains a 5x ratio between
+  vorticity and scalar coefficients by using `prandtl_number = 0.2`.
+
 v0.34.0
 -------
 - [#4198](https://github.com/CliMA/ClimaAtmos.jl/pull/4198) [badge-💥breaking] modifies surface conditions

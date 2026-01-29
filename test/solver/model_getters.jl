@@ -11,7 +11,7 @@ import ClimaAtmos as CA
         Dict(
             "hyperdiff" => "CAM_SE",
             "vorticity_hyperdiffusion_coefficient" => 0.1857,
-            "scalar_hyperdiffusion_coefficient" => 0.929738,
+            "hyperdiffusion_prandtl_number" => 0.2,
             "divergence_damping_factor" => 5.0,
         ),
         job_id = "test_hyperdiff_cam_se_args",
@@ -23,11 +23,11 @@ import ClimaAtmos as CA
 
     # Test that CAM_SE returns the correct coefficient values
     cam_se_ν₄_vort = FT(0.150 * 1.238)
-    cam_se_ν₄_scalar = FT(0.751 * 1.238)
+    cam_se_prandtl = FT(0.2)
     cam_se_ν₄_dd = FT(5)
     @test hyperdiff_model isa CA.ClimaHyperdiffusion
     @test hyperdiff_model.ν₄_vorticity_coeff == cam_se_ν₄_vort
-    @test hyperdiff_model.ν₄_scalar_coeff == cam_se_ν₄_scalar
+    @test hyperdiff_model.prandtl_number == cam_se_prandtl
     @test hyperdiff_model.divergence_damping_factor == cam_se_ν₄_dd
 
     @info "Test CAM_SE coefficient validation"
@@ -36,7 +36,7 @@ import ClimaAtmos as CA
         Dict(
             "hyperdiff" => "CAM_SE",
             "vorticity_hyperdiffusion_coefficient" => 0.18571, # deliberately wrong value
-            "scalar_hyperdiffusion_coefficient" => 0.929738,
+            "hyperdiffusion_prandtl_number" => 0.2,
             "divergence_damping_factor" => 5.0,
         ),
         job_id = "test_hyperdiff_cam_se_wrong_args",

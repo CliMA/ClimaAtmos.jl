@@ -38,8 +38,8 @@ function amip_target_diagedmf(context, output_dir)
     diff_mode = CA.Implicit()
     hyperdiff = CA.ClimaHyperdiffusion{FT}(;
         ν₄_vorticity_coeff = 0.150 * 1.238,
-        ν₄_scalar_coeff = 0.751 * 1.238,
         divergence_damping_factor = 5,
+        prandtl_number = FT(0.2),  # Maintains 5x scalar/vorticity ratio (0.751/0.150)
     )
 
     tracers = (

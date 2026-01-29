@@ -76,8 +76,8 @@ end
             ),
             hyperdiff = CA.ClimaHyperdiffusion(;
                 ν₄_vorticity_coeff = 1e15,
-                ν₄_scalar_coeff = 1e15,
                 divergence_damping_factor = 1.0,
+                prandtl_number = 1.0,
             ),
             disable_surface_flux_tendency = true,
         )
