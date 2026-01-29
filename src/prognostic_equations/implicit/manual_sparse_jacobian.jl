@@ -1256,9 +1256,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 scale_height =
                     CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
                 H_up_min = CAP.min_updraft_top(turbconv_params)
+                ᶠlg = Fields.local_geometry_field(Y.f)
                 @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ -=
                     dtγ * (DiagonalMatrixRow(
-                        2 * α_d * norm(Y.f.sgsʲs.:(1).u₃ - ᶠu₃⁰) /
+                        2 * α_d * CC.Geometry._norm(Y.f.sgsʲs.:(1).u₃ - ᶠu₃⁰, ᶠlg) /
                         max(scale_height, H_up_min) * (one_C3xACT3,),
                     ))
             end
