@@ -141,8 +141,10 @@ Create a Box3DGrid with topography support.
 - `z_max = 30000.0`: the domain maximum along the z-direction
 - `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
   1D within each horizontal element is then `n_quad_points = nh_poly + 1`
-- `z_stretch = true`: whether to use vertical stretching
-- `dz_bottom = 500.0`: bottom layer thickness for stretching
+- `z_stretch = true`: whether to use vertical stretching. 
+    Alternatively set vertical stretching directly with `stretch`.
+- `dz_bottom = 500.0`: bottom layer thickness for vertical stretching
+- `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `stretch`/`z_stretch`.
 - `bubble = false`: enables the "bubble correction" for more accurate element
   areas when computing the spectral element space.
 - `periodic_x = true`: use periodic domain along x-direction
@@ -166,6 +168,9 @@ function BoxGrid(
     nh_poly = 3,
     z_stretch = true,
     dz_bottom = 500.0,
+    stretch = z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) :
+              Meshes.Uniform(),
+    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem, stretch),
     bubble = false,
     periodic_x = true,
     periodic_y = true,
@@ -175,19 +180,15 @@ function BoxGrid(
     topo_smoothing = false,
 ) where {FT}
     n_quad_points = nh_poly + 1
-    stretch =
-        z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing,
     )
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem, stretch)
     grid = CommonGrids.Box3DGrid(
         FT;
         z_elem, x_min = 0, x_max, y_min = 0, y_max, z_min = 0, z_max,
         periodic_x, periodic_y, n_quad_points, x_elem, y_elem,
         device = ClimaComms.device(context),
         context,
-        stretch,
         hypsography_fun,
         global_geometry = Geometry.CartesianGlobalGeometry(),
         z_mesh,
