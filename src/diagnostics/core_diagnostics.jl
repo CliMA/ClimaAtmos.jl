@@ -252,9 +252,9 @@ add_diagnostic_variable!(
     units = "%",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(cache.precomputed.cloud_diagnostics_tuple.cf) .* 100
+            return copy(cache.precomputed.ᶜcloud_fraction) .* 100
         else
-            out .= cache.precomputed.cloud_diagnostics_tuple.cf .* 100
+            out .= cache.precomputed.ᶜcloud_fraction .* 100
         end
     end,
 )
@@ -494,9 +494,9 @@ function compute_clw!(
     moisture_model::EquilMoistModel,
 )
     if isnothing(out)
-        return copy(cache.precomputed.cloud_diagnostics_tuple.q_liq)
+        return copy(cache.precomputed.ᶜq_liq_rai)
     else
-        out .= cache.precomputed.cloud_diagnostics_tuple.q_liq
+        out .= cache.precomputed.ᶜq_liq_rai
     end
 end
 
@@ -543,9 +543,9 @@ function compute_cli!(
     moisture_model::EquilMoistModel,
 )
     if isnothing(out)
-        return copy(cache.precomputed.cloud_diagnostics_tuple.q_ice)
+        return copy(cache.precomputed.ᶜq_ice_sno)
     else
-        out .= cache.precomputed.cloud_diagnostics_tuple.q_ice
+        out .= cache.precomputed.ᶜq_ice_sno
     end
 end
 
@@ -1179,8 +1179,8 @@ function compute_clwvi!(
         clw = cache.scratch.ᶜtemp_scalar
         @. clw =
             state.c.ρ * (
-                cache.precomputed.cloud_diagnostics_tuple.q_liq +
-                cache.precomputed.cloud_diagnostics_tuple.q_ice
+                cache.precomputed.ᶜq_liq_rai +
+                cache.precomputed.ᶜq_ice_sno
             )
         Operators.column_integral_definite!(out, clw)
         return out
@@ -1188,8 +1188,8 @@ function compute_clwvi!(
         clw = cache.scratch.ᶜtemp_scalar
         @. clw =
             state.c.ρ * (
-                cache.precomputed.cloud_diagnostics_tuple.q_liq +
-                cache.precomputed.cloud_diagnostics_tuple.q_ice
+                cache.precomputed.ᶜq_liq_rai +
+                cache.precomputed.ᶜq_ice_sno
             )
         Operators.column_integral_definite!(out, clw)
     end
@@ -1245,12 +1245,12 @@ function compute_lwp!(
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         lw = cache.scratch.ᶜtemp_scalar
-        @. lw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+        @. lw = state.c.ρ * cache.precomputed.ᶜq_liq_rai
         Operators.column_integral_definite!(out, lw)
         return out
     else
         lw = cache.scratch.ᶜtemp_scalar
-        @. lw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+        @. lw = state.c.ρ * cache.precomputed.ᶜq_liq_rai
         Operators.column_integral_definite!(out, lw)
     end
 end
@@ -1305,12 +1305,12 @@ function compute_clivi!(
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         cli = cache.scratch.ᶜtemp_scalar
-        @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+        @. cli = state.c.ρ * cache.precomputed.ᶜq_ice_sno
         Operators.column_integral_definite!(out, cli)
         return out
     else
         cli = cache.scratch.ᶜtemp_scalar
-        @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+        @. cli = state.c.ρ * cache.precomputed.ᶜq_ice_sno
         Operators.column_integral_definite!(out, cli)
     end
 end
@@ -1378,7 +1378,7 @@ function compute_clvi!(
         cloud_cover = cache.scratch.ᶜtemp_scalar
         FT = Spaces.undertype(axes(cloud_cover))
         @. cloud_cover = ifelse(
-            cache.precomputed.cloud_diagnostics_tuple.cf > zero(FT),
+            cache.precomputed.ᶜcloud_fraction > zero(FT),
             one(FT),
             zero(FT),
         )
@@ -1388,7 +1388,7 @@ function compute_clvi!(
         cloud_cover = cache.scratch.ᶜtemp_scalar
         FT = Spaces.undertype(axes(cloud_cover))
         @. cloud_cover = ifelse(
-            cache.precomputed.cloud_diagnostics_tuple.cf > zero(FT),
+            cache.precomputed.ᶜcloud_fraction > zero(FT),
             one(FT),
             zero(FT),
         )
@@ -1817,8 +1817,8 @@ add_diagnostic_variable!(
 function compute_covariance_diagnostics!(out, state, cache, time, type)
     thermo_params = CAP.thermodynamics_params(cache.params)
 
-    # Reuse central compute_covariance function
-    (ᶜq′q′, ᶜθ′θ′, ᶜθ′q′) = compute_covariance(
+    # Reuse central compute_θ_covariance function for θ-based covariances
+    (ᶜq′q′, ᶜθ′θ′, ᶜθ′q′) = compute_θ_covariance(
         state, cache, thermo_params,
     )
 

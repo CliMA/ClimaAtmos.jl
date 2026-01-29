@@ -78,6 +78,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     STP,
     VDP,
     EFP,
+    PAP,
 } <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
@@ -93,6 +94,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     surface_temp_params::STP
     vert_diff_params::VDP
     external_forcing_params::EFP
+    prescribed_aerosol_params::PAP
     Omega::FT
     f_plane_coriolis_frequency::FT
     planet_radius::FT

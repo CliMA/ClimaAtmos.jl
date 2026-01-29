@@ -104,6 +104,15 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :rc,
             # DataHandlers contains caches, so they are stateful
             :data_handler,
+            # Scratch field for microphysics NamedTuple results
+            :ᶜmp_result,
+            # Covariance fields depend on scratch state
+            :ᶜT′T′,
+            :ᶜq′q′,
+            :ᶜT′q′,
+            # RRTMGP internal arrays may differ due to RNG state
+            :rrtmgp_model,
+            :ᶠradiation_flux,
             rrtmgp_clear_fix...,
             # Config-specific
             more_ignore...,
@@ -144,6 +153,15 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :hyperdiffusion_ghost_buffer,
             :data_handler,
             :rc,
+            # Scratch field for microphysics NamedTuple results
+            :ᶜmp_result,
+            # Covariance fields depend on scratch state
+            :ᶜT′T′,
+            :ᶜq′q′,
+            :ᶜT′q′,
+            # RRTMGP internal arrays are not deterministic through fill_with_nans!
+            :rrtmgp_model,
+            :ᶠradiation_flux,
             rrtmgp_clear_fix...,
         ]),
     )
