@@ -63,25 +63,6 @@ Use the mean value.
 struct SGSMean <: AbstractSGSamplingType end
 
 """
-    SGSQuadrature
-
-Compute the mean as a weighted sum of the Gauss-Hermite quadrature points.
-"""
-struct SGSQuadrature{N, A, W} <: AbstractSGSamplingType
-    a::A  # values
-    w::W  # weights
-    function SGSQuadrature(::Type{FT}; quadrature_order = 3) where {FT}
-        N = quadrature_order
-        # TODO: double check this python-> julia translation
-        # a, w = np.polynomial.hermite.hermgauss(N)
-        a, w = GQ.hermite(FT, N)
-        a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-        return new{N, typeof(a), typeof(w)}(a, w)
-    end
-end
-quadrature_order(::SGSQuadrature{N}) where {N} = N
-
-"""
     AbstractCloudModel
 
 How to compute the cloud fraction.

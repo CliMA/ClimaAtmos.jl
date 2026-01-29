@@ -77,37 +77,6 @@ function compute_covariance(Y, p, thermo_params)
 end
 
 """
-   Compute f(θ, q) as a sum over inner and outer quadrature points
-   that approximate the sub-grid scale variability of θ and q.
-
-   θ - liquid ice potential temperature
-   q - total water specific humidity
-"""
-function sum_over_quadrature_points(
-    f::F,
-    get_x_hat::F1,
-    quad,
-) where {F <: Function, F1 <: Function}
-    χ = quad.a
-    weights = quad.w
-    quad_order = quadrature_order(quad)
-    FT = eltype(χ)
-    # zero outer quadrature points
-    T = typeof(f(get_x_hat(χ[1], χ[1])...))
-    outer_env = rzero(T)
-    @inbounds for m_q in 1:quad_order
-        # zero inner quadrature points
-        inner_env = rzero(T)
-        for m_h in 1:quad_order
-            x_hat = get_x_hat(χ[m_q], χ[m_h])
-            inner_env = inner_env ⊞ f(x_hat...) ⊠ weights[m_h] ⊠ FT(1 / sqrt(π))
-        end
-        outer_env = outer_env ⊞ inner_env ⊠ weights[m_q] ⊠ FT(1 / sqrt(π))
-    end
-    return outer_env
-end
-
-"""
     function compute_cloud_fraction_quadrature_diagnostics(
         thermo_params, SG_quad, p_c, q_mean, θ_mean, q′q′, θ′θ′, θ′q′
     )
@@ -136,44 +105,23 @@ function compute_cloud_fraction_quadrature_diagnostics(
     θ′θ′,
     θ′q′,
 )
+    # Use shared covariance limiting (θ passed as T parameter, same math)
+    σ_q, σ_θ, corr = limit_covariances(q′q′, θ′θ′, θ′q′, q_mean, SG_quad)
 
-    # Return physical values based on quadrature points and limited covarainces
+    # Return physical values based on quadrature points
     function get_x_hat(χ1, χ2)
-        FT = eltype(thermo_params)
-        # Epsilon defined per typical variable fluctuation
-        eps_q = eps(FT) * max(eps(FT), q_mean)
-        eps_θ = eps(FT)
-
-        # limit σ_q to prevent negative q_tot_hat
-        σ_q_lim = -q_mean / (sqrt(FT(2)) * SG_quad.a[1])
-        σ_q = min(sqrt(q′q′), σ_q_lim)
-        # Do we also have to try to limit θ in the same way as q??
-        σ_θ = sqrt(θ′θ′)
-
-        # Enforce Cauchy-Schwarz inequality, numerically stable compute
-        _corr = (θ′q′ / max(σ_q, eps_q))
-        corr = max(min(_corr / max(σ_θ, eps_θ), FT(1)), FT(-1))
-
-        # Conditionals
-        σ_c = sqrt(max(1 - corr * corr, 0)) * σ_θ
-
-        μ_c = θ_mean + sqrt(FT(2)) * corr * σ_θ * χ1
-        θ_hat = μ_c + sqrt(FT(2)) * σ_c * χ2
-        q_hat = q_mean + sqrt(FT(2)) * σ_q * χ1
-        # The σ_q_lim limits q_tot_hat to be close to zero
-        # for the negative sampling points. However due to numerical errors
-        # we sometimes still get small negative numbers here
-        return (θ_hat, max(FT(0), q_hat))
+        # Use shared physical point computation (θ_mean passed as μ_T, same math)
+        get_physical_point(SG_quad.dist, χ1, χ2, q_mean, θ_mean, σ_q, σ_θ, corr)
     end
 
-    function f(x1_hat, x2_hat)
+    function f(θ_hat, q_hat)
         FT = eltype(thermo_params)
         _ts = TD.PhaseEquil_pθq(thermo_params, p_c, x1_hat, x2_hat)
         hc = TD.has_condensate(thermo_params, _ts)
 
-        cf = hc ? FT(1) : FT(0) # cloud fraction
-        q_liq = TD.PhasePartition(thermo_params, _ts).liq # cloud liquid for radiation
-        q_ice = TD.PhasePartition(thermo_params, _ts).ice # cloud ice for radiation
+        cf = ifelse(hc, one(FT), zero(FT))  # cloud fraction
+        q_liq = TD.PhasePartition(thermo_params, _ts).liq  # cloud liquid for radiation
+        q_ice = TD.PhasePartition(thermo_params, _ts).ice  # cloud ice for radiation
 
         return (; cf, q_liq, q_ice)
     end
