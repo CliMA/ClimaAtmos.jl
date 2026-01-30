@@ -120,7 +120,7 @@ If `duration < 1 hour` do nothing,
 If `duration < 1 day` take hourly means,
 if `duration < 30 days` take daily means,
 if `duration < 90 days` take means over ten days,
-If `duration >= 90 year` take monthly means.
+If `duration >= 3 months` take monthly means.
 """
 function frequency_averages(duration)
     FT = eltype(duration)
