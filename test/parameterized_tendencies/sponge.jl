@@ -63,7 +63,7 @@ using Base.Broadcast: materialize
             )
 
             @test CA.β_rayleigh_uₕ.(rs, ᶜz, z_max) ≈ expected_uₕ
-            @test CA.β_rayleigh_w.(rs, ᶠz, z_max) ≈ expected_w
+            @test CA.β_rayleigh_u₃.(rs, ᶠz, z_max) ≈ expected_w
         end
 
         @testset "Tendency for horizontal velocity" begin

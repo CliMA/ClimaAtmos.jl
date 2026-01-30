@@ -1,4 +1,4 @@
-309
+310
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+310
+ - Update RCEMIPII CRM box test and sponge tendencies.
+
 309
  - Stabilize prognostic-EDMF nightly build with reduced hyperdiff Prandtl number. 
 
