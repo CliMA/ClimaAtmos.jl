@@ -364,7 +364,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         detr_int_val = Fields.field_values(Fields.level(ᶜdetrʲs.:($j), 1))
         @. entr_int_val = limit_entrainment(
             ifelse(
-                buoyancy_flux_val < 0 || ᶜaʲ_int_val >= $(FT(turbconv_params.surface_area)),
+                buoyancy_flux_val < 0 || ᶜaʲ_int_val <= 0 ||
+                ᶜaʲ_int_val >= $(FT(turbconv_params.surface_area)),
                 entr_int_val,
                 detr_int_val +
                 ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,

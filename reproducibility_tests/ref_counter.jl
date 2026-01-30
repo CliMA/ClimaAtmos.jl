@@ -1,4 +1,4 @@
-307
+308
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+308
+ - PEDMF bugfix: return entr_detr_lim_tau for entr at the boundary when area fraction is negative
+
 307
 - Update to Insolation v1.1, with a small change in clipping of solar zenith angle.
 Also change TOA flux and zenith angle for idealized insolation.
