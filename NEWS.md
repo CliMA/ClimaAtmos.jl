@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 main
 -------
+v0.35.0
+-------
 - [#4225](https://github.com/CliMA/ClimaAtmos.jl/pull/4225) Add an option for vertical water borrowing limiter. Configure via `tracer_nonnegativity_method: "vertical_water_borrowing"`
   and optionally `vertical_water_borrowing_species` (defaults to all tracers if not specified).
   The limiter enforces non-negativity using a single threshold (0.0) that applies uniformly to all selected tracers.
