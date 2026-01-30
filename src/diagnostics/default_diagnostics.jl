@@ -74,7 +74,16 @@ end
 default_diagnostics(submodel, duration, start_date, t_start; output_writer) = []
 
 """
-    produce_common_diagnostic_function(period, reduction)
+    common_diagnostics(
+        period,
+        reduction,
+        output_writer,
+        start_date,
+        t_start,
+        short_names...;
+        pre_output_hook! = nothing,
+        model = nothing,
+    )
 
 Helper function to define functions like `daily_max`.
 """
@@ -86,6 +95,7 @@ function common_diagnostics(
     t_start,
     short_names...;
     pre_output_hook! = nothing,
+    model = nothing,
 )
     date_last =
         t_start isa ClimaUtilities.TimeManager.ITime ?
@@ -95,7 +105,12 @@ function common_diagnostics(
         map(short_names) do short_name
             return ScheduledDiagnostic(
                 variable = get_diagnostic_variable(short_name),
-                compute_schedule_func = EveryStepSchedule(),
+                compute_schedule_func = make_compute_schedule(
+                    period,
+                    start_date,
+                    date_last;
+                    model,
+                ),
                 output_schedule_func = EveryCalendarDtSchedule(
                     period;
                     reference_date = start_date,
@@ -109,10 +124,46 @@ function common_diagnostics(
     )
 end
 
+"""
+    make_compute_schedule(
+        period,
+        start_date,
+        date_last;
+        model = nothing,
+    )
+
+Return an appropriate compute schedule for the given output `period`.
+
+For shorter output periods (e.g., hourly), diagnostics are computed every
+timestep. For longer output periods (e.g., monthly and daily), diagnostics are
+computed less frequently.
+"""
+function make_compute_schedule(
+    period,
+    start_date,
+    date_last;
+    model = nothing,
+)
+    if !(period isa Dates.Month || (period isa Dates.Day && Dates.value(period) > 1))
+        return EveryStepSchedule()
+    end
+
+    is_precip_diag = model isa Union{EquilMoistModel, NonEquilMoistModel}
+    is_radiation_diag = model isa RRTMGPI.AbstractRRTMGPMode
+
+    compute_every = (is_precip_diag || is_radiation_diag) ? Dates.Hour(1) : Dates.Hour(6)
+    return EveryCalendarDtSchedule(
+        compute_every;
+        reference_date = start_date,
+        date_last = date_last,
+    )
+
+end
+
 include("standard_diagnostic_frequencies.jl")
 
 """
-    frequency_averages(duration::Real)
+    frequency_averages(duration::Real; model = nothing)
 
 Return the correct averaging function depending on the total simulation time.
 
@@ -122,17 +173,17 @@ if `duration < 30 days` take daily means,
 if `duration < 90 days` take means over ten days,
 If `duration >= 3 months` take monthly means.
 """
-function frequency_averages(duration)
+function frequency_averages(duration; model = nothing)
     FT = eltype(duration)
     duration = Float64(duration)
     if duration >= 90 * 86400
-        return (args...; kwargs...) -> monthly_averages(FT, args...; kwargs...)
+        return (args...; kwargs...) -> monthly_averages(FT, args...; model, kwargs...)
     elseif duration >= 30 * 86400
-        return (args...; kwargs...) -> tendaily_averages(FT, args...; kwargs...)
+        return (args...; kwargs...) -> tendaily_averages(FT, args...; model, kwargs...)
     elseif duration >= 86400
-        return (args...; kwargs...) -> daily_averages(FT, args...; kwargs...)
+        return (args...; kwargs...) -> daily_averages(FT, args...; model, kwargs...)
     elseif duration >= 3600
-        return (args...; kwargs...) -> hourly_averages(FT, args...; kwargs...)
+        return (args...; kwargs...) -> hourly_averages(FT, args...; model, kwargs...)
     else
         return (args...; kwargs...) -> ()
     end
@@ -206,7 +257,7 @@ end
 # Moisture model #
 ##################
 function default_diagnostics(
-    ::T,
+    model::T,
     duration,
     start_date,
     t_start;
@@ -229,7 +280,7 @@ function default_diagnostics(
         "clwvi",
         "clivi",
     ]
-    average_func = frequency_averages(duration)
+    average_func = frequency_averages(duration; model)
     return [average_func(moist_diagnostics...; output_writer, start_date, t_start)...]
 end
 
@@ -268,7 +319,7 @@ function default_diagnostics(
 end
 
 function default_diagnostics(
-    ::Microphysics1Moment,
+    model::Microphysics1Moment,
     duration,
     start_date,
     t_start;
@@ -276,13 +327,13 @@ function default_diagnostics(
 )
     precip_diagnostics = ["husra", "hussn"]
 
-    average_func = frequency_averages(duration)
+    average_func = frequency_averages(duration; model)
 
     return [average_func(precip_diagnostics...; output_writer, start_date, t_start)...]
 end
 
 function default_diagnostics(
-    ::Microphysics2Moment,
+    model::Microphysics2Moment,
     duration,
     start_date,
     t_start;
@@ -290,7 +341,7 @@ function default_diagnostics(
 )
     precip_diagnostics = ["husra", "hussn", "cdnc", "ncra"]
 
-    average_func = frequency_averages(duration)
+    average_func = frequency_averages(duration; model)
 
     return [average_func(precip_diagnostics...; output_writer, start_date, t_start)...]
 end
@@ -299,7 +350,7 @@ end
 # Radiation mode #
 ##################
 function default_diagnostics(
-    ::RRTMGPI.AbstractRRTMGPMode,
+    model::RRTMGPI.AbstractRRTMGPMode,
     duration,
     start_date,
     t_start;
@@ -319,14 +370,14 @@ function default_diagnostics(
         "rlus",
     ]
 
-    average_func = frequency_averages(duration)
+    average_func = frequency_averages(duration; model)
 
     return [average_func(rad_diagnostics...; output_writer, start_date, t_start)...]
 end
 
 
 function default_diagnostics(
-    ::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+    model::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
     duration,
     start_date,
     t_start;
@@ -357,7 +408,7 @@ function default_diagnostics(
         "rlutcs",
     ]
 
-    average_func = frequency_averages(duration)
+    average_func = frequency_averages(duration; model)
 
     return [
         average_func(rad_diagnostics...; output_writer, start_date, t_start)...,
@@ -369,7 +420,7 @@ end
 # Turbconv model #
 ##################
 function default_diagnostics(
-    ::PrognosticEDMFX,
+    model::PrognosticEDMFX,
     duration,
     start_date,
     t_start;
@@ -402,7 +453,7 @@ function default_diagnostics(
         "lmix",
     ]
 
-    average_func = frequency_averages(duration)
+    average_func = frequency_averages(duration; model)
 
     return [
         average_func(edmfx_draft_diagnostics...; output_writer, start_date, t_start)...,
@@ -412,7 +463,7 @@ end
 
 
 function default_diagnostics(
-    ::DiagnosticEDMFX,
+    model::DiagnosticEDMFX,
     duration,
     start_date,
     t_start;
@@ -432,7 +483,7 @@ function default_diagnostics(
     ]
     diagnostic_edmfx_env_diagnostics = ["waen", "tke", "lmix"]
 
-    average_func = frequency_averages(duration)
+    average_func = frequency_averages(duration; model)
 
     return [
         average_func(
@@ -450,10 +501,16 @@ function default_diagnostics(
     ]
 end
 
-function default_diagnostics(::EDOnlyEDMFX, duration, start_date, t_start; output_writer)
+function default_diagnostics(
+    model::EDOnlyEDMFX,
+    duration,
+    start_date,
+    t_start;
+    output_writer,
+)
     edonly_edmfx_diagnostics = ["tke"]
 
-    average_func = frequency_averages(duration)
+    average_func = frequency_averages(duration; model)
 
     return [
         average_func(edonly_edmfx_diagnostics...; output_writer, start_date, t_start)...,
