@@ -148,7 +148,8 @@ Create a Box3DGrid with topography support.
 - `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
   1D within each horizontal element is then `n_quad_points = nh_poly + 1`
 - `z_stretch = true`: whether to use vertical stretching
-- `dz_bottom = 500.0`: bottom layer thickness for stretching
+- `dz_bottom = 500.0`: bottom layer thickness for vertical stretching
+- `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`.
 - `bubble = false`: enables the "bubble correction" for more accurate element
   areas when computing the spectral element space.
 - `periodic_x = true`: use periodic domain along x-direction
@@ -184,7 +185,6 @@ function BoxGrid(
     ),
 ) where {FT}
     n_quad_points = nh_poly + 1
-    stretch = stretch_from_bool(FT, z_stretch, dz_bottom)
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing,
     )
@@ -194,7 +194,6 @@ function BoxGrid(
         periodic_x, periodic_y, n_quad_points, x_elem, y_elem,
         device = ClimaComms.device(context),
         context,
-        stretch,
         hypsography_fun,
         global_geometry = Geometry.CartesianGlobalGeometry(),
         z_mesh,

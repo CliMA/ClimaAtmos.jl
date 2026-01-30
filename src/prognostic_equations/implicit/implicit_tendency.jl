@@ -203,16 +203,12 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) +
                   cp_d * (ᶠinterp(ᶜθ_v - ᶜθ_vr)) * ᶠgradᵥ(ᶜΠ)
 
-    if rayleigh_sponge isa RayleighSponge
-        ᶠz = Fields.coordinate_field(Y.f).z
-        zmax = z_max(axes(Y.f))
-        rs = rayleigh_sponge
-        @. Yₜ.f.u₃ -= β_rayleigh_w(rs, ᶠz, zmax) * Y.f.u₃
-        if turbconv_model isa PrognosticEDMFX
-            for j in 1:n
-                @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                    β_rayleigh_w(rs, ᶠz, zmax) * Y.f.sgsʲs.:($$j).u₃
-            end
+    rst_u₃ = rayleigh_sponge_tendency_u₃(Y.f.u₃, rayleigh_sponge)
+    @. Yₜ.f.u₃ += rst_u₃
+    if turbconv_model isa PrognosticEDMFX
+        for j in 1:n
+            rst_u₃ʲ = rayleigh_sponge_tendency_u₃(Y.f.sgsʲs.:($j).u₃, rayleigh_sponge)
+            @. Yₜ.f.sgsʲs.:($$j).u₃ += rst_u₃ʲ
         end
     end
     return nothing

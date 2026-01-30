@@ -27,13 +27,9 @@ Struct used for dispatch to the 2-moment warm rain + P3 ice microphysics paramet
 struct Microphysics2MomentP3 <: AbstractPrecipitationModel end
 
 """
-    TracerNonnegativityConstraint{qtot}
+    TracerNonnegativityMethod
 
-Methods for enforcing tracer nonnegativity. 
-
-`qtot` is a boolean indicating whether q_tot should be constrained to be nonnegative. It can be
-- `true`: Constrain q_tot to be nonnegative
-- `false`: Do not constrain q_tot
+Family of methods for enforcing tracer nonnegativity. 
 
 There are four methods for enforcing tracer nonnegativity:
 - `TracerNonnegativityElementConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
@@ -44,12 +40,53 @@ There are four methods for enforcing tracer nonnegativity:
     exchanging tracer mass between vapor (`q_vap`) and each tracer over time
 - `TracerNonnegativityVerticalWaterBorrowing`: Enforce nonnegativity using VerticalMassBorrowingLimiter,
     which redistributes tracer mass vertically. Note: `qtot` parameter is not applicable to this method.
+
+`qtot` is a boolean that is `true` if q_tot is among the constrained tracers, and `false` otherwise.
+
+# Constructor
+
+    TracerNonnegativityMethod(method::String; include_qtot = false)
+
+Create a microphysics tracer nonnegativity constraint.
+
+Depending on the microphysics model, the constrained tracers include:
+- `ρq_liq`, `ρq_ice`, `ρq_rai`, `ρq_sno`,
+- If `include_qtot` is true, `q_tot` is also among the constrained tracers.
+
+# Arguments:
+- `method`: Can be
+    - "elementwise_constraint": constructs `TracerNonnegativityElementConstraint{include_qtot}()`
+    - "vapor_constraint": constructs `TracerNonnegativityVaporConstraint{include_qtot}()`
+    - "vapor_tendency": constructs `TracerNonnegativityVaporTendency()`
+
+# Keyword arguments:
+- `include_qtot`: (default: `false`) Boolean that is `true` if q_tot is among the constrained tracers.
 """
-abstract type TracerNonnegativityConstraint{qtot} end
+abstract type TracerNonnegativityMethod end
+abstract type TracerNonnegativityConstraint{qtot} <: TracerNonnegativityMethod end
 struct TracerNonnegativityElementConstraint{qtot} <: TracerNonnegativityConstraint{qtot} end
 struct TracerNonnegativityVaporConstraint{qtot} <: TracerNonnegativityConstraint{qtot} end
-struct TracerNonnegativityVaporTendency end
+struct TracerNonnegativityVaporTendency <: TracerNonnegativityMethod end
 struct TracerNonnegativityVerticalWaterBorrowing <: TracerNonnegativityConstraint{false} end
+
+function TracerNonnegativityMethod(method::String; include_qtot::Bool = false)
+    if method == "elementwise_constraint"
+        return TracerNonnegativityElementConstraint{include_qtot}()
+    elseif method == "vapor_constraint"
+        return TracerNonnegativityVaporConstraint{include_qtot}()
+    elseif method == "vapor_tendency"
+        include_qtot &&
+            error("TracerNonnegativityVaporTendency does not support `include_qtot = true`")
+        return TracerNonnegativityVaporTendency()
+    elseif method == "vertical_water_borrowing"
+        include_qtot &&
+            error("TracerNonnegativityVerticalWaterBorrowing does not support \
+                `include_qtot = true`")
+        return TracerNonnegativityVerticalWaterBorrowing()
+    else
+        error("Invalid tracer nonnegativity method: $method")
+    end
+end
 
 """
 
@@ -175,6 +212,11 @@ Base.@kwdef struct SlabOceanSST{FT} <: AbstractSurfaceTemperature
     ϕ₀::FT = 16 # Q-flux meridional scale [deg]
 end
 
+
+### --------------------- ###
+### Hyperdiffusion models ###
+### --------------------- ###
+
 abstract type AbstractHyperdiffusion end
 Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
     ν₄_vorticity_coeff::FT
@@ -199,37 +241,35 @@ function cam_se_hyperdiffusion(::Type{FT}) where {FT}
     )
 end
 
+### ------------------------------------ ###
+### Prescribed vertical diffusion models ###
+### ------------------------------------ ###
+
 abstract type AbstractVerticalDiffusion end
 Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
     C_E::FT
 end
+VerticalDiffusion{FT}(; disable_momentum_vertical_diffusion, C_E) where {FT} =
+    VerticalDiffusion{disable_momentum_vertical_diffusion, FT}(; C_E)
+
 disable_momentum_vertical_diffusion(::VerticalDiffusion{DM}) where {DM} = DM
 Base.@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
     H::FT
     D₀::FT
 end
-disable_momentum_vertical_diffusion(::DecayWithHeightDiffusion{DM}) where {DM} =
-    DM
+DecayWithHeightDiffusion{FT}(; disable_momentum_vertical_diffusion, H, D₀) where {FT} =
+    DecayWithHeightDiffusion{disable_momentum_vertical_diffusion, FT}(; H, D₀)
+
+disable_momentum_vertical_diffusion(::DecayWithHeightDiffusion{DM}) where {DM} = DM
 disable_momentum_vertical_diffusion(::Nothing) = false
 
-struct SurfaceFlux end
 
-abstract type AbstractSponge end
-Base.Broadcast.broadcastable(x::AbstractSponge) = tuple(x)
-Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
-    zd::FT
-    κ₂::FT
-end
+### --------------------- ###
+### Eddy Viscosity Models ###
+### --------------------- ###
 
+abstract type EddyViscosityModel end
 
-function ViscousSponge(params)
-    return ViscousSponge{CP.float_type(params)}(;
-        zd = params.zd_viscous,
-        κ₂ = params.kappa_2_sponge,
-    )
-end
-
-abstract type AbstractEddyViscosityModel end
 """
     SmagorinskyLilly{AXES}
 
@@ -241,18 +281,15 @@ Smagorinsky-Lilly eddy viscosity model.
 - `:W` (vertical axis)
 - `:UV_W` (horizontal and vertical axes treated separately).
 
-You can construct it using `SmagorinskyLilly(:UVW)` instead of `SmagorinskyLilly{:UVW}()`.
+# Examples
+Construct a model instance by passing the selected axes as a keyword argument:
+```julia
+smagorinsky_lilly = SmagorinskyLilly(; axes = :UV_W)
+```
 """
-struct SmagorinskyLilly{AXES} <: AbstractEddyViscosityModel end
+struct SmagorinskyLilly{AXES} <: EddyViscosityModel end
 
-"""
-    SmagorinskyLilly(axes::Symbol)
-
-Create a SmagorinskyLilly model with the specified axes configuration.
-
-`axes` must be one of: `:UVW`, `:UV`, `:W`, or `:UV_W`.
-"""
-function SmagorinskyLilly(axes::Symbol)
+function SmagorinskyLilly(; axes::Symbol)
     @assert axes in (:UVW, :UV, :W, :UV_W) "axes must be one of :UVW, :UV, :W, or :UV_W, got :$axes"
     return SmagorinskyLilly{axes}()
 end
@@ -287,30 +324,125 @@ is_smagorinsky_horizontal(::SmagorinskyLilly{AXES}) where {AXES} =
     AXES == :UVW || AXES == :UV || AXES == :UV_W
 is_smagorinsky_horizontal(::Nothing) = false
 
-struct AnisotropicMinimumDissipation{FT} <: AbstractEddyViscosityModel
+@kwdef struct AnisotropicMinimumDissipation{FT} <: EddyViscosityModel
     c_amd::FT
 end
 
-struct ConstantHorizontalDiffusion{FT} <: AbstractEddyViscosityModel
+@kwdef struct ConstantHorizontalDiffusion{FT} <: EddyViscosityModel
     D::FT
 end
 
+### ------------- ###
+### Sponge models ###
+### ------------- ###
 
-Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
+abstract type SpongeModel end
+Base.broadcastable(x::SpongeModel) = tuple(x)
+
+"""
+    ViscousSponge{FT} <: SpongeModel
+
+Viscous sponge model; dampen variables in proportion to the value of their Laplacian
+
+Whenever `z > zd`, the viscous sponge model applies the tendency
+
+ ```math
+ \frac{∂χ}{∂t} = - β ⋅ ∇⋅(∇χ),   z > zd
+ ```
+
+ where `β = κ₂ ⋅ ζ` and `χ ∈ {uₕ, u₃, ρe_tot, GS_TRACERS}`;
+ the grid-scale tracers `GS_TRACERS` depend on the microphysical model,
+ but may include e.g. `ρq_tot`, `ρq_liq`, `ρq_ice`, ...
+ If the `PrognosticEDMFX` scheme is used, the model is additionally applied to `χ ∈ {u₃ʲ}`.
+ `κ₂` is a damping coefficient, and `ζ` is the damping function
+
+ ```math
+ ζ(z) = sin^2(π(z-zd)/(zmax-zd)/2)
+ ```
+
+ with `zd` the lower damping height and `zmax` the domain top height.
+
+# Examples
+```julia
+# Apply damping above 20km with κ₂ = 10^6 m²/s²
+sponge = ViscousSponge(Float32; zd = 20_000, κ₂ = 1e6)
+```
+"""
+@kwdef struct ViscousSponge{FT} <: SpongeModel
+    "Lower damping height, in meters"
     zd::FT
-    α_uₕ::FT
-    α_w::FT
-    α_sgs_tracer::FT
+    "Damping coefficient, in m²/s²"
+    κ₂::FT
 end
 
-function RayleighSponge(params)
-    return RayleighSponge{CP.float_type(params)}(;
-        zd = params.zd_rayleigh,
-        α_uₕ = params.alpha_rayleigh_uh,
-        α_w = params.alpha_rayleigh_w,
-        α_sgs_tracer = params.alpha_rayleigh_sgs_tracer,
-    )
+ViscousSponge(params) = ViscousSponge(;
+    zd = params.zd_viscous,
+    κ₂ = params.kappa_2_sponge,
+)
+
+"""
+    RayleighSponge{FT} <: SpongeModel
+
+Rayleigh sponge model; dampen variables in proportion to their value
+
+Whenever `z > zd`, the Rayleigh sponge model applies the tendency
+
+ ```math
+ \frac{∂χ}{∂t} = - β ⋅ χ,   z > zd
+ ```
+
+ where `β = α_χ ⋅ ζ` and `χ ∈ {uₕ, u₃}`; 
+ If `ρtke` is a prognostic variable, it is also damped;
+ If the `PrognosticEDMFX` scheme is used, the model is additionally applied to
+ `χ ∈ {u₃ʲ, mseʲ, q_totʲ}`, and
+ `χ ∈ {q_liqʲ, q_raiʲ, q_iceʲ, q_snoʲ}` (depending on the microphysical model).
+ `α_χ` is a damping coefficient for each variable, and `ζ` is the damping function
+
+ ```math
+ ζ(z) = sin^2(π(z-zd)/(zmax-zd)/2)
+ ```
+ 
+ with `zd` the lower damping height and `zmax` the domain top height.
+
+ Separate damping coefficients are used:
+ - `α_uₕ`: horizontal velocity, `uₕ`;
+ - `α_w`: vertical velocity, `u₃`, `u₃ʲ`;
+ - `α_sgs_tracer`: subgrid-scale tracer variables, `ρtke`, `mseʲ`, `q_totʲ`, 
+    `q_liqʲ`, `q_raiʲ`, `q_iceʲ`, `q_snoʲ`.
+
+ By default, damping is only applied to vertical velocity, with:
+ - `α_uₕ = 0`
+ - `α_w = 1`
+ - `α_sgs_tracer = 0`
+
+# Examples
+```julia
+# Apply damping to vertical velocity, above 20km
+sponge = RayleighSponge(Float32; zd = 20_000)
+```
+"""
+@kwdef struct RayleighSponge{FT} <: SpongeModel
+    "Lower damping height, in meters"
+    zd::FT
+    "Damping coefficient for horizontal velocity, by default 0 (no damping)"
+    α_uₕ::FT = 0
+    "Damping coefficient for vertical velocity, by default 1 (full damping)"
+    α_w::FT = 1
+    "Damping coefficient for subgrid-scale tracer variables, by default 0 (no damping)"
+    α_sgs_tracer::FT = 0
 end
+
+RayleighSponge(params) = RayleighSponge(;
+    zd = params.zd_rayleigh,
+    α_uₕ = params.alpha_rayleigh_uh,
+    α_w = params.alpha_rayleigh_w,
+    α_sgs_tracer = params.alpha_rayleigh_sgs_tracer,
+)
+
+
+### ------------------- ###
+### Gravity wave models ###
+### ------------------- ###
 
 abstract type AbstractGravityWave end
 Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
@@ -689,31 +821,6 @@ function AtmosNumerics(;
     )
 end
 
-function Base.summary(io::IO, numerics::AtmosNumerics)
-    pns = string.(propertynames(numerics))
-    buf = maximum(length.(pns))
-    keys = propertynames(numerics)
-    vals = repeat.(" ", map(s -> buf - length(s) + 2, pns))
-    bufs = (; zip(keys, vals)...)
-    print(io, '\n')
-    for pn in propertynames(numerics)
-        prop = getproperty(numerics, pn)
-        s = string(
-            "  ", # needed for some reason
-            getproperty(bufs, pn),
-            '`',
-            string(pn),
-            '`',
-            "::",
-            '`',
-            typeof(prop),
-            '`',
-            '\n',
-        )
-        print(io, s)
-    end
-end
-
 const ValTF = Union{Val{true}, Val{false}}
 
 struct EDMFXModel{
@@ -938,37 +1045,6 @@ end
     getproperty(atmos, Val{property_name}())
 
 Base.broadcastable(x::AtmosModel) = tuple(x)
-
-function Base.summary(io::IO, atmos::AtmosModel)
-    pns = string.(propertynames(atmos))
-    buf = maximum(length.(pns))
-    keys = propertynames(atmos)
-    vals = repeat.(" ", map(s -> buf - length(s) + 2, pns))
-    bufs = (; zip(keys, vals)...)
-    print(io, '\n')
-    for pn in propertynames(atmos)
-        prop = getproperty(atmos, pn)
-        # Skip some data:
-        prop isa Bool && continue
-        prop isa NTuple && continue
-        prop isa Int && continue
-        prop isa Float64 && continue
-        prop isa Float32 && continue
-        s = string(
-            "  ", # needed for some reason
-            getproperty(bufs, pn),
-            '`',
-            string(pn),
-            '`',
-            "::",
-            '`',
-            typeof(prop),
-            '`',
-            '\n',
-        )
-        print(io, s)
-    end
-end
 
 """
     AtmosModel(; kwargs...)
