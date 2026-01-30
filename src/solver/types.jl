@@ -34,18 +34,21 @@ Methods for enforcing tracer nonnegativity.
 - `true`: Constrain q_tot to be nonnegative
 - `false`: Do not constrain q_tot
 
-There are three methods for enforcing tracer nonnegativity:
+There are four methods for enforcing tracer nonnegativity:
 - `TracerNonnegativityElementConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
     tracer mass within an element (i.e. horizontally)
 - `TracerNonnegativityVaporConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
     tracer mass between vapor (`q_vap = q_tot - q_cond`) and each tracer
 - `TracerNonnegativityVaporTendency`: Enforce nonnegativity by applying a tendency to each tracer,
     exchanging tracer mass between vapor (`q_vap`) and each tracer over time
+- `TracerNonnegativityVerticalWaterBorrowing`: Enforce nonnegativity using VerticalMassBorrowingLimiter,
+    which redistributes tracer mass vertically. Note: `qtot` parameter is not applicable to this method.
 """
 abstract type TracerNonnegativityConstraint{qtot} end
 struct TracerNonnegativityElementConstraint{qtot} <: TracerNonnegativityConstraint{qtot} end
 struct TracerNonnegativityVaporConstraint{qtot} <: TracerNonnegativityConstraint{qtot} end
 struct TracerNonnegativityVaporTendency end
+struct TracerNonnegativityVerticalWaterBorrowing <: TracerNonnegativityConstraint{false} end
 
 """
 
@@ -524,7 +527,18 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
+Base.@kwdef struct AtmosNumerics{
+    EN_UP,
+    TR_UP,
+    ED_UP,
+    SG_UP,
+    ED_TR_UP,
+    TDC,
+    RR,
+    LIM,
+    DM,
+    HD,
+}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_q_tot_upwinding::EN_UP = Val(:vanleer_limiter)
@@ -901,6 +915,8 @@ Internal testing and calibration components for single-column setups:
 - `energy_q_tot_upwinding`, `tracer_upwinding`, `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`: Val() upwinding schemes
 - `test_dycore_consistency`: nothing or TestDycoreConsistency() for debugging
 - `limiter`: nothing or QuasiMonotoneLimiter()
+- `vertical_water_borrowing_species`: internal value `nothing` (apply to all tracers; config default is `~`), empty tuple (apply to none; config `[]`), or Tuple{Symbol, ...} from config string/list (e.g. `["ρq_tot"]`) to apply only to those tracers. See config `vertical_water_borrowing_species` in default_config.yml for YAML options.
+  (Note: The vertical water borrowing limiter is created in the cache based on `AtmosWaterModel.tracer_nonnegativity_method`)
 - `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
 - `hyperdiff`: nothing or ClimaHyperdiffusion()
 

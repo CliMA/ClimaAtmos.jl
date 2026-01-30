@@ -243,7 +243,8 @@ function get_numerics(parsed_args, FT)
     edmfx_tracer_upwinding =
         Val(Symbol(parsed_args["edmfx_tracer_upwinding"]))
 
-    limiter = parsed_args["apply_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
+    limiter =
+        parsed_args["apply_sem_quasimonotone_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
     # wrap each upwinding mode in a Val for dispatch
     diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
@@ -1051,6 +1052,38 @@ function get_simulation(config::AtmosConfig)
     steady_state_velocity =
         get_steady_state_velocity(params, Y, config.parsed_args)
 
+    FT = Spaces.undertype(axes(Y.c))
+
+    # Parse vertical_water_borrowing configuration for cache
+    # Check if tracer_nonnegativity_method is vertical_water_borrowing
+    tracer_nonneg_method = config.parsed_args["tracer_nonnegativity_method"]
+    is_vertical_water_borrowing =
+        !isnothing(tracer_nonneg_method) &&
+        (
+            tracer_nonneg_method == "vertical_water_borrowing" ||
+            startswith(tracer_nonneg_method, "vertical_water_borrowing_")
+        )
+
+    vwb_thresholds = is_vertical_water_borrowing ? (FT(0.0),) : nothing
+
+    vwb_species =
+        if is_vertical_water_borrowing &&
+           haskey(config.parsed_args, "vertical_water_borrowing_species") &&
+           !isnothing(config.parsed_args["vertical_water_borrowing_species"])
+            species_config = config.parsed_args["vertical_water_borrowing_species"]
+            if species_config isa Vector
+                tuple(Symbol.(species_config)...)
+            elseif species_config isa String
+                (Symbol(species_config),)
+            else
+                error(
+                    "vertical_water_borrowing_species must be a string or list of strings, got $(typeof(species_config))",
+                )
+            end
+        else
+            nothing  # Default: apply to all tracers
+        end
+
     s = @timed_str begin
         p = build_cache(
             Y,
@@ -1062,6 +1095,7 @@ function get_simulation(config::AtmosConfig)
             tracers.aerosol_names,
             tracers.time_varying_trace_gas_names,
             steady_state_velocity,
+            vwb_species,
         )
     end
     @info "Allocating cache (p): $s"

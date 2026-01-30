@@ -3,13 +3,21 @@ ClimaAtmos.jl Release Notes
 
 main
 -------
+- [#4225](https://github.com/CliMA/ClimaAtmos.jl/pull/4225) Add an option for vertical water borrowing limiter. Configure via `tracer_nonnegativity_method: "vertical_water_borrowing"`
+  and optionally `vertical_water_borrowing_species` (defaults to all tracers if not specified).
+  The limiter enforces non-negativity using a single threshold (0.0) that applies uniformly to all selected tracers.
+  
+  Rename `limiter` to `sem_quasimonotone_limiter` in cache numerics for clarity.
+  The cache now stores the quasi-monotone limiter instance as `sem_quasimonotone_limiter`
+  to better distinguish it from other limiter types (e.g., `vertical_water_borrowing_limiter`).
+
 - [#4231](https://github.com/CliMA/ClimaAtmos.jl/pull/4231) [badge-💥breaking] removes grid-scale
 thermo state, including ᶜts in p.precomputed.sfc_conditions.
 
 - [#4211](https://github.com/CliMA/ClimaAtmos.jl/pull/4211) 
   add experimental methods to remove negative microphysical condensate values
 
-- Refactor hyperdiffusion to use Prandtl number parameterization. The scalar hyperdiffusion
+- [#4245](https://github.com/CliMA/ClimaAtmos.jl/pull/4245) Refactor hyperdiffusion to use Prandtl number parameterization. The scalar hyperdiffusion
   coefficient is now computed as `ν₄_scalar = ν₄_vorticity / prandtl_number`, replacing the
   previous direct `ν₄_scalar_coeff` parameter. Configure via `hyperdiffusion_prandtl_number`
   (default: 1.0). The `CAM_SE` hyperdiffusion configuration maintains a 5x ratio between
