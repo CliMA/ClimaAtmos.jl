@@ -1296,11 +1296,10 @@ version = "1.4.5"
     Parsers = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 
 [[deps.Insolation]]
-deps = ["Artifacts", "Dates", "DelimitedFiles", "Interpolations"]
-git-tree-sha1 = "cd44510144600f1a26e63080823140c76d9cc157"
+deps = ["Adapt", "Artifacts", "ClimaParams", "Dates", "DelimitedFiles", "Interpolations"]
+git-tree-sha1 = "e406cece91ec7b68f562dc90708a4300bdac2420"
 uuid = "e98cc03f-d57e-4e3c-b70c-8d51efe9e0d8"
-version = "0.10.2"
-weakdeps = ["ClimaParams"]
+version = "1.1.0"
 
     [deps.Insolation.extensions]
     CreateParametersExt = "ClimaParams"

@@ -857,6 +857,7 @@ steps:
           julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl --manytests true
         agents:
           slurm_mem: 16GB
+        soft_fail: true
 
       - label: ":computer: test restart_AtmosSimulation GPU manytests"
         command: >

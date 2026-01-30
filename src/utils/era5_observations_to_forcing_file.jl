@@ -226,23 +226,6 @@ function get_vertical_tendencies(sim_forcing, var)
     return -deriv
 end
 
-function get_coszen_inst(
-    lat,
-    lon,
-    date,
-    FT,
-    param_set = IP.InsolationParameters(FT),
-    od = Insolation.OrbitalData(),
-)
-
-    date = DateTime(date)
-
-    S, μ =
-        Insolation.solar_flux_and_cos_sza(date, od, FT(lon), FT(lat), param_set)
-
-    return μ, S * μ
-end
-
 """
     generate_external_era5_forcing_file(
         lat,
@@ -481,7 +464,16 @@ function generate_external_forcing_file(
     end
 
     # add coszen
-    coszen_list = get_coszen_inst.(lat, lon, tvforcing["valid_time"][:], FT)
+    # Compute coszen and solar flux using Insolation.jl
+    coszen_list = map(tvforcing["valid_time"][:]) do date
+        F, S, μ, ζ = Insolation.insolation(
+            DateTime(date),
+            FT(lat),
+            FT(lon),
+            IP.InsolationParameters(FT),
+        )
+        return (μ, F)  # return (coszen, TOA_flux)
+    end
     defVar(ds, "coszen", FT, ("x", "y", "z", "time"))
     defVar(ds, "rsdt", FT, ("x", "y", "z", "time"))
 

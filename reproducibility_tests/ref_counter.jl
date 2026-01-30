@@ -1,4 +1,4 @@
-306
+307
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+307
+- Update to Insolation v1.1, with a small change in clipping of solar zenith angle.
+Also change TOA flux and zenith angle for idealized insolation.
+
 306
 - Reduce default scalar hyperdiffusion coefficient (apply prandtl number parameter in the default yaml)
 

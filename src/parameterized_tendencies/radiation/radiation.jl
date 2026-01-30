@@ -347,7 +347,7 @@ function radiation_model_cache(
             )
     end
 
-    cos_zenith = weighted_irradiance = NaN # initialized in callback
+    cos_zenith = toa_flux = NaN # initialized in callback
 
     rrtmgp_model = RRTMGPI.RRTMGPModel(
         rrtmgp_params,
@@ -364,7 +364,7 @@ function radiation_model_cache(
         direct_sw_surface_albedo = NaN, # initialized in callback
         diffuse_sw_surface_albedo = NaN, # initialized in callback
         cos_zenith,
-        weighted_irradiance,
+        toa_flux,
         kwargs...,
     )
     cloud_cache = (;)
@@ -413,7 +413,10 @@ insolation_cache(_, _) = (;)
 function insolation_cache(::TimeVaryingInsolation, Y)
     FT = Spaces.undertype(axes(Y.c))
     return (;
-        insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT})
+        insolation_tuple = similar(
+            Spaces.level(Y.c, 1),
+            @NamedTuple{F::FT, S::FT, μ::FT, ζ::FT}
+        )
     )
 end
 
