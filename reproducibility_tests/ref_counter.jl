@@ -1,4 +1,4 @@
-457
+458
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+458
+- Remove clipping of zenith angle
+
 457
 - The 1M `rain_terminal_velocity` default flips from `Fixed` to `Chen2022`,
   so rain now falls at the state-dependent Chen et al. (2022) speed by
