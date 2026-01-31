@@ -467,9 +467,9 @@ version = "0.3.18"
 
 [[deps.ClimaDiagnostics]]
 deps = ["Accessors", "ClimaComms", "ClimaCore", "ClimaUtilities", "Dates", "NCDatasets", "NVTX", "OrderedCollections", "SciMLBase"]
-git-tree-sha1 = "93a01486292f0f30194c541e09d729c2c540369e"
+git-tree-sha1 = "ee9609d1c03d43bd09236ff9943df17f37db004c"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
-version = "0.3.0"
+version = "0.3.1"
 
 [[deps.ClimaInterpolations]]
 deps = ["DocStringExtensions"]

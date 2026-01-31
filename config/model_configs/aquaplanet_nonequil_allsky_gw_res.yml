@@ -24,3 +24,13 @@ diagnostics:
     period: 1days
   - short_name: [reffclw, reffcli]
     period: 6hours
+  - short_name: [hus_neg_frac, hus_neg_mean, hus_min]
+    period: 1days
+  - short_name: [clw_neg_frac, clw_neg_mean, clw_min]
+    period: 1days
+  - short_name: [cli_neg_frac, cli_neg_mean, cli_min]
+    period: 1days
+  - short_name: [husra_neg_frac, husra_neg_mean, husra_min]
+    period: 1days
+  - short_name: [hussn_neg_frac, hussn_neg_mean, hussn_min]
+    period: 1days
