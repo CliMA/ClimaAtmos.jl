@@ -27,6 +27,9 @@ z_elem:
 z_max:
   help: "Model top height. Default: 30km"
   value: 30000.0
+vertical_mesh:
+  help: "Predefined vertical mesh [`~` (default), `rcemipii`]"
+  value: ~
 vorticity_hyperdiffusion_coefficient:
   help: "Hyperdiffusion coefficient for vorticity (m s-1)"
   value: 0.1857

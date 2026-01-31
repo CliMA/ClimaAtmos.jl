@@ -23,20 +23,26 @@ energy_q_tot_upwinding: vanleer_limiter  # is default (alt: `first_order`)
 reproducibility_test: true
 
 # microphysics
+### 0M+Equil option
+# moist: equil
+# precip_model: 0M
 ### !! 1M and 2M !!
 cloud_model: grid_scale   # Ultimately wanted when `moist: nonequil`
 moist: nonequil
 precip_model: 1M
+
 ### spatial discretization ###
-x_max: 96000.0  # 96km
-y_max: 96000.0  # 96km
-# x_max: 6000000.0  # 6000km
-# y_max: 400000.0  # 400km
-z_max: 30000.0  # 30km
 nh_poly: 3  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
-# z_elem: 43  # Note: Set sponge height (`zd_viscous`) in toml file to cover top ~5 points
-z_elem: 86
-dz_bottom: 30.0
+## RCE_small
+x_max: 96000  # 96km
+y_max: 96000  # 96km
+## RCE_large
+# x_max: 6000000  # 6000km
+# y_max: 400000  # 400km
+## Vertical mesh
+z_max: 33000  # 33km
+z_elem: 74
+vertical_mesh: rcemipii
 
 #~8km grid
 x_elem: 4
