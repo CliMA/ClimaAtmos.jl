@@ -9,7 +9,7 @@ permissions:
 
 on:
   merge_group:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, synchronize]
     branches:
       - main
