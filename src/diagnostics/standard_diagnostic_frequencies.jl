@@ -1,40 +1,56 @@
 """
-    monthly_maxs(FT, short_names...; output_writer, start_date, t_start)
+    monthly_maxs(FT, short_names...; output_writer, start_date, t_start, model = nothing)
 
 Return a list of `ScheduledDiagnostics` that compute the monthly max for the given variables.
 """
-monthly_maxs(FT, short_names...; output_writer, start_date, t_start) =
-    common_diagnostics(Month(1), max, output_writer, start_date, t_start, short_names...)
+monthly_maxs(FT, short_names...; output_writer, start_date, t_start, model = nothing) =
+    common_diagnostics(
+        Month(1),
+        max,
+        output_writer,
+        start_date,
+        t_start,
+        short_names...;
+        model,
+    )
 """
-    monthly_max(FT, short_names; output_writer, start_date, t_start)
+    monthly_max(FT, short_names; output_writer, start_date, t_start, model = nothing)
 
 Return a `ScheduledDiagnostics` that computes the monthly max for the given variable.
 """
-monthly_max(FT, short_names; output_writer, start_date, t_start) =
-    monthly_maxs(FT, short_names; output_writer, start_date, t_start)[1]
+monthly_max(FT, short_names; output_writer, start_date, t_start, model = nothing) =
+    monthly_maxs(FT, short_names; output_writer, start_date, t_start, model)[1]
 
 """
-    monthly_mins(short_names...; output_writer, start_date, t_start)
+    monthly_mins(FT, short_names...; output_writer, start_date, t_start, model = nothing)
 
 Return a list of `ScheduledDiagnostics` that compute the monthly min for the given variables.
 """
-monthly_mins(FT, short_names...; output_writer, start_date, t_start) =
-    common_diagnostics(Month(1), min, output_writer, start_date, t_start, short_names...)
+monthly_mins(FT, short_names...; output_writer, start_date, t_start, model = nothing) =
+    common_diagnostics(
+        Month(1),
+        min,
+        output_writer,
+        start_date,
+        t_start,
+        short_names...;
+        model,
+    )
 """
-    monthly_min(FT, short_names; output_writer, start_date, t_start)
+    monthly_min(FT, short_names; output_writer, start_date, t_start, model = nothing)
 
 Return a `ScheduledDiagnostics` that computes the monthly min for the given variable.
 """
-monthly_min(FT, short_names; output_writer, start_date, t_start) =
-    monthly_mins(FT, short_names; output_writer, start_date, t_start)[1]
+monthly_min(FT, short_names; output_writer, start_date, t_start, model = nothing) =
+    monthly_mins(FT, short_names; output_writer, start_date, t_start, model)[1]
 
 """
-    monthly_averages(FT, short_names...; output_writer, start_date, t_start)
+    monthly_averages(FT, short_names...; output_writer, start_date, t_start, model = nothing)
 
 Return a list of `ScheduledDiagnostics` that compute the monthly average for the given variables.
 """
 # An average is just a sum with a normalization before output
-monthly_averages(FT, short_names...; output_writer, start_date, t_start) =
+monthly_averages(FT, short_names...; output_writer, start_date, t_start, model = nothing) =
     common_diagnostics(
         Month(1),
         (+),
@@ -44,54 +60,71 @@ monthly_averages(FT, short_names...; output_writer, start_date, t_start) =
         short_names...,
         ;
         pre_output_hook! = average_pre_output_hook!,
+        model,
     )
 
 """
-    monthly_average(FT, short_names; output_writer, start_date, t_start)
+    monthly_average(FT, short_names; output_writer, start_date, t_start, model = nothing)
 
 Return a `ScheduledDiagnostics` that compute the monthly average for the given variable.
 """
 # An average is just a sum with a normalization before output
-monthly_average(FT, short_names; output_writer, start_date, t_start) =
-    monthly_averages(FT, short_names; output_writer, start_date, t_start)[1]
+monthly_average(FT, short_names; output_writer, start_date, t_start, model = nothing) =
+    monthly_averages(FT, short_names; output_writer, start_date, t_start, model)[1]
 
 """
-    tendaily_maxs(FT, short_names...; output_writer, start_date, t_start)
+    tendaily_maxs(FT, short_names...; output_writer, start_date, t_start, model = nothing)
 
 Return a list of `ScheduledDiagnostics` that compute the max over ten days for the given variables.
 """
-tendaily_maxs(FT, short_names...; output_writer, start_date, t_start) =
-    common_diagnostics(Day(10), max, output_writer, start_date, t_start, short_names...)
+tendaily_maxs(FT, short_names...; output_writer, start_date, t_start, model = nothing) =
+    common_diagnostics(
+        Day(10),
+        max,
+        output_writer,
+        start_date,
+        t_start,
+        short_names...;
+        model,
+    )
 """
-    tendaily_max(FT, short_names; output_writer, start_date, t_start)
+    tendaily_max(FT, short_names; output_writer, start_date, t_start, model = nothing)
 
 Return a `ScheduledDiagnostics` that computes the max over ten days for the given variable.
 """
-tendaily_max(FT, short_names; output_writer, start_date, t_start) =
-    tendaily_maxs(FT, short_names; output_writer, start_date, t_start)[1]
+tendaily_max(FT, short_names; output_writer, start_date, t_start, model = nothing) =
+    tendaily_maxs(FT, short_names; output_writer, start_date, t_start, model)[1]
 
 """
-    tendaily_mins(FT, short_names...; output_writer, start_date, t_start)
+    tendaily_mins(FT, short_names...; output_writer, start_date, t_start, model = nothing)
 
 Return a list of `ScheduledDiagnostics` that compute the min over ten days for the given variables.
 """
-tendaily_mins(FT, short_names...; output_writer, start_date, t_start) =
-    common_diagnostics(Day(10), min, output_writer, start_date, t_start, short_names...)
+tendaily_mins(FT, short_names...; output_writer, start_date, t_start, model = nothing) =
+    common_diagnostics(
+        Day(10),
+        min,
+        output_writer,
+        start_date,
+        t_start,
+        short_names...;
+        model,
+    )
 """
-    tendaily_min(FT, short_names; output_writer, start_date, t_start)
+    tendaily_min(FT, short_names; output_writer, start_date, t_start, model = nothing)
 
 Return a `ScheduledDiagnostics` that computes the min over ten days for the given variable.
 """
-tendaily_min(FT, short_names; output_writer, start_date, t_start) =
-    tendaily_mins(FT, short_names; output_writer, start_date, t_start)[1]
+tendaily_min(FT, short_names; output_writer, start_date, t_start, model = nothing) =
+    tendaily_mins(FT, short_names; output_writer, start_date, t_start, model)[1]
 
 """
-    tendaily_averages(FT, short_names...; output_writer, start_date, t_start)
+    tendaily_averages(FT, short_names...; output_writer, start_date, t_start, model = nothing)
 
 Return a list of `ScheduledDiagnostics` that compute the average over ten days for the given variables.
 """
 # An average is just a sum with a normalization before output
-tendaily_averages(FT, short_names...; output_writer, start_date, t_start) =
+tendaily_averages(FT, short_names...; output_writer, start_date, t_start, model = nothing) =
     common_diagnostics(
         Day(10),
         (+),
@@ -100,54 +133,71 @@ tendaily_averages(FT, short_names...; output_writer, start_date, t_start) =
         t_start,
         short_names...;
         pre_output_hook! = average_pre_output_hook!,
+        model,
     )
 """
-    tendaily_average(FT, short_names; output_writer, start_date, t_start)
+    tendaily_average(FT, short_names; output_writer, start_date, t_start, model = nothing)
 
 Return a `ScheduledDiagnostics` that compute the average over ten days for the given variable.
 """
 # An average is just a sum with a normalization before output
-tendaily_average(FT, short_names; output_writer, start_date, t_start) =
-    tendaily_averages(FT, short_names; output_writer, start_date, t_start)[1]
+tendaily_average(FT, short_names; output_writer, start_date, t_start, model = nothing) =
+    tendaily_averages(FT, short_names; output_writer, start_date, t_start, model)[1]
 
 """
-    daily_maxs(FT, short_names...; output_writer, start_date, t_start)
+    daily_maxs(FT, short_names...; output_writer, start_date, t_start, model = nothing)
 
 Return a list of `ScheduledDiagnostics` that compute the daily max for the given variables.
 """
-daily_maxs(FT, short_names...; output_writer, start_date, t_start) =
-    common_diagnostics(Day(1), max, output_writer, start_date, t_start, short_names...)
+daily_maxs(FT, short_names...; output_writer, start_date, t_start, model = nothing) =
+    common_diagnostics(
+        Day(1),
+        max,
+        output_writer,
+        start_date,
+        t_start,
+        short_names...;
+        model,
+    )
 """
-    daily_max(FT, short_names; output_writer, start_date, t_start)
+    daily_max(FT, short_names; output_writer, start_date, t_start, model = nothing)
 
 
 Return a `ScheduledDiagnostics` that computes the daily max for the given variable.
 """
-daily_max(FT, short_names; output_writer, start_date, t_start) =
-    daily_maxs(FT, short_names; output_writer, start_date, t_start)[1]
+daily_max(FT, short_names; output_writer, start_date, t_start, model = nothing) =
+    daily_maxs(FT, short_names; output_writer, start_date, t_start, model)[1]
 
 """
-    daily_mins(FT, short_names...; output_writer, start_date, t_start)
+    daily_mins(FT, short_names...; output_writer, start_date, t_start, model = nothing)
 
 Return a list of `ScheduledDiagnostics` that compute the daily min for the given variables.
 """
-daily_mins(FT, short_names...; output_writer, start_date, t_start) =
-    common_diagnostics(Day(1), min, output_writer, start_date, t_start, short_names...)
+daily_mins(FT, short_names...; output_writer, start_date, t_start, model = nothing) =
+    common_diagnostics(
+        Day(1),
+        min,
+        output_writer,
+        start_date,
+        t_start,
+        short_names...;
+        model,
+    )
 """
-    daily_min(FT, short_names; output_writer, start_date, t_start)
+    daily_min(FT, short_names; output_writer, start_date, t_start, model = nothing)
 
 Return a `ScheduledDiagnostics` that computes the daily min for the given variable.
 """
-daily_min(FT, short_names; output_writer, start_date, t_start) =
-    daily_mins(FT, short_names; output_writer, start_date, t_start)[1]
+daily_min(FT, short_names; output_writer, start_date, t_start, model = nothing) =
+    daily_mins(FT, short_names; output_writer, start_date, t_start, model)[1]
 
 """
-    daily_averages(FT, short_names...; output_writer, start_date, t_start)
+    daily_averages(FT, short_names...; output_writer, start_date, t_start, model = nothing)
 
 Return a list of `ScheduledDiagnostics` that compute the daily average for the given variables.
 """
 # An average is just a sum with a normalization before output
-daily_averages(FT, short_names...; output_writer, start_date, t_start) =
+daily_averages(FT, short_names...; output_writer, start_date, t_start, model = nothing) =
     common_diagnostics(
         Day(1),
         (+),
@@ -156,55 +206,72 @@ daily_averages(FT, short_names...; output_writer, start_date, t_start) =
         t_start,
         short_names...;
         pre_output_hook! = average_pre_output_hook!,
+        model,
     )
 """
-    daily_average(FT, short_names; output_writer, start_date, t_start)
+    daily_average(FT, short_names; output_writer, start_date, t_start, model = nothing)
 
 Return a `ScheduledDiagnostics` that compute the daily average for the given variable.
 """
 # An average is just a sum with a normalization before output
-daily_average(FT, short_names; output_writer, start_date, t_start) =
-    daily_averages(FT, short_names; output_writer, start_date, t_start)[1]
+daily_average(FT, short_names; output_writer, start_date, t_start, model = nothing) =
+    daily_averages(FT, short_names; output_writer, start_date, t_start, model)[1]
 
 """
-    hourly_maxs(FT, short_names...; output_writer, start_date, t_start)
+    hourly_maxs(FT, short_names...; output_writer, start_date, t_start, model = nothing)
 
 Return a list of `ScheduledDiagnostics` that compute the hourly max for the given variables.
 """
-hourly_maxs(FT, short_names...; output_writer, start_date, t_start) =
-    common_diagnostics(Hour(1), max, output_writer, start_date, t_start, short_names...)
+hourly_maxs(FT, short_names...; output_writer, start_date, t_start, model = nothing) =
+    common_diagnostics(
+        Hour(1),
+        max,
+        output_writer,
+        start_date,
+        t_start,
+        short_names...;
+        model,
+    )
 
 """
-    hourly_max(FT, short_names; output_writer, start_date, t_start)
+    hourly_max(FT, short_names; output_writer, start_date, t_start, model = nothing)
 
 Return a `ScheduledDiagnostics` that computes the hourly max for the given variable.
 """
-hourly_max(FT, short_names; output_writer, start_date, t_start) =
-    hourly_maxs(FT, short_names; output_writer, start_date, t_start)[1]
+hourly_max(FT, short_names; output_writer, start_date, t_start, model = nothing) =
+    hourly_maxs(FT, short_names; output_writer, start_date, t_start, model)[1]
 
 """
-    hourly_mins(FT, short_names...; output_writer, start_date, t_start)
+    hourly_mins(FT, short_names...; output_writer, start_date, t_start, model = nothing)
 
 Return a list of `ScheduledDiagnostics` that compute the hourly min for the given variables.
 """
-hourly_mins(FT, short_names...; output_writer, start_date, t_start) =
-    common_diagnostics(Hour(1), min, output_writer, start_date, t_start, short_names...)
-"""
-    hourly_mins(FT, short_names...; output_writer, start_date, t_start)
+hourly_mins(FT, short_names...; output_writer, start_date, t_start, model = nothing) =
+    common_diagnostics(
+        Hour(1),
+        min,
+        output_writer,
+        start_date,
+        t_start,
+        short_names...;
+        model,
+    )
 
+"""
+    hourly_min(FT, short_names; output_writer, start_date, t_start, model = nothing)
 
 Return a `ScheduledDiagnostics` that computes the hourly min for the given variable.
 """
-hourly_min(FT, short_names; output_writer, start_date, t_start) =
-    hourly_mins(FT, short_names; output_writer, start_date, t_start)[1]
+hourly_min(FT, short_names; output_writer, start_date, t_start, model = nothing) =
+    hourly_mins(FT, short_names; output_writer, start_date, t_start, model)[1]
 
 # An average is just a sum with a normalization before output
 """
-    hourly_averages(FT, short_names...; output_writer, start_date, t_start)
+    hourly_averages(FT, short_names...; output_writer, start_date, t_start, model = nothing)
 
 Return a list of `ScheduledDiagnostics` that compute the hourly average for the given variables.
 """
-hourly_averages(FT, short_names...; output_writer, start_date, t_start) =
+hourly_averages(FT, short_names...; output_writer, start_date, t_start, model = nothing) =
     common_diagnostics(
         Hour(1),
         (+),
@@ -213,12 +280,13 @@ hourly_averages(FT, short_names...; output_writer, start_date, t_start) =
         t_start,
         short_names...;
         pre_output_hook! = average_pre_output_hook!,
+        model,
     )
 
 """
-    hourly_average(FT, short_names...; output_writer, start_date, t_start)
+    hourly_average(FT, short_names; output_writer, start_date, t_start, model = nothing)
 
 Return a `ScheduledDiagnostics` that computes the hourly average for the given variable.
 """
-hourly_average(FT, short_names; output_writer, start_date, t_start) =
-    hourly_averages(FT, short_names; output_writer, start_date, t_start)[1]
+hourly_average(FT, short_names; output_writer, start_date, t_start, model = nothing) =
+    hourly_averages(FT, short_names; output_writer, start_date, t_start, model)[1]
