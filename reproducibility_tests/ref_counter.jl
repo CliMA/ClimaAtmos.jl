@@ -37,6 +37,7 @@
   pressure-drag, detrainment shear-mixing) runs in the implicit stage next
   to `edmfx_sgs_diffusive_flux_tendency!`, so production and dissipation
   share the Newton iterate. The Jacobian is unchanged.
+- Remove clipping of zenith angle
 
 458
 - Prescribed temperature tendencies (large-scale advection and radiative
