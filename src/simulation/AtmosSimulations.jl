@@ -147,7 +147,7 @@ function AtmosSimulation{FT}(;
     t_start = 0,
     t_end = 86400 * 10,  # 10 days
     ode_config = CTS.IMEXAlgorithm(
-        CTS.ARS222(),
+        CTS.ARS232(),
         CTS.NewtonsMethod(;
             max_iters = 1,
             update_j = CTS.UpdateEvery(CTS.NewNewtonIteration),
