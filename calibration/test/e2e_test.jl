@@ -38,7 +38,11 @@ function process_member_data(simdir::SimDir)
     isempty(simdir.vars) && return NaN
     rsut =
         get(simdir; short_name = "rsut", reduction = "average", period = "30d")
-    return slice(rsut; time = 30days).data
+    if pkgversion(ClimaDiagnostics) < v"0.3"
+        return slice(rsut, time = 30days).data
+    else
+        return slice(rsut, time = 0days).data
+    end
 end
 
 addprocs(CAL.SlurmManager())
