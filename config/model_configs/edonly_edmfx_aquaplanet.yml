@@ -8,3 +8,6 @@ precip_model: 0M
 t_end: 3hours
 dt_save_state_to_disk: 600secs
 use_itime: true
+prescribed_aerosols: ["SO4", "CB1", "OC1", "DST01", "SSLT01"]
+aerosol_radiation: true
+insolation: timevarying
