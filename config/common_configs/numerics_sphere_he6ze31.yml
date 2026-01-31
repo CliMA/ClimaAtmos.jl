@@ -5,7 +5,7 @@ z_elem: 31
 z_max: 60000.0
 dz_bottom: 50.0
 dt: 400secs
-ode_algo: ARS222
+ode_algo: ARS232
 hyperdiff: ClimaHyperdiffusion
 rayleigh_sponge: true
 viscous_sponge: true
