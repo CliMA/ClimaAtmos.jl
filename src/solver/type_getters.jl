@@ -110,11 +110,11 @@ function get_atmos(config::AtmosConfig, params)
     edmfx_model = EDMFXModel(;
         entr_model = get_entrainment_model(parsed_args),
         detr_model = get_detrainment_model(parsed_args),
-        sgs_mass_flux = Val(parsed_args["edmfx_sgs_mass_flux"]),
-        sgs_diffusive_flux = Val(parsed_args["edmfx_sgs_diffusive_flux"]),
-        nh_pressure = Val(parsed_args["edmfx_nh_pressure"]),
-        vertical_diffusion = Val(parsed_args["edmfx_vertical_diffusion"]),
-        filter = Val(parsed_args["edmfx_filter"]),
+        sgs_mass_flux = parsed_args["edmfx_sgs_mass_flux"],
+        sgs_diffusive_flux = parsed_args["edmfx_sgs_diffusive_flux"],
+        nh_pressure = parsed_args["edmfx_nh_pressure"],
+        vertical_diffusion = parsed_args["edmfx_vertical_diffusion"],
+        filter = parsed_args["edmfx_filter"],
         scale_blending_method = get_scale_blending_method(parsed_args),
     )
 
@@ -222,31 +222,28 @@ function get_numerics(parsed_args, FT)
         parsed_args["reproducible_restart"] ? ReproducibleRestart() :
         nothing
 
-    energy_q_tot_upwinding = Val(Symbol(parsed_args["energy_q_tot_upwinding"]))
-    tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"]))
+    energy_q_tot_upwinding = Symbol(parsed_args["energy_q_tot_upwinding"])
+    tracer_upwinding = Symbol(parsed_args["tracer_upwinding"])
 
     # Compat
     if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
-       energy_q_tot_upwinding == Val(:vanleer_limiter)
-        energy_q_tot_upwinding = Val(:none)
+       energy_q_tot_upwinding == :vanleer_limiter
+        energy_q_tot_upwinding = :none
         @warn "energy_q_tot_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting energy_q_tot_upwinding to :none"
     end
     if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
-       tracer_upwinding == Val(:vanleer_limiter)
-        tracer_upwinding = Val(:none)
+       tracer_upwinding == :vanleer_limiter
+        tracer_upwinding = :none
         @warn "tracer_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting tracer_upwinding to :none"
     end
 
-    edmfx_mse_q_tot_upwinding = Val(Symbol(parsed_args["edmfx_mse_q_tot_upwinding"]))
-    edmfx_sgsflux_upwinding =
-        Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
-    edmfx_tracer_upwinding =
-        Val(Symbol(parsed_args["edmfx_tracer_upwinding"]))
+    edmfx_mse_q_tot_upwinding = Symbol(parsed_args["edmfx_mse_q_tot_upwinding"])
+    edmfx_sgsflux_upwinding = Symbol(parsed_args["edmfx_sgsflux_upwinding"])
+    edmfx_tracer_upwinding = Symbol(parsed_args["edmfx_tracer_upwinding"])
 
     limiter =
         parsed_args["apply_sem_quasimonotone_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
-    # wrap each upwinding mode in a Val for dispatch
     diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
 
     hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
@@ -977,7 +974,6 @@ function get_grid(parsed_args, params, context)
             x_elem = parsed_args["x_elem"],
             x_max = parsed_args["x_max"],
             nh_poly = parsed_args["nh_poly"],
-            bubble = parsed_args["bubble"],
             periodic_x = true,
             kwargs...,
         )

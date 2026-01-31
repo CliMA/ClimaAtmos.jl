@@ -42,7 +42,7 @@ import ClimaParams
             context,
             x_elem, x_max, nh_poly, periodic_x = true,
             z_elem, z_max, z_stretch, dz_bottom,
-            bubble, topography,
+            topography,
         )
         column_grid = CA.ColumnGrid(
             FT; context, z_elem, z_max, z_stretch, dz_bottom,

@@ -20,6 +20,7 @@ Create an ExtrudedCubedSphereGrid with topography support.
 - `z_max = 30000.0`: the domain maximum along the z-direction
 - `z_stretch = true`: whether to use vertical stretching
 - `dz_bottom = 500.0`: bottom layer thickness for stretching
+- `z_mesh = DefaultZMesh(FT; z_min = 0, z_max, z_elem, z_stretch)`: the vertical mesh
 - `radius = 6.371229e6`: the radius of the cubed sphere
 - `h_elem = 6`: the number of horizontal elements per side of every panel (6
   panels in total)
@@ -52,10 +53,12 @@ function SphereGrid(
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = SLEVEWarp{FT}(),
     topo_smoothing = false,
+    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
+        stretch = stretch_from_bool(FT, z_stretch, dz_bottom),
+    ),
 ) where {FT}
     n_quad_points = nh_poly + 1
-    stretch =
-        z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
+    stretch = stretch_from_bool(FT, z_stretch, dz_bottom)
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing,
     )
@@ -72,7 +75,7 @@ function SphereGrid(
 
     grid = CommonGrids.ExtrudedCubedSphereGrid(
         FT;
-        z_elem, z_min = 0, z_max, radius, h_elem,
+        z_elem, z_min = 0, z_max, z_mesh, radius, h_elem,
         n_quad_points,
         device = ClimaComms.device(context),
         context,
@@ -99,6 +102,7 @@ Create a ColumnGrid.
 - `z_elem = 10`: the number of z-points
 - `z_max = 30000.0`: the domain maximum along the z-direction
 - `z_stretch = true`: whether to use vertical stretching
+- `z_mesh = DefaultZMesh(FT; z_min = 0, z_max, z_elem, z_stretch)`: the vertical mesh
 - `dz_bottom = 500.0`: bottom layer thickness for stretching
 """
 function ColumnGrid(
@@ -108,10 +112,11 @@ function ColumnGrid(
     z_max = 30000.0,
     z_stretch = true,
     dz_bottom = 500.0,
+    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
+        stretch = stretch_from_bool(FT, z_stretch, dz_bottom),
+    ),
 ) where {FT}
-    stretch =
-        z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem, stretch)
+    stretch = stretch_from_bool(FT, z_stretch, dz_bottom)
     grid = CommonGrids.ColumnGrid(
         FT;
         z_elem, z_min = 0, z_max, z_mesh,
@@ -139,6 +144,7 @@ Create a Box3DGrid with topography support.
 - `y_max = 300000.0`: the domain maximum along the y-direction
 - `z_elem = 10`: the number of z-points
 - `z_max = 30000.0`: the domain maximum along the z-direction
+- `z_mesh = DefaultZMesh(FT; z_min = 0, z_max, z_elem, z_stretch)`: the vertical mesh
 - `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
   1D within each horizontal element is then `n_quad_points = nh_poly + 1`
 - `z_stretch = true`: whether to use vertical stretching
@@ -173,14 +179,15 @@ function BoxGrid(
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = LinearWarp(),
     topo_smoothing = false,
+    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
+        stretch = stretch_from_bool(FT, z_stretch, dz_bottom),
+    ),
 ) where {FT}
     n_quad_points = nh_poly + 1
-    stretch =
-        z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
+    stretch = stretch_from_bool(FT, z_stretch, dz_bottom)
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing,
     )
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem, stretch)
     grid = CommonGrids.Box3DGrid(
         FT;
         z_elem, x_min = 0, x_max, y_min = 0, y_max, z_min = 0, z_max,
@@ -211,13 +218,11 @@ Create a SliceXZGrid with topography support.
 - `x_max = 300000.0`: the domain maximum along the x-direction
 - `z_elem = 10`: the number of z-points
 - `z_max = 30000.0`: the domain maximum along the z-direction
+- `z_mesh = DefaultZMesh(FT; z_min = 0, z_max, z_elem, z_stretch)`: the vertical mesh
 - `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
   1D within each horizontal element is then `n_quad_points = nh_poly + 1`
 - `z_stretch = true`: whether to use vertical stretching
 - `dz_bottom = 500.0`: bottom layer thickness for stretching
-- `bubble = false`: enables the "bubble correction" for more accurate element
-  areas when computing the spectral element space. Note: Currently not supported
-  by SliceXZGrid in ClimaCore.
 - `periodic_x = true`: use periodic domain along x-direction
 - `topography = NoTopography()`: topography type
 - `topography_damping_factor = 5.0`: factor by which smallest resolved
@@ -236,20 +241,21 @@ function PlaneGrid(
     nh_poly = 3,
     z_stretch = true,
     dz_bottom = 500.0,
-    bubble = false,
     periodic_x = true,
     topography::AbstractTopography = NoTopography(),
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = LinearWarp(),
     topo_smoothing = false,
+    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
+        stretch = stretch_from_bool(FT, z_stretch, dz_bottom),
+    ),
 ) where {FT}
     n_quad_points = nh_poly + 1
-    stretch =
-        z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
+    stretch = stretch_from_bool(FT, z_stretch, dz_bottom)
     hypsography_fun = hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing,
     )
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem, stretch)
+
 
     grid = CommonGrids.SliceXZGrid(
         FT;
@@ -337,3 +343,6 @@ function hypsography_function_from_topography(
         return hypsography
     end
 end
+
+stretch_from_bool(::Type{FT}, z_stretch, dz_bottom) where {FT} =
+    z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
