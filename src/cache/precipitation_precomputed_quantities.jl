@@ -297,7 +297,7 @@ function set_precipitation_velocities!(
     @. ᶜwₙᵣ = getindex(
         CM2.rain_terminal_velocity(
             cm2p.sb,
-            cm2p.rtv,
+            cmc.Ch2022.rain,
             max(zero(Y.c.ρ), specific(Y.c.ρq_rai, Y.c.ρ)),
             Y.c.ρ,
             max(zero(Y.c.ρ), Y.c.ρn_rai),
@@ -307,7 +307,7 @@ function set_precipitation_velocities!(
     @. ᶜwᵣ = getindex(
         CM2.rain_terminal_velocity(
             cm2p.sb,
-            cm2p.rtv,
+            cmc.Ch2022.rain,
             max(zero(Y.c.ρ), specific(Y.c.ρq_rai, Y.c.ρ)),
             Y.c.ρ,
             max(zero(Y.c.ρ), Y.c.ρn_rai),
@@ -325,7 +325,7 @@ function set_precipitation_velocities!(
     @. ᶜwₙₗ = getindex(
         CM2.cloud_terminal_velocity(
             cm2p.sb.pdf_c,
-            cm2p.ctv,
+            cmc.stokes,
             max(zero(Y.c.ρ), specific(Y.c.ρq_liq, Y.c.ρ)),
             Y.c.ρ,
             max(zero(Y.c.ρ), Y.c.ρn_liq),
@@ -335,7 +335,7 @@ function set_precipitation_velocities!(
     @. ᶜwₗ = getindex(
         CM2.cloud_terminal_velocity(
             cm2p.sb.pdf_c,
-            cm2p.ctv,
+            cmc.stokes,
             max(zero(Y.c.ρ), specific(Y.c.ρq_liq, Y.c.ρ)),
             Y.c.ρ,
             max(zero(Y.c.ρ), Y.c.ρn_liq),
@@ -408,9 +408,9 @@ function set_precipitation_velocities!(
 
     # Cloud liquid (number)
     @. ᶜw⁰ = getindex(
-        CM2.rain_terminal_velocity(
-            cm2p.sb,
-            cm2p.rtv,
+        CM2.cloud_terminal_velocity(
+            cm2p.sb.pdf_c,
+            cmc.stokes,
             max(zero(Y.c.ρ), ᶜq_liq⁰),
             ᶜρ⁰,
             max(zero(Y.c.ρ), ᶜn_liq⁰),
@@ -427,9 +427,9 @@ function set_precipitation_velocities!(
 
     # Cloud liquid (mass)
     @. ᶜw⁰ = getindex(
-        CM2.rain_terminal_velocity(
-            cm2p.sb,
-            cm2p.rtv,
+        CM2.cloud_terminal_velocity(
+            cm2p.sb.pdf_c,
+            cmc.stokes,
             max(zero(Y.c.ρ), ᶜq_liq⁰),
             ᶜρ⁰,
             max(zero(Y.c.ρ), ᶜn_liq⁰),
@@ -470,7 +470,7 @@ function set_precipitation_velocities!(
     @. ᶜw⁰ = getindex(
         CM2.rain_terminal_velocity(
             cm2p.sb,
-            cm2p.rtv,
+            cmc.Ch2022.rain,
             max(zero(Y.c.ρ), ᶜq_rai⁰),
             ᶜρ⁰,
             max(zero(Y.c.ρ), ᶜn_rai⁰),
@@ -489,7 +489,7 @@ function set_precipitation_velocities!(
     @. ᶜw⁰ = getindex(
         CM2.rain_terminal_velocity(
             cm2p.sb,
-            cm2p.rtv,
+            cmc.Ch2022.rain,
             max(zero(Y.c.ρ), ᶜq_rai⁰),
             ᶜρ⁰,
             max(zero(Y.c.ρ), ᶜn_rai⁰),
