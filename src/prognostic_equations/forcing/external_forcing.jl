@@ -570,11 +570,18 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     q_tot = APL.ISDAC_q_tot(FT)
 
     # Convert ISDAC potential temperature to air temperature
+    FT = Spaces.undertype(axes(Y.c))
     ta_ISDAC =
-        (pres, z) -> TD.air_temperature(
-            thermo_params,
-            TD.PhaseEquil_pθq(thermo_params, pres, θ(z), q_tot(z)),
-        )
+        (pres, z) ->
+            TD.saturation_adjustment(
+                thermo_params,
+                TD.pθ_li(),
+                pres,
+                θ(z),
+                q_tot(z);
+                maxiter = 4,
+                tol = FT(0),
+            ).T
 
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶜlg = Fields.local_geometry_field(Y.c)

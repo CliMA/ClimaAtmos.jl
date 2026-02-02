@@ -331,8 +331,6 @@ function generate_external_forcing_file(
     if warming_amount isa Number
         # Get the relative humidity before warming; this will be used to scale the specific humidity after warming
         param_set = TD.Parameters.ThermodynamicsParameters(FT)
-        phase_partition =
-            TD.PhasePartition.(sim_forcing["hus"], sim_forcing["clw"], sim_forcing["cli"])
         # expand dimension and convert pressure levels from hPa (ERA5 raw) to Pa (needed for thermodynamics)
         p_expanded =
             FT.(
@@ -347,13 +345,22 @@ function generate_external_forcing_file(
                 param_set,
                 sim_forcing["ta"],
                 p_expanded,
-                TD.PhaseEquil{FT},
-                phase_partition,
+                sim_forcing["hus"],
+                sim_forcing["clw"],
+                sim_forcing["cli"],
             )
 
         # Warming the temperature
         sim_forcing["ta"] .+= warming_amount
-        ρ = TD.air_density.(param_set, sim_forcing["ta"], p_expanded, phase_partition)
+        ρ =
+            TD.air_density.(
+                param_set,
+                sim_forcing["ta"],
+                p_expanded,
+                sim_forcing["hus"],
+                sim_forcing["clw"],
+                sim_forcing["cli"],
+            )
 
         # Get the saturation specific humidity at the warmed temperature
         saturation_humidity_at_warming =

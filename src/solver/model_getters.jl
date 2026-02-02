@@ -634,12 +634,6 @@ function get_detrainment_model(parsed_args)
     end
 end
 
-function get_surface_thermo_state_type(parsed_args)
-    dict = Dict()
-    dict["GCMSurfaceThermoState"] = GCMSurfaceThermoState()
-    return dict[parsed_args["surface_thermo_state_type"]]
-end
-
 function get_tracers(parsed_args)
     aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
     time_varying_trace_gas_names = Tuple(parsed_args["time_varying_trace_gases"])

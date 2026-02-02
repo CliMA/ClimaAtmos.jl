@@ -517,20 +517,19 @@ function correct_surface_pressure_for_topography!(
         return false
     end
 
-    FT = eltype(thermo_params)
     grav = thermo_params.grav
 
     ᶠz_model_surface = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶠΔz = zeros(face_space)
     @. ᶠΔz = ᶠz_model_surface - ᶠz_surface
 
-    ᶠR_m = ᶠinterp.(TD.gas_constant_air.(thermo_params, TD.PhasePartition.(ᶜq_tot)))
+    ᶠR_m = ᶠinterp.(TD.gas_constant_air.(thermo_params, ᶜq_tot))
     ᶠR_m_sfc = Fields.level(ᶠR_m, Fields.half)
 
     ᶠT = ᶠinterp.(ᶜT)
     ᶠT_sfc = Fields.level(ᶠT, Fields.half)
 
-    @. p_sfc = p_sfc * exp(FT(-1) * ᶠΔz * grav / (ᶠR_m_sfc * ᶠT_sfc))
+    @. p_sfc = p_sfc * exp(-(ᶠΔz) * grav / (ᶠR_m_sfc * ᶠT_sfc))
 
     @info "Adjusted surface pressure to account for ERA5/model surface-height differences."
     return true
@@ -670,15 +669,15 @@ function overwrite_initial_conditions!(
         # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile,
         # recompute the pressure levels assuming hydrostatic balance is maintained.
         ᶜ∂lnp∂z = @. -thermo_params.grav /
-           (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
+           (TD.gas_constant_air(thermo_params, ᶜq_tot) * ᶜT)
         ᶠlnp_over_psfc = zeros(face_space)
         Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
         p_sfc .* exp.(ᶠlnp_over_psfc)
     end
-    ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp.(ᶠp), ᶜT, ᶜq_tot)
+    ᶜρ = TD.air_density.(thermo_params, ᶜT, ᶜinterp.(ᶠp), ᶜq_tot)
 
     # Assign prognostic variables from equilibrium moisture models
-    Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
+    Y.c.ρ .= TD.air_density.(thermo_params, ᶜT, ᶜinterp.(ᶠp), ᶜq_tot)
     # Velocity is first assigned on cell-centers and then interpolated onto
     # cell faces.
     vel =
@@ -710,10 +709,10 @@ function overwrite_initial_conditions!(
     e_kin = similar(ᶜT)
     e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
     e_pot = geopotential.(thermo_params.grav, Fields.coordinate_field(Y.c).z)
-    Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
+    Y.c.ρe_tot .= TD.total_energy.(thermo_params, e_kin, e_pot, ᶜT, ᶜq_tot) .* Y.c.ρ
     # Initialize prognostic EDMF 0M subdomains if present
     if hasproperty(Y.c, :sgsʲs)
-        ᶜmse = TD.specific_enthalpy.(thermo_params, ᶜts) .+ e_pot
+        ᶜmse = TD.enthalpy.(thermo_params, ᶜT, ᶜq_tot) .+ e_pot
         for name in propertynames(Y.c.sgsʲs)
             s = getproperty(Y.c.sgsʲs, name)
             hasproperty(s, :ρa) && fill!(s.ρa, 0)
@@ -819,14 +818,12 @@ function _overwrite_initial_conditions_from_file!(
     # p is then updated with the integral result, given p_sfc,
     # following which the thermodynamic state is constructed.
     ᶜ∂lnp∂z = @. -thermo_params.grav /
-       (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
+                 (TD.gas_constant_air(thermo_params, ᶜq_tot) * ᶜT)
     ᶠlnp_over_psfc = zeros(face_space)
     Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
     ᶠp = p_sfc .* exp.(ᶠlnp_over_psfc)
-    ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp.(ᶠp), ᶜT, ᶜq_tot)
-
     # Assign prognostic variables from equilibrium moisture models
-    Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
+    Y.c.ρ .= TD.air_density.(thermo_params, ᶜT, ᶜinterp.(ᶠp), ᶜq_tot)
     # Velocity is first assigned on cell-centers and then interpolated onto
     # cell faces.
     vel =
@@ -855,7 +852,7 @@ function _overwrite_initial_conditions_from_file!(
     e_kin = similar(ᶜT)
     e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
     e_pot = geopotential.(thermo_params.grav, Fields.coordinate_field(Y.c).z)
-    Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
+    Y.c.ρe_tot .= TD.total_energy.(thermo_params, e_kin, e_pot, ᶜT, ᶜq_tot) .* Y.c.ρ
     if hasproperty(Y.c, :ρq_tot)
         Y.c.ρq_tot .= ᶜq_tot .* Y.c.ρ
     else

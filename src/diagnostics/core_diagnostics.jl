@@ -1635,6 +1635,7 @@ add_diagnostic_variable!(
 ###
 function compute_cape!(out, state, cache, time)
     thermo_params = lazy.(CAP.thermodynamics_params(cache.params))
+    FT = eltype(thermo_params)
     g = lazy.(TD.Parameters.grav(thermo_params))
 
     # Get surface parcel properties from sfc_conditions
@@ -1646,27 +1647,42 @@ function compute_cape!(out, state, cache, time)
     # Compute liquid-ice potential temperature at surface (no condensate, so q_liq=q_ice=0)
     surface_θ_liq_ice =
         lazy.(
-            TD.liquid_ice_pottemp.(
+            TD.liquid_ice_pottemp_given_pressure.(
                 thermo_params,
                 surface_T,
                 surface_p,
-                TD.PhasePartition.(surface_q),
-            ),
-        )
-
-    # Create parcel thermodynamic states at each level based on energy & moisture at surface
-    parcel_ts_moist =
-        lazy.(
-            TD.PhaseEquil_pθq.(
-                thermo_params,
-                cache.precomputed.ᶜp,
-                surface_θ_liq_ice,
                 surface_q,
             ),
         )
 
+    # Helper function to extract just T from saturation_adjustment result
+    # (avoids broadcasting issues with NamedTuple containing bool)
+    _parcel_T_from_sa(thermo_params, p, θ_liq_ice, q_tot, maxiter, tol) =
+        TD.saturation_adjustment(
+            thermo_params,
+            TD.pθ_li(),
+            p,
+            θ_liq_ice,
+            q_tot;
+            maxiter,
+            tol,
+        ).T
+
+    # Create parcel thermodynamic states at each level based on energy & moisture at surface
+    parcel_T =
+        lazy.(
+            _parcel_T_from_sa.(
+                thermo_params,
+                cache.precomputed.ᶜp,
+                surface_θ_liq_ice,
+                surface_q,
+                4,
+                FT(0),
+            ),
+        )
+
     # Calculate virtual temperatures for parcel & environment
-    parcel_Tv = lazy.(TD.virtual_temperature.(thermo_params, parcel_ts_moist))
+    parcel_Tv = lazy.(TD.virtual_temperature.(thermo_params, parcel_T, surface_q))
     (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
     env_Tv =
         lazy.(

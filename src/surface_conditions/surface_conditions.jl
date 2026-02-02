@@ -224,9 +224,7 @@ function surface_state_to_conditions(
                         "q_flux cannot be specified when using a DryModel",
                     )
                 end
-                # Use ρ_sfc directly and compute cp_m from primitives
-                q_sfc = TD.PhasePartition(q_vap)
-                shf = θ_flux * ρ_sfc * TD.cp_m(thermo_params, q_sfc)
+                shf = θ_flux * ρ_sfc * TD.cp_m(thermo_params, q_vap)
                 lhf = q_flux * ρ_sfc * TD.latent_heat_vapor(thermo_params, T_sfc)
             end
             flux_specs = SF.FluxSpecs(ustar = parameterization.ustar, shf = shf, lhf = lhf)
