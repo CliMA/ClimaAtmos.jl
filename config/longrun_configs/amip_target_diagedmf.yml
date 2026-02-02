@@ -16,6 +16,6 @@ edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-t_end: "120days"
+t_end: "240days"
 toml: [toml/longrun_aquaplanet_diagedmf.toml]
 netcdf_output_at_levels: true

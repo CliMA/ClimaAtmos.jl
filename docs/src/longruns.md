@@ -8,24 +8,14 @@ longrun_hydrostatic_balance
 Solid body rotation. Test if the dry dycore can maintain the no flow steady state.
 ```
 ```
-longrun_dry_baroclinic_wave
+longrun_dry_baroclinic_wave_he60
 
 Dry baroclinic wave. Test the dry dycore initial value problem.
 ```
 ```
-longrun_dry_baroclinic_wave_he60
-
-Dry baroclinic wave with a higher resolution.
-```
-```
-longrun_moist_baroclinic_wave
-
-Moist baroclinic wave. Test the moist dycore initial value problem.
-```
-```
 longrun_moist_baroclinic_wave_he60
 
-Moist baroclinic wave with a higher resolution.
+Moist baroclinic wave. Test the moist dycore initial value problem.
 ```
 ```
 longrun_dry_held_suarez
@@ -75,20 +65,8 @@ Aquaplanet with idealized insolation, all-sky radiation, 1-moment microphysics.
 Use this job to test 1-moment microphysics related features.
 ```
 ```
-longrun_aquaplanet_dyamond
-
-Aquaplanet setup for DYAMOND (global high-resolution simulation). This job includes
-all the atmosphere components required for DYAMOND. It will be updated whenever new components are ready.
-```
-```
 amip_target_diagedmf
 
 Aquaplanet setup for AMIP (atmosphere-land simulation). This job includes all the
 working atmosphere components required for AMIP. It will be updated whenever new components are ready.
-```
-```
-amip_target_edonly
-
-Aquaplanet setup for AMIP (atmosphere-land simulation) without convection. This job includes all the
-working atmosphere components required for AMIP without convection. It will be updated whenever new components are ready.
 ```
