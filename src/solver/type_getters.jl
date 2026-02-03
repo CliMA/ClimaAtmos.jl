@@ -621,11 +621,6 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
     end
 end
 
-thermo_state_type(::DryModel, ::Type{FT}) where {FT} = TD.PhaseDry{FT}
-thermo_state_type(::EquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseEquil{FT}
-thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
-    TD.PhaseNonEquil{FT}
-
 auto_detect_restart_file(::OutputPathGenerator.OutputPathGeneratorStyle, _) =
     error("auto_detect_restart_file works only with ActiveLink")
 

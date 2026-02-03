@@ -154,8 +154,8 @@ function prescribe_flow!(Y, p, t, flow::PrescribedFlow)
     thermo_params = CAP.thermodynamics_params(p.params)
 
     @. Y.c.ρ = ᶜρ_init_dry + Y.c.ρq_tot
-    ᶜts = @. lazy(TD.PhaseEquil_ρTq(thermo_params, Y.c.ρ, ᶜT_init, Y.c.ρq_tot / Y.c.ρ))
+    ᶜq_tot = @. lazy(Y.c.ρq_tot / Y.c.ρ)
     ᶜe_kin = compute_kinetic(Y.c.uₕ, Y.f.u₃)
-    @. Y.c.ρe_tot = Y.c.ρ * TD.total_energy(thermo_params, ᶜts, ᶜe_kin, ᶜΦ)
+    @. Y.c.ρe_tot = Y.c.ρ * TD.total_energy(thermo_params, ᶜe_kin, ᶜΦ, ᶜT_init, ᶜq_tot)
     return nothing
 end

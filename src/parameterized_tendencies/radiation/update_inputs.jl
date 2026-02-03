@@ -103,13 +103,10 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
         end
 
         # assume that ᶜq_vap = ᶜq_tot when computing ᶜvmr_h2o
-        @. ᶜvmr_h2o =
-            TD.vol_vapor_mixing_ratio(thermo_params, TD.PhasePartition(ᶜq_tot))
+        @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(thermo_params, ᶜq_tot)
     else
-        @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
-            thermo_params,
-            TD.PhasePartition(ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno),
-        )
+        @. ᶜvmr_h2o =
+            TD.vol_vapor_mixing_ratio(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
         @. ᶜrh = min(
             max(
                 TD.relative_humidity(

@@ -35,7 +35,6 @@ TODO: Rename `ᶜK` to `ᶜκ`.
 function implicit_precomputed_quantities(Y, atmos)
     (; moisture_model, turbconv_model, microphysics_model) = atmos
     FT = eltype(Y)
-    TST = thermo_state_type(moisture_model, FT)
     n = n_mass_flux_subdomains(turbconv_model)
     gs_quantities = (;
         ᶜspecific = Base.materialize(ᶜspecific_gs_tracers(Y)),
@@ -117,7 +116,6 @@ function precomputed_quantities(Y, atmos)
             isnothing(atmos.vertical_diffusion)
     @assert !(atmos.moisture_model isa NonEquilMoistModel) ||
             !(atmos.microphysics_model isa Microphysics0Moment)
-    TST = thermo_state_type(atmos.moisture_model, FT)
     sa_result_type = @NamedTuple{T::FT, q_liq::FT, q_ice::FT}
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)

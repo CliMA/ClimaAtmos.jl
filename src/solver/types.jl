@@ -430,16 +430,12 @@ struct PiGroupsDetrainment <: AbstractDetrainmentModel end
 struct BuoyancyVelocityDetrainment <: AbstractDetrainmentModel end
 struct SmoothAreaDetrainment <: AbstractDetrainmentModel end
 
-abstract type AbstractSurfaceThermoState end
-struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
-
 abstract type AbstractTendencyModel end
 struct UseAllTendency <: AbstractTendencyModel end
 struct NoGridScaleTendency <: AbstractTendencyModel end
 struct NoSubgridScaleTendency <: AbstractTendencyModel end
 
 # Define broadcasting for types
-Base.broadcastable(x::AbstractSurfaceThermoState) = tuple(x)
 Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
 Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
@@ -507,8 +503,17 @@ function get_ρu₃qₜ_surface(flow::ShipwayHill2012VelocityProfile, thermo_par
     q_tot_sfc = rv_sfc / (1 + rv_sfc)  # 0.0148 kg/kg
     p_sfc = FT(100_700)
     θ_sfc = FT(297.9)
-    ts_sfc = TD.PhaseEquil_pθq(thermo_params, p_sfc, θ_sfc, q_tot_sfc)
-    ρ_sfc = TD.air_density(thermo_params, ts_sfc)  # 1.165 kg/m³
+    T =
+        TD.saturation_adjustment(
+            thermo_params,
+            TD.pθ_li(),
+            p_sfc,
+            θ_sfc,
+            q_tot_sfc;
+            maxiter = 4,
+            tol = FT(0),
+        ).T
+    ρ_sfc = TD.air_density(thermo_params, T, p_sfc, q_tot_sfc)  # 1.165 kg/m³
     w_sfc = Geometry.WVector(flow(0, t))
     return ρ_sfc * w_sfc * q_tot_sfc
 end

@@ -59,9 +59,6 @@ use_newton_rtol:
 newton_rtol:
   help: "Relative tolerance of Newton's method (only for ClimaTimeSteppers.jl; only used when `use_newton_rtol` is `true`)"
   value: 1.0e-5
-surface_thermo_state_type:
-  help: "Surface thermo state type [`GCMSurfaceThermoState` (default), `PrescribedThermoState`]"
-  value: "GCMSurfaceThermoState"
 split_ode:
   help: "Use split of ODE problem. Examples: [`true` (implicit, default), `false` (explicit)]"
   value: true
