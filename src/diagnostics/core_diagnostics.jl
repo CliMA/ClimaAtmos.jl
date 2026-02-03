@@ -1353,7 +1353,7 @@ function compute_cloud_top_height!(
     q_cond = @. lazy(q_liq + q_ice)
 
     # 1. Create the "cloudiness" mask using the sigmoid function
-    w = @. lazy(1 / (1 + exp(-(state.c.ρ * ct_constants.k) * (q_cond - ct_constants.thresh))))
+    w = @. lazy(1 / (1 + exp(-ct_constants.k * (q_cond - ct_constants.thresh))))
 
     # 2. Create a numerically stabilized exponential weight to favor higher altitudes
     az = @. lazy(ct_constants.a * z)
