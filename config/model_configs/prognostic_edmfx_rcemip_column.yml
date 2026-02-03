@@ -32,7 +32,7 @@ dt_save_state_to_disk: "60mins"
 toml: [toml/rcemip_SCM_prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [8, 8, 100]
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, cltz, hussfc, evspsbl, pr]
     period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, husraup, hussnup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, husraen, hussnen, tke]
     period: 10mins

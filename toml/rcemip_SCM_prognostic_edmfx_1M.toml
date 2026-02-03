@@ -1,8 +1,5 @@
 [zd_rayleigh]
-value = 40000.0
-
-[zd_viscous]
-value = 40000.0
+value = 30000
 
 [EDMF_surface_area]
 value = 0.1
