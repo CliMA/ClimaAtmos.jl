@@ -45,6 +45,8 @@ function get_diagnostics(
         parsed_args["netcdf_output_at_levels"] ? CAD.LevelsMethod() :
         CAD.FakePressureLevelsMethod()
 
+    horizontal_method = Symbol(get(parsed_args, "netcdf_horizontal_method", "spectral"))
+
     # The start_date keyword was added in v0.2.9. For prior versions, the diagnostics will
     # not contain the date
     maybe_add_start_date =
@@ -55,6 +57,7 @@ function get_diagnostics(
         output_dir,
         num_points = num_netcdf_points;
         z_sampling_method,
+        horizontal_method,
         sync_schedule = CAD.EveryStepSchedule(),
         maybe_add_start_date...,
     )

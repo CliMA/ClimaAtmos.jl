@@ -101,6 +101,7 @@ function setup_diagnostics_and_writers(
                 "diagnostics" => diagnostics,
                 "netcdf_interpolation_num_points" => nothing,
                 "netcdf_output_at_levels" => false,
+                "netcdf_horizontal_method" => "spectral",
             )
             user_scheduled_diagnostics, user_writers, _ = get_diagnostics(
                 diag_config,
