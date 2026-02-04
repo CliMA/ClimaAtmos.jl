@@ -724,7 +724,7 @@ function set_precipitation_cache!(
 end
 function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     (; dt) = p
-    (; ᶜT, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
+    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
 
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
@@ -732,6 +732,8 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
     ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
     ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+    ᶜq_vap_safe =
+        @. lazy(max(TD.vapor_specific_humidity(ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno), 0))
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
@@ -774,6 +776,7 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         ᶜq_rai,
         ᶜq_sno,
         ᶜT,
+        ᶜq_vap_safe,
         dt,
         cmp,
         thp,
