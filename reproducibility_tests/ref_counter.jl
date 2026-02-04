@@ -1,4 +1,4 @@
-308
+309
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+309
+ - Stabilize prognostic-EDMF nightly build with reduced hyperdiff Prandtl number. 
+
 308
  - PEDMF bugfix: return entr_detr_lim_tau for entr at the boundary when area fraction is negative
 
