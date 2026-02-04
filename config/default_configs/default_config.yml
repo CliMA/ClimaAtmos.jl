@@ -32,7 +32,7 @@ vorticity_hyperdiffusion_coefficient:
   value: 0.1857
 hyperdiffusion_prandtl_number:
   help: "Prandtl number for hyperdiffusion. Scalar hyperdiffusion coefficient = vorticity coefficient / Prandtl number."
-  value: 1.0
+  value: 0.6
 # Topography
 topography:
   help: "Define the surface elevation profile [`NoWarp` (default), `Earth`, `DCMIP200`, `Hughes2023`, `Agnesi`, `Schar`, `Cosine2D`, `Cosine3D`]"
