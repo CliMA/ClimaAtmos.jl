@@ -24,13 +24,23 @@ diagnostics:
     period: 1days
   - short_name: [reffclw, reffcli]
     period: 6hours
-  - short_name: [hus_neg_frac, hus_neg_mean, hus_min]
+  - short_name: [hus_neg_frac, hus_neg_mean, hus_neg_sum, hus_min]
     period: 1days
-  - short_name: [clw_neg_frac, clw_neg_mean, clw_min]
+  - short_name: [clw_neg_frac, clw_neg_mean, clw_neg_sum, clw_min]
     period: 1days
-  - short_name: [cli_neg_frac, cli_neg_mean, cli_min]
+  - short_name: [cli_neg_frac, cli_neg_mean, cli_neg_sum, cli_min]
     period: 1days
-  - short_name: [husra_neg_frac, husra_neg_mean, husra_min]
+  - short_name: [husra_neg_frac, husra_neg_mean, husra_neg_sum, husra_min]
     period: 1days
-  - short_name: [hussn_neg_frac, hussn_neg_mean, hussn_min]
+  - short_name: [hussn_neg_frac, hussn_neg_mean, hussn_neg_sum, hussn_min]
+    period: 1days
+  - short_name: [hus_pos_frac, hus_pos_mean, hus_pos_sum, hus_max]
+    period: 1days
+  - short_name: [clw_pos_frac, clw_pos_mean, clw_pos_sum, clw_max]
+    period: 1days
+  - short_name: [cli_pos_frac, cli_pos_mean, cli_pos_sum, cli_max]
+    period: 1days
+  - short_name: [husra_pos_frac, husra_pos_mean, husra_pos_sum, husra_max]
+    period: 1days
+  - short_name: [hussn_pos_frac, hussn_pos_mean, hussn_pos_sum, hussn_max]
     period: 1days
