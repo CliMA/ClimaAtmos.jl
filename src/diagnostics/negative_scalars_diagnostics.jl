@@ -17,6 +17,20 @@ function compute_min_per_level!(out, field)
 end
 
 """
+    compute_max_per_level!(out, field)
+
+Computes the maximum value of a field at each vertical level and stores it in `out`.
+"""
+function compute_max_per_level!(out, field)
+    out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
+    for i in 1:Spaces.nlevels(axes(field))
+        field_level = Fields.level(field, i)
+        Fields.level(out′, i) .= maximum(field_level)
+    end
+    return out′
+end
+
+"""
     compute_negative_mean_per_level!(out, field)
 
 Computes the mean of negative values of a field at each vertical level.
@@ -26,16 +40,64 @@ function compute_negative_mean_per_level!(out, field)
     out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
     for i in 1:Spaces.nlevels(axes(field))
         field_level = Fields.level(field, i)
-        # Mask: 1 for negative values, 0 otherwise (excludes zero)
-        negative_mask =
-            @. lazy(ifelse(field_level < 0, one(field_level), zero(field_level)))
-        # Sum of negative values only
-        sum_negative = sum(@. lazy(field_level * negative_mask))
-        # Count of negative values
-        count_negative = sum(negative_mask)
+        sum_negative = sum(x -> min(x, 0), field_level)
+        count_negative = sum(x -> x < 0, field_level)
+
         # Mean of negative values (0 if no negatives)
         Fields.level(out′, i) .=
             ifelse(count_negative > 0, sum_negative / count_negative, 0)
+    end
+    return out′
+end
+
+"""
+    compute_positive_mean_per_level!(out, field)
+
+Computes the mean of positive values of a field at each vertical level.
+If no positive values exist at a level, result is 0.
+"""
+function compute_positive_mean_per_level!(out, field)
+    out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
+    for i in 1:Spaces.nlevels(axes(field))
+        field_level = Fields.level(field, i)
+        sum_positive = sum(x -> max(x, 0), field_level)
+        count_positive = sum(x -> x > 0, field_level)
+
+        # Mean of positive values (0 if no positives)
+        Fields.level(out′, i) .=
+            ifelse(count_positive > 0, sum_positive / count_positive, 0)
+    end
+    return out′
+end
+
+"""
+    compute_negative_sum_per_level!(out, field)
+
+Computes the sum of negative values of a field at each vertical level.
+If no negative values exist at a level, result is 0.
+"""
+function compute_negative_sum_per_level!(out, field)
+    out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
+    for i in 1:Spaces.nlevels(axes(field))
+        field_level = Fields.level(field, i)
+        sum_negative = sum(x -> min(x, 0), field_level)
+        Fields.level(out′, i) .= sum_negative
+    end
+    return out′
+end
+
+"""
+    compute_positive_sum_per_level!(out, field)
+
+Computes the sum of positive values of a field at each vertical level.
+If no positive values exist at a level, result is 0.
+"""
+function compute_positive_sum_per_level!(out, field)
+    out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
+    for i in 1:Spaces.nlevels(axes(field))
+        field_level = Fields.level(field, i)
+        sum_positive = sum(x -> max(x, 0), field_level)
+        Fields.level(out′, i) .= sum_positive
     end
     return out′
 end
@@ -49,13 +111,30 @@ function compute_negative_fraction_per_level!(out, field)
     out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
     for i in 1:Spaces.nlevels(axes(field))
         field_level = Fields.level(field, i)
-        negative_mask_field_level = @. lazy(-sign(min(field_level, 0)))
-        # Weighted by the area
-        Fields.level(out′, i) .=
-            sum(negative_mask_field_level) / sum(@. lazy(one((field_level))))
+        count_negative = sum(x -> x < 0, field_level)
+        count_all = sum(one, field_level)
+        Fields.level(out′, i) .= count_negative / count_all
     end
     return out′
 end
+
+"""
+    compute_positive_fraction_per_level!(out, field)
+
+Computes the fraction of the level where `field` is positive.
+"""
+function compute_positive_fraction_per_level!(out, field)
+    out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
+    for i in 1:Spaces.nlevels(axes(field))
+        field_level = Fields.level(field, i)
+        count_positive = sum(x -> x > 0, field_level)
+        count_all = sum(one, field_level)
+        Fields.level(out′, i) .= count_positive / count_all
+    end
+    return out′
+end
+
+
 
 # =============================================================================
 # Code generation for tracer diagnostics
@@ -91,6 +170,13 @@ const DIAGNOSTIC_TYPES = [
         "Minimum value of",
     ),
     (
+        "_max",
+        compute_max_per_level!,
+        "Vertical Profile of Maximal",
+        "kg/kg",
+        "Maximum value of",
+    ),
+    (
         "_neg_mean",
         compute_negative_mean_per_level!,
         "Vertical Profile of Mean Negative",
@@ -98,11 +184,39 @@ const DIAGNOSTIC_TYPES = [
         "Mean of negative",
     ),
     (
+        "_pos_mean",
+        compute_positive_mean_per_level!,
+        "Vertical Profile of Mean Positive",
+        "kg/kg",
+        "Mean of positive",
+    ),
+    (
+        "_neg_sum",
+        compute_negative_sum_per_level!,
+        "Vertical Profile of Sum of Negative",
+        "kg/kg",
+        "Sum of negative",
+    ),
+    (
+        "_pos_sum",
+        compute_positive_sum_per_level!,
+        "Vertical Profile of Sum of Positive",
+        "kg/kg",
+        "Sum of positive",
+    ),
+    (
         "_neg_frac",
         compute_negative_fraction_per_level!,
         "Vertical Profile of Negative Fraction",
-        "%",
+        "",
         "Fraction of grid points with negative",
+    ),
+    (
+        "_pos_frac",
+        compute_positive_fraction_per_level!,
+        "Vertical Profile of Positive Fraction",
+        "",
+        "Fraction of grid points with positive",
     ),
 ]
 
