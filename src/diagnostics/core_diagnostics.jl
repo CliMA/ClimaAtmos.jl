@@ -1357,7 +1357,7 @@ function compute_cloud_top_height!(
 
     # 2. Create a numerically stabilized exponential weight to favor higher altitudes
     az = @. lazy(ct_constants.a * z)
-    max_az = maximum(az) # This prevents overflow in the exp() call
+    max_az = @. lazy(maximum(az)) # This prevents overflow in the exp() call
     exp_az_stabilized = @. lazy(exp(az - max_az))
     
     # 3. Combine weights into a single common term 
@@ -1377,8 +1377,8 @@ function compute_cloud_top_height!(
     Operators.column_integral_definite!(denom, denominator)
 
     # Handle the no-cloud case to prevent division by zero
-    is_cloudy = Fields.level(denom, 1) .> eps(eltype(denom))
-    result = @. ifelse(is_cloudy, num / denom, 0.0)
+    FT = eltype(denom)
+    result = @. ifelse(denom > eps(FT), num / denom, zero(FT))
 
     if isnothing(out)
         out = result
