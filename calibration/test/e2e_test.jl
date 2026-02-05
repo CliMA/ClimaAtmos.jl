@@ -1,5 +1,5 @@
 #= End-to-end test
-Runs a perfect model calibration, calibrating on the parameter `astronomical_unit`
+Runs a perfect model calibration, calibrating on the parameter `total_solar_irradiance`
 with top-of-atmosphere radiative shortwave flux in the loss function.
 
 Currently uses ClimaCalibrate.SlurmManager, which integrates with Distributed.jl's workers.
@@ -38,7 +38,7 @@ function process_member_data(simdir::SimDir)
     isempty(simdir.vars) && return NaN
     rsut =
         get(simdir; short_name = "rsut", reduction = "average", period = "30d")
-    return slice(rsut; time = 30days).data
+    return slice(rsut, time = 0days).data
 end
 
 addprocs(CAL.SlurmManager())
@@ -59,9 +59,9 @@ addprocs(CAL.SlurmManager())
     # Experiment Configuration
     ensemble_size = 50
     n_iterations = 10
-    astronomical_unit = 149_597_870_000
+    total_solar_irradiance = 1362
     noise = 0.1 * I
-    prior = constrained_gaussian("astronomical_unit", 6e10, 1e11, 2e5, Inf)
+    prior = constrained_gaussian("total_solar_irradiance", 1000, 200, 0, Inf)
     obs_path = joinpath(experiment_dir, "observations.jld2")
 end
 
@@ -113,7 +113,7 @@ function scatter_plot(eki::EKP.EnsembleKalmanProcess)
         CairoMakie.scatter!(ax, gg, uu)
     end
 
-    CairoMakie.hlines!(ax, [astronomical_unit], linestyle = :dash)
+    CairoMakie.hlines!(ax, [total_solar_irradiance], linestyle = :dash)
     CairoMakie.vlines!(ax, observations, linestyle = :dash)
 
     output = joinpath(output_dir, "scatter.png")
@@ -133,7 +133,7 @@ function param_versus_iter_plot(eki::EKP.EnsembleKalmanProcess)
         CairoMakie.scatter!(ax, fill(i, length(param)), vec(param))
     end
 
-    CairoMakie.hlines!(ax, [astronomical_unit]; color = :red, linestyle = :dash)
+    CairoMakie.hlines!(ax, [total_solar_irradiance]; color = :red, linestyle = :dash)
 
     output = joinpath(output_dir, "param_vs_iter.png")
     CairoMakie.save(output, f)
@@ -149,4 +149,4 @@ spread = map(var, params)
 # Spread should be heavily decreased as particles have converged
 @test last(spread) / first(spread) < 0.1
 # Parameter should be close to true value
-@test mean(last(params)) ≈ astronomical_unit rtol = 0.02
+@test mean(last(params)) ≈ total_solar_irradiance rtol = 0.02
