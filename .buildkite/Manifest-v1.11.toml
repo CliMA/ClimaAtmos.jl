@@ -2,7 +2,7 @@
 
 julia_version = "1.11.8"
 manifest_format = "2.0"
-project_hash = "06f35284954620eb3311eb3f7600710ddb4a8b36"
+project_hash = "7d664493685844cbc71f30595787269d64779b15"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -2346,7 +2346,9 @@ version = "1.11.0"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "Artifacts", "ClimaComms", "DocStringExtensions", "Random"]
-git-tree-sha1 = "3c4435c2103deda98e6c6830cb43d86facd774cc"
+git-tree-sha1 = "e2063ef0421e4171227f1ad8dca8596687fc05ce"
+repo-rev = "zs/small_zenith_angle"
+repo-url = "https://github.com/CliMA/RRTMGP.jl.git"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
 version = "0.21.6"
 weakdeps = ["CUDA", "ClimaParams", "NCDatasets"]
