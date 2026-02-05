@@ -82,8 +82,7 @@ function cloud_sources(
     return ifelse(
         S > FT(0),
         triangle_inequality_limiter(S, limit(qᵥ - qₛₗ, dt, 2), limit(qₗ, dt, 2)),
-        # For evaporation: use abs() since qᵥ - qₛₗ < 0 when subsaturated
-        -triangle_inequality_limiter(abs(S), limit(qₗ, dt, 2), limit(abs(qᵥ - qₛₗ), dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(qₗ, dt, 2), FT(0)),
     )
 end
 function cloud_sources(
@@ -133,8 +132,7 @@ function cloud_sources(
     return ifelse(
         S > FT(0),
         triangle_inequality_limiter(S, limit(qᵥ - qₛᵢ, dt, 2), limit(qᵢ, dt, 2)),
-        # For sublimation: use abs() since qᵥ - qₛᵢ < 0 when subsaturated
-        -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2), limit(abs(qᵥ - qₛᵢ), dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2), FT(0)),
     )
 end
 
