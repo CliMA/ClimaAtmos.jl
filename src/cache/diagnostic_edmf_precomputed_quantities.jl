@@ -857,6 +857,16 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     microphys_1m_params,
                     thermo_params,
                 )
+                q_vap_safeʲ_prev_level = @. lazy(
+                    max(
+                        TD.vapor_specific_humidity(
+                            q_tot_safeʲ_prev_level,
+                            q_liq_raiʲ_prev_level,
+                            q_ice_snoʲ_prev_level,
+                        ),
+                        0,
+                    ),
+                )
                 # Rain sinks from the updrafts
                 compute_precipitation_sinks!(
                     Sᵖ_prev_level,
@@ -869,6 +879,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     q_raiʲ_prev_level,
                     q_snoʲ_prev_level,
                     Tʲ_prev_level,
+                    q_vap_safeʲ_prev_level,
                     dt,
                     microphys_1m_params,
                     thermo_params,
@@ -1515,7 +1526,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     cloud_params = CAP.microphysics_cloud_params(p.params)
     (; dt) = p
 
-    (; ᶜT, ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) =
+        p.precomputed
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
@@ -1539,6 +1551,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         thermo_params,
     )
     # Rain sinks from the updrafts
+    ᶜq_vap_safe =
+        @. lazy(max(TD.vapor_specific_humidity(ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno), 0))
     compute_precipitation_sinks!(
         ᶜSᵖ,
         ᶜSqᵣᵖ⁰,
@@ -1550,6 +1564,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         specific.(Y.c.ρq_rai, Y.c.ρ),
         specific.(Y.c.ρq_sno, Y.c.ρ),
         ᶜT,
+        ᶜq_vap_safe,
         dt,
         microphys_1m_params,
         thermo_params,

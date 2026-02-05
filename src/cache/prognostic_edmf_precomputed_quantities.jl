@@ -492,7 +492,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     cmp = CAP.microphysics_1m_params(params)
     cmc = CAP.microphysics_cloud_params(params)
 
-    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜTʲs) = p.precomputed
+    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs) = p.precomputed
+    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
     (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
     (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
 
@@ -552,6 +553,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             cmp,
             thp,
         )
+        ᶜq_vap_safeʲ = @. lazy(
+            max(
+                TD.vapor_specific_humidity(
+                    ᶜq_tot_safeʲs.:($$j),
+                    ᶜq_liq_raiʲs.:($$j),
+                    ᶜq_ice_snoʲs.:($$j),
+                ),
+                0,
+            ),
+        )
         compute_precipitation_sinks!(
             ᶜSᵖ,
             ᶜSqᵣᵖʲs.:($j),
@@ -563,6 +574,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             Y.c.sgsʲs.:($j).q_rai,
             Y.c.sgsʲs.:($j).q_sno,
             ᶜTʲs.:($j),
+            ᶜq_vap_safeʲ,
             dt,
             cmp,
             thp,
@@ -601,6 +613,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
+    ᶜq_vap_safe⁰ =
+        @. lazy(max(TD.vapor_specific_humidity(ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰), 0))
     compute_precipitation_sources!(
         ᶜSᵖ,
         ᶜSᵖ_snow,
@@ -630,6 +644,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜq_rai⁰,
         ᶜq_sno⁰,
         ᶜT⁰,
+        ᶜq_vap_safe⁰,
         dt,
         cmp,
         thp,

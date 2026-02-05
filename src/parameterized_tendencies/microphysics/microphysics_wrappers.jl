@@ -309,7 +309,7 @@ function compute_precipitation_sources!(
 end
 
 """
-    compute_precipitation_sinks!(Sᵖ, Sqᵣᵖ, Sqₛᵖ, ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, T, dt, mp, thp)
+    compute_precipitation_sinks!(Sᵖ, Sqᵣᵖ, Sqₛᵖ, ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, T, q_vap,dt, mp, thp)
 
  - Sᵖ - a temporary containter to help compute precipitation source terms
  - Sqᵣᵖ, Sqₛᵖ - cached storage for precipitation source terms
@@ -335,6 +335,7 @@ function compute_precipitation_sinks!(
     qᵣ,
     qₛ,
     T,
+    q_vap,
     dt,
     mp,
     thp,
@@ -349,7 +350,7 @@ function compute_precipitation_sinks!(
     @. Sᵖ = -triangle_inequality_limiter(
         -CM1.evaporation_sublimation(rps..., qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, T),
         limit(qᵣ, dt, 5),
-        limit(TD.vapor_specific_humidity(qₜ, qₗ + qᵢ, qᵣ + qₛ), dt, 5),
+        limit(q_vap, dt, 5),
     )
     @. Sqᵣᵖ += Sᵖ
 
@@ -366,8 +367,8 @@ function compute_precipitation_sinks!(
     @. Sᵖ = CM1.evaporation_sublimation(sps..., qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, T)
     @. Sᵖ = ifelse(
         Sᵖ > FT(0),
-        triangle_inequality_limiter(Sᵖ, limit(TD.vapor_specific_humidity(qₜ, qₗ + qᵣ, qᵢ + qₛ), dt, 5), limit(qₛ, dt, 5)),
-        -triangle_inequality_limiter(FT(-1) * Sᵖ, limit(qₛ, dt, 5), limit(TD.vapor_specific_humidity(qₜ, qₗ + qᵣ, qᵢ + qₛ), dt, 5)),
+        triangle_inequality_limiter(Sᵖ, limit(q_vap, dt, 5), limit(qₛ, dt, 5)),
+        -triangle_inequality_limiter(FT(-1) * Sᵖ, limit(qₛ, dt, 5), limit(q_vap, dt, 5)),
     )
     @. Sqₛᵖ += Sᵖ
     #! format: on
