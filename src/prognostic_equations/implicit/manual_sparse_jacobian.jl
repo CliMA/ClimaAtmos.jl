@@ -813,40 +813,34 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ᶜq_liq_raiʲs,
                 ᶜq_ice_snoʲs,
                 ᶜKʲs,
+            ) = p.precomputed
+            (;
                 bdmr_l,
                 bdmr_r,
                 bdmr,
-            ) = p.precomputed
+            ) = p.scratch
 
             # upwinding options for q_tot and mse
-            is_third_order =
-                p.atmos.numerics.edmfx_mse_q_tot_upwinding == Val(:third_order)
-            ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
+            ᶠupwind = ᶠupwind1
             ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
                 top = Operators.SetValue(zero(CT3{FT})),
                 bottom = Operators.SetValue(zero(CT3{FT})),
             ) # Need to wrap ᶠupwind in this for well-defined boundaries.
-            UpwindMatrixRowType =
-                is_third_order ? QuaddiagonalMatrixRow : BidiagonalMatrixRow
-            ᶠupwind_matrix = is_third_order ? ᶠupwind3_matrix : ᶠupwind1_matrix
+            UpwindMatrixRowType = BidiagonalMatrixRow
+            ᶠupwind_matrix = ᶠupwind1_matrix
             ᶠset_upwind_matrix_bcs = Operators.SetBoundaryOperator(;
                 top = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
                 bottom = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
             ) # Need to wrap ᶠupwind_matrix in this for well-defined boundaries.
 
             # upwinding options for other tracers
-            is_tracer_upwinding_third_order =
-                p.atmos.numerics.edmfx_tracer_upwinding == Val(:third_order)
-            ᶠtracer_upwind = is_tracer_upwinding_third_order ? ᶠupwind3 : ᶠupwind1
+            ᶠtracer_upwind = ᶠupwind1
             ᶠset_tracer_upwind_bcs = Operators.SetBoundaryOperator(;
                 top = Operators.SetValue(zero(CT3{FT})),
                 bottom = Operators.SetValue(zero(CT3{FT})),
             ) # Need to wrap ᶠtracer_upwind in this for well-defined boundaries.
-            TracerUpwindMatrixRowType =
-                is_tracer_upwinding_third_order ? QuaddiagonalMatrixRow :
-                BidiagonalMatrixRow
-            ᶠtracer_upwind_matrix =
-                is_tracer_upwinding_third_order ? ᶠupwind3_matrix : ᶠupwind1_matrix
+            TracerUpwindMatrixRowType = BidiagonalMatrixRow
+            ᶠtracer_upwind_matrix = ᶠupwind1_matrix
             ᶠset_tracer_upwind_matrix_bcs = Operators.SetBoundaryOperator(;
                 top = Operators.SetValue(zero(TracerUpwindMatrixRowType{CT3{FT}})),
                 bottom = Operators.SetValue(zero(TracerUpwindMatrixRowType{CT3{FT}})),
@@ -869,34 +863,39 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ᶜq_ice_snoʲs.:(1),
                 )
 
+            ᶜu³ʲ = p.scratch.ᶜtemp_CT3
+            @. ᶜu³ʲ = ᶜinterp(ᶠu³ʲs.:(1))
+            ᶜu³ʲ_data = ᶜu³ʲ.components.data.:1
+            @. bdmr_l = convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix())
+            @. bdmr_r = convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix())
+            @. ᶜtridiagonal_matrix =
+                -DiagonalMatrixRow(adjoint(ᶜu³ʲ)) ⋅ ifelse(ᶜu³ʲ_data < 0, bdmr_r, bdmr_l) ⋅
+                ᶠgradᵥ_matrix()
+
             ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
             @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
-                dtγ * (
-                    DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
-                    ᶜadvdivᵥ_matrix() ⋅
-                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)))
-                ) - (I,)
+                dtγ * ᶜtridiagonal_matrix - (I,)
             ∂ᶜq_totʲ_err_∂ᶠu₃ʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(f.sgsʲs.:(1).u₃)]
-            @. p.scratch.ᶜbidiagonal_adjoint_matrix_c3 =
-                -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
-                    ᶠset_upwind_bcs(
-                        ᶠupwind(CT3(sign(ᶠu³ʲ_data)), Y.c.sgsʲs.:(1).q_tot),
-                    ) * adjoint(C3(sign(ᶠu³ʲ_data))),
-                ) + DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot) ⋅ ᶜadvdivᵥ_matrix()
             @. ∂ᶜq_totʲ_err_∂ᶠu₃ʲ =
-                dtγ * p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+                dtγ *
+                -DiagonalMatrixRow(
+                    adjoint(
+                        ifelse(ᶜu³ʲ_data < 0,
+                            ᶜright_bias(ᶠgradᵥ(Y.c.sgsʲs.:(1).q_tot)),
+                            ᶜleft_bias(ᶠgradᵥ(Y.c.sgsʲs.:(1).q_tot)),
+                        ),
+                    ),
+                ) ⋅ ᶜinterp_matrix() ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
 
             ∂ᶜmseʲ_err_∂ᶜmseʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
             @. ∂ᶜmseʲ_err_∂ᶜmseʲ =
                 dtγ * (
-                    DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
-                    ᶜadvdivᵥ_matrix() ⋅
-                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) -
+                    ᶜtridiagonal_matrix -
                     DiagonalMatrixRow(
-                        adjoint(ᶜinterp(ᶠu³ʲs.:(1))) *
+                        adjoint(ᶜu³ʲ) *
                         ᶜgradᵥ_ᶠΦ *
                         Y.c.ρ *
                         ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
@@ -904,14 +903,16 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ) - (I,)
             ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(f.sgsʲs.:(1).u₃)]
-            @. p.scratch.ᶜbidiagonal_adjoint_matrix_c3 =
-                -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
-                    ᶠset_upwind_bcs(
-                        ᶠupwind(CT3(sign(ᶠu³ʲ_data)), Y.c.sgsʲs.:(1).mse),
-                    ) * adjoint(C3(sign(ᶠu³ʲ_data))),
-                ) + DiagonalMatrixRow(Y.c.sgsʲs.:(1).mse) ⋅ ᶜadvdivᵥ_matrix()
             @. ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
-                dtγ * p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+                dtγ *
+                -DiagonalMatrixRow(
+                    adjoint(
+                        ifelse(ᶜu³ʲ_data < 0,
+                            ᶜright_bias(ᶠgradᵥ(Y.c.sgsʲs.:(1).mse)),
+                            ᶜleft_bias(ᶠgradᵥ(Y.c.sgsʲs.:(1).mse)),
+                        ),
+                    ),
+                ) ⋅ ᶜinterp_matrix() ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
 
             ∂ᶜρaʲ_err_∂ᶜρaʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).ρa)]
@@ -1045,8 +1046,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
             ᶜu₃ʲ = p.scratch.ᶜtemp_C3
             @. ᶜu₃ʲ = ᶜinterp(Y.f.sgsʲs.:(1).u₃)
-            @. bdmr_l = convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix())
-            @. bdmr_r = convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix())
             @. bdmr = ifelse(ᶜu₃ʲ.components.data.:1 > 0, bdmr_l, bdmr_r)
             @. ᶠtridiagonal_matrix_c3 = -(ᶠgradᵥ_matrix()) ⋅ bdmr
             if rs isa RayleighSponge
@@ -1100,29 +1099,20 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     # advection
                     ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χʲ_name, χʲ_name]
                     @. ∂ᶜχʲ_err_∂ᶜχʲ =
-                        dtγ * (
-                            DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
-                            ᶜadvdivᵥ_matrix() ⋅
-                            ᶠset_tracer_upwind_matrix_bcs(
-                                ᶠtracer_upwind_matrix(ᶠu³ʲs.:(1)),
-                            )
-                        ) - (I,)
+                        dtγ * ᶜtridiagonal_matrix - (I,)
                     ∂ᶜχʲ_err_∂ᶠu₃ʲ =
                         matrix[χʲ_name, @name(f.sgsʲs.:(1).u₃)]
                     # pull out and store for performance
-                    @. ᶜtracer_advection_matrix =
-                        (ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
-                            ᶠset_tracer_upwind_bcs(
-                                ᶠtracer_upwind(CT3(sign(ᶠu³ʲ_data)), ᶜχʲ),
-                            ) * adjoint(C3(sign(ᶠu³ʲ_data))),
-                        )
-                    @. ᶜtracer_advection_matrix =
-                        dtγ * (
-                            DiagonalMatrixRow(ᶜχʲ) ⋅ ᶜadvdivᵥ_matrix()
-                            -
-                            ᶜtracer_advection_matrix)
                     @. ∂ᶜχʲ_err_∂ᶠu₃ʲ =
-                        ᶜtracer_advection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+                        dtγ *
+                        -DiagonalMatrixRow(
+                            adjoint(
+                                ifelse(ᶜu³ʲ_data < 0,
+                                    ᶜright_bias(ᶠgradᵥ(ᶜχʲ)),
+                                    ᶜleft_bias(ᶠgradᵥ(ᶜχʲ)),
+                                ),
+                            ),
+                        ) ⋅ ᶜinterp_matrix() ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
 
                     # sedimentation
                     # (pull out common subexpression for performance)

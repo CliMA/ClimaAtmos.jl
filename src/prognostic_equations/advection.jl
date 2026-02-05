@@ -366,6 +366,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     ᶠz = Fields.coordinate_field(Y.f).z
     ᶜu₃ʲ = p.scratch.ᶜtemp_C3
+    ᶜu³ʲ = p.scratch.ᶜtemp_CT3
     ᶜKᵥʲ = p.scratch.ᶜtemp_scalar_2
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
@@ -393,6 +394,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     end
 
     for j in 1:n
+        @. ᶜu³ʲ = ᶜinterp(ᶠu³ʲs.:($$j))
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
 
         # Flux form vertical advection of area farction with the grid mean velocity
@@ -403,14 +405,14 @@ function edmfx_sgs_vertical_advection_tendency!(
         # Advective form advection of mse and q_tot with the grid mean velocity
         # Note: This allocates because the function is too long
         va = vertical_advection(
-            ᶠu³ʲs.:($j),
+            ᶜu³ʲ,
             Y.c.sgsʲs.:($j).mse,
             edmfx_mse_q_tot_upwinding,
         )
         @. Yₜ.c.sgsʲs.:($$j).mse += va
 
         va = vertical_advection(
-            ᶠu³ʲs.:($j),
+            ᶜu³ʲ,
             Y.c.sgsʲs.:($j).q_tot,
             edmfx_mse_q_tot_upwinding,
         )
@@ -461,7 +463,7 @@ function edmfx_sgs_vertical_advection_tendency!(
 
                 # Advective form advection of tracers with updraft velocity
                 va = vertical_advection(
-                    ᶠu³ʲs.:($j),
+                    ᶜu³ʲ,
                     ᶜqʲ,
                     edmfx_tracer_upwinding,
                 )
@@ -541,7 +543,7 @@ function edmfx_sgs_vertical_advection_tendency!(
 
                 # Advective form advection of tracers with updraft velocity
                 va = vertical_advection(
-                    ᶠu³ʲs.:($j),
+                    ᶜu³ʲ,
                     ᶜχʲ,
                     edmfx_tracer_upwinding,
                 )
@@ -563,6 +565,33 @@ function edmfx_sgs_vertical_advection_tendency!(
         end
     end
 end
+
+"""
+    vertical_advection(ᶜu³, ᶜχ, scheme::Val)
+
+Compute the vertical advective tendency of a cell-centered scalar `ᶜχ`
+using the vertical velocity `ᶜu³` in advective form `-u³ ∂χ/∂z`.
+
+# Schemes
+- `Val(:none)`: centered gradient (non-dissipative).
+- `Val(:first_order)`: first-order upwind gradient based on the sign of `u³`
+  for added numerical stability.
+
+Returns a lazy field with the cell-centered advection tendency.
+"""
+vertical_advection(ᶜu³, ᶜχ, ::Val{:none}) =
+    @. lazy(
+        -dot(ᶜu³, ᶜinterp(ᶠgradᵥ(ᶜχ))),
+    )
+vertical_advection(ᶜu³, ᶜχ, ::Val{:first_order}) =
+    @. lazy(
+        -dot(ᶜu³,
+            ifelse(ᶜu³.components.data.:1 < 0,
+                ᶜright_bias(ᶠgradᵥ(ᶜχ)),
+                ᶜleft_bias(ᶠgradᵥ(ᶜχ)),
+            ),
+        ),
+    )
 
 """
     updraft_sedimentation(ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ)

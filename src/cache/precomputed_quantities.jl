@@ -229,9 +229,6 @@ function precomputed_quantities(Y, atmos)
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
             ρtke_flux = similar(Fields.level(Y.f, half), C3{FT}),
-            bdmr_l = similar(Y.c, BidiagonalMatrixRow{FT}),
-            bdmr_r = similar(Y.c, BidiagonalMatrixRow{FT}),
-            bdmr = similar(Y.c, BidiagonalMatrixRow{FT}),
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),

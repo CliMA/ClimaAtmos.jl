@@ -133,6 +133,9 @@ function temporary_quantities(Y, atmos)
         ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜtridiagonal_matrix_scalar = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶠtridiagonal_matrix_c3 = similar(Y.f, TridiagonalMatrixRow{C3{FT}}),
+        bdmr_l = similar(Y.c, BidiagonalMatrixRow{FT}),
+        bdmr_r = similar(Y.c, BidiagonalMatrixRow{FT}),
+        bdmr = similar(Y.c, BidiagonalMatrixRow{FT}),
         (!isnothing(atmos.prescribed_flow) ? (; temp_Yₜ_imp = similar(Y)) : (;))...,
     )
 end

@@ -407,7 +407,7 @@ edmfx_detr_model:
   help: "EDMFX detrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
   value: ~
 edmfx_mse_q_tot_upwinding:
-  help: "EDMFX upwinding mode [`none`, `first_order` (default), `third_order`]"
+  help: "EDMFX upwinding mode [`none`, `first_order` (default)]"
   value: first_order
 edmfx_tracer_upwinding:
   help: "EDMFX tracer upwinding mode [`none`, `first_order` (default)]"

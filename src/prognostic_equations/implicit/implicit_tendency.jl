@@ -97,13 +97,6 @@ function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind3(ᶠu³, ᶜχ))))
 end
 
-vertical_advection(ᶠu³, ᶜχ, ::Val{:none}) =
-    @. lazy(-(ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
-vertical_advection(ᶠu³, ᶜχ, ::Val{:first_order}) =
-    @. lazy(-(ᶜadvdivᵥ(ᶠupwind1(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
-vertical_advection(ᶠu³, ᶜχ, ::Val{:third_order}) =
-    @. lazy(-(ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
-
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; moisture_model, turbconv_model, rayleigh_sponge, microphysics_model) =
         p.atmos
