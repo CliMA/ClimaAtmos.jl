@@ -6,7 +6,7 @@ and generates comparison plots. It is NOT included in the automated test suite
 because it has no @test assertions - it only generates plots for manual verification.
 
 To run manually:
-    julia --project=test test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl
+    julia --project test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl
 =#
 
 using ClimaComms
@@ -18,10 +18,7 @@ import Interpolations
 import ClimaAtmos
 import ClimaAtmos as CA
 import ClimaCore
-import ClimaCore.Spaces as Spaces
-import ClimaCore.Fields as Fields
-import ClimaCore.Geometry as Geometry
-import ClimaCore.Operators as Operators
+import ClimaCore: Spaces, Fields, Geometry, Operators, Grids
 const FT = Float64
 
 include("../gw_plotutils.jl")
@@ -159,9 +156,10 @@ column_domain = ClimaCore.Domains.IntervalDomain(
 column_mesh = ClimaCore.Meshes.IntervalMesh(column_domain, nelems = 40)
 
 # construct  the face space from the center one
-column_face_space = ClimaCore.Spaces.FaceFiniteDifferenceSpace(column_mesh)
+grid = Grids.FiniteDifferenceGrid(ClimaComms.device(), column_mesh)
+column_face_space = Spaces.FiniteDifferenceSpace(grid, Spaces.CellFace())
 column_center_space =
-    ClimaCore.Spaces.CenterFiniteDifferenceSpace(column_face_space)
+    Spaces.CenterFiniteDifferenceSpace(column_face_space)
 
 coordinate = Fields.coordinate_field(column_center_space)
 
