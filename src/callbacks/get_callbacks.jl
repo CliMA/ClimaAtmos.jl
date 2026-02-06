@@ -22,7 +22,8 @@ function get_diagnostics(
     # NOTE: Everything has to be lowercase in ALLOWED_REDUCTIONS (so that we can match
     # "max" and "Max")
     ALLOWED_REDUCTIONS = Dict(
-        "inst" => (nothing, nothing), # nothing is: just dump the variable
+        #"inst" => (nothing, nothing), # nothing is: just dump the variable
+        "inst" => (nothing, ((output, _) -> (@assert iszero(sum(min.(output, 0)))))),
         "nothing" => (nothing, nothing),
         "max" => (max, nothing),
         "min" => (min, nothing),

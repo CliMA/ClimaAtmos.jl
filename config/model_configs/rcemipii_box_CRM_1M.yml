@@ -74,22 +74,23 @@ toml: [toml/rcemipii_box.toml]
 output_default_diagnostics: false  # adds various 1h diagnostics. Only use if `dt_save_state_to_disk` is a multiple of 1hr
 diagnostics:
   - short_name: [
-      wa, ua, va, ta, thetaa, ha, # dynamics & thermodynamics
-      hus, hur, cl, clw, cli, cltz,  # liquid
-      pr,  # precipitation
-      ke,  # kinetic energy for spectrum
+      # wa, ua, va, ta, thetaa, ha, # dynamics & thermodynamics
+      # hus, hur, cl, clw, cli, # moisture
+      cltz,  # cloud top height
+      # pr,  # precipitation
+      # ke,  # kinetic energy for spectrum
       # Smagorinsky diagnostics
-      Dh_smag, strainh_smag,  # horizontal
-      Dv_smag, strainv_smag  # vertical
+      # Dh_smag, strainh_smag,  # horizontal
+      # Dv_smag, strainv_smag  # vertical
       # DecayWithHeight diffusion coefficient
       # edt
     ]
     # period: 10mins
     period: 1hours
   ## 1M microphsics
-  - short_name: [husra, hussn]
+  # - short_name: [husra, hussn]
     # period: 10mins
-    period: 1hours
+    # period: 1hours
   # 2M microphysics
   # - short_name: [cdnc, ncra]
   #   period: 10mins
