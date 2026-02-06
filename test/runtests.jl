@@ -70,7 +70,7 @@ if TEST_GROUP in ("parameterizations", "all")
     @safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
 
     # NOTE: Gravity wave visualization scripts (test_nogw_3d.jl, test_nogw_mima.jl,
-    # test_nogw_single_column.jl, ogwd_3d.jl, ogwd_baseflux.jl) are not included
+    # test_nogw_single_column.jl, test_ogw_3d.jl, test_ogw_baseflux.jl) are not included
     # in the test suite because they have no @test assertions - they only generate
     # comparison plots for visual verification.
 end
