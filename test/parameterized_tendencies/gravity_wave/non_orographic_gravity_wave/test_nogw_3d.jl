@@ -17,7 +17,7 @@ import ClimaCore.Geometry as Geometry
 
 include("../gw_plotutils.jl")
 
-const FT = Float64
+const FT = Float32
 
 # test Figure 8 of the Alexander and Dunkerton (1999) paper:
 # https://journals.ametsoc.org/view/journals/atsc/56/24/1520-0469_1999_056_4167_aspomf_2.0.co_2.xml?tab_body=pdf
