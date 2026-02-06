@@ -57,7 +57,7 @@ center_space = axes(Y.c)
 ᶜz = Fields.coordinate_field(Y.c).z
 
 # Compute source_level and damp_level based on height
-center_z = Array(parent(ᶜz))[:]
+center_z = Array(Fields.field2array(ᶜz))[:, 1]
 source_level = argmin(abs.(center_z .- gw_source_height))
 damp_level = Spaces.nlevels(center_space)
 
@@ -172,7 +172,7 @@ CA.non_orographic_gravity_wave_forcing(
     v_waveforcing,
     p,
 )
-Jan_uforcing = parent(uforcing)[:]
+Jan_uforcing = Array(Fields.field2array(uforcing))[:, 1]
 fig = generate_empty_figure()
 create_plot!(
     fig;
@@ -212,7 +212,7 @@ CA.non_orographic_gravity_wave_forcing(
     v_waveforcing,
     p,
 )
-April_uforcing = parent(uforcing)[:]
+April_uforcing = Array(Fields.field2array(uforcing))[:, 1]
 fig = generate_empty_figure()
 create_plot!(
     fig;
@@ -252,7 +252,7 @@ CA.non_orographic_gravity_wave_forcing(
     v_waveforcing,
     p,
 )
-July_uforcing = parent(uforcing)[:]
+July_uforcing = Array(Fields.field2array(uforcing))[:, 1]
 fig = generate_empty_figure()
 create_plot!(
     fig;
@@ -292,7 +292,7 @@ CA.non_orographic_gravity_wave_forcing(
     v_waveforcing,
     p,
 )
-Oct_uforcing = parent(uforcing)[:]
+Oct_uforcing = Array(Fields.field2array(uforcing))[:, 1]
 fig = generate_empty_figure()
 create_plot!(
     fig;
