@@ -26,6 +26,7 @@ import ..gcm_height
 import ..gcm_driven_profile_tmean
 import ..constant_buoyancy_frequency_initial_state
 import ..weather_model_data_path
+import ..parse_date
 
 import Thermodynamics.TemperatureProfiles:
     DecayingTemperatureProfile, DryAdiabaticProfile
@@ -40,6 +41,7 @@ import Interpolations as Intp
 import NCDatasets as NC
 import Statistics: mean
 import ClimaUtilities.SpaceVaryingInputs
+import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import Dates
 
 include("local_state.jl")

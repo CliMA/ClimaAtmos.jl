@@ -4,8 +4,12 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+v0.35.2
+-------
+
 v0.35.1
 -------
+- [4276](https://github.com/CliMA/ClimaAtmos.jl/pull/4276) Create IC type to allow initializing AMIP with ERA5 on model levels. Add artifact which corresponds to default AMIP start date (Jan 1, 2010). Also removes unused ᶜspecific in the precomputed cache.
 
 v0.35.0
 -------

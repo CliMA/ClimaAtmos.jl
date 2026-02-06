@@ -37,7 +37,6 @@ function implicit_precomputed_quantities(Y, atmos)
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     gs_quantities = (;
-        ᶜspecific = Base.materialize(ᶜspecific_gs_tracers(Y)),
         ᶜu = similar(Y.c, C123{FT}),
         ᶠu³ = similar(Y.f, CT3{FT}),
         ᶠu = similar(Y.f, CT123{FT}),

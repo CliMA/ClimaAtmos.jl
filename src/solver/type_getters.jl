@@ -436,6 +436,8 @@ function get_initial_condition(parsed_args, atmos)
             parsed_args["start_date"],
             parsed_args["era5_initial_condition_dir"],
         )
+    elseif parsed_args["initial_condition"] == "AMIPFromERA5"
+        return ICs.AMIPFromERA5(parsed_args["start_date"])
     elseif parsed_args["initial_condition"] == "ShipwayHill2012"
         return ICs.ShipwayHill2012()
     else
