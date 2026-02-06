@@ -626,13 +626,13 @@ end
 
 function default_model_callbacks(water::AtmosWater;
     dt_cloud_fraction,
-    call_cloud_diagnostics_per_stage = false,
     start_date,
     dt,
     t_start,
     t_end,
     kwargs...)
-    if !call_cloud_diagnostics_per_stage && !isnothing(water.moisture_model)
+    if !isnothing(water.call_cloud_diagnostics_per_stage) &&
+       !isnothing(water.moisture_model)
         return cloud_fraction_callback(
             dt_cloud_fraction,
             dt,

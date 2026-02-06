@@ -428,9 +428,7 @@ steps:
 
       - label: ":computer: CRM rcemipii in a box with 1M"
         command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/rcemipii_box_CRM_1M.yml
-          --job_id rcemipii_box_CRM_1M
+          julia --color=yes --project=.buildkite runscripts/rcemipii_box_CRM_1M.jl
 
           julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
           --job_id rcemipii_box_CRM_1M

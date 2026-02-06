@@ -326,6 +326,11 @@ function time_to_seconds(s::String)
     return value * factors[unit]
 end
 
+function error_if_crashed(ret_code)
+    ret_code == :simulation_crashed &&
+        error("The ClimaAtmos simulation has crashed. See the stack trace for details.")
+end
+
 function verify_callbacks(t)
     if length(t) ≠ length(unique(t))
         @show length(t)

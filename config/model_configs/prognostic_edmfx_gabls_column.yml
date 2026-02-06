@@ -15,7 +15,7 @@ edmfx_filter: true
 prognostic_tke: true
 moist: "equil"
 config: "column"
-hyperdiff: false
+hyperdiff: "false"
 z_max: 400
 x_elem: 2
 y_elem: 2

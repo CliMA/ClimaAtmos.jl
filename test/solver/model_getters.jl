@@ -3,7 +3,7 @@ ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 
 @testset "Hyperdiffusion config" begin
-    @info "CAM_SE (Special case of ClimaHyperdiffusion)"
+    @info "CAM_SE (Special case of Hyperdiffusion)"
 
     # Test that CAM_SE uses the correct hardcoded coefficients
     # These match the values from https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2017MS001257
@@ -25,7 +25,7 @@ import ClimaAtmos as CA
     cam_se_ν₄_vort = FT(0.150 * 1.238)
     cam_se_prandtl = FT(0.2)
     cam_se_ν₄_dd = FT(5)
-    @test hyperdiff_model isa CA.ClimaHyperdiffusion
+    @test hyperdiff_model isa CA.Hyperdiffusion
     @test hyperdiff_model.ν₄_vorticity_coeff == cam_se_ν₄_vort
     @test hyperdiff_model.prandtl_number == cam_se_prandtl
     @test hyperdiff_model.divergence_damping_factor == cam_se_ν₄_dd

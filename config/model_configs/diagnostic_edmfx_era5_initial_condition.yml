@@ -10,7 +10,7 @@ topo_smoothing: true
 topography: "Earth"
 rayleigh_sponge: true
 
-hyperdiff: ClimaHyperdiffusion
+hyperdiff: Hyperdiffusion
 divergence_damping_factor: 50.0 # large value to damp IC waves
 vorticity_hyperdiffusion_coefficient: 0.1857
 hyperdiffusion_prandtl_number: 0.2
