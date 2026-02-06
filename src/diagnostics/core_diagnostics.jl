@@ -1347,24 +1347,40 @@ function compute_cloud_top_height!(
     q_ice = cache.precomputed.cloud_diagnostics_tuple.q_ice
     z = Fields.coordinate_field(state.c).z
 
-    ct_constants = CAP.microphysics_cloud_params(cache.params).ct_constants
+    FT = eltype(z)
+
+    #ct_constants = CAP.microphysics_cloud_params(cache.params).ct_constants
+
+    # set constants
+    a = FT(1)
+    q_thresh = FT(1e-8)
+    k = FT(5e9)
 
     # Condensate density (kg/m^3)
     q_cond = @. lazy(q_liq + q_ice)
 
     # 1. Create the "cloudiness" mask using the sigmoid function
-    w = @. lazy(1 / (1 + exp(-ct_constants.k * (q_cond - ct_constants.thresh))))
+    w = @. lazy(1 / (1 + exp(-k * (q_cond - q_thresh))))
+
+    @assert iszero(sum(min.(0,w)))
 
     # 2. Create a numerically stabilized exponential weight to favor higher altitudes
-    az = @. lazy(ct_constants.a * z)
-    max_az = @. lazy(maximum(az)) # This prevents overflow in the exp() call
-    exp_az_stabilized = @. lazy(exp(az - max_az))
+    # az = @. lazy(a * z)
+    # max_az = @. lazy(maximum(az)) # This prevents overflow in the exp() call
+    # exp_az_stabilized = @. lazy(exp(az - max_az))
+    exp_az_stabilized = @. lazy(exp(a * (z / $maximum(z)-1)))
+
+    @assert iszero(sum(min.(0,exp_az_stabilized)))
     
     # 3. Combine weights into a single common term 
     common_weight = @. lazy(w * exp_az_stabilized)
+
+    @assert iszero(sum(min.(0,common_weight)))
     
     # Define numerator and denominator for the weighted average 
     numerator = @. lazy(common_weight * z)
+
+    @assert iszero(sum(min.(0,numerator)))
 
     # The denominator is just the common_weight itself
     denominator = common_weight
@@ -1376,15 +1392,21 @@ function compute_cloud_top_height!(
     Operators.column_integral_definite!(num, numerator)
     Operators.column_integral_definite!(denom, denominator)
 
+    @assert iszero(sum(min.(0,num)))
+    @assert iszero(sum(min.(0,denom)))
+
     # Handle the no-cloud case to prevent division by zero
-    FT = eltype(denom)
-    result = @. ifelse(denom > eps(FT), num / denom, zero(FT))
+    result = @. lazy(ifelse(denom > eps(FT), num / denom, zero(FT)))
+
+    @assert iszero(sum(min.(0,result)))
 
     if isnothing(out)
         out = result
     else
         out .= result
     end
+
+    @assert iszero(sum(min.(0,out)))
 
     return out
 end
