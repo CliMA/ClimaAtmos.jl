@@ -1,0 +1,41 @@
+[nogw_source_pressure]
+value = 31500.0
+
+[nogw_damp_pressure]
+value = 85.0
+
+[nogw_Bw]
+value = 0.4
+
+[nogw_Bt_0]
+value = 0.0043
+
+[nogw_Bt_n]
+value = 0.001
+
+[nogw_Bt_s]
+value = 0.001
+
+[nogw_Bt_eq]
+value = 0.0043
+
+[nogw_cw]
+value = 35.0
+
+[nogw_cw_tropics]
+value = 35.0
+
+[nogw_cn]
+value = 2.0
+
+[nogw_phi0_n]
+value = 15.0
+
+[nogw_phi0_s]
+value = -15.0
+
+[nogw_dphi_n]
+value = 10.0
+
+[nogw_dphi_s]
+value = -10.0

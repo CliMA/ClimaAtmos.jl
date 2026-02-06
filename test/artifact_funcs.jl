@@ -61,3 +61,29 @@ function gfdl_ogw_data_path()
     )
     return AW.get_data_folder(gfdl_data)
 end
+
+# Preprocessed OGWD computed drag artifacts (h_elem=8)
+function ogwd_computed_drag_h8_path()
+    dataset = AW.ArtifactWrapper(
+        @__DIR__,
+        "ogwd-computed-drag-h8",
+        AW.ArtifactFile[AW.ArtifactFile(
+            url = "https://caltech.box.com/shared/static/pttv63tc7yjbergg4cswo5qu3jlphd2m.hdf5",
+            filename = "computed_drag_Earth_false_1_8.hdf5",
+        ),],
+    )
+    return AW.get_data_folder(dataset)
+end
+
+# Preprocessed OGWD computed drag artifacts (h_elem=16)
+function ogwd_computed_drag_h16_path()
+    dataset = AW.ArtifactWrapper(
+        @__DIR__,
+        "ogwd-computed-drag-h16",
+        AW.ArtifactFile[AW.ArtifactFile(
+            url = "https://caltech.box.com/shared/static/oxg7jkxrfemmcqphepm6r13s3pt76x9f.hdf5",
+            filename = "computed_drag_Earth_false_1_16.hdf5",
+        ),],
+    )
+    return AW.get_data_folder(dataset)
+end
