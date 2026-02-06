@@ -1,5 +1,4 @@
-import CUDA
-ENV["CLIMACOMMS_DEVICE"] = "CUDA"
+using CUDA
 
 import ClimaComms
 import ClimaComms.@import_required_backends
