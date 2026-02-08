@@ -185,6 +185,8 @@ function _compare(
     ignore,
 ) where {FT <: AbstractFloat}
     error = maximum(_error(v1, v2))
+    value = maximum(v1)
+    println("$name: $value")
     return print_maybe(error <= 100eps(eltype(v1)), "$name error: $error")
 end
 

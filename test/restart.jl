@@ -271,6 +271,8 @@ else
         Dict(
             "h_elem" => 4,
             "z_elem" => 15,
+            "z_max" => 30000,
+            "initial_condition" => "MoistBaroclinicWave",
             "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
             "reproducible_restart" => true,
             "check_nan_every" => 3,
