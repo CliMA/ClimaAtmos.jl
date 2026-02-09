@@ -1817,23 +1817,21 @@ add_diagnostic_variable!(
 function compute_covariance_diagnostics!(out, state, cache, time, type)
     thermo_params = CAP.thermodynamics_params(cache.params)
 
-    # Reuse central compute_θ_covariance function for θ-based covariances
-    (ᶜq′q′, ᶜθ′θ′, ᶜθ′q′) = compute_θ_covariance(
-        state, cache, thermo_params,
-    )
+    # Read T-based covariances from cache
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = cache.precomputed
 
     result = if type == :qt_qt
         ᶜq′q′
-    elseif type == :tht_tht
-        ᶜθ′θ′
-    elseif type == :qt_tht
-        ᶜθ′q′
+    elseif type == :T_T
+        ᶜT′T′
+    elseif type == :qt_T
+        ᶜT′q′
     else
         error("Unknown variance type")
     end
 
     if isnothing(out)
-        return Base.materialize(result)
+        return copy(result)
     else
         out .= result
     end
@@ -1841,10 +1839,10 @@ end
 
 compute_env_q_tot_variance!(out, state, cache, time) =
     compute_covariance_diagnostics!(out, state, cache, time, :qt_qt)
-compute_env_theta_liq_ice_variance!(out, state, cache, time) =
-    compute_covariance_diagnostics!(out, state, cache, time, :tht_tht)
-compute_env_q_tot_theta_liq_ice_covariance!(out, state, cache, time) =
-    compute_covariance_diagnostics!(out, state, cache, time, :qt_tht)
+compute_env_temperature_variance!(out, state, cache, time) =
+    compute_covariance_diagnostics!(out, state, cache, time, :T_T)
+compute_env_q_tot_temperature_covariance!(out, state, cache, time) =
+    compute_covariance_diagnostics!(out, state, cache, time, :qt_T)
 
 add_diagnostic_variable!(
     short_name = "env_q_tot_variance",
@@ -1854,15 +1852,15 @@ add_diagnostic_variable!(
 )
 
 add_diagnostic_variable!(
-    short_name = "env_theta_liq_ice_variance",
-    long_name = "Environment Variance of Liquid Ice Potential Temperature",
+    short_name = "env_temperature_variance",
+    long_name = "Environment Variance of Temperature",
     units = "K^2",
-    compute! = compute_env_theta_liq_ice_variance!,
+    compute! = compute_env_temperature_variance!,
 )
 
 add_diagnostic_variable!(
-    short_name = "env_q_tot_theta_liq_ice_covariance",
-    long_name = "Environment Covariance of Total Specific Humidity and Liquid Ice Potential Temperature",
+    short_name = "env_q_tot_temperature_covariance",
+    long_name = "Environment Covariance of Total Specific Humidity and Temperature",
     units = "kg kg^-1 K",
-    compute! = compute_env_q_tot_theta_liq_ice_covariance!,
+    compute! = compute_env_q_tot_temperature_covariance!,
 )

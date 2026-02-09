@@ -350,7 +350,7 @@ function get_microphysics_model(parsed_args)
     if use_sgs_quadrature && !(base_scheme isa NoPrecipitation)
         FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
         distribution = get_sgs_distribution(parsed_args)
-        quadrature_order = get(parsed_args, "quadrature_order", 3)
+        quadrature_order = get(parsed_args, "quadrature_order", 2)
         return QuadratureMicrophysics(base_scheme; FT, distribution, quadrature_order)
     else
         return base_scheme
@@ -443,16 +443,6 @@ function get_forcing_type(parsed_args)
     return nothing
 end
 
-struct CallCloudDiagnosticsPerStage end
-function get_call_cloud_diagnostics_per_stage(parsed_args)
-    ccdps = parsed_args["call_cloud_diagnostics_per_stage"]
-    @assert ccdps in (nothing, true, false)
-    return if ccdps in (nothing, false)
-        nothing
-    elseif ccdps == true
-        CallCloudDiagnosticsPerStage()
-    end
-end
 
 function get_subsidence_model(parsed_args, radiation_mode, FT)
     subsidence = parsed_args["subsidence"]

@@ -53,7 +53,7 @@ function QuadratureMicrophysics(
     base_model::M;
     FT::Type = Float32,
     distribution = GaussianSGS(),
-    quadrature_order = 3,
+    quadrature_order = 2,
 ) where {M <: AbstractPrecipitationModel}
     quad = SGSQuadrature(FT; quadrature_order, distribution)
     return QuadratureMicrophysics(base_model, quad)
@@ -889,12 +889,11 @@ end
 
 Groups moisture-related models and types.
 """
-@kwdef struct AtmosWater{MM, PM, CM, MTTS, CCDPS, TNM}
+@kwdef struct AtmosWater{MM, PM, CM, MTTS, TNM}
     moisture_model::MM = DryModel()
     microphysics_model::PM = NoPrecipitation()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
-    call_cloud_diagnostics_per_stage::CCDPS = nothing
     tracer_nonnegativity_method::TNM = nothing
 end
 
@@ -1095,7 +1094,7 @@ The default AtmosModel provides:
 - `microphysics_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
 - `cloud_model`: GridScaleCloud(), QuadratureCloud()
 - `microphysics_tendency_timestepping`: Explicit(), Implicit()
-- `call_cloud_diagnostics_per_stage`: nothing or CallCloudDiagnosticsPerStage()
+
 
 ## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
 Internal testing and calibration components for single-column setups:

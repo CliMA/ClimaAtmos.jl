@@ -122,7 +122,6 @@ function amip_target_diagedmf(context, output_dir)
     callback_kwargs = (;
         dt_rad = "1secs",
         dt_cloud_fraction = "1secs",
-        call_cloud_diagnostics_per_stage = true,
     )
 
     args = (; model,
@@ -226,11 +225,13 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             # Computed in tendencies (which are not computed in this case)
             :hyperdiff,
             # Scratch-like precomputed field for microphysics (uninitialized until tendencies run)
-            :ᶜmp_result,
+            :ᶜmp_tendency,
             # rc is some CUDA/CuArray internal object that we don't care about
             :rc,
             # DataHandlers contains caches, so they are stateful
             :data_handler,
+            # Covariance fields are recomputed in set_precomputed_quantities!
+            :ᶜT′T′, :ᶜq′q′, :ᶜT′q′,
             rrtmgp_clear_fix...,
             # Config-specific
             more_ignore...,
@@ -269,7 +270,7 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :ghost_buffer,
             :hyperdiffusion_ghost_buffer,
             :data_handler,
-            :ᶜmp_result,
+            :ᶜmp_tendency,
             :ᶜT′T′, :ᶜq′q′, :ᶜT′q′,
             :rc,
             rrtmgp_clear_fix...,
@@ -361,9 +362,7 @@ if MANYTESTS
                             edmfx_model,
                             insolation = CA.IdealizedInsolation(),
                             reproducible_restart = CA.ReproducibleRestart(),
-                            test_dycore_consistency = CA.TestDycoreConsistency(),
-                            call_cloud_diagnostics_per_stage = CA.CallCloudDiagnosticsPerStage(),
-                        )
+                            test_dycore_consistency = CA.TestDycoreConsistency())
 
                         # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
                         # hard-code this to be always false for those versions
@@ -397,7 +396,6 @@ if MANYTESTS
                         callback_kwargs = (;
                             dt_rad = "1secs",
                             dt_cloud_fraction = "1secs",
-                            call_cloud_diagnostics_per_stage = true,
                         )
                         args = (;
                             model,

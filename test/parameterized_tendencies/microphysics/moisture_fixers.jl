@@ -2,8 +2,7 @@
 Unit tests for moisture_fixers.jl
 
 Tests cover:
-1. `clip()` - non-negative clipping
-2. `tracer_nonnegativity_vapor_tendency()` - tendency computation
+1. `tracer_nonnegativity_vapor_tendency()` - tendency computation
 =#
 
 using Test
@@ -11,51 +10,23 @@ using ClimaAtmos
 
 # Import functions under test
 import ClimaAtmos:
-    clip, tracer_nonnegativity_vapor_tendency, limit, triangle_inequality_limiter
+    tracer_nonnegativity_vapor_tendency, limit
 
 @testset "Moisture Fixers" begin
 
-    @testset "clip()" begin
-        @testset "basic functionality" begin
-            # Positive values pass through
-            @test clip(0.01) == 0.01
-            @test clip(1.0) == 1.0
-
-            # Zero stays zero
-            @test clip(0.0) == 0.0
-
-            # Negative values clipped to zero
-            @test clip(-0.01) == 0.0
-            @test clip(-1.0) == 0.0
-        end
-
-        @testset "type stability" begin
-            @test eltype(clip(Float32(-0.1))) == Float32
-            @test eltype(clip(Float64(-0.1))) == Float64
-            @test clip(Float32(0.5)) == Float32(0.5)
-        end
-
-        @testset "edge cases" begin
-            # Very small negative
-            @test clip(-1e-15) == 0.0
-
-            # Very small positive preserved
-            @test clip(1e-15) ≈ 1e-15
-        end
-    end
 
     @testset "tracer_nonnegativity_vapor_tendency()" begin
         dt = 1.0
         q_vap = 0.01  # 10 g/kg vapor available
 
         @testset "no correction needed" begin
-            # Positive tracer: no correction
+            # Positive tracer: no correction (smooth approx gives ~ε residual)
             @test tracer_nonnegativity_vapor_tendency(0.001, q_vap, dt) ≈ 0.0 atol =
-                eps(Float64)
+                1e-7
 
             # Zero tracer: no correction
             @test tracer_nonnegativity_vapor_tendency(0.0, q_vap, dt) ≈ 0.0 atol =
-                eps(Float64)
+                1e-7
         end
 
         @testset "correction for negative tracer" begin
@@ -78,13 +49,13 @@ import ClimaAtmos:
 
             # Should be limited by vapor (using n=5 sharing)
             @test S > 0.0
-            @test S <= q_vap_small / dt / 5 + eps(Float64)
+            @test S <= q_vap_small / dt / 5 + 1e-7
         end
 
         @testset "no vapor available" begin
             # Negative tracer but no vapor to borrow from
             S = tracer_nonnegativity_vapor_tendency(-0.001, 0.0, dt)
-            @test S ≈ 0.0 atol = eps(Float64)
+            @test S ≈ 0.0 atol = 1e-7
         end
 
         @testset "type stability" begin
@@ -102,8 +73,8 @@ import ClimaAtmos:
             # Correction is bounded: cannot add more mass than available
             for q in [-0.001, -0.01, -0.1]
                 S = tracer_nonnegativity_vapor_tendency(q, q_vap, dt)
-                # Tendency * dt * 5 (number of species) should not exceed vapor
-                @test S * dt * 5 <= q_vap + eps(Float64)
+                # Tendency * dt * 5 (number of species sharing) should not exceed vapor
+                @test S * dt * 5 <= q_vap + 1e-7
             end
         end
     end

@@ -73,6 +73,9 @@ if TEST_GROUP in ("parameterizations", "all")
     @safetestset "Tendency limiters tests" begin @time include("parameterized_tendencies/microphysics/tendency_limiters.jl") end
     @safetestset "Moisture fixers tests" begin @time include("parameterized_tendencies/microphysics/moisture_fixers.jl") end
     @safetestset "Cloud fraction tests" begin @time include("parameterized_tendencies/microphysics/cloud_fraction.jl") end
+    @safetestset "SGS saturation tests" begin @time include("parameterized_tendencies/microphysics/sgs_saturation.jl") end
+    @safetestset "BMT integration tests" begin @time include("parameterized_tendencies/microphysics/bmt_integration.jl") end
+    @safetestset "Allocation tests" begin @time include("parameterized_tendencies/microphysics/allocations.jl") end
 
     # NOTE: Gravity wave visualization scripts (nogw_test_3d.jl, nogw_test_mima.jl,
     # nogw_test_single_column.jl, ogwd_3d.jl, ogwd_baseflux.jl) are not included

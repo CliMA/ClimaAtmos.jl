@@ -166,31 +166,4 @@ import ClimaParams as CP
         end
     end
 
-    @testset "Allocation Test" begin
-        FT = Float64
-        toml_dict = CP.create_toml_dict(FT)
-        thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
-        quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
-
-        ρ = FT(1.0)
-        T_mean = FT(280.0)
-        q_mean = FT(0.01)
-        T′T′ = FT(1.0)
-        q′q′ = FT(1e-6)
-        T′q′ = FT(0.0)
-
-        # Warm-up
-        _ = ClimaAtmos.compute_sgs_saturation_adjustment(
-            thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, T′q′,
-        )
-
-        # Test allocations
-        allocs = @allocated ClimaAtmos.compute_sgs_saturation_adjustment(
-            thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, T′q′,
-        )
-
-        # Should have minimal allocations (closure for get_x_hat may allocate small amount)
-        @test allocs < 2000
-    end
-
 end

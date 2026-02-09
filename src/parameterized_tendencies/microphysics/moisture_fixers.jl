@@ -7,29 +7,6 @@
 import ClimaCore.MatrixFields as MF
 
 """
-    clip(q)
-
-Clip a value to be non-negative.
-
-Provides a branchless `max(0, q)` operation suitable for GPU kernels.
-
-# Arguments
-- `q`: Value to clip (any numeric type)
-
-# Returns
-`max(0, q)` with the same type as `q`.
-
-# Example
-```julia
-q_liq_safe = clip(q_liq)  # Ensures non-negative
-```
-"""
-@inline function clip(q)
-    FT = eltype(q)
-    return max(FT(0), q)
-end
-
-"""
     tracer_nonnegativity_vapor_tendency(q, q_vap, dt)
 
 Compute a tendency to restore negative tracer values by borrowing from vapor.
@@ -52,9 +29,8 @@ Tendency [kg/kg/s] to add to tracer:
 Uses `n=5` in `limit()` to share vapor among multiple tracers that may need correction.
 """
 @inline function tracer_nonnegativity_vapor_tendency(q, q_vap, dt)
-    FT = eltype(q)
     # -min(0, q/dt) gives positive tendency when q < 0
-    return smooth_min_limiter(-min(FT(0), q / dt), limit(q_vap, dt, 5))
+    return smooth_min_limiter(-min(zero(q), q / dt), limit(q_vap, dt, 5))
 end
 
 # Default: no correction (dry model, equilibrium moisture, etc.)

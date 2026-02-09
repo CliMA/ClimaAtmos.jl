@@ -20,6 +20,12 @@
 
 
 #=
+313
+ - Change microphysics to using bulk microphysics tendencies, with limiters on total 
+   tendencies (rather than individual species tendencies).
+ - Change cloud fraction calculation to Sommeria-Deardorff moment-based approach, which 
+   underestimates cloud fraction without microphysics quadratures.  
+
 312
  - Relax entr/detr limits for prognostic EDMF when entr/detr is treated implicitly
 
