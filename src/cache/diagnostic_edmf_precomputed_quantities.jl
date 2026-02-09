@@ -821,15 +821,18 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
             # 0-moment microphysics: sink of q_tot from precipitation removal
             if microphysics_model isa Microphysics0Moment
+                mp_result_prev_level = Fields.field_values(
+                    Fields.level(p.precomputed.ᶜmp_result, i - 1))
+                @. mp_result_prev_level = BMT.bulk_microphysics_tendencies(
+                    BMT.Microphysics0Moment(),
+                    microphys_0m_params,
+                    thermo_params,
+                    Tʲ_prev_level,
+                    q_liq_raiʲ_prev_level,
+                    q_ice_snoʲ_prev_level,
+                )
                 @. S_q_totʲ_prev_level = limit_sink(
-                    BMT.bulk_microphysics_tendencies(
-                        BMT.Microphysics0Moment(),
-                        microphys_0m_params,
-                        thermo_params,
-                        Tʲ_prev_level,
-                        q_liq_raiʲ_prev_level,
-                        q_ice_snoʲ_prev_level,
-                    ).dq_tot_dt,
+                    mp_result_prev_level.dq_tot_dt,
                     q_totʲ_prev_level, dt, 1,
                 )
                 # 1-moment microphysics: cloud water (liquid and ice) and
@@ -1450,20 +1453,19 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     microphys_0m_params = CAP.microphysics_0m_params(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
     (; dt) = p
-    (; ᶜT, ᶜq_liq_rai, ᶜq_ice_sno, ᶜSqₜᵐ⁰) = p.precomputed
+    (; ᶜT, ᶜq_liq_rai, ᶜq_ice_sno, ᶜSqₜᵐ⁰, ᶜmp_result) = p.precomputed
 
     # Environment precipitation sources (to be applied to grid mean)
-    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    @. ᶜSqₜᵐ⁰ = limit_sink(
-        BMT.bulk_microphysics_tendencies(
-            BMT.Microphysics0Moment(),
-            microphys_0m_params,
-            thermo_params,
-            ᶜT,
-            ᶜq_liq_rai, ᶜq_ice_sno,
-        ).dq_tot_dt,
-        ᶜq_tot, dt, 1,
+    # Materialize BMT result first to avoid NamedTuple property access in broadcast
+    @. ᶜmp_result = BMT.bulk_microphysics_tendencies(
+        BMT.Microphysics0Moment(),
+        microphys_0m_params,
+        thermo_params,
+        ᶜT,
+        ᶜq_liq_rai, ᶜq_ice_sno,
     )
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_result.dq_tot_dt, ᶜq_tot, dt, 1)
     return nothing
 end
 

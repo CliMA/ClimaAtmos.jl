@@ -381,8 +381,19 @@ NVTX.@annotate function set_cloud_fraction!(
     # Get condensate means (dispatches on moisture_model)
     ᶜq_liq, ᶜq_ice = _get_condensate_means(Y, p, turbconv_model, moisture_model)
 
-    # Get T-based covariances
-    ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
+    # Get T-based covariances (may be lazy or cached)
+    ᶜq′q′_lazy, ᶜT′T′_lazy, ᶜT′q′_lazy = get_covariances(Y, p, thermo_params)
+
+    # Materialize covariances into scratch fields to break the lazy broadcast
+    # chain before the compute_cloud_fraction_sd kernel. Without this, the
+    # entire mixing_length → cov_from_grad → ∂T/∂θ expression tree flows into
+    # the GPU kernel parameters, leading to pressure on parameter memory
+    ᶜq′q′ = p.scratch.ᶜtemp_scalar_3
+    ᶜT′T′ = p.scratch.ᶜtemp_scalar_6
+    ᶜT′q′ = p.scratch.ᶜtemp_scalar_7
+    ᶜq′q′ .= ᶜq′q′_lazy
+    ᶜT′T′ .= ᶜT′T′_lazy
+    ᶜT′q′ .= ᶜT′q′_lazy
 
     @. p.precomputed.ᶜcloud_fraction = compute_cloud_fraction_sd(
         thermo_params,
@@ -647,10 +658,17 @@ function set_ml_cloud_fraction!(
     ᶜθ_mean,
 )
     # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
-    ᶜmixing_length_field =
+    ᶜmixing_length_lazy =
         turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX ?
         ᶜmixing_length(Y, p) :
         compute_gm_mixing_length(Y, p)
+
+    # Materialize mixing length into scratch field to break the lazy broadcast
+    # chain. For PrognosticEDMFX, ᶜmixing_length returns a lazy broadcast
+    # carrying mixing_length_lopez_gomez_2020 with its parameter structs,
+    # which would exceed the 4 KiB GPU kernel parameter limit if nested.
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_6
+    ᶜmixing_length_field .= ᶜmixing_length_lazy
 
     # Vertical gradients of q_tot and θ_liq_ice
     ᶜ∇q = p.scratch.ᶜtemp_scalar_2
