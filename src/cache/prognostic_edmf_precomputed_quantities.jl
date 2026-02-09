@@ -459,28 +459,29 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
 
     # Sources from the updrafts
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    (; ᶜmp_result) = p.precomputed
     for j in 1:n
+        # Materialize BMT result first to avoid NamedTuple property access in broadcast
+        @. ᶜmp_result = BMT.bulk_microphysics_tendencies(
+            BMT.Microphysics0Moment(),
+            cmp, thp,
+            ᶜTʲs.:($$j),
+            ᶜq_liq_raiʲs.:($$j),
+            ᶜq_ice_snoʲs.:($$j),
+        )
         @. ᶜSqₜᵐʲs.:($$j) = limit_sink(
-            BMT.bulk_microphysics_tendencies(
-                BMT.Microphysics0Moment(),
-                cmp, thp,
-                ᶜTʲs.:($$j),
-                ᶜq_liq_raiʲs.:($$j),
-                ᶜq_ice_snoʲs.:($$j),
-            ).dq_tot_dt,
+            ᶜmp_result.dq_tot_dt,
             Y.c.sgsʲs.:($$j).q_tot, dt, 1,
         )
     end
     # sources from the environment
-    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-    @. ᶜSqₜᵐ⁰ = limit_sink(
-        BMT.bulk_microphysics_tendencies(
-            BMT.Microphysics0Moment(),
-            cmp, thp, ᶜT⁰,
-            ᶜq_liq_rai⁰, ᶜq_ice_sno⁰,
-        ).dq_tot_dt,
-        ᶜq_tot⁰, dt, 1,
+    @. ᶜmp_result = BMT.bulk_microphysics_tendencies(
+        BMT.Microphysics0Moment(),
+        cmp, thp, ᶜT⁰,
+        ᶜq_liq_rai⁰, ᶜq_ice_sno⁰,
     )
+    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+    @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_result.dq_tot_dt, ᶜq_tot⁰, dt, 1)
     return nothing
 end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(

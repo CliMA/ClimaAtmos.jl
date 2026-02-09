@@ -270,6 +270,7 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :hyperdiffusion_ghost_buffer,
             :data_handler,
             :ᶜmp_result,
+            :ᶜT′T′, :ᶜq′q′, :ᶜT′q′,
             :rc,
             rrtmgp_clear_fix...,
         ]),
