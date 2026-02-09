@@ -1529,14 +1529,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         ᶜT′q′,
     )
 
-    # Source limits: physically motivated per-species bounds
-    ᶜsat_excess =
-        @. lazy(TD.saturation_excess(thermo_params, ᶜT, Y.c.ρ, ᶜq_tot, ᶜq_liq, ᶜq_ice))
-    @. ᶜSqₗᵐ⁰ =
-        smooth_tendency_limiter(ᶜmp_result.dq_lcl_dt, ᶜsat_excess + ᶜq_ice, ᶜq_liq, dt)
-    @. ᶜSqᵢᵐ⁰ =
-        smooth_tendency_limiter(ᶜmp_result.dq_icl_dt, ᶜsat_excess + ᶜq_liq, ᶜq_ice, dt)
-    @. ᶜSqᵣᵐ⁰ = smooth_tendency_limiter(ᶜmp_result.dq_rai_dt, ᶜq_liq + ᶜq_sno, ᶜq_rai, dt)
-    @. ᶜSqₛᵐ⁰ = smooth_tendency_limiter(ᶜmp_result.dq_sno_dt, ᶜq_ice + ᶜq_rai, ᶜq_sno, dt)
+    # Apply physically motivated tendency limits
+    @. ᶜmp_result = apply_1m_tendency_limits(ᶜmp_result, thermo_params, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt)
+    @. ᶜSqₗᵐ⁰ = ᶜmp_result.dq_lcl_dt
+    @. ᶜSqᵢᵐ⁰ = ᶜmp_result.dq_icl_dt
+    @. ᶜSqᵣᵐ⁰ = ᶜmp_result.dq_rai_dt
+    @. ᶜSqₛᵐ⁰ = ᶜmp_result.dq_sno_dt
     return nothing
 end

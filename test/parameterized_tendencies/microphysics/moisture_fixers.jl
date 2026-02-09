@@ -2,8 +2,7 @@
 Unit tests for moisture_fixers.jl
 
 Tests cover:
-1. `clip()` - non-negative clipping
-2. `tracer_nonnegativity_vapor_tendency()` - tendency computation
+1. `tracer_nonnegativity_vapor_tendency()` - tendency computation
 =#
 
 using Test
@@ -11,38 +10,10 @@ using ClimaAtmos
 
 # Import functions under test
 import ClimaAtmos:
-    clip, tracer_nonnegativity_vapor_tendency, limit, triangle_inequality_limiter
+    tracer_nonnegativity_vapor_tendency, limit, triangle_inequality_limiter
 
 @testset "Moisture Fixers" begin
 
-    @testset "clip()" begin
-        @testset "basic functionality" begin
-            # Positive values pass through
-            @test clip(0.01) == 0.01
-            @test clip(1.0) == 1.0
-
-            # Zero stays zero
-            @test clip(0.0) == 0.0
-
-            # Negative values clipped to zero
-            @test clip(-0.01) == 0.0
-            @test clip(-1.0) == 0.0
-        end
-
-        @testset "type stability" begin
-            @test eltype(clip(Float32(-0.1))) == Float32
-            @test eltype(clip(Float64(-0.1))) == Float64
-            @test clip(Float32(0.5)) == Float32(0.5)
-        end
-
-        @testset "edge cases" begin
-            # Very small negative
-            @test clip(-1e-15) == 0.0
-
-            # Very small positive preserved
-            @test clip(1e-15) ≈ 1e-15
-        end
-    end
 
     @testset "tracer_nonnegativity_vapor_tendency()" begin
         dt = 1.0

@@ -590,14 +590,12 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜT′q′,
     )
 
-    # Source limits: q_vap = vapor available (primary source for condensation/deposition)
-    ᶜq_vap⁰ = @. lazy(ᶜq_tot⁰ - ᶜq_liq⁰ - ᶜq_ice⁰ - ᶜq_rai⁰ - ᶜq_sno⁰)
-    @. ᶜSqₗᵐ⁰ = smooth_tendency_limiter(ᶜmp_result.dq_lcl_dt, ᶜq_vap⁰ + ᶜq_ice⁰, ᶜq_liq⁰, dt)
-    @. ᶜSqᵢᵐ⁰ = smooth_tendency_limiter(ᶜmp_result.dq_icl_dt, ᶜq_vap⁰ + ᶜq_liq⁰, ᶜq_ice⁰, dt)
-    @. ᶜSqᵣᵐ⁰ =
-        smooth_tendency_limiter(ᶜmp_result.dq_rai_dt, ᶜq_liq⁰ + ᶜq_sno⁰, ᶜq_rai⁰, dt)
-    @. ᶜSqₛᵐ⁰ =
-        smooth_tendency_limiter(ᶜmp_result.dq_sno_dt, ᶜq_ice⁰ + ᶜq_rai⁰, ᶜq_sno⁰, dt)
+    # Apply physically motivated tendency limits
+    @. ᶜmp_result = apply_1m_tendency_limits(ᶜmp_result, thp, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰, dt)
+    @. ᶜSqₗᵐ⁰ = ᶜmp_result.dq_lcl_dt
+    @. ᶜSqᵢᵐ⁰ = ᶜmp_result.dq_icl_dt
+    @. ᶜSqᵣᵐ⁰ = ᶜmp_result.dq_rai_dt
+    @. ᶜSqₛᵐ⁰ = ᶜmp_result.dq_sno_dt
     return nothing
 end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(

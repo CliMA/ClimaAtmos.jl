@@ -90,6 +90,9 @@ S_limited = triangle_inequality_limiter(
     limit(q_liq, dt, 3),  # bound for positive tendency (depletes q_liq)
     limit(q_rain, dt, 3), # bound for negative tendency (depletes q_rain)
 )
+
+!!! note
+    This is deprecated. Use `smooth_tendency_limiter` instead.
 ```
 
 # Reference
@@ -217,8 +220,8 @@ Source limits should be physically motivated per-species bounds:
 - `q_source`: Available source quantity for this species [kg/kg]
 - `q_sink`: Available sink quantity (species being depleted) [kg/kg]
 - `dt`: Timestep [s]
-- `n_sink`: Number of competing sink processes (default: 10)
-- `n_source`: Number of competing source processes (default: 30)
+- `n_sink`: Number of timesteps for sink depletion (default: 5)
+- `n_source`: Number of timesteps for source depletion (default: 10)
 
 # Example
 ```julia
@@ -229,7 +232,7 @@ Sqₗᵐ = smooth_tendency_limiter(dq_lcl_dt, sat_excess + q_ice, q_liq, dt)
 See also: [`smooth_min_limiter`](@ref), [`limit`](@ref)
 """
 @inline function smooth_tendency_limiter(
-    S, q_source, q_sink, dt, n_sink = 10, n_source = 30,
+    S, q_source, q_sink, dt, n_sink = 5, n_source = 10,
 )
     FT = eltype(S)
     bound_pos = limit(q_source, dt, n_source)
@@ -237,23 +240,6 @@ See also: [`smooth_min_limiter`](@ref), [`limit`](@ref)
     pos_limited = max(smooth_min_limiter(S, bound_pos), FT(0))
     neg_limited = -max(smooth_min_limiter(-S, bound_neg), FT(0))
     return ifelse(S >= FT(0), pos_limited, neg_limited)
-end
-
-"""
-    saturation_excess_nonneg(thp, T, ρ, q_tot, q_liq, q_ice)
-
-AD-safe nonnegative saturation excess.
-
-Combines `TD.saturation_excess(thp, T, ρ, q_tot, q_liq, q_ice)` with an AD-safe
-nonneg clamp (`ifelse(x < 0, 0*x, x)`).
-
-Used as the source limit for cloud species in [`smooth_tendency_limiter`](@ref):
-- liquid cloud source limit: `saturation_excess_nonneg(...) + q_ice`
-- ice cloud source limit: `saturation_excess_nonneg(...) + q_liq`
-"""
-@inline function saturation_excess_nonneg(thp, T, ρ, q_tot, q_liq, q_ice)
-    se = TD.saturation_excess(thp, T, ρ, q_tot, q_liq, q_ice)
-    return ifelse(se < 0, 0 * se, se)
 end
 
 """

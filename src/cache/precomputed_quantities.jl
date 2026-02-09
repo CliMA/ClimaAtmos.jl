@@ -132,7 +132,7 @@ function precomputed_quantities(Y, atmos)
     ᶜcloud_fraction = similar(Y.c, FT)
     @. ᶜcloud_fraction = FT(0)
 
-    # SGS covariances for cloud fraction (S&D) and microphysics quadrature
+    # SGS covariances for cloud fraction (Sommeria & Deardorff closure) and microphysics quadrature
     # Only allocate when QuadratureMicrophysics or QuadratureCloud/MLCloud is used
     uses_sgs_quadrature =
         atmos.microphysics_model isa QuadratureMicrophysics ||

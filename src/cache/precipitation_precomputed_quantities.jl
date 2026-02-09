@@ -32,8 +32,14 @@ function Kin(ᶜw_precip, ᶜu_air)
 end
 
 """
-    Smallest mass value that is different than zero for the purpose of mass_weigthed
-    averaging of terminal velocities.
+    ϵ_numerics(FT)
+
+Smallest threshold for specific humidity comparisons.
+Uses sqrt(floatmin(FT)) to detect effectively-zero specific humidities.
+
+NOTE: For density division guards in terminal velocity averaging, use sqrt(eps(FT))
+instead to prevent division overflow. sqrt(floatmin(FT)) is ~1e-19 for Float32,
+which causes overflow when used as a divisor denominator.
 """
 ϵ_numerics(FT) = sqrt(floatmin(FT))
 
@@ -166,8 +172,8 @@ function set_precipitation_velocities!(
         @. ᶜimplied_env_mass_flux -=
             Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_liq * ᶜwₗʲs.:($$j)
     end
-    # average
-    @. ᶜwₗ = ifelse(ᶜρχ > ϵ_numerics(FT), ᶜwₗ / ᶜρχ, FT(0))
+    # average (clamp to prevent spurious negatives from numerical errors at low mass)
+    @. ᶜwₗ = ifelse(ᶜρχ > sqrt(eps(FT)), max(ᶜwₗ / ᶜρχ, zero(ᶜwₗ / ᶜρχ)), zero(ᶜwₗ))
     @. ᶜimplied_env_mass_flux += Y.c.ρq_liq * ᶜwₗ
     # contribution of env q_liq sedimentation to htot
     @. ᶜρwₕhₜ = ᶜimplied_env_mass_flux * (Iₗ(thp, ᶜT⁰) + ᶜΦ)
@@ -193,8 +199,8 @@ function set_precipitation_velocities!(
         @. ᶜimplied_env_mass_flux -=
             Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_ice * ᶜwᵢʲs.:($$j)
     end
-    # average
-    @. ᶜwᵢ = ifelse(ᶜρχ > ϵ_numerics(FT), ᶜwᵢ / ᶜρχ, FT(0))
+    # average (clamp to prevent spurious negatives from numerical errors at low mass)
+    @. ᶜwᵢ = ifelse(ᶜρχ > sqrt(eps(FT)), max(ᶜwᵢ / ᶜρχ, zero(ᶜwᵢ / ᶜρχ)), zero(ᶜwᵢ))
     @. ᶜimplied_env_mass_flux += Y.c.ρq_ice * ᶜwᵢ
     # contribution of env q_liq sedimentation to htot
     @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (Iᵢ(thp, ᶜT⁰) + ᶜΦ)
@@ -221,8 +227,8 @@ function set_precipitation_velocities!(
         @. ᶜimplied_env_mass_flux -=
             Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai * ᶜwᵣʲs.:($$j)
     end
-    # average
-    @. ᶜwᵣ = ifelse(ᶜρχ > ϵ_numerics(FT), ᶜwᵣ / ᶜρχ, FT(0))
+    # average (clamp to prevent spurious negatives from numerical errors at low mass)
+    @. ᶜwᵣ = ifelse(ᶜρχ > sqrt(eps(FT)), max(ᶜwᵣ / ᶜρχ, zero(ᶜwᵣ / ᶜρχ)), zero(ᶜwᵣ))
     @. ᶜimplied_env_mass_flux += Y.c.ρq_rai * ᶜwᵣ
     # contribution of env q_liq sedimentation to htot
     @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (Iₗ(thp, ᶜT⁰) + ᶜΦ)
@@ -249,8 +255,8 @@ function set_precipitation_velocities!(
         @. ᶜimplied_env_mass_flux -=
             Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno * ᶜwₛʲs.:($$j)
     end
-    # average
-    @. ᶜwₛ = ifelse(ᶜρχ > ϵ_numerics(FT), ᶜwₛ / ᶜρχ, FT(0))
+    # average (clamp to prevent spurious negatives from numerical errors at low mass)
+    @. ᶜwₛ = ifelse(ᶜρχ > sqrt(eps(FT)), max(ᶜwₛ / ᶜρχ, zero(ᶜwₛ / ᶜρχ)), zero(ᶜwₛ))
     @. ᶜimplied_env_mass_flux += Y.c.ρq_sno * ᶜwₛ
     # contribution of env q_liq sedimentation to htot
     @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (Iᵢ(thp, ᶜT⁰) + ᶜΦ)
@@ -834,12 +840,12 @@ function set_microphysics_tendency_cache!(
         ᶜT′q′,
     )
 
-    # Source limits: q_vap = vapor available (primary source for condensation/deposition)
-    ᶜq_vap = @. lazy(ᶜq_tot - ᶜq_liq - ᶜq_ice - ᶜq_rai - ᶜq_sno)
-    @. ᶜSqₗᵐ = smooth_tendency_limiter(ᶜmp_result.dq_lcl_dt, ᶜq_vap + ᶜq_ice, ᶜq_liq, dt)
-    @. ᶜSqᵢᵐ = smooth_tendency_limiter(ᶜmp_result.dq_icl_dt, ᶜq_vap + ᶜq_liq, ᶜq_ice, dt)
-    @. ᶜSqᵣᵐ = smooth_tendency_limiter(ᶜmp_result.dq_rai_dt, ᶜq_liq + ᶜq_sno, ᶜq_rai, dt)
-    @. ᶜSqₛᵐ = smooth_tendency_limiter(ᶜmp_result.dq_sno_dt, ᶜq_ice + ᶜq_rai, ᶜq_sno, dt)
+    # Apply physically motivated tendency limits
+    @. ᶜmp_result = apply_1m_tendency_limits(ᶜmp_result, thermo_params, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt)
+    @. ᶜSqₗᵐ = ᶜmp_result.dq_lcl_dt
+    @. ᶜSqᵢᵐ = ᶜmp_result.dq_icl_dt
+    @. ᶜSqᵣᵐ = ᶜmp_result.dq_rai_dt
+    @. ᶜSqₛᵐ = ᶜmp_result.dq_sno_dt
 
     return nothing
 end

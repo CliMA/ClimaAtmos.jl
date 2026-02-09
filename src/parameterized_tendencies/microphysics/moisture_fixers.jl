@@ -6,28 +6,7 @@
 
 import ClimaCore.MatrixFields as MF
 
-"""
-    clip(q)
 
-Clip a value to be non-negative.
-
-Provides a branchless `max(0, q)` operation suitable for GPU kernels.
-
-# Arguments
-- `q`: Value to clip (any numeric type)
-
-# Returns
-`max(0, q)` with the same type as `q`.
-
-# Example
-```julia
-q_liq_safe = clip(q_liq)  # Ensures non-negative
-```
-"""
-@inline function clip(q)
-    FT = eltype(q)
-    return max(FT(0), q)
-end
 
 """
     tracer_nonnegativity_vapor_tendency(q, q_vap, dt)

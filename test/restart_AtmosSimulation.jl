@@ -231,6 +231,8 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :rc,
             # DataHandlers contains caches, so they are stateful
             :data_handler,
+            # Covariance fields are recomputed in set_precomputed_quantities!
+            :ᶜT′T′, :ᶜq′q′, :ᶜT′q′,
             rrtmgp_clear_fix...,
             # Config-specific
             more_ignore...,
