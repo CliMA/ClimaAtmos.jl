@@ -155,4 +155,6 @@ include(joinpath("solver", "type_getters.jl"))
 include(joinpath("solver", "yaml_helper.jl"))
 include(joinpath("solver", "solve.jl"))
 
+include(joinpath("utils", "show.jl"))
+
 end # module
