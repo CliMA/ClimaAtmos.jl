@@ -2,11 +2,7 @@
 
 julia_version = "1.11.8"
 manifest_format = "2.0"
-<<<<<<< HEAD
-project_hash = "06f35284954620eb3311eb3f7600710ddb4a8b36"
-=======
 project_hash = "540736597eca2c58f256fe6d9edcc6626ed7d2db"
->>>>>>> e50ec6259 (Create Larcorm1 Case)
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -158,7 +154,7 @@ version = "1.11.0"
 
 [[deps.AtmosphericProfilesLibrary]]
 deps = ["ClimaParams", "Interpolations", "LinearAlgebra", "Thermodynamics"]
-path = "/Users/jeff/Clima/AtmosphericProfilesLibrary.jl/"
+path = "/home/jeff/clima/AtmosphericProfilesLibrary.jl/"
 uuid = "86bc3604-9858-485a-bdbe-831ec50de11d"
 version = "0.1.7"
 
@@ -529,15 +525,9 @@ version = "0.1.13"
 
 [[deps.CloudMicrophysics]]
 deps = ["ClimaParams", "DocStringExtensions", "ForwardDiff", "LazyArtifacts", "LogExpFunctions", "RootSolvers", "SpecialFunctions", "StaticArrays", "Thermodynamics", "UnrolledUtilities"]
-<<<<<<< HEAD
 git-tree-sha1 = "ec7626b4d6a1b9f64093a323f49a6086b85018bd"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
 version = "0.30.0"
-=======
-git-tree-sha1 = "a1839b18814f1b8b0b9c0d8b43de8cf3ba6e7cf1"
-uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.29.1"
->>>>>>> e50ec6259 (Create Larcorm1 Case)
 
     [deps.CloudMicrophysics.extensions]
     EmulatorModelsExt = ["DataFrames", "MLJ"]
@@ -920,15 +910,9 @@ uuid = "9aa1b823-49e4-5ca5-8b0f-3971ec8bab6a"
 version = "0.3.2"
 
 [[deps.FastPower]]
-<<<<<<< HEAD
 git-tree-sha1 = "862831f78c7a48681a074ecc9aac09f2de563f71"
 uuid = "a4df4552-cc26-4903-aec0-212e50a0e84b"
 version = "1.3.1"
-=======
-git-tree-sha1 = "1dd291358e0e3a31f77dbbb76ce7abbcca38d410"
-uuid = "a4df4552-cc26-4903-aec0-212e50a0e84b"
-version = "1.3.0"
->>>>>>> e50ec6259 (Create Larcorm1 Case)
 
     [deps.FastPower.extensions]
     FastPowerEnzymeExt = "Enzyme"
@@ -1055,15 +1039,9 @@ version = "1.3.7"
 
 [[deps.ForwardDiff]]
 deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions"]
-<<<<<<< HEAD
 git-tree-sha1 = "eef4c86803f47dcb61e9b8790ecaa96956fdd8ae"
 uuid = "f6369f11-7733-5829-9624-2563aa707210"
 version = "1.3.2"
-=======
-git-tree-sha1 = "b2977f86ed76484de6f29d5b36f2fa686f085487"
-uuid = "f6369f11-7733-5829-9624-2563aa707210"
-version = "1.3.1"
->>>>>>> e50ec6259 (Create Larcorm1 Case)
 weakdeps = ["StaticArrays"]
 
     [deps.ForwardDiff.extensions]
@@ -1133,9 +1111,9 @@ version = "0.2.0"
 
 [[deps.GPUCompiler]]
 deps = ["ExprTools", "InteractiveUtils", "LLVM", "Libdl", "Logging", "PrecompileTools", "Preferences", "Scratch", "Serialization", "TOML", "Tracy", "UUIDs"]
-git-tree-sha1 = "7237207d87760307c92c260565f706688229cf6e"
+git-tree-sha1 = "6e5a25bc455da8e8d88b6b7377e341e9af1929f0"
 uuid = "61eb1bfa-7361-4325-ad38-22787b887f55"
-version = "1.8.1"
+version = "1.7.5"
 
 [[deps.GPUToolbox]]
 deps = ["LLVM"]
@@ -1505,15 +1483,9 @@ version = "0.6.11"
 
 [[deps.Krylov]]
 deps = ["LinearAlgebra", "Printf", "SparseArrays"]
-<<<<<<< HEAD
 git-tree-sha1 = "125d65fe5042faf078383312dd060adf11d90802"
 uuid = "ba0b0d4f-ebba-5204-a429-3ac8c609bfb7"
 version = "0.10.5"
-=======
-git-tree-sha1 = "fd0812fa5d58edfa2948342adca9b0a175b17d8a"
-uuid = "ba0b0d4f-ebba-5204-a429-3ac8c609bfb7"
-version = "0.10.4"
->>>>>>> e50ec6259 (Create Larcorm1 Case)
 
 [[deps.KrylovKit]]
 deps = ["LinearAlgebra", "PackageExtensionCompat", "Printf", "Random", "VectorInterface"]
@@ -1761,15 +1733,9 @@ version = "1.0.0"
 
 [[deps.MLDataDevices]]
 deps = ["Adapt", "Functors", "Preferences", "Random", "SciMLPublic"]
-<<<<<<< HEAD
 git-tree-sha1 = "683a2d3a26da07b30d941e308fd330516b478b17"
 uuid = "7e8f7934-dd98-4c1a-8fe8-92b47a384d40"
 version = "1.17.3"
-=======
-git-tree-sha1 = "117dd3d538d0ca82979ebcf15d9ad8bf0431c206"
-uuid = "7e8f7934-dd98-4c1a-8fe8-92b47a384d40"
-version = "1.17.2"
->>>>>>> e50ec6259 (Create Larcorm1 Case)
 
     [deps.MLDataDevices.extensions]
     AMDGPUExt = "AMDGPU"
@@ -2436,15 +2402,9 @@ version = "1.3.4"
 
 [[deps.RecursiveArrayTools]]
 deps = ["Adapt", "ArrayInterface", "DocStringExtensions", "GPUArraysCore", "LinearAlgebra", "PrecompileTools", "RecipesBase", "StaticArraysCore", "SymbolicIndexingInterface"]
-<<<<<<< HEAD
 git-tree-sha1 = "81750fa442cc5cb3ab1ba89b1cdf8eda543e6905"
 uuid = "731186ca-8d62-57ce-b412-fbd966d074cd"
 version = "3.47.0"
-=======
-git-tree-sha1 = "31b3d7b7e14faad39583475b89aadbd9c3e7ef8b"
-uuid = "731186ca-8d62-57ce-b412-fbd966d074cd"
-version = "3.44.0"
->>>>>>> e50ec6259 (Create Larcorm1 Case)
 
     [deps.RecursiveArrayTools.extensions]
     RecursiveArrayToolsFastBroadcastExt = "FastBroadcast"
@@ -2884,15 +2844,9 @@ version = "7.7.0+0"
 
 [[deps.SurfaceFluxes]]
 deps = ["RootSolvers", "Thermodynamics"]
-<<<<<<< HEAD
 git-tree-sha1 = "bfab829e51b2b3a1127d7aa7511e407af4849e25"
 uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
 version = "0.15.0"
-=======
-git-tree-sha1 = "bf11863f42e42ff25a4315224cbc0cf2d404879f"
-uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
-version = "0.14.2"
->>>>>>> e50ec6259 (Create Larcorm1 Case)
 weakdeps = ["ClimaParams"]
 
     [deps.SurfaceFluxes.extensions]
@@ -2967,15 +2921,9 @@ version = "1.0.2"
 
 [[deps.Thermodynamics]]
 deps = ["ForwardDiff", "Random", "RootSolvers"]
-<<<<<<< HEAD
 git-tree-sha1 = "3958121b3ed912e0858960b682de6e98cb4949dd"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 version = "0.15.7"
-=======
-git-tree-sha1 = "ed3bda4ef913084e1e028d4fb05e26f1b69356f6"
-uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-version = "0.15.4"
->>>>>>> e50ec6259 (Create Larcorm1 Case)
 weakdeps = ["ClimaParams"]
 
     [deps.Thermodynamics.extensions]
