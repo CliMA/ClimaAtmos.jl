@@ -1902,11 +1902,15 @@ function (initial_condition::Larcform1)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pTq(thermo_params, p(z), T(z), q_tot(z)),
+            T = T(z),
+            p = p(z),
+            q_tot = q_tot(z),
+            #thermo_state = TD.PhaseEquil_pTq(thermo_params, p(z), T(z), q_tot(z)),
             velocity = velocity(z),
             turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : FT(0)),
         )
     end
+    return local_state
 end
 
 """

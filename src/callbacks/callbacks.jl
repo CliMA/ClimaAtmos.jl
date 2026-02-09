@@ -211,7 +211,7 @@ function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)
     FT = Spaces.undertype(axes(Y.c))
     (; rrtmgp_model) = p.radiation
     rrtmgp_model.cos_zenith .= cosd(FT(60)) # shouldn't actually matter here.
-    rrtmgp_model.weighted_irradiance .= FT(0)  # for case with zero insolation
+    rrtmgp_model.toa_flux .= FT(0)  # for case with zero insolation
 end
 
 function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
