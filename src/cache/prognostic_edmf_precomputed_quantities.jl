@@ -487,10 +487,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
 
     # Sources from the updrafts
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜmp_result) = p.precomputed
+    (; ᶜmp_tendency) = p.precomputed
     for j in 1:n
         # Materialize BMT result first to avoid NamedTuple property access in broadcast
-        @. ᶜmp_result = BMT.bulk_microphysics_tendencies(
+        @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
             BMT.Microphysics0Moment(),
             cmp, thp,
             ᶜTʲs.:($$j),
@@ -498,18 +498,18 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             ᶜq_ice_snoʲs.:($$j),
         )
         @. ᶜSqₜᵐʲs.:($$j) = limit_sink(
-            ᶜmp_result.dq_tot_dt,
-            Y.c.sgsʲs.:($$j).q_tot, dt, 1,
+            ᶜmp_tendency.dq_tot_dt,
+            Y.c.sgsʲs.:($$j).q_tot, dt,
         )
     end
     # sources from the environment
-    @. ᶜmp_result = BMT.bulk_microphysics_tendencies(
+    @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
         BMT.Microphysics0Moment(),
         cmp, thp, ᶜT⁰,
         ᶜq_liq_rai⁰, ᶜq_ice_sno⁰,
     )
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-    @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_result.dq_tot_dt, ᶜq_tot⁰, dt, 1)
+    @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_tendency.dq_tot_dt, ᶜq_tot⁰, dt)
     return nothing
 end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
@@ -524,7 +524,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     cmc = CAP.microphysics_cloud_params(params)
 
     (; ᶜSqₗᵐʲs, ᶜSqᵢᵐʲs, ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs, ᶜρʲs, ᶜTʲs) = p.precomputed
-    (; ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜmp_result) = p.precomputed
+    (; ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜmp_tendency) = p.precomputed
     (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
 
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs) = p.precomputed
@@ -566,7 +566,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             ᶜSqᵢᵐʲs.:($j),
             ᶜSqᵣᵐʲs.:($j),
             ᶜSqₛᵐʲs.:($j),
-            ᶜmp_result,
+            ᶜmp_tendency,
             ᶜρʲs.:($j),
             Y.c.sgsʲs.:($j).q_tot,
             Y.c.sgsʲs.:($j).q_liq,
@@ -595,12 +595,12 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         GridMeanSGS()
     end
 
-    # Get T-based covariances (from cache if available)
-    ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thp)
+    # Get T-based covariances from cache
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
 
     # Integrate microphysics tendencies over SGS fluctuations
-    # (writes into pre-allocated ᶜmp_result to avoid NamedTuple allocation)
-    @. ᶜmp_result = microphysics_tendencies_quadrature(
+    # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
+    @. ᶜmp_tendency = microphysics_tendencies_quadrature(
         BMT.Microphysics1Moment(),
         SG_quad,
         cmp,
@@ -618,14 +618,21 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜT′q′,
     )
 
-    # Source limits: q_vap = vapor available (primary source for condensation/deposition)
-    ᶜq_vap⁰ = @. lazy(ᶜq_tot⁰ - ᶜq_liq⁰ - ᶜq_ice⁰ - ᶜq_rai⁰ - ᶜq_sno⁰)
-    @. ᶜSqₗᵐ⁰ = smooth_tendency_limiter(ᶜmp_result.dq_lcl_dt, ᶜq_vap⁰ + ᶜq_ice⁰, ᶜq_liq⁰, dt)
-    @. ᶜSqᵢᵐ⁰ = smooth_tendency_limiter(ᶜmp_result.dq_icl_dt, ᶜq_vap⁰ + ᶜq_liq⁰, ᶜq_ice⁰, dt)
-    @. ᶜSqᵣᵐ⁰ =
-        smooth_tendency_limiter(ᶜmp_result.dq_rai_dt, ᶜq_liq⁰ + ᶜq_sno⁰, ᶜq_rai⁰, dt)
-    @. ᶜSqₛᵐ⁰ =
-        smooth_tendency_limiter(ᶜmp_result.dq_sno_dt, ᶜq_ice⁰ + ᶜq_rai⁰, ᶜq_sno⁰, dt)
+    # Apply physically motivated tendency limits
+    @. ᶜmp_tendency = apply_1m_tendency_limits(
+        ᶜmp_tendency,
+        thp,
+        ᶜq_tot⁰,
+        ᶜq_liq⁰,
+        ᶜq_ice⁰,
+        ᶜq_rai⁰,
+        ᶜq_sno⁰,
+        dt,
+    )
+    @. ᶜSqₗᵐ⁰ = ᶜmp_tendency.dq_lcl_dt
+    @. ᶜSqᵢᵐ⁰ = ᶜmp_tendency.dq_icl_dt
+    @. ᶜSqᵣᵐ⁰ = ᶜmp_tendency.dq_rai_dt
+    @. ᶜSqₛᵐ⁰ = ᶜmp_tendency.dq_sno_dt
     return nothing
 end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
@@ -651,7 +658,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜTʲs,
         ᶜuʲs,
     ) = p.precomputed
-    (; ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜSnₗᵐ⁰, ᶜSnᵣᵐ⁰, ᶜu⁰, ᶜmp_result) =
+    (; ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜSnₗᵐ⁰, ᶜSnᵣᵐ⁰, ᶜu⁰, ᶜmp_tendency) =
         p.precomputed
     (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs, ᶜuʲs) =
@@ -744,7 +751,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             ᶜSnₗᵐʲs.:($j),
             ᶜSqᵣᵐʲs.:($j),
             ᶜSnᵣᵐʲs.:($j),
-            ᶜmp_result,
+            ᶜmp_tendency,
             ᶜρʲs.:($j),
             Y.c.sgsʲs.:($j).q_tot,
             Y.c.sgsʲs.:($j).q_liq,
@@ -797,8 +804,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     end
 
     # Integrate microphysics tendencies over SGS fluctuations
-    # (writes into pre-allocated ᶜmp_result to avoid NamedTuple allocation)
-    @. ᶜmp_result = microphysics_tendencies_quadrature_2m(
+    # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
+    @. ᶜmp_tendency = microphysics_tendencies_quadrature_2m(
         SG_quad,
         cm2p,
         thp,
@@ -812,16 +819,20 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     )
 
     # Apply coupled limiting directly 
-    ᶜf_liq = @. lazy(coupled_sink_limit_factor(
-        ᶜmp_result.dq_lcl_dt, ᶜmp_result.dn_lcl_dt, ᶜq_liq⁰, ᶜn_liq⁰, dt,
-    ))
-    ᶜf_rai = @. lazy(coupled_sink_limit_factor(
-        ᶜmp_result.dq_rai_dt, ᶜmp_result.dn_rai_dt, ᶜq_rai⁰, ᶜn_rai⁰, dt,
-    ))
-    @. ᶜSqₗᵐ⁰ = ᶜmp_result.dq_lcl_dt * ᶜf_liq
-    @. ᶜSnₗᵐ⁰ = ᶜmp_result.dn_lcl_dt * ᶜf_liq
-    @. ᶜSqᵣᵐ⁰ = ᶜmp_result.dq_rai_dt * ᶜf_rai
-    @. ᶜSnᵣᵐ⁰ = ᶜmp_result.dn_rai_dt * ᶜf_rai
+    ᶜf_liq = @. lazy(
+        coupled_sink_limit_factor(
+            ᶜmp_tendency.dq_lcl_dt, ᶜmp_tendency.dn_lcl_dt, ᶜq_liq⁰, ᶜn_liq⁰, dt,
+        ),
+    )
+    ᶜf_rai = @. lazy(
+        coupled_sink_limit_factor(
+            ᶜmp_tendency.dq_rai_dt, ᶜmp_tendency.dn_rai_dt, ᶜq_rai⁰, ᶜn_rai⁰, dt,
+        ),
+    )
+    @. ᶜSqₗᵐ⁰ = ᶜmp_tendency.dq_lcl_dt * ᶜf_liq
+    @. ᶜSnₗᵐ⁰ = ᶜmp_tendency.dn_lcl_dt * ᶜf_liq
+    @. ᶜSqᵣᵐ⁰ = ᶜmp_tendency.dq_rai_dt * ᶜf_rai
+    @. ᶜSnᵣᵐ⁰ = ᶜmp_tendency.dn_rai_dt * ᶜf_rai
     @. ᶜSqᵢᵐ⁰ = 0
     @. ᶜSqₛᵐ⁰ = 0
     ᶜw⁰ = @. lazy(w_component(Geometry.WVector(ᶜu⁰)))

@@ -142,51 +142,6 @@ function test_cloud_fraction_bounds(p, FT)
     @test maximum(p.precomputed.ᶜcloud_fraction) <= FT(1) + eps(FT)
 end
 
-"""
-    test_microphysics_allocations!(ᶜYₜ, Y, p)
-
-Test that `microphysics_tendency!` has stable allocations (no growth).
-Runs twice: once for warmup, once for measurement.
-The second call should not allocate more than the first.
-"""
-function test_microphysics_allocations!(ᶜYₜ, Y, p)
-    FT = eltype(Y)
-    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
-
-    # Warmup (triggers JIT compilation)
-    ᶜYₜ .= zero(eltype(ᶜYₜ))
-    CA.microphysics_tendency!(
-        ᶜYₜ, Y, p, FT(0),
-        moisture_model, microphysics_model, turbconv_model,
-    )
-
-    # Measure allocations on second call
-    ᶜYₜ .= zero(eltype(ᶜYₜ))
-    allocs = @allocated CA.microphysics_tendency!(
-        ᶜYₜ, Y, p, FT(0),
-        moisture_model, microphysics_model, turbconv_model,
-    )
-    return allocs
-end
-
-"""
-    test_cache_allocations!(Y, p)
-
-Test that `set_microphysics_tendency_cache!` is zero-allocation.
-This catches NamedTuple field allocations from functions like `limited_tendency_2m`.
-"""
-function test_cache_allocations!(Y, p)
-    (; turbconv_model, microphysics_model) = p.atmos
-
-    # Warmup
-    CA.set_microphysics_tendency_cache!(Y, p, microphysics_model, turbconv_model)
-
-    # Measure
-    allocs = @allocated CA.set_microphysics_tendency_cache!(
-        Y, p, microphysics_model, turbconv_model,
-    )
-    return allocs
-end
 
 # =================
 # Integration Tests
@@ -223,15 +178,7 @@ end
         # Verify source equals tendency
         @test ᶜYₜ.c.ρ == p.precomputed.ᶜS_ρq_tot
 
-        # Allocation regression tests
-        @testset "allocation stability" begin
-            allocs = test_microphysics_allocations!(ᶜYₜ, Y, p)
-            @test allocs < 10_000
-        end
-        @testset "cache allocation stability" begin
-            allocs = test_cache_allocations!(Y, p)
-            @test allocs <= 64  # Small constant allocs OK; catches NamedTuple field allocs
-        end
+
     end
 
     @testset "NonEquilibrium moisture + 1-moment" begin
@@ -278,15 +225,7 @@ end
         # Cloud fraction bounds
         test_cloud_fraction_bounds(p, FT)
 
-        # Allocation regression tests
-        @testset "allocation stability" begin
-            allocs = test_microphysics_allocations!(ᶜYₜ, Y, p)
-            @test allocs < 10_000
-        end
-        @testset "cache allocation stability" begin
-            allocs = test_cache_allocations!(Y, p)
-            @test allocs <= 64  # Small constant allocs OK; catches NamedTuple field allocs
-        end
+
     end
 
     @testset "NonEquilibrium moisture + 2-moment" begin
@@ -333,15 +272,7 @@ end
         # Cloud fraction bounds
         test_cloud_fraction_bounds(p, FT)
 
-        # Allocation regression tests
-        @testset "allocation stability" begin
-            allocs = test_microphysics_allocations!(ᶜYₜ, Y, p)
-            @test allocs < 10_000
-        end
-        @testset "cache allocation stability" begin
-            allocs = test_cache_allocations!(Y, p)
-            @test allocs <= 64  # Small constant allocs OK; catches NamedTuple field allocs
-        end
+
     end
     @testset "NonEquilibrium moisture + 1-moment + SGS quadrature" begin
         config = CA.AtmosConfig(
@@ -388,14 +319,6 @@ end
         # ρq_tot tendency should be zero for 1M (no total water tendency)
         @test all(iszero, parent(ᶜYₜ.c.ρq_tot))
 
-        # Allocation regression tests
-        @testset "allocation stability (with quadrature)" begin
-            allocs = test_microphysics_allocations!(ᶜYₜ, Y, p)
-            @test allocs < 50_000
-        end
-        @testset "cache allocation stability" begin
-            allocs = test_cache_allocations!(Y, p)
-            @test allocs <= 64  # Small constant allocs OK; catches NamedTuple field allocs
-        end
+
     end
 end

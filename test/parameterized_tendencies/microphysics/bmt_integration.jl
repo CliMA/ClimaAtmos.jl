@@ -266,8 +266,8 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                 # With no hydrometeors, tendencies should be zero or near-zero
                 @test isfinite(result.dq_lcl_dt)
                 @test isfinite(result.dq_icl_dt)
-                @test isfinite(result.dq_rai_dt)
-                @test isfinite(result.dq_sno_dt)
+                @test result.dq_rai_dt == 0
+                @test result.dq_sno_dt == 0
             end
         end
     end

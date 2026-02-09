@@ -3,7 +3,7 @@
 #####
 
 """
-    edmfx_precipitation_tendency!(Yₜ, Y, p, t, turbconv_model, microphysics_model)
+    edmfx_microphysics_tendency!(Yₜ, Y, p, t, turbconv_model, microphysics_model)
 
 Applies microphysics tendencies to the EDMFX prognostic variables.
 
@@ -28,10 +28,10 @@ Arguments:
 Returns: `nothing`, modifies `Yₜ` in place.
 """
 
-edmfx_precipitation_tendency!(Yₜ, Y, p, t, turbconv_model, microphysics_model) =
+edmfx_microphysics_tendency!(Yₜ, Y, p, t, turbconv_model, microphysics_model) =
     nothing
 
-function edmfx_precipitation_tendency!(
+function edmfx_microphysics_tendency!(
     Yₜ,
     Y,
     p,
@@ -65,7 +65,7 @@ function edmfx_precipitation_tendency!(
     return nothing
 end
 
-function edmfx_precipitation_tendency!(
+function edmfx_microphysics_tendency!(
     Yₜ,
     Y,
     p,
@@ -88,7 +88,7 @@ function edmfx_precipitation_tendency!(
     return nothing
 end
 
-function edmfx_precipitation_tendency!(
+function edmfx_microphysics_tendency!(
     Yₜ,
     Y,
     p,

@@ -69,10 +69,10 @@ autoconversion, accretion, and precipitation) in a single call.
 Modifies `Sqₗᵐ`, `Sqᵢᵐ`, `Sqᵣᵐ`, `Sqₛᵐ` in-place with limited tendencies.
 
 # Note
-Tendencies are limited using `limit_sink` to prevent unphysical
-depletion of hydrometeor categories.
+Tendencies are limited to prevent unphysically large
+tendencies.
 
-`mp_result` is a pre-allocated scratch field of matching NamedTuple type,
+`mp_tendency` is a pre-allocated scratch field of matching NamedTuple type,
 used to avoid allocations from the BMT return value.
 """
 function compute_1m_precipitation_tendencies!(
@@ -80,7 +80,7 @@ function compute_1m_precipitation_tendencies!(
     Sqᵢᵐ,
     Sqᵣᵐ,
     Sqₛᵐ,
-    mp_result,
+    mp_tendency,
     ρ,
     qₜ,
     qₗ,
@@ -94,8 +94,8 @@ function compute_1m_precipitation_tendencies!(
 )
     FT = eltype(thp)
 
-    # Call BMT to get all tendencies at once (writes into pre-allocated mp_result)
-    @. mp_result = BMT.bulk_microphysics_tendencies(
+    # Call BMT to get all tendencies at once (writes into pre-allocated mp_tendency)
+    @. mp_tendency = BMT.bulk_microphysics_tendencies(
         BMT.Microphysics1Moment(),
         mp,
         thp,
@@ -108,17 +108,12 @@ function compute_1m_precipitation_tendencies!(
         qₛ,
     )
 
-    # Apply bidirectional limiters with physically motivated source bounds:
-    # q_vap = vapor available (primary source for condensation/deposition)
-    #  - liquid cloud: vapor condensation + ice melting
-    #  - ice cloud: vapor deposition + liquid freezing
-    #  - rain: liquid autoconversion/accretion + snow melting
-    #  - snow: ice autoconversion/accretion + rain freezing
-    qᵥ = @. lazy(qₜ - qₗ - qᵢ - qᵣ - qₛ)
-    @. Sqₗᵐ = smooth_tendency_limiter(mp_result.dq_lcl_dt, qᵥ + qᵢ, qₗ, dt)
-    @. Sqᵢᵐ = smooth_tendency_limiter(mp_result.dq_icl_dt, qᵥ + qₗ, qᵢ, dt)
-    @. Sqᵣᵐ = smooth_tendency_limiter(mp_result.dq_rai_dt, qₗ + qₛ, qᵣ, dt)
-    @. Sqₛᵐ = smooth_tendency_limiter(mp_result.dq_sno_dt, qᵢ + qᵣ, qₛ, dt)
+    # Apply limiting via shared helper
+    @. mp_tendency = apply_1m_tendency_limits(mp_tendency, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, dt)
+    @. Sqₗᵐ = mp_tendency.dq_lcl_dt
+    @. Sqᵢᵐ = mp_tendency.dq_icl_dt
+    @. Sqᵣᵐ = mp_tendency.dq_rai_dt
+    @. Sqₛᵐ = mp_tendency.dq_sno_dt
 end
 
 """
@@ -149,7 +144,7 @@ Modifies output arrays in-place with limited tendencies.
 Tendencies are limited using `limit_sink` to prevent unphysical
 depletion of hydrometeor categories.
 
-`mp_result` is a pre-allocated scratch field of matching NamedTuple type,
+`mp_tendency` is a pre-allocated scratch field of matching NamedTuple type,
 used to avoid allocations from the BMT return value.
 """
 function compute_2m_precipitation_tendencies!(
@@ -157,7 +152,7 @@ function compute_2m_precipitation_tendencies!(
     Snₗᵐ,
     Sqᵣᵐ,
     Snᵣᵐ,
-    mp_result,
+    mp_tendency,
     ρ,
     qₜ,
     qₗ,
@@ -171,8 +166,8 @@ function compute_2m_precipitation_tendencies!(
 )
     FT = eltype(thp)
 
-    # Call BMT to get all tendencies at once (writes into pre-allocated mp_result)
-    @. mp_result = BMT.bulk_microphysics_tendencies(
+    # Call BMT to get all tendencies at once (writes into pre-allocated mp_tendency)
+    @. mp_tendency = BMT.bulk_microphysics_tendencies(
         BMT.Microphysics2Moment(),
         mp,
         thp,
@@ -186,16 +181,20 @@ function compute_2m_precipitation_tendencies!(
     )
 
     # Apply coupled limiting directly
-    f_liq = @. lazy(coupled_sink_limit_factor(
-        mp_result.dq_lcl_dt, mp_result.dn_lcl_dt, qₗ, nₗ, dt,
-    ))
-    f_rai = @. lazy(coupled_sink_limit_factor(
-        mp_result.dq_rai_dt, mp_result.dn_rai_dt, qᵣ, nᵣ, dt,
-    ))
-    @. Sqₗᵐ = mp_result.dq_lcl_dt * f_liq
-    @. Snₗᵐ = mp_result.dn_lcl_dt * f_liq
-    @. Sqᵣᵐ = mp_result.dq_rai_dt * f_rai
-    @. Snᵣᵐ = mp_result.dn_rai_dt * f_rai
+    f_liq = @. lazy(
+        coupled_sink_limit_factor(
+            mp_tendency.dq_lcl_dt, mp_tendency.dn_lcl_dt, qₗ, nₗ, dt,
+        ),
+    )
+    f_rai = @. lazy(
+        coupled_sink_limit_factor(
+            mp_tendency.dq_rai_dt, mp_tendency.dn_rai_dt, qᵣ, nᵣ, dt,
+        ),
+    )
+    @. Sqₗᵐ = mp_tendency.dq_lcl_dt * f_liq
+    @. Snₗᵐ = mp_tendency.dn_lcl_dt * f_liq
+    @. Sqᵣᵐ = mp_tendency.dq_rai_dt * f_rai
+    @. Snᵣᵐ = mp_tendency.dn_rai_dt * f_rai
 end
 
 #####
@@ -500,6 +499,22 @@ NamedTuple with SGS-averaged `dq_tot_dt` and `e_int_precip`.
         SG_quad.T_min,
     )
     return sum_over_quadrature_points(evaluator, transform, SG_quad)
+end
+
+"""
+    microphysics_tendencies_quadrature_0m(::GridMeanSGS, ...)
+
+Direct GridMeanSGS dispatch for 0M: evaluates at grid mean, skipping quadrature.
+Matches the pattern used by the 1M `microphysics_tendencies_quadrature(::GridMeanSGS, ...)`.
+"""
+@inline function microphysics_tendencies_quadrature_0m(
+    ::GridMeanSGS,
+    cm_params, thermo_params,
+    ρ, T_mean, q_tot_mean,
+    T′T′, q′q′, T′q′,
+)
+    evaluator = Microphysics0MEvaluator(cm_params, thermo_params, ρ)
+    return evaluator(T_mean, q_tot_mean)
 end
 
 
