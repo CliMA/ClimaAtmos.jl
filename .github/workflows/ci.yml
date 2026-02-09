@@ -1,6 +1,7 @@
 name: ci
 on:
   push:
+    branches: [main]
     tags: '*'
   pull_request:
   merge_group:
@@ -28,8 +29,15 @@ jobs:
           - '1.11'
         os:
           - ubuntu-latest
-          - macOS-latest
           - windows-latest
+          # There is a concurrency limit for MacOS runners across the
+          # entire organization.
+          # (see https://docs.github.com/en/actions/reference/limits#job-concurrency-limits-for-github-hosted-runners)
+          # To help with this, MacOS runners are only run when PRs are merged
+          # into the main branch.
+          - ${{ github.event_name == 'push' && 'macos-latest' || '' }}
+        exclude:
+          - os: ''
         test_group:
           - infrastructure
           - dynamics
