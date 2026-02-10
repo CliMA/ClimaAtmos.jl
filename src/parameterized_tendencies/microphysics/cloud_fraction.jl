@@ -78,11 +78,12 @@ Pipeline:
 4. Transform θ→T using `compute_∂T_∂θ!`
 """
 function set_covariance_cache!(Y, p, thermo_params)
-    # Covariance fields are only allocated when SGS quadrature or
-    # QuadratureCloud/MLCloud is active (see precomputed_quantities.jl).
-    # No-op otherwise.
+    # Covariance fields are only allocated when microphysics needs the
+    # quadrature API or QuadratureCloud/MLCloud is active.
+    # No-op otherwise (e.g. EquilMoist + 0M + GridScaleCloud).
     uses_covariances =
-        p.atmos.microphysics_model isa QuadratureMicrophysics ||
+        p.atmos.microphysics_model isa
+        Union{Microphysics1Moment, Microphysics2Moment, QuadratureMicrophysics} ||
         p.atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
     uses_covariances || return nothing
 

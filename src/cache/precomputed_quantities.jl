@@ -132,10 +132,13 @@ function precomputed_quantities(Y, atmos)
     ᶜcloud_fraction = similar(Y.c, FT)
     @. ᶜcloud_fraction = FT(0)
 
-    # SGS covariances for cloud fraction (Sommeria & Deardorff closure) and microphysics quadrature
-    # Only allocate when QuadratureMicrophysics or QuadratureCloud/MLCloud is used
+    # SGS covariances for cloud fraction (Sommeria & Deardorff closure) and microphysics quadrature.
+    # Bare Microphysics1Moment/Microphysics2Moment always route through the
+    # QuadratureMicrophysics API internally (with GridMeanSGS), so they also
+    # need covariance fields allocated.
     uses_sgs_quadrature =
-        atmos.microphysics_model isa QuadratureMicrophysics ||
+        atmos.microphysics_model isa
+        Union{Microphysics1Moment, Microphysics2Moment, QuadratureMicrophysics} ||
         atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
     covariance_quantities =
         uses_sgs_quadrature ?

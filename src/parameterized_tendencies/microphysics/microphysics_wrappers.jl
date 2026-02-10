@@ -553,6 +553,22 @@ NamedTuple with SGS-averaged `dq_tot_dt` and `e_int_precip`.
     return sum_over_quadrature_points(evaluator, transform, SG_quad)
 end
 
+"""
+    microphysics_tendencies_quadrature_0m(::GridMeanSGS, ...)
+
+Direct GridMeanSGS dispatch for 0M: evaluates at grid mean, skipping quadrature.
+Matches the pattern used by the 1M `microphysics_tendencies_quadrature(::GridMeanSGS, ...)`.
+"""
+@inline function microphysics_tendencies_quadrature_0m(
+    ::GridMeanSGS,
+    cm_params, thermo_params,
+    ρ, T_mean, q_tot_mean,
+    T′T′, q′q′, T′q′,
+)
+    evaluator = Microphysics0MEvaluator(cm_params, thermo_params, ρ)
+    return evaluator(T_mean, q_tot_mean)
+end
+
 
 #####
 ##### SGS Quadrature Integration for Microphysics
