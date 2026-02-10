@@ -49,6 +49,19 @@ which causes overflow when used as a divisor denominator.
 Updates the precipitation terminal velocity, cloud sedimentation velocity,
 and their contribution to total water and energy advection.
 """
+# Unwrap QuadratureMicrophysics: terminal velocities don't depend on the
+# SGS quadrature scheme, so forward to the dispatch for the inner model.
+function set_precipitation_velocities!(
+    Y,
+    p,
+    moisture_model,
+    qm::QuadratureMicrophysics,
+    turbconv_model,
+)
+    return set_precipitation_velocities!(
+        Y, p, moisture_model, qm.base_model, turbconv_model,
+    )
+end
 function set_precipitation_velocities!(Y, p, _, _, _)
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     @. ᶜwₜqₜ = Geometry.WVector(0)
