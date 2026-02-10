@@ -1,6 +1,4 @@
 initial_condition: GABLS
-scm_coriolis: GABLS
-surface_setup: GABLS
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false

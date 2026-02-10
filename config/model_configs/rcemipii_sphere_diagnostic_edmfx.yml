@@ -1,8 +1,7 @@
+initial_condition: RCEMIPIIProfile_300
 surface_setup: DefaultMoninObukhov
-surface_temperature: RCEMIPII
 rad: allskywithclear
 turbconv: diagnostic_edmfx
-insolation: rcemipii
 prognostic_tke: true
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"

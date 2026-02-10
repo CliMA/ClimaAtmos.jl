@@ -1,7 +1,5 @@
 ## Model
-prescribed_flow: ShipwayHill2012
 initial_condition: ShipwayHill2012
-surface_setup: ShipwayHill2012
 energy_q_tot_upwinding: first_order
 tracer_upwinding: first_order
 microphysics_model: "1M"

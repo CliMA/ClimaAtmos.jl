@@ -24,7 +24,12 @@ using Aqua
 end
 
 @testset "Aqua tests (all)" begin
-    Aqua.test_all(ClimaAtmos; persistent_tasks = true)
+    Aqua.test_all(
+        ClimaAtmos;
+        persistent_tasks = true,
+        stale_deps = (ignore = [:Glib_jll],),
+        deps_compat = (ignore = [:Glib_jll],),
+    )
 end
 
 nothing

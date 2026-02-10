@@ -27,10 +27,10 @@ config.parsed_args["topo_smoothing"] = false;
 config.parsed_args["topography_damping_factor"] = 1;
 
 params = CA.ClimaAtmosParameters(config)
-atmos = CA.get_atmos(config, params)
+setup_type = CA.get_setup_type(config.parsed_args, params.thermodynamics_params)
+atmos = CA.get_atmos(config, params; setup_type)
 grid = CA.get_grid(config.parsed_args, params, config.comms_ctx)
 spaces = CA.get_spaces(grid)
-initial_condition = CA.get_initial_condition(config.parsed_args, atmos)
 
 parsed_args = config.parsed_args
 
@@ -41,8 +41,9 @@ computed_drag = load_computed_drag(parsed_args, comms_ctx)
 
 #########################################
 
-Y = CA.ICs.atmos_state(
-    initial_condition(params),
+Y = CA.Setups.initial_state(
+    setup_type,
+    params,
     atmos,
     spaces.center_space,
     spaces.face_space,

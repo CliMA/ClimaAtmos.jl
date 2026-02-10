@@ -1,7 +1,5 @@
 initial_condition: "GCM"
-external_forcing: "GCM"
 external_forcing_file: "/resnick/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
-surface_setup: "GCM"
 turbconv: "diagnostic_edmfx"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
@@ -22,7 +20,6 @@ z_elem: 60
 z_stretch: true
 dz_bottom: 30
 rad: allskywithclear
-insolation: "gcmdriven"
 dt: "100secs"
 t_end: "72hours"
 dt_save_state_to_disk: "10mins"

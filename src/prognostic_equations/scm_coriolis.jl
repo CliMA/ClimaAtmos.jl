@@ -19,17 +19,16 @@ large-scale forcing.
 
 Arguments:
 - `ᶜuₕ`: The cell-centered horizontal velocity field [m/s].
-- `scm_coriolis`: An object containing Coriolis parameters and geostrophic wind
-                   profiles. If not of type `SCMCoriolis`, a `NullBroadcasted`
-                   is returned, indicating no Coriolis forcing.
+- `scm_coriolis`: A NamedTuple `(; prof_ug, prof_vg, coriolis_param)`, or
+                   `nothing` for no Coriolis forcing.
 
 Returns:
 - A `ClimaCore.Fields.Field` (or a lazy broadcast over ClimaCore Fields)
   representing the Coriolis tendency for `ᶜuₕ` [m/s²],
-  or `NullBroadcasted()` if `scm_coriolis` is not an `SCMCoriolis` type.
+  or `NullBroadcasted()` if `scm_coriolis` is nothing.
 """
+scm_coriolis_tendency_uₕ(ᶜuₕ, ::Nothing) = NullBroadcasted()
 function scm_coriolis_tendency_uₕ(ᶜuₕ, scm_coriolis)
-    scm_coriolis isa SCMCoriolis || return NullBroadcasted()
     (; prof_ug, prof_vg) = scm_coriolis
     (; coriolis_param) = scm_coriolis
 

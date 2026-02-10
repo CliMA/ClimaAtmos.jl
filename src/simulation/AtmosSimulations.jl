@@ -1,7 +1,7 @@
 import ClimaCore: Grids
 import ClimaUtilities.TimeManager: ITime
 import ClimaAtmos.Diagnostics as CAD
-import .InitialConditions as ICs
+import .Setups
 
 struct AtmosSimulation{TT, S1 <: AbstractString, S2 <: AbstractString, OW, OD}
     job_id::S1
@@ -129,7 +129,7 @@ function AtmosSimulation{FT}(;
     params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(FT),
     context::ClimaComms.AbstractCommsContext = ClimaComms.context(),
     grid::Grids.AbstractGrid = SphereGrid(FT; radius = CAP.planet_radius(params), context),
-    initial_condition::ICs.InitialCondition = InitialConditions.DecayingProfile(),
+    initial_condition = Setups.DecayingProfile(; perturb = true, params),
     dt = 600,
     start_date = DateTime(2010, 1, 1),
     t_start = 0,
@@ -196,12 +196,12 @@ function AtmosSimulation{FT}(;
     else
         dt, t_start, t_end = convert_time_args(dt, t_start, t_end, itime, start_date, FT)
         spaces = get_spaces(grid)
-        Y = ICs.atmos_state(
-            initial_condition(params), model,
+        Y = Setups.initial_state(
+            initial_condition, params, model,
             spaces.center_space,
             spaces.face_space,
         )
-        InitialConditions.overwrite_initial_conditions!(
+        Setups.overwrite_initial_state!(
             initial_condition, Y, params.thermodynamics_params,
         )
     end

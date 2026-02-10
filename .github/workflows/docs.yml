@@ -22,8 +22,18 @@ jobs:
         with:
           version: '1.11'
       - uses: julia-actions/cache@v2
+      - name: Pin Glib_jll to working version
+        shell: julia --project=. {0}
+        run: |
+          import Pkg
+          
       - name: Install dependencies
-        run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+        shell: julia --project=docs {0}
+        run: |
+          using Pkg
+          Pkg.develop(PackageSpec(path="."))
+          Pkg.add(Pkg.PackageSpec(name="Glib_jll", version="2.82.4"))
+          Pkg.instantiate()
       - name: Build and deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For authentication with GitHub Actions token

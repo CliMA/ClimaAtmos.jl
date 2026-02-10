@@ -1,8 +1,4 @@
 initial_condition: DYCOMS_RF01
-subsidence: DYCOMS
-scm_coriolis: DYCOMS_RF01
-rad: DYCOMS
-surface_setup: DYCOMS_RF01
 turbconv: prognostic_edmfx
 implicit_diffusion: true
 implicit_sgs_advection: false

@@ -85,23 +85,28 @@ end
 ExchangeCoefficients(C) = ExchangeCoefficients(Cd = C, Ch = C)
 
 """
-    MoninObukhov(; z0, z0m, z0b, fluxes, ustar)
+    MoninObukhov(; z0, z0m, z0b, fluxes, shf, lhf, θ_flux, q_flux, ustar)
 
 Container for storing values used to calculate surface conditions using
 Monin-Obukhov Similarity Theory. See SurfaceFluxes docs for more information.
 
-- z0: Roughness
-- z0m: Roughness for momentum
-- z0b: Roughness for scalars
-- fluxes: Sensible and latent heat fluxes
-- ustar: Friction velocity
+## Roughness (required)
+- `z0`: Roughness (sets both `z0m` and `z0b`)
+- `z0m`, `z0b`: Roughness for momentum and scalars (specify both, or use `z0`)
+
+## Prescribed fluxes (optional) — specify via one of:
+- `fluxes`: A `HeatFluxes` or `θAndQFluxes` struct directly
+- `shf`, `lhf`: Sensible/latent heat fluxes (W/m²) — constructs `HeatFluxes`
+- `θ_flux`, `q_flux`: θ and q fluxes (K·m/s, kg/kg·m/s) — constructs `θAndQFluxes`
+
+## Other (optional)
+- `ustar`: Friction velocity (m/s)
 
 Valid combinations:
  - roughness
  - roughness and fluxes
  - roughness and ustar
  - roughness and fluxes and ustar
-Roughnesses can be specified by either z0 or both z0m and z0b.
 """
 struct MoninObukhov{
     FT,
@@ -116,8 +121,10 @@ end
 
 function MoninObukhov(;
     z0 = nothing, z0m = nothing, z0b = nothing,
-    fluxes = nothing, ustar = nothing,
+    fluxes = nothing, shf = nothing, lhf = nothing,
+    θ_flux = nothing, q_flux = nothing, ustar = nothing,
 )
+    # Roughness handling
     if !isnothing(z0)
         if isnothing(z0m) && isnothing(z0b)
             z0m = z0b = z0
@@ -125,6 +132,26 @@ function MoninObukhov(;
             error("Cannot specify z0 and z0m/z0b")
         end
     end
+
+    # Flux handling: flat kwargs --> PrescribedFluxes struct
+    has_heat = !isnothing(shf) || !isnothing(lhf)
+    has_theta = !isnothing(θ_flux) || !isnothing(q_flux)
+    if !isnothing(fluxes) && (has_heat || has_theta)
+        error(
+            "Cannot specify `fluxes` alongside individual flux kwargs (shf, lhf, θ_flux, q_flux)",
+        )
+    end
+    if has_heat && has_theta
+        error(
+            "Cannot specify both heat-flux kwargs (shf, lhf) and θ-flux kwargs (θ_flux, q_flux)",
+        )
+    end
+    if has_heat
+        fluxes = HeatFluxes(; shf, lhf)
+    elseif has_theta
+        fluxes = θAndQFluxes(; θ_flux, q_flux)
+    end
+
     m_o(z0m::Number, z0b::Number, fluxes, ::Nothing) =
         MoninObukhov(z0m, z0b, fluxes, nothing)
     m_o(z0m::Number, z0b::Number, ::Nothing, ustar::Number) =

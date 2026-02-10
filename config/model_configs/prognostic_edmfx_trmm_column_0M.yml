@@ -1,6 +1,4 @@
 initial_condition: TRMM_LBA
-rad: TRMM_LBA
-surface_setup: TRMM_LBA
 turbconv: prognostic_edmfx
 implicit_diffusion: true
 implicit_sgs_advection: true

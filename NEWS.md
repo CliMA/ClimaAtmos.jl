@@ -3,6 +3,7 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- Replace `InitialConditions` module with `Setups` module. Remove `surface_temperature` config key.
 
 - [#4361](https://github.com/CliMA/ClimaAtmos.jl/pull/4361) Refactor reproducibility infrastructure to use rms deviations in prognostic variables and only fail when rms deviation exceeds tolerance.
 
