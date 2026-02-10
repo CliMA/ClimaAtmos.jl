@@ -371,10 +371,7 @@ prescribed_aerosols:
 time_varying_trace_gases:
   help: "Trace gases that vary in time, e.g. [\"CO2\", \"O3\"]. Currently, only \"CO2\" and \"O3\" are supported. All other trace gases set fixed to default values from ClimaParams."
   value: []
-# TODO: remove once https://github.com/CliMA/ClimaAtmos.jl/issues/2873 is closed
-call_cloud_diagnostics_per_stage:
-  help: "A temporary Bool for calling cloud diagnostics every stage"
-  value: false
+
 # EDMF configuration
 turbconv:
   help: "Turbulence convection scheme [`nothing` (default), 'prognostic_edmfx', 'diagnostic_edmfx']"

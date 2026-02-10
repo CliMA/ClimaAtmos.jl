@@ -122,7 +122,6 @@ function amip_target_diagedmf(context, output_dir)
     callback_kwargs = (;
         dt_rad = "1secs",
         dt_cloud_fraction = "1secs",
-        call_cloud_diagnostics_per_stage = true,
     )
 
     args = (; model,
@@ -364,7 +363,7 @@ if MANYTESTS
                             insolation = CA.IdealizedInsolation(),
                             reproducible_restart = CA.ReproducibleRestart(),
                             test_dycore_consistency = CA.TestDycoreConsistency(),
-                            call_cloud_diagnostics_per_stage = CA.CallCloudDiagnosticsPerStage(),
+
                         )
 
                         # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
@@ -399,7 +398,6 @@ if MANYTESTS
                         callback_kwargs = (;
                             dt_rad = "1secs",
                             dt_cloud_fraction = "1secs",
-                            call_cloud_diagnostics_per_stage = true,
                         )
                         args = (;
                             model,

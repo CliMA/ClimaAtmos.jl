@@ -510,18 +510,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         callbacks = (callbacks..., scm_external_forcing_callback()...)
     end
 
-    # Cloud fraction
-    if !parsed_args["call_cloud_diagnostics_per_stage"]
-        callbacks = (
-            callbacks...,
-            cloud_fraction_callback(
-                parsed_args["dt_cloud_fraction"],
-                dt,
-                t_start,
-                t_end,
-            )...,
-        )
-    end
+
 
     # Radiation
     callbacks = (
@@ -631,8 +620,7 @@ function default_model_callbacks(water::AtmosWater;
     t_start,
     t_end,
     kwargs...)
-    if !isnothing(water.call_cloud_diagnostics_per_stage) &&
-       !isnothing(water.moisture_model)
+    if !isnothing(water.moisture_model)
         return cloud_fraction_callback(
             dt_cloud_fraction,
             dt,

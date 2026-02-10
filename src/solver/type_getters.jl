@@ -80,8 +80,7 @@ function get_atmos(config::AtmosConfig, params)
 
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
-    call_cloud_diagnostics_per_stage =
-        get_call_cloud_diagnostics_per_stage(parsed_args)
+
 
     # HeldSuarezForcing can be set via radiation_mode or legacy forcing option for now
     final_radiation_mode =
@@ -143,7 +142,7 @@ function get_atmos(config::AtmosConfig, params)
         cloud_model,
         microphysics_tendency_timestepping = implicit_microphysics ?
                                              Implicit() : Explicit(),
-        call_cloud_diagnostics_per_stage,
+
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(parsed_args),
 
         # SCMSetup - Single-Column Model components

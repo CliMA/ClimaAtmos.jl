@@ -249,7 +249,7 @@ if MANYTESTS
                             "rad" => radiation,
                             "dt_rad" => "1secs",
                             "surface_setup" => "DefaultMoninObukhov",
-                            "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed
+
                             "t_end" => "3secs",
                             "dt_save_state_to_disk" => "1secs",
                             "enable_diagnostics" => false,
@@ -295,7 +295,7 @@ else
             "log_progress" => false,
             "dt" => "1secs",
             "dt_rad" => "1secs",
-            "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed
+
             "t_end" => "3secs",
             "dt_save_state_to_disk" => "1secs",
             "output_dir" => joinpath(amip_output_loc, amip_job_id),

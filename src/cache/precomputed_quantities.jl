@@ -269,8 +269,7 @@ function precomputed_quantities(Y, atmos)
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
-            ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
+
             ᶠnh_pressure₃_buoyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             precipitation_sgs_quantities...,
         ) : (;)
@@ -280,13 +279,10 @@ function precomputed_quantities(Y, atmos)
         (; ρtke_flux = similar(Fields.level(Y.f, half), C3{FT}),) : (;)
 
     # Gradient fields for covariance computation (used in cloud fraction/microphysics)
-    # Only allocate if NOT already included via advective_sgs_quantities (PrognosticEDMFX)
-    sgs_quantities =
-        atmos.turbconv_model isa PrognosticEDMFX ? (;) :
-        (;
-            ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
-            ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
-        )
+    sgs_quantities = (;
+        ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
+        ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
+    )
 
     diagnostic_precipitation_sgs_quantities =
         atmos.microphysics_model isa
@@ -595,7 +591,7 @@ current state `Y`. This is only called before each evaluation of
 """
 NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, moisture_model, cloud_model, microphysics_model) = p.atmos
-    (; call_cloud_diagnostics_per_stage) = p.atmos
+
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
     # Only cache covariances per-step when there are per-step consumers:
@@ -686,10 +682,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     )
     set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
 
-    # TODO
-    if call_cloud_diagnostics_per_stage isa CallCloudDiagnosticsPerStage
-        set_cloud_fraction!(Y, p, moisture_model, cloud_model)
-    end
+    set_cloud_fraction!(Y, p, moisture_model, cloud_model)
 
     set_smagorinsky_lilly_precomputed_quantities!(Y, p, p.atmos.smagorinsky_lilly)
 

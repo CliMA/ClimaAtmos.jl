@@ -1444,26 +1444,51 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
 )
     return nothing
 end
+"""
+    set_diagnostic_edmf_precomputed_quantities_env_precipitation!(Y, p, t, ::Microphysics0Moment)
+
+Dispatch for bare `Microphysics0Moment` (without explicit `QuadratureMicrophysics` wrapper).
+
+Creates a `QuadratureMicrophysics` wrapper with `GridMeanSGS()` distribution and delegates,
+matching the pattern in `precipitation_precomputed_quantities.jl`.
+"""
 NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipitation!(
     Y,
     p,
     t,
     microphysics_model::Microphysics0Moment,
 )
+    qm = QuadratureMicrophysics(Microphysics0Moment(), GridMeanSGS())
+    return set_diagnostic_edmf_precomputed_quantities_env_precipitation!(Y, p, t, qm)
+end
+
+NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipitation!(
+    Y,
+    p,
+    t,
+    qm::QuadratureMicrophysics{Microphysics0Moment},
+)
     microphys_0m_params = CAP.microphysics_0m_params(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
     (; dt) = p
-    (; ᶜT, ᶜq_liq_rai, ᶜq_ice_sno, ᶜSqₜᵐ⁰, ᶜmp_result) = p.precomputed
+    (; ᶜT, ᶜq_tot_safe, ᶜSqₜᵐ⁰, ᶜmp_result) = p.precomputed
 
-    # Environment precipitation sources (to be applied to grid mean)
-    # Materialize BMT result first to avoid NamedTuple property access in broadcast
-    @. ᶜmp_result = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics0Moment(),
+    # Get T-based covariances (from cache)
+    ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
+
+    # Integrate 0M tendencies over SGS fluctuations (writes into pre-allocated ᶜmp_result)
+    @. ᶜmp_result = microphysics_tendencies_quadrature_0m(
+        $(qm.quadrature),
         microphys_0m_params,
         thermo_params,
+        Y.c.ρ,
         ᶜT,
-        ᶜq_liq_rai, ᶜq_ice_sno,
+        ᶜq_tot_safe,
+        ᶜT′T′,
+        ᶜq′q′,
+        ᶜT′q′,
     )
+
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_result.dq_tot_dt, ᶜq_tot, dt)
     return nothing

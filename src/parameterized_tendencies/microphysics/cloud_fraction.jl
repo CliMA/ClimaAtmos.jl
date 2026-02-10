@@ -29,7 +29,6 @@ function compute_θ_covariance(Y, p, thermo_params)
     # Compute gradients for non-EDMF cases (EDMF gradients are precomputed)
     if isnothing(turbconv_model)
         needs_gradients =
-            p.atmos.call_cloud_diagnostics_per_stage isa CallCloudDiagnosticsPerStage ||
             p.atmos.microphysics_model isa QuadratureMicrophysics ||
             p.atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
         if needs_gradients
@@ -204,7 +203,8 @@ function set_covariance_cache!(Y, p, thermo_params)
     @. ᶜT′q′ = ᶜθ′q′_lazy  # temporarily holds θ′q′
 
     # Transform θ→T covariances in-place
-    ᶜ∂T_∂θ = compute_∂T_∂θ!(p.scratch.ᶜtemp_scalar_2, Y, p, thermo_params)
+    ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_2
+    compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
     @. ᶜT′T′ = ᶜ∂T_∂θ^2 * ᶜT′T′  # θ′θ′ → T′T′
     @. ᶜT′q′ = ᶜ∂T_∂θ * ᶜT′q′     # θ′q′ → T′q′
     return nothing
@@ -548,7 +548,7 @@ function _get_condensate_means_equil(p, turbconv_model)
         (; ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
         return ᶜq_liq_rai⁰, ᶜq_ice_sno⁰
     else
-        (; ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed  # TODO: Check this. Shouldn't we use environment variables for DiagnosticEDMFX too?
+        (; ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
         return ᶜq_liq_rai, ᶜq_ice_sno
     end
 end
