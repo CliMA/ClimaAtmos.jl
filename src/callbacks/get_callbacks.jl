@@ -503,6 +503,18 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         callbacks = (callbacks..., conservation_checking_callback()...)
     end
 
+    # Precipitation flux correction (corrects sfc.water for IMEX Newton asymmetry)
+    if atmos.surface_model isa SlabOceanSST &&
+       !(atmos.moisture_model isa DryModel)
+        callbacks = (
+            callbacks...,
+            call_every_n_steps(
+                correct_precipitation_surface_fluxes!;
+                call_at_end = true,
+            ),
+        )
+    end
+
     # External forcing
     if parsed_args["external_forcing"] in
        ["ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal"] &&

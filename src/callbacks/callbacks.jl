@@ -18,6 +18,7 @@ import ClimaUtilities.TimeVaryingInputs: evaluate!
 
 
 include("callback_helpers.jl")
+include("precipitation_surface_flux_correction.jl")
 
 function flux_accumulation!(integrator)
     Y = integrator.u
