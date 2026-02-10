@@ -4,6 +4,9 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+- [#4252](https://github.com/CliMA/ClimaAtmos.jl/pull/4252) Add option to write
+  diagnostics in pressure coordinates
+
 v0.35.2
 -------
 

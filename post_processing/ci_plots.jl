@@ -42,7 +42,7 @@ import CairoMakie
 import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
-import ClimaAnalysis: SimDir, slice, read_var, average_xy, window, average_time
+import ClimaAnalysis: SimDir, slice, average_xy, window, average_time
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
@@ -706,7 +706,7 @@ function make_plots(
     end
 
     # surface_precipitation
-    surface_precip = read_var(simdir.variable_paths["pr"]["inst"]["10s"])
+    surface_precip = get(simdir; short_name = "pr", reduction = "inst", period = "10s")
     # Column simulations use a minimal box, so slice x,y
     if haskey(surface_precip.dims, "x")
         surface_precip = slice(surface_precip; x = surface_precip.dims["x"][1])
