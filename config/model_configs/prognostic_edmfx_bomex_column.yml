@@ -1,8 +1,4 @@
 initial_condition: "Bomex"
-subsidence: "Bomex"
-scm_coriolis: "Bomex"
-ls_adv: "Bomex"
-surface_setup: "Bomex"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
