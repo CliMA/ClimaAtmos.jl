@@ -6,8 +6,6 @@
 
 import ClimaCore.MatrixFields as MF
 
-
-
 """
     tracer_nonnegativity_vapor_tendency(q, q_vap, dt)
 

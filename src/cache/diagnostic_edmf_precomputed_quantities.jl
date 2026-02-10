@@ -833,7 +833,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 )
                 @. S_q_totʲ_prev_level = limit_sink(
                     mp_result_prev_level.dq_tot_dt,
-                    q_totʲ_prev_level, dt, 1,
+                    q_totʲ_prev_level, dt,
                 )
                 # 1-moment microphysics: cloud water (liquid and ice) and
                 # precipitation (rain and snow) tendencies. q_tot is constant, because
@@ -1465,7 +1465,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         ᶜq_liq_rai, ᶜq_ice_sno,
     )
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_result.dq_tot_dt, ᶜq_tot, dt, 1)
+    @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_result.dq_tot_dt, ᶜq_tot, dt)
     return nothing
 end
 

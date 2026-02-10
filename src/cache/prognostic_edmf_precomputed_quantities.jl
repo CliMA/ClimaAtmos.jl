@@ -471,7 +471,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         )
         @. ᶜSqₜᵐʲs.:($$j) = limit_sink(
             ᶜmp_result.dq_tot_dt,
-            Y.c.sgsʲs.:($$j).q_tot, dt, 1,
+            Y.c.sgsʲs.:($$j).q_tot, dt,
         )
     end
     # sources from the environment
@@ -481,7 +481,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜq_liq_rai⁰, ᶜq_ice_sno⁰,
     )
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-    @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_result.dq_tot_dt, ᶜq_tot⁰, dt, 1)
+    @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_result.dq_tot_dt, ᶜq_tot⁰, dt)
     return nothing
 end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
