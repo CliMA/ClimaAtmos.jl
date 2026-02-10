@@ -285,6 +285,7 @@ else
             "output_dir" => joinpath(amip_output_loc, amip_job_id),
             "dt_cloud_fraction" => "1secs",
             "rad" => "allskywithclear",
+            "radiation_reset_rng_seed" => true,
             "toml" => [
                 joinpath(@__DIR__, "../toml/longrun_aquaplanet_diagedmf.toml"),
             ],
