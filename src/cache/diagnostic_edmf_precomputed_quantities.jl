@@ -1531,7 +1531,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
     ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
 
-    # Get T-based covariances (from cache if available)
+    # Get T-based covariances from cache
     ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
 
     # Integrate microphysics tendencies over SGS fluctuations

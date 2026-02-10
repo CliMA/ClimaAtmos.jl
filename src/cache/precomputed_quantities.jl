@@ -532,8 +532,6 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         @. ᶜq_ice_sno = ᶜsa_result.q_ice
 
         # Two-pass SGS: recompute condensate using SGS quadrature over (T, q_tot)
-        # Note: In implicit phase, covariance cache may not be populated yet;
-        # get_covariances will compute on-the-fly if cache is empty
         if microphysics_model isa QuadratureMicrophysics
             ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
             # Reuse ᶜsa_result (same NamedTuple type) to avoid allocating a new field
@@ -594,13 +592,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
 
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
-    # Only cache covariances per-step when there are per-step consumers:
-    # 1. QuadratureMicrophysics → set_microphysics_tendency_cache! needs them
-    # Otherwise, covariances are computed on-the-fly via get_covariances() lazy
-    # fallback when the cloud fraction callback fires.
-    _cache_covariances =
-        _uses_sgs_covariances(cloud_model, microphysics_model) &&
-        microphysics_model isa QuadratureMicrophysics
+
 
     if !isnothing(p.sfc_setup)
         SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
@@ -634,8 +626,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
-        # Cache covariances after closures (mixing length) are computed
-        _cache_covariances && set_covariance_cache!(Y, p, thermo_params)
+        set_covariance_cache!(Y, p, thermo_params)
         set_prognostic_edmf_precomputed_quantities_precipitation!(
             Y,
             p,
@@ -647,8 +638,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
-        # Cache covariances after closures (mixing length) are computed
-        _cache_covariances && set_covariance_cache!(Y, p, thermo_params)
+        set_covariance_cache!(Y, p, thermo_params)
         set_diagnostic_edmf_precomputed_quantities_env_precipitation!(
             Y,
             p,
@@ -663,7 +653,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
 
     # Cache covariances for non-EDMF paths (no closures to wait for)
     if isnothing(turbconv_model)
-        _cache_covariances && set_covariance_cache!(Y, p, thermo_params)
+        set_covariance_cache!(Y, p, thermo_params)
     end
 
     set_precipitation_velocities!(

@@ -567,7 +567,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         GridMeanSGS()
     end
 
-    # Get T-based covariances (from cache if available)
+    # Get T-based covariances from cache
     ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thp)
 
     # Integrate microphysics tendencies over SGS fluctuations

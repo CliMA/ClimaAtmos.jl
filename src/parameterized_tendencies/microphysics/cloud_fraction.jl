@@ -8,125 +8,6 @@ import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 
 
 """
-    compute_θ_covariance(Y, p, thermo_params)
-
-Compute θ-based covariances from gradients and mixing length.
-This is a helper function used by `compute_covariance`.
-
-Note: For PrognosticEDMFX, gradients are computed from grid-scale variables
-rather than environmental variables. This is an approximation; ideally
-covariances would use environmental gradients since they represent sub-grid
-fluctuations within the environment.
-
-# Returns
-Tuple `(ᶜq′q′, ᶜθ′θ′, ᶜθ′q′)` of lazy field expressions.
-"""
-function compute_θ_covariance(Y, p, thermo_params)
-    coeff = CAP.diagnostic_covariance_coeff(p.params)
-    turbconv_model = p.atmos.turbconv_model
-    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
-
-    # Compute gradients for non-EDMF cases (EDMF gradients are precomputed)
-    if isnothing(turbconv_model)
-        needs_gradients =
-            p.atmos.microphysics_model isa QuadratureMicrophysics ||
-            p.atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
-        if needs_gradients
-            (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
-            # TODO: replace by 3d gradients
-            @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
-            @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
-                ᶠinterp(
-                    TD.liquid_ice_pottemp(
-                        thermo_params,
-                        ᶜT,
-                        Y.c.ρ,
-                        ᶜq_tot_safe,
-                        ᶜq_liq_rai,
-                        ᶜq_ice_sno,
-                    ),
-                ),
-            )
-        end
-    end
-    # For EDMF: gradients are precomputed in set_explicit_precomputed_quantities!
-
-    # NOTE: gradients must be precomputed when using compute_gm_mixing_length
-    # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
-    ᶜmixing_length_field =
-        turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX ?
-        ᶜmixing_length(Y, p) :
-        compute_gm_mixing_length(Y, p)
-
-    # Compute covariance based on gradients and the mixing length
-    cov_from_grad(C, L, ∇Φ, ∇Ψ) = 2 * C * L^2 * dot(∇Φ, ∇Ψ)
-    ᶜq′q′ = @. lazy(
-        cov_from_grad(
-            coeff,
-            ᶜmixing_length_field,
-            Geometry.WVector(ᶜgradᵥ_q_tot),
-            Geometry.WVector(ᶜgradᵥ_q_tot),
-        ),
-    )
-    ᶜθ′θ′ = @. lazy(
-        cov_from_grad(
-            coeff,
-            ᶜmixing_length_field,
-            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
-            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
-        ),
-    )
-    ᶜθ′q′ = @. lazy(
-        cov_from_grad(
-            coeff,
-            ᶜmixing_length_field,
-            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
-            Geometry.WVector(ᶜgradᵥ_q_tot),
-        ),
-    )
-
-    return (ᶜq′q′, ᶜθ′θ′, ᶜθ′q′)
-end
-
-"""
-    compute_covariance(Y, p, thermo_params)
-
-Compute T-based covariances for SGS quadrature (on-the-fly lazy version).
-
-Calls `compute_θ_covariance` for θ-based covariances, then transforms
-to T-based using `compute_∂T_∂θ!`. Used by `get_covariances` when
-covariances are not cached.
-
-# Returns
-Tuple `(ᶜq′q′, ᶜT′T′, ᶜT′q′)` of lazy field expressions.
-"""
-function compute_covariance(Y, p, thermo_params)
-    # Get θ-based covariances (shared with set_covariance_cache! and diagnostics)
-    ᶜq′q′, ᶜθ′θ′, ᶜθ′q′ = compute_θ_covariance(Y, p, thermo_params)
-
-    # Compute ∂T/∂θ (shared helper, materializes into scratch)
-    ᶜ∂T_∂θ = compute_∂T_∂θ!(p.scratch.ᶜtemp_scalar_2, Y, p, thermo_params)
-
-    # Transform θ→T covariances lazily
-    ᶜT′T′ = @. lazy(ᶜ∂T_∂θ^2 * ᶜθ′θ′)
-    ᶜT′q′ = @. lazy(ᶜ∂T_∂θ * ᶜθ′q′)
-
-    return (ᶜq′q′, ᶜT′T′, ᶜT′q′)
-end
-
-"""
-    _uses_sgs_covariances(cloud_model, microphysics_model) -> Bool
-
-Compile-time constant: whether the model needs cached SGS covariances.
-True when QuadratureMicrophysics, QuadratureCloud, or MLCloud is used.
-Takes model fields directly (not the full atmos struct) to enable
-zero-allocation type dispatch.
-"""
-@inline _uses_sgs_covariances(cloud_model, microphysics_model) =
-    microphysics_model isa QuadratureMicrophysics ||
-    cloud_model isa Union{QuadratureCloud, MLCloud}
-
-"""
     compute_∂T_∂θ!(dest, Y, p, thermo_params)
 
 Materialize the θ→T Jacobian (∂T/∂θ_li) into `dest`.
@@ -182,8 +63,13 @@ end
 Materializes T-based SGS covariances into cached fields for use by downstream
 computations (SGS quadrature, cloud fraction).
 
-Called once per timestep in `set_explicit_precomputed_quantities!`.
+Called once per stage in `set_explicit_precomputed_quantities!`.
 Populates `p.precomputed.(ᶜT′T′, ᶜq′q′, ᶜT′q′)`.
+
+Note: For PrognosticEDMFX, gradients are computed from grid-scale variables
+rather than environmental variables. This is an approximation; ideally
+covariances would use environmental gradients since they represent sub-grid
+fluctuations within the environment.
 
 Pipeline:
 1. Compute vertical gradients (non-EDMF only)
@@ -194,13 +80,66 @@ Pipeline:
 function set_covariance_cache!(Y, p, thermo_params)
     (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
 
-    # Compute lazy θ-based covariances (shared with diagnostics)
-    ᶜq′q′_lazy, ᶜθ′θ′_lazy, ᶜθ′q′_lazy = compute_θ_covariance(Y, p, thermo_params)
+    coeff = CAP.diagnostic_covariance_coeff(p.params)
+    turbconv_model = p.atmos.turbconv_model
+    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
 
-    # Materialize into cache fields
-    @. ᶜq′q′ = ᶜq′q′_lazy
-    @. ᶜT′T′ = ᶜθ′θ′_lazy  # temporarily holds θ′θ′
-    @. ᶜT′q′ = ᶜθ′q′_lazy  # temporarily holds θ′q′
+    # Compute gradients for non-EDMF cases (EDMF gradients are precomputed)
+    if isnothing(turbconv_model)
+        needs_gradients =
+            p.atmos.microphysics_model isa QuadratureMicrophysics ||
+            p.atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
+        if needs_gradients
+            (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+            # TODO: replace by 3d gradients
+            @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
+            @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
+                ᶠinterp(
+                    TD.liquid_ice_pottemp(
+                        thermo_params,
+                        ᶜT,
+                        Y.c.ρ,
+                        ᶜq_tot_safe,
+                        ᶜq_liq_rai,
+                        ᶜq_ice_sno,
+                    ),
+                ),
+            )
+        end
+    end
+    # For EDMF: gradients are precomputed in set_explicit_precomputed_quantities!
+
+    # NOTE: gradients must be precomputed when using compute_gm_mixing_length
+    # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field =
+        turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX ?
+        ᶜmixing_length(Y, p) :
+        compute_gm_mixing_length(Y, p)
+
+    # Compute θ-based covariances from gradients and mixing length
+    cov_from_grad(C, L, ∇Φ, ∇Ψ) = 2 * C * L^2 * dot(∇Φ, ∇Ψ)
+
+    # Materialize q′q′ into cache (same in θ and T basis)
+    @. ᶜq′q′ = cov_from_grad(
+        coeff,
+        ᶜmixing_length_field,
+        Geometry.WVector(ᶜgradᵥ_q_tot),
+        Geometry.WVector(ᶜgradᵥ_q_tot),
+    )
+    # Materialize θ′θ′ into ᶜT′T′ temporarily
+    @. ᶜT′T′ = cov_from_grad(
+        coeff,
+        ᶜmixing_length_field,
+        Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+        Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+    )
+    # Materialize θ′q′ into ᶜT′q′ temporarily
+    @. ᶜT′q′ = cov_from_grad(
+        coeff,
+        ᶜmixing_length_field,
+        Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+        Geometry.WVector(ᶜgradᵥ_q_tot),
+    )
 
     # Transform θ→T covariances in-place
     ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_2
@@ -213,30 +152,17 @@ end
 """
     get_covariances(Y, p, thermo_params)
 
-Get T-based covariances, either from cache or computed on-the-fly.
+Get T-based covariances from cache.
 
-If covariances are cached (when SGS quadrature is used), returns the cached
-fields. Otherwise, computes lazy covariances on-the-fly.
+Covariances are cached every stage by `set_covariance_cache!` in
+`set_explicit_precomputed_quantities!`.
 
 # Returns
-Tuple `(ᶜq′q′, ᶜT′T′, ᶜT′q′)` of field expressions.
+Tuple `(ᶜq′q′, ᶜT′T′, ᶜT′q′)` of cached fields.
 """
 function get_covariances(Y, p, thermo_params)
-    (; cloud_model, microphysics_model) =
-        p.atmos
-    # Use cached covariances only when per-step caching is active
-    # (same condition as _cache_covariances in set_explicit_precomputed_quantities!)
-    _is_cached =
-        _uses_sgs_covariances(cloud_model, microphysics_model) && 
-            microphysics_model isa QuadratureMicrophysics
-    if _is_cached
-        # Use cached covariances (populated by set_covariance_cache!)
-        (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
-        return (ᶜq′q′, ᶜT′T′, ᶜT′q′)
-    else
-        # Compute on-the-fly (lazy)
-        return compute_covariance(Y, p, thermo_params)
-    end
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
+    return (ᶜq′q′, ᶜT′T′, ᶜT′q′)
 end
 
 # ============================================================================
@@ -381,19 +307,8 @@ NVTX.@annotate function set_cloud_fraction!(
     # Get condensate means (dispatches on moisture_model)
     ᶜq_liq, ᶜq_ice = _get_condensate_means(Y, p, turbconv_model, moisture_model)
 
-    # Get T-based covariances (may be lazy or cached)
-    ᶜq′q′_lazy, ᶜT′T′_lazy, ᶜT′q′_lazy = get_covariances(Y, p, thermo_params)
-
-    # Materialize covariances into scratch fields to break the lazy broadcast
-    # chain before the compute_cloud_fraction_sd kernel. Without this, the
-    # entire mixing_length → cov_from_grad → ∂T/∂θ expression tree flows into
-    # the GPU kernel parameters, leading to pressure on parameter memory
-    ᶜq′q′ = p.scratch.ᶜtemp_scalar_3
-    ᶜT′T′ = p.scratch.ᶜtemp_scalar_6
-    ᶜT′q′ = p.scratch.ᶜtemp_scalar_7
-    ᶜq′q′ .= ᶜq′q′_lazy
-    ᶜT′T′ .= ᶜT′T′_lazy
-    ᶜT′q′ .= ᶜT′q′_lazy
+    # Get T-based covariances from cache
+    ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
 
     @. p.precomputed.ᶜcloud_fraction = compute_cloud_fraction_sd(
         thermo_params,
@@ -516,7 +431,7 @@ function _compute_cloud_state(Y, p, thermo_params, turbconv_model, moisture_mode
     # Get condensate means
     ᶜq_liq, ᶜq_ice = _get_condensate_means(Y, p, turbconv_model, moisture_model)
 
-    # Get T-based covariances (from cache if available, otherwise computed lazily)
+    # Get T-based covariances from cache
     ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
 
     return ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_liq, ᶜq_ice, ᶜT′T′, ᶜq′q′, ᶜT′q′

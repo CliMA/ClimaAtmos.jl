@@ -674,7 +674,7 @@ function set_microphysics_tendency_cache!(
     cm_params = CAP.microphysics_0m_params(params)
     thermo_params = CAP.thermodynamics_params(params)
 
-    # Get T-based covariances (from cache if available)
+    # Get T-based covariances from cache
     ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
 
     # Integrate 0M tendencies over SGS fluctuations (writes into pre-allocated ᶜmp_result)
@@ -817,7 +817,7 @@ function set_microphysics_tendency_cache!(
     ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
     ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
 
-    # 1. Get T-based covariances (from cache or computed lazily)
+    # 1. Get T-based covariances from cache
     ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
 
     # 2. Integrate microphysics tendencies over SGS fluctuations
