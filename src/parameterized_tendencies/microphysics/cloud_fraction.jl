@@ -78,6 +78,14 @@ Pipeline:
 4. Transform θ→T using `compute_∂T_∂θ!`
 """
 function set_covariance_cache!(Y, p, thermo_params)
+    # Covariance fields are only allocated when SGS quadrature or
+    # QuadratureCloud/MLCloud is active (see precomputed_quantities.jl).
+    # No-op otherwise.
+    uses_covariances =
+        p.atmos.microphysics_model isa QuadratureMicrophysics ||
+        p.atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
+    uses_covariances || return nothing
+
     (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
 
     coeff = CAP.diagnostic_covariance_coeff(p.params)
