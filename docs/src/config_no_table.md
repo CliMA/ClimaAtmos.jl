@@ -13,10 +13,6 @@ To start the model with a custom configuration, run:
 Below is the default Bomex configuration:
 ```
 initial_condition: "Bomex"
-subsidence: "Bomex"
-scm_coriolis: "Bomex"
-ls_adv: "Bomex"
-surface_setup: "Bomex"
 turbconv: "prognostic_edmfx"
 edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
