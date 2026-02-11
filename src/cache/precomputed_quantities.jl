@@ -653,6 +653,10 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         # TODO do I need env precipitation/cloud formation here?
     end
 
+    # Cache covariances for non-EDMF paths (no closures to wait for)
+    if isnothing(turbconv_model)
+        set_covariance_cache!(Y, p, thermo_params)
+    end
 
     set_precipitation_velocities!(
         Y,

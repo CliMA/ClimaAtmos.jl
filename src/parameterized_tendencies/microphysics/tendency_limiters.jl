@@ -32,7 +32,7 @@ max_rate = limit(q_rai, dt, 3)
 end
 
 """
-    smooth_min_limiter(tendency, tendency_bound, sharpness=1e-8)
+    smooth_min_limiter(tendency, tendency_bound, sharpness=1e-10)
 
 Smooth approximation to `min(tendency, tendency_bound)` for GPU-friendly limiting.
 
@@ -75,7 +75,6 @@ Bidirectional smooth tendency limiter for processes with both positive and negat
 - `tendency`: Raw tendency (source or sink) [kg/kg/s]
 - `tend_bound`: Maximum allowed magnitude for positive tendencies [kg/kg/s]
 - `tend_bound_neg`: Maximum allowed magnitude for negative tendencies [kg/kg/s]
-- `sharpness`: Smoothness parameter (default: 1e-10)
 
 # Returns
 Limited tendency satisfying:
