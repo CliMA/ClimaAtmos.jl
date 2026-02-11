@@ -12,48 +12,28 @@ import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 
 Materialize the θ→T Jacobian (∂T/∂θ_li) into `dest`.
 
-For PrognosticEDMFX, uses environmental variables (ᶜT⁰, etc.).
-Otherwise, uses grid-scale variables.
+Always uses grid-mean variables, consistent with the gradient computation
+(see `set_covariance_cache!`).
 """
 function compute_∂T_∂θ!(dest, Y, p, thermo_params)
-    turbconv_model = p.atmos.turbconv_model
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
-        ᶜρ_env = @. lazy(
-            TD.air_density(
-                thermo_params, ᶜT⁰, p.precomputed.ᶜp,
-                ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰,
-            ),
-        )
-        ᶜθ_li = @. lazy(
-            TD.liquid_ice_pottemp(
-                thermo_params, ᶜT⁰, ᶜρ_env, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰,
-            ),
-        )
-        @. dest = ∂T_∂θ_li(
-            thermo_params, ᶜT⁰, ᶜθ_li, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰, ᶜq_tot_safe⁰, ᶜρ_env,
-        )
+    (; ᶜT) = p.precomputed
+    ᶜρ = Y.c.ρ
+    if p.atmos.moisture_model isa Union{DryModel, EquilMoistModel}
+        (; ᶜq_liq_rai, ᶜq_ice_sno, ᶜq_tot_safe) = p.precomputed
+        ᶜq_liq = ᶜq_liq_rai
+        ᶜq_ice = ᶜq_ice_sno
+        ᶜq_tot = ᶜq_tot_safe
     else
-        (; ᶜT) = p.precomputed
-        ᶜρ_env = Y.c.ρ
-        ᶜT_env = ᶜT
-        if p.atmos.moisture_model isa Union{DryModel, EquilMoistModel}
-            (; ᶜq_liq_rai, ᶜq_ice_sno, ᶜq_tot_safe) = p.precomputed
-            ᶜq_liq = ᶜq_liq_rai
-            ᶜq_ice = ᶜq_ice_sno
-            ᶜq_tot = ᶜq_tot_safe
-        else
-            ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-            ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-            ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        end
-        ᶜθ_li = @. lazy(
-            TD.liquid_ice_pottemp(thermo_params, ᶜT_env, ᶜρ_env, ᶜq_tot, ᶜq_liq, ᶜq_ice),
-        )
-        @. dest = ∂T_∂θ_li(
-            thermo_params, ᶜT_env, ᶜθ_li, ᶜq_liq, ᶜq_ice, ᶜq_tot, ᶜρ_env,
-        )
+        ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+        ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     end
+    ᶜθ_li = @. lazy(
+        TD.liquid_ice_pottemp(thermo_params, ᶜT, ᶜρ, ᶜq_tot, ᶜq_liq, ᶜq_ice),
+    )
+    @. dest = ∂T_∂θ_li(
+        thermo_params, ᶜT, ᶜθ_li, ᶜq_liq, ᶜq_ice, ᶜq_tot, ᶜρ,
+    )
     return dest
 end
 
@@ -66,13 +46,15 @@ computations (SGS quadrature, cloud fraction).
 Called once per stage in `set_explicit_precomputed_quantities!`.
 Populates `p.precomputed.(ᶜT′T′, ᶜq′q′, ᶜT′q′)`.
 
-Note: For PrognosticEDMFX, gradients are computed from grid-scale variables
-rather than environmental variables. This is an approximation; ideally
-covariances would use environmental gradients since they represent sub-grid
-fluctuations within the environment.
+Note: Vertical gradients (ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) are always computed
+from grid-mean variables. For EDMF configurations, these gradients are computed
+in `set_explicit_precomputed_quantities!` before this function is called. For
+non-EDMF, they are computed here. Ideally PrognosticEDMFX would use environmental
+gradients since the covariances represent sub-grid fluctuations within the
+environment, but this is a current approximation.
 
 Pipeline:
-1. Compute vertical gradients (non-EDMF only)
+1. Compute vertical gradients (non-EDMF only; EDMF gradients are precomputed)
 2. Compute mixing length via `compute_gm_mixing_length` or `ᶜmixing_length`
 3. Materialize θ-based covariances from gradients
 4. Transform θ→T using `compute_∂T_∂θ!`
@@ -158,21 +140,6 @@ function set_covariance_cache!(Y, p, thermo_params)
     return nothing
 end
 
-"""
-    get_covariances(Y, p, thermo_params)
-
-Get T-based covariances from cache.
-
-Covariances are cached every stage by `set_covariance_cache!` in
-`set_explicit_precomputed_quantities!`.
-
-# Returns
-Tuple `(ᶜq′q′, ᶜT′T′, ᶜT′q′)` of cached fields.
-"""
-function get_covariances(Y, p, thermo_params)
-    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
-    return (ᶜq′q′, ᶜT′T′, ᶜT′q′)
-end
 
 # ============================================================================
 # Cloud Fraction: Sommeria-Deardorff Moment Matching
@@ -317,7 +284,7 @@ NVTX.@annotate function set_cloud_fraction!(
     ᶜq_liq, ᶜq_ice = _get_condensate_means(Y, p, turbconv_model, moisture_model)
 
     # Get T-based covariances from cache
-    ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
 
     @. p.precomputed.ᶜcloud_fraction = compute_cloud_fraction_sd(
         thermo_params,
@@ -441,7 +408,7 @@ function _compute_cloud_state(Y, p, thermo_params, turbconv_model, moisture_mode
     ᶜq_liq, ᶜq_ice = _get_condensate_means(Y, p, turbconv_model, moisture_model)
 
     # Get T-based covariances from cache
-    ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
 
     return ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_liq, ᶜq_ice, ᶜT′T′, ᶜq′q′, ᶜT′q′
 end

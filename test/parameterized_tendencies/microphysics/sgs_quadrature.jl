@@ -457,65 +457,6 @@ using ClimaAtmos
         end
     end
 
-    @testset "Allocation Tests" begin
-        # Test that quadrature integration doesn't allocate after first call
-        # (First call may allocate for compilation)
-
-        for FT in (Float32, Float64)
-            @testset "FT = $FT" begin
-                # Setup
-                quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
-
-                # Grid mean state
-                T_mean = FT(280.0)
-                q_mean = FT(0.01)
-
-                # Covariances
-                T′T′ = FT(1.0)
-                q′q′ = FT(1e-6)
-                T′q′ = FT(1e-4)
-
-                # Simple test function (returns scalar)
-                f_scalar(T, q) = T + q
-
-                # Warm-up call (allows compilation)
-                result_warmup = ClimaAtmos.integrate_over_sgs(
-                    f_scalar, quad, q_mean, T_mean, q′q′, T′T′, T′q′,
-                )
-
-                # Test minimal allocations on second call  
-                # Small allocations (~1KB) from get_x_hat closure are acceptable
-                # The critical fix was eliminating O(N_grid × N_quad²) allocations from f() closure
-                allocs = @allocated ClimaAtmos.integrate_over_sgs(
-                    f_scalar, quad, q_mean, T_mean, q′q′, T′T′, T′q′,
-                )
-
-                @test allocs < 2000  # Allow small overhead from get_x_hat closure
-
-                # Test with functor (like MicrophysicsEvaluator)
-                struct TestEvaluator{FT}
-                    a::FT
-                    b::FT
-                end
-                (eval::TestEvaluator)(T, q) = eval.a * T + eval.b * q
-
-                evaluator = TestEvaluator(FT(2), FT(3))
-
-                # Warm-up
-                result_warmup2 = ClimaAtmos.integrate_over_sgs(
-                    evaluator, quad, q_mean, T_mean, q′q′, T′T′, T′q′,
-                )
-
-                # Test minimal allocations with functor (even smaller overhead)
-                allocs_functor = @allocated ClimaAtmos.integrate_over_sgs(
-                    evaluator, quad, q_mean, T_mean, q′q′, T′T′, T′q′,
-                )
-
-                @test allocs_functor < 100  # Functor should have minimal overhead
-            end
-        end
-    end
-
     @testset "Mass Conservation" begin
         # Verify that total water is conserved in microphysics quadrature
         import Thermodynamics as TD

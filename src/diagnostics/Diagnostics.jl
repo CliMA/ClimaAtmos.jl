@@ -59,7 +59,7 @@ import ..SlabOceanSST
 # functions used to calculate diagnostics
 import ..draft_area
 import ..compute_gm_mixing_length
-import ..get_covariances
+
 import ..horizontal_integral_at_boundary
 import ..ᶜmixing_length
 import ..eddy_diffusivity

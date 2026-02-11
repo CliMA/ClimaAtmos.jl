@@ -1474,7 +1474,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     (; ᶜT, ᶜq_tot_safe, ᶜSqₜᵐ⁰, ᶜmp_result) = p.precomputed
 
     # Get T-based covariances (from cache)
-    ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
 
     # Integrate 0M tendencies over SGS fluctuations (writes into pre-allocated ᶜmp_result)
     @. ᶜmp_result = microphysics_tendencies_quadrature_0m(
@@ -1532,7 +1532,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
 
     # Get T-based covariances from cache
-    ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
 
     # Integrate microphysics tendencies over SGS fluctuations
     # (writes into pre-allocated ᶜmp_result to avoid NamedTuple allocation)

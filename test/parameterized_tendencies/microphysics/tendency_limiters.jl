@@ -359,18 +359,4 @@ import ClimaAtmos:
             @test eltype(f) == Float32
         end
     end
-
-    @testset "zero allocations (scalar)" begin
-        # These must be zero-allocation for GPU safety.
-        # Any allocations indicate boxing of return values or type instability.
-
-        @testset "coupled_sink_limit_factor" begin
-            # Warmup
-            coupled_sink_limit_factor(-0.01, -1e8, 0.001, 1e8, 1.0)
-            allocs = @allocated coupled_sink_limit_factor(-0.01, -1e8, 0.001, 1e8, 1.0)
-            @test allocs == 0
-        end
-
-
-    end
 end

@@ -35,13 +35,9 @@ end
     ϵ_numerics(FT)
 
 Smallest threshold for specific humidity comparisons.
-Uses sqrt(floatmin(FT)) to detect effectively-zero specific humidities.
-
-NOTE: For density division guards in terminal velocity averaging, use sqrt(eps(FT))
-instead to prevent division overflow. sqrt(floatmin(FT)) is ~1e-19 for Float32,
-which causes overflow when used as a divisor denominator.
+Uses cbrt(floatmin(FT)) to detect effectively-zero specific humidities.
 """
-ϵ_numerics(FT) = sqrt(floatmin(FT))
+ϵ_numerics(FT) = cbrt(floatmin(FT))
 
 """
     set_precipitation_velocities!(Y, p, moisture_model, microphysics_model, turbconv_model)
@@ -186,7 +182,7 @@ function set_precipitation_velocities!(
             Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_liq * ᶜwₗʲs.:($$j)
     end
     # average (clamp to prevent spurious negatives from numerical errors at low mass)
-    @. ᶜwₗ = ifelse(ᶜρχ > sqrt(eps(FT)), max(ᶜwₗ / ᶜρχ, zero(ᶜwₗ / ᶜρχ)), zero(ᶜwₗ))
+    @. ᶜwₗ = ifelse(ᶜρχ > ϵ_numerics(FT), max(ᶜwₗ / ᶜρχ, zero(ᶜwₗ / ᶜρχ)), zero(ᶜwₗ))
     @. ᶜimplied_env_mass_flux += Y.c.ρq_liq * ᶜwₗ
     # contribution of env q_liq sedimentation to htot
     @. ᶜρwₕhₜ = ᶜimplied_env_mass_flux * (Iₗ(thp, ᶜT⁰) + ᶜΦ)
@@ -213,7 +209,7 @@ function set_precipitation_velocities!(
             Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_ice * ᶜwᵢʲs.:($$j)
     end
     # average (clamp to prevent spurious negatives from numerical errors at low mass)
-    @. ᶜwᵢ = ifelse(ᶜρχ > sqrt(eps(FT)), max(ᶜwᵢ / ᶜρχ, zero(ᶜwᵢ / ᶜρχ)), zero(ᶜwᵢ))
+    @. ᶜwᵢ = ifelse(ᶜρχ > ϵ_numerics(FT), max(ᶜwᵢ / ᶜρχ, zero(ᶜwᵢ / ᶜρχ)), zero(ᶜwᵢ))
     @. ᶜimplied_env_mass_flux += Y.c.ρq_ice * ᶜwᵢ
     # contribution of env q_liq sedimentation to htot
     @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (Iᵢ(thp, ᶜT⁰) + ᶜΦ)
@@ -241,7 +237,7 @@ function set_precipitation_velocities!(
             Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai * ᶜwᵣʲs.:($$j)
     end
     # average (clamp to prevent spurious negatives from numerical errors at low mass)
-    @. ᶜwᵣ = ifelse(ᶜρχ > sqrt(eps(FT)), max(ᶜwᵣ / ᶜρχ, zero(ᶜwᵣ / ᶜρχ)), zero(ᶜwᵣ))
+    @. ᶜwᵣ = ifelse(ᶜρχ > ϵ_numerics(FT), max(ᶜwᵣ / ᶜρχ, zero(ᶜwᵣ / ᶜρχ)), zero(ᶜwᵣ))
     @. ᶜimplied_env_mass_flux += Y.c.ρq_rai * ᶜwᵣ
     # contribution of env q_liq sedimentation to htot
     @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (Iₗ(thp, ᶜT⁰) + ᶜΦ)
@@ -269,7 +265,7 @@ function set_precipitation_velocities!(
             Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno * ᶜwₛʲs.:($$j)
     end
     # average (clamp to prevent spurious negatives from numerical errors at low mass)
-    @. ᶜwₛ = ifelse(ᶜρχ > sqrt(eps(FT)), max(ᶜwₛ / ᶜρχ, zero(ᶜwₛ / ᶜρχ)), zero(ᶜwₛ))
+    @. ᶜwₛ = ifelse(ᶜρχ > ϵ_numerics(FT), max(ᶜwₛ / ᶜρχ, zero(ᶜwₛ / ᶜρχ)), zero(ᶜwₛ))
     @. ᶜimplied_env_mass_flux += Y.c.ρq_sno * ᶜwₛ
     # contribution of env q_liq sedimentation to htot
     @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (Iᵢ(thp, ᶜT⁰) + ᶜΦ)
@@ -688,7 +684,7 @@ function set_microphysics_tendency_cache!(
     thermo_params = CAP.thermodynamics_params(params)
 
     # Get T-based covariances from cache
-    ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
 
     # Integrate 0M tendencies over SGS fluctuations (writes into pre-allocated ᶜmp_result)
     @. ᶜmp_result = microphysics_tendencies_quadrature_0m(
@@ -831,7 +827,7 @@ function set_microphysics_tendency_cache!(
     ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
 
     # 1. Get T-based covariances from cache
-    ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
 
     # 2. Integrate microphysics tendencies over SGS fluctuations
     #    (writes into pre-allocated ᶜmp_result to avoid NamedTuple allocation)

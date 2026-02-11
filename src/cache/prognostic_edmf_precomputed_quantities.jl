@@ -568,7 +568,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     end
 
     # Get T-based covariances from cache
-    ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thp)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
 
     # Integrate microphysics tendencies over SGS fluctuations
     # (writes into pre-allocated ᶜmp_result to avoid NamedTuple allocation)

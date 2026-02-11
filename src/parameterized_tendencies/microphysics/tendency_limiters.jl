@@ -221,18 +221,18 @@ Source limits should be physically motivated per-species bounds:
 - `q_sink`: Available sink quantity (species being depleted) [kg/kg]
 - `dt`: Timestep [s]
 - `n_sink`: Number of timesteps for sink depletion (default: 5)
-- `n_source`: Number of timesteps for source depletion (default: 20)
+- `n_source`: Number of timesteps for source depletion (default: 30)
 
 # Example
 ```julia
-# Limit BMT tendency: sources bounded by sat_excess + partner, sinks by species
-Sqₗᵐ = smooth_tendency_limiter(dq_lcl_dt, sat_excess + q_ice, q_liq, dt)
+# Limit BMT tendency: sources bounded by q_tot, sinks by species
+Sqₗᵐ = smooth_tendency_limiter(dq_lcl_dt, q_tot, q_liq, dt)
 ```
 
 See also: [`smooth_min_limiter`](@ref), [`limit`](@ref)
 """
 @inline function smooth_tendency_limiter(
-    S, q_source, q_sink, dt, n_sink = 5, n_source = 20,
+    S, q_source, q_sink, dt, n_sink = 5, n_source = 30,
 )
     FT = eltype(S)
     bound_pos = limit(q_source, dt, n_source)

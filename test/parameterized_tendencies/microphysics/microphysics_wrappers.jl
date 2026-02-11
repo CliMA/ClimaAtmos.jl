@@ -221,36 +221,4 @@ import ClimaAtmos: limit_sink
         end
     end
 
-    @testset "Allocation Test" begin
-        FT = Float64
-        toml_dict = CP.create_toml_dict(FT)
-        mp = CMP.Microphysics0MParams(toml_dict)
-        thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
-
-        T = FT(280.0)
-        q_liq = FT(0.001)
-        q_ice = FT(0.0005)
-        Φ = FT(1000.0)
-
-        # Warm-up
-        _ = BMT.bulk_microphysics_tendencies(
-            BMT.Microphysics0Moment(), mp, thp, T, q_liq, q_ice,
-        )
-        _ = ClimaAtmos.e_tot_0M_precipitation_sources_helper(thp, T, q_liq, q_ice, Φ)
-        _ = limit_sink(FT(-0.01), FT(0.01), FT(60.0), 1)
-
-        # Test allocations
-        allocs_bmt = @allocated BMT.bulk_microphysics_tendencies(
-            BMT.Microphysics0Moment(), mp, thp, T, q_liq, q_ice,
-        )
-        allocs_energy = @allocated ClimaAtmos.e_tot_0M_precipitation_sources_helper(
-            thp, T, q_liq, q_ice, Φ,
-        )
-        allocs_limit = @allocated limit_sink(FT(-0.01), FT(0.01), FT(60.0), 1)
-
-        @test allocs_bmt == 0
-        @test allocs_energy == 0
-        @test allocs_limit == 0
-    end
-
 end

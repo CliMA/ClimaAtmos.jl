@@ -1818,7 +1818,7 @@ function compute_covariance_diagnostics!(out, state, cache, time, type)
     thermo_params = CAP.thermodynamics_params(cache.params)
 
     # Read T-based covariances from cache
-    (ᶜq′q′, ᶜT′T′, ᶜT′q′) = get_covariances(state, cache, thermo_params)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = cache.precomputed
 
     result = if type == :qt_qt
         ᶜq′q′

@@ -536,7 +536,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
 
         # Two-pass SGS: recompute condensate using SGS quadrature over (T, q_tot)
         if microphysics_model isa QuadratureMicrophysics
-            ᶜq′q′, ᶜT′T′, ᶜT′q′ = get_covariances(Y, p, thermo_params)
+            (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
             # Reuse ᶜsa_result (same NamedTuple type) to avoid allocating a new field
             @. ᶜsa_result = compute_sgs_saturation_adjustment(
                 thermo_params,
@@ -654,10 +654,6 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         # TODO do I need env precipitation/cloud formation here?
     end
 
-    # Cache covariances for non-EDMF paths (no closures to wait for)
-    if isnothing(turbconv_model)
-        set_covariance_cache!(Y, p, thermo_params)
-    end
 
     set_precipitation_velocities!(
         Y,

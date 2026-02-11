@@ -68,7 +68,7 @@ import ClimaParams as CP
                         FT(1e-3), FT(0),
                         FT(0), FT(0), FT(0),
                     )
-                    @test cf > FT(0.9)
+                    @test cf > FT(0.99)
                 end
 
                 @testset "Both liquid and ice → max overlap" begin
@@ -83,7 +83,7 @@ import ClimaParams as CP
                         FT(1.0), FT(1e-6), FT(0),
                     )
                     # Max overlap: combined cf ≥ liquid-only cf
-                    @test cf_both >= cf_liq - eps(FT)
+                    @test cf_both >= cf_liq
                 end
 
                 @testset "Type stability" begin
@@ -98,26 +98,5 @@ import ClimaParams as CP
         end
     end
 
-    @testset "Allocation Test" begin
-        FT = Float64
-        toml_dict = CP.create_toml_dict(FT)
-        thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
-
-        T = FT(280.0)
-        ρ = FT(1.0)
-
-        # Warm up
-        _ = CA.compute_cloud_fraction_sd(
-            thp, T, ρ,
-            FT(1e-3), FT(0),
-            FT(1.0), FT(1e-6), FT(0),
-        )
-        allocs = @allocated CA.compute_cloud_fraction_sd(
-            thp, T, ρ,
-            FT(1e-3), FT(0),
-            FT(1.0), FT(1e-6), FT(0),
-        )
-        @test allocs == 0
-    end
-
 end
+

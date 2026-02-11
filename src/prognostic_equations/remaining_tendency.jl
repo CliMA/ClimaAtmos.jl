@@ -280,7 +280,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     # EDMF updraft microphysics tendencies (applied to updraft prognostic variables)
-    edmfx_precipitation_tendency!(
+    edmfx_microphysics_tendency!(
         Yₜ,
         Y,
         p,
