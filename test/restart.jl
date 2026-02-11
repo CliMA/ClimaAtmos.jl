@@ -232,6 +232,7 @@ if MANYTESTS
                             "dt_rad" => "1secs",
                             "surface_setup" => "DefaultMoninObukhov",
                             "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed
+                            "radiation_reset_rng_seed" => true,
                             "t_end" => "3secs",
                             "dt_save_state_to_disk" => "1secs",
                             "enable_diagnostics" => false,
@@ -283,6 +284,7 @@ else
             "output_dir" => joinpath(amip_output_loc, amip_job_id),
             "dt_cloud_fraction" => "1secs",
             "rad" => "allskywithclear",
+            "radiation_reset_rng_seed" => true,
             "toml" => [
                 joinpath(@__DIR__, "../toml/longrun_aquaplanet_diagedmf.toml"),
             ],
