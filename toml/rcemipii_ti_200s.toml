@@ -73,10 +73,10 @@ value = 800
 # Microphysics
 
 [condensation_evaporation_timescale]
-value = 50
+value = 2
 
 [sublimation_deposition_timescale]
-value = 50
+value = 200
 
 [precipitation_timescale]
 value = 600

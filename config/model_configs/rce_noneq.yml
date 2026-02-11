@@ -2,55 +2,40 @@ reference_job_id: les_box  # for plotting
 surface_setup: DefaultMoninObukhov
 surface_temperature: RCEMIPII
 insolation: rcemipii
-initial_condition: RCEMIPIIProfile_300
-output_dir: "/glade/derecho/scratch/oalcabes/RCE_small/1M_noneq"
-restart_file: "/glade/derecho/scratch/oalcabes/RCE_small/1M_noneq/output_0014/day52.0.hdf5"
 config: box
 rad: allskywithclear
+co2_model: fixed
+output_dir: "/glade/derecho/scratch/oalcabes/rce_tests"
 approximate_linear_solve_iters: 2  # only valid when implicit_diffusion=true
 rayleigh_sponge: true  # set sponge level in toml file
+# diffusion
+smagorinsky_lilly: "UV_W"
+implicit_diffusion: true
 
-# Diffusion
-hyperdiff: "false"
-implicit_diffusion: false
-smagorinsky_lilly: "UV_W"  # horizontal + vertical
-
-# Upwinding mode
-tracer_upwinding: vanleer_limiter  # is default (alt: `first_order`)
-energy_q_tot_upwinding: vanleer_limiter  # is default (alt: `first_order`)
-
-reproducibility_test: true
-tracer_nonnegativity_method: "elementwise_constraint"
+# Reference diffusion setup
+# vert_diff: "DecayWithHeightDiffusion"
+# hyperdiff: "true"
 
 # microphysics
-### 0M+Equil option
-# moist: equil
-# precip_model: 0M
+# moist: equil  # nonequil
+# precip_model: 0M #2M
 ### !! 1M and 2M !!
 cloud_model: grid_scale   # Ultimately wanted when `moist: nonequil`
 moist: nonequil
 precip_model: 1M
-
-# implicit_noneq_cloud_formation: true
-# use_auto_jacobian: true
-
+# precip_model: 2M
 ### spatial discretization ###
+x_max: 96000.0  # 96km
+y_max: 96000.0  # 96km
+z_max: 30000.0  # 30km
 nh_poly: 3  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
-## RCE_small
-x_max: 96000  # 96km
-y_max: 96000  # 96km
-## RCE_large
-# x_max: 6000000  # 6000km
-# y_max: 400000  # 400km
-## Vertical mesh
-z_max: 33000  # 33km
-z_elem: 74
-vertical_mesh: rcemipii
+z_elem: 43  # Note: Set sponge height (`zd_viscous`) in toml file to cover top ~5 points
+dz_bottom: 30.0
 
-#~8km grid
-# x_elem: 4
-# y_elem: 4
-# dt: 10secs
+# ~8km grid
+x_elem: 4
+y_elem: 4
+dt: 10secs
 # ~4km grid
 # x_elem: 8
 # y_elem: 8
@@ -60,17 +45,12 @@ vertical_mesh: rcemipii
 # y_elem: 16
 # dt: 2secs
 # ~1km grid
-x_elem: 32
-y_elem: 32
-dt: 1secs
+# x_elem: 32
+# y_elem: 32
+# dt: 1secs
 
-# t_end: 10hours
-# t_end: 1days
-# t_end: 2days
-# t_end: 4days
-# t_end: 10days
+t_end: 5days
 # t_end: 21days
-t_end: 150days
 
 ## >> During debugging, reduce these as appropriate
 dt_save_state_to_disk: 1days
@@ -91,16 +71,16 @@ diagnostics:
       ke,  # kinetic energy for spectrum
       # Smagorinsky diagnostics
       Dh_smag, strainh_smag,  # horizontal
-      Dv_smag, strainv_smag  # vertical
+      Dv_smag, strainv_smag,  # vertical
       # DecayWithHeight diffusion coefficient
-      # edt
+      # edt,
     ]
-    # period: 10mins
     period: 1hours
+    # period: 10mins
   ## 1M microphsics
   - short_name: [husra, hussn]
-    # period: 10mins
     period: 1hours
+    # period: 10mins
   # 2M microphysics
   # - short_name: [cdnc, ncra]
   #   period: 10mins

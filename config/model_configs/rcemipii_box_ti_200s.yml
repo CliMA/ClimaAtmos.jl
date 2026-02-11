@@ -3,8 +3,8 @@ surface_setup: DefaultMoninObukhov
 surface_temperature: RCEMIPII
 insolation: rcemipii
 initial_condition: RCEMIPIIProfile_300
-output_dir: "/glade/derecho/scratch/oalcabes/RCE_small/1M_noneq"
-restart_file: "/glade/derecho/scratch/oalcabes/RCE_small/1M_noneq/output_0014/day52.0.hdf5"
+output_dir: "/glade/derecho/scratch/oalcabes/RCE_small/tau_i_tests/ti_200"
+restart_file: "/glade/derecho/scratch/oalcabes/RCE_small/tau_i_tests/ti_200/output_0004/day20.0.hdf5"
 config: box
 rad: allskywithclear
 approximate_linear_solve_iters: 2  # only valid when implicit_diffusion=true
@@ -69,8 +69,8 @@ dt: 1secs
 # t_end: 2days
 # t_end: 4days
 # t_end: 10days
-# t_end: 21days
-t_end: 150days
+t_end: 21days
+# t_end: 150days
 
 ## >> During debugging, reduce these as appropriate
 dt_save_state_to_disk: 1days
@@ -79,7 +79,7 @@ check_nan_every: 1024  # for debugging: set to check NaNs every `n` iterations
 log_to_file: true
 ## <<
 
-toml: [toml/rcemipii_box.toml]
+toml: [toml/rcemipii_ti_200s.toml]
 
 # enable_diagnostics: false
 output_default_diagnostics: false  # adds various 1h diagnostics. Only use if `dt_save_state_to_disk` is a multiple of 1hr

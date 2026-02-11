@@ -1,3 +1,13 @@
+[compat]
+CairoMakie = "0.11 - 0.15"
+ClimaCoreSpectra = "0.1"
+ClimaCoreTempestRemap = "0.3"
+Poppler_jll = "24"
+PrettyTables = "2"
+ProfileCanvas = "0.1"
+SnoopCompileCore = "3"
+julia = "1.11"
+
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 ArtifactWrappers = "a14bc488-3040-4b00-9dc1-f6467924858a"
@@ -40,16 +50,11 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
-[sources]
-ClimaAtmos = {path = ".."}
-PrecompileCI = {path = "PrecompileCI"}
+[extras]
+CUDA_Runtime_jll = "76a88914-d11a-5bdc-97e0-2f5a05c973a2"
 
-[compat]
-CairoMakie = "0.11 - 0.15"
-ClimaCoreSpectra = "0.1"
-ClimaCoreTempestRemap = "0.3"
-Poppler_jll = "24"
-PrettyTables = "2"
-ProfileCanvas = "0.1"
-SnoopCompileCore = "3"
-julia = "1.11"
+[sources.ClimaAtmos]
+path = ".."
+
+[sources.PrecompileCI]
+path = "PrecompileCI"
