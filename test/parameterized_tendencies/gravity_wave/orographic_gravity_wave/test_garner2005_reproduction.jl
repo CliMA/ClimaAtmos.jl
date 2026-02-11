@@ -55,7 +55,7 @@ using ClimaCore
 using ClimaCore.CommonSpaces
 import ClimaAtmos as CA
 import ClimaAtmos.Parameters as CAP
-import ClimaCore: Fields, Geometry, DataLayouts, Operators, Spaces, Grids, Utilities, to_cpu
+import ClimaCore: Fields, Geometry, DataLayouts, Operators, Spaces, Grids, Utilities, to_cpu, InputOutput
 
 using CairoMakie
 using Statistics
@@ -64,6 +64,8 @@ import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz, read_var, window
 
 include("../gw_remap_plot_utils.jl")
+include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
+include("ogw_test_utils.jl")
 
 #######################################
 # TEST SELECTION
@@ -198,17 +200,15 @@ function garner_fig7_pressure_profile(z::FT) where {FT}
     return p_0 * exp(-z / H)
 end
 
-# Setup simulation
+# Setup simulation - try local raw_topo first, fall back to artifact
 (; config_file, job_id) = CA.commandline_kwargs()
-config = CA.AtmosConfig(config_file; job_id, comms_ctx)
-config.parsed_args["orographic_gravity_wave"] = "raw_topo"
-config.parsed_args["topography"] = "Earth"
-# Increase vertical resolution for Figure 7 (need smooth profiles up to 40 km)
-config.parsed_args["z_elem"] = 10
-config.parsed_args["z_max"] = 45000.0   # Model top at 45 km
+simulation, config = create_ogw_simulation(
+    config_file,
+    job_id,
+    comms_ctx;
+    extra_parsed_args = Dict("z_elem" => 10, "z_max" => 45000.0),
+)
 (; parsed_args) = config
-
-simulation = CA.get_simulation(config)
 p = simulation.integrator.p
 Y = simulation.integrator.u
 
@@ -217,21 +217,26 @@ u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
 v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 ᶜz = Fields.coordinate_field(Y.c).z
 
-# Unpack cache and scratch vars
-ᶜT = p.scratch.ᶜtemp_scalar
+# Unpack cache
 (; topo_ᶜz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
     p.orographic_gravity_wave
 (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
     p.orographic_gravity_wave
 (; values_at_z_pbl, topo_info) = p.orographic_gravity_wave
 (; ᶜdTdz, ᶜbuoyancy_frequency) = p.orographic_gravity_wave
-(; ᶜts) = p.precomputed
+# (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
 (; params) = p
 
 # Extract parameters
 ogw_params = p.orographic_gravity_wave.ogw_params
 grav = CAP.grav(params)
 thermo_params = CAP.thermodynamics_params(params)
+
+# Compute PBL height from initial-condition pressure/temperature profiles
+cp_d = CAP.cp_d(params)
+ᶜp = p.precomputed.ᶜp
+ᶜT = p.precomputed.ᶜT
+CA.get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
 
 #######################################
 # FIGURE 1: Americas
@@ -1592,14 +1597,10 @@ if should_run(:figure4)
     #--- Panel 3: Linear drag from raw_topo ---
     println("\nComputing linear drag from raw_topo...")
 
-    # Setup simulation
+    # Setup simulation - try local raw_topo first, fall back to artifact
     (; config_file, job_id) = CA.commandline_kwargs()
-    config = CA.AtmosConfig(config_file; job_id, comms_ctx)
-    config.parsed_args["orographic_gravity_wave"] = "raw_topo"
-    config.parsed_args["topography"] = "Earth"
+    simulation, config = create_ogw_simulation(config_file, job_id, comms_ctx)
     (; parsed_args) = config
-
-    simulation = CA.get_simulation(config)
     p = simulation.integrator.p
     Y = simulation.integrator.u
 
@@ -1608,21 +1609,32 @@ if should_run(:figure4)
     v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
     ᶜz = Fields.coordinate_field(Y.c).z
 
-    # Unpack cache and scratch vars
-    ᶜT = p.scratch.ᶜtemp_scalar
+    # Unpack cache
     (; topo_ᶜz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
         p.orographic_gravity_wave
     (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
         p.orographic_gravity_wave
     (; values_at_z_pbl, topo_info) = p.orographic_gravity_wave
     (; ᶜdTdz, ᶜbuoyancy_frequency) = p.orographic_gravity_wave
-    (; ᶜts) = p.precomputed
+    # (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     (; params) = p
 
     # Extract parameters
     ogw_params = p.orographic_gravity_wave.ogw_params
     grav = CAP.grav(params)
     thermo_params = CAP.thermodynamics_params(params)
+
+    # Compute PBL height from initial-condition pressure/temperature profiles
+    cp_d = CAP.cp_d(params)
+    ᶜp = p.precomputed.ᶜp
+    ᶜT = p.precomputed.ᶜT
+    CA.get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
+
+    # Set idealized values for Figure 4 on the new simulation's fields
+    @. u_phy = FT(10.0)
+    @. v_phy = FT(0.0)
+    @. Y.c.ρ = FT(1.0)
+    @. ᶜbuoyancy_frequency = FT(0.01)
 
     # Compute linear drag using raw_topo (already loaded as topo_info)
     CA.calc_base_flux!(
@@ -2059,15 +2071,15 @@ if should_run(:figure7)
     println("="^70)
 
     # Setup simulation with higher vertical resolution for Figure 7
+    # Try local raw_topo first, fall back to artifact
     (; config_file, job_id) = CA.commandline_kwargs()
-    config = CA.AtmosConfig(config_file; job_id, comms_ctx)
-    config.parsed_args["orographic_gravity_wave"] = "raw_topo"
-    config.parsed_args["topography"] = "Earth"
-    config.parsed_args["z_elem"] = 64       # High vertical resolution for smooth profiles
-    config.parsed_args["z_max"] = 45000.0   # Model top at 45 km
+    simulation, config = create_ogw_simulation(
+        config_file,
+        job_id,
+        comms_ctx;
+        extra_parsed_args = Dict("z_elem" => 64, "z_max" => 45000.0),
+    )
     (; parsed_args) = config
-
-    simulation = CA.get_simulation(config)
     p = simulation.integrator.p
     Y = simulation.integrator.u
 
@@ -2076,15 +2088,14 @@ if should_run(:figure7)
     v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
     ᶜz = Fields.coordinate_field(Y.c).z
 
-    # Unpack cache and scratch vars
-    ᶜT = p.scratch.ᶜtemp_scalar
+    # Unpack cache
     (; topo_ᶜz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
         p.orographic_gravity_wave
     (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
         p.orographic_gravity_wave
     (; values_at_z_pbl, topo_info) = p.orographic_gravity_wave
     (; ᶜdTdz, ᶜbuoyancy_frequency) = p.orographic_gravity_wave
-    (; ᶜts) = p.precomputed
+    # (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     (; params) = p
 
     # Extract parameters

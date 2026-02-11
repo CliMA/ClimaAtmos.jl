@@ -8,9 +8,11 @@ using ClimaCore.CommonSpaces
 import ClimaAtmos as CA
 import ClimaAtmos.Thermodynamics as TD
 import ClimaAtmos.Parameters as CAP
-import ClimaCore: Fields, Geometry, Operators, Spaces, Grids, Utilities, to_cpu
+import ClimaCore: Fields, Geometry, Operators, Spaces, Grids, Utilities, to_cpu, InputOutput
 
 include("../gw_remap_plot_utils.jl")
+include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
+include("ogw_test_utils.jl")
 
 const FT = Float64
 ᶜgradᵥ = Operators.GradientF2C()
@@ -38,12 +40,15 @@ Returns a named tuple with:
 function compute_base_flux(ogw_mode::String, comms_ctx, config_file, job_id)
     @info "Computing base flux for ogw_mode = $ogw_mode"
 
-    config = CA.AtmosConfig(config_file; job_id, comms_ctx)
-    config.parsed_args["h_elem"] = 8
-    config.parsed_args["orographic_gravity_wave"] = ogw_mode
-    config.parsed_args["topography"] = "Earth"
-
-    simulation = CA.get_simulation(config)
+    simulation, config = if ogw_mode == "raw_topo"
+        create_ogw_simulation(config_file, job_id, comms_ctx)
+    else
+        config = CA.AtmosConfig(config_file; job_id, comms_ctx)
+        config.parsed_args["h_elem"] = 8
+        config.parsed_args["orographic_gravity_wave"] = ogw_mode
+        config.parsed_args["topography"] = "Earth"
+        CA.get_simulation(config), config
+    end
     p = simulation.integrator.p
     Y = simulation.integrator.u
 

@@ -9,6 +9,7 @@ include(
 )
 include("../gw_remap_plot_utils.jl")
 include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
+include("ogw_test_utils.jl")
 
 ENV["CLIMACOMMS_DEVICE"] = "CPU"
 
@@ -39,31 +40,7 @@ parsed_args = config.parsed_args
 (; output_filename) = CA.gen_fn(parsed_args)
 
 
-# Switch between loading from local file or artifact
-load_from_local = false
-
-computed_drag = if load_from_local
-    @info "Loading preprocessed topography from local file..."
-    CA.load_preprocessed_topography(parsed_args)
-else
-    # Load preprocessed topography from artifact
-    h_elem = config.parsed_args["h_elem"]
-    artifact_base_path = if h_elem == 8
-        ogwd_computed_drag_h8_path()
-    elseif h_elem == 16
-        ogwd_computed_drag_h16_path()
-    else
-        error(
-            "No artifact available for h_elem=$h_elem. Only h_elem=8 and h_elem=16 are supported.",
-        )
-    end
-    artifact_path = joinpath(artifact_base_path, "$(output_filename).hdf5")
-    @info "Loading topography drag vector from artifact: $(artifact_path)"
-    reader = InputOutput.HDF5Reader(artifact_path, comms_ctx)
-    drag = InputOutput.read_field(reader, "computed_drag")
-    Base.close(reader)
-    drag
-end
+computed_drag = load_computed_drag(parsed_args, comms_ctx)
 
 #########################################
 
