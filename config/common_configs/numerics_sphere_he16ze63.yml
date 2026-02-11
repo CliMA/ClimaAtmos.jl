@@ -6,7 +6,7 @@ z_max: 60000.0
 dz_bottom: 30.0
 dt: 120secs
 ode_algo: ARS343
-hyperdiff: ClimaHyperdiffusion
+hyperdiff: Hyperdiffusion
 rayleigh_sponge: true
 viscous_sponge: true
 implicit_diffusion: true

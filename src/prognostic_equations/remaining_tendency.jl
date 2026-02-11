@@ -153,8 +153,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     rst_uₕ = rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge)
 
     if use_prognostic_tke(turbconv_model)
-        rst_ρtke =
-            rayleigh_sponge_tendency_sgs_tracer(Y.c.ρtke, rayleigh_sponge)
+        rst_ρtke = rayleigh_sponge_tendency_sgs_tracer(Y.c.ρtke, rayleigh_sponge)
         @. Yₜ.c.ρtke += rst_ρtke
     end
     if turbconv_model isa PrognosticEDMFX
@@ -163,15 +162,11 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         n = n_mass_flux_subdomains(p.atmos.turbconv_model)
         for j in 1:n
             rst_sgs_mse = rayleigh_sponge_tendency_sgs_tracer(
-                Y.c.sgsʲs.:($j).mse,
-                ᶜmse,
-                rayleigh_sponge,
+                Y.c.sgsʲs.:($j).mse, ᶜmse, rayleigh_sponge,
             )
             @. Yₜ.c.sgsʲs.:($$j).mse += rst_sgs_mse
             rst_sgs_q_tot = rayleigh_sponge_tendency_sgs_tracer(
-                Y.c.sgsʲs.:($j).q_tot,
-                ᶜq_tot,
-                rayleigh_sponge,
+                Y.c.sgsʲs.:($j).q_tot, ᶜq_tot, rayleigh_sponge,
             )
             @. Yₜ.c.sgsʲs.:($$j).q_tot += rst_sgs_q_tot
         end
@@ -184,18 +179,12 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
                 (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
                 (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
             )
-            MatrixFields.unrolled_foreach(
-                moisture_species,
-            ) do (sgs_q_name, ρq_name)
+            MatrixFields.unrolled_foreach(moisture_species) do (sgs_q_name, ρq_name)
                 ᶜρq = MatrixFields.get_field(Y, ρq_name)
                 ᶜq = @. lazy(specific(ᶜρq, Y.c.ρ))
                 ᶜsgs_q = MatrixFields.get_field(Y, sgs_q_name)
                 ᶜsgs_qₜ = MatrixFields.get_field(Yₜ, sgs_q_name)
-                rst_sgs_q = rayleigh_sponge_tendency_sgs_tracer(
-                    ᶜsgs_q,
-                    ᶜq,
-                    rayleigh_sponge,
-                )
+                rst_sgs_q = rayleigh_sponge_tendency_sgs_tracer(ᶜsgs_q, ᶜq, rayleigh_sponge)
                 @. ᶜsgs_qₜ += rst_sgs_q
             end
         end
@@ -276,8 +265,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     radiation_tendency!(Yₜ, Y, p, t, p.atmos.radiation_mode)
     if p.atmos.sgs_entr_detr_mode == Explicit()
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+        edmfx_first_interior_entr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
-    edmfx_first_interior_entr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     if p.atmos.sgs_mf_mode == Explicit()
         edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end

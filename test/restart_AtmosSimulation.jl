@@ -36,11 +36,7 @@ function amip_target_diagedmf(context, output_dir)
         CA.ViscousSponge{FT}(; zd = params.zd_viscous, κ₂ = params.kappa_2_sponge)
 
     diff_mode = CA.Implicit()
-    hyperdiff = CA.ClimaHyperdiffusion{FT}(;
-        ν₄_vorticity_coeff = 0.150 * 1.238,
-        divergence_damping_factor = 5,
-        prandtl_number = FT(0.2),  # Maintains 5x scalar/vorticity ratio (0.751/0.150)
-    )
+    hyperdiff = CA.cam_se_hyperdiffusion(FT)
 
     tracers = (
         "CB1", "CB2",
@@ -79,11 +75,11 @@ function amip_target_diagedmf(context, output_dir)
     edmfx_model = CA.EDMFXModel(;
         entr_model = CA.InvZEntrainment(),
         detr_model = CA.BuoyancyVelocityDetrainment(),
-        sgs_mass_flux = Val(true),
-        sgs_diffusive_flux = Val(true),
-        nh_pressure = Val(true),
-        vertical_diffusion = Val(false),
-        filter = Val(false),
+        sgs_mass_flux = true,
+        sgs_diffusive_flux = true,
+        nh_pressure = true,
+        vertical_diffusion = false,
+        filter = false,
         scale_blending_method = CA.SmoothMinimumBlending(),
     )
     topography = CA.EarthTopography()
@@ -152,11 +148,11 @@ get_edmfx_model(turbconv_model) = nothing
 get_edmfx_model(turbconv_model::CA.DiagnosticEDMFX) = CA.EDMFXModel(;
     entr_model = CA.InvZEntrainment(),
     detr_model = CA.BuoyancyVelocityDetrainment(),
-    sgs_mass_flux = Val(true),
-    sgs_diffusive_flux = Val(true),
-    nh_pressure = Val(true),
-    vertical_diffusion = Val(false),
-    filter = Val(false),
+    sgs_mass_flux = true,
+    sgs_diffusive_flux = true,
+    nh_pressure = true,
+    vertical_diffusion = false,
+    filter = false,
     scale_blending_method = CA.SmoothMinimumBlending(),
 )
 
@@ -294,16 +290,16 @@ TESTING = Any[]
 FT = Float32
 if MANYTESTS
     allsky_radiation =
-        RRTMGPI.AllSkyRadiation(
-            false,
-            false,
-            CA.InteractiveCloudInRadiation(),
-            true,
-            false,
-            false,
-            true,
+        RRTMGPI.AllSkyRadiation(;
+            idealized_h2o = false,
+            idealized_clouds = false,
+            cloud = CA.InteractiveCloudInRadiation(),
+            add_isothermal_boundary_layer = true,
+            aerosol_radiation = false,
+            reset_rng_seed = false,
+            deep_atmosphere = true,
         )
-    diagnostic_edmfx = CA.DiagnosticEDMFX{1, false}(1e-5)
+    diagnostic_edmfx = CA.DiagnosticEDMFX(; area_fraction = 1e-5)
     topography = CA.EarthTopography()
     if comms_ctx isa ClimaComms.SingletonCommsContext
         grids = (
@@ -335,7 +331,10 @@ if MANYTESTS
             microphys_models = (CA.Microphysics0Moment(),)
             topography_type = CA.NoTopography()
             turbconv_models = (diagnostic_edmfx,)
-            gray_radiation = RRTMGPI.GrayRadiation(true, false)
+            gray_radiation = RRTMGPI.GrayRadiation(;
+                add_isothermal_boundary_layer = true,
+                deep_atmosphere = false,
+            )
             radiation_modes = (gray_radiation, allsky_radiation)
         end
 

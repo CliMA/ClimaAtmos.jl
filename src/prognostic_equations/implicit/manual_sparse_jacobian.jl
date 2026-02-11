@@ -590,7 +590,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             dtγ * (
                 ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅
                 ∂ᶜK_∂ᶠu₃ +
-                DiagonalMatrixRow(-β_rayleigh_w(rs, ᶠz, zmax) * (one_C3xACT3,))
+                DiagonalMatrixRow(-β_rayleigh_u₃(rs, ᶠz, zmax) * (one_C3xACT3,))
             ) - (I_u₃,)
     else
         @. ∂ᶠu₃_err_∂ᶠu₃ =
@@ -1054,9 +1054,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     dtγ * (
                         ᶠtridiagonal_matrix_c3 ⋅
                         DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) -
-                        DiagonalMatrixRow(
-                            β_rayleigh_w(rs, ᶠz, zmax) * (one_C3xACT3,),
-                        )
+                        DiagonalMatrixRow(β_rayleigh_u₃(rs, ᶠz, zmax) * (one_C3xACT3,))
                     ) - (I_u₃,)
             else
                 @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
@@ -1566,9 +1564,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
             @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                 dtγ *
-                -DiagonalMatrixRow(
-                    β_rayleigh_w(rs, ᶠz, zmax) * (one_C3xACT3,),
-                ) - (I_u₃,)
+                -DiagonalMatrixRow(β_rayleigh_u₃(rs, ᶠz, zmax) * (one_C3xACT3,)) - (I_u₃,)
         end
     end
 

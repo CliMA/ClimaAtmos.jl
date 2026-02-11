@@ -1,4 +1,4 @@
-308
+312
 
 # **README**
 #
@@ -20,6 +20,18 @@
 
 
 #=
+312
+ - Relax entr/detr limits for prognostic EDMF when entr/detr is treated implicitly
+
+311
+ - Update from Thermodynamics 0.15.7 to 0.15.8
+
+310
+ - Update RCEMIPII CRM box test and sponge tendencies.
+
+309
+ - Stabilize prognostic-EDMF nightly build with reduced hyperdiff Prandtl number.
+
 308
  - PEDMF bugfix: return entr_detr_lim_tau for entr at the boundary when area fraction is negative
 

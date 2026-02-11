@@ -291,19 +291,20 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             p.atmos.edmfx_model.entr_model,
         )
 
-        @. ᶜentrʲs.:($$j) = limit_entrainment(
-            ᶜentrʲs.:($$j),
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-            dt,
-        )
-
         @. ᶜturb_entrʲs.:($$j) = turbulent_entrainment(
             turbconv_params,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
         )
 
-        @. ᶜturb_entrʲs.:($$j) =
-            limit_turb_entrainment(ᶜentrʲs.:($$j), ᶜturb_entrʲs.:($$j), dt)
+        if p.atmos.sgs_entr_detr_mode == Explicit()
+            @. ᶜentrʲs.:($$j) = limit_entrainment(
+                ᶜentrʲs.:($$j),
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                dt,
+            )
+            @. ᶜturb_entrʲs.:($$j) =
+                limit_turb_entrainment(ᶜentrʲs.:($$j), ᶜturb_entrʲs.:($$j), dt)
+        end
 
         @. ᶜvert_div = ᶜdivᵥ(ᶠinterp(ᶜρʲs.:($$j)) * ᶠu³ʲs.:($$j)) / ᶜρʲs.:($$j)
         @. ᶜmassflux_vert_div =
@@ -346,33 +347,60 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             p.atmos.edmfx_model.detr_model,
         )
 
-        @. ᶜdetrʲs.:($$j) = limit_detrainment(
-            ᶜdetrʲs.:($$j),
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-            dt,
-        )
+        if p.atmos.sgs_entr_detr_mode == Explicit()
+            @. ᶜdetrʲs.:($$j) = limit_detrainment(
+                ᶜdetrʲs.:($$j),
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                dt,
+            )
+        else
+            @. ᶜdetrʲs.:($$j) = limit_detrainment(
+                ᶜdetrʲs.:($$j),
+                ᶜentrʲs.:($$j),
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                dt,
+            )
+        end
 
-        # If the surface buoyancy flux is positive, increase entrainment in the first cell
-        # so that the updraft area grows to at least `surface_area` within one timestep.
-        # Otherwise (stable surface), leave entrainment unchanged.
+        # If the surface buoyancy flux is positive, adjust the first-cell updraft area toward `surface_area`:
+        #   - if area < surface_area: increase entrainment to grow area toward `surface_area`
+        #   - if area > surface_area: increase detrainment to decay area toward `surface_area`
+        # If area is negative or surface buoyancy flux is non-positive (stable/neutral surface), leave
+        # entrainment and detrainment unchanged.
         buoyancy_flux_val = Fields.field_values(p.precomputed.sfc_conditions.buoyancy_flux)
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
         sgsʲs_ρa_int_val =
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
+        # Seed a small positive updraft area fraction when surface buoyancy flux is positive.
+        # This perturbation prevents the plume area from staying identically zero,
+        # allowing entrainment to grow it to the prescribed surface area.
+        @. sgsʲs_ρa_int_val += ifelse(buoyancy_flux_val < 0,
+            0,
+            max(0, sgsʲs_ρ_int_val * $(eps(FT)) - sgsʲs_ρa_int_val),
+        )
         @. ᶜaʲ_int_val = draft_area(sgsʲs_ρa_int_val, sgsʲs_ρ_int_val)
         entr_int_val = Fields.field_values(Fields.level(ᶜentrʲs.:($j), 1))
         detr_int_val = Fields.field_values(Fields.level(ᶜdetrʲs.:($j), 1))
-        @. entr_int_val = limit_entrainment(
-            ifelse(
-                buoyancy_flux_val < 0 || ᶜaʲ_int_val <= 0 ||
-                ᶜaʲ_int_val >= $(FT(turbconv_params.surface_area)),
-                entr_int_val,
-                detr_int_val +
-                ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
-            ),
-            ᶜaʲ_int_val,
-            dt,
+        @. entr_int_val = ifelse(
+            buoyancy_flux_val < 0 || ᶜaʲ_int_val <= 0 ||
+            ᶜaʲ_int_val >= $(FT(turbconv_params.surface_area)),
+            entr_int_val,
+            detr_int_val +
+            ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
         )
+        @. detr_int_val = ifelse(
+            buoyancy_flux_val < 0 || ᶜaʲ_int_val <= 0 ||
+            ᶜaʲ_int_val < $(FT(turbconv_params.surface_area)),
+            detr_int_val,
+            entr_int_val -
+            ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
+        )
+        if p.atmos.sgs_entr_detr_mode == Explicit()
+            @. entr_int_val = limit_entrainment(entr_int_val, ᶜaʲ_int_val, dt)
+            @. detr_int_val = limit_detrainment(detr_int_val, ᶜaʲ_int_val, dt)
+        else
+            @. detr_int_val = limit_detrainment(detr_int_val, entr_int_val, ᶜaʲ_int_val, dt)
+        end
 
         # The buoyancy term in the nonhydrostatic pressure closure is always applied
         # for prognostic edmf. The tendency is combined with the buoyancy term in the
@@ -492,7 +520,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     cmp = CAP.microphysics_1m_params(params)
     cmc = CAP.microphysics_cloud_params(params)
 
-    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜTʲs) = p.precomputed
+    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs) = p.precomputed
+    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
     (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
     (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
 
@@ -552,6 +581,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             cmp,
             thp,
         )
+        ᶜq_vap_safeʲ = @. lazy(
+            max(
+                TD.vapor_specific_humidity(
+                    ᶜq_tot_safeʲs.:($$j),
+                    ᶜq_liq_raiʲs.:($$j),
+                    ᶜq_ice_snoʲs.:($$j),
+                ),
+                0,
+            ),
+        )
         compute_precipitation_sinks!(
             ᶜSᵖ,
             ᶜSqᵣᵖʲs.:($j),
@@ -563,6 +602,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             Y.c.sgsʲs.:($j).q_rai,
             Y.c.sgsʲs.:($j).q_sno,
             ᶜTʲs.:($j),
+            ᶜq_vap_safeʲ,
             dt,
             cmp,
             thp,
@@ -601,6 +641,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
+    ᶜq_vap_safe⁰ =
+        @. lazy(max(TD.vapor_specific_humidity(ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰), 0))
     compute_precipitation_sources!(
         ᶜSᵖ,
         ᶜSᵖ_snow,
@@ -630,6 +672,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜq_rai⁰,
         ᶜq_sno⁰,
         ᶜT⁰,
+        ᶜq_vap_safe⁰,
         dt,
         cmp,
         thp,

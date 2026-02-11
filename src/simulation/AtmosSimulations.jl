@@ -12,24 +12,9 @@ struct AtmosSimulation{TT, S1 <: AbstractString, S2 <: AbstractString, OW, OD}
     integrator::OD
 end
 
-Base.summary(::AtmosSimulation) = "AtmosSimulation"
-
 ClimaComms.context(sim::AtmosSimulation) =
     ClimaComms.context(sim.integrator.u.c)
 ClimaComms.device(sim::AtmosSimulation) = ClimaComms.device(sim.integrator.u.c)
-
-function Base.show(io::IO, sim::AtmosSimulation)
-    device_type = nameof(typeof(ClimaComms.device(sim)))
-    return print(
-        io,
-        "Simulation $(sim.job_id)\n",
-        "├── Running on: $(device_type)\n",
-        "├── Output folder: $(sim.output_dir)\n",
-        "├── Start date: $(sim.start_date)\n",
-        "├── Current time: $(sim.integrator.t) seconds\n",
-        "└── Stop time: $(sim.t_end) seconds",
-    )
-end
 
 
 function setup_diagnostics_and_writers(
@@ -101,7 +86,7 @@ function setup_diagnostics_and_writers(
                 "diagnostics" => diagnostics,
                 "netcdf_interpolation_num_points" => nothing,
                 "netcdf_output_at_levels" => false,
-                "netcdf_horizontal_method" => "spectral",
+                "netcdf_horizontal_method" => "bilinear",
             )
             user_scheduled_diagnostics, user_writers, _ = get_diagnostics(
                 diag_config,
@@ -177,6 +162,7 @@ function AtmosSimulation{FT}(;
     debug_jacobian = false,
     # Misc 
     checkpoint_frequency = Inf,
+    log_to_file = false,
 ) where {FT}
     # Set up output directory and restart file detection
     output_dir, restart_file = setup_output_dir(
@@ -280,6 +266,11 @@ function AtmosSimulation{FT}(;
     end
 
     reset_graceful_exit(output_dir)
+
+    if log_to_file
+        logger = ClimaComms.FileLogger(context, output_dir)
+        Logging.global_logger(logger)
+    end
 
     return AtmosSimulation(
         job_id, output_dir, start_date, t_end, writers, integrator,

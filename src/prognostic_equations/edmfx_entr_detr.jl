@@ -597,17 +597,6 @@ function edmfx_first_interior_entr_tendency!(
 
     for j in 1:n
 
-        # Seed a small positive updraft area fraction when surface buoyancy flux is positive.
-        # This perturbation prevents the plume area from staying identically zero,
-        # allowing entrainment to grow it to the prescribed surface area.
-        sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
-        sgsʲs_ρa_int_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
-        sgsʲs_ρaₜ_int_val = Fields.field_values(Fields.level(Yₜ.c.sgsʲs.:($j).ρa, 1))
-        @. sgsʲs_ρaₜ_int_val += ifelse(buoyancy_flux_val < 0,
-            0,
-            max(0, (sgsʲs_ρ_int_val * $(eps(FT)) - sgsʲs_ρa_int_val) / dt),
-        )
-
         # Apply entrainment tendencies in the first model cell for moist static energy (mse) 
         # and total humidity (q_tot). The entrained fluid is assumed to have a scalar value 
         # given by `sgs_scalar_first_interior_bc` (mean + SGS perturbation). Since 
@@ -615,6 +604,8 @@ function edmfx_first_interior_entr_tendency!(
         # contrast, we supply the high-value (entrained) tracer minus the environment value 
         # here to form the correct tendency.
         entr_int_val = Fields.field_values(Fields.level(ᶜentrʲs.:($j), 1))
+        sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
+        sgsʲs_ρa_int_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
         @. ᶜaʲ_int_val = max(
             FT(turbconv_params.surface_area),
             draft_area(sgsʲs_ρa_int_val, sgsʲs_ρ_int_val),
@@ -666,6 +657,8 @@ limit_entrainment(entr::FT, a, dt) where {FT} = max(
 )
 limit_detrainment(detr::FT, a, dt) where {FT} =
     max(min(detr, FT(0.9) * 1 / dt), 0)
+limit_detrainment(detr::FT, entr::FT, a, dt) where {FT} =
+    max(detr, entr - FT(0.9) * 1 / dt)
 
 function limit_turb_entrainment(dyn_entr::FT, turb_entr, dt) where {FT}
     return max(min((FT(0.9) * 1 / dt) - dyn_entr, turb_entr), 0)

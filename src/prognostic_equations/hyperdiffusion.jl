@@ -31,7 +31,7 @@ function hyperdiffusion_cache(Y, atmos)
 end
 
 function hyperdiffusion_cache(
-    Y, hyperdiff::ClimaHyperdiffusion, turbconv_model, moisture_model, microphysics_model,
+    Y, ::Hyperdiffusion, turbconv_model, moisture_model, microphysics_model,
 )
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)

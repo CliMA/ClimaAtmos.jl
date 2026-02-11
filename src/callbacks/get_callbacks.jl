@@ -61,7 +61,31 @@ function get_diagnostics(
         sync_schedule = CAD.EveryStepSchedule(),
         maybe_add_start_date...,
     )
+
+    # Create NetCDF writer for diagnostics in pressure coordinates if they
+    # exist
+    write_in_pressure_coords = any(yaml_diagnostics) do yaml_diag
+        get(yaml_diag, "pressure_coordinates", false)
+    end
+    pressure_netcdf_writer = nothing
+    if write_in_pressure_coords
+        z_sampling_method = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
+            p.precomputed.ᶜp,
+            t_start,
+        )
+        pressure_space = ClimaDiagnostics.Writers.pressure_space(z_sampling_method)
+        pressure_netcdf_writer = CAD.NetCDFWriter(
+            pressure_space,
+            output_dir,
+            num_points = num_netcdf_points;
+            z_sampling_method,
+            sync_schedule = CAD.EveryStepSchedule(),
+            maybe_add_start_date...,
+        )
+    end
+
     writers = (dict_writer, hdf5_writer, netcdf_writer)
+    isnothing(pressure_netcdf_writer) || (writers = (writers..., pressure_netcdf_writer))
 
     # The default writer is netcdf
     ALLOWED_WRITERS = Dict(
@@ -76,6 +100,7 @@ function get_diagnostics(
     diagnostics_ragged = map(yaml_diagnostics) do yaml_diag
         short_names = yaml_diag["short_name"]
         output_name = get(yaml_diag, "output_name", nothing)
+        in_pressure_coords = get(yaml_diag, "pressure_coordinates", false)
 
         if short_names isa Vector
             isnothing(output_name) || error(
@@ -105,7 +130,14 @@ function get_diagnostics(
             if !haskey(ALLOWED_WRITERS, writer_ext)
                 error("writer $writer_ext not implemented")
             else
-                writer = ALLOWED_WRITERS[writer_ext]
+                writer = if in_pressure_coords
+                    writer_ext in ("netcdf", "nothing") ||
+                        error("Writing in pressure coordinates is only \
+                        compatible with the NetCDF writer")
+                    pressure_netcdf_writer
+                else
+                    ALLOWED_WRITERS[writer_ext]
+                end
             end
 
             haskey(yaml_diag, "period") ||
@@ -629,13 +661,13 @@ end
 
 function default_model_callbacks(water::AtmosWater;
     dt_cloud_fraction,
-    call_cloud_diagnostics_per_stage = false,
     start_date,
     dt,
     t_start,
     t_end,
     kwargs...)
-    if !call_cloud_diagnostics_per_stage && !isnothing(water.moisture_model)
+    if !isnothing(water.call_cloud_diagnostics_per_stage) &&
+       !isnothing(water.moisture_model)
         return cloud_fraction_callback(
             dt_cloud_fraction,
             dt,

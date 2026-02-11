@@ -22,6 +22,15 @@ function implicit_temporary_quantities(Y, atmos)
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜu₃ʲ
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³, ᶠu³_diff
         ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
+        temp_data_level = Fields.field_values(
+            Fields.level(Fields.Field(FT, center_space), 1),
+        ),
+        temp_data_level_2 = Fields.field_values(
+            Fields.level(Fields.Field(FT, center_space), 1),
+        ),
+        temp_data_level_3 = Fields.field_values(
+            Fields.level(Fields.Field(FT, center_space), 1),
+        ),
     )
 end
 function temporary_quantities(Y, atmos)

@@ -1,6 +1,6 @@
 t_end: "1days"
 config: "box"
-hyperdiff: true
+hyperdiff: Hyperdiffusion
 dt: "20secs"
 perturb_initstate: false
 disable_surface_flux_tendency: true

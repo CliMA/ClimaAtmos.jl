@@ -208,7 +208,7 @@ Returns:
   of `low_percentile` and `high_percentile`.
 """
 function percentile_bounds_mean_norm(
-    low_percentile::FT,
+    low_percentile,
     high_percentile::FT,
 ) where {FT}
     std_normal_pdf(x) = -exp(-x * x / 2) / sqrt(2 * pi)

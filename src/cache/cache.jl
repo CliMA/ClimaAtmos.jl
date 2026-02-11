@@ -129,9 +129,7 @@ function build_cache(
 
     nonneg_lim = atmos.water.tracer_nonnegativity_method
     tracer_nonnegativity_limiter = if nonneg_lim isa TracerNonnegativityElementConstraint
-        Limiters.QuasiMonotoneLimiter(similar(Y.c.ρq_tot, FT);
-            convergence_stats = Limiters.NoConvergenceStats(),
-        )
+        Limiters.QuasiMonotoneLimiter(similar(Y.c.ρq_tot, FT))
     else
         nothing
     end

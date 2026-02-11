@@ -52,9 +52,7 @@ include(joinpath("prognostic_equations", "zero_velocity.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "jacobian.jl"))
-include(
-    joinpath("prognostic_equations", "implicit", "manual_sparse_jacobian.jl"),
-)
+include(joinpath("prognostic_equations", "implicit", "manual_sparse_jacobian.jl"))
 include(joinpath("prognostic_equations", "implicit", "auto_dense_jacobian.jl"))
 include(joinpath("prognostic_equations", "implicit", "auto_sparse_jacobian.jl"))
 include(joinpath("prognostic_equations", "implicit", "autodiff_utils.jl"))
@@ -71,24 +69,16 @@ include(joinpath("parameterized_tendencies", "radiation", "held_suarez.jl"))
 
 include(
     joinpath(
-        "parameterized_tendencies",
-        "gravity_wave_drag",
-        "non_orographic_gravity_wave.jl",
+        "parameterized_tendencies", "gravity_wave_drag", "non_orographic_gravity_wave.jl",
     ),
 )
 include(
     joinpath(
-        "parameterized_tendencies",
-        "gravity_wave_drag",
-        "orographic_gravity_wave_helper.jl",
+        "parameterized_tendencies", "gravity_wave_drag", "orographic_gravity_wave_helper.jl",
     ),
 )
 include(
-    joinpath(
-        "parameterized_tendencies",
-        "gravity_wave_drag",
-        "orographic_gravity_wave.jl",
-    ),
+    joinpath("parameterized_tendencies", "gravity_wave_drag", "orographic_gravity_wave.jl"),
 )
 include(joinpath("prognostic_equations", "hyperdiffusion.jl"))
 include(joinpath("prognostic_equations", "gm_sgs_closures.jl"))
@@ -100,48 +90,23 @@ include(joinpath("prognostic_equations", "edmfx_tke.jl"))
 include(joinpath("prognostic_equations", "edmfx_sgs_flux.jl"))
 include(joinpath("prognostic_equations", "edmfx_boundary_condition.jl"))
 include(joinpath("prognostic_equations", "edmfx_precipitation.jl"))
-include(
-    joinpath("parameterized_tendencies", "microphysics", "precipitation.jl"),
-)
-include(
-    joinpath("parameterized_tendencies", "microphysics", "cloud_condensate.jl"),
-)
-include(
-    joinpath(
-        "parameterized_tendencies",
-        "microphysics",
-        "microphysics_wrappers.jl",
-    ),
-)
-include(
-    joinpath(
-        "parameterized_tendencies", "microphysics", "moisture_fixer.jl"),
-)
-include(
-    joinpath("prognostic_equations", "vertical_diffusion_boundary_layer.jl"),
-)
+include(joinpath("parameterized_tendencies", "microphysics", "precipitation.jl"))
+include(joinpath("parameterized_tendencies", "microphysics", "cloud_condensate.jl"))
+include(joinpath("parameterized_tendencies", "microphysics", "microphysics_wrappers.jl"))
+include(joinpath("parameterized_tendencies", "microphysics", "moisture_fixer.jl"))
+include(joinpath("prognostic_equations", "vertical_diffusion_boundary_layer.jl"))
 include(joinpath("prognostic_equations", "surface_flux.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "rayleigh_sponge.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
+include(joinpath("parameterized_tendencies", "les_sgs_models", "smagorinsky_lilly.jl"))
 include(
     joinpath(
-        "parameterized_tendencies",
-        "les_sgs_models",
-        "smagorinsky_lilly.jl",
+        "parameterized_tendencies", "les_sgs_models", "anisotropic_minimum_dissipation.jl",
     ),
 )
 include(
     joinpath(
-        "parameterized_tendencies",
-        "les_sgs_models",
-        "anisotropic_minimum_dissipation.jl",
-    ),
-)
-include(
-    joinpath(
-        "parameterized_tendencies",
-        "les_sgs_models",
-        "constant_horizontal_diffusion.jl",
+        "parameterized_tendencies", "les_sgs_models", "constant_horizontal_diffusion.jl",
     ),
 )
 include(joinpath("prognostic_equations", "advection.jl"))
@@ -169,5 +134,7 @@ include(joinpath("solver", "model_getters.jl")) # high-level (using parsed_args)
 include(joinpath("solver", "type_getters.jl"))
 include(joinpath("solver", "yaml_helper.jl"))
 include(joinpath("solver", "solve.jl"))
+
+include(joinpath("utils", "show.jl"))
 
 end # module
