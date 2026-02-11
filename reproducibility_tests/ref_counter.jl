@@ -1,4 +1,4 @@
-311
+312
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+312
+ - Relax entr/detr limits for prognostic EDMF when entr/detr is treated implicitly
+
 311
  - Update from Thermodynamics 0.15.7 to 0.15.8
 
