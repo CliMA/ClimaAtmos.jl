@@ -129,7 +129,7 @@ function set_precipitation_velocities!(
     # scratch to compute env mass flux
     ᶜimplied_env_mass_flux = p.scratch.ᶜtemp_scalar
     # scratch to add positive masses of subdomains
-    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities 
+    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities
     # over subdomains once negative subdomain mass issues are resolved
     # We use positive masses for mass-weighted averaging gs terminal velocity. This ensures
     # that the value remains between sgs terminal velocity values (important for stability).
@@ -137,7 +137,7 @@ function set_precipitation_velocities!(
     # scratch for adding energy fluxes over subdomains
     ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
 
-    # Compute gs sedimentation velocity based on subdomain velocities (assuming gs flux 
+    # Compute gs sedimentation velocity based on subdomain velocities (assuming gs flux
     # equals sum of sgs fluxes)
 
     ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
@@ -390,13 +390,13 @@ function set_precipitation_velocities!(
     # scratch to compute env velocities
     ᶜw⁰ = p.scratch.ᶜtemp_scalar
     # scratch to add positive masses of subdomains
-    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities 
-    # over subdomains once negative subdomain mass issues are resolved 
+    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities
+    # over subdomains once negative subdomain mass issues are resolved
     ᶜρχ = p.scratch.ᶜtemp_scalar_2
     # scratch for adding energy fluxes over subdomains
     ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
 
-    # Compute gs sedimentation velocity based on subdomain velocities (assuming gs flux 
+    # Compute gs sedimentation velocity based on subdomain velocities (assuming gs flux
     # equals sum of sgs fluxes)
 
     ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
@@ -624,7 +624,7 @@ sources from the sub-domains.
 set_precipitation_cache!(Y, p, _, _) = nothing
 function set_precipitation_cache!(Y, p, ::Microphysics0Moment, _)
     (; params, dt) = p
-    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜT, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; ᶜΦ) = p.core
     cm_params = CAP.microphysics_0m_params(params)
@@ -634,7 +634,6 @@ function set_precipitation_cache!(Y, p, ::Microphysics0Moment, _)
             cm_params,
             dt,
             Y.c.ρq_tot / Y.c.ρ,
-            ᶜq_tot_safe,
             ᶜq_liq_rai,
             ᶜq_ice_sno,
         )

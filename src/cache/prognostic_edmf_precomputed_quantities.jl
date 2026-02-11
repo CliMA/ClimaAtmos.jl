@@ -494,7 +494,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             cmp,
             dt,
             Y.c.sgsʲs.:($$j).q_tot,
-            ᶜq_tot_safeʲs.:($$j),
             ᶜq_liq_raiʲs.:($$j),
             ᶜq_ice_snoʲs.:($$j),
         )
@@ -503,7 +502,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
     @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
         cmp, dt, ᶜq_tot⁰,
-        ᶜq_tot_safe⁰,
         ᶜq_liq_rai⁰,
         ᶜq_ice_sno⁰,
     )

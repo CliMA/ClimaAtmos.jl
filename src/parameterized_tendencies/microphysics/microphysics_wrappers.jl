@@ -141,16 +141,16 @@ end
 
  - cmp - struct with microphysics parameters
  - dt - model time step
- - qₜ - total water specific humidity
- - q_tot, q_liq, q_ice - phase partition quantities
+ - q_tot - total water specific humidity
+ - q_liq, q_ice - liquid and ice specific humidities
 
 Returns the qₜ source term due to precipitation formation
 defined as Δm_tot / (m_dry + m_tot) for the 0-moment scheme
 """
-function q_tot_0M_precipitation_sources(cmp::CMP.Parameters0M, dt, qₜ, q_tot, q_liq, q_ice)
+function q_tot_0M_precipitation_sources(cmp::CMP.Parameters0M, dt, q_tot, q_liq, q_ice)
     return -triangle_inequality_limiter(
-        -CM0.remove_precipitation(cmp, TD.PhasePartition(q_tot, q_liq, q_ice)),
-        qₜ / dt,
+        -CM0.remove_precipitation(cmp, q_liq, q_ice),
+        q_tot / dt,
     )
 end
 
