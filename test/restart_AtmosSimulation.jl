@@ -362,9 +362,7 @@ if MANYTESTS
                             edmfx_model,
                             insolation = CA.IdealizedInsolation(),
                             reproducible_restart = CA.ReproducibleRestart(),
-                            test_dycore_consistency = CA.TestDycoreConsistency(),
-
-                        )
+                            test_dycore_consistency = CA.TestDycoreConsistency())
 
                         # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
                         # hard-code this to be always false for those versions

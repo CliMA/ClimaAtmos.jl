@@ -10,7 +10,7 @@ using ClimaAtmos
 
 # Import functions under test
 import ClimaAtmos:
-    tracer_nonnegativity_vapor_tendency, limit, triangle_inequality_limiter
+    tracer_nonnegativity_vapor_tendency, limit
 
 @testset "Moisture Fixers" begin
 

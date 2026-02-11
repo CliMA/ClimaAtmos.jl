@@ -591,7 +591,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     )
 
     # Apply physically motivated tendency limits
-    @. ᶜmp_result = apply_1m_tendency_limits(ᶜmp_result, thp, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰, dt)
+    @. ᶜmp_result = apply_1m_tendency_limits(
+        ᶜmp_result,
+        thp,
+        ᶜq_tot⁰,
+        ᶜq_liq⁰,
+        ᶜq_ice⁰,
+        ᶜq_rai⁰,
+        ᶜq_sno⁰,
+        dt,
+    )
     @. ᶜSqₗᵐ⁰ = ᶜmp_result.dq_lcl_dt
     @. ᶜSqᵢᵐ⁰ = ᶜmp_result.dq_icl_dt
     @. ᶜSqᵣᵐ⁰ = ᶜmp_result.dq_rai_dt
@@ -782,12 +791,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     )
 
     # Apply coupled limiting directly 
-    ᶜf_liq = @. lazy(coupled_sink_limit_factor(
-        ᶜmp_result.dq_lcl_dt, ᶜmp_result.dn_lcl_dt, ᶜq_liq⁰, ᶜn_liq⁰, dt,
-    ))
-    ᶜf_rai = @. lazy(coupled_sink_limit_factor(
-        ᶜmp_result.dq_rai_dt, ᶜmp_result.dn_rai_dt, ᶜq_rai⁰, ᶜn_rai⁰, dt,
-    ))
+    ᶜf_liq = @. lazy(
+        coupled_sink_limit_factor(
+            ᶜmp_result.dq_lcl_dt, ᶜmp_result.dn_lcl_dt, ᶜq_liq⁰, ᶜn_liq⁰, dt,
+        ),
+    )
+    ᶜf_rai = @. lazy(
+        coupled_sink_limit_factor(
+            ᶜmp_result.dq_rai_dt, ᶜmp_result.dn_rai_dt, ᶜq_rai⁰, ᶜn_rai⁰, dt,
+        ),
+    )
     @. ᶜSqₗᵐ⁰ = ᶜmp_result.dq_lcl_dt * ᶜf_liq
     @. ᶜSnₗᵐ⁰ = ᶜmp_result.dn_lcl_dt * ᶜf_liq
     @. ᶜSqᵣᵐ⁰ = ᶜmp_result.dq_rai_dt * ᶜf_rai

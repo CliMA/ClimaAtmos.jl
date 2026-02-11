@@ -115,4 +115,3 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
     )
     return ᶜmixing_length
 end
-

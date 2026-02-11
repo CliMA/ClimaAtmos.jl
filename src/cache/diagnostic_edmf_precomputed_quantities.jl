@@ -1555,7 +1555,16 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     )
 
     # Apply physically motivated tendency limits
-    @. ᶜmp_result = apply_1m_tendency_limits(ᶜmp_result, thermo_params, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt)
+    @. ᶜmp_result = apply_1m_tendency_limits(
+        ᶜmp_result,
+        thermo_params,
+        ᶜq_tot,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜq_rai,
+        ᶜq_sno,
+        dt,
+    )
     @. ᶜSqₗᵐ⁰ = ᶜmp_result.dq_lcl_dt
     @. ᶜSqᵢᵐ⁰ = ᶜmp_result.dq_icl_dt
     @. ᶜSqᵣᵐ⁰ = ᶜmp_result.dq_rai_dt

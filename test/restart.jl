@@ -249,7 +249,6 @@ if MANYTESTS
                             "rad" => radiation,
                             "dt_rad" => "1secs",
                             "surface_setup" => "DefaultMoninObukhov",
-
                             "t_end" => "3secs",
                             "dt_save_state_to_disk" => "1secs",
                             "enable_diagnostics" => false,
@@ -294,9 +293,7 @@ else
             "check_nan_every" => 3,
             "log_progress" => false,
             "dt" => "1secs",
-            "dt_rad" => "1secs",
-
-            "t_end" => "3secs",
+            "dt_rad" => "1secs", "t_end" => "3secs",
             "dt_save_state_to_disk" => "1secs",
             "output_dir" => joinpath(amip_output_loc, amip_job_id),
             "dt_cloud_fraction" => "1secs",

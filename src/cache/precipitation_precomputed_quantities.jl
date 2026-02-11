@@ -850,7 +850,16 @@ function set_microphysics_tendency_cache!(
     )
 
     # Apply physically motivated tendency limits
-    @. ᶜmp_result = apply_1m_tendency_limits(ᶜmp_result, thermo_params, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt)
+    @. ᶜmp_result = apply_1m_tendency_limits(
+        ᶜmp_result,
+        thermo_params,
+        ᶜq_tot,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜq_rai,
+        ᶜq_sno,
+        dt,
+    )
     @. ᶜSqₗᵐ = ᶜmp_result.dq_lcl_dt
     @. ᶜSqᵢᵐ = ᶜmp_result.dq_icl_dt
     @. ᶜSqᵣᵐ = ᶜmp_result.dq_rai_dt
@@ -923,12 +932,16 @@ function set_microphysics_tendency_cache!(
     )
 
     # Apply coupled limiting directly
-    ᶜf_liq = @. lazy(coupled_sink_limit_factor(
-        ᶜmp_result.dq_lcl_dt, ᶜmp_result.dn_lcl_dt, ᶜq_liq, ᶜn_liq, dt,
-    ))
-    ᶜf_rai = @. lazy(coupled_sink_limit_factor(
-        ᶜmp_result.dq_rai_dt, ᶜmp_result.dn_rai_dt, ᶜq_rai, ᶜn_rai, dt,
-    ))
+    ᶜf_liq = @. lazy(
+        coupled_sink_limit_factor(
+            ᶜmp_result.dq_lcl_dt, ᶜmp_result.dn_lcl_dt, ᶜq_liq, ᶜn_liq, dt,
+        ),
+    )
+    ᶜf_rai = @. lazy(
+        coupled_sink_limit_factor(
+            ᶜmp_result.dq_rai_dt, ᶜmp_result.dn_rai_dt, ᶜq_rai, ᶜn_rai, dt,
+        ),
+    )
     @. ᶜSqₗᵐ = ᶜmp_result.dq_lcl_dt * ᶜf_liq
     @. ᶜSnₗᵐ = ᶜmp_result.dn_lcl_dt * ᶜf_liq
     @. ᶜSqᵣᵐ = ᶜmp_result.dq_rai_dt * ᶜf_rai
@@ -1002,12 +1015,16 @@ function set_microphysics_tendency_cache!(Y, p, ::Microphysics2MomentP3, ::Nothi
     )
 
     # Apply coupled limiting directly
-    ᶜf_liq = @. lazy(coupled_sink_limit_factor(
-        ᶜmp_result.dq_lcl_dt, ᶜmp_result.dn_lcl_dt, ᶜq_liq, ᶜn_liq, dt,
-    ))
-    ᶜf_rai = @. lazy(coupled_sink_limit_factor(
-        ᶜmp_result.dq_rai_dt, ᶜmp_result.dn_rai_dt, ᶜq_rai, ᶜn_rai, dt,
-    ))
+    ᶜf_liq = @. lazy(
+        coupled_sink_limit_factor(
+            ᶜmp_result.dq_lcl_dt, ᶜmp_result.dn_lcl_dt, ᶜq_liq, ᶜn_liq, dt,
+        ),
+    )
+    ᶜf_rai = @. lazy(
+        coupled_sink_limit_factor(
+            ᶜmp_result.dq_rai_dt, ᶜmp_result.dn_rai_dt, ᶜq_rai, ᶜn_rai, dt,
+        ),
+    )
     @. ᶜSqₗᵐ = ᶜmp_result.dq_lcl_dt * ᶜf_liq
     @. ᶜSnₗᵐ = ᶜmp_result.dn_lcl_dt * ᶜf_liq
     @. ᶜSqᵣᵐ = ᶜmp_result.dq_rai_dt * ᶜf_rai

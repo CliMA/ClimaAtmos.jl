@@ -142,7 +142,6 @@ function get_atmos(config::AtmosConfig, params)
         cloud_model,
         microphysics_tendency_timestepping = implicit_microphysics ?
                                              Implicit() : Explicit(),
-
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(parsed_args),
 
         # SCMSetup - Single-Column Model components

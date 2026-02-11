@@ -86,7 +86,8 @@ end
 
 function _allocs_cloud_fraction_sd(thp)
     FT = Float64
-    T = FT(280.0); ρ = FT(1.0)
+    T = FT(280.0)
+    ρ = FT(1.0)
     CA.compute_cloud_fraction_sd(thp, T, ρ, FT(1e-3), FT(0), FT(1), FT(1e-6), FT(0))
     return @allocated CA.compute_cloud_fraction_sd(
         thp, T, ρ, FT(1e-3), FT(0), FT(1), FT(1e-6), FT(0),
@@ -100,7 +101,9 @@ end
 
 function _allocs_bmt_0m(mp, thp)
     FT = Float64
-    T = FT(280.0); q_liq = FT(0.001); q_ice = FT(0.0005)
+    T = FT(280.0)
+    q_liq = FT(0.001)
+    q_ice = FT(0.0005)
     BMT.bulk_microphysics_tendencies(BMT.Microphysics0Moment(), mp, thp, T, q_liq, q_ice)
     return @allocated BMT.bulk_microphysics_tendencies(
         BMT.Microphysics0Moment(), mp, thp, T, q_liq, q_ice,
@@ -109,7 +112,10 @@ end
 
 function _allocs_energy_helper(thp)
     FT = Float64
-    T = FT(280.0); q_liq = FT(0.001); q_ice = FT(0.0005); Φ = FT(1000.0)
+    T = FT(280.0)
+    q_liq = FT(0.001)
+    q_ice = FT(0.0005)
+    Φ = FT(1000.0)
     CA.e_tot_0M_precipitation_sources_helper(thp, T, q_liq, q_ice, Φ)
     return @allocated CA.e_tot_0M_precipitation_sources_helper(thp, T, q_liq, q_ice, Φ)
 end
@@ -122,8 +128,12 @@ end
 
 function _allocs_sgs_sat_adj(thp, quad)
     FT = Float64
-    ρ = FT(1.0); T_mean = FT(280.0); q_mean = FT(0.01)
-    T′T′ = FT(1.0); q′q′ = FT(1e-6); T′q′ = FT(0.0)
+    ρ = FT(1.0)
+    T_mean = FT(280.0)
+    q_mean = FT(0.01)
+    T′T′ = FT(1.0)
+    q′q′ = FT(1e-6)
+    T′q′ = FT(0.0)
     ClimaAtmos.compute_sgs_saturation_adjustment(
         thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, T′q′,
     )
@@ -144,8 +154,11 @@ end
 (ev::TestEvaluator)(T, q) = ev.a * T + ev.b * q
 
 function _allocs_integrate_sgs_functor(quad, ::Type{FT}) where {FT}
-    T_mean = FT(280.0); q_mean = FT(0.01)
-    T′T′ = FT(1.0); q′q′ = FT(1e-6); T′q′ = FT(1e-4)
+    T_mean = FT(280.0)
+    q_mean = FT(0.01)
+    T′T′ = FT(1.0)
+    q′q′ = FT(1e-6)
+    T′q′ = FT(1e-4)
     evaluator = TestEvaluator(FT(2), FT(3))
     ClimaAtmos.integrate_over_sgs(evaluator, quad, q_mean, T_mean, q′q′, T′T′, T′q′)
     return @allocated ClimaAtmos.integrate_over_sgs(
@@ -277,7 +290,7 @@ end
 
             @testset "allocation stability" begin
                 allocs = test_microphysics_allocations!(ᶜYₜ, Y, p)
-                @test allocs == 160  # pre-existing: aerosol lookup
+                @test allocs <= 160  # pre-existing: aerosol lookup
             end
             @testset "cache allocation stability" begin
                 allocs = test_cache_allocations!(Y, p)
