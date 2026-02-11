@@ -1,4 +1,4 @@
-t_end: "360days"
+t_end: "10days"
 dt_save_state_to_disk: "10days"
 moist: "equil"
 rad: "allskywithclear"
