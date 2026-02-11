@@ -35,6 +35,7 @@ Compute base flux for a given orographic gravity wave mode.
 Returns a named tuple with:
 - tau_x: zonal base flux (on CPU)
 - tau_y: meridional base flux (on CPU)
+- topo_info: named tuple of tensor fields (t11, t12, t21, t22, hmax, hmin) on CPU
 - Y_cpu: state vector (on CPU)
 """
 function compute_base_flux(ogw_mode::String, comms_ctx, config_file, job_id)
@@ -115,9 +116,18 @@ function compute_base_flux(ogw_mode::String, comms_ctx, config_file, job_id)
     )
 
     # Move GPU arrays back to CPU for plotting
+    topo_info_cpu = (
+        t11 = to_cpu(topo_info.t11),
+        t12 = to_cpu(topo_info.t12),
+        t21 = to_cpu(topo_info.t21),
+        t22 = to_cpu(topo_info.t22),
+        hmax = to_cpu(topo_info.hmax),
+        hmin = to_cpu(topo_info.hmin),
+    )
     return (
         tau_x = to_cpu(topo_τ_x),
         tau_y = to_cpu(topo_τ_y),
+        topo_info = topo_info_cpu,
         Y_cpu = to_cpu(Y),
     )
 end
@@ -182,3 +192,117 @@ create_figure_set(
     remap_dir = joinpath(@__DIR__, "ogwd_3d", "remap_data/"),
     FT = FT,
 )
+
+#######################################
+# ZONAL MEAN DIAGNOSTICS
+#######################################
+
+using Statistics: mean
+
+# Include tensor fields alongside baseflux for remapping
+all_field_data = Dict{String, Any}(
+    "tau_x_raw" => raw_topo_results.tau_x,
+    "tau_y_raw" => raw_topo_results.tau_y,
+    "tau_x_gfdl" => gfdl_results.tau_x,
+    "tau_y_gfdl" => gfdl_results.tau_y,
+    "t11_raw" => raw_topo_results.topo_info.t11,
+    "t12_raw" => raw_topo_results.topo_info.t12,
+    "t11_gfdl" => gfdl_results.topo_info.t11,
+    "t12_gfdl" => gfdl_results.topo_info.t12,
+)
+
+# Remap all fields to lat-lon grid
+zonal_plot_config = PlotConfig(
+    plot_mode = :horizontal_slice,
+    nlat = 90,
+    nlon = 180,
+    cleanup_remap_files = false,
+)
+datafile_rll = remap_to_latlon(
+    joinpath(@__DIR__, "ogwd_3d", "remap_data/"),
+    collect(keys(all_field_data)),
+    all_field_data,
+    raw_topo_results.Y_cpu,
+    ᶜspace;
+    config = zonal_plot_config,
+    FT = FT,
+)
+
+# Read remapped lat-lon data
+rll_data = NCDataset(datafile_rll) do ds
+    lat = Array(ds["lat"])
+    d = Dict{String, Any}("lat" => lat)
+    for k in keys(all_field_data)
+        raw = Array(ds[k])
+        # Handle [lon, lat, time] → [lon, lat]
+        d[k] = size(raw, 3) > 0 ? raw[:, :, 1] : raw[:, :]
+    end
+    d
+end
+lat = rll_data["lat"]
+
+# Zonal statistics helpers
+zonal_mean_fn(d) = dropdims(mean(d; dims = 1); dims = 1)
+zonal_max_abs_fn(d) = dropdims(maximum(abs.(d); dims = 1); dims = 1)
+
+# Create 5-panel diagnostic figure
+fig = CairoMakie.Figure(; size = (1600, 2400))
+
+# Panel 1: Zonal mean τ_x
+ax1 = CairoMakie.Axis(fig[1, 1]; title = "Zonal mean τ_x", xlabel = "lat", ylabel = "τ_x")
+CairoMakie.lines!(ax1, lat, zonal_mean_fn(rll_data["tau_x_raw"]); label = "raw_topo")
+CairoMakie.lines!(ax1, lat, zonal_mean_fn(rll_data["tau_x_gfdl"]); label = "gfdl_restart")
+CairoMakie.axislegend(ax1)
+
+# Panel 2: Zonal mean τ_y
+ax2 = CairoMakie.Axis(fig[2, 1]; title = "Zonal mean τ_y", xlabel = "lat", ylabel = "τ_y")
+CairoMakie.lines!(ax2, lat, zonal_mean_fn(rll_data["tau_y_raw"]); label = "raw_topo")
+CairoMakie.lines!(ax2, lat, zonal_mean_fn(rll_data["tau_y_gfdl"]); label = "gfdl_restart")
+CairoMakie.axislegend(ax2)
+
+# Panel 3: Max |t11| per latitude (check 1/cos blowup)
+ax3 = CairoMakie.Axis(
+    fig[3, 1];
+    title = "Max |t11| per latitude",
+    xlabel = "lat",
+    ylabel = "|t11|",
+)
+CairoMakie.lines!(ax3, lat, zonal_max_abs_fn(rll_data["t11_raw"]); label = "raw_topo")
+CairoMakie.lines!(ax3, lat, zonal_max_abs_fn(rll_data["t11_gfdl"]); label = "gfdl_restart")
+CairoMakie.axislegend(ax3)
+
+# Panel 4: Max |t12| per latitude
+ax4 = CairoMakie.Axis(
+    fig[4, 1];
+    title = "Max |t12| per latitude",
+    xlabel = "lat",
+    ylabel = "|t12|",
+)
+CairoMakie.lines!(ax4, lat, zonal_max_abs_fn(rll_data["t12_raw"]); label = "raw_topo")
+CairoMakie.lines!(ax4, lat, zonal_max_abs_fn(rll_data["t12_gfdl"]); label = "gfdl_restart")
+CairoMakie.axislegend(ax4)
+
+# Panel 5: Zonal mean difference (raw - gfdl)
+ax5 = CairoMakie.Axis(
+    fig[5, 1];
+    title = "Zonal mean difference (raw_topo − gfdl_restart)",
+    xlabel = "lat",
+    ylabel = "difference",
+)
+CairoMakie.lines!(
+    ax5,
+    lat,
+    zonal_mean_fn(rll_data["tau_x_raw"]) .- zonal_mean_fn(rll_data["tau_x_gfdl"]);
+    label = "Δτ_x",
+)
+CairoMakie.lines!(
+    ax5,
+    lat,
+    zonal_mean_fn(rll_data["tau_y_raw"]) .- zonal_mean_fn(rll_data["tau_y_gfdl"]);
+    label = "Δτ_y",
+)
+CairoMakie.axislegend(ax5)
+
+mkpath(output_dir)
+CairoMakie.save(joinpath(output_dir, "zonal_diagnostics.pdf"), fig)
+@info "Saved zonal diagnostics to $(joinpath(output_dir, "zonal_diagnostics.pdf"))"
