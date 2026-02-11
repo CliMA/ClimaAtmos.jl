@@ -3,8 +3,11 @@ Unit tests for tendency_limiters.jl
 
 Tests cover:
 1. `limit()` - basic rate limiting
-2. `triangle_inequality_limiter()` - Horn (2012) limiter properties
+2. `smooth_min_limiter()` - smooth minimum approximation
 3. `smooth_tendency_limiter()` - bidirectional tendency limiting
+4. `coupled_sink_limit_factor()` - uniform scaling for coupled sinks
+5. `sink_scale_factor()` - scale factor for uniform sink limiting
+6. `apply_1m_tendency_limits()` - end-to-end 1M limiter
 =#
 
 using Test
@@ -13,10 +16,10 @@ using ClimaAtmos
 # Import functions under test
 import ClimaAtmos:
     limit,
-    triangle_inequality_limiter,
     smooth_min_limiter,
     smooth_tendency_limiter,
-    coupled_sink_limit_factor
+    coupled_sink_limit_factor,
+    sink_scale_factor
 
 @testset "Tendency Limiters" begin
 
@@ -47,74 +50,15 @@ import ClimaAtmos:
         end
     end
 
-    @testset "triangle_inequality_limiter()" begin
-        dt = 1.0
-
-        @testset "bounded output" begin
-            # L ≤ min(F, M) for F, M ≥ 0
-            for F in [0.0, 0.001, 0.01, 0.1, 1.0]
-                for M in [0.0, 0.001, 0.01, 0.1, 1.0]
-                    L = triangle_inequality_limiter(F, M)
-                    @test L >= 0.0
-                    @test L <= min(F, M) + eps(Float64)
-                end
-            end
-        end
-
-        @testset "limiting behavior" begin
-            # F >> M: output ≈ M (capped at available)
-            @test triangle_inequality_limiter(1.0, 0.01) ≈ 0.01 atol = 0.001
-
-            # F << M: output ≈ F (pass-through)
-            @test triangle_inequality_limiter(0.01, 1.0) ≈ 0.01 atol = 0.001
-        end
-
-        @testset "symmetric case" begin
-            # F = M: output = F + M - sqrt(2)*M ≈ 0.586*M
-            F = M = 0.5
-            L = triangle_inequality_limiter(F, M)
-            expected = F + M - sqrt(2) * M
-            @test L ≈ expected
-        end
-
-        @testset "zero inputs" begin
-            @test triangle_inequality_limiter(0.0, 0.0) == 0.0
-            @test triangle_inequality_limiter(0.0, 1.0) == 0.0
-            @test triangle_inequality_limiter(1.0, 0.0) == 0.0
-        end
-
-        @testset "negative force" begin
-            # Negative force should swap arguments and negate result
-            L_pos = triangle_inequality_limiter(0.5, 0.3, 0.2)
-            L_neg = triangle_inequality_limiter(-0.5, 0.2, 0.3)
-            @test L_neg ≈ -L_pos
-        end
-
-        @testset "negative allowed_source_amount edge case" begin
-            # When source goes negative, use limit_neg as fallback
-            L = triangle_inequality_limiter(0.1, -0.01, 0.2)
-            # Result is bounded by the reverse limiting
-            @test isfinite(L)
-
-            # Both negative: return zero
-            L = triangle_inequality_limiter(0.1, -0.01, 0.0)
-            @test L == 0.0
-        end
-
-        @testset "type stability" begin
-            @test eltype(triangle_inequality_limiter(Float32(0.5), Float32(0.3))) == Float32
-            @test eltype(triangle_inequality_limiter(Float64(0.5), Float64(0.3))) == Float64
-        end
-    end
 
     @testset "smooth_min_limiter()" begin
         @testset "bounded output" begin
             # L ≤ min(S, B) for S, B ≥ 0
-            for S in [0.0, 0.001, 0.01, 0.1, 1.0]
-                for B in [0.0, 0.001, 0.01, 0.1, 1.0]
+            for S in [0.001, 0.01, 0.1, 1.0]
+                for B in [0.001, 0.01, 0.1, 1.0]
                     L = smooth_min_limiter(S, B)
-                    @test L >= 0.0 || isapprox(L, 0.0, atol = 1e-9)
-                    @test L <= min(S, B) + 1e-9
+                    @test L >= 0.0 || isapprox(L, 0.0, atol = 1e-7)
+                    @test L <= min(S, B) + 1e-7
                 end
             end
         end
@@ -132,7 +76,7 @@ import ClimaAtmos:
             S = B = 0.5
             L = smooth_min_limiter(S, B)
             # Should be B - ε/2 ≈ B for small ε
-            @test L ≈ B atol = 1e-9
+            @test L ≈ B atol = 1e-7
         end
 
         @testset "symmetry" begin
@@ -142,9 +86,10 @@ import ClimaAtmos:
         end
 
         @testset "zero inputs" begin
-            @test smooth_min_limiter(0.0, 0.0) ≈ 0.0 atol = 1e-9
-            @test smooth_min_limiter(0.0, 1.0) ≈ 0.0 atol = 1e-9
-            @test smooth_min_limiter(1.0, 0.0) ≈ 0.0 atol = 1e-9
+            # smooth_min_limiter returns -ε/2 ≈ 0 when both inputs are zero
+            @test smooth_min_limiter(0.0, 0.0) ≈ 0.0 atol = 1e-7
+            @test smooth_min_limiter(0.0, 1.0) ≈ 0.0 atol = 1e-7
+            @test smooth_min_limiter(1.0, 0.0) ≈ 0.0 atol = 1e-7
         end
 
         @testset "sharpness parameter" begin
@@ -163,48 +108,44 @@ import ClimaAtmos:
     end
 
     @testset "smooth_tendency_limiter()" begin
-        dt = 1.0
-
-        @testset "positive tendency limited by source" begin
-            # Source (q_source) limits how much can grow
-            # S = 0.1, q_source = 0.05 → limit = 0.05/dt/3 ≈ 0.0167
-            L = smooth_tendency_limiter(0.1, 0.05, 1.0, dt)
+        @testset "positive tendency limited" begin
+            # Source bound limits how much can grow
+            L = smooth_tendency_limiter(0.1, 0.02, 1.0)
             @test L > 0.0
             @test L < 0.1  # Should be limited
         end
 
         @testset "positive tendency pass-through" begin
-            # Large source, small tendency → passes through
-            L = smooth_tendency_limiter(0.001, 1.0, 1.0, dt)
+            # Large bound, small tendency → passes through
+            L = smooth_tendency_limiter(0.001, 1.0, 1.0)
             @test L ≈ 0.001 atol = 1e-6
         end
 
-        @testset "negative tendency limited by sink" begin
-            # Sink (q_sink) limits how much can be removed
-            # S = -0.1, q_sink = 0.01 → limit = 0.01/dt/3 ≈ 0.0033
-            L = smooth_tendency_limiter(-0.1, 1.0, 0.01, dt)
+        @testset "negative tendency limited" begin
+            # Negative bound limits how much can be removed
+            L = smooth_tendency_limiter(-0.1, 1.0, 0.01)
             @test L < 0.0
             @test abs(L) < 0.1  # Should be limited
         end
 
         @testset "negative tendency pass-through" begin
-            # Large sink, small tendency → passes through
-            L = smooth_tendency_limiter(-0.001, 1.0, 1.0, dt)
+            # Large bound, small tendency → passes through
+            L = smooth_tendency_limiter(-0.001, 1.0, 1.0)
             @test L ≈ -0.001 atol = 1e-6
         end
 
         @testset "zero tendency" begin
-            @test smooth_tendency_limiter(0.0, 0.05, 0.05, dt) ≈ 0.0 atol = 1e-9
+            @test smooth_tendency_limiter(0.0, 0.05, 0.05) ≈ 0.0 atol = 1e-9
         end
 
-        @testset "zero source prevents positive tendency" begin
-            L = smooth_tendency_limiter(0.1, 0.0, 0.05, dt)
-            @test L == 0.0
+        @testset "zero positive bound prevents positive tendency" begin
+            L = smooth_tendency_limiter(0.1, 0.0, 0.05)
+            @test L ≈ 0.0 atol = 1e-7
         end
 
-        @testset "zero sink prevents negative tendency" begin
-            L = smooth_tendency_limiter(-0.1, 0.05, 0.0, dt)
-            @test L == 0.0
+        @testset "zero negative bound prevents negative tendency" begin
+            L = smooth_tendency_limiter(-0.1, 0.05, 0.0)
+            @test L ≈ 0.0 atol = 1e-7
         end
 
         @testset "type stability" begin
@@ -213,7 +154,6 @@ import ClimaAtmos:
                     Float32(0.5),
                     Float32(0.3),
                     Float32(0.3),
-                    Float32(1.0),
                 ),
             ) == Float32
             @test eltype(
@@ -221,82 +161,8 @@ import ClimaAtmos:
                     Float64(0.5),
                     Float64(0.3),
                     Float64(0.3),
-                    Float64(1.0),
                 ),
             ) == Float64
-        end
-    end
-
-    @testset "smooth_tendency_limiter() condensation use case" begin
-        dt = 1.0
-
-        @testset "condensation (S > 0)" begin
-            # Condensation limited by supersaturation
-            S = 0.01  # condensation rate
-            q_sat_excess = 0.005  # supersaturated by 5 g/kg
-            q_cond = 0.001  # existing condensate
-
-            S_lim = smooth_tendency_limiter(S, max(q_sat_excess, 0.0), q_cond, dt, 2)
-
-            # Should be positive (condensation)
-            @test S_lim > 0.0
-
-            # Should be limited (can't condense more than supersaturation)
-            @test S_lim <= S
-
-            # Should respect supersaturation limit
-            @test S_lim <= q_sat_excess / dt + eps(Float64)
-        end
-
-        @testset "evaporation (S < 0)" begin
-            # Evaporation limited by available condensate and subsaturation
-            S = -0.01  # evaporation rate
-            q_sat_excess = -0.005  # subsaturated
-            q_cond = 0.002  # available condensate
-
-            S_lim = smooth_tendency_limiter(S, max(q_sat_excess, 0.0), q_cond, dt, 2)
-
-            # Should be negative (evaporation)
-            @test S_lim < 0.0
-
-            # Should respect condensate limit
-            @test abs(S_lim) <= q_cond / dt + eps(Float64)
-        end
-
-        @testset "sign consistency" begin
-            dt = 1.0
-
-            # Positive tendency → positive result
-            S_lim = smooth_tendency_limiter(0.01, 0.01, 0.01, dt, 2)
-            @test S_lim >= 0.0
-
-            # Negative tendency → negative result
-            S_lim = smooth_tendency_limiter(-0.01, max(-0.01, 0.0), 0.01, dt, 2)
-            @test S_lim <= 0.0
-
-            # Zero tendency → zero result
-            S_lim = smooth_tendency_limiter(0.0, 0.01, 0.01, dt, 2)
-            @test S_lim == 0.0
-        end
-
-        @testset "physical edge cases" begin
-            dt = 1.0
-
-            # No supersaturation → no condensation
-            S_lim = smooth_tendency_limiter(0.01, 0.0, 0.01, dt, 2)
-            @test S_lim == 0.0
-
-            # No condensate → no evaporation
-            S_lim = smooth_tendency_limiter(-0.01, max(-0.01, 0.0), 0.0, dt, 2)
-            @test S_lim == 0.0
-        end
-
-        @testset "type stability" begin
-            @test eltype(
-                smooth_tendency_limiter(
-                    Float32(0.01), Float32(0.01), Float32(0.01), Float32(1.0), 2,
-                ),
-            ) == Float32
         end
     end
 
@@ -313,13 +179,13 @@ import ClimaAtmos:
             # Mass limited more than number → mass factor wins
             q = 0.001
             n = 1e10  # Lots of number available
-            Sq = -0.01  # Would deplete q in 0.1s
-            Sn = -1e7   # Would take 1000s to deplete n
+            Sq = -0.01  # Would deplete q quickly
+            Sn = -1e7   # Would take long to deplete n
 
             f = coupled_sink_limit_factor(Sq, Sn, q, n, dt)
-            # Mass bound = q/(dt*3) = 0.00033, |Sq| = 0.01
-            # f_mass = 0.00033/0.01 ≈ 0.033
-            # Number bound = n/(dt*3) ≈ 3.3e9, |Sn| = 1e7 → no limiting (f_n = 1)
+            # Mass bound = q/(dt*3) = 0.000333, |Sq| = 0.01
+            # f_mass = 0.000333/0.01 ≈ 0.033
+            # Number bound = n/(dt*3) ≈ 3.3e9, |Sn| = 1e7 → no limiting
             @test f < 0.1  # Should be limited by mass
         end
 
@@ -350,6 +216,17 @@ import ClimaAtmos:
             @test f <= 1.0
         end
 
+        @testset "custom n parameter" begin
+            q = 0.001
+            Sq = -0.01
+            Sn = -1e5
+
+            # More sinks → stricter bound
+            f_3 = coupled_sink_limit_factor(Sq, Sn, q, 1e10, dt, 3)
+            f_10 = coupled_sink_limit_factor(Sq, Sn, q, 1e10, dt, 10)
+            @test f_10 < f_3  # More sinks = stricter = smaller factor
+        end
+
         @testset "type stability" begin
             f = coupled_sink_limit_factor(
                 Float32(-0.01), Float32(-1e8),
@@ -357,6 +234,166 @@ import ClimaAtmos:
                 Float32(1.0),
             )
             @test eltype(f) == Float32
+        end
+    end
+
+    @testset "sink_scale_factor()" begin
+        dt = 1.0
+
+        @testset "sources → no limiting" begin
+            @test sink_scale_factor(0.01, 0.001, dt, 3) == 1.0
+            @test sink_scale_factor(0.0, 0.001, dt, 3) == 1.0
+        end
+
+        @testset "small sink → no limiting" begin
+            # Sink is well within budget
+            q = 0.01
+            S = -0.0001  # Tiny sink
+            @test sink_scale_factor(S, q, dt, 3) == 1.0
+        end
+
+        @testset "large sink → limiting" begin
+            # Sink exceeds budget
+            q = 0.001
+            S = -0.01  # Would deplete q in 0.1s
+            n = 3
+            f = sink_scale_factor(S, q, dt, n)
+            bound = q / dt / n  # 0.000333
+            @test f ≈ bound / abs(S) rtol = 1e-10
+            @test f < 1.0
+            @test f > 0.0
+        end
+
+        @testset "negative q → zero bound → zero factor" begin
+            # When q is negative, bound = 0, so any sink gets factor 0
+            f = sink_scale_factor(-0.01, -0.001, dt, 3)
+            @test f == 0.0
+        end
+
+        @testset "zero q → zero factor for sinks" begin
+            f = sink_scale_factor(-0.01, 0.0, dt, 3)
+            @test f == 0.0
+        end
+
+        @testset "type stability" begin
+            @test eltype(
+                sink_scale_factor(Float32(-0.01), Float32(0.001), Float32(1.0), 3),
+            ) == Float32
+            @test eltype(
+                sink_scale_factor(Float64(-0.01), Float64(0.001), Float64(1.0), 3),
+            ) == Float64
+        end
+    end
+
+    @testset "apply_1m_tendency_limits() uniform scaling" begin
+        import ClimaAtmos: apply_1m_tendency_limits
+        import Thermodynamics as TD
+        import ClimaParams as CP
+
+        FT = Float64
+        # Create minimal thermodynamics params
+        toml_dict = CP.create_toml_dict(FT)
+        thermo_params = TD.Parameters.ThermodynamicsParameters(toml_dict)
+
+        dt = FT(600)  # 10 minute timestep
+
+        @testset "no limiting when tendencies are small" begin
+            # Tendencies must be small relative to sink budget: q/(dt*n_sink)
+            # With n_sink=20, dt=600: budget for q_sno=0.01 is 0.01/(600*20)=8.3e-7
+            mp_result = (
+                dq_lcl_dt = FT(1e-8),
+                dq_icl_dt = FT(-5e-9),
+                dq_rai_dt = FT(-3e-9),
+                dq_sno_dt = FT(-2e-9),
+            )
+            q_tot = FT(0.01)
+            q_liq = FT(0.01)
+            q_ice = FT(0.01)
+            q_rai = FT(0.01)
+            q_sno = FT(0.01)
+
+            limited = apply_1m_tendency_limits(
+                mp_result,
+                thermo_params,
+                q_tot,
+                q_liq,
+                q_ice,
+                q_rai,
+                q_sno,
+                dt,
+            )
+
+            # Should pass through unchanged
+            @test limited.dq_lcl_dt ≈ mp_result.dq_lcl_dt rtol = 1e-10
+            @test limited.dq_icl_dt ≈ mp_result.dq_icl_dt rtol = 1e-10
+            @test limited.dq_rai_dt ≈ mp_result.dq_rai_dt rtol = 1e-10
+            @test limited.dq_sno_dt ≈ mp_result.dq_sno_dt rtol = 1e-10
+        end
+
+        @testset "uniform sink limiting prevents depletion" begin
+            # One species would be depleted without limiting
+            mp_result = (
+                dq_lcl_dt = FT(0.001),
+                dq_icl_dt = FT(-0.0005),
+                dq_rai_dt = FT(-0.01),  # Would deplete rain in < dt
+                dq_sno_dt = FT(-0.0002),
+            )
+            q_tot = FT(0.01)
+            q_liq = FT(0.001)
+            q_ice = FT(0.0005)
+            q_rai = FT(0.0001)  # Small amount
+            q_sno = FT(0.0002)
+
+            limited = apply_1m_tendency_limits(
+                mp_result,
+                thermo_params,
+                q_tot,
+                q_liq,
+                q_ice,
+                q_rai,
+                q_sno,
+                dt,
+            )
+
+            # All tendencies should be scaled uniformly
+            # Check that rain won't be depleted
+            @test limited.dq_rai_dt * dt >= -q_rai
+            @test abs(limited.dq_rai_dt) < abs(mp_result.dq_rai_dt)
+
+            # Uniform scaling: all tendencies scaled by same factor
+            expected_factor = limited.dq_rai_dt / mp_result.dq_rai_dt
+            @test limited.dq_lcl_dt / mp_result.dq_lcl_dt ≈ expected_factor rtol = 1e-6
+            @test limited.dq_icl_dt / mp_result.dq_icl_dt ≈ expected_factor rtol = 1e-6
+            @test limited.dq_sno_dt / mp_result.dq_sno_dt ≈ expected_factor rtol = 1e-6
+        end
+
+        @testset "temperature-rate limiting" begin
+            # Large phase change tendencies → temperature limit kicks in
+            mp_result = (
+                dq_lcl_dt = FT(0.01),   # Large condensation
+                dq_icl_dt = FT(-0.001),
+                dq_rai_dt = FT(-0.003),
+                dq_sno_dt = FT(-0.001),
+            )
+            q_tot = FT(0.02)
+            q_liq = FT(0.001)
+            q_ice = FT(0.001)
+            q_rai = FT(0.005)
+            q_sno = FT(0.002)
+
+            limited = apply_1m_tendency_limits(
+                mp_result,
+                thermo_params,
+                q_tot,
+                q_liq,
+                q_ice,
+                q_rai,
+                q_sno,
+                dt,
+            )
+
+            # Tendencies should be limited
+            @test abs(limited.dq_lcl_dt) < abs(mp_result.dq_lcl_dt)
         end
     end
 end

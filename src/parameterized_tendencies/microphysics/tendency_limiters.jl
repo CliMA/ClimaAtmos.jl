@@ -32,149 +32,19 @@ max_rate = limit(q_rai, dt, 3)
 end
 
 """
-    triangle_inequality_limiter(tendency, tendency_bound, tendency_bound_neg=0)
+    smooth_min_limiter(tendency, tendency_bound, sharpness=1e-8)
 
-Smoothly limit a `tendency` to not exceed `tendency_bound` using a C∞ differentiable formula.
+Smooth approximation to `min(tendency, tendency_bound)` for GPU-friendly limiting.
 
-This limiter ensures that source/sink terms do not deplete their source species faster
-than physically available, while remaining smooth for GPU kernels and automatic differentiation.
-
-# Mathematical Formula
-Uses the Horn (2012) formula derived from the triangle inequality:
+Uses a differentiable formula that approaches `min(S, B)` as `sharpness → 0`:
 ```math
-S_{\\text{limited}} = S + B - \\sqrt{S^2 + B^2}
+\\frac{S + B - \\sqrt{(S - B)^2 + ε^2}}{2}
 ```
-where `S` is the raw `tendency` and `B` is the `tendency_bound`.
-
-# Properties
-For `S ≥ 0` and `B ≥ 0`:
-- **Bounded output:** `0 ≤ S_limited ≤ min(S, B)`
-- **Limiting regime:** When `S >> B`, output approaches `B` (capped at bound)
-- **Crossover point:** When `S = B`, output is `(2 - √2)S ≈ 0.59 S`
-- **Pass-through regime:** When `S << B`, output approaches `S` (minimal limiting)
-- **C∞ differentiable:** Smooth everywhere, suitable for GPU and AD
-
-# TODO: The `S = B` behavior is arbitrary and odd. We could instead use a limiter 
-# that smoothly transitions from `S` to `B` over the entire range of `S`.
 
 # Arguments
-- `tendency`: The raw tendency (source/sink term) to limit [kg/kg/s or similar]
-- `tendency_bound`: Maximum allowed magnitude for positive tendencies [same units].
-  Typically computed as `limit(q_source, dt, n)` where `n` is the number of
-  competing sinks for the source species.
-- `tendency_bound_neg`: Maximum allowed magnitude when `tendency < 0` [same units].
-  Used for bidirectional processes (e.g., condensation/evaporation).
-
-# Returns
-Limited tendency `S_limited` satisfying `0 ≤ S_limited ≤ tendency_bound` when
-`tendency ≥ 0` and `tendency_bound ≥ 0`.
-
-# Negative Tendency Handling
-When `tendency < 0`, the function recursively calls itself with swapped bounds:
-```julia
--triangle_inequality_limiter(-tendency, tendency_bound_neg, tendency_bound)
-```
-This ensures symmetric limiting for bidirectional processes.
-
-# Edge Cases
-When `tendency_bound < 0` (due to numerical errors in the source quantity):
-- If `tendency_bound_neg > 0`: Attempts reverse limiting
-- Otherwise: Returns zero (conservative fallback)
-
-# Example
-```julia
-# Limit rain accretion tendency by available cloud liquid and rain
-S_accr = accretion_rate(q_liq, q_rain)
-S_limited = triangle_inequality_limiter(
-    S_accr,
-    limit(q_liq, dt, 3),  # bound for positive tendency (depletes q_liq)
-    limit(q_rain, dt, 3), # bound for negative tendency (depletes q_rain)
-)
-
-!!! note
-    This is deprecated. Use `smooth_tendency_limiter` instead.
-```
-
-# Reference
-Horn, M. (2012). "ASAMgpu V1.0 – a moist fully compressible atmospheric model
-    using graphics processing units (GPUs)". *Geosci. Model Dev.*, 5, 345–353.
-    https://doi.org/10.5194/gmd-5-345-2012
-"""
-@inline function triangle_inequality_limiter(
-    tendency,
-    tendency_bound,
-    tendency_bound_neg = 0,
-)
-    FT = eltype(tendency)
-
-    # Handle negative tendency via recursion with swapped bounds
-    # NOTE: Must use `if` here, not `ifelse`, because ifelse evaluates both branches
-    # which would cause infinite recursion
-    if tendency < FT(0)
-        return -triangle_inequality_limiter(-tendency, tendency_bound_neg, tendency_bound)
-    end
-
-    # Apply Horn (2012) limiter formula: S + B - sqrt(S² + B²)
-    # This smoothly transitions from S (when S << B) to B (when S >> B)
-    tendency_limited =
-        tendency + tendency_bound - sqrt(tendency^2 + tendency_bound^2)
-
-    # Edge case: tendency_bound < 0 (source quantity went negative due to numerics)
-    # If tendency_bound_neg > 0, attempt reverse limiting; otherwise return zero
-    reverse_step1 = tendency_limited
-    reverse_step2 =
-        -reverse_step1 + tendency_bound_neg -
-        sqrt(reverse_step1^2 + tendency_bound_neg^2)
-    tendency_reverse_limited = -reverse_step2
-
-    # Branchless selection (GPU-friendly)
-    has_valid_bound = tendency_bound >= FT(0)
-    can_reverse_limit = tendency_bound_neg > FT(0)
-
-    return ifelse(
-        has_valid_bound,
-        tendency_limited,           # Standard case: valid bound
-        ifelse(
-            can_reverse_limit,
-            tendency_reverse_limited,  # Fallback: try reverse limiting
-            FT(0),                     # No valid limiting possible
-        ),
-    )
-end
-
-"""
-    smooth_min_limiter(tendency, tendency_bound, sharpness=1e-10)
-
-Smoothly limit `tendency` to not exceed `tendency_bound` using a smooth minimum approximation.
-
-This is a C∞ differentiable approximation to `min(tendency, tendency_bound)` that:
-- Returns `≈ tendency` when `tendency << tendency_bound` (pass-through)
-- Returns `≈ tendency_bound` when `tendency >> tendency_bound` (capped)
-- Returns `≈ tendency_bound` when `tendency = tendency_bound` 
-
-# Mathematical Formula
-```math
-S_{\\text{limited}} = \\frac{1}{2}\\left(S + B - \\sqrt{(S - B)^2 + \\epsilon^2}\\right)
-```
-where `S` is the raw `tendency`, `B` is the `tendency_bound`, and `ε` is the `sharpness` parameter.
-
-# Properties
-For `S ≥ 0` and `B ≥ 0`:
-- **Bounded output:** `0 ≤ S_limited ≤ min(S, B)`
-- **Limiting regime:** When `S >> B`, output approaches `B`
-- **Crossover point:** When `S = B`, output is `B - ε/2 ≈ B` (much better than triangle's 0.59B)
-- **Pass-through regime:** When `S << B`, output approaches `S`
-- **Symmetric:** `smooth_min_limiter(S, B) = smooth_min_limiter(B, S)`
-- **C∞ differentiable:** Smooth everywhere, suitable for GPU and AD
-
-# Arguments
-- `tendency`: The raw tendency to limit [kg/kg/s or similar]
-- `tendency_bound`: Maximum allowed value [same units]
-- `sharpness`: Smoothing parameter controlling transition width (default: 1e-10).
-  Smaller values give sharper transitions closer to `min(S, B)`.
-
-# Returns
-Limited tendency `S_limited` satisfying `0 ≤ S_limited ≤ min(S, B)` for `S, B ≥ 0`.
+- `tendency`: The raw tendency (source/sink term) [kg/kg/s]
+- `tendency_bound`: Maximum allowed tendency [same units]
+- `sharpness`: Smoothness parameter (default: 1e-10). Smaller = sharper transition.
 
 # Example
 ```julia
@@ -183,11 +53,10 @@ S_accr = accretion_rate(q_liq, q_rain)
 S_limited = smooth_min_limiter(S_accr, limit(q_liq, dt, 3))
 ```
 
-See also: [`triangle_inequality_limiter`](@ref), [`smooth_tendency_limiter`](@ref)
+See also: [`smooth_tendency_limiter`](@ref)
 """
-@inline function smooth_min_limiter(tendency, tendency_bound, sharpness = 1e-10)
-    FT = eltype(tendency)
-    ε = FT(sharpness)
+@inline function smooth_min_limiter(tendency, tendency_bound, sharpness = 1e-8)
+    ε = oftype(tendency, sharpness)
 
     # Smooth minimum formula: approaches min(S, B) as ε → 0
     # When S = B: output = B - ε/2 ≈ B 
@@ -198,120 +67,222 @@ See also: [`triangle_inequality_limiter`](@ref), [`smooth_tendency_limiter`](@re
 end
 
 """
-    smooth_tendency_limiter(S, q_source, q_sink, dt, n_sink, n_source)
+    smooth_tendency_limiter(tendency, tend_bound_pos, tend_bound_neg)
 
-Branchless bidirectional limiter for fused microphysics tendencies.
-
-Limits both sinks and sources using [`smooth_min_limiter`](@ref):
-- Sources (S > 0): capped by `q_source / (dt × n_source)`
-- Sinks (S < 0): capped by `q_sink / (dt × n_sink)` (prevent species depletion)
-
-This is needed because BMT aggregates all micro-processes (including cloud
-condensation and phase conversions) into a single tendency.
-
-Source limits should be physically motivated per-species bounds:
-- liquid cloud: `saturation_excess + q_ice` (condensation + ice melting)
-- ice cloud: `saturation_excess + q_liq` (deposition + liquid freezing)
-- rain: `q_liq + q_sno` (autoconversion/accretion + snow melting)
-- snow: `q_ice + q_rai` (autoconversion/accretion + rain freezing)
+Bidirectional smooth tendency limiter for processes with both positive and negative tendencies.
 
 # Arguments
-- `S`: Tendency [kg/kg/s], can be positive (source) or negative (sink)
-- `q_source`: Available source quantity for this species [kg/kg]
-- `q_sink`: Available sink quantity (species being depleted) [kg/kg]
-- `dt`: Timestep [s]
-- `n_sink`: Number of timesteps for sink depletion (default: 5)
-- `n_source`: Number of timesteps for source depletion (default: 30)
+- `tendency`: Raw tendency (source or sink) [kg/kg/s]
+- `tend_bound`: Maximum allowed magnitude for positive tendencies [kg/kg/s]
+- `tend_bound_neg`: Maximum allowed magnitude for negative tendencies [kg/kg/s]
+- `sharpness`: Smoothness parameter (default: 1e-10)
+
+# Returns
+Limited tendency satisfying:
+- `0 ≤ S_limited ≤ tend_bound` when `tendency > 0`
+- `tend_bound_neg ≤ S_limited ≤ 0` when `tendency < 0`
 
 # Example
 ```julia
-# Limit BMT tendency: sources bounded by q_tot, sinks by species
-Sqₗᵐ = smooth_tendency_limiter(dq_lcl_dt, q_tot, q_liq, dt)
+# Limit condensation/evaporation by available vapor and liquid
+ S_cond = condensation_rate(q_vap, q_liq)
+S_limited = smooth_tendency_limiter(
+    S_cond,
+    limit(q_vap, dt, 5),     # bound for condensation (depletes q_vap)
+    limit(q_liq, dt, 5),     # bound for evaporation (depletes q_liq)
+)
 ```
-
-See also: [`smooth_min_limiter`](@ref), [`limit`](@ref)
 """
 @inline function smooth_tendency_limiter(
-    S, q_source, q_sink, dt, n_sink = 5, n_source = 30,
+    tendency,
+    tend_bound_pos,
+    tend_bound_neg,
 )
-    FT = eltype(S)
-    bound_pos = limit(q_source, dt, n_source)
-    bound_neg = limit(q_sink, dt, n_sink)
-    pos_limited = max(smooth_min_limiter(S, bound_pos), FT(0))
-    neg_limited = -max(smooth_min_limiter(-S, bound_neg), FT(0))
-    return ifelse(S >= FT(0), pos_limited, neg_limited)
+
+    # Ensure bounds are non-negative
+    tend_bound_pos = max(zero(tend_bound_pos), tend_bound_pos)
+    tend_bound_neg = max(zero(tend_bound_neg), tend_bound_neg)
+
+    # Positive tendency (source): limit by tend_bound
+    limited_pos = smooth_min_limiter(tendency, tend_bound_pos)
+
+    # Negative tendency (sink): limit by tend_bound_neg (which becomes a negative limit)
+    limited_neg = -smooth_min_limiter(-tendency, tend_bound_neg)
+
+    # Branchless selection
+    return ifelse(tendency >= zero(tendency), limited_pos, limited_neg)
 end
 
 """
-    coupled_sink_limit_factor(Sq, Sn, q, n, dt, n_sinks=3)
+    coupled_sink_limit_factor(S1, S2, q1, q2, dt, n=3)
 
-Compute a single limiting factor for coupled mass/number tendencies.
+Compute a uniform scaling factor for two coupled sink tendencies.
 
-Uses the MORE restrictive limit to preserve the mass/number ratio (mean particle size).
-Both mass and number tendencies should be multiplied by this factor.
+For processes where two species are simultaneously depleted (e.g., autoconversion
+depletes both cloud liquid and number), compute a single scaling factor based on
+the most restrictive constraint.
 
 # Arguments
-- `Sq`: Mass tendency [kg/kg/s]
-- `Sn`: Number tendency [1/kg/s]
-- `q`: Available mass [kg/kg]
-- `n`: Available number [1/kg]
+- `S1`, `S2`: Raw sink tendencies (must be ≤ 0) [kg/kg/s or #/kg/s]
+- `q1`, `q2`: Available quantities [kg/kg or #/kg]
 - `dt`: Timestep [s]
-- `n_sinks`: Number of competing sink processes (default: 3)
+- `n`: Number of competing sinks (default: 3)
 
 # Returns
-Limiting factor `f ∈ [0, 1]` to multiply both tendencies by.
-Returns 1 (no limiting) if both tendencies are sources (≥ 0).
+Scaling factor `f ∈ [0, 1]` such that:
+- `|S1 * f| ≤ q1/(dt*n)` and `|S2 * f| ≤ q2/(dt*n)`
+- `f = min(M1/|S1|, M2/|S2|)` when both are sinks
+- `f = 1` if either tendency is not a sink
+
+# Example
+```julia
+# Autoconversion depletes both q_liq and n_liq
+f = coupled_sink_limit_factor(
+    dq_liq_auto, dn_liq_auto, q_liq, n_liq, dt,
+)
+dq_liq_auto *= f
+dn_liq_auto *= f
+```
 """
-@inline function coupled_sink_limit_factor(Sq, Sn, q, n, dt, n_sinks = 3)
-    FT = eltype(Sq)
+@inline function coupled_sink_limit_factor(S1, S2, q1, q2, dt, n = 3)
+    M1 = limit(q1, dt, n)
+    M2 = limit(q2, dt, n)
 
-    # Both sources → no limiting needed
-    if Sq >= FT(0) && Sn >= FT(0)
-        return FT(1)
-    end
+    # Compute individual scaling factors (only for sinks)
+    f1 = ifelse(S1 < zero(S1) && -S1 > M1, M1 / (-S1), one(S1))
+    f2 = ifelse(S2 < zero(S2) && -S2 > M2, M2 / (-S2), one(S2))
 
-    # Compute bounds for each quantity
-    bound_q = limit(q, dt, n_sinks)
-    bound_n = limit(n, dt, n_sinks)
-
-    # Compute limiting factors: how much must we scale to stay within bounds?
-    # Only compute for sinks (negative tendencies)
-    f_q = ifelse(Sq < FT(0) && -Sq > bound_q, bound_q / -Sq, FT(1))
-    f_n = ifelse(Sn < FT(0) && -Sn > bound_n, bound_n / -Sn, FT(1))
-
-    # Use the more restrictive factor to preserve mass/number ratio
-    return min(f_q, f_n)
+    # Take most restrictive
+    return min(f1, f2)
 end
-
 
 """
     limit_sink(S, q, dt, n=3)
 
-Limit a sink tendency to prevent overdrawing the source quantity.
+Limit a sink tendency to prevent species depletion using smooth limiting.
 
-Only limits negative tendencies (sinks); positive tendencies (sources) pass through.
-Uses `smooth_min_limiter` for C∞ differentiability.
+Only applies limiting when `S < 0` (sink). Source tendencies (`S ≥ 0`) pass through unchanged.
 
 # Arguments
-- `S`: Tendency [kg/kg/s or similar], negative for sinks
-- `q`: Available source quantity [kg/kg or similar]
+- `S`: Raw tendency (source or sink) [kg/kg/s]
+- `q`: Available quantity [kg/kg]
 - `dt`: Timestep [s]
-- `n`: Number of competing sink processes (default: 3)
+- `n`: Number of competing sinks (default: 3)
 
 # Returns
-Limited tendency with same sign as input, magnitude bounded by `q / (dt × n)`.
+Limited tendency:
+- If `S < 0`: `-smooth_min_limiter(-S, limit(q, dt, n))`
+- If `S ≥ 0`: `S` (unchanged)
 
 # Example
 ```julia
-# Limit ice depletion tendency
-Sqᵢᵐ_lim = limit_sink(Sqᵢᵐ, q_ice, dt)
+# Limit rain evaporation to available rain
+S_evap_limited = limit_sink(S_evap, q_rain, dt, 3)
 ```
 """
 @inline function limit_sink(S, q, dt, n = 3)
-    FT = eltype(S)
     return ifelse(
-        S < FT(0),
+        S < zero(S),
         -smooth_min_limiter(-S, limit(q, dt, n)),
         S,
+    )
+end
+
+"""
+    sink_scale_factor(S, q, dt, n)
+
+Compute a uniform scaling factor for sink tendencies.
+
+Returns a factor `f ∈ [0, 1]` such that `S * f` will not deplete `q`
+faster than `q / (dt × n)`.
+
+For sources (S ≥ 0), returns 1 (no limiting).
+For sinks (S < 0) that exceed the bound, returns `bound / |S|`.
+"""
+@inline function sink_scale_factor(S, q, dt, n)
+    bound = limit(q, dt, n)
+    return ifelse(S < zero(S) && -S > bound, bound / (-S), one(S))
+end
+
+"""
+    apply_1m_tendency_limits(mp_result, tps, q_tot, q_liq, q_ice, q_rai, q_sno, dt)
+
+Apply physical limiting to 1M microphysics tendencies.
+
+Two layers of limiting are applied:
+1. **Uniform sink limiting**: Computes a single scale factor from all 4 species via
+   `sink_scale_factor()` with `n=20`, applied uniformly to preserve mass coupling.
+2. **Temperature rate limiting**: Caps each species' individual contribution to temperature
+   change at 2 K per timestep to prevent numerical instabilities.
+
+# Arguments
+- `mp_result`: NamedTuple from BMT with raw tendencies
+- `tps`: Thermodynamic parameters (for `L_v`, `L_s`, `c_p`)
+- `q_tot`: Total water specific humidity [kg/kg]
+- `q_liq`: Cloud liquid [kg/kg]
+- `q_ice`: Cloud ice [kg/kg]
+- `q_rai`: Rain [kg/kg]
+- `q_sno`: Snow [kg/kg]
+- `dt`: Timestep [s]
+
+# Returns
+NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt)`
+"""
+@inline function apply_1m_tendency_limits(
+    mp_result,
+    tps,
+    q_tot,
+    q_liq,
+    q_ice,
+    q_rai,
+    q_sno,
+    dt,
+)
+    dq_lcl_dt = mp_result.dq_lcl_dt
+    dq_icl_dt = mp_result.dq_icl_dt
+    dq_rai_dt = mp_result.dq_rai_dt
+    dq_sno_dt = mp_result.dq_sno_dt
+
+    # Uniform sink limiting: couple all 4 species with a single scale factor.
+    # This preserves mass balance across ALL microphysics pathways, including
+    # cross-phase transfers (e.g., WBF: q_liq→q_ice, melting: q_sno→q_rai).
+    # Tested alternatives (paired, selective, individual) all degrade conservation.
+    n_sink = 20
+
+    f_sink = min(
+        sink_scale_factor(dq_lcl_dt, q_liq, dt, n_sink),
+        sink_scale_factor(dq_icl_dt, q_ice, dt, n_sink),
+        sink_scale_factor(dq_rai_dt, q_rai, dt, n_sink),
+        sink_scale_factor(dq_sno_dt, q_sno, dt, n_sink),
+    )
+
+    dq_lcl_dt *= f_sink
+    dq_icl_dt *= f_sink
+    dq_rai_dt *= f_sink
+    dq_sno_dt *= f_sink
+
+    # Express condensate tendencies as equivalent temperature tendencies
+    Lv_over_cp = TD.Parameters.LH_v0(tps) / TD.Parameters.cp_d(tps)
+    Ls_over_cp = TD.Parameters.LH_s0(tps) / TD.Parameters.cp_d(tps)
+
+    # Temperature change limit per timestep
+    dT_dt_max = oftype(q_tot, 2) / dt
+
+    # Temperature-based limiting
+    f_lcl = min(one(q_tot), dT_dt_max / max(abs(Lv_over_cp * dq_lcl_dt), eps(q_tot)))
+    f_icl = min(one(q_tot), dT_dt_max / max(abs(Ls_over_cp * dq_icl_dt), eps(q_tot)))
+    f_rai = min(one(q_tot), dT_dt_max / max(abs(Lv_over_cp * dq_rai_dt), eps(q_tot)))
+    f_sno = min(one(q_tot), dT_dt_max / max(abs(Ls_over_cp * dq_sno_dt), eps(q_tot)))
+
+    dq_lcl_dt *= f_lcl
+    dq_icl_dt *= f_icl
+    dq_rai_dt *= f_rai
+    dq_sno_dt *= f_sno
+
+    return (
+        dq_lcl_dt = dq_lcl_dt,
+        dq_icl_dt = dq_icl_dt,
+        dq_rai_dt = dq_rai_dt,
+        dq_sno_dt = dq_sno_dt,
     )
 end

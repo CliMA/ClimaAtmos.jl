@@ -69,8 +69,8 @@ autoconversion, accretion, and precipitation) in a single call.
 Modifies `Sqₗᵐ`, `Sqᵢᵐ`, `Sqᵣᵐ`, `Sqₛᵐ` in-place with limited tendencies.
 
 # Note
-Tendencies are limited using `limit_sink` to prevent unphysical
-depletion of hydrometeor categories.
+Tendencies are limited to prevent unphysically large
+tendencies.
 
 `mp_result` is a pre-allocated scratch field of matching NamedTuple type,
 used to avoid allocations from the BMT return value.
@@ -114,62 +114,6 @@ function compute_1m_precipitation_tendencies!(
     @. Sqᵢᵐ = mp_result.dq_icl_dt
     @. Sqᵣᵐ = mp_result.dq_rai_dt
     @. Sqₛᵐ = mp_result.dq_sno_dt
-end
-
-"""
-    apply_1m_tendency_limits(mp_result, tps, q_tot, q_liq, q_ice, q_rai, q_sno, dt)
-
-Apply physical limiting to 1M microphysics tendencies.
-
-Two layers of limiting are applied:
-1. **Mass conservation**: prevents unphysical depletion of each species beyond
-   available sources (via `smooth_tendency_limiter`).
-2. **Temperature rate**: caps the implied temperature tendency from latent heat
-   release/absorption at 5 K per timestep. The implied temperature rate is
-   `dT/dt = (L_v/c_p) dq_lcl/dt + (L_s/c_p) dq_icl/dt`; if `|dT/dt * dt| > 2 K`,
-   condensate tendencies are uniformly scaled down.
-
-# Arguments
-- `mp_result`: NamedTuple from BMT with raw tendencies
-- `tps`: Thermodynamic parameters (for `L_v`, `L_s`, `c_p`)
-- `q_tot`: Total water specific humidity [kg/kg]
-- `q_liq`: Cloud liquid [kg/kg]
-- `q_ice`: Cloud ice [kg/kg]
-- `q_rai`: Rain [kg/kg]
-- `q_sno`: Snow [kg/kg]
-- `dt`: Timestep [s]
-
-# Returns
-NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt)`
-"""
-@inline function apply_1m_tendency_limits(mp_result, tps, q_tot, q_liq, q_ice, q_rai, q_sno, dt)
-    FT = typeof(q_tot)
-    q_vap = q_tot - q_liq - q_ice - q_rai - q_sno
-
-    # Mass-conservation limits
-    dq_lcl_dt = smooth_tendency_limiter(mp_result.dq_lcl_dt, q_vap + q_ice, q_liq, dt)
-    dq_icl_dt = smooth_tendency_limiter(mp_result.dq_icl_dt, q_vap + q_liq, q_ice, dt)
-    dq_rai_dt = smooth_tendency_limiter(mp_result.dq_rai_dt, q_liq + q_sno, q_rai, dt)
-    dq_sno_dt = smooth_tendency_limiter(mp_result.dq_sno_dt, q_ice + q_rai, q_sno, dt)
-
-    # Temperature-rate limiter:
-    # Phase changes imply temperature tendencies via latent heat release/absorption
-    Lv_over_cp = TD.Parameters.LH_v0(tps) / TD.Parameters.cp_d(tps)
-    Ls_over_cp = TD.Parameters.LH_s0(tps) / TD.Parameters.cp_d(tps)
-
-    # max 5 K temperature change per timestep
-    # TODO: Arbitrary limit; remove when microphysics is implicitly handled
-    dT_dt_max = FT(5) / dt
-
-    dT_dt = Lv_over_cp * dq_lcl_dt + Ls_over_cp * dq_icl_dt
-    scale = min(FT(1), dT_dt_max / max(abs(dT_dt), eps(FT)))
-
-    return (
-        dq_lcl_dt = dq_lcl_dt * scale,
-        dq_icl_dt = dq_icl_dt * scale,
-        dq_rai_dt = dq_rai_dt,
-        dq_sno_dt = dq_sno_dt,
-    )
 end
 
 """
@@ -237,12 +181,16 @@ function compute_2m_precipitation_tendencies!(
     )
 
     # Apply coupled limiting directly
-    f_liq = @. lazy(coupled_sink_limit_factor(
-        mp_result.dq_lcl_dt, mp_result.dn_lcl_dt, qₗ, nₗ, dt,
-    ))
-    f_rai = @. lazy(coupled_sink_limit_factor(
-        mp_result.dq_rai_dt, mp_result.dn_rai_dt, qᵣ, nᵣ, dt,
-    ))
+    f_liq = @. lazy(
+        coupled_sink_limit_factor(
+            mp_result.dq_lcl_dt, mp_result.dn_lcl_dt, qₗ, nₗ, dt,
+        ),
+    )
+    f_rai = @. lazy(
+        coupled_sink_limit_factor(
+            mp_result.dq_rai_dt, mp_result.dn_rai_dt, qᵣ, nᵣ, dt,
+        ),
+    )
     @. Sqₗᵐ = mp_result.dq_lcl_dt * f_liq
     @. Snₗᵐ = mp_result.dn_lcl_dt * f_liq
     @. Sqᵣᵐ = mp_result.dq_rai_dt * f_rai
