@@ -928,7 +928,7 @@ function compute_ogw_drag(
 
     cg_lat = Fields.level(Fields.coordinate_field(Y.f).lat, half)
 
-    if topography == Val(:Earth)
+    if topography == Val(:Earth) || topography == Val(:NoWarp)
         #### To-dos:
         # 1. load orography on lat-lon grid and subtract from z_surface
         # 2. use clima grid info, e.g., grid area

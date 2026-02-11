@@ -2181,9 +2181,9 @@ if should_run(:figure7)
     ylims!(ax, 0, 40)
     axislegend(ax, position = :rt)
 
-    save("garner2005_reproduction/fig7_wind_profile_debug.png", fig_debug)
+    save(joinpath(output_dir, "fig7_wind_profile_debug.png"), fig_debug)
     println(
-        "\n  Saved wind profile debug plot: garner2005_reproduction/fig7_wind_profile_debug.png",
+        "\n  Saved wind profile debug plot: $(joinpath(output_dir, "fig7_wind_profile_debug.png"))",
     )
     # =========================================================================
 
