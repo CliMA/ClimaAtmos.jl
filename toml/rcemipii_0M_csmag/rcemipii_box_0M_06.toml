@@ -57,7 +57,7 @@ value = 30000
 # Diffusion coefficients
 
 [c_smag]
-value = 0.2
+value = 0.6
 
 [D_0_diffusion]
 value = 5
@@ -66,12 +66,6 @@ value = 5
 value = 800
 
 # Microphysics
-
-[condensation_evaporation_timescale]
-value = 50
-
-[sublimation_deposition_timescale]
-value = 50
 
 [precipitation_timescale]
 value = 600
