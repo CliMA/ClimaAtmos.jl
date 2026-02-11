@@ -500,13 +500,15 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix()
 
+    # Cache geometry-scaled density to reduce LocalGeometry field loads
+    ᶜρJ = @. ᶜρ * ᶜJ
     @. ᶜadvection_matrix =
-        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
+        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρJ) / ᶠJ)
 
     if use_derivative(topography_flag)
         ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
         @. ∂ᶜρ_err_∂ᶜuₕ =
-            dtγ * ᶜadvection_matrix ⋅ ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅
+            dtγ * ᶜadvection_matrix ⋅ ᶠwinterp_matrix(ᶜρJ) ⋅
             DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
     end
     ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
@@ -536,7 +538,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ᶜθ_v = p.scratch.ᶜtemp_scalar_3
     @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
-    # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration: 
+    # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration:
     #              grad(p) / ρ + grad(Φ)  =  cp_d * θ_v * grad(Π) + grad(Φ).
     # Here below, we use the old formulation of (grad(Φ) + grad(p) / ρ).
     # This is because the new formulation would require computing the derivative of θ_v.
@@ -1480,15 +1482,23 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
                     ᶠu³⁰_data = ᶠu³⁰.components.data.:1
 
+                    # Cache geometry-aware density and interpolated weighting factor
+                    # to reduce LocalGeometry field bandwidth: avoids repeated loads of ᶜJ and ᶠJ
+                    ᶜρ⁰J = @. ᶜρ⁰ * ᶜJ
+                    ᶠweighting = @. ᶠinterp(ᶜρ⁰J) / ᶠJ
+
+                    # Cache expensive operator computations that don't depend on tracer
                     # pull common subexpressions that don't depend on which
                     # tracer out of the tracer loop for performance
+                    ᶠupwind_bcs = @. ᶠset_tracer_upwind_matrix_bcs(
+                        ᶠtracer_upwind_matrix(ᶠu³⁰),
+                    )
+
                     @. ᶜtracer_advection_matrix =
                         -(ᶜadvdivᵥ_matrix()) ⋅
-                        DiagonalMatrixRow(ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ)
+                        DiagonalMatrixRow(ᶠweighting)
                     @. ᶜtridiagonal_matrix =
-                        ᶜtracer_advection_matrix ⋅ ᶠset_tracer_upwind_matrix_bcs(
-                            ᶠtracer_upwind_matrix(ᶠu³⁰),
-                        )
+                        ᶜtracer_advection_matrix ⋅ ᶠupwind_bcs
                     MatrixFields.unrolled_foreach(
                         microphysics_tracers,
                     ) do (ρχ_name, χʲ_name, χ_name)
