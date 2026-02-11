@@ -1079,7 +1079,7 @@ function set_precipitation_surface_fluxes!(
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency) = p.conservation_check
-    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ) = p.precomputed
+    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     sfc_J = Fields.level(ᶠJ, Fields.half)
@@ -1115,6 +1115,10 @@ function set_precipitation_surface_fluxes!(
     sfc_wₛ = Fields.Field(Fields.field_values(Fields.level(ᶜwₛ, 1)), sfc_space)
     sfc_wₗ = Fields.Field(Fields.field_values(Fields.level(ᶜwₗ, 1)), sfc_space)
     sfc_wᵢ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵢ, 1)), sfc_space)
+    sfc_wₜqₜ = Fields.Field(
+        Fields.field_values(Fields.level(ᶜwₜqₜ.components.data.:1, 1)),
+        sfc_space,
+    )
     sfc_wₕhₜ = Fields.Field(
         Fields.field_values(Fields.level(ᶜwₕhₜ.components.data.:1, 1)),
         sfc_space,
@@ -1122,6 +1126,8 @@ function set_precipitation_surface_fluxes!(
 
     @. surface_rain_flux = sfc_ρ * (sfc_qᵣ * (-sfc_wᵣ) + sfc_qₗ * (-sfc_wₗ))
     @. surface_snow_flux = sfc_ρ * (sfc_qₛ * (-sfc_wₛ) + sfc_qᵢ * (-sfc_wᵢ))
+    # @. surface_rain_flux = sfc_ρ * (-sfc_wₜqₜ)
+    # @. surface_snow_flux = 0
     @. col_integrated_precip_energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
 
     return nothing

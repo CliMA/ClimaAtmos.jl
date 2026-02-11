@@ -300,6 +300,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         p.atmos.turbconv_model,
     )
 
+    vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
+
     # TODO: make bycolumn-able
     non_orographic_gravity_wave_tendency!(
         Yₜ,

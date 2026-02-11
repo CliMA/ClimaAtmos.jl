@@ -76,6 +76,12 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         )
     end
 
+    # (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
+
+    # @. Yₜ.c.ρ -= ᶜprecipdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(-(ᶜwₜqₜ)))
+    # @. Yₜ.c.ρe_tot -= ᶜprecipdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(-(ᶜwₕhₜ)))
+    # @. Yₜ.c.ρq_tot -= ᶜprecipdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(-(ᶜwₜqₜ)))
+
     # For prognostic edmf, augment the energy tendencies with the additional energy contributions
     # so that the total-grid energy flux remains consistent. Specifically, we enforce that the 
     # grid-mean energy flux equals the sum of the subdomain (updraft/environment) energy fluxes 

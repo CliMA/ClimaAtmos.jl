@@ -647,9 +647,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             if ρχₚ_name in
                (@name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_rai), @name(c.ρq_sno))
                 ∂ᶜρq_tot_err_∂ᶜρq = matrix[@name(c.ρq_tot), ρχₚ_name]
-                @. ∂ᶜρq_tot_err_∂ᶜρq =
-                    p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
-                    p.scratch.ᶠband_matrix_wvec
+                # @. ∂ᶜρq_tot_err_∂ᶜρq =
+                #     p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
+                #     p.scratch.ᶠband_matrix_wvec
+                @. ∂ᶜρq_tot_err_∂ᶜρq = zero(typeof(∂ᶜρq_tot_err_∂ᶜρq))
 
                 ∂ᶜρe_tot_err_∂ᶜρq = matrix[@name(c.ρe_tot), ρχₚ_name]
                 e_int_func = internal_energy_func(ρχₚ_name)
