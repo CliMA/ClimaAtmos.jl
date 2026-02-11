@@ -334,7 +334,7 @@ netcdf_interpolation_num_points:
   value: ~
 netcdf_horizontal_method:
   help: "Horizontal interpolation method for NetCDF remapping to lat/lon (or other) grids. Options: `spectral` (default) or `bilinear`."
-  value: "spectral"
+  value: "bilinear"
 check_nan_every:
   help: "Check if the state contains NaNs every this number of iterations"
   value: 1024
