@@ -1,0 +1,91 @@
+reference_job_id: les_box  # for plotting
+surface_setup: DefaultMoninObukhov
+surface_temperature: RCEMIPII
+insolation: rcemipii
+initial_condition: RCEMIPIIProfile_300
+config: box
+rad: allskywithclear
+approximate_linear_solve_iters: 2  # only valid when implicit_diffusion=true
+rayleigh_sponge: true  # set sponge level in toml file
+
+# Diffusion
+hyperdiff: "false"
+implicit_diffusion: false
+smagorinsky_lilly: "UV_W"  # horizontal + vertical
+# smagorinsky_lilly: "UV"  # horizontal
+# vert_diff: "DecayWithHeightDiffusion"  # vertical
+# implicit_diffusion: true
+
+# Upwinding mode
+tracer_upwinding: vanleer_limiter  # is default (alt: `first_order`)
+energy_q_tot_upwinding: vanleer_limiter  # is default (alt: `first_order`)
+
+reproducibility_test: true
+
+# microphysics
+### !! 1M and 2M !!
+cloud_model: grid_scale   # Ultimately wanted when `moist: nonequil`
+moist: nonequil
+precip_model: 1M
+### spatial discretization ###
+x_max: 96000.0  # 96km
+y_max: 96000.0  # 96km
+# x_max: 6000000.0  # 6000km
+# y_max: 400000.0  # 400km
+z_max: 30000.0  # 30km
+nh_poly: 3  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
+# z_elem: 43  # Note: Set sponge height (`zd_viscous`) in toml file to cover top ~5 points
+z_elem: 86
+dz_bottom: 30.0
+
+#~8km grid
+# x_elem: 4
+# y_elem: 4
+# dt: 10secs
+# ~4km grid
+x_elem: 8
+y_elem: 8
+dt: 5secs
+# ~2km grid
+# x_elem: 16
+# y_elem: 16
+# dt: 2secs
+# ~1km grid
+# x_elem: 32
+# y_elem: 32
+# dt: 1secs
+
+t_end: 21days
+
+## >> During debugging, reduce these as appropriate
+dt_save_state_to_disk: 1days
+dt_rad: 1hours  # same as `dt_save_state_to_disk` for reproducibility
+check_nan_every: 1024  # for debugging: set to check NaNs every `n` iterations
+log_to_file: true
+## <<
+
+toml: [toml/rcemipii_box.toml]
+
+# enable_diagnostics: false
+output_default_diagnostics: false  # adds various 1h diagnostics. Only use if `dt_save_state_to_disk` is a multiple of 1hr
+diagnostics:
+  - short_name: [
+      wa, ua, va, ta, thetaa, ha, # dynamics & thermodynamics
+      hus, hur, cl, clw, cli,  # liquid
+      pr,  # precipitation
+      ke,  # kinetic energy for spectrum
+      # Smagorinsky diagnostics
+      Dh_smag, strainh_smag,  # horizontal
+      Dv_smag, strainv_smag  # vertical
+      # DecayWithHeight diffusion coefficient
+      # edt
+    ]
+    # period: 10mins
+    period: 1hours
+  ## 1M microphsics
+  - short_name: [husra, hussn]
+    # period: 10mins
+    period: 1hours
+  # 2M microphysics
+  # - short_name: [cdnc, ncra]
+  #   period: 10mins
