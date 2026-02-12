@@ -171,44 +171,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
 end
 
 """
-    set_prognostic_edmf_precomputed_quantities_implicit_closures!(Y, p, t)
-
-Updates the precomputed quantities stored in `p` for edmfx implicit closures.
-"""
-NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_implicit_closures!(
-    Y,
-    p,
-    t,
-)
-
-    (; turbconv_model) = p.atmos
-
-    (; params) = p
-    n = n_mass_flux_subdomains(turbconv_model)
-
-    (; ᶠu₃⁰, ᶠnh_pressure₃_dragʲs) = p.precomputed
-    ᶠlg = Fields.local_geometry_field(Y.f)
-
-    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-    # nonhydrostatic pressure closure drag term
-    for j in 1:n
-        if p.atmos.edmfx_model.nh_pressure isa Val{true}
-            @. ᶠnh_pressure₃_dragʲs.:($$j) = ᶠupdraft_nh_pressure_drag(
-                params,
-                ᶠlg,
-                Y.f.sgsʲs.:($$j).u₃,
-                ᶠu₃⁰,
-                scale_height,
-            )
-        else
-            @. ᶠnh_pressure₃_dragʲs.:($$j) = C3(0)
-        end
-    end
-
-    return nothing
-end
-
-"""
     set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
 
 Updates the precomputed quantities stored in `p` for edmfx explicit closures.
