@@ -222,7 +222,8 @@ function precomputed_quantities(Y, atmos)
         precipitation_quantities = (;)
     end
     precipitation_sgs_quantities =
-        atmos.microphysics_model isa Microphysics0Moment ?
+        atmos.microphysics_model isa
+        Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}} ?
         (; ᶜSqₜᵐʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵐ⁰ = similar(Y.c, FT)) :
         atmos.microphysics_model isa
         Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}} ?
