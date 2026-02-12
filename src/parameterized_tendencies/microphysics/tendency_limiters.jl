@@ -235,7 +235,7 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
 
     # Mass-conservation limits using cross-species source pools
     n_sink = 5
-    n_source = 20
+    n_source = 30
     dq_lcl_dt = smooth_tendency_limiter(
         mp_tendency.dq_lcl_dt,
         limit(q_vap + q_ice, dt, n_source),
