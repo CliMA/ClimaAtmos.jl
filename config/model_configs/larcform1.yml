@@ -1,6 +1,6 @@
 initial_condition: "Larcform1"
 surface_setup: DefaultMoninObukhov  #"Larcform1_test"
-disable_surface_flux_tendency: false # for testing
+disable_surface_flux_tendency: true # for testing
 turbconv: "diagnostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
@@ -23,7 +23,7 @@ z_stretch: true
 x_elem: 1
 y_elem: 1
 dt: 10secs
-dt_rad: 10secs 
+dt_rad: 10mins 
 t_end: 20days # full run length is 20days
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage : true
