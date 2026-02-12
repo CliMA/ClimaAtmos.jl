@@ -7,14 +7,15 @@ turbconv: diagnostic_edmfx
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 prognostic_tke: true
-edmfx_entr_model: "Generalized"
+edmfx_entr_model: "PiGroups"
 edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
+precip_model: 0M
 call_cloud_diagnostics_per_stage: true
-config: box
+config: column
 x_max: 1e8
 y_max: 1e8
 x_elem: 2
@@ -26,7 +27,7 @@ dt: 100secs
 t_end: 4hours
 dt_save_state_to_disk: 10mins
 toml: [toml/diagnostic_edmfx.toml]
-netcdf_interpolation_num_points: [8, 8, 30]
+netcdf_interpolation_num_points: [2, 2, 30]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
     period: 10mins
