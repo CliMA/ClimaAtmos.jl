@@ -1290,7 +1290,9 @@ function colorbar_for_profiles_in_time!(var;
     N_times = 10, first_time_relative = Dates.Second(0),
     orientation = :vertical,
 )
-    all_ts = var.dims["time"]
+    # all_ts = var.dims["time"]
+    Δt = Int(var.dims["time"][2] - var.dims["time"][1])  # time step
+    all_ts = range(Int(var.dims["time"][1]), length = length(var.dims["time"]), step = Δt)  # hack to get accurate times in seconds
     # Get equispaced periods
     equi_inds, time_unit = get_equispaced_indices(
         all_ts, N_times, var.attributes["start_date"]; first_time_relative
