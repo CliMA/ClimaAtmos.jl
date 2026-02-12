@@ -829,7 +829,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     microphys_0m_params,
                     dt,
                     q_totʲ_prev_level,
-                    q_tot_safeʲ_prev_level,
                     q_liq_raiʲ_prev_level,
                     q_ice_snoʲ_prev_level,
                 )
@@ -1509,7 +1508,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         microphys_0m_params,
         dt,
         ᶜq_tot,
-        ᶜq_tot_safe,
         ᶜq_liq_rai,
         ᶜq_ice_sno,
     )
