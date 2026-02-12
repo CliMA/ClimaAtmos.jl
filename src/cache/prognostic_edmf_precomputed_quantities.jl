@@ -244,7 +244,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜentrʲs,
         ᶜdetrʲs,
         ᶜturb_entrʲs,
-        ᶠnh_pressure₃_buoyʲs,
     ) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     ᶜaʲ_int_val = p.scratch.temp_data_level
@@ -401,15 +400,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         else
             @. detr_int_val = limit_detrainment(detr_int_val, entr_int_val, ᶜaʲ_int_val, dt)
         end
-
-        # The buoyancy term in the nonhydrostatic pressure closure is always applied
-        # for prognostic edmf. The tendency is combined with the buoyancy term in the
-        # updraft momentum equation in `edmfx_sgs_vertical_advection_tendency!`. This
-        # term is still calculated here as it is used explicitly in the TKE equation.
-        @. ᶠnh_pressure₃_buoyʲs.:($$j) = ᶠupdraft_nh_pressure_buoyancy(
-            params,
-            buoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
-        )
     end
 
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, cloud_diagnostics_tuple) =
