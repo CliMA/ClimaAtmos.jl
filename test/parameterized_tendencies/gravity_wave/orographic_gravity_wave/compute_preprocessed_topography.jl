@@ -69,8 +69,9 @@ else
     topo_cg = CA.compute_OGW_info(
         Y, elevation_data, earth_radius, γ, h_frac;
         skip_pt = 4,
-        n_smoothing_cells_hpoz = 4.0,
-        n_smoothing_cells_chi = 4.0,
+        n_smoothing_cells_hpoz = 12.0,
+        smoothing_length_scale_chi = 100e3,
+        smoothing_length_scale_elev = 50e3,
     )
 end
 
