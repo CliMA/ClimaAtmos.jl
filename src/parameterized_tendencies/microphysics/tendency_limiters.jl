@@ -36,14 +36,18 @@ end
 
 Smooth approximation to `min(tendency, tendency_bound)` for GPU-friendly limiting.
 
+Requires both inputs to be `≥ 0`. The result is clamped to `≥ 0` to preserve the
+invariant that `min(S, B) ≥ 0` when both inputs are non-negative (the smooth formula
+can undershoot by `ε/2` near zero).
+
 Uses a differentiable formula that approaches `min(S, B)` as `sharpness → 0`:
 ```math
 \\frac{S + B - \\sqrt{(S - B)^2 + ε^2}}{2}
 ```
 
 # Arguments
-- `tendency`: The raw tendency (source/sink term) [kg/kg/s]
-- `tendency_bound`: Maximum allowed tendency [same units]
+- `tendency`: The raw tendency (`≥ 0`) [kg/kg/s]
+- `tendency_bound`: Maximum allowed tendency (`≥ 0`) [same units]
 - `sharpness`: Smoothness parameter (default: 1e-10). Smaller = sharper transition.
 
 # Example
@@ -55,15 +59,16 @@ S_limited = smooth_min_limiter(S_accr, limit(q_liq, dt, 3))
 
 See also: [`smooth_tendency_limiter`](@ref)
 """
-@inline function smooth_min_limiter(tendency, tendency_bound, sharpness = 1e-8)
+@inline function smooth_min_limiter(tendency, tendency_bound, sharpness = 1e-10)
     ε = oftype(tendency, sharpness)
 
     # Smooth minimum formula: approaches min(S, B) as ε → 0
-    # When S = B: output = B - ε/2 ≈ B 
+    # When S = B: output = B - ε/2 ≈ B
     S = tendency
     B = tendency_bound
 
-    return (S + B - sqrt((S - B)^2 + ε^2)) / 2
+    # Clamp ≥ 0: the ε² term can cause undershoot of ~ε/2 when S ≈ B ≈ 0
+    return max((S + B - sqrt((S - B)^2 + ε^2)) / 2, zero(S))
 end
 
 """
@@ -102,10 +107,10 @@ S_limited = smooth_tendency_limiter(
     tend_bound_pos = max(zero(tend_bound_pos), tend_bound_pos)
     tend_bound_neg = max(zero(tend_bound_neg), tend_bound_neg)
 
-    # Positive tendency (source): limit by tend_bound
+    # Positive tendency (source): limit by tend_bound_pos
     limited_pos = smooth_min_limiter(tendency, tend_bound_pos)
 
-    # Negative tendency (sink): limit by tend_bound_neg (which becomes a negative limit)
+    # Negative tendency (sink): limit by tend_bound_neg
     limited_neg = -smooth_min_limiter(-tendency, tend_bound_neg)
 
     # Branchless selection
@@ -234,7 +239,7 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
     q_vap = q_tot - q_liq - q_ice - q_rai - q_sno
 
     # Mass-conservation limits using cross-species source pools
-    n_sink = 10
+    n_sink = 5
     n_source = 30
     dq_lcl_dt = smooth_tendency_limiter(
         mp_tendency.dq_lcl_dt,

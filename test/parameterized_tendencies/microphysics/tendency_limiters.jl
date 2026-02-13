@@ -248,15 +248,15 @@ import ClimaAtmos:
         dt = FT(600)  # 10 minute timestep
 
         @testset "no limiting when tendencies are small" begin
-            # Very small tendencies relative to large species pools
+            # Small tendencies relative to large species pools
             # → smooth limiter barely touches them.
             # n_sink=5 budget for q=0.01 is 0.01/(600*5) = 3.3e-6
-            # Tendencies ~1e-10 are ~30000× below budget.
+            # Tendencies ~1e-7 are ~33× below budget.
             mp_tendency = (
-                dq_lcl_dt = FT(1e-10),
-                dq_icl_dt = FT(-5e-11),
-                dq_rai_dt = FT(-3e-11),
-                dq_sno_dt = FT(-2e-11),
+                dq_lcl_dt = FT(1e-7),
+                dq_icl_dt = FT(-5e-8),
+                dq_rai_dt = FT(-3e-8),
+                dq_sno_dt = FT(-2e-8),
             )
             q_liq = FT(0.01)
             q_ice = FT(0.01)
@@ -277,11 +277,11 @@ import ClimaAtmos:
 
             # Should pass through nearly unchanged.
             # The smooth limiter introduces O(ε²/S) corrections,
-            # so we allow up to 20% deviation for these tiny tendencies.
-            @test limited.dq_lcl_dt ≈ mp_tendency.dq_lcl_dt rtol = 0.2
-            @test limited.dq_icl_dt ≈ mp_tendency.dq_icl_dt rtol = 0.2
-            @test limited.dq_rai_dt ≈ mp_tendency.dq_rai_dt rtol = 0.3
-            @test limited.dq_sno_dt ≈ mp_tendency.dq_sno_dt rtol = 0.5
+            # so we allow small relative deviation.
+            @test limited.dq_lcl_dt ≈ mp_tendency.dq_lcl_dt rtol = 0.05
+            @test limited.dq_icl_dt ≈ mp_tendency.dq_icl_dt rtol = 0.05
+            @test limited.dq_rai_dt ≈ mp_tendency.dq_rai_dt rtol = 0.05
+            @test limited.dq_sno_dt ≈ mp_tendency.dq_sno_dt rtol = 0.05
         end
 
         @testset "per-species sink limiting prevents depletion" begin
