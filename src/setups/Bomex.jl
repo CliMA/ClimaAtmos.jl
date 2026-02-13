@@ -6,8 +6,18 @@ balanced pressure profile. Profiles are sourced from AtmosphericProfilesLibrary.
 
 The `profiles` field stores precomputed atmospheric profile functions (computed
 at construction time before broadcasting).
+
+## Example
+```julia
+import Thermodynamics as TD
+import ClimaParams as CP
+FT = Float64
+toml_dict = CP.create_toml_dict(FT)
+thermo_params = TD.Parameters.ThermodynamicsParameters(toml_dict)
+setup = Bomex(; prognostic_tke = true, thermo_params)
+```
 """
-struct Bomex{P} <: AbstractSetup
+struct Bomex{P}
     prognostic_tke::Bool
     profiles::P
 end
@@ -15,10 +25,12 @@ Bomex(; prognostic_tke, thermo_params) =
     Bomex(prognostic_tke, bomex_profiles(thermo_params))
 
 """
-    bomex_profiles(params)
+    bomex_profiles(thermo_params)
 
-Precompute the atmospheric profiles for the Bomex case. Returns a NamedTuple of
-interpolatable profile functions of height `z`.
+Precompute the atmospheric profiles for the Bomex case, given thermodynamic
+parameters `thermo_params`. 
+
+Returns a NamedTuple of interpolatable profile functions of height `z`.
 """
 function bomex_profiles(thermo_params)
     FT = eltype(thermo_params)
@@ -43,10 +55,9 @@ function center_initial_condition(setup::Bomex, local_geometry, params)
     p_val = FT(profiles.p(z))
     T = FT(TD.air_temperature(thermo_params, TD.pθ_li(), p_val, θ_val, q_tot_val))
 
-    velocity = Geometry.UVector(FT(profiles.u(z)))
     tke_val = prognostic_tke ? FT(0) : FT(profiles.tke(z))
 
-    return physical_state(; T, p = p_val, q_tot = q_tot_val, velocity, tke = tke_val)
+    return physical_state(; T, p = p_val, q_tot = q_tot_val, u = FT(profiles.u(z)), tke = tke_val)
 end
 
 function surface_condition(::Bomex, params)
