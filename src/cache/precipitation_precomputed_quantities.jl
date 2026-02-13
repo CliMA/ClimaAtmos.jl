@@ -1050,7 +1050,7 @@ set_precipitation_surface_fluxes!(Y, p, _) = nothing
 function set_precipitation_surface_fluxes!(
     Y,
     p,
-    microphysics_model::Microphysics0Moment,
+    microphysics_model::Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}},
 )
     (; ᶜT) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
@@ -1075,7 +1075,7 @@ end
 function set_precipitation_surface_fluxes!(
     Y,
     p,
-    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}, Microphysics2Moment, QuadratureMicrophysics{<:Microphysics2Moment}},
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency) = p.conservation_check
@@ -1127,7 +1127,7 @@ function set_precipitation_surface_fluxes!(
     return nothing
 end
 
-function set_precipitation_surface_fluxes!(Y, p, ::Microphysics2MomentP3)
+function set_precipitation_surface_fluxes!(Y, p, ::Union{Microphysics2MomentP3, QuadratureMicrophysics{<:Microphysics2MomentP3}})
     set_precipitation_surface_fluxes!(Y, p, Microphysics2Moment())
     # TODO: Figure out what to do for ρn_ice, ρq_rim, ρb_rim
 end
