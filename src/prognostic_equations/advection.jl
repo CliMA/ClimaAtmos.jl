@@ -618,19 +618,13 @@ function updraft_sedimentation!(
     # use output as a scratch field
     ∂a∂z = vtt
     @. ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
-    @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
-    @. p.scratch.ᶠtemp_scalar_3 = ᶠright_bias(-(ᶜw) * ᶜa * ᶜχ)
-    @. p.scratch.ᶠtemp_scalar_2 = ᶠright_bias(-(ᶜw) * ᶜχ)
+    ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
+    ᶠwaχ = @. p.scratch.ᶠtemp_scalar_3 = ᶠright_bias(-(ᶜw) * ᶜa * ᶜχ)
+    ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠright_bias(-(ᶜw) * ᶜχ)
     @. vtt = ifelse(
         ∂a∂z < 0,
-        -(ᶜprecipdivᵥ(
-            p.scratch.ᶠtemp_scalar * Geometry.WVector(p.scratch.ᶠtemp_scalar_3),
-        )),
-        -(
-            ᶜa * ᶜprecipdivᵥ(
-                p.scratch.ᶠtemp_scalar * Geometry.WVector(p.scratch.ᶠtemp_scalar_2),
-            )
-        ),
+        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ))),
+        -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))),
     )
     return
 end
