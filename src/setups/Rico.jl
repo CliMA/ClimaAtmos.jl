@@ -6,8 +6,18 @@ hydrostatically balanced pressure profile. Profiles are sourced from Atmospheric
 
 The `profiles` field stores precomputed atmospheric profile functions (computed
 at construction time before broadcasting).
+
+## Example
+```julia
+import Thermodynamics as TD
+import ClimaParams as CP
+FT = Float64
+toml_dict = CP.create_toml_dict(FT)
+thermo_params = TD.Parameters.ThermodynamicsParameters(toml_dict)
+setup = Rico(; prognostic_tke = true, thermo_params)
+```
 """
-struct Rico{P} <: AbstractSetup
+struct Rico{P}
     prognostic_tke::Bool
     profiles::P
 end
@@ -44,10 +54,13 @@ function center_initial_condition(setup::Rico, local_geometry, params)
     p_val = FT(profiles.p(z))
     T = FT(TD.air_temperature(thermo_params, TD.pθ_li(), p_val, θ_val, q_tot_val))
 
-    velocity = Geometry.UVVector(FT(profiles.u(z)), FT(profiles.v(z)))
     tke_val = prognostic_tke ? FT(0) : FT(profiles.tke(z))
 
-    return physical_state(; T, p = p_val, q_tot = q_tot_val, velocity, tke = tke_val)
+    return physical_state(;
+        T, p = p_val, q_tot = q_tot_val,
+        u = FT(profiles.u(z)), v = FT(profiles.v(z)),
+        tke = tke_val,
+    )
 end
 
 function surface_condition(::Rico, params)

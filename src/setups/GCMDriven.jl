@@ -9,7 +9,7 @@ Surface conditions are read from the same file (mean surface temperature).
 """
 
 """
-    GCMDriven{P} <: AbstractSetup
+    GCMDriven{P, FT}
 
 Pointwise column IC driven by GCM forcing NetCDF data.
 
@@ -18,8 +18,13 @@ Pointwise column IC driven by GCM forcing NetCDF data.
 - `cfsite_number`: Site identifier within the NetCDF file (e.g., `"site23"`).
 - `profiles`: NamedTuple of 1D interpolators `(T, u, v, q_tot, ρ)`.
 - `T_sfc`: Mean surface temperature from the forcing file.
+
+## Example
+```julia
+setup = GCMDriven("path/to/HadGEM2-A_amip.2004-2008.07.nc", "site23")
+```
 """
-struct GCMDriven{P, FT} <: AbstractSetup
+struct GCMDriven{P, FT}
     external_forcing_file::String
     cfsite_number::String
     profiles::P
@@ -63,18 +68,17 @@ function center_initial_condition(setup::GCMDriven, local_geometry, params)
     (; profiles) = setup
     (; z) = local_geometry.coordinates
     FT = typeof(z)
-    thermo_params = CAP.thermodynamics_params(params)
 
     T = FT(profiles.T(z))
     q_tot = FT(profiles.q_tot(z))
     ρ = FT(profiles.ρ(z))
-    p = TD.air_pressure(thermo_params, T, ρ, q_tot, FT(0), FT(0))
 
     return physical_state(;
         T,
-        p,
+        ρ,
         q_tot,
-        velocity = Geometry.UVVector(FT(profiles.u(z)), FT(profiles.v(z))),
+        u = FT(profiles.u(z)),
+        v = FT(profiles.v(z)),
         tke = FT(0),
     )
 end
