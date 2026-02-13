@@ -108,7 +108,7 @@ function tracer_nonnegativity_constraint!(Y, p, t,
     tracer_nonnegativity::TracerNonnegativityConstraint{constrain_qtot},
 ) where {constrain_qtot}
     (; tracer_nonnegativity_limiter) = p.numerics
-    (; ᶜtemp_scalar) = p.scratch
+    (; ᶜtemp_scalar, ᶜtemp_scalar_2) = p.scratch
     ᶜρ = Y.c.ρ
     ᶜρq_tot = Y.c.ρq_tot
 
@@ -124,9 +124,21 @@ function tracer_nonnegativity_constraint!(Y, p, t,
         ᶜρq = MatrixFields.get_field(Y.c, name)
 
         if tracer_nonnegativity isa TracerNonnegativityElementConstraint
+            if (name == @name(ρq_tot)) && constrain_qtot
+                ᶜtemp_scalar_2 .= ᶜρq
+            end
             ᶜρq_lim = @. ᶜtemp_scalar = max(0, ᶜρq)
             Limiters.compute_bounds!(tracer_nonnegativity_limiter, ᶜρq_lim, ᶜρ)  # bounds are `extrema(ᶜρq_lim) = (0, max(ᶜρq))`
             Limiters.apply_limiter!(ᶜρq, ᶜρ, tracer_nonnegativity_limiter; warn = false)  # ᶜρq is clipped to bounds, effectively ensuring `0 ≤ ᶜρq`
+            if (name == @name(ρq_tot)) && constrain_qtot
+                ᶜΔρq_tot = similar(ᶜρq)
+                ᶜΔρq_tot .= ᶜρq .- ᶜtemp_scalar_2
+                thp = CAP.thermodynamics_params(p.params)
+                ᶜT = p.precomputed.ᶜT
+                ᶜΦ = p.core.ᶜΦ
+                @. Y.c.ρ += ᶜΔρq_tot
+                @. Y.c.ρe_tot += ᶜΔρq_tot * (TD.internal_energy_vapor(thp, ᶜT) + ᶜΦ)
+            end
         elseif tracer_nonnegativity isa TracerNonnegativityVaporConstraint
             # If `ρq` is negative, set it to 0 (as long as `ρq_tot` is positive), otherwise keep it as is
             @. ᶜρq = ifelse(ᶜρq_tot > 0, max(0, ᶜρq), ᶜρq)
