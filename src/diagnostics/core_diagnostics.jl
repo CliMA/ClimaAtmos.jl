@@ -902,9 +902,13 @@ function compute_pr!(
     microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
+        QuadratureMicrophysics{<:Microphysics0Moment},
         Microphysics1Moment,
+        QuadratureMicrophysics{<:Microphysics1Moment},
         Microphysics2Moment,
+        QuadratureMicrophysics{<:Microphysics2Moment},
         Microphysics2MomentP3,
+        QuadratureMicrophysics{<:Microphysics2MomentP3},
     },
 )
     if isnothing(out)
@@ -939,9 +943,13 @@ function compute_prra!(
     microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
+        QuadratureMicrophysics{<:Microphysics0Moment},
         Microphysics1Moment,
+        QuadratureMicrophysics{<:Microphysics1Moment},
         Microphysics2Moment,
+        QuadratureMicrophysics{<:Microphysics2Moment},
         Microphysics2MomentP3,
+        QuadratureMicrophysics{<:Microphysics2MomentP3},
     },
 )
     if isnothing(out)
@@ -973,9 +981,13 @@ function compute_prsn!(
     microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
+        QuadratureMicrophysics{<:Microphysics0Moment},
         Microphysics1Moment,
+        QuadratureMicrophysics{<:Microphysics1Moment},
         Microphysics2Moment,
+        QuadratureMicrophysics{<:Microphysics2Moment},
         Microphysics2MomentP3,
+        QuadratureMicrophysics{<:Microphysics2MomentP3},
     },
 )
     if isnothing(out)
@@ -1008,7 +1020,12 @@ function compute_husra!(
     cache,
     time,
     microphysics_model::Union{
-        Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3,
+        Microphysics1Moment,
+        QuadratureMicrophysics{<:Microphysics1Moment},
+        Microphysics2Moment,
+        QuadratureMicrophysics{<:Microphysics2Moment},
+        Microphysics2MomentP3,
+        QuadratureMicrophysics{<:Microphysics2MomentP3},
     },
 )
     if isnothing(out)
@@ -1041,7 +1058,12 @@ function compute_hussn!(
     cache,
     time,
     microphysics_model::Union{
-        Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3,
+        Microphysics1Moment,
+        QuadratureMicrophysics{<:Microphysics1Moment},
+        Microphysics2Moment,
+        QuadratureMicrophysics{<:Microphysics2Moment},
+        Microphysics2MomentP3,
+        QuadratureMicrophysics{<:Microphysics2MomentP3},
     },
 )
     if isnothing(out)
@@ -1073,7 +1095,12 @@ function compute_cdnc!(
     state,
     cache,
     time,
-    microphysics_model::Union{Microphysics2Moment, Microphysics2MomentP3},
+    microphysics_model::Union{
+        Microphysics2Moment,
+        QuadratureMicrophysics{<:Microphysics2Moment},
+        Microphysics2MomentP3,
+        QuadratureMicrophysics{<:Microphysics2MomentP3},
+    },
 )
     if isnothing(out)
         return state.c.ρn_liq
@@ -1104,7 +1131,12 @@ function compute_ncra!(
     state,
     cache,
     time,
-    microphysics_model::Union{Microphysics2Moment, Microphysics2MomentP3},
+    microphysics_model::Union{
+        Microphysics2Moment,
+        QuadratureMicrophysics{<:Microphysics2Moment},
+        Microphysics2MomentP3,
+        QuadratureMicrophysics{<:Microphysics2MomentP3},
+    },
 )
     if isnothing(out)
         return state.c.ρn_rai

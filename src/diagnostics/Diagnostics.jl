@@ -33,6 +33,7 @@ import ..NonEquilMoistModel
 # microphysics_model
 import ..NoPrecipitation
 import ..Microphysics0Moment
+import ..QuadratureMicrophysics
 import ..Microphysics1Moment
 import ..Microphysics2Moment
 import ..Microphysics2MomentP3
