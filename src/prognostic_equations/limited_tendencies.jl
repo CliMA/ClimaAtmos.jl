@@ -46,8 +46,12 @@ to all tracers for which the limiter is used. The limiter instance is created as
 filter which tracers the limiter is applied to before calling `apply_limiter!` (since `apply_limiter!`
 doesn't support a species keyword argument). If species is `nothing` (default), the limiter is applied
 to all tracers. Otherwise, only tracers matching the specified tuple of names will have the limiter
-applied. The tuple format for the threshold is required by ClimaCore's API (for GPU compatibility),
-but only a single threshold value is used for all tracers.
+applied. 
+
+When the limiter is applied to total water (ρq_tot), the effective tendency Δ(ρq_tot) is
+deduced from the pre- and post-limited states. To keep mass and energy consistent 
+(https://clima.github.io/ClimaAtmos.jl/dev/microphysics/), density
+and total energy are updated.
 
 Arguments:
 - `Y`: The current state vector (`ClimaCore.Fields.FieldVector`), modified in place.
@@ -81,6 +85,17 @@ NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
     # Our state stores ρχ (tracer density). Store χ in scratch, apply limiter, then write ρχ back.
     # Also note: species filtering is done here, not passed to apply_limiter! (which doesn't support it)
     if !isnothing(vertical_water_borrowing_limiter)
+        # When ρq_tot is limited, we must update ρ and ρe_tot for consistency
+        # dρ/dt = S (mass tendency), d(ρe_tot)/dt = S * (I_y + Φ) for water mass change.
+        ρq_tot_limited =
+            _should_apply_limiter_to_tracer(
+                @name(ρq_tot),
+                vertical_water_borrowing_species,
+            ) &&
+            hasproperty(Y.c, :ρq_tot)
+        if ρq_tot_limited
+            p.scratch.ᶜtemp_scalar_2 .= Y.c.ρq_tot # Temp storage for ρq_tot before limiting.
+        end
         ᶜχ = p.scratch.ᶜtemp_scalar
         for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
             if _should_apply_limiter_to_tracer(ρχ_name, vertical_water_borrowing_species)
@@ -89,6 +104,16 @@ NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
                 Limiters.apply_limiter!(ᶜχ, Y.c.ρ, vertical_water_borrowing_limiter)
                 ρχ .= ᶜχ .* Y.c.ρ
             end
+        end
+        # Consistency between columnwise "borrowed water" and borrowed mass / energy. 
+        if ρq_tot_limited
+            ᶜΔρq_tot = similar(Y.c.ρq_tot)
+            ᶜΔρq_tot .= Y.c.ρq_tot .- p.scratch.ᶜtemp_scalar_2
+            thp = CAP.thermodynamics_params(p.params)
+            ᶜT = p.precomputed.ᶜT
+            ᶜΦ = p.core.ᶜΦ
+            @. Y.c.ρ += ᶜΔρq_tot
+            @. Y.c.ρe_tot += ᶜΔρq_tot * (TD.internal_energy_vapor(thp, ᶜT) + ᶜΦ)
         end
     end
     return nothing
