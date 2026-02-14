@@ -230,7 +230,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
 
     if moisture_model isa NonEquilMoistModel &&
        microphysics_model isa
-       Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}}
+       Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
         (; ᶜq_liqʲs, ᶜq_iceʲs, ᶜq_raiʲs, ᶜq_snoʲs) = p.precomputed
 
         ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
@@ -311,7 +311,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
 
         if moisture_model isa NonEquilMoistModel &&
            microphysics_model isa
-           Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}}
+           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
             ᶜq_liqʲ = ᶜq_liqʲs.:($j)
             ᶜq_iceʲ = ᶜq_iceʲs.:($j)
             ᶜq_raiʲ = ᶜq_raiʲs.:($j)
@@ -370,7 +370,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
 
         if moisture_model isa NonEquilMoistModel &&
            microphysics_model isa
-           Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}}
+           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
             set_diagnostic_edmfx_draft_quantities_level!(
                 thermo_params,
                 ρʲ_int_level,
@@ -512,7 +512,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
     if moisture_model isa NonEquilMoistModel &&
        microphysics_model isa
-       Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}}
+       Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
         ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
         ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
         ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
@@ -585,7 +585,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
         if moisture_model isa NonEquilMoistModel &&
            microphysics_model isa
-           Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}}
+           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
             q_liq_level = Fields.field_values(Fields.level(ᶜq_liq, i))
             q_liq_prev_level = Fields.field_values(Fields.level(ᶜq_liq, i - 1))
 
@@ -623,12 +623,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ᶠnh_pressure³_dragʲ = ᶠnh_pressure³_dragʲs.:($j)
 
             if microphysics_model isa
-               Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}}
+               Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
                 ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵐʲs.:($j)
             end
             if moisture_model isa NonEquilMoistModel &&
                microphysics_model isa
-               Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}}
+               Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
                 ᶜq_liqʲ = ᶜq_liqʲs.:($j)
                 ᶜq_iceʲ = ᶜq_iceʲs.:($j)
                 ᶜq_raiʲ = ᶜq_raiʲs.:($j)
@@ -681,14 +681,14 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
             S_q_totʲ_prev_level =
                 if microphysics_model isa
-                   Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}}
+                   Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
                     Fields.field_values(Fields.level(ᶜS_q_totʲ, i - 1))
                 else
                     Ref(nothing)
                 end
             if moisture_model isa NonEquilMoistModel &&
                microphysics_model isa
-               Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}}
+               Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
 
                 q_liqʲ_level = Fields.field_values(Fields.level(ᶜq_liqʲ, i))
                 q_iceʲ_level = Fields.field_values(Fields.level(ᶜq_iceʲ, i))
@@ -831,7 +831,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
             # 0-moment microphysics: sink of q_tot from precipitation removal
             if microphysics_model isa
-               Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}}
+               Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
                 mp_tendency_prev_level = Fields.field_values(
                     Fields.level(p.precomputed.ᶜmp_tendency, i - 1))
                 @. mp_tendency_prev_level = BMT.bulk_microphysics_tendencies(
@@ -851,7 +851,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 # all the species are considered a part of the working fluid.
             elseif moisture_model isa NonEquilMoistModel &&
                    microphysics_model isa
-                   Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}}
+                   Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
                 # Microphysics tendencies from the updrafts (using fused BMT API)
                 mp_tendency_prev_level = Fields.field_values(
                     Fields.level(p.precomputed.ᶜmp_tendency, i - 1))
@@ -979,7 +979,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     FT(1),
                 )
             if microphysics_model isa
-               Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}}
+               Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
                 @. ρaʲu³ʲ_data += microphysics_sources(
                     local_geometry_halflevel.J,
                     local_geometry_prev_level.J,
@@ -1035,7 +1035,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     mseʲ_prev_level,
                 )
             if microphysics_model isa
-               Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}}
+               Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
                 @. ρaʲu³ʲ_datamse += microphysics_sources(
                     local_geometry_halflevel.J,
                     local_geometry_prev_level.J,
@@ -1077,7 +1077,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     q_totʲ_prev_level,
                 )
             if microphysics_model isa
-               Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}}
+               Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
                 @. ρaʲu³ʲ_dataq_tot += microphysics_sources(
                     local_geometry_halflevel.J,
                     local_geometry_prev_level.J,
@@ -1095,7 +1095,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ### 1-moment microphysics tracers
             ###
             if microphysics_model isa
-               Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}} &&
+               Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} &&
                moisture_model isa NonEquilMoistModel
                 # TODO - loop over tracres
                 ρaʲu³ʲ_dataq_ = p.scratch.temp_data_level_3
@@ -1236,7 +1236,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     ifelse(kill_updraft_2, q_tot_level, q_totʲ_level)
                 if microphysics_model isa Union{
                     Microphysics1Moment,
-                    QuadratureMicrophysics{<:Microphysics1Moment},
+                    QuadratureMicrophysics{Microphysics1Moment},
                 } &&
                    moisture_model isa NonEquilMoistModel
                     @. q_liqʲ_level =
@@ -1258,7 +1258,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             )
             if moisture_model isa NonEquilMoistModel &&
                microphysics_model isa
-               Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}}
+               Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
                 set_diagnostic_edmfx_draft_quantities_level!(
                     thermo_params,
                     ρʲ_level,
@@ -1367,13 +1367,13 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
         @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
 
         if microphysics_model isa
-           Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}}
+           Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
             ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵐʲs.:($j)
             S_q_totʲ_level = Fields.field_values(Fields.level(ᶜS_q_totʲ, i_top))
             @. S_q_totʲ_level = 0
         end
         if microphysics_model isa
-           Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}} &&
+           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} &&
            moisture_model isa NonEquilMoistModel
             ᶜS_q_liqʲ = p.precomputed.ᶜSqₗᵐʲs.:($j)
             ᶜS_q_iceʲ = p.precomputed.ᶜSqᵢᵐʲs.:($j)
@@ -1493,7 +1493,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     microphys_0m_params = CAP.microphysics_0m_params(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
     (; dt) = p
-    (; ᶜT, ᶜq_tot_safe, ᶜSqₜᵐ⁰, ᶜmp_tendency) = p.precomputed
+    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜSqₜᵐ⁰, ᶜmp_tendency) = p.precomputed
 
     # Get T-based variances (from cache)
     (; ᶜT′T′, ᶜq′q′) = p.precomputed

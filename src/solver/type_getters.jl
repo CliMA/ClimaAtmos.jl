@@ -60,7 +60,7 @@ function get_atmos(config::AtmosConfig, params)
                 Union{
             NoPrecipitation,
             Microphysics0Moment,
-            QuadratureMicrophysics{<:Microphysics0Moment},
+            QuadratureMicrophysics{Microphysics0Moment},
         }
     end
     if moisture_model isa NonEquilMoistModel

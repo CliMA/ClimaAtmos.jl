@@ -61,7 +61,7 @@ function ClimaAtmosParameters(
     if !isnothing(parsed_args)
         cm_model = get_microphysics_model(parsed_args)
         cm_model isa
-        Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}} ||
+        Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}} ||
             (microphysics_0m_params = nothing)
         cm_model isa Union{
             Microphysics1Moment,
@@ -76,7 +76,7 @@ function ClimaAtmosParameters(
         } ||
             (microphysics_2m_params = nothing)
         cm_model isa
-        Union{Microphysics2MomentP3, QuadratureMicrophysics{<:Microphysics2MomentP3}} ||
+        Union{Microphysics2MomentP3, QuadratureMicrophysics{Microphysics2MomentP3}} ||
             (microphysics_2mp3_params = nothing)
     end
     MP0M = typeof(microphysics_0m_params)

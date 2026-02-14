@@ -222,6 +222,22 @@ end
 
 function turbconv_center_variables(
     ls,
+    turbconv_model::PrognosticEDMFX,
+    moisture_model::NonEquilMoistModel,
+    qm::QuadratureMicrophysics,
+    gs_vars,
+)
+    return turbconv_center_variables(
+        ls,
+        turbconv_model,
+        moisture_model,
+        qm.base_model,
+        gs_vars,
+    )
+end
+
+function turbconv_center_variables(
+    ls,
     turbconv_model::Union{EDOnlyEDMFX, DiagnosticEDMFX},
     _,
     _,

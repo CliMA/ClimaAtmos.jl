@@ -709,7 +709,7 @@ function set_microphysics_tendency_cache!(
     Y,
     p,
     ::Microphysics0Moment,
-    ::DiagnosticEDMFX,
+    turbconv_model::DiagnosticEDMFX,
 )
     # For environment we multiply by grid mean ρ and not byᶜρa⁰
     # assuming a⁰=1
@@ -784,6 +784,16 @@ function set_microphysics_tendency_cache!(
     end
     return nothing
 end
+
+function set_microphysics_tendency_cache!(
+    Y,
+    p,
+    qm::QuadratureMicrophysics{Microphysics0Moment},
+    turbconv_model::Union{DiagnosticEDMFX, PrognosticEDMFX},
+)
+    set_microphysics_tendency_cache!(Y, p, qm.base_model, turbconv_model)
+end
+
 """
     set_microphysics_tendency_cache!(Y, p, ::Microphysics1Moment, turbconv_model)
 
@@ -888,6 +898,15 @@ function set_microphysics_tendency_cache!(
     # in edmf sub-domains.
     return nothing
 end
+function set_microphysics_tendency_cache!(
+    Y,
+    p,
+    qm::QuadratureMicrophysics{Microphysics1Moment},
+    turbconv_model::Union{DiagnosticEDMFX, PrognosticEDMFX},
+)
+    set_microphysics_tendency_cache!(Y, p, qm.base_model, turbconv_model)
+end
+
 function set_microphysics_tendency_cache!(Y, p, ::Microphysics2Moment, turbconv_model)
     # Use unified quadrature path with GridMeanSGS (grid-mean-only evaluation for now)
     qm = QuadratureMicrophysics(Microphysics2Moment(), GridMeanSGS())
@@ -972,6 +991,14 @@ function set_microphysics_tendency_cache!(
     # in edmf sub-domains.
     return nothing
 end
+function set_microphysics_tendency_cache!(
+    Y,
+    p,
+    qm::QuadratureMicrophysics{Microphysics2Moment},
+    turbconv_model::PrognosticEDMFX,
+)
+    set_microphysics_tendency_cache!(Y, p, qm.base_model, turbconv_model)
+end
 
 function set_microphysics_tendency_cache!(Y, p, ::Microphysics2MomentP3, ::Nothing)
     (; dt) = p
@@ -1052,7 +1079,7 @@ function set_precipitation_surface_fluxes!(
     p,
     microphysics_model::Union{
         Microphysics0Moment,
-        QuadratureMicrophysics{<:Microphysics0Moment},
+        QuadratureMicrophysics{Microphysics0Moment},
     },
 )
     (; ᶜT) = p.precomputed
@@ -1080,9 +1107,9 @@ function set_precipitation_surface_fluxes!(
     p,
     microphysics_model::Union{
         Microphysics1Moment,
-        QuadratureMicrophysics{<:Microphysics1Moment},
+        QuadratureMicrophysics{Microphysics1Moment},
         Microphysics2Moment,
-        QuadratureMicrophysics{<:Microphysics2Moment},
+        QuadratureMicrophysics{Microphysics2Moment},
     },
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
@@ -1138,7 +1165,7 @@ end
 function set_precipitation_surface_fluxes!(
     Y,
     p,
-    ::Union{Microphysics2MomentP3, QuadratureMicrophysics{<:Microphysics2MomentP3}},
+    ::Union{Microphysics2MomentP3, QuadratureMicrophysics{Microphysics2MomentP3}},
 )
     set_precipitation_surface_fluxes!(Y, p, Microphysics2Moment())
     # TODO: Figure out what to do for ρn_ice, ρq_rim, ρb_rim

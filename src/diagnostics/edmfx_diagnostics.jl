@@ -438,7 +438,10 @@ function compute_cdncup!(
     state,
     cache,
     time,
-    microphysics_model_model::Microphysics2Moment,
+    microphysics_model_model::Union{
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+    },
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -562,7 +565,12 @@ function compute_husraup!(
     state,
     cache,
     time,
-    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{
+        Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+    },
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -576,7 +584,10 @@ function compute_husraup!(
     state,
     cache,
     time,
-    moisture_model::Microphysics1Moment,
+    microphysics_model::Union{
+        Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
+    },
     turbconv_model::DiagnosticEDMFX,
 )
     if isnothing(out)
@@ -621,7 +632,10 @@ function compute_ncraup!(
     state,
     cache,
     time,
-    microphysics_model_model::Microphysics2Moment,
+    microphysics_model_model::Union{
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+    },
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -669,7 +683,12 @@ function compute_hussnup!(
     state,
     cache,
     time,
-    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{
+        Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+    },
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -683,7 +702,10 @@ function compute_hussnup!(
     state,
     cache,
     time,
-    moisture_model::Microphysics1Moment,
+    microphysics_model::Union{
+        Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
+    },
     turbconv_model::DiagnosticEDMFX,
 )
     if isnothing(out)
@@ -1318,7 +1340,12 @@ function compute_husraen!(
     state,
     cache,
     time,
-    microphysics_model_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model_model::Union{
+        Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+    },
     turbconv_model::PrognosticEDMFX,
 )
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), state, cache)
@@ -1413,7 +1440,12 @@ function compute_hussnen!(
     state,
     cache,
     time,
-    microphysics_model_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model_model::Union{
+        Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+    },
     turbconv_model::PrognosticEDMFX,
 )
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), state, cache)

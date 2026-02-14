@@ -154,7 +154,7 @@ function precomputed_quantities(Y, atmos)
         atmos.moisture_model isa NonEquilMoistModel ?
         (; ᶜwₗ = similar(Y.c, FT), ᶜwᵢ = similar(Y.c, FT)) : (;)
     if atmos.microphysics_model isa
-       Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}}
+       Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
         precipitation_quantities = (;
             ᶜS_ρq_tot = similar(Y.c, FT),
             ᶜS_ρe_tot = similar(Y.c, FT),
@@ -162,7 +162,7 @@ function precomputed_quantities(Y, atmos)
                 @NamedTuple{dq_tot_dt::FT, e_int_precip::FT}),
         )
     elseif atmos.microphysics_model isa
-           Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}}
+           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
         precipitation_quantities = (;
             ᶜwᵣ = similar(Y.c, FT),
             ᶜwₛ = similar(Y.c, FT),
@@ -176,7 +176,7 @@ function precomputed_quantities(Y, atmos)
         )
     elseif atmos.microphysics_model isa Union{
         Microphysics2Moment,
-        QuadratureMicrophysics{<:Microphysics2Moment},
+        QuadratureMicrophysics{Microphysics2Moment},
         Microphysics2MomentP3,
     }
         # 2-moment microphysics
@@ -221,10 +221,10 @@ function precomputed_quantities(Y, atmos)
     end
     precipitation_sgs_quantities =
         atmos.microphysics_model isa
-        Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}} ?
+        Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}} ?
         (; ᶜSqₜᵐʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵐ⁰ = similar(Y.c, FT)) :
         atmos.microphysics_model isa
-        Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}} ?
+        Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ?
         (;
             ᶜSqₗᵐʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵢᵐʲs = similar(Y.c, NTuple{n, FT}),
@@ -240,7 +240,7 @@ function precomputed_quantities(Y, atmos)
             ᶜSqₛᵐ⁰ = similar(Y.c, FT),
         ) :
         atmos.microphysics_model isa
-        Union{Microphysics2Moment, QuadratureMicrophysics{<:Microphysics2Moment}} ?
+        Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}} ?
         (;
             ᶜSqₗᵐʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵢᵐʲs = similar(Y.c, NTuple{n, FT}),
@@ -287,7 +287,7 @@ function precomputed_quantities(Y, atmos)
 
     diagnostic_precipitation_sgs_quantities =
         atmos.microphysics_model isa
-        Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}} ?
+        Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ?
         (;
             ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),

@@ -50,9 +50,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
 
     if p.atmos.moisture_model isa NonEquilMoistModel && (
         p.atmos.microphysics_model isa
-        Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}} ||
+        Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
         p.atmos.microphysics_model isa
-        Union{Microphysics2Moment, QuadratureMicrophysics{<:Microphysics2Moment}}
+        Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
     )
         ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
         ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
@@ -135,9 +135,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         @. ᶜq_tot_safeʲ = max(0, ᶜq_totʲ)
         if moisture_model isa NonEquilMoistModel && (
             microphysics_model isa
-            Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}} ||
+            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
             microphysics_model isa
-            Union{Microphysics2Moment, QuadratureMicrophysics{<:Microphysics2Moment}}
+            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
         )
             ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
             ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
@@ -473,7 +473,7 @@ end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Union{Microphysics0Moment, QuadratureMicrophysics{<:Microphysics0Moment}},
+    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
 )
 
     (; params, dt) = p
@@ -520,7 +520,7 @@ end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Union{Microphysics1Moment, QuadratureMicrophysics{<:Microphysics1Moment}},
+    ::Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}},
 )
 
     (; params, dt) = p
@@ -643,7 +643,7 @@ end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Union{Microphysics2Moment, QuadratureMicrophysics{<:Microphysics2Moment}},
+    ::Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}},
 )
 
     (; params, dt) = p
