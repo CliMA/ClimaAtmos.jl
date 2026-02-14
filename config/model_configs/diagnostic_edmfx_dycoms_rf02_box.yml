@@ -15,7 +15,7 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: nonequil
 precip_model: "1M"
-call_cloud_diagnostics_per_stage: true
+use_sgs_quadrature: false
 config: box
 x_max: 1e8
 y_max: 1e8

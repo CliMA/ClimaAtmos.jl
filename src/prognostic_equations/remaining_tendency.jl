@@ -171,7 +171,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.sgsʲs.:($$j).q_tot += rst_sgs_q_tot
         end
         if moisture_model isa NonEquilMoistModel &&
-           microphysics_model isa Microphysics1Moment
+           microphysics_model isa
+           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
             # TODO: This doesn't work for multiple updrafts
             moisture_species = (
                 (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq)),
@@ -279,18 +280,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     edmfx_filter_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
-    if p.atmos.noneq_cloud_formation_mode == Explicit()
-        cloud_condensate_tendency!(
-            Yₜ,
-            Y,
-            p,
-            p.atmos.moisture_model,
-            p.atmos.microphysics_model,
-            p.atmos.turbconv_model,
-        )
-    end
-
-    edmfx_precipitation_tendency!(
+    # EDMF updraft microphysics tendencies (applied to updraft prognostic variables)
+    edmfx_microphysics_tendency!(
         Yₜ,
         Y,
         p,
@@ -298,7 +289,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         p.atmos.turbconv_model,
         p.atmos.microphysics_model,
     )
-    precipitation_tendency!(
+
+    # Unified microphysics tendencies (cloud condensation + precipitation)
+    microphysics_tendency!(
         Yₜ,
         Y,
         p,
@@ -324,7 +317,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         p.atmos.orographic_gravity_wave,
     )
 
-    # NOTE: Precipitation tendencies should be applied before calling this function,
+    # NOTE: Microphysics tendencies should be applied before calling this function,
     # because precipitation cache is used in this function
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
 

@@ -329,9 +329,9 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function get_microphysics_model(parsed_args)
+function get_microphysics_model(parsed_args, params = nothing)
     microphysics_model = parsed_args["precip_model"]
-    return if isnothing(microphysics_model) || microphysics_model == "nothing"
+    base_scheme = if isnothing(microphysics_model) || microphysics_model == "nothing"
         NoPrecipitation()
     elseif microphysics_model == "0M"
         Microphysics0Moment()
@@ -343,6 +343,50 @@ function get_microphysics_model(parsed_args)
         Microphysics2MomentP3()
     else
         error("Invalid microphysics_model $(microphysics_model)")
+    end
+
+    # Wrap with SGS quadrature if enabled
+    use_sgs_quadrature = get(parsed_args, "use_sgs_quadrature", false)
+    if use_sgs_quadrature && !(base_scheme isa NoPrecipitation)
+        FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
+        distribution = get_sgs_distribution(parsed_args)
+        quadrature_order = get(parsed_args, "quadrature_order", 2)
+        # Read T_min and q_max from ClimaParams when available
+        T_min = isnothing(params) ? FT(150) : FT(CAP.T_min_sgs(params))
+        q_max = isnothing(params) ? FT(0.1) : FT(CAP.q_max_sgs(params))
+        return QuadratureMicrophysics(
+            base_scheme;
+            FT,
+            distribution,
+            quadrature_order,
+            T_min,
+            q_max,
+        )
+    else
+        return base_scheme
+    end
+end
+
+"""
+    get_sgs_distribution(parsed_args)
+
+Parse the SGS distribution type from configuration.
+
+# Config value mapping
+- `"gaussian"` or `nothing` → `GaussianSGS()` (default)
+- `"lognormal"` → `LogNormalSGS()`
+- `"mean"` → `GridMeanSGS()` (grid-mean only, no SGS sampling)
+"""
+function get_sgs_distribution(parsed_args)
+    dist_name = get(parsed_args, "sgs_distribution", "gaussian")
+    return if dist_name in (nothing, "gaussian")
+        GaussianSGS()
+    elseif dist_name == "lognormal"
+        LogNormalSGS()
+    elseif dist_name == "mean"
+        GridMeanSGS()
+    else
+        error("Invalid sgs_distribution $(dist_name). Use: gaussian, lognormal, mean")
     end
 end
 
@@ -371,10 +415,11 @@ end
 function get_cloud_model(parsed_args, params)
     cloud_model = parsed_args["cloud_model"]
     FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
+
     return if cloud_model == "grid_scale"
         GridScaleCloud()
     elseif cloud_model == "quadrature"
-        QuadratureCloud(SGSQuadrature(FT))
+        QuadratureCloud()
     elseif cloud_model == "MLCloud"
         nn_filepath = joinpath(
             @clima_artifact("cloud_fraction_nn"),
@@ -386,8 +431,7 @@ function get_cloud_model(parsed_args, params)
         nn_param_vec = FT.(CAP.cloud_fraction_param_vec(params))
         # build the model
         cf_nn_model = nn_architecture(nn_param_vec)
-        # use quadrature for qliq, qice and nn for cloud fraction
-        MLCloud_constructor(SGSQuadrature(FT), cf_nn_model)
+        MLCloud_constructor(cf_nn_model)
     else
         error("Invalid cloud_model $(cloud_model)")
     end
@@ -409,16 +453,6 @@ function get_forcing_type(parsed_args)
     return nothing
 end
 
-struct CallCloudDiagnosticsPerStage end
-function get_call_cloud_diagnostics_per_stage(parsed_args)
-    ccdps = parsed_args["call_cloud_diagnostics_per_stage"]
-    @assert ccdps in (nothing, true, false)
-    return if ccdps in (nothing, false)
-        nothing
-    elseif ccdps == true
-        CallCloudDiagnosticsPerStage()
-    end
-end
 
 function get_subsidence_model(parsed_args, radiation_mode, FT)
     subsidence = parsed_args["subsidence"]
@@ -663,7 +697,7 @@ function check_case_consistency(parsed_args)
              which is needed for topography. Thus, prescribed flow must have flat surface."
         )
         @assert(
-            !parsed_args["implicit_noneq_cloud_formation"] &&
+            !parsed_args["implicit_microphysics"] &&
             !parsed_args["implicit_diffusion"] &&
             !parsed_args["implicit_sgs_advection"] &&
             !parsed_args["implicit_sgs_entr_detr"] &&

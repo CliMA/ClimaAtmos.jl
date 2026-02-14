@@ -148,7 +148,14 @@ end
 # - model_accessor: expression to get the model from cache.atmos
 
 const MICROPHYSICS_MODELS =
-    Union{Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3}
+    Union{
+        Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+        Microphysics2MomentP3,
+        QuadratureMicrophysics{Microphysics2MomentP3},
+    }
 const MOISTURE_MODELS = Union{EquilMoistModel, NonEquilMoistModel}
 
 const TRACER_DIAGNOSTICS = [

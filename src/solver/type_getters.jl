@@ -47,7 +47,7 @@ function get_atmos(config::AtmosConfig, params)
     FT = eltype(config)
     check_case_consistency(parsed_args)
     moisture_model = get_moisture_model(parsed_args)
-    microphysics_model = get_microphysics_model(parsed_args)
+    microphysics_model = get_microphysics_model(parsed_args, params)
     cloud_model = get_cloud_model(parsed_args, params)
 
     if moisture_model isa DryModel
@@ -57,26 +57,30 @@ function get_atmos(config::AtmosConfig, params)
     if moisture_model isa EquilMoistModel
         @warn "Running simulations with equilibrium thermodynamics assumptions."
         @assert microphysics_model isa
-                Union{NoPrecipitation, Microphysics0Moment}
+                Union{
+            NoPrecipitation,
+            Microphysics0Moment,
+            QuadratureMicrophysics{Microphysics0Moment},
+        }
     end
     if moisture_model isa NonEquilMoistModel
         @assert microphysics_model isa Union{
             NoPrecipitation, Microphysics1Moment,
             Microphysics2Moment, Microphysics2MomentP3,
+            QuadratureMicrophysics,
         }
     end
     if microphysics_model isa NoPrecipitation
         @warn "Running simulations without any precipitation formation."
     end
 
-    implicit_noneq_cloud_formation =
-        parsed_args["implicit_noneq_cloud_formation"]
-    @assert implicit_noneq_cloud_formation in (true, false)
+    implicit_microphysics =
+        parsed_args["implicit_microphysics"]
+    @assert implicit_microphysics in (true, false)
 
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
-    call_cloud_diagnostics_per_stage =
-        get_call_cloud_diagnostics_per_stage(parsed_args)
+
 
     # HeldSuarezForcing can be set via radiation_mode or legacy forcing option for now
     final_radiation_mode =
@@ -136,9 +140,8 @@ function get_atmos(config::AtmosConfig, params)
         moisture_model,
         microphysics_model,
         cloud_model,
-        noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
-                                     Implicit() : Explicit(),
-        call_cloud_diagnostics_per_stage,
+        microphysics_tendency_timestepping = implicit_microphysics ?
+                                             Implicit() : Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(parsed_args),
 
         # SCMSetup - Single-Column Model components
