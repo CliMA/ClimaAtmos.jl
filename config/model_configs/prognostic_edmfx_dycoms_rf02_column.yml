@@ -17,7 +17,6 @@ edmfx_filter: true
 prognostic_tke: true
 moist: "nonequil"
 precip_model: "1M"
-call_cloud_diagnostics_per_stage: true
 config: "column"
 x_elem: 2
 y_elem: 2

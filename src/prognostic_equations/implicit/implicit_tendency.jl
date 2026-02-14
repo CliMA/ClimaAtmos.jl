@@ -10,16 +10,8 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
-    if p.atmos.noneq_cloud_formation_mode == Implicit()
-        cloud_condensate_tendency!(
-            Yₜ,
-            Y,
-            p,
-            p.atmos.moisture_model,
-            p.atmos.microphysics_model,
-            p.atmos.turbconv_model,
-        )
-    end
+    # TODO: Needs to be updated to use the new microphysics 
+    # tendency function with quadrature if implicit_microphysics is true
 
     if p.atmos.sgs_adv_mode == Implicit()
         edmfx_sgs_vertical_advection_tendency!(

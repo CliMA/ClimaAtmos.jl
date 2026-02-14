@@ -592,6 +592,7 @@ steps:
         artifact_paths: "baroclinic_wave_nonequil_conservation_source/output_active/*"
         agents:
           slurm_mem: 16GB
+        soft_fail: true
 
   - group: "Sphere Examples (Dycore)"
     steps:

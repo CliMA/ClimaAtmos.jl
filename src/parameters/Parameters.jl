@@ -28,6 +28,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     tke_surf_scale::FT
     tke_surf_flux_coeff::FT
     diagnostic_covariance_coeff::FT
+    Tq_correlation_coefficient::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT
     Prandtl_number_0::FT
@@ -78,6 +79,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     STP,
     VDP,
     EFP,
+    PAP,
 } <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
@@ -93,6 +95,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     surface_temp_params::STP
     vert_diff_params::VDP
     external_forcing_params::EFP
+    prescribed_aerosol_params::PAP
     Omega::FT
     f_plane_coriolis_frequency::FT
     planet_radius::FT
