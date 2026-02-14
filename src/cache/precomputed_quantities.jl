@@ -143,10 +143,9 @@ function precomputed_quantities(Y, atmos)
     covariance_quantities =
         uses_sgs_quadrature ?
         (;
-            ᶜT′T′ = similar(Y.c, FT),
-            ᶜq′q′ = similar(Y.c, FT),
+            ᶜT′T′ = zeros(axes(Y.c)),
+            ᶜq′q′ = zeros(axes(Y.c)),
         ) : (;)
-
     surface_precip_fluxes = (;
         surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
         surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
