@@ -207,8 +207,12 @@ all_field_data = Dict{String, Any}(
     "tau_y_gfdl" => gfdl_results.tau_y,
     "t11_raw" => raw_topo_results.topo_info.t11,
     "t12_raw" => raw_topo_results.topo_info.t12,
+    "t21_raw" => raw_topo_results.topo_info.t21,
+    "t22_raw" => raw_topo_results.topo_info.t22,
     "t11_gfdl" => gfdl_results.topo_info.t11,
     "t12_gfdl" => gfdl_results.topo_info.t12,
+    "t21_gfdl" => gfdl_results.topo_info.t21,
+    "t22_gfdl" => gfdl_results.topo_info.t22,
 )
 
 # Remap all fields to lat-lon grid
@@ -245,8 +249,8 @@ lat = rll_data["lat"]
 zonal_mean_fn(d) = dropdims(mean(d; dims = 1); dims = 1)
 zonal_max_abs_fn(d) = dropdims(maximum(abs.(d); dims = 1); dims = 1)
 
-# Create 5-panel diagnostic figure
-fig = CairoMakie.Figure(; size = (1600, 2400))
+# Create 3-panel zonal diagnostics figure
+fig = CairoMakie.Figure(; size = (1600, 1500))
 
 # Panel 1: Zonal mean τ_x
 ax1 = CairoMakie.Axis(fig[1, 1]; title = "Zonal mean τ_x", xlabel = "lat", ylabel = "τ_x")
@@ -260,49 +264,55 @@ CairoMakie.lines!(ax2, lat, zonal_mean_fn(rll_data["tau_y_raw"]); label = "raw_t
 CairoMakie.lines!(ax2, lat, zonal_mean_fn(rll_data["tau_y_gfdl"]); label = "gfdl_restart")
 CairoMakie.axislegend(ax2)
 
-# Panel 3: Max |t11| per latitude (check 1/cos blowup)
+# Panel 3: Zonal mean difference (raw - gfdl)
 ax3 = CairoMakie.Axis(
     fig[3, 1];
-    title = "Max |t11| per latitude",
-    xlabel = "lat",
-    ylabel = "|t11|",
-)
-CairoMakie.lines!(ax3, lat, zonal_max_abs_fn(rll_data["t11_raw"]); label = "raw_topo")
-CairoMakie.lines!(ax3, lat, zonal_max_abs_fn(rll_data["t11_gfdl"]); label = "gfdl_restart")
-CairoMakie.axislegend(ax3)
-
-# Panel 4: Max |t12| per latitude
-ax4 = CairoMakie.Axis(
-    fig[4, 1];
-    title = "Max |t12| per latitude",
-    xlabel = "lat",
-    ylabel = "|t12|",
-)
-CairoMakie.lines!(ax4, lat, zonal_max_abs_fn(rll_data["t12_raw"]); label = "raw_topo")
-CairoMakie.lines!(ax4, lat, zonal_max_abs_fn(rll_data["t12_gfdl"]); label = "gfdl_restart")
-CairoMakie.axislegend(ax4)
-
-# Panel 5: Zonal mean difference (raw - gfdl)
-ax5 = CairoMakie.Axis(
-    fig[5, 1];
     title = "Zonal mean difference (raw_topo − gfdl_restart)",
     xlabel = "lat",
     ylabel = "difference",
 )
 CairoMakie.lines!(
-    ax5,
+    ax3,
     lat,
     zonal_mean_fn(rll_data["tau_x_raw"]) .- zonal_mean_fn(rll_data["tau_x_gfdl"]);
     label = "Δτ_x",
 )
 CairoMakie.lines!(
-    ax5,
+    ax3,
     lat,
     zonal_mean_fn(rll_data["tau_y_raw"]) .- zonal_mean_fn(rll_data["tau_y_gfdl"]);
     label = "Δτ_y",
 )
-CairoMakie.axislegend(ax5)
+CairoMakie.axislegend(ax3)
 
 mkpath(output_dir)
 CairoMakie.save(joinpath(output_dir, "zonal_diagnostics.pdf"), fig)
 @info "Saved zonal diagnostics to $(joinpath(output_dir, "zonal_diagnostics.pdf"))"
+
+# Create 4-panel drag tensor diagnostics figure
+fig_tensor = CairoMakie.Figure(; size = (1600, 2000))
+
+for (idx, tname) in enumerate(["t11", "t12", "t21", "t22"])
+    ax = CairoMakie.Axis(
+        fig_tensor[idx, 1];
+        title = "Max |$(tname)| per latitude",
+        xlabel = "lat",
+        ylabel = "|$(tname)|",
+    )
+    CairoMakie.lines!(
+        ax,
+        lat,
+        zonal_max_abs_fn(rll_data["$(tname)_raw"]);
+        label = "raw_topo",
+    )
+    CairoMakie.lines!(
+        ax,
+        lat,
+        zonal_max_abs_fn(rll_data["$(tname)_gfdl"]);
+        label = "gfdl_restart",
+    )
+    CairoMakie.axislegend(ax)
+end
+
+CairoMakie.save(joinpath(output_dir, "drag_tensor_diagnostics.pdf"), fig_tensor)
+@info "Saved drag tensor diagnostics to $(joinpath(output_dir, "drag_tensor_diagnostics.pdf"))"

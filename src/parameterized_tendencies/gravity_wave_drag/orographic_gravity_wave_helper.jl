@@ -28,9 +28,15 @@ function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
     # later divided again when creating the file that contains the actual T tensor
     # being used.
     dχdx, dχdy = .-calc_∇A(χ, lon, lat, earth_radius)
-    # for antarctic
-    dχdx[:, lat .< FT(-88)] .= FT(0)
-    dχdy[:, lat .< FT(-88)] .= FT(0)
+
+    # Polar taper: cos² rolloff from |lat|=75° to |lat|=90°
+    # Damps spurious gradients from lat-lon grid convergence near poles
+    polar_arg = clamp.((abs.(lat) .- FT(75)) ./ FT(15), FT(0), FT(1))
+    polar_taper = cos.(FT(π) / FT(2) .* polar_arg) .^ 2
+    dhdx .*= polar_taper'
+    dhdy .*= polar_taper'
+    dχdx .*= polar_taper'
+    dχdy .*= polar_taper'
 
     t11 = dχdx .* dhdx
     t21 = dχdx .* dhdy
@@ -60,7 +66,7 @@ function calc_∇A(A, lon, lat, earth_radius)
             (A[end, :] .- A[end - 1, :])',
         ) ./ (
             deg2rad(dlon) * earth_radius .*
-            reshape(repeat(cosd.(lat), length(lon)), length(lat), :)'
+            reshape(repeat(max.(cosd.(lat), cosd(FT(60))), length(lon)), length(lat), :)'
         )
     dAdy =
         hcat(
@@ -366,29 +372,29 @@ function smooth_field_latlon(
     result = zeros(FT, size(field))
     cosphi = cosd.(lat)
 
-    for i in eachindex(lon)
-        for j in eachindex(lat)
-            irange =
-                max(i - ilon_range[j], 1):min(i + ilon_range[j], length(lon))
-            jrange =
-                max(j - ilat_range[j], 1):min(j + ilat_range[j], length(lat))
+    nlon = length(lon)
+    for j in eachindex(lat)
+        jrange =
+            max(j - ilat_range[j], 1):min(j + ilat_range[j], length(lat))
+        max_ilon = ilon_range[j]
+        s2 = scale[j]^2
 
-            hmn = FT(0)
-            wt = FT(0)
+        # Precompute full 2D weight table for this latitude band
+        dlat_dists = deg2rad.(lat[jrange] .- lat[j])
+        dlon_offsets = deg2rad.((-max_ilon:max_ilon) .* dlon) .* cosphi[j]
+        arc2 = dlon_offsets .^ 2 .+ dlat_dists' .^ 2
+        wt_full = FT(1) ./ (FT(1) .+ arc2 ./ s2)
 
-            for j1 in jrange
-                for i1 in irange
-                    dlon_dist = deg2rad(lon[i1] - lon[i]) * cosphi[j]
-                    dlat_dist = deg2rad(lat[j1] - lat[j])
-                    arc2 = dlon_dist^2 + dlat_dist^2
+        for i in eachindex(lon)
+            irange = max(i - max_ilon, 1):min(i + max_ilon, nlon)
 
-                    w = FT(1) / (FT(1) + arc2 / (scale[j]^2))
+            # Map irange to indices in the precomputed weight table
+            wt_i =
+                (first(irange) - i + max_ilon + 1):(last(irange) - i + max_ilon + 1)
+            w = @view wt_full[wt_i, :]
+            field_window = @view field[irange, jrange]
 
-                    hmn += w * field[i1, j1]
-                    wt += w
-                end
-            end
-            result[i, j] = hmn / wt
+            result[i, j] = sum(w .* field_window) / sum(w)
         end
     end
 
@@ -602,7 +608,6 @@ function compute_OGW_info(
             lat,
             earth_radius;
             smoothing_length_scale = smoothing_length_scale_elev,
-            use_lat_factor = false,
         )
     else
         elev
