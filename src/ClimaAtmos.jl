@@ -44,6 +44,7 @@ include(joinpath("cache", "cloud_fraction.jl"))
 include(joinpath("cache", "surface_albedo.jl"))
 
 include(joinpath("initial_conditions", "InitialConditions.jl"))
+include(joinpath("setups", "Setups.jl"))
 include(joinpath("surface_conditions", "SurfaceConditions.jl"))
 include(joinpath("utils", "refstate_thermodynamics.jl"))
 
