@@ -241,7 +241,7 @@ No updates are applied when `radiation_mode.idealized_clouds` is true.
 function update_cloud_properties!((; u, p, t)::I) where {I}
     (; radiation_mode) = p.atmos
     (; rrtmgp_model) = p.radiation
-    (; cloud_diagnostics_tuple) = p.precomputed
+    (; ᶜcloud_fraction, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     FT = Spaces.undertype(axes(u.c))
     cmc = CAP.microphysics_cloud_params(p.params)
 
@@ -278,14 +278,14 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
         cloud_liquid_water_content =
             radiation_mode.cloud isa PrescribedCloudInRadiation ?
             p.radiation.prescribed_clouds_field.clwc :
-            cloud_diagnostics_tuple.q_liq
+            ᶜq_liq_rai
         cloud_ice_water_content =
             radiation_mode.cloud isa PrescribedCloudInRadiation ?
             p.radiation.prescribed_clouds_field.ciwc :
-            cloud_diagnostics_tuple.q_ice
+            ᶜq_ice_sno
         cloud_fraction =
             radiation_mode.cloud isa PrescribedCloudInRadiation ?
-            p.radiation.prescribed_clouds_field.cc : cloud_diagnostics_tuple.cf
+            p.radiation.prescribed_clouds_field.cc : ᶜcloud_fraction
         @. ᶜlwp =
             kg_to_g_factor * u.c.ρ * cloud_liquid_water_content * ᶜΔz /
             max(cloud_fraction, eps(FT))

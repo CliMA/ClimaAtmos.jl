@@ -241,7 +241,9 @@ end
 
 """
     mixing_length_lopez_gomez_2020(
-    params,
+    turbconv_params,
+    sf_params,
+    vkc,
     ustar,
     ᶜz,
     z_sfc,
@@ -256,7 +258,9 @@ end
 )
 
 where:
-- `params`: Parameter set (e.g., CLIMAParameters.AbstractParameterSet).
+- `turbconv_params`: Turbulence-convection parameter set.
+- `sf_params`: Surface flux parameter set (Businger parameters).
+- `vkc`: Von Kármán constant.
 - `ustar`: Friction velocity [m/s].
 - `ᶜz`: Cell center height [m].
 - `z_sfc`: Surface elevation [m].
@@ -280,7 +284,9 @@ and its constituent physical scales.
 """
 
 function mixing_length_lopez_gomez_2020(
-    params,
+    turbconv_params,
+    sf_params,
+    vkc,
     ustar,
     ᶜz,
     z_sfc,
@@ -297,13 +303,9 @@ function mixing_length_lopez_gomez_2020(
     FT = eltype(ᶜz)
     eps_FT = eps(FT)
 
-    turbconv_params = CAP.turbconv_params(params)
-    sf_params = CAP.surface_fluxes_params(params) # Businger params
-
     c_m = CAP.tke_ed_coeff(turbconv_params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
     c_b = CAP.static_stab_coeff(turbconv_params)
-    vkc = CAP.von_karman_const(params)
 
     # l_z: Geometric distance from the surface
     l_z = ᶜz - z_sfc
@@ -424,9 +426,17 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     @. ᶜprandtl_nvec =
         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
+    # Extract sub-parameters before the lazy broadcast to avoid capturing
+    # the full ClimaAtmosParameters struct (~4 KiB) in GPU kernel parameters.
+    turbconv_params = CAP.turbconv_params(params)
+    sf_params = CAP.surface_fluxes_params(params)
+    vkc = CAP.von_karman_const(params)
+
     ᶜmixing_length_tuple = @. lazy(
         mixing_length_lopez_gomez_2020(
-            params,
+            turbconv_params,
+            sf_params,
+            vkc,
             ustar,
             ᶜz,
             z_sfc,

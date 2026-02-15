@@ -9,7 +9,6 @@ precip_model: "1M"
 #moist: "equil"
 #precip_model: "0M"
 cloud_model: "grid_scale"
-call_cloud_diagnostics_per_stage: true
 config: "column"
 hyperdiff: "false"
 ## Simulation

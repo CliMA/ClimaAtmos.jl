@@ -12,7 +12,6 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
-call_cloud_diagnostics_per_stage: true
 precip_model: "0M"
 config: box
 x_max: 1e8

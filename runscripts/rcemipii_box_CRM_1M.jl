@@ -66,7 +66,7 @@ model = CA.AtmosModel(;
     moisture_model = CA.NonEquilMoistModel(),
     microphysics_model = CA.Microphysics1Moment(),
     cloud_model = CA.GridScaleCloud(),
-    noneq_cloud_formation_mode = CA.Explicit(),
+    microphysics_tendency_timestepping = CA.Explicit(),
     tracer_nonnegativity_method = CA.TracerNonnegativityMethod("elementwise_constraint"),
 
     # AtmosRadiation

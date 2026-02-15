@@ -7,6 +7,10 @@ main
 - [#4252](https://github.com/CliMA/ClimaAtmos.jl/pull/4252) Add option to write
   diagnostics in pressure coordinates
 
+- [#4260](https://github.com/CliMA/ClimaAtmos.jl/pull/4260) Add option to use quadrature for
+microphysics tendencies. Updated to CloudMicrophysics v0.31, and use the BulkMicrophysicsTendencies
+API.
+
 v0.35.2
 -------
 
