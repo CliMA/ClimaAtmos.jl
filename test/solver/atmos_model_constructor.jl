@@ -67,7 +67,7 @@ end
         model = CA.AtmosModel(;
             moisture_model = CA.EquilMoistModel(),
             microphysics_model = CA.Microphysics1Moment(),
-            cloud_model = CA.QuadratureCloud(CA.SGSQuadrature(FT)),
+            cloud_model = CA.QuadratureCloud(),
             radiation_mode = RRTMGPI.ClearSkyRadiation(;
                 idealized_h2o = false,
                 add_isothermal_boundary_layer = false,

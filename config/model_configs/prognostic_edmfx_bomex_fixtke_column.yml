@@ -13,7 +13,6 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: false
 moist: "equil"
-call_cloud_diagnostics_per_stage: true
 config: "column"
 z_max: 3e3
 x_elem: 2

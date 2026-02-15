@@ -3,11 +3,10 @@ import CairoMakie as MK
 
 FT = Float32
 
-# Two example forces
-force1(q) = q
-force2(q) = -q
+# Example force for smooth_tendency_limiter
+force(q) = q
 
-# Max allowed source amount
+# Max allowed source amounts
 max_q1 = FT(5)
 max_q2 = FT(2)
 
@@ -24,13 +23,8 @@ ax = MK.Axis(
 
 MK.lines!(
     q_range,
-    CA.triangle_inequality_limiter.(force1.(q_range), max_q1, max_q2),
-    label = "Positive force",
-)
-MK.lines!(
-    q_range,
-    CA.triangle_inequality_limiter.(force2.(q_range), max_q1, max_q2),
-    label = "Negative force",
+    CA.smooth_tendency_limiter.(force.(q_range), max_q1, max_q2),
+    label = "smooth_tendency_limiter",
 )
 MK.hlines!([max_q1, -max_q2], label = "Allowed tracer sources")
 
