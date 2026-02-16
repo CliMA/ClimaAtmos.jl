@@ -666,8 +666,13 @@ This ensures:
 
     # Scale condensate to preserve the partitioning ratio from grid mean
     # If q_cond_mean > 0, scale proportionally; otherwise use λ partitioning
+    # Use eps-guarded division to prevent overflow when q_cond_mean is tiny
     has_grid_mean_condensate = eval.q_cond_mean > FT(0)
-    scale = ifelse(has_grid_mean_condensate, q_cond_hat / eval.q_cond_mean, FT(1))
+    scale = ifelse(
+        has_grid_mean_condensate,
+        q_cond_hat / max(eval.q_cond_mean, ϵ_numerics(FT)),
+        FT(1),
+    )
 
     q_lcl_hat = ifelse(
         has_grid_mean_condensate,
@@ -680,9 +685,10 @@ This ensures:
         (FT(1) - λ) * q_cond_hat,
     )
 
-    # Ensure non-negative
+    # Ensure non-negative and clamp to physical bounds
     q_lcl_hat = max(FT(0), q_lcl_hat)
     q_icl_hat = max(FT(0), q_icl_hat)
+    q_tot_hat = max(FT(0), q_tot_hat)
 
     # Call CloudMicrophysics point-wise tendencies
     return BMT.bulk_microphysics_tendencies(
