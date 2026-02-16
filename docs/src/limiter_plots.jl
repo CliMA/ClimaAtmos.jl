@@ -3,12 +3,12 @@ import CairoMakie as MK
 
 FT = Float32
 
-# Example force for smooth_tendency_limiter
+# Example tendency
 force(q) = q
 
-# Max allowed source amounts
-max_q1 = FT(5)
-max_q2 = FT(2)
+# Max allowed source/sink amounts
+max_q_pos = FT(5)
+max_q_neg = FT(2)
 
 # tracer range
 q_range = range(FT(-20), FT(20), 100)
@@ -23,10 +23,10 @@ ax = MK.Axis(
 
 MK.lines!(
     q_range,
-    CA.smooth_tendency_limiter.(force.(q_range), max_q1, max_q2),
-    label = "smooth_tendency_limiter",
+    CA.tendency_limiter.(force.(q_range), max_q_pos, max_q_neg),
+    label = "tendency_limiter",
 )
-MK.hlines!([max_q1, -max_q2], label = "Allowed tracer sources")
+MK.hlines!([max_q_pos, -max_q_neg], label = "Allowed tracer sources")
 
 MK.axislegend(ax; position = :lc)
 MK.save("assets/limiters_plot.png", fig) # hide

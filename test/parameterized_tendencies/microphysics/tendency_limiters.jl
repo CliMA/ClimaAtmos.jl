@@ -3,10 +3,9 @@ Unit tests for tendency_limiters.jl
 
 Tests cover:
 1. `limit()` - basic rate limiting
-2. `smooth_min_limiter()` - smooth minimum approximation
-3. `smooth_tendency_limiter()` - bidirectional tendency limiting
-4. `coupled_sink_limit_factor()` - uniform scaling for coupled sinks
-5. `apply_1m_tendency_limits()` - end-to-end 1M limiter
+2. `tendency_limiter()` - bidirectional tendency limiting
+3. `coupled_sink_limit_factor()` - uniform scaling for coupled sinks
+4. `apply_1m_tendency_limits()` - end-to-end 1M limiter
 =#
 
 using Test
@@ -15,7 +14,6 @@ using ClimaAtmos
 # Import functions under test
 import ClimaAtmos:
     limit,
-    min_limiter,
     tendency_limiter,
     coupled_sink_limit_factor
 
@@ -49,60 +47,6 @@ import ClimaAtmos:
     end
 
 
-    @testset "min_limiter()" begin
-        @testset "bounded output" begin
-            # L ≤ min(S, B) for S, B ≥ 0
-            for S in [0.001, 0.01, 0.1, 1.0]
-                for B in [0.001, 0.01, 0.1, 1.0]
-                    L = min_limiter(S, B)
-                    @test L >= 0.0 || isapprox(L, 0.0, atol = 1e-7)
-                    @test L <= min(S, B) + 1e-7
-                end
-            end
-        end
-
-        @testset "limiting behavior" begin
-            # S >> B: output ≈ B (capped at available)
-            @test min_limiter(1.0, 0.01) ≈ 0.01 atol = 1e-8
-
-            # S << B: output ≈ S (pass-through)
-            @test min_limiter(0.01, 1.0) ≈ 0.01 atol = 1e-8
-        end
-
-        @testset "crossover case S = B" begin
-            # S = B: output ≈ B 
-            S = B = 0.5
-            L = min_limiter(S, B)
-            # Should be B - ε/2 ≈ B for small ε
-            @test L ≈ B atol = 1e-7
-        end
-
-        @testset "symmetry" begin
-            # min_limiter(S, B) = min_limiter(B, S)
-            @test min_limiter(0.3, 0.7) ≈ min_limiter(0.7, 0.3)
-            @test min_limiter(0.1, 0.9) ≈ min_limiter(0.9, 0.1)
-        end
-
-        @testset "zero inputs" begin
-            # min_limiter returns -ε/2 ≈ 0 when both inputs are zero
-            @test min_limiter(0.0, 0.0) ≈ 0.0 atol = 1e-7
-            @test min_limiter(0.0, 1.0) ≈ 0.0 atol = 1e-7
-            @test min_limiter(1.0, 0.0) ≈ 0.0 atol = 1e-7
-        end
-
-        @testset "sharpness parameter" begin
-            # Larger sharpness = smoother transition (more deviation from min)
-            S = B = 0.5
-            # min_limiter no longer has sharpness, so we just test basic min behavior
-            L = min_limiter(S, B)
-            @test L ≈ B
-        end
-
-        @testset "type stability" begin
-            @test eltype(min_limiter(Float32(0.5), Float32(0.3))) == Float32
-            @test eltype(min_limiter(Float64(0.5), Float64(0.3))) == Float64
-        end
-    end
 
     @testset "tendency_limiter()" begin
         @testset "positive tendency limited" begin

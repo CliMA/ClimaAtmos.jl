@@ -32,7 +32,7 @@ Weights are standard Gauss-Hermite weights for integration against ``e^{-x^2}``.
 Tuple `(nodes, weights)` as `Vector{FT}`.
 """
 function gauss_hermite(::Type{FT}, N::Int) where {FT}
-    # Precomputed values for common orders (physicists' Hermite polynomials)
+    # Precomputed values for common orders
     if N == 1
         return (FT[0], FT[sqrt(π)])
     elseif N == 2
@@ -150,7 +150,7 @@ struct GaussianSGS <: AbstractSGSDistribution end
 
 Log-normal distribution for positive-definite quantities.
 
-Uses Gauss-Hermite quadrature in log-space. Ensures ``q > 0``.
+Uses Gauss-Hermite quadrature in log-space for humidity. Ensures ``q > 0``.
 """
 struct LogNormalSGS <: AbstractSGSDistribution end
 
