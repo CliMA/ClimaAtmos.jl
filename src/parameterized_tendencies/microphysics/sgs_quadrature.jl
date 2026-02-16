@@ -498,7 +498,7 @@ end
 # ============================================================================
 
 """
-    PhysicalPointTransform{D, FT}
+    PhysicalPointTransform
 
 GPU-safe functor for transforming quadrature points to physical space.
 
@@ -514,6 +514,7 @@ Field order matches return order `(T, q)` for consistency.
 - `σ_T`: Standard deviation of T [K]
 - `σ_q`: Standard deviation of q [kg/kg]
 - `corr`: Correlation coefficient [-1, 1]
+- `T_min`: Minimum temperature clamp [K]
 """
 struct PhysicalPointTransform{D, FT}
     dist::D
@@ -593,7 +594,7 @@ function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
 
     # Use functor instead of closure to avoid heap allocations
     # Field order is (T, q) to match return order of get_physical_point
-    transform = PhysicalPointTransform(quad.dist, μ_T, μ_q, σ_T, σ_q, corr, quad.T_min)
+    transform = PhysicalPointTransform(quad.dist, μ_T, μ_q, σ_T, σ_q, corr, oftype(μ_T, quad.T_min))
 
     return sum_over_quadrature_points(f, transform, quad)
 end

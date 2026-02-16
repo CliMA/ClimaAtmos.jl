@@ -13,7 +13,7 @@ import Thermodynamics as TD
 # ============================================================================
 
 """
-    SaturationAdjustmentEvaluator{TPS, FT}
+    SaturationAdjustmentEvaluator
 
 GPU-safe functor for computing saturation-adjusted state at quadrature points.
 
@@ -30,9 +30,9 @@ the full thermodynamic state.
 - `thermo_params`: Thermodynamics parameters
 - `ρ`: Air density [kg/m³]
 """
-struct SaturationAdjustmentEvaluator{TPS, FT}
+struct SaturationAdjustmentEvaluator{TPS, T1}
     thermo_params::TPS
-    ρ::FT
+    ρ::T1
 end
 
 """
@@ -126,7 +126,7 @@ but this requires iteration. For now, we only average the condensate.
 
     # Transform quadrature points to physical space (T, q) using functor (GPU-safe)
     transform =
-        PhysicalPointTransform(SG_quad.dist, T_mean, q_mean, σ_T, σ_q, corr, SG_quad.T_min)
+        PhysicalPointTransform(SG_quad.dist, T_mean, q_mean, σ_T, σ_q, corr, oftype(T_mean, SG_quad.T_min))
 
     # Integrate over quadrature points
     result = sum_over_quadrature_points(evaluator, transform, SG_quad)

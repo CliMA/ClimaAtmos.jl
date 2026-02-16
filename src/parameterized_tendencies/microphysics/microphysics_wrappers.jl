@@ -424,7 +424,7 @@ end
 # ============================================================================
 
 """
-    Microphysics0MEvaluator{CMP, TPS, FT}
+    Microphysics0MEvaluator
 
 GPU-safe functor for computing 0-moment microphysics tendencies at quadrature
 points. At each point (T_hat, q_hat), condensate is diagnosed from saturation
@@ -436,10 +436,10 @@ is called to compute precipitation removal tendencies.
 - `thermo_params`: Thermodynamics parameters
 - `ρ`: Air density [kg/m³]
 """
-struct Microphysics0MEvaluator{CMP, TPS, FT}
+struct Microphysics0MEvaluator{CMP, TPS, T1}
     cm_params::CMP
     thermo_params::TPS
-    ρ::FT
+    ρ::T1
 end
 
 @inline function (eval::Microphysics0MEvaluator)(T_hat, q_hat)
@@ -496,7 +496,7 @@ NamedTuple with SGS-averaged `dq_tot_dt` and `e_int_precip`.
         σ_T,
         σ_q,
         corr,
-        SG_quad.T_min,
+        oftype(T_mean, SG_quad.T_min),
     )
     return sum_over_quadrature_points(evaluator, transform, SG_quad)
 end
@@ -737,7 +737,7 @@ end
         σ_T,
         σ_q,
         corr,
-        SG_quad.T_min,
+        oftype(T_mean, SG_quad.T_min),
     )
     return sum_over_quadrature_points(evaluator, transform, SG_quad)
 end
