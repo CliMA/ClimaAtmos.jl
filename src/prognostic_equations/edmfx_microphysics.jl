@@ -71,7 +71,10 @@ function edmfx_microphysics_tendency!(
     p,
     t,
     turbconv_model::PrognosticEDMFX,
-    microphysics_model::Microphysics1Moment,
+    microphysics_model::Union{
+        Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
+    },
 )
     n = n_mass_flux_subdomains(turbconv_model)
 
@@ -94,7 +97,10 @@ function edmfx_microphysics_tendency!(
     p,
     t,
     turbconv_model::PrognosticEDMFX,
-    microphysics_model::Microphysics2Moment,
+    microphysics_model::Union{
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+    },
 )
     n = n_mass_flux_subdomains(turbconv_model)
 

@@ -169,8 +169,10 @@ function edmfx_vertical_diffusion_tendency!(
         end
 
         if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
+            p.atmos.microphysics_model isa
+            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
+            p.atmos.microphysics_model isa
+            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
         )
             α_precip = CAP.α_vert_diff_tracer(params)
             ᶜρʲ = ᶜρʲs.:(1)

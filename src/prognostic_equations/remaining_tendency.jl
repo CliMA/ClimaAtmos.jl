@@ -171,7 +171,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.sgsʲs.:($$j).q_tot += rst_sgs_q_tot
         end
         if moisture_model isa NonEquilMoistModel &&
-           microphysics_model isa Microphysics1Moment
+           microphysics_model isa
+           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
             # TODO: This doesn't work for multiple updrafts
             moisture_species = (
                 (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq)),

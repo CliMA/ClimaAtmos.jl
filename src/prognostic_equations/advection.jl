@@ -417,8 +417,10 @@ function edmfx_sgs_vertical_advection_tendency!(
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
 
         if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
+            p.atmos.microphysics_model isa
+            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
+            p.atmos.microphysics_model isa
+            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
         )
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
             # TODO - make it work for multiple updrafts
@@ -518,7 +520,10 @@ function edmfx_sgs_vertical_advection_tendency!(
 
         # Sedimentation of number concentrations for 2M microphysics
         if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.microphysics_model isa Microphysics2Moment
+           (
+            p.atmos.microphysics_model isa Microphysics2Moment ||
+            p.atmos.microphysics_model isa QuadratureMicrophysics{Microphysics2Moment}
+        )
 
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
             # TODO - make it work for multiple updrafts

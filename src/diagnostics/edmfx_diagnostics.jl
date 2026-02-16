@@ -1227,7 +1227,10 @@ function compute_cdncen!(
     state,
     cache,
     time,
-    microphysics_model_model::Microphysics2Moment,
+    microphysics_model_model::Union{
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+    },
     turbconv_model::PrognosticEDMFX,
 )
     ᶜn_liq⁰ = ᶜspecific_env_value(@name(n_liq), state, cache)
@@ -1391,7 +1394,10 @@ function compute_ncraen!(
     state,
     cache,
     time,
-    microphysics_model_model::Microphysics2Moment,
+    microphysics_model_model::Union{
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+    },
     turbconv_model::PrognosticEDMFX,
 )
     ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), state, cache)

@@ -60,7 +60,13 @@ sourced from grid-mean vapor.
 Only active when `p.atmos.water.tracer_nonnegativity_method` is `TracerNonnegativityVaporTendency`.
 """
 function tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t,
-    ::NonEquilMoistModel, ::Union{Microphysics1Moment, Microphysics2Moment},
+    ::NonEquilMoistModel,
+    ::Union{
+        Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+    },
 )
     p.atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVaporTendency || return
 

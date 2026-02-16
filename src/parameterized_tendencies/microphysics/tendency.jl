@@ -145,26 +145,38 @@ end
 ##### QuadratureMicrophysics
 #####
 
-# For NonEquilMoistModel + QuadratureMicrophysics{Microphysics1Moment}:
-# The cache (ᶜSqₗᵐ, etc.) already includes ALL tendencies (cloud + precip)
-# from SGS-integrated BMT calls.
-function microphysics_tendency!(Yₜ, Y, p, t,
-    ::NonEquilMoistModel, qm::QuadratureMicrophysics{Microphysics1Moment}, _,
-)
-    (; ᶜSqₗᵐ, ᶜSqᵢᵐ, ᶜSqᵣᵐ, ᶜSqₛᵐ) = p.precomputed
-
-    # Tendencies are already limited in the cache; just scale by density
-    @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜSqₗᵐ
-    @. Yₜ.c.ρq_ice += Y.c.ρ * ᶜSqᵢᵐ
-    @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜSqᵣᵐ
-    @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜSqₛᵐ
-
-    return nothing
-end
-
-# Generic fallback: delegate to base model for other moisture models (e.g., EquilMoistModel)
+# Generic fallback: delegate to base model
 function microphysics_tendency!(Yₜ, Y, p, t,
     moisture_model, qm::QuadratureMicrophysics, turbconv_model,
+)
+    return microphysics_tendency!(
+        Yₜ,
+        Y,
+        p,
+        t,
+        moisture_model,
+        qm.base_model,
+        turbconv_model,
+    )
+end
+
+function microphysics_tendency!(Yₜ, Y, p, t,
+    moisture_model::NonEquilMoistModel, qm::QuadratureMicrophysics{Microphysics1Moment},
+    turbconv_model::DiagnosticEDMFX,
+)
+    return microphysics_tendency!(
+        Yₜ,
+        Y,
+        p,
+        t,
+        moisture_model,
+        qm.base_model,
+        turbconv_model,
+    )
+end
+function microphysics_tendency!(Yₜ, Y, p, t,
+    moisture_model::NonEquilMoistModel, qm::QuadratureMicrophysics{Microphysics1Moment},
+    turbconv_model::PrognosticEDMFX,
 )
     return microphysics_tendency!(
         Yₜ,
@@ -289,6 +301,35 @@ function microphysics_tendency!(Yₜ, Y, p, t,
         @. Yₜ.c.ρq_ice += Y.c.sgsʲs.:($$j).ρa * ᶜSqᵢᵐʲs.:($$j)
         @. Yₜ.c.ρq_sno += Y.c.sgsʲs.:($$j).ρa * ᶜSqₛᵐʲs.:($$j)
     end
+end
+
+function microphysics_tendency!(Yₜ, Y, p, t,
+    moisture_model::NonEquilMoistModel, qm::QuadratureMicrophysics{Microphysics2Moment},
+    turbconv_model::DiagnosticEDMFX,
+)
+    return microphysics_tendency!(
+        Yₜ,
+        Y,
+        p,
+        t,
+        moisture_model,
+        qm.base_model,
+        turbconv_model,
+    )
+end
+function microphysics_tendency!(Yₜ, Y, p, t,
+    moisture_model::NonEquilMoistModel, qm::QuadratureMicrophysics{Microphysics2Moment},
+    turbconv_model::PrognosticEDMFX,
+)
+    return microphysics_tendency!(
+        Yₜ,
+        Y,
+        p,
+        t,
+        moisture_model,
+        qm.base_model,
+        turbconv_model,
+    )
 end
 
 #####
