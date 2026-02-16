@@ -31,29 +31,15 @@ max_rate = limit(q_rai, dt, 3)
     return max(zero(q), q) / dt / n
 end
 
-"""
-    min_limiter(tendency, tendency_bound)
 
-Returns the minimum of two values, `min(tendency, tendency_bound)`.
-This function is a straightforward wrapper around `min`, ensuring that the
-limiting logic remains simple and differentiable (AD-safe).
-
-Used to cap tendencies so that they do not deplete a species beyond its
-current mass within a timestep `dt`.
-
-# TODO: Remove this, since it's just a wrapper around `min`, once it all works.
-"""
-@inline function min_limiter(tendency, tendency_bound)
-    return min(tendency, tendency_bound)
-end
 
 """
     tendency_limiter(tendency, tend_bound_pos, tend_bound_neg)
 
 Limits a `tendency` to be within `[tend_bound_neg, tend_bound_pos]`.
 
-- If `tendency > 0`: limited by `min_limiter(tendency, tend_bound_pos)`
-- If `tendency < 0`: limited by `-min_limiter(-tendency, tend_bound_neg)`
+- If `tendency > 0`: limited by `min(tendency, tend_bound_pos)`
+- If `tendency < 0`: limited by `-min(-tendency, tend_bound_neg)`
 
 This ensures that sources do not exceed `tend_bound_pos` and sinks do not
 exceed `tend_bound_neg` (magnitude-wise).
@@ -72,10 +58,10 @@ negative tracer concentrations.
     tend_bound_neg = max(zero(tend_bound_neg), tend_bound_neg)
 
     # Positive tendency (source): limit by tend_bound_pos
-    limited_pos = min_limiter(tendency, tend_bound_pos)
+    limited_pos = min(tendency, tend_bound_pos)
 
     # Negative tendency (sink): limit by tend_bound_neg (which is positive scalar)
-    limited_neg = -min_limiter(-tendency, tend_bound_neg)
+    limited_neg = -min(-tendency, tend_bound_neg)
 
     # Branchless selection
     return ifelse(tendency >= zero(tendency), limited_pos, limited_neg)
@@ -139,7 +125,7 @@ Only applies limiting when `S < 0` (sink). Source tendencies (`S ≥ 0`) pass th
 
 # Returns
 Limited tendency:
-- If `S < 0`: `-min_limiter(-S, limit(q, dt, n))`
+- If `S < 0`: `-min(-S, limit(q, dt, n))`
 - If `S ≥ 0`: `S` (unchanged)
 
 # Example
@@ -151,7 +137,7 @@ S_evap_limited = limit_sink(S_evap, q_rain, dt, 3)
 @inline function limit_sink(S, q, dt, n = 3)
     return ifelse(
         S < zero(S),
-        -min_limiter(-S, limit(q, dt, n)),
+        -min(-S, limit(q, dt, n)),
         S,
     )
 end
@@ -200,7 +186,8 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
     dt,
 )
     FT = typeof(q_tot)
-    q_vap = q_tot - q_liq - q_ice - q_rai - q_sno
+    # Guard against negative q_vap from numerical errors (AD-safe via max)
+    q_vap = max(zero(q_tot), q_tot - q_liq - q_ice - q_rai - q_sno)
 
     # Mass-conservation limits using cross-species source pools
     n_sink = 5

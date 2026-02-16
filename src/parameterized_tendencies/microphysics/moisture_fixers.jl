@@ -23,14 +23,14 @@ vapor `q_vap`.
 # Returns
 Tendency [kg/kg/s] to add to tracer:
 - If `q >= 0`: Returns `0` (no correction needed)
-- If `q < 0`: Returns positive tendency limited by `min_limiter`
+- If `q < 0`: Returns positive tendency limited by available vapor
 
 # Notes
 Uses `n=5` in `limit()` to share vapor among multiple tracers that may need correction.
 """
 @inline function tracer_nonnegativity_vapor_tendency(q, q_vap, dt)
     # -min(0, q/dt) gives positive tendency when q < 0
-    return min_limiter(-min(zero(q), q / dt), limit(q_vap, dt, 5))
+    return min(-min(zero(q), q / dt), limit(q_vap, dt, 5))
 end
 
 # Default: no correction (dry model, equilibrium moisture, etc.)

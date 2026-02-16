@@ -461,6 +461,20 @@ end
     set_prognostic_edmf_precomputed_quantities_precipitation!(Y, p, microphysics_model)
 
 Updates the precomputed microphysics tendency quantities stored in `p` for EDMFX.
+
+# SGS Quadrature Design
+
+For EDMF, microphysics tendencies are computed separately for updrafts and the environment:
+
+**Updrafts** use direct BMT evaluation (no SGS quadrature) because:
+1. Updrafts are coherent turbulent structures with more homogeneous thermodynamic properties
+2. Updraft area fraction is usually small (~1-10%), so SGS variance within updrafts has limited 
+impact on the grid-mean tendency
+
+**Environment** uses SGS quadrature integration (when `QuadratureMicrophysics` is configured)
+because the environment dominates the grid-mean variance. The quadrature captures subgrid-scale
+fluctuations in temperature and moisture, which is important for threshold processes like
+condensation/evaporation at cloud edges.
 """
 function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
@@ -469,7 +483,6 @@ function set_prognostic_edmf_precomputed_quantities_precipitation!(
 )
     return nothing
 end
-# TODO: Add support for QuadratureMicrophysics 0M
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
@@ -481,6 +494,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     cmp = CAP.microphysics_0m_params(params)
     (;
         ᶜT⁰,
+        ᶜp,
+        ᶜq_tot_safe⁰,
         ᶜq_liq_rai⁰,
         ᶜq_ice_sno⁰,
         ᶜTʲs,
@@ -490,7 +505,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜSqₜᵐ⁰,
     ) = p.precomputed
 
-    # Sources from the updrafts
+    # Sources from the updrafts (direct BMT evaluation without quadrature)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜmp_tendency) = p.precomputed
     for j in 1:n
@@ -507,13 +522,33 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             Y.c.sgsʲs.:($$j).q_tot, dt,
         )
     end
-    # sources from the environment
-    @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics0Moment(),
-        cmp, thp, ᶜT⁰,
-        ᶜq_liq_rai⁰, ᶜq_ice_sno⁰,
-    )
+
+    # Sources from the environment (with SGS quadrature integration)
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+    ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
+
+    # Get SGS quadrature from atmos config (GridMeanSGS if not using QuadratureMicrophysics)
+    SG_quad = if p.atmos.microphysics_model isa QuadratureMicrophysics
+        p.atmos.microphysics_model.quadrature
+    else
+        GridMeanSGS()
+    end
+
+    # Get T-based variances from cache
+    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+
+    # Integrate 0M tendencies over SGS fluctuations
+    @. ᶜmp_tendency = microphysics_tendencies_quadrature_0m(
+        SG_quad,
+        cmp,
+        thp,
+        ᶜρ⁰,
+        ᶜT⁰,
+        ᶜq_tot⁰,
+        ᶜT′T′,
+        ᶜq′q′,
+        correlation_Tq(params),
+    )
     @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_tendency.dq_tot_dt, ᶜq_tot⁰, dt)
     return nothing
 end
