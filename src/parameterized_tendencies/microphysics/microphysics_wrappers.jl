@@ -628,16 +628,25 @@ at each quadrature point is diagnosed using a perturbation-based model.
 
 # Condensate Diagnosis
 
-At each quadrature point, condensate is diagnosed using perturbation theory:
-1. Compute saturation deficit at grid mean: `Δq_mean = q_tot_mean - q_sat(T_mean, ρ)`
-2. Compute saturation deficit at quadrature point: `Δq_hat = q_tot_hat - q_sat(T_hat, ρ)`
-3. Perturbation in saturation excess: `δΔq = Δq_hat - Δq_mean`
-4. Perturbed condensate: `q_cond_hat = max(0, q_cond_mean + δΔq)`
-5. Partition using temperature-dependent liquid fraction `λ(T_hat)`
+At each quadrature point, condensate is diagnosed as:
 
-This ensures:
-- At grid mean `(T_mean, q_tot_mean)`: recovers exactly `(q_lcl_mean, q_icl_mean)`
-- Captures threshold behavior at cloud edges where saturation excess varies
+    q_cond_hat = max(0, excess_hat + bias)
+
+where `excess_hat = q_tot_hat - q_sat(T_hat, ρ)` is the local saturation excess,
+and `bias` corrects for any non-equilibrium offset at the grid mean:
+
+    bias = q_cond_mean - max(0, excess_mean)
+
+The bias represents prognostic condensate that cannot be explained by saturation
+alone (e.g., condensate persisting in a subsaturating environment). When the grid
+mean is in equilibrium (`q_cond_mean ≈ max(0, excess_mean)`), the bias vanishes
+and condensate at each quadrature point reduces to `max(0, excess_hat)`.
+
+When the grid mean is subsaturated (`excess_mean < 0`) with no condensate
+(`q_cond_mean = 0`), the bias is zero, so condensate forms only where the
+quadrature point is actually supersaturated.
+
+Condensate is partitioned into liquid and ice using `λ(T_hat)`.
 """
 @inline function (eval::MicrophysicsEvaluator)(T_hat, q_tot_hat)
     FT = typeof(eval.ρ)
@@ -653,13 +662,13 @@ This ensures:
     # Saturation excess at the quadrature point
     excess_hat = q_tot_hat - q_sat_hat
 
-    # Perturbation in saturation excess using precomputed grid-mean value
-    Δ_excess = excess_hat - eval.excess_mean
-
-    # Apply perturbation to grid-mean condensate
-    # This ensures that at zero variance (T_hat = T_mean, q_tot_hat = q_tot_mean),
-    # we recover exactly q_lcl_mean and q_icl_mean
-    q_cond_hat = max(FT(0), eval.q_cond_mean + Δ_excess)
+    # Non-equilibrium bias: difference between prognostic condensate and
+    # equilibrium condensate (clamped to saturated regime only).
+    # - Subsaturated mean (excess_mean < 0, q_cond_mean = 0): bias = 0
+    # - Saturated equilibrium (q_cond_mean ≈ excess_mean): bias ≈ 0
+    # - Non-equilibrium (q_cond_mean ≠ excess_mean): bias preserves offset
+    bias = eval.q_cond_mean - max(FT(0), eval.excess_mean)
+    q_cond_hat = max(FT(0), excess_hat + bias)
 
     # Partition using grid-mean liquid fraction
     λ = TD.liquid_fraction(eval.tps, T_hat, eval.q_lcl_mean, eval.q_icl_mean)
