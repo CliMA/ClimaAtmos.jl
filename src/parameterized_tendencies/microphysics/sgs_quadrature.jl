@@ -594,7 +594,8 @@ function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
 
     # Use functor instead of closure to avoid heap allocations
     # Field order is (T, q) to match return order of get_physical_point
-    transform = PhysicalPointTransform(quad.dist, μ_T, μ_q, σ_T, σ_q, corr, oftype(μ_T, quad.T_min))
+    transform =
+        PhysicalPointTransform(quad.dist, μ_T, μ_q, σ_T, σ_q, corr, oftype(μ_T, quad.T_min))
 
     return sum_over_quadrature_points(f, transform, quad)
 end
