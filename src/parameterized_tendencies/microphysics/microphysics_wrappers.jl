@@ -459,7 +459,7 @@ end
     return BMT.bulk_microphysics_tendencies(
         BMT.Microphysics0Moment(),
         eval.cm_params, eval.thermo_params,
-        T_hat, q_liq, q_ice,
+        T_hat, q_liq, q_ice, q_sat,
     )
 end
 
