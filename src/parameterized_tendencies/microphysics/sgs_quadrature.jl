@@ -373,42 +373,31 @@ Correlation coefficient corr(T′, q′) ∈ [-1, 1].
 """
     limit_covariances(q′q′, T′T′, corr_Tq, q_mean, quad)
 
-Limit variances and correlation to ensure physical validity.
+Compute standard deviations from variances and enforce physical validity.
 
 Applies two constraints:
-1. ``\\sigma_q`` is bounded to prevent negative ``q_{tot}``:
-   ``\\sigma_q \\leq -q_{mean} / (\\sqrt{2} \\chi_1)``
+1. Variances are floored at zero before taking the square root
 2. Cauchy-Schwarz inequality: ``|\\rho| \\leq 1`` (enforced via `clamp`)
+
+Negative `q_hat` values at extreme quadrature points are handled downstream
+by `max(0, q_hat)` clamping in `get_physical_point`.
 
 # Arguments
 - `q′q′`: Variance of total water ``\\langle q'^2 \\rangle``
 - `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
 - `corr_Tq`: Correlation coefficient ``\\rho(T', q')``
-- `q_mean`: Mean total water
-- `quad`: `SGSQuadrature` struct
+- `q_mean`: Mean total water (unused, kept for API compatibility)
+- `quad`: `SGSQuadrature` struct (unused, kept for API compatibility)
 
 # Returns
-Tuple `(σ_q, σ_T, corr)` of limited standard deviations and correlation.
+Tuple `(σ_q, σ_T, corr)` of standard deviations and clamped correlation.
 """
 @inline function limit_covariances(q′q′, T′T′, corr_Tq, q_mean, quad)
     FT = typeof(q_mean)
-
-    # Limit σ_q to prevent negative q_tot_hat
-    # For Gauss-Hermite, the most negative quadrature point has abscissa quad.a[1] < 0
-    # For order=1, a[1]=0, so no limiting is needed (no variance displacement)
-    sqrt2 = sqrt(FT(2))
-    a_min = quad.a[1]  # Most negative abscissa (or zero for order=1)
-
-    # Branchless limiting: q_hat = μ_q + sqrt2 * σ_q * a_min >= 0
-    # => σ_q <= -μ_q / (sqrt2 * a_min)  when a_min < 0
-    σ_q_raw = sqrt(max(FT(0), q′q′))
-    σ_q_lim = ifelse(a_min < FT(0), -q_mean / (sqrt2 * a_min), σ_q_raw)
-    σ_q = min(σ_q_raw, σ_q_lim)
+    σ_q = sqrt(max(FT(0), q′q′))
     σ_T = sqrt(max(FT(0), T′T′))
-
     # Enforce Cauchy-Schwarz inequality: |corr| ≤ 1
     corr = clamp(corr_Tq, -one(FT), one(FT))
-
     return (σ_q, σ_T, corr)
 end
 
@@ -475,7 +464,7 @@ end
 
     # Use log-normal only if both mean and variance are positive
     use_lognormal = (μ_q > ε) & (σ_q > zero(FT))
-    q_hat = ifelse(use_lognormal, q_lognormal, μ_q)
+    q_hat = max(zero(FT), ifelse(use_lognormal, q_lognormal, μ_q))
 
     # Step 3: Keep Gaussian for T using correlated z_T, clamped to T_min
     # T_min comes from thermo_params for consistency with Thermodynamics.jl constraints
