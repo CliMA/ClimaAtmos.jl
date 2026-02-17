@@ -19,7 +19,7 @@ moist: "nonequil"
 call_cloud_diagnostics_per_stage: true
 precip_model: "1M"
 config: "column"
-z_max: 30000.0  # 30km
+z_max: 33000.0  # 30km
 x_elem: 2
 y_elem: 2
 z_elem: 86
@@ -27,7 +27,8 @@ dz_bottom: 30.0
 z_stretch: false
 perturb_initstate: false
 dt: "5secs"
-t_end: "24hours"
+# t_end: "24hours"
+t_end: "21days"
 dt_save_state_to_disk: "60mins"
 toml: [toml/rcemip_SCM_prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [8, 8, 100]
