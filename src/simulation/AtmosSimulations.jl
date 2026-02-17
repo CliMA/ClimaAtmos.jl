@@ -39,6 +39,7 @@ function setup_diagnostics_and_writers(
         num_points = ClimaDiagnostics.Writers.default_num_points(axes(Y.c));
         z_sampling_method = CAD.LevelsMethod(),  # TODO: Could make this configurable
         sync_schedule = CAD.EveryStepSchedule(),
+        init_time = t_start,
         start_date,
     )
 
