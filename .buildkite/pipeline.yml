@@ -363,12 +363,20 @@ steps:
         artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
 
       - label: ":computer: orographic gravity wave parameterization unit test for base flux calculation"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_baseflux.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_baseflux.jl"
         artifact_paths: "orographic_gravity_wave_test_baseflux/*"
 
       - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_3d.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_3d.jl"
         artifact_paths: "orographic_gravity_wave_test_3d/*"
+
+      - label: ":computer: orographic gravity wave parameterization unit test for computed drag"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_computed_drag.jl"
+        artifact_paths: "orographic_gravity_wave_test_computed_drag/*"
+
+      - label: ":computer: orographic gravity wave Garner 2005 figure reproduction test"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_garner2005_reproduction.jl"
+        artifact_paths: "orographic_gravity_wave_test_garner2005/*"
 
   - group: "Column Examples"
     steps:

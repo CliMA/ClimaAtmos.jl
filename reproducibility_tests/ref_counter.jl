@@ -1,4 +1,4 @@
-315
+316
 
 # **README**
 #
@@ -20,6 +20,8 @@
 
 
 #=
+316
+- Add GPU Orographic Gravity Wave implementation, refactor NOGW tests, add OGW tests and fix base fluxes
 
 315
 - Reduce t_end of several jobs

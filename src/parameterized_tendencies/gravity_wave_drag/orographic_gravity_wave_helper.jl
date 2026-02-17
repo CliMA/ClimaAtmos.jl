@@ -28,21 +28,20 @@ function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
     # later divided again when creating the file that contains the actual T tensor
     # being used.
     dχdx, dχdy = .-calc_∇A(χ, lon, lat, earth_radius)
-    # for antarctic
-    dχdx[:, lat .< FT(-88)] .= FT(0)
-    dχdy[:, lat .< FT(-88)] .= FT(0)
+
+    # Polar taper: cos² rolloff from |lat|=75° to |lat|=90°
+    # Damps spurious gradients from lat-lon grid convergence near poles
+    polar_arg = clamp.((abs.(lat) .- FT(75)) ./ FT(15), FT(0), FT(1))
+    polar_taper = cos.(FT(π) / FT(2) .* polar_arg) .^ 2
+    dhdx .*= polar_taper'
+    dhdy .*= polar_taper'
+    dχdx .*= polar_taper'
+    dχdy .*= polar_taper'
 
     t11 = dχdx .* dhdx
     t21 = dχdx .* dhdy
     t12 = dχdy .* dhdx
     t22 = dχdy .* dhdy
-
-    # Zero out tensor components at polar regions to prevent blow-up from finite differences
-    # This matches the polar masking in calc_velocity_potential
-    t11[:, abs.(lat) .> FT(89)] .= FT(0)
-    t12[:, abs.(lat) .> FT(89)] .= FT(0)
-    t21[:, abs.(lat) .> FT(89)] .= FT(0)
-    t22[:, abs.(lat) .> FT(89)] .= FT(0)
 
     return (t11, t21, t12, t22)
 end
@@ -67,7 +66,7 @@ function calc_∇A(A, lon, lat, earth_radius)
             (A[end, :] .- A[end - 1, :])',
         ) ./ (
             deg2rad(dlon) * earth_radius .*
-            reshape(repeat(cosd.(lat), length(lon)), length(lat), :)'
+            reshape(repeat(max.(cosd.(lat), cosd(FT(60))), length(lon)), length(lat), :)'
         )
     dAdy =
         hcat(
@@ -115,7 +114,7 @@ function calc_velocity_potential(
     n_smoothing_cells = nothing,
     min_smoothing_cells = 1.0,
 )
-    @info "Computing velocity potential (optimized)..."
+    @info "Computing velocity potential (Haversine arc, tiny=1e-12)..."
     FT = eltype(elev)
 
     # Ensure non-negative elevation
@@ -183,25 +182,21 @@ function calc_velocity_potential(
 
     # Pre-compute trigonometric values
     cosphi = cosd.(lat)
-    sinphi = sind.(lat)
 
-    # Pre-compute longitude offset cosines (reused across all grid points)
+    # Pre-compute sin²(Δlon/2) for Haversine formula (reused across all grid points)
     max_ilon_offset = maximum(ilon_range)
-    cosdlam = [cosd(i2 * dlon) for i2 in 0:max_ilon_offset]
+    sin_half_dlon_sq = [sin(deg2rad(i2 * dlon) / 2)^2 for i2 in 0:max_ilon_offset]
 
     # Initialize output
     χ = zeros(FT, nlon, nlat)
 
     # Main convolution loop: latitude (outer) then longitude (inner)
-    # This matches Fortran structure and allows weight pre-computation
+    # Note: Fortran skips |lat| > 89° (get_velpot.f90:81). This is a no-op
+    # (Antarctic mask + zero Arctic elevation) but we match it for safety.
     for j in 1:nlat
-        jlat_deg = lat[j]
-
-        # Skip polar regions (matches Fortran threshold)
-        if abs(jlat_deg) > 89
+        if abs(lat[j]) > FT(89)
             continue
         end
-
         # Determine latitude window for this j
         ja = max(1, j - ilat_range[j])
         jb = min(nlat, j + ilat_range[j])
@@ -213,37 +208,32 @@ function calc_velocity_potential(
         wt = zeros(FT, max_i_offset + 1, jb - ja)  # +1 for zero offset in first dim
 
         cj = cosphi[j]
-        sj = sinphi[j]
 
         # Compute weights once per latitude row (OPTIMIZATION: moved outside i-loop)
         # Note: Fortran uses ja+1:jb (skips first element), we match that here
         for (j1_idx, j1) in enumerate((ja + 1):jb)
             cj1 = cosphi[j1]
-            sj1 = sinphi[j1]
-            ccj = cj * cj1  # cos(lat_j) * cos(lat_j1)
-            ssj = sj * sj1  # sin(lat_j) * sin(lat_j1)
+
+            # Haversine: sin²(Δlat/2) — hoisted out of i2 loop (depends only on j, j1)
+            sin_half_dlat_sq = sin(deg2rad(lat[j1] - lat[j]) / 2)^2
 
             for i2 in 0:max_i_offset
-                # Compute great circle arc distance using offset
-                # arc = acos(cos(lat1)*cos(lat2)*cos(dlon) + sin(lat1)*sin(lat2))
-                arc = acos(min(FT(1), ccj * cosdlam[i2 + 1] + ssj))
+                # Haversine formula for great-circle arc (numerically stable for small arcs)
+                # h = sin²(Δlat/2) + cos(lat₁)·cos(lat₂)·sin²(Δlon/2)
+                # arc = 2·asin(√h)
+                h = sin_half_dlat_sq + cj * cj1 * sin_half_dlon_sq[i2 + 1]
+                arc = FT(2) * asin(sqrt(clamp(h, FT(0), FT(1))))
 
                 # Blackman window taper (matches Fortran exactly)
-                # Fortran: arc1 = arc/max(arc, scale(j)) - clamps arc1 to max of 1.0
-                # This prevents Blackman from going negative for arc > scale
                 arc1 = arc / max(arc, scale[j])
                 blackman =
                     FT(0.42) +
                     FT(0.50) * cos(FT(π) * arc1) +
                     FT(0.08) * cos(FT(2π) * arc1)
 
-                # Weight: cos(lat) / arc * Blackman_window
-                # CRITICAL: Use latitude-dependent regularization to prevent polar blow-up
-                # Fortran uses tiny=1e-12 which causes blow-up at high latitudes for the Julia version
-                # At poles: grid compression makes arc very small, need larger min_arc
-                lat_factor = FT(0.02) + abs(sind(lat[j])) * FT(0.08)  # 2% to 10%
-                min_arc = scale[j] * lat_factor
-                wt[i2 + 1, j1_idx] = cj1 / (arc + min_arc) * blackman
+                # Weight: cos(lat) / (arc + tiny) * Blackman_window
+                # Matches Fortran get_velpot.f90:98-101 with tiny=1e-12
+                wt[i2 + 1, j1_idx] = cj1 / (arc + FT(1e-12)) * blackman
             end
 
             # Zero out singularity (when j == j1 and i_offset == 0)
@@ -278,13 +268,6 @@ function calc_velocity_potential(
                     end
                 end
             end
-            if j == 71 && i == 2487  # The problematic location
-                @info "Debug at blow-up location (i=$i, j=$j, lat=$(lat[j])):"
-                @info "  sum_val = $sum_val"
-                @info "  max weight = $(maximum(abs.(wt)))"
-                @info "  ilon_range[j] = $(ilon_range[j]), ilat_range[j] = $(ilat_range[j])"
-                @info "  scale[j] = $(scale[j])"
-            end
             χ[i, j] = sum_val
         end
     end
@@ -292,19 +275,13 @@ function calc_velocity_potential(
     # Apply area element scaling
     # The weights already include cos(lat) normalization (cj1 term)
     χ .*= (dlon_rad * dlat_rad)
-    # Debug: find where the huge values are
-    max_val, max_idx = findmax(abs.(χ))
-    max_i, max_j = Tuple(max_idx)
-    @info "Max |χ| location: i=$max_i (lon=$(lon[max_i])), j=$max_j (lat=$(lat[max_j])), value=$(χ[max_i, max_j])"
-    @info "χ range before final scaling: min=$(minimum(χ)), max=$(maximum(χ))"
+
     # Add singularity correction term (Green's function correction for finite grid size)
+    # Note: Fortran (get_velpot.f90:121-129) applies this at ALL latitudes.
+    # The term is well-behaved near poles: as lat→90°, dlamj→0 but dlamj*log(...)→0.
+    # Cell-centered grids never have exact polar points, so cos(lat) > 0 always.
     for j in 1:nlat
         jlat_deg = lat[j]
-
-        # Skip polar regions where dlamj → 0 causes log singularity (matches Fortran)
-        if abs(jlat_deg) > 89
-            continue
-        end
 
         cj = cosd(jlat_deg)
         dlamj = dlon_rad * cj
@@ -324,6 +301,104 @@ function calc_velocity_potential(
     χ .*= (earth_radius / (FT(2) * pi))
 
     return χ
+end
+
+
+"""
+    smooth_field_latlon(field, lon, lat, earth_radius;
+                        smoothing_length_scale=nothing,
+                        n_smoothing_cells=nothing,
+                        min_smoothing_cells=1.0)
+
+Smooth a 2D lat-lon field using distance-weighted inverse-quadratic kernel.
+Same kernel and scale computation as `calc_hpoz_latlon`: w = 1/(1 + arc²/scale²).
+Returns the weighted-mean smoothed field.
+"""
+function smooth_field_latlon(
+    field,
+    lon,
+    lat,
+    earth_radius;
+    smoothing_length_scale = nothing,
+    n_smoothing_cells = nothing,
+    min_smoothing_cells = 1.0,
+    use_lat_factor = true,
+)
+    @info "Smoothing field on lat-lon grid..."
+    FT = eltype(field)
+
+    dlat = lat[2] - lat[1]
+    dlon = lon[2] - lon[1]
+
+    # Compute grid-aware scale (same as calc_hpoz_latlon)
+    Δx_lon = deg2rad(dlon) * earth_radius .* cosd.(lat)
+    Δy_lat = deg2rad(dlat) * earth_radius
+    Δh_grid = sqrt.(Δx_lon .^ 2 .+ Δy_lat^2)
+
+    if n_smoothing_cells !== nothing && smoothing_length_scale !== nothing
+        error(
+            "Cannot specify both n_smoothing_cells and smoothing_length_scale. Choose one.",
+        )
+    elseif n_smoothing_cells !== nothing
+        scale_distance = n_smoothing_cells .* Δh_grid
+    elseif smoothing_length_scale !== nothing
+        n_cells = smoothing_length_scale ./ Δh_grid
+        n_cells_clamped = max.(n_cells, min_smoothing_cells)
+        scale_distance = n_cells_clamped .* Δh_grid
+    else
+        default_scale = FT(100e3)
+        n_cells = default_scale ./ Δh_grid
+        n_cells_clamped = max.(n_cells, FT(min_smoothing_cells))
+        scale_distance = n_cells_clamped .* Δh_grid
+    end
+
+    # Scale computation
+    scale = if use_lat_factor
+        # Latitude-dependent scaling (matches Fortran χ/hmax behavior)
+        sind(40) ./ earth_radius ./ sind.(max.(FT(20), abs.(lat))) .*
+        scale_distance
+    else
+        # Isotropic with 1/cos polar compensation
+        scale_distance ./ earth_radius ./ max.(FT(0.3), cosd.(lat))
+    end
+
+    ilat_range = Int.(round.(scale ./ deg2rad(dlat)))
+    ilon_range =
+        min.(
+            Int.(round.(scale ./ (deg2rad(dlon) .* cosd.(lat)))),
+            Int(round(length(lon) / 8)),
+        )
+
+    result = zeros(FT, size(field))
+    cosphi = cosd.(lat)
+
+    nlon = length(lon)
+    for j in eachindex(lat)
+        jrange =
+            max(j - ilat_range[j], 1):min(j + ilat_range[j], length(lat))
+        max_ilon = ilon_range[j]
+        s2 = scale[j]^2
+
+        # Precompute full 2D weight table for this latitude band
+        dlat_dists = deg2rad.(lat[jrange] .- lat[j])
+        dlon_offsets = deg2rad.(((-max_ilon):max_ilon) .* dlon) .* cosphi[j]
+        arc2 = dlon_offsets .^ 2 .+ dlat_dists' .^ 2
+        wt_full = FT(1) ./ (FT(1) .+ arc2 ./ s2)
+
+        for i in eachindex(lon)
+            irange = max(i - max_ilon, 1):min(i + max_ilon, nlon)
+
+            # Map irange to indices in the precomputed weight table
+            wt_i =
+                (first(irange) - i + max_ilon + 1):(last(irange) - i + max_ilon + 1)
+            w = @view wt_full[wt_i, :]
+            field_window = @view field[irange, jrange]
+
+            result[i, j] = sum(w .* field_window) / sum(w)
+        end
+    end
+
+    return result
 end
 
 
@@ -458,7 +533,6 @@ function calc_hpoz_latlon(
         end
     end
 
-    hmax[:, abs.(lat) .> FT(89)] .= FT(0)
     return hmax
 end
 
@@ -472,6 +546,8 @@ function compute_OGW_info(
     n_smoothing_cells_hpoz = 4.0,
     n_smoothing_cells_chi = 4.0,
     smoothing_length_scale = nothing,
+    smoothing_length_scale_chi = nothing,
+    smoothing_length_scale_elev = nothing,
     min_smoothing_cells = 1.0,
 )
     # obtain lat, lon, elevation from the elev_data
@@ -508,24 +584,38 @@ function compute_OGW_info(
 
     # compute χ (with grid-aware smoothing)
     # less smoothing -> stronger drag
-    @debug "n_smoothing_cells for calc_velocity_potential = $n_smoothing_cells_chi"
+    # Use smoothing_length_scale_chi if provided, else fall back to shared smoothing_length_scale
+    chi_length_scale = something(smoothing_length_scale_chi, smoothing_length_scale)
+    chi_n_cells = chi_length_scale !== nothing ? nothing : n_smoothing_cells_chi
+    @debug "chi smoothing: length_scale=$chi_length_scale, n_cells=$chi_n_cells"
     χ = calc_velocity_potential(
         elev,
         lon,
         lat,
         earth_radius;
-        smoothing_length_scale,
-        n_smoothing_cells = n_smoothing_cells_chi,
+        smoothing_length_scale = chi_length_scale,
+        n_smoothing_cells = chi_n_cells,
         min_smoothing_cells,
     )
 
+    # Optionally smooth elevation for tensor gradient computation
+    # (matches effective resolution of coarser Fortran elevation data)
+    elev_for_tensor = if smoothing_length_scale_elev !== nothing
+        @info "Smoothing elevation for tensor gradients (scale=$(smoothing_length_scale_elev)m)"
+        smooth_field_latlon(
+            copy(elev),
+            lon,
+            lat,
+            earth_radius;
+            smoothing_length_scale = smoothing_length_scale_elev,
+        )
+    else
+        elev
+    end
+
     # compute orographic tensor (t11, t21, t12, t22)
-    # Debug: find where the huge values are
-    # max_val, max_idx = findmax(abs.(χ))
-    # max_i, max_j = Tuple(max_idx)
-    # @info "Max |χ| location: i=$max_i (lon=$(lon[max_i])), j=$max_j (lat=$(lat[max_j])), value=$(χ[max_i, max_j])"
-    # @info "χ range before final scaling: min=$(minimum(χ)), max=$(maximum(χ))"
-    t11, t21, t12, t22 = calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
+    t11, t21, t12, t22 =
+        calc_orographic_tensor(elev_for_tensor, χ, lon, lat, earth_radius)
 
 
     topo_ll = (; hmax, hmin, t11, t12, t21, t22)

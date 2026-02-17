@@ -15,6 +15,7 @@ Not yet included in our codebase
 =#
 using ClimaUtilities.ClimaArtifacts
 using ClimaCore: InputOutput
+import .AtmosArtifacts as AA
 
 orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
     orographic_gravity_wave_cache(Y, atmos.orographic_gravity_wave)
@@ -110,9 +111,10 @@ end
 orographic_gravity_wave_compute_tendency!(Y, p, ::Nothing) = nothing
 
 function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravityWave)
-    # unpack cache and scratch vars
-    ᶜT = p.scratch.ᶜtemp_scalar
-    (; ᶜts, ᶜp) = p.precomputed
+    # unpack cache
+    # ᶜT = p.scratch.ᶜtemp_scalar
+    # (; ᶜts, ᶜp) = p.precomputed
+    (; ᶜp, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     (; params) = p
     (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
     (; ᶜdTdz) = p.orographic_gravity_wave
@@ -131,10 +133,11 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     thermo_params = CAP.thermodynamics_params(params)
 
     # compute buoyancy frequency
-    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
+    # @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
     ᶜdTdz .= Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
     @. ᶜbuoyancy_frequency =
-        (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts))
+        (grav / ᶜT) *
+        (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno))
     @. ᶜbuoyancy_frequency =
         ifelse(ᶜbuoyancy_frequency < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜbuoyancy_frequency))) # to avoid small numbers
     @. ᶠbuoyancy_frequency = ᶠinterp(ᶜbuoyancy_frequency)
@@ -465,6 +468,11 @@ function calc_nonpropagating_forcing!(
     @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
     @. ᶜdiff = ᶜinterp.(ᶠp_m1 .- ᶠp)
 
+    # Exclude cells with zero weights from the mask to avoid division by zero.
+    # Zero weight means p == p_ref at that cell, so it contributes nothing
+    # to the pressure-weighted average.
+    @. ᶜmask = ᶜmask && (ᶜweights != FT(0))
+
     parent(ᶜweights) .= parent(ᶜweights .* ᶜmask)
 
     input = @. lazy(ifelse(ᶜmask == true, ᶜdiff / ᶜweights, FT(0)))
@@ -474,7 +482,7 @@ function calc_nonpropagating_forcing!(
     end
 
     if any(isnan.(parent(ᶜwtsum)))
-        error("NaN encountered in weight sum calculation of orographic gravity wave drag")
+        @warn "NaN encountered in weight sum calculation of orographic gravity wave drag"
     end
 
     # Compute drag, handling empty mask case (wtsum=0) gracefully
@@ -921,14 +929,29 @@ function compute_ogw_drag(
 
     cg_lat = Fields.level(Fields.coordinate_field(Y.f).lat, half)
 
-    if topography == Val(:Earth)
+    if topography == Val(:Earth) || topography == Val(:NoWarp)
         #### To-dos:
         # 1. load orography on lat-lon grid and subtract from z_surface
         # 2. use clima grid info, e.g., grid area
 
-        # to be replaced by an artifact ; fn by fn_gen
-        filename = "computed_drag_Earth_false_1_$(h_elem)"
-        topo_info = load_preprocessed_topography(filename)
+        # Try local file first (for development when preprocessing has been run)
+        local_filename = "computed_drag_Earth_false_1_$(h_elem)"
+        local_path = joinpath(pkgdir(@__MODULE__), "$(local_filename).hdf5")
+
+        if isfile(local_path)
+            @info "Loading computed drag from local file: $(local_path)"
+            topo_info = load_preprocessed_topography(local_filename)
+        else
+            # Fall back to ClimaArtifacts
+            @info "Local file not found, loading from ClimaArtifacts (h_elem=$(h_elem))..."
+            artifact_path =
+                AA.ogwd_computed_drag_file_path(; h_elem, context = ClimaComms.context(Y.c))
+            @info "Loading from: $(artifact_path)"
+            reader = InputOutput.HDF5Reader(artifact_path, ClimaComms.context(Y.c))
+            topo_info = InputOutput.read_field(reader, "computed_drag")
+            Base.close(reader)
+        end
+
         return set_topo_info_target_space(topo_info, ᶜsurface_space)
 
         ### Handle analytical test cases

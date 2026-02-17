@@ -261,6 +261,10 @@ end
 function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) where {FT}
     ogw_name = parsed_args["orographic_gravity_wave"]
     @assert ogw_name in (nothing, "gfdl_restart", "raw_topo", "linear")
+    if ogw_name == "gfdl_restart" && parsed_args["topography"] == "NoWarp"
+        @warn "gfdl_restart orographic gravity wave drag requires topography config, but topography is \"NoWarp\". Disabling orographic gravity wave drag."
+        return nothing
+    end
     return if ogw_name == "raw_topo" || ogw_name == "gfdl_restart"
         (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) =
             params.orographic_gravity_wave_params

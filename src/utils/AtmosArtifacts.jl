@@ -118,4 +118,20 @@ function co2_concentration_file_path(; context = nothing)
     return joinpath(@clima_artifact("co2_dataset", context), "co2_mm_mlo.txt")
 end
 
+"""
+    ogwd_computed_drag_file_path(; h_elem::Int, context = nothing)
+
+Construct the file path for the pre-computed OGWD topographic drag HDF5 file.
+
+Pre-computed drag tensor fields (t11, t12, t21, t22) and mountain heights
+(hmax, hmin) for the specified horizontal resolution.
+
+Supports h_elem = 6, 8, 12, 16.
+"""
+function ogwd_computed_drag_file_path(; h_elem::Int, context = nothing)
+    artifact_name = "ogwd_computed_drag_h$(h_elem)"
+    filename = "computed_drag_Earth_false_1_$(h_elem).hdf5"
+    return joinpath(@clima_artifact(artifact_name, context), filename)
+end
+
 end

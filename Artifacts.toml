@@ -90,3 +90,35 @@ git-tree-sha1 = "c2412372bdf40ba73f496dc0fe427d063e31533b"
     [[cloud_fraction_nn.download]]
     sha256 = "a0b8b682539d975c1cc331549d0222a0eda121f5b2977cc63486368a7dc07885"
     url = "https://caltech.box.com/shared/static/vdb6r7cv5tj6uhrphn5a4352smsxdqgs.gz"
+
+[ogwd_computed_drag_h6]
+git-tree-sha1 = "bf189454e5cb19962d8324e7e1667b7aa867bff9"
+lazy = true
+
+    [[ogwd_computed_drag_h6.download]]
+    sha256 = "d47ad38fd56f8ee07369bdc4bcd0c02232e19bdd9f65cef017b9f0e121f258d1"
+    url = "https://caltech.box.com/shared/static/z62wtr479hlsel7j6pv874ykjvdiac9n.gz"
+
+[ogwd_computed_drag_h8]
+git-tree-sha1 = "1a701e3d35845605ba1896d9f633f213def441f4"
+lazy = true
+
+    [[ogwd_computed_drag_h8.download]]
+    sha256 = "cf962a981819dab8694716ea5012c4f506042b906ad22f35fa077a0a0c537cf5"
+    url = "https://caltech.box.com/shared/static/o7x2xs4f2np09szolciybashe3a8r8j0.gz"
+
+[ogwd_computed_drag_h12]
+git-tree-sha1 = "cd53d9017480bd815f734a644ce00b0a63f59374"
+lazy = true
+
+    [[ogwd_computed_drag_h12.download]]
+    sha256 = "347a2f1d7a7ed98112c861e47ef997b454858000977937fab9ee0349cedbcc39"
+    url = "https://caltech.box.com/shared/static/y37wnbxv3hm1bpo3ru5qg44byq8t5fip.gz"
+
+[ogwd_computed_drag_h16]
+git-tree-sha1 = "210b80645a110f32c38d61dd2b958440162fc3fe"
+lazy = true
+
+    [[ogwd_computed_drag_h16.download]]
+    sha256 = "36a0c58e120d0ea2be9d683e13dc4fab42fd8730b3a219de9a24fb9d91defcb0"
+    url = "https://caltech.box.com/shared/static/sn1p7uh0xkzcg7qe6cra7h2bh9j3oamr.gz"
