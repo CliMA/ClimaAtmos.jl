@@ -1,3 +1,4 @@
+output_dir: "/glade/derecho/scratch/oalcabes/scm_rce"
 initial_condition: RCEMIPIIProfile_300
 surface_setup: DefaultMoninObukhov
 surface_temperature: RCEMIPII
