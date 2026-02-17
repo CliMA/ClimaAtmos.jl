@@ -2,6 +2,8 @@ using NCDatasets
 import Interpolations
 using Statistics: mean
 import ClimaUtilities.SpaceVaryingInputs: SpaceVaryingInput
+import ClimaCore: Remapping, Geometry, Fields, Spaces
+import ClimaCore.Utilities: half
 
 """
     calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
@@ -16,7 +18,6 @@ import ClimaUtilities.SpaceVaryingInputs: SpaceVaryingInput
 function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
     @info "Computing T tensor..."
     FT = eltype(elev)
-    bfscale = FT(1e-2)
 
     # compute ∇h
     @. elev = max(0, elev)
@@ -112,7 +113,6 @@ function calc_velocity_potential(
     earth_radius;
     smoothing_length_scale = nothing,
     n_smoothing_cells = nothing,
-    min_smoothing_cells = 1.0,
 )
     @info "Computing velocity potential (Haversine arc, tiny=1e-12)..."
     FT = eltype(elev)
@@ -142,21 +142,15 @@ function calc_velocity_potential(
             "Cannot specify both n_smoothing_cells and smoothing_length_scale. Choose one.",
         )
     elseif n_smoothing_cells !== nothing
-        # User specified exact number of cells
+        # User specified exact number of cells (on lat-lon grid)
         scale_distance = n_smoothing_cells .* Δh_grid
     elseif smoothing_length_scale !== nothing
-        # User specified physical length scale in meters
-        # Compute equivalent number of cells and enforce minimum
-        n_cells = smoothing_length_scale ./ Δh_grid
-        n_cells_clamped = max.(n_cells, min_smoothing_cells)
-        scale_distance = n_cells_clamped .* Δh_grid
+        # User specified physical length scale in meters (from GCM grid)
+        scale_distance = smoothing_length_scale
     else
-        # Default: 100 km scale with minimum cell constraint
-        # Note: FT(200e3) was used in some codes sent by Steve Garner
-        default_scale = FT(100e3)
-        n_cells = default_scale ./ Δh_grid
-        n_cells_clamped = max.(n_cells, FT(min_smoothing_cells))
-        scale_distance = n_cells_clamped .* Δh_grid
+        error(
+            "Must specify either n_smoothing_cells or smoothing_length_scale for grid-aware preprocessing.",
+        )
     end
 
     # Apply latitude-dependent scaling factor (matches Fortran)
@@ -321,7 +315,6 @@ function smooth_field_latlon(
     earth_radius;
     smoothing_length_scale = nothing,
     n_smoothing_cells = nothing,
-    min_smoothing_cells = 1.0,
     use_lat_factor = true,
 )
     @info "Smoothing field on lat-lon grid..."
@@ -340,16 +333,15 @@ function smooth_field_latlon(
             "Cannot specify both n_smoothing_cells and smoothing_length_scale. Choose one.",
         )
     elseif n_smoothing_cells !== nothing
+        # User specified exact number of cells (on lat-lon grid)
         scale_distance = n_smoothing_cells .* Δh_grid
     elseif smoothing_length_scale !== nothing
-        n_cells = smoothing_length_scale ./ Δh_grid
-        n_cells_clamped = max.(n_cells, min_smoothing_cells)
-        scale_distance = n_cells_clamped .* Δh_grid
+        # User specified physical length scale in meters (from GCM grid)
+        scale_distance = smoothing_length_scale
     else
-        default_scale = FT(100e3)
-        n_cells = default_scale ./ Δh_grid
-        n_cells_clamped = max.(n_cells, FT(min_smoothing_cells))
-        scale_distance = n_cells_clamped .* Δh_grid
+        error(
+            "Must specify either n_smoothing_cells or smoothing_length_scale for grid-aware preprocessing.",
+        )
     end
 
     # Scale computation
@@ -428,7 +420,6 @@ function calc_hpoz_latlon(
     earth_radius;
     smoothing_length_scale = nothing,
     n_smoothing_cells = nothing,
-    min_smoothing_cells = 1.0,
 )
     @info "Computing hmax..."
     FT = eltype(elev)
@@ -451,19 +442,15 @@ function calc_hpoz_latlon(
             "Cannot specify both n_smoothing_cells and smoothing_length_scale. Choose one.",
         )
     elseif n_smoothing_cells !== nothing
-        # User specified exact number of cells
+        # User specified exact number of cells (on lat-lon grid)
         scale_distance = n_smoothing_cells .* Δh_grid
     elseif smoothing_length_scale !== nothing
-        # User specified physical length scale in meters
-        n_cells = smoothing_length_scale ./ Δh_grid
-        n_cells_clamped = max.(n_cells, min_smoothing_cells)
-        scale_distance = n_cells_clamped .* Δh_grid
+        # User specified physical length scale in meters (from GCM grid)
+        scale_distance = smoothing_length_scale
     else
-        # Default: 100 km scale with minimum cell constraint
-        default_scale = FT(100e3)
-        n_cells = default_scale ./ Δh_grid
-        n_cells_clamped = max.(n_cells, FT(min_smoothing_cells))
-        scale_distance = n_cells_clamped .* Δh_grid
+        error(
+            "Must specify either n_smoothing_cells or smoothing_length_scale for grid-aware preprocessing.",
+        )
     end
 
     # Apply latitude-dependent scaling factor (matches Fortran)
@@ -542,16 +529,30 @@ function compute_OGW_info(
     earth_radius,
     γ,
     h_frac;
-    skip_pt::Int = 12,
-    n_smoothing_cells_hpoz = 4.0,
-    n_smoothing_cells_chi = 4.0,
-    smoothing_length_scale = nothing,
-    smoothing_length_scale_chi = nothing,
-    smoothing_length_scale_elev = nothing,
-    min_smoothing_cells = 1.0,
+    α_smoothing = 0.15,  # tunable: smoothing scale as fraction of grid resolution
 )
     # obtain lat, lon, elevation from the elev_data
     FT = Spaces.undertype(Spaces.axes(Y.c))
+
+    # Extract GCM grid resolution for grid-aware smoothing
+    hspace = Spaces.horizontal_space(Spaces.axes(Y.c))
+    Δh_GCM = FT(Spaces.node_horizontal_length_scale(hspace))
+
+    # Auto-compute smoothing parameters based on GCM grid resolution
+    # The smoothing scale should be a fraction of the GCM grid scale
+    smoothing_length_scale = α_smoothing * Δh_GCM
+
+    # Determine skip_pt based on desired resolution relative to grid
+    # Raw data is ~10km (21600×10800), we want to downsample appropriately
+    # For a 400km grid with α=0.1, smoothing ~40km, so skip_pt ~4-6
+    raw_data_resolution = FT(2 * π * earth_radius / 21600)  # ~10 km
+    skip_pt = max(4, Int(round(smoothing_length_scale / (4 * raw_data_resolution))))
+
+    @info "Grid-aware OGWD preprocessing" Δh_GCM smoothing_length_scale skip_pt α_smoothing
+
+    # Apply smoothing for hmax and chi, but not for elevation used in drag tensors
+    smoothing_length_scale_chi = smoothing_length_scale  # Smooth chi for numerical stability
+    smoothing_length_scale_elev = nothing  # No smoothing for tensor gradients (keep raw elevation)
     # downsample to elev dims (3600×1800)
     nt = NCDataset(elev_data, "r") do ds
         lon = FT.(Array(ds["lon"]))[1:skip_pt:end]
@@ -563,17 +564,17 @@ function compute_OGW_info(
     FT = eltype(elev)
 
     # compute hmax and hmin (with grid-aware smoothing)
+    # The calc_hpoz_latlon function computes hmn (local mean) at smoothing_length_scale
+    # and subtracts it when computing hmax, effectively filtering out features > smoothing_length_scale
     # less smoothing -> stronger drag
-    @debug "skip_pt = $skip_pt"
-    @debug "n_smoothing_cells for calc_hpoz_latlon = $n_smoothing_cells_hpoz"
+    @info "skip_pt = $skip_pt"
+    @info "smoothing_length_scale for calc_hpoz_latlon = $smoothing_length_scale"
     hpoz = calc_hpoz_latlon(
         elev,
         lon,
         lat,
         earth_radius;
-        smoothing_length_scale,
-        n_smoothing_cells = n_smoothing_cells_hpoz,
-        min_smoothing_cells,
+        smoothing_length_scale = smoothing_length_scale,
     )
     hpoz = @. max(FT(0), hpoz)^(FT(2) - γ)
     hmax = @. (
@@ -582,12 +583,12 @@ function compute_OGW_info(
     )^(FT(1) / (FT(2) - γ))
     hmin = hmax .* h_frac
 
-    # compute χ (with grid-aware smoothing)
+    # compute χ (no smoothing if chi_length_scale is nothing)
     # less smoothing -> stronger drag
-    # Use smoothing_length_scale_chi if provided, else fall back to shared smoothing_length_scale
-    chi_length_scale = something(smoothing_length_scale_chi, smoothing_length_scale)
-    chi_n_cells = chi_length_scale !== nothing ? nothing : n_smoothing_cells_chi
-    @debug "chi smoothing: length_scale=$chi_length_scale, n_cells=$chi_n_cells"
+    chi_length_scale = smoothing_length_scale_chi
+    # If no length scale, use n_smoothing_cells = 0 (no smoothing)
+    chi_n_cells = chi_length_scale !== nothing ? nothing : 0.0
+    @info "chi smoothing: length_scale=$chi_length_scale, n_cells=$chi_n_cells"
     χ = calc_velocity_potential(
         elev,
         lon,
@@ -595,7 +596,6 @@ function compute_OGW_info(
         earth_radius;
         smoothing_length_scale = chi_length_scale,
         n_smoothing_cells = chi_n_cells,
-        min_smoothing_cells,
     )
 
     # Optionally smooth elevation for tensor gradient computation

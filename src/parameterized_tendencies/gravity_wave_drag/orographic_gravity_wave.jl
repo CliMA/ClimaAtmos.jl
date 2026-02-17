@@ -111,6 +111,18 @@ end
 orographic_gravity_wave_compute_tendency!(Y, p, ::Nothing) = nothing
 
 function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravityWave)
+    @debug begin
+        if !hasfield(typeof(p), :ogwd_call_counter)
+            @info "OGWD tendency function called for the first time"
+        end
+
+        # DEBUG: Check if Y has NaNs at entry
+        if any(isnan, parent(Y.c.ρ))
+            @error "OGWD: Input Y.c.ρ already has NaNs at function entry!"
+            error("Cannot compute OGWD tendency with NaN inputs")
+        end
+    end
+
     # unpack cache
     # ᶜT = p.scratch.ᶜtemp_scalar
     # (; ᶜts, ᶜp) = p.precomputed
@@ -204,6 +216,18 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
         cp_d,
         p,
     )
+
+    @debug begin
+        # Checkpoint 2b: Check computed forcing magnitude
+        @info "  Computed forcing: u_max=$(maximum(abs, ᶜuforcing)) m/s², v_max=$(maximum(abs, ᶜvforcing)) m/s²"
+
+        # Warn if forcing is very large (>0.01 m/s² = 1 cm/s² is already strong)
+        max_forcing = max(maximum(abs, ᶜuforcing), maximum(abs, ᶜvforcing))
+        if max_forcing > 0.01
+            @warn "OGWD forcing very large! This may cause instability."
+            @warn "  max_accel=$(max_forcing) m/s² (threshold: 0.01 m/s²)"
+        end
+    end
 end
 
 orographic_gravity_wave_apply_tendency!(Yₜ, p, ::Nothing) = nothing
@@ -361,6 +385,15 @@ function orographic_gravity_wave_forcing!(
     @. ᶜuforcing = max(FT(-3e-3), min(FT(3e-3), ᶜuforcing))
     @. ᶜvforcing = max(FT(-3e-3), min(FT(3e-3), ᶜvforcing))
 
+    @debug begin
+        # DEBUG: Check for NaNs in OGWD forcing
+        if any(isnan, parent(ᶜuforcing)) || any(isnan, parent(ᶜvforcing))
+            @error "NaN detected in OGWD forcing!"
+            @error "  ᶜuforcing: has_nan=$(any(isnan, parent(ᶜuforcing))), min=$(minimum(parent(ᶜuforcing))), max=$(maximum(parent(ᶜuforcing)))"
+            @error "  ᶜvforcing: has_nan=$(any(isnan, parent(ᶜvforcing))), min=$(minimum(parent(ᶜvforcing))), max=$(maximum(parent(ᶜvforcing)))"
+            error("OGWD produced NaN forcing - aborting")
+        end
+    end
 end
 
 function calc_nonpropagating_forcing!(
@@ -941,6 +974,14 @@ function compute_ogw_drag(
         if isfile(local_path)
             @info "Loading computed drag from local file: $(local_path)"
             topo_info = load_preprocessed_topography(local_filename)
+
+            @debug begin
+                # Checkpoint 1: Validate loaded drag tensor
+                @info "OGWD drag tensor loaded from LOCAL FILE (h_elem=$(h_elem)):"
+                @info "  hmax: min=$(minimum(parent(topo_info.hmax))), max=$(maximum(parent(topo_info.hmax))), mean=$(sum(parent(topo_info.hmax))/length(parent(topo_info.hmax)))"
+                @info "  t11: min=$(minimum(parent(topo_info.t11))), max=$(maximum(parent(topo_info.t11)))"
+                @info "  NaN/Inf: hmax_nan=$(any(isnan, parent(topo_info.hmax))), t11_inf=$(any(isinf, parent(topo_info.t11)))"
+            end
         else
             # Fall back to ClimaArtifacts
             @info "Local file not found, loading from ClimaArtifacts (h_elem=$(h_elem))..."
@@ -950,6 +991,14 @@ function compute_ogw_drag(
             reader = InputOutput.HDF5Reader(artifact_path, ClimaComms.context(Y.c))
             topo_info = InputOutput.read_field(reader, "computed_drag")
             Base.close(reader)
+
+            @debug begin
+                # Checkpoint 1: Validate loaded drag tensor
+                @info "OGWD drag tensor loaded from ARTIFACT (h_elem=$(h_elem)):"
+                @info "  hmax: min=$(minimum(topo_info.hmax)), max=$(maximum(topo_info.hmax)), mean=$(sum(parent(topo_info.hmax))/length(parent(topo_info.hmax)))"
+                @info "  t11: min=$(minimum(topo_info.t11)), max=$(maximum(topo_info.t11))"
+                @info "  NaN/Inf: hmax_nan=$(any(isnan, topo_info.hmax)), t11_inf=$(any(isinf, topo_info.t11))"
+            end
         end
 
         return set_topo_info_target_space(topo_info, ᶜsurface_space)
