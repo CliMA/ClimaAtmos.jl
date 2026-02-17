@@ -69,8 +69,12 @@ NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
     ) =
         p.numerics
 
-    # Apply general limiter if configured
+    # Apply general (SEM quasimonotone) limiter if configured.
+    # When ρq_tot is limited, update ρ and ρe_tot for mass and energy consistency.
     if !isnothing(sem_quasimonotone_limiter)
+        if hasproperty(Y.c, :ρq_tot)
+            p.scratch.ᶜtemp_scalar_2 .= Y.c.ρq_tot
+        end
         for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
             Limiters.compute_bounds!(
                 sem_quasimonotone_limiter,
@@ -79,22 +83,22 @@ NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
             )
             Limiters.apply_limiter!(Y.c.:($ρχ_name), Y.c.ρ, sem_quasimonotone_limiter)
         end
+        if hasproperty(Y.c, :ρq_tot)
+            @. p.scratch.ᶜtemp_scalar_2 = Y.c.ρq_tot - p.scratch.ᶜtemp_scalar_2
+            enforce_mass_energy_consistency!(Y, p, p.scratch.ᶜtemp_scalar_2)
+        end
     end
 
     # Apply vertical water borrowing limiter if configured
     # Our state stores ρχ (tracer density). Store χ in scratch, apply limiter, then write ρχ back.
-    # Also note: species filtering is done here, not passed to apply_limiter! (which doesn't support it)
+    # When ρq_tot is limited, update ρ and ρe_tot for mass and energy consistency.
     if !isnothing(vertical_water_borrowing_limiter)
-        # When ρq_tot is limited, we must update ρ and ρe_tot for consistency
-        # dρ/dt = S (mass tendency), d(ρe_tot)/dt = S * (I_y + Φ) for water mass change.
-        ρq_tot_limited =
-            _should_apply_limiter_to_tracer(
-                @name(ρq_tot),
-                vertical_water_borrowing_species,
-            ) &&
-            hasproperty(Y.c, :ρq_tot)
-        if ρq_tot_limited
-            p.scratch.ᶜtemp_scalar_2 .= Y.c.ρq_tot # Temp storage for ρq_tot before limiting.
+        if _should_apply_limiter_to_tracer(
+            @name(ρq_tot),
+            vertical_water_borrowing_species,
+        ) &&
+           hasproperty(Y.c, :ρq_tot)
+            p.scratch.ᶜtemp_scalar_2 .= Y.c.ρq_tot
         end
         ᶜχ = p.scratch.ᶜtemp_scalar
         for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
@@ -105,15 +109,13 @@ NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
                 ρχ .= ᶜχ .* Y.c.ρ
             end
         end
-        # Consistency between columnwise "borrowed water" and borrowed mass / energy. 
-        if ρq_tot_limited
-            ᶜΔρq_tot = similar(Y.c.ρq_tot)
-            ᶜΔρq_tot .= Y.c.ρq_tot .- p.scratch.ᶜtemp_scalar_2
-            thp = CAP.thermodynamics_params(p.params)
-            ᶜT = p.precomputed.ᶜT
-            ᶜΦ = p.core.ᶜΦ
-            @. Y.c.ρ += ᶜΔρq_tot
-            @. Y.c.ρe_tot += ᶜΔρq_tot * (TD.internal_energy_vapor(thp, ᶜT) + ᶜΦ)
+        if _should_apply_limiter_to_tracer(
+            @name(ρq_tot),
+            vertical_water_borrowing_species,
+        ) &&
+           hasproperty(Y.c, :ρq_tot)
+            @. p.scratch.ᶜtemp_scalar_2 = Y.c.ρq_tot - p.scratch.ᶜtemp_scalar_2
+            enforce_mass_energy_consistency!(Y, p, p.scratch.ᶜtemp_scalar_2)
         end
     end
     return nothing
