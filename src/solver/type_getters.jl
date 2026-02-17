@@ -110,11 +110,11 @@ function get_atmos(config::AtmosConfig, params)
     edmfx_model = EDMFXModel(;
         entr_model = get_entrainment_model(parsed_args),
         detr_model = get_detrainment_model(parsed_args),
-        sgs_mass_flux = Val(parsed_args["edmfx_sgs_mass_flux"]),
-        sgs_diffusive_flux = Val(parsed_args["edmfx_sgs_diffusive_flux"]),
-        nh_pressure = Val(parsed_args["edmfx_nh_pressure"]),
-        vertical_diffusion = Val(parsed_args["edmfx_vertical_diffusion"]),
-        filter = Val(parsed_args["edmfx_filter"]),
+        sgs_mass_flux = parsed_args["edmfx_sgs_mass_flux"],
+        sgs_diffusive_flux = parsed_args["edmfx_sgs_diffusive_flux"],
+        nh_pressure = parsed_args["edmfx_nh_pressure"],
+        vertical_diffusion = parsed_args["edmfx_vertical_diffusion"],
+        filter = parsed_args["edmfx_filter"],
         scale_blending_method = get_scale_blending_method(parsed_args),
     )
 
@@ -222,30 +222,28 @@ function get_numerics(parsed_args, FT)
         parsed_args["reproducible_restart"] ? ReproducibleRestart() :
         nothing
 
-    energy_q_tot_upwinding = Val(Symbol(parsed_args["energy_q_tot_upwinding"]))
-    tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"]))
+    energy_q_tot_upwinding = Symbol(parsed_args["energy_q_tot_upwinding"])
+    tracer_upwinding = Symbol(parsed_args["tracer_upwinding"])
 
     # Compat
     if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
-       energy_q_tot_upwinding == Val(:vanleer_limiter)
-        energy_q_tot_upwinding = Val(:none)
+       energy_q_tot_upwinding == :vanleer_limiter
+        energy_q_tot_upwinding = :none
         @warn "energy_q_tot_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting energy_q_tot_upwinding to :none"
     end
     if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
-       tracer_upwinding == Val(:vanleer_limiter)
-        tracer_upwinding = Val(:none)
+       tracer_upwinding == :vanleer_limiter
+        tracer_upwinding = :none
         @warn "tracer_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting tracer_upwinding to :none"
     end
 
-    edmfx_mse_q_tot_upwinding = Val(Symbol(parsed_args["edmfx_mse_q_tot_upwinding"]))
-    edmfx_sgsflux_upwinding =
-        Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
-    edmfx_tracer_upwinding =
-        Val(Symbol(parsed_args["edmfx_tracer_upwinding"]))
+    edmfx_mse_q_tot_upwinding = Symbol(parsed_args["edmfx_mse_q_tot_upwinding"])
+    edmfx_sgsflux_upwinding = Symbol(parsed_args["edmfx_sgsflux_upwinding"])
+    edmfx_tracer_upwinding = Symbol(parsed_args["edmfx_tracer_upwinding"])
 
-    limiter = parsed_args["apply_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
+    limiter =
+        parsed_args["apply_sem_quasimonotone_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
-    # wrap each upwinding mode in a Val for dispatch
     diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
 
     hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
@@ -438,6 +436,8 @@ function get_initial_condition(parsed_args, atmos)
             parsed_args["start_date"],
             parsed_args["era5_initial_condition_dir"],
         )
+    elseif parsed_args["initial_condition"] == "AMIPFromERA5"
+        return ICs.AMIPFromERA5(parsed_args["start_date"])
     elseif parsed_args["initial_condition"] == "ShipwayHill2012"
         return ICs.ShipwayHill2012()
     else
@@ -619,11 +619,6 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
         CTS.IMEXAlgorithm(ode_algo_name(), newtons_method)
     end
 end
-
-thermo_state_type(::DryModel, ::Type{FT}) where {FT} = TD.PhaseDry{FT}
-thermo_state_type(::EquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseEquil{FT}
-thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
-    TD.PhaseNonEquil{FT}
 
 auto_detect_restart_file(::OutputPathGenerator.OutputPathGeneratorStyle, _) =
     error("auto_detect_restart_file works only with ActiveLink")
@@ -976,7 +971,6 @@ function get_grid(parsed_args, params, context)
             x_elem = parsed_args["x_elem"],
             x_max = parsed_args["x_max"],
             nh_poly = parsed_args["nh_poly"],
-            bubble = parsed_args["bubble"],
             periodic_x = true,
             kwargs...,
         )
@@ -1051,6 +1045,38 @@ function get_simulation(config::AtmosConfig)
     steady_state_velocity =
         get_steady_state_velocity(params, Y, config.parsed_args)
 
+    FT = Spaces.undertype(axes(Y.c))
+
+    # Parse vertical_water_borrowing configuration for cache
+    # Check if tracer_nonnegativity_method is vertical_water_borrowing
+    tracer_nonneg_method = config.parsed_args["tracer_nonnegativity_method"]
+    is_vertical_water_borrowing =
+        !isnothing(tracer_nonneg_method) &&
+        (
+            tracer_nonneg_method == "vertical_water_borrowing" ||
+            startswith(tracer_nonneg_method, "vertical_water_borrowing_")
+        )
+
+    vwb_thresholds = is_vertical_water_borrowing ? (FT(0.0),) : nothing
+
+    vwb_species =
+        if is_vertical_water_borrowing &&
+           haskey(config.parsed_args, "vertical_water_borrowing_species") &&
+           !isnothing(config.parsed_args["vertical_water_borrowing_species"])
+            species_config = config.parsed_args["vertical_water_borrowing_species"]
+            if species_config isa Vector
+                tuple(Symbol.(species_config)...)
+            elseif species_config isa String
+                (Symbol(species_config),)
+            else
+                error(
+                    "vertical_water_borrowing_species must be a string or list of strings, got $(typeof(species_config))",
+                )
+            end
+        else
+            nothing  # Default: apply to all tracers
+        end
+
     s = @timed_str begin
         p = build_cache(
             Y,
@@ -1062,13 +1088,10 @@ function get_simulation(config::AtmosConfig)
             tracers.aerosol_names,
             tracers.time_varying_trace_gas_names,
             steady_state_velocity,
+            vwb_species,
         )
     end
     @info "Allocating cache (p): $s"
-
-    if config.parsed_args["discrete_hydrostatic_balance"]
-        set_discrete_hydrostatic_balanced_state!(Y, p)
-    end
 
     FT = Spaces.undertype(axes(Y.c))
     s = @timed_str begin

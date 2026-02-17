@@ -242,59 +242,6 @@ function entrainment(
     return max(entr, 0) # Ensure non-negative
 end
 
-function detrainment_from_thermo_state(
-    thermo_params,
-    turbconv_params,
-    z_prev_level,
-    z_sfc_halflevel,
-    p_prev_level,
-    ρ_prev_level,
-    ρaʲ_prev_level,
-    tsʲ_prev_level,
-    ρʲ_prev_level,
-    u³ʲ_prev_halflevel,
-    local_geometry_prev_halflevel,
-    u³_prev_halflevel,
-    ts_prev_level,
-    ᶜbuoy⁰,
-    entrʲ_prev_level,
-    vert_div_level,
-    ᶜmassflux_vert_div, # mass flux divergence is not implemented for diagnostic edmf
-    w_vert_div_level,
-    tke_prev_level,
-    ᶜgradᵥ_ᶠΦ,
-    edmfx_detr_model,
-)
-    FT = eltype(thermo_params)
-    detrainment(
-        thermo_params,
-        turbconv_params,
-        z_prev_level,
-        z_sfc_halflevel,
-        p_prev_level,
-        ρ_prev_level,
-        ρaʲ_prev_level,
-        draft_area(ρaʲ_prev_level, ρʲ_prev_level),
-        get_physical_w(u³ʲ_prev_halflevel, local_geometry_prev_halflevel),
-        TD.relative_humidity(thermo_params, tsʲ_prev_level),
-        vertical_buoyancy_acceleration(
-            ρ_prev_level,
-            ρʲ_prev_level,
-            ᶜgradᵥ_ᶠΦ,
-            local_geometry_prev_halflevel,
-        ),
-        get_physical_w(u³_prev_halflevel, local_geometry_prev_halflevel),
-        TD.relative_humidity(thermo_params, ts_prev_level),
-        FT(0),
-        entrʲ_prev_level,
-        vert_div_level,
-        FT(0), # mass flux divergence is not implemented for diagnostic edmf
-        w_vert_div_level,
-        tke_prev_level,
-        edmfx_detr_model,
-    )
-end
-
 """
     detrainment(
         thermo_params, turbconv_params, ᶜz, z_sfc, ᶜp, ᶜρ, ᶜρaʲ, ᶜaʲ,
@@ -601,7 +548,7 @@ function edmfx_first_interior_entr_tendency!(
 )
 
     (; params, dt) = p
-    (; ᶜK, ᶜρʲs, ᶜentrʲs, ᶜts) = p.precomputed
+    (; ᶜK, ᶜρʲs, ᶜentrʲs) = p.precomputed
 
     FT = eltype(params)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -637,8 +584,7 @@ function edmfx_first_interior_entr_tendency!(
         Fields.local_geometry_field(Fields.level(Y.f, Fields.half)),
     )
 
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+    (; ᶜh_tot) = p.precomputed
     ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
     ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
@@ -651,17 +597,6 @@ function edmfx_first_interior_entr_tendency!(
 
     for j in 1:n
 
-        # Seed a small positive updraft area fraction when surface buoyancy flux is positive.
-        # This perturbation prevents the plume area from staying identically zero,
-        # allowing entrainment to grow it to the prescribed surface area.
-        sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
-        sgsʲs_ρa_int_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
-        sgsʲs_ρaₜ_int_val = Fields.field_values(Fields.level(Yₜ.c.sgsʲs.:($j).ρa, 1))
-        @. sgsʲs_ρaₜ_int_val += ifelse(buoyancy_flux_val < 0,
-            0,
-            max(0, (sgsʲs_ρ_int_val * $(eps(FT)) - sgsʲs_ρa_int_val) / dt),
-        )
-
         # Apply entrainment tendencies in the first model cell for moist static energy (mse) 
         # and total humidity (q_tot). The entrained fluid is assumed to have a scalar value 
         # given by `sgs_scalar_first_interior_bc` (mean + SGS perturbation). Since 
@@ -669,6 +604,8 @@ function edmfx_first_interior_entr_tendency!(
         # contrast, we supply the high-value (entrained) tracer minus the environment value 
         # here to form the correct tendency.
         entr_int_val = Fields.field_values(Fields.level(ᶜentrʲs.:($j), 1))
+        sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
+        sgsʲs_ρa_int_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
         @. ᶜaʲ_int_val = max(
             FT(turbconv_params.surface_area),
             draft_area(sgsʲs_ρa_int_val, sgsʲs_ρ_int_val),
@@ -720,6 +657,8 @@ limit_entrainment(entr::FT, a, dt) where {FT} = max(
 )
 limit_detrainment(detr::FT, a, dt) where {FT} =
     max(min(detr, FT(0.9) * 1 / dt), 0)
+limit_detrainment(detr::FT, entr::FT, a, dt) where {FT} =
+    max(detr, entr - FT(0.9) * 1 / dt)
 
 function limit_turb_entrainment(dyn_entr::FT, turb_entr, dt) where {FT}
     return max(min((FT(0.9) * 1 / dt) - dyn_entr, turb_entr), 0)

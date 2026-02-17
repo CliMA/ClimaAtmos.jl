@@ -144,18 +144,16 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     (; ls_adv, scm_coriolis) = p.atmos
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜp, sfc_conditions, ᶜts, ᶜK) = p.precomputed
+    (; ᶜp, ᶜK, ᶜT, ᶜh_tot, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; sfc_conditions) = p.precomputed
 
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     vst_uₕ = viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
     vst_u₃ = viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge)
     vst_ρe_tot = viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge)
     rst_uₕ = rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge)
 
     if use_prognostic_tke(turbconv_model)
-        rst_ρtke =
-            rayleigh_sponge_tendency_sgs_tracer(Y.c.ρtke, rayleigh_sponge)
+        rst_ρtke = rayleigh_sponge_tendency_sgs_tracer(Y.c.ρtke, rayleigh_sponge)
         @. Yₜ.c.ρtke += rst_ρtke
     end
     if turbconv_model isa PrognosticEDMFX
@@ -164,15 +162,11 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         n = n_mass_flux_subdomains(p.atmos.turbconv_model)
         for j in 1:n
             rst_sgs_mse = rayleigh_sponge_tendency_sgs_tracer(
-                Y.c.sgsʲs.:($j).mse,
-                ᶜmse,
-                rayleigh_sponge,
+                Y.c.sgsʲs.:($j).mse, ᶜmse, rayleigh_sponge,
             )
             @. Yₜ.c.sgsʲs.:($$j).mse += rst_sgs_mse
             rst_sgs_q_tot = rayleigh_sponge_tendency_sgs_tracer(
-                Y.c.sgsʲs.:($j).q_tot,
-                ᶜq_tot,
-                rayleigh_sponge,
+                Y.c.sgsʲs.:($j).q_tot, ᶜq_tot, rayleigh_sponge,
             )
             @. Yₜ.c.sgsʲs.:($$j).q_tot += rst_sgs_q_tot
         end
@@ -185,29 +179,23 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
                 (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
                 (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
             )
-            MatrixFields.unrolled_foreach(
-                moisture_species,
-            ) do (sgs_q_name, ρq_name)
+            MatrixFields.unrolled_foreach(moisture_species) do (sgs_q_name, ρq_name)
                 ᶜρq = MatrixFields.get_field(Y, ρq_name)
                 ᶜq = @. lazy(specific(ᶜρq, Y.c.ρ))
                 ᶜsgs_q = MatrixFields.get_field(Y, sgs_q_name)
                 ᶜsgs_qₜ = MatrixFields.get_field(Yₜ, sgs_q_name)
-                rst_sgs_q = rayleigh_sponge_tendency_sgs_tracer(
-                    ᶜsgs_q,
-                    ᶜq,
-                    rayleigh_sponge,
-                )
+                rst_sgs_q = rayleigh_sponge_tendency_sgs_tracer(ᶜsgs_q, ᶜq, rayleigh_sponge)
                 @. ᶜsgs_qₜ += rst_sgs_q
             end
         end
     end
     # For HeldSuarezForcing, the radiation_mode is used as the forcing parameter
     forcing = radiation_mode isa HeldSuarezForcing ? radiation_mode : nothing
-    hs_args = (ᶜuₕ, ᶜp, params, sfc_conditions.ts, moisture_model, forcing)
+    hs_args = (ᶜuₕ, ᶜp, params, sfc_conditions.T_sfc, moisture_model, forcing)
     hs_tendency_uₕ = held_suarez_forcing_tendency_uₕ(hs_args...)
     hs_tendency_ρe_tot = held_suarez_forcing_tendency_ρe_tot(ᶜρ, hs_args...)
     edmf_cor_tend_uₕ = scm_coriolis_tendency_uₕ(ᶜuₕ, scm_coriolis)
-    lsa_args = (ᶜρ, thermo_params, ᶜts, t, ls_adv)
+    lsa_args = (ᶜρ, thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, t, ls_adv)
     bc_lsa_tend_ρe_tot = large_scale_advection_tendency_ρe_tot(lsa_args...)
 
     # TODO: fuse, once we fix
@@ -277,8 +265,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     radiation_tendency!(Yₜ, Y, p, t, p.atmos.radiation_mode)
     if p.atmos.sgs_entr_detr_mode == Explicit()
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+        edmfx_first_interior_entr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
-    edmfx_first_interior_entr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     if p.atmos.sgs_mf_mode == Explicit()
         edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end

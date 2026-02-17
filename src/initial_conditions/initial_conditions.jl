@@ -48,21 +48,6 @@ struct ColumnInterpolatableField{F, D}
 end
 (f::ColumnInterpolatableField)(z) = Spaces.undertype(axes(f.f))(f.data(z))
 
-function Base.show(io::IO, x::ColumnInterpolatableField)
-    # Extract z grid from the wrapped column field
-    z = Fields.coordinate_field(x.f).z
-    nz = Spaces.nlevels(z)
-    zmin, zmax = extrema(z)
-    val_eltype = eltype(x.f)
-    # These are fixed by the constructor
-    interp_str = "Linear"
-    extrap_str = "Flat"
-    print(io,
-        "ColumnInterpolatableField(Nz=$nz, z∈[$zmin, $zmax], value_eltype=$val_eltype, ",
-        "interpolation=$interp_str, extrapolation=$extrap_str)",
-    )
-end
-
 import ClimaComms
 import ClimaCore.Domains as Domains
 import ClimaCore.Meshes as Meshes
@@ -143,7 +128,6 @@ function (initial_condition::IsothermalProfile)(params)
         R_d = CAP.R_d(params)
         MSLP = CAP.MSLP(params)
         grav = CAP.grav(params)
-        thermo_params = CAP.thermodynamics_params(params)
         T = FT(temperature)
 
         (; z) = local_geometry.coordinates
@@ -152,7 +136,8 @@ function (initial_condition::IsothermalProfile)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+            T = T,
+            p = p,
         )
     end
     return local_state
@@ -191,7 +176,8 @@ function (initial_condition::DecayingProfile)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+            T = T,
+            p = p,
         )
     end
     return local_state
@@ -224,18 +210,30 @@ struct WeatherModel <: InitialCondition
     era5_initial_condition_dir::Union{Nothing, String}
 end
 
-function (initial_condition::Union{MoistFromFile, WeatherModel})(params)
+"""
+    AMIPFromERA5(start_date)
+
+An `InitialCondition` for AMIP simulations using ERA5 monthly reanalysis data.
+Uses the `amip_era5_ic` artifact containing pre-processed ERA5 data interpolated
+to z-levels, matching the format expected by the WeatherModel machinery.
+
+Expected artifact structure: `amip_era5_ic/era5_init_YYYYMMDD_0000.nc`
+"""
+struct AMIPFromERA5 <: InitialCondition
+    start_date::String
+end
+
+function (initial_condition::Union{MoistFromFile, WeatherModel, AMIPFromERA5})(params)
     function local_state(local_geometry)
         FT = eltype(params)
-        grav = CAP.grav(params)
-        thermo_params = CAP.thermodynamics_params(params)
 
         T, p = FT(NaN), FT(NaN) # placeholder values
 
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+            T = T,
+            p = p,
         )
     end
     return local_state
@@ -257,7 +255,6 @@ function (initial_condition::DryDensityCurrentProfile)(params)
     function local_state(local_geometry)
         FT = eltype(params)
         grav = CAP.grav(params)
-        thermo_params = CAP.thermodynamics_params(params)
         ndims = length(propertynames(local_geometry.coordinates))
         (; x, z) = local_geometry.coordinates
         x_c = FT(25600)
@@ -294,7 +291,8 @@ function (initial_condition::DryDensityCurrentProfile)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+            T = T,
+            p = p,
         )
     end
     return local_state
@@ -315,7 +313,6 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
     function local_state(local_geometry)
         FT = eltype(params)
         grav = CAP.grav(params)
-        thermo_params = CAP.thermodynamics_params(params)
         ndims = length(propertynames(local_geometry.coordinates))
         (; x, z) = local_geometry.coordinates
         x_c = FT(500)
@@ -352,7 +349,8 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+            T = T,
+            p = p,
         )
     end
     return local_state
@@ -369,7 +367,7 @@ three different SST temperatures and different initial specific humidity
 profiles. Note: this should be used for RCE_small and NOT
 RCE_large - RCE_large must be initialized with the final state of RCE_small.
 """
-struct RCEMIPIIProfile{FT} <: InitialCondition
+@kwdef struct RCEMIPIIProfile{FT} <: InitialCondition
     temperature::FT
     humidity::FT
 end
@@ -384,7 +382,6 @@ function (initial_condition::RCEMIPIIProfile)(params)
         FT = eltype(params)
         R_d = CAP.R_d(params)
         grav = CAP.grav(params)
-        thermo_params = CAP.thermodynamics_params(params)
 
         T_0 = FT(temperature)
         q_0 = FT(humidity)
@@ -413,7 +410,9 @@ function (initial_condition::RCEMIPIIProfile)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q),
+            T = T,
+            p = p,
+            q_tot = q,
         )
     end
     return local_state
@@ -516,20 +515,18 @@ function correct_surface_pressure_for_topography!(
         return false
     end
 
-    FT = eltype(thermo_params)
     grav = thermo_params.grav
 
     ᶠz_model_surface = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
-    ᶠΔz = zeros(face_space)
-    @. ᶠΔz = ᶠz_model_surface - ᶠz_surface
+    ᶠΔz = @. ᶠz_model_surface - ᶠz_surface
 
-    ᶠR_m = ᶠinterp.(TD.gas_constant_air.(thermo_params, TD.PhasePartition.(ᶜq_tot)))
+    ᶠR_m = ᶠinterp.(TD.gas_constant_air.(thermo_params, ᶜq_tot))
     ᶠR_m_sfc = Fields.level(ᶠR_m, Fields.half)
 
     ᶠT = ᶠinterp.(ᶜT)
     ᶠT_sfc = Fields.level(ᶠT, Fields.half)
 
-    @. p_sfc = p_sfc * exp(FT(-1) * ᶠΔz * grav / (ᶠR_m_sfc * ᶠT_sfc))
+    @. p_sfc = p_sfc * exp(-(ᶠΔz) * grav / (ᶠR_m_sfc * ᶠT_sfc))
 
     @info "Adjusted surface pressure to account for ERA5/model surface-height differences."
     return true
@@ -669,15 +666,15 @@ function overwrite_initial_conditions!(
         # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile,
         # recompute the pressure levels assuming hydrostatic balance is maintained.
         ᶜ∂lnp∂z = @. -thermo_params.grav /
-           (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
+           (TD.gas_constant_air(thermo_params, ᶜq_tot) * ᶜT)
         ᶠlnp_over_psfc = zeros(face_space)
         Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
         p_sfc .* exp.(ᶠlnp_over_psfc)
     end
-    ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp.(ᶠp), ᶜT, ᶜq_tot)
+    ᶜρ = TD.air_density.(thermo_params, ᶜT, ᶜinterp.(ᶠp), ᶜq_tot)
 
     # Assign prognostic variables from equilibrium moisture models
-    Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
+    Y.c.ρ .= TD.air_density.(thermo_params, ᶜT, ᶜinterp.(ᶠp), ᶜq_tot)
     # Velocity is first assigned on cell-centers and then interpolated onto
     # cell faces.
     vel =
@@ -709,10 +706,10 @@ function overwrite_initial_conditions!(
     e_kin = similar(ᶜT)
     e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
     e_pot = geopotential.(thermo_params.grav, Fields.coordinate_field(Y.c).z)
-    Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
+    Y.c.ρe_tot .= TD.total_energy.(thermo_params, e_kin, e_pot, ᶜT, ᶜq_tot) .* Y.c.ρ
     # Initialize prognostic EDMF 0M subdomains if present
     if hasproperty(Y.c, :sgsʲs)
-        ᶜmse = TD.specific_enthalpy.(thermo_params, ᶜts) .+ e_pot
+        ᶜmse = TD.enthalpy.(thermo_params, ᶜT, ᶜq_tot) .+ e_pot
         for name in propertynames(Y.c.sgsʲs)
             s = getproperty(Y.c.sgsʲs, name)
             hasproperty(s, :ρa) && fill!(s.ρa, 0)
@@ -727,6 +724,14 @@ function overwrite_initial_conditions!(
             "`dry` configurations are incompatible with the interpolated initial conditions.",
         )
     end
+
+    if hasproperty(Y.c, :ρq_liq)
+        fill!(Y.c.ρq_liq, 0)
+    end
+    if hasproperty(Y.c, :ρq_ice)
+        fill!(Y.c.ρq_ice, 0)
+    end
+
     if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
         Y.c.ρq_sno .=
             SpaceVaryingInputs.SpaceVaryingInput(
@@ -755,10 +760,48 @@ function overwrite_initial_conditions!(
 end
 
 """
-    _overwrite_initial_conditions_from_file!(file_path::String, Y, thermo_params, config)
+    overwrite_initial_conditions!(initial_condition::AMIPFromERA5, Y, thermo_params)
+
+Overwrite the prognostic state `Y` with ERA5-derived initial conditions for AMIP simulations.
+Initial condition corresponds to Jan 1, 2010 at 00Z.
+Uses hydrostatic integration from surface pressure to compute the pressure profile.
+
+Expected variables in the IC file:
+- 3D: `u`, `v`, `w`, `t`, `q`
+- 2D broadcast in `z`: `p` (surface pressure)
+"""
+function overwrite_initial_conditions!(
+    initial_condition::AMIPFromERA5,
+    Y,
+    thermo_params,
+)
+    # Get file path from AMIP artifact
+    dt = parse_date(initial_condition.start_date)
+    start_date_str = Dates.format(dt, "yyyymmdd")
+
+    file_path = joinpath(
+        @clima_artifact("era5_inst_model_levels"),
+        "era5_init_processed_internal_$(start_date_str)_0000.nc",
+    )
+
+    extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
+
+    return _overwrite_initial_conditions_from_file!(
+        file_path,
+        extrapolation_bc,
+        Y,
+        thermo_params;
+        regridder_type = :InterpolationsRegridder,
+        interpolation_method = Intp.Linear(),
+    )
+end
+
+"""
+    _overwrite_initial_conditions_from_file!(file_path, extrapolation_bc, Y, thermo_params;
+                                              regridder_type=nothing, interpolation_method=nothing)
 
 Given a prognostic state `Y`, an `initial condition` (specifically, where initial values are
-assigned from interpolations of existing datasets), a `thermo_state`, this function
+assigned from interpolations of existing datasets), and `thermo_params`, this function
 overwrites the default initial condition and populates prognostic variables with
 interpolated values using the `SpaceVaryingInputs` tool. To mitigate issues related to
 unbalanced states following the interpolation operation, we recompute vertical pressure
@@ -770,14 +813,34 @@ We expect the file to contain the following variables:
 - `q`, for humidity,
 - `u, v, w`, for velocity,
 - `cswc, crwc` for snow and rain water content (for 1 moment microphysics).
+
+If the file contains `z_sfc` (surface altitude), a hydrostatic correction is applied
+to account for differences between the file's orography and the model's topography.
+
+Optional keyword arguments:
+- `regridder_type`: The regridder type to use (e.g., `:InterpolationsRegridder`)
+- `interpolation_method`: The interpolation method (e.g., `Intp.Linear()`)
 """
 function _overwrite_initial_conditions_from_file!(
     file_path::String,
     extrapolation_bc,
     Y,
-    thermo_params,
+    thermo_params;
+    regridder_type = nothing,
+    interpolation_method = nothing,
 )
-    regridder_kwargs = isnothing(extrapolation_bc) ? () : (; extrapolation_bc)
+    regridder_kwargs = if isnothing(extrapolation_bc) && isnothing(interpolation_method)
+        ()
+    elseif isnothing(interpolation_method)
+        (; extrapolation_bc)
+    elseif isnothing(extrapolation_bc)
+        (; interpolation_method)
+    else
+        (; extrapolation_bc, interpolation_method)
+    end
+    svi_kwargs =
+        isnothing(regridder_type) ? (; regridder_kwargs) :
+        (; regridder_type, regridder_kwargs)
     isfile(file_path) || error("$(file_path) is not a file")
     @info "Overwriting initial conditions with data from file $(file_path)"
     center_space = Fields.axes(Y.c)
@@ -788,23 +851,42 @@ function _overwrite_initial_conditions_from_file!(
         SpaceVaryingInputs.SpaceVaryingInput(
             file_path,
             "p",
-            face_space,
-            regridder_kwargs = regridder_kwargs,
+            face_space;
+            svi_kwargs...,
         ),
         Fields.half,
     )
     ᶜT = SpaceVaryingInputs.SpaceVaryingInput(
         file_path,
         "t",
-        center_space,
-        regridder_kwargs = regridder_kwargs,
+        center_space;
+        svi_kwargs...,
     )
     ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(
         file_path,
         "q",
-        center_space,
-        regridder_kwargs = regridder_kwargs,
+        center_space;
+        svi_kwargs...,
     )
+
+    # Apply hydrostatic surface-pressure correction only if surface altitude is available
+    surface_altitude_var = "z_sfc"
+    has_surface_altitude = NC.NCDataset(file_path) do ds
+        haskey(ds, surface_altitude_var)
+    end
+    if has_surface_altitude
+        correct_surface_pressure_for_topography!(
+            p_sfc,
+            file_path,
+            face_space,
+            Y,
+            ᶜT,
+            ᶜq_tot,
+            thermo_params,
+            regridder_kwargs;
+            surface_altitude_var = surface_altitude_var,
+        )
+    end
 
     # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile,
     # recompute the pressure levels assuming hydrostatic balance is maintained.
@@ -818,14 +900,12 @@ function _overwrite_initial_conditions_from_file!(
     # p is then updated with the integral result, given p_sfc,
     # following which the thermodynamic state is constructed.
     ᶜ∂lnp∂z = @. -thermo_params.grav /
-       (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
+                 (TD.gas_constant_air(thermo_params, ᶜq_tot) * ᶜT)
     ᶠlnp_over_psfc = zeros(face_space)
     Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
     ᶠp = p_sfc .* exp.(ᶠlnp_over_psfc)
-    ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp.(ᶠp), ᶜT, ᶜq_tot)
-
     # Assign prognostic variables from equilibrium moisture models
-    Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
+    Y.c.ρ .= TD.air_density.(thermo_params, ᶜT, ᶜinterp.(ᶠp), ᶜq_tot)
     # Velocity is first assigned on cell-centers and then interpolated onto
     # cell faces.
     vel =
@@ -833,20 +913,20 @@ function _overwrite_initial_conditions_from_file!(
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "u",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
+                center_space;
+                svi_kwargs...,
             ),
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "v",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
+                center_space;
+                svi_kwargs...,
             ),
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "w",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
+                center_space;
+                svi_kwargs...,
             ),
         )
     Y.c.uₕ .= C12.(Geometry.UVVector.(vel))
@@ -854,7 +934,7 @@ function _overwrite_initial_conditions_from_file!(
     e_kin = similar(ᶜT)
     e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
     e_pot = geopotential.(thermo_params.grav, Fields.coordinate_field(Y.c).z)
-    Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
+    Y.c.ρe_tot .= TD.total_energy.(thermo_params, e_kin, e_pot, ᶜT, ᶜq_tot) .* Y.c.ρ
     if hasproperty(Y.c, :ρq_tot)
         Y.c.ρq_tot .= ᶜq_tot .* Y.c.ρ
     else
@@ -862,21 +942,46 @@ function _overwrite_initial_conditions_from_file!(
             "`dry` configurations are incompatible with the interpolated initial conditions.",
         )
     end
+
+    if hasproperty(Y.c, :ρq_liq)
+        fill!(Y.c.ρq_liq, 0)
+    end
+    if hasproperty(Y.c, :ρq_ice)
+        fill!(Y.c.ρq_ice, 0)
+    end
     if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
-        Y.c.ρq_sno .=
-            SpaceVaryingInputs.SpaceVaryingInput(
-                file_path,
-                "cswc",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
-            ) .* Y.c.ρ
-        Y.c.ρq_rai .=
-            SpaceVaryingInputs.SpaceVaryingInput(
-                file_path,
-                "crwc",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
-            ) .* Y.c.ρ
+        has_microphysics_vars = NC.NCDataset(file_path) do ds
+            haskey(ds, "cswc") && haskey(ds, "crwc")
+        end
+        if has_microphysics_vars
+            Y.c.ρq_sno .=
+                SpaceVaryingInputs.SpaceVaryingInput(
+                    file_path,
+                    "cswc",
+                    center_space;
+                    svi_kwargs...,
+                ) .* Y.c.ρ
+            Y.c.ρq_rai .=
+                SpaceVaryingInputs.SpaceVaryingInput(
+                    file_path,
+                    "crwc",
+                    center_space;
+                    svi_kwargs...,
+                ) .* Y.c.ρ
+        else
+            fill!(Y.c.ρq_sno, 0)
+            fill!(Y.c.ρq_rai, 0)
+        end
+    end
+    # Initialize prognostic EDMF 0M subdomains if present
+    if hasproperty(Y.c, :sgsʲs)
+        ᶜmse = TD.enthalpy.(thermo_params, ᶜT, ᶜq_tot) .+ e_pot
+        for name in propertynames(Y.c.sgsʲs)
+            s = getproperty(Y.c.sgsʲs, name)
+            hasproperty(s, :ρa) && fill!(s.ρa, 0)
+            hasproperty(s, :mse) && (s.mse .= ᶜmse)
+            hasproperty(s, :q_tot) && (s.q_tot .= ᶜq_tot)
+        end
     end
 
     if hasproperty(Y.c, :ρtke)
@@ -1073,7 +1178,6 @@ end
 function (initial_condition::DryBaroclinicWave)(params)
     (; perturb, deep_atmosphere) = initial_condition
     function local_state(local_geometry)
-        thermo_params = CAP.thermodynamics_params(params)
         (; z, lat, long) = local_geometry.coordinates
         if deep_atmosphere
             (; p, T_v, u, v) =
@@ -1091,7 +1195,8 @@ function (initial_condition::DryBaroclinicWave)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseDry_pT(thermo_params, p, T_v),
+            T = T_v,
+            p = p,
             velocity = Geometry.UVVector(u, v),
         )
     end
@@ -1112,7 +1217,6 @@ end
 function (initial_condition::MoistBaroclinicWave)(params)
     (; perturb, deep_atmosphere) = initial_condition
     function local_state(local_geometry)
-        thermo_params = CAP.thermodynamics_params(params)
         (; z, lat, long) = local_geometry.coordinates
         (; p, T, q_tot, u, v) = moist_baroclinic_wave_values(
             z,
@@ -1125,7 +1229,9 @@ function (initial_condition::MoistBaroclinicWave)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
+            T = T,
+            p = p,
+            q_tot = q_tot,
             velocity = Geometry.UVVector(u, v),
         )
     end
@@ -1147,7 +1253,6 @@ function (initial_condition::MoistBaroclinicWaveWithEDMF)(params)
     (; perturb, deep_atmosphere) = initial_condition
     function local_state(local_geometry)
         FT = eltype(params)
-        thermo_params = CAP.thermodynamics_params(params)
         (; z, lat, long) = local_geometry.coordinates
         (; p, T, q_tot, u, v) = moist_baroclinic_wave_values(
             z,
@@ -1160,7 +1265,9 @@ function (initial_condition::MoistBaroclinicWaveWithEDMF)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
+            T = T,
+            p = p,
+            q_tot = q_tot,
             velocity = Geometry.UVVector(u, v),
             turbconv_state = EDMFState(; tke = FT(0), draft_area = FT(0.2)),
         )
@@ -1205,7 +1312,9 @@ function (initial_condition::MoistAdiabaticProfileEDMFX)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
+            T = T,
+            p = p,
+            q_tot = q_tot,
             turbconv_state = EDMFState(;
                 tke = FT(0),
                 draft_area = draft_area(FT)(z),
@@ -1238,7 +1347,9 @@ function (initial_condition::SimplePlume)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
+            T = T,
+            p = p,
+            q_tot = q_tot,
             turbconv_state = EDMFState(; tke = FT(0)),
         )
     end
@@ -1273,28 +1384,29 @@ function hydrostatic_pressure_profile(;
     FT = eltype(thermo_params)
     grav = TD.Parameters.grav(thermo_params)
 
-    ts(p, z, ::Nothing, ::Nothing, _) = error("Either T or θ must be specified")
-    ts(p, z, T::FunctionOrSpline, θ::FunctionOrSpline, _) =
+    # Compute air density from (p, z) using either T(z) or θ(z), with optional q_tot(z)
+    function ρ_from_profile(p, z, ::Nothing, ::Nothing, _)
+        error("Either T or θ must be specified")
+    end
+    function ρ_from_profile(p, z, T::FunctionOrSpline, θ::FunctionOrSpline, _)
         error("Only one of T and θ can be specified")
-    ts(p, z, T::FunctionOrSpline, ::Nothing, ::Nothing) =
-        TD.PhaseDry_pT(thermo_params, p, oftype(p, T(z)))
-    ts(p, z, ::Nothing, θ::FunctionOrSpline, ::Nothing) =
-        TD.PhaseDry_pθ(thermo_params, p, oftype(p, θ(z)))
-    ts(p, z, T::FunctionOrSpline, ::Nothing, q_tot::FunctionOrSpline) =
-        TD.PhaseEquil_pTq(
-            thermo_params,
-            p,
-            oftype(p, T(z)),
-            oftype(p, q_tot(z)),
-        )
-    ts(p, z, ::Nothing, θ::FunctionOrSpline, q_tot::FunctionOrSpline) =
-        TD.PhaseEquil_pθq(
-            thermo_params,
-            p,
-            oftype(p, θ(z)),
-            oftype(p, q_tot(z)),
-        )
-    dp_dz(p, z) = -grav * TD.air_density(thermo_params, ts(p, z, T, θ, q_tot))
+    end
+    function ρ_from_profile(p, z, T::FunctionOrSpline, ::Nothing, ::Nothing)
+        TD.air_density(thermo_params, oftype(p, T(z)), p)
+    end
+    function ρ_from_profile(p, z, ::Nothing, θ::FunctionOrSpline, ::Nothing)
+        T_val = TD.air_temperature(thermo_params, TD.pθ_li(), p, oftype(p, θ(z)))
+        TD.air_density(thermo_params, T_val, p)
+    end
+    function ρ_from_profile(p, z, T::FunctionOrSpline, ::Nothing, q_tot::FunctionOrSpline)
+        TD.air_density(thermo_params, oftype(p, T(z)), p, oftype(p, q_tot(z)), FT(0), FT(0))
+    end
+    function ρ_from_profile(p, z, ::Nothing, θ::FunctionOrSpline, q_tot::FunctionOrSpline)
+        q = oftype(p, q_tot(z))
+        T_val = TD.air_temperature(thermo_params, TD.pθ_li(), p, oftype(p, θ(z)), q)
+        TD.air_density(thermo_params, T_val, p, q, FT(0), FT(0))
+    end
+    dp_dz(p, z) = -grav * ρ_from_profile(p, z, T, θ, q_tot)
 
     return column_indefinite_integral(dp_dz, p_0, (FT(0), FT(z_max)))
 end
@@ -1324,10 +1436,12 @@ for IC in (:GABLS,)
         tke = APL.$tke_func_name(FT)
         function local_state(local_geometry)
             (; z) = local_geometry.coordinates
+            T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z))
             return LocalState(;
                 params,
                 geometry = local_geometry,
-                thermo_state = TD.PhaseDry_pθ(thermo_params, p(z), θ(z)),
+                T = T,
+                p = p(z),
                 velocity = Geometry.UVector(u(z)),
                 turbconv_state = EDMFState(;
                     tke = prognostic_tke ? FT(0) : tke(z),
@@ -1353,9 +1467,14 @@ function (initial_condition::GATE_III)(params)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     p_0 = FT(101500.0)
-    T = APL.GATE_III_T(FT)
-    q_tot = APL.GATE_III_q_tot(FT)
-    p = hydrostatic_pressure_profile(; thermo_params, p_0, T, q_tot)
+    T_profile = APL.GATE_III_T(FT)
+    q_tot_profile = APL.GATE_III_q_tot(FT)
+    p = hydrostatic_pressure_profile(;
+        thermo_params,
+        p_0,
+        T = T_profile,
+        q_tot = q_tot_profile,
+    )
     u = APL.GATE_III_u(FT)
     tke = APL.GATE_III_tke(FT)
     function local_state(local_geometry)
@@ -1363,12 +1482,9 @@ function (initial_condition::GATE_III)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pTq(
-                thermo_params,
-                p(z),
-                T(z),
-                q_tot(z),
-            ),
+            T = T_profile(z),
+            p = p(z),
+            q_tot = q_tot_profile(z),
             velocity = Geometry.UVector(u(z)),
             turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
         )
@@ -1417,15 +1533,13 @@ for IC in (:Soares, :Bomex)
         tke = APL.$tke_func_name(FT)
         function local_state(local_geometry)
             (; z) = local_geometry.coordinates
+            T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot(z))
             return LocalState(;
                 params,
                 geometry = local_geometry,
-                thermo_state = TD.PhaseEquil_pθq(
-                    thermo_params,
-                    p(z),
-                    θ(z),
-                    q_tot(z),
-                ),
+                T = T,
+                p = p(z),
+                q_tot = q_tot(z),
                 velocity = Geometry.UVector(u(z)),
                 turbconv_state = EDMFState(;
                     tke = prognostic_tke ? FT(0) : tke(z),
@@ -1473,19 +1587,16 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
         p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
         u = APL.$u_func_name(FT)
         v = APL.$v_func_name(FT)
-        #tke = APL.$tke_func_name(FT)
-        tke = APL.Dycoms_RF01_tke_prescribed(FT) #TODO - dont have the tke profile for Dycoms_RF02
+        tke = APL.Dycoms_RF01_tke_prescribed(FT)
         function local_state(local_geometry)
             (; z) = local_geometry.coordinates
+            T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot(z))
             return LocalState(;
                 params,
                 geometry = local_geometry,
-                thermo_state = TD.PhaseEquil_pθq(
-                    thermo_params,
-                    p(z),
-                    θ(z),
-                    q_tot(z),
-                ),
+                T = T,
+                p = p(z),
+                q_tot = q_tot(z),
                 velocity = Geometry.UVVector(u(z), v(z)),
                 turbconv_state = EDMFState(;
                     tke = prognostic_tke ? FT(0) : tke(z),
@@ -1517,18 +1628,15 @@ function (initial_condition::Rico)(params)
     u = APL.Rico_u(FT)
     v = APL.Rico_v(FT)
     tke = APL.Rico_tke_prescribed(FT)
-    #tke = z -> z < 2980 ? 1 - z / 2980 : FT(0) # TODO: Move this to APL.
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
+        T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot(z))
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pθq(
-                thermo_params,
-                p(z),
-                θ(z),
-                q_tot(z),
-            ),
+            T = T,
+            p = p(z),
+            q_tot = q_tot(z),
             velocity = Geometry.UVVector(u(z), v(z)),
             turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
         )
@@ -1551,7 +1659,7 @@ function (initial_condition::TRMM_LBA)(params)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     p_0 = FT(99130.0)
-    T = APL.TRMM_LBA_T(FT)
+    T_profile = APL.TRMM_LBA_T(FT)
 
     # Set q_tot to the value implied by the measured pressure and relative
     # humidity profiles (see the definition of relative humidity and equation 37
@@ -1563,7 +1671,7 @@ function (initial_condition::TRMM_LBA)(params)
     measured_RH = APL.TRMM_LBA_RH(FT)
     measured_z_values = APL.TRMM_LBA_z(FT)
     measured_q_tot_values = map(measured_z_values) do z
-        p_v_sat = TD.saturation_vapor_pressure(thermo_params, T(z), TD.Liquid())
+        p_v_sat = TD.saturation_vapor_pressure(thermo_params, T_profile(z), TD.Liquid())
         denominator =
             measured_p(z) - p_v_sat +
             (1 / Rv_over_Rd) * p_v_sat * measured_RH(z) / 100
@@ -1579,7 +1687,7 @@ function (initial_condition::TRMM_LBA)(params)
         Intp.Flat(),
     )
 
-    p = hydrostatic_pressure_profile(; thermo_params, p_0, T, q_tot)
+    p = hydrostatic_pressure_profile(; thermo_params, p_0, T = T_profile, q_tot)
     u = APL.TRMM_LBA_u(FT)
     v = APL.TRMM_LBA_v(FT)
     tke = APL.TRMM_LBA_tke_prescribed(FT)
@@ -1588,12 +1696,9 @@ function (initial_condition::TRMM_LBA)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pTq(
-                thermo_params,
-                p(z),
-                T(z),
-                q_tot(z),
-            ),
+            T = T_profile(z),
+            p = p(z),
+            q_tot = q_tot(z),
             velocity = Geometry.UVVector(u(z), v(z)),
             turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
         )
@@ -1622,22 +1727,32 @@ function (initial_condition::PrecipitatingColumn)(params)
     nₗ = prescribed_prof(FT, 4000, 5500, 1e7)
     nᵣ = prescribed_prof(FT, 2000, 5000, 1e3)
     θ = APL.Rico_θ_liq_ice(FT)
-    q_tot = APL.Rico_q_tot(FT)
+    q_tot_profile = APL.Rico_q_tot(FT)
     u = prescribed_prof(FT, 0, Inf, 0)
     v = prescribed_prof(FT, 0, Inf, 0)
-    p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
+    p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot = q_tot_profile)
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
-        ts = TD.PhaseNonEquil_pθq(
+        q_liq_z = qₗ(z) + qᵣ(z)
+        q_ice_z = qᵢ(z) + qₛ(z)
+        q_tot_z = q_tot_profile(z)
+        T = TD.air_temperature(
             thermo_params,
+            TD.pθ_li(),
             p(z),
             θ(z),
-            TD.PhasePartition(q_tot(z), qₗ(z) + qᵣ(z), qᵢ(z) + qₛ(z)),
+            q_tot_z,
+            q_liq_z,
+            q_ice_z,
         )
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = ts,
+            T = T,
+            p = p(z),
+            q_tot = q_tot_z,
+            q_liq = q_liq_z,
+            q_ice = q_ice_z,
             velocity = Geometry.UVVector(u(z), v(z)),
             turbconv_state = nothing,
             precip_state = PrecipStateMassNum(;
@@ -1670,7 +1785,7 @@ function (initial_condition::GCMDriven)(params)
         vec(gcm_height(ds.group[cfsite_number]))
     end
     vars = gcm_initial_conditions(external_forcing_file, cfsite_number)
-    T, u, v, q_tot, ρ₀ = map(vars) do value
+    T_prof, u, v, q_tot_prof, ρ₀ = map(vars) do value
         Intp.extrapolate(
             Intp.interpolate((z_gcm,), value, Intp.Gridded(Intp.Linear())),
             Intp.Flat(),
@@ -1680,15 +1795,16 @@ function (initial_condition::GCMDriven)(params)
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
         FT = typeof(z)
+        T_val = FT(T_prof(z))
+        q_tot_val = FT(q_tot_prof(z))
+        ρ_val = FT(ρ₀(z))
+        p = TD.air_pressure(thermo_params, T_val, ρ_val, q_tot_val, FT(0), FT(0))
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = ts = TD.PhaseEquil_ρTq(
-                thermo_params,
-                FT(ρ₀(z)),
-                FT(T(z)),
-                FT(q_tot(z)),
-            ),
+            T = T_val,
+            p = p,
+            q_tot = q_tot_val,
             velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
             turbconv_state = EDMFState(; tke = FT(0)),
         )
@@ -1736,15 +1852,16 @@ function (initial_condition::InterpolatedColumnProfile)(params)
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
         FT = typeof(z)
+        T_val = FT(T(z))
+        q_tot_val = FT(q_tot(z))
+        ρ_val = FT(ρ₀(z))
+        p = TD.air_pressure(thermo_params, T_val, ρ_val, q_tot_val, FT(0), FT(0))
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = ts = TD.PhaseEquil_ρTq(
-                thermo_params,
-                FT(ρ₀(z)),
-                FT(T(z)),
-                FT(q_tot(z)),
-            ),
+            T = T_val,
+            p = p,
+            q_tot = q_tot_val,
             velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
             turbconv_state = EDMFState(; tke = FT(0)),
         )
@@ -1814,15 +1931,13 @@ function (initial_condition::ISDAC)(params)
 
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
+        T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z) + θ_pert(z), q_tot(z))
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pθq(
-                thermo_params,
-                p(z),
-                θ(z) + θ_pert(z),
-                q_tot(z),
-            ),
+            T = T,
+            p = p(z),
+            q_tot = q_tot(z),
             velocity = Geometry.UVVector(u(z), v(z)),
             turbconv_state = EDMFState(; tke = prognostic_tke ? tke(z) : FT(0)),
         )
@@ -1861,8 +1976,11 @@ function (initial_condition::ShipwayHill2012)(params)
     p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
+        T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot(z))
         return LocalState(; params, geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pθq(thermo_params, p(z), θ(z), q_tot(z)),
+            T = T,
+            p = p(z),
+            q_tot = q_tot(z),
             precip_state = NoPrecipState{typeof(z)}(),
         )
     end

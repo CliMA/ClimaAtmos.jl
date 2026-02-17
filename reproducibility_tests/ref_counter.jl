@@ -1,4 +1,4 @@
-302
+312
 
 # **README**
 #
@@ -20,6 +20,39 @@
 
 
 #=
+312
+ - Relax entr/detr limits for prognostic EDMF when entr/detr is treated implicitly
+
+311
+ - Update from Thermodynamics 0.15.7 to 0.15.8
+
+310
+ - Update RCEMIPII CRM box test and sponge tendencies.
+
+309
+ - Stabilize prognostic-EDMF nightly build with reduced hyperdiff Prandtl number.
+
+308
+ - PEDMF bugfix: return entr_detr_lim_tau for entr at the boundary when area fraction is negative
+
+307
+- Update to Insolation v1.1, with a small change in clipping of solar zenith angle.
+Also change TOA flux and zenith angle for idealized insolation.
+
+306
+- Reduce default scalar hyperdiffusion coefficient (apply prandtl number parameter in the default yaml)
+
+305
+- Remove grid-scale thermo state from precomputed quantities and uses new thermodynamics functions.
+(Fix main branch that is still breaking)
+
+304
+- Remove grid-scale thermo state from precomputed quantities and uses new thermodynamics functions.
+
+303
+- Remove thermo state from initial conditions, which changes the behavior of
+prognostic EDMF case, possibly from the change in `enthalpy` function.
+
 302
 - Changing the diffusion used for the RCEMIPII CRM box test changes behavior.
 

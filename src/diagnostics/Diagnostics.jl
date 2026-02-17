@@ -83,7 +83,7 @@ import ClimaDiagnostics:
 import ClimaDiagnostics.DiagnosticVariables: descriptive_short_name
 
 import ClimaDiagnostics.Schedules:
-    EveryStepSchedule, EveryDtSchedule, EveryCalendarDtSchedule
+    EveryStepSchedule, EveryDtSchedule, EveryCalendarDtSchedule, DivisorSchedule
 
 import ClimaDiagnostics.Writers:
     DictWriter,

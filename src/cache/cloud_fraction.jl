@@ -13,7 +13,7 @@ end
     Diagnose horizontal covariances based on vertical gradients
     (i.e. taking turbulence production as the only term)
 """
-function compute_covariance(Y, p, thermo_params, ᶜts)
+function compute_covariance(Y, p, thermo_params)
     coeff = CAP.diagnostic_covariance_coeff(p.params)
     turbconv_model = p.atmos.turbconv_model
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
@@ -23,10 +23,20 @@ function compute_covariance(Y, p, thermo_params, ᶜts)
     if isnothing(turbconv_model)
         if p.atmos.call_cloud_diagnostics_per_stage isa
            CallCloudDiagnosticsPerStage
-            @. ᶜgradᵥ_q_tot =
-                ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
-            @. ᶜgradᵥ_θ_liq_ice =
-                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
+            (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+            @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
+            @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
+                ᶠinterp(
+                    TD.liquid_ice_pottemp(
+                        thermo_params,
+                        ᶜT,
+                        Y.c.ρ,
+                        ᶜq_tot_safe,
+                        ᶜq_liq_rai,
+                        ᶜq_ice_sno,
+                    ),
+                ),
+            )
         end
     end
     # Reminder that gradients need to be precomputed when using compute_gm_mixing_length
@@ -99,14 +109,16 @@ end
 
 """
     function compute_cloud_fraction_quadrature_diagnostics(
-        thermo_params, SG_quad, ts, q′q′, θ′θ′, θ′q′
+        thermo_params, SG_quad, p_c, q_mean, θ_mean, q′q′, θ′θ′, θ′q′
     )
 
 where:
   - thermo params - thermodynamics parameters
   - SG_quad is a struct containing information about Gaussian quadrature order,
     sampling point values and weights
-  - ts is the thermodynamic state
+  - p_c is the air pressure
+  - q_mean is the total specific humidity
+  - θ_mean is the liquid-ice potential temperature
   - q′q′, θ′θ′, θ′q′ are the covariances of q_tot and liquid ice potential temperature
 
 The function imposes additional limits on the quadrature points
@@ -117,15 +129,13 @@ computed as a sum over quadrature points with weights.
 function compute_cloud_fraction_quadrature_diagnostics(
     thermo_params,
     SG_quad::SGSQuadrature,
-    ts,
+    p_c,
+    q_mean,
+    θ_mean,
     q′q′,
     θ′θ′,
     θ′q′,
 )
-    # Grab mean pressure, liquid ice potential temperature and total specific humidity
-    p_c = TD.air_pressure(thermo_params, ts)
-    q_mean = TD.total_specific_humidity(thermo_params, ts)
-    θ_mean = TD.liquid_ice_pottemp(thermo_params, ts)
 
     # Return physical values based on quadrature points and limited covarainces
     function get_x_hat(χ1, χ2)
@@ -158,7 +168,7 @@ function compute_cloud_fraction_quadrature_diagnostics(
 
     function f(x1_hat, x2_hat)
         FT = eltype(thermo_params)
-        _ts = thermo_state(thermo_params; p = p_c, θ = x1_hat, q_tot = x2_hat)
+        _ts = TD.PhaseEquil_pθq(thermo_params, p_c, x1_hat, x2_hat)
         hc = TD.has_condensate(thermo_params, _ts)
 
         cf = hc ? FT(1) : FT(0) # cloud fraction
@@ -192,23 +202,22 @@ NVTX.@annotate function set_cloud_fraction!(
     moist_model::Union{EquilMoistModel, NonEquilMoistModel},
     ::GridScaleCloud,
 )
-    (; ᶜts) = p.precomputed
-    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     FT = eltype(p.params)
 
     if moist_model isa EquilMoistModel
         @. p.precomputed.cloud_diagnostics_tuple =
             make_cloud_fraction_named_tuple(
-                ifelse(TD.has_condensate(thermo_params, ᶜts), FT(1), FT(0)),
-                TD.PhasePartition(thermo_params, ᶜts).liq,
-                TD.PhasePartition(thermo_params, ᶜts).ice,
+                ifelse(TD.has_condensate(ᶜq_liq_rai + ᶜq_ice_sno), FT(1), FT(0)),
+                ᶜq_liq_rai,
+                ᶜq_ice_sno,
             )
     else
         q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
         q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
         @. p.precomputed.cloud_diagnostics_tuple =
             make_cloud_fraction_named_tuple(
-                ifelse(TD.has_condensate(thermo_params, ᶜts), FT(1), FT(0)),
+                ifelse(TD.has_condensate(ᶜq_liq_rai + ᶜq_ice_sno), FT(1), FT(0)),
                 q_liq,
                 q_ice,
             )
@@ -222,18 +231,48 @@ NVTX.@annotate function set_cloud_fraction!(
 )
     thermo_params = CAP.thermodynamics_params(p.params)
     turbconv_model = p.atmos.turbconv_model
+    (; ᶜp, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
 
-    ᶜts = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜts⁰ : p.precomputed.ᶜts
+    # For PrognosticEDMFX, use environment state; otherwise use grid-scale
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+        ᶜρ⁰ = @. lazy(
+            TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+        )
+        ᶜθ_mean = @. lazy(
+            TD.liquid_ice_pottemp(
+                thermo_params,
+                ᶜT⁰,
+                ᶜρ⁰,
+                ᶜq_tot_safe⁰,
+                ᶜq_liq_rai⁰,
+                ᶜq_ice_sno⁰,
+            ),
+        )
+    else
+        ᶜθ_mean = @. lazy(
+            TD.liquid_ice_pottemp(
+                thermo_params,
+                ᶜT,
+                Y.c.ρ,
+                ᶜq_tot_safe,
+                ᶜq_liq_rai,
+                ᶜq_ice_sno,
+            ),
+        )
+    end
 
     # Compute covariance based on the gradients of q_tot and theta_liq_ice
-    ᶜq′q′, ᶜθ′θ′, ᶜθ′q′ = compute_covariance(Y, p, thermo_params, ᶜts)
+    ᶜq′q′, ᶜθ′θ′, ᶜθ′q′ = compute_covariance(Y, p, thermo_params)
 
     # Compute SGS cloud fraction diagnostics based on environment quadrature points ...
     @. p.precomputed.cloud_diagnostics_tuple =
         compute_cloud_fraction_quadrature_diagnostics(
             thermo_params,
             qc.SG_quad,
-            ᶜts,
+            ᶜp,
+            ᶜq_tot_safe,
+            ᶜθ_mean,
             ᶜq′q′,
             ᶜθ′θ′,
             ᶜθ′q′,
@@ -247,25 +286,31 @@ NVTX.@annotate function set_cloud_fraction!(
             qc,
             thermo_params,
             turbconv_model,
-            ᶜts,
+            ᶜp,
+            ᶜq_tot_safe,
+            ᶜθ_mean,
         )
     end
 
     # ... weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise) ...
     if turbconv_model isa PrognosticEDMFX
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
+        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+        ᶜρ⁰ = @. lazy(
+            TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+        )
         @. p.precomputed.cloud_diagnostics_tuple *= NamedTuple{(:cf, :q_liq, :q_ice)}(
             tuple(
-                draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts)),
-                draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts)),
-                draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts)),
+                draft_area(ᶜρa⁰, ᶜρ⁰),
+                draft_area(ᶜρa⁰, ᶜρ⁰),
+                draft_area(ᶜρa⁰, ᶜρ⁰),
             ),
         )
     end
     # ... and add contributions from the updrafts if using EDMF.
     if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
         n = n_mass_flux_subdomains(turbconv_model)
-        (; ᶜρʲs, ᶜtsʲs) = p.precomputed
+        (; ᶜρʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
         for j in 1:n
             ᶜρaʲ =
                 turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
@@ -274,14 +319,12 @@ NVTX.@annotate function set_cloud_fraction!(
             @. p.precomputed.cloud_diagnostics_tuple += NamedTuple{(:cf, :q_liq, :q_ice)}(
                 tuple(
                     ifelse(
-                        TD.has_condensate(thermo_params, ᶜtsʲs.:($$j)),
+                        TD.has_condensate(ᶜq_liq_raiʲs.:($$j) + ᶜq_ice_snoʲs.:($$j)),
                         draft_area(ᶜρaʲ, ᶜρʲs.:($$j)),
                         0,
                     ),
-                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)) *
-                    TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
-                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)) *
-                    TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
+                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)) * ᶜq_liq_raiʲs.:($$j),
+                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)) * ᶜq_ice_snoʲs.:($$j),
                 ),
             )
         end
@@ -294,7 +337,9 @@ function set_ml_cloud_fraction!(
     ml_cloud::MLCloud,
     thermo_params,
     turbconv_model,
-    ᶜts,
+    ᶜp,
+    ᶜq_mean,
+    ᶜθ_mean,
 )
     FT = eltype(p.params)
     ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
@@ -325,8 +370,9 @@ function set_ml_cloud_fraction!(
             ᶜmixing_length_field,
             ᶜ∇q,
             ᶜ∇θ,
-            specific.(Y.c.ρq_tot, Y.c.ρ),
-            ᶜts,
+            ᶜq_mean,
+            ᶜp,
+            ᶜθ_mean,
             thermo_params,
         )
 end
@@ -337,20 +383,18 @@ function compute_ml_cloud_fraction(
     ᶜ∇q,
     ᶜ∇θ,
     q_tot,
-    ᶜts,
+    p_c,
+    θli,
     thermo_params,
 )
     FT = eltype(thermo_params)
-    # Saturation state at current thermodynamic state
-    q_sat = TD.q_vap_saturation(thermo_params, ᶜts)
-
-    # Liquid–ice potential temperature at current thermodynamic state
-    θli = TD.liquid_ice_pottemp(thermo_params, ᶜts)
-
+    # Saturation state at current thermodynamic state (via θ, p, q_tot)
+    ts_current = TD.PhaseEquil_pθq(thermo_params, p_c, θli, q_tot)
+    q_sat = TD.q_vap_saturation(thermo_params, ts_current)
 
     # distance to saturation in temperature space
     Δθli, θli_sat, dqsatdθli =
-        saturation_distance(q_tot, q_sat, ᶜts, θli, thermo_params, FT(0.1))
+        saturation_distance(q_tot, q_sat, p_c, θli, thermo_params, FT(0.1))
 
     # form the pi groups 
     π_1 = (q_sat - q_tot) / q_sat
@@ -359,17 +403,16 @@ function compute_ml_cloud_fraction(
     π_4 = (ᶜ∇θ * ᶜmixing_length_field) / θli_sat
 
     return apply_cf_nn(nn_model, π_1, π_2, π_3, π_4)
-
 end
 
-function saturation_distance(q_tot, q_sat, ᶜts, θli, thermo_params, Δθli_fd)
+function saturation_distance(q_tot, q_sat, p_c, θli, thermo_params, Δθli_fd)
 
     # Perturbed thermodynamic states for finite-difference
     ts_perturbed = TD.PhaseEquil_pθq(
         thermo_params,
-        ᶜts.p,
-        θli .+ Δθli_fd,
-        ᶜts.q_tot,
+        p_c,
+        θli + Δθli_fd,
+        q_tot,
     )
     q_sat_perturbed = TD.q_vap_saturation(thermo_params, ts_perturbed)
 

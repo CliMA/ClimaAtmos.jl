@@ -78,9 +78,8 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
 end
 
 function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWave)
-    ᶜT = p.scratch.ᶜtemp_scalar
     (; params) = p
-    (; ᶜts, ᶜp) = p.precomputed
+    (; ᶜp, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     (; ᶜdTdz) = p.orographic_gravity_wave
     (;
         topo_k_pbl,
@@ -107,7 +106,6 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     ᶠz = Fields.coordinate_field(Y.f).z
 
     # get PBL info
-    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
         parent(topo_k_pbl[colidx]) .=
             get_pbl(ᶜp[colidx], ᶜT[colidx], ᶜz[colidx], grav, cp_d)
@@ -115,7 +113,9 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
 
     # buoyancy frequency at cell centers
     parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
-    ᶜN = @. (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts)) # this is actually ᶜN^2
+    ᶜcp_m = @. lazy(TD.cp_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno))
+    #TODO: make a function to compute buoyancy frequency
+    ᶜN = @. (grav / ᶜT) * (ᶜdTdz + grav / ᶜcp_m) # this is actually ᶜN^2
     @. ᶜN = ifelse(ᶜN < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜN))) # to avoid small numbers
 
     # prepare physical uv input variables for gravity_wave_forcing()

@@ -6,15 +6,14 @@ dt: 120secs
 t_end: 12hours
 start_date: "20250627-0000"
 initial_condition: "WeatherModel"
-discrete_hydrostatic_balance: false # TODO: change to true once we fix discrete hydrostatic balance to work with orography
 topo_smoothing: true
 topography: "Earth"
 rayleigh_sponge: true
 
-hyperdiff: ClimaHyperdiffusion
+hyperdiff: Hyperdiffusion
 divergence_damping_factor: 50.0 # large value to damp IC waves
-scalar_hyperdiffusion_coefficient: 0.929738
 vorticity_hyperdiffusion_coefficient: 0.1857
+hyperdiffusion_prandtl_number: 0.2
 insolation: "timevarying"
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear

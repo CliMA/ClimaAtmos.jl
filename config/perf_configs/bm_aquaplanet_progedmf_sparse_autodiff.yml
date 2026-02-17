@@ -1,7 +1,7 @@
 h_elem: 12
 z_elem: 25
 dt: 10secs
-t_end: 61mins
+t_end: 31mins
 dt_save_state_to_disk: "Inf"
 log_progress: false
 approximate_linear_solve_iters: 1
@@ -11,7 +11,8 @@ implicit_sgs_nh_pressure: true
 implicit_sgs_vertdiff: true
 implicit_sgs_mass_flux: true
 use_auto_jacobian: true
-update_jacobian_every: dt
+update_jacobian_every: stage
+ode_algo: "ARS222"
 debug_jacobian: true
 moist: equil
 surface_setup: DefaultMoninObukhov

@@ -226,23 +226,6 @@ function get_vertical_tendencies(sim_forcing, var)
     return -deriv
 end
 
-function get_coszen_inst(
-    lat,
-    lon,
-    date,
-    FT,
-    param_set = IP.InsolationParameters(FT),
-    od = Insolation.OrbitalData(),
-)
-
-    date = DateTime(date)
-
-    S, μ =
-        Insolation.solar_flux_and_cos_sza(date, od, FT(lon), FT(lat), param_set)
-
-    return μ, S * μ
-end
-
 """
     generate_external_era5_forcing_file(
         lat,
@@ -348,8 +331,6 @@ function generate_external_forcing_file(
     if warming_amount isa Number
         # Get the relative humidity before warming; this will be used to scale the specific humidity after warming
         param_set = TD.Parameters.ThermodynamicsParameters(FT)
-        phase_partition =
-            TD.PhasePartition.(sim_forcing["hus"], sim_forcing["clw"], sim_forcing["cli"])
         # expand dimension and convert pressure levels from hPa (ERA5 raw) to Pa (needed for thermodynamics)
         p_expanded =
             FT.(
@@ -364,13 +345,22 @@ function generate_external_forcing_file(
                 param_set,
                 sim_forcing["ta"],
                 p_expanded,
-                TD.PhaseEquil{FT},
-                phase_partition,
+                sim_forcing["hus"],
+                sim_forcing["clw"],
+                sim_forcing["cli"],
             )
 
         # Warming the temperature
         sim_forcing["ta"] .+= warming_amount
-        ρ = TD.air_density.(param_set, sim_forcing["ta"], p_expanded, phase_partition)
+        ρ =
+            TD.air_density.(
+                param_set,
+                sim_forcing["ta"],
+                p_expanded,
+                sim_forcing["hus"],
+                sim_forcing["clw"],
+                sim_forcing["cli"],
+            )
 
         # Get the saturation specific humidity at the warmed temperature
         saturation_humidity_at_warming =
@@ -481,7 +471,16 @@ function generate_external_forcing_file(
     end
 
     # add coszen
-    coszen_list = get_coszen_inst.(lat, lon, tvforcing["valid_time"][:], FT)
+    # Compute coszen and solar flux using Insolation.jl
+    coszen_list = map(tvforcing["valid_time"][:]) do date
+        F, S, μ, ζ = Insolation.insolation(
+            DateTime(date),
+            FT(lat),
+            FT(lon),
+            IP.InsolationParameters(FT),
+        )
+        return (μ, F)  # return (coszen, TOA_flux)
+    end
     defVar(ds, "coszen", FT, ("x", "y", "z", "time"))
     defVar(ds, "rsdt", FT, ("x", "y", "z", "time"))
 

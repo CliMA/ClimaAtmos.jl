@@ -21,7 +21,7 @@
 #     ::T,
 # ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
 #     thermo_params = CAP.thermodynamics_params(cache.params)
-#     out .= TD.relative_humidity.(thermo_params, cache.ᶜts)
+#     out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜT, state.c.ρ, cache.precomputed.ᶜq_tot_safe, cache.precomputed.ᶜq_liq_rai, cache.precomputed.ᶜq_ice_sno))
 # end
 #
 # 2. Define a function that has the correct signature and calls this function
@@ -129,11 +129,10 @@ add_diagnostic_variable!(
     standard_name = "air_temperature",
     units = "K",
     compute! = (out, state, cache, time) -> begin
-        thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
-            return TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
+            return copy(cache.precomputed.ᶜT)
         else
-            out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
+            out .= cache.precomputed.ᶜT
         end
     end,
 )
@@ -148,10 +147,26 @@ add_diagnostic_variable!(
     units = "K",
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
+        (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
         if isnothing(out)
-            return TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts)
+            return TD.potential_temperature.(
+                thermo_params,
+                ᶜT,
+                state.c.ρ,
+                ᶜq_tot_safe,
+                ᶜq_liq_rai,
+                ᶜq_ice_sno,
+            )
         else
-            out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts)
+            out .=
+                TD.potential_temperature.(
+                    thermo_params,
+                    ᶜT,
+                    state.c.ρ,
+                    ᶜq_tot_safe,
+                    ᶜq_liq_rai,
+                    ᶜq_ice_sno,
+                )
         end
     end,
 )
@@ -165,10 +180,11 @@ add_diagnostic_variable!(
     units = "m^2 s^-2",
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
+        (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
         if isnothing(out)
-            return TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜts)
+            return TD.enthalpy.(thermo_params, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
         else
-            out .= TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜts)
+            out .= TD.enthalpy.(thermo_params, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
         end
     end,
 )
@@ -399,10 +415,26 @@ function compute_hur!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
     if isnothing(out)
-        return TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts)
+        return TD.relative_humidity.(
+            thermo_params,
+            ᶜT,
+            ᶜp,
+            ᶜq_tot_safe,
+            ᶜq_liq_rai,
+            ᶜq_ice_sno,
+        )
     else
-        out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts)
+        out .=
+            TD.relative_humidity.(
+                thermo_params,
+                ᶜT,
+                ᶜp,
+                ᶜq_tot_safe,
+                ᶜq_liq_rai,
+                ᶜq_ice_sno,
+            )
     end
 end
 
@@ -559,18 +591,11 @@ function compute_hussfc!(
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    # q_vap_sfc is the total specific humidity at the surface (no liquid/ice)
     if isnothing(out)
-        return TD.total_specific_humidity.(
-            thermo_params,
-            cache.precomputed.sfc_conditions.ts,
-        )
+        return copy(cache.precomputed.sfc_conditions.q_vap_sfc)
     else
-        out .=
-            TD.total_specific_humidity.(
-                thermo_params,
-                cache.precomputed.sfc_conditions.ts,
-            )
+        out .= cache.precomputed.sfc_conditions.q_vap_sfc
     end
 end
 
@@ -593,18 +618,10 @@ add_diagnostic_variable!(
     units = "K",
     comments = "Temperature of the lower boundary of the atmosphere",
     compute! = (out, state, cache, time) -> begin
-        thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
-            return TD.air_temperature.(
-                thermo_params,
-                cache.precomputed.sfc_conditions.ts,
-            )
+            return copy(cache.precomputed.sfc_conditions.T_sfc)
         else
-            out .=
-                TD.air_temperature.(
-                    thermo_params,
-                    cache.precomputed.sfc_conditions.ts,
-                )
+            out .= cache.precomputed.sfc_conditions.T_sfc
         end
     end,
 )
@@ -619,18 +636,11 @@ add_diagnostic_variable!(
     units = "K",
     comments = "Temperature at the bottom cell center of the atmosphere",
     compute! = (out, state, cache, time) -> begin
-        thermo_params = CAP.thermodynamics_params(cache.params)
+        T_level = Fields.level(cache.precomputed.ᶜT, 1)
         if isnothing(out)
-            return TD.air_temperature.(
-                thermo_params,
-                Fields.level(cache.precomputed.ᶜts, 1),
-            )
+            return copy(T_level)
         else
-            out .=
-                TD.air_temperature.(
-                    thermo_params,
-                    Fields.level(cache.precomputed.ᶜts, 1),
-                )
+            out .= T_level
         end
     end,
 )
@@ -1323,25 +1333,18 @@ add_diagnostic_variable!(
 ###
 function compute_dsevi!(out, state, cache, time)
     thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜT = cache.precomputed.ᶜT
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         cp = CAP.cp_d(cache.params)
         dse = cache.scratch.ᶜtemp_scalar
-        @. dse =
-            state.c.ρ * (
-                cp * TD.air_temperature(thermo_params, cache.precomputed.ᶜts) +
-                cache.core.ᶜΦ
-            )
+        @. dse = state.c.ρ * (TD.dry_static_energy(thermo_params, ᶜT, cache.core.ᶜΦ))
         Operators.column_integral_definite!(out, dse)
         return out
     else
         cp = CAP.cp_d(cache.params)
         dse = cache.scratch.ᶜtemp_scalar
-        @. dse =
-            state.c.ρ * (
-                cp * TD.air_temperature(thermo_params, cache.precomputed.ᶜts) +
-                cache.core.ᶜΦ
-            )
+        @. dse = state.c.ρ * (TD.dry_static_energy(thermo_params, ᶜT, cache.core.ᶜΦ))
         Operators.column_integral_definite!(out, dse)
     end
 end
@@ -1370,7 +1373,6 @@ function compute_clvi!(
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         cloud_cover = cache.scratch.ᶜtemp_scalar
@@ -1454,6 +1456,9 @@ function compute_hurvi!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
+    # Vapor specific humidity = q_tot - q_liq - q_ice
+    ᶜq_vap = @. lazy(ᶜq_tot_safe - ᶜq_liq_rai - ᶜq_ice_sno)
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         # compute vertical integral of saturation specific humidity
@@ -1462,16 +1467,11 @@ function compute_hurvi!(
         sat = cache.scratch.ᶜtemp_scalar
         @. sat =
             state.c.ρ *
-            TD.q_vap_saturation(thermo_params, cache.precomputed.ᶜts)
+            TD.q_vap_saturation(thermo_params, ᶜT, state.c.ρ, ᶜq_liq_rai, ᶜq_ice_sno)
         Operators.column_integral_definite!(sat_vi, sat)
         # compute saturation-weighted vertical integral of specific humidity
-        hur = cache.scratch.ᶜtemp_scalar
-        @. hur = TD.vapor_specific_humidity(
-            CAP.thermodynamics_params(cache.params),
-            cache.precomputed.ᶜts,
-        )
         hur_weighted = cache.scratch.ᶜtemp_scalar_2
-        @. hur_weighted = state.c.ρ * hur / sat_vi
+        @. hur_weighted = state.c.ρ * ᶜq_vap / sat_vi
         Operators.column_integral_definite!(out, hur_weighted)
         return out
     else
@@ -1481,16 +1481,11 @@ function compute_hurvi!(
         sat = cache.scratch.ᶜtemp_scalar
         @. sat =
             state.c.ρ *
-            TD.q_vap_saturation(thermo_params, cache.precomputed.ᶜts)
+            TD.q_vap_saturation(thermo_params, ᶜT, state.c.ρ, ᶜq_liq_rai, ᶜq_ice_sno)
         Operators.column_integral_definite!(sat_vi, sat)
         # compute saturation-weighted vertical integral of specific humidity
-        hur = cache.scratch.ᶜtemp_scalar
-        @. hur = TD.vapor_specific_humidity(
-            CAP.thermodynamics_params(cache.params),
-            cache.precomputed.ᶜts,
-        )
         hur_weighted = cache.scratch.ᶜtemp_scalar_2
-        @. hur_weighted = state.c.ρ * hur / sat_vi
+        @. hur_weighted = state.c.ρ * ᶜq_vap / sat_vi
         Operators.column_integral_definite!(out, hur_weighted)
     end
 end
@@ -1498,7 +1493,6 @@ end
 add_diagnostic_variable!(
     short_name = "hurvi",
     long_name = "Relative Humidity Saturation-Weighted Vertical Integral",
-    standard_name = "relative_humidity_vi",
     units = "kg m^-2",
     comments = "Integrated relative humidity over the vertical column",
     compute! = compute_hurvi!,
@@ -1520,18 +1514,12 @@ function compute_husv!(
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    # Vapor specific humidity = q_tot - q_liq - q_ice
+    (; ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
     if isnothing(out)
-        return TD.vapor_specific_humidity.(
-            CAP.thermodynamics_params(cache.params),
-            cache.precomputed.ᶜts,
-        )
+        return @. ᶜq_tot_safe - ᶜq_liq_rai - ᶜq_ice_sno
     else
-        out .=
-            TD.vapor_specific_humidity.(
-                CAP.thermodynamics_params(cache.params),
-                cache.precomputed.ᶜts,
-            )
+        out .= @. ᶜq_tot_safe - ᶜq_liq_rai - ᶜq_ice_sno
     end
 end
 
@@ -1552,7 +1540,6 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "uapredicted",
     long_name = "Predicted Eastward Wind",
-    standard_name = "predicted_eastward_wind",
     units = "m s^-1",
     comments = "Predicted steady-state eastward (zonal) wind component",
     compute! = (out, state, cache, time) -> begin
@@ -1567,7 +1554,6 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "vapredicted",
     long_name = "Predicted Northward Wind",
-    standard_name = "predicted_northward_wind",
     units = "m s^-1",
     comments = "Predicted steady-state northward (meridional) wind component",
     compute! = (out, state, cache, time) -> begin
@@ -1582,7 +1568,6 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "wapredicted",
     long_name = "Predicted Upward Air Velocity",
-    standard_name = "predicted_upward_air_velocity",
     units = "m s^-1",
     comments = "Predicted steady-state vertical wind component",
     compute! = (out, state, cache, time) -> begin
@@ -1597,7 +1582,6 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "uaerror",
     long_name = "Error of Eastward Wind",
-    standard_name = "error_eastward_wind",
     units = "m s^-1",
     comments = "Error of steady-state eastward (zonal) wind component",
     compute! = (out, state, cache, time) -> begin
@@ -1615,7 +1599,6 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "vaerror",
     long_name = "Error of Northward Wind",
-    standard_name = "error_northward_wind",
     units = "m s^-1",
     comments = "Error of steady-state northward (meridional) wind component",
     compute! = (out, state, cache, time) -> begin
@@ -1633,7 +1616,6 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "waerror",
     long_name = "Error of Upward Air Velocity",
-    standard_name = "error_upward_air_velocity",
     units = "m s^-1",
     comments = "Error of steady-state vertical wind component",
     compute! = (out, state, cache, time) -> begin
@@ -1653,30 +1635,59 @@ add_diagnostic_variable!(
 ###
 function compute_cape!(out, state, cache, time)
     thermo_params = lazy.(CAP.thermodynamics_params(cache.params))
+    FT = eltype(thermo_params)
     g = lazy.(TD.Parameters.grav(thermo_params))
 
-    # Get surface parcel properties
-    surface_thermal_state = lazy.(cache.precomputed.sfc_conditions.ts)
-    surface_q =
-        lazy.(TD.total_specific_humidity.(thermo_params, surface_thermal_state))
+    # Get surface parcel properties from sfc_conditions
+    # At the surface, q_tot ≈ q_vap (no condensate)
+    surface_q = lazy.(cache.precomputed.sfc_conditions.q_vap_sfc)
+    surface_T = lazy.(cache.precomputed.sfc_conditions.T_sfc)
+    # Use lowest level pressure as approximate surface pressure
+    surface_p = lazy.(Fields.level(ᶠinterp.(cache.precomputed.ᶜp), half))
+    # Compute liquid-ice potential temperature at surface (no condensate, so q_liq=q_ice=0)
     surface_θ_liq_ice =
-        lazy.(TD.liquid_ice_pottemp.(thermo_params, surface_thermal_state))
-
-    # Create parcel thermodynamic states at each level based on energy & moisture at surface
-    parcel_ts_moist =
         lazy.(
-            TD.PhaseEquil_pθq.(
+            TD.liquid_ice_pottemp_given_pressure.(
                 thermo_params,
-                cache.precomputed.ᶜp,
-                surface_θ_liq_ice,
+                surface_T,
+                surface_p,
                 surface_q,
             ),
         )
 
+    # Helper function to extract just T from saturation_adjustment result
+    # (avoids broadcasting issues with NamedTuple containing bool)
+    _parcel_T_from_sa(thermo_params, p, θ_liq_ice, q_tot, maxiter, tol) =
+        TD.saturation_adjustment(
+            thermo_params,
+            TD.pθ_li(),
+            p,
+            θ_liq_ice,
+            q_tot;
+            maxiter,
+            tol,
+        ).T
+
+    # Create parcel thermodynamic states at each level based on energy & moisture at surface
+    parcel_T =
+        lazy.(
+            _parcel_T_from_sa.(
+                thermo_params,
+                cache.precomputed.ᶜp,
+                surface_θ_liq_ice,
+                surface_q,
+                4,
+                FT(0),
+            ),
+        )
+
     # Calculate virtual temperatures for parcel & environment
-    parcel_Tv = lazy.(TD.virtual_temperature.(thermo_params, parcel_ts_moist))
+    parcel_Tv = lazy.(TD.virtual_temperature.(thermo_params, parcel_T, surface_q))
+    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
     env_Tv =
-        lazy.(TD.virtual_temperature.(thermo_params, cache.precomputed.ᶜts))
+        lazy.(
+            TD.virtual_temperature.(thermo_params, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+        )
 
     # Calculate buoyancy from the difference in virtual temperatures
     ᶜbuoyancy = cache.scratch.ᶜtemp_scalar
@@ -1713,11 +1724,20 @@ add_diagnostic_variable!(
 function compute_mslp!(out, state, cache, time)
     thermo_params = CAP.thermodynamics_params(cache.params)
     g = TD.Parameters.grav(thermo_params)
-    ts_level = Fields.level(cache.precomputed.ᶜts, 1)
-    R_m_surf = @. lazy(TD.gas_constant_air(thermo_params, ts_level))
+    q_tot_safe_level = Fields.level(cache.precomputed.ᶜq_tot_safe, 1)
+    q_liq_rai_level = Fields.level(cache.precomputed.ᶜq_liq_rai, 1)
+    q_ice_sno_level = Fields.level(cache.precomputed.ᶜq_ice_sno, 1)
+    R_m_surf = @. lazy(
+        TD.gas_constant_air(
+            thermo_params,
+            q_tot_safe_level,
+            q_liq_rai_level,
+            q_ice_sno_level,
+        ),
+    )
 
     p_level = Fields.level(cache.precomputed.ᶜp, 1)
-    t_level = @. lazy(TD.air_temperature(thermo_params, ts_level))
+    t_level = Fields.level(cache.precomputed.ᶜT, 1)
     z_level = Fields.level(Fields.coordinate_field(state.c.ρ).z, 1)
 
     # Reduce to mean sea level using hypsometric formulation with lapse rate adjustment
@@ -1795,17 +1815,11 @@ add_diagnostic_variable!(
 # Covariances (3d)
 ###
 function compute_covariance_diagnostics!(out, state, cache, time, type)
-    turbconv_model = cache.atmos.turbconv_model
     thermo_params = CAP.thermodynamics_params(cache.params)
-    if isa(turbconv_model, PrognosticEDMFX)
-        ᶜts = cache.precomputed.ᶜts⁰
-    else
-        ᶜts = cache.precomputed.ᶜts
-    end
 
     # Reuse central compute_covariance function
     (ᶜq′q′, ᶜθ′θ′, ᶜθ′q′) = compute_covariance(
-        state, cache, thermo_params, ᶜts,
+        state, cache, thermo_params,
     )
 
     result = if type == :qt_qt

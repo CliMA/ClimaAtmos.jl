@@ -22,6 +22,15 @@ function implicit_temporary_quantities(Y, atmos)
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜu₃ʲ
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³, ᶠu³_diff
         ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
+        temp_data_level = Fields.field_values(
+            Fields.level(Fields.Field(FT, center_space), 1),
+        ),
+        temp_data_level_2 = Fields.field_values(
+            Fields.level(Fields.Field(FT, center_space), 1),
+        ),
+        temp_data_level_3 = Fields.field_values(
+            Fields.level(Fields.Field(FT, center_space), 1),
+        ),
     )
 end
 function temporary_quantities(Y, atmos)
@@ -32,6 +41,7 @@ function temporary_quantities(Y, atmos)
     return (;
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_h
         ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠρK_u
+        ᶠtemp_scalar_3 = Fields.Field(FT, face_space),
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch
         ᶜtemp_scalar_3 = Fields.Field(FT, center_space),
@@ -56,6 +66,12 @@ function temporary_quantities(Y, atmos)
         temp_data_level_3 = Fields.field_values(
             Fields.level(Fields.Field(FT, center_space), 1),
         ), # ρaʲu³ʲ_datah_tot
+        temp_data_level_4 = Fields.field_values(
+            Fields.level(Fields.Field(FT, center_space), 1),
+        ),
+        temp_data_level_5 = Fields.field_values(
+            Fields.level(Fields.Field(FT, center_space), 1),
+        ),
         ᶜtemp_C12 = Fields.Field(C12{FT}, center_space), # ᶜuₕ_mean
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜ∇Φ₃
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
@@ -117,6 +133,20 @@ function temporary_quantities(Y, atmos)
             },
         ),
         ᶠbidiagonal_matrix_ct3_2 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
+        ᶠbidiagonal_matrix_ct3xct12 = similar(
+            Y.f,
+            BidiagonalMatrixRow{
+                ClimaCore.Geometry.AxisTensor{
+                    FT,
+                    2,
+                    Tuple{
+                        ClimaCore.Geometry.ContravariantAxis{(3,)},
+                        ClimaCore.Geometry.ContravariantAxis{(1, 2)},
+                    },
+                    SMatrix{1, 2, FT, 2},
+                },
+            },
+        ),
         ᶜbidiagonal_matrix_scalar = similar(Y.c, BidiagonalMatrixRow{FT}),
         ᶜadvection_matrix = similar(
             Y.c,

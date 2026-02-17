@@ -40,13 +40,15 @@ function edmfx_sgs_mass_flux_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
-    (; ᶠu³) = p.precomputed
+    (; ᶜp, ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
     (; dt) = p
 
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
+    ᶜρ⁰ = @. lazy(
+        TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+    )
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
@@ -57,8 +59,7 @@ function edmfx_sgs_mass_flux_tendency!(
         # [best after removal of precomputed quantities]
         ᶠu³_diff = p.scratch.ᶠtemp_CT3
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
-        ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-        ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+        (; ᶜh_tot) = p.precomputed
         for j in 1:n
             @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
             @. ᶜa_scalar =
@@ -189,7 +190,7 @@ function edmfx_sgs_mass_flux_tendency!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
-    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜts) = p.precomputed
+    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     FT = eltype(Y)
@@ -197,8 +198,7 @@ function edmfx_sgs_mass_flux_tendency!(
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
         thermo_params = CAP.thermodynamics_params(p.params)
         # energy
-        ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-        ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+        (; ᶜh_tot) = p.precomputed
         ᶠu³_diff = p.scratch.ᶠtemp_CT3
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
         for j in 1:n
@@ -378,8 +378,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     FT = Spaces.undertype(axes(Y.c))
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
-    thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜu, ᶜts) = p.precomputed
+    (; ᶜu) = p.precomputed
     (; ρtke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
@@ -412,8 +411,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
-        ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-        ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+        (; ᶜh_tot) = p.precomputed
         @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜh_tot)))
 
         if use_prognostic_tke(turbconv_model)

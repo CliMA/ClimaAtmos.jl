@@ -91,8 +91,17 @@ function edmfx_tke_tendency!(
         # Note: Adding the following tendency breaks bm_aquaplanet_progedmf_dense_autodiff
         if turbconv_model isa PrognosticEDMFX
             ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-            (; ᶜts⁰) = p.precomputed
-            ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
+            (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+            ᶜρ⁰ = @. lazy(
+                TD.air_density(
+                    thermo_params,
+                    ᶜT⁰,
+                    ᶜp,
+                    ᶜq_tot_safe⁰,
+                    ᶜq_liq_rai⁰,
+                    ᶜq_ice_sno⁰,
+                ),
+            )
             @. Yₜ.c.ρtke -=
                 ᶜρa⁰ * adjoint(CT3(ᶜinterp(ᶠu³⁰ - ᶠu³))) *
                 (ᶜρ⁰ - Y.c.ρ) *

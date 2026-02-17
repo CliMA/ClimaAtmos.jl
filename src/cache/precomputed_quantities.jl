@@ -16,7 +16,10 @@ The following grid-scale quantities are treated implicitly and are precomputed:
     - `ᶜu`: covariant velocity on cell centers
     - `ᶠu`: contravariant velocity on cell faces
     - `ᶜK`: kinetic energy on cell centers
-    - `ᶜts`: thermodynamic state on cell centers
+    - `ᶜT`: air temperature on cell centers
+    - `ᶜq_tot_safe`: total water specific humidity on cell centers
+    - `ᶜq_liq_rai`: liquid water specific humidity on cell centers
+    - `ᶜq_ice_sno`: ice specific humidity on cell centers
     - `ᶜp`: air pressure on cell centers
 If the `turbconv_model` is `PrognosticEDMFX`, there also two SGS versions of
 every quantity except for `ᶜp` (which is shared across all subdomains):
@@ -32,18 +35,37 @@ TODO: Rename `ᶜK` to `ᶜκ`.
 function implicit_precomputed_quantities(Y, atmos)
     (; moisture_model, turbconv_model, microphysics_model) = atmos
     FT = eltype(Y)
-    TST = thermo_state_type(moisture_model, FT)
     n = n_mass_flux_subdomains(turbconv_model)
     gs_quantities = (;
-        ᶜspecific = Base.materialize(ᶜspecific_gs_tracers(Y)),
         ᶜu = similar(Y.c, C123{FT}),
         ᶠu³ = similar(Y.f, CT3{FT}),
         ᶠu = similar(Y.f, CT123{FT}),
         ᶜK = similar(Y.c, FT),
-        ᶜts = similar(Y.c, TST),
+        ᶜT = similar(Y.c, FT),
+        ᶜh_tot = similar(Y.c, FT),
         ᶜp = similar(Y.c, FT),
     )
+    # Moisture-related quantities depend on moisture model:
+    # - EquilMoistModel: allocate fields + thermo_state cache for saturation adjustment
+    # - Ohters: allocate fields only
+    sa_result_type = @NamedTuple{T::FT, q_liq::FT, q_ice::FT}
+    moist_gs_quantities =
+        if moisture_model isa EquilMoistModel
+            (;
+                ᶜq_tot_safe = similar(Y.c, FT),
+                ᶜq_liq_rai = similar(Y.c, FT),
+                ᶜq_ice_sno = similar(Y.c, FT),
+                ᶜsa_result = similar(Y.c, sa_result_type),
+            )
+        else  # DryModel or NonEquilMoistModel
+            (;
+                ᶜq_tot_safe = similar(Y.c, FT),
+                ᶜq_liq_rai = similar(Y.c, FT),
+                ᶜq_ice_sno = similar(Y.c, FT),
+            )
+        end
     sgs_quantities = (;)
+    # Base prognostic EDMFX quantities (for all moisture models)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
@@ -51,16 +73,27 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜK⁰ = similar(Y.c, FT),
-            ᶜts⁰ = similar(Y.c, TST),
+            ᶜT⁰ = similar(Y.c, FT),
+            ᶜq_tot_safe⁰ = similar(Y.c, FT),
+            ᶜq_liq_rai⁰ = similar(Y.c, FT),
+            ᶜq_ice_sno⁰ = similar(Y.c, FT),
             ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
             ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
             ᶠKᵥʲs = similar(Y.f, NTuple{n, FT}),
-            ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
+            ᶜTʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_tot_safeʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_liq_raiʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_ice_snoʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             ᶠnh_pressure₃_dragʲs = similar(Y.f, NTuple{n, C3{FT}}),
         ) : (;)
-    return (; gs_quantities..., sgs_quantities..., prognostic_sgs_quantities...)
+    return (;
+        gs_quantities...,
+        moist_gs_quantities...,
+        sgs_quantities...,
+        prognostic_sgs_quantities...,
+    )
 end
 
 """
@@ -82,7 +115,7 @@ function precomputed_quantities(Y, atmos)
             isnothing(atmos.vertical_diffusion)
     @assert !(atmos.moisture_model isa NonEquilMoistModel) ||
             !(atmos.microphysics_model isa Microphysics0Moment)
-    TST = thermo_state_type(atmos.moisture_model, FT)
+    sa_result_type = @NamedTuple{T::FT, q_liq::FT, q_ice::FT}
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
@@ -232,7 +265,10 @@ function precomputed_quantities(Y, atmos)
             ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
             ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
+            ᶜTʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_tot_safeʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_liq_raiʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_ice_snoʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             ᶜmseʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_totʲs = similar(Y.c, NTuple{n, FT}),
@@ -379,64 +415,13 @@ function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
     return nothing
 end
 
-function thermo_state(
-    thermo_params;
-    ρ = nothing,
-    p = nothing,
-    θ = nothing,
-    e_int = nothing,
-    q_tot = nothing,
-    q_pt = nothing,
-)
-    get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, ::Nothing, ::Nothing) =
-        TD.PhaseDry_ρe(thermo_params, ρ, e_int)
-    get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, q_tot::Real, ::Nothing) =
-        TD.PhaseEquil_ρeq(
-            thermo_params,
-            ρ,
-            e_int,
-            q_tot,
-            3,
-            eltype(thermo_params)(0.003),
-        )
-    get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, ::Nothing, q_pt) =
-        TD.PhaseNonEquil(thermo_params, e_int, ρ, q_pt)
-    get_ts(::Nothing, p::Real, θ::Real, ::Nothing, q_tot::Real, ::Nothing) =
-        TD.PhaseEquil_pθq(thermo_params, p, θ, q_tot)
-    return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
+# Combined getter function for thermodynamic state variables from saturation adjustment.
+# Returns a NamedTuple with T, q_liq, q_ice.
+# This avoids redundant saturation_adjustment calls for EquilMoistModel.
+function saturation_adjustment_tuple(thermo_params, ::TD.ρe, ρ, e_int, q_tot)
+    sa_result = TD.saturation_adjustment(thermo_params, TD.ρe(), ρ, e_int, q_tot)
+    return (; T = sa_result.T, q_liq = sa_result.q_liq, q_ice = sa_result.q_ice)
 end
-
-# GPU-compatible thermo_vars using multiple dispatch. Each method returns a 
-# NamedTuple with the thermodynamic variables needed for the corresponding 
-# moisture model.
-
-function thermo_vars(::DryModel, ::Any, ᶜY, K, Φ)
-    e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ
-    return (; e_int)
-end
-
-function thermo_vars(::EquilMoistModel, ::Any, ᶜY, K, Φ)
-    e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ
-    q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ)
-    return (; e_int, q_tot)
-end
-
-function thermo_vars(::NonEquilMoistModel, ::Any, ᶜY, K, Φ)
-    e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ
-    q_pt_args = (;
-        q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ),
-        q_liq = specific(ᶜY.ρq_liq, ᶜY.ρ) + specific(ᶜY.ρq_rai, ᶜY.ρ),
-        q_ice = specific(ᶜY.ρq_ice, ᶜY.ρ) + specific(ᶜY.ρq_sno, ᶜY.ρ),
-    )
-    return (; e_int, q_pt = TD.PhasePartition(q_pt_args...))
-end
-
-ts_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ) =
-    thermo_state(
-        thermo_params;
-        thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)...,
-        ρ,
-    )
 
 function eddy_diffusivity_coefficient_H(D₀, H, z_sfc, z)
     return D₀ * exp(-(z - z_sfc) / H)
@@ -464,13 +449,12 @@ elsewhere, but doing it here ensures that it occurs whenever the precomputed
 quantities are updated.
 """
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
-    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
+    (; turbconv_model, moisture_model) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp) = p.precomputed
+    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜh_tot, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
-    thermo_args = (thermo_params, moisture_model, microphysics_model)
 
     @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
 
@@ -487,9 +471,9 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # TODO: In the following increments to ᶜK, we actually need to add
         # quantities of the form ᶜρaχ⁰ / ᶜρ⁰ and ᶜρaχʲ / ᶜρʲ to ᶜK, rather than
         # quantities of the form ᶜρaχ⁰ / ᶜρ and ᶜρaχʲ / ᶜρ. However, we cannot
-        # compute ᶜρ⁰ and ᶜρʲ without first computing ᶜts⁰ and ᶜtsʲ, both of
-        # which depend on the value of ᶜp, which in turn depends on ᶜts. Since
-        # ᶜts depends on ᶜK, this
+        # compute ᶜρ⁰ and ᶜρʲ without first computing ᶜT⁰ and ᶜTʲ, both of
+        # which depend on the value of ᶜp, which in turn depends on ᶜT. Since
+        # ᶜT depends on ᶜK, this
         # means that the amount by which ᶜK needs to be incremented is a
         # function of ᶜK itself. So, unless we run a nonlinear solver here, this
         # circular dependency will prevent us from computing the exact value of
@@ -498,8 +482,38 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.ρtke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    @. ᶜts = ts_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+    ᶜe_int = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ) - ᶜK - ᶜΦ)
+    if moisture_model isa EquilMoistModel
+        # Compute thermodynamic state variables using combined getter function.
+        # This avoids redundant saturation_adjustment calls for EquilMoistModel.
+        @. ᶜq_tot_safe = max(0, specific(Y.c.ρq_tot, Y.c.ρ))
+        (; ᶜsa_result) = p.precomputed
+        @. ᶜsa_result =
+            saturation_adjustment_tuple(thermo_params, TD.ρe(), Y.c.ρ, ᶜe_int, ᶜq_tot_safe)
+        @. ᶜT = ᶜsa_result.T
+        @. ᶜq_liq_rai = ᶜsa_result.q_liq
+        @. ᶜq_ice_sno = ᶜsa_result.q_ice
+    else  # DryModel or NonEquilMoistModel
+        # For DryModel: q values are set to zero
+        # For NonEquilMoistModel: q values are computed from state variables
+        if moisture_model isa DryModel
+            @. ᶜq_tot_safe = zero(eltype(ᶜT))
+            @. ᶜq_liq_rai = zero(eltype(ᶜT))
+            @. ᶜq_ice_sno = zero(eltype(ᶜT))
+        else  # NonEquilMoistModel
+            @. ᶜq_tot_safe = max(0, specific(Y.c.ρq_tot, Y.c.ρ))
+            @. ᶜq_liq_rai =
+                max(0, specific(Y.c.ρq_liq, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
+            @. ᶜq_ice_sno =
+                max(0, specific(Y.c.ρq_ice, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
+        end
+        @. ᶜT =
+            TD.air_temperature(thermo_params, ᶜe_int, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    end
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    @. ᶜh_tot =
+        TD.total_enthalpy(thermo_params, ᶜe_tot, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    @. ᶜp = TD.air_pressure(thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
@@ -521,7 +535,6 @@ current state `Y`. This is only called before each evaluation of
 NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, moisture_model, cloud_model) = p.atmos
     (; call_cloud_diagnostics_per_stage) = p.atmos
-    (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
 
@@ -530,10 +543,20 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     end
 
     if turbconv_model isa AbstractEDMF
-        @. p.precomputed.ᶜgradᵥ_q_tot =
-            ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
-        @. p.precomputed.ᶜgradᵥ_θ_liq_ice =
-            ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
+        (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+        @. p.precomputed.ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
+        @. p.precomputed.ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
+            ᶠinterp(
+                TD.liquid_ice_pottemp(
+                    thermo_params,
+                    ᶜT,
+                    Y.c.ρ,
+                    ᶜq_tot_safe,
+                    ᶜq_liq_rai,
+                    ᶜq_ice_sno,
+                ),
+            ),
+        )
     end
 
     # The buoyancy gradient depends on the cloud fraction, and the cloud fraction

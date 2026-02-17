@@ -9,3 +9,9 @@ disable_surface_flux_tendency: true
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]
     period: 1days
+    compute_every: 1steps
+  - short_name: [pfull, wa, va, rv, hus, ke]
+    period: 1days
+    reduction_time: average
+    pressure_coordinates: true
+    compute_every: 1hours

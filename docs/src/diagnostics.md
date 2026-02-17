@@ -18,15 +18,18 @@ diagnostics:
     output_name: a_name
     period: 3hours
     writer: nc
+    compute_every: 1hours
   - reduction_time: average
     short_name: rhoa
     period: 12hours
     writer: h5
+    compute_every: 2steps
 ```
 This adds two diagnostics (both for `rhoa`). The `period` keyword
 identifies the period over which to compute the reduction and how often to save
 to disk. `output_name` is optional, and if provided, it identifies the name of the
-output file.
+output file. The `compute_every` keyword identifies how often the field should
+be computed.
 
 For multiple diagnostics with the same specs, it is also possible to directly
 pass a vector of `short_names`, as in
@@ -40,6 +43,25 @@ diagnostics:
 The default `writer` is NetCDF. If `writer` is `nc` or `netcdf`, the output is
 remapped non-conservatively on a Cartesian grid and saved to a NetCDF file.
 Currently, only 3D fields on cubed spheres are supported.
+
+#### Writing in pressure coordinates
+
+!!! compat "Compatibility"
+    This is only available in versions after ClimaAtmos v0.35.2.
+
+You can write diagnostics to NetCDF files in pressure coordinates by setting
+`pressure_coordinates` to true. This replaces the vertical dimension `z` in
+the NetCDF files with the dimension `pressure_level`. For more information about
+writing diagnostics in pressure coordinates, see the
+[documentation](https://clima.github.io/ClimaDiagnostics.jl/dev/writers/#Output-diagnostics-in-pressure-coordinates)
+in ClimaDiagnostics.
+
+```
+diagnostics:
+  - short_name: [pfull, wa, va, rv, hus, ke]
+    period: 1days
+    pressure_coordinates: true
+```
 
 ### From a script
 

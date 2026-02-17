@@ -18,7 +18,7 @@ prognostic_tke: true
 moist: equil
 call_cloud_diagnostics_per_stage: true
 config: column
-hyperdiff: false
+hyperdiff: "false"
 z_max: 1500
 x_elem: 2
 y_elem: 2

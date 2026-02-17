@@ -93,6 +93,7 @@ function build_cache(
     aerosol_names,
     time_varying_trace_gas_names,
     steady_state_velocity,
+    vwb_species = nothing,
 )
     FT = eltype(params)
     dt = FT(dt)
@@ -120,7 +121,7 @@ function build_cache(
             )
         ) : (; col_integrated_precip_energy_tendency = (;))
 
-    limiter = if isnothing(atmos.numerics.limiter)
+    sem_quasimonotone_limiter = if isnothing(atmos.numerics.limiter)
         nothing
     elseif atmos.numerics.limiter isa QuasiMonotoneLimiter
         Limiters.QuasiMonotoneLimiter(similar(Y.c, FT))
@@ -128,14 +129,24 @@ function build_cache(
 
     nonneg_lim = atmos.water.tracer_nonnegativity_method
     tracer_nonnegativity_limiter = if nonneg_lim isa TracerNonnegativityElementConstraint
-        Limiters.QuasiMonotoneLimiter(similar(Y.c.ρq_tot, FT);
-            convergence_stats = Limiters.NoConvergenceStats(),
-        )
+        Limiters.QuasiMonotoneLimiter(similar(Y.c.ρq_tot, FT))
     else
         nothing
     end
 
-    numerics = (; limiter, tracer_nonnegativity_limiter)
+    vertical_water_borrowing_limiter = nothing
+    vertical_water_borrowing_species = vwb_species
+
+    if atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVerticalWaterBorrowing
+        vertical_water_borrowing_limiter = Limiters.VerticalMassBorrowingLimiter((FT(0.0),))
+    end
+
+    numerics = (;
+        sem_quasimonotone_limiter,
+        tracer_nonnegativity_limiter,
+        vertical_water_borrowing_limiter,
+        vertical_water_borrowing_species,
+    )
 
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(Y.f), Fields.half)

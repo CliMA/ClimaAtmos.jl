@@ -435,10 +435,7 @@ Returns:
 """
 function ᶜspecific_env_mse(Y, p)
     turbconv_model = p.atmos.turbconv_model
-    (; ᶜK, ᶜts) = p.precomputed
-    thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+    (; ᶜK, ᶜh_tot) = p.precomputed
 
     # grid-scale moist static energy density `ρ * mse`.
     ᶜρmse = @. lazy(Y.c.ρ * (ᶜh_tot - ᶜK))

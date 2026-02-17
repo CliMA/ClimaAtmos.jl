@@ -3,6 +3,7 @@ import StaticArrays as SA
 import Thermodynamics as TD
 import Dates
 
+import ClimaParams as CP
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
 
@@ -26,26 +27,66 @@ Struct used for dispatch to the 2-moment warm rain + P3 ice microphysics paramet
 struct Microphysics2MomentP3 <: AbstractPrecipitationModel end
 
 """
-    TracerNonnegativityConstraint{qtot}
+    TracerNonnegativityMethod
 
-Methods for enforcing tracer nonnegativity. 
+Family of methods for enforcing tracer nonnegativity. 
 
-`qtot` is a boolean indicating whether q_tot should be constrained to be nonnegative. It can be
-- `true`: Constrain q_tot to be nonnegative
-- `false`: Do not constrain q_tot
-
-There are three methods for enforcing tracer nonnegativity:
+There are four methods for enforcing tracer nonnegativity:
 - `TracerNonnegativityElementConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
     tracer mass within an element (i.e. horizontally)
 - `TracerNonnegativityVaporConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
     tracer mass between vapor (`q_vap = q_tot - q_cond`) and each tracer
 - `TracerNonnegativityVaporTendency`: Enforce nonnegativity by applying a tendency to each tracer,
     exchanging tracer mass between vapor (`q_vap`) and each tracer over time
+- `TracerNonnegativityVerticalWaterBorrowing`: Enforce nonnegativity using VerticalMassBorrowingLimiter,
+    which redistributes tracer mass vertically. Note: `qtot` parameter is not applicable to this method.
+
+`qtot` is a boolean that is `true` if q_tot is among the constrained tracers, and `false` otherwise.
+
+# Constructor
+
+    TracerNonnegativityMethod(method::String; include_qtot = false)
+
+Create a microphysics tracer nonnegativity constraint.
+
+Depending on the microphysics model, the constrained tracers include:
+- `ρq_liq`, `ρq_ice`, `ρq_rai`, `ρq_sno`,
+- If `include_qtot` is true, `q_tot` is also among the constrained tracers.
+
+# Arguments:
+- `method`: Can be
+    - "elementwise_constraint": constructs `TracerNonnegativityElementConstraint{include_qtot}()`
+    - "vapor_constraint": constructs `TracerNonnegativityVaporConstraint{include_qtot}()`
+    - "vapor_tendency": constructs `TracerNonnegativityVaporTendency()`
+
+# Keyword arguments:
+- `include_qtot`: (default: `false`) Boolean that is `true` if q_tot is among the constrained tracers.
 """
-abstract type TracerNonnegativityConstraint{qtot} end
+abstract type TracerNonnegativityMethod end
+abstract type TracerNonnegativityConstraint{qtot} <: TracerNonnegativityMethod end
 struct TracerNonnegativityElementConstraint{qtot} <: TracerNonnegativityConstraint{qtot} end
 struct TracerNonnegativityVaporConstraint{qtot} <: TracerNonnegativityConstraint{qtot} end
-struct TracerNonnegativityVaporTendency end
+struct TracerNonnegativityVaporTendency <: TracerNonnegativityMethod end
+struct TracerNonnegativityVerticalWaterBorrowing <: TracerNonnegativityConstraint{false} end
+
+function TracerNonnegativityMethod(method::String; include_qtot::Bool = false)
+    if method == "elementwise_constraint"
+        return TracerNonnegativityElementConstraint{include_qtot}()
+    elseif method == "vapor_constraint"
+        return TracerNonnegativityVaporConstraint{include_qtot}()
+    elseif method == "vapor_tendency"
+        include_qtot &&
+            error("TracerNonnegativityVaporTendency does not support `include_qtot = true`")
+        return TracerNonnegativityVaporTendency()
+    elseif method == "vertical_water_borrowing"
+        include_qtot &&
+            error("TracerNonnegativityVerticalWaterBorrowing does not support \
+                `include_qtot = true`")
+        return TracerNonnegativityVerticalWaterBorrowing()
+    else
+        error("Invalid tracer nonnegativity method: $method")
+    end
+end
 
 """
 
@@ -161,7 +202,7 @@ struct PrescribedCloudInRadiation <: AbstractCloudInRadiation end
 
 abstract type AbstractSurfaceTemperature end
 struct PrescribedSST <: AbstractSurfaceTemperature end
-Base.@kwdef struct SlabOceanSST{FT} <: AbstractSurfaceTemperature
+@kwdef struct SlabOceanSST{FT} <: AbstractSurfaceTemperature
     # optional slab ocean parameters:
     depth_ocean::FT = 40 # ocean mixed layer depth [m]
     ρ_ocean::FT = 1020 # ocean density [kg / m³]
@@ -171,36 +212,62 @@ Base.@kwdef struct SlabOceanSST{FT} <: AbstractSurfaceTemperature
     ϕ₀::FT = 16 # Q-flux meridional scale [deg]
 end
 
-abstract type AbstractHyperdiffusion end
-Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
+
+### -------------------- ###
+### Hyperdiffusion model ###
+### -------------------- ###
+
+@kwdef struct Hyperdiffusion{FT}
     ν₄_vorticity_coeff::FT
-    ν₄_scalar_coeff::FT
     divergence_damping_factor::FT
+    prandtl_number::FT
 end
 
+"""
+    cam_se_hyperdiffusion(FT)
+
+Create a Hyperdiffusion with CAM_SE preset coefficients.
+
+These coefficients match hyperviscosity coefficients from: 
+(Lauritzen et al. (2017))[https://doi.org/10.1029/2017MS001257]
+for equations A18 and A19, scaled by `(1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3 ≈ 1.238`
+"""
+cam_se_hyperdiffusion(::Type{FT}) where {FT} =
+    Hyperdiffusion{FT}(;
+        ν₄_vorticity_coeff = 0.150 * 1.238,
+        divergence_damping_factor = 5,
+        prandtl_number = 0.2,
+    )
+
+### ------------------------------------ ###
+### Prescribed vertical diffusion models ###
+### ------------------------------------ ###
+
 abstract type AbstractVerticalDiffusion end
-Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
+@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
     C_E::FT
 end
+VerticalDiffusion{FT}(; disable_momentum_vertical_diffusion, C_E) where {FT} =
+    VerticalDiffusion{disable_momentum_vertical_diffusion, FT}(; C_E)
+
 disable_momentum_vertical_diffusion(::VerticalDiffusion{DM}) where {DM} = DM
-Base.@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
+@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
     H::FT
     D₀::FT
 end
-disable_momentum_vertical_diffusion(::DecayWithHeightDiffusion{DM}) where {DM} =
-    DM
+DecayWithHeightDiffusion{FT}(; disable_momentum_vertical_diffusion, H, D₀) where {FT} =
+    DecayWithHeightDiffusion{disable_momentum_vertical_diffusion, FT}(; H, D₀)
+
+disable_momentum_vertical_diffusion(::DecayWithHeightDiffusion{DM}) where {DM} = DM
 disable_momentum_vertical_diffusion(::Nothing) = false
 
-struct SurfaceFlux end
 
-abstract type AbstractSponge end
-Base.Broadcast.broadcastable(x::AbstractSponge) = tuple(x)
-Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
-    zd::FT
-    κ₂::FT
-end
+### --------------------- ###
+### Eddy Viscosity Models ###
+### --------------------- ###
 
-abstract type AbstractEddyViscosityModel end
+abstract type EddyViscosityModel end
+
 """
     SmagorinskyLilly{AXES}
 
@@ -211,8 +278,19 @@ Smagorinsky-Lilly eddy viscosity model.
 - `:UV` (horizontal axes)
 - `:W` (vertical axis)
 - `:UV_W` (horizontal and vertical axes treated separately).
+
+# Examples
+Construct a model instance by passing the selected axes as a keyword argument:
+```julia
+smagorinsky_lilly = SmagorinskyLilly(; axes = :UV_W)
+```
 """
-struct SmagorinskyLilly{AXES} <: AbstractEddyViscosityModel end
+struct SmagorinskyLilly{AXES} <: EddyViscosityModel end
+
+function SmagorinskyLilly(; axes::Symbol)
+    @assert axes in (:UVW, :UV, :W, :UV_W) "axes must be one of :UVW, :UV, :W, or :UV_W, got :$axes"
+    return SmagorinskyLilly{axes}()
+end
 
 """
     is_smagorinsky_UVW_coupled(model)
@@ -244,24 +322,128 @@ is_smagorinsky_horizontal(::SmagorinskyLilly{AXES}) where {AXES} =
     AXES == :UVW || AXES == :UV || AXES == :UV_W
 is_smagorinsky_horizontal(::Nothing) = false
 
-struct AnisotropicMinimumDissipation{FT} <: AbstractEddyViscosityModel
+@kwdef struct AnisotropicMinimumDissipation{FT} <: EddyViscosityModel
     c_amd::FT
 end
 
-struct ConstantHorizontalDiffusion{FT} <: AbstractEddyViscosityModel
+@kwdef struct ConstantHorizontalDiffusion{FT} <: EddyViscosityModel
     D::FT
 end
 
+### ------------- ###
+### Sponge models ###
+### ------------- ###
 
-Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
+abstract type SpongeModel end
+Base.broadcastable(x::SpongeModel) = tuple(x)
+
+"""
+    ViscousSponge{FT} <: SpongeModel
+
+Viscous sponge model; dampen variables in proportion to the value of their Laplacian
+
+Whenever `z > zd`, the viscous sponge model applies the tendency
+
+ ```math
+ \frac{∂χ}{∂t} = - β ⋅ ∇⋅(∇χ),   z > zd
+ ```
+
+ where `β = κ₂ ⋅ ζ` and `χ ∈ {uₕ, u₃, ρe_tot, GS_TRACERS}`;
+ the grid-scale tracers `GS_TRACERS` depend on the microphysical model,
+ but may include e.g. `ρq_tot`, `ρq_liq`, `ρq_ice`, ...
+ If the `PrognosticEDMFX` scheme is used, the model is additionally applied to `χ ∈ {u₃ʲ}`.
+ `κ₂` is a damping coefficient, and `ζ` is the damping function
+
+ ```math
+ ζ(z) = sin^2(π(z-zd)/(zmax-zd)/2)
+ ```
+
+ with `zd` the lower damping height and `zmax` the domain top height.
+
+# Examples
+```julia
+# Apply damping above 20km with κ₂ = 10^6 m²/s²
+sponge = ViscousSponge(Float32; zd = 20_000, κ₂ = 1e6)
+```
+"""
+@kwdef struct ViscousSponge{FT} <: SpongeModel
+    "Lower damping height, in meters"
     zd::FT
-    α_uₕ::FT
-    α_w::FT
-    α_sgs_tracer::FT
+    "Damping coefficient, in m²/s²"
+    κ₂::FT
 end
 
+ViscousSponge(params) = ViscousSponge(;
+    zd = params.zd_viscous,
+    κ₂ = params.kappa_2_sponge,
+)
+
+"""
+    RayleighSponge{FT} <: SpongeModel
+
+Rayleigh sponge model; dampen variables in proportion to their value
+
+Whenever `z > zd`, the Rayleigh sponge model applies the tendency
+
+ ```math
+ \frac{∂χ}{∂t} = - β ⋅ χ,   z > zd
+ ```
+
+ where `β = α_χ ⋅ ζ` and `χ ∈ {uₕ, u₃}`; 
+ If `ρtke` is a prognostic variable, it is also damped;
+ If the `PrognosticEDMFX` scheme is used, the model is additionally applied to
+ `χ ∈ {u₃ʲ, mseʲ, q_totʲ}`, and
+ `χ ∈ {q_liqʲ, q_raiʲ, q_iceʲ, q_snoʲ}` (depending on the microphysical model).
+ `α_χ` is a damping coefficient for each variable, and `ζ` is the damping function
+
+ ```math
+ ζ(z) = sin^2(π(z-zd)/(zmax-zd)/2)
+ ```
+ 
+ with `zd` the lower damping height and `zmax` the domain top height.
+
+ Separate damping coefficients are used:
+ - `α_uₕ`: horizontal velocity, `uₕ`;
+ - `α_w`: vertical velocity, `u₃`, `u₃ʲ`;
+ - `α_sgs_tracer`: subgrid-scale tracer variables, `ρtke`, `mseʲ`, `q_totʲ`, 
+    `q_liqʲ`, `q_raiʲ`, `q_iceʲ`, `q_snoʲ`.
+
+ By default, damping is only applied to vertical velocity, with:
+ - `α_uₕ = 0`
+ - `α_w = 1`
+ - `α_sgs_tracer = 0`
+
+# Examples
+```julia
+# Apply damping to vertical velocity, above 20km
+sponge = RayleighSponge(Float32; zd = 20_000)
+```
+"""
+@kwdef struct RayleighSponge{FT} <: SpongeModel
+    "Lower damping height, in meters"
+    zd::FT
+    "Damping coefficient for horizontal velocity, by default 0 (no damping)"
+    α_uₕ::FT = 0
+    "Damping coefficient for vertical velocity, by default 1 (full damping)"
+    α_w::FT = 1
+    "Damping coefficient for subgrid-scale tracer variables, by default 0 (no damping)"
+    α_sgs_tracer::FT = 0
+end
+
+RayleighSponge(params) = RayleighSponge(;
+    zd = params.zd_rayleigh,
+    α_uₕ = params.alpha_rayleigh_uh,
+    α_w = params.alpha_rayleigh_w,
+    α_sgs_tracer = params.alpha_rayleigh_sgs_tracer,
+)
+
+
+### ------------------- ###
+### Gravity wave models ###
+### ------------------- ###
+
 abstract type AbstractGravityWave end
-Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
+@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
     source_pressure::FT = 31500
     damp_pressure::FT = 85
     source_height::FT = 15000
@@ -284,7 +466,7 @@ Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
     dϕ_s::FT = -5
 end
 
-Base.@kwdef struct OrographicGravityWave{FT, S} <: AbstractGravityWave
+@kwdef struct OrographicGravityWave{FT, S} <: AbstractGravityWave
     γ::FT = 0.4
     ϵ::FT = 0.0
     β::FT = 0.5
@@ -340,20 +522,28 @@ Base.broadcastable(x::BuoyGradMean) = tuple(x)
 
 Variables used in the environmental buoyancy gradient computation.
 """
-Base.@kwdef struct EnvBuoyGradVars{FT, TS}
-    ts::TS
+@kwdef struct EnvBuoyGradVars{FT}
+    T::FT
+    ρ::FT
+    q_tot::FT
+    q_liq::FT
+    q_ice::FT
     cf::FT
     ∂qt∂z::FT
     ∂θli∂z::FT
 end
 
 function EnvBuoyGradVars(
-    ts::TD.ThermodynamicState,
+    T,
+    ρ,
+    q_tot,
+    q_liq,
+    q_ice,
     cf,
     ∂qt∂z_∂θli∂z,
 )
     (; ∂qt∂z, ∂θli∂z) = ∂qt∂z_∂θli∂z
-    return EnvBuoyGradVars(ts, cf, ∂qt∂z, ∂θli∂z)
+    return EnvBuoyGradVars(T, ρ, q_tot, q_liq, q_ice, cf, ∂qt∂z, ∂θli∂z)
 end
 
 Base.eltype(::EnvBuoyGradVars{FT}) where {FT} = FT
@@ -370,7 +560,6 @@ end
 function MixingLength(master, wall, tke, buoy, l_grid)
     return MixingLength(promote(master, wall, tke, buoy, l_grid)...)
 end
-
 
 abstract type AbstractEDMF end
 
@@ -389,11 +578,48 @@ end
 PrognosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
     PrognosticEDMFX{N, TKE, FT}(a_half)
 
+"""
+    PrognosticEDMFX(; n_updrafts = 1, prognostic_tke = false, area_fraction)
+
+Create a PrognosticEDMFX model with the specified number of updrafts, TKE configuration, and area fraction.
+
+# Arguments
+- `n_updrafts::Int`: Number of updraft subdomains
+- `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
+- `area_fraction`: "Small" area fraction threshold, is the `a_half` argument in `sgs_weight_function` 
+    - Note: Float type is inferred from this value
+"""
+function PrognosticEDMFX(;
+    n_updrafts = 1,
+    prognostic_tke = false,
+    area_fraction::FT,
+) where {FT}
+    return PrognosticEDMFX{n_updrafts, prognostic_tke, FT}(area_fraction)
+end
+
 struct DiagnosticEDMFX{N, TKE, FT} <: AbstractEDMF
     a_half::FT # WARNING: this should never be used outside of `specific`
 end
-DiagnosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
-    DiagnosticEDMFX{N, TKE, FT}(a_half)
+DiagnosticEDMFX{N, TKE}(area_fraction::FT) where {N, TKE, FT} =
+    DiagnosticEDMFX{N, TKE, FT}(area_fraction)
+
+"""
+    DiagnosticEDMFX(; n_updrafts = 1, prognostic_tke = false, area_fraction)
+
+Create a DiagnosticEDMFX model with the specified number of updrafts, TKE configuration, and area fraction.
+
+# Arguments
+- `n_updrafts::Int`: Number of updraft subdomains
+- `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
+- `area_fraction`: Area fraction at half levels (float type is inferred from this value)
+"""
+function DiagnosticEDMFX(;
+    n_updrafts = 1,
+    prognostic_tke = false,
+    area_fraction::FT,
+) where {FT}
+    return DiagnosticEDMFX{n_updrafts, prognostic_tke, FT}(area_fraction)
+end
 
 n_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
@@ -420,16 +646,12 @@ struct PiGroupsDetrainment <: AbstractDetrainmentModel end
 struct BuoyancyVelocityDetrainment <: AbstractDetrainmentModel end
 struct SmoothAreaDetrainment <: AbstractDetrainmentModel end
 
-abstract type AbstractSurfaceThermoState end
-struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
-
 abstract type AbstractTendencyModel end
 struct UseAllTendency <: AbstractTendencyModel end
 struct NoGridScaleTendency <: AbstractTendencyModel end
 struct NoSubgridScaleTendency <: AbstractTendencyModel end
 
 # Define broadcasting for types
-Base.broadcastable(x::AbstractSurfaceThermoState) = tuple(x)
 Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
 Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
@@ -441,7 +663,7 @@ Base.broadcastable(x::AbstractDetrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractSGSamplingType) = tuple(x)
 Base.broadcastable(x::AbstractTendencyModel) = tuple(x)
 
-Base.@kwdef struct RadiationDYCOMS{FT}
+@kwdef struct RadiationDYCOMS{FT}
     "Large-scale divergence"
     divergence::FT = 3.75e-6
     alpha_z::FT = 1.0
@@ -450,7 +672,7 @@ Base.@kwdef struct RadiationDYCOMS{FT}
     F1::FT = 22.0
 end
 
-Base.@kwdef struct RadiationISDAC{FT}
+@kwdef struct RadiationISDAC{FT}
     F₀::FT = 72  # W/m²
     F₁::FT = 15  # W/m²
     κ::FT = 170  # m²/kg
@@ -497,8 +719,17 @@ function get_ρu₃qₜ_surface(flow::ShipwayHill2012VelocityProfile, thermo_par
     q_tot_sfc = rv_sfc / (1 + rv_sfc)  # 0.0148 kg/kg
     p_sfc = FT(100_700)
     θ_sfc = FT(297.9)
-    ts_sfc = TD.PhaseEquil_pθq(thermo_params, p_sfc, θ_sfc, q_tot_sfc)
-    ρ_sfc = TD.air_density(thermo_params, ts_sfc)  # 1.165 kg/m³
+    T =
+        TD.saturation_adjustment(
+            thermo_params,
+            TD.pθ_li(),
+            p_sfc,
+            θ_sfc,
+            q_tot_sfc;
+            maxiter = 4,
+            tol = FT(0),
+        ).T
+    ρ_sfc = TD.air_density(thermo_params, T, p_sfc, q_tot_sfc)  # 1.165 kg/m³
     w_sfc = Geometry.WVector(flow(0, t))
     return ρ_sfc * w_sfc * q_tot_sfc
 end
@@ -517,79 +748,110 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
-
+struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
     """Enable specific upwinding schemes for specific equations"""
-    energy_q_tot_upwinding::EN_UP = Val(:vanleer_limiter)
-    tracer_upwinding::TR_UP = Val(:vanleer_limiter)
-    edmfx_mse_q_tot_upwinding::ED_UP = Val(:first_order)
-    edmfx_sgsflux_upwinding::SG_UP = Val(:none)
-    edmfx_tracer_upwinding::ED_TR_UP = Val(:first_order)
-
+    energy_q_tot_upwinding::EN_UP
+    tracer_upwinding::TR_UP
+    edmfx_mse_q_tot_upwinding::ED_UP
+    edmfx_sgsflux_upwinding::SG_UP
+    edmfx_tracer_upwinding::ED_TR_UP
     """Add NaNs to certain equations to track down problems"""
-    test_dycore_consistency::TDC = nothing
+    test_dycore_consistency::TDC
     """Whether the simulation is reproducible when restarting from a restart file"""
-    reproducible_restart::RR = nothing
-
-    limiter::LIM = nothing
-
+    reproducible_restart::RR
+    limiter::LIM
     """Timestepping mode for diffusion: Explicit() or Implicit()"""
-    diff_mode::DM = Explicit()
-
-    """Hyperdiffusion model: nothing or ClimaHyperdiffusion()"""
-    hyperdiff::HD = ClimaHyperdiffusion{Float32}(;
-        ν₄_vorticity_coeff = 0.150 * 1.238,
-        ν₄_scalar_coeff = 0.751 * 1.238,
-        divergence_damping_factor = 5,
-    )
+    diff_mode::DM
+    """Hyperdiffusion model: nothing or Hyperdiffusion()"""
+    hyperdiff::HD
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
-function Base.summary(io::IO, numerics::AtmosNumerics)
-    pns = string.(propertynames(numerics))
-    buf = maximum(length.(pns))
-    keys = propertynames(numerics)
-    vals = repeat.(" ", map(s -> buf - length(s) + 2, pns))
-    bufs = (; zip(keys, vals)...)
-    print(io, '\n')
-    for pn in propertynames(numerics)
-        prop = getproperty(numerics, pn)
-        s = string(
-            "  ", # needed for some reason
-            getproperty(bufs, pn),
-            '`',
-            string(pn),
-            '`',
-            "::",
-            '`',
-            typeof(prop),
-            '`',
-            '\n',
-        )
-        print(io, s)
-    end
+"""
+    AtmosNumerics(; kwargs...)
+
+Create an AtmosNumerics struct. Upwinding schemes can be specified as symbols or strings,
+which will be automatically converted to Val types for compile-time dispatch.
+"""
+function AtmosNumerics(;
+    energy_q_tot_upwinding = :vanleer_limiter,
+    tracer_upwinding = :vanleer_limiter,
+    edmfx_mse_q_tot_upwinding = :first_order,
+    edmfx_sgsflux_upwinding = :none,
+    edmfx_tracer_upwinding = :first_order,
+    test_dycore_consistency = nothing,
+    reproducible_restart = nothing,
+    limiter = nothing,
+    diff_mode = Explicit(),
+    hyperdiff = Hyperdiffusion{Float32}(;
+        ν₄_vorticity_coeff = 0.150 * 1.238,
+        divergence_damping_factor = 5,
+        prandtl_number = 1.0,
+    ),
+    kwargs...,
+)
+    # Helper to convert symbols/strings to Val types, or keep Val types as-is
+    parse_upwinding(x::Union{Symbol, String}) = Val(Symbol(x))
+    parse_upwinding(x::Val) = x
+
+    return AtmosNumerics(
+        parse_upwinding(energy_q_tot_upwinding),
+        parse_upwinding(tracer_upwinding),
+        parse_upwinding(edmfx_mse_q_tot_upwinding),
+        parse_upwinding(edmfx_sgsflux_upwinding),
+        parse_upwinding(edmfx_tracer_upwinding),
+        test_dycore_consistency,
+        reproducible_restart,
+        limiter,
+        diff_mode,
+        hyperdiff,
+    )
 end
 
 const ValTF = Union{Val{true}, Val{false}}
 
-Base.@kwdef struct EDMFXModel{
-    EEM,
-    EDM,
-    ESMF <: ValTF,
-    ESDF <: ValTF,
-    ENP <: ValTF,
-    EVD <: ValTF,
-    EF <: ValTF,
+struct EDMFXModel{
+    EEM, EDM,
+    ESMF <: ValTF, ESDF <: ValTF, ENP <: ValTF, EVD <: ValTF, EF <: ValTF,
     SBM <: AbstractScaleBlendingMethod,
 }
-    entr_model::EEM = nothing
-    detr_model::EDM = nothing
-    sgs_mass_flux::ESMF = Val(false)
-    sgs_diffusive_flux::ESDF = Val(false)
-    nh_pressure::ENP = Val(false)
-    vertical_diffusion::EVD = Val(false)
-    filter::EF = Val(false)
+    entr_model::EEM
+    detr_model::EDM
+    sgs_mass_flux::ESMF
+    sgs_diffusive_flux::ESDF
+    nh_pressure::ENP
+    vertical_diffusion::EVD
+    filter::EF
     scale_blending_method::SBM
+end
+
+
+# Convenience constructor that converts booleans to Val types
+# This outer constructor allows passing booleans, which are converted to Val types
+function EDMFXModel(;
+    entr_model = nothing,
+    detr_model = nothing,
+    sgs_mass_flux::Union{Bool, ValTF} = false,
+    sgs_diffusive_flux::Union{Bool, ValTF} = false,
+    nh_pressure::Union{Bool, ValTF} = false,
+    vertical_diffusion::Union{Bool, ValTF} = false,
+    filter::Union{Bool, ValTF} = false,
+    scale_blending_method,
+    kwargs...,
+)
+    parse_val_tf(x::Bool) = Val(x)
+    parse_val_tf(x::ValTF) = x
+    # Convert booleans to Val types, keep Val types as-is
+    return EDMFXModel(
+        entr_model,
+        detr_model,
+        parse_val_tf(sgs_mass_flux),
+        parse_val_tf(sgs_diffusive_flux),
+        parse_val_tf(nh_pressure),
+        parse_val_tf(vertical_diffusion),
+        parse_val_tf(filter),
+        scale_blending_method,
+    )
 end
 
 # Grouped structs to reduce AtmosModel type parameters
@@ -602,7 +864,7 @@ Groups Single-Column Model and Large-Eddy Simulation specific forcing, advection
 These components are primarily used internally for testing, calibration, and research purposes
 with single-column model setups. Most external users will not need these components.
 """
-Base.@kwdef struct SCMSetup{S, EF, LA, AT, SC}
+@kwdef struct SCMSetup{S, EF, LA, AT, SC}
     subsidence::S = nothing
     external_forcing::EF = nothing
     ls_adv::LA = nothing
@@ -615,7 +877,7 @@ end
 
 Groups moisture-related models and types.
 """
-Base.@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS, TNM}
+@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS, TNM}
     moisture_model::MM = DryModel()
     microphysics_model::PM = NoPrecipitation()
     cloud_model::CM = QuadratureCloud(SGSQuadrature(Float32))
@@ -629,7 +891,7 @@ end
 
 Groups radiation-related models and types.
 """
-Base.@kwdef struct AtmosRadiation{RM, IN}
+@kwdef struct AtmosRadiation{RM, IN}
     radiation_mode::RM = nothing
     insolation::IN = IdealizedInsolation()
 end
@@ -639,7 +901,7 @@ end
 
 Groups turbulence convection-related models and types.
 """
-Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD, CHD}
+@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD, CHD}
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     sgs_adv_mode::SAM = Explicit()
@@ -657,7 +919,7 @@ end
 
 Groups gravity wave-related models and types.
 """
-Base.@kwdef struct AtmosGravityWave{NOGW, OGW}
+@kwdef struct AtmosGravityWave{NOGW, OGW}
     non_orographic_gravity_wave::NOGW = nothing
     orographic_gravity_wave::OGW = nothing
 end
@@ -667,7 +929,7 @@ end
 
 Groups sponge-related models and types.
 """
-Base.@kwdef struct AtmosSponge{VS, RS}
+@kwdef struct AtmosSponge{VS, RS}
     viscous_sponge::VS = nothing
     rayleigh_sponge::RS = nothing
 end
@@ -677,7 +939,7 @@ end
 
 Groups surface-related models and types.
 """
-Base.@kwdef struct AtmosSurface{ST, SM, SA}
+@kwdef struct AtmosSurface{ST, SM, SA}
     sfc_temperature::ST = ZonallySymmetricSST()
     surface_model::SM = PrescribedSST()
     surface_albedo::SA = ConstantAlbedo{Float32}(; α = 0.07)
@@ -752,37 +1014,6 @@ end
 
 Base.broadcastable(x::AtmosModel) = tuple(x)
 
-function Base.summary(io::IO, atmos::AtmosModel)
-    pns = string.(propertynames(atmos))
-    buf = maximum(length.(pns))
-    keys = propertynames(atmos)
-    vals = repeat.(" ", map(s -> buf - length(s) + 2, pns))
-    bufs = (; zip(keys, vals)...)
-    print(io, '\n')
-    for pn in propertynames(atmos)
-        prop = getproperty(atmos, pn)
-        # Skip some data:
-        prop isa Bool && continue
-        prop isa NTuple && continue
-        prop isa Int && continue
-        prop isa Float64 && continue
-        prop isa Float32 && continue
-        s = string(
-            "  ", # needed for some reason
-            getproperty(bufs, pn),
-            '`',
-            string(pn),
-            '`',
-            "::",
-            '`',
-            typeof(prop),
-            '`',
-            '\n',
-        )
-        print(io, s)
-    end
-end
-
 """
     AtmosModel(; kwargs...)
 
@@ -819,10 +1050,10 @@ model = AtmosModel()  # Creates a basic dry atmospheric model
 ```julia
 model = AtmosModel(;
     radiation_mode = HeldSuarezForcing(),
-    hyperdiff = ClimaHyperdiffusion(;
+    hyperdiff = Hyperdiffusion(;
         ν₄_vorticity_coeff = 1e15,
-        ν₄_scalar_coeff = 1e15,
-        divergence_damping_factor = 1.0
+        divergence_damping_factor = 1.0,
+        prandtl_number = 1.0
     )
 )
 ```
@@ -894,8 +1125,10 @@ Internal testing and calibration components for single-column setups:
 - `energy_q_tot_upwinding`, `tracer_upwinding`, `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`: Val() upwinding schemes
 - `test_dycore_consistency`: nothing or TestDycoreConsistency() for debugging
 - `limiter`: nothing or QuasiMonotoneLimiter()
+- `vertical_water_borrowing_species`: internal value `nothing` (apply to all tracers; config default is `~`), empty tuple (apply to none; config `[]`), or Tuple{Symbol, ...} from config string/list (e.g. `["ρq_tot"]`) to apply only to those tracers. See config `vertical_water_borrowing_species` in default_config.yml for YAML options.
+  (Note: The vertical water borrowing limiter is created in the cache based on `AtmosWaterModel.tracer_nonnegativity_method`)
 - `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
-- `hyperdiff`: nothing or ClimaHyperdiffusion()
+- `hyperdiff`: nothing or Hyperdiffusion()
 
 ## Top-level Options
 - `vertical_diffusion`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
@@ -1042,7 +1275,7 @@ Create a dry atmospheric model with sensible defaults for dry simulations.
 ```julia
 model = DryAtmosModel(;
     radiation_mode = HeldSuarezForcing(),
-    hyperdiff = ClimaHyperdiffusion(; ν₄_vorticity_coeff = 1e15, ν₄_scalar_coeff = 1e15, divergence_damping_factor = 1.0)
+    hyperdiff = Hyperdiffusion(; ν₄_vorticity_coeff = 1e15, divergence_damping_factor = 1.0, prandtl_number = 1.0)
 )
 ```
 """

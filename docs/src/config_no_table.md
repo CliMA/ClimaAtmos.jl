@@ -27,7 +27,7 @@ edmfx_nh_pressure: true
 prognostic_tke: false
 moist: "equil"
 config: "box"
-hyperdiff: true
+hyperdiff: Hyperdiffusion
 x_max: 1e8
 y_max: 1e8
 z_max: 3e3

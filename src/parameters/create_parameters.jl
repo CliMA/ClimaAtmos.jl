@@ -150,6 +150,7 @@ cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
 cloud_parameters(toml_dict::CP.ParamDict) = (;
     liquid = CM.Parameters.CloudLiquid(toml_dict),
     ice = CM.Parameters.CloudIce(toml_dict),
+    stokes = CM.Parameters.StokesRegimeVelType(toml_dict),
     Ch2022 = CM.Parameters.Chen2022VelType(toml_dict),
     N_cloud_liquid_droplets = CP.get_parameter_values(
         toml_dict,

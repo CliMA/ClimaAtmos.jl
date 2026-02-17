@@ -11,7 +11,7 @@ import SciMLBase
 import .Parameters as CAP
 import ClimaCore: InputOutput
 using Dates
-using Insolation: instantaneous_zenith_angle
+
 import ClimaCore.Fields: ColumnField
 
 import ClimaUtilities.TimeVaryingInputs: evaluate!
@@ -109,13 +109,23 @@ end
 NVTX.@annotate function cloud_fraction_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
-    (; ᶜts, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
+    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) =
+        p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     if isnothing(p.atmos.turbconv_model)
-        @. ᶜgradᵥ_q_tot =
-            ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
-        @. ᶜgradᵥ_θ_liq_ice =
-            ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
+        @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
+        @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
+            ᶠinterp(
+                TD.liquid_ice_pottemp(
+                    thermo_params,
+                    ᶜT,
+                    Y.c.ρ,
+                    ᶜq_tot_safe,
+                    ᶜq_liq_rai,
+                    ᶜq_ice_sno,
+                ),
+            ),
+        )
     end
     set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model)
 end
@@ -157,14 +167,14 @@ function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     FT = Spaces.undertype(axes(Y.c))
     (; rrtmgp_model) = p.radiation
     rrtmgp_model.cos_zenith .= cosd(FT(42.05))
-    rrtmgp_model.weighted_irradiance .= FT(551.58)
+    rrtmgp_model.toa_flux .= FT(551.58)
 end
 
 function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
     (; rrtmgp_model) = p.radiation
     rrtmgp_model.cos_zenith .= Fields.field2array(p.external_forcing.cos_zenith)
-    rrtmgp_model.weighted_irradiance .=
-        Fields.field2array(p.external_forcing.insolation)
+    rrtmgp_model.toa_flux .=
+        Fields.field2array(p.external_forcing.toa_flux)
 end
 
 function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
@@ -179,7 +189,7 @@ function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
 
     # set insolation variables from the values within the fields
     rrtmgp_model.cos_zenith .= Fields.field2array(coszen)
-    rrtmgp_model.weighted_irradiance .= Fields.field2array(rsdt)
+    rrtmgp_model.toa_flux .= Fields.field2array(rsdt ./ coszen)
 end
 
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
@@ -191,12 +201,10 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
         latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
     (; rrtmgp_model) = p.radiation
-    # perpetual equinox with no diurnal cycle
-    rrtmgp_model.cos_zenith .= cos(FT(π) / 3)
-    weighted_irradiance =
-        @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
-           (4 * cos(FT(π) / 3))
-    rrtmgp_model.weighted_irradiance .= weighted_irradiance
+    # Approximate annual mean insolation without diurnal cycle
+    # Reference: O'Gorman and Schneider (2008), J. Climate, 21, 3815-3832
+    rrtmgp_model.toa_flux .= 680
+    @. rrtmgp_model.cos_zenith = (1 + FT(0.3) * (1 - 3 * sind(latitude)^2)) * FT(0.5)
 end
 
 function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
@@ -208,39 +216,37 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     current_datetime =
         t isa ITime ? ClimaUtilities.TimeManager.date(t) :
         tvi.start_date + Dates.Second(round(Int, t)) # current time
-    max_zenith_angle = FT(π) / 2 - eps(FT)
-    irradiance = FT(CAP.tot_solar_irrad(params))
-    au = FT(CAP.astro_unit(params))
-    d, δ, η_UTC =
-        FT.(
-            Insolation.helper_instantaneous_zenith_angle(
-                current_datetime,
-                insolation_params,
-            ),
-        )
+
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     cos_zenith =
         Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
-    weighted_irradiance = Fields.array2field(
-        rrtmgp_model.weighted_irradiance,
+    toa_flux = Fields.array2field(
+        rrtmgp_model.toa_flux,
         axes(bottom_coords),
     )
+
+    # Use Insolation API: insolate_tuple = insolation(datetime, lat, lon, params)
+    # Note: μ is already clamped at 0 by Insolation.jl but rrtmgp needs a non-zero μ
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        @. insolation_tuple = instantaneous_zenith_angle(
-            d,
-            δ,
-            η_UTC,
-            bottom_coords.long,
+        # Calculate insolation for each grid point
+        @. insolation_tuple = Insolation.insolation(
+            current_datetime,
             bottom_coords.lat,
-        ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
+            bottom_coords.long,
+            insolation_params,
+        )
+
     else
-        # assume that the latitude and longitude are both 0 for flat space,
-        # so that insolation_tuple is a constant Field
-        insolation_tuple .=
-            Ref(instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0)))
+        # assume that the latitude and longitude are both 0 for flat space
+        insolation_tuple .= Ref(Insolation.insolation(
+            current_datetime,
+            FT(0),
+            FT(0),
+            insolation_params,
+        ))
     end
-    @. cos_zenith = cos(min(first(insolation_tuple), max_zenith_angle))
-    @. weighted_irradiance = irradiance * (au / last(insolation_tuple))^2
+    @. cos_zenith = max(insolation_tuple.μ, eps(FT))
+    @. toa_flux = insolation_tuple.S
 end
 
 NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)

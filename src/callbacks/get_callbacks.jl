@@ -58,7 +58,31 @@ function get_diagnostics(
         sync_schedule = CAD.EveryStepSchedule(),
         maybe_add_start_date...,
     )
+
+    # Create NetCDF writer for diagnostics in pressure coordinates if they
+    # exist
+    write_in_pressure_coords = any(yaml_diagnostics) do yaml_diag
+        get(yaml_diag, "pressure_coordinates", false)
+    end
+    pressure_netcdf_writer = nothing
+    if write_in_pressure_coords
+        z_sampling_method = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
+            p.precomputed.ᶜp,
+            t_start,
+        )
+        pressure_space = ClimaDiagnostics.Writers.pressure_space(z_sampling_method)
+        pressure_netcdf_writer = CAD.NetCDFWriter(
+            pressure_space,
+            output_dir,
+            num_points = num_netcdf_points;
+            z_sampling_method,
+            sync_schedule = CAD.EveryStepSchedule(),
+            maybe_add_start_date...,
+        )
+    end
+
     writers = (dict_writer, hdf5_writer, netcdf_writer)
+    isnothing(pressure_netcdf_writer) || (writers = (writers..., pressure_netcdf_writer))
 
     # The default writer is netcdf
     ALLOWED_WRITERS = Dict(
@@ -73,6 +97,7 @@ function get_diagnostics(
     diagnostics_ragged = map(yaml_diagnostics) do yaml_diag
         short_names = yaml_diag["short_name"]
         output_name = get(yaml_diag, "output_name", nothing)
+        in_pressure_coords = get(yaml_diag, "pressure_coordinates", false)
 
         if short_names isa Vector
             isnothing(output_name) || error(
@@ -102,40 +127,24 @@ function get_diagnostics(
             if !haskey(ALLOWED_WRITERS, writer_ext)
                 error("writer $writer_ext not implemented")
             else
-                writer = ALLOWED_WRITERS[writer_ext]
+                writer = if in_pressure_coords
+                    writer_ext in ("netcdf", "nothing") ||
+                        error("Writing in pressure coordinates is only \
+                        compatible with the NetCDF writer")
+                    pressure_netcdf_writer
+                else
+                    ALLOWED_WRITERS[writer_ext]
+                end
             end
 
             haskey(yaml_diag, "period") ||
                 error("period keyword required for diagnostics")
 
             period_str = yaml_diag["period"]
-
-            if occursin("months", period_str)
-                months = match(r"^(\d+)months$", period_str)
-                isnothing(months) && error(
-                    "$(period_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
-                )
-                period_dates = Dates.Month(parse(Int, first(months)))
-            else
-                period_seconds = FT(time_to_seconds(period_str))
-                period_dates =
-                    CA.promote_period.(Dates.Second(period_seconds))
-            end
-
-            date_last =
-                t_start isa ITime ?
-                ClimaUtilities.TimeManager.date(t_start) :
-                start_date + Dates.Second(t_start)
-            output_schedule = CAD.EveryCalendarDtSchedule(
-                period_dates;
-                reference_date = start_date,
-                date_last = date_last,
-            )
-            compute_schedule = CAD.EveryCalendarDtSchedule(
-                period_dates;
-                reference_date = start_date,
-                date_last = date_last,
-            )
+            output_schedule =
+                parse_frequency_to_schedule(FT, period_str, start_date, t_start)
+            compute_schedule =
+                parse_frequency_to_schedule(FT, period_str, start_date, t_start)
 
             if isnothing(output_name)
                 output_short_name = CAD.descriptive_short_name(
@@ -148,8 +157,12 @@ function get_diagnostics(
 
             if isnothing(reduction_time_func)
                 compute_every = compute_schedule
-            else
+            elseif !("compute_every" in keys(yaml_diag))
                 compute_every = CAD.EveryStepSchedule()
+            else
+                compute_every_str = yaml_diag["compute_every"]
+                compute_every =
+                    parse_frequency_to_schedule(FT, compute_every_str, start_date, t_start)
             end
 
             CAD.ScheduledDiagnostic(
@@ -199,6 +212,55 @@ function get_diagnostics(
     end
 
     return diagnostics, writers, periods_reductions
+end
+
+"""
+    parse_frequency_to_schedule(
+        ::Type{FT},
+        frequency_str,
+        start_date,
+        t_start,
+    )
+
+Parse a frequency (e.g. "3months", "2steps", "10mins") into a schedule for
+diagnostics.
+"""
+function parse_frequency_to_schedule(
+    ::Type{FT},
+    frequency_str,
+    start_date,
+    t_start,
+) where {FT}
+    if occursin("steps", frequency_str)
+        steps = match(r"^(\d+)steps$", frequency_str)
+        isnothing(steps) && error(
+            "$(frequency_str) has to be of the form <NUM>steps, e.g. 2steps for 2 steps",
+        )
+        steps = parse(Int, first(steps))
+        return CAD.DivisorSchedule(steps)
+    end
+
+    if occursin("months", frequency_str)
+        months = match(r"^(\d+)months$", frequency_str)
+        isnothing(months) && error(
+            "$(frequency_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
+        )
+        period_dates = Dates.Month(parse(Int, first(months)))
+    else
+        period_seconds = FT(time_to_seconds(frequency_str))
+        period_dates =
+            CA.promote_period.(Dates.Second(period_seconds))
+    end
+
+    date_last =
+        t_start isa ITime ?
+        ClimaUtilities.TimeManager.date(t_start) :
+        start_date + Dates.Second(t_start)
+    return CAD.EveryCalendarDtSchedule(
+        period_dates;
+        reference_date = start_date,
+        date_last = date_last,
+    )
 end
 
 function parse_checkpoint_frequency(period::Number)
@@ -596,13 +658,13 @@ end
 
 function default_model_callbacks(water::AtmosWater;
     dt_cloud_fraction,
-    call_cloud_diagnostics_per_stage = false,
     start_date,
     dt,
     t_start,
     t_end,
     kwargs...)
-    if !call_cloud_diagnostics_per_stage && !isnothing(water.moisture_model)
+    if !isnothing(water.call_cloud_diagnostics_per_stage) &&
+       !isnothing(water.moisture_model)
         return cloud_fraction_callback(
             dt_cloud_fraction,
             dt,

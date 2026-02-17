@@ -56,43 +56,28 @@ end
 
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
-    if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
-        ν₄_vorticity_coeff =
-            FT(parsed_args["vorticity_hyperdiffusion_coefficient"])
-        ν₄_scalar_coeff = FT(parsed_args["scalar_hyperdiffusion_coefficient"])
-        divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
-        return ClimaHyperdiffusion(;
-            ν₄_vorticity_coeff,
-            ν₄_scalar_coeff,
-            divergence_damping_factor,
+    if hyperdiff_name == "Hyperdiffusion"
+        return Hyperdiffusion{FT}(;
+            ν₄_vorticity_coeff = parsed_args["vorticity_hyperdiffusion_coefficient"],
+            divergence_damping_factor = parsed_args["divergence_damping_factor"],
+            prandtl_number = parsed_args["hyperdiffusion_prandtl_number"],
         )
     elseif hyperdiff_name == "CAM_SE"
-        # To match hyperviscosity coefficients in:
-        #    https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2017MS001257
-        #    for equation A18 and A19
-        # Need to scale by (1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3  ≈ 1.238
-        # These are re-scaled by the grid resolution in function ν₄(hyperdiff, Y)
-        ν₄_vorticity_coeff = FT(0.150 * 1.238)
-        ν₄_scalar_coeff = FT(0.751 * 1.238)
-        divergence_damping_factor = FT(5)
         # Ensure the user isn't trying to set the values manually from the config as CAM_SE defines a set of hyperdiffusion coefficients
+        cam_se_hyperdiff = cam_se_hyperdiffusion(FT)
         coeff_pairs = [
-            (ν₄_vorticity_coeff, "vorticity_hyperdiffusion_coefficient"),
-            (ν₄_scalar_coeff, "scalar_hyperdiffusion_coefficient"),
-            (divergence_damping_factor, "divergence_damping_factor"),
+            (cam_se_hyperdiff.ν₄_vorticity_coeff, "vorticity_hyperdiffusion_coefficient"),
+            (cam_se_hyperdiff.divergence_damping_factor, "divergence_damping_factor"),
+            (cam_se_hyperdiff.prandtl_number, "hyperdiffusion_prandtl_number"),
         ]
 
         for (cam_coef, config_coef) in coeff_pairs
             # check to machine precision
             config_val = FT(parsed_args[config_coef])
-            @assert isapprox(cam_coef, config_val, atol = 1e-8) "CAM_SE hyperdiffusion overwrites $config_coef, use hyperdiff: ClimaHyperdiffusion to set this value manually in the config instead."
+            @assert isapprox(cam_coef, config_val, atol = 1e-8) "CAM_SE hyperdiffusion overwrites $config_coef, use `hyperdiff: Hyperdiffusion` to set this value manually in the config instead."
         end
-        return ClimaHyperdiffusion(;
-            ν₄_vorticity_coeff,
-            ν₄_scalar_coeff,
-            divergence_damping_factor,
-        )
-    elseif hyperdiff_name in ("none", "false", false)
+        return cam_se_hyperdiff
+    elseif hyperdiff_name ∈ ("false", false, nothing)
         return nothing
     else
         error("Uncaught hyperdiffusion model type.")
@@ -183,9 +168,7 @@ The possible model configurations flags are:
 function get_smagorinsky_lilly_model(parsed_args)
     smag = parsed_args["smagorinsky_lilly"]
     isnothing(smag) && return nothing
-    smag_symbol = Symbol(smag)
-    @assert smag_symbol in (:UVW, :UV, :W, :UV_W)
-    return SmagorinskyLilly{smag_symbol}()
+    return SmagorinskyLilly(; axes = Symbol(smag))
 end
 
 function get_amd_les_model(parsed_args, ::Type{FT}) where {FT}
@@ -302,16 +285,19 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         @warn "prescribe_clouds_in_radiation does not have any effect with $radiation_name radiation option"
     end
     return if radiation_name == "gray"
-        RRTMGPI.GrayRadiation(add_isothermal_boundary_layer, deep_atmosphere)
+        RRTMGPI.GrayRadiation(;
+            add_isothermal_boundary_layer,
+            deep_atmosphere,
+        )
     elseif radiation_name == "clearsky"
-        RRTMGPI.ClearSkyRadiation(
+        RRTMGPI.ClearSkyRadiation(;
             idealized_h2o,
             add_isothermal_boundary_layer,
             aerosol_radiation,
             deep_atmosphere,
         )
     elseif radiation_name == "allsky"
-        RRTMGPI.AllSkyRadiation(
+        RRTMGPI.AllSkyRadiation(;
             idealized_h2o,
             idealized_clouds,
             cloud,
@@ -321,7 +307,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
             deep_atmosphere,
         )
     elseif radiation_name == "allskywithclear"
-        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(;
             idealized_h2o,
             idealized_clouds,
             cloud,
@@ -373,6 +359,10 @@ function get_tracer_nonnegativity_method(parsed_args)
         qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
                         `_qtot` suffix. qtot will be ignored.")
         TracerNonnegativityVaporTendency()
+    elseif method == "vertical_water_borrowing"
+        qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
+                        `_qtot` suffix. qtot will be ignored.")
+        TracerNonnegativityVerticalWaterBorrowing()
     else
         error("Invalid `tracer_nonnegativity_method` $(method)")
     end
@@ -464,9 +454,11 @@ function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     end
     # See https://clima.github.io/AtmosphericProfilesLibrary.jl/dev/
     # for which functions accept which arguments.
-    prof_dqtdt = (thermo_params, ᶜts, t, z) -> prof_dqtdt₀(z)
-    prof_dTdt = (thermo_params, ᶜts, t, z) ->
-        prof_dTdt₀(TD.exner(thermo_params, ᶜts), z)
+    # TODO: do not assume dry air?
+    prof_dqtdt = (thermo_params, ᶜp, t, z) -> prof_dqtdt₀(z)
+    prof_dTdt =
+        (thermo_params, ᶜp, t, z) ->
+            prof_dTdt₀(TD.exner_given_pressure(thermo_params, ᶜp), z)
 
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
@@ -585,14 +577,13 @@ function get_turbconv_model(FT, parsed_args, turbconv_params)
         "edonly_edmfx",
     )
 
+    n_updrafts = parsed_args["updraft_number"]
+    prognostic_tke = parsed_args["prognostic_tke"]
+    area_fraction = turbconv_params.min_area
     return if turbconv == "prognostic_edmfx"
-        N = parsed_args["updraft_number"]
-        TKE = parsed_args["prognostic_tke"]
-        PrognosticEDMFX{N, TKE}(turbconv_params.min_area)
+        PrognosticEDMFX(; n_updrafts, prognostic_tke, area_fraction)
     elseif turbconv == "diagnostic_edmfx"
-        N = parsed_args["updraft_number"]
-        TKE = parsed_args["prognostic_tke"]
-        DiagnosticEDMFX{N, TKE}(turbconv_params.min_area)
+        DiagnosticEDMFX(; n_updrafts, prognostic_tke, area_fraction)
     elseif turbconv == "edonly_edmfx"
         EDOnlyEDMFX()
     else
@@ -626,12 +617,6 @@ function get_detrainment_model(parsed_args)
     else
         error("Invalid detr_model $(detr_model)")
     end
-end
-
-function get_surface_thermo_state_type(parsed_args)
-    dict = Dict()
-    dict["GCMSurfaceThermoState"] = GCMSurfaceThermoState()
-    return dict[parsed_args["surface_thermo_state_type"]]
 end
 
 function get_tracers(parsed_args)

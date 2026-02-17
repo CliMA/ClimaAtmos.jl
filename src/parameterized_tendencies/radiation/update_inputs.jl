@@ -47,21 +47,19 @@ function update_temperature_pressure!((; u, p, t)::I) where {I}
     T_min = CAP.optics_lookup_temperature_min(params)
     T_max = CAP.optics_lookup_temperature_max(params)
 
-    (; ᶜts, ᶜp, sfc_conditions) = p.precomputed
+    (; ᶜT, sfc_conditions) = p.precomputed
     model = p.radiation.rrtmgp_model
 
     # update surface temperature
-    sfc_ts = sfc_conditions.ts
-    sfc_T = Fields.array2field(model.surface_temperature, axes(sfc_ts))
-    @. sfc_T = TD.air_temperature(thermo_params, sfc_ts)
+    sfc_T = Fields.array2field(model.surface_temperature, axes(sfc_conditions.T_sfc))
+    @. sfc_T = sfc_conditions.T_sfc
 
     # update layer pressure
     model.center_pressure .= Fields.field2array(p.precomputed.ᶜp)
-    # compute layer temperature
-    ᶜT = Fields.array2field(model.center_temperature, axes(u.c))
+    # compute layer temperature (clamped to RRTMGP bounds)
+    rrtmgp_ᶜT = Fields.array2field(model.center_temperature, axes(u.c))
     # TODO: move this to RRTMGP
-    @. ᶜT =
-        min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
+    @. rrtmgp_ᶜT = min(max(ᶜT, FT(T_min)), FT(T_max))
     return nothing
 end
 
@@ -75,7 +73,7 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
     (; rrtmgp_model) = p.radiation
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(thermo_params)
-    (; ᶜts) = p.precomputed
+    (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     ᶜrh = Fields.array2field(rrtmgp_model.center_relative_humidity, axes(u.c))
     ᶜvmr_h2o = Fields.array2field(
         rrtmgp_model.center_volume_mixing_ratio_h2o,
@@ -94,7 +92,8 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
         # temporarily store ᶜq_tot in ᶜvmr_h2o
         ᶜq_tot = ᶜvmr_h2o
         @. ᶜq_tot =
-            max_relative_humidity * TD.q_vap_saturation(thermo_params, ᶜts)
+            max_relative_humidity *
+            TD.q_vap_saturation(thermo_params, ᶜT, u.c.ρ, ᶜq_liq_rai, ᶜq_ice_sno)
 
         # filter ᶜq_tot so that it is monotonically decreasing with z
         for i in 2:Spaces.nlevels(axes(ᶜq_tot))
@@ -104,14 +103,24 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
         end
 
         # assume that ᶜq_vap = ᶜq_tot when computing ᶜvmr_h2o
-        @. ᶜvmr_h2o =
-            TD.vol_vapor_mixing_ratio(thermo_params, TD.PhasePartition(ᶜq_tot))
+        @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(thermo_params, ᶜq_tot)
     else
-        @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
-            thermo_params,
-            TD.PhasePartition(thermo_params, ᶜts),
+        @. ᶜvmr_h2o =
+            TD.vol_vapor_mixing_ratio(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+        @. ᶜrh = min(
+            max(
+                TD.relative_humidity(
+                    thermo_params,
+                    ᶜT,
+                    ᶜp,
+                    ᶜq_tot_safe,
+                    ᶜq_liq_rai,
+                    ᶜq_ice_sno,
+                ),
+                0,
+            ),
+            1,
         )
-        @. ᶜrh = min(max(TD.relative_humidity(thermo_params, ᶜts), 0), 1)
     end
 
     return nothing

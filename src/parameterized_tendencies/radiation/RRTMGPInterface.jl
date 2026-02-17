@@ -1,6 +1,6 @@
 module RRTMGPInterface
 
-import ..AbstractCloudInRadiation
+import ..AbstractCloudInRadiation, ..InteractiveCloudInRadiation
 
 import NCDatasets as NC
 using RRTMGP
@@ -16,22 +16,23 @@ using Random
 # should move it there eventually.
 
 abstract type AbstractRRTMGPMode end
-struct GrayRadiation <: AbstractRRTMGPMode
-    add_isothermal_boundary_layer::Bool
-    deep_atmosphere::Bool
+@kwdef struct GrayRadiation <: AbstractRRTMGPMode
+    add_isothermal_boundary_layer::Bool = true
+    deep_atmosphere::Bool = true
 end
-struct ClearSkyRadiation <: AbstractRRTMGPMode
-    idealized_h2o::Bool
-    add_isothermal_boundary_layer::Bool
-    aerosol_radiation::Bool
-    deep_atmosphere::Bool
+@kwdef struct ClearSkyRadiation <: AbstractRRTMGPMode
+    idealized_h2o::Bool = false
+    add_isothermal_boundary_layer::Bool = true
+    aerosol_radiation::Bool = false
+    deep_atmosphere::Bool = true
 end
-struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
-    idealized_h2o::Bool
-    idealized_clouds::Bool
-    cloud::ACR
-    add_isothermal_boundary_layer::Bool
-    aerosol_radiation::Bool
+@kwdef struct AllSkyRadiation{ACR <: Union{Nothing, AbstractCloudInRadiation}} <:
+              AbstractRRTMGPMode
+    idealized_h2o::Bool = false
+    idealized_clouds::Bool = false
+    cloud::ACR = InteractiveCloudInRadiation()
+    add_isothermal_boundary_layer::Bool = true
+    aerosol_radiation::Bool = false
     """
     Reset the RNG seed before calling RRTMGP to a known value (the timestep number).
     When modeling cloud optics, RRTMGP uses a random number generator.
@@ -39,17 +40,17 @@ struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
     the simulation is fully reproducible and can be restarted in a reproducible way.
     Disable this option when running production runs.
     """
-    reset_rng_seed::Bool
-    deep_atmosphere::Bool
+    reset_rng_seed::Bool = false
+    deep_atmosphere::Bool = true
 end
-struct AllSkyRadiationWithClearSkyDiagnostics{
-    ACR <: AbstractCloudInRadiation,
+@kwdef struct AllSkyRadiationWithClearSkyDiagnostics{
+    ACR <: Union{Nothing, AbstractCloudInRadiation},
 } <: AbstractRRTMGPMode
-    idealized_h2o::Bool
-    idealized_clouds::Bool
-    cloud::ACR
-    add_isothermal_boundary_layer::Bool
-    aerosol_radiation::Bool
+    idealized_h2o::Bool = false
+    idealized_clouds::Bool = false
+    cloud::ACR = InteractiveCloudInRadiation()
+    add_isothermal_boundary_layer::Bool = true
+    aerosol_radiation::Bool = false
     """
     Reset the RNG seed before calling RRTMGP to a known value (the timestep number).
     When modeling cloud optics, RRTMGP uses a random number generator.
@@ -57,8 +58,8 @@ struct AllSkyRadiationWithClearSkyDiagnostics{
     the simulation is fully reproducible and can be restarted in a reproducible way.
     Disable this option when running production runs.
     """
-    reset_rng_seed::Bool
-    deep_atmosphere::Bool
+    reset_rng_seed::Bool = false
+    deep_atmosphere::Bool = true
 end
 
 """
@@ -372,9 +373,9 @@ array.
 - `diffuse_sw_surface_albedo`: diffuse shortwave albedo of the surface
   (required)
 - `cos_zenith`: cosine of the zenith angle of sun in radians (required)
-- `weighted_irradiance`: irradiance of sun in W/m^2 (required); the incoming
+- `toa_flux`: irradiance of sun in W/m^2 (required); the incoming
   direct shortwave radiation is given by
-  `model.weighted_irradiance .* model.cos_zenith`
+  `model.toa_flux .* model.cos_zenith`
 - `top_of_atmosphere_diffuse_sw_flux_dn`: incoming diffuse shortwave
   radiation in W/m^2 (assumed to be 0 by default)
 - arguments only available when `radiation_mode isa GrayRadiation`:
@@ -539,7 +540,7 @@ function _RRTMGPModel(
     cos_zenith = DA{FT}(undef, ncol)
     set_and_save!(cos_zenith, "cos_zenith", t..., dict)
     toa_flux = DA{FT}(undef, ncol)
-    set_and_save!(toa_flux, "weighted_irradiance", t..., dict)
+    set_and_save!(toa_flux, "toa_flux", t..., dict)
     sfc_alb_direct = DA{FT}(undef, lu_kwargs.nbnd_sw, ncol)
     set_and_save!(sfc_alb_direct, "direct_sw_surface_albedo", t..., dict)
     sfc_alb_diffuse = DA{FT}(undef, lu_kwargs.nbnd_sw, ncol)

@@ -5,9 +5,9 @@ topo_smoothing: true
 initial_condition: "DryBaroclinicWave"
 t_end: "6days"
 dt: "200secs"
-hyperdiff: "ClimaHyperdiffusion"
+hyperdiff: Hyperdiffusion
 vorticity_hyperdiffusion_coefficient: 1.5
-scalar_hyperdiffusion_coefficient: 1.5
+hyperdiffusion_prandtl_number: 1.0
 divergence_damping_factor: 1.0
 disable_surface_flux_tendency: true
 netcdf_output_at_levels: false

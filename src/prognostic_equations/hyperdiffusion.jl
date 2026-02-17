@@ -12,13 +12,15 @@ import ClimaCore.Spaces as Spaces
 A `NamedTuple` of the hyperdiffusivity `ν₄_scalar` and the hyperviscosity
 `ν₄_vorticity`. These quantities are assumed to scale with `h^3`, where `h` is
 the mean nodal distance, following the empirical results of Lauritzen et al.
-(2018, https://doi.org/10.1029/2017MS001257). When `h == 1`, these quantities
-are equal to `hyperdiff.ν₄_scalar_coeff` and `hyperdiff.ν₄_vorticity_coeff`.
+(2018, https://doi.org/10.1029/2017MS001257). The scalar coefficient is computed
+as `ν₄_scalar = ν₄_vorticity / prandtl_number`, where `ν₄_vorticity = ν₄_vorticity_coeff * h^3`.
 """
 function ν₄(hyperdiff, Y)
     h = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
-    ν₄_scalar = hyperdiff.ν₄_scalar_coeff * h^3
+    # Vorticity coefficient unchanged
     ν₄_vorticity = hyperdiff.ν₄_vorticity_coeff * h^3
+    # Scalar coefficient = vorticity coefficient / Prandtl number
+    ν₄_scalar = ν₄_vorticity / hyperdiff.prandtl_number
     return (; ν₄_scalar, ν₄_vorticity)
 end
 
@@ -29,7 +31,7 @@ function hyperdiffusion_cache(Y, atmos)
 end
 
 function hyperdiffusion_cache(
-    Y, hyperdiff::ClimaHyperdiffusion, turbconv_model, moisture_model, microphysics_model,
+    Y, ::Hyperdiffusion, turbconv_model, moisture_model, microphysics_model,
 )
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -91,7 +93,6 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     (; params) = p
     (; ᶜΦ) = p.core
-    (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
 
     isnothing(hyperdiff) && return nothing
@@ -108,7 +109,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # Grid scale hyperdiffusion
     @. ᶜ∇²u = C123(wgradₕ(divₕ(ᶜu))) - C123(wcurlₕ(C123(curlₕ(ᶜu))))
 
-    ᶜh_ref = @. lazy(h_dr(thermo_params, ᶜts, ᶜΦ))
+    ᶜh_ref = @. lazy(h_dr(thermo_params, ᶜp, ᶜΦ))
 
     @. ᶜ∇²specific_energy = wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ - ᶜh_ref))
 

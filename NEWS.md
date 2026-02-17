@@ -3,13 +3,44 @@ ClimaAtmos.jl Release Notes
 
 main
 -------
-- [#4211](https://github.com/CliMA/ClimaAtmos.jl/pull/4211) 
+
+- [#4252](https://github.com/CliMA/ClimaAtmos.jl/pull/4252) Add option to write
+  diagnostics in pressure coordinates
+
+v0.35.2
+-------
+
+v0.35.1
+-------
+- [4276](https://github.com/CliMA/ClimaAtmos.jl/pull/4276) Create IC type to allow initializing AMIP with ERA5 on model levels. Add artifact which corresponds to default AMIP start date (Jan 1, 2010). Also removes unused ᶜspecific in the precomputed cache.
+
+v0.35.0
+-------
+- [#4225](https://github.com/CliMA/ClimaAtmos.jl/pull/4225) Add an option for vertical water borrowing limiter. Configure via `tracer_nonnegativity_method: "vertical_water_borrowing"`
+  and optionally `vertical_water_borrowing_species` (defaults to all tracers if not specified).
+  The limiter enforces non-negativity using a single threshold (0.0) that applies uniformly to all selected tracers.
+
+  Rename `limiter` to `sem_quasimonotone_limiter` in cache numerics for clarity.
+  The cache now stores the quasi-monotone limiter instance as `sem_quasimonotone_limiter`
+  to better distinguish it from other limiter types (e.g., `vertical_water_borrowing_limiter`).
+
+- [#4231](https://github.com/CliMA/ClimaAtmos.jl/pull/4231) [badge-💥breaking] removes grid-scale
+thermo state, including ᶜts in p.precomputed.sfc_conditions.
+
+- [#4211](https://github.com/CliMA/ClimaAtmos.jl/pull/4211)
   add experimental methods to remove negative microphysical condensate values
+
+- [#4245](https://github.com/CliMA/ClimaAtmos.jl/pull/4245) Refactor hyperdiffusion to use Prandtl number parameterization. The scalar hyperdiffusion
+  coefficient is now computed as `ν₄_scalar = ν₄_vorticity / prandtl_number`, replacing the
+  previous direct `ν₄_scalar_coeff` parameter. Configure via `hyperdiffusion_prandtl_number`
+  (default: 1.0). The `CAM_SE` hyperdiffusion configuration maintains a 5x ratio between
+  vorticity and scalar coefficients by using `prandtl_number = 0.2`.
 
 v0.34.0
 -------
 - [#4198](https://github.com/CliMA/ClimaAtmos.jl/pull/4198) [badge-💥breaking] modifies surface conditions
 to use SurfaceFluxes v0.15.
+
 - [#4220](https://github.com/CliMA/ClimaAtmos.jl/pull/4220) modifies `SphereGrid` to use spacefillingcurve.
 
 v0.33.2

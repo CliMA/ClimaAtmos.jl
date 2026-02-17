@@ -156,7 +156,7 @@ This involves:
   temperature and moisture, radiative heating, vertical eddy advection components)
   and GCM state variables (temperature, moisture, winds) for a specified `cfsite_number`.
 - Reading large-scale subsidence (`wap`).
-- Reading TOA insolation and cosine of solar zenith angle.
+- Reading TOA flux and cosine of solar zenith angle.
 - Interpolating these profiles to the model's vertical grid using `interp_vertical_prof`.
 - Computing inverse relaxation timescales for nudging.
 - Calculating the full vertical eddy fluctuation term for temperature and moisture by
@@ -182,7 +182,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
     ᶜinv_τ_wind = similar(Y.c, FT)
     ᶜinv_τ_scalar = similar(Y.c, FT)
     ᶜls_subsidence = similar(Y.c, FT)
-    insolation = similar(Fields.level(Y.c.ρ, 1), FT)
+    toa_flux = similar(Fields.level(Y.c.ρ, 1), FT)
     cos_zenith = similar(Fields.level(Y.c.ρ, 1), FT)
 
     (; external_forcing_file, cfsite_number) = external_forcing
@@ -210,10 +210,10 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
             )
         end
 
-        function set_insolation!(cc_field)
-            # rsdt is TOA insolation on a horizontal plane. We need
-            # total solar irradiance and the solar zenith angle separately. So compute 
-            #`TSI = rsdt/cos(SZA)`.
+        function set_toa_flux!(cc_field)
+            # rsdt is TOA insolation. We need
+            # TOA flux and the solar zenith angle separately. So compute 
+            #`toa_flux = rsdt/cos(SZA)`.
             parent(cc_field) .= mean(
                 ds.group[cfsite_number]["rsdt"][:] ./
                 ds.group[cfsite_number]["coszen"][:],
@@ -245,7 +245,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
         gcm_vert_advection!(ᶜdTdt_fluc, ᶜT_nudge, ᶜls_subsidence)
         gcm_vert_advection!(ᶜdqtdt_fluc, ᶜqt_nudge, ᶜls_subsidence)
 
-        set_insolation!(insolation)
+        set_toa_flux!(toa_flux)
         set_cos_zenith!(cos_zenith)
 
         @. ᶜinv_τ_wind = compute_gcm_driven_momentum_inv_τ(zc_gcm, params)
@@ -264,7 +264,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
         ᶜinv_τ_wind,
         ᶜinv_τ_scalar,
         ᶜls_subsidence,
-        insolation,
+        toa_flux,
         cos_zenith,
     )
 end
@@ -318,7 +318,7 @@ function external_forcing_tendency!(
     # horizontal advection, vertical fluctuation, nudging, subsidence (need to add),
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜts) = p.precomputed
+    (; ᶜT) = p.precomputed
     (;
         ᶜdTdt_fluc,
         ᶜdqtdt_fluc,
@@ -338,13 +338,12 @@ function external_forcing_tendency!(
     @. ᶜuₕ_nudge = C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg)
     @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind
 
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+    (; ᶜh_tot, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     # nudging tendency
     ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
     @. ᶜdTdt_nudging =
-        -(TD.air_temperature(thermo_params, ᶜts) - ᶜT_nudge) * ᶜinv_τ_scalar
+        -(ᶜT - ᶜT_nudge) * ᶜinv_τ_scalar
     @. ᶜdqtdt_nudging =
         -(specific(Y.c.ρq_tot, Y.c.ρ) - ᶜqt_nudge) * ᶜinv_τ_scalar
 
@@ -360,9 +359,9 @@ function external_forcing_tendency!(
     # total energy
     @. Yₜ.c.ρe_tot +=
         Y.c.ρ * (
-            TD.cv_m(thermo_params, ᶜts) * ᶜdTdt_sum +
+            TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) * ᶜdTdt_sum +
             (
-                cv_v * (TD.air_temperature(thermo_params, ᶜts) - T_0) + Lv_0 -
+                cv_v * (ᶜT - T_0) + Lv_0 -
                 R_v * T_0
             ) * ᶜdqtdt_sum
         )
@@ -522,7 +521,7 @@ function external_forcing_cache(
             params,
         ),
         ᶜls_subsidence = similar(Y.c, FT),
-        insolation = similar(
+        toa_flux = similar(
             Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
             FT,
         ),
@@ -561,7 +560,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜts, ᶜp) = p.precomputed
+    (; ᶜp, ᶜT) = p.precomputed
 
     ᶜinv_τ_scalar = APL.ISDAC_inv_τ_scalar(FT)  # s⁻¹
     ᶜinv_τ_wind = APL.ISDAC_inv_τ_wind(FT)  # s⁻¹
@@ -571,11 +570,18 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     q_tot = APL.ISDAC_q_tot(FT)
 
     # Convert ISDAC potential temperature to air temperature
+    FT = Spaces.undertype(axes(Y.c))
     ta_ISDAC =
-        (pres, z) -> TD.air_temperature(
-            thermo_params,
-            TD.PhaseEquil_pθq(thermo_params, pres, θ(z), q_tot(z)),
-        )
+        (pres, z) ->
+            TD.saturation_adjustment(
+                thermo_params,
+                TD.pθ_li(),
+                pres,
+                θ(z),
+                q_tot(z);
+                maxiter = 4,
+                tol = FT(0),
+            ).T
 
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶜlg = Fields.local_geometry_field(Y.c)
@@ -588,7 +594,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
     @. ᶜdTdt_nudging =
-        -(TD.air_temperature(thermo_params, ᶜts) - ta_ISDAC(ᶜp, ᶜz)) *
+        -(ᶜT - ta_ISDAC(ᶜp, ᶜz)) *
         ᶜinv_τ_scalar(ᶜz)
     @. ᶜdqtdt_nudging =
         -(specific(Y.c.ρq_tot, Y.c.ρ) - q_tot(ᶜz)) * ᶜinv_τ_scalar(ᶜz)
@@ -598,11 +604,12 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     cv_v = TD.Parameters.cv_v(thermo_params)
     R_v = TD.Parameters.R_v(thermo_params)
     # total energy
+    (; ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     @. Yₜ.c.ρe_tot +=
         Y.c.ρ * (
-            TD.cv_m(thermo_params, ᶜts) * ᶜdTdt_nudging +
+            TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) * ᶜdTdt_nudging +
             (
-                cv_v * (TD.air_temperature(thermo_params, ᶜts) - T_0) + Lv_0 -
+                cv_v * (ᶜT - T_0) + Lv_0 -
                 R_v * T_0
             ) * ᶜdqtdt_nudging
         )
