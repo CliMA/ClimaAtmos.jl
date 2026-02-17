@@ -1,0 +1,45 @@
+name: Buildkite External PR Trigger
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  trigger-buildkite:
+    # Only run on PR comments with the trigger phrase and when the commenter is an org member
+    if: |
+      github.event.issue.pull_request && 
+      startsWith(github.event.comment.body, '/buildkite run') &&
+      (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'
+      )
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Get PR details
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            core.setOutput('sha', pr.data.head.sha);
+            core.setOutput('ref', pr.data.head.ref);
+            core.setOutput('base', pr.data.base.ref);
+            return pr.data;
+            
+      - name: Trigger Buildkite
+        uses: buildkite/trigger-pipeline-action@v2.4.1
+        with:
+          buildkite_api_access_token: ${{ secrets.BUILDKITE_API_TOKEN }}
+          pipeline: "your-org/your-pipeline"
+          branch: ${{ steps.pr.outputs.ref }}
+          commit: ${{ steps.pr.outputs.sha }}
+          message: "Triggered by @${{ github.actor }} via comment"
+          # Needed to ensure buildkite associated this build with the PR
+          send_pull_request: true
