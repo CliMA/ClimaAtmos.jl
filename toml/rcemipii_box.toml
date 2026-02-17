@@ -53,3 +53,6 @@ value = 1.25
 
 [SST_wavelength]
 value = 6e6
+
+[zd_rayleigh]
+value = 30000

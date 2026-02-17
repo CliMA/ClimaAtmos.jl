@@ -45,6 +45,14 @@ function get_diagnostics(
         parsed_args["netcdf_output_at_levels"] ? CAD.LevelsMethod() :
         CAD.FakePressureLevelsMethod()
 
+    # Map config string to ClimaCore.Remapping type (NetCDFWriter expects AbstractRemappingMethod)
+    netcdf_horizontal_str = get(parsed_args, "netcdf_horizontal_method", "spectral")
+    horizontal_method = if netcdf_horizontal_str == "bilinear"
+        CC.Remapping.BilinearRemapping()
+    else
+        CC.Remapping.SpectralElementRemapping()
+    end
+
     # The start_date keyword was added in v0.2.9. For prior versions, the diagnostics will
     # not contain the date
     maybe_add_start_date =
@@ -55,6 +63,7 @@ function get_diagnostics(
         output_dir,
         num_points = num_netcdf_points;
         z_sampling_method,
+        horizontal_method,
         sync_schedule = CAD.EveryStepSchedule(),
         init_time = t_start,
         maybe_add_start_date...,
@@ -84,7 +93,6 @@ function get_diagnostics(
     end
 
     writers = (dict_writer, hdf5_writer, netcdf_writer)
-    isnothing(pressure_netcdf_writer) || (writers = (writers..., pressure_netcdf_writer))
 
     # The default writer is netcdf
     ALLOWED_WRITERS = Dict(
@@ -99,7 +107,6 @@ function get_diagnostics(
     diagnostics_ragged = map(yaml_diagnostics) do yaml_diag
         short_names = yaml_diag["short_name"]
         output_name = get(yaml_diag, "output_name", nothing)
-        in_pressure_coords = get(yaml_diag, "pressure_coordinates", false)
 
         if short_names isa Vector
             isnothing(output_name) || error(
@@ -129,14 +136,7 @@ function get_diagnostics(
             if !haskey(ALLOWED_WRITERS, writer_ext)
                 error("writer $writer_ext not implemented")
             else
-                writer = if in_pressure_coords
-                    writer_ext in ("netcdf", "nothing") ||
-                        error("Writing in pressure coordinates is only \
-                        compatible with the NetCDF writer")
-                    pressure_netcdf_writer
-                else
-                    ALLOWED_WRITERS[writer_ext]
-                end
+                writer = ALLOWED_WRITERS[writer_ext]
             end
 
             haskey(yaml_diag, "period") ||
@@ -677,13 +677,13 @@ end
 
 function default_model_callbacks(water::AtmosWater;
     dt_cloud_fraction,
+    call_cloud_diagnostics_per_stage = false,
     start_date,
     dt,
     t_start,
     t_end,
     kwargs...)
-    if !isnothing(water.call_cloud_diagnostics_per_stage) &&
-       !isnothing(water.moisture_model)
+    if !call_cloud_diagnostics_per_stage && !isnothing(water.moisture_model)
         return cloud_fraction_callback(
             dt_cloud_fraction,
             dt,
