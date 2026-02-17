@@ -495,6 +495,11 @@ function nogw_callback(
     return (call_every_dt(nogw_model_callback!, dt_nogw_seconds),)
 end
 
+function edmfx_filter_callback(
+    dt,
+)
+    return call_every_dt(edmfx_filter_callback!, dt)
+end
 
 function get_callbacks(config, sim_info, atmos, params, Y, p)
     (; parsed_args, comms_ctx) = config
@@ -581,6 +586,12 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         )...,
     )
 
+    # EDMFX filter
+    callbacks = (
+        callbacks...,
+        edmfx_filter_callback(dt),
+    )
+
     return callbacks
 end
 
@@ -654,6 +665,12 @@ function default_model_callbacks(gravity_wave::AtmosGravityWave;
         t_end,
         checkpoint_frequency;
     )
+end
+
+# EDMFX filter callbacks
+function default_model_callbacks(turbconv_model::PrognosticEDMFX;
+    dt)
+    return edmfx_filter_callback(dt)
 end
 
 function default_model_callbacks(water::AtmosWater;

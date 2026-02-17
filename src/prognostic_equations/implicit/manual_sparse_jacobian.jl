@@ -260,12 +260,6 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 )...,
                 MatrixFields.unrolled_map(
                     name ->
-                        (@name(f.sgsʲs.:(1).u₃), name) =>
-                            similar(Y.f, BidiagonalRow_C3),
-                    available_sgs_condensate_mass_names,
-                )...,
-                MatrixFields.unrolled_map(
-                    name ->
                         (@name(c.sgsʲs.:(1).mse), name) => similar(Y.c, DiagonalRow),
                     available_sgs_condensate_mass_names,
                 )...,
@@ -275,10 +269,6 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                     similar(Y.c, TridiagonalRow),
                 (@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)) =>
                     similar(Y.c, TridiagonalRow),
-                (@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).q_tot)) =>
-                    similar(Y.f, BidiagonalRow_C3),
-                (@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)) =>
-                    similar(Y.f, BidiagonalRow_C3),
                 (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) =>
                     similar(Y.f, TridiagonalRow_C3xACT3),
             )
@@ -1010,16 +1000,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     dtγ * ᶜadvdivᵥ_matrix() ⋅
                     (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
 
-                # ∂ᶠu₃ʲ_err_∂ᶜqʲ through ρʲ variations in updraft buoyancy eq
-                ∂ᶠu₃ʲ_err_∂ᶜqʲ = matrix[@name(f.sgsʲs.:(1).u₃), qʲ_name]
-                @. ∂ᶠu₃ʲ_err_∂ᶜqʲ =
-                    dtγ * DiagonalMatrixRow(
-                        (1 - α_b) * ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) /
-                        (ᶠinterp(ᶜρʲs.:(1)))^2,
-                    ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
-                        (ᶜρʲs.:(1))^2 / ᶜp * ᶜ∂RmT∂qʲ,
-                    )
-
                 # ∂ᶜmseʲ_err_∂ᶜqʲ through ρʲ variations in buoyancy term in mse eq
                 ∂ᶜmseʲ_err_∂ᶜqʲ = matrix[@name(c.sgsʲs.:(1).mse), qʲ_name]
                 @. ∂ᶜmseʲ_err_∂ᶜqʲ =
@@ -1030,16 +1010,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         )
                     )
             end
-
-            ∂ᶠu₃ʲ_err_∂ᶜmseʲ =
-                matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)]
-            @. ∂ᶠu₃ʲ_err_∂ᶜmseʲ =
-                dtγ * DiagonalMatrixRow(
-                    (1 - α_b) * ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) /
-                    (ᶠinterp(ᶜρʲs.:(1)))^2,
-                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
-                    ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
-                )
 
             ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]

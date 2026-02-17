@@ -161,6 +161,20 @@ NVTX.@annotate function nogw_model_callback!(integrator)
     return nothing
 end
 
+NVTX.@annotate function edmfx_filter_callback!(integrator)
+    Y = integrator.u
+    p = integrator.p
+    t = integrator.t
+
+    edmfx_filter_tendency!(
+        Y,
+        p,
+        t,
+        p.atmos.turbconv_model,
+    )
+    return nothing
+end
+
 #Uniform insolation, magnitudes from Wing et al. (2018)
 #Note that the TOA downward shortwave fluxes won't be the same as the values in the paper if add_isothermal_boundary_layer is true
 function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)

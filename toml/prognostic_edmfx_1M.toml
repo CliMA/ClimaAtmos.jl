@@ -53,4 +53,4 @@ value = 100
 value = 100
 
 [entr_detr_limit_inv_tau]
-value = 0.0001
+value = 0.01

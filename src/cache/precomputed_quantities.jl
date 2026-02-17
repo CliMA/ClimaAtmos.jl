@@ -236,6 +236,7 @@ function precomputed_quantities(Y, atmos)
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
             ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
+            ᶠρ_diffʲs = similar(Y.f, NTuple{n, FT}),
             ᶠnh_pressure₃_buoyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             precipitation_sgs_quantities...,
         ) : (;)
