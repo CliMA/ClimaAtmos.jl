@@ -99,10 +99,14 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     (; ᶜρaʲs) = p.precomputed
 
     # Tendencies are already limited in the cache; just scale by density
-    @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜSqₗᵐ⁰
-    @. Yₜ.c.ρq_ice += Y.c.ρ * ᶜSqᵢᵐ⁰
-    @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜSqᵣᵐ⁰
-    @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜSqₛᵐ⁰
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    turbconv_model = p.atmos.turbconv_model
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, p.precomputed.ᶜρaʲs, turbconv_model))
+
+    @. Yₜ.c.ρq_liq += ᶜρa⁰ * ᶜSqₗᵐ⁰
+    @. Yₜ.c.ρq_ice += ᶜρa⁰ * ᶜSqᵢᵐ⁰
+    @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜSqᵣᵐ⁰
+    @. Yₜ.c.ρq_sno += ᶜρa⁰ * ᶜSqₛᵐ⁰
 
     # Update from the updraft microphysics tendencies
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)

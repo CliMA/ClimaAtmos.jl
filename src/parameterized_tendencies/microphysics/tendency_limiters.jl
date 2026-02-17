@@ -190,8 +190,11 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
     q_vap = max(zero(q_tot), q_tot - q_liq - q_ice - q_rai - q_sno)
 
     # Mass-conservation limits using cross-species source pools
+    # n_sink: number of timesteps over which species would be depleted
     n_sink = 5
+    # n_source: number of timesteps over which sources are depleted (large because q_tot is taken as source)
     n_source = 30
+
     dq_lcl_dt = tendency_limiter(
         mp_tendency.dq_lcl_dt,
         limit(q_vap + q_ice, dt, n_source),

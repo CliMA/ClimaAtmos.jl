@@ -7,9 +7,7 @@ import CloudMicrophysics.AerosolModel as CMAM
 import CloudMicrophysics.AerosolActivation as CMAA
 
 # Import SGS quadrature utilities
-using ..ClimaAtmos:
-    limit_covariances, sum_over_quadrature_points,
-    PhysicalPointTransform
+using ..ClimaAtmos: integrate_over_sgs
 
 
 """
@@ -355,7 +353,7 @@ function aerosol_activation_sources(
     # Early exit for invalid inputs (negative supersaturation, no aerosols, or 
     # non-physical values that would cause DomainError in CMP)
     invalid_inputs =
-        (S < FT(0)) || (n_aer < eps(FT)) || (w <= FT(0)) ||
+        (S < FT(0)) || (n_aer < ϵ_numerics(FT)) || (w <= FT(0)) ||
         (seasalt_mean_radius <= FT(0)) || (sulfate_radius <= FT(0)) ||
         !isfinite(S) || !isfinite(T) || !isfinite(p)
 
@@ -427,39 +425,37 @@ end
     Microphysics0MEvaluator
 
 GPU-safe functor for computing 0-moment microphysics tendencies at quadrature
-points. At each point (T_hat, q_hat), condensate is diagnosed from saturation
-excess, then `BMT.bulk_microphysics_tendencies(Microphysics0Moment(), ...)`
-is called to compute precipitation removal tendencies.
+points. Delegates condensate diagnosis to `SaturationAdjustmentEvaluator`,
+then calls `BMT.bulk_microphysics_tendencies(Microphysics0Moment(), ...)`.
 
 # Fields
 - `cm_params`: 0M microphysics parameters
-- `thermo_params`: Thermodynamics parameters
-- `ρ`: Air density [kg/m³]
+- `sat_eval`: `SaturationAdjustmentEvaluator` for condensate diagnosis
 """
-struct Microphysics0MEvaluator{CMP, TPS, T1}
+struct Microphysics0MEvaluator{CMP, SAE}
     cm_params::CMP
-    thermo_params::TPS
-    ρ::T1
+    sat_eval::SAE
+end
+
+function Microphysics0MEvaluator(cm_params, thermo_params, ρ)
+    sat_eval = SaturationAdjustmentEvaluator(thermo_params, ρ)
+    return Microphysics0MEvaluator(cm_params, sat_eval)
 end
 
 @inline function (eval::Microphysics0MEvaluator)(T_hat, q_hat)
-    FT = typeof(q_hat)
-    thp = eval.thermo_params
+    # Diagnose condensate via saturation adjustment
+    sa = eval.sat_eval(T_hat, q_hat)
 
-    # Diagnose condensate from saturation excess at this quadrature point
-    q_sat = TD.q_vap_saturation(thp, T_hat, eval.ρ)
-    q_cond = max(FT(0), q_hat - q_sat)
-
-    # Partition condensate using liquid fraction
-    λ = TD.liquid_fraction_ramp(thp, T_hat)
-    q_liq = λ * q_cond
-    q_ice = (FT(1) - λ) * q_cond
+    # Compute q_sat for the 0M tendency function
+    # Clamp to non-negative: Float32 rounding in the λ/(1-λ) split can make
+    # q_liq + q_ice slightly exceed q_cond, yielding a tiny negative remainder.
+    q_sat = max(zero(q_hat), q_hat - sa.q_liq - sa.q_ice)
 
     # Compute 0M tendencies at this quadrature point
     return BMT.bulk_microphysics_tendencies(
         BMT.Microphysics0Moment(),
-        eval.cm_params, eval.thermo_params,
-        T_hat, q_liq, q_ice, q_sat,
+        eval.cm_params, eval.sat_eval.thermo_params,
+        T_hat, sa.q_liq, sa.q_ice, q_sat,
     )
 end
 
@@ -482,39 +478,11 @@ NamedTuple with SGS-averaged `dq_tot_dt` and `e_int_precip`.
     ρ, T_mean, q_tot_mean,
     T′T′, q′q′, corr_Tq,
 )
-    # Limit variances for physical validity
-    σ_q, σ_T, corr = limit_covariances(q′q′, T′T′, corr_Tq, q_tot_mean, SG_quad)
-
     # Create GPU-safe functor
     evaluator = Microphysics0MEvaluator(cm_params, thermo_params, ρ)
 
     # Integrate over quadrature points
-    transform = PhysicalPointTransform(
-        SG_quad.dist,
-        T_mean,
-        q_tot_mean,
-        σ_T,
-        σ_q,
-        corr,
-        oftype(T_mean, SG_quad.T_min),
-    )
-    return sum_over_quadrature_points(evaluator, transform, SG_quad)
-end
-
-"""
-    microphysics_tendencies_quadrature_0m(::GridMeanSGS, ...)
-
-Direct GridMeanSGS dispatch for 0M: evaluates at grid mean, skipping quadrature.
-Matches the pattern used by the 1M `microphysics_tendencies_quadrature(::GridMeanSGS, ...)`.
-"""
-@inline function microphysics_tendencies_quadrature_0m(
-    ::GridMeanSGS,
-    cm_params, thermo_params,
-    ρ, T_mean, q_tot_mean,
-    T′T′, q′q′, corr_Tq,
-)
-    evaluator = Microphysics0MEvaluator(cm_params, thermo_params, ρ)
-    return evaluator(T_mean, q_tot_mean)
+    return integrate_over_sgs(evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq)
 end
 
 
@@ -720,7 +688,8 @@ end
 
     # Fast path for GridMeanSGS: skip quadrature, call BMT directly at grid mean
     # This avoids the overhead of the quadrature loop for grid-mean-only evaluation
-    if SG_quad.dist isa GridMeanSGS
+    if SG_quad isa GridMeanSGS ||
+       (SG_quad isa SGSQuadrature && SG_quad.dist isa GridMeanSGS)
         return BMT.bulk_microphysics_tendencies(
             scheme, mp, tps, ρ, T_mean,
             q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
@@ -733,9 +702,6 @@ end
     q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
     excess_mean = q_tot_mean - q_sat_mean
 
-    # Limit variances for physical validity
-    σ_q, σ_T, corr = limit_covariances(q′q′, T′T′, corr_Tq, q_tot_mean, SG_quad)
-
     # Create functor (no closure, GPU-safe)
     evaluator = MicrophysicsEvaluator(
         scheme, mp, tps, ρ,
@@ -745,40 +711,7 @@ end
     )
 
     # Integrate over quadrature points using functor (GPU-safe, no closure)
-    transform = PhysicalPointTransform(
-        SG_quad.dist,
-        T_mean,
-        q_tot_mean,
-        σ_T,
-        σ_q,
-        corr,
-        oftype(T_mean, SG_quad.T_min),
-    )
-    return sum_over_quadrature_points(evaluator, transform, SG_quad)
-end
-
-"""
-    microphysics_tendencies_quadrature(scheme, ::GridMeanSGS, ...)
-
-Direct GridMeanSGS dispatch: evaluates BMT at grid mean, skipping quadrature.
-
-This allows using `GridMeanSGS()` directly without wrapping in `SGSQuadrature(FT; ...)`,
-avoiding the need to extract FT from the space.
-"""
-@inline function microphysics_tendencies_quadrature(
-    scheme,
-    ::GridMeanSGS,
-    mp, tps,
-    ρ, p_c,
-    T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-    T′T′, q′q′, corr_Tq,
-    args...,
-)
-    return BMT.bulk_microphysics_tendencies(
-        scheme, mp, tps, ρ, T_mean,
-        q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-        args...,
-    )
+    return integrate_over_sgs(evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq)
 end
 
 """

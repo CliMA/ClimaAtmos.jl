@@ -62,51 +62,11 @@ function gauss_hermite(::Type{FT}, N::Int) where {FT}
 end
 
 """
-    gauss_legendre(FT, N)
-
-Gauss-Legendre quadrature nodes and weights for order `N` on ``[-1, 1]``.
-
-# Arguments
-- `FT`: Floating-point type
-- `N::Int`: Quadrature order (1-5 supported)
-
-# Returns
-Tuple `(nodes, weights)` as `Vector{FT}`.
-"""
-function gauss_legendre(::Type{FT}, N::Int) where {FT}
-    # Precomputed values for common orders
-    if N == 1
-        return (FT[0], FT[2])
-    elseif N == 2
-        a = one(FT) / sqrt(FT(3))
-        return (FT[-a, a], FT[1, 1])
-    elseif N == 3
-        a = sqrt(FT(3) / FT(5))
-        return (FT[-a, 0, a], FT[FT(5) / 9, FT(8) / 9, FT(5) / 9])
-    elseif N == 4
-        a1 = sqrt(FT(3) / FT(7) - FT(2) / FT(7) * sqrt(FT(6) / FT(5)))
-        a2 = sqrt(FT(3) / FT(7) + FT(2) / FT(7) * sqrt(FT(6) / FT(5)))
-        w1 = (FT(18) + sqrt(FT(30))) / FT(36)
-        w2 = (FT(18) - sqrt(FT(30))) / FT(36)
-        return (FT[-a2, -a1, a1, a2], FT[w2, w1, w1, w2])
-    elseif N == 5
-        a1 = FT(1) / FT(3) * sqrt(FT(5) - FT(2) * sqrt(FT(10) / FT(7)))
-        a2 = FT(1) / FT(3) * sqrt(FT(5) + FT(2) * sqrt(FT(10) / FT(7)))
-        w0 = FT(128) / FT(225)
-        w1 = (FT(322) + FT(13) * sqrt(FT(70))) / FT(900)
-        w2 = (FT(322) - FT(13) * sqrt(FT(70))) / FT(900)
-        return (FT[-a2, -a1, 0, a1, a2], FT[w2, w1, w0, w1, w2])
-    else
-        error("Gauss-Legendre quadrature order $N not implemented. Use N ∈ {1,2,3,4,5}.")
-    end
-end
-
-"""
     gauss_legendre_01(FT, N)
 
 Gauss-Legendre quadrature nodes and weights for order `N` on ``[0, 1]``.
 
-Transformed from ``[-1,1]`` via ``x = (t+1)/2``.
+Precomputed from standard ``[-1,1]`` quadrature via ``x = (t+1)/2``, ``w_{01} = w/2``.
 
 # Arguments
 - `FT`: Floating-point type
@@ -116,11 +76,40 @@ Transformed from ``[-1,1]`` via ``x = (t+1)/2``.
 Tuple `(nodes, weights)` as `Vector{FT}`.
 """
 function gauss_legendre_01(::Type{FT}, N::Int) where {FT}
-    nodes, weights = gauss_legendre(FT, N)
-    # Transform [-1,1] -> [0,1]: x = (t+1)/2, dx = dt/2
-    nodes_01 = [(t + one(FT)) / FT(2) for t in nodes]
-    weights_01 = [w / FT(2) for w in weights]
-    return (nodes_01, weights_01)
+    half = FT(1) / FT(2)
+    if N == 1
+        return (FT[half], FT[1])
+    elseif N == 2
+        a = one(FT) / sqrt(FT(3))
+        return (FT[(1 - a) * half, (1 + a) * half], FT[half, half])
+    elseif N == 3
+        a = sqrt(FT(3) / FT(5))
+        return (
+            FT[(1 - a) * half, half, (1 + a) * half],
+            FT[FT(5) / 18, FT(4) / 9, FT(5) / 18],
+        )
+    elseif N == 4
+        a1 = sqrt(FT(3) / FT(7) - FT(2) / FT(7) * sqrt(FT(6) / FT(5)))
+        a2 = sqrt(FT(3) / FT(7) + FT(2) / FT(7) * sqrt(FT(6) / FT(5)))
+        w1 = (FT(18) + sqrt(FT(30))) / FT(36)
+        w2 = (FT(18) - sqrt(FT(30))) / FT(36)
+        return (
+            FT[(1 - a2) * half, (1 - a1) * half, (1 + a1) * half, (1 + a2) * half],
+            FT[w2 * half, w1 * half, w1 * half, w2 * half],
+        )
+    elseif N == 5
+        a1 = FT(1) / FT(3) * sqrt(FT(5) - FT(2) * sqrt(FT(10) / FT(7)))
+        a2 = FT(1) / FT(3) * sqrt(FT(5) + FT(2) * sqrt(FT(10) / FT(7)))
+        w0 = FT(128) / FT(225)
+        w1 = (FT(322) + FT(13) * sqrt(FT(70))) / FT(900)
+        w2 = (FT(322) - FT(13) * sqrt(FT(70))) / FT(900)
+        return (
+            FT[(1 - a2) * half, (1 - a1) * half, half, (1 + a1) * half, (1 + a2) * half],
+            FT[w2 * half, w1 * half, w0 * half, w1 * half, w2 * half],
+        )
+    else
+        error("Gauss-Legendre quadrature order $N not implemented. Use N ∈ {1,2,3,4,5}.")
+    end
 end
 
 # ============================================================================
@@ -132,25 +121,29 @@ end
 
 Abstract supertype for subgrid-scale probability distributions.
 
-Subtypes determine the quadrature method and physical point transformation.
+Subtypes determine how specific humidity `q` is sampled in `get_physical_point`.
+Temperature is always sampled from a Gaussian, regardless of distribution type.
 """
 abstract type AbstractSGSDistribution end
 
 """
     GaussianSGS <: AbstractSGSDistribution
 
-Gaussian (normal) distribution for SGS fluctuations.
+Bivariate Gaussian distribution for SGS fluctuations of `(T, q)`.
 
-Uses Gauss-Hermite quadrature. Appropriate for unbounded variables.
+Both temperature and specific humidity are sampled from correlated Gaussians.
+Negative `q` values at extreme quadrature points are clamped to zero.
 """
 struct GaussianSGS <: AbstractSGSDistribution end
 
 """
     LogNormalSGS <: AbstractSGSDistribution
 
-Log-normal distribution for positive-definite quantities.
+Log-normal distribution for specific humidity; Gaussian for temperature.
 
-Uses Gauss-Hermite quadrature in log-space for humidity. Ensures ``q > 0``.
+Specific humidity `q` is sampled from a log-normal distribution (positive-definite
+by construction), while temperature `T` remains Gaussian. Correlation between
+`T` and `q` is maintained via a Gaussian copula.
 """
 struct LogNormalSGS <: AbstractSGSDistribution end
 
@@ -192,31 +185,37 @@ Subgrid-scale quadrature configuration for integrating over thermodynamic fluctu
 - `dist::D`: Distribution type
 - `T_min::FT`: Minimum temperature for physical validity [K]. Used to clamp
   sampled temperatures in `get_physical_point` to prevent domain errors in
-  thermodynamics calculations. Typically set from `Thermodynamics.Parameters.T_min`.
+  thermodynamics calculations. Set from ClimaParams `temperature_minimum`.
+- `q_max::FT`: Maximum specific humidity [kg/kg]. Used to clamp sampled
+  humidity values in `get_physical_point` to prevent extreme supersaturation
+  from driving unphysically low temperatures through excessive latent heat.
+  Set from ClimaParams `specific_humidity_maximum`.
 
 # Constructors
 
-    SGSQuadrature(FT; quadrature_order=2, distribution=GaussianSGS(), T_min=150.0)
+    SGSQuadrature(FT; quadrature_order=3, distribution=GaussianSGS(), T_min=150.0, q_max=0.1)
 
 Create an `SGSQuadrature` with the specified floating-point type `FT`,
-quadrature order, distribution type, and minimum temperature.
+quadrature order, distribution type, minimum temperature, and maximum humidity.
 
 The T-q correlation coefficient is provided externally via `correlation_Tq(params)`
 rather than being stored in this struct.
 
-The minimum temperature `T_min` should be set from `Thermodynamics.Parameters.T_min(thermo_params)`
-to ensure consistency with the thermodynamics package constraints.
+`T_min` and `q_max` are read from ClimaParams (`temperature_minimum` and
+`specific_humidity_maximum`) and passed through at construction time.
 """
 struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSamplingType
     a::A             # quadrature points
     w::W             # quadrature weights
     dist::D          # distribution type
     T_min::FT        # minimum temperature for physical validity [K]
+    q_max::FT        # maximum specific humidity [kg/kg]
     function SGSQuadrature(
         ::Type{FT};
         quadrature_order = 3,
         distribution::D = GaussianSGS(),
         T_min = FT(150),  # Reasonable default for atmospheric applications
+        q_max = FT(0.1),  # Maximum humidity: ~100 g/kg (well above physical max)
     ) where {FT, D <: AbstractSGSDistribution}
         # GridMeanSGS always uses N=1 (single point at origin)
         N = distribution isa GridMeanSGS ? 1 : quadrature_order
@@ -227,6 +226,7 @@ struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSam
             w,
             distribution,
             FT(T_min),
+            FT(q_max),
         )
     end
 end
@@ -260,9 +260,10 @@ Dispatches to appropriate quadrature method based on distribution:
 end
 
 @inline function get_quadrature_nodes_weights(::GridMeanSGS, FT, N)
-    # Grid-mean-only: single point at origin with weight 1
-    # Ignores N - always returns a single quadrature point
-    ([FT(0)], [FT(1)])
+    # Grid-mean-only: single point at origin with weight sqrt(π)
+    # The weight must be sqrt(π) because sum_over_quadrature_points divides by π
+    # (assuming 2D quadrature), so (sqrt(π))^2 / π = 1.
+    ([FT(0)], [sqrt(FT(π))])
 end
 
 # ============================================================================
@@ -332,7 +333,7 @@ Derivative ∂T/∂θ_li [dimensionless]
     Π = T / max(θ_li, eps(FT))
 
     q_sat = TD.q_vap_saturation(thermo_params, T, ρ)
-    is_saturated = q_tot > q_sat * (one(FT) + eps(FT))
+    is_saturated = q_tot >= q_sat
 
     # Clausius-Clapeyron: dq_sat/dT ≈ q_sat × L_v / (R_v × T²)
     dqsat_dT = ifelse(
@@ -367,11 +368,11 @@ Correlation coefficient corr(T′, q′) ∈ [-1, 1].
 @inline correlation_Tq(params) = CAP.Tq_correlation_coefficient(params)
 
 # ============================================================================
-# Covariance Limiting
+# Extract standard deviations and correlation coefficient
 # ============================================================================
 
 """
-    limit_covariances(q′q′, T′T′, corr_Tq, q_mean, quad)
+    sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
 
 Compute standard deviations from variances and enforce physical validity.
 
@@ -386,17 +387,15 @@ by `max(0, q_hat)` clamping in `get_physical_point`.
 - `q′q′`: Variance of total water ``\\langle q'^2 \\rangle``
 - `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
 - `corr_Tq`: Correlation coefficient ``\\rho(T', q')``
-- `q_mean`: Mean total water (unused, kept for API compatibility)
-- `quad`: `SGSQuadrature` struct (unused, kept for API compatibility)
 
 # Returns
 Tuple `(σ_q, σ_T, corr)` of standard deviations and clamped correlation.
 """
-@inline function limit_covariances(q′q′, T′T′, corr_Tq, q_mean, quad)
-    FT = typeof(q_mean)
+@inline function sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
+    FT = typeof(corr_Tq)
     σ_q = sqrt(max(FT(0), q′q′))
     σ_T = sqrt(max(FT(0), T′T′))
-    # Enforce Cauchy-Schwarz inequality: |corr| ≤ 1
+    # Enforce |corr| ≤ 1
     corr = clamp(corr_Tq, -one(FT), one(FT))
     return (σ_q, σ_T, corr)
 end
@@ -406,29 +405,52 @@ end
 # ============================================================================
 
 """
-    get_physical_point(dist, χ1, χ2, μ_q, μ_T, σ_q, σ_T, corr)
+    get_physical_point(dist, χ1, χ2, μ_q, μ_T, σ_q, σ_T, corr, T_min, q_max)
 
 Transform quadrature points ``(\\chi_1, \\chi_2)`` to physical space ``(T, q)``.
 
-For correlated bivariate Gaussian (`GaussianSGS`):
+Temperature is always Gaussian, clamped to ``T \\geq T_{min}``.
+Specific humidity is clamped to ``0 \\leq q \\leq q_{max}``.
+Sampling depends on `dist`:
+
+**`GaussianSGS`**: correlated bivariate Gaussian
 ```math
-q = \\mu_q + \\sqrt{2} \\sigma_q \\chi_1
+q = \\clamp(\\mu_q + \\sqrt{2} \\sigma_q \\chi_1, \\; 0, \\; q_{max})
 ```
 ```math
-T = \\mu_T + \\sqrt{2} \\sigma_T (\\rho \\chi_1 + \\sqrt{1-\\rho^2} \\chi_2)
+T = \\max(T_{min}, \\; \\mu_T + \\sqrt{2} \\sigma_T (\\rho \\chi_1 + \\sqrt{1-\\rho^2} \\chi_2))
 ```
 
+**`LogNormalSGS`**: log-normal for `q`, Gaussian for `T`, linked by a Gaussian copula
+```math
+q = \\min(q_{max}, \\; \\exp(\\mu_{\\ln} + \\sqrt{2} \\sigma_{\\ln} z_q))
+```
+where ``z_q = \\chi_1`` and ``z_T = \\rho \\chi_1 + \\sqrt{1-\\rho^2} \\chi_2``.
+
 # Arguments
-- `dist`: Distribution type (`GaussianSGS` or `LogNormalSGS`)
-- `χ1`, `χ2`: Quadrature points
-- `μ_q`, `μ_T`: Mean values
-- `σ_q`, `σ_T`: Standard deviations
-- `corr`: Correlation coefficient
+- `dist`: Distribution type (`GaussianSGS`, `LogNormalSGS`, or `GridMeanSGS`)
+- `χ1`, `χ2`: Quadrature abscissae
+- `μ_q`, `μ_T`: Mean specific humidity [kg/kg] and temperature [K]
+- `σ_q`, `σ_T`: Standard deviations of `q` and `T`
+- `corr`: Correlation coefficient ``\\rho(T', q')``
+- `T_min`: Minimum temperature floor [K]
+- `q_max`: Maximum specific humidity ceiling [kg/kg]
 
 # Returns
 Tuple `(T_hat, q_hat)` of physical values.
 """
-@inline function get_physical_point(::GaussianSGS, χ1, χ2, μ_q, μ_T, σ_q, σ_T, corr, T_min)
+@inline function get_physical_point(
+    ::GaussianSGS,
+    χ1,
+    χ2,
+    μ_q,
+    μ_T,
+    σ_q,
+    σ_T,
+    corr,
+    T_min,
+    q_max,
+)
     FT = typeof(μ_q)
     sqrt2 = sqrt(FT(2))
 
@@ -437,21 +459,29 @@ Tuple `(T_hat, q_hat)` of physical values.
     μ_c = μ_T + sqrt2 * corr * σ_T * χ1
 
     # Clamp both T and q to physically valid ranges
-    # T must be >= T_min for thermodynamics calculations (saturation vapor pressure uses log(T))
-    # T_min comes from thermo_params for consistency with Thermodynamics.jl constraints
     T_hat = max(T_min, μ_c + sqrt2 * σ_c * χ2)
-    q_hat = max(zero(FT), μ_q + sqrt2 * σ_q * χ1)
+    q_hat = clamp(μ_q + sqrt2 * σ_q * χ1, zero(FT), q_max)
 
     return (T_hat, q_hat)
 end
 
-@inline function get_physical_point(::LogNormalSGS, χ1, χ2, μ_q, μ_T, σ_q, σ_T, corr, T_min)
+@inline function get_physical_point(
+    ::LogNormalSGS,
+    χ1,
+    χ2,
+    μ_q,
+    μ_T,
+    σ_q,
+    σ_T,
+    corr,
+    T_min,
+    q_max,
+)
     FT = typeof(μ_q)
     sqrt2 = sqrt(FT(2))
-    ε = eps(FT)
+    ε = ϵ_numerics(FT)
 
     # Step 1: Generate correlated Gaussian variables using copula approach
-    # This ensures proper correlation structure between T and q
     z_q = χ1
     z_T = corr * χ1 + sqrt(max(zero(FT), one(FT) - corr^2)) * χ2
 
@@ -464,21 +494,29 @@ end
 
     # Use log-normal only if both mean and variance are positive
     use_lognormal = (μ_q > ε) & (σ_q > zero(FT))
-    q_hat = max(zero(FT), ifelse(use_lognormal, q_lognormal, μ_q))
+    q_hat = clamp(ifelse(use_lognormal, q_lognormal, μ_q), zero(FT), q_max)
 
     # Step 3: Keep Gaussian for T using correlated z_T, clamped to T_min
-    # T_min comes from thermo_params for consistency with Thermodynamics.jl constraints
     T_hat = max(T_min, μ_T + sqrt2 * σ_T * z_T)
 
     return (T_hat, q_hat)
 end
 
-
-
 # GridMeanSGS: evaluates only at the grid mean, ignoring variance
-@inline function get_physical_point(::GridMeanSGS, χ1, χ2, μ_q, μ_T, σ_q, σ_T, corr, T_min)
-    # Return grid mean directly, ignoring quadrature points, variance, and T_min
-    # χ1, χ2, σ_q, σ_T, corr, T_min are all ignored
+@inline function get_physical_point(
+    ::GridMeanSGS,
+    χ1,
+    χ2,
+    μ_q,
+    μ_T,
+    σ_q,
+    σ_T,
+    corr,
+    T_min,
+    q_max,
+)
+    # Return grid mean directly, ignoring quadrature points, variance, and bounds
+    # χ1, χ2, σ_q, σ_T, corr, T_min, q_max are all ignored
     (μ_T, μ_q)
 end
 
@@ -489,21 +527,20 @@ end
 """
     PhysicalPointTransform
 
-GPU-safe functor for transforming quadrature points to physical space.
+GPU-safe functor wrapping `get_physical_point` to avoid heap-allocated closures.
 
-Replaces closures like `(χ1, χ2) -> get_physical_point(dist, χ1, χ2, ...)` with
-a struct that captures all necessary parameters, avoiding heap allocations.
-
-Field order matches return order `(T, q)` for consistency.
+Captures all parameters needed by `get_physical_point(dist, χ1, χ2, ...)` in a
+struct. Field order matches return order `(T, q)` for consistency.
 
 # Fields
-- `dist`: Distribution type (`GaussianSGS` or `LogNormalSGS`)
+- `dist`: Distribution type (`GaussianSGS`, `LogNormalSGS`, or `GridMeanSGS`)
 - `μ_T`: Mean temperature [K]
 - `μ_q`: Mean specific humidity [kg/kg]
 - `σ_T`: Standard deviation of T [K]
 - `σ_q`: Standard deviation of q [kg/kg]
 - `corr`: Correlation coefficient [-1, 1]
-- `T_min`: Minimum temperature clamp [K]
+- `T_min`: Minimum temperature floor [K]
+- `q_max`: Maximum specific humidity ceiling [kg/kg]
 """
 struct PhysicalPointTransform{D, FT}
     dist::D
@@ -513,10 +550,22 @@ struct PhysicalPointTransform{D, FT}
     σ_q::FT
     corr::FT
     T_min::FT
+    q_max::FT
 end
 
 @inline function (t::PhysicalPointTransform)(χ1, χ2)
-    return get_physical_point(t.dist, χ1, χ2, t.μ_q, t.μ_T, t.σ_q, t.σ_T, t.corr, t.T_min)
+    return get_physical_point(
+        t.dist,
+        χ1,
+        χ2,
+        t.μ_q,
+        t.μ_T,
+        t.σ_q,
+        t.σ_T,
+        t.corr,
+        t.T_min,
+        t.q_max,
+    )
 end
 
 # ============================================================================
@@ -563,28 +612,39 @@ end
 """
     integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
 
-Integrate `f(T, q)` over SGS fluctuations.
+Integrate `f(T, q)` over the bivariate SGS distribution.
 
-Convenience function that handles variance limiting and physical point
-transformation internally.
+Converts variances to standard deviations, constructs a `PhysicalPointTransform`
+for the distribution type in `quad`, and evaluates the Gauss-Hermite quadrature.
+Temperature is always Gaussian; the distribution of specific humidity is
+determined by `quad.dist` (see [`get_physical_point`](@ref)).
 
 # Arguments
 - `f`: Point-wise function `(T, q) -> result`
-- `quad`: `SGSQuadrature` struct
-- `μ_q`, `μ_T`: Mean values
-- `q′q′`, `T′T′`: Variances
+- `quad`: `SGSQuadrature` struct (contains distribution type, nodes, weights)
+- `μ_q`, `μ_T`: Mean specific humidity [kg/kg] and temperature [K]
+- `q′q′`, `T′T′`: Variances of `q` and `T`
 - `corr_Tq`: Correlation coefficient ``ρ(T', q')``
 
 # Returns
-Weighted sum with the same type as `f(T, q)`.
+Weighted sum ``\\approx E[f(T, q)]`` with the same type as `f(T, q)`.
 """
 function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
-    σ_q, σ_T, corr = limit_covariances(q′q′, T′T′, corr_Tq, μ_q, quad)
+    σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
 
     # Use functor instead of closure to avoid heap allocations
     # Field order is (T, q) to match return order of get_physical_point
-    transform =
-        PhysicalPointTransform(quad.dist, μ_T, μ_q, σ_T, σ_q, corr, oftype(μ_T, quad.T_min))
+    # Promote all scalars to match μ_T type (may be Dual in autodiff path)
+    transform = PhysicalPointTransform(
+        quad.dist,
+        μ_T,
+        oftype(μ_T, μ_q),
+        oftype(μ_T, σ_T),
+        oftype(μ_T, σ_q),
+        oftype(μ_T, corr),
+        oftype(μ_T, quad.T_min),
+        oftype(μ_T, quad.q_max),
+    )
 
     return sum_over_quadrature_points(f, transform, quad)
 end

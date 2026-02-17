@@ -123,9 +123,10 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     Φ_level,
 )
     FT = eltype(thermo_params)
-    @. q_tot_safe_level = max(0, q_tot_level)
     @. q_liq_rai_level = max(0, q_liq_level + q_rai_level)
     @. q_ice_sno_level = max(0, q_ice_level + q_sno_level)
+    # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
+    @. q_tot_safe_level = max(q_liq_rai_level + q_ice_sno_level, q_tot_level)
     @. T_level = TD.air_temperature(
         thermo_params,
         TD.ph(),

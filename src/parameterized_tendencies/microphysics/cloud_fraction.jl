@@ -211,8 +211,8 @@ Cloud fraction ∈ [0, 1]
     sig2_i = q′q′ + b_i * b_i * T′T′ - FT(2) * b_i * corr_Tq * σ_T * σ_q
 
     # Safety floor
-    sig_l = sqrt(max(sig2_l, eps(FT)))
-    sig_i = sqrt(max(sig2_i, eps(FT)))
+    sig_l = sqrt(max(sig2_l, ϵ_numerics(FT)))
+    sig_i = sqrt(max(sig2_i, ϵ_numerics(FT)))
 
     # --- 3. Normalize condensate by PDF width ---
     Q_hat_l = q_liq / sig_l

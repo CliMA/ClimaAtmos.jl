@@ -557,11 +557,12 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
             @. ᶜq_liq_rai = zero(eltype(ᶜT))
             @. ᶜq_ice_sno = zero(eltype(ᶜT))
         else  # NonEquilMoistModel
-            @. ᶜq_tot_safe = max(0, specific(Y.c.ρq_tot, Y.c.ρ))
             @. ᶜq_liq_rai =
                 max(0, specific(Y.c.ρq_liq, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
             @. ᶜq_ice_sno =
                 max(0, specific(Y.c.ρq_ice, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
+            # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
+            @. ᶜq_tot_safe = max(ᶜq_liq_rai + ᶜq_ice_sno, specific(Y.c.ρq_tot, Y.c.ρ))
         end
         @. ᶜT =
             TD.air_temperature(thermo_params, ᶜe_int, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)

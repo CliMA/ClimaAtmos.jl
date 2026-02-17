@@ -34,14 +34,9 @@ using ClimaAtmos
     @testset "Gauss-Legendre Quadrature" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                # Test order 3 on [-1,1]
-                a, w = ClimaAtmos.gauss_legendre(FT, 3)
-                @test length(a) == 3
-                @test a[2] ≈ FT(0) atol = eps(FT)
-                @test sum(w) ≈ FT(2) atol = FT(1e-10)  # ∫₋₁¹ dx = 2
-
                 # Test order 3 on [0,1]
                 a01, w01 = ClimaAtmos.gauss_legendre_01(FT, 3)
+                @test length(a01) == 3
                 @test all(0 .<= a01 .<= 1)
                 @test sum(w01) ≈ FT(1) atol = FT(1e-10)  # ∫₀¹ dx = 1
             end
@@ -51,11 +46,6 @@ using ClimaAtmos
     @testset "SGSQuadrature Struct" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                # Default (Gaussian, order 3)
-                quad = ClimaAtmos.SGSQuadrature(FT)
-                @test ClimaAtmos.quadrature_order(quad) == 3
-                @test quad.dist isa ClimaAtmos.GaussianSGS
-
                 # Custom order and distribution
                 quad5 = ClimaAtmos.SGSQuadrature(
                     FT;
@@ -70,7 +60,7 @@ using ClimaAtmos
                     ClimaAtmos.SGSQuadrature(FT; distribution = ClimaAtmos.GridMeanSGS())
                 @test ClimaAtmos.quadrature_order(quad_gridmean) == 1  # Always N=1
                 @test quad_gridmean.a == [FT(0)]  # Single point at origin
-                @test quad_gridmean.w == [FT(1)]  # Weight = 1
+                @test quad_gridmean.w ≈ [sqrt(FT(π))]  # Weight = sqrt(π)
                 @test quad_gridmean.dist isa ClimaAtmos.GridMeanSGS
 
                 # GridMeanSGS ignores quadrature_order argument
@@ -87,20 +77,18 @@ using ClimaAtmos
     @testset "Variance Limiting" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                quad = ClimaAtmos.SGSQuadrature(FT)
-
                 # Standard case
                 corr_Tq = FT(0.6)
-                σ_q, σ_T, corr = ClimaAtmos.limit_covariances(
-                    FT(1e-6), FT(1.0), corr_Tq, FT(0.01), quad,
+                σ_q, σ_T, corr = ClimaAtmos.sgs_stddevs_and_correlation(
+                    FT(1e-6), FT(1.0), corr_Tq,
                 )
                 @test σ_q >= 0
                 @test σ_T >= 0
                 @test -1 <= corr <= 1
 
                 # Zero variance
-                σ_q0, σ_T0, corr0 = ClimaAtmos.limit_covariances(
-                    FT(0), FT(0), corr_Tq, FT(0.01), quad,
+                σ_q0, σ_T0, corr0 = ClimaAtmos.sgs_stddevs_and_correlation(
+                    FT(0), FT(0), corr_Tq,
                 )
                 @test σ_q0 == 0
                 @test σ_T0 == 0
@@ -111,23 +99,21 @@ using ClimaAtmos
     @testset "Correlation Clamping" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                quad = ClimaAtmos.SGSQuadrature(FT)
-
                 # Correlation within [-1, 1] passes through
-                _, _, corr1 = ClimaAtmos.limit_covariances(
-                    FT(1e-6), FT(1.0), FT(0.5), FT(0.01), quad,
+                _, _, corr1 = ClimaAtmos.sgs_stddevs_and_correlation(
+                    FT(1e-6), FT(1.0), FT(0.5),
                 )
                 @test corr1 == FT(0.5)
 
                 # Correlation > 1 is clamped
-                _, _, corr2 = ClimaAtmos.limit_covariances(
-                    FT(1e-6), FT(1.0), FT(1.5), FT(0.01), quad,
+                _, _, corr2 = ClimaAtmos.sgs_stddevs_and_correlation(
+                    FT(1e-6), FT(1.0), FT(1.5),
                 )
                 @test corr2 == FT(1.0)
 
                 # Correlation < -1 is clamped
-                _, _, corr3 = ClimaAtmos.limit_covariances(
-                    FT(1e-6), FT(1.0), FT(-1.5), FT(0.01), quad,
+                _, _, corr3 = ClimaAtmos.sgs_stddevs_and_correlation(
+                    FT(1e-6), FT(1.0), FT(-1.5),
                 )
                 @test corr3 == FT(-1.0)
 
@@ -230,11 +216,12 @@ using ClimaAtmos
                 corr = FT(0.5)
 
                 T_min = FT(150.0)
+                q_max = FT(1.0)
 
                 # GaussianSGS at χ = 0 should return means
                 T_hat, q_hat = ClimaAtmos.get_physical_point(
                     ClimaAtmos.GaussianSGS(), FT(0), FT(0), μ_q, μ_T, σ_q, σ_T, corr,
-                    T_min,
+                    T_min, q_max,
                 )
                 @test T_hat ≈ μ_T atol = FT(0.1)
                 @test q_hat ≈ μ_q atol = FT(0.001)
@@ -242,7 +229,7 @@ using ClimaAtmos
                 # LogNormalSGS
                 T_hat_ln, q_hat_ln = ClimaAtmos.get_physical_point(
                     ClimaAtmos.LogNormalSGS(), FT(0), FT(0), μ_q, μ_T, σ_q, σ_T, corr,
-                    T_min,
+                    T_min, q_max,
                 )
                 @test T_hat_ln ≈ μ_T atol = FT(0.1)
                 @test q_hat_ln > 0  # log-normal is always positive
@@ -252,7 +239,7 @@ using ClimaAtmos
                 # GridMeanSGS always returns grid mean regardless of χ values
                 T_hat_gm, q_hat_gm = ClimaAtmos.get_physical_point(
                     ClimaAtmos.GridMeanSGS(), FT(999), FT(999), μ_q, μ_T, σ_q, σ_T,
-                    corr, T_min,
+                    corr, T_min, q_max,
                 )
                 @test T_hat_gm == μ_T  # Exact equality, not approximate
                 @test q_hat_gm == μ_q  # Exact equality, not approximate
@@ -350,7 +337,12 @@ using ClimaAtmos
 
                 # Test 1: Single quadrature point should match grid-mean evaluation
                 @testset "Single Point = Grid Mean" begin
-                    quad_1pt = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 1)
+                    # Use GaussianSGS: only Gaussian has χ=0 → (μ_T, μ_q)
+                    quad_1pt = ClimaAtmos.SGSQuadrature(
+                        FT;
+                        quadrature_order = 1,
+                        distribution = ClimaAtmos.GaussianSGS(),
+                    )
 
                     # Quadrature result
                     result_quad = microphysics_tendencies_quadrature(
@@ -607,6 +599,67 @@ using ClimaAtmos
         end
     end
 
+
+    @testset "GridMeanSGS Quadrature = Direct BMT" begin
+        # Verify that the GridMeanSGS quadrature path produces the same result
+        # as a direct BMT call. 
+        import Thermodynamics as TD
+        import ClimaParams as CP
+        import CloudMicrophysics.Parameters as CMP
+        import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
+        using ClimaAtmos: microphysics_tendencies_quadrature
+
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                toml_dict = CP.create_toml_dict(FT)
+                tps = TD.Parameters.ThermodynamicsParameters(toml_dict)
+                mp = CMP.Microphysics1MParams(toml_dict)
+
+                # Grid-mean state
+                ρ = FT(1.2)
+                p_c = FT(1e5)
+                T_mean = FT(280.0)
+                q_tot = FT(0.01)
+                q_liq = FT(0.001)
+                q_ice = FT(0.0005)
+                q_rai = FT(0.0002)
+                q_sno = FT(0.0001)
+
+                # GridMeanSGS inside SGSQuadrature
+                quad_gm = ClimaAtmos.SGSQuadrature(
+                    FT;
+                    distribution = ClimaAtmos.GridMeanSGS(),
+                )
+
+                # Non-zero variances — should be ignored by GridMeanSGS
+                T′T′ = FT(4.0)
+                q′q′ = FT(1e-5)
+                corr_Tq = FT(0.6)
+
+                # Quadrature path
+                result_quad = microphysics_tendencies_quadrature(
+                    BMT.Microphysics1Moment(),
+                    quad_gm, mp, tps, ρ, p_c,
+                    T_mean, q_tot, q_liq, q_ice, q_rai, q_sno,
+                    T′T′, q′q′, corr_Tq,
+                )
+
+                # Direct BMT call
+                result_direct = BMT.bulk_microphysics_tendencies(
+                    BMT.Microphysics1Moment(),
+                    mp, tps, ρ, T_mean,
+                    q_tot, q_liq, q_ice, q_rai, q_sno,
+                )
+
+                # They must match exactly (both evaluate at grid mean)
+                for field in (:dq_lcl_dt, :dq_icl_dt, :dq_rai_dt, :dq_sno_dt)
+                    val_q = getfield(result_quad, field)
+                    val_d = getfield(result_direct, field)
+                    @test val_q ≈ val_d rtol = FT(1e-5)
+                end
+            end
+        end
+    end
 
     @testset "Sign Convention" begin
         # Verify that quadrature-averaged microphysics tendencies have correct signs.

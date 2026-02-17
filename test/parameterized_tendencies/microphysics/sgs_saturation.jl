@@ -110,7 +110,12 @@ import ClimaParams as CP
                 end
 
                 @testset "Single quadrature point = grid-mean" begin
-                    quad_1pt = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 1)
+                    # Use GaussianSGS: only Gaussian has χ=0 → (μ_T, μ_q)
+                    quad_1pt = ClimaAtmos.SGSQuadrature(
+                        FT;
+                        quadrature_order = 1,
+                        distribution = ClimaAtmos.GaussianSGS(),
+                    )
 
                     result = ClimaAtmos.compute_sgs_saturation_adjustment(
                         thp, quad_1pt, ρ, T_mean, q_mean,

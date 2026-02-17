@@ -59,9 +59,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
         ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
         # Compute env thermodynamic state from primitives
-        @. ᶜq_tot_safe⁰ = max(0, ᶜq_tot⁰)
         @. ᶜq_liq_rai⁰ = max(0, ᶜq_liq⁰ + ᶜq_rai⁰)
         @. ᶜq_ice_sno⁰ = max(0, ᶜq_ice⁰ + ᶜq_sno⁰)
+        # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
+        @. ᶜq_tot_safe⁰ = max(ᶜq_liq_rai⁰ + ᶜq_ice_sno⁰, ᶜq_tot⁰)
         ᶜh⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)  # specific enthalpy
         @. ᶜT⁰ = TD.air_temperature(
             thermo_params,
@@ -145,6 +146,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
             @. ᶜq_liq_raiʲ = max(0, ᶜq_liqʲ + ᶜq_raiʲ)
             @. ᶜq_ice_snoʲ = max(0, ᶜq_iceʲ + ᶜq_snoʲ)
+            # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
+            @. ᶜq_tot_safeʲ = max(ᶜq_liq_raiʲ + ᶜq_ice_snoʲ, ᶜq_totʲ)
             ᶜhʲ = @. lazy(ᶜmseʲ - ᶜΦ)
             @. ᶜTʲ = TD.air_temperature(
                 thermo_params,
@@ -577,26 +580,26 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         @. ᶜwᵣʲs.:($$j) = CM1.terminal_velocity(
             cmp.precip.rain,
             cmp.terminal_velocity.rain,
-            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), ᶜρʲs.:($$j)),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
         )
         @. ᶜwₛʲs.:($$j) = CM1.terminal_velocity(
             cmp.precip.snow,
             cmp.terminal_velocity.snow,
-            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), ᶜρʲs.:($$j)),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_sno),
         )
         # compute sedimentation velocity for cloud condensate [m/s]
         @. ᶜwₗʲs.:($$j) = CMNe.terminal_velocity(
             cmc.liquid,
             cmc.stokes,
-            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), ᶜρʲs.:($$j)),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_liq),
         )
         @. ᶜwᵢʲs.:($$j) = CMNe.terminal_velocity(
             cmc.ice,
             cmc.Ch2022.small_ice,
-            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), ᶜρʲs.:($$j)),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_ice),
         )
 

@@ -329,7 +329,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function get_microphysics_model(parsed_args)
+function get_microphysics_model(parsed_args, params = nothing)
     microphysics_model = parsed_args["precip_model"]
     base_scheme = if isnothing(microphysics_model) || microphysics_model == "nothing"
         NoPrecipitation()
@@ -351,7 +351,17 @@ function get_microphysics_model(parsed_args)
         FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
         distribution = get_sgs_distribution(parsed_args)
         quadrature_order = get(parsed_args, "quadrature_order", 2)
-        return QuadratureMicrophysics(base_scheme; FT, distribution, quadrature_order)
+        # Read T_min and q_max from ClimaParams when available
+        T_min = isnothing(params) ? FT(150) : FT(CAP.T_min(params))
+        q_max = isnothing(params) ? FT(0.1) : FT(CAP.q_max(params))
+        return QuadratureMicrophysics(
+            base_scheme;
+            FT,
+            distribution,
+            quadrature_order,
+            T_min,
+            q_max,
+        )
     else
         return base_scheme
     end

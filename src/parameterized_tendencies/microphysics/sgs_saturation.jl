@@ -118,26 +118,11 @@ but this requires iteration. For now, we only average the condensate.
     q′q′,
     corr_Tq,
 )
-    # Limit variances for physical validity
-    σ_q, σ_T, corr = limit_covariances(q′q′, T′T′, corr_Tq, q_mean, SG_quad)
-
     # Create GPU-safe functor (not a closure)
     evaluator = SaturationAdjustmentEvaluator(thermo_params, ρ)
 
-    # Transform quadrature points to physical space (T, q) using functor (GPU-safe)
-    transform =
-        PhysicalPointTransform(
-            SG_quad.dist,
-            T_mean,
-            q_mean,
-            σ_T,
-            σ_q,
-            corr,
-            oftype(T_mean, SG_quad.T_min),
-        )
-
     # Integrate over quadrature points
-    result = sum_over_quadrature_points(evaluator, transform, SG_quad)
+    result = integrate_over_sgs(evaluator, SG_quad, q_mean, T_mean, q′q′, T′T′, corr_Tq)
 
     # Return with grid-mean T (condensate is SGS-averaged)
     return (; T = T_mean, q_liq = result.q_liq, q_ice = result.q_ice)
