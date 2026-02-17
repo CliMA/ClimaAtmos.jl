@@ -244,6 +244,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜentrʲs,
         ᶜdetrʲs,
         ᶜturb_entrʲs,
+        ᶠρ_diffʲs,
         ᶠnh_pressure₃_buoyʲs,
     ) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
@@ -401,6 +402,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         else
             @. detr_int_val = limit_detrainment(detr_int_val, entr_int_val, ᶜaʲ_int_val, dt)
         end
+
+        @. ᶠρ_diffʲs.:($$j) = min(0, ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ)) / ᶠinterp(ᶜρʲs.:($$j))
 
         # The buoyancy term in the nonhydrostatic pressure closure is always applied
         # for prognostic edmf. The tendency is combined with the buoyancy term in the

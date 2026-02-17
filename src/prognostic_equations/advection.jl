@@ -358,7 +358,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; dt) = p
     (; edmfx_mse_q_tot_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
-    (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs) = p.precomputed
+    (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs, ᶠρ_diffʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
 
     FT = eltype(p.params)
@@ -382,8 +382,7 @@ function edmfx_sgs_vertical_advection_tendency!(
         # and calcuate the buoyancy term relative to the grid-mean density.
         # We also include the buoyancy term in the nonhydrostatic pressure closure here.
         @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-            (1 - α_b) * (ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) * ᶠgradᵥ_ᶜΦ) /
-            ᶠinterp(ᶜρʲs.:($$j)) + ᶠgradᵥ(ᶜKᵥʲ)
+            (1 - α_b) * ᶠρ_diffʲs.:($$j) * ᶠgradᵥ_ᶜΦ + ᶠgradᵥ(ᶜKᵥʲ)
 
         # buoyancy term in mse equation
         @. Yₜ.c.sgsʲs.:($$j).mse +=

@@ -1,4 +1,4 @@
-312
+313
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+313
+ - PEDMF: precompute sgs buoyancy; apply edmf filter as a callback; mix unphysical sgs with grid mean
+
 312
  - Relax entr/detr limits for prognostic EDMF when entr/detr is treated implicitly
 
