@@ -417,19 +417,29 @@ function get_initial_condition(parsed_args, atmos)
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
     elseif isfile(parsed_args["initial_condition"])
-        return ICs.MoistFromFile(parsed_args["initial_condition"])
+        # TODO: remove once we fully migrate to Setups (MoistFromFile now handled by Setups)
+        error(
+            "File-based initial condition has been migrated to the Setups module. " *
+            "This branch should not be reached.",
+        )
     elseif parsed_args["initial_condition"] == "ReanalysisTimeVarying"
-        return ICs.external_tv_initial_condition(
-            atmos.external_forcing.external_forcing_file,
-            parsed_args["start_date"],
+        # TODO: remove once we fully migrate to Setups (InterpolatedColumnProfile now handled by Setups)
+        error(
+            "ReanalysisTimeVarying initial condition has been migrated to the Setups module. " *
+            "This branch should not be reached.",
         )
     elseif parsed_args["initial_condition"] == "WeatherModel"
-        return ICs.WeatherModel(
-            parsed_args["start_date"],
-            parsed_args["era5_initial_condition_dir"],
+        # TODO: remove once we fully migrate to Setups (WeatherModel now handled by Setups)
+        error(
+            "WeatherModel initial condition has been migrated to the Setups module. " *
+            "This branch should not be reached.",
         )
     elseif parsed_args["initial_condition"] == "AMIPFromERA5"
-        return ICs.AMIPFromERA5(parsed_args["start_date"])
+        # TODO: remove once we fully migrate to Setups (AMIPFromERA5 now handled by Setups)
+        error(
+            "AMIPFromERA5 initial condition has been migrated to the Setups module. " *
+            "This branch should not be reached.",
+        )
     elseif parsed_args["initial_condition"] == "ShipwayHill2012"
         return ICs.ShipwayHill2012()
         # TODO: remove once we fully migrate to Setups (GCM now handled by Setups.GCMDriven)
@@ -456,6 +466,20 @@ function get_setup_type(parsed_args, thermo_params)
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
+    elseif ic_name == "ReanalysisTimeVarying"
+        return Setups.interpolated_column_profile(
+            parsed_args["external_forcing_file"],
+            parsed_args["start_date"],
+        )
+    elseif ic_name == "WeatherModel"
+        return Setups.WeatherModel(
+            parsed_args["start_date"],
+            parsed_args["era5_initial_condition_dir"],
+        )
+    elseif ic_name == "AMIPFromERA5"
+        return Setups.AMIPFromERA5(parsed_args["start_date"])
+    elseif isfile(ic_name)
+        return Setups.MoistFromFile(ic_name)
     end
     return nothing
 end

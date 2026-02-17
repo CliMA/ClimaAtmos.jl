@@ -50,14 +50,14 @@ function center_initial_condition(setup::Bomex, local_geometry, params)
     (; prognostic_tke, profiles) = setup
 
     # Evaluate profiles at z
-    θ_val = FT(profiles.θ(z))
-    q_tot_val = FT(profiles.q_tot(z))
-    p_val = FT(profiles.p(z))
-    T = FT(TD.air_temperature(thermo_params, TD.pθ_li(), p_val, θ_val, q_tot_val))
+    θ = FT(profiles.θ(z))
+    q_tot = FT(profiles.q_tot(z))
+    p = FT(profiles.p(z))
+    T = FT(TD.air_temperature(thermo_params, TD.pθ_li(), p, θ, q_tot))
 
-    tke_val = prognostic_tke ? FT(0) : FT(profiles.tke(z))
+    tke = prognostic_tke ? FT(0) : FT(profiles.tke(z))
 
-    return physical_state(; T, p = p_val, q_tot = q_tot_val, u = FT(profiles.u(z)), tke = tke_val)
+    return physical_state(; T, p, q_tot, u = FT(profiles.u(z)), tke)
 end
 
 function surface_condition(::Bomex, params)

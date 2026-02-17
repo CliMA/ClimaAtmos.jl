@@ -151,9 +151,15 @@ function turbconv_center_variables(
     ρa = ρ * draft_area / n
     mse = moist_static_energy(params, T, local_geometry; q_tot, q_liq, q_ice)
     if microphysics_model isa Microphysics1Moment
-        sgsʲs = uniform_subdomains((; ρa, mse, q_tot, q_liq, q_ice, q_rai, q_sno), turbconv_model)
+        sgsʲs = uniform_subdomains(
+            (; ρa, mse, q_tot, q_liq, q_ice, q_rai, q_sno),
+            turbconv_model,
+        )
     else  # Microphysics2Moment
-        sgsʲs = uniform_subdomains((; ρa, mse, q_tot, q_liq, q_ice, q_rai, q_sno, n_liq, n_rai), turbconv_model)
+        sgsʲs = uniform_subdomains(
+            (; ρa, mse, q_tot, q_liq, q_ice, q_rai, q_sno, n_liq, n_rai),
+            turbconv_model,
+        )
     end
     return (; ρtke, sgsʲs)
 end

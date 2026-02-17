@@ -12,11 +12,14 @@ import ..C12, ..C3
 # File-based IC infrastructure (overwrite_from_file.jl, GCMDriven.jl, InterpolatedColumnProfile.jl)
 import Dates
 import ClimaUtilities.SpaceVaryingInputs
+import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import NCDatasets as NC
 import Statistics: mean
 import ..ᶜinterp, ..ᶠinterp
 import ..compute_kinetic
 import ..gcm_height, ..gcm_driven_profile_tmean, ..gcm_driven_timeseries
+import ..weather_model_data_path
+import ..parse_date
 
 # Model types for dispatch (used by prognostic_variables.jl)
 import ..DryModel
@@ -161,6 +164,9 @@ include("Rico.jl")
 # File-based IC infrastructure and setups
 include("overwrite_from_file.jl")
 include("GCMDriven.jl")
-# include("InterpolatedColumnProfile.jl")
+include("InterpolatedColumnProfile.jl")
+include("MoistFromFile.jl")
+include("WeatherModel.jl")
+include("AMIPFromERA5.jl")
 
 end # module

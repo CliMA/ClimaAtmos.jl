@@ -2,10 +2,10 @@
 
 A setup defines the initial conditions for a simulation case. At its core, a
 setup is a struct that implements `center_initial_condition`, which returns a
-physical_state NamedTuple at each grid point. The `physical_state`
-describes the thermodynamic and kinematic state through temperature, pressure or
-density, moisture, velocity and is converted into prognostic variables
-automatically based on the model configuration.
+physical state NamedTuple at each grid point. The physical state describes the
+thermodynamic and kinematic state through temperature, pressure or density,
+moisture, velocity and is converted into prognostic variables automatically
+based on the model configuration.
 
 ## `center_initial_condition`
 
@@ -92,4 +92,8 @@ ClimaAtmos.Setups.Rico
 
 ```@docs
 ClimaAtmos.Setups.GCMDriven
+ClimaAtmos.Setups.InterpolatedColumnProfile
+ClimaAtmos.Setups.MoistFromFile
+ClimaAtmos.Setups.WeatherModel
+ClimaAtmos.Setups.AMIPFromERA5
 ```
