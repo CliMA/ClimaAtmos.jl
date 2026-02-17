@@ -33,7 +33,7 @@ x_max: 96000.0  # 96km
 y_max: 96000.0  # 96km
 # x_max: 6000000.0  # 6000km
 # y_max: 400000.0  # 400km
-z_max: 30000.0  # 30km
+z_max: 33000.0  # 30km
 nh_poly: 3  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
 # z_elem: 43  # Note: Set sponge height (`zd_viscous`) in toml file to cover top ~5 points
 z_elem: 86
