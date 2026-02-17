@@ -277,7 +277,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     if p.atmos.sgs_vertdiff_mode == Explicit()
         edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
-    edmfx_filter_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     # EDMF updraft microphysics tendencies (applied to updraft prognostic variables)

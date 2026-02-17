@@ -140,10 +140,11 @@ function entrainment(
 )
     FT = eltype(thermo_params)
     entr_inv_tau = CAP.entr_inv_tau(turbconv_params)
+    a_min = CAP.min_area(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
     # Entrainment is not well-defined if updraft area is negligible.
     # Fix at limit_inv_tau to ensure some mixing with the environment.
-    if ᶜaʲ <= eps(FT)
+    if ᶜaʲ <= a_min
         return limit_inv_tau
     end
 
@@ -217,7 +218,7 @@ function entrainment(
 
     # Entrainment is not well-defined if updraft area is negligible,
     # as some limiters depend on ᶜaʲ.
-    if ᶜaʲ <= eps(FT) && min_area_limiter_scale == FT(0) # If no area and no base min_area_limiter
+    if ᶜaʲ <= a_min && min_area_limiter_scale == FT(0) # If no area and no base min_area_limiter
         return limit_inv_tau
     end
 
@@ -336,11 +337,12 @@ function detrainment(
     ::PiGroupsDetrainment,
 )
     FT = eltype(thermo_params)
+    a_min = CAP.min_area(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
 
     # If ᶜaʲ (updraft area fraction) is negligible, detrainment is considered
     # to be fixed at limit_inv_tau. This also protects division by ᶜρaʲ later.
-    if ᶜaʲ <= eps(FT)
+    if ᶜaʲ <= a_min
         return limit_inv_tau
     end
 
@@ -414,12 +416,13 @@ function detrainment(
         CAP.detr_massflux_vertdiv_coeff(turbconv_params)
     max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
     max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
+    a_min = CAP.min_area(turbconv_params)
     a_max = CAP.max_area(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
 
     # If ᶜaʲ (updraft area fraction) is negligible, detrainment is not well defined.
     # Fix at limit_inv_tau to ensure some mixing with the environment.
-    if ᶜaʲ <= eps(FT)
+    if ᶜaʲ <= a_min
         return limit_inv_tau
     end
 
@@ -460,9 +463,10 @@ function detrainment(
     ::SmoothAreaDetrainment,
 )
     FT = eltype(thermo_params)
+    a_min = CAP.min_area(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
     # If ᶜaʲ is negligible detrainment is fixed at limit_inv_tau.
-    if (ᶜaʲ <= eps(FT)) # Consistent check for ᶜaʲ
+    if (ᶜaʲ <= a_min) # Consistent check for ᶜaʲ
         detr = limit_inv_tau
         # If vertical velocity divergence term is non-negative detrainment is zero.
     elseif (ᶜw_vert_div >= 0)

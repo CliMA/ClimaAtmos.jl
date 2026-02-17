@@ -1,4 +1,4 @@
-313
+314
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+314
+ - PEDMF: precompute sgs buoyancy; apply edmf filter as a callback; mix unphysical sgs with grid mean
+
 313
  - Change microphysics to using bulk microphysics tendencies, with limiters on total 
    tendencies (rather than individual species tendencies).
