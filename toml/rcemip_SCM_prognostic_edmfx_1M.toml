@@ -1,8 +1,5 @@
 [zd_rayleigh]
-value = 40000.0
-
-[zd_viscous]
-value = 40000.0
+value = 28000.0
 
 [EDMF_surface_area]
 value = 0.1
@@ -47,10 +44,10 @@ value = 40.0
 value = 0
 
 [condensation_evaporation_timescale]
-value = 50
+value = 10
 
 [sublimation_deposition_timescale]
-value = 50
+value = 20
 
 [SST_mean]
 value = 300

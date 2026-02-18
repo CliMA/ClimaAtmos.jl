@@ -19,12 +19,12 @@ moist: "nonequil"
 precip_model: "1M"
 use_sgs_quadrature: false
 config: "column"
-z_max: 30000.0  # 30km
+z_max: 33000.0  # 30km
 x_elem: 2
 y_elem: 2
 z_elem: 86
 dz_bottom: 30.0
-z_stretch: false
+z_stretch: true
 perturb_initstate: false
 dt: "5secs"
 t_end: "24hours"
