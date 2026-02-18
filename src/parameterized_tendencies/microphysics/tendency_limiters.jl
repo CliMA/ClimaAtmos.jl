@@ -247,9 +247,9 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
     Lv_over_cp = TD.Parameters.LH_v0(tps) / TD.Parameters.cp_d(tps)
     Ls_over_cp = TD.Parameters.LH_s0(tps) / TD.Parameters.cp_d(tps)
 
-    # Max 2 K temperature change per timestep 
+    # Max 5 K temperature change per timestep 
     # TODO: arbitrary choice; remove or make very large once microphysics is implicit
-    dT_dt_max = FT(2) / dt
+    dT_dt_max = FT(5) / dt
 
     dT_dt = Lv_over_cp * dq_lcl_dt + Ls_over_cp * dq_icl_dt
     scale = min(FT(1), dT_dt_max / max(abs(dT_dt), eps(FT)))
