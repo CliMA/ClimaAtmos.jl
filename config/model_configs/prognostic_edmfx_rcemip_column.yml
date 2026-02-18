@@ -2,6 +2,7 @@ output_dir: "/glade/derecho/scratch/oalcabes/scm_rce"
 initial_condition: RCEMIPIIProfile_300
 surface_setup: DefaultMoninObukhov
 surface_temperature: RCEMIPII
+output_dir: "/scratch/olivia/rce_scm"
 insolation: rcemipii
 turbconv: "prognostic_edmfx"
 tracer_upwinding: first_order
@@ -32,7 +33,7 @@ dt: "5secs"
 t_end: "21days"
 dt_save_state_to_disk: "60mins"
 toml: [toml/rcemip_SCM_prognostic_edmfx_1M.toml]
-netcdf_interpolation_num_points: [8, 8, 100]
+netcdf_interpolation_num_points: [8, 8, 86]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
     period: 10mins
