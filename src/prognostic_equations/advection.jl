@@ -506,14 +506,18 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜinv_ρ̂ * vtt
             end
 
-            # Contribution of density variation due to sedimentation
+            # Contribution of density variation due to sedimentation.
+            # Semi-implicit (backward Euler) treatment prevents overshooting
+            # when  ᶜinv_ρ̂ * ᶜ∂ρ∂t_sed  is large (small updraft area
+            # fraction with strong sedimentation). 
             @. Yₜ.c.sgsʲs.:($$j).ρa += ᶜ∂ρ∂t_sed
-            @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).mse * ᶜ∂ρ∂t_sed
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_tot * ᶜ∂ρ∂t_sed
-            @. Yₜ.c.sgsʲs.:($$j).q_liq -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_liq * ᶜ∂ρ∂t_sed
-            @. Yₜ.c.sgsʲs.:($$j).q_ice -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_ice * ᶜ∂ρ∂t_sed
-            @. Yₜ.c.sgsʲs.:($$j).q_rai -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_rai * ᶜ∂ρ∂t_sed
-            @. Yₜ.c.sgsʲs.:($$j).q_sno -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_sno * ᶜ∂ρ∂t_sed
+            ᶜlimited_rate = @. lazy(implicit_sink_rate(ᶜinv_ρ̂ * ᶜ∂ρ∂t_sed, dt))
+            @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜlimited_rate * Y.c.sgsʲs.:($$j).mse
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜlimited_rate * Y.c.sgsʲs.:($$j).q_tot
+            @. Yₜ.c.sgsʲs.:($$j).q_liq -= ᶜlimited_rate * Y.c.sgsʲs.:($$j).q_liq
+            @. Yₜ.c.sgsʲs.:($$j).q_ice -= ᶜlimited_rate * Y.c.sgsʲs.:($$j).q_ice
+            @. Yₜ.c.sgsʲs.:($$j).q_rai -= ᶜlimited_rate * Y.c.sgsʲs.:($$j).q_rai
+            @. Yₜ.c.sgsʲs.:($$j).q_sno -= ᶜlimited_rate * Y.c.sgsʲs.:($$j).q_sno
 
         end
 
@@ -567,8 +571,9 @@ function edmfx_sgs_vertical_advection_tendency!(
                 )
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
 
-                # Contribution of density variation due to sedimentation
-                @. ᶜχʲₜ -= ᶜinv_ρ̂ * ᶜχʲ * ᶜ∂ρ∂t_sed
+                # Contribution of density variation due to sedimentation 
+                # (same semi-implicit treatment as above)
+                @. ᶜχʲₜ -= ᶜlimited_rate * ᶜχʲ
             end
         end
     end

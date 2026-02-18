@@ -31,7 +31,30 @@ max_rate = limit(q_rai, dt, 3)
     return max(zero(q), q) / dt / n
 end
 
+"""
+    implicit_sink_rate(rate, dt)
 
+Semi-implicit (backward Euler) limiter for a linear decay tendency.
+
+For a decay ODE  `dψ/dt = −rate · ψ`, the explicit tendency `−rate · ψ`
+can overshoot zero when `rate · dt > 1`.  This function returns the
+implicitly-limited rate
+
+    rate / (1 + dt · max(rate, 0))
+
+which is equivalent to the backward Euler solution
+`ψ_{n+1} = ψ_n / (1 + dt · rate)`.  Only sink terms (`rate > 0`) are
+limited; source terms (`rate ≤ 0`) pass through unmodified.
+
+# Usage
+```julia
+limited = implicit_sink_rate(rate, dt)
+@. Yₜ.ψ -= limited * Y.ψ
+```
+"""
+@inline function implicit_sink_rate(rate, dt)
+    return rate / (1 + dt * max(rate, zero(rate)))
+end
 
 """
     tendency_limiter(tendency, tend_bound_pos, tend_bound_neg)
@@ -192,7 +215,7 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
     # Mass-conservation limits using cross-species source pools
     # n_sink: number of timesteps over which species would be depleted
     n_sink = 5
-    # n_source: number of timesteps over which sources are depleted (large because q_tot is taken as source)
+    # n_source: number of timesteps over which sources are depleted 
     n_source = 30
 
     dq_lcl_dt = tendency_limiter(
@@ -212,7 +235,7 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
     )
     dq_sno_dt = tendency_limiter(
         mp_tendency.dq_sno_dt,
-        limit(q_ice + q_rai, dt, n_source),
+        limit(q_ice, dt, n_source),
         limit(q_sno, dt, n_sink),
     )
 
@@ -224,9 +247,9 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
     Lv_over_cp = TD.Parameters.LH_v0(tps) / TD.Parameters.cp_d(tps)
     Ls_over_cp = TD.Parameters.LH_s0(tps) / TD.Parameters.cp_d(tps)
 
-    # Max 5 K temperature change per timestep 
+    # Max 2 K temperature change per timestep 
     # TODO: arbitrary choice; remove or make very large once microphysics is implicit
-    dT_dt_max = FT(5) / dt
+    dT_dt_max = FT(2) / dt
 
     dT_dt = Lv_over_cp * dq_lcl_dt + Ls_over_cp * dq_icl_dt
     scale = min(FT(1), dT_dt_max / max(abs(dT_dt), eps(FT)))
