@@ -56,6 +56,7 @@ function get_diagnostics(
         num_points = num_netcdf_points;
         z_sampling_method,
         sync_schedule = CAD.EveryStepSchedule(),
+        init_time = t_start,
         maybe_add_start_date...,
     )
 
@@ -77,6 +78,7 @@ function get_diagnostics(
             num_points = num_netcdf_points;
             z_sampling_method,
             sync_schedule = CAD.EveryStepSchedule(),
+            init_time = t_start,
             maybe_add_start_date...,
         )
     end

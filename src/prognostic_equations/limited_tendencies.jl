@@ -46,8 +46,12 @@ to all tracers for which the limiter is used. The limiter instance is created as
 filter which tracers the limiter is applied to before calling `apply_limiter!` (since `apply_limiter!`
 doesn't support a species keyword argument). If species is `nothing` (default), the limiter is applied
 to all tracers. Otherwise, only tracers matching the specified tuple of names will have the limiter
-applied. The tuple format for the threshold is required by ClimaCore's API (for GPU compatibility),
-but only a single threshold value is used for all tracers.
+applied. 
+
+When the limiter is applied to total water (ρq_tot), the effective tendency Δ(ρq_tot) is
+deduced from the pre- and post-limited states. To keep mass and energy consistent 
+(https://clima.github.io/ClimaAtmos.jl/dev/microphysics/), density
+and total energy are updated.
 
 Arguments:
 - `Y`: The current state vector (`ClimaCore.Fields.FieldVector`), modified in place.
@@ -65,8 +69,12 @@ NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
     ) =
         p.numerics
 
-    # Apply general limiter if configured
+    # Apply general (SEM quasimonotone) limiter if configured.
+    # When ρq_tot is limited, update ρ and ρe_tot for mass and energy consistency.
     if !isnothing(sem_quasimonotone_limiter)
+        if hasproperty(Y.c, :ρq_tot)
+            p.scratch.ᶜtemp_scalar_2 .= Y.c.ρq_tot
+        end
         for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
             Limiters.compute_bounds!(
                 sem_quasimonotone_limiter,
@@ -75,12 +83,23 @@ NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
             )
             Limiters.apply_limiter!(Y.c.:($ρχ_name), Y.c.ρ, sem_quasimonotone_limiter)
         end
+        if hasproperty(Y.c, :ρq_tot)
+            @. p.scratch.ᶜtemp_scalar_2 = Y.c.ρq_tot - p.scratch.ᶜtemp_scalar_2
+            enforce_mass_energy_consistency!(Y, p, p.scratch.ᶜtemp_scalar_2)
+        end
     end
 
     # Apply vertical water borrowing limiter if configured
     # Our state stores ρχ (tracer density). Store χ in scratch, apply limiter, then write ρχ back.
-    # Also note: species filtering is done here, not passed to apply_limiter! (which doesn't support it)
+    # When ρq_tot is limited, update ρ and ρe_tot for mass and energy consistency.
     if !isnothing(vertical_water_borrowing_limiter)
+        if _should_apply_limiter_to_tracer(
+            @name(ρq_tot),
+            vertical_water_borrowing_species,
+        ) &&
+           hasproperty(Y.c, :ρq_tot)
+            p.scratch.ᶜtemp_scalar_2 .= Y.c.ρq_tot
+        end
         ᶜχ = p.scratch.ᶜtemp_scalar
         for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
             if _should_apply_limiter_to_tracer(ρχ_name, vertical_water_borrowing_species)
@@ -89,6 +108,14 @@ NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
                 Limiters.apply_limiter!(ᶜχ, Y.c.ρ, vertical_water_borrowing_limiter)
                 ρχ .= ᶜχ .* Y.c.ρ
             end
+        end
+        if _should_apply_limiter_to_tracer(
+            @name(ρq_tot),
+            vertical_water_borrowing_species,
+        ) &&
+           hasproperty(Y.c, :ρq_tot)
+            @. p.scratch.ᶜtemp_scalar_2 = Y.c.ρq_tot - p.scratch.ᶜtemp_scalar_2
+            enforce_mass_energy_consistency!(Y, p, p.scratch.ᶜtemp_scalar_2)
         end
     end
     return nothing

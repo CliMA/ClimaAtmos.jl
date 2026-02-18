@@ -430,17 +430,14 @@ function edmfx_sgs_vertical_advection_tendency!(
             (; ᶜTʲs) = p.precomputed
             ᶜ∂ρ∂t_sed = p.scratch.ᶜtemp_scalar_3
             @. ᶜ∂ρ∂t_sed = 0
-
-            ᶜinv_ρ̂ = (@. lazy(
-                specific(
-                    FT(1),
-                    Y.c.sgsʲs.:($$j).ρa,
-                    FT(0),
-                    ᶜρʲs.:($$j),
-                    turbconv_model,
-                ),
-            ))
-
+            ᶜinv_ρ̂ = p.scratch.ᶜtemp_scalar_4
+            @. ᶜinv_ρ̂ = specific(
+                FT(1),
+                Y.c.sgsʲs.:($$j).ρa,
+                FT(0),
+                ᶜρʲs.:($$j),
+                turbconv_model,
+            )
             # Sedimentation
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.
             sgs_microphysics_tracers = (
@@ -468,7 +465,10 @@ function edmfx_sgs_vertical_advection_tendency!(
                 @. ᶜqʲₜ += va
 
                 # Flux form sedimentation of tracers
-                vtt = updraft_sedimentation(
+                vtt = p.scratch.ᶜtemp_scalar_5
+                updraft_sedimentation!(
+                    vtt,
+                    p,
                     ᶜρʲs.:($j),
                     ᶜwʲ,
                     ᶜa,
@@ -491,11 +491,14 @@ function edmfx_sgs_vertical_advection_tendency!(
                 else
                     error("Unsupported moisture tracer variable")
                 end
-                vtt = updraft_sedimentation(
+                ᶜχ_lazy = @. lazy(ᶜqʲ * ᶜmse_li)
+                updraft_sedimentation!(
+                    vtt,
+                    p,
                     ᶜρʲs.:($j),
                     ᶜwʲ,
                     ᶜa,
-                    ᶜqʲ .* ᶜmse_li,
+                    ᶜχ_lazy,
                     ᶠJ,
                 )
                 @. Yₜ.c.sgsʲs.:($$j).mse +=
@@ -548,7 +551,10 @@ function edmfx_sgs_vertical_advection_tendency!(
                 @. ᶜχʲₜ += va
 
                 # Flux form sedimentation of tracers
-                vtt = updraft_sedimentation(
+                vtt = p.scratch.ᶜtemp_scalar_5
+                updraft_sedimentation!(
+                    vtt,
+                    p,
                     ᶜρʲs.:($j),
                     ᶜwʲ,
                     ᶜa,
@@ -565,40 +571,43 @@ function edmfx_sgs_vertical_advection_tendency!(
 end
 
 """
-    updraft_sedimentation(ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ)
+    updraft_sedimentation!(vtt, p, ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ)
 
-Compute the sedimentation tendency of tracer `χ` within an updraft, including lateral 
+Compute the sedimentation tendency of tracer `χ` within an updraft, including lateral
 detrainment when the updraft area increases with height.
 
 # Description
-Sedimenting particles fall with velocity `w` through an updraft of fractional area `a(z)`.  
-The vertical flux divergence gives a tendency of ``∂(ρ w a χ)/∂z``.  
-When `∂a/∂z > 0`, some sedimenting mass exits laterally through the expanding sides, 
-producing a detrainment tendency of ``-ρ w χ ∂a/∂z``.  
+Sedimenting particles fall with velocity `w` through an updraft of fractional area `a(z)`.
+The vertical flux divergence gives a tendency of ``∂(ρ w a χ)/∂z``.
+When `∂a/∂z > 0`, some sedimenting mass exits laterally through the expanding sides,
+producing a detrainment tendency of ``-ρ w χ ∂a/∂z``.
 The resulting net tendency in this case is ``a * ∂(ρ w χ)/∂z``.
 
 # Equation
-The lateral flux through the updraft side surface `S` within one grid column is  
-``F_side = ∫_S (ρ χ (w · n)) dS ≈ ρ χ (w · n) A_side,``  
-where `n` is the outward unit normal and `A_side` the side area.  
-For predominantly vertical sedimentation,  
-``w·n A_side ≈ w A_grid [a(z+Δz) - a(z)] = w A_grid Δa.``  
-Dividing by the grid column volume `A_grid·Δz` gives the flux divergence (tendency):  
-``tendency ≈ ρ χ w ∂a/∂z.``  
-A negative sign is applied to represent the loss (detrainment) from the updraft:  
+The lateral flux through the updraft side surface `S` within one grid column is
+``F_side = ∫_S (ρ χ (w · n)) dS ≈ ρ χ (w · n) A_side,``
+where `n` is the outward unit normal and `A_side` the side area.
+For predominantly vertical sedimentation,
+``w·n A_side ≈ w A_grid [a(z+Δz) - a(z)] = w A_grid Δa.``
+Dividing by the grid column volume `A_grid·Δz` gives the flux divergence (tendency):
+``tendency ≈ ρ χ w ∂a/∂z.``
+A negative sign is applied to represent the loss (detrainment) from the updraft:
 ``Dₛ = -ρ w χ ∂a/∂z.``
 
 # Arguments
-- `ᶜρ`: air density  
-- `ᶜw`: sedimentation velocity (positive downward)  
-- `ᶜa`: updraft area fraction  
-- `ᶜχ`: tracer mixing ratio  
+- `vtt` : output field
+- `p`: cache containing scratch spaces
+- `ᶜρ`: air density
+- `ᶜw`: sedimentation velocity (positive downward)
+- `ᶜa`: updraft area fraction
+- `ᶜχ`: tracer mixing ratio
 - `ᶠJ`: face Jacobian (grid geometry)
 
-# Returns
-Tracer tendency due to sedimentation and lateral detrainment.
+`vtt` gets filled with Tracer tendency due to sedimentation and lateral detrainment.
 """
-function updraft_sedimentation(
+function updraft_sedimentation!(
+    vtt,
+    p,
     ᶜρ,
     ᶜw,
     ᶜa,
@@ -606,18 +615,16 @@ function updraft_sedimentation(
     ᶠJ,
 )
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ∂a∂z = @. lazy(ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa))))
-    return @. lazy(
-        ifelse(
-            ∂a∂z < 0,
-            -(ᶜprecipdivᵥ(
-                ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(-(ᶜw)) * ᶜa * ᶜχ),
-            )),
-            -(
-                ᶜa * ᶜprecipdivᵥ(
-                    ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(-(ᶜw)) * ᶜχ),
-                )
-            ),
-        ),
+    # use output as a scratch field
+    ∂a∂z = vtt
+    @. ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
+    ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
+    ᶠwaχ = @. p.scratch.ᶠtemp_scalar_3 = ᶠright_bias(-(ᶜw) * ᶜa * ᶜχ)
+    ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠright_bias(-(ᶜw) * ᶜχ)
+    @. vtt = ifelse(
+        ∂a∂z < 0,
+        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ))),
+        -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))),
     )
+    return
 end

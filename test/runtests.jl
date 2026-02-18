@@ -33,6 +33,8 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Variable manipulations" begin @time include("variable_manipulations_tests.jl") end
     @safetestset "Parameter tests" begin @time include("parameter_tests.jl") end
 
+    @safetestset "Check TOML path" begin @time include("test_output_yaml_path.jl") end
+
     # Interface tests
     @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
     @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end

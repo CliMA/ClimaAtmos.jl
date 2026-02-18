@@ -503,13 +503,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     # Cache geometry-scaled density to reduce LocalGeometry field loads
     ᶜρJ = @. ᶜρ * ᶜJ
     @. ᶜadvection_matrix =
-        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρJ) / ᶠJ)
-
+        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
+    @. p.scratch.ᶠbidiagonal_matrix_ct3xct12 =
+        ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
     if use_derivative(topography_flag)
         ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
         @. ∂ᶜρ_err_∂ᶜuₕ =
-            dtγ * ᶜadvection_matrix ⋅ ᶠwinterp_matrix(ᶜρJ) ⋅
-            DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
+            dtγ * ᶜadvection_matrix ⋅ p.scratch.ᶠbidiagonal_matrix_ct3xct12
     end
     ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
     @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
@@ -524,7 +524,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
             @. ∂ᶜρχ_err_∂ᶜuₕ =
                 dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ)) ⋅
-                ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
+                p.scratch.ᶠbidiagonal_matrix_ct3xct12
         end
 
         ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
@@ -1534,7 +1534,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
                         ∂ᶜρχ_err_∂ᶠu₃ʲ =
                             matrix[ρχ_name, @name(f.sgsʲs.:(1).u₃)]
-                        # pull out and store in shmem for kernel performance
+                        # pull out and store in cache for kernel performance
                         @. p.scratch.ᶠtemp_CT3_2 = ᶠset_tracer_upwind_bcs(
                             ᶠtracer_upwind(CT3(sign(ᶠu³⁰_data)),
                                 ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰),
