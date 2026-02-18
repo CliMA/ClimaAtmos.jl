@@ -1596,6 +1596,69 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     microphysics_jacobian_diagonal(ᶜS_ρq_tot / ᶜρ, ᶜq_tot),
                 )
         end
+
+        # EDMF microphysics: diagonal entries for updraft variables
+        if p.atmos.turbconv_model isa PrognosticEDMFX
+            n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+            
+            # 1M EDMF
+            if p.atmos.moisture_model isa NonEquilMoistModel
+                (; ᶜSqₗᵐʲs, ᶜSqᵢᵐʲs, ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs) = p.precomputed
+                # 1M tracers in EDMF are specific humidities (q), not densities (ρq)
+                for j in 1:n
+                    # Manual tuple construction for subdomain j to ensure correct types/names
+                    tracers_j = (
+                         (Symbol("c.sgsʲs.:($j).q_liq"), ᶜSqₗᵐʲs.:($j)),
+                         (Symbol("c.sgsʲs.:($j).q_ice"), ᶜSqᵢᵐʲs.:($j)),
+                         (Symbol("c.sgsʲs.:($j).q_rai"), ᶜSqᵣᵐʲs.:($j)),
+                         (Symbol("c.sgsʲs.:($j).q_sno"), ᶜSqₛᵐʲs.:($j)),
+                    )
+                    
+                    for (q_name, ᶜSq) in tracers_j
+                        MatrixFields.has_field(Y, q_name) || continue
+                        q_field = MatrixFields.get_field(Y, q_name)
+                        ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
+                        @. ∂ᶜq_err_∂ᶜq +=
+                            dtγ * DiagonalMatrixRow(
+                                microphysics_jacobian_diagonal(ᶜSq, q_field),
+                            )
+                    end
+                end
+            end
+
+            # 0M EDMF
+            if p.atmos.microphysics_model isa Microphysics0Moment
+                 # Note: PrognosticEDMFX with 0M uses `ᶜSqₜᵐʲs` (total water tendency)
+                 # Check if ᶜSqₜᵐʲs exists in precomputed (it should)
+                 if hasproperty(p.precomputed, :ᶜSqₜᵐʲs)
+                    (; ᶜSqₜᵐʲs) = p.precomputed
+                    for j in 1:n
+                        # q_tot
+                        q_name = Symbol("c.sgsʲs.:($j).q_tot")
+                        if MatrixFields.has_field(Y, q_name)
+                            q_field = MatrixFields.get_field(Y, q_name)
+                            ᶜSq = ᶜSqₜᵐʲs.:($j)
+                            ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
+                            @. ∂ᶜq_err_∂ᶜq +=
+                                dtγ * DiagonalMatrixRow(
+                                    microphysics_jacobian_diagonal(ᶜSq, q_field),
+                                )
+                        end
+
+                        # ρa (area density)
+                        # ∂(ρa)/∂t = ... + ρa * Sq
+                        # Diagonal element: Sq
+                        ρa_name = Symbol("c.sgsʲs.:($j).ρa")
+                        if MatrixFields.has_field(Y, ρa_name)
+                            ᶜSq = ᶜSqₜᵐʲs.:($j)
+                            ∂ᶜρa_err_∂ᶜρa = matrix[ρa_name, ρa_name]
+                            @. ∂ᶜρa_err_∂ᶜρa +=
+                                dtγ * DiagonalMatrixRow(ᶜSq)
+                        end
+                    end
+                 end
+            end
+        end
     end
 
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
