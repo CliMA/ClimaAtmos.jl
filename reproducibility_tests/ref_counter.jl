@@ -1,4 +1,4 @@
-314
+315
 
 # **README**
 #
@@ -20,29 +20,33 @@
 
 
 #=
+
+315
+- Reduce t_end of several jobs
+
 314
- - PEDMF: precompute sgs buoyancy; apply edmf filter as a callback; mix unphysical sgs with grid mean
+- PEDMF: precompute sgs buoyancy; apply edmf filter as a callback; mix unphysical sgs with grid mean
 
 313
- - Change microphysics to using bulk microphysics tendencies, with limiters on total 
+- Change microphysics to using bulk microphysics tendencies, with limiters on total 
    tendencies (rather than individual species tendencies).
- - Change cloud fraction calculation to Sommeria-Deardorff moment-based approach, which 
+- Change cloud fraction calculation to Sommeria-Deardorff moment-based approach, which 
    underestimates cloud fraction without microphysics quadratures.  
 
 312
- - Relax entr/detr limits for prognostic EDMF when entr/detr is treated implicitly
+- Relax entr/detr limits for prognostic EDMF when entr/detr is treated implicitly
 
 311
- - Update from Thermodynamics 0.15.7 to 0.15.8
+- Update from Thermodynamics 0.15.7 to 0.15.8
 
 310
- - Update RCEMIPII CRM box test and sponge tendencies.
+- Update RCEMIPII CRM box test and sponge tendencies.
 
 309
- - Stabilize prognostic-EDMF nightly build with reduced hyperdiff Prandtl number.
+- Stabilize prognostic-EDMF nightly build with reduced hyperdiff Prandtl number.
 
 308
- - PEDMF bugfix: return entr_detr_lim_tau for entr at the boundary when area fraction is negative
+- PEDMF bugfix: return entr_detr_lim_tau for entr at the boundary when area fraction is negative
 
 307
 - Update to Insolation v1.1, with a small change in clipping of solar zenith angle.
