@@ -6,6 +6,7 @@ dt_save_state_to_disk: "24hours"
 vert_diff: "DecayWithHeightDiffusion"
 moist: "nonequil"
 precip_model: "1M"
+use_sgs_quadrature: false
 rad: "allskywithclear"
 aerosol_radiation: true
 prescribe_clouds_in_radiation: true

@@ -33,6 +33,7 @@ import ..NonEquilMoistModel
 # microphysics_model
 import ..NoPrecipitation
 import ..Microphysics0Moment
+import ..QuadratureMicrophysics
 import ..Microphysics1Moment
 import ..Microphysics2Moment
 import ..Microphysics2MomentP3
@@ -59,7 +60,7 @@ import ..SlabOceanSST
 # functions used to calculate diagnostics
 import ..draft_area
 import ..compute_gm_mixing_length
-import ..compute_covariance
+
 import ..horizontal_integral_at_boundary
 import ..ᶜmixing_length
 import ..eddy_diffusivity
@@ -70,6 +71,7 @@ import ..ᶜcompute_eddy_diffusivity_coefficient
 import ..ρa⁰
 import ..specific
 import ..ᶜspecific_env_value
+import ..correlation_Tq
 
 
 # We need the abbreviations for symbols like curl, grad, and so on
