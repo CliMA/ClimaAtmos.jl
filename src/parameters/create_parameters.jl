@@ -159,8 +159,8 @@ atmos_name_map = (;
     :tracer_hyperdiffusion_factor => :α_hyperdiff_tracer,
     :tracer_vertical_diffusion_factor => :α_vert_diff_tracer,
     :D_horizontal_diffusion => :constant_horizontal_diffusion_D,
-    :temperature_minimum => :T_min,
-    :specific_humidity_maximum => :q_max,
+    :temperature_minimum => :T_min_sgs,
+    :specific_humidity_maximum => :q_max_sgs,
 )
 
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =

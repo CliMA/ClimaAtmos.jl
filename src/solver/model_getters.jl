@@ -352,8 +352,8 @@ function get_microphysics_model(parsed_args, params = nothing)
         distribution = get_sgs_distribution(parsed_args)
         quadrature_order = get(parsed_args, "quadrature_order", 2)
         # Read T_min and q_max from ClimaParams when available
-        T_min = isnothing(params) ? FT(150) : FT(CAP.T_min(params))
-        q_max = isnothing(params) ? FT(0.1) : FT(CAP.q_max(params))
+        T_min = isnothing(params) ? FT(150) : FT(CAP.T_min_sgs(params))
+        q_max = isnothing(params) ? FT(0.1) : FT(CAP.q_max_sgs(params))
         return QuadratureMicrophysics(
             base_scheme;
             FT,

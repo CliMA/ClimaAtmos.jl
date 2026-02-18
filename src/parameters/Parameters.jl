@@ -129,8 +129,8 @@ Base.@kwdef struct ClimaAtmosParameters{
     # Constant horizontal diffusion
     constant_horizontal_diffusion_D::FT
     # SGS quadrature bounds
-    T_min::FT
-    q_max::FT
+    T_min_sgs::FT
+    q_max_sgs::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
@@ -144,11 +144,7 @@ for fn in fieldnames(TCPS)
     @eval $(fn)(ps::ATCP) = ps.$(fn)
 end
 
-# Forward Thermodynamics parameters (exclude T_min to avoid clash with
-# the ClimaAtmosParameters.T_min field used for SGS quadrature bounds;
-# the Thermodynamics T_min is available as TD.TP.T_min_ref instead)
 for var in fieldnames(TD.Parameters.ThermodynamicsParameters)
-    var === :T_min && continue
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
 end
 # Thermodynamics derived parameters
