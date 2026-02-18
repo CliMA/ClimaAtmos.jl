@@ -25,7 +25,7 @@ x_elem: 2
 y_elem: 2
 z_elem: 86
 dz_bottom: 30.0
-z_stretch: false
+z_stretch: true
 perturb_initstate: false
 dt: "5secs"
 # t_end: "24hours"
