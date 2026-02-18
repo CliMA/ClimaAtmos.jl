@@ -27,6 +27,47 @@ Struct used for dispatch to the 2-moment warm rain + P3 ice microphysics paramet
 struct Microphysics2MomentP3 <: AbstractPrecipitationModel end
 
 """
+    QuadratureMicrophysics{M <: AbstractPrecipitationModel, Q} <: AbstractPrecipitationModel
+
+Wrapper for microphysics models that enables SGS quadrature integration of microphysics
+tendencies over subgrid-scale temperature and moisture fluctuations.
+
+# Fields
+- `base_model::M`: The underlying microphysics model (e.g., `Microphysics1Moment()`)
+- `quadrature::Q`: SGS quadrature configuration (`SGSQuadrature`)
+"""
+struct QuadratureMicrophysics{M <: AbstractPrecipitationModel, Q} <:
+       AbstractPrecipitationModel
+    base_model::M
+    quadrature::Q
+end
+
+"""
+    QuadratureMicrophysics(base_model; FT=Float32, distribution=GaussianSGS(),
+        quadrature_order=3, T_min=FT(150), q_max=FT(0.1))
+
+Create a `QuadratureMicrophysics` wrapper with default SGSQuadrature settings.
+
+For grid-mean-only evaluation (no SGS sampling), use `distribution=GridMeanSGS()`.
+
+Physical bounds on sampled values:
+- `T_min`: minimum sampled temperature [K] (prevents `log(T<0)` in saturation)
+- `q_max`: maximum sampled specific humidity [kg/kg] (prevents extreme
+  supersaturation from driving unphysically low temperatures)
+"""
+function QuadratureMicrophysics(
+    base_model::M;
+    FT::Type = Float32,
+    distribution = GaussianSGS(),
+    quadrature_order = 3,
+    T_min = FT(150),
+    q_max = FT(0.1),
+) where {M <: AbstractPrecipitationModel}
+    quad = SGSQuadrature(FT; quadrature_order, distribution, T_min, q_max)
+    return QuadratureMicrophysics(base_model, quad)
+end
+
+"""
     TracerNonnegativityMethod
 
 Family of methods for enforcing tracer nonnegativity. 
@@ -103,24 +144,7 @@ Use the mean value.
 """
 struct SGSMean <: AbstractSGSamplingType end
 
-"""
-    SGSQuadrature
 
-Compute the mean as a weighted sum of the Gauss-Hermite quadrature points.
-"""
-struct SGSQuadrature{N, A, W} <: AbstractSGSamplingType
-    a::A  # values
-    w::W  # weights
-    function SGSQuadrature(::Type{FT}; quadrature_order = 3) where {FT}
-        N = quadrature_order
-        # TODO: double check this python-> julia translation
-        # a, w = np.polynomial.hermite.hermgauss(N)
-        a, w = GQ.hermite(FT, N)
-        a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-        return new{N, typeof(a), typeof(w)}(a, w)
-    end
-end
-quadrature_order(::SGSQuadrature{N}) where {N} = N
 
 """
     AbstractCloudModel
@@ -139,27 +163,23 @@ struct GridScaleCloud <: AbstractCloudModel end
 """
     QuadratureCloud
 
-Compute the cloud fraction by sampling over the quadrature points.
+Compute the cloud fraction using Sommeria-Deardorff moment matching.
 """
-struct QuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
-    SG_quad::SGQ
-end
+struct QuadratureCloud <: AbstractCloudModel end
 
 
 """
     MLCloud
 
-Compute the cloud fraction using a machine learning model. Continue to use
-quadrature sampling for sub-grid variability of q_liq, q_ice.
+Compute the cloud fraction using a machine learning model.
 """
-struct MLCloud{SGQ <: AbstractSGSamplingType, M} <: AbstractCloudModel
-    SG_quad::SGQ
+struct MLCloud{M} <: AbstractCloudModel
     model::M
 end
 
-function MLCloud_constructor(SG_quad, model)
+function MLCloud_constructor(model)
     static_model = Adapt.adapt_structure(SA.SArray, model)
-    return MLCloud{typeof(SG_quad), typeof(static_model)}(SG_quad, static_model)
+    return MLCloud{typeof(static_model)}(static_model)
 end
 
 abstract type AbstractSST end
@@ -877,12 +897,11 @@ end
 
 Groups moisture-related models and types.
 """
-@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS, TNM}
+@kwdef struct AtmosWater{MM, PM, CM, MTTS, TNM}
     moisture_model::MM = DryModel()
     microphysics_model::PM = NoPrecipitation()
-    cloud_model::CM = QuadratureCloud(SGSQuadrature(Float32))
-    noneq_cloud_formation_mode::NCFM = nothing
-    call_cloud_diagnostics_per_stage::CCDPS = nothing
+    cloud_model::CM = QuadratureCloud()
+    microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
 end
 
@@ -1082,8 +1101,8 @@ The default AtmosModel provides:
 - `moisture_model`: DryModel(), EquilMoistModel(), NonEquilMoistModel()
 - `microphysics_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
 - `cloud_model`: GridScaleCloud(), QuadratureCloud()
-- `noneq_cloud_formation_mode`: Explicit(), Implicit()
-- `call_cloud_diagnostics_per_stage`: nothing or CallCloudDiagnosticsPerStage()
+- `microphysics_tendency_timestepping`: Explicit(), Implicit()
+
 
 ## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
 Internal testing and calibration components for single-column setups:
@@ -1313,7 +1332,7 @@ function NonEquilMoistAtmosModel(; kwargs...)
     defaults = (
         moisture_model = NonEquilMoistModel(),
         microphysics_model = Microphysics1Moment(),
-        noneq_cloud_formation_mode = Explicit(),
+        microphysics_tendency_timestepping = Explicit(),
     )
     return AtmosModel(; defaults..., kwargs...)
 end

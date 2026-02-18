@@ -252,9 +252,9 @@ add_diagnostic_variable!(
     units = "%",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(cache.precomputed.cloud_diagnostics_tuple.cf) .* 100
+            return copy(cache.precomputed.ᶜcloud_fraction) .* 100
         else
-            out .= cache.precomputed.cloud_diagnostics_tuple.cf .* 100
+            out .= cache.precomputed.ᶜcloud_fraction .* 100
         end
     end,
 )
@@ -494,9 +494,9 @@ function compute_clw!(
     moisture_model::EquilMoistModel,
 )
     if isnothing(out)
-        return copy(cache.precomputed.cloud_diagnostics_tuple.q_liq)
+        return copy(cache.precomputed.ᶜq_liq_rai)
     else
-        out .= cache.precomputed.cloud_diagnostics_tuple.q_liq
+        out .= cache.precomputed.ᶜq_liq_rai
     end
 end
 
@@ -543,9 +543,9 @@ function compute_cli!(
     moisture_model::EquilMoistModel,
 )
     if isnothing(out)
-        return copy(cache.precomputed.cloud_diagnostics_tuple.q_ice)
+        return copy(cache.precomputed.ᶜq_ice_sno)
     else
-        out .= cache.precomputed.cloud_diagnostics_tuple.q_ice
+        out .= cache.precomputed.ᶜq_ice_sno
     end
 end
 
@@ -902,9 +902,13 @@ function compute_pr!(
     microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
+        QuadratureMicrophysics{Microphysics0Moment},
         Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
         Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
         Microphysics2MomentP3,
+        QuadratureMicrophysics{Microphysics2MomentP3},
     },
 )
     if isnothing(out)
@@ -939,9 +943,13 @@ function compute_prra!(
     microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
+        QuadratureMicrophysics{Microphysics0Moment},
         Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
         Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
         Microphysics2MomentP3,
+        QuadratureMicrophysics{Microphysics2MomentP3},
     },
 )
     if isnothing(out)
@@ -973,9 +981,13 @@ function compute_prsn!(
     microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
+        QuadratureMicrophysics{Microphysics0Moment},
         Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
         Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
         Microphysics2MomentP3,
+        QuadratureMicrophysics{Microphysics2MomentP3},
     },
 )
     if isnothing(out)
@@ -1008,7 +1020,12 @@ function compute_husra!(
     cache,
     time,
     microphysics_model::Union{
-        Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3,
+        Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+        Microphysics2MomentP3,
+        QuadratureMicrophysics{Microphysics2MomentP3},
     },
 )
     if isnothing(out)
@@ -1041,7 +1058,12 @@ function compute_hussn!(
     cache,
     time,
     microphysics_model::Union{
-        Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3,
+        Microphysics1Moment,
+        QuadratureMicrophysics{Microphysics1Moment},
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+        Microphysics2MomentP3,
+        QuadratureMicrophysics{Microphysics2MomentP3},
     },
 )
     if isnothing(out)
@@ -1073,7 +1095,12 @@ function compute_cdnc!(
     state,
     cache,
     time,
-    microphysics_model::Union{Microphysics2Moment, Microphysics2MomentP3},
+    microphysics_model::Union{
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+        Microphysics2MomentP3,
+        QuadratureMicrophysics{Microphysics2MomentP3},
+    },
 )
     if isnothing(out)
         return state.c.ρn_liq
@@ -1104,7 +1131,12 @@ function compute_ncra!(
     state,
     cache,
     time,
-    microphysics_model::Union{Microphysics2Moment, Microphysics2MomentP3},
+    microphysics_model::Union{
+        Microphysics2Moment,
+        QuadratureMicrophysics{Microphysics2Moment},
+        Microphysics2MomentP3,
+        QuadratureMicrophysics{Microphysics2MomentP3},
+    },
 )
     if isnothing(out)
         return state.c.ρn_rai
@@ -1179,8 +1211,8 @@ function compute_clwvi!(
         clw = cache.scratch.ᶜtemp_scalar
         @. clw =
             state.c.ρ * (
-                cache.precomputed.cloud_diagnostics_tuple.q_liq +
-                cache.precomputed.cloud_diagnostics_tuple.q_ice
+                cache.precomputed.ᶜq_liq_rai +
+                cache.precomputed.ᶜq_ice_sno
             )
         Operators.column_integral_definite!(out, clw)
         return out
@@ -1188,8 +1220,8 @@ function compute_clwvi!(
         clw = cache.scratch.ᶜtemp_scalar
         @. clw =
             state.c.ρ * (
-                cache.precomputed.cloud_diagnostics_tuple.q_liq +
-                cache.precomputed.cloud_diagnostics_tuple.q_ice
+                cache.precomputed.ᶜq_liq_rai +
+                cache.precomputed.ᶜq_ice_sno
             )
         Operators.column_integral_definite!(out, clw)
     end
@@ -1245,12 +1277,12 @@ function compute_lwp!(
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         lw = cache.scratch.ᶜtemp_scalar
-        @. lw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+        @. lw = state.c.ρ * cache.precomputed.ᶜq_liq_rai
         Operators.column_integral_definite!(out, lw)
         return out
     else
         lw = cache.scratch.ᶜtemp_scalar
-        @. lw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+        @. lw = state.c.ρ * cache.precomputed.ᶜq_liq_rai
         Operators.column_integral_definite!(out, lw)
     end
 end
@@ -1305,12 +1337,12 @@ function compute_clivi!(
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         cli = cache.scratch.ᶜtemp_scalar
-        @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+        @. cli = state.c.ρ * cache.precomputed.ᶜq_ice_sno
         Operators.column_integral_definite!(out, cli)
         return out
     else
         cli = cache.scratch.ᶜtemp_scalar
-        @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+        @. cli = state.c.ρ * cache.precomputed.ᶜq_ice_sno
         Operators.column_integral_definite!(out, cli)
     end
 end
@@ -1378,7 +1410,7 @@ function compute_clvi!(
         cloud_cover = cache.scratch.ᶜtemp_scalar
         FT = Spaces.undertype(axes(cloud_cover))
         @. cloud_cover = ifelse(
-            cache.precomputed.cloud_diagnostics_tuple.cf > zero(FT),
+            cache.precomputed.ᶜcloud_fraction > zero(FT),
             one(FT),
             zero(FT),
         )
@@ -1388,7 +1420,7 @@ function compute_clvi!(
         cloud_cover = cache.scratch.ᶜtemp_scalar
         FT = Spaces.undertype(axes(cloud_cover))
         @. cloud_cover = ifelse(
-            cache.precomputed.cloud_diagnostics_tuple.cf > zero(FT),
+            cache.precomputed.ᶜcloud_fraction > zero(FT),
             one(FT),
             zero(FT),
         )
@@ -1817,23 +1849,22 @@ add_diagnostic_variable!(
 function compute_covariance_diagnostics!(out, state, cache, time, type)
     thermo_params = CAP.thermodynamics_params(cache.params)
 
-    # Reuse central compute_covariance function
-    (ᶜq′q′, ᶜθ′θ′, ᶜθ′q′) = compute_covariance(
-        state, cache, thermo_params,
-    )
+    # Read T-based variances from cache
+    (; ᶜT′T′, ᶜq′q′) = cache.precomputed
 
     result = if type == :qt_qt
         ᶜq′q′
-    elseif type == :tht_tht
-        ᶜθ′θ′
-    elseif type == :qt_tht
-        ᶜθ′q′
+    elseif type == :T_T
+        ᶜT′T′
+    elseif type == :T_qt
+        corr = correlation_Tq(cache.params)
+        @. corr * sqrt(max(0, ᶜT′T′)) * sqrt(max(0, ᶜq′q′))
     else
         error("Unknown variance type")
     end
 
     if isnothing(out)
-        return Base.materialize(result)
+        return copy(result)
     else
         out .= result
     end
@@ -1841,10 +1872,19 @@ end
 
 compute_env_q_tot_variance!(out, state, cache, time) =
     compute_covariance_diagnostics!(out, state, cache, time, :qt_qt)
-compute_env_theta_liq_ice_variance!(out, state, cache, time) =
-    compute_covariance_diagnostics!(out, state, cache, time, :tht_tht)
-compute_env_q_tot_theta_liq_ice_covariance!(out, state, cache, time) =
-    compute_covariance_diagnostics!(out, state, cache, time, :qt_tht)
+compute_env_temperature_variance!(out, state, cache, time) =
+    compute_covariance_diagnostics!(out, state, cache, time, :T_T)
+compute_env_q_tot_temperature_covariance!(out, state, cache, time) =
+    compute_covariance_diagnostics!(out, state, cache, time, :T_qt)
+
+function compute_env_q_tot_temperature_correlation!(out, state, cache, time)
+    corr = correlation_Tq(cache.params)
+    if isnothing(out)
+        return fill(corr, axes(state.c))
+    else
+        out .= corr
+    end
+end
 
 add_diagnostic_variable!(
     short_name = "env_q_tot_variance",
@@ -1854,15 +1894,22 @@ add_diagnostic_variable!(
 )
 
 add_diagnostic_variable!(
-    short_name = "env_theta_liq_ice_variance",
-    long_name = "Environment Variance of Liquid Ice Potential Temperature",
+    short_name = "env_temperature_variance",
+    long_name = "Environment Variance of Temperature",
     units = "K^2",
-    compute! = compute_env_theta_liq_ice_variance!,
+    compute! = compute_env_temperature_variance!,
 )
 
 add_diagnostic_variable!(
-    short_name = "env_q_tot_theta_liq_ice_covariance",
-    long_name = "Environment Covariance of Total Specific Humidity and Liquid Ice Potential Temperature",
-    units = "kg kg^-1 K",
-    compute! = compute_env_q_tot_theta_liq_ice_covariance!,
+    short_name = "env_q_tot_temperature_covariance",
+    long_name = "Environment Covariance of Total Specific Humidity and Temperature",
+    units = "kg K kg^-1",
+    compute! = compute_env_q_tot_temperature_covariance!,
+)
+
+add_diagnostic_variable!(
+    short_name = "env_q_tot_temperature_correlation",
+    long_name = "Environment Correlation of Total Specific Humidity and Temperature",
+    units = "1",
+    compute! = compute_env_q_tot_temperature_correlation!,
 )

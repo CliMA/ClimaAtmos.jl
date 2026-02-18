@@ -10,16 +10,8 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
-    if p.atmos.noneq_cloud_formation_mode == Implicit()
-        cloud_condensate_tendency!(
-            Yₜ,
-            Y,
-            p,
-            p.atmos.moisture_model,
-            p.atmos.microphysics_model,
-            p.atmos.turbconv_model,
-        )
-    end
+    # TODO: Needs to be updated to use the new microphysics 
+    # tendency function with quadrature if implicit_microphysics is true
 
     if p.atmos.sgs_adv_mode == Implicit()
         edmfx_sgs_vertical_advection_tendency!(
@@ -145,7 +137,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
-    if microphysics_model isa Microphysics1Moment
+    if microphysics_model isa
+       Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
@@ -158,7 +151,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
-    if microphysics_model isa Microphysics2Moment
+    if microphysics_model isa
+       Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
         (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(

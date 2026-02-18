@@ -21,3 +21,6 @@ value = 0
 
 [max_area_limiter_scale]
 value = 0
+
+[Tq_correlation_coefficient]
+value = 0.6

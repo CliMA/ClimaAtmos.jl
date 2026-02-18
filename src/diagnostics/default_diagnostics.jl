@@ -300,7 +300,7 @@ end
 # Precipitation model #
 #######################
 function default_diagnostics(
-    ::Microphysics0Moment,
+    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
     duration,
     start_date,
     t_start;
@@ -311,7 +311,7 @@ function default_diagnostics(
 end
 
 function default_diagnostics(
-    ::Microphysics1Moment,
+    ::Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}},
     duration,
     start_date,
     t_start;
@@ -325,7 +325,7 @@ function default_diagnostics(
 end
 
 function default_diagnostics(
-    ::Microphysics2Moment,
+    ::Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}},
     duration,
     start_date,
     t_start;
