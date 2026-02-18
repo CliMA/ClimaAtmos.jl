@@ -1556,6 +1556,48 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         end
     end
 
+    # Microphysics diagonal Jacobian entries
+    if p.atmos.microphysics_tendency_timestepping == Implicit()
+        ᶜρ = Y.c.ρ
+
+        # 1M microphysics: diagonal entries for ρq_liq, ρq_ice, ρq_rai, ρq_sno
+        if p.atmos.moisture_model isa NonEquilMoistModel
+            (; ᶜSqₗᵐ, ᶜSqᵢᵐ, ᶜSqᵣᵐ, ᶜSqₛᵐ) = p.precomputed
+            microphysics_1m_tracers = (
+                (@name(c.ρq_liq), ᶜSqₗᵐ),
+                (@name(c.ρq_ice), ᶜSqᵢᵐ),
+                (@name(c.ρq_rai), ᶜSqᵣᵐ),
+                (@name(c.ρq_sno), ᶜSqₛᵐ),
+            )
+            MatrixFields.unrolled_foreach(
+                microphysics_1m_tracers,
+            ) do (ρχ_name, ᶜSq)
+                MatrixFields.has_field(Y, ρχ_name) || return
+                ρχ_field = MatrixFields.get_field(Y, ρχ_name)
+                ᶜq = @. lazy(specific(ρχ_field, ᶜρ))
+                ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+                @. ∂ᶜρχ_err_∂ᶜρχ +=
+                    dtγ * DiagonalMatrixRow(
+                        microphysics_jacobian_diagonal(ᶜSq, ᶜq),
+                    )
+            end
+        end
+
+        # 0M microphysics: diagonal entry for ρq_tot
+        if p.atmos.moisture_model isa EquilMoistModel &&
+           MatrixFields.has_field(Y, @name(c.ρq_tot))
+            (; ᶜS_ρq_tot) = p.precomputed
+            ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+            ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, ᶜρ))
+            # ᶜS_ρq_tot is the density-scaled tendency (≡ ρ·Sq),
+            # so the specific tendency is ᶜS_ρq_tot / ρ.
+            @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
+                dtγ * DiagonalMatrixRow(
+                    microphysics_jacobian_diagonal(ᶜS_ρq_tot / ᶜρ, ᶜq_tot),
+                )
+        end
+    end
+
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
     zero_velocity_jacobian!(matrix, Y, p, t)
 end
