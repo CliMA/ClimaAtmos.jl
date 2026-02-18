@@ -28,7 +28,7 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
-      - uses: julia-actions/julia-downgrade-compat@v1
+      - uses: julia-actions/julia-downgrade-compat@v2
         with:
           skip: Artifacts, Dates, LazyArtifacts, LinearAlgebra, Logging, Printf, Test, Statistics, Random, Pkg
       - uses: julia-actions/julia-buildpkg@latest
