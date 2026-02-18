@@ -76,10 +76,6 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜ∇Φ₃
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
         ᶜtemp_CT123 = Fields.Field(CT123{FT}, center_space),
-        ᶜtemp_CT3xCT12 = Fields.Field(
-            typeof(zero(C3{FT}) * zero(CT12{FT})'),
-            center_space,
-        ), # ᶜg³ʰ
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
         ᶠtemp_CT3_2 = Fields.Field(CT3{FT}, face_space),
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
