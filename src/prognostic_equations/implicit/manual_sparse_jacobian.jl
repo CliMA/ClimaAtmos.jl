@@ -474,10 +474,14 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ᶠu₃ = Y.f.u₃
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
-    ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
-    ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
     ᶠz = Fields.coordinate_field(Y.f).z
     zmax = z_max(axes(Y.f))
+
+    # Cache geometry sub-tensors to avoid passing full LocalGeometry into kernels.
+    ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
+    ᶜg³ʰ = p.scratch.ᶜtemp_CT3xCT12
+    @. ᶜg³ʰ = g³ʰ(ᶜgⁱʲ)
+    ᶠg³³ = g³³_field(axes(Y.f))
 
     ᶜkappa_m = p.scratch.ᶜtemp_scalar
     @. ᶜkappa_m =
@@ -489,7 +493,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     if use_derivative(topography_flag)
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
-            adjoint(CT12(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ),
+            adjoint(CT12(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * ᶜg³ʰ,
         )
     else
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CT12(ᶜuₕ)))
@@ -505,14 +509,14 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     @. ᶜadvection_matrix =
         -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρJ) / ᶠJ)
     @. p.scratch.ᶠbidiagonal_matrix_ct3xct12 =
-        ᶠwinterp_matrix(ᶜρJ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
+        ᶠwinterp_matrix(ᶜρJ) ⋅ DiagonalMatrixRow(ᶜg³ʰ)
     if use_derivative(topography_flag)
         ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
         @. ∂ᶜρ_err_∂ᶜuₕ =
             dtγ * ᶜadvection_matrix ⋅ p.scratch.ᶠbidiagonal_matrix_ct3xct12
     end
     ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
-    @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+    @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠg³³)
 
     tracer_info = (@name(c.ρe_tot), @name(c.ρq_tot))
 
@@ -529,7 +533,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
         ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
         @. ∂ᶜρχ_err_∂ᶠu₃ =
-            dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
+            dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ) * ᶠg³³)
     end
 
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
@@ -888,7 +892,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ) * adjoint(C3(sign(ᶠu³ʲ_data))),
                 ) + DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot) ⋅ ᶜadvdivᵥ_matrix()
             @. ∂ᶜq_totʲ_err_∂ᶠu₃ʲ =
-                dtγ * p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+                dtγ * p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ DiagonalMatrixRow(ᶠg³³)
 
             ∂ᶜmseʲ_err_∂ᶜmseʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
@@ -913,7 +917,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ) * adjoint(C3(sign(ᶠu³ʲ_data))),
                 ) + DiagonalMatrixRow(Y.c.sgsʲs.:(1).mse) ⋅ ᶜadvdivᵥ_matrix()
             @. ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
-                dtγ * p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+                dtγ * p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ DiagonalMatrixRow(ᶠg³³)
 
             ∂ᶜρaʲ_err_∂ᶜρaʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).ρa)]
@@ -937,7 +941,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ),
                     ) *
                     adjoint(C3(sign(ᶠu³ʲ_data))) *
-                    g³³(ᶠgⁱʲ),
+                    ᶠg³³,
                 )
 
             # contribution of ρʲ variations in vertical transport of ρa and updraft buoyancy eq
@@ -1122,7 +1126,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             -
                             ᶜtracer_advection_matrix)
                     @. ∂ᶜχʲ_err_∂ᶠu₃ʲ =
-                        ᶜtracer_advection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+                        ᶜtracer_advection_matrix ⋅ DiagonalMatrixRow(ᶠg³³)
 
                     # sedimentation
                     # (pull out common subexpression for performance)
@@ -1350,7 +1354,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶜρʲs.:(1) *
                             ᶜJ *
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                        ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+                        ) / ᶠJ * (ᶠg³³),
                     )
 
                 ∂ᶜρe_tot_err_∂ᶠu₃ʲ =
@@ -1362,7 +1366,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶜρʲs.:(1) *
                             ᶜJ *
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                        ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+                        ) / ᶠJ * (ᶠg³³),
                     )
 
                 @. p.scratch.ᶠdiagonal_matrix_ct3xct3 = DiagonalMatrixRow(
@@ -1371,7 +1375,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ᶜρʲs.:(1) *
                         ᶜJ *
                         draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                    ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+                    ) / ᶠJ * (ᶠg³³),
                 )
 
                 ∂ᶜρq_tot_err_∂ᶠu₃ = matrix[@name(c.ρq_tot), @name(f.u₃)]
@@ -1462,7 +1466,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)) * ᶜχʲ,
                                         ),
                                     ) * adjoint(C3(sign(ᶠu³ʲ_data))),
-                                )) ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+                                )) ⋅ DiagonalMatrixRow(ᶠg³³)
 
                     end
 
@@ -1544,7 +1548,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             dtγ * ᶜtracer_advection_matrix ⋅
                             DiagonalMatrixRow(
                                 p.scratch.ᶠtemp_CT3_2 * adjoint(C3(sign(ᶠu³⁰_data))) *
-                                ᶠinterp(-1 * Y.c.sgsʲs.:(1).ρa / ᶜρa⁰) * g³³(ᶠgⁱʲ),
+                                ᶠinterp(-1 * Y.c.sgsʲs.:(1).ρa / ᶜρa⁰) * ᶠg³³,
                             )
 
                         ∂ᶜρχ_err_∂ᶜρχ =
@@ -1564,7 +1568,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                                         ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰),
                                     ),
                                 ) * adjoint(C3(sign(ᶠu³⁰_data))) *
-                                ᶠinterp(Y.c.ρ / ᶜρa⁰) * g³³(ᶠgⁱʲ),
+                                ᶠinterp(Y.c.ρ / ᶜρa⁰) * ᶠg³³,
                             )
                     end
                 end
