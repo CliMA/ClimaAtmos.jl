@@ -173,12 +173,12 @@ function entrainment(
 
     entr_param_vec = CAP.entr_param_vec(turbconv_params)
     pi_sum =
-        entr_param_vec[1] * abs(Π₁) +
-        entr_param_vec[2] * abs(Π₂) +
-        entr_param_vec[3] * abs(Π₃) +
-        entr_param_vec[4] * abs(Π₄) +
-        entr_param_vec[5] * abs(Π₅) +
-        entr_param_vec[6]
+        #entr_param_vec[1] * abs(Π₁) +
+        entr_param_vec[1] * abs(Π₂) +
+        entr_param_vec[2] * abs(Π₃) +
+        #entr_param_vec[4] * abs(Π₄) +
+        #entr_param_vec[5] * abs(Π₅) +
+        entr_param_vec[3]
 
     inv_timescale_factor = abs(ᶜwʲ - ᶜw⁰) / elev_above_sfc
 
