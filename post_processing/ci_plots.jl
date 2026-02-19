@@ -1053,7 +1053,6 @@ AquaplanetPlots = Union{
     Val{:edonly_edmfx_aquaplanet},
     Val{:mpi_sphere_aquaplanet_rhoe_equil_clearsky},
     Val{:aquaplanet_equil_allsky_gw_raw},
-    Val{:aquaplanet_nonequil_allsky_gw_res},
     Val{:aquaplanet_nonequil_allsky_gw_res_2M},
     Val{:rcemipii_sphere_diagnostic_edmfx},
     Val{:longrun_aquaplanet_allsky_0M},

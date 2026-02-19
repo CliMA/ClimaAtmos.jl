@@ -26,7 +26,7 @@ reference_job_id = Val(:les_box)  # for plotting
 output_dir = nothing  # customize if desired
 FT = Float32
 
-t_end = "10hours"
+t_end = "4hours"
 
 ##### RCE-small #####
 x_max = y_max = 96_000

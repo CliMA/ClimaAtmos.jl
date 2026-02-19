@@ -11,7 +11,7 @@ y_elem: 45
 z_elem: 45
 z_stretch: false
 dt: "0.25secs"
-t_end: "20secs"
+t_end: "10secs"
 dt_save_state_to_disk: "5secs"
 disable_surface_flux_tendency: true
 netcdf_interpolation_num_points: [40, 40, 80]

@@ -3,7 +3,7 @@ dt_save_state_to_disk: "2days"
 reproducibility_test: true
 initial_condition: "MoistBaroclinicWave"
 dt: "450secs"
-t_end: "10days"
+t_end: "6days"
 moist: "equil"
 disable_surface_flux_tendency: true
 diagnostics:
