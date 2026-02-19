@@ -10,7 +10,7 @@ so the contribution is suppressed to prevent Newton-solver divergence.
 """
 @inline function microphysics_jacobian_diagonal(Sq, q)
     FT = typeof(Sq)
-    q_threshold = ϵ_numerics(FT))
+    q_threshold = ϵ_numerics(FT)
 
     return ifelse(abs(q) > q_threshold, Sq / abs(q), zero(Sq))
 end
