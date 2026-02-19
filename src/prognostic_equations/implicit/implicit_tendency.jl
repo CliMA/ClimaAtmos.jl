@@ -28,6 +28,19 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             p.atmos.microphysics_model,
             p.atmos.turbconv_model,
         )
+        # Apply surface precipitation tendency here alongside atmospheric
+        # removal so both sides of the water/energy budget use the same
+        # cached ᶜS_ρq_tot. Placing the deposition in T_exp would cause
+        # an IMEX stage mismatch (T_imp sees stale ᶜS_ρq_tot, T_exp sees
+        # fresh one), breaking conservation.
+        surface_precipitation_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.surface_model,
+            p.atmos.moisture_model,
+        )
     end
 
     if p.atmos.sgs_adv_mode == Implicit()

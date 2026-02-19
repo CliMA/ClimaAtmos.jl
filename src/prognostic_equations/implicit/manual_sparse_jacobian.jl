@@ -1590,12 +1590,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
            MatrixFields.has_field(Y, @name(c.ρq_tot))
             (; ᶜS_ρq_tot) = p.precomputed
             ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+            # Use lazy fields to avoid broadcast allocation (matching 1M pattern)
             ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, ᶜρ))
-            # ᶜS_ρq_tot is the density-scaled tendency (≡ ρ·Sq),
-            # so the specific tendency is ᶜS_ρq_tot / ρ.
+            ᶜSq_tot = @. lazy(ᶜS_ρq_tot / ᶜρ)
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * DiagonalMatrixRow(
-                    microphysics_jacobian_diagonal(ᶜS_ρq_tot / ᶜρ, ᶜq_tot),
+                    microphysics_jacobian_diagonal(ᶜSq_tot, ᶜq_tot),
                 )
         end
 
