@@ -426,12 +426,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             if j > 1
                 error("Below code doesn't work for multiple updrafts")
             end
-            thp = CAP.thermodynamics_params(params)
-            (; ᶜΦ) = p.core
-            (; ᶜTʲs) = p.precomputed
-            ᶜ∂ρ∂t_sed = p.scratch.ᶜtemp_scalar_3
-            @. ᶜ∂ρ∂t_sed = 0
-            ᶜinv_ρ̂ = p.scratch.ᶜtemp_scalar_4
+            ᶜinv_ρ̂ = p.scratch.ᶜtemp_scalar_3
             @. ᶜinv_ρ̂ = specific(
                 FT(1),
                 Y.c.sgsʲs.:($$j).ρa,
@@ -466,7 +461,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                 @. ᶜqʲₜ += va
 
                 # Flux form sedimentation of tracers
-                vtt = p.scratch.ᶜtemp_scalar_5
+                vtt = p.scratch.ᶜtemp_scalar_4
                 updraft_sedimentation!(
                     vtt,
                     p,
@@ -478,47 +473,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                 )
                 @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
                 @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
-                @. ᶜ∂ρ∂t_sed += vtt
-
-                # Flux form sedimentation of energy
-                if name in (@name(q_liq), @name(q_rai))
-                    ᶜmse_li = (@. lazy(
-                        TD.internal_energy_liquid(thp, ᶜTʲs.:($$j)) + ᶜΦ,
-                    ))
-                elseif name in (@name(q_ice), @name(q_sno))
-                    ᶜmse_li = (@. lazy(
-                        TD.internal_energy_ice(thp, ᶜTʲs.:($$j)) + ᶜΦ,
-                    ))
-                else
-                    error("Unsupported moisture tracer variable")
-                end
-                ᶜχ_lazy = @. lazy(ᶜqʲ * ᶜmse_li)
-                updraft_sedimentation!(
-                    vtt,
-                    p,
-                    ᶜρʲs.:($j),
-                    ᶜwʲ,
-                    ᶜa,
-                    ᶜχ_lazy,
-                    ᶠJ,
-                )
-                @. Yₜ.c.sgsʲs.:($$j).mse +=
-                    ᶜinv_ρ̂ * vtt
             end
-
-            # Contribution of density variation due to sedimentation.
-            # Semi-implicit (backward Euler) treatment prevents overshooting
-            # when  ᶜinv_ρ̂ * ᶜ∂ρ∂t_sed  is large (small updraft area
-            # fraction with strong sedimentation). 
-            @. Yₜ.c.sgsʲs.:($$j).ρa += ᶜ∂ρ∂t_sed
-            ᶜlimited_rate = @. lazy(implicit_sink_rate(ᶜinv_ρ̂ * ᶜ∂ρ∂t_sed, dt))
-            @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜlimited_rate * Y.c.sgsʲs.:($$j).mse
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜlimited_rate * Y.c.sgsʲs.:($$j).q_tot
-            @. Yₜ.c.sgsʲs.:($$j).q_liq -= ᶜlimited_rate * Y.c.sgsʲs.:($$j).q_liq
-            @. Yₜ.c.sgsʲs.:($$j).q_ice -= ᶜlimited_rate * Y.c.sgsʲs.:($$j).q_ice
-            @. Yₜ.c.sgsʲs.:($$j).q_rai -= ᶜlimited_rate * Y.c.sgsʲs.:($$j).q_rai
-            @. Yₜ.c.sgsʲs.:($$j).q_sno -= ᶜlimited_rate * Y.c.sgsʲs.:($$j).q_sno
-
         end
 
         # Sedimentation of number concentrations for 2M microphysics
@@ -559,7 +514,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                 @. ᶜχʲₜ += va
 
                 # Flux form sedimentation of tracers
-                vtt = p.scratch.ᶜtemp_scalar_5
+                vtt = p.scratch.ᶜtemp_scalar_4
                 updraft_sedimentation!(
                     vtt,
                     p,
@@ -570,10 +525,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶠJ,
                 )
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
-
-                # Contribution of density variation due to sedimentation 
-                # (same semi-implicit treatment as above)
-                @. ᶜχʲₜ -= ᶜlimited_rate * ᶜχʲ
             end
         end
     end

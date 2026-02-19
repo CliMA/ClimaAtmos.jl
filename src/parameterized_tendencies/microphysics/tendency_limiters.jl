@@ -32,31 +32,6 @@ max_rate = limit(q_rai, dt, 3)
 end
 
 """
-    implicit_sink_rate(rate, dt)
-
-Semi-implicit (backward Euler) limiter for a linear decay tendency.
-
-For a decay ODE  `dψ/dt = −rate · ψ`, the explicit tendency `−rate · ψ`
-can overshoot zero when `rate · dt > 1`.  This function returns the
-implicitly-limited rate
-
-    rate / (1 + dt · max(rate, 0))
-
-which is equivalent to the backward Euler solution
-`ψ_{n+1} = ψ_n / (1 + dt · rate)`.  Only sink terms (`rate > 0`) are
-limited; source terms (`rate ≤ 0`) pass through unmodified.
-
-# Usage
-```julia
-limited = implicit_sink_rate(rate, dt)
-@. Yₜ.ψ -= limited * Y.ψ
-```
-"""
-@inline function implicit_sink_rate(rate, dt)
-    return rate / (1 + dt * max(rate, zero(rate)))
-end
-
-"""
     tendency_limiter(tendency, tend_bound_pos, tend_bound_neg)
 
 Limits a `tendency` to be within `[tend_bound_neg, tend_bound_pos]`.
