@@ -50,7 +50,7 @@ NamedTuple with:
 - `q_liq`: Liquid condensate [kg/kg]
 - `q_ice`: Ice condensate [kg/kg]
 """
-@inline function (eval::SaturationAdjustmentEvaluator)(T_hat, q_hat)
+@noinline function (eval::SaturationAdjustmentEvaluator)(T_hat, q_hat)
     FT = typeof(q_hat)
     thp = eval.thermo_params
 
