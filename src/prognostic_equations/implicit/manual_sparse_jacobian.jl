@@ -1596,29 +1596,25 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ) do (ρχ_name, ᶜSq)
                 MatrixFields.has_field(Y, ρχ_name) || return
                 ρχ_field = MatrixFields.get_field(Y, ρχ_name)
-                ᶜq = @. lazy(specific(ρχ_field, ᶜρ))
                 ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
-                @. ∂ᶜρχ_err_∂ᶜρχ +=
-                    dtγ * DiagonalMatrixRow(
-                        microphysics_jacobian_diagonal(ᶜSq, ᶜq),
-                    )
+                add_microphysics_jacobian_entry!(
+                    ∂ᶜρχ_err_∂ᶜρχ, dtγ, ᶜSq, ρχ_field, ᶜρ,
+                )
             end
         end
 
         # 0M microphysics: diagonal entry for ρq_tot
+        # Both ᶜS_ρq_tot and Y.c.ρq_tot are density-weighted, so the ρ
+        # cancels in the ratio S/|q|.  Use them directly.
         if p.atmos.moisture_model isa EquilMoistModel &&
            p.atmos.microphysics_model isa
            Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}} &&
            MatrixFields.has_field(Y, @name(c.ρq_tot))
             (; ᶜS_ρq_tot) = p.precomputed
             ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
-            # Use lazy fields to avoid broadcast allocation (matching 1M pattern)
-            ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, ᶜρ))
-            ᶜSq_tot = @. lazy(ᶜS_ρq_tot / ᶜρ)
-            @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
-                dtγ * DiagonalMatrixRow(
-                    microphysics_jacobian_diagonal(ᶜSq_tot, ᶜq_tot),
-                )
+            add_microphysics_jacobian_entry!(
+                ∂ᶜρq_tot_err_∂ᶜρq_tot, dtγ, ᶜS_ρq_tot, Y.c.ρq_tot,
+            )
         end
 
         # EDMF microphysics: diagonal entries for updraft variables
@@ -1645,10 +1641,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         @. ∂ᶜq_err_∂ᶜq =
                             zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
                     end
-                    @. ∂ᶜq_err_∂ᶜq +=
-                        dtγ * DiagonalMatrixRow(
-                            microphysics_jacobian_diagonal(ᶜSq, q_field),
-                        )
+                    add_microphysics_jacobian_entry!(
+                        ∂ᶜq_err_∂ᶜq, dtγ, ᶜSq, q_field,
+                    )
                 end
             end
 
@@ -1668,10 +1663,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             @. ∂ᶜq_err_∂ᶜq =
                                 zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
                         end
-                        @. ∂ᶜq_err_∂ᶜq +=
-                            dtγ * DiagonalMatrixRow(
-                                microphysics_jacobian_diagonal(ᶜSq, q_field),
-                            )
+                        add_microphysics_jacobian_entry!(
+                            ∂ᶜq_err_∂ᶜq, dtγ, ᶜSq, q_field,
+                        )
                     end
 
                     ρa_name = @name(c.sgsʲs.:(1).ρa)

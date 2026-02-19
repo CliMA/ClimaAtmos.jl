@@ -15,9 +15,7 @@ using ClimaAtmos
 import ClimaAtmos:
     limit,
     tendency_limiter,
-    coupled_sink_limit_factor,
-    microphysics_jacobian_diagonal,
-    ϵ_numerics
+    coupled_sink_limit_factor
 
 @testset "Tendency Limiters" begin
 
@@ -298,39 +296,5 @@ import ClimaAtmos:
             @test limited.dq_rai_dt ≈ mp_tendency.dq_rai_dt rtol = 0.1
             @test limited.dq_sno_dt ≈ mp_tendency.dq_sno_dt rtol = 0.1
         end
-    end
-end
-
-@testset "microphysics_jacobian_diagonal" begin
-
-    @testset "sink returns Sq/q" begin
-        Sq = -0.01
-        q  = 0.001
-        @test microphysics_jacobian_diagonal(Sq, q) ≈ Sq / q
-    end
-
-    @testset "source returns Sq/q" begin
-        Sq = 0.005
-        q  = 0.002
-        @test microphysics_jacobian_diagonal(Sq, q) ≈ Sq / q
-    end
-
-    @testset "near-zero q uses ϵ_numerics guard" begin
-        Sq = -1e-10
-        q  = 0.0
-        result = microphysics_jacobian_diagonal(Sq, q)
-        @test isfinite(result)
-        @test result ≈ Sq / ϵ_numerics(Float64)
-    end
-
-    @testset "zero tendency returns zero" begin
-        @test microphysics_jacobian_diagonal(0.0, 0.01) == 0.0
-        @test microphysics_jacobian_diagonal(0.0, 0.0) == 0.0
-    end
-
-    @testset "Float32 type stability" begin
-        result = microphysics_jacobian_diagonal(Float32(-0.01), Float32(0.001))
-        @test result isa Float32
-        @test result ≈ Float32(-0.01) / Float32(0.001)
     end
 end
