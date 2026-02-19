@@ -273,9 +273,15 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                     similar(Y.f, TridiagonalRow_C3xACT3),
             )
         else
+            # When implicit microphysics is active, SGS scalar diagonal
+            # blocks need real DiagonalRow fields (not UniformScaling) so
+            # that microphysics Jacobian entries can be += into them.
+            implicit_microphysics_sgs =
+                atmos.microphysics_tendency_timestepping == Implicit()
             (
                 MatrixFields.unrolled_map(
-                    name -> (name, name) => FT(-1) * I,
+                    name -> (name, name) => implicit_microphysics_sgs ?
+                        similar(Y.c, DiagonalRow) : FT(-1) * I,
                     available_sgs_scalar_names,
                 )...,
                 (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) =>
@@ -1617,6 +1623,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     MatrixFields.has_field(Y, q_name) || return
                     q_field = MatrixFields.get_field(Y, q_name)
                     ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
+                    # When sgs_advection is off, this block was not
+                    # initialized by the advection code; set it to -I first.
+                    if !use_derivative(sgs_advection_flag)
+                        @. ∂ᶜq_err_∂ᶜq =
+                            zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
+                    end
                     @. ∂ᶜq_err_∂ᶜq +=
                         dtγ * DiagonalMatrixRow(
                             microphysics_jacobian_diagonal(ᶜSq, q_field),
@@ -1634,6 +1646,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         q_field = MatrixFields.get_field(Y, q_name)
                         ᶜSq = ᶜSqₜᵐʲs.:(1)
                         ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
+                        # When sgs_advection is off, this block was not
+                        # initialized by the advection code; set it to -I first.
+                        if !use_derivative(sgs_advection_flag)
+                            @. ∂ᶜq_err_∂ᶜq =
+                                zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
+                        end
                         @. ∂ᶜq_err_∂ᶜq +=
                             dtγ * DiagonalMatrixRow(
                                 microphysics_jacobian_diagonal(ᶜSq, q_field),
@@ -1644,6 +1662,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     if MatrixFields.has_field(Y, ρa_name)
                         ᶜSq = ᶜSqₜᵐʲs.:(1)
                         ∂ᶜρa_err_∂ᶜρa = matrix[ρa_name, ρa_name]
+                        if !use_derivative(sgs_advection_flag)
+                            @. ∂ᶜρa_err_∂ᶜρa =
+                                zero(typeof(∂ᶜρa_err_∂ᶜρa)) - (I,)
+                        end
                         @. ∂ᶜρa_err_∂ᶜρa +=
                             dtγ * DiagonalMatrixRow(ᶜSq)
                     end

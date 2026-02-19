@@ -16,6 +16,8 @@ surface_precipitation_tendency!(Yₜ, Y, p, t, ::PrescribedSST, _) = nothing
 surface_precipitation_tendency!(Yₜ, Y, p, t, _, ::DryModel) = nothing
 surface_precipitation_tendency!(Yₜ, Y, p, t, ::PrescribedSST, ::DryModel) =
     nothing
+surface_precipitation_tendency!(Yₜ, Y, p, t, ::SlabOceanSST, ::DryModel) =
+    nothing
 
 function surface_precipitation_tendency!(
     Yₜ, Y, p, t, slab::SlabOceanSST, moisture_model,
