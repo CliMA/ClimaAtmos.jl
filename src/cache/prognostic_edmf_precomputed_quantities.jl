@@ -471,7 +471,7 @@ For EDMF, microphysics tendencies are computed separately for updrafts and the e
 
 **Updrafts** use direct BMT evaluation (no SGS quadrature) because:
 1. Updrafts are coherent turbulent structures with more homogeneous thermodynamic properties
-2. Updraft area fraction is usually small (~1-10%), so SGS variance within updrafts has limited 
+2. Updraft area fraction is usually small (~1-10%), so SGS variance within updrafts has limited
 impact on the grid-mean tendency
 
 **Environment** uses SGS quadrature integration (when `QuadratureMicrophysics` is configured)
@@ -486,7 +486,7 @@ function set_prognostic_edmf_precomputed_quantities_precipitation!(
 )
     return nothing
 end
-NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
+function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
     ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
@@ -555,7 +555,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_tendency.dq_tot_dt, ᶜq_tot⁰, dt)
     return nothing
 end
-NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
+function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
     ::Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}},
@@ -678,7 +678,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     @. ᶜSqₛᵐ⁰ = ᶜmp_tendency.dq_sno_dt
     return nothing
 end
-NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
+function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
     ::Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}},
@@ -861,7 +861,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜn_rai⁰,
     )
 
-    # Apply coupled limiting directly 
+    # Apply coupled limiting directly
     ᶜf_liq = @. lazy(
         coupled_sink_limit_factor(
             ᶜmp_tendency.dq_lcl_dt, ᶜmp_tendency.dn_lcl_dt, ᶜq_liq⁰, ᶜn_liq⁰, dt,
