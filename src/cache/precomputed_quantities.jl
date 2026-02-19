@@ -86,7 +86,6 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜq_liq_raiʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_ice_snoʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
-            ᶠnh_pressure₃_dragʲs = similar(Y.f, NTuple{n, C3{FT}}),
         ) : (;)
     return (;
         gs_quantities...,
@@ -265,14 +264,10 @@ function precomputed_quantities(Y, atmos)
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
             ρtke_flux = similar(Fields.level(Y.f, half), C3{FT}),
-            bdmr_l = similar(Y.c, BidiagonalMatrixRow{FT}),
-            bdmr_r = similar(Y.c, BidiagonalMatrixRow{FT}),
-            bdmr = similar(Y.c, BidiagonalMatrixRow{FT}),
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
             ᶠρ_diffʲs = similar(Y.f, NTuple{n, FT}),
-            ᶠnh_pressure₃_buoyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             precipitation_sgs_quantities...,
         ) : (;)
 
@@ -576,7 +571,6 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
-        set_prognostic_edmf_precomputed_quantities_implicit_closures!(Y, p, t)
     elseif !(isnothing(turbconv_model))
         # Do nothing for other turbconv models for now
     end
