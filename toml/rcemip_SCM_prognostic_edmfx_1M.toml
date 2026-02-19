@@ -1,5 +1,5 @@
 [zd_rayleigh]
-value = 28000.0
+value = 2800.0
 
 [EDMF_surface_area]
 value = 0.1
@@ -53,7 +53,7 @@ value = 20
 value = 300
 
 [SST_delta]
-value = 0
+value = 1.25
 
 [SST_wavelength]
 value = 6e6

@@ -1,3 +1,4 @@
+output_dir: "/scratch/olivia/rce_scm"
 initial_condition: RCEMIPIIProfile_300
 surface_setup: DefaultMoninObukhov
 surface_temperature: RCEMIPII
@@ -20,14 +21,17 @@ precip_model: "1M"
 use_sgs_quadrature: false
 config: "column"
 z_max: 33000.0  # 30km
+# z_max: 5000
 x_elem: 2
 y_elem: 2
-z_elem: 86
+z_elem: 100
 dz_bottom: 30.0
-z_stretch: true
+z_stretch: false
 perturb_initstate: false
 dt: "5secs"
-t_end: "24hours"
+# t_end: "24hours"
+# t_end: "2days"
+t_end: "21days"
 dt_save_state_to_disk: "60mins"
 toml: [toml/rcemip_SCM_prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [8, 8, 100]
