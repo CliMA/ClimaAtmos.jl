@@ -1127,10 +1127,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             matrix[@name(c.sgsʲs.:(1).q_tot), χʲ_name]
                         @. ∂ᶜq_totʲ_err_∂ᶜχʲ =
                             DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar
-
-                        ∂ᶜρaʲ_err_∂ᶜχʲ =
-                            matrix[@name(c.sgsʲs.:(1).ρa), χʲ_name]
-                        @. ∂ᶜρaʲ_err_∂ᶜχʲ += ᶜtridiagonal_matrix_scalar
                     end
 
                 end
