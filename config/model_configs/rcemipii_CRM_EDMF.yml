@@ -46,7 +46,7 @@ precip_model: 1M
 # use_auto_jacobian: true
 
 ### spatial discretization ###
-nh_poly: 3  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
+nh_poly: 2  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
 ## RCE_small
 x_max: 96000  # 96km
 y_max: 96000  # 96km
@@ -60,9 +60,9 @@ dz_bottom: 30
 z_stretch: false
 # vertical_mesh: rcemipii
 
-#~8km grid
-x_elem: 4
-y_elem: 4
+#~50km grid
+x_elem: 2
+y_elem: 2
 dt: 10secs
 # ~4km grid
 # x_elem: 8
