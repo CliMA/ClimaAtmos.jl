@@ -590,7 +590,7 @@ Approximates the integral:
 # Returns
 Weighted sum with the same type as `f(T, q)`.
 """
-function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature{N}) where {N}
+@noinline function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature{N}) where {N}
     χ = quad.a
     weights = quad.w
     FT = eltype(χ)
@@ -629,7 +629,7 @@ determined by `quad.dist` (see [`get_physical_point`](@ref)).
 # Returns
 Weighted sum ``\\approx E[f(T, q)]`` with the same type as `f(T, q)`.
 """
-function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
+@noinline function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
     σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
 
     # Use functor instead of closure to avoid heap allocations

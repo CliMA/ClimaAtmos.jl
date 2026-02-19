@@ -350,7 +350,7 @@ function aerosol_activation_sources(
     sulfate_std = aerosol_params.sulfate_std
     sulfate_kappa = aerosol_params.sulfate_kappa
 
-    # Early exit for invalid inputs (negative supersaturation, no aerosols, or 
+    # Early exit for invalid inputs (negative supersaturation, no aerosols, or
     # non-physical values that would cause DomainError in CMP)
     invalid_inputs =
         (S < FT(0)) || (n_aer < ϵ_numerics(FT)) || (w <= FT(0)) ||
@@ -533,7 +533,7 @@ improving representation of phase changes.
 # Returns
 NamedTuple with averaged source terms:
 - `dq_lcl_dt`: Cloud liquid tendency [kg/kg/s]
-- `dq_icl_dt`: Cloud ice tendency [kg/kg/s]  
+- `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
 
@@ -675,7 +675,7 @@ Condensate is partitioned into liquid and ice using `λ(T_hat)`.
     )
 end
 
-@inline function microphysics_tendencies_quadrature(
+@noinline function microphysics_tendencies_quadrature(
     scheme,
     SG_quad,
     mp, tps,
