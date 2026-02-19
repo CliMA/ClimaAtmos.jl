@@ -323,6 +323,9 @@ albedo_model:
 implicit_diffusion:
   help: "Whether to treat the vertical diffusion tendency implicitly [`false` (default), `true`]"
   value: false
+implicit_horizontal_acoustics:
+  help: "Whether to treat horizontal acoustic terms (pressure gradient, mass divergence) implicitly via a Helmholtz solver [`false` (default), `true`]"
+  value: false
 approximate_linear_solve_iters:
   help: "Number of iterations for the approximate linear solve (used when `implicit_diffusion` is true)"
   value: 1

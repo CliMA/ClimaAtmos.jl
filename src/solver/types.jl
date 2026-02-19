@@ -748,7 +748,7 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
+struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HAM, HD}
     """Enable specific upwinding schemes for specific equations"""
     energy_q_tot_upwinding::EN_UP
     tracer_upwinding::TR_UP
@@ -762,6 +762,8 @@ struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
     limiter::LIM
     """Timestepping mode for diffusion: Explicit() or Implicit()"""
     diff_mode::DM
+    """Timestepping mode for horizontal acoustic terms (PGF, mass divergence): Explicit() or Implicit()"""
+    horizontal_acoustic_mode::HAM
     """Hyperdiffusion model: nothing or Hyperdiffusion()"""
     hyperdiff::HD
 end
@@ -783,6 +785,7 @@ function AtmosNumerics(;
     reproducible_restart = nothing,
     limiter = nothing,
     diff_mode = Explicit(),
+    horizontal_acoustic_mode = Explicit(),
     hyperdiff = Hyperdiffusion{Float32}(;
         ν₄_vorticity_coeff = 0.150 * 1.238,
         divergence_damping_factor = 5,
@@ -804,6 +807,7 @@ function AtmosNumerics(;
         reproducible_restart,
         limiter,
         diff_mode,
+        horizontal_acoustic_mode,
         hyperdiff,
     )
 end
@@ -1128,6 +1132,7 @@ Internal testing and calibration components for single-column setups:
 - `vertical_water_borrowing_species`: internal value `nothing` (apply to all tracers; config default is `~`), empty tuple (apply to none; config `[]`), or Tuple{Symbol, ...} from config string/list (e.g. `["ρq_tot"]`) to apply only to those tracers. See config `vertical_water_borrowing_species` in default_config.yml for YAML options.
   (Note: The vertical water borrowing limiter is created in the cache based on `AtmosWaterModel.tracer_nonnegativity_method`)
 - `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
+- `horizontal_acoustic_mode`: Explicit(), Implicit() timestepping mode for horizontal acoustic terms (PGF, mass divergence)
 - `hyperdiff`: nothing or Hyperdiffusion()
 
 ## Top-level Options

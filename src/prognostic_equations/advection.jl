@@ -45,7 +45,12 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         (; ᶜuʲs) = p.precomputed
     end
 
-    @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, 1)
+    horizontal_acoustic_explicit =
+        p.atmos.horizontal_acoustic_mode == Explicit()
+
+    if horizontal_acoustic_explicit
+        @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, 1)
+    end
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).ρa -= split_divₕ(
@@ -56,7 +61,9 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     end
 
     (; ᶜh_tot) = p.precomputed
-    @. Yₜ.c.ρe_tot -= split_divₕ(Y.c.ρ * ᶜu, ᶜh_tot)
+    if horizontal_acoustic_explicit
+        @. Yₜ.c.ρe_tot -= split_divₕ(Y.c.ρ * ᶜu, ᶜh_tot)
+    end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
@@ -78,14 +85,30 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     ᶜθ_v_diff = @. lazy(ᶜθ_v - ᶜθ_vr)
-    # split form pressure gradient: 0.5 * cp_d * [θv ∇Π + ∇(θv Π) - Π∇θv]
-    @. Yₜ.c.uₕ -= C12(
-        gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) +
-        cp_d *
-        (
-            ᶜθ_v_diff * gradₕ(ᶜΠ) + gradₕ(ᶜθ_v_diff * ᶜΠ) - ᶜΠ * gradₕ(ᶜθ_v_diff)
-        ) / 2,
-    )
+    if horizontal_acoustic_explicit
+        # split form pressure gradient: 0.5 * cp_d * [θv ∇Π + ∇(θv Π) - Π∇θv]
+        @. Yₜ.c.uₕ -= C12(
+            gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) +
+            cp_d *
+            (
+                ᶜθ_v_diff * gradₕ(ᶜΠ) + gradₕ(ᶜθ_v_diff * ᶜΠ) -
+                ᶜΠ * gradₕ(ᶜθ_v_diff)
+            ) / 2,
+        )
+    else
+        # Nonlinear PGF correction: (full Exner split-form PGF) − (linearized PGF).
+        # The linearized acoustic PGF  (1/ρ_ref) ∇ₕp  lives in the implicit
+        # tendency; here we add only the difference so the total is correct.
+        ᶜρ_ref = p.horizontal_acoustic_cache.ᶜρ_ref
+        @. Yₜ.c.uₕ -= C12(
+            gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) +
+            cp_d *
+            (
+                ᶜθ_v_diff * gradₕ(ᶜΠ) + gradₕ(ᶜθ_v_diff * ᶜΠ) -
+                ᶜΠ * gradₕ(ᶜθ_v_diff)
+            ) / 2 - gradₕ(ᶜp) / ᶜρ_ref,
+        )
+    end
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end

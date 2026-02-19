@@ -522,6 +522,14 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     elseif !(isnothing(turbconv_model))
         # Do nothing for other turbconv models for now
     end
+
+    if hasproperty(p, :horizontal_acoustic_cache)
+        update_horizontal_acoustic_reference_state!(
+            p.horizontal_acoustic_cache,
+            Y,
+            p,
+        )
+    end
 end
 
 """

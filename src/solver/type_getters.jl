@@ -245,6 +245,8 @@ function get_numerics(parsed_args, FT)
         parsed_args["apply_sem_quasimonotone_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
     diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
+    horizontal_acoustic_mode =
+        parsed_args["implicit_horizontal_acoustics"] ? Implicit() : Explicit()
 
     hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
 
@@ -258,6 +260,7 @@ function get_numerics(parsed_args, FT)
         test_dycore_consistency,
         reproducible_restart,
         diff_mode,
+        horizontal_acoustic_mode,
         hyperdiff,
     )
     @info "numerics $(summary(numerics))"

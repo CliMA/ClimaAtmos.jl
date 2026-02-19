@@ -18,6 +18,7 @@ struct AtmosCache{
     NETFLUXSFC,
     SSV,
     CONSCHECK,
+    HAC,
 }
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
     dt::FT
@@ -66,6 +67,9 @@ struct AtmosCache{
 
     """Conservation check for prognostic surface temperature"""
     conservation_check::CONSCHECK
+
+    """Cache for horizontal implicit acoustic Helmholtz solver (nothing if explicit)"""
+    horizontal_acoustic_cache::HAC
 end
 
 # Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
@@ -199,6 +203,7 @@ function build_cache(
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
     tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
+    ha_cache = horizontal_acoustic_cache(Y, atmos)
 
     args = (
         dt,
@@ -220,6 +225,7 @@ function build_cache(
         net_energy_flux_sfc,
         steady_state_velocity,
         conservation_check,
+        ha_cache,
     )
 
     return AtmosCache{map(typeof, args)...}(args...)

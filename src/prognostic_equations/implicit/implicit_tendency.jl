@@ -10,6 +10,10 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
+    if p.atmos.horizontal_acoustic_mode == Implicit()
+        implicit_horizontal_acoustic_tendency!(Yₜ, Y, p, t)
+    end
+
     if p.atmos.noneq_cloud_formation_mode == Implicit()
         cloud_condensate_tendency!(
             Yₜ,
