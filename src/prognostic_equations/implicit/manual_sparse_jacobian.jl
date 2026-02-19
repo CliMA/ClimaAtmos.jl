@@ -1602,10 +1602,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         # EDMF microphysics: diagonal entries for updraft variables
         if p.atmos.turbconv_model isa PrognosticEDMFX
 
-            # 1M EDMF
+            # 1M EDMF: diagonal entries for individual condensate species.
             if p.atmos.moisture_model isa NonEquilMoistModel
                 (; ᶜSqₗᵐʲs, ᶜSqᵢᵐʲs, ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs) = p.precomputed
-                # 1M tracers in EDMF are specific humidities (q), not densities (ρq)
                 sgs_microphysics_tracers = (
                     (@name(c.sgsʲs.:(1).q_liq), ᶜSqₗᵐʲs.:(1)),
                     (@name(c.sgsʲs.:(1).q_ice), ᶜSqᵢᵐʲs.:(1)),
