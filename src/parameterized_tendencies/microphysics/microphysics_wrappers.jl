@@ -442,7 +442,7 @@ function Microphysics0MEvaluator(cm_params, thermo_params, ρ)
     return Microphysics0MEvaluator(cm_params, sat_eval)
 end
 
-@inline function (eval::Microphysics0MEvaluator)(T_hat, q_hat)
+@noinline function (eval::Microphysics0MEvaluator)(T_hat, q_hat)
     # Diagnose condensate via saturation adjustment
     sa = eval.sat_eval(T_hat, q_hat)
 
@@ -616,7 +616,7 @@ quadrature point is actually supersaturated.
 
 Condensate is partitioned into liquid and ice using `λ(T_hat)`.
 """
-@inline function (eval::MicrophysicsEvaluator)(T_hat, q_tot_hat)
+@noinline function (eval::MicrophysicsEvaluator)(T_hat, q_tot_hat)
     FT = typeof(eval.ρ)
 
     # Compute saturation excess perturbation relative to grid mean

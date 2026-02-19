@@ -553,7 +553,7 @@ struct PhysicalPointTransform{D, FT}
     q_max::FT
 end
 
-@inline function (t::PhysicalPointTransform)(χ1, χ2)
+@noinline function (t::PhysicalPointTransform)(χ1, χ2)
     return get_physical_point(
         t.dist,
         χ1,
