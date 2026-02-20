@@ -1,5 +1,3 @@
-ENV["CLIMACOMMS_DEVICE"] = "CPU"
-
 import ClimaComms
 ClimaComms.@import_required_backends
 

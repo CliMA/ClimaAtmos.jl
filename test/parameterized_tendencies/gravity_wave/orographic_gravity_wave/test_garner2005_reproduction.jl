@@ -46,7 +46,6 @@ with parameters γ = 0.4, β = 0.5, ε = 0, a_1/a_0 = 9.0
 """
 
 import CUDA
-ENV["CLIMACOMMS_DEVICE"] = "CPU"
 
 import ClimaComms
 import ClimaComms.@import_required_backends

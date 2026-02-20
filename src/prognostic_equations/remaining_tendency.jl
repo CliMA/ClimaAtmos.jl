@@ -300,7 +300,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         p.atmos.turbconv_model,
     )
 
-    # TODO: make bycolumn-able
     non_orographic_gravity_wave_apply_tendency!(
         Yₜ,
         Y,

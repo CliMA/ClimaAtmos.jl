@@ -10,8 +10,6 @@ include(
 include("../gw_remap_plot_utils.jl")
 include("ogw_test_utils.jl")
 
-ENV["CLIMACOMMS_DEVICE"] = "CPU"
-
 import ClimaComms
 import ClimaComms.@import_required_backends
 

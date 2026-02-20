@@ -8,8 +8,6 @@ include(
     ),
 )
 
-ENV["CLIMACOMMS_DEVICE"] = "CUDA"
-
 import CUDA
 import ClimaComms
 import ClimaComms.@import_required_backends

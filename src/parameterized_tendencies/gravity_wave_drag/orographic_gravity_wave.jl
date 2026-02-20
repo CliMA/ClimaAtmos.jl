@@ -7,12 +7,6 @@
 # and the GFDL implementation:
 # https://github.com/NOAA-GFDL/atmos_phys/blob/main/atmos_param/topo_drag/topo_drag.F90
 
-#=
-The following are default false in GFDL code but usually run with true in nml setups:
-use_pbl_from_lock = .true.
-use_uref_4stable = .true.
-Not yet included in our codebase
-=#
 using ClimaUtilities.ClimaArtifacts
 using ClimaCore: InputOutput
 import .AtmosArtifacts as AA
@@ -124,8 +118,6 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     end
 
     # unpack cache
-    # ᶜT = p.scratch.ᶜtemp_scalar
-    # (; ᶜts, ᶜp) = p.precomputed
     (; ᶜp, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     (; params) = p
     (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
@@ -137,15 +129,14 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     ᶠz = Fields.coordinate_field(Y.f).z
     ᶠdz = Fields.Δz_field(axes(Y.f))
     FT = Spaces.undertype(axes(Y.c))
-
     ᶜρ = Y.c.ρ
+
     # parameters
     cp_d = CAP.cp_d(params)
     grav = CAP.grav(params)
     thermo_params = CAP.thermodynamics_params(params)
 
     # compute buoyancy frequency
-    # @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
     ᶜdTdz .= Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
     @. ᶜbuoyancy_frequency =
         (grav / ᶜT) *
@@ -163,29 +154,29 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
 
     # explicit scale height approach for pressure extrapolation
     # Fields.level returns by reference
-    z_bottom = Fields.level(ᶠz, half)
-    z_second = Fields.level(ᶠz, 1 + half)
-    p_bottom = Fields.level(ᶠp, half)
-    p_second = Fields.level(ᶠp, 1 + half)
+    ᶠz_bottom = Fields.level(ᶠz, half)
+    ᶠz_second = Fields.level(ᶠz, 1 + half)
+    ᶠp_bottom = Fields.level(ᶠp, half)
+    ᶠp_second = Fields.level(ᶠp, 1 + half)
 
     # Calculate scale height from the two levels
     Fields.field_values(scale_height_values) .=
-        (Fields.field_values(z_second) .- Fields.field_values(z_bottom)) ./
-        log.(Fields.field_values(p_bottom) ./ Fields.field_values(p_second))
+        (Fields.field_values(ᶠz_second) .- Fields.field_values(ᶠz_bottom)) ./
+        log.(Fields.field_values(ᶠp_bottom) ./ Fields.field_values(ᶠp_second))
 
     # Calculate the extrapolated height (one level below bottom)
     z_extrapolated_values .=
-        Fields.field_values(z_bottom) .-
-        (Fields.field_values(z_second) .- Fields.field_values(z_bottom))
+        Fields.field_values(ᶠz_bottom) .-
+        (Fields.field_values(ᶠz_second) .- Fields.field_values(ᶠz_bottom))
 
     # Extrapolate pressure using barometric formula: p = p₀ * exp(-z/H)
     Boundary_value = Fields.Field(
-        Fields.field_values(p_bottom) .*
+        Fields.field_values(ᶠp_bottom) .*
         exp.(
-            (z_extrapolated_values .- Fields.field_values(z_bottom)) ./
+            (z_extrapolated_values .- Fields.field_values(ᶠz_bottom)) ./
             Fields.field_values(scale_height_values)
         ),
-        axes(p_bottom),
+        axes(ᶠp_bottom),
     )
 
     field_shiftface_down!(ᶠp, ᶠp_m1, Boundary_value)
@@ -240,7 +231,7 @@ function orographic_gravity_wave_apply_tendency!(
     (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
 
     @. Yₜ.c.uₕ +=
-        Geometry.Covariant12Vector.(Geometry.UVVector.(ᶜuforcing, ᶜvforcing))
+        C12.(Geometry.UVVector.(ᶜuforcing, ᶜvforcing))
 
 end
 
@@ -283,7 +274,7 @@ function orographic_gravity_wave_forcing!(
     # the z-values don't change, but this is necessary for
     # calc_nonpropagating_forcing! to work on the GPU
     get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
-    parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl) .- 0.5 .* parent(Δz_bot)
+    parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl) .- FT(1/2) .* parent(Δz_bot)
     topo_ᶠz_pbl = topo_ᶠz_pbl.components.data.:1
 
     # compute base flux at the planetary boundary layer height
@@ -492,12 +483,10 @@ function calc_nonpropagating_forcing!(
     end
 
     # Include cells that overlap with [z_pbl, z_ref):
-    # - RightBiasedF2C checks upper face > z_pbl (cell extends above z_pbl)
-    # - LeftBiasedF2C checks lower face < z_ref (cell starts below z_ref)
+    # - ᶜright_bias checks upper face > z_pbl (cell extends above z_pbl)
+    # - ᶜleft_bias checks lower face < z_ref (cell starts below z_ref)
     # This ensures at least one cell is included when z_ref > z_pbl
-    L2 = Operators.LeftBiasedF2C(;)
-    R2 = Operators.RightBiasedF2C(;)
-    @. ᶜmask = R2.((ᶠz .> ᶠz_pbl)) .&& L2.((ᶠz .< ᶠz_ref))
+    @. ᶜmask = ᶜright_bias.((ᶠz .> ᶠz_pbl)) .&& ᶜleft_bias.((ᶠz .< ᶠz_ref))
     @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
     @. ᶜdiff = ᶜinterp.(ᶠp_m1 .- ᶠp)
 
@@ -661,8 +650,7 @@ end
 
 function field_shiftface_down!(ᶠexample_field, ᶠshifted_field, Boundary_value)
     L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(Boundary_value))
-    L2 = Operators.LeftBiasedF2C(;)
-    ᶠshifted_field .= L1.(L2.(ᶠexample_field))
+    ᶠshifted_field .= L1.(ᶜleft_bias.(ᶠexample_field))
 end
 
 function calc_base_flux!(
@@ -963,10 +951,6 @@ function compute_ogw_drag(
     cg_lat = Fields.level(Fields.coordinate_field(Y.f).lat, half)
 
     if topography == Val(:Earth) || topography == Val(:NoWarp)
-        #### To-dos:
-        # 1. load orography on lat-lon grid and subtract from z_surface
-        # 2. use clima grid info, e.g., grid area
-
         # Try local file first (for development when preprocessing has been run)
         local_filename = "computed_drag_Earth_false_1_$(h_elem)"
         local_path = joinpath(pkgdir(@__MODULE__), "$(local_filename).hdf5")
