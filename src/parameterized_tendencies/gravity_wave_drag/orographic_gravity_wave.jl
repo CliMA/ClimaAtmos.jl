@@ -648,9 +648,27 @@ function get_pbl_z!(result, ᶜp, ᶜT, ᶜz, grav, cp_d)
     end
 end
 
-function field_shiftface_down!(ᶠexample_field, ᶠshifted_field, Boundary_value)
-    L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(Boundary_value))
-    ᶠshifted_field .= L1.(ᶜleft_bias.(ᶠexample_field))
+
+
+"""
+    field_shiftface_down!(source_field, shifted_field, boundary_value)
+
+Shift a face-centered field downward by one level, storing the result in `shifted_field`.
+
+This is needed to access face values at level `k-1` from within a level-`k` computation
+(e.g., computing `ᶠp[k-1]` for pressure differences across cell layers). ClimaCore `column_reduce` and `column_accumulate` do not support direct `field[k-1]` indexing in broadcast expressions, so we
+construct the shifted view via a round-trip through the cell-center grid:
+
+1. `LeftBiasedF2C` interpolates faces → cell centers using the value from below.
+2. `LeftBiasedC2F` interpolates cell centers → faces using the value from below,
+    with `boundary_value` prescribed at the bottom face.
+
+The net effect is `shifted_field[k] = source_field[k-1]` for interior faces,
+and `shifted_field[bottom] = boundary_value` at the lowest face.
+"""
+function field_shiftface_down!(source_field, shifted_field, boundary_value)
+    L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(boundary_value))
+    shifted_field .= L1.(ᶜleft_bias.(source_field))
 end
 
 function calc_base_flux!(
