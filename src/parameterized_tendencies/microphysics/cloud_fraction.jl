@@ -18,7 +18,7 @@ Always uses grid-mean variables, consistent with the gradient computation
 function compute_∂T_∂θ!(dest, Y, p, thermo_params)
     (; ᶜT) = p.precomputed
     ᶜρ = Y.c.ρ
-    if p.atmos.microphysics_model isa Union{DryModel, EquilibriumMicrophysics0M}
+    if base_microphysics_model(p.atmos.microphysics_model) isa Union{DryModel, EquilibriumMicrophysics0M}
         (; ᶜq_liq_rai, ᶜq_ice_sno, ᶜq_tot_safe) = p.precomputed
         ᶜq_liq = ᶜq_liq_rai
         ᶜq_ice = ᶜq_ice_sno
