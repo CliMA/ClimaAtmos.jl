@@ -1701,25 +1701,22 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
                 if hasproperty(p.precomputed, :ᶜSqₜᵐʲs)
                     (; ᶜSqₜᵐʲs) = p.precomputed
+                    ᶜSq = ᶜSqₜᵐʲs.:(1)
+
                     q_name = @name(c.sgsʲs.:(1).q_tot)
                     if MatrixFields.has_field(Y, q_name)
-                        q_field = MatrixFields.get_field(Y, q_name)
-                        ᶜSq = ᶜSqₜᵐʲs.:(1)
                         ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
-                        # When sgs_advection is off, this block was not
-                        # initialized by the advection code; set it to -I first.
                         if !use_derivative(sgs_advection_flag)
                             @. ∂ᶜq_err_∂ᶜq =
                                 zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
                         end
                         add_microphysics_jacobian_entry!(
-                            ∂ᶜq_err_∂ᶜq, dtγ, ᶜSq, q_field,
+                            ∂ᶜq_err_∂ᶜq, dtγ, ᶜSq, Y.c.sgsʲs.:(1).q_tot,
                         )
                     end
 
                     ρa_name = @name(c.sgsʲs.:(1).ρa)
                     if MatrixFields.has_field(Y, ρa_name)
-                        ᶜSq = ᶜSqₜᵐʲs.:(1)
                         ∂ᶜρa_err_∂ᶜρa = matrix[ρa_name, ρa_name]
                         if !use_derivative(sgs_advection_flag)
                             @. ∂ᶜρa_err_∂ᶜρa =
