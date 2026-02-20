@@ -172,6 +172,9 @@ function precomputed_quantities(Y, atmos)
             ᶜmp_tendency = similar(Y.c,
                 @NamedTuple{dq_lcl_dt::FT, dq_icl_dt::FT, dq_rai_dt::FT, dq_sno_dt::FT}
             ),
+            ᶜmp_derivative = similar(Y.c,
+                @NamedTuple{∂tendency_∂q_lcl::FT, ∂tendency_∂q_icl::FT, ∂tendency_∂q_rai::FT, ∂tendency_∂q_sno::FT}
+            ),
         )
     elseif atmos.microphysics_model isa Union{
         Microphysics2Moment,
@@ -229,6 +232,10 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵢᵐʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵣᵐʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₛᵐʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜ∂Sqₗʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜ∂Sqᵢʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜ∂Sqᵣʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜ∂Sqₛʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
@@ -574,6 +581,17 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     elseif !(isnothing(turbconv_model))
         # Do nothing for other turbconv models for now
     end
+
+    # When microphysics is implicit, compute the microphysics tendency cache
+    # and surface fluxes here so that ᶜS_ρq_tot is fresh for each implicit
+    # stage.  This ensures the atmospheric water removal (in T_imp) and the
+    # surface deposition use the same ᶜS_ρq_tot, preserving conservation.
+    if p.atmos.microphysics_tendency_timestepping == Implicit()
+        set_microphysics_tendency_cache!(
+            Y, p, microphysics_model, turbconv_model,
+        )
+        set_precipitation_surface_fluxes!(Y, p, microphysics_model)
+    end
 end
 
 """
@@ -663,14 +681,18 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p.atmos.microphysics_model,
         p.atmos.turbconv_model,
     )
-    # Needs to be done after edmf precipitation is computed in sub-domains
-    set_microphysics_tendency_cache!(
-        Y,
-        p,
-        p.atmos.microphysics_model,
-        p.atmos.turbconv_model,
-    )
-    set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
+    # Needs to be done after edmf precipitation is computed in sub-domains.
+    # When microphysics is implicit, these are computed in
+    # set_implicit_precomputed_quantities! instead (for IMEX conservation).
+    if p.atmos.microphysics_tendency_timestepping != Implicit()
+        set_microphysics_tendency_cache!(
+            Y,
+            p,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+        set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
+    end
 
     set_cloud_fraction!(Y, p, moisture_model, cloud_model)
 

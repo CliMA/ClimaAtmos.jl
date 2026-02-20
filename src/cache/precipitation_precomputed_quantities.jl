@@ -873,6 +873,22 @@ function set_microphysics_tendency_cache!(
     @. ᶜSqᵣᵐ = ᶜmp_tendency.dq_rai_dt
     @. ᶜSqₛᵐ = ᶜmp_tendency.dq_sno_dt
 
+    # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
+    # grid-mean state for the implicit Jacobian diagonal.
+    (; ᶜmp_derivative) = p.precomputed
+    @. ᶜmp_derivative = BMT.bulk_microphysics_derivatives(
+        BMT.Microphysics1Moment(),
+        mp,
+        thermo_params,
+        Y.c.ρ,
+        ᶜT,
+        ᶜq_tot,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜq_rai,
+        ᶜq_sno,
+    )
+
     return nothing
 end
 

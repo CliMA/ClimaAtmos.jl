@@ -1592,22 +1592,41 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
         # 1M microphysics: diagonal entries for ρq_liq, ρq_ice, ρq_rai, ρq_sno
         if p.atmos.moisture_model isa NonEquilMoistModel
-            (; ᶜSqₗᵐ, ᶜSqᵢᵐ, ᶜSqᵣᵐ, ᶜSqₛᵐ) = p.precomputed
-            microphysics_1m_tracers = (
-                (@name(c.ρq_liq), ᶜSqₗᵐ),
-                (@name(c.ρq_ice), ᶜSqᵢᵐ),
-                (@name(c.ρq_rai), ᶜSqᵣᵐ),
-                (@name(c.ρq_sno), ᶜSqₛᵐ),
+            # --- Old approximate Jacobian (S/|q|) ---
+            # (; ᶜSqₗᵐ, ᶜSqᵢᵐ, ᶜSqᵣᵐ, ᶜSqₛᵐ) = p.precomputed
+            # microphysics_1m_tracers = (
+            #     (@name(c.ρq_liq), ᶜSqₗᵐ),
+            #     (@name(c.ρq_ice), ᶜSqᵢᵐ),
+            #     (@name(c.ρq_rai), ᶜSqᵣᵐ),
+            #     (@name(c.ρq_sno), ᶜSqₛᵐ),
+            # )
+            # MatrixFields.unrolled_foreach(
+            #     microphysics_1m_tracers,
+            # ) do (ρχ_name, ᶜSq)
+            #     MatrixFields.has_field(Y, ρχ_name) || return
+            #     ρχ_field = MatrixFields.get_field(Y, ρχ_name)
+            #     ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+            #     add_microphysics_jacobian_entry!(
+            #         ∂ᶜρχ_err_∂ᶜρχ, dtγ, ᶜSq, ρχ_field, ᶜρ,
+            #     )
+            # end
+
+            # --- bulk_microphysics_derivatives ---
+            # ∂(ρ * dqₓ/dt)/∂(ρqₓ) = ∂(dqₓ/dt)/∂qₓ  (ρ cancels)
+            (; ᶜmp_derivative) = p.precomputed
+            microphysics_1m_deriv_tracers = (
+                (@name(c.ρq_liq), ᶜmp_derivative.∂tendency_∂q_lcl),
+                (@name(c.ρq_ice), ᶜmp_derivative.∂tendency_∂q_icl),
+                (@name(c.ρq_rai), ᶜmp_derivative.∂tendency_∂q_rai),
+                (@name(c.ρq_sno), ᶜmp_derivative.∂tendency_∂q_sno),
             )
             MatrixFields.unrolled_foreach(
-                microphysics_1m_tracers,
-            ) do (ρχ_name, ᶜSq)
+                microphysics_1m_deriv_tracers,
+            ) do (ρχ_name, ᶜ∂S∂q)
                 MatrixFields.has_field(Y, ρχ_name) || return
-                ρχ_field = MatrixFields.get_field(Y, ρχ_name)
                 ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
-                add_microphysics_jacobian_entry!(
-                    ∂ᶜρχ_err_∂ᶜρχ, dtγ, ᶜSq, ρχ_field, ᶜρ,
-                )
+                @. ∂ᶜρχ_err_∂ᶜρχ +=
+                    dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
             end
         end
 
@@ -1630,18 +1649,41 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             # 1M EDMF: diagonal entries for individual condensate species.
             if p.atmos.moisture_model isa NonEquilMoistModel
-                (; ᶜSqₗᵐʲs, ᶜSqᵢᵐʲs, ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs) = p.precomputed
-                sgs_microphysics_tracers = (
-                    (@name(c.sgsʲs.:(1).q_liq), ᶜSqₗᵐʲs.:(1)),
-                    (@name(c.sgsʲs.:(1).q_ice), ᶜSqᵢᵐʲs.:(1)),
-                    (@name(c.sgsʲs.:(1).q_rai), ᶜSqᵣᵐʲs.:(1)),
-                    (@name(c.sgsʲs.:(1).q_sno), ᶜSqₛᵐʲs.:(1)),
+                # --- Old approximate Jacobian (S/|q|) ---
+                # (; ᶜSqₗᵐʲs, ᶜSqᵢᵐʲs, ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs) = p.precomputed
+                # sgs_microphysics_tracers = (
+                #     (@name(c.sgsʲs.:(1).q_liq), ᶜSqₗᵐʲs.:(1)),
+                #     (@name(c.sgsʲs.:(1).q_ice), ᶜSqᵢᵐʲs.:(1)),
+                #     (@name(c.sgsʲs.:(1).q_rai), ᶜSqᵣᵐʲs.:(1)),
+                #     (@name(c.sgsʲs.:(1).q_sno), ᶜSqₛᵐʲs.:(1)),
+                # )
+                # MatrixFields.unrolled_foreach(
+                #     sgs_microphysics_tracers,
+                # ) do (q_name, ᶜSq)
+                #     MatrixFields.has_field(Y, q_name) || return
+                #     q_field = MatrixFields.get_field(Y, q_name)
+                #     ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
+                #     if !use_derivative(sgs_advection_flag)
+                #         @. ∂ᶜq_err_∂ᶜq =
+                #             zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
+                #     end
+                #     add_microphysics_jacobian_entry!(
+                #         ∂ᶜq_err_∂ᶜq, dtγ, ᶜSq, q_field,
+                #     )
+                # end
+
+                # --- Derivatives from bulk_microphysics_derivatives ---
+                (; ᶜ∂Sqₗʲs, ᶜ∂Sqᵢʲs, ᶜ∂Sqᵣʲs, ᶜ∂Sqₛʲs) = p.precomputed
+                sgs_microphysics_deriv_tracers = (
+                    (@name(c.sgsʲs.:(1).q_liq), ᶜ∂Sqₗʲs.:(1)),
+                    (@name(c.sgsʲs.:(1).q_ice), ᶜ∂Sqᵢʲs.:(1)),
+                    (@name(c.sgsʲs.:(1).q_rai), ᶜ∂Sqᵣʲs.:(1)),
+                    (@name(c.sgsʲs.:(1).q_sno), ᶜ∂Sqₛʲs.:(1)),
                 )
                 MatrixFields.unrolled_foreach(
-                    sgs_microphysics_tracers,
-                ) do (q_name, ᶜSq)
+                    sgs_microphysics_deriv_tracers,
+                ) do (q_name, ᶜ∂S∂q)
                     MatrixFields.has_field(Y, q_name) || return
-                    q_field = MatrixFields.get_field(Y, q_name)
                     ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
                     # When sgs_advection is off, this block was not
                     # initialized by the advection code; set it to -I first.
@@ -1649,9 +1691,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         @. ∂ᶜq_err_∂ᶜq =
                             zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
                     end
-                    add_microphysics_jacobian_entry!(
-                        ∂ᶜq_err_∂ᶜq, dtγ, ᶜSq, q_field,
-                    )
+                    @. ∂ᶜq_err_∂ᶜq +=
+                        dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
                 end
             end
 

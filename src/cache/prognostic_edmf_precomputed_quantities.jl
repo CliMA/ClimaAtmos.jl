@@ -576,6 +576,24 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             cmp,
             thp,
         )
+
+        # Exact derivatives ∂(dqₓ/dt)/∂qₓ at updraft state for Jacobian
+        (; ᶜ∂Sqₗʲs, ᶜ∂Sqᵢʲs, ᶜ∂Sqᵣʲs, ᶜ∂Sqₛʲs, ᶜmp_derivative) = p.precomputed
+        @. ᶜmp_derivative = BMT.bulk_microphysics_derivatives(
+            BMT.Microphysics1Moment(),
+            cmp, thp,
+            ᶜρʲs.:($$j),
+            ᶜTʲs.:($$j),
+            Y.c.sgsʲs.:($$j).q_tot,
+            Y.c.sgsʲs.:($$j).q_liq,
+            Y.c.sgsʲs.:($$j).q_ice,
+            Y.c.sgsʲs.:($$j).q_rai,
+            Y.c.sgsʲs.:($$j).q_sno,
+        )
+        @. ᶜ∂Sqₗʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_lcl
+        @. ᶜ∂Sqᵢʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_icl
+        @. ᶜ∂Sqᵣʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_rai
+        @. ᶜ∂Sqₛʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_sno
     end
 
     # Microphysics tendencies from the environment (with SGS quadrature)
