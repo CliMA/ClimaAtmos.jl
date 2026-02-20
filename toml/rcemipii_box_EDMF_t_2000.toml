@@ -1,0 +1,110 @@
+# toml/rcemipii_box.toml
+
+# Surface Setup
+
+[SST_mean]
+value = 300
+
+[SST_delta]
+value = 1.25
+
+[SST_wavelength]
+value = 6e6
+
+[mean_sea_level_pressure]
+value = 101480
+
+[idealized_ocean_albedo]
+value = 0.07
+
+# No rotation
+
+[angular_velocity_planet_rotation]
+value = 0
+
+# Trace gases
+
+[CO2_fixed_value]
+value = 348e-6
+
+[CH4_fixed_value]
+value = 1650e-9
+
+[N2O_fixed_value]
+value = 306e-9
+
+[CFC11_fixed_value]
+value = 0
+
+[CFC12_fixed_value]
+value = 0
+
+[CFC22_fixed_value]
+value = 0
+
+[CCL4_fixed_value]
+value = 0
+
+# Sponge layer
+
+[zd_rayleigh]
+value = 28000
+
+########################
+### Model Parameters ###
+########################
+
+# EDMF coefficients
+
+[EDMF_surface_area]
+value = 0.1
+
+[EDMF_min_area]
+value = 1.0e-5
+
+[EDMF_max_area]
+value = 0.7
+
+[entr_inv_tau]
+value = 0.0001
+
+[entr_coeff]
+value = 0.1
+
+[min_area_limiter_scale]
+value = 0
+
+[detr_inv_tau]
+value = 0.0001
+
+[detr_coeff]
+value = 0
+
+[detr_buoy_coeff]
+value = 0
+
+[detr_vertdiv_coeff]
+value = 0
+
+[detr_massflux_vertdiv_coeff]
+value = 1
+
+[max_area_limiter_scale]
+value = 0
+
+[pressure_normalmode_drag_coeff]
+value = 40.0
+
+[tracer_vertical_diffusion_factor]
+value = 0
+
+# Microphysics
+
+[condensation_evaporation_timescale]
+value = 20
+
+[sublimation_deposition_timescale]
+value = 2000
+
+[precipitation_timescale]
+value = 600

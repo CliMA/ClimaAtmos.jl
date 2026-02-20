@@ -1,0 +1,123 @@
+reference_job_id: les_box  # for plotting
+surface_setup: DefaultMoninObukhov
+surface_temperature: RCEMIPII
+insolation: rcemipii
+initial_condition: RCEMIPIIProfile_300
+output_dir: "/scratch/olivia/rce_edmf_box/ti_20"
+config: box
+rad: allskywithclear
+rayleigh_sponge: true  # set sponge level in toml file
+
+# Diffusion
+hyperdiff: "Hyperdiffusion"
+implicit_diffusion: true
+# smagorinsky_lilly: "UV_W"  # horizontal + vertical
+turbconv: prognostic_edmfx
+
+approximate_linear_solve_iters: 2 # only valid when implicit_diffusion=true
+max_newton_iters_ode: 3
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+
+# Upwinding mode
+# tracer_upwinding: vanleer_limiter  # is default (alt: `first_order`)
+# energy_q_tot_upwinding: vanleer_limiter  # is default (alt: `first_order`)
+tracer_upwinding: first_order
+energy_q_tot_upwinding: first_order  # is default (alt: `first_order`)
+
+tracer_nonnegativity_method: "elementwise_constraint"
+
+# microphysics
+### 0M+Equil option
+# moist: equil
+# precip_model: 0M
+### !! 1M and 2M !!
+cloud_model: grid_scale   # Ultimately wanted when `moist: nonequil`
+moist: nonequil
+precip_model: 1M
+
+# implicit_noneq_cloud_formation: true
+# use_auto_jacobian: true
+
+### spatial discretization ###
+nh_poly: 1  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
+## RCE_small
+x_max: 96000  # 96km
+y_max: 96000  # 96km
+## RCE_large
+# x_max: 6000000  # 6000km
+# y_max: 400000  # 400km
+## Vertical mesh
+z_max: 33000  # 33km
+z_elem: 100
+dz_bottom: 30
+z_stretch: false
+# vertical_mesh: rcemipii
+
+#~50km grid
+x_elem: 2
+y_elem: 2
+dt: 10secs
+# ~4km grid
+# x_elem: 8
+# y_elem: 8
+# dt: 5secs
+# ~2km grid
+# x_elem: 16
+# y_elem: 16
+# dt: 2secs
+# ~1km grid
+# x_elem: 32
+# y_elem: 32
+# dt: 1secs
+
+# t_end: 10hours
+# t_end: 1days
+# t_end: 2days
+# t_end: 4days
+# t_end: 10days
+t_end: 21days
+# t_end: 150days
+
+## >> During debugging, reduce these as appropriate
+dt_save_state_to_disk: 1days
+dt_rad: 1hours  # same as `dt_save_state_to_disk` for reproducibility
+check_nan_every: 1024  # for debugging: set to check NaNs every `n` iterations
+log_to_file: true
+## <<
+
+toml: ["toml/rcemipii_box_EDMF_t_20.toml"]
+
+# enable_diagnostics: false
+output_default_diagnostics: false  # adds various 1h diagnostics. Only use if `dt_save_state_to_disk` is a multiple of 1hr
+diagnostics:
+  - short_name: [
+      wa, ua, va, ta, thetaa, ha, # dynamics & thermodynamics
+      hus, hur, cl, clw, cli,  # liquid
+      pr,  # precipitation
+      ke,  # kinetic energy for spectrum
+      # Smagorinsky diagnostics
+      # Dh_smag, strainh_smag,  # horizontal
+      # Dv_smag, strainv_smag  # vertical
+      # DecayWithHeight diffusion coefficient
+      # edt
+      # edmf diagnostics
+      arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup,
+      waen, taen, thetaaen, haen, husen, huren, clwen, clien,
+      tke, entr, detr, lmix, bgrad, strain, edt, evu
+    ]
+    # period: 10mins
+    period: 1hours
+  ## 1M microphsics
+  - short_name: [husra, hussn]
+    # period: 10mins
+    period: 1hours
+  # 2M microphysics
+  # - short_name: [cdnc, ncra]
+  #   period: 10mins
