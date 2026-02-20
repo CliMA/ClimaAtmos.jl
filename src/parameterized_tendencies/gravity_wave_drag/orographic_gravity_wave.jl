@@ -274,7 +274,7 @@ function orographic_gravity_wave_forcing!(
     # the z-values don't change, but this is necessary for
     # calc_nonpropagating_forcing! to work on the GPU
     get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
-    parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl) .- FT(1/2) .* parent(Δz_bot)
+    parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl) .- FT(1 / 2) .* parent(Δz_bot)
     topo_ᶠz_pbl = topo_ᶠz_pbl.components.data.:1
 
     # compute base flux at the planetary boundary layer height
