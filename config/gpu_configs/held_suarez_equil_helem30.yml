@@ -3,8 +3,7 @@ approximate_linear_solve_iters: 1
 t_end: "1days"
 dt_save_state_to_disk: "Inf"
 output_default_diagnostics: false
-moist: "equil"
 vert_diff: true
-precip_model: "0M"
+microphysics_model: "0M"
 forcing: "held_suarez"
 toml: [toml/longrun_held_suarez.toml]

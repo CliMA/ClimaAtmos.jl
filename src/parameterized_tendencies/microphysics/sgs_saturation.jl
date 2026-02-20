@@ -3,7 +3,7 @@
 # ============================================================================
 # Computes saturation-adjusted thermodynamic state (T, q_liq, q_ice) by
 # integrating over the joint PDF of (T, q_tot), accounting for subgrid-scale
-# fluctuations. Used with EquilMoistModel for physical
+# fluctuations. Used with EquilibriumMicrophysics0M for physical
 # consistency between cloud fraction and condensate.
 
 import Thermodynamics as TD
@@ -84,7 +84,7 @@ Compute SGS-averaged saturation adjustment by integrating over the joint PDF
 of `(T, q_tot)`.
 
 This function replaces the grid-mean saturation adjustment when using
-`QuadratureCloud` or `MLCloud` with `EquilMoistModel`, ensuring that cloud condensate
+`QuadratureCloud` or `MLCloud` with `EquilibriumMicrophysics0M`, ensuring that cloud condensate
 is computed consistently with cloud fraction.
 
 # Arguments

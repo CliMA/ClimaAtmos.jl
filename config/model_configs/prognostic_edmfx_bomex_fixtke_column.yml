@@ -12,7 +12,7 @@ edmfx_nh_pressure: true
 edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: false
-moist: "equil"
+microphysics_model: "0M"
 config: "column"
 z_max: 3e3
 x_elem: 2

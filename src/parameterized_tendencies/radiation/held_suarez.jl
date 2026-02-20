@@ -11,7 +11,7 @@ import ClimaCore.Fields as Fields
 ##### Held-Suarez forcing
 #####
 
-function held_suarez_ΔT_y_T_equator(params, moisture_model::DryModel)
+function held_suarez_ΔT_y_T_equator(params, microphysics_model::DryModel)
     FT = eltype(params)
     ΔT_y = FT(CAP.ΔT_y_dry(params))
     T_equator = FT(CAP.T_equator_dry(params))
@@ -20,8 +20,8 @@ end
 
 function held_suarez_ΔT_y_T_equator(
     params,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     FT = eltype(params)
     ΔT_y = FT(CAP.ΔT_y_wet(params))
     T_equator = FT(CAP.T_equator_wet(params))
@@ -88,7 +88,7 @@ function held_suarez_forcing_tendency_ρe_tot(
     ᶜp,
     params,
     T_sfc,
-    moisture_model,
+    microphysics_model,
     forcing,
 )
     forcing isa Nothing && return NullBroadcasted()
@@ -112,7 +112,7 @@ function held_suarez_forcing_tendency_ρe_tot(
 
     z_surface = Fields.level(ᶠz, Fields.half)
 
-    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, moisture_model)
+    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, microphysics_model)
 
     hs_params = HeldSuarezForcingParams{FT}(
         ΔT_y,
@@ -138,7 +138,7 @@ function held_suarez_forcing_tendency_uₕ(
     ᶜp,
     params,
     T_sfc,
-    moisture_model,
+    microphysics_model,
     forcing,
 )
     forcing isa Nothing && return NullBroadcasted()
@@ -160,7 +160,7 @@ function held_suarez_forcing_tendency_uₕ(
 
     z_surface = Fields.level(ᶠz, Fields.half)
 
-    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, moisture_model)
+    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, microphysics_model)
 
     hs_params = HeldSuarezForcingParams{FT}(
         ΔT_y,

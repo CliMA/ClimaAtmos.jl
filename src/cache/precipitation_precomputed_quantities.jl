@@ -40,7 +40,7 @@ Uses cbrt(floatmin(FT)) to detect effectively-zero specific humidities.
 ϵ_numerics(FT) = cbrt(floatmin(FT))
 
 """
-    set_precipitation_velocities!(Y, p, moisture_model, microphysics_model, turbconv_model)
+    set_precipitation_velocities!(Y, p, microphysics_model, turbconv_model)
 
 Updates the precipitation terminal velocity, cloud sedimentation velocity,
 and their contribution to total water and energy advection.
@@ -50,15 +50,14 @@ and their contribution to total water and energy advection.
 function set_precipitation_velocities!(
     Y,
     p,
-    moisture_model,
     qm::QuadratureMicrophysics,
     turbconv_model,
 )
     return set_precipitation_velocities!(
-        Y, p, moisture_model, qm.base_model, turbconv_model,
+        Y, p, qm.base_model, turbconv_model,
     )
 end
-function set_precipitation_velocities!(Y, p, _, _, _)
+function set_precipitation_velocities!(Y, p, _, _)
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     @. ᶜwₜqₜ = Geometry.WVector(0)
     @. ᶜwₕhₜ = Geometry.WVector(0)
@@ -67,8 +66,7 @@ end
 function set_precipitation_velocities!(
     Y,
     p,
-    moisture_model::NonEquilMoistModel,
-    microphysics_model::Microphysics1Moment,
+    microphysics_model::NonEquilibriumMicrophysics1M,
     _,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
@@ -124,8 +122,7 @@ end
 function set_precipitation_velocities!(
     Y,
     p,
-    moisture_model::NonEquilMoistModel,
-    microphysics_model::Microphysics1Moment,
+    microphysics_model::NonEquilibriumMicrophysics1M,
     turbconv_model::PrognosticEDMFX,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
@@ -297,8 +294,7 @@ end
 function set_precipitation_velocities!(
     Y,
     p,
-    moisture_model::NonEquilMoistModel,
-    microphysics_model::Microphysics2Moment,
+    microphysics_model::NonEquilibriumMicrophysics2M,
     _,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
@@ -386,8 +382,7 @@ end
 function set_precipitation_velocities!(
     Y,
     p,
-    moisture_model::NonEquilMoistModel,
-    microphysics_model::Microphysics2Moment,
+    microphysics_model::NonEquilibriumMicrophysics2M,
     turbconv_model::PrognosticEDMFX,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
@@ -569,7 +564,7 @@ function set_precipitation_velocities!(
 end
 
 function set_precipitation_velocities!(
-    Y, p, ::NonEquilMoistModel, ::Microphysics2MomentP3,
+    Y, p, ::NonEquilibriumMicrophysics2MP3,
 )
     ## liquid quantities (2M warm rain)
     (; ᶜwₗ, ᶜwᵣ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
@@ -646,7 +641,7 @@ properties. When running with edmf model this means summing the microphysics
 sources from the sub-domains.
 """
 set_microphysics_tendency_cache!(Y, p, _, _) = nothing
-function set_microphysics_tendency_cache!(Y, p, ::Microphysics0Moment, _)
+function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
     (; params, dt) = p
     (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜmp_tendency) = p.precomputed
@@ -673,7 +668,7 @@ end
 function set_microphysics_tendency_cache!(
     Y,
     p,
-    qm::QuadratureMicrophysics{Microphysics0Moment},
+    qm::QuadratureMicrophysics{EquilibriumMicrophysics0M},
     _,
 )
     (; dt, params) = p
@@ -708,7 +703,7 @@ end
 function set_microphysics_tendency_cache!(
     Y,
     p,
-    ::Microphysics0Moment,
+    ::EquilibriumMicrophysics0M,
     turbconv_model::DiagnosticEDMFX,
 )
     (; ᶜΦ) = p.core
@@ -743,7 +738,7 @@ end
 function set_microphysics_tendency_cache!(
     Y,
     p,
-    ::Microphysics0Moment,
+    ::EquilibriumMicrophysics0M,
     ::PrognosticEDMFX,
 )
     (; ᶜΦ) = p.core
@@ -786,16 +781,16 @@ end
 function set_microphysics_tendency_cache!(
     Y,
     p,
-    qm::QuadratureMicrophysics{Microphysics0Moment},
+    qm::QuadratureMicrophysics{EquilibriumMicrophysics0M},
     turbconv_model::Union{DiagnosticEDMFX, PrognosticEDMFX},
 )
     set_microphysics_tendency_cache!(Y, p, qm.base_model, turbconv_model)
 end
 
 """
-    set_microphysics_tendency_cache!(Y, p, ::Microphysics1Moment, turbconv_model)
+    set_microphysics_tendency_cache!(Y, p, ::NonEquilibriumMicrophysics1M, turbconv_model)
 
-Dispatch for bare `Microphysics1Moment` (without explicit `QuadratureMicrophysics` wrapper).
+Dispatch for bare `NonEquilibriumMicrophysics1M` (without explicit `QuadratureMicrophysics` wrapper).
 
 # Design Note
 This method creates a `QuadratureMicrophysics` wrapper with `GridMeanSGS()` distribution,
@@ -808,8 +803,8 @@ This design allows:
 2. Easy extension to full SGS quadrature by changing the distribution
 3. Consistent covariance computation across cloud fraction and precipitation
 """
-function set_microphysics_tendency_cache!(Y, p, ::Microphysics1Moment, turbconv_model)
-    qm = QuadratureMicrophysics(Microphysics1Moment(), GridMeanSGS())
+function set_microphysics_tendency_cache!(Y, p, ::NonEquilibriumMicrophysics1M, turbconv_model)
+    qm = QuadratureMicrophysics(NonEquilibriumMicrophysics1M(), GridMeanSGS())
     return set_microphysics_tendency_cache!(Y, p, qm, turbconv_model)
 end
 
@@ -817,7 +812,7 @@ end
 function set_microphysics_tendency_cache!(
     Y,
     p,
-    qm::QuadratureMicrophysics{Microphysics1Moment},
+    qm::QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
     _,
 )
     (; dt, params) = p
@@ -879,7 +874,7 @@ end
 function set_microphysics_tendency_cache!(
     Y,
     p,
-    ::Microphysics1Moment,
+    ::NonEquilibriumMicrophysics1M,
     ::DiagnosticEDMFX,
 )
     # Nothing needs to be done on the grid mean. The Sources are computed
@@ -889,7 +884,7 @@ end
 function set_microphysics_tendency_cache!(
     Y,
     p,
-    ::Microphysics1Moment,
+    ::NonEquilibriumMicrophysics1M,
     ::PrognosticEDMFX,
 )
     # Nothing needs to be done on the grid mean. The Sources are computed
@@ -899,22 +894,22 @@ end
 function set_microphysics_tendency_cache!(
     Y,
     p,
-    qm::QuadratureMicrophysics{Microphysics1Moment},
+    qm::QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
     turbconv_model::Union{DiagnosticEDMFX, PrognosticEDMFX},
 )
     set_microphysics_tendency_cache!(Y, p, qm.base_model, turbconv_model)
 end
 
-function set_microphysics_tendency_cache!(Y, p, ::Microphysics2Moment, turbconv_model)
+function set_microphysics_tendency_cache!(Y, p, ::NonEquilibriumMicrophysics2M, turbconv_model)
     # Use unified quadrature path with GridMeanSGS (grid-mean-only evaluation for now)
-    qm = QuadratureMicrophysics(Microphysics2Moment(), GridMeanSGS())
+    qm = QuadratureMicrophysics(NonEquilibriumMicrophysics2M(), GridMeanSGS())
     return set_microphysics_tendency_cache!(Y, p, qm, turbconv_model)
 end
 
 function set_microphysics_tendency_cache!(
     Y,
     p,
-    qm::QuadratureMicrophysics{Microphysics2Moment},
+    qm::QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
     _,
 )
     (; dt) = p
@@ -973,7 +968,7 @@ end
 function set_microphysics_tendency_cache!(
     Y,
     p,
-    ::Microphysics2Moment,
+    ::NonEquilibriumMicrophysics2M,
     ::DiagnosticEDMFX,
 )
     error("Not implemented yet")
@@ -982,7 +977,7 @@ end
 function set_microphysics_tendency_cache!(
     Y,
     p,
-    ::Microphysics2Moment,
+    ::NonEquilibriumMicrophysics2M,
     ::PrognosticEDMFX,
 )
     # Nothing needs to be done on the grid mean. The Sources are computed
@@ -992,13 +987,13 @@ end
 function set_microphysics_tendency_cache!(
     Y,
     p,
-    qm::QuadratureMicrophysics{Microphysics2Moment},
+    qm::QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
     turbconv_model::PrognosticEDMFX,
 )
     set_microphysics_tendency_cache!(Y, p, qm.base_model, turbconv_model)
 end
 
-function set_microphysics_tendency_cache!(Y, p, ::Microphysics2MomentP3, ::Nothing)
+function set_microphysics_tendency_cache!(Y, p, ::NonEquilibriumMicrophysics2MP3, ::Nothing)
     (; dt) = p
     (; ᶜT, ᶜSqₗᵐ, ᶜSqᵢᵐ, ᶜSqᵣᵐ, ᶜSqₛᵐ, ᶜmp_tendency) = p.precomputed
     (; ᶜSnₗᵐ, ᶜSnᵣᵐ, ᶜScoll, ᶜlogλ) = p.precomputed
@@ -1076,8 +1071,8 @@ function set_precipitation_surface_fluxes!(
     Y,
     p,
     microphysics_model::Union{
-        Microphysics0Moment,
-        QuadratureMicrophysics{Microphysics0Moment},
+        EquilibriumMicrophysics0M,
+        QuadratureMicrophysics{EquilibriumMicrophysics0M},
     },
 )
     (; ᶜT) = p.precomputed
@@ -1104,10 +1099,10 @@ function set_precipitation_surface_fluxes!(
     Y,
     p,
     microphysics_model::Union{
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
+        NonEquilibriumMicrophysics1M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
+        NonEquilibriumMicrophysics2M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
     },
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
@@ -1163,8 +1158,8 @@ end
 function set_precipitation_surface_fluxes!(
     Y,
     p,
-    ::Union{Microphysics2MomentP3, QuadratureMicrophysics{Microphysics2MomentP3}},
+    ::Union{NonEquilibriumMicrophysics2MP3, QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3}},
 )
-    set_precipitation_surface_fluxes!(Y, p, Microphysics2Moment())
+    set_precipitation_surface_fluxes!(Y, p, NonEquilibriumMicrophysics2M())
     # TODO: Figure out what to do for ρn_ice, ρq_rim, ρb_rim
 end

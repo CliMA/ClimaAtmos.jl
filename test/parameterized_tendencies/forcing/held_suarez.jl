@@ -40,7 +40,7 @@ using ClimaCore.CommonSpaces
     ᶜp = Fields.Field(FT, ᶜspace)
     ρe_totₜ = Fields.Field(FT, ᶜspace)
     ts_surf = Fields.Field(TD.PhaseDry{FT}, ᶜspace)
-    moisture_model = CA.DryModel()
+    microphysics_model = CA.DryModel()
     forcing = CA.HeldSuarezForcing()
     params = CA.ClimaAtmosParameters(FT)
     ### Component test begins here
@@ -50,7 +50,7 @@ using ClimaCore.CommonSpaces
         ᶜp,
         params,
         ts_surf,
-        moisture_model,
+        microphysics_model,
         forcing,
     )
     @. ρe_totₜ = bc
@@ -59,7 +59,7 @@ using ClimaCore.CommonSpaces
         ᶜp,
         params,
         ts_surf,
-        moisture_model,
+        microphysics_model,
         forcing,
     )
     @. ᶜuₕₜ = bc

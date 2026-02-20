@@ -35,8 +35,7 @@ end
         # Define expected defaults in a compact dictionary
         expected_defaults = Dict(
             # Core physics defaults
-            :moisture_model => CA.DryModel,
-            :microphysics_model => CA.NoPrecipitation,
+            :microphysics_model => CA.DryModel,
             :cloud_model => Union{CA.GridScaleCloud, CA.QuadratureCloud},
             :surface_model => CA.PrescribedSST,
             :sfc_temperature => CA.ZonallySymmetricSST,
@@ -65,8 +64,7 @@ end
     @testset "User overrides work correctly" begin
         # Test various override scenarios including complex parameter types
         model = CA.AtmosModel(;
-            moisture_model = CA.EquilMoistModel(),
-            microphysics_model = CA.Microphysics1Moment(),
+            microphysics_model = CA.NonEquilibriumMicrophysics1M(),
             cloud_model = CA.QuadratureCloud(),
             radiation_mode = RRTMGPI.ClearSkyRadiation(;
                 idealized_h2o = false,
@@ -83,8 +81,7 @@ end
         )
 
         # Test customized values
-        @test model.moisture_model isa CA.EquilMoistModel
-        @test model.microphysics_model isa CA.Microphysics1Moment
+        @test model.microphysics_model isa CA.NonEquilibriumMicrophysics1M
         @test model.cloud_model isa CA.QuadratureCloud
         @test model.radiation_mode isa RRTMGPI.ClearSkyRadiation
         @test model.hyperdiff isa CA.Hyperdiffusion
@@ -101,12 +98,12 @@ end
         # Test that convenience constructors properly override defaults
         models = [
             ("dry", CA.DryAtmosModel(), CA.DryModel),
-            ("equil", CA.EquilMoistAtmosModel(), CA.EquilMoistModel),
-            ("nonequil", CA.NonEquilMoistAtmosModel(), CA.NonEquilMoistModel),
+            ("equil", CA.EquilMoistAtmosModel(), CA.EquilibriumMicrophysics0M),
+            ("nonequil", CA.NonEquilMoistAtmosModel(), CA.NonEquilibriumMicrophysics1M),
         ]
 
-        for (name, model, expected_moisture_type) in models
-            @test model.moisture_model isa expected_moisture_type
+        for (name, model, expected_microphysics_type) in models
+            @test model.microphysics_model isa expected_microphysics_type
             @test model.surface_model isa CA.PrescribedSST  # default preserved
             @test model.numerics.diff_mode isa CA.Explicit  # default preserved
             @test model.numerics.hyperdiff isa Union{Nothing, CA.Hyperdiffusion}  # default is nothing or Hyperdiffusion
@@ -118,16 +115,15 @@ end
     @testset "Basic configurations work as documented" begin
         # Test basic dry model
         dry_model = CA.AtmosModel(;
-            moisture_model = CA.DryModel(),
+            microphysics_model = CA.DryModel(),
             surface_model = CA.PrescribedSST(),
         )
-        @test dry_model.moisture_model isa CA.DryModel
+        @test dry_model.microphysics_model isa CA.DryModel
         @test dry_model.surface_model isa CA.PrescribedSST
 
         # Test moist model with radiation
         moist_model = CA.AtmosModel(;
-            moisture_model = CA.EquilMoistModel(),
-            microphysics_model = CA.Microphysics0Moment(),
+            microphysics_model = CA.EquilibriumMicrophysics0M(),
             radiation_mode = RRTMGPI.ClearSkyRadiation(;
                 idealized_h2o = false,
                 add_isothermal_boundary_layer = false,
@@ -135,8 +131,7 @@ end
                 deep_atmosphere = false,
             ),
         )
-        @test moist_model.moisture_model isa CA.EquilMoistModel
-        @test moist_model.microphysics_model isa CA.Microphysics0Moment
+        @test moist_model.microphysics_model isa CA.EquilibriumMicrophysics0M
         @test moist_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
 
         # Test HeldSuarezForcing as radiation mode
@@ -148,22 +143,22 @@ end
 
 @testset "Interface Compatibility" begin
     # Test that both flat parameters and grouped struct access work
-    model = CA.AtmosModel(moisture_model = CA.NonEquilMoistModel())
+    model = CA.AtmosModel(microphysics_model = CA.NonEquilibriumMicrophysics1M())
 
     # Flat parameter access
-    @test model.moisture_model isa CA.NonEquilMoistModel
+    @test model.microphysics_model isa CA.NonEquilibriumMicrophysics1M
 
     # Grouped struct access  
     @test model.water isa CA.AtmosWater
-    @test model.water.moisture_model isa CA.NonEquilMoistModel
+    @test model.water.microphysics_model isa CA.NonEquilibriumMicrophysics1M
 end
 
 @testset "Complete Grouped Struct Support" begin
     # Test passing complete grouped struct
-    water = CA.AtmosWater(; moisture_model = CA.EquilMoistModel())
+    water = CA.AtmosWater(; microphysics_model = CA.EquilibriumMicrophysics0M())
     model = CA.AtmosModel(; water = water)
     @test model.water === water
-    @test model.moisture_model isa CA.EquilMoistModel
+    @test model.microphysics_model isa CA.EquilibriumMicrophysics0M
 end
 
 @testset "Error Handling" begin

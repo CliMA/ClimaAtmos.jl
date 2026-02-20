@@ -48,12 +48,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
 
-    if p.atmos.moisture_model isa NonEquilMoistModel && (
-        p.atmos.microphysics_model isa
-        Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
-        p.atmos.microphysics_model isa
-        Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-    )
+    if p.atmos.microphysics_model isa Union{
+        NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
+        NonEquilibriumMicrophysics2M, QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
+    }
         ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
         ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
         ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
@@ -73,7 +71,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
             ᶜq_ice_sno⁰,
         )
     else
-        # EquilMoistModel: use saturation adjustment to get T and phase partition
+        # EquilibriumMicrophysics0M: use saturation adjustment to get T and phase partition
         @. ᶜq_tot_safe⁰ = max(0, ᶜq_tot⁰)
         (; ᶜsa_result) = p.precomputed
         h⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)
@@ -97,7 +95,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     ᶠuₕ³,
     t,
 )
-    (; moisture_model, turbconv_model, microphysics_model) = p.atmos
+    (; microphysics_model, turbconv_model) = p.atmos
 
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -134,12 +132,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
 
         @. ᶜq_tot_safeʲ = max(0, ᶜq_totʲ)
-        if moisture_model isa NonEquilMoistModel && (
-            microphysics_model isa
-            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
-            microphysics_model isa
-            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-        )
+        if microphysics_model isa Union{
+            NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
+            NonEquilibriumMicrophysics2M, QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
+        }
             ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
             ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
             ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
@@ -158,7 +154,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
                 ᶜq_ice_snoʲ,
             )
         else
-            # EquilMoistModel: use saturation adjustment
+            # EquilibriumMicrophysics0M: use saturation adjustment
             (; ᶜsa_result) = p.precomputed
             @. ᶜsa_result = saturation_adjustment_tuple(
                 thermo_params,
@@ -437,14 +433,14 @@ condensation/evaporation at cloud edges.
 function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::NoPrecipitation,
+    ::DryModel,
 )
     return nothing
 end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
+    ::Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}},
 )
 
     (; params, dt) = p
@@ -513,7 +509,7 @@ end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}},
+    ::Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}},
 )
 
     (; params, dt) = p
@@ -636,7 +632,7 @@ end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}},
+    ::Union{NonEquilibriumMicrophysics2M, QuadratureMicrophysics{NonEquilibriumMicrophysics2M}},
 )
 
     (; params, dt) = p

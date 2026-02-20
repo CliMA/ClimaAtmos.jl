@@ -1,6 +1,5 @@
 dt_save_state_to_disk: 12hours
-moist: equil
-precip_model: 0M
+microphysics_model: "0M"
 rad: allskywithclear
 idealized_insolation: false
 dt_rad: 1hours

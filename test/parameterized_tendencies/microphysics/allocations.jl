@@ -36,20 +36,20 @@ The second call should not allocate more than the first.
 """
 function test_microphysics_allocations!(ᶜYₜ, Y, p)
     FT = eltype(Y)
-    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
+    (; turbconv_model, microphysics_model) = p.atmos
 
     # Warmup (triggers JIT compilation)
     ᶜYₜ .= zero(eltype(ᶜYₜ))
     CA.microphysics_tendency!(
         ᶜYₜ, Y, p, FT(0),
-        moisture_model, microphysics_model, turbconv_model,
+        microphysics_model, turbconv_model,
     )
 
     # Measure allocations on second call
     ᶜYₜ .= zero(eltype(ᶜYₜ))
     allocs = @allocated CA.microphysics_tendency!(
         ᶜYₜ, Y, p, FT(0),
-        moisture_model, microphysics_model, turbconv_model,
+        microphysics_model, turbconv_model,
     )
     return allocs
 end
@@ -226,8 +226,7 @@ end
             config = CA.AtmosConfig(
                 Dict(
                     "initial_condition" => "DYCOMS_RF02",
-                    "moist" => "equil",
-                    "precip_model" => "0M",
+                    "microphysics_model" => "0M",
                     "config" => "column",
                     "output_default_diagnostics" => false,
                 ),
@@ -251,8 +250,7 @@ end
             config = CA.AtmosConfig(
                 Dict(
                     "initial_condition" => "PrecipitatingColumn",
-                    "moist" => "nonequil",
-                    "precip_model" => "1M",
+                    "microphysics_model" => "1M",
                     "config" => "column",
                     "output_default_diagnostics" => false,
                 ),
@@ -276,8 +274,7 @@ end
             config = CA.AtmosConfig(
                 Dict(
                     "initial_condition" => "PrecipitatingColumn",
-                    "moist" => "nonequil",
-                    "precip_model" => "2M",
+                    "microphysics_model" => "2M",
                     "config" => "column",
                     "output_default_diagnostics" => false,
                     "prescribed_aerosols" => ["SSLT01"],
@@ -302,8 +299,7 @@ end
             config = CA.AtmosConfig(
                 Dict(
                     "initial_condition" => "PrecipitatingColumn",
-                    "moist" => "nonequil",
-                    "precip_model" => "1M",
+                    "microphysics_model" => "1M",
                     "config" => "column",
                     "use_sgs_quadrature" => true,
                     "sgs_distribution" => "gaussian",

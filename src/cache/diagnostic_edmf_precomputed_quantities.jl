@@ -186,7 +186,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     p,
     t,
 )
-    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
+    (; turbconv_model, microphysics_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜΦ) = p.core
@@ -229,9 +229,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     ustar_sfc_halflevel = Fields.field_values(ustar)
     obukhov_length_sfc_halflevel = Fields.field_values(obukhov_length)
 
-    if moisture_model isa NonEquilMoistModel &&
-       microphysics_model isa
-       Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
+    if microphysics_model isa
+       Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
         (; ᶜq_liqʲs, ᶜq_iceʲs, ᶜq_raiʲs, ᶜq_snoʲs) = p.precomputed
 
         ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
@@ -310,9 +309,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
             local_geometry_int_halflevel,
         )
 
-        if moisture_model isa NonEquilMoistModel &&
-           microphysics_model isa
-           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
+        if microphysics_model isa
+           Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
             ᶜq_liqʲ = ᶜq_liqʲs.:($j)
             ᶜq_iceʲ = ᶜq_iceʲs.:($j)
             ᶜq_raiʲ = ᶜq_raiʲs.:($j)
@@ -369,9 +367,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
             )
         end
 
-        if moisture_model isa NonEquilMoistModel &&
-           microphysics_model isa
-           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
+        if microphysics_model isa
+           Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
             set_diagnostic_edmfx_draft_quantities_level!(
                 thermo_params,
                 ρʲ_int_level,
@@ -485,7 +482,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     p,
     t,
 )
-    (; turbconv_model, microphysics_model, moisture_model) = p.atmos
+    (; turbconv_model, microphysics_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -511,9 +508,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰) = p.precomputed
 
-    if moisture_model isa NonEquilMoistModel &&
-       microphysics_model isa
-       Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
+    if microphysics_model isa
+       Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
         ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
         ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
         ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
@@ -584,9 +580,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
         dz_prev_level = Fields.field_values(Fields.level(ᶜdz, i - 1))
 
-        if moisture_model isa NonEquilMoistModel &&
-           microphysics_model isa
-           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
+        if microphysics_model isa
+           Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
             q_liq_level = Fields.field_values(Fields.level(ᶜq_liq, i))
             q_liq_prev_level = Fields.field_values(Fields.level(ᶜq_liq, i - 1))
 
@@ -624,12 +619,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ᶠnh_pressure³_dragʲ = ᶠnh_pressure³_dragʲs.:($j)
 
             if microphysics_model isa
-               Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
+               Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}}
                 ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵐʲs.:($j)
             end
-            if moisture_model isa NonEquilMoistModel &&
-               microphysics_model isa
-               Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
+            if microphysics_model isa
+               Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
                 ᶜq_liqʲ = ᶜq_liqʲs.:($j)
                 ᶜq_iceʲ = ᶜq_iceʲs.:($j)
                 ᶜq_raiʲ = ᶜq_raiʲs.:($j)
@@ -682,14 +676,13 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
             S_q_totʲ_prev_level =
                 if microphysics_model isa
-                   Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
+                   Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}}
                     Fields.field_values(Fields.level(ᶜS_q_totʲ, i - 1))
                 else
                     Ref(nothing)
                 end
-            if moisture_model isa NonEquilMoistModel &&
-               microphysics_model isa
-               Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
+            if microphysics_model isa
+               Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
 
                 q_liqʲ_level = Fields.field_values(Fields.level(ᶜq_liqʲ, i))
                 q_iceʲ_level = Fields.field_values(Fields.level(ᶜq_iceʲ, i))
@@ -832,7 +825,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
             # 0-moment microphysics: sink of q_tot from precipitation removal
             if microphysics_model isa
-               Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
+               Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}}
                 mp_tendency_prev_level = Fields.field_values(
                     Fields.level(p.precomputed.ᶜmp_tendency, i - 1))
                 @. mp_tendency_prev_level = BMT.bulk_microphysics_tendencies(
@@ -850,9 +843,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 # 1-moment microphysics: cloud water (liquid and ice) and
                 # precipitation (rain and snow) tendencies. q_tot is constant, because
                 # all the species are considered a part of the working fluid.
-            elseif moisture_model isa NonEquilMoistModel &&
-                   microphysics_model isa
-                   Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
+            elseif microphysics_model isa
+                   Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
                 # Microphysics tendencies from the updrafts (using fused BMT API)
                 mp_tendency_prev_level = Fields.field_values(
                     Fields.level(p.precomputed.ᶜmp_tendency, i - 1))
@@ -980,7 +972,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     FT(1),
                 )
             if microphysics_model isa
-               Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
+               Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}}
                 @. ρaʲu³ʲ_data += microphysics_sources(
                     local_geometry_halflevel.J,
                     local_geometry_prev_level.J,
@@ -1036,7 +1028,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     mseʲ_prev_level,
                 )
             if microphysics_model isa
-               Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
+               Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}}
                 @. ρaʲu³ʲ_datamse += microphysics_sources(
                     local_geometry_halflevel.J,
                     local_geometry_prev_level.J,
@@ -1078,7 +1070,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     q_totʲ_prev_level,
                 )
             if microphysics_model isa
-               Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
+               Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}}
                 @. ρaʲu³ʲ_dataq_tot += microphysics_sources(
                     local_geometry_halflevel.J,
                     local_geometry_prev_level.J,
@@ -1096,8 +1088,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ### 1-moment microphysics tracers
             ###
             if microphysics_model isa
-               Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} &&
-               moisture_model isa NonEquilMoistModel
+               Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
                 # TODO - loop over tracres
                 ρaʲu³ʲ_dataq_ = p.scratch.temp_data_level_3
                 @. ρaʲu³ʲ_dataq_ =
@@ -1236,10 +1227,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 @. q_totʲ_level =
                     ifelse(kill_updraft_2, q_tot_level, q_totʲ_level)
                 if microphysics_model isa Union{
-                    Microphysics1Moment,
-                    QuadratureMicrophysics{Microphysics1Moment},
-                } &&
-                   moisture_model isa NonEquilMoistModel
+                    NonEquilibriumMicrophysics1M,
+                    QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
+                }
                     @. q_liqʲ_level =
                         ifelse(kill_updraft_2, q_liq_level, q_liqʲ_level)
                     @. q_iceʲ_level =
@@ -1257,9 +1247,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 local_geometry_level,
                 local_geometry_halflevel,
             )
-            if moisture_model isa NonEquilMoistModel &&
-               microphysics_model isa
-               Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
+            if microphysics_model isa
+               Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
                 set_diagnostic_edmfx_draft_quantities_level!(
                     thermo_params,
                     ρʲ_level,
@@ -1328,7 +1317,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
     (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p.precomputed
     (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs, ᶠnh_pressure³_buoyʲs, ᶠnh_pressure³_dragʲs) =
         p.precomputed
-    (; microphysics_model, moisture_model) = p.atmos
+    (; microphysics_model) = p.atmos
 
     # set values for the top level
     i_top = Spaces.nlevels(axes(Y.c))
@@ -1368,14 +1357,13 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
         @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
 
         if microphysics_model isa
-           Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
+           Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}}
             ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵐʲs.:($j)
             S_q_totʲ_level = Fields.field_values(Fields.level(ᶜS_q_totʲ, i_top))
             @. S_q_totʲ_level = 0
         end
         if microphysics_model isa
-           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} &&
-           moisture_model isa NonEquilMoistModel
+           Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
             ᶜS_q_liqʲ = p.precomputed.ᶜSqₗᵐʲs.:($j)
             ᶜS_q_iceʲ = p.precomputed.ᶜSqᵢᵐʲs.:($j)
             ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵐʲs.:($j)
@@ -1463,14 +1451,14 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     Y,
     p,
     t,
-    ::NoPrecipitation,
+    ::DryModel,
 )
     return nothing
 end
 """
-    set_diagnostic_edmf_precomputed_quantities_env_precipitation!(Y, p, t, ::Microphysics0Moment)
+    set_diagnostic_edmf_precomputed_quantities_env_precipitation!(Y, p, t, ::EquilibriumMicrophysics0M)
 
-Dispatch for bare `Microphysics0Moment` (without explicit `QuadratureMicrophysics` wrapper).
+Dispatch for bare `EquilibriumMicrophysics0M` (without explicit `QuadratureMicrophysics` wrapper).
 
 Creates a `QuadratureMicrophysics` wrapper with `GridMeanSGS()` distribution and delegates,
 matching the pattern in `precipitation_precomputed_quantities.jl`.
@@ -1479,9 +1467,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     Y,
     p,
     t,
-    microphysics_model::Microphysics0Moment,
+    microphysics_model::EquilibriumMicrophysics0M,
 )
-    qm = QuadratureMicrophysics(Microphysics0Moment(), GridMeanSGS())
+    qm = QuadratureMicrophysics(EquilibriumMicrophysics0M(), GridMeanSGS())
     return set_diagnostic_edmf_precomputed_quantities_env_precipitation!(Y, p, t, qm)
 end
 
@@ -1489,7 +1477,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     Y,
     p,
     t,
-    qm::QuadratureMicrophysics{Microphysics0Moment},
+    qm::QuadratureMicrophysics{EquilibriumMicrophysics0M},
 )
     microphys_0m_params = CAP.microphysics_0m_params(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -1518,9 +1506,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
 end
 
 """
-    set_diagnostic_edmf_precomputed_quantities_env_precipitation!(Y, p, t, ::Microphysics1Moment)
+    set_diagnostic_edmf_precomputed_quantities_env_precipitation!(Y, p, t, ::NonEquilibriumMicrophysics1M)
 
-Dispatch for bare `Microphysics1Moment` (without explicit `QuadratureMicrophysics` wrapper).
+Dispatch for bare `NonEquilibriumMicrophysics1M` (without explicit `QuadratureMicrophysics` wrapper).
 
 Creates a `QuadratureMicrophysics` wrapper with `GridMeanSGS()` distribution and delegates,
 matching the pattern in `precipitation_precomputed_quantities.jl`.
@@ -1529,9 +1517,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     Y,
     p,
     t,
-    microphysics_model::Microphysics1Moment,
+    microphysics_model::NonEquilibriumMicrophysics1M,
 )
-    qm = QuadratureMicrophysics(Microphysics1Moment(), GridMeanSGS())
+    qm = QuadratureMicrophysics(NonEquilibriumMicrophysics1M(), GridMeanSGS())
     return set_diagnostic_edmf_precomputed_quantities_env_precipitation!(Y, p, t, qm)
 end
 
@@ -1539,7 +1527,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     Y,
     p,
     t,
-    qm::QuadratureMicrophysics{Microphysics1Moment},
+    qm::QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
 )
     thermo_params = CAP.thermodynamics_params(p.params)
     microphys_1m_params = CAP.microphysics_1m_params(p.params)

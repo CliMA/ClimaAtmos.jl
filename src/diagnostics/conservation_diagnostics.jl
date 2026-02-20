@@ -41,7 +41,7 @@ add_diagnostic_variable!(
 # Total water of the air (scalar)
 ###
 compute_watera!(out, state, cache, time) =
-    compute_watera!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_watera!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_watera!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("watera", model)
 
@@ -50,8 +50,8 @@ function compute_watera!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     if isnothing(out)
         return [sum(state.c.ρq_tot)]
     else
@@ -107,7 +107,7 @@ compute_watero!(out, state, cache, time) = compute_watero!(
     state,
     cache,
     time,
-    cache.atmos.moisture_model,
+    cache.atmos.microphysics_model,
     cache.atmos.surface_model,
 )
 compute_watero!(
@@ -115,7 +115,7 @@ compute_watero!(
     _,
     _,
     _,
-    moisture_model::T1,
+    microphysics_model::T1,
     surface_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute total water of the ocean with a moist model and with SlabOceanSST",
@@ -126,7 +126,7 @@ function compute_watero!(
     state,
     cache,
     time,
-    moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    microphysics_model::MoistMicrophysics,
     surface_model::SlabOceanSST,
 )
     if isnothing(out)

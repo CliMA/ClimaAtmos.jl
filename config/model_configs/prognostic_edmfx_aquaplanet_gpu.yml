@@ -24,8 +24,7 @@ implicit_sgs_vertdiff: true
 implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
-moist: equil
-precip_model: 0M
+microphysics_model: "0M"
 t_end: 1hours
 dt_save_state_to_disk: 600secs
 toml: [toml/prognostic_edmfx.toml]

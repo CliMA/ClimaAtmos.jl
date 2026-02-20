@@ -238,7 +238,7 @@ compute_husup!(out, state, cache, time) = compute_husup!(
     state,
     cache,
     time,
-    cache.atmos.moisture_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_husup!(
@@ -246,7 +246,7 @@ compute_husup!(
     _,
     _,
     _,
-    moisture_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft specific humidity with a moist model and with EDMFX",
@@ -258,7 +258,7 @@ function compute_husup!(
     state,
     cache,
     time,
-    moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    microphysics_model::MoistMicrophysics,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
@@ -284,7 +284,7 @@ compute_hurup!(out, state, cache, time) = compute_hurup!(
     state,
     cache,
     time,
-    cache.atmos.moisture_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_hurup!(
@@ -292,7 +292,7 @@ compute_hurup!(
     _,
     _,
     _,
-    moisture_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft relative humidity and with a moist model and with EDMFX",
@@ -303,7 +303,7 @@ function compute_hurup!(
     state,
     cache,
     time,
-    moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    microphysics_model::MoistMicrophysics,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -346,7 +346,7 @@ compute_clwup!(out, state, cache, time) = compute_clwup!(
     state,
     cache,
     time,
-    cache.atmos.moisture_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_clwup!(
@@ -354,7 +354,7 @@ compute_clwup!(
     _,
     _,
     _,
-    moisture_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft liquid water specific humidity and with a moist model and with EDMFX",
@@ -365,7 +365,7 @@ function compute_clwup!(
     state,
     cache,
     time,
-    moisture_model::EquilMoistModel,
+    microphysics_model::EquilibriumMicrophysics0M,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
@@ -379,7 +379,7 @@ function compute_clwup!(
     state,
     cache,
     time,
-    moisture_model::NonEquilMoistModel,
+    microphysics_model::NonEquilibriumMicrophysics,
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -393,7 +393,7 @@ function compute_clwup!(
     state,
     cache,
     time,
-    moisture_model::NonEquilMoistModel,
+    microphysics_model::NonEquilibriumMicrophysics,
     turbconv_model::DiagnosticEDMFX,
 )
     if isnothing(out)
@@ -439,8 +439,8 @@ function compute_cdncup!(
     cache,
     time,
     microphysics_model_model::Union{
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
+        NonEquilibriumMicrophysics2M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
     },
     turbconv_model::PrognosticEDMFX,
 )
@@ -470,7 +470,7 @@ compute_cliup!(out, state, cache, time) = compute_cliup!(
     state,
     cache,
     time,
-    cache.atmos.moisture_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_cliup!(
@@ -478,7 +478,7 @@ compute_cliup!(
     _,
     _,
     _,
-    moisture_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft ice water specific humidity and with a moist model and with EDMFX",
@@ -489,7 +489,7 @@ function compute_cliup!(
     state,
     cache,
     time,
-    moisture_model::EquilMoistModel,
+    microphysics_model::EquilibriumMicrophysics0M,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
@@ -503,7 +503,7 @@ function compute_cliup!(
     state,
     cache,
     time,
-    moisture_model::NonEquilMoistModel,
+    microphysics_model::NonEquilibriumMicrophysics,
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -517,7 +517,7 @@ function compute_cliup!(
     state,
     cache,
     time,
-    moisture_model::NonEquilMoistModel,
+    microphysics_model::NonEquilibriumMicrophysics,
     turbconv_model::DiagnosticEDMFX,
 )
     if isnothing(out)
@@ -566,10 +566,10 @@ function compute_husraup!(
     cache,
     time,
     microphysics_model::Union{
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
+        NonEquilibriumMicrophysics1M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
+        NonEquilibriumMicrophysics2M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
     },
     turbconv_model::PrognosticEDMFX,
 )
@@ -585,8 +585,8 @@ function compute_husraup!(
     cache,
     time,
     microphysics_model::Union{
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
+        NonEquilibriumMicrophysics1M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
     },
     turbconv_model::DiagnosticEDMFX,
 )
@@ -633,8 +633,8 @@ function compute_ncraup!(
     cache,
     time,
     microphysics_model_model::Union{
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
+        NonEquilibriumMicrophysics2M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
     },
     turbconv_model::PrognosticEDMFX,
 )
@@ -684,10 +684,10 @@ function compute_hussnup!(
     cache,
     time,
     microphysics_model::Union{
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
+        NonEquilibriumMicrophysics1M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
+        NonEquilibriumMicrophysics2M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
     },
     turbconv_model::PrognosticEDMFX,
 )
@@ -703,8 +703,8 @@ function compute_hussnup!(
     cache,
     time,
     microphysics_model::Union{
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
+        NonEquilibriumMicrophysics1M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
     },
     turbconv_model::DiagnosticEDMFX,
 )
@@ -1042,7 +1042,7 @@ compute_husen!(out, state, cache, time) = compute_husen!(
     state,
     cache,
     time,
-    cache.atmos.moisture_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_husen!(
@@ -1050,7 +1050,7 @@ compute_husen!(
     _,
     _,
     _,
-    moisture_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft specific humidity and with a moist model and with EDMFX",
@@ -1061,7 +1061,7 @@ function compute_husen!(
     state,
     cache,
     time,
-    moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    microphysics_model::MoistMicrophysics,
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -1086,7 +1086,7 @@ compute_huren!(out, state, cache, time) = compute_huren!(
     state,
     cache,
     time,
-    cache.atmos.moisture_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_huren!(
@@ -1094,7 +1094,7 @@ compute_huren!(
     _,
     _,
     _,
-    moisture_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft relative humidity and with a moist model and with EDMFX",
@@ -1105,7 +1105,7 @@ function compute_huren!(
     state,
     cache,
     time,
-    moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    microphysics_model::MoistMicrophysics,
     turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -1147,7 +1147,7 @@ compute_clwen!(out, state, cache, time) = compute_clwen!(
     state,
     cache,
     time,
-    cache.atmos.moisture_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_clwen!(
@@ -1155,7 +1155,7 @@ compute_clwen!(
     _,
     _,
     _,
-    moisture_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft liquid water specific humidity and with a moist model and with EDMFX",
@@ -1166,7 +1166,7 @@ function compute_clwen!(
     state,
     cache,
     time,
-    moisture_model::EquilMoistModel,
+    microphysics_model::EquilibriumMicrophysics0M,
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -1181,7 +1181,7 @@ function compute_clwen!(
     state,
     cache,
     time,
-    moisture_model::NonEquilMoistModel,
+    microphysics_model::NonEquilibriumMicrophysics,
     turbconv_model::PrognosticEDMFX,
 )
     ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), state, cache)
@@ -1228,8 +1228,8 @@ function compute_cdncen!(
     cache,
     time,
     microphysics_model_model::Union{
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
+        NonEquilibriumMicrophysics2M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
     },
     turbconv_model::PrognosticEDMFX,
 )
@@ -1260,7 +1260,7 @@ compute_clien!(out, state, cache, time) = compute_clien!(
     state,
     cache,
     time,
-    cache.atmos.moisture_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_clien!(
@@ -1268,7 +1268,7 @@ compute_clien!(
     _,
     _,
     _,
-    moisture_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft ice water specific humidity and with a moist model and with EDMFX",
@@ -1279,7 +1279,7 @@ function compute_clien!(
     state,
     cache,
     time,
-    moisture_model::EquilMoistModel,
+    microphysics_model::EquilibriumMicrophysics0M,
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -1294,7 +1294,7 @@ function compute_clien!(
     state,
     cache,
     time,
-    moisture_model::NonEquilMoistModel,
+    microphysics_model::NonEquilibriumMicrophysics,
     turbconv_model::PrognosticEDMFX,
 )
     ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), state, cache)
@@ -1344,10 +1344,10 @@ function compute_husraen!(
     cache,
     time,
     microphysics_model_model::Union{
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
+        NonEquilibriumMicrophysics1M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
+        NonEquilibriumMicrophysics2M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
     },
     turbconv_model::PrognosticEDMFX,
 )
@@ -1395,8 +1395,8 @@ function compute_ncraen!(
     cache,
     time,
     microphysics_model_model::Union{
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
+        NonEquilibriumMicrophysics2M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
     },
     turbconv_model::PrognosticEDMFX,
 )
@@ -1447,10 +1447,10 @@ function compute_hussnen!(
     cache,
     time,
     microphysics_model_model::Union{
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
+        NonEquilibriumMicrophysics1M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
+        NonEquilibriumMicrophysics2M,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
     },
     turbconv_model::PrognosticEDMFX,
 )

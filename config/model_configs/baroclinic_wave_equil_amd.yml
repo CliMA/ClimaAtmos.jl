@@ -1,11 +1,10 @@
-precip_model: "0M"
+microphysics_model: "0M"
 dt_save_state_to_disk: "2days"
 reproducibility_test: true
 initial_condition: "MoistBaroclinicWave"
 dt: "360secs"
 amd_les: true
 t_end: "8days"
-moist: "equil"
 disable_surface_flux_tendency: true
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]
