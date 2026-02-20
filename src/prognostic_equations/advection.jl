@@ -148,7 +148,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
                     split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_sno) -
                     Y.c.sgsʲs.:($$j).q_sno * split_divₕ(ᶜuʲs.:($$j), 1)
             end
-            if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
+            if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics2M, QuadratureMicrophysics{NonEquilibriumMicrophysics2M}}
                 @. Yₜ.c.sgsʲs.:($$j).n_liq -=
                     split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_liq) -
                     Y.c.sgsʲs.:($$j).n_liq * split_divₕ(ᶜuʲs.:($$j), 1)

@@ -564,7 +564,7 @@ function set_precipitation_velocities!(
 end
 
 function set_precipitation_velocities!(
-    Y, p, ::NonEquilibriumMicrophysics2MP3,
+    Y, p, ::NonEquilibriumMicrophysics2MP3, _,
 )
     ## liquid quantities (2M warm rain)
     (; ᶜwₗ, ᶜwᵣ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed

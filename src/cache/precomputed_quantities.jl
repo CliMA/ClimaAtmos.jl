@@ -148,7 +148,7 @@ function precomputed_quantities(Y, atmos)
         surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
     )
     sedimentation_quantities =
-        atmos.microphysics_model isa NonEquilibriumMicrophysics ?
+        atmos.microphysics_model isa Union{NonEquilibriumMicrophysics, QuadratureMicrophysics{<:NonEquilibriumMicrophysics}} ?
         (; ᶜwₗ = similar(Y.c, FT), ᶜwᵢ = similar(Y.c, FT)) : (;)
     if atmos.microphysics_model isa
        Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}}
@@ -175,6 +175,7 @@ function precomputed_quantities(Y, atmos)
         NonEquilibriumMicrophysics2M,
         QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
         NonEquilibriumMicrophysics2MP3,
+        QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3},
     }
         # 2-moment microphysics
         precipitation_quantities = (;
@@ -197,7 +198,7 @@ function precomputed_quantities(Y, atmos)
             ),
         )
         # Add additional quantities for 2M + P3
-        if atmos.microphysics_model isa NonEquilibriumMicrophysics2MP3
+        if atmos.microphysics_model isa Union{NonEquilibriumMicrophysics2MP3, QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3}}
             precipitation_quantities = (;
                 # liquid quantities (2M warm rain)
                 precipitation_quantities...,

@@ -104,7 +104,7 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
     if !(microphysics_model isa DryModel)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠsubsidence³, ᶜq_tot, Val{:first_order}())
-        if microphysics_model isa NonEquilibriumMicrophysics
+        if microphysics_model isa Union{NonEquilibriumMicrophysics, QuadratureMicrophysics{<:NonEquilibriumMicrophysics}}
             ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
             subsidence!(
                 Yₜ.c.ρq_liq,

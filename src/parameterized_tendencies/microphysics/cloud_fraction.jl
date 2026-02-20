@@ -250,6 +250,9 @@ Dispatches on `microphysics_model` and `cloud_model`:
 
 For EDMF turbulence models, updraft contributions are added to the environment values.
 """
+set_cloud_fraction!(Y, p, qm::QuadratureMicrophysics, cloud_model) =
+    set_cloud_fraction!(Y, p, qm.base_model, cloud_model)
+
 NVTX.@annotate function set_cloud_fraction!(Y, p, ::DryModel, _)
     FT = eltype(p.params)
     p.precomputed.ᶜcloud_fraction .= FT(0)
@@ -416,6 +419,8 @@ end
 
 Dispatch condensate mean retrieval based on microphysics model.
 """
+_get_condensate_means(Y, p, turbconv_model, qm::QuadratureMicrophysics) =
+    _get_condensate_means(Y, p, turbconv_model, qm.base_model)
 _get_condensate_means(Y, p, turbconv_model, ::EquilibriumMicrophysics0M) =
     _get_condensate_means_equil(p, turbconv_model)
 _get_condensate_means(Y, p, turbconv_model, ::NonEquilibriumMicrophysics) =

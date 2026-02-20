@@ -231,7 +231,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     subsidence_tendency!(Yₜ, Y, p, t, p.atmos.subsidence)
 
     @. Yₜ.c.ρe_tot += bc_lsa_tend_ρe_tot
-    if microphysics_model isa MoistMicrophysics
+    if microphysics_model isa Union{MoistMicrophysics, QuadratureMicrophysics{<:MoistMicrophysics}}
         bc_lsa_tend_ρq_tot = large_scale_advection_tendency_ρq_tot(lsa_args...)
         @. Yₜ.c.ρq_tot += bc_lsa_tend_ρq_tot
     end

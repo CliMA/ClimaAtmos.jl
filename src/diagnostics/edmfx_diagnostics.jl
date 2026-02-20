@@ -238,7 +238,7 @@ compute_husup!(out, state, cache, time) = compute_husup!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_husup!(
@@ -284,7 +284,7 @@ compute_hurup!(out, state, cache, time) = compute_hurup!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_hurup!(
@@ -346,7 +346,7 @@ compute_clwup!(out, state, cache, time) = compute_clwup!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_clwup!(
@@ -419,7 +419,7 @@ compute_cdncup!(out, state, cache, time) = compute_cdncup!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_cdncup!(
@@ -470,7 +470,7 @@ compute_cliup!(out, state, cache, time) = compute_cliup!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_cliup!(
@@ -546,7 +546,7 @@ compute_husraup!(out, state, cache, time) = compute_husraup!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_husraup!(
@@ -613,7 +613,7 @@ compute_ncraup!(out, state, cache, time) = compute_ncraup!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_ncraup!(
@@ -664,7 +664,7 @@ compute_hussnup!(out, state, cache, time) = compute_hussnup!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_hussnup!(
@@ -1042,7 +1042,7 @@ compute_husen!(out, state, cache, time) = compute_husen!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_husen!(
@@ -1086,7 +1086,7 @@ compute_huren!(out, state, cache, time) = compute_huren!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_huren!(
@@ -1147,7 +1147,7 @@ compute_clwen!(out, state, cache, time) = compute_clwen!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_clwen!(
@@ -1208,7 +1208,7 @@ compute_cdncen!(out, state, cache, time) = compute_cdncen!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_cdncen!(
@@ -1260,7 +1260,7 @@ compute_clien!(out, state, cache, time) = compute_clien!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_clien!(
@@ -1324,7 +1324,7 @@ compute_husraen!(out, state, cache, time) = compute_husraen!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_husraen!(
@@ -1375,7 +1375,7 @@ compute_ncraen!(out, state, cache, time) = compute_ncraen!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_ncraen!(
@@ -1427,7 +1427,7 @@ compute_hussnen!(out, state, cache, time) = compute_hussnen!(
     state,
     cache,
     time,
-    cache.atmos.microphysics_model,
+    base_microphysics_model(cache.atmos.microphysics_model),
     cache.atmos.turbconv_model,
 )
 compute_hussnen!(

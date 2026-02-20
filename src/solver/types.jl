@@ -44,6 +44,15 @@ struct QuadratureMicrophysics{M <: AbstractMicrophysicsModel, Q} <:
 end
 
 """
+    base_microphysics_model(m::AbstractMicrophysicsModel)
+
+Unwrap `QuadratureMicrophysics` to get the underlying microphysics model.
+For non-wrapped models, returns `m` unchanged.
+"""
+base_microphysics_model(m::AbstractMicrophysicsModel) = m
+base_microphysics_model(m::QuadratureMicrophysics) = m.base_model
+
+"""
     QuadratureMicrophysics(base_model; FT=Float32, distribution=GaussianSGS(),
         quadrature_order=3, T_min=FT(150), q_max=FT(0.1))
 
