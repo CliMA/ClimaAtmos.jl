@@ -17,9 +17,10 @@ correct Jacobian diagonal entry.
 @inline function add_microphysics_jacobian_entry!(∂, dtγ, Sq_field, q_field)
     FT = eltype(Sq_field)
     ε = ϵ_numerics(FT)
-    @. ∂ += dtγ * DiagonalMatrixRow(
-        ifelse(abs(q_field) > ε, Sq_field / abs(q_field), zero(FT)),
-    )
+    @. ∂ +=
+        dtγ * DiagonalMatrixRow(
+            ifelse(abs(q_field) > ε, Sq_field / abs(q_field), zero(FT)),
+        )
     return nothing
 end
 

@@ -283,21 +283,29 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 atmos.microphysics_tendency_timestepping == Implicit()
             # 0M EDMF writes to q_tot and ρa; 1M EDMF writes to
             # condensate species (q_liq, q_ice, q_rai, q_sno).
-            sgs_micro_names = needs_implicit_micro ? (
-                (atmos.microphysics_model isa Union{
-                    Microphysics0Moment,
-                    QuadratureMicrophysics{Microphysics0Moment},
-                } ? (
-                    @name(c.sgsʲs.:(1).q_tot),
-                    @name(c.sgsʲs.:(1).ρa),
-                ) : ())...,
-                (atmos.moisture_model isa NonEquilMoistModel ?
-                    sgs_condensate_mass_names : ())...,
-            ) : ()
+            sgs_micro_names =
+                needs_implicit_micro ?
+                (
+                    (
+                        atmos.microphysics_model isa Union{
+                            Microphysics0Moment,
+                            QuadratureMicrophysics{Microphysics0Moment},
+                        } ? (
+                            @name(c.sgsʲs.:(1).q_tot),
+                            @name(c.sgsʲs.:(1).ρa),
+                        ) : ()
+                    )...,
+                    (
+                        atmos.moisture_model isa NonEquilMoistModel ?
+                        sgs_condensate_mass_names : ()
+                    )...,
+                ) : ()
             (
                 MatrixFields.unrolled_map(
-                    name -> (name, name) => name in sgs_micro_names ?
-                        similar(Y.c, DiagonalRow) : FT(-1) * I,
+                    name ->
+                        (name, name) =>
+                            name in sgs_micro_names ?
+                            similar(Y.c, DiagonalRow) : FT(-1) * I,
                     available_sgs_scalar_names,
                 )...,
                 (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) =>
