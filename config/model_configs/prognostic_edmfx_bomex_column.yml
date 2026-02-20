@@ -34,3 +34,4 @@ diagnostics:
     period: 10mins
   - short_name: [entr, detr, lmix, lmixw, lmixtke, lmixb, bgrad, strain, edt, evu]
     period: 10mins
+ode_algo: "ARS222"
