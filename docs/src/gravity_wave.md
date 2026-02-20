@@ -61,13 +61,13 @@ The orographic gravity wave drag parameterization follows the methods described 
 ### PBL top
 There are many ways to determine the PBL top. We implement the following simple criteria to find the PBL top level k as the highest level that satisfies
 ```math
-^c p[k] \ge 0.5 ∗ ^f p[0]
+^c p[k] \ge 0.5 ∗ ^c p[1]
 ```
 and
 ```math
-^c T[0] + T_{boost} - ^c T[k] > g/c_p * ( ^c z[k] - ^c z[0] )
+^c T[1] + T_{boost} - ^c T[k] > g/c_p * ( ^c z[k] - ^c z[1] )
 ```
-where the superscripts ``f`` and ``c`` represent cell faces and cell centers in the vertical stencils. ``T_{boost} = 1.5 \mathrm{K}`` is the surface temperature boost to improve PBL height estimate.
+where the superscript ``c`` represents cell centers in the vertical stencils, and ``[1]`` denotes the first (lowest) cell center level. ``T_{boost} = 1.5 \mathrm{K}`` is the surface temperature boost to improve PBL height estimate.
 
 ### Orographic information
 The orographic information needed in generating the base momentum flux for low-level flow encountering the sub-grid scale mountains. We compute the tensor ``\textbf{T}`` and the scalar ``h_{max}`` from the Earth elevation data (GFDL codes [here](https://caltech.box.com/s/w4szffattzofarpwyv9rmm5s77jgo3o4)).
@@ -115,11 +115,7 @@ Fr_{max} = h_{max} \frac{\overline{N}}{V_{\tau}},
 ```math
 Fr_{min} = h_{min} \frac{\overline{N}}{V_{\tau}}.
 ```
-We also compute the med Froude number as
-```math
-Fr_{med} = Fr_{crit} + Fr_{int},
-```
-where ``Fr_{crit} = 0.7`` is the critical Froude number for nonlinear flow, and ``Fr_{int} = 0.5`` is an arbitrary parameter. Note that ``Fr_{crit}`` acts as the primary tuning lever for partitioning drag between the low-level blocked flow and the upper-level wave breaking.
+Here, ``Fr_{crit} = 0.7`` is the critical Froude number for nonlinear flow. ``Fr_{crit}`` acts as the primary tuning lever for partitioning drag between the low-level blocked flow and the upper-level wave breaking.
 
 The saturation velocity is computed as
 ```math
@@ -135,18 +131,11 @@ FrU_{sat} = Fr_{crit} * U_{sat},
 FrU_{min} = Fr_{min} * U_{sat},
 ```
 ```math
-FrU_{med} = Fr_{med} * U_{sat},
-```
-```math
 FrU_{max} = \max(Fr_{max} * U_{sat}, FrU_{min} + \epsilon_0),
 ```
 ```math
-FrU_{clp} = \min(FrU_{max}, \max(FrU_{min}, FrU_{sat})),
+FrU_{clp} = \min(FrU_{max}, \max(FrU_{min}, FrU_{sat})).
 ```
-```math
-FrU_0 = \frac{U_0}{V_{\tau}}U_{sat},
-```
-and ``U_0=1.0 \mathrm{m/s}`` is the arbitrary velocity scale.
 
 Now the correct linear drag is computed as
 ```math
@@ -159,28 +148,29 @@ and the propagating and non-propagating parts of the drag are computed as
 ```math
 \tau_{np} = a_1 \frac{U_{sat}}{1+\beta} \left[ \frac{FrU_{max}^{1+\gamma-\epsilon} - FrU_{clp}^{1+\gamma-\epsilon}}{1+\gamma-\epsilon} - FrU_{sat}^{\beta+1} \frac{FrU_{\max}^{\gamma-\epsilon-\beta} - FrU_{clp}^{\gamma-\epsilon-\beta}}{\gamma-\epsilon-\beta} \right].
 ```
+The non-propagating drag is then scaled by the Froude number:
+```math
+\tau_{np} = \frac{\tau_{np}}{\max(Fr_{crit}, Fr_{max})}.
+```
 
 Here, ``(\gamma, \epsilon, \beta) = (0.4, 0.0, 0.5)`` are empirical shape parameters constrained by observations [Garner 2005]. Specifically, ``\gamma=0.4`` is derived from the observed scaling of mountain width versus height.
 
 ### Saturation profiles for the propagating component
 The vertical profiles of saturated momentum flux ``\tau_{sat}`` is computed then so that momentum forcing can be obtained for ``d\overline{V}/dt = -\overline{\rho}^{-1}d\tau_{sat}/dz``. This only applies to the propagating part.
 
-Similar to the base flux calculation but for the 3D fields, we computed ``N`` and ``V_\tau`` at cell faces as
+Similar to the base flux calculation but for the 3D fields, we compute ``V_\tau`` at cell centers as
 ```math
-^f N[k]^2 = \frac{g}{^f T[k]} * ( ^f \overline{\frac{dT}{dz}}[k] + \frac{g}{cp}),
-```
-```math
-^f V_{\tau}[k] = \max(\epsilon_0, - V[k] \cdot \frac{\tau}{|\tau|}),
+^c V_{\tau}[k] = \max(\epsilon_0, - V[k] \cdot \frac{\tau}{|\tau|}),
 ```
 where ``\epsilon_0`` denotes a measure of floating-point precision.
 
-Let ``L_1 = L_0 * \max(0.5, \min(2.0, 1.0-samp*V_\tau*d^2V_{\tau}/N^2))`` where ``samp=1.0`` is the correction for coarse sampling of ``d^2V/dz^2``, and
+Let ``L_1 = L_0 * \max(0.5, \min(2.0, 1.0 - 2 V_\tau \cdot d^2V_{\tau} / N^2))`` where the factor of 2 is a correction for coarse sampling of ``d^2V/dz^2``, and
 ```math
-^f d^2V_{\tau}[k] = - \frac{d^2 V}{dz^2}[k] \cdot \frac{\tau}{|\tau|}.
+^c d^2V_{\tau}[k] = - \frac{d^2 V}{dz^2}[k] \cdot \frac{\tau}{|\tau|}.
 ```
-The saturated velocity ``U_{sat}`` is refined as follows and used to computed the intermediate ``FrU's``
+The saturated velocity ``U_{sat}`` is refined as follows and used to compute the intermediate ``FrU``'s:
 ```math
-U_{sat} = \min(U_{sat}, \sqrt{\frac{^\mathrm{f} \rho}{\rho_0} \frac{^\mathrm{f} V_{\pmb{\tau}}^3}{^\mathrm{f}N L_1} }).
+U_{sat} = \min(U_{sat}, \sqrt{\frac{^c \rho}{\rho_0} \frac{^c V_{\pmb{\tau}}^3}{^c N \cdot L_1} }).
 ```
 
 The ``FrU_{min}`` and ``FrU_{max}`` are inherited from the base flux calculation. Let's save the source level ``FrU_{sat}`` and ``FrU_{clp}`` into
@@ -205,7 +195,7 @@ Then, the saturated profile of propagating component of the momentum flux is
 
 If the wave does not break and propagates all the way up to the model top, the residual momentum carried by this part will be redistributed throughout the column weighted by pressure to conserve momentum. That is,
 ```math
-\tau_{sat}[k] = \tau_{sat}[k] - \tau_{sat}[end] \frac{^f p-^f p[k]}{^f p-^f p[end]}.
+\tau_{sat}[k] = \tau_{sat}[k] - \tau_{sat}[end] \frac{^c p[1] - ^c p[k]}{^c p[1] - ^c p[end]}.
 ```
 
 ### Velocity tendencies due to the orographic drag
@@ -220,25 +210,27 @@ The forcing from the propagating part on the zonal and meridional wind are
 Here, ``(\tau_x, \tau_y, \tau_l)`` is computed in the base flux calculation, and ``\tau_{sat}`` is calculated in the saturation flux profile. The propagating part functions throughout the entire column.
 
 #### Non-propagating component
-Let's first find the reference level ``kref`` below which the non-propagating part functions to decelerate the flow. Let ``k`` loops from PBL top upwards, initiate ``phase = 0.0`` and ``z_{last} = ^fz[k]``, if ``phase \leq \pi`` and ``k`` is below the top level, update ``phase`` and ``z_{last}`` as
+Let's first find the reference level ``z_{ref}`` below which the non-propagating part functions to decelerate the flow. Iterating over face levels above the PBL top, we accumulate phase as
 ```math
-phase += \frac{\max(N_{min}, \min(N_{max}, ^fN[k]))}{\max(vvmin, ^f V_{\tau}[k])} * (^c z[k+1] - z_{last})
+phase += (^f z[k] - z_{pbl}) \cdot \frac{\max(N_{min}, \min(N_{max}, ^f N[k]))}{\max(vvmin, ^f V_{\tau}[k])}
 ```
-```math
-z_{last} = ^c z[k+1]
-```
-and move one level up. Here, ``N_{min} = 0.7e-2, N_{max}=1.7e-2, vvmin = 1.0``; and ``(^f N, ^f V_{\tau})`` are computed during the saturation profile calculation. Let ``kref=k`` when the loop terminates.
+and set ``z_{ref} = ^f z[k]`` when ``phase > \pi``. Here, ``N_{min} = 0.7e-2, N_{max}=1.7e-2, vvmin = 1.0``; and ``(^f N, ^f V_{\tau})`` are computed during the saturation profile calculation. If phase never exceeds ``\pi``, ``z_{ref}`` defaults to the model top.
 
-The drag forcing due to non-propagating component functions from the PBL top to the level of ``kref`` and is weighted by pressure. The weights of each level are computed as
+The drag forcing due to non-propagating component functions from the PBL top to ``z_{ref}`` and is weighted by pressure. The weights at each cell center are computed by interpolating face-level pressure differences:
 ```math
-weight[k] = ^c p[k] - ^f p[kref],
+weight[k] = \overline{^f p - ^f p_{ref}}^c,
+```
+where ``^f p_{ref}`` is the face pressure at ``z_{ref}``, and the overbar denotes interpolation to cell centers. The pressure layer thickness is similarly interpolated:
+```math
+diff[k] = \overline{^f p[k-1] - ^f p[k]}^c,
 ```
 and the sum of the weights is
 ```math
-wtsum += \frac{^f p[k-1] - ^f p[k]}{weight[k]}.
+wtsum = \sum_{k \in \mathrm{mask}} \frac{diff[k]}{weight[k]}.
 ```
+The mask selects cells that overlap with the interval ``[z_{pbl}, z_{ref})`` and have nonzero weights.
 
-For level ``k`` between PBL top and ``kref``, the forcing due to non-propagating component is
+For masked levels, the forcing due to non-propagating component is
 ```math
 ^c \left( \frac{du}{dt} [k] \right)_{np} = g \frac{\tau_{np}}{\tau_l} \frac{weight[k]}{wtsum} \tau_x,
 ```
@@ -266,37 +258,97 @@ To avoid instability due to large tendencies from the forcing, let's constrain t
 Here we computed the forcing on the physical velocity (i.e., zonal and meridional wind). They are converted to the Covariant12Vector before being added to ``Y_t`` in the codes.
 
 
-## Implementation Details
+## Implementation Details - Orographic Gravity Wave
+
+### End-to-End Pipeline
+
+The orographic gravity wave implementation consists of two stages: an **offline preprocessing** stage that computes topographic information from raw elevation data, and an **online runtime** stage that uses that information to compute drag tendencies during simulation.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  OFFLINE PREPROCESSING                          │
+│                                                                 │
+│  ETOPO2022 elevation (NetCDF)                                   │
+│       │                                                         │
+│       ▼                                                         │
+│  compute_OGW_info()                                             │
+│   ├─ calc_hpoz_latlon()  ──→  hmax, hmin  (lat-lon grid)       │
+│   ├─ calc_velocity_potential()  ──→  χ    (2D Hilbert transform)│
+│   └─ calc_orographic_tensor()  ──→  T    (lat-lon grid)        │
+│       │                                                         │
+│       ▼                                                         │
+│  regrid_OGW_info()  ──→  SpaceVaryingInput to spectral element  │
+│       │                                                         │
+│       ▼                                                         │
+│  write_computed_drag!()  ──→  HDF5 artifact                     │
+│       (hmax, hmin, t11, t12, t21, t22)                          │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                    stored as ClimaArtifact
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  ONLINE RUNTIME                                 │
+│                                                                 │
+│  Simulation startup:                                            │
+│   compute_ogw_drag()  ──→  load HDF5 artifact                  │
+│   orographic_gravity_wave_cache()  ──→  allocate ~30 fields     │
+│                                                                 │
+│  Every dt_ogw (callback):                                       │
+│   orographic_gravity_wave_compute_tendency!()                   │
+│   ├─ buoyancy frequency N                                       │
+│   ├─ get_pbl_z!()                                               │
+│   ├─ calc_base_flux!()                                          │
+│   ├─ calc_saturation_profile!()                                 │
+│   ├─ calc_propagate_forcing!()                                  │
+│   ├─ calc_nonpropagating_forcing!()                             │
+│   └─ clamp to ±3e-3 m/s²                                       │
+│       │                                                         │
+│       ▼  (stored in cache)                                      │
+│                                                                 │
+│  Every dt (integrator):                                         │
+│   orographic_gravity_wave_apply_tendency!()                     │
+│   └─ Yₜ.c.uₕ += Covariant12Vector(ᶜuforcing, ᶜvforcing)       │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ### Topography Preprocessing Pipeline
 
-For Earth topography simulations, the orographic information is preprocessed offline before runtime:
+For Earth topography simulations, the orographic information is preprocessed offline before runtime. The preprocessing is driven by `test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/compute_preprocessed_topography.jl` and the core computation lives in `src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave_helper.jl`.
 
-1. **Loading**: The ETOPO2022 elevation artifact is loaded onto a regular lat-lon grid.
+The pipeline proceeds as follows:
 
-2. **Computing**: The orographic tensor ``\textbf{T}`` and height limits ``(h_{max}, h_{min})`` are computed on this lat-lon grid using `src/parameterized_tendencies/gravity_wave_drag/preprocess_topography.jl`. The velocity potential ``\chi`` is computed via a 2D Hilbert transform with latitude-dependent smoothing (Blackman window taper).
+1. **Loading**: The ETOPO2022 elevation artifact is loaded onto a regular lat-lon grid (downsampled by a configurable `skip_pt` factor).
 
-3. **Interpolating**: The computed quantities are regridded onto the CliMA spectral element grid using `SpaceVaryingInput`.
+2. **Height statistics** (`calc_hpoz_latlon`): ``h_{max}`` is computed using a distance-weighted 4th-moment calculation over the sub-grid terrain within each GCM grid cell. This captures the effective peak obstruction height rather than the raw maximum. ``h_{min} = h_{frac} \cdot h_{max}`` where ``h_{frac}`` is a configurable fraction.
 
-4. **Saving**: The preprocessed topographic information is saved to HDF5 for efficient loading during simulations.
+3. **Velocity potential** (`calc_velocity_potential`): The velocity potential ``\chi`` is computed via a 2D Hilbert transform following the GFDL Fortran implementation (`get_velpot.f90`). A Blackman window taper controls the smoothing scale, and the window size is determined by the GCM grid resolution.
+
+4. **Orographic tensor** (`calc_orographic_tensor`): The drag tensor ``\textbf{T} = \nabla\chi (\nabla h)^T`` is computed from finite-difference gradients in spherical coordinates. A ``\cos^2`` polar taper is applied from ``|\mathrm{lat}| = 75°`` to ``90°`` to suppress spurious gradients from lat-lon grid convergence.
+
+5. **Regridding** (`regrid_OGW_info`): The 6 topographic fields ``(h_{max}, h_{min}, t_{11}, t_{12}, t_{21}, t_{22})`` are interpolated from the lat-lon grid onto the CliMA spectral element grid using `SpaceVaryingInput`.
+
+6. **Saving** (`write_computed_drag!`): The ClimaCore field is written to HDF5 with metadata attributes (topography type, smoothing, damping factor, ``h_{elem}``). Pre-computed artifacts for common ``h_{elem}`` values are available via `ClimaArtifacts`.
 
 This separation of preprocessing from runtime avoids expensive tensor calculations during each simulation.
 
 ### Cache Initialization
 
-The orographic gravity wave cache is initialized via `orographic_gravity_wave_cache()`, which pre-allocates approximately 30 fields for runtime computation. The initialization follows one of three paths based on the `topo_info` configuration:
+The orographic gravity wave cache is initialized via `orographic_gravity_wave_cache()`, which pre-allocates approximately 30 fields for runtime computation. The topographic information is loaded via `get_topo_info()`, which follows one of three paths based on the `topo_info` configuration:
 
 | Configuration | Description |
 |--------------|-------------|
-| `Val(:gfdl_restart)` | Load pre-computed orographic data from GFDL artifact |
-| `Val(:raw_topo)` | Compute orographic tensor from raw Earth elevation data |
-| `Val(:linear)` | Use analytical topography functions (DCMIP200, Hughes2023, etc.) |
+| `Val(:gfdl_restart)` | Load pre-computed orographic data from GFDL restart NetCDF and remap via `regrid_OGW_info` |
+| `Val(:raw_topo)` | Load pre-computed HDF5 artifact (local file or ClimaArtifact), or compute tensor on-the-fly for analytical topographies |
+| `Val(:linear)` | Use user-provided drag input directly as fields |
 
-For analytical test cases, the topographic tensor is computed on-the-fly using the specified topography function (e.g., `topography_dcmip200`, `topography_hughes2023`).
+For Earth topography with `Val(:raw_topo)`, the runtime code first checks for a local HDF5 file, then falls back to fetching a lazy artifact via `ClimaArtifacts`. For analytical test cases (DCMIP200, Hughes2023, Agnesi, Schar, Cosine2d, Cosine3d), the tensor is computed on-the-fly using ClimaCore horizontal gradient operators.
 
 ### Runtime Computation
 
-At each timestep, `orographic_gravity_wave_compute_tendency!()` executes the following pipeline:
+The orographic gravity wave uses a split compute/apply pattern:
+
+**Compute step** (`orographic_gravity_wave_compute_tendency!`): Runs periodically at the `dt_ogw` interval via a callback (not every timestep). It executes the following pipeline and stores the result in the cache:
 
 1. **Buoyancy frequency**: Compute ``N`` from the temperature profile at cell centers and faces.
 2. **PBL detection**: Determine planetary boundary layer height using pressure and temperature criteria via `get_pbl_z!()`.
@@ -307,6 +359,19 @@ At each timestep, `orographic_gravity_wave_compute_tendency!()` executes the fol
 
 The computed tendencies are constrained to ``\pm 3 \times 10^{-3}`` m/s² to ensure numerical stability.
 
+**Apply step** (`orographic_gravity_wave_apply_tendency!`): Runs every timestep as part of `remaining_tendency!`. It reads the cached forcing and adds it to the velocity tendency ``Y_t`` as a `Covariant12Vector`.
+
+### Key Source Files
+
+| File | Description |
+|------|-------------|
+| `src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl` | Runtime forcing computation: cache, compute/apply tendency, all physics subroutines |
+| `src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave_helper.jl` | Offline preprocessing: tensor computation, velocity potential, regridding, HDF5 I/O |
+| `src/parameterized_tendencies/gravity_wave_drag/preprocess_topography.jl` | Preprocessing driver utilities: HDF5 writing, NetCDF diagnostics, plotting |
+| `src/topography/topography.jl` | Analytical topography functions (DCMIP200, Hughes2023, Agnesi, Schar, Cosine) |
+| `src/solver/types.jl` | Type definitions: `OrographicGravityWave`, `FullOrographicGravityWave`, `LinearOrographicGravityWave` |
+| `src/callbacks/callbacks.jl` | `ogw_model_callback!` that triggers the compute step |
+
 ### Testing and Validation
 
 The orographic gravity wave implementation is validated through:
@@ -314,3 +379,4 @@ The orographic gravity wave implementation is validated through:
 - **Garner 2005 reproduction**: Unit tests that reproduce figures from the reference paper.
 - **3D simulation tests**: Full atmospheric simulations with orographic forcing.
 - **Base flux validation**: Comparison of computed fluxes against expected values for known topographies.
+- **Preprocessed topography validation**: The script `test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_computed_drag.jl` compares the preprocessed topographic fields (``h_{max}``, ``h_{min}``, ``t_{11}``, ``t_{12}``, ``t_{21}``, ``t_{22}``) against the GFDL restart data. It loads both the CliMA-computed drag artifact and the GFDL reference via `Val(:gfdl_restart)`, then generates side-by-side contour plots for visual comparison.
