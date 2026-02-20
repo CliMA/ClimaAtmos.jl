@@ -34,14 +34,14 @@ Uses `n=5` in `limit()` to share vapor among multiple tracers that may need corr
 end
 
 # Default: no correction (dry model, equilibrium moisture, etc.)
-tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, _, _) = nothing
+tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, _) = nothing
 
 """
-    tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, moisture_model, microphysics_model)
+    tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, microphysics_model)
 
 Apply tracer nonnegativity corrections by borrowing mass from vapor.
 
-For `NonEquilMoistModel` with 1M/2M microphysics: if any cloud/precipitation
+For `NonEquilibriumMicrophysics` (1M/2M): if any cloud/precipitation
 tracer (q_liq, q_ice, q_rai, q_sno) is negative, adds a positive tendency
 sourced from grid-mean vapor.
 
@@ -50,8 +50,8 @@ sourced from grid-mean vapor.
 - `Y`: State vector
 - `p`: Cache containing `atmos`, `dt`, etc.
 - `t`: Current time
-- `moisture_model`: Moisture model type (dispatched on `NonEquilMoistModel`)
-- `microphysics_model`: Microphysics scheme (dispatched on `Microphysics1Moment` or `Microphysics2Moment`)
+- `microphysics_model`: Microphysics model (dispatched on `NonEquilibriumMicrophysics1M`
+  or `NonEquilibriumMicrophysics2M`)
 
 # Modifies
 - `Yₜ.c.ρq_liq`, `Yₜ.c.ρq_ice`, `Yₜ.c.ρq_rai`, `Yₜ.c.ρq_sno`
@@ -60,12 +60,9 @@ sourced from grid-mean vapor.
 Only active when `p.atmos.water.tracer_nonnegativity_method` is `TracerNonnegativityVaporTendency`.
 """
 function tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t,
-    ::NonEquilMoistModel,
     ::Union{
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
     },
 )
     p.atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVaporTendency || return

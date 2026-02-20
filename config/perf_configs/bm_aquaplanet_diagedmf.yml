@@ -4,7 +4,6 @@ dt: 90secs
 t_end: 61mins
 dt_save_state_to_disk: "Inf"
 log_progress: false
-moist: equil
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
 dt_rad: 1hours
@@ -16,5 +15,5 @@ edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-precip_model: 0M
+microphysics_model: "0M"
 toml: [toml/diagnostic_edmfx.toml]

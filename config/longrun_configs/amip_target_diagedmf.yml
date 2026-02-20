@@ -1,6 +1,5 @@
 dt_save_state_to_disk: "30days"
-moist: "equil"
-precip_model: "0M"
+microphysics_model: "0M"
 rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"

@@ -206,7 +206,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                         atmos.vertical_diffusion,
                     ) ? similar(Y.c, TridiagonalRow) : FT(-1) * I,
         )
-    elseif atmos.moisture_model isa DryModel
+    elseif atmos.microphysics_model isa DryModel
         MatrixFields.unrolled_map(
             name -> (name, name) => FT(-1) * I,
             (diffused_scalar_names..., ρtke_if_available..., @name(c.uₕ)),
@@ -352,8 +352,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     full_alg =
         if use_derivative(diffusion_flag) ||
            use_derivative(sgs_advection_flag) ||
-           !(atmos.moisture_model isa DryModel)
-            gs_scalar_subalg = if !(atmos.moisture_model isa DryModel)
+           !(atmos.microphysics_model isa DryModel)
+            gs_scalar_subalg = if !(atmos.microphysics_model isa DryModel)
                 MatrixFields.BlockLowerTriangularSolve(
                     available_condensate_mass_names...,
                     alg₂ = MatrixFields.BlockLowerTriangularSolve(
@@ -551,12 +551,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     end
 
     microphysics_tracers =
-        p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa
-            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
-            p.atmos.microphysics_model isa
-            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-        ) ?
+        p.atmos.microphysics_model isa Union{
+            NonEquilibriumMicrophysics1M,
+            NonEquilibriumMicrophysics2M,
+        } ?
         (
             (@name(c.ρq_liq), e_int_v0, Δcv_l),
             (@name(c.ρq_ice), e_int_s0, Δcv_i),
@@ -606,12 +604,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         (name == @name(c.ρq_liq) || name == @name(c.ρq_rai)) ? TD.internal_energy_liquid :
         (name == @name(c.ρq_ice) || name == @name(c.ρq_sno)) ? TD.internal_energy_ice :
         nothing
-    if !(p.atmos.moisture_model isa DryModel) || use_derivative(diffusion_flag)
+    if !(p.atmos.microphysics_model isa DryModel) || use_derivative(diffusion_flag)
         ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρe_tot)) - (I,)
     end
 
-    if !(p.atmos.moisture_model isa DryModel)
+    if !(p.atmos.microphysics_model isa DryModel)
         ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
         @. ∂ᶜρe_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρq_tot))
 
@@ -955,14 +953,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
             ᶜ∂RmT∂qʲ = p.scratch.ᶜtemp_scalar_2
             sgs_microphysics_tracers =
-                p.atmos.moisture_model isa NonEquilMoistModel && (
-                    p.atmos.microphysics_model isa Union{
-                        Microphysics1Moment,
-                        QuadratureMicrophysics{Microphysics1Moment},
-                    } ||
-                    p.atmos.microphysics_model isa
-                    Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-                ) ?
+                p.atmos.microphysics_model isa Union{
+                    NonEquilibriumMicrophysics1M,
+                    NonEquilibriumMicrophysics2M,
+                } ?
                 (
                     (@name(c.sgsʲs.:(1).q_tot), -LH_v0, Δcp_v, ΔR_v),
                     (@name(c.sgsʲs.:(1).q_liq), LH_v0, Δcp_l, -R_v),
@@ -1041,12 +1035,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             end
 
             # advection and sedimentation of microphysics tracers
-            if p.atmos.moisture_model isa NonEquilMoistModel && (
-                p.atmos.microphysics_model isa
-                Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
-                p.atmos.microphysics_model isa
-                Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-            )
+            if p.atmos.microphysics_model isa Union{
+                NonEquilibriumMicrophysics1M,
+                NonEquilibriumMicrophysics2M,
+            }
 
                 ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
                 ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_7
@@ -1162,14 +1154,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         Y.c.sgsʲs.:(1).ρa / (1 - Y.c.sgsʲs.:(1).q_tot)^2 / ᶜρʲs.:(1),
                     ) ⋅
                     ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot)
-                if p.atmos.moisture_model isa NonEquilMoistModel && (
-                    p.atmos.microphysics_model isa Union{
-                        Microphysics1Moment,
-                        QuadratureMicrophysics{Microphysics1Moment},
-                    } ||
-                    p.atmos.microphysics_model isa
-                    Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-                )
+                if p.atmos.microphysics_model isa Union{
+                    NonEquilibriumMicrophysics1M,
+                    NonEquilibriumMicrophysics2M,
+                }
                     sgs_microphysics_tracers = (
                         (@name(c.sgsʲs.:(1).q_liq), FT(1)),
                         (@name(c.sgsʲs.:(1).q_ice), FT(1)),
@@ -1203,14 +1191,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         (ᶠinterp(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))) *
                         (one_C3xACT3,),
                     ))
-                if p.atmos.moisture_model isa NonEquilMoistModel && (
-                    p.atmos.microphysics_model isa Union{
-                        Microphysics1Moment,
-                        QuadratureMicrophysics{Microphysics1Moment},
-                    } ||
-                    p.atmos.microphysics_model isa
-                    Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-                )
+                if p.atmos.microphysics_model isa Union{
+                    NonEquilibriumMicrophysics1M,
+                    NonEquilibriumMicrophysics2M,
+                }
                     sgs_microphysics_tracers = (
                         (@name(c.sgsʲs.:(1).q_liq)),
                         (@name(c.sgsʲs.:(1).q_ice)),
@@ -1389,14 +1373,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     DiagonalMatrixRow(ᶜJ)
 
                 # grid-mean tracers
-                if p.atmos.moisture_model isa NonEquilMoistModel && (
-                    p.atmos.microphysics_model isa Union{
-                        Microphysics1Moment,
-                        QuadratureMicrophysics{Microphysics1Moment},
-                    } ||
-                    p.atmos.microphysics_model isa
-                    Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-                )
+                if p.atmos.microphysics_model isa Union{
+                    NonEquilibriumMicrophysics1M,
+                    NonEquilibriumMicrophysics2M,
+                }
 
                     microphysics_tracers = (
                         (@name(c.ρq_liq), @name(c.sgsʲs.:(1).q_liq), @name(q_liq)),
