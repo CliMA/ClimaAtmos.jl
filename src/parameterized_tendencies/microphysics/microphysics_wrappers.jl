@@ -89,6 +89,7 @@ function compute_1m_precipitation_tendencies!(
     dt,
     mp,
     thp,
+    microphysics_tendency_timestepping = Explicit(),
 )
     FT = eltype(thp)
 
@@ -107,7 +108,17 @@ function compute_1m_precipitation_tendencies!(
     )
 
     # Apply limiting via shared helper
-    @. mp_tendency = apply_1m_tendency_limits(mp_tendency, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, dt)
+    @. mp_tendency = apply_1m_tendency_limits(
+        $(Ref(microphysics_tendency_timestepping)),
+        mp_tendency,
+        thp,
+        qₜ,
+        qₗ,
+        qᵢ,
+        qᵣ,
+        qₛ,
+        dt,
+    )
     @. Sqₗᵐ = mp_tendency.dq_lcl_dt
     @. Sqᵢᵐ = mp_tendency.dq_icl_dt
     @. Sqᵣᵐ = mp_tendency.dq_rai_dt

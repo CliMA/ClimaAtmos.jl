@@ -575,6 +575,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             dt,
             cmp,
             thp,
+            p.atmos.microphysics_tendency_timestepping,
         )
 
         # Exact derivatives ∂(dqₓ/dt)/∂qₓ at updraft state for Jacobian
@@ -636,6 +637,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
 
     # Apply physically motivated tendency limits
     @. ᶜmp_tendency = apply_1m_tendency_limits(
+        $(Ref(p.atmos.microphysics_tendency_timestepping)),
         ᶜmp_tendency,
         thp,
         ᶜq_tot⁰,

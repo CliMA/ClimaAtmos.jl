@@ -859,6 +859,7 @@ function set_microphysics_tendency_cache!(
 
     # Apply physically motivated tendency limits
     @. ᶜmp_tendency = apply_1m_tendency_limits(
+        $(Ref(p.atmos.microphysics_tendency_timestepping)),
         ᶜmp_tendency,
         thermo_params,
         ᶜq_tot,

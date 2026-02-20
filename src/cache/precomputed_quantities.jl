@@ -173,7 +173,12 @@ function precomputed_quantities(Y, atmos)
                 @NamedTuple{dq_lcl_dt::FT, dq_icl_dt::FT, dq_rai_dt::FT, dq_sno_dt::FT}
             ),
             ᶜmp_derivative = similar(Y.c,
-                @NamedTuple{∂tendency_∂q_lcl::FT, ∂tendency_∂q_icl::FT, ∂tendency_∂q_rai::FT, ∂tendency_∂q_sno::FT}
+                @NamedTuple{
+                    ∂tendency_∂q_lcl::FT,
+                    ∂tendency_∂q_icl::FT,
+                    ∂tendency_∂q_rai::FT,
+                    ∂tendency_∂q_sno::FT,
+                }
             ),
         )
     elseif atmos.microphysics_model isa Union{
