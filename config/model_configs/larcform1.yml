@@ -1,8 +1,9 @@
 initial_condition: "Larcform1"
 surface_setup: DefaultMoninObukhov  #"Larcform1_test"
 disable_surface_flux_tendency: true # for testing
-turbconv: "diagnostic_edmfx"
-implicit_diffusion: true
+#turbconv: "diagnostic_edmfx"
+vert_diff: VerticalDiffusion
+implicit_diffusion: false
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
 # edmfx_upwinding: first_order
@@ -12,6 +13,7 @@ edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_surface: SlabOceanSST #"EisenmanSeaIce" #"SlabOceanSST" # TODO implement sea ice
 moist: "equil"
@@ -22,12 +24,12 @@ z_elem: 30
 z_stretch: true
 x_elem: 1
 y_elem: 1
-dt: 10secs
-dt_rad: 10mins 
+dt: 60mins
+dt_rad: 60mins
 t_end: 20days # full run length is 20days
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage : true
-toml: [toml/larcform1.toml]
+toml: [toml/larcform1_0M.toml]
 netcdf_output_at_levels: true
 #netcdf_interpolation_num_points: [2, 2, 200] # needed?
 output_default_diagnostics: false
@@ -42,7 +44,7 @@ diagnostics:
   - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, prsn, hus, hur, ua, va, wa, rlu, rld, rhoa] # profiles (2D)
     period: 1hours
     reduction_time: average
-  - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs, hfss, hfls, ts, tas]  # time-series (1D)
+  - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs, hfss, hfls, ts, tas]       # time-series (1D)
   # sithick only valid for prognostic_surface: EisenmanSeaIce
     period: 1hours
     reduction_time: average
