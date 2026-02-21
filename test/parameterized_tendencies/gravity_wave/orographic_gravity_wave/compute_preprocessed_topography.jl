@@ -55,6 +55,8 @@ earth_radius = Spaces.topology(hspace).mesh.domain.radius
 elevation_data =
     CA.AA.earth_orography_file_path(; context = ClimaComms.context(Y.c))
 
+α_smoothing = 0.15  # smoothing scale as fraction of grid resolution
+
 load_preprocessed_topography = false
 
 if load_preprocessed_topography
@@ -65,8 +67,8 @@ if load_preprocessed_topography
     )
 else
     topo_cg = CA.compute_OGW_info(
-        Y, elevation_data, earth_radius, γ, h_frac,
-        # Smoothing parameters now auto-computed based on grid resolution
+        Y, elevation_data, earth_radius, γ, h_frac;
+        α_smoothing,
     )
 end
 

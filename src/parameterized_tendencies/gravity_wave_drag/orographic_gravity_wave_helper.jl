@@ -546,7 +546,7 @@ function compute_OGW_info(
     # Raw data is ~10km (21600×10800), we want to downsample appropriately
     # For a 400km grid with α=0.1, smoothing ~40km, so skip_pt ~4-6
     raw_data_resolution = FT(2 * π * earth_radius / 21600)  # ~10 km
-    skip_pt = max(4, Int(round(smoothing_length_scale / (4 * raw_data_resolution))))
+    skip_pt = max(1, Int(round(smoothing_length_scale / (4 * raw_data_resolution))))
 
     @info "Grid-aware OGWD preprocessing" Δh_GCM smoothing_length_scale skip_pt α_smoothing
 
@@ -617,9 +617,6 @@ function compute_OGW_info(
     t11, t21, t12, t22 =
         calc_orographic_tensor(elev_for_tensor, χ, lon, lat, earth_radius)
 
-
-    topo_ll = (; hmax, hmin, t11, t12, t21, t22)
-
     # create ClimaCore.Fields
     topo_cg = fill(
         (;
@@ -632,25 +629,6 @@ function compute_OGW_info(
         ),
         axes(Fields.level(Y.c.ρ, 1)),
     )
-
-    # cg_lat = Fields.level(Fields.coordinate_field(Y.c).lat, 1)
-    # cg_lon = Fields.level(Fields.coordinate_field(Y.c).long, 1)
-
-    # # NOTE: GFDL may incorporate some smoothing when inerpolate it to model grid
-    # for varname in (:hmax, :hmin, :t11, :t12, :t21, :t22)
-    #     li_obj = Interpolations.linear_interpolation(
-    #         (lon, lat),
-    #         getproperty(topo_ll, varname),
-    #         extrapolation_bc = (
-    #             Interpolations.Periodic(),
-    #             Interpolations.Flat(),
-    #         ),
-    #     )
-    #     Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    #         parent(getproperty(topo_cg, varname)[colidx]) .=
-    #             FT.(li_obj(parent(cg_lon[colidx]), parent(cg_lat[colidx])))
-    #     end
-    # end
 
     # Save the computed lat-lon data to a temporary NetCDF file
     # This allows us to use the GPU-compatible SpaceVaryingInput infrastructure

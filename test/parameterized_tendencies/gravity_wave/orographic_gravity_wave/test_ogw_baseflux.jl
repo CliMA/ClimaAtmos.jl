@@ -24,6 +24,7 @@ comms_ctx = ClimaComms.SingletonCommsContext()
 @show CUDA.functional()
 @show ClimaComms.device(comms_ctx)
 
+h_elem = 8
 (; config_file, job_id) = CA.commandline_kwargs()
 
 """
@@ -37,14 +38,14 @@ Returns a named tuple with:
 - topo_info: named tuple of tensor fields (t11, t12, t21, t22, hmax, hmin) on CPU
 - Y_cpu: state vector (on CPU)
 """
-function compute_base_flux(ogw_mode::String, comms_ctx, config_file, job_id)
+function compute_base_flux(ogw_mode::String, comms_ctx, config_file, job_id; h_elem = 8)
     @info "Computing base flux for ogw_mode = $ogw_mode"
 
     simulation, config = if ogw_mode == "raw_topo"
-        create_ogw_simulation(config_file, job_id, comms_ctx)
+        create_ogw_simulation(config_file, job_id, comms_ctx; h_elem)
     else
         config = CA.AtmosConfig(config_file; job_id, comms_ctx)
-        config.parsed_args["h_elem"] = 8
+        config.parsed_args["h_elem"] = h_elem
         config.parsed_args["orographic_gravity_wave"] = ogw_mode
         config.parsed_args["topography"] = "Earth"
         CA.get_simulation(config), config
@@ -135,8 +136,8 @@ end
 # COMPUTE BASE FLUX FOR BOTH MODES
 #######################################
 
-raw_topo_results = compute_base_flux("raw_topo", comms_ctx, config_file, job_id)
-gfdl_results = compute_base_flux("gfdl_restart", comms_ctx, config_file, job_id)
+raw_topo_results = compute_base_flux("raw_topo", comms_ctx, config_file, job_id, h_elem = h_elem)
+gfdl_results = compute_base_flux("gfdl_restart", comms_ctx, config_file, job_id, h_elem = h_elem)
 
 # Use space from one of the results (they should be identical)
 ᶜspace = axes(raw_topo_results.Y_cpu.c)

@@ -50,13 +50,14 @@ function create_ogw_simulation(
     config_file,
     job_id,
     comms_ctx;
+    h_elem = 8,
     extra_parsed_args = Dict{String, Any}(),
 )
     # Try raw_topo (local file) first
     try
         @info "Trying raw_topo (local file)..."
         config = CA.AtmosConfig(config_file; job_id, comms_ctx)
-        config.parsed_args["h_elem"] = 8
+        config.parsed_args["h_elem"] = h_elem
         config.parsed_args["orographic_gravity_wave"] = "raw_topo"
         config.parsed_args["topography"] = "Earth"
         config.parsed_args["topo_smoothing"] = false
@@ -73,7 +74,7 @@ function create_ogw_simulation(
 
     # Fallback: gfdl_restart + overwrite topo_info from artifact
     config = CA.AtmosConfig(config_file; job_id, comms_ctx)
-    config.parsed_args["h_elem"] = 8
+    config.parsed_args["h_elem"] = h_elem
     config.parsed_args["orographic_gravity_wave"] = "gfdl_restart"
     config.parsed_args["topography"] = "Earth"
     config.parsed_args["topo_smoothing"] = false

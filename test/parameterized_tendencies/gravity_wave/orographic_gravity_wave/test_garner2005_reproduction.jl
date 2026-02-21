@@ -1445,7 +1445,7 @@ if should_run(:quiver_plots)
     # Figure 1: Americas (160°W to 30°W = 200° to 330° in 0-360 notation)
     println("\nFigure 1: Drag over Americas")
     plot_garner_quiver(
-        joinpath(output_dir, "garner_fig1_americas_quiver.pdf"),
+        joinpath(output_dir, "garner_fig1_americas_quiver.png"),
         datafile_fig1,
         "τ_x",
         "τ_y";
@@ -1460,7 +1460,7 @@ if should_run(:quiver_plots)
     # Figure 2: Asia (45°E to 135°E)
     println("\nFigure 2: Drag over Asia")
     plot_garner_quiver(
-        joinpath(output_dir, "garner_fig2_asia_quiver.pdf"),
+        joinpath(output_dir, "garner_fig2_asia_quiver.png"),
         datafile_fig2,
         "τ_x",
         "τ_y";
@@ -1689,7 +1689,7 @@ if should_run(:figure4)
     println("="^70)
 
     plot_garner_fig4_tripanel(
-        joinpath(output_dir, "garner_fig4_linear_drag.pdf"),
+        joinpath(output_dir, "garner_fig4_linear_drag.png"),
         datafile_fig4,
         ["D_analytical", "τ_l_gfdl", "τ_l_raw"],
         [
@@ -1929,7 +1929,7 @@ if should_run(:figure5)
     println("="^70)
 
     plot_garner_fig5(
-        joinpath(output_dir, "garner_fig5_normalized_drag.pdf"),
+        joinpath(output_dir, "garner_fig5_normalized_drag.png"),
         collect(x_range),
         Dp_hmin0,
         Dp_hmin_eq_hmax,
@@ -2037,7 +2037,7 @@ if should_run(:figure6)
     println("="^70)
 
     plot_garner_fig6_twopanel(
-        joinpath(output_dir, "garner_fig6_drag_and_nonlinear.pdf"),
+        joinpath(output_dir, "garner_fig6_drag_and_nonlinear.png"),
         datafile_fig6,
         ["total_drag", "nonlinear_frac"],
         ["Total Drag", "Nonlinear Fraction"],
@@ -2132,59 +2132,6 @@ if should_run(:figure7)
     @. v_phy = FT(0.0)
     @. Y.c.ρ = garner_fig7_density_profile(ᶜz_field)
     @. ᶜbuoyancy_frequency = garner_fig7_stability_profile(ᶜz_field)
-
-    # =========================================================================
-    # DEBUG: Extract and plot wind profile from a single column
-    # =========================================================================
-    # Get the first column (horizontal index 1)
-    u_col = Fields.column(u_phy, 1, 1, 1)  # (i, j, h) indices
-    z_col = Fields.column(ᶜz_field, 1, 1, 1)
-
-    # Extract to vectors
-    u_vec = collect(parent(u_col)[:])
-    z_vec = collect(parent(z_col)[:])
-    z_km_vec = z_vec ./ 1000.0
-
-    if DEBUG_PRINTS
-        println("\n  --- Wind Profile Debug ---")
-        println("  Number of levels: $(length(z_vec))")
-        println("  Height range: $(minimum(z_km_vec)) to $(maximum(z_km_vec)) km")
-        println("  Wind range: $(minimum(u_vec)) to $(maximum(u_vec)) m/s")
-        println("\n  Level-by-level:")
-        for (k, (z, u)) in enumerate(zip(z_km_vec, u_vec))
-            println("    k=$k: z=$(round(z, digits=2)) km, V=$(round(u, digits=2)) m/s")
-        end
-    end
-
-    # Also compute the analytical profile at high resolution for comparison
-    z_hires = collect(range(0.0, 40000.0, length = 200))
-    u_hires = [garner_fig7_wind_profile(FT(z)) for z in z_hires]
-
-    # Plot wind profile comparison
-    fig_debug = Figure(size = (600, 500), fontsize = 14)
-    ax = Axis(fig_debug[1, 1],
-        xlabel = "V (m/s)",
-        ylabel = "Height (km)",
-        title = "Wind Profile: Model vs Analytical",
-    )
-
-    # Analytical (high-res) curve
-    lines!(ax, u_hires, z_hires ./ 1000.0, color = :blue, linewidth = 2,
-        label = "Analytical (Garner)")
-
-    # Model column values (discrete points)
-    scatter!(ax, u_vec, z_km_vec, color = :red, markersize = 10,
-        label = "Model column")
-
-    xlims!(ax, 0, 70)
-    ylims!(ax, 0, 40)
-    axislegend(ax, position = :rt)
-
-    save(joinpath(output_dir, "fig7_wind_profile_debug.pdf"), fig_debug)
-    println(
-        "\n  Saved wind profile debug plot: $(joinpath(output_dir, "fig7_wind_profile_debug.pdf"))",
-    )
-    # =========================================================================
 
     # Set identity tensor so Vτ = V (wind projects directly without rotation)
     # Save original values
@@ -2487,7 +2434,7 @@ if should_run(:figure7)
     println("="^70)
 
     plot_garner_fig7(
-        joinpath(output_dir, "garner_fig7_vertical_profile.pdf"),
+        joinpath(output_dir, "garner_fig7_vertical_profile.png"),
         collect(z_km),
         collect(flux_hmin0),
         collect(flux_hmin_eq_hmax),
