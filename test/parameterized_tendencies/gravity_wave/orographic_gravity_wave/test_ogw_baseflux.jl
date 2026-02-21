@@ -136,8 +136,10 @@ end
 # COMPUTE BASE FLUX FOR BOTH MODES
 #######################################
 
-raw_topo_results = compute_base_flux("raw_topo", comms_ctx, config_file, job_id, h_elem = h_elem)
-gfdl_results = compute_base_flux("gfdl_restart", comms_ctx, config_file, job_id, h_elem = h_elem)
+raw_topo_results =
+    compute_base_flux("raw_topo", comms_ctx, config_file, job_id, h_elem = h_elem)
+gfdl_results =
+    compute_base_flux("gfdl_restart", comms_ctx, config_file, job_id, h_elem = h_elem)
 
 # Use space from one of the results (they should be identical)
 ᶜspace = axes(raw_topo_results.Y_cpu.c)
