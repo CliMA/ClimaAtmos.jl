@@ -123,7 +123,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # is done in the explicit tendency.
     # Here we add the vertical advection with precipitation terminal velocity
     # using downward biasing and free outflow bottom boundary condition
-    if microphysics_model isa Union{NonEquilibriumMicrophysics, QuadratureMicrophysics{<:NonEquilibriumMicrophysics}}
+    if microphysics_model isa NonEquilibriumMicrophysics
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
         @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
@@ -137,7 +137,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         )
     end
     if microphysics_model isa
-       Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
+       NonEquilibriumMicrophysics1M
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
@@ -151,7 +151,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         )
     end
     if microphysics_model isa
-       Union{NonEquilibriumMicrophysics2M, QuadratureMicrophysics{NonEquilibriumMicrophysics2M}}
+       NonEquilibriumMicrophysics2M
         (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
@@ -174,7 +174,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
-    if microphysics_model isa Union{NonEquilibriumMicrophysics2MP3, QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3}}
+    if microphysics_model isa NonEquilibriumMicrophysics2MP3
         (; ρ, ρn_ice, ρq_rim, ρb_rim) = Y.c
         ᶜwnᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwnᵢ))
         ᶜwᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwᵢ))

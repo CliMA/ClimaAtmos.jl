@@ -18,7 +18,7 @@ Always uses grid-mean variables, consistent with the gradient computation
 function compute_∂T_∂θ!(dest, Y, p, thermo_params)
     (; ᶜT) = p.precomputed
     ᶜρ = Y.c.ρ
-    if base_microphysics_model(p.atmos.microphysics_model) isa Union{DryModel, EquilibriumMicrophysics0M}
+    if p.atmos.microphysics_model isa Union{DryModel, EquilibriumMicrophysics0M}
         (; ᶜq_liq_rai, ᶜq_ice_sno, ᶜq_tot_safe) = p.precomputed
         ᶜq_liq = ᶜq_liq_rai
         ᶜq_ice = ᶜq_ice_sno
@@ -64,8 +64,8 @@ function set_covariance_cache!(Y, p, thermo_params)
     # quadrature API or QuadratureCloud/MLCloud is active.
     # No-op otherwise (e.g. EquilMoist + 0M + GridScaleCloud).
     uses_covariances =
-        p.atmos.microphysics_model isa
-        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M, QuadratureMicrophysics} ||
+        !isnothing(p.atmos.sgs_quadrature) ||
+        p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
         p.atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
     uses_covariances || return nothing
 
@@ -78,7 +78,7 @@ function set_covariance_cache!(Y, p, thermo_params)
     # Compute gradients for non-EDMF cases (EDMF gradients are precomputed)
     if isnothing(turbconv_model)
         needs_gradients =
-            p.atmos.microphysics_model isa QuadratureMicrophysics ||
+            !isnothing(p.atmos.sgs_quadrature) ||
             p.atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
         if needs_gradients
             (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
@@ -250,9 +250,6 @@ Dispatches on `microphysics_model` and `cloud_model`:
 
 For EDMF turbulence models, updraft contributions are added to the environment values.
 """
-set_cloud_fraction!(Y, p, qm::QuadratureMicrophysics, cloud_model) =
-    set_cloud_fraction!(Y, p, qm.base_model, cloud_model)
-
 NVTX.@annotate function set_cloud_fraction!(Y, p, ::DryModel, _)
     FT = eltype(p.params)
     p.precomputed.ᶜcloud_fraction .= FT(0)
@@ -419,8 +416,6 @@ end
 
 Dispatch condensate mean retrieval based on microphysics model.
 """
-_get_condensate_means(Y, p, turbconv_model, qm::QuadratureMicrophysics) =
-    _get_condensate_means(Y, p, turbconv_model, qm.base_model)
 _get_condensate_means(Y, p, turbconv_model, ::EquilibriumMicrophysics0M) =
     _get_condensate_means_equil(p, turbconv_model)
 _get_condensate_means(Y, p, turbconv_model, ::NonEquilibriumMicrophysics) =

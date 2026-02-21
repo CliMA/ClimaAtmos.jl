@@ -169,10 +169,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             )
             @. Yₜ.c.sgsʲs.:($$j).q_tot += rst_sgs_q_tot
         end
-        if microphysics_model isa Union{
-            NonEquilibriumMicrophysics1M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-        }
+        if microphysics_model isa NonEquilibriumMicrophysics1M
             # TODO: This doesn't work for multiple updrafts
             moisture_species = (
                 (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq)),
@@ -231,7 +228,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     subsidence_tendency!(Yₜ, Y, p, t, p.atmos.subsidence)
 
     @. Yₜ.c.ρe_tot += bc_lsa_tend_ρe_tot
-    if microphysics_model isa Union{MoistMicrophysics, QuadratureMicrophysics{<:MoistMicrophysics}}
+    if microphysics_model isa MoistMicrophysics
         bc_lsa_tend_ρq_tot = large_scale_advection_tendency_ρq_tot(lsa_args...)
         @. Yₜ.c.ρq_tot += bc_lsa_tend_ρq_tot
     end

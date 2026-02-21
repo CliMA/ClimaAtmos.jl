@@ -148,7 +148,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
                     split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_sno) -
                     Y.c.sgsʲs.:($$j).q_sno * split_divₕ(ᶜuʲs.:($$j), 1)
             end
-            if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics2M, QuadratureMicrophysics{NonEquilibriumMicrophysics2M}}
+            if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
                 @. Yₜ.c.sgsʲs.:($$j).n_liq -=
                     split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_liq) -
                     Y.c.sgsʲs.:($$j).n_liq * split_divₕ(ᶜuʲs.:($$j), 1)
@@ -414,12 +414,7 @@ function edmfx_sgs_vertical_advection_tendency!(
         )
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
 
-        if p.atmos.microphysics_model isa Union{
-            NonEquilibriumMicrophysics1M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-            NonEquilibriumMicrophysics2M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-        }
+        if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
             # TODO - make it work for multiple updrafts
             if j > 1
@@ -476,10 +471,7 @@ function edmfx_sgs_vertical_advection_tendency!(
         end
 
         # Sedimentation of number concentrations for 2M microphysics
-        if p.atmos.microphysics_model isa Union{
-            NonEquilibriumMicrophysics2M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-        }
+        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
 
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
             # TODO - make it work for multiple updrafts

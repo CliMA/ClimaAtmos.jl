@@ -48,10 +48,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
 
-    if p.atmos.microphysics_model isa Union{
-        NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-        NonEquilibriumMicrophysics2M, QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-    }
+    if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
         ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
         ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
         ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
@@ -133,8 +130,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
 
         @. ᶜq_tot_safeʲ = max(0, ᶜq_totʲ)
         if microphysics_model isa Union{
-            NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-            NonEquilibriumMicrophysics2M, QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
+            NonEquilibriumMicrophysics1M,
+            NonEquilibriumMicrophysics2M,
         }
             ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
             ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
@@ -425,7 +422,7 @@ For EDMF, microphysics tendencies are computed separately for updrafts and the e
 2. Updraft area fraction is usually small (~1-10%), so SGS variance within updrafts has limited 
 impact on the grid-mean tendency
 
-**Environment** uses SGS quadrature integration (when `QuadratureMicrophysics` is configured)
+**Environment** uses SGS quadrature integration (when `sgs_quadrature` is configured)
 because the environment dominates the grid-mean variance. The quadrature captures subgrid-scale
 fluctuations in temperature and moisture, which is important for threshold processes like
 condensation/evaporation at cloud edges.
@@ -440,7 +437,7 @@ end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}},
+    ::EquilibriumMicrophysics0M,
 )
 
     (; params, dt) = p
@@ -481,12 +478,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
 
-    # Get SGS quadrature from atmos config (GridMeanSGS if not using QuadratureMicrophysics)
-    SG_quad = if p.atmos.microphysics_model isa QuadratureMicrophysics
-        p.atmos.microphysics_model.quadrature
-    else
-        GridMeanSGS()
-    end
+    SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
 
     # Get T-based variances from cache
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
@@ -509,7 +501,7 @@ end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}},
+    ::NonEquilibriumMicrophysics1M,
 )
 
     (; params, dt) = p
@@ -582,12 +574,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
 
-    # Get SGS quadrature from atmos config (GridMeanSGS if not using QuadratureMicrophysics)
-    SG_quad = if p.atmos.microphysics_model isa QuadratureMicrophysics
-        p.atmos.microphysics_model.quadrature
-    else
-        GridMeanSGS()
-    end
+    SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
 
     # Get T-based variances from cache
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
@@ -632,7 +619,7 @@ end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Union{NonEquilibriumMicrophysics2M, QuadratureMicrophysics{NonEquilibriumMicrophysics2M}},
+    ::NonEquilibriumMicrophysics2M,
 )
 
     (; params, dt) = p
@@ -790,12 +777,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
 
-    # Get SGS quadrature from atmos config (GridMeanSGS if not using QuadratureMicrophysics)
-    SG_quad = if p.atmos.microphysics_model isa QuadratureMicrophysics
-        p.atmos.microphysics_model.quadrature
-    else
-        GridMeanSGS()
-    end
+    SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
 
     # Integrate microphysics tendencies over SGS fluctuations
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)

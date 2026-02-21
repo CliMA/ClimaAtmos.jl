@@ -119,12 +119,7 @@ function edmfx_sgs_mass_flux_tendency!(
         end
 
         # Microphysics tracers fluxes
-        if p.atmos.microphysics_model isa Union{
-            NonEquilibriumMicrophysics1M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-            NonEquilibriumMicrophysics2M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-        }
+        if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             microphysics_tracers = (
                 (@name(c.ρq_liq), @name(c.sgsʲs.:(1).q_liq), @name(q_liq)),
                 (@name(c.ρq_ice), @name(c.sgsʲs.:(1).q_ice), @name(q_ice)),
@@ -254,12 +249,7 @@ function edmfx_sgs_mass_flux_tendency!(
         end
 
         # Microphysics tracers fluxes
-        if p.atmos.microphysics_model isa Union{
-            NonEquilibriumMicrophysics1M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-            NonEquilibriumMicrophysics2M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-        }
+        if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             microphysics_tracers = (
                 (@name(c.ρq_liq), @name(ᶜq_liqʲs.:(1))),
                 (@name(c.ρq_ice), @name(ᶜq_iceʲs.:(1))),

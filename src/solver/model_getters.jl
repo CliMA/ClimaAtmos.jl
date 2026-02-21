@@ -4,8 +4,8 @@ import JLD2
 function get_microphysics_model(parsed_args, params = nothing)
     model_name = parsed_args["microphysics_model"]
     @assert model_name in ("dry", "0M", "1M", "2M", "2MP3")
-    base_scheme = if model_name == "dry"
-        return DryModel()
+    if model_name == "dry"
+        DryModel()
     elseif model_name == "0M"
         EquilibriumMicrophysics0M()
     elseif model_name == "1M"
@@ -15,25 +15,17 @@ function get_microphysics_model(parsed_args, params = nothing)
     elseif model_name == "2MP3"
         NonEquilibriumMicrophysics2MP3()
     end
+end
 
+function get_sgs_quadrature(parsed_args, params = nothing)
     use_sgs_quadrature = get(parsed_args, "use_sgs_quadrature", false)
-    if use_sgs_quadrature
-        FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
-        distribution = get_sgs_distribution(parsed_args)
-        quadrature_order = get(parsed_args, "quadrature_order", 2)
-        T_min = isnothing(params) ? FT(150) : FT(CAP.T_min_sgs(params))
-        q_max = isnothing(params) ? FT(0.1) : FT(CAP.q_max_sgs(params))
-        return QuadratureMicrophysics(
-            base_scheme;
-            FT,
-            distribution,
-            quadrature_order,
-            T_min,
-            q_max,
-        )
-    else
-        return base_scheme
-    end
+    use_sgs_quadrature || return nothing
+    FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
+    distribution = get_sgs_distribution(parsed_args)
+    quadrature_order = get(parsed_args, "quadrature_order", 2)
+    T_min = isnothing(params) ? FT(150) : FT(CAP.T_min_sgs(params))
+    q_max = isnothing(params) ? FT(0.1) : FT(CAP.q_max_sgs(params))
+    return SGSQuadrature(FT; quadrature_order, distribution, T_min, q_max)
 end
 
 function get_sfc_temperature_form(parsed_args)

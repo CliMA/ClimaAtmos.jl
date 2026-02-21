@@ -51,7 +51,7 @@ sourced from grid-mean vapor.
 - `p`: Cache containing `atmos`, `dt`, etc.
 - `t`: Current time
 - `microphysics_model`: Microphysics model (dispatched on `NonEquilibriumMicrophysics1M`
-  or `NonEquilibriumMicrophysics2M`, with or without `QuadratureMicrophysics` wrapper)
+  or `NonEquilibriumMicrophysics2M`)
 
 # Modifies
 - `Yₜ.c.ρq_liq`, `Yₜ.c.ρq_ice`, `Yₜ.c.ρq_rai`, `Yₜ.c.ρq_sno`
@@ -62,9 +62,7 @@ Only active when `p.atmos.water.tracer_nonnegativity_method` is `TracerNonnegati
 function tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t,
     ::Union{
         NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
         NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
     },
 )
     p.atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVaporTendency || return

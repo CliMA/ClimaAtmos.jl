@@ -27,7 +27,7 @@
 # 2. Define a function that has the correct signature and calls this function
 #
 # compute_hur!(out, state, cache, time) =
-#     compute_hur!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+#     compute_hur!(out, state, cache, time, cache.atmos.microphysics_model)
 #
 # 3. Define a function that returns an error when the model is incorrect
 #
@@ -403,7 +403,7 @@ add_diagnostic_variable!(
 # Relative humidity (3d)
 ###
 compute_hur!(out, state, cache, time) =
-    compute_hur!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_hur!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hur!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hur", model)
 
@@ -451,7 +451,7 @@ add_diagnostic_variable!(
 # Total specific humidity (3d)
 ###
 compute_hus!(out, state, cache, time) =
-    compute_hus!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_hus!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hus!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hus", model)
 
@@ -482,7 +482,7 @@ add_diagnostic_variable!(
 # Liquid water specific humidity (3d)
 ###
 compute_clw!(out, state, cache, time) =
-    compute_clw!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_clw!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_clw!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("clw", model)
 
@@ -531,7 +531,7 @@ add_diagnostic_variable!(
 # Ice water specific humidity (3d)
 ###
 compute_cli!(out, state, cache, time) =
-    compute_cli!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_cli!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_cli!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("cli", model)
 
@@ -580,7 +580,7 @@ add_diagnostic_variable!(
 # Surface specific humidity (2d)
 ###
 compute_hussfc!(out, state, cache, time) =
-    compute_hussfc!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_hussfc!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hussfc!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hussfc", model)
 
@@ -767,7 +767,7 @@ add_diagnostic_variable!(
 # Surface evaporation (2d)
 ###
 compute_evspsbl!(out, state, cache, time) =
-    compute_evspsbl!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_evspsbl!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_evspsbl!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("evspsbl", model)
 
@@ -800,7 +800,7 @@ add_diagnostic_variable!(
 # Latent heat flux (2d)
 ###
 compute_hfls!(out, state, cache, time) =
-    compute_hfls!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_hfls!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hfls!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hfls", model)
 
@@ -835,7 +835,7 @@ add_diagnostic_variable!(
 # Sensible heat flux (2d)
 ###
 compute_hfss!(out, state, cache, time) =
-    compute_hfss!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_hfss!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hfss!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hfss", model)
 
@@ -890,7 +890,7 @@ add_diagnostic_variable!(
 # Precipitation (2d)
 ###
 compute_pr!(out, state, cache, time) =
-    compute_pr!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_pr!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_pr!(_, _, _, _, microphysics_model::T) where {T} =
     error_diagnostic_variable("pr", microphysics_model)
 
@@ -902,13 +902,9 @@ function compute_pr!(
     microphysics_model::Union{
         DryModel,
         EquilibriumMicrophysics0M,
-        QuadratureMicrophysics{EquilibriumMicrophysics0M},
         NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
         NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
         NonEquilibriumMicrophysics2MP3,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3},
     },
 )
     if isnothing(out)
@@ -931,7 +927,7 @@ add_diagnostic_variable!(
 )
 
 compute_prra!(out, state, cache, time) =
-    compute_prra!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_prra!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_prra!(_, _, _, _, microphysics_model::T) where {T} =
     error_diagnostic_variable("prra", microphysics_model)
 
@@ -943,13 +939,9 @@ function compute_prra!(
     microphysics_model::Union{
         DryModel,
         EquilibriumMicrophysics0M,
-        QuadratureMicrophysics{EquilibriumMicrophysics0M},
         NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
         NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
         NonEquilibriumMicrophysics2MP3,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3},
     },
 )
     if isnothing(out)
@@ -969,7 +961,7 @@ add_diagnostic_variable!(
 )
 
 compute_prsn!(out, state, cache, time) =
-    compute_prsn!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_prsn!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_prsn!(_, _, _, _, microphysics_model::T) where {T} =
     error_diagnostic_variable("prsn", microphysics_model)
 
@@ -981,13 +973,9 @@ function compute_prsn!(
     microphysics_model::Union{
         DryModel,
         EquilibriumMicrophysics0M,
-        QuadratureMicrophysics{EquilibriumMicrophysics0M},
         NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
         NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
         NonEquilibriumMicrophysics2MP3,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3},
     },
 )
     if isnothing(out)
@@ -1010,7 +998,7 @@ add_diagnostic_variable!(
 # Precipitation (3d)
 ###
 compute_husra!(out, state, cache, time) =
-    compute_husra!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_husra!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_husra!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("husra", model)
 
@@ -1021,11 +1009,8 @@ function compute_husra!(
     time,
     microphysics_model::Union{
         NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
         NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
         NonEquilibriumMicrophysics2MP3,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3},
     },
 )
     if isnothing(out)
@@ -1048,7 +1033,7 @@ add_diagnostic_variable!(
 )
 
 compute_hussn!(out, state, cache, time) =
-    compute_hussn!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_hussn!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hussn!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hussn", model)
 
@@ -1059,11 +1044,8 @@ function compute_hussn!(
     time,
     microphysics_model::Union{
         NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
         NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
         NonEquilibriumMicrophysics2MP3,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3},
     },
 )
     if isnothing(out)
@@ -1086,7 +1068,7 @@ add_diagnostic_variable!(
 )
 
 compute_cdnc!(out, state, cache, time) =
-    compute_cdnc!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_cdnc!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_cdnc!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("cdnc", model)
 
@@ -1097,9 +1079,7 @@ function compute_cdnc!(
     time,
     microphysics_model::Union{
         NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
         NonEquilibriumMicrophysics2MP3,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3},
     },
 )
     if isnothing(out)
@@ -1122,7 +1102,7 @@ add_diagnostic_variable!(
 )
 
 compute_ncra!(out, state, cache, time) =
-    compute_ncra!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_ncra!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_ncra!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("ncra", model)
 
@@ -1133,9 +1113,7 @@ function compute_ncra!(
     time,
     microphysics_model::Union{
         NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
         NonEquilibriumMicrophysics2MP3,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3},
     },
 )
     if isnothing(out)
@@ -1195,7 +1173,7 @@ add_diagnostic_variable!(
 # Condensed water path (2d)
 ###
 compute_clwvi!(out, state, cache, time) =
-    compute_clwvi!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_clwvi!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_clwvi!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("clwvi", model)
 
@@ -1263,7 +1241,7 @@ add_diagnostic_variable!(
 # Liquid water path (2d)
 ###
 compute_lwp!(out, state, cache, time) =
-    compute_lwp!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_lwp!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_lwp!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("lwp", model)
 
@@ -1323,7 +1301,7 @@ add_diagnostic_variable!(
 # Ice water path (2d)
 ###
 compute_clivi!(out, state, cache, time) =
-    compute_clivi!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_clivi!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_clivi!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("clivi", model)
 
@@ -1394,7 +1372,7 @@ add_diagnostic_variable!(
 # column integrated cloud fraction (2d)
 ###
 compute_clvi!(out, state, cache, time) =
-    compute_clvi!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_clvi!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_clvi!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("clvi", model)
 
@@ -1443,7 +1421,7 @@ add_diagnostic_variable!(
 # Column integrated total specific humidity (2d)
 ###
 compute_prw!(out, state, cache, time) =
-    compute_prw!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_prw!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_prw!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("prw", model)
 
@@ -1476,7 +1454,7 @@ add_diagnostic_variable!(
 # Column integrated relative humidity (2d)
 ###
 compute_hurvi!(out, state, cache, time) =
-    compute_hurvi!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_hurvi!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hurvi!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hurvi", model)
 
@@ -1535,7 +1513,7 @@ add_diagnostic_variable!(
 # Vapor specific humidity (3d)
 ###
 compute_husv!(out, state, cache, time) =
-    compute_husv!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_husv!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_husv!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("husv", model)
 
@@ -1807,7 +1785,7 @@ add_diagnostic_variable!(
 # Rainwater path (2d)
 ###
 compute_rwp!(out, state, cache, time) =
-    compute_rwp!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_rwp!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_rwp!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("rwp", model)
 

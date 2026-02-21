@@ -47,20 +47,14 @@ function hyperdiffusion_cache(
     # Sub-grid scale quantities
     ᶜ∇²uʲs = turbconv_model isa PrognosticEDMFX ? similar(Y.c, NTuple{n, C123{FT}}) : (;)
     moisture_sgs_quantities =
-        microphysics_model isa Union{
-            NonEquilibriumMicrophysics1M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-        } ?
+        microphysics_model isa NonEquilibriumMicrophysics1M ?
         (;
             ᶜ∇²q_liqʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²q_iceʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²q_raiʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²q_snoʲs = similar(Y.c, NTuple{n, FT}),
         ) :
-        microphysics_model isa Union{
-            NonEquilibriumMicrophysics2M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-        } ?
+        microphysics_model isa NonEquilibriumMicrophysics2M ?
         (;
             ᶜ∇²q_liqʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²q_iceʲs = similar(Y.c, NTuple{n, FT}),
@@ -225,10 +219,7 @@ function dss_hyperdiffusion_tendency_pairs(p)
         (p.hyperdiff.ᶜ∇²q_totʲs => buffer.ᶜ∇²q_totʲs,) : ()
     tc_moisture_pairs =
         turbconv_model isa PrognosticEDMFX &&
-        p.atmos.microphysics_model isa Union{
-            NonEquilibriumMicrophysics1M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-        } ?
+        p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
         (
             p.hyperdiff.ᶜ∇²q_liqʲs => buffer.ᶜ∇²q_liqʲs,
             p.hyperdiff.ᶜ∇²q_iceʲs => buffer.ᶜ∇²q_iceʲs,
@@ -236,10 +227,7 @@ function dss_hyperdiffusion_tendency_pairs(p)
             p.hyperdiff.ᶜ∇²q_snoʲs => buffer.ᶜ∇²q_snoʲs,
         ) :
         turbconv_model isa PrognosticEDMFX &&
-        p.atmos.microphysics_model isa Union{
-            NonEquilibriumMicrophysics2M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-        } ?
+        p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M ?
         (
             p.hyperdiff.ᶜ∇²q_liqʲs => buffer.ᶜ∇²q_liqʲs,
             p.hyperdiff.ᶜ∇²q_iceʲs => buffer.ᶜ∇²q_iceʲs,
@@ -273,10 +261,7 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             # Note: It is more correct to have ρa inside and outside the divergence
             @. ᶜ∇²q_totʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_tot))
         end
-        if microphysics_model isa Union{
-               NonEquilibriumMicrophysics1M,
-               QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-           }
+        if microphysics_model isa NonEquilibriumMicrophysics1M
             (; ᶜ∇²q_liqʲs, ᶜ∇²q_iceʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs) = p.hyperdiff
             for j in 1:n
                 # Note: It is more correct to have ρa inside and outside the divergence
@@ -285,10 +270,7 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 @. ᶜ∇²q_raiʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_rai))
                 @. ᶜ∇²q_snoʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_sno))
             end
-        elseif microphysics_model isa Union{
-                   NonEquilibriumMicrophysics2M,
-                   QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-               }
+        elseif microphysics_model isa NonEquilibriumMicrophysics2M
             (; ᶜ∇²q_liqʲs, ᶜ∇²q_iceʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs, ᶜ∇²n_liqʲs, ᶜ∇²n_raiʲs) =
                 p.hyperdiff
             for j in 1:n
@@ -340,10 +322,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 ν₄_scalar * Y.c.sgsʲs.:($$j).ρa / (1 - Y.c.sgsʲs.:($$j).q_tot) *
                 wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
         end
-        if microphysics_model isa Union{
-               NonEquilibriumMicrophysics1M,
-               QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-           }
+        if microphysics_model isa NonEquilibriumMicrophysics1M
             (; ᶜ∇²q_liqʲs, ᶜ∇²q_iceʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs) = p.hyperdiff
             for j in 1:n
                 @. Yₜ.c.sgsʲs.:($$j).q_liq -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_liqʲs.:($$j)))
@@ -353,10 +332,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 @. Yₜ.c.sgsʲs.:($$j).q_sno -=
                     ν₄_scalar_for_precip * wdivₕ(gradₕ(ᶜ∇²q_snoʲs.:($$j)))
             end
-        elseif microphysics_model isa Union{
-                   NonEquilibriumMicrophysics2M,
-                   QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-               }
+        elseif microphysics_model isa NonEquilibriumMicrophysics2M
             (; ᶜ∇²q_liqʲs, ᶜ∇²q_iceʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs, ᶜ∇²n_liqʲs, ᶜ∇²n_raiʲs) =
                 p.hyperdiff
             for j in 1:n

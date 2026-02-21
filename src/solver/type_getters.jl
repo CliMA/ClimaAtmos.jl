@@ -47,6 +47,7 @@ function get_atmos(config::AtmosConfig, params)
     FT = eltype(config)
     check_case_consistency(parsed_args)
     microphysics_model = get_microphysics_model(parsed_args, params)
+    sgs_quadrature = get_sgs_quadrature(parsed_args, params)
     cloud_model = get_cloud_model(parsed_args, params)
 
     if microphysics_model isa DryModel
@@ -121,6 +122,7 @@ function get_atmos(config::AtmosConfig, params)
         microphysics_tendency_timestepping = implicit_microphysics ?
                                              Implicit() : Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(parsed_args),
+        sgs_quadrature,
 
         # SCMSetup - Single-Column Model components
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),

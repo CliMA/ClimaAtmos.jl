@@ -41,7 +41,7 @@ add_diagnostic_variable!(
 # Total water of the air (scalar)
 ###
 compute_watera!(out, state, cache, time) =
-    compute_watera!(out, state, cache, time, base_microphysics_model(cache.atmos.microphysics_model))
+    compute_watera!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_watera!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("watera", model)
 
@@ -107,7 +107,7 @@ compute_watero!(out, state, cache, time) = compute_watero!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.surface_model,
 )
 compute_watero!(

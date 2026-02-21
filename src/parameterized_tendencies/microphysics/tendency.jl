@@ -119,51 +119,6 @@ function microphysics_tendency!(Yₜ, Y, p, t,
 end
 
 #####
-##### QuadratureMicrophysics
-#####
-
-# Generic fallback: delegate to base model
-function microphysics_tendency!(Yₜ, Y, p, t,
-    qm::QuadratureMicrophysics, turbconv_model,
-)
-    return microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        qm.base_model,
-        turbconv_model,
-    )
-end
-
-function microphysics_tendency!(Yₜ, Y, p, t,
-    qm::QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-    turbconv_model::DiagnosticEDMFX,
-)
-    return microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        qm.base_model,
-        turbconv_model,
-    )
-end
-function microphysics_tendency!(Yₜ, Y, p, t,
-    qm::QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-    turbconv_model::PrognosticEDMFX,
-)
-    return microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        qm.base_model,
-        turbconv_model,
-    )
-end
-
-#####
 ##### 2-Moment Microphysics
 #####
 
@@ -256,33 +211,6 @@ function microphysics_tendency!(Yₜ, Y, p, t,
         @. Yₜ.c.ρq_ice += Y.c.sgsʲs.:($$j).ρa * ᶜSqᵢᵐʲs.:($$j)
         @. Yₜ.c.ρq_sno += Y.c.sgsʲs.:($$j).ρa * ᶜSqₛᵐʲs.:($$j)
     end
-end
-
-function microphysics_tendency!(Yₜ, Y, p, t,
-    qm::QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-    turbconv_model::DiagnosticEDMFX,
-)
-    return microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        qm.base_model,
-        turbconv_model,
-    )
-end
-function microphysics_tendency!(Yₜ, Y, p, t,
-    qm::QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-    turbconv_model::PrognosticEDMFX,
-)
-    return microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        qm.base_model,
-        turbconv_model,
-    )
 end
 
 #####

@@ -114,9 +114,6 @@ moisture_variables(ls, ::NonEquilibriumMicrophysics) = (;
     ρq_liq = ls.ρ * ls.q_liq,
     ρq_ice = ls.ρ * ls.q_ice,
 )
-moisture_variables(ls, qm::QuadratureMicrophysics) =
-    moisture_variables(ls, qm.base_model)
-
 precip_variables(ls, ::DryModel) = (;)
 precip_variables(ls, ::EquilibriumMicrophysics0M) = (;)
 precip_variables(ls, ::NonEquilibriumMicrophysics1M) = (;
@@ -129,9 +126,6 @@ precip_variables(ls, ::NonEquilibriumMicrophysics2M) = (;
     ρq_rai = ls.ρ * ls.precip_state.q_rai,
     ρq_sno = ls.ρ * ls.precip_state.q_sno,
 )
-precip_variables(ls, qm::QuadratureMicrophysics) =
-    precip_variables(ls, qm.base_model)
-
 function precip_variables(ls, ::NonEquilibriumMicrophysics2MP3)
     (; ρ) = ls
     (; n_liq, n_rai, q_rai) = ls.precip_state.warm
@@ -213,20 +207,6 @@ function turbconv_center_variables(
         )
     end
     return (; ρtke = ρtke, sgsʲs)
-end
-
-function turbconv_center_variables(
-    ls,
-    turbconv_model::PrognosticEDMFX,
-    qm::QuadratureMicrophysics,
-    gs_vars,
-)
-    return turbconv_center_variables(
-        ls,
-        turbconv_model,
-        qm.base_model,
-        gs_vars,
-    )
 end
 
 function turbconv_center_variables(

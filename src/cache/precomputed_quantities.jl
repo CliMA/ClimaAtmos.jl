@@ -50,7 +50,7 @@ function implicit_precomputed_quantities(Y, atmos)
     # - Others: allocate fields only
     sa_result_type = @NamedTuple{T::FT, q_liq::FT, q_ice::FT}
     moist_gs_quantities =
-        if microphysics_model isa Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}}
+        if microphysics_model isa EquilibriumMicrophysics0M
             (;
                 ᶜq_tot_safe = similar(Y.c, FT),
                 ᶜq_liq_rai = similar(Y.c, FT),
@@ -130,12 +130,11 @@ function precomputed_quantities(Y, atmos)
     @. ᶜcloud_fraction = FT(0)
 
     # SGS covariances for cloud fraction (Sommeria & Deardorff closure) and microphysics quadrature.
-    # Bare NonEquilibriumMicrophysics1M/NonEquilibriumMicrophysics2M always route through the
-    # QuadratureMicrophysics API internally (with GridMeanSGS), so they also
-    # need covariance fields allocated.
+    # NonEquilibriumMicrophysics1M/2M always route through the quadrature API
+    # internally (with GridMeanSGS), so they also need covariance fields allocated.
     uses_sgs_quadrature =
-        atmos.microphysics_model isa
-        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M, QuadratureMicrophysics} ||
+        !isnothing(atmos.sgs_quadrature) ||
+        atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
         atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
     covariance_quantities =
         uses_sgs_quadrature ?
@@ -148,18 +147,16 @@ function precomputed_quantities(Y, atmos)
         surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
     )
     sedimentation_quantities =
-        atmos.microphysics_model isa Union{NonEquilibriumMicrophysics, QuadratureMicrophysics{<:NonEquilibriumMicrophysics}} ?
+        atmos.microphysics_model isa NonEquilibriumMicrophysics ?
         (; ᶜwₗ = similar(Y.c, FT), ᶜwᵢ = similar(Y.c, FT)) : (;)
-    if atmos.microphysics_model isa
-       Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}}
+    if atmos.microphysics_model isa EquilibriumMicrophysics0M
         precipitation_quantities = (;
             ᶜS_ρq_tot = similar(Y.c, FT),
             ᶜS_ρe_tot = similar(Y.c, FT),
             ᶜmp_tendency = similar(Y.c,
                 @NamedTuple{dq_tot_dt::FT, e_int_precip::FT}),
         )
-    elseif atmos.microphysics_model isa
-           Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}}
+    elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         precipitation_quantities = (;
             ᶜwᵣ = similar(Y.c, FT),
             ᶜwₛ = similar(Y.c, FT),
@@ -171,12 +168,7 @@ function precomputed_quantities(Y, atmos)
                 @NamedTuple{dq_lcl_dt::FT, dq_icl_dt::FT, dq_rai_dt::FT, dq_sno_dt::FT}
             ),
         )
-    elseif atmos.microphysics_model isa Union{
-        NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-        NonEquilibriumMicrophysics2MP3,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3},
-    }
+    elseif atmos.microphysics_model isa Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3}
         # 2-moment microphysics
         precipitation_quantities = (;
             ᶜwᵣ = similar(Y.c, FT),
@@ -198,7 +190,7 @@ function precomputed_quantities(Y, atmos)
             ),
         )
         # Add additional quantities for 2M + P3
-        if atmos.microphysics_model isa Union{NonEquilibriumMicrophysics2MP3, QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3}}
+        if atmos.microphysics_model isa NonEquilibriumMicrophysics2MP3
             precipitation_quantities = (;
                 # liquid quantities (2M warm rain)
                 precipitation_quantities...,
@@ -218,11 +210,9 @@ function precomputed_quantities(Y, atmos)
         precipitation_quantities = (;)
     end
     precipitation_sgs_quantities =
-        atmos.microphysics_model isa
-        Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}} ?
+        atmos.microphysics_model isa EquilibriumMicrophysics0M ?
         (; ᶜSqₜᵐʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵐ⁰ = similar(Y.c, FT)) :
-        atmos.microphysics_model isa
-        Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}} ?
+        atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
         (;
             ᶜSqₗᵐʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵢᵐʲs = similar(Y.c, NTuple{n, FT}),
@@ -237,8 +227,7 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵣᵐ⁰ = similar(Y.c, FT),
             ᶜSqₛᵐ⁰ = similar(Y.c, FT),
         ) :
-        atmos.microphysics_model isa
-        Union{NonEquilibriumMicrophysics2M, QuadratureMicrophysics{NonEquilibriumMicrophysics2M}} ?
+        atmos.microphysics_model isa NonEquilibriumMicrophysics2M ?
         (;
             ᶜSqₗᵐʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵢᵐʲs = similar(Y.c, NTuple{n, FT}),
@@ -281,8 +270,7 @@ function precomputed_quantities(Y, atmos)
     )
 
     diagnostic_precipitation_sgs_quantities =
-        atmos.microphysics_model isa
-        Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}} ?
+        atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
         (;
             ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
@@ -516,7 +504,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # TODO: We should think more about these increments before we use them.
     end
     ᶜe_int = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ) - ᶜK - ᶜΦ)
-    if microphysics_model isa Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}}
+    if microphysics_model isa EquilibriumMicrophysics0M
         # Compute thermodynamic state variables using combined getter function.
         # This avoids redundant saturation_adjustment calls for EquilibriumMicrophysics0M.
         @. ᶜq_tot_safe = max(0, specific(Y.c.ρq_tot, Y.c.ρ))
@@ -528,12 +516,12 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         @. ᶜq_ice_sno = ᶜsa_result.q_ice
 
         # Two-pass SGS: recompute condensate using SGS quadrature over (T, q_tot)
-        if microphysics_model isa QuadratureMicrophysics
+        sgs_quad = p.atmos.sgs_quadrature
+        if !isnothing(sgs_quad)
             (; ᶜT′T′, ᶜq′q′) = p.precomputed
-            # Reuse ᶜsa_result (same NamedTuple type) to avoid allocating a new field
             @. ᶜsa_result = compute_sgs_saturation_adjustment(
                 thermo_params,
-                $(microphysics_model.quadrature),
+                $(sgs_quad),
                 Y.c.ρ,
                 ᶜT,
                 ᶜq_tot_safe,

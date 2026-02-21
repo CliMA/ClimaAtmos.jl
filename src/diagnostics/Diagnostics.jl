@@ -33,8 +33,6 @@ import ..NonEquilibriumMicrophysics2M
 import ..NonEquilibriumMicrophysics2MP3
 import ..NonEquilibriumMicrophysics
 import ..MoistMicrophysics
-import ..QuadratureMicrophysics
-import ..base_microphysics_model
 
 # radiation
 import ClimaAtmos.RRTMGPInterface as RRTMGPI

@@ -272,7 +272,7 @@ function _moist_default_diagnostics(duration, start_date, t_start; output_writer
 end
 
 function default_diagnostics(
-    ::Union{EquilibriumMicrophysics0M, QuadratureMicrophysics{EquilibriumMicrophysics0M}},
+    ::EquilibriumMicrophysics0M,
     duration,
     start_date,
     t_start;
@@ -282,7 +282,7 @@ function default_diagnostics(
 end
 
 function default_diagnostics(
-    ::Union{NonEquilibriumMicrophysics1M, QuadratureMicrophysics{NonEquilibriumMicrophysics1M}},
+    ::NonEquilibriumMicrophysics1M,
     duration,
     start_date,
     t_start;
@@ -297,7 +297,7 @@ function default_diagnostics(
 end
 
 function default_diagnostics(
-    ::Union{NonEquilibriumMicrophysics2M, QuadratureMicrophysics{NonEquilibriumMicrophysics2M}},
+    ::NonEquilibriumMicrophysics2M,
     duration,
     start_date,
     t_start;
@@ -312,7 +312,7 @@ function default_diagnostics(
 end
 
 function default_diagnostics(
-    ::Union{NonEquilibriumMicrophysics2MP3, QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3}},
+    ::NonEquilibriumMicrophysics2MP3,
     duration,
     start_date,
     t_start;

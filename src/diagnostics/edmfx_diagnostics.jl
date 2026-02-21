@@ -238,7 +238,7 @@ compute_husup!(out, state, cache, time) = compute_husup!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_husup!(
@@ -284,7 +284,7 @@ compute_hurup!(out, state, cache, time) = compute_hurup!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_hurup!(
@@ -346,7 +346,7 @@ compute_clwup!(out, state, cache, time) = compute_clwup!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_clwup!(
@@ -419,7 +419,7 @@ compute_cdncup!(out, state, cache, time) = compute_cdncup!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_cdncup!(
@@ -438,10 +438,7 @@ function compute_cdncup!(
     state,
     cache,
     time,
-    microphysics_model_model::Union{
-        NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-    },
+    microphysics_model_model::NonEquilibriumMicrophysics2M,
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -470,7 +467,7 @@ compute_cliup!(out, state, cache, time) = compute_cliup!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_cliup!(
@@ -546,7 +543,7 @@ compute_husraup!(out, state, cache, time) = compute_husraup!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_husraup!(
@@ -565,12 +562,7 @@ function compute_husraup!(
     state,
     cache,
     time,
-    microphysics_model::Union{
-        NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-        NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-    },
+    microphysics_model::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -584,10 +576,7 @@ function compute_husraup!(
     state,
     cache,
     time,
-    microphysics_model::Union{
-        NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-    },
+    microphysics_model::NonEquilibriumMicrophysics1M,
     turbconv_model::DiagnosticEDMFX,
 )
     if isnothing(out)
@@ -613,7 +602,7 @@ compute_ncraup!(out, state, cache, time) = compute_ncraup!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_ncraup!(
@@ -632,10 +621,7 @@ function compute_ncraup!(
     state,
     cache,
     time,
-    microphysics_model_model::Union{
-        NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-    },
+    microphysics_model_model::NonEquilibriumMicrophysics2M,
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -664,7 +650,7 @@ compute_hussnup!(out, state, cache, time) = compute_hussnup!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_hussnup!(
@@ -683,12 +669,7 @@ function compute_hussnup!(
     state,
     cache,
     time,
-    microphysics_model::Union{
-        NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-        NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-    },
+    microphysics_model::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -702,10 +683,7 @@ function compute_hussnup!(
     state,
     cache,
     time,
-    microphysics_model::Union{
-        NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-    },
+    microphysics_model::NonEquilibriumMicrophysics1M,
     turbconv_model::DiagnosticEDMFX,
 )
     if isnothing(out)
@@ -1042,7 +1020,7 @@ compute_husen!(out, state, cache, time) = compute_husen!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_husen!(
@@ -1086,7 +1064,7 @@ compute_huren!(out, state, cache, time) = compute_huren!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_huren!(
@@ -1147,7 +1125,7 @@ compute_clwen!(out, state, cache, time) = compute_clwen!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_clwen!(
@@ -1208,7 +1186,7 @@ compute_cdncen!(out, state, cache, time) = compute_cdncen!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_cdncen!(
@@ -1227,10 +1205,7 @@ function compute_cdncen!(
     state,
     cache,
     time,
-    microphysics_model_model::Union{
-        NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-    },
+    microphysics_model_model::NonEquilibriumMicrophysics2M,
     turbconv_model::PrognosticEDMFX,
 )
     ᶜn_liq⁰ = ᶜspecific_env_value(@name(n_liq), state, cache)
@@ -1260,7 +1235,7 @@ compute_clien!(out, state, cache, time) = compute_clien!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_clien!(
@@ -1324,7 +1299,7 @@ compute_husraen!(out, state, cache, time) = compute_husraen!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_husraen!(
@@ -1343,12 +1318,7 @@ function compute_husraen!(
     state,
     cache,
     time,
-    microphysics_model_model::Union{
-        NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-        NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-    },
+    microphysics_model_model::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
     turbconv_model::PrognosticEDMFX,
 )
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), state, cache)
@@ -1375,7 +1345,7 @@ compute_ncraen!(out, state, cache, time) = compute_ncraen!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_ncraen!(
@@ -1394,10 +1364,7 @@ function compute_ncraen!(
     state,
     cache,
     time,
-    microphysics_model_model::Union{
-        NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-    },
+    microphysics_model_model::NonEquilibriumMicrophysics2M,
     turbconv_model::PrognosticEDMFX,
 )
     ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), state, cache)
@@ -1427,7 +1394,7 @@ compute_hussnen!(out, state, cache, time) = compute_hussnen!(
     state,
     cache,
     time,
-    base_microphysics_model(cache.atmos.microphysics_model),
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_hussnen!(
@@ -1446,12 +1413,7 @@ function compute_hussnen!(
     state,
     cache,
     time,
-    microphysics_model_model::Union{
-        NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
-        NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
-    },
+    microphysics_model_model::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
     turbconv_model::PrognosticEDMFX,
 )
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), state, cache)

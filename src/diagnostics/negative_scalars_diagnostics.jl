@@ -150,11 +150,8 @@ end
 const MICROPHYSICS_MODELS =
     Union{
         NonEquilibriumMicrophysics1M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
         NonEquilibriumMicrophysics2M,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
         NonEquilibriumMicrophysics2MP3,
-        QuadratureMicrophysics{NonEquilibriumMicrophysics2MP3},
     }
 const MOISTURE_MODELS = MoistMicrophysics
 

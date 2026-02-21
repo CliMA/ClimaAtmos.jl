@@ -112,7 +112,7 @@ function held_suarez_forcing_tendency_ρe_tot(
 
     z_surface = Fields.level(ᶠz, Fields.half)
 
-    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, base_microphysics_model(microphysics_model))
+    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, microphysics_model)
 
     hs_params = HeldSuarezForcingParams{FT}(
         ΔT_y,
@@ -160,7 +160,7 @@ function held_suarez_forcing_tendency_uₕ(
 
     z_surface = Fields.level(ᶠz, Fields.half)
 
-    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, base_microphysics_model(microphysics_model))
+    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, microphysics_model)
 
     hs_params = HeldSuarezForcingParams{FT}(
         ΔT_y,

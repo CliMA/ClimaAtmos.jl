@@ -9,7 +9,6 @@ import ..NonEquilibriumMicrophysics2M
 import ..NonEquilibriumMicrophysics2MP3
 import ..NonEquilibriumMicrophysics
 import ..MoistMicrophysics
-import ..QuadratureMicrophysics
 import ..PrescribedSST
 import ..SlabOceanSST
 import ..ᶜinterp

@@ -553,9 +553,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     microphysics_tracers =
         p.atmos.microphysics_model isa Union{
             NonEquilibriumMicrophysics1M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
             NonEquilibriumMicrophysics2M,
-            QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
         } ?
         (
             (@name(c.ρq_liq), e_int_v0, Δcv_l),
@@ -957,9 +955,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             sgs_microphysics_tracers =
                 p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
-                    QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
                     NonEquilibriumMicrophysics2M,
-                    QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
                 } ?
                 (
                     (@name(c.sgsʲs.:(1).q_tot), -LH_v0, Δcp_v, ΔR_v),
@@ -1041,9 +1037,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             # advection and sedimentation of microphysics tracers
             if p.atmos.microphysics_model isa Union{
                 NonEquilibriumMicrophysics1M,
-                QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
                 NonEquilibriumMicrophysics2M,
-                QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
             }
 
                 ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
@@ -1162,9 +1156,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot)
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
-                    QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
                     NonEquilibriumMicrophysics2M,
-                    QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
                 }
                     sgs_microphysics_tracers = (
                         (@name(c.sgsʲs.:(1).q_liq), FT(1)),
@@ -1201,9 +1193,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ))
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
-                    QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
                     NonEquilibriumMicrophysics2M,
-                    QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
                 }
                     sgs_microphysics_tracers = (
                         (@name(c.sgsʲs.:(1).q_liq)),
@@ -1385,9 +1375,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 # grid-mean tracers
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
-                    QuadratureMicrophysics{NonEquilibriumMicrophysics1M},
                     NonEquilibriumMicrophysics2M,
-                    QuadratureMicrophysics{NonEquilibriumMicrophysics2M},
                 }
 
                     microphysics_tracers = (

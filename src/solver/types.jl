@@ -28,56 +28,6 @@ const MoistMicrophysics = Union{
 }
 
 """
-    QuadratureMicrophysics{M <: AbstractMicrophysicsModel, Q} <: AbstractMicrophysicsModel
-
-Wrapper for microphysics models that enables SGS quadrature integration of microphysics
-tendencies over subgrid-scale temperature and moisture fluctuations.
-
-# Fields
-- `base_model::M`: The underlying microphysics model (e.g., `NonEquilibriumMicrophysics1M()`)
-- `quadrature::Q`: SGS quadrature configuration (`SGSQuadrature`)
-"""
-struct QuadratureMicrophysics{M <: AbstractMicrophysicsModel, Q} <:
-       AbstractMicrophysicsModel
-    base_model::M
-    quadrature::Q
-end
-
-"""
-    base_microphysics_model(m::AbstractMicrophysicsModel)
-
-Unwrap `QuadratureMicrophysics` to get the underlying microphysics model.
-For non-wrapped models, returns `m` unchanged.
-"""
-base_microphysics_model(m::AbstractMicrophysicsModel) = m
-base_microphysics_model(m::QuadratureMicrophysics) = m.base_model
-
-"""
-    QuadratureMicrophysics(base_model; FT=Float32, distribution=GaussianSGS(),
-        quadrature_order=3, T_min=FT(150), q_max=FT(0.1))
-
-Create a `QuadratureMicrophysics` wrapper with default SGSQuadrature settings.
-
-For grid-mean-only evaluation (no SGS sampling), use `distribution=GridMeanSGS()`.
-
-Physical bounds on sampled values:
-- `T_min`: minimum sampled temperature [K] (prevents `log(T<0)` in saturation)
-- `q_max`: maximum sampled specific humidity [kg/kg] (prevents extreme
-  supersaturation from driving unphysically low temperatures)
-"""
-function QuadratureMicrophysics(
-    base_model::M;
-    FT::Type = Float32,
-    distribution = GaussianSGS(),
-    quadrature_order = 3,
-    T_min = FT(150),
-    q_max = FT(0.1),
-) where {M <: AbstractMicrophysicsModel}
-    quad = SGSQuadrature(FT; quadrature_order, distribution, T_min, q_max)
-    return QuadratureMicrophysics(base_model, quad)
-end
-
-"""
     TracerNonnegativityMethod
 
 Family of methods for enforcing tracer nonnegativity. 
@@ -906,11 +856,12 @@ end
 
 Groups moisture and microphysics-related models and types.
 """
-@kwdef struct AtmosWater{PM, CM, MTTS, TNM}
+@kwdef struct AtmosWater{PM, CM, MTTS, TNM, SQ}
     microphysics_model::PM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
+    sgs_quadrature::SQ = nothing
 end
 
 """
@@ -1108,6 +1059,7 @@ The default AtmosModel provides:
 - `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
 - `cloud_model`: GridScaleCloud(), QuadratureCloud()
 - `microphysics_tendency_timestepping`: Explicit(), Implicit()
+- `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)
 
 
 ## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
