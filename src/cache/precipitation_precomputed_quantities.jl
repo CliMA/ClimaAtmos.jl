@@ -711,8 +711,6 @@ function set_microphysics_tendency_cache!(
     ::Microphysics0Moment,
     turbconv_model::DiagnosticEDMFX,
 )
-    # For environment we multiply by grid mean ρ and not byᶜρa⁰
-    # assuming a⁰=1
     (; ᶜΦ) = p.core
     (; ᶜSqₜᵐ⁰, ᶜSqₜᵐʲs, ᶜρaʲs) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
@@ -720,12 +718,12 @@ function set_microphysics_tendency_cache!(
     thermo_params = CAP.thermodynamics_params(p.params)
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    ρ = Y.c.ρ
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, p.precomputed.ᶜρaʲs, p.atmos.turbconv_model))
 
-    @. ᶜS_ρq_tot = ᶜSqₜᵐ⁰ * ρ
+    @. ᶜS_ρq_tot = ᶜSqₜᵐ⁰ * ᶜρa⁰
     @. ᶜS_ρe_tot =
         ᶜSqₜᵐ⁰ *
-        ρ *
+        ᶜρa⁰ *
         e_tot_0M_precipitation_sources_helper(thermo_params, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno, ᶜΦ)
     for j in 1:n
         @. ᶜS_ρq_tot += ᶜSqₜᵐʲs.:($$j) * ᶜρaʲs.:($$j)
@@ -754,9 +752,9 @@ function set_microphysics_tendency_cache!(
     (; ᶜTʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
 
     @. ᶜS_ρq_tot = ᶜSqₜᵐ⁰ * ᶜρa⁰
     @. ᶜS_ρe_tot =

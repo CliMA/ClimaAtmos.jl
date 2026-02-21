@@ -805,9 +805,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ᶜq_liq_raiʲs,
                 ᶜq_ice_snoʲs,
                 ᶜKʲs,
-                bdmr_l,
-                bdmr_r,
-                bdmr,
             ) = p.precomputed
 
             # upwinding options for q_tot and mse
@@ -1021,10 +1018,15 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
             ᶜu₃ʲ = p.scratch.ᶜtemp_C3
             @. ᶜu₃ʲ = ᶜinterp(Y.f.sgsʲs.:(1).u₃)
-            @. bdmr_l = convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix())
-            @. bdmr_r = convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix())
-            @. bdmr = ifelse(ᶜu₃ʲ.components.data.:1 > 0, bdmr_l, bdmr_r)
-            @. ᶠtridiagonal_matrix_c3 = -(ᶠgradᵥ_matrix()) ⋅ bdmr
+            @. p.scratch.ᶜtemp_bdmr = convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix())
+            @. p.scratch.ᶜtemp_bdmr_2 =
+                convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix())
+            @. p.scratch.ᶜtemp_bdmr_3 = ifelse(
+                ᶜu₃ʲ.components.data.:1 > 0,
+                p.scratch.ᶜtemp_bdmr,
+                p.scratch.ᶜtemp_bdmr_2,
+            )
+            @. ᶠtridiagonal_matrix_c3 = -(ᶠgradᵥ_matrix()) ⋅ p.scratch.ᶜtemp_bdmr_3
             if rs isa RayleighSponge
                 @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                     dtγ * (
@@ -1127,10 +1129,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             matrix[@name(c.sgsʲs.:(1).q_tot), χʲ_name]
                         @. ∂ᶜq_totʲ_err_∂ᶜχʲ =
                             DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar
-
-                        ∂ᶜρaʲ_err_∂ᶜχʲ =
-                            matrix[@name(c.sgsʲs.:(1).ρa), χʲ_name]
-                        @. ∂ᶜρaʲ_err_∂ᶜχʲ += ᶜtridiagonal_matrix_scalar
                     end
 
                 end

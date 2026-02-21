@@ -19,3 +19,4 @@ diagnostics:
     period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke, lmix]
     period: 10mins
+ode_algo: "ARS222"
