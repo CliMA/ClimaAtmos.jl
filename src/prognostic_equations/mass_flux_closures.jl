@@ -111,10 +111,21 @@ function edmfx_nh_pressure_drag_tendency!(
     t,
     turbconv_model::PrognosticEDMFX,
 )
-    (; ᶠnh_pressure₃_dragʲs) = p.precomputed
-    n = n_mass_flux_subdomains(turbconv_model)
-    for j in 1:n
-        @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠnh_pressure₃_dragʲs.:($$j)
+    if p.atmos.edmfx_model.nh_pressure isa Val{true}
+        (; params) = p
+        n = n_mass_flux_subdomains(turbconv_model)
+        (; ᶠu₃⁰) = p.precomputed
+        ᶠlg = Fields.local_geometry_field(Y.f)
+        scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+        for j in 1:n
+            @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠupdraft_nh_pressure_drag(
+                params,
+                ᶠlg,
+                Y.f.sgsʲs.:($$j).u₃,
+                ᶠu₃⁰,
+                scale_height,
+            )
+        end
     end
 end
 

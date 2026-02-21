@@ -31,8 +31,6 @@ max_rate = limit(q_rai, dt, 3)
     return max(zero(q), q) / dt / n
 end
 
-
-
 """
     tendency_limiter(tendency, tend_bound_pos, tend_bound_neg)
 
@@ -192,7 +190,7 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
     # Mass-conservation limits using cross-species source pools
     # n_sink: number of timesteps over which species would be depleted
     n_sink = 5
-    # n_source: number of timesteps over which sources are depleted (large because q_tot is taken as source)
+    # n_source: number of timesteps over which sources are depleted 
     n_source = 30
 
     dq_lcl_dt = tendency_limiter(
@@ -212,7 +210,7 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
     )
     dq_sno_dt = tendency_limiter(
         mp_tendency.dq_sno_dt,
-        limit(q_ice + q_rai, dt, n_source),
+        limit(q_ice, dt, n_source),
         limit(q_sno, dt, n_sink),
     )
 

@@ -45,3 +45,4 @@ diagnostics:
     period: 6hours
   - short_name: [rlut, rlutcs, rsut, rsutcs, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv]
     period: 6hours
+ode_algo: "ARS222"

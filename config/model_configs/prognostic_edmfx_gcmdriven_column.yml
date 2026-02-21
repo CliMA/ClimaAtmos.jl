@@ -45,3 +45,4 @@ diagnostics:
   - reduction_time: max
     short_name: tke
     period: 10mins
+ode_algo: "ARS222"

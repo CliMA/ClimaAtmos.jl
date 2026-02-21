@@ -38,3 +38,4 @@ diagnostics:
     reduction_time: average
     period: 1hours
 use_itime: true
+ode_algo: "ARS222"

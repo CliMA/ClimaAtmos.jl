@@ -44,3 +44,4 @@ diagnostics:
     period: 10mins
   - short_name: [husra, hussn]
     period: 10mins
+ode_algo: "ARS222"

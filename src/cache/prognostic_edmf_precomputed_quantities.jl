@@ -178,44 +178,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
 end
 
 """
-    set_prognostic_edmf_precomputed_quantities_implicit_closures!(Y, p, t)
-
-Updates the precomputed quantities stored in `p` for edmfx implicit closures.
-"""
-NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_implicit_closures!(
-    Y,
-    p,
-    t,
-)
-
-    (; turbconv_model) = p.atmos
-
-    (; params) = p
-    n = n_mass_flux_subdomains(turbconv_model)
-
-    (; ᶠu₃⁰, ᶠnh_pressure₃_dragʲs) = p.precomputed
-    ᶠlg = Fields.local_geometry_field(Y.f)
-
-    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-    # nonhydrostatic pressure closure drag term
-    for j in 1:n
-        if p.atmos.edmfx_model.nh_pressure isa Val{true}
-            @. ᶠnh_pressure₃_dragʲs.:($$j) = ᶠupdraft_nh_pressure_drag(
-                params,
-                ᶠlg,
-                Y.f.sgsʲs.:($$j).u₃,
-                ᶠu₃⁰,
-                scale_height,
-            )
-        else
-            @. ᶠnh_pressure₃_dragʲs.:($$j) = C3(0)
-        end
-    end
-
-    return nothing
-end
-
-"""
     set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
 
 Updates the precomputed quantities stored in `p` for edmfx explicit closures.
@@ -252,7 +214,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜdetrʲs,
         ᶜturb_entrʲs,
         ᶠρ_diffʲs,
-        ᶠnh_pressure₃_buoyʲs,
     ) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     ᶜaʲ_int_val = p.scratch.temp_data_level
@@ -411,15 +372,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         end
 
         @. ᶠρ_diffʲs.:($$j) = min(0, ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ)) / ᶠinterp(ᶜρʲs.:($$j))
-
-        # The buoyancy term in the nonhydrostatic pressure closure is always applied
-        # for prognostic edmf. The tendency is combined with the buoyancy term in the
-        # updraft momentum equation in `edmfx_sgs_vertical_advection_tendency!`. This
-        # term is still calculated here as it is used explicitly in the TKE equation.
-        @. ᶠnh_pressure₃_buoyʲs.:($$j) = ᶠupdraft_nh_pressure_buoyancy(
-            params,
-            buoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
-        )
     end
 
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) =
