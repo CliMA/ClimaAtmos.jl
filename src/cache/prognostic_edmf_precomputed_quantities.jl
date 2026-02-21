@@ -351,14 +351,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         entr_int_val = Fields.field_values(Fields.level(ᶜentrʲs.:($j), 1))
         detr_int_val = Fields.field_values(Fields.level(ᶜdetrʲs.:($j), 1))
         @. entr_int_val = ifelse(
-            buoyancy_flux_val < 0 || ᶜaʲ_int_val <= 0 ||
+            buoyancy_flux_val < 0 ||
             ᶜaʲ_int_val >= $(FT(turbconv_params.surface_area)),
             entr_int_val,
             detr_int_val +
             ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
         )
         @. detr_int_val = ifelse(
-            buoyancy_flux_val < 0 || ᶜaʲ_int_val <= 0 ||
+            buoyancy_flux_val < 0 ||
             ᶜaʲ_int_val < $(FT(turbconv_params.surface_area)),
             detr_int_val,
             entr_int_val -
@@ -370,6 +370,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         else
             @. detr_int_val = limit_detrainment(detr_int_val, entr_int_val, ᶜaʲ_int_val, dt)
         end
+        # Add boundary kinematic contribution to entrainment to compensate
+        # advective area loss (∂(ρaw)/∂z) in the first cell. Using a one-sided
+        # estimate (zero flux below the surface), we add ᶠw₂ / ᶜdz₁ = 2 ᶜw₁ / ᶜdz₁ 
+        # so that entrainment can effectively relax area toward `surface_area`.
+        ᶜdz = Fields.Δz_field(axes(Y.c))
+        @. p.scratch.ᶜtemp_scalar_4 = 2 * get_physical_w(ᶜuʲs.:($$j), ᶜlg) / ᶜdz
+        w_over_dz_val = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar_4, 1))
+        @. entr_int_val += ifelse(buoyancy_flux_val < 0, 0, w_over_dz_val)
 
         @. ᶠρ_diffʲs.:($$j) = min(0, ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ)) / ᶠinterp(ᶜρʲs.:($$j))
     end
