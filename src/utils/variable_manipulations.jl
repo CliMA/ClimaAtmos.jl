@@ -1,5 +1,6 @@
 import ClimaCore.MatrixFields: @name
 import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
+import ClimaCore.Geometry: geometry_requirement, NeedsMinimal
 
 """
     specific(ρχ, ρ)
@@ -44,6 +45,9 @@ Arguments:
 - `turbconv_model`: The turbulence convection model, containing parameters for regularization (e.g., `a_half`).
 """
 specific(ρχ, ρ) = ρχ / ρ
+
+# Geometry trait: specific is just division, no coordinate transformations
+geometry_requirement(::typeof(specific)) = NeedsMinimal()
 
 function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     # TODO: Replace turbconv_model struct by parameters, and include a_half in

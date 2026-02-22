@@ -25,6 +25,14 @@ atmos_state(local_state, atmos_model, center_space, face_space) =
         )...,
     )
 
+# Geometry requirement traits - mark simple arithmetic operations as minimal
+import ClimaCore.Geometry: geometry_requirement, NeedsMinimal
+
+# These functions only do arithmetic (ρ * q) - no coordinate transformations
+geometry_requirement(::typeof(precip_variables)) = NeedsMinimal()
+geometry_requirement(::typeof(moisture_variables)) = NeedsMinimal()
+geometry_requirement(::typeof(energy_variables)) = NeedsMinimal()
+
 """
     atmos_center_variables(ls, atmos_model)
 
