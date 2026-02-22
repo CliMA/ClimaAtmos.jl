@@ -42,6 +42,9 @@ is_tracer_var(symbol) = !(
 # https://stackoverflow.com/questions/14687665/very-slow-stdpow-for-bases-very-close-to-1
 fast_pow(x, y) = exp(y * log(x))
 
+import ClimaCore.Geometry: NeedsMinimal, geometry_requirement
+geometry_requirement(::typeof(fast_pow)) = NeedsMinimal()
+
 """
     geopotential(grav, z)
 
@@ -54,6 +57,9 @@ where:
 - `z` is the height
 """
 geopotential(grav, z) = grav * z
+
+# Geometry trait: simple multiplication (geometry_requirement already imported above)
+geometry_requirement(::typeof(geopotential)) = NeedsMinimal()
 
 """
     time_from_filename(file)

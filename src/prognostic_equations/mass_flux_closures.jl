@@ -66,6 +66,9 @@ function draft_area(ρa, ρ)
     return ρa / ρ
 end
 
+import ClimaCore.Geometry: NeedsMinimal, geometry_requirement
+geometry_requirement(::typeof(draft_area)) = NeedsMinimal()
+
 """
    Return the virtual mass term of the pressure closure for updrafts [m/s2 * m]
 

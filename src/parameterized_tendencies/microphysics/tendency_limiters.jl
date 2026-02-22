@@ -154,10 +154,10 @@ Two layers of limiting are applied:
    - `dq_icl_dt`: source = `q_vap + q_liq`, sink = `q_ice`
    - `dq_rai_dt`: source = `q_liq + q_sno`, sink = `q_rai`
    - `dq_sno_dt`: source = `q_ice + q_rai`, sink = `q_sno`
-2. **Combined temperature rate**: caps the combined tendency to a maximum equivalent 
+2. **Combined temperature rate**: caps the combined tendency to a maximum equivalent
    temperature change `dT/dt = (L_v/c_p)·dq_lcl + (L_s/c_p)·dq_icl`
-   and rescales `dq_lcl_dt` and `dq_icl_dt` uniformly. (Temperature is used as a convenient 
-   metric for the magnitude of tendencies, although not all tendencies are actually associated 
+   and rescales `dq_lcl_dt` and `dq_icl_dt` uniformly. (Temperature is used as a convenient
+   metric for the magnitude of tendencies, although not all tendencies are actually associated
    with temperature changes.)
 
 # Arguments
@@ -190,7 +190,7 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
     # Mass-conservation limits using cross-species source pools
     # n_sink: number of timesteps over which species would be depleted
     n_sink = 5
-    # n_source: number of timesteps over which sources are depleted 
+    # n_source: number of timesteps over which sources are depleted
     n_source = 30
 
     dq_lcl_dt = tendency_limiter(
@@ -215,14 +215,14 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
     )
 
     # Combined temperature-rate limiter:
-    # Condensate tendencies are expressed as possible temperature changes (although they 
+    # Condensate tendencies are expressed as possible temperature changes (although they
     # may not be realized).
     # A single combined scale factor preserves the ratio between condensate species,
     # preventing mass-energy decoupling that can drive temperatures negative.
     Lv_over_cp = TD.Parameters.LH_v0(tps) / TD.Parameters.cp_d(tps)
     Ls_over_cp = TD.Parameters.LH_s0(tps) / TD.Parameters.cp_d(tps)
 
-    # Max 5 K temperature change per timestep 
+    # Max 5 K temperature change per timestep
     # TODO: arbitrary choice; remove or make very large once microphysics is implicit
     dT_dt_max = FT(5) / dt
 
@@ -236,3 +236,9 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
         dq_sno_dt = dq_sno_dt,
     )
 end
+# Geometry traits: pure arithmetic limiting operations
+import ClimaCore.Geometry: NeedsMinimal, geometry_requirement
+geometry_requirement(::typeof(limit)) = NeedsMinimal()
+geometry_requirement(::typeof(tendency_limiter)) = NeedsMinimal()
+geometry_requirement(::typeof(limit_sink)) = NeedsMinimal()
+geometry_requirement(::typeof(coupled_sink_limit_factor)) = NeedsMinimal()
