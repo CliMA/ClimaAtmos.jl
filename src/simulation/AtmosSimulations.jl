@@ -224,7 +224,7 @@ function AtmosSimulation{FT}(;
                 callback_kwargs...,
             )...,
             common_callbacks(
-                dt, output_dir, start_date, t_start, t_end, context,
+                model, dt, output_dir, start_date, t_start, t_end, context,
                 checkpoint_frequency,
             )...)
     else

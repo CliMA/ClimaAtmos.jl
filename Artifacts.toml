@@ -90,3 +90,49 @@ git-tree-sha1 = "c2412372bdf40ba73f496dc0fe427d063e31533b"
     [[cloud_fraction_nn.download]]
     sha256 = "a0b8b682539d975c1cc331549d0222a0eda121f5b2977cc63486368a7dc07885"
     url = "https://caltech.box.com/shared/static/vdb6r7cv5tj6uhrphn5a4352smsxdqgs.gz"
+
+[ogwd_computed_drag_h6]
+git-tree-sha1 = "bf189454e5cb19962d8324e7e1667b7aa867bff9"
+lazy = true
+
+    [[ogwd_computed_drag_h6.download]]
+    sha256 = "a54c3ab3c0213e7c6d11fa73ab5fe54f3799e8383c6c3164e98d9c257945a4ef"
+    url = "https://caltech.box.com/shared/static/hrupvak4oceoi2camqey166u61421q25.gz"
+
+[ogwd_computed_drag_h8]
+git-tree-sha1 = "df178b2f3efba5c9670c7f75cd04637f844a8145"
+lazy = true
+
+    [[ogwd_computed_drag_h8.download]]
+    sha256 = "8375fd84c2b2b3ef9b333666702c55687f130e299753f4e21e0fd99f04fa355d"
+    url = "https://caltech.box.com/shared/static/bmzj3r7b2lez3xjggymi2ifoq5vg6jnq.gz"
+
+[ogwd_computed_drag_h12]
+git-tree-sha1 = "2aa7ab2ca8b562aa8ba92905bd664cc64a976ad2"
+lazy = true
+
+    [[ogwd_computed_drag_h12.download]]
+    sha256 = "8b3834b9e3ed93bf08c6b7a0bbec83ff418ce357f186f67fc441b0e8d288ae32"
+    url = "https://caltech.box.com/shared/static/p058wvdd42zhidgt3copgn88ijgs2c3a.gz"
+
+[ogwd_computed_drag_h16]
+git-tree-sha1 = "158138fc38c3aa08ce1605ac65ff1983a1a407db"
+lazy = true
+
+    [[ogwd_computed_drag_h16.download]]
+    sha256 = "af9987bf9bf63899014b99b9420536cdd06f7bc05ea44b37f31e42e3b7840ed7"
+    url = "https://caltech.box.com/shared/static/imtr9k7ktzm0fff1k32zphb8oybmrsvn.gz"
+
+[ogw_computed_drag_h30]
+git-tree-sha1 = "ab898b33fcde4a719ee12cb1271399177d6a3561"
+
+    [[ogw_computed_drag_h30.download]]
+    sha256 = "9d5b7d5046911069f4c6917dc01b0c88ca2bb1273f203d45f92577ab2b83442b"
+    url = "https://caltech.box.com/shared/static/7ut92ej4qs15pm1g6vpykvmpqw6cjztj.gz"
+    
+[ogw_computed_drag_h60]
+git-tree-sha1 = "d11b75df5be566eae42d6a3f2b3f60a381feacf8"
+
+    [[ogw_computed_drag_h60.download]]
+    sha256 = "6bcccb58ff3e3687deb8782234a2518a4b92ce00a1b0f830f4c84d19f9384585"
+    url = "https://caltech.box.com/shared/static/0e5l0qvuf06zmj7gl625yb4vlt7phknz.gz"

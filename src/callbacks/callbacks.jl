@@ -161,6 +161,18 @@ NVTX.@annotate function nogw_model_callback!(integrator)
     return nothing
 end
 
+NVTX.@annotate function ogw_model_callback!(integrator)
+    Y = integrator.u
+    p = integrator.p
+
+    orographic_gravity_wave_compute_tendency!(
+        Y,
+        p,
+        p.atmos.orographic_gravity_wave,
+    )
+    return nothing
+end
+
 NVTX.@annotate function edmfx_filter_callback!(integrator)
     Y = integrator.u
     p = integrator.p

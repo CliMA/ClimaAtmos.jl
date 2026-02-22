@@ -20,6 +20,8 @@
 
 
 #=
+316
+- Add GPU Orographic Gravity Wave implementation, refactor NOGW tests, add OGW tests and fix base fluxes
 
 316
 - Use ARS222 as the default ODE solver for prognostic EDMF
