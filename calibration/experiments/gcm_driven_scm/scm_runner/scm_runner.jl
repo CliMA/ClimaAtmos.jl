@@ -23,7 +23,7 @@ NUM_WORKERS = 10
 
 
 # example usage
-# sbatch scm_runner.sbatch --run_output_dir=/groups/esm/cchristo/climaatmos_scm_calibrations/scm_runs/nearest_neig_particle_i6_m31_exp51 --parameter_path=./optimal_tomls/parameters_nearest_neig_particle_i6_m31_exp51.toml
+# sbatch scm_runner.sbatch --run_output_dir=/resnick/groups/esm/cchristo/climaatmos_scm_calibrations/scm_runs/nearest_neig_particle_i6_m31_exp51 --parameter_path=./optimal_tomls/parameters_nearest_neig_particle_i6_m31_exp51.toml
 
 function main()
     s = ArgParseSettings()

@@ -259,12 +259,12 @@ function entrainment_velocity_scale(
 
     entr_param_vec = CAP.entr_param_vec(turbconv_params)
     pi_sum =
-        entr_param_vec[1] * abs(Π₁) +
-        entr_param_vec[2] * abs(Π₂) +
-        entr_param_vec[3] * abs(Π₃) +
-        entr_param_vec[4] * abs(Π₄) +
-        entr_param_vec[5] * abs(Π₅) +
-        entr_param_vec[6]
+        # entr_param_vec[1] * abs(Π₁) +
+        entr_param_vec[1] * abs(Π₂) +
+        entr_param_vec[2] * abs(Π₃) +
+        # entr_param_vec[4] * abs(Π₄) +
+        # entr_param_vec[5] * abs(Π₅) +
+        entr_param_vec[3]
 
     area_limiter_factor = upper_area_limiter_factor(ᶜaʲ, turbconv_params)
     entr_vel_scale = area_limiter_factor * max(0, pi_sum) / elev_above_sfc
