@@ -984,7 +984,7 @@ function get_simulation(config::AtmosConfig)
     sim_info = get_sim_info(config)
     params = ClimaAtmosParameters(config)
     atmos = get_atmos(config, params)
-    comms_ctx = get_comms_context(config.parsed_args)
+    comms_ctx = config.comms_ctx
     grid = get_grid(config.parsed_args, params, comms_ctx)
 
     job_id = sim_info.job_id

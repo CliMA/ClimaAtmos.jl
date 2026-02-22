@@ -39,7 +39,7 @@ perturb_initstate: false
 dt: "10secs"
 dt_rad: "30mins"
 t_end: "72hours"
-dt_save_to_disk: "10mins"
+dt_save_to_disk: "1000days"
 call_cloud_diagnostics_per_stage : true
 toml: [scm_tomls/prognostic_edmfx.toml]
 netcdf_output_at_levels: true

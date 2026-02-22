@@ -203,11 +203,11 @@ observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 @info "Initializing calibration" n_iterations ensemble_size output_dir
 
 eki = CAL.calibrate(
-    CAL.WorkerBackend,
+    CAL.WorkerBackend(),
     ensemble_size,
     n_iterations,
     observations,
-    nothing, # noise alread sprecified in observations
+    nothing, # noise already specified in observations
     prior,
     output_dir;
     scheduler = EKP.DataMisfitController(on_terminate = "continue"),

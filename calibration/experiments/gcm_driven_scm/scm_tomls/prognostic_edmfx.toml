@@ -1,32 +1,39 @@
 [EDMF_min_area]
 value = 1.0e-5
+type = "float"
 
 [EDMF_max_area]
 value = 0.7
-
-[entr_inv_tau]
-value = 0.00001
-
-[tracer_vertical_diffusion_factor]
-value = 0.0
+type = "float"
 
 [min_area_limiter_scale]
 value = 0
+type = "float"
 
 [detr_inv_tau]
-value = 0
+value = 0.0001
+type = "float"
 
 [detr_coeff]
 value = 0
+type = "float"
 
 [detr_buoy_coeff]
 value = 0
+type = "float"
 
-[detr_vertdiv_coeff]
+[detr_massflux_vertdiv_coeff]
 value = 0
+type = "float"
+
+[entr_detr_limit_inv_tau]
+value = 0.01
+type = "float"
 
 [zd_rayleigh]
 value = 30000.0
+type = "float"
 
 [zd_viscous]
 value = 30000.0
+type = "float"
