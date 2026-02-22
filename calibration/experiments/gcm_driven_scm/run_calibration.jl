@@ -135,7 +135,7 @@ JLD2.jldsave(
 )
 
 ### get LES obs (Y) and norm factors
-ref_paths, _ = get_les_calibration_library(max_cases = 10, models = "HadGEM2-A")
+ref_paths, _ = get_les_calibration_library(max_cases = 20, models = "HadGEM2-A")
 obs_vec = []
 
 for ref_path in ref_paths
@@ -203,11 +203,11 @@ observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 @info "Initializing calibration" n_iterations ensemble_size output_dir
 
 eki = CAL.calibrate(
-    CAL.WorkerBackend,
+    CAL.WorkerBackend(),
     ensemble_size,
     n_iterations,
     observations,
-    nothing, # noise alread sprecified in observations
+    nothing, # noise already specified in observations
     prior,
     output_dir;
     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
