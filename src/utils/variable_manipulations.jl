@@ -340,9 +340,9 @@ end
 Construct the `FieldName` corresponding to the product ρ·χ.
 
 Given a tracer name `χ_name`, this function returns the new name that
-represents the corresponding density-weighted quantity (ρ times χ). 
+represents the corresponding density-weighted quantity (ρ times χ).
 
-The function works recursively on hierarchical field names: If `χ_name` 
+The function works recursively on hierarchical field names: If `χ_name`
 is a base name (no children), it returns a new name prefixed with `ρ`.
 If `χ_name` has internal structure (e.g. a composite name), the function
 recurses into the child names and prepends `ρ` at the lowest level.
@@ -361,17 +361,17 @@ end
 """
     get_χʲ_name_from_ρχ_name(ρχ_name::FieldName)
 
-Construct the `FieldName` corresponding to the specific tracer in the updraft 
+Construct the `FieldName` corresponding to the specific tracer in the updraft
 (`χʲ` with j = 1) associated with a given density-weighted tracer on the grid mean (`ρ·χ`).
 
-Given the name of a density-weighted tracer `ρχ_name`, this function returns the 
+Given the name of a density-weighted tracer `ρχ_name`, this function returns the
 corresponding name of the specific tracer in the first subgrid updraft.
 
-The function operates recursively on hierarchical field names:  
-- If `ρχ_name` is a base name (no children), it replaces the `ρ` prefix with the 
-  appropriate updraft-specific prefix (e.g. `sgsʲs.:(1)`) and converts the variable 
+The function operates recursively on hierarchical field names:
+- If `ρχ_name` is a base name (no children), it replaces the `ρ` prefix with the
+  appropriate updraft-specific prefix (e.g. `sgsʲs.:(1)`) and converts the variable
   to its specific form.
-- If `ρχ_name` has internal structure (e.g. a composite name), the function 
+- If `ρχ_name` has internal structure (e.g. a composite name), the function
   recurses into the child names and applies the transformation at the lowest level.
 """
 function get_χʲ_name_from_ρχ_name(ρχ_name)
