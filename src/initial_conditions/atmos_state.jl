@@ -25,14 +25,6 @@ atmos_state(local_state, atmos_model, center_space, face_space) =
         )...,
     )
 
-# Geometry requirement traits - mark simple arithmetic operations as minimal
-import ClimaCore.Geometry: geometry_requirement, NeedsMinimal
-
-# These functions only do arithmetic (ρ * q) - no coordinate transformations
-geometry_requirement(::typeof(precip_variables)) = NeedsMinimal()
-geometry_requirement(::typeof(moisture_variables)) = NeedsMinimal()
-geometry_requirement(::typeof(energy_variables)) = NeedsMinimal()
-
 """
     atmos_center_variables(ls, atmos_model)
 
@@ -154,6 +146,14 @@ function precip_variables(ls, ::Microphysics2MomentP3)
     )
     return (; warm_state..., cold_state...)
 end
+
+# Geometry requirement traits - mark simple arithmetic operations as minimal
+import ClimaCore.Geometry: geometry_requirement, NeedsMinimal
+
+# These functions only do arithmetic (ρ * q) - no coordinate transformations
+geometry_requirement(::typeof(precip_variables)) = NeedsMinimal()
+geometry_requirement(::typeof(moisture_variables)) = NeedsMinimal()
+geometry_requirement(::typeof(energy_variables)) = NeedsMinimal()
 
 # We can use paper-based cases for LES type configurations (no TKE)
 # or SGS type configurations (initial TKE needed), so we do not need to assert
