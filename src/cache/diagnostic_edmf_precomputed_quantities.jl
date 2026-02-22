@@ -872,6 +872,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     dt,
                     microphys_1m_params,
                     thermo_params,
+                    p.atmos.microphysics_tendency_timestepping,
                 )
 
             end
@@ -1579,6 +1580,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
 
     # Apply physically motivated tendency limits
     @. ᶜmp_tendency = apply_1m_tendency_limits(
+        $(Ref(p.atmos.microphysics_tendency_timestepping)),
         ᶜmp_tendency,
         thermo_params,
         ᶜq_tot,

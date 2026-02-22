@@ -859,6 +859,7 @@ function set_microphysics_tendency_cache!(
 
     # Apply physically motivated tendency limits
     @. ᶜmp_tendency = apply_1m_tendency_limits(
+        $(Ref(p.atmos.microphysics_tendency_timestepping)),
         ᶜmp_tendency,
         thermo_params,
         ᶜq_tot,
@@ -872,6 +873,22 @@ function set_microphysics_tendency_cache!(
     @. ᶜSqᵢᵐ = ᶜmp_tendency.dq_icl_dt
     @. ᶜSqᵣᵐ = ᶜmp_tendency.dq_rai_dt
     @. ᶜSqₛᵐ = ᶜmp_tendency.dq_sno_dt
+
+    # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
+    # grid-mean state for the implicit Jacobian diagonal.
+    (; ᶜmp_derivative) = p.precomputed
+    @. ᶜmp_derivative = BMT.bulk_microphysics_derivatives(
+        BMT.Microphysics1Moment(),
+        mp,
+        thermo_params,
+        Y.c.ρ,
+        ᶜT,
+        ᶜq_tot,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜq_rai,
+        ᶜq_sno,
+    )
 
     return nothing
 end

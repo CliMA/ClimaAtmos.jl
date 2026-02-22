@@ -142,38 +142,41 @@ end
 
 
 """
-    apply_1m_tendency_limits(mp_tendency, tps, q_tot, q_liq, q_ice, q_rai, q_sno, dt)
+    apply_1m_tendency_limits(timestepping, mp_tendency, tps, q_tot, q_liq, q_ice, q_rai, q_sno, dt)
 
 Apply physical limiting to 1M microphysics tendencies.
 
-Two layers of limiting are applied:
-1. **Mass conservation**: prevents unphysical depletion of each species beyond
-   available sources (via `tendency_limiter`). Each species is limited
-   bidirectionally against its maximal cross-species source pool:
-   - `dq_lcl_dt`: source = `q_vap + q_ice`, sink = `q_liq`
-   - `dq_icl_dt`: source = `q_vap + q_liq`, sink = `q_ice`
-   - `dq_rai_dt`: source = `q_liq + q_sno`, sink = `q_rai`
-   - `dq_sno_dt`: source = `q_ice + q_rai`, sink = `q_sno`
-2. **Combined temperature rate**: caps the combined tendency to a maximum equivalent 
-   temperature change `dT/dt = (L_v/c_p)·dq_lcl + (L_s/c_p)·dq_icl`
-   and rescales `dq_lcl_dt` and `dq_icl_dt` uniformly. (Temperature is used as a convenient 
-   metric for the magnitude of tendencies, although not all tendencies are actually associated 
-   with temperature changes.)
-
-# Arguments
-- `mp_tendency`: NamedTuple from BMT with raw tendencies
-- `tps`: Thermodynamic parameters (for `L_v`, `L_s`, `c_p`)
-- `q_tot`: Total water specific humidity [kg/kg]
-- `q_liq`: Cloud liquid [kg/kg]
-- `q_ice`: Cloud ice [kg/kg]
-- `q_rai`: Rain [kg/kg]
-- `q_sno`: Snow [kg/kg]
-- `dt`: Timestep [s]
-
-# Returns
-NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt)`
+Dispatches on `timestepping`:
+- `Implicit()`: **no-op** — returns raw tendencies unchanged. With implicit
+  microphysics and exact Jacobian derivatives, limiting creates a mismatch
+  that causes Newton solver overshoot.
+- `Explicit()`: applies mass-conservation and temperature-rate limiters.
 """
 @inline function apply_1m_tendency_limits(
+    ::Implicit,
+    mp_tendency,
+    tps,
+    q_tot,
+    q_liq,
+    q_ice,
+    q_rai,
+    q_sno,
+    dt,
+)
+    # No-op: with implicit microphysics and exact Jacobian derivatives,
+    # tendency limiting creates a mismatch between the Jacobian diagonal
+    # (which uses the unlimited derivative) and the actual tendency (which
+    # was limited), causing the Newton solver to overshoot.
+    return (
+        dq_lcl_dt = mp_tendency.dq_lcl_dt,
+        dq_icl_dt = mp_tendency.dq_icl_dt,
+        dq_rai_dt = mp_tendency.dq_rai_dt,
+        dq_sno_dt = mp_tendency.dq_sno_dt,
+    )
+end
+
+@inline function apply_1m_tendency_limits(
+    ::Explicit,
     mp_tendency,
     tps,
     q_tot,
@@ -188,9 +191,7 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
     q_vap = max(zero(q_tot), q_tot - q_liq - q_ice - q_rai - q_sno)
 
     # Mass-conservation limits using cross-species source pools
-    # n_sink: number of timesteps over which species would be depleted
     n_sink = 5
-    # n_source: number of timesteps over which sources are depleted 
     n_source = 30
 
     dq_lcl_dt = tendency_limiter(
@@ -214,16 +215,11 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
         limit(q_sno, dt, n_sink),
     )
 
-    # Combined temperature-rate limiter:
-    # Condensate tendencies are expressed as possible temperature changes (although they 
-    # may not be realized).
-    # A single combined scale factor preserves the ratio between condensate species,
-    # preventing mass-energy decoupling that can drive temperatures negative.
+    # Combined temperature-rate limiter
     Lv_over_cp = TD.Parameters.LH_v0(tps) / TD.Parameters.cp_d(tps)
     Ls_over_cp = TD.Parameters.LH_s0(tps) / TD.Parameters.cp_d(tps)
 
-    # Max 5 K temperature change per timestep 
-    # TODO: arbitrary choice; remove or make very large once microphysics is implicit
+    # Max 5 K temperature change per timestep
     dT_dt_max = FT(5) / dt
 
     dT_dt = Lv_over_cp * dq_lcl_dt + Ls_over_cp * dq_icl_dt
