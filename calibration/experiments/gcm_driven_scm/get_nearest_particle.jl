@@ -14,8 +14,7 @@ using Statistics
 include("helper_funcs.jl")
 
 
-# output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_43" # path to calibration output
-output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/output_progedmf_cal_v1/exp12" # path to calibration output
+output_dir = "/resnick/groups/esm/cchristo/climaatmos_scm_calibrations/output_progedmf_cal_v1/exp12" # path to calibration output
 iteration = 4
 prefix = "prog_1M"
 
