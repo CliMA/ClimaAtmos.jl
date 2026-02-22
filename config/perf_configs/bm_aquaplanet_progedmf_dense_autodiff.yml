@@ -13,7 +13,6 @@ implicit_sgs_mass_flux: true
 use_dense_jacobian: true
 update_jacobian_every: stage
 ode_algo: "ARS222"
-moist: equil
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
 dt_rad: 1hours
@@ -28,5 +27,5 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-precip_model: 0M
+microphysics_model: "0M"
 toml: [toml/prognostic_edmfx.toml]

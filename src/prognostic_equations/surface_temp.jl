@@ -101,7 +101,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
     end
 
     # 4. Energy tendency due to precipitation accumulation        
-    if !(p.atmos.moisture_model isa DryModel)
+    if !(p.atmos.microphysics_model isa DryModel)
 
         pet = p.conservation_check.col_integrated_precip_energy_tendency
 
@@ -116,7 +116,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
         surface_heat_capacity_per_area
 
     # --- WATER BALANCE (if moisture is active) ---
-    if !(p.atmos.moisture_model isa DryModel)
+    if !(p.atmos.microphysics_model isa DryModel)
         # 1. Turbulent surface water fluxes (evaporation/condensation)
         if !(p.atmos.disable_surface_flux_tendency)
             sfc_turb_w_flux =

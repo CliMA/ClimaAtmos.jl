@@ -1,8 +1,7 @@
 dt_save_state_to_disk: "Inf"
 output_default_diagnostics: false
 h_elem: 42
-moist: "equil"
-precip_model: "0M"
+microphysics_model: "0M"
 rad: "allskywithclear"
 insolation: "timevarying"
 dt_rad: "1hours"

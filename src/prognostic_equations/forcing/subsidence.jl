@@ -43,7 +43,7 @@ subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:third_order}) =
     subsidence_tendency!(Yₜ, Y, p, t, subsidence_model::Subsidence)
 
 Applies subsidence tendencies to total energy (`ρe_tot`), total specific humidity
-(`ρq_tot`), and other moisture species (`ρq_liq`, `ρq_ice`) if a `NonEquilMoistModel`
+(`ρq_tot`), and other moisture species (`ρq_liq`, `ρq_ice`) if a `NonEquilibriumMicrophysics`
 is used.
 
 The subsidence velocity profile `w_sub(z)` is obtained from `subsidence_model.prof`.
@@ -56,7 +56,7 @@ Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
 - `Y`: The current state vector (used for `Y.c.ρ`).
 - `p`: Cache containing parameters, precomputed fields (`ᶜh_tot`),
-       atmospheric model configurations (`p.atmos.moisture_model`, `p.atmos.subsidence`),
+       atmospheric model configurations (`p.atmos.microphysics_model`, `p.atmos.subsidence`),
        and scratch space.
 - `t`: Current simulation time (unused by this specific tendency calculation).
 - `subsidence_model`: A `Subsidence` object containing the subsidence profile function.
@@ -70,7 +70,7 @@ subsidence_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing    # No subsidence
     subsidence_tendency!(Yₜ, Y, p, t, subsidence_model::Subsidence)
 
 Applies subsidence tendencies to total energy (`ρe_tot`), total specific humidity
-(`ρq_tot`), and other moisture species (`ρq_liq`, `ρq_ice`) if a `NonEquilMoistModel`
+(`ρq_tot`), and other moisture species (`ρq_liq`, `ρq_ice`) if a `NonEquilibriumMicrophysics`
 is used.
 
 The subsidence velocity profile `w_sub(z)` is obtained from `subsidence_model.prof`.
@@ -87,7 +87,7 @@ Arguments:
 - `subsidence`: The subsidence model object.
 """
 function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
-    (; moisture_model) = p.atmos
+    (; microphysics_model) = p.atmos
     subsidence_profile = p.atmos.subsidence.prof
     thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜh_tot) = p.precomputed
@@ -101,10 +101,10 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
     # LS Subsidence
     subsidence!(Yₜ.c.ρe_tot, Y.c.ρ, ᶠsubsidence³, ᶜh_tot, Val{:first_order}())
 
-    if !(moisture_model isa DryModel)
+    if !(microphysics_model isa DryModel)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠsubsidence³, ᶜq_tot, Val{:first_order}())
-        if moisture_model isa NonEquilMoistModel
+        if microphysics_model isa NonEquilibriumMicrophysics
             ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
             subsidence!(
                 Yₜ.c.ρq_liq,

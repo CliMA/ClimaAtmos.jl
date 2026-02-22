@@ -24,7 +24,7 @@ mktempdir() do output_dir
     end
     config_dict = Dict(
         "output_default_diagnostics" => true,
-        "moist" => "equil",
+        "microphysics_model" => "0M",
         "toml" => [base_toml_file],
         "output_dir" => output_dir,
         "t_end" => "600secs",
@@ -34,8 +34,8 @@ mktempdir() do output_dir
     @testset "Atmos Configuration" begin
         @test float(simulation.t_end) == 600
         @test simulation.output_dir == joinpath(member_path, "output_0000")
-        @test simulation.integrator.p.atmos.moisture_model ==
-              CA.EquilMoistModel()
+        @test simulation.integrator.p.atmos.microphysics_model ==
+              CA.EquilibriumMicrophysics0M()
         @test simulation.integrator.p.params.rrtmgp_params.grav == 10.0
     end
 end

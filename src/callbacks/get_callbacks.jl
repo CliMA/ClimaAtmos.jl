@@ -671,7 +671,7 @@ function default_model_callbacks(water::AtmosWater;
     t_start,
     t_end,
     kwargs...)
-    if !isnothing(water.moisture_model)
+    if !isnothing(water.microphysics_model)
         return cloud_fraction_callback(
             dt_cloud_fraction,
             dt,

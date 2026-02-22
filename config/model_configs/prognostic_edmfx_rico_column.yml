@@ -15,8 +15,7 @@ edmfx_nh_pressure: true
 edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
-moist: "nonequil"
-precip_model: "1M"
+microphysics_model: "1M"
 use_sgs_quadrature: false
 config: "column"
 z_max: 4e3

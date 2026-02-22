@@ -9,7 +9,7 @@ turbconv: "diagnostic_edmfx"
 x_elem: 2
 dz_bottom: 30.0
 config: "box"
-moist: "equil"
+microphysics_model: "0M"
 toml: [toml/diagnostic_edmfx.toml]
 netcdf_interpolation_num_points: [8, 8, 45]
 diagnostics:

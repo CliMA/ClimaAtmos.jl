@@ -2,7 +2,7 @@ initial_condition: "MoistAdiabaticProfileEDMFX"
 advection_test: true
 turbconv: "prognostic_edmfx"
 config: "column"
-moist: "equil"
+microphysics_model: "0M"
 z_max: 5.5e4
 x_elem: 2
 y_elem: 2

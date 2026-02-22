@@ -4,7 +4,7 @@ simulation = CA.AtmosSimulation(
     CA.AtmosConfig(
         Dict(
             "initial_condition" => "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc",
-            "moist" => "equil",
+            "microphysics_model" => "0M",
         ),
         job_id = "test_init_with_file_dyamond",
     ),

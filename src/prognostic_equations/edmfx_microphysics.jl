@@ -22,8 +22,8 @@ Arguments:
 - `p`: The cache, containing precomputed quantities and parameters.
 - `t`: The current simulation time.
 - `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`).
-- `microphysics_model`: The precipitation model (e.g., `Microphysics0Moment`,
-  `Microphysics1Moment`, `Microphysics2Moment`).
+- `microphysics_model`: The microphysics model (e.g., `EquilibriumMicrophysics0M`,
+  `NonEquilibriumMicrophysics1M`, `NonEquilibriumMicrophysics2M`).
 
 Returns: `nothing`, modifies `Yₜ` in place.
 """
@@ -37,7 +37,7 @@ function edmfx_microphysics_tendency!(
     p,
     t,
     turbconv_model::PrognosticEDMFX,
-    microphysics_model::Microphysics0Moment,
+    microphysics_model::EquilibriumMicrophysics0M,
 )
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜSqₜᵐʲs, ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
@@ -71,10 +71,7 @@ function edmfx_microphysics_tendency!(
     p,
     t,
     turbconv_model::PrognosticEDMFX,
-    microphysics_model::Union{
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-    },
+    microphysics_model::NonEquilibriumMicrophysics1M,
 )
     n = n_mass_flux_subdomains(turbconv_model)
 
@@ -97,10 +94,7 @@ function edmfx_microphysics_tendency!(
     p,
     t,
     turbconv_model::PrognosticEDMFX,
-    microphysics_model::Union{
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
-    },
+    microphysics_model::NonEquilibriumMicrophysics2M,
 )
     n = n_mass_flux_subdomains(turbconv_model)
 

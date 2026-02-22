@@ -245,16 +245,11 @@ function core_default_diagnostics(output_writer, duration, start_date, t_start, 
     end
 end
 
-##################
-# Moisture model #
-##################
-function default_diagnostics(
-    ::T,
-    duration,
-    start_date,
-    t_start;
-    output_writer,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+######################
+# Microphysics model #
+######################
+
+function _moist_default_diagnostics(duration, start_date, t_start; output_writer)
     moist_diagnostics = [
         "hur",
         "hus",
@@ -277,65 +272,73 @@ function default_diagnostics(
 end
 
 function default_diagnostics(
-    atmos_water::AtmosWater,
+    ::EquilibriumMicrophysics0M,
     duration,
     start_date,
     t_start;
     output_writer,
 )
-    diagnostics = []
-
-    # Add moisture and precipitation model diagnostics
-    for model in (atmos_water.moisture_model, atmos_water.microphysics_model)
-        !isnothing(model) && append!(
-            diagnostics,
-            default_diagnostics(model, duration, start_date, t_start; output_writer),
-        )
-    end
-
-    return diagnostics
-end
-
-#######################
-# Precipitation model #
-#######################
-function default_diagnostics(
-    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
-    duration,
-    start_date,
-    t_start;
-    output_writer,
-)
-    # 0-moment microphysics doesn't have additional diagnostics beyond basic moisture
-    return []
+    return _moist_default_diagnostics(duration, start_date, t_start; output_writer)
 end
 
 function default_diagnostics(
-    ::Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}},
+    ::NonEquilibriumMicrophysics1M,
     duration,
     start_date,
     t_start;
     output_writer,
 )
     precip_diagnostics = ["husra", "hussn"]
-
     average_func = frequency_averages(duration)
-
-    return [average_func(precip_diagnostics...; output_writer, start_date, t_start)...]
+    return [
+        _moist_default_diagnostics(duration, start_date, t_start; output_writer)...,
+        average_func(precip_diagnostics...; output_writer, start_date, t_start)...,
+    ]
 end
 
 function default_diagnostics(
-    ::Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}},
+    ::NonEquilibriumMicrophysics2M,
     duration,
     start_date,
     t_start;
     output_writer,
 )
     precip_diagnostics = ["husra", "hussn", "cdnc", "ncra"]
-
     average_func = frequency_averages(duration)
+    return [
+        _moist_default_diagnostics(duration, start_date, t_start; output_writer)...,
+        average_func(precip_diagnostics...; output_writer, start_date, t_start)...,
+    ]
+end
 
-    return [average_func(precip_diagnostics...; output_writer, start_date, t_start)...]
+function default_diagnostics(
+    ::NonEquilibriumMicrophysics2MP3,
+    duration,
+    start_date,
+    t_start;
+    output_writer,
+)
+    return _moist_default_diagnostics(duration, start_date, t_start; output_writer)
+end
+
+function default_diagnostics(
+    atmos_water::AtmosWater,
+    duration,
+    start_date,
+    t_start;
+    output_writer,
+)
+    if !isnothing(atmos_water.microphysics_model)
+        return default_diagnostics(
+            atmos_water.microphysics_model,
+            duration,
+            start_date,
+            t_start;
+            output_writer,
+        )
+    else
+        return []
+    end
 end
 
 ##################

@@ -206,8 +206,8 @@ test_dycore_consistency:
 dt_save_state_to_disk:
   help: "Time between saving the state to disk. Examples: [`10secs`, `1hours`, `1months`, `Inf` (do not save, default)]"
   value: "Inf"
-moist:
-  help: "Moisture model [`dry` (default), `equil`, `nonequil`]"
+microphysics_model:
+  help: "Microphysics model [`dry` (default), `0M`, `1M`, `2M`, `2MP3`]"
   value: "dry"
 divergence_damping_factor:
   help: "Divergence damping factor"
@@ -235,9 +235,6 @@ apply_sem_quasimonotone_limiter:
   value: false
 vertical_water_borrowing_species:
   help: "Tracers to which the vertical water borrowing limiter is applied when using `tracer_nonnegativity_method: vertical_water_borrowing`. A single threshold (0.0) applies uniformly to all selected tracers. Omitted or `~` (null): apply to all tracers (ρq_tot, ρq_liq, ρq_ice, etc., as present). Empty list `[]`: apply to no tracers. Specific names: use a string (e.g. `ρq_tot`) or list of strings (e.g. `[\"ρq_tot\"]`, `[\"ρq_tot\", \"ρq_liq\"]`) — only those tracers get the limiter; names must match the state (e.g. ρq_tot, ρq_liq, ρq_rai, ρq_ice, ρq_sno)."
-  value: ~
-precip_model:
-  help: "Precipitation model [`nothing` (default), `0M`, `1M`]"
   value: ~
 cloud_model:
   help: "Cloud model [`grid_scale`, `quadrature` (default), `MLCloud`]"

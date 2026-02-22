@@ -3,8 +3,7 @@ surface_setup: DefaultMoninObukhov
 rad: allskywithclear
 edmfx_sgs_diffusive_flux: true
 turbconv: edonly_edmfx
-moist: equil
-precip_model: 0M
+microphysics_model: "0M"
 t_end: 3hours
 dt_save_state_to_disk: 600secs
 use_itime: true

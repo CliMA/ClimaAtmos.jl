@@ -98,8 +98,7 @@ vertical_advection(ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. lazy(-(ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    (; moisture_model, turbconv_model, rayleigh_sponge, microphysics_model) =
-        p.atmos
+    (; microphysics_model, turbconv_model, rayleigh_sponge) = p.atmos
     (; params, dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
@@ -114,7 +113,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # Central vertical advection of active tracers (e_tot and q_tot)
     vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
-    if !(moisture_model isa DryModel)
+    if !(microphysics_model isa DryModel)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt
@@ -124,7 +123,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # is done in the explicit tendency.
     # Here we add the vertical advection with precipitation terminal velocity
     # using downward biasing and free outflow bottom boundary condition
-    if moisture_model isa NonEquilMoistModel
+    if microphysics_model isa NonEquilibriumMicrophysics
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
         @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
@@ -138,7 +137,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         )
     end
     if microphysics_model isa
-       Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
+       NonEquilibriumMicrophysics1M
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
@@ -152,7 +151,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         )
     end
     if microphysics_model isa
-       Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
+       NonEquilibriumMicrophysics2M
         (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
@@ -175,13 +174,13 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
-    if microphysics_model isa Microphysics2MomentP3
+    if microphysics_model isa NonEquilibriumMicrophysics2MP3
         (; ρ, ρn_ice, ρq_rim, ρb_rim) = Y.c
         ᶜwnᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwnᵢ))
         ᶜwᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwᵢ))
         ᶠρ = @. lazy(ᶠinterp(ρ * ᶜJ) / ᶠJ)
 
-        # Note: `ρq_ice` is handled above, in `moisture_model isa NonEquilMoistModel`
+        # Note: `ρq_ice` is handled above, in `microphysics_model isa NonEquilibriumMicrophysics`
         @. Yₜ.c.ρn_ice -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwnᵢ * specific(ρn_ice, ρ)))
         @. Yₜ.c.ρq_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρq_rim, ρ)))
         @. Yₜ.c.ρb_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρb_rim, ρ)))

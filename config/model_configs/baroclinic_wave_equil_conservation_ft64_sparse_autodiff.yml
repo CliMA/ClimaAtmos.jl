@@ -1,7 +1,7 @@
 FLOAT_TYPE: "Float64"
 initial_condition: "MoistBaroclinicWave"
 t_end: "5days"
-moist: "equil"
+microphysics_model: "0M"
 disable_surface_flux_tendency: true
 use_auto_jacobian: true
 update_jacobian_every: dt
