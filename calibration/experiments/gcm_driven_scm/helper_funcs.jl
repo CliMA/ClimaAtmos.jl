@@ -49,10 +49,11 @@ end
 
 function get_z_grid(atmos_config::CA.AtmosConfig; z_max = nothing)
     params = CA.ClimaAtmosParameters(atmos_config)
-    spaces =
-        CA.get_spaces(atmos_config.parsed_args, params, atmos_config.comms_ctx)
+    grid = CA.get_grid(atmos_config.parsed_args, params, atmos_config.comms_ctx)
+    spaces = CA.get_spaces(grid)
     coord = CA.Fields.coordinate_field(spaces.center_space)
-    z_vec = convert(Vector{Float64}, parent(coord.z)[:])
+    # Use unique() to handle box grids with multiple horizontal points
+    z_vec = convert(Vector{Float64}, unique(parent(coord.z)[:]))
     if !isnothing(z_max)
         z_vec = filter(x -> x <= z_max, z_vec)
     end
@@ -79,10 +80,12 @@ function create_z_stretch(
     !isnothing(dz_bottom) ? config_tmp.parsed_args["dz_bottom"] = dz_bottom :
     nothing
 
-    spaces = CA.get_spaces(config_tmp.parsed_args, params, config_tmp.comms_ctx)
+    grid = CA.get_grid(config_tmp.parsed_args, params, config_tmp.comms_ctx)
+    spaces = CA.get_spaces(grid)
 
     coord = CA.Fields.coordinate_field(spaces.center_space);
-    z_vec = convert(Vector{Float64}, parent(coord.z)[:])
+    # Use unique() to handle box grids with multiple horizontal points
+    z_vec = convert(Vector{Float64}, unique(parent(coord.z)[:]))
     return z_vec
 end
 
@@ -886,7 +889,7 @@ function ensemble_data(
             member_path =
                 TOMLInterface.path_to_ensemble_member(output_dir, iteration, m)
             simulation_dir =
-                joinpath(member_path, "config_$config_i", "output_0000")
+                joinpath(member_path, "config_$config_i", "output_active")
 
             model_config_dict = YAML.load_file(joinpath(simulation_dir, ".yml"))
             # suppress logs when creating model config, z grids to avoid cluttering output
@@ -978,7 +981,7 @@ function get_forcing_file(i, ref_paths)
     experiment = cfsite_info["experiment"]
     month = cfsite_info["month"]
 
-    forcing_file_path = "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/$(forcing_model)_$(experiment).2004-2008.$(month).nc"
+    forcing_file_path = "/resnick/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/$(forcing_model)_$(experiment).2004-2008.$(month).nc"
 
     return forcing_file_path
 end

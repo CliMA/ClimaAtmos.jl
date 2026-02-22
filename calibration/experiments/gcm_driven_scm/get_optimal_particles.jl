@@ -12,7 +12,7 @@ using Statistics
 
 
 include("helper_funcs.jl")
-output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_39"
+output_dir = "/resnick/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_39"
 iteration = 13 # iteration to get optimal particles (iterations = nothing)
 final_iter = iteration + 1
 

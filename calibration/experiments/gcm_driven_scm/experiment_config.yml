@@ -4,25 +4,27 @@
 # prior_path: prior_prognostic.toml
 # prior_path: prior_diagnostic_linreg_entr_detr.toml # diagnostic EDMF with linreg 
 # prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_0M_v4.toml
-prior_path: prior_prognostic_pi_entr_smooth_entr_detr_1M_v1.toml
-# prior_path: prior_diagnostic_linreg_entr_detr_1M.toml
-ensemble_size: 200
+# prior_path: prior_prognostic_pi_entr_smooth_entr_detr_1M_v1.toml
+# prior_path: prior_prognostic_pi_entr_smooth_entr_detr_1M_v1.toml
+prior_path: prior_prognostic_pi_entr_gen_detr_impl_0M_v5.toml
+ensemble_size: 100
 n_iterations: 8
 # batch_size: 18 # number of cases per iteration
-batch_size: 10 # number of cases per iteration
+batch_size: 20 # number of cases per iteration
 # batch_size: 10 # number of cases per iteration
 # batch_size: 9 # number of cases per iteration
 # model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
 # model_config : model_config_prognostic.yml
 # model_config : model_config_prognostic_impl.yml
 # model_config : model_config_diagnostic.yml
-model_config : model_config_prognostic_1M.yml
+# model_config : model_config_prognostic_1M.yml
+model_config : model_config_prognostic_v2.yml
 
 # output_dir : /central/scratch/cchristo/debug/exp36_eqn1_tke
 # output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v3/exp36_eqn1_tke
 # output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v3/debug_exp1
 # output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v4/exp1_baseline
-output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_progedmf_cal_v1/exp14
+output_dir : /resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/output_progedmf_cal_v2/exp2
 # output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_diagedmf_cal_v1/exp16
 
 # Slurm resource configuration
