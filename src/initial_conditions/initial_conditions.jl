@@ -103,9 +103,9 @@ function (::ConstantBuoyancyFrequencyProfile)(params)
     function local_state(local_geometry)
         FT = eltype(params)
         coord = local_geometry.coordinates
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
+            local_geometry,
             constant_buoyancy_frequency_initial_state(params, coord)...,
         )
     end
@@ -133,11 +133,11 @@ function (initial_condition::IsothermalProfile)(params)
         (; z) = local_geometry.coordinates
         p = MSLP * exp(-z * grav / (R_d * T))
 
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p,
+            local_geometry,
+            T,
+            p,
         )
     end
     return local_state
@@ -173,11 +173,11 @@ function (initial_condition::DecayingProfile)(params)
             T += coeff * FT(0.1) * (z < 5000)
         end
 
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p,
+            local_geometry,
+            T,
+            p,
         )
     end
     return local_state
@@ -197,12 +197,12 @@ end
     WeatherModel(start_date)
 
 An `InitialCondition` that initializes the model with an empty state, and then overwrites
-it with the content of a NetCDF file that contains the initial conditions, stored in the 
-artifact `weather_model_ic`/raw/era5_raw_YYYYMMDD_HHMM.nc. We interpolate the initial 
-conditions from ERA5 pressure level grid to a z grid, saving to the artifact 
+it with the content of a NetCDF file that contains the initial conditions, stored in the
+artifact `weather_model_ic`/raw/era5_raw_YYYYMMDD_HHMM.nc. We interpolate the initial
+conditions from ERA5 pressure level grid to a z grid, saving to the artifact
 weather_model_ic/init/era5_init_YYYYMMDD_HHMM.nc. It is then interpolated to the model
 grid in `_overwrite_initial_conditions_from_file!`, which documents the required variables.
-Recall running `ClimaUtilities.ClimaArtiffacts.@clima_artifact("weather_model_ic")` gets 
+Recall running `ClimaUtilities.ClimaArtiffacts.@clima_artifact("weather_model_ic")` gets
 the artifact path.
 """
 struct WeatherModel <: InitialCondition
@@ -229,11 +229,11 @@ function (initial_condition::Union{MoistFromFile, WeatherModel, AMIPFromERA5})(p
 
         T, p = FT(NaN), FT(NaN) # placeholder values
 
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p,
+            local_geometry,
+            T,
+            p,
         )
     end
     return local_state
@@ -288,11 +288,11 @@ function (initial_condition::DryDensityCurrentProfile)(params)
         p = p_0 * π_exn^(cp_d / R_d) # pressure
         ρ = p / R_d / T # density
 
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p,
+            local_geometry,
+            T,
+            p,
         )
     end
     return local_state
@@ -346,11 +346,11 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
         p = p_0 * π_exn^(cp_d / R_d) # pressure
         ρ = p / R_d / T # density
 
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p,
+            local_geometry,
+            T,
+            p,
         )
     end
     return local_state
@@ -407,12 +407,12 @@ function (initial_condition::RCEMIPIIProfile)(params)
             z ≤ z_t ? p_0 * ((T_v0 - Γ * z) / T_v0)^(grav / (R_d * Γ)) :
             p_t * exp(-grav * (z - z_t) / (R_d * T_vt))
 
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p,
-            q_tot = q,
+            local_geometry,
+            T,
+            p,
+            q,
         )
     end
     return local_state
@@ -1192,12 +1192,12 @@ function (initial_condition::DryBaroclinicWave)(params)
             )
         end
 
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T_v,
-            p = p,
-            velocity = Geometry.UVVector(u, v),
+            local_geometry,
+            T_v,
+            p,
+            Geometry.UVVector(u, v),
         )
     end
     return local_state
@@ -1226,13 +1226,13 @@ function (initial_condition::MoistBaroclinicWave)(params)
             perturb,
             deep_atmosphere,
         )
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p,
-            q_tot = q_tot,
-            velocity = Geometry.UVVector(u, v),
+            local_geometry,
+            T,
+            p,
+            q_tot,
+            Geometry.UVVector(u, v),
         )
     end
     return local_state
@@ -1262,14 +1262,14 @@ function (initial_condition::MoistBaroclinicWaveWithEDMF)(params)
             perturb,
             deep_atmosphere,
         )
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p,
-            q_tot = q_tot,
-            velocity = Geometry.UVVector(u, v),
-            turbconv_state = EDMFState(; tke = FT(0), draft_area = FT(0.2)),
+            local_geometry,
+            T,
+            p,
+            q_tot,
+            Geometry.UVVector(u, v),
+            EDMFState(; tke = FT(0), draft_area = FT(0.2)),
         )
     end
     return local_state
@@ -1309,13 +1309,13 @@ function (initial_condition::MoistAdiabaticProfileEDMFX)(params)
         end
         q_tot = edmfx_q_tot(FT)(z)
 
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p,
-            q_tot = q_tot,
-            turbconv_state = EDMFState(;
+            local_geometry,
+            T,
+            p,
+            q_tot,
+            EDMFState(;
                 tke = FT(0),
                 draft_area = draft_area(FT)(z),
                 velocity = Geometry.WVector(FT(1.0)),
@@ -1344,13 +1344,13 @@ function (initial_condition::SimplePlume)(params)
         T, p = temp_profile(thermo_params, z)
         q_tot = FT(0)
 
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p,
-            q_tot = q_tot,
-            turbconv_state = EDMFState(; tke = FT(0)),
+            local_geometry,
+            T,
+            p,
+            q_tot,
+            EDMFState(; tke = FT(0)),
         )
     end
     return local_state
@@ -1437,13 +1437,13 @@ for IC in (:GABLS,)
         function local_state(local_geometry)
             (; z) = local_geometry.coordinates
             T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z))
-            return LocalState(;
+            return local_state_from(
                 params,
-                geometry = local_geometry,
-                T = T,
-                p = p(z),
-                velocity = Geometry.UVector(u(z)),
-                turbconv_state = EDMFState(;
+                local_geometry,
+                T,
+                p(z),
+                Geometry.UVector(u(z)),
+                EDMFState(;
                     tke = prognostic_tke ? FT(0) : tke(z),
                 ),
             )
@@ -1479,14 +1479,14 @@ function (initial_condition::GATE_III)(params)
     tke = APL.GATE_III_tke(FT)
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T_profile(z),
-            p = p(z),
-            q_tot = q_tot_profile(z),
-            velocity = Geometry.UVector(u(z)),
-            turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
+            local_geometry,
+            T_profile(z),
+            p(z),
+            q_tot_profile(z),
+            Geometry.UVector(u(z)),
+            EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
         )
     end
     return local_state
@@ -1534,14 +1534,14 @@ for IC in (:Soares, :Bomex)
         function local_state(local_geometry)
             (; z) = local_geometry.coordinates
             T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot(z))
-            return LocalState(;
+            return local_state_from(
                 params,
-                geometry = local_geometry,
-                T = T,
-                p = p(z),
-                q_tot = q_tot(z),
-                velocity = Geometry.UVector(u(z)),
-                turbconv_state = EDMFState(;
+                local_geometry,
+                T,
+                p(z),
+                q_tot(z),
+                Geometry.UVector(u(z)),
+                EDMFState(;
                     tke = prognostic_tke ? FT(0) : tke(z),
                 ),
             )
@@ -1591,14 +1591,14 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
         function local_state(local_geometry)
             (; z) = local_geometry.coordinates
             T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot(z))
-            return LocalState(;
+            return local_state_from(
                 params,
-                geometry = local_geometry,
-                T = T,
-                p = p(z),
-                q_tot = q_tot(z),
-                velocity = Geometry.UVVector(u(z), v(z)),
-                turbconv_state = EDMFState(;
+                local_geometry,
+                T,
+                p(z),
+                q_tot(z),
+                Geometry.UVVector(u(z), v(z)),
+                EDMFState(;
                     tke = prognostic_tke ? FT(0) : tke(z),
                 ),
             )
@@ -1631,14 +1631,14 @@ function (initial_condition::Rico)(params)
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
         T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot(z))
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p(z),
-            q_tot = q_tot(z),
-            velocity = Geometry.UVVector(u(z), v(z)),
-            turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
+            local_geometry,
+            T,
+            p(z),
+            q_tot(z),
+            Geometry.UVVector(u(z), v(z)),
+            EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
         )
     end
     return local_state
@@ -1693,14 +1693,14 @@ function (initial_condition::TRMM_LBA)(params)
     tke = APL.TRMM_LBA_tke_prescribed(FT)
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T_profile(z),
-            p = p(z),
-            q_tot = q_tot(z),
-            velocity = Geometry.UVVector(u(z), v(z)),
-            turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
+            local_geometry,
+            T_profile(z),
+            p(z),
+            q_tot(z),
+            Geometry.UVVector(u(z), v(z)),
+            EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
         )
     end
     return local_state
@@ -1745,17 +1745,17 @@ function (initial_condition::PrecipitatingColumn)(params)
             q_liq_z,
             q_ice_z,
         )
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p(z),
-            q_tot = q_tot_z,
-            q_liq = q_liq_z,
-            q_ice = q_ice_z,
-            velocity = Geometry.UVVector(u(z), v(z)),
-            turbconv_state = nothing,
-            precip_state = PrecipStateMassNum(;
+            local_geometry,
+            T,
+            p(z),
+            q_tot_z,
+            q_liq_z,
+            q_ice_z,
+            Geometry.UVVector(u(z), v(z)),
+            nothing,
+            PrecipStateMassNum(;
                 n_liq = nₗ(z),
                 n_rai = nᵣ(z),
                 q_rai = qᵣ(z),
@@ -1799,14 +1799,14 @@ function (initial_condition::GCMDriven)(params)
         q_tot_val = FT(q_tot_prof(z))
         ρ_val = FT(ρ₀(z))
         p = TD.air_pressure(thermo_params, T_val, ρ_val, q_tot_val, FT(0), FT(0))
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T_val,
-            p = p,
-            q_tot = q_tot_val,
-            velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
-            turbconv_state = EDMFState(; tke = FT(0)),
+            local_geometry,
+            T_val,
+            p,
+            q_tot_val,
+            Geometry.UVVector(FT(u(z)), FT(v(z))),
+            EDMFState(; tke = FT(0)),
         )
     end
     return local_state
@@ -1856,14 +1856,14 @@ function (initial_condition::InterpolatedColumnProfile)(params)
         q_tot_val = FT(q_tot(z))
         ρ_val = FT(ρ₀(z))
         p = TD.air_pressure(thermo_params, T_val, ρ_val, q_tot_val, FT(0), FT(0))
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T_val,
-            p = p,
-            q_tot = q_tot_val,
-            velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
-            turbconv_state = EDMFState(; tke = FT(0)),
+            local_geometry,
+            T_val,
+            p,
+            q_tot_val,
+            Geometry.UVVector(FT(u(z)), FT(v(z))),
+            EDMFState(; tke = FT(0)),
         )
     end
     return local_state
@@ -1932,14 +1932,14 @@ function (initial_condition::ISDAC)(params)
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
         T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z) + θ_pert(z), q_tot(z))
-        return LocalState(;
+        return local_state_from(
             params,
-            geometry = local_geometry,
-            T = T,
-            p = p(z),
-            q_tot = q_tot(z),
-            velocity = Geometry.UVVector(u(z), v(z)),
-            turbconv_state = EDMFState(; tke = prognostic_tke ? tke(z) : FT(0)),
+            local_geometry,
+            T,
+            p(z),
+            q_tot(z),
+            Geometry.UVVector(u(z), v(z)),
+            EDMFState(; tke = prognostic_tke ? tke(z) : FT(0)),
         )
     end
 end
@@ -1950,8 +1950,8 @@ end
 The `InitialCondition` described in [ShipwayHill2012](@cite), but with a hydrostatically
 balanced pressure profile.
 
-B. J. Shipway and A. A. Hill. 
-Diagnosis of systematic differences between multiple parametrizations of warm rain microphysics using a kinematic framework. 
+B. J. Shipway and A. A. Hill.
+Diagnosis of systematic differences between multiple parametrizations of warm rain microphysics using a kinematic framework.
 Quarterly Journal of the Royal Meteorological Society 138, 2196-2211 (2012).
 """
 struct ShipwayHill2012 <: InitialCondition end
@@ -1977,11 +1977,11 @@ function (initial_condition::ShipwayHill2012)(params)
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
         T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot(z))
-        return LocalState(; params, geometry = local_geometry,
-            T = T,
-            p = p(z),
-            q_tot = q_tot(z),
-            precip_state = NoPrecipState{typeof(z)}(),
+        return local_state_from( params, geometry = local_geometry,
+            T,
+            p(z),
+            q_tot(z),
+            NoPrecipState{typeof(z)}(),
         )
     end
     return local_state

@@ -24,7 +24,7 @@ are set to 0. Moisture specific humidities default to 0.
 struct LocalState{
     FT,
     P <: CAP.ClimaAtmosParameters{FT},
-    G <: Geometry.LocalGeometry{<:Any, <:Any, FT},
+    G <: Geometry.AbstractLocalGeometry{FT},
     V <: Geometry.LocalVector{FT},
     TC <: TurbconvState{FT},
     PS <: PrecipState{FT},
@@ -47,6 +47,32 @@ struct LocalState{
 end
 
 function LocalState(;
+    params,
+    geometry,
+    T,
+    p,
+    velocity = nothing,
+    turbconv_state = nothing,
+    precip_state = nothing,
+    q_tot = nothing,
+    q_liq = nothing,
+    q_ice = nothing,
+)
+    return local_state_from(
+        params,
+        geometry,
+        T,
+        p,
+        velocity,
+        turbconv_state,
+        precip_state,
+        q_tot,
+        q_liq,
+        q_ice,
+    )
+end
+
+@inline function local_state_from(
     params,
     geometry,
     T,
@@ -122,8 +148,8 @@ struct NoPrecipState{FT} <: PrecipState{FT} end
 
 
 Stores the values of `n_liq`, `n_rai`, `q_rai`, and `q_sno` for the `microphysics_model`.
-This struct includes both mass and number densities and can be used for initializing 
-precipitation states in both one-moment and two-moment microphysics schemes. 
+This struct includes both mass and number densities and can be used for initializing
+precipitation states in both one-moment and two-moment microphysics schemes.
 In one-moment schemes, the number densities (`n_liq`, `n_rai`) are ignored.
 If no values are provided, all fields are initialized to zero.
 """
