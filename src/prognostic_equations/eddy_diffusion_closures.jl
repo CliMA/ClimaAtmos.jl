@@ -7,6 +7,7 @@ import Thermodynamics.Parameters as TDP
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 import SurfaceFluxes.UniversalFunctions as UF
+import ClimaCore.Geometry: NeedsMinimal, geometry_requirement
 
 """
     buoyancy_gradients(
@@ -668,3 +669,6 @@ Returns K_h in units of [m^2/s].
 function eddy_diffusivity(K_u, prandtl_number)
     return K_u / prandtl_number # prandtl_nvec is already bounded by eps_FT and Pr_max
 end
+# Register geometry requirements for TKE-based closure functions
+# buoyancy_gradients operates primarily on scalar fields and projection operations
+geometry_requirement(::typeof(buoyancy_gradients)) = NeedsMinimal()

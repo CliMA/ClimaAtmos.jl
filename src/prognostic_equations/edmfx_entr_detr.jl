@@ -3,6 +3,7 @@
 #####
 
 import Thermodynamics.Parameters as TDP
+import ClimaCore.Geometry: NeedsMinimal, geometry_requirement
 
 # Entrainment models
 
@@ -11,7 +12,7 @@ import Thermodynamics.Parameters as TDP
     calculate_pi_groups(
         elev_above_sfc, ref_H, ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ,
         ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke
-    ) 
+    )
 
 Calculates non-dimensional Π-groups used in EDMF entrainment/detrainment models.
 
@@ -33,7 +34,7 @@ Returns a tuple of five Π-groups: (Π₁, Π₂, Π₃, Π₄, Π₅).
 Π₃: Related to updraft area.
 Π₄: Related to relative humidity difference.
 Π₅: Related to normalized elevation above surface.
-Π₁ and Π₂ are scaled by empirical factors (100 and 2 respectively) to 
+Π₁ and Π₂ are scaled by empirical factors (100 and 2 respectively) to
 become O(1) and then clipped to the range [-1, 1].
 """
 function calculate_pi_groups(
@@ -75,7 +76,7 @@ The specific formulation for entrainment depends on the concrete type passed as
 such as `NoEntrainment` (which returns a zero rate), `PiGroupsEntrainment`
 (which uses an entrainment rate based on a linear combination of scaled absolute
 values of non-dimensional Pi-groups and a constant term), or `InvZEntrainment` (a "physically
-inspired" formulation with a term proportional to `1/z`). Each model implements a distinct 
+inspired" formulation with a term proportional to `1/z`). Each model implements a distinct
 physical or empirical approach to quantify the entrainment process in updrafts.
 
 Arguments (all cell-centered):
@@ -227,7 +228,7 @@ function entrainment(
         exp(-min_area_limiter_power * (max(ᶜaʲ, 0) - a_min))
 
     elev_above_sfc = ᶜz - z_sfc
-    # Velocity difference term divided by elev_above_sfc; set to zero if elev_above_sfc is 
+    # Velocity difference term divided by elev_above_sfc; set to zero if elev_above_sfc is
     # not positive to prevent division by zero or excessively large values.
     vel_diff_term = if elev_above_sfc > eps(FT)
         entr_coeff * abs(ᶜwʲ - ᶜw⁰) / elev_above_sfc
@@ -256,8 +257,8 @@ The specific formulation for detrainment depends on the concrete type passed as
 `model_option`. This argument dispatches to different detrainment models,
 such as `NoDetrainment` (which returns a zero rate), `PiGroupsDetrainment`
 (which uses non-dimensional Pi-groups and mass flux divergence),
-`BuoyancyVelocityDetrainment` (a physically inspired formulation, based on `buoyancy/vertical velocity`), 
-or `SmoothAreaDetrainment` (based on entrainment and updraft vertical velocity divergence). 
+`BuoyancyVelocityDetrainment` (a physically inspired formulation, based on `buoyancy/vertical velocity`),
+or `SmoothAreaDetrainment` (based on entrainment and updraft vertical velocity divergence).
 Each model implements a distinct physical or empirical approach to quantify the detrainment
 process from updrafts.
 
@@ -282,7 +283,7 @@ Arguments (all cell-centered):
 - `ᶜw_vert_div`: Vertical divergence term related to updraft vertical velocity [1/s].
 - `ᶜtke`: Turbulent kinetic energy [m²/s²].
 - `model_option`: An object whose type specifies the detrainment model to use
-                  (e.g., an instance of `NoDetrainment`, `PiGroupsDetrainment`, 
+                  (e.g., an instance of `NoDetrainment`, `PiGroupsDetrainment`,
                   `BuoyancyVelocityDetrainment`, `SmoothAreaDetrainment`, etc.).
                   This corresponds to the `AbstractDetrainmentModel` in the function signature.
 
@@ -537,9 +538,9 @@ end
 Apply first-interior–level entrainment tendencies for each EDMF updraft.
 
 This routine (1) seeds a small positive updraft area fraction when surface
-buoyancy flux is positive—allowing the plume to grow from zero—and  
+buoyancy flux is positive—allowing the plume to grow from zero—and
 (2) adds entrainment tendencies for moist static energy (`mse`) and total
-humidity (`q_tot`) in the first model cell.  
+humidity (`q_tot`) in the first model cell.
 The entrained tracer value is taken from `sgs_scalar_first_interior_bc`.
 """
 edmfx_first_interior_entr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
@@ -601,11 +602,11 @@ function edmfx_first_interior_entr_tendency!(
 
     for j in 1:n
 
-        # Apply entrainment tendencies in the first model cell for moist static energy (mse) 
-        # and total humidity (q_tot). The entrained fluid is assumed to have a scalar value 
-        # given by `sgs_scalar_first_interior_bc` (mean + SGS perturbation). Since 
-        # `edmfx_entr_detr_tendency!` computes entrainment based on the environment–updraft 
-        # contrast, we supply the high-value (entrained) tracer minus the environment value 
+        # Apply entrainment tendencies in the first model cell for moist static energy (mse)
+        # and total humidity (q_tot). The entrained fluid is assumed to have a scalar value
+        # given by `sgs_scalar_first_interior_bc` (mean + SGS perturbation). Since
+        # `edmfx_entr_detr_tendency!` computes entrainment based on the environment–updraft
+        # contrast, we supply the high-value (entrained) tracer minus the environment value
         # here to form the correct tendency.
         entr_int_val = Fields.field_values(Fields.level(ᶜentrʲs.:($j), 1))
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
@@ -679,3 +680,11 @@ limit_detrainment(detr::FT, a, w, dz, dt) where {FT} =
 function limit_turb_entrainment(dyn_entr::FT, turb_entr, w, dz) where {FT}
     return max(min((FT(0.9) * w / dz) - dyn_entr, turb_entr), 0)
 end
+
+# Register geometry requirements for EDMF functions
+# These functions operate on scalar fields and don't need full geometry
+geometry_requirement(::typeof(entrainment)) = NeedsMinimal()
+geometry_requirement(::typeof(detrainment)) = NeedsMinimal()
+geometry_requirement(::typeof(limit_entrainment)) = NeedsMinimal()
+geometry_requirement(::typeof(limit_detrainment)) = NeedsMinimal()
+geometry_requirement(::typeof(limit_turb_entrainment)) = NeedsMinimal()
