@@ -68,7 +68,7 @@ function process_member_data(
     forcing_file_indices = EKP.get_current_minibatch(eki)
     g = Float64[]
     for i in forcing_file_indices
-        simulation_dir = joinpath(member_path, "config_$i", "output_0000")
+        simulation_dir = joinpath(member_path, "config_$i", "output_active")
         model_config_dict = YAML.load_file(joinpath(simulation_dir, ".yml"))
         # suppress logs when creating model config, z grids to avoid cluttering output
         model_config = suppress_logs(CA.AtmosConfig, model_config_dict)

@@ -9,8 +9,8 @@
 #SBATCH --output=scm_runner_%j.out
 
 module purge
-export MODULEPATH="/groups/esm/modules:$MODULEPATH"
-module load climacommon/2024_05_27
+export MODULEPATH="/resnick/groups/esm/modules:$MODULEPATH"
+module load climacommon/2025_07_30
 
 julia --project scm_runner.jl "$@"
 
