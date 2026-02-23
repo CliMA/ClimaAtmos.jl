@@ -223,6 +223,15 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
+    # Pre-compute physical vertical velocities and buoyancy acceleration to avoid LocalGeometry in broadcasts
+    (; ᶜw_phys_ʲs, ᶜw_phys_⁰, ᶜb_accel_ʲs) = p.precomputed
+    for j in 1:n
+        @. ᶜw_phys_ʲs.:($$j) = get_physical_w(ᶜuʲs.:($$j), ᶜlg)
+        @. ᶜb_accel_ʲs.:($$j) =
+            vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg)
+    end
+    @. ᶜw_phys_⁰ = get_physical_w(ᶜu, ᶜlg)
+
     ᶜvert_div = p.scratch.ᶜtemp_scalar
     ᶜmassflux_vert_div = p.scratch.ᶜtemp_scalar_2
     ᶜw_vert_div = p.scratch.ᶜtemp_scalar_3
@@ -236,7 +245,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             ᶜp,
             Y.c.ρ,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-            get_physical_w(ᶜuʲs.:($$j), ᶜlg),
+            ᶜw_phys_ʲs.:($$j),
             TD.relative_humidity(
                 thermo_params,
                 ᶜTʲs.:($$j),
@@ -245,8 +254,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 ᶜq_liq_raiʲs.:($$j),
                 ᶜq_ice_snoʲs.:($$j),
             ),
-            vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
-            get_physical_w(ᶜu, ᶜlg),
+            ᶜb_accel_ʲs.:($$j),
+            ᶜw_phys_⁰,
             TD.relative_humidity(
                 thermo_params,
                 ᶜT⁰,
@@ -288,7 +297,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             Y.c.ρ,
             Y.c.sgsʲs.:($$j).ρa,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-            get_physical_w(ᶜuʲs.:($$j), ᶜlg),
+            ᶜw_phys_ʲs.:($$j),
             TD.relative_humidity(
                 thermo_params,
                 ᶜTʲs.:($$j),
@@ -297,8 +306,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 ᶜq_liq_raiʲs.:($$j),
                 ᶜq_ice_snoʲs.:($$j),
             ),
-            vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
-            get_physical_w(ᶜu, ᶜlg),
+            ᶜb_accel_ʲs.:($$j),
+            ᶜw_phys_⁰,
             TD.relative_humidity(
                 thermo_params,
                 ᶜT⁰,

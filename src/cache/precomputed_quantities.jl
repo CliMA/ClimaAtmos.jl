@@ -268,6 +268,11 @@ function precomputed_quantities(Y, atmos)
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
             ᶠρ_diffʲs = similar(Y.f, NTuple{n, FT}),
+            # Pre-computed physical vertical velocities (w_phys) to avoid LocalGeometry in broadcasts
+            ᶜw_phys_ʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜw_phys_⁰ = similar(Y.c, FT),
+            # Pre-computed vertical buoyancy acceleration to avoid LocalGeometry in broadcasts
+            ᶜb_accel_ʲs = similar(Y.c, NTuple{n, FT}),
             precipitation_sgs_quantities...,
         ) : (;)
 
