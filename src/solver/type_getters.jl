@@ -47,7 +47,7 @@ function get_atmos(config::AtmosConfig, params)
     FT = eltype(config)
     check_case_consistency(parsed_args)
     moisture_model = get_moisture_model(parsed_args)
-    microphysics_model = get_microphysics_model(parsed_args)
+    microphysics_model = get_microphysics_model(parsed_args, params)
     cloud_model = get_cloud_model(parsed_args, params)
 
     if moisture_model isa DryModel
@@ -57,26 +57,30 @@ function get_atmos(config::AtmosConfig, params)
     if moisture_model isa EquilMoistModel
         @warn "Running simulations with equilibrium thermodynamics assumptions."
         @assert microphysics_model isa
-                Union{NoPrecipitation, Microphysics0Moment}
+                Union{
+            NoPrecipitation,
+            Microphysics0Moment,
+            QuadratureMicrophysics{Microphysics0Moment},
+        }
     end
     if moisture_model isa NonEquilMoistModel
         @assert microphysics_model isa Union{
             NoPrecipitation, Microphysics1Moment,
             Microphysics2Moment, Microphysics2MomentP3,
+            QuadratureMicrophysics,
         }
     end
     if microphysics_model isa NoPrecipitation
         @warn "Running simulations without any precipitation formation."
     end
 
-    implicit_noneq_cloud_formation =
-        parsed_args["implicit_noneq_cloud_formation"]
-    @assert implicit_noneq_cloud_formation in (true, false)
+    implicit_microphysics =
+        parsed_args["implicit_microphysics"]
+    @assert implicit_microphysics in (true, false)
 
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
-    call_cloud_diagnostics_per_stage =
-        get_call_cloud_diagnostics_per_stage(parsed_args)
+
 
     # HeldSuarezForcing can be set via radiation_mode or legacy forcing option for now
     final_radiation_mode =
@@ -110,11 +114,11 @@ function get_atmos(config::AtmosConfig, params)
     edmfx_model = EDMFXModel(;
         entr_model = get_entrainment_model(parsed_args),
         detr_model = get_detrainment_model(parsed_args),
-        sgs_mass_flux = Val(parsed_args["edmfx_sgs_mass_flux"]),
-        sgs_diffusive_flux = Val(parsed_args["edmfx_sgs_diffusive_flux"]),
-        nh_pressure = Val(parsed_args["edmfx_nh_pressure"]),
-        vertical_diffusion = Val(parsed_args["edmfx_vertical_diffusion"]),
-        filter = Val(parsed_args["edmfx_filter"]),
+        sgs_mass_flux = parsed_args["edmfx_sgs_mass_flux"],
+        sgs_diffusive_flux = parsed_args["edmfx_sgs_diffusive_flux"],
+        nh_pressure = parsed_args["edmfx_nh_pressure"],
+        vertical_diffusion = parsed_args["edmfx_vertical_diffusion"],
+        filter = parsed_args["edmfx_filter"],
         scale_blending_method = get_scale_blending_method(parsed_args),
     )
 
@@ -136,9 +140,8 @@ function get_atmos(config::AtmosConfig, params)
         moisture_model,
         microphysics_model,
         cloud_model,
-        noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
-                                     Implicit() : Explicit(),
-        call_cloud_diagnostics_per_stage,
+        microphysics_tendency_timestepping = implicit_microphysics ?
+                                             Implicit() : Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(parsed_args),
 
         # SCMSetup - Single-Column Model components
@@ -222,31 +225,28 @@ function get_numerics(parsed_args, FT)
         parsed_args["reproducible_restart"] ? ReproducibleRestart() :
         nothing
 
-    energy_q_tot_upwinding = Val(Symbol(parsed_args["energy_q_tot_upwinding"]))
-    tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"]))
+    energy_q_tot_upwinding = Symbol(parsed_args["energy_q_tot_upwinding"])
+    tracer_upwinding = Symbol(parsed_args["tracer_upwinding"])
 
     # Compat
     if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
-       energy_q_tot_upwinding == Val(:vanleer_limiter)
-        energy_q_tot_upwinding = Val(:none)
+       energy_q_tot_upwinding == :vanleer_limiter
+        energy_q_tot_upwinding = :none
         @warn "energy_q_tot_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting energy_q_tot_upwinding to :none"
     end
     if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
-       tracer_upwinding == Val(:vanleer_limiter)
-        tracer_upwinding = Val(:none)
+       tracer_upwinding == :vanleer_limiter
+        tracer_upwinding = :none
         @warn "tracer_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting tracer_upwinding to :none"
     end
 
-    edmfx_mse_q_tot_upwinding = Val(Symbol(parsed_args["edmfx_mse_q_tot_upwinding"]))
-    edmfx_sgsflux_upwinding =
-        Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
-    edmfx_tracer_upwinding =
-        Val(Symbol(parsed_args["edmfx_tracer_upwinding"]))
+    edmfx_mse_q_tot_upwinding = Symbol(parsed_args["edmfx_mse_q_tot_upwinding"])
+    edmfx_sgsflux_upwinding = Symbol(parsed_args["edmfx_sgsflux_upwinding"])
+    edmfx_tracer_upwinding = Symbol(parsed_args["edmfx_tracer_upwinding"])
 
     limiter =
         parsed_args["apply_sem_quasimonotone_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
-    # wrap each upwinding mode in a Val for dispatch
     diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
 
     hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
@@ -440,6 +440,8 @@ function get_initial_condition(parsed_args, atmos)
             parsed_args["start_date"],
             parsed_args["era5_initial_condition_dir"],
         )
+    elseif parsed_args["initial_condition"] == "AMIPFromERA5"
+        return ICs.AMIPFromERA5(parsed_args["start_date"])
     elseif parsed_args["initial_condition"] == "ShipwayHill2012"
         return ICs.ShipwayHill2012()
     else
@@ -973,7 +975,6 @@ function get_grid(parsed_args, params, context)
             x_elem = parsed_args["x_elem"],
             x_max = parsed_args["x_max"],
             nh_poly = parsed_args["nh_poly"],
-            bubble = parsed_args["bubble"],
             periodic_x = true,
             kwargs...,
         )
@@ -991,12 +992,16 @@ function get_simulation(config::AtmosConfig)
     output_dir = sim_info.output_dir
     @info "Simulation info" job_id output_dir
 
+    output_toml_file = joinpath(output_dir, "$(job_id)_parameters.toml")
     CP.log_parameter_information(
         config.toml_dict,
-        joinpath(output_dir, "$(job_id)_parameters.toml"),
+        output_toml_file,
         strict = config.parsed_args["strict_params"],
     )
-    YAML.write_file(joinpath(output_dir, "$job_id.yml"), config.parsed_args)
+
+    output_args = copy(config.parsed_args)
+    output_args["toml"] = [abspath(output_toml_file)]
+    YAML.write_file(joinpath(output_dir, "$job_id.yml"), output_args)
 
     if sim_info.restart
         s = @timed_str begin

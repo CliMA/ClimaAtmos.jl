@@ -31,7 +31,7 @@ function hyperdiffusion_cache(Y, atmos)
 end
 
 function hyperdiffusion_cache(
-    Y, hyperdiff::ClimaHyperdiffusion, turbconv_model, moisture_model, microphysics_model,
+    Y, ::Hyperdiffusion, turbconv_model, moisture_model, microphysics_model,
 )
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -48,7 +48,8 @@ function hyperdiffusion_cache(
     ᶜ∇²uʲs = turbconv_model isa PrognosticEDMFX ? similar(Y.c, NTuple{n, C123{FT}}) : (;)
     moisture_sgs_quantities =
         moisture_model isa NonEquilMoistModel &&
-        microphysics_model isa Microphysics1Moment ?
+        microphysics_model isa
+        Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ?
         (;
             ᶜ∇²q_liqʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²q_iceʲs = similar(Y.c, NTuple{n, FT}),
@@ -56,7 +57,8 @@ function hyperdiffusion_cache(
             ᶜ∇²q_snoʲs = similar(Y.c, NTuple{n, FT}),
         ) :
         moisture_model isa NonEquilMoistModel &&
-        microphysics_model isa Microphysics2Moment ?
+        microphysics_model isa
+        Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}} ?
         (;
             ᶜ∇²q_liqʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²q_iceʲs = similar(Y.c, NTuple{n, FT}),
@@ -222,7 +224,8 @@ function dss_hyperdiffusion_tendency_pairs(p)
     tc_moisture_pairs =
         turbconv_model isa PrognosticEDMFX &&
         p.atmos.moisture_model isa NonEquilMoistModel &&
-        p.atmos.microphysics_model isa Microphysics1Moment ?
+        p.atmos.microphysics_model isa
+        Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ?
         (
             p.hyperdiff.ᶜ∇²q_liqʲs => buffer.ᶜ∇²q_liqʲs,
             p.hyperdiff.ᶜ∇²q_iceʲs => buffer.ᶜ∇²q_iceʲs,
@@ -231,14 +234,15 @@ function dss_hyperdiffusion_tendency_pairs(p)
         ) :
         turbconv_model isa PrognosticEDMFX &&
         p.atmos.moisture_model isa NonEquilMoistModel &&
-        p.atmos.microphysics_model isa Microphysics2Moment ?
+        p.atmos.microphysics_model isa
+        Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}} ?
         (
             p.hyperdiff.ᶜ∇²q_liqʲs => buffer.ᶜ∇²q_liqʲs,
             p.hyperdiff.ᶜ∇²q_iceʲs => buffer.ᶜ∇²q_iceʲs,
             p.hyperdiff.ᶜ∇²q_raiʲs => buffer.ᶜ∇²q_raiʲs,
             p.hyperdiff.ᶜ∇²q_snoʲs => buffer.ᶜ∇²q_snoʲs,
-            p.hyperdiff.ᶜ∇²q_liqʲs => buffer.ᶜ∇²q_liqʲs,
-            p.hyperdiff.ᶜ∇²q_raiʲs => buffer.ᶜ∇²q_raiʲs,
+            p.hyperdiff.ᶜ∇²n_liqʲs => buffer.ᶜ∇²n_liqʲs,
+            p.hyperdiff.ᶜ∇²n_raiʲs => buffer.ᶜ∇²n_raiʲs,
         ) : ()
     tracer_pairs = (core_tracer_pairs..., tc_tracer_pairs..., tc_moisture_pairs...)
     return (dynamics_pairs..., tracer_pairs...)
@@ -266,7 +270,8 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             @. ᶜ∇²q_totʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_tot))
         end
         if moisture_model isa NonEquilMoistModel &&
-           microphysics_model isa Microphysics1Moment
+           microphysics_model isa
+           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
             (; ᶜ∇²q_liqʲs, ᶜ∇²q_iceʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs) = p.hyperdiff
             for j in 1:n
                 # Note: It is more correct to have ρa inside and outside the divergence
@@ -276,7 +281,8 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 @. ᶜ∇²q_snoʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_sno))
             end
         elseif moisture_model isa NonEquilMoistModel &&
-               microphysics_model isa Microphysics2Moment
+               microphysics_model isa
+               Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
             (; ᶜ∇²q_liqʲs, ᶜ∇²q_iceʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs, ᶜ∇²n_liqʲs, ᶜ∇²n_raiʲs) =
                 p.hyperdiff
             for j in 1:n
@@ -329,7 +335,8 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
         end
         if moisture_model isa NonEquilMoistModel &&
-           microphysics_model isa Microphysics1Moment
+           microphysics_model isa
+           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
             (; ᶜ∇²q_liqʲs, ᶜ∇²q_iceʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs) = p.hyperdiff
             for j in 1:n
                 @. Yₜ.c.sgsʲs.:($$j).q_liq -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_liqʲs.:($$j)))
@@ -340,7 +347,8 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                     ν₄_scalar_for_precip * wdivₕ(gradₕ(ᶜ∇²q_snoʲs.:($$j)))
             end
         elseif moisture_model isa NonEquilMoistModel &&
-               microphysics_model isa Microphysics2Moment
+               microphysics_model isa
+               Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
             (; ᶜ∇²q_liqʲs, ᶜ∇²q_iceʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs, ᶜ∇²n_liqʲs, ᶜ∇²n_raiʲs) =
                 p.hyperdiff
             for j in 1:n

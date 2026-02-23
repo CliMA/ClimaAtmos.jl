@@ -14,8 +14,7 @@ implicit_sgs_advection: true
 implicit_sgs_mass_flux: true
 implicit_sgs_entr_detr: true
 implicit_sgs_nh_pressure: true
-# unstable with implicit vertical diffusion
-implicit_sgs_vertdiff: false
+implicit_sgs_vertdiff: true
 
 approximate_linear_solve_iters: 2
 edmfx_sgsflux_upwinding: first_order
@@ -25,7 +24,7 @@ edmfx_detr_model: "PiGroups"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
-edmfx_vertical_diffusion: false
+edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
 precip_model: "0M"
@@ -39,7 +38,7 @@ perturb_initstate: false
 dt: "50secs"
 dt_rad: "10mins"
 t_end: "30hours"
-call_cloud_diagnostics_per_stage: true
+ode_algo: "ARS222"
 toml: [toml/prognostic_edmfx_calibrated.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]

@@ -7,6 +7,26 @@ import LinearAlgebra: norm_sqr
 using Dates: DateTime, @dateformat_str
 import StaticArrays: SVector, SMatrix
 
+"""
+    enforce_mass_energy_consistency!(Y, p, ᶜΔρq_tot)
+
+Updates density (ρ) and total energy (ρe_tot) to maintain mass and energy consistency
+when ρq_tot changes by ᶜΔρq_tot due to limiter application.
+
+Arguments:
+- `Y`: The state vector, modified in place.
+- `p`: Cache containing parameters and precomputed fields.
+- `ᶜΔρq_tot`: The change in total water density due to limiter application.
+"""
+function enforce_mass_energy_consistency!(Y, p, ᶜΔρq_tot)
+    thp = CAP.thermodynamics_params(p.params)
+    ᶜT = p.precomputed.ᶜT
+    ᶜΦ = p.core.ᶜΦ
+    @. Y.c.ρ += ᶜΔρq_tot
+    @. Y.c.ρe_tot += ᶜΔρq_tot * (TD.internal_energy_vapor(thp, ᶜT) + ᶜΦ)
+    return nothing
+end
+
 is_energy_var(symbol) = symbol in (:ρe_tot,)
 is_momentum_var(symbol) = symbol in (:uₕ, :u₃)
 is_sgs_var(symbol) = symbol in (:sgsʲs,)
@@ -324,6 +344,11 @@ function time_to_seconds(s::String)
     )
     factors = Dict(unit => val for (units, val) in factor_groups for unit in units)
     return value * factors[unit]
+end
+
+function error_if_crashed(ret_code)
+    ret_code == :simulation_crashed &&
+        error("The ClimaAtmos simulation has crashed. See the stack trace for details.")
 end
 
 function verify_callbacks(t)

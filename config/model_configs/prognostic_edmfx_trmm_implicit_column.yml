@@ -23,12 +23,12 @@ edmfx_filter: true
 prognostic_tke: true
 moist: nonequil
 precip_model: "1M"
-call_cloud_diagnostics_per_stage: true
+use_sgs_quadrature: false
 config: column
 z_max: 16400
 z_elem: 82
 z_stretch: false
-dt: 150secs
+dt: 120secs
 t_end: 12hours
 dt_save_state_to_disk: 60mins
 toml: [toml/prognostic_edmfx_1M.toml]
@@ -42,3 +42,4 @@ diagnostics:
     period: 10mins
   - short_name: [husra, hussn, husraup, hussnup, husraen, hussnen]
     period: 10mins
+ode_algo: "ARS222"

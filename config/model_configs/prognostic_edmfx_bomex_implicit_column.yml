@@ -23,7 +23,6 @@ prognostic_tke: true
 precip_model: 0M
 cloud_model : "grid_scale"
 moist: "equil"
-call_cloud_diagnostics_per_stage: true
 config: "column"
 z_max: 5e3
 z_elem: 40
@@ -41,3 +40,4 @@ diagnostics:
     period: 10mins
   - short_name: [entr, detr, lmix, lmixw, lmixtke, lmixb, bgrad, strain, edt, evu]
     period: 10mins
+ode_algo: "ARS222"

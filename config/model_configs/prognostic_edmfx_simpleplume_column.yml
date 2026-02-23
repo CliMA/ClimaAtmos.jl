@@ -15,7 +15,6 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: false
 moist: "equil"
-call_cloud_diagnostics_per_stage: true
 config: "column"
 z_max: 4e3
 z_elem: 40
@@ -33,3 +32,4 @@ diagnostics:
     period: 10mins
   - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
     period: 10mins
+ode_algo: "ARS222"

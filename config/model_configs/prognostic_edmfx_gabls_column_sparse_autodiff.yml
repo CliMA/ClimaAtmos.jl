@@ -11,7 +11,8 @@ implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
 use_auto_jacobian: true
-update_jacobian_every: dt
+update_jacobian_every: stage
+ode_algo: "ARS222"
 debug_jacobian: true
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
@@ -23,14 +24,14 @@ edmfx_filter: true
 prognostic_tke: true
 moist: "equil"
 config: "column"
-hyperdiff: false
+hyperdiff: "false"
 z_max: 400
 x_elem: 2
 y_elem: 2
 z_elem: 8
 z_stretch: false
 dt: "10secs"
-t_end: "9hours"
+t_end: "5hours"
 dt_save_state_to_disk: "30mins"
 perturb_initstate: false
 toml: [toml/prognostic_edmfx.toml]

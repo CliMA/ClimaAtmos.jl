@@ -13,7 +13,8 @@ implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
 use_auto_jacobian: true
-update_jacobian_every: dt
+update_jacobian_every: stage
+ode_algo: "ARS222"
 debug_jacobian: true
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
@@ -26,14 +27,13 @@ prognostic_tke: true
 precip_model: 0M
 cloud_model : "grid_scale"
 moist: "equil"
-call_cloud_diagnostics_per_stage: true
 config: "column"
 z_max: 5e3
 z_elem: 40
 z_stretch: false
 perturb_initstate: false
 dt: "50secs"
-t_end: "6hours"
+t_end: "3hours"
 dt_save_state_to_disk: "10mins"
 toml: [toml/prognostic_edmfx_bomex.toml]
 netcdf_interpolation_num_points: [2, 2, 60]

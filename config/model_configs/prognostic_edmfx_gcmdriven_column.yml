@@ -27,7 +27,6 @@ dt: "10secs"
 dt_rad: "30mins"
 t_end: "6hours"
 dt_save_state_to_disk: "6hours"
-call_cloud_diagnostics_per_stage : true
 toml: [toml/prognostic_edmfx_gcmdriven.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
@@ -46,3 +45,4 @@ diagnostics:
   - reduction_time: max
     short_name: tke
     period: 10mins
+ode_algo: "ARS222"

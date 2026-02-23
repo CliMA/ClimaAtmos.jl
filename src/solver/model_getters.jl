@@ -59,43 +59,28 @@ end
 
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
-    if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
-        ν₄_vorticity_coeff =
-            FT(parsed_args["vorticity_hyperdiffusion_coefficient"])
-        divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
-        prandtl_number = FT(parsed_args["hyperdiffusion_prandtl_number"])
-        return ClimaHyperdiffusion(;
-            ν₄_vorticity_coeff,
-            divergence_damping_factor,
-            prandtl_number,
+    if hyperdiff_name == "Hyperdiffusion"
+        return Hyperdiffusion{FT}(;
+            ν₄_vorticity_coeff = parsed_args["vorticity_hyperdiffusion_coefficient"],
+            divergence_damping_factor = parsed_args["divergence_damping_factor"],
+            prandtl_number = parsed_args["hyperdiffusion_prandtl_number"],
         )
     elseif hyperdiff_name == "CAM_SE"
-        # To match hyperviscosity coefficients in:
-        #    https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2017MS001257
-        #    for equation A18 and A19
-        # Need to scale by (1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3  ≈ 1.238
-        # These are re-scaled by the grid resolution in function ν₄(hyperdiff, Y)
-        ν₄_vorticity_coeff = FT(0.150 * 1.238)
-        divergence_damping_factor = FT(5)
-        prandtl_number = FT(0.2)  # Maintains CAM_SE 5x scalar/vorticity ratio
         # Ensure the user isn't trying to set the values manually from the config as CAM_SE defines a set of hyperdiffusion coefficients
+        cam_se_hyperdiff = cam_se_hyperdiffusion(FT)
         coeff_pairs = [
-            (ν₄_vorticity_coeff, "vorticity_hyperdiffusion_coefficient"),
-            (divergence_damping_factor, "divergence_damping_factor"),
-            (prandtl_number, "hyperdiffusion_prandtl_number"),
+            (cam_se_hyperdiff.ν₄_vorticity_coeff, "vorticity_hyperdiffusion_coefficient"),
+            (cam_se_hyperdiff.divergence_damping_factor, "divergence_damping_factor"),
+            (cam_se_hyperdiff.prandtl_number, "hyperdiffusion_prandtl_number"),
         ]
 
         for (cam_coef, config_coef) in coeff_pairs
             # check to machine precision
             config_val = FT(parsed_args[config_coef])
-            @assert isapprox(cam_coef, config_val, atol = 1e-8) "CAM_SE hyperdiffusion overwrites $config_coef, use hyperdiff: ClimaHyperdiffusion to set this value manually in the config instead."
+            @assert isapprox(cam_coef, config_val, atol = 1e-8) "CAM_SE hyperdiffusion overwrites $config_coef, use `hyperdiff: Hyperdiffusion` to set this value manually in the config instead."
         end
-        return ClimaHyperdiffusion(;
-            ν₄_vorticity_coeff,
-            divergence_damping_factor,
-            prandtl_number,
-        )
-    elseif hyperdiff_name in ("none", "false", false)
+        return cam_se_hyperdiff
+    elseif hyperdiff_name ∈ ("false", false, nothing)
         return nothing
     else
         error("Uncaught hyperdiffusion model type.")
@@ -192,9 +177,7 @@ The possible model configurations flags are:
 function get_smagorinsky_lilly_model(parsed_args)
     smag = parsed_args["smagorinsky_lilly"]
     isnothing(smag) && return nothing
-    smag_symbol = Symbol(smag)
-    @assert smag_symbol in (:UVW, :UV, :W, :UV_W)
-    return SmagorinskyLilly{smag_symbol}()
+    return SmagorinskyLilly(; axes = Symbol(smag))
 end
 
 function get_amd_les_model(parsed_args, ::Type{FT}) where {FT}
@@ -311,16 +294,19 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         @warn "prescribe_clouds_in_radiation does not have any effect with $radiation_name radiation option"
     end
     return if radiation_name == "gray"
-        RRTMGPI.GrayRadiation(add_isothermal_boundary_layer, deep_atmosphere)
+        RRTMGPI.GrayRadiation(;
+            add_isothermal_boundary_layer,
+            deep_atmosphere,
+        )
     elseif radiation_name == "clearsky"
-        RRTMGPI.ClearSkyRadiation(
+        RRTMGPI.ClearSkyRadiation(;
             idealized_h2o,
             add_isothermal_boundary_layer,
             aerosol_radiation,
             deep_atmosphere,
         )
     elseif radiation_name == "allsky"
-        RRTMGPI.AllSkyRadiation(
+        RRTMGPI.AllSkyRadiation(;
             idealized_h2o,
             idealized_clouds,
             cloud,
@@ -330,7 +316,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
             deep_atmosphere,
         )
     elseif radiation_name == "allskywithclear"
-        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(;
             idealized_h2o,
             idealized_clouds,
             cloud,
@@ -352,9 +338,9 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function get_microphysics_model(parsed_args)
+function get_microphysics_model(parsed_args, params = nothing)
     microphysics_model = parsed_args["precip_model"]
-    return if isnothing(microphysics_model) || microphysics_model == "nothing"
+    base_scheme = if isnothing(microphysics_model) || microphysics_model == "nothing"
         NoPrecipitation()
     elseif microphysics_model == "0M"
         Microphysics0Moment()
@@ -366,6 +352,50 @@ function get_microphysics_model(parsed_args)
         Microphysics2MomentP3()
     else
         error("Invalid microphysics_model $(microphysics_model)")
+    end
+
+    # Wrap with SGS quadrature if enabled
+    use_sgs_quadrature = get(parsed_args, "use_sgs_quadrature", false)
+    if use_sgs_quadrature && !(base_scheme isa NoPrecipitation)
+        FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
+        distribution = get_sgs_distribution(parsed_args)
+        quadrature_order = get(parsed_args, "quadrature_order", 2)
+        # Read T_min and q_max from ClimaParams when available
+        T_min = isnothing(params) ? FT(150) : FT(CAP.T_min_sgs(params))
+        q_max = isnothing(params) ? FT(0.1) : FT(CAP.q_max_sgs(params))
+        return QuadratureMicrophysics(
+            base_scheme;
+            FT,
+            distribution,
+            quadrature_order,
+            T_min,
+            q_max,
+        )
+    else
+        return base_scheme
+    end
+end
+
+"""
+    get_sgs_distribution(parsed_args)
+
+Parse the SGS distribution type from configuration.
+
+# Config value mapping
+- `"gaussian"` or `nothing` → `GaussianSGS()` (default)
+- `"lognormal"` → `LogNormalSGS()`
+- `"mean"` → `GridMeanSGS()` (grid-mean only, no SGS sampling)
+"""
+function get_sgs_distribution(parsed_args)
+    dist_name = get(parsed_args, "sgs_distribution", "gaussian")
+    return if dist_name in (nothing, "gaussian")
+        GaussianSGS()
+    elseif dist_name == "lognormal"
+        LogNormalSGS()
+    elseif dist_name == "mean"
+        GridMeanSGS()
+    else
+        error("Invalid sgs_distribution $(dist_name). Use: gaussian, lognormal, mean")
     end
 end
 
@@ -394,10 +424,11 @@ end
 function get_cloud_model(parsed_args, params)
     cloud_model = parsed_args["cloud_model"]
     FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
+
     return if cloud_model == "grid_scale"
         GridScaleCloud()
     elseif cloud_model == "quadrature"
-        QuadratureCloud(SGSQuadrature(FT))
+        QuadratureCloud()
     elseif cloud_model == "MLCloud"
         nn_filepath = joinpath(
             @clima_artifact("cloud_fraction_nn"),
@@ -409,8 +440,7 @@ function get_cloud_model(parsed_args, params)
         nn_param_vec = FT.(CAP.cloud_fraction_param_vec(params))
         # build the model
         cf_nn_model = nn_architecture(nn_param_vec)
-        # use quadrature for qliq, qice and nn for cloud fraction
-        MLCloud_constructor(SGSQuadrature(FT), cf_nn_model)
+        MLCloud_constructor(cf_nn_model)
     else
         error("Invalid cloud_model $(cloud_model)")
     end
@@ -432,16 +462,6 @@ function get_forcing_type(parsed_args)
     return nothing
 end
 
-struct CallCloudDiagnosticsPerStage end
-function get_call_cloud_diagnostics_per_stage(parsed_args)
-    ccdps = parsed_args["call_cloud_diagnostics_per_stage"]
-    @assert ccdps in (nothing, true, false)
-    return if ccdps in (nothing, false)
-        nothing
-    elseif ccdps == true
-        CallCloudDiagnosticsPerStage()
-    end
-end
 
 function get_subsidence_model(parsed_args, radiation_mode, FT)
     subsidence = parsed_args["subsidence"]
@@ -600,14 +620,13 @@ function get_turbconv_model(FT, parsed_args, turbconv_params)
         "edonly_edmfx",
     )
 
+    n_updrafts = parsed_args["updraft_number"]
+    prognostic_tke = parsed_args["prognostic_tke"]
+    area_fraction = turbconv_params.min_area
     return if turbconv == "prognostic_edmfx"
-        N = parsed_args["updraft_number"]
-        TKE = parsed_args["prognostic_tke"]
-        PrognosticEDMFX{N, TKE}(turbconv_params.min_area)
+        PrognosticEDMFX(; n_updrafts, prognostic_tke, area_fraction)
     elseif turbconv == "diagnostic_edmfx"
-        N = parsed_args["updraft_number"]
-        TKE = parsed_args["prognostic_tke"]
-        DiagnosticEDMFX{N, TKE}(turbconv_params.min_area)
+        DiagnosticEDMFX(; n_updrafts, prognostic_tke, area_fraction)
     elseif turbconv == "edonly_edmfx"
         EDOnlyEDMFX()
     else
@@ -687,7 +706,7 @@ function check_case_consistency(parsed_args)
              which is needed for topography. Thus, prescribed flow must have flat surface."
         )
         @assert(
-            !parsed_args["implicit_noneq_cloud_formation"] &&
+            !parsed_args["implicit_microphysics"] &&
             !parsed_args["implicit_diffusion"] &&
             !parsed_args["implicit_sgs_advection"] &&
             !parsed_args["implicit_sgs_entr_detr"] &&

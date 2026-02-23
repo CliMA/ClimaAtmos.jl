@@ -6,11 +6,9 @@ import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Spaces as Spaces
 
-αₘ(s::ViscousSponge{FT}, z) where {FT} = ifelse(z > s.zd, s.κ₂, FT(0))
-ζ_viscous(s::ViscousSponge{FT}, z, zmax) where {FT} =
-    sin(FT(π) / 2 * (z - s.zd) / (zmax - s.zd))^2
-β_viscous(s::ViscousSponge{FT}, z, zmax) where {FT} =
-    αₘ(s, z) * ζ_viscous(s, z, zmax)
+αₘ(s::ViscousSponge, z) = ifelse(z > s.zd, s.κ₂, zero(s.κ₂))
+ζ_viscous(s::ViscousSponge, z, zmax) = sinpi((z - s.zd) / (zmax - s.zd) / 2)^2
+β_viscous(s::ViscousSponge, z, zmax) = αₘ(s, z) * ζ_viscous(s, z, zmax)
 
 function viscous_sponge_tendency_uₕ(ᶜuₕ, s)
     if s isa Nothing || axes(ᶜuₕ) isa Spaces.FiniteDifferenceSpace
@@ -18,14 +16,14 @@ function viscous_sponge_tendency_uₕ(ᶜuₕ, s)
     end
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜuₕ))
     zmax = z_max(axes(ᶠz))
-    return @. lazy(
-        β_viscous(s, ᶜz, zmax) * (
-            wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(
-                Geometry.Covariant12Axis(),
-                wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))),
-            )
-        ),
+    axis_C12 = (Geometry.Covariant12Axis(),)
+    axis_C3 = (Geometry.Covariant3Axis(),)
+    # vector Laplacian: ∇²u = ∇·∇u - ∇×(∇×u)
+    ᶜ∇²uₕ = @. lazy(
+        wgradₕ(divₕ(ᶜuₕ)) -
+        Geometry.project(axis_C12, wcurlₕ(Geometry.project(axis_C3, curlₕ(ᶜuₕ)))),
     )
+    return @. lazy(β_viscous(s, ᶜz, zmax) * ᶜ∇²uₕ)
 end
 
 function viscous_sponge_tendency_u₃(u₃, s)

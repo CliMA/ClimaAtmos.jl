@@ -93,9 +93,12 @@ function common_diagnostics(
         start_date + Dates.Second(t_start)
     return vcat(
         map(short_names) do short_name
-            return ScheduledDiagnostic(
-                variable = get_diagnostic_variable(short_name),
-                compute_schedule_func = EveryStepSchedule(),
+            variable = get_diagnostic_variable(short_name)
+            return ScheduledDiagnostic(;
+                variable,
+                compute_schedule_func = make_compute_schedule(variable, period,
+                    start_date,
+                    date_last),
                 output_schedule_func = EveryCalendarDtSchedule(
                     period;
                     reference_date = start_date,
@@ -106,6 +109,46 @@ function common_diagnostics(
                 pre_output_hook! = pre_output_hook!,
             )
         end...,
+    )
+end
+
+#! format: off
+"""
+    A list of short names of diagnostic that are computed every hour for longer
+    simulations. The diagnostics conist of precipitation and radiation
+    variables. This is used in `make_compute_schedule`.
+"""
+const HOURLY_DIAGS = Set([
+    "pr", "prra", "prsn", "prw", "rsd", "rsdt", "rsds", "rsu", "rsut", "rsus", "rld",
+    "rlds", "rlu", "rlut", "rlus", "rsdcs", "rsdscs", "rsucs", "rsutcs", "rsuscs", "rldcs",
+    "rldscs", "rldscs", "rlucs", "rlutcs"
+    ]
+)
+#! format: on
+
+"""
+    make_compute_schedule(variable, period, start_date, date_last)
+
+Return an appropriate compute schedule for the given `variable` and output
+`period`.
+
+For shorter output periods (e.g., hourly), diagnostics are computed every
+timestep. For longer output periods (e.g., monthly and daily), diagnostics are
+computed less frequently.
+"""
+function make_compute_schedule(variable, period, start_date, date_last)
+    if !(
+        period isa Dates.Month || period isa Dates.Week ||
+        (period isa Dates.Day && Dates.value(period) > 1)
+    )
+        return EveryStepSchedule()
+    end
+    short_name = ClimaDiagnostics.DiagnosticVariables.short_name(variable)
+    compute_every = short_name in HOURLY_DIAGS ? Dates.Hour(1) : Dates.Hour(6)
+    return EveryCalendarDtSchedule(
+        compute_every;
+        reference_date = start_date,
+        date_last = date_last,
     )
 end
 
@@ -120,7 +163,7 @@ If `duration < 1 hour` do nothing,
 If `duration < 1 day` take hourly means,
 if `duration < 30 days` take daily means,
 if `duration < 90 days` take means over ten days,
-If `duration >= 90 year` take monthly means.
+If `duration >= 3 months` take monthly means.
 """
 function frequency_averages(duration)
     FT = eltype(duration)
@@ -257,7 +300,7 @@ end
 # Precipitation model #
 #######################
 function default_diagnostics(
-    ::Microphysics0Moment,
+    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
     duration,
     start_date,
     t_start;
@@ -268,7 +311,7 @@ function default_diagnostics(
 end
 
 function default_diagnostics(
-    ::Microphysics1Moment,
+    ::Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}},
     duration,
     start_date,
     t_start;
@@ -282,7 +325,7 @@ function default_diagnostics(
 end
 
 function default_diagnostics(
-    ::Microphysics2Moment,
+    ::Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}},
     duration,
     start_date,
     t_start;

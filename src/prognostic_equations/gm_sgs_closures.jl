@@ -75,7 +75,7 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
         ᶠu³,
         ᶜlinear_buoygrad,
         ᶜstrain_rate_norm,
-        cloud_diagnostics_tuple,
+        ᶜcloud_fraction,
     ) =
         p.precomputed
 
@@ -87,7 +87,7 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
         ᶜq_tot_safe,
         ᶜq_liq_rai,
         ᶜq_ice_sno,
-        cloud_diagnostics_tuple.cf,
+        ᶜcloud_fraction,
         C3,
         p.precomputed.ᶜgradᵥ_q_tot,
         p.precomputed.ᶜgradᵥ_θ_liq_ice,
@@ -104,13 +104,14 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
     @. ᶜprandtl_nvec =
         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
-    return @. lazy(
-        smagorinsky_lilly_length(
-            CAP.c_smag(params),
-            sqrt(max(ᶜlinear_buoygrad, 0)),   # N_eff
-            ᶜdz,
-            ᶜprandtl_nvec,
-            ᶜstrain_rate_norm,
-        ),
+    # Materialize directly into scratch field to avoid lazy heap allocations
+    ᶜmixing_length = p.scratch.ᶜtemp_scalar
+    @. ᶜmixing_length = smagorinsky_lilly_length(
+        CAP.c_smag(params),
+        sqrt(max(ᶜlinear_buoygrad, 0)),   # N_eff
+        ᶜdz,
+        ᶜprandtl_nvec,
+        ᶜstrain_rate_norm,
     )
+    return ᶜmixing_length
 end

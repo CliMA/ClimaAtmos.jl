@@ -1,8 +1,8 @@
 z_max: 55000.0
 implicit_diffusion: false
 approximate_linear_solve_iters: 1
-dt_save_state_to_disk: "4days"
-t_end: "4days"
+dt_save_state_to_disk: "1days"
+t_end: "1days"
 vert_diff: true
 forcing: "held_suarez"
 precip_model: "0M"

@@ -10,6 +10,7 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_sgsflux_upwinding: "vanleer_limiter"
 edmfx_tracer_upwinding: "vanleer_limiter"
+initial_condition: "AMIPFromERA5"
 moist: equil
 precip_model: 0M
 t_end: 12hours

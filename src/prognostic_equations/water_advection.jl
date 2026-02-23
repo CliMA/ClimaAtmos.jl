@@ -52,26 +52,32 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         (name == @name(ρq_liq) || name == @name(ρq_rai)) ? TD.internal_energy_liquid :
         (name == @name(ρq_ice) || name == @name(ρq_sno)) ? TD.internal_energy_ice :
         nothing
+
+    ᶠρ = p.scratch.ᶠtemp_scalar
+    ᶜq = p.scratch.ᶜtemp_scalar
+    vtt = p.scratch.ᶜtemp_scalar_2
+    @. ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
     MatrixFields.unrolled_foreach(microphysics_tracers) do (ρq_name, w_name)
         MatrixFields.has_field(Y.c, ρq_name) || return
 
         ᶜρq = MatrixFields.get_field(Y.c, ρq_name)
         ᶜw = MatrixFields.get_field(p.precomputed, w_name)
-        vtt = @.lazy(
+        @. ᶜq = specific(ᶜρq, Y.c.ρ)
+        @. vtt =
             -1 * ᶜprecipdivᵥ(
-                ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                    Geometry.WVector(-(ᶜw)) * specific(ᶜρq, Y.c.ρ),
+                ᶠρ * ᶠright_bias(
+                    Geometry.WVector(-(ᶜw)) * ᶜq,
                 ),
-            ),
-        )
+            )
         @. Yₜ.c.ρ += vtt
         @. Yₜ.c.ρq_tot += vtt
 
         e_int_func = internal_energy_func(ρq_name)
+        @. p.scratch.ᶜtemp_scalar_3 =
+            -(ᶜw) * ᶜq * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜu)))
         @. Yₜ.c.ρe_tot -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜw)) * specific(ᶜρq, Y.c.ρ) *
-                (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜu))),
+            ᶠρ * ᶠright_bias(
+                Geometry.WVector(p.scratch.ᶜtemp_scalar_3),
             ),
         )
     end
@@ -84,7 +90,8 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         (; ᶜρʲs, ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
         (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
 
-        ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
+        ᶜρ⁰ = p.scratch.ᶜtemp_scalar
+        @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰)
 
         # TODO the following code works for only one updraft 
         sgs_microphysics_tracers = (
@@ -102,6 +109,9 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             ᶜw = MatrixFields.get_field(p.precomputed, w_name)
 
             e_int_func = internal_energy_func(get_ρχ_name(q_name))
+            @. p.scratch.ᶜtemp_scalar_2 = e_int_func(thp, ᶜT) - $(Kin(ᶜw, ᶜu))
+            @. p.scratch.ᶜtemp_scalar_3 =
+                e_int_func(thp, ᶜTʲs.:(1)) - p.scratch.ᶜtemp_scalar_2
             # TODO do we need to add kinetic energy of subdomains?
             @. Yₜ.c.ρe_tot -=
                 ᶜprecipdivᵥ(
@@ -109,18 +119,17 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                         Geometry.WVector(-(ᶜwʲ)) *
                         draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)) * ᶜqʲ *
                         (
-                            e_int_func(thp, ᶜTʲs.:(1)) - e_int_func(thp, ᶜT) -
-                            $(Kin(ᶜw, ᶜu))
+                            p.scratch.ᶜtemp_scalar_3
                         ),
                     ),
                 )
-
+            @. p.scratch.ᶜtemp_scalar_3 = e_int_func(thp, ᶜT⁰) - p.scratch.ᶜtemp_scalar_2
             ᶜwaq⁰ = @. lazy((ᶜρq * ᶜw - Y.c.sgsʲs.:(1).ρa * ᶜqʲ * ᶜwʲ) / ᶜρ⁰)
             @. Yₜ.c.ρe_tot -=
                 -1 * ᶜprecipdivᵥ(
                     ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ * ᶠright_bias(
                         Geometry.WVector(-(ᶜwaq⁰)) *
-                        (e_int_func(thp, ᶜT⁰) - e_int_func(thp, ᶜT) - $(Kin(ᶜw, ᶜu))),
+                        p.scratch.ᶜtemp_scalar_3,
                     ),
                 )
         end

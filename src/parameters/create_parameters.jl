@@ -51,7 +51,7 @@ function ClimaAtmosParameters(
     microphysics_cloud_params = cloud_parameters(toml_dict)
     MPC = typeof(microphysics_cloud_params)
 
-    microphysics_0m_params = CM.Parameters.Parameters0M(toml_dict)
+    microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
     microphysics_1m_params = microphys_1m_parameters(toml_dict)
     microphysics_2m_params = microphys_2m_parameters(toml_dict)
     microphysics_2mp3_params = get_microphysics_2m_p3_parameters(toml_dict)
@@ -60,12 +60,24 @@ function ClimaAtmosParameters(
     # needed for the microphysics model that is actually used.
     if !isnothing(parsed_args)
         cm_model = get_microphysics_model(parsed_args)
-        cm_model isa Microphysics0Moment || (microphysics_0m_params = nothing)
-        cm_model isa Union{Microphysics1Moment, Microphysics2Moment} ||
+        cm_model isa
+        Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}} ||
+            (microphysics_0m_params = nothing)
+        cm_model isa Union{
+            Microphysics1Moment,
+            Microphysics2Moment,
+            QuadratureMicrophysics{<:Union{Microphysics1Moment, Microphysics2Moment}},
+        } ||
             (microphysics_1m_params = nothing)
-        cm_model isa Union{Microphysics2Moment, Microphysics2MomentP3} ||
+        cm_model isa Union{
+            Microphysics2Moment,
+            Microphysics2MomentP3,
+            QuadratureMicrophysics{<:Union{Microphysics2Moment, Microphysics2MomentP3}},
+        } ||
             (microphysics_2m_params = nothing)
-        cm_model isa Microphysics2MomentP3 || (microphysics_2mp3_params = nothing)
+        cm_model isa
+        Union{Microphysics2MomentP3, QuadratureMicrophysics{Microphysics2MomentP3}} ||
+            (microphysics_2mp3_params = nothing)
     end
     MP0M = typeof(microphysics_0m_params)
     MP1M = typeof(microphysics_1m_params)
@@ -77,6 +89,9 @@ function ClimaAtmosParameters(
 
     external_forcing_params = external_forcing_parameters(toml_dict)
     EFP = typeof(external_forcing_params)
+
+    prescribed_aerosol_params = prescribed_aerosol_parameters(toml_dict)
+    PAP = typeof(prescribed_aerosol_params)
 
     parameters =
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
@@ -96,6 +111,7 @@ function ClimaAtmosParameters(
         STP,
         VDP,
         EFP,
+        PAP,
     }(;
         parameters...,
         thermodynamics_params,
@@ -112,6 +128,7 @@ function ClimaAtmosParameters(
         surface_temp_params,
         vert_diff_params,
         external_forcing_params,
+        prescribed_aerosol_params,
     )
 end
 
@@ -142,6 +159,8 @@ atmos_name_map = (;
     :tracer_hyperdiffusion_factor => :α_hyperdiff_tracer,
     :tracer_vertical_diffusion_factor => :α_vert_diff_tracer,
     :D_horizontal_diffusion => :constant_horizontal_diffusion_D,
+    :temperature_minimum => :T_min_sgs,
+    :specific_humidity_maximum => :q_max_sgs,
 )
 
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
@@ -158,40 +177,21 @@ cloud_parameters(toml_dict::CP.ParamDict) = (;
         "ClimaAtmos",
     ).prescribed_cloud_droplet_number_concentration,
     aml = aerosol_ml_parameters(toml_dict),
+    activation = CM.Parameters.AerosolActivationParameters(toml_dict),
 )
 
 microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     microphys_1m_parameters(CP.create_toml_dict(FT))
 
-microphys_1m_parameters(toml_dict::CP.ParamDict) = (;
-    cl = CM.Parameters.CloudLiquid(toml_dict),
-    ci = CM.Parameters.CloudIce(toml_dict),
-    pr = CM.Parameters.Rain(toml_dict),
-    ps = CM.Parameters.Snow(toml_dict),
-    ce = CM.Parameters.CollisionEff(toml_dict),
-    tv = CM.Parameters.Blk1MVelType(toml_dict),
-    aps = CM.Parameters.AirProperties(toml_dict),
-    var = CM.Parameters.VarTimescaleAcnv(toml_dict),
-    Ndp = CP.get_parameter_values(
-        toml_dict,
-        "prescribed_cloud_droplet_number_concentration",
-        "ClimaAtmos",
-    ).prescribed_cloud_droplet_number_concentration,
-)
+microphys_1m_parameters(toml_dict::CP.ParamDict) =
+    CM.Parameters.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
 
 microphys_2m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     microphys_2m_parameters(CP.create_toml_dict(FT))
 
-microphys_2m_parameters(toml_dict::CP.ParamDict) = (;
-    sb = CM.Parameters.SB2006(toml_dict),
-    aps = CM.Parameters.AirProperties(toml_dict),
-    ctv = CM.Parameters.StokesRegimeVelType(toml_dict),
-    rtv = CM.Parameters.SB2006VelType(toml_dict),
-    liquid = CM.Parameters.CloudLiquid(toml_dict),
-    ice = CM.Parameters.CloudIce(toml_dict),
-    arg = CM.Parameters.AerosolActivationParameters(toml_dict),
-    aerosol = prescribed_aerosol_parameters(toml_dict),
-)
+function microphys_2m_parameters(toml_dict::CP.ParamDict)
+    CM.Parameters.Microphysics2MParams(toml_dict; with_ice = false)
+end
 
 get_microphysics_2m_p3_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     get_microphysics_2m_p3_parameters(CP.create_toml_dict(FT))
@@ -207,13 +207,7 @@ Get the parameters for the 2-moment warm rain + P3 ice microphysics scheme.
  - `toml_dict`: A TOML dictionary containing the parameters, see [`CP.create_toml_dict()`](@ref).
 """
 function get_microphysics_2m_p3_parameters(toml_dict::CP.ParamDict)
-    return (;
-        warm = microphys_2m_parameters(toml_dict),
-        cold = (;
-            params = CM.Parameters.ParametersP3(toml_dict; slope_law = :constant),
-            velocity_params = CM.Parameters.Chen2022VelType(toml_dict),
-        ),
-    )
+    CM.Parameters.Microphysics2MParams(toml_dict; with_ice = true)
 end
 
 function vert_diff_parameters(toml_dict)
@@ -308,6 +302,7 @@ function TurbulenceConvectionParameters(
         :mixing_length_tke_surf_flux_coeff => :tke_surf_flux_coeff,
         :mixing_length_diss_coeff => :tke_diss_coeff,
         :diagnostic_covariance_coeff => :diagnostic_covariance_coeff,
+        :Tq_correlation_coefficient => :Tq_correlation_coefficient,
         :detr_buoy_coeff => :detr_buoy_coeff,
         :EDMF_max_area => :max_area,
         :mixing_length_smin_rm => :smin_rm,

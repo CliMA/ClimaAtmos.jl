@@ -8,4 +8,5 @@ surface_setup: "DefaultMoninObukhov"
 turbconv: "edonly_edmfx"
 edmfx_sgs_diffusive_flux: true
 precip_model: "1M"
+use_sgs_quadrature: false
 toml: [toml/longrun_aquaplanet_1M.toml]

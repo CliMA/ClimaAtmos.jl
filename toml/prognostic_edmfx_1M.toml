@@ -51,3 +51,6 @@ value = 100
 
 [sublimation_deposition_timescale]
 value = 100
+
+[entr_detr_limit_inv_tau]
+value = 0.01

@@ -120,8 +120,10 @@ function edmfx_sgs_mass_flux_tendency!(
 
         # Microphysics tracers fluxes
         if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
+            p.atmos.microphysics_model isa
+            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
+            p.atmos.microphysics_model isa
+            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
         )
             microphysics_tracers = (
                 (@name(c.ρq_liq), @name(c.sgsʲs.:(1).q_liq), @name(q_liq)),
@@ -253,8 +255,10 @@ function edmfx_sgs_mass_flux_tendency!(
 
         # Microphysics tracers fluxes
         if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
+            p.atmos.microphysics_model isa
+            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
+            p.atmos.microphysics_model isa
+            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
         )
             microphysics_tracers = (
                 (@name(c.ρq_liq), @name(ᶜq_liqʲs.:(1))),

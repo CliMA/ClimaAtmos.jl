@@ -1,6 +1,6 @@
 module RRTMGPInterface
 
-import ..AbstractCloudInRadiation
+import ..AbstractCloudInRadiation, ..InteractiveCloudInRadiation
 
 import NCDatasets as NC
 using RRTMGP
@@ -16,22 +16,23 @@ using Random
 # should move it there eventually.
 
 abstract type AbstractRRTMGPMode end
-struct GrayRadiation <: AbstractRRTMGPMode
-    add_isothermal_boundary_layer::Bool
-    deep_atmosphere::Bool
+@kwdef struct GrayRadiation <: AbstractRRTMGPMode
+    add_isothermal_boundary_layer::Bool = true
+    deep_atmosphere::Bool = true
 end
-struct ClearSkyRadiation <: AbstractRRTMGPMode
-    idealized_h2o::Bool
-    add_isothermal_boundary_layer::Bool
-    aerosol_radiation::Bool
-    deep_atmosphere::Bool
+@kwdef struct ClearSkyRadiation <: AbstractRRTMGPMode
+    idealized_h2o::Bool = false
+    add_isothermal_boundary_layer::Bool = true
+    aerosol_radiation::Bool = false
+    deep_atmosphere::Bool = true
 end
-struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
-    idealized_h2o::Bool
-    idealized_clouds::Bool
-    cloud::ACR
-    add_isothermal_boundary_layer::Bool
-    aerosol_radiation::Bool
+@kwdef struct AllSkyRadiation{ACR <: Union{Nothing, AbstractCloudInRadiation}} <:
+              AbstractRRTMGPMode
+    idealized_h2o::Bool = false
+    idealized_clouds::Bool = false
+    cloud::ACR = InteractiveCloudInRadiation()
+    add_isothermal_boundary_layer::Bool = true
+    aerosol_radiation::Bool = false
     """
     Reset the RNG seed before calling RRTMGP to a known value (the timestep number).
     When modeling cloud optics, RRTMGP uses a random number generator.
@@ -39,17 +40,17 @@ struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
     the simulation is fully reproducible and can be restarted in a reproducible way.
     Disable this option when running production runs.
     """
-    reset_rng_seed::Bool
-    deep_atmosphere::Bool
+    reset_rng_seed::Bool = false
+    deep_atmosphere::Bool = true
 end
-struct AllSkyRadiationWithClearSkyDiagnostics{
-    ACR <: AbstractCloudInRadiation,
+@kwdef struct AllSkyRadiationWithClearSkyDiagnostics{
+    ACR <: Union{Nothing, AbstractCloudInRadiation},
 } <: AbstractRRTMGPMode
-    idealized_h2o::Bool
-    idealized_clouds::Bool
-    cloud::ACR
-    add_isothermal_boundary_layer::Bool
-    aerosol_radiation::Bool
+    idealized_h2o::Bool = false
+    idealized_clouds::Bool = false
+    cloud::ACR = InteractiveCloudInRadiation()
+    add_isothermal_boundary_layer::Bool = true
+    aerosol_radiation::Bool = false
     """
     Reset the RNG seed before calling RRTMGP to a known value (the timestep number).
     When modeling cloud optics, RRTMGP uses a random number generator.
@@ -57,8 +58,8 @@ struct AllSkyRadiationWithClearSkyDiagnostics{
     the simulation is fully reproducible and can be restarted in a reproducible way.
     Disable this option when running production runs.
     """
-    reset_rng_seed::Bool
-    deep_atmosphere::Bool
+    reset_rng_seed::Bool = false
+    deep_atmosphere::Bool = true
 end
 
 """

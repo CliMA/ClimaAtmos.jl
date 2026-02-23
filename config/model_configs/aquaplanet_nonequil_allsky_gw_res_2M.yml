@@ -1,10 +1,11 @@
 viscous_sponge: false
 dt: "360secs"
-t_end: "1days"
+t_end: "12hours"
 dt_save_state_to_disk: "24hours"
 vert_diff: "DecayWithHeightDiffusion"
 moist: "nonequil"
 precip_model: "2M"
+use_sgs_quadrature: false
 rad: "allskywithclear"
 aerosol_radiation: true
 prescribe_clouds_in_radiation: true
@@ -19,9 +20,6 @@ prescribed_aerosols: ["SO4", "CB1", "OC1", "DST01", "SSLT01", "SSLT02", "SSLT03"
 diagnostics:
   - short_name: [edt, evu, mmrso4, mmrbcpo, mmrocpo, mmrdust, mmrss, loadss, o3, od550aer, odsc550aer]
     reduction_time: average
-    period: 1days
-  - short_name: [hus, clw, cli, husra, hussn, cdnc, ncra]
-    reduction_time: average
-    period: 1days
+    period: 12hours
   - short_name: [reffclw, reffcli]
-    period: 6hours
+    period: 12hours

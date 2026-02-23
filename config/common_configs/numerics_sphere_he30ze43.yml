@@ -6,5 +6,5 @@ z_max: 30000.0
 dz_bottom: 30.0
 dt: 90secs
 ode_algo: ARS343
-hyperdiff: ClimaHyperdiffusion
+hyperdiff: Hyperdiffusion
 max_newton_iters_ode: 1

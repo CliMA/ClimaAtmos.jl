@@ -3,12 +3,27 @@ ClimaAtmos.jl Release Notes
 
 main
 -------
+
+- [#4252](https://github.com/CliMA/ClimaAtmos.jl/pull/4252) Add option to write
+  diagnostics in pressure coordinates
+
+- [#4260](https://github.com/CliMA/ClimaAtmos.jl/pull/4260) Add option to use quadrature for
+microphysics tendencies. Updated to CloudMicrophysics v0.31, and use the BulkMicrophysicsTendencies
+API.
+
+v0.35.2
+-------
+
+v0.35.1
+-------
+- [4276](https://github.com/CliMA/ClimaAtmos.jl/pull/4276) Create IC type to allow initializing AMIP with ERA5 on model levels. Add artifact which corresponds to default AMIP start date (Jan 1, 2010). Also removes unused ᶜspecific in the precomputed cache.
+
 v0.35.0
 -------
 - [#4225](https://github.com/CliMA/ClimaAtmos.jl/pull/4225) Add an option for vertical water borrowing limiter. Configure via `tracer_nonnegativity_method: "vertical_water_borrowing"`
   and optionally `vertical_water_borrowing_species` (defaults to all tracers if not specified).
   The limiter enforces non-negativity using a single threshold (0.0) that applies uniformly to all selected tracers.
-  
+
   Rename `limiter` to `sem_quasimonotone_limiter` in cache numerics for clarity.
   The cache now stores the quasi-monotone limiter instance as `sem_quasimonotone_limiter`
   to better distinguish it from other limiter types (e.g., `vertical_water_borrowing_limiter`).
@@ -16,7 +31,7 @@ v0.35.0
 - [#4231](https://github.com/CliMA/ClimaAtmos.jl/pull/4231) [badge-💥breaking] removes grid-scale
 thermo state, including ᶜts in p.precomputed.sfc_conditions.
 
-- [#4211](https://github.com/CliMA/ClimaAtmos.jl/pull/4211) 
+- [#4211](https://github.com/CliMA/ClimaAtmos.jl/pull/4211)
   add experimental methods to remove negative microphysical condensate values
 
 - [#4245](https://github.com/CliMA/ClimaAtmos.jl/pull/4245) Refactor hyperdiffusion to use Prandtl number parameterization. The scalar hyperdiffusion

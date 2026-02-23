@@ -42,7 +42,7 @@ import CairoMakie
 import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
-import ClimaAnalysis: SimDir, slice, read_var, average_xy, window, average_time
+import ClimaAnalysis: SimDir, slice, average_xy, window, average_time
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
@@ -348,7 +348,8 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
     (dim1 == "lon" || dim1 == "long") ||
         error("First dimension has to be longitude (found $dim1)")
     dim2 == "lat" || error("Second dimension has to be latitude (found $dim2)")
-    dim3 == "z" || error("Third dimension has to be altitude (found $dim3)")
+    (dim3 == "z" || dim3 == "z_reference") ||
+        error("Third dimension has to be altitude (found $dim3)")
 
     FT = eltype(var.data)
 
@@ -706,7 +707,7 @@ function make_plots(
     end
 
     # surface_precipitation
-    surface_precip = read_var(simdir.variable_paths["pr"]["inst"]["10s"])
+    surface_precip = get(simdir; short_name = "pr", reduction = "inst", period = "10s")
     # Column simulations use a minimal box, so slice x,y
     if haskey(surface_precip.dims, "x")
         surface_precip = slice(surface_precip; x = surface_precip.dims["x"][1])
@@ -1053,7 +1054,6 @@ AquaplanetPlots = Union{
     Val{:edonly_edmfx_aquaplanet},
     Val{:mpi_sphere_aquaplanet_rhoe_equil_clearsky},
     Val{:aquaplanet_equil_allsky_gw_raw},
-    Val{:aquaplanet_nonequil_allsky_gw_res},
     Val{:aquaplanet_nonequil_allsky_gw_res_2M},
     Val{:rcemipii_sphere_diagnostic_edmfx},
     Val{:longrun_aquaplanet_allsky_0M},
@@ -1113,11 +1113,30 @@ function make_plots(
     vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
         get(simdir; short_name, reduction)
     end
-    make_plots_generic(
+    short_names_spectra = ["ua", "wa", "ta", "hus"]
+    vars_spectra =
+        map_comparison(simdirs, short_names_spectra) do simdir, short_name
+            slice(
+                compute_spectrum(
+                    slice(
+                        get(simdir; short_name, reduction),
+                        time = LAST_SNAP,
+                    ),
+                ),
+                z = 1500,
+            )
+        end
+    tmp_file = make_plots_generic(
         output_paths,
         vars_3D,
         time = LAST_SNAP,
         more_kwargs = YLINEARSCALE,
+    )
+    make_plots_generic(
+        output_paths,
+        vars_spectra;
+        output_name = "spectra",
+        plot_fn = plot_spectrum_with_line!,
     )
     make_plots_generic(
         output_paths,

@@ -111,10 +111,21 @@ function edmfx_nh_pressure_drag_tendency!(
     t,
     turbconv_model::PrognosticEDMFX,
 )
-    (; ᶠnh_pressure₃_dragʲs) = p.precomputed
-    n = n_mass_flux_subdomains(turbconv_model)
-    for j in 1:n
-        @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠnh_pressure₃_dragʲs.:($$j)
+    if p.atmos.edmfx_model.nh_pressure isa Val{true}
+        (; params) = p
+        n = n_mass_flux_subdomains(turbconv_model)
+        (; ᶠu₃⁰) = p.precomputed
+        ᶠlg = Fields.local_geometry_field(Y.f)
+        scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+        for j in 1:n
+            @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠupdraft_nh_pressure_drag(
+                params,
+                ᶠlg,
+                Y.f.sgsʲs.:($$j).u₃,
+                ᶠu₃⁰,
+                scale_height,
+            )
+        end
     end
 end
 
@@ -169,8 +180,10 @@ function edmfx_vertical_diffusion_tendency!(
         end
 
         if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
+            p.atmos.microphysics_model isa
+            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
+            p.atmos.microphysics_model isa
+            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
         )
             α_precip = CAP.α_vert_diff_tracer(params)
             ᶜρʲ = ᶜρʲs.:(1)
@@ -204,33 +217,72 @@ function edmfx_vertical_diffusion_tendency!(
 end
 
 """
-    edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model)
+    edmfx_filter_tendency!(Y, p, t, turbconv_model)
 
-Apply EDMF filters:
- - Relax u_3 to zero when it is negative
- - Relax ρa to zero when it is negative
- - Relax ρa to ρ when a is larger than one
-
-This function modifies the tendency `Yₜ` in place based on the current state `Y`,
-parameters `p`, time `t`, and the turbulence convection model `turbconv_model`.
-It specifically targets the vertical velocity (`u₃`) and the product of density and area fraction (`ρa`)
-for each sub-domain in the EDMFX model.
+Apply EDMF physical constraints: immediately mix the updraft with the environment if
+  - area fraction is negative or negligible (smaller than eps)
+  - updraft velocity is negative or negligible
+  - updraft air is heavier than the grid mean (negative buoyancy)
 """
-edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+edmfx_filter_tendency!(Y, p, t, turbconv_model) = nothing
 
-function edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
+function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
 
-    n = n_mass_flux_subdomains(turbconv_model)
-    (; dt) = p
+    (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
     FT = eltype(p.params)
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    microphysics_tracers = (
+        (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq)),
+        (@name(c.sgsʲs.:(1).q_ice), @name(c.ρq_ice)),
+        (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
+        (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
+        (@name(c.sgsʲs.:(1).n_liq), @name(c.ρn_liq)),
+        (@name(c.sgsʲs.:(1).n_rai), @name(c.ρn_rai)),
+    )
 
     if p.atmos.edmfx_model.filter isa Val{true}
         for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                C3(min(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0)) / dt
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= min(Y.c.sgsʲs.:($$j).ρa, 0) / dt
-            @. Yₜ.c.sgsʲs.:($$j).ρa -=
-                max(Y.c.sgsʲs.:($$j).ρa - p.precomputed.ᶜρʲs.:($$j), 0) / dt
+            # clip updraft velocity and area fraction to zero if they are negative
+            @. Y.c.sgsʲs.:($$j).ρa = max(0, min(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
+            @. Y.f.sgsʲs.:($$j).u₃ =
+                C3(max(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0))
+
+            # clip updraft velocity to zero if the updraft air is heavier than the grid-mean
+            @. Y.f.sgsʲs.:($$j).u₃ =
+                ifelse(ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) > 0, C3(0), Y.f.sgsʲs.:($$j).u₃)
+
+            # clip updraft area fraction to zero if the cell-averaged velocity is negligible.
+            @. Y.c.sgsʲs.:($$j).ρa = ifelse(
+                ᶜinterp(Y.f.sgsʲs.:($$j).u₃.components.data.:1) <= eps(FT),
+                0,
+                Y.c.sgsʲs.:($$j).ρa,
+            )
+            # clip updraft velocity to zero if the face-averaged area fraction is negligible.
+            @. Y.f.sgsʲs.:($$j).u₃ =
+                ifelse(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) < eps(FT), C3(0), Y.f.sgsʲs.:($$j).u₃)
+
+            # mix updraft mse and q_tot with the grid mean values if any of the above conditions happened
+            @. Y.c.sgsʲs.:($$j).mse =
+                ifelse(Y.c.sgsʲs.:($$j).ρa < eps(FT), ᶜh_tot - ᶜK, Y.c.sgsʲs.:($$j).mse)
+            @. Y.c.sgsʲs.:($$j).q_tot = ifelse(
+                Y.c.sgsʲs.:($$j).ρa < eps(FT),
+                specific(Y.c.ρq_tot, Y.c.ρ),
+                Y.c.sgsʲs.:($$j).q_tot,
+            )
+
+            # mix the rest of the updraft microphysics tracers
+            MatrixFields.unrolled_foreach(microphysics_tracers) do (χʲ_name, ρχ_name)
+                MatrixFields.has_field(Y, χʲ_name) || return
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+                @. ᶜχʲ = ifelse(
+                    Y.c.sgsʲs.:($$j).ρa < eps(FT),
+                    specific(ᶜρχ, Y.c.ρ),
+                    ᶜχʲ,
+                )
+            end
         end
+        set_precomputed_quantities!(Y, p, t)
     end
 end

@@ -4,7 +4,7 @@ dz_bottom: 30.0
 dt_save_state_to_disk: "5days"
 initial_condition: "IsothermalProfile"
 config: "column"
-hyperdiff: false
+hyperdiff: "false"
 disable_surface_flux_tendency: true
 dt: "3hours"
 FLOAT_TYPE: "Float64"

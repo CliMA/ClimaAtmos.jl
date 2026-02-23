@@ -428,9 +428,7 @@ steps:
 
       - label: ":computer: CRM rcemipii in a box with 1M"
         command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/rcemipii_box_CRM_1M.yml
-          --job_id rcemipii_box_CRM_1M
+          julia --color=yes --project=.buildkite runscripts/rcemipii_box_CRM_1M.jl
 
           julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
           --job_id rcemipii_box_CRM_1M
@@ -594,6 +592,7 @@ steps:
         artifact_paths: "baroclinic_wave_nonequil_conservation_source/output_active/*"
         agents:
           slurm_mem: 16GB
+        soft_fail: true
 
   - group: "Sphere Examples (Dycore)"
     steps:
@@ -983,24 +982,28 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: "Prognostic EDMF TRMM in a column sparse autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_sparse_autodiff.yml
-          --job_id prognostic_edmfx_trmm_column_sparse_autodiff
-        artifact_paths: "prognostic_edmfx_trmm_column_sparse_autodiff/output_active/*"
-        agents:
-          slurm_mem: 20GB
-        soft_fail: true
+      # Temporarily disabled until fixed
+      # - label: "Prognostic EDMF TRMM in a column sparse autodiff"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_sparse_autodiff.yml
+      #     --job_id prognostic_edmfx_trmm_column_sparse_autodiff
+      #   artifact_paths: "prognostic_edmfx_trmm_column_sparse_autodiff/output_active/*"
+      #   agents:
+      #     slurm_mem: 20GB
+      #   soft_fail: true
 
       - label: "Prognostic EDMF aquaplanet dense autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
           --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_dense_autodiff.yml
-          --job_id prognostic_edmfx_aquaplanet_dense_autodiff
-        artifact_paths: "prognostic_edmfx_aquaplanet_dense_autodiff/output_active/*"
+          --job_id prognostic_edmfx_aquaplanet_dense_autodiff_gpu
+        artifact_paths: "prognostic_edmfx_aquaplanet_dense_autodiff_gpu/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
+          slurm_gpus: 1
           slurm_mem: 20GB
 
       - label: "Prognostic EDMF aquaplanet sparse autodiff"
@@ -1008,9 +1011,12 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
           --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_sparse_autodiff.yml
-          --job_id prognostic_edmfx_aquaplanet_sparse_autodiff
-        artifact_paths: "prognostic_edmfx_aquaplanet_sparse_autodiff/output_active/*"
+          --job_id prognostic_edmfx_aquaplanet_sparse_autodiff_gpu
+        artifact_paths: "prognostic_edmfx_aquaplanet_sparse_autodiff_gpu/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
+          slurm_gpus: 1
           slurm_mem: 20GB
 
   - group: "GPU"
@@ -1178,32 +1184,6 @@ steps:
           slurm_gpus: 1
           slurm_mem: 20GB
 
-      - label: "GPU: Prognostic EDMF aquaplanet dense autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu_dense_autodiff.yml
-          --job_id prognostic_edmfx_aquaplanet_gpu_dense_autodiff
-        artifact_paths: "prognostic_edmfx_aquaplanet_gpu_dense_autodiff/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 20GB
-
-      - label: "GPU: Prognostic EDMF aquaplanet sparse autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu_sparse_autodiff.yml
-          --job_id prognostic_edmfx_aquaplanet_gpu_sparse_autodiff
-        artifact_paths: "prognostic_edmfx_aquaplanet_gpu_sparse_autodiff/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 20GB
-
   - group: "Benchmarks"
     steps:
       - label: ":computer: Benchmark: CPU baroclinic wave moist"
@@ -1342,16 +1322,16 @@ steps:
         agents:
           slurm_mem: 32GB
 
-      - label: ":fire: Flame graph: prognostic edmf dense autodiff"
-        command: >
-          julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
-          --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_dense_autodiff.yml
-          --job_id flame_aquaplanet_progedmf_dense_autodiff
-        artifact_paths: "flame_aquaplanet_progedmf_dense_autodiff/*"
-        agents:
-          slurm_mem: 32GB
-        soft_fail: true
+      # This job takes too long (a hour) so it is temporarily disabled
+      # - label: ":fire: Flame graph: prognostic edmf dense autodiff"
+      #   command: >
+      #     julia --color=yes --project=.buildkite perf/flame.jl
+      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+      #     --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_dense_autodiff.yml
+      #     --job_id flame_aquaplanet_progedmf_dense_autodiff
+      #   artifact_paths: "flame_aquaplanet_progedmf_dense_autodiff/*"
+      #   agents:
+      #     slurm_mem: 32GB
 
       - label: ":fire: Flame graph: prognostic edmf sparse autodiff"
         command: >

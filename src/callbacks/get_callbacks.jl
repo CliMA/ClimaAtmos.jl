@@ -56,9 +56,35 @@ function get_diagnostics(
         num_points = num_netcdf_points;
         z_sampling_method,
         sync_schedule = CAD.EveryStepSchedule(),
+        init_time = t_start,
         maybe_add_start_date...,
     )
+
+    # Create NetCDF writer for diagnostics in pressure coordinates if they
+    # exist
+    write_in_pressure_coords = any(yaml_diagnostics) do yaml_diag
+        get(yaml_diag, "pressure_coordinates", false)
+    end
+    pressure_netcdf_writer = nothing
+    if write_in_pressure_coords
+        z_sampling_method = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
+            p.precomputed.ᶜp,
+            t_start,
+        )
+        pressure_space = ClimaDiagnostics.Writers.pressure_space(z_sampling_method)
+        pressure_netcdf_writer = CAD.NetCDFWriter(
+            pressure_space,
+            output_dir,
+            num_points = num_netcdf_points;
+            z_sampling_method,
+            sync_schedule = CAD.EveryStepSchedule(),
+            init_time = t_start,
+            maybe_add_start_date...,
+        )
+    end
+
     writers = (dict_writer, hdf5_writer, netcdf_writer)
+    isnothing(pressure_netcdf_writer) || (writers = (writers..., pressure_netcdf_writer))
 
     # The default writer is netcdf
     ALLOWED_WRITERS = Dict(
@@ -73,6 +99,7 @@ function get_diagnostics(
     diagnostics_ragged = map(yaml_diagnostics) do yaml_diag
         short_names = yaml_diag["short_name"]
         output_name = get(yaml_diag, "output_name", nothing)
+        in_pressure_coords = get(yaml_diag, "pressure_coordinates", false)
 
         if short_names isa Vector
             isnothing(output_name) || error(
@@ -102,7 +129,14 @@ function get_diagnostics(
             if !haskey(ALLOWED_WRITERS, writer_ext)
                 error("writer $writer_ext not implemented")
             else
-                writer = ALLOWED_WRITERS[writer_ext]
+                writer = if in_pressure_coords
+                    writer_ext in ("netcdf", "nothing") ||
+                        error("Writing in pressure coordinates is only \
+                        compatible with the NetCDF writer")
+                    pressure_netcdf_writer
+                else
+                    ALLOWED_WRITERS[writer_ext]
+                end
             end
 
             haskey(yaml_diag, "period") ||
@@ -463,6 +497,11 @@ function nogw_callback(
     return (call_every_dt(nogw_model_callback!, dt_nogw_seconds),)
 end
 
+function edmfx_filter_callback(
+    dt,
+)
+    return call_every_dt(edmfx_filter_callback!, dt)
+end
 
 function get_callbacks(config, sim_info, atmos, params, Y, p)
     (; parsed_args, comms_ctx) = config
@@ -510,18 +549,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         callbacks = (callbacks..., scm_external_forcing_callback()...)
     end
 
-    # Cloud fraction
-    if !parsed_args["call_cloud_diagnostics_per_stage"]
-        callbacks = (
-            callbacks...,
-            cloud_fraction_callback(
-                parsed_args["dt_cloud_fraction"],
-                dt,
-                t_start,
-                t_end,
-            )...,
-        )
-    end
+
 
     # Radiation
     callbacks = (
@@ -547,6 +575,12 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
             t_end,
             checkpoint_frequency,
         )...,
+    )
+
+    # EDMFX filter
+    callbacks = (
+        callbacks...,
+        edmfx_filter_callback(dt),
     )
 
     return callbacks
@@ -624,15 +658,20 @@ function default_model_callbacks(gravity_wave::AtmosGravityWave;
     )
 end
 
+# EDMFX filter callbacks
+function default_model_callbacks(turbconv_model::PrognosticEDMFX;
+    dt)
+    return edmfx_filter_callback(dt)
+end
+
 function default_model_callbacks(water::AtmosWater;
     dt_cloud_fraction,
-    call_cloud_diagnostics_per_stage = false,
     start_date,
     dt,
     t_start,
     t_end,
     kwargs...)
-    if !call_cloud_diagnostics_per_stage && !isnothing(water.moisture_model)
+    if !isnothing(water.moisture_model)
         return cloud_fraction_callback(
             dt_cloud_fraction,
             dt,

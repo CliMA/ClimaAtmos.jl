@@ -158,8 +158,14 @@ vert_diff:
   help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `DecayWithHeightDiffusion`]"
   value: "false"
 hyperdiff:
-  help: "Hyperdiffusion. [`ClimaHyperdiffusion` (default), `CAM_SE` (Lauritzen et al. 2018), `none` (or `false`)]"
-  value: "ClimaHyperdiffusion"
+  help: |
+    Fourth-order hyperdiffusion. Options:
+    - `Hyperdiffusion` (default): Use custom coefficients for hyperdiffusion: 
+      set these with the `vorticity_hyperdiffusion_coefficient`, `hyperdiffusion_prandtl_number`, 
+      `divergence_damping_factor` config options.
+    - `CAM_SE` (Lauritzen et al. 2018): Use CAM_SE coefficients for hyperdiffusion
+    - `false`: Disable hyperdiffusion
+  value: "Hyperdiffusion"
 amd_les:
   help: "AMD LES closure [`true`, `false` (default)]"
   value: false
@@ -239,9 +245,18 @@ cloud_model:
 cloud_nn_architecture:
   help: "Cloud neural network architecture to use when `cloud_model` is set to `MLCloud` [`arch_2layers_8nodes.jld2` (default), etc.]"
   value: "arch_2layers_8nodes.jld2"
-implicit_noneq_cloud_formation:
-  help: "Whether to treat the nonequilibrium cloud condensate tendency implicitly [`true`, `false` (default)]"
+implicit_microphysics:
+  help: "Whether to treat microphysics tendencies implicitly (placeholder for now) [`true`, `false` (default)]"
   value: false
+use_sgs_quadrature:
+  help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true`, `false` (default)]"
+  value: true
+sgs_distribution:
+  help: "Distribution type for SGS quadrature over microphysics. [`gaussian` (default), `lognormal`, `mean` (grid-mean only, no SGS sampling)]"
+  value: "gaussian"
+quadrature_order:
+  help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 2"
+  value: 3
 perf_summary:
   help: "Flag for collecting performance summary information"
   value: false
@@ -356,10 +371,7 @@ prescribed_aerosols:
 time_varying_trace_gases:
   help: "Trace gases that vary in time, e.g. [\"CO2\", \"O3\"]. Currently, only \"CO2\" and \"O3\" are supported. All other trace gases set fixed to default values from ClimaParams."
   value: []
-# TODO: remove once https://github.com/CliMA/ClimaAtmos.jl/issues/2873 is closed
-call_cloud_diagnostics_per_stage:
-  help: "A temporary Bool for calling cloud diagnostics every stage"
-  value: false
+
 # EDMF configuration
 turbconv:
   help: "Turbulence convection scheme [`nothing` (default), 'prognostic_edmfx', 'diagnostic_edmfx']"

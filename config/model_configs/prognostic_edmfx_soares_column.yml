@@ -16,7 +16,7 @@ edmfx_filter: true
 prognostic_tke: true
 moist: "equil"
 config: "column"
-hyperdiff: false
+hyperdiff: "false"
 z_max: 3750
 z_elem: 75
 z_stretch: false
@@ -32,3 +32,4 @@ diagnostics:
     period: 10mins
   - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
     period: 10mins
+ode_algo: "ARS222"

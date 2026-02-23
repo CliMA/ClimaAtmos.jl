@@ -49,17 +49,20 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
 
     if p.atmos.moisture_model isa NonEquilMoistModel && (
-        p.atmos.microphysics_model isa Microphysics1Moment ||
-        p.atmos.microphysics_model isa Microphysics2Moment
+        p.atmos.microphysics_model isa
+        Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
+        p.atmos.microphysics_model isa
+        Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
     )
         ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
         ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
         ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
         ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
         # Compute env thermodynamic state from primitives
-        @. ᶜq_tot_safe⁰ = max(0, ᶜq_tot⁰)
         @. ᶜq_liq_rai⁰ = max(0, ᶜq_liq⁰ + ᶜq_rai⁰)
         @. ᶜq_ice_sno⁰ = max(0, ᶜq_ice⁰ + ᶜq_sno⁰)
+        # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
+        @. ᶜq_tot_safe⁰ = max(ᶜq_liq_rai⁰ + ᶜq_ice_sno⁰, ᶜq_tot⁰)
         ᶜh⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)  # specific enthalpy
         @. ᶜT⁰ = TD.air_temperature(
             thermo_params,
@@ -132,8 +135,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
 
         @. ᶜq_tot_safeʲ = max(0, ᶜq_totʲ)
         if moisture_model isa NonEquilMoistModel && (
-            microphysics_model isa Microphysics1Moment ||
-            microphysics_model isa Microphysics2Moment
+            microphysics_model isa
+            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
+            microphysics_model isa
+            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
         )
             ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
             ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
@@ -141,6 +146,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
             @. ᶜq_liq_raiʲ = max(0, ᶜq_liqʲ + ᶜq_raiʲ)
             @. ᶜq_ice_snoʲ = max(0, ᶜq_iceʲ + ᶜq_snoʲ)
+            # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
+            @. ᶜq_tot_safeʲ = max(ᶜq_liq_raiʲ + ᶜq_ice_snoʲ, ᶜq_totʲ)
             ᶜhʲ = @. lazy(ᶜmseʲ - ᶜΦ)
             @. ᶜTʲ = TD.air_temperature(
                 thermo_params,
@@ -167,44 +174,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         @. ᶜρʲ =
             TD.air_density(thermo_params, ᶜTʲ, ᶜp, ᶜq_tot_safeʲ, ᶜq_liq_raiʲ, ᶜq_ice_snoʲ)
     end
-    return nothing
-end
-
-"""
-    set_prognostic_edmf_precomputed_quantities_implicit_closures!(Y, p, t)
-
-Updates the precomputed quantities stored in `p` for edmfx implicit closures.
-"""
-NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_implicit_closures!(
-    Y,
-    p,
-    t,
-)
-
-    (; turbconv_model) = p.atmos
-
-    (; params) = p
-    n = n_mass_flux_subdomains(turbconv_model)
-
-    (; ᶠu₃⁰, ᶠnh_pressure₃_dragʲs) = p.precomputed
-    ᶠlg = Fields.local_geometry_field(Y.f)
-
-    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-    # nonhydrostatic pressure closure drag term
-    for j in 1:n
-        if p.atmos.edmfx_model.nh_pressure isa Val{true}
-            @. ᶠnh_pressure₃_dragʲs.:($$j) = ᶠupdraft_nh_pressure_drag(
-                params,
-                ᶠlg,
-                Y.f.sgsʲs.:($$j).u₃,
-                ᶠu₃⁰,
-                scale_height,
-            )
-        else
-            @. ᶠnh_pressure₃_dragʲs.:($$j) = C3(0)
-        end
-    end
-
     return nothing
 end
 
@@ -244,7 +213,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜentrʲs,
         ᶜdetrʲs,
         ᶜturb_entrʲs,
-        ᶠnh_pressure₃_buoyʲs,
+        ᶠρ_diffʲs,
     ) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     ᶜaʲ_int_val = p.scratch.temp_data_level
@@ -291,19 +260,20 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             p.atmos.edmfx_model.entr_model,
         )
 
-        @. ᶜentrʲs.:($$j) = limit_entrainment(
-            ᶜentrʲs.:($$j),
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-            dt,
-        )
-
         @. ᶜturb_entrʲs.:($$j) = turbulent_entrainment(
             turbconv_params,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
         )
 
-        @. ᶜturb_entrʲs.:($$j) =
-            limit_turb_entrainment(ᶜentrʲs.:($$j), ᶜturb_entrʲs.:($$j), dt)
+        if p.atmos.sgs_entr_detr_mode == Explicit()
+            @. ᶜentrʲs.:($$j) = limit_entrainment(
+                ᶜentrʲs.:($$j),
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                dt,
+            )
+            @. ᶜturb_entrʲs.:($$j) =
+                limit_turb_entrainment(ᶜentrʲs.:($$j), ᶜturb_entrʲs.:($$j), dt)
+        end
 
         @. ᶜvert_div = ᶜdivᵥ(ᶠinterp(ᶜρʲs.:($$j)) * ᶠu³ʲs.:($$j)) / ᶜρʲs.:($$j)
         @. ᶜmassflux_vert_div =
@@ -346,45 +316,73 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             p.atmos.edmfx_model.detr_model,
         )
 
-        @. ᶜdetrʲs.:($$j) = limit_detrainment(
-            ᶜdetrʲs.:($$j),
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-            dt,
-        )
+        if p.atmos.sgs_entr_detr_mode == Explicit()
+            @. ᶜdetrʲs.:($$j) = limit_detrainment(
+                ᶜdetrʲs.:($$j),
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                dt,
+            )
+        else
+            @. ᶜdetrʲs.:($$j) = limit_detrainment(
+                ᶜdetrʲs.:($$j),
+                ᶜentrʲs.:($$j),
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                dt,
+            )
+        end
 
-        # If the surface buoyancy flux is positive, increase entrainment in the first cell
-        # so that the updraft area grows to at least `surface_area` within one timestep.
-        # Otherwise (stable surface), leave entrainment unchanged.
+        # If the surface buoyancy flux is positive, adjust the first-cell updraft area toward `surface_area`:
+        #   - if area < surface_area: increase entrainment to grow area toward `surface_area`
+        #   - if area > surface_area: increase detrainment to decay area toward `surface_area`
+        # If area is negative or surface buoyancy flux is non-positive (stable/neutral surface), leave
+        # entrainment and detrainment unchanged.
         buoyancy_flux_val = Fields.field_values(p.precomputed.sfc_conditions.buoyancy_flux)
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
         sgsʲs_ρa_int_val =
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
+        # Seed a small positive updraft area fraction when surface buoyancy flux is positive.
+        # This perturbation prevents the plume area from staying identically zero,
+        # allowing entrainment to grow it to the prescribed surface area.
+        @. sgsʲs_ρa_int_val += ifelse(buoyancy_flux_val < 0,
+            0,
+            max(0, sgsʲs_ρ_int_val * $(eps(FT)) - sgsʲs_ρa_int_val),
+        )
         @. ᶜaʲ_int_val = draft_area(sgsʲs_ρa_int_val, sgsʲs_ρ_int_val)
         entr_int_val = Fields.field_values(Fields.level(ᶜentrʲs.:($j), 1))
         detr_int_val = Fields.field_values(Fields.level(ᶜdetrʲs.:($j), 1))
-        @. entr_int_val = limit_entrainment(
-            ifelse(
-                buoyancy_flux_val < 0 || ᶜaʲ_int_val <= 0 ||
-                ᶜaʲ_int_val >= $(FT(turbconv_params.surface_area)),
-                entr_int_val,
-                detr_int_val +
-                ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
-            ),
-            ᶜaʲ_int_val,
-            dt,
+        @. entr_int_val = ifelse(
+            buoyancy_flux_val < 0 ||
+            ᶜaʲ_int_val >= $(FT(turbconv_params.surface_area)),
+            entr_int_val,
+            detr_int_val +
+            ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
         )
+        @. detr_int_val = ifelse(
+            buoyancy_flux_val < 0 ||
+            ᶜaʲ_int_val < $(FT(turbconv_params.surface_area)),
+            detr_int_val,
+            entr_int_val -
+            ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
+        )
+        if p.atmos.sgs_entr_detr_mode == Explicit()
+            @. entr_int_val = limit_entrainment(entr_int_val, ᶜaʲ_int_val, dt)
+            @. detr_int_val = limit_detrainment(detr_int_val, ᶜaʲ_int_val, dt)
+        else
+            @. detr_int_val = limit_detrainment(detr_int_val, entr_int_val, ᶜaʲ_int_val, dt)
+        end
+        # Add boundary kinematic contribution to entrainment to compensate
+        # advective area loss (∂(ρaw)/∂z) in the first cell. Using a one-sided
+        # estimate (zero flux below the surface), we add ᶠw₂ / ᶜdz₁ = 2 ᶜw₁ / ᶜdz₁ 
+        # so that entrainment can effectively relax area toward `surface_area`.
+        ᶜdz = Fields.Δz_field(axes(Y.c))
+        @. p.scratch.ᶜtemp_scalar_4 = 2 * get_physical_w(ᶜuʲs.:($$j), ᶜlg) / ᶜdz
+        w_over_dz_val = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar_4, 1))
+        @. entr_int_val += ifelse(buoyancy_flux_val < 0, 0, w_over_dz_val)
 
-        # The buoyancy term in the nonhydrostatic pressure closure is always applied
-        # for prognostic edmf. The tendency is combined with the buoyancy term in the
-        # updraft momentum equation in `edmfx_sgs_vertical_advection_tendency!`. This
-        # term is still calculated here as it is used explicitly in the TKE equation.
-        @. ᶠnh_pressure₃_buoyʲs.:($$j) = ᶠupdraft_nh_pressure_buoyancy(
-            params,
-            buoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
-        )
+        @. ᶠρ_diffʲs.:($$j) = min(0, ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ)) / ᶠinterp(ᶜρʲs.:($$j))
     end
 
-    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, cloud_diagnostics_tuple) =
+    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) =
         p.precomputed
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     @. ᶜlinear_buoygrad = buoyancy_gradients( # TODO - do we need to modify buoyancy gradients based on NonEq + 1M tracers?
@@ -395,7 +393,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜq_tot,
         ᶜq_liq_rai,
         ᶜq_ice_sno,
-        cloud_diagnostics_tuple.cf,
+        ᶜcloud_fraction,
         C3,
         ᶜgradᵥ_q_tot,
         ᶜgradᵥ_θ_liq_ice,
@@ -428,7 +426,21 @@ end
 """
     set_prognostic_edmf_precomputed_quantities_precipitation!(Y, p, microphysics_model)
 
-Updates the precomputed quantities stored in `p` for edmfx precipitation sources.
+Updates the precomputed microphysics tendency quantities stored in `p` for EDMFX.
+
+# SGS Quadrature Design
+
+For EDMF, microphysics tendencies are computed separately for updrafts and the environment:
+
+**Updrafts** use direct BMT evaluation (no SGS quadrature) because:
+1. Updrafts are coherent turbulent structures with more homogeneous thermodynamic properties
+2. Updraft area fraction is usually small (~1-10%), so SGS variance within updrafts has limited 
+impact on the grid-mean tendency
+
+**Environment** uses SGS quadrature integration (when `QuadratureMicrophysics` is configured)
+because the environment dominates the grid-mean variance. The quadrature captures subgrid-scale
+fluctuations in temperature and moisture, which is important for threshold processes like
+condensation/evaporation at cloud edges.
 """
 function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
@@ -440,7 +452,7 @@ end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Microphysics0Moment,
+    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
 )
 
     (; params, dt) = p
@@ -448,43 +460,68 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     cmp = CAP.microphysics_0m_params(params)
     (;
         ᶜT⁰,
+        ᶜp,
         ᶜq_tot_safe⁰,
         ᶜq_liq_rai⁰,
         ᶜq_ice_sno⁰,
         ᶜTʲs,
-        ᶜq_tot_safeʲs,
         ᶜq_liq_raiʲs,
         ᶜq_ice_snoʲs,
-        ᶜSqₜᵖʲs,
-        ᶜSqₜᵖ⁰,
+        ᶜSqₜᵐʲs,
+        ᶜSqₜᵐ⁰,
     ) = p.precomputed
 
-    # Sources from the updrafts
+    # Sources from the updrafts (direct BMT evaluation without quadrature)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    (; ᶜmp_tendency) = p.precomputed
     for j in 1:n
-        @. ᶜSqₜᵖʲs.:($$j) = q_tot_0M_precipitation_sources(
-            cmp,
-            dt,
-            Y.c.sgsʲs.:($$j).q_tot,
-            ᶜq_tot_safeʲs.:($$j),
+        # Materialize BMT result first to avoid NamedTuple property access in broadcast
+        @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
+            BMT.Microphysics0Moment(),
+            cmp, thp,
+            ᶜTʲs.:($$j),
             ᶜq_liq_raiʲs.:($$j),
             ᶜq_ice_snoʲs.:($$j),
         )
+        @. ᶜSqₜᵐʲs.:($$j) = limit_sink(
+            ᶜmp_tendency.dq_tot_dt,
+            Y.c.sgsʲs.:($$j).q_tot, dt,
+        )
     end
-    # sources from the environment
+
+    # Sources from the environment (with SGS quadrature integration)
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-    @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
-        cmp, dt, ᶜq_tot⁰,
-        ᶜq_tot_safe⁰,
-        ᶜq_liq_rai⁰,
-        ᶜq_ice_sno⁰,
+    ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
+
+    # Get SGS quadrature from atmos config (GridMeanSGS if not using QuadratureMicrophysics)
+    SG_quad = if p.atmos.microphysics_model isa QuadratureMicrophysics
+        p.atmos.microphysics_model.quadrature
+    else
+        GridMeanSGS()
+    end
+
+    # Get T-based variances from cache
+    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+
+    # Integrate 0M tendencies over SGS fluctuations
+    @. ᶜmp_tendency = microphysics_tendencies_quadrature_0m(
+        SG_quad,
+        cmp,
+        thp,
+        ᶜρ⁰,
+        ᶜT⁰,
+        ᶜq_tot⁰,
+        ᶜT′T′,
+        ᶜq′q′,
+        correlation_Tq(params),
     )
+    @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_tendency.dq_tot_dt, ᶜq_tot⁰, dt)
     return nothing
 end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Microphysics1Moment,
+    ::Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}},
 )
 
     (; params, dt) = p
@@ -492,16 +529,11 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     cmp = CAP.microphysics_1m_params(params)
     cmc = CAP.microphysics_cloud_params(params)
 
-    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs) = p.precomputed
-    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
-    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+    (; ᶜSqₗᵐʲs, ᶜSqᵢᵐʲs, ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs, ᶜρʲs, ᶜTʲs) = p.precomputed
+    (; ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜmp_tendency) = p.precomputed
     (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
 
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs) = p.precomputed
-
-    # TODO - can I re-use them between js and env?
-    ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
@@ -509,39 +541,38 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
 
         # compute terminal velocity for precipitation
         @. ᶜwᵣʲs.:($$j) = CM1.terminal_velocity(
-            cmp.pr,
-            cmp.tv.rain,
-            ᶜρʲs.:($$j),
+            cmp.precip.rain,
+            cmp.terminal_velocity.rain,
+            max(zero(Y.c.ρ), ᶜρʲs.:($$j)),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
         )
         @. ᶜwₛʲs.:($$j) = CM1.terminal_velocity(
-            cmp.ps,
-            cmp.tv.snow,
-            ᶜρʲs.:($$j),
+            cmp.precip.snow,
+            cmp.terminal_velocity.snow,
+            max(zero(Y.c.ρ), ᶜρʲs.:($$j)),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_sno),
         )
         # compute sedimentation velocity for cloud condensate [m/s]
         @. ᶜwₗʲs.:($$j) = CMNe.terminal_velocity(
             cmc.liquid,
             cmc.stokes,
-            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), ᶜρʲs.:($$j)),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_liq),
         )
         @. ᶜwᵢʲs.:($$j) = CMNe.terminal_velocity(
             cmc.ice,
             cmc.Ch2022.small_ice,
-            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), ᶜρʲs.:($$j)),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_ice),
         )
 
-        # Precipitation sources and sinks from the updrafts
-        compute_precipitation_sources!(
-            ᶜSᵖ,
-            ᶜSᵖ_snow,
-            ᶜSqₗᵖʲs.:($j),
-            ᶜSqᵢᵖʲs.:($j),
-            ᶜSqᵣᵖʲs.:($j),
-            ᶜSqₛᵖʲs.:($j),
+        # Microphysics tendencies from the updrafts (using fused BMT API)
+        compute_1m_precipitation_tendencies!(
+            ᶜSqₗᵐʲs.:($j),
+            ᶜSqᵢᵐʲs.:($j),
+            ᶜSqᵣᵐʲs.:($j),
+            ᶜSqₛᵐʲs.:($j),
+            ᶜmp_tendency,
             ᶜρʲs.:($j),
             Y.c.sgsʲs.:($j).q_tot,
             Y.c.sgsʲs.:($j).q_liq,
@@ -552,134 +583,68 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             dt,
             cmp,
             thp,
-        )
-        ᶜq_vap_safeʲ = @. lazy(
-            max(
-                TD.vapor_specific_humidity(
-                    ᶜq_tot_safeʲs.:($$j),
-                    ᶜq_liq_raiʲs.:($$j),
-                    ᶜq_ice_snoʲs.:($$j),
-                ),
-                0,
-            ),
-        )
-        compute_precipitation_sinks!(
-            ᶜSᵖ,
-            ᶜSqᵣᵖʲs.:($j),
-            ᶜSqₛᵖʲs.:($j),
-            ᶜρʲs.:($j),
-            Y.c.sgsʲs.:($j).q_tot,
-            Y.c.sgsʲs.:($j).q_liq,
-            Y.c.sgsʲs.:($j).q_ice,
-            Y.c.sgsʲs.:($j).q_rai,
-            Y.c.sgsʲs.:($j).q_sno,
-            ᶜTʲs.:($j),
-            ᶜq_vap_safeʲ,
-            dt,
-            cmp,
-            thp,
-        )
-        # Cloud formation from the updrafts
-        @. ᶜSqₗᵖʲs.:($$j) += cloud_sources(
-            cmc.liquid,
-            thp,
-            Y.c.sgsʲs.:($$j).q_tot,
-            Y.c.sgsʲs.:($$j).q_liq,
-            Y.c.sgsʲs.:($$j).q_ice,
-            Y.c.sgsʲs.:($$j).q_rai,
-            Y.c.sgsʲs.:($$j).q_sno,
-            ᶜρʲs.:($$j),
-            ᶜTʲs.:($$j),
-            dt,
-        )
-        @. ᶜSqᵢᵖʲs.:($$j) += cloud_sources(
-            cmc.ice,
-            thp,
-            Y.c.sgsʲs.:($$j).q_tot,
-            Y.c.sgsʲs.:($$j).q_liq,
-            Y.c.sgsʲs.:($$j).q_ice,
-            Y.c.sgsʲs.:($$j).q_rai,
-            Y.c.sgsʲs.:($$j).q_sno,
-            ᶜρʲs.:($$j),
-            ᶜTʲs.:($$j),
-            dt,
         )
     end
 
-    # Precipitation sources and sinks from the environment
+    # Microphysics tendencies from the environment (with SGS quadrature)
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
     ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
     ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
-    ᶜq_vap_safe⁰ =
-        @. lazy(max(TD.vapor_specific_humidity(ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰), 0))
-    compute_precipitation_sources!(
-        ᶜSᵖ,
-        ᶜSᵖ_snow,
-        ᶜSqₗᵖ⁰,
-        ᶜSqᵢᵖ⁰,
-        ᶜSqᵣᵖ⁰,
-        ᶜSqₛᵖ⁰,
-        ᶜρ⁰,
-        ᶜq_tot⁰,
-        ᶜq_liq⁰,
-        ᶜq_ice⁰,
-        ᶜq_rai⁰,
-        ᶜq_sno⁰,
-        ᶜT⁰,
-        dt,
+
+    # Get SGS quadrature from atmos config (GridMeanSGS if not using QuadratureMicrophysics)
+    SG_quad = if p.atmos.microphysics_model isa QuadratureMicrophysics
+        p.atmos.microphysics_model.quadrature
+    else
+        GridMeanSGS()
+    end
+
+    # Get T-based variances from cache
+    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+
+    # Integrate microphysics tendencies over SGS fluctuations
+    # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
+    @. ᶜmp_tendency = microphysics_tendencies_quadrature(
+        BMT.Microphysics1Moment(),
+        SG_quad,
         cmp,
         thp,
-    )
-    compute_precipitation_sinks!(
-        ᶜSᵖ,
-        ᶜSqᵣᵖ⁰,
-        ᶜSqₛᵖ⁰,
         ᶜρ⁰,
+        ᶜp,
+        ᶜT⁰,
         ᶜq_tot⁰,
         ᶜq_liq⁰,
         ᶜq_ice⁰,
         ᶜq_rai⁰,
         ᶜq_sno⁰,
-        ᶜT⁰,
-        ᶜq_vap_safe⁰,
-        dt,
-        cmp,
-        thp,
+        ᶜT′T′,
+        ᶜq′q′,
+        correlation_Tq(p.params),
     )
-    # Cloud formation from the environment
-    @. ᶜSqₗᵖ⁰ += cloud_sources(
-        cmc.liquid,
+
+    # Apply physically motivated tendency limits
+    @. ᶜmp_tendency = apply_1m_tendency_limits(
+        ᶜmp_tendency,
         thp,
         ᶜq_tot⁰,
         ᶜq_liq⁰,
         ᶜq_ice⁰,
         ᶜq_rai⁰,
         ᶜq_sno⁰,
-        ᶜρ⁰,
-        ᶜT⁰,
         dt,
     )
-    @. ᶜSqᵢᵖ⁰ += cloud_sources(
-        cmc.ice,
-        thp,
-        ᶜq_tot⁰,
-        ᶜq_liq⁰,
-        ᶜq_ice⁰,
-        ᶜq_rai⁰,
-        ᶜq_sno⁰,
-        ᶜρ⁰,
-        ᶜT⁰,
-        dt,
-    )
+    @. ᶜSqₗᵐ⁰ = ᶜmp_tendency.dq_lcl_dt
+    @. ᶜSqᵢᵐ⁰ = ᶜmp_tendency.dq_icl_dt
+    @. ᶜSqᵣᵐ⁰ = ᶜmp_tendency.dq_rai_dt
+    @. ᶜSqₛᵐ⁰ = ᶜmp_tendency.dq_sno_dt
     return nothing
 end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Microphysics2Moment,
+    ::Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}},
 )
 
     (; params, dt) = p
@@ -689,37 +654,34 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     cmc = CAP.microphysics_cloud_params(params)
 
     (;
-        ᶜSqₗᵖʲs,
-        ᶜSqᵢᵖʲs,
-        ᶜSqᵣᵖʲs,
-        ᶜSqₛᵖʲs,
-        ᶜSnₗᵖʲs,
-        ᶜSnᵣᵖʲs,
+        ᶜSqₗᵐʲs,
+        ᶜSqᵢᵐʲs,
+        ᶜSqᵣᵐʲs,
+        ᶜSqₛᵐʲs,
+        ᶜSnₗᵐʲs,
+        ᶜSnᵣᵐʲs,
         ᶜρʲs,
         ᶜTʲs,
         ᶜuʲs,
     ) = p.precomputed
-    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜSnₗᵖ⁰, ᶜSnᵣᵖ⁰, ᶜu⁰) =
+    (; ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜSnₗᵐ⁰, ᶜSnᵣᵐ⁰, ᶜu⁰, ᶜmp_tendency) =
         p.precomputed
     (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs, ᶜuʲs) =
         p.precomputed
 
-    ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
-
     # Get prescribed aerosol concentrations
     seasalt_num = p.scratch.ᶜtemp_scalar_3
     seasalt_mean_radius = p.scratch.ᶜtemp_scalar_4
     sulfate_num = p.scratch.ᶜtemp_scalar_5
-    if (:tracers in propertynames(p)) &&
-       (:prescribed_aerosols_field in propertynames(p.tracers))
+    if hasproperty(p, :tracers) &&
+       hasproperty(p.tracers, :prescribed_aerosols_field)
         compute_prescribed_aerosol_properties!(
             seasalt_num,
             seasalt_mean_radius,
             sulfate_num,
             p.tracers.prescribed_aerosols_field,
-            cm2p.aerosol,
+            params.prescribed_aerosol_params,
         )
     else
         @. seasalt_num = 0
@@ -735,8 +697,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         # TODO sedimentation of snow is based on the 1M scheme
         @. ᶜwₙᵣʲs.:($$j) = getindex(
             CM2.rain_terminal_velocity(
-                cm2p.sb,
-                cm2p.rtv,
+                cm2p.warm_rain.seifert_beheng,
+                cmc.Ch2022.rain,
                 max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
                 ᶜρʲs.:($$j),
                 max(zero(Y.c.ρ), ᶜρʲs.:($$j) * Y.c.sgsʲs.:($$j).n_rai),
@@ -745,8 +707,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         )
         @. ᶜwᵣʲs.:($$j) = getindex(
             CM2.rain_terminal_velocity(
-                cm2p.sb,
-                cm2p.rtv,
+                cm2p.warm_rain.seifert_beheng,
+                cmc.Ch2022.rain,
                 max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
                 ᶜρʲs.:($$j),
                 max(zero(Y.c.ρ), ᶜρʲs.:($$j) * Y.c.sgsʲs.:($$j).n_rai),
@@ -754,8 +716,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             2,
         )
         @. ᶜwₛʲs.:($$j) = CM1.terminal_velocity(
-            cm1p.ps,
-            cm1p.tv.snow,
+            cm1p.precip.snow,
+            cm1p.terminal_velocity.snow,
             ᶜρʲs.:($$j),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_sno),
         )
@@ -763,8 +725,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         # TODO sedimentation of ice is based on the 1M scheme
         @. ᶜwₙₗʲs.:($$j) = getindex(
             CM2.cloud_terminal_velocity(
-                cm2p.sb.pdf_c,
-                cm2p.ctv,
+                cm2p.warm_rain.seifert_beheng.pdf_c,
+                cmc.stokes,
                 max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_liq),
                 ᶜρʲs.:($$j),
                 max(zero(Y.c.ρ), ᶜρʲs.:($$j) * Y.c.sgsʲs.:($$j).n_liq),
@@ -773,8 +735,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         )
         @. ᶜwₗʲs.:($$j) = getindex(
             CM2.cloud_terminal_velocity(
-                cm2p.sb.pdf_c,
-                cm2p.ctv,
+                cm2p.warm_rain.seifert_beheng.pdf_c,
+                cmc.stokes,
                 max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_liq),
                 ᶜρʲs.:($$j),
                 max(zero(Y.c.ρ), ᶜρʲs.:($$j) * Y.c.sgsʲs.:($$j).n_liq),
@@ -788,55 +750,30 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_ice),
         )
 
-        # Precipitation sources and sinks from the updrafts
-        compute_warm_precipitation_sources_2M!(
-            ᶜSᵖ,
-            ᶜS₂ᵖ,
-            ᶜSnₗᵖʲs.:($j),
-            ᶜSnᵣᵖʲs.:($j),
-            ᶜSqₗᵖʲs.:($j),
-            ᶜSqᵣᵖʲs.:($j),
+        # Microphysics tendencies from the updrafts (using fused BMT API)
+        # Note: ice and snow tendencies are zero in warm rain 2M scheme
+        compute_2m_precipitation_tendencies!(
+            ᶜSqₗᵐʲs.:($j),
+            ᶜSnₗᵐʲs.:($j),
+            ᶜSqᵣᵐʲs.:($j),
+            ᶜSnᵣᵐʲs.:($j),
+            ᶜmp_tendency,
             ᶜρʲs.:($j),
-            Y.c.sgsʲs.:($j).n_liq,
-            Y.c.sgsʲs.:($j).n_rai,
             Y.c.sgsʲs.:($j).q_tot,
             Y.c.sgsʲs.:($j).q_liq,
-            Y.c.sgsʲs.:($j).q_ice,
+            Y.c.sgsʲs.:($j).n_liq,
             Y.c.sgsʲs.:($j).q_rai,
-            Y.c.sgsʲs.:($j).q_sno,
+            Y.c.sgsʲs.:($j).n_rai,
             ᶜTʲs.:($j),
             dt,
             cm2p,
             thp,
         )
-        @. ᶜSqᵢᵖʲs.:($$j) = 0
-        @. ᶜSqₛᵖʲs.:($$j) = 0
-        # Cloud formation from the updrafts
-        @. ᶜSqₗᵖʲs.:($$j) += cloud_sources(
-            cmc.liquid,
-            thp,
-            Y.c.sgsʲs.:($$j).q_tot,
-            Y.c.sgsʲs.:($$j).q_liq,
-            Y.c.sgsʲs.:($$j).q_ice,
-            Y.c.sgsʲs.:($$j).q_rai,
-            Y.c.sgsʲs.:($$j).q_sno,
-            ᶜρʲs.:($$j),
-            ᶜTʲs.:($$j),
-            dt,
-        )
-        @. ᶜSqᵢᵖʲs.:($$j) += cloud_sources(
-            cmc.ice,
-            thp,
-            Y.c.sgsʲs.:($$j).q_tot,
-            Y.c.sgsʲs.:($$j).q_liq,
-            Y.c.sgsʲs.:($$j).q_ice,
-            Y.c.sgsʲs.:($$j).q_rai,
-            Y.c.sgsʲs.:($$j).q_sno,
-            ᶜρʲs.:($$j),
-            ᶜTʲs.:($$j),
-            dt,
-        )
-        @. ᶜSnₗᵖʲs += aerosol_activation_sources(
+        @. ᶜSqᵢᵐʲs.:($$j) = 0
+        @. ᶜSqₛᵐʲs.:($$j) = 0
+        ᶜwʲ = @. lazy(max(0, w_component(Geometry.WVector(ᶜuʲs.:($$j)))))
+        @. ᶜSnₗᵐʲs += aerosol_activation_sources(
+            (cmc.activation,),  # TODO: remove parenthesis once CMP parameter types are Base.broadcastable
             seasalt_num,
             seasalt_mean_radius,
             sulfate_num,
@@ -845,16 +782,17 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             Y.c.sgsʲs.:($$j).q_ice + Y.c.sgsʲs.:($$j).q_sno,
             Y.c.sgsʲs.:($$j).n_liq + Y.c.sgsʲs.:($$j).n_rai,
             ᶜρʲs.:($$j),
-            max(0, w_component.(Geometry.WVector.(ᶜuʲs.:($$j)))),
+            ᶜwʲ,
             (cm2p,),
             thp,
             ᶜTʲs.:($$j),
             ᶜp,
             dt,
+            (params.prescribed_aerosol_params,),
         )
     end
 
-    # Precipitation sources and sinks from the environment
+    # Microphysics tendencies from the environment (with SGS quadrature)
     ᶜn_liq⁰ = ᶜspecific_env_value(@name(n_liq), Y, p)
     ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), Y, p)
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
@@ -863,54 +801,49 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
-    compute_warm_precipitation_sources_2M!(
-        ᶜSᵖ,
-        ᶜS₂ᵖ,
-        ᶜSnₗᵖ⁰,
-        ᶜSnᵣᵖ⁰,
-        ᶜSqₗᵖ⁰,
-        ᶜSqᵣᵖ⁰,
-        ᶜρ⁰,
-        ᶜn_liq⁰,
-        ᶜn_rai⁰,
-        ᶜq_tot⁰,
-        ᶜq_liq⁰,
-        ᶜq_ice⁰,
-        ᶜq_rai⁰,
-        ᶜq_sno⁰,
-        ᶜT⁰,
-        dt,
+
+    # Get SGS quadrature from atmos config (GridMeanSGS if not using QuadratureMicrophysics)
+    SG_quad = if p.atmos.microphysics_model isa QuadratureMicrophysics
+        p.atmos.microphysics_model.quadrature
+    else
+        GridMeanSGS()
+    end
+
+    # Integrate microphysics tendencies over SGS fluctuations
+    # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
+    @. ᶜmp_tendency = microphysics_tendencies_quadrature_2m(
+        SG_quad,
         cm2p,
         thp,
-    )
-    @. ᶜSqᵢᵖ⁰ = 0
-    @. ᶜSqₛᵖ⁰ = 0
-    # Cloud formation from the environment
-    @. ᶜSqₗᵖ⁰ += cloud_sources(
-        cmc.liquid,
-        thp,
-        ᶜq_tot⁰,
-        ᶜq_liq⁰,
-        ᶜq_ice⁰,
-        ᶜq_rai⁰,
-        ᶜq_sno⁰,
         ᶜρ⁰,
         ᶜT⁰,
-        dt,
-    )
-    @. ᶜSqᵢᵖ⁰ += cloud_sources(
-        cmc.ice,
-        thp,
         ᶜq_tot⁰,
         ᶜq_liq⁰,
-        ᶜq_ice⁰,
+        ᶜn_liq⁰,
         ᶜq_rai⁰,
-        ᶜq_sno⁰,
-        ᶜρ⁰,
-        ᶜT⁰,
-        dt,
+        ᶜn_rai⁰,
     )
-    @. ᶜSnₗᵖ⁰ += aerosol_activation_sources(
+
+    # Apply coupled limiting directly 
+    ᶜf_liq = @. lazy(
+        coupled_sink_limit_factor(
+            ᶜmp_tendency.dq_lcl_dt, ᶜmp_tendency.dn_lcl_dt, ᶜq_liq⁰, ᶜn_liq⁰, dt,
+        ),
+    )
+    ᶜf_rai = @. lazy(
+        coupled_sink_limit_factor(
+            ᶜmp_tendency.dq_rai_dt, ᶜmp_tendency.dn_rai_dt, ᶜq_rai⁰, ᶜn_rai⁰, dt,
+        ),
+    )
+    @. ᶜSqₗᵐ⁰ = ᶜmp_tendency.dq_lcl_dt * ᶜf_liq
+    @. ᶜSnₗᵐ⁰ = ᶜmp_tendency.dn_lcl_dt * ᶜf_liq
+    @. ᶜSqᵣᵐ⁰ = ᶜmp_tendency.dq_rai_dt * ᶜf_rai
+    @. ᶜSnᵣᵐ⁰ = ᶜmp_tendency.dn_rai_dt * ᶜf_rai
+    @. ᶜSqᵢᵐ⁰ = 0
+    @. ᶜSqₛᵐ⁰ = 0
+    ᶜw⁰ = @. lazy(w_component(Geometry.WVector(ᶜu⁰)))
+    @. ᶜSnₗᵐ⁰ += aerosol_activation_sources(
+        (cmc.activation,),
         seasalt_num,
         seasalt_mean_radius,
         sulfate_num,
@@ -919,12 +852,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜq_ice⁰ + ᶜq_sno⁰,
         ᶜn_liq⁰ + ᶜn_rai⁰,
         ᶜρ⁰,
-        w_component.(Geometry.WVector.(ᶜu⁰)),
+        ᶜw⁰,
         (cm2p,),
         thp,
         ᶜT⁰,
         ᶜp,
         dt,
+        (params.prescribed_aerosol_params,),
     )
     return nothing
 end

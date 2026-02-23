@@ -21,8 +21,8 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
 moist: "nonequil"
-call_cloud_diagnostics_per_stage: true
 precip_model: "1M"
+use_sgs_quadrature: false
 config: "column"
 z_max: 4e3
 x_elem: 2
@@ -30,7 +30,7 @@ y_elem: 2
 z_elem: 100
 z_stretch: false
 perturb_initstate: false
-dt: "60secs"
+dt: "120secs"
 t_end: "24hours"
 dt_save_state_to_disk: "60mins"
 toml: [toml/prognostic_edmfx_1M.toml]
@@ -44,3 +44,4 @@ diagnostics:
     period: 10mins
   - short_name: [husra, hussn]
     period: 10mins
+ode_algo: "ARS222"

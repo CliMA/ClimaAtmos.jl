@@ -140,10 +140,11 @@ function entrainment(
 )
     FT = eltype(thermo_params)
     entr_inv_tau = CAP.entr_inv_tau(turbconv_params)
+    a_min = CAP.min_area(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
     # Entrainment is not well-defined if updraft area is negligible.
     # Fix at limit_inv_tau to ensure some mixing with the environment.
-    if ᶜaʲ <= eps(FT)
+    if ᶜaʲ <= a_min
         return limit_inv_tau
     end
 
@@ -217,7 +218,7 @@ function entrainment(
 
     # Entrainment is not well-defined if updraft area is negligible,
     # as some limiters depend on ᶜaʲ.
-    if ᶜaʲ <= eps(FT) && min_area_limiter_scale == FT(0) # If no area and no base min_area_limiter
+    if ᶜaʲ <= a_min && min_area_limiter_scale == FT(0) # If no area and no base min_area_limiter
         return limit_inv_tau
     end
 
@@ -336,11 +337,12 @@ function detrainment(
     ::PiGroupsDetrainment,
 )
     FT = eltype(thermo_params)
+    a_min = CAP.min_area(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
 
     # If ᶜaʲ (updraft area fraction) is negligible, detrainment is considered
     # to be fixed at limit_inv_tau. This also protects division by ᶜρaʲ later.
-    if ᶜaʲ <= eps(FT)
+    if ᶜaʲ <= a_min
         return limit_inv_tau
     end
 
@@ -414,12 +416,13 @@ function detrainment(
         CAP.detr_massflux_vertdiv_coeff(turbconv_params)
     max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
     max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
+    a_min = CAP.min_area(turbconv_params)
     a_max = CAP.max_area(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
 
     # If ᶜaʲ (updraft area fraction) is negligible, detrainment is not well defined.
     # Fix at limit_inv_tau to ensure some mixing with the environment.
-    if ᶜaʲ <= eps(FT)
+    if ᶜaʲ <= a_min
         return limit_inv_tau
     end
 
@@ -460,9 +463,10 @@ function detrainment(
     ::SmoothAreaDetrainment,
 )
     FT = eltype(thermo_params)
+    a_min = CAP.min_area(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
     # If ᶜaʲ is negligible detrainment is fixed at limit_inv_tau.
-    if (ᶜaʲ <= eps(FT)) # Consistent check for ᶜaʲ
+    if (ᶜaʲ <= a_min) # Consistent check for ᶜaʲ
         detr = limit_inv_tau
         # If vertical velocity divergence term is non-negative detrainment is zero.
     elseif (ᶜw_vert_div >= 0)
@@ -597,17 +601,6 @@ function edmfx_first_interior_entr_tendency!(
 
     for j in 1:n
 
-        # Seed a small positive updraft area fraction when surface buoyancy flux is positive.
-        # This perturbation prevents the plume area from staying identically zero,
-        # allowing entrainment to grow it to the prescribed surface area.
-        sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
-        sgsʲs_ρa_int_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
-        sgsʲs_ρaₜ_int_val = Fields.field_values(Fields.level(Yₜ.c.sgsʲs.:($j).ρa, 1))
-        @. sgsʲs_ρaₜ_int_val += ifelse(buoyancy_flux_val < 0,
-            0,
-            max(0, (sgsʲs_ρ_int_val * $(eps(FT)) - sgsʲs_ρa_int_val) / dt),
-        )
-
         # Apply entrainment tendencies in the first model cell for moist static energy (mse) 
         # and total humidity (q_tot). The entrained fluid is assumed to have a scalar value 
         # given by `sgs_scalar_first_interior_bc` (mean + SGS perturbation). Since 
@@ -615,6 +608,8 @@ function edmfx_first_interior_entr_tendency!(
         # contrast, we supply the high-value (entrained) tracer minus the environment value 
         # here to form the correct tendency.
         entr_int_val = Fields.field_values(Fields.level(ᶜentrʲs.:($j), 1))
+        sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
+        sgsʲs_ρa_int_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
         @. ᶜaʲ_int_val = max(
             FT(turbconv_params.surface_area),
             draft_area(sgsʲs_ρa_int_val, sgsʲs_ρ_int_val),
@@ -666,6 +661,8 @@ limit_entrainment(entr::FT, a, dt) where {FT} = max(
 )
 limit_detrainment(detr::FT, a, dt) where {FT} =
     max(min(detr, FT(0.9) * 1 / dt), 0)
+limit_detrainment(detr::FT, entr::FT, a, dt) where {FT} =
+    max(detr, entr - FT(0.9) * 1 / dt)
 
 function limit_turb_entrainment(dyn_entr::FT, turb_entr, dt) where {FT}
     return max(min((FT(0.9) * 1 / dt) - dyn_entr, turb_entr), 0)

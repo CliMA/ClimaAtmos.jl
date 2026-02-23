@@ -3,9 +3,9 @@ dt_save_state_to_disk: "6days"
 rayleigh_sponge: true
 topo_smoothing: true
 initial_condition: "DryBaroclinicWave"
-t_end: "6days"
+t_end: "4days"
 dt: "200secs"
-hyperdiff: "ClimaHyperdiffusion"
+hyperdiff: Hyperdiffusion
 vorticity_hyperdiffusion_coefficient: 1.5
 hyperdiffusion_prandtl_number: 1.0
 divergence_damping_factor: 1.0

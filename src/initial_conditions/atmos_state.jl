@@ -144,6 +144,9 @@ precip_variables(ls, ::Microphysics2Moment) = (;
     ρq_rai = ls.ρ * ls.precip_state.q_rai,
     ρq_sno = ls.ρ * ls.precip_state.q_sno,
 )
+# QuadratureMicrophysics wraps a base model — delegate to its dispatch
+precip_variables(ls, qm::QuadratureMicrophysics) =
+    precip_variables(ls, qm.base_model)
 
 function precip_variables(ls, ::Microphysics2MomentP3)
     (; ρ) = ls
@@ -231,6 +234,22 @@ function turbconv_center_variables(
         )
     end
     return (; ρtke = ρtke, sgsʲs)
+end
+
+function turbconv_center_variables(
+    ls,
+    turbconv_model::PrognosticEDMFX,
+    moisture_model::NonEquilMoistModel,
+    qm::QuadratureMicrophysics,
+    gs_vars,
+)
+    return turbconv_center_variables(
+        ls,
+        turbconv_model,
+        moisture_model,
+        qm.base_model,
+        gs_vars,
+    )
 end
 
 function turbconv_center_variables(

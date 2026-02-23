@@ -50,7 +50,7 @@ end
             :orographic_gravity_wave => nothing,
             :viscous_sponge => nothing,
             :rayleigh_sponge => nothing,
-            :hyperdiff => Union{Nothing, CA.ClimaHyperdiffusion},
+            :hyperdiff => Union{Nothing, CA.Hyperdiffusion},
             :vertical_diffusion => nothing,
         )
 
@@ -59,7 +59,7 @@ end
         # Test numerics structure separately due to nested fields
         @test model.numerics isa CA.AtmosNumerics
         @test model.numerics.diff_mode isa CA.Explicit
-        @test model.numerics.hyperdiff isa Union{Nothing, CA.ClimaHyperdiffusion}
+        @test model.numerics.hyperdiff isa Union{Nothing, CA.Hyperdiffusion}
     end
 
     @testset "User overrides work correctly" begin
@@ -67,14 +67,14 @@ end
         model = CA.AtmosModel(;
             moisture_model = CA.EquilMoistModel(),
             microphysics_model = CA.Microphysics1Moment(),
-            cloud_model = CA.QuadratureCloud(CA.SGSQuadrature(FT)),
-            radiation_mode = RRTMGPI.ClearSkyRadiation(
-                false,
-                false,
-                false,
-                false,
+            cloud_model = CA.QuadratureCloud(),
+            radiation_mode = RRTMGPI.ClearSkyRadiation(;
+                idealized_h2o = false,
+                add_isothermal_boundary_layer = false,
+                aerosol_radiation = false,
+                deep_atmosphere = false,
             ),
-            hyperdiff = CA.ClimaHyperdiffusion(;
+            hyperdiff = CA.Hyperdiffusion(;
                 ν₄_vorticity_coeff = 1e15,
                 divergence_damping_factor = 1.0,
                 prandtl_number = 1.0,
@@ -87,8 +87,8 @@ end
         @test model.microphysics_model isa CA.Microphysics1Moment
         @test model.cloud_model isa CA.QuadratureCloud
         @test model.radiation_mode isa RRTMGPI.ClearSkyRadiation
-        @test model.hyperdiff isa CA.ClimaHyperdiffusion
-        @test model.numerics.hyperdiff isa CA.ClimaHyperdiffusion
+        @test model.hyperdiff isa CA.Hyperdiffusion
+        @test model.numerics.hyperdiff isa CA.Hyperdiffusion
         @test model.disable_surface_flux_tendency == true
 
         # Test that non-overridden defaults are preserved
@@ -109,7 +109,7 @@ end
             @test model.moisture_model isa expected_moisture_type
             @test model.surface_model isa CA.PrescribedSST  # default preserved
             @test model.numerics.diff_mode isa CA.Explicit  # default preserved
-            @test model.numerics.hyperdiff isa Union{Nothing, CA.ClimaHyperdiffusion}  # default is nothing or ClimaHyperdiffusion
+            @test model.numerics.hyperdiff isa Union{Nothing, CA.Hyperdiffusion}  # default is nothing or Hyperdiffusion
         end
     end
 end
@@ -128,11 +128,11 @@ end
         moist_model = CA.AtmosModel(;
             moisture_model = CA.EquilMoistModel(),
             microphysics_model = CA.Microphysics0Moment(),
-            radiation_mode = RRTMGPI.ClearSkyRadiation(
-                false,
-                false,
-                false,
-                false,
+            radiation_mode = RRTMGPI.ClearSkyRadiation(;
+                idealized_h2o = false,
+                add_isothermal_boundary_layer = false,
+                aerosol_radiation = false,
+                deep_atmosphere = false,
             ),
         )
         @test moist_model.moisture_model isa CA.EquilMoistModel

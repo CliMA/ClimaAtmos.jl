@@ -48,21 +48,6 @@ struct ColumnInterpolatableField{F, D}
 end
 (f::ColumnInterpolatableField)(z) = Spaces.undertype(axes(f.f))(f.data(z))
 
-function Base.show(io::IO, x::ColumnInterpolatableField)
-    # Extract z grid from the wrapped column field
-    z = Fields.coordinate_field(x.f).z
-    nz = Spaces.nlevels(z)
-    zmin, zmax = extrema(z)
-    val_eltype = eltype(x.f)
-    # These are fixed by the constructor
-    interp_str = "Linear"
-    extrap_str = "Flat"
-    print(io,
-        "ColumnInterpolatableField(Nz=$nz, z∈[$zmin, $zmax], value_eltype=$val_eltype, ",
-        "interpolation=$interp_str, extrapolation=$extrap_str)",
-    )
-end
-
 import ClimaComms
 import ClimaCore.Domains as Domains
 import ClimaCore.Meshes as Meshes
@@ -225,7 +210,20 @@ struct WeatherModel <: InitialCondition
     era5_initial_condition_dir::Union{Nothing, String}
 end
 
-function (initial_condition::Union{MoistFromFile, WeatherModel})(params)
+"""
+    AMIPFromERA5(start_date)
+
+An `InitialCondition` for AMIP simulations using ERA5 monthly reanalysis data.
+Uses the `amip_era5_ic` artifact containing pre-processed ERA5 data interpolated
+to z-levels, matching the format expected by the WeatherModel machinery.
+
+Expected artifact structure: `amip_era5_ic/era5_init_YYYYMMDD_0000.nc`
+"""
+struct AMIPFromERA5 <: InitialCondition
+    start_date::String
+end
+
+function (initial_condition::Union{MoistFromFile, WeatherModel, AMIPFromERA5})(params)
     function local_state(local_geometry)
         FT = eltype(params)
 
@@ -369,7 +367,7 @@ three different SST temperatures and different initial specific humidity
 profiles. Note: this should be used for RCE_small and NOT
 RCE_large - RCE_large must be initialized with the final state of RCE_small.
 """
-struct RCEMIPIIProfile{FT} <: InitialCondition
+@kwdef struct RCEMIPIIProfile{FT} <: InitialCondition
     temperature::FT
     humidity::FT
 end
@@ -520,8 +518,7 @@ function correct_surface_pressure_for_topography!(
     grav = thermo_params.grav
 
     ᶠz_model_surface = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
-    ᶠΔz = zeros(face_space)
-    @. ᶠΔz = ᶠz_model_surface - ᶠz_surface
+    ᶠΔz = @. ᶠz_model_surface - ᶠz_surface
 
     ᶠR_m = ᶠinterp.(TD.gas_constant_air.(thermo_params, ᶜq_tot))
     ᶠR_m_sfc = Fields.level(ᶠR_m, Fields.half)
@@ -727,6 +724,14 @@ function overwrite_initial_conditions!(
             "`dry` configurations are incompatible with the interpolated initial conditions.",
         )
     end
+
+    if hasproperty(Y.c, :ρq_liq)
+        fill!(Y.c.ρq_liq, 0)
+    end
+    if hasproperty(Y.c, :ρq_ice)
+        fill!(Y.c.ρq_ice, 0)
+    end
+
     if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
         Y.c.ρq_sno .=
             SpaceVaryingInputs.SpaceVaryingInput(
@@ -755,7 +760,45 @@ function overwrite_initial_conditions!(
 end
 
 """
-    _overwrite_initial_conditions_from_file!(file_path::String, Y, thermo_params, config)
+    overwrite_initial_conditions!(initial_condition::AMIPFromERA5, Y, thermo_params)
+
+Overwrite the prognostic state `Y` with ERA5-derived initial conditions for AMIP simulations.
+Initial condition corresponds to Jan 1, 2010 at 00Z.
+Uses hydrostatic integration from surface pressure to compute the pressure profile.
+
+Expected variables in the IC file:
+- 3D: `u`, `v`, `w`, `t`, `q`
+- 2D broadcast in `z`: `p` (surface pressure)
+"""
+function overwrite_initial_conditions!(
+    initial_condition::AMIPFromERA5,
+    Y,
+    thermo_params,
+)
+    # Get file path from AMIP artifact
+    dt = parse_date(initial_condition.start_date)
+    start_date_str = Dates.format(dt, "yyyymmdd")
+
+    file_path = joinpath(
+        @clima_artifact("era5_inst_model_levels"),
+        "era5_init_processed_internal_$(start_date_str)_0000.nc",
+    )
+
+    extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
+
+    return _overwrite_initial_conditions_from_file!(
+        file_path,
+        extrapolation_bc,
+        Y,
+        thermo_params;
+        regridder_type = :InterpolationsRegridder,
+        interpolation_method = Intp.Linear(),
+    )
+end
+
+"""
+    _overwrite_initial_conditions_from_file!(file_path, extrapolation_bc, Y, thermo_params;
+                                              regridder_type=nothing, interpolation_method=nothing)
 
 Given a prognostic state `Y`, an `initial condition` (specifically, where initial values are
 assigned from interpolations of existing datasets), and `thermo_params`, this function
@@ -770,14 +813,34 @@ We expect the file to contain the following variables:
 - `q`, for humidity,
 - `u, v, w`, for velocity,
 - `cswc, crwc` for snow and rain water content (for 1 moment microphysics).
+
+If the file contains `z_sfc` (surface altitude), a hydrostatic correction is applied
+to account for differences between the file's orography and the model's topography.
+
+Optional keyword arguments:
+- `regridder_type`: The regridder type to use (e.g., `:InterpolationsRegridder`)
+- `interpolation_method`: The interpolation method (e.g., `Intp.Linear()`)
 """
 function _overwrite_initial_conditions_from_file!(
     file_path::String,
     extrapolation_bc,
     Y,
-    thermo_params,
+    thermo_params;
+    regridder_type = nothing,
+    interpolation_method = nothing,
 )
-    regridder_kwargs = isnothing(extrapolation_bc) ? () : (; extrapolation_bc)
+    regridder_kwargs = if isnothing(extrapolation_bc) && isnothing(interpolation_method)
+        ()
+    elseif isnothing(interpolation_method)
+        (; extrapolation_bc)
+    elseif isnothing(extrapolation_bc)
+        (; interpolation_method)
+    else
+        (; extrapolation_bc, interpolation_method)
+    end
+    svi_kwargs =
+        isnothing(regridder_type) ? (; regridder_kwargs) :
+        (; regridder_type, regridder_kwargs)
     isfile(file_path) || error("$(file_path) is not a file")
     @info "Overwriting initial conditions with data from file $(file_path)"
     center_space = Fields.axes(Y.c)
@@ -788,23 +851,42 @@ function _overwrite_initial_conditions_from_file!(
         SpaceVaryingInputs.SpaceVaryingInput(
             file_path,
             "p",
-            face_space,
-            regridder_kwargs = regridder_kwargs,
+            face_space;
+            svi_kwargs...,
         ),
         Fields.half,
     )
     ᶜT = SpaceVaryingInputs.SpaceVaryingInput(
         file_path,
         "t",
-        center_space,
-        regridder_kwargs = regridder_kwargs,
+        center_space;
+        svi_kwargs...,
     )
     ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(
         file_path,
         "q",
-        center_space,
-        regridder_kwargs = regridder_kwargs,
+        center_space;
+        svi_kwargs...,
     )
+
+    # Apply hydrostatic surface-pressure correction only if surface altitude is available
+    surface_altitude_var = "z_sfc"
+    has_surface_altitude = NC.NCDataset(file_path) do ds
+        haskey(ds, surface_altitude_var)
+    end
+    if has_surface_altitude
+        correct_surface_pressure_for_topography!(
+            p_sfc,
+            file_path,
+            face_space,
+            Y,
+            ᶜT,
+            ᶜq_tot,
+            thermo_params,
+            regridder_kwargs;
+            surface_altitude_var = surface_altitude_var,
+        )
+    end
 
     # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile,
     # recompute the pressure levels assuming hydrostatic balance is maintained.
@@ -831,20 +913,20 @@ function _overwrite_initial_conditions_from_file!(
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "u",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
+                center_space;
+                svi_kwargs...,
             ),
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "v",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
+                center_space;
+                svi_kwargs...,
             ),
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "w",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
+                center_space;
+                svi_kwargs...,
             ),
         )
     Y.c.uₕ .= C12.(Geometry.UVVector.(vel))
@@ -860,21 +942,46 @@ function _overwrite_initial_conditions_from_file!(
             "`dry` configurations are incompatible with the interpolated initial conditions.",
         )
     end
+
+    if hasproperty(Y.c, :ρq_liq)
+        fill!(Y.c.ρq_liq, 0)
+    end
+    if hasproperty(Y.c, :ρq_ice)
+        fill!(Y.c.ρq_ice, 0)
+    end
     if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
-        Y.c.ρq_sno .=
-            SpaceVaryingInputs.SpaceVaryingInput(
-                file_path,
-                "cswc",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
-            ) .* Y.c.ρ
-        Y.c.ρq_rai .=
-            SpaceVaryingInputs.SpaceVaryingInput(
-                file_path,
-                "crwc",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
-            ) .* Y.c.ρ
+        has_microphysics_vars = NC.NCDataset(file_path) do ds
+            haskey(ds, "cswc") && haskey(ds, "crwc")
+        end
+        if has_microphysics_vars
+            Y.c.ρq_sno .=
+                SpaceVaryingInputs.SpaceVaryingInput(
+                    file_path,
+                    "cswc",
+                    center_space;
+                    svi_kwargs...,
+                ) .* Y.c.ρ
+            Y.c.ρq_rai .=
+                SpaceVaryingInputs.SpaceVaryingInput(
+                    file_path,
+                    "crwc",
+                    center_space;
+                    svi_kwargs...,
+                ) .* Y.c.ρ
+        else
+            fill!(Y.c.ρq_sno, 0)
+            fill!(Y.c.ρq_rai, 0)
+        end
+    end
+    # Initialize prognostic EDMF 0M subdomains if present
+    if hasproperty(Y.c, :sgsʲs)
+        ᶜmse = TD.enthalpy.(thermo_params, ᶜT, ᶜq_tot) .+ e_pot
+        for name in propertynames(Y.c.sgsʲs)
+            s = getproperty(Y.c.sgsʲs, name)
+            hasproperty(s, :ρa) && fill!(s.ρa, 0)
+            hasproperty(s, :mse) && (s.mse .= ᶜmse)
+            hasproperty(s, :q_tot) && (s.q_tot .= ᶜq_tot)
+        end
     end
 
     if hasproperty(Y.c, :ρtke)

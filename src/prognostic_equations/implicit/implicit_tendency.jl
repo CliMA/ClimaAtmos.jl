@@ -10,16 +10,8 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
-    if p.atmos.noneq_cloud_formation_mode == Implicit()
-        cloud_condensate_tendency!(
-            Yₜ,
-            Y,
-            p,
-            p.atmos.moisture_model,
-            p.atmos.microphysics_model,
-            p.atmos.turbconv_model,
-        )
-    end
+    # TODO: Needs to be updated to use the new microphysics 
+    # tendency function with quadrature if implicit_microphysics is true
 
     if p.atmos.sgs_adv_mode == Implicit()
         edmfx_sgs_vertical_advection_tendency!(
@@ -45,6 +37,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
 
     if p.atmos.sgs_entr_detr_mode == Implicit()
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+        edmfx_first_interior_entr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
     if p.atmos.sgs_mf_mode == Implicit()
@@ -144,7 +137,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
-    if microphysics_model isa Microphysics1Moment
+    if microphysics_model isa
+       Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
@@ -157,7 +151,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
-    if microphysics_model isa Microphysics2Moment
+    if microphysics_model isa
+       Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
         (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
@@ -203,16 +198,12 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) +
                   cp_d * (ᶠinterp(ᶜθ_v - ᶜθ_vr)) * ᶠgradᵥ(ᶜΠ)
 
-    if rayleigh_sponge isa RayleighSponge
-        ᶠz = Fields.coordinate_field(Y.f).z
-        zmax = z_max(axes(Y.f))
-        rs = rayleigh_sponge
-        @. Yₜ.f.u₃ -= β_rayleigh_w(rs, ᶠz, zmax) * Y.f.u₃
-        if turbconv_model isa PrognosticEDMFX
-            for j in 1:n
-                @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                    β_rayleigh_w(rs, ᶠz, zmax) * Y.f.sgsʲs.:($$j).u₃
-            end
+    rst_u₃ = rayleigh_sponge_tendency_u₃(Y.f.u₃, rayleigh_sponge)
+    @. Yₜ.f.u₃ += rst_u₃
+    if turbconv_model isa PrognosticEDMFX
+        for j in 1:n
+            rst_u₃ʲ = rayleigh_sponge_tendency_u₃(Y.f.sgsʲs.:($j).u₃, rayleigh_sponge)
+            @. Yₜ.f.sgsʲs.:($$j).u₃ += rst_u₃ʲ
         end
     end
     return nothing

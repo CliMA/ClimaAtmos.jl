@@ -40,8 +40,10 @@ include(joinpath("cache", "prognostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "diagnostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "precipitation_precomputed_quantities.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
-include(joinpath("cache", "cloud_fraction.jl"))
 include(joinpath("cache", "surface_albedo.jl"))
+
+# Microphysics module (SGS quadrature, cloud fraction, tendency limiters, wrappers)
+include(joinpath("parameterized_tendencies", "microphysics", "microphysics.jl"))
 
 include(joinpath("initial_conditions", "InitialConditions.jl"))
 include(joinpath("surface_conditions", "SurfaceConditions.jl"))
@@ -99,24 +101,7 @@ include(joinpath("prognostic_equations", "edmfx_entr_detr.jl"))
 include(joinpath("prognostic_equations", "edmfx_tke.jl"))
 include(joinpath("prognostic_equations", "edmfx_sgs_flux.jl"))
 include(joinpath("prognostic_equations", "edmfx_boundary_condition.jl"))
-include(joinpath("prognostic_equations", "edmfx_precipitation.jl"))
-include(
-    joinpath("parameterized_tendencies", "microphysics", "precipitation.jl"),
-)
-include(
-    joinpath("parameterized_tendencies", "microphysics", "cloud_condensate.jl"),
-)
-include(
-    joinpath(
-        "parameterized_tendencies",
-        "microphysics",
-        "microphysics_wrappers.jl",
-    ),
-)
-include(
-    joinpath(
-        "parameterized_tendencies", "microphysics", "moisture_fixer.jl"),
-)
+include(joinpath("prognostic_equations", "edmfx_microphysics.jl"))
 include(
     joinpath("prognostic_equations", "vertical_diffusion_boundary_layer.jl"),
 )
@@ -169,5 +154,7 @@ include(joinpath("solver", "model_getters.jl")) # high-level (using parsed_args)
 include(joinpath("solver", "type_getters.jl"))
 include(joinpath("solver", "yaml_helper.jl"))
 include(joinpath("solver", "solve.jl"))
+
+include(joinpath("utils", "show.jl"))
 
 end # module

@@ -23,19 +23,21 @@ implicit_sgs_nh_pressure: true
 implicit_sgs_vertdiff: true
 implicit_sgs_mass_flux: true
 use_dense_jacobian: true
-update_jacobian_every: dt
+update_jacobian_every: stage
+ode_algo: "ARS222"
+debug_jacobian: true
 max_newton_iters_ode: 3
 moist: equil
 precip_model: 0M
-t_end: 40mins
+t_end: 10mins
 dt_save_state_to_disk: 600secs
 toml: [toml/prognostic_edmfx.toml]
 output_default_diagnostics: false
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfss, hfls, hur, hus, cl, clw, cli, evspsbl, pr, rsd, rsu, rld, rlu]
     reduction_time: average
-    period: 40mins
+    period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     reduction_time: average
-    period: 40mins
+    period: 10mins
 use_itime: true

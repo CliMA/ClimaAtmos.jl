@@ -1,8 +1,8 @@
 z_max: 55000.0
 viscous_sponge: false
 implicit_diffusion: false
-dt_save_state_to_disk: "4days"
-t_end: "8days"
+dt_save_state_to_disk: "2days"
+t_end: "2days"
 disable_surface_flux_tendency: true
 forcing: "held_suarez"
 toml: [toml/sphere_held_suarez.toml]

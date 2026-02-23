@@ -4,8 +4,9 @@ implicit_sgs_entr_detr: true
 implicit_sgs_nh_pressure: true
 implicit_sgs_vertdiff: true
 max_newton_iters_ode: 3
-dt: "30secs"
-t_end: "30days"
+ode_algo: "ARS222"
+dt: "120secs"
+t_end: "240days"
 dt_save_state_to_disk: "30days"
 moist: "equil"
 rad: "allskywithclear"

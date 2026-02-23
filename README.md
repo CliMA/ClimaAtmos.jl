@@ -87,33 +87,22 @@ julia> ]
 
 Currently, the simulations are stored in the `test` folder. Run all the test cases with the following commands.
 
-First, we instantiate the test environment, by launching (from `ClimaAtmos.jl/`) Julia with the `test/` environment active:
+First, launch Julia from the `ClimaAtmos.jl/` directory with the project active:
 
 ```
-$ julia --project=test
+$ julia --project
 ```
 
-Then, once in the Julia REPL, we switch to the package manager by pressing `]`:
-
-```julia
-julia> ]
-```
-
-Once in the package manager, we `develop` the `ClimaAtmos.jl/` directory:
+Then, in the Julia REPL, switch to the package manager by pressing `]` and run the tests:
 
 ```pkg
-test> dev .
+(ClimaAtmos) pkg> test
 ```
 
-Now, we can switch back to the Julia REPL by escaping and run the test suite interactively:
-
-```julia
-julia> include(joinpath("test", "runtests.jl"))
-```
-Or escape the Julia REPL and run from the command line:
+Or run from the command line:
 
 ```
-$ julia --project=test test/runtests.jl
+$ julia --project -e 'using Pkg; Pkg.test()'
 ```
 
 If you run into issues when running the test suite this way, please open an issue.
