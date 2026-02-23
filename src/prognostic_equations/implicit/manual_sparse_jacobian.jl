@@ -273,11 +273,22 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                     similar(Y.f, TridiagonalRow_C3xACT3),
             )
         else
+            # When sgs_advection is not differentiated, diagonal blocks
+            # only need to hold microphysics derivatives (DiagonalRow).
+            # For names that don't receive microphysics updates, FT(-1)*I
+            # (UniformScaling) suffices.
+            implicit_micro =
+                atmos.microphysics_tendency_timestepping == Implicit()
             (
                 MatrixFields.unrolled_map(
-                    name -> (name, name) => FT(-1) * I,
                     available_sgs_scalar_names,
-                )...,
+                ) do name
+                    if implicit_micro
+                        (name, name) => similar(Y.c, DiagonalRow)
+                    else
+                        (name, name) => FT(-1) * I
+                    end
+                end...,
                 (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) =>
                     !isnothing(atmos.rayleigh_sponge) ?
                     similar(Y.f, DiagonalRow_C3xACT3) : FT(-1) * I,
@@ -471,15 +482,8 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
             ) do (q_name, ᶜ∂S∂q)
                 MatrixFields.has_field(Y, q_name) || return
                 ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
-                if use_derivative(sgs_advection_flag)
-                    @. ∂ᶜq_err_∂ᶜq +=
-                        dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
-                else
-                    @. ∂ᶜq_err_∂ᶜq =
-                        DiagonalMatrixRow(
-                            dtγ * ᶜ∂S∂q - one(eltype(ᶜ∂S∂q)),
-                        )
-                end
+                @. ∂ᶜq_err_∂ᶜq +=
+                    dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
             end
         end
 
@@ -496,29 +500,16 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
                     FT_micro = eltype(ᶜSq)
                     ε = CA.ϵ_numerics(FT_micro)
                     q_field = Y.c.sgsʲs.:(1).q_tot
-                    if use_derivative(sgs_advection_flag)
-                        @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(
-                            ifelse(abs(q_field) > ε, ᶜSq / abs(q_field), zero(FT_micro)),
-                        )
-                    else
-                        @. ∂ᶜq_err_∂ᶜq = DiagonalMatrixRow(
-                            dtγ * ifelse(abs(q_field) > ε, ᶜSq / abs(q_field), zero(FT_micro)) -
-                            one(FT_micro),
-                        )
-                    end
+                    @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(
+                        ifelse(abs(q_field) > ε, ᶜSq / abs(q_field), zero(FT_micro)),
+                    )
                 end
 
                 ρa_name = @name(c.sgsʲs.:(1).ρa)
                 if MatrixFields.has_field(Y, ρa_name)
                     ∂ᶜρa_err_∂ᶜρa = matrix[ρa_name, ρa_name]
-                    if use_derivative(sgs_advection_flag)
-                        @. ∂ᶜρa_err_∂ᶜρa +=
-                            dtγ * DiagonalMatrixRow(ᶜSq)
-                    else
-                        @. ∂ᶜρa_err_∂ᶜρa = DiagonalMatrixRow(
-                            dtγ * ᶜSq - one(eltype(ᶜSq)),
-                        )
-                    end
+                    @. ∂ᶜρa_err_∂ᶜρa +=
+                        dtγ * DiagonalMatrixRow(ᶜSq)
                 end
             end
         end
