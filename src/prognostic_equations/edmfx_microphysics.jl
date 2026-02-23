@@ -37,7 +37,10 @@ function edmfx_microphysics_tendency!(
     p,
     t,
     turbconv_model::PrognosticEDMFX,
-    microphysics_model::Microphysics0Moment,
+    microphysics_model::Union{
+        Microphysics0Moment,
+        QuadratureMicrophysics{Microphysics0Moment},
+    },
 )
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜSqₜᵐʲs, ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed

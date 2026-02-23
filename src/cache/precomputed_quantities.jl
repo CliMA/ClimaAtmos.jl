@@ -87,11 +87,54 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜq_ice_snoʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
+    # Microphysics tendency fields: needed when microphysics is implicit so
+    # that set_microphysics_tendency_cache! can write dual-number results
+    # during autodiff Jacobian evaluation.
+    implicit_mp_quantities =
+        if atmos.microphysics_tendency_timestepping == Implicit()
+            sfc_level = Fields.level(Y.f, half)
+            base_mp = if microphysics_model isa
+                         Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
+                (;
+                    ᶜS_ρq_tot = similar(Y.c, FT),
+                    ᶜS_ρe_tot = similar(Y.c, FT),
+                    ᶜmp_tendency = similar(Y.c,
+                        @NamedTuple{dq_tot_dt::FT, e_int_precip::FT}),
+                    surface_rain_flux = similar(sfc_level, FT),
+                    surface_snow_flux = similar(sfc_level, FT),
+                )
+            elseif microphysics_model isa
+                   Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
+                (;
+                    ᶜS_ρq_tot = similar(Y.c, FT),
+                    ᶜS_ρe_tot = similar(Y.c, FT),
+                    ᶜmp_tendency = similar(Y.c,
+                        @NamedTuple{dq_lcl_dt::FT, dq_icl_dt::FT, dq_rai_dt::FT, dq_sno_dt::FT}),
+                    surface_rain_flux = similar(sfc_level, FT),
+                    surface_snow_flux = similar(sfc_level, FT),
+                )
+            else
+                (;)
+            end
+            edmf_mp = if turbconv_model isa PrognosticEDMFX &&
+                         !(microphysics_model isa NoPrecipitation)
+                (;
+                    ᶜSqₜᵐʲs = similar(Y.c, NTuple{n, FT}),
+                    ᶜSqₜᵐ⁰ = similar(Y.c, FT),
+                )
+            else
+                (;)
+            end
+            (; base_mp..., edmf_mp...)
+        else
+            (;)
+        end
     return (;
         gs_quantities...,
         moist_gs_quantities...,
         sgs_quantities...,
         prognostic_sgs_quantities...,
+        implicit_mp_quantities...,
     )
 end
 
@@ -556,6 +599,13 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
             )
             @. ᶜq_liq_rai = ᶜsa_result.q_liq
             @. ᶜq_ice_sno = ᶜsa_result.q_ice
+            # Update T to be thermodynamically consistent with the
+            # SGS-averaged condensate.  More condensate than the grid-mean
+            # saturation adjustment implies more latent heat release, so T
+            # must increase to conserve energy.
+            @. ᶜT = TD.air_temperature(
+                thermo_params, ᶜe_int, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno,
+            )
         end
     else  # DryModel or NonEquilMoistModel
         # For DryModel: q values are set to zero
@@ -592,6 +642,14 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     # stage.  This ensures the atmospheric water removal (in T_imp) and the
     # surface deposition use the same ᶜS_ρq_tot, preserving conservation.
     if p.atmos.microphysics_tendency_timestepping == Implicit()
+        # For PrognosticEDMFX, recompute per-subdomain precipitation
+        # tendencies (ᶜSqₜᵐ⁰, ᶜSqₜᵐʲs) from the current Y so they are
+        # consistent with the area fractions used in set_microphysics_tendency_cache!.
+        if turbconv_model isa PrognosticEDMFX
+            set_prognostic_edmf_precomputed_quantities_precipitation!(
+                Y, p, microphysics_model,
+            )
+        end
         set_microphysics_tendency_cache!(
             Y, p, microphysics_model, turbconv_model,
         )
