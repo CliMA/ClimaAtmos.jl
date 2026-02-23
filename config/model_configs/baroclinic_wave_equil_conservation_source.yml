@@ -8,6 +8,10 @@ precip_model: "0M"
 vert_diff: true
 dt_save_state_to_disk: "5days"
 check_conservation: true
+# Implicit 0M + SGS quadrature produces nonlinear precipitation
+# tendencies that require multiple Newton iterations to converge.
+# Conservation test may fail with only one Newton iteration.
+max_newton_iters_ode: 3
 diagnostics:
   - short_name: [massa, energya, watera, energyo, watero]
     period: 1days
