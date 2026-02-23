@@ -241,8 +241,8 @@ function dss_hyperdiffusion_tendency_pairs(p)
             p.hyperdiff.ᶜ∇²q_iceʲs => buffer.ᶜ∇²q_iceʲs,
             p.hyperdiff.ᶜ∇²q_raiʲs => buffer.ᶜ∇²q_raiʲs,
             p.hyperdiff.ᶜ∇²q_snoʲs => buffer.ᶜ∇²q_snoʲs,
-            p.hyperdiff.ᶜ∇²q_liqʲs => buffer.ᶜ∇²q_liqʲs,
-            p.hyperdiff.ᶜ∇²q_raiʲs => buffer.ᶜ∇²q_raiʲs,
+            p.hyperdiff.ᶜ∇²n_liqʲs => buffer.ᶜ∇²n_liqʲs,
+            p.hyperdiff.ᶜ∇²n_raiʲs => buffer.ᶜ∇²n_raiʲs,
         ) : ()
     tracer_pairs = (core_tracer_pairs..., tc_tracer_pairs..., tc_moisture_pairs...)
     return (dynamics_pairs..., tracer_pairs...)
