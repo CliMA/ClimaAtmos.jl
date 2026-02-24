@@ -25,18 +25,14 @@ import ..Parameters as CAP
 
 import ..unit_basis_vector_data
 
-# moisture_model
-import ..DryModel
-import ..EquilMoistModel
-import ..NonEquilMoistModel
-
 # microphysics_model
-import ..NoPrecipitation
-import ..Microphysics0Moment
-import ..QuadratureMicrophysics
-import ..Microphysics1Moment
-import ..Microphysics2Moment
-import ..Microphysics2MomentP3
+import ..DryModel
+import ..EquilibriumMicrophysics0M
+import ..NonEquilibriumMicrophysics1M
+import ..NonEquilibriumMicrophysics2M
+import ..NonEquilibriumMicrophysics2MP3
+import ..NonEquilibriumMicrophysics
+import ..MoistMicrophysics
 
 # radiation
 import ClimaAtmos.RRTMGPInterface as RRTMGPI

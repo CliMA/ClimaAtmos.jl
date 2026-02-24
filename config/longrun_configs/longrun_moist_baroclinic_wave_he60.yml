@@ -2,8 +2,7 @@ h_elem: 60
 dt: "30secs"
 t_end: "30days"
 initial_condition: "MoistBaroclinicWave"
-moist: "equil"
-precip_model: "0M"
+microphysics_model: "0M"
 dt_save_state_to_disk: "10days"
 disable_surface_flux_tendency: true
 netcdf_interpolation_num_points: [360, 180, 2]

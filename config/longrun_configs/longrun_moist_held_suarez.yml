@@ -1,8 +1,7 @@
 implicit_diffusion: false
 approximate_linear_solve_iters: 1
 t_end: "360days"
-moist: "equil"
-precip_model: "0M"
+microphysics_model: "0M"
 vert_diff: true
 forcing: "held_suarez"
 dt_save_state_to_disk: "10days"

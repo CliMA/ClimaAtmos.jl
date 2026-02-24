@@ -565,18 +565,6 @@ steps:
           --job_id baroclinic_wave_conservation
         artifact_paths: "baroclinic_wave_conservation/output_active/*"
 
-      - label: ":computer: baroclinic wave moist check conservation"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation.yml
-          --job_id baroclinic_wave_equil_conservation
-        artifact_paths: "baroclinic_wave_equil_conservation/output_active/*"
-
-      - label: ":computer: baroclinic wave moist check conservation float64"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_ft64.yml
-          --job_id baroclinic_wave_equil_conservation_ft64
-        artifact_paths: "baroclinic_wave_equil_conservation_ft64/output_active/*"
-
       - label: ":computer: baroclinic wave moist check conservation with sources"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_source.yml
@@ -705,7 +693,7 @@ steps:
         artifact_paths: "edonly_edmfx_aquaplanet/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":genie: Diagnostic EDMF aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -730,7 +718,7 @@ steps:
         artifact_paths: "rcemipii_sphere_diagnostic_edmfx/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":genie: Prognostic EDMF aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -935,7 +923,7 @@ steps:
 
           julia --color=yes --project=.buildkite post_processing/remap/remap_pipeline.jl
           --data_dir prep_remap/output_active --out_dir remap_pipeline_output
-        artifact_paths: "remap_pipeline_output/*"    
+        artifact_paths: "remap_pipeline_output/*"
 
   - group: "Autodiff"
     steps:

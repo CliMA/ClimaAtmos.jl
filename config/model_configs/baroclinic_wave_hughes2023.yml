@@ -2,7 +2,7 @@ dt_save_state_to_disk: "2days"
 initial_condition: "MoistBaroclinicWave"
 topography: "Hughes2023"
 topo_smoothing: false
-moist: equil
+microphysics_model: "0M"
 disable_surface_flux_tendency: true
 dt: "200secs"
 t_end: "4days"

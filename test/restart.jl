@@ -185,15 +185,13 @@ if MANYTESTS
 
     for configuration in configurations
         if configuration == "sphere"
-            moistures = ["nonequil"]
-            precips = ["1M"]
+            microphysics_models = ["1M"]
             topography = "Earth"
             turbconv_models = [nothing, "diagnostic_edmfx"]
             # turbconv_models = ["prognostic_edmfx"]
             radiations = [nothing, "allsky"]
         else
-            moistures = ["equil"]
-            precips = ["0M"]
+            microphysics_models = ["0M"]
             topography = "NoWarp"
             turbconv_models = ["diagnostic_edmfx"]
             radiations = ["gray", "allskywithclear"]
@@ -201,59 +199,56 @@ if MANYTESTS
 
         for turbconv_mode in turbconv_models
             for radiation in radiations
-                for moisture in moistures
-                    for precip in precips
-                        if !isnothing(turbconv_mode)
-                            # EDMF only supports equilibrium moisture
-                            if occursin("edmfx", turbconv_mode)
-                                moisture == "equil" || continue
-                            end
+                for mp_model in microphysics_models
+                    if !isnothing(turbconv_mode)
+                        # EDMF only supports equilibrium moisture
+                        if occursin("edmfx", turbconv_mode)
+                            mp_model == "0M" || continue
                         end
-
-                        # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
-                        # hard-code this to be always false for those versions
-                        bubble = pkgversion(ClimaCore) > v"0.14.5"
-
-                        # Make sure that all MPI processes agree on the output_loc
-                        output_loc =
-                            ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) :
-                            ""
-                        output_loc = ClimaComms.bcast(comms_ctx, output_loc)
-                        # Sometimes the shared filesystem doesn't work properly
-                        # and the folder is not synced across MPI processes.
-                        # Let's add an additional check here.
-                        maybe_wait_filesystem(comms_ctx, output_loc)
-
-                        job_id = "$(configuration)_$(moisture)_$(precip)_$(topography)_$(radiation)_$(turbconv_mode)"
-                        test_dict = Dict(
-                            "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
-                            "reproducible_restart" => true,
-                            "check_nan_every" => 3,
-                            "log_progress" => false,
-                            "moist" => moisture,
-                            "precip_model" => precip,
-                            "config" => configuration,
-                            "topography" => topography,
-                            "turbconv" => turbconv_mode,
-                            "dt" => "1secs",
-                            "bubble" => bubble,
-                            "viscous_sponge" => true,
-                            "rayleigh_sponge" => true,
-                            "insolation" => "timevarying",
-                            "rad" => radiation,
-                            "dt_rad" => "1secs",
-                            "surface_setup" => "DefaultMoninObukhov",
-                            "radiation_reset_rng_seed" => true,
-                            "t_end" => "3secs",
-                            "dt_save_state_to_disk" => "1secs",
-                            "enable_diagnostics" => false,
-                            "output_dir" => joinpath(output_loc, job_id),
-                        )
-                        push!(
-                            TESTING,
-                            (; test_dict, job_id, more_ignore = Symbol[]),
-                        )
                     end
+
+                    # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
+                    # hard-code this to be always false for those versions
+                    bubble = pkgversion(ClimaCore) > v"0.14.5"
+
+                    # Make sure that all MPI processes agree on the output_loc
+                    output_loc =
+                        ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) :
+                        ""
+                    output_loc = ClimaComms.bcast(comms_ctx, output_loc)
+                    # Sometimes the shared filesystem doesn't work properly
+                    # and the folder is not synced across MPI processes.
+                    # Let's add an additional check here.
+                    maybe_wait_filesystem(comms_ctx, output_loc)
+
+                    job_id = "$(configuration)_$(mp_model)_$(topography)_$(radiation)_$(turbconv_mode)"
+                    test_dict = Dict(
+                        "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
+                        "reproducible_restart" => true,
+                        "check_nan_every" => 3,
+                        "log_progress" => false,
+                        "microphysics_model" => mp_model,
+                        "config" => configuration,
+                        "topography" => topography,
+                        "turbconv" => turbconv_mode,
+                        "dt" => "1secs",
+                        "bubble" => bubble,
+                        "viscous_sponge" => true,
+                        "rayleigh_sponge" => true,
+                        "insolation" => "timevarying",
+                        "rad" => radiation,
+                        "dt_rad" => "1secs",
+                        "surface_setup" => "DefaultMoninObukhov",
+                        "radiation_reset_rng_seed" => true,
+                        "t_end" => "3secs",
+                        "dt_save_state_to_disk" => "1secs",
+                        "enable_diagnostics" => false,
+                        "output_dir" => joinpath(output_loc, job_id),
+                    )
+                    push!(
+                        TESTING,
+                        (; test_dict, job_id, more_ignore = Symbol[]),
+                    )
                 end
             end
         end

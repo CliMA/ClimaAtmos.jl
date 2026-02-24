@@ -149,14 +149,11 @@ end
 
 const MICROPHYSICS_MODELS =
     Union{
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
-        Microphysics2MomentP3,
-        QuadratureMicrophysics{Microphysics2MomentP3},
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
     }
-const MOISTURE_MODELS = Union{EquilMoistModel, NonEquilMoistModel}
+const MOISTURE_MODELS = MoistMicrophysics
 
 const TRACER_DIAGNOSTICS = [
     # (short_name, long_name, ρq_field, model_types, model_accessor_field)
@@ -164,7 +161,7 @@ const TRACER_DIAGNOSTICS = [
     ("cli", "Cloud Ice", :ρq_ice, MICROPHYSICS_MODELS, :microphysics_model),
     ("husra", "Rain Specific Humidity", :ρq_rai, MICROPHYSICS_MODELS, :microphysics_model),
     ("hussn", "Snow Specific Humidity", :ρq_sno, MICROPHYSICS_MODELS, :microphysics_model),
-    ("hus", "Specific Humidity", :ρq_tot, MOISTURE_MODELS, :moisture_model),
+    ("hus", "Specific Humidity", :ρq_tot, MOISTURE_MODELS, :microphysics_model),
 ]
 
 # Diagnostic types: (suffix, compute_func, long_name_template, units, comments_template)

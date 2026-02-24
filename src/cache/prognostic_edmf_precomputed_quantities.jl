@@ -48,12 +48,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
 
-    if p.atmos.moisture_model isa NonEquilMoistModel && (
-        p.atmos.microphysics_model isa
-        Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
-        p.atmos.microphysics_model isa
-        Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-    )
+    if p.atmos.microphysics_model isa
+       Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
         ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
         ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
         ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
@@ -73,7 +69,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
             ᶜq_ice_sno⁰,
         )
     else
-        # EquilMoistModel: use saturation adjustment to get T and phase partition
+        # EquilibriumMicrophysics0M: use saturation adjustment to get T and phase partition
         @. ᶜq_tot_safe⁰ = max(0, ᶜq_tot⁰)
         (; ᶜsa_result) = p.precomputed
         h⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)
@@ -97,7 +93,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     ᶠuₕ³,
     t,
 )
-    (; moisture_model, turbconv_model, microphysics_model) = p.atmos
+    (; microphysics_model, turbconv_model) = p.atmos
 
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -134,12 +130,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
 
         @. ᶜq_tot_safeʲ = max(0, ᶜq_totʲ)
-        if moisture_model isa NonEquilMoistModel && (
-            microphysics_model isa
-            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
-            microphysics_model isa
-            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-        )
+        if microphysics_model isa Union{
+            NonEquilibriumMicrophysics1M,
+            NonEquilibriumMicrophysics2M,
+        }
             ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
             ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
             ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
@@ -158,7 +152,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
                 ᶜq_ice_snoʲ,
             )
         else
-            # EquilMoistModel: use saturation adjustment
+            # EquilibriumMicrophysics0M: use saturation adjustment
             (; ᶜsa_result) = p.precomputed
             @. ᶜsa_result = saturation_adjustment_tuple(
                 thermo_params,
@@ -360,14 +354,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         entr_int_val = Fields.field_values(Fields.level(ᶜentrʲs.:($j), 1))
         detr_int_val = Fields.field_values(Fields.level(ᶜdetrʲs.:($j), 1))
         @. entr_int_val = ifelse(
-            buoyancy_flux_val < 0 || ᶜaʲ_int_val <= 0 ||
+            buoyancy_flux_val < 0 ||
             ᶜaʲ_int_val >= $(FT(turbconv_params.surface_area)),
             entr_int_val,
             detr_int_val +
             ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
         )
         @. detr_int_val = ifelse(
-            buoyancy_flux_val < 0 || ᶜaʲ_int_val <= 0 ||
+            buoyancy_flux_val < 0 ||
             ᶜaʲ_int_val < $(FT(turbconv_params.surface_area)),
             detr_int_val,
             entr_int_val -
@@ -379,6 +373,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         else
             @. detr_int_val = limit_detrainment(detr_int_val, entr_int_val, ᶜaʲ_int_val, dt)
         end
+        # Add boundary kinematic contribution to entrainment to compensate
+        # advective area loss (∂(ρaw)/∂z) in the first cell. Using a one-sided
+        # estimate (zero flux below the surface), we add ᶠw₂ / ᶜdz₁ = 2 ᶜw₁ / ᶜdz₁ 
+        # so that entrainment can effectively relax area toward `surface_area`.
+        ᶜdz = Fields.Δz_field(axes(Y.c))
+        @. p.scratch.ᶜtemp_scalar_4 = 2 * get_physical_w(ᶜuʲs.:($$j), ᶜlg) / ᶜdz
+        w_over_dz_val = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar_4, 1))
+        @. entr_int_val += ifelse(buoyancy_flux_val < 0, 0, w_over_dz_val)
 
         @. ᶠρ_diffʲs.:($$j) = min(0, ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ)) / ᶠinterp(ᶜρʲs.:($$j))
     end
@@ -438,7 +440,7 @@ For EDMF, microphysics tendencies are computed separately for updrafts and the e
 2. Updraft area fraction is usually small (~1-10%), so SGS variance within updrafts has limited
 impact on the grid-mean tendency
 
-**Environment** uses SGS quadrature integration (when `QuadratureMicrophysics` is configured)
+**Environment** uses SGS quadrature integration (when `sgs_quadrature` is configured)
 because the environment dominates the grid-mean variance. The quadrature captures subgrid-scale
 fluctuations in temperature and moisture, which is important for threshold processes like
 condensation/evaporation at cloud edges.
@@ -446,14 +448,14 @@ condensation/evaporation at cloud edges.
 function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::NoPrecipitation,
+    ::DryModel,
 )
     return nothing
 end
 function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
+    ::EquilibriumMicrophysics0M,
 )
 
     (; params, dt) = p
@@ -494,12 +496,7 @@ function set_prognostic_edmf_precomputed_quantities_precipitation!(
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
 
-    # Get SGS quadrature from atmos config (GridMeanSGS if not using QuadratureMicrophysics)
-    SG_quad = if p.atmos.microphysics_model isa QuadratureMicrophysics
-        p.atmos.microphysics_model.quadrature
-    else
-        GridMeanSGS()
-    end
+    SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
 
     # Get T-based variances from cache
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
@@ -522,7 +519,7 @@ end
 function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}},
+    ::NonEquilibriumMicrophysics1M,
 )
 
     (; params, dt) = p
@@ -595,12 +592,7 @@ function set_prognostic_edmf_precomputed_quantities_precipitation!(
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
 
-    # Get SGS quadrature from atmos config (GridMeanSGS if not using QuadratureMicrophysics)
-    SG_quad = if p.atmos.microphysics_model isa QuadratureMicrophysics
-        p.atmos.microphysics_model.quadrature
-    else
-        GridMeanSGS()
-    end
+    SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
 
     # Get T-based variances from cache
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
@@ -645,7 +637,7 @@ end
 function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
-    ::Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}},
+    ::NonEquilibriumMicrophysics2M,
 )
 
     (; params, dt) = p
@@ -803,12 +795,7 @@ function set_prognostic_edmf_precomputed_quantities_precipitation!(
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
 
-    # Get SGS quadrature from atmos config (GridMeanSGS if not using QuadratureMicrophysics)
-    SG_quad = if p.atmos.microphysics_model isa QuadratureMicrophysics
-        p.atmos.microphysics_model.quadrature
-    else
-        GridMeanSGS()
-    end
+    SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
 
     # Integrate microphysics tendencies over SGS fluctuations
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)

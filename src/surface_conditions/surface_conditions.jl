@@ -94,7 +94,7 @@ function set_dummy_surface_conditions!(p)
     @. sfc_conditions.ustar = FT(0.2)
     @. sfc_conditions.obukhov_length = FT(1e-4)
     @. sfc_conditions.buoyancy_flux = FT(0)
-    if !(atmos.moisture_model isa DryModel)
+    if !(atmos.microphysics_model isa DryModel)
         @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
     end
     @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
@@ -157,7 +157,7 @@ function surface_state_to_conditions(
     Δz = z_int - coordinates.z
 
     FT = eltype(thermo_params)
-    (!isnothing(surf_state.q_vap) && atmos.moisture_model isa DryModel) &&
+    (!isnothing(surf_state.q_vap) && atmos.microphysics_model isa DryModel) &&
         error("surface q_vap cannot be specified when using a DryModel")
 
     T_sfc = if isnothing(sfc_temp_var)
@@ -185,7 +185,7 @@ function surface_state_to_conditions(
         q_liq_int,
         q_ice_int,
     )
-    if atmos.moisture_model isa DryModel
+    if atmos.microphysics_model isa DryModel
         q_vap = 0
     else
         # Assume that the surface is water with saturated air directly
@@ -212,7 +212,7 @@ function surface_state_to_conditions(
                 if isnothing(lhf)
                     lhf = FT(0)
                 else
-                    atmos.moisture_model isa DryModel &&
+                    atmos.microphysics_model isa DryModel &&
                         error("lhf cannot be specified when using a DryModel")
                 end
             elseif parameterization.fluxes isa θAndQFluxes
@@ -220,7 +220,7 @@ function surface_state_to_conditions(
                 if isnothing(q_flux)
                     q_flux = FT(0)
                 else
-                    atmos.moisture_model isa DryModel && error(
+                    atmos.microphysics_model isa DryModel && error(
                         "q_flux cannot be specified when using a DryModel",
                     )
                 end
@@ -340,7 +340,7 @@ function tensor_from_components(f₁₃, f₂₃, L, n₃ = surface_normal(L))
 end
 
 """
-    surface_conditions_type(moisture_model, FT)
+    surface_conditions_type(atmos_model, FT)
 
 Gets the return type of `surface_conditions` without evaluating the function.
 """

@@ -9,8 +9,7 @@ dt_cloud_fraction: "1secs"
 t_end: "10secs"
 dt_save_state_to_disk: "1secs"
 log_progress: false
-moist: "equil"
 surface_setup: "DefaultMoninObukhov"
 rad: "allskywithclear"
 vert_diff: true
-precip_model: "0M"
+microphysics_model: "0M"

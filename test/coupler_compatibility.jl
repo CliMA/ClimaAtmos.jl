@@ -34,7 +34,7 @@ const T2 = 290
     config = CA.AtmosConfig(
         Dict(
             "initial_condition" => "DYCOMS_RF02",
-            "moist" => "equil",
+            "microphysics_model" => "0M",
             "config" => "column",
             "output_default_diagnostics" => false,
         );
@@ -103,7 +103,7 @@ end
     config = CA.AtmosConfig(
         Dict(
             "surface_setup" => "PrescribedSurface",
-            "moist" => "equil",
+            "microphysics_model" => "0M",
             "rad" => "clearsky",
             "config" => "column",
             "turbconv" => "diagnostic_edmfx",

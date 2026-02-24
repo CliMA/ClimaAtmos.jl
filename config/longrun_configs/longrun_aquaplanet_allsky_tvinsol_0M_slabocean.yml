@@ -1,7 +1,6 @@
 t_end: "360days"
 dt_save_state_to_disk: "30days"
 check_conservation: true
-moist: "equil"
 prognostic_surface: "SlabOceanSST"
 albedo_model: "RegressionFunctionAlbedo"
 surface_setup: "DefaultMoninObukhov"
@@ -10,5 +9,5 @@ rad: "allskywithclear"
 insolation: "timevarying"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
-precip_model: "0M"
+microphysics_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]

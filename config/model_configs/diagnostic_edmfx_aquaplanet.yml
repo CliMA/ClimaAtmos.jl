@@ -9,8 +9,7 @@ edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-moist: equil
-precip_model: 0M
+microphysics_model: "0M"
 t_end: 3hours
 reproducibility_test: true
 toml: [toml/diagnostic_edmfx_0M.toml]

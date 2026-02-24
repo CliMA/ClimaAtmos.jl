@@ -10,8 +10,7 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 rayleigh_sponge: true
-moist: equil
-precip_model: 0M
+microphysics_model: "0M"
 t_end: 12hours
 dt_save_state_to_disk: 12hours
 toml: [toml/rcemipii_diagnostic_edmfx_0M.toml]

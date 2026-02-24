@@ -7,8 +7,7 @@ external_forcing: "ISDAC"
 rad: "ISDAC"
 config: "box"
 # microphysics
-moist: "nonequil"
-precip_model: "1M"
+microphysics_model: "1M"
 use_sgs_quadrature: false
 # diffusion
 implicit_diffusion: false
