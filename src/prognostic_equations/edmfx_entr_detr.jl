@@ -187,7 +187,7 @@ function entrainment(
         (FT(1) - min(max(ᶜaʲ, 0), FT(1)))^entr_mult_limiter_coeff # Ensure ᶜaʲ is clipped to [0,1] for exponent
 
     entr = area_limiter_factor * inv_timescale_factor * pi_sum + entr_inv_tau
-    return max(entr, 0) # Ensure non-negative entrainment
+    return max(entr, entr_inv_tau) # Ensure non-negative entrainment
 end
 
 function entrainment(
