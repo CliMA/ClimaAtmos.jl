@@ -1,11 +1,11 @@
 # Gravity wave parameterization
 Gravity waves have a great impact on the atmospheric circulation. They are usually generated from topography or convection, propagate upward and alter temperature and winds in the middle atmosphere, and influence tropospheric circulation through downward control. The horizontal wavelength for gravity waves ranges from several kilometers to hundreds of kilometers, which is smaller than typical GCM resolution and needs to be parameterized.
 
-The gravity wave drag on the wind velocities (``\overline{\vec{v}}=(u,v)``) are 
+The gravity wave drag on the wind velocities (``\overline{\vec{v}}=(u,v)``) are
 ```math
-\frac{\partial \overline{\vec{v}}}{ \partial t} = ... - \underbrace{\frac{\partial \overline{\vec{v}'w'}}{\partial z}\Big|_{GW} }_{\vec{X}} 
-``` 
-with $\vec{X} = (X_\lambda, X_\phi)$ representing the sub-grid scale zonal and meridional components of the gravity wave drag and is calculated with the parameterization. 
+\frac{\partial \overline{\vec{v}}}{ \partial t} = ... - \underbrace{\frac{\partial \overline{\vec{v}'w'}}{\partial z}\Big|_{GW} }_{\vec{X}}
+```
+with $\vec{X} = (X_\lambda, X_\phi)$ representing the sub-grid scale zonal and meridional components of the gravity wave drag and is calculated with the parameterization.
 
 ## Non-orographic gravity wave
 The non-orographic gravity wave drag parameterization follows the spectra methods described in [alexander1999](@cite). The following assumptions are made for this parameterization to work:
@@ -21,35 +21,39 @@ B_0(c) = \frac{F_{S0}(c)}{\rho_0} = sgn(c-u_0) \left( Bm\_w \exp\left[ -\left( \
 ```
 where the subscript ``0`` denotes values at the source level. ``c_0`` is the phase speed with the maximum flux magnitude ``Bm``. ``c_w`` is the half-width at half-maximum of the Gaussian.  ``\_w`` and ``\_n`` represent the wide and narrow bands of the spectra.
 
+The reference frame for the spectrum is latitude-dependent: it is ground-relative in the extra-tropics and relative to the source-level zonal wind in the tropics, with smoothing applied at the transition.
+
 ### Upward propagation and wave breaking
 Waves that are reflected will be removed from the spectrum. A wave that breaks at a level above the source will deposit all its momentum flux into that level and be removed from the spectrum.
 
 The reflection frequency is defined as
 ```math
 \omega_r(z) = (\frac{N(z)^2 k^2}{k^2+\alpha^2})^{1/2}
-```	
-where ``N(z)`` is the buoyancy frequency, ``k`` is the horizontal wavenumber that corresponds to a wavelength of 300 km, ``\alpha = 1/H`` where $H$ is the scale height. ``\omega_r(z)`` is used to determine for each monochromatic wave in the spectrum, whether it will be reflected at height ``z``.
+```
+where ``N(z)`` is the buoyancy frequency, ``k`` is the horizontal wavenumber that corresponds to a wavelength of 300 km, and ``\alpha = 1/(2H)`` where $H$ is the scale height. ``\omega_r(z)`` is used to determine for each monochromatic wave in the spectrum, whether it will be reflected at height ``z``.
 
 The instability condition is defined as
 ```math
 Q(z,c) = \frac{\rho_0}{\rho(z)} \frac{2N(z)B_0(c)}{k[c-u(z)]^3}
 ```
-``Q(z,c)`` is used to determine whether the monochromatic wave of phase speed ``c`` gets unstable at height ``z``. 
+``Q(z,c)`` is used to determine whether the monochromatic wave of phase speed ``c`` gets unstable at height ``z``.
 
 * At the source level
-  - if ``|\omega|=k|c-u_0| \geq \omega_r``, this wave would have undergone internal reflection somewhere below and is removed from the spectrum;
-  - if ``Q(z_0, c) \geq 1``, it is also removed because it is not stable at the source level.
+- if ``|\omega|=k|c-u_0| \geq \omega_r``, this wave would have undergone internal reflection somewhere below and is removed from the spectrum;
+- if ``Q(z_0, c) \geq 1``, it is also removed because it is not stable at the source level.
 
 * At the levels above ``(z_n>z_0)``, ``|\omega(z_n)|=k|c-u(z_n)| \geq \omega_r(z_n)`` is removed from the spectrum. In the remaining speed, ``Q(z_n,c) \geq 1`` are breaking between level ``z_{n-1}`` and ``z_n``, and this portion of momentum flux is all deposited between ``z_{n-1}`` and ``z_n``, which yields
-  ```math
-  X(z_{n-1/2}) = \frac{\epsilon \rho_0}{\rho(z_{n-1/2)}}\Sigma_j (B_0)j.
-  ```
-  where ``\epsilon=F_{S0}/\rho_0/\Sigma B_0`` is the wave intermittency. In computing the intermittency, ``F_{S0}`` is the time average total momentum flux and is prescribed as latitude dependent properties. 
-  And we get 
-  ```math
-  X(z_{n-1}) = 0.5*\left[X(z_{n-3/2}) +X(z_{n-1/2}) \right].
-  ```
-By applying the above parameterization on zonal and meridional winds, the forcing for the physical wind velocity is computed. We further transform them onto the Covariant vectors and that will be the tendencied added onto the momentum equation.
+```math
+X(z_{n-1/2}) = \frac{\epsilon \rho_0}{\rho(z_{n-1/2)}}\Sigma_j (B_0)j.
+```
+where ``\epsilon=F_{S0}/\rho_0/\Sigma B_0`` is the wave intermittency. In computing the intermittency, ``F_{S0}`` is the time average total momentum flux and is prescribed as latitude dependent properties.
+
+To ensure momentum conservation, any momentum flux that propagates to the model top without breaking is re-deposited evenly throughout the damping layer (sponge layer).
+
+And we get
+```math
+X(z_{n-1}) = 0.5*\left[X(z_{n-3/2}) +X(z_{n-1/2}) \right].
+```
 
 ## Orographic gravity wave
 The orographic gravity wave drag parameterization follows the methods described in [garner2005](@cite). The momentum drag from sub-grid scale mountains is divided into a non-propagating component and a propagating component. The non-propagating component forces momentum drag within the planetary boundary layer while the propagating component generate a `c=0` gravity wave which propagates upwards and deposit momentum flux to the layers where it breaks.
