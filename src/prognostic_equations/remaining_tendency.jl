@@ -61,7 +61,7 @@ Arguments:
 Returns:
 - `Yₜ`: The populated main tendency state vector.
 """
-NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+@noinline NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     Yₜ .= zero(eltype(Yₜ))
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
@@ -133,7 +133,7 @@ This function relies on numerous specialized sub-functions to calculate each
 distinct tendency component. The order of calls can be important due to
 dependencies or operator splitting assumptions.
 """
-NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
+@noinline NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃

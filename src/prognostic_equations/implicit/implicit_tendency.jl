@@ -5,12 +5,12 @@
 import ClimaCore
 import ClimaCore: Fields, Geometry
 
-NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
+@noinline NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
-    # TODO: Needs to be updated to use the new microphysics 
+    # TODO: Needs to be updated to use the new microphysics
     # tendency function with quadrature if implicit_microphysics is true
 
     if p.atmos.sgs_adv_mode == Implicit()
