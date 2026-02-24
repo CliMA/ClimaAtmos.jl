@@ -45,17 +45,27 @@ function create_plot!(
         generic_axis = fig[p_loc[1], p_loc[2]] = GridLayout() # Generic Axis Layout
         Axis(generic_axis[1, 1]; title, xlabel, ylabel, yscale, yreversed) # Plot specific attributes
         # custom_levels is a workaround for plotting constant fields with CairoMakie
-        custom_levels =
-            minimum(Z) ≈ maximum(Z) ? (minimum(Z):0.1:(minimum(Z) + 0.2)) :
-            levels
+        # If colorrange is specified, use it to create levels, otherwise use provided levels
+        if colorrange !== nothing
+            custom_levels = range(
+                colorrange[1],
+                colorrange[2];
+                length = (levels isa Integer ? levels : 25),
+            )
+        elseif minimum(Z) ≈ maximum(Z)
+            custom_levels = minimum(Z):0.1:(minimum(Z) + 0.2)
+        else
+            custom_levels = levels
+        end
+
         generic_plot = CairoMakie.contourf!(
             X,
             Y,
             Z;
             levels = custom_levels,
-            colormap,
-            extendhigh,
-            extendlow,
+            colormap = colormap,
+            extendhigh = extendhigh,
+            extendlow = extendlow,
         ) # Add plot contents
         Colorbar(generic_axis[1, 2], generic_plot)
     end
