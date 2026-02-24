@@ -599,13 +599,6 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
             )
             @. ᶜq_liq_rai = ᶜsa_result.q_liq
             @. ᶜq_ice_sno = ᶜsa_result.q_ice
-            # Update T to be thermodynamically consistent with the
-            # SGS-averaged condensate.  More condensate than the grid-mean
-            # saturation adjustment implies more latent heat release, so T
-            # must increase to conserve energy.
-            @. ᶜT = TD.air_temperature(
-                thermo_params, ᶜe_int, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno,
-            )
         end
     else  # DryModel or NonEquilMoistModel
         # For DryModel: q values are set to zero
