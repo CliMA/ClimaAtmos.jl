@@ -173,12 +173,12 @@ function entrainment(
 
     entr_param_vec = CAP.entr_param_vec(turbconv_params)
     pi_sum =
-        entr_param_vec[1] * abs(Π₁) +
-        entr_param_vec[2] * abs(Π₂) +
-        entr_param_vec[3] * abs(Π₃) +
-        entr_param_vec[4] * abs(Π₄) +
-        entr_param_vec[5] * abs(Π₅) +
-        entr_param_vec[6]
+        #entr_param_vec[1] * abs(Π₁) +
+        entr_param_vec[1] * abs(Π₂) +
+        entr_param_vec[2] * abs(Π₃) +
+        #entr_param_vec[4] * abs(Π₄) +
+        #entr_param_vec[5] * abs(Π₅) +
+        entr_param_vec[3]
 
     inv_timescale_factor = abs(ᶜwʲ - ᶜw⁰) / elev_above_sfc
 
@@ -187,7 +187,7 @@ function entrainment(
         (FT(1) - min(max(ᶜaʲ, 0), FT(1)))^entr_mult_limiter_coeff # Ensure ᶜaʲ is clipped to [0,1] for exponent
 
     entr = area_limiter_factor * inv_timescale_factor * pi_sum + entr_inv_tau
-    return max(entr, 0) # Ensure non-negative entrainment
+    return max(entr, entr_inv_tau) # Ensure non-negative entrainment
 end
 
 function entrainment(
