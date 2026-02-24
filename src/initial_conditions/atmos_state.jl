@@ -42,7 +42,6 @@ function atmos_center_variables(ls, atmos_model)
     sgs_vars = turbconv_center_variables(
         ls,
         atmos_model.turbconv_model,
-        atmos_model.moisture_model,
         atmos_model.microphysics_model,
         gs_vars,
     )
@@ -63,7 +62,7 @@ grid_scale_center_variables(ls, atmos_model) = (;
     ρ = ls.ρ,
     uₕ = C12(ls.velocity, ls.geometry),
     energy_variables(ls)...,
-    moisture_variables(ls, atmos_model.moisture_model)...,
+    moisture_variables(ls, atmos_model.microphysics_model)...,
     precip_variables(ls, atmos_model.microphysics_model)...,
 )
 
@@ -106,40 +105,33 @@ function moisture_variables(ls, ::DryModel)
     @assert ls.q_tot == 0 && ls.q_liq == 0 && ls.q_ice == 0
     return (;)
 end
-function moisture_variables(ls, ::EquilMoistModel)
+function moisture_variables(ls, ::EquilibriumMicrophysics0M)
     @assert ls.q_liq == 0 && ls.q_ice == 0 # Equilibrium model: condensate is diagnosed
     return (; ρq_tot = ls.ρ * ls.q_tot)
 end
-moisture_variables(ls, ::NonEquilMoistModel) = (;
+moisture_variables(ls, ::NonEquilibriumMicrophysics) = (;
     ρq_tot = ls.ρ * ls.q_tot,
     ρq_liq = ls.ρ * ls.q_liq,
     ρq_ice = ls.ρ * ls.q_ice,
 )
-
-precip_variables(ls, ::NoPrecipitation) = (;)
-precip_variables(ls, ::Microphysics0Moment) = (;)
-precip_variables(ls, ::Microphysics1Moment) = (;
+precip_variables(ls, ::DryModel) = (;)
+precip_variables(ls, ::EquilibriumMicrophysics0M) = (;)
+precip_variables(ls, ::NonEquilibriumMicrophysics1M) = (;
     ρq_rai = ls.ρ * ls.precip_state.q_rai,
     ρq_sno = ls.ρ * ls.precip_state.q_sno,
 )
-precip_variables(ls, ::Microphysics2Moment) = (;
+precip_variables(ls, ::NonEquilibriumMicrophysics2M) = (;
     ρn_liq = ls.ρ * ls.precip_state.n_liq,
     ρn_rai = ls.ρ * ls.precip_state.n_rai,
     ρq_rai = ls.ρ * ls.precip_state.q_rai,
     ρq_sno = ls.ρ * ls.precip_state.q_sno,
 )
-# QuadratureMicrophysics wraps a base model — delegate to its dispatch
-precip_variables(ls, qm::QuadratureMicrophysics) =
-    precip_variables(ls, qm.base_model)
-
-function precip_variables(ls, ::Microphysics2MomentP3)
+function precip_variables(ls, ::NonEquilibriumMicrophysics2MP3)
     (; ρ) = ls
     (; n_liq, n_rai, q_rai) = ls.precip_state.warm
     (; n_ice, q_ice, q_rim, b_rim) = ls.precip_state.cold
-    # warm state
     ls_warm = (; ρ, precip_state = ls.precip_state.warm)
-    warm_state = precip_variables(ls_warm, Microphysics2Moment())
-    # cold state
+    warm_state = precip_variables(ls_warm, NonEquilibriumMicrophysics2M())
     cold_state = (;
         ρq_ice = ρ * q_ice, ρn_ice = ρ * n_ice,
         ρq_rim = ρ * q_rim, ρb_rim = ρ * b_rim,
@@ -150,12 +142,11 @@ end
 # We can use paper-based cases for LES type configurations (no TKE)
 # or SGS type configurations (initial TKE needed), so we do not need to assert
 # that there is no TKE when there is no turbconv_model.
-turbconv_center_variables(ls, ::Nothing, _, _, gs_vars) = (;)
+turbconv_center_variables(ls, ::Nothing, _, gs_vars) = (;)
 
 function turbconv_center_variables(
     ls,
     turbconv_model::PrognosticEDMFX,
-    moisture_model,
     microphysics_model,
     gs_vars,
 )
@@ -172,8 +163,7 @@ end
 function turbconv_center_variables(
     ls,
     turbconv_model::PrognosticEDMFX,
-    moisture_model::NonEquilMoistModel,
-    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
     gs_vars,
 )
     # TODO - Instead of dispatching, should we unify this with the above function?
@@ -188,7 +178,7 @@ function turbconv_center_variables(
     q_sno = ls.precip_state.q_sno
     n_liq = ls.precip_state.n_liq
     n_rai = ls.precip_state.n_rai
-    if microphysics_model isa Microphysics1Moment
+    if microphysics_model isa NonEquilibriumMicrophysics1M
         sgsʲs = ntuple(
             _ -> (;
                 ρa = ρa,
@@ -201,7 +191,7 @@ function turbconv_center_variables(
             ),
             Val(n),
         )
-    elseif microphysics_model isa Microphysics2Moment
+    elseif microphysics_model isa NonEquilibriumMicrophysics2M
         sgsʲs = ntuple(
             _ -> (;
                 ρa = ρa,
@@ -222,24 +212,7 @@ end
 
 function turbconv_center_variables(
     ls,
-    turbconv_model::PrognosticEDMFX,
-    moisture_model::NonEquilMoistModel,
-    qm::QuadratureMicrophysics,
-    gs_vars,
-)
-    return turbconv_center_variables(
-        ls,
-        turbconv_model,
-        moisture_model,
-        qm.base_model,
-        gs_vars,
-    )
-end
-
-function turbconv_center_variables(
-    ls,
     turbconv_model::Union{EDOnlyEDMFX, DiagnosticEDMFX},
-    _,
     _,
     gs_vars,
 )

@@ -11,8 +11,7 @@ edmfx_sgs_diffusive_flux: true
 edmfx_sgsflux_upwinding: "vanleer_limiter"
 edmfx_tracer_upwinding: "vanleer_limiter"
 initial_condition: "AMIPFromERA5"
-moist: equil
-precip_model: 0M
+microphysics_model: "0M"
 t_end: 12hours
 toml: [toml/diagnostic_edmfx_0M.toml]
 use_itime: true

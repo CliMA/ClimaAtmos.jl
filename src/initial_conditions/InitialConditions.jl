@@ -1,15 +1,14 @@
 module InitialConditions
 
 import ..AtmosModel
+import ..AbstractMicrophysicsModel
 import ..DryModel
-import ..EquilMoistModel
-import ..NonEquilMoistModel
-import ..NoPrecipitation
-import ..Microphysics0Moment
-import ..Microphysics1Moment
-import ..Microphysics2Moment
-import ..Microphysics2MomentP3
-import ..QuadratureMicrophysics
+import ..EquilibriumMicrophysics0M
+import ..NonEquilibriumMicrophysics1M
+import ..NonEquilibriumMicrophysics2M
+import ..NonEquilibriumMicrophysics2MP3
+import ..NonEquilibriumMicrophysics
+import ..MoistMicrophysics
 import ..PrescribedSST
 import ..SlabOceanSST
 import ..ᶜinterp

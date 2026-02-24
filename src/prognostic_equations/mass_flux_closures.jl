@@ -179,12 +179,8 @@ function edmfx_vertical_diffusion_tendency!(
                 ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
         end
 
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa
-            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
-            p.atmos.microphysics_model isa
-            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-        )
+        if p.atmos.microphysics_model isa
+           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             α_precip = CAP.α_vert_diff_tracer(params)
             ᶜρʲ = ᶜρʲs.:(1)
             ᶜdivᵥ_q = Operators.DivergenceF2C(

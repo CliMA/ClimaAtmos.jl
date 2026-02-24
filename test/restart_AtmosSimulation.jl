@@ -45,8 +45,7 @@ function amip_target_diagedmf(context, output_dir)
         "SO4",
         "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05",
     )
-    microphysics_model = CA.Microphysics0Moment()
-    moisture_model = CA.EquilMoistModel()
+    microphysics_model = CA.EquilibriumMicrophysics0M()
 
     # Radiation mode
     idealized_h2o = false
@@ -89,7 +88,6 @@ function amip_target_diagedmf(context, output_dir)
     dz_bottom = 30.0
 
     model = CA.AtmosModel(;
-        moisture_model,
         microphysics_model,
         turbconv_model,
         edmfx_model,
@@ -326,14 +324,12 @@ if MANYTESTS
             nothing
         end
         if mesh isa Meshes.EquiangularCubedSphere
-            moisture_models = (CA.NonEquilMoistModel(),)
-            microphys_models = (CA.Microphysics1Moment(),)
+            microphys_models = (CA.NonEquilibriumMicrophysics1M(),)
             topography_type = CA.EarthTopography()
             turbconv_models = (nothing, diagnostic_edmfx)
             radiation_modes = (nothing, allsky_radiation)
         else
-            moisture_models = (CA.EquilMoistModel(),)
-            microphys_models = (CA.Microphysics0Moment(),)
+            microphys_models = (CA.EquilibriumMicrophysics0M(),)
             topography_type = CA.NoTopography()
             turbconv_models = (diagnostic_edmfx,)
             gray_radiation = RRTMGPI.GrayRadiation(;
@@ -345,74 +341,70 @@ if MANYTESTS
 
         for turbconv_model in turbconv_models
             for radiation_mode in radiation_modes
-                for moisture_model in moisture_models
-                    for microphysics_model in microphys_models
-                        # EDMF only supports equilibrium moisture
-                        if turbconv_model isa CA.DiagnosticEDMFX &&
-                           moisture_model isa CA.NonEquilMoistModel
-                            continue
-                        end
-
-                        edmfx_model = get_edmfx_model(turbconv_model)
-                        model = CA.AtmosModel(;
-                            radiation_mode,
-                            moisture_model,
-                            microphysics_model,
-                            turbconv_model,
-                            edmfx_model,
-                            insolation = CA.IdealizedInsolation(),
-                            reproducible_restart = CA.ReproducibleRestart(),
-                            test_dycore_consistency = CA.TestDycoreConsistency())
-
-                        # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
-                        # hard-code this to be always false for those versions
-                        bubble = pkgversion(ClimaCore) > v"0.14.5"
-
-                        # Make sure that all MPI processes agree on the output_loc
-                        output_loc =
-                            ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) :
-                            ""
-                        output_loc = ClimaComms.bcast(comms_ctx, output_loc)
-                        # Sometimes the shared filesystem doesn't work properly
-                        # and the folder is not synced across MPI processes.
-                        # Let's add an additional check here.
-                        maybe_wait_filesystem(comms_ctx, output_loc)
-
-                        # Create job_id string from configuration
-                        config_name =
-                            mesh isa Meshes.EquiangularCubedSphere ? "sphere" :
-                            mesh isa Meshes.RectilinearMesh ? "box" : "column"
-                        moisture_name =
-                            moisture_model isa CA.NonEquilMoistModel ? "nonequil" : "equil"
-                        precip_name =
-                            microphysics_model isa CA.Microphysics1Moment ? "1M" : "0M"
-                        topo_name = string(nameof(typeof(topography_type)))
-                        rad_name =
-                            isnothing(radiation_mode) ? "none" :
-                            radiation_mode isa RRTMGPI.GrayRadiation ? "gray" : "allsky"
-                        turbconv_name =
-                            isnothing(turbconv_model) ? "none" : "diagnostic_edmfx"
-                        job_id = "$(config_name)_$(moisture_name)_$(precip_name)_$(topo_name)_$(rad_name)_$(turbconv_name)"
-                        callback_kwargs = (;
-                            dt_rad = "1secs",
-                            dt_cloud_fraction = "1secs",
-                        )
-                        args = (;
-                            model,
-                            grid,
-                            job_id,
-                            callback_kwargs,
-                            default_diagnostics = false,
-                            dt = 1secs,
-                            t_end = 3secs,
-                            checkpoint_frequency = 1secs,
-                        )
-                        simulation = CA.AtmosSimulation{FT}(; args..., context = comms_ctx)
-                        push!(
-                            TESTING,
-                            (; simulation, args, more_ignore = Symbol[]),
-                        )
+                for microphysics_model in microphys_models
+                    # EDMF only supports equilibrium moisture
+                    if turbconv_model isa CA.DiagnosticEDMFX &&
+                       microphysics_model isa CA.NonEquilibriumMicrophysics
+                        continue
                     end
+
+                    edmfx_model = get_edmfx_model(turbconv_model)
+                    model = CA.AtmosModel(;
+                        radiation_mode,
+                        microphysics_model,
+                        turbconv_model,
+                        edmfx_model,
+                        insolation = CA.IdealizedInsolation(),
+                        reproducible_restart = CA.ReproducibleRestart(),
+                        test_dycore_consistency = CA.TestDycoreConsistency())
+
+                    # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
+                    # hard-code this to be always false for those versions
+                    bubble = pkgversion(ClimaCore) > v"0.14.5"
+
+                    # Make sure that all MPI processes agree on the output_loc
+                    output_loc =
+                        ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) :
+                        ""
+                    output_loc = ClimaComms.bcast(comms_ctx, output_loc)
+                    # Sometimes the shared filesystem doesn't work properly
+                    # and the folder is not synced across MPI processes.
+                    # Let's add an additional check here.
+                    maybe_wait_filesystem(comms_ctx, output_loc)
+
+                    # Create job_id string from configuration
+                    config_name =
+                        mesh isa Meshes.EquiangularCubedSphere ? "sphere" :
+                        mesh isa Meshes.RectilinearMesh ? "box" : "column"
+                    microphysics_name =
+                        microphysics_model isa CA.NonEquilibriumMicrophysics1M ?
+                        "nonequil_1M" : "equil_0M"
+                    topo_name = string(nameof(typeof(topography_type)))
+                    rad_name =
+                        isnothing(radiation_mode) ? "none" :
+                        radiation_mode isa RRTMGPI.GrayRadiation ? "gray" : "allsky"
+                    turbconv_name =
+                        isnothing(turbconv_model) ? "none" : "diagnostic_edmfx"
+                    job_id = "$(config_name)_$(microphysics_name)_$(topo_name)_$(rad_name)_$(turbconv_name)"
+                    callback_kwargs = (;
+                        dt_rad = "1secs",
+                        dt_cloud_fraction = "1secs",
+                    )
+                    args = (;
+                        model,
+                        grid,
+                        job_id,
+                        callback_kwargs,
+                        default_diagnostics = false,
+                        dt = 1secs,
+                        t_end = 3secs,
+                        checkpoint_frequency = 1secs,
+                    )
+                    simulation = CA.AtmosSimulation{FT}(; args..., context = comms_ctx)
+                    push!(
+                        TESTING,
+                        (; simulation, args, more_ignore = Symbol[]),
+                    )
                 end
             end
         end

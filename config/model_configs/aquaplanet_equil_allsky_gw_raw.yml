@@ -11,9 +11,8 @@ t_end: "15hours"
 non_orographic_gravity_wave: true
 vert_diff: true
 insolation: "timevarying"
-precip_model: "0M"
+microphysics_model: "0M"
 cloud_model: "grid_scale"
-moist: "equil"
 albedo_model: "RegressionFunctionAlbedo"
 reproducibility_test: true
 aerosol_radiation: true

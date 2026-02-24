@@ -87,7 +87,7 @@ function edmfx_sgs_mass_flux_tendency!(
         )
         @. Yₜ.c.ρe_tot += vtt
 
-        if !(p.atmos.moisture_model isa DryModel)
+        if !(p.atmos.microphysics_model isa DryModel)
             # Specific humidity fluxes: First sum up the draft fluxes
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
@@ -119,12 +119,8 @@ function edmfx_sgs_mass_flux_tendency!(
         end
 
         # Microphysics tracers fluxes
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa
-            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
-            p.atmos.microphysics_model isa
-            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-        )
+        if p.atmos.microphysics_model isa
+           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             microphysics_tracers = (
                 (@name(c.ρq_liq), @name(c.sgsʲs.:(1).q_liq), @name(q_liq)),
                 (@name(c.ρq_ice), @name(c.sgsʲs.:(1).q_ice), @name(q_ice)),
@@ -224,7 +220,7 @@ function edmfx_sgs_mass_flux_tendency!(
         end
         # TODO: add environment flux?
 
-        if !(p.atmos.moisture_model isa DryModel)
+        if !(p.atmos.microphysics_model isa DryModel)
             # Specific humidity fluxes
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
@@ -254,12 +250,8 @@ function edmfx_sgs_mass_flux_tendency!(
         end
 
         # Microphysics tracers fluxes
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa
-            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
-            p.atmos.microphysics_model isa
-            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-        )
+        if p.atmos.microphysics_model isa
+           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             microphysics_tracers = (
                 (@name(c.ρq_liq), @name(ᶜq_liqʲs.:(1))),
                 (@name(c.ρq_ice), @name(ᶜq_iceʲs.:(1))),
@@ -325,7 +317,7 @@ function edmfx_sgs_mass_flux_tendency!(
         #     edmfx_sgsflux_upwinding,
         # )
         # @. Yₜ.c.ρe_tot += vtt
-        # if !(p.atmos.moisture_model isa DryModel)
+        # if !(p.atmos.microphysics_model isa DryModel)
         #     ᶜq_tot⁰ = @specific_env_value(:q_tot, Y.c, turbconv_model))
         #     @. ᶜa_scalar =
         #         (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) *
@@ -439,7 +431,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 )
         end
 
-        if !(p.atmos.moisture_model isa DryModel)
+        if !(p.atmos.microphysics_model isa DryModel)
             # Specific humidity diffusion
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(

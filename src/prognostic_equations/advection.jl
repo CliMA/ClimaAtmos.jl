@@ -100,9 +100,9 @@ Specifically, this function calculates:
 - Horizontal advection for all prognostic tracer variables (`ρχ_name`) in `Y.c`.
 - Horizontal advection for EDMFX updraft total specific humidity (`q_totʲ`).
 - Horizontal advection for other EDMFX updraft moisture species (`q_liqʲ`, `q_iceʲ`,
-  `q_raiʲ`, `q_snoʲ`) if using a `NonEquilMoistModel` and `Microphysics1Moment`
-  precipitation model. If the `Microphysics2Moment` model is used instead, `n_liqʲ``
-  and `n_raiʲ` are also advected.
+  `q_raiʲ`, `q_snoʲ`) if using a `NonEquilibriumMicrophysics1M` or
+  `NonEquilibriumMicrophysics2M` microphysics model. If the `NonEquilibriumMicrophysics2M`
+  model is used instead, `n_liqʲ` and `n_raiʲ` are also advected.
 
 Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
@@ -131,10 +131,10 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
                 split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_tot) -
                 Y.c.sgsʲs.:($$j).q_tot * split_divₕ(ᶜuʲs.:($$j), 1)
-            if p.atmos.moisture_model isa NonEquilMoistModel && (
-                p.atmos.microphysics_model isa Microphysics1Moment ||
-                p.atmos.microphysics_model isa Microphysics2Moment
-            )
+            if p.atmos.microphysics_model isa Union{
+                NonEquilibriumMicrophysics1M,
+                NonEquilibriumMicrophysics2M,
+            }
                 @. Yₜ.c.sgsʲs.:($$j).q_liq -=
                     split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_liq) -
                     Y.c.sgsʲs.:($$j).q_liq * split_divₕ(ᶜuʲs.:($$j), 1)
@@ -148,8 +148,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
                     split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_sno) -
                     Y.c.sgsʲs.:($$j).q_sno * split_divₕ(ᶜuʲs.:($$j), 1)
             end
-            if p.atmos.moisture_model isa NonEquilMoistModel &&
-               p.atmos.microphysics_model isa Microphysics2Moment
+            if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
                 @. Yₜ.c.sgsʲs.:($$j).n_liq -=
                     split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_liq) -
                     Y.c.sgsʲs.:($$j).n_liq * split_divₕ(ᶜuʲs.:($$j), 1)
@@ -277,7 +276,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρe_tot += vtt - vtt_central
     end
 
-    if !(p.atmos.moisture_model isa DryModel) && energy_q_tot_upwinding != Val(:none)
+    if !(p.atmos.microphysics_model isa DryModel) && energy_q_tot_upwinding != Val(:none)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, energy_q_tot_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, Val(:none))
@@ -328,8 +327,8 @@ This function handles:
 - Vertical advection of updraft density-area product (`ρaʲ`).
 - Vertical advection of updraft moist static energy (`mseʲ`) and total specific humidity (`q_totʲ`).
 - Vertical advection of other updraft moisture species (`q_liqʲ`, `q_iceʲ`, `q_raiʲ`, `q_snoʲ`)
-  if using a `NonEquilMoistModel` and `Microphysics1Moment` precipitation model. If the `Microphysics2Moment`
-  model is used instead, `n_liqʲ` and `n_raiʲ` are also advected.
+  if using a `NonEquilibriumMicrophysics1M` or `NonEquilibriumMicrophysics2M` microphysics
+  model. If the `NonEquilibriumMicrophysics2M` model is used, `n_liqʲ` and `n_raiʲ` are also advected.
 - Buoyancy forcing terms in the updraft vertical momentum (`u₃ʲ`) equation, including
   adjustments for non-hydrostatic pressure.
 - Buoyancy production/conversion terms in the updraft `mseʲ` equation.
@@ -415,12 +414,8 @@ function edmfx_sgs_vertical_advection_tendency!(
         )
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
 
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa
-            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
-            p.atmos.microphysics_model isa
-            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-        )
+        if p.atmos.microphysics_model isa
+           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
             # TODO - make it work for multiple updrafts
             if j > 1
@@ -477,11 +472,7 @@ function edmfx_sgs_vertical_advection_tendency!(
         end
 
         # Sedimentation of number concentrations for 2M microphysics
-        if p.atmos.moisture_model isa NonEquilMoistModel &&
-           (
-            p.atmos.microphysics_model isa Microphysics2Moment ||
-            p.atmos.microphysics_model isa QuadratureMicrophysics{Microphysics2Moment}
-        )
+        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
 
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
             # TODO - make it work for multiple updrafts

@@ -4,7 +4,6 @@ z_elem: 25
 dt: "1secs"
 t_end: "1mins"
 log_progress: false
-moist: "equil"
 initial_condition: "MoistBaroclinicWave"
 disable_surface_flux_tendency: true
-precip_model: "0M"
+microphysics_model: "0M"

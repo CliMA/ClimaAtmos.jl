@@ -46,32 +46,19 @@ function get_atmos(config::AtmosConfig, params)
     (; parsed_args) = config
     FT = eltype(config)
     check_case_consistency(parsed_args)
-    moisture_model = get_moisture_model(parsed_args)
     microphysics_model = get_microphysics_model(parsed_args, params)
+    sgs_quadrature = get_sgs_quadrature(parsed_args, params)
     cloud_model = get_cloud_model(parsed_args, params)
 
-    if moisture_model isa DryModel
+    if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
-        @assert microphysics_model isa NoPrecipitation
     end
-    if moisture_model isa EquilMoistModel
-        @warn "Running simulations with equilibrium thermodynamics assumptions."
-        @assert microphysics_model isa
-                Union{
-            NoPrecipitation,
-            Microphysics0Moment,
-            QuadratureMicrophysics{Microphysics0Moment},
-        }
-    end
-    if moisture_model isa NonEquilMoistModel
-        @assert microphysics_model isa Union{
-            NoPrecipitation, Microphysics1Moment,
-            Microphysics2Moment, Microphysics2MomentP3,
-            QuadratureMicrophysics,
-        }
-    end
-    if microphysics_model isa NoPrecipitation
-        @warn "Running simulations without any precipitation formation."
+
+    if microphysics_model isa EquilibriumMicrophysics0M && isnothing(sgs_quadrature)
+        error(
+            "EquilibriumMicrophysics0M requires use_sgs_quadrature: true. " *
+            "GridMeanSGS fallback is not supported for 0-moment microphysics because of poor results.",
+        )
     end
 
     implicit_microphysics =
@@ -137,12 +124,12 @@ function get_atmos(config::AtmosConfig, params)
 
     atmos = AtmosModel(;
         # AtmosWater - Moisture, Precipitation & Clouds
-        moisture_model,
         microphysics_model,
         cloud_model,
         microphysics_tendency_timestepping = implicit_microphysics ?
                                              Implicit() : Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(parsed_args),
+        sgs_quadrature,
 
         # SCMSetup - Single-Column Model components
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),

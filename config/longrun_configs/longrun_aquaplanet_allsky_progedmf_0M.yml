@@ -8,7 +8,6 @@ ode_algo: "ARS222"
 dt: "120secs"
 t_end: "240days"
 dt_save_state_to_disk: "30days"
-moist: "equil"
 rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
@@ -22,5 +21,5 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-precip_model: "0M"
+microphysics_model: "0M"
 toml: [toml/longrun_aquaplanet_progedmf.toml]

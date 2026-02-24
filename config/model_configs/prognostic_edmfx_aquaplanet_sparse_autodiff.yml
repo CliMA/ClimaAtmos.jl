@@ -27,8 +27,7 @@ update_jacobian_every: stage
 ode_algo: "ARS222"
 debug_jacobian: true
 max_newton_iters_ode: 3
-moist: equil
-precip_model: 0M
+microphysics_model: "0M"
 t_end: 10mins
 dt_save_state_to_disk: 600secs
 toml: [toml/prognostic_edmfx.toml]

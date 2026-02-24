@@ -127,7 +127,7 @@ NVTX.@annotate function cloud_fraction_model_callback!(integrator)
             ),
         )
     end
-    set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model)
+    set_cloud_fraction!(Y, p, p.atmos.microphysics_model, p.atmos.cloud_model)
 end
 
 NVTX.@annotate function rrtmgp_model_callback!(integrator)

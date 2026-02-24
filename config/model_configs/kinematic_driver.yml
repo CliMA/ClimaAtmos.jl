@@ -4,8 +4,7 @@ initial_condition: ShipwayHill2012
 surface_setup: ShipwayHill2012
 energy_q_tot_upwinding: first_order
 tracer_upwinding: first_order
-moist: "nonequil"
-precip_model: "1M"
+microphysics_model: "1M"
 use_sgs_quadrature: false
 #moist: "equil"
 #precip_model: "0M"
