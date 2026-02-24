@@ -9,6 +9,7 @@ turbconv: "edonly_edmfx"
 edmfx_sgs_diffusive_flux: true
 surface_setup: "DefaultMoninObukhov"
 t_end: "1hours"
+check_nan_every: 1
 toml: [toml/longrun_aquaplanet.toml]
 time_varying_trace_gases: ["O3"]
 aerosol_radiation: true
