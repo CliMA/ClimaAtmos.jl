@@ -3,8 +3,7 @@ dt: "360secs"
 t_end: "12hours"
 dt_save_state_to_disk: "24hours"
 vert_diff: "DecayWithHeightDiffusion"
-moist: "nonequil"
-precip_model: "2M"
+microphysics_model: "2M"
 use_sgs_quadrature: false
 rad: "allskywithclear"
 aerosol_radiation: true

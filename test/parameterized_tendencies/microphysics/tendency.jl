@@ -2,9 +2,8 @@
 Unit tests for tendency.jl
 
 Tests cover:
-1. microphysics_tendency! dispatch matrix (error cases)
-2. NoPrecipitation returns nothing
-3. Integration tests (merged from precipitation.jl)
+1. microphysics_tendency! dispatch (DryModel returns nothing)
+2. Integration tests (merged from precipitation.jl)
 =#
 
 using Test
@@ -24,74 +23,12 @@ include("../../test_helpers.jl")
 
 @testset "Microphysics Tendency Dispatch" begin
 
-    @testset "Error Cases" begin
-        @testset "DryModel + 0M throws error" begin
-            @test_throws ErrorException CA.microphysics_tendency!(
-                nothing, nothing, nothing, nothing,
-                CA.DryModel(), CA.Microphysics0Moment(), nothing,
-            )
-        end
-
-        @testset "DryModel + 1M throws error" begin
-            @test_throws ErrorException CA.microphysics_tendency!(
-                nothing, nothing, nothing, nothing,
-                CA.DryModel(), CA.Microphysics1Moment(), nothing,
-            )
-        end
-
-        @testset "DryModel + 2M throws error" begin
-            @test_throws ErrorException CA.microphysics_tendency!(
-                nothing, nothing, nothing, nothing,
-                CA.DryModel(), CA.Microphysics2Moment(), nothing,
-            )
-        end
-
-        @testset "NonEquilMoist + 0M throws error" begin
-            @test_throws ErrorException CA.microphysics_tendency!(
-                nothing, nothing, nothing, nothing,
-                CA.NonEquilMoistModel(), CA.Microphysics0Moment(), nothing,
-            )
-        end
-
-        @testset "EquilMoist + 1M throws error" begin
-            @test_throws ErrorException CA.microphysics_tendency!(
-                nothing, nothing, nothing, nothing,
-                CA.EquilMoistModel(), CA.Microphysics1Moment(), nothing,
-            )
-        end
-
-        @testset "EquilMoist + 2M throws error" begin
-            @test_throws ErrorException CA.microphysics_tendency!(
-                nothing, nothing, nothing, nothing,
-                CA.EquilMoistModel(), CA.Microphysics2Moment(), nothing,
-            )
-        end
-    end
-
-    @testset "NoPrecipitation returns nothing" begin
-        @testset "DryModel + NoPrecipitation" begin
-            result = CA.microphysics_tendency!(
-                nothing, nothing, nothing, nothing,
-                CA.DryModel(), CA.NoPrecipitation(), nothing,
-            )
-            @test isnothing(result)
-        end
-
-        @testset "EquilMoist + NoPrecipitation" begin
-            result = CA.microphysics_tendency!(
-                nothing, nothing, nothing, nothing,
-                CA.EquilMoistModel(), CA.NoPrecipitation(), nothing,
-            )
-            @test isnothing(result)
-        end
-
-        @testset "NonEquilMoist + NoPrecipitation" begin
-            result = CA.microphysics_tendency!(
-                nothing, nothing, nothing, nothing,
-                CA.NonEquilMoistModel(), CA.NoPrecipitation(), nothing,
-            )
-            @test isnothing(result)
-        end
+    @testset "DryModel returns nothing" begin
+        result = CA.microphysics_tendency!(
+            nothing, nothing, nothing, nothing,
+            CA.DryModel(), nothing,
+        )
+        @test isnothing(result)
     end
 end
 
@@ -101,10 +38,10 @@ end
 
 function test_precipitation_setup!(Y, p, expected_vars)
     FT = eltype(Y)
-    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
+    (; turbconv_model, microphysics_model) = p.atmos
 
     CA.set_precipitation_velocities!(
-        Y, p, moisture_model, microphysics_model, turbconv_model,
+        Y, p, microphysics_model, turbconv_model,
     )
     CA.set_microphysics_tendency_cache!(Y, p, microphysics_model, turbconv_model)
     CA.set_precipitation_surface_fluxes!(Y, p, microphysics_model)
@@ -117,11 +54,11 @@ end
 
 function test_microphysics_tendency!(ᶜYₜ, Y, p)
     FT = eltype(Y)
-    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
+    (; turbconv_model, microphysics_model) = p.atmos
 
     CA.microphysics_tendency!(
         ᶜYₜ, Y, p, FT(0),
-        moisture_model, microphysics_model, turbconv_model,
+        microphysics_model, turbconv_model,
     )
 
     # No NaNs in tendencies
@@ -152,8 +89,7 @@ end
         config = CA.AtmosConfig(
             Dict(
                 "initial_condition" => "DYCOMS_RF02",
-                "moist" => "equil",
-                "precip_model" => "0M",
+                "microphysics_model" => "0M",
                 "config" => "column",
                 "output_default_diagnostics" => false,
             ),
@@ -162,7 +98,7 @@ end
         (; Y, p, params) = generate_test_simulation(config)
         FT = eltype(Y)
         ᶜYₜ = zero(Y)
-        (; turbconv_model, moisture_model, microphysics_model) = p.atmos
+        (; turbconv_model, microphysics_model) = p.atmos
 
         # Expected cache variables for 0-moment
         expected_vars =
@@ -185,8 +121,7 @@ end
         config = CA.AtmosConfig(
             Dict(
                 "initial_condition" => "PrecipitatingColumn",
-                "moist" => "nonequil",
-                "precip_model" => "1M",
+                "microphysics_model" => "1M",
                 "config" => "column",
                 "output_default_diagnostics" => false,
             ),
@@ -195,7 +130,7 @@ end
         (; Y, p, params) = generate_test_simulation(config)
         FT = eltype(Y)
         ᶜYₜ = zero(Y)
-        (; turbconv_model, moisture_model, microphysics_model) = p.atmos
+        (; turbconv_model, microphysics_model) = p.atmos
 
         # Expected cache variables for 1-moment
         expected_vars = (
@@ -232,8 +167,7 @@ end
         config = CA.AtmosConfig(
             Dict(
                 "initial_condition" => "PrecipitatingColumn",
-                "moist" => "nonequil",
-                "precip_model" => "2M",
+                "microphysics_model" => "2M",
                 "config" => "column",
                 "output_default_diagnostics" => false,
                 "prescribed_aerosols" => ["SSLT01"],
@@ -243,7 +177,7 @@ end
         (; Y, p, params) = generate_test_simulation(config)
         FT = eltype(Y)
         ᶜYₜ = zero(Y)
-        (; turbconv_model, moisture_model, microphysics_model) = p.atmos
+        (; turbconv_model, microphysics_model) = p.atmos
 
         # Expected cache variables for 2-moment (includes number densities)
         expected_vars = (
@@ -278,8 +212,7 @@ end
         config = CA.AtmosConfig(
             Dict(
                 "initial_condition" => "PrecipitatingColumn",
-                "moist" => "nonequil",
-                "precip_model" => "1M",
+                "microphysics_model" => "1M",
                 "config" => "column",
                 "use_sgs_quadrature" => true,
                 "sgs_distribution" => "gaussian",
@@ -291,7 +224,7 @@ end
         (; Y, p, params) = generate_test_simulation(config)
         FT = eltype(Y)
         ᶜYₜ = zero(Y)
-        (; turbconv_model, moisture_model, microphysics_model) = p.atmos
+        (; turbconv_model, microphysics_model) = p.atmos
 
         # Quadrature-specific cache variables
         expected_vars = (

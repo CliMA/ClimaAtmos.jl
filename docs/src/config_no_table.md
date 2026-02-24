@@ -25,7 +25,7 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 prognostic_tke: false
-moist: "equil"
+microphysics_model: "0M"
 config: "box"
 hyperdiff: Hyperdiffusion
 x_max: 1e8

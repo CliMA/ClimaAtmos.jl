@@ -1,12 +1,11 @@
 FLOAT_TYPE: "Float32"
 initial_condition: "MoistBaroclinicWave"
 t_end: "5days"
-moist: "nonequil"
 tracer_nonnegativity_method: "vapor_tendency"
 surface_setup: DefaultMoninObukhov
 prognostic_surface: "SlabOceanSST"
 rad: "clearsky"
-precip_model: "1M"
+microphysics_model: "1M"
 use_sgs_quadrature: false
 vert_diff: true
 dt_save_state_to_disk: "5days"
