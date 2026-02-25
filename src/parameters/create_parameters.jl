@@ -82,6 +82,21 @@ function ClimaAtmosParameters(
 
     prescribed_aerosol_params = prescribed_aerosol_parameters(toml_dict)
     PAP = typeof(prescribed_aerosol_params)
+    # Only load gravity wave parameters if enabled in config
+    non_orographic_gravity_wave_params = nothing
+    orographic_gravity_wave_params = nothing
+    if !isnothing(parsed_args)
+        if get(parsed_args, "non_orographic_gravity_wave", false)
+            non_orographic_gravity_wave_params =
+                NonOrographicGravityWaveParameters(toml_dict)
+        end
+        if !isnothing(get(parsed_args, "orographic_gravity_wave", nothing))
+            orographic_gravity_wave_params =
+                OrographicGravityWaveParameters(toml_dict)
+        end
+    end
+    NOGWP = typeof(non_orographic_gravity_wave_params)
+    OGWP = typeof(orographic_gravity_wave_params)
 
     parameters =
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
@@ -102,6 +117,8 @@ function ClimaAtmosParameters(
         VDP,
         EFP,
         PAP,
+        NOGWP,
+        OGWP,
     }(;
         parameters...,
         thermodynamics_params,
@@ -119,6 +136,8 @@ function ClimaAtmosParameters(
         vert_diff_params,
         external_forcing_params,
         prescribed_aerosol_params,
+        non_orographic_gravity_wave_params,
+        orographic_gravity_wave_params,
     )
 end
 
@@ -352,4 +371,70 @@ function SurfaceTemperatureParameters(
     parameters = merge(parameters, overrides)
     FT = CP.float_type(toml_dict)
     CAP.SurfaceTemperatureParameters{FT}(; parameters...)
+end
+
+NonOrographicGravityWaveParameters(
+    ::Type{FT},
+    overrides = NamedTuple(),
+) where {FT <: AbstractFloat} =
+    NonOrographicGravityWaveParameters(CP.create_toml_dict(FT), overrides)
+
+function NonOrographicGravityWaveParameters(
+    toml_dict::CP.ParamDict,
+    overrides = NamedTuple(),
+)
+    name_map = (;
+        :nogw_source_pressure => :source_pressure,
+        :nogw_damp_pressure => :damp_pressure,
+        :nogw_source_height => :source_height,
+        :nogw_Bw => :Bw,
+        :nogw_Bn => :Bn,
+        :nogw_dc => :dc,
+        :nogw_cmax => :cmax,
+        :nogw_c0 => :c0,
+        :nogw_nk => :nk,
+        :nogw_cw => :cw,
+        :nogw_cw_tropics => :cw_tropics,
+        :nogw_cn => :cn,
+        :nogw_Bt_0 => :Bt_0,
+        :nogw_Bt_n => :Bt_n,
+        :nogw_Bt_s => :Bt_s,
+        :nogw_Bt_eq => :Bt_eq,
+        :nogw_phi0_n => :ϕ0_n,
+        :nogw_phi0_s => :ϕ0_s,
+        :nogw_dphi_n => :dϕ_n,
+        :nogw_dphi_s => :dϕ_s,
+    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    parameters = merge(parameters, overrides)
+    FT = CP.float_type(toml_dict)
+    CAP.NonOrographicGravityWaveParameters{FT}(; parameters...)
+end
+
+
+OrographicGravityWaveParameters(
+    ::Type{FT},
+    overrides = NamedTuple(),
+) where {FT <: AbstractFloat} =
+    OrographicGravityWaveParameters(CP.create_toml_dict(FT), overrides)
+
+function OrographicGravityWaveParameters(
+    toml_dict::CP.ParamDict,
+    overrides = NamedTuple(),
+)
+    name_map = (;
+        :ogw_mountain_height_width_exponent => :γ, # L ∝ h^γ (equation 14, paper suggests γ ≈ 0.4)
+        :ogw_number_density_exponent => :ϵ, # number density of orography in a grid cell, n(h) ∝ h^(-ε)
+        :ogw_mountain_shape_parameter => :β, # L(z) = L_b(1 - z/h)^β (equation 12), β=1 for triangular mountains and β<1 for blunt mounrains, β>1 for pointy mountains
+        :ogw_critical_height_threshold => :h_frac, # h_crit = h_frac * (V / N)
+        :ogw_density_scale_factor => :ρscale,
+        :ogw_reference_mountain_width => :L0, # L_0 = 80 km 
+        :ogw_linear_drag_coefficient => :a0, # a_0 = 0.9
+        :ogw_nonlinear_drag_coefficient => :a1, # a_1 = 3.0
+        :ogw_critical_froude_number => :Fr_crit, # Fr_crit = 0.7
+    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    parameters = merge(parameters, overrides)
+    FT = CP.float_type(toml_dict)
+    CAP.OrographicGravityWaveParameters{FT}(; parameters...)
 end

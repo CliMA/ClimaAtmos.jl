@@ -1,4 +1,4 @@
-import ClimaCoreTempestRemap
+using ClimaCoreTempestRemap
 import ClimaCore: Spaces, Fields, Quadratures
 import ClimaComms
 import ClimaAtmos: SurfaceConditions, CT3

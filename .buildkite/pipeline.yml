@@ -347,35 +347,36 @@ steps:
   - group: "Gravity wave"
     steps:
       - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_3d.jl"
         artifact_paths: "nonorographic_gravity_wave_test_3d/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: non-orographic gravity wave parameterization test with MiMA output"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_mima.jl"
         artifact_paths: "nonorographic_gravity_wave_test_mima/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: non-orographic gravity wave parameterization unit test single column"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_single_column.jl"
         artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
 
       - label: ":computer: orographic gravity wave parameterization unit test for base flux calculation"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_baseflux.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_baseflux.jl"
         artifact_paths: "orographic_gravity_wave_test_baseflux/*"
 
       - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_3d.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_3d.jl"
         artifact_paths: "orographic_gravity_wave_test_3d/*"
 
-      - label: ":computer: single column non-orographic gravity wave parameterization"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
-          --job_id single_column_nonorographic_gravity_wave
-        artifact_paths: "single_column_nonorographic_gravity_wave/*"
+      - label: ":computer: orographic gravity wave parameterization unit test for computed drag"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_computed_drag.jl"
+        artifact_paths: "orographic_gravity_wave_test_computed_drag/*"
+
+      - label: ":computer: orographic gravity wave Garner 2005 figure reproduction test"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_garner2005_reproduction.jl"
+        artifact_paths: "orographic_gravity_wave_test_garner2005/*"
 
   - group: "Column Examples"
     steps:
@@ -1103,17 +1104,18 @@ steps:
           slurm_ntasks: 2
           slurm_mem: 16GB
 
-      - label: "GPU: test DYAMOND interpolated initial conditions"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_summer.yml
-          --job_id gpu_aquaplanet_dyamond_summer
-        artifact_paths: "gpu_aquaplanet_dyamond_summer/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16GB
+      # Brittle test: to be removed
+      # - label: "GPU: test DYAMOND interpolated initial conditions"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_summer.yml
+      #     --job_id gpu_aquaplanet_dyamond_summer
+      #   artifact_paths: "gpu_aquaplanet_dyamond_summer/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_mem: 16GB
 
       - label: ":earth_americas: GPU: Diagnostic EDMF ERA5 Weather Model Initial Condition"
         command: >

@@ -1,0 +1,10 @@
+t_end: "1secs"
+dt: "1secs"
+disable_surface_flux_tendency: true
+non_orographic_gravity_wave: true
+dt_nogw: "1secs"
+toml: [toml/nogw_mima_test.toml]
+FLOAT_TYPE: "Float64"
+z_max: 80000.0
+z_elem: 40
+z_stretch: false
