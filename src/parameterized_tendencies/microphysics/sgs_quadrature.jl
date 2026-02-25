@@ -454,13 +454,20 @@ Tuple `(T_hat, q_hat)` of physical values.
     FT = typeof(μ_q)
     sqrt2 = sqrt(FT(2))
 
-    # Conditional mean and std for T given q
-    σ_c = sqrt(max(one(FT) - corr^2, zero(FT))) * σ_T
-    μ_c = μ_T + sqrt2 * corr * σ_T * χ1
-
-    # Clamp both T and q to physically valid ranges
-    T_hat = max(T_min, μ_c + sqrt2 * σ_c * χ2)
+    # Clamp q to physically valid ranges
     q_hat = clamp(μ_q + sqrt2 * σ_q * χ1, zero(FT), q_max)
+
+    # Re-infer effective χ1 from clamped q to maintain physical T-q correlation.
+    # If a negative q fluctuation was truncated to 0, T should only be conditioned
+    # on the q=0 state, not the "phantom" negative q.
+    χ1_eff = (q_hat - μ_q) / (sqrt2 * max(σ_q, ϵ_numerics(FT)))
+
+    # Conditional mean and std for T given *clamped* q
+    σ_c = sqrt(max(one(FT) - corr^2, zero(FT))) * σ_T
+    μ_c = μ_T + sqrt2 * corr * σ_T * χ1_eff
+
+    # Clamp T to physically valid ranges
+    T_hat = max(T_min, μ_c + sqrt2 * σ_c * χ2)
 
     return (T_hat, q_hat)
 end
@@ -632,18 +639,21 @@ Weighted sum ``\\approx E[f(T, q)]`` with the same type as `f(T, q)`.
 @noinline function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
     σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
 
-    # Use functor instead of closure to avoid heap allocations
-    # Field order is (T, q) to match return order of get_physical_point
-    # Promote all scalars to match μ_T type (may be Dual in autodiff path)
+    # Use functor instead of closure to avoid heap allocations.
+    # Field order is (T, q) to match return order of get_physical_point.
+
+    # Promote μ_T and μ_q to the widest type: with autodiff, either may
+    # independently be a Dual (when ρe_tot or ρq_tot is perturbed).
+    μ_T_p, μ_q_p = promote(μ_T, μ_q)
     transform = PhysicalPointTransform(
         quad.dist,
-        μ_T,
-        oftype(μ_T, μ_q),
-        oftype(μ_T, σ_T),
-        oftype(μ_T, σ_q),
-        oftype(μ_T, corr),
-        oftype(μ_T, quad.T_min),
-        oftype(μ_T, quad.q_max),
+        μ_T_p,
+        μ_q_p,
+        oftype(μ_T_p, σ_T),
+        oftype(μ_T_p, σ_q),
+        oftype(μ_T_p, corr),
+        oftype(μ_T_p, quad.T_min),
+        oftype(μ_T_p, quad.q_max),
     )
 
     return sum_over_quadrature_points(f, transform, quad)

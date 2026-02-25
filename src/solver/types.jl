@@ -423,40 +423,47 @@ RayleighSponge(params) = RayleighSponge(;
 ### ------------------- ###
 
 abstract type AbstractGravityWave end
-@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
-    source_pressure::FT = 31500
-    damp_pressure::FT = 85
-    source_height::FT = 15000
-    Bw::FT = 1.0
-    Bn::FT = 1.0
-    dc::FT = 0.8
-    cmax::FT = 99.6
-    c0::FT = 0
-    nk::FT = 1
-    cw::FT = 40.0
-    cw_tropics::FT = 40.0
-    cn::FT = 40.0
-    Bt_0::FT = 0.0003
-    Bt_n::FT = 0.0003
-    Bt_s::FT = 0.0003
-    Bt_eq::FT = 0.0003
-    ϕ0_n::FT = 30
-    ϕ0_s::FT = -30
-    dϕ_n::FT = 5
-    dϕ_s::FT = -5
+Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
+    source_pressure::FT
+    damp_pressure::FT
+    source_height::FT
+    Bw::FT
+    Bn::FT
+    dc::FT
+    cmax::FT
+    c0::FT
+    nk::FT
+    cw::FT
+    cw_tropics::FT
+    cn::FT
+    Bt_0::FT
+    Bt_n::FT
+    Bt_s::FT
+    Bt_eq::FT
+    ϕ0_n::FT
+    ϕ0_s::FT
+    dϕ_n::FT
+    dϕ_s::FT
 end
 
-@kwdef struct OrographicGravityWave{FT, S} <: AbstractGravityWave
-    γ::FT = 0.4
-    ϵ::FT = 0.0
-    β::FT = 0.5
-    h_frac::FT = 0.1
-    ρscale::FT = 1.2
-    L0::FT = 80e3
-    a0::FT = 0.9
-    a1::FT = 3.0
-    Fr_crit::FT = 0.7
-    topo_info::S = "gfdl_restart"
+abstract type OrographicGravityWave <: AbstractGravityWave end
+
+Base.@kwdef struct LinearOrographicGravityWave{S} <: OrographicGravityWave
+    topo_info::S = Val(:linear)
+end
+
+Base.@kwdef struct FullOrographicGravityWave{FT, S, T} <: OrographicGravityWave
+    γ::FT
+    ϵ::FT
+    β::FT
+    h_frac::FT
+    ρscale::FT
+    L0::FT
+    a0::FT
+    a1::FT
+    Fr_crit::FT
+    topo_info::S
+    topography::T
 end
 
 abstract type AbstractForcing end

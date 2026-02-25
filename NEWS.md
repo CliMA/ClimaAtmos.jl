@@ -2,6 +2,16 @@ ClimaAtmos.jl Release Notes
 ============================
 
 main
+----
+
+
+v0.36.0
+-------
+
+-[#4285](https://github.com/CliMA/ClimaAtmos.jl/pull/4320) Delete moisture_model.
+Rename microphysics_models.
+
+v0.35.4
 -------
 
 - [#4252](https://github.com/CliMA/ClimaAtmos.jl/pull/4252) Add option to write

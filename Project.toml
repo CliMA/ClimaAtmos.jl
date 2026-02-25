@@ -1,7 +1,7 @@
 name = "ClimaAtmos"
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 authors = ["Climate Modeling Alliance"]
-version = "0.35.4"
+version = "0.36.0"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -79,7 +79,7 @@ YAML = "0.4"
 julia = "1.9"
 Aqua = "0.8.9"
 ArtifactWrappers = "0.2"
-CairoMakie = "0.11"
+CairoMakie = "0.11, 0.12, 0.13, 0.14, 0.15"
 ClimaReproducibilityTests = "0.1.1"
 Distributions = "0.25.87"
 IntervalSets = "0.7"

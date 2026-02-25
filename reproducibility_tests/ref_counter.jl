@@ -1,4 +1,4 @@
-316
+318
 
 # **README**
 #
@@ -20,6 +20,13 @@
 
 
 #=
+318
+- Add GPU Orographic Gravity Wave implementation, refactor NOGW tests, add OGW tests and fix base fluxes
+
+317
+- SGS saturation quadrature fix: apply weight adjustment to prevent
+  condensate from exceeding q_tot when quadrature points are clamped to zero.
+  Affects all EquilMoistModel + QuadratureMicrophysics configurations.
 
 316
 - Use ARS222 as the default ODE solver for prognostic EDMF
