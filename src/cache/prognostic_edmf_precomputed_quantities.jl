@@ -475,14 +475,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             ᶜq_liq_raiʲs.:($$j),
             ᶜq_ice_snoʲs.:($$j),
         )
-        if p.atmos.microphysics_tendency_timestepping == Implicit()
-            @. ᶜSqₜᵐʲs.:($$j) = ᶜmp_tendency.dq_tot_dt
-        else
-            @. ᶜSqₜᵐʲs.:($$j) = limit_sink(
-                ᶜmp_tendency.dq_tot_dt,
-                Y.c.sgsʲs.:($$j).q_tot, dt,
-            )
-        end
+        @. ᶜSqₜᵐʲs.:($$j) = limit_sink(
+            ᶜmp_tendency.dq_tot_dt,
+            Y.c.sgsʲs.:($$j).q_tot, dt,
+        )
     end
 
     # Sources from the environment (with SGS quadrature integration)
@@ -511,11 +507,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜq′q′,
         correlation_Tq(params),
     )
-    if p.atmos.microphysics_tendency_timestepping == Implicit()
-        @. ᶜSqₜᵐ⁰ = ᶜmp_tendency.dq_tot_dt
-    else
-        @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_tendency.dq_tot_dt, ᶜq_tot⁰, dt)
-    end
+    @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_tendency.dq_tot_dt, ᶜq_tot⁰, dt)
     return nothing
 end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(

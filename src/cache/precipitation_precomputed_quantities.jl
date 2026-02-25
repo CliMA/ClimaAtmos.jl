@@ -664,12 +664,8 @@ function set_microphysics_tendency_cache!(Y, p, ::Microphysics0Moment, _)
         ᶜq_liq_rai,
         ᶜq_ice_sno,
     )
-    if p.atmos.microphysics_tendency_timestepping == Implicit()
-        @. ᶜS_ρq_tot = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
-    else
-        @. ᶜS_ρq_tot =
-            Y.c.ρ * limit_sink(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot / Y.c.ρ, dt)
-    end
+    @. ᶜS_ρq_tot =
+        Y.c.ρ * limit_sink(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot / Y.c.ρ, dt)
     @. ᶜS_ρe_tot = ᶜS_ρq_tot * (ᶜmp_tendency.e_int_precip + ᶜΦ)
     return nothing
 end
@@ -703,12 +699,8 @@ function set_microphysics_tendency_cache!(
         correlation_Tq(params),
     )
 
-    # Apply sink limiter (explicit only) and scale by density
-    if p.atmos.microphysics_tendency_timestepping == Implicit()
-        @. ᶜS_ρq_tot = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
-    else
-        @. ᶜS_ρq_tot = Y.c.ρ * limit_sink(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot / Y.c.ρ, dt)
-    end
+    # Apply sink limiter and scale by density
+    @. ᶜS_ρq_tot = Y.c.ρ * limit_sink(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot / Y.c.ρ, dt)
     @. ᶜS_ρe_tot = ᶜS_ρq_tot * (ᶜmp_tendency.e_int_precip + ᶜΦ)
     return nothing
 end
@@ -1108,9 +1100,9 @@ function set_precipitation_surface_fluxes!(
     (; ᶜT) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
+    (; col_integrated_precip_energy_tendency) = p.conservation_check
 
     # update total column energy source for surface energy balance
-    (; col_integrated_precip_energy_tendency) = p.conservation_check
     Operators.column_integral_definite!(
         col_integrated_precip_energy_tendency,
         ᶜS_ρe_tot,
