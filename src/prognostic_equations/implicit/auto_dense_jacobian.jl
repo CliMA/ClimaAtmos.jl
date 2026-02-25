@@ -73,6 +73,10 @@ function jacobian_cache(alg::AutoDenseJacobian, Y, atmos)
     I_column_matrix[diagind(I_column_matrix)] .= 1
     I_matrix = reshape(I_column_matrix, N, N, 1)
 
+    # When the Jacobian has NaN (e.g. unphysical trial state), we skip LU and mark invalid;
+    # invert_jacobian! then returns ΔY = NaN so the solver can reject the step.
+    factorization_valid = Ref(true)
+
     return (;
         precomputed_dual,
         scratch_dual,
@@ -83,6 +87,7 @@ function jacobian_cache(alg::AutoDenseJacobian, Y, atmos)
         column_lu_vectors,
         I_matrix,
         N_val = Val(N), # Save N as a statically inferrable parameter.
+        factorization_valid,
     )
 end
 
@@ -169,7 +174,7 @@ function update_column_matrices!(alg::AutoDenseJacobian, cache, Y, p, t)
 end
 
 function update_jacobian!(alg::AutoDenseJacobian, cache, Y, p, dtγ, t)
-    (; column_matrices, column_lu_factors, I_matrix, N_val) = cache
+    (; column_matrices, column_lu_factors, I_matrix, N_val, factorization_valid) = cache
     device = ClimaComms.device(Y.c)
 
     # Set column_matrices to ∂Yₜ/∂Y.
@@ -179,36 +184,84 @@ function update_jacobian!(alg::AutoDenseJacobian, cache, Y, p, dtγ, t)
     # of the implicit equation.
     column_lu_factors .= dtγ .* column_matrices .- I_matrix
 
+    # If the Jacobian has NaN (e.g. unphysical trial state → safe refstate → NaN),
+    # skip LU so we do not error; invert_jacobian! will return ΔY = NaN.
+    if any(isnan, column_lu_factors)
+        factorization_valid[] = false
+        # Diagnose Newton trial state when Y is real (not Dual); skip during Jacobian AD.
+        T = eltype(parent(Y.c.ρ))
+        if !(T <: ForwardDiff.Dual)
+            ρ_parent = parent(Y.c.ρ)
+            diag = "min(ρ)=$(minimum(ρ_parent)), max(ρ)=$(maximum(ρ_parent))"
+            if hasproperty(p, :precomputed) && hasproperty(p.precomputed, :ᶜp)
+                p_parent = parent(p.precomputed.ᶜp)
+                diag *= "; min(ᶜp)=$(minimum(p_parent)), max(ᶜp)=$(maximum(p_parent))"
+            end
+            @warn(
+                "Jacobian contained NaN (column-local dense); skipping LU. " *
+                "Newton trial state: $diag. " *
+                "Linear solve will return ΔY=NaN; check_tendency_nans should have errored earlier with exact routine.",
+            )
+        end
+        return
+    end
+    factorization_valid[] = true
     # Replace each matrix in column_lu_factors with triangular L and U matrices.
     parallel_lu_factorize!(device, column_lu_factors, N_val)
+    # Post-LU check: Schur-complement updates can introduce NaN from an
+    # ill-conditioned (near-singular) Jacobian even if the pre-LU matrix had none.
+    # This typically happens when the column-local Jacobian is missing horizontal
+    # coupling (e.g. implicit horizontal acoustics) and the approximation breaks down.
+    if any(isnan, column_lu_factors)
+        factorization_valid[] = false
+        T = eltype(parent(Y.c.ρ))
+        if !(T <: ForwardDiff.Dual)
+            ρ_parent = parent(Y.c.ρ)
+            diag = "min(ρ)=$(minimum(ρ_parent)), max(ρ)=$(maximum(ρ_parent))"
+            if hasproperty(p, :precomputed) && hasproperty(p.precomputed, :ᶜp)
+                p_parent = parent(p.precomputed.ᶜp)
+                diag *= "; min(ᶜp)=$(minimum(p_parent)), max(ᶜp)=$(maximum(p_parent))"
+            end
+            @warn(
+                "LU factorization produced NaN (ill-conditioned column-local Jacobian). " *
+                "Newton trial state: $diag. " *
+                "Returning ΔY=NaN so Newton can reject this step. " *
+                "If this recurs, reduce dt or verify the Helmholtz corrector is stabilising horizontal acoustics.",
+            )
+        end
+    end
 end
 
 function invert_jacobian!(::AutoDenseJacobian, cache, ΔY, R)
-    (; column_lu_vectors, column_lu_factors, N_val) = cache
+    (; column_lu_vectors, column_lu_factors, N_val, factorization_valid) = cache
     device = ClimaComms.device(ΔY.c)
     column_indices = column_index_iterator(ΔY)
     scalar_names = scalar_field_names(ΔY)
     vector_index_to_field_vector_index_map =
         enumerate(field_vector_index_iterator(ΔY))
 
-    # Copy all scalar values from R into column_lu_vectors.
-    ClimaComms.@threaded device begin
-        # On multithreaded devices, use one thread for each number.
-        for (vector_index, column_index) in enumerate(column_indices),
-            (scalar_level_index, (scalar_index, level_index)) in
-            vector_index_to_field_vector_index_map
+    # When the last update_jacobian! skipped LU due to NaN, return ΔY=0 so Y stays valid (Newton stalls but doesn't corrupt state).
+    if !factorization_valid[]
+        FT = eltype(column_lu_vectors)
+        column_lu_vectors .= FT(0)
+    else
+        # Copy all scalar values from R into column_lu_vectors.
+        ClimaComms.@threaded device begin
+            for (vector_index, column_index) in enumerate(column_indices),
+                (scalar_level_index, (scalar_index, level_index)) in
+                vector_index_to_field_vector_index_map
 
-            number = unrolled_applyat(scalar_index, scalar_names) do name
-                field = MatrixFields.get_field(R, name)
-                @inbounds point(field, level_index, column_index...)[]
+                number = unrolled_applyat(scalar_index, scalar_names) do name
+                    field = MatrixFields.get_field(R, name)
+                    @inbounds point(field, level_index, column_index...)[]
+                end
+                @inbounds column_lu_vectors[scalar_level_index, vector_index] =
+                    number
             end
-            @inbounds column_lu_vectors[scalar_level_index, vector_index] =
-                number
         end
+        # Solve L * U * ΔY = R for ΔY in each column.
+        parallel_lu_solve!(device, column_lu_vectors, column_lu_factors, N_val)
     end
-
-    # Solve L * U * ΔY = R for ΔY in each column.
-    parallel_lu_solve!(device, column_lu_vectors, column_lu_factors, N_val)
 
     # Copy all scalar values from column_lu_vectors into ΔY.
     ClimaComms.@threaded device begin
@@ -283,15 +336,28 @@ function parallel_lu_factorize!(device, matrices, ::Val{N}) where {N}
         end
 
         # Overwrite the local column matrix with its LU factorization.
+        # If a diagonal becomes NaN or zero (singular/ill-conditioned Jacobian — e.g.
+        # from horizontal acoustic coupling missing in the column-local approximation),
+        # fill the output with NaN so update_jacobian! detects it and sets
+        # factorization_valid[] = false, causing invert_jacobian! to return ΔY = NaN
+        # and let the Newton solver handle the rejection gracefully.
+        lu_ok = true
         @inbounds for k in 1:N
-            isnan(matrix[k, k]) && error("LU error: NaN on diagonal")
-            iszero(matrix[k, k]) && error("LU error: 0 on diagonal")
+            if isnan(matrix[k, k]) || iszero(matrix[k, k])
+                lu_ok = false
+                break
+            end
             inverse_of_diagonal_value = inv(matrix[k, k])
             for i in (k + 1):N
                 matrix[i, k] *= inverse_of_diagonal_value
             end
             for j in (k + 1):N, i in (k + 1):N
                 matrix[i, j] -= matrix[i, k] * matrix[k, j]
+            end
+        end
+        if !lu_ok
+            @inbounds for j in 1:N, i in 1:N
+                matrix[i, j] = FT(NaN)
             end
         end
 

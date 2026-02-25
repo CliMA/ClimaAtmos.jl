@@ -99,7 +99,31 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         # Nonlinear PGF correction: (full Exner split-form PGF) − (linearized PGF).
         # The linearized acoustic PGF  (1/ρ_ref) ∇ₕp  lives in the implicit
         # tendency; here we add only the difference so the total is correct.
+        #
+        # NaN can be introduced here by:
+        # 1) Non-positive ᶜp: ᶜΠ = exner_given_pressure(ᶜp), ᶜΦ_r = phi_r(ᶜp), ᶜθ_vr = theta_vr(ᶜp)
+        #    all use Π ∝ p^κ or log(Π); p ≤ 0 → NaN.
+        # 2) Zero or NaN ᶜρ_ref: gradₕ(ᶜp) / ᶜρ_ref → Inf/NaN.
         ᶜρ_ref = p.horizontal_acoustic_cache.ᶜρ_ref
+        p_min = minimum(parent(ᶜp))
+        ρ_ref_min = minimum(parent(ᶜρ_ref))
+        if isnan(p_min) || p_min <= 0
+            error(
+                "horizontal_dynamics_tendency! (implicit horizontal acoustics): " *
+                "pressure must be positive for Exner/log. min(ᶜp) = $p_min",
+            )
+        end
+        if ρ_ref_min <= 0 || isnan(ρ_ref_min)
+            error(
+                "horizontal_dynamics_tendency! (implicit horizontal acoustics): " *
+                "ρ_ref = Y.c.ρ is non-positive or NaN (min(ᶜρ_ref) = $ρ_ref_min). " *
+                "Negative density is unphysical: the state has left the physical manifold. " *
+                "This often occurs with the column-local dense Jacobian, which omits horizontal coupling " *
+                "so IMEX stage updates can produce inconsistent (e.g. negative ρ) states. " *
+                "Try use_krylov_method: true so the linear solve uses the full Jacobian via JVP; " *
+                "or smaller dt. The full fix is Option B (horizontal Helmholtz + predictor-corrector).",
+            )
+        end
         @. Yₜ.c.uₕ -= C12(
             gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) +
             cp_d *

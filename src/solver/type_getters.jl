@@ -92,6 +92,9 @@ function get_atmos(config::AtmosConfig, params)
     implicit_diffusion = parsed_args["implicit_diffusion"]
     @assert implicit_diffusion in (true, false)
 
+    implicit_horizontal_acoustics = parsed_args["implicit_horizontal_acoustics"]
+    @assert implicit_horizontal_acoustics in (true, false)
+
     implicit_sgs_advection = parsed_args["implicit_sgs_advection"]
     @assert implicit_sgs_advection in (true, false)
 
@@ -523,7 +526,19 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
 )
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
-    jacobian_algorithm = if use_dense_jacobian
+    # Implicit horizontal acoustics requires the dense Jacobian; sparse Jacobian does not include the coupling blocks.
+    use_dense_jacobian_final = use_dense_jacobian
+    if atmos.horizontal_acoustic_mode == Implicit() && !use_dense_jacobian
+        use_dense_jacobian_final = true
+        @warn(
+            "Implicit horizontal acoustics is on but use_dense_jacobian was false. " *
+            "Using dense Jacobian (column-local; no horizontal coupling). " *
+            "Set use_dense_jacobian: true in your config to silence this warning. " *
+            "use_krylov_method: true can be tried but may fail earlier in some runs; " *
+            "robust fix is Option B (Helmholtz + predictor-corrector).",
+        )
+    end
+    jacobian_algorithm = if use_dense_jacobian_final
         AutoDenseJacobian()
     else
         manual_jacobian_algorithm = ManualSparseJacobian(

@@ -6,13 +6,15 @@ import ClimaCore
 import ClimaCore: Fields, Geometry
 
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
+    check_state_nans(Y, "implicit_tendency!")
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+    check_tendency_nans(Yₜ, "implicit_vertical_advection_tendency!"; Y = Y)
 
-    if p.atmos.horizontal_acoustic_mode == Implicit()
-        implicit_horizontal_acoustic_tendency!(Yₜ, Y, p, t)
-    end
+    # Horizontal acoustics Implicit() uses predictor-corrector (Option B): Newton sees only
+    # vertical coupling; horizontal_helmholtz_correction! in set_precomputed_quantities! (cache!)
+    # adds the horizontal coupling after Newton convergence.
 
     if p.atmos.noneq_cloud_formation_mode == Implicit()
         cloud_condensate_tendency!(
@@ -23,6 +25,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             p.atmos.microphysics_model,
             p.atmos.turbconv_model,
         )
+        check_tendency_nans(Yₜ, "cloud_condensate_tendency!"; Y = Y)
     end
 
     if p.atmos.sgs_adv_mode == Implicit()
@@ -33,6 +36,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             t,
             p.atmos.turbconv_model,
         )
+        check_tendency_nans(Yₜ, "edmfx_sgs_vertical_advection_tendency!"; Y = Y)
     end
 
     if p.atmos.diff_mode == Implicit()
@@ -44,8 +48,8 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             p.atmos.vertical_diffusion,
         )
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+        check_tendency_nans(Yₜ, "vertical_diffusion_boundary_layer_tendency! + edmfx_sgs_diffusive_flux_tendency!"; Y = Y)
     end
-
 
     if p.atmos.sgs_entr_detr_mode == Implicit()
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
@@ -66,10 +70,12 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    check_tendency_nans(Yₜ, "pressure_work_tendency!"; Y = Y)
 
     # NOTE: This will zero out all momentum tendencies in the edmfx advection test
     # DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)
+    check_tendency_nans(Yₜ, "implicit_tendency! (final)"; Y = Y)
 
     return nothing
 end
@@ -200,11 +206,13 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
     # This is equivalent to grad_v(Φ) + grad_v(p) / ρ
-    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
+    # Use _safe refstate functions so unphysical Newton/AD trial states (p ≤ 0) yield NaN
+    # instead of DomainError, allowing the solver to reject the step.
+    ᶜΦ_r = @. lazy(phi_r_safe(thermo_params, ᶜp))
     ᶜθ_v = p.scratch.ᶜtemp_scalar
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
-    ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
-    ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
+    @. ᶜθ_v = theta_v_safe(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    ᶜθ_vr = @. lazy(theta_vr_safe(thermo_params, ᶜp))
+    ᶜΠ = @. lazy(exner_given_pressure_safe(thermo_params, ᶜp))
     @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) +
                   cp_d * (ᶠinterp(ᶜθ_v - ᶜθ_vr)) * ᶠgradᵥ(ᶜΠ)
 

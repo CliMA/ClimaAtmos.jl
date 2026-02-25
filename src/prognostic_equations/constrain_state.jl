@@ -29,6 +29,11 @@ NVTX.@annotate function constrain_state!(Y, p, t)
     prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
     tracer_nonnegativity_constraint!(Y, p, t, p.atmos.water.tracer_nonnegativity_method)
     dss!(Y, p, t)
+    # NOTE: The horizontal Helmholtz correction (Option B predictor-corrector) is applied in
+    # set_precomputed_quantities! (cache!), NOT here. This ensures it only runs after Newton
+    # convergence (and at end-of-timestep), never on stage initial guesses. constrain_state!
+    # (dss!) is called on both initial guesses (imex_ark line 127) and post-Newton
+    # (imex_ark line 146); set_precomputed_quantities! (cache!) is only called post-Newton.
     return nothing
 end
 

@@ -433,6 +433,38 @@ function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
     return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
 end
 
+# Physical bounds used when clamping Newton iterates (so implicit residual/Jacobian
+# are never evaluated at unphysical state; allows stable implicit solve without reducing dt).
+const _implicit_ρ_min = 1e-6
+const _implicit_ρ_max = 1e3
+const _implicit_p_min = 1.0
+
+"""
+    clamp_implicit_state!(Y)
+
+Clamp the state `Y` to physical bounds in-place so that the implicit residual
+and Jacobian are never evaluated at unphysical values (e.g. negative ρ or p).
+Called at the start of `set_implicit_precomputed_quantities!` so every Newton
+iterate is kept in a valid range; allows the direct Newton solve to remain
+stable without reducing dt.
+"""
+function clamp_implicit_state!(Y)
+    @. Y.c.ρ = max(_implicit_ρ_min, min(_implicit_ρ_max, Y.c.ρ))
+    for name in (:ρq_tot, :ρq_liq, :ρq_ice, :ρq_rai, :ρq_sno, :ρn_liq, :ρn_rai, :ρtke)
+        hasproperty(Y.c, name) || continue
+        f = getproperty(Y.c, name)
+        parent(f) .= max.(0, parent(f))
+    end
+    if hasproperty(Y.c, :sgsʲs)
+        for j in eachindex(Y.c.sgsʲs)
+            hasproperty(Y.c.sgsʲs[j], :ρa) || continue
+            ρa = Y.c.sgsʲs[j].ρa
+            parent(ρa) .= max.(0, parent(ρa))
+        end
+    end
+    return nothing
+end
+
 """
     set_implicit_precomputed_quantities!(Y, p, t)
 
@@ -440,6 +472,11 @@ Updates the precomputed quantities that are handled implicitly based on the
 current state `Y`. This is called before each evaluation of either
 `implicit_tendency!` or `remaining_tendency!`, and it includes quantities used
 in both tedencies.
+
+Before updating, the state is clamped to physical bounds via `clamp_implicit_state!`
+so that Newton iterates never become unphysical (negative ρ, etc.). After pressure
+is computed, `ᶜp` is clamped to a minimum so refstate thermodynamics never see
+non-positive pressure.
 
 This function also applies a "filter" to `Y` in order to ensure that `ᶠu³` is 0
 at the surface (i.e., to enforce the impenetrable boundary condition). If the
@@ -449,6 +486,31 @@ elsewhere, but doing it here ensures that it occurs whenever the precomputed
 quantities are updated.
 """
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
+    clamp_implicit_state!(Y)
+    _data = parent(Y)
+    _has_nan = any(isnan, _data)
+    _has_inf = any(isinf, _data)
+    if _has_nan || _has_inf
+        # Field-level diagnosis: identify which component carries the bad value.
+        _bad_fields = String[]
+        for name in propertynames(Y.c)
+            d = parent(getproperty(Y.c, name))
+            (any(isnan, d) || any(isinf, d)) && push!(_bad_fields, "Y.c.$name")
+        end
+        # Y.f may be a NamedTuple of face fields; check each property.
+        for name in propertynames(Y.f)
+            d = parent(getproperty(Y.f, name))
+            (any(isnan, d) || any(isinf, d)) && push!(_bad_fields, "Y.f.$name")
+        end
+        kind = _has_nan ? "NaN" : "Inf"
+        error(
+            "State Y contains $kind at entry to set_implicit_precomputed_quantities! " *
+            "(Newton trial state). " *
+            "Bad fields: $(join(_bad_fields, ", ")). " *
+            "Typical causes: (NaN) LU solve on ill-conditioned implicit system; " *
+            "(Inf) Float32 overflow from super-CFL u₃ or kinetic energy.",
+        )
+    end
     (; turbconv_model, moisture_model) = p.atmos
     (; ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜh_tot, ᶜp) = p.precomputed
@@ -514,6 +576,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     @. ᶜh_tot =
         TD.total_enthalpy(thermo_params, ᶜe_tot, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    @. ᶜp = max(_implicit_p_min, ᶜp)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
@@ -523,13 +586,8 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # Do nothing for other turbconv models for now
     end
 
-    if hasproperty(p, :horizontal_acoustic_cache)
-        update_horizontal_acoustic_reference_state!(
-            p.horizontal_acoustic_cache,
-            Y,
-            p,
-        )
-    end
+    # Horizontal acoustic reference state is updated only in set_explicit_precomputed_quantities!
+    # so that it is never overwritten with unphysical Newton trial state (see docstring there).
 end
 
 """
@@ -545,6 +603,17 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     (; call_cloud_diagnostics_per_stage) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
+
+    # Update horizontal acoustic reference state only from physical state (step-start Y).
+    # Never updated in set_implicit_precomputed_quantities!, which runs on Newton trial states.
+    if hasproperty(p, :horizontal_acoustic_cache) &&
+       !isnothing(p.horizontal_acoustic_cache)
+        update_horizontal_acoustic_reference_state!(
+            p.horizontal_acoustic_cache,
+            Y,
+            p,
+        )
+    end
 
     if !isnothing(p.sfc_setup)
         SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
@@ -635,8 +704,30 @@ end
     set_precomputed_quantities!(Y, p, t)
 
 Updates all precomputed quantities based on the current state `Y`.
+
+When `horizontal_acoustic_mode == Implicit()` (Option B predictor-corrector),
+this is where the Helmholtz correction is applied — after Newton convergence and
+at end-of-timestep. This function is mapped to `cache!` in the IMEX ARK solver,
+which is called only at those two points, never on stage initial guesses. Moving
+the correction here prevents double-application to the initial guess.
 """
 function set_precomputed_quantities!(Y, p, t)
+    # Option B predictor-corrector: apply horizontal Helmholtz correction and re-DSS.
+    # cache! is called only after Newton convergence and at end-of-timestep (never on
+    # initial guesses, which use cache_imp! = set_implicit_precomputed_quantities!).
+    if !isnothing(p.horizontal_acoustic_cache)
+        horizontal_helmholtz_correction!(Y, p, t)
+        do_dss(axes(Y.c)) &&
+            Spaces.weighted_dss!(Y.c => p.ghost_buffer.c, Y.f => p.ghost_buffer.f)
+    end
+    if any(isnan, parent(Y))
+        error(
+            "State Y contains NaN in set_precomputed_quantities! " *
+            "(post-Newton or end-of-timestep state). " *
+            "This usually means Newton produced a NaN solution or the Helmholtz " *
+            "correction introduced NaN. Inspect min(ρ), min(p); try smaller dt.",
+        )
+    end
     set_implicit_precomputed_quantities!(Y, p, t)
     set_explicit_precomputed_quantities!(Y, p, t)
 end

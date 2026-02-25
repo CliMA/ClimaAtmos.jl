@@ -62,14 +62,19 @@ Returns:
 - `Yₜ`: The populated main tendency state vector.
 """
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    check_state_nans(Y, "remaining_tendency!")
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     Yₜ .= zero(eltype(Yₜ))
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
     fill_with_nans!(p)  # TODO: would be better to limit this to debug mode (e.g., if p.debug_mode...)
     horizontal_dynamics_tendency!(Yₜ, Y, p, t)
+    check_tendency_nans(Yₜ, "horizontal_dynamics_tendency!")
     hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    check_tendency_nans(Yₜ, "hyperdiffusion_tendency!")
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+    check_tendency_nans(Yₜ, "explicit_vertical_advection_tendency!")
     additional_tendency!(Yₜ, Y, p, t)
+    check_tendency_nans(Yₜ, "additional_tendency!")
     return Yₜ
 end
 

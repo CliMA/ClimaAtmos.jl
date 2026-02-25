@@ -109,17 +109,21 @@ end
 NVTX.@annotate function cloud_fraction_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
-    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) =
+    (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) =
         p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     if isnothing(p.atmos.turbconv_model)
         @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
+        # Use precomputed ᶜp (already clamped to _implicit_p_min > 0) rather than
+        # recomputing pressure from Y.c.ρ and ᶜT. During implicit solves, trial
+        # states can be unphysical (negative ρ or T), which would make
+        # liquid_ice_pottemp compute a negative pressure and trigger a log domain error.
         @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
             ᶠinterp(
-                TD.liquid_ice_pottemp(
+                TD.liquid_ice_pottemp_given_pressure(
                     thermo_params,
                     ᶜT,
-                    Y.c.ρ,
+                    ᶜp,
                     ᶜq_tot_safe,
                     ᶜq_liq_rai,
                     ᶜq_ice_sno,
@@ -334,7 +338,63 @@ function reset_graceful_exit(output_dir)
     open(io -> print(io, 0), file, "w")
 end
 
+"""
+    _fields_with_nan(u, prefix = "")
+
+Recursively find state component paths (e.g. "c.ρ", "f.u₃") that contain any NaN.
+Returns a vector of strings.
+"""
+function _fields_with_nan(u, prefix = "")
+    out = String[]
+    for pn in propertynames(u)
+        sub = getproperty(u, pn)
+        path = isempty(prefix) ? string(pn) : prefix * "." * string(pn)
+        if sub isa Fields.Field
+            p = parent(sub)
+            T = eltype(p)
+            if T <: Number
+                any(isnan, p) && push!(out, path)
+            else
+                # Field with struct eltype (e.g. NamedTuple): check each field
+                for fn in propertynames(T)
+                    try
+                        col = getfield.(p, fn)
+                        if eltype(col) <: Number
+                            any(isnan, col) && push!(out, path * "." * string(fn))
+                        end
+                    catch
+                    end
+                end
+            end
+        elseif sub isa Union{Number, AbstractString, Bool, Symbol, Nothing}
+            continue
+        else
+            try
+                if !isempty(propertynames(sub))
+                    append!(out, _fields_with_nan(sub, path))
+                end
+            catch
+            end
+        end
+    end
+    return out
+end
+
 function check_nans(integrator)
-    any(isnan, parent(integrator.u)) && error("Found NaN")
-    return nothing
+    u = integrator.u
+    if !any(isnan, parent(u))
+        return nothing
+    end
+    fields_with_nan = _fields_with_nan(u)
+    t = integrator.t
+    step_info = "t = $t"
+    try
+        iter = integrator.iter
+        step_info = "step = $iter, t = $t"
+    catch
+    end
+    error(
+        "Found NaN at $step_info. State components with NaN: " *
+        (isempty(fields_with_nan) ? "(flat parent)" : join(fields_with_nan, ", ")),
+    )
 end

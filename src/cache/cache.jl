@@ -171,16 +171,21 @@ function build_cache(
     scratch = temporary_quantities(Y, atmos)
 
     precomputed = precomputed_quantities(Y, atmos)
+    # ha_cache must be allocated before precomputing_arguments so that
+    # set_precomputed_quantities! (called below) can access p.horizontal_acoustic_cache.
+    ha_cache = horizontal_acoustic_cache(Y, atmos)
     precomputing_arguments = (;
         atmos,
         core,
         params,
         sfc_setup,
+        ghost_buffer,
         precomputed,
         scratch,
         dt,
         conservation_check,
         external_forcing,
+        horizontal_acoustic_cache = ha_cache,
     )
 
     # Coupler compatibility
@@ -188,6 +193,19 @@ function build_cache(
         SurfaceConditions.set_dummy_surface_conditions!(precomputing_arguments)
 
     set_precomputed_quantities!(Y, precomputing_arguments, FT(0))
+
+    # Reset ᶜcs²_ref to zero after the initial set_precomputed_quantities! call.
+    # set_explicit_precomputed_quantities! (called inside above) sets ᶜcs²_ref to
+    # real sound-speed values. Without this reset, the ClimaTimeSteppers __init
+    # would call cache! on the initial state with real ᶜcs²_ref, applying the
+    # Helmholtz correction to the physical initial state and corrupting it
+    # (negative densities → clamped to 1e-6, but ρe_tot becomes hugely negative
+    # → negative T → negative pressure in callbacks). Resetting ᶜcs²_ref here
+    # makes the __init cache! call a no-op; set_explicit_precomputed_quantities!
+    # within that call will restore real ᶜcs²_ref for the first actual timestep.
+    if !isnothing(ha_cache)
+        fill!(parent(ha_cache.ᶜcs²_ref), zero(FT))
+    end
 
     radiation_args =
         atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
@@ -203,7 +221,6 @@ function build_cache(
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
     tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
-    ha_cache = horizontal_acoustic_cache(Y, atmos)
 
     args = (
         dt,
