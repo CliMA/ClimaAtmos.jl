@@ -628,23 +628,6 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # For non-EDMF: gradients are computed inside set_covariance_cache!.
     set_covariance_cache!(Y, p, thermo_params)
 
-    # EDMF precipitation (consumes covariance fields for SGS quadrature)
-    if turbconv_model isa PrognosticEDMFX
-        set_prognostic_edmf_precomputed_quantities_precipitation!(
-            Y,
-            p,
-            p.atmos.microphysics_model,
-        )
-    end
-    if turbconv_model isa DiagnosticEDMFX
-        set_diagnostic_edmf_precomputed_quantities_env_precipitation!(
-            Y,
-            p,
-            t,
-            p.atmos.microphysics_model,
-        )
-    end
-
     set_precipitation_velocities!(
         Y,
         p,
