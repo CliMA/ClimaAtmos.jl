@@ -87,11 +87,25 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜq_ice_snoʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
+    # Microphysics quantities that are written during set_implicit_precomputed_quantities!
+    # and depend on Y (through ρa⁰), so they need Dual-typed copies for autodiff.
+    implicit_mp_quantities =
+        if atmos.microphysics_tendency_timestepping == Implicit() &&
+           microphysics_model isa
+           Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}}
+            (;
+                ᶜS_ρq_tot = similar(Y.c, FT),
+                ᶜS_ρe_tot = similar(Y.c, FT),
+            )
+        else
+            (;)
+        end
     return (;
         gs_quantities...,
         moist_gs_quantities...,
         sgs_quantities...,
         prognostic_sgs_quantities...,
+        implicit_mp_quantities...,
     )
 end
 
