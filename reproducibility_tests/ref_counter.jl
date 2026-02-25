@@ -1,4 +1,4 @@
-317
+318
 
 # **README**
 #
@@ -20,6 +20,8 @@
 
 
 #=
+318
+- Add GPU Orographic Gravity Wave implementation, refactor NOGW tests, add OGW tests and fix base fluxes
 
 317
 - SGS saturation quadrature fix: apply weight adjustment to prevent
