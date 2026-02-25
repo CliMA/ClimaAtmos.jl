@@ -92,6 +92,13 @@ import ClimaParams as CP
                 T_mean = FT(280.0)
                 q_mean = FT(0.01)
 
+                # Pre-compute grid-mean condensate for comparison
+                q_sat_gm = TD.q_vap_saturation(thp, T_mean, ρ)
+                q_cond_gm = max(FT(0), q_mean - q_sat_gm)
+                λ_gm = TD.liquid_fraction_ramp(thp, T_mean)
+                q_liq_gm = λ_gm * q_cond_gm
+                q_ice_gm = (FT(1) - λ_gm) * q_cond_gm
+
                 @testset "Zero variance = grid-mean" begin
                     # Zero covariances should give grid-mean result
                     result = ClimaAtmos.compute_sgs_saturation_adjustment(
@@ -99,13 +106,8 @@ import ClimaParams as CP
                         FT(0), FT(0), FT(0),
                     )
 
-                    # Compute grid-mean directly
-                    q_sat = TD.q_vap_saturation(thp, T_mean, ρ)
-                    q_cond_gm = max(FT(0), q_mean - q_sat)
-                    λ = TD.liquid_fraction_ramp(thp, T_mean)
-
-                    @test result.q_liq ≈ λ * q_cond_gm rtol = FT(1e-5)
-                    @test result.q_ice ≈ (1 - λ) * q_cond_gm rtol = FT(1e-5)
+                    @test result.q_liq ≈ q_liq_gm rtol = FT(1e-5)
+                    @test result.q_ice ≈ q_ice_gm rtol = FT(1e-5)
                     @test result.T == T_mean
                 end
 
@@ -123,12 +125,8 @@ import ClimaParams as CP
                     )
 
                     # Even with variance, single point should give grid-mean
-                    q_sat = TD.q_vap_saturation(thp, T_mean, ρ)
-                    q_cond_gm = max(FT(0), q_mean - q_sat)
-                    λ = TD.liquid_fraction_ramp(thp, T_mean)
-
-                    @test result.q_liq ≈ λ * q_cond_gm rtol = FT(1e-4)
-                    @test result.q_ice ≈ (1 - λ) * q_cond_gm rtol = FT(1e-4)
+                    @test result.q_liq ≈ q_liq_gm rtol = FT(1e-4)
+                    @test result.q_ice ≈ q_ice_gm rtol = FT(1e-4)
                 end
 
                 @testset "Non-zero variance gives finite result" begin
@@ -148,7 +146,7 @@ import ClimaParams as CP
                 @testset "Condensate non-negativity" begin
                     # Edge case: very dry conditions
                     result = ClimaAtmos.compute_sgs_saturation_adjustment(
-                        thp, quad, ρ, FT(300.0), FT(0.001),  # Very dry
+                        thp, quad, ρ, FT(300.0), FT(0.001),
                         FT(1.0), FT(1e-8), FT(0),
                     )
 
