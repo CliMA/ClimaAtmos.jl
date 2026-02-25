@@ -1,0 +1,20 @@
+dt_save_state_to_disk: "3600secs"
+initial_condition: "DryDensityCurrentProfile"
+x_max: 51200.0
+z_elem: 90
+# CFL_acoustic = cs * dt / dx_elem = 347 * 1.8 / 640 ≈ 0.98 ≈ 1.0 (element-based)
+# Richardson stability limit: dt < 0.53 s (CFL_elem ~ 0.29); dt = 1.8 s tests beyond that.
+dt: "0.3secs"
+t_end: "900.0secs"
+z_stretch: false
+x_elem: 80
+config: "plane"
+z_max: 6400.0
+disable_surface_flux_tendency: true
+output_default_diagnostics: false
+implicit_horizontal_acoustics: true
+use_dense_jacobian: true
+check_nan_every: 1
+diagnostics:
+  - short_name: thetaa
+    period: 900secs
