@@ -636,16 +636,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     )
 
     # Apply physically motivated tendency limits
-    @. ᶜmp_tendency = apply_1m_tendency_limits(
-        $(Ref(p.atmos.microphysics_tendency_timestepping)),
-        ᶜmp_tendency,
-        thp,
-        ᶜq_tot⁰,
-        ᶜq_liq⁰,
-        ᶜq_ice⁰,
-        ᶜq_rai⁰,
-        ᶜq_sno⁰,
-        dt,
+    _apply_1m_limits!(
+        ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping,
+        thp, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰, dt,
     )
     @. ᶜSqₗᵐ⁰ = ᶜmp_tendency.dq_lcl_dt
     @. ᶜSqᵢᵐ⁰ = ᶜmp_tendency.dq_icl_dt

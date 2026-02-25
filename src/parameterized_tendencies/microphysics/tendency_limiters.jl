@@ -232,3 +232,28 @@ end
         dq_sno_dt = dq_sno_dt,
     )
 end
+
+"""
+    _apply_1m_limits!(ᶜmp_tendency, timestepping, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt)
+
+Function barrier for `apply_1m_tendency_limits` in broadcast expressions.
+
+Dispatches on `timestepping::AbstractTimesteppingMode` outside the broadcast,
+then calls `apply_1m_tendency_limits` inside the broadcast with the concrete
+singleton type.  This avoids passing the timestepping mode *through* the
+broadcast (which would require a `Ref` wrapper and its 8-byte heap allocation).
+"""
+@inline function _apply_1m_limits!(
+    ᶜmp_tendency, timestepping::Implicit, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+)
+    @. ᶜmp_tendency = apply_1m_tendency_limits(
+        Implicit(), ᶜmp_tendency, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+    )
+end
+@inline function _apply_1m_limits!(
+    ᶜmp_tendency, timestepping::Explicit, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+)
+    @. ᶜmp_tendency = apply_1m_tendency_limits(
+        Explicit(), ᶜmp_tendency, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+    )
+end

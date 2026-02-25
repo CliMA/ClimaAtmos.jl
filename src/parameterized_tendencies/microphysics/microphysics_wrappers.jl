@@ -108,16 +108,9 @@ function compute_1m_precipitation_tendencies!(
     )
 
     # Apply limiting via shared helper
-    @. mp_tendency = apply_1m_tendency_limits(
-        $(Ref(microphysics_tendency_timestepping)),
-        mp_tendency,
-        thp,
-        qₜ,
-        qₗ,
-        qᵢ,
-        qᵣ,
-        qₛ,
-        dt,
+    _apply_1m_limits!(
+        mp_tendency, microphysics_tendency_timestepping,
+        thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, dt,
     )
     @. Sqₗᵐ = mp_tendency.dq_lcl_dt
     @. Sqᵢᵐ = mp_tendency.dq_icl_dt

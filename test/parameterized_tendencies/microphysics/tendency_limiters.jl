@@ -208,6 +208,7 @@ import ClimaAtmos:
             q_tot = FT(0.05)  # q_vap = 0.01 > 0
 
             limited = apply_1m_tendency_limits(
+                ClimaAtmos.Explicit(),
                 mp_tendency,
                 thermo_params,
                 q_tot,
@@ -242,6 +243,7 @@ import ClimaAtmos:
             q_tot = FT(0.01)  # q_vap = 0.0082
 
             limited = apply_1m_tendency_limits(
+                ClimaAtmos.Explicit(),
                 mp_tendency,
                 thermo_params,
                 q_tot,
@@ -279,6 +281,7 @@ import ClimaAtmos:
             q_tot = FT(0.05)  # q_vap = 0.01
 
             limited = apply_1m_tendency_limits(
+                ClimaAtmos.Explicit(),
                 mp_tendency,
                 thermo_params,
                 q_tot,
