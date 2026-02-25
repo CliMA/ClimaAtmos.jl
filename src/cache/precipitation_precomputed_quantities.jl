@@ -978,6 +978,24 @@ function set_microphysics_tendency_cache!(
     @. ᶜSqᵢᵐ = 0
     @. ᶜSqₛᵐ = 0
 
+    # Compute 2M microphysics derivatives ∂(dqₓ/dt)/∂qₓ
+    # for the implicit Jacobian diagonal.
+    (; ᶜmp_derivative) = p.precomputed
+    @. ᶜmp_derivative = BMT.bulk_microphysics_derivatives(
+        BMT.Microphysics2Moment(),
+        cmp,
+        thp,
+        Y.c.ρ,
+        ᶜT,
+        ᶜq_tot,
+        ᶜq_liq,
+        ᶜq_liq,  # q_icl proxy (not tracked in 2M warm-only)
+        ᶜq_rai,
+        ᶜq_liq,  # q_sno proxy (not tracked in 2M warm-only)
+        ᶜn_liq,
+        ᶜn_rai,
+    )
+
     return nothing
 end
 function set_microphysics_tendency_cache!(

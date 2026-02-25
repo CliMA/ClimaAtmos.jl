@@ -205,6 +205,16 @@ function precomputed_quantities(Y, atmos)
                     dq_ice_dt::FT, dq_rim_dt::FT, db_rim_dt::FT,
                 }
             ),
+            ᶜmp_derivative = similar(Y.c,
+                @NamedTuple{
+                    ∂tendency_∂q_lcl::FT,
+                    ∂tendency_∂q_icl::FT,
+                    ∂tendency_∂q_rai::FT,
+                    ∂tendency_∂q_sno::FT,
+                    ∂tendency_∂n_lcl::FT,
+                    ∂tendency_∂n_rai::FT,
+                }
+            ),
         )
         # Add additional quantities for 2M + P3
         if atmos.microphysics_model isa Microphysics2MomentP3
