@@ -638,6 +638,87 @@ function set_precipitation_velocities!(
 end
 
 """
+    refresh_microphysics_source!(Y, p, microphysics_model, turbconv_model)
+
+Lightweight update of `ᶜS_ρq_tot` / `ᶜS_ρe_tot` from the already-computed
+`ᶜmp_tendency`.  Called from `set_implicit_precomputed_quantities!` to refresh
+only the Y-dependent part (ρ × limit_sink) without re-running the full
+`set_microphysics_tendency_cache!` (whose quadrature broadcasts allocate).
+"""
+refresh_microphysics_source!(Y, p, _, _) = nothing
+
+# 0M grid-mean (bare or quadrature, non-EDMF)
+function refresh_microphysics_source!(
+    Y, p,
+    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
+    _,
+)
+    (; dt) = p
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜmp_tendency) = p.precomputed
+    (; ᶜΦ) = p.core
+    @. ᶜS_ρq_tot =
+        Y.c.ρ * limit_sink(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot / Y.c.ρ, dt)
+    @. ᶜS_ρe_tot = ᶜS_ρq_tot * (ᶜmp_tendency.e_int_precip + ᶜΦ)
+    return nothing
+end
+
+# 0M + PrognosticEDMFX: ᶜS_ρq_tot depends on Y through ρa⁰ and ρa updrafts
+function refresh_microphysics_source!(
+    Y, p,
+    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
+    ::PrognosticEDMFX,
+)
+    (; ᶜΦ) = p.core
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
+    (; ᶜSqₜᵐ⁰, ᶜSqₜᵐʲs) = p.precomputed
+    (; ᶜTʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
+    (; ᶜT⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
+
+    @. ᶜS_ρq_tot = ᶜSqₜᵐ⁰ * ᶜρa⁰
+    @. ᶜS_ρe_tot =
+        ᶜSqₜᵐ⁰ *
+        ᶜρa⁰ *
+        e_tot_0M_precipitation_sources_helper(
+            thermo_params,
+            ᶜT⁰,
+            ᶜq_liq_rai⁰,
+            ᶜq_ice_sno⁰,
+            ᶜΦ,
+        )
+    for j in 1:n
+        @. ᶜS_ρq_tot += ᶜSqₜᵐʲs.:($$j) * Y.c.sgsʲs.:($$j).ρa
+        @. ᶜS_ρe_tot +=
+            ᶜSqₜᵐʲs.:($$j) *
+            Y.c.sgsʲs.:($$j).ρa *
+            e_tot_0M_precipitation_sources_helper(
+                thermo_params,
+                ᶜTʲs.:($$j),
+                ᶜq_liq_raiʲs.:($$j),
+                ᶜq_ice_snoʲs.:($$j),
+                ᶜΦ,
+            )
+    end
+    return nothing
+end
+
+# 1M and 2M: no allocating broadcasts, so just delegate
+function refresh_microphysics_source!(
+    Y, p,
+    mm::Union{
+        Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment},
+        Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment},
+    },
+    turbconv_model,
+)
+    set_microphysics_tendency_cache!(Y, p, mm, turbconv_model)
+    return nothing
+end
+
+"""
     set_microphysics_tendency_cache!(Y, p, microphysics_model, turbconv_model)
 
 Computes the cache needed for microphysics tendencies. When run without edmf

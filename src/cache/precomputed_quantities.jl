@@ -611,14 +611,15 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # Do nothing for other turbconv models for now
     end
 
-    # When microphysics is implicit, compute the microphysics tendency cache
-    # and surface fluxes here so that ᶜS_ρq_tot is fresh for each implicit
-    # stage.  This ensures the atmospheric water removal (in T_imp) and the
+    # When microphysics is implicit, refresh ᶜS_ρq_tot and ᶜS_ρe_tot from
+    # the already-computed ᶜmp_tendency so that they reflect the current Y.
+    # This ensures the atmospheric water removal (in T_imp) and the
     # surface deposition use the same ᶜS_ρq_tot, preserving conservation.
+    # We deliberately skip re-running the full set_microphysics_tendency_cache!
+    # here because the quadrature broadcasts allocate via Ref(); only the
+    # ᶜS_ρq_tot = ρ * limit_sink(...) lines actually depend on Y.
     if p.atmos.microphysics_tendency_timestepping == Implicit()
-        set_microphysics_tendency_cache!(
-            Y, p, microphysics_model, turbconv_model,
-        )
+        refresh_microphysics_source!(Y, p, microphysics_model, turbconv_model)
         set_precipitation_surface_fluxes!(Y, p, microphysics_model)
     end
 end
