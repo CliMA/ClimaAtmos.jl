@@ -647,10 +647,22 @@ only the Y-dependent part (ρ × limit_sink) without re-running the full
 """
 refresh_microphysics_source!(Y, p, _, _) = nothing
 
-# 0M grid-mean (bare or quadrature, non-EDMF)
+# Bare 0M (non-quadrature, non-EDMF): no allocating broadcasts, delegate to full recompute
 function refresh_microphysics_source!(
     Y, p,
-    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
+    mm::Microphysics0Moment,
+    turbconv_model,
+)
+    set_microphysics_tendency_cache!(Y, p, mm, turbconv_model)
+    return nothing
+end
+
+# Quadrature 0M (non-EDMF): skip the allocating quadrature broadcast,
+# only refresh the Y-dependent ᶜS_ρq_tot / ᶜS_ρe_tot from stale ᶜmp_tendency.
+# ᶜmp_tendency depends on ᶜT (already refreshed in implicit precomputed).
+function refresh_microphysics_source!(
+    Y, p,
+    ::QuadratureMicrophysics{Microphysics0Moment},
     _,
 )
     (; dt) = p
@@ -662,10 +674,21 @@ function refresh_microphysics_source!(
     return nothing
 end
 
-# 0M + PrognosticEDMFX: ᶜS_ρq_tot depends on Y through ρa⁰ and ρa updrafts
+# Bare 0M + PrognosticEDMFX: no allocating broadcasts, delegate to full recompute
 function refresh_microphysics_source!(
     Y, p,
-    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
+    mm::Microphysics0Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    set_microphysics_tendency_cache!(Y, p, mm, turbconv_model)
+    return nothing
+end
+
+# Quadrature 0M + PrognosticEDMFX: ᶜSqₜᵐ⁰/ᶜSqₜᵐʲs already computed by EDMF precipitation;
+# only refresh the Y-dependent ᶜS_ρq_tot / ᶜS_ρe_tot (avoids allocating quadrature broadcast)
+function refresh_microphysics_source!(
+    Y, p,
+    ::QuadratureMicrophysics{Microphysics0Moment},
     ::PrognosticEDMFX,
 )
     (; ᶜΦ) = p.core

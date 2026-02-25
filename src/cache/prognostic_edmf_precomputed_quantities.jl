@@ -492,8 +492,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         GridMeanSGS()
     end
 
-    # Get T-based variances from cache
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    # Get T-based variances from cache (zero when SGS quadrature is off)
+    FT = eltype(Y)
+    if hasproperty(p.precomputed, :ᶜT′T′)
+        (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    else
+        ᶜT′T′ = FT(0)
+        ᶜq′q′ = FT(0)
+    end
 
     # Integrate 0M tendencies over SGS fluctuations
     @. ᶜmp_tendency = microphysics_tendencies_quadrature_0m(
@@ -612,8 +618,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         GridMeanSGS()
     end
 
-    # Get T-based variances from cache
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    # Get T-based variances from cache (zero when SGS quadrature is off)
+    FT = eltype(Y)
+    if hasproperty(p.precomputed, :ᶜT′T′)
+        (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    else
+        ᶜT′T′ = FT(0)
+        ᶜq′q′ = FT(0)
+    end
 
     # Integrate microphysics tendencies over SGS fluctuations
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
