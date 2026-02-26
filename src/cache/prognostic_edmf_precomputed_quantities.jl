@@ -366,7 +366,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         end
         # Add boundary kinematic contribution to entrainment to compensate
         # advective area loss (∂(ρaw)/∂z) in the first cell. Using a one-sided
-        # estimate (zero flux below the surface), we add ᶠw₂ / ᶜdz₁ = 2 ᶜw₁ / ᶜdz₁ 
+        # estimate (zero flux below the surface), we add ᶠw₂ / ᶜdz₁ = 2 ᶜw₁ / ᶜdz₁
         # so that entrainment can effectively relax area toward `surface_area`.
         ᶜdz = Fields.Δz_field(axes(Y.c))
         @. p.scratch.ᶜtemp_scalar_4 = 2 * get_physical_w(ᶜuʲs.:($$j), ᶜlg) / ᶜdz
