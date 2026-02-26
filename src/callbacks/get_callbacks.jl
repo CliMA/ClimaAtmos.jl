@@ -242,22 +242,34 @@ function parse_frequency_to_schedule(
         return CAD.DivisorSchedule(steps)
     end
 
+    date_last =
+        t_start isa ITime ?
+        ClimaUtilities.TimeManager.date(t_start) :
+        start_date + Dates.Second(t_start)
+
     if occursin("months", frequency_str)
         months = match(r"^(\d+)months$", frequency_str)
         isnothing(months) && error(
             "$(frequency_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
         )
         period_dates = Dates.Month(parse(Int, first(months)))
+    elseif frequency_str == "monthly"
+        period_dates = Dates.Month(1)
+        date_last = Dates.firstdayofmonth(date_last)
+    elseif frequency_str == "weekly"
+        period_dates = Dates.Week(1)
+        date_last = date_last - Dates.Day(Dates.dayofweek(date_last) - 1)
+    elseif frequency_str == "daily"
+        period_dates = Dates.Day(1)
+        # Converting to a Date clears the time information (e.g. hours, minutes,
+        # seconds, etc)
+        date_last = Dates.DateTime(Dates.Date(date_last))
     else
         period_seconds = FT(time_to_seconds(frequency_str))
         period_dates =
             CA.promote_period.(Dates.Second(period_seconds))
     end
 
-    date_last =
-        t_start isa ITime ?
-        ClimaUtilities.TimeManager.date(t_start) :
-        start_date + Dates.Second(t_start)
     return CAD.EveryCalendarDtSchedule(
         period_dates;
         reference_date = start_date,
@@ -503,6 +515,47 @@ function edmfx_filter_callback(
     return call_every_dt(edmfx_filter_callback!, dt)
 end
 
+function ogw_callback(
+    orographic_gravity_wave,
+    dt_ogw,
+    dt,
+    t_start,
+    t_end,
+    checkpoint_frequency,
+)
+    orographic_gravity_wave isa OrographicGravityWave || return ()
+
+    # Determine float type: use Float64 if dt is ITime (since float(ITime) -> Float64),
+    # otherwise preserve the float type of dt or default to Float64
+    FT = typeof(dt) <: ITime ? Float64 : (dt isa AbstractFloat ? typeof(dt) : Float64)
+
+    # Convert dt_ogw string to seconds (once)
+    dt_ogw_seconds_float = time_to_seconds(dt_ogw)
+
+    # Compute float value for validation BEFORE promotion
+    dt_ogw_seconds_val = FT(dt_ogw_seconds_float)
+
+    # Create dt_ogw_seconds matching the type of dt (ITime if dt is ITime, else FT)
+    dt_ogw_seconds =
+        dt isa ITime ?
+        ITime(dt_ogw_seconds_float) :
+        dt_ogw_seconds_val
+
+    # Promote dt_ogw_seconds with other time values to ensure all have compatible types
+    dt_ogw_seconds, _, _, _ = promote(dt_ogw_seconds, t_start, dt, t_end)
+
+    # Validation against checkpoint frequency using the float value (before promotion)
+    dt_ogw_s = Dates.Second(round(Int, dt_ogw_seconds_val))
+    if checkpoint_frequency != Inf &&
+       !CA.isdivisible(checkpoint_frequency, dt_ogw_s)
+        @warn "Orographic gravity wave period ($(dt_ogw_s)) is not an even divisor of the checkpoint frequency ($checkpoint_frequency)"
+        @warn "This simulation will not be reproducible when restarted"
+    end
+
+    return (call_every_dt(ogw_model_callback!, dt_ogw_seconds),)
+end
+
+
 function get_callbacks(config, sim_info, atmos, params, Y, p)
     (; parsed_args, comms_ctx) = config
     FT = eltype(params)
@@ -570,6 +623,19 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         nogw_callback(
             atmos.non_orographic_gravity_wave,
             parsed_args["dt_nogw"],
+            dt,
+            t_start,
+            t_end,
+            checkpoint_frequency,
+        )...,
+    )
+
+    # Orographic gravity wave
+    callbacks = (
+        callbacks...,
+        ogw_callback(
+            atmos.orographic_gravity_wave,
+            parsed_args["dt_ogw"],
             dt,
             t_start,
             t_end,
@@ -671,7 +737,7 @@ function default_model_callbacks(water::AtmosWater;
     t_start,
     t_end,
     kwargs...)
-    if !isnothing(water.moisture_model)
+    if !isnothing(water.microphysics_model)
         return cloud_fraction_callback(
             dt_cloud_fraction,
             dt,
@@ -683,7 +749,7 @@ function default_model_callbacks(water::AtmosWater;
 end
 
 """
-    common_callbacks(dt, output_dir, start_date, t_start, t_end, comms_ctx; kwargs...)
+    common_callbacks(model, dt, output_dir, start_date, t_start, t_end, comms_ctx; kwargs...)
 
 Get commonly used callbacks like progress logging, NaN checking, conservation, etc.
 These are not model-specific but are frequently needed across simulations.
@@ -694,7 +760,7 @@ These are not model-specific but are frequently needed across simulations.
 - `external_forcing_column = false`: Enable external forcing for single column
 """
 function common_callbacks(
-    dt, output_dir, start_date, t_start, t_end, comms_ctx, checkpoint_frequency,
+    model, dt, output_dir, start_date, t_start, t_end, comms_ctx, checkpoint_frequency,
 )
     callbacks = ()
 

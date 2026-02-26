@@ -275,6 +275,9 @@ orographic_gravity_wave:
 non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
   value: false
+dt_ogw:
+  help: "Time between calling orographic gravity wave update"
+  value: "1800secs"
 dt_nogw:
   help: "Time between calling non-orographic gravity wave update"
   value: "1800secs"
