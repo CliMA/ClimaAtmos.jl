@@ -50,6 +50,24 @@ append_to_atmos_cache(atmos_cache, precomputed, scratch) = AtmosCache(
     end...,
 )
 
+# Full-tendency Jacobian: also replace hyperdiff (written in prep_hyperdiffusion_tendency!)
+# and core (read in implicit_tendency!; mixing Float32 core with Dual causes method errors).
+append_to_atmos_cache(atmos_cache, precomputed, scratch, hyperdiff, core) = AtmosCache(
+    unrolled_map(fieldnames(typeof(atmos_cache))) do cache_component_name
+        if cache_component_name == :precomputed
+            (; atmos_cache.precomputed..., precomputed...)
+        elseif cache_component_name == :scratch
+            (; atmos_cache.scratch..., scratch...)
+        elseif cache_component_name == :hyperdiff
+            hyperdiff
+        elseif cache_component_name == :core
+            core
+        else
+            getfield(atmos_cache, cache_component_name)
+        end
+    end...,
+)
+
 # The horizontal SpectralElementSpace of the fields in a FieldVector.
 function horizontal_space(field_vector)
     all_values = Fields._values(field_vector)

@@ -9,6 +9,7 @@ import ClimaAtmos as CA
 import ClimaCore: Fields, Grids
 import ClimaTimeSteppers as CTS
 import Logging
+import StaticArrays as SA
 
 import ClimaUtilities.TimeManager: ITime
 
@@ -508,10 +509,20 @@ end
 
 function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
     auto_jacobian_padding_bands,
-    approximate_linear_solve_iters, debug_jacobian,
+    approximate_linear_solve_iters, debug_jacobian;
+    use_full_tendency = false,
+    p = nothing,
 )
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
+    if use_full_tendency && !isnothing(p)
+        # DIRK: full-tendency Jacobian (requires dense)
+        use_dense_jacobian ||
+            error("DIRK requires use_dense_jacobian = true (full-tendency Jacobian)")
+        jacobian_algorithm = AutoDenseJacobianFullTendency()
+        @info "Jacobian algorithm: $(summary_string(jacobian_algorithm)) (full tendency)"
+        return Jacobian(jacobian_algorithm, Y, p; verbose = debug_jacobian)
+    end
     jacobian_algorithm = if use_dense_jacobian
         AutoDenseJacobian()
     else
@@ -553,11 +564,104 @@ function ode_configuration(::Type{FT}, args) where {FT}
 end
 
 
+# Diagonally Implicit Runge-Kutta (DIRK) algorithm names supported in ClimaAtmos.
+# DIRK treats the full RHS implicitly. We use a negligible explicit coefficient (ε) in the
+# first stage so ClimaTimeSteppers' init_cache gets a non-empty inds_T_exp; the explicit
+# tendency is set to zero so the numerical result is pure DIRK.
+# Refs: Kennedy & Carpenter (2019) https://www.sciencedirect.com/science/article/pii/S0168927419301801,
+#       Fernandez et al. (MIT) https://www.mit.edu/~cuongng/project/les2/les2.pdf
+const DIRK_ALGORITHM_NAMES = ("DIRK232", "DIRK343")
+const DIRK_EXPLICIT_EPS = 1e-20  # negligible so b_exp' * T_exp ≈ 0 when T_exp is zeroed
+
+"""
+    dirk_tableau(ode_name)
+
+Return an IMEXTableau for the given DIRK scheme. The explicit part (a_exp, b_exp) is
+effectively zero: only the first stage has b_exp[1] = ε so the integrator allocates
+one explicit stage; we set T_exp_T_lim! to zero that stage so the update is pure DIRK.
+- DIRK232: 2-stage, 2nd-order L-stable SDIRK (γ = 1 - 1/√2).
+- DIRK343: 3-stage, 3rd-order L-stable DIRK (γ = (3+√3)/6, Alexander 1977 style).
+"""
+function dirk_tableau(ode_name::AbstractString)
+    ε = DIRK_EXPLICIT_EPS
+    if ode_name == "DIRK232"
+        γ = 1 - 1 / √2
+        a_exp = SA.@SMatrix [0.0 0.0; 0.0 0.0]
+        b_exp = SA.@SVector [ε, 0.0]  # one negligible entry so inds_T_exp is non-empty
+        a_imp = SA.@SMatrix [γ 0.0; (1 - γ) γ]
+        b_imp = SA.@SVector [(1 - γ), γ]
+        return CTS.IMEXTableau(; a_exp, b_exp, a_imp, b_imp)
+    elseif ode_name == "DIRK343"
+        γ = (3 + √3) / 6
+        a_exp = SA.@SMatrix [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0]
+        b_exp = SA.@SVector [ε, 0.0, 0.0]
+        # 3-stage 3rd-order L-stable DIRK (lower triangular)
+        a_imp = SA.@SMatrix [
+            γ 0.0 0.0
+            (1 / 2 - γ) γ 0.0
+            (2γ - 1) (1 - 2γ) γ
+        ]
+        b_imp = SA.@SVector [1 / 6, 1 / 6, 2 / 3]
+        return CTS.IMEXTableau(; a_exp, b_exp, a_imp, b_imp)
+    else
+        error("Unknown DIRK algorithm: $ode_name. Use one of $DIRK_ALGORITHM_NAMES")
+    end
+end
+
+"""Return true if `ode_algo` is a DIRK (negligible explicit part) IMEX algorithm."""
+is_dirk(ode_algo) = false
+function is_dirk(ode_algo::CTS.IMEXAlgorithm)
+    t = ode_algo.tableau
+    # SparseCoeffs does not support iterate() or Array(); extract wrapped array (field 1)
+    a_exp = Array(getfield(t.a_exp, 1))
+    b_exp = Array(getfield(t.b_exp, 1))
+    # DIRK: a_exp all zero, b_exp at most negligible (DIRK_EXPLICIT_EPS) for init_cache
+    all(iszero, a_exp) && maximum(abs, b_exp) <= 1.1 * DIRK_EXPLICIT_EPS
+end
+
 function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
     max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol,
     eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol, newton_rtol,
     jvp_step_adjustment,
 ) where {FT}
+    # DIRK schemes: build IMEX tableau with zero explicit part and same Newton options as IMEX
+    if ode_name in DIRK_ALGORITHM_NAMES
+        @info "Using DIRK config: `$ode_name` (full tendency implicit)"
+        newtons_method = CTS.NewtonsMethod(;
+            max_iters = max_newton_iters_ode,
+            update_j = if update_jacobian_every == "dt"
+                CTS.UpdateEvery(CTS.NewTimeStep)
+            elseif update_jacobian_every == "stage"
+                CTS.UpdateEvery(CTS.NewNewtonSolve)
+            else
+                CTS.UpdateEvery(CTS.NewNewtonIteration)
+            end,
+            krylov_method = if use_krylov_method
+                CTS.KrylovMethod(;
+                    jacobian_free_jvp = CTS.ForwardDiffJVP(;
+                        step_adjustment = FT(jvp_step_adjustment),
+                    ),
+                    forcing_term = if use_dynamic_krylov_rtol
+                        α = FT(eisenstat_walker_forcing_alpha)
+                        CTS.EisenstatWalkerForcing(; α)
+                    else
+                        CTS.ConstantForcing(FT(krylov_rtol))
+                    end,
+                )
+            else
+                nothing
+            end,
+            convergence_checker = if use_newton_rtol
+                norm_condition = CTS.MaximumRelativeError(FT(newton_rtol))
+                CTS.ConvergenceChecker(; norm_condition)
+            else
+                nothing
+            end,
+        )
+        tableau = dirk_tableau(ode_name)
+        return CTS.IMEXAlgorithm(tableau, newtons_method)
+    end
+
     ode_algo_name = getproperty(CTS, Symbol(ode_name))
     @info "Using ODE config: `$ode_algo_name`"
     return if ode_algo_name <: CTS.RosenbrockAlgorithmName
@@ -809,19 +913,38 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
     (; atmos) = p
     s = @timed_str begin
         if isnothing(prescribed_flow)
-
-            # This is the default case
-            T_exp_T_lim! = remaining_tendency!
-            T_imp! = SciMLBase.ODEFunction(
-                implicit_tendency!;
+            if is_dirk(ode_algo)
+                # DIRK: full RHS is implicit. One stage has b_exp[1]=ε so init_cache
+                # gets non-empty inds_T_exp; we zero that stage so the update is pure DIRK.
+                T_exp_T_lim! = (Yₜ, Yₜ_lim, Y, p, t) -> (Yₜ .= zero(eltype(Yₜ)); Yₜ_lim .= zero(eltype(Yₜ_lim)); nothing)
+                # Full-tendency Jacobian (dual-safe cache includes hyperdiff for hyperdiffusion).
                 jac_prototype = get_jacobian(ode_algo, Y, atmos,
                     use_dense_jacobian, use_auto_jacobian,
                     auto_jacobian_padding_bands,
-                    approximate_linear_solve_iters, debug_jacobian,
-                ),
-                Wfact = update_jacobian!,
-            )
-            cache_imp! = set_implicit_precomputed_quantities!
+                    approximate_linear_solve_iters, debug_jacobian;
+                    use_full_tendency = true,
+                    p,
+                )
+                T_imp! = SciMLBase.ODEFunction(
+                    full_tendency!;
+                    jac_prototype,
+                    Wfact = update_jacobian!,
+                )
+                cache_imp! = set_precomputed_quantities!
+            else
+                # Default: IMEX split (remaining explicit, implicit_tendency implicit)
+                T_exp_T_lim! = remaining_tendency!
+                T_imp! = SciMLBase.ODEFunction(
+                    implicit_tendency!;
+                    jac_prototype = get_jacobian(ode_algo, Y, atmos,
+                        use_dense_jacobian, use_auto_jacobian,
+                        auto_jacobian_padding_bands,
+                        approximate_linear_solve_iters, debug_jacobian,
+                    ),
+                    Wfact = update_jacobian!,
+                )
+                cache_imp! = set_implicit_precomputed_quantities!
+            end
         else
             # `prescribed_flow` is an experimental case where the flow is prescribed,
             # so implicit tendencies are treated explicitly to avoid treatment of sound waves

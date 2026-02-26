@@ -87,14 +87,21 @@ function solve_atmos!(simulation)
             return AtmosSolveResults(sol, :success, walltime)
         end
     catch ret_code
+        exc_msg = ret_code isa Exception ? "$(typeof(ret_code)): $(sprint(showerror, ret_code))" : "$ret_code"
+        # Single line to stderr so the crash reason is easy to find in long logs
+        println(stderr, "ClimaAtmos CRASH: ", exc_msg)
+        bt = catch_backtrace()
+        # Log only the first 20 stack frames so the trace is readable
+        max_frames = 20
+        short_bt = length(bt) > max_frames ? bt[1:max_frames] : bt
+        @error "ClimaAtmos simulation crashed (stacktrace truncated to $max_frames frames)" exception =
+            (ret_code, short_bt)
         if !CA.is_distributed(comms_ctx)
             # We can only save when not distributed because we don't have a way to sync the
             # MPI processes (maybe just one MPI rank crashes, leading to a hanging
             # simulation)
             CA.save_state_to_disk_func(integrator, simulation.output_dir)
         end
-        @error "ClimaAtmos simulation crashed. Stacktrace for failed simulation" exception =
-            (ret_code, catch_backtrace())
         return AtmosSolveResults(nothing, :simulation_crashed, nothing)
     finally
         # Close all the files opened by the writers

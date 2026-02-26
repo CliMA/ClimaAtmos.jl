@@ -1,0 +1,26 @@
+# Plane density current test with DIRK (Diagonally Implicit Runge-Kutta) timestepper.
+# Same setup as plane_density_current_test.yml (stable with dt=0.3s explicit), but uses
+# DIRK232 (2-stage, 2nd-order L-stable) with full RHS treated implicitly.
+# Requires use_dense_jacobian: true.
+# To estimate dt_max from the Jacobian spectral radius, run:
+#   julia --project=.buildkite miscellaneous_tools/estimate_dirk_dt_max.jl [this_file]
+initial_condition: "DryDensityCurrentProfile"
+config: "plane"
+x_max: 51200.0
+x_elem: 80
+z_max: 6400.0
+z_elem: 90
+z_stretch: false
+dt: "1secs"
+t_end: "900.0secs"
+disable_surface_flux_tendency: true
+# DIRK timestepper: full RHS treated implicitly (dt=1s to reach failure point faster)
+ode_algo: "DIRK232"
+use_dense_jacobian: true
+max_newton_iters_ode: 8
+update_jacobian_every: stage
+output_default_diagnostics: false
+diagnostics:
+  - short_name: thetaa
+    period: 900secs
+dt_save_state_to_disk: "3600secs"

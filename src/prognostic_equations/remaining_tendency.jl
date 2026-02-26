@@ -73,6 +73,24 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     return Yₜ
 end
 
+"""
+    full_tendency!(Yₜ, Y, p, t)
+
+Combined tendency for use with fully implicit timesteppers (e.g. DIRK).
+Computes the full RHS dY/dt by summing the explicit (remaining) and implicit
+tendencies. Uses `p.scratch.temp_Yₜ_imp` and `p.scratch.temp_Yₜ_lim` as
+scratch. See [Implicit large-eddy simulation of compressible flows using the
+Interior Embedded Discontinuous Galerkin method](https://www.mit.edu/~cuongng/project/les2/les2.pdf)
+and Kennedy & Carpenter (2019) for DIRK references.
+"""
+function full_tendency!(Yₜ, Y, p, t)
+    (; temp_Yₜ_imp, temp_Yₜ_lim) = p.scratch
+    remaining_tendency!(Yₜ, temp_Yₜ_lim, Y, p, t)
+    implicit_tendency!(temp_Yₜ_imp, Y, p, t)
+    Yₜ .+= temp_Yₜ_imp
+    return nothing
+end
+
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Spaces as Spaces

@@ -160,6 +160,8 @@ function temporary_quantities(Y, atmos)
         ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜtridiagonal_matrix_scalar = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶠtridiagonal_matrix_c3 = similar(Y.f, TridiagonalMatrixRow{C3{FT}}),
-        (!isnothing(atmos.prescribed_flow) ? (; temp_Yₜ_imp = similar(Y)) : (;))...,
+        # Used by prescribed_flow (fully_explicit_tendency!) and by DIRK (full_tendency!)
+        temp_Yₜ_imp = similar(Y),
+        temp_Yₜ_lim = similar(Y),
     )
 end
