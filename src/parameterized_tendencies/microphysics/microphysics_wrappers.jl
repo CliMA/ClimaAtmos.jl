@@ -350,7 +350,7 @@ function aerosol_activation_sources(
     sulfate_std = aerosol_params.sulfate_std
     sulfate_kappa = aerosol_params.sulfate_kappa
 
-    # Early exit for invalid inputs (negative supersaturation, no aerosols, or
+    # Early exit for invalid inputs (negative supersaturation, no aerosols, or 
     # non-physical values that would cause DomainError in CMP)
     invalid_inputs =
         (S < FT(0)) || (n_aer < ϵ_numerics(FT)) || (w <= FT(0)) ||
@@ -533,7 +533,7 @@ improving representation of phase changes.
 # Returns
 NamedTuple with averaged source terms:
 - `dq_lcl_dt`: Cloud liquid tendency [kg/kg/s]
-- `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
+- `dq_icl_dt`: Cloud ice tendency [kg/kg/s]  
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
 
@@ -560,27 +560,18 @@ struct MicrophysicsEvaluator{S, MP, TPS, FT, Args <: Tuple}
     mp::MP
     tps::TPS
     ρ::FT
+    # Grid-mean state
+    T_mean::FT
+    q_tot_mean::FT
     q_lcl_mean::FT
     q_icl_mean::FT
     q_rai::FT
     q_sno::FT
     # Precomputed grid-mean values (avoid redundant computation in quadrature loop)
     q_cond_mean::FT
+    q_sat_mean::FT      # Saturation at grid mean
     excess_mean::FT     # Saturation excess at grid mean (q_tot_mean - q_sat_mean)
     args::Args
-end
-
-struct Microphysics1MEvaluator{MP, TPS, FT}
-    mp::MP
-    tps::TPS
-    ρ::FT
-    q_lcl_mean::FT
-    q_icl_mean::FT
-    q_rai::FT
-    q_sno::FT
-    has_grid_mean_condensate::Bool
-    condensate_scale_inv::FT
-    bias::FT
 end
 
 """
@@ -684,294 +675,43 @@ Condensate is partitioned into liquid and ice using `λ(T_hat)`.
     )
 end
 
-@inline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
-    FT = typeof(eval.ρ)
-
-    q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
-    excess_hat = q_tot_hat - q_sat_hat
-    q_cond_hat = max(FT(0), excess_hat + eval.bias)
-
-    λ = TD.liquid_fraction(eval.tps, T_hat, eval.q_lcl_mean, eval.q_icl_mean)
-    scale = ifelse(
-        eval.has_grid_mean_condensate,
-        q_cond_hat * eval.condensate_scale_inv,
-        FT(1),
-    )
-
-    q_lcl_hat = ifelse(
-        eval.has_grid_mean_condensate,
-        eval.q_lcl_mean * scale,
-        λ * q_cond_hat,
-    )
-    q_icl_hat = ifelse(
-        eval.has_grid_mean_condensate,
-        eval.q_icl_mean * scale,
-        (FT(1) - λ) * q_cond_hat,
-    )
-
-    q_lcl_hat = max(FT(0), q_lcl_hat)
-    q_icl_hat = max(FT(0), q_icl_hat)
-    q_tot_hat = max(FT(0), q_tot_hat)
-
-    return BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics1Moment(),
-        eval.mp,
-        eval.tps,
-        eval.ρ,
-        T_hat,
-        q_tot_hat,
-        q_lcl_hat,
-        q_icl_hat,
-        eval.q_rai,
-        eval.q_sno,
-    )
-end
-
-@noinline function _microphysics_tendencies_quadrature_slowpath(
+@inline function microphysics_tendencies_quadrature(
     scheme,
     SG_quad,
-    mp,
-    tps,
-    ρ,
-    T_mean,
-    q_tot_mean,
-    q_lcl_mean,
-    q_icl_mean,
-    q_rai,
-    q_sno,
-    T′T′,
-    q′q′,
-    corr_Tq,
-    args...,
-)
-    q_cond_mean = q_lcl_mean + q_icl_mean
-    q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
-    excess_mean = q_tot_mean - q_sat_mean
-
-    evaluator = MicrophysicsEvaluator(
-        scheme,
-        mp,
-        tps,
-        ρ,
-        q_lcl_mean,
-        q_icl_mean,
-        q_rai,
-        q_sno,
-        q_cond_mean,
-        excess_mean,
-        args,
-    )
-
-    return integrate_over_sgs(evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq)
-end
-
-@noinline function _microphysics_tendencies_quadrature_1m_slowpath(
-    SG_quad,
-    mp,
-    tps,
-    ρ,
-    T_mean,
-    q_tot_mean,
-    q_lcl_mean,
-    q_icl_mean,
-    q_rai,
-    q_sno,
-    T′T′,
-    q′q′,
-    corr_Tq,
-)
-    FT = typeof(ρ)
-    q_cond_mean = q_lcl_mean + q_icl_mean
-    q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
-    excess_mean = q_tot_mean - q_sat_mean
-    has_grid_mean_condensate = q_cond_mean > FT(0)
-    condensate_scale_inv = ifelse(
-        has_grid_mean_condensate,
-        inv(max(q_cond_mean, ϵ_numerics(FT))),
-        FT(1),
-    )
-    bias = q_cond_mean - max(FT(0), excess_mean)
-
-    evaluator = Microphysics1MEvaluator(
-        mp,
-        tps,
-        ρ,
-        q_lcl_mean,
-        q_icl_mean,
-        q_rai,
-        q_sno,
-        has_grid_mean_condensate,
-        condensate_scale_inv,
-        bias,
-    )
-
-    return integrate_over_sgs(evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq)
-end
-
-@inline function microphysics_tendencies_quadrature(
-    ::BMT.Microphysics1Moment,
-    ::GridMeanSGS,
-    mp,
-    tps,
-    ρ,
-    p_c,
-    T_mean,
-    q_tot_mean,
-    q_lcl_mean,
-    q_icl_mean,
-    q_rai,
-    q_sno,
-    T′T′,
-    q′q′,
-    corr_Tq,
-)
-    return BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics1Moment(),
-        mp,
-        tps,
-        ρ,
-        T_mean,
-        q_tot_mean,
-        q_lcl_mean,
-        q_icl_mean,
-        q_rai,
-        q_sno,
-    )
-end
-
-@inline function microphysics_tendencies_quadrature(
-    ::BMT.Microphysics1Moment,
-    SG_quad::SGSQuadrature,
-    mp,
-    tps,
-    ρ,
-    p_c,
-    T_mean,
-    q_tot_mean,
-    q_lcl_mean,
-    q_icl_mean,
-    q_rai,
-    q_sno,
-    T′T′,
-    q′q′,
-    corr_Tq,
-)
-    if SG_quad.dist isa GridMeanSGS
-        return BMT.bulk_microphysics_tendencies(
-            BMT.Microphysics1Moment(),
-            mp,
-            tps,
-            ρ,
-            T_mean,
-            q_tot_mean,
-            q_lcl_mean,
-            q_icl_mean,
-            q_rai,
-            q_sno,
-        )
-    end
-
-    return _microphysics_tendencies_quadrature_1m_slowpath(
-        SG_quad,
-        mp,
-        tps,
-        ρ,
-        T_mean,
-        q_tot_mean,
-        q_lcl_mean,
-        q_icl_mean,
-        q_rai,
-        q_sno,
-        T′T′,
-        q′q′,
-        corr_Tq,
-    )
-end
-
-@inline function microphysics_tendencies_quadrature(
-    scheme,
-    ::GridMeanSGS,
-    mp,
-    tps,
-    ρ,
-    p_c,
-    T_mean,
-    q_tot_mean,
-    q_lcl_mean,
-    q_icl_mean,
-    q_rai,
-    q_sno,
-    T′T′,
-    q′q′,
-    corr_Tq,
+    mp, tps,
+    ρ, p_c,
+    T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+    T′T′, q′q′, corr_Tq,
     args...,  # Additional args like N_lcl for 2M
 )
-    return BMT.bulk_microphysics_tendencies(
-        scheme,
-        mp,
-        tps,
-        ρ,
-        T_mean,
-        q_tot_mean,
-        q_lcl_mean,
-        q_icl_mean,
-        q_rai,
-        q_sno,
-        args...,
-    )
-end
+    FT = eltype(tps)
 
-@inline function microphysics_tendencies_quadrature(
-    scheme,
-    SG_quad::SGSQuadrature,
-    mp,
-    tps,
-    ρ,
-    p_c,
-    T_mean,
-    q_tot_mean,
-    q_lcl_mean,
-    q_icl_mean,
-    q_rai,
-    q_sno,
-    T′T′,
-    q′q′,
-    corr_Tq,
-    args...,  # Additional args like N_lcl for 2M
-)
-    if SG_quad.dist isa GridMeanSGS
+    # Fast path for GridMeanSGS: skip quadrature, call BMT directly at grid mean
+    # This avoids the overhead of the quadrature loop for grid-mean-only evaluation
+    if SG_quad isa GridMeanSGS ||
+       (SG_quad isa SGSQuadrature && SG_quad.dist isa GridMeanSGS)
         return BMT.bulk_microphysics_tendencies(
-            scheme,
-            mp,
-            tps,
-            ρ,
-            T_mean,
-            q_tot_mean,
-            q_lcl_mean,
-            q_icl_mean,
-            q_rai,
-            q_sno,
+            scheme, mp, tps, ρ, T_mean,
+            q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
             args...,
         )
     end
 
-    return _microphysics_tendencies_quadrature_slowpath(
-        scheme,
-        SG_quad,
-        mp,
-        tps,
-        ρ,
-        T_mean,
-        q_tot_mean,
-        q_lcl_mean,
-        q_icl_mean,
-        q_rai,
-        q_sno,
-        T′T′,
-        q′q′,
-        corr_Tq,
-        args...,
+    # Pre-compute grid-mean condensate and saturation for perturbation model
+    q_cond_mean = q_lcl_mean + q_icl_mean
+    q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
+    excess_mean = q_tot_mean - q_sat_mean
+
+    # Create functor (no closure, GPU-safe)
+    evaluator = MicrophysicsEvaluator(
+        scheme, mp, tps, ρ,
+        T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+        q_cond_mean, q_sat_mean, excess_mean,
+        args,
     )
+
+    # Integrate over quadrature points using functor (GPU-safe, no closure)
+    return integrate_over_sgs(evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq)
 end
 
 """
