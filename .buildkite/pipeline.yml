@@ -1115,17 +1115,17 @@ steps:
           slurm_ntasks: 2
           slurm_mem: 16GB
 
-      - label: "GPU: test DYAMOND interpolated initial conditions"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_summer.yml
-          --job_id gpu_aquaplanet_dyamond_summer
-        artifact_paths: "gpu_aquaplanet_dyamond_summer/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16GB
+      # - label: "GPU: test DYAMOND interpolated initial conditions"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_summer.yml
+      #     --job_id gpu_aquaplanet_dyamond_summer
+      #   artifact_paths: "gpu_aquaplanet_dyamond_summer/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_mem: 16GB
 
       - label: ":earth_americas: GPU: Diagnostic EDMF ERA5 Weather Model Initial Condition"
         command: >

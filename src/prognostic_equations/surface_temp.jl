@@ -25,7 +25,7 @@ function surface_precipitation_tendency!(
     FT = eltype(Y)
 
     # Surface energy from precipitation
-    pet = p.conservation_check.col_integrated_precip_energy_tendency
+    pet = p.precomputed.col_integrated_precip_energy_tendency
     depth_ocean = slab.depth_ocean
     ρ_ocean = slab.ρ_ocean
     cp_ocean = slab.cp_ocean
@@ -142,7 +142,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
     if !(p.atmos.moisture_model isa DryModel) &&
        p.atmos.microphysics_tendency_timestepping != Implicit()
 
-        pet = p.conservation_check.col_integrated_precip_energy_tendency
+        pet = p.precomputed.col_integrated_precip_energy_tendency
 
     else
         pet = FT(0)

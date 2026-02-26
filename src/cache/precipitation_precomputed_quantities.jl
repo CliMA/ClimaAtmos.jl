@@ -647,22 +647,12 @@ only the Y-dependent part (ρ × limit_sink) without re-running the full
 """
 refresh_microphysics_source!(Y, p, _, _) = nothing
 
-# Bare 0M (non-quadrature, non-EDMF): no allocating broadcasts, delegate to full recompute
+# 0M grid-mean (bare or quadrature, non-EDMF):
+# ᶜmp_tendency is already fresh from the explicit stage; only refresh the
+# Y-dependent ᶜS_ρq_tot / ᶜS_ρe_tot without the allocating BMT broadcast.
 function refresh_microphysics_source!(
     Y, p,
-    mm::Microphysics0Moment,
-    turbconv_model,
-)
-    set_microphysics_tendency_cache!(Y, p, mm, turbconv_model)
-    return nothing
-end
-
-# Quadrature 0M (non-EDMF): skip the allocating quadrature broadcast,
-# only refresh the Y-dependent ᶜS_ρq_tot / ᶜS_ρe_tot from stale ᶜmp_tendency.
-# ᶜmp_tendency depends on ᶜT (already refreshed in implicit precomputed).
-function refresh_microphysics_source!(
-    Y, p,
-    ::QuadratureMicrophysics{Microphysics0Moment},
+    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
     _,
 )
     (; dt) = p
@@ -671,24 +661,19 @@ function refresh_microphysics_source!(
     @. ᶜS_ρq_tot =
         Y.c.ρ * limit_sink(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot / Y.c.ρ, dt)
     @. ᶜS_ρe_tot = ᶜS_ρq_tot * (ᶜmp_tendency.e_int_precip + ᶜΦ)
+    set_precipitation_surface_fluxes!(
+        Y, p,
+        Microphysics0Moment(),
+    )
     return nothing
 end
 
-# Bare 0M + PrognosticEDMFX: no allocating broadcasts, delegate to full recompute
+# 0M + PrognosticEDMFX (bare or quadrature):
+# ᶜSqₜᵐ⁰/ᶜSqₜᵐʲs are already fresh from EDMF precipitation in the explicit stage;
+# only refresh the Y-dependent ᶜS_ρq_tot / ᶜS_ρe_tot (avoids allocating broadcasts)
 function refresh_microphysics_source!(
     Y, p,
-    mm::Microphysics0Moment,
-    turbconv_model::PrognosticEDMFX,
-)
-    set_microphysics_tendency_cache!(Y, p, mm, turbconv_model)
-    return nothing
-end
-
-# Quadrature 0M + PrognosticEDMFX: ᶜSqₜᵐ⁰/ᶜSqₜᵐʲs already computed by EDMF precipitation;
-# only refresh the Y-dependent ᶜS_ρq_tot / ᶜS_ρe_tot (avoids allocating quadrature broadcast)
-function refresh_microphysics_source!(
-    Y, p,
-    ::QuadratureMicrophysics{Microphysics0Moment},
+    ::Union{Microphysics0Moment, QuadratureMicrophysics{Microphysics0Moment}},
     ::PrognosticEDMFX,
 )
     (; ᶜΦ) = p.core
@@ -725,6 +710,10 @@ function refresh_microphysics_source!(
                 ᶜΦ,
             )
     end
+    set_precipitation_surface_fluxes!(
+        Y, p,
+        Microphysics0Moment(),
+    )
     return nothing
 end
 
@@ -738,6 +727,7 @@ function refresh_microphysics_source!(
     turbconv_model,
 )
     set_microphysics_tendency_cache!(Y, p, mm, turbconv_model)
+    set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
 end
 
@@ -1215,7 +1205,7 @@ function set_precipitation_surface_fluxes!(
     (; ᶜT) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
-    (; col_integrated_precip_energy_tendency) = p.conservation_check
+    (; col_integrated_precip_energy_tendency) = p.precomputed
 
     # update total column energy source for surface energy balance
     Operators.column_integral_definite!(
@@ -1243,7 +1233,7 @@ function set_precipitation_surface_fluxes!(
     },
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
-    (; col_integrated_precip_energy_tendency) = p.conservation_check
+    (; col_integrated_precip_energy_tendency) = p.precomputed
     (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ) = p.precomputed
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J

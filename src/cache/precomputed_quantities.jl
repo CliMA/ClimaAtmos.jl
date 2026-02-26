@@ -100,12 +100,28 @@ function implicit_precomputed_quantities(Y, atmos)
         else
             (;)
         end
+    # Surface precipitation fluxes need Dual-typed copies so that
+    # set_precipitation_surface_fluxes! can be called during the implicit
+    # stage (AD writes Dual values into these fields).
+    implicit_sfc_precip_quantities =
+        if !(microphysics_model isa NoPrecipitation)
+            (;
+                surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
+                surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
+                col_integrated_precip_energy_tendency = zeros(
+                    axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
+                ),
+            )
+        else
+            (;)
+        end
     return (;
         gs_quantities...,
         moist_gs_quantities...,
         sgs_quantities...,
         prognostic_sgs_quantities...,
         implicit_mp_quantities...,
+        implicit_sfc_precip_quantities...,
     )
 end
 
@@ -611,16 +627,12 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # Do nothing for other turbconv models for now
     end
 
-    # When microphysics is implicit, refresh ᶜS_ρq_tot and ᶜS_ρe_tot from
-    # the already-computed ᶜmp_tendency so that they reflect the current Y.
-    # This ensures the atmospheric water removal (in T_imp) and the
-    # surface deposition use the same ᶜS_ρq_tot, preserving conservation.
-    # We deliberately skip re-running the full set_microphysics_tendency_cache!
-    # here because the quadrature broadcasts allocate via Ref(); only the
-    # ᶜS_ρq_tot = ρ * limit_sink(...) lines actually depend on Y.
+    # When microphysics is implicit, refresh ᶜS_ρq_tot / ᶜS_ρe_tot and the
+    # surface precipitation fluxes so that they reflect the current Y.
+    # The surface flux fields have Dual-typed copies in
+    # implicit_precomputed_quantities, so AD can write into them safely.
     if p.atmos.microphysics_tendency_timestepping == Implicit()
         refresh_microphysics_source!(Y, p, microphysics_model, turbconv_model)
-        set_precipitation_surface_fluxes!(Y, p, microphysics_model)
     end
 end
 
@@ -711,18 +723,17 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p.atmos.microphysics_model,
         p.atmos.turbconv_model,
     )
-    # Needs to be done after edmf precipitation is computed in sub-domains.
-    # When microphysics is implicit, these are computed in
-    # set_implicit_precomputed_quantities! instead (for IMEX conservation).
-    if p.atmos.microphysics_tendency_timestepping != Implicit()
-        set_microphysics_tendency_cache!(
-            Y,
-            p,
-            p.atmos.microphysics_model,
-            p.atmos.turbconv_model,
-        )
-        set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
-    end
+    # Always compute ᶜmp_tendency and ᶜS_ρq_tot here so both are fresh.
+    # When microphysics is implicit, the implicit stage will additionally
+    # refresh ᶜS_ρq_tot / ᶜS_ρe_tot from the (now-fresh) ᶜmp_tendency
+    # using the current Newton-iterate Y, avoiding the allocating BMT broadcast.
+    set_microphysics_tendency_cache!(
+        Y,
+        p,
+        p.atmos.microphysics_model,
+        p.atmos.turbconv_model,
+    )
+    set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
 
     set_cloud_fraction!(Y, p, moisture_model, cloud_model)
 
