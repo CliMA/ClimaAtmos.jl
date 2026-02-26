@@ -445,8 +445,6 @@ weakdeps = ["CUDA", "MPI"]
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "ClimaInterpolations", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LazyBroadcast", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "UnrolledUtilities"]
 git-tree-sha1 = "1690d0f355e9d952cc9b8e564127177594f0f1cc"
-repo-rev = "main"
-repo-url = "https://github.com/CliMA/ClimaCore.jl.git"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
 version = "0.14.50"
 weakdeps = ["CUDA", "GPUCompiler", "Krylov"]
@@ -469,11 +467,11 @@ version = "0.3.18"
 
 [[deps.ClimaDiagnostics]]
 deps = ["Accessors", "ClimaComms", "ClimaCore", "ClimaUtilities", "Dates", "NCDatasets", "NVTX", "OrderedCollections", "SciMLBase"]
-git-tree-sha1 = "4e61101defc15e4a232a6abc7da5ce9aa03a4abe"
-repo-rev = "as/bilinear"
+git-tree-sha1 = "38bbd16298d9e58bf975a0dcf5fdc45b0186e616"
+repo-rev = "main"
 repo-url = "https://github.com/CliMA/ClimaDiagnostics.jl.git"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
-version = "0.3.2"
+version = "0.3.3"
 
 [[deps.ClimaInterpolations]]
 deps = ["DocStringExtensions"]
