@@ -242,22 +242,34 @@ function parse_frequency_to_schedule(
         return CAD.DivisorSchedule(steps)
     end
 
+    date_last =
+        t_start isa ITime ?
+        ClimaUtilities.TimeManager.date(t_start) :
+        start_date + Dates.Second(t_start)
+
     if occursin("months", frequency_str)
         months = match(r"^(\d+)months$", frequency_str)
         isnothing(months) && error(
             "$(frequency_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
         )
         period_dates = Dates.Month(parse(Int, first(months)))
+    elseif frequency_str == "monthly"
+        period_dates = Dates.Month(1)
+        date_last = Dates.firstdayofmonth(date_last)
+    elseif frequency_str == "weekly"
+        period_dates = Dates.Week(1)
+        date_last = date_last - Dates.Day(Dates.dayofweek(date_last) - 1)
+    elseif frequency_str == "daily"
+        period_dates = Dates.Day(1)
+        # Converting to a Date clears the time information (e.g. hours, minutes,
+        # seconds, etc)
+        date_last = Dates.DateTime(Dates.Date(date_last))
     else
         period_seconds = FT(time_to_seconds(frequency_str))
         period_dates =
             CA.promote_period.(Dates.Second(period_seconds))
     end
 
-    date_last =
-        t_start isa ITime ?
-        ClimaUtilities.TimeManager.date(t_start) :
-        start_date + Dates.Second(t_start)
     return CAD.EveryCalendarDtSchedule(
         period_dates;
         reference_date = start_date,
