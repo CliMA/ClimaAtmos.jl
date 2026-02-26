@@ -127,3 +127,16 @@ else
         return ClimaDiagnostics.Writers.default_num_points(space)
     end
 end
+
+# NetCDF horizontal interpolation method (ClimaDiagnostics 0.3.3+, ClimaCore 0.14.50+)
+if pkgversion(ClimaDiagnostics) >= v"0.3.3" && pkgversion(ClimaCore) >= v"0.14.50"
+    function netcdf_horizontal_method_kw(parsed_args)
+        method = get(parsed_args, "netcdf_interpolation_method", "bilinear")
+        if lowercase(string(method)) == "bilinear"
+            return (; horizontal_method = ClimaCore.Remapping.BilinearRemapping())
+        end
+        return (;)
+    end
+else
+    netcdf_horizontal_method_kw(_) = (;)
+end

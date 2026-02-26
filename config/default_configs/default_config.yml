@@ -347,6 +347,9 @@ netcdf_output_at_levels:
 netcdf_interpolation_num_points:
   help: "Override the number of interpolation point for the NetCDF output. This configuration has to be a list of integers, e.g. [180, 90, 10]."
   value: ~
+netcdf_interpolation_method:
+  help: "Horizontal interpolation method for NetCDF output: \"spectral_element\" (Lagrange at quadrature points) or \"bilinear\" (default). Bilinear requires ClimaDiagnostics 0.3.3 and ClimaCore 0.14.50."
+  value: "bilinear"
 check_nan_every:
   help: "Check if the state contains NaNs every this number of iterations"
   value: 1024

@@ -50,6 +50,8 @@ function get_diagnostics(
     maybe_add_start_date =
         pkgversion(CAD.ClimaDiagnostics) >= v"0.2.9" ? (; start_date) : (;)
 
+    maybe_horizontal_method = netcdf_horizontal_method_kw(parsed_args)
+
     netcdf_writer = CAD.NetCDFWriter(
         axes(Y.c),
         output_dir,
@@ -58,6 +60,7 @@ function get_diagnostics(
         sync_schedule = CAD.EveryStepSchedule(),
         init_time = t_start,
         maybe_add_start_date...,
+        maybe_horizontal_method...,
     )
 
     # Create NetCDF writer for diagnostics in pressure coordinates if they
@@ -80,6 +83,7 @@ function get_diagnostics(
             sync_schedule = CAD.EveryStepSchedule(),
             init_time = t_start,
             maybe_add_start_date...,
+            maybe_horizontal_method...,
         )
     end
 

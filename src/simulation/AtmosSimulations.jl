@@ -33,15 +33,20 @@ function setup_diagnostics_and_writers(
     writers = ()
 
     # Helper function to create default NetCDF writer
-    default_nc_writer() = CAD.NetCDFWriter(
-        axes(Y.c),
-        output_dir,
-        num_points = ClimaDiagnostics.Writers.default_num_points(axes(Y.c));
-        z_sampling_method = CAD.LevelsMethod(),  # TODO: Could make this configurable
-        sync_schedule = CAD.EveryStepSchedule(),
-        init_time = t_start,
-        start_date,
-    )
+    function default_nc_writer(; netcdf_interpolation_method = "bilinear")
+        parsed_args = Dict("netcdf_interpolation_method" => netcdf_interpolation_method)
+        maybe_horizontal_method = netcdf_horizontal_method_kw(parsed_args) # `maybe` for version compatibility
+        return CAD.NetCDFWriter(
+            axes(Y.c),
+            output_dir,
+            num_points = ClimaDiagnostics.Writers.default_num_points(axes(Y.c));
+            z_sampling_method = CAD.LevelsMethod(),  # TODO: Could make this configurable
+            sync_schedule = CAD.EveryStepSchedule(),
+            init_time = t_start,
+            start_date,
+            maybe_horizontal_method...,
+        )
+    end
 
     # Add default diagnostics if enabled
     if use_default_diagnostics
@@ -87,6 +92,7 @@ function setup_diagnostics_and_writers(
                 "diagnostics" => diagnostics,
                 "netcdf_interpolation_num_points" => nothing,
                 "netcdf_output_at_levels" => false,
+                "netcdf_interpolation_method" => "bilinear",
                 "output_default_diagnostics" => false,
             )
             user_scheduled_diagnostics, user_writers, _ = get_diagnostics(
