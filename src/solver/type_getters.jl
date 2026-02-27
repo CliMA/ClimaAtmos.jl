@@ -41,7 +41,7 @@ function convert_time_args(dt, t_start, t_end, use_itime, start_date, FT)
     end
 end
 
-function get_atmos(config::AtmosConfig, params)
+function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     (; turbconv_params) = params
     (; parsed_args) = config
     FT = eltype(config)
@@ -132,11 +132,11 @@ function get_atmos(config::AtmosConfig, params)
         sgs_quadrature,
 
         # SCMSetup - Single-Column Model components
-        subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
+        subsidence = get_subsidence_model(parsed_args, radiation_mode, FT; setup_type),
         external_forcing = get_external_forcing_model(parsed_args, FT),
-        ls_adv = get_large_scale_advection_model(parsed_args, FT),
+        ls_adv = get_large_scale_advection_model(parsed_args, FT; setup_type),
         advection_test,
-        scm_coriolis = get_scm_coriolis(parsed_args, FT),
+        scm_coriolis = get_scm_coriolis(parsed_args, FT; setup_type),
 
         # PrescribedFlow
         prescribed_flow,
@@ -384,10 +384,8 @@ function get_initial_condition(parsed_args, atmos)
     elseif parsed_args["initial_condition"] in [
         "GABLS",
         "Soares",
-        "Bomex",
         "DYCOMS_RF01",
         "DYCOMS_RF02",
-        "Rico",
         "TRMM_LBA",
         "SimplePlume",
     ]
@@ -411,32 +409,71 @@ function get_initial_condition(parsed_args, atmos)
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
     elseif isfile(parsed_args["initial_condition"])
-        return ICs.MoistFromFile(parsed_args["initial_condition"])
-    elseif parsed_args["initial_condition"] == "GCM"
-        @assert parsed_args["prognostic_tke"] == true
-        return ICs.GCMDriven(
-            parsed_args["external_forcing_file"],
-            parsed_args["cfsite_number"],
+        # TODO: remove once we fully migrate to Setups (MoistFromFile now handled by Setups)
+        error(
+            "File-based initial condition has been migrated to the Setups module. " *
+            "This branch should not be reached.",
         )
     elseif parsed_args["initial_condition"] == "ReanalysisTimeVarying"
-        return ICs.external_tv_initial_condition(
-            atmos.external_forcing.external_forcing_file,
-            parsed_args["start_date"],
+        # TODO: remove once we fully migrate to Setups (InterpolatedColumnProfile now handled by Setups)
+        error(
+            "ReanalysisTimeVarying initial condition has been migrated to the Setups module. " *
+            "This branch should not be reached.",
         )
     elseif parsed_args["initial_condition"] == "WeatherModel"
-        return ICs.WeatherModel(
-            parsed_args["start_date"],
-            parsed_args["era5_initial_condition_dir"],
+        # TODO: remove once we fully migrate to Setups (WeatherModel now handled by Setups)
+        error(
+            "WeatherModel initial condition has been migrated to the Setups module. " *
+            "This branch should not be reached.",
         )
     elseif parsed_args["initial_condition"] == "AMIPFromERA5"
-        return ICs.AMIPFromERA5(parsed_args["start_date"])
+        # TODO: remove once we fully migrate to Setups (AMIPFromERA5 now handled by Setups)
+        error(
+            "AMIPFromERA5 initial condition has been migrated to the Setups module. " *
+            "This branch should not be reached.",
+        )
     elseif parsed_args["initial_condition"] == "ShipwayHill2012"
         return ICs.ShipwayHill2012()
+        # TODO: remove once we fully migrate to Setups (GCM now handled by Setups.GCMDriven)
+    elseif parsed_args["initial_condition"] == "GCM"
+        error(
+            "GCM initial condition has been migrated to the Setups module. " *
+            "This branch should not be reached.",
+        )
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
         )
     end
+end
+
+function get_setup_type(parsed_args, thermo_params)
+    ic_name = parsed_args["initial_condition"]
+    if ic_name == "Bomex"
+        return Setups.Bomex(; prognostic_tke = parsed_args["prognostic_tke"], thermo_params)
+    elseif ic_name == "Rico"
+        return Setups.Rico(; prognostic_tke = parsed_args["prognostic_tke"], thermo_params)
+    elseif ic_name == "GCM"
+        return Setups.GCMDriven(
+            parsed_args["external_forcing_file"],
+            parsed_args["cfsite_number"],
+        )
+    elseif ic_name == "ReanalysisTimeVarying"
+        return Setups.interpolated_column_profile(
+            parsed_args["external_forcing_file"],
+            parsed_args["start_date"],
+        )
+    elseif ic_name == "WeatherModel"
+        return Setups.WeatherModel(
+            parsed_args["start_date"],
+            parsed_args["era5_initial_condition_dir"],
+        )
+    elseif ic_name == "AMIPFromERA5"
+        return Setups.AMIPFromERA5(parsed_args["start_date"])
+    elseif isfile(ic_name)
+        return Setups.MoistFromFile(ic_name)
+    end
+    return nothing
 end
 
 function get_topography(FT, parsed_args)
@@ -484,7 +521,45 @@ function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp
     return (; ᶜu, ᶠu)
 end
 
-function get_surface_setup(parsed_args)
+"""
+    _assemble_surface_state(sfc_data::NamedTuple, FT)
+
+Convert a Setups surface_condition NamedTuple into a SurfaceConditions.SurfaceState.
+
+Bridges the Setups module (which knows only physics) to the SurfaceConditions
+module (which owns the SurfaceState type), keeping the two modules decoupled.
+"""
+function _assemble_surface_state(sfc_data::NamedTuple, FT)
+    T = get(sfc_data, :T, nothing)
+    p = get(sfc_data, :p, nothing)
+    q_vap = get(sfc_data, :q_vap, nothing)
+    z0 = get(sfc_data, :z0, FT(1e-4))
+
+    parameterization = if haskey(sfc_data, :θ_flux) || haskey(sfc_data, :q_flux)
+        θ_flux = get(sfc_data, :θ_flux, FT(0))
+        q_flux = get(sfc_data, :q_flux, nothing)
+        ustar = get(sfc_data, :ustar, nothing)
+        fluxes = SurfaceConditions.θAndQFluxes(; θ_flux, q_flux)
+        SurfaceConditions.MoninObukhov(; z0, fluxes, ustar)
+    else
+        SurfaceConditions.MoninObukhov(; z0)
+    end
+
+    return SurfaceConditions.SurfaceState(; parameterization, T, p, q_vap)
+end
+
+function get_surface_setup(parsed_args, setup_type = nothing)
+    # If using Setups module, build a callable that converts
+    # the setup's surface_condition NamedTuple into a SurfaceState.
+    if !isnothing(setup_type)
+        return function (params)
+            sfc_data = Setups.surface_condition(setup_type, params)
+            FT = eltype(params)
+            return _assemble_surface_state(sfc_data, FT)
+        end
+    end
+
+    # Otherwise use config-based path (existing behavior)
     parsed_args["surface_setup"] == "GCM" && return SurfaceConditions.GCMDriven(
         parsed_args["external_forcing_file"],
         parsed_args["cfsite_number"],
@@ -972,7 +1047,8 @@ end
 function get_simulation(config::AtmosConfig)
     sim_info = get_sim_info(config)
     params = ClimaAtmosParameters(config)
-    atmos = get_atmos(config, params)
+    setup_type = get_setup_type(config.parsed_args, CAP.thermodynamics_params(params))
+    atmos = get_atmos(config, params; setup_type)
     comms_ctx = get_comms_context(config.parsed_args)
     grid = get_grid(config.parsed_args, params, comms_ctx)
 
@@ -1011,29 +1087,49 @@ function get_simulation(config::AtmosConfig)
     end
     @info "Simulation Grid: $(spaces.center_space.grid)"
     # TODO: add more information about the grid - stretch, etc.
-    initial_condition = get_initial_condition(config.parsed_args, atmos)
-    surface_setup = get_surface_setup(config.parsed_args)
+    # Only build the legacy InitialConditions object when the Setups path doesn't handle it.
+    initial_condition =
+        isnothing(setup_type) ? get_initial_condition(config.parsed_args, atmos) : nothing
+    surface_setup = get_surface_setup(config.parsed_args, setup_type)
     if !sim_info.restart
         s = @timed_str begin
-            Y = ICs.atmos_state(
-                initial_condition(params),
-                atmos,
-                spaces.center_space,
-                spaces.face_space,
-            )
+            if !isnothing(setup_type)
+                Y = Setups.initial_state(
+                    setup_type,
+                    params,
+                    atmos,
+                    spaces.center_space,
+                    spaces.face_space,
+                )
+            else
+                Y = ICs.atmos_state(
+                    initial_condition(params),
+                    atmos,
+                    spaces.center_space,
+                    spaces.face_space,
+                )
+            end
         end
         @info "Allocating Y: $s"
 
-        # In instances where we wish to interpolate existing datasets, e.g.
-        # NetCDF files containing spatially varying thermodynamic properties,
-        # this call to `overwrite_initial_conditions` overwrites the variables
-        # in `Y` (specific to `initial_condition`) with those computed using the
-        # `SpaceVaryingInputs` tool.
-        CA.InitialConditions.overwrite_initial_conditions!(
-            initial_condition,
-            Y,
-            params.thermodynamics_params,
-        )
+        if !isnothing(setup_type)
+            Setups.overwrite_initial_state!(
+                setup_type,
+                Y,
+                params.thermodynamics_params,
+            )
+        else
+            # In instances where we wish to interpolate existing datasets, e.g.
+            # NetCDF files containing spatially varying thermodynamic properties,
+            # this call to `overwrite_initial_conditions` overwrites the variables
+            # in `Y` (specific to `initial_condition`) with those computed using the
+            # `SpaceVaryingInputs` tool.
+            CA.InitialConditions.overwrite_initial_conditions!(
+                initial_condition,
+                Y,
+                params.thermodynamics_params,
+            )
+        end
     end
 
     tracers = get_tracers(config.parsed_args)

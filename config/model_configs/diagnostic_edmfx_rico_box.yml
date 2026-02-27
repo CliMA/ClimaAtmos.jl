@@ -1,7 +1,4 @@
 initial_condition: Rico
-subsidence: Rico
-ls_adv: Rico
-surface_setup: Rico
 turbconv: diagnostic_edmfx
 tracer_upwinding: first_order
 implicit_diffusion: true

@@ -70,21 +70,6 @@ function (::Soares)(params)
     return SurfaceState(; parameterization, T, p, q_vap)
 end
 
-struct Bomex end
-function (::Bomex)(params)
-    FT = eltype(params)
-    T = FT(300.4)
-    p = FT(101500)
-    q_vap = FT(0.02245)
-    θ_flux = FT(8e-3)
-    q_flux = FT(5.2e-5)
-    z0 = FT(1e-4)
-    ustar = FT(0.28)
-    fluxes = θAndQFluxes(; θ_flux, q_flux)
-    parameterization = MoninObukhov(; z0, fluxes, ustar)
-    return SurfaceState(; parameterization, T, p, q_vap)
-end
-
 struct DYCOMS_RF01 end
 function (::DYCOMS_RF01)(params)
     FT = eltype(params)
@@ -112,37 +97,6 @@ function (::DYCOMS_RF02)(params)
     parameterization =
         MoninObukhov(; z0, fluxes = HeatFluxes(; shf, lhf), ustar)
     return SurfaceState(; parameterization, T, p, q_vap)
-end
-
-struct Rico end
-function (::Rico)(params)
-    FT = eltype(params)
-    thermo_params = CAP.thermodynamics_params(params)
-    T_surface = FT(299.8)
-    p_surface = FT(101540)
-    z0 = FT(1.5e-4)
-    Cd = FT(0.001229)
-    Ch = FT(0.001094)
-    Cq = FT(0.001133) # TODO: Add support for Cq to SF.Coefficients.
-    # Saturated surface conditions for a given surface temperature and pressure
-    p_sat_surface =
-        TD.saturation_vapor_pressure(thermo_params, T_surface, TD.Liquid())
-    ϵ_v = TD.Parameters.R_d(thermo_params) / TD.Parameters.R_v(thermo_params)
-    q_surface = ϵ_v * p_sat_surface / (p_surface - p_sat_surface * (1 - ϵ_v))
-
-    function surface_state(surface_coordinates, interior_z, t)
-        # Adjust the coefficients from 20 m to the actual value of z.
-        adjustment = (log(20 / z0) / log(interior_z / z0))^2
-        parameterization =
-            ExchangeCoefficients(Cd = Cd * adjustment, Ch = Ch * adjustment)
-        SurfaceState(;
-            parameterization,
-            T = T_surface,
-            p = p_surface,
-            q_vap = q_surface,
-        )
-    end
-    return surface_state
 end
 
 struct TRMM_LBA end
@@ -196,6 +150,7 @@ function (::SimplePlume)(params)
     return SurfaceState(; parameterization, T, p, q_vap)
 end
 
+# TODO: remove once we fully migrate to Setups (duplicated in setups/GCMDriven.jl)
 struct GCMDriven
     external_forcing_file::String
     cfsite_number::String

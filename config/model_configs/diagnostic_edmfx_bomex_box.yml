@@ -1,8 +1,4 @@
 initial_condition: "Bomex"
-subsidence: "Bomex"
-scm_coriolis: "Bomex"
-ls_adv: "Bomex"
-surface_setup: "Bomex"
 turbconv: "diagnostic_edmfx"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2

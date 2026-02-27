@@ -472,7 +472,14 @@ function get_forcing_type(parsed_args)
 end
 
 
-function get_subsidence_model(parsed_args, radiation_mode, FT)
+function get_subsidence_model(parsed_args, radiation_mode, FT; setup_type = nothing)
+    # Setup path: if setup provides subsidence, use it
+    if !isnothing(setup_type)
+        prof = Setups.subsidence_forcing(setup_type, FT)
+        !isnothing(prof) && return Subsidence(prof)
+    end
+
+    # Config path (legacy)
     subsidence = parsed_args["subsidence"]
     isnothing(subsidence) && return nothing
 
@@ -493,7 +500,22 @@ function get_subsidence_model(parsed_args, radiation_mode, FT)
     return Subsidence(prof)
 end
 
-function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
+function get_large_scale_advection_model(
+    parsed_args, ::Type{FT}; setup_type = nothing,
+) where {FT}
+    # Setup path: if setup provides large-scale advection, use it
+    if !isnothing(setup_type)
+        data = Setups.large_scale_advection_forcing(setup_type, FT)
+        if !isnothing(data)
+            prof_dqtdt = (thermo_params, ᶜp, t, z) -> data.prof_dqtdt(z)
+            prof_dTdt =
+                (thermo_params, ᶜp, t, z) ->
+                    data.prof_dTdt(TD.exner_given_pressure(thermo_params, ᶜp), z)
+            return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
+        end
+    end
+
+    # Config path (legacy)
     ls_adv = parsed_args["ls_adv"]
     ls_adv == nothing && return nothing
 
@@ -592,7 +614,15 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function get_scm_coriolis(parsed_args, ::Type{FT}) where {FT}
+function get_scm_coriolis(parsed_args, ::Type{FT}; setup_type = nothing) where {FT}
+    # Setup path: if setup provides coriolis forcing, use it
+    if !isnothing(setup_type)
+        data = Setups.coriolis_forcing(setup_type, FT)
+        !isnothing(data) &&
+            return SCMCoriolis(data.prof_ug, data.prof_vg, data.coriolis_param)
+    end
+
+    # Config path (legacy)
     scm_coriolis = parsed_args["scm_coriolis"]
     scm_coriolis == nothing && return nothing
     (prof_u, prof_v) = if scm_coriolis == "Bomex"

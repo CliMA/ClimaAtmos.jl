@@ -7,6 +7,7 @@ returns a function of the form `local_state(local_geometry)::LocalState`.
 """
 abstract type InitialCondition end
 
+# TODO: remove once we fully migrate to Setups (duplicated in setups/common.jl)
 # Perturbation coefficient for the initial conditions
 # It would be better to be able to specify the wavenumbers
 # but we don't have access to the domain size here
@@ -16,6 +17,7 @@ perturb_coeff(p::Geometry.LatLongZPoint{FT}) where {FT} = sind(p.long)
 perturb_coeff(p::Geometry.XZPoint{FT}) where {FT} = sin(p.x)
 perturb_coeff(p::Geometry.XYZPoint{FT}) where {FT} = sin(p.x)
 
+# TODO: remove once we fully migrate to Setups (duplicated in setups/hydrostatic.jl)
 """
     ColumnInterpolatableField(::Fields.ColumnField)
 
@@ -56,6 +58,7 @@ import ClimaCore.Operators as Operators
 import ClimaCore.Topologies as Topologies
 import ClimaCore.Spaces as Spaces
 
+# TODO: remove once we fully migrate to Setups (duplicated in setups/hydrostatic.jl)
 """
     column_indefinite_integral(f, ϕ₀, zspan; nelems = 100)
 
@@ -446,6 +449,7 @@ function overwrite_initial_conditions!(
     )
 end
 
+# TODO: remove once we fully migrate to Setups (duplicated in setups/overwrite_from_file.jl)
 """
     correct_surface_pressure_for_topography!(
         p_sfc,
@@ -796,6 +800,7 @@ function overwrite_initial_conditions!(
     )
 end
 
+# TODO: remove once we fully migrate to Setups (duplicated in setups/overwrite_from_file.jl)
 """
     _overwrite_initial_conditions_from_file!(file_path, extrapolation_bc, Y, thermo_params;
                                               regridder_type=nothing, interpolation_method=nothing)
@@ -1361,6 +1366,7 @@ end
 # TODO: Get rid of this
 import AtmosphericProfilesLibrary as APL
 
+# TODO: remove once we fully migrate to Setups (duplicated in setups/hydrostatic.jl)
 const FunctionOrSpline =
     Union{Function, APL.AbstractProfile, Intp.Extrapolation}
 
@@ -1502,52 +1508,32 @@ Base.@kwdef struct Soares <: InitialCondition
     prognostic_tke::Bool = false
 end
 
-"""
-    Bomex
-
-The `InitialCondition` described in [Holland1973](@cite), but with a hydrostatically
-balanced pressure profile.
-"""
-Base.@kwdef struct Bomex <: InitialCondition
-    prognostic_tke::Bool = false
-end
-
-for IC in (:Soares, :Bomex)
-    θ_func_name = Symbol(IC, :_θ_liq_ice)
-    q_tot_func_name = Symbol(IC, :_q_tot)
-    u_func_name = Symbol(IC, :_u)
-    tke_func_name = Symbol(IC, :_tke_prescribed)
-    @eval function (initial_condition::$IC)(params)
-        (; prognostic_tke) = initial_condition
-        FT = eltype(params)
-        thermo_params = CAP.thermodynamics_params(params)
-        p_0 = FT(
-            $IC <: Bomex ? 101500.0 :
-            $IC <: Soares ? 100000.0 :
-            error("Invalid Initial Condition : $($IC)"),
+function (initial_condition::Soares)(params)
+    (; prognostic_tke) = initial_condition
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    p_0 = FT(100000.0)
+    θ = APL.Soares_θ_liq_ice(FT)
+    q_tot = APL.Soares_q_tot(FT)
+    p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
+    u = APL.Soares_u(FT)
+    tke = APL.Soares_tke_prescribed(FT)
+    function local_state(local_geometry)
+        (; z) = local_geometry.coordinates
+        T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot(z))
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            T = T,
+            p = p(z),
+            q_tot = q_tot(z),
+            velocity = Geometry.UVector(u(z)),
+            turbconv_state = EDMFState(;
+                tke = prognostic_tke ? FT(0) : tke(z),
+            ),
         )
-        θ = APL.$θ_func_name(FT)
-        q_tot = APL.$q_tot_func_name(FT)
-        p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
-        u = APL.$u_func_name(FT)
-        tke = APL.$tke_func_name(FT)
-        function local_state(local_geometry)
-            (; z) = local_geometry.coordinates
-            T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot(z))
-            return LocalState(;
-                params,
-                geometry = local_geometry,
-                T = T,
-                p = p(z),
-                q_tot = q_tot(z),
-                velocity = Geometry.UVector(u(z)),
-                turbconv_state = EDMFState(;
-                    tke = prognostic_tke ? FT(0) : tke(z),
-                ),
-            )
-        end
-        return local_state
     end
+    return local_state
 end
 
 """
@@ -1607,42 +1593,6 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
     end
 end
 
-"""
-    Rico
-
-The `InitialCondition` described in [Rauber2007](@cite), but with a hydrostatically
-balanced pressure profile.
-"""
-Base.@kwdef struct Rico <: InitialCondition
-    prognostic_tke::Bool = false
-end
-
-function (initial_condition::Rico)(params)
-    (; prognostic_tke) = initial_condition
-    FT = eltype(params)
-    thermo_params = CAP.thermodynamics_params(params)
-    p_0 = FT(101540.0)
-    θ = APL.Rico_θ_liq_ice(FT)
-    q_tot = APL.Rico_q_tot(FT)
-    p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
-    u = APL.Rico_u(FT)
-    v = APL.Rico_v(FT)
-    tke = APL.Rico_tke_prescribed(FT)
-    function local_state(local_geometry)
-        (; z) = local_geometry.coordinates
-        T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot(z))
-        return LocalState(;
-            params,
-            geometry = local_geometry,
-            T = T,
-            p = p(z),
-            q_tot = q_tot(z),
-            velocity = Geometry.UVVector(u(z), v(z)),
-            turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
-        )
-    end
-    return local_state
-end
 
 """
     TRMM_LBA
@@ -1764,64 +1714,6 @@ function (initial_condition::PrecipitatingColumn)(params)
         )
     end
     return local_state
-end
-
-"""
-    GCMDriven <: InitialCondition
-
-The `InitialCondition` from a provided GCM forcing file, with data type `DType`.
-"""
-struct GCMDriven <: InitialCondition
-    external_forcing_file::String
-    cfsite_number::String
-end
-
-function (initial_condition::GCMDriven)(params)
-    (; external_forcing_file, cfsite_number) = initial_condition
-    thermo_params = CAP.thermodynamics_params(params)
-
-    # Read forcing file
-    z_gcm = NC.NCDataset(external_forcing_file) do ds
-        vec(gcm_height(ds.group[cfsite_number]))
-    end
-    vars = gcm_initial_conditions(external_forcing_file, cfsite_number)
-    T_prof, u, v, q_tot_prof, ρ₀ = map(vars) do value
-        Intp.extrapolate(
-            Intp.interpolate((z_gcm,), value, Intp.Gridded(Intp.Linear())),
-            Intp.Flat(),
-        )
-    end
-
-    function local_state(local_geometry)
-        (; z) = local_geometry.coordinates
-        FT = typeof(z)
-        T_val = FT(T_prof(z))
-        q_tot_val = FT(q_tot_prof(z))
-        ρ_val = FT(ρ₀(z))
-        p = TD.air_pressure(thermo_params, T_val, ρ_val, q_tot_val, FT(0), FT(0))
-        return LocalState(;
-            params,
-            geometry = local_geometry,
-            T = T_val,
-            p = p,
-            q_tot = q_tot_val,
-            velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
-            turbconv_state = EDMFState(; tke = FT(0)),
-        )
-    end
-    return local_state
-end
-
-function gcm_initial_conditions(external_forcing_file, cfsite_number)
-    NC.NCDataset(external_forcing_file) do ds
-        (  # TODO: Cast to CuVector for GPU compatibility
-            gcm_driven_profile_tmean(ds.group[cfsite_number], "ta"),
-            gcm_driven_profile_tmean(ds.group[cfsite_number], "ua"),
-            gcm_driven_profile_tmean(ds.group[cfsite_number], "va"),
-            gcm_driven_profile_tmean(ds.group[cfsite_number], "hus"),
-            vec(mean(1 ./ ds.group[cfsite_number]["alpha"][:, :], dims = 2)), # convert alpha to rho using rho=1/alpha, take average profile
-        )
-    end
 end
 
 """

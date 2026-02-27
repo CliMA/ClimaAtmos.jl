@@ -33,9 +33,7 @@ ClimaAtmos.InitialConditions.MoistAdiabaticProfileEDMFX
 ClimaAtmos.InitialConditions.GABLS
 ClimaAtmos.InitialConditions.DYCOMS_RF01
 ClimaAtmos.InitialConditions.DYCOMS_RF02
-ClimaAtmos.InitialConditions.Rico
 ClimaAtmos.InitialConditions.TRMM_LBA
-ClimaAtmos.InitialConditions.Bomex
 ClimaAtmos.InitialConditions.Soares
 ClimaAtmos.InitialConditions.RCEMIPIIProfile
 ```

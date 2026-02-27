@@ -2,7 +2,6 @@ initial_condition: "GCM"
 external_forcing: "GCM"
 external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
 cfsite_number : "site23"
-surface_setup: "GCM"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
