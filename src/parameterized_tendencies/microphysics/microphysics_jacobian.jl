@@ -1,3 +1,18 @@
+# Scalar helpers for the Jacobian diagonal computation. Extracting the
+# computation into a scalar function avoids calling `abs` twice in a single
+# broadcast expression, which can prevent broadcast-fusion type inference and
+# cause heap allocations in the surrounding function.
+@inline function _jac_coeff(Sq, q, ε)
+    aq = abs(q)
+    return ifelse(aq > ε, Sq / aq, zero(Sq))
+end
+
+@inline function _jac_coeff_from_ratio(Sq, ρq, ρ, ε)
+    q = ρq / ρ
+    aq = abs(q)
+    return ifelse(aq > ε, Sq / aq, zero(Sq))
+end
+
 """
     add_microphysics_jacobian_entry!(∂, dtγ, Sq_field, q_field)
 
@@ -17,10 +32,7 @@ correct Jacobian diagonal entry.
 @inline function add_microphysics_jacobian_entry!(∂, dtγ, Sq_field, q_field)
     FT = eltype(Sq_field)
     ε = ϵ_numerics(FT)
-    @. ∂ +=
-        dtγ * DiagonalMatrixRow(
-            ifelse(abs(q_field) > ε, Sq_field / abs(q_field), zero(FT)),
-        )
+    @. ∂ += dtγ * DiagonalMatrixRow(_jac_coeff(Sq_field, q_field, ε))
     return nothing
 end
 
@@ -40,8 +52,6 @@ value `q = ρq / ρ`, giving the Jacobian diagonal `Sq / |q|`.
 @inline function add_microphysics_jacobian_entry!(∂, dtγ, Sq, ρq, ρ)
     FT = eltype(Sq)
     ε = ϵ_numerics(FT)
-    @. ∂ += dtγ * DiagonalMatrixRow(
-        ifelse(abs(ρq / ρ) > ε, Sq / abs(ρq / ρ), zero(FT)),
-    )
+    @. ∂ += dtγ * DiagonalMatrixRow(_jac_coeff_from_ratio(Sq, ρq, ρ, ε))
     return nothing
 end
