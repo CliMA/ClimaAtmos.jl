@@ -22,5 +22,4 @@ include("cloud_fraction.jl")
 # Microphysics processes
 include("microphysics_wrappers.jl")
 include("tendency.jl")
-include("microphysics_jacobian.jl")
 include("moisture_fixers.jl")
