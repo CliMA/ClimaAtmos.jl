@@ -6,7 +6,7 @@ surface_setup: DefaultMoninObukhov
 prognostic_surface: "SlabOceanSST"
 rad: "clearsky"
 microphysics_model: "1M"
-use_sgs_quadrature: false
+use_sgs_quadrature: true
 vert_diff: true
 dt_save_state_to_disk: "5days"
 check_conservation: true
