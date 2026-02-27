@@ -522,9 +522,11 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)
         end
 
-        @. Yₜ.f.sgsʲs.:($$j).u₃ +=
-            (ᶠinterp(ᶜentrʲ) .+ ᶠinterp(ᶜturb_entrʲ)) *
-            (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)
+        if p.atmos.sgs_entr_detr_mode == Explicit()
+            @. Yₜ.f.sgsʲs.:($$j).u₃ +=
+                (ᶠinterp(ᶜentrʲ) .+ ᶠinterp(ᶜturb_entrʲ)) *
+                (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)
+        end
     end
     return nothing
 end

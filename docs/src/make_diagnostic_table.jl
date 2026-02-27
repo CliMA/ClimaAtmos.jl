@@ -16,12 +16,14 @@ for d in values(CA.Diagnostics.ALL_DIAGNOSTICS)
     push!(standard_names, d.standard_name)
 end
 data = hcat(short_names, long_names, units, comments, standard_names)
+tf = TextTableFormat(;
+    horizontal_lines_at_data_rows = collect(1:size(data, 1)),
+)
 pretty_table(
     data;
-    autowrap = true,
-    linebreaks = true,
-    columns_width = [10, 15, 8, 32, 15],  # Width = 80
-    body_hlines = collect(1:size(data)[1]),
-    header = ["Short name", "Long name", "Units", "Comments", "Standard name"],
-    alignment = :l,
+    auto_wrap = true,
+    line_breaks = true,
+    fixed_data_column_widths = [10, 15, 8, 32, 15],
+    column_labels = [["Short name", "Long name", "Units", "Comments", "Standard name"]],
+    table_format = tf,
 )

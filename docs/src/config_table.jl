@@ -21,9 +21,9 @@ function make_table_from_config_file(config_file, title)
         String,
         data;
         title = title,
-        header = ["Argument", "Type", "Description"],
-        alignment = :l,
-        backend = Val(:markdown),
+        column_labels = [["Argument", "Type", "Description"]],
+        alignment = fill(:l, size(data, 2)),
+        backend = :markdown,
     )
 end
 default_configs = joinpath(ca_dir, "config", "default_configs")

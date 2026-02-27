@@ -1,4 +1,4 @@
-319
+320
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+320
+- PEDMF: solve sgs u₃ implicit equation first and then use the solution to converge other tracers in 
+  one Newton iteration. 
+
 319
 - Clip divergence in detrainment 
 

@@ -9,7 +9,8 @@ implicit_sgs_nh_pressure: true
 implicit_sgs_vertdiff: true
 implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
-max_newton_iters_ode: 3
+max_newton_iters_ode_subproblem: 3
+max_newton_iters_ode: 1
 use_auto_jacobian: true
 update_jacobian_every: stage
 ode_algo: "ARS222"

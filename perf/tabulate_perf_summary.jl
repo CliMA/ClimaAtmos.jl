@@ -160,11 +160,11 @@ function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
     worsened(data_ij) = !(data_ij isa String) && (data_ij > 0)
     improved(data_ij) = !(data_ij isa String) && (data_ij < 0)
 
-    hl_worsened_pc = PrettyTables.Highlighter(
+    hl_worsened_pc = PrettyTables.TextHighlighter(
         (data, i, j) -> worsened(data[i, j]) && j == size(data, 2),
         PrettyTables.crayon"red bold",
     )
-    hl_improved_pc = PrettyTables.Highlighter(
+    hl_improved_pc = PrettyTables.TextHighlighter(
         (data, i, j) -> improved(data[i, j]) && j == size(data, 2),
         PrettyTables.crayon"green bold",
     )
@@ -172,12 +172,12 @@ function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
     @info "Metric: $(metric_name(last(metric_tup)))"
     PrettyTables.pretty_table(
         table_data;
-        header,
-        header_crayon = PrettyTables.crayon"yellow bold",
-        subheader_crayon = PrettyTables.crayon"blue bold",
-        highlighters = (hl_worsened_pc, hl_improved_pc),
-        crop = :none,
-        alignment = vcat(:l, repeat([:r], size(table_data, 2) - 1)),
+        column_labels = collect(header),
+        style = PrettyTables.TextTableStyle(;
+            first_line_column_label = PrettyTables.crayon"yellow bold",
+            column_label = PrettyTables.crayon"blue bold",
+        ),
+        highlighters = [hl_worsened_pc, hl_improved_pc],
     )
 end
 

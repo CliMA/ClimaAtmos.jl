@@ -35,15 +35,15 @@ function print_jacobian_summary(integrator)
     end
     block_rescalings = CA.first_column_rescaling_arrays(Y, p, t)
 
-    highlighters = (
-        Highlighter((d, i, j) -> d[i, j] < 1e-12; foreground = :dark_gray),
-        Highlighter((d, i, j) -> 1e-12 <= d[i, j] < 1e-6; foreground = :blue),
-        Highlighter((d, i, j) -> 1e-6 <= d[i, j] < 1e-3; foreground = :cyan),
-        Highlighter((d, i, j) -> 1e-3 <= d[i, j] < 1e-1; foreground = :green),
-        Highlighter((d, i, j) -> 1e-1 <= d[i, j] < 1; foreground = :yellow),
-        Highlighter((d, i, j) -> d[i, j] == 1; foreground = :light_red),
-        Highlighter((d, i, j) -> d[i, j] > 1; foreground = :light_magenta),
-    )
+    highlighters = [
+        TextHighlighter((d, i, j) -> d[i, j] < 1e-12, crayon"dark_gray"),
+        TextHighlighter((d, i, j) -> 1e-12 <= d[i, j] < 1e-6, crayon"blue"),
+        TextHighlighter((d, i, j) -> 1e-6 <= d[i, j] < 1e-3, crayon"cyan"),
+        TextHighlighter((d, i, j) -> 1e-3 <= d[i, j] < 1e-1, crayon"green"),
+        TextHighlighter((d, i, j) -> 1e-1 <= d[i, j] < 1, crayon"yellow"),
+        TextHighlighter((d, i, j) -> d[i, j] == 1, crayon"light_red"),
+        TextHighlighter((d, i, j) -> d[i, j] > 1, crayon"light_magenta"),
+    ]
     row_labels = map(collect(scalar_names)) do name
         replace(
             string(name),
@@ -57,16 +57,14 @@ function print_jacobian_summary(integrator)
         )
     end
     table_kwargs = (;
-        columns_width = 5,
-        crop = :none,
-        formatters = ft_printf("%1.0e"),
-        highlighters,
-        row_labels,
-        show_header = false,
-        tf = tf_matrix,
-        vlines = [1],
+        fixed_data_column_widths = 5,
+        formatters = [fmt__printf("%1.0e")],
+        highlighters = highlighters,
+        row_labels = row_labels,
+        show_column_labels = false,
+        table_format = PrettyTables.text_table_format__matrix,
     )
-    dense_table_kwargs = (; table_kwargs..., highlighters = highlighters[1])
+    dense_table_kwargs = (; table_kwargs..., highlighters = [highlighters[1]])
     bandwidth_table_kwargs = (; dense_table_kwargs..., formatters = nothing)
 
     bandwidth(block) =
