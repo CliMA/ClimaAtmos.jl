@@ -1,4 +1,4 @@
-318
+319
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+
+319
+- Change default `sgs_distribution` to `lognormal`. This affects
+  SGS quadrature sampling of specific humidity for microphysics tendencies.
 
 318
 - Changes in tendency limiters and making microphysics implicit.

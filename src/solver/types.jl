@@ -43,7 +43,7 @@ struct QuadratureMicrophysics{M <: AbstractPrecipitationModel, Q} <:
 end
 
 """
-    QuadratureMicrophysics(base_model; FT=Float32, distribution=GaussianSGS(),
+    QuadratureMicrophysics(base_model; FT=Float32, distribution=LogNormalSGS(),
         quadrature_order=3, T_min=FT(150), q_max=FT(0.1))
 
 Create a `QuadratureMicrophysics` wrapper with default SGSQuadrature settings.
@@ -58,7 +58,7 @@ Physical bounds on sampled values:
 function QuadratureMicrophysics(
     base_model::M;
     FT::Type = Float32,
-    distribution = GaussianSGS(),
+    distribution = LogNormalSGS(),
     quadrature_order = 3,
     T_min = FT(150),
     q_max = FT(0.1),
