@@ -1,4 +1,4 @@
-320
+321
 
 # **README**
 #
@@ -20,12 +20,22 @@
 
 
 #=
+
+321
+- Port remaining omitted changes from implicit microphysics branch:
+  T_min floor for updraft temperatures, _apply_1m_limits! function barrier
+  in EDMF code paths, aerosol tuple allocation fix, lognormal SGS default,
+  and enable SGS quadrature across all 1M/2M config files.
+
 320
-- PEDMF: solve sgs u₃ implicit equation first and then use the solution to converge other tracers in 
-  one Newton iteration. 
+- Port implicit microphysics to main: implicit IMEX timestepping for
+  microphysics tendencies, Jacobian diagonal entries, surface precipitation
+  tendency, relaxed tendency limiters (n_sink=1, temperature limiter removed).
 
 319
-- Clip divergence in detrainment 
+- Clip divergence in detrainment
+- Change default `sgs_distribution` to `lognormal`. This affects
+  SGS quadrature sampling of specific humidity for microphysics tendencies.
 
 318
 - Add GPU Orographic Gravity Wave implementation, refactor NOGW tests, add OGW tests and fix base fluxes
