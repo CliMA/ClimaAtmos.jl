@@ -146,37 +146,12 @@ end
 
 Apply physical limiting to 1M microphysics tendencies.
 
-Dispatches on `timestepping`:
-- `Implicit()`: **no-op** — returns raw tendencies unchanged. With implicit
-  microphysics and exact Jacobian derivatives, limiting creates a mismatch
-  that causes Newton solver overshoot.
-- `Explicit()`: applies mass-conservation and temperature-rate limiters.
+Applies mass-conservation and temperature-rate limiters to prevent
+negative species concentrations from cross-species sinks (accretion,
+autoconversion) that the diagonal-only Jacobian cannot stabilize.
 """
 @inline function apply_1m_tendency_limits(
-    ::Implicit,
-    mp_tendency,
-    tps,
-    q_tot,
-    q_liq,
-    q_ice,
-    q_rai,
-    q_sno,
-    dt,
-)
-    # No-op: with implicit microphysics and exact Jacobian derivatives,
-    # tendency limiting creates a mismatch between the Jacobian diagonal
-    # (which uses the unlimited derivative) and the actual tendency (which
-    # was limited), causing the Newton solver to overshoot.
-    return (
-        dq_lcl_dt = mp_tendency.dq_lcl_dt,
-        dq_icl_dt = mp_tendency.dq_icl_dt,
-        dq_rai_dt = mp_tendency.dq_rai_dt,
-        dq_sno_dt = mp_tendency.dq_sno_dt,
-    )
-end
-
-@inline function apply_1m_tendency_limits(
-    ::Explicit,
+    ::AbstractTimesteppingMode,
     mp_tendency,
     tps,
     q_tot,
@@ -190,9 +165,11 @@ end
     # Guard against negative q_vap from numerical errors (AD-safe via max)
     q_vap = max(zero(q_tot), q_tot - q_liq - q_ice - q_rai - q_sno)
 
-    # Mass-conservation limits using cross-species source pools
-    n_sink = 5
-    n_source = 30
+    # Mass-conservation limits:
+    # n_sink = 1: sink cannot exceed species content in one step
+    # n_source = 10: source cannot exceed 10% of pool per step
+    n_sink = 1
+    n_source = 10
 
     dq_lcl_dt = tendency_limiter(
         mp_tendency.dq_lcl_dt,
@@ -215,19 +192,9 @@ end
         limit(q_sno, dt, n_sink),
     )
 
-    # Combined temperature-rate limiter
-    Lv_over_cp = TD.Parameters.LH_v0(tps) / TD.Parameters.cp_d(tps)
-    Ls_over_cp = TD.Parameters.LH_s0(tps) / TD.Parameters.cp_d(tps)
-
-    # Max 5 K temperature change per timestep
-    dT_dt_max = FT(5) / dt
-
-    dT_dt = Lv_over_cp * dq_lcl_dt + Ls_over_cp * dq_icl_dt
-    scale = min(FT(1), dT_dt_max / max(abs(dT_dt), eps(FT)))
-
     return (
-        dq_lcl_dt = dq_lcl_dt * scale,
-        dq_icl_dt = dq_icl_dt * scale,
+        dq_lcl_dt = dq_lcl_dt,
+        dq_icl_dt = dq_icl_dt,
         dq_rai_dt = dq_rai_dt,
         dq_sno_dt = dq_sno_dt,
     )

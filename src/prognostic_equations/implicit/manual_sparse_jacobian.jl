@@ -1623,7 +1623,10 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
         ) do (ρχ_name, ᶜ∂S∂q)
             MatrixFields.has_field(Y, ρχ_name) || return
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
-            @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
+            # Clamp to non-positive: only sink derivatives (stabilizing)
+            # are used. Source derivatives (e.g. snow deposition ∂S/∂q > 0)
+            # would make (I - dtγ*J) < I, destabilizing the Newton solver.
+            @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(min(zero(ᶜ∂S∂q), ᶜ∂S∂q))
         end
     end
 
@@ -1682,7 +1685,7 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
                     @. ∂ᶜq_err_∂ᶜq =
                         zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
                 end
-                @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
+                @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(min(zero(ᶜ∂S∂q), ᶜ∂S∂q))
             end
         end
 
