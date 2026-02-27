@@ -9,7 +9,7 @@ config: "box"
 # microphysics
 moist: "nonequil"
 precip_model: "1M"
-use_sgs_quadrature: false
+use_sgs_quadrature: true
 # diffusion
 implicit_diffusion: false
 approximate_linear_solve_iters: 2

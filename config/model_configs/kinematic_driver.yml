@@ -6,7 +6,7 @@ energy_q_tot_upwinding: first_order
 tracer_upwinding: first_order
 moist: "nonequil"
 precip_model: "1M"
-use_sgs_quadrature: false
+use_sgs_quadrature: true
 #moist: "equil"
 #precip_model: "0M"
 cloud_model: "grid_scale"
