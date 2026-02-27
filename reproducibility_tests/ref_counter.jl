@@ -1,4 +1,4 @@
-321
+319
 
 # **README**
 #
@@ -21,19 +21,11 @@
 
 #=
 
-321
-- Port remaining omitted changes from implicit microphysics branch:
-  T_min floor for updraft temperatures, _apply_1m_limits! function barrier
-  in EDMF code paths, aerosol tuple allocation fix, lognormal SGS default,
-  and enable SGS quadrature across all 1M/2M config files.
-
-320
+319
 - Port implicit microphysics to main: implicit IMEX timestepping for
   microphysics tendencies, Jacobian diagonal entries, surface precipitation
-  tendency, relaxed tendency limiters (n_sink=1, temperature limiter removed).
-
-319
-- Change default `sgs_distribution` to `lognormal`. This affects
+  tendency, relaxed tendency limiters 
+- Change default to SGS quadrature with`sgs_distribution` as `lognormal`. This affects
   SGS quadrature sampling of specific humidity for microphysics tendencies.
 
 318
