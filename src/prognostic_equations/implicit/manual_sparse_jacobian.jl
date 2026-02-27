@@ -549,8 +549,14 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
 
     ᶜθ_v = p.scratch.ᶜtemp_scalar_3
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
-    ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
+    # Guard against negative pressure during Newton iterations:
+    # the implicit solver can temporarily produce unphysical states where
+    # ᶜp < 0, causing DomainError in log(p) inside exner_given_pressure.
+    FT = eltype(Y)
+    ᶜp_safe = p.scratch.ᶜtemp_scalar_4
+    @. ᶜp_safe = max(ᶜp, eps(FT))
+    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp_safe, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp_safe))
     # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration: 
     #              grad(p) / ρ + grad(Φ)  =  cp_d * θ_v * grad(Π) + grad(Φ).
     # Here below, we use the old formulation of (grad(Φ) + grad(p) / ρ).
