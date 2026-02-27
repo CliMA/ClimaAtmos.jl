@@ -719,24 +719,6 @@ function set_precipitation_velocities!(
 end
 
 """
-    set_microphysics_tendency_cache!(Y, p, microphysics_model, turbconv_model)
-
-When run without EDMF, this involves computing microphysics sources based on the grid mean
-properties. The model supports summing over SGS quadrature points to sample the variability.
-
-For EDMF, microphysics tendencies are computed separately for updrafts and the environment:
-
-**Updrafts** use direct BMT evaluation (no SGS quadrature) because:
-1. Updrafts are coherent turbulent structures with more homogeneous thermodynamic properties
-2. Updraft area fraction is usually small (~1-10%), so SGS variance within updrafts has limited
-impact on the grid-mean tendency
-
-**Environment** uses SGS quadrature integration (when `sgs_quadrature` is configured)
-because the environment dominates the grid-mean variance. The quadrature captures subgrid-scale
-fluctuations in temperature and moisture, which is important for threshold processes like
-condensation/evaporation at cloud edges.
-"""
-"""
     refresh_microphysics_source!(Y, p, microphysics_model, turbconv_model)
 
 Lightweight update of `ᶜS_ρq_tot` / `ᶜS_ρe_tot` from the already-computed
@@ -823,6 +805,24 @@ function refresh_microphysics_source!(
     return nothing
 end
 
+"""
+    set_microphysics_tendency_cache!(Y, p, microphysics_model, turbconv_model)
+
+When run without EDMF, this involves computing microphysics sources based on the grid mean
+properties. The model supports summing over SGS quadrature points to sample the variability.
+
+For EDMF, microphysics tendencies are computed separately for updrafts and the environment:
+
+**Updrafts** use direct BMT evaluation (no SGS quadrature) because:
+1. Updrafts are coherent turbulent structures with more homogeneous thermodynamic properties
+2. Updraft area fraction is usually small (~1-10%), so SGS variance within updrafts has limited
+impact on the grid-mean tendency
+
+**Environment** uses SGS quadrature integration (when `sgs_quadrature` is configured)
+because the environment dominates the grid-mean variance. The quadrature captures subgrid-scale
+fluctuations in temperature and moisture, which is important for threshold processes like
+condensation/evaporation at cloud edges.
+"""
 set_microphysics_tendency_cache!(Y, p, _, _) = nothing
 function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
     (; dt) = p

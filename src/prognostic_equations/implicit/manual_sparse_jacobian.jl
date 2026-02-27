@@ -284,7 +284,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 needs_implicit_micro ?
                 (
                     (
-                        atmos.microphysics_model isa EquilibriumMicrophysics0M ? (
+                        atmos.microphysics_model isa EquilibriumMicrophysics0M ?
+                        (
                             @name(c.sgsʲs.:(1).q_tot),
                             @name(c.sgsʲs.:(1).ρa),
                         ) : ()
