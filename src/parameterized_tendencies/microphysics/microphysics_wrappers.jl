@@ -578,31 +578,6 @@ struct MicrophysicsPrecompute{FT}
     excess_mean::FT
 end
 
-"""
-    compute_microphysics_precompute(tps, ρ, T_mean, q_tot_mean, q_lcl_mean, q_icl_mean)
-
-Pre-compute grid-mean saturation values. This lightweight computation can be
-fused by the compiler or split into a separate kernel, reducing register pressure
-in the main quadrature loop.
-
-# Returns
-`MicrophysicsPrecompute` struct with pre-computed saturation values.
-"""
-@inline function compute_microphysics_precompute(
-    tps,
-    ρ::FT,
-    T_mean::FT,
-    q_tot_mean::FT,
-    q_lcl_mean::FT,
-    q_icl_mean::FT,
-) where {FT}
-    q_cond_mean = q_lcl_mean + q_icl_mean
-    q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
-    excess_mean = q_tot_mean - q_sat_mean
-
-    return MicrophysicsPrecompute(q_cond_mean, q_sat_mean, excess_mean)
-end
-
 # ============================================================================
 # Original Evaluator (kept for reference/compatibility)
 # ============================================================================
@@ -826,16 +801,18 @@ end
         )
     end
 
-    # Pre-compute saturation values (lightweight, can be fused or split)
-    precomp = compute_microphysics_precompute(
-        tps, ρ, T_mean, q_tot_mean, q_lcl_mean, q_icl_mean
-    )
-
-    # Create simplified evaluator with pre-computed values
+    # Pre-compute saturation values inline to eliminate function call overhead
+    # This maintains the register/occupancy improvements of MicrophysicsEvaluatorSimple
+    # while eliminating the cost of an extra function call
+    q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
     evaluator = MicrophysicsEvaluatorSimple(
         scheme, mp, tps, ρ,
         T_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-        precomp,
+        MicrophysicsPrecompute(
+            q_lcl_mean + q_icl_mean,
+            q_sat_mean,
+            q_tot_mean - q_sat_mean
+        ),
         args,  # Tuple will be inferred
     )
 
