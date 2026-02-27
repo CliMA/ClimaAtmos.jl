@@ -628,36 +628,22 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # For non-EDMF: gradients are computed inside set_covariance_cache!.
     set_covariance_cache!(Y, p, thermo_params)
 
-    # EDMF precipitation (consumes covariance fields for SGS quadrature)
-    if turbconv_model isa PrognosticEDMFX
-        set_prognostic_edmf_precomputed_quantities_precipitation!(
-            Y,
-            p,
-            p.atmos.microphysics_model,
-        )
-    end
-    if turbconv_model isa DiagnosticEDMFX
-        set_diagnostic_edmf_precomputed_quantities_env_precipitation!(
-            Y,
-            p,
-            t,
-            p.atmos.microphysics_model,
-        )
-    end
-
+    # Cache precipitation terminal velocities for grid mean and prognostic EDMF updrafts.
     set_precipitation_velocities!(
         Y,
         p,
         p.atmos.microphysics_model,
         p.atmos.turbconv_model,
     )
-    # Needs to be done after edmf precipitation is computed in sub-domains
+    # Compute microphysics sources from grid mean and sub-domains.
     set_microphysics_tendency_cache!(
         Y,
         p,
         p.atmos.microphysics_model,
         p.atmos.turbconv_model,
     )
+    # Compute surface precipitation fluxes (has to be after microphysics_sources_cache
+    # because for the 0 moment microphysics it's an integral of the q_tot sink).
     set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
 
     set_cloud_fraction!(Y, p, microphysics_model, cloud_model)

@@ -140,11 +140,10 @@ function entrainment(
 )
     FT = eltype(thermo_params)
     entr_inv_tau = CAP.entr_inv_tau(turbconv_params)
-    a_min = CAP.min_area(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
     # Entrainment is not well-defined if updraft area is negligible.
     # Fix at limit_inv_tau to ensure some mixing with the environment.
-    if ᶜaʲ <= a_min
+    if ᶜaʲ <= eps(FT)
         return limit_inv_tau
     end
 
@@ -187,7 +186,7 @@ function entrainment(
         (FT(1) - min(max(ᶜaʲ, 0), FT(1)))^entr_mult_limiter_coeff # Ensure ᶜaʲ is clipped to [0,1] for exponent
 
     entr = area_limiter_factor * inv_timescale_factor * pi_sum + entr_inv_tau
-    return max(entr, 0) # Ensure non-negative entrainment
+    return max(entr, entr_inv_tau)
 end
 
 function entrainment(
@@ -218,7 +217,7 @@ function entrainment(
 
     # Entrainment is not well-defined if updraft area is negligible,
     # as some limiters depend on ᶜaʲ.
-    if ᶜaʲ <= a_min && min_area_limiter_scale == FT(0) # If no area and no base min_area_limiter
+    if ᶜaʲ <= eps(FT)
         return limit_inv_tau
     end
 
@@ -240,7 +239,7 @@ function entrainment(
 
     entr =
         area_limiter_factor * (entr_inv_tau + vel_diff_term + min_area_limiter)
-    return max(entr, 0) # Ensure non-negative
+    return max(entr, entr_inv_tau)
 end
 
 """
@@ -337,12 +336,12 @@ function detrainment(
     ::PiGroupsDetrainment,
 )
     FT = eltype(thermo_params)
-    a_min = CAP.min_area(turbconv_params)
+    detr_inv_tau = CAP.detr_inv_tau(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
 
     # If ᶜaʲ (updraft area fraction) is negligible, detrainment is considered
     # to be fixed at limit_inv_tau. This also protects division by ᶜρaʲ later.
-    if ᶜaʲ <= a_min
+    if ᶜaʲ <= eps(FT)
         return limit_inv_tau
     end
 
@@ -382,7 +381,7 @@ function detrainment(
     detr_factor_mass_flux_div = -min(ᶜmassflux_vert_div, FT(0)) / ᶜρaʲ
     detr = detr_factor_mass_flux_div * pi_sum_detr
 
-    return max(detr, 0) # Ensure non-negative detrainment
+    return max(detr, detr_inv_tau)
 end
 
 function detrainment(
@@ -416,13 +415,12 @@ function detrainment(
         CAP.detr_massflux_vertdiv_coeff(turbconv_params)
     max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
     max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
-    a_min = CAP.min_area(turbconv_params)
     a_max = CAP.max_area(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
 
     # If ᶜaʲ (updraft area fraction) is negligible, detrainment is not well defined.
     # Fix at limit_inv_tau to ensure some mixing with the environment.
-    if ᶜaʲ <= a_min
+    if ᶜaʲ <= eps(FT)
         return limit_inv_tau
     end
 
@@ -434,10 +432,10 @@ function detrainment(
         detr_coeff * abs(ᶜwʲ) +
         detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
         max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) - detr_vertdiv_coeff * ᶜvert_div -
-        detr_massflux_vertdiv_coeff * min(ᶜmassflux_vert_div, 0) / ᶜρaʲ + # Protected by ᶜρaʲ check above
+        detr_massflux_vertdiv_coeff * min(ᶜmassflux_vert_div, 0) / ᶜρaʲ + # Protected by ᶜaʲ check above
         max_area_limiter
 
-    return max(detr, 0)
+    return max(detr, detr_inv_tau)
 end
 
 function detrainment(
@@ -463,10 +461,10 @@ function detrainment(
     ::SmoothAreaDetrainment,
 )
     FT = eltype(thermo_params)
-    a_min = CAP.min_area(turbconv_params)
+    detr_inv_tau = CAP.detr_inv_tau(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
     # If ᶜaʲ is negligible detrainment is fixed at limit_inv_tau.
-    if (ᶜaʲ <= a_min) # Consistent check for ᶜaʲ
+    if (ᶜaʲ <= eps(FT)) # Consistent check for ᶜaʲ
         detr = limit_inv_tau
         # If vertical velocity divergence term is non-negative detrainment is zero.
     elseif (ᶜw_vert_div >= 0)
@@ -474,7 +472,7 @@ function detrainment(
     else
         detr = ᶜentr - ᶜw_vert_div
     end
-    return max(detr, 0)
+    return max(detr, detr_inv_tau)
 end
 
 function turbulent_entrainment(turbconv_params, ᶜaʲ)

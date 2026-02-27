@@ -250,7 +250,7 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
 
             # clip updraft area fraction to zero if the cell-averaged velocity is negligible.
             @. Y.c.sgsʲs.:($$j).ρa = ifelse(
-                ᶜinterp(Y.f.sgsʲs.:($$j).u₃.components.data.:1) <= eps(FT),
+                ᶜinterp(Y.f.sgsʲs.:($$j).u₃.components.data.:1) < eps(FT),
                 0,
                 Y.c.sgsʲs.:($$j).ρa,
             )
