@@ -26,15 +26,25 @@ microphysics_tendency!(Yₜ, Y, p, t, ::DryModel, _) = nothing
 function microphysics_tendency!(Yₜ, Y, p, t,
     ::EquilibriumMicrophysics0M, _,
 )
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
+    (; ᶜΦ) = p.core
+    (; ᶜmp_tendency) = p.precomputed
+
+    ᶜS_ρq_tot = @. lazy(Y.c.ρ * ᶜmp_tendency.dq_tot_dt)
 
     @. Yₜ.c.ρq_tot += ᶜS_ρq_tot
     @. Yₜ.c.ρ += ᶜS_ρq_tot
-    @. Yₜ.c.ρe_tot += ᶜS_ρe_tot
+    @. Yₜ.c.ρe_tot += ᶜS_ρq_tot * (ᶜmp_tendency.e_int_precip + ᶜΦ)
+    return nothing
+end
+function microphysics_tendency!(Yₜ, Y, p, t,
+    ::EquilibriumMicrophysics0M, ::PrognosticEDMFX,
+)
+    (; ᶜmp_tendency, ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
+
+
 
     return nothing
 end
-
 #####
 ##### 1-Moment Microphysics
 #####

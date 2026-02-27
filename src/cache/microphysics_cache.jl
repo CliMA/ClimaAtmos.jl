@@ -738,10 +738,10 @@ condensation/evaporation at cloud edges.
 """
 set_microphysics_tendency_cache!(Y, p, _, _) = nothing
 function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
+
     (; dt) = p
-    (; ᶜΦ) = p.core
     (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜmp_tendency) = p.precomputed
+    (; ᶜmp_tendency) = p.precomputed
 
     cm0 = CAP.microphysics_0m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
@@ -776,9 +776,9 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
             ᶜq_ice_sno,
         )
     end
-    @. ᶜS_ρq_tot =
-        Y.c.ρ * limit_sink(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot / Y.c.ρ, dt)
-    @. ᶜS_ρe_tot = ᶜS_ρq_tot * (ᶜmp_tendency.e_int_precip + ᶜΦ)
+    @. ᶜmp_tendency.dq_tot_dt = limit_sink(
+        ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot / Y.c.ρ, dt
+    )
     return nothing
 end
 function set_microphysics_tendency_cache!(
@@ -819,6 +819,8 @@ function set_microphysics_tendency_cache!(
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ)) # TODO why not q_tot_safe?
     @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_tendency.dq_tot_dt, ᶜq_tot, dt)
 
+#TODO - compute energy contribution too
+
     # Sum the contributions from updrafts and environment
     @. ᶜS_ρq_tot = ᶜSqₜᵐ⁰ * ᶜρa⁰
     @. ᶜS_ρe_tot =
@@ -849,7 +851,7 @@ function set_microphysics_tendency_cache!(
     (; ᶜΦ) = p.core
     (; dt) = p
     (; ᶜp) = p.precomputed
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜSqₜᵐ⁰, ᶜSqₜᵐʲs, ᶜmp_tendency) = p.precomputed
+    (; ᶜmp_tendency, ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
     (; ᶜTʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
     (; ᶜT′T′, ᶜq′q′) = p.precomputed # temperature-based variances
@@ -858,20 +860,19 @@ function set_microphysics_tendency_cache!(
     cm0 = CAP.microphysics_0m_params(p.params)
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
 
     # Sources from the updrafts (direct BMT evaluation without quadrature)
     for j in 1:n
         # Materialize BMT result first to avoid NamedTuple property access in broadcast
-        @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
+        @. ᶜmp_tendencyʲs.:($$j) = BMT.bulk_microphysics_tendencies(
             BMT.Microphysics0Moment(),
             cm0, thp,
             ᶜTʲs.:($$j),
             ᶜq_liq_raiʲs.:($$j),
             ᶜq_ice_snoʲs.:($$j),
         )
-        @. ᶜSqₜᵐʲs.:($$j) = limit_sink(
-            ᶜmp_tendency.dq_tot_dt,
+        @. ᶜmp_tendencyʲs.:($$j).dq_tot_dt = limit_sink(
+           ᶜmp_tendencyʲs.:($$j).dq_tot_dt.dq_tot_dt,
             Y.c.sgsʲs.:($$j).q_tot, dt,
         )
     end
@@ -882,7 +883,7 @@ function set_microphysics_tendency_cache!(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
     )
     SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    @. ᶜmp_tendency = microphysics_tendencies_quadrature_0m(
+    @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_0m(
         SG_quad,
         cm0,
         thp,
@@ -893,10 +894,15 @@ function set_microphysics_tendency_cache!(
         ᶜq′q′,
         correlation_Tq(p.params),
     )
-    @. ᶜSqₜᵐ⁰ = limit_sink(ᶜmp_tendency.dq_tot_dt, ᶜq_tot⁰, dt)
+    @. ᶜmp_tendency⁰.dq_tot_dt = limit_sink(ᶜmp_tendency⁰.dq_tot_dt, ᶜq_tot⁰, dt)
 
+    #ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜSqₜᵐ⁰, ᶜSqₜᵐʲs,
+
+
+
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
     # Sum the contributions from EDMF subdomains
-    @. ᶜS_ρq_tot = ᶜSqₜᵐ⁰ * ᶜρa⁰
+    @. ᶜmp_tendency.dq_tot_dt = ᶜmp_tendency.dq_tot_dt⁰ * ᶜρa⁰
     @. ᶜS_ρe_tot =
         ᶜSqₜᵐ⁰ *
         ᶜρa⁰ *
@@ -907,6 +913,8 @@ function set_microphysics_tendency_cache!(
             ᶜq_ice_sno⁰,
             ᶜΦ,
         )
+
+
     for j in 1:n
         @. ᶜS_ρq_tot += ᶜSqₜᵐʲs.:($$j) * Y.c.sgsʲs.:($$j).ρa
         @. ᶜS_ρe_tot +=
