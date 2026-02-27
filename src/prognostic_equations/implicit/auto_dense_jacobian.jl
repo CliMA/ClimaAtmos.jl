@@ -270,19 +270,27 @@ matrix ``Uᵢ``, where ``Mᵢ = Lᵢ * Uᵢ``. The value of `N` must be wrapped 
 factorization to avoid dynamic local memory allocations.
 
 The runtime of this algorithm scales as ``O(N^3)``.
+
+On GPU, an in-place version is used (no per-thread MArray) to stay within
+CUDA per-thread local memory limits when N is large (e.g. N > 128).
 """
-function parallel_lu_factorize!(device, matrices, ::Val{N}) where {N}
+function parallel_lu_factorize!(device, matrices, n_val::Val{N}) where {N}
+    if device isa ClimaComms.CUDADevice
+        _parallel_lu_factorize_gpu!(device, matrices, n_val)
+    else
+        _parallel_lu_factorize_cpu!(device, matrices, n_val)
+    end
+end
+
+function _parallel_lu_factorize_cpu!(device, matrices, ::Val{N}) where {N}
     n_matrices = size(matrices, 3)
     @assert size(matrices, 1) == size(matrices, 2) == N
     ClimaComms.@threaded device for matrix_index in 1:n_matrices
-        # Copy each column into local memory to minimize global memory reads.
         FT = eltype(matrices)
         matrix = MArray{Tuple{N, N}, FT}(undef)
-        @inbounds for j in 1:N, i in 1:N # Copy entries in column-major order.
+        @inbounds for j in 1:N, i in 1:N
             matrix[i, j] = matrices[i, j, matrix_index]
         end
-
-        # Overwrite the local column matrix with its LU factorization.
         @inbounds for k in 1:N
             isnan(matrix[k, k]) && error("LU error: NaN on diagonal")
             iszero(matrix[k, k]) && error("LU error: 0 on diagonal")
@@ -294,10 +302,28 @@ function parallel_lu_factorize!(device, matrices, ::Val{N}) where {N}
                 matrix[i, j] -= matrix[i, k] * matrix[k, j]
             end
         end
-
-        # Copy the new column matrix back into global memory.
         @inbounds for j in 1:N, i in 1:N
             matrices[i, j, matrix_index] = matrix[i, j]
+        end
+    end
+end
+
+function _parallel_lu_factorize_gpu!(device, matrices, ::Val{N}) where {N}
+    n_matrices = size(matrices, 3)
+    @assert size(matrices, 1) == size(matrices, 2) == N
+    # In-place LU (Doolittle): no per-thread N×N copy, stays under CUDA local memory.
+    ClimaComms.@threaded device for matrix_index in 1:n_matrices
+        @inbounds for k in 1:N
+            pivot = matrices[k, k, matrix_index]
+            isnan(pivot) && error("LU error: NaN on diagonal")
+            iszero(pivot) && error("LU error: 0 on diagonal")
+            inv_pivot = inv(pivot)
+            for i in (k + 1):N
+                matrices[i, k, matrix_index] *= inv_pivot
+            end
+            for j in (k + 1):N, i in (k + 1):N
+                matrices[i, j, matrix_index] -= matrices[i, k, matrix_index] * matrices[k, j, matrix_index]
+            end
         end
     end
 end
@@ -314,25 +340,33 @@ a `Val` to ensure that it is statically inferrable, which allows the LU solver
 to avoid dynamic local memory allocations.
 
 The runtime of this algorithm scales as ``O(N^2)``.
+
+On GPU, an in-place version is used so each thread only touches global memory
+(no per-thread N×N matrix copy), staying within CUDA local memory limits.
 """
-function parallel_lu_solve!(device, vectors, matrices, ::Val{N}) where {N}
+function parallel_lu_solve!(device, vectors, matrices, n_val::Val{N}) where {N}
+    if device isa ClimaComms.CUDADevice
+        _parallel_lu_solve_gpu!(device, vectors, matrices, n_val)
+    else
+        _parallel_lu_solve_cpu!(device, vectors, matrices, n_val)
+    end
+end
+
+function _parallel_lu_solve_cpu!(device, vectors, matrices, ::Val{N}) where {N}
     n_matrices = size(matrices, 3)
     @assert size(vectors, 1) == N
     @assert size(vectors, 2) == n_matrices
     @assert size(matrices, 1) == size(matrices, 2) == N
     ClimaComms.@threaded device for vector_and_matrix_index in 1:n_matrices
-        # Copy each column into local memory to minimize global memory reads.
         FT = eltype(matrices)
         vector = MArray{Tuple{N}, FT}(undef)
         matrix = MArray{Tuple{N, N}, FT}(undef)
         @inbounds for i in 1:N
             vector[i] = vectors[i, vector_and_matrix_index]
         end
-        @inbounds for j in 1:N, i in 1:N # Copy entries in column-major order.
+        @inbounds for j in 1:N, i in 1:N
             matrix[i, j] = matrices[i, j, vector_and_matrix_index]
         end
-
-        # Overwrite the local column vector with the linear system's solution.
         @inbounds for i in 2:N
             l_row_i_dot_product = zero(FT)
             for j in 1:(i - 1)
@@ -349,10 +383,33 @@ function parallel_lu_solve!(device, vectors, matrices, ::Val{N}) where {N}
             vector[i] -= u_row_i_dot_product
             vector[i] /= matrix[i, i]
         end
-
-        # Copy the new column vector back into global memory.
         @inbounds for i in 1:N
             vectors[i, vector_and_matrix_index] = vector[i]
+        end
+    end
+end
+
+function _parallel_lu_solve_gpu!(device, vectors, matrices, ::Val{N}) where {N}
+    n_matrices = size(matrices, 3)
+    @assert size(vectors, 1) == N
+    @assert size(vectors, 2) == n_matrices
+    @assert size(matrices, 1) == size(matrices, 2) == N
+    # In-place solve: L y = b (forward), then U x = y (back). No per-thread N×N copy.
+    ClimaComms.@threaded device for idx in 1:n_matrices
+        @inbounds for i in 2:N
+            s = zero(eltype(vectors))
+            for j in 1:(i - 1)
+                s += matrices[i, j, idx] * vectors[j, idx]
+            end
+            vectors[i, idx] -= s
+        end
+        @inbounds vectors[N, idx] /= matrices[N, N, idx]
+        @inbounds for i in (N - 1):-1:1
+            s = zero(eltype(vectors))
+            for j in (i + 1):N
+                s += matrices[i, j, idx] * vectors[j, idx]
+            end
+            vectors[i, idx] = (vectors[i, idx] - s) / matrices[i, i, idx]
         end
     end
 end
