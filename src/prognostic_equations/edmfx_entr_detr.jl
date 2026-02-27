@@ -433,7 +433,7 @@ function detrainment(
         detr_inv_tau +
         detr_coeff * abs(ᶜwʲ) +
         detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
-        max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) - detr_vertdiv_coeff * ᶜvert_div -
+        max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) - detr_vertdiv_coeff * min(ᶜvert_div, 0) -
         detr_massflux_vertdiv_coeff * min(ᶜmassflux_vert_div, 0) / ᶜρaʲ + # Protected by ᶜρaʲ check above
         max_area_limiter
 
