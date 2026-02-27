@@ -350,7 +350,7 @@ function aerosol_activation_sources(
     sulfate_std = aerosol_params.sulfate_std
     sulfate_kappa = aerosol_params.sulfate_kappa
 
-    # Early exit for invalid inputs (negative supersaturation, no aerosols, or 
+    # Early exit for invalid inputs (negative supersaturation, no aerosols, or
     # non-physical values that would cause DomainError in CMP)
     invalid_inputs =
         (S < FT(0)) || (n_aer < ϵ_numerics(FT)) || (w <= FT(0)) ||
@@ -533,7 +533,7 @@ improving representation of phase changes.
 # Returns
 NamedTuple with averaged source terms:
 - `dq_lcl_dt`: Cloud liquid tendency [kg/kg/s]
-- `dq_icl_dt`: Cloud ice tendency [kg/kg/s]  
+- `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
 
@@ -555,6 +555,58 @@ T′T′ = (∂T_∂θ)² × θ′θ′
 ```
 The T-q correlation coefficient is obtained from `correlation_Tq(params)`.
 """
+
+# ============================================================================
+# Kernel Fission: Pre-computation Helper
+# ============================================================================
+
+"""
+    MicrophysicsPrecompute{FT}
+
+Pre-computed saturation values for quadrature integration. By computing these
+in a separate lightweight step, we reduce the size of the evaluator struct
+passed through the quadrature loop, reducing register pressure.
+
+# Fields
+- `q_cond_mean::FT`: Grid-mean condensate (q_lcl + q_icl)
+- `q_sat_mean::FT`: Grid-mean saturation specific humidity
+- `excess_mean::FT`: Grid-mean saturation excess (q_tot - q_sat)
+"""
+struct MicrophysicsPrecompute{FT}
+    q_cond_mean::FT
+    q_sat_mean::FT
+    excess_mean::FT
+end
+
+"""
+    compute_microphysics_precompute(tps, ρ, T_mean, q_tot_mean, q_lcl_mean, q_icl_mean)
+
+Pre-compute grid-mean saturation values. This lightweight computation can be
+fused by the compiler or split into a separate kernel, reducing register pressure
+in the main quadrature loop.
+
+# Returns
+`MicrophysicsPrecompute` struct with pre-computed saturation values.
+"""
+@inline function compute_microphysics_precompute(
+    tps,
+    ρ::FT,
+    T_mean::FT,
+    q_tot_mean::FT,
+    q_lcl_mean::FT,
+    q_icl_mean::FT,
+) where {FT}
+    q_cond_mean = q_lcl_mean + q_icl_mean
+    q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
+    excess_mean = q_tot_mean - q_sat_mean
+
+    return MicrophysicsPrecompute(q_cond_mean, q_sat_mean, excess_mean)
+end
+
+# ============================================================================
+# Original Evaluator (kept for reference/compatibility)
+# ============================================================================
+
 struct MicrophysicsEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
     mp::MP
@@ -675,6 +727,84 @@ Condensate is partitioned into liquid and ice using `λ(T_hat)`.
     )
 end
 
+# ============================================================================
+# Simplified Evaluator with Pre-computed Values
+# ============================================================================
+
+"""
+    MicrophysicsEvaluatorSimple
+
+Simplified evaluator that receives pre-computed saturation values, reducing
+struct size and register pressure compared to `MicrophysicsEvaluator`.
+
+By removing `q_tot_mean` and packing pre-computed values into a small struct,
+we reduce the evaluator footprint and help the compiler generate more efficient
+GPU code with lower register usage.
+"""
+struct MicrophysicsEvaluatorSimple{S, MP, TPS, FT, PC, Args <: Tuple}
+    scheme::S
+    mp::MP
+    tps::TPS
+    ρ::FT
+    # Grid-mean prognostic state (only what's needed for quadrature point eval)
+    T_mean::FT
+    q_lcl_mean::FT
+    q_icl_mean::FT
+    q_rai::FT
+    q_sno::FT
+    # Pre-computed values (from kernel 1)
+    precomp::PC
+    args::Args
+end
+
+@inline function (eval::MicrophysicsEvaluatorSimple)(T_hat, q_tot_hat)
+    FT = typeof(eval.ρ)
+
+    # Compute saturation at quadrature point only
+    q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
+    excess_hat = q_tot_hat - q_sat_hat
+
+    # Use pre-computed bias
+    bias = eval.precomp.q_cond_mean - max(FT(0), eval.precomp.excess_mean)
+    q_cond_hat = max(FT(0), excess_hat + bias)
+
+    # Partition using grid-mean liquid fraction
+    λ = TD.liquid_fraction(eval.tps, T_hat, eval.q_lcl_mean, eval.q_icl_mean)
+
+    has_grid_mean_condensate = eval.precomp.q_cond_mean > FT(0)
+    scale = ifelse(
+        has_grid_mean_condensate,
+        q_cond_hat / max(eval.precomp.q_cond_mean, ϵ_numerics(FT)),
+        FT(1),
+    )
+
+    q_lcl_hat = ifelse(
+        has_grid_mean_condensate,
+        eval.q_lcl_mean * scale,
+        λ * q_cond_hat,
+    )
+    q_icl_hat = ifelse(
+        has_grid_mean_condensate,
+        eval.q_icl_mean * scale,
+        (FT(1) - λ) * q_cond_hat,
+    )
+
+    # Ensure non-negative
+    q_lcl_hat = max(FT(0), q_lcl_hat)
+    q_icl_hat = max(FT(0), q_icl_hat)
+    q_tot_hat = max(FT(0), q_tot_hat)
+
+    return BMT.bulk_microphysics_tendencies(
+        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat,
+        q_tot_hat, q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
+        eval.args...,
+    )
+end
+
+# ============================================================================
+# Main Quadrature Function with Kernel Fission
+# ============================================================================
+
 @inline function microphysics_tendencies_quadrature(
     scheme,
     SG_quad,
@@ -682,12 +812,11 @@ end
     ρ, p_c,
     T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
     T′T′, q′q′, corr_Tq,
-    args...,  # Additional args like N_lcl for 2M
+    args...,  # Keep varargs for GPU compatibility
 )
     FT = eltype(tps)
 
     # Fast path for GridMeanSGS: skip quadrature, call BMT directly at grid mean
-    # This avoids the overhead of the quadrature loop for grid-mean-only evaluation
     if SG_quad isa GridMeanSGS ||
        (SG_quad isa SGSQuadrature && SG_quad.dist isa GridMeanSGS)
         return BMT.bulk_microphysics_tendencies(
@@ -697,20 +826,20 @@ end
         )
     end
 
-    # Pre-compute grid-mean condensate and saturation for perturbation model
-    q_cond_mean = q_lcl_mean + q_icl_mean
-    q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
-    excess_mean = q_tot_mean - q_sat_mean
-
-    # Create functor (no closure, GPU-safe)
-    evaluator = MicrophysicsEvaluator(
-        scheme, mp, tps, ρ,
-        T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-        q_cond_mean, q_sat_mean, excess_mean,
-        args,
+    # Pre-compute saturation values (lightweight, can be fused or split)
+    precomp = compute_microphysics_precompute(
+        tps, ρ, T_mean, q_tot_mean, q_lcl_mean, q_icl_mean
     )
 
-    # Integrate over quadrature points using functor (GPU-safe, no closure)
+    # Create simplified evaluator with pre-computed values
+    evaluator = MicrophysicsEvaluatorSimple(
+        scheme, mp, tps, ρ,
+        T_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+        precomp,
+        args,  # Tuple will be inferred
+    )
+
+    # Integrate (now with smaller evaluator struct)
     return integrate_over_sgs(evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq)
 end
 
