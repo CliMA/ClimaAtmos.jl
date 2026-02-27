@@ -9,6 +9,9 @@ Dense Jacobian for the **full** tendency (remaining + implicit), for use with
 DIRK timesteppers. Same as `AutoDenseJacobian` but uses `full_tendency!` and
 full precomputed/scratch from `p`. The cache is built from `p` so that
 `set_precomputed_quantities!` and `full_tendency!` see the full state.
+
+On GPU, a smaller `max_simultaneous_derivatives` (8) is used automatically so
+ForwardDiff.Dual kernels stay under CUDA shared memory limits.
 """
 struct AutoDenseJacobianFullTendency{S} <: JacobianAlgorithm end
 AutoDenseJacobianFullTendency(max_simultaneous_derivatives = 32) =

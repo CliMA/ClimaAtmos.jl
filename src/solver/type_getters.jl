@@ -516,11 +516,14 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
     if use_full_tendency && !isnothing(p)
-        # DIRK: full-tendency Jacobian (requires dense)
+        # DIRK: full-tendency Jacobian (requires dense). On GPU use smaller chunk size so
+        # ForwardDiff.Dual kernels stay under CUDA shared memory limit (smem ∝ Dual size).
         use_dense_jacobian ||
             error("DIRK requires use_dense_jacobian = true (full-tendency Jacobian)")
-        jacobian_algorithm = AutoDenseJacobianFullTendency()
-        @info "Jacobian algorithm: $(summary_string(jacobian_algorithm)) (full tendency)"
+        device = ClimaComms.device(Y.c)
+        max_simultaneous_derivatives = device isa ClimaComms.CUDADevice ? 8 : 32
+        jacobian_algorithm = AutoDenseJacobianFullTendency(max_simultaneous_derivatives)
+        @info "Jacobian algorithm: $(summary_string(jacobian_algorithm)) (full tendency, max_deriv=$max_simultaneous_derivatives on $(device))"
         return Jacobian(jacobian_algorithm, Y, p; verbose = debug_jacobian)
     end
     jacobian_algorithm = if use_dense_jacobian
