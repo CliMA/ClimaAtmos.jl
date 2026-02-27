@@ -308,21 +308,30 @@ function _parallel_lu_factorize_cpu!(device, matrices, ::Val{N}) where {N}
     end
 end
 
+# Max matrices per GPU kernel launch to avoid ERROR_INVALID_VALUE (register/launch limits).
+# Smaller batch = fewer threads per launch; with large N each thread uses many registers.
+const _GPU_LU_BATCH_SIZE = 64
+
 function _parallel_lu_factorize_gpu!(device, matrices, ::Val{N}) where {N}
     n_matrices = size(matrices, 3)
     @assert size(matrices, 1) == size(matrices, 2) == N
-    # In-place LU (Doolittle): no per-thread N×N copy, stays under CUDA local memory.
-    ClimaComms.@threaded device for matrix_index in 1:n_matrices
-        @inbounds for k in 1:N
-            pivot = matrices[k, k, matrix_index]
-            isnan(pivot) && error("LU error: NaN on diagonal")
-            iszero(pivot) && error("LU error: 0 on diagonal")
-            inv_pivot = inv(pivot)
-            for i in (k + 1):N
-                matrices[i, k, matrix_index] *= inv_pivot
-            end
-            for j in (k + 1):N, i in (k + 1):N
-                matrices[i, j, matrix_index] -= matrices[i, k, matrix_index] * matrices[k, j, matrix_index]
+    # In-place LU (Doolittle). Batch to limit threads per launch for large N (register pressure).
+    for start_idx in 1:_GPU_LU_BATCH_SIZE:n_matrices
+        end_idx = min(start_idx + _GPU_LU_BATCH_SIZE - 1, n_matrices)
+        n_batch = end_idx - start_idx + 1
+        ClimaComms.@threaded device for batch_i in 1:n_batch
+            matrix_index = start_idx - 1 + batch_i
+            @inbounds for k in 1:N
+                pivot = matrices[k, k, matrix_index]
+                isnan(pivot) && error("LU error: NaN on diagonal")
+                iszero(pivot) && error("LU error: 0 on diagonal")
+                inv_pivot = inv(pivot)
+                for i in (k + 1):N
+                    matrices[i, k, matrix_index] *= inv_pivot
+                end
+                for j in (k + 1):N, i in (k + 1):N
+                    matrices[i, j, matrix_index] -= matrices[i, k, matrix_index] * matrices[k, j, matrix_index]
+                end
             end
         end
     end
@@ -394,22 +403,27 @@ function _parallel_lu_solve_gpu!(device, vectors, matrices, ::Val{N}) where {N}
     @assert size(vectors, 1) == N
     @assert size(vectors, 2) == n_matrices
     @assert size(matrices, 1) == size(matrices, 2) == N
-    # In-place solve: L y = b (forward), then U x = y (back). No per-thread N×N copy.
-    ClimaComms.@threaded device for idx in 1:n_matrices
-        @inbounds for i in 2:N
-            s = zero(eltype(vectors))
-            for j in 1:(i - 1)
-                s += matrices[i, j, idx] * vectors[j, idx]
+    # In-place solve: L y = b (forward), then U x = y (back). Batch to match factorize.
+    for start_idx in 1:_GPU_LU_BATCH_SIZE:n_matrices
+        end_idx = min(start_idx + _GPU_LU_BATCH_SIZE - 1, n_matrices)
+        n_batch = end_idx - start_idx + 1
+        ClimaComms.@threaded device for batch_i in 1:n_batch
+            idx = start_idx - 1 + batch_i
+            @inbounds for i in 2:N
+                s = zero(eltype(vectors))
+                for j in 1:(i - 1)
+                    s += matrices[i, j, idx] * vectors[j, idx]
+                end
+                vectors[i, idx] -= s
             end
-            vectors[i, idx] -= s
-        end
-        @inbounds vectors[N, idx] /= matrices[N, N, idx]
-        @inbounds for i in (N - 1):-1:1
-            s = zero(eltype(vectors))
-            for j in (i + 1):N
-                s += matrices[i, j, idx] * vectors[j, idx]
+            @inbounds vectors[N, idx] /= matrices[N, N, idx]
+            @inbounds for i in (N - 1):-1:1
+                s = zero(eltype(vectors))
+                for j in (i + 1):N
+                    s += matrices[i, j, idx] * vectors[j, idx]
+                end
+                vectors[i, idx] = (vectors[i, idx] - s) / matrices[i, i, idx]
             end
-            vectors[i, idx] = (vectors[i, idx] - s) / matrices[i, i, idx]
         end
     end
 end
