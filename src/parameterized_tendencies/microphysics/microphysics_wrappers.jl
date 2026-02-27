@@ -89,7 +89,6 @@ function compute_1m_precipitation_tendencies!(
     dt,
     mp,
     thp,
-    microphysics_tendency_timestepping = Explicit(),
 )
     FT = eltype(thp)
 
@@ -108,10 +107,7 @@ function compute_1m_precipitation_tendencies!(
     )
 
     # Apply limiting via shared helper
-    _apply_1m_limits!(
-        mp_tendency, microphysics_tendency_timestepping,
-        thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, dt,
-    )
+    @. mp_tendency = apply_1m_tendency_limits(mp_tendency, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, dt)
     @. Sqₗᵐ = mp_tendency.dq_lcl_dt
     @. Sqᵢᵐ = mp_tendency.dq_icl_dt
     @. Sqᵣᵐ = mp_tendency.dq_rai_dt
@@ -241,14 +237,14 @@ function compute_prescribed_aerosol_properties!(
     @. sulfate_num = 0
 
     # Get aerosol concentrations if available
-    seasalt_names = (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05)
-    seasalt_radius_props = (:SSLT01_radius, :SSLT02_radius, :SSLT03_radius, :SSLT04_radius, :SSLT05_radius)
-    sulfate_names = (:SO4,)
+    seasalt_names = [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+    sulfate_names = [:SO4]
     for aerosol_name in propertynames(prescribed_aerosol_field)
         if aerosol_name in seasalt_names
-            # Find the index of the sea salt mode to get the corresponding radius property
-            idx = findfirst(isequal(aerosol_name), seasalt_names)
-            seasalt_particle_radius = getproperty(aerosol_params, seasalt_radius_props[idx])
+            seasalt_particle_radius = getproperty(
+                aerosol_params,
+                Symbol(string(aerosol_name) * "_radius"),
+            )
             seasalt_particle_mass =
                 FT(4 / 3 * pi) *
                 seasalt_particle_radius^3 *

@@ -1,4 +1,4 @@
-319
+318
 
 # **README**
 #
@@ -20,14 +20,6 @@
 
 
 #=
-
-319
-- Port implicit microphysics to main: implicit IMEX timestepping for
-  microphysics tendencies, Jacobian diagonal entries, surface precipitation
-  tendency, relaxed tendency limiters 
-- Change default to SGS quadrature with`sgs_distribution` as `lognormal`. This affects
-  SGS quadrature sampling of specific humidity for microphysics tendencies.
-
 318
 - Add GPU Orographic Gravity Wave implementation, refactor NOGW tests, add OGW tests and fix base fluxes
 

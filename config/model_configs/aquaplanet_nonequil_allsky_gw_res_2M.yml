@@ -4,7 +4,7 @@ t_end: "12hours"
 dt_save_state_to_disk: "24hours"
 vert_diff: "DecayWithHeightDiffusion"
 microphysics_model: "2M"
-use_sgs_quadrature: true
+use_sgs_quadrature: false
 rad: "allskywithclear"
 aerosol_radiation: true
 prescribe_clouds_in_radiation: true

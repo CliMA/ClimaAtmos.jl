@@ -703,13 +703,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
             tke_prev_level = Fields.field_values(Fields.level(ᶜtke, i - 1))
 
-            # Use a temperature floor to prevent DomainError in
-            # saturation_vapor_pressure when updraft thermodynamics
-            # produce unphysical temperatures.
             rhʲ_prev_level = p.scratch.temp_data_level_4
             @. rhʲ_prev_level = TD.relative_humidity(
                 thermo_params,
-                max(Tʲ_prev_level, CAP.T_min_sgs(params)),
+                Tʲ_prev_level,
                 p_prev_level,
                 q_tot_safeʲ_prev_level,
                 q_liq_raiʲ_prev_level,
@@ -718,7 +715,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             rh_prev_level = p.scratch.temp_data_level_5
             @. rh_prev_level = TD.relative_humidity(
                 thermo_params,
-                max(T_prev_level, CAP.T_min_sgs(params)),
+                T_prev_level,
                 p_prev_level,
                 q_tot_safe_prev_level,
                 q_liq_rai_prev_level,
@@ -856,7 +853,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     dt,
                     microphys_1m_params,
                     thermo_params,
-                    p.atmos.microphysics_tendency_timestepping,
                 )
 
             end

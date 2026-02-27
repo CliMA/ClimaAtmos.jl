@@ -3,42 +3,6 @@
 #####
 
 """
-    surface_precipitation_tendency!(Yₜ, Y, p, t, surface_model, microphysics_model)
-
-Applies the surface water and energy deposition from precipitation.
-
-When microphysics tendencies are treated implicitly, this function is called
-from `implicit_tendency!` (rather than from the explicit `surface_temp_tendency!`)
-so that both the atmospheric water removal and the surface deposition use the
-same cached `ᶜS_ρq_tot`, preserving conservation across IMEX stages.
-"""
-surface_precipitation_tendency!(Yₜ, Y, p, t, ::PrescribedSST, _) = nothing
-surface_precipitation_tendency!(Yₜ, Y, p, t, _, ::DryModel) = nothing
-surface_precipitation_tendency!(Yₜ, Y, p, t, ::PrescribedSST, ::DryModel) =
-    nothing
-surface_precipitation_tendency!(Yₜ, Y, p, t, ::SlabOceanSST, ::DryModel) =
-    nothing
-
-function surface_precipitation_tendency!(
-    Yₜ, Y, p, t, slab::SlabOceanSST, microphysics_model,
-)
-    FT = eltype(Y)
-
-    # Surface energy from precipitation
-    pet = p.precomputed.col_integrated_precip_energy_tendency
-    depth_ocean = slab.depth_ocean
-    ρ_ocean = slab.ρ_ocean
-    cp_ocean = slab.cp_ocean
-    surface_heat_capacity_per_area = ρ_ocean * cp_ocean * depth_ocean
-    @. Yₜ.sfc.T -= pet / surface_heat_capacity_per_area
-
-    # Surface water from precipitation (rain + snow)
-    P_liq = p.precomputed.surface_rain_flux
-    P_snow = p.precomputed.surface_snow_flux
-    @. Yₜ.sfc.water -= P_liq + P_snow
-end
-
-"""
     surface_temp_tendency!(Yₜ, Y, p, t, surface_model)
 
 Computes the tendency for the prognostic surface temperature (`Y.sfc.T`) and,
@@ -136,13 +100,10 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
         Q = FT(0)
     end
 
-    # 4. Energy tendency due to precipitation accumulation
-    # When microphysics is implicit, precipitation budget is handled in
-    # implicit_tendency! to avoid IMEX stage mismatch (conservation).
-    if !(p.atmos.microphysics_model isa DryModel) &&
-       p.atmos.microphysics_tendency_timestepping != Implicit()
+    # 4. Energy tendency due to precipitation accumulation        
+    if !(p.atmos.microphysics_model isa DryModel)
 
-        pet = p.precomputed.col_integrated_precip_energy_tendency
+        pet = p.conservation_check.col_integrated_precip_energy_tendency
 
     else
         pet = FT(0)
@@ -166,16 +127,10 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
             sfc_turb_w_flux = 0
         end
 
-        # 2. Precipitation (rain and snow)
-        # When microphysics is implicit, precipitation budget is handled in
-        # implicit_tendency! to avoid IMEX stage mismatch (conservation).
-        if p.atmos.microphysics_tendency_timestepping != Implicit()
-            P_liq = p.precomputed.surface_rain_flux
-            P_snow = p.precomputed.surface_snow_flux
-        else
-            P_liq = FT(0)
-            P_snow = FT(0)
-        end
+        # 2. Precipitation (rain and snow, defined negative downward, so positive flux 
+        # from surface to atmosphere)
+        P_liq = p.precomputed.surface_rain_flux
+        P_snow = p.precomputed.surface_snow_flux
 
         # Total water tendency for surface water:
         # d(water)/dt = -(Precip_up + Precip_snow_up + TurbFlux_water_atm_to_sfc) [kg/m²/s]
