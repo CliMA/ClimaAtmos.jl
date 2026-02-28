@@ -18,9 +18,19 @@ const ASTP = AbstractSurfaceTemperatureParameters
 abstract type AbstractGravityWaveParameters end
 const AGWP = AbstractGravityWaveParameters
 
-Base.broadcastable(param_set::ACAP) = tuple(param_set)
-Base.broadcastable(param_set::ATCP) = tuple(param_set)
-Base.broadcastable(param_set::ASTP) = tuple(param_set)
+# TODO: Check if this works with the new DataLayouts code.
+const fake_point_space = CC.Spaces.PointSpace(CC.DataLayouts.DataF(nothing))
+point_field(x) = CC.Fields.Field(CC.DataLayouts.DataF(x), fake_point_space)
+Base.broadcastable(param_set::ACAP) = point_field(param_set)
+Base.broadcastable(param_set::ATCP) = point_field(param_set)
+Base.broadcastable(param_set::ASTP) = point_field(param_set)
+Base.broadcastable(param_set::IP.InsolationParameters) = point_field(param_set)
+Base.broadcastable(param_set::TD.Parameters.ThermodynamicsParameters) =
+    point_field(param_set)
+Base.broadcastable(param_set::CM.Parameters.ParametersType) =
+    point_field(param_set)
+Base.broadcastable(param_set::SF.Parameters.SurfaceFluxesParameters) =
+    point_field(param_set)
 
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     surface_area::FT
