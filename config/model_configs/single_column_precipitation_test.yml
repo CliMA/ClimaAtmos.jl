@@ -10,7 +10,6 @@ dt_save_state_to_disk: "500secs"
 dt_cloud_fraction: "60secs"
 cloud_model: "grid_scale"
 microphysics_model: "1M"
-use_sgs_quadrature: true
 vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2

@@ -13,7 +13,6 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 microphysics_model: "1M"
-use_sgs_quadrature: true
 config: box
 x_max: 1e8
 y_max: 1e8

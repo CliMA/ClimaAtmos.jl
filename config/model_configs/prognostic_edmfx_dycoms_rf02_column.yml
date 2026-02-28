@@ -16,7 +16,6 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
 microphysics_model: "1M"
-use_sgs_quadrature: true
 config: "column"
 x_elem: 2
 y_elem: 2
