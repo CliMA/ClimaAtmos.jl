@@ -60,13 +60,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
         @. ᶜq_tot_safe⁰ = max(ᶜq_liq_rai⁰ + ᶜq_ice_sno⁰, ᶜq_tot⁰)
         ᶜh⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)  # specific enthalpy
-        @. ᶜT⁰ = TD.air_temperature(
-            thermo_params,
-            TD.ph(),
-            ᶜh⁰,
-            ᶜq_tot_safe⁰,
-            ᶜq_liq_rai⁰,
-            ᶜq_ice_sno⁰,
+        @. ᶜT⁰ = max(
+            CAP.T_min_sgs(p.params),
+            TD.air_temperature(
+                thermo_params,
+                TD.ph(),
+                ᶜh⁰,
+                ᶜq_tot_safe⁰,
+                ᶜq_liq_rai⁰,
+                ᶜq_ice_sno⁰,
+            ),
         )
     else
         # EquilibriumMicrophysics0M: use saturation adjustment to get T and phase partition
@@ -143,13 +146,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
             @. ᶜq_tot_safeʲ = max(ᶜq_liq_raiʲ + ᶜq_ice_snoʲ, ᶜq_totʲ)
             ᶜhʲ = @. lazy(ᶜmseʲ - ᶜΦ)
-            @. ᶜTʲ = TD.air_temperature(
-                thermo_params,
-                TD.ph(),
-                ᶜhʲ,
-                ᶜq_tot_safeʲ,
-                ᶜq_liq_raiʲ,
-                ᶜq_ice_snoʲ,
+            @. ᶜTʲ = max(
+                CAP.T_min_sgs(p.params),
+                TD.air_temperature(
+                    thermo_params,
+                    TD.ph(),
+                    ᶜhʲ,
+                    ᶜq_tot_safeʲ,
+                    ᶜq_liq_raiʲ,
+                    ᶜq_ice_snoʲ,
+                ),
             )
         else
             # EquilibriumMicrophysics0M: use saturation adjustment

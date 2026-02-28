@@ -603,8 +603,11 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
             @. ᶜq_tot_safe = max(ᶜq_liq_rai + ᶜq_ice_sno, specific(Y.c.ρq_tot, Y.c.ρ))
         end
-        @. ᶜT =
-            TD.air_temperature(thermo_params, ᶜe_int, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+        # Floor T to prevent negative pressure during implicit Newton iterations
+        @. ᶜT = max(
+            CAP.T_min_sgs(p.params),
+            TD.air_temperature(thermo_params, ᶜe_int, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno),
+        )
     end
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
     @. ᶜh_tot =
