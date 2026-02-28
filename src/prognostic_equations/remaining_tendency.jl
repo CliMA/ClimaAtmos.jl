@@ -276,16 +276,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     end
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
-    # EDMF updraft microphysics tendencies (applied to updraft prognostic variables)
-    edmfx_microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        p.atmos.turbconv_model,
-        p.atmos.microphysics_model,
-    )
-
     # Unified microphysics tendencies (cloud condensation + precipitation)
     microphysics_tendency!(
         Yₜ,

@@ -152,7 +152,7 @@ function precomputed_quantities(Y, atmos)
         (; ᶜwₗ = similar(Y.c, FT), ᶜwᵢ = similar(Y.c, FT)) : (;)
 
     # Helper named tuples for microphysics cache
-    MP0_NT = @NamedTuple{dq_tot_dt::FT,}
+    MP0_NT = @NamedTuple{dq_tot_dt::FT, e_tot_hlpr}
     MP1_NT = @NamedTuple{
         dq_lcl_dt::FT, dq_icl_dt::FT, dq_rai_dt::FT, dq_sno_dt::FT,
     }

@@ -614,7 +614,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ᶠnh_pressure³_dragʲ = ᶠnh_pressure³_dragʲs.:($j)
 
             if microphysics_model isa EquilibriumMicrophysics0M
-                ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵐʲs.:($j)
+                ᶜmp_tendencyʲ = p.precomputed.ᶜmp_tendencyʲs.:($j)
             end
             if microphysics_model isa NonEquilibriumMicrophysics1M
                 ᶜq_liqʲ = ᶜq_liqʲs.:($j)
@@ -622,11 +622,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 ᶜq_raiʲ = ᶜq_raiʲs.:($j)
                 ᶜq_snoʲ = ᶜq_snoʲs.:($j)
 
-                ᶜS_q_liqʲ = p.precomputed.ᶜSqₗᵐʲs.:($j)
-                ᶜS_q_iceʲ = p.precomputed.ᶜSqᵢᵐʲs.:($j)
-                ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵐʲs.:($j)
-                ᶜS_q_snoʲ = p.precomputed.ᶜSqₛᵐʲs.:($j)
-
+                ᶜmp_tendencyʲ = p.precomputed.ᶜmp_tendencyʲs.:($j)
             end
 
             ρaʲ_level = Fields.field_values(Fields.level(ᶜρaʲ, i))
@@ -667,9 +663,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             scale_height =
                 CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
 
-            S_q_totʲ_prev_level =
-                if microphysics_model isa EquilibriumMicrophysics0M
-                    Fields.field_values(Fields.level(ᶜS_q_totʲ, i - 1))
+            ᶜmp_tendencyʲ_prev_level =
+                if microphysics_model isa MoistMicrophysics
+                    Fields.field_values(Fields.level(ᶜmp_tendencyʲ, i - 1))
                 else
                     Ref(nothing)
                 end
@@ -688,17 +684,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     Fields.field_values(Fields.level(ᶜq_raiʲ, i - 1))
                 q_snoʲ_prev_level =
                     Fields.field_values(Fields.level(ᶜq_snoʲ, i - 1))
-
-                S_q_liqʲ_prev_level =
-                    Fields.field_values(Fields.level(ᶜS_q_liqʲ, i - 1))
-                S_q_iceʲ_prev_level =
-                    Fields.field_values(Fields.level(ᶜS_q_iceʲ, i - 1))
-                S_q_raiʲ_prev_level =
-                    Fields.field_values(Fields.level(ᶜS_q_raiʲ, i - 1))
-                S_q_snoʲ_prev_level =
-                    Fields.field_values(Fields.level(ᶜS_q_snoʲ, i - 1))
-
-
             end
 
             tke_prev_level = Fields.field_values(Fields.level(ᶜtke, i - 1))
@@ -816,33 +801,34 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
             # 0-moment microphysics: sink of q_tot from precipitation removal
             if microphysics_model isa EquilibriumMicrophysics0M
-                mp_tendency_prev_level = Fields.field_values(
-                    Fields.level(p.precomputed.ᶜmp_tendency, i - 1))
-                @. mp_tendency_prev_level = BMT.bulk_microphysics_tendencies(
-                    BMT.Microphysics0Moment(),
-                    microphys_0m_params,
-                    thermo_params,
-                    Tʲ_prev_level,
-                    q_liq_raiʲ_prev_level,
-                    q_ice_snoʲ_prev_level,
-                )
-                @. S_q_totʲ_prev_level = limit_sink(
+                @. ᶜmp_tendencyʲ_prev_level.dq_tot_dt =
+                    BMT.bulk_microphysics_tendencies(
+                        BMT.Microphysics0Moment(),
+                        microphys_0m_params,
+                        thermo_params,
+                        Tʲ_prev_level,
+                        q_liq_raiʲ_prev_level,
+                        q_ice_snoʲ_prev_level,
+                    )
+                @. ᶜmp_tendencyʲ_prev_level.dq_tot_dt = limit_sink(
                     mp_tendency_prev_level.dq_tot_dt,
                     q_totʲ_prev_level, dt,
                 )
+                @. ᶜmp_tendencyʲ_prev_level.e_tot_hlpr =
+                    e_tot_0M_precipitation_sources_helper(
+                        thermo_params,
+                        Tʲ_prev_level,
+                        q_liq_rai_prev_level,
+                        q_ice_sno_prev_level,
+                        Φ_prev_level,
+                    )
                 # 1-moment microphysics: cloud water (liquid and ice) and
                 # precipitation (rain and snow) tendencies. q_tot is constant, because
                 # all the species are considered a part of the working fluid.
             elseif microphysics_model isa NonEquilibriumMicrophysics1M
                 # Microphysics tendencies from the updrafts (using fused BMT API)
-                mp_tendency_prev_level = Fields.field_values(
-                    Fields.level(p.precomputed.ᶜmp_tendency, i - 1))
                 compute_1m_precipitation_tendencies!(
-                    S_q_liqʲ_prev_level,
-                    S_q_iceʲ_prev_level,
-                    S_q_raiʲ_prev_level,
-                    S_q_snoʲ_prev_level,
-                    mp_tendency_prev_level,
+                    mp_tendencyʲ_prev_level,
                     ρʲ_prev_level,
                     q_totʲ_prev_level,
                     q_liqʲ_prev_level,
@@ -854,7 +840,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     microphys_1m_params,
                     thermo_params,
                 )
-
             end
 
             u³ʲ_datau³ʲ_data = p.scratch.temp_data_level
@@ -965,7 +950,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     local_geometry_halflevel.J,
                     local_geometry_prev_level.J,
                     ρaʲ_prev_level,
-                    S_q_totʲ_prev_level,
+                    ᶜmp_tendencyʲ_prev_level.dq_tot_dt,
                 )
             end
 
@@ -1020,14 +1005,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     local_geometry_halflevel.J,
                     local_geometry_prev_level.J,
                     ρaʲ_prev_level,
-                    S_q_totʲ_prev_level *
-                    e_tot_0M_precipitation_sources_helper(
-                        thermo_params,
-                        Tʲ_prev_level,
-                        q_liq_rai_prev_level,
-                        q_ice_sno_prev_level,
-                        Φ_prev_level,
-                    ),
+                    ᶜmp_tendencyʲ_prev_level.dq_tot_dt *
+                    ᶜmp_tendencyʲ_prev_level.e_tot_hlpr
                 )
             end
             @. mseʲ_level = ifelse(
@@ -1061,7 +1040,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     local_geometry_halflevel.J,
                     local_geometry_prev_level.J,
                     ρaʲ_prev_level,
-                    S_q_totʲ_prev_level,
+                    ᶜmp_tendencyʲ_prev_level.dq_tot_dt,
                 )
             end
             @. q_totʲ_level = ifelse(
@@ -1073,6 +1052,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ###
             ### 1-moment microphysics tracers
             ###
+            # dupa
             if microphysics_model isa NonEquilibriumMicrophysics1M
                 # TODO - loop over tracres
                 ρaʲu³ʲ_dataq_ = p.scratch.temp_data_level_3
@@ -1098,7 +1078,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         local_geometry_halflevel.J,
                         local_geometry_prev_level.J,
                         ρaʲ_prev_level,
-                        S_q_liqʲ_prev_level,
+                        ᶜmp_tendencyʲ_prev_level.dq_lcl_dt,
                     )
                 @. q_liqʲ_level = ifelse(
                     kill_updraft,
@@ -1128,7 +1108,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         local_geometry_halflevel.J,
                         local_geometry_prev_level.J,
                         ρaʲ_prev_level,
-                        S_q_iceʲ_prev_level,
+                        ᶜmp_tendencyʲ_prev_level.dq_icl_dt,
                     )
                 @. q_iceʲ_level = ifelse(
                     kill_updraft,
@@ -1158,7 +1138,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         local_geometry_halflevel.J,
                         local_geometry_prev_level.J,
                         ρaʲ_prev_level,
-                        S_q_raiʲ_prev_level,
+                        ᶜmp_tendencyʲ_prev_level.dq_rai_dt,
                     )
                 @. q_raiʲ_level = ifelse(
                     kill_updraft,
@@ -1188,7 +1168,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         local_geometry_halflevel.J,
                         local_geometry_prev_level.J,
                         ρaʲ_prev_level,
-                        S_q_snoʲ_prev_level,
+                        ᶜmp_tendencyʲ_prev_level.dq_sno_dt,
                     )
                 @. q_snoʲ_level = ifelse(
                     kill_updraft,
@@ -1338,23 +1318,18 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
         @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
 
         if microphysics_model isa EquilibriumMicrophysics0M
-            ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵐʲs.:($j)
-            S_q_totʲ_level = Fields.field_values(Fields.level(ᶜS_q_totʲ, i_top))
-            @. S_q_totʲ_level = 0
+            ᶜmp_tendencyʲ = p.precomputed.ᶜSqₜᵐʲs.:($j)
+            ᶜmp_tendencyʲ_level = Fields.field_values(Fields.level(ᶜmp_tendencyʲ, i_top))
+            @. ᶜmp_tendencyʲ_level.dq_tot_dt = 0
+            @. ᶜmp_tendencyʲ_level.e_tot_hlpr = 0
         end
         if microphysics_model isa NonEquilibriumMicrophysics1M
-            ᶜS_q_liqʲ = p.precomputed.ᶜSqₗᵐʲs.:($j)
-            ᶜS_q_iceʲ = p.precomputed.ᶜSqᵢᵐʲs.:($j)
-            ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵐʲs.:($j)
-            ᶜS_q_snoʲ = p.precomputed.ᶜSqₛᵐʲs.:($j)
-            S_q_liqʲ_level = Fields.field_values(Fields.level(ᶜS_q_liqʲ, i_top))
-            S_q_iceʲ_level = Fields.field_values(Fields.level(ᶜS_q_iceʲ, i_top))
-            S_q_raiʲ_level = Fields.field_values(Fields.level(ᶜS_q_raiʲ, i_top))
-            S_q_snoʲ_level = Fields.field_values(Fields.level(ᶜS_q_snoʲ, i_top))
-            @. S_q_liqʲ_level = 0
-            @. S_q_iceʲ_level = 0
-            @. S_q_raiʲ_level = 0
-            @. S_q_snoʲ_level = 0
+            ᶜmp_tendencyʲ = p.precomputed.ᶜmp_tendencyʲs.:($j)
+            ᶜmp_tendencyʲ_level = Fields.field_values(Fields.level(ᶜmp_tendencyʲ, i_top))
+            @. ᶜmp_tendencyʲ_level.dq_lcl_dt = 0
+            @. ᶜmp_tendencyʲ_level.dq_icl_dt = 0
+            @. ᶜmp_tendencyʲ_level.dq_rai_dt = 0
+            @. ᶜmp_tendencyʲ_level.dq_sno_dt = 0
         end
     end
     return nothing
