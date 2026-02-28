@@ -1630,11 +1630,9 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
     # 0M microphysics: diagonal entry for ρq_tot
     if p.atmos.microphysics_model isa EquilibriumMicrophysics0M &&
        MatrixFields.has_field(Y, @name(c.ρq_tot))
-        (; ᶜS_ρq_tot) = p.precomputed
+        (; ᶜ∂Sq_tot) = p.precomputed
         ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
-        add_microphysics_jacobian_entry!(
-            ∂ᶜρq_tot_err_∂ᶜρq_tot, dtγ, ᶜS_ρq_tot, Y.c.ρq_tot,
-        )
+        @. ∂ᶜρq_tot_err_∂ᶜρq_tot += dtγ * DiagonalMatrixRow(ᶜ∂Sq_tot)
     end
 
     # EDMF microphysics: diagonal entries for updraft variables

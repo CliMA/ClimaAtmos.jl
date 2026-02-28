@@ -735,11 +735,15 @@ function refresh_microphysics_source!(
     _,
 )
     (; dt) = p
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜmp_tendency) = p.precomputed
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜmp_tendency, ᶜ∂Sq_tot) = p.precomputed
     (; ᶜΦ) = p.core
     @. ᶜS_ρq_tot =
         Y.c.ρ * limit_sink(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot / Y.c.ρ, dt)
     @. ᶜS_ρe_tot = ᶜS_ρq_tot * (ᶜmp_tendency.e_int_precip + ᶜΦ)
+    # Pre-compute Jacobian diagonal coefficient S/|q| for update_microphysics_jacobian!
+    FT = eltype(ᶜS_ρq_tot)
+    ε = ϵ_numerics(FT)
+    @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot, ε)
     set_precipitation_surface_fluxes!(
         Y, p,
         EquilibriumMicrophysics0M(),
@@ -754,7 +758,7 @@ function refresh_microphysics_source!(
     ::PrognosticEDMFX,
 )
     (; ᶜΦ) = p.core
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜ∂Sq_tot) = p.precomputed
     (; ᶜSqₜᵐ⁰, ᶜSqₜᵐʲs) = p.precomputed
     (; ᶜTʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
@@ -787,6 +791,10 @@ function refresh_microphysics_source!(
                 ᶜΦ,
             )
     end
+    # Pre-compute Jacobian diagonal coefficient S/|q| for update_microphysics_jacobian!
+    FT = eltype(ᶜS_ρq_tot)
+    ε = ϵ_numerics(FT)
+    @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot, ε)
     set_precipitation_surface_fluxes!(
         Y, p,
         EquilibriumMicrophysics0M(),
