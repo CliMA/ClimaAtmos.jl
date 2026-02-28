@@ -44,6 +44,20 @@ The default `writer` is NetCDF. If `writer` is `nc` or `netcdf`, the output is
 remapped non-conservatively on a Cartesian grid and saved to a NetCDF file.
 Currently, only 3D fields on cubed spheres are supported.
 
+!!! note "Did you know?"
+    For the `period`, you can also specify `"monthly"`, `"weekly"`, and
+    `"daily"`. These options align the reductions to start at the beginning of
+    each month, week, and day, respectively.
+
+    For example:
+    - If `period: monthly` and `reduction_time: average` are used, and the
+      simulation begins on `2010-01-15`, then the first time saved represents
+      the time average of the second half of January.
+    - The next time saved represents the time average of the data for February,
+      and so on.
+
+    This is useful to account for spinup.
+
 #### Writing in pressure coordinates
 
 !!! compat "Compatibility"
