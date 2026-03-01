@@ -1433,7 +1433,7 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
         ) do (ρχ_name, ᶜ∂S∂q)
             MatrixFields.has_field(Y, ρχ_name) || return
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
-            @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(min(zero(ᶜ∂S∂q), ᶜ∂S∂q))
+            @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
         end
 
         # Precipitation (q_rai, q_sno): use S/q from quadrature-integrated
@@ -1443,7 +1443,7 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
         FT = Spaces.undertype(axes(Y.c))
         ε = ϵ_numerics(FT)
         if p.atmos.turbconv_model isa PrognosticEDMFX
-            # Environment quadrature tendencies (dominant contribution)
+            # Environment quadrature tendencies 
             (; ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰) = p.precomputed
             precip_1m_sq_tracers = (
                 (@name(c.ρq_rai), ᶜSqᵣᵐ⁰, Y.c.ρq_rai),
@@ -1463,9 +1463,10 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
             MatrixFields.has_field(Y, ρχ_name) || return
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
             # S/q approximation: ∂(dq/dt)/∂q ≈ (dq/dt) / q
-            # Clamped to non-positive (only sinks stabilize the Newton solver)
+            # Uses the full derivative (including source terms) for an accurate
+            # Newton linearization consistent with the quadrature tendencies.
             @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(
-                min(zero(ᶜS), ᶜS / max(specific(ᶜρχ, ᶜρ), ε))
+                ᶜS / max(specific(ᶜρχ, ᶜρ), ε)
             )
         end
     end
@@ -1517,7 +1518,7 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
                     @. ∂ᶜq_err_∂ᶜq =
                         zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
                 end
-                @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(min(zero(ᶜ∂S∂q), ᶜ∂S∂q))
+                @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
             end
         end
 
