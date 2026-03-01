@@ -1420,21 +1420,53 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
     # 1M microphysics: diagonal entries for ρq_liq, ρq_ice, ρq_rai, ρq_sno
     if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         (; ᶜmp_derivative) = p.precomputed
-        microphysics_1m_deriv_tracers = (
+
+        # Cloud condensate (q_lcl, q_icl): use BMT grid-mean derivatives
+        # (dominated by the condensation/deposition term -1/τ_relax, which
+        # is independent of the SGS distribution)
+        cloud_1m_deriv_tracers = (
             (@name(c.ρq_liq), ᶜmp_derivative.∂tendency_∂q_lcl),
             (@name(c.ρq_ice), ᶜmp_derivative.∂tendency_∂q_icl),
-            (@name(c.ρq_rai), ᶜmp_derivative.∂tendency_∂q_rai),
-            (@name(c.ρq_sno), ᶜmp_derivative.∂tendency_∂q_sno),
         )
         MatrixFields.unrolled_foreach(
-            microphysics_1m_deriv_tracers,
+            cloud_1m_deriv_tracers,
         ) do (ρχ_name, ᶜ∂S∂q)
             MatrixFields.has_field(Y, ρχ_name) || return
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
-            # Clamp to non-positive: only sink derivatives (stabilizing)
-            # are used. Source derivatives (e.g. snow deposition ∂S/∂q > 0)
-            # would make (I - dtγ*J) < I, destabilizing the Newton solver.
             @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(min(zero(ᶜ∂S∂q), ᶜ∂S∂q))
+        end
+
+        # Precipitation (q_rai, q_sno): use S/q from quadrature-integrated
+        # tendencies. This makes the Jacobian consistent with the SGS quadrature
+        # used in the implicit tendency, preventing Newton solver divergence
+        # when the SGS distribution differs from the grid mean.
+        FT = Spaces.undertype(axes(Y.c))
+        ε = ϵ_numerics(FT)
+        if p.atmos.turbconv_model isa PrognosticEDMFX
+            # Environment quadrature tendencies (dominant contribution)
+            (; ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰) = p.precomputed
+            precip_1m_sq_tracers = (
+                (@name(c.ρq_rai), ᶜSqᵣᵐ⁰, Y.c.ρq_rai),
+                (@name(c.ρq_sno), ᶜSqₛᵐ⁰, Y.c.ρq_sno),
+            )
+        else
+            # Grid-mean quadrature tendencies
+            (; ᶜSqᵣᵐ, ᶜSqₛᵐ) = p.precomputed
+            precip_1m_sq_tracers = (
+                (@name(c.ρq_rai), ᶜSqᵣᵐ, Y.c.ρq_rai),
+                (@name(c.ρq_sno), ᶜSqₛᵐ, Y.c.ρq_sno),
+            )
+        end
+        MatrixFields.unrolled_foreach(
+            precip_1m_sq_tracers,
+        ) do (ρχ_name, ᶜS, ᶜρχ)
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+            # S/q approximation: ∂(dq/dt)/∂q ≈ (dq/dt) / q
+            # Clamped to non-positive (only sinks stabilize the Newton solver)
+            @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(
+                min(zero(ᶜS), ᶜS / max(specific(ᶜρχ, ᶜρ), ε))
+            )
         end
     end
 
