@@ -1611,8 +1611,6 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
         # tendencies. This makes the Jacobian consistent with the SGS quadrature
         # used in the implicit tendency, preventing Newton solver divergence
         # when the SGS distribution differs from the grid mean.
-        FT = Spaces.undertype(axes(Y.c))
-        ε = ϵ_numerics(FT)
         if p.atmos.turbconv_model isa PrognosticEDMFX
             # Environment quadrature tendencies 
             (; ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰) = p.precomputed
@@ -1637,7 +1635,7 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
             # Uses the full derivative (including source terms) for an accurate
             # Newton linearization consistent with the quadrature tendencies.
             @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(
-                ᶜS / max(specific(ᶜρχ, ᶜρ), ε)
+                _jac_coeff_from_ratio(ᶜS, ᶜρχ, ᶜρ)
             )
         end
     end
@@ -1661,8 +1659,6 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
 
         # Precipitation: use S/q from quadrature-integrated tendencies
         # _jac_coeff_from_ratio safely returns zero when |q| < ε
-        FT = Spaces.undertype(axes(Y.c))
-        ε = ϵ_numerics(FT)
         (; ᶜSqᵣᵐ, ᶜSnᵣᵐ) = p.precomputed
         precip_2m_sq_tracers = (
             (@name(c.ρq_rai), ᶜSqᵣᵐ, Y.c.ρq_rai),
@@ -1674,7 +1670,7 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
             MatrixFields.has_field(Y, ρχ_name) || return
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
             @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(
-                _jac_coeff_from_ratio(ᶜS, ᶜρχ, ᶜρ, ε)
+                _jac_coeff_from_ratio(ᶜS, ᶜρχ, ᶜρ)
             )
         end
     end

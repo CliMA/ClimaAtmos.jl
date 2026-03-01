@@ -2,15 +2,26 @@
 # computation into a scalar function avoids calling `abs` twice in a single
 # broadcast expression, which can prevent broadcast-fusion type inference and
 # cause heap allocations in the surrounding function.
+#
+# The 2-argument overloads compute ε internally to avoid passing a scalar
+# through the broadcast, which would otherwise allocate a Ref wrapper.
 @inline function _jac_coeff(Sq, q, ε)
     aq = abs(q)
     return ifelse(aq > ε, Sq / aq, zero(Sq))
+end
+@inline function _jac_coeff(Sq, q)
+    ε = ϵ_numerics(typeof(Sq))
+    return _jac_coeff(Sq, q, ε)
 end
 
 @inline function _jac_coeff_from_ratio(Sq, ρq, ρ, ε)
     q = ρq / ρ
     aq = abs(q)
     return ifelse(aq > ε, Sq / aq, zero(Sq))
+end
+@inline function _jac_coeff_from_ratio(Sq, ρq, ρ)
+    ε = ϵ_numerics(typeof(Sq))
+    return _jac_coeff_from_ratio(Sq, ρq, ρ, ε)
 end
 
 """
@@ -30,9 +41,7 @@ correct Jacobian diagonal entry.
     broadcast fusion barriers (e.g., through lazy fields).
 """
 @inline function add_microphysics_jacobian_entry!(∂, dtγ, Sq_field, q_field)
-    FT = eltype(Sq_field)
-    ε = ϵ_numerics(FT)
-    @. ∂ += dtγ * DiagonalMatrixRow(_jac_coeff(Sq_field, q_field, ε))
+    @. ∂ += dtγ * DiagonalMatrixRow(_jac_coeff(Sq_field, q_field))
     return nothing
 end
 
@@ -50,8 +59,6 @@ value `q = ρq / ρ`, giving the Jacobian diagonal `Sq / |q|`.
     heap allocations.
 """
 @inline function add_microphysics_jacobian_entry!(∂, dtγ, Sq, ρq, ρ)
-    FT = eltype(Sq)
-    ε = ϵ_numerics(FT)
-    @. ∂ += dtγ * DiagonalMatrixRow(_jac_coeff_from_ratio(Sq, ρq, ρ, ε))
+    @. ∂ += dtγ * DiagonalMatrixRow(_jac_coeff_from_ratio(Sq, ρq, ρ))
     return nothing
 end
