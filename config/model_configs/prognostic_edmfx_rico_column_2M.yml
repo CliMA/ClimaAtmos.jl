@@ -15,6 +15,8 @@ edmfx_nh_pressure: true
 edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
+# 2M EDMF updraft Jacobian not yet implemented; use explicit microphysics
+implicit_microphysics: false
 microphysics_model: "2M"
 config: "column"
 z_max: 4e3

@@ -1645,18 +1645,37 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
     # 2M microphysics: diagonal entries for ρq_liq, ρq_rai, ρn_liq, ρn_rai
     if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
         (; ᶜmp_derivative) = p.precomputed
-        microphysics_2m_deriv_tracers = (
+
+        # Cloud fields: use BMT grid-mean derivatives
+        cloud_2m_deriv_tracers = (
             (@name(c.ρq_liq), ᶜmp_derivative.∂tendency_∂q_lcl),
-            (@name(c.ρq_rai), ᶜmp_derivative.∂tendency_∂q_rai),
             (@name(c.ρn_liq), ᶜmp_derivative.∂tendency_∂n_lcl),
-            (@name(c.ρn_rai), ᶜmp_derivative.∂tendency_∂n_rai),
         )
         MatrixFields.unrolled_foreach(
-            microphysics_2m_deriv_tracers,
+            cloud_2m_deriv_tracers,
         ) do (ρχ_name, ᶜ∂S∂q)
             MatrixFields.has_field(Y, ρχ_name) || return
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
             @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
+        end
+
+        # Precipitation: use S/q from quadrature-integrated tendencies
+        # _jac_coeff_from_ratio safely returns zero when |q| < ε
+        FT = Spaces.undertype(axes(Y.c))
+        ε = ϵ_numerics(FT)
+        (; ᶜSqᵣᵐ, ᶜSnᵣᵐ) = p.precomputed
+        precip_2m_sq_tracers = (
+            (@name(c.ρq_rai), ᶜSqᵣᵐ, Y.c.ρq_rai),
+            (@name(c.ρn_rai), ᶜSnᵣᵐ, Y.c.ρn_rai),
+        )
+        MatrixFields.unrolled_foreach(
+            precip_2m_sq_tracers,
+        ) do (ρχ_name, ᶜS, ᶜρχ)
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+            @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(
+                _jac_coeff_from_ratio(ᶜS, ᶜρχ, ᶜρ, ε)
+            )
         end
     end
 
@@ -1692,6 +1711,12 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
                 @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
             end
         end
+
+        # TODO: 2M EDMF updraft Jacobian entries remain to be implemented.
+        # This requires extending the Jacobian sparsity pattern to include
+        # diagonal blocks for updraft n_liq and n_rai species.
+        # Without these entries, 2M microphysics should use explicit
+        # timestepping for stability.
 
         # 0M EDMF
         if p.atmos.microphysics_model isa EquilibriumMicrophysics0M

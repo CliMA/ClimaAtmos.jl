@@ -9,6 +9,8 @@ t_end: "1500secs"
 dt_save_state_to_disk: "500secs"
 dt_cloud_fraction: "60secs"
 cloud_model: "grid_scale"
+# 2M implicit microphysics Jacobian not yet fully implemented
+implicit_microphysics: false
 microphysics_model: "2M"
 vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
