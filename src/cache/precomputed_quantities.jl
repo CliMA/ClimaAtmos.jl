@@ -261,6 +261,11 @@ function precomputed_quantities(Y, atmos)
     else
         precipitation_quantities = (;)
     end
+    # Zero-initialize derivatives to prevent NaN from uninitialized memory
+    # (PrognosticEDMFX paths may not compute ᶜmp_derivative)
+    if haskey(precipitation_quantities, :ᶜmp_derivative)
+        parent(precipitation_quantities.ᶜmp_derivative) .= 0
+    end
     precipitation_sgs_quantities =
         atmos.microphysics_model isa EquilibriumMicrophysics0M ?
         (; ᶜSqₜᵐʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵐ⁰ = similar(Y.c, FT)) :

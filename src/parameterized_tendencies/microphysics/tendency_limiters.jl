@@ -224,3 +224,5 @@ end
         Explicit(), ᶜmp_tendency, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
     )
 end
+# No-op when microphysics_tendency_timestepping is not configured
+@inline _apply_1m_limits!(ᶜmp_tendency, ::Nothing, args...) = nothing

@@ -3,6 +3,8 @@ dt: "360secs"
 t_end: "12hours"
 dt_save_state_to_disk: "24hours"
 vert_diff: "DecayWithHeightDiffusion"
+# 2M implicit microphysics Jacobian not yet fully implemented
+implicit_microphysics: false
 microphysics_model: "2M"
 rad: "allskywithclear"
 aerosol_radiation: true
