@@ -743,7 +743,11 @@ function refresh_microphysics_source!(
     # Pre-compute Jacobian diagonal coefficient S/|q| for update_microphysics_jacobian!
     FT = eltype(ᶜS_ρq_tot)
     ε = ϵ_numerics(FT)
-    @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot, ε)
+    # Only compute Jacobian coefficient when not in autodiff mode
+    # (ᶜ∂Sq_tot is Float but ᶜS_ρq_tot may contain Dual numbers during autodiff)
+    if eltype(ᶜS_ρq_tot) === eltype(ᶜ∂Sq_tot)
+        @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot, ε)
+    end
     set_precipitation_surface_fluxes!(
         Y, p,
         EquilibriumMicrophysics0M(),
@@ -794,7 +798,11 @@ function refresh_microphysics_source!(
     # Pre-compute Jacobian diagonal coefficient S/|q| for update_microphysics_jacobian!
     FT = eltype(ᶜS_ρq_tot)
     ε = ϵ_numerics(FT)
-    @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot, ε)
+    # Only compute Jacobian coefficient when not in autodiff mode
+    # (ᶜ∂Sq_tot is Float32 but ᶜS_ρq_tot may contain Dual numbers during autodiff)
+    if eltype(ᶜS_ρq_tot) === eltype(ᶜ∂Sq_tot)
+        @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot, ε)
+    end
     set_precipitation_surface_fluxes!(
         Y, p,
         EquilibriumMicrophysics0M(),
