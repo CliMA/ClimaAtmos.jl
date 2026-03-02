@@ -1396,21 +1396,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         end
     end
 
-    # 0M microphysics: diagonal entry for ρq_tot (inlined to avoid function
-    # call overhead that causes allocations on some Julia versions)
-    if p.atmos.microphysics_tendency_timestepping == Implicit() &&
-       p.atmos.microphysics_model isa EquilibriumMicrophysics0M &&
-       MatrixFields.has_field(Y, @name(c.ρq_tot))
-        (; ᶜ∂Sq_tot) = p.precomputed
-        ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
-        @. ∂ᶜρq_tot_err_∂ᶜρq_tot += dtγ * DiagonalMatrixRow(ᶜ∂Sq_tot)
-    end
-
-    # 1M/2M/EDMF microphysics entries (extracted to keep this function small).
-    # Skip for 0M (already handled inline above) to avoid function call overhead.
-    if !(p.atmos.microphysics_model isa EquilibriumMicrophysics0M)
-        update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
-    end
+    # Microphysics Jacobian entries (extracted to keep this function small).
+    update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
 
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
     zero_velocity_jacobian!(matrix, Y, p, t)
@@ -1419,12 +1406,12 @@ end
 """
     update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
 
-Add diagonal Jacobian entries for implicit microphysics tendencies.
+Add diagonal Jacobian entries for implicit microphysics tendencies (0M, 1M, 2M,
+and EDMF updraft species).
 
-This function is extracted from `update_jacobian!` to keep the parent function
-below Julia's optimization threshold. Without this extraction, the additional
-code size causes Julia's compiler to miss inlining opportunities in unrelated
-broadcasts, resulting in heap allocations per call.
+Extracted from `update_jacobian!` to keep the parent function below Julia's
+optimization threshold — large functions cause the compiler to miss inlining
+opportunities in broadcast expressions, resulting in heap allocations.
 """
 function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
     p.atmos.microphysics_tendency_timestepping == Implicit() || return nothing
@@ -1518,7 +1505,14 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
         end
     end
 
-    # 0M entry is inlined in update_jacobian! to avoid function call overhead
+    # 0M microphysics: diagonal entry for ρq_tot
+    if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
+        if MatrixFields.has_field(Y, @name(c.ρq_tot))
+            (; ᶜ∂Sq_tot) = p.precomputed
+            ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+            @. ∂ᶜρq_tot_err_∂ᶜρq_tot += dtγ * DiagonalMatrixRow(ᶜ∂Sq_tot)
+        end
+    end
 
     # EDMF microphysics: diagonal entries for updraft variables
     if p.atmos.turbconv_model isa PrognosticEDMFX
