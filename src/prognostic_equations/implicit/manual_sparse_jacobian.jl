@@ -1525,15 +1525,15 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
 
         # 1M EDMF: diagonal entries for individual condensate species.
         if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M
-            (; ᶜ∂Sqₗʲs, ᶜ∂Sqᵢʲs, ᶜ∂Sqᵣʲs, ᶜ∂Sqₛʲs) = p.precomputed
-            sgs_microphysics_deriv_tracers = (
+            # Cloud (q_liq, q_ice): BMT analytical derivatives precomputed per
+            # updraft.  Same pattern as grid-mean (dominated by −1/τ_relax).
+            (; ᶜ∂Sqₗʲs, ᶜ∂Sqᵢʲs) = p.precomputed
+            sgs_cloud_deriv_tracers = (
                 (@name(c.sgsʲs.:(1).q_liq), ᶜ∂Sqₗʲs.:(1)),
                 (@name(c.sgsʲs.:(1).q_ice), ᶜ∂Sqᵢʲs.:(1)),
-                (@name(c.sgsʲs.:(1).q_rai), ᶜ∂Sqᵣʲs.:(1)),
-                (@name(c.sgsʲs.:(1).q_sno), ᶜ∂Sqₛʲs.:(1)),
             )
             MatrixFields.unrolled_foreach(
-                sgs_microphysics_deriv_tracers,
+                sgs_cloud_deriv_tracers,
             ) do (q_name, ᶜ∂S∂q)
                 MatrixFields.has_field(Y, q_name) || return
                 ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
@@ -1542,6 +1542,25 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
                         zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
                 end
                 @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
+            end
+
+            # Precipitation (q_rai, q_sno): S/q computed inline using frozen
+            # tendencies and the current iterate.  Matches grid-mean treatment.
+            (; ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs) = p.precomputed
+            sgs_precip_sq_tracers = (
+                (@name(c.sgsʲs.:(1).q_rai), ᶜSqᵣᵐʲs.:(1), Y.c.sgsʲs.:(1).q_rai),
+                (@name(c.sgsʲs.:(1).q_sno), ᶜSqₛᵐʲs.:(1), Y.c.sgsʲs.:(1).q_sno),
+            )
+            MatrixFields.unrolled_foreach(
+                sgs_precip_sq_tracers,
+            ) do (q_name, ᶜS, ᶜq)
+                MatrixFields.has_field(Y, q_name) || return
+                ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
+                if !use_derivative(sgs_advection_flag)
+                    @. ∂ᶜq_err_∂ᶜq =
+                        zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
+                end
+                @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(_jac_coeff(ᶜS, ᶜq))
             end
         end
 

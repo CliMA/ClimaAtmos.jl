@@ -8,13 +8,14 @@
 @inline function _jac_coeff(Sq, q, ε)
     FT = typeof(Sq)
     aq = abs(q)
-    # For sinks (Sq < 0) with small q: Sq / max(ε, |q|) provides strong damping
-    # that prevents negative q in the Newton solver.  The denominator floor ε
-    # bounds the maximum Jacobian entry to |S|/ε.
-    # For sources (Sq > 0) with small q (|q| < ε): truncate to zero because
-    # the source rate is typically independent of q (e.g., autoconversion),
-    # so Sq / q gives a large destabilizing positive Jacobian entry.
-    return ifelse(Sq > zero(FT) && aq < ε, zero(FT), Sq / max(aq, ε))
+    # For sinks (Sq < 0): Sq / max(ε, |q|) provides strong damping that prevents
+    # negative q in the Newton solver.  The denominator floor ε bounds the maximum
+    # Jacobian entry to |S|/ε.
+    # For sources (Sq ≥ 0): always return zero.  Source terms are often independent
+    # of the target species (e.g., autoconversion ∝ q_liq², not q_rai), so S/q
+    # gives a spuriously large positive Jacobian that can destabilize the Newton
+    # iteration.  The −I diagonal in the residual already provides stabilization.
+    return ifelse(Sq >= zero(FT), zero(FT), Sq / max(aq, ε))
 end
 @inline function _jac_coeff(Sq, q)
     ε = ϵ_numerics(typeof(Sq))
@@ -25,7 +26,7 @@ end
     FT = typeof(Sq)
     q = ρq / ρ
     aq = abs(q)
-    return ifelse(Sq > zero(FT) && aq < ε, zero(FT), Sq / max(aq, ε))
+    return ifelse(Sq >= zero(FT), zero(FT), Sq / max(aq, ε))
 end
 @inline function _jac_coeff_from_ratio(Sq, ρq, ρ)
     ε = ϵ_numerics(typeof(Sq))
@@ -36,8 +37,9 @@ end
     add_microphysics_jacobian_entry!(∂, dtγ, Sq_field, q_field)
 
 Broadcast-level helper that adds `dtγ * DiagonalMatrixRow(Sq/|q|)` to the
-matrix block `∂`.  The contribution is suppressed when `|q|` is below a
-numerical threshold.
+matrix block `∂` for sink terms only.  The contribution is zero whenever
+`Sq ≥ 0` (sources are excluded to avoid spurious positive Jacobian entries
+from q-independent source rates) and bounded by `|Sq|/ε` as `|q| → 0`.
 
 `Sq_field` and `q_field` must be in the *same* units — either both specific
 (per-mass) or both density-weighted — so that the ratio `Sq / |q|` gives the

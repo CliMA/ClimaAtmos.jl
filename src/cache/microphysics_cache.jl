@@ -35,10 +35,10 @@ end
     ϵ_numerics(FT)
 
 Smallest threshold for specific humidity comparisons and Jacobian
-denominator floors.  Hardcoded to 1e-8 so that the behavior is identical 
+denominator floors.  Hardcoded to 1e-9 so that the behavior is identical
 for Float32 and Float64.
 """
-ϵ_numerics(FT) = FT(1e-8)
+ϵ_numerics(FT) = FT(1e-9)
 
 """
     set_precipitation_velocities!(Y, p, microphysics_model, turbconv_model)
@@ -808,10 +808,71 @@ function refresh_microphysics_source!(
     return nothing
 end
 
-# 1M and 2M: just delegate
+# 1M: lightweight refresh — skip the expensive quadrature broadcast and only
+# update the cloud Jacobian derivatives (ᶜmp_derivative and updraft ᶜ∂Sq*ʲs),
+# which depend on T and q that change during Newton iterations.  The frozen
+# precipitation tendencies (ᶜSqᵣᵐ, ᶜSqₛᵐ, etc.) are used as-is; the S/q
+# Jacobian uses them with the current-iterate q from Y.
 function refresh_microphysics_source!(
     Y, p,
-    mm::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+    mm::NonEquilibriumMicrophysics1M,
+    turbconv_model,
+)
+    (; ᶜT, ᶜq_tot_safe, ᶜmp_derivative) = p.precomputed
+    cmp = CAP.microphysics_1m_params(p.params)
+    thp = CAP.thermodynamics_params(p.params)
+    ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+    ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+
+    # For EDMF: refresh per-updraft BMT cloud derivatives using ᶜmp_derivative as
+    # scratch.  Updraft loop runs first; grid-mean call at the end leaves
+    # ᶜmp_derivative in the correct state for the grid-mean Jacobian block.
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜ∂Sqₗʲs, ᶜ∂Sqᵢʲs, ᶜρʲs, ᶜTʲs) = p.precomputed
+        n = n_mass_flux_subdomains(turbconv_model)
+        for j in 1:n
+            @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
+                BMT.Microphysics1Moment(),
+                cmp,
+                thp,
+                ᶜρʲs.:($$j),
+                ᶜTʲs.:($$j),
+                p.precomputed.ᶜq_tot_safeʲs.:($$j),
+                Y.c.sgsʲs.:($$j).q_liq,
+                Y.c.sgsʲs.:($$j).q_ice,
+                Y.c.sgsʲs.:($$j).q_rai,
+                Y.c.sgsʲs.:($$j).q_sno,
+            )
+            @. ᶜ∂Sqₗʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_lcl
+            @. ᶜ∂Sqᵢʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_icl
+        end
+    end
+
+    # Refresh grid-mean BMT cloud derivatives (always, and last for EDMF so
+    # ᶜmp_derivative is correct for the grid-mean Jacobian block)
+    @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
+        BMT.Microphysics1Moment(),
+        cmp,
+        thp,
+        Y.c.ρ,
+        ᶜT,
+        ᶜq_tot_safe,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜq_rai,
+        ᶜq_sno,
+    )
+
+    set_precipitation_surface_fluxes!(Y, p, mm)
+    return nothing
+end
+
+# 2M: full recompute (lightweight optimization is a future TODO)
+function refresh_microphysics_source!(
+    Y, p,
+    mm::NonEquilibriumMicrophysics2M,
     turbconv_model,
 )
     set_microphysics_tendency_cache!(Y, p, mm, turbconv_model)
@@ -1165,7 +1226,8 @@ function set_microphysics_tendency_cache!(
     cmp = CAP.microphysics_1m_params(p.params)
 
     (; ᶜSqₗᵐʲs, ᶜSqᵢᵐʲs, ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs, ᶜρʲs, ᶜTʲs) = p.precomputed
-    (; ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜmp_tendency) = p.precomputed
+    (; ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜmp_tendency, ᶜmp_derivative) = p.precomputed
+    (; ᶜ∂Sqₗʲs, ᶜ∂Sqᵢʲs) = p.precomputed
     (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -1189,6 +1251,23 @@ function set_microphysics_tendency_cache!(
             cmp,
             thp,
         )
+        # BMT cloud derivatives at updraft j state (same pattern as grid-mean).
+        # ᶜmp_derivative is reused as scratch; the per-updraft ∂S/∂q values are
+        # immediately extracted into ᶜ∂Sqₗʲs / ᶜ∂Sqᵢʲs for use in the Jacobian.
+        @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
+            BMT.Microphysics1Moment(),
+            cmp,
+            thp,
+            ᶜρʲs.:($$j),
+            ᶜTʲs.:($$j),
+            p.precomputed.ᶜq_tot_safeʲs.:($$j),
+            Y.c.sgsʲs.:($$j).q_liq,
+            Y.c.sgsʲs.:($$j).q_ice,
+            Y.c.sgsʲs.:($$j).q_rai,
+            Y.c.sgsʲs.:($$j).q_sno,
+        )
+        @. ᶜ∂Sqₗʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_lcl
+        @. ᶜ∂Sqᵢʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_icl
     end
 
     # Microphysics tendencies from the environment (with SGS quadrature)
