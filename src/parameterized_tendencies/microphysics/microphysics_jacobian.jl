@@ -6,8 +6,15 @@
 # The 2-argument overloads compute ε internally to avoid passing a scalar
 # through the broadcast, which would otherwise allocate a Ref wrapper.
 @inline function _jac_coeff(Sq, q, ε)
+    FT = typeof(Sq)
     aq = abs(q)
-    return ifelse(aq > ε, Sq / aq, zero(Sq))
+    # For sinks (Sq < 0) with small q: Sq / max(ε, |q|) provides strong damping
+    # that prevents negative q in the Newton solver.  The denominator floor ε
+    # bounds the maximum Jacobian entry to |S|/ε.
+    # For sources (Sq > 0) with small q (|q| < ε): truncate to zero because
+    # the source rate is typically independent of q (e.g., autoconversion),
+    # so Sq / q gives a large destabilizing positive Jacobian entry.
+    return ifelse(Sq > zero(FT) && aq < ε, zero(FT), Sq / max(aq, ε))
 end
 @inline function _jac_coeff(Sq, q)
     ε = ϵ_numerics(typeof(Sq))
@@ -15,9 +22,10 @@ end
 end
 
 @inline function _jac_coeff_from_ratio(Sq, ρq, ρ, ε)
+    FT = typeof(Sq)
     q = ρq / ρ
     aq = abs(q)
-    return ifelse(aq > ε, Sq / aq, zero(Sq))
+    return ifelse(Sq > zero(FT) && aq < ε, zero(FT), Sq / max(aq, ε))
 end
 @inline function _jac_coeff_from_ratio(Sq, ρq, ρ)
     ε = ϵ_numerics(typeof(Sq))

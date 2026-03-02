@@ -165,6 +165,7 @@ function compute_2m_precipitation_tendencies!(
     dt,
     mp,
     thp,
+    timestepping,
 )
     FT = eltype(thp)
 
@@ -182,21 +183,13 @@ function compute_2m_precipitation_tendencies!(
         nᵣ,
     )
 
-    # Apply coupled limiting directly
-    f_liq = @. lazy(
-        coupled_sink_limit_factor(
-            mp_tendency.dq_lcl_dt, mp_tendency.dn_lcl_dt, qₗ, nₗ, dt,
-        ),
-    )
-    f_rai = @. lazy(
-        coupled_sink_limit_factor(
-            mp_tendency.dq_rai_dt, mp_tendency.dn_rai_dt, qᵣ, nᵣ, dt,
-        ),
-    )
-    @. Sqₗᵐ = mp_tendency.dq_lcl_dt * f_liq
-    @. Snₗᵐ = mp_tendency.dn_lcl_dt * f_liq
-    @. Sqᵣᵐ = mp_tendency.dq_rai_dt * f_rai
-    @. Snᵣᵐ = mp_tendency.dn_rai_dt * f_rai
+    # Apply limits (no-op for implicit timestepping)
+    _apply_2m_limits!(mp_tendency, timestepping, qₗ, nₗ, qᵣ, nᵣ, dt)
+
+    @. Sqₗᵐ = mp_tendency.dq_lcl_dt
+    @. Snₗᵐ = mp_tendency.dn_lcl_dt
+    @. Sqᵣᵐ = mp_tendency.dq_rai_dt
+    @. Snᵣᵐ = mp_tendency.dn_rai_dt
 end
 
 #####
@@ -242,7 +235,8 @@ function compute_prescribed_aerosol_properties!(
 
     # Get aerosol concentrations if available
     seasalt_names = (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05)
-    seasalt_radius_props = (:SSLT01_radius, :SSLT02_radius, :SSLT03_radius, :SSLT04_radius, :SSLT05_radius)
+    seasalt_radius_props =
+        (:SSLT01_radius, :SSLT02_radius, :SSLT03_radius, :SSLT04_radius, :SSLT05_radius)
     sulfate_names = (:SO4,)
     for aerosol_name in propertynames(prescribed_aerosol_field)
         if aerosol_name in seasalt_names
@@ -690,26 +684,32 @@ end
 )
     FT = eltype(tps)
 
+    # Clamp species humidities to prevent negativity in quadratures
+    q_lcl_safe = max(0, q_lcl_mean)
+    q_icl_safe = max(0, q_icl_mean)
+    q_rai_safe = max(0, q_rai)
+    q_sno_safe = max(0, q_sno)
+
     # Fast path for GridMeanSGS: skip quadrature, call BMT directly at grid mean
     # This avoids the overhead of the quadrature loop for grid-mean-only evaluation
     if SG_quad isa GridMeanSGS ||
        (SG_quad isa SGSQuadrature && SG_quad.dist isa GridMeanSGS)
         return BMT.bulk_microphysics_tendencies(
             scheme, mp, tps, ρ, T_mean,
-            q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+            q_tot_mean, q_lcl_safe, q_icl_safe, q_rai_safe, q_sno_safe,
             args...,
         )
     end
 
     # Pre-compute grid-mean condensate and saturation for perturbation model
-    q_cond_mean = q_lcl_mean + q_icl_mean
+    q_cond_mean = q_lcl_safe + q_icl_safe
     q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
     excess_mean = q_tot_mean - q_sat_mean
 
     # Create functor (no closure, GPU-safe)
     evaluator = MicrophysicsEvaluator(
         scheme, mp, tps, ρ,
-        T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+        T_mean, q_tot_mean, q_lcl_safe, q_icl_safe, q_rai_safe, q_sno_safe,
         q_cond_mean, q_sat_mean, excess_mean,
         args,
     )
@@ -749,12 +749,15 @@ NamedTuple with tendencies: `dq_lcl_dt`, `dn_lcl_dt`, `dq_rai_dt`, `dn_rai_dt`
     ρ, T,
     q_tot, q_liq, n_liq, q_rai, n_rai,
 )
+    # Clamp species humidities to prevent negativity in quadratures (to be implemented)
+    q_liq_safe = max(0, q_liq)
+    q_rai_safe = max(0, q_rai)
     # Fall back to grid-mean evaluation for non-GridMeanSGS distributions
     return BMT.bulk_microphysics_tendencies(
         BMT.Microphysics2Moment(),
         cmp, tps,
         ρ, T,
-        q_tot, q_liq, n_liq, q_rai, n_rai,
+        q_tot, q_liq_safe, n_liq, q_rai_safe, n_rai,
     )
 end
 
@@ -769,10 +772,13 @@ Direct GridMeanSGS dispatch for 2M: evaluates BMT at grid mean.
     ρ, T,
     q_tot, q_liq, n_liq, q_rai, n_rai,
 )
+    # Clamp species humidities to prevent negativity from breaking BMT
+    q_liq_safe = max(0, q_liq)
+    q_rai_safe = max(0, q_rai)
     return BMT.bulk_microphysics_tendencies(
         BMT.Microphysics2Moment(),
         cmp, tps,
         ρ, T,
-        q_tot, q_liq, n_liq, q_rai, n_rai,
+        q_tot, q_liq_safe, n_liq, q_rai_safe, n_rai,
     )
 end

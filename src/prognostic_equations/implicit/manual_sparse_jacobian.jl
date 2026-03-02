@@ -1567,7 +1567,21 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         end
     end
 
-    update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
+    # 0M microphysics: diagonal entry for ρq_tot (inlined to avoid function
+    # call overhead that causes allocations on some Julia versions)
+    if p.atmos.microphysics_tendency_timestepping == Implicit() &&
+       p.atmos.microphysics_model isa EquilibriumMicrophysics0M &&
+       MatrixFields.has_field(Y, @name(c.ρq_tot))
+        (; ᶜ∂Sq_tot) = p.precomputed
+        ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+        @. ∂ᶜρq_tot_err_∂ᶜρq_tot += dtγ * DiagonalMatrixRow(ᶜ∂Sq_tot)
+    end
+
+    # 1M/2M/EDMF microphysics entries (extracted to keep this function small).
+    # Skip for 0M (already handled inline above) to avoid function call overhead.
+    if !(p.atmos.microphysics_model isa EquilibriumMicrophysics0M)
+        update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
+    end
 
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
     zero_velocity_jacobian!(matrix, Y, p, t)
@@ -1635,7 +1649,7 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
             # Uses the full derivative (including source terms) for an accurate
             # Newton linearization consistent with the quadrature tendencies.
             @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(
-                _jac_coeff_from_ratio(ᶜS, ᶜρχ, ᶜρ)
+                _jac_coeff_from_ratio(ᶜS, ᶜρχ, ᶜρ),
             )
         end
     end
@@ -1670,18 +1684,12 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
             MatrixFields.has_field(Y, ρχ_name) || return
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
             @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(
-                _jac_coeff_from_ratio(ᶜS, ᶜρχ, ᶜρ)
+                _jac_coeff_from_ratio(ᶜS, ᶜρχ, ᶜρ),
             )
         end
     end
 
-    # 0M microphysics: diagonal entry for ρq_tot
-    if p.atmos.microphysics_model isa EquilibriumMicrophysics0M &&
-       MatrixFields.has_field(Y, @name(c.ρq_tot))
-        (; ᶜ∂Sq_tot) = p.precomputed
-        ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
-        @. ∂ᶜρq_tot_err_∂ᶜρq_tot += dtγ * DiagonalMatrixRow(ᶜ∂Sq_tot)
-    end
+    # 0M entry is inlined in update_jacobian! to avoid function call overhead
 
     # EDMF microphysics: diagonal entries for updraft variables
     if p.atmos.turbconv_model isa PrognosticEDMFX

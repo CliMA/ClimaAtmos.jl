@@ -204,8 +204,6 @@ function precomputed_quantities(Y, atmos)
                 @NamedTuple{
                     ∂tendency_∂q_lcl::FT,
                     ∂tendency_∂q_icl::FT,
-                    ∂tendency_∂q_rai::FT,
-                    ∂tendency_∂q_sno::FT,
                 }
             ),
         )
@@ -233,11 +231,7 @@ function precomputed_quantities(Y, atmos)
             ᶜmp_derivative = similar(Y.c,
                 @NamedTuple{
                     ∂tendency_∂q_lcl::FT,
-                    ∂tendency_∂q_icl::FT,
-                    ∂tendency_∂q_rai::FT,
-                    ∂tendency_∂q_sno::FT,
                     ∂tendency_∂n_lcl::FT,
-                    ∂tendency_∂n_rai::FT,
                 }
             ),
         )
