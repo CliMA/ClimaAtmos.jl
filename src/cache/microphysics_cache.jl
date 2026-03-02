@@ -722,10 +722,18 @@ end
 """
     refresh_microphysics_source!(Y, p, microphysics_model, turbconv_model)
 
-Lightweight update of `ᶜS_ρq_tot` / `ᶜS_ρe_tot` from the already-computed
-`ᶜmp_tendency`.  Called from `set_implicit_precomputed_quantities!` to refresh
-only the Y-dependent part (ρ × limit_sink) without re-running the full
-`set_microphysics_tendency_cache!` (whose quadrature broadcasts allocate).
+Refresh microphysics precomputed quantities that depend on the current Newton
+iterate `Y`.  Called from `set_implicit_precomputed_quantities!` at every
+Newton iteration of the implicit solve.
+
+- **0M**: lightweight — recomputes only `ᶜS_ρq_tot` / `ᶜS_ρe_tot` from the
+  already-computed `ᶜmp_tendency` (ρ × limit_sink).  The tendency itself is
+  fixed; only the density-weighted form changes as ρ evolves.
+- **1M/2M**: full recompute via `set_microphysics_tendency_cache!`.  A cheaper
+  path (refreshing only the Jacobian derivatives) is not used because the BMT
+  Jacobian is bounded and provides no barrier at q=0: Newton can converge to
+  negative q_liq/q_ice when the frozen tendency is a large sink.
+- **default**: no-op (microphysics not active or not implicit).
 """
 refresh_microphysics_source!(Y, p, _, _) = nothing
 
@@ -808,71 +816,16 @@ function refresh_microphysics_source!(
     return nothing
 end
 
-# 1M: lightweight refresh — skip the expensive quadrature broadcast and only
-# update the cloud Jacobian derivatives (ᶜmp_derivative and updraft ᶜ∂Sq*ʲs),
-# which depend on T and q that change during Newton iterations.  The frozen
-# precipitation tendencies (ᶜSqᵣᵐ, ᶜSqₛᵐ, etc.) are used as-is; the S/q
-# Jacobian uses them with the current-iterate q from Y.
+# 1M/2M: full recompute at each Newton iteration to maintain self-limiting
+# behaviour of cloud condensate sinks as q→0.  A lightweight alternative
+# (refreshing only the Jacobian derivatives without re-running the quadrature)
+# is unsafe for q_liq/q_ice: the BMT Jacobian is bounded and provides no
+# barrier at q=0, so the Newton iteration can converge to negative q when the
+# frozen tendency is a large sink.  Revisit once the full computation has been
+# profiled and the cost is understood.
 function refresh_microphysics_source!(
     Y, p,
-    mm::NonEquilibriumMicrophysics1M,
-    turbconv_model,
-)
-    (; ᶜT, ᶜq_tot_safe, ᶜmp_derivative) = p.precomputed
-    cmp = CAP.microphysics_1m_params(p.params)
-    thp = CAP.thermodynamics_params(p.params)
-    ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-    ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-    ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-
-    # For EDMF: refresh per-updraft BMT cloud derivatives using ᶜmp_derivative as
-    # scratch.  Updraft loop runs first; grid-mean call at the end leaves
-    # ᶜmp_derivative in the correct state for the grid-mean Jacobian block.
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∂Sqₗʲs, ᶜ∂Sqᵢʲs, ᶜρʲs, ᶜTʲs) = p.precomputed
-        n = n_mass_flux_subdomains(turbconv_model)
-        for j in 1:n
-            @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
-                BMT.Microphysics1Moment(),
-                cmp,
-                thp,
-                ᶜρʲs.:($$j),
-                ᶜTʲs.:($$j),
-                p.precomputed.ᶜq_tot_safeʲs.:($$j),
-                Y.c.sgsʲs.:($$j).q_liq,
-                Y.c.sgsʲs.:($$j).q_ice,
-                Y.c.sgsʲs.:($$j).q_rai,
-                Y.c.sgsʲs.:($$j).q_sno,
-            )
-            @. ᶜ∂Sqₗʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_lcl
-            @. ᶜ∂Sqᵢʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_icl
-        end
-    end
-
-    # Refresh grid-mean BMT cloud derivatives (always, and last for EDMF so
-    # ᶜmp_derivative is correct for the grid-mean Jacobian block)
-    @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
-        BMT.Microphysics1Moment(),
-        cmp,
-        thp,
-        Y.c.ρ,
-        ᶜT,
-        ᶜq_tot_safe,
-        ᶜq_liq,
-        ᶜq_ice,
-        ᶜq_rai,
-        ᶜq_sno,
-    )
-
-    set_precipitation_surface_fluxes!(Y, p, mm)
-    return nothing
-end
-
-# 2M: full recompute (lightweight optimization is a future TODO)
-function refresh_microphysics_source!(
-    Y, p,
-    mm::NonEquilibriumMicrophysics2M,
+    mm::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
     turbconv_model,
 )
     set_microphysics_tendency_cache!(Y, p, mm, turbconv_model)
