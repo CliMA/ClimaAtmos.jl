@@ -10,4 +10,3 @@ surface_setup: "DefaultMoninObukhov"
 rad: "allskywithclear"
 vert_diff: true
 microphysics_model: "1M"
-use_sgs_quadrature: false

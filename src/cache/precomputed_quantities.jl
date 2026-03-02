@@ -87,11 +87,40 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜq_ice_snoʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
+    # Microphysics quantities that are written during set_implicit_precomputed_quantities!
+    # and depend on Y (through ρa⁰), so they need Dual-typed copies for autodiff.
+    implicit_mp_quantities =
+        if atmos.microphysics_tendency_timestepping == Implicit() &&
+           microphysics_model isa EquilibriumMicrophysics0M
+            (;
+                ᶜS_ρq_tot = similar(Y.c, FT),
+                ᶜS_ρe_tot = similar(Y.c, FT),
+            )
+        else
+            (;)
+        end
+    # Surface precipitation fluxes need Dual-typed copies so that
+    # set_precipitation_surface_fluxes! can be called during the implicit
+    # stage (AD writes Dual values into these fields).
+    implicit_sfc_precip_quantities =
+        if !(microphysics_model isa DryModel)
+            (;
+                surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
+                surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
+                col_integrated_precip_energy_tendency = zeros(
+                    axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
+                ),
+            )
+        else
+            (;)
+        end
     return (;
         gs_quantities...,
         moist_gs_quantities...,
         sgs_quantities...,
         prognostic_sgs_quantities...,
+        implicit_mp_quantities...,
+        implicit_sfc_precip_quantities...,
     )
 end
 
@@ -156,6 +185,9 @@ function precomputed_quantities(Y, atmos)
             ᶜS_ρe_tot = similar(Y.c, FT),
             ᶜmp_tendency = similar(Y.c,
                 @NamedTuple{dq_tot_dt::FT, e_int_precip::FT}),
+            # Pre-computed Jacobian diagonal coefficient S/|q| for 0M,
+            # avoids allocations in update_microphysics_jacobian!
+            ᶜ∂Sq_tot = similar(Y.c, FT),
         )
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         precipitation_quantities = (;
@@ -167,6 +199,12 @@ function precomputed_quantities(Y, atmos)
             ᶜSqₛᵐ = similar(Y.c, FT),
             ᶜmp_tendency = similar(Y.c,
                 @NamedTuple{dq_lcl_dt::FT, dq_icl_dt::FT, dq_rai_dt::FT, dq_sno_dt::FT}
+            ),
+            ᶜmp_derivative = similar(Y.c,
+                @NamedTuple{
+                    ∂tendency_∂q_lcl::FT,
+                    ∂tendency_∂q_icl::FT,
+                }
             ),
         )
     elseif atmos.microphysics_model isa
@@ -190,6 +228,12 @@ function precomputed_quantities(Y, atmos)
                     dq_ice_dt::FT, dq_rim_dt::FT, db_rim_dt::FT,
                 }
             ),
+            ᶜmp_derivative = similar(Y.c,
+                @NamedTuple{
+                    ∂tendency_∂q_lcl::FT,
+                    ∂tendency_∂n_lcl::FT,
+                }
+            ),
         )
         # Add additional quantities for 2M + P3
         if atmos.microphysics_model isa NonEquilibriumMicrophysics2MP3
@@ -211,6 +255,11 @@ function precomputed_quantities(Y, atmos)
     else
         precipitation_quantities = (;)
     end
+    # Zero-initialize derivatives to prevent NaN from uninitialized memory
+    # (PrognosticEDMFX paths may not compute ᶜmp_derivative)
+    if haskey(precipitation_quantities, :ᶜmp_derivative)
+        parent(precipitation_quantities.ᶜmp_derivative) .= 0
+    end
     precipitation_sgs_quantities =
         atmos.microphysics_model isa EquilibriumMicrophysics0M ?
         (; ᶜSqₜᵐʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵐ⁰ = similar(Y.c, FT)) :
@@ -220,6 +269,10 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵢᵐʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵣᵐʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₛᵐʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜ∂Sqₗʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜ∂Sqᵢʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜ∂Sqᵣʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜ∂Sqₛʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
@@ -549,8 +602,11 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
             @. ᶜq_tot_safe = max(ᶜq_liq_rai + ᶜq_ice_sno, specific(Y.c.ρq_tot, Y.c.ρ))
         end
-        @. ᶜT =
-            TD.air_temperature(thermo_params, ᶜe_int, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+        # Floor T to prevent negative pressure during implicit Newton iterations
+        @. ᶜT = max(
+            CAP.T_min_sgs(p.params),
+            TD.air_temperature(thermo_params, ᶜe_int, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno),
+        )
     end
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
     @. ᶜh_tot =
@@ -562,6 +618,14 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
     elseif !(isnothing(turbconv_model))
         # Do nothing for other turbconv models for now
+    end
+
+    # When microphysics is implicit, refresh ᶜS_ρq_tot / ᶜS_ρe_tot and the
+    # surface precipitation fluxes so that they reflect the current Y.
+    # The surface flux fields have Dual-typed copies in
+    # implicit_precomputed_quantities, so AD can write into them safely.
+    if p.atmos.microphysics_tendency_timestepping == Implicit()
+        refresh_microphysics_source!(Y, p, microphysics_model, turbconv_model)
     end
 end
 
@@ -636,6 +700,10 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p.atmos.turbconv_model,
     )
     # Compute microphysics sources from grid mean and sub-domains.
+    # Always compute ᶜmp_tendency and ᶜS_ρq_tot here so both are fresh.
+    # When microphysics is implicit, the implicit stage will additionally
+    # refresh ᶜS_ρq_tot / ᶜS_ρe_tot from the (now-fresh) ᶜmp_tendency
+    # using the current Newton-iterate Y, avoiding the allocating BMT broadcast.
     set_microphysics_tendency_cache!(
         Y,
         p,

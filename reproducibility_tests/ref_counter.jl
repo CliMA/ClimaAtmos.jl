@@ -1,4 +1,4 @@
-319
+320
 
 # **README**
 #
@@ -20,8 +20,19 @@
 
 
 #=
+
+320
+- Port implicit microphysics to main: implicit IMEX timestepping for
+  microphysics tendencies, Jacobian diagonal entries, surface precipitation
+  tendency, relaxed tendency limiters (n_sink=1, temperature limiter removed).
+
 319
-- Clip divergence in detrainment 
+- Clip divergence in detrainment
+- Change default `sgs_distribution` to `lognormal`. This affects
+  SGS quadrature sampling of specific humidity for microphysics tendencies.
+
+319
+- Revert accidental merge of implicit microphysics branch (v0.36.1)
 
 318
 - Add GPU Orographic Gravity Wave implementation, refactor NOGW tests, add OGW tests and fix base fluxes
