@@ -1,0 +1,27 @@
+# Plane density current with fully implicit timestepping (ESDIRK + JFNK).
+# Goal: remove acoustic CFL limit; stable dt for HEVI is 0.3s.
+# With fully_implicit + Krylov we can test dt = 3s (10x) or larger.
+dt_save_state_to_disk: "3600secs"
+initial_condition: "DryDensityCurrentProfile"
+x_max: 51200.0
+z_elem: 90
+dt: "3secs"
+t_end: "900.0secs"
+z_stretch: false
+x_elem: 80
+config: "plane"
+z_max: 6400.0
+disable_surface_flux_tendency: true
+output_default_diagnostics: false
+# Fully implicit: all tendencies in implicit; no explicit part
+fully_implicit: true
+ode_algo: "ARK437L2SA1"
+use_krylov_method: true
+use_dynamic_krylov_rtol: true
+max_newton_iters_ode: 5
+use_newton_rtol: true
+newton_rtol: 1.0e-4
+use_dense_jacobian: true
+diagnostics:
+  - short_name: thetaa
+    period: 900secs
