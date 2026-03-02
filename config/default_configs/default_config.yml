@@ -98,6 +98,9 @@ update_jacobian_every:
 debug_jacobian:
   help: "Whether to print summary information about the Jacobian matrix, including comparisons of different algorithms evaluated on the first column of the final state against the exact Jacobian [`true`, `false` (default)]"
   value: false
+fully_implicit:
+  help: "Use fully implicit timestepping (all tendencies in implicit; no explicit part). Removes acoustic CFL limitation. Requires use_krylov_method true. For testing e.g. plane_density_current with large dt."
+  value: false
 # Radiation
 rad:
   help: "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"

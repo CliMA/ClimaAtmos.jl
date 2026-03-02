@@ -239,6 +239,7 @@ function AtmosSimulation{FT}(;
         use_dense_jacobian, use_auto_jacobian, auto_jacobian_padding_bands,
         approximate_linear_solve_iters, debug_jacobian,
         nothing,
+        model.fully_implicit,
         dt,
     )
 

@@ -187,6 +187,7 @@ function get_atmos(config::AtmosConfig, params)
         vertical_diffusion,
         numerics = get_numerics(parsed_args, FT),
         disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
+        fully_implicit = parsed_args["fully_implicit"],
     )
     # TODO: Should this go in the AtmosModel constructor?
     @assert !@any_reltype(atmos, (UnionAll, DataType))
@@ -789,6 +790,21 @@ function fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ .+= temp_Yₜ_imp
 end
 
+"""
+    fully_implicit_tendency!(Yₜ, Y, p, t)
+
+Full right-hand side for fully implicit timestepping: explicit + implicit tendencies
+combined. Used when `fully_implicit` is true so the acoustic CFL does not limit dt.
+Requires `use_krylov_method: true` (Jacobian-vector products from full residual;
+column-local Jacobian used as preconditioner).
+"""
+function fully_implicit_tendency!(Yₜ, Y, p, t)
+    (; temp_Yₜ_imp, temp_Yₜ_lim) = p.scratch
+    remaining_tendency!(Yₜ, temp_Yₜ_lim, Y, p, t)
+    implicit_tendency!(temp_Yₜ_imp, Y, p, t)
+    Yₜ .+= temp_Yₜ_imp
+end
+
 function args_integrator(args, Y, p, tspan, ode_algo, callback, dt_integrator)
     return args_integrator(Y, p, tspan, ode_algo, callback,
         args["use_dense_jacobian"],
@@ -797,6 +813,7 @@ function args_integrator(args, Y, p, tspan, ode_algo, callback, dt_integrator)
         args["approximate_linear_solve_iters"],
         args["debug_jacobian"],
         args["prescribed_flow"],
+        args["fully_implicit"],
         dt_integrator,
     )
 end
@@ -804,11 +821,26 @@ end
 function args_integrator(Y, p, tspan, ode_algo, callback,
     use_dense_jacobian, use_auto_jacobian, auto_jacobian_padding_bands,
     approximate_linear_solve_iters, debug_jacobian, prescribed_flow,
-    dt_integrator,
+    fully_implicit, dt_integrator,
 )
     (; atmos) = p
     s = @timed_str begin
-        if isnothing(prescribed_flow)
+        if atmos.fully_implicit
+            # Fully implicit: all tendencies in T_imp!; no explicit part. Removes acoustic CFL.
+            # Requires use_krylov_method: true (JFNK; column-local Jacobian as preconditioner).
+            @assert isnothing(prescribed_flow) "fully_implicit and prescribed_flow are mutually exclusive"
+            T_exp_T_lim! = nothing
+            T_imp! = SciMLBase.ODEFunction(
+                fully_implicit_tendency!;
+                jac_prototype = get_jacobian(ode_algo, Y, atmos,
+                    use_dense_jacobian, use_auto_jacobian,
+                    auto_jacobian_padding_bands,
+                    approximate_linear_solve_iters, debug_jacobian,
+                ),
+                Wfact = update_jacobian!,
+            )
+            cache_imp! = set_implicit_precomputed_quantities!
+        elseif isnothing(prescribed_flow)
 
             # This is the default case
             T_exp_T_lim! = remaining_tendency!

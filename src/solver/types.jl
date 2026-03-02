@@ -953,6 +953,10 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
 
     """Whether to apply surface flux tendency (independent of surface conditions)"""
     disable_surface_flux_tendency::Bool
+
+    """Use fully implicit timestepping (all tendencies in implicit; no explicit part). Requires use_krylov_method: true.
+    GPU-compatible (uses same device as state). Adds ~2× state size in scratch (temp_Yₜ_imp, temp_Yₜ_lim); monitor device memory on large runs."""
+    fully_implicit::Bool
 end
 
 # Map grouped struct types to their names in AtmosModel struct
@@ -1144,6 +1148,7 @@ function AtmosModel(; kwargs...)
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
+    fully_implicit = get(atmos_model_kwargs, :fully_implicit, false)
 
     prescribed_flow = get(atmos_model_kwargs, :prescribed_flow, nothing)
 
@@ -1170,6 +1175,7 @@ function AtmosModel(; kwargs...)
         surface,
         numerics,
         disable_surface_flux_tendency,
+        fully_implicit,
     )
 end
 

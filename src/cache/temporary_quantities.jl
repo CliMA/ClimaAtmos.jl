@@ -160,6 +160,11 @@ function temporary_quantities(Y, atmos)
         ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜtridiagonal_matrix_scalar = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶠtridiagonal_matrix_c3 = similar(Y.f, TridiagonalMatrixRow{C3{FT}}),
-        (!isnothing(atmos.prescribed_flow) ? (; temp_Yₜ_imp = similar(Y)) : (;))...,
+        # fully_implicit: two state-sized scratch arrays (device follows Y; extra device memory ~2× state)
+        (
+            atmos.fully_implicit ? (; temp_Yₜ_imp = similar(Y), temp_Yₜ_lim = similar(Y)) :
+            !isnothing(atmos.prescribed_flow) ? (; temp_Yₜ_imp = similar(Y)) :
+            (;)
+        )...,
     )
 end
