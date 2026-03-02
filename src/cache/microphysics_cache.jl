@@ -763,6 +763,56 @@ function refresh_microphysics_source!(
     return nothing
 end
 
+# 0M + DiagnosticEDMFX: mirrors set_microphysics_tendency_cache! for DiagnosticEDMFX —
+# re-aggregate the frozen per-subdomain specific tendencies (ᶜSqₜᵐ⁰, ᶜSqₜᵐʲs) with the
+# current density (ρ changes at each Newton iterate; precomputed area fractions do not).
+# Without this dispatch the wildcard (0M, _) method is chosen, which uses the grid-mean
+# ᶜmp_tendency and ignores the EDMF area weighting, corrupting the implicit residual.
+function refresh_microphysics_source!(
+    Y, p,
+    ::EquilibriumMicrophysics0M,
+    turbconv_model::DiagnosticEDMFX,
+)
+    (; ᶜΦ) = p.core
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜ∂Sq_tot) = p.precomputed
+    (; ᶜSqₜᵐ⁰, ᶜSqₜᵐʲs) = p.precomputed
+    (; ᶜTʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs, ᶜρaʲs) = p.precomputed
+    (; ᶜT, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+
+    n = n_mass_flux_subdomains(turbconv_model)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, p.precomputed.ᶜρaʲs, turbconv_model))
+
+    # Environment contribution
+    @. ᶜS_ρq_tot = ᶜSqₜᵐ⁰ * ᶜρa⁰
+    @. ᶜS_ρe_tot =
+        ᶜSqₜᵐ⁰ *
+        ᶜρa⁰ *
+        e_tot_0M_precipitation_sources_helper(thermo_params, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno, ᶜΦ)
+    # Updraft contributions
+    for j in 1:n
+        @. ᶜS_ρq_tot += ᶜSqₜᵐʲs.:($$j) * ᶜρaʲs.:($$j)
+        @. ᶜS_ρe_tot +=
+            ᶜSqₜᵐʲs.:($$j) *
+            ᶜρaʲs.:($$j) *
+            e_tot_0M_precipitation_sources_helper(
+                thermo_params,
+                ᶜTʲs.:($$j),
+                ᶜq_liq_raiʲs.:($$j),
+                ᶜq_ice_snoʲs.:($$j),
+                ᶜΦ,
+            )
+    end
+    # Pre-compute Jacobian diagonal coefficient S/|q| for update_microphysics_jacobian!
+    # Only compute Jacobian coefficient when not in autodiff mode
+    # (ᶜ∂Sq_tot is Float32 but ᶜS_ρq_tot may contain Dual numbers during autodiff)
+    if eltype(ᶜS_ρq_tot) === eltype(ᶜ∂Sq_tot)
+        @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot)
+    end
+    set_precipitation_surface_fluxes!(Y, p, EquilibriumMicrophysics0M())
+    return nothing
+end
+
 # 0M + PrognosticEDMFX:
 function refresh_microphysics_source!(
     Y, p,
@@ -836,20 +886,36 @@ end
 """
     set_microphysics_tendency_cache!(Y, p, microphysics_model, turbconv_model)
 
-When run without EDMF, this involves computing microphysics sources based on the grid mean
-properties. The model supports summing over SGS quadrature points to sample the variability.
+Compute and cache the microphysics source terms (`ᶜS_ρq_tot`, `ᶜS_ρe_tot`, Jacobian
+coefficients, etc.) for the current state `Y`.
 
-For EDMF, microphysics tendencies are computed separately for updrafts and the environment:
+**Dispatch table** (microphysics_model × turbconv_model):
 
-**Updrafts** use direct BMT evaluation (no SGS quadrature) because:
+| Model  | Nothing / default | DiagnosticEDMFX | PrognosticEDMFX |
+|--------|-------------------|-----------------|-----------------|
+| DryModel | no-op           | no-op (fallback)| no-op (fallback)|
+| 0M     | grid-mean (± SGS quad) | EDMF-weighted | EDMF-weighted |
+| 1M     | grid-mean (± SGS quad) | EDMF-weighted | EDMF-weighted |
+| 2M     | grid-mean         | **error** (not implemented) | EDMF-weighted |
+| 2MP3   | grid-mean (no EDMF) | —             | —               |
+
+**Non-EDMF path** computes microphysics on the grid-mean state, with an optional sum over
+SGS quadrature points (controlled by `p.atmos.sgs_quadrature`) to sample subgrid variability.
+
+**EDMF path** computes tendencies separately for updrafts and the environment:
+
+*Updrafts* use direct BMT evaluation (no SGS quadrature) because:
 1. Updrafts are coherent turbulent structures with more homogeneous thermodynamic properties
 2. Updraft area fraction is usually small (~1-10%), so SGS variance within updrafts has limited
-impact on the grid-mean tendency
+   impact on the grid-mean tendency.
 
-**Environment** uses SGS quadrature integration (when `sgs_quadrature` is configured)
-because the environment dominates the grid-mean variance. The quadrature captures subgrid-scale
+*Environment* uses SGS quadrature integration (when `sgs_quadrature` is configured) because
+the environment dominates the grid-mean variance. The quadrature captures subgrid-scale
 fluctuations in temperature and moisture, which is important for threshold processes like
 condensation/evaporation at cloud edges.
+
+The grid-mean source is then the area-weighted sum:
+  `ᶜS_ρq_tot = ᶜSqₜᵐ⁰ * ᶜρa⁰ + Σⱼ ᶜSqₜᵐʲ * ᶜρaʲ`
 """
 set_microphysics_tendency_cache!(Y, p, _, _) = nothing
 function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
@@ -1166,6 +1232,22 @@ function set_microphysics_tendency_cache!(
     @. ᶜSqᵢᵐ⁰ = ᶜmp_tendency.dq_icl_dt
     @. ᶜSqᵣᵐ⁰ = ᶜmp_tendency.dq_rai_dt
     @. ᶜSqₛᵐ⁰ = ᶜmp_tendency.dq_sno_dt
+
+    # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
+    # grid-mean state for the implicit Jacobian diagonal.
+    @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
+        BMT.Microphysics1Moment(),
+        cm1,
+        thp,
+        Y.c.ρ,
+        ᶜT,
+        ᶜq_tot_safe,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜq_rai,
+        ᶜq_sno,
+    )
+
     return nothing
 end
 function set_microphysics_tendency_cache!(
@@ -1264,6 +1346,29 @@ function set_microphysics_tendency_cache!(
     @. ᶜSqᵢᵐ⁰ = ᶜmp_tendency.dq_icl_dt
     @. ᶜSqᵣᵐ⁰ = ᶜmp_tendency.dq_rai_dt
     @. ᶜSqₛᵐ⁰ = ᶜmp_tendency.dq_sno_dt
+
+    # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
+    # grid-mean state for the implicit Jacobian diagonal.
+    # Note: ᶜmp_derivative was used as scratch for updrafts above; we now
+    # overwrite it with the grid-mean derivatives for the grid-mean Jacobian.
+    (; ᶜT, ᶜq_tot_safe) = p.precomputed
+    ᶜq_liq_gm = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+    ᶜq_ice_gm = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+    ᶜq_rai_gm = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    ᶜq_sno_gm = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+    @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
+        BMT.Microphysics1Moment(),
+        cmp,
+        thp,
+        Y.c.ρ,
+        ᶜT,
+        ᶜq_tot_safe,
+        ᶜq_liq_gm,
+        ᶜq_ice_gm,
+        ᶜq_rai_gm,
+        ᶜq_sno_gm,
+    )
+
     return nothing
 end
 function set_microphysics_tendency_cache!(Y, p, ::NonEquilibriumMicrophysics2M, _)

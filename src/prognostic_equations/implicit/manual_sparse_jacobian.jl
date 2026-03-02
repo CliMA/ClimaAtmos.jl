@@ -1418,6 +1418,15 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
 
     ᶜρ = Y.c.ρ
 
+    # 0M microphysics: diagonal entry for ρq_tot
+    if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
+        if MatrixFields.has_field(Y, @name(c.ρq_tot))
+            (; ᶜ∂Sq_tot) = p.precomputed
+            ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+            @. ∂ᶜρq_tot_err_∂ᶜρq_tot += dtγ * DiagonalMatrixRow(ᶜ∂Sq_tot)
+        end
+    end
+
     # 1M microphysics: diagonal entries for ρq_liq, ρq_ice, ρq_rai, ρq_sno
     if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         (; ᶜmp_derivative) = p.precomputed
@@ -1505,17 +1514,38 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
         end
     end
 
-    # 0M microphysics: diagonal entry for ρq_tot
-    if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
-        if MatrixFields.has_field(Y, @name(c.ρq_tot))
-            (; ᶜ∂Sq_tot) = p.precomputed
-            ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
-            @. ∂ᶜρq_tot_err_∂ᶜρq_tot += dtγ * DiagonalMatrixRow(ᶜ∂Sq_tot)
-        end
-    end
-
     # EDMF microphysics: diagonal entries for updraft variables
     if p.atmos.turbconv_model isa PrognosticEDMFX
+
+        # 0M EDMF
+        if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
+            if hasproperty(p.precomputed, :ᶜSqₜᵐʲs)
+                (; ᶜSqₜᵐʲs) = p.precomputed
+                ᶜSq = ᶜSqₜᵐʲs.:(1)
+
+                q_name = @name(c.sgsʲs.:(1).q_tot)
+                if MatrixFields.has_field(Y, q_name)
+                    ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
+                    if !use_derivative(sgs_advection_flag)
+                        @. ∂ᶜq_err_∂ᶜq =
+                            zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
+                    end
+                    add_microphysics_jacobian_entry!(
+                        ∂ᶜq_err_∂ᶜq, dtγ, ᶜSq, Y.c.sgsʲs.:(1).q_tot,
+                    )
+                end
+
+                ρa_name = @name(c.sgsʲs.:(1).ρa)
+                if MatrixFields.has_field(Y, ρa_name)
+                    ∂ᶜρa_err_∂ᶜρa = matrix[ρa_name, ρa_name]
+                    if !use_derivative(sgs_advection_flag)
+                        @. ∂ᶜρa_err_∂ᶜρa =
+                            zero(typeof(∂ᶜρa_err_∂ᶜρa)) - (I,)
+                    end
+                    @. ∂ᶜρa_err_∂ᶜρa += dtγ * DiagonalMatrixRow(ᶜSq)
+                end
+            end
+        end
 
         # 1M EDMF: diagonal entries for individual condensate species.
         if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M
@@ -1563,36 +1593,7 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
         # diagonal blocks for updraft n_liq and n_rai species.
         # Without these entries, 2M microphysics should use explicit
         # timestepping for stability.
-
-        # 0M EDMF
-        if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
-            if hasproperty(p.precomputed, :ᶜSqₜᵐʲs)
-                (; ᶜSqₜᵐʲs) = p.precomputed
-                ᶜSq = ᶜSqₜᵐʲs.:(1)
-
-                q_name = @name(c.sgsʲs.:(1).q_tot)
-                if MatrixFields.has_field(Y, q_name)
-                    ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
-                    if !use_derivative(sgs_advection_flag)
-                        @. ∂ᶜq_err_∂ᶜq =
-                            zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
-                    end
-                    add_microphysics_jacobian_entry!(
-                        ∂ᶜq_err_∂ᶜq, dtγ, ᶜSq, Y.c.sgsʲs.:(1).q_tot,
-                    )
-                end
-
-                ρa_name = @name(c.sgsʲs.:(1).ρa)
-                if MatrixFields.has_field(Y, ρa_name)
-                    ∂ᶜρa_err_∂ᶜρa = matrix[ρa_name, ρa_name]
-                    if !use_derivative(sgs_advection_flag)
-                        @. ∂ᶜρa_err_∂ᶜρa =
-                            zero(typeof(∂ᶜρa_err_∂ᶜρa)) - (I,)
-                    end
-                    @. ∂ᶜρa_err_∂ᶜρa += dtγ * DiagonalMatrixRow(ᶜSq)
-                end
-            end
-        end
+        
     end
     return nothing
 end

@@ -749,15 +749,13 @@ NamedTuple with tendencies: `dq_lcl_dt`, `dn_lcl_dt`, `dq_rai_dt`, `dn_rai_dt`
     ρ, T,
     q_tot, q_liq, n_liq, q_rai, n_rai,
 )
-    # Clamp species humidities to prevent negativity in quadratures (to be implemented)
-    q_liq_safe = max(0, q_liq)
-    q_rai_safe = max(0, q_rai)
+
     # Fall back to grid-mean evaluation for non-GridMeanSGS distributions
     return BMT.bulk_microphysics_tendencies(
         BMT.Microphysics2Moment(),
         cmp, tps,
         ρ, T,
-        q_tot, q_liq_safe, n_liq, q_rai_safe, n_rai,
+        q_tot, q_liq, n_liq, q_rai, n_rai,
     )
 end
 
@@ -772,13 +770,10 @@ Direct GridMeanSGS dispatch for 2M: evaluates BMT at grid mean.
     ρ, T,
     q_tot, q_liq, n_liq, q_rai, n_rai,
 )
-    # Clamp species humidities to prevent negativity from breaking BMT
-    q_liq_safe = max(0, q_liq)
-    q_rai_safe = max(0, q_rai)
     return BMT.bulk_microphysics_tendencies(
         BMT.Microphysics2Moment(),
         cmp, tps,
         ρ, T,
-        q_tot, q_liq_safe, n_liq, q_rai_safe, n_rai,
+        q_tot, q_liq, n_liq, q_rai, n_rai,
     )
 end

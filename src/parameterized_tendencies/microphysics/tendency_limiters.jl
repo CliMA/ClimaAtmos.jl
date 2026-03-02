@@ -146,9 +146,9 @@ end
 
 Apply physical limiting to 1M microphysics tendencies.
 
-Applies mass-conservation and temperature-rate limiters to prevent
-negative species concentrations from cross-species sinks (accretion,
-autoconversion) that the diagonal-only Jacobian cannot stabilize.
+Applies mass-conservation limiters to prevent negative species concentrations 
+from cross-species sinks (accretion, autoconversion) that the diagonal-only Jacobian 
+cannot stabilize.
 """
 @inline function apply_1m_tendency_limits(
     ::AbstractTimesteppingMode,
