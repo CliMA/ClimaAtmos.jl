@@ -1191,7 +1191,7 @@ function set_microphysics_tendency_cache!(
     cm1 = CAP.microphysics_1m_params(p.params)
     (; dt) = p
 
-    (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜmp_tendency) = p.precomputed
+    (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜmp_tendency, ᶜmp_derivative) = p.precomputed
 
     # Environment specific humidities
     ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
