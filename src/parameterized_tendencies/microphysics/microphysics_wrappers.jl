@@ -108,7 +108,7 @@ function compute_1m_precipitation_tendencies!(
     )
 
     # Apply limiting via shared helper
-    _apply_1m_limits!(
+    apply_1m_tendency_limits!(
         mp_tendency, microphysics_tendency_timestepping,
         thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, dt,
     )
@@ -184,7 +184,7 @@ function compute_2m_precipitation_tendencies!(
     )
 
     # Apply limits (no-op for implicit timestepping)
-    _apply_2m_limits!(mp_tendency, timestepping, qₗ, nₗ, qᵣ, nᵣ, dt)
+    apply_2m_tendency_limits!(mp_tendency, timestepping, qₗ, nₗ, qᵣ, nᵣ, dt)
 
     @. Sqₗᵐ = mp_tendency.dq_lcl_dt
     @. Snₗᵐ = mp_tendency.dn_lcl_dt

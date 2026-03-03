@@ -940,7 +940,7 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
             ᶜq_ice_sno,
         )
     end
-    _apply_0m_limits!(
+    apply_0m_tendency_limits!(
         ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping, ᶜq_tot_safe, dt,
     )
     @. ᶜS_ρq_tot = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
@@ -982,7 +982,7 @@ function set_microphysics_tendency_cache!(
         ᶜq′q′,
         correlation_Tq(p.params),
     )
-    _apply_0m_limits!(
+    apply_0m_tendency_limits!(
         ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping, ᶜq_tot_safe, dt,
     )
     @. ᶜSqₜᵐ⁰ = ᶜmp_tendency.dq_tot_dt
@@ -1038,7 +1038,7 @@ function set_microphysics_tendency_cache!(
             ᶜq_liq_raiʲs.:($$j),
             ᶜq_ice_snoʲs.:($$j),
         )
-        _apply_0m_limits!(
+        apply_0m_tendency_limits!(
             ᶜmp_tendency,
             p.atmos.microphysics_tendency_timestepping,
             p.precomputed.ᶜq_tot_safeʲs.:($j),
@@ -1063,7 +1063,7 @@ function set_microphysics_tendency_cache!(
         ᶜq′q′,
         correlation_Tq(p.params),
     )
-    _apply_0m_limits!(
+    apply_0m_tendency_limits!(
         ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping, ᶜq_tot_safe⁰, dt,
     )
     @. ᶜSqₜᵐ⁰ = ᶜmp_tendency.dq_tot_dt
@@ -1135,7 +1135,7 @@ function set_microphysics_tendency_cache!(Y, p, ::NonEquilibriumMicrophysics1M, 
     )
 
     # Apply physically motivated tendency limits
-    _apply_1m_limits!(
+    apply_1m_tendency_limits!(
         ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping,
         thp, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
     )
@@ -1207,7 +1207,7 @@ function set_microphysics_tendency_cache!(
     )
 
     # Apply physically motivated tendency limits
-    _apply_1m_limits!(
+    apply_1m_tendency_limits!(
         ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping,
         thp, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
     )
@@ -1321,7 +1321,7 @@ function set_microphysics_tendency_cache!(
     )
 
     # Apply physically motivated tendency limits
-    _apply_1m_limits!(
+    apply_1m_tendency_limits!(
         ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping,
         thp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰, dt,
     )
@@ -1386,7 +1386,7 @@ function set_microphysics_tendency_cache!(Y, p, ::NonEquilibriumMicrophysics2M, 
     )
 
     # Apply physically motivated tendency limits
-    _apply_2m_limits!(
+    apply_2m_tendency_limits!(
         ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping, ᶜq_liq, ᶜn_liq, ᶜq_rai,
         ᶜn_rai, dt,
     )
@@ -1530,7 +1530,7 @@ function set_microphysics_tendency_cache!(
     )
 
     # Apply physically motivated tendency limits
-    _apply_2m_limits!(
+    apply_2m_tendency_limits!(
         ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping, ᶜq_liq⁰, ᶜn_liq⁰, ᶜq_rai⁰,
         ᶜn_rai⁰, dt,
     )

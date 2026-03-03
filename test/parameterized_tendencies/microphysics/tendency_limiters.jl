@@ -5,7 +5,7 @@ Tests cover:
 1. `limit()` - basic rate limiting
 2. `tendency_limiter()` - bidirectional tendency limiting
 3. `coupled_sink_limit_factor()` - uniform scaling for coupled sinks
-4. `apply_1m_tendency_limits()` - end-to-end 1M limiter
+4. `_explicit_1m_tendency_limits()` - end-to-end 1M limiter
 =#
 
 using Test
@@ -178,8 +178,8 @@ import ClimaAtmos:
         end
     end
 
-    @testset "apply_1m_tendency_limits() cross-species limiting" begin
-        import ClimaAtmos: apply_1m_tendency_limits
+    @testset "_explicit_1m_tendency_limits() cross-species limiting" begin
+        import ClimaAtmos: _explicit_1m_tendency_limits
         import Thermodynamics as TD
         import ClimaParams as CP
 
@@ -207,7 +207,7 @@ import ClimaAtmos:
             q_sno = FT(0.01)
             q_tot = FT(0.05)  # q_vap = 0.01 > 0
 
-            limited = apply_1m_tendency_limits(
+            limited = _explicit_1m_tendency_limits(
                 ClimaAtmos.Explicit(),
                 mp_tendency,
                 thermo_params,
@@ -242,7 +242,7 @@ import ClimaAtmos:
             q_sno = FT(0.0002)
             q_tot = FT(0.01)  # q_vap = 0.0082
 
-            limited = apply_1m_tendency_limits(
+            limited = _explicit_1m_tendency_limits(
                 ClimaAtmos.Explicit(),
                 mp_tendency,
                 thermo_params,
