@@ -1479,6 +1479,7 @@ function set_microphysics_tendency_cache!(
             dt,
             cm2p,
             thp,
+            p.atmos.microphysics_tendency_timestepping,
         )
         @. ᶜSqᵢᵐʲs.:($$j) = 0
         @. ᶜSqₛᵐʲs.:($$j) = 0
