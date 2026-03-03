@@ -726,13 +726,19 @@ Refresh microphysics precomputed quantities that depend on the current Newton
 iterate `Y`.  Called from `set_implicit_precomputed_quantities!` at every
 Newton iteration of the implicit solve.
 
-- **0M**: lightweight — recomputes only `ᶜS_ρq_tot` / `ᶜS_ρe_tot` from the
-  already-computed `ᶜmp_tendency` (ρ × limit_sink).  The tendency itself is
-  fixed; only the density-weighted form changes as ρ evolves.
-- **1M/2M**: full recompute via `set_microphysics_tendency_cache!`.  A cheaper
-  path (refreshing only the Jacobian derivatives) is not used because the BMT
-  Jacobian is bounded and provides no barrier at q=0: Newton can converge to
-  negative q_liq/q_ice when the frozen tendency is a large sink.
+All schemes freeze the specific microphysics tendencies computed in the
+explicit stage; only density-weighted source terms and surface fluxes are
+refreshed here.
+
+- **0M**: recomputes `ᶜS_ρq_tot` / `ᶜS_ρe_tot` from the frozen
+  `ᶜmp_tendency` (ρ × tendency).  For EDMF variants, the per-subdomain
+  specific tendencies (`ᶜSqₜᵐ⁰`, `ᶜSqₜᵐʲs`) are re-aggregated with the
+  current ρ / ρa.
+- **1M/2M**: refreshes only `set_precipitation_surface_fluxes!`.  The
+  specific tendencies (`ᶜSqₗᵐ`, etc.) are frozen; density weighting is
+  applied at tendency-evaluation time in `tendency.jl`.  The Jacobian uses
+  frozen `ᶜmp_derivative` (cloud) and `S/q` (precip) computed from the
+  frozen tendencies and the current iterate.
 - **default**: no-op (microphysics not active or not implicit).
 """
 update_implicit_microphysics_cache!(Y, p, _, _) = nothing
@@ -846,19 +852,15 @@ function update_implicit_microphysics_cache!(
     return nothing
 end
 
-# 1M/2M: full recompute at each Newton iteration to maintain self-limiting
-# behaviour of cloud condensate sinks as q→0.  A lightweight alternative
-# (refreshing only the Jacobian derivatives without re-running the quadrature)
-# is unsafe for q_liq/q_ice: the BMT Jacobian is bounded and provides no
-# barrier at q=0, so the Newton iteration can converge to negative q when the
-# frozen tendency is a large sink.  Revisit once the full computation has been
-# profiled and the cost is understood.
+# 1M/2M: lightweight refresh — keep specific tendencies frozen from the
+# explicit stage; only update surface precipitation fluxes.  The density
+# weighting (Y.c.ρ * ᶜSqₗᵐ) is applied at tendency-evaluation time in
+# tendency.jl, so it automatically reflects the current Newton iterate.
 function update_implicit_microphysics_cache!(
     Y, p,
     mm::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
     turbconv_model,
 )
-    set_microphysics_tendency_cache!(Y, p, mm, turbconv_model)
     set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
 end
@@ -1171,7 +1173,8 @@ function set_microphysics_tendency_cache!(
     cm1 = CAP.microphysics_1m_params(p.params)
     (; dt) = p
 
-    (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜmp_tendency, ᶜmp_derivative) = p.precomputed
+    (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜmp_tendency, ᶜmp_derivative) =
+        p.precomputed
 
     # Environment specific humidities
     ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))

@@ -227,6 +227,7 @@ const DIAGNOSTIC_TYPES = [
 # Generate all diagnostic functions and registrations
 for (short_name, long_name, ρq_field, model_types, model_accessor_field) in
     TRACER_DIAGNOSTICS
+
     for (suffix, compute_func, long_name_prefix, units, comments_prefix) in
         DIAGNOSTIC_TYPES
         # Construct names

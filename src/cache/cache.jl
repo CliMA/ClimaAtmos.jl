@@ -159,7 +159,7 @@ function build_cache(
         ᶠf¹²,
         # Used by diagnostics such as hfres, evspblw
         surface_ct3_unit = CT3.(
-            unit_basis_vector_data.(CT3, sfc_local_geometry)
+            unit_basis_vector_data.(CT3, sfc_local_geometry),
         ),
     )
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)

@@ -705,14 +705,14 @@ function compute_tau!(out, state, cache, component)
     if isnothing(out)
         return getproperty(
             Geometry.UVVector.(
-                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit
+                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit,
             ).components.data,
             component,
         )
     else
         out .= getproperty(
             Geometry.UVVector.(
-                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit
+                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit,
             ).components.data,
             component,
         )
@@ -1696,7 +1696,7 @@ function compute_cape!(out, state, cache, time)
     (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
     env_Tv =
         lazy.(
-            TD.virtual_temperature.(thermo_params, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+            TD.virtual_temperature.(thermo_params, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno),
         )
 
     # Calculate buoyancy from the difference in virtual temperatures
