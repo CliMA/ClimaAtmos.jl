@@ -210,10 +210,28 @@ then calls `apply_1m_tendency_limits` inside the broadcast with the concrete
 singleton type.  This avoids passing the timestepping mode *through* the
 broadcast (which would require a `Ref` wrapper and its 8-byte heap allocation).
 """
-# No-op for implicit timestepping: the S/q Jacobian naturally suppresses
-# tendencies as q→0, making explicit limiting unnecessary. Limiting also
-# introduces discontinuities that break Newton solver convergence.
-@inline _apply_1m_limits!(ᶜmp_tendency, ::Implicit, args...) = nothing
+# For implicit timestepping, apply sink-only limiting.  The S/q Jacobian
+# stabilises same-species sinks (q_rai evaporation on q_rai diagonal), but
+# cross-species sinks (e.g. accretion depleting q_ice via the q_rai equation)
+# are not represented on the q_ice diagonal and can drive q_ice negative.
+# Sink-only limiting (limit_sink) is smooth and monotone, so it does not
+# create the discontinuities that would break Newton convergence.
+@inline function _apply_1m_limits!(
+    ᶜmp_tendency, ::Implicit, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+)
+    @. ᶜmp_tendency = _implicit_1m_sink_limits(
+        ᶜmp_tendency, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+    )
+end
+@inline function _implicit_1m_sink_limits(mp_tendency, q_liq, q_ice, q_rai, q_sno, dt)
+    n_sink = 1
+    return (
+        dq_lcl_dt = limit_sink(mp_tendency.dq_lcl_dt, q_liq, dt, n_sink),
+        dq_icl_dt = limit_sink(mp_tendency.dq_icl_dt, q_ice, dt, n_sink),
+        dq_rai_dt = limit_sink(mp_tendency.dq_rai_dt, q_rai, dt, n_sink),
+        dq_sno_dt = limit_sink(mp_tendency.dq_sno_dt, q_sno, dt, n_sink),
+    )
+end
 @inline function _apply_1m_limits!(
     ᶜmp_tendency, timestepping::Explicit, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
 )
