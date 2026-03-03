@@ -1421,13 +1421,12 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
     # 0M microphysics: diagonal entry for ρq_tot
     if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
         if MatrixFields.has_field(Y, @name(c.ρq_tot))
-            (; ᶜS_ρq_tot) = p.precomputed
+            # Read the pre-computed S/|q| Jacobian coefficient (computed in
+            # update_implicit_microphysics_cache!) to avoid inline _jac_coeff
+            # evaluation inside the broadcast, which causes heap allocations.
+            (; ᶜ∂Sq_tot) = p.precomputed
             ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
-            # Fused broadcast: compute S/q and apply dtγ in one kernel
-            # to avoid Ref-boxing of dtγ (which causes allocs).
-            add_microphysics_jacobian_entry!(
-                ∂ᶜρq_tot_err_∂ᶜρq_tot, dtγ, ᶜS_ρq_tot, Y.c.ρq_tot,
-            )
+            @. ∂ᶜρq_tot_err_∂ᶜρq_tot += dtγ * DiagonalMatrixRow(ᶜ∂Sq_tot)
         end
     end
 

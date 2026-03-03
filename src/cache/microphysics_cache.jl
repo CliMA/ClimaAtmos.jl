@@ -760,12 +760,14 @@ function update_implicit_microphysics_cache!(
     _,
 )
     (; dt) = p
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜmp_tendency) = p.precomputed
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜmp_tendency, ᶜ∂Sq_tot) = p.precomputed
     (; ᶜΦ) = p.core
     # No limit_sink needed: the S/q Jacobian naturally suppresses tendencies
     # as q→0, and limiting introduces discontinuities that hurt Newton convergence.
     @. ᶜS_ρq_tot = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
     @. ᶜS_ρe_tot = ᶜS_ρq_tot * (ᶜmp_tendency.e_int_precip + ᶜΦ)
+    # Pre-compute Jacobian coefficient S/|q| for zero-alloc Wfact read.
+    @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot)
     set_precipitation_surface_fluxes!(
         Y, p,
         EquilibriumMicrophysics0M(),
@@ -811,6 +813,8 @@ function update_implicit_microphysics_cache!(
                 ᶜΦ,
             )
     end
+    (; ᶜ∂Sq_tot) = p.precomputed
+    @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot)
     set_precipitation_surface_fluxes!(Y, p, EquilibriumMicrophysics0M())
     return nothing
 end
@@ -855,6 +859,8 @@ function update_implicit_microphysics_cache!(
                 ᶜΦ,
             )
     end
+    (; ᶜ∂Sq_tot) = p.precomputed
+    @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot)
     set_precipitation_surface_fluxes!(
         Y, p,
         EquilibriumMicrophysics0M(),
