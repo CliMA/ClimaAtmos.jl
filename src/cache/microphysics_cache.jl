@@ -1144,26 +1144,20 @@ function set_microphysics_tendency_cache!(Y, p, ::NonEquilibriumMicrophysics1M, 
     @. ᶜSqᵣᵐ = ᶜmp_tendency.dq_rai_dt
     @. ᶜSqₛᵐ = ᶜmp_tendency.dq_sno_dt
 
-    # Compute quadrature-integrated microphysics self-derivatives ∂(dqₓ/dt)/∂qₓ
-    # for the implicit Jacobian diagonal.  Using the same quadrature as the
-    # tendency ensures consistency: ∂<S>/∂q = <∂S/∂q> when q is not perturbed.
+    # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
+    # grid-mean state for the implicit Jacobian diagonal.
     (; ᶜmp_derivative) = p.precomputed
-    @. ᶜmp_derivative = microphysics_derivatives_quadrature(
+    @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
         BMT.Microphysics1Moment(),
-        sgs_quad,
         cmp,
         thp,
         Y.c.ρ,
-        ᶜp,
         ᶜT,
         ᶜq_tot_safe,
         ᶜq_liq,
         ᶜq_ice,
         ᶜq_rai,
         ᶜq_sno,
-        ᶜT′T′,
-        ᶜq′q′,
-        correlation_Tq(p.params),
     )
 
     return nothing
@@ -1222,24 +1216,19 @@ function set_microphysics_tendency_cache!(
     @. ᶜSqᵣᵐ⁰ = ᶜmp_tendency.dq_rai_dt
     @. ᶜSqₛᵐ⁰ = ᶜmp_tendency.dq_sno_dt
 
-    # Compute quadrature-integrated microphysics self-derivatives ∂(dqₓ/dt)/∂qₓ
-    # for the implicit Jacobian diagonal (same quadrature as the tendency).
-    @. ᶜmp_derivative = microphysics_derivatives_quadrature(
+    # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
+    # grid-mean state for the implicit Jacobian diagonal.
+    @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
         BMT.Microphysics1Moment(),
-        sgs_quad,
         cm1,
         thp,
         Y.c.ρ,
-        ᶜp,
         ᶜT,
         ᶜq_tot_safe,
         ᶜq_liq,
         ᶜq_ice,
         ᶜq_rai,
         ᶜq_sno,
-        ᶜT′T′,
-        ᶜq′q′,
-        correlation_Tq(p.params),
     )
 
     return nothing
@@ -1256,7 +1245,7 @@ function set_microphysics_tendency_cache!(
 
     (; ᶜSqₗᵐʲs, ᶜSqᵢᵐʲs, ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs, ᶜρʲs, ᶜTʲs) = p.precomputed
     (; ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰, ᶜmp_tendency, ᶜmp_derivative) = p.precomputed
-    (; ᶜ∂Sqₗʲs, ᶜ∂Sqᵢʲs, ᶜ∂Sqᵣʲs, ᶜ∂Sqₛʲs) = p.precomputed
+    (; ᶜ∂Sqₗʲs, ᶜ∂Sqᵢʲs) = p.precomputed
     (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -1280,10 +1269,10 @@ function set_microphysics_tendency_cache!(
             cmp,
             thp,
         )
-        # BMT self-derivatives at updraft j state (resolved updraft — no quadrature).
-        # ᶜmp_derivative is reused as scratch; all per-updraft ∂S/∂q values are
-        # immediately extracted for use in the Jacobian.
-        @. ᶜmp_derivative = BMT.bulk_microphysics_derivatives(
+        # BMT cloud derivatives at updraft j state (same pattern as grid-mean).
+        # ᶜmp_derivative is reused as scratch; the per-updraft ∂S/∂q values are
+        # immediately extracted into ᶜ∂Sqₗʲs / ᶜ∂Sqᵢʲs for use in the Jacobian.
+        @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
             BMT.Microphysics1Moment(),
             cmp,
             thp,
@@ -1297,8 +1286,6 @@ function set_microphysics_tendency_cache!(
         )
         @. ᶜ∂Sqₗʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_lcl
         @. ᶜ∂Sqᵢʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_icl
-        @. ᶜ∂Sqᵣʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_rai
-        @. ᶜ∂Sqₛʲs.:($$j) = ᶜmp_derivative.∂tendency_∂q_sno
     end
 
     # Microphysics tendencies from the environment (with SGS quadrature)
@@ -1343,31 +1330,26 @@ function set_microphysics_tendency_cache!(
     @. ᶜSqᵣᵐ⁰ = ᶜmp_tendency.dq_rai_dt
     @. ᶜSqₛᵐ⁰ = ᶜmp_tendency.dq_sno_dt
 
-    # Compute quadrature-integrated microphysics self-derivatives ∂(dqₓ/dt)/∂qₓ
-    # for the grid-mean Jacobian diagonal (environment).
+    # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
+    # grid-mean state for the implicit Jacobian diagonal.
     # Note: ᶜmp_derivative was used as scratch for updrafts above; we now
-    # overwrite it with the environment derivatives.
+    # overwrite it with the grid-mean derivatives for the grid-mean Jacobian.
     (; ᶜT, ᶜq_tot_safe) = p.precomputed
     ᶜq_liq_gm = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
     ᶜq_ice_gm = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
     ᶜq_rai_gm = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
     ᶜq_sno_gm = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-    @. ᶜmp_derivative = microphysics_derivatives_quadrature(
+    @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
         BMT.Microphysics1Moment(),
-        SG_quad,
         cmp,
         thp,
         Y.c.ρ,
-        ᶜp,
         ᶜT,
         ᶜq_tot_safe,
         ᶜq_liq_gm,
         ᶜq_ice_gm,
         ᶜq_rai_gm,
         ᶜq_sno_gm,
-        ᶜT′T′,
-        ᶜq′q′,
-        correlation_Tq(p.params),
     )
 
     return nothing

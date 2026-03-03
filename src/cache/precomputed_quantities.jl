@@ -201,8 +201,6 @@ function precomputed_quantities(Y, atmos)
                 @NamedTuple{
                     ∂tendency_∂q_lcl::FT,
                     ∂tendency_∂q_icl::FT,
-                    ∂tendency_∂q_rai::FT,
-                    ∂tendency_∂q_sno::FT,
                 }
             ),
         )
@@ -268,14 +266,12 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵢᵐʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵣᵐʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₛᵐʲs = similar(Y.c, NTuple{n, FT}),
-            # BMT self-derivatives ∂(dq/dt)/∂q evaluated at each updraft state,
-            # stored for use in the implicit Jacobian diagonal.  Cloud derivatives
-            # use the condensation physics; precipitation derivatives capture the
-            # evaporation/sublimation and accretion-sink physics.
+            # BMT cloud derivatives ∂(dq_lcl/dt)/∂q_lcl and ∂(dq_icl/dt)/∂q_icl
+            # evaluated at each updraft state (same pattern as grid-mean ᶜmp_derivative).
+            # Precipitation (q_rai, q_sno) Jacobian is computed inline in
+            # update_microphysics_jacobian! using S/q with the current iterate.
             ᶜ∂Sqₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∂Sqᵢʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜ∂Sqᵣʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜ∂Sqₛʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
@@ -306,13 +302,11 @@ function precomputed_quantities(Y, atmos)
             ᶜSnₗᵐ⁰ = similar(Y.c, FT),
             ᶜSnᵣᵐ⁰ = similar(Y.c, FT),
         ) : (;)
-    # Zero-initialize updraft Jacobian derivatives to prevent NaN from
+    # Zero-initialize updraft cloud Jacobian derivatives to prevent NaN from
     # uninitialized memory before the first call to set_microphysics_tendency_cache!
     if haskey(precipitation_sgs_quantities, :ᶜ∂Sqₗʲs)
         parent(precipitation_sgs_quantities.ᶜ∂Sqₗʲs) .= 0
         parent(precipitation_sgs_quantities.ᶜ∂Sqᵢʲs) .= 0
-        parent(precipitation_sgs_quantities.ᶜ∂Sqᵣʲs) .= 0
-        parent(precipitation_sgs_quantities.ᶜ∂Sqₛʲs) .= 0
     end
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?
