@@ -14,17 +14,18 @@ using Statistics
 include("helper_funcs.jl")
 
 
-output_dir = "/resnick/groups/esm/cchristo/climaatmos_scm_calibrations/output_progedmf_cal_v1/exp12" # path to calibration output
-iteration = 4
-prefix = "prog_1M"
+output_dir = "/resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/output_diagedmf_cal_v2/exp1" # path to calibration output
+iteration = 7
+# prefix = "prog_1M"
+prefix = "diag_0M_diagedmf_cal_v2_exp1"
 
 
-
-# write_optimal_toml_dir = "./scm_runner/optimal_tomls"
-# param_overrides_path = "./scm_tomls/diagnostic_edmfx.toml"
 
 write_optimal_toml_dir = "./scm_runner/optimal_tomls"
-param_overrides_path = "./scm_tomls/prognostic_edmfx.toml"
+param_overrides_path = "./scm_tomls/diagnostic_edmfx.toml"
+
+# write_optimal_toml_dir = "./scm_runner/optimal_tomls"
+# param_overrides_path = "./scm_tomls/prognostic_edmfx.toml"
 
 
 
