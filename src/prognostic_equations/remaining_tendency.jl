@@ -316,6 +316,16 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # NOTE: Microphysics tendencies should be applied before calling this function,
     # because precipitation cache is used in this function
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
+    if p.atmos.microphysics_tendency_timestepping == Explicit()
+        surface_precipitation_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.surface_model,
+            p.atmos.microphysics_model,
+        )
+    end
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)

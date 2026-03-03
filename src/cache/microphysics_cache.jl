@@ -720,7 +720,7 @@ function set_precipitation_velocities!(
 end
 
 """
-    refresh_microphysics_source!(Y, p, microphysics_model, turbconv_model)
+    update_implicit_microphysics_cache!(Y, p, microphysics_model, turbconv_model)
 
 Refresh microphysics precomputed quantities that depend on the current Newton
 iterate `Y`.  Called from `set_implicit_precomputed_quantities!` at every
@@ -735,27 +735,21 @@ Newton iteration of the implicit solve.
   negative q_liq/q_ice when the frozen tendency is a large sink.
 - **default**: no-op (microphysics not active or not implicit).
 """
-refresh_microphysics_source!(Y, p, _, _) = nothing
+update_implicit_microphysics_cache!(Y, p, _, _) = nothing
 
 # 0M grid-mean (non-EDMF):
-function refresh_microphysics_source!(
+function update_implicit_microphysics_cache!(
     Y, p,
     ::EquilibriumMicrophysics0M,
     _,
 )
     (; dt) = p
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜmp_tendency, ᶜ∂Sq_tot) = p.precomputed
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜmp_tendency) = p.precomputed
     (; ᶜΦ) = p.core
     # No limit_sink needed: the S/q Jacobian naturally suppresses tendencies
     # as q→0, and limiting introduces discontinuities that hurt Newton convergence.
     @. ᶜS_ρq_tot = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
     @. ᶜS_ρe_tot = ᶜS_ρq_tot * (ᶜmp_tendency.e_int_precip + ᶜΦ)
-    # Pre-compute Jacobian diagonal coefficient S/|q| for update_microphysics_jacobian!
-    # Only compute Jacobian coefficient when not in autodiff mode
-    # (ᶜ∂Sq_tot is Float but ᶜS_ρq_tot may contain Dual numbers during autodiff)
-    if eltype(ᶜS_ρq_tot) === eltype(ᶜ∂Sq_tot)
-        @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot)
-    end
     set_precipitation_surface_fluxes!(
         Y, p,
         EquilibriumMicrophysics0M(),
@@ -763,18 +757,16 @@ function refresh_microphysics_source!(
     return nothing
 end
 
-# 0M + DiagnosticEDMFX: mirrors set_microphysics_tendency_cache! for DiagnosticEDMFX —
-# re-aggregate the frozen per-subdomain specific tendencies (ᶜSqₜᵐ⁰, ᶜSqₜᵐʲs) with the
-# current density (ρ changes at each Newton iterate; precomputed area fractions do not).
-# Without this dispatch the wildcard (0M, _) method is chosen, which uses the grid-mean
-# ᶜmp_tendency and ignores the EDMF area weighting, corrupting the implicit residual.
-function refresh_microphysics_source!(
+# 0M + DiagnosticEDMFX: re-aggregate the per-subdomain specific tendencies
+# (ᶜSqₜᵐ⁰, ᶜSqₜᵐʲs) with the current density (ρ changes at each Newton
+# iterate; the specific tendencies themselves do not).
+function update_implicit_microphysics_cache!(
     Y, p,
     ::EquilibriumMicrophysics0M,
     turbconv_model::DiagnosticEDMFX,
 )
     (; ᶜΦ) = p.core
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜ∂Sq_tot) = p.precomputed
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; ᶜSqₜᵐ⁰, ᶜSqₜᵐʲs) = p.precomputed
     (; ᶜTʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs, ᶜρaʲs) = p.precomputed
     (; ᶜT, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
@@ -803,24 +795,18 @@ function refresh_microphysics_source!(
                 ᶜΦ,
             )
     end
-    # Pre-compute Jacobian diagonal coefficient S/|q| for update_microphysics_jacobian!
-    # Only compute Jacobian coefficient when not in autodiff mode
-    # (ᶜ∂Sq_tot is Float32 but ᶜS_ρq_tot may contain Dual numbers during autodiff)
-    if eltype(ᶜS_ρq_tot) === eltype(ᶜ∂Sq_tot)
-        @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot)
-    end
     set_precipitation_surface_fluxes!(Y, p, EquilibriumMicrophysics0M())
     return nothing
 end
 
 # 0M + PrognosticEDMFX:
-function refresh_microphysics_source!(
+function update_implicit_microphysics_cache!(
     Y, p,
     ::EquilibriumMicrophysics0M,
     ::PrognosticEDMFX,
 )
     (; ᶜΦ) = p.core
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜ∂Sq_tot) = p.precomputed
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; ᶜSqₜᵐ⁰, ᶜSqₜᵐʲs) = p.precomputed
     (; ᶜTʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
@@ -853,12 +839,6 @@ function refresh_microphysics_source!(
                 ᶜΦ,
             )
     end
-    # Pre-compute Jacobian diagonal coefficient S/|q| for update_microphysics_jacobian!
-    # Only compute Jacobian coefficient when not in autodiff mode
-    # (ᶜ∂Sq_tot is Float32 but ᶜS_ρq_tot may contain Dual numbers during autodiff)
-    if eltype(ᶜS_ρq_tot) === eltype(ᶜ∂Sq_tot)
-        @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot)
-    end
     set_precipitation_surface_fluxes!(
         Y, p,
         EquilibriumMicrophysics0M(),
@@ -873,7 +853,7 @@ end
 # barrier at q=0, so the Newton iteration can converge to negative q when the
 # frozen tendency is a large sink.  Revisit once the full computation has been
 # profiled and the cost is understood.
-function refresh_microphysics_source!(
+function update_implicit_microphysics_cache!(
     Y, p,
     mm::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
     turbconv_model,

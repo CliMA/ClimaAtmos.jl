@@ -186,7 +186,7 @@ function precomputed_quantities(Y, atmos)
             ᶜmp_tendency = similar(Y.c,
                 @NamedTuple{dq_tot_dt::FT, e_int_precip::FT}),
             # Pre-computed Jacobian diagonal coefficient for 0M,
-            # avoids allocations in update_microphysics_jacobian!
+            # computed in update_microphysics_jacobian!
             ᶜ∂Sq_tot = similar(Y.c, FT),
         )
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
@@ -633,7 +633,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     # The surface flux fields have Dual-typed copies in
     # implicit_precomputed_quantities, so AD can write into them safely.
     if p.atmos.microphysics_tendency_timestepping == Implicit()
-        refresh_microphysics_source!(Y, p, microphysics_model, turbconv_model)
+        update_implicit_microphysics_cache!(Y, p, microphysics_model, turbconv_model)
     end
 end
 

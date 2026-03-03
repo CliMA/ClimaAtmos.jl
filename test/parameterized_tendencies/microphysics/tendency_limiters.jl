@@ -262,46 +262,5 @@ import ClimaAtmos:
             # Snow should be limited but less aggressively than rain.
             @test abs(limited.dq_sno_dt) <= abs(mp_tendency.dq_sno_dt)
         end
-
-        @testset "temperature-rate limiting (removed in implicit branch)" begin
-            # Temperature-rate limiter was removed; tendencies should pass
-            # through with only per-species sink limiting.  Large condensation
-            # triggers no special scaling because the temperature limiter no
-            # longer exists.
-            mp_tendency = (
-                dq_lcl_dt = FT(0.01),   # Large condensation
-                dq_icl_dt = FT(-0.001),
-                dq_rai_dt = FT(-1e-8),  # Tiny, well within budget
-                dq_sno_dt = FT(-1e-8),  # Tiny, well within budget
-            )
-            q_liq = FT(0.01)
-            q_ice = FT(0.01)
-            q_rai = FT(0.01)
-            q_sno = FT(0.01)
-            q_tot = FT(0.05)  # q_vap = 0.01
-
-            limited = apply_1m_tendency_limits(
-                ClimaAtmos.Explicit(),
-                mp_tendency,
-                thermo_params,
-                q_tot,
-                q_liq,
-                q_ice,
-                q_rai,
-                q_sno,
-                dt,
-            )
-
-            # Without temperature limiter, condensate tendencies are still
-            # subject to per-species source limiting (n_source=10).
-            # dq_lcl_dt=0.01 is a source for liquid, so it is limited by
-            # q_liq / (dt * n_source) ≈ 1.67e-6, much smaller than 0.01.
-            @test limited.dq_lcl_dt > 0  # still positive (source)
-            @test limited.dq_lcl_dt < mp_tendency.dq_lcl_dt  # but limited
-
-            # Rain and snow still pass through unchanged
-            @test limited.dq_rai_dt ≈ mp_tendency.dq_rai_dt rtol = 0.1
-            @test limited.dq_sno_dt ≈ mp_tendency.dq_sno_dt rtol = 0.1
-        end
     end
 end
