@@ -6,7 +6,7 @@ approximate_linear_solve_iters: 2
 prognostic_tke: true
 rayleigh_sponge: true
 edmfx_entr_model: "PiGroups"
-edmfx_detr_model : "SmoothArea"
+edmfx_detr_model : "Generalized"
 edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
@@ -17,7 +17,6 @@ moist: "nonequil"
 # moist: "equil"
 # call_cloud_diagnostics_per_stage: true
 config: "column"
-cloud_model: "quadrature_sgs"
 hyperdiff: "false"
 z_max: 45000
 z_elem: 60
