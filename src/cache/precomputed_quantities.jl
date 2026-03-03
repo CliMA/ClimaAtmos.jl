@@ -185,9 +185,6 @@ function precomputed_quantities(Y, atmos)
             ᶜS_ρe_tot = similar(Y.c, FT),
             ᶜmp_tendency = similar(Y.c,
                 @NamedTuple{dq_tot_dt::FT, e_int_precip::FT}),
-            # Pre-computed Jacobian diagonal coefficient for 0M,
-            # computed in update_microphysics_jacobian!
-            ᶜ∂Sq_tot = similar(Y.c, FT),
         )
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         precipitation_quantities = (;

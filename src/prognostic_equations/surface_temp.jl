@@ -14,6 +14,8 @@ removal, preserving conservation across IMEX stages.
 """
 surface_precipitation_tendency!(Yₜ, Y, p, t, _, _) = nothing
 
+surface_precipitation_tendency!(Yₜ, Y, p, t, ::SlabOceanSST, ::DryModel) = nothing
+
 function surface_precipitation_tendency!(
     Yₜ, Y, p, t, slab::SlabOceanSST, microphysics_model,
 )

@@ -223,7 +223,7 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             # Computed in tendencies (which are not computed in this case)
             :hyperdiff,
             # Precomputed scratch fields for microphysics (uninitialized until tendencies run)
-            :ᶜmp_tendency, :ᶜ∂Sq_tot,
+            :ᶜmp_tendency,
             # rc is some CUDA/CuArray internal object that we don't care about
             :rc,
             # DataHandlers contains caches, so they are stateful
@@ -268,7 +268,7 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :ghost_buffer,
             :hyperdiffusion_ghost_buffer,
             :data_handler,
-            :ᶜmp_tendency, :ᶜ∂Sq_tot,
+            :ᶜmp_tendency,
             :ᶜT′T′, :ᶜq′q′,
             :rc,
             rrtmgp_clear_fix...,
