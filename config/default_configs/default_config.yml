@@ -69,8 +69,11 @@ use_dynamic_krylov_rtol:
   help: "Whether to use Eisenstat-Walker forcing instead of a constant relative tolerance in the Krylov method (only for ClimaTimeSteppers.jl)"
   value: false
 max_newton_iters_ode:
-  help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)"
+  help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)."
   value: 1
+max_newton_iters_ode_subproblem:
+  help: "Maximum number of Newton iterations for the auxiliary implicit subproblem (only for ODE algorithms that use Newton's method). In prognostic EDMF, this controls the Newton iterations used to solve the updraft velocity equation; all other variables are advanced with a single Newton iteration."
+  value: 3
 ode_algo:
   help: "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, etc.]"
   value: "ARS343"

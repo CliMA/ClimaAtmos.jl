@@ -57,6 +57,10 @@ include(joinpath("prognostic_equations", "implicit", "jacobian.jl"))
 include(
     joinpath("prognostic_equations", "implicit", "manual_sparse_jacobian.jl"),
 )
+include(joinpath("prognostic_equations", "implicit", "implicit_tendency_sgs_u3.jl"))
+include(
+    joinpath("prognostic_equations", "implicit", "manual_sparse_jacobian_sgs_u3.jl"),
+)
 include(joinpath("prognostic_equations", "implicit", "auto_dense_jacobian.jl"))
 include(joinpath("prognostic_equations", "implicit", "auto_sparse_jacobian.jl"))
 include(joinpath("prognostic_equations", "implicit", "autodiff_utils.jl"))

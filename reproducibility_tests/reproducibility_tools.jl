@@ -422,8 +422,14 @@ function report_reproducibility_results(
     table_data = vcat(computed_data, compare_data)
     body_hlines = cumsum(map(x -> nv, 1:ns))
 
-    PrettyTables.pretty_table(io, table_data; body_hlines, header, crop = :none)
-
+    PrettyTables.pretty_table(
+        io,
+        table_data;
+        column_labels = [header],
+        table_format = PrettyTables.TextTableFormat(
+            horizontal_lines_at_data_rows = body_hlines,
+        ),
+    )
 
     header = ["Source", "Status"]
 
@@ -432,7 +438,11 @@ function report_reproducibility_results(
     end
     summary_statuses = map(status_emoji, summary_statuses)
     table_data = hcat(sources, summary_statuses)
-    PrettyTables.pretty_table(io, table_data; header, crop = :none)
+    PrettyTables.pretty_table(
+        io,
+        table_data;
+        column_labels = [header],
+    )
 
     n_comparisons = length(computed_mses)
     println(io, "Summary:")

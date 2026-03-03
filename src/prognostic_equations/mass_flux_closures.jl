@@ -111,7 +111,8 @@ function edmfx_nh_pressure_drag_tendency!(
     t,
     turbconv_model::PrognosticEDMFX,
 )
-    if p.atmos.edmfx_model.nh_pressure isa Val{true}
+    if p.atmos.edmfx_model.nh_pressure isa Val{true} &&
+       p.atmos.sgs_nh_pressure_mode == Explicit()
         (; params) = p
         n = n_mass_flux_subdomains(turbconv_model)
         (; ᶠu₃⁰) = p.precomputed
