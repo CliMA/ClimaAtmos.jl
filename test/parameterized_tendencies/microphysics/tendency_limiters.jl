@@ -5,7 +5,9 @@ Tests cover:
 1. `limit()` - basic rate limiting
 2. `tendency_limiter()` - bidirectional tendency limiting
 3. `coupled_sink_limit_factor()` - uniform scaling for coupled sinks
-4. `_explicit_1m_tendency_limits()` - end-to-end 1M limiter
+4. `limit_sink()` - sink-only tendency limiting
+5. `_explicit_1m_tendency_limits()` - end-to-end 1M explicit limiter
+6. `_implicit_1m_tendency_limits()` - end-to-end 1M implicit limiter
 =#
 
 using Test
@@ -15,7 +17,9 @@ using ClimaAtmos
 import ClimaAtmos:
     limit,
     tendency_limiter,
-    coupled_sink_limit_factor
+    coupled_sink_limit_factor,
+    limit_sink,
+    _implicit_1m_tendency_limits
 
 @testset "Tendency Limiters" begin
 
@@ -178,6 +182,50 @@ import ClimaAtmos:
         end
     end
 
+    @testset "limit_sink()" begin
+        dt = 1.0
+
+        @testset "sources pass through unchanged" begin
+            # Positive tendency (source) should not be limited
+            @test limit_sink(0.1, 0.001, dt) == 0.1
+            @test limit_sink(0.001, 0.0, dt) == 0.001  # Even with zero q
+        end
+
+        @testset "small sinks pass through" begin
+            # Sink well within budget → passes through
+            q = 0.01
+            S = -0.0001  # |S| = 0.0001, budget = 0.01/(1*3) = 0.0033
+            @test limit_sink(S, q, dt) ≈ S
+        end
+
+        @testset "large sinks are limited" begin
+            q = 0.001
+            S = -0.01  # |S| = 0.01, budget = 0.001/(1*3) ≈ 0.000333
+            L = limit_sink(S, q, dt)
+            @test L < 0.0              # Still a sink
+            @test abs(L) < abs(S)      # Magnitude reduced
+            @test abs(L) ≈ q / (dt * 3)  # Clamped to budget
+        end
+
+        @testset "zero quantity prevents depletion" begin
+            L = limit_sink(-0.1, 0.0, dt)
+            @test L ≈ 0.0 atol = 1e-15
+        end
+
+        @testset "custom n parameter" begin
+            q = 0.001
+            S = -0.01
+            L3 = limit_sink(S, q, dt, 3)
+            L5 = limit_sink(S, q, dt, 5)
+            @test abs(L5) < abs(L3)  # More sinks = tighter limit
+        end
+
+        @testset "type stability" begin
+            @test eltype(limit_sink(Float32(-0.01), Float32(0.001), Float32(1.0))) == Float32
+            @test eltype(limit_sink(Float64(-0.01), Float64(0.001), Float64(1.0))) == Float64
+        end
+    end
+
     @testset "_explicit_1m_tendency_limits() cross-species limiting" begin
         import ClimaAtmos: _explicit_1m_tendency_limits
         import Thermodynamics as TD
@@ -192,9 +240,10 @@ import ClimaAtmos:
 
         @testset "no limiting when tendencies are small" begin
             # Small tendencies relative to large species pools
-            # → smooth limiter barely touches them.
-            # n_sink=1 budget for q=0.01 is 0.01/(600*1) = 1.67e-5
-            # Tendencies ~1e-7 are ~167× below budget.
+            # → limiter barely touches them.
+            # n_sink=5 budget for q=0.01 is 0.01/(600*5) = 3.33e-6
+            # n_source=30 budget for source pool is even larger.
+            # Tendencies ~1e-7 are well below both budgets.
             mp_tendency = (
                 dq_lcl_dt = FT(1e-7),
                 dq_icl_dt = FT(-5e-8),
@@ -208,7 +257,6 @@ import ClimaAtmos:
             q_tot = FT(0.05)  # q_vap = 0.01 > 0
 
             limited = _explicit_1m_tendency_limits(
-                ClimaAtmos.Explicit(),
                 mp_tendency,
                 thermo_params,
                 q_tot,
@@ -220,8 +268,6 @@ import ClimaAtmos:
             )
 
             # Should pass through nearly unchanged.
-            # The smooth limiter introduces O(ε²/S) corrections,
-            # so we allow small relative deviation.
             @test limited.dq_lcl_dt ≈ mp_tendency.dq_lcl_dt rtol = 0.05
             @test limited.dq_icl_dt ≈ mp_tendency.dq_icl_dt rtol = 0.05
             @test limited.dq_rai_dt ≈ mp_tendency.dq_rai_dt rtol = 0.05
@@ -243,7 +289,6 @@ import ClimaAtmos:
             q_tot = FT(0.01)  # q_vap = 0.0082
 
             limited = _explicit_1m_tendency_limits(
-                ClimaAtmos.Explicit(),
                 mp_tendency,
                 thermo_params,
                 q_tot,
@@ -261,6 +306,89 @@ import ClimaAtmos:
             # With per-species limiting, other species are limited independently.
             # Snow should be limited but less aggressively than rain.
             @test abs(limited.dq_sno_dt) <= abs(mp_tendency.dq_sno_dt)
+        end
+    end
+
+    @testset "_implicit_1m_tendency_limits()" begin
+        FT = Float64
+        dt = FT(600)
+
+        @testset "sources pass through unchanged" begin
+            mp_tendency = (
+                dq_lcl_dt = FT(0.001),
+                dq_icl_dt = FT(0.0005),
+                dq_rai_dt = FT(0.002),
+                dq_sno_dt = FT(0.001),
+            )
+            q_liq = FT(0.01)
+            q_ice = FT(0.01)
+            q_rai = FT(0.01)
+            q_sno = FT(0.01)
+
+            limited = _implicit_1m_tendency_limits(
+                mp_tendency, q_liq, q_ice, q_rai, q_sno, dt,
+            )
+
+            # All sources → pass through unchanged
+            @test limited.dq_lcl_dt == mp_tendency.dq_lcl_dt
+            @test limited.dq_icl_dt == mp_tendency.dq_icl_dt
+            @test limited.dq_rai_dt == mp_tendency.dq_rai_dt
+            @test limited.dq_sno_dt == mp_tendency.dq_sno_dt
+        end
+
+        @testset "sinks are limited to prevent depletion" begin
+            mp_tendency = (
+                dq_lcl_dt = FT(0.001),     # Source — should pass through
+                dq_icl_dt = FT(-0.0005),   # Small sink — within budget
+                dq_rai_dt = FT(-0.01),     # Large sink — should be capped
+                dq_sno_dt = FT(-0.005),    # Medium sink
+            )
+            q_liq = FT(0.01)
+            q_ice = FT(0.01)
+            q_rai = FT(0.0001)  # Very small amount → forces limiting
+            q_sno = FT(0.0002)
+
+            limited = _implicit_1m_tendency_limits(
+                mp_tendency, q_liq, q_ice, q_rai, q_sno, dt,
+            )
+
+            # Source passes through
+            @test limited.dq_lcl_dt == mp_tendency.dq_lcl_dt
+
+            # Large rain sink should be clamped
+            # n_sink=3, budget = 0.0001 / (600*3) ≈ 5.56e-8
+            @test limited.dq_rai_dt < 0.0
+            @test abs(limited.dq_rai_dt) < abs(mp_tendency.dq_rai_dt)
+            @test abs(limited.dq_rai_dt) ≈ q_rai / (dt * 3)
+
+            # Snow sink should also be clamped
+            @test limited.dq_sno_dt < 0.0
+            @test abs(limited.dq_sno_dt) < abs(mp_tendency.dq_sno_dt)
+        end
+
+        @testset "no temperature-rate limiting applied" begin
+            # Unlike explicit mode, implicit mode should NOT apply
+            # temperature-rate limiting — verify by using extreme
+            # cloud tendencies that would trigger the temperature limiter
+            # in explicit mode.
+            mp_tendency = (
+                dq_lcl_dt = FT(0.1),    # Huge source
+                dq_icl_dt = FT(0.1),    # Huge source
+                dq_rai_dt = FT(0.0),
+                dq_sno_dt = FT(0.0),
+            )
+            q_liq = FT(0.01)
+            q_ice = FT(0.01)
+            q_rai = FT(0.01)
+            q_sno = FT(0.01)
+
+            limited = _implicit_1m_tendency_limits(
+                mp_tendency, q_liq, q_ice, q_rai, q_sno, dt,
+            )
+
+            # Sources pass through — no temperature-rate rescaling
+            @test limited.dq_lcl_dt == mp_tendency.dq_lcl_dt
+            @test limited.dq_icl_dt == mp_tendency.dq_icl_dt
         end
     end
 end

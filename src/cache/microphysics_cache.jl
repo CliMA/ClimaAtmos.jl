@@ -34,11 +34,21 @@ end
 """
     ϵ_numerics(FT)
 
-Smallest threshold for specific humidity comparisons and Jacobian
-denominator floors.  Hardcoded to 1e-9 so that the behavior is identical
-for Float32 and Float64.
+Generic numerical-zero threshold.  Used for variance floors, σ guards,
+and density-weighted mass checks — anywhere the exact value does not
+matter as long as it is small but safely above underflow.
 """
-ϵ_numerics(FT) = FT(1e-9)
+ϵ_numerics(FT) = cbrt(floatmin(FT))
+
+"""
+    q_min(FT)
+
+Minimum specific humidity threshold [kg/kg].  Used as a denominator floor
+in the Jacobian S/q approximation, condensate scaling, and SGS saturation
+weight adjustment — anywhere a physical humidity value is compared or
+divided by.
+"""
+q_min(FT) = FT(1e-10)
 
 """
     set_precipitation_velocities!(Y, p, microphysics_model, turbconv_model)
@@ -1547,7 +1557,7 @@ function set_microphysics_tendency_cache!(
         seasalt_num,
         seasalt_mean_radius,
         sulfate_num,
-        ᶜq_tot⁰,
+        ᶜq_tot_safe⁰,
         ᶜq_liq⁰ + ᶜq_rai⁰,
         ᶜq_ice⁰ + ᶜq_sno⁰,
         ᶜn_liq⁰ + ᶜn_rai⁰,

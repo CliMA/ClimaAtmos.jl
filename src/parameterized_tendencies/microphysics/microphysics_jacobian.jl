@@ -2,11 +2,9 @@
 # computation into a scalar function avoids calling `abs` twice in a single
 # broadcast expression, which can prevent broadcast-fusion type inference and
 # cause heap allocations in the surrounding function.
-#
-# The 2-argument overloads compute ε internally to avoid passing a scalar
-# through the broadcast, which would otherwise allocate a Ref wrapper.
-@inline function _jac_coeff(Sq, q, ε)
+@inline function _jac_coeff(Sq, q)
     FT = typeof(Sq)
+    ε = q_min(FT)
     aq = abs(q)
     # Use S/|q| as an approximation for ∂S/∂q.  The approximation is exact
     # for accretion-type processes where S ∝ q (∂S/∂q = S/q), and provides
@@ -27,20 +25,13 @@
     # and the Newton step q^{k+1} = q^n + dtγ·S converges in one iteration.
     return ifelse(Sq >= zero(FT) && aq <= ε, zero(FT), Sq / max(aq, ε))
 end
-@inline function _jac_coeff(Sq, q)
-    ε = ϵ_numerics(typeof(Sq))
-    return _jac_coeff(Sq, q, ε)
-end
 
-@inline function _jac_coeff_from_ratio(Sq, ρq, ρ, ε)
+@inline function _jac_coeff_from_ratio(Sq, ρq, ρ)
     FT = typeof(Sq)
+    ε = q_min(FT)
     q = ρq / ρ
     aq = abs(q)
     return ifelse(Sq >= zero(FT) && aq <= ε, zero(FT), Sq / max(aq, ε))
-end
-@inline function _jac_coeff_from_ratio(Sq, ρq, ρ)
-    ε = ϵ_numerics(typeof(Sq))
-    return _jac_coeff_from_ratio(Sq, ρq, ρ, ε)
 end
 
 """
@@ -84,7 +75,8 @@ value `q = ρq / ρ`, giving the Jacobian diagonal `Sq / |q|`.
 !!! note
     The division by `ρ` is performed inside the broadcast to avoid creating
     intermediate lazy fields, which would break broadcast fusion and cause
-    heap allocations.
+    heap allocations. Consider moving the division outside the broadcast to 
+    have only one method for this function. 
 """
 @inline function add_microphysics_jacobian_entry!(∂, dtγ, Sq, ρq, ρ)
     @. ∂ += dtγ * DiagonalMatrixRow(_jac_coeff_from_ratio(Sq, ρq, ρ))

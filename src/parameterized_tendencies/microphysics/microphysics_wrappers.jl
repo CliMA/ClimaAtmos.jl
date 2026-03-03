@@ -645,7 +645,7 @@ Condensate is partitioned into liquid and ice using `λ(T_hat)`.
     has_grid_mean_condensate = eval.q_cond_mean > FT(0)
     scale = ifelse(
         has_grid_mean_condensate,
-        q_cond_hat / max(eval.q_cond_mean, ϵ_numerics(FT)),
+        q_cond_hat / max(eval.q_cond_mean, q_min(FT)),
         FT(1),
     )
 

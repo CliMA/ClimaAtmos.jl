@@ -139,7 +139,7 @@ NamedTuple with SGS-averaged:
     # q_mean. Since q_cond = 0 whenever q_hat = 0, this is equivalent to
     # scaling the integrated condensate by ratio.
     # Clamp ratio ≤ 1: only correct downward (lower-bound truncation).
-    ratio = min(one(FT), q_mean / max(result.q_tot_quad, ϵ_numerics(FT)))
+    ratio = min(one(FT), q_mean / max(result.q_tot_quad, q_min(FT)))
     q_liq = result.q_liq * ratio
     q_ice = result.q_ice * ratio
 
