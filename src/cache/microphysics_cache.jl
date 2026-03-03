@@ -862,13 +862,31 @@ function update_implicit_microphysics_cache!(
     return nothing
 end
 
-# 1M/2M: lightweight refresh — keep specific tendencies frozen from the
-# explicit stage; only update surface precipitation fluxes.  The density
-# weighting (Y.c.ρ * ᶜSqₗᵐ) is applied at tendency-evaluation time in
-# tendency.jl, so it automatically reflects the current Newton iterate.
+# 1M: re-apply the implicit sink limiter each Newton iteration using the
+# current iterate q values.  The specific tendencies (ᶜSqₗᵐ, etc.) are
+# frozen from the explicit stage for performance (avoids re-running SGS
+# quadrature), but density-weighted sinks can drive q negative if the Newton
+# solve updates q from vertical transport.  Clamping against the current q
+# prevents this without recomputing the full tendency.
 function update_implicit_microphysics_cache!(
     Y, p,
-    mm::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+    mm::NonEquilibriumMicrophysics1M,
+    turbconv_model,
+)
+    (; ᶜSqₗᵐ, ᶜSqᵢᵐ, ᶜSqᵣᵐ, ᶜSqₛᵐ) = p.precomputed
+    (; dt) = p
+    @. ᶜSqₗᵐ = limit_sink(ᶜSqₗᵐ, specific(Y.c.ρq_liq, Y.c.ρ), dt)
+    @. ᶜSqᵢᵐ = limit_sink(ᶜSqᵢᵐ, specific(Y.c.ρq_ice, Y.c.ρ), dt)
+    @. ᶜSqᵣᵐ = limit_sink(ᶜSqᵣᵐ, specific(Y.c.ρq_rai, Y.c.ρ), dt)
+    @. ᶜSqₛᵐ = limit_sink(ᶜSqₛᵐ, specific(Y.c.ρq_sno, Y.c.ρ), dt)
+    set_precipitation_surface_fluxes!(Y, p, mm)
+    return nothing
+end
+
+# 2M: lightweight refresh only — surface fluxes.
+function update_implicit_microphysics_cache!(
+    Y, p,
+    mm::NonEquilibriumMicrophysics2M,
     turbconv_model,
 )
     set_precipitation_surface_fluxes!(Y, p, mm)
