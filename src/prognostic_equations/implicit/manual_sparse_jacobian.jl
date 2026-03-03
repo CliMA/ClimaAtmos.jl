@@ -1435,51 +1435,23 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
     if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         (; ᶜmp_derivative) = p.precomputed
 
-        # Cloud condensate (q_lcl, q_icl): use BMT grid-mean derivatives
-        # (dominated by the condensation/deposition term -1/τ_relax, which
-        # is independent of the SGS distribution)
-        cloud_1m_deriv_tracers = (
+        # Cloud condensate (q_lcl, q_icl) and precipitation (q_rai, q_sno):
+        # use quadrature-integrated BMT self-derivatives ∂S/∂q stored in
+        # ᶜmp_derivative.  These are always ≤ 0, giving a strictly stabilising
+        # diagonal, and are consistent with the SGS-quadrature-integrated
+        # tendencies (∂<S>/∂q = <∂S/∂q> since q_rai, q_sno are not perturbed).
+        all_1m_deriv_tracers = (
             (@name(c.ρq_liq), ᶜmp_derivative.∂tendency_∂q_lcl),
             (@name(c.ρq_ice), ᶜmp_derivative.∂tendency_∂q_icl),
+            (@name(c.ρq_rai), ᶜmp_derivative.∂tendency_∂q_rai),
+            (@name(c.ρq_sno), ᶜmp_derivative.∂tendency_∂q_sno),
         )
         MatrixFields.unrolled_foreach(
-            cloud_1m_deriv_tracers,
+            all_1m_deriv_tracers,
         ) do (ρχ_name, ᶜ∂S∂q)
             MatrixFields.has_field(Y, ρχ_name) || return
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
             @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
-        end
-
-        # Precipitation (q_rai, q_sno): use S/q from quadrature-integrated
-        # tendencies. This makes the Jacobian consistent with the SGS quadrature
-        # used in the implicit tendency, preventing Newton solver divergence
-        # when the SGS distribution differs from the grid mean.
-        if p.atmos.turbconv_model isa PrognosticEDMFX
-            # Environment quadrature tendencies 
-            (; ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰) = p.precomputed
-            precip_1m_sq_tracers = (
-                (@name(c.ρq_rai), ᶜSqᵣᵐ⁰, Y.c.ρq_rai),
-                (@name(c.ρq_sno), ᶜSqₛᵐ⁰, Y.c.ρq_sno),
-            )
-        else
-            # Grid-mean quadrature tendencies
-            (; ᶜSqᵣᵐ, ᶜSqₛᵐ) = p.precomputed
-            precip_1m_sq_tracers = (
-                (@name(c.ρq_rai), ᶜSqᵣᵐ, Y.c.ρq_rai),
-                (@name(c.ρq_sno), ᶜSqₛᵐ, Y.c.ρq_sno),
-            )
-        end
-        MatrixFields.unrolled_foreach(
-            precip_1m_sq_tracers,
-        ) do (ρχ_name, ᶜS, ᶜρχ)
-            MatrixFields.has_field(Y, ρχ_name) || return
-            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
-            # S/q approximation: ∂(dq/dt)/∂q ≈ (dq/dt) / q
-            # Uses the full derivative (including source terms) for an accurate
-            # Newton linearization consistent with the quadrature tendencies.
-            @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(
-                _jac_coeff_from_ratio(ᶜS, ᶜρχ, ᶜρ),
-            )
         end
     end
 
@@ -1572,23 +1544,23 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
                 @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
             end
 
-            # Precipitation (q_rai, q_sno): S/q computed inline using frozen
-            # tendencies and the current iterate.  Matches grid-mean treatment.
-            (; ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs) = p.precomputed
-            sgs_precip_sq_tracers = (
-                (@name(c.sgsʲs.:(1).q_rai), ᶜSqᵣᵐʲs.:(1), Y.c.sgsʲs.:(1).q_rai),
-                (@name(c.sgsʲs.:(1).q_sno), ᶜSqₛᵐʲs.:(1), Y.c.sgsʲs.:(1).q_sno),
+            # Precipitation (q_rai, q_sno): BMT analytical derivatives
+            # precomputed per updraft. Same pattern as cloud condensates above.
+            (; ᶜ∂Sqᵣʲs, ᶜ∂Sqₛʲs) = p.precomputed
+            sgs_precip_deriv_tracers = (
+                (@name(c.sgsʲs.:(1).q_rai), ᶜ∂Sqᵣʲs.:(1)),
+                (@name(c.sgsʲs.:(1).q_sno), ᶜ∂Sqₛʲs.:(1)),
             )
             MatrixFields.unrolled_foreach(
-                sgs_precip_sq_tracers,
-            ) do (q_name, ᶜS, ᶜq)
+                sgs_precip_deriv_tracers,
+            ) do (q_name, ᶜ∂S∂q)
                 MatrixFields.has_field(Y, q_name) || return
                 ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
                 if !use_derivative(sgs_advection_flag)
                     @. ∂ᶜq_err_∂ᶜq =
                         zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
                 end
-                @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(_jac_coeff(ᶜS, ᶜq))
+                @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
             end
         end
 

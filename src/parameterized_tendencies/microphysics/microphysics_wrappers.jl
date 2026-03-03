@@ -719,6 +719,121 @@ end
 end
 
 """
+    MicrophysicsDerivativeEvaluator
+
+GPU-safe functor for computing 1-moment microphysics tendency self-derivatives
+`∂S/∂q` at each SGS quadrature point.  Identical to `MicrophysicsEvaluator` in
+struct layout and condensate diagnosis; differs only in that the final call is
+`BMT.bulk_microphysics_derivatives` rather than `BMT.bulk_microphysics_tendencies`.
+
+Integrating this evaluator over the SGS distribution via `integrate_over_sgs`
+yields quadrature-consistent derivatives that match the quadrature-integrated
+tendencies — a property the grid-mean-only derivative cannot provide.
+"""
+struct MicrophysicsDerivativeEvaluator{S, MP, TPS, FT, Args <: Tuple}
+    scheme::S
+    mp::MP
+    tps::TPS
+    ρ::FT
+    T_mean::FT
+    q_tot_mean::FT
+    q_lcl_mean::FT
+    q_icl_mean::FT
+    q_rai::FT
+    q_sno::FT
+    q_cond_mean::FT
+    q_sat_mean::FT
+    excess_mean::FT
+    args::Args
+end
+
+@inline function (eval::MicrophysicsDerivativeEvaluator)(T_hat, q_tot_hat)
+    FT = typeof(eval.ρ)
+
+    # Condensate diagnosis — identical to MicrophysicsEvaluator
+    q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
+    excess_hat = q_tot_hat - q_sat_hat
+    bias = eval.q_cond_mean - max(FT(0), eval.excess_mean)
+    q_cond_hat = max(FT(0), excess_hat + bias)
+
+    λ = TD.liquid_fraction(eval.tps, T_hat, eval.q_lcl_mean, eval.q_icl_mean)
+
+    has_grid_mean_condensate = eval.q_cond_mean > FT(0)
+    scale = ifelse(
+        has_grid_mean_condensate,
+        q_cond_hat / max(eval.q_cond_mean, ϵ_numerics(FT)),
+        FT(1),
+    )
+
+    q_lcl_hat = max(FT(0), ifelse(has_grid_mean_condensate, eval.q_lcl_mean * scale, λ * q_cond_hat))
+    q_icl_hat = max(FT(0), ifelse(has_grid_mean_condensate, eval.q_icl_mean * scale, (FT(1) - λ) * q_cond_hat))
+    q_tot_hat = max(FT(0), q_tot_hat)
+
+    # Derivatives rather than tendencies — only change vs MicrophysicsEvaluator
+    return BMT.bulk_microphysics_derivatives(
+        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat,
+        q_tot_hat, q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
+        eval.args...,
+    )
+end
+
+"""
+    microphysics_derivatives_quadrature(scheme, SG_quad, mp, tps,
+        ρ, p_c, T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+        T′T′, q′q′, corr_Tq, args...)
+
+SGS-quadrature-integrated microphysics self-derivatives `∂S/∂q`.
+
+Parallel to `microphysics_tendencies_quadrature` but integrates
+`BMT.bulk_microphysics_derivatives` instead of `BMT.bulk_microphysics_tendencies`,
+using the same condensate diagnosis at each quadrature point.
+
+Returns a `NamedTuple` with fields:
+- `∂tendency_∂q_lcl`, `∂tendency_∂q_icl`: cloud condensate self-derivatives [1/s]
+- `∂tendency_∂q_rai`, `∂tendency_∂q_sno`: precipitation self-derivatives [1/s]
+
+These are used as the diagonal Jacobian entries for the implicit microphysics
+solve, replacing the S/q approximation for precipitation.
+"""
+@inline function microphysics_derivatives_quadrature(
+    scheme,
+    SG_quad,
+    mp, tps,
+    ρ, p_c,
+    T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+    T′T′, q′q′, corr_Tq,
+    args...,
+)
+    q_lcl_safe = max(0, q_lcl_mean)
+    q_icl_safe = max(0, q_icl_mean)
+    q_rai_safe = max(0, q_rai)
+    q_sno_safe = max(0, q_sno)
+
+    # Fast path: GridMeanSGS evaluates directly at the grid mean
+    if SG_quad isa GridMeanSGS ||
+       (SG_quad isa SGSQuadrature && SG_quad.dist isa GridMeanSGS)
+        return BMT.bulk_microphysics_derivatives(
+            scheme, mp, tps, ρ, T_mean,
+            q_tot_mean, q_lcl_safe, q_icl_safe, q_rai_safe, q_sno_safe,
+            args...,
+        )
+    end
+
+    q_cond_mean = q_lcl_safe + q_icl_safe
+    q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
+    excess_mean = q_tot_mean - q_sat_mean
+
+    evaluator = MicrophysicsDerivativeEvaluator(
+        scheme, mp, tps, ρ,
+        T_mean, q_tot_mean, q_lcl_safe, q_icl_safe, q_rai_safe, q_sno_safe,
+        q_cond_mean, q_sat_mean, excess_mean,
+        args,
+    )
+
+    return integrate_over_sgs(evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq)
+end
+
+"""
     microphysics_tendencies_quadrature_2m(...)
 
 SGS quadrature integration for Microphysics2Moment (warm rain only).
