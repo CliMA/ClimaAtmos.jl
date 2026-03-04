@@ -1,4 +1,4 @@
-320
+321
 
 # **README**
 #
@@ -21,12 +21,15 @@
 
 #=
 
-320
-- Port implicit microphysics to main: implicit IMEX timestepping for
-  microphysics tendencies, Jacobian diagonal entries, surface precipitation
-  tendency, relaxed tendency limiters (n_sink=1, temperature limiter removed).
+321
+- Implicit IMEX timestepping formicrophysics tendencies, Jacobian diagonal entries, surface precipitation
+  tendency.
 - Change default `sgs_distribution` to `lognormal`. This affects
   SGS quadrature sampling of specific humidity for microphysics tendencies.
+
+320
+- PEDMF: solve sgs u₃ implicit equation first and then use the solution to converge other tracers in 
+  one Newton iteration. 
 
 319
 - Clip divergence in detrainment
