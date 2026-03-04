@@ -183,7 +183,6 @@ function precomputed_quantities(Y, atmos)
         precipitation_quantities = (;
             ᶜS_ρq_tot = similar(Y.c, FT),
             ᶜS_ρe_tot = similar(Y.c, FT),
-            ᶜ∂Sq_tot = similar(Y.c, FT),
             ᶜmp_tendency = similar(Y.c,
                 @NamedTuple{dq_tot_dt::FT, e_int_precip::FT}),
         )

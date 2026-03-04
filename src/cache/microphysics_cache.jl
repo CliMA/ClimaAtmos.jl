@@ -760,14 +760,10 @@ function update_implicit_microphysics_cache!(
     _,
 )
     (; dt) = p
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜmp_tendency, ᶜ∂Sq_tot) = p.precomputed
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot, ᶜmp_tendency) = p.precomputed
     (; ᶜΦ) = p.core
-    # No limit_sink needed: the S/q Jacobian naturally suppresses tendencies
-    # as q→0, and limiting introduces discontinuities that hurt Newton convergence.
     @. ᶜS_ρq_tot = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
     @. ᶜS_ρe_tot = ᶜS_ρq_tot * (ᶜmp_tendency.e_int_precip + ᶜΦ)
-    # Pre-compute Jacobian coefficient S/|q| for zero-alloc Wfact read.
-    @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot)
     set_precipitation_surface_fluxes!(
         Y, p,
         EquilibriumMicrophysics0M(),
@@ -813,8 +809,7 @@ function update_implicit_microphysics_cache!(
                 ᶜΦ,
             )
     end
-    (; ᶜ∂Sq_tot) = p.precomputed
-    @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot)
+
     set_precipitation_surface_fluxes!(Y, p, EquilibriumMicrophysics0M())
     return nothing
 end
@@ -859,8 +854,7 @@ function update_implicit_microphysics_cache!(
                 ᶜΦ,
             )
     end
-    (; ᶜ∂Sq_tot) = p.precomputed
-    @. ᶜ∂Sq_tot = _jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot)
+
     set_precipitation_surface_fluxes!(
         Y, p,
         EquilibriumMicrophysics0M(),
@@ -868,23 +862,13 @@ function update_implicit_microphysics_cache!(
     return nothing
 end
 
-# 1M: re-apply the implicit sink limiter each Newton iteration using the
-# current iterate q values.  The specific tendencies (ᶜSqₗᵐ, etc.) are
-# frozen from the explicit stage for performance (avoids re-running SGS
-# quadrature), but density-weighted sinks can drive q negative if the Newton
-# solve updates q from vertical transport.  Clamping against the current q
-# prevents this without recomputing the full tendency.
+# 1M: lightweight refresh only — surface fluxes.
+# Specific tendencies (ᶜSqₗᵐ, etc.) are frozen from the explicit stage.
 function update_implicit_microphysics_cache!(
     Y, p,
     mm::NonEquilibriumMicrophysics1M,
     turbconv_model,
 )
-    (; ᶜSqₗᵐ, ᶜSqᵢᵐ, ᶜSqᵣᵐ, ᶜSqₛᵐ) = p.precomputed
-    (; dt) = p
-    @. ᶜSqₗᵐ = limit_sink(ᶜSqₗᵐ, specific(Y.c.ρq_liq, Y.c.ρ), dt)
-    @. ᶜSqᵢᵐ = limit_sink(ᶜSqᵢᵐ, specific(Y.c.ρq_ice, Y.c.ρ), dt)
-    @. ᶜSqᵣᵐ = limit_sink(ᶜSqᵣᵐ, specific(Y.c.ρq_rai, Y.c.ρ), dt)
-    @. ᶜSqₛᵐ = limit_sink(ᶜSqₛᵐ, specific(Y.c.ρq_sno, Y.c.ρ), dt)
     set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
 end

@@ -60,7 +60,7 @@ correct Jacobian diagonal entry.
     broadcast fusion barriers (e.g., through lazy fields).
 """
 @inline function add_microphysics_jacobian_entry!(∂, dtγ, Sq_field, q_field)
-    @. ∂ += dtγ * DiagonalMatrixRow(_jac_coeff(Sq_field, q_field))
+    @. ∂ += $(dtγ) * DiagonalMatrixRow(_jac_coeff(Sq_field, q_field))
     return nothing
 end
 
@@ -79,6 +79,6 @@ value `q = ρq / ρ`, giving the Jacobian diagonal `Sq / |q|`.
     have only one method for this function. 
 """
 @inline function add_microphysics_jacobian_entry!(∂, dtγ, Sq, ρq, ρ)
-    @. ∂ += dtγ * DiagonalMatrixRow(_jac_coeff_from_ratio(Sq, ρq, ρ))
+    @. ∂ += $(dtγ) * DiagonalMatrixRow(_jac_coeff_from_ratio(Sq, ρq, ρ))
     return nothing
 end

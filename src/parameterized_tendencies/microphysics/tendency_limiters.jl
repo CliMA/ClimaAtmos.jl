@@ -175,7 +175,7 @@ end
     ᶜmp_tendency, ::Implicit, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
 )
     @. ᶜmp_tendency = _implicit_1m_tendency_limits(
-        ᶜmp_tendency, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+        ᶜmp_tendency, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
     )
 end
 @inline apply_1m_tendency_limits!(ᶜmp_tendency, ::Nothing, args...) = nothing
@@ -239,13 +239,15 @@ Two layers of limiting are applied:
     )
 
     # Combined temperature-rate limiter:
+    # Condensate tendencies are expressed as possible temperature changes (although they 
+    # may not be realized).
     # A single combined scale factor preserves the ratio between condensate species,
     # preventing mass-energy decoupling that can drive temperatures negative.
     Lv_over_cp = TD.Parameters.LH_v0(tps) / TD.Parameters.cp_d(tps)
     Ls_over_cp = TD.Parameters.LH_s0(tps) / TD.Parameters.cp_d(tps)
 
     # Max 5 K temperature change per timestep 
-    # TODO: arbitrary choice
+    # TODO: arbitrary choice; remove or make very large once microphysics is implicit
     dT_dt_max = FT(5) / dt
 
     dT_dt = Lv_over_cp * dq_lcl_dt + Ls_over_cp * dq_icl_dt
@@ -260,21 +262,52 @@ Two layers of limiting are applied:
 end
 
 """
-    _implicit_1m_tendency_limits(mp_tendency, q_liq, q_ice, q_rai, q_sno, dt)
+    _implicit_1m_tendency_limits(mp_tendency, q_tot, q_liq, q_ice, q_rai, q_sno, dt)
 
 Pointwise implicit-mode 1M tendency limiting (called inside broadcast).
 
-Applies sink-only limiting via `limit_sink` to prevent each species from
-going negative, without capping sources or applying temperature-rate limits
-that would introduce discontinuities in the Newton solver's tendency surface.
+Applies bidirectional limiting via `tendency_limiter` to prevent each species
+from going negative **and** to cap sources against their cross-species donor
+pools. Without these limits, cross-species processes can overwhelm the
+energy budget and drive temperatures negative on coarse grids.
+
+Applied once during the initial tendency computation in
+`set_microphysics_tendency_cache!`; **not** re-applied inside Newton iterations.
 """
-@inline function _implicit_1m_tendency_limits(mp_tendency, q_liq, q_ice, q_rai, q_sno, dt)
+@inline function _implicit_1m_tendency_limits(
+    mp_tendency, q_tot, q_liq, q_ice, q_rai, q_sno, dt,
+)
+    q_vap = max(zero(q_tot), q_tot - q_liq - q_ice - q_rai - q_sno)
+
     n_sink = 3
-    return (
-        dq_lcl_dt = limit_sink(mp_tendency.dq_lcl_dt, q_liq, dt, n_sink),
-        dq_icl_dt = limit_sink(mp_tendency.dq_icl_dt, q_ice, dt, n_sink),
-        dq_rai_dt = limit_sink(mp_tendency.dq_rai_dt, q_rai, dt, n_sink),
-        dq_sno_dt = limit_sink(mp_tendency.dq_sno_dt, q_sno, dt, n_sink),
+    n_source = 10
+
+    dq_lcl_dt = tendency_limiter(
+        mp_tendency.dq_lcl_dt,
+        limit(q_vap + q_ice, dt, n_source),
+        limit(q_liq, dt, n_sink),
+    )
+    dq_icl_dt = tendency_limiter(
+        mp_tendency.dq_icl_dt,
+        limit(q_vap + q_liq, dt, n_source),
+        limit(q_ice, dt, n_sink),
+    )
+    dq_rai_dt = tendency_limiter(
+        mp_tendency.dq_rai_dt,
+        limit(q_liq + q_sno, dt, n_source),
+        limit(q_rai, dt, n_sink),
+    )
+    dq_sno_dt = tendency_limiter(
+        mp_tendency.dq_sno_dt,
+        limit(q_ice, dt, n_source),
+        limit(q_sno, dt, n_sink),
+    )
+
+    return (;
+        dq_lcl_dt,
+        dq_icl_dt,
+        dq_rai_dt,
+        dq_sno_dt,
     )
 end
 

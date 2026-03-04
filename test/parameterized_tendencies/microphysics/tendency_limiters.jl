@@ -313,23 +313,23 @@ import ClimaAtmos:
         FT = Float64
         dt = FT(600)
 
-        @testset "sources pass through unchanged" begin
+        @testset "small sources within pool budget pass through" begin
             mp_tendency = (
-                dq_lcl_dt = FT(0.001),
-                dq_icl_dt = FT(0.0005),
-                dq_rai_dt = FT(0.002),
-                dq_sno_dt = FT(0.001),
+                dq_lcl_dt = FT(1e-7),
+                dq_icl_dt = FT(5e-8),
+                dq_rai_dt = FT(2e-7),
+                dq_sno_dt = FT(1e-7),
             )
             q_liq = FT(0.01)
             q_ice = FT(0.01)
             q_rai = FT(0.01)
             q_sno = FT(0.01)
+            q_tot = FT(0.05)
 
             limited = _implicit_1m_tendency_limits(
-                mp_tendency, q_liq, q_ice, q_rai, q_sno, dt,
+                mp_tendency, q_tot, q_liq, q_ice, q_rai, q_sno, dt,
             )
 
-            # All sources → pass through unchanged
             @test limited.dq_lcl_dt == mp_tendency.dq_lcl_dt
             @test limited.dq_icl_dt == mp_tendency.dq_icl_dt
             @test limited.dq_rai_dt == mp_tendency.dq_rai_dt
@@ -338,42 +338,33 @@ import ClimaAtmos:
 
         @testset "sinks are limited to prevent depletion" begin
             mp_tendency = (
-                dq_lcl_dt = FT(0.001),     # Source — should pass through
-                dq_icl_dt = FT(-0.0005),   # Small sink — within budget
-                dq_rai_dt = FT(-0.01),     # Large sink — should be capped
-                dq_sno_dt = FT(-0.005),    # Medium sink
+                dq_lcl_dt = FT(1e-7),
+                dq_icl_dt = FT(-0.0005),
+                dq_rai_dt = FT(-0.01),
+                dq_sno_dt = FT(-0.005),
             )
             q_liq = FT(0.01)
             q_ice = FT(0.01)
-            q_rai = FT(0.0001)  # Very small amount → forces limiting
+            q_rai = FT(0.0001)
             q_sno = FT(0.0002)
+            q_tot = FT(0.03)
 
             limited = _implicit_1m_tendency_limits(
-                mp_tendency, q_liq, q_ice, q_rai, q_sno, dt,
+                mp_tendency, q_tot, q_liq, q_ice, q_rai, q_sno, dt,
             )
 
-            # Source passes through
-            @test limited.dq_lcl_dt == mp_tendency.dq_lcl_dt
-
-            # Large rain sink should be clamped
-            # n_sink=3, budget = 0.0001 / (600*3) ≈ 5.56e-8
             @test limited.dq_rai_dt < 0.0
             @test abs(limited.dq_rai_dt) < abs(mp_tendency.dq_rai_dt)
             @test abs(limited.dq_rai_dt) ≈ q_rai / (dt * 3)
 
-            # Snow sink should also be clamped
             @test limited.dq_sno_dt < 0.0
             @test abs(limited.dq_sno_dt) < abs(mp_tendency.dq_sno_dt)
         end
 
-        @testset "no temperature-rate limiting applied" begin
-            # Unlike explicit mode, implicit mode should NOT apply
-            # temperature-rate limiting — verify by using extreme
-            # cloud tendencies that would trigger the temperature limiter
-            # in explicit mode.
+        @testset "sources are limited against donor pools" begin
             mp_tendency = (
-                dq_lcl_dt = FT(0.1),    # Huge source
-                dq_icl_dt = FT(0.1),    # Huge source
+                dq_lcl_dt = FT(0.1),
+                dq_icl_dt = FT(0.1),
                 dq_rai_dt = FT(0.0),
                 dq_sno_dt = FT(0.0),
             )
@@ -381,14 +372,14 @@ import ClimaAtmos:
             q_ice = FT(0.01)
             q_rai = FT(0.01)
             q_sno = FT(0.01)
+            q_tot = FT(0.05)
 
             limited = _implicit_1m_tendency_limits(
-                mp_tendency, q_liq, q_ice, q_rai, q_sno, dt,
+                mp_tendency, q_tot, q_liq, q_ice, q_rai, q_sno, dt,
             )
 
-            # Sources pass through — no temperature-rate rescaling
-            @test limited.dq_lcl_dt == mp_tendency.dq_lcl_dt
-            @test limited.dq_icl_dt == mp_tendency.dq_icl_dt
+            @test limited.dq_lcl_dt > 0.0
+            @test limited.dq_lcl_dt < mp_tendency.dq_lcl_dt
         end
     end
 end

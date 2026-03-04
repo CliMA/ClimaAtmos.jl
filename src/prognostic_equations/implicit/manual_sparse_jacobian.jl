@@ -528,14 +528,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
 
     ᶜθ_v = p.scratch.ᶜtemp_scalar_3
-    # Guard against negative pressure during Newton iterations:
-    # the implicit solver can temporarily produce unphysical states where
-    # ᶜp < 0, causing DomainError in log(p) inside exner_given_pressure.
-    FT = eltype(Y)
-    ᶜp_safe = p.scratch.ᶜtemp_scalar_4
-    @. ᶜp_safe = max(ᶜp, eps(FT))
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp_safe, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
-    ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp_safe))
+    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration: 
     #              grad(p) / ρ + grad(Φ)  =  cp_d * θ_v * grad(Π) + grad(Φ).
     # Here below, we use the old formulation of (grad(Φ) + grad(p) / ρ).
@@ -1421,12 +1415,10 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
     # 0M microphysics: diagonal entry for ρq_tot
     if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
         if MatrixFields.has_field(Y, @name(c.ρq_tot))
-            # Read the pre-computed S/|q| Jacobian coefficient (computed in
-            # update_implicit_microphysics_cache!) to avoid inline _jac_coeff
-            # evaluation inside the broadcast, which causes heap allocations.
-            (; ᶜ∂Sq_tot) = p.precomputed
+            (; ᶜS_ρq_tot) = p.precomputed
             ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
-            @. ∂ᶜρq_tot_err_∂ᶜρq_tot += dtγ * DiagonalMatrixRow(ᶜ∂Sq_tot)
+            @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
+                dtγ * DiagonalMatrixRow(_jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot))
         end
     end
 
