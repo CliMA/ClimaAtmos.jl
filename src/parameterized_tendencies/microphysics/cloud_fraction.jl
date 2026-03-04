@@ -226,6 +226,21 @@ Cloud fraction ∈ [0, 1]
     cf_l = tanh(coeff * Q_hat_l)
     cf_i = tanh(coeff * Q_hat_i)
 
+    # TODO: Implement a different cloud fraction when SGS distribution of q_tot is 
+    # lognormal and dispatch over SGS distribution. E.g., use
+    # Q_hat = q_cond / sig_s
+    
+    # Coefficient of variation (protect against division by zero); needs q_tot as 
+    # additional input
+    # C_v = sig_s / max(q_tot, ϵ_numerics(FT)) 
+    
+    # As C_v increases (more skewed lognormal tail), CF should be lower. 
+    # This α dictates how fast CF grows with normalized condensate.
+    # Note: The exact functional form α = f(C_v) requires tuning
+    # via offline root-finding against the lognormal incomplete first moment!
+    # α = FT(1) / (FT(1) + C_v)  # Example heuristic
+    # return FT(1) - exp(-α * Q_hat)
+
     # --- 5. Maximum overlap ---
     cf = max(cf_l, cf_i)
 
