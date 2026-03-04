@@ -88,9 +88,13 @@ function _allocs_cloud_fraction_sd(thp)
     FT = Float64
     T = FT(280.0)
     ρ = FT(1.0)
-    CA.compute_cloud_fraction_sd(thp, T, ρ, FT(1e-3), FT(0), FT(1), FT(1e-6), FT(0))
+    CA.compute_cloud_fraction_sd(
+        thp, T, ρ, FT(0.011), FT(1e-3), FT(0), FT(1), FT(1e-6), FT(0), FT(1),
+        CA.GaussianSGS(),
+    )
     return @allocated CA.compute_cloud_fraction_sd(
-        thp, T, ρ, FT(1e-3), FT(0), FT(1), FT(1e-6), FT(0),
+        thp, T, ρ, FT(0.011), FT(1e-3), FT(0), FT(1), FT(1e-6), FT(0), FT(1),
+        CA.GaussianSGS(),
     )
 end
 

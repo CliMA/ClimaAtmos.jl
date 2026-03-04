@@ -266,13 +266,16 @@ end
 
 Pointwise implicit-mode 1M tendency limiting (called inside broadcast).
 
-Applies bidirectional limiting via `tendency_limiter` to prevent each species
-from going negative **and** to cap sources against their cross-species donor
-pools. Without these limits, cross-species processes can overwhelm the
-energy budget and drive temperatures negative on coarse grids.
+Applies sink-only limiting via `limit_sink` to prevent each species
+from going negative. Unlike the explicit limiters, implicit sources are
+not hard-capped against cross-species donor pools, as this creates a
+mathematical discontinuity that breaks Newton solver convergence.
 
 Applied once during the initial tendency computation in
 `set_microphysics_tendency_cache!`; **not** re-applied inside Newton iterations.
+
+TODO: make this function no-op once microphysics is fully implicit and stable, to 
+avoid physically inconsistent limiting of sinks (without limits on sources).
 """
 @inline function _implicit_1m_tendency_limits(
     mp_tendency, q_tot, q_liq, q_ice, q_rai, q_sno, dt,
@@ -362,4 +365,3 @@ end
         db_rim_dt = mp_tendency.db_rim_dt,
     )
 end
-

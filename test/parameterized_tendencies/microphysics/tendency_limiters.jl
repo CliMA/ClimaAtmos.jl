@@ -221,8 +221,10 @@ import ClimaAtmos:
         end
 
         @testset "type stability" begin
-            @test eltype(limit_sink(Float32(-0.01), Float32(0.001), Float32(1.0))) == Float32
-            @test eltype(limit_sink(Float64(-0.01), Float64(0.001), Float64(1.0))) == Float64
+            @test eltype(limit_sink(Float32(-0.01), Float32(0.001), Float32(1.0))) ==
+                  Float32
+            @test eltype(limit_sink(Float64(-0.01), Float64(0.001), Float64(1.0))) ==
+                  Float64
         end
     end
 
