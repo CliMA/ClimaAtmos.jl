@@ -222,7 +222,7 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :ghost_buffer,
             # Computed in tendencies (which are not computed in this case)
             :hyperdiff,
-            # Scratch-like precomputed field for microphysics (uninitialized until tendencies run)
+            # Precomputed scratch fields for microphysics (uninitialized until tendencies run)
             :ᶜmp_tendency,
             # rc is some CUDA/CuArray internal object that we don't care about
             :rc,

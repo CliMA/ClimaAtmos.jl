@@ -13,6 +13,35 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     # TODO: Needs to be updated to use the new microphysics 
     # tendency function with quadrature if implicit_microphysics is true
 
+    if p.atmos.microphysics_tendency_timestepping == Implicit()
+        edmfx_microphysics_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.turbconv_model,
+            p.atmos.microphysics_model,
+        )
+        microphysics_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+        # Surface water/energy deposition from precipitation (implicit path).
+        # The explicit counterpart is called from remaining_tendency!.
+        surface_precipitation_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.surface_model,
+            p.atmos.microphysics_model,
+        )
+    end
+
     if p.atmos.sgs_adv_mode == Implicit()
         edmfx_sgs_vertical_advection_tendency!(
             Yₜ,

@@ -264,9 +264,34 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) => FT(-1) * I,
             )
         else
+            # When implicit microphysics is active, some SGS scalar entries
+            # need a DiagonalRow so that update_microphysics_jacobian! can
+            # increment them.  UniformScaling is not incrementable in-place.
+            needs_implicit_micro =
+                atmos.microphysics_tendency_timestepping == Implicit()
+            # 0M EDMF writes to q_tot and ρa; 1M EDMF writes to
+            # condensate species (q_liq, q_ice, q_rai, q_sno).
+            sgs_micro_names =
+                needs_implicit_micro ?
+                (
+                    (
+                        atmos.microphysics_model isa EquilibriumMicrophysics0M ?
+                        (
+                            @name(c.sgsʲs.:(1).q_tot),
+                            @name(c.sgsʲs.:(1).ρa),
+                        ) : ()
+                    )...,
+                    (
+                        atmos.microphysics_model isa NonEquilibriumMicrophysics ?
+                        sgs_condensate_mass_names : ()
+                    )...,
+                ) : ()
             (
                 MatrixFields.unrolled_map(
-                    name -> (name, name) => FT(-1) * I,
+                    name ->
+                        (name, name) =>
+                            name in sgs_micro_names ?
+                            similar(Y.c, DiagonalRow) : FT(-1) * I,
                     available_sgs_scalar_names,
                 )...,
                 (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) => FT(-1) * I,
@@ -1365,8 +1390,207 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         end
     end
 
+    # Microphysics Jacobian entries (extracted to keep this function small).
+    update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
+
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
     zero_velocity_jacobian!(matrix, Y, p, t)
+end
+
+"""
+    update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
+
+Add diagonal Jacobian entries for implicit microphysics tendencies (0M, 1M, 2M,
+and EDMF updraft species).
+
+Extracted from `update_jacobian!` to keep the parent function below Julia's
+optimization threshold — large functions cause the compiler to miss inlining
+opportunities in broadcast expressions, resulting in heap allocations.
+"""
+function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
+    p.atmos.microphysics_tendency_timestepping == Implicit() || return nothing
+
+    ᶜρ = Y.c.ρ
+
+    # 0M microphysics: diagonal entry for ρq_tot
+    if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
+        if MatrixFields.has_field(Y, @name(c.ρq_tot))
+            (; ᶜS_ρq_tot) = p.precomputed
+            ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+            @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
+                dtγ * DiagonalMatrixRow(_jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot))
+        end
+    end
+
+    # 1M microphysics: diagonal entries for ρq_liq, ρq_ice, ρq_rai, ρq_sno
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M
+        (; ᶜmp_derivative) = p.precomputed
+
+        # Cloud condensate (q_lcl, q_icl): use BMT grid-mean derivatives
+        # (dominated by the condensation/deposition term -1/τ_relax, which
+        # is independent of the SGS distribution)
+        cloud_1m_deriv_tracers = (
+            (@name(c.ρq_liq), ᶜmp_derivative.∂tendency_∂q_lcl),
+            (@name(c.ρq_ice), ᶜmp_derivative.∂tendency_∂q_icl),
+        )
+        MatrixFields.unrolled_foreach(
+            cloud_1m_deriv_tracers,
+        ) do (ρχ_name, ᶜ∂S∂q)
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+            @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
+        end
+
+        # Precipitation (q_rai, q_sno): use S/q from quadrature-integrated
+        # tendencies. This makes the Jacobian consistent with the SGS quadrature
+        # used in the implicit tendency, preventing Newton solver divergence
+        # when the SGS distribution differs from the grid mean.
+        if p.atmos.turbconv_model isa PrognosticEDMFX
+            # Environment quadrature tendencies 
+            (; ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰) = p.precomputed
+            precip_1m_sq_tracers = (
+                (@name(c.ρq_rai), ᶜSqᵣᵐ⁰, Y.c.ρq_rai),
+                (@name(c.ρq_sno), ᶜSqₛᵐ⁰, Y.c.ρq_sno),
+            )
+        else
+            # Grid-mean quadrature tendencies
+            (; ᶜSqᵣᵐ, ᶜSqₛᵐ) = p.precomputed
+            precip_1m_sq_tracers = (
+                (@name(c.ρq_rai), ᶜSqᵣᵐ, Y.c.ρq_rai),
+                (@name(c.ρq_sno), ᶜSqₛᵐ, Y.c.ρq_sno),
+            )
+        end
+        MatrixFields.unrolled_foreach(
+            precip_1m_sq_tracers,
+        ) do (ρχ_name, ᶜS, ᶜρχ)
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+            # S/q approximation: ∂(dq/dt)/∂q ≈ (dq/dt) / q
+            # Uses the full derivative (including source terms) for an accurate
+            # Newton linearization consistent with the quadrature tendencies.
+            @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(
+                _jac_coeff_from_ratio(ᶜS, ᶜρχ, ᶜρ),
+            )
+        end
+    end
+
+    # 2M microphysics: diagonal entries for ρq_liq, ρq_rai, ρn_liq, ρn_rai
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
+        (; ᶜmp_derivative) = p.precomputed
+
+        # Cloud fields: use BMT grid-mean derivatives
+        cloud_2m_deriv_tracers = (
+            (@name(c.ρq_liq), ᶜmp_derivative.∂tendency_∂q_lcl),
+            (@name(c.ρn_liq), ᶜmp_derivative.∂tendency_∂n_lcl),
+        )
+        MatrixFields.unrolled_foreach(
+            cloud_2m_deriv_tracers,
+        ) do (ρχ_name, ᶜ∂S∂q)
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+            @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
+        end
+
+        # Precipitation: use S/q from quadrature-integrated tendencies
+        # _jac_coeff_from_ratio safely returns zero when |q| < ε
+        (; ᶜSqᵣᵐ, ᶜSnᵣᵐ) = p.precomputed
+        precip_2m_sq_tracers = (
+            (@name(c.ρq_rai), ᶜSqᵣᵐ, Y.c.ρq_rai),
+            (@name(c.ρn_rai), ᶜSnᵣᵐ, Y.c.ρn_rai),
+        )
+        MatrixFields.unrolled_foreach(
+            precip_2m_sq_tracers,
+        ) do (ρχ_name, ᶜS, ᶜρχ)
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+            @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(
+                _jac_coeff_from_ratio(ᶜS, ᶜρχ, ᶜρ),
+            )
+        end
+    end
+
+    # EDMF microphysics: diagonal entries for updraft variables
+    if p.atmos.turbconv_model isa PrognosticEDMFX
+
+        # 0M EDMF
+        if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
+            if hasproperty(p.precomputed, :ᶜSqₜᵐʲs)
+                (; ᶜSqₜᵐʲs) = p.precomputed
+                ᶜSq = ᶜSqₜᵐʲs.:(1)
+
+                q_name = @name(c.sgsʲs.:(1).q_tot)
+                if MatrixFields.has_field(Y, q_name)
+                    ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
+                    if !use_derivative(sgs_advection_flag)
+                        @. ∂ᶜq_err_∂ᶜq =
+                            zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
+                    end
+                    add_microphysics_jacobian_entry!(
+                        ∂ᶜq_err_∂ᶜq, dtγ, ᶜSq, Y.c.sgsʲs.:(1).q_tot,
+                    )
+                end
+
+                ρa_name = @name(c.sgsʲs.:(1).ρa)
+                if MatrixFields.has_field(Y, ρa_name)
+                    ∂ᶜρa_err_∂ᶜρa = matrix[ρa_name, ρa_name]
+                    if !use_derivative(sgs_advection_flag)
+                        @. ∂ᶜρa_err_∂ᶜρa =
+                            zero(typeof(∂ᶜρa_err_∂ᶜρa)) - (I,)
+                    end
+                    @. ∂ᶜρa_err_∂ᶜρa += dtγ * DiagonalMatrixRow(ᶜSq)
+                end
+            end
+        end
+
+        # 1M EDMF: diagonal entries for individual condensate species.
+        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M
+            # Cloud (q_liq, q_ice): BMT analytical derivatives precomputed per
+            # updraft.  Same pattern as grid-mean (dominated by −1/τ_relax).
+            (; ᶜ∂Sqₗʲs, ᶜ∂Sqᵢʲs) = p.precomputed
+            sgs_cloud_deriv_tracers = (
+                (@name(c.sgsʲs.:(1).q_liq), ᶜ∂Sqₗʲs.:(1)),
+                (@name(c.sgsʲs.:(1).q_ice), ᶜ∂Sqᵢʲs.:(1)),
+            )
+            MatrixFields.unrolled_foreach(
+                sgs_cloud_deriv_tracers,
+            ) do (q_name, ᶜ∂S∂q)
+                MatrixFields.has_field(Y, q_name) || return
+                ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
+                if !use_derivative(sgs_advection_flag)
+                    @. ∂ᶜq_err_∂ᶜq =
+                        zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
+                end
+                @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(ᶜ∂S∂q)
+            end
+
+            # Precipitation (q_rai, q_sno): S/q computed inline using frozen
+            # tendencies and the current iterate.  Matches grid-mean treatment.
+            (; ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs) = p.precomputed
+            sgs_precip_sq_tracers = (
+                (@name(c.sgsʲs.:(1).q_rai), ᶜSqᵣᵐʲs.:(1), Y.c.sgsʲs.:(1).q_rai),
+                (@name(c.sgsʲs.:(1).q_sno), ᶜSqₛᵐʲs.:(1), Y.c.sgsʲs.:(1).q_sno),
+            )
+            MatrixFields.unrolled_foreach(
+                sgs_precip_sq_tracers,
+            ) do (q_name, ᶜS, ᶜq)
+                MatrixFields.has_field(Y, q_name) || return
+                ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
+                if !use_derivative(sgs_advection_flag)
+                    @. ∂ᶜq_err_∂ᶜq =
+                        zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
+                end
+                @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(_jac_coeff(ᶜS, ᶜq))
+            end
+        end
+
+        # TODO: 2M EDMF updraft Jacobian entries remain to be implemented.
+        # This requires extending the Jacobian sparsity pattern to include
+        # diagonal blocks for updraft n_liq and n_rai species.
+        # Without these entries, 2M microphysics should use explicit
+        # timestepping for stability.
+
+    end
+    return nothing
 end
 
 invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R) =

@@ -22,110 +22,150 @@ import ClimaParams as CP
 
                 T = FT(280.0)
                 ρ = FT(1.0)
+                # For tests we need a nominal q_tot. Let's assume q_tot = q_cond + 0.01
+                q_tot_base = FT(0.01)
 
-                @testset "No condensate → zero cloud fraction" begin
-                    cf = CA.compute_cloud_fraction_sd(
-                        thp, T, ρ,
-                        FT(0), FT(0),         # q_liq, q_ice
-                        FT(1.0), FT(1e-6), FT(0),  # T'T', q'q', T'q'
-                    )
-                    @test cf == FT(0)
-                end
-
-                @testset "Liquid condensate → positive cloud fraction" begin
-                    cf = CA.compute_cloud_fraction_sd(
-                        thp, T, ρ,
-                        FT(1e-3), FT(0),       # q_liq present
-                        FT(1.0), FT(1e-6), FT(0),
-                    )
-                    @test cf > FT(0)
-                    @test cf <= FT(1)
-                end
-
-                @testset "Ice condensate → positive cloud fraction" begin
-                    T_cold = FT(240.0)
-                    cf = CA.compute_cloud_fraction_sd(
-                        thp, T_cold, ρ,
-                        FT(0), FT(1e-3),       # q_ice present
-                        FT(1.0), FT(1e-6), FT(0),
-                    )
-                    @test cf > FT(0)
-                    @test cf <= FT(1)
-                end
-
-                @testset "Large condensate, small variance → cf ≈ 1" begin
-                    cf = CA.compute_cloud_fraction_sd(
-                        thp, T, ρ,
-                        FT(1e-2), FT(0),       # large q_liq
-                        FT(0.01), FT(1e-10), FT(0),  # small variance
-                    )
-                    @test cf > FT(0.99)
-                end
-
-                @testset "Zero variance, nonzero condensate → cf = 1" begin
-                    cf = CA.compute_cloud_fraction_sd(
-                        thp, T, ρ,
-                        FT(1e-3), FT(0),
-                        FT(0), FT(0), FT(0),
-                    )
-                    @test cf > FT(0.99)
-                end
-
-                @testset "Both liquid and ice → max overlap" begin
-                    cf_both = CA.compute_cloud_fraction_sd(
-                        thp, FT(260.0), ρ,
-                        FT(1e-3), FT(5e-4),
-                        FT(1.0), FT(1e-6), FT(0),
-                    )
-                    cf_liq = CA.compute_cloud_fraction_sd(
-                        thp, FT(260.0), ρ,
-                        FT(1e-3), FT(0),
-                        FT(1.0), FT(1e-6), FT(0),
-                    )
-                    # Max overlap: combined cf ≥ liquid-only cf
-                    @test cf_both >= cf_liq
-                end
-
-                @testset "Type stability" begin
-                    cf = CA.compute_cloud_fraction_sd(
-                        thp, T, ρ,
-                        FT(1e-3), FT(0),
-                        FT(1.0), FT(1e-6), FT(0),
-                    )
-                    @test cf isa FT
-                end
-
-                @testset "Cloud fraction increases with T-q correlation" begin
-                    # Physical reasoning: positive corr(T',q') means T and q
-                    # perturbations partially cancel in the saturation deficit
-                    # s = q − q_sat(T).  The PDF width σ_s² = σ_q² + b²σ_T²
-                    # − 2b·corr·σ_T·σ_q shrinks when corr increases (b > 0),
-                    # so Q̂ = q_cond / σ_s grows ⇒ cf = tanh(π/√6·Q̂) grows.
-                    corr_vals = FT[-0.9, -0.6, -0.3, 0.0, 0.3, 0.6, 0.9]
-
-                    # Liquid-only case
-                    cf_liq = [
-                        CA.compute_cloud_fraction_sd(
-                            thp, T, ρ,
-                            FT(1e-3), FT(0),
-                            FT(1.0), FT(1e-6), c,
-                        ) for c in corr_vals
-                    ]
-                    for i in 2:length(cf_liq)
-                        @test cf_liq[i] > cf_liq[i - 1]
+                for sgs_dist in (CA.GaussianSGS(), CA.LogNormalSGS())
+                    @testset "No condensate → zero cloud fraction ($sgs_dist)" begin
+                        cf = CA.compute_cloud_fraction_sd(
+                            thp, T, ρ, q_tot_base,
+                            FT(0), FT(0),              # q_liq, q_ice
+                            FT(1.0), FT(1e-6), FT(0),  # T'T', q'q', T'q'
+                            FT(1), sgs_dist,
+                        )
+                        @test cf == FT(0)
                     end
 
-                    # Ice-only case (cold temperature)
-                    T_cold = FT(240.0)
-                    cf_ice = [
+                    @testset "Liquid condensate → positive cloud fraction ($sgs_dist)" begin
+                        cf = CA.compute_cloud_fraction_sd(
+                            thp, T, ρ, q_tot_base + FT(1e-3),
+                            FT(1e-3), FT(0),           # q_liq present
+                            FT(1.0), FT(1e-6), FT(0),
+                            FT(1), sgs_dist,
+                        )
+                        @test cf > FT(0)
+                        @test cf <= FT(1)
+                    end
+
+                    @testset "Ice condensate → positive cloud fraction ($sgs_dist)" begin
+                        T_cold = FT(240.0)
+                        cf = CA.compute_cloud_fraction_sd(
+                            thp, T_cold, ρ, q_tot_base + FT(1e-3),
+                            FT(0), FT(1e-3),           # q_ice present
+                            FT(1.0), FT(1e-6), FT(0),
+                            FT(1), sgs_dist,
+                        )
+                        @test cf > FT(0)
+                        @test cf <= FT(1)
+                    end
+
+                    @testset "Large condensate, small variance → cf ≈ 1 ($sgs_dist)" begin
+                        cf = CA.compute_cloud_fraction_sd(
+                            thp, T, ρ, q_tot_base + FT(1e-2),
+                            FT(1e-2), FT(0),           # large q_liq
+                            FT(0.01), FT(1e-10), FT(0),# small variance
+                            FT(1), sgs_dist,
+                        )
+                        @test cf > FT(0.99)
+                    end
+
+                    @testset "Zero variance, nonzero condensate → cf = 1 ($sgs_dist)" begin
+                        cf = CA.compute_cloud_fraction_sd(
+                            thp, T, ρ, q_tot_base + FT(1e-3),
+                            FT(1e-3), FT(0),
+                            FT(0), FT(0), FT(0),
+                            FT(1), sgs_dist,
+                        )
+                        @test cf > FT(0.99)
+                    end
+
+                    @testset "Both liquid and ice → max overlap ($sgs_dist)" begin
+                        cf_both = CA.compute_cloud_fraction_sd(
+                            thp, FT(260.0), ρ, q_tot_base + FT(1.5e-3),
+                            FT(1e-3), FT(5e-4),
+                            FT(1.0), FT(1e-6), FT(0),
+                            FT(1), sgs_dist,
+                        )
+                        cf_liq = CA.compute_cloud_fraction_sd(
+                            thp, FT(260.0), ρ, q_tot_base + FT(1.5e-3),
+                            FT(1e-3), FT(0),
+                            FT(1.0), FT(1e-6), FT(0),
+                            FT(1), sgs_dist,
+                        )
+                        # Max overlap: combined cf ≥ liquid-only cf
+                        @test cf_both >= cf_liq
+                    end
+
+                    @testset "Type stability ($sgs_dist)" begin
+                        cf = CA.compute_cloud_fraction_sd(
+                            thp, T, ρ, q_tot_base + FT(1e-3),
+                            FT(1e-3), FT(0),
+                            FT(1.0), FT(1e-6), FT(0),
+                            FT(1), sgs_dist,
+                        )
+                        @test cf isa FT
+                    end
+
+                    @testset "Cloud fraction increases with T-q correlation ($sgs_dist)" begin
+                        # Physical reasoning: positive corr(T',q') means T and q
+                        # perturbations partially cancel in the saturation deficit
+                        # s = q − q_sat(T).  The PDF width σ_s² = σ_q² + b²σ_T²
+                        # − 2b·corr·σ_T·σ_q shrinks when corr increases (b > 0),
+                        # so Q̂ = q_cond / σ_s grows ⇒ cf grows.
+                        corr_vals = FT[-0.9, -0.6, -0.3, 0.0, 0.3, 0.6, 0.9]
+
+                        # Liquid-only case
+                        cf_liq = [
+                            CA.compute_cloud_fraction_sd(
+                                thp, T, ρ, q_tot_base + FT(1e-3),
+                                FT(1e-3), FT(0),
+                                FT(1.0), FT(1e-6), c,
+                                FT(1), sgs_dist,
+                            ) for c in corr_vals
+                        ]
+                        for i in 2:length(cf_liq)
+                            @test cf_liq[i] > cf_liq[i - 1]
+                        end
+
+                        # Ice-only case (cold temperature)
+                        T_cold = FT(240.0)
+                        cf_ice = [
+                            CA.compute_cloud_fraction_sd(
+                                thp, T_cold, ρ, q_tot_base + FT(1e-3),
+                                FT(0), FT(1e-3),
+                                FT(1.0), FT(1e-6), c,
+                                FT(1), sgs_dist,
+                            ) for c in corr_vals
+                        ]
+                        for i in 2:length(cf_ice)
+                            @test cf_ice[i] > cf_ice[i - 1]
+                        end
+                    end
+                end
+
+                @testset "LogNormalSGS: CF decreases as Cv increases (constant absolute condensate and q_tot)" begin
+                    # Hold q_cond and q_tot constant. 
+                    # Vary absolute variance q_var to vary sig_s, which varies Cv = sig_s / q_tot.
+                    # Larger variance -> larger Cv -> more skewed tail & smaller Q_hat -> smaller CF.
+
+                    q_cond = FT(1e-3)
+                    qt = FT(0.01)
+
+                    # Increasing q_var array to increase Cv and sig_s
+                    q_var_vals = FT[1e-6, 1e-5, 1e-4, 1e-3]
+
+                    cfs = [
                         CA.compute_cloud_fraction_sd(
-                            thp, T_cold, ρ,
-                            FT(0), FT(1e-3),
-                            FT(1.0), FT(1e-6), c,
-                        ) for c in corr_vals
+                            thp, T, ρ, qt,
+                            q_cond, FT(0),
+                            FT(0), q_var, FT(0),
+                            FT(1), CA.LogNormalSGS(),
+                        ) for q_var in q_var_vals
                     ]
-                    for i in 2:length(cf_ice)
-                        @test cf_ice[i] > cf_ice[i - 1]
+
+                    # As variance (and Cv) increases, CF should decrease
+                    for i in 2:length(cfs)
+                        @test cfs[i] < cfs[i - 1]
                     end
                 end
             end
