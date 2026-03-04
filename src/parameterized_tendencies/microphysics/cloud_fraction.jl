@@ -277,7 +277,7 @@ end
 )
     FT = typeof(Q_hat)
     # Coefficient of variation (protect against division by zero)
-    C_v = sig_s / max(q_tot, ϵ_numerics(FT))
+    C_v = sig_s / max(q_tot, q_min(FT))
 
     # Base coefficient corresponds to Gaussian limit (Cv -> 0)
     coeff = (FT(π) / sqrt(FT(6))) * cf_steepness_scale
@@ -355,6 +355,9 @@ NVTX.@annotate function set_cloud_fraction!(
         isnothing(p.atmos.sgs_quadrature) ? GaussianSGS() :
         p.atmos.sgs_quadrature.dist
 
+    corr_Tq = correlation_Tq(p.params)
+    cf_steepness_scale = CAP.cloud_fraction_steepness_scale(p.params)
+
     @. p.precomputed.ᶜcloud_fraction = compute_cloud_fraction_sd(
         thermo_params,
         ᶜT_mean,
@@ -364,8 +367,8 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜq_ice,
         ᶜT′T′,
         ᶜq′q′,
-        correlation_Tq(p.params),
-        CAP.cloud_fraction_steepness_scale(p.params),
+        corr_Tq,
+        cf_steepness_scale,
         sgs_dist,
     )
 
