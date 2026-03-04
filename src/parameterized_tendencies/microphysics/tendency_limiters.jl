@@ -277,31 +277,14 @@ Applied once during the initial tendency computation in
 @inline function _implicit_1m_tendency_limits(
     mp_tendency, q_tot, q_liq, q_ice, q_rai, q_sno, dt,
 )
-    q_vap = max(zero(q_tot), q_tot - q_liq - q_ice - q_rai - q_sno)
+    # n_sink = 1 matches the implicit formulation which is unconditionally stable
+    # for diagonals, but needs to cap sinks bounded by the available tracer pool
+    n_sink = 1
 
-    n_sink = 3
-    n_source = 10
-
-    dq_lcl_dt = tendency_limiter(
-        mp_tendency.dq_lcl_dt,
-        limit(q_vap + q_ice, dt, n_source),
-        limit(q_liq, dt, n_sink),
-    )
-    dq_icl_dt = tendency_limiter(
-        mp_tendency.dq_icl_dt,
-        limit(q_vap + q_liq, dt, n_source),
-        limit(q_ice, dt, n_sink),
-    )
-    dq_rai_dt = tendency_limiter(
-        mp_tendency.dq_rai_dt,
-        limit(q_liq + q_sno, dt, n_source),
-        limit(q_rai, dt, n_sink),
-    )
-    dq_sno_dt = tendency_limiter(
-        mp_tendency.dq_sno_dt,
-        limit(q_ice, dt, n_source),
-        limit(q_sno, dt, n_sink),
-    )
+    dq_lcl_dt = limit_sink(mp_tendency.dq_lcl_dt, q_liq, dt, n_sink)
+    dq_icl_dt = limit_sink(mp_tendency.dq_icl_dt, q_ice, dt, n_sink)
+    dq_rai_dt = limit_sink(mp_tendency.dq_rai_dt, q_rai, dt, n_sink)
+    dq_sno_dt = limit_sink(mp_tendency.dq_sno_dt, q_sno, dt, n_sink)
 
     return (;
         dq_lcl_dt,

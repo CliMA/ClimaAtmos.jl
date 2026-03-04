@@ -355,31 +355,10 @@ import ClimaAtmos:
 
             @test limited.dq_rai_dt < 0.0
             @test abs(limited.dq_rai_dt) < abs(mp_tendency.dq_rai_dt)
-            @test abs(limited.dq_rai_dt) ≈ q_rai / (dt * 3)
+            @test abs(limited.dq_rai_dt) ≈ q_rai / dt
 
             @test limited.dq_sno_dt < 0.0
             @test abs(limited.dq_sno_dt) < abs(mp_tendency.dq_sno_dt)
-        end
-
-        @testset "sources are limited against donor pools" begin
-            mp_tendency = (
-                dq_lcl_dt = FT(0.1),
-                dq_icl_dt = FT(0.1),
-                dq_rai_dt = FT(0.0),
-                dq_sno_dt = FT(0.0),
-            )
-            q_liq = FT(0.01)
-            q_ice = FT(0.01)
-            q_rai = FT(0.01)
-            q_sno = FT(0.01)
-            q_tot = FT(0.05)
-
-            limited = _implicit_1m_tendency_limits(
-                mp_tendency, q_tot, q_liq, q_ice, q_rai, q_sno, dt,
-            )
-
-            @test limited.dq_lcl_dt > 0.0
-            @test limited.dq_lcl_dt < mp_tendency.dq_lcl_dt
         end
     end
 end
