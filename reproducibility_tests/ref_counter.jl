@@ -22,8 +22,7 @@
 #=
 
 321
-- Implicit IMEX timestepping formicrophysics tendencies, Jacobian diagonal entries, surface precipitation
-  tendency.
+- Implicit timestepping for microphysics tendencies, with diagonal Jacobian entries.
 - Change default `sgs_distribution` to `lognormal`. This affects
   SGS quadrature sampling of specific humidity for microphysics tendencies.
 
