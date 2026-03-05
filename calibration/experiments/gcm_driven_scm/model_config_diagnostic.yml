@@ -11,10 +11,6 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 microphysics_model: "0M"
-precip_model: 1M
-moist: "nonequil"
-# precip_model: 0M
-# moist: "equil"
 # call_cloud_diagnostics_per_stage: true
 config: "column"
 hyperdiff: "false"

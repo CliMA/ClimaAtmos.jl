@@ -12,7 +12,6 @@ rayleigh_sponge: true
 # edmfx_detr_model: "Generalized"
 edmfx_entr_model: "PiGroups"
 edmfx_detr_model: "SmoothArea"
-precip_model: 0M
 cloud_model: "quadrature_sgs"
 # cloud_model : "grid_scale" 
 edmfx_sgs_mass_flux: true

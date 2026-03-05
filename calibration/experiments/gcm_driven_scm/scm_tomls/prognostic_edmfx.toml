@@ -27,7 +27,7 @@ value = 0
 type = "float"
 
 [entr_detr_limit_inv_tau]
-value = 0.01
+value = 0.0001
 type = "float"
 
 [zd_rayleigh]
@@ -36,4 +36,8 @@ type = "float"
 
 [zd_viscous]
 value = 30000.0
+type = "float"
+
+[alpha_rayleigh_sgs_tracer]
+value = 1e-3
 type = "float"

@@ -9,9 +9,15 @@ using Plots
 using LinearAlgebra
 using DataFrames
 
-output_dir = "/resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/output_progedmf_cal_v2/exp2"
-iterations = 0:3
+output_dir = "/resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/output_progedmf_cal_v2/exp11"
+iterations = 0:6
 # iterations = nothing
+
+# Plot output directory (relative path, user can change this)
+plot_output_dir = "plots/eki_plots/progedmf_cal_v2_exp11"
+
+# If true, combine all parameter evolution plots into a single figure (sorted by relative change)
+combine_param_plots = true
 
 include("helper_funcs.jl")
 
@@ -19,10 +25,10 @@ const config_dict =
     YAML.load_file(joinpath(output_dir, "configs", "experiment_config.yml"))
 const n_iterations = config_dict["n_iterations"]
 
-# plotting output dirs
-plot_dir = joinpath(output_dir, "plots", "param_plots")
+# Create plotting output subdirs
+plot_dir = joinpath(plot_output_dir, "param_plots")
 mkpath(plot_dir)
-plot_dir_y_vec = joinpath(output_dir, "plots", "y_vec_plots")
+plot_dir_y_vec = joinpath(plot_output_dir, "y_vec_plots")
 mkpath(plot_dir_y_vec)
 
 
@@ -204,70 +210,114 @@ phi_all = EKP.transform_unconstrained_to_constrained(prior, u_all)
 phi_all_stacked = cat(phi_all...; dims = 3)
 
 
-names = []
+param_names = []
 for i in 1:length(prior.name)
     if isa(prior.distribution[i], EKP.Parameterized)
-        push!(names, prior.name[i])
+        push!(param_names, prior.name[i])
     elseif isa(prior.distribution[i], EKP.VectorOfParameterized)
         for j in 1:length(prior.distribution[i].distribution)
-            push!(names, prior.name[i] * "_$j")
+            push!(param_names, prior.name[i] * "_$j")
         end
     end
 end
 
+# Compute relative change for each parameter (for sorting)
+function compute_relative_change(data)
+    mean_first = mean(data[:, 1])
+    mean_last = mean(data[:, end])
+    # Use absolute relative change, normalized by initial value (or 1 if near zero)
+    denom = max(abs(mean_first), 1e-8)
+    return abs(mean_last - mean_first) / denom
+end
 
+relative_changes = [
+    compute_relative_change(phi_all_stacked[i, :, :])
+    for i in 1:size(phi_all_stacked, 1)
+]
+sorted_param_indices = sortperm(relative_changes, rev = true)
 
-for param_i in 1:size(phi_all_stacked, 1)
-    param_name = names[param_i]
-    data = phi_all_stacked[param_i, :, :]
-
-    mean_vals = mean(data, dims = 1)
-    max_vals = maximum(data, dims = 1)
-    min_vals = minimum(data, dims = 1)
-    std_vals = std(data, dims = 1)
-
-    mean_vals = vec(mean_vals)
-    max_vals = vec(max_vals)
-    min_vals = vec(min_vals)
-    std_vals = vec(std_vals)
+# Helper function to create a parameter evolution plot
+function make_param_plot(data, param_name, iter_range; show_legend = true)
+    mean_vals = vec(mean(data, dims = 1))
+    max_vals = vec(maximum(data, dims = 1))
+    min_vals = vec(minimum(data, dims = 1))
+    std_vals = vec(std(data, dims = 1))
 
     upper_2std = mean_vals .+ 2 .* std_vals
     lower_2std = mean_vals .- 2 .* std_vals
 
-    iterations = 1:size(phi_all_stacked, 3)
-    plot(iterations, mean_vals, label = "Mean", lw = 2, color = :black)
+    plt = plot(
+        iter_range,
+        mean_vals,
+        label = show_legend ? "Mean" : false,
+        lw = 2,
+        color = :black,
+    )
     plot!(
-        iterations,
+        plt,
+        iter_range,
         max_vals,
-        label = "Max",
+        label = show_legend ? "Max" : false,
         lw = 1,
         linestyle = :dash,
         color = :black,
     )
     plot!(
-        iterations,
+        plt,
+        iter_range,
         min_vals,
-        label = "Min",
+        label = show_legend ? "Min" : false,
         lw = 1,
         linestyle = :dash,
         color = :black,
     )
-
     plot!(
-        iterations,
+        plt,
+        iter_range,
         upper_2std,
         fillrange = lower_2std,
-        label = "±2 STD Shading",
+        label = show_legend ? "±2 STD" : false,
         fillalpha = 0.3,
         lw = 0,
         color = :blue,
     )
 
-    xlabel!("Iteration")
-    ylabel!("$param_name")
-    title!("Parameter evol: $param_name")
+    xlabel!(plt, "Iteration")
+    ylabel!(plt, param_name)
+    title!(plt, param_name)
+    return plt
+end
 
+iter_range_params = 1:size(phi_all_stacked, 3)
 
-    savefig(joinpath(plot_dir, "param_$(param_name)_stats.png"))
+if combine_param_plots
+    # Create combined subplot figure (sorted by relative change)
+    n_params = size(phi_all_stacked, 1)
+    n_cols = min(3, n_params)
+    n_rows = ceil(Int, n_params / n_cols)
 
+    subplots = []
+    for (idx, param_i) in enumerate(sorted_param_indices)
+        param_name = param_names[param_i]
+        data = phi_all_stacked[param_i, :, :]
+        # Only show legend on first subplot
+        plt = make_param_plot(data, param_name, iter_range_params; show_legend = (idx == 1))
+        push!(subplots, plt)
+    end
+
+    combined_plt = plot(
+        subplots...,
+        layout = (n_rows, n_cols),
+        size = (400 * n_cols, 300 * n_rows),
+        margin = 5Plots.mm,
+    )
+    savefig(combined_plt, joinpath(plot_dir, "all_params_evolution.png"))
+else
+    # Create individual plots for each parameter
+    for param_i in 1:size(phi_all_stacked, 1)
+        param_name = param_names[param_i]
+        data = phi_all_stacked[param_i, :, :]
+        plt = make_param_plot(data, param_name, iter_range_params; show_legend = true)
+        savefig(plt, joinpath(plot_dir, "param_$(param_name)_stats.png"))
+    end
 end
