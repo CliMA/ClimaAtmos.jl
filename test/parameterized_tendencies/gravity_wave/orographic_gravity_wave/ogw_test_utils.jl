@@ -31,7 +31,7 @@ function load_computed_drag(parsed_args, comms_ctx)
 
     # Fall back to ClimaArtifacts
     @info "Local file not found, loading from ClimaArtifacts..."
-    artifact_path = AA.ogwd_computed_drag_file_path(; h_elem, context = comms_ctx)
+    artifact_path = AA.ogw_computed_drag_file_path(; h_elem, context = comms_ctx)
     @info "Loading from: $(artifact_path)"
     reader = InputOutput.HDF5Reader(artifact_path, comms_ctx)
     drag = InputOutput.read_field(reader, "computed_drag")
