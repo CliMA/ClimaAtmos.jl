@@ -364,7 +364,13 @@ function generate_external_forcing_file(
 
         # Get the saturation specific humidity at the warmed temperature
         saturation_humidity_at_warming =
-            TD.q_vap_saturation.(param_set, sim_forcing["ta"], ρ, sim_forcing["clw"], sim_forcing["cli"])
+            TD.q_vap_saturation.(
+                param_set,
+                sim_forcing["ta"],
+                ρ,
+                sim_forcing["clw"],
+                sim_forcing["cli"],
+            )
         sim_forcing["hus"] = saturation_humidity_at_warming .* relative_humidity
     end
 
