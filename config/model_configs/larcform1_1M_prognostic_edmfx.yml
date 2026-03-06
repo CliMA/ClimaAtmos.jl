@@ -1,8 +1,8 @@
 initial_condition: "Larcform1"
 surface_setup: DefaultMoninObukhov  #"Larcform1_test"
-disable_surface_flux_tendency: true # for testing
-#turbconv: "diagnostic_edmfx"
-vert_diff: VerticalDiffusion
+disable_surface_flux_tendency: false # for testing
+turbconv: "prognostic_edmfx" # consider "edonly_edmfx"
+#vert_diff: VerticalDiffusion
 implicit_diffusion: false
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
@@ -16,40 +16,50 @@ edmfx_nh_pressure: true
 edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_surface: SlabOceanSST #"EisenmanSeaIce" #"SlabOceanSST" # TODO implement sea ice
-moist: "equil"
+moist: "nonequil"
 config: "column"
 z_max: 9000.0
-dz_bottom: 20.0
-z_elem: 30
-z_stretch: true
+#dz_bottom: 20.0
+z_elem: 60
+z_stretch: false
 x_elem: 1
 y_elem: 1
-dt: 60mins
-dt_rad: 60mins
-t_end: 20days # full run length is 20days
+dt: 1mins
+dt_rad: 1mins
+t_end: 5days # full run length is 20days
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage : true
-toml: [toml/larcform1_0M.toml]
+toml: [toml/larcform1_1M_prognostic_edmfx.toml]
 netcdf_output_at_levels: true
-#netcdf_interpolation_num_points: [2, 2, 200] # needed?
+#netcdf_interpolation_
+num_points: [2, 2, 200] # needed?
 output_default_diagnostics: false
 rad: allskywithclear
 insolation: "larcform1"
-precip_model: "0M"
+precip_model: "1M"
 ode_algo: ARS343
 log_to_file: true
 
 
 diagnostics: 
   - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, prsn, hus, hur, ua, va, wa, rlu, rld, rhoa] # profiles (2D)
-    period: 1hours
+    period: 30mins
     reduction_time: average
-  - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs, hfss, hfls, ts, tas]       # time-series (1D)
+  - short_name: [rlut, rlus, rlds, evspsbl, lwp, clivi, rsdt, rlutcs, rldscs, hfss, hfls, ts, tas]       # time-series (1D)
   # sithick only valid for prognostic_surface: EisenmanSeaIce
-    period: 1hours
+    period: 30mins
     reduction_time: average
 
 # TODO:
 # prognostic surface_temperature // sea-ice model
 # consider greenhouse gas concentrations
 # SCM coriolis?
+
+
+# Log
+# 1) running with surface flux tendencies enabled. (stable)
+# 2) troubleshooting 0 LWP. dt 1mins -> 20mins, t_end --> 5 days, diagnostics output 20min avgs
+# - add ice water path `clivi`
+# - try increasing sublimation_deposition_timescale to 1000s and 10_000s from 100s. Same issue.
+# - able to get nonzero LWP with EDMFx enabled and adjusted sublimation_deposition timesescale
+# 3) Noticed noisey data. testing with shared 3min dt_rad and dt. May also just be our high output freq. (30mins currently)

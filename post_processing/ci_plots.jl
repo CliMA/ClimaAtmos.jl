@@ -1593,20 +1593,43 @@ function make_plots(
     )
 end
 
-Larcform1Plots = Val{:larcform1}
+Larcform1Plots = Union{Val{:larcform1}, Val{:larcform1_1M}}
+
+# Catch-all for any job whose name begins with "larcform1"
+function make_plots(val::Val{S}, output_paths::Vector{<:AbstractString}) where {S}
+    if startswith(String(S), "larcform1")
+        return make_plots(Val(:larcform1), output_paths)
+    end
+    @warn "No plot found for $val"
+end
+
 function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
 
     short_names_2D = ["ta", "thetaa", "pfull", "clw", "cli", "hus", "hur", "ua", "va", "wa", "rlu", "rld", "rhoa"]
-    short_names_1D = ["rlut", "rlus", "rlds", "evspsbl", "lwp", "rsdt", "rlutcs", "rldscs", "cl", "pr", "prsn", "hfss", "hfls", "ts", ] # "sithick"
+    short_names_1D = ["rlut", "rlus", "rlds", "evspsbl", "lwp", "clivi", "rsdt", "rlutcs", "rldscs", "cl", "pr", "prsn", "hfss", "hfls", "ts", ] # "sithick"
     reduction = "average"
     
     vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
-        get(simdir; short_name, reduction)
+        var = get(simdir; short_name, reduction)
+        if haskey(var.dims, "x")
+            var = slice(var; x = var.dims["x"][1])
+        end
+        if haskey(var.dims, "y")
+            var = slice(var; y = var.dims["y"][1])
+        end
+        return var
     end
 
     vars_1D = map_comparison(simdirs, short_names_1D) do simdir, short_name
-        get(simdir; short_name, reduction)
+        var = get(simdir; short_name, reduction)
+        if haskey(var.dims, "x")
+            var = slice(var; x = var.dims["x"][1])
+        end
+        if haskey(var.dims, "y")
+            var = slice(var; y = var.dims["y"][1])
+        end
+        return var
     end
 
     make_plots_generic(
