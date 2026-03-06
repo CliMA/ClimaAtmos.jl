@@ -10,18 +10,10 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
-    # TODO: Needs to be updated to use the new microphysics 
+    # TODO: Needs to be updated to use the new microphysics
     # tendency function with quadrature if implicit_microphysics is true
 
     if p.atmos.microphysics_tendency_timestepping == Implicit()
-        edmfx_microphysics_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.turbconv_model,
-            p.atmos.microphysics_model,
-        )
         microphysics_tendency!(
             Yₜ,
             Y,

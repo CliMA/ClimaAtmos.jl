@@ -193,7 +193,7 @@ Two layers of limiting are applied:
    - `dq_icl_dt`: source = `q_vap + q_liq`, sink = `q_ice`
    - `dq_rai_dt`: source = `q_liq + q_sno`, sink = `q_rai`
    - `dq_sno_dt`: source = `q_ice`, sink = `q_sno`
-2. **Combined temperature rate**: caps the combined tendency to a maximum equivalent 
+2. **Combined temperature rate**: caps the combined tendency to a maximum equivalent
    temperature change `dT/dt = (L_v/c_p)·dq_lcl + (L_s/c_p)·dq_icl`
    and rescales `dq_lcl_dt` and `dq_icl_dt` uniformly.
 """
@@ -214,7 +214,7 @@ Two layers of limiting are applied:
     # Mass-conservation limits using cross-species source pools
     # n_sink: number of timesteps over which species would be depleted
     n_sink = 5
-    # n_source: number of timesteps over which sources are depleted 
+    # n_source: number of timesteps over which sources are depleted
     n_source = 30
 
     dq_lcl_dt = tendency_limiter(
@@ -239,14 +239,14 @@ Two layers of limiting are applied:
     )
 
     # Combined temperature-rate limiter:
-    # Condensate tendencies are expressed as possible temperature changes (although they 
+    # Condensate tendencies are expressed as possible temperature changes (although they
     # may not be realized).
     # A single combined scale factor preserves the ratio between condensate species,
     # preventing mass-energy decoupling that can drive temperatures negative.
     Lv_over_cp = TD.Parameters.LH_v0(tps) / TD.Parameters.cp_d(tps)
     Ls_over_cp = TD.Parameters.LH_s0(tps) / TD.Parameters.cp_d(tps)
 
-    # Max 5 K temperature change per timestep 
+    # Max 5 K temperature change per timestep
     # TODO: arbitrary choice; remove or make very large once microphysics is implicit
     dT_dt_max = FT(5) / dt
 
@@ -274,7 +274,7 @@ mathematical discontinuity that breaks Newton solver convergence.
 Applied once during the initial tendency computation in
 `set_microphysics_tendency_cache!`; **not** re-applied inside Newton iterations.
 
-TODO: make this function no-op once microphysics is fully implicit and stable, to 
+TODO: make this function no-op once microphysics is fully implicit and stable, to
 avoid physically inconsistent limiting of sinks (without limits on sources).
 """
 @inline function _implicit_1m_tendency_limits(
@@ -321,7 +321,7 @@ end
     dq_tot_dt = limit_sink(mp_tendency.dq_tot_dt, q_tot, dt)
     return (
         dq_tot_dt = dq_tot_dt,
-        e_int_precip = mp_tendency.e_int_precip,
+        e_tot_hlpr = mp_tendency.e_tot_hlpr,
     )
 end
 

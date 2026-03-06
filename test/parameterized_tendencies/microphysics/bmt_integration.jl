@@ -72,15 +72,14 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                     q_ice,
                 )
 
-                # Verify return type (includes fields and value types)
-                @test result isa NamedTuple{(:dq_tot_dt, :e_int_precip), NTuple{2, FT}}
+                # Verify return type is a scalar
+                @test result isa FT
 
-                # Verify finite values
-                @test isfinite(result.dq_tot_dt)
-                @test isfinite(result.e_int_precip)
+                # Verify finite value
+                @test isfinite(result)
 
                 # Physical: 0M should remove condensate
-                @test result.dq_tot_dt <= 0  # Condensate is removed as precipitation
+                @test result <= 0  # Condensate is removed as precipitation
             end
         end
     end
