@@ -338,7 +338,7 @@ function generate_external_forcing_file(
                     sim_forcing["pressure_level"] .* 100,
                     1,
                     size(sim_forcing["hus"], 2),
-                )
+                ),
             )
         relative_humidity =
             TD.relative_humidity.(

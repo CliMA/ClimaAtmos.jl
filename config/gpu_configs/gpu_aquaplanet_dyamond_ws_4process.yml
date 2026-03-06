@@ -3,8 +3,7 @@ output_default_diagnostics: false
 h_elem: 60
 rayleigh_sponge: true
 viscous_sponge: true
-moist: "equil"
-precip_model: "0M"
+microphysics_model: "0M"
 rad: "allskywithclear"
 insolation: "timevarying"
 dt_rad: "1hours"

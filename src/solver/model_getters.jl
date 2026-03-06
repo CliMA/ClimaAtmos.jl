@@ -1,16 +1,31 @@
 using Flux
 import JLD2
 
-function get_moisture_model(parsed_args)
-    moisture_name = parsed_args["moist"]
-    @assert moisture_name in ("dry", "equil", "nonequil")
-    return if moisture_name == "dry"
+function get_microphysics_model(parsed_args, params = nothing)
+    model_name = parsed_args["microphysics_model"]
+    @assert model_name in ("dry", "0M", "1M", "2M", "2MP3")
+    if model_name == "dry"
         DryModel()
-    elseif moisture_name == "equil"
-        EquilMoistModel()
-    elseif moisture_name == "nonequil"
-        NonEquilMoistModel()
+    elseif model_name == "0M"
+        EquilibriumMicrophysics0M()
+    elseif model_name == "1M"
+        NonEquilibriumMicrophysics1M()
+    elseif model_name == "2M"
+        NonEquilibriumMicrophysics2M()
+    elseif model_name == "2MP3"
+        NonEquilibriumMicrophysics2MP3()
     end
+end
+
+function get_sgs_quadrature(parsed_args, params = nothing)
+    use_sgs_quadrature = get(parsed_args, "use_sgs_quadrature", false)
+    use_sgs_quadrature || return nothing
+    FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
+    distribution = get_sgs_distribution(parsed_args)
+    quadrature_order = get(parsed_args, "quadrature_order", 2)
+    T_min = isnothing(params) ? FT(150) : FT(CAP.T_min_sgs(params))
+    q_max = isnothing(params) ? FT(0.1) : FT(CAP.q_max_sgs(params))
+    return SGSQuadrature(FT; quadrature_order, distribution, T_min, q_max)
 end
 
 function get_sfc_temperature_form(parsed_args)
@@ -212,44 +227,84 @@ end
 
 function get_non_orographic_gravity_wave_model(
     parsed_args,
+    params,
     ::Type{FT},
 ) where {FT}
     nogw_name = parsed_args["non_orographic_gravity_wave"]
     @assert nogw_name in (true, false)
     return if nogw_name == true
-        if parsed_args["config"] == "column"
-            NonOrographicGravityWave{FT}(; Bw = 1.2, Bn = 0.0, Bt_0 = 4e-3)
-        elseif parsed_args["config"] == "sphere"
-            NonOrographicGravityWave{FT}(;
-                Bw = 0.4,
-                Bn = 0.0,
-                cw = 35.0,
-                cw_tropics = 35.0,
-                cn = 2.0,
-                Bt_0 = 0.0043,
-                Bt_n = 0.0,
-                Bt_eq = 0.0043,
-                Bt_s = 0.0,
-                ϕ0_n = 15,
-                ϕ0_s = -15,
-                dϕ_n = 10,
-                dϕ_s = -10,
-            )
-        else
-            error("Uncaught case")
-        end
+        (;
+            source_pressure,
+            damp_pressure,
+            source_height,
+            Bw,
+            Bn,
+            dc,
+            cmax,
+            c0,
+            nk,
+            cw,
+            cw_tropics,
+            cn,
+            Bt_0,
+            Bt_n,
+            Bt_s,
+            Bt_eq,
+            ϕ0_n,
+            ϕ0_s,
+            dϕ_n,
+            dϕ_s,
+        ) = params.non_orographic_gravity_wave_params
+        NonOrographicGravityWave{FT}(;
+            source_pressure,
+            damp_pressure,
+            source_height,
+            Bw,
+            Bn,
+            dc,
+            cmax,
+            c0,
+            nk,
+            cw,
+            cw_tropics,
+            cn,
+            Bt_0,
+            Bt_n,
+            Bt_s,
+            Bt_eq,
+            ϕ0_n,
+            ϕ0_s,
+            dϕ_n,
+            dϕ_s,
+        )
     else
         nothing
     end
 end
 
-function get_orographic_gravity_wave_model(parsed_args, ::Type{FT}) where {FT}
+function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) where {FT}
     ogw_name = parsed_args["orographic_gravity_wave"]
-    @assert ogw_name in (nothing, "gfdl_restart", "raw_topo")
-    return if ogw_name == "gfdl_restart"
-        OrographicGravityWave{FT, String}()
-    elseif ogw_name == "raw_topo"
-        OrographicGravityWave{FT, String}(topo_info = "raw_topo")
+    @assert ogw_name in (nothing, "gfdl_restart", "raw_topo", "linear")
+    return if ogw_name == "raw_topo" || ogw_name == "gfdl_restart"
+        (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) =
+            params.orographic_gravity_wave_params
+        topo_info = Val(Symbol(parsed_args["orographic_gravity_wave"]))
+        topography = Val(Symbol(parsed_args["topography"]))
+        FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(;
+            γ,
+            ϵ,
+            β,
+            h_frac,
+            ρscale,
+            L0,
+            a0,
+            a1,
+            Fr_crit,
+            topo_info,
+            topography,
+        )
+    elseif ogw_name == "linear"
+        LinearOrographicGravityWave(; topo_info = Val(:linear))
     else
         nothing
     end
@@ -338,43 +393,6 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function get_microphysics_model(parsed_args, params = nothing)
-    microphysics_model = parsed_args["precip_model"]
-    base_scheme = if isnothing(microphysics_model) || microphysics_model == "nothing"
-        NoPrecipitation()
-    elseif microphysics_model == "0M"
-        Microphysics0Moment()
-    elseif microphysics_model == "1M"
-        Microphysics1Moment()
-    elseif microphysics_model == "2M"
-        Microphysics2Moment()
-    elseif microphysics_model == "2MP3"
-        Microphysics2MomentP3()
-    else
-        error("Invalid microphysics_model $(microphysics_model)")
-    end
-
-    # Wrap with SGS quadrature if enabled
-    use_sgs_quadrature = get(parsed_args, "use_sgs_quadrature", false)
-    if use_sgs_quadrature && !(base_scheme isa NoPrecipitation)
-        FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
-        distribution = get_sgs_distribution(parsed_args)
-        quadrature_order = get(parsed_args, "quadrature_order", 2)
-        # Read T_min and q_max from ClimaParams when available
-        T_min = isnothing(params) ? FT(150) : FT(CAP.T_min_sgs(params))
-        q_max = isnothing(params) ? FT(0.1) : FT(CAP.q_max_sgs(params))
-        return QuadratureMicrophysics(
-            base_scheme;
-            FT,
-            distribution,
-            quadrature_order,
-            T_min,
-            q_max,
-        )
-    else
-        return base_scheme
-    end
-end
 
 """
     get_sgs_distribution(parsed_args)
@@ -382,20 +400,20 @@ end
 Parse the SGS distribution type from configuration.
 
 # Config value mapping
-- `"gaussian"` or `nothing` → `GaussianSGS()` (default)
 - `"lognormal"` → `LogNormalSGS()`
+- `"gaussian"` → `GaussianSGS()`
 - `"mean"` → `GridMeanSGS()` (grid-mean only, no SGS sampling)
 """
 function get_sgs_distribution(parsed_args)
-    dist_name = get(parsed_args, "sgs_distribution", "gaussian")
-    return if dist_name in (nothing, "gaussian")
-        GaussianSGS()
-    elseif dist_name == "lognormal"
+    dist_name = parsed_args["sgs_distribution"]
+    return if dist_name == "lognormal"
         LogNormalSGS()
+    elseif dist_name == "gaussian"
+        GaussianSGS()
     elseif dist_name == "mean"
         GridMeanSGS()
     else
-        error("Invalid sgs_distribution $(dist_name). Use: gaussian, lognormal, mean")
+        error("Invalid sgs_distribution $(dist_name). Use: lognormal, gaussian, mean")
     end
 end
 
@@ -676,7 +694,7 @@ function check_case_consistency(parsed_args)
     rad = parsed_args["rad"]
     cor = parsed_args["scm_coriolis"]
     forc = parsed_args["forcing"]
-    moist = parsed_args["moist"]
+    microphysics = parsed_args["microphysics_model"]
     ls_adv = parsed_args["ls_adv"]
     extf = parsed_args["external_forcing"]
     imp_vert_diff = parsed_args["implicit_diffusion"]
@@ -690,7 +708,7 @@ function check_case_consistency(parsed_args)
         @assert(
             allequal(ISDAC_mandatory) &&
             all(isnothing, (cor, forc, ls_adv)) &&
-            moist != "dry",
+            microphysics != "dry",
             "ISDAC setup not consistent"
         )
     elseif imp_vert_diff

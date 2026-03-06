@@ -63,8 +63,7 @@ initial_condition = CA.InitialConditions.RCEMIPIIProfile_300()
 ## Construct the model
 model = CA.AtmosModel(;
     # AtmosWater - Moisture, Precipitation & Clouds
-    moisture_model = CA.NonEquilMoistModel(),
-    microphysics_model = CA.Microphysics1Moment(),
+    microphysics_model = CA.NonEquilibriumMicrophysics1M(),
     cloud_model = CA.GridScaleCloud(),
     microphysics_tendency_timestepping = CA.Explicit(),
     tracer_nonnegativity_method = CA.TracerNonnegativityMethod("elementwise_constraint"),
@@ -126,11 +125,12 @@ diagnostics = [
     ),
 ]
 ### 1M microphysics
-if model.microphysics_model ∈ (CA.Microphysics1Moment(), CA.Microphysics2Moment())
+if model.microphysics_model ∈
+   (CA.NonEquilibriumMicrophysics1M(), CA.NonEquilibriumMicrophysics2M())
     push!(diagnostics, Dict("short_name" => ["husra", "hussn"], "period" => "1hours"))
 end
 ### 2M microphysics
-if model.microphysics_model == CA.Microphysics2Moment()
+if model.microphysics_model == CA.NonEquilibriumMicrophysics2M()
     push!(diagnostics, Dict("short_name" => ["cdnc", "ncra"], "period" => "1hours"))
 end
 

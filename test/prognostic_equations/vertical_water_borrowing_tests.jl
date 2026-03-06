@@ -9,8 +9,7 @@ function create_vwb_config(species = ["ρq_tot"], job_id = "vwb_test")
     config_dict = Dict(
         "config" => "column",
         "initial_condition" => "DecayingProfile",
-        "moist" => "nonequil",
-        "precip_model" => "1M",
+        "microphysics_model" => "1M",
         "tracer_nonnegativity_method" => "vertical_water_borrowing",
         "output_default_diagnostics" => false,
     )

@@ -7,4 +7,9 @@ dt: "400secs"
 disable_surface_flux_tendency: true
 non_orographic_gravity_wave: true
 dt_nogw: "400secs"
+toml: [toml/nogw_single_column_test.toml]
+z_max: 50000.0
+z_elem: 50
+z_stretch: false
+FLOAT_TYPE: "Float64"
 

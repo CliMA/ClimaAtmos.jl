@@ -138,8 +138,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
     ᶜρ = Y.c.ρ
-    (; radiation_mode, moisture_model, turbconv_model, microphysics_model) =
-        p.atmos
+    (; radiation_mode, microphysics_model, turbconv_model) = p.atmos
     (; rayleigh_sponge, viscous_sponge) = p.atmos
     (; ls_adv, scm_coriolis) = p.atmos
     (; params) = p
@@ -170,9 +169,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             )
             @. Yₜ.c.sgsʲs.:($$j).q_tot += rst_sgs_q_tot
         end
-        if moisture_model isa NonEquilMoistModel &&
-           microphysics_model isa
-           Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}}
+        if microphysics_model isa NonEquilibriumMicrophysics1M
             # TODO: This doesn't work for multiple updrafts
             moisture_species = (
                 (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq)),
@@ -192,7 +189,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     end
     # For HeldSuarezForcing, the radiation_mode is used as the forcing parameter
     forcing = radiation_mode isa HeldSuarezForcing ? radiation_mode : nothing
-    hs_args = (ᶜuₕ, ᶜp, params, sfc_conditions.T_sfc, moisture_model, forcing)
+    hs_args = (ᶜuₕ, ᶜp, params, sfc_conditions.T_sfc, microphysics_model, forcing)
     hs_tendency_uₕ = held_suarez_forcing_tendency_uₕ(hs_args...)
     hs_tendency_ρe_tot = held_suarez_forcing_tendency_ρe_tot(ᶜρ, hs_args...)
     edmf_cor_tend_uₕ = scm_coriolis_tendency_uₕ(ᶜuₕ, scm_coriolis)
@@ -231,7 +228,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     subsidence_tendency!(Yₜ, Y, p, t, p.atmos.subsidence)
 
     @. Yₜ.c.ρe_tot += bc_lsa_tend_ρe_tot
-    if moisture_model isa AbstractMoistModel
+    if microphysics_model isa MoistMicrophysics
         bc_lsa_tend_ρq_tot = large_scale_advection_tendency_ρq_tot(lsa_args...)
         @. Yₜ.c.ρq_tot += bc_lsa_tend_ρq_tot
     end
@@ -280,45 +277,55 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     # EDMF updraft microphysics tendencies (applied to updraft prognostic variables)
-    edmfx_microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        p.atmos.turbconv_model,
-        p.atmos.microphysics_model,
-    )
+    if p.atmos.microphysics_tendency_timestepping == Explicit()
+        edmfx_microphysics_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.turbconv_model,
+            p.atmos.microphysics_model,
+        )
+    end
 
     # Unified microphysics tendencies (cloud condensation + precipitation)
-    microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        p.atmos.moisture_model,
-        p.atmos.microphysics_model,
-        p.atmos.turbconv_model,
-    )
+    if p.atmos.microphysics_tendency_timestepping == Explicit()
+        microphysics_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+    end
 
-    # TODO: make bycolumn-able
-    non_orographic_gravity_wave_tendency!(
+    non_orographic_gravity_wave_apply_tendency!(
         Yₜ,
         Y,
         p,
         t,
         p.atmos.non_orographic_gravity_wave,
     )
-    orographic_gravity_wave_tendency!(
+    orographic_gravity_wave_apply_tendency!(
         Yₜ,
-        Y,
         p,
-        t,
         p.atmos.orographic_gravity_wave,
     )
 
     # NOTE: Microphysics tendencies should be applied before calling this function,
     # because precipitation cache is used in this function
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
+    if p.atmos.microphysics_tendency_timestepping == Explicit()
+        surface_precipitation_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.surface_model,
+            p.atmos.microphysics_model,
+        )
+    end
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
@@ -336,7 +343,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     # Optional tendency to bring negative small tracers back from negative
     # at the cost of water vapor.
-    tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, moisture_model, microphysics_model)
+    tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, microphysics_model)
 
     # NOTE: This will zero out all momentum tendencies in the EDMFX advection test,
     # where velocities do not evolve

@@ -44,6 +44,20 @@ The default `writer` is NetCDF. If `writer` is `nc` or `netcdf`, the output is
 remapped non-conservatively on a Cartesian grid and saved to a NetCDF file.
 Currently, only 3D fields on cubed spheres are supported.
 
+!!! note "Did you know?"
+    For the `period`, you can also specify `"monthly"`, `"weekly"`, and
+    `"daily"`. These options align the reductions to start at the beginning of
+    each month, week, and day, respectively.
+
+    For example:
+    - If `period: monthly` and `reduction_time: average` are used, and the
+      simulation begins on `2010-01-15`, then the first time saved represents
+      the time average of the second half of January.
+    - The next time saved represents the time average of the data for February,
+      and so on.
+
+    This is useful to account for spinup.
+
 #### Writing in pressure coordinates
 
 !!! compat "Compatibility"
@@ -72,7 +86,7 @@ list of diagnostics ready to be passed to the simulation. So, for example
 
 ```julia
 
-model = ClimaAtmos.AtmosModel(..., moisture_model = ClimaAtmos.DryModel(), ...)
+model = ClimaAtmos.AtmosModel(..., microphysics_model = ClimaAtmos.DryModel(), ...)
 
 diagnostics = ClimaAtmos.default_diagnostics(model)
 # => List of diagnostics that include the ones specified for the DryModel
@@ -197,38 +211,38 @@ For instance, if you want to compute relative humidity, which does not make
 sense for dry simulations, you should define the functions
 
 ```julia
-function compute_relative_humidity(state, cache, time, moisture_model::T) where {T}
-    error("Cannot compute relative_humidity with moisture_model = $T")
+function compute_relative_humidity(state, cache, time, microphysics_model::T) where {T}
+    error("Cannot compute relative_humidity with microphysics_model = $T")
 end
 
 function compute_relative_humidity(
-    state, cache, time, moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    state, cache, time, microphysics_model::MoistMicrophysics,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     return @. lazy(TD.relative_humidity(thermo_params, cache.ᶜts))
 end
 
 compute_relative_humidity!(out, state, cache, time) =
-    compute_relative_humidity!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_relative_humidity!(out, state, cache, time, cache.atmos.microphysics_model)
 ```
 
 This will return the correct relative humidity and throw informative errors when
 it cannot be computed. We could specialize
 `compute_relative_humidity` further if the relative humidity
-were computed differently for `EquilMoistModel` and `NonEquilMoistModel`.
+were computed differently for `EquilibriumMicrophysics0M` and `NonEquilibriumMicrophysics`.
 
 In `ClimaAtmos`, we define some helper functions to produce error messages, so
 the above code can be written as
 ```julia
 function compute_relative_humidity(
-    state, cache, time, moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    state, cache, time, microphysics_model::MoistMicrophysics,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     return @. lazy(TD.relative_humidity(thermo_params, cache.ᶜts))
 end
 
 compute_relative_humidity!(out, state, cache, time) =
-    compute_relative_humidity!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_relative_humidity!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_relative_humidity!(_, _, _, _, model) =
     error_diagnostic_variable("relative_humidity", model)
 ```

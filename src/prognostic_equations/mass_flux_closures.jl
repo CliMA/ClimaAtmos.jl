@@ -111,7 +111,8 @@ function edmfx_nh_pressure_drag_tendency!(
     t,
     turbconv_model::PrognosticEDMFX,
 )
-    if p.atmos.edmfx_model.nh_pressure isa Val{true}
+    if p.atmos.edmfx_model.nh_pressure isa Val{true} &&
+       p.atmos.sgs_nh_pressure_mode == Explicit()
         (; params) = p
         n = n_mass_flux_subdomains(turbconv_model)
         (; ᶠu₃⁰) = p.precomputed
@@ -179,12 +180,8 @@ function edmfx_vertical_diffusion_tendency!(
                 ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
         end
 
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa
-            Union{Microphysics1Moment, QuadratureMicrophysics{Microphysics1Moment}} ||
-            p.atmos.microphysics_model isa
-            Union{Microphysics2Moment, QuadratureMicrophysics{Microphysics2Moment}}
-        )
+        if p.atmos.microphysics_model isa
+           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             α_precip = CAP.α_vert_diff_tracer(params)
             ᶜρʲ = ᶜρʲs.:(1)
             ᶜdivᵥ_q = Operators.DivergenceF2C(
@@ -254,7 +251,7 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
 
             # clip updraft area fraction to zero if the cell-averaged velocity is negligible.
             @. Y.c.sgsʲs.:($$j).ρa = ifelse(
-                ᶜinterp(Y.f.sgsʲs.:($$j).u₃.components.data.:1) <= eps(FT),
+                ᶜinterp(Y.f.sgsʲs.:($$j).u₃.components.data.:1) < eps(FT),
                 0,
                 Y.c.sgsʲs.:($$j).ρa,
             )

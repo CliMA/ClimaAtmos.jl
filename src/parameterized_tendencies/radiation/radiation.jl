@@ -460,7 +460,7 @@ function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS)
     )
 end
 function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
-    @assert !(p.atmos.moisture_model isa DryModel)
+    @assert !(p.atmos.microphysics_model isa DryModel)
 
     (; params) = p
     (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_ρq, ᶠradiation_flux) =

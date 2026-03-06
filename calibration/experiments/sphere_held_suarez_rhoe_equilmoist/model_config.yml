@@ -1,8 +1,7 @@
 dt: 500secs
 t_end: 560days
-moist: equil 
 forcing: held_suarez
-precip_model: 0M
+microphysics_model: "0M"
 job_id: sphere_held_suarez_rhoe_equilmoist
 output_dir: output/sphere_held_suarez_rhoe_equilmoist
 # This filepath is only valid on the Caltech central cluster, to reproduce this path run:

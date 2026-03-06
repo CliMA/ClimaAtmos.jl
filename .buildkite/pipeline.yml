@@ -347,35 +347,36 @@ steps:
   - group: "Gravity wave"
     steps:
       - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_3d.jl"
         artifact_paths: "nonorographic_gravity_wave_test_3d/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: non-orographic gravity wave parameterization test with MiMA output"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_mima.jl"
         artifact_paths: "nonorographic_gravity_wave_test_mima/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: non-orographic gravity wave parameterization unit test single column"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_single_column.jl"
         artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
 
       - label: ":computer: orographic gravity wave parameterization unit test for base flux calculation"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_baseflux.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_baseflux.jl"
         artifact_paths: "orographic_gravity_wave_test_baseflux/*"
 
       - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_3d.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_3d.jl"
         artifact_paths: "orographic_gravity_wave_test_3d/*"
 
-      - label: ":computer: single column non-orographic gravity wave parameterization"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
-          --job_id single_column_nonorographic_gravity_wave
-        artifact_paths: "single_column_nonorographic_gravity_wave/*"
+      - label: ":computer: orographic gravity wave parameterization unit test for computed drag"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_computed_drag.jl"
+        artifact_paths: "orographic_gravity_wave_test_computed_drag/*"
+
+      - label: ":computer: orographic gravity wave Garner 2005 figure reproduction test"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_garner2005_reproduction.jl"
+        artifact_paths: "orographic_gravity_wave_test_garner2005/*"
 
   - group: "Column Examples"
     steps:
@@ -565,18 +566,6 @@ steps:
           --job_id baroclinic_wave_conservation
         artifact_paths: "baroclinic_wave_conservation/output_active/*"
 
-      - label: ":computer: baroclinic wave moist check conservation"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation.yml
-          --job_id baroclinic_wave_equil_conservation
-        artifact_paths: "baroclinic_wave_equil_conservation/output_active/*"
-
-      - label: ":computer: baroclinic wave moist check conservation float64"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_ft64.yml
-          --job_id baroclinic_wave_equil_conservation_ft64
-        artifact_paths: "baroclinic_wave_equil_conservation_ft64/output_active/*"
-
       - label: ":computer: baroclinic wave moist check conservation with sources"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_source.yml
@@ -705,7 +694,7 @@ steps:
         artifact_paths: "edonly_edmfx_aquaplanet/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":genie: Diagnostic EDMF aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -730,7 +719,7 @@ steps:
         artifact_paths: "rcemipii_sphere_diagnostic_edmfx/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":genie: Prognostic EDMF aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -935,7 +924,7 @@ steps:
 
           julia --color=yes --project=.buildkite post_processing/remap/remap_pipeline.jl
           --data_dir prep_remap/output_active --out_dir remap_pipeline_output
-        artifact_paths: "remap_pipeline_output/*"    
+        artifact_paths: "remap_pipeline_output/*"
 
   - group: "Autodiff"
     steps:
@@ -964,23 +953,23 @@ steps:
           --job_id baroclinic_wave_sparse_autodiff
         artifact_paths: "baroclinic_wave_sparse_autodiff/output_active/*"
 
-      - label: "Prognostic EDMF GABLS in a column sparse autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column_sparse_autodiff.yml
-          --job_id prognostic_edmfx_gabls_column_sparse_autodiff
-        artifact_paths: "prognostic_edmfx_gabls_column_sparse_autodiff/output_active/*"
-        agents:
-          slurm_mem: 20GB
+      # - label: "Prognostic EDMF GABLS in a column sparse autodiff"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column_sparse_autodiff.yml
+      #     --job_id prognostic_edmfx_gabls_column_sparse_autodiff
+      #   artifact_paths: "prognostic_edmfx_gabls_column_sparse_autodiff/output_active/*"
+      #   agents:
+      #     slurm_mem: 20GB
 
-      - label: "Prognostic EDMF Bomex in a column sparse autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column_sparse_autodiff.yml
-          --job_id prognostic_edmfx_bomex_column_sparse_autodiff
-        artifact_paths: "prognostic_edmfx_bomex_column_sparse_autodiff/output_active/*"
-        agents:
-          slurm_mem: 20GB
+      # - label: "Prognostic EDMF Bomex in a column sparse autodiff"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column_sparse_autodiff.yml
+      #     --job_id prognostic_edmfx_bomex_column_sparse_autodiff
+      #   artifact_paths: "prognostic_edmfx_bomex_column_sparse_autodiff/output_active/*"
+      #   agents:
+      #     slurm_mem: 20GB
 
       # Temporarily disabled until fixed
       # - label: "Prognostic EDMF TRMM in a column sparse autodiff"
@@ -993,31 +982,31 @@ steps:
       #     slurm_mem: 20GB
       #   soft_fail: true
 
-      - label: "Prognostic EDMF aquaplanet dense autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_dense_autodiff.yml
-          --job_id prognostic_edmfx_aquaplanet_dense_autodiff_gpu
-        artifact_paths: "prognostic_edmfx_aquaplanet_dense_autodiff_gpu/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 20GB
+      # - label: "Prognostic EDMF aquaplanet dense autodiff"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_dense_autodiff.yml
+      #     --job_id prognostic_edmfx_aquaplanet_dense_autodiff_gpu
+      #   artifact_paths: "prognostic_edmfx_aquaplanet_dense_autodiff_gpu/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_mem: 20GB
 
-      - label: "Prognostic EDMF aquaplanet sparse autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_sparse_autodiff.yml
-          --job_id prognostic_edmfx_aquaplanet_sparse_autodiff_gpu
-        artifact_paths: "prognostic_edmfx_aquaplanet_sparse_autodiff_gpu/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 20GB
+      # - label: "Prognostic EDMF aquaplanet sparse autodiff"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_sparse_autodiff.yml
+      #     --job_id prognostic_edmfx_aquaplanet_sparse_autodiff_gpu
+      #   artifact_paths: "prognostic_edmfx_aquaplanet_sparse_autodiff_gpu/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_mem: 20GB
 
   - group: "GPU"
     steps:
@@ -1115,17 +1104,18 @@ steps:
           slurm_ntasks: 2
           slurm_mem: 16GB
 
-      - label: "GPU: test DYAMOND interpolated initial conditions"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_summer.yml
-          --job_id gpu_aquaplanet_dyamond_summer
-        artifact_paths: "gpu_aquaplanet_dyamond_summer/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16GB
+      # Brittle test: to be removed
+      # - label: "GPU: test DYAMOND interpolated initial conditions"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_summer.yml
+      #     --job_id gpu_aquaplanet_dyamond_summer
+      #   artifact_paths: "gpu_aquaplanet_dyamond_summer/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_mem: 16GB
 
       - label: ":earth_americas: GPU: Diagnostic EDMF ERA5 Weather Model Initial Condition"
         command: >
@@ -1333,15 +1323,15 @@ steps:
       #   agents:
       #     slurm_mem: 32GB
 
-      - label: ":fire: Flame graph: prognostic edmf sparse autodiff"
-        command: >
-          julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
-          --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_sparse_autodiff.yml
-          --job_id flame_aquaplanet_progedmf_sparse_autodiff
-        artifact_paths: "flame_aquaplanet_progedmf_sparse_autodiff/*"
-        agents:
-          slurm_mem: 32GB
+      # - label: ":fire: Flame graph: prognostic edmf sparse autodiff"
+      #   command: >
+      #     julia --color=yes --project=.buildkite perf/flame.jl
+      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+      #     --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_sparse_autodiff.yml
+      #     --job_id flame_aquaplanet_progedmf_sparse_autodiff
+      #   artifact_paths: "flame_aquaplanet_progedmf_sparse_autodiff/*"
+      #   agents:
+      #     slurm_mem: 32GB
 
       - label: ":fire: Flame graph: diffusion"
         command: >

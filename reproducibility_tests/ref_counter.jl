@@ -1,4 +1,4 @@
-316
+321
 
 # **README**
 #
@@ -20,6 +20,26 @@
 
 
 #=
+
+321
+- Implicit timestepping for microphysics tendencies, with diagonal Jacobian entries.
+- Change default `sgs_distribution` to `lognormal`. This affects
+  SGS quadrature sampling of specific humidity for microphysics tendencies.
+
+320
+- PEDMF: solve sgs u₃ implicit equation first and then use the solution to converge other tracers in 
+  one Newton iteration. 
+
+319
+- Clip divergence in detrainment
+
+318
+- Add GPU Orographic Gravity Wave implementation, refactor NOGW tests, add OGW tests and fix base fluxes
+
+317
+- SGS saturation quadrature fix: apply weight adjustment to prevent
+  condensate from exceeding q_tot when quadrature points are clamped to zero.
+  Affects all EquilMoistModel + QuadratureMicrophysics configurations.
 
 316
 - Use ARS222 as the default ODE solver for prognostic EDMF

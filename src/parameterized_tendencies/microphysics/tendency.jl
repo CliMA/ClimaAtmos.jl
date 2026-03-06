@@ -1,15 +1,29 @@
 # ============================================================================
 # Unified Microphysics Tendencies
 # ============================================================================
-# Single entry point for all microphysics tendency calculations.
-# Combines cloud condensation/evaporation and precipitation processes.
 #
-# For NonEquilMoistModel, cloud condensation/evaporation is computed first,
-# then precipitation processes (autoconversion, accretion, evaporation).
+# Single entry point for all microphysics tendency calculations.  All expensive
+# computations (SGS quadrature, BMT calls, limiters) are performed in
+# `set_microphysics_tendency_cache!` and stored in `p.precomputed`.  The
+# functions here apply those cached tendencies with the appropriate density
+# and EDMF area weighting.
 #
-# In EDMF modes (PrognosticEDMFX/DiagnosticEDMFX), tendencies are computed
-# per-subdomain in the EDMF precomputed quantities files and applied here
-# with area weighting.
+# Dispatch matrix (microphysics_model × turbconv_model):
+#
+#   Model        | Nothing | DiagnosticEDMFX | PrognosticEDMFX
+#   -------------|---------|-----------------|----------------
+#   DryModel     | no-op   | no-op (fallback)| no-op (fallback)
+#   0M           | ✓       | ✓ (fallback)    | ✓ (fallback)
+#   1M           | ✓       | ✓               | ✓
+#   2M           | ✓       | error           | ✓
+#   2MP3         | ✓       | —               | —
+#
+# 0M uses a wildcard `_` for turbconv_model: the tendency aggregation (ᶜS_ρq_tot,
+# ᶜS_ρe_tot) is done per-configuration in `set_microphysics_tendency_cache!`, so
+# all turbconv variants apply identically here.
+#
+# For 1M/2M in EDMF modes, separate source terms for the environment (⁰ suffix)
+# and each updraft (ʲs suffix) are area-weighted and accumulated.
 
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
@@ -17,18 +31,14 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 ##### No Microphysics
 #####
 
-microphysics_tendency!(Yₜ, Y, p, t, _, ::NoPrecipitation, _) = nothing
+microphysics_tendency!(Yₜ, Y, p, t, ::DryModel, _) = nothing
 
 #####
-##### 0-Moment Microphysics (EquilMoistModel only)
+##### 0-Moment Microphysics
 #####
-
-function microphysics_tendency!(Yₜ, Y, p, t, ::DryModel, ::Microphysics0Moment, _)
-    error("Microphysics0Moment is incompatible with DryModel")
-end
 
 function microphysics_tendency!(Yₜ, Y, p, t,
-    ::EquilMoistModel, ::Microphysics0Moment, _,
+    ::EquilibriumMicrophysics0M, _,
 )
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
 
@@ -39,43 +49,13 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     return nothing
 end
 
-function microphysics_tendency!(Yₜ, Y, p, t,
-    ::NonEquilMoistModel, ::Microphysics0Moment, _,
-)
-    error("Microphysics0Moment is not supported with NonEquilMoistModel")
-end
-
 #####
 ##### 1-Moment Microphysics
 #####
 
+# 1M non-EDMF: apply precomputed grid-mean tendencies scaled by density
 function microphysics_tendency!(Yₜ, Y, p, t,
-    ::DryModel, ::Microphysics1Moment, _,
-)
-    error("Microphysics1Moment is incompatible with DryModel")
-end
-
-function microphysics_tendency!(Yₜ, Y, p, t,
-    ::EquilMoistModel, ::Microphysics1Moment, _,
-)
-    error("Microphysics1Moment is not implemented for EquilMoistModel")
-end
-
-"""
-    microphysics_tendency!(Yₜ, Y, p, t, moisture_model, microphysics_model, turbconv_model)
-
-Unified entry point for all microphysics tendency calculations.
-
-For `NonEquilMoistModel` with 1M/2M microphysics (without EDMF): Applies microphysics 
-tendencies from precomputed cache
-
-For EDMF modes, tendencies are computed per-subdomain in precomputed quantities
-and applied here with area weighting.
-
-Modifies `Yₜ.c.ρq_liq`, `Yₜ.c.ρq_ice`, `Yₜ.c.ρq_rai`, `Yₜ.c.ρq_sno` in place.
-"""
-function microphysics_tendency!(Yₜ, Y, p, t,
-    ::NonEquilMoistModel, ::Microphysics1Moment, _,
+    ::NonEquilibriumMicrophysics1M, _,
 )
     (; ᶜSqₗᵐ, ᶜSqᵢᵐ, ᶜSqᵣᵐ, ᶜSqₛᵐ) = p.precomputed
 
@@ -90,7 +70,7 @@ end
 
 # 1M with DiagnosticEDMFX
 function microphysics_tendency!(Yₜ, Y, p, t,
-    ::NonEquilMoistModel, ::Microphysics1Moment, ::DiagnosticEDMFX,
+    ::NonEquilibriumMicrophysics1M, ::DiagnosticEDMFX,
 )
     # Source terms from EDMFX environment
     (; ᶜSqₗᵐ⁰, ᶜSqᵢᵐ⁰, ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰) = p.precomputed
@@ -98,17 +78,16 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     (; ᶜSqₗᵐʲs, ᶜSqᵢᵐʲs, ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs) = p.precomputed
     (; ᶜρaʲs) = p.precomputed
 
-    # Tendencies are already limited in the cache; just scale by density
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     turbconv_model = p.atmos.turbconv_model
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, p.precomputed.ᶜρaʲs, turbconv_model))
 
+    # Environment contribution
     @. Yₜ.c.ρq_liq += ᶜρa⁰ * ᶜSqₗᵐ⁰
     @. Yₜ.c.ρq_ice += ᶜρa⁰ * ᶜSqᵢᵐ⁰
     @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜSqᵣᵐ⁰
     @. Yₜ.c.ρq_sno += ᶜρa⁰ * ᶜSqₛᵐ⁰
 
-    # Update from the updraft microphysics tendencies
+    # Updraft contributions
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
         @. Yₜ.c.ρq_liq += ᶜρaʲs.:($$j) * ᶜSqₗᵐʲs.:($$j)
@@ -116,11 +95,12 @@ function microphysics_tendency!(Yₜ, Y, p, t,
         @. Yₜ.c.ρq_rai += ᶜρaʲs.:($$j) * ᶜSqᵣᵐʲs.:($$j)
         @. Yₜ.c.ρq_sno += ᶜρaʲs.:($$j) * ᶜSqₛᵐʲs.:($$j)
     end
+    return nothing
 end
 
 # 1M with PrognosticEDMFX
 function microphysics_tendency!(Yₜ, Y, p, t,
-    ::NonEquilMoistModel, ::Microphysics1Moment, turbconv_model::PrognosticEDMFX,
+    ::NonEquilibriumMicrophysics1M, turbconv_model::PrognosticEDMFX,
 )
     # Source terms from EDMFX updrafts
     (; ᶜSqₗᵐʲs, ᶜSqᵢᵐʲs, ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs) = p.precomputed
@@ -129,13 +109,13 @@ function microphysics_tendency!(Yₜ, Y, p, t,
 
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
-    # Tendencies are already limited in the cache; just scale by density
+    # Environment contribution
     @. Yₜ.c.ρq_liq += ᶜρa⁰ * ᶜSqₗᵐ⁰
     @. Yₜ.c.ρq_ice += ᶜρa⁰ * ᶜSqᵢᵐ⁰
     @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜSqᵣᵐ⁰
     @. Yₜ.c.ρq_sno += ᶜρa⁰ * ᶜSqₛᵐ⁰
 
-    # Update from the updraft microphysics tendencies
+    # Updraft contributions
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
         @. Yₜ.c.ρq_liq += Y.c.sgsʲs.:($$j).ρa * ᶜSqₗᵐʲs.:($$j)
@@ -143,54 +123,7 @@ function microphysics_tendency!(Yₜ, Y, p, t,
         @. Yₜ.c.ρq_rai += Y.c.sgsʲs.:($$j).ρa * ᶜSqᵣᵐʲs.:($$j)
         @. Yₜ.c.ρq_sno += Y.c.sgsʲs.:($$j).ρa * ᶜSqₛᵐʲs.:($$j)
     end
-end
-
-#####
-##### QuadratureMicrophysics
-#####
-
-# Generic fallback: delegate to base model
-function microphysics_tendency!(Yₜ, Y, p, t,
-    moisture_model, qm::QuadratureMicrophysics, turbconv_model,
-)
-    return microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        moisture_model,
-        qm.base_model,
-        turbconv_model,
-    )
-end
-
-function microphysics_tendency!(Yₜ, Y, p, t,
-    moisture_model::NonEquilMoistModel, qm::QuadratureMicrophysics{Microphysics1Moment},
-    turbconv_model::DiagnosticEDMFX,
-)
-    return microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        moisture_model,
-        qm.base_model,
-        turbconv_model,
-    )
-end
-function microphysics_tendency!(Yₜ, Y, p, t,
-    moisture_model::NonEquilMoistModel, qm::QuadratureMicrophysics{Microphysics1Moment},
-    turbconv_model::PrognosticEDMFX,
-)
-    return microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        moisture_model,
-        qm.base_model,
-        turbconv_model,
-    )
+    return nothing
 end
 
 #####
@@ -198,19 +131,7 @@ end
 #####
 
 function microphysics_tendency!(Yₜ, Y, p, t,
-    ::DryModel, ::Microphysics2Moment, _,
-)
-    error("Microphysics2Moment is incompatible with DryModel")
-end
-
-function microphysics_tendency!(Yₜ, Y, p, t,
-    ::EquilMoistModel, ::Microphysics2Moment, _,
-)
-    error("Microphysics2Moment is not implemented for EquilMoistModel")
-end
-
-function microphysics_tendency!(Yₜ, Y, p, t,
-    ::NonEquilMoistModel, ::Microphysics2Moment, _,
+    ::NonEquilibriumMicrophysics2M, _,
 )
     (; ᶜT, ᶜp, ᶜu) = p.precomputed
     (; ᶜSqₗᵐ, ᶜSqᵢᵐ, ᶜSqᵣᵐ, ᶜSqₛᵐ) = p.precomputed
@@ -221,6 +142,8 @@ function microphysics_tendency!(Yₜ, Y, p, t,
 
     # --- Aerosol activation (ARG 2000) — requires prescribed aerosols ---
     # Cloud condensation is already included in the fused BMT cache tendencies.
+    # hasproperty here is a compile-time constant for concrete `p` types; the
+    # dead branch is eliminated by the compiler when aerosols are not configured.
     if hasproperty(p, :tracers) &&
        hasproperty(p.tracers, :prescribed_aerosols_field)
         seasalt_num = p.scratch.ᶜtemp_scalar
@@ -266,14 +189,14 @@ end
 
 # 2M with DiagnosticEDMFX
 function microphysics_tendency!(Yₜ, Y, p, t,
-    ::NonEquilMoistModel, ::Microphysics2Moment, ::DiagnosticEDMFX,
+    ::NonEquilibriumMicrophysics2M, ::DiagnosticEDMFX,
 )
-    error("Microphysics2Moment is not implemented for DiagnosticEDMFX")
+    error("NonEquilibriumMicrophysics2M is not implemented for DiagnosticEDMFX")
 end
 
 # 2M with PrognosticEDMFX
 function microphysics_tendency!(Yₜ, Y, p, t,
-    ::NonEquilMoistModel, ::Microphysics2Moment, turbconv_model::PrognosticEDMFX,
+    ::NonEquilibriumMicrophysics2M, turbconv_model::PrognosticEDMFX,
 )
     # Source terms from EDMFX updrafts
     (; ᶜSqₗᵐʲs, ᶜSqᵢᵐʲs, ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs, ᶜSnₗᵐʲs, ᶜSnᵣᵐʲs) = p.precomputed
@@ -292,63 +215,34 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     @. Yₜ.c.ρq_ice += ᶜρa⁰ * ᶜSqᵢᵐ⁰
     @. Yₜ.c.ρq_sno += ᶜρa⁰ * ᶜSqₛᵐ⁰
 
-    # Update from the updraft microphysics tendencies
+    # Updraft contributions
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
-        # Tendencies already limited in cache; just scale by density
         @. Yₜ.c.ρq_liq += Y.c.sgsʲs.:($$j).ρa * ᶜSqₗᵐʲs.:($$j)
         @. Yₜ.c.ρn_liq += Y.c.sgsʲs.:($$j).ρa * ᶜSnₗᵐʲs.:($$j)
         @. Yₜ.c.ρq_rai += Y.c.sgsʲs.:($$j).ρa * ᶜSqᵣᵐʲs.:($$j)
         @. Yₜ.c.ρn_rai += Y.c.sgsʲs.:($$j).ρa * ᶜSnᵣᵐʲs.:($$j)
-
-        # Ice and snow (zero in warm-rain 2M)
         @. Yₜ.c.ρq_ice += Y.c.sgsʲs.:($$j).ρa * ᶜSqᵢᵐʲs.:($$j)
         @. Yₜ.c.ρq_sno += Y.c.sgsʲs.:($$j).ρa * ᶜSqₛᵐʲs.:($$j)
     end
-end
-
-function microphysics_tendency!(Yₜ, Y, p, t,
-    moisture_model::NonEquilMoistModel, qm::QuadratureMicrophysics{Microphysics2Moment},
-    turbconv_model::DiagnosticEDMFX,
-)
-    return microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        moisture_model,
-        qm.base_model,
-        turbconv_model,
-    )
-end
-function microphysics_tendency!(Yₜ, Y, p, t,
-    moisture_model::NonEquilMoistModel, qm::QuadratureMicrophysics{Microphysics2Moment},
-    turbconv_model::PrognosticEDMFX,
-)
-    return microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        moisture_model,
-        qm.base_model,
-        turbconv_model,
-    )
+    return nothing
 end
 
 #####
 ##### 2-Moment Microphysics with P3 Ice Scheme
 #####
 
+# 2MP3: delegates warm-rain tendencies to the 2M path, then adds P3 ice collision
+# terms (∂ₜq_c, ∂ₜq_r, ∂ₜN_c, ∂ₜN_r, ∂ₜL_rim, ∂ₜL_ice, ∂ₜB_rim).
 function microphysics_tendency!(Yₜ, Y, p, t,
-    ne::NonEquilMoistModel, ::Microphysics2MomentP3, ::Nothing,
+    ::NonEquilibriumMicrophysics2MP3, ::Nothing,
 )
     (; ᶜScoll) = p.precomputed
 
-    # 2 moment scheme (warm)
-    microphysics_tendency!(Yₜ, Y, p, t, ne, Microphysics2Moment(), nothing)
+    # Warm-rain processes (autoconversion, accretion, evaporation)
+    microphysics_tendency!(Yₜ, Y, p, t, NonEquilibriumMicrophysics2M(), nothing)
 
-    # P3 scheme (cold) - collisions
+    # P3 ice collisions (riming, aggregation, melting)
     @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜScoll.∂ₜq_c
     @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜScoll.∂ₜq_r
     @. Yₜ.c.ρn_liq += ᶜScoll.∂ₜN_c

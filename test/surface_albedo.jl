@@ -9,7 +9,7 @@ Random.seed!(1234)
     FT = Float32
     base_config = Dict(
         "initial_condition" => "DYCOMS_RF02",
-        "moist" => "equil",
+        "microphysics_model" => "0M",
         "config" => "column",
         "rad" => "clearsky",
         "FLOAT_TYPE" => string(FT),

@@ -127,7 +127,7 @@ NVTX.@annotate function cloud_fraction_model_callback!(integrator)
             ),
         )
     end
-    set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model)
+    set_cloud_fraction!(Y, p, p.atmos.microphysics_model, p.atmos.cloud_model)
 end
 
 NVTX.@annotate function rrtmgp_model_callback!(integrator)
@@ -157,6 +157,18 @@ NVTX.@annotate function nogw_model_callback!(integrator)
         Y,
         p,
         p.atmos.non_orographic_gravity_wave,
+    )
+    return nothing
+end
+
+NVTX.@annotate function ogw_model_callback!(integrator)
+    Y = integrator.u
+    p = integrator.p
+
+    orographic_gravity_wave_compute_tendency!(
+        Y,
+        p,
+        p.atmos.orographic_gravity_wave,
     )
     return nothing
 end

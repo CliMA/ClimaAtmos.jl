@@ -7,70 +7,30 @@ import ClimaParams as CP
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
 
-abstract type AbstractMoistureModel end
-abstract type AbstractMoistModel <: AbstractMoistureModel end
-struct DryModel <: AbstractMoistureModel end
-struct EquilMoistModel <: AbstractMoistModel end
-struct NonEquilMoistModel <: AbstractMoistModel end
+abstract type AbstractMicrophysicsModel end
 
-abstract type AbstractPrecipitationModel end
-struct NoPrecipitation <: AbstractPrecipitationModel end
-struct Microphysics0Moment <: AbstractPrecipitationModel end
-struct Microphysics1Moment <: AbstractPrecipitationModel end
-struct Microphysics2Moment <: AbstractPrecipitationModel end
+struct DryModel <: AbstractMicrophysicsModel end
+struct EquilibriumMicrophysics0M <: AbstractMicrophysicsModel end
+struct NonEquilibriumMicrophysics1M <: AbstractMicrophysicsModel end
+struct NonEquilibriumMicrophysics2M <: AbstractMicrophysicsModel end
+struct NonEquilibriumMicrophysics2MP3 <: AbstractMicrophysicsModel end
 
-"""
-    Microphysics2MomentP3 <: AbstractPrecipitationModel
-
-Struct used for dispatch to the 2-moment warm rain + P3 ice microphysics parameterizations
-"""
-struct Microphysics2MomentP3 <: AbstractPrecipitationModel end
-
-"""
-    QuadratureMicrophysics{M <: AbstractPrecipitationModel, Q} <: AbstractPrecipitationModel
-
-Wrapper for microphysics models that enables SGS quadrature integration of microphysics
-tendencies over subgrid-scale temperature and moisture fluctuations.
-
-# Fields
-- `base_model::M`: The underlying microphysics model (e.g., `Microphysics1Moment()`)
-- `quadrature::Q`: SGS quadrature configuration (`SGSQuadrature`)
-"""
-struct QuadratureMicrophysics{M <: AbstractPrecipitationModel, Q} <:
-       AbstractPrecipitationModel
-    base_model::M
-    quadrature::Q
-end
-
-"""
-    QuadratureMicrophysics(base_model; FT=Float32, distribution=GaussianSGS(),
-        quadrature_order=3, T_min=FT(150), q_max=FT(0.1))
-
-Create a `QuadratureMicrophysics` wrapper with default SGSQuadrature settings.
-
-For grid-mean-only evaluation (no SGS sampling), use `distribution=GridMeanSGS()`.
-
-Physical bounds on sampled values:
-- `T_min`: minimum sampled temperature [K] (prevents `log(T<0)` in saturation)
-- `q_max`: maximum sampled specific humidity [kg/kg] (prevents extreme
-  supersaturation from driving unphysically low temperatures)
-"""
-function QuadratureMicrophysics(
-    base_model::M;
-    FT::Type = Float32,
-    distribution = GaussianSGS(),
-    quadrature_order = 3,
-    T_min = FT(150),
-    q_max = FT(0.1),
-) where {M <: AbstractPrecipitationModel}
-    quad = SGSQuadrature(FT; quadrature_order, distribution, T_min, q_max)
-    return QuadratureMicrophysics(base_model, quad)
-end
+const NonEquilibriumMicrophysics = Union{
+    NonEquilibriumMicrophysics1M,
+    NonEquilibriumMicrophysics2M,
+    NonEquilibriumMicrophysics2MP3,
+}
+const MoistMicrophysics = Union{
+    EquilibriumMicrophysics0M,
+    NonEquilibriumMicrophysics1M,
+    NonEquilibriumMicrophysics2M,
+    NonEquilibriumMicrophysics2MP3,
+}
 
 """
     TracerNonnegativityMethod
 
-Family of methods for enforcing tracer nonnegativity. 
+Family of methods for enforcing tracer nonnegativity.
 
 There are four methods for enforcing tracer nonnegativity:
 - `TracerNonnegativityElementConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
@@ -300,7 +260,7 @@ end
 
 Create a Hyperdiffusion with CAM_SE preset coefficients.
 
-These coefficients match hyperviscosity coefficients from: 
+These coefficients match hyperviscosity coefficients from:
 (Lauritzen et al. (2017))[https://doi.org/10.1029/2017MS001257]
 for equations A18 and A19, scaled by `(1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3 ≈ 1.238`
 """
@@ -461,7 +421,7 @@ Whenever `z > zd`, the Rayleigh sponge model applies the tendency
  \frac{∂χ}{∂t} = - β ⋅ χ,   z > zd
  ```
 
- where `β = α_χ ⋅ ζ` and `χ ∈ {uₕ, u₃}`; 
+ where `β = α_χ ⋅ ζ` and `χ ∈ {uₕ, u₃}`;
  If `ρtke` is a prognostic variable, it is also damped;
  If the `PrognosticEDMFX` scheme is used, the model is additionally applied to
  `χ ∈ {u₃ʲ, mseʲ, q_totʲ}`, and
@@ -471,13 +431,13 @@ Whenever `z > zd`, the Rayleigh sponge model applies the tendency
  ```math
  ζ(z) = sin^2(π(z-zd)/(zmax-zd)/2)
  ```
- 
+
  with `zd` the lower damping height and `zmax` the domain top height.
 
  Separate damping coefficients are used:
  - `α_uₕ`: horizontal velocity, `uₕ`;
  - `α_w`: vertical velocity, `u₃`, `u₃ʲ`;
- - `α_sgs_tracer`: subgrid-scale tracer variables, `ρtke`, `mseʲ`, `q_totʲ`, 
+ - `α_sgs_tracer`: subgrid-scale tracer variables, `ρtke`, `mseʲ`, `q_totʲ`,
     `q_liqʲ`, `q_raiʲ`, `q_iceʲ`, `q_snoʲ`.
 
  By default, damping is only applied to vertical velocity, with:
@@ -515,40 +475,47 @@ RayleighSponge(params) = RayleighSponge(;
 ### ------------------- ###
 
 abstract type AbstractGravityWave end
-@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
-    source_pressure::FT = 31500
-    damp_pressure::FT = 85
-    source_height::FT = 15000
-    Bw::FT = 1.0
-    Bn::FT = 1.0
-    dc::FT = 0.8
-    cmax::FT = 99.6
-    c0::FT = 0
-    nk::FT = 1
-    cw::FT = 40.0
-    cw_tropics::FT = 40.0
-    cn::FT = 40.0
-    Bt_0::FT = 0.0003
-    Bt_n::FT = 0.0003
-    Bt_s::FT = 0.0003
-    Bt_eq::FT = 0.0003
-    ϕ0_n::FT = 30
-    ϕ0_s::FT = -30
-    dϕ_n::FT = 5
-    dϕ_s::FT = -5
+Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
+    source_pressure::FT
+    damp_pressure::FT
+    source_height::FT
+    Bw::FT
+    Bn::FT
+    dc::FT
+    cmax::FT
+    c0::FT
+    nk::FT
+    cw::FT
+    cw_tropics::FT
+    cn::FT
+    Bt_0::FT
+    Bt_n::FT
+    Bt_s::FT
+    Bt_eq::FT
+    ϕ0_n::FT
+    ϕ0_s::FT
+    dϕ_n::FT
+    dϕ_s::FT
 end
 
-@kwdef struct OrographicGravityWave{FT, S} <: AbstractGravityWave
-    γ::FT = 0.4
-    ϵ::FT = 0.0
-    β::FT = 0.5
-    h_frac::FT = 0.1
-    ρscale::FT = 1.2
-    L0::FT = 80e3
-    a0::FT = 0.9
-    a1::FT = 3.0
-    Fr_crit::FT = 0.7
-    topo_info::S = "gfdl_restart"
+abstract type OrographicGravityWave <: AbstractGravityWave end
+
+Base.@kwdef struct LinearOrographicGravityWave{S} <: OrographicGravityWave
+    topo_info::S = Val(:linear)
+end
+
+Base.@kwdef struct FullOrographicGravityWave{FT, S, T} <: OrographicGravityWave
+    γ::FT
+    ϵ::FT
+    β::FT
+    h_frac::FT
+    ρscale::FT
+    L0::FT
+    a0::FT
+    a1::FT
+    Fr_crit::FT
+    topo_info::S
+    topography::T
 end
 
 abstract type AbstractForcing end
@@ -658,7 +625,7 @@ Create a PrognosticEDMFX model with the specified number of updrafts, TKE config
 # Arguments
 - `n_updrafts::Int`: Number of updraft subdomains
 - `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
-- `area_fraction`: "Small" area fraction threshold, is the `a_half` argument in `sgs_weight_function` 
+- `area_fraction`: "Small" area fraction threshold, is the `a_half` argument in `sgs_weight_function`
     - Note: Float type is inferred from this value
 """
 function PrognosticEDMFX(;
@@ -724,8 +691,7 @@ struct NoGridScaleTendency <: AbstractTendencyModel end
 struct NoSubgridScaleTendency <: AbstractTendencyModel end
 
 # Define broadcasting for types
-Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
-Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
+Base.broadcastable(x::AbstractMicrophysicsModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
 Base.broadcastable(x::EDOnlyEDMFX) = tuple(x)
 Base.broadcastable(x::PrognosticEDMFX) = tuple(x)
@@ -947,14 +913,14 @@ end
 """
     AtmosWater
 
-Groups moisture-related models and types.
+Groups moisture and microphysics-related models and types.
 """
-@kwdef struct AtmosWater{MM, PM, CM, MTTS, TNM}
-    moisture_model::MM = DryModel()
-    microphysics_model::PM = NoPrecipitation()
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ}
+    microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
+    sgs_quadrature::SQ = nothing
 end
 
 """
@@ -1061,7 +1027,7 @@ const GROUPED_PROPERTY_MAP = Dict{Symbol, Symbol}(
     property in fieldnames(group_type)
 )
 
-# Forward property access: atmos.moisture_model → atmos.moisture.moisture_model
+# Forward property access: atmos.microphysics_model → atmos.water.microphysics_model
 # Use ::Val constant for @generated compile-time access
 @generated function Base.getproperty(
     atmos::AtmosModel,
@@ -1107,9 +1073,9 @@ The one exception is the top-level `disable_surface_flux_tendency` field, which 
 # Property Access
 Arguments can be accessed both directly and through grouped structs:
 ```julia
-model = AtmosModel(; moisture_model = EquilMoistModel())
-model.moisture_model        # Direct access
-model.water.moisture_model  # Grouped access
+model = AtmosModel(; microphysics_model = EquilibriumMicrophysics0M())
+model.microphysics_model        # Direct access
+model.water.microphysics_model  # Grouped access
 ```
 
 # Example: Minimal model (uses defaults)
@@ -1132,15 +1098,14 @@ model = AtmosModel(;
 # Example: Moist model with full radiation
 ```julia
 model = AtmosModel(;
-    moisture_model = EquilMoistModel(),
-    microphysics_model = Microphysics0Moment(),
+    microphysics_model = EquilibriumMicrophysics0M(),
     radiation_mode = RRTMGPI.AllSkyRadiation(),
 )
 ```
 
 # Default Configuration
 The default AtmosModel provides:
-- **Dry atmosphere**: DryModel() with NoPrecipitation()
+- **Dry atmosphere**: DryModel()
 - **Basic surface**: PrescribedSST() with ZonallySymmetricSST()
 - **Cloud model**: QuadratureCloud() with SGS quadrature
 - **Idealized insolation**: IdealizedInsolation()
@@ -1150,10 +1115,10 @@ The default AtmosModel provides:
 # Available Structs
 
 ## AtmosWater
-- `moisture_model`: DryModel(), EquilMoistModel(), NonEquilMoistModel()
-- `microphysics_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
+- `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
 - `cloud_model`: GridScaleCloud(), QuadratureCloud()
 - `microphysics_tendency_timestepping`: Explicit(), Implicit()
+- `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)
 
 
 ## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
@@ -1351,10 +1316,7 @@ model = DryAtmosModel(;
 ```
 """
 function DryAtmosModel(; kwargs...)
-    defaults = (
-        moisture_model = DryModel(),
-        microphysics_model = NoPrecipitation(),
-    )
+    defaults = (microphysics_model = DryModel(),)
     return AtmosModel(; defaults..., kwargs...)
 end
 
@@ -1365,8 +1327,7 @@ Create an equilibrium moist atmospheric model with sensible defaults for moist s
 """
 function EquilMoistAtmosModel(; kwargs...)
     defaults = (
-        moisture_model = EquilMoistModel(),
-        microphysics_model = Microphysics0Moment(),
+        microphysics_model = EquilibriumMicrophysics0M(),
         cloud_model = GridScaleCloud(),
         surface_model = PrescribedSST(),
         sfc_temperature = ZonallySymmetricSST(),
@@ -1382,8 +1343,7 @@ Create a non-equilibrium moist atmospheric model with sensible defaults.
 """
 function NonEquilMoistAtmosModel(; kwargs...)
     defaults = (
-        moisture_model = NonEquilMoistModel(),
-        microphysics_model = Microphysics1Moment(),
+        microphysics_model = NonEquilibriumMicrophysics1M(),
         microphysics_tendency_timestepping = Explicit(),
     )
     return AtmosModel(; defaults..., kwargs...)

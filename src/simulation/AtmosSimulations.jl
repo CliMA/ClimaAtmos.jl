@@ -88,6 +88,7 @@ function setup_diagnostics_and_writers(
                 "netcdf_interpolation_num_points" => nothing,
                 "netcdf_output_at_levels" => false,
                 "output_default_diagnostics" => false,
+                "netcdf_horizontal_method" => "bilinear",
             )
             user_scheduled_diagnostics, user_writers, _ = get_diagnostics(
                 diag_config,
@@ -224,7 +225,7 @@ function AtmosSimulation{FT}(;
                 callback_kwargs...,
             )...,
             common_callbacks(
-                dt, output_dir, start_date, t_start, t_end, context,
+                model, dt, output_dir, start_date, t_start, t_end, context,
                 checkpoint_frequency,
             )...)
     else

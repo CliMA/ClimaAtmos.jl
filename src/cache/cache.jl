@@ -114,7 +114,7 @@ function build_cache(
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
 
     conservation_check =
-        !(atmos.microphysics_model isa NoPrecipitation) ?
+        !(atmos.microphysics_model isa DryModel) ?
         (;
             col_integrated_precip_energy_tendency = zeros(
                 axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
@@ -159,7 +159,7 @@ function build_cache(
         ᶠf¹²,
         # Used by diagnostics such as hfres, evspblw
         surface_ct3_unit = CT3.(
-            unit_basis_vector_data.(CT3, sfc_local_geometry)
+            unit_basis_vector_data.(CT3, sfc_local_geometry),
         ),
     )
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)

@@ -19,7 +19,7 @@
 #     cache,
 #     time,
 #     ::T,
-# ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+# ) where {T <: MoistMicrophysics}
 #     thermo_params = CAP.thermodynamics_params(cache.params)
 #     out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜT, state.c.ρ, cache.precomputed.ᶜq_tot_safe, cache.precomputed.ᶜq_liq_rai, cache.precomputed.ᶜq_ice_sno))
 # end
@@ -27,7 +27,7 @@
 # 2. Define a function that has the correct signature and calls this function
 #
 # compute_hur!(out, state, cache, time) =
-#     compute_hur!(out, state, cache, time, cache.atmos.moisture_model)
+#     compute_hur!(out, state, cache, time, cache.atmos.microphysics_model)
 #
 # 3. Define a function that returns an error when the model is incorrect
 #
@@ -403,7 +403,7 @@ add_diagnostic_variable!(
 # Relative humidity (3d)
 ###
 compute_hur!(out, state, cache, time) =
-    compute_hur!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_hur!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hur!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hur", model)
 
@@ -412,8 +412,8 @@ function compute_hur!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     thermo_params = CAP.thermodynamics_params(cache.params)
     (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
     if isnothing(out)
@@ -451,7 +451,7 @@ add_diagnostic_variable!(
 # Total specific humidity (3d)
 ###
 compute_hus!(out, state, cache, time) =
-    compute_hus!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_hus!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hus!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hus", model)
 
@@ -460,8 +460,8 @@ function compute_hus!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     if isnothing(out)
         return state.c.ρq_tot ./ state.c.ρ
     else
@@ -482,7 +482,7 @@ add_diagnostic_variable!(
 # Liquid water specific humidity (3d)
 ###
 compute_clw!(out, state, cache, time) =
-    compute_clw!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_clw!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_clw!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("clw", model)
 
@@ -491,7 +491,7 @@ function compute_clw!(
     state,
     cache,
     time,
-    moisture_model::EquilMoistModel,
+    microphysics_model::EquilibriumMicrophysics0M,
 )
     if isnothing(out)
         return copy(cache.precomputed.ᶜq_liq_rai)
@@ -505,7 +505,7 @@ function compute_clw!(
     state,
     cache,
     time,
-    moisture_model::NonEquilMoistModel,
+    microphysics_model::NonEquilibriumMicrophysics,
 )
     if isnothing(out)
         return state.c.ρq_liq ./ state.c.ρ
@@ -531,7 +531,7 @@ add_diagnostic_variable!(
 # Ice water specific humidity (3d)
 ###
 compute_cli!(out, state, cache, time) =
-    compute_cli!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_cli!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_cli!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("cli", model)
 
@@ -540,7 +540,7 @@ function compute_cli!(
     state,
     cache,
     time,
-    moisture_model::EquilMoistModel,
+    microphysics_model::EquilibriumMicrophysics0M,
 )
     if isnothing(out)
         return copy(cache.precomputed.ᶜq_ice_sno)
@@ -554,7 +554,7 @@ function compute_cli!(
     state,
     cache,
     time,
-    moisture_model::NonEquilMoistModel,
+    microphysics_model::NonEquilibriumMicrophysics,
 )
     if isnothing(out)
         return state.c.ρq_ice ./ state.c.ρ
@@ -580,7 +580,7 @@ add_diagnostic_variable!(
 # Surface specific humidity (2d)
 ###
 compute_hussfc!(out, state, cache, time) =
-    compute_hussfc!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_hussfc!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hussfc!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hussfc", model)
 
@@ -589,8 +589,8 @@ function compute_hussfc!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     # q_vap_sfc is the total specific humidity at the surface (no liquid/ice)
     if isnothing(out)
         return copy(cache.precomputed.sfc_conditions.q_vap_sfc)
@@ -747,14 +747,14 @@ function compute_tau!(out, state, cache, component)
     if isnothing(out)
         return getproperty(
             Geometry.UVVector.(
-                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit
+                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit,
             ).components.data,
             component,
         )
     else
         out .= getproperty(
             Geometry.UVVector.(
-                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit
+                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit,
             ).components.data,
             component,
         )
@@ -809,7 +809,7 @@ add_diagnostic_variable!(
 # Surface evaporation (2d)
 ###
 compute_evspsbl!(out, state, cache, time) =
-    compute_evspsbl!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_evspsbl!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_evspsbl!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("evspsbl", model)
 
@@ -818,8 +818,8 @@ function compute_evspsbl!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     (; ρ_flux_q_tot) = cache.precomputed.sfc_conditions
     (; surface_ct3_unit) = cache.core
 
@@ -842,7 +842,7 @@ add_diagnostic_variable!(
 # Latent heat flux (2d)
 ###
 compute_hfls!(out, state, cache, time) =
-    compute_hfls!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_hfls!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hfls!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hfls", model)
 
@@ -851,8 +851,8 @@ function compute_hfls!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     (; ρ_flux_q_tot) = cache.precomputed.sfc_conditions
     (; surface_ct3_unit) = cache.core
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -877,7 +877,7 @@ add_diagnostic_variable!(
 # Sensible heat flux (2d)
 ###
 compute_hfss!(out, state, cache, time) =
-    compute_hfss!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_hfss!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hfss!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hfss", model)
 
@@ -886,7 +886,7 @@ function compute_hfss!(
     state,
     cache,
     time,
-    moisture_model::T,
+    microphysics_model::T,
 ) where {T <: DryModel}
     (; ρ_flux_h_tot) = cache.precomputed.sfc_conditions
     (; surface_ct3_unit) = cache.core
@@ -903,8 +903,8 @@ function compute_hfss!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     (; ρ_flux_h_tot, ρ_flux_q_tot) = cache.precomputed.sfc_conditions
     (; surface_ct3_unit) = cache.core
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -942,15 +942,11 @@ function compute_pr!(
     cache,
     time,
     microphysics_model::Union{
-        NoPrecipitation,
-        Microphysics0Moment,
-        QuadratureMicrophysics{Microphysics0Moment},
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
-        Microphysics2MomentP3,
-        QuadratureMicrophysics{Microphysics2MomentP3},
+        DryModel,
+        EquilibriumMicrophysics0M,
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
     },
 )
     if isnothing(out)
@@ -983,15 +979,11 @@ function compute_prra!(
     cache,
     time,
     microphysics_model::Union{
-        NoPrecipitation,
-        Microphysics0Moment,
-        QuadratureMicrophysics{Microphysics0Moment},
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
-        Microphysics2MomentP3,
-        QuadratureMicrophysics{Microphysics2MomentP3},
+        DryModel,
+        EquilibriumMicrophysics0M,
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
     },
 )
     if isnothing(out)
@@ -1021,15 +1013,11 @@ function compute_prsn!(
     cache,
     time,
     microphysics_model::Union{
-        NoPrecipitation,
-        Microphysics0Moment,
-        QuadratureMicrophysics{Microphysics0Moment},
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
-        Microphysics2MomentP3,
-        QuadratureMicrophysics{Microphysics2MomentP3},
+        DryModel,
+        EquilibriumMicrophysics0M,
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
     },
 )
     if isnothing(out)
@@ -1062,12 +1050,9 @@ function compute_husra!(
     cache,
     time,
     microphysics_model::Union{
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
-        Microphysics2MomentP3,
-        QuadratureMicrophysics{Microphysics2MomentP3},
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
     },
 )
     if isnothing(out)
@@ -1100,12 +1085,9 @@ function compute_hussn!(
     cache,
     time,
     microphysics_model::Union{
-        Microphysics1Moment,
-        QuadratureMicrophysics{Microphysics1Moment},
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
-        Microphysics2MomentP3,
-        QuadratureMicrophysics{Microphysics2MomentP3},
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
     },
 )
     if isnothing(out)
@@ -1138,10 +1120,8 @@ function compute_cdnc!(
     cache,
     time,
     microphysics_model::Union{
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
-        Microphysics2MomentP3,
-        QuadratureMicrophysics{Microphysics2MomentP3},
+        NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
     },
 )
     if isnothing(out)
@@ -1174,10 +1154,8 @@ function compute_ncra!(
     cache,
     time,
     microphysics_model::Union{
-        Microphysics2Moment,
-        QuadratureMicrophysics{Microphysics2Moment},
-        Microphysics2MomentP3,
-        QuadratureMicrophysics{Microphysics2MomentP3},
+        NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
     },
 )
     if isnothing(out)
@@ -1237,7 +1215,7 @@ add_diagnostic_variable!(
 # Condensed water path (2d)
 ###
 compute_clwvi!(out, state, cache, time) =
-    compute_clwvi!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_clwvi!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_clwvi!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("clwvi", model)
 
@@ -1246,7 +1224,7 @@ function compute_clwvi!(
     state,
     cache,
     time,
-    moisture_model::EquilMoistModel,
+    microphysics_model::EquilibriumMicrophysics0M,
 )
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
@@ -1274,7 +1252,7 @@ function compute_clwvi!(
     state,
     cache,
     time,
-    moisture_model::NonEquilMoistModel,
+    microphysics_model::NonEquilibriumMicrophysics,
 )
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
@@ -1305,7 +1283,7 @@ add_diagnostic_variable!(
 # Liquid water path (2d)
 ###
 compute_lwp!(out, state, cache, time) =
-    compute_lwp!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_lwp!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_lwp!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("lwp", model)
 
@@ -1314,7 +1292,7 @@ function compute_lwp!(
     state,
     cache,
     time,
-    moisture_model::EquilMoistModel,
+    microphysics_model::EquilibriumMicrophysics0M,
 )
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
@@ -1334,7 +1312,7 @@ function compute_lwp!(
     state,
     cache,
     time,
-    moisture_model::NonEquilMoistModel,
+    microphysics_model::NonEquilibriumMicrophysics,
 )
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
@@ -1365,7 +1343,7 @@ add_diagnostic_variable!(
 # Ice water path (2d)
 ###
 compute_clivi!(out, state, cache, time) =
-    compute_clivi!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_clivi!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_clivi!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("clivi", model)
 
@@ -1374,8 +1352,8 @@ function compute_clivi!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         cli = cache.scratch.ᶜtemp_scalar
@@ -1436,7 +1414,7 @@ add_diagnostic_variable!(
 # column integrated cloud fraction (2d)
 ###
 compute_clvi!(out, state, cache, time) =
-    compute_clvi!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_clvi!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_clvi!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("clvi", model)
 
@@ -1445,8 +1423,8 @@ function compute_clvi!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         cloud_cover = cache.scratch.ᶜtemp_scalar
@@ -1485,7 +1463,7 @@ add_diagnostic_variable!(
 # Column integrated total specific humidity (2d)
 ###
 compute_prw!(out, state, cache, time) =
-    compute_prw!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_prw!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_prw!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("prw", model)
 
@@ -1494,8 +1472,8 @@ function compute_prw!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         Operators.column_integral_definite!(out, state.c.ρq_tot)
@@ -1518,7 +1496,7 @@ add_diagnostic_variable!(
 # Column integrated relative humidity (2d)
 ###
 compute_hurvi!(out, state, cache, time) =
-    compute_hurvi!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_hurvi!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hurvi!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hurvi", model)
 
@@ -1527,8 +1505,8 @@ function compute_hurvi!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     thermo_params = CAP.thermodynamics_params(cache.params)
     (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
     # Vapor specific humidity = q_tot - q_liq - q_ice
@@ -1577,7 +1555,7 @@ add_diagnostic_variable!(
 # Vapor specific humidity (3d)
 ###
 compute_husv!(out, state, cache, time) =
-    compute_husv!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_husv!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_husv!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("husv", model)
 
@@ -1586,8 +1564,8 @@ function compute_husv!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    microphysics_model::T,
+) where {T <: MoistMicrophysics}
     # Vapor specific humidity = q_tot - q_liq - q_ice
     (; ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
     if isnothing(out)
@@ -1760,7 +1738,7 @@ function compute_cape!(out, state, cache, time)
     (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = cache.precomputed
     env_Tv =
         lazy.(
-            TD.virtual_temperature.(thermo_params, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+            TD.virtual_temperature.(thermo_params, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno),
         )
 
     # Calculate buoyancy from the difference in virtual temperatures
@@ -1858,8 +1836,14 @@ function compute_rwp!(
     state,
     cache,
     time,
-    moisture_model::T,
-) where {T <: Union{Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3}}
+    microphysics_model::T,
+) where {
+    T <: Union{
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
+    },
+}
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         rw = cache.scratch.ᶜtemp_scalar
