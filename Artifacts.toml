@@ -91,36 +91,36 @@ git-tree-sha1 = "c2412372bdf40ba73f496dc0fe427d063e31533b"
     sha256 = "a0b8b682539d975c1cc331549d0222a0eda121f5b2977cc63486368a7dc07885"
     url = "https://caltech.box.com/shared/static/vdb6r7cv5tj6uhrphn5a4352smsxdqgs.gz"
 
-[ogwd_computed_drag_h6]
-git-tree-sha1 = "bf189454e5cb19962d8324e7e1667b7aa867bff9"
+[ogw_computed_drag_h6]
+git-tree-sha1 = "eda18e3fb3c23e68d5baa1798c654d3b88181c9f"
 lazy = true
 
-    [[ogwd_computed_drag_h6.download]]
-    sha256 = "a54c3ab3c0213e7c6d11fa73ab5fe54f3799e8383c6c3164e98d9c257945a4ef"
+    [[ogw_computed_drag_h6.download]]
+    sha256 = "18ea7cba9518d46e9552bf1a7ca5170882e40bf0755280df86e1f0cdd5354044"
     url = "https://caltech.box.com/shared/static/hrupvak4oceoi2camqey166u61421q25.gz"
 
-[ogwd_computed_drag_h8]
-git-tree-sha1 = "df178b2f3efba5c9670c7f75cd04637f844a8145"
+[ogw_computed_drag_h8]
+git-tree-sha1 = "ea035bd664abf8552a6ccb845f15c6c73c58745d"
 lazy = true
 
-    [[ogwd_computed_drag_h8.download]]
-    sha256 = "8375fd84c2b2b3ef9b333666702c55687f130e299753f4e21e0fd99f04fa355d"
+    [[ogw_computed_drag_h8.download]]
+    sha256 = "f649d2820ec445a5028626432717dc89f0dc0172b9ac1f9b46bf3076e09e2788"
     url = "https://caltech.box.com/shared/static/bmzj3r7b2lez3xjggymi2ifoq5vg6jnq.gz"
 
-[ogwd_computed_drag_h12]
-git-tree-sha1 = "2aa7ab2ca8b562aa8ba92905bd664cc64a976ad2"
+[ogw_computed_drag_h12]
+git-tree-sha1 = "129809607edc23bfa8b4a8f6a1e0addf01d4d96c"
 lazy = true
 
-    [[ogwd_computed_drag_h12.download]]
-    sha256 = "8b3834b9e3ed93bf08c6b7a0bbec83ff418ce357f186f67fc441b0e8d288ae32"
+    [[ogw_computed_drag_h12.download]]
+    sha256 = "d7e9dd1425e1c0708711940c87dde82e4667265f489085be581e159b742e433a"
     url = "https://caltech.box.com/shared/static/p058wvdd42zhidgt3copgn88ijgs2c3a.gz"
 
-[ogwd_computed_drag_h16]
-git-tree-sha1 = "158138fc38c3aa08ce1605ac65ff1983a1a407db"
+[ogw_computed_drag_h16]
+git-tree-sha1 = "2161318478a32f9826c2f1733af280a5ed148f5c"
 lazy = true
 
-    [[ogwd_computed_drag_h16.download]]
-    sha256 = "af9987bf9bf63899014b99b9420536cdd06f7bc05ea44b37f31e42e3b7840ed7"
+    [[ogw_computed_drag_h16.download]]
+    sha256 = "9c617e547526670efdde33c62bfc38f1ee9b9f647783fe8e832aa169d4d985bb"
     url = "https://caltech.box.com/shared/static/imtr9k7ktzm0fff1k32zphb8oybmrsvn.gz"
 
 [ogw_computed_drag_h30]

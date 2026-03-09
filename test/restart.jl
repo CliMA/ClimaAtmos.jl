@@ -104,7 +104,7 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :rc,
             # DataHandlers contains caches, so they are stateful
             :data_handler,
-            # Scratch field for microphysics NamedTuple results
+            # Scratch field for microphysics (uninitialized until tendencies run)
             :ᶜmp_tendency,
             # Covariance fields depend on scratch state
             :ᶜT′T′,
@@ -150,7 +150,7 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :hyperdiffusion_ghost_buffer,
             :data_handler,
             :rc,
-            # Scratch field for microphysics NamedTuple results
+            # Scratch field for microphysics (uninitialized until tendencies run)
             :ᶜmp_tendency,
             # Covariance fields depend on scratch state
             :ᶜT′T′,

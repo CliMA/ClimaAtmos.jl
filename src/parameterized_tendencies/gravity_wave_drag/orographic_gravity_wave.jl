@@ -174,7 +174,7 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
         Fields.field_values(ᶠp_bottom) .*
         exp.(
             (z_extrapolated_values .- Fields.field_values(ᶠz_bottom)) ./
-            Fields.field_values(scale_height_values)
+            Fields.field_values(scale_height_values),
         ),
         axes(ᶠp_bottom),
     )
@@ -988,7 +988,7 @@ function compute_ogw_drag(
             # Fall back to ClimaArtifacts
             @info "Local file not found, loading from ClimaArtifacts (h_elem=$(h_elem))..."
             artifact_path =
-                AA.ogwd_computed_drag_file_path(; h_elem, context = ClimaComms.context(Y.c))
+                AA.ogw_computed_drag_file_path(; h_elem, context = ClimaComms.context(Y.c))
             @info "Loading from: $(artifact_path)"
             reader = InputOutput.HDF5Reader(artifact_path, ClimaComms.context(Y.c))
             topo_info = InputOutput.read_field(reader, "computed_drag")

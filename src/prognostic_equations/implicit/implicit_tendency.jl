@@ -13,6 +13,35 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     # TODO: Needs to be updated to use the new microphysics 
     # tendency function with quadrature if implicit_microphysics is true
 
+    if p.atmos.microphysics_tendency_timestepping == Implicit()
+        edmfx_microphysics_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.turbconv_model,
+            p.atmos.microphysics_model,
+        )
+        microphysics_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+        # Surface water/energy deposition from precipitation (implicit path).
+        # The explicit counterpart is called from remaining_tendency!.
+        surface_precipitation_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.surface_model,
+            p.atmos.microphysics_model,
+        )
+    end
+
     if p.atmos.sgs_adv_mode == Implicit()
         edmfx_sgs_vertical_advection_tendency!(
             Yₜ,
@@ -42,10 +71,6 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
 
     if p.atmos.sgs_mf_mode == Implicit()
         edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-    end
-
-    if p.atmos.sgs_nh_pressure_mode == Implicit()
-        edmfx_nh_pressure_drag_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
     if p.atmos.sgs_vertdiff_mode == Implicit()
@@ -199,11 +224,5 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     rst_u₃ = rayleigh_sponge_tendency_u₃(Y.f.u₃, rayleigh_sponge)
     @. Yₜ.f.u₃ += rst_u₃
-    if turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            rst_u₃ʲ = rayleigh_sponge_tendency_u₃(Y.f.sgsʲs.:($j).u₃, rayleigh_sponge)
-            @. Yₜ.f.sgsʲs.:($$j).u₃ += rst_u₃ʲ
-        end
-    end
     return nothing
 end

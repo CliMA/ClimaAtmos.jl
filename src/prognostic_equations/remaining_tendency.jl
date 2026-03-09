@@ -277,24 +277,28 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     # EDMF updraft microphysics tendencies (applied to updraft prognostic variables)
-    edmfx_microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        p.atmos.turbconv_model,
-        p.atmos.microphysics_model,
-    )
+    if p.atmos.microphysics_tendency_timestepping == Explicit()
+        edmfx_microphysics_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.turbconv_model,
+            p.atmos.microphysics_model,
+        )
+    end
 
     # Unified microphysics tendencies (cloud condensation + precipitation)
-    microphysics_tendency!(
-        Yₜ,
-        Y,
-        p,
-        t,
-        p.atmos.microphysics_model,
-        p.atmos.turbconv_model,
-    )
+    if p.atmos.microphysics_tendency_timestepping == Explicit()
+        microphysics_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+    end
 
     non_orographic_gravity_wave_apply_tendency!(
         Yₜ,
@@ -312,6 +316,16 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # NOTE: Microphysics tendencies should be applied before calling this function,
     # because precipitation cache is used in this function
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
+    if p.atmos.microphysics_tendency_timestepping == Explicit()
+        surface_precipitation_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.surface_model,
+            p.atmos.microphysics_model,
+        )
+    end
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)

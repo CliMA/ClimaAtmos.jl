@@ -141,10 +141,49 @@ S_evap_limited = limit_sink(S_evap, q_rain, dt, 3)
 end
 
 
-"""
-    apply_1m_tendency_limits(mp_tendency, tps, q_tot, q_liq, q_ice, q_rai, q_sno, dt)
+# ============================================================================
+# 1M Tendency Limiting
+# ============================================================================
 
-Apply physical limiting to 1M microphysics tendencies.
+"""
+    apply_1m_tendency_limits!(ᶜmp_tendency, timestepping, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt)
+
+Apply physical limiting to 1M microphysics tendencies in-place.
+
+Dispatches on `timestepping::AbstractTimesteppingMode`:
+- **Explicit**: mass-conservation + temperature-rate limiting (see `_explicit_1m_tendency_limits`)
+- **Implicit**: sink-only limiting (see `_implicit_1m_tendency_limits`)
+- **Nothing**: no-op
+
+Also acts as a function barrier: the timestepping mode is dispatched *outside*
+the broadcast, avoiding heap allocation.
+"""
+@inline function apply_1m_tendency_limits!(
+    ᶜmp_tendency, ::Explicit, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+)
+    @. ᶜmp_tendency = _explicit_1m_tendency_limits(
+        ᶜmp_tendency, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+    )
+end
+# For implicit timestepping, apply sink-only limiting.  The S/q Jacobian
+# stabilises same-species sinks (q_rai evaporation on q_rai diagonal), but
+# cross-species sinks (e.g. accretion depleting q_ice via the q_rai equation)
+# are not represented on the q_ice diagonal and can drive q_ice negative.
+# Sink-only limiting (limit_sink) is smooth and monotone, so it does not
+# create the discontinuities that would break Newton convergence.
+@inline function apply_1m_tendency_limits!(
+    ᶜmp_tendency, ::Implicit, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+)
+    @. ᶜmp_tendency = _implicit_1m_tendency_limits(
+        ᶜmp_tendency, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+    )
+end
+@inline apply_1m_tendency_limits!(ᶜmp_tendency, ::Nothing, args...) = nothing
+
+"""
+    _explicit_1m_tendency_limits(mp_tendency, tps, q_tot, q_liq, q_ice, q_rai, q_sno, dt)
+
+Pointwise explicit-mode 1M tendency limiting (called inside broadcast).
 
 Two layers of limiting are applied:
 1. **Mass conservation**: prevents unphysical depletion of each species beyond
@@ -153,27 +192,12 @@ Two layers of limiting are applied:
    - `dq_lcl_dt`: source = `q_vap + q_ice`, sink = `q_liq`
    - `dq_icl_dt`: source = `q_vap + q_liq`, sink = `q_ice`
    - `dq_rai_dt`: source = `q_liq + q_sno`, sink = `q_rai`
-   - `dq_sno_dt`: source = `q_ice + q_rai`, sink = `q_sno`
+   - `dq_sno_dt`: source = `q_ice`, sink = `q_sno`
 2. **Combined temperature rate**: caps the combined tendency to a maximum equivalent 
    temperature change `dT/dt = (L_v/c_p)·dq_lcl + (L_s/c_p)·dq_icl`
-   and rescales `dq_lcl_dt` and `dq_icl_dt` uniformly. (Temperature is used as a convenient 
-   metric for the magnitude of tendencies, although not all tendencies are actually associated 
-   with temperature changes.)
-
-# Arguments
-- `mp_tendency`: NamedTuple from BMT with raw tendencies
-- `tps`: Thermodynamic parameters (for `L_v`, `L_s`, `c_p`)
-- `q_tot`: Total water specific humidity [kg/kg]
-- `q_liq`: Cloud liquid [kg/kg]
-- `q_ice`: Cloud ice [kg/kg]
-- `q_rai`: Rain [kg/kg]
-- `q_sno`: Snow [kg/kg]
-- `dt`: Timestep [s]
-
-# Returns
-NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt)`
+   and rescales `dq_lcl_dt` and `dq_icl_dt` uniformly.
 """
-@inline function apply_1m_tendency_limits(
+@inline function _explicit_1m_tendency_limits(
     mp_tendency,
     tps,
     q_tot,
@@ -234,5 +258,110 @@ NamedTuple with limited tendencies: `(dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt
         dq_icl_dt = dq_icl_dt * scale,
         dq_rai_dt = dq_rai_dt,
         dq_sno_dt = dq_sno_dt,
+    )
+end
+
+"""
+    _implicit_1m_tendency_limits(mp_tendency, q_tot, q_liq, q_ice, q_rai, q_sno, dt)
+
+Pointwise implicit-mode 1M tendency limiting (called inside broadcast).
+
+Applies sink-only limiting via `limit_sink` to prevent each species
+from going negative. Unlike the explicit limiters, implicit sources are
+not hard-capped against cross-species donor pools, as this creates a
+mathematical discontinuity that breaks Newton solver convergence.
+
+Applied once during the initial tendency computation in
+`set_microphysics_tendency_cache!`; **not** re-applied inside Newton iterations.
+
+TODO: make this function no-op once microphysics is fully implicit and stable, to 
+avoid physically inconsistent limiting of sinks (without limits on sources).
+"""
+@inline function _implicit_1m_tendency_limits(
+    mp_tendency, q_tot, q_liq, q_ice, q_rai, q_sno, dt,
+)
+    # n_sink = 1 matches the implicit formulation which is unconditionally stable
+    # for diagonals, but needs to cap sinks bounded by the available tracer pool
+    n_sink = 1
+
+    dq_lcl_dt = limit_sink(mp_tendency.dq_lcl_dt, q_liq, dt, n_sink)
+    dq_icl_dt = limit_sink(mp_tendency.dq_icl_dt, q_ice, dt, n_sink)
+    dq_rai_dt = limit_sink(mp_tendency.dq_rai_dt, q_rai, dt, n_sink)
+    dq_sno_dt = limit_sink(mp_tendency.dq_sno_dt, q_sno, dt, n_sink)
+
+    return (;
+        dq_lcl_dt,
+        dq_icl_dt,
+        dq_rai_dt,
+        dq_sno_dt,
+    )
+end
+
+
+# ============================================================================
+# 0M Tendency Limiting
+# ============================================================================
+
+"""
+    apply_0m_tendency_limits!(ᶜmp_tendency, timestepping, ᶜq_tot, dt)
+
+Apply physical limiting to 0M microphysics tendencies in-place.
+
+No-op for implicit timestepping as the Jacobian handles stability.
+"""
+@inline apply_0m_tendency_limits!(ᶜmp_tendency, ::Implicit, args...) = nothing
+@inline function apply_0m_tendency_limits!(
+    ᶜmp_tendency, ::Explicit, ᶜq_tot, dt,
+)
+    @. ᶜmp_tendency = _explicit_0m_tendency_limits(ᶜmp_tendency, ᶜq_tot, dt)
+end
+@inline apply_0m_tendency_limits!(ᶜmp_tendency, ::Nothing, args...) = nothing
+
+@inline function _explicit_0m_tendency_limits(mp_tendency, q_tot, dt)
+    dq_tot_dt = limit_sink(mp_tendency.dq_tot_dt, q_tot, dt)
+    return (
+        dq_tot_dt = dq_tot_dt,
+        e_int_precip = mp_tendency.e_int_precip,
+    )
+end
+
+
+# ============================================================================
+# 2M Tendency Limiting
+# ============================================================================
+
+"""
+    apply_2m_tendency_limits!(ᶜmp_tendency, timestepping, ᶜq_liq, ᶜn_liq, ᶜq_rai, ᶜn_rai, dt)
+
+Apply physical limiting to 2M microphysics tendencies in-place.
+
+No-op for implicit timestepping as the Jacobian handles stability.
+"""
+@inline apply_2m_tendency_limits!(ᶜmp_tendency, ::Implicit, args...) = nothing
+@inline function apply_2m_tendency_limits!(
+    ᶜmp_tendency, ::Explicit, ᶜq_liq, ᶜn_liq, ᶜq_rai, ᶜn_rai, dt,
+)
+    @. ᶜmp_tendency = _explicit_2m_tendency_limits(
+        ᶜmp_tendency, ᶜq_liq, ᶜn_liq, ᶜq_rai, ᶜn_rai, dt,
+    )
+end
+@inline apply_2m_tendency_limits!(ᶜmp_tendency, ::Nothing, args...) = nothing
+
+@inline function _explicit_2m_tendency_limits(mp_tendency, q_liq, n_liq, q_rai, n_rai, dt)
+    f_liq = coupled_sink_limit_factor(
+        mp_tendency.dq_lcl_dt, mp_tendency.dn_lcl_dt, q_liq, n_liq, dt,
+    )
+    f_rai = coupled_sink_limit_factor(
+        mp_tendency.dq_rai_dt, mp_tendency.dn_rai_dt, q_rai, n_rai, dt,
+    )
+
+    return (
+        dq_lcl_dt = mp_tendency.dq_lcl_dt * f_liq,
+        dn_lcl_dt = mp_tendency.dn_lcl_dt * f_liq,
+        dq_rai_dt = mp_tendency.dq_rai_dt * f_rai,
+        dn_rai_dt = mp_tendency.dn_rai_dt * f_rai,
+        dq_ice_dt = mp_tendency.dq_ice_dt,
+        dq_rim_dt = mp_tendency.dq_rim_dt,
+        db_rim_dt = mp_tendency.db_rim_dt,
     )
 end

@@ -1,15 +1,29 @@
 # ============================================================================
 # Unified Microphysics Tendencies
 # ============================================================================
-# Single entry point for all microphysics tendency calculations.
-# Combines cloud condensation/evaporation and precipitation processes.
 #
-# For NonEquilibriumMicrophysics, cloud condensation/evaporation is computed
-# first, then precipitation processes (autoconversion, accretion, evaporation).
+# Single entry point for all microphysics tendency calculations.  All expensive
+# computations (SGS quadrature, BMT calls, limiters) are performed in
+# `set_microphysics_tendency_cache!` and stored in `p.precomputed`.  The
+# functions here apply those cached tendencies with the appropriate density
+# and EDMF area weighting.
 #
-# In EDMF modes (PrognosticEDMFX/DiagnosticEDMFX), tendencies are computed
-# per-subdomain in the EDMF precomputed quantities files and applied here
-# with area weighting.
+# Dispatch matrix (microphysics_model × turbconv_model):
+#
+#   Model        | Nothing | DiagnosticEDMFX | PrognosticEDMFX
+#   -------------|---------|-----------------|----------------
+#   DryModel     | no-op   | no-op (fallback)| no-op (fallback)
+#   0M           | ✓       | ✓ (fallback)    | ✓ (fallback)
+#   1M           | ✓       | ✓               | ✓
+#   2M           | ✓       | error           | ✓
+#   2MP3         | ✓       | —               | —
+#
+# 0M uses a wildcard `_` for turbconv_model: the tendency aggregation (ᶜS_ρq_tot,
+# ᶜS_ρe_tot) is done per-configuration in `set_microphysics_tendency_cache!`, so
+# all turbconv variants apply identically here.
+#
+# For 1M/2M in EDMF modes, separate source terms for the environment (⁰ suffix)
+# and each updraft (ʲs suffix) are area-weighted and accumulated.
 
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
@@ -39,19 +53,7 @@ end
 ##### 1-Moment Microphysics
 #####
 
-"""
-    microphysics_tendency!(Yₜ, Y, p, t, microphysics_model, turbconv_model)
-
-Unified entry point for all microphysics tendency calculations.
-
-For `NonEquilibriumMicrophysics` with 1M/2M microphysics (without EDMF): Applies
-microphysics tendencies from precomputed cache
-
-For EDMF modes, tendencies are computed per-subdomain in precomputed quantities
-and applied here with area weighting.
-
-Modifies `Yₜ.c.ρq_liq`, `Yₜ.c.ρq_ice`, `Yₜ.c.ρq_rai`, `Yₜ.c.ρq_sno` in place.
-"""
+# 1M non-EDMF: apply precomputed grid-mean tendencies scaled by density
 function microphysics_tendency!(Yₜ, Y, p, t,
     ::NonEquilibriumMicrophysics1M, _,
 )
@@ -76,17 +78,16 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     (; ᶜSqₗᵐʲs, ᶜSqᵢᵐʲs, ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs) = p.precomputed
     (; ᶜρaʲs) = p.precomputed
 
-    # Tendencies are already limited in the cache; just scale by density
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     turbconv_model = p.atmos.turbconv_model
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, p.precomputed.ᶜρaʲs, turbconv_model))
 
+    # Environment contribution
     @. Yₜ.c.ρq_liq += ᶜρa⁰ * ᶜSqₗᵐ⁰
     @. Yₜ.c.ρq_ice += ᶜρa⁰ * ᶜSqᵢᵐ⁰
     @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜSqᵣᵐ⁰
     @. Yₜ.c.ρq_sno += ᶜρa⁰ * ᶜSqₛᵐ⁰
 
-    # Update from the updraft microphysics tendencies
+    # Updraft contributions
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
         @. Yₜ.c.ρq_liq += ᶜρaʲs.:($$j) * ᶜSqₗᵐʲs.:($$j)
@@ -94,6 +95,7 @@ function microphysics_tendency!(Yₜ, Y, p, t,
         @. Yₜ.c.ρq_rai += ᶜρaʲs.:($$j) * ᶜSqᵣᵐʲs.:($$j)
         @. Yₜ.c.ρq_sno += ᶜρaʲs.:($$j) * ᶜSqₛᵐʲs.:($$j)
     end
+    return nothing
 end
 
 # 1M with PrognosticEDMFX
@@ -107,13 +109,13 @@ function microphysics_tendency!(Yₜ, Y, p, t,
 
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
-    # Tendencies are already limited in the cache; just scale by density
+    # Environment contribution
     @. Yₜ.c.ρq_liq += ᶜρa⁰ * ᶜSqₗᵐ⁰
     @. Yₜ.c.ρq_ice += ᶜρa⁰ * ᶜSqᵢᵐ⁰
     @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜSqᵣᵐ⁰
     @. Yₜ.c.ρq_sno += ᶜρa⁰ * ᶜSqₛᵐ⁰
 
-    # Update from the updraft microphysics tendencies
+    # Updraft contributions
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
         @. Yₜ.c.ρq_liq += Y.c.sgsʲs.:($$j).ρa * ᶜSqₗᵐʲs.:($$j)
@@ -121,6 +123,7 @@ function microphysics_tendency!(Yₜ, Y, p, t,
         @. Yₜ.c.ρq_rai += Y.c.sgsʲs.:($$j).ρa * ᶜSqᵣᵐʲs.:($$j)
         @. Yₜ.c.ρq_sno += Y.c.sgsʲs.:($$j).ρa * ᶜSqₛᵐʲs.:($$j)
     end
+    return nothing
 end
 
 #####
@@ -139,6 +142,8 @@ function microphysics_tendency!(Yₜ, Y, p, t,
 
     # --- Aerosol activation (ARG 2000) — requires prescribed aerosols ---
     # Cloud condensation is already included in the fused BMT cache tendencies.
+    # hasproperty here is a compile-time constant for concrete `p` types; the
+    # dead branch is eliminated by the compiler when aerosols are not configured.
     if hasproperty(p, :tracers) &&
        hasproperty(p.tracers, :prescribed_aerosols_field)
         seasalt_num = p.scratch.ᶜtemp_scalar
@@ -210,34 +215,34 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     @. Yₜ.c.ρq_ice += ᶜρa⁰ * ᶜSqᵢᵐ⁰
     @. Yₜ.c.ρq_sno += ᶜρa⁰ * ᶜSqₛᵐ⁰
 
-    # Update from the updraft microphysics tendencies
+    # Updraft contributions
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
-        # Tendencies already limited in cache; just scale by density
         @. Yₜ.c.ρq_liq += Y.c.sgsʲs.:($$j).ρa * ᶜSqₗᵐʲs.:($$j)
         @. Yₜ.c.ρn_liq += Y.c.sgsʲs.:($$j).ρa * ᶜSnₗᵐʲs.:($$j)
         @. Yₜ.c.ρq_rai += Y.c.sgsʲs.:($$j).ρa * ᶜSqᵣᵐʲs.:($$j)
         @. Yₜ.c.ρn_rai += Y.c.sgsʲs.:($$j).ρa * ᶜSnᵣᵐʲs.:($$j)
-
-        # Ice and snow (zero in warm-rain 2M)
         @. Yₜ.c.ρq_ice += Y.c.sgsʲs.:($$j).ρa * ᶜSqᵢᵐʲs.:($$j)
         @. Yₜ.c.ρq_sno += Y.c.sgsʲs.:($$j).ρa * ᶜSqₛᵐʲs.:($$j)
     end
+    return nothing
 end
 
 #####
 ##### 2-Moment Microphysics with P3 Ice Scheme
 #####
 
+# 2MP3: delegates warm-rain tendencies to the 2M path, then adds P3 ice collision
+# terms (∂ₜq_c, ∂ₜq_r, ∂ₜN_c, ∂ₜN_r, ∂ₜL_rim, ∂ₜL_ice, ∂ₜB_rim).
 function microphysics_tendency!(Yₜ, Y, p, t,
     ::NonEquilibriumMicrophysics2MP3, ::Nothing,
 )
     (; ᶜScoll) = p.precomputed
 
-    # 2 moment scheme (warm)
+    # Warm-rain processes (autoconversion, accretion, evaporation)
     microphysics_tendency!(Yₜ, Y, p, t, NonEquilibriumMicrophysics2M(), nothing)
 
-    # P3 scheme (cold) - collisions
+    # P3 ice collisions (riming, aggregation, melting)
     @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜScoll.∂ₜq_c
     @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜScoll.∂ₜq_r
     @. Yₜ.c.ρn_liq += ᶜScoll.∂ₜN_c

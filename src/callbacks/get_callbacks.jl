@@ -45,6 +45,18 @@ function get_diagnostics(
         parsed_args["netcdf_output_at_levels"] ? CAD.LevelsMethod() :
         CAD.FakePressureLevelsMethod()
 
+    # Map config string to ClimaCore.Remapping type (NetCDFWriter expects AbstractRemappingMethod)
+    netcdf_horizontal_str = get(parsed_args, "netcdf_horizontal_method", "spectral")
+    horizontal_method = if netcdf_horizontal_str == "bilinear"
+        CC.Remapping.BilinearRemapping()
+    elseif netcdf_horizontal_str == "spectral"
+        CC.Remapping.SpectralElementRemapping()
+    else
+        error(
+            "netcdf_horizontal_method must be \"bilinear\" or \"spectral\", got \"$(netcdf_horizontal_str)\"",
+        )
+    end
+
     # The start_date keyword was added in v0.2.9. For prior versions, the diagnostics will
     # not contain the date
     maybe_add_start_date =
@@ -55,6 +67,7 @@ function get_diagnostics(
         output_dir,
         num_points = num_netcdf_points;
         z_sampling_method,
+        horizontal_method,
         sync_schedule = CAD.EveryStepSchedule(),
         init_time = t_start,
         maybe_add_start_date...,
@@ -77,6 +90,7 @@ function get_diagnostics(
             output_dir,
             num_points = num_netcdf_points;
             z_sampling_method,
+            horizontal_method,
             sync_schedule = CAD.EveryStepSchedule(),
             init_time = t_start,
             maybe_add_start_date...,
