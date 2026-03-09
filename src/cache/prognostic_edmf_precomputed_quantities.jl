@@ -60,13 +60,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
         @. ᶜq_tot_safe⁰ = max(ᶜq_liq_rai⁰ + ᶜq_ice_sno⁰, ᶜq_tot⁰)
         ᶜh⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)  # specific enthalpy
-        @. ᶜT⁰ = TD.air_temperature(
-            thermo_params,
-            TD.ph(),
-            ᶜh⁰,
-            ᶜq_tot_safe⁰,
-            ᶜq_liq_rai⁰,
-            ᶜq_ice_sno⁰,
+        @. ᶜT⁰ = max(
+            CAP.T_min_sgs(p.params),
+            TD.air_temperature(
+                thermo_params,
+                TD.ph(),
+                ᶜh⁰,
+                ᶜq_tot_safe⁰,
+                ᶜq_liq_rai⁰,
+                ᶜq_ice_sno⁰,
+            ),
         )
     else
         # EquilibriumMicrophysics0M: use saturation adjustment to get T and phase partition
@@ -143,13 +146,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
             @. ᶜq_tot_safeʲ = max(ᶜq_liq_raiʲ + ᶜq_ice_snoʲ, ᶜq_totʲ)
             ᶜhʲ = @. lazy(ᶜmseʲ - ᶜΦ)
-            @. ᶜTʲ = TD.air_temperature(
-                thermo_params,
-                TD.ph(),
-                ᶜhʲ,
-                ᶜq_tot_safeʲ,
-                ᶜq_liq_raiʲ,
-                ᶜq_ice_snoʲ,
+            @. ᶜTʲ = max(
+                CAP.T_min_sgs(p.params),
+                TD.air_temperature(
+                    thermo_params,
+                    TD.ph(),
+                    ᶜhʲ,
+                    ᶜq_tot_safeʲ,
+                    ᶜq_liq_raiʲ,
+                    ᶜq_ice_snoʲ,
+                ),
             )
         else
             # EquilibriumMicrophysics0M: use saturation adjustment
@@ -366,10 +372,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         end
         # Add boundary kinematic contribution to entrainment to compensate
         # advective area loss (∂(ρaw)/∂z) in the first cell. Using a one-sided
-        # estimate (zero flux below the surface), we add ᶠw₂ / ᶜdz₁ = 2 ᶜw₁ / ᶜdz₁
+        # estimate (zero flux below the surface), we add ᶠw₂ / ᶜdz₁ =  ᶠu³ʲs[2]
         # so that entrainment can effectively relax area toward `surface_area`.
-        ᶜdz = Fields.Δz_field(axes(Y.c))
-        @. p.scratch.ᶜtemp_scalar_4 = 2 * get_physical_w(ᶜuʲs.:($$j), ᶜlg) / ᶜdz
+        @. p.scratch.ᶜtemp_scalar_4 =
+            ᶜright_bias(p.precomputed.ᶠu³ʲs.:($$j).components.data.:1)
         w_over_dz_val = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar_4, 1))
         @. entr_int_val += ifelse(buoyancy_flux_val < 0, 0, w_over_dz_val)
 

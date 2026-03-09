@@ -59,7 +59,7 @@ function compute_base_flux(ogw_mode::String, comms_ctx, config_file, job_id; h_e
 
     ᶜz = Fields.coordinate_field(Y.c).z
 
-    # Simple latitude-based wind profile (from ogwd_baseflux_gpu.jl / Garner05 Figure 1)
+    # Simple latitude-based wind profile (from ogw_baseflux_gpu.jl / Garner05 Figure 1)
     # Tropics (|lat| <= 23.5): u = -7 m/s, v = 0
     # Extratropics: u = 13 m/s, v = 0
     ᶜlocal_geometry = Fields.local_geometry_field(axes(Y.c))
@@ -85,7 +85,7 @@ function compute_base_flux(ogw_mode::String, comms_ctx, config_file, job_id; h_e
     # Use constant buoyancy frequency N = 0.01
     @. ᶜbuoyancy_frequency = FT(0.01)
 
-    # Use constant density ρ = 1.0 (like ogwd_baseflux_gpu.jl)
+    # Use constant density ρ = 1.0 (like ogw_baseflux_gpu.jl)
     @. Y.c.ρ = FT(1.0)
 
     # Compute base flux

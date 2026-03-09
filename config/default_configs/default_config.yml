@@ -69,8 +69,11 @@ use_dynamic_krylov_rtol:
   help: "Whether to use Eisenstat-Walker forcing instead of a constant relative tolerance in the Krylov method (only for ClimaTimeSteppers.jl)"
   value: false
 max_newton_iters_ode:
-  help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)"
+  help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)."
   value: 1
+max_newton_iters_ode_subproblem:
+  help: "Maximum number of Newton iterations for the auxiliary implicit subproblem (only for ODE algorithms that use Newton's method). In prognostic EDMF, this controls the Newton iterations used to solve the updraft velocity equation; all other variables are advanced with a single Newton iteration."
+  value: 3
 ode_algo:
   help: "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, etc.]"
   value: "ARS343"
@@ -249,8 +252,8 @@ use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true`, `false` (default)]"
   value: true
 sgs_distribution:
-  help: "Distribution type for SGS quadrature over microphysics. [`gaussian` (default), `lognormal`, `mean` (grid-mean only, no SGS sampling)]"
-  value: "gaussian"
+  help: "Distribution type for SGS quadrature over microphysics. [`gaussian`, `lognormal` (default), `mean` (grid-mean only, no SGS sampling)]"
+  value: "lognormal"
 quadrature_order:
   help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 2"
   value: 3
@@ -347,6 +350,9 @@ netcdf_output_at_levels:
 netcdf_interpolation_num_points:
   help: "Override the number of interpolation point for the NetCDF output. This configuration has to be a list of integers, e.g. [180, 90, 10]."
   value: ~
+netcdf_horizontal_method:
+  help: "Horizontal interpolation method for NetCDF remapping to lat/lon (or other) grids. Options: `bilinear` (default) or `spectral`."
+  value: "bilinear"
 check_nan_every:
   help: "Check if the state contains NaNs every this number of iterations"
   value: 1024

@@ -391,20 +391,20 @@ end
 Parse the SGS distribution type from configuration.
 
 # Config value mapping
-- `"gaussian"` or `nothing` → `GaussianSGS()` (default)
 - `"lognormal"` → `LogNormalSGS()`
+- `"gaussian"` → `GaussianSGS()`
 - `"mean"` → `GridMeanSGS()` (grid-mean only, no SGS sampling)
 """
 function get_sgs_distribution(parsed_args)
-    dist_name = get(parsed_args, "sgs_distribution", "gaussian")
-    return if dist_name in (nothing, "gaussian")
-        GaussianSGS()
-    elseif dist_name == "lognormal"
+    dist_name = parsed_args["sgs_distribution"]
+    return if dist_name == "lognormal"
         LogNormalSGS()
+    elseif dist_name == "gaussian"
+        GaussianSGS()
     elseif dist_name == "mean"
         GridMeanSGS()
     else
-        error("Invalid sgs_distribution $(dist_name). Use: gaussian, lognormal, mean")
+        error("Invalid sgs_distribution $(dist_name). Use: lognormal, gaussian, mean")
     end
 end
 

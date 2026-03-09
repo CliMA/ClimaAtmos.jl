@@ -3,6 +3,39 @@
 #####
 
 """
+    surface_precipitation_tendency!(Yₜ, Y, p, t, surface_model, microphysics_model)
+
+Applies the surface water and energy deposition from precipitation.
+
+Called from both `implicit_tendency!` (when microphysics is implicit) and
+`remaining_tendency!` (when microphysics is explicit), so that the surface
+deposition always uses the same cached `ᶜS_ρq_tot` as the atmospheric water
+removal, preserving conservation across IMEX stages.
+"""
+surface_precipitation_tendency!(Yₜ, Y, p, t, _, _) = nothing
+
+surface_precipitation_tendency!(Yₜ, Y, p, t, ::SlabOceanSST, ::DryModel) = nothing
+
+function surface_precipitation_tendency!(
+    Yₜ, Y, p, t, slab::SlabOceanSST, microphysics_model,
+)
+    FT = eltype(Y)
+
+    # Surface energy from precipitation
+    pet = p.precomputed.col_integrated_precip_energy_tendency
+    depth_ocean = slab.depth_ocean
+    ρ_ocean = slab.ρ_ocean
+    cp_ocean = slab.cp_ocean
+    surface_heat_capacity_per_area = ρ_ocean * cp_ocean * depth_ocean
+    @. Yₜ.sfc.T -= pet / surface_heat_capacity_per_area
+
+    # Surface water from precipitation (rain + snow)
+    P_liq = p.precomputed.surface_rain_flux
+    P_snow = p.precomputed.surface_snow_flux
+    @. Yₜ.sfc.water -= P_liq + P_snow
+end
+
+"""
     surface_temp_tendency!(Yₜ, Y, p, t, surface_model)
 
 Computes the tendency for the prognostic surface temperature (`Y.sfc.T`) and,
@@ -16,41 +49,11 @@ This function is dispatched based on the type of `surface_model`:
     - Net upward radiative flux at the surface.
     - Net upward turbulent surface energy flux (sensible + latent heat).
     - Net ocean heat flux divergence in the slab (Q-flux), if enabled.
-    - Energy flux due to precipitation.
-    - For surface water (if model is not dry):
-        - Net upward turbulent surface water flux (evaporation).
-        - Precipitation (rain and snow) impact.
+    - For surface water: net upward turbulent surface water flux (evaporation).
 
-The heat capacity of the slab surface is determined by `slab.depth_ocean`,
-`slab.ρ_ocean`, and `slab.cp_ocean`.
-
-**Sign Conventions for Flux Variables (all positive = surface to atmosphere/upward):**
-- `sfc_rad_e_flux`: Net upward radiative flux (e.g., SW_up - SW_down + LW_up - LW_down).
-                   Positive value signifies energy loss for the surface.
-- `turb_e_flux_sfc_to_atm` (derived from `p.precomputed.sfc_conditions.ρ_flux_h_tot`):
-                   Net upward turbulent energy flux. Positive value signifies energy loss for the surface.
-- `Q` (Q-flux): Net ocean heat flux divergence in the slab. Positive value signifies
-                local energy loss for the surface slab.
-- `pet` (precipitation energy): Energy removed from the surface due to precipitation processes. 
-                Positive value signifies energy loss for the surface.
-- `P_liq`, `P_snow` (from `p.precomputed.surface_x_flux`): These variables must represent
-                the precipitation water flux (positive upward). Thus, for physical
-                precipitation *onto* the surface (a downward flux), `P_liq` and `P_snow`
-                are *negative*.
-- `sfc_turb_w_flux` (derived from `p.precomputed.sfc_conditions.ρ_flux_q_tot`):
-                Net upward turbulent water flux (evaporation). Positive value signifies
-                water loss for the surface. 
-
-Arguments:
-- `Yₜ`: The tendency state vector, where `Yₜ.sfc` components are modified.
-- `Y`: The current state vector (used for surface latitude for Q-flux).
-- `p`: Cache containing parameters, precomputed fields (radiation fluxes, surface
-       conditions, precipitation fluxes), atmospheric model configurations, and
-       slab model properties.
-- `t`: Current simulation time.
-- `surface_model`: The surface model instance.
-
-Modifies surface tendency vector `Yₜ.sfc` in place.
+Precipitation surface deposition (energy and water) is handled separately by
+`surface_precipitation_tendency!`, which is called from both the implicit and
+explicit tendency paths.
 """
 surface_temp_tendency!(Yₜ, Y, p, t, ::PrescribedSST) = nothing
 
@@ -81,7 +84,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
     if !(p.atmos.disable_surface_flux_tendency)
         turb_e_flux_sfc_to_atm =
             Geometry.WVector.(
-                p.precomputed.sfc_conditions.ρ_flux_h_tot
+                p.precomputed.sfc_conditions.ρ_flux_h_tot,
             ).components.data.:1
     else
         turb_e_flux_sfc_to_atm = 0
@@ -100,41 +103,29 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
         Q = FT(0)
     end
 
-    # 4. Energy tendency due to precipitation accumulation        
-    if !(p.atmos.microphysics_model isa DryModel)
-
-        pet = p.conservation_check.col_integrated_precip_energy_tendency
-
-    else
-        pet = FT(0)
-    end
-
-    # Total energy tendency for surface temperature:
-    # dT/dt = -(NetRad_upward + TurbFlux_sfc_to_atm + Q_div - PrecipEnergySource) / HeatCapacity
+    # Total energy tendency for surface temperature
+    # (precipitation energy/water deposition is handled separately
+    # by surface_precipitation_tendency! in both implicit and explicit paths):
+    # dT/dt = -(NetRad_upward + TurbFlux_sfc_to_atm + Q_div) / HeatCapacity
     @. Yₜ.sfc.T -=
-        (sfc_rad_e_flux + turb_e_flux_sfc_to_atm + Q + pet) /
+        (sfc_rad_e_flux + turb_e_flux_sfc_to_atm + Q) /
         surface_heat_capacity_per_area
 
     # --- WATER BALANCE (if moisture is active) ---
     if !(p.atmos.microphysics_model isa DryModel)
-        # 1. Turbulent surface water fluxes (evaporation/condensation)
+        # Turbulent surface water fluxes (evaporation/condensation)
         if !(p.atmos.disable_surface_flux_tendency)
             sfc_turb_w_flux =
                 Geometry.WVector.(
-                    p.precomputed.sfc_conditions.ρ_flux_q_tot
+                    p.precomputed.sfc_conditions.ρ_flux_q_tot,
                 ).components.data.:1
         else
             sfc_turb_w_flux = 0
         end
 
-        # 2. Precipitation (rain and snow, defined negative downward, so positive flux 
-        # from surface to atmosphere)
-        P_liq = p.precomputed.surface_rain_flux
-        P_snow = p.precomputed.surface_snow_flux
-
-        # Total water tendency for surface water:
-        # d(water)/dt = -(Precip_up + Precip_snow_up + TurbFlux_water_atm_to_sfc) [kg/m²/s]
-        @. Yₜ.sfc.water -= P_liq + P_snow + sfc_turb_w_flux
+        # Water tendency from turbulent fluxes only;
+        # precipitation (rain + snow) is handled by surface_precipitation_tendency!.
+        @. Yₜ.sfc.water -= sfc_turb_w_flux
     end
 
 end
