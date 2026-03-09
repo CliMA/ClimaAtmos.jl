@@ -18,6 +18,7 @@ import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
 import CUDA
+import SciMLBase
 
 include("common.jl")
 (; config_file, job_id) = CA.commandline_kwargs()
@@ -25,12 +26,11 @@ config = CA.AtmosConfig(config_file; job_id)
 
 simulation = CA.get_simulation(config)
 (; integrator) = simulation;
-Y₀ = deepcopy(integrator.u);
 # Run one step to compile
-@info "Compiling benchmark_step!..."
-CA.benchmark_step!(integrator, Y₀);
+@info "Compiling step!..."
+SciMLBase.step!(integrator);
 
-@info "Running benchmark_step!..."
+@info "Running step!..."
 comms_ctx = ClimaComms.context(integrator.u.c)
 device = ClimaComms.device(comms_ctx)
 
@@ -43,14 +43,18 @@ if device isa ClimaComms.CUDADevice
         @info "Using external CUDA profiler"
         CUDA.@profile external = true begin
             e = CUDA.@elapsed begin
-                CA.benchmark_step!(integrator, Y₀, n_steps)
+                for i in 1:n_steps
+                    SciMLBase.step!(integrator)
+                end
             end
         end
     else
         @info "Using internal CUDA profiler"
         res = CUDA.@profile external = false begin
             e = CUDA.@elapsed begin
-                CA.benchmark_step!(integrator, Y₀, n_steps)
+                for i in 1:n_steps
+                    SciMLBase.step!(integrator)
+                end
             end
         end
         show(IOContext(stdout, :limit => false), res)
@@ -62,7 +66,9 @@ else
     local e
     s = CA.@timed_str begin
         e = ClimaComms.elapsed(device) do
-            CA.benchmark_step!(integrator, Y₀, n_steps) # run
+            for i in 1:n_steps
+                SciMLBase.step!(integrator)
+            end
         end
     end
     @info "Ran step! $n_steps times in $s, ($(CA.prettytime(e/n_steps*1e9)) per step)"
