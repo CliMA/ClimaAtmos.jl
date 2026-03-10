@@ -896,9 +896,11 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
 
     # TODO - duplicated with tendency and implicit cache update
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
+    (; ᶜ∂tendency_∂q_tot) = p.precomputed
+
     @. ᶜρ_dq_tot_dt = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
     @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
-    # TODO - duplicated with tendency and implicit cache update
+    @. ᶜ∂tendency_∂q_tot = _jac_coeff(ᶜρ_dq_tot_dt, Y.c.ρq_tot)
     return nothing
 end
 
@@ -930,9 +932,9 @@ function set_microphysics_tendency_cache!(
     )
 
     # TODO - duplicated with tendency and implicit cache update
-    #(; ᶜmp_tendency) = p.precomputed
     (; ᶜmp_tendencyʲs, ᶜρaʲs) = p.precomputed
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
+    (; ᶜ∂tendency_∂q_tot, ᶜ∂tendency_∂q_totʲs) = p.precomputed
     n = n_mass_flux_subdomains(tm)
     @. ᶜρ_dq_tot_dt = ᶜmp_tendency.dq_tot_dt * ρa⁰(Y.c.ρ, ᶜρaʲs, tm)
     @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
@@ -941,8 +943,12 @@ function set_microphysics_tendency_cache!(
         @. ᶜρ_de_tot_dt +=
             ᶜρaʲs.:($$j) * ᶜmp_tendencyʲs.:($$j).dq_tot_dt *
             ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
+
+        @. ᶜ∂tendency_∂q_totʲs.:($$j) = 0
     end
-    # TODO - duplicated with tendency and implicit cache update
+
+    @. ᶜ∂tendency_∂q_tot = _jac_coeff(ᶜρ_dq_tot_dt, Y.c.ρq_tot)
+
     return nothing
 end
 
@@ -982,6 +988,8 @@ function set_microphysics_tendency_cache!(
             e_tot_0M_precipitation_sources_helper(
                 thp, ᶜTʲs.:($$j), ᶜq_liq_raiʲs.:($$j), ᶜq_ice_snoʲs.:($$j), ᶜΦ,
             )
+
+        @. ᶜ∂tendency_∂q_totʲs.:($$j) = _jac_coeff(ᶜmp_tendencyʲs.:($$j).dq_tot_dt, Y.c.sgsʲs.:($$j).q_tot)
     end
 
     ### Environment contribution
@@ -1010,7 +1018,9 @@ function set_microphysics_tendency_cache!(
             ᶜmp_tendencyʲs.:($$j).dq_tot_dt * Y.c.sgsʲs.:($$j).ρa *
             ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
     end
-    # TODO - duplicated with tendency and implicit cache update
+
+    @. ᶜ∂tendency_∂q_tot = _jac_coeff(ᶜρ_dq_tot_dt, Y.c.ρq_tot)
+
     return nothing
 end
 
@@ -1049,10 +1059,8 @@ function set_microphysics_tendency_cache!(
     )
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
     # grid-mean state for the implicit Jacobian diagonal.
-    @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
-        BMT.Microphysics1Moment(), cmp, thp, Y.c.ρ, ᶜT,
-        ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno,
-    )
+    @. ᶜmp_derivative = _jac_coeffs_1m(ᶜmp_tendency, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno)
+    
     return nothing
 end
 
@@ -1090,10 +1098,8 @@ function set_microphysics_tendency_cache!(
 
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
     # grid-mean state for the implicit Jacobian diagonal.
-    @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
-        BMT.Microphysics1Moment(), cm1, thp, Y.c.ρ, ᶜT,
-        ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno,
-    )
+    @. ᶜmp_derivative = _jac_coeffs_1m(ᶜmp_tendency, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno)
+
     return nothing
 end
 
@@ -1122,12 +1128,13 @@ function set_microphysics_tendency_cache!(
             ᶜTʲs.:($j), dt, cmp, thp,
         )
         # BMT cloud derivatives at updraft j state (same pattern as grid-mean).
-        @. ᶜmp_derivativeʲs.:($$j) = BMT.bulk_microphysics_cloud_derivatives(
-            BMT.Microphysics1Moment(), cmp, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j),
-            p.precomputed.ᶜq_tot_safeʲs.:($$j),
-            Y.c.sgsʲs.:($$j).q_liq, Y.c.sgsʲs.:($$j).q_ice,
-            Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
-        )
+        @. ᶜmp_derivativeʲs.:($$j) = _jac_coeffs_1m(
+            ᶜmp_tendencyʲs.:($$j), 
+            Y.c.sgsʲs.:($j).q_liq, 
+            Y.c.sgsʲs.:($j).q_ice,
+            Y.c.sgsʲs.:($j).q_rai, 
+            Y.c.sgsʲs.:($j).q_sno,
+            )
     end
 
     ### Environment contribution
@@ -1158,10 +1165,8 @@ function set_microphysics_tendency_cache!(
     ᶜq_ice_gm = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
     ᶜq_rai_gm = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
     ᶜq_sno_gm = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-    @. ᶜmp_derivative = BMT.bulk_microphysics_cloud_derivatives(
-        BMT.Microphysics1Moment(), cmp, thp, Y.c.ρ, ᶜT, ᶜq_tot_safe,
-        ᶜq_liq_gm, ᶜq_ice_gm, ᶜq_rai_gm, ᶜq_sno_gm,
-    )
+    @. ᶜmp_derivative = _jac_coeffs_1m(ᶜmp_tendency⁰, ᶜq_liq_gm, ᶜq_ice_gm, ᶜq_rai_gm, ᶜq_sno_gm)
+
     return nothing
 end
 

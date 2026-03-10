@@ -1,4 +1,4 @@
-324
+325
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+325
+- Update implicit timestepping for microphysics tendencies, with diagonal Jacobian entries.
+
 324
 - Updating to SurfaceFluxesv1:
   - maxiter in surfacefluxes rootsolver calls is modified,
