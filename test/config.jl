@@ -29,7 +29,7 @@ function extract_job_ids(folder_path)
     return job_id_dict
 end
 
-file_to_job_id = extract_job_ids("config")
+file_to_job_id = extract_job_ids(joinpath(pkgdir(CA), "config"))
 # Check that all jobs have a unique job_id
 value_to_keys = Dict()
 for (key, value) in file_to_job_id
