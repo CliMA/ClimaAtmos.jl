@@ -198,7 +198,11 @@ scratch = (;
 )
 
 for j in 1:length(lat)
-    local non_orographic_gravity_wave = non_orographic_gravity_wave_param(lat[j], FT)
+    local non_orographic_gravity_wave = (;
+        non_orographic_gravity_wave_param(lat[j], FT)...,
+        u_waveforcing_top = similar(Fields.level(ᶜz, 1), FT),
+        v_waveforcing_top = similar(Fields.level(ᶜz, 1), FT),
+    )
     # Create input parameters at each level
     local params_nogw = (; non_orographic_gravity_wave, scratch)
     for i in 1:length(lon)
