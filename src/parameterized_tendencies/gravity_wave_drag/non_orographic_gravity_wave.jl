@@ -49,6 +49,8 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             ᶜlevel,
             u_waveforcing = similar(Y.c.ρ),
             v_waveforcing = similar(Y.c.ρ),
+            u_waveforcing_top = similar(Fields.level(Y.c.ρ, 1)),
+            v_waveforcing_top = similar(Fields.level(Y.c.ρ, 1)),
             uforcing = similar(Y.c.ρ),
             vforcing = similar(Y.c.ρ),
             gw_ncval = Val(nc),
@@ -122,6 +124,8 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             ᶜlevel,
             u_waveforcing = similar(Y.c.ρ),
             v_waveforcing = similar(Y.c.ρ),
+            u_waveforcing_top = similar(Fields.level(Y.c.ρ, 1)),
+            v_waveforcing_top = similar(Fields.level(Y.c.ρ, 1)),
             uforcing = similar(Y.c.ρ),
             vforcing = similar(Y.c.ρ),
             gw_ncval = Val(nc),
@@ -451,7 +455,7 @@ function non_orographic_gravity_wave_forcing(
         )
 
         #extract the momentum flux outside the model top.
-        u_waveforcing_top = p.scratch.temp_field_level
+        u_waveforcing_top = p.non_orographic_gravity_wave.u_waveforcing_top
         copyto!(
             Fields.field_values(u_waveforcing_top),
             Fields.field_values(
@@ -466,7 +470,7 @@ function non_orographic_gravity_wave_forcing(
             0,
         )
 
-        v_waveforcing_top = p.scratch.temp_field_level
+        v_waveforcing_top = p.non_orographic_gravity_wave.v_waveforcing_top
         copyto!(
             Fields.field_values(v_waveforcing_top),
             Fields.field_values(

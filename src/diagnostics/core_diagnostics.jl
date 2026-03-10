@@ -1709,7 +1709,7 @@ function compute_cape!(out, state, cache, time)
 
     # Helper function to extract just T from saturation_adjustment result
     # (avoids broadcasting issues with NamedTuple containing bool)
-    _parcel_T_from_sa(thermo_params, p, θ_liq_ice, q_tot, maxiter, tol) =
+    _parcel_T_from_sa(thermo_params, p, θ_liq_ice, q_tot, maxiter) =
         TD.saturation_adjustment(
             thermo_params,
             TD.pθ_li(),
@@ -1717,7 +1717,6 @@ function compute_cape!(out, state, cache, time)
             θ_liq_ice,
             q_tot;
             maxiter,
-            tol,
         ).T
 
     # Create parcel thermodynamic states at each level based on energy & moisture at surface
@@ -1729,7 +1728,6 @@ function compute_cape!(out, state, cache, time)
                 surface_θ_liq_ice,
                 surface_q,
                 4,
-                FT(0),
             ),
         )
 

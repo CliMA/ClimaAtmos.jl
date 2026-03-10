@@ -26,4 +26,5 @@ pretty_table(
     fixed_data_column_widths = [10, 15, 8, 32, 15],
     column_labels = [["Short name", "Long name", "Units", "Comments", "Standard name"]],
     table_format = tf,
+    display_size = (-1, -1),
 )

@@ -580,7 +580,6 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
                 θ(z),
                 q_tot(z);
                 maxiter = 4,
-                tol = FT(0),
             ).T
 
     ᶜz = Fields.coordinate_field(Y.c).z
