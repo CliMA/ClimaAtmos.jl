@@ -7,7 +7,6 @@ Tests cover:
 3. `coupled_sink_limit_factor()` - uniform scaling for coupled sinks
 4. `limit_sink()` - sink-only tendency limiting
 5. `_explicit_1m_tendency_limits()` - end-to-end 1M explicit limiter
-6. `_implicit_1m_tendency_limits()` - end-to-end 1M implicit limiter
 =#
 
 using Test
@@ -18,8 +17,7 @@ import ClimaAtmos:
     limit,
     tendency_limiter,
     coupled_sink_limit_factor,
-    limit_sink,
-    _implicit_1m_tendency_limits
+    limit_sink
 
 @testset "Tendency Limiters" begin
 
@@ -308,59 +306,6 @@ import ClimaAtmos:
             # With per-species limiting, other species are limited independently.
             # Snow should be limited but less aggressively than rain.
             @test abs(limited.dq_sno_dt) <= abs(mp_tendency.dq_sno_dt)
-        end
-    end
-
-    @testset "_implicit_1m_tendency_limits()" begin
-        FT = Float64
-        dt = FT(600)
-
-        @testset "small sources within pool budget pass through" begin
-            mp_tendency = (
-                dq_lcl_dt = FT(1e-7),
-                dq_icl_dt = FT(5e-8),
-                dq_rai_dt = FT(2e-7),
-                dq_sno_dt = FT(1e-7),
-            )
-            q_liq = FT(0.01)
-            q_ice = FT(0.01)
-            q_rai = FT(0.01)
-            q_sno = FT(0.01)
-            q_tot = FT(0.05)
-
-            limited = _implicit_1m_tendency_limits(
-                mp_tendency, q_tot, q_liq, q_ice, q_rai, q_sno, dt,
-            )
-
-            @test limited.dq_lcl_dt == mp_tendency.dq_lcl_dt
-            @test limited.dq_icl_dt == mp_tendency.dq_icl_dt
-            @test limited.dq_rai_dt == mp_tendency.dq_rai_dt
-            @test limited.dq_sno_dt == mp_tendency.dq_sno_dt
-        end
-
-        @testset "sinks are limited to prevent depletion" begin
-            mp_tendency = (
-                dq_lcl_dt = FT(1e-7),
-                dq_icl_dt = FT(-0.0005),
-                dq_rai_dt = FT(-0.01),
-                dq_sno_dt = FT(-0.005),
-            )
-            q_liq = FT(0.01)
-            q_ice = FT(0.01)
-            q_rai = FT(0.0001)
-            q_sno = FT(0.0002)
-            q_tot = FT(0.03)
-
-            limited = _implicit_1m_tendency_limits(
-                mp_tendency, q_tot, q_liq, q_ice, q_rai, q_sno, dt,
-            )
-
-            @test limited.dq_rai_dt < 0.0
-            @test abs(limited.dq_rai_dt) < abs(mp_tendency.dq_rai_dt)
-            @test abs(limited.dq_rai_dt) ≈ q_rai / dt
-
-            @test limited.dq_sno_dt < 0.0
-            @test abs(limited.dq_sno_dt) < abs(mp_tendency.dq_sno_dt)
         end
     end
 end

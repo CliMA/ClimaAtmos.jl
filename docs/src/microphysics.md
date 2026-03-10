@@ -113,6 +113,40 @@ include("limiter_plots.jl") # hide
 
 ![] (assets/limiters_plot.png)
 
+### Implicit treatment of microphysics sinks
+
+Microphysical processes can produce large negative tendencies (sinks) for tracer variables. When treated explicitly, these sinks can impose severe timestep restrictions and may lead to negative tracer values.
+
+ClimaAtmos therefore provides an option to treat microphysics sinks implicitly. This option is enabled by default but can be disabled if desired.
+
+When the implicit option is enabled, negative microphysics tendencies are represented as linear sinks and handled by the time integration scheme. Given a microphysics tendency ``S`` acting on tracer ``q``, we distinguish between sources and sinks:
+
+```math
+T(q) =
+\begin{cases}
+S, & S \ge 0 \\
+D q, & S < 0
+\end{cases}
+```
+
+where the sink coefficient ``D`` is obtained from a local linearization
+
+```math
+D \approx S / q.
+```
+
+In practice, the denominator is regularized to avoid excessively large coefficients when ``q`` becomes very small, i.e.
+
+```math
+D \approx S / \max(q, \varepsilon),
+```
+
+where ``\varepsilon`` is a small positive constant.
+
+This representation allows the destruction term to be treated implicitly, which significantly improves stability for large sink rates.
+
+During multi-stage time integration, stage extrapolation may occasionally produce small negative values of ``q`` even though the tendencies were computed from a positive state. To mitigate this artifact, a small restoring source may be applied that drives negative values back toward zero over the stage time scale. This correction is purely numerical and does not represent a physical microphysics process.
+
 ### Hyperdiffusion
 
 Hyperdiffusion (``\nabla^4`` operator) is a tendency applied
