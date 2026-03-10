@@ -17,7 +17,6 @@ function saturation_adjustment_tuple(thermo_params, ::TD.ph, p, h, q_tot)
         h,
         q_tot;
         maxiter = 4,
-        tol = FT(0),
     )
     return (; T = sa_result.T, q_liq = sa_result.q_liq, q_ice = sa_result.q_ice)
 end
