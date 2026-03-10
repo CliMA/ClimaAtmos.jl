@@ -713,7 +713,6 @@ function get_ρu₃qₜ_surface(flow::ShipwayHill2012VelocityProfile, thermo_par
             θ_sfc,
             q_tot_sfc;
             maxiter = 4,
-            tol = FT(0),
         ).T
     ρ_sfc = TD.air_density(thermo_params, T, p_sfc, q_tot_sfc)  # 1.165 kg/m³
     w_sfc = Geometry.WVector(flow(0, t))
