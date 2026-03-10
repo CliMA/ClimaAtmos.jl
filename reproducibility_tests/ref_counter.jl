@@ -1,4 +1,4 @@
-321
+322
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+322
+- Fixed bug in non-orographic gravity wave parameterization where the same scratch field is used for both u and v forcings.
 
 321
 - Implicit timestepping for microphysics tendencies, with diagonal Jacobian entries.

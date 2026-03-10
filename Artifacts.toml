@@ -91,6 +91,14 @@ git-tree-sha1 = "c2412372bdf40ba73f496dc0fe427d063e31533b"
     sha256 = "a0b8b682539d975c1cc331549d0222a0eda121f5b2977cc63486368a7dc07885"
     url = "https://caltech.box.com/shared/static/vdb6r7cv5tj6uhrphn5a4352smsxdqgs.gz"
 
+[ogw_computed_drag_h4]
+git-tree-sha1 = "4b29e533617216b6f01c27cbf070ccff9ca02361"
+lazy = true
+
+    [[ogw_computed_drag_h4.download]]
+    sha256 = "dbb74dbdacd8cc784cc636936b982cf166b646ef6c0368b987e57503387bfcda"
+    url = "https://caltech.box.com/shared/static/bxe0nbaherr0vebyke13alnrhsllg20k.gz"
+
 [ogw_computed_drag_h6]
 git-tree-sha1 = "eda18e3fb3c23e68d5baa1798c654d3b88181c9f"
 lazy = true
