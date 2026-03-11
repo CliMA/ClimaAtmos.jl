@@ -109,9 +109,8 @@ function update_jacobian_sgs_u₃!(alg::ManualSparseJacobian, cache, Y, p, dtγ,
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
             ᶜu₃ʲ = p.scratch.ᶜtemp_C3
             @. ᶜu₃ʲ = ᶜinterp(Y.f.sgsʲs.:(1).u₃)
-            @. p.scratch.ᶜtemp_bdmr = convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix())
-            @. p.scratch.ᶜtemp_bdmr_2 =
-                convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix())
+            @. p.scratch.ᶜtemp_bdmr = ᶜleft_bias_matrix()
+            @. p.scratch.ᶜtemp_bdmr_2 = ᶜright_bias_matrix()
             @. p.scratch.ᶜtemp_bdmr_3 = ifelse(
                 ᶜu₃ʲ.components.data.:1 > 0,
                 p.scratch.ᶜtemp_bdmr,

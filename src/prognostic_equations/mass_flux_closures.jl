@@ -250,20 +250,21 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
                 ifelse(ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) > 0, C3(0), Y.f.sgsʲs.:($$j).u₃)
 
             # clip updraft area fraction to zero if the cell-averaged velocity is negligible.
+            eps_ft = eps(FT)
             @. Y.c.sgsʲs.:($$j).ρa = ifelse(
-                ᶜinterp(Y.f.sgsʲs.:($$j).u₃.components.data.:1) < eps(FT),
+                ᶜinterp(Y.f.sgsʲs.:($$j).u₃.components.data.:1) < eps_ft,
                 0,
                 Y.c.sgsʲs.:($$j).ρa,
             )
             # clip updraft velocity to zero if the face-averaged area fraction is negligible.
             @. Y.f.sgsʲs.:($$j).u₃ =
-                ifelse(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) < eps(FT), C3(0), Y.f.sgsʲs.:($$j).u₃)
+                ifelse(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) < eps_ft, C3(0), Y.f.sgsʲs.:($$j).u₃)
 
             # mix updraft mse and q_tot with the grid mean values if any of the above conditions happened
             @. Y.c.sgsʲs.:($$j).mse =
-                ifelse(Y.c.sgsʲs.:($$j).ρa < eps(FT), ᶜh_tot - ᶜK, Y.c.sgsʲs.:($$j).mse)
+                ifelse(Y.c.sgsʲs.:($$j).ρa < eps_ft, ᶜh_tot - ᶜK, Y.c.sgsʲs.:($$j).mse)
             @. Y.c.sgsʲs.:($$j).q_tot = ifelse(
-                Y.c.sgsʲs.:($$j).ρa < eps(FT),
+                Y.c.sgsʲs.:($$j).ρa < eps_ft,
                 specific(Y.c.ρq_tot, Y.c.ρ),
                 Y.c.sgsʲs.:($$j).q_tot,
             )
@@ -274,7 +275,7 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
                 @. ᶜχʲ = ifelse(
-                    Y.c.sgsʲs.:($$j).ρa < eps(FT),
+                    Y.c.sgsʲs.:($$j).ρa < eps_ft,
                     specific(ᶜρχ, Y.c.ρ),
                     ᶜχʲ,
                 )
