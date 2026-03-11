@@ -530,7 +530,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ᶜθ_v = p.scratch.ᶜtemp_scalar_3
     @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
-    # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration: 
+    # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration:
     #              grad(p) / ρ + grad(Φ)  =  cp_d * θ_v * grad(Π) + grad(Φ).
     # Here below, we use the old formulation of (grad(Φ) + grad(p) / ρ).
     # This is because the new formulation would require computing the derivative of θ_v.
@@ -1411,14 +1411,17 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
     p.atmos.microphysics_tendency_timestepping == Implicit() || return nothing
 
     ᶜρ = Y.c.ρ
+    # TODO - do we need a corresponding term for ρe_tot?
 
     # 0M microphysics: diagonal entry for ρq_tot
     if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
         if MatrixFields.has_field(Y, @name(c.ρq_tot))
-            (; ᶜS_ρq_tot) = p.precomputed
+            (; ᶜρ_dq_tot_dt) = p.precomputed
             ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
-                dtγ * DiagonalMatrixRow(_jac_coeff(ᶜS_ρq_tot, Y.c.ρq_tot))
+                dtγ * DiagonalMatrixRow(_jac_coeff(
+                    ᶜρ_dq_tot_dt, Y.c.ρq_tot,
+                ))
         end
     end
 
@@ -1446,18 +1449,18 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
         # used in the implicit tendency, preventing Newton solver divergence
         # when the SGS distribution differs from the grid mean.
         if p.atmos.turbconv_model isa PrognosticEDMFX
-            # Environment quadrature tendencies 
-            (; ᶜSqᵣᵐ⁰, ᶜSqₛᵐ⁰) = p.precomputed
+            # Environment quadrature tendencies
+            (; ᶜmp_tendency⁰) = p.precomputed
             precip_1m_sq_tracers = (
-                (@name(c.ρq_rai), ᶜSqᵣᵐ⁰, Y.c.ρq_rai),
-                (@name(c.ρq_sno), ᶜSqₛᵐ⁰, Y.c.ρq_sno),
+                (@name(c.ρq_rai), ᶜmp_tendency⁰.dq_rai_dt, Y.c.ρq_rai),
+                (@name(c.ρq_sno), ᶜmp_tendency⁰.dq_sno_dt, Y.c.ρq_sno),
             )
         else
             # Grid-mean quadrature tendencies
-            (; ᶜSqᵣᵐ, ᶜSqₛᵐ) = p.precomputed
+            (; ᶜmp_tendency) = p.precomputed
             precip_1m_sq_tracers = (
-                (@name(c.ρq_rai), ᶜSqᵣᵐ, Y.c.ρq_rai),
-                (@name(c.ρq_sno), ᶜSqₛᵐ, Y.c.ρq_sno),
+                (@name(c.ρq_rai), ᶜmp_tendency.dq_rai_dt, Y.c.ρq_rai),
+                (@name(c.ρq_sno), ᶜmp_tendency.dq_sno_dt, Y.c.ρq_sno),
             )
         end
         MatrixFields.unrolled_foreach(
@@ -1493,10 +1496,10 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
 
         # Precipitation: use S/q from quadrature-integrated tendencies
         # _jac_coeff_from_ratio safely returns zero when |q| < ε
-        (; ᶜSqᵣᵐ, ᶜSnᵣᵐ) = p.precomputed
+        (; ᶜmp_tendency) = p.precomputed
         precip_2m_sq_tracers = (
-            (@name(c.ρq_rai), ᶜSqᵣᵐ, Y.c.ρq_rai),
-            (@name(c.ρn_rai), ᶜSnᵣᵐ, Y.c.ρn_rai),
+            (@name(c.ρq_rai), ᶜmp_tendency.dq_rai_dt, Y.c.ρq_rai),
+            (@name(c.ρn_rai), ᶜmp_tendency.dn_rai_dt, Y.c.ρn_rai),
         )
         MatrixFields.unrolled_foreach(
             precip_2m_sq_tracers,
@@ -1511,12 +1514,11 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
 
     # EDMF microphysics: diagonal entries for updraft variables
     if p.atmos.turbconv_model isa PrognosticEDMFX
-
         # 0M EDMF
         if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
-            if hasproperty(p.precomputed, :ᶜSqₜᵐʲs)
-                (; ᶜSqₜᵐʲs) = p.precomputed
-                ᶜSq = ᶜSqₜᵐʲs.:(1)
+            if hasproperty(p.precomputed, :ᶜmp_tendencyʲs)
+                (; ᶜmp_tendencyʲs) = p.precomputed
+                ᶜSq_tot = ᶜmp_tendency.:(1).dq_tot_dt
 
                 q_name = @name(c.sgsʲs.:(1).q_tot)
                 if MatrixFields.has_field(Y, q_name)
@@ -1526,7 +1528,7 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
                             zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
                     end
                     add_microphysics_jacobian_entry!(
-                        ∂ᶜq_err_∂ᶜq, dtγ, ᶜSq, Y.c.sgsʲs.:(1).q_tot,
+                        ∂ᶜq_err_∂ᶜq, dtγ, ᶜSq_tot, Y.c.sgsʲs.:(1).q_tot,
                     )
                 end
 
@@ -1537,7 +1539,7 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
                         @. ∂ᶜρa_err_∂ᶜρa =
                             zero(typeof(∂ᶜρa_err_∂ᶜρa)) - (I,)
                     end
-                    @. ∂ᶜρa_err_∂ᶜρa += dtγ * DiagonalMatrixRow(ᶜSq)
+                    @. ∂ᶜρa_err_∂ᶜρa += dtγ * DiagonalMatrixRow(ᶜSq_tot)
                 end
             end
         end
@@ -1546,10 +1548,12 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
         if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M
             # Cloud (q_liq, q_ice): BMT analytical derivatives precomputed per
             # updraft.  Same pattern as grid-mean (dominated by −1/τ_relax).
-            (; ᶜ∂Sqₗʲs, ᶜ∂Sqᵢʲs) = p.precomputed
+            (; ᶜmp_derivativeʲs) = p.precomputed
+            ᶜ∂Sq_liq = ᶜmp_derivativeʲs.:(1).∂tendency_∂q_lcl
+            ᶜ∂Sq_ice = ᶜmp_derivativeʲs.:(1).∂tendency_∂q_icl
             sgs_cloud_deriv_tracers = (
-                (@name(c.sgsʲs.:(1).q_liq), ᶜ∂Sqₗʲs.:(1)),
-                (@name(c.sgsʲs.:(1).q_ice), ᶜ∂Sqᵢʲs.:(1)),
+                (@name(c.sgsʲs.:(1).q_liq), ᶜ∂Sq_liq),
+                (@name(c.sgsʲs.:(1).q_ice), ᶜ∂Sq_ice),
             )
             MatrixFields.unrolled_foreach(
                 sgs_cloud_deriv_tracers,
@@ -1565,10 +1569,19 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
 
             # Precipitation (q_rai, q_sno): S/q computed inline using frozen
             # tendencies and the current iterate.  Matches grid-mean treatment.
-            (; ᶜSqᵣᵐʲs, ᶜSqₛᵐʲs) = p.precomputed
+            (; ᶜmp_tendencyʲs) = p.precomputed
+
             sgs_precip_sq_tracers = (
-                (@name(c.sgsʲs.:(1).q_rai), ᶜSqᵣᵐʲs.:(1), Y.c.sgsʲs.:(1).q_rai),
-                (@name(c.sgsʲs.:(1).q_sno), ᶜSqₛᵐʲs.:(1), Y.c.sgsʲs.:(1).q_sno),
+                (
+                    @name(c.sgsʲs.:(1).q_rai),
+                    ᶜmp_tendencyʲs.:(1).dq_rai_dt,
+                    Y.c.sgsʲs.:(1).q_rai,
+                ),
+                (
+                    @name(c.sgsʲs.:(1).q_sno),
+                    ᶜmp_tendencyʲs.:(1).dq_sno_dt,
+                    Y.c.sgsʲs.:(1).q_sno,
+                ),
             )
             MatrixFields.unrolled_foreach(
                 sgs_precip_sq_tracers,
