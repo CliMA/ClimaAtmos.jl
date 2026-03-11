@@ -182,8 +182,18 @@ function precomputed_quantities(Y, atmos)
         dq_lcl_dt::FT, dn_lcl_dt::FT, dq_rai_dt::FT, dn_rai_dt::FT,
         dq_ice_dt::FT, dq_rim_dt::FT, db_rim_dt::FT,
     }
-    ∂MP1_NT = @NamedTuple{∂tendency_∂q_lcl::FT, ∂tendency_∂q_icl::FT, ∂tendency_∂q_rai::FT, ∂tendency_∂q_sno::FT}
-    ∂MP23_NT = @NamedTuple{∂tendency_∂q_lcl::FT, ∂tendency_∂n_lcl::FT, ∂tendency_∂q_rai::FT, ∂tendency_∂n_rai::FT}
+    ∂MP1_NT = @NamedTuple{
+        ∂tendency_∂q_lcl::FT,
+        ∂tendency_∂q_icl::FT,
+        ∂tendency_∂q_rai::FT,
+        ∂tendency_∂q_sno::FT,
+    }
+    ∂MP23_NT = @NamedTuple{
+        ∂tendency_∂q_lcl::FT,
+        ∂tendency_∂n_lcl::FT,
+        ∂tendency_∂q_rai::FT,
+        ∂tendency_∂n_rai::FT,
+    }
 
     if atmos.microphysics_model isa EquilibriumMicrophysics0M
         precipitation_quantities = (;

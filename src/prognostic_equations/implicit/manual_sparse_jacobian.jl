@@ -1462,7 +1462,8 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
                         @. ∂ᶜρa_err_∂ᶜρa =
                             zero(typeof(∂ᶜρa_err_∂ᶜρa)) - (I,)
                     end
-                    @. ∂ᶜρa_err_∂ᶜρa += dtγ * DiagonalMatrixRow(ᶜmp_tendencyʲs.:(1).dq_tot_dt)
+                    @. ∂ᶜρa_err_∂ᶜρa +=
+                        dtγ * DiagonalMatrixRow(ᶜmp_tendencyʲs.:(1).dq_tot_dt)
                 end
             end
         end

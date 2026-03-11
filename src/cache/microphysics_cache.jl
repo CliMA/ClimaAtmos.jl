@@ -989,7 +989,8 @@ function set_microphysics_tendency_cache!(
                 thp, ᶜTʲs.:($$j), ᶜq_liq_raiʲs.:($$j), ᶜq_ice_snoʲs.:($$j), ᶜΦ,
             )
 
-        @. ᶜ∂tendency_∂q_totʲs.:($$j) = _jac_coeff(ᶜmp_tendencyʲs.:($$j).dq_tot_dt, Y.c.sgsʲs.:($$j).q_tot)
+        @. ᶜ∂tendency_∂q_totʲs.:($$j) =
+            _jac_coeff(ᶜmp_tendencyʲs.:($$j).dq_tot_dt, Y.c.sgsʲs.:($$j).q_tot)
     end
 
     ### Environment contribution
@@ -1060,7 +1061,7 @@ function set_microphysics_tendency_cache!(
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
     # grid-mean state for the implicit Jacobian diagonal.
     @. ᶜmp_derivative = _jac_coeffs_1m(ᶜmp_tendency, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno)
-    
+
     return nothing
 end
 
@@ -1129,12 +1130,12 @@ function set_microphysics_tendency_cache!(
         )
         # BMT cloud derivatives at updraft j state (same pattern as grid-mean).
         @. ᶜmp_derivativeʲs.:($$j) = _jac_coeffs_1m(
-            ᶜmp_tendencyʲs.:($$j), 
-            Y.c.sgsʲs.:($j).q_liq, 
-            Y.c.sgsʲs.:($j).q_ice,
-            Y.c.sgsʲs.:($j).q_rai, 
-            Y.c.sgsʲs.:($j).q_sno,
-            )
+            ᶜmp_tendencyʲs.:($$j),
+            Y.c.sgsʲs.:($$j).q_liq,
+            Y.c.sgsʲs.:($$j).q_ice,
+            Y.c.sgsʲs.:($$j).q_rai,
+            Y.c.sgsʲs.:($$j).q_sno,
+        )
     end
 
     ### Environment contribution
@@ -1165,7 +1166,8 @@ function set_microphysics_tendency_cache!(
     ᶜq_ice_gm = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
     ᶜq_rai_gm = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
     ᶜq_sno_gm = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-    @. ᶜmp_derivative = _jac_coeffs_1m(ᶜmp_tendency⁰, ᶜq_liq_gm, ᶜq_ice_gm, ᶜq_rai_gm, ᶜq_sno_gm)
+    @. ᶜmp_derivative =
+        _jac_coeffs_1m(ᶜmp_tendency⁰, ᶜq_liq_gm, ᶜq_ice_gm, ᶜq_rai_gm, ᶜq_sno_gm)
 
     return nothing
 end
