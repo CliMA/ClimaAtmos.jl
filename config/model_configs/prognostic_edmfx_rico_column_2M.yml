@@ -18,6 +18,7 @@ prognostic_tke: true
 # 2M EDMF updraft Jacobian not yet implemented; use explicit microphysics
 implicit_microphysics: false
 microphysics_model: "2M"
+use_sgs_quadrature: false
 config: "column"
 z_max: 4e3
 x_elem: 2

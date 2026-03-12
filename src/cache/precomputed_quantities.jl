@@ -274,7 +274,7 @@ function precomputed_quantities(Y, atmos)
         if atmos.turbconv_model isa PrognosticEDMFX
             precipitation_sgs_quantities = (;
                 precipitation_sgs_quantities...,
-                ᶜmp_tendency⁰ = similar(Y.c, MP3_NT),
+                ᶜmp_tendency⁰ = similar(Y.c, MP23_NT),
             )
         end
     else
