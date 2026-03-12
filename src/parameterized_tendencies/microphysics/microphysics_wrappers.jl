@@ -1,5 +1,3 @@
-# A set of wrappers for using CloudMicrophysics.jl functions inside EDMFX loops
-
 import Thermodynamics as TD
 import CloudMicrophysics.Parameters as CMP
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
@@ -9,6 +7,9 @@ import CloudMicrophysics.AerosolActivation as CMAA
 # Import SGS quadrature utilities
 using ..ClimaAtmos: integrate_over_sgs
 
+###
+### 0 Moment Microphysics
+###
 
 """
     e_tot_0M_precipitation_sources_helper(thp, T, q_liq, q_ice, Φ)
@@ -33,7 +34,6 @@ Energy multiplier [J/kg] computed as:
 where `λ` is the liquid fraction and `I_l`, `I_i` are liquid/ice internal energies.
 """
 @inline function e_tot_0M_precipitation_sources_helper(thp, T, q_liq, q_ice, Φ)
-
     λ = TD.liquid_fraction(thp, T, q_liq, q_ice)
     Iₗ = TD.internal_energy_liquid(thp, T)
     Iᵢ = TD.internal_energy_ice(thp, T)
@@ -41,17 +41,92 @@ where `λ` is the liquid fraction and `I_l`, `I_i` are liquid/ice internal energ
     return λ * Iₗ + (1 - λ) * Iᵢ + Φ
 end
 
+"""
+    Microphysics0MEvaluator
+
+GPU-safe functor for computing 0-moment microphysics tendencies at quadrature
+points. Delegates condensate diagnosis to `SaturationAdjustmentEvaluator`,
+then calls `BMT.bulk_microphysics_tendencies(Microphysics0Moment(), ...)`.
+
+Returns a `NamedTuple` with `dq_tot_dt` and `e_tot_hlpr` so that both fields
+are SGS-averaged by `integrate_over_sgs`.
+
+# Fields
+- `cm_params`: 0M microphysics parameters
+- `sat_eval`: `SaturationAdjustmentEvaluator` for condensate diagnosis
+- `Φ`: Geopotential energy [J/kg] (constant within a grid cell)
+"""
+struct Microphysics0MEvaluator{CMP, SAE, FT}
+    cm_params::CMP
+    sat_eval::SAE
+    Φ::FT
+end
+
+function Microphysics0MEvaluator(cm_params, thermo_params, ρ, Φ)
+    sat_eval = SaturationAdjustmentEvaluator(thermo_params, ρ)
+    return Microphysics0MEvaluator(cm_params, sat_eval, Φ)
+end
+
+@inline function (eval::Microphysics0MEvaluator)(T_hat, q_hat)
+    # Diagnose condensate via saturation adjustment
+    sa = eval.sat_eval(T_hat, q_hat)
+
+    # Compute q_sat for the 0M tendency function
+    # Clamp to non-negative: Float32 rounding in the λ/(1-λ) split can make
+    # q_liq + q_ice slightly exceed q_cond, yielding a tiny negative remainder.
+    q_sat = max(zero(q_hat), q_hat - sa.q_liq - sa.q_ice)
+
+    # Compute 0M dq_tot_dt at this quadrature point
+    dq_tot_dt = BMT.bulk_microphysics_tendencies(
+        BMT.Microphysics0Moment(), eval.cm_params, eval.sat_eval.thermo_params,
+        T_hat, sa.q_liq, sa.q_ice, q_sat,
+    )
+    # Compute energy helper at this quadrature point using the
+    # locally-diagnosed condensate, so both fields are SGS-averaged.
+    e_tot_hlpr = e_tot_0M_precipitation_sources_helper(
+        eval.sat_eval.thermo_params, T_hat, sa.q_liq, sa.q_ice, eval.Φ,
+    )
+    return (; dq_tot_dt, e_tot_hlpr)
+end
 
 """
-    compute_1m_precipitation_tendencies!(Sqₗᵐ, Sqᵢᵐ, Sqᵣᵐ, Sqₛᵐ, ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, T, dt, mp, thp)
+    microphysics_tendencies_quadrature_0m(
+        SG_quad, cm_params, thermo_params,
+        ρ, T_mean, q_tot_mean, T′T′, q′q′, corr_Tq, Φ,
+    )
 
-Compute 1-moment microphysics tendencies using the fused BMT API.
+Compute SGS-averaged 0-moment microphysics tendencies by integrating over
+the joint PDF of (T, q_tot). At each quadrature point, condensate is diagnosed
+from saturation excess, then 0M precipitation removal tendencies are computed.
+
+# Returns
+NamedTuple with SGS-averaged `dq_tot_dt` and `e_tot_hlpr`.
+"""
+@inline function microphysics_tendencies_quadrature_0m(
+    SG_quad, cm_params, thermo_params, ρ, T_mean, q_tot_mean,
+    T′T′, q′q′, corr_Tq, Φ,
+)
+    # Create GPU-safe functor (Φ is constant within a grid cell)
+    evaluator = Microphysics0MEvaluator(cm_params, thermo_params, ρ, Φ)
+    # Integrate over quadrature points; both dq_tot_dt and e_tot_hlpr
+    # are averaged over the SGS distribution.
+    return integrate_over_sgs(
+        evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq,
+    )
+end
+
+###
+### 1 Moment Microphysics
+###
+
+"""
+    compute_1m_precipitation_tendencies!(mp_tendency, ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, T, dt, mp, thp)
 
 This function computes all microphysics tendencies (cloud condensation/evaporation,
 autoconversion, accretion, and precipitation) in a single call.
 
 # Arguments
-- `Sqₗᵐ`, `Sqᵢᵐ`, `Sqᵣᵐ`, `Sqₛᵐ`: Output arrays for liquid, ice, rain, snow tendencies [1/s]
+- `mp_tendency`: Output NamedTuple for liquid, ice, rain, snow tendencies [1/s]
 - `ρ`: Air density [kg/m³]
 - `qₜ`: Total water specific humidity [kg/kg]
 - `qₗ`: Cloud liquid specific humidity [kg/kg]
@@ -64,518 +139,25 @@ autoconversion, accretion, and precipitation) in a single call.
 - `thp`: Thermodynamics parameters
 
 # Output
-Modifies `Sqₗᵐ`, `Sqᵢᵐ`, `Sqᵣᵐ`, `Sqₛᵐ` in-place with limited tendencies.
-
-# Note
-Tendencies are limited to prevent unphysically large
-tendencies.
-
-`mp_tendency` is a pre-allocated scratch field of matching NamedTuple type,
-used to avoid allocations from the BMT return value.
+Modifies `mp_tendency` in-place with limited tendencies.
 """
 function compute_1m_precipitation_tendencies!(
-    Sqₗᵐ,
-    Sqᵢᵐ,
-    Sqᵣᵐ,
-    Sqₛᵐ,
-    mp_tendency,
-    ρ,
-    qₜ,
-    qₗ,
-    qᵢ,
-    qᵣ,
-    qₛ,
-    T,
-    dt,
-    mp,
-    thp,
+    mp_tendency, ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, T, dt, mp, thp,
     microphysics_tendency_timestepping = Explicit(),
 )
-    FT = eltype(thp)
-
-    # Call BMT to get all tendencies at once (writes into pre-allocated mp_tendency)
     @. mp_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics1Moment(),
-        mp,
-        thp,
-        ρ,
-        T,
-        qₜ,
-        qₗ,
-        qᵢ,
-        qᵣ,
-        qₛ,
+        BMT.Microphysics1Moment(), mp, thp, ρ, T, qₜ, qₗ, qᵢ, qᵣ, qₛ,
     )
-
-    # Apply limiting via shared helper
     apply_1m_tendency_limits!(
         mp_tendency, microphysics_tendency_timestepping,
         thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, dt,
     )
-    @. Sqₗᵐ = mp_tendency.dq_lcl_dt
-    @. Sqᵢᵐ = mp_tendency.dq_icl_dt
-    @. Sqᵣᵐ = mp_tendency.dq_rai_dt
-    @. Sqₛᵐ = mp_tendency.dq_sno_dt
 end
 
 """
-    compute_2m_precipitation_tendencies!(Sqₗᵐ, Snₗᵐ, Sqᵣᵐ, Snᵣᵐ, ρ, qₜ, qₗ, nₗ, qᵣ, nᵣ, T, dt, mp, thp)
+    (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
 
-Compute 2-moment microphysics tendencies using the fused BMT API (warm rain only).
-
-This function computes all microphysics tendencies (cloud condensation/evaporation,
-autoconversion, accretion, and precipitation) in a single call.
-
-# Arguments
-- `Sqₗᵐ`, `Snₗᵐ`, `Sqᵣᵐ`, `Snᵣᵐ`: Output arrays for liquid mass, liquid number, rain mass, rain number tendencies
-- `ρ`: Air density [kg/m³]
-- `qₜ`: Total water specific humidity [kg/kg]
-- `qₗ`: Cloud liquid specific humidity [kg/kg]
-- `nₗ`: Cloud liquid number concentration [1/kg]
-- `qᵣ`: Rain specific humidity [kg/kg]
-- `nᵣ`: Rain number concentration [1/kg]
-- `T`: Air temperature [K]
-- `dt`: Model timestep [s] (for tendency limiting)
-- `mp`: Microphysics parameters (`CMP.Microphysics2MParams`)
-- `thp`: Thermodynamics parameters
-
-# Output
-Modifies output arrays in-place with limited tendencies.
-
-# Note
-Tendencies are limited using `limit_sink` to prevent unphysical
-depletion of hydrometeor categories.
-
-`mp_tendency` is a pre-allocated scratch field of matching NamedTuple type,
-used to avoid allocations from the BMT return value.
-"""
-function compute_2m_precipitation_tendencies!(
-    Sqₗᵐ,
-    Snₗᵐ,
-    Sqᵣᵐ,
-    Snᵣᵐ,
-    mp_tendency,
-    ρ,
-    qₜ,
-    qₗ,
-    nₗ,
-    qᵣ,
-    nᵣ,
-    T,
-    dt,
-    mp,
-    thp,
-    timestepping,
-)
-    FT = eltype(thp)
-
-    # Call BMT to get all tendencies at once (writes into pre-allocated mp_tendency)
-    @. mp_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(),
-        mp,
-        thp,
-        ρ,
-        T,
-        qₜ,
-        qₗ,
-        nₗ,
-        qᵣ,
-        nᵣ,
-    )
-
-    # Apply limits (no-op for implicit timestepping)
-    apply_2m_tendency_limits!(mp_tendency, timestepping, qₗ, nₗ, qᵣ, nᵣ, dt)
-
-    @. Sqₗᵐ = mp_tendency.dq_lcl_dt
-    @. Snₗᵐ = mp_tendency.dn_lcl_dt
-    @. Sqᵣᵐ = mp_tendency.dq_rai_dt
-    @. Snᵣᵐ = mp_tendency.dn_rai_dt
-end
-
-#####
-##### 2M microphysics
-#####
-
-"""
-    compute_prescribed_aerosol_properties!(
-        seasalt_num,
-        seasalt_mean_radius,
-        sulfate_num,
-        prescribed_aerosol_field,
-        aerosol_params,
-    )
-
-Computes the number concentrations (per unit mass of air) of prescribed sea salt and sulfate aerosols, as well as
-the geometric mean radius of sea salt aerosol, and writes the results in-place.
-
-# Arguments
-- `seasalt_num`: Array to be overwritten with the total number concentration of sea salt aerosol [kg⁻¹].
-- `seasalt_mean_radius`: Array to be overwritten with the geometric mean radius of sea salt aerosol [m].
-- `sulfate_num`: Array to be overwritten with the total number concentration of sulfate aerosol [kg⁻¹].
-- `prescribed_aerosol_field`: A container holding mass mixing ratios of aerosol tracers (e.g., `:SSLT01`, `:SO4`).
-- `aerosol_params`: Parameters defining aerosol properties (e.g., density, mode radius, geometric standard deviation, hygroscopicity).
-
-# Notes
-- Sea salt number concentration and mean radius are computed by aggregating contributions from all available `:SSLT0X` modes.
-- If no sea salt is present, the mean radius is set to zero to avoid division by zero.
-- Aerosol mass is converted to number using assumed particle radii and densities.
-"""
-function compute_prescribed_aerosol_properties!(
-    seasalt_num,
-    seasalt_mean_radius,
-    sulfate_num,
-    prescribed_aerosol_field,
-    aerosol_params,
-)
-
-    FT = eltype(aerosol_params)
-    @. seasalt_num = 0
-    @. seasalt_mean_radius = 0
-    @. sulfate_num = 0
-
-    # Get aerosol concentrations if available
-    seasalt_names = (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05)
-    seasalt_radius_props =
-        (:SSLT01_radius, :SSLT02_radius, :SSLT03_radius, :SSLT04_radius, :SSLT05_radius)
-    sulfate_names = (:SO4,)
-    for aerosol_name in propertynames(prescribed_aerosol_field)
-        if aerosol_name in seasalt_names
-            # Find the index of the sea salt mode to get the corresponding radius property
-            idx = findfirst(isequal(aerosol_name), seasalt_names)
-            seasalt_particle_radius = getproperty(aerosol_params, seasalt_radius_props[idx])
-            seasalt_particle_mass =
-                FT(4 / 3 * pi) *
-                seasalt_particle_radius^3 *
-                aerosol_params.seasalt_density
-            seasalt_mass = getproperty(prescribed_aerosol_field, aerosol_name)
-            @. seasalt_num += seasalt_mass / seasalt_particle_mass
-            @. seasalt_mean_radius +=
-                seasalt_mass / seasalt_particle_mass *
-                log(seasalt_particle_radius)
-        elseif aerosol_name in sulfate_names
-            sulfate_particle_mass =
-                FT(4 / 3 * pi) *
-                aerosol_params.sulfate_radius^3 *
-                aerosol_params.sulfate_density
-            sulfate_mass = getproperty(prescribed_aerosol_field, aerosol_name)
-            @. sulfate_num += sulfate_mass / sulfate_particle_mass
-        end
-    end
-    # Compute geometric mean radius of the log-normal distribution:
-    # exp(weighted average of log(radius))
-    @. seasalt_mean_radius =
-        ifelse(seasalt_num == 0, 0, exp(seasalt_mean_radius / seasalt_num))
-
-end
-
-"""
-    aerosol_activation_sources(
-        act_params,
-        seasalt_num,
-        seasalt_mean_radius,
-        sulfate_num,
-        qₜ,
-        qₗ,
-        qᵢ,
-        nₗ,
-        ρ,
-        w,
-        cmp,
-        thermo_params,
-        T,
-        p,
-        dt,
-        aerosol_params,
-    )
-
-Computes the source term for cloud droplet number concentration per mass due to aerosol activation,
-based on the Abdul-Razzak and Ghan (2000) parameterization.
-
-This function estimates the number of aerosols activated into cloud droplets per mass of air per second
-from a bi-modal aerosol distribution (sea salt and sulfate), given local supersaturation and vertical
-velocity. The result is returned as a tendency (per second) of liquid droplet number concentration.
-
-# Arguments
-- `act_params`: Aerosol activation parameters (AerosolActivationParameters)
-- `seasalt_num`: Number concentration per mass of sea salt aerosols [kg⁻¹]
-- `seasalt_mean_radius`: Mean dry radius of sea salt aerosol mode [m]
-- `sulfate_num`: Number concentration per mass of sulfate aerosols [kg⁻¹]
-- `qₜ`: Total water specific humidity [kg/kg]
-- `qₗ`: Liquid water (cloud + rain) specific humidity [kg/kg]
-- `qᵢ`: Ice water (cloud ice + snow) specific humidity [kg/kg]
-- `nₗ`: Liquid droplet number concentration per mass [kg⁻¹]
-- `ρ`: Air density [kg/m³]
-- `w`: Vertical velocity [m/s]
-- `cmp`: Microphysics2MParams parameters
-- `thermo_params`: Thermodynamics parameters
-- `T`: Air temperature [K]
-- `p`: Air pressure [Pa]
-- `dt`: Model timestep [s]
-- `aerosol_params`: Prescribed aerosol parameters (NamedTuple with seasalt/sulfate properties)
-
-# Returns
-- Tendency of cloud liquid droplet number concentration per mass of air due to aerosol activation [kg⁻¹/s].
-"""
-function aerosol_activation_sources(
-    act_params,
-    seasalt_num,
-    seasalt_mean_radius,
-    sulfate_num,
-    qₜ,
-    qₗ,
-    qᵢ,
-    nₗ,
-    ρ,
-    w,
-    cmp,
-    thermo_params,
-    T,
-    p,
-    dt,
-    aerosol_params,  # Tuple-wrapped at call sites for broadcast safety
-)
-
-    FT = eltype(nₗ)
-    air_params = cmp.warm_rain.air_properties
-    q_vap = qₜ - qₗ - qᵢ
-    S = TD.supersaturation(thermo_params, q_vap, ρ, T, TD.Liquid())
-    n_aer = seasalt_num + sulfate_num
-
-    # Extract aerosol properties
-    seasalt_std = aerosol_params.seasalt_std
-    seasalt_kappa = aerosol_params.seasalt_kappa
-    sulfate_radius = aerosol_params.sulfate_radius
-    sulfate_std = aerosol_params.sulfate_std
-    sulfate_kappa = aerosol_params.sulfate_kappa
-
-    # Early exit for invalid inputs (negative supersaturation, no aerosols, or 
-    # non-physical values that would cause DomainError in CMP)
-    invalid_inputs =
-        (S < FT(0)) || (n_aer < ϵ_numerics(FT)) || (w <= FT(0)) ||
-        (seasalt_mean_radius <= FT(0)) || (sulfate_radius <= FT(0)) ||
-        !isfinite(S) || !isfinite(T) || !isfinite(p)
-
-    # Short-circuit to avoid expensive CMAA calls that may throw DomainError
-    if invalid_inputs
-        return FT(0)
-    end
-
-    # Mode_κ constructor: (r_dry, stdev, N, vol_mix_ratio, mass_mix_ratio, molar_mass, kappa)
-    # For single-component aerosols, vol_mix_ratio and mass_mix_ratio are (1,).
-    # NOTE: molar_mass is set to (0,) because it is NOT USED by the functions we call
-    # (max_supersaturation, N_activated_per_mode, total_N_activated). These only use
-    # vol_mix_ratio and kappa for Mode_κ hygroscopicity calculations. However, if
-    # M_activated_per_mode were ever called, it would incorrectly return 0 due to this.
-    # TODO: Add proper molar masses (seasalt ~58.44 g/mol NaCl, sulfate ~132.14 g/mol (NH4)2SO4)
-    # to the prescribed_aerosol_params if M_activated is needed in the future.
-    seasalt_mode = CMAM.Mode_κ(
-        seasalt_mean_radius,                 # r_dry: geometric mean dry radius [m]
-        seasalt_std,                         # stdev: geometric standard deviation
-        max(FT(0), seasalt_num) * ρ,         # N: number concentration [#/m³]
-        (FT(1),),                            # vol_mix_ratio: volume mixing ratio (pure component)
-        (FT(1),),                            # mass_mix_ratio: mass mixing ratio (pure component)
-        (FT(0),),                            # molar_mass: [kg/mol] (unused, see note above)
-        (seasalt_kappa,),                    # kappa: hygroscopicity parameter
-    )
-    sulfate_mode = CMAM.Mode_κ(
-        sulfate_radius,                      # r_dry: geometric mean dry radius [m]
-        sulfate_std,                         # stdev: geometric standard deviation
-        max(FT(0), sulfate_num) * ρ,         # N: number concentration [#/m³]
-        (FT(1),),                            # vol_mix_ratio: volume mixing ratio (pure component)
-        (FT(1),),                            # mass_mix_ratio: mass mixing ratio (pure component)
-        (FT(0),),                            # molar_mass: [kg/mol] (unused, see note above)
-        (sulfate_kappa,),                    # kappa: hygroscopicity parameter
-    )
-    distribution = CMAM.AerosolDistribution((seasalt_mode, sulfate_mode))
-    args = (
-        act_params,
-        distribution,
-        air_params,
-        thermo_params,
-        T,
-        p,
-        w,
-        qₜ,
-        qₗ,
-        qᵢ,
-        nₗ * ρ,
-        FT(0),
-    )
-
-    # Compute maximum supersaturation and activated aerosol number
-    S_max = CMAA.max_supersaturation(args...)
-    n_act = CMAA.total_N_activated(args...) / ρ
-
-    # Determine tendency: zero if supersaturation too low,
-    # NaN result, or activation would decrease droplet count
-    return ifelse(
-        S_max < S || !isfinite(n_act) || n_act < nₗ,
-        FT(0),
-        (n_act - nₗ) / dt,
-    )
-end
-
-# ============================================================================
-# SGS Quadrature Integration for 0-Moment Microphysics
-# ============================================================================
-
-"""
-    Microphysics0MEvaluator
-
-GPU-safe functor for computing 0-moment microphysics tendencies at quadrature
-points. Delegates condensate diagnosis to `SaturationAdjustmentEvaluator`,
-then calls `BMT.bulk_microphysics_tendencies(Microphysics0Moment(), ...)`.
-
-# Fields
-- `cm_params`: 0M microphysics parameters
-- `sat_eval`: `SaturationAdjustmentEvaluator` for condensate diagnosis
-"""
-struct Microphysics0MEvaluator{CMP, SAE}
-    cm_params::CMP
-    sat_eval::SAE
-end
-
-function Microphysics0MEvaluator(cm_params, thermo_params, ρ)
-    sat_eval = SaturationAdjustmentEvaluator(thermo_params, ρ)
-    return Microphysics0MEvaluator(cm_params, sat_eval)
-end
-
-@inline function (eval::Microphysics0MEvaluator)(T_hat, q_hat)
-    # Diagnose condensate via saturation adjustment
-    sa = eval.sat_eval(T_hat, q_hat)
-
-    # Compute q_sat for the 0M tendency function
-    # Clamp to non-negative: Float32 rounding in the λ/(1-λ) split can make
-    # q_liq + q_ice slightly exceed q_cond, yielding a tiny negative remainder.
-    q_sat = max(zero(q_hat), q_hat - sa.q_liq - sa.q_ice)
-
-    # Compute 0M tendencies at this quadrature point
-    return BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics0Moment(),
-        eval.cm_params, eval.sat_eval.thermo_params,
-        T_hat, sa.q_liq, sa.q_ice, q_sat,
-    )
-end
-
-"""
-    microphysics_tendencies_quadrature_0m(
-        SG_quad, cm_params, thermo_params,
-        ρ, T_mean, q_tot_mean, T′T′, q′q′, corr_Tq,
-    )
-
-Compute SGS-averaged 0-moment microphysics tendencies by integrating over
-the joint PDF of (T, q_tot). At each quadrature point, condensate is diagnosed
-from saturation excess, then 0M precipitation removal tendencies are computed.
-
-# Returns
-NamedTuple with SGS-averaged `dq_tot_dt` and `e_int_precip`.
-"""
-@inline function microphysics_tendencies_quadrature_0m(
-    SG_quad,
-    cm_params, thermo_params,
-    ρ, T_mean, q_tot_mean,
-    T′T′, q′q′, corr_Tq,
-)
-    # Create GPU-safe functor
-    evaluator = Microphysics0MEvaluator(cm_params, thermo_params, ρ)
-
-    # Integrate over quadrature points
-    return integrate_over_sgs(evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq)
-end
-
-
-#####
-##### SGS Quadrature Integration for Microphysics
-#####
-
-"""
-    microphysics_tendencies_quadrature(
-        scheme,
-        SG_quad,
-        mp, tps,
-        ρ, p_c,
-        T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-        T′T′, q′q′, corr_Tq,
-        args...
-    )
-
-Compute subgrid-scale (SGS) averaged microphysics tendencies by integrating
-point-wise microphysics over the joint PDF of (T, q_tot):
-
-```math
-\\bar{S} = \\int\\int S(T, q, \\dots) P(T, q) \\, dT \\, dq
-```
-
-This enables microphysics tendencies to account for subgrid-scale fluctuations
-in temperature and moisture, capturing threshold effects at cloud edges and
-improving representation of phase changes.
-
-# Arguments
-- `scheme`: Microphysics scheme type (from CloudMicrophysics.BulkMicrophysicsTendencies)
-- `SG_quad`: SGSQuadrature configuration
-- `mp`: Microphysics parameters (scheme-specific)
-- `tps`: Thermodynamics parameters
-- `ρ`: Air density [kg/m³]
-- `p_c`: Pressure [Pa]
-- `T_mean`: Mean temperature [K]
-- `q_tot_mean`: Mean total water [kg/kg]
-- `q_lcl_mean`: Mean cloud liquid [kg/kg]
-- `q_icl_mean`: Mean cloud ice [kg/kg]
-- `q_rai`: Rain [kg/kg] (not perturbed)
-- `q_sno`: Snow [kg/kg] (not perturbed)
-- `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
-- `q′q′`: Variance of q_tot ``\\langle q'^2 \\rangle``
-- `corr_Tq`: Correlation coefficient ρ(T', q')
-- `args...`: Additional arguments (e.g., N_lcl for 2M)
-
-# Returns
-NamedTuple with averaged source terms:
-- `dq_lcl_dt`: Cloud liquid tendency [kg/kg/s]
-- `dq_icl_dt`: Cloud ice tendency [kg/kg/s]  
-- `dq_rai_dt`: Rain tendency [kg/kg/s]
-- `dq_sno_dt`: Snow tendency [kg/kg/s]
-
-# Condensate Model
-
-At each quadrature point (T_hat, q_tot_hat):
-1. Compute saturation q_sat_hat = q_vap_saturation(T_hat, ρ)
-2. Diagnose condensate: q_cond = max(0, q_tot_hat - q_sat_hat)
-3. Partition using liquid fraction: q_lcl_hat = λ × q_cond, q_icl_hat = (1-λ) × q_cond
-
-This captures threshold behavior at cloud edges where saturation excess transitions.
-
-# Note on Variances
-
-Call sites must convert θ-based variances to T-based variances using the chain rule:
-```julia
-∂T_∂θ = ... # (∂T/∂θ_liq_ice) computed at grid mean state
-T′T′ = (∂T_∂θ)² × θ′θ′
-```
-The T-q correlation coefficient is obtained from `correlation_Tq(params)`.
-"""
-struct MicrophysicsEvaluator{S, MP, TPS, FT, Args <: Tuple}
-    scheme::S
-    mp::MP
-    tps::TPS
-    ρ::FT
-    # Grid-mean state
-    T_mean::FT
-    q_tot_mean::FT
-    q_lcl_mean::FT
-    q_icl_mean::FT
-    q_rai::FT
-    q_sno::FT
-    # Precomputed grid-mean values (avoid redundant computation in quadrature loop)
-    q_cond_mean::FT
-    q_sat_mean::FT      # Saturation at grid mean
-    excess_mean::FT     # Saturation excess at grid mean (q_tot_mean - q_sat_mean)
-    args::Args
-end
-
-"""
-    (eval::MicrophysicsEvaluator)(T_hat, q_tot_hat)
-
-Evaluate microphysics tendencies at a quadrature point.
+Evaluate 1-moment microphysics tendencies at a quadrature point.
 
 This functor computes bulk microphysics tendencies at a perturbed thermodynamic
 state `(T_hat, q_tot_hat)` for use in SGS quadrature integration. The condensate
@@ -614,7 +196,26 @@ quadrature point is actually supersaturated.
 
 Condensate is partitioned into liquid and ice using `λ(T_hat)`.
 """
-@inline function (eval::MicrophysicsEvaluator)(T_hat, q_tot_hat)
+struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
+    scheme::S
+    mp::MP
+    tps::TPS
+    ρ::FT
+    # Grid-mean state
+    T_mean::FT
+    q_tot_mean::FT
+    q_lcl_mean::FT
+    q_icl_mean::FT
+    q_rai::FT
+    q_sno::FT
+    # Precomputed grid-mean values (avoid redundant computation in quadrature loop)
+    q_cond_mean::FT
+    q_sat_mean::FT      # Saturation at grid mean
+    excess_mean::FT     # Saturation excess at grid mean (q_tot_mean - q_sat_mean)
+    args::Args
+end
+
+@inline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
     FT = typeof(eval.ρ)
 
     # Compute saturation excess perturbation relative to grid mean
@@ -666,24 +267,77 @@ Condensate is partitioned into liquid and ice using `λ(T_hat)`.
     q_tot_hat = max(FT(0), q_tot_hat)
 
     # Call CloudMicrophysics point-wise tendencies
+    # TODO - how does that connect with prognostc equations for lcl and icl
     return BMT.bulk_microphysics_tendencies(
-        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat,
-        q_tot_hat, q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
-        eval.args...,
+        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
+        q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno, eval.args...,
     )
 end
 
-@inline function microphysics_tendencies_quadrature(
-    scheme,
-    SG_quad,
-    mp, tps,
-    ρ, p_c,
-    T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-    T′T′, q′q′, corr_Tq,
-    args...,  # Additional args like N_lcl for 2M
-)
-    FT = eltype(tps)
+"""
+    microphysics_tendencies_quadrature_1m(
+        scheme, SG_quad, mp, tps, ρ, p_c, T_mean, q_tot_mean,
+        q_lcl_mean, q_icl_mean, q_rai, q_sno, T′T′, q′q′, corr_Tq, args...
+    )
 
+Compute subgrid-scale (SGS) averaged microphysics tendencies by integrating
+point-wise microphysics over the joint PDF of (T, q_tot):
+
+```math
+\\bar{S} = \\int\\int S(T, q, \\dots) P(T, q) \\, dT \\, dq
+```
+
+This enables microphysics tendencies to account for subgrid-scale fluctuations
+in temperature and moisture, capturing threshold effects at cloud edges and
+improving representation of phase changes.
+
+# Arguments
+- `scheme`: Microphysics scheme type (from CloudMicrophysics.BulkMicrophysicsTendencies)
+- `SG_quad`: SGSQuadrature configuration
+- `mp`: Microphysics parameters (scheme-specific)
+- `tps`: Thermodynamics parameters
+- `ρ`: Air density [kg/m³]
+- `p_c`: Pressure [Pa]
+- `T_mean`: Mean temperature [K]
+- `q_tot_mean`: Mean total water [kg/kg]
+- `q_lcl_mean`: Mean cloud liquid [kg/kg]
+- `q_icl_mean`: Mean cloud ice [kg/kg]
+- `q_rai`: Rain [kg/kg] (not perturbed)
+- `q_sno`: Snow [kg/kg] (not perturbed)
+- `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
+- `q′q′`: Variance of q_tot ``\\langle q'^2 \\rangle``
+- `corr_Tq`: Correlation coefficient ρ(T', q')
+- `args...`: Additional arguments (e.g., N_lcl for 2M)
+
+# Returns
+NamedTuple with averaged source terms:
+- `dq_lcl_dt`: Cloud liquid tendency [kg/kg/s]
+- `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
+- `dq_rai_dt`: Rain tendency [kg/kg/s]
+- `dq_sno_dt`: Snow tendency [kg/kg/s]
+
+# Condensate Model
+
+At each quadrature point (T_hat, q_tot_hat):
+1. Compute saturation q_sat_hat = q_vap_saturation(T_hat, ρ)
+2. Diagnose condensate: q_cond = max(0, q_tot_hat - q_sat_hat)
+3. Partition using liquid fraction: q_lcl_hat = λ × q_cond, q_icl_hat = (1-λ) × q_cond
+
+This captures threshold behavior at cloud edges where saturation excess transitions.
+
+# Note on Variances
+
+Call sites must convert θ-based variances to T-based variances using the chain rule:
+```julia
+∂T_∂θ = ... # (∂T/∂θ_liq_ice) computed at grid mean state
+T′T′ = (∂T_∂θ)² × θ′θ′
+```
+The T-q correlation coefficient is obtained from `correlation_Tq(params)`.
+"""
+@inline function microphysics_tendencies_quadrature_1m(
+    scheme, SG_quad, mp, tps, ρ, p_c, T_mean, q_tot_mean,
+    q_lcl_mean, q_icl_mean, q_rai, q_sno, T′T′, q′q′, corr_Tq, args...,
+)
     # Clamp species humidities to prevent negativity in quadratures
     q_lcl_safe = max(0, q_lcl_mean)
     q_icl_safe = max(0, q_icl_mean)
@@ -695,9 +349,8 @@ end
     if SG_quad isa GridMeanSGS ||
        (SG_quad isa SGSQuadrature && SG_quad.dist isa GridMeanSGS)
         return BMT.bulk_microphysics_tendencies(
-            scheme, mp, tps, ρ, T_mean,
-            q_tot_mean, q_lcl_safe, q_icl_safe, q_rai_safe, q_sno_safe,
-            args...,
+            scheme, mp, tps, ρ, T_mean, q_tot_mean,
+            q_lcl_safe, q_icl_safe, q_rai_safe, q_sno_safe, args...,
         )
     end
 
@@ -707,15 +360,223 @@ end
     excess_mean = q_tot_mean - q_sat_mean
 
     # Create functor (no closure, GPU-safe)
-    evaluator = MicrophysicsEvaluator(
-        scheme, mp, tps, ρ,
-        T_mean, q_tot_mean, q_lcl_safe, q_icl_safe, q_rai_safe, q_sno_safe,
-        q_cond_mean, q_sat_mean, excess_mean,
-        args,
+    evaluator = Microphysics1MEvaluator(
+        scheme, mp, tps, ρ, T_mean, q_tot_mean, q_lcl_safe, q_icl_safe,
+        q_rai_safe, q_sno_safe, q_cond_mean, q_sat_mean, excess_mean, args,
     )
 
     # Integrate over quadrature points using functor (GPU-safe, no closure)
-    return integrate_over_sgs(evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq)
+    return integrate_over_sgs(
+        evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq,
+    )
+end
+
+###
+### 2 Moment Microphysics
+###
+
+"""
+    compute_prescribed_aerosol_properties!(
+        seasalt_num, seasalt_mean_radius, sulfate_num,
+        prescribed_aerosol_field, aerosol_params,
+    )
+
+Computes the number concentrations (per unit mass of air) of prescribed sea salt and sulfate aerosols, as well as
+the geometric mean radius of sea salt aerosol, and writes the results in-place.
+
+# Arguments
+- `seasalt_num`: Array to be overwritten with the total number concentration of sea salt aerosol [kg⁻¹].
+- `seasalt_mean_radius`: Array to be overwritten with the geometric mean radius of sea salt aerosol [m].
+- `sulfate_num`: Array to be overwritten with the total number concentration of sulfate aerosol [kg⁻¹].
+- `prescribed_aerosol_field`: A container holding mass mixing ratios of aerosol tracers (e.g., `:SSLT01`, `:SO4`).
+- `aerosol_params`: Parameters defining aerosol properties (e.g., density, mode radius, geometric standard deviation, hygroscopicity).
+
+# Notes
+- Sea salt number concentration and mean radius are computed by aggregating contributions from all available `:SSLT0X` modes.
+- If no sea salt is present, the mean radius is set to zero to avoid division by zero.
+- Aerosol mass is converted to number using assumed particle radii and densities.
+"""
+function compute_prescribed_aerosol_properties!(
+    seasalt_num, seasalt_mean_radius, sulfate_num,
+    prescribed_aerosol_field, aerosol_params,
+)
+
+    FT = eltype(aerosol_params)
+    @. seasalt_num = 0
+    @. seasalt_mean_radius = 0
+    @. sulfate_num = 0
+
+    # Get aerosol concentrations if available
+    seasalt_names = (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05)
+    seasalt_radius_props =
+        (:SSLT01_radius, :SSLT02_radius, :SSLT03_radius, :SSLT04_radius, :SSLT05_radius)
+    sulfate_names = (:SO4,)
+    for aerosol_name in propertynames(prescribed_aerosol_field)
+        if aerosol_name in seasalt_names
+            # Find the index of the sea salt mode to get the corresponding radius property
+            idx = findfirst(isequal(aerosol_name), seasalt_names)
+            seasalt_particle_radius = getproperty(aerosol_params, seasalt_radius_props[idx])
+            seasalt_particle_mass =
+                FT(4 / 3 * pi) *
+                seasalt_particle_radius^3 *
+                aerosol_params.seasalt_density
+            seasalt_mass = getproperty(prescribed_aerosol_field, aerosol_name)
+            @. seasalt_num += seasalt_mass / seasalt_particle_mass
+            @. seasalt_mean_radius +=
+                seasalt_mass / seasalt_particle_mass *
+                log(seasalt_particle_radius)
+        elseif aerosol_name in sulfate_names
+            sulfate_particle_mass =
+                FT(4 / 3 * pi) *
+                aerosol_params.sulfate_radius^3 *
+                aerosol_params.sulfate_density
+            sulfate_mass = getproperty(prescribed_aerosol_field, aerosol_name)
+            @. sulfate_num += sulfate_mass / sulfate_particle_mass
+        end
+    end
+    # Compute geometric mean radius of the log-normal distribution:
+    # exp(weighted average of log(radius))
+    @. seasalt_mean_radius =
+        ifelse(seasalt_num == 0, 0, exp(seasalt_mean_radius / seasalt_num))
+end
+
+"""
+    aerosol_activation_sources(
+        act_params, seasalt_num, seasalt_mean_radius, sulfate_num,
+        qₜ, qₗ, qᵢ, nₗ, ρ, w, cmp, thermo_params, T, p, dt, aerosol_params,
+    )
+
+Computes the source term for cloud droplet number concentration per mass due to aerosol activation,
+based on the Abdul-Razzak and Ghan (2000) parameterization.
+
+This function estimates the number of aerosols activated into cloud droplets per mass of air per second
+from a bi-modal aerosol distribution (sea salt and sulfate), given local supersaturation and vertical
+velocity. The result is returned as a tendency (per second) of liquid droplet number concentration.
+
+# Arguments
+- `act_params`: Aerosol activation parameters (AerosolActivationParameters)
+- `seasalt_num`: Number concentration per mass of sea salt aerosols [kg⁻¹]
+- `seasalt_mean_radius`: Mean dry radius of sea salt aerosol mode [m]
+- `sulfate_num`: Number concentration per mass of sulfate aerosols [kg⁻¹]
+- `qₜ`: Total water specific humidity [kg/kg]
+- `qₗ`: Liquid water (cloud + rain) specific humidity [kg/kg]
+- `qᵢ`: Ice water (cloud ice + snow) specific humidity [kg/kg]
+- `nₗ`: Liquid droplet number concentration per mass [kg⁻¹]
+- `ρ`: Air density [kg/m³]
+- `w`: Vertical velocity [m/s]
+- `cmp`: Microphysics2MParams parameters
+- `thermo_params`: Thermodynamics parameters
+- `T`: Air temperature [K]
+- `p`: Air pressure [Pa]
+- `dt`: Model timestep [s]
+- `aerosol_params`: Prescribed aerosol parameters (NamedTuple with seasalt/sulfate properties)
+
+# Returns
+- Tendency of cloud liquid droplet number concentration per mass of air due to aerosol activation [kg⁻¹/s].
+"""
+function aerosol_activation_sources(
+    act_params, seasalt_num, seasalt_mean_radius, sulfate_num,
+    qₜ, qₗ, qᵢ, nₗ, ρ, w, cmp, thermo_params, T, p, dt, aerosol_params,
+)
+    FT = eltype(nₗ)
+    air_params = cmp.warm_rain.air_properties
+    q_vap = qₜ - qₗ - qᵢ
+    S = TD.supersaturation(thermo_params, q_vap, ρ, T, TD.Liquid())
+    n_aer = seasalt_num + sulfate_num
+
+    # Extract aerosol properties
+    seasalt_std = aerosol_params.seasalt_std
+    seasalt_kappa = aerosol_params.seasalt_kappa
+    sulfate_radius = aerosol_params.sulfate_radius
+    sulfate_std = aerosol_params.sulfate_std
+    sulfate_kappa = aerosol_params.sulfate_kappa
+
+    # Early exit for invalid inputs (negative supersaturation, no aerosols, or
+    # non-physical values that would cause DomainError in CMP)
+    invalid_inputs =
+        (S < FT(0)) || (n_aer < ϵ_numerics(FT)) || (w <= FT(0)) ||
+        (seasalt_mean_radius <= FT(0)) || (sulfate_radius <= FT(0)) ||
+        !isfinite(S) || !isfinite(T) || !isfinite(p)
+
+    # Short-circuit to avoid expensive CMAA calls that may throw DomainError
+    if invalid_inputs
+        return FT(0)
+    end
+
+    # Mode_κ constructor: (r_dry, stdev, N, vol_mix_ratio, mass_mix_ratio, molar_mass, kappa)
+    # For single-component aerosols, vol_mix_ratio and mass_mix_ratio are (1,).
+    # NOTE: molar_mass is set to (0,) because it is NOT USED by the functions we call
+    # (max_supersaturation, N_activated_per_mode, total_N_activated). These only use
+    # vol_mix_ratio and kappa for Mode_κ hygroscopicity calculations. However, if
+    # M_activated_per_mode were ever called, it would incorrectly return 0 due to this.
+    # TODO: Add proper molar masses (seasalt ~58.44 g/mol NaCl, sulfate ~132.14 g/mol (NH4)2SO4)
+    # to the prescribed_aerosol_params if M_activated is needed in the future.
+    seasalt_mode = CMAM.Mode_κ(
+        seasalt_mean_radius,                 # r_dry: geometric mean dry radius [m]
+        seasalt_std,                         # stdev: geometric standard deviation
+        max(FT(0), seasalt_num) * ρ,         # N: number concentration [#/m³]
+        (FT(1),),                            # vol_mix_ratio: volume mixing ratio (pure component)
+        (FT(1),),                            # mass_mix_ratio: mass mixing ratio (pure component)
+        (FT(0),),                            # molar_mass: [kg/mol] (unused, see note above)
+        (seasalt_kappa,),                    # kappa: hygroscopicity parameter
+    )
+    sulfate_mode = CMAM.Mode_κ(
+        sulfate_radius,                      # r_dry: geometric mean dry radius [m]
+        sulfate_std,                         # stdev: geometric standard deviation
+        max(FT(0), sulfate_num) * ρ,         # N: number concentration [#/m³]
+        (FT(1),),                            # vol_mix_ratio: volume mixing ratio (pure component)
+        (FT(1),),                            # mass_mix_ratio: mass mixing ratio (pure component)
+        (FT(0),),                            # molar_mass: [kg/mol] (unused, see note above)
+        (sulfate_kappa,),                    # kappa: hygroscopicity parameter
+    )
+    distribution = CMAM.AerosolDistribution((seasalt_mode, sulfate_mode))
+    args = (
+        act_params, distribution, air_params, thermo_params,
+        T, p, w, qₜ, qₗ, qᵢ, nₗ * ρ, FT(0),
+    )
+
+    # Compute maximum supersaturation and activated aerosol number
+    S_max = CMAA.max_supersaturation(args...)
+    n_act = CMAA.total_N_activated(args...) / ρ
+
+    # Determine tendency: zero if supersaturation too low,
+    # NaN result, or activation would decrease droplet count
+    return ifelse(
+        S_max < S || !isfinite(n_act) || n_act < nₗ,
+        FT(0),
+        (n_act - nₗ) / dt,
+    )
+end
+
+"""
+    compute_2m_precipitation_tendencies!(mp_tendency, ρ, qₜ, qₗ, nₗ, qᵣ, nᵣ, T, dt, mp, thp)
+
+Compute 2-moment warm rain microphysics tendencies (cloud condensation/evaporation,
+autoconversion, accretion, and precipitation) in a single call.
+
+# Arguments
+- `mp_tendency`: Output NamedTuple for liquid mass, liquid number, rain mass, rain number tendencies
+- `ρ`: Air density [kg/m³]
+- `qₜ`: Total water specific humidity [kg/kg]
+- `qₗ`: Cloud liquid specific humidity [kg/kg]
+- `nₗ`: Cloud liquid number concentration [1/kg]
+- `qᵣ`: Rain specific humidity [kg/kg]
+- `nᵣ`: Rain number concentration [1/kg]
+- `T`: Air temperature [K]
+- `dt`: Model timestep [s] (for tendency limiting)
+- `mp`: Microphysics parameters (`CMP.Microphysics2MParams`)
+- `thp`: Thermodynamics parameters
+
+# Output
+Modifies mp_tendency in-place with limited tendencies.
+"""
+function compute_2m_precipitation_tendencies!(
+    mp_tendency, ρ, qₜ, qₗ, nₗ, qᵣ, nᵣ, T, dt, mp, thp, timestepping,
+)
+    @. mp_tendency = BMT.bulk_microphysics_tendencies(
+        BMT.Microphysics2Moment(), mp, thp, ρ, T, qₜ, qₗ, nₗ, qᵣ, nᵣ,
+    )
+    apply_2m_tendency_limits!(mp_tendency, timestepping, qₗ, nₗ, qᵣ, nᵣ, dt)
 end
 
 """
@@ -744,36 +605,18 @@ SGS quadrature integration for Microphysics2Moment (warm rain only).
 NamedTuple with tendencies: `dq_lcl_dt`, `dn_lcl_dt`, `dq_rai_dt`, `dn_rai_dt`
 """
 @inline function microphysics_tendencies_quadrature_2m(
-    SG_quad::SGSQuadrature,
-    cmp, tps,
-    ρ, T,
-    q_tot, q_liq, n_liq, q_rai, n_rai,
+    ::GridMeanSGS, cmp, tps, ρ, T, q_tot, q_liq, n_liq, q_rai, n_rai,
 )
-
-    # Fall back to grid-mean evaluation for non-GridMeanSGS distributions
+    # Direct GridMeanSGS dispatch for 2M: evaluates BMT at grid mean.
     return BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(),
-        cmp, tps,
-        ρ, T,
+        BMT.Microphysics2Moment(), cmp, tps, ρ, T,
         q_tot, q_liq, n_liq, q_rai, n_rai,
     )
 end
-
-"""
-    microphysics_tendencies_quadrature_2m(::GridMeanSGS, ...)
-
-Direct GridMeanSGS dispatch for 2M: evaluates BMT at grid mean.
-"""
 @inline function microphysics_tendencies_quadrature_2m(
-    ::GridMeanSGS,
-    cmp, tps,
-    ρ, T,
+    SG_quad::SGSQuadrature, cmp, tps, ρ, T,
     q_tot, q_liq, n_liq, q_rai, n_rai,
 )
-    return BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(),
-        cmp, tps,
-        ρ, T,
-        q_tot, q_liq, n_liq, q_rai, n_rai,
-    )
+    error("Not implemented yet")
+    return nothing
 end

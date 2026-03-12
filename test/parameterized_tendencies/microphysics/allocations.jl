@@ -148,7 +148,7 @@ end
 
 # NOTE: closure-based tests are omitted here because Julia closures inherently
 # allocate ~352 bytes from closure capture. In production, integrate_over_sgs
-# is always called with functors (e.g. MicrophysicsEvaluator), which are
+# is always called with functors (e.g. Microphysics1MEvaluator), which are
 # zero-allocation.
 
 struct TestEvaluator{FT}
@@ -281,6 +281,7 @@ end
                     "microphysics_model" => "2M",
                     "config" => "column",
                     "output_default_diagnostics" => false,
+                    "use_sgs_quadrature" => false,
                     "prescribed_aerosols" => ["SSLT01"],
                 ),
                 job_id = "alloc_2M",

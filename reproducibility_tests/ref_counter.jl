@@ -1,4 +1,4 @@
-322
+323
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+323
+- Roundoff errors from change of order of operations - lazy bradcast vs caching values
+  for aquaplanet equil allsky varying insol gravity wave (raw_topo) test.
 
 322
 - Fixed bug in non-orographic gravity wave parameterization where the same scratch field is used for both u and v forcings.
@@ -30,8 +33,8 @@
   SGS quadrature sampling of specific humidity for microphysics tendencies.
 
 320
-- PEDMF: solve sgs u₃ implicit equation first and then use the solution to converge other tracers in 
-  one Newton iteration. 
+- PEDMF: solve sgs u₃ implicit equation first and then use the solution to converge other tracers in
+  one Newton iteration.
 
 319
 - Clip divergence in detrainment
@@ -54,10 +57,10 @@
 - PEDMF: precompute sgs buoyancy; apply edmf filter as a callback; mix unphysical sgs with grid mean
 
 313
-- Change microphysics to using bulk microphysics tendencies, with limiters on total 
+- Change microphysics to using bulk microphysics tendencies, with limiters on total
    tendencies (rather than individual species tendencies).
-- Change cloud fraction calculation to Sommeria-Deardorff moment-based approach, which 
-   underestimates cloud fraction without microphysics quadratures.  
+- Change cloud fraction calculation to Sommeria-Deardorff moment-based approach, which
+   underestimates cloud fraction without microphysics quadratures.
 
 312
 - Relax entr/detr limits for prognostic EDMF when entr/detr is treated implicitly
