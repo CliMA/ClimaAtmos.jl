@@ -1434,7 +1434,7 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
         sgs_deriv_tracers = (
             (@name(c.sgsʲs.:(1).q_tot), @name(ᶜ∂tendency_∂q_totʲs.:(1))),
             (@name(c.sgsʲs.:(1).q_liq), @name(ᶜmp_derivativeʲs.:(1).∂tendency_∂q_lcl)),
-            (@name(c.sgsʲs.:(1).q_ice), @name(ᶜmp_derivativeʲs.:(1).∂tendency_∂q_ice)),
+            (@name(c.sgsʲs.:(1).q_ice), @name(ᶜmp_derivativeʲs.:(1).∂tendency_∂q_icl)),
             (@name(c.sgsʲs.:(1).q_rai), @name(ᶜmp_derivativeʲs.:(1).∂tendency_∂q_rai)),
             (@name(c.sgsʲs.:(1).q_sno), @name(ᶜmp_derivativeʲs.:(1).∂tendency_∂q_sno)),
         )

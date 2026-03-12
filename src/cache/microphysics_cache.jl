@@ -910,7 +910,7 @@ function set_microphysics_tendency_cache!(
     (; dt) = p
     (; ᶜΦ) = p.core
     (; ᶜmp_tendency) = p.precomputed
-    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜT, ᶜq_tot_safe) = p.precomputed
     (; ᶜT′T′, ᶜq′q′) = p.precomputed # temperature-based variances
 
     thp = CAP.thermodynamics_params(p.params)
@@ -960,10 +960,10 @@ function set_microphysics_tendency_cache!(
     (; ᶜp) = p.precomputed
 
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
+    (; ᶜ∂tendency_∂q_totʲs) = p.precomputed
     (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
     (; ᶜT′T′, ᶜq′q′) = p.precomputed # temperature-based variances
-    (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
     cm0 = CAP.microphysics_0m_params(p.params)
@@ -1008,9 +1008,9 @@ function set_microphysics_tendency_cache!(
     )
 
     # TODO - duplicated with tendency and implicit cache update
-    #(; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
-    #n = n_mass_flux_subdomains(tm)
+    (; ᶜ∂tendency_∂q_tot) = p.precomputed
+
     @. ᶜρ_dq_tot_dt = ᶜmp_tendency⁰.dq_tot_dt * ρa⁰(Y.c.ρ, Y.c.sgsʲs, tm)
     @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency⁰.e_tot_hlpr
     for j in 1:n
