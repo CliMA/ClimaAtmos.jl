@@ -71,15 +71,10 @@ end
     # Diagnose condensate via saturation adjustment
     sa = eval.sat_eval(T_hat, q_hat)
 
-    # Compute q_sat for the 0M tendency function
-    # Clamp to non-negative: Float32 rounding in the λ/(1-λ) split can make
-    # q_liq + q_ice slightly exceed q_cond, yielding a tiny negative remainder.
-    q_sat = max(zero(q_hat), q_hat - sa.q_liq - sa.q_ice)
-
     # Compute 0M dq_tot_dt at this quadrature point
     dq_tot_dt = BMT.bulk_microphysics_tendencies(
         BMT.Microphysics0Moment(), eval.cm_params, eval.sat_eval.thermo_params,
-        T_hat, sa.q_liq, sa.q_ice, q_sat,
+        T_hat, sa.q_liq, sa.q_ice,
     )
     # Compute energy helper at this quadrature point using the
     # locally-diagnosed condensate, so both fields are SGS-averaged.
