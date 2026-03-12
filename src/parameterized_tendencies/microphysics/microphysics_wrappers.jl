@@ -203,7 +203,6 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     ρ::FT
     # Grid-mean state
     T_mean::FT
-    # q_tot_mean removed to reduce register pressure (not used in functor body)
     q_lcl_mean::FT
     q_icl_mean::FT
     q_rai::FT
@@ -345,6 +344,7 @@ The T-q correlation coefficient is obtained from `correlation_Tq(params)`.
     q_sno_safe = max(0, q_sno)
 
     # Fast path for GridMeanSGS: skip quadrature, call BMT directly at grid mean
+    # This avoids the overhead of the quadrature loop for grid-mean-only evaluation
     if SG_quad isa GridMeanSGS ||
        (SG_quad isa SGSQuadrature && SG_quad.dist isa GridMeanSGS)
         return BMT.bulk_microphysics_tendencies(
@@ -353,8 +353,6 @@ The T-q correlation coefficient is obtained from `correlation_Tq(params)`.
         )
     end
 
-    # Pre-compute saturation values inline to reduce register pressure
-    # Removing q_tot_mean from the evaluator struct improves GPU occupancy
     # Pre-compute grid-mean condensate and saturation for perturbation model
     q_cond_mean = q_lcl_safe + q_icl_safe
     q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
