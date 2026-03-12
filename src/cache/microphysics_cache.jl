@@ -1108,7 +1108,6 @@ function set_microphysics_tendency_cache!(
     Y, p, ::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
 )
     (; dt) = p
-    (; ᶜT, ᶜq_tot_safe) = p.precomputed
     (; ᶜρʲs, ᶜTʲs, ᶜq_tot_safeʲs) = p.precomputed
     (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_derivative) = p.precomputed
@@ -1162,12 +1161,8 @@ function set_microphysics_tendency_cache!(
 
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
     # grid-mean state for the implicit Jacobian diagonal.
-    ᶜq_liq_gm = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-    ᶜq_ice_gm = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-    ᶜq_rai_gm = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-    ᶜq_sno_gm = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
     @. ᶜmp_derivative =
-        _jac_coeffs_1m(ᶜmp_tendency⁰, ᶜq_liq_gm, ᶜq_ice_gm, ᶜq_rai_gm, ᶜq_sno_gm)
+        _jac_coeffs_1m(ᶜmp_tendency⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰)
 
     return nothing
 end
