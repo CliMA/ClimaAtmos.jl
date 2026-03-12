@@ -387,7 +387,7 @@ steps:
           --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
           --job_id single_column_hydrostatic_balance_ft64
 
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
           --job_id single_column_hydrostatic_balance_ft64
           --out_dir single_column_hydrostatic_balance_ft64/output_active
         artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
@@ -431,7 +431,7 @@ steps:
         command: >
           julia --color=yes --project=.buildkite runscripts/rcemipii_box_CRM_1M.jl
 
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
           --job_id rcemipii_box_CRM_1M
           --out_dir rcemipii_box_CRM_1M/output_active
         artifact_paths: "rcemipii_box_CRM_1M/output_active/*"
@@ -610,7 +610,7 @@ steps:
           --config_file $CONFIG_PATH/baroclinic_wave_equil.yml
           --job_id baroclinic_wave_equil
 
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
           --job_id baroclinic_wave_equil
           --out_dir baroclinic_wave_equil/output_active
         artifact_paths: "baroclinic_wave_equil/output_active/*"
@@ -646,7 +646,7 @@ steps:
           --config_file $CONFIG_PATH/held_suarez_equil.yml
           --job_id held_suarez_equil
 
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
           --job_id held_suarez_equil
           --out_dir held_suarez_equil/output_active
         artifact_paths: "held_suarez_equil/output_active/*"
@@ -662,7 +662,7 @@ steps:
           --config_file $CONFIG_PATH/aquaplanet_nonequil_allsky_gw_res_2M.yml
           --job_id aquaplanet_nonequil_allsky_gw_res_2M
 
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
           --job_id aquaplanet_nonequil_allsky_gw_res_2M
           --out_dir aquaplanet_nonequil_allsky_gw_res_2M/output_active
         artifact_paths: "aquaplanet_nonequil_allsky_gw_res_2M/output_active/*"
@@ -677,7 +677,7 @@ steps:
           --config_file $CONFIG_PATH/aquaplanet_equil_allsky_gw_raw.yml
           --job_id aquaplanet_equil_allsky_gw_raw
 
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
           --job_id aquaplanet_equil_allsky_gw_raw
           --out_dir aquaplanet_equil_allsky_gw_raw/output_active
         artifact_paths: "aquaplanet_equil_allsky_gw_raw/output_active/*"
@@ -702,7 +702,7 @@ steps:
           --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
           --job_id diagnostic_edmfx_aquaplanet
 
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
           --job_id diagnostic_edmfx_aquaplanet
           --out_dir diagnostic_edmfx_aquaplanet/output_active
         artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
@@ -727,7 +727,7 @@ steps:
           --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
           --job_id prognostic_edmfx_aquaplanet
 
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
           --job_id prognostic_edmfx_aquaplanet
           --out_dir prognostic_edmfx_aquaplanet/output_active
         artifact_paths: "prognostic_edmfx_aquaplanet/output_active/*"
@@ -1390,8 +1390,8 @@ steps:
   - wait: ~
     continue_on_failure: true
 
-  - label: ":robot_face: Print new mse tables"
-    command: "julia --color=yes --project=.buildkite reproducibility_tests/mse_summary.jl"
+  - label: ":robot_face: Print new rms tables"
+    command: "julia --color=yes --project=.buildkite reproducibility_tests/rms_summary.jl"
 
   - label: ":robot_face: Print new reference counter"
     command: "julia --color=yes --project=.buildkite reproducibility_tests/print_new_ref_counter.jl"

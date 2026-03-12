@@ -34,14 +34,14 @@ function make_ref_file_counter(i, dir...)
     return d
 end
 
-function make_mse(
+function make_rms(
     i,
     dir...;
     subfolder = "output_active",
-    mse_file = "computed_mse.dat",
+    rms_file = "computed_rms.dat",
 )
     d = mkpath(joinpath(dir..., subfolder))
-    open(io -> println(io, i), joinpath(d, mse_file), "w")
+    open(io -> println(io, i), joinpath(d, rms_file), "w")
     return d
 end
 rbundle(p) = joinpath(p, "reproducibility_bundle")
@@ -446,23 +446,34 @@ end
 
 import OrderedCollections: OrderedDict
 
+# Helper: create a zero-diff RMS result dict
+_rms_pass(keys...) = OrderedDict(
+    k => (rms_diff = 0.0, data_scale = 1.0, relative_rms = 0.0, n_points = 1)
+    for k in keys
+)
+# Helper: create a failing RMS result dict (large diff)
+_rms_fail(keys...) = OrderedDict(
+    k => (rms_diff = 1.0, data_scale = 1.0, relative_rms = 1.0, n_points = 1)
+    for k in keys
+)
+
 @testset "Reproducibility infrastructure: report_reproducibility_results - filename" begin
     make_and_cd() do dir
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 1, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        d1 = make_mse(mses1, dir, "d1")
-        d2 = make_mse(mses2, dir, "d2")
-        d3 = make_mse(mses3, dir, "d3")
+        r1 = _rms_pass("a", "b")
+        r2 = _rms_fail("a", "b")
+        r3 = _rms_pass("a", "b")
+        d1 = make_rms(r1, dir, "d1")
+        d2 = make_rms(r2, dir, "d2")
+        d3 = make_rms(r3, dir, "d3")
         paths = [d1, d2, d3]
-        computed_mse_filenames = map(paths) do p
-            joinpath(p, "computed_mse.dat")
+        computed_rms_filenames = map(paths) do p
+            joinpath(p, "computed_rms.dat")
         end
         io = IOBuffer()
         @test report_reproducibility_results(
             io,
-            map(x -> basename(dirname(dirname(x))), computed_mse_filenames),
-            map(x -> parse_file(x), computed_mse_filenames);
+            map(x -> basename(dirname(dirname(x))), computed_rms_filenames),
+            map(x -> parse_file(x), computed_rms_filenames);
             n_pass_limit = 2,
             test_broken_report_flakiness = true,
         ) == :now_reproducible
@@ -472,63 +483,51 @@ end
 
 @testset "Reproducibility infrastructure: report_reproducibility_results - dict, flaky" begin
     make_and_cd() do dir
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 1, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
+        r1 = _rms_pass("a", "b")
+        r2 = _rms_fail("a", "b")
+        r3 = _rms_pass("a", "b")
         io = IOBuffer()
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2, r3];
             n_pass_limit = 2,
             test_broken_report_flakiness = true,
         ) == :now_reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 0, "b" => 1) # only partly passing
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
+        # Only partly failing (one var fails)
+        r2_partial = OrderedDict(
+            "a" => (rms_diff = 0.0, data_scale = 1.0, relative_rms = 0.0, n_points = 1),
+            "b" => (rms_diff = 1.0, data_scale = 1.0, relative_rms = 1.0, n_points = 1),
+        )
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2_partial, r3];
             n_pass_limit = 2,
             test_broken_report_flakiness = true,
         ) == :now_reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 1, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2, r3];
             n_pass_limit = 5,
             test_broken_report_flakiness = true,
         ) == :not_yet_reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 0, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2_partial, r3];
             n_pass_limit = 2,
             test_broken_report_flakiness = true,
         ) == :now_reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 0, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2_partial, r3];
             n_pass_limit = 3,
             test_broken_report_flakiness = true,
         ) == :not_yet_reproducible
@@ -537,132 +536,119 @@ end
 
 @testset "Reproducibility infrastructure: report_reproducibility_results - dict, strict" begin
     make_and_cd() do dir
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 1, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
+        r1 = _rms_pass("a", "b")
+        r2 = _rms_fail("a", "b")
+        r3 = _rms_pass("a", "b")
+        r2_partial = OrderedDict(
+            "a" => (rms_diff = 0.0, data_scale = 1.0, relative_rms = 0.0, n_points = 1),
+            "b" => (rms_diff = 1.0, data_scale = 1.0, relative_rms = 1.0, n_points = 1),
+        )
         io = IOBuffer()
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2, r3];
             n_pass_limit = 2,
             test_broken_report_flakiness = false,
         ) == :reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 0, "b" => 1) # only partly passing
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2_partial, r3];
             n_pass_limit = 2,
             test_broken_report_flakiness = false,
         ) == :reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 1, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2, r3];
             n_pass_limit = 5,
             test_broken_report_flakiness = false,
         ) == :not_reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 0, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2_partial, r3];
             n_pass_limit = 2,
             test_broken_report_flakiness = false,
         ) == :reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 0, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2_partial, r3];
             n_pass_limit = 3,
             test_broken_report_flakiness = false,
         ) == :not_reproducible
     end
 end
 
-@testset "Reproducibility infrastructure: mse summary" begin
+@testset "Reproducibility infrastructure: rms summary" begin
     make_and_cd() do dir
-        mses1 = OrderedDict("a" => 1, "b" => 1)
-        mses2 = OrderedDict("a" => 2, "b" => 2)
-        mses3 = OrderedDict("a" => 3, "b" => 3)
-        d1 = make_mse(mses1, dir, "d1")
-        d2 = make_mse(mses2, dir, "d2")
-        d3 = make_mse(mses3, dir, "d3")
-        d3 = make_mse(mses3, dir, "d3")
+        rms1 = OrderedDict("a" => 1, "b" => 1)
+        rms2 = OrderedDict("a" => 2, "b" => 2)
+        rms3 = OrderedDict("a" => 3, "b" => 3)
+        d1 = make_rms(rms1, dir, "d1")
+        d2 = make_rms(rms2, dir, "d2")
+        d3 = make_rms(rms3, dir, "d3")
+        d3 = make_rms(rms3, dir, "d3")
 
         job_ids = ["d1", "d2", "d3"]
-        computed_mses = get_computed_mses(;
+        computed_results = get_computed_rms(;
             job_ids,
             subfolder = "output_active",
-            is_mse_file = default_is_mse_file,
+            is_rms_file = default_is_rms_file,
         )
         io = IOBuffer()
-        print_mse_summary(io; mses = computed_mses)
+        print_rms_summary(io; results = computed_results)
         s = String(take!(io))
-        @test s == "################################# Computed MSEs
-MSEs[\"d1\"][a] = 1
-MSEs[\"d1\"][b] = 1
-MSEs[\"d2\"][a] = 2
-MSEs[\"d2\"][b] = 2
-MSEs[\"d3\"][a] = 3
-MSEs[\"d3\"][b] = 3
+        @test s == "################################# Computed RMS results
+RMS[\"d1\"][a] = 1
+RMS[\"d1\"][b] = 1
+RMS[\"d2\"][a] = 2
+RMS[\"d2\"][b] = 2
+RMS[\"d3\"][a] = 3
+RMS[\"d3\"][b] = 3
 #################################
 "
 
-        any_skipped = print_skipped_jobs(; mses = computed_mses)
+        any_skipped = print_skipped_jobs(; results = computed_results)
         @test !any_skipped
     end
 end
 
-@testset "Reproducibility infrastructure: mse summary" begin
+@testset "Reproducibility infrastructure: rms summary with missing files" begin
     make_and_cd() do dir
-        mses1 = OrderedDict("a" => 1, "b" => 1)
-        mses2 = OrderedDict("a" => 2, "b" => 2)
-        mses3 = OrderedDict("a" => 3, "b" => 3)
-        d1 = make_mse(mses1, dir, "d1")
-        d2 = make_mse(mses2, dir, "d2"; mse_file = "comuted_mse.dat") # intentional typo
-        d3 = make_mse(mses3, dir, "d3")
-        Base.touch(joinpath(d3, "prog_state.hdf5")) # not an mse file
+        rms1 = OrderedDict("a" => 1, "b" => 1)
+        rms2 = OrderedDict("a" => 2, "b" => 2)
+        rms3 = OrderedDict("a" => 3, "b" => 3)
+        d1 = make_rms(rms1, dir, "d1")
+        d2 = make_rms(rms2, dir, "d2"; rms_file = "comuted_rms.dat") # intentional typo
+        d3 = make_rms(rms3, dir, "d3")
+        Base.touch(joinpath(d3, "prog_state.hdf5")) # not an rms file
 
         job_ids = ["d1", "d2", "d3"]
-        computed_mses = get_computed_mses(;
+        computed_results = get_computed_rms(;
             job_ids,
             subfolder = "output_active",
-            is_mse_file = default_is_mse_file,
+            is_rms_file = default_is_rms_file,
         )
         io = IOBuffer()
-        print_mse_summary(io; mses = computed_mses)
+        print_rms_summary(io; results = computed_results)
         s = String(take!(io))
-        @test s == "################################# Computed MSEs
-MSEs[\"d1\"][a] = 1
-MSEs[\"d1\"][b] = 1
-MSEs[\"d3\"][a] = 3
-MSEs[\"d3\"][b] = 3
+        @test s == "################################# Computed RMS results
+RMS[\"d1\"][a] = 1
+RMS[\"d1\"][b] = 1
+RMS[\"d3\"][a] = 3
+RMS[\"d3\"][b] = 3
 #################################
 "
 
         io = IOBuffer()
-        any_skipped = print_skipped_jobs(io; mses = computed_mses)
+        any_skipped = print_skipped_jobs(io; results = computed_results)
         s = String(take!(io))
         @test any_skipped
         @test s == "Skipped files:
@@ -731,12 +717,12 @@ end
           joinpath("a", "output_1A34", "c")
 end
 
-@testset "Reproducibility infrastructure: commit_sha_from_mse_file" begin
-    @test_throws ErrorException commit_sha_from_mse_file(
+@testset "Reproducibility infrastructure: commit_sha_from_rms_file" begin
+    @test_throws ErrorException commit_sha_from_rms_file(
         joinpath("a", "b", "c"),
     )
-    @test commit_sha_from_mse_file(
-        joinpath("a", "b", "computed_mse_H123.dat"),
+    @test commit_sha_from_rms_file(
+        joinpath("a", "b", "computed_rms_H123.dat"),
     ) == "H123"
 end
 
@@ -1724,9 +1710,9 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
             @test dirs == [d05, d04, d03]
             repro_dir = joinpath(computed_dir, rfolder)
             @test isfile(joinpath(repro_dir, "computed_prog_state.hdf5"))
-            @test isfile(joinpath(repro_dir, "computed_mse_$commit_sha_05.dat"))
-            @test isfile(joinpath(repro_dir, "computed_mse_$commit_sha_04.dat"))
-            @test isfile(joinpath(repro_dir, "computed_mse_$commit_sha_03.dat"))
+            @test isfile(joinpath(repro_dir, "computed_rms_$commit_sha_05.dat"))
+            @test isfile(joinpath(repro_dir, "computed_rms_$commit_sha_04.dat"))
+            @test isfile(joinpath(repro_dir, "computed_rms_$commit_sha_03.dat"))
         end
     end
 end
