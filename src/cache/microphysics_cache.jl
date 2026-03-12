@@ -793,7 +793,7 @@ function update_implicit_microphysics_cache!(
     n = n_mass_flux_subdomains(tm)
 
     @. ᶜρ_dq_tot_dt = ᶜmp_tendency⁰.dq_tot_dt * ρa⁰(Y.c.ρ, Y.c.sgsʲs, tm)
-    @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt⁰ * ᶜmp_tendency⁰.e_tot_hlpr
+    @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency⁰.e_tot_hlpr
     for j in 1:n
         @. ᶜρ_dq_tot_dt += ᶜmp_tendencyʲs.:($$j).dq_tot_dt * Y.c.sgsʲs.:($$j).ρa
         @. ᶜρ_de_tot_dt +=
