@@ -53,6 +53,15 @@ const PHYSICAL_VAR_METADATA =
             (label = "u₃ʲ (updraft vert. wind)", unit = "m/s"),
     )
 
+"""
+    prop_chain_key(prop_chain) -> String
+
+Convert a ClimaCore property-chain tuple (e.g. `(:c, :ρq_tot)`) to a
+dot-separated string key (e.g. `"c.ρq_tot"`) that matches the format
+used in [`PHYSICAL_VAR_METADATA`](@ref).
+"""
+prop_chain_key(pc) = join(string.(pc), ".")
+
 """Look up the human-readable label for a property-chain key, falling back to the key itself."""
 physical_var_label(key::String) =
     haskey(PHYSICAL_VAR_METADATA, key) ? PHYSICAL_VAR_METADATA[key].label : key
@@ -242,7 +251,7 @@ function _read_field_dict(
     for prop_chain in Fields.property_chains(Y)
         arr = vec(Array(parent(Fields.single_field(Y, prop_chain))))
         zero_fill && fill!(arr, 0)
-        dict[string(prop_chain)] = arr
+        dict[prop_chain_key(prop_chain)] = arr
     end
     return dict
 end
@@ -618,7 +627,7 @@ function report_reproducibility_results(
         column_labels = [["Source", "Status"]],
     )
 
-    println(io, "   n_comparisons              = $n_comparisons")
+    println(io, "   n_comparisons               = $n_comparisons")
     println(io, "   n_times_reproducible        = $n_passes")
     println(io, "   n_times_not_reproducible    = $n_not")
     println(io, "   n_pass_limit                = $n_pass_limit")

@@ -912,13 +912,13 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
             InputOutput.write!(hdfwriter, fv, "fv")
             Base.close(hdfwriter)
             dict = to_dict(file, "fv", comms_ctx)
-            @test dict["(:x,)"] isa Vector{Float64}
-            @test dict["(:y,)"] isa Vector{Float64}
+            @test dict["x"] isa Vector{Float64}
+            @test dict["y"] isa Vector{Float64}
             zdict = zero_dict(file, "fv", comms_ctx)
-            @test zdict["(:x,)"] isa Vector{Float64}
-            @test zdict["(:y,)"] isa Vector{Float64}
-            @test all(x -> iszero(x), zdict["(:x,)"])
-            @test all(x -> iszero(x), zdict["(:y,)"])
+            @test zdict["x"] isa Vector{Float64}
+            @test zdict["y"] isa Vector{Float64}
+            @test all(x -> iszero(x), zdict["x"])
+            @test all(x -> iszero(x), zdict["y"])
         end
     end
 
@@ -971,10 +971,10 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
                 skip = true,
             )
             @test length(v) == 1
-            @test v[1]["(:x,)"] isa NamedTuple
-            @test v[1]["(:y,)"] isa NamedTuple
-            @test iszero(v[1]["(:x,)"].rms_diff)
-            @test iszero(v[1]["(:y,)"].rms_diff)
+            @test v[1]["x"] isa NamedTuple
+            @test v[1]["y"] isa NamedTuple
+            @test iszero(v[1]["x"].rms_diff)
+            @test iszero(v[1]["y"].rms_diff)
 
             @test isempty(d)
             @test how == :skipped
@@ -992,10 +992,10 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
                 skip = false,
             )
             @test length(v) == 1
-            @test v[1]["(:x,)"] isa NamedTuple
-            @test v[1]["(:y,)"] isa NamedTuple
-            @test iszero(v[1]["(:x,)"].rms_diff)
-            @test iszero(v[1]["(:y,)"].rms_diff)
+            @test v[1]["x"] isa NamedTuple
+            @test v[1]["y"] isa NamedTuple
+            @test iszero(v[1]["x"].rms_diff)
+            @test iszero(v[1]["y"].rms_diff)
 
             @test isempty(d)
             @test how == :no_comparable_dirs
@@ -1115,12 +1115,12 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
             # The first we compare against is most recent,
             # And we set `fv.x .= 200` and `fv.y .= 300` for
             # that dataset.
-            @test v[1]["(:x,)"].rms_diff > 0  # different data
-            @test v[1]["(:y,)"].rms_diff > 0
-            @test iszero(v[2]["(:x,)"].rms_diff)
-            @test iszero(v[2]["(:y,)"].rms_diff)
-            @test iszero(v[3]["(:x,)"].rms_diff)
-            @test iszero(v[3]["(:y,)"].rms_diff)
+            @test v[1]["x"].rms_diff > 0  # different data
+            @test v[1]["y"].rms_diff > 0
+            @test iszero(v[2]["x"].rms_diff)
+            @test iszero(v[2]["y"].rms_diff)
+            @test iszero(v[3]["x"].rms_diff)
+            @test iszero(v[3]["y"].rms_diff)
 
             @test d == [d05, d04, d03]
             @test how == :successful_comparison
@@ -1168,10 +1168,10 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
                 skip = true,
             )
             @test length(v) == 1
-            @test v[1]["(:x,)"] isa NamedTuple
-            @test v[1]["(:y,)"] isa NamedTuple
-            @test iszero(v[1]["(:x,)"].rms_diff)
-            @test iszero(v[1]["(:y,)"].rms_diff)
+            @test v[1]["x"] isa NamedTuple
+            @test v[1]["y"] isa NamedTuple
+            @test iszero(v[1]["x"].rms_diff)
+            @test iszero(v[1]["y"].rms_diff)
 
             @test isempty(d)
             @test how == :skipped
@@ -1188,10 +1188,10 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
                 skip = false,
             )
             @test length(v) == 1
-            @test v[1]["(:x,)"] isa NamedTuple
-            @test v[1]["(:y,)"] isa NamedTuple
-            @test iszero(v[1]["(:x,)"].rms_diff)
-            @test iszero(v[1]["(:y,)"].rms_diff)
+            @test v[1]["x"] isa NamedTuple
+            @test v[1]["y"] isa NamedTuple
+            @test iszero(v[1]["x"].rms_diff)
+            @test iszero(v[1]["y"].rms_diff)
 
             @test isempty(d)
             @test how == :no_comparable_dirs
@@ -1256,12 +1256,12 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
             # The first we compare against is most recent,
             # And we set `fv.x .= 200` and `fv.y .= 300` for
             # that dataset.
-            @test v[1]["(:x,)"].rms_diff > 0  # different data
-            @test v[1]["(:y,)"].rms_diff > 0
-            @test iszero(v[2]["(:x,)"].rms_diff)
-            @test iszero(v[2]["(:y,)"].rms_diff)
-            @test iszero(v[3]["(:x,)"].rms_diff)
-            @test iszero(v[3]["(:y,)"].rms_diff)
+            @test v[1]["x"].rms_diff > 0  # different data
+            @test v[1]["y"].rms_diff > 0
+            @test iszero(v[2]["x"].rms_diff)
+            @test iszero(v[2]["y"].rms_diff)
+            @test iszero(v[3]["x"].rms_diff)
+            @test iszero(v[3]["y"].rms_diff)
 
             @test d == [d05, d04, d03]
             @test how == :successful_comparison
