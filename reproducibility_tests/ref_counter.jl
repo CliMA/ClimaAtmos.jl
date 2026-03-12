@@ -1,10 +1,10 @@
-326
+327
 
 # **README**
 #
 # What is the ref_counter?
 #
-# The ref_counter is part of reproduciability tests. The counter identifies a
+# The ref_counter is part of reproducibility tests. The counter identifies a
 # particular snapshot of our code, a "reference". Each PR is tested against this
 # reference to check if it reproduces the expected behavior. This allows us to
 # check that PRs that are expected to not modify the behavior do indeed preserve
@@ -13,13 +13,29 @@
 # When am I allowed to increase the ref_counter?
 #
 # If you know that your PR is changing some behavior (e.g., you are changing
-# parameters, or how things are computed, or added a new component), you should
-# increase the number on top of this file and add an explanation on why it has
-# changed in the comments below. Increasing the ref_counter will make your PR
-# the new reference that other PRs will be compared against.
+# the numeric scheme), you MUST increase the reference counter. Note that
+# structural changes to the testing infrastructure (like switching outputs from
+# MSE to RMS) also require bumping the counter.
+#
+# What happens if I increase the ref_counter?
+#
+# The latest reference folder is saved, and a new one is created.
+#
+# Can we reduce the ref_counter?
+#
+# Never! Reverting broken commits still constitute as a state-change, and
+# should therefore increment the reference counter.
 
+# How to increase the ref counter:
+# 1) Increment the number on the first line of this file.
+# 2) Note the date alongside a brief description of the PR in question.
+# 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+327
+- Refactor reproducibility infrastructure to use rms deviations in prognostic variables and only fail when rms deviation exceeds tolerance. 
+- Needs ref_counter update because reference table changes to rmse rather than mse. 
+
 326
 - Update implicit timestepping for microphysics tendencies, with diagonal Jacobian entries.
 
