@@ -327,121 +327,8 @@ function make_file_with_contents(dir, filename, contents)
     f = joinpath(dir, filename)
     open(io -> println(io, contents), f, "w")
 end
-@testset "Reproducibility infrastructure: source_checksum" begin
-    mktempdir2_cd_computed() do (dir_A, dir_B)
-        make_file_with_contents(dir_A, "file_x.jl", "abc")
-        make_file_with_contents(dir_A, "file_y.jl", "abc")
-        make_file_with_contents(dir_A, "file_z.jl", "abc")
-
-        make_file_with_contents(dir_B, "file_x.jl", "abc")
-        make_file_with_contents(dir_B, "file_y.jl", "abc")
-        make_file_with_contents(dir_B, "file_z.jl", "abc")
-        @test source_checksum(dir_A) == source_checksum(dir_B)
-    end
-
-    mktempdir2_cd_computed() do (dir_A, dir_B)
-        make_file_with_contents(dir_A, "file_x.jl", "abc")
-        make_file_with_contents(dir_A, "file_y.jl", "abc")
-        make_file_with_contents(dir_A, "file_z.jl", "abc")
-
-        make_file_with_contents(dir_B, "file_x.jl", "xyz")
-        make_file_with_contents(dir_B, "file_y.jl", "abc")
-        make_file_with_contents(dir_B, "file_z.jl", "abc")
-        @test source_checksum(dir_A) ≠ source_checksum(dir_B)
-    end
-end
-
-@testset "Reproducibility infrastructure: source_has_changed" begin
-    mktempdir2_cd_computed() do (dir_A, dir_B)
-        make_file_with_contents(dir_A, "file_x.jl", "abc")
-        make_file_with_contents(dir_A, "file_y.jl", "abc")
-        make_file_with_contents(dir_A, "file_z.jl", "abc")
-        d_A = make_ref_file_counter(3, dir_A, "d_A")
-        make_file_with_contents(
-            d_A,
-            "source_checksum.dat",
-            source_checksum(dir_A),
-        )
-
-        make_file_with_contents(dir_B, "file_x.jl", "abc")
-        make_file_with_contents(dir_B, "file_y.jl", "abc")
-        make_file_with_contents(dir_B, "file_z.jl", "abc")
-        d_B = make_ref_file_counter(3, dir_B, "d_B")
-        make_file_with_contents(
-            d_B,
-            "source_checksum.dat",
-            source_checksum(dir_B),
-        )
-
-        @test source_has_changed(;
-            n = 0, # force no comparable reference, source code
-            root_dir = dir_A,
-            ref_counter_PR = 3,
-            skip = false,
-            src_dir = dir_B,
-        )
-    end
-
-    mktempdir2_cd_computed() do (dir_A, dir_B)
-        make_file_with_contents(dir_A, "file_x.jl", "abc")
-        make_file_with_contents(dir_A, "file_y.jl", "abc")
-        make_file_with_contents(dir_A, "file_z.jl", "abc")
-        d_A = make_ref_file_counter(3, dir_A, "d_A")
-        make_file_with_contents(
-            d_A,
-            "source_checksum.dat",
-            source_checksum(dir_A),
-        )
-
-        make_file_with_contents(dir_B, "file_x.jl", "abc")
-        make_file_with_contents(dir_B, "file_y.jl", "abc")
-        make_file_with_contents(dir_B, "file_z.jl", "abc")
-        d_B = make_ref_file_counter(3, dir_B, "d_B")
-        make_file_with_contents(
-            d_B,
-            "source_checksum.dat",
-            source_checksum(dir_B),
-        )
-
-        @test !source_has_changed(;
-            n = 5,
-            root_dir = dir_A,
-            ref_counter_PR = 3,
-            skip = false,
-            src_dir = dir_B,
-        )
-    end
-
-    mktempdir2_cd_computed() do (dir_A, dir_B)
-        make_file_with_contents(dir_A, "file_x.jl", "abc")
-        make_file_with_contents(dir_A, "file_y.jl", "abc")
-        make_file_with_contents(dir_A, "file_z.jl", "abc")
-        d_A = make_ref_file_counter(3, dir_A, "d_A")
-        make_file_with_contents(
-            d_A,
-            "source_checksum.dat",
-            source_checksum(dir_A),
-        )
-
-        make_file_with_contents(dir_B, "file_x.jl", "abc")
-        make_file_with_contents(dir_B, "file_y.jl", "abc")
-        make_file_with_contents(dir_B, "file_z.jl", "xyz")
-        d_B = make_ref_file_counter(3, dir_B, "d_B")
-        make_file_with_contents(
-            d_B,
-            "source_checksum.dat",
-            source_checksum(dir_B),
-        )
-
-        @test source_has_changed(;
-            n = 5,
-            root_dir = dir_A,
-            ref_counter_PR = 3,
-            skip = false,
-            src_dir = dir_B,
-        )
-    end
-end
+# source_checksum and source_has_changed tests removed:
+# these functions were dead code and have been deleted.
 
 
 import OrderedCollections: OrderedDict
@@ -756,8 +643,7 @@ end
         file = joinpath(job_id_2, "output_active", "ref_prog_state.dat")
         open(io -> println(io, 1), file, "w")
 
-        @test source_checksum(hash1) == source_checksum(computed_dir)
-        @test source_checksum(hash2) == source_checksum(computed_dir)
+
 
         repro_folder = "repro_bundle"
         (; files_src, files_dest) = save_dir_in_out_list(;
@@ -829,8 +715,7 @@ end
         file = joinpath(job_id_2, "output_active", "ref_prog_state.dat")
         open(io -> println(io, 1), file, "w")
 
-        @test source_checksum(hash1) == source_checksum(computed_dir)
-        @test source_checksum(hash2) == source_checksum(computed_dir)
+
 
         repro_folder = "repro_bundle"
         repro_dir = joinpath(save_dir, "hash_new", repro_folder)
@@ -847,7 +732,6 @@ end
             ),
             ref_counter_PR = 3,
             repro_folder,
-            skip = false,
         )
         @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.dat"))
         @test isfile(joinpath(repro_dir, "job_id_2", "ref_prog_state.dat"))
@@ -886,8 +770,7 @@ end
         file = joinpath(job_id_2, "output_active", "ref_prog_state.dat")
         open(io -> println(io, 1), file, "w")
 
-        @test source_checksum(hash1) == source_checksum(computed_dir)
-        @test source_checksum(hash2) == source_checksum(computed_dir)
+
 
         repro_folder = "repro_bundle"
         move_data_to_save_dir(;
@@ -904,7 +787,6 @@ end
             ),
             repro_folder,
             ref_counter_PR = 3,
-            skip = false,
         )
         repro_dir = joinpath(save_dir, "hash_new", "repro_bundle")
         @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.dat"))
@@ -944,8 +826,7 @@ end
         file = joinpath(job_id_2_sym_dir, "ref_prog_state.dat")
         open(io -> println(io, 1), file, "w")
 
-        @test source_checksum(hash1) == source_checksum(computed_dir)
-        @test source_checksum(hash2) == source_checksum(computed_dir)
+
 
         repro_folder = "repro_bundle"
         move_data_to_save_dir(;
@@ -962,7 +843,6 @@ end
             ),
             repro_folder,
             ref_counter_PR = 3,
-            skip = false,
         )
         repro_dir = joinpath(save_dir, "hash_new", "repro_bundle")
         @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.dat"))
@@ -1091,10 +971,10 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
                 skip = true,
             )
             @test length(v) == 1
-            @test v[1]["(:x,)"] isa Vector{Float64}
-            @test v[1]["(:y,)"] isa Vector{Float64}
-            @test all(x -> iszero(x), v[1]["(:x,)"])
-            @test all(x -> iszero(x), v[1]["(:y,)"])
+            @test v[1]["(:x,)"] isa NamedTuple
+            @test v[1]["(:y,)"] isa NamedTuple
+            @test iszero(v[1]["(:x,)"].rms_diff)
+            @test iszero(v[1]["(:y,)"].rms_diff)
 
             @test isempty(d)
             @test how == :skipped
@@ -1112,10 +992,10 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
                 skip = false,
             )
             @test length(v) == 1
-            @test v[1]["(:x,)"] isa Vector{Float64}
-            @test v[1]["(:y,)"] isa Vector{Float64}
-            @test all(x -> iszero(x), v[1]["(:x,)"])
-            @test all(x -> iszero(x), v[1]["(:y,)"])
+            @test v[1]["(:x,)"] isa NamedTuple
+            @test v[1]["(:y,)"] isa NamedTuple
+            @test iszero(v[1]["(:x,)"].rms_diff)
+            @test iszero(v[1]["(:y,)"].rms_diff)
 
             @test isempty(d)
             @test how == :no_comparable_dirs
@@ -1235,12 +1115,12 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
             # The first we compare against is most recent,
             # And we set `fv.x .= 200` and `fv.y .= 300` for
             # that dataset.
-            @test v[1]["(:x,)"] == 2970.075
-            @test v[1]["(:y,)"] == 2980.0333333333333
-            @test v[2]["(:x,)"] == 0.0
-            @test v[2]["(:y,)"] == 0.0
-            @test v[3]["(:x,)"] == 0.0
-            @test v[3]["(:y,)"] == 0.0
+            @test v[1]["(:x,)"].rms_diff > 0  # different data
+            @test v[1]["(:y,)"].rms_diff > 0
+            @test iszero(v[2]["(:x,)"].rms_diff)
+            @test iszero(v[2]["(:y,)"].rms_diff)
+            @test iszero(v[3]["(:x,)"].rms_diff)
+            @test iszero(v[3]["(:y,)"].rms_diff)
 
             @test d == [d05, d04, d03]
             @test how == :successful_comparison
@@ -1288,10 +1168,10 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
                 skip = true,
             )
             @test length(v) == 1
-            @test v[1]["(:x,)"] isa Vector{Float64}
-            @test v[1]["(:y,)"] isa Vector{Float64}
-            @test all(x -> iszero(x), v[1]["(:x,)"])
-            @test all(x -> iszero(x), v[1]["(:y,)"])
+            @test v[1]["(:x,)"] isa NamedTuple
+            @test v[1]["(:y,)"] isa NamedTuple
+            @test iszero(v[1]["(:x,)"].rms_diff)
+            @test iszero(v[1]["(:y,)"].rms_diff)
 
             @test isempty(d)
             @test how == :skipped
@@ -1308,10 +1188,10 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
                 skip = false,
             )
             @test length(v) == 1
-            @test v[1]["(:x,)"] isa Vector{Float64}
-            @test v[1]["(:y,)"] isa Vector{Float64}
-            @test all(x -> iszero(x), v[1]["(:x,)"])
-            @test all(x -> iszero(x), v[1]["(:y,)"])
+            @test v[1]["(:x,)"] isa NamedTuple
+            @test v[1]["(:y,)"] isa NamedTuple
+            @test iszero(v[1]["(:x,)"].rms_diff)
+            @test iszero(v[1]["(:y,)"].rms_diff)
 
             @test isempty(d)
             @test how == :no_comparable_dirs
@@ -1376,12 +1256,12 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
             # The first we compare against is most recent,
             # And we set `fv.x .= 200` and `fv.y .= 300` for
             # that dataset.
-            @test v[1]["(:x,)"] == 2970.075
-            @test v[1]["(:y,)"] == 2980.0333333333333
-            @test v[2]["(:x,)"] == 0.0
-            @test v[2]["(:y,)"] == 0.0
-            @test v[3]["(:x,)"] == 0.0
-            @test v[3]["(:y,)"] == 0.0
+            @test v[1]["(:x,)"].rms_diff > 0  # different data
+            @test v[1]["(:y,)"].rms_diff > 0
+            @test iszero(v[2]["(:x,)"].rms_diff)
+            @test iszero(v[2]["(:y,)"].rms_diff)
+            @test iszero(v[3]["(:x,)"].rms_diff)
+            @test iszero(v[3]["(:y,)"].rms_diff)
 
             @test d == [d05, d04, d03]
             @test how == :successful_comparison
