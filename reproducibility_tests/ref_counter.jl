@@ -1,4 +1,4 @@
-331
+332
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+332
+- Change the 0M precipitation threshold to be based on supersaturation excess
+  in all places
+
 331
 - Update Thermodynamics to 1.2
 
@@ -45,8 +49,8 @@
 - Downgrade to 1.11 due to CUDA misaligned memory error
 
 327
-- Refactor reproducibility infrastructure to use rms deviations in prognostic variables and only fail when rms deviation exceeds tolerance. 
-- Needs ref_counter update because reference table changes to rmse rather than mse. 
+- Refactor reproducibility infrastructure to use rms deviations in prognostic variables and only fail when rms deviation exceeds tolerance.
+- Needs ref_counter update because reference table changes to rmse rather than mse.
 
 326
 - Update implicit timestepping for microphysics tendencies, with diagonal Jacobian entries.

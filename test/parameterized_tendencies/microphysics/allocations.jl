@@ -106,11 +106,21 @@ end
 function _allocs_bmt_0m(mp, thp)
     FT = Float64
     T = FT(280.0)
+    ρ = FT(1.0)
     q_liq = FT(0.001)
     q_ice = FT(0.0005)
-    BMT.bulk_microphysics_tendencies(BMT.Microphysics0Moment(), mp, thp, T, q_liq, q_ice)
+    q_vap_sat = TD.q_vap_saturation(thp, T, ρ)
+    BMT.bulk_microphysics_tendencies(
+        BMT.Microphysics0Moment(),
+        mp,
+        thp,
+        T,
+        q_liq,
+        q_ice,
+        q_vap_sat,
+    )
     return @allocated BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics0Moment(), mp, thp, T, q_liq, q_ice,
+        BMT.Microphysics0Moment(), mp, thp, T, q_liq, q_ice, q_vap_sat,
     )
 end
 
