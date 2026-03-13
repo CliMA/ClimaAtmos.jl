@@ -1225,7 +1225,7 @@ function set_microphysics_tendency_cache!(
         # Compute aerosol activation
         @. ᶜmp_tendency.dn_lcl_dt +=
             aerosol_activation_sources(
-                (acp,), seasalt_num, seasalt_mean_radius, sulfate_num,
+                acp, seasalt_num, seasalt_mean_radius, sulfate_num,
                 specific(Y.c.ρq_tot, Y.c.ρ),
                 specific(Y.c.ρq_liq + Y.c.ρq_rai, Y.c.ρ),
                 specific(Y.c.ρq_ice + Y.c.ρq_sno, Y.c.ρ),
@@ -1250,7 +1250,6 @@ function set_microphysics_tendency_cache!(
     thp = CAP.thermodynamics_params(p.params)
     cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
-    cmc = CAP.microphysics_cloud_params(p.params)
     acp = CAP.microphysics_cloud_params(p.params).activation
     pap = p.params.prescribed_aerosol_params
 
@@ -1287,13 +1286,13 @@ function set_microphysics_tendency_cache!(
             ᶜTʲs.:($j), dt, cm2p, thp,
             p.atmos.microphysics_tendency_timestepping,
         )
-        ᶜmp_tendencyʲs.:($j).dq_ice_dt = 0
-        ᶜmp_tendencyʲs.:($j).dq_rim_dt = 0
-        ᶜmp_tendencyʲs.:($j).db_rim_dt = 0
+        #ᶜmp_tendencyʲs.:($j).dq_ice_dt = 0
+        #ᶜmp_tendencyʲs.:($j).dq_rim_dt = 0
+        #ᶜmp_tendencyʲs.:($j).db_rim_dt = 0
         # Aerosol activation
         ᶜwʲ = @. lazy(max(0, w_component(Geometry.WVector(ᶜuʲs.:($$j)))))
         @. ᶜmp_tendencyʲs.:($$j).dn_lcl_dt += aerosol_activation_sources(
-            (cmc.activation,), seasalt_num, seasalt_mean_radius, sulfate_num,
+            acp, seasalt_num, seasalt_mean_radius, sulfate_num,
             ᶜq_tot_safeʲs.:($$j),
             Y.c.sgsʲs.:($$j).q_liq + Y.c.sgsʲs.:($$j).q_rai,
             Y.c.sgsʲs.:($$j).q_ice,
@@ -1306,8 +1305,8 @@ function set_microphysics_tendency_cache!(
     ᶜn_liq⁰ = ᶜspecific_env_value(@name(n_liq), Y, p)
     ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), Y, p)
     ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
-    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
+    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
@@ -1325,14 +1324,14 @@ function set_microphysics_tendency_cache!(
         ᶜmp_tendency⁰, p.atmos.microphysics_tendency_timestepping,
         ᶜq_liq⁰, ᶜn_liq⁰, ᶜq_rai⁰, ᶜn_rai⁰, dt,
     )
-    @. ᶜmp_tendency⁰.dq_ice_dt = 0
-    @. ᶜmp_tendency⁰.dq_sno_dt = 0
+    #@. ᶜmp_tendency⁰.dq_ice_dt = 0
+    #@. ᶜmp_tendency⁰.dq_sno_dt = 0
     # Aerosol activation
     # TODO - make it part of BMT
     # TODO - should be included in limiting
     ᶜw⁰ = @. lazy(w_component(Geometry.WVector(ᶜu⁰)))
-    @. ᶜSnₗᵐ⁰ += aerosol_activation_sources(
-        (acp,), seasalt_num, seasalt_mean_radius, sulfate_num, ᶜq_tot_safe⁰,
+    @. ᶜmp_tendency⁰.dn_lcl_dt += aerosol_activation_sources(
+        acp, seasalt_num, seasalt_mean_radius, sulfate_num, ᶜq_tot_safe⁰,
         ᶜq_liq⁰ + ᶜq_rai⁰, ᶜq_ice⁰ + ᶜq_sno⁰, ᶜn_liq⁰ + ᶜn_rai⁰,
         ᶜρ⁰, ᶜw⁰, cm2p, thp, ᶜT⁰, ᶜp, dt, (pap,),
     )
