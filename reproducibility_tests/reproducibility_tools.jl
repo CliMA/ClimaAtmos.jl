@@ -185,15 +185,14 @@ end
 """
     default_tolerance(data_scale; eps_factor = 10, FT = Float32)
 
-Return a physically meaningful tolerance for an RMS difference:
-`eps_factor * eps(FT) * max(data_scale, 1)`.
-
-The `max(data_scale, 1)` floor prevents the tolerance from collapsing
-to zero for fields with very small mean magnitude.
+Return a physically meaningful tolerance for an RMS difference. Uses a standard
+relative tolerance matching the field's data scale: `eps_factor * eps(FT) * data_scale`.
+(If `data_scale` is strictly zero, falls back to `eps_factor * eps(FT)`).
 """
 function default_tolerance(data_scale; eps_factor = 10, FT = Float32)
-    return eps_factor * eps(FT) * max(data_scale, one(data_scale))
+    return iszero(data_scale) ? eps_factor * eps(FT) : eps_factor * eps(FT) * data_scale
 end
+
 
 """
     test_reproducibility(;
