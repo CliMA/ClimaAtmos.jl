@@ -1416,8 +1416,6 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
         (@name(c.ρq_ice), @name(ᶜmp_derivative.∂tendency_∂q_ice)),
         (@name(c.ρq_rai), @name(ᶜmp_derivative.∂tendency_∂q_rai)),
         (@name(c.ρq_sno), @name(ᶜmp_derivative.∂tendency_∂q_sno)),
-        (@name(c.ρn_liq), @name(ᶜmp_derivative.∂tendency_∂n_lcl)),
-        (@name(c.ρn_rai), @name(ᶜmp_derivative.∂tendency_∂n_rai)),
     )
     MatrixFields.unrolled_foreach(
         gs_deriv_tracers,
@@ -1453,7 +1451,14 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
 
         if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
             if hasproperty(p.precomputed, :ᶜmp_tendencyʲs)
-                (; ᶜmp_tendencyʲs) = p.precomputed
+                (; ᶜmp_tendencyʲs, ᶜ∂tendency_∂q_totʲs) = p.precomputed
+                dq_tot_dtʲ = @. lazy(
+                    microphysics_tendency_model(
+                        ᶜmp_tendencyʲs.:(1).dq_tot_dt,
+                        ᶜ∂tendency_∂q_totʲs.:(1),
+                        Y.c.sgsʲs.:(1).q_tot,
+                    ),
+                )
 
                 ρa_name = @name(c.sgsʲs.:(1).ρa)
                 if MatrixFields.has_field(Y, ρa_name)
@@ -1463,7 +1468,7 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
                             zero(typeof(∂ᶜρa_err_∂ᶜρa)) - (I,)
                     end
                     @. ∂ᶜρa_err_∂ᶜρa +=
-                        dtγ * DiagonalMatrixRow(ᶜmp_tendencyʲs.:(1).dq_tot_dt)
+                        dtγ * DiagonalMatrixRow(dq_tot_dtʲ)
                 end
             end
         end

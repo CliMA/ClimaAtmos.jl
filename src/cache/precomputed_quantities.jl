@@ -222,7 +222,6 @@ function precomputed_quantities(Y, atmos)
             ᶜwₙₗ = similar(Y.c, FT),
             ᶜwₙᵣ = similar(Y.c, FT),
             ᶜmp_tendency = similar(Y.c, MP23_NT),
-            ᶜmp_derivative = similar(Y.c, ∂MP23_NT),
         )
         # Add additional quantities for 2M + P3
         if atmos.microphysics_model isa NonEquilibriumMicrophysics2MP3
@@ -282,7 +281,7 @@ function precomputed_quantities(Y, atmos)
         if atmos.turbconv_model isa PrognosticEDMFX
             precipitation_sgs_quantities = (;
                 precipitation_sgs_quantities...,
-                ᶜmp_tendency⁰ = similar(Y.c, MP3_NT),
+                ᶜmp_tendency⁰ = similar(Y.c, MP23_NT),
             )
         end
     else

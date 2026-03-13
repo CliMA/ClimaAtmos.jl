@@ -900,7 +900,7 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
 
     @. ᶜρ_dq_tot_dt = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
     @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
-    @. ᶜ∂tendency_∂q_tot = _jac_coeff(ᶜρ_dq_tot_dt, Y.c.ρq_tot)
+    @. ᶜ∂tendency_∂q_tot = _jac_coeff_from_ratio(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot, Y.c.ρ)
     return nothing
 end
 
@@ -910,6 +910,7 @@ function set_microphysics_tendency_cache!(
     (; dt) = p
     (; ᶜΦ) = p.core
     (; ᶜmp_tendency) = p.precomputed
+    (; ᶜ∂tendency_∂q_tot) = p.precomputed
     (; ᶜT, ᶜq_tot_safe) = p.precomputed
     (; ᶜT′T′, ᶜq′q′) = p.precomputed # temperature-based variances
 
@@ -930,11 +931,13 @@ function set_microphysics_tendency_cache!(
         ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping,
         ᶜq_tot_safe, dt,
     )
+    # Compute derivative
+    @. ᶜ∂tendency_∂q_tot = _jac_coeff_from_ratio(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot, Y.c.ρ)
 
     # TODO - duplicated with tendency and implicit cache update
     (; ᶜmp_tendencyʲs, ᶜρaʲs) = p.precomputed
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
-    (; ᶜ∂tendency_∂q_tot, ᶜ∂tendency_∂q_totʲs) = p.precomputed
+    (; ᶜ∂tendency_∂q_totʲs) = p.precomputed
     n = n_mass_flux_subdomains(tm)
     @. ᶜρ_dq_tot_dt = ᶜmp_tendency.dq_tot_dt * ρa⁰(Y.c.ρ, ᶜρaʲs, tm)
     @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
@@ -946,8 +949,6 @@ function set_microphysics_tendency_cache!(
 
         @. ᶜ∂tendency_∂q_totʲs.:($$j) = 0
     end
-
-    @. ᶜ∂tendency_∂q_tot = _jac_coeff(ᶜρ_dq_tot_dt, Y.c.ρq_tot)
 
     return nothing
 end
@@ -1020,7 +1021,9 @@ function set_microphysics_tendency_cache!(
             ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
     end
 
-    @. ᶜ∂tendency_∂q_tot = _jac_coeff(ᶜρ_dq_tot_dt, Y.c.ρq_tot)
+    # Assuming S = α q: ∂(dρq_dt)/∂(ρq) = ∂(dq⁰_dt)/∂q⁰, so the grid-mean derivative
+    # can be computed from the environmental tendency.
+    @. ᶜ∂tendency_∂q_tot = _jac_coeff(ᶜmp_tendency⁰.dq_tot_dt, ᶜq_tot_safe⁰)
 
     return nothing
 end
@@ -1161,6 +1164,8 @@ function set_microphysics_tendency_cache!(
 
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
     # grid-mean state for the implicit Jacobian diagonal.
+    # Assuming S = α q: ∂(dρq_dt)/∂(ρq) = ∂(dq⁰_dt)/∂q⁰, so the grid-mean derivative
+    # can be computed from the environmental tendency.
     @. ᶜmp_derivative =
         _jac_coeffs_1m(ᶜmp_tendency⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰)
 
