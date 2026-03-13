@@ -758,8 +758,14 @@ update_implicit_microphysics_cache!(Y, p, _, _) = nothing
 function update_implicit_microphysics_cache!(
     Y, p, mm::EquilibriumMicrophysics0M, _,
 )
-    (; ᶜmp_tendency, ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
-    @. ᶜρ_dq_tot_dt = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
+    (; ᶜmp_tendency, ᶜ∂tendency_∂q_tot, ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
+    @. ᶜρ_dq_tot_dt =
+        Y.c.ρ * microphysics_tendency_model(
+            ᶜmp_tendency.dq_tot_dt,
+            ᶜ∂tendency_∂q_tot,
+            Y.c.ρq_tot,
+            Y.c.ρ,
+        )
     @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
 
     set_precipitation_surface_fluxes!(Y, p, mm)
@@ -770,10 +776,17 @@ function update_implicit_microphysics_cache!(
     Y, p, mm::EquilibriumMicrophysics0M, tm::DiagnosticEDMFX,
 )
     (; ᶜmp_tendency, ᶜmp_tendencyʲs, ᶜρaʲs) = p.precomputed
+    (; ᶜ∂tendency_∂q_tot) = p.precomputed
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
     n = n_mass_flux_subdomains(tm)
 
-    @. ᶜρ_dq_tot_dt = ᶜmp_tendency.dq_tot_dt * ρa⁰(Y.c.ρ, ᶜρaʲs, tm)
+    @. ᶜρ_dq_tot_dt =
+        microphysics_tendency_model(
+            ᶜmp_tendency.dq_tot_dt,
+            ᶜ∂tendency_∂q_tot,
+            Y.c.ρq_tot,
+            Y.c.ρ,
+        ) * ρa⁰(Y.c.ρ, ᶜρaʲs, tm)
     @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
     for j in 1:n
         @. ᶜρ_dq_tot_dt += ᶜρaʲs.:($$j) * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
@@ -790,15 +803,26 @@ function update_implicit_microphysics_cache!(
 )
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
+    (; ᶜ∂tendency_∂q_totʲs, ᶜ∂tendency_∂q_tot, ᶜq_tot_safe⁰) = p.precomputed
     n = n_mass_flux_subdomains(tm)
 
-    @. ᶜρ_dq_tot_dt = ᶜmp_tendency⁰.dq_tot_dt * ρa⁰(Y.c.ρ, Y.c.sgsʲs, tm)
+    @. ᶜρ_dq_tot_dt =
+        microphysics_tendency_model(
+            ᶜmp_tendency⁰.dq_tot_dt,
+            ᶜ∂tendency_∂q_tot,
+            ᶜq_tot_safe⁰,
+        ) * ρa⁰(Y.c.ρ, Y.c.sgsʲs, tm)
     @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency⁰.e_tot_hlpr
     for j in 1:n
-        @. ᶜρ_dq_tot_dt += ᶜmp_tendencyʲs.:($$j).dq_tot_dt * Y.c.sgsʲs.:($$j).ρa
-        @. ᶜρ_de_tot_dt +=
-            ᶜmp_tendencyʲs.:($$j).dq_tot_dt * Y.c.sgsʲs.:($$j).ρa *
-            ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
+        ρdq_tot_dtʲ = @. lazy(
+            Y.c.sgsʲs.:($$j).ρa * microphysics_tendency_model(
+                ᶜmp_tendencyʲs.:($$j).dq_tot_dt,
+                ᶜ∂tendency_∂q_totʲs.:($$j),
+                Y.c.sgsʲs.:($$j).q_tot,
+            ),
+        )
+        @. ᶜρ_dq_tot_dt += ρdq_tot_dtʲ
+        @. ᶜρ_de_tot_dt += ρdq_tot_dtʲ * ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
     end
     set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
