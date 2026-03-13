@@ -341,7 +341,7 @@ function progress_logging_callback(dt, t_start, t_end)
     tot_steps = ceil(Int, (t_end - t_start) / dt)
     five_percent_steps = ceil(Int, 0.05 * tot_steps)
     schedule = CappedGeometricSeriesSchedule(five_percent_steps)
-    cond = (u, t, integrator) -> schedule(integrator)
+    cond = (u, t, integrator) -> integrator.step > 15 && schedule(integrator)
     affect! = (integrator) -> report_walltime(walltime_info, integrator)
     return (SciMLBase.DiscreteCallback(cond, affect!),)
 end
