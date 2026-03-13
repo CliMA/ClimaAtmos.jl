@@ -12,20 +12,17 @@ sophisticated treatments in the future. Mass conservation across tracers
 is not enforced here and remains a TODO.
 """
 @inline function microphysics_tendency_model(mp_tendency, mp_derivative, q)
-    FT = typeof(q)
-    ε = q_min(FT)
-    ifelse(mp_tendency >= 0, mp_tendency, mp_derivative * max(q, ε))
+    # Use linear sink only when tendency is negative and q > 0
+    ifelse(mp_tendency < 0 && q > 0, mp_derivative * q, mp_tendency)
 end
 @inline microphysics_tendency_model(mp_tendency, mp_derivative, ρq, ρ) =
-    ifelse(mp_tendency >= 0, mp_tendency, mp_derivative * ρq / ρ)
+    microphysics_tendency_model(mp_tendency, mp_derivative, ρq / ρ)
 
 # Scalar helpers for the Jacobian diagonal computation.
-# Use S = (S / q)_precomputed * q as an approximation for microphysics sinks,
-# and S = S_precomputed for sources.
-@inline function _jac_coeff(Sq, q)
-    FT = typeof(Sq)
+@inline function _jac_coeff(S, q)
+    FT = typeof(S)
     ε = q_min(FT)
-    return ifelse(Sq >= zero(FT), zero(FT), Sq / max(q, ε))
+    return ifelse(S < 0 && q > 0, S / max(q, ε), zero(FT))
 end
 
 @inline function _jac_coeff_from_ratio(Sq, ρq, ρ)
