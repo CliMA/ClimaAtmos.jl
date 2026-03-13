@@ -487,12 +487,6 @@ git-tree-sha1 = "8e0b9a76036384ef2e634249612592b44797981d"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
 version = "1.0.14"
 
-[[deps.ClimaReproducibilityTests]]
-deps = ["OrderedCollections", "PrettyTables"]
-git-tree-sha1 = "c94cee1fd9d2fff2efe12e69ac24dc4b3c4e604c"
-uuid = "e0c89595-00ba-42a9-9f9b-061ef3dc23a1"
-version = "0.1.2"
-
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "DataStructures", "DiffEqBase", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
 git-tree-sha1 = "6c51d62c304c97e361d028952faf93ad26700ab5"

@@ -80,7 +80,6 @@ julia = "1.9"
 Aqua = "0.8.9"
 ArtifactWrappers = "0.2"
 CairoMakie = "0.11, 0.12, 0.13, 0.14, 0.15"
-ClimaReproducibilityTests = "0.1.2"
 Distributions = "0.25.87"
 IntervalSets = "0.7"
 OrderedCollections = "1.6"
@@ -93,7 +92,6 @@ Test = "1"
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 ArtifactWrappers = "a14bc488-3040-4b00-9dc1-f6467924858a"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
-ClimaReproducibilityTests = "e0c89595-00ba-42a9-9f9b-061ef3dc23a1"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
@@ -103,4 +101,4 @@ SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Aqua", "ArtifactWrappers", "CairoMakie", "ClimaReproducibilityTests", "Distributions", "IntervalSets", "OrderedCollections", "Pkg", "PrettyTables", "SafeTestsets", "Test"]
+test = ["Aqua", "ArtifactWrappers", "CairoMakie", "Distributions", "IntervalSets", "OrderedCollections", "Pkg", "PrettyTables", "SafeTestsets", "Test"]

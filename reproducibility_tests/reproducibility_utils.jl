@@ -68,13 +68,18 @@ In other words, we strip out `output_dir/`, and swap `job_id` and
 ################################################################################
 =#
 
-# debug_reproducibility() = true
+# ────────────────────────────────────────────────────────────────────
+# Configuration: enable debug output only on the CI pipeline
+# ────────────────────────────────────────────────────────────────────
+
+"""Return `true` when running on the ClimaAtmos CI pipeline."""
 debug_reproducibility() =
     get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) == "climaatmos-ci"
 
 import Dates
 import OrderedCollections
 
+"""Return a string listing all files (recursively) in `dir`."""
 function string_all_files_in_dir(dir)
     msg = "Files in dir $dir\n"
     for file in all_files_in_dir(dir)
@@ -83,6 +88,7 @@ function string_all_files_in_dir(dir)
     return msg
 end
 
+"""Return a flat vector of all file paths (recursively) under `dir`."""
 function all_files_in_dir(dir)
     all_files = String[]
     for (root, dirs, files) in walkdir(dir)
@@ -95,22 +101,25 @@ function all_files_in_dir(dir)
     return all_files
 end
 
+# ────────────────────────────────────────────────────────────────────
+# Reference counter: monotonically increasing version identifier
+# ────────────────────────────────────────────────────────────────────
+
+"""Read the reference counter (integer on the first line) from `file`."""
 read_ref_counter(file) = parse(Int, first(readlines(file)))
 
 """
-    sorted_dirs_with_matched_files(; dir = pwd(), filename)
+    sorted_dirs_with_matched_files(; dir = pwd())
 
 Return an array of subdirectories of `dir` (defaults to the current working
 directory) sorted by the reference counters contained in the folders. Return an
 empty vector if no subdirectories are found.
 
 This function recurses through `dir`, and finds all directories that have the
-file `filename`.
+file `ref_counter.jl`.
 """
-function sorted_dirs_with_matched_files(;
-    dir = pwd(),
-    filename = "ref_counter.jl",
-)
+function sorted_dirs_with_matched_files(; dir = pwd())
+    filename = "ref_counter.jl"
     matched_dirs = String[]
     for (root, dirs, files) in walkdir(dir)
         for dir in dirs
@@ -188,7 +197,6 @@ function latest_comparable_dirs(;
         f = joinpath(first(bin), "ref_counter.jl")
         isfile(f) && ref_counter_PR == read_ref_counter(f)
     end
-    isnothing(ref_counter_bins) && return String[]
     isempty(ref_counter_bins) && return String[]
     comparable_dirs = ref_counter_bins[1]
     return comparable_dirs[1:min(n, length(comparable_dirs))]
@@ -231,13 +239,9 @@ comparable states
 ```
 """
 function compute_bins(
-    root_dir::String = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main";
-    filename = "ref_counter.jl",
+    root_dir::String = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
 )
-    dirs = sorted_dirs_with_matched_files(;
-        dir = root_dir,
-        filename = "ref_counter.jl",
-    )
+    dirs = sorted_dirs_with_matched_files(; dir = root_dir)
     return compute_bins(reverse(dirs))
 end
 
@@ -280,15 +284,16 @@ print_bins(io::IO, bins) = println(io, string_bins(bins))
 Return a string summarizing the given bins.
 """
 function string_bins(bins)
-    msg = "Bins:\n"
+    io = IOBuffer()
+    println(io, "Bins:")
     for (i, bin) in enumerate(bins)
-        msg *= "  Bin $i:\n"
+        println(io, "  Bin $i:")
         for (j, state) in enumerate(bin)
             ref_counter = read_ref_counter(joinpath(state, "ref_counter.jl"))
-            msg *= "    (State $j, ref_counter): ($state, $ref_counter)\n"
+            println(io, "    (State $j, ref_counter): ($state, $ref_counter)")
         end
     end
-    return msg
+    return String(take!(io))
 end
 
 """
@@ -336,9 +341,8 @@ function get_reference_dirs_to_delete(;
     root_dir,
     keep_n_comparable_states = 100,
     keep_n_bins_back = 100,
-    filename = "ref_counter.jl",
 )
-    dirs = sorted_dirs_with_matched_files(; dir = root_dir, filename)
+    dirs = sorted_dirs_with_matched_files(; dir = root_dir)
     @assert isempty(invalid_reference_folders(dirs))
     dir_to_delete = String[]
     sorted_dirs = reverse(dirs)
@@ -359,90 +363,15 @@ function get_reference_dirs_to_delete(;
 end
 
 """
-    source_checksum(dir = pwd())
-
-Return a hash from the contents of all Julia files found recursively in `dir`
-(defaults to `pwd`).
-"""
-function source_checksum(dir = pwd())
-    jl_files = String[]
-    for (root, dirs, files) in walkdir(dir)
-        for file in files
-            endswith(file, ".jl") && push!(jl_files, joinpath(root, file))
-        end
-    end
-    all_contents = map(jl_files) do jl_file
-        readlines(jl_file)
-    end
-    joined_contents = join(all_contents, "\n")
-    return hash(joined_contents)
-end
-
-
-"""
-    source_has_changed(
-        n = 5,
-        root_dir = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
-        ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl")),
-        skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
-        src_dir = dirname(@__DIR__),
-    )
-
-Returns a Boolean indicating if the `.jl` files in `src_dir` have changed base
-on `latest_comparable_dirs` (please see the argument list in the
-`latest_comparable_dirs` documentation).
-"""
-function source_has_changed(;
-    n = 5,
-    root_dir = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
-    ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl")),
-    skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
-    src_dir = dirname(@__DIR__),
-)
-    dirs = latest_comparable_dirs(; n, root_dir, ref_counter_PR, skip)
-    isempty(dirs) && return true
-    latest_reference_checksum = joinpath(dirs[1], "source_checksum.dat")
-    if isfile(latest_reference_checksum)
-        src_checksum =
-            parse(UInt64, first(readlines(latest_reference_checksum)))
-        if source_checksum(src_dir) == src_checksum
-            return false # all julia files are the same
-        else
-            return true
-        end
-    else
-        return true
-    end
-end
-
-"""
     strip_output_active_folder(folder)
 
-Returns "" if `folder` is `"output_active"` or in the form `output_active_XXXX`
-where `X` are integers between 0 and 9
+Return `""` if `folder` matches `"output_active"` or `"output_XXXX"` (where
+X are digits). Otherwise return `folder` unchanged. Used when remapping
+paths during data movement to strip CI output directory prefixes.
 """
 function strip_output_active_folder(folder)
-    if folder == "output_active"
-        return ""
-    elseif occursin("output_", folder) &&
-           length(folder) == length("output_XXXX")
-        is_active_output_folder = true
-        rfolder = reverse(folder)
-        for i in 1:4
-            try
-                parse(Int, rfolder[i])
-            catch
-                is_active_output_folder = false
-            end
-        end
-        if is_active_output_folder
-            return ""
-        else
-            return folder
-        end
-    else
-        return folder
-    end
+    (folder == "output_active" || occursin(r"^output_\d{4}$", folder)) ?
+    "" : folder
 end
 
 """
@@ -477,35 +406,11 @@ end
         dirs_src,
         ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
         ref_counter_PR = read_ref_counter(ref_counter_file_PR),
-        skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
-        dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
-        commit = get_commit_sha(),
-        repro_folder = "reproducibility_bundle",
-        strip_folder = strip_output_active_path,
-    )
-
-Moves data in the following way:
-
-for job_id in dest_src
-  `job_id/out/repro/ref_counter.jl`  -> `commit_hash/repro/ref_counter.jl`
-  `job_id/out/repro/`                -> `commit_hash/repro/job_id/`
-  `job_id/out/repro/prog_state.hdf5` -> `commit_hash/repro/job_id/prog_state.hdf5`
-end
-
-Note that files not in the `repro` folder are not moved.
-
-In other words, we strip out `out/`, and swap `job_id` and `repro`. This is done
-for two reasons:
-
- - The ref_counter is job-independent, hence the swap
- - The `out/` is redundant to the purpose of the commit hash folder
-
-Data movement will occur when this function is called:
+        skip = get(ENV, "BUILDKITE_PIPEL Data movement will occur when this function is called:
 
  - on a job run in buildkite
  - when in the merge queue
- - when on the main branch if the `source_checksum` is different from the source
-   code in the latest comparable reference
+ - when on the main branch
 """
 function move_data_to_save_dir(;
     buildkite_ci = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) ==
@@ -515,7 +420,6 @@ function move_data_to_save_dir(;
     dirs_src,
     ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
     ref_counter_PR = read_ref_counter(ref_counter_file_PR),
-    skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
     dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
     commit = get_commit_sha(),
     repro_folder = "reproducibility_bundle",
@@ -524,16 +428,10 @@ function move_data_to_save_dir(;
     buildkite_ci || return nothing
 
     # if a contributor manually merged, we still want to move data from scratch
-    # to `dest_root`. But if moving data on both conditions means that data
-    # will be moved twice if it's merged via the merge queue (and if it is) run
-    # again on the main branch. One thing we can do to prevent the redundant
-    # movement is to check if the source code has changed:
+    # to `dest_root`.
 
     @assert isfile(ref_counter_file_PR)
-    if in_merge_queue || (
-        branch == "main" &&
-        source_has_changed(; n = 1, root_dir = dest_root, ref_counter_PR, skip)
-    )
+    if in_merge_queue || branch == "main"
         (; files_src, files_dest) = save_dir_in_out_list(;
             dirs_src,
             dest_root,
@@ -561,12 +459,6 @@ function move_data_to_save_dir(;
             @warn "Repro: skipping data movement"
             @show in_merge_queue
             @show branch == "main"
-            @show source_has_changed(;
-                n = 1,
-                root_dir = dest_root,
-                ref_counter_PR,
-                skip,
-            )
         end
     end
 end
@@ -574,16 +466,22 @@ end
 """
     get_commit_sha(;
         n_hash_characters = 7,
-        commit = get(ENV, "BUILDKITE_COMMIT", nothing)
+        commit = get(ENV, "BUILDKITE_COMMIT", "UNKNOWN")
     )
 
 Returns a string of the commit hash.
 """
 get_commit_sha(;
     n_hash_characters = 7,
-    commit = get(ENV, "BUILDKITE_COMMIT", nothing),
+    commit = get(ENV, "BUILDKITE_COMMIT", "UNKNOWN"),
 ) = return commit[1:min(n_hash_characters, length(commit))]
 
+"""
+    commit_sha_from_dir(commit_shas, dir)
+
+Walk up the path components of `dir` until one matches an entry in
+`commit_shas`. Returns the matching component, or errors if none is found.
+"""
 function commit_sha_from_dir(commit_shas, dir)
     while true
         if isempty(dir)
@@ -678,110 +576,100 @@ function save_dir_in_out_list(; dirs_src, kwargs...)
     return (; files_src, files_dest)
 end
 
-parse_file(file) = eval(Meta.parse(join(readlines(file))))
+"""Parse a Julia literal expression from `file` and evaluate it."""
+parse_file(file) = eval(Meta.parse(read(file, String)))
 
-
-#####
-##### MSE summary
-#####
-
-"""
-    default_is_mse_file(file, expected_filename_prefix::String = "computed_mse")::Bool
-
-Returns `true` or `false` if the given file is an Mean-Squared-Error(MSE) file,
-based on the basename of the folder and the file extension, and if it has the
-expected filename prefix `expected_filename_prefix`.
-"""
-default_is_mse_file(file, expected_filename_prefix::String = "computed_mse") =
-    startswith(basename(file), expected_filename_prefix) &&
-    endswith(file, ".dat")
+# ────────────────────────────────────────────────────────────────────
+# RMS summary collection and printing
+# ────────────────────────────────────────────────────────────────────
 
 """
-    get_computed_mses(;
-        job_ids::Vector{String},
-        subfolder::String = "output_active",
-        is_mse_file::Function = default_is_mse_file
-    )
+    default_is_rms_file(file, expected_filename_prefix::String = "computed_rms")::Bool
 
-Returns Dict containing either a `Dict` of Dicts containing Mean-Squared-Errors
-(MSEs) (if file was found) per variable in a given job ID (the key) or `Bool`
-(if file was not found).
-
-given:
-
- - `job_ids` vector of job IDs
- - `subfolder` sub-folder to find mse files
- - `is_mse_file` a function to determine if a given file is an MSE file. See
-   `default_is_mse_file` for the used criteria.
-
-It is expected that files exist in the form: `joinpath(job_ids[1], subfolder,
-mse_filename)`
-
-where `is_mse_file` is `true`.
-
+Returns `true` if the given `file` is a computed RMS comparison file,
+based on filename prefix and `.dat` extension.
 """
-function get_computed_mses(;
-    job_ids::Vector{String},
-    subfolder::String = joinpath("output_active", "reproducibility_bundle"),
-    is_mse_file::Function = default_is_mse_file,
-    expected_filename_prefix = "computed_mse",
+function default_is_rms_file(
+    file,
+    expected_filename_prefix::String = "computed_rms",
 )
-    @assert allunique(job_ids)
-
-    computed_mses = OrderedCollections.OrderedDict()
-
-    isempty(job_ids) && return computed_mses
-
-    for job_id in job_ids
-        all_files = filter(
-            file -> is_mse_file(file, expected_filename_prefix),
-            readdir(joinpath(job_id, subfolder); join = true),
-        )
-        computed_mses[job_id] = false
-        for file in all_files # this just parses and returns the last file sorted by name
-            computed_mses[job_id] = parse_file(file)
-            # TODO:Some sort of combined MSE for all comparisons, or just return latest commit
-        end
-    end
-    return computed_mses
+    bn = basename(file)
+    return startswith(bn, expected_filename_prefix) && endswith(bn, ".dat")
 end
 
 """
-    print_mse_summary(io::IO = stdout; mses::AbstractDict)
+    get_computed_rms(;
+        job_ids::Vector{String},
+        subfolder::String = "output_active/reproducibility_bundle",
+        is_rms_file::Function = default_is_rms_file,
+    )
 
-Prints the Mean-Squared-Errors (MSEs) returned by `get_computed_mses`.
+Returns a Dict mapping each job ID to either the parsed comparison result
+dict (if a computed RMS file was found) or `false` (if not found).
+
+It is expected that files exist in the form:
+    `joinpath(job_ids[1], subfolder, rms_filename)`
+where `is_rms_file(rms_filename)` is `true`.
 """
-function print_mse_summary(io::IO = stdout; mses::AbstractDict)
-    println(io, "################################# Computed MSEs")
-    for job_id in keys(mses)
-        mses[job_id] isa AbstractDict || continue
-        for var in keys(mses[job_id])
-            println(io, "MSEs[\"$job_id\"][$(var)] = $(mses[job_id][var])")
+function get_computed_rms(;
+    job_ids::Vector{String},
+    subfolder::String = joinpath("output_active", "reproducibility_bundle"),
+    is_rms_file::Function = default_is_rms_file,
+    expected_filename_prefix = "computed_rms",
+)
+    @assert allunique(job_ids)
+
+    computed_results = OrderedCollections.OrderedDict()
+
+    isempty(job_ids) && return computed_results
+
+    for job_id in job_ids
+        all_files = filter(
+            file -> is_rms_file(file, expected_filename_prefix),
+            readdir(joinpath(job_id, subfolder); join = true),
+        )
+        computed_results[job_id] = false
+        for file in all_files # parses and returns the last file sorted by name
+            computed_results[job_id] = parse_file(file)
+        end
+    end
+    return computed_results
+end
+
+"""
+    print_rms_summary(io::IO = stdout; results::AbstractDict)
+
+Print all computed RMS comparison results returned by `get_computed_rms`.
+"""
+function print_rms_summary(io::IO = stdout; results::AbstractDict)
+    println(io, "################################# Computed RMS results")
+    for job_id in keys(results)
+        results[job_id] isa AbstractDict || continue
+        for var in keys(results[job_id])
+            println(io, "RMS[\"$job_id\"][$(var)] = $(results[job_id][var])")
         end
     end
     println(io, "#################################")
 end
 
 """
-    print_skipped_jobs(io::IO = stdout; mses::AbstractDict)
+    print_skipped_jobs(io::IO = stdout; results::AbstractDict)
 
-Returns a Bool indicating if any jobs were skipped. This occurs when
-`get_computed_mses` returns a dict with at least one value whose type is a
-Bool.
+Return `true` if any jobs were skipped (i.e., `get_computed_rms` returned
+`false` for at least one job ID because no comparison file was found).
 """
-function print_skipped_jobs(io::IO = stdout; mses::AbstractDict)
-    any_skipped = any(x -> x isa Bool, values(mses))
+function print_skipped_jobs(io::IO = stdout; results::AbstractDict)
+    any_skipped = any(x -> x isa Bool, values(results))
     if any_skipped
         println(io, "Skipped files:")
-        for job_id in keys(mses)
-            mses[job_id] isa Bool && continue
-            println(io, "     job_id:`$job_id`, file:`$(mses[job_id])`")
+        for job_id in keys(results)
+            results[job_id] isa Bool && continue
+            println(io, "     job_id:`$job_id`, file:`$(results[job_id])`")
         end
     end
     return any_skipped
 end
 
-import OrderedCollections
 import ArgParse
 
 function reproducibility_test_params()
