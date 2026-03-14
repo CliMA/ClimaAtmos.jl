@@ -1,0 +1,32 @@
+# Beres (2004) convective gravity wave source spectrum parameters
+# These are loaded when nogw_beres_source is enabled in the model config.
+
+[beres_Q0_threshold]
+value = 1.157e-4
+type = "float"
+description = "Minimum convective heating rate to activate Beres source (K/s, ~10 K/day)"
+
+[beres_scale_factor]
+value = 1.0
+type = "float"
+description = "Dimensionless amplitude scaling for Beres momentum flux"
+
+[beres_sigma_x]
+value = 4000.0
+type = "float"
+description = "Convective cell horizontal half-width (m)"
+
+[beres_nu_min]
+value = 8.727e-4
+type = "float"
+description = "Minimum wave frequency for integration (1/s, period ~120 min)"
+
+[beres_nu_max]
+value = 1.047e-2
+type = "float"
+description = "Maximum wave frequency for integration (1/s, period ~10 min)"
+
+[beres_n_nu]
+value = 9
+type = "integer"
+description = "Number of quadrature points for frequency integration (must be 4k+1: 5, 9, 13...)"

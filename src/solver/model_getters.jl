@@ -229,7 +229,22 @@ function get_non_orographic_gravity_wave_model(
             dϕ_n,
             dϕ_s,
         ) = params.non_orographic_gravity_wave_params
-        NonOrographicGravityWave{FT}(;
+
+        # Optionally construct Beres (2004) convective source parameters
+        beres_source = if get(parsed_args, "nogw_beres_source", false)
+            BeresSourceParams{FT}(;
+                Q0_threshold = FT(parsed_args["beres_Q0_threshold"]),
+                beres_scale_factor = FT(parsed_args["beres_scale_factor"]),
+                σ_x = FT(parsed_args["beres_sigma_x"]),
+                ν_min = FT(parsed_args["beres_nu_min"]),
+                ν_max = FT(parsed_args["beres_nu_max"]),
+                n_ν = Int(parsed_args["beres_n_nu"]),
+            )
+        else
+            nothing
+        end
+
+        NonOrographicGravityWave(;
             source_pressure,
             damp_pressure,
             source_height,
@@ -250,6 +265,7 @@ function get_non_orographic_gravity_wave_model(
             ϕ0_s,
             dϕ_n,
             dϕ_s,
+            beres_source,
         )
     else
         nothing
