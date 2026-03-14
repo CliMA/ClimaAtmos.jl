@@ -701,3 +701,125 @@ function wave_source(
         Val(nc),
     )
 end
+
+"""
+    beres_wave_source(c, u_heat, Q0, h, N_source, σ_x, ν_min, ν_max, n_ν,
+                      scale_factor, gw_ncval)
+
+Compute the Beres (2004) convective gravity wave momentum flux spectrum.
+
+Uses a half-sine vertical heating profile Q(z) = Q0 sin(πz/h) and Gaussian
+horizontal heating profile with half-width σ_x. The momentum flux density at
+each phase speed bin is obtained by integrating over wave frequency using
+Boole's rule (5-point Newton-Cotes quadrature).
+
+Returns `NTuple{nc, FT}` in units of Pa/(m/s), matching the `wave_source` interface.
+"""
+function beres_wave_source(
+    c,
+    u_heat,
+    Q0,
+    h,
+    N_source,
+    σ_x,
+    ν_min,
+    ν_max,
+    n_ν,
+    scale_factor,
+    gw_ncval::Val{nc},
+) where {nc}
+    FT = typeof(u_heat)
+    # Boole's rule weights for 5-point Newton-Cotes (applied per 4-subinterval group)
+    # ∫f dx ≈ (2Δx/45) * [7f₁ + 32f₂ + 12f₃ + 32f₄ + 7f₅]
+    boole_w = (FT(7), FT(32), FT(12), FT(32), FT(7))
+    dν = (ν_max - ν_min) / FT(n_ν - 1)
+    n_groups = (n_ν - 1) ÷ 4  # number of 4-subinterval groups
+
+    # Precompute constants
+    h_half = h / FT(2)
+    π_val = FT(π)
+    inv_2π = FT(1) / (FT(2) * π_val)
+    Q0_h_over_π_sq = (Q0 * h / π_val)^2
+
+    ntuple(
+        n -> begin
+            c_n = c[n]
+            c_hat = c_n - u_heat  # intrinsic phase speed
+
+            if abs(c_hat) < FT(1e-6)
+                # Zero intrinsic phase speed — no wave generated
+                FT(0)
+            else
+                # Integrate over frequency using Boole's rule
+                integral = FT(0)
+                for g in 1:n_groups
+                    # 5 points per group, overlapping by 1
+                    for j in 1:5
+                        idx = (g - 1) * 4 + j
+                        ν_j = ν_min + FT(idx - 1) * dν
+
+                        # Horizontal wavenumber: k = ν/c
+                        # Guard against c_n ≈ 0 which gives k → ∞
+                        if abs(c_n) < FT(1e-6)
+                            continue
+                        end
+                        k = ν_j / c_n
+
+                        # Intrinsic frequency: ω_hat = ν - k*U = ν*(1 - U/c) = ν*c_hat/c_n
+                        ω_hat = ν_j - k * u_heat
+
+                        # Skip near-critical layers where ω_hat → 0
+                        # (physically: wave is absorbed at critical level)
+                        ω_hat_min = FT(1e-4) * N_source
+                        if abs(ω_hat) < ω_hat_min
+                            continue
+                        end
+
+                        # Vertical wavenumber squared: m² = N²k²/ω_hat² - k²
+                        # (neglecting 1/(4H²) compressibility term for simplicity)
+                        m_sq = N_source^2 * k^2 / ω_hat^2 - k^2
+
+                        if m_sq <= FT(0)
+                            # Evanescent wave — skip
+                            continue
+                        end
+
+                        m = sqrt(m_sq)
+                        m_h = m * h
+
+                        # Half-sine heating Fourier transform:
+                        # |F_T|² = (Q0 h/π)² * [2mh cos(mh/2) / (m²h² - π²)]²
+                        denom = m_h^2 - π_val^2
+                        if abs(denom) < FT(1e-6)
+                            # Near resonance — cap the response
+                            vert_response = Q0_h_over_π_sq * FT(4) / π_val^2
+                        else
+                            vert_term =
+                                FT(2) * m_h * cos(m * h_half) / denom
+                            vert_response = Q0_h_over_π_sq * vert_term^2
+                        end
+
+                        # Gaussian horizontal structure: exp(-k²σ_x²)
+                        horiz_response = exp(-k^2 * σ_x^2)
+
+                        # Spectral transfer function and vertical flux factor:
+                        # k / (m * ω_hat²)
+                        transfer = abs(k) / (m * ω_hat^2)
+
+                        # Integrand contribution
+                        f_val =
+                            inv_2π * vert_response * horiz_response *
+                            transfer
+
+                        # Apply Boole's weight
+                        w = boole_w[j] * FT(2) * dν / FT(45)
+                        integral = integral + w * f_val
+                    end
+                end
+
+                sign(c_hat) * scale_factor * integral
+            end
+        end,
+        Val(nc),
+    )
+end
