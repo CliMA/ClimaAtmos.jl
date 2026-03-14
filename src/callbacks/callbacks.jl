@@ -271,7 +271,7 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
             insolation_params,
         ))
     end
-    @. cos_zenith = max(insolation_tuple.μ, eps(FT))
+    @. cos_zenith = max(insolation_tuple.μ, 0)
     @. toa_flux = insolation_tuple.S
 end
 
