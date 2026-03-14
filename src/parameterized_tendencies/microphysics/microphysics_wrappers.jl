@@ -203,7 +203,6 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     ρ::FT
     # Grid-mean state
     T_mean::FT
-    q_tot_mean::FT
     q_lcl_mean::FT
     q_icl_mean::FT
     q_rai::FT
@@ -361,7 +360,7 @@ The T-q correlation coefficient is obtained from `correlation_Tq(params)`.
 
     # Create functor (no closure, GPU-safe)
     evaluator = Microphysics1MEvaluator(
-        scheme, mp, tps, ρ, T_mean, q_tot_mean, q_lcl_safe, q_icl_safe,
+        scheme, mp, tps, ρ, T_mean, q_lcl_safe, q_icl_safe,
         q_rai_safe, q_sno_safe, q_cond_mean, q_sat_mean, excess_mean, args,
     )
 
