@@ -1,4 +1,4 @@
-323
+324
 
 # **README**
 #
@@ -20,6 +20,12 @@
 
 
 #=
+324
+- Updating to SurfaceFluxesv1:
+  - maxiter in surfacefluxes rootsolver calls is modified,
+    solver is forced now to use 3 iterations
+  - bugfix in evaporation q_tot -> q_vap
+
 323
 - Roundoff errors from change of order of operations - lazy bradcast vs caching values
   for aquaplanet equil allsky varying insol gravity wave (raw_topo) test.
