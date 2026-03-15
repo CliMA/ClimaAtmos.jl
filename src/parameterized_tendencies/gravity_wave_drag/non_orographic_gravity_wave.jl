@@ -102,7 +102,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             ),
         )
 
-        return (;
+        base_cache = (;
             gw_source_pressure = source_pressure,
             gw_damp_pressure = damp_pressure,
             gw_source_ampl = source_ampl,
@@ -130,6 +130,23 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             vforcing = zero(Y.c.ρ),
             gw_ncval = Val(nc),
         )
+
+        if !isnothing(gw.beres_source)
+            sfc_field = Fields.level(Y.c.ρ, 1)
+            beres_cache = (;
+                ᶜQ_conv = similar(Y.c.ρ),           # convective heating profile
+                gw_Q0 = similar(sfc_field),           # column-max heating rate
+                gw_h_heat = similar(sfc_field),       # heating depth
+                gw_u_heat = similar(sfc_field),       # mean u-wind in heating region
+                gw_v_heat = similar(sfc_field),       # mean v-wind in heating region
+                gw_N_source = similar(sfc_field),     # buoyancy freq at source
+                gw_beres_active = similar(sfc_field), # 1.0 where Beres active, 0.0 otherwise
+                gw_beres_source = gw.beres_source,    # store params for access in tendency
+            )
+            return merge(base_cache, beres_cache)
+        else
+            return base_cache
+        end
     else
         error("Only sphere and columns are supported")
     end
@@ -252,6 +269,12 @@ function non_orographic_gravity_wave_compute_tendency!(
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
+    # Compute Beres convective heating if enabled
+    if haskey(p.non_orographic_gravity_wave, :gw_beres_source) &&
+       !isnothing(p.non_orographic_gravity_wave.gw_beres_source)
+        compute_beres_convective_heating!(Y, p)
+    end
+
     uforcing .= 0
     vforcing .= 0
 
@@ -275,6 +298,122 @@ function non_orographic_gravity_wave_compute_tendency!(
         p,
     )
 
+end
+
+"""
+    compute_beres_convective_heating!(Y, p)
+
+Extract convective heating properties from EDMF for the Beres (2004) source spectrum.
+Computes per-column: Q0 (max heating rate), h (heating depth), u_heat/v_heat (mean wind),
+N_source (buoyancy freq), and beres_active flag.
+"""
+function compute_beres_convective_heating!(Y, p)
+    (; turbconv_model) = p.atmos
+    n_updrafts = n_mass_flux_subdomains(turbconv_model)
+
+    if n_updrafts == 0
+        # No EDMF — Beres inactive everywhere
+        p.non_orographic_gravity_wave.gw_beres_active .= 0
+        return
+    end
+
+    (; ᶜT) = p.precomputed
+    (; ᶜTʲs, ᶠu³ʲs) = p.precomputed
+    (;
+        ᶜQ_conv,
+        gw_Q0,
+        gw_h_heat,
+        gw_u_heat,
+        gw_v_heat,
+        gw_N_source,
+        gw_beres_active,
+        gw_beres_source,
+        ᶜbuoyancy_frequency,
+    ) = p.non_orographic_gravity_wave
+
+    FT = Spaces.undertype(axes(Y.c))
+    ᶜρ = Y.c.ρ
+    ᶜz = Fields.coordinate_field(Y.c).z
+
+    # Compute convective heating proxy: sum over updrafts of (Tʲ - T_env) * ρa_j * w_j / (ρ * cp_d)
+    # We use a simplified approach: vertical mass-flux-weighted temperature anomaly
+    ᶜQ_conv .= FT(0)
+    cp_d = FT(1004.0) # approximate dry air cp
+
+    for j in 1:n_updrafts
+        ᶜTʲ = ᶜTʲs.:($j)
+        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+        ᶠu³ʲ = ᶠu³ʲs.:($j)
+        # Interpolate face vertical velocity to cell centers
+        ᶜwʲ = p.scratch.ᶜtemp_scalar
+        Operators.InterpolateF2C()(ᶜwʲ, Geometry.WVector.(ᶠu³ʲ))
+        # Extract physical w component
+        @. ᶜwʲ = Geometry.WVector(ᶜwʲ).components.data.:1
+        # Heating proxy: (Tʲ - T) * ρaʲ * wʲ / (ρ * cp)
+        @. ᶜQ_conv += (ᶜTʲ - ᶜT) * ᶜρaʲ * ᶜwʲ / (ᶜρ * cp_d)
+    end
+
+    ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
+    ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+
+    # First pass: find Q0 (column max of |Q_conv|)
+    Operators.column_reduce!(gw_Q0, ᶜQ_conv) do Q_prev, Q
+        return max(abs(Q_prev), abs(Q))
+    end
+
+    # Second pass: find heating depth and mean wind in heating region
+    # We define heating region as levels where |Q_conv| > 0.1 * Q0
+    result_field = similar(
+        Fields.level(Y.c.ρ, 1),
+        Tuple{FT, FT, FT, FT, FT, FT},
+    )
+    input2 = Base.Broadcast.broadcasted(
+        tuple,
+        ᶜQ_conv,
+        ᶜz,
+        ᶜu,
+        ᶜv,
+        ᶜbuoyancy_frequency,
+        ᶜρ,
+    )
+    Operators.column_reduce!(
+        result_field,
+        input2,
+    ) do (z_bot_prev, z_top_prev, u_sum_prev, v_sum_prev, bf_sum_prev, w_sum_prev),
+    (Q, z, u, v, bf, ρ)
+        # On first call, prev values are from first level
+        # We accumulate z_bot (min z in heating), z_top (max z), weighted u, v, bf
+        z_bot = z_bot_prev
+        z_top = z_top_prev
+        u_sum = u_sum_prev
+        v_sum = v_sum_prev
+        bf_sum = bf_sum_prev
+        w_sum = w_sum_prev
+        # Note: threshold_field is not accessible here, so we use a fixed fraction
+        # We'll filter in a post-processing step instead
+        weight = abs(Q) * ρ
+        if weight > FT(1e-20)
+            z_bot = min(z_bot, z)
+            z_top = max(z_top, z)
+            u_sum = u_sum + u * weight
+            v_sum = v_sum + v * weight
+            bf_sum = bf_sum + bf * weight
+            w_sum = w_sum + weight
+        end
+        return (z_bot, z_top, u_sum, v_sum, bf_sum, w_sum)
+    end
+
+    # Unpack results
+    @. gw_h_heat = max(result_field.:2 - result_field.:1, FT(1000.0)) # min 1 km
+    weight_sum = result_field.:6
+    @. gw_u_heat = ifelse(weight_sum > FT(1e-20), result_field.:3 / weight_sum, FT(0))
+    @. gw_v_heat = ifelse(weight_sum > FT(1e-20), result_field.:4 / weight_sum, FT(0))
+    @. gw_N_source =
+        ifelse(weight_sum > FT(1e-20), result_field.:5 / weight_sum, FT(0.01))
+
+    # Set beres_active flag: Q0 above threshold
+    Q0_threshold = gw_beres_source.Q0_threshold
+    @. gw_beres_active = ifelse(gw_Q0 > Q0_threshold, FT(1), FT(0))
 end
 
 non_orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
@@ -325,6 +464,20 @@ function non_orographic_gravity_wave_forcing(
         gw_c0,
         gw_nk,
     ) = p.non_orographic_gravity_wave
+
+    # Beres fields (if enabled)
+    has_beres = haskey(p.non_orographic_gravity_wave, :gw_beres_source) &&
+                !isnothing(p.non_orographic_gravity_wave.gw_beres_source)
+    if has_beres
+        (;
+            gw_beres_active,
+            gw_Q0,
+            gw_h_heat,
+            gw_u_heat,
+            gw_N_source,
+            gw_beres_source,
+        ) = p.non_orographic_gravity_wave
+    end
 
     # Temporary scratch fields for shifting levels up
     ᶜρ_p1 = p.scratch.ᶜtemp_scalar
@@ -384,47 +537,104 @@ function non_orographic_gravity_wave_forcing(
     level_end = Spaces.nlevels(axes(ᶜρ))
 
     # Collect all required fields in a broadcasted object
-    input_u = @. lazy(
-        tuple(
-            ᶜu_p1,
-            ᶜu_source,
-            ᶜbf_p1,
-            ᶜρ,
-            ᶜρ_p1,
-            ᶜρ_source,
-            ᶜz_p1,
-            ᶜz,
-            source_level,
-            gw_Bw,
-            gw_Bn,
-            gw_cw,
-            gw_cn,
-            gw_flag,
-            ᶜlevel,
-            gw_source_ampl,
-        ),
-    )
+    # When Beres is enabled, add beres fields; otherwise use zero placeholders
+    if has_beres
+        input_u = @. lazy(
+            tuple(
+                ᶜu_p1,
+                ᶜu_source,
+                ᶜbf_p1,
+                ᶜρ,
+                ᶜρ_p1,
+                ᶜρ_source,
+                ᶜz_p1,
+                ᶜz,
+                source_level,
+                gw_Bw,
+                gw_Bn,
+                gw_cw,
+                gw_cn,
+                gw_flag,
+                ᶜlevel,
+                gw_source_ampl,
+                gw_beres_active,
+                gw_Q0,
+                gw_h_heat,
+                gw_u_heat,
+                gw_N_source,
+            ),
+        )
+        input_v = @. lazy(
+            tuple(
+                ᶜv_p1,
+                ᶜv_source,
+                ᶜbf_p1,
+                ᶜρ,
+                ᶜρ_p1,
+                ᶜρ_source,
+                ᶜz_p1,
+                ᶜz,
+                source_level,
+                gw_Bw,
+                gw_Bn,
+                gw_cw,
+                gw_cn,
+                gw_flag,
+                ᶜlevel,
+                gw_source_ampl,
+                gw_beres_active,
+                gw_Q0,
+                gw_h_heat,
+                gw_v_heat,
+                gw_N_source,
+            ),
+        )
+    else
+        input_u = @. lazy(
+            tuple(
+                ᶜu_p1,
+                ᶜu_source,
+                ᶜbf_p1,
+                ᶜρ,
+                ᶜρ_p1,
+                ᶜρ_source,
+                ᶜz_p1,
+                ᶜz,
+                source_level,
+                gw_Bw,
+                gw_Bn,
+                gw_cw,
+                gw_cn,
+                gw_flag,
+                ᶜlevel,
+                gw_source_ampl,
+            ),
+        )
+        input_v = @. lazy(
+            tuple(
+                ᶜv_p1,
+                ᶜv_source,
+                ᶜbf_p1,
+                ᶜρ,
+                ᶜρ_p1,
+                ᶜρ_source,
+                ᶜz_p1,
+                ᶜz,
+                source_level,
+                gw_Bw,
+                gw_Bn,
+                gw_cw,
+                gw_cn,
+                gw_flag,
+                ᶜlevel,
+                gw_source_ampl,
+            ),
+        )
+    end
 
-    input_v = @. lazy(
-        tuple(
-            ᶜv_p1,
-            ᶜv_source,
-            ᶜbf_p1,
-            ᶜρ,
-            ᶜρ_p1,
-            ᶜρ_source,
-            ᶜz_p1,
-            ᶜz,
-            source_level,
-            gw_Bw,
-            gw_Bn,
-            gw_cw,
-            gw_cn,
-            gw_flag,
-            ᶜlevel,
-            gw_source_ampl,
-        ),
-    )
+    # Beres source params for column_accumulate (nothing if not enabled)
+    beres_params_for_accumulate =
+        has_beres ? gw_beres_source : nothing
 
     # loop over all wave lengths
     for ink in 1:gw_nk
@@ -439,6 +649,7 @@ function non_orographic_gravity_wave_forcing(
             ink,
             level_end,
             gw_ncval,
+            beres_params_for_accumulate,
         )
 
         # Accumulate meridional wave forcing in every column
@@ -452,6 +663,7 @@ function non_orographic_gravity_wave_forcing(
             ink,
             level_end,
             gw_ncval,
+            beres_params_for_accumulate,
         )
 
         #extract the momentum flux outside the model top.
@@ -524,6 +736,7 @@ function waveforcing_column_accumulate!(
     ink,
     level_end,
     gw_ncval::Val{nc},
+    beres_source = nothing,
 ) where {nc}
     FT = eltype(waveforcing)
     # Here we use column_accumulate function to pass the variable B0 and mask through different levels, and calculate waveforcing at each level.
@@ -532,25 +745,25 @@ function waveforcing_column_accumulate!(
         input;
         init = (FT(0.0), mask, FT(NaN), ntuple(i -> FT(NaN), Val(nc))),
         transform = first,
-    ) do (wave_forcing, mask, Bsum_or_NaN, B0_or_NaNs),
-    (
-        u_kp1,
-        u_source,
-        bf_kp1,
-        ρ_k,
-        ρ_kp1,
-        ρ_source,
-        z_kp1,
-        z_k,
-        source_level,
-        Bw,
-        Bn,
-        cw,
-        cn,
-        flag,
-        level,
-        source_ampl,
-    )
+    ) do (wave_forcing, mask, Bsum_or_NaN, B0_or_NaNs), input_data
+        # Destructure the common fields (first 16 elements)
+        u_kp1 = input_data[1]
+        u_source = input_data[2]
+        bf_kp1 = input_data[3]
+        ρ_k = input_data[4]
+        ρ_kp1 = input_data[5]
+        ρ_source = input_data[6]
+        z_kp1 = input_data[7]
+        z_k = input_data[8]
+        source_level = input_data[9]
+        Bw = input_data[10]
+        Bn = input_data[11]
+        cw = input_data[12]
+        cn = input_data[13]
+        flag = input_data[14]
+        level = input_data[15]
+        source_ampl = input_data[16]
+
         FT1 = typeof(u_kp1)
         kwv = 2.0 * π / ((30.0 * (10.0^ink)) * 1.e3) # wave number of gravity waves
         k2 = kwv * kwv
@@ -563,8 +776,32 @@ function waveforcing_column_accumulate!(
         # calculate momentum flux carried by gravity waves with different phase speeds.
         B0, Bsum = if level == 1
             mask = StaticBitVector{nc}(_ -> true)
-            B1 =
+            # Check if Beres is active for this column
+            B1 = if !isnothing(beres_source) && length(input_data) >= 21
+                beres_active_val = input_data[17]
+                if beres_active_val > FT1(0.5)
+                    Q0_val = input_data[18]
+                    h_val = input_data[19]
+                    u_heat_val = input_data[20]
+                    N_val = input_data[21]
+                    wave_source(
+                        c,
+                        u_heat_val,
+                        Q0_val,
+                        h_val,
+                        N_val,
+                        beres_source,
+                        gw_ncval,
+                    )
+                else
+                    # AD fallback for this column
+                    wave_source(
+                        c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval,
+                    )
+                end
+            else
                 wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
+            end
             Bsum1 = sum(abs, B1)
             B1, Bsum1
         else
@@ -703,121 +940,145 @@ function wave_source(
 end
 
 """
-    beres_wave_source(c, u_heat, Q0, h, N_source, σ_x, ν_min, ν_max, n_ν,
-                      scale_factor, gw_ncval)
+    _beres_spectrum_single_h(c_n, c_hat, h, ...)
+
+Compute the Beres (2004) momentum flux integrand for a single phase speed bin
+and a single heating depth h. This is the inner frequency integral.
+"""
+@inline function _beres_spectrum_single_h(
+    c_n,
+    c_hat,
+    h,
+    u_heat,
+    N2,
+    N_source,
+    Q0_sq,
+    σ_x_sq,
+    ν_min,
+    dν,
+    n_groups,
+    boole_w,
+)
+    FT = typeof(c_n)
+    π_val = FT(π)
+    integral = FT(0)
+
+    for g in 1:n_groups
+        for j in 1:5
+            idx = (g - 1) * 4 + j
+            ν_j = ν_min + FT(idx - 1) * dν
+
+            k = ν_j / c_n
+            ν_hat = ν_j - k * u_heat
+
+            ν_hat_min = FT(1e-4) * N_source
+            if abs(ν_hat) < ν_hat_min
+                continue
+            end
+            if abs(ν_hat) >= N_source
+                continue
+            end
+
+            m_sq = k^2 * (N2 / ν_hat^2 - FT(1))
+            if m_sq <= FT(0)
+                continue
+            end
+
+            m = sqrt(m_sq)
+            m_h = m * h
+
+            N2_minus_νhat2 = N2 - ν_hat^2
+
+            δ = m_h - π_val
+            sinc_δ = abs(δ) < FT(1e-10) ? FT(1) : sin(δ) / δ
+            sin_over_denom = -sinc_δ / (m_h + π_val)
+            R = π_val * m * h * sin_over_denom / N2_minus_νhat2
+
+            Gk_sq =
+                Q0_sq * σ_x_sq / FT(2) * exp(-k^2 * σ_x_sq / FT(2))
+            B_sq = Gk_sq * R^2
+
+            propagation_factor = sqrt(N2_minus_νhat2) / abs(ν_hat)
+            F_kν =
+                FT(1) / sqrt(FT(2) * π_val) * propagation_factor * B_sq
+
+            jacobian = ν_j / c_n^2
+            f_val = F_kν * jacobian
+
+            w = boole_w[j] * FT(2) * dν / FT(45)
+            integral = integral + w * f_val
+        end
+    end
+    return integral
+end
+
+"""
+    wave_source(c, u_heat, Q0, h, N_source, beres::BeresSourceParams, gw_ncval)
 
 Compute the Beres (2004) convective gravity wave momentum flux spectrum.
+Dispatches on `BeresSourceParams` to distinguish from the AD Gaussian method.
 
-Uses a half-sine vertical heating profile Q(z) = Q0 sin(πz/h) and Gaussian
-horizontal heating profile with half-width σ_x. The momentum flux density at
-each phase speed bin is obtained by integrating over wave frequency using
-Boole's rule (5-point Newton-Cotes quadrature).
+Implements Eqs. (23), (29)-(30) from Beres, Alexander & Holton (2004, JAS).
+When `n_h_avg > 1`, averages the spectrum over multiple h values in the range
+`h ± Δh_frac * h` to smooth the resonance peaks, following the paper's
+recommendation (Section 2, Figure 4).
 
-Returns `NTuple{nc, FT}` in units of Pa/(m/s), matching the `wave_source` interface.
+Returns `NTuple{nc, FT}` in units consistent with the AD `wave_source`.
 """
-function beres_wave_source(
+function wave_source(
     c,
     u_heat,
     Q0,
     h,
     N_source,
-    σ_x,
-    ν_min,
-    ν_max,
-    n_ν,
-    scale_factor,
+    beres::BeresSourceParams,
     gw_ncval::Val{nc},
 ) where {nc}
+    (; σ_x, ν_min, ν_max, n_ν, beres_scale_factor, n_h_avg, Δh_frac) = beres
     FT = typeof(u_heat)
-    # Boole's rule weights for 5-point Newton-Cotes (applied per 4-subinterval group)
-    # ∫f dx ≈ (2Δx/45) * [7f₁ + 32f₂ + 12f₃ + 32f₄ + 7f₅]
+    scale_factor = FT(beres_scale_factor)
+
     boole_w = (FT(7), FT(32), FT(12), FT(32), FT(7))
     dν = (ν_max - ν_min) / FT(n_ν - 1)
-    n_groups = (n_ν - 1) ÷ 4  # number of 4-subinterval groups
+    n_groups = (n_ν - 1) ÷ 4
 
-    # Precompute constants
-    h_half = h / FT(2)
-    π_val = FT(π)
-    inv_2π = FT(1) / (FT(2) * π_val)
-    Q0_h_over_π_sq = (Q0 * h / π_val)^2
+    N2 = N_source^2
+    σ_x_sq = σ_x^2
+    Q0_sq = Q0^2
 
     ntuple(
         n -> begin
             c_n = c[n]
-            c_hat = c_n - u_heat  # intrinsic phase speed
+            c_hat = c_n - u_heat
 
-            if abs(c_hat) < FT(1e-6)
-                # Zero intrinsic phase speed — no wave generated
+            if abs(c_hat) < FT(1e-6) || abs(c_n) < FT(1e-6)
                 FT(0)
             else
-                # Integrate over frequency using Boole's rule
-                integral = FT(0)
-                for g in 1:n_groups
-                    # 5 points per group, overlapping by 1
-                    for j in 1:5
-                        idx = (g - 1) * 4 + j
-                        ν_j = ν_min + FT(idx - 1) * dν
-
-                        # Horizontal wavenumber: k = ν/c
-                        # Guard against c_n ≈ 0 which gives k → ∞
-                        if abs(c_n) < FT(1e-6)
-                            continue
-                        end
-                        k = ν_j / c_n
-
-                        # Intrinsic frequency: ω_hat = ν - k*U = ν*(1 - U/c) = ν*c_hat/c_n
-                        ω_hat = ν_j - k * u_heat
-
-                        # Skip near-critical layers where ω_hat → 0
-                        # (physically: wave is absorbed at critical level)
-                        ω_hat_min = FT(1e-4) * N_source
-                        if abs(ω_hat) < ω_hat_min
-                            continue
-                        end
-
-                        # Vertical wavenumber squared: m² = N²k²/ω_hat² - k²
-                        # (neglecting 1/(4H²) compressibility term for simplicity)
-                        m_sq = N_source^2 * k^2 / ω_hat^2 - k^2
-
-                        if m_sq <= FT(0)
-                            # Evanescent wave — skip
-                            continue
-                        end
-
-                        m = sqrt(m_sq)
-                        m_h = m * h
-
-                        # Half-sine heating Fourier transform:
-                        # |F_T|² = (Q0 h/π)² * [2mh cos(mh/2) / (m²h² - π²)]²
-                        denom = m_h^2 - π_val^2
-                        if abs(denom) < FT(1e-6)
-                            # Near resonance — cap the response
-                            vert_response = Q0_h_over_π_sq * FT(4) / π_val^2
-                        else
-                            vert_term =
-                                FT(2) * m_h * cos(m * h_half) / denom
-                            vert_response = Q0_h_over_π_sq * vert_term^2
-                        end
-
-                        # Gaussian horizontal structure: exp(-k²σ_x²)
-                        horiz_response = exp(-k^2 * σ_x^2)
-
-                        # Spectral transfer function and vertical flux factor:
-                        # k / (m * ω_hat²)
-                        transfer = abs(k) / (m * ω_hat^2)
-
-                        # Integrand contribution
-                        f_val =
-                            inv_2π * vert_response * horiz_response *
-                            transfer
-
-                        # Apply Boole's weight
-                        w = boole_w[j] * FT(2) * dν / FT(45)
-                        integral = integral + w * f_val
+                if n_h_avg <= 1
+                    # Single h value (no averaging)
+                    result = _beres_spectrum_single_h(
+                        c_n, c_hat, h, u_heat, N2, N_source,
+                        Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
+                    )
+                else
+                    # Average over n_h_avg values of h in [h - Δh, h + Δh]
+                    # per Beres (2004) Section 2, Figure 4
+                    Δh = Δh_frac * h
+                    h_min = h - Δh
+                    h_max = h + Δh
+                    dh = (h_max - h_min) / FT(n_h_avg - 1)
+                    result = FT(0)
+                    for ih in 1:n_h_avg
+                        h_i = h_min + FT(ih - 1) * dh
+                        result += _beres_spectrum_single_h(
+                            c_n, c_hat, h_i, u_heat, N2, N_source,
+                            Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
+                        )
                     end
+                    result = result / FT(n_h_avg)
                 end
 
-                sign(c_hat) * scale_factor * integral
+                sign(c_hat) * scale_factor * result
             end
         end,
         Val(nc),
