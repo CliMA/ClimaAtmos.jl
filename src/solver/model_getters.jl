@@ -206,6 +206,9 @@ function get_non_orographic_gravity_wave_model(
 ) where {FT}
     nogw_name = parsed_args["non_orographic_gravity_wave"]
     @assert nogw_name in (true, false)
+    if nogw_name == false && get(parsed_args, "nogw_beres_source", false)
+        @warn "nogw_beres_source is true but non_orographic_gravity_wave is false; ignoring Beres source"
+    end
     return if nogw_name == true
         (;
             source_pressure,

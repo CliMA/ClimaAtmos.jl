@@ -444,6 +444,8 @@ Base.@kwdef struct BeresSourceParams{FT}
     ν_min::FT            # 1/s, min frequency (period ~120 min)
     ν_max::FT            # 1/s, max frequency (period ~10 min)
     n_ν::Int             # quadrature points (must be 4k+1: 5, 9, 13...)
+    n_h_avg::Int = 1     # number of h values to average over (1 = no averaging)
+    Δh_frac::FT = FT(0.1) # fractional half-range for h averaging: h ± Δh_frac * h
 end
 
 Base.@kwdef struct NonOrographicGravityWave{FT, BS} <: AbstractGravityWave
