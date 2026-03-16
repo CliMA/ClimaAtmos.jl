@@ -243,7 +243,7 @@ import ClimaAtmos: limit_sink
 
                     eval_sub = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(),
-                        mp, thp, ρ, T_mean, q_tot_sub,
+                        mp, thp, ρ, T_mean,
                         FT(0), FT(0), FT(0), FT(0),
                         FT(0), q_sat_mean, excess_sub,
                         (),
@@ -273,7 +273,7 @@ import ClimaAtmos: limit_sink
 
                     eval_sat = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(),
-                        mp, thp, ρ, T_mean, q_tot_sat,
+                        mp, thp, ρ, T_mean,
                         λ * excess_sat, (1 - λ) * excess_sat, FT(0), FT(0),
                         excess_sat, q_sat_mean, excess_sat,
                         (),
