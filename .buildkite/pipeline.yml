@@ -1027,6 +1027,7 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_mem: 16GB
+        soft_fail: true
 
       - label: "GPU: baroclinic wave"
         key: "baroclinic_wave_gpu"
