@@ -1,4 +1,4 @@
-324
+325
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+325
+- Update CI to 1.12
+
 324
 - Updating to SurfaceFluxesv1:
   - maxiter in surfacefluxes rootsolver calls is modified,
