@@ -142,6 +142,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
                 gw_N_source = similar(sfc_field),     # buoyancy freq at source
                 gw_beres_active = similar(sfc_field), # 1.0 where Beres active, 0.0 otherwise
                 gw_beres_source = gw.beres_source,    # store params for access in tendency
+                gw_reduce_result = similar(sfc_field, Tuple{FT, FT, FT, FT, FT, FT}), # preallocated for column_reduce
             )
             return merge(base_cache, beres_cache)
         else
@@ -328,6 +329,7 @@ function compute_beres_convective_heating!(Y, p)
         gw_N_source,
         gw_beres_active,
         gw_beres_source,
+        gw_reduce_result,
         ᶜbuoyancy_frequency,
     ) = p.non_orographic_gravity_wave
 
@@ -336,19 +338,29 @@ function compute_beres_convective_heating!(Y, p)
     ᶜz = Fields.coordinate_field(Y.c).z
 
     # Compute convective heating proxy: sum over updrafts of (Tʲ - T_env) * ρa_j * w_j / (ρ * cp_d)
-    # We use a simplified approach: vertical mass-flux-weighted temperature anomaly
     ᶜQ_conv .= FT(0)
-    cp_d = FT(1004.0) # approximate dry air cp
+    cp_d = FT(CAP.cp_d(p.params))
+
+    # For DiagnosticEDMFX, ρa is in p.precomputed.ᶜρaʲs
+    # For PrognosticEDMFX, ρa is in Y.c.sgsʲs.:($j).ρa
+    has_prognostic_sgs =
+        hasproperty(Y.c, :sgsʲs) && n_updrafts > 0
+    if !has_prognostic_sgs && haskey(p.precomputed, :ᶜρaʲs)
+        ᶜρaʲs_all = p.precomputed.ᶜρaʲs
+    end
 
     for j in 1:n_updrafts
         ᶜTʲ = ᶜTʲs.:($j)
-        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+        ᶜρaʲ = if has_prognostic_sgs
+            Y.c.sgsʲs.:($j).ρa
+        else
+            ᶜρaʲs_all.:($j)
+        end
         ᶠu³ʲ = ᶠu³ʲs.:($j)
-        # Interpolate face vertical velocity to cell centers
+        # Interpolate face vertical velocity to cell centers and extract w
+        ᶜinterp = Operators.InterpolateF2C()
         ᶜwʲ = p.scratch.ᶜtemp_scalar
-        Operators.InterpolateF2C()(ᶜwʲ, Geometry.WVector.(ᶠu³ʲ))
-        # Extract physical w component
-        @. ᶜwʲ = Geometry.WVector(ᶜwʲ).components.data.:1
+        @. ᶜwʲ = Geometry.WVector(ᶜinterp(Geometry.WVector(ᶠu³ʲ))).components.data.:1
         # Heating proxy: (Tʲ - T) * ρaʲ * wʲ / (ρ * cp)
         @. ᶜQ_conv += (ᶜTʲ - ᶜT) * ᶜρaʲ * ᶜwʲ / (ᶜρ * cp_d)
     end
@@ -362,11 +374,7 @@ function compute_beres_convective_heating!(Y, p)
     end
 
     # Second pass: find heating depth and mean wind in heating region
-    # We define heating region as levels where |Q_conv| > 0.1 * Q0
-    result_field = similar(
-        Fields.level(Y.c.ρ, 1),
-        Tuple{FT, FT, FT, FT, FT, FT},
-    )
+    result_field = gw_reduce_result
     input2 = Base.Broadcast.broadcasted(
         tuple,
         ᶜQ_conv,
@@ -376,23 +384,23 @@ function compute_beres_convective_heating!(Y, p)
         ᶜbuoyancy_frequency,
         ᶜρ,
     )
+    eps_weight = FT(1e-20)
+    reduce_init =
+        (FT(Inf), FT(-Inf), FT(0), FT(0), FT(0), FT(0))
     Operators.column_reduce!(
         result_field,
-        input2,
+        input2;
+        init = reduce_init,
     ) do (z_bot_prev, z_top_prev, u_sum_prev, v_sum_prev, bf_sum_prev, w_sum_prev),
     (Q, z, u, v, bf, ρ)
-        # On first call, prev values are from first level
-        # We accumulate z_bot (min z in heating), z_top (max z), weighted u, v, bf
         z_bot = z_bot_prev
         z_top = z_top_prev
         u_sum = u_sum_prev
         v_sum = v_sum_prev
         bf_sum = bf_sum_prev
         w_sum = w_sum_prev
-        # Note: threshold_field is not accessible here, so we use a fixed fraction
-        # We'll filter in a post-processing step instead
         weight = abs(Q) * ρ
-        if weight > FT(1e-20)
+        if weight > eps_weight
             z_bot = min(z_bot, z)
             z_top = max(z_top, z)
             u_sum = u_sum + u * weight
@@ -474,6 +482,7 @@ function non_orographic_gravity_wave_forcing(
             gw_Q0,
             gw_h_heat,
             gw_u_heat,
+            gw_v_heat,
             gw_N_source,
             gw_beres_source,
         ) = p.non_orographic_gravity_wave
