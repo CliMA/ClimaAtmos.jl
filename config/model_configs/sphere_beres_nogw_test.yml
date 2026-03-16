@@ -1,0 +1,40 @@
+# Integration test: DiagnosticEDMFX + Beres NOGW
+# Based on diagnostic_edmfx_aquaplanet.yml with NOGW + Beres source enabled.
+# The Beres scheme extracts convective heating from EDMF to drive the
+# gravity wave source spectrum (Beres et al. 2004, JAS).
+
+# Time stepping
+dt: "120secs"
+t_end: "3hours"
+dt_save_state_to_disk: "3hours"
+
+# EDMF turbulence-convection
+turbconv: "diagnostic_edmfx"
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+
+# Non-orographic gravity waves with Beres convective source
+non_orographic_gravity_wave: true
+dt_nogw: "120secs"
+nogw_beres_source: true
+
+# Physics
+microphysics_model: "0M"
+rad: "clearsky"
+surface_setup: "DefaultMoninObukhov"
+viscous_sponge: false
+
+# Grid — need sufficient vertical extent for GW propagation
+z_max: 45000.0
+z_elem: 30
+
+# Parameters
+toml: [toml/diagnostic_edmfx_0M.toml, toml/nogw_mima_test.toml]
+
+# Output
+FLOAT_TYPE: "Float64"
+output_default_diagnostics: false
