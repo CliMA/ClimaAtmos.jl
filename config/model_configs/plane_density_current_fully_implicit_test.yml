@@ -17,7 +17,7 @@ enable_diagnostics: true
 cloud_model: "grid_scale"
 use_sgs_quadrature: false
 fully_implicit: true
-ode_algo: "ARS343"
+ode_algo: "ARS233"
 use_krylov_method: true
 max_newton_iters_ode: 10
 use_newton_rtol: true
