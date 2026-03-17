@@ -1966,7 +1966,7 @@ function (initial_condition::ShipwayHill2012)(params)
         Intp.interpolate((zs,), vals, Intp.Gridded(Intp.Linear())), Intp.Linear(),
     )
     # profile of water vapour mixing ratio
-    rv(z) = linear_profile(z_values, rv_values)(z)
+    rv(z) = max(linear_profile(z_values, rv_values)(z), zero(z))
     q_tot(z) = rv(z) / (1 + rv(z))
     # profile of potential temperature
     θ(z) = linear_profile(z_values, θ_values)(z)
