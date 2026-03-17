@@ -45,6 +45,27 @@ add_diagnostic_variable!(short_name = "rhoaup", units = "kg m^-3",
 )
 
 ###
+# Updraft buoyancy (3d)
+###
+compute_buoyup(state, cache, time) =
+    compute_buoyup(state, cache, time, cache.atmos.turbconv_model)
+compute_buoyup(_, _, _, turbconv_model) =
+    error_diagnostic_variable("buoyup", turbconv_model)
+
+function compute_buoyup(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX})
+    (; ᶜgradᵥ_ᶠΦ) = cache.core
+    (; ᶜρʲs) = cache.precomputed
+    ᶜlg = Fields.local_geometry_field(axes(state.c))
+    return @. lazy(vertical_buoyancy_acceleration(state.c.ρ, ᶜρʲs.:1, ᶜgradᵥ_ᶠΦ, ᶜlg))
+end
+
+add_diagnostic_variable!(short_name = "buoyup", units = "m s^-2",
+    long_name = "Updraft Air Buoyancy",
+    comments = "Buoyancy of the first updraft",
+    compute = compute_buoyup,
+)
+
+###
 # Updraft w velocity (3d)
 ###
 compute_waup(state, cache, time) =
@@ -58,6 +79,22 @@ add_diagnostic_variable!(short_name = "waup", units = "m s^-1",
     long_name = "Updraft Upward Air Velocity",
     comments = "Vertical wind component of the first updraft",
     compute = compute_waup,
+)
+
+###
+# Updraft mass flux (3d)
+###
+compute_mfup(state, cache, time) =
+    compute_mfup(state, cache, time, cache.atmos.turbconv_model)
+compute_mfup(_, _, _, turbconv_model) = error_diagnostic_variable("mfup", turbconv_model)
+
+compute_mfup(state, cache, _, ::PrognosticEDMFX) =
+    @. lazy((state.c.sgsʲs.:1).ρa * w_component(Geometry.WVector(cache.precomputed.ᶜuʲs.:1)))
+
+add_diagnostic_variable!(short_name = "mfup", units = "kg s^-1 m^-2",
+    long_name = "Updraft Mass Flux",
+    comments = "Mass flux of the first updraft",
+    compute = compute_mfup,
 )
 
 ###
@@ -819,4 +856,226 @@ add_diagnostic_variable!(short_name = "evu", units = "m^2 s^-1",
     standard_name = "atmosphere_momentum_diffusivity",
     comments = "Vertical diffusion coefficient for momentum due to parameterized eddies",
     compute = compute_evu,
+)
+
+###
+# Tendency of q_tot due to SGS mass flux (3d)
+###
+compute_tnhusmf(state, cache, time) = compute_tnhusmf(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_tnhusmf(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute tendency of q_tot due to SGS mass flux \
+                               with a moist model and with EDMFX")
+
+function compute_tnhusmf(state, cache, _,
+    ::MoistMicrophysics, turbconv_model::PrognosticEDMFX,
+)
+    (; edmfx_sgsflux_upwinding) = cache.atmos.numerics
+    (; ᶠu³) = cache.precomputed
+    (; ᶠu³ʲs, ᶜρʲs) = cache.precomputed
+    (; ᶠu³⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜp) = cache.precomputed
+    (; dt) = cache
+
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜρ⁰ = @. lazy(
+        TD.air_density(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+        ),
+    )
+    ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))
+
+    # Updraft contributions
+    ᶜq_tot = @. lazy(specific(state.c.ρq_tot, state.c.ρ))
+    ᶜρʲ = ᶜρʲs.:1
+    ᶜq_totʲ = (state.c.sgsʲs.:1).q_tot
+    ᶜρaʲ = (state.c.sgsʲs.:1).ρa
+    ᶜa_scalarʲ = @. lazy(
+        (ᶜq_totʲ - ᶜq_tot) * draft_area(ᶜρaʲ, ᶜρʲ),
+    )
+    ᶠu³_diffʲ = @. lazy(ᶠu³ʲs.:1 - ᶠu³)
+    vttʲ = vertical_transport(
+        ᶜρʲ,
+        ᶠu³_diffʲ,
+        ᶜa_scalarʲ,
+        dt,
+        edmfx_sgsflux_upwinding,
+    )
+
+    # Environment contribution
+    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), state, cache)
+    ᶜa_scalar⁰ = @. lazy(
+        (ᶜq_tot⁰ - ᶜq_tot) * draft_area(ᶜρa⁰, ᶜρ⁰),
+    )
+    ᶠu³_diff⁰ = @. lazy(ᶠu³⁰ - ᶠu³)
+    vtt⁰ = vertical_transport(
+        ᶜρ⁰,
+        ᶠu³_diff⁰,
+        ᶜa_scalar⁰,
+        dt,
+        edmfx_sgsflux_upwinding,
+    )
+
+    return @. lazy(vttʲ + vtt⁰)
+end
+
+add_diagnostic_variable!(short_name = "tnhusmf", units = "kg kg^-1 s^-1",
+    long_name = "Tendency of total specific humidity due to SGS mass flux transport",
+    comments = "Tendency of q_tot computed as the divergence of the SGS mass flux, including updraft and environment contributions",
+    compute = compute_tnhusmf,
+)
+
+###
+# Tendency of q_tot due to SGS eddy diffusion (3d)
+###
+compute_tnhused(state, cache, time) = compute_tnhused(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_tnhused(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute tendency of q_tot due to SGS eddy diffusion \
+                               with a moist model and with EDMFX")
+
+function compute_tnhused(state, cache, _,
+    ::MoistMicrophysics, ::Union{EDOnlyEDMFX, DiagnosticEDMFX, PrognosticEDMFX},
+)
+    FT = Spaces.undertype(axes(state.c))
+    (; params) = cache
+    turbconv_params = CAP.turbconv_params(params)
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+
+    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
+    ᶜmixing_length_field = ᶜmixing_length(state, cache)
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
+    ᶜprandtl_nvec =
+        @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
+    ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+
+    ᶠρaK_h = @. lazy(ᶠinterp(state.c.ρ) * ᶠinterp(ᶜK_h))
+    ᶠgradᵥ = Operators.GradientC2F()
+    ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
+        top = Operators.SetValue(C3(FT(0))),
+        bottom = Operators.SetValue(C3(FT(0))),
+    )
+    ᶜq_tot = @. lazy(specific(state.c.ρq_tot, state.c.ρ))
+    return @. lazy(-(ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_tot)))))
+end
+
+add_diagnostic_variable!(short_name = "tnhused", units = "kg kg^-1 s^-1",
+    long_name = "Tendency of total specific humidity due to SGS eddy diffusion",
+    comments = "Tendency of q_tot computed from the divergence of the eddy diffusive flux",
+    compute = compute_tnhused,
+)
+
+###
+# Tendency of e_tot due to SGS mass flux (3d)
+###
+compute_tnenemf(state, cache, time) =
+    compute_tnenemf(state, cache, time, cache.atmos.turbconv_model)
+compute_tnenemf(_, _, _, turbconv_model) =
+    error_diagnostic_variable("tnenemf", turbconv_model)
+
+function compute_tnenemf(state, cache, _,
+    turbconv_model::PrognosticEDMFX,
+)
+    (; edmfx_sgsflux_upwinding) = cache.atmos.numerics
+    (; ᶠu³) = cache.precomputed
+    (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = cache.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜp) = cache.precomputed
+    (; ᶜh_tot) = cache.precomputed
+    (; dt) = cache
+
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜρ⁰ = @. lazy(
+        TD.air_density(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+        ),
+    )
+    ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))
+
+    # Updraft contribution
+    ᶜρʲ = ᶜρʲs.:1
+    ᶜρaʲ = (state.c.sgsʲs.:1).ρa
+    ᶜmseʲ = (state.c.sgsʲs.:1).mse
+    ᶜa_scalarʲ = @. lazy(
+        (ᶜmseʲ + ᶜKʲs.:1 - ᶜh_tot) * draft_area(ᶜρaʲ, ᶜρʲ),
+    )
+    ᶠu³_diffʲ = @. lazy(ᶠu³ʲs.:1 - ᶠu³)
+    vttʲ = vertical_transport(
+        ᶜρʲ,
+        ᶠu³_diffʲ,
+        ᶜa_scalarʲ,
+        dt,
+        edmfx_sgsflux_upwinding,
+    )
+
+    # Environment contribution
+    ᶜmse⁰ = ᶜspecific_env_mse(state, cache)
+    ᶜa_scalar⁰ = @. lazy(
+        (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰),
+    )
+    ᶠu³_diff⁰ = @. lazy(ᶠu³⁰ - ᶠu³)
+    vtt⁰ = vertical_transport(
+        ᶜρ⁰,
+        ᶠu³_diff⁰,
+        ᶜa_scalar⁰,
+        dt,
+        edmfx_sgsflux_upwinding,
+    )
+
+    return @. lazy(vttʲ + vtt⁰)
+end
+
+add_diagnostic_variable!(short_name = "tnenemf", units = "W m^-3",
+    long_name = "Tendency of total energy due to SGS mass flux transport",
+    comments = "Tendency of ρe_tot computed as the divergence of the SGS mass flux, including updraft and environment contributions",
+    compute = compute_tnenemf,
+)
+
+###
+# Tendency of e_tot due to SGS eddy diffusion (3d)
+###
+compute_tneneed(state, cache, time) =
+    compute_tneneed(state, cache, time, cache.atmos.turbconv_model)
+compute_tneneed(_, _, _, turbconv_model) =
+    error_diagnostic_variable("tneneed", turbconv_model)
+
+function compute_tneneed(state, cache, _,
+    ::Union{EDOnlyEDMFX, DiagnosticEDMFX, PrognosticEDMFX},
+)
+    FT = Spaces.undertype(axes(state.c))
+    (; params) = cache
+    turbconv_params = CAP.turbconv_params(params)
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+    (; ᶜh_tot) = cache.precomputed
+
+    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
+    ᶜmixing_length_field = ᶜmixing_length(state, cache)
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
+    ᶜprandtl_nvec =
+        @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
+    ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+
+    ᶠρaK_h = @. lazy(ᶠinterp(state.c.ρ) * ᶠinterp(ᶜK_h))
+    ᶠgradᵥ = Operators.GradientC2F()
+    ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
+        top = Operators.SetValue(C3(FT(0))),
+        bottom = Operators.SetValue(C3(FT(0))),
+    )
+    return @. lazy(-(ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜh_tot)))))
+end
+
+add_diagnostic_variable!(short_name = "tneneed", units = "W m^-3",
+    long_name = "Tendency of total energy due to SGS eddy diffusion",
+    comments = "Tendency of ρe_tot computed from the divergence of the eddy diffusive flux of total enthalpy",
+    compute = compute_tneneed,
 )
