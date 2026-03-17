@@ -4,7 +4,7 @@ dt_save_state_to_disk: "Inf"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
 z_elem: 32
-dt: "3secs"
+dt: "6secs"
 t_end: "900secs"
 z_stretch: false
 x_elem: 128
@@ -17,7 +17,7 @@ enable_diagnostics: true
 cloud_model: "grid_scale"
 use_sgs_quadrature: false
 fully_implicit: true
-ode_algo: "ARS233"
+ode_algo: "ARS343"
 use_krylov_method: true
 max_newton_iters_ode: 10
 use_newton_rtol: true

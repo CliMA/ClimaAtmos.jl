@@ -64,7 +64,7 @@ split_ode:
   value: true
 fully_implicit:
   help: "Use fully implicit timestepping (all tendencies in T_imp!, T_exp! = nothing). Requires use_krylov_method: true."
-  value: true
+  value: false
 use_krylov_method:
   help: "Whether to use a Krylov method to solve the linear system in Newton's method (only for ClimaTimeSteppers.jl)"
   value: false
