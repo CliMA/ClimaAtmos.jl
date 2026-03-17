@@ -62,7 +62,7 @@ damp_level = Spaces.nlevels(center_space)
 
 # Load ERA5 data from artifacts
 include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
-era_data = joinpath(era_global_dataset_path(), "box-era5-monthly.nc")
+era_data = era_global_dataset_path()
 
 nt = NCDataset(era_data) do ds
     lon = Array(ds["longitude"])

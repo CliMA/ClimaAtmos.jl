@@ -130,7 +130,7 @@ comms_ctx = ClimaComms.SingletonCommsContext()
 
 # GFDL data file path
 include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
-ncfile = joinpath(gfdl_ogw_data_path(), "gfdl_ogw.nc")
+ncfile = gfdl_ogw_data_path()
 
 # Initialize p
 (; config_file, job_id) = CA.commandline_kwargs()
