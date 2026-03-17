@@ -48,6 +48,7 @@ import ..DiagnosticEDMFX
 
 # gravitywave_models
 import ..NonOrographicGravityWave
+import ..BeresSourceParams
 import ..OrographicGravityWave
 
 # surface_model

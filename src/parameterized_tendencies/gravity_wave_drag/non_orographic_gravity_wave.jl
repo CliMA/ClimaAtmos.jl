@@ -341,6 +341,7 @@ function compute_beres_convective_heating!(Y, p)
     ᶜQ_conv .= FT(0)
     cp_d = FT(CAP.cp_d(p.params))
 
+    # Use the vertical divergence of velocity 
     # For DiagnosticEDMFX, ρa is in p.precomputed.ᶜρaʲs
     # For PrognosticEDMFX, ρa is in Y.c.sgsʲs.:($j).ρa
     has_prognostic_sgs =
@@ -411,15 +412,17 @@ function compute_beres_convective_heating!(Y, p)
         return (z_bot, z_top, u_sum, v_sum, bf_sum, w_sum)
     end
 
-    # Unpack results
+    # Unpack results (with NaN/Inf protection)
+    @. gw_Q0 = ifelse(isnan(gw_Q0) | isinf(gw_Q0), FT(0), gw_Q0)
     @. gw_h_heat = max(result_field.:2 - result_field.:1, FT(1000.0)) # min 1 km
+    @. gw_h_heat = ifelse(isnan(gw_h_heat) | isinf(gw_h_heat), FT(1000.0), gw_h_heat)
     weight_sum = result_field.:6
     @. gw_u_heat = ifelse(weight_sum > FT(1e-20), result_field.:3 / weight_sum, FT(0))
     @. gw_v_heat = ifelse(weight_sum > FT(1e-20), result_field.:4 / weight_sum, FT(0))
     @. gw_N_source =
         ifelse(weight_sum > FT(1e-20), result_field.:5 / weight_sum, FT(0.01))
 
-    # Set beres_active flag: Q0 above threshold
+    # Set beres_active flag: Q0 above threshold (NaN gives inactive)
     Q0_threshold = gw_beres_source.Q0_threshold
     @. gw_beres_active = ifelse(gw_Q0 > Q0_threshold, FT(1), FT(0))
 end
@@ -435,6 +438,20 @@ function non_orographic_gravity_wave_apply_tendency!(
 )
 
     (; uforcing, vforcing) = p.non_orographic_gravity_wave
+    FT = Spaces.undertype(axes(Y.c))
+
+    # Constrain forcing (same limit as OGW: 3e-3 m/s²)
+    # Use ifelse to also catch NaN (IEEE max/min propagate NaN)
+    @. uforcing = ifelse(
+        isnan(uforcing) | isinf(uforcing),
+        FT(0),
+        max(FT(-3e-3), min(FT(3e-3), uforcing)),
+    )
+    @. vforcing = ifelse(
+        isnan(vforcing) | isinf(vforcing),
+        FT(0),
+        max(FT(-3e-3), min(FT(3e-3), vforcing)),
+    )
 
     @. Yₜ.c.uₕ +=
         Geometry.Covariant12Vector.(Geometry.UVVector.(uforcing, vforcing))
