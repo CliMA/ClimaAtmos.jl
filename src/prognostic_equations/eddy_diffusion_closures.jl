@@ -360,7 +360,7 @@ function mixing_length_lopez_gomez_2020(
     #  ⇒  a_pd · l_TKE² − c_neg = 0
     # yielding
     #     l_TKE = √c_neg / a_pd.
-    l_TKE = ifelse(a_pd > eps_FT, sqrt(c_neg / max(a_pd, eps_FT)), FT(0))
+    l_TKE = ifelse(a_pd > eps_FT, sqrt(c_neg / max(a_pd, eps_FT)), FT(1e6))
 
     # --- l_N: Static-stability length scale (buoyancy limit), constrained by l_z ---
     N_eff_sq = max(ᶜN²_eff, FT(0)) # Use N^2 only if stable (N^2 > 0)
