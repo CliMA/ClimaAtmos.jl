@@ -5,8 +5,8 @@
 
 # Time stepping
 dt: "120secs"
-t_end: "3hours"
-dt_save_state_to_disk: "3hours"
+t_end: "10days"
+dt_save_state_to_disk: "1days"
 
 # EDMF turbulence-convection
 turbconv: "diagnostic_edmfx"
@@ -18,9 +18,9 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 
 # Non-orographic gravity waves with Beres convective source
-non_orographic_gravity_wave: true
-dt_nogw: "120secs"
-nogw_beres_source: true
+# non_orographic_gravity_wave: false
+# dt_nogw: "120secs"
+# nogw_beres_source: false
 
 # Physics
 microphysics_model: "0M"
@@ -33,8 +33,14 @@ z_max: 45000.0
 z_elem: 30
 
 # Parameters
-toml: [toml/diagnostic_edmfx_0M.toml, toml/nogw_mima_test.toml]
+# toml: [toml/diagnostic_edmfx_0M.toml, toml/nogw_mima_test.toml]
+toml: [toml/diagnostic_edmfx_0M.toml]
 
 # Output
 FLOAT_TYPE: "Float64"
-output_default_diagnostics: false
+# output_default_diagnostics: true
+# diagnostics:
+#   - short_name: [utendnogw, vtendnogw]
+#     period: 6hours
+#   - short_name: [ua, va, ta, wa]
+#     period: 1days

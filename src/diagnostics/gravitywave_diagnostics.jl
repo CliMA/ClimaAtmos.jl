@@ -38,3 +38,132 @@ add_diagnostic_variable!(short_name = "vtendnogw", units = "m s^-2",
     comments = "Northward Acceleration Due to Non-Orographic Gravity Wave Drag",
     compute = compute_vtendnogw,
 )
+
+###
+# Beres convective GW diagnostics (2D surface fields)
+# These dispatch on the BS type parameter: Nothing = no Beres, BeresSourceParams = Beres enabled
+###
+
+# Max convective heating rate Q0
+compute_nogw_Q0!(out, state, cache, time) = compute_nogw_Q0!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.non_orographic_gravity_wave,
+)
+compute_nogw_Q0!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("nogw_Q0", non_orographic_gravity_wave)
+compute_nogw_Q0!(_, _, _, _, ::NonOrographicGravityWave{FT, Nothing}) where {FT} =
+    error_diagnostic_variable("nogw_Q0 requires Beres source enabled")
+
+function compute_nogw_Q0!(
+    out,
+    state,
+    cache,
+    time,
+    ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    if pkgversion(ClimaDiagnostics) >= v"0.2.13"
+        return cache.non_orographic_gravity_wave.gw_Q0
+    else
+        if isnothing(out)
+            return copy(cache.non_orographic_gravity_wave.gw_Q0)
+        else
+            out .= cache.non_orographic_gravity_wave.gw_Q0
+        end
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_Q0",
+    long_name = "NOGW Max Convective Heating Rate",
+    units = "K s-1",
+    comments = "Column-maximum convective heating rate used by the Beres NOGW source spectrum",
+    compute! = compute_nogw_Q0!,
+)
+
+# Convective heating depth
+compute_nogw_h_heat!(out, state, cache, time) = compute_nogw_h_heat!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.non_orographic_gravity_wave,
+)
+compute_nogw_h_heat!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("nogw_h_heat", non_orographic_gravity_wave)
+compute_nogw_h_heat!(_, _, _, _, ::NonOrographicGravityWave{FT, Nothing}) where {FT} =
+    error_diagnostic_variable("nogw_h_heat requires Beres source enabled")
+
+function compute_nogw_h_heat!(
+    out,
+    state,
+    cache,
+    time,
+    ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    if pkgversion(ClimaDiagnostics) >= v"0.2.13"
+        return cache.non_orographic_gravity_wave.gw_h_heat
+    else
+        if isnothing(out)
+            return copy(cache.non_orographic_gravity_wave.gw_h_heat)
+        else
+            out .= cache.non_orographic_gravity_wave.gw_h_heat
+        end
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_h_heat",
+    long_name = "NOGW Convective Heating Depth",
+    units = "m",
+    comments = "Vertical extent of significant convective heating used by the Beres NOGW source spectrum",
+    compute! = compute_nogw_h_heat!,
+)
+
+# Beres active flag
+compute_nogw_beres_active!(out, state, cache, time) =
+    compute_nogw_beres_active!(
+        out,
+        state,
+        cache,
+        time,
+        cache.atmos.non_orographic_gravity_wave,
+    )
+compute_nogw_beres_active!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("nogw_beres_active", non_orographic_gravity_wave)
+compute_nogw_beres_active!(
+    _,
+    _,
+    _,
+    _,
+    ::NonOrographicGravityWave{FT, Nothing},
+) where {FT} =
+    error_diagnostic_variable("nogw_beres_active requires Beres source enabled")
+
+function compute_nogw_beres_active!(
+    out,
+    state,
+    cache,
+    time,
+    ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    if pkgversion(ClimaDiagnostics) >= v"0.2.13"
+        return cache.non_orographic_gravity_wave.gw_beres_active
+    else
+        if isnothing(out)
+            return copy(cache.non_orographic_gravity_wave.gw_beres_active)
+        else
+            out .= cache.non_orographic_gravity_wave.gw_beres_active
+        end
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_beres_active",
+    long_name = "NOGW Beres Source Active Flag",
+    units = "1",
+    comments = "Flag indicating where the Beres convective GW source is active (1) vs AD fallback (0)",
+    compute! = compute_nogw_beres_active!,
+)
