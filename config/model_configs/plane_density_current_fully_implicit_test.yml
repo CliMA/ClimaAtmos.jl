@@ -1,9 +1,5 @@
 # Fully implicit density current matching ClimaCore example (Float32).
 # Strong hyperdiffusion to match ClimaCore κ₄ ~ 1e7 m⁴/s and suppress grid-scale oscillations.
-hyperdiff: Hyperdiffusion
-vorticity_hyperdiffusion_coefficient: 20.0
-hyperdiffusion_prandtl_number: 1.0
-divergence_damping_factor: 1.0
 dt_save_state_to_disk: "Inf"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
