@@ -62,6 +62,9 @@ newton_rtol:
 split_ode:
   help: "Use split of ODE problem. Examples: [`true` (implicit, default), `false` (explicit)]"
   value: true
+fully_implicit:
+  help: "Use fully implicit timestepping (all tendencies in T_imp!, T_exp! = nothing). Requires use_krylov_method: true."
+  value: true
 use_krylov_method:
   help: "Whether to use a Krylov method to solve the linear system in Newton's method (only for ClimaTimeSteppers.jl)"
   value: false
@@ -80,6 +83,12 @@ ode_algo:
 krylov_rtol:
   help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
   value: 0.1
+krylov_memory:
+  help: "GMRES memory (Krylov subspace size) for Krylov method"
+  value: 30
+krylov_itmax:
+  help: "Maximum Krylov iterations"
+  value: 150
 eisenstat_walker_forcing_alpha:
   help: "Value of alpha to use for Eisenstat-Walker forcing (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` and `use_dynamic_krylov_rtol` are `true`)"
   value: 2.0

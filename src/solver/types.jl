@@ -952,6 +952,8 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
 
     """Whether to apply surface flux tendency (independent of surface conditions)"""
     disable_surface_flux_tendency::Bool
+    """Use fully implicit timestepping (all tendencies in T_imp!, T_exp! = nothing)"""
+    fully_implicit::Bool
 end
 
 # Map grouped struct types to their names in AtmosModel struct
@@ -1143,6 +1145,7 @@ function AtmosModel(; kwargs...)
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
+    fully_implicit = get(atmos_model_kwargs, :fully_implicit, false)
 
     prescribed_flow = get(atmos_model_kwargs, :prescribed_flow, nothing)
 
@@ -1169,6 +1172,7 @@ function AtmosModel(; kwargs...)
         surface,
         numerics,
         disable_surface_flux_tendency,
+        fully_implicit,
     )
 end
 

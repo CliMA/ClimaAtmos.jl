@@ -187,6 +187,7 @@ function get_atmos(config::AtmosConfig, params)
         vertical_diffusion,
         numerics = get_numerics(parsed_args, FT),
         disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
+        fully_implicit = parsed_args["fully_implicit"],
     )
     # TODO: Should this go in the AtmosModel constructor?
     @assert !@any_reltype(atmos, (UnionAll, DataType))
@@ -538,19 +539,50 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
 end
 
 function ode_configuration(::Type{FT}, args) where {FT}
+    fully_implicit = args["fully_implicit"]
+    use_krylov_method = args["use_krylov_method"]
+    max_newton_iters_ode = args["max_newton_iters_ode"]
+    use_dynamic_krylov_rtol = args["use_dynamic_krylov_rtol"]
+
+    use_newton_rtol = args["use_newton_rtol"]
+    newton_rtol = args["newton_rtol"]
+
+    # Fully implicit requires JFNK and sufficient Newton iterations
+    if fully_implicit
+        if !use_krylov_method
+            @warn "fully_implicit=true requires use_krylov_method=true; enabling automatically."
+            use_krylov_method = true
+        end
+        if max_newton_iters_ode < 10
+            @warn "fully_implicit=true requires max_newton_iters_ode >= 10; setting to 10."
+            max_newton_iters_ode = 10
+        end
+        if !use_dynamic_krylov_rtol
+            @warn "fully_implicit=true works best with use_dynamic_krylov_rtol=true; enabling automatically."
+            use_dynamic_krylov_rtol = true
+        end
+        if !use_newton_rtol
+            @warn "fully_implicit=true: enabling use_newton_rtol=true with newton_rtol=1e-4 for early convergence exit."
+            use_newton_rtol = true
+            newton_rtol = FT(1e-4)
+        end
+    end
+
     return ode_configuration(
         FT,
         args["ode_algo"],
         args["update_jacobian_every"],
-        args["max_newton_iters_ode"],
+        max_newton_iters_ode,
         args["max_newton_iters_ode_subproblem"],
-        args["use_krylov_method"],
-        args["use_dynamic_krylov_rtol"],
+        use_krylov_method,
+        use_dynamic_krylov_rtol,
         args["eisenstat_walker_forcing_alpha"],
         args["krylov_rtol"],
-        args["use_newton_rtol"],
-        args["newton_rtol"],
+        use_newton_rtol,
+        newton_rtol,
         args["jvp_step_adjustment"],
+        args["krylov_memory"],
+        args["krylov_itmax"],
     )
 end
 
@@ -559,6 +591,7 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
     max_newton_iters_ode, max_newton_iters_ode_subproblem, use_krylov_method,
     use_dynamic_krylov_rtol, eisenstat_walker_forcing_alpha, krylov_rtol,
     use_newton_rtol, newton_rtol, jvp_step_adjustment,
+    krylov_memory, krylov_itmax,
 ) where {FT}
     ode_algo_name = getproperty(CTS, Symbol(ode_name))
     update_j_freq = if update_jacobian_every == "dt"
@@ -603,6 +636,8 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
                     else
                         CTS.ConstantForcing(FT(krylov_rtol))
                     end,
+                    kwargs = (; memory = krylov_memory),
+                    solve_kwargs = (; itmax = krylov_itmax),
                 )
             else
                 nothing
@@ -805,6 +840,7 @@ function args_integrator(args, Y, p, tspan, ode_algo, callback, dt_integrator)
         args["approximate_linear_solve_iters"],
         args["debug_jacobian"],
         args["prescribed_flow"],
+        args["fully_implicit"],
         dt_integrator,
     )
 end
@@ -812,11 +848,26 @@ end
 function args_integrator(Y, p, tspan, ode_algo, callback,
     use_dense_jacobian, use_auto_jacobian, auto_jacobian_padding_bands,
     approximate_linear_solve_iters, debug_jacobian, prescribed_flow,
+    fully_implicit,
     dt_integrator,
 )
     (; atmos) = p
     s = @timed_str begin
-        if isnothing(prescribed_flow)
+        if fully_implicit
+            # Fully implicit: all tendencies in T_imp!, no T_exp!
+            T_exp_T_lim! = nothing
+            T_imp_subproblem! = nothing
+            T_imp! = SciMLBase.ODEFunction(
+                fully_implicit_tendency!;
+                jac_prototype = get_jacobian(ode_algo, Y, atmos,
+                    use_dense_jacobian, use_auto_jacobian,
+                    auto_jacobian_padding_bands,
+                    approximate_linear_solve_iters, debug_jacobian,
+                ),
+                Wfact = update_jacobian!,
+            )
+            cache_imp! = set_precomputed_quantities!
+        elseif isnothing(prescribed_flow)
 
             # This is the default case
             T_exp_T_lim! = remaining_tendency!

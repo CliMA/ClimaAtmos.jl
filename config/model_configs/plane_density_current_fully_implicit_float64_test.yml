@@ -1,0 +1,34 @@
+# Fully implicit density current (Float64) matching ClimaCore example.
+# Strong hyperdiffusion to match ClimaCore κ₄ ~ 1e7 m⁴/s and suppress grid-scale oscillations.
+dt_save_state_to_disk: "Inf"
+initial_condition: "DryDensityCurrentProfile"
+x_max: 51200.0
+z_elem: 32
+dt: "5secs"
+t_end: "900secs"
+z_stretch: false
+x_elem: 128
+nh_poly: 4
+config: "plane"
+z_max: 6400.0
+disable_surface_flux_tendency: true
+output_default_diagnostics: false
+enable_diagnostics: true
+cloud_model: "grid_scale"
+use_sgs_quadrature: false
+fully_implicit: true
+ode_algo: "ARS222"
+use_krylov_method: true
+max_newton_iters_ode: 10
+use_newton_rtol: true
+newton_rtol: 1.0e-4
+use_dynamic_krylov_rtol: true
+krylov_rtol: 0.1
+krylov_memory: 30
+krylov_itmax: 150
+update_jacobian_every: "dt"
+use_dense_jacobian: false
+FLOAT_TYPE: "Float64"
+diagnostics:
+  - short_name: [thetaa, ua, wa]
+    period: 100secs

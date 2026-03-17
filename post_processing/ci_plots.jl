@@ -838,7 +838,7 @@ function make_plots(
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
-    short_names = ["thetaa"]
+    short_names = ["thetaa", "ua", "wa"]
     vars = map_comparison(get, simdirs, short_names)
     make_plots_generic(
         output_paths,

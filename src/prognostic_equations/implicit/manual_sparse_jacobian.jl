@@ -577,9 +577,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
     ∂ᶠu₃_err_∂ᶠu₃ = matrix[@name(f.u₃), @name(f.u₃)]
     I_u₃ = DiagonalMatrixRow(one_C3xACT3)
-    @. ∂ᶠu₃_err_∂ᶜuₕ =
-        dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅ ∂ᶜK_∂ᶜuₕ
     if rs isa RayleighSponge
+        @. ∂ᶠu₃_err_∂ᶜuₕ =
+            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅ ∂ᶜK_∂ᶜuₕ
         @. ∂ᶠu₃_err_∂ᶠu₃ =
             dtγ * (
                 ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅
@@ -587,6 +587,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 DiagonalMatrixRow(-β_rayleigh_u₃(rs, ᶠz, zmax) * (one_C3xACT3,))
             ) - (I_u₃,)
     else
+        @. ∂ᶠu₃_err_∂ᶜuₕ =
+            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅ ∂ᶜK_∂ᶜuₕ
         @. ∂ᶠu₃_err_∂ᶠu₃ =
             dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅
             ∂ᶜK_∂ᶠu₃ - (I_u₃,)

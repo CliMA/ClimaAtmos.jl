@@ -3,7 +3,7 @@
 #####
 
 import ClimaCore
-import ClimaCore: Fields, Geometry
+import ClimaCore: Fields, Geometry, Spaces
 
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
@@ -79,6 +79,88 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     return nothing
 end
 
+"""
+    fully_implicit_tendency!(Yₜ, Y, p, t)
+
+Compute all tendencies (implicit + explicit) into a single tendency vector.
+Used for fully implicit timestepping where T_exp! = nothing and everything
+goes into T_imp!. Tracer limiter contributions (normally in Yₜ_lim) are
+folded into Yₜ via a scratch buffer.
+"""
+NVTX.@annotate function fully_implicit_tendency!(Yₜ, Y, p, t)
+    fill_with_nans!(p)
+    Yₜ .= zero(eltype(Yₜ))
+
+    # --- Implicit vertical advection ---
+    implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+
+    # --- Implicit physics (same blocks as implicit_tendency!) ---
+    if p.atmos.microphysics_tendency_timestepping == Implicit()
+        microphysics_tendency!(
+            Yₜ, Y, p, t,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+        surface_precipitation_tendency!(
+            Yₜ, Y, p, t,
+            p.atmos.surface_model,
+            p.atmos.microphysics_model,
+        )
+    end
+    if p.atmos.sgs_adv_mode == Implicit()
+        edmfx_sgs_vertical_advection_tendency!(
+            Yₜ, Y, p, t,
+            p.atmos.turbconv_model,
+        )
+    end
+    if p.atmos.diff_mode == Implicit()
+        vertical_diffusion_boundary_layer_tendency!(
+            Yₜ, Y, p, t,
+            p.atmos.vertical_diffusion,
+        )
+        edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    end
+    if p.atmos.sgs_entr_detr_mode == Implicit()
+        edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+        edmfx_first_interior_entr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    end
+    if p.atmos.sgs_mf_mode == Implicit()
+        edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    end
+    if p.atmos.sgs_vertdiff_mode == Implicit()
+        edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    end
+
+    # NOTE: All ρa tendencies should be applied before calling this function
+    pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+
+    # NOTE: This will zero out all momentum tendencies in the edmfx advection test
+    # DO NOT add additional velocity tendencies after this function
+    zero_velocity_tendency!(Yₜ, Y, p, t)
+
+    # --- Explicit tendencies (from remaining_tendency!) ---
+    # Use scratch buffer for Yₜ_lim, then fold into Yₜ
+    Yₜ_lim = p.scratch.temp_Yₜ_lim
+    Yₜ_lim .= zero(eltype(Yₜ_lim))
+    horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
+    horizontal_dynamics_tendency!(Yₜ, Y, p, t)
+    hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+    additional_tendency!(Yₜ, Y, p, t)
+
+    # Fold limiter contributions into Yₜ
+    Yₜ .+= Yₜ_lim
+
+    # DSS on tendency so it is C0 continuous at element boundaries (match ClimaCore rhs!).
+    # Without this, spectral-element horizontal operators leave Yₜ double-valued at
+    # shared nodes, which can produce oscillatory artifacts after the state update.
+    if do_dss(axes(Y.c))
+        Spaces.weighted_dss!(Yₜ.c => p.ghost_buffer.c, Yₜ.f => p.ghost_buffer.f)
+    end
+
+    return nothing
+end
+
 # TODO: All of these should use dtγ instead of dt, but dtγ is not available in
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
 
@@ -125,7 +207,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
 
-    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
+    # Use ᶜadvdivᵥ (CT3 boundary) to match contravariant flux ᶠu³ and Jacobian (ᶜadvdivᵥ_matrix).
+    # ClimaCore working example: density_current_2d_rhoe_vi_implicit_full.jl
+    @. Yₜ.c.ρ -= ᶜadvdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
     # Central vertical advection of active tracers (e_tot and q_tot)
     vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
