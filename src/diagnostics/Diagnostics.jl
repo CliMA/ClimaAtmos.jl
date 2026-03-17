@@ -55,6 +55,7 @@ import ..SlabOceanSST
 
 # functions used to calculate diagnostics
 import ..draft_area
+import ..vertical_buoyancy_acceleration
 import ..compute_gm_mixing_length
 
 import ..horizontal_integral_at_boundary
@@ -68,6 +69,8 @@ import ..ρa⁰
 import ..specific
 import ..ᶜspecific_env_value
 import ..correlation_Tq
+import ..vertical_transport
+import ..ᶜspecific_env_mse
 
 
 # We need the abbreviations for symbols like curl, grad, and so on

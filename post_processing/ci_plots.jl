@@ -1439,9 +1439,9 @@ function make_plots(
     end
 
     short_names = [
-        "wa", "waup", "ta", "taup", "hus", "husup", "arup", "tke", "ua",
-        "thetaa", "thetaaup", "ha", "haup", "hur", "hurup", "lmix",
-        "cl", "clw", "clwup", "cli", "cliup",
+        "cl", "clw", "thetaa", "hus", "tnhusmf", "tnhused", 
+        "wa", "waup", "mfup", "arup", "tke", "buoyup", "thetaaup", "husup", 
+        "clwup", "lmix", "lmixw", "lmixtke", "lmixb", "bgrad", 
         precip_names...,
     ]
     reduction = "inst"
