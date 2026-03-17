@@ -1439,9 +1439,9 @@ function make_plots(
     end
 
     short_names = [
-        "wa", "waup", "ta", "taup", "hus", "husup", "arup", "tke", "ua",
-        "thetaa", "thetaaup", "ha", "haup", "hur", "hurup", "lmix",
-        "cl", "clw", "clwup", "cli", "cliup",
+        "cl", "clw", "thetaa", "hus", "tnhusmf", "tnhused", 
+        "wa", "waup", "mfup", "arup", "tke", "buoyup", "thetaaup", "husup", 
+        "lmix", "lmixw", "lmixtke", "lmixb", "bgrad", 
         precip_names...,
     ]
     reduction = "inst"
@@ -1466,6 +1466,14 @@ function make_plots(
                 return vars
             end
         end
+
+    # For column plots, restrict to below 3000m
+    if sim_type isa Union{EDMFColumnPlots, EDMFColumnPlotsWithPrecip}
+        var_groups_zt = [
+            Tuple(ClimaAnalysis.window(v, "z"; right = 3000.0) for v in group)
+            for group in var_groups_zt
+        ]
+    end
 
     var_groups_z = [
         ([slice(v, time = LAST_SNAP) for v in group]...,) for

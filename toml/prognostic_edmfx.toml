@@ -23,7 +23,7 @@ value = 0.1
 value = 0
 
 [detr_inv_tau]
-value = 0
+value = 0.0001
 
 [detr_coeff]
 value = 0
@@ -45,3 +45,6 @@ value = 40.0
 
 [precipitation_timescale]
 value = 3600
+
+[mixing_length_eddy_viscosity_coefficient]
+value = 0.14

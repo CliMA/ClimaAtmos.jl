@@ -43,6 +43,7 @@ const ᶜsubdivᵥ = Operators.DivergenceF2C(
 const ᶜprecipdivᵥ = Operators.DivergenceF2C(top = Operators.SetValue(CT3(0)))
 
 const ᶠright_bias = Operators.RightBiasedC2F() # for free outflow in ᶜprecipdivᵥ
+const ᶠleft_bias = Operators.LeftBiasedC2F()
 const ᶜleft_bias = Operators.LeftBiasedF2C()
 const ᶜright_bias = Operators.RightBiasedF2C()
 
