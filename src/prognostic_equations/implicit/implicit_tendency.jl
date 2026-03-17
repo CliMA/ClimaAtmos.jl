@@ -151,9 +151,7 @@ NVTX.@annotate function fully_implicit_tendency!(Yₜ, Y, p, t)
     # Fold limiter contributions into Yₜ
     Yₜ .+= Yₜ_lim
 
-    # DSS on tendency so it is C0 continuous at element boundaries (match ClimaCore rhs!).
-    # Without this, spectral-element horizontal operators leave Yₜ double-valued at
-    # shared nodes, which can produce oscillatory artifacts after the state update.
+    # DSS on Yₜ for C0 at element boundaries (match ClimaCore rhs!)
     if do_dss(axes(Y.c))
         Spaces.weighted_dss!(Yₜ.c => p.ghost_buffer.c, Yₜ.f => p.ghost_buffer.f)
     end
@@ -207,8 +205,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
 
-    # Use ᶜadvdivᵥ (CT3 boundary) to match contravariant flux ᶠu³ and Jacobian (ᶜadvdivᵥ_matrix).
-    # ClimaCore working example: density_current_2d_rhoe_vi_implicit_full.jl
+    # ᶜadvdivᵥ (CT3) to match ᶠu³ and Jacobian; ClimaCore density_current_2d_rhoe_vi_implicit_full.jl
     @. Yₜ.c.ρ -= ᶜadvdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
     # Central vertical advection of active tracers (e_tot and q_tot)

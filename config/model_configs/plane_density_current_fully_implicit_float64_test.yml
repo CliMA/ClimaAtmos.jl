@@ -3,11 +3,11 @@
 dt_save_state_to_disk: "Inf"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
-z_elem: 32
-dt: "5secs"
+z_elem: 64
+dt: "3secs"
 t_end: "900secs"
 z_stretch: false
-x_elem: 128
+x_elem: 256
 nh_poly: 4
 config: "plane"
 z_max: 6400.0
