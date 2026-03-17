@@ -341,7 +341,6 @@ function compute_beres_convective_heating!(Y, p)
     ᶜQ_conv .= FT(0)
     cp_d = FT(CAP.cp_d(p.params))
 
-    # Use the vertical divergence of velocity 
     # For DiagnosticEDMFX, ρa is in p.precomputed.ᶜρaʲs
     # For PrognosticEDMFX, ρa is in Y.c.sgsʲs.:($j).ρa
     has_prognostic_sgs =

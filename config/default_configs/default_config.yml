@@ -288,10 +288,10 @@ beres_sigma_x:
   help: "Convective cell horizontal half-width (m)"
   value: 4000.0
 beres_nu_min:
-  help: "Minimum wave frequency for Beres integration (1/s, period ~120 min)"
+  help: "Minimum angular frequency for Beres integration (rad/s, period ~120 min)"
   value: 8.727e-4
 beres_nu_max:
-  help: "Maximum wave frequency for Beres integration (1/s, period ~10 min)"
+  help: "Maximum angular frequency for Beres integration (rad/s, period ~10 min)"
   value: 1.047e-2
 beres_n_nu:
   help: "Number of quadrature points for Beres frequency integration (must be 4k+1: 5, 9, 13...)"
