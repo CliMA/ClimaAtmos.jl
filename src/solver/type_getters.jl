@@ -527,6 +527,7 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
             DerivativeFlag(atmos.sgs_mf_mode),
             DerivativeFlag(atmos.sgs_nh_pressure_mode),
             DerivativeFlag(atmos.sgs_vertdiff_mode),
+            DerivativeFlag(atmos.fully_implicit),
             approximate_linear_solve_iters,
         )
         use_auto_jacobian ?

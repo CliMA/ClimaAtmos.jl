@@ -23,6 +23,7 @@ use_derivative(::IgnoreDerivative) = false
         sgs_mass_flux_flag,
         sgs_nh_pressure_flag,
         sgs_vertdiff_flag,
+        acoustic_diagonal_flag,
         approximate_solve_iters,
     )
 
@@ -48,10 +49,14 @@ solver. Certain groups of derivatives can be toggled on or off by setting their
   subgrid-scale non-hydrostatic pressure drag tendency should be computed
 - `sgs_vertdiff_flag::DerivativeFlag`: whether the derivatives of the
   subgrid-scale vertical diffusion tendency should be computed
+- `acoustic_diagonal_flag::DerivativeFlag`: whether to add a diagonal
+  approximation of the horizontal acoustic Schur complement to the `(ρ,ρ)`,
+  `(uₕ,uₕ)`, and `(ρe_tot,ρe_tot)` blocks, improving convergence for fully
+  implicit solves where horizontal acoustic/gravity wave stiffness dominates
 - `approximate_solve_iters::Int`: number of iterations to take for the
   approximate linear solve required when the `diffusion_flag` is `UseDerivative`
 """
-struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7} <: SparseJacobian
+struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7, F8} <: SparseJacobian
     topography_flag::F1
     diffusion_flag::F2
     sgs_advection_flag::F3
@@ -59,6 +64,7 @@ struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7} <: SparseJacobian
     sgs_mass_flux_flag::F5
     sgs_nh_pressure_flag::F6
     sgs_vertdiff_flag::F7
+    acoustic_diagonal_flag::F8
     approximate_solve_iters::Int
 end
 
@@ -68,6 +74,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         diffusion_flag,
         sgs_advection_flag,
         sgs_mass_flux_flag,
+        acoustic_diagonal_flag,
         approximate_solve_iters,
     ) = alg
     FT = Spaces.undertype(axes(Y.c))
@@ -140,10 +147,20 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
 
     # Note: We have to use FT(-1) * I instead of -I because inv(-1) == -1.0,
     # which means that multiplying inv(-1) by a Float32 will yield a Float64.
-    identity_blocks = MatrixFields.unrolled_map(
-        name -> (name, name) => FT(-1) * I,
-        (@name(c.ρ), sfc_if_available...),
-    )
+    identity_blocks = if use_derivative(acoustic_diagonal_flag)
+        (
+            (@name(c.ρ), @name(c.ρ)) => similar(Y.c, DiagonalRow),
+            MatrixFields.unrolled_map(
+                name -> (name, name) => FT(-1) * I,
+                (sfc_if_available...,),
+            )...,
+        )
+    else
+        MatrixFields.unrolled_map(
+            name -> (name, name) => FT(-1) * I,
+            (@name(c.ρ), sfc_if_available...),
+        )
+    end
 
     active_scalar_names = (@name(c.ρ), @name(c.ρe_tot), ρq_tot_if_available...)
     advection_blocks = (
@@ -202,13 +219,26 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 !isnothing(atmos.turbconv_model) ||
                     !disable_momentum_vertical_diffusion(
                         atmos.vertical_diffusion,
-                    ) ? similar(Y.c, TridiagonalRow) : FT(-1) * I,
+                    ) ? similar(Y.c, TridiagonalRow) :
+                use_derivative(acoustic_diagonal_flag) ?
+                    similar(Y.c, DiagonalRow) : FT(-1) * I,
         )
     elseif atmos.microphysics_model isa DryModel
-        MatrixFields.unrolled_map(
-            name -> (name, name) => FT(-1) * I,
-            (diffused_scalar_names..., ρtke_if_available..., @name(c.uₕ)),
-        )
+        if use_derivative(acoustic_diagonal_flag)
+            (
+                (@name(c.ρe_tot), @name(c.ρe_tot)) => similar(Y.c, DiagonalRow),
+                MatrixFields.unrolled_map(
+                    name -> (name, name) => FT(-1) * I,
+                    (ρtke_if_available...,),
+                )...,
+                (@name(c.uₕ), @name(c.uₕ)) => similar(Y.c, DiagonalRow),
+            )
+        else
+            MatrixFields.unrolled_map(
+                name -> (name, name) => FT(-1) * I,
+                (diffused_scalar_names..., ρtke_if_available..., @name(c.uₕ)),
+            )
+        end
     else
         (
             MatrixFields.unrolled_map(
@@ -227,8 +257,11 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 similar(Y.c, TridiagonalRow),
             MatrixFields.unrolled_map(
                 name -> (name, name) => FT(-1) * I,
-                (ρtke_if_available..., @name(c.uₕ)),
+                (ρtke_if_available...,),
             )...,
+            (@name(c.uₕ), @name(c.uₕ)) =>
+                use_derivative(acoustic_diagonal_flag) ?
+                    similar(Y.c, DiagonalRow) : FT(-1) * I,
         )
     end
 
@@ -419,6 +452,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         sgs_entr_detr_flag,
         sgs_mass_flux_flag,
         sgs_vertdiff_flag,
+        acoustic_diagonal_flag,
     ) = alg
     (; matrix) = cache
     (; params) = p
@@ -796,6 +830,41 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 dtγ * DiagonalMatrixRow(1 / ᶜρ) ⋅ ᶜdiffusion_u_matrix - (I,)
         end
 
+    end
+
+    # Acoustic diagonal shift: approximate the Schur complement of the
+    # coupled (ρ, uₕ) horizontal acoustic system. The Schur complement
+    # gives a Helmholtz operator -I - dtγ² c_s² ∇²ₕ on the diagonal.
+    # We approximate the diagonal of -∇²ₕ as 2π²/Δx² (2D spectral element).
+    if use_derivative(acoustic_diagonal_flag)
+        hspace = Spaces.horizontal_space(axes(Y.c))
+        Δx = FT(Spaces.node_horizontal_length_scale(hspace))
+        γ_d = cp_d / cv_d
+        ᶜα_acoustic = p.scratch.ᶜtemp_scalar_2
+        @. ᶜα_acoustic = FT(dtγ)^2 * γ_d * ᶜp / ᶜρ * FT(2 * π^2) / Δx^2
+
+        ∂ᶜρ_err_∂ᶜρ = matrix[@name(c.ρ), @name(c.ρ)]
+        @. ∂ᶜρ_err_∂ᶜρ = DiagonalMatrixRow(-(FT(1) + ᶜα_acoustic))
+
+        ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
+        ρe_tot_already_initialized =
+            !(p.atmos.microphysics_model isa DryModel) || use_derivative(diffusion_flag)
+        if ρe_tot_already_initialized
+            @. ∂ᶜρe_tot_err_∂ᶜρe_tot += DiagonalMatrixRow(FT(-1) * ᶜα_acoustic)
+        else
+            @. ∂ᶜρe_tot_err_∂ᶜρe_tot = DiagonalMatrixRow(-(FT(1) + ᶜα_acoustic))
+        end
+
+        uₕ_already_initialized = use_derivative(diffusion_flag) && (
+            !isnothing(p.atmos.turbconv_model) ||
+            !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
+        )
+        ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
+        if uₕ_already_initialized
+            @. ∂ᶜuₕ_err_∂ᶜuₕ += DiagonalMatrixRow(FT(-1) * ᶜα_acoustic)
+        else
+            @. ∂ᶜuₕ_err_∂ᶜuₕ = DiagonalMatrixRow(-(FT(1) + ᶜα_acoustic))
+        end
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
