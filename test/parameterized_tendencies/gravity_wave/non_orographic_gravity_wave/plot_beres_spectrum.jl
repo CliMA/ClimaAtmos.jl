@@ -21,35 +21,6 @@ import ClimaAtmos as CA
 const BeresSourceParams = CA.BeresSourceParams
 const wave_source = CA.wave_source
 
-# --- AD Gaussian wave_source for comparison ---
-
-function wave_source_ad(
-    c::NTuple{nc, FT},
-    u_source::FT,
-    Bw::FT,
-    Bn::FT,
-    cw::FT,
-    cn::FT,
-    c0::FT,
-    flag::FT,
-    gw_ncval::Val{nc},
-) where {nc, FT}
-    ntuple(
-        n ->
-            sign(c[n] - u_source) * (
-                Bw * exp(
-                    -log(FT(2)) *
-                    ((c[n] * flag + (c[n] - u_source) * (1 - flag) - c0) / cw)^2,
-                ) +
-                Bn * exp(
-                    -log(FT(2)) *
-                    ((c[n] * flag + (c[n] - u_source) * (1 - flag) - c0) / cn)^2,
-                )
-            ),
-        Val(nc),
-    )
-end
-
 # --- Setup ---
 
 FT = Float64
@@ -164,7 +135,7 @@ let
     u_heat = FT(0.0)
     B_beres = wave_source(c, u_heat, Q0, h, N_source, beres_default, Val(nc))
     Bw = FT(0.4); Bn = FT(0.0); cw = FT(35.0); cn = FT(2.0); c0 = FT(0.0); flag = FT(0.0)
-    B_ad = wave_source_ad(c, u_heat, Bw, Bn, cw, cn, c0, flag, Val(nc))
+    B_ad = wave_source(c, u_heat, Bw, Bn, cw, cn, c0, flag, Val(nc))
     lines!(ax, c_vec, collect(B_beres); label = "Beres (Q0=10 K/day, h=10km)", color = :blue)
     lines!(ax, c_vec, collect(B_ad); label = "AD Gaussian (Bw=0.4, cw=35)", color = :red, linestyle = :dash)
     axislegend(ax; position = :rt)
