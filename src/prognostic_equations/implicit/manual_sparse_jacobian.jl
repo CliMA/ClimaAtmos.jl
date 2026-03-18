@@ -1392,7 +1392,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         end
     end
 
-    # Microphysics Jacobian entries (extracted to keep this function small).
     update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
 
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.

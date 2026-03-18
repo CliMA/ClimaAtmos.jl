@@ -504,7 +504,7 @@ function get_jacobian(ode_algo, Y, atmos, parsed_args)
         parsed_args["auto_jacobian_padding_bands"],
         parsed_args["approximate_linear_solve_iters"],
         parsed_args["debug_jacobian"],
-        false,
+        ; for_sgs_u₃ = false,
     )
 end
 
@@ -512,7 +512,9 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
     auto_jacobian_padding_bands,
     approximate_linear_solve_iters, debug_jacobian; for_sgs_u₃ = false,
 )
-    ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
+    (ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
+        (isdefined(CTS, :DIRKAlgorithm) &&
+            ode_algo isa getproperty(CTS, :DIRKAlgorithm))) ||
         return nothing
     jacobian_algorithm = if use_dense_jacobian
         AutoDenseJacobian()
@@ -614,6 +616,42 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
         CTS.RosenbrockAlgorithm(CTS.tableau(ode_algo_name()))
     elseif ode_algo_name <: CTS.ERKAlgorithmName
         CTS.ExplicitAlgorithm(ode_algo_name())
+    elseif isdefined(CTS, :DIRKAlgorithmName) &&
+           isdefined(CTS, :DIRKAlgorithm) &&
+           ode_algo_name <:
+           getproperty(CTS, :DIRKAlgorithmName)
+        newtons_method = CTS.NewtonsMethod(;
+            max_iters = max_newton_iters_ode,
+            update_j = update_j_freq,
+            krylov_method = if use_krylov_method
+                CTS.KrylovMethod(;
+                    jacobian_free_jvp = CTS.ForwardDiffJVP(;
+                        step_adjustment = FT(
+                            jvp_step_adjustment,
+                        ),
+                    ),
+                    forcing_term = if use_dynamic_krylov_rtol
+                        α = FT(eisenstat_walker_forcing_alpha)
+                        CTS.EisenstatWalkerForcing(; α)
+                    else
+                        CTS.ConstantForcing(FT(krylov_rtol))
+                    end,
+                    kwargs = (; memory = krylov_memory),
+                    solve_kwargs = (; itmax = krylov_itmax),
+                )
+            else
+                nothing
+            end,
+            convergence_checker = if use_newton_rtol
+                norm_condition = CTS.MaximumRelativeError(
+                    FT(newton_rtol),
+                )
+                CTS.ConvergenceChecker(; norm_condition)
+            else
+                nothing
+            end,
+        )
+        CTS.DIRKAlgorithm(ode_algo_name(), newtons_method)
     else
         @assert ode_algo_name <: CTS.IMEXARKAlgorithmName
         newtons_method_subproblem = CTS.NewtonsMethod(;
@@ -862,7 +900,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                 jac_prototype = get_jacobian(ode_algo, Y, atmos,
                     use_dense_jacobian, use_auto_jacobian,
                     auto_jacobian_padding_bands,
-                    approximate_linear_solve_iters, debug_jacobian,
+                    approximate_linear_solve_iters, debug_jacobian
                 ),
                 Wfact = update_jacobian!,
             )
