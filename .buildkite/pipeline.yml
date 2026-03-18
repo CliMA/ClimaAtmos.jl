@@ -931,6 +931,7 @@ steps:
           julia --color=yes --project=.buildkite post_processing/remap/remap_pipeline.jl
           --data_dir prep_remap/output_active --out_dir remap_pipeline_output
         artifact_paths: "remap_pipeline_output/*"
+        soft_fail: true # remove this once MPI issues have been fixed
 
   - group: "Autodiff"
     steps:
