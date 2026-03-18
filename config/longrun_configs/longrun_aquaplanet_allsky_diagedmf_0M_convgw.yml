@@ -18,7 +18,7 @@ nogw_beres_source: true
 toml: [toml/longrun_aquaplanet_diagedmf.toml]
 output_default_diagnostics: true
 diagnostics:
-  - short_name: [utendnogw, vtendnogw, nogw_Q0, nogw_h_heat, nogw_beres_active]
+  - short_name: [utendnogw, vtendnogw, nogw_Q0, nogw_h_heat]
     period: 6hours
   - short_name: [ua, va, ta, wa]
     period: 6hours

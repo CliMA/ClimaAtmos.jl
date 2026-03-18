@@ -335,6 +335,21 @@ function reset_graceful_exit(output_dir)
 end
 
 function check_nans(integrator)
-    any(isnan, parent(integrator.u)) && error("Found NaN")
+    if any(isnan, parent(integrator.u))
+        # Identify which field(s) have NaN
+        Y = integrator.u
+        for pn in propertynames(Y)
+            sub = getproperty(Y, pn)
+            for fn in propertynames(sub)
+                field = getproperty(sub, fn)
+                if any(isnan, parent(field))
+                    n_nan = count(isnan, parent(field))
+                    n_tot = length(parent(field))
+                    @info "NaN found in Y.$pn.$fn: $n_nan / $n_tot elements"
+                end
+            end
+        end
+        error("Found NaN")
+    end
     return nothing
 end

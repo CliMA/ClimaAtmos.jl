@@ -54,6 +54,16 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             uforcing = zero(Y.c.ρ),
             vforcing = zero(Y.c.ρ),
             gw_ncval = Val(nc),
+            # Beres fields (always allocated, inactive for column/box)
+            ᶜQ_conv = similar(Y.c.ρ),
+            gw_Q0 = similar(Fields.level(Y.c.ρ, 1)),
+            gw_h_heat = similar(Fields.level(Y.c.ρ, 1)),
+            gw_u_heat = similar(Fields.level(Y.c.ρ, 1)),
+            gw_v_heat = similar(Fields.level(Y.c.ρ, 1)),
+            gw_N_source = similar(Fields.level(Y.c.ρ, 1)),
+            gw_beres_active = similar(Fields.level(Y.c.ρ, 1)),
+            gw_beres_source = nothing,
+            gw_reduce_result = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT, FT}),
         )
     elseif issphere(axes(Y.c))
 
@@ -102,7 +112,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             ),
         )
 
-        base_cache = (;
+        return (;
             gw_source_pressure = source_pressure,
             gw_damp_pressure = damp_pressure,
             gw_source_ampl = source_ampl,
@@ -129,25 +139,17 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             uforcing = zero(Y.c.ρ),
             vforcing = zero(Y.c.ρ),
             gw_ncval = Val(nc),
+            # Beres fields (always allocated; gw_beres_source is nothing or BeresSourceParams)
+            ᶜQ_conv = similar(Y.c.ρ),
+            gw_Q0 = similar(Fields.level(Y.c.ρ, 1)),
+            gw_h_heat = similar(Fields.level(Y.c.ρ, 1)),
+            gw_u_heat = similar(Fields.level(Y.c.ρ, 1)),
+            gw_v_heat = similar(Fields.level(Y.c.ρ, 1)),
+            gw_N_source = similar(Fields.level(Y.c.ρ, 1)),
+            gw_beres_active = similar(Fields.level(Y.c.ρ, 1)),
+            gw_beres_source = gw.beres_source,
+            gw_reduce_result = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT, FT}),
         )
-
-        if !isnothing(gw.beres_source)
-            sfc_field = Fields.level(Y.c.ρ, 1)
-            beres_cache = (;
-                ᶜQ_conv = similar(Y.c.ρ),           # convective heating profile
-                gw_Q0 = similar(sfc_field),           # column-max heating rate
-                gw_h_heat = similar(sfc_field),       # heating depth
-                gw_u_heat = similar(sfc_field),       # mean u-wind in heating region
-                gw_v_heat = similar(sfc_field),       # mean v-wind in heating region
-                gw_N_source = similar(sfc_field),     # buoyancy freq at source
-                gw_beres_active = similar(sfc_field), # 1.0 where Beres active, 0.0 otherwise
-                gw_beres_source = gw.beres_source,    # store params for access in tendency
-                gw_reduce_result = similar(sfc_field, Tuple{FT, FT, FT, FT, FT, FT}), # preallocated for column_reduce
-            )
-            return merge(base_cache, beres_cache)
-        else
-            return base_cache
-        end
     else
         error("Only sphere and columns are supported")
     end
@@ -271,8 +273,7 @@ function non_orographic_gravity_wave_compute_tendency!(
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
     # Compute Beres convective heating if enabled
-    if haskey(p.non_orographic_gravity_wave, :gw_beres_source) &&
-       !isnothing(p.non_orographic_gravity_wave.gw_beres_source)
+    if !isnothing(p.non_orographic_gravity_wave.gw_beres_source)
         compute_beres_convective_heating!(Y, p)
     end
 
@@ -384,7 +385,7 @@ function compute_beres_convective_heating!(Y, p)
         ᶜbuoyancy_frequency,
         ᶜρ,
     )
-    eps_weight = FT(1e-20)
+    eps_weight = eps(FT)
     reduce_init =
         (FT(Inf), FT(-Inf), FT(0), FT(0), FT(0), FT(0))
     Operators.column_reduce!(
@@ -416,14 +417,16 @@ function compute_beres_convective_heating!(Y, p)
     @. gw_h_heat = max(result_field.:2 - result_field.:1, FT(1000.0)) # min 1 km
     @. gw_h_heat = ifelse(isnan(gw_h_heat) | isinf(gw_h_heat), FT(1000.0), gw_h_heat)
     weight_sum = result_field.:6
-    @. gw_u_heat = ifelse(weight_sum > FT(1e-20), result_field.:3 / weight_sum, FT(0))
-    @. gw_v_heat = ifelse(weight_sum > FT(1e-20), result_field.:4 / weight_sum, FT(0))
+    @. gw_u_heat = ifelse(weight_sum > eps(FT), result_field.:3 / weight_sum, FT(0))
+    @. gw_v_heat = ifelse(weight_sum > eps(FT), result_field.:4 / weight_sum, FT(0))
     @. gw_N_source =
-        ifelse(weight_sum > FT(1e-20), result_field.:5 / weight_sum, FT(0.01))
+        ifelse(weight_sum > eps(FT), result_field.:5 / weight_sum, FT(0.01))
 
-    # Set beres_active flag: Q0 above threshold (NaN gives inactive)
+    # Set beres_active flag: Q0 above threshold AND in tropical band (gw_flag == 0)
+    (; gw_flag) = p.non_orographic_gravity_wave
     Q0_threshold = gw_beres_source.Q0_threshold
-    @. gw_beres_active = ifelse(gw_Q0 > Q0_threshold, FT(1), FT(0))
+    @. gw_beres_active =
+        ifelse(gw_Q0 > Q0_threshold && gw_flag < FT(0.5), FT(1), FT(0))
 end
 
 non_orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
@@ -487,22 +490,14 @@ function non_orographic_gravity_wave_forcing(
         gw_flag,
         gw_c0,
         gw_nk,
+        gw_beres_active,
+        gw_Q0,
+        gw_h_heat,
+        gw_u_heat,
+        gw_v_heat,
+        gw_N_source,
+        gw_beres_source,
     ) = p.non_orographic_gravity_wave
-
-    # Beres fields (if enabled)
-    has_beres = haskey(p.non_orographic_gravity_wave, :gw_beres_source) &&
-                !isnothing(p.non_orographic_gravity_wave.gw_beres_source)
-    if has_beres
-        (;
-            gw_beres_active,
-            gw_Q0,
-            gw_h_heat,
-            gw_u_heat,
-            gw_v_heat,
-            gw_N_source,
-            gw_beres_source,
-        ) = p.non_orographic_gravity_wave
-    end
 
     # Temporary scratch fields for shifting levels up
     ᶜρ_p1 = p.scratch.ᶜtemp_scalar
@@ -562,104 +557,57 @@ function non_orographic_gravity_wave_forcing(
     level_end = Spaces.nlevels(axes(ᶜρ))
 
     # Collect all required fields in a broadcasted object
-    # When Beres is enabled, add beres fields; otherwise use zero placeholders
-    if has_beres
-        input_u = @. lazy(
-            tuple(
-                ᶜu_p1,
-                ᶜu_source,
-                ᶜbf_p1,
-                ᶜρ,
-                ᶜρ_p1,
-                ᶜρ_source,
-                ᶜz_p1,
-                ᶜz,
-                source_level,
-                gw_Bw,
-                gw_Bn,
-                gw_cw,
-                gw_cn,
-                gw_flag,
-                ᶜlevel,
-                gw_source_ampl,
-                gw_beres_active,
-                gw_Q0,
-                gw_h_heat,
-                gw_u_heat,
-                gw_N_source,
-            ),
-        )
-        input_v = @. lazy(
-            tuple(
-                ᶜv_p1,
-                ᶜv_source,
-                ᶜbf_p1,
-                ᶜρ,
-                ᶜρ_p1,
-                ᶜρ_source,
-                ᶜz_p1,
-                ᶜz,
-                source_level,
-                gw_Bw,
-                gw_Bn,
-                gw_cw,
-                gw_cn,
-                gw_flag,
-                ᶜlevel,
-                gw_source_ampl,
-                gw_beres_active,
-                gw_Q0,
-                gw_h_heat,
-                gw_v_heat,
-                gw_N_source,
-            ),
-        )
-    else
-        input_u = @. lazy(
-            tuple(
-                ᶜu_p1,
-                ᶜu_source,
-                ᶜbf_p1,
-                ᶜρ,
-                ᶜρ_p1,
-                ᶜρ_source,
-                ᶜz_p1,
-                ᶜz,
-                source_level,
-                gw_Bw,
-                gw_Bn,
-                gw_cw,
-                gw_cn,
-                gw_flag,
-                ᶜlevel,
-                gw_source_ampl,
-            ),
-        )
-        input_v = @. lazy(
-            tuple(
-                ᶜv_p1,
-                ᶜv_source,
-                ᶜbf_p1,
-                ᶜρ,
-                ᶜρ_p1,
-                ᶜρ_source,
-                ᶜz_p1,
-                ᶜz,
-                source_level,
-                gw_Bw,
-                gw_Bn,
-                gw_cw,
-                gw_cn,
-                gw_flag,
-                ᶜlevel,
-                gw_source_ampl,
-            ),
-        )
-    end
-
-    # Beres source params for column_accumulate (nothing if not enabled)
-    beres_params_for_accumulate =
-        has_beres ? gw_beres_source : nothing
+    # Beres fields are always included (zero when disabled; kernel dispatches on gw_beres_source type)
+    input_u = @. lazy(
+        tuple(
+            ᶜu_p1,
+            ᶜu_source,
+            ᶜbf_p1,
+            ᶜρ,
+            ᶜρ_p1,
+            ᶜρ_source,
+            ᶜz_p1,
+            ᶜz,
+            source_level,
+            gw_Bw,
+            gw_Bn,
+            gw_cw,
+            gw_cn,
+            gw_flag,
+            ᶜlevel,
+            gw_source_ampl,
+            gw_beres_active,
+            gw_Q0,
+            gw_h_heat,
+            gw_u_heat,
+            gw_N_source,
+        ),
+    )
+    input_v = @. lazy(
+        tuple(
+            ᶜv_p1,
+            ᶜv_source,
+            ᶜbf_p1,
+            ᶜρ,
+            ᶜρ_p1,
+            ᶜρ_source,
+            ᶜz_p1,
+            ᶜz,
+            source_level,
+            gw_Bw,
+            gw_Bn,
+            gw_cw,
+            gw_cn,
+            gw_flag,
+            ᶜlevel,
+            gw_source_ampl,
+            gw_beres_active,
+            gw_Q0,
+            gw_h_heat,
+            gw_v_heat,
+            gw_N_source,
+        ),
+    )
 
     # loop over all wave lengths
     for ink in 1:gw_nk
@@ -674,7 +622,7 @@ function non_orographic_gravity_wave_forcing(
             ink,
             level_end,
             gw_ncval,
-            beres_params_for_accumulate,
+            gw_beres_source,
         )
 
         # Accumulate meridional wave forcing in every column
@@ -688,7 +636,7 @@ function non_orographic_gravity_wave_forcing(
             ink,
             level_end,
             gw_ncval,
-            beres_params_for_accumulate,
+            gw_beres_source,
         )
 
         #extract the momentum flux outside the model top.
@@ -750,6 +698,50 @@ function non_orographic_gravity_wave_forcing(
     return nothing
 end
 
+# Compile-time dispatch for source spectrum selection.
+# When beres_source::Nothing, the Beres branch is eliminated at compile time.
+compute_source_spectrum(
+    ::Nothing,
+    _,
+    c,
+    u_source,
+    _,
+    _,
+    _,
+    _,
+    Bw,
+    Bn,
+    cw,
+    cn,
+    c0,
+    flag,
+    gw_ncval,
+) = wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
+
+function compute_source_spectrum(
+    beres::BeresSourceParams,
+    beres_active_val,
+    c,
+    u_source,
+    u_heat_val,
+    Q0_val,
+    h_val,
+    N_val,
+    Bw,
+    Bn,
+    cw,
+    cn,
+    c0,
+    flag,
+    gw_ncval,
+)
+    if beres_active_val > typeof(beres_active_val)(0.5)
+        wave_source(c, u_heat_val, Q0_val, h_val, N_val, beres, gw_ncval)
+    else
+        wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
+    end
+end
+
 # Using column_accumulate function, calculate the gravity wave forcing at each point.
 function waveforcing_column_accumulate!(
     waveforcing,
@@ -770,24 +762,30 @@ function waveforcing_column_accumulate!(
         input;
         init = (FT(0.0), mask, FT(NaN), ntuple(i -> FT(NaN), Val(nc))),
         transform = first,
-    ) do (wave_forcing, mask, Bsum_or_NaN, B0_or_NaNs), input_data
-        # Destructure the common fields (first 16 elements)
-        u_kp1 = input_data[1]
-        u_source = input_data[2]
-        bf_kp1 = input_data[3]
-        ρ_k = input_data[4]
-        ρ_kp1 = input_data[5]
-        ρ_source = input_data[6]
-        z_kp1 = input_data[7]
-        z_k = input_data[8]
-        source_level = input_data[9]
-        Bw = input_data[10]
-        Bn = input_data[11]
-        cw = input_data[12]
-        cn = input_data[13]
-        flag = input_data[14]
-        level = input_data[15]
-        source_ampl = input_data[16]
+    ) do (wave_forcing, mask, Bsum_or_NaN, B0_or_NaNs),
+    (
+        u_kp1,
+        u_source,
+        bf_kp1,
+        ρ_k,
+        ρ_kp1,
+        ρ_source,
+        z_kp1,
+        z_k,
+        source_level,
+        Bw,
+        Bn,
+        cw,
+        cn,
+        flag,
+        level,
+        source_ampl,
+        beres_active_val,
+        Q0_val,
+        h_val,
+        u_heat_val,
+        N_val,
+    )
 
         FT1 = typeof(u_kp1)
         kwv = 2.0 * π / ((30.0 * (10.0^ink)) * 1.e3) # wave number of gravity waves
@@ -801,32 +799,23 @@ function waveforcing_column_accumulate!(
         # calculate momentum flux carried by gravity waves with different phase speeds.
         B0, Bsum = if level == 1
             mask = StaticBitVector{nc}(_ -> true)
-            # Check if Beres is active for this column
-            B1 = if !isnothing(beres_source) && length(input_data) >= 21
-                beres_active_val = input_data[17]
-                if beres_active_val > FT1(0.5)
-                    Q0_val = input_data[18]
-                    h_val = input_data[19]
-                    u_heat_val = input_data[20]
-                    N_val = input_data[21]
-                    wave_source(
-                        c,
-                        u_heat_val,
-                        Q0_val,
-                        h_val,
-                        N_val,
-                        beres_source,
-                        gw_ncval,
-                    )
-                else
-                    # AD fallback for this column
-                    wave_source(
-                        c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval,
-                    )
-                end
-            else
-                wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
-            end
+            B1 = compute_source_spectrum(
+                beres_source,
+                beres_active_val,
+                c,
+                u_source,
+                u_heat_val,
+                Q0_val,
+                h_val,
+                N_val,
+                Bw,
+                Bn,
+                cw,
+                cn,
+                c0,
+                flag,
+                gw_ncval,
+            )
             Bsum1 = sum(abs, B1)
             B1, Bsum1
         else
