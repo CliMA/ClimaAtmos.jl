@@ -182,14 +182,25 @@ function precomputed_quantities(Y, atmos)
         dq_lcl_dt::FT, dn_lcl_dt::FT, dq_rai_dt::FT, dn_rai_dt::FT,
         dq_ice_dt::FT, dq_rim_dt::FT, db_rim_dt::FT,
     }
-    ∂MP1_NT = @NamedTuple{∂tendency_∂q_lcl::FT, ∂tendency_∂q_icl::FT}
-    ∂MP23_NT = @NamedTuple{∂tendency_∂q_lcl::FT, ∂tendency_∂n_lcl::FT}
+    ∂MP1_NT = @NamedTuple{
+        ∂tendency_∂q_lcl::FT,
+        ∂tendency_∂q_icl::FT,
+        ∂tendency_∂q_rai::FT,
+        ∂tendency_∂q_sno::FT,
+    }
+    ∂MP23_NT = @NamedTuple{
+        ∂tendency_∂q_lcl::FT,
+        ∂tendency_∂n_lcl::FT,
+        ∂tendency_∂q_rai::FT,
+        ∂tendency_∂n_rai::FT,
+    }
 
     if atmos.microphysics_model isa EquilibriumMicrophysics0M
         precipitation_quantities = (;
             ᶜmp_tendency = similar(Y.c, MP0_NT),
             ᶜρ_dq_tot_dt = similar(Y.c, FT), # Used in implicit tendency and surface fluxes
             ᶜρ_de_tot_dt = similar(Y.c, FT),
+            ᶜ∂tendency_∂q_tot = similar(Y.c, FT),
         )
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         precipitation_quantities = (;
@@ -211,7 +222,6 @@ function precomputed_quantities(Y, atmos)
             ᶜwₙₗ = similar(Y.c, FT),
             ᶜwₙᵣ = similar(Y.c, FT),
             ᶜmp_tendency = similar(Y.c, MP23_NT),
-            ᶜmp_derivative = similar(Y.c, ∂MP23_NT),
         )
         # Add additional quantities for 2M + P3
         if atmos.microphysics_model isa NonEquilibriumMicrophysics2MP3
@@ -235,6 +245,7 @@ function precomputed_quantities(Y, atmos)
     if atmos.microphysics_model isa EquilibriumMicrophysics0M
         precipitation_sgs_quantities = (;
             ᶜmp_tendencyʲs = similar(Y.c, NTuple{n, MP0_NT}),
+            ᶜ∂tendency_∂q_totʲs = similar(Y.c, NTuple{n, FT}),
         )
         if atmos.turbconv_model isa PrognosticEDMFX
             precipitation_sgs_quantities = (;
@@ -246,10 +257,6 @@ function precomputed_quantities(Y, atmos)
         precipitation_sgs_quantities = (;
             ᶜmp_tendencyʲs = similar(Y.c, NTuple{n, MP1_NT}),
             ᶜmp_derivativeʲs = similar(Y.c, NTuple{n, ∂MP1_NT}),
-            # BMT cloud derivatives ∂(dq_lcl/dt)/∂q_lcl and ∂(dq_icl/dt)/∂q_icl
-            # evaluated at each updraft state (same pattern as grid-mean ᶜmp_derivative).
-            # Precipitation (q_rai, q_sno) Jacobian is computed inline in
-            # update_microphysics_jacobian! using S/q with the current iterate.
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
@@ -274,7 +281,7 @@ function precomputed_quantities(Y, atmos)
         if atmos.turbconv_model isa PrognosticEDMFX
             precipitation_sgs_quantities = (;
                 precipitation_sgs_quantities...,
-                ᶜmp_tendency⁰ = similar(Y.c, MP3_NT),
+                ᶜmp_tendency⁰ = similar(Y.c, MP23_NT),
             )
         end
     else

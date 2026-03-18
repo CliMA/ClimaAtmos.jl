@@ -1,4 +1,4 @@
-325
+326
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+326
+- Update implicit timestepping for microphysics tendencies, with diagonal Jacobian entries.
+
 325
 - Update CI to 1.12
 
