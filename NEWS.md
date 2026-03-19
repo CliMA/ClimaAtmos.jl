@@ -4,6 +4,8 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- [#4361](https://github.com/CliMA/ClimaAtmos.jl/pull/4361) Refactor reproducibility infrastructure to use rms deviations in prognostic variables and only fail when rms deviation exceeds tolerance.
+
 v0.36.1
 -------
 

@@ -55,8 +55,7 @@ msg *= "   - A new reproducibility test was added\n"
 msg *= "   - Grid resolution has changed\n\n"
 msg *= "For more information, please find\n"
 msg *= "`reproducibility_tests/README.md` and read the section\n\n"
-msg *= "  `How to merge pull requests (PR) that get approved\n"
-msg *= "   but *break* reproducibility tests`\n\n"
+msg *= "  `How to merge PRs that break reproducibility tests`\n\n"
 msg *= "for how to merge this PR."
 
 @info msg
