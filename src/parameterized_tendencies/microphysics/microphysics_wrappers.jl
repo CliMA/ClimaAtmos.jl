@@ -161,7 +161,7 @@ Evaluate 1-moment microphysics tendencies at a quadrature point.
 
 This functor computes bulk microphysics tendencies at a perturbed thermodynamic
 state `(T_hat, q_tot_hat)` for use in SGS quadrature integration. The condensate
-at each quadrature point is diagnosed using a perturbation-based model.
+at each quadrature point is assumed to equal its mean value.
 
 # Arguments
 - `T_hat`: Temperature at quadrature point [K]
@@ -173,28 +173,6 @@ at each quadrature point is diagnosed using a perturbation-based model.
 - `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
-
-# Condensate Diagnosis
-
-At each quadrature point, condensate is diagnosed as:
-
-    q_cond_hat = max(0, excess_hat + bias)
-
-where `excess_hat = q_tot_hat - q_sat(T_hat, ρ)` is the local saturation excess,
-and `bias` corrects for any non-equilibrium offset at the grid mean:
-
-    bias = q_cond_mean - max(0, excess_mean)
-
-The bias represents prognostic condensate that cannot be explained by saturation
-alone (e.g., condensate persisting in a subsaturating environment). When the grid
-mean is in equilibrium (`q_cond_mean ≈ max(0, excess_mean)`), the bias vanishes
-and condensate at each quadrature point reduces to `max(0, excess_hat)`.
-
-When the grid mean is subsaturated (`excess_mean < 0`) with no condensate
-(`q_cond_mean = 0`), the bias is zero, so condensate forms only where the
-quadrature point is actually supersaturated.
-
-Condensate is partitioned into liquid and ice using `λ(T_hat)`.
 """
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
@@ -203,80 +181,30 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     ρ::FT
     # Grid-mean state
     T_mean::FT
-    q_lcl_mean::FT
-    q_icl_mean::FT
+    q_lcl::FT
+    q_icl::FT
     q_rai::FT
     q_sno::FT
-    # Precomputed grid-mean values (avoid redundant computation in quadrature loop)
-    q_cond_mean::FT
-    q_sat_mean::FT      # Saturation at grid mean
-    excess_mean::FT     # Saturation excess at grid mean (q_tot_mean - q_sat_mean)
     args::Args
 end
 
 @inline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
     FT = typeof(eval.ρ)
 
-    # Compute saturation excess perturbation relative to grid mean
-    # At grid mean: q_cond_mean = q_lcl_mean + q_icl_mean (given)
-    # At quadrature point: q_cond_hat = q_cond_mean + Δq_cond
-    # where Δq_cond is the perturbation in saturation excess
-
-    # Compute saturation at quadrature point only (grid mean is precomputed)
-    q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
-
-    # Saturation excess at the quadrature point
-    excess_hat = q_tot_hat - q_sat_hat
-
-    # Non-equilibrium bias: difference between prognostic condensate and
-    # equilibrium condensate (clamped to saturated regime only).
-    # - Subsaturated mean (excess_mean < 0, q_cond_mean = 0): bias = 0
-    # - Saturated equilibrium (q_cond_mean ≈ excess_mean): bias ≈ 0
-    # - Non-equilibrium (q_cond_mean ≠ excess_mean): bias preserves offset
-    bias = eval.q_cond_mean - max(FT(0), eval.excess_mean)
-    q_cond_hat = max(FT(0), excess_hat + bias)
-
-    # Partition using grid-mean liquid fraction
-    λ = TD.liquid_fraction(eval.tps, T_hat, eval.q_lcl_mean, eval.q_icl_mean)
-
-    # Scale condensate to preserve the partitioning ratio from grid mean
-    # If q_cond_mean > 0, scale proportionally; otherwise use λ partitioning
-    # Use eps-guarded division to prevent overflow when q_cond_mean is tiny
-    has_grid_mean_condensate = eval.q_cond_mean > FT(0)
-    scale = ifelse(
-        has_grid_mean_condensate,
-        q_cond_hat / max(eval.q_cond_mean, q_min(FT)),
-        FT(1),
-    )
-
-    q_lcl_hat = ifelse(
-        has_grid_mean_condensate,
-        eval.q_lcl_mean * scale,
-        λ * q_cond_hat,
-    )
-    q_icl_hat = ifelse(
-        has_grid_mean_condensate,
-        eval.q_icl_mean * scale,
-        (FT(1) - λ) * q_cond_hat,
-    )
-
     # Ensure non-negative and clamp to physical bounds
-    q_lcl_hat = max(FT(0), q_lcl_hat)
-    q_icl_hat = max(FT(0), q_icl_hat)
     q_tot_hat = max(FT(0), q_tot_hat)
 
     # Call CloudMicrophysics point-wise tendencies
-    # TODO - how does that connect with prognostc equations for lcl and icl
     return BMT.bulk_microphysics_tendencies(
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno, eval.args...,
+        eval.q_lcl, eval.q_icl, eval.q_rai, eval.q_sno, eval.args...,
     )
 end
 
 """
     microphysics_tendencies_quadrature_1m(
-        scheme, SG_quad, mp, tps, ρ, p_c, T_mean, q_tot_mean,
-        q_lcl_mean, q_icl_mean, q_rai, q_sno, T′T′, q′q′, corr_Tq, args...
+        scheme, SG_quad, mp, tps, ρ, T_mean, q_tot_mean,
+        q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, args...
     )
 
 Compute subgrid-scale (SGS) averaged microphysics tendencies by integrating
@@ -296,11 +224,10 @@ improving representation of phase changes.
 - `mp`: Microphysics parameters (scheme-specific)
 - `tps`: Thermodynamics parameters
 - `ρ`: Air density [kg/m³]
-- `p_c`: Pressure [Pa]
 - `T_mean`: Mean temperature [K]
 - `q_tot_mean`: Mean total water [kg/kg]
-- `q_lcl_mean`: Mean cloud liquid [kg/kg]
-- `q_icl_mean`: Mean cloud ice [kg/kg]
+- `q_lcl`: Cloud liquid [kg/kg] (not perturbed)
+- `q_icl`: Cloud ice [kg/kg] (not perturbed)
 - `q_rai`: Rain [kg/kg] (not perturbed)
 - `q_sno`: Snow [kg/kg] (not perturbed)
 - `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
@@ -315,17 +242,7 @@ NamedTuple with averaged source terms:
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
 
-# Condensate Model
-
-At each quadrature point (T_hat, q_tot_hat):
-1. Compute saturation q_sat_hat = q_vap_saturation(T_hat, ρ)
-2. Diagnose condensate: q_cond = max(0, q_tot_hat - q_sat_hat)
-3. Partition using liquid fraction: q_lcl_hat = λ × q_cond, q_icl_hat = (1-λ) × q_cond
-
-This captures threshold behavior at cloud edges where saturation excess transitions.
-
 # Note on Variances
-
 Call sites must convert θ-based variances to T-based variances using the chain rule:
 ```julia
 ∂T_∂θ = ... # (∂T/∂θ_liq_ice) computed at grid mean state
@@ -334,12 +251,12 @@ T′T′ = (∂T_∂θ)² × θ′θ′
 The T-q correlation coefficient is obtained from `correlation_Tq(params)`.
 """
 @inline function microphysics_tendencies_quadrature_1m(
-    scheme, SG_quad, mp, tps, ρ, p_c, T_mean, q_tot_mean,
-    q_lcl_mean, q_icl_mean, q_rai, q_sno, T′T′, q′q′, corr_Tq, args...,
+    scheme, SG_quad, mp, tps, ρ, T_mean, q_tot_mean,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, args...,
 )
     # Clamp species humidities to prevent negativity in quadratures
-    q_lcl_safe = max(0, q_lcl_mean)
-    q_icl_safe = max(0, q_icl_mean)
+    q_lcl_safe = max(0, q_lcl)
+    q_icl_safe = max(0, q_icl)
     q_rai_safe = max(0, q_rai)
     q_sno_safe = max(0, q_sno)
 
@@ -353,15 +270,10 @@ The T-q correlation coefficient is obtained from `correlation_Tq(params)`.
         )
     end
 
-    # Pre-compute grid-mean condensate and saturation for perturbation model
-    q_cond_mean = q_lcl_safe + q_icl_safe
-    q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
-    excess_mean = q_tot_mean - q_sat_mean
-
     # Create functor (no closure, GPU-safe)
     evaluator = Microphysics1MEvaluator(
         scheme, mp, tps, ρ, T_mean, q_lcl_safe, q_icl_safe,
-        q_rai_safe, q_sno_safe, q_cond_mean, q_sat_mean, excess_mean, args,
+        q_rai_safe, q_sno_safe, args,
     )
 
     # Integrate over quadrature points using functor (GPU-safe, no closure)

@@ -245,7 +245,6 @@ import ClimaAtmos: limit_sink
                         BMT.Microphysics1Moment(),
                         mp, thp, ρ, T_mean,
                         FT(0), FT(0), FT(0), FT(0),
-                        FT(0), q_sat_mean, excess_sub,
                         (),
                     )
 
@@ -253,13 +252,9 @@ import ClimaAtmos: limit_sink
                     q_tot_hat = q_sat_mean + FT(0.001)
                     result = eval_sub(T_mean, q_tot_hat)
 
-                    # Expected: q_cond_hat = max(0, 0.001) = 0.001
-                    λ = TD.liquid_fraction(thp, T_mean, FT(0), FT(0))
-                    q_cond_expected = FT(0.001)
                     res_expected = BMT.bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
-                        q_tot_hat, λ * q_cond_expected,
-                        (1 - λ) * q_cond_expected, FT(0), FT(0),
+                        q_tot_hat, FT(0), FT(0), FT(0), FT(0),
                     )
                     @test result.dq_lcl_dt ≈ res_expected.dq_lcl_dt rtol = FT(1e-4)
                     @test result.dq_icl_dt ≈ res_expected.dq_icl_dt rtol = FT(1e-4)
@@ -275,7 +270,6 @@ import ClimaAtmos: limit_sink
                         BMT.Microphysics1Moment(),
                         mp, thp, ρ, T_mean,
                         λ * excess_sat, (1 - λ) * excess_sat, FT(0), FT(0),
-                        excess_sat, q_sat_mean, excess_sat,
                         (),
                     )
 
