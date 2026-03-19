@@ -504,13 +504,15 @@ function get_jacobian(ode_algo, Y, atmos, parsed_args)
         parsed_args["auto_jacobian_padding_bands"],
         parsed_args["approximate_linear_solve_iters"],
         parsed_args["debug_jacobian"],
+        parsed_args["n_helmholtz_iters"],
         ; for_sgs_u₃ = false,
     )
 end
 
 function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
     auto_jacobian_padding_bands,
-    approximate_linear_solve_iters, debug_jacobian; for_sgs_u₃ = false,
+    approximate_linear_solve_iters, debug_jacobian, n_helmholtz_iters;
+    for_sgs_u₃ = false,
 )
     (ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         (isdefined(CTS, :DIRKAlgorithm) &&
@@ -529,6 +531,7 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
             DerivativeFlag(atmos.sgs_vertdiff_mode),
             DerivativeFlag(atmos.fully_implicit),
             approximate_linear_solve_iters,
+            n_helmholtz_iters,
         )
         use_auto_jacobian ?
         AutoSparseJacobian(
@@ -880,6 +883,7 @@ function args_integrator(args, Y, p, tspan, ode_algo, callback, dt_integrator)
         args["debug_jacobian"],
         args["prescribed_flow"],
         args["fully_implicit"],
+        args["n_helmholtz_iters"],
         dt_integrator,
     )
 end
@@ -887,7 +891,7 @@ end
 function args_integrator(Y, p, tspan, ode_algo, callback,
     use_dense_jacobian, use_auto_jacobian, auto_jacobian_padding_bands,
     approximate_linear_solve_iters, debug_jacobian, prescribed_flow,
-    fully_implicit,
+    fully_implicit, n_helmholtz_iters,
     dt_integrator,
 )
     (; atmos) = p
@@ -901,7 +905,8 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                 jac_prototype = get_jacobian(ode_algo, Y, atmos,
                     use_dense_jacobian, use_auto_jacobian,
                     auto_jacobian_padding_bands,
-                    approximate_linear_solve_iters, debug_jacobian
+                    approximate_linear_solve_iters, debug_jacobian,
+                    n_helmholtz_iters,
                 ),
                 Wfact = update_jacobian!,
             )
@@ -918,6 +923,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                         use_dense_jacobian, use_auto_jacobian,
                         auto_jacobian_padding_bands,
                         approximate_linear_solve_iters, debug_jacobian,
+                        n_helmholtz_iters;
                         for_sgs_u₃ = true,
                     ),
                     Wfact = update_jacobian_sgs_u₃!,
@@ -928,6 +934,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                     use_dense_jacobian, use_auto_jacobian,
                     auto_jacobian_padding_bands,
                     approximate_linear_solve_iters, debug_jacobian,
+                    n_helmholtz_iters,
                 ),
                 Wfact = update_jacobian!,
             )

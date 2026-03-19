@@ -55,6 +55,9 @@ solver. Certain groups of derivatives can be toggled on or off by setting their
   implicit solves where horizontal acoustic/gravity wave stiffness dominates
 - `approximate_solve_iters::Int`: number of iterations to take for the
   approximate linear solve required when the `diffusion_flag` is `UseDerivative`
+- `n_helmholtz_iters::Int`: number of Jacobi-preconditioned Richardson
+  iterations for the horizontal Helmholtz solve in the preconditioner (only
+  used when `acoustic_diagonal_flag` is `UseDerivative`). 0 = diagonal only.
 """
 struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7, F8} <: SparseJacobian
     topography_flag::F1
@@ -66,6 +69,7 @@ struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7, F8} <: SparseJacobian
     sgs_vertdiff_flag::F7
     acoustic_diagonal_flag::F8
     approximate_solve_iters::Int
+    n_helmholtz_iters::Int
 end
 
 """
@@ -468,7 +472,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             ᶜscalar_field(),        # ᶜρ
             ᶜscalar_field(),        # ᶜe_tot
             nothing,                # ghost_buffer_c (set in update_jacobian!)
-            3,                      # n_helmholtz_iters
+            alg.n_helmholtz_iters,  # from config
         )
         helmholtz_scratch = (;
             ᶜhelmholtz_ρ = ᶜscalar_field(),
@@ -1740,9 +1744,10 @@ function invert_jacobian!(alg::ManualSparseJacobian, cache, ΔY, R)
     # Step 1: Column-local solve
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
 
-    # Step 2: Horizontal Helmholtz correction (if enabled)
+    # Step 2: Horizontal Helmholtz correction (if enabled and n_iters > 0)
     if use_derivative(alg.acoustic_diagonal_flag) &&
-       !isnothing(cache.helmholtz_state)
+       !isnothing(cache.helmholtz_state) &&
+       cache.helmholtz_state.n_helmholtz_iters > 0
         helmholtz_correction!(cache, ΔY)
     end
 end
