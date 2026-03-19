@@ -13,6 +13,11 @@ import Logging
 
 import ClimaUtilities.TimeManager: ITime
 
+# Override Krylov.ktypeof for FieldVector to return typeof(x) instead of the
+# ClimaCore KrylovExt's array_type-based mapping. This ensures the Krylov
+# workspace S type matches the runtime ktypeof(b) check.
+Krylov.ktypeof(x::ClimaCore.Fields.FieldVector) = typeof(x)
+
 import ClimaDiagnostics
 
 """
@@ -590,6 +595,7 @@ function ode_configuration(::Type{FT}, args) where {FT}
         args["jvp_step_adjustment"],
         args["krylov_memory"],
         args["krylov_itmax"],
+        args["n_helmholtz_iters"],
     )
 end
 
@@ -598,7 +604,7 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
     max_newton_iters_ode, max_newton_iters_ode_subproblem, use_krylov_method,
     use_dynamic_krylov_rtol, eisenstat_walker_forcing_alpha, krylov_rtol,
     use_newton_rtol, newton_rtol, jvp_step_adjustment,
-    krylov_memory, krylov_itmax,
+    krylov_memory, krylov_itmax, n_helmholtz_iters = 0,
 ) where {FT}
     ode_algo_name = getproperty(CTS, Symbol(ode_name))
     update_j_freq = if update_jacobian_every == "dt"

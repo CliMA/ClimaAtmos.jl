@@ -1,7 +1,7 @@
 dt_save_state_to_disk: "Inf"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
-z_elem: 90
+z_elem: 32
 dt: "6secs"
 t_end: "1000secs"
 z_stretch: false

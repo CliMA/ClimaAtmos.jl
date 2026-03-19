@@ -84,7 +84,8 @@ mutable struct HelmholtzPreconditionerState{FT, F, GB}
     ᶜα_acoustic::F       # diagonal: 1 + dtγ²·cs²·2π²/Δx²
     ᶜcs²::F              # sound speed squared: γ_d·ᶜp/ᶜρ
     ᶜρ::F                # density
-    ᶜe_tot::F            # specific total energy (for ρe_tot correction)
+    ᶜe_tot::F            # specific total energy (for tracer correction)
+    ᶜh_tot::F            # total specific enthalpy: (ρe_tot + p)/ρ (for energy Helmholtz)
     ghost_buffer_c::GB   # DSS buffer for center vector fields (uₕ)
     n_helmholtz_iters::Int
     call_counter::Int     # tracks invert_jacobian! calls since last Jacobian update
@@ -472,6 +473,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             ᶜscalar_field(),        # ᶜcs²
             ᶜscalar_field(),        # ᶜρ
             ᶜscalar_field(),        # ᶜe_tot
+            ᶜscalar_field(),        # ᶜh_tot
             nothing,                # ghost_buffer_c (set in update_jacobian!)
             alg.n_helmholtz_iters,  # from config
             0,                      # call_counter
@@ -480,6 +482,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             ᶜhelmholtz_ρ = ᶜscalar_field(),
             ᶜhelmholtz_rhs = ᶜscalar_field(),
             ᶜhelmholtz_laplacian = ᶜscalar_field(),
+            ᶜhelmholtz_ρe = ᶜscalar_field(),
             ᶜhelmholtz_dss_buffer = Spaces.create_dss_buffer(
                 ᶜscalar_field(),
             ),
@@ -929,6 +932,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         @. cache.helmholtz_state.ᶜcs² = γ_d * ᶜp / ᶜρ
         @. cache.helmholtz_state.ᶜρ = ᶜρ
         @. cache.helmholtz_state.ᶜe_tot = Y.c.ρe_tot / ᶜρ
+        @. cache.helmholtz_state.ᶜh_tot = (Y.c.ρe_tot + ᶜp) / ᶜρ
         if do_dss(axes(Y.c))
             cache.helmholtz_state.ghost_buffer_c = p.ghost_buffer.c
         end
@@ -1769,50 +1773,73 @@ end
 """
     helmholtz_correction!(cache, ΔY)
 
-Apply multiplicative horizontal Helmholtz correction after the column-local
-solve. This solves the horizontal acoustic Schur complement:
-    (I - dtγ²·cs²·∇²h)·Δρ = z.ρ - dtγ·wdivₕ(ρ·z.uₕ)
-via Jacobi-preconditioned Richardson iteration, then back-substitutes to
-correct uₕ and ρe_tot.
+Apply block Gauss-Seidel horizontal Helmholtz correction after the column-local
+solve. Sequentially updates (ρ, uₕ, ρe_tot, tracers):
+
+1. ρ-block:     Solve (I - dtγ²·cs²·∇²h)·Δρ = z.ρ - dtγ·wdivₕ(ρ·z.uₕ)
+2. uₕ-block:    Δuₕ = z.uₕ - dtγ·(cs²/ρ)·gradₕ(Δρ)  [uses updated Δρ]
+3. ρe_tot-block: Solve (I - dtγ²·cs²·∇²h)·Δ(ρe_tot) = z.ρe_tot - dtγ·wdivₕ(h_tot·ρ·z.uₕ)
+                 where h_tot = (ρe_tot + p)/ρ  [uses updated Δuₕ]
+4. tracer-block: Δ(ρq) += q·(Δρ_new - z.ρ_old)  [advective, no Helmholtz]
 """
 function helmholtz_correction!(cache, ΔY)
     (; helmholtz_state, helmholtz_scratch) = cache
-    (; dtγ, ᶜα_acoustic, ᶜcs², ᶜρ, ᶜe_tot, n_helmholtz_iters) = helmholtz_state
-    (; ᶜhelmholtz_ρ, ᶜhelmholtz_rhs, ᶜhelmholtz_laplacian, ᶜhelmholtz_dss_buffer) =
-        helmholtz_scratch
+    (; dtγ, ᶜα_acoustic, ᶜcs², ᶜρ, ᶜe_tot, ᶜh_tot, n_helmholtz_iters) =
+        helmholtz_state
+    (; ᶜhelmholtz_ρ, ᶜhelmholtz_rhs, ᶜhelmholtz_laplacian,
+       ᶜhelmholtz_ρe, ᶜhelmholtz_dss_buffer) = helmholtz_scratch
 
     FT = eltype(dtγ)
-    α = FT(dtγ)^2  # cs² factor already stored in ᶜcs²
+    α = FT(dtγ)^2
 
-    # Step 2a: Form Helmholtz RHS = z.ρ - dtγ·wdivₕ(ρ·z.uₕ)
+    # ── Block 1: ρ-Helmholtz ──
+    # RHS = z.ρ - dtγ·wdivₕ(ρ·z.uₕ)
     @. ᶜhelmholtz_rhs = wdivₕ(ᶜρ * ΔY.c.uₕ)
     Spaces.weighted_dss!(ᶜhelmholtz_rhs => ᶜhelmholtz_dss_buffer)
     @. ᶜhelmholtz_rhs = ΔY.c.ρ - FT(dtγ) * ᶜhelmholtz_rhs
 
-    # Step 2b: Solve (I - α·cs²·∇²h)Δρ = rhs
-    # D = 1 + ᶜα_acoustic is the diagonal of the Helmholtz operator.
-    # n_helmholtz_iters controls the method:
-    #   0: skip (handled by caller)
-    #  >0: Jacobi-preconditioned Richardson with DSS each iterate
-    @. ᶜhelmholtz_ρ = ᶜhelmholtz_rhs  # initial guess
+    @. ᶜhelmholtz_ρ = ᶜhelmholtz_rhs
     for _ in 1:n_helmholtz_iters
         @. ᶜhelmholtz_laplacian = wdivₕ(gradₕ(ᶜhelmholtz_ρ))
-        Spaces.weighted_dss!(ᶜhelmholtz_laplacian => ᶜhelmholtz_dss_buffer)
+        Spaces.weighted_dss!(
+            ᶜhelmholtz_laplacian => ᶜhelmholtz_dss_buffer,
+        )
         @. ᶜhelmholtz_ρ +=
-            (ᶜhelmholtz_rhs - ᶜhelmholtz_ρ + α * ᶜcs² * ᶜhelmholtz_laplacian) /
+            (ᶜhelmholtz_rhs - ᶜhelmholtz_ρ +
+             α * ᶜcs² * ᶜhelmholtz_laplacian) /
             (FT(1) + ᶜα_acoustic)
     end
 
-    # Step 2c: Save old z.ρ (still in ΔY.c.ρ) before overwriting
+    # Save old z.ρ before overwriting (reuse ᶜhelmholtz_laplacian as scratch)
     @. ᶜhelmholtz_laplacian = ΔY.c.ρ
     ΔY.c.ρ .= ᶜhelmholtz_ρ
 
-    # Step 2d: Back-substitute uₕ correction
+    # ── Block 2: uₕ back-substitution (uses updated Δρ) ──
     @. ΔY.c.uₕ -= C12(
         FT(dtγ) * (ᶜcs² / max(ᶜρ, FT(1e-6))) * gradₕ(ᶜhelmholtz_ρ),
     )
 
-    # Step 2e: Correct ρe_tot (isentropic approximation)
-    # Δρe_tot += e_tot · (Δρ_new - z.ρ_old)
-    @. ΔY.c.ρe_tot += ᶜe_tot * (ᶜhelmholtz_ρ - ᶜhelmholtz_laplacian)
+    # ── Block 3: ρe_tot-Helmholtz (uses updated Δuₕ) ──
+    # Energy Schur complement: (I - dtγ²·cs²·∇²h)·Δ(ρe_tot) = z.ρe_tot - dtγ·wdivₕ(h_tot·ρ·z.uₕ)
+    @. ᶜhelmholtz_rhs = wdivₕ(ᶜh_tot * ᶜρ * ΔY.c.uₕ)
+    Spaces.weighted_dss!(ᶜhelmholtz_rhs => ᶜhelmholtz_dss_buffer)
+    @. ᶜhelmholtz_rhs = ΔY.c.ρe_tot - FT(dtγ) * ᶜhelmholtz_rhs
+
+    @. ᶜhelmholtz_ρe = ᶜhelmholtz_rhs
+    for _ in 1:n_helmholtz_iters
+        @. ᶜhelmholtz_laplacian = wdivₕ(gradₕ(ᶜhelmholtz_ρe))
+        Spaces.weighted_dss!(
+            ᶜhelmholtz_laplacian => ᶜhelmholtz_dss_buffer,
+        )
+        @. ᶜhelmholtz_ρe +=
+            (ᶜhelmholtz_rhs - ᶜhelmholtz_ρe +
+             α * ᶜcs² * ᶜhelmholtz_laplacian) /
+            (FT(1) + ᶜα_acoustic)
+    end
+    ΔY.c.ρe_tot .= ᶜhelmholtz_ρe
+
+    # ── Block 4: Tracer correction (advective, no Helmholtz) ──
+    # Δ(ρq) += q · (Δρ_new - z.ρ_old)
+    # ᶜhelmholtz_laplacian holds old z.ρ from Block 1
+    # Currently no-op for DryModel; extend for moist tracers when needed.
 end
