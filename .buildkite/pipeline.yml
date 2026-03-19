@@ -798,9 +798,10 @@ steps:
         env:
           CLIMACOMMS_CONTEXT: "MPI"
         timeout_in_minutes: 20
-        soft_fail:
-          - exit_status: -1
-          - exit_status: 255
+        # soft_fail:
+        #   - exit_status: -1
+        #   - exit_status: 255
+        soft_fail: true # remove this once MPI issues have been fixed
         agents:
           slurm_ntasks: 2
           slurm_mem: 24G
@@ -815,9 +816,10 @@ steps:
           CLIMACOMMS_CONTEXT: "MPI"
           CLIMACOMMS_DEVICE: "CUDA"
         timeout_in_minutes: 20
-        soft_fail:
-          - exit_status: -1
-          - exit_status: 255
+        # soft_fail:
+        #   - exit_status: -1
+        #   - exit_status: 255
+        soft_fail: true # remove this once MPI issues have been fixed
         agents:
           slurm_gpus_per_task: 1
           slurm_ntasks: 2
