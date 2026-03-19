@@ -840,7 +840,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     dt,
                     microphys_1m_params,
                     thermo_params,
-                    p.atmos.microphysics_tendency_timestepping,
                 )
             end
 
