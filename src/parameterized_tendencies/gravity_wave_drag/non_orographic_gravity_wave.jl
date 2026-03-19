@@ -55,7 +55,6 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             vforcing = zero(Y.c.ρ),
             gw_ncval = Val(nc),
             # Beres fields (always allocated, inactive for column/box)
-            ᶜQ_conv = similar(Y.c.ρ),
             gw_Q0 = similar(Fields.level(Y.c.ρ, 1)),
             gw_h_heat = similar(Fields.level(Y.c.ρ, 1)),
             gw_u_heat = similar(Fields.level(Y.c.ρ, 1)),
@@ -140,7 +139,6 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             vforcing = zero(Y.c.ρ),
             gw_ncval = Val(nc),
             # Beres fields (always allocated; gw_beres_source is nothing or BeresSourceParams)
-            ᶜQ_conv = similar(Y.c.ρ),
             gw_Q0 = similar(Fields.level(Y.c.ρ, 1)),
             gw_h_heat = similar(Fields.level(Y.c.ρ, 1)),
             gw_u_heat = similar(Fields.level(Y.c.ρ, 1)),
@@ -319,10 +317,9 @@ function compute_beres_convective_heating!(Y, p)
         return
     end
 
-    (; ᶜT) = p.precomputed
-    (; ᶜTʲs, ᶠu³ʲs) = p.precomputed
+    (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs, ᶜh_tot) = p.precomputed
+    (; ᶠu³) = p.precomputed
     (;
-        ᶜQ_conv,
         gw_Q0,
         gw_h_heat,
         gw_u_heat,
@@ -338,32 +335,56 @@ function compute_beres_convective_heating!(Y, p)
     ᶜρ = Y.c.ρ
     ᶜz = Fields.coordinate_field(Y.c).z
 
-    # Compute convective heating proxy: sum over updrafts of (Tʲ - T_env) * ρa_j * w_j / (ρ * cp_d)
+    # Compute convective heating via mass-flux divergence (Yanai Q₁):
+    #   Q₁ = -1/(ρ·cp) · ∂/∂z [Σⱼ ρʲ·(u³ʲ-u³)·aʲ·(mseʲ + Kʲ - h_tot)]
+    # Following the same pattern as edmfx_sgs_flux.jl:54-88.
+    ᶜQ_conv = p.scratch.ᶜtemp_scalar_2
     ᶜQ_conv .= FT(0)
     cp_d = FT(CAP.cp_d(p.params))
 
-    # For DiagnosticEDMFX, ρa is in p.precomputed.ᶜρaʲs
-    # For PrognosticEDMFX, ρa is in Y.c.sgsʲs.:($j).ρa
+    # Scratch fields for face velocity anomaly and cell-center scalar
+    ᶠu³_diff = p.scratch.ᶠtemp_CT3
+    ᶜa_scalar = p.scratch.ᶜtemp_scalar
+
+    # For DiagnosticEDMFX, ρa and mse are in p.precomputed
+    # For PrognosticEDMFX, ρa and mse are in Y.c.sgsʲs.:($j)
     has_prognostic_sgs =
         hasproperty(Y.c, :sgsʲs) && n_updrafts > 0
     if !has_prognostic_sgs && haskey(p.precomputed, :ᶜρaʲs)
         ᶜρaʲs_all = p.precomputed.ᶜρaʲs
+        ᶜmseʲs_all = p.precomputed.ᶜmseʲs
     end
 
     for j in 1:n_updrafts
-        ᶜTʲ = ᶜTʲs.:($j)
+        # Velocity anomaly at faces (contravariant)
+        @. ᶠu³_diff = ᶠu³ʲs.:($j) - ᶠu³
+
+        # Enthalpy anomaly × area fraction (same as edmfx_sgs_flux.jl:65-67)
+        ᶜmseʲ = if has_prognostic_sgs
+            Y.c.sgsʲs.:($j).mse
+        else
+            ᶜmseʲs_all.:($j)
+        end
         ᶜρaʲ = if has_prognostic_sgs
             Y.c.sgsʲs.:($j).ρa
         else
             ᶜρaʲs_all.:($j)
         end
-        ᶠu³ʲ = ᶠu³ʲs.:($j)
-        # Interpolate face vertical velocity to cell centers and extract w
-        ᶜinterp = Operators.InterpolateF2C()
-        ᶜwʲ = p.scratch.ᶜtemp_scalar
-        @. ᶜwʲ = Geometry.WVector(ᶜinterp(Geometry.WVector(ᶠu³ʲ))).components.data.:1
-        # Heating proxy: (Tʲ - T) * ρaʲ * wʲ / (ρ * cp)
-        @. ᶜQ_conv += (ᶜTʲ - ᶜT) * ᶜρaʲ * ᶜwʲ / (ᶜρ * cp_d)
+        @. ᶜa_scalar =
+            (ᶜmseʲ + ᶜKʲs.:($j) - ᶜh_tot) *
+            (ᶜρaʲ / ᶜρʲs.:($j))
+
+        # Divergence: -∂(ρʲ·u³_diff·a_scalar)/∂z on cell centers
+        # Val(:none) = centered differencing (dt unused)
+        vtt = vertical_transport(
+            ᶜρʲs.:($j),
+            ᶠu³_diff,
+            ᶜa_scalar,
+            FT(1),
+            Val(:none),
+        )
+        # Convert from W/m³ to heating rate K/s
+        @. ᶜQ_conv += vtt / (ᶜρ * cp_d)
     end
 
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
