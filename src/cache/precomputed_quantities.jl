@@ -623,39 +623,12 @@ current state `Y`. This is only called before each evaluation of
 `implicit_tendency!` and `remaining_tendency!`.
 """
 NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
-    (; turbconv_model, cloud_model, microphysics_model) = p.atmos
+    (; turbconv_model) = p.atmos
 
-    thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
 
     if !isnothing(p.sfc_setup)
         SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
-    end
-
-    if turbconv_model isa AbstractEDMF
-        (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
-        @. p.precomputed.ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
-        @. p.precomputed.ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
-            ᶠinterp(
-                TD.liquid_ice_pottemp(
-                    thermo_params,
-                    ᶜT,
-                    Y.c.ρ,
-                    ᶜq_tot_safe,
-                    ᶜq_liq_rai,
-                    ᶜq_ice_sno,
-                ),
-            ),
-        )
-    end
-
-    # The buoyancy gradient depends on the cloud fraction, and the cloud fraction
-    # depends on the mixing length, which depends on the buoyancy gradient.
-    # We break this circular dependency by using cloud fraction from the previous time step in the
-    # buoyancy gradient calculation. This breaks reproducible restart in general,
-    # but we support reproducible restart by recalculating the cloud fraction with GridScaleCloud here.
-    if p.atmos.numerics.reproducible_restart isa ReproducibleRestart
-        set_cloud_fraction!(Y, p, microphysics_model, GridScaleCloud())
     end
 
     if turbconv_model isa PrognosticEDMFX
@@ -672,10 +645,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         # TODO do I need env precipitation/cloud formation here?
     end
 
-    # Cache SGS covariances (no-op for dry/0M/GridScaleCloud configs).
-    # For EDMF: gradients are precomputed in the closures above.
-    # For non-EDMF: gradients are computed inside set_covariance_cache!.
-    set_covariance_cache!(Y, p, thermo_params)
+    set_covariance_cache_and_cloud_fraction!(Y, p)
 
     # Cache precipitation terminal velocities for grid mean and prognostic EDMF updrafts.
     set_precipitation_velocities!(
@@ -698,8 +668,6 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # Compute surface precipitation fluxes (has to be after microphysics_sources_cache
     # because for the 0 moment microphysics it's an integral of the q_tot sink).
     set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
-
-    set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
 
     set_smagorinsky_lilly_precomputed_quantities!(Y, p, p.atmos.smagorinsky_lilly)
 

@@ -2,6 +2,152 @@ import NVTX
 import StaticArrays as SA
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 
+"""
+    set_covariance_cache_and_cloud_fraction!(Y, p)
+
+Update the covariance cache and cloud fraction in a way that is consistent with
+the coupling between cloud fraction, buoyancy gradient, and mixing length.
+
+The buoyancy gradient depends on the cloud fraction, while the cloud fraction
+depends on the covariance cache, whose mixing length depends on the buoyancy
+gradient. This circular dependency is resolved by performing two Picard
+iterations on cloud fraction and then applying a guarded Aitken Δ²
+acceleration,
+
+    cₐ = c₀ - (c₁ - c₀)^2 / (c₂ - 2c₁ + c₀),
+
+where `c₀` is the initial cloud fraction, `c₁ = f(c₀)`, and `c₂ = f(c₁)`.
+
+The accelerated update is only applied when the first two Picard increments
+change sign, since in that case the Aitken value lies between the previously
+computed iterates. Otherwise, the second Picard iterate is retained.
+
+For reproducible restart, the initial cloud fraction is first recomputed using
+`GridScaleCloud()` so that the starting iterate is deterministic.
+
+Note: Vertical gradients (`ᶜgradᵥ_q_tot`, `ᶜgradᵥ_θ_liq_ice`) are always computed
+from grid-mean variables. Ideally PrognosticEDMFX would use environmental
+gradients since the covariances represent sub-grid fluctuations within the
+environment, but this is a current approximation.
+"""
+function set_covariance_cache_and_cloud_fraction!(Y, p)
+    (; cloud_model, microphysics_model) = p.atmos
+    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) = p.precomputed
+    (; ᶜlinear_buoygrad, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜlg = Fields.local_geometry_field(Y.c)
+
+    # Precompute gradients
+    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
+    @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
+        ᶠinterp(
+            TD.liquid_ice_pottemp(
+                thermo_params,
+                ᶜT,
+                Y.c.ρ,
+                ᶜq_tot_safe,
+                ᶜq_liq_rai,
+                ᶜq_ice_sno,
+            ),
+        ),
+    )
+
+    # The buoyancy gradient depends on cloud fraction, and cloud fraction depends
+    # on the covariance cache through the mixing length. For reproducible restart,
+    # first reconstruct the initial cloud fraction deterministically.
+    if p.atmos.numerics.reproducible_restart isa ReproducibleRestart
+        set_cloud_fraction!(Y, p, microphysics_model, GridScaleCloud())
+    end
+
+    # One Picard step: use the current cloud fraction to update buoyancy
+    # gradient and covariance cache, then recompute cloud fraction.
+    function picard_step!()
+        @. ᶜlinear_buoygrad = buoyancy_gradients(
+            BuoyGradMean(), # TODO: modify for NonEq + 1M tracers if needed
+            thermo_params,
+            ᶜT,
+            Y.c.ρ,
+            ᶜq_tot_safe,
+            ᶜq_liq_rai,
+            ᶜq_ice_sno,
+            ᶜcloud_fraction,
+            C3,
+            ᶜgradᵥ_q_tot,
+            ᶜgradᵥ_θ_liq_ice,
+            ᶜlg,
+        )
+
+        # Cache SGS covariances (no-op for dry/0M/GridScaleCloud configs).
+        # For EDMF: gradients are precomputed above.
+        # For non-EDMF: gradients are computed inside set_covariance_cache!.
+        set_covariance_cache!(Y, p, thermo_params)
+        set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
+        return nothing
+    end
+
+    # Scratch storage for Picard/Aitken iterates:
+    #   c0 = initial cloud fraction
+    #   c1 = first Picard iterate
+    #   c2 = second Picard iterate
+    # ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_5, ᶜtemp_scalar_6 might
+    # change inside the functions that are called in picard_step!() and should not be used
+    # here to store variables before calling picard_step!
+    c0 = p.scratch.ᶜtemp_scalar_4
+    c1 = p.scratch.ᶜtemp_scalar_7
+    c2 = p.scratch.ᶜtemp_scalar
+
+    # Picard iterates: c1 = f(c0), c2 = f(c1)
+    @. c0 = ᶜcloud_fraction
+    picard_step!()
+    @. c1 = ᶜcloud_fraction
+    picard_step!()
+    @. c2 = ᶜcloud_fraction
+
+    # Apply aitken Δ² acceleration for better convergence
+    @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, c2)
+
+    # Recompute buoyancy gradient and covariance cache with the final cloud fraction.
+    @. ᶜlinear_buoygrad = buoyancy_gradients(
+        BuoyGradMean(), # TODO: modify for NonEq + 1M tracers if needed
+        thermo_params,
+        ᶜT,
+        Y.c.ρ,
+        ᶜq_tot_safe,
+        ᶜq_liq_rai,
+        ᶜq_ice_sno,
+        ᶜcloud_fraction,
+        C3,
+        ᶜgradᵥ_q_tot,
+        ᶜgradᵥ_θ_liq_ice,
+        ᶜlg,
+    )
+    set_covariance_cache!(Y, p, thermo_params)
+
+    return nothing
+end
+
+"""
+Guarded Aitken Δ² acceleration:
+  c_acc = c0 - (c1 - c0)^2 / (c2 - 2c1 + c0)
+
+Apply Aitken only when the Picard increments change sign, i.e. when the
+Picard iterates oscillate around the fixed point. In that case, the
+accelerated value is expected to remain between previously computed iterates.
+Otherwise, retain the second Picard iterate.
+"""
+@inline function _aitken_picard_helper(c0, c1, c2)
+    FT = typeof(c0)
+    Δ1 = c1 - c0
+    Δ2 = c2 - c1
+    denom = c2 - 2c1 + c0
+    tol = eps(FT)
+    return ifelse(
+        (Δ1 * Δ2 < zero(FT)) & (abs(denom) > tol),
+        c0 - Δ1^2 / denom,
+        c2,
+    )
+end
+
 # ============================================================================
 # Utility Functions
 # ============================================================================
@@ -41,23 +187,12 @@ end
     set_covariance_cache!(Y, p, thermo_params)
 
 Materializes T-based SGS covariances into cached fields for use by downstream
-computations (SGS quadrature, cloud fraction).
-
-Called once per stage in `set_explicit_precomputed_quantities!`.
-Populates `p.precomputed.(ᶜT′T′, ᶜq′q′)`.
-
-Note: Vertical gradients (ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) are always computed
-from grid-mean variables. For EDMF configurations, these gradients are computed
-in `set_explicit_precomputed_quantities!` before this function is called. For
-non-EDMF, they are computed here. Ideally PrognosticEDMFX would use environmental
-gradients since the covariances represent sub-grid fluctuations within the
-environment, but this is a current approximation.
+computations (SGS quadrature, cloud fraction). Populates `p.precomputed.(ᶜT′T′, ᶜq′q′)`.
 
 Pipeline:
-1. Compute vertical gradients (non-EDMF only; EDMF gradients are precomputed)
-2. Compute mixing length via `compute_gm_mixing_length` or `ᶜmixing_length`
-3. Materialize θ-based covariances from gradients
-4. Transform θ→T using `compute_∂T_∂θ!`
+1. Compute mixing length via `compute_gm_mixing_length` or `ᶜmixing_length`
+2. Materialize θ-based covariances from gradients
+3. Transform θ→T using `compute_∂T_∂θ!`
 """
 function set_covariance_cache!(Y, p, thermo_params)
     # Covariance fields are only allocated when microphysics needs the
@@ -75,31 +210,6 @@ function set_covariance_cache!(Y, p, thermo_params)
     coeff = CAP.diagnostic_covariance_coeff(p.params)
     turbconv_model = p.atmos.turbconv_model
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
-
-    # Compute gradients for non-EDMF cases (EDMF gradients are precomputed)
-    if isnothing(turbconv_model)
-        needs_gradients =
-            !isnothing(p.atmos.sgs_quadrature) ||
-            p.atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
-        if needs_gradients
-            (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
-            # TODO: replace by 3d gradients
-            @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
-            @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
-                ᶠinterp(
-                    TD.liquid_ice_pottemp(
-                        thermo_params,
-                        ᶜT,
-                        Y.c.ρ,
-                        ᶜq_tot_safe,
-                        ᶜq_liq_rai,
-                        ᶜq_ice_sno,
-                    ),
-                ),
-            )
-        end
-    end
-    # For EDMF: gradients are precomputed in set_explicit_precomputed_quantities!
 
     # NOTE: gradients must be precomputed when using compute_gm_mixing_length
     # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
