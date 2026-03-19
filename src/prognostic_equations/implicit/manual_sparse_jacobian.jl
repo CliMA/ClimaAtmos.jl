@@ -468,7 +468,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             ᶜscalar_field(),        # ᶜρ
             ᶜscalar_field(),        # ᶜe_tot
             nothing,                # ghost_buffer_c (set in update_jacobian!)
-            10,                     # n_helmholtz_iters
+            3,                      # n_helmholtz_iters
         )
         helmholtz_scratch = (;
             ᶜhelmholtz_ρ = ᶜscalar_field(),
@@ -1772,14 +1772,16 @@ function helmholtz_correction!(cache, ΔY)
 
     # Step 2b: Jacobi-preconditioned Richardson iteration
     # Solve (I - α·cs²·∇²h)Δρ = rhs, where D = 1 + ᶜα_acoustic
+    # DSS only the final iterate — this is a preconditioner approximation,
+    # so element-local Laplacians in intermediate steps are acceptable.
     @. ᶜhelmholtz_ρ = ᶜhelmholtz_rhs  # initial guess
     for _ in 1:n_helmholtz_iters
         @. ᶜhelmholtz_laplacian = wdivₕ(gradₕ(ᶜhelmholtz_ρ))
-        Spaces.weighted_dss!(ᶜhelmholtz_laplacian => ᶜhelmholtz_dss_buffer)
         @. ᶜhelmholtz_ρ +=
             (ᶜhelmholtz_rhs - ᶜhelmholtz_ρ + α * ᶜcs² * ᶜhelmholtz_laplacian) /
             (FT(1) + ᶜα_acoustic)
     end
+    Spaces.weighted_dss!(ᶜhelmholtz_ρ => ᶜhelmholtz_dss_buffer)
 
     # Step 2c: Save old z.ρ (still in ΔY.c.ρ) before overwriting
     @. ᶜhelmholtz_laplacian = ΔY.c.ρ
