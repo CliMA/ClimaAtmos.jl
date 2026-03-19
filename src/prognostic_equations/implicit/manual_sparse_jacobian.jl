@@ -1772,25 +1772,25 @@ function helmholtz_correction!(cache, ΔY)
 
     # Step 2b: Jacobi-preconditioned Richardson iteration
     # Solve (I - α·cs²·∇²h)Δρ = rhs, where D = 1 + ᶜα_acoustic
-    # DSS only the final iterate — this is a preconditioner approximation,
-    # so element-local Laplacians in intermediate steps are acceptable.
+    # DSS each iterate to maintain C0 continuity for the Laplacian stencil.
     @. ᶜhelmholtz_ρ = ᶜhelmholtz_rhs  # initial guess
     for _ in 1:n_helmholtz_iters
         @. ᶜhelmholtz_laplacian = wdivₕ(gradₕ(ᶜhelmholtz_ρ))
+        Spaces.weighted_dss!(ᶜhelmholtz_laplacian => ᶜhelmholtz_dss_buffer)
         @. ᶜhelmholtz_ρ +=
             (ᶜhelmholtz_rhs - ᶜhelmholtz_ρ + α * ᶜcs² * ᶜhelmholtz_laplacian) /
             (FT(1) + ᶜα_acoustic)
     end
-    Spaces.weighted_dss!(ᶜhelmholtz_ρ => ᶜhelmholtz_dss_buffer)
 
     # Step 2c: Save old z.ρ (still in ΔY.c.ρ) before overwriting
     @. ᶜhelmholtz_laplacian = ΔY.c.ρ
     ΔY.c.ρ .= ᶜhelmholtz_ρ
 
     # Step 2d: Back-substitute uₕ correction
-    # Note: no DSS on ΔY.c.uₕ here — this is a preconditioner approximation;
-    # GMRES applies the full operator (including DSS) in the next iteration.
-    @. ΔY.c.uₕ -= C12(FT(dtγ) * (ᶜcs² / ᶜρ) * gradₕ(ᶜhelmholtz_ρ))
+    # Guard: clamp ρ away from zero to avoid overflow in cs²/ρ
+    @. ΔY.c.uₕ -= C12(
+        FT(dtγ) * (ᶜcs² / max(ᶜρ, FT(1e-6))) * gradₕ(ᶜhelmholtz_ρ),
+    )
 
     # Step 2e: Correct ρe_tot (isentropic approximation)
     # Δρe_tot += e_tot · (Δρ_new - z.ρ_old)
