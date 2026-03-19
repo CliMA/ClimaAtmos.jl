@@ -530,7 +530,7 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
             DerivativeFlag(atmos.sgs_mf_mode),
             DerivativeFlag(atmos.sgs_nh_pressure_mode),
             DerivativeFlag(atmos.sgs_vertdiff_mode),
-            DerivativeFlag(atmos.fully_implicit),
+            DerivativeFlag(atmos.fully_implicit && n_helmholtz_iters > 0),
             approximate_linear_solve_iters,
             n_helmholtz_iters,
         )
