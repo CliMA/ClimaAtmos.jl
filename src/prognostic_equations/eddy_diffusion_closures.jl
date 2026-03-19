@@ -360,7 +360,7 @@ function mixing_length_lopez_gomez_2020(
     #  ⇒  a_pd · l_TKE² − c_neg = 0
     # yielding
     #     l_TKE = √c_neg / a_pd.
-    l_TKE = ifelse(a_pd > eps_FT, sqrt(c_neg / max(a_pd, eps_FT)), FT(1e6))
+    l_TKE = ifelse(tke_pos > eps_FT, sqrt(c_neg / max(a_pd, eps_FT)), FT(0))
 
     # --- l_N: Static-stability length scale (buoyancy limit), constrained by l_z ---
     N_eff_sq = max(ᶜN²_eff, FT(0)) # Use N^2 only if stable (N^2 > 0)
@@ -380,7 +380,8 @@ function mixing_length_lopez_gomez_2020(
     # Vector of *physical* scales (wall, TKE, stability)
     # These scales (l_W, l_TKE, l_N) are already ensured to be non-negative.
     # l_N is already limited by l_z. l_W and l_TKE are not necessarily.
-    l_physical_scales = SA.SVector(l_W, l_TKE, l_N)
+    l_physical_scales =
+        (tke_pos > eps_FT && a_pd <= 0) ? SA.SVector(l_W, l_N) : SA.SVector(l_W, l_TKE, l_N)
 
     l_smin =
         blend_scales(scale_blending_method, l_physical_scales, turbconv_params)
