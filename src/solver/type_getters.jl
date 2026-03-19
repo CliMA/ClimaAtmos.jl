@@ -8,6 +8,7 @@ import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
 import ClimaCore: Fields, Grids
 import ClimaTimeSteppers as CTS
+import Krylov
 import Logging
 
 import ClimaUtilities.TimeManager: ITime
@@ -624,11 +625,15 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
            isdefined(CTS, :DIRKAlgorithm) &&
            ode_algo_name <:
            getproperty(CTS, :DIRKAlgorithmName)
+        # Use FGMRES when Helmholtz correction is enabled (variable preconditioner)
+        krylov_workspace_type = n_helmholtz_iters > 0 ?
+            Val(Krylov.FgmresWorkspace) : Val(Krylov.GmresWorkspace)
         newtons_method = CTS.NewtonsMethod(;
             max_iters = max_newton_iters_ode,
             update_j = update_j_freq,
             krylov_method = if use_krylov_method
                 CTS.KrylovMethod(;
+                    type = krylov_workspace_type,
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;
                         step_adjustment = FT(
                             jvp_step_adjustment,
@@ -662,11 +667,15 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
             max_iters = max_newton_iters_ode_subproblem,
             update_j = update_j_freq,
         )
+        # Use FGMRES when Helmholtz correction is enabled (variable preconditioner)
+        krylov_workspace_type = n_helmholtz_iters > 0 ?
+            Val(Krylov.FgmresWorkspace) : Val(Krylov.GmresWorkspace)
         newtons_method = CTS.NewtonsMethod(;
             max_iters = max_newton_iters_ode,
             update_j = update_j_freq,
             krylov_method = if use_krylov_method
                 CTS.KrylovMethod(;
+                    type = krylov_workspace_type,
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;
                         step_adjustment = FT(
                             jvp_step_adjustment,

@@ -87,6 +87,7 @@ mutable struct HelmholtzPreconditionerState{FT, F, GB}
     ᶜe_tot::F            # specific total energy (for ρe_tot correction)
     ghost_buffer_c::GB   # DSS buffer for center vector fields (uₕ)
     n_helmholtz_iters::Int
+    call_counter::Int     # tracks invert_jacobian! calls since last Jacobian update
 end
 
 function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
@@ -473,6 +474,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             ᶜscalar_field(),        # ᶜe_tot
             nothing,                # ghost_buffer_c (set in update_jacobian!)
             alg.n_helmholtz_iters,  # from config
+            0,                      # call_counter
         )
         helmholtz_scratch = (;
             ᶜhelmholtz_ρ = ᶜscalar_field(),
@@ -921,6 +923,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         end
 
         # Store state for Helmholtz solve in invert_jacobian!
+        cache.helmholtz_state.call_counter = 0
         cache.helmholtz_state.dtγ = dtγ
         @. cache.helmholtz_state.ᶜα_acoustic = ᶜα_acoustic
         @. cache.helmholtz_state.ᶜcs² = γ_d * ᶜp / ᶜρ
@@ -1744,11 +1747,22 @@ function invert_jacobian!(alg::ManualSparseJacobian, cache, ΔY, R)
     # Step 1: Column-local solve
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
 
-    # Step 2: Horizontal Helmholtz correction (if enabled and n_iters > 0)
+    # Step 2: Horizontal Helmholtz correction (variable preconditioner)
+    # Applied every n_helmholtz_iters-th GMRES call to amortize cost.
+    # Requires FGMRES (flexible GMRES) which handles variable preconditioning.
+    # n_helmholtz_iters controls the application frequency:
+    #   0: disabled (diagonal only)
+    #   1: every GMRES iteration (expensive but most accurate)
+    #   N: every N-th iteration (amortized cost)
     if use_derivative(alg.acoustic_diagonal_flag) &&
        !isnothing(cache.helmholtz_state) &&
        cache.helmholtz_state.n_helmholtz_iters > 0
-        helmholtz_correction!(cache, ΔY)
+        hs = cache.helmholtz_state
+        hs.call_counter += 1
+        if hs.call_counter >= hs.n_helmholtz_iters
+            helmholtz_correction!(cache, ΔY)
+            hs.call_counter = 0
+        end
     end
 end
 
@@ -1775,9 +1789,11 @@ function helmholtz_correction!(cache, ΔY)
     Spaces.weighted_dss!(ᶜhelmholtz_rhs => ᶜhelmholtz_dss_buffer)
     @. ᶜhelmholtz_rhs = ΔY.c.ρ - FT(dtγ) * ᶜhelmholtz_rhs
 
-    # Step 2b: Jacobi-preconditioned Richardson iteration
-    # Solve (I - α·cs²·∇²h)Δρ = rhs, where D = 1 + ᶜα_acoustic
-    # DSS each iterate to maintain C0 continuity for the Laplacian stencil.
+    # Step 2b: Solve (I - α·cs²·∇²h)Δρ = rhs
+    # D = 1 + ᶜα_acoustic is the diagonal of the Helmholtz operator.
+    # n_helmholtz_iters controls the method:
+    #   0: skip (handled by caller)
+    #  >0: Jacobi-preconditioned Richardson with DSS each iterate
     @. ᶜhelmholtz_ρ = ᶜhelmholtz_rhs  # initial guess
     for _ in 1:n_helmholtz_iters
         @. ᶜhelmholtz_laplacian = wdivₕ(gradₕ(ᶜhelmholtz_ρ))
@@ -1792,7 +1808,6 @@ function helmholtz_correction!(cache, ΔY)
     ΔY.c.ρ .= ᶜhelmholtz_ρ
 
     # Step 2d: Back-substitute uₕ correction
-    # Guard: clamp ρ away from zero to avoid overflow in cs²/ρ
     @. ΔY.c.uₕ -= C12(
         FT(dtγ) * (ᶜcs² / max(ᶜρ, FT(1e-6))) * gradₕ(ᶜhelmholtz_ρ),
     )
