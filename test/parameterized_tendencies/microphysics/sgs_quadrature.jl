@@ -573,7 +573,7 @@ using ClimaAtmos
                 # Create evaluator
                 evaluator = Microphysics1MEvaluator(
                     BMT.Microphysics1Moment(),
-                    mp, thp, ρ, T_mean, q_tot_mean,
+                    mp, thp, ρ, T_mean,
                     q_liq_mean, q_ice_mean, q_rai, q_sno,
                     q_cond_mean, q_sat_mean, excess_mean,
                     (),  # Empty args tuple for 1-moment
@@ -602,7 +602,7 @@ using ClimaAtmos
 
     @testset "GridMeanSGS Quadrature = Direct BMT" begin
         # Verify that the GridMeanSGS quadrature path produces the same result
-        # as a direct BMT call. 
+        # as a direct BMT call.
         import Thermodynamics as TD
         import ClimaParams as CP
         import CloudMicrophysics.Parameters as CMP

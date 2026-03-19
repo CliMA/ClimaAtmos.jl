@@ -604,16 +604,23 @@ function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature{N}) where 
 
     inv_sqrt_pi = one(FT) / sqrt(FT(π))
 
-    # Use ntuple for compile-time unrolling (type-stable)
-    outer_sum = ntuple(Val(N)) do i
-        inner_sum = ntuple(Val(N)) do j
+    # Use loops instead of ntuple for register reuse across iterations
+    # Each loop iteration can release registers from the previous iteration,
+    # dramatically reducing peak register usage (from holding all N² evaluations to just a few)
+    outer_sum = rzero(f(get_x_hat(χ[1], χ[1])...))
+
+    @inbounds for i in 1:N
+        inner_sum = rzero(f(get_x_hat(χ[1], χ[1])...))
+        @inbounds for j in 1:N
             x_hat = get_x_hat(χ[i], χ[j])
-            f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi)
+            contribution = f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi)
+            inner_sum = inner_sum ⊞ contribution
         end
-        unrolled_reduce(⊞, inner_sum) ⊠ (weights[i] * inv_sqrt_pi)
+        weighted_inner = inner_sum ⊠ (weights[i] * inv_sqrt_pi)
+        outer_sum = outer_sum ⊞ weighted_inner
     end
 
-    return unrolled_reduce(⊞, outer_sum)
+    return outer_sum
 end
 
 """
