@@ -68,6 +68,23 @@ struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7, F8} <: SparseJacobian
     approximate_solve_iters::Int
 end
 
+"""
+    HelmholtzPreconditionerState
+
+Stores state needed by `helmholtz_correction!` during `invert_jacobian!`.
+These quantities are captured from `update_jacobian!` so that the Helmholtz
+solve in the preconditioner has access to the current Jacobian parameters.
+"""
+mutable struct HelmholtzPreconditionerState{FT, F, GB}
+    dtγ::FT
+    ᶜα_acoustic::F       # diagonal: 1 + dtγ²·cs²·2π²/Δx²
+    ᶜcs²::F              # sound speed squared: γ_d·ᶜp/ᶜρ
+    ᶜρ::F                # density
+    ᶜe_tot::F            # specific total energy (for ρe_tot correction)
+    ghost_buffer_c::GB   # DSS buffer for center vector fields (uₕ)
+    n_helmholtz_iters::Int
+end
+
 function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     (;
         topography_flag,
@@ -439,7 +456,40 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             )
         end
 
-    return (; matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, full_alg))
+    matrix_cache = MatrixFields.FieldMatrixWithSolver(matrix, Y, full_alg)
+
+    # Helmholtz preconditioner state and scratch fields
+    if use_derivative(acoustic_diagonal_flag)
+        ᶜscalar_field() = similar(Y.c, FT)
+        helmholtz_state = HelmholtzPreconditionerState(
+            FT(0),                  # dtγ (updated in update_jacobian!)
+            ᶜscalar_field(),        # ᶜα_acoustic
+            ᶜscalar_field(),        # ᶜcs²
+            ᶜscalar_field(),        # ᶜρ
+            ᶜscalar_field(),        # ᶜe_tot
+            nothing,                # ghost_buffer_c (set in update_jacobian!)
+            10,                     # n_helmholtz_iters
+        )
+        helmholtz_scratch = (;
+            ᶜhelmholtz_ρ = ᶜscalar_field(),
+            ᶜhelmholtz_rhs = ᶜscalar_field(),
+            ᶜhelmholtz_laplacian = ᶜscalar_field(),
+            ᶜhelmholtz_dss_buffer = Spaces.create_dss_buffer(
+                ᶜscalar_field(),
+            ),
+        )
+        return (;
+            matrix = matrix_cache,
+            helmholtz_state,
+            helmholtz_scratch,
+        )
+    else
+        return (;
+            matrix = matrix_cache,
+            helmholtz_state = nothing,
+            helmholtz_scratch = nothing,
+        )
+    end
 end
 
 # TODO: There are a few for loops in this function. This is because
@@ -864,6 +914,16 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. ∂ᶜuₕ_err_∂ᶜuₕ += DiagonalMatrixRow(FT(-1) * ᶜα_acoustic)
         else
             @. ∂ᶜuₕ_err_∂ᶜuₕ = DiagonalMatrixRow(-(FT(1) + ᶜα_acoustic))
+        end
+
+        # Store state for Helmholtz solve in invert_jacobian!
+        cache.helmholtz_state.dtγ = dtγ
+        @. cache.helmholtz_state.ᶜα_acoustic = ᶜα_acoustic
+        @. cache.helmholtz_state.ᶜcs² = γ_d * ᶜp / ᶜρ
+        @. cache.helmholtz_state.ᶜρ = ᶜρ
+        @. cache.helmholtz_state.ᶜe_tot = Y.c.ρe_tot / ᶜρ
+        if do_dss(axes(Y.c))
+            cache.helmholtz_state.ghost_buffer_c = p.ghost_buffer.c
         end
     end
 
@@ -1676,5 +1736,61 @@ function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
     return nothing
 end
 
-invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R) =
+function invert_jacobian!(alg::ManualSparseJacobian, cache, ΔY, R)
+    # Step 1: Column-local solve
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
+
+    # Step 2: Horizontal Helmholtz correction (if enabled)
+    if use_derivative(alg.acoustic_diagonal_flag) &&
+       !isnothing(cache.helmholtz_state)
+        helmholtz_correction!(cache, ΔY)
+    end
+end
+
+"""
+    helmholtz_correction!(cache, ΔY)
+
+Apply multiplicative horizontal Helmholtz correction after the column-local
+solve. This solves the horizontal acoustic Schur complement:
+    (I - dtγ²·cs²·∇²h)·Δρ = z.ρ - dtγ·wdivₕ(ρ·z.uₕ)
+via Jacobi-preconditioned Richardson iteration, then back-substitutes to
+correct uₕ and ρe_tot.
+"""
+function helmholtz_correction!(cache, ΔY)
+    (; helmholtz_state, helmholtz_scratch) = cache
+    (; dtγ, ᶜα_acoustic, ᶜcs², ᶜρ, ᶜe_tot, n_helmholtz_iters) = helmholtz_state
+    (; ᶜhelmholtz_ρ, ᶜhelmholtz_rhs, ᶜhelmholtz_laplacian, ᶜhelmholtz_dss_buffer) =
+        helmholtz_scratch
+
+    FT = eltype(dtγ)
+    α = FT(dtγ)^2  # cs² factor already stored in ᶜcs²
+
+    # Step 2a: Form Helmholtz RHS = z.ρ - dtγ·wdivₕ(ρ·z.uₕ)
+    @. ᶜhelmholtz_rhs = wdivₕ(ᶜρ * ΔY.c.uₕ)
+    Spaces.weighted_dss!(ᶜhelmholtz_rhs => ᶜhelmholtz_dss_buffer)
+    @. ᶜhelmholtz_rhs = ΔY.c.ρ - FT(dtγ) * ᶜhelmholtz_rhs
+
+    # Step 2b: Jacobi-preconditioned Richardson iteration
+    # Solve (I - α·cs²·∇²h)Δρ = rhs, where D = 1 + ᶜα_acoustic
+    @. ᶜhelmholtz_ρ = ᶜhelmholtz_rhs  # initial guess
+    for _ in 1:n_helmholtz_iters
+        @. ᶜhelmholtz_laplacian = wdivₕ(gradₕ(ᶜhelmholtz_ρ))
+        Spaces.weighted_dss!(ᶜhelmholtz_laplacian => ᶜhelmholtz_dss_buffer)
+        @. ᶜhelmholtz_ρ +=
+            (ᶜhelmholtz_rhs - ᶜhelmholtz_ρ + α * ᶜcs² * ᶜhelmholtz_laplacian) /
+            (FT(1) + ᶜα_acoustic)
+    end
+
+    # Step 2c: Save old z.ρ (still in ΔY.c.ρ) before overwriting
+    @. ᶜhelmholtz_laplacian = ΔY.c.ρ
+    ΔY.c.ρ .= ᶜhelmholtz_ρ
+
+    # Step 2d: Back-substitute uₕ correction
+    # Note: no DSS on ΔY.c.uₕ here — this is a preconditioner approximation;
+    # GMRES applies the full operator (including DSS) in the next iteration.
+    @. ΔY.c.uₕ -= C12(FT(dtγ) * (ᶜcs² / ᶜρ) * gradₕ(ᶜhelmholtz_ρ))
+
+    # Step 2e: Correct ρe_tot (isentropic approximation)
+    # Δρe_tot += e_tot · (Δρ_new - z.ρ_old)
+    @. ΔY.c.ρe_tot += ᶜe_tot * (ᶜhelmholtz_ρ - ᶜhelmholtz_laplacian)
+end
