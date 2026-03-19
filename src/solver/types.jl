@@ -1430,9 +1430,14 @@ function AtmosConfig(
     config = override_default_config(config)
 
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
+    atmos_toml = map(config["toml"]) do file
+        isfile(file) ? file :
+        isfile(joinpath(pkgdir(@__MODULE__), file)) ?
+        joinpath(pkgdir(@__MODULE__), file) : error("Parameter file $file not found.")
+    end
     toml_dict = CP.create_toml_dict(
         FT;
-        override_file = CP.merge_toml_files(config["toml"]),
+        override_file = CP.merge_toml_files(atmos_toml),
     )
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
 
