@@ -62,6 +62,22 @@ moisture_variables(ρ, physical_state, ::NonEquilibriumMicrophysics) = (;
     ρq_lcl = ρ * physical_state.q_liq,
     ρq_icl = ρ * physical_state.q_ice,
 )
+function moisture_variables(ρ, physical_state, ::NonEquilibriumMicrophysics2M)
+    (; q_tot, q_liq, n_liq, q_rai, n_rai, q_ice, n_ice, q_rim, b_rim) = physical_state
+    return (;
+        ρq_tot = ρ * q_tot,
+        # warm state
+        ρq_lcl = ρ * q_liq,
+        ρn_lcl = ρ * n_liq,
+        ρq_rai = ρ * q_rai,
+        ρn_rai = ρ * n_rai,
+        # cold state
+        ρq_ice = ρ * q_ice,
+        ρn_ice = ρ * n_ice,
+        ρq_rim = ρ * q_rim,
+        ρb_rim = ρ * b_rim,
+    )
+end
 
 # ============================================================================
 # Precipitation dispatch
@@ -73,27 +89,7 @@ precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics1M) = (;
     ρq_rai = ρ * physical_state.q_rai,
     ρq_sno = ρ * physical_state.q_sno,
 )
-precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics2M) = (;
-    ρn_lcl = ρ * physical_state.n_liq,
-    ρn_rai = ρ * physical_state.n_rai,
-    ρq_rai = ρ * physical_state.q_rai,
-    ρq_sno = ρ * physical_state.q_sno,
-)
-function precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics2MP3)
-    warm_state = (;
-        ρn_lcl = ρ * physical_state.n_liq,
-        ρn_rai = ρ * physical_state.n_rai,
-        ρq_rai = ρ * physical_state.q_rai,
-        ρq_sno = ρ * physical_state.q_sno,
-    )
-    cold_state = (;
-        ρq_icl = ρ * physical_state.q_ice,
-        ρn_ice = ρ * physical_state.n_ice,
-        ρq_rim = ρ * physical_state.q_rim,
-        ρb_rim = ρ * physical_state.b_rim,
-    )
-    return (; warm_state..., cold_state...)
-end
+precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics2M) = (;)
 
 # ============================================================================
 # Turbconv center dispatch
@@ -152,9 +148,9 @@ function turbconv_center_variables(
     else  # NonEquilibriumMicrophysics2M
         sgsʲs = uniform_subdomains(
             (; ρa, mse, q_tot,
-                q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno,
-                n_lcl = n_liq, n_rai,
-            ),
+                q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno, 
+                n_lcl = n_liq, n_rai
+            ),  # TODO: Fix for 2M+P3
             turbconv_model,
         )
     end

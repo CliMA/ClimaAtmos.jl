@@ -4,7 +4,7 @@ import SurfaceFluxes.Parameters.SurfaceFluxesParameters
 import SurfaceFluxes.UniversalFunctions as UF
 import Insolation.Parameters.InsolationParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
-import CloudMicrophysics as CM
+import CloudMicrophysics.Parameters as CMP
 import StaticArrays as SA
 
 """
@@ -24,64 +24,37 @@ function ClimaAtmosParameters(
     toml_dict::TD,
     parsed_args = nothing,
 ) where {TD <: CP.ParamDict}
-    FT = CP.float_type(toml_dict)
 
     turbconv_params = TurbulenceConvectionParameters(toml_dict)
-    TCP = typeof(turbconv_params)
 
     thermodynamics_params = ThermodynamicsParameters(toml_dict)
-    TP = typeof(thermodynamics_params)
-
     rrtmgp_params = RRTMGPParameters(toml_dict)
-    RP = typeof(rrtmgp_params)
-
     trace_gas_params = trace_gas_parameters(toml_dict)
-    TG = typeof(trace_gas_params)
-
     insolation_params = InsolationParameters(toml_dict)
-    IP = typeof(insolation_params)
 
-    surface_fluxes_params =
-        SurfaceFluxesParameters(toml_dict, UF.GryanikParams)
-    SFP = typeof(surface_fluxes_params)
-
+    surface_fluxes_params = SurfaceFluxesParameters(toml_dict, UF.GryanikParams)
     surface_temp_params = SurfaceTemperatureParameters(toml_dict)
-    STP = typeof(surface_temp_params)
 
     microphysics_cloud_params = cloud_parameters(toml_dict)
-    MPC = typeof(microphysics_cloud_params)
-
-    microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
-    microphysics_1m_params = microphys_1m_parameters(toml_dict)
-    microphysics_2m_params = microphys_2m_parameters(toml_dict)
-    microphysics_2mp3_params = get_microphysics_2m_p3_parameters(toml_dict)
+    microphysics_0m_params = CMP.Microphysics0MParams(toml_dict)
+    microphysics_1m_params = CMP.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
+    microphysics_2m_params = CMP.Microphysics2MParams(toml_dict; with_ice = true)
 
     # If parsed_args is provided, we can save parameter space by only loading parameters
     # needed for the microphysics model that is actually used.
     if !isnothing(parsed_args)
         cm_model = get_microphysics_model(parsed_args)
-        cm_model isa EquilibriumMicrophysics0M ||
-            (microphysics_0m_params = nothing)
+        cm_model isa EquilibriumMicrophysics0M || (microphysics_0m_params = nothing)
         cm_model isa Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
             (microphysics_1m_params = nothing)
-        cm_model isa Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3} ||
-            (microphysics_2m_params = nothing)
-        cm_model isa NonEquilibriumMicrophysics2MP3 ||
-            (microphysics_2mp3_params = nothing)
+        cm_model isa NonEquilibriumMicrophysics2M || (microphysics_2m_params = nothing)
     end
-    MP0M = typeof(microphysics_0m_params)
-    MP1M = typeof(microphysics_1m_params)
-    MP2M = typeof(microphysics_2m_params)
-    MP2MP3 = typeof(microphysics_2mp3_params)
 
     vert_diff_params = vert_diff_parameters(toml_dict)
-    VDP = typeof(vert_diff_params)
 
     external_forcing_params = external_forcing_parameters(toml_dict)
-    EFP = typeof(external_forcing_params)
 
     prescribed_aerosol_params = prescribed_aerosol_parameters(toml_dict)
-    PAP = typeof(prescribed_aerosol_params)
     # Only load gravity wave parameters if enabled in config
     non_orographic_gravity_wave_params = nothing
     orographic_gravity_wave_params = nothing
@@ -95,31 +68,9 @@ function ClimaAtmosParameters(
                 OrographicGravityWaveParameters(toml_dict)
         end
     end
-    NOGWP = typeof(non_orographic_gravity_wave_params)
-    OGWP = typeof(orographic_gravity_wave_params)
 
-    parameters =
-        CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
-    return CAP.ClimaAtmosParameters{
-        FT,
-        TP,
-        RP,
-        TG,
-        IP,
-        MPC,
-        MP0M,
-        MP1M,
-        MP2M,
-        MP2MP3,
-        SFP,
-        TCP,
-        STP,
-        VDP,
-        EFP,
-        PAP,
-        NOGWP,
-        OGWP,
-    }(;
+    parameters = CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
+    return CAP.ClimaAtmosParameters(;
         parameters...,
         thermodynamics_params,
         rrtmgp_params,
@@ -129,7 +80,6 @@ function ClimaAtmosParameters(
         microphysics_0m_params,
         microphysics_1m_params,
         microphysics_2m_params,
-        microphysics_2mp3_params,
         surface_fluxes_params,
         turbconv_params,
         surface_temp_params,
@@ -176,48 +126,18 @@ cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     cloud_parameters(CP.create_toml_dict(FT))
 
 cloud_parameters(toml_dict::CP.ParamDict) = (;
-    liquid = CM.Parameters.CloudLiquid(toml_dict),
-    ice = CM.Parameters.CloudIce(toml_dict),
-    stokes = CM.Parameters.StokesRegimeVelType(toml_dict),
-    Ch2022 = CM.Parameters.Chen2022VelType(toml_dict),
+    liquid = CMP.CloudLiquid(toml_dict),
+    ice = CMP.CloudIce(toml_dict),
+    stokes = CMP.StokesRegimeVelType(toml_dict),
+    Ch2022 = CMP.Chen2022VelType(toml_dict),
     N_cloud_liquid_droplets = CP.get_parameter_values(
         toml_dict,
         "prescribed_cloud_droplet_number_concentration",
         "ClimaAtmos",
     ).prescribed_cloud_droplet_number_concentration,
     aml = aerosol_ml_parameters(toml_dict),
-    activation = CM.Parameters.AerosolActivationParameters(toml_dict),
+    activation = CMP.AerosolActivationParameters(toml_dict),
 )
-
-microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
-    microphys_1m_parameters(CP.create_toml_dict(FT))
-
-microphys_1m_parameters(toml_dict::CP.ParamDict) =
-    CM.Parameters.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
-
-microphys_2m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
-    microphys_2m_parameters(CP.create_toml_dict(FT))
-
-function microphys_2m_parameters(toml_dict::CP.ParamDict)
-    CM.Parameters.Microphysics2MParams(toml_dict; with_ice = false)
-end
-
-get_microphysics_2m_p3_parameters(::Type{FT}) where {FT <: AbstractFloat} =
-    get_microphysics_2m_p3_parameters(CP.create_toml_dict(FT))
-
-"""
-    get_microphysics_2m_p3_parameters(FT)
-    get_microphysics_2m_p3_parameters(toml_dict)
-
-Get the parameters for the 2-moment warm rain + P3 ice microphysics scheme.
-
-# Arguments
- - `FT`: The floating point type to use for the parameters, `Float32` or `Float64`.
- - `toml_dict`: A TOML dictionary containing the parameters, see [`CP.create_toml_dict()`](@ref).
-"""
-function get_microphysics_2m_p3_parameters(toml_dict::CP.ParamDict)
-    CM.Parameters.Microphysics2MParams(toml_dict; with_ice = true)
-end
 
 function vert_diff_parameters(toml_dict)
     name_map = (; :C_E => :C_E, :H_diffusion => :H, :D_0_diffusion => :D₀)

@@ -16,7 +16,6 @@
 #   0M           | ✓       | ✓               | ✓
 #   1M           | ✓       | ✓               | ✓
 #   2M           | ✓       | error           | ✓
-#   2MP3         | ✓       | —               | —
 #
 # For 1M/2M in EDMF modes, separate source terms for the environment (⁰ suffix)
 # and each updraft (ʲs suffix) are area-weighted and accumulated.
@@ -204,15 +203,17 @@ end
 ##### 2-Moment Microphysics
 #####
 
-function microphysics_tendency!(Yₜ, Y, p, t,
-    ::NonEquilibriumMicrophysics2M, _,
-)
+function microphysics_tendency!(Yₜ, Y, p, t, ::NonEquilibriumMicrophysics2M, _)
     (; ᶜmp_tendency) = p.precomputed
     @. Yₜ.c.ρq_lcl += Y.c.ρ * ᶜmp_tendency.dq_lcl_dt
     @. Yₜ.c.ρn_lcl += Y.c.ρ * ᶜmp_tendency.dn_lcl_dt
     @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜmp_tendency.dq_rai_dt
     @. Yₜ.c.ρn_rai += Y.c.ρ * ᶜmp_tendency.dn_rai_dt
-    @. Yₜ.c.ρq_icl += Y.c.ρ * ᶜmp_tendency.dq_ice_dt
+    # Cold tendencies
+    @. Yₜ.c.ρq_ice += Y.c.ρ * ᶜmp_tendency.dq_ice_dt
+    @. Yₜ.c.ρn_ice += Y.c.ρ * ᶜmp_tendency.dn_ice_dt
+    @. Yₜ.c.ρq_rim += Y.c.ρ * ᶜmp_tendency.dq_rim_dt
+    @. Yₜ.c.ρb_rim += Y.c.ρ * ᶜmp_tendency.db_rim_dt
     return nothing
 end
 
@@ -224,7 +225,7 @@ end
 
 function microphysics_tendency!(Yₜ, Y, p, t,
     ::NonEquilibriumMicrophysics2M, turbconv_model::PrognosticEDMFX,
-)
+)  # TODO: Update for 2M + P3
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
 
     # Contribution to grid mean tendency from environment
@@ -250,23 +251,4 @@ function microphysics_tendency!(Yₜ, Y, p, t,
         @. Yₜ.c.sgsʲs.:($$j).n_rai += ᶜmp_tendencyʲs.:($$j).dn_rai_dt
         @. Yₜ.c.sgsʲs.:($$j).q_icl += ᶜmp_tendencyʲs.:($$j).dq_ice_dt
     end
-end
-
-function microphysics_tendency!(Yₜ, Y, p, t,
-    ::NonEquilibriumMicrophysics2MP3, ::Nothing,
-)
-    (; ᶜScoll) = p.precomputed
-
-    # 2 moment scheme (warm)
-    microphysics_tendency!(Yₜ, Y, p, t, NonEquilibriumMicrophysics2M(), nothing)
-
-    # P3 scheme (cold) - collisions
-    @. Yₜ.c.ρq_lcl += Y.c.ρ * ᶜScoll.∂ₜq_c
-    @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜScoll.∂ₜq_r
-    @. Yₜ.c.ρn_lcl += ᶜScoll.∂ₜN_c
-    @. Yₜ.c.ρn_rai += ᶜScoll.∂ₜN_r
-    @. Yₜ.c.ρq_rim += ᶜScoll.∂ₜL_rim
-    @. Yₜ.c.ρq_icl += ᶜScoll.∂ₜL_ice
-    @. Yₜ.c.ρb_rim += ᶜScoll.∂ₜB_rim
-    return nothing
 end

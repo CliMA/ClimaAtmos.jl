@@ -22,7 +22,7 @@ Base.broadcastable(param_set::ACAP) = tuple(param_set)
 Base.broadcastable(param_set::ATCP) = tuple(param_set)
 Base.broadcastable(param_set::ASTP) = tuple(param_set)
 
-Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
+@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     surface_area::FT
     max_area::FT
     min_area::FT
@@ -67,7 +67,7 @@ Base.@kwdef struct SurfaceTemperatureParameters{FT} <: ASTP
     SST_wavelength_latitude::FT
 end
 
-Base.@kwdef struct NonOrographicGravityWaveParameters{FT} <: AGWP
+@kwdef struct NonOrographicGravityWaveParameters{FT} <: AGWP
     source_pressure::FT
     damp_pressure::FT
     source_height::FT
@@ -90,7 +90,7 @@ Base.@kwdef struct NonOrographicGravityWaveParameters{FT} <: AGWP
     dϕ_s::FT
 end
 
-Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
+@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
     γ::FT                    # mountain_height_width_exponent: L ∝ h^γ (equation 14, paper suggests γ ≈ 0.4)
     ϵ::FT                    # number_density_exponent: number density of orography in a grid cell, n(h) ∝ h^(-ε)
     β::FT                    # mountain_shape_parameter: L(z) = L_b(1 - z/h)^β (equation 12), β=1 for triangular mountains and β<1 for blunt mountains, β>1 for pointy mountains
@@ -102,25 +102,8 @@ Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
     Fr_crit::FT              # critical_froude_number: Fr_crit = 0.7, critical Froude number h̃_c = Fr_crit
 end
 
-Base.@kwdef struct ClimaAtmosParameters{
-    FT,
-    TP,
-    RP,
-    TG,
-    IP,
-    MPC,
-    MP0M,
-    MP1M,
-    MP2M,
-    MP2MP3,
-    SFP,
-    TCP,
-    STP,
-    VDP,
-    EFP,
-    PAP,
-    NOGWP,
-    OGWP,
+@kwdef struct ClimaAtmosParameters{
+    FT, TP, RP, TG, IP, MPC, MP0M, MP1M, MP2M, SFP, TCP, STP, VDP, EFP, PAP, NOGWP, OGWP,
 } <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
@@ -130,7 +113,6 @@ Base.@kwdef struct ClimaAtmosParameters{
     microphysics_0m_params::MP0M
     microphysics_1m_params::MP1M
     microphysics_2m_params::MP2M
-    microphysics_2mp3_params::MP2MP3
     surface_fluxes_params::SFP
     turbconv_params::TCP
     surface_temp_params::STP

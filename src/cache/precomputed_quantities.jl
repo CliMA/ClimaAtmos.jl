@@ -180,7 +180,7 @@ function precomputed_quantities(Y, atmos)
     }
     MP23_NT = @NamedTuple{
         dq_lcl_dt::FT, dn_lcl_dt::FT, dq_rai_dt::FT, dn_rai_dt::FT,
-        dq_ice_dt::FT, dq_rim_dt::FT, db_rim_dt::FT,
+        dq_ice_dt::FT, dn_ice_dt::FT, dq_rim_dt::FT, db_rim_dt::FT,
     }
 
     if atmos.microphysics_model isa EquilibriumMicrophysics0M
@@ -197,8 +197,7 @@ function precomputed_quantities(Y, atmos)
             ᶜwₛ = similar(Y.c, FT),
             ᶜmp_tendency = similar(Y.c, MP1_NT),
         )
-    elseif atmos.microphysics_model isa
-           Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3}
+    elseif atmos.microphysics_model isa NonEquilibriumMicrophysics2M
         # 2-moment microphysics
         precipitation_quantities = (;
             ᶜwₗ = similar(Y.c, FT),
@@ -206,25 +205,11 @@ function precomputed_quantities(Y, atmos)
             ᶜwᵣ = similar(Y.c, FT),
             ᶜwₛ = similar(Y.c, FT),
             ᶜwₙₗ = similar(Y.c, FT),
+            ᶜwₙᵢ = similar(Y.c, FT),
             ᶜwₙᵣ = similar(Y.c, FT),
             ᶜmp_tendency = similar(Y.c, MP23_NT),
+            ᶜlogλ = similar(Y.c, FT),
         )
-        # Add additional quantities for 2M + P3
-        if atmos.microphysics_model isa NonEquilibriumMicrophysics2MP3
-            precipitation_quantities = (;
-                # liquid quantities (2M warm rain)
-                precipitation_quantities...,
-                # ice quantities (P3)
-                ᶜwnᵢ = similar(Y.c, FT),
-                ᶜlogλ = similar(Y.c, FT),
-                ᶜScoll = similar(Y.c,
-                    @NamedTuple{
-                        ∂ₜq_c::FT, ∂ₜq_r::FT, ∂ₜN_c::FT, ∂ₜN_r::FT,
-                        ∂ₜL_rim::FT, ∂ₜL_ice::FT, ∂ₜB_rim::FT,
-                    }
-                ),
-            )
-        end
     else
         precipitation_quantities = (;)
     end
@@ -571,11 +556,18 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
             @. ᶜq_tot_nonneg = zero(eltype(ᶜT))
             @. ᶜq_liq = zero(eltype(ᶜT))
             @. ᶜq_ice = zero(eltype(ᶜT))
-        else  # NonEquilibriumMicrophysics
+        elseif microphysics_model isa NonEquilibriumMicrophysics1M
             @. ᶜq_liq =
                 max(0, specific(Y.c.ρq_lcl, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
             @. ᶜq_ice =
                 max(0, specific(Y.c.ρq_icl, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
+            # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
+            @. ᶜq_tot_nonneg =
+                max(ᶜq_liq + ᶜq_ice, specific(Y.c.ρq_tot, Y.c.ρ))
+        else  # NonEquilibriumMicrophysics2M
+            @. ᶜq_liq =
+                max(0, specific(Y.c.ρq_lcl, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
+            @. ᶜq_ice = max(0, specific(Y.c.ρq_ice, Y.c.ρ))
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
             @. ᶜq_tot_nonneg =
                 max(ᶜq_liq + ᶜq_ice, specific(Y.c.ρq_tot, Y.c.ρ))

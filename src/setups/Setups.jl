@@ -29,7 +29,6 @@ import ..DryModel
 import ..EquilibriumMicrophysics0M
 import ..NonEquilibriumMicrophysics1M
 import ..NonEquilibriumMicrophysics2M
-import ..NonEquilibriumMicrophysics2MP3
 import ..NonEquilibriumMicrophysics
 import ..MoistMicrophysics
 import ..PrognosticEDMFX

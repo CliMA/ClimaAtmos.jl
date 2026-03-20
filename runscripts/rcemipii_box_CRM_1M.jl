@@ -17,16 +17,18 @@ Random.seed!(1234)
 import ClimaComms
 ClimaComms.@import_required_backends
 context = CA.get_comms_context(Dict("device" => "auto"))
+# context = CA.get_comms_context(Dict("device" => "cpu"))
 
 ### -------------------- ###
 ### Variable model setup ###
 ### -------------------- ###
-job_id = "rcemipii_box_CRM_1M"
+job_id = "rcemipii_box_CRM_2M"
 reference_job_id = Val(:les_box)  # for plotting
 output_dir = nothing  # customize if desired
 FT = Float32
 
-t_end = "4hours"
+# t_end = "4hours"
+t_end = "7days"
 
 ##### RCE-small #####
 x_max = y_max = 96_000
@@ -50,23 +52,30 @@ dt = "10secs"
 
 
 ## Load model parameters
-params = CA.ClimaAtmosParameters(
-    CA.CP.create_toml_dict(FT; override_file = "toml/rcemipii_box.toml"),
-)
+override_file = joinpath(pkgdir(CA), "toml", "rcemipii_box.toml")
+toml_dict = CA.CP.create_toml_dict(FT; override_file)
+params = CA.ClimaAtmosParameters(toml_dict)
 
 ## RCEMIP-II model prescriptions
 insolation = CA.RCEMIPIIInsolation()
 sfc_temperature = CA.RCEMIPIISST()
 initial_condition = CA.Setups.RCEMIPIIProfile_300()
+# Optionally, override the initial condition with a restart file
+restart_file = nothing
+# alternatively detect the latest restart file in the output directory
+detect_restart_file = false
+
+restart_file = "output/rcemipii_box_CRM_2M/output_0081/day1.0.hdf5"
 
 
 ## Construct the model
 model = CA.AtmosModel(;
     # AtmosWater - Moisture, Precipitation & Clouds
-    microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+    microphysics_model = CA.NonEquilibriumMicrophysics2M(),
     cloud_model = CA.GridScaleCloud(),
     microphysics_tendency_timestepping = CA.Explicit(),
-    tracer_nonnegativity_method = CA.TracerNonnegativityMethod("elementwise_constraint"),
+    # tracer_nonnegativity_method = CA.TracerNonnegativityMethod("elementwise_constraint"),
+    tracer_nonnegativity_method = CA.TracerNonnegativityMethod("vapor_constraint"),
 
     # AtmosRadiation
     radiation_mode = CA.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics(),
@@ -121,29 +130,29 @@ diagnostics = [
             "Dh_smag", "strainh_smag",  # horizontal
             "Dv_smag", "strainv_smag",  # vertical
         ],
-        "period" => "1hours",
+        "period" => "10mins",
     ),
 ]
 ### 1M microphysics
-if model.microphysics_model ∈
-   (CA.NonEquilibriumMicrophysics1M(), CA.NonEquilibriumMicrophysics2M())
-    push!(diagnostics, Dict("short_name" => ["husra", "hussn"], "period" => "1hours"))
+if model.microphysics_model == CA.NonEquilibriumMicrophysics1M()
+    push!(diagnostics, Dict("short_name" => ["husra", "hussn"], "period" => "10mins"))
 end
 ### 2M microphysics
 if model.microphysics_model == CA.NonEquilibriumMicrophysics2M()
-    push!(diagnostics, Dict("short_name" => ["cdnc", "ncra"], "period" => "1hours"))
+    push!(diagnostics, Dict("short_name" => ["husra", "hussn", "cdnc", "ncra"], "period" => "10mins"))
 end
 
 ## Assemble simulation
 simulation = CA.AtmosSimulation{FT}(; job_id,
     model, params, context, grid,
-    initial_condition,
+    initial_condition, restart_file, detect_restart_file,
     surface_setup = CA.SurfaceConditions.DefaultMoninObukhov(),
     dt, t_end,
     ode_config,
     output_dir,
     # Callbacks
-    callback_kwargs = (; dt_rad = "1hours"),
+    callback_kwargs = (; dt_cloud_fraction = "3hours", dt_rad = "1hours"),
+    callbacks = (CA.nan_checking_callback(1)...,),
     # Diagnostics
     default_diagnostics = false,
     diagnostics,
@@ -157,6 +166,19 @@ simulation = CA.AtmosSimulation{FT}(; job_id,
 ## Solve
 sol_res = CA.solve_atmos!(simulation)
 (; sol) = sol_res
+#= Manually step the simulation for debugging
+### Enable NaN/Inf checks on every operation
+CC.DebugOnly.call_post_op_callback() = true  # enable debug callbacks
+function CC.DebugOnly.post_op_callback(result, args...; kwargs...)
+    has_nans = result isa Number ? isnan(result) : any(isnan, parent(result))
+    has_inf = result isa Number ? isinf(result) : any(isinf, parent(result))
+    @infiltrate has_nans || has_inf
+end
+### Step the simulation
+Y = simulation.integrator.u  # For reference, the state
+import SciMLBase
+SciMLBase.step!(simulation.integrator)
+=#
 
 # Post-solve checks
 CA.error_if_crashed(sol_res.ret_code)

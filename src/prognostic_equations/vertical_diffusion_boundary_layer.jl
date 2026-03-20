@@ -121,7 +121,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_3
 
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        if ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai))
+        if ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai))  # TODO: Should we scale `ρq_ice` for 2M+P3?
             @. ᶜK_h_scaled = α_vert_diff_tracer * ᶜK_h
         else
             @. ᶜK_h_scaled = ᶜK_h

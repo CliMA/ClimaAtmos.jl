@@ -174,21 +174,41 @@ No-op for implicit timestepping as the Jacobian handles stability.
 end
 @inline apply_2m_tendency_limits!(ᶜmp_tendency, ::Nothing, args...) = nothing
 
-@inline function _explicit_2m_tendency_limits(mp_tendency, q_liq, n_liq, q_rai, n_rai, dt)
-    f_liq = coupled_sink_limit_factor(
-        mp_tendency.dq_lcl_dt, mp_tendency.dn_lcl_dt, q_liq, n_liq, dt,
+@inline function _explicit_2m_tendency_limits(
+    mp_tendency, q_liq, n_liq, q_rai, n_rai, q_ice, n_ice, dt
+)
+    (; dq_lcl_dt, dn_lcl_dt, dq_rai_dt, dn_rai_dt) = mp_tendency
+    (; dq_ice_dt, dn_ice_dt, dq_rim_dt, db_rim_dt) = mp_tendency
+    f_liq = coupled_sink_limit_factor(dq_lcl_dt, dn_lcl_dt, q_liq, n_liq, dt)
+    f_rai = coupled_sink_limit_factor(dq_rai_dt, dn_rai_dt, q_rai, n_rai, dt)
+    f_ice = coupled_sink_limit_factor(dq_ice_dt, dn_ice_dt, q_ice, n_ice, dt)
+    return (;
+        dq_lcl_dt = dq_lcl_dt * f_liq,
+        dn_lcl_dt = dn_lcl_dt * f_liq,
+        dq_rai_dt = dq_rai_dt * f_rai,
+        dn_rai_dt = dn_rai_dt * f_rai,
+        dq_ice_dt = dq_ice_dt * f_ice,
+        dn_ice_dt = dn_ice_dt * f_ice,
+        dq_rim_dt = dq_rim_dt,
+        db_rim_dt = db_rim_dt,
     )
-    f_rai = coupled_sink_limit_factor(
-        mp_tendency.dq_rai_dt, mp_tendency.dn_rai_dt, q_rai, n_rai, dt,
-    )
+end
 
-    return (
-        dq_lcl_dt = mp_tendency.dq_lcl_dt * f_liq,
-        dn_lcl_dt = mp_tendency.dn_lcl_dt * f_liq,
-        dq_rai_dt = mp_tendency.dq_rai_dt * f_rai,
-        dn_rai_dt = mp_tendency.dn_rai_dt * f_rai,
-        dq_ice_dt = mp_tendency.dq_ice_dt,
-        dq_rim_dt = mp_tendency.dq_rim_dt,
-        db_rim_dt = mp_tendency.db_rim_dt,
+@inline function microphysics_tendencies_quadrature_and_explicit_limits_2m(
+    # arguments for bulk tendency
+    sgs_quad, cmp, thp, ρ, T, q_tot_safe,
+    q_liq, n_liq, q_rai, n_rai, q_ice, n_ice, q_rim, b_rim, logλ,
+    # additional arguments for tendency limiter
+    ::Explicit, dt,
+)
+    F_rim = rime_mass_fraction(q_rim, q_ice)
+    q_rim = F_rim * q_ice  # TODO: Should probably limit q_rim in one place
+    mp_tendency = microphysics_tendencies_quadrature_2m(
+        sgs_quad, cmp, thp, ρ, T, q_tot_safe,
+        q_liq, n_liq, q_rai, n_rai, q_ice, n_ice, q_rim, b_rim, logλ
+    )
+    # Apply physically motivated tendency limits
+    return _explicit_2m_tendency_limits(
+        mp_tendency, q_liq, n_liq, q_rai, n_rai, q_ice, n_ice, dt
     )
 end

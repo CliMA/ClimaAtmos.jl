@@ -56,3 +56,14 @@ Artifacts.toml
 AGENTS.md
 MEMORY.md
 .agents
+*.err
+docs/Manifest.toml
+.buildkite/Manifest.toml
+
+rico_2M.jl
+simpledriver.jl
+simpledriver.sbatch
+rcemipii_box.jl
+rcemipii_box.sbatch
+config/model_configs/prognostic_edmfx_rico_implicit_column_2M.yml
+config/model_configs/rcemipii_box.yml

@@ -484,9 +484,10 @@ function compute_2m_precipitation_tendencies!(
 end
 
 """
-    microphysics_tendencies_quadrature_2m(...)
+    microphysics_tendencies_quadrature_2m(::SGSQuadrature, args...)
+    microphysics_tendencies_quadrature_2m(::GridMeanSGS, args...)
 
-SGS quadrature integration for Microphysics2Moment (warm rain only).
+SGS quadrature integration for Microphysics2Moment
 
 !!! warning "Limited SGS support"
     Only `GridMeanSGS` is currently supported for 2-moment microphysics.
@@ -504,23 +505,20 @@ SGS quadrature integration for Microphysics2Moment (warm rain only).
 - `n_liq`: Cloud liquid number [1/kg]
 - `q_rai`: Rain [kg/kg]
 - `n_rai`: Rain number [1/kg]
+- `q_ice`: Ice [kg/kg]
+- `n_ice`: Ice number [1/kg]
+- `q_rim`: Rime [kg/kg]
+- `b_rim`: Rime volume [m³/kg]
+- `logλ`: Log of P3 distribution slope parameter [log(1/m)]
 
 # Returns
 NamedTuple with tendencies: `dq_lcl_dt`, `dn_lcl_dt`, `dq_rai_dt`, `dn_rai_dt`
 """
-@inline function microphysics_tendencies_quadrature_2m(
-    ::GridMeanSGS, cmp, tps, ρ, T, q_tot, q_liq, n_liq, q_rai, n_rai,
-)
+@inline microphysics_tendencies_quadrature_2m(::GridMeanSGS, args...) =
     # Direct GridMeanSGS dispatch for 2M: evaluates BMT at grid mean.
-    return BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(), cmp, tps, ρ, T,
-        q_tot, q_liq, n_liq, q_rai, n_rai,
-    )
-end
-@inline function microphysics_tendencies_quadrature_2m(
-    SG_quad::SGSQuadrature, cmp, tps, ρ, T,
-    q_tot, q_liq, n_liq, q_rai, n_rai,
-)
+    return BMT.bulk_microphysics_tendencies(BMT.Microphysics2Moment(), args...)
+
+@inline function microphysics_tendencies_quadrature_2m(SG_quad::SGSQuadrature, args...)
     error("Not implemented yet")
     return nothing
 end

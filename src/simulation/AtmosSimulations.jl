@@ -298,7 +298,9 @@ function AtmosSimulation{FT}(;
             common_callbacks(
                 model, dt, output_dir, start_date, t_start, t_end, context,
                 checkpoint_frequency,
-            )...)
+            )...,
+            callbacks...,
+        )
     else
         callbacks
     end

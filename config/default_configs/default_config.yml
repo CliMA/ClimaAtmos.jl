@@ -207,7 +207,7 @@ dt_save_state_to_disk:
   help: "Time between saving the state to disk. Examples: [`10secs`, `1hours`, `1months`, `Inf` (do not save, default)]"
   value: "Inf"
 microphysics_model:
-  help: "Microphysics model [`dry` (default), `0M`, `1M`, `2M`, `2MP3`]"
+  help: "Microphysics model [`dry` (default), `0M`, `1M`, `2M`]"
   value: "dry"
 divergence_damping_factor:
   help: "Divergence damping factor"

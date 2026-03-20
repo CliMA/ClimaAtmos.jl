@@ -151,7 +151,6 @@ const MICROPHYSICS_MODELS =
     Union{
         NonEquilibriumMicrophysics1M,
         NonEquilibriumMicrophysics2M,
-        NonEquilibriumMicrophysics2MP3,
     }
 const MOISTURE_MODELS = MoistMicrophysics
 
@@ -160,7 +159,7 @@ const TRACER_DIAGNOSTICS = [
     ("clw", "Cloud Liquid Water", :ρq_lcl, MICROPHYSICS_MODELS, :microphysics_model),
     ("cli", "Cloud Ice", :ρq_icl, MICROPHYSICS_MODELS, :microphysics_model),
     ("husra", "Rain Specific Humidity", :ρq_rai, MICROPHYSICS_MODELS, :microphysics_model),
-    ("hussn", "Snow Specific Humidity", :ρq_sno, MICROPHYSICS_MODELS, :microphysics_model),
+    ("hussn", "Snow Specific Humidity", :ρq_sno, NonEquilibriumMicrophysics1M, :microphysics_model),
     ("hus", "Specific Humidity", :ρq_tot, MOISTURE_MODELS, :microphysics_model),
 ]
 

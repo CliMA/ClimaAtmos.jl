@@ -37,7 +37,7 @@ end
 tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, _) = nothing
 
 """
-    tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, microphysics_model)
+    tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, mm)
 
 Apply tracer nonnegativity corrections by borrowing mass from vapor.
 
@@ -50,41 +50,37 @@ sourced from grid-mean vapor.
 - `Y`: State vector
 - `p`: Cache containing `atmos`, `dt`, etc.
 - `t`: Current time
-- `microphysics_model`: Microphysics model (dispatched on `NonEquilibriumMicrophysics1M`
+- `mm`: Microphysics model (dispatched on `NonEquilibriumMicrophysics1M`
   or `NonEquilibriumMicrophysics2M`)
 
 # Modifies
-- `Yₜ.c.ρq_lcl`, `Yₜ.c.ρq_icl`, `Yₜ.c.ρq_rai`, `Yₜ.c.ρq_sno`
+- `Yₜ.c.ρq_lcl`, `Yₜ.c.ρq_icl`, `Yₜ.c.ρq_rai`, `Yₜ.c.ρq_sno` (if `NonEquilibriumMicrophysics1M`)
+- `Yₜ.c.ρq_lcl`, `Yₜ.c.ρq_ice`, `Yₜ.c.ρq_rai` (if `NonEquilibriumMicrophysics2M`)
 
 # Notes
 Only active when `p.atmos.water.tracer_nonnegativity_method` is `TracerNonnegativityVaporTendency`.
 """
-function tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t,
-    ::Union{
-        NonEquilibriumMicrophysics1M,
-        NonEquilibriumMicrophysics2M,
-    },
+function tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, 
+    mm::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
 )
     p.atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVaporTendency || return
+    moisture_species = condensate_names(mm)
+    generic_tracer_nonnegativity_vapor_tendency!(Yₜ.c, Y.c, moisture_species, p.dt)
+end
 
-    moisture_species = (
-        MF.@name(ρq_lcl), MF.@name(ρq_icl),
-        MF.@name(ρq_rai), MF.@name(ρq_sno),
-    )
 
-    # Compute vapor specific humidity: q_vap = q_tot - q_lcl - q_icl - q_rai - q_sno
-    q_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    q_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
-    q_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
-    q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-    q_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-    q_vap = @. lazy(q_tot - q_lcl - q_icl - q_rai - q_sno)
+function generic_tracer_nonnegativity_vapor_tendency!(ᶜYₜ, ᶜY, moisture_species, dt)
+    ᶜρqs = UU.unrolled_map(Base.Fix1(MF.get_field, ᶜY), moisture_species)  # TODO: Test that this is valid code
+    ᶜρq_cond = @. lazy(UU.unrolled_sum(ᶜρqs))
+
+    # Compute vapor specific humidity: q_vap = (ρq_tot - ρq_cond) / ρ
+    ᶜq_vap = @. lazy(specific(ᶜY.ρq_tot - ᶜρq_cond, ᶜY.ρ))
 
     MF.unrolled_foreach(moisture_species) do ρq_name
-        ᶜρq = MF.get_field(Y.c, ρq_name)
-        ᶜρqₜ = MF.get_field(Yₜ.c, ρq_name)
-        ᶜq = @. lazy(specific(ᶜρq, Y.c.ρ))
+        ᶜρq = MF.get_field(ᶜY, ρq_name)
+        ᶜρqₜ = MF.get_field(ᶜYₜ, ρq_name)
+        ᶜq = @. lazy(specific(ᶜρq, ᶜY.ρ))
         # Add positive tendency to restore negative tracers using mass from vapor
-        @. ᶜρqₜ += Y.c.ρ * tracer_nonnegativity_vapor_tendency(ᶜq, q_vap, p.dt)
+        @. ᶜρqₜ += ᶜY.ρ * tracer_nonnegativity_vapor_tendency(ᶜq, ᶜq_vap, dt)
     end
 end

@@ -575,7 +575,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         (@name(c.ρq_sno), @name(ᶜwₛ), α_vert_diff_tracer),
         (@name(c.ρn_lcl), @name(ᶜwₙₗ), FT(1)),
         (@name(c.ρn_rai), @name(ᶜwₙᵣ), α_vert_diff_tracer),
-        (@name(c.ρn_ice), @name(ᶜwnᵢ), FT(1)),
+        (@name(c.ρn_ice), @name(ᶜwₙᵢ), FT(1)),
         (@name(c.ρq_rim), @name(ᶜwᵢ), FT(1)),
         (@name(c.ρb_rim), @name(ᶜwᵢ), FT(1)),
     )

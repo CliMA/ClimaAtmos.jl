@@ -577,9 +577,11 @@ compute_hussn(state, cache, time) =
     compute_hussn(state, cache, time, cache.atmos.microphysics_model)
 compute_hussn(_, _, _, model) = error_diagnostic_variable("hussn", model)
 
-compute_hussn(state, _, _,
-    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},  # TODO: Remove 2M from dispatch
-) = @. lazy(specific(state.c.ρq_sno, state.c.ρ))
+compute_hussn(state, _, _, ::NonEquilibriumMicrophysics1M) =
+    @. lazy(specific(state.c.ρq_sno, state.c.ρ))
+
+compute_hussn(state, _, _, ::NonEquilibriumMicrophysics2M) =
+    @. lazy(specific(state.c.ρq_ice, state.c.ρ))  # TODO This should be `husice`, or something like that
 
 add_diagnostic_variable!(short_name = "hussn", units = "kg kg^-1",
     long_name = "Mass Fraction of Snow",
@@ -1000,10 +1002,7 @@ compute_rwp(state, cache, time) =
 compute_rwp(_, _, _, model) = error_diagnostic_variable("rwp", model)
 
 function compute_rwp(state, cache, _,
-    ::Union{
-        NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M,
-        NonEquilibriumMicrophysics2MP3,
-    },
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
 )
     rwp = cache.scratch.ᶠtemp_field_level
     Operators.column_integral_definite!(rwp, state.c.ρq_rai)
