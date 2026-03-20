@@ -62,7 +62,10 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_N_source = similar(Fields.level(Y.c.ρ, 1)),
             gw_beres_active = similar(Fields.level(Y.c.ρ, 1)),
             gw_beres_source = nothing,
-            gw_reduce_result = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT, FT}),
+            gw_reduce_result = similar(
+                Fields.level(Y.c.ρ, 1),
+                Tuple{FT, FT, FT, FT, FT, FT},
+            ),
         )
     elseif issphere(axes(Y.c))
 
@@ -146,7 +149,10 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_N_source = similar(Fields.level(Y.c.ρ, 1)),
             gw_beres_active = similar(Fields.level(Y.c.ρ, 1)),
             gw_beres_source = gw.beres_source,
-            gw_reduce_result = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT, FT}),
+            gw_reduce_result = similar(
+                Fields.level(Y.c.ρ, 1),
+                Tuple{FT, FT, FT, FT, FT, FT},
+            ),
         )
     else
         error("Only sphere and columns are supported")

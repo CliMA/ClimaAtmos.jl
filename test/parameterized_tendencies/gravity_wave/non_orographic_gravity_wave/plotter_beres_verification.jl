@@ -131,18 +131,30 @@ println("Plotting Row 1: lat-lon maps...")
 
 pr_pos = deepcopy(pr_last)
 pr_pos.data .= .-pr_pos.data  # flip sign: downward flux → positive precip
-viz.plot!(fig[1, 1], pr_pos; more_kwargs = Dict(
-    :plot => Dict(:colormap => :Blues),
-    :axis => Dict(:title => "Precipitation (kg/m²/s)"),
-))
-viz.plot!(fig[1, 2], Q0_last; more_kwargs = Dict(
-    :plot => Dict(:colormap => :Reds),
-    :axis => Dict(:title => "Max Heating Q₀ (K/s)"),
-))
-viz.plot!(fig[1, 3], h_heat_masked; more_kwargs = Dict(
-    :plot => Dict(:colormap => :viridis),
-    :axis => Dict(:title => "Heating Depth h (m) [active cols]"),
-))
+viz.plot!(
+    fig[1, 1],
+    pr_pos;
+    more_kwargs = Dict(
+        :plot => Dict(:colormap => :Blues),
+        :axis => Dict(:title => "Precipitation (kg/m²/s)"),
+    ),
+)
+viz.plot!(
+    fig[1, 2],
+    Q0_last;
+    more_kwargs = Dict(
+        :plot => Dict(:colormap => :Reds),
+        :axis => Dict(:title => "Max Heating Q₀ (K/s)"),
+    ),
+)
+viz.plot!(
+    fig[1, 3],
+    h_heat_masked;
+    more_kwargs = Dict(
+        :plot => Dict(:colormap => :viridis),
+        :axis => Dict(:title => "Heating Depth h (m) [active cols]"),
+    ),
+)
 
 # Panel (1,4): Q0 vs pr scatter
 ax14 = CairoMakie.Axis(fig[1, 4];
@@ -168,7 +180,13 @@ end
 println("Plotting Row 2: EDMF profiles...")
 
 # Panel (2,1): Updraft area fraction
-ax21 = CairoMakie.Axis(fig[2, 1]; title = "Updraft Area Frac", xlabel = "arup", ylabel = "Height (m)", limits = (nothing, (0, z_max_edmf)))
+ax21 = CairoMakie.Axis(
+    fig[2, 1];
+    title = "Updraft Area Frac",
+    xlabel = "arup",
+    ylabel = "Height (m)",
+    limits = (nothing, (0, z_max_edmf)),
+)
 for (ih, (lon, lat)) in enumerate(hotspots)
     z, data = profile_at(arup_var, lon, lat)
     CairoMakie.lines!(ax21, data, z; color = hotspot_colors[ih],
@@ -177,14 +195,26 @@ end
 CairoMakie.axislegend(ax21; position = :rt, labelsize = 10)
 
 # Panel (2,2): Updraft vertical velocity
-ax22 = CairoMakie.Axis(fig[2, 2]; title = "Updraft Velocity", xlabel = "waup (m/s)", ylabel = "Height (m)", limits = (nothing, (0, z_max_edmf)))
+ax22 = CairoMakie.Axis(
+    fig[2, 2];
+    title = "Updraft Velocity",
+    xlabel = "waup (m/s)",
+    ylabel = "Height (m)",
+    limits = (nothing, (0, z_max_edmf)),
+)
 for (ih, (lon, lat)) in enumerate(hotspots)
     z, data = profile_at(waup_var, lon, lat)
     CairoMakie.lines!(ax22, data, z; color = hotspot_colors[ih])
 end
 
 # Panel (2,3): Enthalpy anomaly haup - ha
-ax23 = CairoMakie.Axis(fig[2, 3]; title = "Enthalpy Anomaly", xlabel = "haup - ha (J/kg)", ylabel = "Height (m)", limits = (nothing, (0, z_max_edmf)))
+ax23 = CairoMakie.Axis(
+    fig[2, 3];
+    title = "Enthalpy Anomaly",
+    xlabel = "haup - ha (J/kg)",
+    ylabel = "Height (m)",
+    limits = (nothing, (0, z_max_edmf)),
+)
 for (ih, (lon, lat)) in enumerate(hotspots)
     z_up, haup_data = profile_at(haup_var, lon, lat)
     z_ha, ha_data = profile_at(ha_var, lon, lat)
@@ -193,11 +223,23 @@ for (ih, (lon, lat)) in enumerate(hotspots)
     CairoMakie.lines!(ax23, delta_h, z_up[1:n]; color = hotspot_colors[ih])
     # Overlay h_heat bounds
     h_val = slice(h_heat_last; lon = lon, lat = lat).data[1]
-    CairoMakie.hlines!(ax23, [0.0, h_val]; color = hotspot_colors[ih], linestyle = :dash, linewidth = 0.5)
+    CairoMakie.hlines!(
+        ax23,
+        [0.0, h_val];
+        color = hotspot_colors[ih],
+        linestyle = :dash,
+        linewidth = 0.5,
+    )
 end
 
 # Panel (2,4): Temperature anomaly
-ax24 = CairoMakie.Axis(fig[2, 4]; title = "Temp Anomaly", xlabel = "ΔT (K)", ylabel = "Height (m)", limits = (nothing, (0, z_max_edmf)))
+ax24 = CairoMakie.Axis(
+    fig[2, 4];
+    title = "Temp Anomaly",
+    xlabel = "ΔT (K)",
+    ylabel = "Height (m)",
+    limits = (nothing, (0, z_max_edmf)),
+)
 for (ih, (lon, lat)) in enumerate(hotspots)
     z_up, taup_data = profile_at(taup_var, lon, lat)
     z_ta, ta_data = profile_at(ta_var, lon, lat)
@@ -210,7 +252,13 @@ end
 println("Plotting Row 3: Beres outputs...")
 
 # Panel (3,1): Beres assumed Q₀·sin(πz/h) vs EDMF mass-flux divergence
-ax31 = CairoMakie.Axis(fig[3, 1]; title = "Heating: sin ref (dash) vs EDMF (solid)", xlabel = "Q₁ (K/s)", ylabel = "Height (m)", limits = (nothing, (0, z_max_edmf)))
+ax31 = CairoMakie.Axis(
+    fig[3, 1];
+    title = "Heating: sin ref (dash) vs EDMF (solid)",
+    xlabel = "Q₁ (K/s)",
+    ylabel = "Height (m)",
+    limits = (nothing, (0, z_max_edmf)),
+)
 for (ih, (lon, lat)) in enumerate(hotspots)
     # Beres assumed profile: Q₀·sin(πz/h) — this is what wave_source uses
     h_val = slice(h_heat_last; lon = lon, lat = lat).data[1]
@@ -246,25 +294,43 @@ end
 CairoMakie.axislegend(ax31; position = :rt, labelsize = 9)
 
 # Panel (3,2): utendnogw
-ax32 = CairoMakie.Axis(fig[3, 2]; title = "u-GW Drag (×1e5)", xlabel = "m/s² ×1e5", ylabel = "Height (m)", limits = (nothing, (0, z_max_gw)))
+ax32 = CairoMakie.Axis(
+    fig[3, 2];
+    title = "u-GW Drag (×1e5)",
+    xlabel = "m/s² ×1e5",
+    ylabel = "Height (m)",
+    limits = (nothing, (0, z_max_gw)),
+)
 for (ih, (lon, lat)) in enumerate(hotspots)
     z, data = profile_at(utend_var, lon, lat)
     CairoMakie.lines!(ax32, data .* 1e5, z; color = hotspot_colors[ih])
 end
 
 # Panel (3,3): vtendnogw
-ax33 = CairoMakie.Axis(fig[3, 3]; title = "v-GW Drag (×1e5)", xlabel = "m/s² ×1e5", ylabel = "Height (m)", limits = (nothing, (0, z_max_gw)))
+ax33 = CairoMakie.Axis(
+    fig[3, 3];
+    title = "v-GW Drag (×1e5)",
+    xlabel = "m/s² ×1e5",
+    ylabel = "Height (m)",
+    limits = (nothing, (0, z_max_gw)),
+)
 for (ih, (lon, lat)) in enumerate(hotspots)
     z, data = profile_at(vtend_var, lon, lat)
     CairoMakie.lines!(ax33, data .* 1e5, z; color = hotspot_colors[ih])
 end
 
 # Panel (3,4): Beres source spectrum B(c) — offline computation
-ax34 = CairoMakie.Axis(fig[3, 4]; title = "Beres Spectrum B(c)", xlabel = "Phase speed c (m/s)", ylabel = "MF (arb.)")
+ax34 = CairoMakie.Axis(
+    fig[3, 4];
+    title = "Beres Spectrum B(c)",
+    xlabel = "Phase speed c (m/s)",
+    ylabel = "MF (arb.)",
+)
 try
     @eval using ClimaAtmos
 
-    dc = 4.0; cmax = 100.0
+    dc = 4.0
+    cmax = 100.0
     nc_bins = Int(floor(2 * cmax / dc + 1))
     c_tuple = ntuple(nn -> (nn - 1) * dc - cmax, nc_bins)
     gw_ncval = Val(nc_bins)
@@ -283,7 +349,8 @@ try
         h_mask = z_ua .<= h_val
         u_heat = any(h_mask) ? Float64(mean(ua_data[h_mask])) : 0.0
 
-        g = 9.81; cp_d = 1004.0
+        g = 9.81
+        cp_d = 1004.0
         N_vals = Float64[]
         for k in 2:(length(z_ta) - 1)
             dTdz = (ta_data[k + 1] - ta_data[k - 1]) / (z_ta[k + 1] - z_ta[k - 1])
@@ -292,12 +359,27 @@ try
         end
         N_source = isempty(N_vals) ? 0.012 : mean(N_vals)
 
-        B = ClimaAtmos.wave_source(c_tuple, u_heat, Q0_val, h_val, N_source, beres, gw_ncval)
+        B = ClimaAtmos.wave_source(
+            c_tuple,
+            u_heat,
+            Q0_val,
+            h_val,
+            N_source,
+            beres,
+            gw_ncval,
+        )
         CairoMakie.lines!(ax34, collect(c_tuple), collect(B); color = hotspot_colors[ih])
     end
 catch e
     println("Spectrum plot skipped: $e")
-    CairoMakie.text!(ax34, 0.5, 0.5; text = "ClimaAtmos\nnot loaded", space = :relative, align = (:center, :center))
+    CairoMakie.text!(
+        ax34,
+        0.5,
+        0.5;
+        text = "ClimaAtmos\nnot loaded",
+        space = :relative,
+        align = (:center, :center),
+    )
 end
 
 # --- Save ---
