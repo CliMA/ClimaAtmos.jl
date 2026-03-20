@@ -462,11 +462,9 @@ function compute_beres_convective_heating!(Y, p)
     @. gw_N_source =
         ifelse(weight_sum > eps(FT), result_field.:5 / weight_sum, FT(0.01))
 
-    # Set beres_active flag: Q0 above threshold AND in tropical band
-    (; gw_flag) = p.non_orographic_gravity_wave
+    # Set beres_active flag: Q0 above threshold (all latitude)
     Q0_threshold = gw_beres_source.Q0_threshold
-    @. gw_beres_active =
-        ifelse(gw_Q0 > Q0_threshold && gw_flag < FT(0.5), FT(1), FT(0))
+    @. gw_beres_active = ifelse(gw_Q0 > Q0_threshold, FT(1), FT(0))
 
     # if _do_debug
     #     _Q0d = Array(parent(gw_Q0))
@@ -720,150 +718,111 @@ function non_orographic_gravity_wave_forcing(
     #     end
     # end
 
+    u_waveforcing_top = p.non_orographic_gravity_wave.u_waveforcing_top
+    v_waveforcing_top = p.non_orographic_gravity_wave.v_waveforcing_top
+    scratch_scalar = p.scratch.ᶜtemp_scalar
+
     # loop over all wave lengths
     for ink in 1:gw_nk
-        # Accumulate zonal wave forcing in every column
+        # --- AD99 background source (always active) ---
         waveforcing_column_accumulate!(
-            u_waveforcing,
-            mask_u,
-            input_u,
-            gw_c,
-            gw_c0,
-            gw_nk,
-            ink,
-            level_end,
-            gw_ncval,
-            gw_beres_source,
+            u_waveforcing, mask_u, input_u,
+            gw_c, gw_c0, gw_nk, ink, level_end,
+            gw_ncval, nothing, Val(:ad99),
         )
-
-        # Accumulate meridional wave forcing in every column
-        waveforcing_column_accumulate!(
-            v_waveforcing,
-            mask_v,
-            input_v,
-            gw_c,
-            gw_c0,
-            gw_nk,
-            ink,
-            level_end,
-            gw_ncval,
-            gw_beres_source,
+        postprocess_waveforcing!(
+            u_waveforcing, u_waveforcing_top,
+            damp_level, ᶜlevel, level_end, scratch_scalar,
         )
-
-        #extract the momentum flux outside the model top.
-        u_waveforcing_top = p.non_orographic_gravity_wave.u_waveforcing_top
-        copyto!(
-            Fields.field_values(u_waveforcing_top),
-            Fields.field_values(
-                Fields.level(
-                    u_waveforcing,
-                    Spaces.nlevels(axes(u_waveforcing)),
-                ),
-            ),
-        )
-        fill!(
-            Fields.level(u_waveforcing, Spaces.nlevels(axes(u_waveforcing))),
-            0,
-        )
-
-        v_waveforcing_top = p.non_orographic_gravity_wave.v_waveforcing_top
-        copyto!(
-            Fields.field_values(v_waveforcing_top),
-            Fields.field_values(
-                Fields.level(
-                    v_waveforcing,
-                    Spaces.nlevels(axes(v_waveforcing)),
-                ),
-            ),
-        )
-        fill!(
-            Fields.level(v_waveforcing, Spaces.nlevels(axes(v_waveforcing))),
-            0,
-        )
-
-        # interpolate the waveforcing from center to face
-        gw_average!(u_waveforcing, p.scratch.ᶜtemp_scalar)
-        gw_average!(v_waveforcing, p.scratch.ᶜtemp_scalar)
-
-        # The momentum flux outside the model top will be evenly deposited onto the levels between the damp level and the model top.
-        @. u_waveforcing = gw_deposit(
-            u_waveforcing_top,
-            u_waveforcing,
-            damp_level,
-            ᶜlevel,
-            level_end,
-        )
-        @. v_waveforcing = gw_deposit(
-            v_waveforcing_top,
-            v_waveforcing,
-            damp_level,
-            ᶜlevel,
-            level_end,
-        )
-
-        # update gravity wave forcing
         @. uforcing = uforcing + u_waveforcing
+
+        waveforcing_column_accumulate!(
+            v_waveforcing, mask_v, input_v,
+            gw_c, gw_c0, gw_nk, ink, level_end,
+            gw_ncval, nothing, Val(:ad99),
+        )
+        postprocess_waveforcing!(
+            v_waveforcing, v_waveforcing_top,
+            damp_level, ᶜlevel, level_end, scratch_scalar,
+        )
         @. vforcing = vforcing + v_waveforcing
 
-        # if _do_debug
-        #     _uw_band = Array(parent(u_waveforcing))
-        #     _vw_band = Array(parent(v_waveforcing))
-        #     _uw_max = maximum(abs.(_uw_band))
-        #     _vw_max = maximum(abs.(_vw_band))
-        #     if _uw_max > 1e-10 || _vw_max > 1e-10
-        #         println("[Beres debug] cb=$(_beres_dbg_count[]) ink=$ink u_wf_max=$(_uw_max) v_wf_max=$(_vw_max)")
-        #     end
-        # end
+        # --- Beres convective source (when configured) ---
+        # Compile-time eliminated when gw_beres_source === nothing (BS=Nothing)
+        if !isnothing(gw_beres_source)
+            waveforcing_column_accumulate!(
+                u_waveforcing, mask_u, input_u,
+                gw_c, gw_c0, gw_nk, ink, level_end,
+                gw_ncval, gw_beres_source, Val(:beres),
+            )
+            postprocess_waveforcing!(
+                u_waveforcing, u_waveforcing_top,
+                damp_level, ᶜlevel, level_end, scratch_scalar,
+            )
+            @. uforcing = uforcing + u_waveforcing
 
+            waveforcing_column_accumulate!(
+                v_waveforcing, mask_v, input_v,
+                gw_c, gw_c0, gw_nk, ink, level_end,
+                gw_ncval, gw_beres_source, Val(:beres),
+            )
+            postprocess_waveforcing!(
+                v_waveforcing, v_waveforcing_top,
+                damp_level, ᶜlevel, level_end, scratch_scalar,
+            )
+            @. vforcing = vforcing + v_waveforcing
+        end
     end
     return nothing
 end
 
-# Compile-time dispatch for source spectrum selection.
-# When beres_source::Nothing, the Beres branch is eliminated at compile time.
-compute_source_spectrum(
-    ::Nothing,
-    _,
-    c,
-    u_source,
-    _,
-    _,
-    _,
-    _,
-    Bw,
-    Bn,
-    cw,
-    cn,
-    c0,
-    flag,
-    gw_ncval,
-) = wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
+# Post-process waveforcing: extract top level, average, and deposit above damp level.
+function postprocess_waveforcing!(
+    waveforcing, waveforcing_top, damp_level, ᶜlevel, level_end, scratch,
+)
+    # Extract momentum flux at model top
+    copyto!(
+        Fields.field_values(waveforcing_top),
+        Fields.field_values(
+            Fields.level(waveforcing, Spaces.nlevels(axes(waveforcing))),
+        ),
+    )
+    fill!(Fields.level(waveforcing, Spaces.nlevels(axes(waveforcing))), 0)
 
-function compute_source_spectrum(
+    # Interpolate from center to face
+    gw_average!(waveforcing, scratch)
+
+    # Deposit escaped momentum flux above damp level
+    @. waveforcing = gw_deposit(
+        waveforcing_top, waveforcing, damp_level, ᶜlevel, level_end,
+    )
+end
+
+# Explicit source spectrum helpers for the two-pass accumulation.
+compute_ad99_spectrum(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval) =
+    wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
+
+function compute_beres_spectrum(
     beres::BeresSourceParams,
     beres_active_val,
     c,
-    u_source,
     u_heat_val,
     Q0_val,
     h_val,
     N_val,
-    Bw,
-    Bn,
-    cw,
-    cn,
-    c0,
-    flag,
-    gw_ncval,
-)
-    if beres_active_val > typeof(beres_active_val)(0.5)
+    gw_ncval::Val{nc},
+) where {nc}
+    FT1 = typeof(Q0_val)
+    if beres_active_val > FT1(0.5)
         wave_source(c, u_heat_val, Q0_val, h_val, N_val, beres, gw_ncval)
     else
-        wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
+        # No Beres contribution for non-convecting columns
+        ntuple(_ -> FT1(0), Val(nc))
     end
 end
 
 # Using column_accumulate function, calculate the gravity wave forcing at each point.
+# source_mode::Val{:ad99} or Val{:beres} selects which source spectrum and intermittency to use.
 function waveforcing_column_accumulate!(
     waveforcing,
     mask,
@@ -874,8 +833,9 @@ function waveforcing_column_accumulate!(
     ink,
     level_end,
     gw_ncval::Val{nc},
-    beres_source = nothing,
-) where {nc}
+    beres_source,
+    source_mode::Val{MODE},
+) where {nc, MODE}
     FT = eltype(waveforcing)
     # Here we use column_accumulate function to pass the variable B0 and mask through different levels, and calculate waveforcing at each level.
     Operators.column_accumulate!(
@@ -920,23 +880,16 @@ function waveforcing_column_accumulate!(
         # calculate momentum flux carried by gravity waves with different phase speeds.
         B0, Bsum = if level == 1
             mask = StaticBitVector{nc}(_ -> true)
-            B1 = compute_source_spectrum(
-                beres_source,
-                beres_active_val,
-                c,
-                u_source,
-                u_heat_val,
-                Q0_val,
-                h_val,
-                N_val,
-                Bw,
-                Bn,
-                cw,
-                cn,
-                c0,
-                flag,
-                gw_ncval,
-            )
+            B1 = if MODE == :ad99
+                compute_ad99_spectrum(
+                    c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval,
+                )
+            else # MODE == :beres
+                compute_beres_spectrum(
+                    beres_source, beres_active_val,
+                    c, u_heat_val, Q0_val, h_val, N_val, gw_ncval,
+                )
+            end
             Bsum1 = sum(abs, B1)
             B1, Bsum1
         else
@@ -1000,12 +953,11 @@ function waveforcing_column_accumulate!(
 
             # compute the gravity wave momentum flux forcing
             # obtained across the entire wave spectrum at this level.
-            # For Beres columns, bypass the AD99 intermittency normalization:
-            # the Beres spectrum already represents physical momentum flux,
-            # so ε should preserve raw amplitudes instead of rescaling to Fs0.
-            eps_ad = calc_intermitency(ρ_source, source_ampl, nk, FT1(Bsum))
-            eps_beres = FT1(1.0) / (ρ_source * FT1(nk))
-            eps = ifelse(beres_active_val > FT1(0.5), eps_beres, eps_ad)
+            eps = if MODE == :ad99
+                calc_intermitency(ρ_source, source_ampl, nk, FT1(Bsum))
+            else # MODE == :beres
+                FT1(1.0) / (ρ_source * FT1(nk))
+            end
             if level >= source_level
                 rbh = sqrt(ρ_k * ρ_kp1)
                 wave_forcing = (ρ_source / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
