@@ -16,7 +16,7 @@ import ClimaCore.Fields as Fields
 @testset "Beres squall-line sphere integration" begin
     comms_ctx = ClimaComms.SingletonCommsContext()
     config_files = [
-        joinpath(@__DIR__, "../../../../config/longrun_configs/longrun_aquaplanet_allsky_diagedmf_0M_convgw.yml"),
+        joinpath(@__DIR__, "../../../../config/longrun_configs/longrun_aquaplanet_allsky_diagedmf_0M_conv_gw.yml"),
         joinpath(@__DIR__, "../../../../config/model_configs/beres_squall_integration_test.yml"),
     ]
     config = CA.AtmosConfig(config_files; job_id = "beres_squall_sph", comms_ctx)
