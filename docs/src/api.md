@@ -1,5 +1,11 @@
 # API
 
+## Simulation
+
+```@docs
+ClimaAtmos.AtmosSimulation
+```
+
 ## Grids
 
 ```@docs
@@ -31,10 +37,6 @@ ClimaAtmos.Hughes2023Topography
 ClimaAtmos.SLEVEWarp
 ClimaAtmos.LinearWarp
 ```
-
-## Setups
-
-See the [Setups page](setups.md) for setup types and interface documentation.
 
 ## Internals
 

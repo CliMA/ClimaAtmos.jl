@@ -24,7 +24,11 @@ makedocs(;
     ),
     pages = [
         "Home" => "index.md",
-        "Getting Started" => "getting_started.md",
+        "Getting Started" => [
+            "Installation" => "installation.md",
+            "Your First Simulation" => "first_simulation.md",
+            "Script vs Config Interface" => "interfaces.md",
+        ],
         "Contributor Guide" => "contributor_guide.md",
         "Equations" => "equations.md",
         "Microphysics" => "microphysics.md",
