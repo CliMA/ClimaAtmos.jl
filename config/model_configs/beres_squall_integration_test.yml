@@ -1,0 +1,4 @@
+# Minimal sphere integration test for Beres squall-line forcing.
+# Inherits physics from longrun_aquaplanet_allsky_diagedmf_0M_convgw.yml
+# but uses a coarse phase-speed grid (nc=51) for fast compilation.
+toml: [toml/longrun_aquaplanet_diagedmf.toml, toml/nogw_beres_test.toml]

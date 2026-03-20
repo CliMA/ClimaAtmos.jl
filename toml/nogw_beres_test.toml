@@ -1,0 +1,10 @@
+# Coarse phase-speed grid for fast compilation in Beres integration tests.
+# nc = 2*cmax/dc + 1 = 2*100/4 + 1 = 51 bins (vs 376 with defaults).
+[nogw_Bw]
+value = 0.4
+
+[nogw_cmax]
+value = 100.0
+
+[nogw_dc]
+value = 4.0

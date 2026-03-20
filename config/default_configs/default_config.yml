@@ -282,8 +282,8 @@ beres_Q0_threshold:
   help: "Minimum convective heating rate to activate Beres source (K/s, ~10 K/day = 1.157e-4)"
   value: 1.157e-4
 beres_scale_factor:
-  help: "Dimensionless amplitude scaling for Beres momentum flux"
-  value: 1.0
+  help: "Dimensionless amplitude scaling for Beres momentum flux (controls total wave flux intensity)"
+  value: 2.0e-6
 beres_sigma_x:
   help: "Convective cell horizontal half-width (m)"
   value: 4000.0
