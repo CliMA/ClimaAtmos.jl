@@ -1,5 +1,5 @@
-t_end: "1days"
-dt_save_state_to_disk: "3hours"
+t_end: "30days"
+dt_save_state_to_disk: "6hours"
 rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
@@ -19,10 +19,10 @@ toml: [toml/longrun_aquaplanet_diagedmf.toml]
 output_default_diagnostics: true
 diagnostics:
   - short_name: [utendnogw, vtendnogw, nogw_Q0, nogw_h_heat]
-    period: 3hours
+    period: 6hours
   - short_name: [ua, va, ta, wa]
-    period: 3hours
+    period: 6hours
   - short_name: [arup, waup, taup, haup]
-    period: 3hours
+    period: 6hours
   - short_name: [pr]
-    period: 3hours
+    period: 6hours
