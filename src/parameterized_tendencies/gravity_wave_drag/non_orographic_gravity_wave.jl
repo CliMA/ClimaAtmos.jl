@@ -720,7 +720,7 @@ function non_orographic_gravity_wave_forcing(
 
     u_waveforcing_top = p.non_orographic_gravity_wave.u_waveforcing_top
     v_waveforcing_top = p.non_orographic_gravity_wave.v_waveforcing_top
-    scratch_scalar = p.scratch.ᶜtemp_scalar
+    gw_avg_scratch = p.scratch.ᶜtemp_scalar_6
 
     # loop over all wave lengths
     for ink in 1:gw_nk
@@ -730,22 +730,17 @@ function non_orographic_gravity_wave_forcing(
             gw_c, gw_c0, gw_nk, ink, level_end,
             gw_ncval, nothing, Val(:ad99),
         )
-        postprocess_waveforcing!(
-            u_waveforcing, u_waveforcing_top,
-            damp_level, ᶜlevel, level_end, scratch_scalar,
-        )
-        @. uforcing = uforcing + u_waveforcing
-
         waveforcing_column_accumulate!(
             v_waveforcing, mask_v, input_v,
             gw_c, gw_c0, gw_nk, ink, level_end,
             gw_ncval, nothing, Val(:ad99),
         )
-        postprocess_waveforcing!(
-            v_waveforcing, v_waveforcing_top,
-            damp_level, ᶜlevel, level_end, scratch_scalar,
+        postprocess_and_accumulate!(
+            u_waveforcing, v_waveforcing,
+            u_waveforcing_top, v_waveforcing_top,
+            uforcing, vforcing,
+            damp_level, ᶜlevel, level_end, gw_avg_scratch,
         )
-        @. vforcing = vforcing + v_waveforcing
 
         # --- Beres convective source (when configured) ---
         # Compile-time eliminated when gw_beres_source === nothing (BS=Nothing)
@@ -755,47 +750,63 @@ function non_orographic_gravity_wave_forcing(
                 gw_c, gw_c0, gw_nk, ink, level_end,
                 gw_ncval, gw_beres_source, Val(:beres),
             )
-            postprocess_waveforcing!(
-                u_waveforcing, u_waveforcing_top,
-                damp_level, ᶜlevel, level_end, scratch_scalar,
-            )
-            @. uforcing = uforcing + u_waveforcing
-
             waveforcing_column_accumulate!(
                 v_waveforcing, mask_v, input_v,
                 gw_c, gw_c0, gw_nk, ink, level_end,
                 gw_ncval, gw_beres_source, Val(:beres),
             )
-            postprocess_waveforcing!(
-                v_waveforcing, v_waveforcing_top,
-                damp_level, ᶜlevel, level_end, scratch_scalar,
+            postprocess_and_accumulate!(
+                u_waveforcing, v_waveforcing,
+                u_waveforcing_top, v_waveforcing_top,
+                uforcing, vforcing,
+                damp_level, ᶜlevel, level_end, gw_avg_scratch,
             )
-            @. vforcing = vforcing + v_waveforcing
         end
     end
     return nothing
 end
 
-# Post-process waveforcing: extract top level, average, and deposit above damp level.
-function postprocess_waveforcing!(
-    waveforcing, waveforcing_top, damp_level, ᶜlevel, level_end, scratch,
+# Post-process u/v waveforcing pair and accumulate into forcing fields.
+# gw_average! clobbers scratch (aliased to ᶜρ_p1 in input_u/v), so both
+# column_accumulate! calls must complete BEFORE this is called.
+function postprocess_and_accumulate!(
+    u_waveforcing, v_waveforcing,
+    u_waveforcing_top, v_waveforcing_top,
+    uforcing, vforcing,
+    damp_level, ᶜlevel, level_end, scratch,
 )
     # Extract momentum flux at model top
     copyto!(
-        Fields.field_values(waveforcing_top),
+        Fields.field_values(u_waveforcing_top),
         Fields.field_values(
-            Fields.level(waveforcing, Spaces.nlevels(axes(waveforcing))),
+            Fields.level(u_waveforcing, Spaces.nlevels(axes(u_waveforcing))),
         ),
     )
-    fill!(Fields.level(waveforcing, Spaces.nlevels(axes(waveforcing))), 0)
+    fill!(Fields.level(u_waveforcing, Spaces.nlevels(axes(u_waveforcing))), 0)
 
-    # Interpolate from center to face
-    gw_average!(waveforcing, scratch)
+    copyto!(
+        Fields.field_values(v_waveforcing_top),
+        Fields.field_values(
+            Fields.level(v_waveforcing, Spaces.nlevels(axes(v_waveforcing))),
+        ),
+    )
+    fill!(Fields.level(v_waveforcing, Spaces.nlevels(axes(v_waveforcing))), 0)
+
+    # Interpolate from center to face (clobbers scratch)
+    gw_average!(u_waveforcing, scratch)
+    gw_average!(v_waveforcing, scratch)
 
     # Deposit escaped momentum flux above damp level
-    @. waveforcing = gw_deposit(
-        waveforcing_top, waveforcing, damp_level, ᶜlevel, level_end,
+    @. u_waveforcing = gw_deposit(
+        u_waveforcing_top, u_waveforcing, damp_level, ᶜlevel, level_end,
     )
+    @. v_waveforcing = gw_deposit(
+        v_waveforcing_top, v_waveforcing, damp_level, ᶜlevel, level_end,
+    )
+
+    # Accumulate into forcing
+    @. uforcing = uforcing + u_waveforcing
+    @. vforcing = vforcing + v_waveforcing
 end
 
 # Explicit source spectrum helpers for the two-pass accumulation.
@@ -819,6 +830,16 @@ function compute_beres_spectrum(
         # No Beres contribution for non-convecting columns
         ntuple(_ -> FT1(0), Val(nc))
     end
+end
+
+# Fallback for when beres_source is nothing (AD99-only mode).
+# This is never called at runtime but must exist for GPU compilation
+# since both branches of the MODE dispatch must be compilable.
+function compute_beres_spectrum(
+    ::Nothing, beres_active_val, c, u_heat_val, Q0_val, h_val, N_val,
+    gw_ncval::Val{nc},
+) where {nc}
+    ntuple(_ -> typeof(Q0_val)(0), Val(nc))
 end
 
 # Using column_accumulate function, calculate the gravity wave forcing at each point.
