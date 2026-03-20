@@ -1609,7 +1609,7 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
     ]
     short_names = short_names ∩ collect(keys(simdirs[1].vars))
     vars = map_comparison(simdirs, short_names) do simdir, short_name
-        var = get(simdir; short_name)
+        var = average_xy(get(simdir; short_name))
         if short_name in ["hus", "clw", "husra", "cli", "hussn"]
             var.data .= var.data .* 1000
             var.attributes["units"] = "g/kg"
@@ -1623,7 +1623,7 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
     short_names_lines = ["lwp", "rwp", "pr"]
     short_names_lines = short_names_lines ∩ collect(keys(simdirs[1].vars))
     vars_lines = map_comparison(simdirs, short_names_lines) do simdir, short_name
-        var = get(simdir; short_name)
+        var = average_xy(get(simdir; short_name))
         return rescale_time_to_min(var)
     end
     make_plots_generic(output_paths, vars_lines; summary_files = [file_contour])
