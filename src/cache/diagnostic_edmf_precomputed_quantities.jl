@@ -1346,34 +1346,16 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     t,
 )
     (; params) = p
-    (; ᶜT, ᶜq_liq_rai, ᶜq_ice_sno, ᶠu³) = p.precomputed
+    (; ᶠu³) = p.precomputed
     (; ustar) = p.precomputed.sfc_conditions
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜstrain_rate_norm) = p.precomputed
     (; ρtke_flux) = p.precomputed
     turbconv_params = CAP.turbconv_params(params)
-    thermo_params = CAP.thermodynamics_params(params)
-    ᶜlg = Fields.local_geometry_field(Y.c)
 
     if p.atmos.turbconv_model isa DiagnosticEDMFX
         (; ᶠu³⁰, ᶜu⁰) = p.precomputed
         @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
     end  # Set here, but used in a different function
-
-    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    @. ᶜlinear_buoygrad = buoyancy_gradients(
-        BuoyGradMean(),
-        thermo_params,
-        ᶜT,
-        Y.c.ρ,
-        ᶜq_tot,
-        ᶜq_liq_rai,
-        ᶜq_ice_sno,
-        p.precomputed.ᶜcloud_fraction,
-        C3,
-        p.precomputed.ᶜgradᵥ_q_tot,
-        p.precomputed.ᶜgradᵥ_θ_liq_ice,
-        ᶜlg,
-    )
 
     # TODO: Currently the shear production only includes vertical gradients
     ᶠu = p.scratch.ᶠtemp_C123

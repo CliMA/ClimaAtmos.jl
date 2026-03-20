@@ -198,9 +198,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜu, ᶜp, ᶠu³, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜu, ᶜp, ᶠu³) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ρtke_flux) = p.precomputed
+    (; ᶜstrain_rate_norm, ρtke_flux) = p.precomputed
     (;
         ᶜuʲs,
         ᶜTʲs,
@@ -380,24 +380,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
         @. ᶠρ_diffʲs.:($$j) = min(0, ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ)) / ᶠinterp(ᶜρʲs.:($$j))
     end
-
-    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) =
-        p.precomputed
-    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    @. ᶜlinear_buoygrad = buoyancy_gradients( # TODO - do we need to modify buoyancy gradients based on NonEq + 1M tracers?
-        BuoyGradMean(),
-        thermo_params,
-        ᶜT,
-        Y.c.ρ,
-        ᶜq_tot,
-        ᶜq_liq_rai,
-        ᶜq_ice_sno,
-        ᶜcloud_fraction,
-        C3,
-        ᶜgradᵥ_q_tot,
-        ᶜgradᵥ_θ_liq_ice,
-        ᶜlg,
-    )
 
     # TODO: Make strain_rate_norm calculation a function in eddy_diffusion_closures
     # TODO: Currently the shear production only includes vertical gradients
