@@ -16,8 +16,14 @@ import ClimaCore.Fields as Fields
 @testset "Beres squall-line sphere integration" begin
     comms_ctx = ClimaComms.SingletonCommsContext()
     config_files = [
-        joinpath(@__DIR__, "../../../../config/longrun_configs/longrun_aquaplanet_allsky_diagedmf_0M_conv_gw.yml"),
-        joinpath(@__DIR__, "../../../../config/model_configs/beres_squall_integration_test.yml"),
+        joinpath(
+            @__DIR__,
+            "../../../../config/longrun_configs/longrun_aquaplanet_allsky_diagedmf_0M_conv_gw.yml",
+        ),
+        joinpath(
+            @__DIR__,
+            "../../../../config/model_configs/beres_squall_integration_test.yml",
+        ),
     ]
     config = CA.AtmosConfig(config_files; job_id = "beres_squall_sph", comms_ctx)
 
@@ -43,9 +49,9 @@ import ClimaCore.Fields as Fields
 
     # Extract NOGW cache
     (; gw_ncval, ᶜbuoyancy_frequency, ᶜlevel, u_waveforcing, v_waveforcing,
-       uforcing, vforcing,
-       gw_Q0, gw_h_heat, gw_u_heat, gw_v_heat, gw_N_source,
-       gw_beres_active, gw_flag,
+        uforcing, vforcing,
+        gw_Q0, gw_h_heat, gw_u_heat, gw_v_heat, gw_N_source,
+        gw_beres_active, gw_flag,
     ) = p.non_orographic_gravity_wave
 
     # Get coordinates
