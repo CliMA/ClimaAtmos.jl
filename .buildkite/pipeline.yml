@@ -1,7 +1,7 @@
 agents:
   queue: central
   slurm_mem: 8G
-  modules: climacommon/2026_02_18
+  modules: climacommon/2025_03_18
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -805,7 +805,7 @@ steps:
         agents:
           slurm_ntasks: 2
           slurm_mem: 24G
-          modules: mpiwrapper/2024_05_27 climacommon/2026_02_18
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
 
       # This job occasionally times out. We add a soft file when the agent is
       # lost because of timeout
@@ -824,7 +824,7 @@ steps:
           slurm_gpus_per_task: 1
           slurm_ntasks: 2
           slurm_mem: 24G
-          modules: mpiwrapper/2024_05_27 climacommon/2026_02_18
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
 
       - label: ":computer: test restart_AtmosSimulation"
         command: >
@@ -872,7 +872,7 @@ steps:
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
-          modules: mpiwrapper/2024_05_27 climacommon/2026_02_18
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
         soft_fail: true # remove this once MPI issues have been fixed
 
       - label: ":computer: Test restart for MPI baroclinic wave"
@@ -890,7 +890,7 @@ steps:
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
-          modules: mpiwrapper/2024_05_27 climacommon/2026_02_18
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
         timeout_in_minutes: 20
         soft_fail: true # remove this once MPI issues have been fixed
         #retry:
@@ -907,7 +907,7 @@ steps:
         agents:
           slurm_ntasks: 2
           slurm_mem: 16GB
-          modules: mpiwrapper/2024_05_27 climacommon/2026_02_18
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
         soft_fail: true # remove this once MPI issues have been fixed
 
       - label: ":computer: Prep for calling remap pipeline"
@@ -922,7 +922,7 @@ steps:
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
-          modules: mpiwrapper/2024_05_27 climacommon/2026_02_18
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
         soft_fail: true # remove this once MPI issues have been fixed
 
       - label: ":computer: Exercise remap pipeline"
@@ -1113,7 +1113,7 @@ steps:
           slurm_cpus_per_task: 4
           slurm_ntasks: 2
           slurm_mem: 16GB
-          modules: mpiwrapper/2024_05_27 climacommon/2026_02_18
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
         soft_fail: true # remove this once MPI issues have been fixed
 
       # Brittle test: to be removed
