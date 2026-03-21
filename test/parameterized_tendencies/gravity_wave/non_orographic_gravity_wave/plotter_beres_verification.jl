@@ -107,16 +107,7 @@ pr_last = last_snapshot(pr_var)
 Q0_last = last_snapshot(Q0_var)
 h_heat_last = last_snapshot(h_heat_var)
 
-# Mask h_heat where Beres is inactive: Q0 below threshold OR outside tropics (|lat| >= 30°)
-Q0_threshold = 1.157e-4  # same as BeresSourceParams default
-h_heat_masked = deepcopy(h_heat_last)
-lats_h = h_heat_masked.dims["lat"]
-for (ilat, lat) in enumerate(lats_h)
-    if abs(lat) >= 30
-        h_heat_masked.data[:, ilat] .= NaN
-    end
-end
-# Only mask extratropics; keep all tropical columns regardless of Q0
+h_heat_masked = h_heat_last
 
 # Find hotspot columns
 println("Finding convective hotspots...")
