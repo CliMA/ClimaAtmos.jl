@@ -1080,7 +1080,7 @@ function set_microphysics_tendency_cache!(
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
     sgs_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
     @. ᶜmp_tendency = microphysics_tendencies_quadrature_1m(
-        BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜp, ᶜT,
+        BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
         ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno,
         ᶜT′T′, ᶜq′q′, correlation_Tq(p.params),
     )
@@ -1118,7 +1118,7 @@ function set_microphysics_tendency_cache!(
     # Grid mean or quadrature sum over the SGS fluctuations
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
     @. ᶜmp_tendency = microphysics_tendencies_quadrature_1m(
-        BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜp, ᶜT,
+        BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
         ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno,
         ᶜT′T′, ᶜq′q′, correlation_Tq(p.params),
     )
@@ -1180,7 +1180,7 @@ function set_microphysics_tendency_cache!(
     # Grid mean or quadrature sum over the SGS fluctuations
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
     @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_1m(
-        BMT.Microphysics1Moment(), SG_quad, cmp, thp, ᶜρ⁰, ᶜp, ᶜT⁰,
+        BMT.Microphysics1Moment(), SG_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
         ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰,
         ᶜT′T′, ᶜq′q′, correlation_Tq(p.params),
     )
