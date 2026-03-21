@@ -554,7 +554,7 @@ function edmfx_first_interior_entr_tendency!(
     (; params, dt) = p
     (; ᶜK, ᶜρʲs, ᶜentrʲs) = p.precomputed
 
-    FT = eltype(params)
+    FT = CAP.float_type(params)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)

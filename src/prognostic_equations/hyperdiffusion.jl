@@ -295,7 +295,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     # Rescale the hyperdiffusivity for precipitating species.
     (; ν₄_scalar) = ν₄(hyperdiff, Y)
-    ν₄_scalar_for_precip = CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar
+    ν₄_scalar_for_precip = CAP.α_hyperdiff_tracer(p.params[]) * ν₄_scalar
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜ∇²specific_tracers) = p.hyperdiff

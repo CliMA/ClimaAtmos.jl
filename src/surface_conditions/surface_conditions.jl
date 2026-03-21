@@ -16,9 +16,9 @@ function update_surface_conditions!(Y, p, t)
         Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
     (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜu, sfc_conditions) = p.precomputed
     (; params, sfc_setup, atmos) = p
-    thermo_params = CAP.thermodynamics_params(params)
-    surface_fluxes_params = CAP.surface_fluxes_params(params)
-    surface_temp_params = CAP.surface_temp_params(params)
+    thermo_params = Fields.field_values(CAP.thermodynamics_params(params))
+    surface_fluxes_params = Fields.field_values(CAP.surface_fluxes_params(params))
+    surface_temp_params = Fields.field_values(CAP.surface_temp_params(params))
     int_T_values = Fields.field_values(Fields.level(ᶜT, 1))
     int_ρ_values = Fields.field_values(Fields.level(Y.c.ρ, 1))
     int_q_tot_values = Fields.field_values(Fields.level(ᶜq_tot_safe, 1))
@@ -88,7 +88,7 @@ surface_state(
 function set_dummy_surface_conditions!(p)
     (; params, atmos) = p
     (; sfc_conditions) = p.precomputed
-    FT = eltype(params)
+    FT = CAP.float_type(params)
     @. sfc_conditions.T_sfc = FT(300)
     @. sfc_conditions.q_vap_sfc = FT(0)
     @. sfc_conditions.ustar = FT(0.2)

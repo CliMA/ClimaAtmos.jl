@@ -142,7 +142,7 @@ function edmfx_vertical_diffusion_tendency!(
     if p.atmos.edmfx_model.vertical_diffusion isa Val{true}
         (; params) = p
         (; ᶜρʲs) = p.precomputed
-        FT = eltype(p.params)
+        FT = CAP.float_type(params)
         turbconv_params = CAP.turbconv_params(params)
         n = n_mass_flux_subdomains(turbconv_model)
         ᶜdivᵥ_mse = Operators.DivergenceF2C(
@@ -226,7 +226,7 @@ edmfx_filter_tendency!(Y, p, t, turbconv_model) = nothing
 function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
 
     (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
-    FT = eltype(p.params)
+    FT = CAP.float_type(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
 
     microphysics_tracers = (

@@ -360,7 +360,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs, ᶠρ_diffʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
 
-    FT = eltype(p.params)
+    FT = CAP.float_type(params)
     turbconv_params = CAP.turbconv_params(params)
     α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     ᶠz = Fields.coordinate_field(Y.f).z

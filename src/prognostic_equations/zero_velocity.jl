@@ -100,7 +100,7 @@ Arguments:
 function set_identity_matrix_entry!(matrix_entry, row_name, col_name)
     identity_matrix_entry_value = if row_name == col_name
         # TODO: Add a method for one(::Axis2Tensor) to simplify this.
-        T = eltype(eltype(matrix_entry))
+        T = CAP.float_type(matrix_entry)
         tensor_data = UniformScaling(one(eltype(T)))
         -DiagonalMatrixRow(Geometry.AxisTensor(axes(T), tensor_data))
     else

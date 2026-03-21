@@ -8,6 +8,7 @@ import SurfaceFluxes as SF
 
 abstract type AbstractClimaAtmosParameters end
 const ACAP = AbstractClimaAtmosParameters
+const ACAPField = CC.Fields.Field{<:CC.DataLayouts.DataF{<:ACAP}}
 
 abstract type AbstractTurbulenceConvectionParameters end
 const ATCP = AbstractTurbulenceConvectionParameters
@@ -178,10 +179,14 @@ end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
 
+float_type(ps::ACAPField) =
+    first(Base.promote_op(Val ∘ eltype, eltype(ps)).parameters)
+
 # Forward TurbulenceConvection parameters
 const TCPS = TurbulenceConvectionParameters
 for var in fieldnames(TCPS)
     @eval $var(ps::ACAP) = $var(turbconv_params(ps))
+    @eval $var(ps::ACAPField) = $var(turbconv_params(ps[]))
 end
 for fn in fieldnames(TCPS)
     @eval $(fn)(ps::ATCP) = ps.$(fn)
@@ -189,21 +194,27 @@ end
 
 for var in fieldnames(TD.Parameters.ThermodynamicsParameters)
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
+    @eval $var(ps::ACAPField) = TD.Parameters.$var(thermodynamics_params(ps[]))
 end
 # Thermodynamics derived parameters
 for var in [:Rv_over_Rd, :kappa_d, :e_int_v0, :e_int_i0, :cv_v, :cv_l, :cv_d]
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
+    @eval $var(ps::ACAPField) = TD.Parameters.$var(thermodynamics_params(ps[]))
 end
 
 # Forwarding SurfaceFluxes parameters
 von_karman_const(ps::ACAP) =
     SF.Parameters.von_karman_const(surface_fluxes_params(ps))
+von_karman_const(ps::ACAPField) =
+    SF.Parameters.von_karman_const(surface_fluxes_params(ps[]))
 
 # ------ MOST (Monin–Obukhov) stability-function coefficients ------
 
 # Insolation parameters
 day(ps::ACAP) = IP.day(insolation_params(ps))
+day(ps::ACAPField) = IP.day(insolation_params(ps[]))
 tot_solar_irrad(ps::ACAP) = IP.tot_solar_irrad(insolation_params(ps))
+tot_solar_irrad(ps::ACAPField) = IP.tot_solar_irrad(insolation_params(ps[]))
 
 # Forward External Forcing parameters
 efp_fields = [
@@ -215,11 +226,13 @@ efp_fields = [
 
 for fn_efp in efp_fields
     @eval $(fn_efp)(ps::ACAP) = external_forcing_params(ps).$(fn_efp)
+    @eval $(fn_efp)(ps::ACAPField) = external_forcing_params(ps[]).$(fn_efp)
 end
 
 # Define parameters as functions
 for var in fieldnames(ClimaAtmosParameters)
     @eval $var(ps::ACAP) = ps.$var
+    @eval $var(ps::ACAPField) = eltype(ps.$var) <: Number ? ps.$var[] : ps.$var
 end
 
 end

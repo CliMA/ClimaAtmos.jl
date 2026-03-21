@@ -15,6 +15,38 @@ include("compat.jl")
 include(joinpath("parameters", "Parameters.jl"))
 import .Parameters as CAP
 
+# Base.@propagate_inbounds CAP.CC.Operators.get_node(
+#     _,
+#     field::CAP.CC.Fields.Field{V},
+#     _::CartesianIndex{1},
+#     _,
+# ) where {V <: CAP.CC.DataLayouts.DataF{<:CAP.ACAP}} = field[]
+# Base.@propagate_inbounds CAP.CC.Operators.get_node(
+#     _,
+#     field::CAP.CC.Fields.Field{V},
+#     _::CartesianIndex{2},
+#     _,
+# ) where {V <: CAP.CC.DataLayouts.DataF{<:CAP.ACAP}} = field[]
+Base.@propagate_inbounds CAP.CC.Operators.get_node(
+    _,
+    field::CAP.CC.Fields.PointField,
+    _::CartesianIndex{1},
+    _,
+) = field[]
+Base.@propagate_inbounds CAP.CC.Operators.get_node(
+    _,
+    field::CAP.CC.Fields.PointField,
+    _::CartesianIndex{2},
+    _,
+) = field[]
+Base.@propagate_inbounds CAP.CC.Operators.get_node(
+    _,
+    data::CAP.CC.DataLayouts.DataF{<:CAP.ACAP},
+    _,
+    _,
+) = data[]
+
+
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "gpu_compat.jl"))
 include(joinpath("solver", "types.jl"))

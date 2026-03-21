@@ -12,7 +12,7 @@ import ClimaCore.Fields as Fields
 #####
 
 function held_suarez_ΔT_y_T_equator(params, microphysics_model::DryModel)
-    FT = eltype(params)
+    FT = CAP.float_type(params)
     ΔT_y = FT(CAP.ΔT_y_dry(params))
     T_equator = FT(CAP.T_equator_dry(params))
     return ΔT_y, T_equator
@@ -22,7 +22,7 @@ function held_suarez_ΔT_y_T_equator(
     params,
     microphysics_model::T,
 ) where {T <: MoistMicrophysics}
-    FT = eltype(params)
+    FT = CAP.float_type(params)
     ΔT_y = FT(CAP.ΔT_y_wet(params))
     T_equator = FT(CAP.T_equator_wet(params))
     return ΔT_y, T_equator

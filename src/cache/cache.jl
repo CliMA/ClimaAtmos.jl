@@ -151,6 +151,11 @@ function build_cache(
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
 
+    param_field = Fields.Field(
+        Fields.DataLayouts.DataF(params),
+        Fields.column(Fields.level(axes(Y.c), 1), 1, 1, 1),
+    )
+
     core = (
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
@@ -162,7 +167,7 @@ function build_cache(
             unit_basis_vector_data.(CT3, sfc_local_geometry),
         ),
     )
-    external_forcing = external_forcing_cache(Y, atmos, params, start_date)
+    external_forcing = external_forcing_cache(Y, atmos, param_field, start_date)
     sfc_setup = surface_setup(params)
     scratch = temporary_quantities(Y, atmos)
 
@@ -170,7 +175,7 @@ function build_cache(
     precomputing_arguments = (;
         atmos,
         core,
-        params,
+        params = param_field,
         sfc_setup,
         precomputed,
         scratch,
@@ -189,7 +194,7 @@ function build_cache(
         atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
         (
             start_date,
-            params,
+            param_field,
             aerosol_names,
             time_varying_trace_gas_names,
             atmos.insolation,
@@ -204,7 +209,7 @@ function build_cache(
         dt,
         atmos,
         numerics,
-        params,
+        param_field,
         core,
         sfc_setup,
         ghost_buffer,

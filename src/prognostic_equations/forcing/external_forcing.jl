@@ -491,7 +491,10 @@ function external_forcing_cache(
         Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
         NamedTuple{
             Tuple(surface_variable_names_as_symbols),
-            NTuple{length(surface_variable_names_as_symbols), eltype(params)},
+            NTuple{
+                length(surface_variable_names_as_symbols),
+                CAP.float_type(params),
+            },
         },
     )
 

@@ -626,7 +626,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, cloud_model, microphysics_model) = p.atmos
 
     thermo_params = CAP.thermodynamics_params(p.params)
-    FT = eltype(p.params)
+    FT = CAP.float_type(p.params)
 
     if !isnothing(p.sfc_setup)
         SurfaceConditions.update_surface_conditions!(Y, p, FT(t))

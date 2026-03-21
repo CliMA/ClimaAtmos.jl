@@ -54,7 +54,7 @@ function edmfx_tke_tendency!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶠu³, ᶠu³ʲs, ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
     turbconv_params = CAP.turbconv_params(p.params)
-    FT = eltype(p.params)
+    FT = CAP.float_type(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
 
     if use_prognostic_tke(turbconv_model)

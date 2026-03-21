@@ -661,7 +661,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     if use_derivative(diffusion_flag)
         (; turbconv_model) = p.atmos
         turbconv_params = CAP.turbconv_params(params)
-        FT = eltype(params)
+        FT = CAP.float_type(params)
         (; vertical_diffusion, smagorinsky_lilly) = p.atmos
         (; ᶜp) = p.precomputed
         ᶜK_u = p.scratch.ᶜtemp_scalar_4

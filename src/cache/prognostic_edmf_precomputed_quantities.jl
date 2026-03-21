@@ -195,7 +195,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
-    FT = eltype(params)
+    FT = CAP.float_type(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
     (; ᶜu, ᶜp, ᶠu³, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed

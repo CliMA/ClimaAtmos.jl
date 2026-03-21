@@ -23,7 +23,7 @@ function flux_accumulation!(integrator)
     Y = integrator.u
     p = integrator.p
     Δt = integrator.dt
-    FT = eltype(p.params)
+    FT = CAP.float_type(p.params)
     if !isnothing(p.atmos.radiation_mode)
         (; ᶠradiation_flux) = p.radiation
         (; net_energy_flux_toa, net_energy_flux_sfc) = p
@@ -278,7 +278,7 @@ end
 NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
     Y = u
-    FT = eltype(p.params)
+    FT = CAP.float_type(p.params)
 
     # TODO: Use ITime here
     t = FT(t)

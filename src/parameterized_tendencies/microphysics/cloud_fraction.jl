@@ -318,7 +318,7 @@ Dispatches on `microphysics_model` and `cloud_model`:
 For EDMF turbulence models, updraft contributions are added to the environment values.
 """
 NVTX.@annotate function set_cloud_fraction!(Y, p, ::DryModel, _)
-    FT = eltype(p.params)
+    FT = CAP.float_type(p.params)
     p.precomputed.ᶜcloud_fraction .= FT(0)
 end
 NVTX.@annotate function set_cloud_fraction!(
@@ -328,7 +328,7 @@ NVTX.@annotate function set_cloud_fraction!(
     ::GridScaleCloud,
 )
     (; ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
-    FT = eltype(p.params)
+    FT = CAP.float_type(p.params)
     @. p.precomputed.ᶜcloud_fraction =
         ifelse(TD.has_condensate(ᶜq_liq_rai + ᶜq_ice_sno), FT(1), FT(0))
 end
