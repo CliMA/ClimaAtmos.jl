@@ -36,7 +36,6 @@ import LinearAlgebra: norm_sqr
 import ..Parameters as CAP
 import Thermodynamics as TD
 import AtmosphericProfilesLibrary as APL
-import SciMLBase
 import Interpolations as Intp
 import NCDatasets as NC
 import Statistics: mean

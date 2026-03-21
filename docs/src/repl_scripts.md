@@ -11,7 +11,7 @@ Pkg.activate(buildkite_env)
 # julia> using Revise # This is useful For REPL debugging. See also: Infiltrator.jl and Main.@infiltrate
 
 import ClimaAtmos as CA
-import SciMLBase: step!
+import ClimaTimeSteppers: step!
 
 # If you wish to run your simulation on a `CUDA` device, use
 

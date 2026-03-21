@@ -10,7 +10,6 @@ include("common.jl")
 using CUDA, BenchmarkTools, OrderedCollections, StatsBase, PrettyTables # needed for CTS.benchmark_step
 using Test
 using ClimaComms
-import SciMLBase
 import ClimaTimeSteppers as CTS
 
 (; config_file, job_id) = CA.commandline_kwargs()
@@ -39,7 +38,7 @@ device = ClimaComms.device(config.comms_ctx)
     ],
 )
 
-SciMLBase.step!(integrator) # compile first
+CTS.step!(integrator) # compile first
 
 are_boundschecks_forced = Base.JLOptions().check_bounds == 1
 # Benchmark allocation tests

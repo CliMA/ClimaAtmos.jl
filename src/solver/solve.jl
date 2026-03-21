@@ -24,7 +24,7 @@ function timed_solve!(integrator)
     comms_ctx = ClimaComms.context(device)
     local sol
     walltime = ClimaComms.elapsed(device) do
-        sol = SciMLBase.solve!(integrator)
+        sol = CTS.solve!(integrator)
     end
     @info "solve! walltime = $(round(walltime, digits = 3))"
     (; tspan) = integrator.sol.prob
@@ -71,7 +71,7 @@ function solve_atmos!(simulation)
     @info "Running" job_id = simulation.job_id output_dir =
         simulation.output_dir tspan
     comms_ctx = ClimaComms.context(axes(integrator.u.c))
-    SciMLBase.step!(integrator)
+    CTS.step!(integrator)
     precompile_callbacks(integrator)
     GC.gc()
     try
@@ -145,7 +145,7 @@ for the flags outlined in a table.
 """
 function benchmark_step!(integrator, Y₀, n_steps = 10)
     for i in 1:n_steps
-        SciMLBase.step!(integrator)
+        CTS.step!(integrator)
         integrator.u .= Y₀ # temporary hack to simplify performance benchmark.
     end
     return nothing
@@ -165,7 +165,7 @@ into account.
 function cycle!(integrator; n_cycles = 1)
     n_steps = n_steps_per_cycle(integrator) * n_cycles
     for i in 1:n_steps
-        SciMLBase.step!(integrator)
+        CTS.step!(integrator)
     end
     return nothing
 end
@@ -184,7 +184,7 @@ Precompiles `step!` and all callbacks
 in the `integrator`.
 """
 function precompile_atmos(integrator)
-    B = Base.precompile(SciMLBase.step!, (typeof(integrator),))
+    B = Base.precompile(CTS.step!, (typeof(integrator),))
     @assert B
     precompile_callbacks(integrator)
     return nothing

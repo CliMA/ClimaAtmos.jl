@@ -61,7 +61,6 @@ known_dependencies = Set([
     "RRTMGP",
     # Random is used to reset seed for random number generator used for cloudy RRTMGP runs to enable bit-wise reproducibility for tests
     "Random",
-    "SciMLBase",
     # SparseMatrixColorings is used to generate the column coloring of the AutoSparseJacobian
     "SparseMatrixColorings",
     "StaticArrays",

@@ -822,7 +822,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             T_exp_T_lim! = remaining_tendency!
             T_imp_subproblem! =
                 p.atmos.turbconv_model isa PrognosticEDMFX ?
-                SciMLBase.ODEFunction(
+                CTS.ODEFunction(
                     implicit_tendency_sgs_u₃!;
                     jac_prototype = get_jacobian(ode_algo, Y, atmos,
                         use_dense_jacobian, use_auto_jacobian,
@@ -832,7 +832,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                     ),
                     Wfact = update_jacobian_sgs_u₃!,
                 ) : nothing
-            T_imp! = SciMLBase.ODEFunction(
+            T_imp! = CTS.ODEFunction(
                 implicit_tendency!;
                 jac_prototype = get_jacobian(ode_algo, Y, atmos,
                     use_dense_jacobian, use_auto_jacobian,
@@ -857,15 +857,14 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             initialize_subproblem! = initialize_sgs_u₃!,
         )
     end
-    problem = SciMLBase.ODEProblem(tendency_function, Y, tspan, p)
+    problem = CTS.ODEProblem(tendency_function, Y, tspan, p)
     # Promote to ensure t_begin, t_end, and dt_integrator all have the same type
     # dt_integrator can be ITime when use_itime=true, while p.dt is always FT
     t_begin, t_end, dt = promote(tspan[1], tspan[2], dt_integrator)
     # Save solution to integrator.sol at the beginning and end
     saveat = [t_begin, t_end]
     args = (problem, ode_algo)
-    allow_custom_kwargs = (; kwargshandle = CTS.DiffEqBase.KeywordArgSilent)
-    kwargs = (; saveat, callback, dt, adjustfinal = true, allow_custom_kwargs...)
+    kwargs = (; saveat, callback, dt)
     return (args, kwargs)
 end
 
@@ -1153,9 +1152,9 @@ function get_simulation(config::AtmosConfig)
 
     s = @timed_str begin
         all_callbacks =
-            SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
+            CTS.CallbackSet(continuous_callbacks, discrete_callbacks)
     end
-    @info "Prepared SciMLBase.CallbackSet callbacks: $s"
+    @info "Prepared CTS.CallbackSet callbacks: $s"
     steps_cycle_non_diag = n_steps_per_cycle_per_cb(all_callbacks, sim_info.dt)
     steps_cycle = lcm(steps_cycle_non_diag)
     @info "n_steps_per_cycle_per_cb (non diagnostics): $steps_cycle_non_diag"
@@ -1175,7 +1174,7 @@ function get_simulation(config::AtmosConfig)
     end
 
     s = @timed_str begin
-        integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
+        integrator = CTS.init(integrator_args...; integrator_kwargs...)
     end
     @info "init integrator: $s"
 
