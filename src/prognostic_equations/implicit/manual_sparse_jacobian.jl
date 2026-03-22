@@ -1801,14 +1801,13 @@ function helmholtz_correction!(cache, ΔY)
     @. ᶜhelmholtz_ρ = ᶜhelmholtz_rhs
     for _ in 1:n_helmholtz_iters
         @. ᶜhelmholtz_laplacian = wdivₕ(gradₕ(ᶜhelmholtz_ρ))
-        Spaces.weighted_dss!(
-            ᶜhelmholtz_laplacian => ᶜhelmholtz_dss_buffer,
-        )
         @. ᶜhelmholtz_ρ +=
             (ᶜhelmholtz_rhs - ᶜhelmholtz_ρ +
              α * ᶜcs² * ᶜhelmholtz_laplacian) /
             (FT(1) + ᶜα_acoustic)
     end
+    # DSS only the final ρ iterate (not intermediate ones)
+    Spaces.weighted_dss!(ᶜhelmholtz_ρ => ᶜhelmholtz_dss_buffer)
 
     # Save old z.ρ before overwriting (reuse ᶜhelmholtz_laplacian as scratch)
     @. ᶜhelmholtz_laplacian = ΔY.c.ρ
@@ -1828,14 +1827,13 @@ function helmholtz_correction!(cache, ΔY)
     @. ᶜhelmholtz_ρe = ᶜhelmholtz_rhs
     for _ in 1:n_helmholtz_iters
         @. ᶜhelmholtz_laplacian = wdivₕ(gradₕ(ᶜhelmholtz_ρe))
-        Spaces.weighted_dss!(
-            ᶜhelmholtz_laplacian => ᶜhelmholtz_dss_buffer,
-        )
         @. ᶜhelmholtz_ρe +=
             (ᶜhelmholtz_rhs - ᶜhelmholtz_ρe +
              α * ᶜcs² * ᶜhelmholtz_laplacian) /
             (FT(1) + ᶜα_acoustic)
     end
+    # DSS only the final ρe_tot iterate (not intermediate ones)
+    Spaces.weighted_dss!(ᶜhelmholtz_ρe => ᶜhelmholtz_dss_buffer)
     ΔY.c.ρe_tot .= ᶜhelmholtz_ρe
 
     # ── Block 4: Tracer correction (advective, no Helmholtz) ──
