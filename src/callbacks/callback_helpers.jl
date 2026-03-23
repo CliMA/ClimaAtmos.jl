@@ -71,9 +71,8 @@ function atmos_callbacks(cbs)
     return callback_objs
 end
 
-n_measured_calls(integrator) = n_measured_calls(integrator.callback)
-n_measured_calls(cbs) =
-    map(x -> x.n_measured_calls, atmos_callbacks(cbs))
+n_measured_calls(integrator) =
+    map(x -> x.n_measured_calls, atmos_callbacks(integrator.callback))
 
 n_expected_calls(integrator) = n_expected_calls(
     integrator.callback,

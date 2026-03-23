@@ -473,9 +473,9 @@ version = "1.0.14"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "StaticArrays"]
-git-tree-sha1 = "31b378d5206e66e34ef765bc7938693f302f8264"
+git-tree-sha1 = "192ec2692b0746d95e3e12032ab552d4a7d8eb8a"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
-version = "0.8.9"
+version = "0.8.10"
 
     [deps.ClimaTimeSteppers.extensions]
     ClimaTimeSteppersBenchmarkToolsExt = ["CUDA", "BenchmarkTools", "OrderedCollections", "StatsBase", "PrettyTables"]

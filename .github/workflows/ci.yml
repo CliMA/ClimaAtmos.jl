@@ -46,7 +46,6 @@ jobs:
           - era5
     env:
       TEST_GROUP: ${{ matrix.test_group }}
-      JULIA_PKG_SERVER: "" # forces Julia to use the GitHub-hosted registry directly (workaround for syncing problems with weak deps)
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
