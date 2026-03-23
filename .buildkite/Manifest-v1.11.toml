@@ -507,7 +507,7 @@ weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolatio
 
 [[deps.CloudMicrophysics]]
 deps = ["ClimaParams", "DocStringExtensions", "ForwardDiff", "LazyArtifacts", "LogExpFunctions", "RootSolvers", "SpecialFunctions", "StaticArrays", "Thermodynamics", "UnrolledUtilities"]
-path = "../../CloudMicrophysics.jl"
+git-tree-sha1 = "ffbcad4974b0be4ec5ff2746558d72d49496a517"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
 version = "0.32.0"
 
@@ -2320,11 +2320,9 @@ version = "0.5.1+0"
 
 [[deps.RootSolvers]]
 deps = ["ForwardDiff", "Printf"]
-git-tree-sha1 = "02a4d8bc238400a1890cf39936bdeca92942aa39"
-repo-rev = "ts/singleton-types"
-repo-url = "https://github.com/CliMA/RootSolvers.jl"
+git-tree-sha1 = "3b6c0089c3dc3d5780786d5007e976fe9d1b7887"
 uuid = "7181ea78-2dcb-4de3-ab41-2b8ab5a31e74"
-version = "1.0.1"
+version = "1.0.2"
 
 [[deps.RoundingEmulator]]
 git-tree-sha1 = "40b9edad2e5287e05bd413a38f61a8ff55b9557b"
@@ -2778,9 +2776,9 @@ version = "1.0.2"
 
 [[deps.Thermodynamics]]
 deps = ["ForwardDiff", "Random", "RootSolvers"]
-path = "../../Thermodynamics.jl"
+git-tree-sha1 = "e7488235d2d098a466fbbede579baaf9bf742a73"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-version = "1.0.1"
+version = "1.0.0"
 weakdeps = ["ClimaParams"]
 
     [deps.Thermodynamics.extensions]
