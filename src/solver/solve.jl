@@ -4,7 +4,7 @@ import Base.Sys: maxrss
 # Empty integrator.tstops to stop time-marching.
 function terminate!(integrator::CTS.DistributedODEIntegrator)
     @info "Gracefully exiting simulation."
-    empty!(integrator.tstops.valtree)
+    empty!(integrator.tstops)
 end
 
 struct EfficiencyStats{TS <: Tuple, WT}
@@ -255,7 +255,8 @@ function check_conservation(sol)
         sum(sol.u[1].c.ρ)
 
     # We set water_conservation to zero for the dry model as there is no water
-    water_conservation = zero(eltype(sol))
+    FT = Spaces.undertype(axes(sol.u[end].c.ρ))
+    water_conservation = zero(FT)
     if :ρq_tot in propertynames(sol.u[1].c)
         water_conservation =
             abs(water_atmos_change + water_surface_change) / water_total
