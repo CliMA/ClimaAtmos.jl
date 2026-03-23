@@ -64,7 +64,7 @@ function callback_from_affect(affect!)
     end
     return nothing
 end
-function atmos_callbacks(cbs::CTS.CallbackSet)
+function atmos_callbacks(cbs)
     all_cbs = [cbs.continuous_callbacks..., cbs.discrete_callbacks...]
     callback_objs = map(cb -> callback_from_affect(cb.affect!), all_cbs)
     filter!(x -> (x isa AtmosCallback), callback_objs)
@@ -72,7 +72,7 @@ function atmos_callbacks(cbs::CTS.CallbackSet)
 end
 
 n_measured_calls(integrator) = n_measured_calls(integrator.callback)
-n_measured_calls(cbs::CTS.CallbackSet) =
+n_measured_calls(cbs) =
     map(x -> x.n_measured_calls, atmos_callbacks(cbs))
 
 n_expected_calls(integrator) = n_expected_calls(
@@ -80,12 +80,12 @@ n_expected_calls(integrator) = n_expected_calls(
     integrator.dt,
     integrator.sol.prob.tspan,
 )
-n_expected_calls(cbs::CTS.CallbackSet, dt, tspan) =
+n_expected_calls(cbs, dt, tspan) =
     map(x -> n_expected_calls(x, dt, tspan), atmos_callbacks(cbs))
 
 n_steps_per_cycle(integrator) =
     n_steps_per_cycle(integrator.callback, integrator.dt)
-function n_steps_per_cycle(cbs::CTS.CallbackSet, dt)
+function n_steps_per_cycle(cbs, dt)
     nspc = n_steps_per_cycle_per_cb(cbs, dt)
     return isempty(nspc) ? 1 : lcm(nspc)
 end
@@ -93,7 +93,7 @@ end
 n_steps_per_cycle_per_cb(integrator) =
     n_steps_per_cycle_per_cb(integrator.callback, integrator.dt)
 
-function n_steps_per_cycle_per_cb(cbs::CTS.CallbackSet, dt)
+function n_steps_per_cycle_per_cb(cbs, dt)
     return map(atmos_callbacks(cbs)) do cb
         cbf = callback_frequency(cb)
         if cbf isa EveryΔt
