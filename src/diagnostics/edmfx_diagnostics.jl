@@ -736,7 +736,9 @@ compute_edt(state, cache, _, model::VerticalDiffusion, ::Nothing) =
 compute_edt(state, _, _, model::DecayWithHeightDiffusion, ::Nothing) =
     ᶜcompute_eddy_diffusivity_coefficient(state.c.ρ, model)
 
-function compute_edt(state, cache, _, ::Nothing, ::Union{PrognosticEDMFX, DiagnosticEDMFX})
+function compute_edt(state, cache, _,
+    ::Nothing, ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX},
+)
     turbconv_params = CAP.turbconv_params(cache.params)
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
     (; params) = cache
@@ -773,7 +775,13 @@ compute_evu(state, cache, _, model::VerticalDiffusion, ::Nothing) =
 compute_evu(state, _, _, model::DecayWithHeightDiffusion, ::Nothing) =
     ᶜcompute_eddy_diffusivity_coefficient(state.c.ρ, model)
 
-function compute_evu(state, cache, _, ::Nothing, ::Union{PrognosticEDMFX, DiagnosticEDMFX})
+function compute_evu(
+    state,
+    cache,
+    _,
+    ::Nothing,
+    ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX},
+)
     turbconv_params = CAP.turbconv_params(cache.params)
     ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
     ᶜmixing_length_field = ᶜmixing_length(state, cache)
