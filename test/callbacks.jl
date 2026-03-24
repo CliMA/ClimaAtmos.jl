@@ -2,7 +2,7 @@ using Test
 import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
-import SciMLBase as SMB
+import ClimaTimeSteppers as CTS
 
 testfun!() = π
 cb_default = CA.call_every_n_steps(testfun!;)
@@ -27,7 +27,7 @@ cb_4 = CA.call_every_n_steps(
     call_at_end = false,
     condition = nothing,
 )
-cb_set = SMB.CallbackSet(cb_1, cb_2, cb_4)
+cb_set = CTS.CallbackSet(cb_1, cb_2, cb_4)
 
 @testset "Simple default callback" begin
     @test cb_default.condition.n == 1
@@ -49,7 +49,7 @@ end
 
 # per dt interval
 @testset "Dt interval callback" begin
-    @test cb_2 isa SMB.DiscreteCallback
+    @test cb_2 isa CTS.DiscreteCallback
     @test cb_2.affect!.dt == test_dt
     @test cb_2.affect!.cb!.f!() == π
     @test_throws AssertionError CA.call_every_dt(

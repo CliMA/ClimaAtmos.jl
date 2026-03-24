@@ -343,7 +343,7 @@ function progress_logging_callback(dt, t_start, t_end)
     schedule = CappedGeometricSeriesSchedule(five_percent_steps)
     cond = (u, t, integrator) -> schedule(integrator)
     affect! = (integrator) -> report_walltime(walltime_info, integrator)
-    return (SciMLBase.DiscreteCallback(cond, affect!),)
+    return (CTS.DiscreteCallback(cond, affect!),)
 end
 
 function nan_checking_callback(check_nan_every::Int)
@@ -382,7 +382,7 @@ function checkpoint_callback(
         )
         cond = (u, t, integrator) -> schedule(integrator)
         affect! = (integrator) -> save_state_to_disk_func(integrator, output_dir)
-        return (SciMLBase.DiscreteCallback(cond, affect!),)
+        return (CTS.DiscreteCallback(cond, affect!),)
     end
     return ()
 end

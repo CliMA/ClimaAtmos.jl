@@ -232,7 +232,7 @@ function AtmosSimulation{FT}(;
         callbacks
     end
     continuous_callbacks = ()
-    callback_set = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
+    callback_set = CTS.CallbackSet(continuous_callbacks, discrete_callbacks)
 
     integrator_args, integrator_kwargs = args_integrator(
         Y, p, (t_start, t_end), ode_config,
@@ -243,7 +243,7 @@ function AtmosSimulation{FT}(;
         dt,
     )
 
-    integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
+    integrator = CTS.init(integrator_args...; integrator_kwargs...)
 
     # Set up diagnostics and writers
     all_diagnostics, writers, periods_reductions = setup_diagnostics_and_writers(

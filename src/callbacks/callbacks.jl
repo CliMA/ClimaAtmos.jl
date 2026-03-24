@@ -7,7 +7,6 @@ import ClimaCore.Fields
 import ClimaComms
 import ClimaCore as CC
 import ClimaCore.Spaces
-import SciMLBase
 import .Parameters as CAP
 import ClimaCore: InputOutput
 using Dates
