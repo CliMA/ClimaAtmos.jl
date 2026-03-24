@@ -134,14 +134,14 @@ function set_precipitation_velocities!(
     (; ᶜp) = p.precomputed
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜTʲs, ᶜρʲs) = p.precomputed
-    (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+    (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
 
     FT = eltype(p.params)
     cmc = CAP.microphysics_cloud_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
 
-    ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
+    ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰))
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     n = n_mass_flux_subdomains(turbconv_model)
 
@@ -430,14 +430,14 @@ function set_precipitation_velocities!(
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     (; ᶜΦ) = p.core
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs) = p.precomputed
-    (; ᶜp, ᶜTʲs, ᶜρʲs, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+    (; ᶜp, ᶜTʲs, ᶜρʲs, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     cmc = CAP.microphysics_cloud_params(p.params)
     cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
 
-    ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰))
+    ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰))
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     n = n_mass_flux_subdomains(turbconv_model)
 
@@ -883,7 +883,7 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
     (; dt) = p
     (; ᶜΦ) = p.core
     # TODO unified naming convention - _safe, lcl+rai-liq, icl+sno=ice
-    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; ᶜmp_tendency) = p.precomputed
 
     cm0 = CAP.microphysics_0m_params(p.params)
@@ -909,12 +909,12 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
     else
         # ... or evaluate on the grid-mean.
         @. ᶜmp_tendency.dq_tot_dt = BMT.bulk_microphysics_tendencies(
-            BMT.Microphysics0Moment(), cm0, thp, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno,
+            BMT.Microphysics0Moment(), cm0, thp, ᶜT, ᶜq_liq, ᶜq_ice,
         )
         # For the grid-mean path (no SGS averaging), compute e_tot_hlpr
         # from grid-mean values (exact for a single evaluation point).
         @. ᶜmp_tendency.e_tot_hlpr = e_tot_0M_precipitation_sources_helper(
-            thp, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno, ᶜΦ,
+            thp, ᶜT, ᶜq_liq, ᶜq_ice, ᶜΦ,
         )
     end
     # Apply the limiter
@@ -990,8 +990,8 @@ function set_microphysics_tendency_cache!(
 
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
     (; ᶜ∂tendency_∂q_totʲs) = p.precomputed
-    (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
-    (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+    (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜT′T′, ᶜq′q′) = p.precomputed # temperature-based variances
 
     thp = CAP.thermodynamics_params(p.params)
@@ -1005,7 +1005,7 @@ function set_microphysics_tendency_cache!(
         # Materialize BMT result first to avoid NamedTuple property access in broadcast
         @. ᶜmp_tendencyʲs.:($$j).dq_tot_dt = BMT.bulk_microphysics_tendencies(
             BMT.Microphysics0Moment(), cm0, thp, ᶜTʲs.:($$j),
-            ᶜq_liq_raiʲs.:($$j), ᶜq_ice_snoʲs.:($$j),
+            ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j),
         )
         # Apply the limiter
         apply_0m_tendency_limits!(
@@ -1015,7 +1015,7 @@ function set_microphysics_tendency_cache!(
         # Compute the total energy helper
         @. ᶜmp_tendencyʲs.:($$j).e_tot_hlpr =
             e_tot_0M_precipitation_sources_helper(
-                thp, ᶜTʲs.:($$j), ᶜq_liq_raiʲs.:($$j), ᶜq_ice_snoʲs.:($$j), ᶜΦ,
+                thp, ᶜTʲs.:($$j), ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j), ᶜΦ,
             )
 
         @. ᶜ∂tendency_∂q_totʲs.:($$j) =
@@ -1024,7 +1024,7 @@ function set_microphysics_tendency_cache!(
 
     ### Environment contribution
     ᶜρ⁰ = @. lazy(
-        TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+        TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )
     SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
     @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_0m(
@@ -1140,7 +1140,7 @@ function set_microphysics_tendency_cache!(
 )
     (; dt) = p
     (; ᶜρʲs, ᶜTʲs, ᶜq_tot_safeʲs) = p.precomputed
-    (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+    (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_derivative) = p.precomputed
     (; ᶜmp_tendencyʲs, ᶜmp_derivativeʲs) = p.precomputed
     (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
@@ -1174,7 +1174,7 @@ function set_microphysics_tendency_cache!(
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(
-        TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+        TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )
     SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
     # Grid mean or quadrature sum over the SGS fluctuations
@@ -1291,7 +1291,7 @@ function set_microphysics_tendency_cache!(
     n = n_mass_flux_subdomains(tm)
 
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_safeʲs) = p.precomputed
-    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
 
@@ -1344,7 +1344,7 @@ function set_microphysics_tendency_cache!(
     ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(
-        TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+        TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )
 
     # Environment mean or quadrature sum over the SGS fluctuations

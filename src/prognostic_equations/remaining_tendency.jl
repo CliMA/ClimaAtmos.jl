@@ -143,7 +143,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     (; ls_adv, scm_coriolis) = p.atmos
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜp, ᶜK, ᶜT, ᶜh_tot, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜp, ᶜK, ᶜT, ᶜh_tot, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; sfc_conditions) = p.precomputed
 
     vst_uₕ = viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
@@ -193,7 +193,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     hs_tendency_uₕ = held_suarez_forcing_tendency_uₕ(hs_args...)
     hs_tendency_ρe_tot = held_suarez_forcing_tendency_ρe_tot(ᶜρ, hs_args...)
     edmf_cor_tend_uₕ = scm_coriolis_tendency_uₕ(ᶜuₕ, scm_coriolis)
-    lsa_args = (ᶜρ, thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, t, ls_adv)
+    lsa_args = (ᶜρ, thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, t, ls_adv)
     bc_lsa_tend_ρe_tot = large_scale_advection_tendency_ρe_tot(lsa_args...)
 
     # TODO: fuse, once we fix

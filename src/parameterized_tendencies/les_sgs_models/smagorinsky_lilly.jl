@@ -18,7 +18,7 @@ Return a lazy representation of the Lilly stratification correction factor
 - `ᶜS`: The cell-centered strain rate tensor.
 """
 function lilly_stratification_correction(Y, p, ᶜS)
-    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; ᶜtemp_scalar) = p.scratch
     grav = CAP.grav(p.params)
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
@@ -31,8 +31,8 @@ function lilly_stratification_correction(Y, p, ᶜS)
             ᶜT,
             Y.c.ρ,
             ᶜq_tot_safe,
-            ᶜq_liq_rai,
-            ᶜq_ice_sno,
+            ᶜq_liq,
+            ᶜq_ice,
         ),
     )
     ᶜ∇ᵥθ = @. ᶜtemp_scalar = Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜθ_v))).components.data.:1

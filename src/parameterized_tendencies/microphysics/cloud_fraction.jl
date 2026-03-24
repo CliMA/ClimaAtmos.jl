@@ -33,7 +33,7 @@ environment, but this is a current approximation.
 function set_covariance_cache_and_cloud_fraction!(Y, p)
     (; cloud_model, microphysics_model) = p.atmos
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) = p.precomputed
-    (; ᶜlinear_buoygrad, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜlinear_buoygrad, ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
@@ -46,8 +46,8 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
                 ᶜT,
                 Y.c.ρ,
                 ᶜq_tot_safe,
-                ᶜq_liq_rai,
-                ᶜq_ice_sno,
+                ᶜq_liq,
+                ᶜq_ice,
             ),
         ),
     )
@@ -68,8 +68,8 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
             ᶜT,
             Y.c.ρ,
             ᶜq_tot_safe,
-            ᶜq_liq_rai,
-            ᶜq_ice_sno,
+            ᶜq_liq,
+            ᶜq_ice,
             ᶜcloud_fraction,
             C3,
             ᶜgradᵥ_q_tot,
@@ -113,8 +113,8 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
         ᶜT,
         Y.c.ρ,
         ᶜq_tot_safe,
-        ᶜq_liq_rai,
-        ᶜq_ice_sno,
+        ᶜq_liq,
+        ᶜq_ice,
         ᶜcloud_fraction,
         C3,
         ᶜgradᵥ_q_tot,
@@ -165,9 +165,9 @@ function compute_∂T_∂θ!(dest, Y, p, thermo_params)
     (; ᶜT) = p.precomputed
     ᶜρ = Y.c.ρ
     if p.atmos.microphysics_model isa Union{DryModel, EquilibriumMicrophysics0M}
-        (; ᶜq_liq_rai, ᶜq_ice_sno, ᶜq_tot_safe) = p.precomputed
-        ᶜq_liq = ᶜq_liq_rai
-        ᶜq_ice = ᶜq_ice_sno
+        (; ᶜq_liq, ᶜq_ice, ᶜq_tot_safe) = p.precomputed
+        ᶜq_liq = ᶜq_liq
+        ᶜq_ice = ᶜq_ice
         ᶜq_tot = ᶜq_tot_safe
     else
         ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
@@ -437,10 +437,10 @@ NVTX.@annotate function set_cloud_fraction!(
     ::MoistMicrophysics,
     ::GridScaleCloud,
 )
-    (; ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜq_liq, ᶜq_ice) = p.precomputed
     FT = eltype(p.params)
     @. p.precomputed.ᶜcloud_fraction =
-        ifelse(TD.has_condensate(ᶜq_liq_rai + ᶜq_ice_sno), FT(1), FT(0))
+        ifelse(TD.has_condensate(ᶜq_liq + ᶜq_ice), FT(1), FT(0))
 end
 NVTX.@annotate function set_cloud_fraction!(
     Y,
@@ -526,15 +526,15 @@ Lightweight alternative to `_compute_cloud_state` when only ρ, T, and q are nee
 function _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     (; ᶜp, ᶜT, ᶜq_tot_safe) = p.precomputed
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
         ᶜρ_env = @. lazy(
             TD.air_density(
                 thermo_params,
                 ᶜT⁰,
                 ᶜp,
                 ᶜq_tot_safe⁰,
-                ᶜq_liq_rai⁰,
-                ᶜq_ice_sno⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
             ),
         )
         return ᶜρ_env, ᶜT⁰, ᶜq_tot_safe⁰
@@ -554,12 +554,12 @@ For PrognosticEDMFX, uses environment (⁰) fields; otherwise uses grid-scale fi
 Tuple: `(ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_liq, ᶜq_ice, ᶜT′T′, ᶜq′q′)`
 """
 function _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_model)
-    (; ᶜp, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜp, ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
 
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
         ᶜρ_env = @. lazy(
-            TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+            TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰),
         )
         ᶜT_mean = ᶜT⁰
         ᶜq_mean = ᶜq_tot_safe⁰
@@ -569,8 +569,8 @@ function _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_
                 ᶜT⁰,
                 ᶜρ_env,
                 ᶜq_tot_safe⁰,
-                ᶜq_liq_rai⁰,
-                ᶜq_ice_sno⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
             ),
         )
     else
@@ -583,8 +583,8 @@ function _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_
                 ᶜT,
                 Y.c.ρ,
                 ᶜq_tot_safe,
-                ᶜq_liq_rai,
-                ᶜq_ice_sno,
+                ᶜq_liq,
+                ᶜq_ice,
             ),
         )
     end
@@ -613,7 +613,7 @@ _get_condensate_means(Y, p, turbconv_model, ::NonEquilibriumMicrophysics) =
 
 Retrieve grid-mean cloud condensate for EquilibriumMicrophysics0M.
 
-For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq_rai⁰, ᶜq_ice_sno⁰).
+For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq⁰, ᶜq_ice⁰).
 Otherwise (including DiagnosticEDMFX), uses grid-scale precomputed condensate.
 
 # Returns
@@ -621,11 +621,11 @@ Tuple: `(ᶜq_liq_mean, ᶜq_ice_mean)` as lazy field expressions.
 """
 function _get_condensate_means_equil(p, turbconv_model)
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
-        return ᶜq_liq_rai⁰, ᶜq_ice_sno⁰
+        (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+        return ᶜq_liq⁰, ᶜq_ice⁰
     else
-        (; ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
-        return ᶜq_liq_rai, ᶜq_ice_sno
+        (; ᶜq_liq, ᶜq_ice) = p.precomputed
+        return ᶜq_liq, ᶜq_ice
     end
 end
 
@@ -634,7 +634,7 @@ end
 
 Retrieve grid-mean cloud condensate for NonEquilibriumMicrophysics.
 
-For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq_rai⁰, ᶜq_ice_sno⁰).
+For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq⁰, ᶜq_ice⁰).
 Otherwise (including DiagnosticEDMFX), computes cloud-only condensate from prognostic variables.
 
 # Returns
@@ -642,8 +642,8 @@ Tuple: `(ᶜq_liq_mean, ᶜq_ice_mean)` as lazy field expressions.
 """
 function _get_condensate_means_nonequil(Y, p, turbconv_model)
     if turbconv_model isa PrognosticEDMFX # TODO Shouldn't we do this for DiagnosticEDMFX too?
-        (; ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
-        return ᶜq_liq_rai⁰, ᶜq_ice_sno⁰
+        (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+        return ᶜq_liq⁰, ᶜq_ice⁰
     else
         ᶜq_liq_mean = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
         ᶜq_ice_mean = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
@@ -671,9 +671,9 @@ function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
     # Weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise)
     if turbconv_model isa PrognosticEDMFX
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
-        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
         ᶜρ⁰ = @. lazy(
-            TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+            TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰),
         )
         @. p.precomputed.ᶜcloud_fraction *= draft_area(ᶜρa⁰, ᶜρ⁰)
     end
@@ -681,7 +681,7 @@ function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
     # Add contributions from the updrafts if using EDMF
     if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
         n = n_mass_flux_subdomains(turbconv_model)
-        (; ᶜρʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
+        (; ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
         for j in 1:n
             ᶜρaʲ =
                 turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
@@ -689,7 +689,7 @@ function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 
             @. p.precomputed.ᶜcloud_fraction +=
                 ifelse(
-                    TD.has_condensate(ᶜq_liq_raiʲs.:($$j) + ᶜq_ice_snoʲs.:($$j)),
+                    TD.has_condensate(ᶜq_liqʲs.:($$j) + ᶜq_iceʲs.:($$j)),
                     draft_area(ᶜρaʲ, ᶜρʲs.:($$j)),
                     0,
                 )
