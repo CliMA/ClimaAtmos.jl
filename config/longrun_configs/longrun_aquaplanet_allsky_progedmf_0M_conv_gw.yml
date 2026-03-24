@@ -6,7 +6,8 @@ implicit_sgs_vertdiff: true
 max_newton_iters_ode: 3
 ode_algo: "ARS222"
 dt: "120secs"
-t_end: "11days"
+t_end: "60days"
+# t_end: "11days"  # short run for debugging
 dt_save_state_to_disk: "10days"
 rad: "allskywithclear"
 dt_rad: "1hours"
@@ -30,9 +31,13 @@ output_default_diagnostics: true
 diagnostics:
   - short_name: [utendnogw, vtendnogw, nogw_Q0, nogw_h_heat]
     period: 1days
-  - short_name: [ua, va, ta, wa]
-    period: 1days
   - short_name: [arup, waup, taup, haup]
     period: 1days
-  - short_name: [pr]
-    period: 1days
+  ## Uncomment below for short (11-day) debugging runs:
+  # - short_name: [ua, va, ta, wa]
+  #   period: 1days
+  # - short_name: [pr]
+  #   period: 1days
+  # - short_name: [pr, ua, va, wa, ta, hus, hfls, hfss, rsdt, rsds, rsut, rsus, rlds, rlut, rlus]
+  #   period: 10days
+  #   reduction_time: "average"

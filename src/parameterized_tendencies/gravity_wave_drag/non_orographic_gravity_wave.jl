@@ -418,26 +418,23 @@ function compute_beres_convective_heating!(Y, p)
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
-    # Pass 1: sum of positive heating (for sinusoidal Q₀ fit)
-    # No external captures — GPU-safe closures
+    # Q₀ = max absolute convective heating rate in the column
     Operators.column_reduce!(gw_Q0, ᶜQ_conv) do Q_prev, Q
-        return Q_prev + max(Q, zero(Q))
+        return max(Q_prev, abs(Q))
     end
-
-    # Pass 2: count active levels (use gw_h_heat as temp, overwritten in pass 3)
-    Operators.column_reduce!(gw_h_heat, ᶜQ_conv) do cnt, Q
-        return cnt + ifelse(abs(Q) > eps(Q), one(Q), zero(Q))
-    end
-
-    # Derive Q₀ = π/2 × mean(Q_pos) from sinusoidal fit:
-    #   For Q(z) = Q₀·sin(πz/h), the mean over 0..h is Q₀·2/π,
-    #   so Q₀ = π/2 × Q_sum / Q_count.
-    @. gw_Q0 = ifelse(
-        gw_h_heat > FT(0),
-        FT(π) / FT(2) * gw_Q0 / gw_h_heat,
-        FT(0),
-    )
     @. gw_Q0 = ifelse(isnan(gw_Q0) | isinf(gw_Q0), FT(0), gw_Q0)
+
+    # NOTE: Column-integrated sinusoidal fit (kept for future verification):
+    #   Pass 1: sum of positive heating
+    #   Operators.column_reduce!(gw_Q0, ᶜQ_conv) do Q_prev, Q
+    #       return Q_prev + max(Q, zero(Q))
+    #   end
+    #   Pass 2: count active levels
+    #   Operators.column_reduce!(gw_h_heat, ᶜQ_conv) do cnt, Q
+    #       return cnt + ifelse(abs(Q) > eps(Q), one(Q), zero(Q))
+    #   end
+    #   Derive Q₀ = π/2 × mean(Q_pos):
+    #   @. gw_Q0 = ifelse(gw_h_heat > FT(0), FT(π)/FT(2) * gw_Q0/gw_h_heat, FT(0))
 
     # Pass 3: find heating depth, mean wind, buoyancy freq (unchanged 6-tuple)
     # Apply sqrt to get the actual buoyancy frequency N.
