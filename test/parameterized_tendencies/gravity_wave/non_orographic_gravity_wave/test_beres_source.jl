@@ -4,6 +4,12 @@ import ClimaAtmos as CA
 const BeresSourceParams = CA.BeresSourceParams
 const wave_source = CA.wave_source
 
+# NOTE: The wave_source / Beres spectrum computation is EDMF-mode-agnostic.
+# It takes (Q0, h, u_heat, N_source) directly, so these unit tests apply
+# identically whether the upstream EDMF is diagnostic or prognostic.
+# The prognostic EDMF integration path is tested separately in
+# test_beres_progedmf_integration.jl.
+
 @testset "Beres (2004) source spectrum" begin
     FT = Float64
 
@@ -222,5 +228,64 @@ const wave_source = CA.wave_source
         if diff_5_9 > 1e-40
             @test diff_9_13 < diff_5_9
         end
+    end
+
+    @testset "Invalid n_ν rejected" begin
+        @test_throws ErrorException BeresSourceParams{FT}(;
+            Q0_threshold = FT(1e-4),
+            beres_scale_factor = FT(1.0),
+            σ_x = FT(4000.0),
+            ν_min = FT(2π / (120 * 60)),
+            ν_max = FT(2π / (10 * 60)),
+            n_ν = 6,
+        )
+        @test_throws ErrorException BeresSourceParams{FT}(;
+            Q0_threshold = FT(1e-4),
+            beres_scale_factor = FT(1.0),
+            σ_x = FT(4000.0),
+            ν_min = FT(2π / (120 * 60)),
+            ν_max = FT(2π / (10 * 60)),
+            n_ν = 10,
+        )
+    end
+
+    @testset "Sign convention: sgn(ĉ) consistent with propagator" begin
+        # Test that the Beres source spectrum produces the correct sign
+        # pattern for the CAM/WACCM convention: sgn(c_hat) outside the
+        # integral, where c_hat = c - u_heat.
+        #
+        # With u_heat = 5 m/s:
+        #   c > u_heat  →  c_hat > 0  →  B(c) > 0  (eastward flux)
+        #   c < u_heat  →  c_hat < 0  →  B(c) < 0  (westward flux)
+        #   c ≈ u_heat  →  c_hat ≈ 0  →  B(c) = 0  (critical level)
+        Q0 = FT(10.0 / 86400.0)
+        h = FT(10000.0)
+        u_heat = FT(5.0)
+
+        B = wave_source(c, u_heat, Q0, h, N_source, beres, Val(nc))
+
+        mid = (nc + 1) ÷ 2  # c = 0 bin
+        # Find the bin closest to c = u_heat
+        c_hat_idx = findfirst(i -> c[i] >= u_heat, 1:nc)
+
+        # All bins well above u_heat should have B > 0
+        for i in (c_hat_idx + 2):nc
+            if abs(B[i]) > 1e-40
+                @test B[i] > 0 "Expected B[$(i)] > 0 for c=$(c[i]) > u_heat=$(u_heat), got $(B[i])"
+            end
+        end
+
+        # All bins well below u_heat should have B < 0
+        for i in 1:(c_hat_idx - 2)
+            if abs(B[i]) > 1e-40
+                @test B[i] < 0 "Expected B[$(i)] < 0 for c=$(c[i]) < u_heat=$(u_heat), got $(B[i])"
+            end
+        end
+
+        # Verify antisymmetry is broken: spectrum should NOT be symmetric
+        # about c=0 when u_heat ≠ 0 (Doppler shift breaks symmetry)
+        asymmetry = sum(abs, B[i] + B[nc + 1 - i] for i in 1:mid)
+        total = sum(abs, B)
+        @test asymmetry / total > 1e-4 "Spectrum should be asymmetric with nonzero u_heat"
     end
 end
