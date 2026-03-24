@@ -4,6 +4,12 @@ import ClimaAtmos as CA
 const BeresSourceParams = CA.BeresSourceParams
 const wave_source = CA.wave_source
 
+# NOTE: The wave_source / Beres spectrum computation is EDMF-mode-agnostic.
+# It takes (Q0, h, u_heat, N_source) directly, so these unit tests apply
+# identically whether the upstream EDMF is diagnostic or prognostic.
+# The prognostic EDMF integration path is tested separately in
+# test_beres_progedmf_integration.jl.
+
 @testset "Beres (2004) source spectrum" begin
     FT = Float64
 

@@ -209,6 +209,16 @@ function get_non_orographic_gravity_wave_model(
     if nogw_name == false && get(parsed_args, "nogw_beres_source", false)
         @warn "nogw_beres_source is true but non_orographic_gravity_wave is false; ignoring Beres source"
     end
+    if get(parsed_args, "nogw_beres_source", false) && nogw_name == true
+        turbconv = get(parsed_args, "turbconv", nothing)
+        if turbconv === nothing || turbconv == "edonly_edmfx"
+            error(
+                "nogw_beres_source requires turbconv to be " *
+                "'diagnostic_edmfx' or 'prognostic_edmfx' " *
+                "(got: $turbconv)",
+            )
+        end
+    end
     return if nogw_name == true
         (;
             source_pressure,
@@ -242,6 +252,7 @@ function get_non_orographic_gravity_wave_model(
                 ν_min = FT(parsed_args["beres_nu_min"]),
                 ν_max = FT(parsed_args["beres_nu_max"]),
                 n_ν = Int(parsed_args["beres_n_nu"]),
+                h_heat_min = FT(parsed_args["beres_h_heat_min"]),
             )
         else
             nothing
