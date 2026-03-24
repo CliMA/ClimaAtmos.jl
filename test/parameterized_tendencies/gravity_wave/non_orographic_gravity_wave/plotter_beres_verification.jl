@@ -39,9 +39,20 @@ simdir = ClimaAnalysis.SimDir(output_dir)
 # --- Helper: load a variable with auto-detected reduction/period ---
 function load_var(simdir, short_name)
     reds = ClimaAnalysis.available_reductions(simdir; short_name)
-    # Prefer "inst" over "average" for our custom diagnostics
-    red = "inst" in reds ? "inst" : first(reds)
-    var = get(simdir; short_name, reduction = red)
+    # Prefer "average" for time-mean fields; fall back to "inst"
+    red = "average" in reds ? "average" : first(reds)
+    # Pick the longest available period to get the smoothest data
+    periods = ClimaAnalysis.available_periods(simdir; short_name, reduction = red)
+    period_order = ["1M", "30d", "10d", "1d", "12h", "1h", "10s"]
+    period = nothing
+    for p in period_order
+        if p in periods
+            period = p
+            break
+        end
+    end
+    var = isnothing(period) ? get(simdir; short_name, reduction = red) :
+                              get(simdir; short_name, reduction = red, period)
     if TIME_AVERAGE_ALL && haskey(var.dims, "time") && length(var.dims["time"]) > 1
         t_max = T_END_DAYS == Inf ? var.dims["time"][end] : T_END_DAYS * DAY_S
         var = ClimaAnalysis.average_time(ClimaAnalysis.window(var, "time"; right = t_max))
@@ -422,6 +433,6 @@ catch e
 end
 
 # --- Save ---
-outfile = "beres_verification.png"
+outfile = joinpath(output_dir, "beres_verification.png")
 CairoMakie.save(outfile, fig)
 println("Saved figure to: $outfile")
