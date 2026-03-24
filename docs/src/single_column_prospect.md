@@ -48,8 +48,6 @@ The `ReanalysisTimeVarying` case extends the `GCM` driven case by providing supp
 ```YAML
 initial_condition: "ReanalysisTimeVarying"
 external_forcing: "ReanalysisTimeVarying"
-surface_setup: "ReanalysisTimeVarying"
-surface_temperature: "ReanalysisTimeVarying"
 start_date: "20070701"
 site_latitude: 17.0
 site_longitude: -149.0

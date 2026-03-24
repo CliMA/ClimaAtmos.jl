@@ -28,23 +28,11 @@ function get_sgs_quadrature(parsed_args, params = nothing)
     return SGSQuadrature(FT; quadrature_order, distribution, T_min, q_max)
 end
 
-function get_sfc_temperature_form(parsed_args)
-    surface_temperature = parsed_args["surface_temperature"]
-    @assert surface_temperature in (
-        "ZonallySymmetric",
-        "RCEMIPII",
-        "ReanalysisTimeVarying",
-    )
-    return if surface_temperature == "ZonallySymmetric"
-        ZonallySymmetricSST()
-    elseif surface_temperature == "RCEMIPII"
-        RCEMIPIISST()
-    elseif surface_temperature == "ReanalysisTimeVarying"
-        ExternalTVColumnSST()
+function get_insolation_form(parsed_args; setup_type = nothing)
+    if !isnothing(setup_type)
+        model = Setups.insolation_model(setup_type)
+        !isnothing(model) && return model
     end
-end
-
-function get_insolation_form(parsed_args)
     insolation = parsed_args["insolation"]
     @assert insolation in (
         "idealized",
@@ -129,12 +117,6 @@ function get_surface_model(parsed_args)
         PrescribedSST()
     elseif prognostic_surface_name in ("true", true, "SlabOceanSST")
         SlabOceanSST()
-    elseif prognostic_surface_name == "PrognosticSurfaceTemperature"
-        @warn "The `PrognosticSurfaceTemperature` option is deprecated. Use `SlabOceanSST` instead."
-        SlabOceanSST()
-    elseif prognostic_surface_name == "PrescribedSurfaceTemperature"
-        @warn "The `PrescribedSurfaceTemperature` option is deprecated. Use `PrescribedSST` instead."
-        PrescribedSST()
     else
         error("Uncaught surface model `$prognostic_surface_name`.")
     end
@@ -301,7 +283,13 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
     end
 end
 
-function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
+function get_radiation_mode(parsed_args, ::Type{FT}; setup_type = nothing) where {FT}
+    radiation_name = parsed_args["rad"]
+    # Use setup default only when config doesn't explicitly set rad
+    if isnothing(radiation_name) && !isnothing(setup_type)
+        model = Setups.radiation_model(setup_type, FT)
+        !isnothing(model) && return model
+    end
     idealized_h2o = parsed_args["idealized_h2o"]
     @assert idealized_h2o in (true, false)
     idealized_clouds = parsed_args["idealized_clouds"]
@@ -318,7 +306,6 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     @assert aerosol_radiation in (true, false)
     reset_rng_seed = parsed_args["radiation_reset_rng_seed"]
     @assert reset_rng_seed in (true, false)
-    radiation_name = parsed_args["rad"]
     deep_atmosphere = parsed_args["deep_atmosphere"]
     @assert radiation_name in (
         nothing,
@@ -472,8 +459,12 @@ function get_forcing_type(parsed_args)
 end
 
 
-function get_subsidence_model(parsed_args, radiation_mode, FT)
+function get_subsidence_model(parsed_args, radiation_mode, FT; setup_type = nothing)
     subsidence = parsed_args["subsidence"]
+    if isnothing(subsidence) && !isnothing(setup_type)
+        profile = Setups.subsidence_forcing(setup_type, FT)
+        !isnothing(profile) && return Subsidence(profile)
+    end
     isnothing(subsidence) && return nothing
 
     prof = if subsidence == "Bomex"
@@ -493,8 +484,20 @@ function get_subsidence_model(parsed_args, radiation_mode, FT)
     return Subsidence(prof)
 end
 
-function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
+function get_large_scale_advection_model(
+    parsed_args, ::Type{FT}; setup_type = nothing,
+) where {FT}
     ls_adv = parsed_args["ls_adv"]
+    if isnothing(ls_adv) && !isnothing(setup_type)
+        data = Setups.large_scale_advection_forcing(setup_type, FT)
+        if !isnothing(data)
+            prof_dqtdt = (thermo_params, p, t, z) -> data.prof_dqtdt(z)
+            prof_dTdt =
+                (thermo_params, p, t, z) ->
+                    data.prof_dTdt(TD.exner_given_pressure(thermo_params, p), z)
+            return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
+        end
+    end
     ls_adv == nothing && return nothing
 
     (prof_dTdt₀, prof_dqtdt₀) = if ls_adv == "Bomex"
@@ -515,8 +518,16 @@ function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
 
-function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
+function get_external_forcing_model(
+    parsed_args,
+    ::Type{FT};
+    setup_type = nothing,
+) where {FT}
     external_forcing = parsed_args["external_forcing"]
+    if isnothing(external_forcing) && !isnothing(setup_type)
+        model = Setups.external_forcing(setup_type, FT)
+        !isnothing(model) && return model
+    end
     @assert external_forcing in (
         nothing,
         "GCM",
@@ -524,14 +535,9 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
         "ReanalysisMonthlyAveragedDiurnal",
         "ISDAC",
     )
-    reanalysis_required_fields = map(
-        x -> parsed_args[x],
-        ["surface_setup", "surface_temperature", "initial_condition"],
-    )
     if external_forcing in
        ("ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal")
         @assert parsed_args["config"] == "column" "ReanalysisTimeVarying and ReanalysisMonthlyAveragedDiurnal are only supported in column mode."
-        @assert all(reanalysis_required_fields .== "ReanalysisTimeVarying") "All of external_forcing, surface_setup, surface_temperature and initial_condition must be set to ReanalysisTimeVarying."
     end
     if !isnothing(parsed_args["era5_diurnal_warming"])
         @assert external_forcing == "ReanalysisMonthlyAveragedDiurnal" "era5_diurnal_warming is only supported for ReanalysisMonthlyAveragedDiurnal."
@@ -545,23 +551,8 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
         GCMForcing{FT}(parsed_args["external_forcing_file"], cfsite_number_str)
 
     elseif external_forcing == "ReanalysisTimeVarying"
-        external_forcing_file =
-            get_external_daily_forcing_file_path(parsed_args)
-        if !isfile(external_forcing_file) ||
-           !check_daily_forcing_times(external_forcing_file, parsed_args)
-            @info "External forcing file $(external_forcing_file) does not exist or does not cover the expected time range. Generating it now."
-            # generate forcing from provided era5 data paths
-            generate_multiday_era5_external_forcing_file(
-                parsed_args,
-                external_forcing_file,
-                FT,
-                input_data_dir = joinpath(
-                    @clima_artifact("era5_hourly_atmos_raw"),
-                    "daily",
-                ),
-            )
-        end
-
+        # File is already generated by get_setup_type; reuse its path.
+        external_forcing_file = setup_type.external_forcing_file
         ExternalDrivenTVForcing{FT}(external_forcing_file)
     elseif external_forcing == "ReanalysisMonthlyAveragedDiurnal"
         external_forcing_file =
@@ -592,9 +583,13 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function get_scm_coriolis(parsed_args, ::Type{FT}) where {FT}
+function get_scm_coriolis(parsed_args, ::Type{FT}; setup_type = nothing) where {FT}
     scm_coriolis = parsed_args["scm_coriolis"]
-    scm_coriolis == nothing && return nothing
+    if isnothing(scm_coriolis) && !isnothing(setup_type)
+        data = Setups.coriolis_forcing(setup_type, FT)
+        !isnothing(data) && return data
+    end
+    isnothing(scm_coriolis) && return nothing
     (prof_u, prof_v) = if scm_coriolis == "Bomex"
         (APL.Bomex_geostrophic_u(FT), z -> FT(0))
     elseif scm_coriolis == "Rico"
@@ -616,7 +611,7 @@ function get_scm_coriolis(parsed_args, ::Type{FT}) where {FT}
     coriolis_params["DYCOMS_RF02"] = FT(0) # TODO: check this
     coriolis_params["GABLS"] = FT(1.39e-4)
     coriolis_param = coriolis_params[scm_coriolis]
-    return SCMCoriolis(prof_u, prof_v, coriolis_param)
+    return (; prof_ug = prof_u, prof_vg = prof_v, coriolis_param)
 end
 
 function get_turbconv_model(FT, parsed_args, turbconv_params)

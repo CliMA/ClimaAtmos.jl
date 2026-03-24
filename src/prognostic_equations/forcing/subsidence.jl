@@ -65,31 +65,9 @@ If `subsidence_model` is `Nothing`, no subsidence tendency is applied.
 """
 subsidence_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing    # No subsidence
 
-
-"""
-    subsidence_tendency!(Yₜ, Y, p, t, subsidence_model::Subsidence)
-
-Applies subsidence tendencies to total energy (`ρe_tot`), total specific humidity
-(`ρq_tot`), and other moisture species (`ρq_liq`, `ρq_ice`) if a `NonEquilibriumMicrophysics`
-is used.
-
-The subsidence velocity profile `w_sub(z)` is obtained from `subsidence_model.prof`.
-This profile is used to construct a face-valued vertical velocity field `ᶠsubsidence³`.
-The `subsidence!` helper function is then called (currently with a first-order
-upwind scheme) to compute and apply the vertical advective tendency for each relevant 
-scalar quantity `χ`.
-
-Arguments:
-- `Yₜ`: The tendency state vector, modified in place.
-- `Y`: The current state vector, used for density (`ρ`).
-- `p`: Cache containing parameters, and the subsidence model object.
-- `t`: Current simulation time.
-- `subsidence`: The subsidence model object.
-"""
-function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
+function subsidence_tendency!(Yₜ, Y, p, t, subsidence::Subsidence)
     (; microphysics_model) = p.atmos
-    subsidence_profile = p.atmos.subsidence.prof
-    thermo_params = CAP.thermodynamics_params(p.params)
+    subsidence_profile = subsidence.prof
     (; ᶜh_tot) = p.precomputed
 
     ᶠz = Fields.coordinate_field(axes(Y.f)).z

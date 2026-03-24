@@ -1,5 +1,4 @@
 initial_condition: "Soares"
-surface_setup: "Soares"
 rayleigh_sponge: true
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true

@@ -1,8 +1,6 @@
 # drive all conditions with ERA5
 initial_condition: "ReanalysisTimeVarying"
 external_forcing: "ReanalysisMonthlyAveragedDiurnal"
-surface_setup: "ReanalysisTimeVarying"
-surface_temperature: "ReanalysisTimeVarying"
 start_date: "20070701"
 site_latitude: 17.0
 site_longitude: -149.0
@@ -43,7 +41,6 @@ netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 output_default_diagnostics: false
 rad: allskywithclear
-insolation: "externaldriventv"
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
     period: 10mins

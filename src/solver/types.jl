@@ -493,12 +493,6 @@ end
 
 struct ISDACForcing end
 
-struct SCMCoriolis{U, V, FT}
-    prof_ug::U
-    prof_vg::V
-    coriolis_param::FT
-end
-
 abstract type AbstractEnvBuoyGradClosure end
 struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
 
@@ -694,12 +688,7 @@ Computes the vertical transport `ρwqₜ` at the surface due to prescribed flow.
 - `t`: The current time.
 """
 function get_ρu₃qₜ_surface(flow::ShipwayHill2012VelocityProfile, thermo_params, t)
-    # TODO: Get these values from the initial conditions:
-    # lg_sfc = Fields.level(Fields.local_geometry_field(Y.f), CA.half)
-    # ic = CA.InitialConditions.ShipwayHill2012()(p.params)
-    # get_ρ(ls) = ls.ρ
-    # ᶠρ_sfc = @. get_ρ(ic(lg_sfc)) <-- inconvenient since this materializes a Field
-    # For now, just copy the values from the initial conditions:
+    # TODO: Get these values from the setup instead of hardcoding:
     FT = eltype(thermo_params)
     rv_sfc = FT(0.015)  # water vapour mixing ratio at surface (kg/kg)
     q_tot_sfc = rv_sfc / (1 + rv_sfc)  # 0.0148 kg/kg
@@ -1074,7 +1063,7 @@ Internal testing and calibration components for single-column setups:
 - `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
 - `ls_adv`: nothing or LargeScaleAdvection()
 - `advection_test`: Bool
-- `scm_coriolis`: nothing or SCMCoriolis()
+- `scm_coriolis`: nothing or NamedTuple `(; prof_ug, prof_vg, coriolis_param)`
 
 ## AtmosRadiation
 - `radiation_mode`: Radiation and atmospheric forcing modes

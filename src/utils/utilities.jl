@@ -595,8 +595,8 @@ Parse a date string into a `DateTime` object. Currently, only the following form
 - yyyymmdd
 - yyyymmdd-HHMM
 """
-function parse_date(date_str)
-    # Define a mapping between allowed formats and corresponding date format 
+function parse_date(date_str::AbstractString)
+    # Define a mapping between allowed formats and corresponding date format
     date_format_mapping = Dict(
         r"^\d{8}$" => dateformat"yyyymmdd",
         r"^\d{8}-\d{4}$" => dateformat"yyyymmdd-HHMM",
@@ -609,6 +609,7 @@ function parse_date(date_str)
         "Date string $date_str does not match any of the allowed formats: yyyymmdd or yyyymmdd-HHMM",
     )
 end
+parse_date(dt::DateTime) = dt
 
 iscolumn(space::Spaces.FiniteDifferenceSpace) = true
 iscolumn(space) = false

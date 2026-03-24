@@ -57,7 +57,7 @@ params = CA.ClimaAtmosParameters(
 ## RCEMIP-II model prescriptions
 insolation = CA.RCEMIPIIInsolation()
 sfc_temperature = CA.RCEMIPIISST()
-initial_condition = CA.InitialConditions.RCEMIPIIProfile_300()
+initial_condition = CA.Setups.RCEMIPIIProfile_300()
 
 
 ## Construct the model

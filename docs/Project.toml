@@ -16,6 +16,9 @@ RootSolvers = "7181ea78-2dcb-4de3-ab41-2b8ab5a31e74"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
+[sources]
+ClimaAtmos = {path = ".."}
+
 [compat]
 Documenter = "1"
 DocumenterCitations = "1"
