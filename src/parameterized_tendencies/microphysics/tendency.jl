@@ -171,19 +171,19 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     ::NonEquilibriumMicrophysics1M, _,
 )
     (; ᶜmp_tendency, ᶜmp_derivative) = p.precomputed
-    @. Yₜ.c.ρq_liq +=
+    @. Yₜ.c.ρq_lcl +=
         Y.c.ρ * microphysics_tendency_model(
             ᶜmp_tendency.dq_lcl_dt,
             ᶜmp_derivative.∂tendency_∂q_lcl,
-            Y.c.ρq_liq,
+            Y.c.ρq_lcl,
             Y.c.ρ,
             p.dt,
         )
-    @. Yₜ.c.ρq_ice +=
+    @. Yₜ.c.ρq_icl +=
         Y.c.ρ * microphysics_tendency_model(
             ᶜmp_tendency.dq_icl_dt,
             ᶜmp_derivative.∂tendency_∂q_icl,
-            Y.c.ρq_ice,
+            Y.c.ρq_icl,
             Y.c.ρ,
             p.dt,
         )
@@ -216,19 +216,19 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, p.precomputed.ᶜρaʲs, turbconv_model))
 
     # Environment contribution to grid mean tendency
-    @. Yₜ.c.ρq_liq +=
+    @. Yₜ.c.ρq_lcl +=
         ᶜρa⁰ * microphysics_tendency_model(
             ᶜmp_tendency.dq_lcl_dt,
             ᶜmp_derivative.∂tendency_∂q_lcl,
-            Y.c.ρq_liq,
+            Y.c.ρq_lcl,
             Y.c.ρ,
             p.dt,
         )
-    @. Yₜ.c.ρq_ice +=
+    @. Yₜ.c.ρq_icl +=
         ᶜρa⁰ * microphysics_tendency_model(
             ᶜmp_tendency.dq_icl_dt,
             ᶜmp_derivative.∂tendency_∂q_icl,
-            Y.c.ρq_ice,
+            Y.c.ρq_icl,
             Y.c.ρ,
             p.dt,
         )
@@ -253,8 +253,8 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     # (Sources in updrafts are applied in the diagnostic EDMF integral loop)
     n = n_mass_flux_subdomains(turbconv_model)
     for j in 1:n
-        @. Yₜ.c.ρq_liq += ᶜρaʲs.:($$j) * ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
-        @. Yₜ.c.ρq_ice += ᶜρaʲs.:($$j) * ᶜmp_tendencyʲs.:($$j).dq_icl_dt
+        @. Yₜ.c.ρq_lcl += ᶜρaʲs.:($$j) * ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
+        @. Yₜ.c.ρq_icl += ᶜρaʲs.:($$j) * ᶜmp_tendencyʲs.:($$j).dq_icl_dt
         @. Yₜ.c.ρq_rai += ᶜρaʲs.:($$j) * ᶜmp_tendencyʲs.:($$j).dq_rai_dt
         @. Yₜ.c.ρq_sno += ᶜρaʲs.:($$j) * ᶜmp_tendencyʲs.:($$j).dq_sno_dt
     end
@@ -270,22 +270,22 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     # Contribution to grid mean tendency from environment
     # ᶜmp_derivative is computed based on environmental microphysics variables
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
-    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
+    ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
+    ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
-    @. Yₜ.c.ρq_liq +=
+    @. Yₜ.c.ρq_lcl +=
         ᶜρa⁰ * microphysics_tendency_model(
             ᶜmp_tendency⁰.dq_lcl_dt,
             ᶜmp_derivative.∂tendency_∂q_lcl,
-            ᶜq_liq⁰,
+            ᶜq_lcl⁰,
             p.dt,
         )
-    @. Yₜ.c.ρq_ice +=
+    @. Yₜ.c.ρq_icl +=
         ᶜρa⁰ * microphysics_tendency_model(
             ᶜmp_tendency⁰.dq_icl_dt,
             ᶜmp_derivative.∂tendency_∂q_icl,
-            ᶜq_ice⁰,
+            ᶜq_icl⁰,
             p.dt,
         )
     @. Yₜ.c.ρq_rai +=
@@ -306,18 +306,18 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     # Contribution from updraft microphysics to grid mean and updraft tendency
     n = n_mass_flux_subdomains(turbconv_model)
     for j in 1:n
-        @. Yₜ.c.ρq_liq +=
+        @. Yₜ.c.ρq_lcl +=
             Y.c.sgsʲs.:($$j).ρa * microphysics_tendency_model(
                 ᶜmp_tendencyʲs.:($$j).dq_lcl_dt,
                 ᶜmp_derivativeʲs.:($$j).∂tendency_∂q_lcl,
-                Y.c.sgsʲs.:($$j).q_liq,
+                Y.c.sgsʲs.:($$j).q_lcl,
                 p.dt,
             )
-        @. Yₜ.c.ρq_ice +=
+        @. Yₜ.c.ρq_icl +=
             Y.c.sgsʲs.:($$j).ρa * microphysics_tendency_model(
                 ᶜmp_tendencyʲs.:($$j).dq_icl_dt,
                 ᶜmp_derivativeʲs.:($$j).∂tendency_∂q_icl,
-                Y.c.sgsʲs.:($$j).q_ice,
+                Y.c.sgsʲs.:($$j).q_icl,
                 p.dt,
             )
         @. Yₜ.c.ρq_rai +=
@@ -335,16 +335,16 @@ function microphysics_tendency!(Yₜ, Y, p, t,
                 p.dt,
             )
 
-        @. Yₜ.c.sgsʲs.:($$j).q_liq += microphysics_tendency_model(
+        @. Yₜ.c.sgsʲs.:($$j).q_lcl += microphysics_tendency_model(
             ᶜmp_tendencyʲs.:($$j).dq_lcl_dt,
             ᶜmp_derivativeʲs.:($$j).∂tendency_∂q_lcl,
-            Y.c.sgsʲs.:($$j).q_liq,
+            Y.c.sgsʲs.:($$j).q_lcl,
             p.dt,
         )
-        @. Yₜ.c.sgsʲs.:($$j).q_ice += microphysics_tendency_model(
+        @. Yₜ.c.sgsʲs.:($$j).q_icl += microphysics_tendency_model(
             ᶜmp_tendencyʲs.:($$j).dq_icl_dt,
             ᶜmp_derivativeʲs.:($$j).∂tendency_∂q_icl,
-            Y.c.sgsʲs.:($$j).q_ice,
+            Y.c.sgsʲs.:($$j).q_icl,
             p.dt,
         )
         @. Yₜ.c.sgsʲs.:($$j).q_rai += microphysics_tendency_model(
@@ -371,11 +371,11 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     ::NonEquilibriumMicrophysics2M, _,
 )
     (; ᶜmp_tendency) = p.precomputed
-    @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜmp_tendency.dq_lcl_dt
-    @. Yₜ.c.ρn_liq += Y.c.ρ * ᶜmp_tendency.dn_lcl_dt
+    @. Yₜ.c.ρq_lcl += Y.c.ρ * ᶜmp_tendency.dq_lcl_dt
+    @. Yₜ.c.ρn_lcl += Y.c.ρ * ᶜmp_tendency.dn_lcl_dt
     @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜmp_tendency.dq_rai_dt
     @. Yₜ.c.ρn_rai += Y.c.ρ * ᶜmp_tendency.dn_rai_dt
-    @. Yₜ.c.ρq_ice += Y.c.ρ * ᶜmp_tendency.dq_ice_dt
+    @. Yₜ.c.ρq_icl += Y.c.ρ * ᶜmp_tendency.dq_ice_dt
     return nothing
 end
 
@@ -392,26 +392,26 @@ function microphysics_tendency!(Yₜ, Y, p, t,
 
     # Contribution to grid mean tendency from environment
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    @. Yₜ.c.ρq_liq += ᶜρa⁰ * ᶜmp_tendency⁰.dq_lcl_dt
-    @. Yₜ.c.ρn_liq += ᶜρa⁰ * ᶜmp_tendency⁰.dn_lcl_dt
+    @. Yₜ.c.ρq_lcl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_lcl_dt
+    @. Yₜ.c.ρn_lcl += ᶜρa⁰ * ᶜmp_tendency⁰.dn_lcl_dt
     @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dq_rai_dt
     @. Yₜ.c.ρn_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dn_rai_dt
-    @. Yₜ.c.ρq_ice += ᶜρa⁰ * ᶜmp_tendency⁰.dq_ice_dt
+    @. Yₜ.c.ρq_icl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_ice_dt
 
     # Contribution from updraft microphysics to grid mean and updraft tendency
     n = n_mass_flux_subdomains(turbconv_model)
     for j in 1:n
-        @. Yₜ.c.ρq_liq += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
-        @. Yₜ.c.ρn_liq += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dn_lcl_dt
+        @. Yₜ.c.ρq_lcl += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
+        @. Yₜ.c.ρn_lcl += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dn_lcl_dt
         @. Yₜ.c.ρq_rai += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_rai_dt
         @. Yₜ.c.ρn_rai += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dn_rai_dt
-        @. Yₜ.c.ρq_ice += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_ice_dt
+        @. Yₜ.c.ρq_icl += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_ice_dt
 
-        @. Yₜ.c.sgsʲs.:($$j).q_liq += ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
-        @. Yₜ.c.sgsʲs.:($$j).n_liq += ᶜmp_tendencyʲs.:($$j).dn_lcl_dt
+        @. Yₜ.c.sgsʲs.:($$j).q_lcl += ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
+        @. Yₜ.c.sgsʲs.:($$j).n_lcl += ᶜmp_tendencyʲs.:($$j).dn_lcl_dt
         @. Yₜ.c.sgsʲs.:($$j).q_rai += ᶜmp_tendencyʲs.:($$j).dq_rai_dt
         @. Yₜ.c.sgsʲs.:($$j).n_rai += ᶜmp_tendencyʲs.:($$j).dn_rai_dt
-        @. Yₜ.c.sgsʲs.:($$j).q_ice += ᶜmp_tendencyʲs.:($$j).dq_ice_dt
+        @. Yₜ.c.sgsʲs.:($$j).q_icl += ᶜmp_tendencyʲs.:($$j).dq_ice_dt
     end
 end
 
@@ -424,12 +424,12 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     microphysics_tendency!(Yₜ, Y, p, t, NonEquilibriumMicrophysics2M(), nothing)
 
     # P3 scheme (cold) - collisions
-    @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜScoll.∂ₜq_c
+    @. Yₜ.c.ρq_lcl += Y.c.ρ * ᶜScoll.∂ₜq_c
     @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜScoll.∂ₜq_r
-    @. Yₜ.c.ρn_liq += ᶜScoll.∂ₜN_c
+    @. Yₜ.c.ρn_lcl += ᶜScoll.∂ₜN_c
     @. Yₜ.c.ρn_rai += ᶜScoll.∂ₜN_r
     @. Yₜ.c.ρq_rim += ᶜScoll.∂ₜL_rim
-    @. Yₜ.c.ρq_ice += ᶜScoll.∂ₜL_ice
+    @. Yₜ.c.ρq_icl += ᶜScoll.∂ₜL_ice
     @. Yₜ.c.ρb_rim += ᶜScoll.∂ₜB_rim
     return nothing
 end

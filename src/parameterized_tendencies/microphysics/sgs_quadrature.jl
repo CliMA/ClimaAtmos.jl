@@ -305,8 +305,8 @@ release partially buffers temperature changes (the "moist adiabatic" effect).
 
 # Usage
 ```julia
-ᶜθ_li = @. lazy(TD.liquid_ice_pottemp(thp, ᶜT, ᶜρ, ᶜq_tot, ᶜq_liq, ᶜq_ice))
-ᶜ∂T_∂θ = @. lazy(∂T_∂θ_li(thp, ᶜT, ᶜθ_li, ᶜq_liq, ᶜq_ice, ᶜq_tot, ᶜρ))
+ᶜθ_li = @. lazy(TD.liquid_ice_pottemp(thp, ᶜT, ᶜρ, ᶜq_tot, ᶜq_lcl, ᶜq_icl))
+ᶜ∂T_∂θ = @. lazy(∂T_∂θ_li(thp, ᶜT, ᶜθ_li, ᶜq_lcl, ᶜq_icl, ᶜq_tot, ᶜρ))
 ᶜT′T′ = @. lazy(ᶜ∂T_∂θ^2 * ᶜθ′θ′)
 ᶜT′q′ = @. lazy(ᶜ∂T_∂θ * ᶜθ′q′)
 ```

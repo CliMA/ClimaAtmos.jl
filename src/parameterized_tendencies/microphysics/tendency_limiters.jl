@@ -146,7 +146,7 @@ end
 # ============================================================================
 
 """
-    apply_1m_tendency_limits!(ᶜmp_tendency, timestepping, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt)
+    apply_1m_tendency_limits!(ᶜmp_tendency, timestepping, tps, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, dt)
 
 Apply physical limiting to 1M microphysics tendencies in-place.
 
@@ -159,10 +159,10 @@ Also acts as a function barrier: the timestepping mode is dispatched *outside*
 the broadcast, avoiding heap allocation.
 """
 @inline function apply_1m_tendency_limits!(
-    ᶜmp_tendency, ::Explicit, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+    ᶜmp_tendency, ::Explicit, tps, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, dt,
 )
     @. ᶜmp_tendency = _explicit_1m_tendency_limits(
-        ᶜmp_tendency, tps, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno, dt,
+        ᶜmp_tendency, tps, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, dt,
     )
 end
 @inline apply_1m_tendency_limits!(ᶜmp_tendency, ::Implicit, args...) = nothing
@@ -282,7 +282,7 @@ end
 # ============================================================================
 
 """
-    apply_2m_tendency_limits!(ᶜmp_tendency, timestepping, ᶜq_liq, ᶜn_liq, ᶜq_rai, ᶜn_rai, dt)
+    apply_2m_tendency_limits!(ᶜmp_tendency, timestepping, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, dt)
 
 Apply physical limiting to 2M microphysics tendencies in-place.
 
@@ -290,10 +290,10 @@ No-op for implicit timestepping as the Jacobian handles stability.
 """
 @inline apply_2m_tendency_limits!(ᶜmp_tendency, ::Implicit, args...) = nothing
 @inline function apply_2m_tendency_limits!(
-    ᶜmp_tendency, ::Explicit, ᶜq_liq, ᶜn_liq, ᶜq_rai, ᶜn_rai, dt,
+    ᶜmp_tendency, ::Explicit, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, dt,
 )
     @. ᶜmp_tendency = _explicit_2m_tendency_limits(
-        ᶜmp_tendency, ᶜq_liq, ᶜn_liq, ᶜq_rai, ᶜn_rai, dt,
+        ᶜmp_tendency, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, dt,
     )
 end
 @inline apply_2m_tendency_limits!(ᶜmp_tendency, ::Nothing, args...) = nothing

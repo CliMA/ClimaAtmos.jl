@@ -166,12 +166,14 @@ function compute_∂T_∂θ!(dest, Y, p, thermo_params)
     ᶜρ = Y.c.ρ
     if p.atmos.microphysics_model isa Union{DryModel, EquilibriumMicrophysics0M}
         (; ᶜq_liq_rai, ᶜq_ice_sno, ᶜq_tot_safe) = p.precomputed
+        # TODO - follow up with renaming the cached variables to liq and ice
         ᶜq_liq = ᶜq_liq_rai
         ᶜq_ice = ᶜq_ice_sno
         ᶜq_tot = ᶜq_tot_safe
     else
-        ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-        ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        # TODO - change in the next PR. Keeping this non behavior changing
+        ᶜq_liq = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ)) # TODO + specific(Y.c.ρq_rai, Y.c.ρ))
+        ᶜq_ice = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ)) # TODO + specific(Y.c.ρq_sno, Y.c.ρ))
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     end
     ᶜθ_li = @. lazy(
@@ -463,7 +465,7 @@ NVTX.@annotate function set_cloud_fraction!(
     ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
     # Get condensate means (dispatches on microphysics_model)
-    ᶜq_liq, ᶜq_ice = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
 
     # Get T-based variances from cache
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
@@ -481,8 +483,8 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜT_mean,
         ᶜρ_env,
         ᶜq_mean,
-        ᶜq_liq,
-        ᶜq_ice,
+        ᶜq_lcl,
+        ᶜq_icl,
         ᶜT′T′,
         ᶜq′q′,
         corr_Tq,
@@ -505,7 +507,7 @@ NVTX.@annotate function set_cloud_fraction!(
     microphysics_model = p.atmos.microphysics_model
 
     # Get environment state, condensate, and covariances
-    ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_liq, ᶜq_ice, ᶜT′T′, ᶜq′q′ =
+    ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′ =
         _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_model)
 
     set_ml_cloud_fraction!(
@@ -560,7 +562,7 @@ Compute environment state, condensate means, and variances for cloud fraction.
 For PrognosticEDMFX, uses environment (⁰) fields; otherwise uses grid-scale fields.
 
 # Returns
-Tuple: `(ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_liq, ᶜq_ice, ᶜT′T′, ᶜq′q′)`
+Tuple: `(ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′)`
 """
 function _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_model)
     (; ᶜp, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
@@ -599,12 +601,12 @@ function _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_
     end
 
     # Get condensate means
-    ᶜq_liq, ᶜq_ice = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
 
     # Get T-based variances from cache
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    return ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_liq, ᶜq_ice, ᶜT′T′, ᶜq′q′
+    return ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′
 end
 
 """
@@ -626,7 +628,7 @@ For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq_rai⁰, ᶜq_i
 Otherwise (including DiagnosticEDMFX), uses grid-scale precomputed condensate.
 
 # Returns
-Tuple: `(ᶜq_liq_mean, ᶜq_ice_mean)` as lazy field expressions.
+Tuple: `(ᶜq_lcl_mean, ᶜq_icl_mean)` as lazy field expressions.
 """
 function _get_condensate_means_equil(p, turbconv_model)
     if turbconv_model isa PrognosticEDMFX
@@ -647,16 +649,16 @@ For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq_rai⁰, ᶜq_i
 Otherwise (including DiagnosticEDMFX), computes cloud-only condensate from prognostic variables.
 
 # Returns
-Tuple: `(ᶜq_liq_mean, ᶜq_ice_mean)` as lazy field expressions.
+Tuple: `(ᶜq_lcl_mean, ᶜq_icl_mean)` as lazy field expressions.
 """
 function _get_condensate_means_nonequil(Y, p, turbconv_model)
     if turbconv_model isa PrognosticEDMFX # TODO Shouldn't we do this for DiagnosticEDMFX too?
         (; ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
         return ᶜq_liq_rai⁰, ᶜq_ice_sno⁰
     else
-        ᶜq_liq_mean = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-        ᶜq_ice_mean = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-        return ᶜq_liq_mean, ᶜq_ice_mean
+        ᶜq_lcl_mean = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
+        ᶜq_icl_mean = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+        return ᶜq_lcl_mean, ᶜq_icl_mean
     end
 end
 

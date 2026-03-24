@@ -190,11 +190,11 @@ function edmfx_vertical_diffusion_tendency!(
             )
 
             microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).q_liq), FT(1)),
-                (@name(c.sgsʲs.:(1).q_ice), FT(1)),
+                (@name(c.sgsʲs.:(1).q_lcl), FT(1)),
+                (@name(c.sgsʲs.:(1).q_icl), FT(1)),
                 (@name(c.sgsʲs.:(1).q_rai), α_precip),
                 (@name(c.sgsʲs.:(1).q_sno), α_precip),
-                (@name(c.sgsʲs.:(1).n_liq), FT(1)),
+                (@name(c.sgsʲs.:(1).n_lcl), FT(1)),
                 (@name(c.sgsʲs.:(1).n_rai), α_precip),
             )
 
@@ -230,11 +230,11 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
     n = n_mass_flux_subdomains(turbconv_model)
 
     microphysics_tracers = (
-        (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq)),
-        (@name(c.sgsʲs.:(1).q_ice), @name(c.ρq_ice)),
+        (@name(c.sgsʲs.:(1).q_lcl), @name(c.ρq_lcl)),
+        (@name(c.sgsʲs.:(1).q_icl), @name(c.ρq_icl)),
         (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
         (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
-        (@name(c.sgsʲs.:(1).n_liq), @name(c.ρn_liq)),
+        (@name(c.sgsʲs.:(1).n_lcl), @name(c.ρn_lcl)),
         (@name(c.sgsʲs.:(1).n_rai), @name(c.ρn_rai)),
     )
 

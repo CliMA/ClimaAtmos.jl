@@ -312,8 +312,8 @@ function precomputed_quantities(Y, atmos)
     diagnostic_precipitation_sgs_quantities =
         atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
         (;
-            ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_lclʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_iclʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_raiʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_snoʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
@@ -582,9 +582,9 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
             @. ᶜq_ice_sno = zero(eltype(ᶜT))
         else  # NonEquilibriumMicrophysics
             @. ᶜq_liq_rai =
-                max(0, specific(Y.c.ρq_liq, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
+                max(0, specific(Y.c.ρq_lcl, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
             @. ᶜq_ice_sno =
-                max(0, specific(Y.c.ρq_ice, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
+                max(0, specific(Y.c.ρq_icl, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
             @. ᶜq_tot_safe = max(ᶜq_liq_rai + ᶜq_ice_sno, specific(Y.c.ρq_tot, Y.c.ρ))
         end

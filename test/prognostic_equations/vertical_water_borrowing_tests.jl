@@ -61,8 +61,8 @@ end
         FT = eltype(Y)
         ref_Y = deepcopy(Y)
         introduce_negatives!(parent(Y.c.ρq_tot))
-        if hasproperty(Y.c, :ρq_liq)
-            introduce_negatives!(parent(Y.c.ρq_liq))
+        if hasproperty(Y.c, :ρq_lcl)
+            introduce_negatives!(parent(Y.c.ρq_lcl))
         end
 
         CA.limiters_func!(Y, p, FT(0), ref_Y)
@@ -75,12 +75,12 @@ end
         FT = eltype(Y)
         ref_Y = deepcopy(Y)
         introduce_negatives!(parent(Y.c.ρq_tot))
-        if hasproperty(Y.c, :ρq_liq)
-            introduce_negatives!(parent(Y.c.ρq_liq))
+        if hasproperty(Y.c, :ρq_lcl)
+            introduce_negatives!(parent(Y.c.ρq_lcl))
         end
 
         CA.limiters_func!(Y, p, FT(0), ref_Y)
         @test minimum(parent(Y.c.ρq_tot)) >= FT(0)
-        hasproperty(Y.c, :ρq_liq) && @test minimum(parent(Y.c.ρq_liq)) >= FT(0)
+        hasproperty(Y.c, :ρq_lcl) && @test minimum(parent(Y.c.ρq_lcl)) >= FT(0)
     end
 end

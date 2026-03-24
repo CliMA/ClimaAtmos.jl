@@ -51,7 +51,7 @@ There are four methods for enforcing tracer nonnegativity:
 Create a microphysics tracer nonnegativity constraint.
 
 Depending on the microphysics model, the constrained tracers include:
-- `ρq_liq`, `ρq_ice`, `ρq_rai`, `ρq_sno`,
+- `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`,
 - If `include_qtot` is true, `q_tot` is also among the constrained tracers.
 
 # Arguments:
@@ -330,7 +330,7 @@ Whenever `z > zd`, the viscous sponge model applies the tendency
 
  where `β = κ₂ ⋅ ζ` and `χ ∈ {uₕ, u₃, ρe_tot, GS_TRACERS}`;
  the grid-scale tracers `GS_TRACERS` depend on the microphysical model,
- but may include e.g. `ρq_tot`, `ρq_liq`, `ρq_ice`, ...
+ but may include e.g. `ρq_tot`, `ρq_lcl`, `ρq_icl`, ...
  If the `PrognosticEDMFX` scheme is used, the model is additionally applied to `χ ∈ {u₃ʲ}`.
  `κ₂` is a damping coefficient, and `ζ` is the damping function
 

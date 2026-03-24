@@ -172,8 +172,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         if microphysics_model isa NonEquilibriumMicrophysics1M
             # TODO: This doesn't work for multiple updrafts
             moisture_species = (
-                (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq)),
-                (@name(c.sgsʲs.:(1).q_ice), @name(c.ρq_ice)),
+                (@name(c.sgsʲs.:(1).q_lcl), @name(c.ρq_lcl)),
+                (@name(c.sgsʲs.:(1).q_icl), @name(c.ρq_icl)),
                 (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
                 (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
             )

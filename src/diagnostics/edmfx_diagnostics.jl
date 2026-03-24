@@ -187,10 +187,10 @@ compute_clwup(_, cache, _,
 ) = cache.precomputed.ᶜq_liq_raiʲs.:1
 
 compute_clwup(state, _, _, ::NonEquilibriumMicrophysics, ::PrognosticEDMFX) =
-    (state.c.sgsʲs.:1).q_liq
+    (state.c.sgsʲs.:1).q_lcl
 
 compute_clwup(_, cache, _, ::NonEquilibriumMicrophysics, ::DiagnosticEDMFX) =
-    cache.precomputed.ᶜq_liqʲs.:1
+    cache.precomputed.ᶜq_lclʲs.:1
 
 add_diagnostic_variable!(
     short_name = "clwup", units = "kg kg^-1",
@@ -210,7 +210,7 @@ compute_cdncup(_, _, _, _, _) =
                                with a 2M precip model and with EDMFX")
 
 compute_cdncup(state, _, _, ::NonEquilibriumMicrophysics2M, ::PrognosticEDMFX) =
-    (state.c.sgsʲs.:1).n_liq
+    (state.c.sgsʲs.:1).n_lcl
 
 add_diagnostic_variable!(short_name = "cdncup", units = "kg^-1",
     long_name = "Updraft Number Mixing Ratio of Cloud Liquid Water",
@@ -236,9 +236,9 @@ compute_cliup(_, cache, _,
 ) = cache.precomputed.ᶜq_ice_snoʲs.:1
 
 compute_cliup(state, _, _, ::NonEquilibriumMicrophysics, ::PrognosticEDMFX) =
-    (state.c.sgsʲs.:1).q_ice
+    (state.c.sgsʲs.:1).q_icl
 compute_cliup(_, cache, _, ::NonEquilibriumMicrophysics, ::DiagnosticEDMFX) =
-    cache.precomputed.ᶜq_iceʲs.:1
+    cache.precomputed.ᶜq_iclʲs.:1
 
 add_diagnostic_variable!(short_name = "cliup", units = "kg kg^-1",
     long_name = "Updraft Mass Fraction of Cloud Ice",
@@ -541,7 +541,7 @@ compute_clwen(_, cache, _, ::EquilibriumMicrophysics0M, ::PrognosticEDMFX) =
     cache.precomputed.ᶜq_liq_rai⁰
 
 compute_clwen(state, cache, _, ::NonEquilibriumMicrophysics, ::PrognosticEDMFX) =
-    ᶜspecific_env_value(@name(q_liq), state, cache)
+    ᶜspecific_env_value(@name(q_lcl), state, cache)
 
 add_diagnostic_variable!(short_name = "clwen", units = "kg kg^-1",
     long_name = "Envrionment Mass Fraction of Cloud Liquid Water",
@@ -560,7 +560,7 @@ compute_cdncen(_, _, _, _, _) =
                                number mixing ratio with a 2M model and with EDMFX")
 
 compute_cdncen(state, cache, _, ::NonEquilibriumMicrophysics2M, ::PrognosticEDMFX) =
-    ᶜspecific_env_value(@name(n_liq), state, cache)
+    ᶜspecific_env_value(@name(n_lcl), state, cache)
 
 add_diagnostic_variable!(short_name = "cdncen", units = "kg^-1",
     long_name = "Environment Number Mixing Ratio of Cloud Liquid Water",
@@ -585,7 +585,7 @@ compute_clien(_, cache, _, ::EquilibriumMicrophysics0M, ::PrognosticEDMFX) =
     cache.precomputed.ᶜq_ice_sno⁰
 
 compute_clien(state, cache, _, ::NonEquilibriumMicrophysics, ::PrognosticEDMFX) =
-    ᶜspecific_env_value(@name(q_ice), state, cache)
+    ᶜspecific_env_value(@name(q_icl), state, cache)
 
 add_diagnostic_variable!(short_name = "clien", units = "kg kg^-1",
     long_name = "Environment Mass Fraction of Cloud Ice",

@@ -138,11 +138,11 @@ function assign_moisture_edmf!(
         )
     end
 
-    if hasproperty(Y.c, :ρq_liq)
-        fill!(Y.c.ρq_liq, 0)
+    if hasproperty(Y.c, :ρq_lcl)
+        fill!(Y.c.ρq_lcl, 0)
     end
-    if hasproperty(Y.c, :ρq_ice)
-        fill!(Y.c.ρq_ice, 0)
+    if hasproperty(Y.c, :ρq_icl)
+        fill!(Y.c.ρq_icl, 0)
     end
     if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
         has_microphysics_vars = NC.NCDataset(file_path) do ds

@@ -122,11 +122,11 @@ function edmfx_sgs_mass_flux_tendency!(
         if p.atmos.microphysics_model isa
            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             microphysics_tracers = (
-                (@name(c.ρq_liq), @name(c.sgsʲs.:(1).q_liq), @name(q_liq)),
-                (@name(c.ρq_ice), @name(c.sgsʲs.:(1).q_ice), @name(q_ice)),
+                (@name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl), @name(q_lcl)),
+                (@name(c.ρq_icl), @name(c.sgsʲs.:(1).q_icl), @name(q_icl)),
                 (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai), @name(q_rai)),
                 (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno), @name(q_sno)),
-                (@name(c.ρn_liq), @name(c.sgsʲs.:(1).n_liq), @name(n_liq)),
+                (@name(c.ρn_lcl), @name(c.sgsʲs.:(1).n_lcl), @name(n_lcl)),
                 (@name(c.ρn_rai), @name(c.sgsʲs.:(1).n_rai), @name(n_rai)),
             )
             # TODO using unrolled_foreach here allocates! (breaks the flame tests
@@ -253,11 +253,11 @@ function edmfx_sgs_mass_flux_tendency!(
         if p.atmos.microphysics_model isa
            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             microphysics_tracers = (
-                (@name(c.ρq_liq), @name(ᶜq_liqʲs.:(1))),
-                (@name(c.ρq_ice), @name(ᶜq_iceʲs.:(1))),
+                (@name(c.ρq_lcl), @name(ᶜq_lclʲs.:(1))),
+                (@name(c.ρq_icl), @name(ᶜq_iclʲs.:(1))),
                 (@name(c.ρq_rai), @name(ᶜq_raiʲs.:(1))),
                 (@name(c.ρq_sno), @name(ᶜq_snoʲs.:(1))),
-                (@name(c.ρn_liq), @name(ᶜn_liqʲs.:(1))),
+                (@name(c.ρn_lcl), @name(ᶜn_lclʲs.:(1))),
                 (@name(c.ρn_rai), @name(ᶜn_raiʲs.:(1))),
             )
             # TODO using unrolled_foreach here allocates! (breaks the flame tests
@@ -451,11 +451,11 @@ function edmfx_sgs_diffusive_flux_tendency!(
             bottom = Operators.SetValue(C3(FT(0))),
         )
         microphysics_tracers = (
-            (@name(c.ρq_liq), FT(1)),
-            (@name(c.ρq_ice), FT(1)),
+            (@name(c.ρq_lcl), FT(1)),
+            (@name(c.ρq_icl), FT(1)),
             (@name(c.ρq_rai), α_precip),
             (@name(c.ρq_sno), α_precip),
-            (@name(c.ρn_liq), FT(1)),
+            (@name(c.ρn_lcl), FT(1)),
             (@name(c.ρn_rai), α_precip),
         )
         MatrixFields.unrolled_foreach(microphysics_tracers) do (ρχ_name, α)
