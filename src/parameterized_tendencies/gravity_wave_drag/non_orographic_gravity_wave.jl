@@ -418,12 +418,28 @@ function compute_beres_convective_heating!(Y, p)
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
-    # First pass: find Q0 (column max of |Q_conv|)
+    # Pass 1: sum of positive heating (for sinusoidal Q₀ fit)
+    # No external captures — GPU-safe closures
     Operators.column_reduce!(gw_Q0, ᶜQ_conv) do Q_prev, Q
-        return max(abs(Q_prev), abs(Q))
+        return Q_prev + max(Q, zero(Q))
     end
 
-    # Second pass: find heating depth and mean wind in heating region
+    # Pass 2: count active levels (use gw_h_heat as temp, overwritten in pass 3)
+    Operators.column_reduce!(gw_h_heat, ᶜQ_conv) do cnt, Q
+        return cnt + ifelse(abs(Q) > eps(Q), one(Q), zero(Q))
+    end
+
+    # Derive Q₀ = π/2 × mean(Q_pos) from sinusoidal fit:
+    #   For Q(z) = Q₀·sin(πz/h), the mean over 0..h is Q₀·2/π,
+    #   so Q₀ = π/2 × Q_sum / Q_count.
+    @. gw_Q0 = ifelse(
+        gw_h_heat > FT(0),
+        FT(π) / FT(2) * gw_Q0 / gw_h_heat,
+        FT(0),
+    )
+    @. gw_Q0 = ifelse(isnan(gw_Q0) | isinf(gw_Q0), FT(0), gw_Q0)
+
+    # Pass 3: find heating depth, mean wind, buoyancy freq (unchanged 6-tuple)
     # Apply sqrt to get the actual buoyancy frequency N.
     ᶜN = p.scratch.ᶜtemp_scalar
     @. ᶜN = sqrt(abs(ᶜbuoyancy_frequency))
@@ -459,7 +475,6 @@ function compute_beres_convective_heating!(Y, p)
     end
 
     # Unpack results (with NaN/Inf protection)
-    @. gw_Q0 = ifelse(isnan(gw_Q0) | isinf(gw_Q0), FT(0), gw_Q0)
     @. gw_h_heat = max(result_field.:2 - result_field.:1, FT(1000.0)) # min 1 km
     @. gw_h_heat = ifelse(isnan(gw_h_heat) | isinf(gw_h_heat), FT(1000.0), gw_h_heat)
     weight_sum = result_field.:6
@@ -468,9 +483,14 @@ function compute_beres_convective_heating!(Y, p)
     @. gw_N_source =
         ifelse(weight_sum > eps(FT), result_field.:5 / weight_sum, FT(0.01))
 
-    # Set beres_active flag: Q0 above threshold (all latitude)
+    # Set beres_active flag: Q0 above threshold AND heating depth above minimum
     Q0_threshold = gw_beres_source.Q0_threshold
-    @. gw_beres_active = ifelse(gw_Q0 > Q0_threshold, FT(1), FT(0))
+    h_heat_min = gw_beres_source.h_heat_min
+    @. gw_beres_active = ifelse(
+        (gw_Q0 > Q0_threshold) & (gw_h_heat > h_heat_min),
+        FT(1),
+        FT(0),
+    )
 
     # if _do_debug
     #     _Q0d = Array(parent(gw_Q0))

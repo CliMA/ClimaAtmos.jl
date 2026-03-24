@@ -296,6 +296,9 @@ beres_nu_max:
 beres_n_nu:
   help: "Number of quadrature points for Beres frequency integration (must be 4k+1: 5, 9, 13...)"
   value: 9
+beres_h_heat_min:
+  help: "Minimum heating depth to activate Beres source (m), filters out shallow convection"
+  value: 3000.0
 dt_nogw:
   help: "Time between calling non-orographic gravity wave update"
   value: "1800secs"
