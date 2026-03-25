@@ -337,7 +337,7 @@ end
 #####
 
 function progress_logging_callback(dt, t_start, t_end)
-    walltime_info = WallTimeInfo(first_update_after_n_calls = 5)
+    walltime_info = WallTimeInfo(first_update_after_n_calls = 8)
     tot_steps = ceil(Int, (t_end - t_start) / dt)
     five_percent_steps = ceil(Int, 0.05 * tot_steps)
     schedule = CappedGeometricSeriesSchedule(five_percent_steps)
