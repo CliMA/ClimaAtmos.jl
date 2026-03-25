@@ -443,80 +443,82 @@ function compute_beres_convective_heating!(Y, p)
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
-    # Pass 1: find convective envelope [z_bot, z_top], mean wind, buoyancy freq
+    # Pass 1: find convective envelope [z_bot, z_top]
     # z_bot: cloud base via total condensate (q_liq + q_ice > threshold)
     # z_top: plume top via updraft area fraction (active convective engine)
     # This excludes sub-cloud BL thermals and passive anvil ice aloft.
     qc_threshold = FT(1e-6)  # kg/kg — above FP32 noise, below any real cloud
     a_threshold = FT(1e-4)   # area fraction — plume effectively dead below this
-    ᶜN = p.scratch.ᶜtemp_scalar
-    @. ᶜN = sqrt(abs(ᶜbuoyancy_frequency))
     result_field = gw_reduce_result
-    input1 = Base.Broadcast.broadcasted(
-        tuple,
-        ᶜQ_conv,
-        ᶜz,
-        ᶜu,
-        ᶜv,
-        ᶜN,
-        ᶜρ,
-        ᶜqc_up,
-        ᶜa_up,
-    )
-    eps_weight = eps(FT)
+    input1 = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜqc_up, ᶜa_up)
     reduce_init =
         (FT(Inf), FT(-Inf), FT(0), FT(0), FT(0), FT(0))
     Operators.column_reduce!(
         result_field,
         input1;
         init = reduce_init,
-    ) do (z_bot_prev, z_top_prev, u_sum_prev, v_sum_prev, bf_sum_prev, w_sum_prev),
-    (Q, z, u, v, bf, ρ, qc, a_up)
-        # Cloud base: condensate present (liq+ice) — where latent heating begins
+    ) do (z_bot_prev, z_top_prev, _3, _4, _5, _6), (z, qc, a_up)
         has_cloud = qc > qc_threshold
-        # Plume top: updraft area fraction still active — where convective engine ends
         has_plume = a_up > a_threshold
-        # Weighted means use positive heating within the active plume
-        has_heating = Q > eps_weight
-        weight = Q * ρ
         z_bot = ifelse(has_cloud, min(z_bot_prev, z), z_bot_prev)
         z_top = ifelse(has_plume, max(z_top_prev, z), z_top_prev)
-        in_envelope = has_heating & has_cloud & has_plume
-        u_sum = ifelse(in_envelope, u_sum_prev + u * weight, u_sum_prev)
-        v_sum = ifelse(in_envelope, v_sum_prev + v * weight, v_sum_prev)
-        bf_sum = ifelse(in_envelope, bf_sum_prev + bf * weight, bf_sum_prev)
-        w_sum = ifelse(in_envelope, w_sum_prev + weight, w_sum_prev)
-        return (z_bot, z_top, u_sum, v_sum, bf_sum, w_sum)
+        return (z_bot, z_top, _3, _4, _5, _6)
     end
 
-    # Unpack results (with NaN/Inf protection)
-    # z_bot and z_top are kept in result_field.:1 and .:2 for Pass 2
-    @. gw_h_heat = max(result_field.:2 - result_field.:1, FT(0))
+    # Store z_bot/z_top into 2D fields before reusing gw_reduce_result
+    @. gw_u_heat = result_field.:1   # temporarily holds z_bot
+    @. gw_v_heat = result_field.:2   # temporarily holds z_top
+    @. gw_h_heat = max(gw_v_heat - gw_u_heat, FT(0))
     @. gw_h_heat = ifelse(isnan(gw_h_heat) | isinf(gw_h_heat), FT(0), gw_h_heat)
-    weight_sum = result_field.:6
-    @. gw_u_heat = ifelse(weight_sum > eps(FT), result_field.:3 / weight_sum, FT(0))
-    @. gw_v_heat = ifelse(weight_sum > eps(FT), result_field.:4 / weight_sum, FT(0))
-    @. gw_N_source =
-        ifelse(weight_sum > eps(FT), result_field.:5 / weight_sum, FT(0.01))
 
-    # Pass 2: Q₀ via Δz-weighted sinusoidal fit (Beres 2004)
-    #   Integrate NET heating strictly within [z_bot, z_top] to exclude
-    #   sub-cloud evaporation and cloud-top radiative cooling, while allowing
-    #   in-cloud evaporative cooling to reduce Q₀.
-    #   For Q(z) = Q₀·sin(πz/h), ∫₀ʰ Q dz = Q₀·2h/π,
-    #   so Q₀ = (π/2) · Σ(Q_net·Δz) / h.
+    # Pass 2: within [z_bot, z_top], compute:
+    #   - Q₀ integral: Σ(Q_net · Δz) for Beres half-sine conversion
+    #   - Mass-weighted mean wind (u, v) and buoyancy frequency (N)
+    # All quantities drawn from the same physical envelope — the continuous
+    # convective column from cloud base to plume top.
+    ᶜN = p.scratch.ᶜtemp_scalar
+    @. ᶜN = sqrt(abs(ᶜbuoyancy_frequency))
     ᶜΔz = Fields.Δz_field(axes(Y.c))
-    ᶜz_bot = result_field.:1  # 2D field broadcast over column
-    ᶜz_top = result_field.:2
-    ᶜQ_net_dz = p.scratch.ᶜtemp_scalar
-    @. ᶜQ_net_dz = ifelse(
-        (ᶜz >= ᶜz_bot) & (ᶜz <= ᶜz_top),
-        ᶜQ_conv * ᶜΔz,
-        FT(0),
+    # Precompute 3D envelope mask (2D z_bot/z_top broadcast over column)
+    ᶜz_bot = gw_u_heat  # 2D field, broadcasts over column via @.
+    ᶜz_top = gw_v_heat
+    ᶜin_env = p.scratch.ᶜtemp_scalar_3  # reuse (ᶜqc_up no longer needed)
+    @. ᶜin_env = ifelse((ᶜz >= ᶜz_bot) & (ᶜz <= ᶜz_top), FT(1), FT(0))
+    input2 = Base.Broadcast.broadcasted(
+        tuple,
+        ᶜQ_conv,
+        ᶜu,
+        ᶜv,
+        ᶜN,
+        ᶜρ,
+        ᶜΔz,
+        ᶜin_env,
     )
-    Operators.column_reduce!(gw_Q0, ᶜQ_net_dz) do acc, val
-        return acc + val
+    # Accumulator: (Q_integral, u_sum, v_sum, N_sum, mass_sum, _unused)
+    reduce_init2 = (FT(0), FT(0), FT(0), FT(0), FT(0), FT(0))
+    Operators.column_reduce!(
+        result_field,
+        input2;
+        init = reduce_init2,
+    ) do (Q_int_prev, u_sum_prev, v_sum_prev, N_sum_prev, m_sum_prev, _6),
+    (Q, u, v, N, ρ, dz, env)
+        active = env > FT(0.5)
+        ρdz = ρ * dz
+        Q_int = ifelse(active, Q_int_prev + Q * dz, Q_int_prev)
+        u_sum = ifelse(active, u_sum_prev + u * ρdz, u_sum_prev)
+        v_sum = ifelse(active, v_sum_prev + v * ρdz, v_sum_prev)
+        N_sum = ifelse(active, N_sum_prev + N * ρdz, N_sum_prev)
+        m_sum = ifelse(active, m_sum_prev + ρdz, m_sum_prev)
+        return (Q_int, u_sum, v_sum, N_sum, m_sum, _6)
     end
+
+    # Unpack Pass 2 results
+    mass_sum = result_field.:5
+    @. gw_u_heat = ifelse(mass_sum > eps(FT), result_field.:2 / mass_sum, FT(0))
+    @. gw_v_heat = ifelse(mass_sum > eps(FT), result_field.:3 / mass_sum, FT(0))
+    @. gw_N_source =
+        ifelse(mass_sum > eps(FT), result_field.:4 / mass_sum, FT(0.01))
+    @. gw_Q0 = result_field.:1
 
     # Finalize Q₀ = (π/2) · Σ(Q_net·Δz) / h, clamped ≥ 0
     @. gw_Q0 = ifelse(
