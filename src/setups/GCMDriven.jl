@@ -53,7 +53,7 @@ function GCMDriven(external_forcing_file::String, cfsite_number::String)
     return GCMDriven(
         external_forcing_file,
         cfsite_number,
-        profiles = ColumnProfiles(z_gcm, T, u, v, q_tot, ρ),
+        ColumnProfiles(z_gcm, T, u, v, q_tot, ρ),
         T_sfc,
     )
 end
