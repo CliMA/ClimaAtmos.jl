@@ -19,8 +19,8 @@ implicit_sgs_vertdiff: true
 approximate_linear_solve_iters: 2
 edmfx_sgsflux_upwinding: first_order
 rayleigh_sponge: true
-edmfx_entr_model: "PiGroups"
-edmfx_detr_model: "PiGroups"
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
@@ -34,11 +34,11 @@ z_elem: 63
 z_stretch: true
 dz_bottom: 30
 perturb_initstate: false
-dt: "50secs"
+dt: "60secs"
 dt_rad: "10mins"
-t_end: "30hours"
+t_end: "1days"
 ode_algo: "ARS222"
-toml: [toml/prognostic_edmfx_calibrated.toml]
+toml: [toml/prognostic_edmfx.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 output_default_diagnostics: false
