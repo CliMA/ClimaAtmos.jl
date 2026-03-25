@@ -415,33 +415,44 @@ function compute_beres_convective_heating!(Y, p)
     # Clean NaN/Inf from boundary stencil artifacts
     # @. ᶜQ_conv = ifelse(isnan(ᶜQ_conv) | isinf(ᶜQ_conv), FT(0), ᶜQ_conv)
 
+    # Compute total updraft condensate (q_liq + q_ice) and area fraction.
+    # Condensate (liq+ice) defines cloud base; area fraction defines cloud top.
+    # Must include ice to capture deep convection above the freezing level.
+    ᶜqc_up = p.scratch.ᶜtemp_scalar_3
+    ᶜa_up = p.scratch.ᶜtemp_scalar_4
+    ᶜqc_up .= FT(0)
+    ᶜa_up .= FT(0)
+    if has_prognostic_sgs
+        for j in 1:n_updrafts
+            ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
+            ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
+            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+            @. ᶜqc_up += ᶜq_liqʲ + ᶜq_iceʲ
+            @. ᶜa_up += ifelse(ᶜρʲs.:($$j) > eps(FT), ᶜρaʲ / ᶜρʲs.:($$j), FT(0))
+        end
+    elseif haskey(p.precomputed, :ᶜq_liqʲs)
+        ᶜq_liqʲs_all = p.precomputed.ᶜq_liqʲs
+        ᶜq_iceʲs_all = p.precomputed.ᶜq_iceʲs
+        ᶜρaʲs_all = p.precomputed.ᶜρaʲs
+        for j in 1:n_updrafts
+            @. ᶜqc_up += ᶜq_liqʲs_all.:($$j) + ᶜq_iceʲs_all.:($$j)
+            @. ᶜa_up += ifelse(ᶜρʲs.:($$j) > eps(FT), ᶜρaʲs_all.:($$j) / ᶜρʲs.:($$j), FT(0))
+        end
+    end
+
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
-    # Q₀ = max absolute convective heating rate in the column
-    Operators.column_reduce!(gw_Q0, ᶜQ_conv) do Q_prev, Q
-        return max(Q_prev, abs(Q))
-    end
-    @. gw_Q0 = ifelse(isnan(gw_Q0) | isinf(gw_Q0), FT(0), gw_Q0)
-
-    # NOTE: Column-integrated sinusoidal fit (kept for future verification):
-    #   Pass 1: sum of positive heating
-    #   Operators.column_reduce!(gw_Q0, ᶜQ_conv) do Q_prev, Q
-    #       return Q_prev + max(Q, zero(Q))
-    #   end
-    #   Pass 2: count active levels
-    #   Operators.column_reduce!(gw_h_heat, ᶜQ_conv) do cnt, Q
-    #       return cnt + ifelse(abs(Q) > eps(Q), one(Q), zero(Q))
-    #   end
-    #   Derive Q₀ = π/2 × mean(Q_pos):
-    #   @. gw_Q0 = ifelse(gw_h_heat > FT(0), FT(π)/FT(2) * gw_Q0/gw_h_heat, FT(0))
-
-    # Pass 3: find heating depth, mean wind, buoyancy freq (unchanged 6-tuple)
-    # Apply sqrt to get the actual buoyancy frequency N.
+    # Pass 1: find convective envelope [z_bot, z_top], mean wind, buoyancy freq
+    # z_bot: cloud base via total condensate (q_liq + q_ice > threshold)
+    # z_top: plume top via updraft area fraction (active convective engine)
+    # This excludes sub-cloud BL thermals and passive anvil ice aloft.
+    qc_threshold = FT(1e-6)  # kg/kg — above FP32 noise, below any real cloud
+    a_threshold = FT(1e-4)   # area fraction — plume effectively dead below this
     ᶜN = p.scratch.ᶜtemp_scalar
     @. ᶜN = sqrt(abs(ᶜbuoyancy_frequency))
     result_field = gw_reduce_result
-    input2 = Base.Broadcast.broadcasted(
+    input1 = Base.Broadcast.broadcasted(
         tuple,
         ᶜQ_conv,
         ᶜz,
@@ -449,36 +460,71 @@ function compute_beres_convective_heating!(Y, p)
         ᶜv,
         ᶜN,
         ᶜρ,
+        ᶜqc_up,
+        ᶜa_up,
     )
     eps_weight = eps(FT)
     reduce_init =
         (FT(Inf), FT(-Inf), FT(0), FT(0), FT(0), FT(0))
     Operators.column_reduce!(
         result_field,
-        input2;
+        input1;
         init = reduce_init,
     ) do (z_bot_prev, z_top_prev, u_sum_prev, v_sum_prev, bf_sum_prev, w_sum_prev),
-    (Q, z, u, v, bf, ρ)
-        weight = abs(Q) * ρ
-        # Use branchless ifelse here -- Not sure if error was due to the branched ifelse
-        active = weight > eps_weight
-        z_bot = ifelse(active, min(z_bot_prev, z), z_bot_prev)
-        z_top = ifelse(active, max(z_top_prev, z), z_top_prev)
-        u_sum = ifelse(active, u_sum_prev + u * weight, u_sum_prev)
-        v_sum = ifelse(active, v_sum_prev + v * weight, v_sum_prev)
-        bf_sum = ifelse(active, bf_sum_prev + bf * weight, bf_sum_prev)
-        w_sum = ifelse(active, w_sum_prev + weight, w_sum_prev)
+    (Q, z, u, v, bf, ρ, qc, a_up)
+        # Cloud base: condensate present (liq+ice) — where latent heating begins
+        has_cloud = qc > qc_threshold
+        # Plume top: updraft area fraction still active — where convective engine ends
+        has_plume = a_up > a_threshold
+        # Weighted means use positive heating within the active plume
+        has_heating = Q > eps_weight
+        weight = Q * ρ
+        z_bot = ifelse(has_cloud, min(z_bot_prev, z), z_bot_prev)
+        z_top = ifelse(has_plume, max(z_top_prev, z), z_top_prev)
+        in_envelope = has_heating & has_cloud & has_plume
+        u_sum = ifelse(in_envelope, u_sum_prev + u * weight, u_sum_prev)
+        v_sum = ifelse(in_envelope, v_sum_prev + v * weight, v_sum_prev)
+        bf_sum = ifelse(in_envelope, bf_sum_prev + bf * weight, bf_sum_prev)
+        w_sum = ifelse(in_envelope, w_sum_prev + weight, w_sum_prev)
         return (z_bot, z_top, u_sum, v_sum, bf_sum, w_sum)
     end
 
     # Unpack results (with NaN/Inf protection)
-    @. gw_h_heat = max(result_field.:2 - result_field.:1, FT(1000.0)) # min 1 km
-    @. gw_h_heat = ifelse(isnan(gw_h_heat) | isinf(gw_h_heat), FT(1000.0), gw_h_heat)
+    # z_bot and z_top are kept in result_field.:1 and .:2 for Pass 2
+    @. gw_h_heat = max(result_field.:2 - result_field.:1, FT(0))
+    @. gw_h_heat = ifelse(isnan(gw_h_heat) | isinf(gw_h_heat), FT(0), gw_h_heat)
     weight_sum = result_field.:6
     @. gw_u_heat = ifelse(weight_sum > eps(FT), result_field.:3 / weight_sum, FT(0))
     @. gw_v_heat = ifelse(weight_sum > eps(FT), result_field.:4 / weight_sum, FT(0))
     @. gw_N_source =
         ifelse(weight_sum > eps(FT), result_field.:5 / weight_sum, FT(0.01))
+
+    # Pass 2: Q₀ via Δz-weighted sinusoidal fit (Beres 2004)
+    #   Integrate NET heating strictly within [z_bot, z_top] to exclude
+    #   sub-cloud evaporation and cloud-top radiative cooling, while allowing
+    #   in-cloud evaporative cooling to reduce Q₀.
+    #   For Q(z) = Q₀·sin(πz/h), ∫₀ʰ Q dz = Q₀·2h/π,
+    #   so Q₀ = (π/2) · Σ(Q_net·Δz) / h.
+    ᶜΔz = Fields.Δz_field(axes(Y.c))
+    ᶜz_bot = result_field.:1  # 2D field broadcast over column
+    ᶜz_top = result_field.:2
+    ᶜQ_net_dz = p.scratch.ᶜtemp_scalar
+    @. ᶜQ_net_dz = ifelse(
+        (ᶜz >= ᶜz_bot) & (ᶜz <= ᶜz_top),
+        ᶜQ_conv * ᶜΔz,
+        FT(0),
+    )
+    Operators.column_reduce!(gw_Q0, ᶜQ_net_dz) do acc, val
+        return acc + val
+    end
+
+    # Finalize Q₀ = (π/2) · Σ(Q_net·Δz) / h, clamped ≥ 0
+    @. gw_Q0 = ifelse(
+        gw_h_heat > FT(0),
+        max(FT(π) / FT(2) * gw_Q0 / gw_h_heat, FT(0)),
+        FT(0),
+    )
+    @. gw_Q0 = ifelse(isnan(gw_Q0) | isinf(gw_Q0), FT(0), gw_Q0)
 
     # Set beres_active flag: Q0 above threshold AND heating depth above minimum
     Q0_threshold = gw_beres_source.Q0_threshold
