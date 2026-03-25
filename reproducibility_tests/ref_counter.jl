@@ -1,4 +1,4 @@
-330
+331
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+331
+- Update Thermodynamics to 1.2
+
 330
 - Replace InitialConditions module with Setups module
 

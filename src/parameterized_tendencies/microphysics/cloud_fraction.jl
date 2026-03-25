@@ -346,7 +346,7 @@ Cloud fraction ∈ [0, 1]
     cf = max(cf_l, cf_i)
 
     # --- 6. No condensate → no cloud (branchless) ---
-    has_cond = (q_liq + q_ice) > FT(0)
+    has_cond = TD.has_condensate(thermo_params, q_liq + q_ice)
     return ifelse(has_cond, cf, zero(FT))
 end
 
@@ -438,9 +438,10 @@ NVTX.@annotate function set_cloud_fraction!(
     ::GridScaleCloud,
 )
     (; ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
     @. p.precomputed.ᶜcloud_fraction =
-        ifelse(TD.has_condensate(ᶜq_liq_rai + ᶜq_ice_sno), FT(1), FT(0))
+        ifelse(TD.has_condensate(thermo_params, ᶜq_liq_rai + ᶜq_ice_sno), FT(1), FT(0))
 end
 NVTX.@annotate function set_cloud_fraction!(
     Y,
@@ -689,7 +690,10 @@ function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 
             @. p.precomputed.ᶜcloud_fraction +=
                 ifelse(
-                    TD.has_condensate(ᶜq_liq_raiʲs.:($$j) + ᶜq_ice_snoʲs.:($$j)),
+                    TD.has_condensate(
+                        thermo_params,
+                        ᶜq_liq_raiʲs.:($$j) + ᶜq_ice_snoʲs.:($$j),
+                    ),
                     draft_area(ᶜρaʲ, ᶜρʲs.:($$j)),
                     0,
                 )
