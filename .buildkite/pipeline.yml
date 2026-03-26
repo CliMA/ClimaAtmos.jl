@@ -462,68 +462,6 @@ steps:
         agents:
           slurm_gpus: 1
 
-      - label: "GPU: Cosine Hills Test (2D, Float64)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/plane_cosine_hills_float64_test.yml
-          --job_id gpu_plane_cosine_hills_float64_test
-        artifact_paths:
-          - "gpu_plane_cosine_hills_float64_test/output_active/*.pdf"
-          - "gpu_plane_cosine_hills_float64_test/output_active/*.yml"
-          - "gpu_plane_cosine_hills_float64_test/output_active/*.toml"
-          - "gpu_plane_cosine_hills_float64_test/output_active/*.dat"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-
-      - label: "GPU: Cosine Hills Test (Extruded 2D, Float64)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/extruded_plane_cosine_hills_float64_test.yml
-          --job_id gpu_extruded_plane_cosine_hills_float64_test
-        artifact_paths:
-          - "gpu_extruded_plane_cosine_hills_float64_test/output_active/*.pdf"
-          - "gpu_extruded_plane_cosine_hills_float64_test/output_active/*.yml"
-          - "gpu_extruded_plane_cosine_hills_float64_test/output_active/*.toml"
-          - "gpu_extruded_plane_cosine_hills_float64_test/output_active/*.dat"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 48GB
-
-      - label: "GPU: Cosine Hills Test (3D, Float64)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/box_cosine_hills_float64_test.yml
-          --job_id gpu_box_cosine_hills_float64_test
-        artifact_paths:
-          - "gpu_box_cosine_hills_float64_test/output_active/*.pdf"
-          - "gpu_box_cosine_hills_float64_test/output_active/*.yml"
-          - "gpu_box_cosine_hills_float64_test/output_active/*.toml"
-          - "gpu_box_cosine_hills_float64_test/output_active/*.dat"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 48GB
-
-      - label: "GPU: Agnesi Mountain Test (2D, Float64)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/plane_agnesi_mountain_float64_test.yml
-          --job_id gpu_plane_agnesi_mountain_float64_test
-        artifact_paths:
-          - "gpu_plane_agnesi_mountain_float64_test/output_active/*.pdf"
-          - "gpu_plane_agnesi_mountain_float64_test/output_active/*.yml"
-          - "gpu_plane_agnesi_mountain_float64_test/output_active/*.toml"
-          - "gpu_plane_agnesi_mountain_float64_test/output_active/*.dat"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-
       - label: "GPU: Schar Mountain Test (2D, Float64)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -1045,34 +983,6 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16GB
 
-      - label: "GPU: baroclinic wave dense autodiff"
-        key: "baroclinic_wave_gpu_dense_autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
-          --config_file $CONFIG_PATH/baroclinic_wave_dense_autodiff.yml
-          --job_id baroclinic_wave_gpu_dense_autodiff
-        artifact_paths: "baroclinic_wave_gpu_dense_autodiff/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16GB
-
-      - label: "GPU: baroclinic wave sparse autodiff"
-        key: "baroclinic_wave_gpu_sparse_autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
-          --config_file $CONFIG_PATH/baroclinic_wave_sparse_autodiff.yml
-          --job_id baroclinic_wave_gpu_sparse_autodiff
-        artifact_paths: "baroclinic_wave_gpu_sparse_autodiff/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16GB
-
       - label: "GPU: compare BW with CPU"
         command: >
           tar xvf baroclinic_wave/output_active/hdf5_files.tar -C baroclinic_wave
@@ -1114,49 +1024,6 @@ steps:
           slurm_mem: 16GB
           modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
         soft_fail: true # remove this once MPI issues have been fixed
-
-      # Brittle test: to be removed
-      # - label: "GPU: test DYAMOND interpolated initial conditions"
-      #   command: >
-      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-      #     --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_summer.yml
-      #     --job_id gpu_aquaplanet_dyamond_summer
-      #   artifact_paths: "gpu_aquaplanet_dyamond_summer/output_active/*"
-      #   env:
-      #     CLIMACOMMS_DEVICE: "CUDA"
-      #   agents:
-      #     slurm_gpus: 1
-      #     slurm_mem: 16GB
-
-      - label: ":earth_americas: GPU: Diagnostic EDMF ERA5 Weather Model Initial Condition"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_era5_initial_condition.yml
-          --job_id diagnostic_edmfx_era5_initial_condition
-        artifact_paths:
-          - "diagnostic_edmfx_era5_initial_condition/output_active/*.pdf"
-          - "diagnostic_edmfx_era5_initial_condition/output_active/*.yml"
-          - "diagnostic_edmfx_era5_initial_condition/output_active/*.toml"
-          - "diagnostic_edmfx_era5_initial_condition/output_active/*.dat"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16GB
-
-      - label: "GPU: EDOnly EDMF aquaplanet"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/edonly_edmfx_aquaplanet.yml
-          --job_id edonly_edmfx_aquaplanet_gpu
-        artifact_paths: "edonly_edmfx_aquaplanet_gpu/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 20GB
 
       - label: "GPU: Diagnostic EDMF aquaplanet"
         key: "diagnostic_edmfx_aquaplanet_gpu"

@@ -12,6 +12,8 @@ edmfx_sgsflux_upwinding: "vanleer_limiter"
 edmfx_tracer_upwinding: "vanleer_limiter"
 initial_condition: "AMIPFromERA5"
 microphysics_model: "0M"
+non_orographic_gravity_wave: true
+orographic_gravity_wave: "raw_topo"
 t_end: 12hours
 toml: [toml/diagnostic_edmfx_0M.toml]
 use_itime: true
