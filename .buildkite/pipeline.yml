@@ -304,7 +304,6 @@ steps:
         artifact_paths: "prognostic_edmfx_gcmdriven_column/output_active/*"
         agents:
           slurm_mem: 20GB
-        soft_fail: true
 
       - label: ":genie: Prognostic EDMF ERA5 Time Varying driven in a column"
         command: >
