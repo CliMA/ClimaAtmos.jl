@@ -133,6 +133,7 @@ include(
     ),
 )
 include(joinpath("prognostic_equations", "advection.jl"))
+include(joinpath("prognostic_equations", "multirate_substepping.jl"))
 
 include(joinpath("cache", "temporary_quantities.jl"))
 include(joinpath("cache", "tracer_cache.jl"))

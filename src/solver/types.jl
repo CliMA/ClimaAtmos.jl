@@ -722,7 +722,7 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
+struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD, DTF}
     """Enable specific upwinding schemes for specific equations"""
     energy_q_tot_upwinding::EN_UP
     tracer_upwinding::TR_UP
@@ -738,6 +738,8 @@ struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
     diff_mode::DM
     """Hyperdiffusion model: nothing or Hyperdiffusion()"""
     hyperdiff::HD
+    """Fast timestep for horizontal substepping of sound/gravity waves (nothing = disabled)"""
+    dt_fast::DTF
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
@@ -762,6 +764,7 @@ function AtmosNumerics(;
         divergence_damping_factor = 5,
         prandtl_number = 1.0,
     ),
+    dt_fast = nothing,
     kwargs...,
 )
     # Helper to convert symbols/strings to Val types, or keep Val types as-is
@@ -779,6 +782,7 @@ function AtmosNumerics(;
         limiter,
         diff_mode,
         hyperdiff,
+        dt_fast,
     )
 end
 

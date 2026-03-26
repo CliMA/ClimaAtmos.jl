@@ -843,11 +843,25 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
     dt_integrator,
 )
     (; atmos) = p
+    dt_fast = atmos.numerics.dt_fast
+    use_multirate = if !isnothing(dt_fast)
+        n_substeps = floor(Int, dt_integrator / dt_fast)
+        if n_substeps < 2
+            @warn "dt_fast=$dt_fast with dt=$dt_integrator gives $n_substeps substeps; disabling multirate substepping (need ≥ 2)"
+            false
+        else
+            @info "Multirate substepping enabled: $n_substeps fast substeps of dt_fast=$dt_fast per slow step dt=$dt_integrator"
+            true
+        end
+    else
+        false
+    end
     s = @timed_str begin
         if isnothing(prescribed_flow)
 
             # This is the default case
-            T_exp_T_lim! = remaining_tendency!
+            T_exp_T_lim! = use_multirate ?
+                substepped_remaining_tendency! : remaining_tendency!
             T_imp_subproblem! =
                 p.atmos.turbconv_model isa PrognosticEDMFX ?
                 CTS.ODEFunction(
