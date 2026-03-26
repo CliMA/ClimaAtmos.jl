@@ -467,9 +467,9 @@ weakdeps = ["CUDA"]
 
 [[deps.ClimaParams]]
 deps = ["Dates", "TOML"]
-git-tree-sha1 = "8e0b9a76036384ef2e634249612592b44797981d"
+git-tree-sha1 = "2246cdd7248af40a87a30e22418977e6884589ad"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "1.0.14"
+version = "1.0.15"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "StaticArrays"]
@@ -2776,9 +2776,9 @@ version = "1.0.2"
 
 [[deps.Thermodynamics]]
 deps = ["ForwardDiff", "Random", "RootSolvers"]
-git-tree-sha1 = "e7488235d2d098a466fbbede579baaf9bf742a73"
+git-tree-sha1 = "f294dff25b05252aaa2b9bbd5055a1cbe1b972ec"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-version = "1.0.0"
+version = "1.2.0"
 weakdeps = ["ClimaParams"]
 
     [deps.Thermodynamics.extensions]
