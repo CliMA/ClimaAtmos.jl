@@ -4,26 +4,45 @@ using Glob
 """
 
 # cfSite numbers
+# CFSITE_TYPES = Dict(
+#     "shallow" => (collect(4:15)..., collect(17:23)...),
+#     "deep" =>
+#         (collect(30:33)..., collect(66:70)..., 82, 92, 94, 96, 99, 100),
+# )
 CFSITE_TYPES = Dict(
-    "shallow" => (collect(4:15)..., collect(17:23)...),
+    "shallow" => (collect(2:15)..., collect(17:23)...),
     "deep" =>
         (collect(30:33)..., collect(66:70)..., 82, 92, 94, 96, 99, 100),
 )
 
-function get_les_calibration_library_tmp()
+# function get_les_calibration_library_tmp()
+#     les_library = get_shallow_LES_library()
+#     # AMIP data: July, NE Pacific
+#     # cfsite_numbers = (17, 18, 22, 23, 30, 94)
+#     # cfsite_numbers = (17, 22, 23, 30, 33, 94)
+#     # cfsite_numbers = (17, 21, 23, 30, 33)# 94)
+#     # cfsite_numbers = (17, 23, 94) #baseline run
+#     # cfsite_numbers = (17, 18, 21, 22, 23, 30, 94) #baseline run
+#     # cfsite_numbers = (17, 18, 19, 21, 22, 23, 30, 33, 94)# 94)
+
+#     cfsite_numbers = (18, 23, 33) #baseline run
+
+#     # cfsite_numbers = (17, 30,)# 94)
+#     les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")
+#     ref_paths = [
+#         get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...)) for
+#         cfsite_number in cfsite_numbers
+#     ]
+#     return (ref_paths, cfsite_numbers)
+# end
+
+function get_les_calibration_library()
     les_library = get_shallow_LES_library()
     # AMIP data: July, NE Pacific
-    # cfsite_numbers = (17, 18, 22, 23, 30, 94)
-    # cfsite_numbers = (17, 22, 23, 30, 33, 94)
-    # cfsite_numbers = (17, 21, 23, 30, 33)# 94)
-    # cfsite_numbers = (17, 23, 94) #baseline run
-    # cfsite_numbers = (17, 18, 21, 22, 23, 30, 94) #baseline run
-    # cfsite_numbers = (17, 18, 19, 21, 22, 23, 30, 33, 94)# 94)
-
-    cfsite_numbers = (18, 23, 33) #baseline run
+    cfsite_numbers = (2, 3, 4, 5, 6, 7) #baseline run
 
     # cfsite_numbers = (17, 30,)# 94)
-    les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")
+    les_kwargs = (forcing_model = "HadGEM2-A", month = 10, experiment = "amip")
     ref_paths = [
         get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...)) for
         cfsite_number in cfsite_numbers
@@ -58,7 +77,7 @@ paths, sites = get_les_calibration_library(models = "HadGEM2-A")
 paths, sites = get_les_calibration_library(models = ["HadGEM2-A", "CNRM-CM5"])
 ```
 """
-function get_les_calibration_library(; max_cases = 120, models = "HadGEM2-A")
+function get_les_calibration_library_prev(; max_cases = 120, models = "HadGEM2-A")
     les_library = get_LES_library()
 
     models_iter = models === nothing ? collect(keys(les_library)) :

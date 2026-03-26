@@ -1,9 +1,29 @@
+[zd_rayleigh]
+value = 30000.0
+type = "float"
+
+[zd_viscous]
+value = 30000.0
+type = "float"
+
+[EDMF_surface_area]
+value = 0.1
+type = "float"
+
 [EDMF_min_area]
 value = 1.0e-5
 type = "float"
 
 [EDMF_max_area]
-value = 0.7
+value = 0.95
+type = "float"
+
+[entr_inv_tau]
+value = 0
+type = "float"
+
+[entr_coeff]
+value = 0.1
 type = "float"
 
 [min_area_limiter_scale]
@@ -22,22 +42,38 @@ type = "float"
 value = 0
 type = "float"
 
+[detr_vertdiv_coeff]
+value = 0
+type = "float"
+
 [detr_massflux_vertdiv_coeff]
 value = 0
 type = "float"
 
-[entr_detr_limit_inv_tau]
-value = 0.0001
+[max_area_limiter_scale]
+value = 0
 type = "float"
 
-[zd_rayleigh]
-value = 30000.0
+[pressure_normalmode_drag_coeff]
+value = 40.0
 type = "float"
 
-[zd_viscous]
-value = 30000.0
+[mixing_length_eddy_viscosity_coefficient]
+value = 0.14
 type = "float"
 
-[alpha_rayleigh_sgs_tracer]
-value = 1e-3
+[mixing_length_tke_surf_flux_coeff]
+value = 2.5
+type = "float"
+
+[mixing_length_diss_coeff]
+value = 0.22
+type = "float"
+
+[precipitation_timescale]
+value = 1200
+type = "float"
+
+[cloud_fraction_steepness_scale]
+value = 1.0
 type = "float"
