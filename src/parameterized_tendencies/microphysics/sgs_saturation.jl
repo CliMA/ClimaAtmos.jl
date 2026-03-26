@@ -21,7 +21,7 @@ saturation adjustment and 0-moment microphysics.
 
 Given (T_hat, q_hat) at a quadrature point, computes:
 1. Saturation specific humidity q_sat from Clausius-Clapeyron
-2. Condensate as saturation excess: q_cond = max(0, q_hat - q_sat)
+2. Condensate as saturation excess: q_con = max(0, q_hat - q_sat)
 3. Liquid/ice partition using temperature-based ramp function
 
 # Fields
@@ -59,7 +59,7 @@ NamedTuple with:
     q_sat = TD.q_vap_saturation(thp, T_hat, eval.ρ)
 
     # Condensate is the saturation excess (positive only)
-    q_cond = max(FT(0), q_hat - q_sat)
+    q_con = max(FT(0), q_hat - q_sat)
 
     # Partition condensate using liquid fraction based on temperature ramp
     # liquid_fraction_ramp is appropriate for equilibrium thermodynamics
@@ -136,7 +136,7 @@ NamedTuple with SGS-averaged:
     # but will be no-op for lognormal q distribution):
     # When q_hat is clamped to 0, the integrated q̃_mean exceeds q_mean.
     # Adjusting weights of valid points by ratio = q_mean / q̃_mean preserves
-    # q_mean. Since q_cond = 0 whenever q_hat = 0, this is equivalent to
+    # q_mean. Since q_con = 0 whenever q_hat = 0, this is equivalent to
     # scaling the integrated condensate by ratio.
     # Clamp ratio ≤ 1: only correct downward (lower-bound truncation).
     ratio = min(one(FT), q_mean / max(result.q_tot_quad, q_min(FT)))

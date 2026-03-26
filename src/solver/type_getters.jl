@@ -944,13 +944,26 @@ function get_grid(parsed_args, params, context)
     FT = eltype(params)
     config = parsed_args["config"]
 
-    # Common vertical discretization parameters
-    kwargs = (
-        z_elem = parsed_args["z_elem"],
-        z_max = parsed_args["z_max"],
-        z_stretch = parsed_args["z_stretch"],
-        dz_bottom = parsed_args["dz_bottom"],
-    )
+    # Use custom face coordinates if provided; otherwise use stretch parameters.
+    z_faces_arr = parsed_args["z_faces"]
+    kwargs = if !isnothing(z_faces_arr)
+        custom_z_mesh = z_mesh_from_faces(FT, z_faces_arr)
+        (
+            z_elem = length(z_faces_arr) - 1,
+            z_max = FT(z_faces_arr[end]),
+            z_stretch = false,
+            dz_bottom = parsed_args["dz_bottom"],
+            z_mesh = custom_z_mesh,
+        )
+    else
+        # Common vertical discretization parameters
+        (
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+        )
+    end
 
     # Add topography parameters for non-column grids
     if config != "column"

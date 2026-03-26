@@ -358,7 +358,62 @@ function reset_graceful_exit(output_dir)
     open(io -> print(io, 0), file, "w")
 end
 
-function check_nans(integrator)
-    any(isnan, parent(integrator.u)) && error("Found NaN")
+function _first_nonfinite_stats(A)
+    bad = .!isfinite.(A)
+    nbad = count(bad)
+    n = length(A)
+    if nbad == 0
+        return (nbad = 0, n = n, idx = nothing, val = nothing)
+    end
+    idx = findfirst(bad)
+    return (nbad = nbad, n = n, idx = idx, val = A[idx])
+end
+
+function _write_nan_forensics(output_dir, integrator)
+    isnothing(output_dir) && return
+    ispath(output_dir) || mkpath(output_dir)
+    file = joinpath(output_dir, "nan_forensics.txt")
+
+    u_arr = parent(integrator.u)
+    u_stats = _first_nonfinite_stats(u_arr)
+
+    du_stats = nothing
+    try
+        du_arr = parent(integrator.du)
+        du_stats = _first_nonfinite_stats(du_arr)
+    catch
+        du_stats = nothing
+    end
+
+    open(file, "a") do io
+        println(io, "---")
+        println(io, "t = ", integrator.t)
+        println(io, "dt = ", integrator.dt)
+        println(io, "u_nonfinite = ", u_stats.nbad, "/", u_stats.n)
+        if !isnothing(u_stats.idx)
+            println(io, "u_first_nonfinite_idx = ", u_stats.idx)
+            println(io, "u_first_nonfinite_value = ", u_stats.val)
+        end
+        if !isnothing(du_stats)
+            println(io, "du_nonfinite = ", du_stats.nbad, "/", du_stats.n)
+            if !isnothing(du_stats.idx)
+                println(io, "du_first_nonfinite_idx = ", du_stats.idx)
+                println(io, "du_first_nonfinite_value = ", du_stats.val)
+            end
+        else
+            println(io, "du_nonfinite = unavailable")
+        end
+    end
+end
+
+function check_nans(integrator, output_dir = nothing)
+    has_nonfinite = any(x -> !isfinite(x), parent(integrator.u))
+    if has_nonfinite
+        _write_nan_forensics(output_dir, integrator)
+        msg = isnothing(output_dir) ?
+              "Found NaN/Inf in state" :
+              "Found NaN/Inf in state; see $(joinpath(output_dir, "nan_forensics.txt"))"
+        error(msg)
+    end
     return nothing
 end

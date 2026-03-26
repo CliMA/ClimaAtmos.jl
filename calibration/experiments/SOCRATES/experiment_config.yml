@@ -1,0 +1,45 @@
+prior_path: prior.toml
+model_config: model_config.yml
+output_dir: output/simple_socrates
+
+ensemble_size: 12
+n_iterations: 4
+batch_size: 1
+
+y_var_names: [thetaa, hus, clw]
+z_max: 4000
+# Legacy SOCRATES default windows from CalibrateEDMF templates:
+# obs_data used approximately 10-12 hours (Atlas paper convention).
+y_t_start_sec: 36000.0
+y_t_end_sec: 43200.0
+g_t_start_sec: 36000.0
+g_t_end_sec: 43200.0
+
+reduction: inst
+
+eki:
+  scheduler_on_terminate: continue
+  localization: none
+  failure_handler: sample_succ_gauss
+  accelerator: default
+
+const_noise_by_var:
+  thetaa: 0.00005
+  hus: 0.00005
+  clw: 0.00005
+
+# Add one entry per SOCRATES flight/case.
+# Forcing and reference files are resolved at runtime via
+# SOCRATESSingleColumnForcings.open_atlas_les_input/output.
+cases:
+  - name: RF01
+    flight_number: 1
+    forcing_type: obs_data
+  - name: RF09
+    flight_number: 9
+    forcing_type: ERA5_data
+    # Optional per-case overrides (used when present):
+    # y_t_start_sec: 36000.0
+    # y_t_end_sec: 43200.0
+    # g_t_start_sec: 36000.0
+    # g_t_end_sec: 43200.0

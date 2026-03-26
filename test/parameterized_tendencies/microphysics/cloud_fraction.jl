@@ -148,7 +148,7 @@ import ClimaParams as CP
                     # Vary absolute variance q_var to vary sig_s, which varies Cv = sig_s / q_tot.
                     # Larger variance -> larger Cv -> more skewed tail & smaller Q_hat -> smaller CF.
 
-                    q_cond = FT(1e-3)
+                    q_con = FT(1e-3)
                     qt = FT(0.01)
 
                     # Increasing q_var array to increase Cv and sig_s

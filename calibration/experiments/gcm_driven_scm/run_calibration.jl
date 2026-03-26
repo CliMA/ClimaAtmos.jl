@@ -16,6 +16,9 @@ const model_interface = joinpath(experiment_dir, "model_interface.jl")
 const experiment_config =
     YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
+include(model_interface)
+
+
 # unpack experiment_config vars into scope 
 for (key, value) in experiment_config
     @eval const $(Symbol(key)) = $value
@@ -53,7 +56,7 @@ JLD2.jldsave(
 )
 
 ### get LES obs (Y) and norm factors
-ref_paths, _ = get_les_calibration_library()
+ref_paths, _ = get_les_calibration_library(; max_cases=1)
 obs_vec = []
 
 for ref_path in ref_paths
@@ -92,56 +95,61 @@ observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
 ###  EKI hyperparameters/settings
 @info "Initializing calibration" n_iterations ensemble_size output_dir
-CAL.initialize(
+CAL.calibrate(
+    CAL.WorkerBackend(),
     ensemble_size,
+    n_iterations,
     observations,
+    nothing, # noise already specified in obs
     prior,
     output_dir;
     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
     localization_method = EKP.Localizers.NoLocalization(),
+    # localization_method = EKP.Localizers.SECNice(nice_loc_ug, nice_loc_gg),
     failure_handler_method = EKP.SampleSuccGauss(),
     accelerator = EKP.DefaultAccelerator(),
 )
 
-eki = nothing
-hpc_kwargs = CAL.kwargs(
-    time = 60,
-    mem_per_cpu = "12G",
-    cpus_per_task = batch_size + 1,
-    ntasks = 1,
-    nodes = 1,
-    reservation = "clima",
-)
-module_load_str = CAL.module_load_string(CAL.CaltechHPCBackend)
-for iter in 0:(n_iterations - 1)
-    @info "Iteration $iter"
-    jobids = map(1:ensemble_size) do member
-        @info "Running ensemble member $member"
-        CAL.slurm_model_run(
-            iter,
-            member,
-            output_dir,
-            experiment_dir,
-            model_interface,
-            module_load_str;
-            hpc_kwargs,
-        )
-    end
+# eki = nothing
+# hpc_kwargs = CAL.kwargs(
+#     time = 60,
+#     mem_per_cpu = "12G",
+#     cpus_per_task = batch_size + 1,
+#     ntasks = 1,
+#     nodes = 1,
+#     reservation = "clima",
+# )
+# # module_load_str = CAL.module_load_string(CAL.CaltechHPCBackend)
+# module_load_str = "" # CAL.WorkerBackend doesnt have a string
+# for iter in 0:(n_iterations - 1)
+#     @info "Iteration $iter"
+#     jobids = map(1:ensemble_size) do member
+#         @info "Running ensemble member $member"
+#         CAL.slurm_model_run(
+#             iter,
+#             member,
+#             output_dir,
+#             experiment_dir,
+#             model_interface,
+#             module_load_str;
+#             hpc_kwargs,
+#         )
+#     end
 
-    statuses = CAL.wait_for_jobs(
-        jobids,
-        output_dir,
-        iter,
-        experiment_dir,
-        model_interface,
-        module_load_str;
-        hpc_kwargs,
-        verbose = false,
-        reruns = 0,
-    )
-    CAL.report_iteration_status(statuses, output_dir, iter)
-    @info "Completed iteration $iter, updating ensemble"
-    G_ensemble = CAL.observation_map(iter; config_dict = experiment_config)
-    CAL.save_G_ensemble(output_dir, iter, G_ensemble)
-    eki = CAL.update_ensemble(output_dir, iter, prior)
-end
+#     statuses = CAL.wait_for_jobs(
+#         jobids,
+#         output_dir,
+#         iter,
+#         experiment_dir,
+#         model_interface,
+#         module_load_str;
+#         hpc_kwargs,
+#         verbose = false,
+#         reruns = 0,
+#     )
+#     CAL.report_iteration_status(statuses, output_dir, iter)
+#     @info "Completed iteration $iter, updating ensemble"
+#     G_ensemble = CAL.observation_map(iter; config_dict = experiment_config)
+#     CAL.save_G_ensemble(output_dir, iter, G_ensemble)
+#     eki = CAL.update_ensemble(output_dir, iter, prior)
+# end

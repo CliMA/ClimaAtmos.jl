@@ -72,6 +72,17 @@ function is_face_variable(filename::String, var_name::String)
     pycles_face_vars = ["w_mean", "w_mean2", "w_mean3"]
 
     NCDataset(filename) do ds
+        if haskey(ds, var_name)
+            var_dims = dimnames(ds[var_name])
+            if ("zc" in var_dims) | ("z_half" in var_dims)
+                return false
+            elseif ("zf" in var_dims) | (var_name in pycles_face_vars)
+                return true
+            elseif ("z" in var_dims)
+                return false
+            end
+        end
+
         for group_option in ["profiles", "reference"]
             haskey(ds.group, group_option) || continue
             if haskey(ds.group[group_option], var_name)
@@ -91,6 +102,12 @@ function is_face_variable(filename::String, var_name::String)
                 end
             end
         end
+
+        throw(
+            ArgumentError(
+                "Variable $var_name does not contain a vertical coordinate.",
+            ),
+        )
     end
 end
 

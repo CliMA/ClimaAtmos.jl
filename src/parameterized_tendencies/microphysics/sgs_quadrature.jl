@@ -329,7 +329,7 @@ Derivative ∂T/∂θ_li [dimensionless]
     c_p = TD.Parameters.cp_d(thermo_params)
     R_v = TD.Parameters.R_v(thermo_params)
 
-    q_cond = q_liq + q_ice
+    q_con = q_liq + q_ice
     Π = T / max(θ_li, eps(FT))
 
     q_sat = TD.q_vap_saturation(thermo_params, T, ρ)

@@ -1,10 +1,28 @@
 import ClimaCore:
-    Geometry, Hypsography, Fields, Spaces, Meshes, Grids, CommonGrids, Topologies
+    Domains, Geometry, Hypsography, Fields, Spaces, Meshes, Grids, CommonGrids, Topologies
 using ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 import .AtmosArtifacts as AA
 import ClimaComms
 
 export SphereGrid, ColumnGrid, BoxGrid, PlaneGrid
+
+"""
+    z_mesh_from_faces(::Type{FT}, z_faces) where {FT}
+
+Build a `ClimaCore.Meshes.IntervalMesh` from a vector of explicit face coordinates.
+`z_faces[1]` is the bottom face (typically 0.0) and `z_faces[end]` is the top face.
+The number of vertical elements equals `length(z_faces) - 1`.
+"""
+function z_mesh_from_faces(::Type{FT}, z_faces) where {FT}
+    faces_ft = FT.(z_faces)
+    z_domain = Domains.IntervalDomain(
+        Geometry.ZPoint{FT}(faces_ft[begin]),
+        Geometry.ZPoint{FT}(faces_ft[end]),
+        boundary_names = (:bottom, :top),
+    )
+    face_points = map(v -> Geometry.ZPoint{FT}(v), faces_ft)
+    return Meshes.IntervalMesh(z_domain, face_points)
+end
 
 """
     SphereGrid(::Type{FT}; kwargs...)

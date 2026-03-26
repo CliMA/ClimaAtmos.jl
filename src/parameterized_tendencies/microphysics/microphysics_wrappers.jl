@@ -242,6 +242,15 @@ NamedTuple with averaged source terms:
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
 
+# Condensate Model
+
+At each quadrature point (T_hat, q_tot_hat):
+1. Compute saturation q_sat_hat = q_vap_saturation(T_hat, ρ)
+2. Diagnose condensate: q_con = max(0, q_tot_hat - q_sat_hat)
+3. Partition using liquid fraction: q_lcl_hat = λ × q_cond, q_icl_hat = (1-λ) × q_cond
+
+This captures threshold behavior at cloud edges where saturation excess transitions.
+
 # Note on Variances
 Call sites must convert θ-based variances to T-based variances using the chain rule:
 ```julia

@@ -165,7 +165,7 @@ using ClimaAtmos
                     # This simplifies the moist correction formula
                     q_liq = FT(0.003)  # 3 g/kg cloud liquid
                     q_ice = FT(0)
-                    q_cond = q_liq + q_ice
+                    q_con = q_liq + q_ice
                     L_v = TD.Parameters.LH_v0(thermo_params)
                     c_p = TD.Parameters.cp_d(thermo_params)
 

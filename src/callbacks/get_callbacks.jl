@@ -346,10 +346,13 @@ function progress_logging_callback(dt, t_start, t_end)
     return (CTS.DiscreteCallback(cond, affect!),)
 end
 
-function nan_checking_callback(check_nan_every::Int)
+function nan_checking_callback(check_nan_every::Int, output_dir = nothing)
     if check_nan_every > 0
         return (
-            call_every_n_steps((integrator) -> check_nans(integrator), check_nan_every),
+            call_every_n_steps(
+                (integrator) -> check_nans(integrator, output_dir),
+                check_nan_every,
+            ),
         )
     end
     return ()
@@ -584,7 +587,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
 
     # NaN checking
     check_nan_every = parsed_args["check_nan_every"]
-    callbacks = (callbacks..., nan_checking_callback(check_nan_every)...)
+    callbacks = (callbacks..., nan_checking_callback(check_nan_every, output_dir)...)
 
     # Graceful exit
     callbacks = (callbacks..., graceful_exit_callback(output_dir)...)
@@ -782,7 +785,7 @@ function common_callbacks(
     callbacks = (callbacks..., progress_logging_callback(dt, t_start, t_end)...)
 
     # NaN checking
-    callbacks = (callbacks..., nan_checking_callback(1024)...)
+    callbacks = (callbacks..., nan_checking_callback(1024, output_dir)...)
 
     # Graceful exit
     callbacks = (callbacks..., graceful_exit_callback(output_dir)...)
