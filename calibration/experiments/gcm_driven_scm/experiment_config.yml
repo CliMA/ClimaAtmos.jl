@@ -10,9 +10,9 @@
 prior_path: prior_prognostic_pi_entr_gen_detr_impl_0M_v5.toml
 # prior_path: prior_diagnostic_linreg_entr_detr.toml
 ensemble_size: 100
-n_iterations: 7
+n_iterations: 9
 # batch_size: 18 # number of cases per iteration
-batch_size: 20 # number of cases per iteration
+batch_size: 6 # number of cases per iteration
 # batch_size: 10 # number of cases per iteration
 # batch_size: 9 # number of cases per iteration
 # model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
@@ -29,8 +29,8 @@ model_config : model_config_prognostic_v2.yml
 # output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v3/exp36_eqn1_tke
 # output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v3/debug_exp1
 # output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v4/exp1_baseline
-output_dir : /resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/output_progedmf_cal_v2/exp11
-# output_dir : /resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/output_diagedmf_cal_v2/exp5
+output_dir : /resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/output_progedmf_cal_v2/exp18
+
 
 # Slurm resource configuration
 slurm_time: "12:00:00"
@@ -64,8 +64,10 @@ y_t_start_sec: # start time of LES averaging window [s]
 y_t_end_sec: # end time of LES averaging window [s]
   shallow: 518400.0 # 6 days (LES length = 6 days)
   deep: 345600.0 # 4 days (LES length = 4 days)
-g_t_start_sec: 216000.0 # start time of SCM averaging window [s] : 2.5 days
-g_t_end_sec: 259200.0 # end time of SCM averaging window [s] : 3 days (SCM length = 3 days)
+# g_t_start_sec: 216000.0 # start time of SCM averaging window [s] : 2.5 days
+# g_t_end_sec: 259200.0 # end time of SCM averaging window [s] : 3 days (SCM length = 3 days)
+g_t_start_sec: 475200.0 # start time of SCM averaging window [s] : 5.5 days (match LES shallow)
+g_t_end_sec: 518400.0 # end time of SCM averaging window [s] : 6 days (SCM length = 6 days)
 
 norm_factors_by_var:
   thetaa: [301.218, 15.235]
@@ -74,9 +76,16 @@ norm_factors_by_var:
   # cli: [-11.697, 1.304] # log norm factors
 
 const_noise_by_var:
-  thetaa: 0.0016
-  hus: 0.0016
-  clw: 0.0045
+  thetaa: 0.0008
+  hus: 0.0008
+  clw: 0.002
+
+  # thetaa: 0.0016
+  # hus: 0.0016
+  # clw: 0.0045
+
+
+  #
   # clw: 0.0016
   # cli: 0.01
   # thetaa: 0.0008
