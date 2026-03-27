@@ -286,10 +286,10 @@ The T-q correlation coefficient is obtained from `correlation_Tq(params)`.
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, args...,
 )
     # Clamp species humidities to prevent negativity in quadratures
-    q_lcl_safe = max(0, q_lcl)
-    q_icl_safe = max(0, q_icl)
-    q_rai_safe = max(0, q_rai)
-    q_sno_safe = max(0, q_sno)
+    q_lcl_nonneg = max(0, q_lcl)
+    q_icl_nonneg = max(0, q_icl)
+    q_rai_nonneg = max(0, q_rai)
+    q_sno_nonneg = max(0, q_sno)
 
     # Fast path for GridMeanSGS: skip quadrature, call BMT directly at grid mean
     # This avoids the overhead of the quadrature loop for grid-mean-only evaluation
@@ -297,14 +297,14 @@ The T-q correlation coefficient is obtained from `correlation_Tq(params)`.
        (SG_quad isa SGSQuadrature && SG_quad.dist isa GridMeanSGS)
         return BMT.bulk_microphysics_tendencies(
             scheme, mp, tps, ρ, T_mean, q_tot_mean,
-            q_lcl_safe, q_icl_safe, q_rai_safe, q_sno_safe, args...,
+            q_lcl_nonneg, q_icl_nonneg, q_rai_nonneg, q_sno_nonneg, args...,
         )
     end
 
     # Create functor (no closure, GPU-safe)
     evaluator = Microphysics1MEvaluator(
-        scheme, mp, tps, ρ, T_mean, q_lcl_safe, q_icl_safe,
-        q_rai_safe, q_sno_safe, args,
+        scheme, mp, tps, ρ, T_mean, q_lcl_nonneg, q_icl_nonneg,
+        q_rai_nonneg, q_sno_nonneg, args,
     )
 
     # Integrate over quadrature points using functor (GPU-safe, no closure)

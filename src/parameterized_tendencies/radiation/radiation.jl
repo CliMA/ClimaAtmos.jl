@@ -539,11 +539,11 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     thermo_params = CAP.thermodynamics_params(params)
     ᶜdTdt_rad = p.radiation.ᶜdTdt_rad
     ᶜρ = Y.c.ρ
-    (; ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     zc = Fields.coordinate_field(axes(ᶜρ)).z
     @. ᶜdTdt_rad = rad(FT(t), zc)
     @. Yₜ.c.ρe_tot +=
-        ᶜρ * TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) * ᶜdTdt_rad
+        ᶜρ * TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) * ᶜdTdt_rad
     return nothing
 end
 

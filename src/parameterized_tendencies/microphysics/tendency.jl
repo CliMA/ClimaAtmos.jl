@@ -117,7 +117,7 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     ::EquilibriumMicrophysics0M, turbconv_model::PrognosticEDMFX,
 )
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰, ᶜTʲs) = p.precomputed
-    (; ᶜ∂tendency_∂q_totʲs, ᶜ∂tendency_∂q_tot, ᶜq_tot_safe⁰) = p.precomputed
+    (; ᶜ∂tendency_∂q_totʲs, ᶜ∂tendency_∂q_tot, ᶜq_tot_nonneg⁰) = p.precomputed
     thp = CAP.thermodynamics_params(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
 
@@ -126,7 +126,7 @@ function microphysics_tendency!(Yₜ, Y, p, t,
         microphysics_tendency_model(
             ᶜmp_tendency⁰.dq_tot_dt,
             ᶜ∂tendency_∂q_tot,
-            ᶜq_tot_safe⁰,
+            ᶜq_tot_nonneg⁰,
             p.dt,
         ) *
         ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model),

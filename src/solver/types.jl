@@ -373,7 +373,7 @@ Whenever `z > zd`, the Rayleigh sponge model applies the tendency
  If `ρtke` is a prognostic variable, it is also damped;
  If the `PrognosticEDMFX` scheme is used, the model is additionally applied to
  `χ ∈ {u₃ʲ, mseʲ, q_totʲ}`, and
- `χ ∈ {q_liqʲ, q_raiʲ, q_iceʲ, q_snoʲ}` (depending on the microphysical model).
+ `χ ∈ {q_lclʲ, q_raiʲ, q_iclʲ, q_snoʲ}` (depending on the microphysical model).
  `α_χ` is a damping coefficient for each variable, and `ζ` is the damping function
 
  ```math
@@ -386,7 +386,7 @@ Whenever `z > zd`, the Rayleigh sponge model applies the tendency
  - `α_uₕ`: horizontal velocity, `uₕ`;
  - `α_w`: vertical velocity, `u₃`, `u₃ʲ`;
  - `α_sgs_tracer`: subgrid-scale tracer variables, `ρtke`, `mseʲ`, `q_totʲ`,
-    `q_liqʲ`, `q_raiʲ`, `q_iceʲ`, `q_snoʲ`.
+    `q_lclʲ`, `q_raiʲ`, `q_iclʲ`, `q_snoʲ`.
 
  By default, damping is only applied to vertical velocity, with:
  - `α_uₕ = 0`

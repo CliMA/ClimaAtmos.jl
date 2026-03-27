@@ -73,7 +73,7 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
     (; rrtmgp_model) = p.radiation
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(thermo_params)
-    (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     ᶜrh = Fields.array2field(rrtmgp_model.center_relative_humidity, axes(u.c))
     ᶜvmr_h2o = Fields.array2field(
         rrtmgp_model.center_volume_mixing_ratio_h2o,
@@ -106,14 +106,19 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
         @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(thermo_params, ᶜq_tot)
     else
         @. ᶜvmr_h2o =
-            TD.vol_vapor_mixing_ratio(thermo_params, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice)
+            TD.vol_vapor_mixing_ratio(
+                thermo_params,
+                ᶜq_tot_nonneg,
+                ᶜq_liq,
+                ᶜq_ice,
+            )
         @. ᶜrh = min(
             max(
                 TD.relative_humidity(
                     thermo_params,
                     ᶜT,
                     ᶜp,
-                    ᶜq_tot_safe,
+                    ᶜq_tot_nonneg,
                     ᶜq_liq,
                     ᶜq_ice,
                 ),

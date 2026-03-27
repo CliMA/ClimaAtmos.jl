@@ -21,7 +21,7 @@
 #     ::T,
 # ) where {T <: MoistMicrophysics}
 #     thermo_params = CAP.thermodynamics_params(cache.params)
-#     out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜT, state.c.ρ, cache.precomputed.ᶜq_tot_safe, cache.precomputed.ᶜq_liq, cache.precomputed.ᶜq_ice))
+#     out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜT, state.c.ρ, cache.precomputed.ᶜq_tot_nonneg, cache.precomputed.ᶜq_liq, cache.precomputed.ᶜq_ice))
 # end
 #
 # 2. Define a function that has the correct signature and calls this function
@@ -147,13 +147,13 @@ add_diagnostic_variable!(
     units = "K",
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
-        (; ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = cache.precomputed
+        (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
         if isnothing(out)
             return TD.potential_temperature.(
                 thermo_params,
                 ᶜT,
                 state.c.ρ,
-                ᶜq_tot_safe,
+                ᶜq_tot_nonneg,
                 ᶜq_liq,
                 ᶜq_ice,
             )
@@ -163,7 +163,7 @@ add_diagnostic_variable!(
                     thermo_params,
                     ᶜT,
                     state.c.ρ,
-                    ᶜq_tot_safe,
+                    ᶜq_tot_nonneg,
                     ᶜq_liq,
                     ᶜq_ice,
                 )
@@ -180,11 +180,11 @@ add_diagnostic_variable!(
     units = "m^2 s^-2",
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
-        (; ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = cache.precomputed
+        (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
         if isnothing(out)
-            return TD.enthalpy.(thermo_params, ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice)
+            return TD.enthalpy.(thermo_params, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
         else
-            out .= TD.enthalpy.(thermo_params, ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice)
+            out .= TD.enthalpy.(thermo_params, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
         end
     end,
 )
@@ -415,13 +415,13 @@ function compute_hur!(
     microphysics_model::T,
 ) where {T <: MoistMicrophysics}
     thermo_params = CAP.thermodynamics_params(cache.params)
-    (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    (; ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
     if isnothing(out)
         return TD.relative_humidity.(
             thermo_params,
             ᶜT,
             ᶜp,
-            ᶜq_tot_safe,
+            ᶜq_tot_nonneg,
             ᶜq_liq,
             ᶜq_ice,
         )
@@ -431,7 +431,7 @@ function compute_hur!(
                 thermo_params,
                 ᶜT,
                 ᶜp,
-                ᶜq_tot_safe,
+                ᶜq_tot_nonneg,
                 ᶜq_liq,
                 ᶜq_ice,
             )
@@ -1466,9 +1466,9 @@ function compute_hurvi!(
     microphysics_model::T,
 ) where {T <: MoistMicrophysics}
     thermo_params = CAP.thermodynamics_params(cache.params)
-    (; ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
     # Vapor specific humidity = q_tot - q_liq - q_ice
-    ᶜq_vap = @. lazy(ᶜq_tot_safe - ᶜq_liq - ᶜq_ice)
+    ᶜq_vap = @. lazy(ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice)
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         # compute vertical integral of saturation specific humidity
@@ -1525,11 +1525,11 @@ function compute_husv!(
     microphysics_model::T,
 ) where {T <: MoistMicrophysics}
     # Vapor specific humidity = q_tot - q_liq - q_ice
-    (; ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
     if isnothing(out)
-        return @. ᶜq_tot_safe - ᶜq_liq - ᶜq_ice
+        return @. ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice
     else
-        out .= @. ᶜq_tot_safe - ᶜq_liq - ᶜq_ice
+        out .= @. ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice
     end
 end
 
@@ -1691,10 +1691,16 @@ function compute_cape!(out, state, cache, time)
 
     # Calculate virtual temperatures for parcel & environment
     parcel_Tv = lazy.(TD.virtual_temperature.(thermo_params, parcel_T, surface_q))
-    (; ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
     env_Tv =
         lazy.(
-            TD.virtual_temperature.(thermo_params, ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice),
+            TD.virtual_temperature.(
+                thermo_params,
+                ᶜT,
+                ᶜq_tot_nonneg,
+                ᶜq_liq,
+                ᶜq_ice,
+            ),
         )
 
     # Calculate buoyancy from the difference in virtual temperatures
@@ -1732,13 +1738,13 @@ add_diagnostic_variable!(
 function compute_mslp!(out, state, cache, time)
     thermo_params = CAP.thermodynamics_params(cache.params)
     g = TD.Parameters.grav(thermo_params)
-    q_tot_safe_level = Fields.level(cache.precomputed.ᶜq_tot_safe, 1)
+    q_tot_nonneg_level = Fields.level(cache.precomputed.ᶜq_tot_nonneg, 1)
     q_liq_level = Fields.level(cache.precomputed.ᶜq_liq, 1)
     q_ice_level = Fields.level(cache.precomputed.ᶜq_ice, 1)
     R_m_surf = @. lazy(
         TD.gas_constant_air(
             thermo_params,
-            q_tot_safe_level,
+            q_tot_nonneg_level,
             q_liq_level,
             q_ice_level,
         ),
