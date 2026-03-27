@@ -7,21 +7,34 @@
 model_config = "model_config_prognostic_v2.yml"
 
 # Base TOML file with default parameter values (relative to gcm_driven_scm directory)
-base_toml = "scm_tomls/prognostic_edmfx_dev_param_sweep.toml"
+base_toml = "scm_tomls/prognostic_edmfx_dev_param_sweep_v2.toml"
 
 # Output directory for sensitivity runs
-output_dir = "/resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/param_sensitivity/exp1"
+output_dir = "/resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/param_sensitivity/exp4"
 
 [run]
 # Number of parallel workers (each worker runs one simulation at a time)
-num_workers = 100
+# Workers are spawned as separate Slurm jobs via SlurmManager
+num_workers = 200
 
 # If true, only generate configs without running simulations
 dry_run = false
 
+# Sweep mode: "one_at_a_time" (default) or "grid" (full combinatorial)
+# WARNING: "grid" mode grows exponentially! Only use with a few parameters.
+# Use grid_parameters to specify which parameters to include in grid search.
+mode = "grid"
+
+# For grid search: maximum allowed configurations before aborting (safety limit)
+max_grid_configs = 10000
+
+# For grid search: list of parameter names to include (null = use all parameters)
+# Example: grid_parameters = ["entr_param_vec", "detr_vertdiv_coeff", "mixing_length_diss_coeff"]
+# grid_parameters = null
+
 # LES cases to run (null = run all available cases, or specify list like [17, 18, 22])
 # cfsite_cases = null
-cfsite_cases = [2, 3, 4, 5, 6, 7]
+cfsite_cases = [3, 4, 5, 6, 21, 22, 23]
 
 # Max number of cases to run (comment out for no limit)
 # max_cases = 10
@@ -46,14 +59,14 @@ experiment = "amip"
 base_path = "/resnick/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected"
 
 [slurm]
-# Time limit per job (HH:MM:SS)
-job_time = "12:00:00"
+# Time limit per worker job (HH:MM:SS)
+job_time = "06:00:00"
 
-# CPUs per task
+# CPUs per worker task
 cpus_per_task = 1
 
-# Memory per CPU
-mem_per_cpu = "25G"
+# Memory per worker CPU
+mem_per_cpu = "16G"
 
 # Forcing-type-specific TOML files (shallow vs deep relaxation settings)
 # These are applied based on cfsite type (shallow or deep convection cases)
@@ -80,6 +93,7 @@ deep = "scm_tomls/gcmdriven_relaxation_deep_forcing.toml"
 values = [
     [0.0, 0.0, 0.01],
     [0.0, 0.0, 0.1],
+    [0.0, 0.0, 0.2],
     [0.0, 0.0, 0.3],
     [0.0, 0.0, 0.5],
     [0.0, 0.0, 1.0],
@@ -87,23 +101,20 @@ values = [
 ]
 type = "float"
 
-[parameters.entr_mult_limiter_coeff]
-values = [0.3, 0.5, 0.7, 0.9, 1.1]
-type = "float"
+# [parameters.entr_mult_limiter_coeff]
+# values = [0.3, 0.5, 0.7, 0.9, 1.1]
+# type = "float"
 
 [parameters.entr_inv_tau]
-# Inverse timescale for entrainment [1/s]
 values = [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2]
 type = "float"
 
 [parameters.detr_inv_tau]
-# Inverse timescale for detrainment [1/s]
 values = [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2]
 type = "float"
 
 [parameters.detr_vertdiv_coeff]
-# Coefficient for vertical divergence detrainment
-values = [0.2, 0.5, 0.75, 1.0, 1.5, 2.0, 5.0]
+values = [0.1, 0.2, 0.5, 0.75, 1.0, 2.0, 5.0]
 type = "float"
 
 [parameters.entr_detr_limit_inv_tau]
@@ -112,57 +123,57 @@ type = "float"
 
 # --- Pressure Parameters ---
 
-[parameters.pressure_normalmode_drag_coeff]
-values = [5.0, 10.0, 20.0, 30.0, 50.0]
-type = "float"
+# [parameters.pressure_normalmode_drag_coeff]
+# values = [5.0, 20.0, 50.0]
+# type = "float"
 
-[parameters.pressure_normalmode_buoy_coeff1]
-values = [0.1, 0.2, 0.3, 0.5, 0.8]
-type = "float"
+# [parameters.pressure_normalmode_buoy_coeff1]
+# values = [0.1, 0.2, 0.3, 0.5, 0.8]
+# type = "float"
 
 # --- Mixing Length / TKE Parameters ---
 
-[parameters.mixing_length_eddy_viscosity_coefficient]
-values = [0.1, 0.2, 0.3, 0.5, 0.8, 1.0, 2.0]
-type = "float"
+# [parameters.mixing_length_eddy_viscosity_coefficient]
+# values = [0.05, 0.1, 0.3, 0.5, 0.8, 1.0, 2.0, 5.0]
+# type = "float"
 
-[parameters.mixing_length_tke_surf_flux_coeff]
-values = [1.0, 2.0, 3.5, 5.0, 7.0, 10.0]
-type = "float"
+# [parameters.mixing_length_tke_surf_flux_coeff]
+# values = [0.1, 1.0, 2.0, 3.5, 5.0, 7.0, 10.0]
+# type = "float"
 
-[parameters.mixing_length_diss_coeff]
-values = [0.01, 0.05, 0.1, 0.15, 0.22, 0.3, 0.4]
-type = "float"
+# [parameters.mixing_length_diss_coeff]
+# values = [0.05, 0.1, 0.3, 0.4, 0.6, 0.8, 1.5]
+# type = "float"
 
 # --- Microphysics / Precipitation Parameters ---
 
-[parameters.precipitation_timescale]
-values = [500.0, 800.0, 1200.0, 1800.0, 2500.0, 3000.0, 4000.0]
-type = "float"
+# [parameters.precipitation_timescale]
+# values = [500.0, 800.0, 1200.0, 1800.0, 2500.0, 3000.0, 4000.0]
+# type = "float"
 
-[parameters.supersaturation_precipitation_threshold]
-values = [0.005, 0.01, 0.02, 0.04, 0.08]
-type = "float"
+# [parameters.supersaturation_precipitation_threshold]
+# values = [0.005, 0.02, 0.08]
+# type = "float"
 
 # --- Cloud Fraction Parameters ---
 
-[parameters.Tq_correlation_coefficient]
-values = [0.4, 0.55, 0.7, 0.85, 0.95]
-type = "float"
+# [parameters.Tq_correlation_coefficient]
+# values = [0.4, 0.55, 0.7, 0.85, 0.95]
+# type = "float"
 
-[parameters.diagnostic_covariance_coeff]
-values = [1.0, 1.5, 2.1, 3.0, 4.0]
-type = "float"
+# [parameters.diagnostic_covariance_coeff]
+# values = [1.0, 1.5, 2.1, 3.0, 4.0]
+# type = "float"
 
 # --- Area Limiter Parameters ---
 
-[parameters.max_area_limiter_scale]
-values = [0.005, 0.008, 0.01, 0.015, 0.02]
-type = "float"
+# [parameters.max_area_limiter_scale]
+# values = [0.005, 0.008, 0.01, 0.015, 0.02]
+# type = "float"
 
-[parameters.max_area_limiter_power]
-values = [15.0, 20.0, 25.0, 30.0, 40.0]
-type = "float"
+# [parameters.max_area_limiter_power]
+# values = [15.0, 20.0, 25.0, 30.0, 40.0]
+# type = "float"
 
 # =============================================================================
 # Parameter Groups (coupled parameters that change together)
@@ -173,6 +184,7 @@ type = "float"
 
 # Coupled parameters: both use the same sweep values (from entr_inv_tau)
 # and only one set of simulations is run for the pair.
-[groups.inv_tau_group]
+
+# [groups.inv_tau_group]
 parameters = ["entr_inv_tau", "detr_inv_tau"]
 
