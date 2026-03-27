@@ -170,6 +170,7 @@ atmos_name_map = (;
     :D_horizontal_diffusion => :constant_horizontal_diffusion_D,
     :temperature_minimum => :T_min_sgs,
     :specific_humidity_maximum => :q_max_sgs,
+    :specific_humidity_minimum => :q_min,
 )
 
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =

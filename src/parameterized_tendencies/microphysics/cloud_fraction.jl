@@ -250,7 +250,7 @@ end
 """
     compute_cloud_fraction_sd(
         thermo_params, T, ρ, q_tot, q_liq, q_ice, T′T′, q′q′, corr_Tq,
-        cf_steepness_scale, sgs_dist
+        cf_steepness_scale, q_min, sgs_dist
     )
 
 Compute cloud fraction using the Sommeria & Deardorff (1977) approach, but with 
@@ -287,6 +287,7 @@ With zero variance the function returns 0 when no condensate exists and
 - `q′q′`: Moisture variance [(kg/kg)²]
 - `corr_Tq`: Correlation coefficient corr(T', q')
 - `cf_steepness_scale`: Scaling factor for the steepness of the cloud fraction transition versus condensate (default 1).
+- `q_min`: Minimum specific humidity threshold [kg/kg] (from ClimaParams `specific_humidity_minimum`).
 - `sgs_dist`: Assumed sub-grid scale distribution type (`GaussianSGS`, `LogNormalSGS`, or `GridMeanSGS`).
 
 # Returns
@@ -302,7 +303,8 @@ Cloud fraction ∈ [0, 1]
     T′T′,
     q′q′,
     corr_Tq,
-    cf_steepness_scale, # Added cf_steepness_scale to signature
+    cf_steepness_scale,
+    q_min,
     sgs_dist::AbstractSGSDistribution,
 )
     FT = eltype(thermo_params)
@@ -338,9 +340,9 @@ Cloud fraction ∈ [0, 1]
 
     # --- 4. Formulation-Specific Cloud Fraction Helpers ---
     cf_l =
-        _cloud_fraction_helper(Q_hat_l, sig_l, q_tot, cf_steepness_scale, sgs_dist)
+        _cloud_fraction_helper(Q_hat_l, sig_l, q_tot, cf_steepness_scale, q_min, sgs_dist)
     cf_i =
-        _cloud_fraction_helper(Q_hat_i, sig_i, q_tot, cf_steepness_scale, sgs_dist)
+        _cloud_fraction_helper(Q_hat_i, sig_i, q_tot, cf_steepness_scale, q_min, sgs_dist)
 
     # --- 5. Maximum overlap ---
     cf = max(cf_l, cf_i)
@@ -351,7 +353,7 @@ Cloud fraction ∈ [0, 1]
 end
 
 """
-    _cloud_fraction_helper(Q_hat, sig_s, q_tot, cf_steepness_scale, sgs_dist)
+    _cloud_fraction_helper(Q_hat, sig_s, q_tot, cf_steepness_scale, q_min, sgs_dist)
 
 Compute the phase-specific cloud fraction from normalized condensate.
 
@@ -360,6 +362,7 @@ Compute the phase-specific cloud fraction from normalized condensate.
 - `sig_s`: Standard deviation of saturation deficit [kg/kg]
 - `q_tot`: Grid-mean total specific humidity [kg/kg]
 - `cf_steepness_scale`: Scaling factor for the steepness of the cloud fraction transition versus condensate
+- `q_min`: Minimum specific humidity threshold [kg/kg]
 - `sgs_dist`: Assumed sub-grid scale distribution type (`GaussianSGS`, `LogNormalSGS`, or `GridMeanSGS`)
 
 # Returns
@@ -370,6 +373,7 @@ Compute the phase-specific cloud fraction from normalized condensate.
     sig_s,
     q_tot,
     cf_steepness_scale,
+    q_min,
     ::GaussianSGS,
 )
     FT = typeof(Q_hat)
@@ -383,11 +387,12 @@ end
     sig_s,
     q_tot,
     cf_steepness_scale,
+    q_min,
     ::LogNormalSGS,
 )
     FT = typeof(Q_hat)
     # Coefficient of variation (protect against division by zero)
-    C_v = sig_s / max(q_tot, q_min(FT))
+    C_v = sig_s / max(q_tot, q_min)
 
     # Base coefficient corresponds to Gaussian limit (Cv -> 0)
     coeff = (FT(π) / sqrt(FT(6))) * cf_steepness_scale
@@ -404,6 +409,7 @@ end
     sig_s,
     q_tot,
     cf_steepness_scale,
+    q_min,
     ::GridMeanSGS,
 )
     FT = typeof(Q_hat)
@@ -468,6 +474,7 @@ NVTX.@annotate function set_cloud_fraction!(
 
     corr_Tq = correlation_Tq(p.params)
     cf_steepness_scale = CAP.cloud_fraction_steepness_scale(p.params)
+    q_min = CAP.q_min(p.params)
 
     @. p.precomputed.ᶜcloud_fraction = compute_cloud_fraction_sd(
         thermo_params,
@@ -480,6 +487,7 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜq′q′,
         corr_Tq,
         cf_steepness_scale,
+        q_min,
         sgs_dist,
     )
 

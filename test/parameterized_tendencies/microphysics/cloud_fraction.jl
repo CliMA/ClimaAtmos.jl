@@ -24,6 +24,7 @@ import ClimaParams as CP
                 ρ = FT(1.0)
                 # For tests we need a nominal q_tot. Let's assume q_tot = q_cond + 0.01
                 q_tot_base = FT(0.01)
+                q_min = FT(1e-10)
 
                 for sgs_dist in (CA.GaussianSGS(), CA.LogNormalSGS())
                     @testset "No condensate → zero cloud fraction ($sgs_dist)" begin
@@ -31,7 +32,7 @@ import ClimaParams as CP
                             thp, T, ρ, q_tot_base,
                             FT(0), FT(0),              # q_liq, q_ice
                             FT(1.0), FT(1e-6), FT(0),  # T'T', q'q', T'q'
-                            FT(1), sgs_dist,
+                            FT(1), q_min, sgs_dist,
                         )
                         @test cf == FT(0)
                     end
@@ -41,7 +42,7 @@ import ClimaParams as CP
                             thp, T, ρ, q_tot_base + FT(1e-3),
                             FT(1e-3), FT(0),           # q_liq present
                             FT(1.0), FT(1e-6), FT(0),
-                            FT(1), sgs_dist,
+                            FT(1), q_min, sgs_dist,
                         )
                         @test cf > FT(0)
                         @test cf <= FT(1)
@@ -53,7 +54,7 @@ import ClimaParams as CP
                             thp, T_cold, ρ, q_tot_base + FT(1e-3),
                             FT(0), FT(1e-3),           # q_ice present
                             FT(1.0), FT(1e-6), FT(0),
-                            FT(1), sgs_dist,
+                            FT(1), q_min, sgs_dist,
                         )
                         @test cf > FT(0)
                         @test cf <= FT(1)
@@ -64,7 +65,7 @@ import ClimaParams as CP
                             thp, T, ρ, q_tot_base + FT(1e-2),
                             FT(1e-2), FT(0),           # large q_liq
                             FT(0.01), FT(1e-10), FT(0),# small variance
-                            FT(1), sgs_dist,
+                            FT(1), q_min, sgs_dist,
                         )
                         @test cf > FT(0.99)
                     end
@@ -74,7 +75,7 @@ import ClimaParams as CP
                             thp, T, ρ, q_tot_base + FT(1e-3),
                             FT(1e-3), FT(0),
                             FT(0), FT(0), FT(0),
-                            FT(1), sgs_dist,
+                            FT(1), q_min, sgs_dist,
                         )
                         @test cf > FT(0.99)
                     end
@@ -84,13 +85,13 @@ import ClimaParams as CP
                             thp, FT(260.0), ρ, q_tot_base + FT(1.5e-3),
                             FT(1e-3), FT(5e-4),
                             FT(1.0), FT(1e-6), FT(0),
-                            FT(1), sgs_dist,
+                            FT(1), q_min, sgs_dist,
                         )
                         cf_liq = CA.compute_cloud_fraction_sd(
                             thp, FT(260.0), ρ, q_tot_base + FT(1.5e-3),
                             FT(1e-3), FT(0),
                             FT(1.0), FT(1e-6), FT(0),
-                            FT(1), sgs_dist,
+                            FT(1), q_min, sgs_dist,
                         )
                         # Max overlap: combined cf ≥ liquid-only cf
                         @test cf_both >= cf_liq
@@ -101,7 +102,7 @@ import ClimaParams as CP
                             thp, T, ρ, q_tot_base + FT(1e-3),
                             FT(1e-3), FT(0),
                             FT(1.0), FT(1e-6), FT(0),
-                            FT(1), sgs_dist,
+                            FT(1), q_min, sgs_dist,
                         )
                         @test cf isa FT
                     end
@@ -120,7 +121,7 @@ import ClimaParams as CP
                                 thp, T, ρ, q_tot_base + FT(1e-3),
                                 FT(1e-3), FT(0),
                                 FT(1.0), FT(1e-6), c,
-                                FT(1), sgs_dist,
+                                FT(1), q_min, sgs_dist,
                             ) for c in corr_vals
                         ]
                         for i in 2:length(cf_liq)
@@ -134,7 +135,7 @@ import ClimaParams as CP
                                 thp, T_cold, ρ, q_tot_base + FT(1e-3),
                                 FT(0), FT(1e-3),
                                 FT(1.0), FT(1e-6), c,
-                                FT(1), sgs_dist,
+                                FT(1), q_min, sgs_dist,
                             ) for c in corr_vals
                         ]
                         for i in 2:length(cf_ice)
@@ -159,7 +160,7 @@ import ClimaParams as CP
                             thp, T, ρ, qt,
                             q_cond, FT(0),
                             FT(0), q_var, FT(0),
-                            FT(1), CA.LogNormalSGS(),
+                            FT(1), q_min, CA.LogNormalSGS(),
                         ) for q_var in q_var_vals
                     ]
 
