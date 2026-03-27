@@ -73,8 +73,8 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     ρ_level,
     T_level,
     q_tot_safe_level,
-    q_liq_rai_level,
-    q_ice_sno_level,
+    q_liq_level,
+    q_ice_level,
     mse_level,
     q_tot_level,
     p_level,
@@ -93,16 +93,16 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     )
     # Extract primitive values from thermo state
     @. T_level = sa_result_level.T
-    @. q_liq_rai_level = sa_result_level.q_liq
-    @. q_ice_sno_level = sa_result_level.q_ice
+    @. q_liq_level = sa_result_level.q_liq
+    @. q_ice_level = sa_result_level.q_ice
     # Compute density from primitive values
     @. ρ_level = TD.air_density(
         thermo_params,
         T_level,
         p_level,
         q_tot_safe_level,
-        q_liq_rai_level,
-        q_ice_sno_level,
+        q_liq_level,
+        q_ice_level,
     )
     return nothing
 end
@@ -111,8 +111,8 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     ρ_level,
     T_level,
     q_tot_safe_level,
-    q_liq_rai_level,
-    q_ice_sno_level,
+    q_liq_level,
+    q_ice_level,
     mse_level,
     q_tot_level,
     q_lcl_level,
@@ -123,25 +123,25 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     Φ_level,
 )
     FT = eltype(thermo_params)
-    @. q_liq_rai_level = max(0, q_lcl_level + q_rai_level)
-    @. q_ice_sno_level = max(0, q_icl_level + q_sno_level)
+    @. q_liq_level = max(0, q_lcl_level + q_rai_level)
+    @. q_ice_level = max(0, q_icl_level + q_sno_level)
     # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-    @. q_tot_safe_level = max(q_liq_rai_level + q_ice_sno_level, q_tot_level)
+    @. q_tot_safe_level = max(q_liq_level + q_ice_level, q_tot_level)
     @. T_level = TD.air_temperature(
         thermo_params,
         TD.ph(),
         mse_level - Φ_level,
         q_tot_safe_level,
-        q_liq_rai_level,
-        q_ice_sno_level,
+        q_liq_level,
+        q_ice_level,
     )
     @. ρ_level = TD.air_density(
         thermo_params,
         T_level,
         p_level,
         q_tot_safe_level,
-        q_liq_rai_level,
-        q_ice_sno_level,
+        q_liq_level,
+        q_ice_level,
     )
     return nothing
 end
@@ -194,7 +194,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.precomputed.sfc_conditions
     (; ᶜρaʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜρʲs) = p.precomputed
-    (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
+    (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰) = p.precomputed
 
     (; params) = p
@@ -260,8 +260,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
         ᶜq_totʲ = ᶜq_totʲs.:($j)
         ᶜTʲ = ᶜTʲs.:($j)
         ᶜq_tot_safeʲ = ᶜq_tot_safeʲs.:($j)
-        ᶜq_liq_raiʲ = ᶜq_liq_raiʲs.:($j)
-        ᶜq_ice_snoʲ = ᶜq_ice_snoʲs.:($j)
+        ᶜq_liqʲ = ᶜq_liqʲs.:($j)
+        ᶜq_iceʲ = ᶜq_iceʲs.:($j)
 
         ρaʲ_int_level = Fields.field_values(Fields.level(ᶜρaʲ, 1))
         u³ʲ_int_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, half))
@@ -271,8 +271,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
         ρʲ_int_level = Fields.field_values(Fields.level(ᶜρʲ, 1))
         Tʲ_int_level = Fields.field_values(Fields.level(ᶜTʲ, 1))
         q_tot_safeʲ_int_level = Fields.field_values(Fields.level(ᶜq_tot_safeʲ, 1))
-        q_liq_raiʲ_int_level = Fields.field_values(Fields.level(ᶜq_liq_raiʲ, 1))
-        q_ice_snoʲ_int_level = Fields.field_values(Fields.level(ᶜq_ice_snoʲ, 1))
+        q_liqʲ_int_level = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
+        q_iceʲ_int_level = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
 
         @. u³ʲ_int_halflevel = CT3(
             Geometry.WVector($(FT(0)), local_geometry_int_halflevel),
@@ -371,8 +371,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
                 ρʲ_int_level,
                 Tʲ_int_level,
                 q_tot_safeʲ_int_level,
-                q_liq_raiʲ_int_level,
-                q_ice_snoʲ_int_level,
+                q_liqʲ_int_level,
+                q_iceʲ_int_level,
                 mseʲ_int_level,
                 q_totʲ_int_level,
                 q_lclʲ_int_level,
@@ -391,8 +391,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
                 ρʲ_int_level,
                 Tʲ_int_level,
                 q_tot_safeʲ_int_level,
-                q_liq_raiʲ_int_level,
-                q_ice_snoʲ_int_level,
+                q_liqʲ_int_level,
+                q_iceʲ_int_level,
                 mseʲ_int_level,
                 q_totʲ_int_level,
                 p_int_level,
@@ -488,7 +488,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; params) = p
     (; dt) = p
     (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜT, ᶜh_tot, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜK) = p.precomputed
+    (; ᶜp, ᶠu³, ᶜT, ᶜh_tot, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, ᶜK) = p.precomputed
     (;
         ᶜρaʲs,
         ᶠu³ʲs,
@@ -502,7 +502,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         ᶠnh_pressure³_buoyʲs,
         ᶠnh_pressure³_dragʲs,
     ) = p.precomputed
-    (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
+    (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰) = p.precomputed
 
     if microphysics_model isa NonEquilibriumMicrophysics1M
@@ -570,8 +570,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         q_tot_prev_level = Fields.field_values(Fields.level(ᶜq_tot, i - 1))
         T_prev_level = Fields.field_values(Fields.level(ᶜT, i - 1))
         q_tot_safe_prev_level = Fields.field_values(Fields.level(ᶜq_tot_safe, i - 1))
-        q_liq_rai_prev_level = Fields.field_values(Fields.level(ᶜq_liq_rai, i - 1))
-        q_ice_sno_prev_level = Fields.field_values(Fields.level(ᶜq_ice_sno, i - 1))
+        q_liq_prev_level = Fields.field_values(Fields.level(ᶜq_liq, i - 1))
+        q_ice_prev_level = Fields.field_values(Fields.level(ᶜq_ice, i - 1))
         p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
         dz_prev_level = Fields.field_values(Fields.level(ᶜdz, i - 1))
@@ -605,8 +605,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ᶜq_totʲ = ᶜq_totʲs.:($j)
             ᶜTʲ = ᶜTʲs.:($j)
             ᶜq_tot_safeʲ = ᶜq_tot_safeʲs.:($j)
-            ᶜq_liq_raiʲ = ᶜq_liq_raiʲs.:($j)
-            ᶜq_ice_snoʲ = ᶜq_ice_snoʲs.:($j)
+            ᶜq_liqʲ = ᶜq_liqʲs.:($j)
+            ᶜq_iceʲ = ᶜq_iceʲs.:($j)
             ᶜentrʲ = ᶜentrʲs.:($j)
             ᶜdetrʲ = ᶜdetrʲs.:($j)
             ᶜturb_entrʲ = ᶜturb_entrʲs.:($j)
@@ -632,8 +632,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ρʲ_level = Fields.field_values(Fields.level(ᶜρʲ, i))
             Tʲ_level = Fields.field_values(Fields.level(ᶜTʲ, i))
             q_tot_safeʲ_level = Fields.field_values(Fields.level(ᶜq_tot_safeʲ, i))
-            q_liq_raiʲ_level = Fields.field_values(Fields.level(ᶜq_liq_raiʲ, i))
-            q_ice_snoʲ_level = Fields.field_values(Fields.level(ᶜq_ice_snoʲ, i))
+            q_liqʲ_level = Fields.field_values(Fields.level(ᶜq_liqʲ, i))
+            q_iceʲ_level = Fields.field_values(Fields.level(ᶜq_iceʲ, i))
 
             ρaʲ_prev_level = Fields.field_values(Fields.level(ᶜρaʲ, i - 1))
             u³ʲ_prev_halflevel =
@@ -645,8 +645,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ρʲ_prev_level = Fields.field_values(Fields.level(ᶜρʲ, i - 1))
             Tʲ_prev_level = Fields.field_values(Fields.level(ᶜTʲ, i - 1))
             q_tot_safeʲ_prev_level = Fields.field_values(Fields.level(ᶜq_tot_safeʲ, i - 1))
-            q_liq_raiʲ_prev_level = Fields.field_values(Fields.level(ᶜq_liq_raiʲ, i - 1))
-            q_ice_snoʲ_prev_level = Fields.field_values(Fields.level(ᶜq_ice_snoʲ, i - 1))
+            q_liqʲ_prev_level = Fields.field_values(Fields.level(ᶜq_liqʲ, i - 1))
+            q_iceʲ_prev_level = Fields.field_values(Fields.level(ᶜq_iceʲ, i - 1))
             ᶜgradᵥ_ᶠΦ_prev_level =
                 Fields.field_values(Fields.level(ᶜgradᵥ_ᶠΦ, i - 1))
             entrʲ_prev_level = Fields.field_values(Fields.level(ᶜentrʲ, i - 1))
@@ -695,8 +695,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 max(Tʲ_prev_level, CAP.T_min_sgs(params)),
                 p_prev_level,
                 q_tot_safeʲ_prev_level,
-                q_liq_raiʲ_prev_level,
-                q_ice_snoʲ_prev_level,
+                q_liqʲ_prev_level,
+                q_iceʲ_prev_level,
             )
             rh_prev_level = p.scratch.temp_data_level_5
             @. rh_prev_level = TD.relative_humidity(
@@ -704,8 +704,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 max(T_prev_level, CAP.T_min_sgs(params)),
                 p_prev_level,
                 q_tot_safe_prev_level,
-                q_liq_rai_prev_level,
-                q_ice_sno_prev_level,
+                q_liq_prev_level,
+                q_ice_prev_level,
             )
 
             @. entrʲ_prev_level = entrainment(
@@ -808,8 +808,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         microphys_0m_params,
                         thermo_params,
                         Tʲ_prev_level,
-                        q_liq_raiʲ_prev_level,
-                        q_ice_snoʲ_prev_level,
+                        q_liqʲ_prev_level,
+                        q_iceʲ_prev_level,
                         TD.q_vap_saturation(
                             thermo_params, Tʲ_prev_level, ρʲ_prev_level,
                         ),
@@ -822,8 +822,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     e_tot_0M_precipitation_sources_helper(
                         thermo_params,
                         Tʲ_prev_level,
-                        q_liq_rai_prev_level,
-                        q_ice_sno_prev_level,
+                        q_liq_prev_level,
+                        q_ice_prev_level,
                         Φ_prev_level,
                     )
                 # 1-moment microphysics: cloud water (liquid and ice) and
@@ -1218,8 +1218,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     ρʲ_level,
                     Tʲ_level,
                     q_tot_safeʲ_level,
-                    q_liq_raiʲ_level,
-                    q_ice_snoʲ_level,
+                    q_liqʲ_level,
+                    q_iceʲ_level,
                     mseʲ_level,
                     q_totʲ_level,
                     q_lclʲ_level,
@@ -1238,8 +1238,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     ρʲ_level,
                     Tʲ_level,
                     q_tot_safeʲ_level,
-                    q_liq_raiʲ_level,
-                    q_ice_snoʲ_level,
+                    q_liqʲ_level,
+                    q_iceʲ_level,
                     mseʲ_level,
                     q_totʲ_level,
                     p_level,

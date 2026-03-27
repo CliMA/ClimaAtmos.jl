@@ -338,7 +338,7 @@ function external_forcing_tendency!(
     @. ᶜuₕ_nudge = C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg)
     @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind
 
-    (; ᶜh_tot, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜh_tot, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
     # nudging tendency
     ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
@@ -359,7 +359,7 @@ function external_forcing_tendency!(
     # total energy
     @. Yₜ.c.ρe_tot +=
         Y.c.ρ * (
-            TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) * ᶜdTdt_sum +
+            TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) * ᶜdTdt_sum +
             (
                 cv_v * (ᶜT - T_0) + Lv_0 -
                 R_v * T_0
@@ -603,10 +603,10 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     cv_v = TD.Parameters.cv_v(thermo_params)
     R_v = TD.Parameters.R_v(thermo_params)
     # total energy
-    (; ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
     @. Yₜ.c.ρe_tot +=
         Y.c.ρ * (
-            TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) * ᶜdTdt_nudging +
+            TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) * ᶜdTdt_nudging +
             (
                 cv_v * (ᶜT - T_0) + Lv_0 -
                 R_v * T_0

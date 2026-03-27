@@ -87,11 +87,11 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     # grid-mean energy flux equals the sum of the subdomain (updraft/environment) energy fluxes 
     # by accounting for the energy carried by sedimenting tracers.
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs, ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
-        (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+        (; ᶜρʲs, ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+        (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
 
         ᶜρ⁰ = p.scratch.ᶜtemp_scalar
-        @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰)
+        @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰)
 
         # TODO the following code works for only one updraft 
         sgs_microphysics_tracers = (

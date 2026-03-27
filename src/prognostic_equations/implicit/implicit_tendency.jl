@@ -121,7 +121,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶠu³, ᶜp, ᶜh_tot, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶠu³, ᶜp, ᶜh_tot, ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
 
@@ -208,7 +208,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # This is equivalent to grad_v(Φ) + grad_v(p) / ρ
     ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
     ᶜθ_v = p.scratch.ᶜtemp_scalar
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice)
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) +

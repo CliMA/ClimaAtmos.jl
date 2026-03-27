@@ -36,7 +36,7 @@ Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMFX-related fields 
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜK, ᶜp, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜu, ᶜK, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = thermo_params.cp_d
@@ -74,7 +74,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     (; ᶜq_tot_safe) = p.precomputed
     ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
     ᶜθ_v = p.scratch.ᶜtemp_scalar
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice)
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     ᶜθ_v_diff = @. lazy(ᶜθ_v - ᶜθ_vr)
