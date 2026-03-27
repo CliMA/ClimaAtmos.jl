@@ -265,7 +265,8 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
             @. Y.c.sgsʲs.:($$j).q_tot = ifelse(
                 Y.c.sgsʲs.:($$j).ρa < eps(FT),
                 specific(Y.c.ρq_tot, Y.c.ρ),
-                Y.c.sgsʲs.:($$j).q_tot,
+                # ensure mass conservation in subdomain decomposition ρaχʲ < ρχ
+                min(Y.c.sgsʲs.:($$j).q_tot, max(0, Y.c.ρq_tot) / Y.c.sgsʲs.:($$j).ρa),
             )
 
             # mix the rest of the updraft microphysics tracers
@@ -276,7 +277,8 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
                 @. ᶜχʲ = ifelse(
                     Y.c.sgsʲs.:($$j).ρa < eps(FT),
                     specific(ᶜρχ, Y.c.ρ),
-                    ᶜχʲ,
+                    # ensure mass conservation in subdomain decomposition ρaχʲ < ρχ
+                    min(ᶜχʲ, max(0, ᶜρχ) / Y.c.sgsʲs.:($$j).ρa),
                 )
             end
         end
