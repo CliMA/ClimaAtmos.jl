@@ -88,13 +88,14 @@ function _allocs_cloud_fraction_sd(thp)
     FT = Float64
     T = FT(280.0)
     ρ = FT(1.0)
+    q_min = FT(1e-10)
     CA.compute_cloud_fraction_sd(
         thp, T, ρ, FT(0.011), FT(1e-3), FT(0), FT(1), FT(1e-6), FT(0), FT(1),
-        CA.GaussianSGS(),
+        q_min, CA.GaussianSGS(),
     )
     return @allocated CA.compute_cloud_fraction_sd(
         thp, T, ρ, FT(0.011), FT(1e-3), FT(0), FT(1), FT(1e-6), FT(0), FT(1),
-        CA.GaussianSGS(),
+        q_min, CA.GaussianSGS(),
     )
 end
 
@@ -148,11 +149,12 @@ function _allocs_sgs_sat_adj(thp, quad)
     T′T′ = FT(1.0)
     q′q′ = FT(1e-6)
     corr_Tq = FT(0.6)
+    q_min = FT(1e-10)
     ClimaAtmos.compute_sgs_saturation_adjustment(
-        thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq,
+        thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq, q_min,
     )
     return @allocated ClimaAtmos.compute_sgs_saturation_adjustment(
-        thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq,
+        thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq, q_min,
     )
 end
 

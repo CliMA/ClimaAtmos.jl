@@ -568,6 +568,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
                 ᶜT′T′,
                 ᶜq′q′,
                 correlation_Tq(p.params),
+                CAP.q_min(p.params),
             )
             @. ᶜq_liq_rai = ᶜsa_result.q_liq
             @. ᶜq_ice_sno = ᶜsa_result.q_ice

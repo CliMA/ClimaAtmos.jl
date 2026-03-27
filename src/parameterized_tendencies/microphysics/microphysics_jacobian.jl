@@ -41,21 +41,20 @@ end
 # For negative tendencies, use S / q as a local linearized sink rate, limited
 # to a minimum time scale of 1 second to avoid excessively large Jacobian entries.
 # Positive tendencies do not contribute to the diagonal sink term.
-@inline function _jac_coeff(S, q)
+@inline function _jac_coeff(S, q, q_min)
     FT = typeof(S)
-    ε = q_min(FT)
-    return ifelse(S < 0 && q > 0, max(-one(FT), S / max(q, ε)), zero(FT))
+    return ifelse(S < 0 && q > 0, max(-one(FT), S / max(q, q_min)), zero(FT))
 end
 
-@inline function _jac_coeff_from_ratio(Sq, ρq, ρ)
+@inline function _jac_coeff_from_ratio(Sq, ρq, ρ, q_min)
     q = ρq / ρ
-    return _jac_coeff(Sq, q)
+    return _jac_coeff(Sq, q, q_min)
 end
 
-@inline function _jac_coeffs_1m(mp_tendency, q_liq, q_ice, q_rai, q_sno)
-    ∂tendency_∂q_lcl = _jac_coeff(mp_tendency.dq_lcl_dt, q_liq)
-    ∂tendency_∂q_icl = _jac_coeff(mp_tendency.dq_icl_dt, q_ice)
-    ∂tendency_∂q_rai = _jac_coeff(mp_tendency.dq_rai_dt, q_rai)
-    ∂tendency_∂q_sno = _jac_coeff(mp_tendency.dq_sno_dt, q_sno)
+@inline function _jac_coeffs_1m(mp_tendency, q_liq, q_ice, q_rai, q_sno, q_min)
+    ∂tendency_∂q_lcl = _jac_coeff(mp_tendency.dq_lcl_dt, q_liq, q_min)
+    ∂tendency_∂q_icl = _jac_coeff(mp_tendency.dq_icl_dt, q_ice, q_min)
+    ∂tendency_∂q_rai = _jac_coeff(mp_tendency.dq_rai_dt, q_rai, q_min)
+    ∂tendency_∂q_sno = _jac_coeff(mp_tendency.dq_sno_dt, q_sno, q_min)
     return (; ∂tendency_∂q_lcl, ∂tendency_∂q_icl, ∂tendency_∂q_rai, ∂tendency_∂q_sno)
 end
