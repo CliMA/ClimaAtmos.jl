@@ -3,19 +3,18 @@
 #SBATCH --output=sensitivity_%j.out
 #SBATCH --error=sensitivity_%j.err
 #SBATCH --time=12:00:00
-#SBATCH --ntasks=100
+#SBATCH --ntasks=201 # num_workers + 1 (driver + 100 workers)
 #SBATCH --cpus-per-task=1
-#SBATCH --mem-per-cpu=12G
+#SBATCH --mem-per-cpu=16G
 
 # Parameter Sensitivity Analysis Submission Script
 # =================================================
-# This script launches the main sensitivity analysis driver.
-# Workers are spawned dynamically via ClusterManagers/SlurmManager.
+# This script runs sensitivity analysis with parallel workers.
+# ntasks = num_workers + 1 (driver + 100 workers).
+# SlurmManager uses srun to distribute workers across allocated tasks.
 #
 # Usage:
 #   sbatch submit_sensitivity.sbatch [--config CONFIG_FILE]
-#
-# The driver process runs on this allocation and manages worker jobs.
 
 set -e
 
@@ -37,6 +36,9 @@ cd /groups/esm/cchristo/clima/copies4/ClimaAtmos.jl/calibration/experiments/gcm_
 module purge
 export MODULEPATH="/resnick/groups/esm/modules:$MODULEPATH"
 module load climacommon/2025_07_30
+
+# Increase worker connection timeout (default is 60s, which may be too short)
+export JULIA_WORKER_TIMEOUT=180
 
 # Run sensitivity analysis
 julia --project=. param_sensitivity/run_sensitivity.jl --config "param_sensitivity/$CONFIG_FILE"
