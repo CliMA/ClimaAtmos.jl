@@ -71,15 +71,15 @@ end
     # Diagnose condensate via saturation adjustment
     sa = eval.sat_eval(T_hat, q_hat)
 
-    # Compute q_sat for the 0M tendency function
-    # Clamp to non-negative: Float32 rounding in the λ/(1-λ) split can make
-    # q_liq + q_ice slightly exceed q_cond, yielding a tiny negative remainder.
-    q_sat = max(zero(q_hat), q_hat - sa.q_liq - sa.q_ice)
+    # Compute saturation specific humidity for supersaturation threshold
+    q_vap_sat = TD.q_vap_saturation(
+        eval.sat_eval.thermo_params, T_hat, eval.sat_eval.ρ,
+    )
 
     # Compute 0M dq_tot_dt at this quadrature point
     dq_tot_dt = BMT.bulk_microphysics_tendencies(
         BMT.Microphysics0Moment(), eval.cm_params, eval.sat_eval.thermo_params,
-        T_hat, sa.q_liq, sa.q_ice, q_sat,
+        T_hat, sa.q_liq, sa.q_ice, q_vap_sat,
     )
     # Compute energy helper at this quadrature point using the
     # locally-diagnosed condensate, so both fields are SGS-averaged.
@@ -113,6 +113,37 @@ NamedTuple with SGS-averaged `dq_tot_dt` and `e_tot_hlpr`.
     return integrate_over_sgs(
         evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq,
     )
+end
+
+"""
+    microphysics_tendencies_quadrature_0m(
+        ::GridMeanSGS, cm_params, thermo_params, ρ, T, q_tot,
+        q_liq, q_ice, Φ,
+    )
+
+Fast path for grid-mean 0-moment microphysics evaluation (no SGS quadrature).
+Computes BMT tendencies directly at grid-mean state with supersaturation
+threshold (`q_vap_sat`), plus the energy helper.
+
+This dispatch allows updraft code to use the same interface as the environment,
+ensuring consistent threshold definitions.
+
+# Returns
+NamedTuple with `dq_tot_dt` and `e_tot_hlpr`.
+"""
+@inline function microphysics_tendencies_quadrature_0m(
+    ::GridMeanSGS, cm_params, thermo_params, ρ, T, q_tot,
+    q_liq, q_ice, Φ,
+)
+    q_vap_sat = TD.q_vap_saturation(thermo_params, T, ρ)
+    dq_tot_dt = BMT.bulk_microphysics_tendencies(
+        BMT.Microphysics0Moment(), cm_params, thermo_params,
+        T, q_liq, q_ice, q_vap_sat,
+    )
+    e_tot_hlpr = e_tot_0M_precipitation_sources_helper(
+        thermo_params, T, q_liq, q_ice, Φ,
+    )
+    return (; dq_tot_dt, e_tot_hlpr)
 end
 
 ###

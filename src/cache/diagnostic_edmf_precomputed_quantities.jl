@@ -810,6 +810,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         Tʲ_prev_level,
                         q_liq_raiʲ_prev_level,
                         q_ice_snoʲ_prev_level,
+                        TD.q_vap_saturation(
+                            thermo_params, Tʲ_prev_level, ρʲ_prev_level,
+                        ),
                     )
                 @. ᶜmp_tendencyʲ_prev_level.dq_tot_dt = limit_sink(
                     ᶜmp_tendencyʲ_prev_level.dq_tot_dt,

@@ -32,15 +32,26 @@ import ClimaAtmos: limit_sink
                 @testset "dq_tot_dt is always ≤ 0 (sink)" begin
                     # Condensate present → precipitation removes water (sink)
                     T = FT(280.0)
+                    ρ = FT(1.0)
                     q_liq = FT(0.001)
                     q_ice = FT(0.0005)
 
+                    # 3-arg form (condensate threshold)
                     result = BMT.bulk_microphysics_tendencies(
                         BMT.Microphysics0Moment(),
                         mp, thp, T, q_liq, q_ice,
                     )
                     @test result <= FT(0)
                     @test isfinite(result)
+
+                    # 4-arg form (supersaturation threshold)
+                    q_vap_sat = TD.q_vap_saturation(thp, T, ρ)
+                    result_sat = BMT.bulk_microphysics_tendencies(
+                        BMT.Microphysics0Moment(),
+                        mp, thp, T, q_liq, q_ice, q_vap_sat,
+                    )
+                    @test result_sat <= FT(0)
+                    @test isfinite(result_sat)
                 end
 
                 @testset "dq_tot_dt is zero when no condensate" begin
@@ -99,6 +110,14 @@ import ClimaAtmos: limit_sink
                         mp, thp, FT(280.0), FT(0.001), FT(0.0005),
                     )
                     @test typeof(result) == FT
+
+                    # 4-arg form
+                    q_vap_sat = TD.q_vap_saturation(thp, FT(280.0), FT(1.0))
+                    result_sat = BMT.bulk_microphysics_tendencies(
+                        BMT.Microphysics0Moment(),
+                        mp, thp, FT(280.0), FT(0.001), FT(0.0005), q_vap_sat,
+                    )
+                    @test typeof(result_sat) == FT
 
                     limited = limit_sink(result, FT(0.01), FT(60.0), 1)
                     @test typeof(limited) == FT

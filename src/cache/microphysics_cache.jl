@@ -910,6 +910,7 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
         # ... or evaluate on the grid-mean.
         @. ᶜmp_tendency.dq_tot_dt = BMT.bulk_microphysics_tendencies(
             BMT.Microphysics0Moment(), cm0, thp, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno,
+            TD.q_vap_saturation(thp, ᶜT, Y.c.ρ),
         )
         # For the grid-mean path (no SGS averaging), compute e_tot_hlpr
         # from grid-mean values (exact for a single evaluation point).
@@ -990,7 +991,7 @@ function set_microphysics_tendency_cache!(
 
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
     (; ᶜ∂tendency_∂q_totʲs) = p.precomputed
-    (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
+    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
     (; ᶜT′T′, ᶜq′q′) = p.precomputed # temperature-based variances
 
@@ -999,24 +1000,17 @@ function set_microphysics_tendency_cache!(
 
     n = n_mass_flux_subdomains(tm)
 
-    ### Updraft contribution
     for j in 1:n
-        # Direct BMT evaluation without quadrature summation
-        # Materialize BMT result first to avoid NamedTuple property access in broadcast
-        @. ᶜmp_tendencyʲs.:($$j).dq_tot_dt = BMT.bulk_microphysics_tendencies(
-            BMT.Microphysics0Moment(), cm0, thp, ᶜTʲs.:($$j),
-            ᶜq_liq_raiʲs.:($$j), ᶜq_ice_snoʲs.:($$j),
+        # Use GridMeanSGS dispatch for consistent threshold with environment
+        @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_quadrature_0m(
+            GridMeanSGS(), cm0, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_safeʲs.:($$j),
+            ᶜq_liq_raiʲs.:($$j), ᶜq_ice_snoʲs.:($$j), ᶜΦ,
         )
         # Apply the limiter
         apply_0m_tendency_limits!(
             ᶜmp_tendencyʲs.:($j), p.atmos.microphysics_tendency_timestepping,
             ᶜq_tot_safeʲs.:($j), dt,
         )
-        # Compute the total energy helper
-        @. ᶜmp_tendencyʲs.:($$j).e_tot_hlpr =
-            e_tot_0M_precipitation_sources_helper(
-                thp, ᶜTʲs.:($$j), ᶜq_liq_raiʲs.:($$j), ᶜq_ice_snoʲs.:($$j), ᶜΦ,
-            )
 
         @. ᶜ∂tendency_∂q_totʲs.:($$j) =
             _jac_coeff(ᶜmp_tendencyʲs.:($$j).dq_tot_dt, Y.c.sgsʲs.:($$j).q_tot)
