@@ -920,7 +920,8 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
     @. ᶜρ_dq_tot_dt = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
     @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
     q_min = CAP.q_min(p.params)
-    @. ᶜ∂tendency_∂q_tot = _jac_coeff_from_ratio(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot, Y.c.ρ, q_min)
+    @. ᶜ∂tendency_∂q_tot =
+        _jac_coeff_from_ratio(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot, Y.c.ρ, q_min)
     return nothing
 end
 
@@ -953,7 +954,8 @@ function set_microphysics_tendency_cache!(
     )
     # Compute derivative
     q_min = CAP.q_min(p.params)
-    @. ᶜ∂tendency_∂q_tot = _jac_coeff_from_ratio(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot, Y.c.ρ, q_min)
+    @. ᶜ∂tendency_∂q_tot =
+        _jac_coeff_from_ratio(ᶜmp_tendency.dq_tot_dt, Y.c.ρq_tot, Y.c.ρ, q_min)
 
     # TODO - duplicated with tendency and implicit cache update
     (; ᶜmp_tendencyʲs, ᶜρaʲs) = p.precomputed

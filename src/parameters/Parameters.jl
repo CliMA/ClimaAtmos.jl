@@ -174,8 +174,6 @@ Base.@kwdef struct ClimaAtmosParameters{
     # SGS quadrature bounds
     T_min_sgs::FT
     q_max_sgs::FT
-    # Minimum specific humidity threshold
-    q_min::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
