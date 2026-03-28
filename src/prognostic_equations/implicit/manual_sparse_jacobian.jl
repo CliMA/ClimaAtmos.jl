@@ -81,6 +81,7 @@ solve in the preconditioner has access to the current Jacobian parameters.
 """
 mutable struct HelmholtzPreconditionerState{FT, F, GB}
     dtγ::FT
+    α_acoustic_max::FT   # max(ᶜα_acoustic) for Chebyshev eigenvalue bounds
     ᶜα_acoustic::F       # diagonal: 1 + dtγ²·cs²·2π²/Δx²
     ᶜcs²::F              # sound speed squared: γ_d·ᶜp/ᶜρ
     ᶜρ::F                # density
@@ -469,6 +470,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         ᶜscalar_field() = similar(Y.c, FT)
         helmholtz_state = HelmholtzPreconditionerState(
             FT(0),                  # dtγ (updated in update_jacobian!)
+            FT(0),                  # α_acoustic_max (updated in update_jacobian!)
             ᶜscalar_field(),        # ᶜα_acoustic
             ᶜscalar_field(),        # ᶜcs²
             ᶜscalar_field(),        # ᶜρ
@@ -483,6 +485,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             ᶜhelmholtz_rhs = ᶜscalar_field(),
             ᶜhelmholtz_laplacian = ᶜscalar_field(),
             ᶜhelmholtz_ρe = ᶜscalar_field(),
+            ᶜhelmholtz_dir = ᶜscalar_field(),  # Chebyshev direction vector
             ᶜhelmholtz_dss_buffer = Spaces.create_dss_buffer(
                 ᶜscalar_field(),
             ),
@@ -928,6 +931,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         # Store state for Helmholtz solve in invert_jacobian!
         cache.helmholtz_state.call_counter = 0
         cache.helmholtz_state.dtγ = dtγ
+        cache.helmholtz_state.α_acoustic_max = maximum(ᶜα_acoustic)
         @. cache.helmholtz_state.ᶜα_acoustic = ᶜα_acoustic
         @. cache.helmholtz_state.ᶜcs² = γ_d * ᶜp / ᶜρ
         @. cache.helmholtz_state.ᶜρ = ᶜρ
@@ -1774,7 +1778,11 @@ end
     helmholtz_correction!(cache, ΔY)
 
 Apply block Gauss-Seidel horizontal Helmholtz correction after the column-local
-solve. Sequentially updates (ρ, uₕ, ρe_tot, tracers):
+solve. Uses Chebyshev semi-iterative acceleration (Saad, Algorithm 12.1) with
+Jacobi preconditioning. Eigenvalue bounds of M⁻¹A ∈ [1/(1+α_max), 1] where
+α_max = max(dtγ²·cs²·2π²/Δx²). DSS is applied only to the final iterate.
+
+Sequentially updates (ρ, uₕ, ρe_tot, tracers):
 
 1. ρ-block:     Solve (I - dtγ²·cs²·∇²h)·Δρ = z.ρ - dtγ·wdivₕ(ρ·z.uₕ)
 2. uₕ-block:    Δuₕ = z.uₕ - dtγ·(cs²/ρ)·gradₕ(Δρ)  [uses updated Δρ]
@@ -1784,29 +1792,55 @@ solve. Sequentially updates (ρ, uₕ, ρe_tot, tracers):
 """
 function helmholtz_correction!(cache, ΔY)
     (; helmholtz_state, helmholtz_scratch) = cache
-    (; dtγ, ᶜα_acoustic, ᶜcs², ᶜρ, ᶜe_tot, ᶜh_tot, n_helmholtz_iters) =
-        helmholtz_state
+    (; dtγ, α_acoustic_max, ᶜα_acoustic, ᶜcs², ᶜρ, ᶜe_tot, ᶜh_tot,
+       n_helmholtz_iters) = helmholtz_state
     (; ᶜhelmholtz_ρ, ᶜhelmholtz_rhs, ᶜhelmholtz_laplacian,
-       ᶜhelmholtz_ρe, ᶜhelmholtz_dss_buffer) = helmholtz_scratch
+       ᶜhelmholtz_ρe, ᶜhelmholtz_dir, ᶜhelmholtz_dss_buffer) =
+        helmholtz_scratch
 
     FT = eltype(dtγ)
     α = FT(dtγ)^2
 
-    # ── Block 1: ρ-Helmholtz ──
+    # Chebyshev parameters: eigenvalues of M⁻¹A ∈ [a, b]
+    # where A = I - α·cs²·∇²h, M = diag(1 + α_acoustic)
+    a = FT(1) / (FT(1) + α_acoustic_max)
+    b = FT(1)
+    θ = (a + b) / 2   # center
+    δ = (b - a) / 2   # half-width
+    σ₁ = θ / δ
+
+    # ── Block 1: ρ-Helmholtz (Chebyshev semi-iterative) ──
     # RHS = z.ρ - dtγ·wdivₕ(ρ·z.uₕ)
     @. ᶜhelmholtz_rhs = wdivₕ(ᶜρ * ΔY.c.uₕ)
     Spaces.weighted_dss!(ᶜhelmholtz_rhs => ᶜhelmholtz_dss_buffer)
     @. ᶜhelmholtz_rhs = ΔY.c.ρ - FT(dtγ) * ᶜhelmholtz_rhs
 
     @. ᶜhelmholtz_ρ = ᶜhelmholtz_rhs
-    for _ in 1:n_helmholtz_iters
+    if n_helmholtz_iters >= 1
+        # Step 1: d₀ = (1/θ) · M⁻¹·r₀
         @. ᶜhelmholtz_laplacian = wdivₕ(gradₕ(ᶜhelmholtz_ρ))
-        @. ᶜhelmholtz_ρ +=
+        @. ᶜhelmholtz_dir =
             (ᶜhelmholtz_rhs - ᶜhelmholtz_ρ +
              α * ᶜcs² * ᶜhelmholtz_laplacian) /
-            (FT(1) + ᶜα_acoustic)
+            ((FT(1) + ᶜα_acoustic) * θ)
+        @. ᶜhelmholtz_ρ += ᶜhelmholtz_dir
+
+        # Steps 2..N: Chebyshev three-term recurrence on direction
+        ρ_prev = FT(1) / σ₁
+        for _ in 2:n_helmholtz_iters
+            ρ_new = FT(1) / (2 * σ₁ - FT(1) / ρ_prev)
+            @. ᶜhelmholtz_laplacian = wdivₕ(gradₕ(ᶜhelmholtz_ρ))
+            @. ᶜhelmholtz_dir =
+                2 * ρ_new * σ₁ / θ *
+                (ᶜhelmholtz_rhs - ᶜhelmholtz_ρ +
+                 α * ᶜcs² * ᶜhelmholtz_laplacian) /
+                (FT(1) + ᶜα_acoustic) +
+                ρ_new * ρ_prev * ᶜhelmholtz_dir
+            @. ᶜhelmholtz_ρ += ᶜhelmholtz_dir
+            ρ_prev = ρ_new
+        end
     end
-    # DSS only the final ρ iterate (not intermediate ones)
+    # DSS only the final ρ iterate
     Spaces.weighted_dss!(ᶜhelmholtz_ρ => ᶜhelmholtz_dss_buffer)
 
     # Save old z.ρ before overwriting (reuse ᶜhelmholtz_laplacian as scratch)
@@ -1818,21 +1852,38 @@ function helmholtz_correction!(cache, ΔY)
         FT(dtγ) * (ᶜcs² / max(ᶜρ, FT(1e-6))) * gradₕ(ᶜhelmholtz_ρ),
     )
 
-    # ── Block 3: ρe_tot-Helmholtz (uses updated Δuₕ) ──
+    # ── Block 3: ρe_tot-Helmholtz (Chebyshev semi-iterative) ──
     # Energy Schur complement: (I - dtγ²·cs²·∇²h)·Δ(ρe_tot) = z.ρe_tot - dtγ·wdivₕ(h_tot·ρ·z.uₕ)
     @. ᶜhelmholtz_rhs = wdivₕ(ᶜh_tot * ᶜρ * ΔY.c.uₕ)
     Spaces.weighted_dss!(ᶜhelmholtz_rhs => ᶜhelmholtz_dss_buffer)
     @. ᶜhelmholtz_rhs = ΔY.c.ρe_tot - FT(dtγ) * ᶜhelmholtz_rhs
 
     @. ᶜhelmholtz_ρe = ᶜhelmholtz_rhs
-    for _ in 1:n_helmholtz_iters
+    if n_helmholtz_iters >= 1
+        # Step 1: d₀ = (1/θ) · M⁻¹·r₀
         @. ᶜhelmholtz_laplacian = wdivₕ(gradₕ(ᶜhelmholtz_ρe))
-        @. ᶜhelmholtz_ρe +=
+        @. ᶜhelmholtz_dir =
             (ᶜhelmholtz_rhs - ᶜhelmholtz_ρe +
              α * ᶜcs² * ᶜhelmholtz_laplacian) /
-            (FT(1) + ᶜα_acoustic)
+            ((FT(1) + ᶜα_acoustic) * θ)
+        @. ᶜhelmholtz_ρe += ᶜhelmholtz_dir
+
+        # Steps 2..N: Chebyshev three-term recurrence on direction
+        ρ_prev = FT(1) / σ₁
+        for _ in 2:n_helmholtz_iters
+            ρ_new = FT(1) / (2 * σ₁ - FT(1) / ρ_prev)
+            @. ᶜhelmholtz_laplacian = wdivₕ(gradₕ(ᶜhelmholtz_ρe))
+            @. ᶜhelmholtz_dir =
+                2 * ρ_new * σ₁ / θ *
+                (ᶜhelmholtz_rhs - ᶜhelmholtz_ρe +
+                 α * ᶜcs² * ᶜhelmholtz_laplacian) /
+                (FT(1) + ᶜα_acoustic) +
+                ρ_new * ρ_prev * ᶜhelmholtz_dir
+            @. ᶜhelmholtz_ρe += ᶜhelmholtz_dir
+            ρ_prev = ρ_new
+        end
     end
-    # DSS only the final ρe_tot iterate (not intermediate ones)
+    # DSS only the final ρe_tot iterate
     Spaces.weighted_dss!(ᶜhelmholtz_ρe => ᶜhelmholtz_dss_buffer)
     ΔY.c.ρe_tot .= ᶜhelmholtz_ρe
 

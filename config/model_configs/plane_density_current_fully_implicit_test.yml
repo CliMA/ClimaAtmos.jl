@@ -25,6 +25,7 @@ krylov_rtol: 0.1
 krylov_memory: 30
 krylov_itmax: 150
 update_jacobian_every: "dt"
+n_helmholtz_iters: 0
 use_dense_jacobian: false
 diagnostics:
   - short_name: [thetaa, ua, wa]
