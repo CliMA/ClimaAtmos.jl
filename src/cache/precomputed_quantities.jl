@@ -559,6 +559,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         sgs_quad = p.atmos.sgs_quadrature
         if !isnothing(sgs_quad)
             (; ᶜT′T′, ᶜq′q′) = p.precomputed
+            corr_Tq = correlation_Tq(p.params)
             @. ᶜsa_result = compute_sgs_saturation_adjustment(
                 thermo_params,
                 $(sgs_quad),
@@ -567,8 +568,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
                 ᶜq_tot_safe,
                 ᶜT′T′,
                 ᶜq′q′,
-                correlation_Tq(p.params),
-                CAP.q_min(p.params),
+                corr_Tq,
             )
             @. ᶜq_liq_rai = ᶜsa_result.q_liq
             @. ᶜq_ice_sno = ᶜsa_result.q_ice
