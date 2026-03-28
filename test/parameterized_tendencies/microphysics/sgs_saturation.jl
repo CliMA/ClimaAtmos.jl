@@ -91,7 +91,6 @@ import ClimaParams as CP
                 ρ = FT(1.0)
                 T_mean = FT(280.0)
                 q_mean = FT(0.01)
-                q_min = FT(1e-10)
 
                 # Pre-compute grid-mean condensate for comparison
                 q_sat_gm = TD.q_vap_saturation(thp, T_mean, ρ)
@@ -104,7 +103,7 @@ import ClimaParams as CP
                     # Zero covariances should give grid-mean result
                     result = ClimaAtmos.compute_sgs_saturation_adjustment(
                         thp, quad, ρ, T_mean, q_mean,
-                        FT(0), FT(0), FT(0), q_min,
+                        FT(0), FT(0), FT(0),
                     )
 
                     @test result.q_liq ≈ q_liq_gm rtol = FT(1e-5)
@@ -122,7 +121,7 @@ import ClimaParams as CP
 
                     result = ClimaAtmos.compute_sgs_saturation_adjustment(
                         thp, quad_1pt, ρ, T_mean, q_mean,
-                        FT(1.0), FT(1e-6), FT(0), q_min,
+                        FT(1.0), FT(1e-6), FT(0),
                     )
 
                     # Even with variance, single point should give grid-mean
@@ -134,7 +133,7 @@ import ClimaParams as CP
                     # With variance
                     result = ClimaAtmos.compute_sgs_saturation_adjustment(
                         thp, quad, ρ, T_mean, q_mean,
-                        FT(4.0), FT(1e-5), FT(1e-3), q_min,
+                        FT(4.0), FT(1e-5), FT(1e-3),
                     )
 
                     @test isfinite(result.T)
@@ -148,7 +147,7 @@ import ClimaParams as CP
                     # Edge case: very dry conditions
                     result = ClimaAtmos.compute_sgs_saturation_adjustment(
                         thp, quad, ρ, FT(300.0), FT(0.001),
-                        FT(1.0), FT(1e-8), FT(0), q_min,
+                        FT(1.0), FT(1e-8), FT(0),
                     )
 
                     @test result.q_liq >= FT(0)
@@ -158,7 +157,7 @@ import ClimaParams as CP
                 @testset "Type stability" begin
                     result = ClimaAtmos.compute_sgs_saturation_adjustment(
                         thp, quad, ρ, T_mean, q_mean,
-                        FT(1.0), FT(1e-6), FT(0), q_min,
+                        FT(1.0), FT(1e-6), FT(0),
                     )
 
                     @test result isa NamedTuple

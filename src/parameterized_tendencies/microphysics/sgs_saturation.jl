@@ -78,7 +78,7 @@ end
 
 """
     compute_sgs_saturation_adjustment(
-        thermo_params, SG_quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq, q_min,
+        thermo_params, SG_quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq,
     )
 
 Compute SGS-averaged saturation adjustment by integrating over the joint PDF
@@ -107,7 +107,6 @@ integrated condensate by `ratio`.
 - `T′T′`: Temperature variance [K²]
 - `q′q′`: Moisture variance [(kg/kg)²]
 - `corr_Tq`: Correlation coefficient corr(T', q')
-- `q_min`: Minimum specific humidity threshold [kg/kg] (from ClimaParams `specific_humidity_minimum`).
 
 # Returns
 NamedTuple with SGS-averaged:
@@ -124,9 +123,9 @@ NamedTuple with SGS-averaged:
     T′T′,
     q′q′,
     corr_Tq,
-    q_min,
 )
     FT = typeof(T_mean)
+    q_min = TD.Parameters.q_min(thermo_params)
     # Create GPU-safe functor (not a closure)
     evaluator = SaturationAdjustmentEvaluator(thermo_params, ρ)
 
