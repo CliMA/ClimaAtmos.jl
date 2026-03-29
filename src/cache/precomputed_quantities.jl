@@ -589,8 +589,9 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
             @. ᶜq_tot_safe = max(ᶜq_liq_rai + ᶜq_ice_sno, specific(Y.c.ρq_tot, Y.c.ρ))
         end
         # Floor T to prevent negative pressure during implicit Newton iterations
+        T_min_sgs = CAP.T_min_sgs(p.params)
         @. ᶜT = max(
-            CAP.T_min_sgs(p.params),
+            T_min_sgs,
             TD.air_temperature(thermo_params, ᶜe_int, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno),
         )
     end
