@@ -508,9 +508,9 @@ function compute_clw!(
     microphysics_model::NonEquilibriumMicrophysics,
 )
     if isnothing(out)
-        return state.c.ρq_liq ./ state.c.ρ
+        return state.c.ρq_lcl ./ state.c.ρ
     else
-        out .= state.c.ρq_liq ./ state.c.ρ
+        out .= state.c.ρq_lcl ./ state.c.ρ
     end
 end
 
@@ -557,9 +557,9 @@ function compute_cli!(
     microphysics_model::NonEquilibriumMicrophysics,
 )
     if isnothing(out)
-        return state.c.ρq_ice ./ state.c.ρ
+        return state.c.ρq_icl ./ state.c.ρ
     else
-        out .= state.c.ρq_ice ./ state.c.ρ
+        out .= state.c.ρq_icl ./ state.c.ρ
     end
 end
 
@@ -1083,9 +1083,9 @@ function compute_cdnc!(
     },
 )
     if isnothing(out)
-        return state.c.ρn_liq
+        return state.c.ρn_lcl
     else
-        out .= state.c.ρn_liq
+        out .= state.c.ρn_lcl
     end
 end
 
@@ -1215,12 +1215,12 @@ function compute_clwvi!(
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         clw = cache.scratch.ᶜtemp_scalar
-        @. clw = state.c.ρq_liq + state.c.ρq_ice
+        @. clw = state.c.ρq_lcl + state.c.ρq_icl
         Operators.column_integral_definite!(out, clw)
         return out
     else
         clw = cache.scratch.ᶜtemp_scalar
-        @. clw = state.c.ρq_liq + state.c.ρq_ice
+        @. clw = state.c.ρq_lcl + state.c.ρq_icl
         Operators.column_integral_definite!(out, clw)
     end
 end
@@ -1275,12 +1275,12 @@ function compute_lwp!(
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         lw = cache.scratch.ᶜtemp_scalar
-        @. lw = state.c.ρq_liq
+        @. lw = state.c.ρq_lcl
         Operators.column_integral_definite!(out, lw)
         return out
     else
         lw = cache.scratch.ᶜtemp_scalar
-        @. lw = state.c.ρq_liq
+        @. lw = state.c.ρq_lcl
         Operators.column_integral_definite!(out, lw)
     end
 end

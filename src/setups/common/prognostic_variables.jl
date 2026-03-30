@@ -59,8 +59,8 @@ moisture_variables(ρ, physical_state, ::DryModel) = (;)
 moisture_variables(ρ, ps, ::EquilibriumMicrophysics0M) = (; ρq_tot = ρ * ps.q_tot)
 moisture_variables(ρ, physical_state, ::NonEquilibriumMicrophysics) = (;
     ρq_tot = ρ * physical_state.q_tot,
-    ρq_liq = ρ * physical_state.q_liq,
-    ρq_ice = ρ * physical_state.q_ice,
+    ρq_lcl = ρ * physical_state.q_liq,
+    ρq_icl = ρ * physical_state.q_ice,
 )
 
 # ============================================================================
@@ -74,20 +74,20 @@ precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics1M) = (;
     ρq_sno = ρ * physical_state.q_sno,
 )
 precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics2M) = (;
-    ρn_liq = ρ * physical_state.n_liq,
+    ρn_lcl = ρ * physical_state.n_liq,
     ρn_rai = ρ * physical_state.n_rai,
     ρq_rai = ρ * physical_state.q_rai,
     ρq_sno = ρ * physical_state.q_sno,
 )
 function precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics2MP3)
     warm_state = (;
-        ρn_liq = ρ * physical_state.n_liq,
+        ρn_lcl = ρ * physical_state.n_liq,
         ρn_rai = ρ * physical_state.n_rai,
         ρq_rai = ρ * physical_state.q_rai,
         ρq_sno = ρ * physical_state.q_sno,
     )
     cold_state = (;
-        ρq_ice = ρ * physical_state.q_ice,
+        ρq_icl = ρ * physical_state.q_ice,
         ρn_ice = ρ * physical_state.n_ice,
         ρq_rim = ρ * physical_state.q_rim,
         ρb_rim = ρ * physical_state.b_rim,
@@ -146,12 +146,12 @@ function turbconv_center_variables(
     mse = TD.moist_static_energy(thermo_params, T, e_pot, q_tot, q_liq, q_ice)
     if microphysics_model isa NonEquilibriumMicrophysics1M
         sgsʲs = uniform_subdomains(
-            (; ρa, mse, q_tot, q_liq, q_ice, q_rai, q_sno),
+            (; ρa, mse, q_tot, q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno),
             turbconv_model,
         )
     else  # NonEquilibriumMicrophysics2M
         sgsʲs = uniform_subdomains(
-            (; ρa, mse, q_tot, q_liq, q_ice, q_rai, q_sno, n_liq, n_rai),
+            (; ρa, mse, q_tot, q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno, n_liq, n_rai),
             turbconv_model,
         )
     end

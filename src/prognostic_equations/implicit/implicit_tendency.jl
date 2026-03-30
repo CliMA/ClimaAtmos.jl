@@ -142,14 +142,14 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # using downward biasing and free outflow bottom boundary condition
     if microphysics_model isa NonEquilibriumMicrophysics
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
-        @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(
+        @. Yₜ.c.ρq_lcl -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₗ)) * specific(Y.c.ρq_liq, Y.c.ρ),
+                Geometry.WVector(-(ᶜwₗ)) * specific(Y.c.ρq_lcl, Y.c.ρ),
             ),
         )
-        @. Yₜ.c.ρq_ice -= ᶜprecipdivᵥ(
+        @. Yₜ.c.ρq_icl -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwᵢ)) * specific(Y.c.ρq_ice, Y.c.ρ),
+                Geometry.WVector(-(ᶜwᵢ)) * specific(Y.c.ρq_icl, Y.c.ρ),
             ),
         )
     end
@@ -170,9 +170,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     if microphysics_model isa
        NonEquilibriumMicrophysics2M
         (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
-        @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(
+        @. Yₜ.c.ρn_lcl -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₙₗ)) * specific(Y.c.ρn_liq, Y.c.ρ),
+                Geometry.WVector(-(ᶜwₙₗ)) * specific(Y.c.ρn_lcl, Y.c.ρ),
             ),
         )
         @. Yₜ.c.ρn_rai -= ᶜprecipdivᵥ(
@@ -197,7 +197,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         ᶜwᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwᵢ))
         ᶠρ = @. lazy(ᶠinterp(ρ * ᶜJ) / ᶠJ)
 
-        # Note: `ρq_ice` is handled above, in `microphysics_model isa NonEquilibriumMicrophysics`
+        # Note: `ρq_icl` is handled above, in `microphysics_model isa NonEquilibriumMicrophysics`
         @. Yₜ.c.ρn_ice -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwnᵢ * specific(ρn_ice, ρ)))
         @. Yₜ.c.ρq_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρq_rim, ρ)))
         @. Yₜ.c.ρb_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρb_rim, ρ)))

@@ -135,12 +135,12 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
                 NonEquilibriumMicrophysics1M,
                 NonEquilibriumMicrophysics2M,
             }
-                @. Yₜ.c.sgsʲs.:($$j).q_liq -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_liq) -
-                    Y.c.sgsʲs.:($$j).q_liq * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).q_ice -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_ice) -
-                    Y.c.sgsʲs.:($$j).q_ice * split_divₕ(ᶜuʲs.:($$j), 1)
+                @. Yₜ.c.sgsʲs.:($$j).q_lcl -=
+                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_lcl) -
+                    Y.c.sgsʲs.:($$j).q_lcl * split_divₕ(ᶜuʲs.:($$j), 1)
+                @. Yₜ.c.sgsʲs.:($$j).q_icl -=
+                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_icl) -
+                    Y.c.sgsʲs.:($$j).q_icl * split_divₕ(ᶜuʲs.:($$j), 1)
                 @. Yₜ.c.sgsʲs.:($$j).q_rai -=
                     split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_rai) -
                     Y.c.sgsʲs.:($$j).q_rai * split_divₕ(ᶜuʲs.:($$j), 1)
@@ -149,9 +149,9 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
                     Y.c.sgsʲs.:($$j).q_sno * split_divₕ(ᶜuʲs.:($$j), 1)
             end
             if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
-                @. Yₜ.c.sgsʲs.:($$j).n_liq -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_liq) -
-                    Y.c.sgsʲs.:($$j).n_liq * split_divₕ(ᶜuʲs.:($$j), 1)
+                @. Yₜ.c.sgsʲs.:($$j).n_lcl -=
+                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_lcl) -
+                    Y.c.sgsʲs.:($$j).n_lcl * split_divₕ(ᶜuʲs.:($$j), 1)
                 @. Yₜ.c.sgsʲs.:($$j).n_rai -=
                     split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_rai) -
                     Y.c.sgsʲs.:($$j).n_rai * split_divₕ(ᶜuʲs.:($$j), 1)
@@ -435,8 +435,8 @@ function edmfx_sgs_vertical_advection_tendency!(
             # Sedimentation
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.
             sgs_microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).q_liq), @name(q_liq), @name(ᶜwₗʲs.:(1))),
-                (@name(c.sgsʲs.:(1).q_ice), @name(q_ice), @name(ᶜwᵢʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_lcl), @name(q_lcl), @name(ᶜwₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_icl), @name(q_icl), @name(ᶜwᵢʲs.:(1))),
                 (@name(c.sgsʲs.:(1).q_rai), @name(q_rai), @name(ᶜwᵣʲs.:(1))),
                 (@name(c.sgsʲs.:(1).q_sno), @name(q_sno), @name(ᶜwₛʲs.:(1))),
             )
@@ -486,7 +486,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             # Sedimentation velocities for microphysics number concentrations
             # (or any tracers that does not directly participate in variations of q_tot and mse)
             sgs_microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).n_liq), @name(ᶜwₙₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).n_lcl), @name(ᶜwₙₗʲs.:(1))),
                 (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
             )
 

@@ -43,13 +43,13 @@ subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:third_order}) =
     subsidence_tendency!(Yₜ, Y, p, t, subsidence_model::Subsidence)
 
 Applies subsidence tendencies to total energy (`ρe_tot`), total specific humidity
-(`ρq_tot`), and other moisture species (`ρq_liq`, `ρq_ice`) if a `NonEquilibriumMicrophysics`
+(`ρq_tot`), and other moisture species (`ρq_lcl`, `ρq_icl`) if a `NonEquilibriumMicrophysics`
 is used.
 
 The subsidence velocity profile `w_sub(z)` is obtained from `subsidence_model.prof`.
 This profile is used to construct a face-valued vertical velocity field `ᶠsubsidence³`.
 The `subsidence!` helper function is then called (currently with a first-order
-upwind scheme) to compute and apply the vertical advective tendency for each relevant 
+upwind scheme) to compute and apply the vertical advective tendency for each relevant
 scalar quantity `χ`.
 
 Arguments:
@@ -83,20 +83,20 @@ function subsidence_tendency!(Yₜ, Y, p, t, subsidence::Subsidence)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠsubsidence³, ᶜq_tot, Val{:first_order}())
         if microphysics_model isa NonEquilibriumMicrophysics
-            ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+            ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
             subsidence!(
-                Yₜ.c.ρq_liq,
+                Yₜ.c.ρq_lcl,
                 Y.c.ρ,
                 ᶠsubsidence³,
-                ᶜq_liq,
+                ᶜq_lcl,
                 Val{:first_order}(),
             )
-            ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+            ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
             subsidence!(
-                Yₜ.c.ρq_ice,
+                Yₜ.c.ρq_icl,
                 Y.c.ρ,
                 ᶠsubsidence³,
-                ᶜq_ice,
+                ᶜq_icl,
                 Val{:first_order}(),
             )
         end

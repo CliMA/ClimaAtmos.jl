@@ -562,11 +562,11 @@ using ClimaAtmos
                 ρ = FT(1.0)
                 T_mean = FT(280.0)
                 q_tot_mean = FT(0.01)
-                q_liq_mean = FT(0.001)
-                q_ice_mean = FT(0.0005)
+                q_lcl_mean = FT(0.001)
+                q_icl_mean = FT(0.0005)
                 q_rai = FT(0.0002)
                 q_sno = FT(0.0001)
-                q_cond_mean = q_liq_mean + q_ice_mean
+                q_cond_mean = q_lcl_mean + q_icl_mean
                 q_sat_mean = TD.q_vap_saturation(thp, T_mean, ρ)
                 excess_mean = q_tot_mean - q_sat_mean
 
@@ -574,7 +574,7 @@ using ClimaAtmos
                 evaluator = Microphysics1MEvaluator(
                     BMT.Microphysics1Moment(),
                     mp, thp, ρ, T_mean,
-                    q_liq_mean, q_ice_mean, q_rai, q_sno,
+                    q_lcl_mean, q_icl_mean, q_rai, q_sno,
                     (),  # Empty args tuple for 1-moment
                 )
 

@@ -163,8 +163,8 @@ vert_diff:
 hyperdiff:
   help: |
     Fourth-order hyperdiffusion. Options:
-    - `Hyperdiffusion` (default): Use custom coefficients for hyperdiffusion: 
-      set these with the `vorticity_hyperdiffusion_coefficient`, `hyperdiffusion_prandtl_number`, 
+    - `Hyperdiffusion` (default): Use custom coefficients for hyperdiffusion:
+      set these with the `vorticity_hyperdiffusion_coefficient`, `hyperdiffusion_prandtl_number`,
       `divergence_damping_factor` config options.
     - `CAM_SE` (Lauritzen et al. 2018): Use CAM_SE coefficients for hyperdiffusion
     - `false`: Disable hyperdiffusion
@@ -234,7 +234,7 @@ apply_sem_quasimonotone_limiter:
   help: "Apply a horizontal SEM quasi-monotone limiter to every tracer [`false` (default), `true`]"
   value: false
 vertical_water_borrowing_species:
-  help: "Tracers to which the vertical water borrowing limiter is applied when using `tracer_nonnegativity_method: vertical_water_borrowing`. A single threshold (0.0) applies uniformly to all selected tracers. Omitted or `~` (null): apply to all tracers (ρq_tot, ρq_liq, ρq_ice, etc., as present). Empty list `[]`: apply to no tracers. Specific names: use a string (e.g. `ρq_tot`) or list of strings (e.g. `[\"ρq_tot\"]`, `[\"ρq_tot\", \"ρq_liq\"]`) — only those tracers get the limiter; names must match the state (e.g. ρq_tot, ρq_liq, ρq_rai, ρq_ice, ρq_sno)."
+  help: "Tracers to which the vertical water borrowing limiter is applied when using `tracer_nonnegativity_method: vertical_water_borrowing`. A single threshold (0.0) applies uniformly to all selected tracers. Omitted or `~` (null): apply to all tracers (ρq_tot, ρq_lcl, ρq_rai, etc., as present). Empty list `[]`: apply to no tracers. Specific names: use a string (e.g. `ρq_tot`) or list of strings (e.g. `[\"ρq_tot\"]`, `[\"ρq_tot\", \"ρq_lcl\"]`) — only those tracers get the limiter; names must match the state (e.g. ρq_tot, ρq_lcl, ρq_rai, ρq_icl, ρq_sno)."
   value: ~
 cloud_model:
   help: "Cloud model [`grid_scale`, `quadrature` (default), `MLCloud`]"

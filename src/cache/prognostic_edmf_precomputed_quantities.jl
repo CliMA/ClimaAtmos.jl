@@ -49,13 +49,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
 
     if p.atmos.microphysics_model isa
        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-        ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
-        ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
+        ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
+        ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
         ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
         ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
         # Compute env thermodynamic state from primitives
-        @. ᶜq_liq_rai⁰ = max(0, ᶜq_liq⁰ + ᶜq_rai⁰)
-        @. ᶜq_ice_sno⁰ = max(0, ᶜq_ice⁰ + ᶜq_sno⁰)
+        @. ᶜq_liq_rai⁰ = max(0, ᶜq_lcl⁰ + ᶜq_rai⁰)
+        @. ᶜq_ice_sno⁰ = max(0, ᶜq_icl⁰ + ᶜq_sno⁰)
         # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
         @. ᶜq_tot_safe⁰ = max(ᶜq_liq_rai⁰ + ᶜq_ice_sno⁰, ᶜq_tot⁰)
         ᶜh⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)  # specific enthalpy
@@ -137,12 +137,12 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             NonEquilibriumMicrophysics1M,
             NonEquilibriumMicrophysics2M,
         }
-            ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
-            ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
+            ᶜq_lclʲ = Y.c.sgsʲs.:($j).q_lcl
+            ᶜq_iclʲ = Y.c.sgsʲs.:($j).q_icl
             ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
             ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
-            @. ᶜq_liq_raiʲ = max(0, ᶜq_liqʲ + ᶜq_raiʲ)
-            @. ᶜq_ice_snoʲ = max(0, ᶜq_iceʲ + ᶜq_snoʲ)
+            @. ᶜq_liq_raiʲ = max(0, ᶜq_lclʲ + ᶜq_raiʲ)
+            @. ᶜq_ice_snoʲ = max(0, ᶜq_iclʲ + ᶜq_snoʲ)
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
             @. ᶜq_tot_safeʲ = max(ᶜq_liq_raiʲ + ᶜq_ice_snoʲ, ᶜq_totʲ)
             ᶜhʲ = @. lazy(ᶜmseʲ - ᶜΦ)

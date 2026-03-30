@@ -143,7 +143,7 @@ end
 # Each entry: (short_name, long_name, state_field_symbol, model_types, model_accessor)
 # - short_name: prefix for diagnostic names (e.g., "clw" → "clw_min", "clw_neg_mean", "clw_neg_frac")
 # - long_name: human-readable tracer name for descriptions
-# - state_field_symbol: symbol of the ρq field in state.c (e.g., :ρq_liq)
+# - state_field_symbol: symbol of the ρq field in state.c (e.g., :ρq_lcl)
 # - model_types: Union of model types that support this diagnostic
 # - model_accessor: expression to get the model from cache.atmos
 
@@ -157,8 +157,8 @@ const MOISTURE_MODELS = MoistMicrophysics
 
 const TRACER_DIAGNOSTICS = [
     # (short_name, long_name, ρq_field, model_types, model_accessor_field)
-    ("clw", "Cloud Liquid Water", :ρq_liq, MICROPHYSICS_MODELS, :microphysics_model),
-    ("cli", "Cloud Ice", :ρq_ice, MICROPHYSICS_MODELS, :microphysics_model),
+    ("clw", "Cloud Liquid Water", :ρq_lcl, MICROPHYSICS_MODELS, :microphysics_model),
+    ("cli", "Cloud Ice", :ρq_icl, MICROPHYSICS_MODELS, :microphysics_model),
     ("husra", "Rain Specific Humidity", :ρq_rai, MICROPHYSICS_MODELS, :microphysics_model),
     ("hussn", "Snow Specific Humidity", :ρq_sno, MICROPHYSICS_MODELS, :microphysics_model),
     ("hus", "Specific Humidity", :ρq_tot, MOISTURE_MODELS, :microphysics_model),

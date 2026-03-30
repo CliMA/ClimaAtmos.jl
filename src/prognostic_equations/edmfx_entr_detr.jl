@@ -492,11 +492,11 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
 
     microphysics_tracers = (
-        (@name(c.sgsʲs.:(1).q_liq), @name(q_liq)),
-        (@name(c.sgsʲs.:(1).q_ice), @name(q_ice)),
+        (@name(c.sgsʲs.:(1).q_lcl), @name(q_lcl)),
+        (@name(c.sgsʲs.:(1).q_icl), @name(q_icl)),
         (@name(c.sgsʲs.:(1).q_rai), @name(q_rai)),
         (@name(c.sgsʲs.:(1).q_sno), @name(q_sno)),
-        (@name(c.sgsʲs.:(1).n_liq), @name(n_liq)),
+        (@name(c.sgsʲs.:(1).n_lcl), @name(n_lcl)),
         (@name(c.sgsʲs.:(1).n_rai), @name(n_rai)),
     )
 

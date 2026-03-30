@@ -149,8 +149,8 @@ end
         test_microphysics_tendency!(ᶜYₜ, Y, p)
 
         # Additional 1M-specific NaN checks
-        @test !any(isnan, ᶜYₜ.c.ρq_liq)
-        @test !any(isnan, ᶜYₜ.c.ρq_ice)
+        @test !any(isnan, ᶜYₜ.c.ρq_lcl)
+        @test !any(isnan, ᶜYₜ.c.ρq_icl)
         @test !any(isnan, ᶜYₜ.c.ρq_rai)
         @test !any(isnan, ᶜYₜ.c.ρq_sno)
 
@@ -194,11 +194,11 @@ end
         test_microphysics_tendency!(ᶜYₜ, Y, p)
 
         # Additional 2M-specific NaN checks (includes number densities)
-        @test !any(isnan, ᶜYₜ.c.ρq_liq)
-        @test !any(isnan, ᶜYₜ.c.ρq_ice)
+        @test !any(isnan, ᶜYₜ.c.ρq_lcl)
+        @test !any(isnan, ᶜYₜ.c.ρq_icl)
         @test !any(isnan, ᶜYₜ.c.ρq_rai)
         @test !any(isnan, ᶜYₜ.c.ρq_sno)
-        @test !any(isnan, ᶜYₜ.c.ρn_liq)
+        @test !any(isnan, ᶜYₜ.c.ρn_lcl)
         @test !any(isnan, ᶜYₜ.c.ρn_rai)
 
         # Terminal velocities must be non-negative (includes number-weighted)
@@ -241,8 +241,8 @@ end
         test_microphysics_tendency!(ᶜYₜ, Y, p)
 
         # 1M-specific NaN checks
-        @test !any(isnan, ᶜYₜ.c.ρq_liq)
-        @test !any(isnan, ᶜYₜ.c.ρq_ice)
+        @test !any(isnan, ᶜYₜ.c.ρq_lcl)
+        @test !any(isnan, ᶜYₜ.c.ρq_icl)
         @test !any(isnan, ᶜYₜ.c.ρq_rai)
         @test !any(isnan, ᶜYₜ.c.ρq_sno)
 
