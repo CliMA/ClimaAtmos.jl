@@ -18,8 +18,8 @@ The following grid-scale quantities are treated implicitly and are precomputed:
     - `ᶜK`: kinetic energy on cell centers
     - `ᶜT`: air temperature on cell centers
     - `ᶜq_tot_safe`: total water specific humidity on cell centers
-    - `ᶜq_liq_rai`: liquid water specific humidity on cell centers
-    - `ᶜq_ice_sno`: ice specific humidity on cell centers
+    - `ᶜq_liq`: liquid water specific humidity on cell centers
+    - `ᶜq_ice`: ice specific humidity on cell centers
     - `ᶜp`: air pressure on cell centers
 If the `turbconv_model` is `PrognosticEDMFX`, there also two SGS versions of
 every quantity except for `ᶜp` (which is shared across all subdomains):
@@ -53,15 +53,15 @@ function implicit_precomputed_quantities(Y, atmos)
         if microphysics_model isa EquilibriumMicrophysics0M
             (;
                 ᶜq_tot_safe = similar(Y.c, FT),
-                ᶜq_liq_rai = similar(Y.c, FT),
-                ᶜq_ice_sno = similar(Y.c, FT),
+                ᶜq_liq = similar(Y.c, FT),
+                ᶜq_ice = similar(Y.c, FT),
                 ᶜsa_result = similar(Y.c, sa_result_type),
             )
         else  # DryModel or NonEquilibriumMicrophysics
             (;
                 ᶜq_tot_safe = similar(Y.c, FT),
-                ᶜq_liq_rai = similar(Y.c, FT),
-                ᶜq_ice_sno = similar(Y.c, FT),
+                ᶜq_liq = similar(Y.c, FT),
+                ᶜq_ice = similar(Y.c, FT),
             )
         end
     sgs_quantities = (;)
@@ -75,16 +75,16 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜK⁰ = similar(Y.c, FT),
             ᶜT⁰ = similar(Y.c, FT),
             ᶜq_tot_safe⁰ = similar(Y.c, FT),
-            ᶜq_liq_rai⁰ = similar(Y.c, FT),
-            ᶜq_ice_sno⁰ = similar(Y.c, FT),
+            ᶜq_liq⁰ = similar(Y.c, FT),
+            ᶜq_ice⁰ = similar(Y.c, FT),
             ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
             ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
             ᶠKᵥʲs = similar(Y.f, NTuple{n, FT}),
             ᶜTʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_tot_safeʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_liq_raiʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_ice_snoʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
     # Microphysics quantities that are written during set_implicit_precomputed_quantities!
@@ -327,8 +327,8 @@ function precomputed_quantities(Y, atmos)
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
             ᶜTʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_tot_safeʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_liq_raiʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_ice_snoʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             ᶜmseʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_totʲs = similar(Y.c, NTuple{n, FT}),
@@ -512,7 +512,7 @@ quantities are updated.
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, microphysics_model) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜh_tot, ᶜp) = p.precomputed
+    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -552,8 +552,8 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         @. ᶜsa_result =
             saturation_adjustment_tuple(thermo_params, TD.ρe(), Y.c.ρ, ᶜe_int, ᶜq_tot_safe)
         @. ᶜT = ᶜsa_result.T
-        @. ᶜq_liq_rai = ᶜsa_result.q_liq
-        @. ᶜq_ice_sno = ᶜsa_result.q_ice
+        @. ᶜq_liq = ᶜsa_result.q_liq
+        @. ᶜq_ice = ᶜsa_result.q_ice
 
         # Two-pass SGS: recompute condensate using SGS quadrature over (T, q_tot)
         sgs_quad = p.atmos.sgs_quadrature
@@ -570,35 +570,35 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
                 ᶜq′q′,
                 corr_Tq,
             )
-            @. ᶜq_liq_rai = ᶜsa_result.q_liq
-            @. ᶜq_ice_sno = ᶜsa_result.q_ice
+            @. ᶜq_liq = ᶜsa_result.q_liq
+            @. ᶜq_ice = ᶜsa_result.q_ice
         end
     else  # DryModel or NonEquilibriumMicrophysics
         # For DryModel: q values are set to zero
         # For NonEquilibriumMicrophysics: q values are computed from state variables
         if microphysics_model isa DryModel
             @. ᶜq_tot_safe = zero(eltype(ᶜT))
-            @. ᶜq_liq_rai = zero(eltype(ᶜT))
-            @. ᶜq_ice_sno = zero(eltype(ᶜT))
+            @. ᶜq_liq = zero(eltype(ᶜT))
+            @. ᶜq_ice = zero(eltype(ᶜT))
         else  # NonEquilibriumMicrophysics
-            @. ᶜq_liq_rai =
+            @. ᶜq_liq =
                 max(0, specific(Y.c.ρq_lcl, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
-            @. ᶜq_ice_sno =
+            @. ᶜq_ice =
                 max(0, specific(Y.c.ρq_icl, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-            @. ᶜq_tot_safe = max(ᶜq_liq_rai + ᶜq_ice_sno, specific(Y.c.ρq_tot, Y.c.ρ))
+            @. ᶜq_tot_safe = max(ᶜq_liq + ᶜq_ice, specific(Y.c.ρq_tot, Y.c.ρ))
         end
         # Floor T to prevent negative pressure during implicit Newton iterations
         T_min_sgs = CAP.T_min_sgs(p.params)
         @. ᶜT = max(
             T_min_sgs,
-            TD.air_temperature(thermo_params, ᶜe_int, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno),
+            TD.air_temperature(thermo_params, ᶜe_int, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice),
         )
     end
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
     @. ᶜh_tot =
-        TD.total_enthalpy(thermo_params, ᶜe_tot, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+        TD.total_enthalpy(thermo_params, ᶜe_tot, ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice)
+    @. ᶜp = TD.air_pressure(thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)

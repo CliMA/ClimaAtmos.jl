@@ -424,7 +424,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     (; params) = p
     (; ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶜK, ᶜp, ᶜT, ᶜh_tot) = p.precomputed
-    (; ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
     (;
         ∂ᶜK_∂ᶜuₕ,
         ∂ᶜK_∂ᶠu₃,
@@ -475,8 +475,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     ᶜkappa_m = p.scratch.ᶜtemp_scalar
     @. ᶜkappa_m =
-        TD.gas_constant_air(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) /
-        TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+        TD.gas_constant_air(thermo_params, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) /
+        TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice)
 
     ᶜ∂p∂ρq_tot = p.scratch.ᶜtemp_scalar_2
     @. ᶜ∂p∂ρq_tot = ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (ᶜT - T_0)) + ΔR_v * ᶜT
@@ -528,7 +528,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
 
     ᶜθ_v = p.scratch.ᶜtemp_scalar_3
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice)
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration:
     #              grad(p) / ρ + grad(Φ)  =  cp_d * θ_v * grad(Π) + grad(Φ).
@@ -804,8 +804,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ᶠu³ʲs,
                 ᶜTʲs,
                 ᶜq_tot_safeʲs,
-                ᶜq_liq_raiʲs,
-                ᶜq_ice_snoʲs,
+                ᶜq_liqʲs,
+                ᶜq_iceʲs,
                 ᶜKʲs,
             ) = p.precomputed
 
@@ -850,14 +850,14 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 TD.gas_constant_air(
                     thermo_params,
                     ᶜq_tot_safeʲs.:(1),
-                    ᶜq_liq_raiʲs.:(1),
-                    ᶜq_ice_snoʲs.:(1),
+                    ᶜq_liqʲs.:(1),
+                    ᶜq_iceʲs.:(1),
                 ) /
                 TD.cv_m(
                     thermo_params,
                     ᶜq_tot_safeʲs.:(1),
-                    ᶜq_liq_raiʲs.:(1),
-                    ᶜq_ice_snoʲs.:(1),
+                    ᶜq_liqʲs.:(1),
+                    ᶜq_iceʲs.:(1),
                 )
 
             ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
@@ -1154,10 +1154,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     TD.gas_constant_air(
                         thermo_params,
                         ᶜq_tot_safe,
-                        ᶜq_liq_rai,
-                        ᶜq_ice_sno,
+                        ᶜq_liq,
+                        ᶜq_ice,
                     ) /
-                    TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+                    TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice)
 
 
                 ᶜ∂p∂ρq_tot = p.scratch.ᶜtemp_scalar_2
@@ -1309,15 +1309,15 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
                     # add env flux contributions
                     (; ᶜp) = p.precomputed
-                    (; ᶠu³⁰, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+                    (; ᶠu³⁰, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
                     ᶜρ⁰ = @. lazy(
                         TD.air_density(
                             thermo_params,
                             ᶜT⁰,
                             ᶜp,
                             ᶜq_tot_safe⁰,
-                            ᶜq_liq_rai⁰,
-                            ᶜq_ice_sno⁰,
+                            ᶜq_liq⁰,
+                            ᶜq_ice⁰,
                         ),
                     )
                     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))

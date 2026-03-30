@@ -73,7 +73,7 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
     (; rrtmgp_model) = p.radiation
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(thermo_params)
-    (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
     ᶜrh = Fields.array2field(rrtmgp_model.center_relative_humidity, axes(u.c))
     ᶜvmr_h2o = Fields.array2field(
         rrtmgp_model.center_volume_mixing_ratio_h2o,
@@ -93,7 +93,7 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
         ᶜq_tot = ᶜvmr_h2o
         @. ᶜq_tot =
             max_relative_humidity *
-            TD.q_vap_saturation(thermo_params, ᶜT, u.c.ρ, ᶜq_liq_rai, ᶜq_ice_sno)
+            TD.q_vap_saturation(thermo_params, ᶜT, u.c.ρ, ᶜq_liq, ᶜq_ice)
 
         # filter ᶜq_tot so that it is monotonically decreasing with z
         for i in 2:Spaces.nlevels(axes(ᶜq_tot))
@@ -106,7 +106,7 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
         @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(thermo_params, ᶜq_tot)
     else
         @. ᶜvmr_h2o =
-            TD.vol_vapor_mixing_ratio(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+            TD.vol_vapor_mixing_ratio(thermo_params, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice)
         @. ᶜrh = min(
             max(
                 TD.relative_humidity(
@@ -114,8 +114,8 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
                     ᶜT,
                     ᶜp,
                     ᶜq_tot_safe,
-                    ᶜq_liq_rai,
-                    ᶜq_ice_sno,
+                    ᶜq_liq,
+                    ᶜq_ice,
                 ),
                 0,
             ),
@@ -241,7 +241,7 @@ No updates are applied when `radiation_mode.idealized_clouds` is true.
 function update_cloud_properties!((; u, p, t)::I) where {I}
     (; radiation_mode) = p.atmos
     (; rrtmgp_model) = p.radiation
-    (; ᶜcloud_fraction, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜcloud_fraction, ᶜq_liq, ᶜq_ice) = p.precomputed
     FT = Spaces.undertype(axes(u.c))
     cmc = CAP.microphysics_cloud_params(p.params)
 
@@ -278,11 +278,11 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
         cloud_liquid_water_content =
             radiation_mode.cloud isa PrescribedCloudInRadiation ?
             p.radiation.prescribed_clouds_field.clwc :
-            ᶜq_liq_rai
+            ᶜq_liq
         cloud_ice_water_content =
             radiation_mode.cloud isa PrescribedCloudInRadiation ?
             p.radiation.prescribed_clouds_field.ciwc :
-            ᶜq_ice_sno
+            ᶜq_ice
         cloud_fraction =
             radiation_mode.cloud isa PrescribedCloudInRadiation ?
             p.radiation.prescribed_clouds_field.cc : ᶜcloud_fraction

@@ -37,7 +37,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
     (; ᶜp, ᶜK) = p.precomputed
-    (; ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+    (; ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
 
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
@@ -54,10 +54,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
         ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
         # Compute env thermodynamic state from primitives
-        @. ᶜq_liq_rai⁰ = max(0, ᶜq_lcl⁰ + ᶜq_rai⁰)
-        @. ᶜq_ice_sno⁰ = max(0, ᶜq_icl⁰ + ᶜq_sno⁰)
+        @. ᶜq_liq⁰ = max(0, ᶜq_lcl⁰ + ᶜq_rai⁰)
+        @. ᶜq_ice⁰ = max(0, ᶜq_icl⁰ + ᶜq_sno⁰)
         # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-        @. ᶜq_tot_safe⁰ = max(ᶜq_liq_rai⁰ + ᶜq_ice_sno⁰, ᶜq_tot⁰)
+        @. ᶜq_tot_safe⁰ = max(ᶜq_liq⁰ + ᶜq_ice⁰, ᶜq_tot⁰)
         ᶜh⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)  # specific enthalpy
         T_min_sgs = CAP.T_min_sgs(p.params)
         @. ᶜT⁰ = max(
@@ -67,8 +67,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
                 TD.ph(),
                 ᶜh⁰,
                 ᶜq_tot_safe⁰,
-                ᶜq_liq_rai⁰,
-                ᶜq_ice_sno⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
             ),
         )
     else
@@ -79,8 +79,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         @. ᶜsa_result =
             saturation_adjustment_tuple(thermo_params, TD.ph(), ᶜp, h⁰, ᶜq_tot_safe⁰)
         @. ᶜT⁰ = ᶜsa_result.T
-        @. ᶜq_liq_rai⁰ = ᶜsa_result.q_liq
-        @. ᶜq_ice_sno⁰ = ᶜsa_result.q_ice
+        @. ᶜq_liq⁰ = ᶜsa_result.q_liq
+        @. ᶜq_ice⁰ = ᶜsa_result.q_ice
     end
     return nothing
 end
@@ -110,8 +110,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         ᶠKᵥʲs,
         ᶜTʲs,
         ᶜq_tot_safeʲs,
-        ᶜq_liq_raiʲs,
-        ᶜq_ice_snoʲs,
+        ᶜq_liqʲs,
+        ᶜq_iceʲs,
         ᶜρʲs,
     ) = p.precomputed
 
@@ -123,8 +123,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
         ᶜTʲ = ᶜTʲs.:($j)
         ᶜq_tot_safeʲ = ᶜq_tot_safeʲs.:($j)
-        ᶜq_liq_raiʲ = ᶜq_liq_raiʲs.:($j)
-        ᶜq_ice_snoʲ = ᶜq_ice_snoʲs.:($j)
+        ᶜq_liqʲ = ᶜq_liqʲs.:($j)
+        ᶜq_iceʲ = ᶜq_iceʲs.:($j)
         ᶜρʲ = ᶜρʲs.:($j)
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
@@ -141,10 +141,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             ᶜq_iclʲ = Y.c.sgsʲs.:($j).q_icl
             ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
             ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
-            @. ᶜq_liq_raiʲ = max(0, ᶜq_lclʲ + ᶜq_raiʲ)
-            @. ᶜq_ice_snoʲ = max(0, ᶜq_iclʲ + ᶜq_snoʲ)
+            @. ᶜq_liqʲ = max(0, ᶜq_lclʲ + ᶜq_raiʲ)
+            @. ᶜq_iceʲ = max(0, ᶜq_iclʲ + ᶜq_snoʲ)
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-            @. ᶜq_tot_safeʲ = max(ᶜq_liq_raiʲ + ᶜq_ice_snoʲ, ᶜq_totʲ)
+            @. ᶜq_tot_safeʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜq_totʲ)
             ᶜhʲ = @. lazy(ᶜmseʲ - ᶜΦ)
             T_min_sgs = CAP.T_min_sgs(p.params)
             @. ᶜTʲ = max(
@@ -154,8 +154,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
                     TD.ph(),
                     ᶜhʲ,
                     ᶜq_tot_safeʲ,
-                    ᶜq_liq_raiʲ,
-                    ᶜq_ice_snoʲ,
+                    ᶜq_liqʲ,
+                    ᶜq_iceʲ,
                 ),
             )
         else
@@ -169,11 +169,11 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
                 ᶜq_tot_safeʲ,
             )
             @. ᶜTʲ = ᶜsa_result.T
-            @. ᶜq_liq_raiʲ = ᶜsa_result.q_liq
-            @. ᶜq_ice_snoʲ = ᶜsa_result.q_ice
+            @. ᶜq_liqʲ = ᶜsa_result.q_liq
+            @. ᶜq_iceʲ = ᶜsa_result.q_ice
         end
         @. ᶜρʲ =
-            TD.air_density(thermo_params, ᶜTʲ, ᶜp, ᶜq_tot_safeʲ, ᶜq_liq_raiʲ, ᶜq_ice_snoʲ)
+            TD.air_density(thermo_params, ᶜTʲ, ᶜp, ᶜq_tot_safeʲ, ᶜq_liqʲ, ᶜq_iceʲ)
     end
     return nothing
 end
@@ -201,14 +201,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     n = n_mass_flux_subdomains(turbconv_model)
 
     (; ᶜu, ᶜp, ᶠu³) = p.precomputed
-    (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+    (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜstrain_rate_norm, ρtke_flux) = p.precomputed
     (;
         ᶜuʲs,
         ᶜTʲs,
         ᶜq_tot_safeʲs,
-        ᶜq_liq_raiʲs,
-        ᶜq_ice_snoʲs,
+        ᶜq_liqʲs,
+        ᶜq_iceʲs,
         ᶠu³ʲs,
         ᶜρʲs,
         ᶜentrʲs,
@@ -243,8 +243,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 ᶜTʲs.:($$j),
                 ᶜp,
                 ᶜq_tot_safeʲs.:($$j),
-                ᶜq_liq_raiʲs.:($$j),
-                ᶜq_ice_snoʲs.:($$j),
+                ᶜq_liqʲs.:($$j),
+                ᶜq_iceʲs.:($$j),
             ),
             vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
             get_physical_w(ᶜu, ᶜlg),
@@ -253,8 +253,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 ᶜT⁰,
                 ᶜp,
                 ᶜq_tot_safe⁰,
-                ᶜq_liq_rai⁰,
-                ᶜq_ice_sno⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
             ),
             FT(0),
             max(ᶜtke, 0),
@@ -295,8 +295,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 ᶜTʲs.:($$j),
                 ᶜp,
                 ᶜq_tot_safeʲs.:($$j),
-                ᶜq_liq_raiʲs.:($$j),
-                ᶜq_ice_snoʲs.:($$j),
+                ᶜq_liqʲs.:($$j),
+                ᶜq_iceʲs.:($$j),
             ),
             vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
             get_physical_w(ᶜu, ᶜlg),
@@ -305,8 +305,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 ᶜT⁰,
                 ᶜp,
                 ᶜq_tot_safe⁰,
-                ᶜq_liq_rai⁰,
-                ᶜq_ice_sno⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
             ),
             FT(0),
             ᶜentrʲs.:($$j),
