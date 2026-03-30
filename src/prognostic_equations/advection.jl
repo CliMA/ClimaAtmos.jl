@@ -369,6 +369,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
 
+    grav = CAP.grav(params)
     for j in 1:n
         if p.atmos.sgs_adv_mode == Explicit()
             # TODO: Add a biased GradientF2F operator in ClimaCore
@@ -389,7 +390,7 @@ function edmfx_sgs_vertical_advection_tendency!(
         @. Yₜ.c.sgsʲs.:($$j).mse +=
             adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃))) *
             (ᶜρʲs.:($$j) - Y.c.ρ) *
-            ᶜgradᵥ(CAP.grav(params) * ᶠz) / ᶜρʲs.:($$j)
+            ᶜgradᵥ(grav * ᶠz) / ᶜρʲs.:($$j)
     end
 
     for j in 1:n

@@ -892,9 +892,10 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
         # are SGS-averaged so that the energy helper is consistent with
         # the nonlinear dependence on condensate at each quadrature point.
         (; ᶜT′T′, ᶜq′q′) = p.precomputed
+        corr_Tq = correlation_Tq(p.params)
         @. ᶜmp_tendency = microphysics_tendencies_quadrature_0m(
             $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_safe,
-            ᶜT′T′, ᶜq′q′, correlation_Tq(p.params), ᶜΦ,
+            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ,
         )
     else
         # ... or evaluate on the grid-mean.
@@ -943,9 +944,10 @@ function set_microphysics_tendency_cache!(
     ### Environment contribution
     # Both dq_tot_dt and e_tot_hlpr are SGS-averaged.
     sgs_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
+    corr_Tq = correlation_Tq(p.params)
     @. ᶜmp_tendency = microphysics_tendencies_quadrature_0m(
         $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_safe,
-        ᶜT′T′, ᶜq′q′, correlation_Tq(p.params), ᶜΦ,
+        ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ,
     )
     # Apply the limiter
     apply_0m_tendency_limits!(
@@ -1016,9 +1018,10 @@ function set_microphysics_tendency_cache!(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
     )
     SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
+    corr_Tq = correlation_Tq(p.params)
     @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_0m(
         SG_quad, cm0, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_safe⁰,
-        ᶜT′T′, ᶜq′q′, correlation_Tq(p.params), ᶜΦ,
+        ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ,
     )
     # Apply the limiter
     apply_0m_tendency_limits!(
@@ -1069,10 +1072,11 @@ function set_microphysics_tendency_cache!(
     # Grid mean or quadrature sum over the SGS fluctuations
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
     sgs_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
+    corr_Tq = correlation_Tq(p.params)
     @. ᶜmp_tendency = microphysics_tendencies_quadrature_1m(
         BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
         ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno,
-        ᶜT′T′, ᶜq′q′, correlation_Tq(p.params),
+        ᶜT′T′, ᶜq′q′, corr_Tq,
     )
     # Apply the limiter
     apply_1m_tendency_limits!(
@@ -1106,12 +1110,13 @@ function set_microphysics_tendency_cache!(
     ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
 
     sgs_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
+    corr_Tq = correlation_Tq(p.params)
     # Grid mean or quadrature sum over the SGS fluctuations
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
     @. ᶜmp_tendency = microphysics_tendencies_quadrature_1m(
         BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
         ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, ᶜq_rai, ᶜq_sno,
-        ᶜT′T′, ᶜq′q′, correlation_Tq(p.params),
+        ᶜT′T′, ᶜq′q′, corr_Tq,
     )
     # Apply the limiter
     apply_1m_tendency_limits!(
@@ -1171,12 +1176,13 @@ function set_microphysics_tendency_cache!(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
     )
     SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
+    corr_Tq = correlation_Tq(p.params)
     # Grid mean or quadrature sum over the SGS fluctuations
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
     @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_1m(
         BMT.Microphysics1Moment(), SG_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
         ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-        ᶜT′T′, ᶜq′q′, correlation_Tq(p.params),
+        ᶜT′T′, ᶜq′q′, corr_Tq,
     )
     # Apply the limiter
     apply_1m_tendency_limits!(

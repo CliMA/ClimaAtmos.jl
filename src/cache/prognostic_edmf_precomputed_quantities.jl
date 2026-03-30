@@ -59,8 +59,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
         @. ᶜq_tot_safe⁰ = max(ᶜq_liq_rai⁰ + ᶜq_ice_sno⁰, ᶜq_tot⁰)
         ᶜh⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)  # specific enthalpy
+        T_min_sgs = CAP.T_min_sgs(p.params)
         @. ᶜT⁰ = max(
-            CAP.T_min_sgs(p.params),
+            T_min_sgs,
             TD.air_temperature(
                 thermo_params,
                 TD.ph(),
@@ -145,8 +146,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
             @. ᶜq_tot_safeʲ = max(ᶜq_liq_raiʲ + ᶜq_ice_snoʲ, ᶜq_totʲ)
             ᶜhʲ = @. lazy(ᶜmseʲ - ᶜΦ)
+            T_min_sgs = CAP.T_min_sgs(p.params)
             @. ᶜTʲ = max(
-                CAP.T_min_sgs(p.params),
+                T_min_sgs,
                 TD.air_temperature(
                     thermo_params,
                     TD.ph(),
