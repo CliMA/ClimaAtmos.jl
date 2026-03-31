@@ -28,11 +28,6 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
-      - name: Pin Glib_jll to working version
-        shell: julia --project=. {0}
-        run: |
-          import Pkg
-          Pkg.add(Pkg.PackageSpec(name="Glib_jll", version="2.82.4"))
       - uses: julia-actions/julia-downgrade-compat@v1
         with:
           skip: Artifacts, Dates, Downloads, LazyArtifacts, LinearAlgebra, Logging, Printf, Test, Statistics, Random, Pkg, Glib_jll
