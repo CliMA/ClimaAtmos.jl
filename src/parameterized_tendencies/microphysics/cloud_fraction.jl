@@ -33,19 +33,19 @@ environment, but this is a current approximation.
 function set_covariance_cache_and_cloud_fraction!(Y, p)
     (; cloud_model, microphysics_model) = p.atmos
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) = p.precomputed
-    (; ᶜlinear_buoygrad, ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜlinear_buoygrad, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
     # Precompute gradients
-    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
+    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_nonneg))
     @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
         ᶠinterp(
             TD.liquid_ice_pottemp(
                 thermo_params,
                 ᶜT,
                 Y.c.ρ,
-                ᶜq_tot_safe,
+                ᶜq_tot_nonneg,
                 ᶜq_liq,
                 ᶜq_ice,
             ),
@@ -67,7 +67,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
             thermo_params,
             ᶜT,
             Y.c.ρ,
-            ᶜq_tot_safe,
+            ᶜq_tot_nonneg,
             ᶜq_liq,
             ᶜq_ice,
             ᶜcloud_fraction,
@@ -112,7 +112,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
         thermo_params,
         ᶜT,
         Y.c.ρ,
-        ᶜq_tot_safe,
+        ᶜq_tot_nonneg,
         ᶜq_liq,
         ᶜq_ice,
         ᶜcloud_fraction,
@@ -165,11 +165,11 @@ function compute_∂T_∂θ!(dest, Y, p, thermo_params)
     (; ᶜT) = p.precomputed
     ᶜρ = Y.c.ρ
     if p.atmos.microphysics_model isa Union{DryModel, EquilibriumMicrophysics0M}
-        (; ᶜq_liq, ᶜq_ice, ᶜq_tot_safe) = p.precomputed
+        (; ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg) = p.precomputed
         # TODO - follow up with renaming the cached variables to liq and ice
         ᶜq_liq = ᶜq_liq
         ᶜq_ice = ᶜq_ice
-        ᶜq_tot = ᶜq_tot_safe
+        ᶜq_tot = ᶜq_tot_nonneg
     else
         # TODO - change in the next PR. Keeping this non behavior changing
         ᶜq_liq = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ)) # TODO + specific(Y.c.ρq_rai, Y.c.ρ))
@@ -449,7 +449,11 @@ NVTX.@annotate function set_cloud_fraction!(
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
     @. p.precomputed.ᶜcloud_fraction =
-        ifelse(TD.has_condensate(thermo_params, ᶜq_liq + ᶜq_ice), FT(1), FT(0))
+        ifelse(
+            TD.has_condensate(thermo_params, ᶜq_liq + ᶜq_ice),
+            FT(1),
+            FT(0),
+        )
 end
 NVTX.@annotate function set_cloud_fraction!(
     Y,
@@ -535,22 +539,22 @@ Get environment density, temperature, and specific humidity for cloud fraction.
 Lightweight alternative to `_compute_cloud_state` when only ρ, T, and q are needed.
 """
 function _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
-    (; ᶜp, ᶜT, ᶜq_tot_safe) = p.precomputed
+    (; ᶜp, ᶜT, ᶜq_tot_nonneg) = p.precomputed
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
         ᶜρ_env = @. lazy(
             TD.air_density(
                 thermo_params,
                 ᶜT⁰,
                 ᶜp,
-                ᶜq_tot_safe⁰,
+                ᶜq_tot_nonneg⁰,
                 ᶜq_liq⁰,
                 ᶜq_ice⁰,
             ),
         )
-        return ᶜρ_env, ᶜT⁰, ᶜq_tot_safe⁰
+        return ᶜρ_env, ᶜT⁰, ᶜq_tot_nonneg⁰
     else
-        return Y.c.ρ, ᶜT, ᶜq_tot_safe
+        return Y.c.ρ, ᶜT, ᶜq_tot_nonneg
     end
 end
 
@@ -565,21 +569,28 @@ For PrognosticEDMFX, uses environment (⁰) fields; otherwise uses grid-scale fi
 Tuple: `(ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′)`
 """
 function _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_model)
-    (; ᶜp, ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
 
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
         ᶜρ_env = @. lazy(
-            TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰),
+            TD.air_density(
+                thermo_params,
+                ᶜT⁰,
+                ᶜp,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+            ),
         )
         ᶜT_mean = ᶜT⁰
-        ᶜq_mean = ᶜq_tot_safe⁰
+        ᶜq_mean = ᶜq_tot_nonneg⁰
         ᶜθ_mean = @. lazy(
             TD.liquid_ice_pottemp(
                 thermo_params,
                 ᶜT⁰,
                 ᶜρ_env,
-                ᶜq_tot_safe⁰,
+                ᶜq_tot_nonneg⁰,
                 ᶜq_liq⁰,
                 ᶜq_ice⁰,
             ),
@@ -587,13 +598,13 @@ function _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_
     else
         ᶜρ_env = Y.c.ρ
         ᶜT_mean = ᶜT
-        ᶜq_mean = ᶜq_tot_safe
+        ᶜq_mean = ᶜq_tot_nonneg
         ᶜθ_mean = @. lazy(
             TD.liquid_ice_pottemp(
                 thermo_params,
                 ᶜT,
                 Y.c.ρ,
-                ᶜq_tot_safe,
+                ᶜq_tot_nonneg,
                 ᶜq_liq,
                 ᶜq_ice,
             ),
@@ -682,9 +693,16 @@ function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
     # Weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise)
     if turbconv_model isa PrognosticEDMFX
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
-        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
         ᶜρ⁰ = @. lazy(
-            TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰),
+            TD.air_density(
+                thermo_params,
+                ᶜT⁰,
+                ᶜp,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+            ),
         )
         @. p.precomputed.ᶜcloud_fraction *= draft_area(ᶜρa⁰, ᶜρ⁰)
     end

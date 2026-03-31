@@ -71,10 +71,10 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρtke -= split_divₕ(Y.c.ρ * ᶜu, ᶜtke)
     end
 
-    (; ᶜq_tot_safe) = p.precomputed
+    (; ᶜq_tot_nonneg) = p.precomputed
     ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
     ᶜθ_v = p.scratch.ᶜtemp_scalar
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice)
+    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     ᶜθ_v_diff = @. lazy(ᶜθ_v - ᶜθ_vr)
@@ -99,7 +99,7 @@ and for specific humidity species within EDMFX subdomains.
 Specifically, this function calculates:
 - Horizontal advection for all prognostic tracer variables (`ρχ_name`) in `Y.c`.
 - Horizontal advection for EDMFX updraft total specific humidity (`q_totʲ`).
-- Horizontal advection for other EDMFX updraft moisture species (`q_liqʲ`, `q_iceʲ`,
+- Horizontal advection for other EDMFX updraft moisture species (`q_lclʲ`, `q_iclʲ`,
   `q_raiʲ`, `q_snoʲ`) if using a `NonEquilibriumMicrophysics1M` or
   `NonEquilibriumMicrophysics2M` microphysics model. If the `NonEquilibriumMicrophysics2M`
   model is used instead, `n_liqʲ` and `n_raiʲ` are also advected.
@@ -326,7 +326,7 @@ Computes tendencies due to vertical advection and buoyancy for EDMFX subgrid-sca
 This function handles:
 - Vertical advection of updraft density-area product (`ρaʲ`).
 - Vertical advection of updraft moist static energy (`mseʲ`) and total specific humidity (`q_totʲ`).
-- Vertical advection of other updraft moisture species (`q_liqʲ`, `q_iceʲ`, `q_raiʲ`, `q_snoʲ`)
+- Vertical advection of other updraft moisture species (`q_lclʲ`, `q_iclʲ`, `q_raiʲ`, `q_snoʲ`)
   if using a `NonEquilibriumMicrophysics1M` or `NonEquilibriumMicrophysics2M` microphysics
   model. If the `NonEquilibriumMicrophysics2M` model is used, `n_liqʲ` and `n_raiʲ` are also advected.
 - Buoyancy forcing terms in the updraft vertical momentum (`u₃ʲ`) equation, including

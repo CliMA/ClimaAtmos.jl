@@ -69,7 +69,7 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
     ᶜlg = Fields.local_geometry_field(Y.c)
     (;
         ᶜT,
-        ᶜq_tot_safe,
+        ᶜq_tot_nonneg,
         ᶜq_liq,
         ᶜq_ice,
         ᶠu³,
@@ -84,7 +84,7 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
         thermo_params,
         ᶜT,
         Y.c.ρ,
-        ᶜq_tot_safe,
+        ᶜq_tot_nonneg,
         ᶜq_liq,
         ᶜq_ice,
         ᶜcloud_fraction,

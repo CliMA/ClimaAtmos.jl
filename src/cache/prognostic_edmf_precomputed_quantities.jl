@@ -37,7 +37,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
     (; ᶜp, ᶜK) = p.precomputed
-    (; ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) =
+        p.precomputed
 
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
@@ -57,7 +58,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         @. ᶜq_liq⁰ = max(0, ᶜq_lcl⁰ + ᶜq_rai⁰)
         @. ᶜq_ice⁰ = max(0, ᶜq_icl⁰ + ᶜq_sno⁰)
         # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-        @. ᶜq_tot_safe⁰ = max(ᶜq_liq⁰ + ᶜq_ice⁰, ᶜq_tot⁰)
+        @. ᶜq_tot_nonneg⁰ = max(ᶜq_liq⁰ + ᶜq_ice⁰, ᶜq_tot⁰)
         ᶜh⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)  # specific enthalpy
         T_min_sgs = CAP.T_min_sgs(p.params)
         @. ᶜT⁰ = max(
@@ -66,18 +67,18 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
                 thermo_params,
                 TD.ph(),
                 ᶜh⁰,
-                ᶜq_tot_safe⁰,
+                ᶜq_tot_nonneg⁰,
                 ᶜq_liq⁰,
                 ᶜq_ice⁰,
             ),
         )
     else
         # EquilibriumMicrophysics0M: use saturation adjustment to get T and phase partition
-        @. ᶜq_tot_safe⁰ = max(0, ᶜq_tot⁰)
+        @. ᶜq_tot_nonneg⁰ = max(0, ᶜq_tot⁰)
         (; ᶜsa_result) = p.precomputed
         h⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)
         @. ᶜsa_result =
-            saturation_adjustment_tuple(thermo_params, TD.ph(), ᶜp, h⁰, ᶜq_tot_safe⁰)
+            saturation_adjustment_tuple(thermo_params, TD.ph(), ᶜp, h⁰, ᶜq_tot_nonneg⁰)
         @. ᶜT⁰ = ᶜsa_result.T
         @. ᶜq_liq⁰ = ᶜsa_result.q_liq
         @. ᶜq_ice⁰ = ᶜsa_result.q_ice
@@ -109,7 +110,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         ᶜKʲs,
         ᶠKᵥʲs,
         ᶜTʲs,
-        ᶜq_tot_safeʲs,
+        ᶜq_tot_nonnegʲs,
         ᶜq_liqʲs,
         ᶜq_iceʲs,
         ᶜρʲs,
@@ -122,7 +123,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         ᶠKᵥʲ = ᶠKᵥʲs.:($j)
         ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
         ᶜTʲ = ᶜTʲs.:($j)
-        ᶜq_tot_safeʲ = ᶜq_tot_safeʲs.:($j)
+        ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
         ᶜq_liqʲ = ᶜq_liqʲs.:($j)
         ᶜq_iceʲ = ᶜq_iceʲs.:($j)
         ᶜρʲ = ᶜρʲs.:($j)
@@ -132,7 +133,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
 
-        @. ᶜq_tot_safeʲ = max(0, ᶜq_totʲ)
+        @. ᶜq_tot_nonnegʲ = max(0, ᶜq_totʲ)
         if microphysics_model isa Union{
             NonEquilibriumMicrophysics1M,
             NonEquilibriumMicrophysics2M,
@@ -144,7 +145,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             @. ᶜq_liqʲ = max(0, ᶜq_lclʲ + ᶜq_raiʲ)
             @. ᶜq_iceʲ = max(0, ᶜq_iclʲ + ᶜq_snoʲ)
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-            @. ᶜq_tot_safeʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜq_totʲ)
+            @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜq_totʲ)
             ᶜhʲ = @. lazy(ᶜmseʲ - ᶜΦ)
             T_min_sgs = CAP.T_min_sgs(p.params)
             @. ᶜTʲ = max(
@@ -153,7 +154,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
                     thermo_params,
                     TD.ph(),
                     ᶜhʲ,
-                    ᶜq_tot_safeʲ,
+                    ᶜq_tot_nonnegʲ,
                     ᶜq_liqʲ,
                     ᶜq_iceʲ,
                 ),
@@ -166,14 +167,21 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
                 TD.ph(),
                 ᶜp,
                 ᶜmseʲ - ᶜΦ,
-                ᶜq_tot_safeʲ,
+                ᶜq_tot_nonnegʲ,
             )
             @. ᶜTʲ = ᶜsa_result.T
             @. ᶜq_liqʲ = ᶜsa_result.q_liq
             @. ᶜq_iceʲ = ᶜsa_result.q_ice
         end
         @. ᶜρʲ =
-            TD.air_density(thermo_params, ᶜTʲ, ᶜp, ᶜq_tot_safeʲ, ᶜq_liqʲ, ᶜq_iceʲ)
+            TD.air_density(
+                thermo_params,
+                ᶜTʲ,
+                ᶜp,
+                ᶜq_tot_nonnegʲ,
+                ᶜq_liqʲ,
+                ᶜq_iceʲ,
+            )
     end
     return nothing
 end
@@ -201,12 +209,12 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     n = n_mass_flux_subdomains(turbconv_model)
 
     (; ᶜu, ᶜp, ᶠu³) = p.precomputed
-    (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜstrain_rate_norm, ρtke_flux) = p.precomputed
     (;
         ᶜuʲs,
         ᶜTʲs,
-        ᶜq_tot_safeʲs,
+        ᶜq_tot_nonnegʲs,
         ᶜq_liqʲs,
         ᶜq_iceʲs,
         ᶠu³ʲs,
@@ -242,7 +250,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 thermo_params,
                 ᶜTʲs.:($$j),
                 ᶜp,
-                ᶜq_tot_safeʲs.:($$j),
+                ᶜq_tot_nonnegʲs.:($$j),
                 ᶜq_liqʲs.:($$j),
                 ᶜq_iceʲs.:($$j),
             ),
@@ -252,7 +260,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 thermo_params,
                 ᶜT⁰,
                 ᶜp,
-                ᶜq_tot_safe⁰,
+                ᶜq_tot_nonneg⁰,
                 ᶜq_liq⁰,
                 ᶜq_ice⁰,
             ),
@@ -294,7 +302,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 thermo_params,
                 ᶜTʲs.:($$j),
                 ᶜp,
-                ᶜq_tot_safeʲs.:($$j),
+                ᶜq_tot_nonnegʲs.:($$j),
                 ᶜq_liqʲs.:($$j),
                 ᶜq_iceʲs.:($$j),
             ),
@@ -304,7 +312,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 thermo_params,
                 ᶜT⁰,
                 ᶜp,
-                ᶜq_tot_safe⁰,
+                ᶜq_tot_nonneg⁰,
                 ᶜq_liq⁰,
                 ᶜq_ice⁰,
             ),
