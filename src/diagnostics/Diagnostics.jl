@@ -67,6 +67,8 @@ import ..ᶜcompute_eddy_diffusivity_coefficient
 import ..ρa⁰
 import ..specific
 import ..ᶜspecific_env_value
+import ..ᶜspecific_env_mse
+import ..n_mass_flux_subdomains
 import ..correlation_Tq
 
 
