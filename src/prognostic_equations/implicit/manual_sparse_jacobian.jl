@@ -1,7 +1,27 @@
 import LinearAlgebra: I, Adjoint
 
 using ClimaCore.MatrixFields
-import ClimaCore.MatrixFields: @name
+import ClimaCore.MatrixFields: @name, copyto_foreach!
+
+# Mod-only optimization: avoid FieldNameSet.foreach in ClimaCore's default
+# copyto_foreach! by iterating pairs directly. This preserves semantics while
+# reducing key-set traversal overhead in hot materialization paths.
+function copyto_foreach!(
+    dest::MatrixFields.FieldNameDict,
+    vector_or_matrix::MatrixFields.FieldNameDict,
+)
+    MatrixFields.unrolled_foreach(pairs(vector_or_matrix)) do pair
+        key, entry = pair
+        dest_entry = dest[key]
+        if dest_entry isa MatrixFields.ScalingFieldMatrixEntry
+            dest_entry == entry || error("matrix entry at $key is immutable")
+        elseif entry isa MatrixFields.ScalingFieldMatrixEntry
+            dest_entry .= (entry,)
+        else
+            dest_entry .= entry
+        end
+    end
+end
 
 abstract type DerivativeFlag end
 struct UseDerivative <: DerivativeFlag end
