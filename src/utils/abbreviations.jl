@@ -12,6 +12,10 @@ const CT2 = Geometry.Contravariant2Vector
 const CT12 = Geometry.Contravariant12Vector
 const CT3 = Geometry.Contravariant3Vector
 const CT123 = Geometry.Contravariant123Vector
+const UVec = Geometry.UVector
+const VVec = Geometry.VVector
+const WVec = Geometry.WVector
+const UV = Geometry.UVVector
 const UVW = Geometry.UVWVector
 
 const divₕ = Operators.Divergence()

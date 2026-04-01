@@ -40,6 +40,14 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
     @safetestset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
     @safetestset "Topography tests" begin @time include("topography.jl") end
+
+end
+
+# ============================================================================
+# Diagnostics: Unit tests for diagnostic variables
+# ============================================================================
+if TEST_GROUP in ("diagnostics", "all")
+    @safetestset "Diagnostics unit tests" begin @time include("diagnostics/unit_diagnostics.jl") end
 end
 
 # ============================================================================

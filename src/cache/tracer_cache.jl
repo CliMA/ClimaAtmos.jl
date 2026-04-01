@@ -67,7 +67,7 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
         # The keys in the merra2_aerosols.nc file have to match the ones passed with the
         # configuration. The file also has to be defined on the globe and provide
         # time series of lon-lat-z data.
-        prescribed_aerosol_names_as_symbols = Symbol.(prescribed_aerosol_names)
+        prescribed_aerosol_names_as_symbols = Symbol.(Tuple(prescribed_aerosol_names))
         target_space = axes(Y.c)
         extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
         timevaryinginputs = [
