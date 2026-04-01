@@ -1,56 +1,111 @@
 [EDMF_surface_area]
 value = 0.1
+type = "float"
 
 [EDMF_min_area]
 value = 1.0e-5
+type = "float"
 
 [EDMF_max_area]
-value = 0.7
+value = 0.95
+type = "float"
+
+[max_area_limiter_scale]
+value = 0.01
+type = "float"
+
+[max_area_limiter_power]
+value = 25
+type = "float"
 
 [entr_inv_tau]
 value = 0.0001
+type = "float"
 
 [entr_coeff]
 value = 0.3
+type = "float"
 
 [turb_entr_param_vec]
-value = [1e-10, 0.0, 0.0]
+value = [0.0, 0.0, 0.0]
+type = "float"
 
 [min_area_limiter_scale]
 value = 0
+type = "float"
 
 [detr_inv_tau]
 value = 0
+type = "float"
 
 [detr_coeff]
 value = 0
+type = "float"
 
 [detr_buoy_coeff]
 value = 0
+type = "float"
 
 [detr_vertdiv_coeff]
 value = 0
+type = "float"
 
 [detr_massflux_vertdiv_coeff]
 value = 1
-
-[max_area_limiter_scale]
-value = 0
+type = "float"
 
 [pressure_normalmode_drag_coeff]
-value = 40.0
+value = 10.0
+type = "float"
 
 [gcmdriven_momentum_relaxation_timescale]
 value = 21600.0
+type = "float"
 
 [gcmdriven_scalar_relaxation_timescale]
 value = 86400.0
+type = "float"
 
 [gcmdriven_relaxation_minimum_height]
 value = 3000.0
+type = "float"
 
 [gcmdriven_relaxation_maximum_height]
 value = 3500.0
+type = "float"
 
 [zd_rayleigh]
-value = 20000.0
+value = 30000.0
+type = "float"
+
+[zd_viscous]
+value = 30000.0
+type = "float"
+
+[mixing_length_tke_surf_flux_coeff]
+value = 4.0
+type = "float"
+
+[mixing_length_diss_coeff]
+value = 0.45
+type = "float"
+
+[mixing_length_eddy_viscosity_coefficient]
+value = 0.75
+type = "float"
+
+[precipitation_timescale]
+value = 3000
+type = "float"
+
+[Tq_correlation_coefficient]
+value = 0.9
+type = "float"
+
+[supersaturation_precipitation_threshold]
+value = 0.03
+type = "float"
+
+[cloud_fraction_steepness_scale]
+value = 1.0
+type = "float"
