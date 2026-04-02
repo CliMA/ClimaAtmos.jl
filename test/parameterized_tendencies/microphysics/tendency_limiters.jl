@@ -6,7 +6,7 @@ Tests cover:
 2. `tendency_limiter()` - bidirectional tendency limiting
 3. `coupled_sink_limit_factor()` - uniform scaling for coupled sinks
 4. `limit_sink()` - sink-only tendency limiting
-5. `_explicit_1m_tendency_limits()` - end-to-end 1M explicit limiter
+5. `explicit_1m_tendency_limit()` - end-to-end 1M explicit limiter
 =#
 
 using Test
@@ -226,8 +226,8 @@ import ClimaAtmos:
         end
     end
 
-    @testset "_explicit_1m_tendency_limits() cross-species limiting" begin
-        import ClimaAtmos: _explicit_1m_tendency_limits
+    @testset "explicit_1m_tendency_limit() cross-species limiting" begin
+        import ClimaAtmos: explicit_1m_tendency_limit
         import Thermodynamics as TD
         import ClimaParams as CP
 
@@ -244,68 +244,52 @@ import ClimaAtmos:
             # n_sink=5 budget for q=0.01 is 0.01/(600*5) = 3.33e-6
             # n_source=30 budget for source pool is even larger.
             # Tendencies ~1e-7 are well below both budgets.
-            mp_tendency = (
-                dq_lcl_dt = FT(1e-7),
-                dq_icl_dt = FT(-5e-8),
-                dq_rai_dt = FT(-3e-8),
-                dq_sno_dt = FT(-2e-8),
-            )
+            dq_lcl_dt = FT(1e-7)
+            dq_icl_dt = FT(-5e-8)
+            dq_rai_dt = FT(-3e-8)
+            dq_sno_dt = FT(-2e-8)
             q_liq = FT(0.01)
             q_ice = FT(0.01)
             q_rai = FT(0.01)
             q_sno = FT(0.01)
             q_tot = FT(0.05)  # q_vap = 0.01 > 0
 
-            limited = _explicit_1m_tendency_limits(
-                mp_tendency,
-                thermo_params,
-                q_tot,
-                q_liq,
-                q_ice,
-                q_rai,
-                q_sno,
-                dt,
+            limited = explicit_1m_tendency_limit(
+                dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt,
+                thermo_params, q_tot, q_liq, q_ice, q_rai, q_sno, dt,
             )
 
             # Should pass through nearly unchanged.
-            @test limited.dq_lcl_dt ≈ mp_tendency.dq_lcl_dt rtol = 0.05
-            @test limited.dq_icl_dt ≈ mp_tendency.dq_icl_dt rtol = 0.05
-            @test limited.dq_rai_dt ≈ mp_tendency.dq_rai_dt rtol = 0.05
-            @test limited.dq_sno_dt ≈ mp_tendency.dq_sno_dt rtol = 0.05
+            @test limited.dq_lcl_dt ≈ dq_lcl_dt rtol = 0.05
+            @test limited.dq_icl_dt ≈ dq_icl_dt rtol = 0.05
+            @test limited.dq_rai_dt ≈ dq_rai_dt rtol = 0.05
+            @test limited.dq_sno_dt ≈ dq_sno_dt rtol = 0.05
         end
 
         @testset "per-species sink limiting prevents depletion" begin
             # Rain has a large sink tendency relative to its small amount
-            mp_tendency = (
-                dq_lcl_dt = FT(0.001),
-                dq_icl_dt = FT(-0.0005),
-                dq_rai_dt = FT(-0.01),  # Would deplete rain in < dt
-                dq_sno_dt = FT(-0.0002),
-            )
+            dq_lcl_dt = FT(0.001)
+            dq_icl_dt = FT(-0.0005)
+            dq_rai_dt = FT(-0.01)  # Would deplete rain in < dt
+            dq_sno_dt = FT(-0.0002)
             q_liq = FT(0.001)
             q_ice = FT(0.0005)
             q_rai = FT(0.0001)  # Small amount
             q_sno = FT(0.0002)
             q_tot = FT(0.01)  # q_vap = 0.0082
 
-            limited = _explicit_1m_tendency_limits(
-                mp_tendency,
-                thermo_params,
-                q_tot,
-                q_liq,
-                q_ice,
-                q_rai,
-                q_sno,
-                dt,
+            limited = explicit_1m_tendency_limit(
+                dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt,
+                thermo_params, q_tot, q_liq, q_ice, q_rai, q_sno, dt,
             )
 
             # Rain sink tendency should be limited (prevented from depleting)
             @test limited.dq_rai_dt * dt >= -q_rai
-            @test abs(limited.dq_rai_dt) < abs(mp_tendency.dq_rai_dt)
+            @test abs(limited.dq_rai_dt) < abs(dq_rai_dt)
 
             # With per-species limiting, other species are limited independently.
             # Snow should be limited but less aggressively than rain.
-            @test abs(limited.dq_sno_dt) <= abs(mp_tendency.dq_sno_dt)
+            @test abs(limited.dq_sno_dt) <= abs(dq_sno_dt)
         end
     end
 end

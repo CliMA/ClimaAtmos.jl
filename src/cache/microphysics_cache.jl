@@ -876,46 +876,31 @@ set_microphysics_tendency_cache!(Y, p, _, _) = nothing
 function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
     (; dt) = p
     (; ᶜΦ) = p.core
-    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    (; ᶜmp_tendency) = p.precomputed
+    (; ᶜT, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
 
     cm0 = CAP.microphysics_0m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
 
-    # TODO - The logic in 1m all configs and 0m EDMF is:
-    # SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    # and then always call the quadrature path anyway.
-    # We should do the same here. Concern is that ᶜT′T′/ᶜq′q′
-    # are currenly only allocated when sgs_quadrature is configured.
-
-    ### Grid-mean microphysics tendency (with/without quadrature sampling)
+    ### Grid-mean microphysics tendency with/without quadrature sampling.
     sgs_quad = p.atmos.sgs_quadrature
-    if !isnothing(sgs_quad)
-        # Evaluate over quadrature points; both dq_tot_dt and e_tot_hlpr
+    tst = p.atmos.microphysics_tendency_timestepping
+    if not_quadrature(sgs_quad)
+        # Evaluate on the grid-mean.
+        (; ᶜq_liq, ᶜq_ice) = p.precomputed
+        @. ᶜmp_tendency = microphysics_tendencies_0m(
+            cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜΦ, $(tst), dt,
+        )
+    else
+        # Evaluate over quadrature points. Both dq_tot_dt and e_tot_hlpr
         # are SGS-averaged so that the energy helper is consistent with
         # the nonlinear dependence on condensate at each quadrature point.
         (; ᶜT′T′, ᶜq′q′) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
-        @. ᶜmp_tendency = microphysics_tendencies_quadrature_0m(
+        @. ᶜmp_tendency = microphysics_tendencies_0m(
             $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
-            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ,
-        )
-    else
-        # ... or evaluate on the grid-mean.
-        @. ᶜmp_tendency.dq_tot_dt = BMT.bulk_microphysics_tendencies(
-            BMT.Microphysics0Moment(), cm0, thp, ᶜT, ᶜq_liq, ᶜq_ice,
-            TD.q_vap_saturation(thp, ᶜT, Y.c.ρ),
-        )
-        # For the grid-mean path (no SGS averaging), compute e_tot_hlpr
-        # from grid-mean values (exact for a single evaluation point).
-        @. ᶜmp_tendency.e_tot_hlpr = e_tot_0M_precipitation_sources_helper(
-            thp, ᶜT, ᶜq_liq, ᶜq_ice, ᶜΦ,
+            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ, $(tst), dt,
         )
     end
-    # Apply the limiter
-    apply_0m_tendency_limits!(
-        ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping, ᶜq_tot_nonneg, dt,
-    )
 
     # TODO - duplicated with tendency and implicit cache update
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
@@ -937,26 +922,28 @@ function set_microphysics_tendency_cache!(
     (; ᶜmp_tendency) = p.precomputed
     (; ᶜ∂tendency_∂q_tot) = p.precomputed
     (; ᶜT, ᶜq_tot_nonneg) = p.precomputed
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed # temperature-based variances
 
     thp = CAP.thermodynamics_params(p.params)
     cm0 = CAP.microphysics_0m_params(p.params)
 
     ### Updraft contribution is computed in diagnostic EDMF integral loop
 
-    ### Environment contribution
-    # Both dq_tot_dt and e_tot_hlpr are SGS-averaged.
-    sgs_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    corr_Tq = correlation_Tq(p.params)
-    @. ᶜmp_tendency = microphysics_tendencies_quadrature_0m(
-        $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
-        ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ,
-    )
-    # Apply the limiter
-    apply_0m_tendency_limits!(
-        ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping,
-        ᶜq_tot_nonneg, dt,
-    )
+    ### Environment contribution on the grid mean or quadrature points
+    sgs_quad = p.atmos.sgs_quadrature
+    tst = p.atmos.microphysics_tendency_timestepping
+    if not_quadrature(sgs_quad)
+        (; ᶜq_liq, ᶜq_ice) = p.precomputed
+        @. ᶜmp_tendency = microphysics_tendencies_0m(
+            cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜΦ, $(tst), dt,
+        )
+    else
+        (; ᶜT′T′, ᶜq′q′) = p.precomputed
+        corr_Tq = correlation_Tq(p.params)
+        @. ᶜmp_tendency = microphysics_tendencies_0m(
+            $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
+            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ, $(tst), dt,
+        )
+    end
     # Compute derivative
     q_min = CAP.q_min(p.params)
     @. ᶜ∂tendency_∂q_tot =
@@ -992,44 +979,43 @@ function set_microphysics_tendency_cache!(
     (; ᶜ∂tendency_∂q_totʲs) = p.precomputed
     (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed # temperature-based variances
 
     thp = CAP.thermodynamics_params(p.params)
     cm0 = CAP.microphysics_0m_params(p.params)
 
     n = n_mass_flux_subdomains(tm)
     q_min = CAP.q_min(p.params)
+    tst = p.atmos.microphysics_tendency_timestepping
 
     for j in 1:n
-        # Use GridMeanSGS dispatch for consistent threshold with environment
-        @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_quadrature_0m(
-            GridMeanSGS(), cm0, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-            ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j), ᶜΦ,
+        # Point-wise evaluation of microphysics tendencies in the updraft
+        @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_0m(
+            cm0, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+            ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j), ᶜΦ, $(tst), dt,
         )
-        # Apply the limiter
-        apply_0m_tendency_limits!(
-            ᶜmp_tendencyʲs.:($j), p.atmos.microphysics_tendency_timestepping,
-            ᶜq_tot_nonnegʲs.:($j), dt,
-        )
-
         @. ᶜ∂tendency_∂q_totʲs.:($$j) =
             _jac_coeff(ᶜmp_tendencyʲs.:($$j).dq_tot_dt, Y.c.sgsʲs.:($$j).q_tot, q_min)
     end
 
-    ### Environment contribution
+    ### Environment contribution with/without quadrature sampling.
     ᶜρ⁰ = @. lazy(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )
-    SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    corr_Tq = correlation_Tq(p.params)
-    @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_0m(
-        SG_quad, cm0, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
-        ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ,
-    )
-    # Apply the limiter
-    apply_0m_tendency_limits!(
-        ᶜmp_tendency⁰, p.atmos.microphysics_tendency_timestepping, ᶜq_tot_nonneg⁰, dt,
-    )
+    sgs_quad = p.atmos.sgs_quadrature
+    if not_quadrature(sgs_quad)
+        # Evaluate on the grid-mean.
+        @. ᶜmp_tendency⁰ = microphysics_tendencies_0m(
+            cm0, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜΦ, $(tst), dt,
+        )
+    else
+        # Evaluate over quadrature points.
+        (; ᶜT′T′, ᶜq′q′) = p.precomputed
+        corr_Tq = correlation_Tq(p.params)
+        @. ᶜmp_tendency⁰ = microphysics_tendencies_0m(
+            $(sgs_quad), cm0, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
+            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ, $(tst), dt,
+        )
+    end
 
     # TODO - duplicated with tendency and implicit cache update
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
@@ -1061,7 +1047,6 @@ function set_microphysics_tendency_cache!(
 )
     (; dt) = p
     (; ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜmp_tendency, ᶜmp_derivative) = p.precomputed
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
@@ -1074,18 +1059,22 @@ function set_microphysics_tendency_cache!(
 
     # Grid mean or quadrature sum over the SGS fluctuations
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
-    sgs_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    corr_Tq = correlation_Tq(p.params)
-    @. ᶜmp_tendency = microphysics_tendencies_quadrature_1m(
-        BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
-        ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-        ᶜT′T′, ᶜq′q′, corr_Tq,
-    )
-    # Apply the limiter
-    apply_1m_tendency_limits!(
-        ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping,
-        thp, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, dt,
-    )
+    sgs_quad = p.atmos.sgs_quadrature
+    tst = p.atmos.microphysics_tendency_timestepping
+    if not_quadrature(sgs_quad)
+        @. ᶜmp_tendency = microphysics_tendencies_1m(
+            Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            ᶜT, cmp, thp, $(tst), dt,
+        )
+    else
+        (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
+        corr_Tq = correlation_Tq(p.params)
+        @. ᶜmp_tendency = microphysics_tendencies_1m(
+            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
+            ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            ᶜT′T′, ᶜq′q′, corr_Tq, $(tst), dt,
+        )
+    end
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
     # grid-mean state for the implicit Jacobian diagonal.
     q_min = CAP.q_min(p.params)
@@ -1099,7 +1088,6 @@ function set_microphysics_tendency_cache!(
 )
     (; dt) = p
     (; ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜmp_tendency, ᶜmp_derivative) = p.precomputed
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
 
     thp = CAP.thermodynamics_params(p.params)
     cm1 = CAP.microphysics_1m_params(p.params)
@@ -1112,21 +1100,24 @@ function set_microphysics_tendency_cache!(
     ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
     ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
 
-    sgs_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    corr_Tq = correlation_Tq(p.params)
     # Grid mean or quadrature sum over the SGS fluctuations
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
-    @. ᶜmp_tendency = microphysics_tendencies_quadrature_1m(
-        BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
-        ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-        ᶜT′T′, ᶜq′q′, corr_Tq,
-    )
-    # Apply the limiter
-    apply_1m_tendency_limits!(
-        ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping,
-        thp, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, dt,
-    )
-
+    sgs_quad = p.atmos.sgs_quadrature
+    tst = p.atmos.microphysics_tendency_timestepping
+    if not_quadrature(sgs_quad)
+        @. ᶜmp_tendency = microphysics_tendencies_1m(
+            Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, ᶜT, cm1, thp,
+            $(tst), dt,
+        )
+    else
+        (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
+        corr_Tq = correlation_Tq(p.params)
+        @. ᶜmp_tendency = microphysics_tendencies_1m(
+            BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
+            ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            ᶜT′T′, ᶜq′q′, corr_Tq, $(tst), dt,
+        )
+    end
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
     # grid-mean state for the implicit Jacobian diagonal.
     q_min = CAP.q_min(p.params)
@@ -1143,21 +1134,21 @@ function set_microphysics_tendency_cache!(
     (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_derivative) = p.precomputed
     (; ᶜmp_tendencyʲs, ᶜmp_derivativeʲs) = p.precomputed
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
 
     n = n_mass_flux_subdomains(tm)
     q_min = CAP.q_min(p.params)
+    tst = p.atmos.microphysics_tendency_timestepping
 
     ### Updraft contribution
     for j in 1:n
-        compute_1m_precipitation_tendencies!(
-            ᶜmp_tendencyʲs.:($j), ᶜρʲs.:($j), ᶜq_tot_nonnegʲs.:($j),
-            Y.c.sgsʲs.:($j).q_lcl, Y.c.sgsʲs.:($j).q_icl,
-            Y.c.sgsʲs.:($j).q_rai, Y.c.sgsʲs.:($j).q_sno,
-            ᶜTʲs.:($j), dt, cmp, thp,
+        @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
+            ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+            Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
+            Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
+            ᶜTʲs.:($$j), cmp, thp, $(tst), dt,
         )
         # BMT cloud derivatives at updraft j state (same pattern as grid-mean).
         @. ᶜmp_derivativeʲs.:($$j) = _jac_coeffs_1m(
@@ -1178,21 +1169,21 @@ function set_microphysics_tendency_cache!(
     ᶜρ⁰ = @. lazy(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )
-    SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    corr_Tq = correlation_Tq(p.params)
-    # Grid mean or quadrature sum over the SGS fluctuations
-    # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
-    @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_1m(
-        BMT.Microphysics1Moment(), SG_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
-        ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-        ᶜT′T′, ᶜq′q′, corr_Tq,
-    )
-    # Apply the limiter
-    apply_1m_tendency_limits!(
-        ᶜmp_tendency⁰, p.atmos.microphysics_tendency_timestepping,
-        thp, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, dt,
-    )
-
+    sgs_quad = p.atmos.sgs_quadrature
+    if not_quadrature(sgs_quad)
+        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+            ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+            ᶜT⁰, cmp, thp, $(tst), dt,
+        )
+    else
+        (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
+        corr_Tq = correlation_Tq(p.params)
+        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
+            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+            ᶜT′T′, ᶜq′q′, corr_Tq, $(tst), dt,
+        )
+    end
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
     # grid-mean state for the implicit Jacobian diagonal.
     # Assuming S = α q: ∂(dρq_dt)/∂(ρq) = ∂(dq⁰_dt)/∂q⁰, so the grid-mean derivative

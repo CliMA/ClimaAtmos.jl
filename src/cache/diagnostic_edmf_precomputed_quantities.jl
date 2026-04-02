@@ -800,52 +800,38 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             nh_pressure³_dragʲ_data_prev_halflevel =
                 nh_pressure³_dragʲ_prev_halflevel.components.data.:1
 
-            # Microphysics sources and sinks. To be applied in updraft continuity,
+            # Microphysics sources and sinks. To be applied in continuity,
             # moisture and energy equations for updrafts and grid mean.
-
-            # 0-moment microphysics: sink of q_tot from precipitation removal
             if microphysics_model isa EquilibriumMicrophysics0M
-                @. ᶜmp_tendencyʲ_prev_level.dq_tot_dt =
-                    BMT.bulk_microphysics_tendencies(
-                        BMT.Microphysics0Moment(),
-                        microphys_0m_params,
-                        thermo_params,
-                        Tʲ_prev_level,
-                        q_liqʲ_prev_level,
-                        q_iceʲ_prev_level,
-                        TD.q_vap_saturation(
-                            thermo_params, Tʲ_prev_level, ρʲ_prev_level,
-                        ),
-                    )
-                @. ᶜmp_tendencyʲ_prev_level.dq_tot_dt = limit_sink(
-                    ᶜmp_tendencyʲ_prev_level.dq_tot_dt,
-                    q_totʲ_prev_level, dt,
-                )
-                @. ᶜmp_tendencyʲ_prev_level.e_tot_hlpr =
-                    e_tot_0M_precipitation_sources_helper(
-                        thermo_params,
-                        Tʲ_prev_level,
-                        q_liq_prev_level,
-                        q_ice_prev_level,
-                        Φ_prev_level,
-                    )
-                # 1-moment microphysics: cloud water (liquid and ice) and
-                # precipitation (rain and snow) tendencies. q_tot is constant, because
-                # all the species are considered a part of the working fluid.
-            elseif microphysics_model isa NonEquilibriumMicrophysics1M
-                # Microphysics tendencies from the updrafts (using fused BMT API)
-                compute_1m_precipitation_tendencies!(
-                    ᶜmp_tendencyʲ_prev_level,
+                # Sink of total water and energy from precipitation removal.
+                @. ᶜmp_tendencyʲ_prev_level = microphysics_tendencies_0m(
+                    microphys_0m_params,
+                    thermo_params,
                     ρʲ_prev_level,
-                    q_totʲ_prev_level,
+                    Tʲ_prev_level,
+                    q_tot_nonnegʲ_prev_level,
+                    q_liqʲ_prev_level,
+                    q_iceʲ_prev_level,
+                    Φ_prev_level,
+                    $(p.atmos.microphysics_tendency_timestepping),
+                    dt,
+                )
+            elseif microphysics_model isa NonEquilibriumMicrophysics1M
+                # Cloud water (liquid and ice) and precipitation
+                # (rain and snow) tendencies. Total water is constant, because
+                # all water species are considered part of the working fluid.
+                @. ᶜmp_tendencyʲ_prev_level = microphysics_tendencies_1m(
+                    ρʲ_prev_level,
+                    q_tot_nonnegʲ_prev_level,
                     q_lclʲ_prev_level,
                     q_iclʲ_prev_level,
                     q_raiʲ_prev_level,
                     q_snoʲ_prev_level,
                     Tʲ_prev_level,
-                    dt,
                     microphys_1m_params,
                     thermo_params,
+                    $(p.atmos.microphysics_tendency_timestepping),
+                    dt,
                 )
             end
 
