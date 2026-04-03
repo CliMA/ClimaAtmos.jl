@@ -155,13 +155,13 @@ Every dt (integrator):
 | `non_orographic_gravity_wave` | `false` | Enable NOGW parameterization |
 | `nogw_beres_source` | `false` | Enable Beres convective source (requires EDMF turbconv) |
 | `dt_nogw` | `1800secs` | Callback interval for NOGW computation |
-| `beres_Q0_threshold` | `1.157e-4` | Min heating rate to activate (K/s, ~10 K/day) |
+| `beres_Q0_threshold` | `1.0e-5` | Min heating rate to activate (K/s, ~1 K/day) |
 | `beres_scale_factor` | `2.0e-6` | Amplitude scaling for Beres momentum flux |
 | `beres_sigma_x` | `4000.0` | Convective cell half-width (m) |
 | `beres_nu_min` | `8.727e-4` | Min angular frequency for integration (rad/s) |
 | `beres_nu_max` | `1.047e-2` | Max angular frequency for integration (rad/s) |
 | `beres_n_nu` | `9` | Quadrature points for frequency integration (must be 4k+1) |
-| `beres_h_heat_min` | `3000.0` | Min heating depth to activate (m) |
+| `beres_h_heat_min` | `1000.0` | Min heating depth to activate (m) |
 
 ### Diagnostics
 

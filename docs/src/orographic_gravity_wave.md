@@ -42,7 +42,7 @@ The tensor ``\textbf{T}``, which contains all relevant information including amp
 where ``h`` is the earth elevation and ``\chi`` is the velocity potential defined above.
 
 #### ``h_{max}``
-``h_{max}`` represents the effective maximum height of the orographic features within a grid cell relative to the mean surface. Using the 4th moment (rather than variance) emphasizes the tallest peaks — the ones that matter most for generating gravity waves — while still averaging over the subgrid terrain.
+``h_{max}`` represents the effective maximum height of the orographic features within a grid cell relative to the mean surface. Using the 4th moment (rather than variance) emphasizes the tallest peaks most relevant for generating gravity waves while still averaging over the subgrid terrain.
 
 The computation proceeds in two steps. First, a raw height statistic ``h_0`` is computed from the distance-weighted 4th moment of subgrid elevation deviations:
 ```math
