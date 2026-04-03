@@ -279,8 +279,8 @@ nogw_beres_source:
   help: "Use Beres (2004) convective source spectrum for tropical NOGW (requires EDMF) [`false` (default), `true`]"
   value: false
 beres_Q0_threshold:
-  help: "Minimum convective heating rate to activate Beres source (K/s, ~10 K/day = 1.157e-4)"
-  value: 1.157e-4
+  help: "Minimum convective heating rate to activate Beres source (K/s, ~1 K/day = 1e-5)"
+  value: 1.0e-5
 beres_scale_factor:
   help: "Dimensionless amplitude scaling for Beres momentum flux (controls total wave flux intensity)"
   value: 2.0e-6
@@ -298,7 +298,7 @@ beres_n_nu:
   value: 9
 beres_h_heat_min:
   help: "Minimum heating depth to activate Beres source (m), filters out shallow convection"
-  value: 3000.0
+  value: 1000.0
 dt_nogw:
   help: "Time between calling non-orographic gravity wave update"
   value: "1800secs"
