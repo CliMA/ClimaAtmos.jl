@@ -38,7 +38,10 @@ makedocs(;
         "Setups" => "setups.md",
         "Available Diagnostics" => "available_diagnostics.md",
         "Diagnostic EDMF Equations" => "diagnostic_edmf_equations.md",
-        "Gravity Wave Drag Parameterizations" => "gravity_wave.md",
+        "Gravity Wave Drag Parameterizations" => [
+            "Non-orographic Gravity Waves" => "non_orographic_gravity_wave.md",
+            "Orographic Gravity Waves" => "orographic_gravity_wave.md",
+        ],
         "Ocean Surface Albedo Parameterization" => "surface_albedo.md",
         "Topography Representation" => "topography.md",
         "Tracers" => "tracers.md",
