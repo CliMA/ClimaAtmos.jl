@@ -16,7 +16,6 @@ edmfx_nh_pressure: true
 edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_surface: SlabOceanSST #"EisenmanSeaIce" #"SlabOceanSST" # TODO implement sea ice
-moist: "nonequil"
 config: "column"
 z_max: 9000.0
 #dz_bottom: 20.0
@@ -35,7 +34,7 @@ netcdf_output_at_levels: true
 output_default_diagnostics: false
 rad: allskywithclear
 insolation: "larcform1"
-precip_model: "1M"
+microphysics_model: "1M"
 ode_algo: ARS343
 log_to_file: true
 
