@@ -62,10 +62,15 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_N_source = similar(Fields.level(Y.c.ρ, 1)),
             gw_beres_active = similar(Fields.level(Y.c.ρ, 1)),
             gw_beres_source = nothing,
+            gw_zbot = similar(Fields.level(Y.c.ρ, 1)),
+            gw_ztop = similar(Fields.level(Y.c.ρ, 1)),
+            gw_Q_conv = similar(Y.c.ρ),
             gw_reduce_result = similar(
                 Fields.level(Y.c.ρ, 1),
                 Tuple{FT, FT, FT, FT, FT, FT},
             ),
+            gw_deep_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
+            gw_cb_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
         )
     elseif issphere(axes(Y.c))
 
@@ -149,10 +154,15 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_N_source = similar(Fields.level(Y.c.ρ, 1)),
             gw_beres_active = similar(Fields.level(Y.c.ρ, 1)),
             gw_beres_source = gw.beres_source,
+            gw_zbot = similar(Fields.level(Y.c.ρ, 1)),
+            gw_ztop = similar(Fields.level(Y.c.ρ, 1)),
+            gw_Q_conv = similar(Y.c.ρ),
             gw_reduce_result = similar(
                 Fields.level(Y.c.ρ, 1),
                 Tuple{FT, FT, FT, FT, FT, FT},
             ),
+            gw_deep_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
+            gw_cb_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
         )
     else
         error("Only sphere and columns are supported")
@@ -332,7 +342,7 @@ function compute_beres_convective_heating!(Y, p)
     # _beres_dbg_count[] += 1
     # _do_debug = true  # always print — debugging active
 
-    (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs, ᶜh_tot) = p.precomputed
+    (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs, ᶜh_tot, ᶜuʲs) = p.precomputed
     (; ᶠu³) = p.precomputed
     (;
         gw_Q0,
@@ -342,7 +352,12 @@ function compute_beres_convective_heating!(Y, p)
         gw_N_source,
         gw_beres_active,
         gw_beres_source,
+        gw_zbot,
+        gw_ztop,
+        gw_Q_conv,
         gw_reduce_result,
+        gw_deep_count,
+        gw_cb_count,
         ᶜbuoyancy_frequency,
     ) = p.non_orographic_gravity_wave
 
@@ -415,61 +430,74 @@ function compute_beres_convective_heating!(Y, p)
     # Clean NaN/Inf from boundary stencil artifacts
     # @. ᶜQ_conv = ifelse(isnan(ᶜQ_conv) | isinf(ᶜQ_conv), FT(0), ᶜQ_conv)
 
-    # Compute total updraft condensate (q_liq + q_ice) and area fraction.
-    # Condensate (liq+ice) defines cloud base; area fraction defines cloud top.
-    # Must include ice to capture deep convection above the freezing level.
-    ᶜqc_up = p.scratch.ᶜtemp_scalar_3
+    # Persist Q_conv into cache before scratch field is reused
+    @. gw_Q_conv = ᶜQ_conv
+
+    # Compute max updraft vertical velocity and total area fraction (cell centers).
+    ᶜw_up = p.scratch.ᶜtemp_scalar_3
     ᶜa_up = p.scratch.ᶜtemp_scalar_4
-    ᶜqc_up .= FT(0)
+    ᶜw_up .= FT(0)
     ᶜa_up .= FT(0)
-    if has_prognostic_sgs
-        for j in 1:n_updrafts
-            ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
-            ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
-            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
-            @. ᶜqc_up += ᶜq_liqʲ + ᶜq_iceʲ
-            @. ᶜa_up += ifelse(ᶜρʲs.:($$j) > eps(FT), ᶜρaʲ / ᶜρʲs.:($$j), FT(0))
+    for j in 1:n_updrafts
+        @. ᶜw_up = max(ᶜw_up, w_component(Geometry.WVector(ᶜuʲs.:($$j))))
+        ᶜρaʲ = if has_prognostic_sgs
+            Y.c.sgsʲs.:($j).ρa
+        else
+            p.precomputed.ᶜρaʲs.:($j)
         end
-    elseif haskey(p.precomputed, :ᶜq_liqʲs)
-        ᶜq_liqʲs_all = p.precomputed.ᶜq_liqʲs
-        ᶜq_iceʲs_all = p.precomputed.ᶜq_iceʲs
-        ᶜρaʲs_all = p.precomputed.ᶜρaʲs
-        for j in 1:n_updrafts
-            @. ᶜqc_up += ᶜq_liqʲs_all.:($$j) + ᶜq_iceʲs_all.:($$j)
-            @. ᶜa_up += ifelse(ᶜρʲs.:($$j) > eps(FT), ᶜρaʲs_all.:($$j) / ᶜρʲs.:($$j), FT(0))
-        end
+        @. ᶜa_up += ifelse(ᶜρʲs.:($$j) > eps(FT), ᶜρaʲ / ᶜρʲs.:($$j), FT(0))
     end
 
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
-    # Pass 1: find convective envelope [z_bot, z_top]
-    # z_bot: cloud base via total condensate (q_liq + q_ice > threshold)
-    # z_top: plume top via updraft area fraction (active convective engine)
-    # This excludes sub-cloud BL thermals and passive anvil ice aloft.
-    qc_threshold = FT(1e-6)  # kg/kg — above FP32 noise, below any real cloud
-    a_threshold = FT(1e-4)   # area fraction — plume effectively dead below this
+    # Pass 1: find convective envelope [z_bot, z_top].
+    # z_peak: height of max updraft velocity (convective core)
+    # z_top: highest level where area fraction > threshold (plume top)
+    # z_bot = z_top - 2*z_peak, clamped to ≥ 3 km (above PBL)
     result_field = gw_reduce_result
-    input1 = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜqc_up, ᶜa_up)
+    input1 = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜw_up, ᶜa_up)
+    # Accumulator: (w_max, z_peak, z_top, _unused, _unused, _unused)
     reduce_init =
-        (FT(Inf), FT(-Inf), FT(0), FT(0), FT(0), FT(0))
-    Operators.column_reduce!(
-        result_field,
-        input1;
-        init = reduce_init,
-    ) do (z_bot_prev, z_top_prev, _3, _4, _5, _6), (z, qc, a_up)
-        has_cloud = qc > qc_threshold
-        has_plume = a_up > a_threshold
-        z_bot = ifelse(has_cloud, min(z_bot_prev, z), z_bot_prev)
-        z_top = ifelse(has_plume, max(z_top_prev, z), z_top_prev)
-        return (z_bot, z_top, _3, _4, _5, _6)
+        (FT(0), FT(0), FT(-Inf), FT(0), FT(0), FT(0))
+    let _a_thresh = FT(1e-3)
+        Operators.column_reduce!(
+            result_field,
+            input1;
+            init = reduce_init,
+        ) do (w_max, z_peak_prev, z_top_prev, _4, _5, _6), (z, w, a)
+            # Track height of maximum updraft velocity
+            new_peak = w > w_max
+            w_best = ifelse(new_peak, w, w_max)
+            z_peak = ifelse(new_peak, z, z_peak_prev)
+            # Track highest level where area fraction exceeds threshold
+            z_top = ifelse(a > _a_thresh, max(z_top_prev, z), z_top_prev)
+            return (w_best, z_peak, z_top, _4, _5, _6)
+        end
     end
 
-    # Store z_bot/z_top into 2D fields before reusing gw_reduce_result
-    @. gw_u_heat = result_field.:1   # temporarily holds z_bot
-    @. gw_v_heat = result_field.:2   # temporarily holds z_top
+    # Extract results and compute z_bot
+    @. gw_N_source = result_field.:2   # temporarily holds z_peak
+    @. gw_v_heat = result_field.:3     # z_top
+    # z_bot = 2*z_peak - z_top, clamped above 3 km to exclude BL thermals
+    # (mirrors the upper half of the plume below the peak)
+    @. gw_u_heat = max(
+        FT(2) * gw_N_source - gw_v_heat,
+        FT(3000),
+    )
+    # Sanitize: if z_top was never set (no active updraft), zero everything
+    @. gw_u_heat = ifelse(gw_v_heat < FT(0), FT(0), gw_u_heat)
+    @. gw_v_heat = ifelse(gw_v_heat < FT(0), FT(0), gw_v_heat)
     @. gw_h_heat = max(gw_v_heat - gw_u_heat, FT(0))
     @. gw_h_heat = ifelse(isnan(gw_h_heat) | isinf(gw_h_heat), FT(0), gw_h_heat)
+
+    # Persist zbot/ztop before gw_u_heat/gw_v_heat get overwritten by mean winds
+    @. gw_zbot = gw_u_heat
+    @. gw_ztop = gw_v_heat
+
+    # Count callback invocations and deep convection events (z_top > 10km)
+    @. gw_cb_count += FT(1)
+    @. gw_deep_count += ifelse(gw_v_heat > FT(10000), FT(1), FT(0))
 
     # Pass 2: within [z_bot, z_top], compute:
     #   - Q₀ integral: Σ(Q_net · Δz) for Beres half-sine conversion
@@ -482,7 +510,7 @@ function compute_beres_convective_heating!(Y, p)
     # Precompute 3D envelope mask (2D z_bot/z_top broadcast over column)
     ᶜz_bot = gw_u_heat  # 2D field, broadcasts over column via @.
     ᶜz_top = gw_v_heat
-    ᶜin_env = p.scratch.ᶜtemp_scalar_3  # reuse (ᶜqc_up no longer needed)
+    ᶜin_env = p.scratch.ᶜtemp_scalar_3  # reuse (ᶜw_up no longer needed)
     @. ᶜin_env = ifelse((ᶜz >= ᶜz_bot) & (ᶜz <= ᶜz_top), FT(1), FT(0))
     input2 = Base.Broadcast.broadcasted(
         tuple,
@@ -495,14 +523,16 @@ function compute_beres_convective_heating!(Y, p)
         ᶜin_env,
     )
     # Accumulator: (Q_integral, u_sum, v_sum, N_sum, mass_sum, _unused)
-    reduce_init2 = (FT(0), FT(0), FT(0), FT(0), FT(0), FT(0))
+    _zero = FT(0)
+    _half = FT(0.5)
+    reduce_init2 = (_zero, _zero, _zero, _zero, _zero, _zero)
     Operators.column_reduce!(
         result_field,
         input2;
         init = reduce_init2,
     ) do (Q_int_prev, u_sum_prev, v_sum_prev, N_sum_prev, m_sum_prev, _6),
     (Q, u, v, N, ρ, dz, env)
-        active = env > FT(0.5)
+        active = env > _half
         ρdz = ρ * dz
         Q_int = ifelse(active, Q_int_prev + Q * dz, Q_int_prev)
         u_sum = ifelse(active, u_sum_prev + u * ρdz, u_sum_prev)

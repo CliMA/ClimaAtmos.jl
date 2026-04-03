@@ -446,7 +446,7 @@ Base.@kwdef struct BeresSourceParams{FT}
     n_ν::Int             # quadrature points (must be 4k+1: 5, 9, 13...)
     n_h_avg::Int = 1     # number of h values to average over (1 = no averaging)
     Δh_frac::FT = FT(0.1) # fractional half-range for h averaging: h ± Δh_frac * h
-    h_heat_min::FT = FT(3000.0) # m, minimum heating depth to activate (filters shallow convection)
+    h_heat_min::FT = FT(1000.0) # m, minimum heating depth to activate (filters shallow convection)
 end
 
 Base.@kwdef struct NonOrographicGravityWave{FT, BS} <: AbstractGravityWave
