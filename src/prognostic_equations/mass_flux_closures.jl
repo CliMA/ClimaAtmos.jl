@@ -245,16 +245,6 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
             @. Y.f.sgsʲs.:($$j).u₃ =
                 C3(max(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0))
 
-            # clip updraft velocity to zero if the updraft air is heavier than the grid-mean
-            @. Y.f.sgsʲs.:($$j).u₃ =
-                ifelse(ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) > 0, C3(0), Y.f.sgsʲs.:($$j).u₃)
-
-            # clip updraft area fraction to zero if the cell-averaged velocity is negligible.
-            @. Y.c.sgsʲs.:($$j).ρa = ifelse(
-                ᶜinterp(Y.f.sgsʲs.:($$j).u₃.components.data.:1) < eps(FT),
-                0,
-                Y.c.sgsʲs.:($$j).ρa,
-            )
             # clip updraft velocity to zero if the face-averaged area fraction is negligible.
             @. Y.f.sgsʲs.:($$j).u₃ =
                 ifelse(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) < eps(FT), C3(0), Y.f.sgsʲs.:($$j).u₃)

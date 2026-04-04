@@ -1,4 +1,4 @@
-334
+335
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+335
+- Remove buoyancy clipping and allow negative buoyancy; solve sgs updraft velocity equation 
+  analytically in initialize_sgs_u₃ (and use 0 number of Newton iterations for solving this 
+  equation numerically by default.)
+
 334
 - Change prognostic variable names in 1M scheme: liq->lcl, ice->icl
 

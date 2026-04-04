@@ -388,7 +388,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         w_over_dz_val = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar_4, 1))
         @. entr_int_val += ifelse(buoyancy_flux_val < 0, 0, w_over_dz_val)
 
-        @. ᶠρ_diffʲs.:($$j) = min(0, ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ)) / ᶠinterp(ᶜρʲs.:($$j))
+        @. ᶠρ_diffʲs.:($$j) = ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) / ᶠinterp(ᶜρʲs.:($$j))
     end
 
     # TODO: Make strain_rate_norm calculation a function in eddy_diffusion_closures
