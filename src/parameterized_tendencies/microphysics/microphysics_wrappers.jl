@@ -245,6 +245,16 @@ NamedTuple with microphysics source terms:
 - `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
+
+# Note on Variances
+Call sites must convert θ-based variances to T-based variances using the chain rule:
+```julia
+∂T_∂θ = ... # (∂T/∂θ_liq_ice) computed at grid mean state
+T′T′ = (∂T_∂θ)² × θ′θ′
+```
+The T–q correlation is scalar `correlation_Tq(params)` unless subcell geometric
+variance is enabled, in which case call sites may pass a per-cell effective correlation
+from `sgs_quadrature_Tq_moments` (see `materialize_sgs_quadrature_moments!`).
 """
 @inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
     ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, tst, dt,

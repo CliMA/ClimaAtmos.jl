@@ -1,0 +1,7 @@
+# Stub: cfSite / GCM-driven SCM-style case (not run in the default matrix).
+# Forcing and LES reference paths would mirror `calibration/experiments/gcm_driven_scm`.
+# initial_condition: <set via driver>
+# external_forcing: ...
+# See README.md in this directory.
+case_name: cfsite_stub
+enabled: false

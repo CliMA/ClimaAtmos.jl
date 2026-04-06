@@ -7,6 +7,22 @@ using ClimaAtmos
 
 @testset "SGS Quadrature" begin
 
+    @testset "subcell geometric variance increment" begin
+        # Arguments are squared vertical gradients (∂q/∂z)² and (∂T/∂z)²
+        Δq, ΔT =
+            ClimaAtmos.subcell_geometric_variance_increment(2.0, 0.01, 0.16)
+        @test Δq ≈ (1 / 12) * 4 * 0.01
+        @test ΔT ≈ (1 / 12) * 4 * 0.16
+    end
+
+    @testset "subcell geometric T–q covariance" begin
+        Δz = 2.0
+        ∂T∂θ = 0.5
+        dot_wq_wθ = 0.02  # e.g. (∂q/∂z)(∂θ/∂z) in a column
+        cov_geom = ClimaAtmos.subcell_geometric_covariance_Tq(Δz, ∂T∂θ, dot_wq_wθ)
+        @test cov_geom ≈ (1 / 12) * Δz^2 * ∂T∂θ * dot_wq_wθ
+    end
+
     @testset "Gauss-Hermite Quadrature" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin

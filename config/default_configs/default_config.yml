@@ -251,6 +251,9 @@ sgs_distribution:
 quadrature_order:
   help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 2"
   value: 3
+sgs_quadrature_subcell_geometric_variance:
+  help: "Add subcell geometric variance (1/12)Δz² vertical-gradient contributions to (q_tot,T) variances used only for SGS quadrature and SGS saturation adjustment; does not change cached covariances used for cloud fraction [`false` (default), `true`]"
+  value: false
 perf_summary:
   help: "Flag for collecting performance summary information"
   value: false

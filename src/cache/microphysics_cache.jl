@@ -8,6 +8,7 @@ import CloudMicrophysics.Microphysics2M as CM2
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 import Thermodynamics as TD
+import LinearAlgebra: dot
 import ClimaCore.Operators as Operators
 import ClimaCore.Fields as Fields
 
@@ -40,6 +41,117 @@ and density-weighted mass checks — anywhere the exact value does not
 matter as long as it is small but safely above underflow.
 """
 ϵ_numerics(FT) = cbrt(floatmin(FT))
+
+"""
+    q_min(FT)
+
+Minimum specific humidity threshold [kg/kg].  Used as a denominator floor
+in the Jacobian S/q approximation, condensate scaling, and SGS saturation
+weight adjustment — anywhere a physical humidity value is compared or
+divided by.
+"""
+q_min(FT) = FT(1e-10)
+
+"""
+    subcell_geometric_variance_increment(Δz, dqdz_sq, dTdz_sq)
+
+Return `(Δq′q′, ΔT′T′)` from subcell linear reconstruction over thickness `Δz`
+(``(1/12) Δz^2 (∂q/∂z)^2`` and ``(1/12) Δz^2 (∂T/∂z)^2``). Arguments `dqdz_sq`
+and `dTdz_sq` are **squared** vertical derivatives in quadrature variables.
+"""
+@inline function subcell_geometric_variance_increment(Δz, dqdz_sq, dTdz_sq)
+    geom = (one(typeof(Δz)) / 12) * Δz^2
+    return geom * dqdz_sq, geom * dTdz_sq
+end
+
+"""
+    subcell_geometric_covariance_Tq(Δz, ∂T∂θ_li, dot_wq_wθ)
+
+Subcell geometric contribution to ``\\mathrm{Cov}(T', q')`` for a linear-in-z profile:
+``(1/12) Δz^2 (∂T/∂z)(∂q/∂z)`` with ``∂T/∂z ≈ (∂T/∂θ_{li})(∂θ_{li}/∂z)``.
+Here `dot_wq_wθ` is `dot(WVector(∇q), WVector(∇θ_{li}))` (column geometry).
+"""
+@inline function subcell_geometric_covariance_Tq(Δz, ∂T∂θ_li, dot_wq_wθ)
+    return (one(typeof(Δz)) / 12) * Δz^2 * ∂T∂θ_li * dot_wq_wθ
+end
+
+function materialize_sgs_quadrature_moments!(
+    ᶜq_var_out,
+    ᶜT_var_out,
+    ᶜcorr_out,
+    Y,
+    p,
+    ᶜq′q′,
+    ᶜT′T′,
+    thermo_params,
+)
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
+    ᶜ∂T_∂θ_buf = p.scratch.ᶜdT_dθ_li_buffer
+    compute_∂T_∂θ!(ᶜ∂T_∂θ_buf, Y, p, thermo_params)
+    FT = eltype(ᶜdz)
+    twelfth = one(FT) / 12
+    ρ_param = correlation_Tq(p.params)
+    ε = ϵ_numerics(FT)
+    # WVector must be fused inside `@.` (per-cell), not applied to whole Fields.
+    @. ᶜq_var_out =
+        ᶜq′q′ +
+        twelfth *
+        ᶜdz^2 *
+        dot(
+            Geometry.WVector(ᶜgradᵥ_q_tot),
+            Geometry.WVector(ᶜgradᵥ_q_tot),
+        )
+    @. ᶜT_var_out =
+        ᶜT′T′ +
+        twelfth *
+        ᶜdz^2 *
+        ᶜ∂T_∂θ_buf^2 *
+        dot(
+            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+        )
+    @. ᶜcorr_out = clamp(
+        (
+            ρ_param *
+            sqrt(max(zero(FT), ᶜq′q′)) *
+            sqrt(max(zero(FT), ᶜT′T′)) +
+            twelfth *
+            ᶜdz^2 *
+            ᶜ∂T_∂θ_buf *
+            dot(
+                Geometry.WVector(ᶜgradᵥ_q_tot),
+                Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+            )
+        ) /
+        max(
+            oftype(ᶜq_var_out, ε),
+            sqrt(max(zero(FT), ᶜq_var_out)) * sqrt(max(zero(FT), ᶜT_var_out)),
+        ),
+        -one(FT),
+        one(FT),
+    )
+    return nothing
+end
+
+@inline function sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thermo_params)
+    if p.atmos.sgs_quadrature_subcell_geometric_variance
+        (; ᶜsgs_quad_var_q, ᶜsgs_quad_var_T, ᶜsgs_quad_corr) = p.scratch
+        materialize_sgs_quadrature_moments!(
+            ᶜsgs_quad_var_q,
+            ᶜsgs_quad_var_T,
+            ᶜsgs_quad_corr,
+            Y,
+            p,
+            ᶜq′q′,
+            ᶜT′T′,
+            thermo_params,
+        )
+        return ᶜsgs_quad_var_T, ᶜsgs_quad_var_q, ᶜsgs_quad_corr
+    else
+        return ᶜT′T′, ᶜq′q′, nothing
+    end
+end
 
 """
     set_precipitation_velocities!(Y, p, microphysics_model, turbconv_model)
@@ -895,10 +1007,11 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
         # are SGS-averaged so that the energy helper is consistent with
         # the nonlinear dependence on condensate at each quadrature point.
         (; ᶜT′T′, ᶜq′q′) = p.precomputed
-        corr_Tq = correlation_Tq(p.params)
+        ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+        corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
         @. ᶜmp_tendency = microphysics_tendencies_0m(
             $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
-            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ, $(tst), dt,
+            ᶜσT², ᶜσq², corr_Tq, ᶜΦ, $(tst), dt,
         )
     end
 
@@ -938,10 +1051,11 @@ function set_microphysics_tendency_cache!(
         )
     else
         (; ᶜT′T′, ᶜq′q′) = p.precomputed
-        corr_Tq = correlation_Tq(p.params)
+        ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+        corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
         @. ᶜmp_tendency = microphysics_tendencies_0m(
             $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
-            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ, $(tst), dt,
+            ᶜσT², ᶜσq², corr_Tq, ᶜΦ, $(tst), dt,
         )
     end
     # Compute derivative
@@ -1010,10 +1124,11 @@ function set_microphysics_tendency_cache!(
     else
         # Evaluate over quadrature points.
         (; ᶜT′T′, ᶜq′q′) = p.precomputed
-        corr_Tq = correlation_Tq(p.params)
+        ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+        corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
         @. ᶜmp_tendency⁰ = microphysics_tendencies_0m(
             $(sgs_quad), cm0, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
-            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ, $(tst), dt,
+            ᶜσT², ᶜσq², corr_Tq, ᶜΦ, $(tst), dt,
         )
     end
 
@@ -1068,11 +1183,12 @@ function set_microphysics_tendency_cache!(
         )
     else
         (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
-        corr_Tq = correlation_Tq(p.params)
+        ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+        corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, corr_Tq, $(tst), dt,
+            ᶜσT², ᶜσq², corr_Tq, $(tst), dt,
         )
     end
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
@@ -1111,11 +1227,12 @@ function set_microphysics_tendency_cache!(
         )
     else
         (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
-        corr_Tq = correlation_Tq(p.params)
+        ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+        corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, corr_Tq, $(tst), dt,
+            ᶜσT², ᶜσq², corr_Tq, $(tst), dt,
         )
     end
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
@@ -1177,11 +1294,12 @@ function set_microphysics_tendency_cache!(
         )
     else
         (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
-        corr_Tq = correlation_Tq(p.params)
+        ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+        corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, corr_Tq, $(tst), dt,
+            ᶜσT², ᶜσq², corr_Tq, $(tst), dt,
         )
     end
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
