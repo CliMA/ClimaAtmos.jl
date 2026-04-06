@@ -47,7 +47,6 @@ known_dependencies = Set([
     "Dates",
     "Flux", # for machine learning based parameterizations
     "ForwardDiff", # for automatic differentiation in the implicit solver
-    "Glib_jll", # workaround for GHA failure
     "Insolation",
     "Interpolations",
     "JLD2", # for loading Flux models
