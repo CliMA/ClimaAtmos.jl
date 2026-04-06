@@ -223,7 +223,7 @@ v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
     p.orographic_gravity_wave
 (; values_at_z_pbl, topo_info) = p.orographic_gravity_wave
 (; ᶜdTdz, ᶜbuoyancy_frequency) = p.orographic_gravity_wave
-# (; ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
+# (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
 (; params) = p
 
 # Extract parameters
@@ -1615,7 +1615,7 @@ if should_run(:figure4)
         p.orographic_gravity_wave
     (; values_at_z_pbl, topo_info) = p.orographic_gravity_wave
     (; ᶜdTdz, ᶜbuoyancy_frequency) = p.orographic_gravity_wave
-    # (; ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
+    # (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; params) = p
 
     # Extract parameters
@@ -2094,7 +2094,7 @@ if should_run(:figure7)
         p.orographic_gravity_wave
     (; values_at_z_pbl, topo_info) = p.orographic_gravity_wave
     (; ᶜdTdz, ᶜbuoyancy_frequency) = p.orographic_gravity_wave
-    # (; ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice) = p.precomputed
+    # (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; params) = p
 
     # Extract parameters

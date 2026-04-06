@@ -72,7 +72,7 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     sa_result_level,
     ρ_level,
     T_level,
-    q_tot_safe_level,
+    q_tot_nonneg_level,
     q_liq_level,
     q_ice_level,
     mse_level,
@@ -82,14 +82,14 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
 )
     FT = eltype(thermo_params)
 
-    @. q_tot_safe_level = max(0, q_tot_level)
+    @. q_tot_nonneg_level = max(0, q_tot_level)
     # Perform saturation adjustment to get T, q_liq, q_ice
     @. sa_result_level = saturation_adjustment_tuple(
         thermo_params,
         TD.ph(),
         p_level,
         mse_level - Φ_level,
-        q_tot_safe_level,
+        q_tot_nonneg_level,
     )
     # Extract primitive values from thermo state
     @. T_level = sa_result_level.T
@@ -100,7 +100,7 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
         thermo_params,
         T_level,
         p_level,
-        q_tot_safe_level,
+        q_tot_nonneg_level,
         q_liq_level,
         q_ice_level,
     )
@@ -110,7 +110,7 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     thermo_params,
     ρ_level,
     T_level,
-    q_tot_safe_level,
+    q_tot_nonneg_level,
     q_liq_level,
     q_ice_level,
     mse_level,
@@ -126,12 +126,12 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     @. q_liq_level = max(0, q_lcl_level + q_rai_level)
     @. q_ice_level = max(0, q_icl_level + q_sno_level)
     # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-    @. q_tot_safe_level = max(q_liq_level + q_ice_level, q_tot_level)
+    @. q_tot_nonneg_level = max(q_liq_level + q_ice_level, q_tot_level)
     @. T_level = TD.air_temperature(
         thermo_params,
         TD.ph(),
         mse_level - Φ_level,
-        q_tot_safe_level,
+        q_tot_nonneg_level,
         q_liq_level,
         q_ice_level,
     )
@@ -139,7 +139,7 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
         thermo_params,
         T_level,
         p_level,
-        q_tot_safe_level,
+        q_tot_nonneg_level,
         q_liq_level,
         q_ice_level,
     )
@@ -194,7 +194,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.precomputed.sfc_conditions
     (; ᶜρaʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜρʲs) = p.precomputed
-    (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    (; ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰) = p.precomputed
 
     (; params) = p
@@ -259,7 +259,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
         ᶜρʲ = ᶜρʲs.:($j)
         ᶜq_totʲ = ᶜq_totʲs.:($j)
         ᶜTʲ = ᶜTʲs.:($j)
-        ᶜq_tot_safeʲ = ᶜq_tot_safeʲs.:($j)
+        ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
         ᶜq_liqʲ = ᶜq_liqʲs.:($j)
         ᶜq_iceʲ = ᶜq_iceʲs.:($j)
 
@@ -270,7 +270,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
         q_totʲ_int_level = Fields.field_values(Fields.level(ᶜq_totʲ, 1))
         ρʲ_int_level = Fields.field_values(Fields.level(ᶜρʲ, 1))
         Tʲ_int_level = Fields.field_values(Fields.level(ᶜTʲ, 1))
-        q_tot_safeʲ_int_level = Fields.field_values(Fields.level(ᶜq_tot_safeʲ, 1))
+        q_tot_nonnegʲ_int_level = Fields.field_values(Fields.level(ᶜq_tot_nonnegʲ, 1))
         q_liqʲ_int_level = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
         q_iceʲ_int_level = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
 
@@ -370,7 +370,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
                 thermo_params,
                 ρʲ_int_level,
                 Tʲ_int_level,
-                q_tot_safeʲ_int_level,
+                q_tot_nonnegʲ_int_level,
                 q_liqʲ_int_level,
                 q_iceʲ_int_level,
                 mseʲ_int_level,
@@ -390,7 +390,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
                 sa_result_int_level,
                 ρʲ_int_level,
                 Tʲ_int_level,
-                q_tot_safeʲ_int_level,
+                q_tot_nonnegʲ_int_level,
                 q_liqʲ_int_level,
                 q_iceʲ_int_level,
                 mseʲ_int_level,
@@ -488,7 +488,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; params) = p
     (; dt) = p
     (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜT, ᶜh_tot, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, ᶜK) = p.precomputed
+    (; ᶜp, ᶠu³, ᶜT, ᶜh_tot, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜK) = p.precomputed
     (;
         ᶜρaʲs,
         ᶠu³ʲs,
@@ -502,7 +502,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         ᶠnh_pressure³_buoyʲs,
         ᶠnh_pressure³_dragʲs,
     ) = p.precomputed
-    (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    (; ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰) = p.precomputed
 
     if microphysics_model isa NonEquilibriumMicrophysics1M
@@ -569,7 +569,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         h_tot_prev_level = Fields.field_values(Fields.level(ᶜh_tot, i - 1))
         q_tot_prev_level = Fields.field_values(Fields.level(ᶜq_tot, i - 1))
         T_prev_level = Fields.field_values(Fields.level(ᶜT, i - 1))
-        q_tot_safe_prev_level = Fields.field_values(Fields.level(ᶜq_tot_safe, i - 1))
+        q_tot_nonneg_prev_level = Fields.field_values(Fields.level(ᶜq_tot_nonneg, i - 1))
         q_liq_prev_level = Fields.field_values(Fields.level(ᶜq_liq, i - 1))
         q_ice_prev_level = Fields.field_values(Fields.level(ᶜq_ice, i - 1))
         p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
@@ -604,7 +604,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ᶜρʲ = ᶜρʲs.:($j)
             ᶜq_totʲ = ᶜq_totʲs.:($j)
             ᶜTʲ = ᶜTʲs.:($j)
-            ᶜq_tot_safeʲ = ᶜq_tot_safeʲs.:($j)
+            ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
             ᶜq_liqʲ = ᶜq_liqʲs.:($j)
             ᶜq_iceʲ = ᶜq_iceʲs.:($j)
             ᶜentrʲ = ᶜentrʲs.:($j)
@@ -631,7 +631,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             q_totʲ_level = Fields.field_values(Fields.level(ᶜq_totʲ, i))
             ρʲ_level = Fields.field_values(Fields.level(ᶜρʲ, i))
             Tʲ_level = Fields.field_values(Fields.level(ᶜTʲ, i))
-            q_tot_safeʲ_level = Fields.field_values(Fields.level(ᶜq_tot_safeʲ, i))
+            q_tot_nonnegʲ_level = Fields.field_values(Fields.level(ᶜq_tot_nonnegʲ, i))
             q_liqʲ_level = Fields.field_values(Fields.level(ᶜq_liqʲ, i))
             q_iceʲ_level = Fields.field_values(Fields.level(ᶜq_iceʲ, i))
 
@@ -644,9 +644,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 Fields.field_values(Fields.level(ᶜq_totʲ, i - 1))
             ρʲ_prev_level = Fields.field_values(Fields.level(ᶜρʲ, i - 1))
             Tʲ_prev_level = Fields.field_values(Fields.level(ᶜTʲ, i - 1))
-            q_tot_safeʲ_prev_level = Fields.field_values(Fields.level(ᶜq_tot_safeʲ, i - 1))
-            q_liqʲ_prev_level = Fields.field_values(Fields.level(ᶜq_liqʲ, i - 1))
-            q_iceʲ_prev_level = Fields.field_values(Fields.level(ᶜq_iceʲ, i - 1))
+            q_tot_nonnegʲ_prev_level =
+                Fields.field_values(Fields.level(ᶜq_tot_nonnegʲ, i - 1))
+            q_liqʲ_prev_level =
+                Fields.field_values(Fields.level(ᶜq_liqʲ, i - 1))
+            q_iceʲ_prev_level =
+                Fields.field_values(Fields.level(ᶜq_iceʲ, i - 1))
             ᶜgradᵥ_ᶠΦ_prev_level =
                 Fields.field_values(Fields.level(ᶜgradᵥ_ᶠΦ, i - 1))
             entrʲ_prev_level = Fields.field_values(Fields.level(ᶜentrʲ, i - 1))
@@ -694,7 +697,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 thermo_params,
                 max(Tʲ_prev_level, CAP.T_min_sgs(params)),
                 p_prev_level,
-                q_tot_safeʲ_prev_level,
+                q_tot_nonnegʲ_prev_level,
                 q_liqʲ_prev_level,
                 q_iceʲ_prev_level,
             )
@@ -703,7 +706,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 thermo_params,
                 max(T_prev_level, CAP.T_min_sgs(params)),
                 p_prev_level,
-                q_tot_safe_prev_level,
+                q_tot_nonneg_prev_level,
                 q_liq_prev_level,
                 q_ice_prev_level,
             )
@@ -1217,7 +1220,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     thermo_params,
                     ρʲ_level,
                     Tʲ_level,
-                    q_tot_safeʲ_level,
+                    q_tot_nonnegʲ_level,
                     q_liqʲ_level,
                     q_iceʲ_level,
                     mseʲ_level,
@@ -1237,7 +1240,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     sa_result_level,
                     ρʲ_level,
                     Tʲ_level,
-                    q_tot_safeʲ_level,
+                    q_tot_nonnegʲ_level,
                     q_liqʲ_level,
                     q_iceʲ_level,
                     mseʲ_level,

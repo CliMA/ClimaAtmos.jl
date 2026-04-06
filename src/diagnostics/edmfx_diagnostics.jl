@@ -86,11 +86,11 @@ compute_thetaaup(_, _, _, turbconv_model) =
 
 function compute_thetaaup(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX})
     thermo_params = CAP.thermodynamics_params(cache.params)
-    (; ᶜTʲs, ᶜρʲs, ᶜq_tot_safeʲs, ᶜq_liqʲs, ᶜq_iceʲs) = cache.precomputed
+    (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = cache.precomputed
     return @. lazy(
         TD.potential_temperature(
             thermo_params,
-            ᶜTʲs.:1, ᶜρʲs.:1, ᶜq_tot_safeʲs.:1, ᶜq_liqʲs.:1, ᶜq_iceʲs.:1,
+            ᶜTʲs.:1, ᶜρʲs.:1, ᶜq_tot_nonnegʲs.:1, ᶜq_liqʲs.:1, ᶜq_iceʲs.:1,
         ),
     )
 end
@@ -110,10 +110,11 @@ compute_haup(_, _, _, turbconv_model) = error_diagnostic_variable("haup", turbco
 
 function compute_haup(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX})
     thermo_params = CAP.thermodynamics_params(cache.params)
-    (; ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liqʲs, ᶜq_iceʲs) = cache.precomputed
+    (; ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = cache.precomputed
     return @. lazy(
         TD.enthalpy(
-            thermo_params, ᶜTʲs.:1, ᶜq_tot_safeʲs.:1, ᶜq_liqʲs.:1, ᶜq_iceʲs.:1,
+            thermo_params, ᶜTʲs.:1, ᶜq_tot_nonnegʲs.:1, ᶜq_liqʲs.:1,
+            ᶜq_iceʲs.:1,
         ),
     )
 end
@@ -136,7 +137,7 @@ compute_husup(_, _, _, _, _) =
 
 # TODO: use the actual q_tot
 compute_husup(_, cache, _, ::MoistMicrophysics, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
-    cache.precomputed.ᶜq_tot_safeʲs.:1
+    cache.precomputed.ᶜq_tot_nonnegʲs.:1
 
 add_diagnostic_variable!(short_name = "husup", units = "kg kg^-1",
     long_name = "Updraft Specific Humidity",
@@ -158,10 +159,11 @@ function compute_hurup(_, cache, _,
     ::MoistMicrophysics, ::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
-    (; ᶜTʲs, ᶜp, ᶜq_tot_safeʲs, ᶜq_liqʲs, ᶜq_iceʲs) = cache.precomputed
+    (; ᶜTʲs, ᶜp, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = cache.precomputed
     return @. lazy(
         TD.relative_humidity(
-            thermo_params, ᶜTʲs.:1, ᶜp, ᶜq_tot_safeʲs.:1, ᶜq_liqʲs.:1, ᶜq_iceʲs.:1,
+            thermo_params, ᶜTʲs.:1, ᶜp, ᶜq_tot_nonnegʲs.:1, ᶜq_liqʲs.:1,
+            ᶜq_iceʲs.:1,
         ),
     )
 end
@@ -374,9 +376,16 @@ compute_aren(_, _, _, turbconv_model) = error_diagnostic_variable("aren", turbco
 function compute_aren(state, cache, _, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))
-    (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
+    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
     ᶜρ⁰ = @. lazy(
-        TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰),
+        TD.air_density(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+        ),
     )
     return @. lazy(draft_area(ᶜρa⁰, ᶜρ⁰))
 end
@@ -399,9 +408,16 @@ compute_rhoaen(_, _, _, turbconv_model) =
 
 function compute_rhoaen(_, cache, _, ::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
-    (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
+    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
     return @. lazy(
-        TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰),
+        TD.air_density(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+        ),
     )
 end
 
@@ -450,13 +466,20 @@ compute_thetaaen(_, _, _, turbconv_model) =
 
 function compute_thetaaen(_, cache, _, ::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
-    (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
+    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
     ᶜρ⁰ = @. lazy(
-        TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰),
+        TD.air_density(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+        ),
     )
     return @. lazy(
         TD.potential_temperature(
-            thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+            thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
         ),
     )
 end
@@ -475,8 +498,10 @@ compute_haen(_, _, _, turbconv_model) = error_diagnostic_variable("haen", turbco
 
 function compute_haen(_, cache, _, ::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
-    (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
-    return @. lazy(TD.enthalpy(thermo_params, ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰))
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
+    return @. lazy(
+        TD.enthalpy(thermo_params, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
+    )
 end
 
 add_diagnostic_variable!(short_name = "haen", units = "K",
@@ -495,7 +520,7 @@ compute_husen(_, _, _, _, _) =
                                with a moist model and with EDMFX")
 
 compute_husen(_, cache, _, ::MoistMicrophysics, ::PrognosticEDMFX) =
-    cache.precomputed.ᶜq_tot_safe⁰
+    cache.precomputed.ᶜq_tot_nonneg⁰
 
 add_diagnostic_variable!(short_name = "husen", units = "kg kg^-1",
     long_name = "Environment Specific Humidity",
@@ -514,10 +539,10 @@ compute_huren(_, _, _, _, _) =
 
 function compute_huren(_, cache, _, ::MoistMicrophysics, ::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
-    (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
+    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
     return @. lazy(
         TD.relative_humidity(
-            thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+            thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
         ),
     )
 end

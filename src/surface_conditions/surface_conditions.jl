@@ -14,14 +14,14 @@ function update_surface_conditions!(Y, p, t)
     )
     int_local_geometry_values =
         Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
-    (; ᶜT, ᶜq_tot_safe, ᶜq_liq, ᶜq_ice, ᶜu, sfc_conditions) = p.precomputed
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜu, sfc_conditions) = p.precomputed
     (; params, sfc_setup, atmos) = p
     thermo_params = CAP.thermodynamics_params(params)
     surface_fluxes_params = CAP.surface_fluxes_params(params)
     surface_temp_params = CAP.surface_temp_params(params)
     int_T_values = Fields.field_values(Fields.level(ᶜT, 1))
     int_ρ_values = Fields.field_values(Fields.level(Y.c.ρ, 1))
-    int_q_tot_values = Fields.field_values(Fields.level(ᶜq_tot_safe, 1))
+    int_q_tot_values = Fields.field_values(Fields.level(ᶜq_tot_nonneg, 1))
     int_q_liq_values = Fields.field_values(Fields.level(ᶜq_liq, 1))
     int_q_ice_values = Fields.field_values(Fields.level(ᶜq_ice, 1))
     int_u_values = Fields.field_values(Fields.level(ᶜu, 1))
