@@ -1,27 +1,7 @@
 import LinearAlgebra: I, Adjoint
 
 using ClimaCore.MatrixFields
-import ClimaCore.MatrixFields: @name, copyto_foreach!
-
-# Mod-only optimization: avoid FieldNameSet.foreach in ClimaCore's default
-# copyto_foreach! by iterating pairs directly. This preserves semantics while
-# reducing key-set traversal overhead in hot materialization paths.
-function copyto_foreach!(
-    dest::MatrixFields.FieldNameDict,
-    vector_or_matrix::MatrixFields.FieldNameDict,
-)
-    MatrixFields.unrolled_foreach(pairs(vector_or_matrix)) do pair
-        key, entry = pair
-        dest_entry = dest[key]
-        if dest_entry isa MatrixFields.ScalingFieldMatrixEntry
-            dest_entry == entry || error("matrix entry at $key is immutable")
-        elseif entry isa MatrixFields.ScalingFieldMatrixEntry
-            dest_entry .= (entry,)
-        else
-            dest_entry .= entry
-        end
-    end
-end
+import ClimaCore.MatrixFields: @name
 
 abstract type DerivativeFlag end
 struct UseDerivative <: DerivativeFlag end
@@ -1305,12 +1285,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ᶜtracer_advection_matrix ⋅ ᶠset_tracer_upwind_matrix_bcs(
                             ᶠtracer_upwind_matrix(ᶠu³ʲs.:(1)),
                         )
-                    @. ᶜtridiagonal_matrix_scalar =
-                        dtγ *
-                        ᶜtridiagonal_matrix ⋅
-                        DiagonalMatrixRow(
-                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                        )
                     MatrixFields.unrolled_foreach(
                         microphysics_tracers,
                     ) do (ρχ_name, χʲ_name, χ_name)
@@ -1319,7 +1293,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
                         ∂ᶜρχ_err_∂ᶜχʲ =
                             matrix[ρχ_name, χʲ_name]
-                        @. ∂ᶜρχ_err_∂ᶜχʲ = ᶜtridiagonal_matrix_scalar
+                        @. ∂ᶜρχ_err_∂ᶜχʲ =
+                            dtγ *
+                            ᶜtridiagonal_matrix ⋅
+                            DiagonalMatrixRow(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)))
 
                         ∂ᶜρχ_err_∂ᶜρa =
                             matrix[ρχ_name, @name(c.sgsʲs.:(1).ρa)]
@@ -1356,10 +1333,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ᶜtracer_advection_matrix ⋅ ᶠset_tracer_upwind_matrix_bcs(
                             ᶠtracer_upwind_matrix(ᶠu³⁰),
                         )
-                    @. ᶜtridiagonal_matrix_scalar =
-                        dtγ *
-                        ᶜtridiagonal_matrix ⋅
-                        DiagonalMatrixRow(-1 * Y.c.sgsʲs.:(1).ρa / ᶜρ⁰)
                     MatrixFields.unrolled_foreach(
                         microphysics_tracers,
                     ) do (ρχ_name, χʲ_name, χ_name)
@@ -1369,7 +1342,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
                         ∂ᶜρχ_err_∂ᶜχʲ =
                             matrix[ρχ_name, χʲ_name]
-                        @. ∂ᶜρχ_err_∂ᶜχʲ += ᶜtridiagonal_matrix_scalar
+                        @. ∂ᶜρχ_err_∂ᶜχʲ +=
+                            dtγ *
+                            ᶜtridiagonal_matrix ⋅
+                            DiagonalMatrixRow(-1 * Y.c.sgsʲs.:(1).ρa / ᶜρ⁰)
 
                         ∂ᶜρχ_err_∂ᶜρa =
                             matrix[ρχ_name, @name(c.sgsʲs.:(1).ρa)]
@@ -1390,6 +1366,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶜtridiagonal_matrix ⋅
                             DiagonalMatrixRow(-1 * ᶜχʲ / ᶜρ⁰)
 
+                        ∂ᶜρχ_err_∂ᶜρχ =
+                            matrix[ρχ_name, ρχ_name]
+                        @. ∂ᶜρχ_err_∂ᶜρχ +=
+                            dtγ *
+                            ᶜtridiagonal_matrix ⋅
+                            DiagonalMatrixRow(1 / ᶜρ⁰)
+
                         ∂ᶜρχ_err_∂ᶠu₃ =
                             matrix[ρχ_name, @name(f.u₃)]
                         @. ∂ᶜρχ_err_∂ᶠu₃ =
@@ -1402,15 +1385,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                                 ) * adjoint(C3(sign(ᶠu³⁰_data))) *
                                 ᶠinterp(Y.c.ρ / ᶜρa⁰) * g³³(ᶠgⁱʲ),
                             )
-                    end
-                    @. ᶜtridiagonal_matrix_scalar =
-                        dtγ * ᶜtridiagonal_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ⁰)
-                    MatrixFields.unrolled_foreach(
-                        microphysics_tracers,
-                    ) do (ρχ_name, _, _)
-                        MatrixFields.has_field(Y, ρχ_name) || return
-                        ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
-                        @. ∂ᶜρχ_err_∂ᶜρχ += ᶜtridiagonal_matrix_scalar
                     end
                 end
             end
