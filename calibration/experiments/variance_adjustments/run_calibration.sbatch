@@ -7,9 +7,9 @@
 #SBATCH --mem=64G
 #SBATCH --output=variance_calibration_%j.out
 
-# GPU: add --gres=gpu:1 and export CLIMACOMMS_DEVICE=CUDA if your site uses CUDA-aware MPI/ClimaComms.
+# GPU (optional): e.g. --gres=gpu:1 and export CLIMACALIB_DEVICE=CUDADevice (see README).
 cd "${SLURM_SUBMIT_DIR}" || exit 1
 export VARIANCE_CALIB_WORKERS=${VARIANCE_CALIB_WORKERS:-14}
 
-julia --project=. -e 'import Pkg; Pkg.instantiate()'
-julia --project=. run_calibration.jl
+# Full pipeline (reference truth + EKI) in one Julia session; set VA_SKIP_REFERENCE=1 if y already exists.
+julia --project=. run_e2e.jl

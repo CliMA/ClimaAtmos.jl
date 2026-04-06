@@ -6,7 +6,7 @@ Currently uses ClimaCalibrate.SlurmManager, which integrates with Distributed.jl
 
 `addprocs(CAL.SlurmManager(10))` starts up an `srun` session consisting of 
 10 Julia workers with TCP connections to the host process.
-`calibrate(CAL.WorkerBackend, ...)` uses `remotecall` to execute the `forward_model`
+`calibrate(CAL.WorkerBackend(), ...)` uses `remotecall` to execute the `forward_model`
 function (found in `calibration/model_interface.jl`) on the remote workers.
 
 Further documentation can be found at https://clima.github.io/ClimaCalibrate.jl/dev/backends/
@@ -82,7 +82,7 @@ end
 @everywhere observations = JLD2.load_object(obs_path)
 
 eki = CAL.calibrate(
-    CAL.WorkerBackend,
+    CAL.WorkerBackend(),
     ensemble_size,
     n_iterations,
     observations,

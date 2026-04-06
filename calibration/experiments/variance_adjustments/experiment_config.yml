@@ -1,17 +1,16 @@
-# Single-run EKI slice; use `scripts/sweep_forward_runs.jl` for N_quad × varfix grids.
+# Default EKI slice (TRMM, N_quad=3, varfix off). Override with VA_EXPERIMENT_CONFIG=path/to/other.yml
+# Forward-only grids: scripts/sweep_forward_runs.jl — not run by run_e2e.jl.
 case_name: TRMM_LBA
 model_config_path: model_configs/trmm_column_varquad.yml
-# Baseline SCM TOML inside ClimaAtmos.jl/toml/
-scm_toml: prognostic_edmfx_implicit_scm_calibrated_5_cases_shallow_deep_v1.toml
-output_dir: simulation_output/calibration/TRMM_LBA/N_3/varfix_off/eki
+scm_toml: toml/scm_calibrated_TRMM_varquad.toml
+output_dir: simulation_output/TRMM_LBA/N_3/varfix_off/eki
 ensemble_size: 6
 n_iterations: 2
 prior_path: prior.toml
 quadrature_order: 3
 sgs_quadrature_subcell_geometric_variance: false
-# Reference observation vector (generate with `generate_observations_reference.jl`)
-observations_path: observations_reference.jld2
+# Reference truth → same slice: simulation_output/<CASE>/N_<n>/<varfix>/reference/output_active
+observations_path: simulation_output/TRMM_LBA/N_3/varfix_off/reference/observations.jld2
 observation_noise_std: 0.05
 calibration_mode: calibrated_varfix_off
-# Expected git branch for edits (warn only)
 expected_git_branch: jb/variance_adjustments

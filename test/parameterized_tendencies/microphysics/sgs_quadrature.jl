@@ -730,8 +730,11 @@ using ClimaAtmos
                         quad, mp_0m, thp, ρ, T_mean, q_tot_mean,
                         FT(0), FT(0), FT(0), Φ, tst, dt,
                     )
-                    @test result_zero.dq_tot_dt <= FT(0)
-                    @test isfinite(result_zero.dq_tot_dt)
+                    dq0 = result_zero.dq_tot_dt
+                    # BMT 0M returns a NamedTuple; quadrature averages that structure.
+                    dq0_s = dq0 isa NamedTuple && hasproperty(dq0, :dq_tot_dt) ? dq0.dq_tot_dt : dq0
+                    @test dq0_s <= FT(0)
+                    @test isfinite(dq0_s)
                     @test isfinite(result_zero.e_tot_hlpr)
 
                     # With variances (SGS fluctuations)
@@ -739,8 +742,10 @@ using ClimaAtmos
                         quad, mp_0m, thp, ρ, T_mean, q_tot_mean,
                         FT(4.0), FT(1e-5), FT(0.6), Φ, tst, dt,
                     )
-                    @test result_var.dq_tot_dt <= FT(0)
-                    @test isfinite(result_var.dq_tot_dt)
+                    dqv = result_var.dq_tot_dt
+                    dqv_s = dqv isa NamedTuple && hasproperty(dqv, :dq_tot_dt) ? dqv.dq_tot_dt : dqv
+                    @test dqv_s <= FT(0)
+                    @test isfinite(dqv_s)
                     @test isfinite(result_var.e_tot_hlpr)
 
                     # Direct (non-quadrature) evaluation with reasonable condensate

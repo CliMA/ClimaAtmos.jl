@@ -1,4 +1,5 @@
 # Small subset for pipeline testing; extend with gcm_driven_scm priors as needed.
+# Section names must be valid ClimaParams keys in the merged TOML (base `scm_toml` + defaults).
 [entr_inv_tau]
 prior = "constrained_gaussian(entr_inv_tau, 0.0001, 1e-5, 0, Inf)"
 type = "float"

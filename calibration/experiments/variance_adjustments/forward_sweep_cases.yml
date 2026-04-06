@@ -1,0 +1,10 @@
+# Registry for `scripts/sweep_forward_runs.jl`: add rows for new columns (cfSite, GoogleLES, etc.).
+# Override path: `julia ... scripts/sweep_forward_runs.jl --registry=path/to/this.yml`.
+#
+# `model_config_path`: column YAML under this experiment (or repo-relative if you prefer absolute in env).
+# `scm_toml`: passed to `va_scm_toml_path` (same as EKI `scm_toml` in experiment YAMLs).
+cases:
+  - model_config_path: model_configs/trmm_column_varquad.yml
+    scm_toml: toml/scm_calibrated_TRMM_varquad.toml
+  - model_config_path: model_configs/dycoms_rf01_column_varquad.yml
+    scm_toml: prognostic_edmfx.toml

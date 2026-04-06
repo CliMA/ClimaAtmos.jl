@@ -49,6 +49,9 @@ Artifacts.toml
 *.loc
 *.out
 *.log
+*.jld2
+*.dat
+
 
 # misc
 .DS_Store
