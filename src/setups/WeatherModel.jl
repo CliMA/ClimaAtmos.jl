@@ -8,25 +8,27 @@ full prognostic state with ERA5 data obtained via `weather_model_data_path`.
 
 ## Fields
 - `start_date`: DateTime parsed from a date string in format "yyyymmdd" or "yyyymmdd-HHMM".
-- `era5_initial_condition_dir`: Optional directory with pre-processed ERA5 files.
-  When `nothing`, uses the `weather_model_ic` ClimaArtifact.
 - `use_full_pressure`: If `true`, attempt to read 3D pressure from the file
   rather than computing it hydrostatically. Defaults to `false`.
+
+The optional ERA5 initial condition directory is stored in `_ERA5_IC_DIR` to avoid GPU 
+allocation issues with strings. When `nothing`, uses the `weather_model_ic` ClimaArtifact.
 """
-struct WeatherModel{S}
+struct WeatherModel
     start_date::Dates.DateTime
-    era5_initial_condition_dir::S
     use_full_pressure::Bool
 end
+
+const _ERA5_IC_DIR = Ref{Any}(nothing)
 
 function WeatherModel(
     start_date::String,
     era5_initial_condition_dir = nothing;
     use_full_pressure::Bool = false,
 )
+    _ERA5_IC_DIR[] = era5_initial_condition_dir
     return WeatherModel(
         parse_date(start_date),
-        era5_initial_condition_dir,
         use_full_pressure,
     )
 end
@@ -46,15 +48,16 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
     z_top = round(maximum(z_arr))
     target_levels = collect(0.0:300.0:z_top)
 
+    era5_dir = _ERA5_IC_DIR[]
     @info "Calling weather_model_data_path" (
         start_date = setup.start_date,
-        era5_dir = setup.era5_initial_condition_dir,
+        era5_dir = era5_dir,
     )
 
     file_path = weather_model_data_path(
         setup.start_date,
         target_levels,
-        setup.era5_initial_condition_dir,
+        era5_dir,
     )
 
     if !setup.use_full_pressure
