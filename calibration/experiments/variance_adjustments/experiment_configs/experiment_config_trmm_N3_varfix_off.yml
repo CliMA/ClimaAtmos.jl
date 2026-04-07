@@ -1,0 +1,35 @@
+# TRMM_LBA + PyCLES LES stats: set **`LES_STATS_FILE`** or **`les_truth.stats_file`** to a `Stats*.nc` before
+# `build_observations_from_les.jl` / EKI. Time window below should match your LES output.
+les_truth:
+  stats_file: ""
+  y_t_start_sec: 0.0
+  y_t_end_sec: 43200.0
+reference_truth_from_eki:
+  member: best
+case_name: TRMM_LBA
+model_config_path:
+  - model_configs/master_column_varquad_diagnostic_edmfx.yml
+  - model_configs/trmm_column_varquad_hires.yml
+scm_toml:
+  - toml/master_calibrated_baseline_1M.toml
+  - toml/cases/TRMM_LBA_varquad_overlay_1M.toml
+output_dir: simulation_output/TRMM_LBA/N_3/varfix_off/eki
+ensemble_size: 6
+n_iterations: 2
+prior_path: prior.toml
+quadrature_order: 3
+sgs_quadrature_subcell_geometric_variance: false
+observations_path: simulation_output/TRMM_LBA/N_3/varfix_off/reference/observations.jld2
+observation_noise_std: [0.05, 0.05, 0.05]
+observation_fields:
+  - short_name: thetaa
+    reduction: inst
+    period: 10m
+  - short_name: hus
+    reduction: inst
+    period: 10m
+  - short_name: clw
+    reduction: inst
+    period: 10m
+calibration_mode: calibrated_varfix_off
+expected_git_branch: jb/variance_adjustments

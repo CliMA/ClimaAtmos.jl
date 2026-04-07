@@ -1,0 +1,43 @@
+# **Non-operational archive (coarse mesh):** not used by checked-in study YAMLs. Use
+# `bomex_column_varquad_hires.yml` for truth / EKI / sweeps.
+#
+# BOMEX column (quadrature + 1M); shallow trade-wind cumulus setup.
+initial_condition: "Bomex"
+turbconv: prognostic_edmfx
+implicit_diffusion: true
+implicit_sgs_advection: false
+approximate_linear_solve_iters: 2
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+cloud_model: quadrature
+microphysics_model: "1M"
+use_sgs_quadrature: true
+sgs_distribution: lognormal
+quadrature_order: 3
+sgs_quadrature_subcell_geometric_variance: false
+config: column
+z_max: 3000
+x_elem: 2
+y_elem: 2
+z_elem: 60
+z_stretch: false
+perturb_initstate: false
+dt: 10secs
+t_end: 6hours
+toml: []
+netcdf_interpolation_num_points: [2, 2, 60]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, hur, hus, cl, clw, cli]
+    period: 10mins
+  - short_name: [waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
+    period: 10mins
+  - short_name: [lwp, clivi]
+    period: 10mins
+ode_algo: "ARS222"
+output_default_diagnostics: false

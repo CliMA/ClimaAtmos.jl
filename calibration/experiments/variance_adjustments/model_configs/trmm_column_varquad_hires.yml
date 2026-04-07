@@ -1,0 +1,9 @@
+# TRMM_LBA — mesh and time window. Thin overlay (merge after the shared column master in `model_config_path`).
+initial_condition: TRMM_LBA
+z_max: 16400
+z_elem: 164
+z_stretch: false
+dz_bottom: 30
+dt: 150secs
+t_end: 12hours
+netcdf_interpolation_num_points: [8, 8, 164]

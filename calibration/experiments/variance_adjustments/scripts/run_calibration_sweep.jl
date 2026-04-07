@@ -1,5 +1,6 @@
-# Run reference generation + EKI for each listed experiment YAML (separate subprocess per slice so
-# Distributed workers do not leak between calibrations).
+# Run EKI calibration for each listed experiment YAML **in-process** (no extra `julia` subprocess per slice).
+# Uses `Distributed.addprocs` / `rmprocs` inside `run_variance_calibration!` + cleanup after each slice so workers
+# do not leak into the forward sweep.
 #
 #   julia --project=. scripts/run_calibration_sweep.jl
 #
@@ -19,42 +20,47 @@ Pkg.activate(_EXPERIMENT_DIR)
 
 include(joinpath(_EXPERIMENT_DIR, "stdio_flush.jl"))
 va_setup_stdio_flushing!()
-include(joinpath(_EXPERIMENT_DIR, "calibration_sweep_configs.jl"))
+if !isdefined(Main, :va_calibration_sweep_configs)
+    include(joinpath(_EXPERIMENT_DIR, "calibration_sweep_configs.jl"))
+end
+if !isdefined(Main, :run_variance_calibration!)
+    include(joinpath(_EXPERIMENT_DIR, "eki_calibration.jl"))
+end
 
-function _run_subprocess(script::AbstractString, env::Pair{String, String})
-    cmd = addenv(
-        `$(Base.julia_cmd()) --project=$(_EXPERIMENT_DIR) $script`,
-        env,
-    )
-    @info "Running" cmd
-    va_flush_stdio()
-    run(cmd)
-    va_flush_stdio()
+using Distributed
+
+function run_calibration_slice_inprocess(config_relp::AbstractString, opts::EkiCalibrationOptions)
+    old = get(ENV, "VA_EXPERIMENT_CONFIG", nothing)
+    ENV["VA_EXPERIMENT_CONFIG"] = config_relp
+    try
+        run_variance_calibration!(opts)
+    finally
+        if old === nothing
+            delete!(ENV, "VA_EXPERIMENT_CONFIG")
+        else
+            ENV["VA_EXPERIMENT_CONFIG"] = old
+        end
+        if nprocs() > 1
+            rmprocs(workers())
+        end
+    end
     return nothing
 end
 
-function run_calibration_slice(config_relp::AbstractString)
-    env = "VA_EXPERIMENT_CONFIG" => config_relp
-    _run_subprocess(joinpath(_EXPERIMENT_DIR, "generate_observations_reference.jl"), env)
-    _run_subprocess(joinpath(_EXPERIMENT_DIR, "run_calibration.jl"), env)
-    return nothing
-end
-
-function main()
-    fail_fast = any(==("--fail-fast"), ARGS)
+function run_calibration_sweep!(opts::EkiCalibrationOptions = va_eki_calibration_options_from_env(); fail_fast::Bool = false)
     tid = get(ENV, "CALIB_SWEEP_TASK_ID", get(ENV, "SLURM_ARRAY_TASK_ID", ""))
     configs = va_calibration_sweep_configs()
     if !isempty(strip(tid))
         i = parse(Int, tid) + 1
         (1 <= i <= length(configs)) ||
             error("Task index $(i - 1) out of range; need 0:$(length(configs) - 1)")
-        return run_calibration_slice(configs[i])
+        return run_calibration_slice_inprocess(configs[i], opts)
     end
     failed = String[]
     for c in configs
         @info "Calibration sweep cell" c
         try
-            run_calibration_slice(c)
+            run_calibration_slice_inprocess(c, opts)
         catch err
             push!(failed, c)
             @error "Calibration slice failed" config = c exception = (err, catch_backtrace())
@@ -69,4 +75,12 @@ function main()
     return nothing
 end
 
-main()
+function main()
+    fail_fast = any(==("--fail-fast"), ARGS)
+    return run_calibration_sweep!(va_eki_calibration_options_from_env(); fail_fast = fail_fast)
+end
+
+if !isempty(Base.PROGRAM_FILE) && isfile(Base.PROGRAM_FILE) &&
+   abspath(Base.PROGRAM_FILE) == abspath(@__FILE__)
+    main()
+end

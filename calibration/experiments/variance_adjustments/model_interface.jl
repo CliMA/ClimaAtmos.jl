@@ -39,8 +39,40 @@ function build_atmos_config_dict(
     experiment_dir::AbstractString,
 )
     expc = experiment_config()
-    model_rel = expc["model_config_path"]
-    config_dict = YAML.load_file(joinpath(experiment_dir, model_rel))
+    config_dict = va_load_merged_case_yaml_dict(experiment_dir, expc["model_config_path"])
+
+    # GCM-forced column: match forcing file + cfSite to experiment `les_truth` (portable artifact path in YAML).
+    # GoogleLES / CloudBench: `shen_site_group` + `googleles_forcing_path` (or env `VA_GOOGLELES_FORCING_FILE`).
+    forcing_override = strip(get(ENV, "VA_GCM_FORCING_FILE", ""))
+    if !isempty(forcing_override)
+        config_dict["external_forcing_file"] = forcing_override
+    end
+    lt = get(expc, "les_truth", nothing)
+    if lt isa AbstractDict && string(get(lt, "source", "")) == "googleles_cloudbench"
+        sg = string(
+            get(
+                lt,
+                "shen_site_group",
+                get(expc, "googleles_shen_site_group", "site_googleles"),
+            ),
+        )
+        config_dict["cfsite_number"] = sg
+        gfo = strip(get(ENV, "VA_GOOGLELES_FORCING_FILE", ""))
+        if !isempty(gfo)
+            config_dict["external_forcing_file"] = gfo
+        else
+            gfp = get(expc, "googleles_forcing_path", nothing)
+            if gfp !== nothing && !isempty(strip(string(gfp)))
+                s = string(strip(string(gfp)))
+                config_dict["external_forcing_file"] =
+                    isabspath(s) ? s : joinpath(experiment_dir, s)
+            end
+        end
+    elseif lt isa AbstractDict && haskey(lt, "cfsite")
+        n = Int(lt["cfsite"])
+        # `cfsite_gcm_forcing` NetCDF groups are `site2`, `site4`, `site23`, … (no zero-padding; see artifact).
+        config_dict["cfsite_number"] = "site" * string(n)
+    end
 
     out_rel = expc["output_dir"]
     out_root = isabspath(out_rel) ? String(out_rel) : joinpath(experiment_dir, out_rel)
@@ -48,10 +80,10 @@ function build_atmos_config_dict(
     config_dict["output_dir"] = member_path
 
     param_path = joinpath(member_path, "parameters.toml")
-    scm_toml = va_scm_toml_path(experiment_dir, expc["scm_toml"])
+    scm_baseline = va_merge_scm_baseline_dict(experiment_dir, expc["scm_toml"])
     mkpath(member_path)
     combined_path = joinpath(member_path, VA_COMBINED_MEMBER_ATMOS_PARAMETERS_BASENAME)
-    va_write_combined_member_atmos_parameters_toml(scm_toml, param_path, combined_path)
+    va_write_combined_member_atmos_parameters_toml(scm_baseline, param_path, combined_path)
     config_dict["toml"] = [combined_path]
 
     config_dict["quadrature_order"] = expc["quadrature_order"]

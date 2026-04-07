@@ -1,0 +1,9 @@
+# BOMEX — mesh and time. Thin overlay (merge after the shared column master in `model_config_path`).
+initial_condition: "Bomex"
+z_max: 3000
+z_elem: 120
+z_stretch: false
+perturb_initstate: false
+dt: 10secs
+t_end: 6hours
+netcdf_interpolation_num_points: [2, 2, 120]

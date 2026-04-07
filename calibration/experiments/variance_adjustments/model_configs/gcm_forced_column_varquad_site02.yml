@@ -1,0 +1,12 @@
+# HadGEM2-A AMIP July forcing; cfSite `site2`. Thin overlay (merge after the shared column master in `model_config_path`).
+forward_sweep_case_slug: GCM_CFSITE02
+initial_condition: GCM
+external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
+cfsite_number: "site2"
+z_max: 40000
+z_elem: 120
+z_stretch: true
+dz_bottom: 20
+dt: 10secs
+t_end: 6hours
+netcdf_interpolation_num_points: [2, 2, 120]

@@ -1,7 +1,7 @@
 # CLI: reference truth run + write **`observations_path`** from the active experiment YAML (activates project).
 #
 #   julia --project=. generate_observations_reference.jl
-#   VA_EXPERIMENT_CONFIG=experiment_config_trmm_N3_varfix_on.yml julia --project=. generate_observations_reference.jl
+#   VA_EXPERIMENT_CONFIG=experiment_configs/experiment_config_gcm_cfsite23_N3_varfix_off.yml julia --project=. generate_observations_reference.jl
 #
 import Pkg
 const _ROOT = dirname(@__FILE__) |> abspath

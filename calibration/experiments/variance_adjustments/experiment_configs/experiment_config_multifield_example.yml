@@ -1,0 +1,19 @@
+# Example: stack multiple column diagnostics into y (length = z_elem × n_fields).
+# Copy keys into `../experiment_config.yml`, then build LES truth with `build_observations_from_les.jl`
+# (needs a `les_truth` block like the main YAMLs — see `experiment_config.yml`).
+# Also set reference_truth_from_eki like the main experiment YAML (see README).
+#
+# les_truth:
+#   stats_file: ""
+#   y_t_start_sec: 475200.0
+#   y_t_end_sec: 518400.0
+#
+# observation_noise_std: scalar σ → σ² on all levels; or a list of length n_fields
+#   (one std per stacked block of z_elem levels).
+#
+# observation_fields:
+#   - short_name: thetaa
+#   - short_name: hur
+#   - short_name: cl
+#
+# observation_noise_std: [0.08, 0.15, 0.1]

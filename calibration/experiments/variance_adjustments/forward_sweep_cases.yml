@@ -2,9 +2,40 @@
 # Override path: `julia ... scripts/sweep_forward_runs.jl --registry=path/to/this.yml`.
 #
 # `model_config_path`: column YAML under this experiment (or repo-relative if you prefer absolute in env).
-# `scm_toml`: passed to `va_scm_toml_path` (same as EKI `scm_toml` in experiment YAMLs).
+# `scm_toml`: string or YAML list (master + overlays); used only for **`--baseline-scm-forward`**.
+#
+# **EKI-parameter ladder (default):** set `eki_varfix_off_config` to the experiment YAML whose EKI output
+# supplies the merged member TOML for **`varfix_off`** cells. Set optional `eki_varfix_on_config` for
+# **`varfix_on`** cells; if omitted, **`varfix_on`** uses the **same** merged TOML as varfix off (frozen-θ /
+# “naive-on-grid” at coarser resolutions). Run calibration **before** this sweep when using EKI mode.
 cases:
-  - model_config_path: model_configs/trmm_column_varquad.yml
-    scm_toml: toml/scm_calibrated_TRMM_varquad.toml
-  - model_config_path: model_configs/dycoms_rf01_column_varquad.yml
+  - model_config_path:
+      - model_configs/master_column_varquad_diagnostic_edmfx.yml
+      - model_configs/gcm_forced_column_varquad_hires.yml
     scm_toml: prognostic_edmfx.toml
+    eki_varfix_off_config: experiment_configs/experiment_config_gcm_cfsite04_N3_varfix_off.yml
+  - model_config_path:
+      - model_configs/master_column_varquad_diagnostic_edmfx.yml
+      - model_configs/gcm_forced_column_varquad_hires.yml
+    scm_toml: prognostic_edmfx.toml
+    eki_varfix_off_config: experiment_configs/experiment_config_gcm_cfsite08_N3_varfix_off.yml
+  - model_config_path:
+      - model_configs/master_column_varquad_diagnostic_edmfx.yml
+      - model_configs/gcm_forced_column_varquad_hires.yml
+    scm_toml: prognostic_edmfx.toml
+    eki_varfix_off_config: experiment_configs/experiment_config_gcm_cfsite11_N3_varfix_off.yml
+  - model_config_path:
+      - model_configs/master_column_varquad_diagnostic_edmfx.yml
+      - model_configs/gcm_forced_column_varquad_hires.yml
+    scm_toml: prognostic_edmfx.toml
+    eki_varfix_off_config: experiment_configs/experiment_config_gcm_cfsite19_N3_varfix_off.yml
+  - model_config_path:
+      - model_configs/master_column_varquad_diagnostic_edmfx.yml
+      - model_configs/gcm_forced_column_varquad_hires.yml
+    scm_toml: prognostic_edmfx.toml
+    eki_varfix_off_config: experiment_configs/experiment_config_gcm_cfsite23_N3_varfix_off.yml
+  - model_config_path:
+      - model_configs/master_column_varquad_diagnostic_edmfx.yml
+      - model_configs/googleles_column_varquad_hires.yml
+    scm_toml: prognostic_edmfx.toml
+    eki_varfix_off_config: experiment_configs/experiment_config_googleles_01_N3_varfix_off.yml

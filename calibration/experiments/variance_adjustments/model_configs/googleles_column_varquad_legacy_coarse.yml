@@ -1,0 +1,50 @@
+# **Non-operational archive (coarse mesh):** not used by checked-in study YAMLs. Use
+# `googleles_column_varquad_hires.yml` for truth / EKI / sweeps.
+#
+# GoogleLES / CloudBench column SCM: `external_forcing_file` and `cfsite_number` are set at runtime
+# from each experiment YAML (`googleles_forcing_path`, `les_truth.shen_site_group`) in `model_interface.jl`.
+# Forcing NetCDF is built by `va_ensure_googleles_shen_forcing!` (synthetic Shen-style; see README).
+forward_sweep_case_slug: GOOGLELES
+initial_condition: GCM
+external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
+cfsite_number: "site4"
+turbconv: prognostic_edmfx
+tracer_upwinding: first_order
+implicit_diffusion: true
+implicit_sgs_advection: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
+implicit_sgs_mass_flux: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode_subproblem: 3
+max_newton_iters_ode: 1
+edmfx_entr_model: "PiGroups"
+edmfx_detr_model: "SmoothArea"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+cloud_model: quadrature
+microphysics_model: "1M"
+use_sgs_quadrature: true
+sgs_distribution: lognormal
+quadrature_order: 3
+sgs_quadrature_subcell_geometric_variance: false
+config: column
+z_max: 40000
+x_elem: 2
+y_elem: 2
+z_elem: 60
+z_stretch: true
+dz_bottom: 30
+dt: 10secs
+t_end: 6hours
+toml: []
+netcdf_interpolation_num_points: [2, 2, 60]
+diagnostics:
+  - short_name: [hus, thetaa, clw, cli, lwp, clivi]
+    period: 10mins
+ode_algo: "ARS222"
+output_default_diagnostics: false

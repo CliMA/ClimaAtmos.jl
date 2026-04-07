@@ -6,11 +6,20 @@ import ClimaComms
 import ClimaAtmos as CA
 
 """
+Subdirectory of the experiment root holding **named EKI slice** YAMLs (`experiment_config_*_*.yml`).
+The default **`experiment_config.yml`** stays at the experiment root (see [`va_experiment_config_path`](@ref)).
+"""
+const VA_EXPERIMENT_CONFIGS_DIR = "experiment_configs"
+
+"""
     va_experiment_config_path(experiment_dir[, explicit]) -> String
 
 Path to the active experiment YAML. If `explicit` is set (non-empty), it is interpreted relative to
 `experiment_dir` unless absolute. Else if **`VA_EXPERIMENT_CONFIG`** is set in the environment, use that
 (same relative/absolute rules). Else **`experiment_dir/experiment_config.yml`**.
+
+Named slice YAMLs (per-case / per-parameter EKI configs) live under **`experiment_dir/$(VA_EXPERIMENT_CONFIGS_DIR)/`**
+(e.g. `experiment_configs/experiment_config_gcm_cfsite19_N3_varfix_off.yml`).
 """
 function va_experiment_config_path(
     experiment_dir::AbstractString,
@@ -84,11 +93,21 @@ function va_observations_abs_path(experiment_dir::AbstractString, expc)
     return isabspath(p) ? String(p) : joinpath(experiment_dir, p)
 end
 
+"""Root directory of EKI outputs for this experiment slice (`output_dir` from YAML, resolved relative to `experiment_dir`)."""
+function va_eki_output_root(experiment_dir::AbstractString, expc)
+    out = expc["output_dir"]
+    return isabspath(out) ? String(out) : joinpath(experiment_dir, out)
+end
+
 """
     va_field_specs(expc) -> Vector{Dict}
 
 Diagnostics used to build the observation vector. Default: single `thetaa` profile.
 Override with `observation_fields` in `experiment_config.yml` (list of `short_name`, optional `reduction`, `period`).
+
+Special composite: `short_name: clw_plus_cli` builds one `z_elem` block as **cloud liquid + cloud ice** mass fractions
+(`clw` + `cli` at each level). It does **not** include rain/snow (`husra` / `hussn`). Requires both `clw` and `cli`
+in the case YAML `diagnostics`.
 
 `reduction` must match ClimaAnalysis `SimDir` keys: YAML diagnostics without `reduction_time` are stored as `inst`;
 use `average` only if the case YAML sets `reduction_time: average` for that variable.
@@ -116,8 +135,31 @@ function va_field_specs(expc)
 end
 
 function va_z_elem(experiment_dir::AbstractString, expc)
-    cfg = YAML.load_file(joinpath(experiment_dir, expc["model_config_path"]))
+    cfg = va_load_merged_case_yaml_dict(experiment_dir, expc["model_config_path"])
     return Int(cfg["z_elem"])
+end
+
+"""
+    va_z_centers_column(experiment_dir, expc) -> Vector{Float64}
+
+Vertical cell-center heights (m) for the column in **`model_config_path`**, for interpolating LES onto the
+SCM grid (see `les_truth_build.jl`). Optional **`les_truth.z_max`** in the experiment YAML trims levels above
+`z_max` (same idea as `gcm_driven_scm` `z_max`).
+"""
+function va_z_centers_column(experiment_dir::AbstractString, expc)
+    cfg = va_load_merged_case_yaml_dict(experiment_dir, expc["model_config_path"])
+    atmos_config = CA.AtmosConfig(cfg)
+    params = CA.ClimaAtmosParameters(atmos_config)
+    grid = CA.get_grid(atmos_config.parsed_args, params, atmos_config.comms_ctx)
+    spaces = CA.get_spaces(grid, atmos_config.comms_ctx)
+    coord = CA.Fields.coordinate_field(spaces.center_space)
+    z_vec = convert(Vector{Float64}, parent(coord.z)[:])
+    lt = get(expc, "les_truth", nothing)
+    if lt isa AbstractDict && haskey(lt, "z_max")
+        zm = Float64(lt["z_max"])
+        z_vec = filter(z -> z <= zm, z_vec)
+    end
+    return z_vec
 end
 
 function va_expected_obs_length(experiment_dir, expc)
@@ -136,7 +178,7 @@ function va_model_diagnostic_shortname_period_pairs(
     config_path::Union{Nothing, AbstractString} = nothing,
 )
     expc = va_load_experiment_config(experiment_dir, config_path)
-    cfg = YAML.load_file(joinpath(experiment_dir, expc["model_config_path"]))
+    cfg = va_load_merged_case_yaml_dict(experiment_dir, expc["model_config_path"])
     pairs = Tuple{String, String}[]
     !haskey(cfg, "diagnostics") && return pairs
     for block in cfg["diagnostics"]
@@ -153,6 +195,33 @@ function va_model_diagnostic_shortname_period_pairs(
     return pairs
 end
 
+"""Diagnostics list from merged case YAML (`model_config_path` master + overlay), for forward-sweep plots."""
+function va_case_yaml_diagnostic_shortname_period_pairs(
+    experiment_dir::AbstractString,
+    model_yaml_spec,
+)
+    cfg = va_load_merged_case_yaml_dict(experiment_dir, model_yaml_spec)
+    pairs = Tuple{String, String}[]
+    !haskey(cfg, "diagnostics") && return pairs
+    for block in cfg["diagnostics"]
+        period = string(get(block, "period", "10m"))
+        sn = block["short_name"]
+        if sn isa AbstractVector || sn isa Tuple
+            for x in sn
+                push!(pairs, (string(x), period))
+            end
+        else
+            push!(pairs, (string(sn), period))
+        end
+    end
+    return pairs
+end
+
+function va_z_elem_from_case_yaml(experiment_dir::AbstractString, model_yaml_spec)
+    cfg = va_load_merged_case_yaml_dict(experiment_dir, model_yaml_spec)
+    return Int(cfg["z_elem"])
+end
+
 """Comms context: `CLIMACALIB_DEVICE` env matches `get_comms_context` (`auto`, `CUDADevice`, etc.)."""
 function va_comms_ctx()
     dev = get(ENV, "CLIMACALIB_DEVICE", "auto")
@@ -162,10 +231,13 @@ end
 """
     va_scm_toml_path(experiment_dir, rel::AbstractString) -> String
 
-Resolve `experiment_config.yml` key `scm_toml` (`rel`, often e.g. `toml/foo.toml`).
+Resolve **one** layer of `experiment_config.yml` key `scm_toml` (`rel`, e.g. `toml/foo.toml`).
+For **master + case overlays**, use a YAML list in `scm_toml` and [`va_scm_toml_spec_layers`](@ref) /
+[`va_merge_scm_baseline_dict`](@ref) instead.
+
 Uses `joinpath(experiment_dir, rel)` when that file exists (vendored experiment TOML);
 otherwise falls back to `ClimaAtmos.jl/toml/` with `basename(rel)` for shared defaults
-(e.g. DYCOMS `prognostic_edmfx.toml` in sweeps).
+(e.g. `prognostic_edmfx.toml` in sweeps).
 """
 function va_scm_toml_path(experiment_dir::AbstractString, rel::AbstractString)
     local_path = joinpath(experiment_dir, rel)
@@ -173,6 +245,96 @@ function va_scm_toml_path(experiment_dir::AbstractString, rel::AbstractString)
     atmos_path = joinpath(pkgdir(CA), "toml", basename(rel))
     isfile(atmos_path) || error("scm_toml not found at $local_path or $atmos_path")
     return atmos_path
+end
+
+"""
+    va_scm_toml_spec_layers(experiment_dir, scm_spec) -> Vector{String}
+
+Resolve `experiment_config.yml` key **`scm_toml`** to an ordered list of absolute paths.
+
+- **String:** one layer (same as [`va_scm_toml_path`](@ref)).
+- **Vector / tuple of strings:** master + case overlays; each entry is resolved like a single `scm_toml` path.
+  **Later files override** earlier ones at the **top-level** `[name]` table (same rule as
+  [`va_write_combined_member_atmos_parameters_toml`](@ref)).
+"""
+function va_scm_toml_spec_layers(experiment_dir::AbstractString, scm_spec)::Vector{String}
+    if scm_spec isa AbstractVector || scm_spec isa Tuple
+        length(scm_spec) >= 1 || error("scm_toml list must be non-empty")
+        return String[va_scm_toml_path(experiment_dir, string(x)) for x in scm_spec]
+    else
+        return String[va_scm_toml_path(experiment_dir, string(scm_spec))]
+    end
+end
+
+"""
+    va_model_config_path_layers(raw_spec) -> Vector{String}
+
+Normalize **`model_config_path`** from **`experiment_config.yml`** or a forward-sweep registry row: a **string**
+is a single layer; a **non-empty list** loads and shallow-merges **in order** (master first, case overlay last).
+The **last** path is the canonical case id ([`va_model_config_yaml_rel`](@ref)).
+"""
+function va_model_config_path_layers(raw_spec)::Vector{String}
+    if raw_spec isa AbstractString
+        s = String(strip(string(raw_spec)))
+        isempty(s) && error("model_config_path is empty")
+        return String[s]
+    elseif raw_spec isa AbstractVector
+        length(raw_spec) >= 1 || error("model_config_path list must be non-empty")
+        return String[String(strip(string(x))) for x in raw_spec]
+    else
+        error("model_config_path must be a string or a non-empty list of strings")
+    end
+end
+
+"""Last path in [`va_model_config_path_layers`](@ref); used as registry / task `yaml_rel` key."""
+function va_model_config_yaml_rel(raw_spec)::String
+    layers = va_model_config_path_layers(raw_spec)
+    return layers[end]
+end
+
+"""
+    va_load_merged_case_yaml_dict(experiment_dir, raw_spec) -> Dict{String, Any}
+
+Shallow-merge YAML dicts for each relative path in [`va_model_config_path_layers`](@ref); **later** files
+override **earlier** keys (same as multi-file [`CA.AtmosConfig`](@ref)).
+"""
+function va_load_merged_case_yaml_dict(experiment_dir::AbstractString, raw_spec)::Dict{String, Any}
+    layers = va_model_config_path_layers(raw_spec)
+    merged = Dict{String, Any}()
+    for rel in layers
+        path = joinpath(experiment_dir, rel)
+        isfile(path) || error("Case YAML not found: $path")
+        merge!(merged, YAML.load_file(path))
+    end
+    return merged
+end
+
+"""Merge SCM TOML layers (see [`va_scm_toml_spec_layers`](@ref)) into one `Dict` for ClimaParams-style TOML."""
+function va_merge_scm_baseline_dict(experiment_dir::AbstractString, scm_spec)
+    merged = Dict{String, Any}()
+    for p in va_scm_toml_spec_layers(experiment_dir, scm_spec)
+        d = TOML.parsefile(p)
+        for (k, v) in d
+            merged[k] = v
+        end
+    end
+    return merged
+end
+
+"""Basename for a single-file merge of layered `scm_toml` (reference runs and forward-sweep baselines)."""
+const VA_MERGED_SCM_BASELINE_BASENAME = "_scm_merged_baseline.toml"
+
+function va_write_merged_scm_baseline_file!(
+    experiment_dir::AbstractString,
+    scm_spec,
+    out_path::AbstractString,
+)
+    d = va_merge_scm_baseline_dict(experiment_dir, scm_spec)
+    mkpath(dirname(out_path))
+    open(out_path, "w") do io
+        TOML.print(io, d)
+    end
+    return out_path
 end
 
 """
@@ -210,7 +372,8 @@ Ways to handle overlap include: strip overlapping names from a copy of the basel
 
 # Behavior
 
-1. Load `scm_baseline_path` (full case defaults from `experiment_config.yml` → `scm_toml`).
+1. Load the SCM baseline as a `Dict` — either from a **single** TOML path, or from **`scm_toml` layers**
+   in the experiment YAML (see [`va_merge_scm_baseline_dict`](@ref)).
 2. Load `eki_member_parameters_path` (`parameters.toml` for this member).
 3. For each **top-level** key in the EKI file, **replace** the baseline entry (whole table). Keys
    only in the baseline are unchanged. This matches `merge_toml_files` across two files with
@@ -221,16 +384,17 @@ package defaults; this helper only collapses **two user-provided sources** into 
 
 # Arguments
 
-- `scm_baseline_path`: absolute path to the SCM baseline TOML.
+- `scm_baseline`: parsed baseline (`Dict`, e.g. from [`va_merge_scm_baseline_dict`](@ref)), **or** `scm_baseline_path`
+  as a single TOML file path (string).
 - `eki_member_parameters_path`: `joinpath(member_path, "parameters.toml")`.
 - `out_path`: where to write (typically `joinpath(member_path, VA_COMBINED_MEMBER_ATMOS_PARAMETERS_BASENAME)`).
 """
 function va_write_combined_member_atmos_parameters_toml(
-    scm_baseline_path::AbstractString,
+    scm_baseline::AbstractDict,
     eki_member_parameters_path::AbstractString,
     out_path::AbstractString,
 )
-    combined = copy(TOML.parsefile(scm_baseline_path))
+    combined = Dict{String, Any}(scm_baseline)
     for (k, v) in TOML.parsefile(eki_member_parameters_path)
         combined[k] = v
     end
@@ -238,6 +402,18 @@ function va_write_combined_member_atmos_parameters_toml(
         TOML.print(io, combined)
     end
     return out_path
+end
+
+function va_write_combined_member_atmos_parameters_toml(
+    scm_baseline_path::AbstractString,
+    eki_member_parameters_path::AbstractString,
+    out_path::AbstractString,
+)
+    return va_write_combined_member_atmos_parameters_toml(
+        Dict{String, Any}(TOML.parsefile(scm_baseline_path)),
+        eki_member_parameters_path,
+        out_path,
+    )
 end
 
 function va_job_id_reference(expc)
@@ -358,7 +534,12 @@ function va_naive_post_analysis_figure_dir(
     )
 end
 
-"""Absolute path to `prior_path` from the active experiment YAML."""
+"""
+    va_prior_abs_path(experiment_dir[, config_path]) -> String
+
+Absolute path to `prior_path` from the active experiment YAML. Each slice can use a different file; the same
+parameter **name** can therefore have a different prior distribution in another case’s `prior*.toml`.
+"""
 function va_prior_abs_path(
     experiment_dir::AbstractString,
     config_path::Union{Nothing, AbstractString} = nothing,
@@ -403,5 +584,31 @@ function va_build_noise_matrix(
     else
         σ = Float64(σ_raw)
         return (σ^2) * LinearAlgebra.I(n_y)
+    end
+end
+
+"""
+    va_worker_julia_exeflags(project_dir::AbstractString, worker_threads::Int) -> Cmd
+
+`exeflags` for [`Distributed.addprocs`](@ref): each worker uses `--project=project_dir` and **`-t worker_threads`**.
+
+Typical pattern: start the driver with **`julia -t 20`** (threads for the main process / threaded forward sweep),
+set **`VARIANCE_CALIB_WORKER_THREADS=1`** (EKI) and/or **`VA_FORWARD_SWEEP_WORKER_THREADS=1`** (distributed forward
+sweep) so ensemble workers stay **one thread per SCM** and do not oversubscribe the machine.
+"""
+function va_worker_julia_exeflags(project_dir::AbstractString, worker_threads::Int)
+    worker_threads >= 1 || error("worker_threads must be >= 1, got $worker_threads")
+    return `--project=$project_dir -t $worker_threads`
+end
+
+"""Parse `VARIANCE_CALIB_BACKEND`-style strings to `:worker` or `:julia` (single boundary for env vs structs)."""
+function va_parse_eki_calibration_backend(s::AbstractString)::Symbol
+    s = lowercase(String(strip(s)))
+    if s in ("worker", "distributed", "workers")
+        return :worker
+    elseif s in ("julia", "serial", "sequential", "main")
+        return :julia
+    else
+        error("VARIANCE_CALIB_BACKEND must be worker or julia; got $(repr(s)).")
     end
 end

@@ -1,0 +1,11 @@
+# TRMM_LBA + PiGroups / SmoothArea — case-specific entrainment parameters (calibrated snapshot).
+# Use after `toml/master_calibrated_baseline_0M.toml`.
+
+[entr_mult_limiter_coeff]
+value = 1.092018003548091
+
+[entr_param_vec]
+value = [20.79875221707495, -11.596790112748911, -21.483515589802018, 16.504290885216815, -5.100320549520367, 0.023669853693880992, 0.00010636352628825227, 3098.4007223962226]
+
+[turb_entr_param_vec]
+value = [0.027824111769192167, 2294.9318189901137]

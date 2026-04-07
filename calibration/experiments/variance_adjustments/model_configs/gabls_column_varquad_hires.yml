@@ -1,0 +1,10 @@
+# GABLS — mesh and time. Thin overlay (merge after the shared column master in `model_config_path`).
+initial_condition: GABLS
+hyperdiff: "false"
+z_max: 400
+z_elem: 32
+z_stretch: false
+dt: 10secs
+t_end: 9hours
+perturb_initstate: false
+netcdf_interpolation_num_points: [2, 2, 32]

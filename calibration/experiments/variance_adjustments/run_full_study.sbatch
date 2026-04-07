@@ -10,8 +10,8 @@
 # Submit from calibration/experiments/variance_adjustments
 cd "${SLURM_SUBMIT_DIR}" || exit 1
 
-# `run_full_study.jl` runs ~80 forwards + EKI + naive + figures by default (N_quad 1–5 × default registry + ladder).
-# Optional flags (examples): --skip-forward  --forward-baseline-only  --skip-naive  --forward-skip-done  --naive-skip-done
+# `run_full_study.jl` runs EKI + naive + ~80 forwards (merged θ, forward_eki/) + figures by default.
+# Exploratory SCM-only ladder: --forward-baseline-scm. Optional: --skip-forward  --forward-baseline-only  --skip-naive  --forward-skip-done  --naive-skip-done
 export VARIANCE_CALIB_WORKERS="${VARIANCE_CALIB_WORKERS:-14}"
 
 julia --project=. -e 'import Pkg; Pkg.instantiate()'

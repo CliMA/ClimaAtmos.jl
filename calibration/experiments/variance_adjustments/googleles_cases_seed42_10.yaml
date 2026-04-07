@@ -1,0 +1,13 @@
+# Deterministic sample: Random.seed!(42); shuffle! of all (site_id, month, amip) triples.
+# Regenerate with `scripts/generate_googleles_registry.jl` if the sampling policy changes.
+cases:
+  - { index: 1, site_id: 161, month: 4, experiment: amip }
+  - { index: 2, site_id: 439, month: 7, experiment: amip }
+  - { index: 3, site_id: 253, month: 7, experiment: amip }
+  - { index: 4, site_id: 97, month: 4, experiment: amip }
+  - { index: 5, site_id: 435, month: 4, experiment: amip }
+  - { index: 6, site_id: 130, month: 1, experiment: amip }
+  - { index: 7, site_id: 192, month: 7, experiment: amip }
+  - { index: 8, site_id: 162, month: 1, experiment: amip }
+  - { index: 9, site_id: 378, month: 10, experiment: amip }
+  - { index: 10, site_id: 263, month: 10, experiment: amip }

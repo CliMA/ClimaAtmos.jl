@@ -1,0 +1,92 @@
+# Shared baseline — non-equilibrium 1M bulk microphysics + common EDMF / diffusion.
+# Case-specific PiGroups vectors: `toml/cases/<CASE>_varquad_overlay_1M.toml`.
+
+[zd_rayleigh]
+value = 20000.0
+
+[zd_viscous]
+value = 40000.0
+
+[min_area_limiter_scale]
+value = 0
+
+[max_area_limiter_scale]
+value = 0
+
+[mixing_length_tke_surf_scale]
+value = 1.1402470659472088
+
+[mixing_length_diss_coeff]
+value = 0.12492989143864316
+
+[EDMF_max_area]
+value = 0.7
+
+[entr_inv_tau]
+value = 0
+
+[entr_coeff]
+value = 0.1
+
+[detr_coeff]
+value = 0
+
+[EDMF_surface_area]
+value = 0.07485284402727316
+
+[mixing_length_eddy_viscosity_coefficient]
+value = 0.1202718388572739
+
+[EDMF_min_area]
+value = 1.0e-5
+
+[detr_vertdiv_coeff]
+value = 0
+
+[detr_inv_tau]
+value = 0
+
+[detr_buoy_coeff]
+value = 0
+
+[detr_massflux_vertdiv_coeff]
+value = 1
+
+[pressure_normalmode_drag_coeff]
+value = 35.63930801272878
+
+[mixing_length_Prandtl_number_0]
+value = 0.7050537783880338
+
+[mixing_length_static_stab_coeff]
+value = 0.2841967194320584
+
+[pressure_normalmode_buoy_coeff1]
+value = 0.29145613813882526
+
+[diagnostic_covariance_coeff]
+value = 2.1
+
+[tracer_vertical_diffusion_factor]
+value = 0
+
+[condensation_evaporation_timescale]
+value = 100
+
+[sublimation_deposition_timescale]
+value = 100
+
+[entr_detr_limit_inv_tau]
+value = 0.01
+
+[rain_autoconversion_timescale]
+value = 1000
+
+[cloud_liquid_water_specific_humidity_autoconversion_threshold]
+value = 0.0005
+
+[snow_autoconversion_timescale]
+value = 100
+
+[cloud_ice_specific_humidity_autoconversion_threshold]
+value = 0.000001

@@ -1,0 +1,3 @@
+# Optional second layer merged after diagnostic_edmfx_1M.toml for uncalibrated sweeps.
+# Add only real ClimaParams tables (e.g. [edmfx_entr_detr_params]) — no fake top-level
+# tables, or strict mode will halt with "unused parameters".
