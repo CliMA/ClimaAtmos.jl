@@ -92,4 +92,4 @@ To run the simulation on a local machine you will need to first download the rea
 8234def2ead82e385a330a48ed2f0c030e434065 = "/some/random/path/raw_data_dir" # for raw data
 a1a465e8d237d78bef1e6d346054da395787a9f9 = "/some/random/path/processed_files" # for storing
 ```
-Good luck! :wink:
+Good luck!
