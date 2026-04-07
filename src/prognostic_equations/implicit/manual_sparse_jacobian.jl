@@ -407,19 +407,25 @@ end
 """
     SparseHelmholtz2DCache
 
-Stores the sparse Helmholtz matrix and work vectors for the 2D sparse direct
-Helmholtz preconditioner on sphere (cubed-sphere) grids. The Helmholtz operator
-is assembled per vertical level:
-    H = M_h + δtγ² · diag(cs²) · K_h
+Stores per-level sparse Helmholtz matrices and work vectors for the 2D sparse
+direct Helmholtz preconditioner on sphere (cubed-sphere) grids. Each vertical
+level has an independent N_h × N_h Helmholtz system:
+    H_k = M_h + δtγ² · diag(cs²_k) · K_h
 where M_h is the GLL mass matrix (using actual WJ values) and K_h is the 2D SE
 stiffness matrix using an isotropic metric approximation. DOFs are mapped using
 cubed-sphere topology connectivity (shared face/vertex nodes merged).
+
+Level-decoupled storage avoids the O(N_v²) fill-in cost of a monolithic
+N_dof × N_dof LU and enables per-level parallelism.
 """
 struct SparseHelmholtz2DCache{FT}
-    H_sparse::SparseMatrixCSC{FT, Int}
-    H_factorization::Base.RefValue{Any}
-    rhs_vec::Vector{FT}
-    sol_vec::Vector{FT}
+    # Per-level Helmholtz matrices and factorizations (length N_v)
+    H_levels::Vector{SparseMatrixCSC{FT, Int}}
+    H_level_factors::Vector{Base.RefValue{Any}}
+    # Per-level work vectors (length N_h each)
+    rhs_lev::Vector{FT}
+    sol_lev::Vector{FT}
+    # State vectors (length N_h * N_v, level-major: idx = (k-1)*N_h + h)
     cs2_vec::Vector{FT}
     ρ_vec::Vector{FT}
     dtγ::Base.RefValue{FT}
@@ -429,8 +435,8 @@ struct SparseHelmholtz2DCache{FT}
     D_matrix::Matrix{FT}        # Nq × Nq differentiation matrix
     weights::Vector{FT}         # Nq quadrature weights
     K1D_ref::Matrix{FT}         # Nq × Nq reference 1D stiffness: Σ_q w_q D[q,a]D[q,b]
-    # Per-node mass: WJ[i,j,e] for all nodes
-    WJ_vec::Vector{FT}          # length N_dof (indexed by global DOF)
+    # Per-DOF mass (length N_h): WJ accumulated across shared elements
+    WJ_vec::Vector{FT}
     # Mesh metadata
     Nq::Int
     nelem::Int
@@ -439,7 +445,7 @@ struct SparseHelmholtz2DCache{FT}
     N_dof::Int                  # N_h * N_v
     _scratch_ρ::Any             # center scalar scratch field
     _scratch_div::Any           # center scalar scratch field
-    # Float32 → Float64 temporaries for UMFPACK
+    # Float32 → Float64 temporaries for UMFPACK (length N_h)
     rhs_work64::Union{Nothing, Vector{Float64}}
     sol_work64::Union{Nothing, Vector{Float64}}
 end
@@ -515,7 +521,7 @@ function build_sparse_helmholtz_2d_cache(::Type{FT}, Y) where {FT}
     dof_map, N_h = build_sparse_helmholtz_2d_dof_map(topology, Nq)
     N_dof = N_h * N_v
 
-    @info "SparseHelmholtz2D: nelem=$nelem, Nq=$Nq, N_h=$N_h, N_v=$N_v, N_dof=$N_dof"
+    @info "SparseHelmholtz2D: nelem=$nelem, Nq=$Nq, N_h=$N_h, N_v=$N_v, N_dof=$N_dof (level-decoupled)"
 
     # GLL quadrature data
     points, w = Quadratures.quadrature_points(FT, quad)
@@ -525,40 +531,35 @@ function build_sparse_helmholtz_2d_cache(::Type{FT}, Y) where {FT}
     # Reference 1D stiffness: K1D[a,b] = Σ_q w_q * D[q,a] * D[q,b]
     K1D_ref = D' * Diagonal(weights) * D
 
-    # Build sparsity pattern: for each element, all node pairs couple (Nq² × Nq²)
-    # Because the diagonal-metric stiffness has row-wise and column-wise coupling,
-    # the effective per-element nonzeros are: for each node (i,j), it couples to
-    # all (i',j) [same j-row] and all (i,j') [same i-column].
+    # Build N_h × N_h sparsity pattern (shared by all levels, values differ).
     I_idx = Int[]
     J_idx = Int[]
     V_val = FT[]
 
-    for k in 1:N_v
-        for e in 1:nelem
-            for j1 in 1:Nq, i1 in 1:Nq
-                h_row = dof_map[i1, j1, e]
-                row = (k - 1) * N_h + h_row
-                # Direction 1: coupling to (i2, j1) for all i2
-                for i2 in 1:Nq
-                    h_col = dof_map[i2, j1, e]
-                    col = (k - 1) * N_h + h_col
-                    push!(I_idx, row)
-                    push!(J_idx, col)
-                    push!(V_val, FT(0))
-                end
-                # Direction 2: coupling to (i1, j2) for all j2
-                for j2 in 1:Nq
-                    h_col = dof_map[i1, j2, e]
-                    col = (k - 1) * N_h + h_col
-                    push!(I_idx, row)
-                    push!(J_idx, col)
-                    push!(V_val, FT(0))
-                end
+    for e in 1:nelem
+        for j1 in 1:Nq, i1 in 1:Nq
+            h_row = dof_map[i1, j1, e]
+            # Direction 1: coupling to (i2, j1) for all i2
+            for i2 in 1:Nq
+                h_col = dof_map[i2, j1, e]
+                push!(I_idx, h_row)
+                push!(J_idx, h_col)
+                push!(V_val, FT(0))
+            end
+            # Direction 2: coupling to (i1, j2) for all j2
+            for j2 in 1:Nq
+                h_col = dof_map[i1, j2, e]
+                push!(I_idx, h_row)
+                push!(J_idx, h_col)
+                push!(V_val, FT(0))
             end
         end
     end
 
-    H_sparse = sparse(I_idx, J_idx, V_val, N_dof, N_dof)
+    # Create N_v independent copies of the horizontal sparsity pattern
+    H_template = sparse(I_idx, J_idx, V_val, N_h, N_h)
+    H_levels = [copy(H_template) for _ in 1:N_v]
+    H_level_factors = [Ref{Any}(nothing) for _ in 1:N_v]
 
     # Extract WJ values from horizontal local geometry, store by DOF
     WJ_vec = zeros(FT, N_h)
@@ -568,7 +569,7 @@ function build_sparse_helmholtz_2d_cache(::Type{FT}, Y) where {FT}
     @inbounds for e in 1:nelem
         for j in 1:Nq, i in 1:Nq
             h_dof = dof_map[i, j, e]
-            # Accumulate WJ for shared DOFs (DSS-like); will normalize later
+            # Accumulate WJ for shared DOFs (DSS-like)
             WJ_vec[h_dof] += FT(WJ_arr[i, j, 1, e])
         end
     end
@@ -576,16 +577,17 @@ function build_sparse_helmholtz_2d_cache(::Type{FT}, Y) where {FT}
     _scratch_ρ = similar(Y.c, FT)
     _scratch_div = similar(Y.c, FT)
 
-    rhs_work64 = FT === Float32 ? zeros(Float64, N_dof) : nothing
-    sol_work64 = FT === Float32 ? zeros(Float64, N_dof) : nothing
+    # Float32 → Float64 temporaries sized per-level (N_h) for UMFPACK
+    rhs_work64 = FT === Float32 ? zeros(Float64, N_h) : nothing
+    sol_work64 = FT === Float32 ? zeros(Float64, N_h) : nothing
 
     return SparseHelmholtz2DCache{FT}(
-        H_sparse,
-        Ref{Any}(nothing),
-        zeros(FT, N_dof),
-        zeros(FT, N_dof),
-        zeros(FT, N_dof),
-        zeros(FT, N_dof),
+        H_levels,
+        H_level_factors,
+        zeros(FT, N_h),          # rhs_lev
+        zeros(FT, N_h),          # sol_lev
+        zeros(FT, N_dof),        # cs2_vec (all levels)
+        zeros(FT, N_dof),        # ρ_vec (all levels)
         Ref(FT(0)),
         dof_map,
         D,
@@ -646,49 +648,41 @@ end
 """
     assemble_sparse_helmholtz_2d!(shc::SparseHelmholtz2DCache)
 
-Assemble the 2D horizontal Helmholtz matrix:
-    H = M_h + δtγ² · diag(cs²) · K_h
+Assemble per-level 2D horizontal Helmholtz matrices:
+    H_k = M_h + δtγ² · diag(cs²_k) · K_h
 where M_h uses the actual WJ values (diagonal) and K_h uses the isotropic
 metric approximation (J·g^{αβ} ≈ δ^{αβ}), giving a tensor-product stiffness:
     K[(i1,j1),(i2,j2)] = δ(j1,j2)·w[j1]·K1D[i1,i2] + δ(i1,i2)·w[i1]·K1D[j1,j2]
 
-After assembly, the matrix is LU-factorized.
+Each level is assembled and LU-factorized independently (N_h × N_h).
 """
 function assemble_sparse_helmholtz_2d!(shc::SparseHelmholtz2DCache{FT}) where {FT}
-    (; H_sparse, cs2_vec, WJ_vec, K1D_ref, weights, dtγ,
+    (; H_levels, H_level_factors, cs2_vec, WJ_vec, K1D_ref, weights, dtγ,
        dof_map, Nq, nelem, N_h, N_v) = shc
 
     δtγ² = dtγ[]^2
 
-    H_sparse.nzval .= FT(0)
-
-    # Step 1: Add mass matrix (diagonal) — once per unique DOF per level.
-    # WJ_vec already contains the DSS-accumulated WJ for each DOF, so we
-    # add it exactly once to avoid double-counting for shared nodes.
     @inbounds for k in 1:N_v
+        Hk = H_levels[k]
+        Hk.nzval .= FT(0)
+
+        # Mass matrix (diagonal) — once per unique DOF
         for h in 1:N_h
-            idx = (k - 1) * N_h + h
-            H_sparse[idx, idx] += FT(WJ_vec[h])
+            Hk[h, h] += FT(WJ_vec[h])
         end
-    end
 
-    # Step 2: Add stiffness matrix — assembled per element via direct
-    # stiffness summation. For shared DOFs, the += naturally accumulates
-    # contributions from all elements (correct FEM assembly).
-    @inbounds for k in 1:N_v
+        # Stiffness matrix — assembled per element via direct stiffness summation
         for e in 1:nelem
             for j in 1:Nq, i in 1:Nq
                 h_row = dof_map[i, j, e]
-                row = (k - 1) * N_h + h_row
-                cs2_row = cs2_vec[row]
+                cs2_row = cs2_vec[(k - 1) * N_h + h_row]
 
                 # Direction 1: K_h coupling along i-direction (fixed j)
                 w_j = weights[j]
                 for i2 in 1:Nq
                     h_col = dof_map[i2, j, e]
-                    col = (k - 1) * N_h + h_col
                     k_val = K1D_ref[i, i2]
-                    H_sparse[row, col] += δtγ² * cs2_row * w_j * k_val
+                    Hk[h_row, h_col] += δtγ² * cs2_row * w_j * k_val
                 end
 
                 # Direction 2: K_h coupling along j-direction (fixed i)
@@ -696,15 +690,15 @@ function assemble_sparse_helmholtz_2d!(shc::SparseHelmholtz2DCache{FT}) where {F
                 for j2 in 1:Nq
                     j2 == j && continue  # diagonal already counted in direction 1
                     h_col = dof_map[i, j2, e]
-                    col = (k - 1) * N_h + h_col
                     k_val = K1D_ref[j, j2]
-                    H_sparse[row, col] += δtγ² * cs2_row * w_i * k_val
+                    Hk[h_row, h_col] += δtγ² * cs2_row * w_i * k_val
                 end
             end
         end
+
+        H_level_factors[k][] = lu(Hk)
     end
 
-    shc.H_factorization[] = lu(H_sparse)
     return nothing
 end
 
@@ -712,46 +706,56 @@ end
     sparse_helmholtz_2d_correction!(shc::SparseHelmholtz2DCache, ΔY)
 
 Apply additive 2D sparse Helmholtz correction after column-local solve.
-1. RHS = -δtγ · M · wdivₕ(ρ · z.uₕ)
-2. Solve (M_h + δtγ² · cs² · K_h) · Δρ_h = RHS
+1. RHS_k = -δtγ · wdivₕ(ρ · z.uₕ)  (per level k)
+2. Solve H_k · Δρ_h_k = RHS_k  (per level k, independent N_h × N_h systems)
 3. ΔY.c.ρ += Δρ_h (additive, ρ-only)
 """
 function sparse_helmholtz_2d_correction!(shc::SparseHelmholtz2DCache{FT}, ΔY) where {FT}
-    (; H_factorization, rhs_vec, sol_vec, dtγ, ρ_vec, WJ_vec,
-       dof_map, Nq, nelem, N_h, N_v, N_dof,
+    (; H_level_factors, rhs_lev, sol_lev, dtγ, ρ_vec,
+       dof_map, Nq, nelem, N_h, N_v,
        _scratch_ρ, _scratch_div, rhs_work64, sol_work64) = shc
 
-    # Step 1: Form RHS = -δtγ · M · wdivₕ(ρ · z.uₕ)
+    # Step 1: Form wdivₕ(ρ · z.uₕ) into scratch field
     _sparse_helmholtz_2d_vec_to_field!(_scratch_ρ, ρ_vec, dof_map, Nq, nelem, N_v, N_h)
     @. _scratch_div = wdivₕ(_scratch_ρ * ΔY.c.uₕ)
     Spaces.weighted_dss!(_scratch_div)
 
-    rhs_vec .= FT(0)
     arr_div = parent(_scratch_div)  # VIJFH: (Nv, Nq, Nq, 1, nelem)
-    @inbounds for e in 1:nelem
-        for j in 1:Nq, i in 1:Nq
-            h_dof = dof_map[i, j, e]
-            for k in 1:N_v
-                idx = (k - 1) * N_h + h_dof
-                # wdivₕ already returns the weak form (mass-weighted),
-                # so RHS = -δtγ · wdivₕ(ρ · uₕ)
-                rhs_vec[idx] += -dtγ[] * arr_div[k, i, j, 1, e]
+    arr_out = parent(_scratch_ρ)    # reuse for output
+
+    δtγ_val = dtγ[]
+
+    # Step 2: Solve each level independently
+    @inbounds for k in 1:N_v
+        # Gather RHS for this level
+        rhs_lev .= FT(0)
+        for e in 1:nelem
+            for j in 1:Nq, i in 1:Nq
+                h_dof = dof_map[i, j, e]
+                rhs_lev[h_dof] += -δtγ_val * arr_div[k, i, j, 1, e]
+            end
+        end
+
+        # Solve H_k · sol = rhs
+        Fac = H_level_factors[k][]
+        if rhs_work64 !== nothing
+            @inbounds for h in 1:N_h; rhs_work64[h] = rhs_lev[h]; end
+            LinearAlgebra.ldiv!(sol_work64, Fac, rhs_work64)
+            @inbounds for h in 1:N_h; sol_lev[h] = FT(sol_work64[h]); end
+        else
+            LinearAlgebra.ldiv!(sol_lev, Fac, rhs_lev)
+        end
+
+        # Scatter solution back to field for this level
+        for e in 1:nelem
+            for j in 1:Nq, i in 1:Nq
+                h_dof = dof_map[i, j, e]
+                arr_out[k, i, j, 1, e] = sol_lev[h_dof]
             end
         end
     end
 
-    # Step 2: Solve H · Δρ_h = rhs
-    Fac = H_factorization[]
-    if rhs_work64 !== nothing
-        @. rhs_work64 = rhs_vec
-        LinearAlgebra.ldiv!(sol_work64, Fac, rhs_work64)
-        @. sol_vec = sol_work64
-    else
-        LinearAlgebra.ldiv!(sol_vec, Fac, rhs_vec)
-    end
-
-    # Step 3: Write correction to scratch field, DSS, add to ΔY
-    _sparse_helmholtz_2d_vec_to_field!(_scratch_ρ, sol_vec, dof_map, Nq, nelem, N_v, N_h)
+    # Step 3: DSS the correction and add to ΔY
     Spaces.weighted_dss!(_scratch_ρ)
     @. ΔY.c.ρ += _scratch_ρ
 
