@@ -17,28 +17,9 @@ import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
 
-# Krylov + FieldVector on GPU: override cache allocation so workspace uses
-# similar(prototype) instead of FieldVector(undef, n). Requires ClimaCore as/bickley.
-import ClimaTimeSteppers
-import ClimaCore
-import Krylov
-function ClimaTimeSteppers.allocate_cache(
-    alg::ClimaTimeSteppers.KrylovMethod,
-    x_prototype::ClimaCore.Fields.FieldVector,
-)
-    (; jacobian_free_jvp, forcing_term, kwargs, debugger) = alg
-    type = ClimaTimeSteppers.solver_type(alg)
-    kc = Krylov.KrylovConstructor(similar(x_prototype))
-    return (;
-        jacobian_free_jvp_cache = isnothing(jacobian_free_jvp) ? nothing :
-            ClimaTimeSteppers.allocate_cache(jacobian_free_jvp, x_prototype),
-        forcing_term_cache =
-            ClimaTimeSteppers.allocate_cache(forcing_term, x_prototype),
-        solver = type(kc; kwargs...),
-        debugger_cache = isnothing(debugger) ? nothing :
-            ClimaTimeSteppers.allocate_cache(debugger, x_prototype),
-    )
-end
+# Krylov workspaces must use `Krylov.ktypeof(x)` (ClimaCore KrylovExt maps FieldVector →
+# Vector / CuVector). A KrylovConstructor(similar(x)) workspace keeps S = FieldVector and
+# fails Krylov 0.10's `ktypeof(b) == S` check in fgmres! against KrylovExt's ktypeof.
 
 if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()

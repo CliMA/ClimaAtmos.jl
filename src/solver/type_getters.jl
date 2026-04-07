@@ -13,10 +13,11 @@ import Logging
 
 import ClimaUtilities.TimeManager: ITime
 
-# Override Krylov.ktypeof for FieldVector to return typeof(x) instead of the
-# ClimaCore KrylovExt's array_type-based mapping. This ensures the Krylov
-# workspace S type matches the runtime ktypeof(b) check.
-Krylov.ktypeof(x::ClimaCore.Fields.FieldVector) = typeof(x)
+# Krylov.ktypeof for FieldVector is defined in ClimaCore's KrylovExt: it maps to
+# a 1D Vector type so Krylov can allocate workspaces with `similar(undef, n)`.
+# Do not override here — returning typeof(x) would make fgmres call
+# FieldVector(UndefInitializer(), n), which is not defined, and would also
+# overwrite KrylovExt during precompilation.
 
 import ClimaDiagnostics
 
@@ -511,13 +512,16 @@ function get_jacobian(ode_algo, Y, atmos, parsed_args)
         parsed_args["approximate_linear_solve_iters"],
         parsed_args["debug_jacobian"],
         parsed_args["n_helmholtz_iters"],
+        parsed_args["sparse_helmholtz"],
+        parsed_args["sparse_helmholtz_2d"],
         ; for_sgs_u₃ = false,
     )
 end
 
 function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
     auto_jacobian_padding_bands,
-    approximate_linear_solve_iters, debug_jacobian, n_helmholtz_iters;
+    approximate_linear_solve_iters, debug_jacobian, n_helmholtz_iters,
+    sparse_helmholtz = false, sparse_helmholtz_2d = false;
     for_sgs_u₃ = false,
 )
     (ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
@@ -538,6 +542,8 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
             DerivativeFlag(atmos.fully_implicit && n_helmholtz_iters > 0),
             approximate_linear_solve_iters,
             n_helmholtz_iters,
+            DerivativeFlag(atmos.fully_implicit && sparse_helmholtz),
+            DerivativeFlag(atmos.fully_implicit && sparse_helmholtz_2d),
         )
         use_auto_jacobian ?
         AutoSparseJacobian(
@@ -596,6 +602,8 @@ function ode_configuration(::Type{FT}, args) where {FT}
         args["krylov_memory"],
         args["krylov_itmax"],
         args["n_helmholtz_iters"],
+        args["sparse_helmholtz"],
+        args["sparse_helmholtz_2d"],
     )
 end
 
@@ -605,6 +613,7 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
     use_dynamic_krylov_rtol, eisenstat_walker_forcing_alpha, krylov_rtol,
     use_newton_rtol, newton_rtol, jvp_step_adjustment,
     krylov_memory, krylov_itmax, n_helmholtz_iters = 0,
+    sparse_helmholtz = false, sparse_helmholtz_2d = false,
 ) where {FT}
     ode_algo_name = getproperty(CTS, Symbol(ode_name))
     update_j_freq = if update_jacobian_every == "dt"
@@ -632,7 +641,7 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
            ode_algo_name <:
            getproperty(CTS, :DIRKAlgorithmName)
         # Use FGMRES when Helmholtz correction is enabled (variable preconditioner)
-        krylov_workspace_type = n_helmholtz_iters > 0 ?
+        krylov_workspace_type = (n_helmholtz_iters > 0 || sparse_helmholtz || sparse_helmholtz_2d) ?
             Val(Krylov.FgmresWorkspace) : Val(Krylov.GmresWorkspace)
         newtons_method = CTS.NewtonsMethod(;
             max_iters = max_newton_iters_ode,
@@ -674,7 +683,7 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
             update_j = update_j_freq,
         )
         # Use FGMRES when Helmholtz correction is enabled (variable preconditioner)
-        krylov_workspace_type = n_helmholtz_iters > 0 ?
+        krylov_workspace_type = (n_helmholtz_iters > 0 || sparse_helmholtz || sparse_helmholtz_2d) ?
             Val(Krylov.FgmresWorkspace) : Val(Krylov.GmresWorkspace)
         newtons_method = CTS.NewtonsMethod(;
             max_iters = max_newton_iters_ode,
@@ -899,6 +908,8 @@ function args_integrator(args, Y, p, tspan, ode_algo, callback, dt_integrator)
         args["prescribed_flow"],
         args["fully_implicit"],
         args["n_helmholtz_iters"],
+        args["sparse_helmholtz"],
+        args["sparse_helmholtz_2d"],
         dt_integrator,
     )
 end
@@ -906,7 +917,7 @@ end
 function args_integrator(Y, p, tspan, ode_algo, callback,
     use_dense_jacobian, use_auto_jacobian, auto_jacobian_padding_bands,
     approximate_linear_solve_iters, debug_jacobian, prescribed_flow,
-    fully_implicit, n_helmholtz_iters,
+    fully_implicit, n_helmholtz_iters, sparse_helmholtz, sparse_helmholtz_2d,
     dt_integrator,
 )
     (; atmos) = p
@@ -922,6 +933,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                     auto_jacobian_padding_bands,
                     approximate_linear_solve_iters, debug_jacobian,
                     n_helmholtz_iters,
+                    sparse_helmholtz, sparse_helmholtz_2d,
                 ),
                 Wfact = update_jacobian!,
             )
@@ -938,7 +950,8 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                         use_dense_jacobian, use_auto_jacobian,
                         auto_jacobian_padding_bands,
                         approximate_linear_solve_iters, debug_jacobian,
-                        n_helmholtz_iters;
+                        n_helmholtz_iters,
+                        sparse_helmholtz, sparse_helmholtz_2d;
                         for_sgs_u₃ = true,
                     ),
                     Wfact = update_jacobian_sgs_u₃!,
@@ -950,6 +963,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                     auto_jacobian_padding_bands,
                     approximate_linear_solve_iters, debug_jacobian,
                     n_helmholtz_iters,
+                    sparse_helmholtz, sparse_helmholtz_2d,
                 ),
                 Wfact = update_jacobian!,
             )

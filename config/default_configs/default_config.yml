@@ -68,6 +68,12 @@ fully_implicit:
 n_helmholtz_iters:
   help: "Number of Jacobi-preconditioned Richardson iterations for the horizontal Helmholtz solve in the preconditioner. 0 = diagonal only (no Helmholtz correction). Only used when fully_implicit: true."
   value: 0
+sparse_helmholtz:
+  help: "Enable sparse direct Helmholtz preconditioner for horizontal acoustics (fully implicit only, plane topology). Independent of n_helmholtz_iters."
+  value: false
+sparse_helmholtz_2d:
+  help: "Enable 2D sparse direct Helmholtz preconditioner for horizontal acoustics on sphere grids (fully implicit only). Assembles a global SE stiffness matrix using cubed-sphere topology connectivity and LU-factorizes it level-by-level. Requires FGMRES."
+  value: false
 use_krylov_method:
   help: "Whether to use a Krylov method to solve the linear system in Newton's method (only for ClimaTimeSteppers.jl)"
   value: false

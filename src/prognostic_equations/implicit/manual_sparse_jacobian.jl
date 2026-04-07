@@ -1,7 +1,10 @@
-import LinearAlgebra: I, Adjoint
+import LinearAlgebra: I, Adjoint, Diagonal, lu
+using SparseArrays
 
 using ClimaCore.MatrixFields
 import ClimaCore.MatrixFields: @name
+import ClimaCore.Topologies as Topologies
+import ClimaCore.Quadratures as Quadratures
 
 abstract type DerivativeFlag end
 struct UseDerivative <: DerivativeFlag end
@@ -25,6 +28,8 @@ use_derivative(::IgnoreDerivative) = false
         sgs_vertdiff_flag,
         acoustic_diagonal_flag,
         approximate_solve_iters,
+        sparse_helmholtz_flag,
+        sparse_helmholtz_2d_flag,
     )
 
 A [`JacobianAlgorithm`](@ref) that approximates the Jacobian using analytically
@@ -58,8 +63,18 @@ solver. Certain groups of derivatives can be toggled on or off by setting their
 - `n_helmholtz_iters::Int`: number of Jacobi-preconditioned Richardson
   iterations for the horizontal Helmholtz solve in the preconditioner (only
   used when `acoustic_diagonal_flag` is `UseDerivative`). 0 = diagonal only.
+- `sparse_helmholtz_flag::DerivativeFlag`: whether to use a sparse direct
+  Helmholtz preconditioner for horizontal acoustics (plane topology only).
+  Independent of `acoustic_diagonal_flag` and `n_helmholtz_iters`. Uses
+  LU-factorized sparse matrix solve instead of iterative Chebyshev. Requires
+  FGMRES.
+- `sparse_helmholtz_2d_flag::DerivativeFlag`: whether to use a 2D sparse direct
+  Helmholtz preconditioner for horizontal acoustics on sphere grids. Assembles
+  the SE stiffness matrix using cubed-sphere topology connectivity with proper
+  face/vertex DOF sharing. LU-factorized and applied level-by-level. Requires
+  FGMRES.
 """
-struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7, F8} <: SparseJacobian
+struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7, F8, F9, F10} <: SparseJacobian
     topography_flag::F1
     diffusion_flag::F2
     sgs_advection_flag::F3
@@ -70,6 +85,8 @@ struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7, F8} <: SparseJacobian
     acoustic_diagonal_flag::F8
     approximate_solve_iters::Int
     n_helmholtz_iters::Int
+    sparse_helmholtz_flag::F9
+    sparse_helmholtz_2d_flag::F10
 end
 
 """
@@ -90,6 +107,655 @@ mutable struct HelmholtzPreconditionerState{FT, F, GB}
     ghost_buffer_c::GB   # DSS buffer for center vector fields (uₕ)
     n_helmholtz_iters::Int
     call_counter::Int     # tracks invert_jacobian! calls since last Jacobian update
+end
+
+"""
+    SparseHelmholtzCache
+
+Stores the sparse Helmholtz matrix and work vectors for the sparse direct
+Helmholtz preconditioner. The Helmholtz operator is:
+    H = M_h + δtγ² · diag(cs²) · K_h
+where M_h is the GLL mass matrix and K_h is the SE stiffness matrix
+(horizontal only, no vertical coupling).
+"""
+struct SparseHelmholtzCache{FT}
+    H_sparse::SparseMatrixCSC{FT, Int}
+    H_factorization::Base.RefValue{Any}
+    rhs_vec::Vector{FT}
+    sol_vec::Vector{FT}
+    cs2_vec::Vector{FT}
+    ρ_vec::Vector{FT}
+    dtγ::Base.RefValue{FT}
+    D_matrix::Matrix{FT}
+    weights::Vector{FT}
+    elem_Δx::FT
+    helem::Int
+    npoly::Int
+    Nq::Int
+    N_h::Int
+    N_v::Int
+    N_dof::Int
+    _scratch_ρ::Any    # center scalar scratch field
+    _scratch_div::Any  # center scalar scratch field
+    # UMFPACK `lu` on sparse matrices uses Float64; use these for ldiv! when FT === Float32
+    rhs_work64::Union{Nothing, Vector{Float64}}
+    sol_work64::Union{Nothing, Vector{Float64}}
+end
+
+"""
+Global DOF index from horizontal DOF i_h and vertical level k.
+"""
+@inline function _sparse_helmholtz_global_dof(i_h::Int, k::Int, N_h::Int)
+    return (k - 1) * N_h + i_h
+end
+
+"""
+Map (element e, local node q) to unique horizontal DOF index.
+Periodic: node Nq of element e shares with node 1 of element e+1.
+"""
+@inline function _sparse_helmholtz_h_dof(e::Int, q::Int, npoly::Int, Nq::Int, helem::Int)
+    if q == Nq
+        next_e = (e == helem) ? 1 : e + 1
+        return (next_e - 1) * npoly + 1
+    else
+        return (e - 1) * npoly + q
+    end
+end
+
+function build_sparse_helmholtz_cache(::Type{FT}, Y) where {FT}
+    cspace = axes(Y.c)
+    hspace = Spaces.horizontal_space(cspace)
+    topology = Spaces.topology(hspace)
+    quad = Spaces.quadrature_style(hspace)
+
+    helem = Topologies.nlocalelems(topology)
+    Nq = Quadratures.degrees_of_freedom(quad)
+    npoly = Nq - 1
+    N_h = helem * npoly  # unique horizontal DOFs (periodic)
+    N_v = Spaces.nlevels(cspace)
+    N_dof = N_h * N_v
+
+    # GLL quadrature data
+    points, w = Quadratures.quadrature_points(FT, quad)
+    D = Matrix{FT}(Quadratures.differentiation_matrix(FT, quad))
+    weights = Vector{FT}(w)
+
+    # Element physical width: node spacing × nodes per element
+    Δx_node = FT(Spaces.node_horizontal_length_scale(hspace))
+    elem_Δx = Δx_node * npoly
+
+    J_e = elem_Δx / 2
+
+    # Build sparsity pattern (horizontal stiffness only)
+    I_idx = Int[]
+    J_idx = Int[]
+    V_val = FT[]
+
+    for k in 1:N_v
+        for e in 1:helem
+            for qi in 1:Nq
+                i_h = _sparse_helmholtz_h_dof(e, qi, npoly, Nq, helem)
+                row = _sparse_helmholtz_global_dof(i_h, k, N_h)
+                for qj in 1:Nq
+                    j_h = _sparse_helmholtz_h_dof(e, qj, npoly, Nq, helem)
+                    col = _sparse_helmholtz_global_dof(j_h, k, N_h)
+                    push!(I_idx, row)
+                    push!(J_idx, col)
+                    push!(V_val, FT(1))
+                end
+            end
+        end
+    end
+
+    H_sparse = sparse(I_idx, J_idx, V_val, N_dof, N_dof)
+
+    _scratch_ρ = similar(Y.c, FT)
+    _scratch_div = similar(Y.c, FT)
+
+    rhs_work64 = FT === Float32 ? zeros(Float64, N_dof) : nothing
+    sol_work64 = FT === Float32 ? zeros(Float64, N_dof) : nothing
+
+    return SparseHelmholtzCache{FT}(
+        H_sparse,
+        Ref{Any}(nothing),
+        zeros(FT, N_dof),
+        zeros(FT, N_dof),
+        zeros(FT, N_dof),
+        zeros(FT, N_dof),
+        Ref(FT(0)),
+        D,
+        weights,
+        elem_Δx,
+        helem,
+        npoly,
+        Nq,
+        N_h,
+        N_v,
+        N_dof,
+        _scratch_ρ,
+        _scratch_div,
+        rhs_work64,
+        sol_work64,
+    )
+end
+
+"""
+Extract a center scalar field to a flat vector using the DOF mapping.
+Parent layout: (Nv, Ni, Nf, Nh) = (N_v, Nq, 1, helem)
+"""
+function _sparse_helmholtz_field_to_vec!(
+    vec::Vector{FT}, field, helem, npoly, N_v, N_h,
+) where {FT}
+    arr = parent(field)
+    @inbounds for e in 1:helem
+        for q in 1:npoly
+            i_h = (e - 1) * npoly + q
+            for k in 1:N_v
+                vec[_sparse_helmholtz_global_dof(i_h, k, N_h)] = arr[k, q, 1, e]
+            end
+        end
+    end
+    return vec
+end
+
+"""
+Write a flat vector back to a center scalar field.
+"""
+function _sparse_helmholtz_vec_to_field!(
+    field, vec::Vector{FT}, helem, npoly, Nq, N_v, N_h,
+) where {FT}
+    arr = parent(field)
+    @inbounds for e in 1:helem
+        for q in 1:npoly
+            i_h = (e - 1) * npoly + q
+            for k in 1:N_v
+                arr[k, q, 1, e] = vec[_sparse_helmholtz_global_dof(i_h, k, N_h)]
+            end
+        end
+    end
+    # Copy shared boundary: q=Nq of element e = q=1 of element e+1
+    @inbounds for e in 1:helem
+        next_e = (e == helem) ? 1 : e + 1
+        for k in 1:N_v
+            arr[k, Nq, 1, e] = arr[k, 1, 1, next_e]
+        end
+    end
+    return field
+end
+
+"""
+    assemble_sparse_helmholtz!(shc::SparseHelmholtzCache)
+
+Assemble the horizontal Helmholtz matrix H = M_h + δtγ² · diag(cs²) · K_h
+and compute its LU factorization.
+"""
+function assemble_sparse_helmholtz!(shc::SparseHelmholtzCache{FT}) where {FT}
+    (; H_sparse, cs2_vec, D_matrix, weights, elem_Δx, dtγ,
+       helem, npoly, Nq, N_h, N_v) = shc
+
+    J_e = elem_Δx / 2
+    δtγ² = dtγ[]^2
+
+    K_elem = (1 / J_e) * (D_matrix' * Diagonal(weights) * D_matrix)
+    M_elem = weights .* J_e
+
+    H_sparse.nzval .= FT(0)
+
+    @inbounds for k in 1:N_v
+        for e in 1:helem
+            for qi in 1:Nq
+                i_h = _sparse_helmholtz_h_dof(e, qi, npoly, Nq, helem)
+                row = _sparse_helmholtz_global_dof(i_h, k, N_h)
+                cs2_ik = cs2_vec[row]
+
+                for qj in 1:Nq
+                    j_h = _sparse_helmholtz_h_dof(e, qj, npoly, Nq, helem)
+                    col = _sparse_helmholtz_global_dof(j_h, k, N_h)
+                    m_val = (qi == qj) ? M_elem[qi] : FT(0)
+                    k_val = K_elem[qi, qj]
+                    H_sparse[row, col] += m_val + δtγ² * cs2_ik * k_val
+                end
+            end
+        end
+    end
+
+    shc.H_factorization[] = lu(H_sparse)
+    return nothing
+end
+
+"""
+    sparse_helmholtz_correction!(shc::SparseHelmholtzCache, ΔY)
+
+Apply additive sparse Helmholtz correction after column-local solve.
+1. RHS = -δtγ · M · wdivₕ(ρ · z.uₕ)
+2. Solve (M_h + δtγ² · cs² · K_h) · Δρ_h = RHS
+3. ΔY.c.ρ += Δρ_h (additive, ρ-only)
+"""
+function sparse_helmholtz_correction!(shc::SparseHelmholtzCache{FT}, ΔY) where {FT}
+    (; H_factorization, rhs_vec, sol_vec, dtγ, ρ_vec,
+       weights, elem_Δx, helem, npoly, Nq, N_h, N_v, N_dof,
+       _scratch_ρ, _scratch_div, rhs_work64, sol_work64) = shc
+
+    J_e = elem_Δx / 2
+    M_elem = weights .* J_e
+
+    # Step 1: Form RHS = -δtγ · M · wdivₕ(ρ · z.uₕ)
+    _sparse_helmholtz_vec_to_field!(_scratch_ρ, ρ_vec, helem, npoly, Nq, N_v, N_h)
+    @. _scratch_div = wdivₕ(_scratch_ρ * ΔY.c.uₕ)
+    Spaces.weighted_dss!(_scratch_div)
+
+    rhs_vec .= FT(0)
+    arr_div = parent(_scratch_div)
+    @inbounds for e in 1:helem
+        for q in 1:Nq
+            i_h = _sparse_helmholtz_h_dof(e, q, npoly, Nq, helem)
+            M_q = M_elem[q]
+            for k in 1:N_v
+                idx = _sparse_helmholtz_global_dof(i_h, k, N_h)
+                rhs_vec[idx] += -dtγ[] * M_q * arr_div[k, q, 1, e]
+            end
+        end
+    end
+
+    # Step 2: Solve H · Δρ_h = rhs
+    # Sparse UMFPACK factorization is Float64; rhs/sol are FT (often Float32)
+    Fac = H_factorization[]
+    if rhs_work64 !== nothing
+        @. rhs_work64 = rhs_vec
+        LinearAlgebra.ldiv!(sol_work64, Fac, rhs_work64)
+        @. sol_vec = sol_work64
+    else
+        LinearAlgebra.ldiv!(sol_vec, Fac, rhs_vec)
+    end
+
+    # Step 3: Write correction to scratch field, DSS, add to ΔY
+    _sparse_helmholtz_vec_to_field!(_scratch_ρ, sol_vec, helem, npoly, Nq, N_v, N_h)
+    Spaces.weighted_dss!(_scratch_ρ)
+    @. ΔY.c.ρ += _scratch_ρ
+
+    return nothing
+end
+
+# ============================================================================
+# 2D Sparse Helmholtz for sphere (cubed-sphere topology)
+# ============================================================================
+
+# --- Union-Find helpers for DOF merging ---
+function _uf_find!(parent::Vector{Int}, i::Int)
+    while parent[i] != i
+        parent[i] = parent[parent[i]]  # path compression
+        i = parent[i]
+    end
+    return i
+end
+
+function _uf_union!(parent::Vector{Int}, rank::Vector{Int}, a::Int, b::Int)
+    ra = _uf_find!(parent, a)
+    rb = _uf_find!(parent, b)
+    ra == rb && return
+    if rank[ra] < rank[rb]
+        parent[ra] = rb
+    elseif rank[ra] > rank[rb]
+        parent[rb] = ra
+    else
+        parent[rb] = ra
+        rank[ra] += 1
+    end
+    return
+end
+
+"""
+    SparseHelmholtz2DCache
+
+Stores the sparse Helmholtz matrix and work vectors for the 2D sparse direct
+Helmholtz preconditioner on sphere (cubed-sphere) grids. The Helmholtz operator
+is assembled per vertical level:
+    H = M_h + δtγ² · diag(cs²) · K_h
+where M_h is the GLL mass matrix (using actual WJ values) and K_h is the 2D SE
+stiffness matrix using an isotropic metric approximation. DOFs are mapped using
+cubed-sphere topology connectivity (shared face/vertex nodes merged).
+"""
+struct SparseHelmholtz2DCache{FT}
+    H_sparse::SparseMatrixCSC{FT, Int}
+    H_factorization::Base.RefValue{Any}
+    rhs_vec::Vector{FT}
+    sol_vec::Vector{FT}
+    cs2_vec::Vector{FT}
+    ρ_vec::Vector{FT}
+    dtγ::Base.RefValue{FT}
+    # DOF mapping: dof_map[i, j, e] → unique horizontal DOF index (1..N_h)
+    dof_map::Array{Int, 3}
+    # 1D GLL quadrature
+    D_matrix::Matrix{FT}        # Nq × Nq differentiation matrix
+    weights::Vector{FT}         # Nq quadrature weights
+    K1D_ref::Matrix{FT}         # Nq × Nq reference 1D stiffness: Σ_q w_q D[q,a]D[q,b]
+    # Per-node mass: WJ[i,j,e] for all nodes
+    WJ_vec::Vector{FT}          # length N_dof (indexed by global DOF)
+    # Mesh metadata
+    Nq::Int
+    nelem::Int
+    N_h::Int                    # unique horizontal DOFs
+    N_v::Int                    # vertical levels
+    N_dof::Int                  # N_h * N_v
+    _scratch_ρ::Any             # center scalar scratch field
+    _scratch_div::Any           # center scalar scratch field
+    # Float32 → Float64 temporaries for UMFPACK
+    rhs_work64::Union{Nothing, Vector{Float64}}
+    sol_work64::Union{Nothing, Vector{Float64}}
+end
+
+"""
+    build_sparse_helmholtz_2d_dof_map(topology, Nq)
+
+Build the unique horizontal DOF mapping for a 2D spectral element topology
+(cubed-sphere or 2D box). Uses union-find to merge shared face and vertex nodes.
+
+Returns `(dof_map, N_h)` where `dof_map[i, j, e]` gives the unique horizontal
+DOF index and `N_h` is the total number of unique DOFs.
+"""
+function build_sparse_helmholtz_2d_dof_map(topology, Nq)
+    nelem = Topologies.nlocalelems(topology)
+    N_raw = nelem * Nq * Nq
+
+    # Initialize union-find
+    uf_parent = collect(1:N_raw)
+    uf_rank = zeros(Int, N_raw)
+
+    # Raw index from (i, j, e)
+    @inline raw_idx(i, j, e) = (e - 1) * Nq * Nq + (j - 1) * Nq + i
+
+    # Merge shared face DOFs using interior_faces
+    for (e1, f1, e2, f2, reversed) in Topologies.interior_faces(topology)
+        for q in 1:Nq
+            i1, j1 = Topologies.face_node_index(f1, Nq, q, false)
+            i2, j2 = Topologies.face_node_index(f2, Nq, q, reversed)
+            r1 = raw_idx(i1, j1, e1)
+            r2 = raw_idx(i2, j2, e2)
+            _uf_union!(uf_parent, uf_rank, r1, r2)
+        end
+    end
+
+    # Compact: assign sequential DOF indices
+    root_to_dof = Dict{Int, Int}()
+    next_dof = 0
+    dof_map = Array{Int, 3}(undef, Nq, Nq, nelem)
+    @inbounds for e in 1:nelem
+        for j in 1:Nq, i in 1:Nq
+            root = _uf_find!(uf_parent, raw_idx(i, j, e))
+            if !haskey(root_to_dof, root)
+                next_dof += 1
+                root_to_dof[root] = next_dof
+            end
+            dof_map[i, j, e] = root_to_dof[root]
+        end
+    end
+    N_h = next_dof
+
+    return dof_map, N_h
+end
+
+"""
+    build_sparse_helmholtz_2d_cache(::Type{FT}, Y) where {FT}
+
+Build the 2D sparse Helmholtz cache for sphere grids. Computes the DOF mapping
+from cubed-sphere topology connectivity, builds the sparsity pattern for the
+2D SE Helmholtz operator, and allocates work vectors.
+"""
+function build_sparse_helmholtz_2d_cache(::Type{FT}, Y) where {FT}
+    cspace = axes(Y.c)
+    hspace = Spaces.horizontal_space(cspace)
+    topology = Spaces.topology(hspace)
+    quad = Spaces.quadrature_style(hspace)
+
+    Nq = Quadratures.degrees_of_freedom(quad)
+    nelem = Topologies.nlocalelems(topology)
+    N_v = Spaces.nlevels(cspace)
+
+    # Build DOF mapping
+    dof_map, N_h = build_sparse_helmholtz_2d_dof_map(topology, Nq)
+    N_dof = N_h * N_v
+
+    @info "SparseHelmholtz2D: nelem=$nelem, Nq=$Nq, N_h=$N_h, N_v=$N_v, N_dof=$N_dof"
+
+    # GLL quadrature data
+    points, w = Quadratures.quadrature_points(FT, quad)
+    D = Matrix{FT}(Quadratures.differentiation_matrix(FT, quad))
+    weights = Vector{FT}(w)
+
+    # Reference 1D stiffness: K1D[a,b] = Σ_q w_q * D[q,a] * D[q,b]
+    K1D_ref = D' * Diagonal(weights) * D
+
+    # Build sparsity pattern: for each element, all node pairs couple (Nq² × Nq²)
+    # Because the diagonal-metric stiffness has row-wise and column-wise coupling,
+    # the effective per-element nonzeros are: for each node (i,j), it couples to
+    # all (i',j) [same j-row] and all (i,j') [same i-column].
+    I_idx = Int[]
+    J_idx = Int[]
+    V_val = FT[]
+
+    for k in 1:N_v
+        for e in 1:nelem
+            for j1 in 1:Nq, i1 in 1:Nq
+                h_row = dof_map[i1, j1, e]
+                row = (k - 1) * N_h + h_row
+                # Direction 1: coupling to (i2, j1) for all i2
+                for i2 in 1:Nq
+                    h_col = dof_map[i2, j1, e]
+                    col = (k - 1) * N_h + h_col
+                    push!(I_idx, row)
+                    push!(J_idx, col)
+                    push!(V_val, FT(0))
+                end
+                # Direction 2: coupling to (i1, j2) for all j2
+                for j2 in 1:Nq
+                    h_col = dof_map[i1, j2, e]
+                    col = (k - 1) * N_h + h_col
+                    push!(I_idx, row)
+                    push!(J_idx, col)
+                    push!(V_val, FT(0))
+                end
+            end
+        end
+    end
+
+    H_sparse = sparse(I_idx, J_idx, V_val, N_dof, N_dof)
+
+    # Extract WJ values from horizontal local geometry, store by DOF
+    WJ_vec = zeros(FT, N_h)
+    lg_data = Spaces.local_geometry_data(hspace)
+    WJ_arr = parent(lg_data.WJ)  # shape (Nq, Nq, 1, nelem) for IJFH
+
+    @inbounds for e in 1:nelem
+        for j in 1:Nq, i in 1:Nq
+            h_dof = dof_map[i, j, e]
+            # Accumulate WJ for shared DOFs (DSS-like); will normalize later
+            WJ_vec[h_dof] += FT(WJ_arr[i, j, 1, e])
+        end
+    end
+
+    _scratch_ρ = similar(Y.c, FT)
+    _scratch_div = similar(Y.c, FT)
+
+    rhs_work64 = FT === Float32 ? zeros(Float64, N_dof) : nothing
+    sol_work64 = FT === Float32 ? zeros(Float64, N_dof) : nothing
+
+    return SparseHelmholtz2DCache{FT}(
+        H_sparse,
+        Ref{Any}(nothing),
+        zeros(FT, N_dof),
+        zeros(FT, N_dof),
+        zeros(FT, N_dof),
+        zeros(FT, N_dof),
+        Ref(FT(0)),
+        dof_map,
+        D,
+        weights,
+        Matrix{FT}(K1D_ref),
+        WJ_vec,
+        Nq,
+        nelem,
+        N_h,
+        N_v,
+        N_dof,
+        _scratch_ρ,
+        _scratch_div,
+        rhs_work64,
+        sol_work64,
+    )
+end
+
+"""
+Extract a center scalar field (VIJFH layout) to a flat DOF vector.
+Parent layout: (Nv, Ni, Nj, Nf, Nh) = (N_v, Nq, Nq, 1, nelem).
+For shared DOFs, the last-written value wins (should be identical post-DSS).
+"""
+function _sparse_helmholtz_2d_field_to_vec!(
+    vec::Vector{FT}, field, dof_map, Nq, nelem, N_v, N_h,
+) where {FT}
+    arr = parent(field)
+    @inbounds for e in 1:nelem
+        for j in 1:Nq, i in 1:Nq
+            h_dof = dof_map[i, j, e]
+            for k in 1:N_v
+                vec[(k - 1) * N_h + h_dof] = arr[k, i, j, 1, e]
+            end
+        end
+    end
+    return vec
+end
+
+"""
+Write a flat DOF vector back to a center scalar field (VIJFH layout).
+All (i,j,e) mapping to the same DOF receive the same value.
+"""
+function _sparse_helmholtz_2d_vec_to_field!(
+    field, vec::Vector{FT}, dof_map, Nq, nelem, N_v, N_h,
+) where {FT}
+    arr = parent(field)
+    @inbounds for e in 1:nelem
+        for j in 1:Nq, i in 1:Nq
+            h_dof = dof_map[i, j, e]
+            for k in 1:N_v
+                arr[k, i, j, 1, e] = vec[(k - 1) * N_h + h_dof]
+            end
+        end
+    end
+    return field
+end
+
+"""
+    assemble_sparse_helmholtz_2d!(shc::SparseHelmholtz2DCache)
+
+Assemble the 2D horizontal Helmholtz matrix:
+    H = M_h + δtγ² · diag(cs²) · K_h
+where M_h uses the actual WJ values (diagonal) and K_h uses the isotropic
+metric approximation (J·g^{αβ} ≈ δ^{αβ}), giving a tensor-product stiffness:
+    K[(i1,j1),(i2,j2)] = δ(j1,j2)·w[j1]·K1D[i1,i2] + δ(i1,i2)·w[i1]·K1D[j1,j2]
+
+After assembly, the matrix is LU-factorized.
+"""
+function assemble_sparse_helmholtz_2d!(shc::SparseHelmholtz2DCache{FT}) where {FT}
+    (; H_sparse, cs2_vec, WJ_vec, K1D_ref, weights, dtγ,
+       dof_map, Nq, nelem, N_h, N_v) = shc
+
+    δtγ² = dtγ[]^2
+
+    H_sparse.nzval .= FT(0)
+
+    # Step 1: Add mass matrix (diagonal) — once per unique DOF per level.
+    # WJ_vec already contains the DSS-accumulated WJ for each DOF, so we
+    # add it exactly once to avoid double-counting for shared nodes.
+    @inbounds for k in 1:N_v
+        for h in 1:N_h
+            idx = (k - 1) * N_h + h
+            H_sparse[idx, idx] += FT(WJ_vec[h])
+        end
+    end
+
+    # Step 2: Add stiffness matrix — assembled per element via direct
+    # stiffness summation. For shared DOFs, the += naturally accumulates
+    # contributions from all elements (correct FEM assembly).
+    @inbounds for k in 1:N_v
+        for e in 1:nelem
+            for j in 1:Nq, i in 1:Nq
+                h_row = dof_map[i, j, e]
+                row = (k - 1) * N_h + h_row
+                cs2_row = cs2_vec[row]
+
+                # Direction 1: K_h coupling along i-direction (fixed j)
+                w_j = weights[j]
+                for i2 in 1:Nq
+                    h_col = dof_map[i2, j, e]
+                    col = (k - 1) * N_h + h_col
+                    k_val = K1D_ref[i, i2]
+                    H_sparse[row, col] += δtγ² * cs2_row * w_j * k_val
+                end
+
+                # Direction 2: K_h coupling along j-direction (fixed i)
+                w_i = weights[i]
+                for j2 in 1:Nq
+                    j2 == j && continue  # diagonal already counted in direction 1
+                    h_col = dof_map[i, j2, e]
+                    col = (k - 1) * N_h + h_col
+                    k_val = K1D_ref[j, j2]
+                    H_sparse[row, col] += δtγ² * cs2_row * w_i * k_val
+                end
+            end
+        end
+    end
+
+    shc.H_factorization[] = lu(H_sparse)
+    return nothing
+end
+
+"""
+    sparse_helmholtz_2d_correction!(shc::SparseHelmholtz2DCache, ΔY)
+
+Apply additive 2D sparse Helmholtz correction after column-local solve.
+1. RHS = -δtγ · M · wdivₕ(ρ · z.uₕ)
+2. Solve (M_h + δtγ² · cs² · K_h) · Δρ_h = RHS
+3. ΔY.c.ρ += Δρ_h (additive, ρ-only)
+"""
+function sparse_helmholtz_2d_correction!(shc::SparseHelmholtz2DCache{FT}, ΔY) where {FT}
+    (; H_factorization, rhs_vec, sol_vec, dtγ, ρ_vec, WJ_vec,
+       dof_map, Nq, nelem, N_h, N_v, N_dof,
+       _scratch_ρ, _scratch_div, rhs_work64, sol_work64) = shc
+
+    # Step 1: Form RHS = -δtγ · M · wdivₕ(ρ · z.uₕ)
+    _sparse_helmholtz_2d_vec_to_field!(_scratch_ρ, ρ_vec, dof_map, Nq, nelem, N_v, N_h)
+    @. _scratch_div = wdivₕ(_scratch_ρ * ΔY.c.uₕ)
+    Spaces.weighted_dss!(_scratch_div)
+
+    rhs_vec .= FT(0)
+    arr_div = parent(_scratch_div)  # VIJFH: (Nv, Nq, Nq, 1, nelem)
+    @inbounds for e in 1:nelem
+        for j in 1:Nq, i in 1:Nq
+            h_dof = dof_map[i, j, e]
+            for k in 1:N_v
+                idx = (k - 1) * N_h + h_dof
+                # wdivₕ already returns the weak form (mass-weighted),
+                # so RHS = -δtγ · wdivₕ(ρ · uₕ)
+                rhs_vec[idx] += -dtγ[] * arr_div[k, i, j, 1, e]
+            end
+        end
+    end
+
+    # Step 2: Solve H · Δρ_h = rhs
+    Fac = H_factorization[]
+    if rhs_work64 !== nothing
+        @. rhs_work64 = rhs_vec
+        LinearAlgebra.ldiv!(sol_work64, Fac, rhs_work64)
+        @. sol_vec = sol_work64
+    else
+        LinearAlgebra.ldiv!(sol_vec, Fac, rhs_vec)
+    end
+
+    # Step 3: Write correction to scratch field, DSS, add to ΔY
+    _sparse_helmholtz_2d_vec_to_field!(_scratch_ρ, sol_vec, dof_map, Nq, nelem, N_v, N_h)
+    Spaces.weighted_dss!(_scratch_ρ)
+    @. ΔY.c.ρ += _scratch_ρ
+
+    return nothing
 end
 
 function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
@@ -494,12 +1160,28 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             matrix = matrix_cache,
             helmholtz_state,
             helmholtz_scratch,
+            sparse_helmholtz = nothing,
+            sparse_helmholtz_2d = nothing,
         )
     else
+        # Sparse direct Helmholtz preconditioner (independent of Chebyshev path)
+        sparse_helmholtz = if use_derivative(alg.sparse_helmholtz_flag)
+            build_sparse_helmholtz_cache(FT, Y)
+        else
+            nothing
+        end
+        # 2D sparse Helmholtz for sphere grids
+        sparse_helmholtz_2d = if use_derivative(alg.sparse_helmholtz_2d_flag)
+            build_sparse_helmholtz_2d_cache(FT, Y)
+        else
+            nothing
+        end
         return (;
             matrix = matrix_cache,
             helmholtz_state = nothing,
             helmholtz_scratch = nothing,
+            sparse_helmholtz,
+            sparse_helmholtz_2d,
         )
     end
 end
@@ -940,6 +1622,38 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         if do_dss(axes(Y.c))
             cache.helmholtz_state.ghost_buffer_c = p.ghost_buffer.c
         end
+    end
+
+    # Sparse direct Helmholtz: extract state and assemble matrix
+    if use_derivative(alg.sparse_helmholtz_flag) && !isnothing(cache.sparse_helmholtz)
+        shc = cache.sparse_helmholtz
+        shc.dtγ[] = FT(dtγ)
+        γ_d_sh = cp_d / cv_d
+        ᶜcs²_tmp = p.scratch.ᶜtemp_scalar_2
+        @. ᶜcs²_tmp = γ_d_sh * ᶜp / ᶜρ
+        _sparse_helmholtz_field_to_vec!(
+            shc.cs2_vec, ᶜcs²_tmp, shc.helem, shc.npoly, shc.N_v, shc.N_h,
+        )
+        _sparse_helmholtz_field_to_vec!(
+            shc.ρ_vec, ᶜρ, shc.helem, shc.npoly, shc.N_v, shc.N_h,
+        )
+        assemble_sparse_helmholtz!(shc)
+    end
+
+    # 2D Sparse Helmholtz for sphere: extract state and assemble matrix
+    if use_derivative(alg.sparse_helmholtz_2d_flag) && !isnothing(cache.sparse_helmholtz_2d)
+        shc2 = cache.sparse_helmholtz_2d
+        shc2.dtγ[] = FT(dtγ)
+        γ_d_sh2 = cp_d / cv_d
+        ᶜcs²_tmp2 = p.scratch.ᶜtemp_scalar_2
+        @. ᶜcs²_tmp2 = γ_d_sh2 * ᶜp / ᶜρ
+        _sparse_helmholtz_2d_field_to_vec!(
+            shc2.cs2_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
+        )
+        _sparse_helmholtz_2d_field_to_vec!(
+            shc2.ρ_vec, ᶜρ, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
+        )
+        assemble_sparse_helmholtz_2d!(shc2)
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
@@ -1771,6 +2485,16 @@ function invert_jacobian!(alg::ManualSparseJacobian, cache, ΔY, R)
             helmholtz_correction!(cache, ΔY)
             hs.call_counter = 0
         end
+    end
+
+    # Step 3: Sparse direct Helmholtz correction (independent of Chebyshev path)
+    if use_derivative(alg.sparse_helmholtz_flag) && !isnothing(cache.sparse_helmholtz)
+        sparse_helmholtz_correction!(cache.sparse_helmholtz, ΔY)
+    end
+
+    # Step 4: 2D sparse direct Helmholtz correction for sphere grids
+    if use_derivative(alg.sparse_helmholtz_2d_flag) && !isnothing(cache.sparse_helmholtz_2d)
+        sparse_helmholtz_2d_correction!(cache.sparse_helmholtz_2d, ΔY)
     end
 end
 
