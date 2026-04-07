@@ -5,7 +5,7 @@ dz_bottom: 500.0
 rayleigh_sponge: false
 viscous_sponge: false
 dt: 20secs
-start_date: "20250627"
+start_date: "20100701"
 initial_condition: "WeatherModel"
 surface_setup: DefaultMoninObukhov
 rad: clearsky

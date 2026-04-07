@@ -78,9 +78,6 @@ lazy = true
 [DYAMOND_SUMMER_ICS_p14deg]
 git-tree-sha1 = "789c8dd160b022a6c714a102c1495530c7a9d20c"
 
-[weather_model_ic]
-git-tree-sha1 = "1c05bc305e79ceaab8c537be4f8c4a26465996a3"
-
 [era5_inst_model_levels]
 git-tree-sha1 = "8aae2d7330f90a029a4891be658a691e4e3362dc"
 
@@ -144,3 +141,6 @@ git-tree-sha1 = "d11b75df5be566eae42d6a3f2b3f60a381feacf8"
     [[ogw_computed_drag_h60.download]]
     sha256 = "6bcccb58ff3e3687deb8782234a2518a4b92ce00a1b0f830f4c84d19f9384585"
     url = "https://caltech.box.com/shared/static/0e5l0qvuf06zmj7gl625yb4vlt7phknz.gz"
+
+[wxquest_initial_conditions]
+git-tree-sha1 = "85b1e3654fb88f19a715ea6c235e1d66f254d2e6"
