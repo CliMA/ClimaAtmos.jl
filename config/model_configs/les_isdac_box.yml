@@ -21,7 +21,6 @@ rayleigh_sponge: true
 toml: [toml/les_isdac.toml]  # sponge height
 dt: "0.05secs"
 t_end: "2mins"
-dt_cloud_fraction: "10mins"
 restart_file: "/resnick/groups/esm/hervik/climaatmos-les-artifacts/les_isdac_day0.0.hdf5"
 # diagnostics
 dt_save_state_to_disk: "1mins"

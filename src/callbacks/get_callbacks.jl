@@ -450,16 +450,6 @@ function scheduled_callback(
     return (call_every_dt(affect!, dt_seconds),)
 end
 
-function cloud_fraction_callback(dt_cloud_fraction, dt, t_start, t_end)
-    return scheduled_callback(
-        cloud_fraction_model_callback!,
-        dt_cloud_fraction,
-        dt,
-        t_start,
-        t_end,
-    )
-end
-
 function radiation_callback(
     radiation_mode,
     dt_rad,
@@ -691,24 +681,6 @@ end
 function default_model_callbacks(turbconv_model::PrognosticEDMFX;
     dt)
     return edmfx_filter_callback(dt)
-end
-
-function default_model_callbacks(water::AtmosWater;
-    dt_cloud_fraction = "3hours",
-    start_date,
-    dt,
-    t_start,
-    t_end,
-    kwargs...)
-    if !isnothing(water.microphysics_model)
-        return cloud_fraction_callback(
-            dt_cloud_fraction,
-            dt,
-            t_start,
-            t_end,
-        )
-    end
-    return ()
 end
 
 """

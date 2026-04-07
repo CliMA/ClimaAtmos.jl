@@ -143,7 +143,7 @@ simulation = CA.AtmosSimulation{FT}(; job_id,
     ode_config,
     output_dir,
     # Callbacks
-    callback_kwargs = (; dt_cloud_fraction = "3hours", dt_rad = "1hours"),
+    callback_kwargs = (; dt_rad = "1hours"),
     # Diagnostics
     default_diagnostics = false,
     diagnostics,

@@ -119,7 +119,6 @@ function amip_target_diagedmf(context, output_dir)
 
     callback_kwargs = (;
         dt_rad = "1secs",
-        dt_cloud_fraction = "1secs",
     )
 
     args = (; model,
@@ -388,7 +387,6 @@ if MANYTESTS
                     job_id = "$(config_name)_$(microphysics_name)_$(topo_name)_$(rad_name)_$(turbconv_name)"
                     callback_kwargs = (;
                         dt_rad = "1secs",
-                        dt_cloud_fraction = "1secs",
                     )
                     args = (;
                         model,

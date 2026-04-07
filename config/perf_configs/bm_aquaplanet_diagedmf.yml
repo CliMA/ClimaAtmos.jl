@@ -7,7 +7,6 @@ log_progress: false
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
 dt_rad: 1hours
-dt_cloud_fraction: 1hours
 turbconv: diagnostic_edmfx
 prognostic_tke: true
 edmfx_entr_model: "Generalized"

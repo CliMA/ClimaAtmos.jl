@@ -104,30 +104,6 @@ function external_driven_single_column!(integrator)
     evaluate!(ᶜls_subsidence, wa, t)
 end
 
-NVTX.@annotate function cloud_fraction_model_callback!(integrator)
-    Y = integrator.u
-    p = integrator.p
-    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) =
-        p.precomputed
-    thermo_params = CAP.thermodynamics_params(p.params)
-    if isnothing(p.atmos.turbconv_model)
-        @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_nonneg))
-        @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
-            ᶠinterp(
-                TD.liquid_ice_pottemp(
-                    thermo_params,
-                    ᶜT,
-                    Y.c.ρ,
-                    ᶜq_tot_nonneg,
-                    ᶜq_liq,
-                    ᶜq_ice,
-                ),
-            ),
-        )
-    end
-    set_cloud_fraction!(Y, p, p.atmos.microphysics_model, p.atmos.cloud_model)
-end
-
 NVTX.@annotate function rrtmgp_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p

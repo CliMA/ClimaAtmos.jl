@@ -8,6 +8,5 @@ vert_diff: "DecayWithHeightDiffusion"
 rad: "allskywithclear"
 insolation: "timevarying"
 dt_rad: "1hours"
-dt_cloud_fraction: "1hours"
 microphysics_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]
