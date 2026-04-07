@@ -15,12 +15,13 @@ ode_algo: "ARS222"
 use_krylov_method: true
 max_newton_iters_ode: 10
 use_newton_rtol: true
-newton_rtol: 1.0e-4
+newton_rtol: 1.0e-3
 use_dynamic_krylov_rtol: true
-krylov_rtol: 0.1
+krylov_rtol: 0.3
 krylov_memory: 50
 krylov_itmax: 200
 update_jacobian_every: "dt"
 use_dense_jacobian: false
 # 2D sparse Helmholtz preconditioner for sphere
 sparse_helmholtz_2d: true
+helmholtz_backsub_alpha: 0.3

@@ -514,6 +514,7 @@ function get_jacobian(ode_algo, Y, atmos, parsed_args)
         parsed_args["n_helmholtz_iters"],
         parsed_args["sparse_helmholtz"],
         parsed_args["sparse_helmholtz_2d"],
+        parsed_args["helmholtz_backsub_alpha"],
         ; for_sgs_u₃ = false,
     )
 end
@@ -521,7 +522,8 @@ end
 function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
     auto_jacobian_padding_bands,
     approximate_linear_solve_iters, debug_jacobian, n_helmholtz_iters,
-    sparse_helmholtz = false, sparse_helmholtz_2d = false;
+    sparse_helmholtz = false, sparse_helmholtz_2d = false,
+    helmholtz_backsub_alpha = 0.0;
     for_sgs_u₃ = false,
 )
     (ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
@@ -544,6 +546,7 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
             n_helmholtz_iters,
             DerivativeFlag(atmos.fully_implicit && sparse_helmholtz),
             DerivativeFlag(atmos.fully_implicit && sparse_helmholtz_2d),
+            Float64(helmholtz_backsub_alpha),
         )
         use_auto_jacobian ?
         AutoSparseJacobian(
@@ -910,6 +913,7 @@ function args_integrator(args, Y, p, tspan, ode_algo, callback, dt_integrator)
         args["n_helmholtz_iters"],
         args["sparse_helmholtz"],
         args["sparse_helmholtz_2d"],
+        args["helmholtz_backsub_alpha"],
         dt_integrator,
     )
 end
@@ -918,6 +922,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
     use_dense_jacobian, use_auto_jacobian, auto_jacobian_padding_bands,
     approximate_linear_solve_iters, debug_jacobian, prescribed_flow,
     fully_implicit, n_helmholtz_iters, sparse_helmholtz, sparse_helmholtz_2d,
+    helmholtz_backsub_alpha,
     dt_integrator,
 )
     (; atmos) = p
@@ -934,6 +939,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                     approximate_linear_solve_iters, debug_jacobian,
                     n_helmholtz_iters,
                     sparse_helmholtz, sparse_helmholtz_2d,
+                    helmholtz_backsub_alpha,
                 ),
                 Wfact = update_jacobian!,
             )
@@ -951,7 +957,8 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                         auto_jacobian_padding_bands,
                         approximate_linear_solve_iters, debug_jacobian,
                         n_helmholtz_iters,
-                        sparse_helmholtz, sparse_helmholtz_2d;
+                        sparse_helmholtz, sparse_helmholtz_2d,
+                        helmholtz_backsub_alpha;
                         for_sgs_u₃ = true,
                     ),
                     Wfact = update_jacobian_sgs_u₃!,
@@ -964,6 +971,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                     approximate_linear_solve_iters, debug_jacobian,
                     n_helmholtz_iters,
                     sparse_helmholtz, sparse_helmholtz_2d,
+                    helmholtz_backsub_alpha,
                 ),
                 Wfact = update_jacobian!,
             )

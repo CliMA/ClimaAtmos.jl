@@ -87,6 +87,7 @@ struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7, F8, F9, F10} <: SparseJa
     n_helmholtz_iters::Int
     sparse_helmholtz_flag::F9
     sparse_helmholtz_2d_flag::F10
+    helmholtz_backsub_alpha::Float64
 end
 
 """
@@ -428,7 +429,9 @@ struct SparseHelmholtz2DCache{FT}
     # State vectors (length N_h * N_v, level-major: idx = (k-1)*N_h + h)
     cs2_vec::Vector{FT}
     ρ_vec::Vector{FT}
+    e_tot_vec::Vector{FT}       # specific total energy e_tot = ρe_tot/ρ (for back-sub)
     dtγ::Base.RefValue{FT}
+    backsub_alpha::FT           # damping for uₕ/ρe_tot back-sub (0 = ρ-only)
     # DOF mapping: dof_map[i, j, e] → unique horizontal DOF index (1..N_h)
     dof_map::Array{Int, 3}
     # 1D GLL quadrature
@@ -443,8 +446,9 @@ struct SparseHelmholtz2DCache{FT}
     N_h::Int                    # unique horizontal DOFs
     N_v::Int                    # vertical levels
     N_dof::Int                  # N_h * N_v
-    _scratch_ρ::Any             # center scalar scratch field
-    _scratch_div::Any           # center scalar scratch field
+    _scratch_ρ::Any             # center scalar scratch field (reused as Δρ output)
+    _scratch_div::Any           # center scalar scratch field (reused as cs²/ρ for back-sub)
+    _scratch_e_tot::Any         # center scalar scratch field (e_tot for ρe_tot back-sub)
     # Float32 → Float64 temporaries for UMFPACK (length N_h)
     rhs_work64::Union{Nothing, Vector{Float64}}
     sol_work64::Union{Nothing, Vector{Float64}}
@@ -507,7 +511,7 @@ Build the 2D sparse Helmholtz cache for sphere grids. Computes the DOF mapping
 from cubed-sphere topology connectivity, builds the sparsity pattern for the
 2D SE Helmholtz operator, and allocates work vectors.
 """
-function build_sparse_helmholtz_2d_cache(::Type{FT}, Y) where {FT}
+function build_sparse_helmholtz_2d_cache(::Type{FT}, Y; backsub_alpha::FT = FT(0)) where {FT}
     cspace = axes(Y.c)
     hspace = Spaces.horizontal_space(cspace)
     topology = Spaces.topology(hspace)
@@ -576,6 +580,7 @@ function build_sparse_helmholtz_2d_cache(::Type{FT}, Y) where {FT}
 
     _scratch_ρ = similar(Y.c, FT)
     _scratch_div = similar(Y.c, FT)
+    _scratch_e_tot = similar(Y.c, FT)
 
     # Float32 → Float64 temporaries sized per-level (N_h) for UMFPACK
     rhs_work64 = FT === Float32 ? zeros(Float64, N_h) : nothing
@@ -588,7 +593,9 @@ function build_sparse_helmholtz_2d_cache(::Type{FT}, Y) where {FT}
         zeros(FT, N_h),          # sol_lev
         zeros(FT, N_dof),        # cs2_vec (all levels)
         zeros(FT, N_dof),        # ρ_vec (all levels)
+        zeros(FT, N_dof),        # e_tot_vec (all levels)
         Ref(FT(0)),
+        backsub_alpha,
         dof_map,
         D,
         weights,
@@ -601,6 +608,7 @@ function build_sparse_helmholtz_2d_cache(::Type{FT}, Y) where {FT}
         N_dof,
         _scratch_ρ,
         _scratch_div,
+        _scratch_e_tot,
         rhs_work64,
         sol_work64,
     )
@@ -708,12 +716,16 @@ end
 Apply additive 2D sparse Helmholtz correction after column-local solve.
 1. RHS_k = -δtγ · wdivₕ(ρ · z.uₕ)  (per level k)
 2. Solve H_k · Δρ_h_k = RHS_k  (per level k, independent N_h × N_h systems)
-3. ΔY.c.ρ += Δρ_h (additive, ρ-only)
+3. ΔY.c.ρ += Δρ_h (additive)
+4. If backsub_alpha > 0, apply damped uₕ and ρe_tot back-substitution:
+   ΔY.c.uₕ  -= α · dtγ · (cs²/ρ) · C12(gradₕ(Δρ_h))
+   ΔY.c.ρe_tot += α · e_tot · Δρ_h
 """
 function sparse_helmholtz_2d_correction!(shc::SparseHelmholtz2DCache{FT}, ΔY) where {FT}
     (; H_level_factors, rhs_lev, sol_lev, dtγ, ρ_vec,
+       backsub_alpha, cs2_vec, e_tot_vec,
        dof_map, Nq, nelem, N_h, N_v,
-       _scratch_ρ, _scratch_div, rhs_work64, sol_work64) = shc
+       _scratch_ρ, _scratch_div, _scratch_e_tot, rhs_work64, sol_work64) = shc
 
     # Step 1: Form wdivₕ(ρ · z.uₕ) into scratch field
     _sparse_helmholtz_2d_vec_to_field!(_scratch_ρ, ρ_vec, dof_map, Nq, nelem, N_v, N_h)
@@ -755,9 +767,30 @@ function sparse_helmholtz_2d_correction!(shc::SparseHelmholtz2DCache{FT}, ΔY) w
         end
     end
 
-    # Step 3: DSS the correction and add to ΔY
+    # Step 3: DSS the Δρ correction and add to ΔY
     Spaces.weighted_dss!(_scratch_ρ)
     @. ΔY.c.ρ += _scratch_ρ
+
+    # Step 4: Damped uₕ and ρe_tot back-substitution
+    # _scratch_ρ now holds the DSS'd Δρ_h correction field
+    if backsub_alpha > FT(0)
+        α = backsub_alpha
+
+        # Reconstruct cs²/ρ into _scratch_div (free after step 1)
+        _sparse_helmholtz_2d_vec_to_field!(_scratch_div, cs2_vec, dof_map, Nq, nelem, N_v, N_h)
+        # _scratch_e_tot temporarily holds ρ field for division
+        _sparse_helmholtz_2d_vec_to_field!(_scratch_e_tot, ρ_vec, dof_map, Nq, nelem, N_v, N_h)
+        @. _scratch_div = _scratch_div / max(_scratch_e_tot, FT(1e-6))
+
+        # uₕ back-sub: ΔY.c.uₕ -= α · dtγ · (cs²/ρ) · C12(gradₕ(Δρ_h))
+        @. ΔY.c.uₕ -= C12(FT(α * δtγ_val) * _scratch_div * gradₕ(_scratch_ρ))
+
+        # Reconstruct e_tot into _scratch_e_tot
+        _sparse_helmholtz_2d_vec_to_field!(_scratch_e_tot, e_tot_vec, dof_map, Nq, nelem, N_v, N_h)
+
+        # ρe_tot back-sub: ΔY.c.ρe_tot += α · e_tot · Δρ_h
+        @. ΔY.c.ρe_tot += FT(α) * _scratch_e_tot * _scratch_ρ
+    end
 
     return nothing
 end
@@ -1176,7 +1209,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         end
         # 2D sparse Helmholtz for sphere grids
         sparse_helmholtz_2d = if use_derivative(alg.sparse_helmholtz_2d_flag)
-            build_sparse_helmholtz_2d_cache(FT, Y)
+            build_sparse_helmholtz_2d_cache(FT, Y; backsub_alpha = FT(alg.helmholtz_backsub_alpha))
         else
             nothing
         end
@@ -1657,6 +1690,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         _sparse_helmholtz_2d_field_to_vec!(
             shc2.ρ_vec, ᶜρ, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
         )
+        # Extract e_tot = ρe_tot/ρ for back-substitution (reuse ᶜcs²_tmp2 as scratch)
+        if shc2.backsub_alpha > 0
+            @. ᶜcs²_tmp2 = Y.c.ρe_tot / ᶜρ
+            _sparse_helmholtz_2d_field_to_vec!(
+                shc2.e_tot_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
+            )
+        end
         assemble_sparse_helmholtz_2d!(shc2)
     end
 
