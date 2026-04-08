@@ -10,7 +10,7 @@
 # `distributed_worker_threads` (CLI `--distributed-worker-threads`) so workers use `-t 1` while the main process can
 # use `julia -t N`. Default sweep mode is sequential.
 #
-# **Default:** merged EKI member TOML (`forward_eki/` output). See [`forward_sweep_cases.yml`](../forward_sweep_cases.yml)
+# **Default:** merged EKI member TOML (`forward_eki/` output). See [`forward_sweep_cases.yml`](../registries/forward_sweep_cases.yml)
 # for `eki_varfix_off_config` / `eki_varfix_on_config`. Use **`--baseline-scm-forward`** for exploratory runs
 # with registry `scm_toml` only (`forward_only/`).
 #
@@ -135,11 +135,12 @@ function parse_forward_sweep_cli(argv::Vector{String})::ForwardSweepConfig
     return cfg
 end
 
-function main()
+"""CLI entry for `julia …/sweep_forward_runs.jl` (does not run on bare `include`)."""
+function va_forward_runs_sweep_cli()
     return run_forward_sweep!(parse_forward_sweep_cli(collect(String, ARGS)); merge_env = false)
 end
 
 if !isempty(Base.PROGRAM_FILE) && isfile(Base.PROGRAM_FILE) &&
    abspath(Base.PROGRAM_FILE) == abspath(@__FILE__)
-    main()
+    va_forward_runs_sweep_cli()
 end

@@ -13,7 +13,7 @@ scm_toml: prognostic_edmfx.toml
 output_dir: simulation_output/BOMEX/N_3/varfix_off/eki
 ensemble_size: 6
 n_iterations: 2
-prior_path: prior.toml
+prior_path: config/prior.toml
 quadrature_order: 3
 sgs_quadrature_subcell_geometric_variance: false
 observations_path: simulation_output/BOMEX/N_3/varfix_off/reference/observations.jld2

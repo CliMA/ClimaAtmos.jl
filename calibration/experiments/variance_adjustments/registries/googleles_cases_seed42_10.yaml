@@ -1,5 +1,5 @@
 # Deterministic sample: Random.seed!(42); shuffle! of all (site_id, month, amip) triples.
-# Regenerate with `scripts/generate_googleles_registry.jl` if the sampling policy changes.
+# Committed path: `registries/googleles_cases_seed42_10.yaml`. Regenerate with `scripts/generate_googleles_registry.jl` if the sampling policy changes.
 cases:
   - { index: 1, site_id: 161, month: 4, experiment: amip }
   - { index: 2, site_id: 439, month: 7, experiment: amip }

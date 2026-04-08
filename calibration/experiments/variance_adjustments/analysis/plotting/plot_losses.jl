@@ -24,7 +24,7 @@ if _va_analysis_is_main()
     Pkg.activate(_VA_EXPERIMENT_DIR)
 end
 
-include(joinpath(_VA_EXPERIMENT_DIR, "experiment_common.jl"))
+include(joinpath(_VA_EXPERIMENT_DIR, "lib", "experiment_common.jl"))
 import CairoMakie as M
 import JLD2
 import EnsembleKalmanProcesses as EKP

@@ -8,8 +8,8 @@
 #      (SCM + EKI member **`parameters.toml`**) — runs **after** calibration so EKI output exists.
 #
 # **One command (no exports required):**
-#   julia --project=. run_e2e.jl
-#   julia --project=. run_e2e.jl --config experiment_configs/experiment_config_gcm_cfsite23_N3_varfix_off.yml --calib-workers=20
+#   julia --project=. scripts/run_e2e.jl
+#   julia --project=. scripts/run_e2e.jl --config experiment_configs/experiment_config_gcm_cfsite23_N3_varfix_off.yml --calib-workers=20
 #   ./run_e2e.sh --help
 #
 # Defaults (only if not already set in the environment): `VARIANCE_CALIB_WORKERS` = min(20, CPU−1),
@@ -20,19 +20,19 @@
 #   - No grid over `quadrature_order` or varfix — those are fixed in `experiment_config.yml` (or
 #     `VA_EXPERIMENT_CONFIG`). Forward-only grids: `scripts/sweep_forward_runs.jl`. Several EKI YAMLs:
 #     `scripts/run_calibration_sweep.jl` or rerun with different `--config` / `VA_EXPERIMENT_CONFIG`.
-# For the multi-YAML README workflow (EKI sweep + figures, optional forward grid), use `run_full_study.jl`.
+# For the multi-YAML README workflow (EKI sweep + figures, optional forward grid), use `scripts/run_full_study.jl`.
 #
-# REPL (activate this project first):
-#   include("run_e2e.jl")   # uses defaults from `_parse_e2e_cli!` only if you call it after empty ARGS
+# REPL (from experiment root, after `Pkg.activate(".")`): `empty!(ARGS); include("scripts/run_e2e.jl")`
+# (CLI flags were already parsed at parse time; use env vars or re-launch with `ARGS`.)
 #
 import Pkg
 
-const _VA_ROOT = dirname(@__FILE__) |> abspath
+const _VA_ROOT = dirname(@__DIR__) |> abspath
 
 function _e2e_print_help()
     println("""
 Usage:
-  julia --project=. run_e2e.jl [options]
+  julia --project=. scripts/run_e2e.jl [options]
 
 Options:
   --config=FILE | --config FILE   Set which experiment YAML to use (same as VA_EXPERIMENT_CONFIG).
@@ -90,7 +90,7 @@ function _parse_e2e_cli!(argv::Vector{String})
             i > length(argv) && error("--calib-backend requires worker|julia")
             ENV["VARIANCE_CALIB_BACKEND"] = argv[i]
         else
-            error("Unknown argument: $(repr(a)). Try run_e2e.jl --help")
+            error("Unknown argument: $(repr(a)). Try scripts/run_e2e.jl --help")
         end
         i += 1
     end
@@ -108,13 +108,13 @@ end
 _parse_e2e_cli!(ARGS)
 
 Pkg.activate(_VA_ROOT)
-include(joinpath(_VA_ROOT, "stdio_flush.jl"))
+include(joinpath(_VA_ROOT, "lib", "stdio_flush.jl"))
 va_setup_stdio_flushing!()
 if get(ENV, "VA_SKIP_INSTANTIATE", "") != "1"
     Pkg.instantiate()
 end
 
-include(joinpath(_VA_ROOT, "eki_calibration.jl"))
+include(joinpath(_VA_ROOT, "lib", "eki_calibration.jl"))
 if get(ENV, "VA_SKIP_CALIBRATION", "") != "1"
     run_variance_calibration!(va_eki_calibration_options_from_env())
 else
@@ -122,7 +122,7 @@ else
 end
 va_flush_stdio()
 
-include(joinpath(_VA_ROOT, "reference_generation.jl"))
+include(joinpath(_VA_ROOT, "lib", "reference_generation.jl"))
 if get(ENV, "VA_SKIP_REFERENCE", "") != "1"
     generate_observations_reference!()
 else
@@ -131,5 +131,5 @@ end
 va_flush_stdio()
 
 @info "Pipeline finished" root = _VA_ROOT workers = ENV["VARIANCE_CALIB_WORKERS"] worker_threads =
-    ENV["VARIANCE_CALIB_WORKER_THREADS"] config = get(ENV, "VA_EXPERIMENT_CONFIG", "experiment_config.yml")
+    ENV["VARIANCE_CALIB_WORKER_THREADS"] config = get(ENV, "VA_EXPERIMENT_CONFIG", "config/experiment_config.yml")
 va_flush_stdio()

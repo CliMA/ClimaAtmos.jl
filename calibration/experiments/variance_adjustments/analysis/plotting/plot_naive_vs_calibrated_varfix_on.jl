@@ -1,9 +1,9 @@
 # Naive vs separately calibrated varfix-on: one figure set per `(varfix_off_yaml, varfix_on_yaml)` pair.
 # Requires `plot_profiles.jl` (`va_plot_all_case_diagnostic_profiles`, `va_load_experiment_config`, …) and
-# [`calibration_sweep_configs.jl`](../../calibration_sweep_configs.jl) (`va_naive_vs_calibrated_varfix_on_yaml_pairs`).
+# [`lib/calibration_sweep_configs.jl`](../../lib/calibration_sweep_configs.jl) (`va_naive_vs_calibrated_varfix_on_yaml_pairs`).
 #
 const _VA_ROOT_NAIVEPLOT = joinpath(@__DIR__, "..", "..") |> abspath
-include(joinpath(_VA_ROOT_NAIVEPLOT, "observation_map.jl"))
+include(joinpath(_VA_ROOT_NAIVEPLOT, "lib", "observation_map.jl"))
 
 import ClimaCalibrate as CAL
 

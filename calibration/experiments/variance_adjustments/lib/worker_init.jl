@@ -7,6 +7,6 @@ import Pkg
 Pkg.activate(_va_exp_dir)
 import ClimaCalibrate as CAL
 import ClimaAtmos as CA
-include(joinpath(_va_exp_dir, "model_interface.jl"))
-include(joinpath(_va_exp_dir, "observation_map.jl"))
+include(joinpath(_va_exp_dir, "lib", "model_interface.jl"))
+include(joinpath(_va_exp_dir, "lib", "observation_map.jl"))
 load_experiment_config!(_va_exp_dir)

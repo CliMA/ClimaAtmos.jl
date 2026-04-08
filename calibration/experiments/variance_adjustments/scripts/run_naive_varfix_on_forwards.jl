@@ -17,14 +17,14 @@ using Pkg: Pkg
 const _EXPERIMENT_DIR = dirname(@__DIR__) |> abspath
 Pkg.activate(_EXPERIMENT_DIR)
 
-include(joinpath(_EXPERIMENT_DIR, "stdio_flush.jl"))
+include(joinpath(_EXPERIMENT_DIR, "lib", "stdio_flush.jl"))
 va_setup_stdio_flushing!()
 if !isdefined(Main, :va_experiment_config_path)
-    include(joinpath(_EXPERIMENT_DIR, "experiment_common.jl"))
+    include(joinpath(_EXPERIMENT_DIR, "lib", "experiment_common.jl"))
 end
-include(joinpath(_EXPERIMENT_DIR, "calibration_sweep_configs.jl"))
+include(joinpath(_EXPERIMENT_DIR, "lib", "calibration_sweep_configs.jl"))
 if !isdefined(Main, :VA_COMPOSITE_SHORT_NAME_CLW_PLUS_CLI)
-    include(joinpath(_EXPERIMENT_DIR, "observation_map.jl"))
+    include(joinpath(_EXPERIMENT_DIR, "lib", "observation_map.jl"))
 end
 
 using ClimaCalibrate: ClimaCalibrate as CAL
@@ -204,11 +204,12 @@ function run_naive_forwards!(cfg::NaiveForwardConfig = NaiveForwardConfig())
     return nothing
 end
 
-function main()
+"""CLI entry for `julia …/run_naive_varfix_on_forwards.jl` (does not run on bare `include`)."""
+function va_naive_varfix_on_forwards_cli()
     return run_naive_forwards!(parse_naive_forward_cli(collect(String, ARGS)))
 end
 
 if !isempty(Base.PROGRAM_FILE) && isfile(Base.PROGRAM_FILE) &&
    abspath(Base.PROGRAM_FILE) == abspath(@__FILE__)
-    main()
+    va_naive_varfix_on_forwards_cli()
 end

@@ -9,7 +9,7 @@ include(joinpath(@__DIR__, "experiment_common.jl"))
 
 import JLD2
 
-const _GCM_DIR = joinpath(@__DIR__, "..", "gcm_driven_scm")
+const _GCM_DIR = joinpath(@__DIR__, "..", "..", "gcm_driven_scm")
 include(joinpath(_GCM_DIR, "helper_funcs.jl"))
 include(joinpath(_GCM_DIR, "get_les_metadata.jl"))
 
@@ -111,7 +111,7 @@ function va_resolve_les_stats_path(experiment_dir::AbstractString, expc)
             error(
                 "Could not load GCM-forced LES stats for cfsite=$(cfsite), forcing_model=$(fm), month=$(mo), experiment=$(ex). " *
                     "Check **`GCMFORCEDLES_ROOT`** and that `Output.cfsite*/...` contains a unique `Stats*.nc`, or set **`LES_STATS_FILE`** / **`les_truth.stats_file`**, " *
-                    "or **`run_full_study.jl --skip-les-observations`** if **`observations.jld2`** is already staged. " *
+                    "or **`scripts/run_full_study.jl --skip-les-observations`** if **`observations.jld2`** is already staged. " *
                     "Underlying error: $err",
             )
         end
@@ -185,7 +185,7 @@ For each experiment YAML path in `config_yamls` (relative to `experiment_dir` un
 exists at **`observations_path`**. If the file is already present and `force` is `false`, skip. Set env
 **`VA_FORCE_LES_OBSERVATIONS=1`** to always rebuild.
 
-Called by **`run_full_study.jl`** before the EKI sweep (typically `va_calibration_sweep_configs()`), unless **`--skip-les-observations`**
+Called by **`scripts/run_full_study.jl`** before the EKI sweep (typically `va_calibration_sweep_configs()`), unless **`--skip-les-observations`**
 or env **`VA_SKIP_LES_OBSERVATIONS_BUILD=1`**.
 """
 function va_ensure_les_observations_for_calibration_sweep!(

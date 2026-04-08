@@ -7,16 +7,28 @@ import ClimaAtmos as CA
 
 """
 Subdirectory of the experiment root holding **named EKI slice** YAMLs (`experiment_config_*_*.yml`).
-The default **`experiment_config.yml`** stays at the experiment root (see [`va_experiment_config_path`](@ref)).
+The default slice YAML is **`config/experiment_config.yml`** (see [`va_experiment_config_path`](@ref)).
 """
 const VA_EXPERIMENT_CONFIGS_DIR = "experiment_configs"
+
+"""Default experiment YAML relative to the experiment directory (canonical layout)."""
+const VA_DEFAULT_EXPERIMENT_CONFIG_RELPATH = joinpath("config", "experiment_config.yml")
+
+function _va_default_experiment_config_path(experiment_dir::AbstractString)::String
+    p = joinpath(experiment_dir, VA_DEFAULT_EXPERIMENT_CONFIG_RELPATH)
+    isfile(p) && return p
+    leg = joinpath(experiment_dir, "experiment_config.yml")
+    return isfile(leg) ? leg : p
+end
 
 """
     va_experiment_config_path(experiment_dir[, explicit]) -> String
 
 Path to the active experiment YAML. If `explicit` is set (non-empty), it is interpreted relative to
 `experiment_dir` unless absolute. Else if **`VA_EXPERIMENT_CONFIG`** is set in the environment, use that
-(same relative/absolute rules). Else **`experiment_dir/experiment_config.yml`**.
+(same relative/absolute rules). Else **`experiment_dir/config/experiment_config.yml`** (if that file exists),
+otherwise a legacy root **`experiment_dir/experiment_config.yml`** if present, else the canonical
+**`config/experiment_config.yml`** path (load may error until the file exists).
 
 Named slice YAMLs (per-case / per-parameter EKI configs) live under **`experiment_dir/$(VA_EXPERIMENT_CONFIGS_DIR)/`**
 (e.g. `experiment_configs/experiment_config_gcm_cfsite19_N3_varfix_off.yml`).
@@ -33,7 +45,7 @@ function va_experiment_config_path(
     if !isempty(env)
         return isabspath(env) ? env : joinpath(experiment_dir, env)
     end
-    return joinpath(experiment_dir, "experiment_config.yml")
+    return _va_default_experiment_config_path(experiment_dir)
 end
 
 """Load the experiment YAML (same resolution rules as [`va_experiment_config_path`](@ref))."""
@@ -272,15 +284,35 @@ end
 Normalize **`model_config_path`** from **`experiment_config.yml`** or a forward-sweep registry row: a **string**
 is a single layer; a **non-empty list** loads and shallow-merges **in order** (master first, case overlay last).
 The **last** path is the canonical case id ([`va_model_config_yaml_rel`](@ref)).
+
+Nested lists are **flattened** (YAML parsers sometimes yield `[[a, b]]` instead of `[a, b]`).
 """
+function _va_flatten_model_config_path_layers!(out::Vector{String}, x)
+    if x isa AbstractString
+        s = String(strip(string(x)))
+        isempty(s) && error("model_config_path entry is empty")
+        push!(out, s)
+    elseif x isa AbstractVector
+        isempty(x) && error("model_config_path list must be non-empty")
+        for y in x
+            _va_flatten_model_config_path_layers!(out, y)
+        end
+    else
+        error("model_config_path entries must be strings or nested lists of strings; got $(typeof(x))")
+    end
+    return out
+end
+
 function va_model_config_path_layers(raw_spec)::Vector{String}
     if raw_spec isa AbstractString
         s = String(strip(string(raw_spec)))
         isempty(s) && error("model_config_path is empty")
         return String[s]
     elseif raw_spec isa AbstractVector
-        length(raw_spec) >= 1 || error("model_config_path list must be non-empty")
-        return String[String(strip(string(x))) for x in raw_spec]
+        out = String[]
+        _va_flatten_model_config_path_layers!(out, raw_spec)
+        isempty(out) && error("model_config_path list must be non-empty")
+        return out
     else
         error("model_config_path must be a string or a non-empty list of strings")
     end

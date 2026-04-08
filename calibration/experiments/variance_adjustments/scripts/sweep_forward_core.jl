@@ -3,17 +3,17 @@
 
 const EXPERIMENT_DIR = joinpath(@__DIR__, "..") |> abspath
 
-include(joinpath(EXPERIMENT_DIR, "stdio_flush.jl"))
+include(joinpath(EXPERIMENT_DIR, "lib", "stdio_flush.jl"))
 va_setup_stdio_flushing!()
 if !isdefined(Main, :va_experiment_config_path)
-    include(joinpath(EXPERIMENT_DIR, "experiment_common.jl"))
+    include(joinpath(EXPERIMENT_DIR, "lib", "experiment_common.jl"))
 end
 if !isdefined(Main, :ForwardSweepConfig)
     include(joinpath(@__DIR__, "resolution_ladder.jl"))
-    include(joinpath(EXPERIMENT_DIR, "forward_sweep_grid.jl"))
+    include(joinpath(EXPERIMENT_DIR, "lib", "forward_sweep_grid.jl"))
 end
 if !isdefined(Main, :VA_COMPOSITE_SHORT_NAME_CLW_PLUS_CLI)
-    include(joinpath(EXPERIMENT_DIR, "observation_map.jl"))
+    include(joinpath(EXPERIMENT_DIR, "lib", "observation_map.jl"))
 end
 
 import ClimaAtmos as CA
@@ -48,7 +48,7 @@ function _va_resolve_sweep_merged_toml(
 )::Union{Nothing, String}
     sweep_cfg.forward_parameters == VA_FORWARD_PARAM_BASELINE_SCM && return nothing
     eki_varfix_off_config === nothing && error(
-        "EKI-parameter forward sweep: registry case missing `eki_varfix_off_config` (see forward_sweep_cases.yml).",
+        "EKI-parameter forward sweep: registry case missing `eki_varfix_off_config` (see registries/forward_sweep_cases.yml).",
     )
     config_relp = varfix ? something(eki_varfix_on_config, eki_varfix_off_config) : eki_varfix_off_config
     iter = something(sweep_cfg.eki_iteration, va_latest_eki_iteration_number(experiment_dir, config_relp))

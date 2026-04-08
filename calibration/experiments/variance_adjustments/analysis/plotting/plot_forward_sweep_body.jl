@@ -177,6 +177,10 @@ linestyles, optional observations-y, and finer-mesh overlay when available.
 
 Writes **`forward_sweep_clw_plus_cli_summary.png`** under the same `figure_root` convention as
 [`va_plot_forward_sweep_comparisons!`](@ref).
+
+**Y limits:** Within each case row, all panels share the same height cap: the **maximum** of per-panel
+[`va_condensate_cloud_top_height_m`](@ref) values (so coarse and fine tiers align vertically). If no panel
+returns a cap, panels fall back to individual caps / autoscale.
 """
 function va_plot_forward_sweep_clw_plus_cli_summary!(
     experiment_dir::AbstractString,
@@ -195,7 +199,8 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
     )
     tasks = va_flatten_forward_sweep_tasks(experiment_dir, cfg)
     groups = Dict{Tuple{String, String, String}, Vector{Tuple{Int, Bool, String, String}}}()
-    for (yml, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _eo, _en) in tasks
+    for (layers, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _eo, _en) in tasks
+        yml = layers[end]
         res_seg = va_tier_path_segment(tier, z_stretch, yaml_dz)
         ap = va_forward_sweep_output_active_path(experiment_dir, slug, res_seg, n, vf, cfg)
         !isdir(ap) && continue
@@ -253,6 +258,60 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
         per_b = _va_yaml_period_for_short_name(pairs, "cli")
         z_elem = va_z_elem_from_case_yaml(experiment_dir, row.model_config_layers)
 
+        n_ref = 3
+        vf_ref = false
+        row_ylim_caps = Union{Nothing, Float64}[nothing for _ in 1:max_cols]
+        for ci in 1:max_cols
+            if ci > length(segs) || per_a === nothing || per_b === nothing
+                continue
+            end
+            res_seg = segs[ci]
+            k = (row.slug, row.yaml_rel, res_seg)
+            cells = get(groups, k, Tuple{Int, Bool, String, String}[])
+            isempty(cells) && continue
+            sort!(cells; by = x -> (x[1], x[2] ? 1 : 0))
+            paths = String[c[3] for c in cells]
+            paths_abs = String[abspath(p) for p in paths]
+            calibration_truth_series = nothing
+            if row.eki_varfix_off_config !== nothing
+                truth_active = va_reference_output_active(experiment_dir, row.eki_varfix_off_config)
+                if isdir(truth_active)
+                    calibration_truth_series = Tuple{String, String}[(
+                        truth_active,
+                        "Observations y (ref column)",
+                    )]
+                end
+            end
+            forward_finest_series = nothing
+            fz = va_forward_sweep_reference_finer_than_panel(
+                experiment_dir,
+                row.slug,
+                row.yaml_rel,
+                cfg,
+                res_seg;
+                n_quad = n_ref,
+                varfix = vf_ref,
+            )
+            if fz !== nothing
+                _, ref_active, ref_tier_seg = fz
+                if abspath(ref_active) ∉ paths_abs
+                    forward_finest_series = Tuple{String, String}[(
+                        ref_active,
+                        "Finer mesh (N=$(n_ref) $(vf_ref ? "vf_on" : "vf_off")): $(ref_tier_seg)",
+                    )]
+                end
+            end
+            row_ylim_caps[ci] = va_condensate_cloud_top_height_m(
+                paths,
+                calibration_truth_series,
+                forward_finest_series;
+                experiment_dir,
+                model_config_rel = row.model_config_layers,
+            )
+        end
+        finite_row_caps = Float64[c for c in row_ylim_caps if c !== nothing]
+        ylim_row = isempty(finite_row_caps) ? nothing : maximum(finite_row_caps)
+
         for ci in 1:max_cols
             ax = CM.Axis(
                 fig[ri+1, ci+1];
@@ -298,8 +357,6 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
                 end
             end
             forward_finest_series = nothing
-            n_ref = 3
-            vf_ref = false
             fz = va_forward_sweep_reference_finer_than_panel(
                 experiment_dir,
                 row.slug,
@@ -318,13 +375,7 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
                     )]
                 end
             end
-            ylims_h = va_condensate_cloud_top_height_m(
-                paths,
-                calibration_truth_series,
-                forward_finest_series;
-                experiment_dir,
-                model_config_rel = row.model_config_layers,
-            )
+            ylims_h_panel = row_ylim_caps[ci]
             n_series, any_line = _va_plot_clw_plus_cli_series_on_axis!(
                 ax,
                 paths,
@@ -348,7 +399,8 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
                 continue
             end
             any_panel = true
-            _va_finalize_profile_axis_limits!(ax, ylims_h)
+            ylims_apply = ylim_row !== nothing ? ylim_row : ylims_h_panel
+            _va_finalize_profile_axis_limits!(ax, ylims_apply)
             if legend_ax === nothing && n_series > 1
                 legend_ax = ax
             end

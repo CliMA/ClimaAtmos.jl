@@ -2,6 +2,9 @@
 # Included after `experiment_common.jl` and `scripts/resolution_ladder.jl` are loaded.
 import YAML
 
+"""Default forward-sweep case registry (relative to the experiment directory)."""
+const VA_FORWARD_SWEEP_REGISTRY_DEFAULT_RELPATH = joinpath("registries", "forward_sweep_cases.yml")
+
 """Parameter source for resolution-ladder forwards: registry SCM only vs merged EKI member TOML."""
 const VA_FORWARD_PARAM_BASELINE_SCM = :baseline_scm
 const VA_FORWARD_PARAM_EKI_CALIBRATED = :eki_calibrated
@@ -97,7 +100,7 @@ end
 function va_forward_sweep_registry_path(experiment_dir::AbstractString, cfg::ForwardSweepConfig)
     p = cfg.registry_path
     path = if p === nothing || isempty(strip(p))
-        joinpath(experiment_dir, "forward_sweep_cases.yml")
+        joinpath(experiment_dir, VA_FORWARD_SWEEP_REGISTRY_DEFAULT_RELPATH)
     else
         isabspath(p) ? p : joinpath(experiment_dir, p)
     end

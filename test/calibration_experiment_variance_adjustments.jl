@@ -4,14 +4,16 @@ using LinearAlgebra
 import YAML
 
 const _VA_DIR = joinpath(@__DIR__, "..", "calibration", "experiments", "variance_adjustments")
-include(joinpath(_VA_DIR, "experiment_common.jl"))
+include(joinpath(_VA_DIR, "lib", "experiment_common.jl"))
 include(joinpath(_VA_DIR, "scripts", "resolution_ladder.jl"))
-include(joinpath(_VA_DIR, "forward_sweep_grid.jl"))
+include(joinpath(_VA_DIR, "lib", "forward_sweep_grid.jl"))
 
 @testset "variance_adjustments experiment_common" begin
+    @test va_model_config_path_layers(["a.yml", "b.yml"]) == ["a.yml", "b.yml"]
+    @test va_model_config_path_layers(Any[Any["a.yml", "b.yml"]]) == ["a.yml", "b.yml"]
     @test va_parse_eki_calibration_backend("worker") === :worker
     @test va_parse_eki_calibration_backend("julia") === :julia
-    expc = YAML.load_file(joinpath(_VA_DIR, "experiment_config.yml"))
+    expc = YAML.load_file(va_experiment_config_path(_VA_DIR))
     @test isfile(va_experiment_config_path(_VA_DIR))
     @test va_reference_output_dir(_VA_DIR, expc) ==
           joinpath(_VA_DIR, "simulation_output", "GCM_CFSITE04", "N_3", "varfix_off", "reference")
@@ -86,7 +88,7 @@ end
     @test row.eki_varfix_off_config == "experiment_configs/experiment_config_gcm_cfsite04_N3_varfix_off.yml"
     @test va_forward_sweep_task_count(_VA_DIR, ForwardSweepConfig(; resolution_ladder = false)) == 60
     @test va_forward_sweep_task_count(_VA_DIR, ForwardSweepConfig(; resolution_ladder = true)) == 240
-    expc_yaml = YAML.load_file(joinpath(_VA_DIR, "experiment_config.yml"))
+    expc_yaml = YAML.load_file(va_experiment_config_path(_VA_DIR))
     pairs_exp = va_model_diagnostic_shortname_period_pairs(_VA_DIR)
     pairs_case = va_case_yaml_diagnostic_shortname_period_pairs(_VA_DIR, expc_yaml["model_config_path"])
     @test pairs_case == pairs_exp
@@ -111,7 +113,7 @@ end
 
 @testset "uncalibrated forward sweep registry" begin
     uc = ForwardSweepConfig(;
-        registry_path = "forward_sweep_cases_uncalibrated.yml",
+        registry_path = "registries/forward_sweep_cases_uncalibrated.yml",
         resolution_ladder = false,
         forward_parameters = VA_FORWARD_PARAM_BASELINE_SCM,
     )

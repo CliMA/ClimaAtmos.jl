@@ -15,9 +15,9 @@ if _va_pfw_is_main()
     Pkg.activate(_VA_PFW_EXPERIMENT_DIR)
 end
 
-include(joinpath(_VA_PFW_EXPERIMENT_DIR, "experiment_common.jl"))
+include(joinpath(_VA_PFW_EXPERIMENT_DIR, "lib", "experiment_common.jl"))
 include(joinpath(_VA_PFW_EXPERIMENT_DIR, "scripts", "resolution_ladder.jl"))
-include(joinpath(_VA_PFW_EXPERIMENT_DIR, "forward_sweep_grid.jl"))
+include(joinpath(_VA_PFW_EXPERIMENT_DIR, "lib", "forward_sweep_grid.jl"))
 include(joinpath(_VA_PFW_PLOT_DIR, "plot_profiles.jl"))
 include(joinpath(_VA_PFW_PLOT_DIR, "plot_forward_sweep_body.jl"))
 
@@ -74,7 +74,7 @@ Usage: julia --project=. analysis/plotting/plot_forward_sweep.jl [options]
 
   --eki-calibrated-forward | --baseline-scm-forward   Match forward_eki vs forward_only outputs
   --baseline-only | --resolution-ladder   Match the forward sweep grid
-  --registry=REL.yml
+  --registry=REL.yml            default when omitted: registries/forward_sweep_cases.yml
   --ladder-n-tiers=N  --ladder-coarsen-ratio=R  --ladder-z-elem-min=N  --ladder-min-dz-factor=F
   --figures-dir=DIR   optional; default folder depends on EKI vs baseline mode
 """)

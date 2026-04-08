@@ -15,11 +15,11 @@ using JLD2: JLD2
 using ClimaCalibrate: ClimaCalibrate as CAL
 using ClimaAtmos: ClimaAtmos as CA
 
-const _EKI_EXPERIMENT_DIR = dirname(@__FILE__) |> abspath
+const _EKI_EXPERIMENT_DIR = joinpath(dirname(@__FILE__), "..") |> abspath
 
 # Top-level load so `CAL.calibrate` / `observation_map` are not defined newer than the caller (Julia 1.12+).
-include(joinpath(_EKI_EXPERIMENT_DIR, "model_interface.jl"))
-include(joinpath(_EKI_EXPERIMENT_DIR, "observation_map.jl"))
+include(joinpath(dirname(@__FILE__), "model_interface.jl"))
+include(joinpath(dirname(@__FILE__), "observation_map.jl"))
 
 Base.@kwdef mutable struct EkiCalibrationOptions
     worker_count::Int = min(4, max(1, Sys.CPU_THREADS - 1))
@@ -45,7 +45,7 @@ function va_merge_eki_calibration_env!(opts::EkiCalibrationOptions)
     return opts
 end
 
-"""Default options with `va_merge_eki_calibration_env!` applied (e.g. `run_calibration.jl` entry)."""
+"""Default options with `va_merge_eki_calibration_env!` applied (e.g. `scripts/run_calibration.jl` entry)."""
 function va_eki_calibration_options_from_env()
     opts = EkiCalibrationOptions()
     va_merge_eki_calibration_env!(opts)
@@ -77,7 +77,7 @@ function run_variance_calibration!(opts::EkiCalibrationOptions = va_eki_calibrat
         error(
             "Missing $obs_path. EKI needs **y** before it runs: place **`observations.jld2`** at **`observations_path`** " *
                 "(from your workflow). `run_calibration_sweep.jl` only runs calibration; it does not build **`y`**. " *
-                "After a completed EKI, `generate_observations_reference.jl` can regenerate **`y`** using **`reference_truth_from_eki`**.",
+                "After a completed EKI, `scripts/generate_observations_reference.jl` can regenerate **`y`** using **`reference_truth_from_eki`**.",
         )
     end
     observations = JLD2.load_object(obs_path)
@@ -109,7 +109,7 @@ function run_variance_calibration!(opts::EkiCalibrationOptions = va_eki_calibrat
         end
         Distributed.@everywhere const _va_exp_dir = $experiment_dir
         # Worker imports cannot sit in `run_variance_calibration!()` body (Julia 1.12+ syntax).
-        Distributed.@everywhere include(joinpath(_va_exp_dir, "worker_init.jl"))
+        Distributed.@everywhere include(joinpath(_va_exp_dir, "lib", "worker_init.jl"))
     end
 
     calib_backend = use_workers ? CAL.WorkerBackend() : CAL.JuliaBackend()

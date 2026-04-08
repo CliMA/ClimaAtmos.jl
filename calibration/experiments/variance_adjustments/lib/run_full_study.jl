@@ -1,20 +1,22 @@
 # Full experiment driver: ensure LES `observations.jld2` per sweep YAML → EKI sweep → naive forwards → forward sweep (merged θ) → figures.
 #
-# **Uncalibrated study (SCM-only forwards, no EKI):** use `--uncalibrated-study` or pass `--forward-registry=forward_sweep_cases_uncalibrated.yml`
+# **Uncalibrated study (SCM-only forwards, no EKI):** use `--uncalibrated-study` or pass `--forward-registry=registries/forward_sweep_cases_uncalibrated.yml`
 # with `--forward-baseline-scm` and `--skip-calib` / `--skip-naive` (the preset sets these). Example:
-#   julia --project=. run_full_study.jl --uncalibrated-study 2>&1 | tee uncalibrated_full_study.log
+#   julia --project=. scripts/run_full_study.jl --uncalibrated-study 2>&1 | tee logs/uncalibrated_full_study.log
 #
 # **CLI** — from `calibration/experiments/variance_adjustments/`:
-#   julia --project=. run_full_study.jl [flags]
+#   julia --project=. scripts/run_full_study.jl [flags]
 # From **any** cwd (no `cd`): invoke by absolute path, e.g.
 #   julia /.../variance_adjustments/scripts/run_full_study.jl [flags]
-# (`scripts/run_full_study.jl` forwards here; env is activated from the repo path.)
 #
 # **REPL** (kwargs; optional `VA_*` / `VARIANCE_*` merged when fields are left unset — see `va_full_study_merge_env!`):
-#   using Pkg; Pkg.activate("."); include("run_full_study.jl")
+#   using Pkg; Pkg.activate("."); include("scripts/run_full_study.jl")
 #   run_full_study!()                              # default pipeline
 #   run_full_study!(; skip_forward = true)         # only EKI + naive + figures (forward-sweep figures need existing forward_eki/ data)
-#   run_full_study!(; skip_forward = true, skip_calib = true, skip_naive = true, skip_instantiate = true)  # figures only
+#   run_full_study_figures_only!()                   # alias for figures_only = true
+#   run_full_study_uncalibrated_figures_only!()     # figures only + uncalibrated preset
+#   run_full_study!(; figures_only = true)         # same as run_full_study_figures_only!
+#   run_full_study!(; figures_only = true, uncalibrated_study = true)
 #   run_full_study!(; forward_baseline_only = true) # 20 forwards (N_quad 1–5), no resolution ladder
 #
 # CLI flags (same options as kwargs on `FullStudyOptions`):
@@ -40,20 +42,21 @@
 # `rmprocs` per slice), forward sweep uses `ForwardSweepConfig` (`addprocs` / `rmprocs` for `parallel=:distributed`).
 # No extra `julia` subprocesses for calibration / naive / forward (avoids duplicate compilation and orphan PIDs).
 #
+isdefined(Main, :_VA_ROOT) ||
+    error("Internal: include `lib/run_full_study.jl` only after setting `Main._VA_ROOT` to the experiment directory.")
 import Pkg
 
-const _VA_ROOT = dirname(@__FILE__) |> abspath
-Pkg.activate(_VA_ROOT)
-include(joinpath(_VA_ROOT, "stdio_flush.jl"))
+const _VA_LIB = joinpath(_VA_ROOT, "lib")
+include(joinpath(_VA_LIB, "stdio_flush.jl"))
 va_setup_stdio_flushing!()
-include(joinpath(_VA_ROOT, "calibration_sweep_configs.jl"))
-include(joinpath(_VA_ROOT, "les_truth_build.jl"))
+include(joinpath(_VA_LIB, "calibration_sweep_configs.jl"))
+include(joinpath(_VA_LIB, "les_truth_build.jl"))
 
 # Load plotting + grid helpers **before** `run_full_study!` is defined so Julia ≥1.12 does not compile
 # `run_full_study!` in a world age older than `va_run_post_analysis!` / `ForwardSweepConfig` (avoids
-# MethodError when driving from one session: `include("run_full_study.jl"); run_full_study!()`).
+# MethodError when driving from one session: `include("scripts/run_full_study.jl"); run_full_study!()`).
 include(joinpath(_VA_ROOT, "analysis/plotting/run_post_analysis.jl"))
-include(joinpath(_VA_ROOT, "eki_calibration.jl"))
+include(joinpath(_VA_LIB, "eki_calibration.jl"))
 include(joinpath(_VA_ROOT, "scripts", "sweep_forward_core.jl"))
 include(joinpath(_VA_ROOT, "analysis", "plotting", "plot_forward_sweep_body.jl"))
 include(joinpath(_VA_ROOT, "analysis", "plotting", "plot_naive_vs_calibrated_varfix_on.jl"))
@@ -97,14 +100,31 @@ Base.@kwdef mutable struct FullStudyOptions
     skip_les_observations_build::Bool = false
     """
     If set, passed to `sweep_forward_runs.jl` as `--registry=` (path relative to this directory or absolute).
-    Default `nothing` → `forward_sweep_cases.yml`.
+    Default `nothing` → `registries/forward_sweep_cases.yml`.
     """
     forward_registry::Union{Nothing, String} = nothing
     """
     Preset: skip LES-obs build, calibration, naive forwards; use `--baseline-scm-forward` and
-    `forward_sweep_cases_uncalibrated.yml` unless `forward_registry` is set. One-command uncalibrated pipeline.
+    `registries/forward_sweep_cases_uncalibrated.yml` unless `forward_registry` is set. One-command uncalibrated pipeline.
     """
     uncalibrated_study::Bool = false
+    """
+    Preset: skip instantiate, forward sweep, calibration, naive forwards, and LES obs build; **only** run figure
+    stages (forward-sweep comparison plots + optional EKI post-analysis when calibration was not skipped).
+    Compose with `uncalibrated_study = true` for `forward_only/` + uncalibrated registry paths. CLI: `--figures-only`.
+    Env: `VA_FIGURES_ONLY=1`.
+    """
+    figures_only::Bool = false
+end
+
+function va_full_study_apply_figures_only_preset!(opts::FullStudyOptions)
+    opts.figures_only || return opts
+    opts.skip_instantiate = true
+    opts.skip_forward = true
+    opts.skip_calib = true
+    opts.skip_naive = true
+    opts.skip_les_observations_build = true
+    return opts
 end
 
 function va_full_study_apply_uncalibrated_preset!(opts::FullStudyOptions)
@@ -114,7 +134,7 @@ function va_full_study_apply_uncalibrated_preset!(opts::FullStudyOptions)
     opts.skip_les_observations_build = true
     opts.forward_baseline_scm = true
     if opts.forward_registry === nothing || isempty(strip(opts.forward_registry))
-        opts.forward_registry = "forward_sweep_cases_uncalibrated.yml"
+        opts.forward_registry = "registries/forward_sweep_cases_uncalibrated.yml"
     end
     return opts
 end
@@ -149,6 +169,9 @@ function va_full_study_merge_env!(opts::FullStudyOptions)
     if !opts.uncalibrated_study && strip(get(ENV, "VA_UNCALIBRATED_STUDY", "")) in ("1", "true", "yes")
         opts.uncalibrated_study = true
     end
+    if !opts.figures_only && strip(get(ENV, "VA_FIGURES_ONLY", "")) in ("1", "true", "yes")
+        opts.figures_only = true
+    end
     return opts
 end
 
@@ -158,7 +181,7 @@ end
 
 function _full_study_print_help()
     println("""
-Usage: julia --project=. run_full_study.jl [flags]
+Usage: julia --project=. scripts/run_full_study.jl [flags]
 
   --skip-instantiate
   --skip-forward
@@ -167,7 +190,7 @@ Usage: julia --project=. run_full_study.jl [flags]
   --skip-calib
   --skip-naive
   --skip-figures
-  --figures-only
+  --figures-only              Preset: only post-analysis + forward-sweep figures (same as figures_only=true / VA_FIGURES_ONLY=1)
   --forward-skip-done
   --forward-fail-fast
   --calib-fail-fast
@@ -180,11 +203,13 @@ Usage: julia --project=. run_full_study.jl [flags]
   --calib-worker-threads=N     VARIANCE_CALIB_WORKER_THREADS
   --calib-backend=worker|julia VARIANCE_CALIB_BACKEND
   --skip-les-observations     Skip building missing LES `observations.jld2` before EKI (see also `VA_SKIP_LES_OBSERVATIONS_BUILD`)
-  --forward-registry=REL.yml  Forward sweep + figures: pass `--registry=` to `sweep_forward_runs.jl` (default: `forward_sweep_cases.yml`)
-  --uncalibrated-study        Preset: SCM-only forwards on `forward_sweep_cases_uncalibrated.yml` (skips calib, naive, LES obs build)
+  --forward-registry=REL.yml  Forward sweep + figures: pass `--registry=` to `sweep_forward_runs.jl` (default: `registries/forward_sweep_cases.yml`)
+  --uncalibrated-study        Preset: SCM-only forwards on `registries/forward_sweep_cases_uncalibrated.yml` (skips calib, naive, LES obs build)
 
-REPL: include(\"run_full_study.jl\"); run_full_study!(; skip_forward = true)
+REPL: include(\"scripts/run_full_study.jl\"); run_full_study!(; skip_forward = true)
+REPL (figures only): run_full_study!(; figures_only = true)
 REPL (uncalibrated): run_full_study!(; uncalibrated_study = true)
+REPL (uncalibrated figures only): run_full_study!(; figures_only = true, uncalibrated_study = true)
 """)
     va_flush_stdio()
     return nothing
@@ -212,11 +237,7 @@ function parse_full_study_cli(argv::Vector{String})::FullStudyOptions
         elseif a == "--skip-figures"
             opts.skip_figures = true
         elseif a == "--figures-only"
-            opts.skip_instantiate = true
-            opts.skip_forward = true
-            opts.skip_calib = true
-            opts.skip_naive = true
-            opts.skip_les_observations_build = true
+            opts.figures_only = true
         elseif a == "--forward-skip-done"
             opts.forward_skip_done = true
         elseif a == "--forward-fail-fast"
@@ -249,7 +270,6 @@ function parse_full_study_cli(argv::Vector{String})::FullStudyOptions
             error("Unknown argument: $(repr(a)). Try --help.")
         end
     end
-    va_full_study_apply_uncalibrated_preset!(opts)
     return opts
 end
 
@@ -290,7 +310,11 @@ end
 
 function run_full_study!(opts::FullStudyOptions)
     va_full_study_merge_env!(opts)
+    va_full_study_apply_figures_only_preset!(opts)
     va_full_study_apply_uncalibrated_preset!(opts)
+    if opts.figures_only
+        @info "Figures-only preset: skipping instantiate / forwards / calibration / naive / LES obs build"
+    end
     if opts.uncalibrated_study
         @info "Uncalibrated study preset: forward registry" registry = opts.forward_registry skip_calib = opts.skip_calib forward_baseline_scm =
             opts.forward_baseline_scm
@@ -394,16 +418,26 @@ function run_full_study!(;
     forward_baseline_only::Bool = false,
     forward_baseline_scm::Bool = false,
     uncalibrated_study::Bool = false,
+    figures_only::Bool = false,
     forward_registry::Union{Nothing, String} = nothing,
     kwargs...,
 )
-    o = FullStudyOptions(; kwargs..., forward_baseline_scm = forward_baseline_scm, uncalibrated_study = uncalibrated_study, forward_registry = forward_registry)
+    o = FullStudyOptions(;
+        kwargs...,
+        forward_baseline_scm = forward_baseline_scm,
+        uncalibrated_study = uncalibrated_study,
+        figures_only = figures_only,
+        forward_registry = forward_registry,
+    )
     if forward_baseline_only
         o.forward_resolution_ladder = false
     end
     return run_full_study!(o)
 end
 
-if abspath(Base.PROGRAM_FILE) == abspath(@__FILE__)
-    run_full_study!(parse_full_study_cli(collect(String, ARGS)))
-end
+"""Re-run post-analysis + forward-sweep figures only (no instantiate / forwards / EKI / naive)."""
+run_full_study_figures_only!(; kwargs...) = run_full_study!(; figures_only = true, kwargs...)
+
+"""Same as [`run_full_study_figures_only!`](@ref) with [`uncalibrated_study`](@ref) preset (baseline SCM registry)."""
+run_full_study_uncalibrated_figures_only!(; kwargs...) =
+    run_full_study!(; figures_only = true, uncalibrated_study = true, kwargs...)

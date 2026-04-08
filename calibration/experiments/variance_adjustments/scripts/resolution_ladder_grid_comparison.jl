@@ -11,6 +11,8 @@
 # Usage (from this directory):
 #   julia --project=. resolution_ladder_grid_comparison.jl
 #   julia --project=. resolution_ladder_grid_comparison.jl /path/to/out_dir
+#
+# REPL: `include` this file, then `va_resolution_ladder_grid_comparison_cli()` (optional: set `ARGS` first).
 
 import ClimaCore.CommonGrids as CG
 import ClimaCore.Meshes as Meshes
@@ -470,7 +472,8 @@ function resolution_ladder_combined_both_tiers(
     return out_path
 end
 
-function main()
+"""CLI / REPL entry: build resolution-ladder tables and figures (optional `ARGS[1]` = output directory)."""
+function va_resolution_ladder_grid_comparison_cli()
     out_dir = get(ARGS, 1, joinpath(@__DIR__, "..", "analysis", "figures", "resolution_ladder"))
     mkpath(out_dir)
 
@@ -497,4 +500,7 @@ function main()
     return nothing
 end
 
-main()
+if !isempty(Base.PROGRAM_FILE) && isfile(Base.PROGRAM_FILE) &&
+   abspath(Base.PROGRAM_FILE) == abspath(@__FILE__)
+    va_resolution_ladder_grid_comparison_cli()
+end

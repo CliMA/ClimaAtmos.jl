@@ -9,10 +9,10 @@
 #   julia --project=. analysis/plotting/run_post_analysis.jl [--figures-dir=DIR] [--experiment-config=REL.yml] [output_active path1 [path2 ...]]
 #
 # One slice (default figure dir, losses + parameters + case diagnostics):
-#   julia --project=. analysis/plotting/run_post_analysis.jl --experiment-config=experiment_config.yml
+#   julia --project=. analysis/plotting/run_post_analysis.jl --experiment-config=config/experiment_config.yml
 #
 # All slices in `va_calibration_sweep_configs()` (same as full study’s figure pass):
-#   julia --project=. run_full_study.jl --figures-only
+#   julia --project=. scripts/run_full_study.jl --figures-only
 #
 # Figures default to `analysis/figures/<CASE>_N<n>_<varfix>_<calibration_mode>/` so different slices do not overwrite.
 #

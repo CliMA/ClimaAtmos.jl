@@ -5,6 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
+#SBATCH --output=logs/slurm/va_sweep_%A_%a.out
 #
 # No #SBATCH --array here: pass it at submit time so it always matches `flatten_sweep_tasks`.
 # Slurm: options on the `sbatch` command line override directives in this file.
@@ -18,6 +19,7 @@
 # Submit from this experiment directory (or set SLURM_SUBMIT_DIR accordingly).
 
 cd "${SLURM_SUBMIT_DIR}" || exit 1
+mkdir -p logs/slurm
 
 julia --project=. -e 'import Pkg; Pkg.instantiate()'
 julia --project=. scripts/sweep_forward_runs.jl --baseline-only --skip-done

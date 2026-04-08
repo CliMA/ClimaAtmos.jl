@@ -1,6 +1,6 @@
 # YAML paths (relative to the experiment directory) for multi-slice EKI + post-analysis.
-# Named slices live under `experiment_configs/`; default `experiment_config.yml` stays at the experiment root.
-# Edit this list to match the slices you want in `run_calibration_sweep.jl` and `run_full_study.jl`.
+# Named slices live under `experiment_configs/`; default slice is `config/experiment_config.yml`.
+# Edit this list to match the slices you want in `scripts/run_calibration_sweep.jl` and `scripts/run_full_study.jl` / `lib/run_full_study.jl`.
 # Idealized PyCLES slices: `va_idealized_calibration_sweep_configs()` (TRMM, DYCOMS, BOMEX, GABLS).
 # Must match `VA_EXPERIMENT_CONFIGS_DIR` in `experiment_common.jl`.
 const _VA_SL = "experiment_configs"
@@ -20,7 +20,7 @@ function va_calibration_sweep_configs()
     ]
 end
 
-"""Varfix-off YAMLs used for the **naive** track: after EKI, run varfix-**on** forwards with the same member TOML (`run_full_study.jl`, `scripts/run_naive_varfix_on_forwards.jl`)."""
+"""Varfix-off YAMLs used for the **naive** track: after EKI, run varfix-**on** forwards with the same member TOML (`scripts/run_full_study.jl`, `scripts/run_naive_varfix_on_forwards.jl`)."""
 function va_naive_varfix_off_source_configs()
     return String[
         "$(_VA_SL)/experiment_config_gcm_cfsite04_N3_varfix_off.yml",
