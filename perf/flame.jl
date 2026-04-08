@@ -16,9 +16,9 @@ device = ClimaComms.device(config.comms_ctx)
 # The callbacks flame graph is very expensive, so only do 2 steps.
 @info "running step"
 
-import SciMLBase
-SciMLBase.step!(integrator) # compile first
-SciMLBase.step!(integrator) # compile print_walltime_estimate, which skips the first step to avoid timing compilation
+import ClimaTimeSteppers as CTS
+CTS.step!(integrator) # compile first
+CTS.step!(integrator) # compile print_walltime_estimate, which skips the first step to avoid timing compilation
 CA.call_all_callbacks!(integrator) # compile callbacks
 import Profile, ProfileCanvas
 output_dir = job_id
@@ -26,7 +26,7 @@ mkpath(output_dir)
 
 @info "collect profile"
 Profile.clear()
-prof = Profile.@profile SciMLBase.step!(integrator)
+prof = Profile.@profile CTS.step!(integrator)
 results = Profile.fetch()
 Profile.clear()
 
@@ -65,7 +65,7 @@ sampling_rate = expected_allocs <= max_allocs_for_full_sampling ? 1 : 0.01
 # use new allocation profiler
 @info "collecting allocations with sampling rate $sampling_rate"
 Profile.Allocs.clear()
-Profile.Allocs.@profile sample_rate = sampling_rate SciMLBase.step!(integrator)
+Profile.Allocs.@profile sample_rate = sampling_rate CTS.step!(integrator)
 results = Profile.Allocs.fetch()
 Profile.Allocs.clear()
 profile = ProfileCanvas.view_allocs(results)
@@ -88,8 +88,8 @@ end
 
 
 ## old allocation profiler (TODO: remove this)
-allocs = @allocated SciMLBase.step!(integrator)
-@timev SciMLBase.step!(integrator)
+allocs = @allocated CTS.step!(integrator)
+@timev CTS.step!(integrator)
 @info "`allocs ($job_id)`: $(allocs)"
 
 if allocs < allocs_limit[job_id] * buffer

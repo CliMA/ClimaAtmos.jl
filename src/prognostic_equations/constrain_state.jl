@@ -40,7 +40,7 @@ Perform a weighted Direct Stiffness Summation (DSS) on components of the state `
 This function applies DSS to `ClimaCore.Field`s (or structures of `Field`s)
 typically named `.c` (center-located) and `.f` (face-located) within the state
 object `Y`. The DSS operation is essential in `ClimaCore` for ensuring that
-fields are C0 continuous across element boundaries. It correctly sums contributions 
+fields are C0 continuous across element boundaries. It correctly sums contributions
 to degrees of freedom that are shared between different processes (MPI ranks).
 
 The operation is performed in-place, modifying the fields within `Y` (e.g., `Y.c`, `Y.f`).
@@ -113,7 +113,7 @@ function tracer_nonnegativity_constraint!(Y, p, t,
     ᶜρq_tot = Y.c.ρq_tot
 
     tracer_mass_names = (
-        @name(ρq_liq), @name(ρq_rai), @name(ρq_ice), @name(ρq_sno),
+        @name(ρq_lcl), @name(ρq_rai), @name(ρq_icl), @name(ρq_sno),
         @name(ρq_tot),
     )
 
@@ -150,19 +150,25 @@ function prescribe_flow!(Y, p, t, flow::PrescribedFlow)
     z = Fields.coordinate_field(Y.f).z
     @. Y.f.u₃ = C3(Geometry.WVector(flow(z, t)), ᶠlg)
 
-    ### Fix energy to initial temperature
     ᶜlg = Fields.local_geometry_field(Y.c)
-    local_state = InitialConditions.ShipwayHill2012()(p.params)
-    get_ρ_init_dry(ls) = ls.thermo_state.ρ * (1 - ls.thermo_state.q_tot)
-    get_T_init(ls) = TD.air_temperature(ls.thermo_params, ls.thermo_state)
-    ᶜρ_init_dry = @. lazy(get_ρ_init_dry(local_state(ᶜlg)))
-    ᶜT_init = @. lazy(get_T_init(local_state(ᶜlg)))
-
     thermo_params = CAP.thermodynamics_params(p.params)
+    setup = Setups.ShipwayHill2012(; thermo_params)
+    function _shipway_ρ_dry(lg)
+        ps = Setups.center_initial_condition(setup, lg, p.params)
+        ρ = Setups.air_density(ps, p.params)
+        return ρ * (1 - ps.q_tot)
+    end
+    _shipway_T(lg) = Setups.center_initial_condition(setup, lg, p.params).T
+    ᶜρ_init_dry = @. lazy(_shipway_ρ_dry(ᶜlg))
+    ᶜT_init = @. lazy(_shipway_T(ᶜlg))
 
+    # Clamp ρq_tot to non-negative to prevent the feedback loop:
+    # negative ρq_tot → lower ρ → more negative q_tot → blowup
+    @. Y.c.ρq_tot = max(Y.c.ρq_tot, 0)
     @. Y.c.ρ = ᶜρ_init_dry + Y.c.ρq_tot
     ᶜq_tot = @. lazy(Y.c.ρq_tot / Y.c.ρ)
     ᶜe_kin = compute_kinetic(Y.c.uₕ, Y.f.u₃)
+    # Fix energy to initial temperature
     @. Y.c.ρe_tot = Y.c.ρ * TD.total_energy(thermo_params, ᶜe_kin, ᶜΦ, ᶜT_init, ᶜq_tot)
     return nothing
 end

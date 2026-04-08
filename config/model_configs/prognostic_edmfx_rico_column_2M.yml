@@ -1,7 +1,4 @@
 initial_condition: "Rico"
-subsidence: "Rico"
-ls_adv: "Rico"
-surface_setup: "Rico"
 turbconv: "prognostic_edmfx"
 tracer_upwinding: first_order
 implicit_diffusion: true
@@ -18,6 +15,7 @@ prognostic_tke: true
 # 2M EDMF updraft Jacobian not yet implemented; use explicit microphysics
 implicit_microphysics: false
 microphysics_model: "2M"
+use_sgs_quadrature: false
 config: "column"
 z_max: 4e3
 x_elem: 2

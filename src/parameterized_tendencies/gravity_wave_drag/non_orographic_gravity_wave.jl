@@ -143,7 +143,7 @@ function non_orographic_gravity_wave_compute_tendency!(
     ::NonOrographicGravityWave,
 )
     #unpack
-    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; params) = p
     (;
         ᶜdTdz,
@@ -167,7 +167,7 @@ function non_orographic_gravity_wave_compute_tendency!(
 
     # compute buoyancy frequency
     ᶜdTdz .= Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
-    ᶜcp_m = @. lazy(TD.cp_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno))
+    ᶜcp_m = @. lazy(TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
 
     @. ᶜbuoyancy_frequency =
         (grav / ᶜT) * (ᶜdTdz + grav / ᶜcp_m)

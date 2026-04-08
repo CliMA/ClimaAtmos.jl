@@ -158,12 +158,12 @@ Base.show(io::IO, x::RRTMGPI.AbstractRRTMGPMode) =
     parseable_show_with_fields_no_type_header(io, x)
 
 # src/initial_conditions/initial_conditions.jl
-Base.show(io::IO, x::InitialConditions.RCEMIPIIProfile) =
+Base.show(io::IO, x::Setups.RCEMIPIIProfile) =
     parseable_show_with_fields_no_type_header(io, x)
 
 import ClimaCore: Fields, Spaces
 function Base.show(
-    io::IO, ::MIME"text/plain", x::InitialConditions.ColumnInterpolatableField,
+    io::IO, ::MIME"text/plain", x::Setups.ColumnInterpolatableField,
 )
     # Extract z grid from the wrapped column field
     z = Fields.coordinate_field(x.f).z

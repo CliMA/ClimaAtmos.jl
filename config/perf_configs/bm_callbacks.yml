@@ -5,7 +5,6 @@ rayleigh_sponge: false
 viscous_sponge: false
 dt: "1secs"
 dt_rad: "1secs"
-dt_cloud_fraction: "1secs"
 t_end: "10secs"
 dt_save_state_to_disk: "1secs"
 log_progress: false

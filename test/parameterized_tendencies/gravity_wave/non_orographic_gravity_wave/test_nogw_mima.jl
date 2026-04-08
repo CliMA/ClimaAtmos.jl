@@ -45,7 +45,7 @@ gw_damp_pressure = nogw_params.damp_pressure
 
 # MiMA data
 include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
-mima_data = joinpath(mima_gwf_path(), "mima_gwf.nc")
+mima_data = mima_gwf_path()
 
 nt = NCDataset(mima_data) do ds
     lon = Array(ds["lon"])

@@ -143,7 +143,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     (; ls_adv, scm_coriolis) = p.atmos
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜp, ᶜK, ᶜT, ᶜh_tot, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜp, ᶜK, ᶜT, ᶜh_tot, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; sfc_conditions) = p.precomputed
 
     vst_uₕ = viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
@@ -172,8 +172,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         if microphysics_model isa NonEquilibriumMicrophysics1M
             # TODO: This doesn't work for multiple updrafts
             moisture_species = (
-                (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq)),
-                (@name(c.sgsʲs.:(1).q_ice), @name(c.ρq_ice)),
+                (@name(c.sgsʲs.:(1).q_lcl), @name(c.ρq_lcl)),
+                (@name(c.sgsʲs.:(1).q_icl), @name(c.ρq_icl)),
                 (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
                 (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
             )
@@ -193,7 +193,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     hs_tendency_uₕ = held_suarez_forcing_tendency_uₕ(hs_args...)
     hs_tendency_ρe_tot = held_suarez_forcing_tendency_ρe_tot(ᶜρ, hs_args...)
     edmf_cor_tend_uₕ = scm_coriolis_tendency_uₕ(ᶜuₕ, scm_coriolis)
-    lsa_args = (ᶜρ, thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, t, ls_adv)
+    lsa_args =
+        (ᶜρ, thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, t, ls_adv)
     bc_lsa_tend_ρe_tot = large_scale_advection_tendency_ρe_tot(lsa_args...)
 
     # TODO: fuse, once we fix
@@ -275,18 +276,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-
-    # EDMF updraft microphysics tendencies (applied to updraft prognostic variables)
-    if p.atmos.microphysics_tendency_timestepping == Explicit()
-        edmfx_microphysics_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.turbconv_model,
-            p.atmos.microphysics_model,
-        )
-    end
 
     # Unified microphysics tendencies (cloud condensation + precipitation)
     if p.atmos.microphysics_tendency_timestepping == Explicit()

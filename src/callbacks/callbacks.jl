@@ -7,7 +7,6 @@ import ClimaCore.Fields
 import ClimaComms
 import ClimaCore as CC
 import ClimaCore.Spaces
-import SciMLBase
 import .Parameters as CAP
 import ClimaCore: InputOutput
 using Dates
@@ -68,9 +67,8 @@ function external_driven_single_column!(integrator)
     t = integrator.t
 
     @assert p.atmos.sfc_temperature isa ExternalTVColumnSST (
-        "SCM reanalysis timevarying setup requires `initial_condition`, " *
-        "`external_forcing`, `surface_setup`, and `surface_temperature` " *
-        "to be set to `ReanalysisTimeVarying`"
+        "SCM reanalysis timevarying setup requires `initial_condition` " *
+        "and `external_forcing` to be set to `ReanalysisTimeVarying`"
     )
 
     FT = Spaces.undertype(axes(Y.c))
@@ -104,30 +102,6 @@ function external_driven_single_column!(integrator)
 
     # subsidence
     evaluate!(ᶜls_subsidence, wa, t)
-end
-
-NVTX.@annotate function cloud_fraction_model_callback!(integrator)
-    Y = integrator.u
-    p = integrator.p
-    (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) =
-        p.precomputed
-    thermo_params = CAP.thermodynamics_params(p.params)
-    if isnothing(p.atmos.turbconv_model)
-        @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
-        @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
-            ᶠinterp(
-                TD.liquid_ice_pottemp(
-                    thermo_params,
-                    ᶜT,
-                    Y.c.ρ,
-                    ᶜq_tot_safe,
-                    ᶜq_liq_rai,
-                    ᶜq_ice_sno,
-                ),
-            ),
-        )
-    end
-    set_cloud_fraction!(Y, p, p.atmos.microphysics_model, p.atmos.cloud_model)
 end
 
 NVTX.@annotate function rrtmgp_model_callback!(integrator)

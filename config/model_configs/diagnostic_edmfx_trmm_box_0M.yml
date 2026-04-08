@@ -1,6 +1,4 @@
 initial_condition: TRMM_LBA
-rad: TRMM_LBA
-surface_setup: TRMM_LBA
 turbconv: diagnostic_edmfx
 implicit_diffusion: true
 approximate_linear_solve_iters: 2

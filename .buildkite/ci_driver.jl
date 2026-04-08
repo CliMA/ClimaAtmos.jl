@@ -31,7 +31,6 @@ sol_res = CA.solve_atmos!(simulation)
 import ClimaCore
 import ClimaCore: Topologies, Quadratures, Spaces, Fields
 import ClimaComms
-using SciMLBase
 using PrettyTables
 using JLD2
 using NCDatasets

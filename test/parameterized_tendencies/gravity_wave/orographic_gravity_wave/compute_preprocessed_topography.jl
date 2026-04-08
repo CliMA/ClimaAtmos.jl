@@ -27,15 +27,16 @@ config.parsed_args["topography_damping_factor"] = 1;
 config.parsed_args["orographic_gravity_wave"] = "raw_topo";
 
 params = CA.ClimaAtmosParameters(config)
-atmos = CA.get_atmos(config, params)
+setup_type = CA.get_setup_type(config.parsed_args, params.thermodynamics_params)
+atmos = CA.get_atmos(config, params; setup_type)
 grid = CA.get_grid(config.parsed_args, params, config.comms_ctx)
 spaces = CA.get_spaces(grid)
-initial_condition = CA.get_initial_condition(config.parsed_args, atmos)
-surface_setup = CA.get_surface_setup(config.parsed_args)
+surface_setup = CA.get_surface_setup(config.parsed_args; setup_type)
 hspace = Spaces.horizontal_space(spaces.center_space)
 
-Y = CA.ICs.atmos_state(
-    initial_condition(params),
+Y = CA.Setups.initial_state(
+    setup_type,
+    params,
     atmos,
     spaces.center_space,
     spaces.face_space,

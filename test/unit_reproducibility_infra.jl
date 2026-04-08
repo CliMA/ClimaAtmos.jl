@@ -34,14 +34,14 @@ function make_ref_file_counter(i, dir...)
     return d
 end
 
-function make_mse(
+function make_rms(
     i,
     dir...;
     subfolder = "output_active",
-    mse_file = "computed_mse.dat",
+    rms_file = "computed_rms.dat",
 )
     d = mkpath(joinpath(dir..., subfolder))
-    open(io -> println(io, i), joinpath(d, mse_file), "w")
+    open(io -> println(io, i), joinpath(d, rms_file), "w")
     return d
 end
 rbundle(p) = joinpath(p, "reproducibility_bundle")
@@ -327,142 +327,55 @@ function make_file_with_contents(dir, filename, contents)
     f = joinpath(dir, filename)
     open(io -> println(io, contents), f, "w")
 end
-@testset "Reproducibility infrastructure: source_checksum" begin
-    mktempdir2_cd_computed() do (dir_A, dir_B)
-        make_file_with_contents(dir_A, "file_x.jl", "abc")
-        make_file_with_contents(dir_A, "file_y.jl", "abc")
-        make_file_with_contents(dir_A, "file_z.jl", "abc")
-
-        make_file_with_contents(dir_B, "file_x.jl", "abc")
-        make_file_with_contents(dir_B, "file_y.jl", "abc")
-        make_file_with_contents(dir_B, "file_z.jl", "abc")
-        @test source_checksum(dir_A) == source_checksum(dir_B)
-    end
-
-    mktempdir2_cd_computed() do (dir_A, dir_B)
-        make_file_with_contents(dir_A, "file_x.jl", "abc")
-        make_file_with_contents(dir_A, "file_y.jl", "abc")
-        make_file_with_contents(dir_A, "file_z.jl", "abc")
-
-        make_file_with_contents(dir_B, "file_x.jl", "xyz")
-        make_file_with_contents(dir_B, "file_y.jl", "abc")
-        make_file_with_contents(dir_B, "file_z.jl", "abc")
-        @test source_checksum(dir_A) ≠ source_checksum(dir_B)
-    end
-end
-
-@testset "Reproducibility infrastructure: source_has_changed" begin
-    mktempdir2_cd_computed() do (dir_A, dir_B)
-        make_file_with_contents(dir_A, "file_x.jl", "abc")
-        make_file_with_contents(dir_A, "file_y.jl", "abc")
-        make_file_with_contents(dir_A, "file_z.jl", "abc")
-        d_A = make_ref_file_counter(3, dir_A, "d_A")
-        make_file_with_contents(
-            d_A,
-            "source_checksum.dat",
-            source_checksum(dir_A),
-        )
-
-        make_file_with_contents(dir_B, "file_x.jl", "abc")
-        make_file_with_contents(dir_B, "file_y.jl", "abc")
-        make_file_with_contents(dir_B, "file_z.jl", "abc")
-        d_B = make_ref_file_counter(3, dir_B, "d_B")
-        make_file_with_contents(
-            d_B,
-            "source_checksum.dat",
-            source_checksum(dir_B),
-        )
-
-        @test source_has_changed(;
-            n = 0, # force no comparable reference, source code
-            root_dir = dir_A,
-            ref_counter_PR = 3,
-            skip = false,
-            src_dir = dir_B,
-        )
-    end
-
-    mktempdir2_cd_computed() do (dir_A, dir_B)
-        make_file_with_contents(dir_A, "file_x.jl", "abc")
-        make_file_with_contents(dir_A, "file_y.jl", "abc")
-        make_file_with_contents(dir_A, "file_z.jl", "abc")
-        d_A = make_ref_file_counter(3, dir_A, "d_A")
-        make_file_with_contents(
-            d_A,
-            "source_checksum.dat",
-            source_checksum(dir_A),
-        )
-
-        make_file_with_contents(dir_B, "file_x.jl", "abc")
-        make_file_with_contents(dir_B, "file_y.jl", "abc")
-        make_file_with_contents(dir_B, "file_z.jl", "abc")
-        d_B = make_ref_file_counter(3, dir_B, "d_B")
-        make_file_with_contents(
-            d_B,
-            "source_checksum.dat",
-            source_checksum(dir_B),
-        )
-
-        @test !source_has_changed(;
-            n = 5,
-            root_dir = dir_A,
-            ref_counter_PR = 3,
-            skip = false,
-            src_dir = dir_B,
-        )
-    end
-
-    mktempdir2_cd_computed() do (dir_A, dir_B)
-        make_file_with_contents(dir_A, "file_x.jl", "abc")
-        make_file_with_contents(dir_A, "file_y.jl", "abc")
-        make_file_with_contents(dir_A, "file_z.jl", "abc")
-        d_A = make_ref_file_counter(3, dir_A, "d_A")
-        make_file_with_contents(
-            d_A,
-            "source_checksum.dat",
-            source_checksum(dir_A),
-        )
-
-        make_file_with_contents(dir_B, "file_x.jl", "abc")
-        make_file_with_contents(dir_B, "file_y.jl", "abc")
-        make_file_with_contents(dir_B, "file_z.jl", "xyz")
-        d_B = make_ref_file_counter(3, dir_B, "d_B")
-        make_file_with_contents(
-            d_B,
-            "source_checksum.dat",
-            source_checksum(dir_B),
-        )
-
-        @test source_has_changed(;
-            n = 5,
-            root_dir = dir_A,
-            ref_counter_PR = 3,
-            skip = false,
-            src_dir = dir_B,
-        )
-    end
-end
+# source_checksum and source_has_changed tests removed:
+# these functions were dead code and have been deleted.
 
 
 import OrderedCollections: OrderedDict
 
+@testset "Reproducibility infrastructure: physical_var_label / physical_var_unit" begin
+    # Known key returns the metadata label and unit
+    @test physical_var_label("c.ρ") == "ρ (density)"
+    @test physical_var_unit("c.ρ") == "kg/m³"
+
+    # Unknown key falls back to the key string itself
+    @test physical_var_label("c.nonexistent_var") == "c.nonexistent_var"
+    @test physical_var_unit("c.nonexistent_var") == ""
+
+    # The warn is actually emitted for unknown keys
+    @test_logs (:warn, r"No metadata entry.*c\.mystery_var") physical_var_label(
+        "c.mystery_var",
+    )
+end
+
+# Helper: create a zero-diff RMS result dict
+_rms_pass(keys...) = OrderedDict(
+    k => (rms_diff = 0.0, data_scale = 1.0, relative_rms = 0.0, n_points = 1)
+    for k in keys
+)
+# Helper: create a failing RMS result dict (large diff)
+_rms_fail(keys...) = OrderedDict(
+    k => (rms_diff = 1.0, data_scale = 1.0, relative_rms = 1.0, n_points = 1)
+    for k in keys
+)
+
 @testset "Reproducibility infrastructure: report_reproducibility_results - filename" begin
     make_and_cd() do dir
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 1, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        d1 = make_mse(mses1, dir, "d1")
-        d2 = make_mse(mses2, dir, "d2")
-        d3 = make_mse(mses3, dir, "d3")
+        r1 = _rms_pass("a", "b")
+        r2 = _rms_fail("a", "b")
+        r3 = _rms_pass("a", "b")
+        d1 = make_rms(r1, dir, "d1")
+        d2 = make_rms(r2, dir, "d2")
+        d3 = make_rms(r3, dir, "d3")
         paths = [d1, d2, d3]
-        computed_mse_filenames = map(paths) do p
-            joinpath(p, "computed_mse.dat")
+        computed_rms_filenames = map(paths) do p
+            joinpath(p, "computed_rms.dat")
         end
         io = IOBuffer()
         @test report_reproducibility_results(
             io,
-            map(x -> basename(dirname(dirname(x))), computed_mse_filenames),
-            map(x -> parse_file(x), computed_mse_filenames);
+            map(x -> basename(dirname(dirname(x))), computed_rms_filenames),
+            map(x -> parse_file(x), computed_rms_filenames);
             n_pass_limit = 2,
             test_broken_report_flakiness = true,
         ) == :now_reproducible
@@ -472,63 +385,51 @@ end
 
 @testset "Reproducibility infrastructure: report_reproducibility_results - dict, flaky" begin
     make_and_cd() do dir
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 1, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
+        r1 = _rms_pass("a", "b")
+        r2 = _rms_fail("a", "b")
+        r3 = _rms_pass("a", "b")
         io = IOBuffer()
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2, r3];
             n_pass_limit = 2,
             test_broken_report_flakiness = true,
         ) == :now_reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 0, "b" => 1) # only partly passing
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
+        # Only partly failing (one var fails)
+        r2_partial = OrderedDict(
+            "a" => (rms_diff = 0.0, data_scale = 1.0, relative_rms = 0.0, n_points = 1),
+            "b" => (rms_diff = 1.0, data_scale = 1.0, relative_rms = 1.0, n_points = 1),
+        )
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2_partial, r3];
             n_pass_limit = 2,
             test_broken_report_flakiness = true,
         ) == :now_reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 1, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2, r3];
             n_pass_limit = 5,
             test_broken_report_flakiness = true,
         ) == :not_yet_reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 0, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2_partial, r3];
             n_pass_limit = 2,
             test_broken_report_flakiness = true,
         ) == :now_reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 0, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2_partial, r3];
             n_pass_limit = 3,
             test_broken_report_flakiness = true,
         ) == :not_yet_reproducible
@@ -537,132 +438,119 @@ end
 
 @testset "Reproducibility infrastructure: report_reproducibility_results - dict, strict" begin
     make_and_cd() do dir
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 1, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
+        r1 = _rms_pass("a", "b")
+        r2 = _rms_fail("a", "b")
+        r3 = _rms_pass("a", "b")
+        r2_partial = OrderedDict(
+            "a" => (rms_diff = 0.0, data_scale = 1.0, relative_rms = 0.0, n_points = 1),
+            "b" => (rms_diff = 1.0, data_scale = 1.0, relative_rms = 1.0, n_points = 1),
+        )
         io = IOBuffer()
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2, r3];
             n_pass_limit = 2,
             test_broken_report_flakiness = false,
         ) == :reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 0, "b" => 1) # only partly passing
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2_partial, r3];
             n_pass_limit = 2,
             test_broken_report_flakiness = false,
         ) == :reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 1, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2, r3];
             n_pass_limit = 5,
             test_broken_report_flakiness = false,
         ) == :not_reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 0, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2_partial, r3];
             n_pass_limit = 2,
             test_broken_report_flakiness = false,
         ) == :reproducible
 
-        mses1 = OrderedDict("a" => 0, "b" => 0)
-        mses2 = OrderedDict("a" => 0, "b" => 1)
-        mses3 = OrderedDict("a" => 0, "b" => 0)
-        mses = [mses1, mses2, mses3]
         @test report_reproducibility_results(
             io,
             ["S1", "S2", "S3"],
-            mses;
+            [r1, r2_partial, r3];
             n_pass_limit = 3,
             test_broken_report_flakiness = false,
         ) == :not_reproducible
     end
 end
 
-@testset "Reproducibility infrastructure: mse summary" begin
+@testset "Reproducibility infrastructure: rms summary" begin
     make_and_cd() do dir
-        mses1 = OrderedDict("a" => 1, "b" => 1)
-        mses2 = OrderedDict("a" => 2, "b" => 2)
-        mses3 = OrderedDict("a" => 3, "b" => 3)
-        d1 = make_mse(mses1, dir, "d1")
-        d2 = make_mse(mses2, dir, "d2")
-        d3 = make_mse(mses3, dir, "d3")
-        d3 = make_mse(mses3, dir, "d3")
+        rms1 = OrderedDict("a" => 1, "b" => 1)
+        rms2 = OrderedDict("a" => 2, "b" => 2)
+        rms3 = OrderedDict("a" => 3, "b" => 3)
+        d1 = make_rms(rms1, dir, "d1")
+        d2 = make_rms(rms2, dir, "d2")
+        d3 = make_rms(rms3, dir, "d3")
+        d3 = make_rms(rms3, dir, "d3")
 
         job_ids = ["d1", "d2", "d3"]
-        computed_mses = get_computed_mses(;
+        computed_results = get_computed_rms(;
             job_ids,
             subfolder = "output_active",
-            is_mse_file = default_is_mse_file,
+            is_rms_file = default_is_rms_file,
         )
         io = IOBuffer()
-        print_mse_summary(io; mses = computed_mses)
+        print_rms_summary(io; results = computed_results)
         s = String(take!(io))
-        @test s == "################################# Computed MSEs
-MSEs[\"d1\"][a] = 1
-MSEs[\"d1\"][b] = 1
-MSEs[\"d2\"][a] = 2
-MSEs[\"d2\"][b] = 2
-MSEs[\"d3\"][a] = 3
-MSEs[\"d3\"][b] = 3
+        @test s == "################################# Computed RMS results
+RMS[\"d1\"][a] = 1
+RMS[\"d1\"][b] = 1
+RMS[\"d2\"][a] = 2
+RMS[\"d2\"][b] = 2
+RMS[\"d3\"][a] = 3
+RMS[\"d3\"][b] = 3
 #################################
 "
 
-        any_skipped = print_skipped_jobs(; mses = computed_mses)
+        any_skipped = print_skipped_jobs(; results = computed_results)
         @test !any_skipped
     end
 end
 
-@testset "Reproducibility infrastructure: mse summary" begin
+@testset "Reproducibility infrastructure: rms summary with missing files" begin
     make_and_cd() do dir
-        mses1 = OrderedDict("a" => 1, "b" => 1)
-        mses2 = OrderedDict("a" => 2, "b" => 2)
-        mses3 = OrderedDict("a" => 3, "b" => 3)
-        d1 = make_mse(mses1, dir, "d1")
-        d2 = make_mse(mses2, dir, "d2"; mse_file = "comuted_mse.dat") # intentional typo
-        d3 = make_mse(mses3, dir, "d3")
-        Base.touch(joinpath(d3, "prog_state.hdf5")) # not an mse file
+        rms1 = OrderedDict("a" => 1, "b" => 1)
+        rms2 = OrderedDict("a" => 2, "b" => 2)
+        rms3 = OrderedDict("a" => 3, "b" => 3)
+        d1 = make_rms(rms1, dir, "d1")
+        d2 = make_rms(rms2, dir, "d2"; rms_file = "comuted_rms.dat") # intentional typo
+        d3 = make_rms(rms3, dir, "d3")
+        Base.touch(joinpath(d3, "prog_state.hdf5")) # not an rms file
 
         job_ids = ["d1", "d2", "d3"]
-        computed_mses = get_computed_mses(;
+        computed_results = get_computed_rms(;
             job_ids,
             subfolder = "output_active",
-            is_mse_file = default_is_mse_file,
+            is_rms_file = default_is_rms_file,
         )
         io = IOBuffer()
-        print_mse_summary(io; mses = computed_mses)
+        print_rms_summary(io; results = computed_results)
         s = String(take!(io))
-        @test s == "################################# Computed MSEs
-MSEs[\"d1\"][a] = 1
-MSEs[\"d1\"][b] = 1
-MSEs[\"d3\"][a] = 3
-MSEs[\"d3\"][b] = 3
+        @test s == "################################# Computed RMS results
+RMS[\"d1\"][a] = 1
+RMS[\"d1\"][b] = 1
+RMS[\"d3\"][a] = 3
+RMS[\"d3\"][b] = 3
 #################################
 "
 
         io = IOBuffer()
-        any_skipped = print_skipped_jobs(io; mses = computed_mses)
+        any_skipped = print_skipped_jobs(io; results = computed_results)
         s = String(take!(io))
         @test any_skipped
         @test s == "Skipped files:
@@ -731,12 +619,12 @@ end
           joinpath("a", "output_1A34", "c")
 end
 
-@testset "Reproducibility infrastructure: commit_sha_from_mse_file" begin
-    @test_throws ErrorException commit_sha_from_mse_file(
+@testset "Reproducibility infrastructure: commit_sha_from_rms_file" begin
+    @test_throws ErrorException commit_sha_from_rms_file(
         joinpath("a", "b", "c"),
     )
-    @test commit_sha_from_mse_file(
-        joinpath("a", "b", "computed_mse_H123.dat"),
+    @test commit_sha_from_rms_file(
+        joinpath("a", "b", "computed_rms_H123.dat"),
     ) == "H123"
 end
 
@@ -770,8 +658,7 @@ end
         file = joinpath(job_id_2, "output_active", "ref_prog_state.dat")
         open(io -> println(io, 1), file, "w")
 
-        @test source_checksum(hash1) == source_checksum(computed_dir)
-        @test source_checksum(hash2) == source_checksum(computed_dir)
+
 
         repro_folder = "repro_bundle"
         (; files_src, files_dest) = save_dir_in_out_list(;
@@ -843,8 +730,7 @@ end
         file = joinpath(job_id_2, "output_active", "ref_prog_state.dat")
         open(io -> println(io, 1), file, "w")
 
-        @test source_checksum(hash1) == source_checksum(computed_dir)
-        @test source_checksum(hash2) == source_checksum(computed_dir)
+
 
         repro_folder = "repro_bundle"
         repro_dir = joinpath(save_dir, "hash_new", repro_folder)
@@ -861,7 +747,6 @@ end
             ),
             ref_counter_PR = 3,
             repro_folder,
-            skip = false,
         )
         @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.dat"))
         @test isfile(joinpath(repro_dir, "job_id_2", "ref_prog_state.dat"))
@@ -900,8 +785,7 @@ end
         file = joinpath(job_id_2, "output_active", "ref_prog_state.dat")
         open(io -> println(io, 1), file, "w")
 
-        @test source_checksum(hash1) == source_checksum(computed_dir)
-        @test source_checksum(hash2) == source_checksum(computed_dir)
+
 
         repro_folder = "repro_bundle"
         move_data_to_save_dir(;
@@ -918,7 +802,6 @@ end
             ),
             repro_folder,
             ref_counter_PR = 3,
-            skip = false,
         )
         repro_dir = joinpath(save_dir, "hash_new", "repro_bundle")
         @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.dat"))
@@ -958,8 +841,7 @@ end
         file = joinpath(job_id_2_sym_dir, "ref_prog_state.dat")
         open(io -> println(io, 1), file, "w")
 
-        @test source_checksum(hash1) == source_checksum(computed_dir)
-        @test source_checksum(hash2) == source_checksum(computed_dir)
+
 
         repro_folder = "repro_bundle"
         move_data_to_save_dir(;
@@ -976,7 +858,6 @@ end
             ),
             repro_folder,
             ref_counter_PR = 3,
-            skip = false,
         )
         repro_dir = joinpath(save_dir, "hash_new", "repro_bundle")
         @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.dat"))
@@ -1046,13 +927,13 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
             InputOutput.write!(hdfwriter, fv, "fv")
             Base.close(hdfwriter)
             dict = to_dict(file, "fv", comms_ctx)
-            @test dict["(:x,)"] isa Vector{Float64}
-            @test dict["(:y,)"] isa Vector{Float64}
+            @test dict["x"] isa Vector{Float64}
+            @test dict["y"] isa Vector{Float64}
             zdict = zero_dict(file, "fv", comms_ctx)
-            @test zdict["(:x,)"] isa Vector{Float64}
-            @test zdict["(:y,)"] isa Vector{Float64}
-            @test all(x -> iszero(x), zdict["(:x,)"])
-            @test all(x -> iszero(x), zdict["(:y,)"])
+            @test zdict["x"] isa Vector{Float64}
+            @test zdict["y"] isa Vector{Float64}
+            @test all(x -> iszero(x), zdict["x"])
+            @test all(x -> iszero(x), zdict["y"])
         end
     end
 
@@ -1105,10 +986,10 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
                 skip = true,
             )
             @test length(v) == 1
-            @test v[1]["(:x,)"] isa Vector{Float64}
-            @test v[1]["(:y,)"] isa Vector{Float64}
-            @test all(x -> iszero(x), v[1]["(:x,)"])
-            @test all(x -> iszero(x), v[1]["(:y,)"])
+            @test v[1]["x"] isa NamedTuple
+            @test v[1]["y"] isa NamedTuple
+            @test iszero(v[1]["x"].rms_diff)
+            @test iszero(v[1]["y"].rms_diff)
 
             @test isempty(d)
             @test how == :skipped
@@ -1126,10 +1007,10 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
                 skip = false,
             )
             @test length(v) == 1
-            @test v[1]["(:x,)"] isa Vector{Float64}
-            @test v[1]["(:y,)"] isa Vector{Float64}
-            @test all(x -> iszero(x), v[1]["(:x,)"])
-            @test all(x -> iszero(x), v[1]["(:y,)"])
+            @test v[1]["x"] isa NamedTuple
+            @test v[1]["y"] isa NamedTuple
+            @test iszero(v[1]["x"].rms_diff)
+            @test iszero(v[1]["y"].rms_diff)
 
             @test isempty(d)
             @test how == :no_comparable_dirs
@@ -1249,12 +1130,12 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
             # The first we compare against is most recent,
             # And we set `fv.x .= 200` and `fv.y .= 300` for
             # that dataset.
-            @test v[1]["(:x,)"] == 2970.075
-            @test v[1]["(:y,)"] == 2980.0333333333333
-            @test v[2]["(:x,)"] == 0.0
-            @test v[2]["(:y,)"] == 0.0
-            @test v[3]["(:x,)"] == 0.0
-            @test v[3]["(:y,)"] == 0.0
+            @test v[1]["x"].rms_diff > 0  # different data
+            @test v[1]["y"].rms_diff > 0
+            @test iszero(v[2]["x"].rms_diff)
+            @test iszero(v[2]["y"].rms_diff)
+            @test iszero(v[3]["x"].rms_diff)
+            @test iszero(v[3]["y"].rms_diff)
 
             @test d == [d05, d04, d03]
             @test how == :successful_comparison
@@ -1302,10 +1183,10 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
                 skip = true,
             )
             @test length(v) == 1
-            @test v[1]["(:x,)"] isa Vector{Float64}
-            @test v[1]["(:y,)"] isa Vector{Float64}
-            @test all(x -> iszero(x), v[1]["(:x,)"])
-            @test all(x -> iszero(x), v[1]["(:y,)"])
+            @test v[1]["x"] isa NamedTuple
+            @test v[1]["y"] isa NamedTuple
+            @test iszero(v[1]["x"].rms_diff)
+            @test iszero(v[1]["y"].rms_diff)
 
             @test isempty(d)
             @test how == :skipped
@@ -1322,10 +1203,10 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
                 skip = false,
             )
             @test length(v) == 1
-            @test v[1]["(:x,)"] isa Vector{Float64}
-            @test v[1]["(:y,)"] isa Vector{Float64}
-            @test all(x -> iszero(x), v[1]["(:x,)"])
-            @test all(x -> iszero(x), v[1]["(:y,)"])
+            @test v[1]["x"] isa NamedTuple
+            @test v[1]["y"] isa NamedTuple
+            @test iszero(v[1]["x"].rms_diff)
+            @test iszero(v[1]["y"].rms_diff)
 
             @test isempty(d)
             @test how == :no_comparable_dirs
@@ -1390,12 +1271,12 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
             # The first we compare against is most recent,
             # And we set `fv.x .= 200` and `fv.y .= 300` for
             # that dataset.
-            @test v[1]["(:x,)"] == 2970.075
-            @test v[1]["(:y,)"] == 2980.0333333333333
-            @test v[2]["(:x,)"] == 0.0
-            @test v[2]["(:y,)"] == 0.0
-            @test v[3]["(:x,)"] == 0.0
-            @test v[3]["(:y,)"] == 0.0
+            @test v[1]["x"].rms_diff > 0  # different data
+            @test v[1]["y"].rms_diff > 0
+            @test iszero(v[2]["x"].rms_diff)
+            @test iszero(v[2]["y"].rms_diff)
+            @test iszero(v[3]["x"].rms_diff)
+            @test iszero(v[3]["y"].rms_diff)
 
             @test d == [d05, d04, d03]
             @test how == :successful_comparison
@@ -1724,9 +1605,9 @@ if pkgversion(ClimaCore) ≥ v"0.14.20"
             @test dirs == [d05, d04, d03]
             repro_dir = joinpath(computed_dir, rfolder)
             @test isfile(joinpath(repro_dir, "computed_prog_state.hdf5"))
-            @test isfile(joinpath(repro_dir, "computed_mse_$commit_sha_05.dat"))
-            @test isfile(joinpath(repro_dir, "computed_mse_$commit_sha_04.dat"))
-            @test isfile(joinpath(repro_dir, "computed_mse_$commit_sha_03.dat"))
+            @test isfile(joinpath(repro_dir, "computed_rms_$commit_sha_05.dat"))
+            @test isfile(joinpath(repro_dir, "computed_rms_$commit_sha_04.dat"))
+            @test isfile(joinpath(repro_dir, "computed_rms_$commit_sha_03.dat"))
         end
     end
 end

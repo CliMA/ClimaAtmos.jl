@@ -19,11 +19,7 @@ TEST_GROUP = get(ENV, "TEST_GROUP", "all")
 # Infrastructure: Configuration, utilities, interfaces, and integration tests
 # ============================================================================
 if TEST_GROUP in ("infrastructure", "all")
-    # Skip Aqua tests due to precompilation failures in old versions of SciMLBase
-    import SciMLBase
-    if pkgversion(SciMLBase) > v"2.12.1"
-        @safetestset "Aqua" begin @time include("aqua.jl") end
-    end
+    @safetestset "Aqua" begin @time include("aqua.jl") end
 
     @safetestset "Dependencies" begin @time include("dependencies.jl") end
     @safetestset "Callbacks" begin @time include("callbacks.jl") end

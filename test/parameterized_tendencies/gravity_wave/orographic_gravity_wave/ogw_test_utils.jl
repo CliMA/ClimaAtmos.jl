@@ -15,7 +15,7 @@ import ClimaAtmos: AtmosArtifacts as AA
 """
     load_computed_drag(parsed_args, comms_ctx)
 
-Load computed drag data: try local file first, fall back to ArtifactWrappers artifact.
+Load computed drag data: try local file first, fall back to ClimaArtifacts artifact.
 Returns a ClimaCore Field with (hmax, hmin, t11, t12, t21, t22).
 """
 function load_computed_drag(parsed_args, comms_ctx)

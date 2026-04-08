@@ -36,7 +36,7 @@ Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMFX-related fields 
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜK, ᶜp, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜu, ᶜK, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = thermo_params.cp_d
@@ -71,10 +71,10 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρtke -= split_divₕ(Y.c.ρ * ᶜu, ᶜtke)
     end
 
-    (; ᶜq_tot_safe) = p.precomputed
+    (; ᶜq_tot_nonneg) = p.precomputed
     ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
     ᶜθ_v = p.scratch.ᶜtemp_scalar
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     ᶜθ_v_diff = @. lazy(ᶜθ_v - ᶜθ_vr)
@@ -99,7 +99,7 @@ and for specific humidity species within EDMFX subdomains.
 Specifically, this function calculates:
 - Horizontal advection for all prognostic tracer variables (`ρχ_name`) in `Y.c`.
 - Horizontal advection for EDMFX updraft total specific humidity (`q_totʲ`).
-- Horizontal advection for other EDMFX updraft moisture species (`q_liqʲ`, `q_iceʲ`,
+- Horizontal advection for other EDMFX updraft moisture species (`q_lclʲ`, `q_iclʲ`,
   `q_raiʲ`, `q_snoʲ`) if using a `NonEquilibriumMicrophysics1M` or
   `NonEquilibriumMicrophysics2M` microphysics model. If the `NonEquilibriumMicrophysics2M`
   model is used instead, `n_liqʲ` and `n_raiʲ` are also advected.
@@ -135,12 +135,12 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
                 NonEquilibriumMicrophysics1M,
                 NonEquilibriumMicrophysics2M,
             }
-                @. Yₜ.c.sgsʲs.:($$j).q_liq -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_liq) -
-                    Y.c.sgsʲs.:($$j).q_liq * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).q_ice -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_ice) -
-                    Y.c.sgsʲs.:($$j).q_ice * split_divₕ(ᶜuʲs.:($$j), 1)
+                @. Yₜ.c.sgsʲs.:($$j).q_lcl -=
+                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_lcl) -
+                    Y.c.sgsʲs.:($$j).q_lcl * split_divₕ(ᶜuʲs.:($$j), 1)
+                @. Yₜ.c.sgsʲs.:($$j).q_icl -=
+                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_icl) -
+                    Y.c.sgsʲs.:($$j).q_icl * split_divₕ(ᶜuʲs.:($$j), 1)
                 @. Yₜ.c.sgsʲs.:($$j).q_rai -=
                     split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_rai) -
                     Y.c.sgsʲs.:($$j).q_rai * split_divₕ(ᶜuʲs.:($$j), 1)
@@ -149,9 +149,9 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
                     Y.c.sgsʲs.:($$j).q_sno * split_divₕ(ᶜuʲs.:($$j), 1)
             end
             if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
-                @. Yₜ.c.sgsʲs.:($$j).n_liq -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_liq) -
-                    Y.c.sgsʲs.:($$j).n_liq * split_divₕ(ᶜuʲs.:($$j), 1)
+                @. Yₜ.c.sgsʲs.:($$j).n_lcl -=
+                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_lcl) -
+                    Y.c.sgsʲs.:($$j).n_lcl * split_divₕ(ᶜuʲs.:($$j), 1)
                 @. Yₜ.c.sgsʲs.:($$j).n_rai -=
                     split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_rai) -
                     Y.c.sgsʲs.:($$j).n_rai * split_divₕ(ᶜuʲs.:($$j), 1)
@@ -326,7 +326,7 @@ Computes tendencies due to vertical advection and buoyancy for EDMFX subgrid-sca
 This function handles:
 - Vertical advection of updraft density-area product (`ρaʲ`).
 - Vertical advection of updraft moist static energy (`mseʲ`) and total specific humidity (`q_totʲ`).
-- Vertical advection of other updraft moisture species (`q_liqʲ`, `q_iceʲ`, `q_raiʲ`, `q_snoʲ`)
+- Vertical advection of other updraft moisture species (`q_lclʲ`, `q_iclʲ`, `q_raiʲ`, `q_snoʲ`)
   if using a `NonEquilibriumMicrophysics1M` or `NonEquilibriumMicrophysics2M` microphysics
   model. If the `NonEquilibriumMicrophysics2M` model is used, `n_liqʲ` and `n_raiʲ` are also advected.
 - Buoyancy forcing terms in the updraft vertical momentum (`u₃ʲ`) equation, including
@@ -369,6 +369,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
 
+    grav = CAP.grav(params)
     for j in 1:n
         if p.atmos.sgs_adv_mode == Explicit()
             # TODO: Add a biased GradientF2F operator in ClimaCore
@@ -389,7 +390,7 @@ function edmfx_sgs_vertical_advection_tendency!(
         @. Yₜ.c.sgsʲs.:($$j).mse +=
             adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃))) *
             (ᶜρʲs.:($$j) - Y.c.ρ) *
-            ᶜgradᵥ(CAP.grav(params) * ᶠz) / ᶜρʲs.:($$j)
+            ᶜgradᵥ(grav * ᶠz) / ᶜρʲs.:($$j)
     end
 
     for j in 1:n
@@ -434,8 +435,8 @@ function edmfx_sgs_vertical_advection_tendency!(
             # Sedimentation
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.
             sgs_microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).q_liq), @name(q_liq), @name(ᶜwₗʲs.:(1))),
-                (@name(c.sgsʲs.:(1).q_ice), @name(q_ice), @name(ᶜwᵢʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_lcl), @name(q_lcl), @name(ᶜwₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_icl), @name(q_icl), @name(ᶜwᵢʲs.:(1))),
                 (@name(c.sgsʲs.:(1).q_rai), @name(q_rai), @name(ᶜwᵣʲs.:(1))),
                 (@name(c.sgsʲs.:(1).q_sno), @name(q_sno), @name(ᶜwₛʲs.:(1))),
             )
@@ -485,7 +486,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             # Sedimentation velocities for microphysics number concentrations
             # (or any tracers that does not directly participate in variations of q_tot and mse)
             sgs_microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).n_liq), @name(ᶜwₙₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).n_lcl), @name(ᶜwₙₗʲs.:(1))),
                 (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
             )
 

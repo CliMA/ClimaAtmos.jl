@@ -10,18 +10,10 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
-    # TODO: Needs to be updated to use the new microphysics 
+    # TODO: Needs to be updated to use the new microphysics
     # tendency function with quadrature if implicit_microphysics is true
 
     if p.atmos.microphysics_tendency_timestepping == Implicit()
-        edmfx_microphysics_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.turbconv_model,
-            p.atmos.microphysics_model,
-        )
         microphysics_tendency!(
             Yₜ,
             Y,
@@ -129,7 +121,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶠu³, ᶜp, ᶜh_tot, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶠu³, ᶜp, ᶜh_tot, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
 
@@ -150,14 +142,14 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # using downward biasing and free outflow bottom boundary condition
     if microphysics_model isa NonEquilibriumMicrophysics
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
-        @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(
+        @. Yₜ.c.ρq_lcl -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₗ)) * specific(Y.c.ρq_liq, Y.c.ρ),
+                Geometry.WVector(-(ᶜwₗ)) * specific(Y.c.ρq_lcl, Y.c.ρ),
             ),
         )
-        @. Yₜ.c.ρq_ice -= ᶜprecipdivᵥ(
+        @. Yₜ.c.ρq_icl -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwᵢ)) * specific(Y.c.ρq_ice, Y.c.ρ),
+                Geometry.WVector(-(ᶜwᵢ)) * specific(Y.c.ρq_icl, Y.c.ρ),
             ),
         )
     end
@@ -178,9 +170,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     if microphysics_model isa
        NonEquilibriumMicrophysics2M
         (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
-        @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(
+        @. Yₜ.c.ρn_lcl -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₙₗ)) * specific(Y.c.ρn_liq, Y.c.ρ),
+                Geometry.WVector(-(ᶜwₙₗ)) * specific(Y.c.ρn_lcl, Y.c.ρ),
             ),
         )
         @. Yₜ.c.ρn_rai -= ᶜprecipdivᵥ(
@@ -205,7 +197,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         ᶜwᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwᵢ))
         ᶠρ = @. lazy(ᶠinterp(ρ * ᶜJ) / ᶠJ)
 
-        # Note: `ρq_ice` is handled above, in `microphysics_model isa NonEquilibriumMicrophysics`
+        # Note: `ρq_icl` is handled above, in `microphysics_model isa NonEquilibriumMicrophysics`
         @. Yₜ.c.ρn_ice -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwnᵢ * specific(ρn_ice, ρ)))
         @. Yₜ.c.ρq_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρq_rim, ρ)))
         @. Yₜ.c.ρb_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρb_rim, ρ)))
@@ -216,7 +208,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # This is equivalent to grad_v(Φ) + grad_v(p) / ρ
     ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
     ᶜθ_v = p.scratch.ᶜtemp_scalar
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) +

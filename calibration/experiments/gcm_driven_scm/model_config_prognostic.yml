@@ -1,7 +1,5 @@
 initial_condition: "GCM"
-external_forcing: "GCM"
 external_forcing_file: "/resnick/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
-surface_setup: "GCM"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
@@ -25,7 +23,6 @@ z_elem: 60
 z_stretch: true
 dz_bottom: 30
 rad: allskywithclear
-insolation: "gcmdriven"
 perturb_initstate: false
 dt: "10secs"
 dt_rad: "30mins"

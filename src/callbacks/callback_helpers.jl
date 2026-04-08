@@ -1,4 +1,4 @@
-import SciMLBase
+import ClimaTimeSteppers as CTS
 
 #####
 ##### Callback helpers
@@ -21,11 +21,10 @@ function call_every_n_steps(
         condition
     end
     cb! = AtmosCallback(f!, EveryNSteps(n))
-    return SciMLBase.DiscreteCallback(
+    return CTS.DiscreteCallback(
         cond,
         cb!;
         initialize = (cb, u, t, integrator) -> skip_first || cb!(integrator),
-        save_positions = (false, false),
     )
 end
 
@@ -43,7 +42,7 @@ function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
             next_t[] = min(next_t[], t_end)
         end
     end
-    return SciMLBase.DiscreteCallback(
+    return CTS.DiscreteCallback(
         (u, t, integrator) -> t >= next_t[],
         affect!;
         initialize = (cb, u, t, integrator) -> begin
@@ -52,7 +51,6 @@ function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
             next_t[] =
                 (call_at_end && t < t_end) ? min(t_end, t + dt) : t + dt
         end,
-        save_positions = (false, false),
     )
 end
 
@@ -66,28 +64,27 @@ function callback_from_affect(affect!)
     end
     return nothing
 end
-function atmos_callbacks(cbs::SciMLBase.CallbackSet)
+function atmos_callbacks(cbs)
     all_cbs = [cbs.continuous_callbacks..., cbs.discrete_callbacks...]
     callback_objs = map(cb -> callback_from_affect(cb.affect!), all_cbs)
     filter!(x -> (x isa AtmosCallback), callback_objs)
     return callback_objs
 end
 
-n_measured_calls(integrator) = n_measured_calls(integrator.callback)
-n_measured_calls(cbs::SciMLBase.CallbackSet) =
-    map(x -> x.n_measured_calls, atmos_callbacks(cbs))
+n_measured_calls(integrator) =
+    map(x -> x.n_measured_calls, atmos_callbacks(integrator.callback))
 
 n_expected_calls(integrator) = n_expected_calls(
     integrator.callback,
     integrator.dt,
     integrator.sol.prob.tspan,
 )
-n_expected_calls(cbs::SciMLBase.CallbackSet, dt, tspan) =
+n_expected_calls(cbs, dt, tspan) =
     map(x -> n_expected_calls(x, dt, tspan), atmos_callbacks(cbs))
 
 n_steps_per_cycle(integrator) =
     n_steps_per_cycle(integrator.callback, integrator.dt)
-function n_steps_per_cycle(cbs::SciMLBase.CallbackSet, dt)
+function n_steps_per_cycle(cbs, dt)
     nspc = n_steps_per_cycle_per_cb(cbs, dt)
     return isempty(nspc) ? 1 : lcm(nspc)
 end
@@ -95,7 +92,7 @@ end
 n_steps_per_cycle_per_cb(integrator) =
     n_steps_per_cycle_per_cb(integrator.callback, integrator.dt)
 
-function n_steps_per_cycle_per_cb(cbs::SciMLBase.CallbackSet, dt)
+function n_steps_per_cycle_per_cb(cbs, dt)
     return map(atmos_callbacks(cbs)) do cb
         cbf = callback_frequency(cb)
         if cbf isa EveryΔt

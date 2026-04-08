@@ -2,9 +2,10 @@ t_end: "360days"
 dt_save_state_to_disk: "10days"
 rad: "allskywithclear"
 dt_rad: "1hours"
-dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
 turbconv: "edonly_edmfx"
 edmfx_sgs_diffusive_flux: true
 microphysics_model: "1M"
+use_sgs_quadrature: false
+implicit_microphysics: false
 toml: [toml/longrun_aquaplanet_1M.toml]

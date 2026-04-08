@@ -57,7 +57,7 @@ params = CA.ClimaAtmosParameters(
 ## RCEMIP-II model prescriptions
 insolation = CA.RCEMIPIIInsolation()
 sfc_temperature = CA.RCEMIPIISST()
-initial_condition = CA.InitialConditions.RCEMIPIIProfile_300()
+initial_condition = CA.Setups.RCEMIPIIProfile_300()
 
 
 ## Construct the model
@@ -143,7 +143,7 @@ simulation = CA.AtmosSimulation{FT}(; job_id,
     ode_config,
     output_dir,
     # Callbacks
-    callback_kwargs = (; dt_cloud_fraction = "3hours", dt_rad = "1hours"),
+    callback_kwargs = (; dt_rad = "1hours"),
     # Diagnostics
     default_diagnostics = false,
     diagnostics,

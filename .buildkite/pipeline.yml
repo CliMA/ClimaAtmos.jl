@@ -17,36 +17,32 @@ env:
   MPI_CONFIG_PATH: "config/mpi_configs"
 
 steps:
-  - label: "init :computer:"
+  - label: "Initialize"
     key: "init_cpu_env"
     concurrency: 1
     concurrency_group: "depot/climaatmos-ci"
     command:
       - "echo $$JULIA_DEPOT_PATH"
 
-      - echo "--- Check that ClimaAtmos is developed in Manifest"
-      - julia --check-bounds=yes -e 'using TOML; @assert TOML.parsefile(".buildkite/Manifest-v1.11.toml")["deps"]["ClimaAtmos"][1]["path"] == ".."'
-
       - echo "--- Instantiate .buildkite"
-      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.precompile(;strict=true); using CUDA; CUDA.precompile_runtime(); Pkg.status()'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.precompile(;strict=true); Pkg.status()'"
 
     agents:
       slurm_cpus_per_task: 8
-      slurm_gpus: 1
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
       JULIA_MAX_NUM_PRECOMPILE_FILES: 50
 
   - wait
 
-  - group: "Reproducibility infrastructure"
+  - group: "Reproducibility"
     steps:
-      - label: ":computer: Test reproducibility infrastructure"
+      - label: ":green_book: Reproducibility: Test infrastructure"
         command: "julia --color=yes --project=.buildkite test/unit_reproducibility_infra.jl"
 
   - group: "Radiation"
     steps:
-      - label: ":computer: single column radiative equilibrium gray"
+      - label: ":sun_with_face: Radiation: Gray"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_column_ze63.yml
@@ -54,7 +50,7 @@ steps:
           --job_id single_column_radiative_equilibrium_gray
         artifact_paths: "single_column_radiative_equilibrium_gray/output_active/*"
 
-      - label: ":computer: single column radiative equilibrium clearsky"
+      - label: ":sun_with_face: Radiation: Clear-sky, no clouds, idealized water."
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_column_ze63.yml
@@ -62,7 +58,7 @@ steps:
           --job_id single_column_radiative_equilibrium_clearsky
         artifact_paths: "single_column_radiative_equilibrium_clearsky/output_active/*"
 
-      - label: ":computer: single column radiative equilibrium clearsky prognostic surface temperature"
+      - label: ":sun_with_face: Radiation: Clear-sky, prognostic surface temperature (interactive slab)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_column_ze63.yml
@@ -70,7 +66,7 @@ steps:
           --job_id single_column_radiative_equilibrium_clearsky_prognostic_surface_temp
         artifact_paths: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/output_active/*"
 
-      - label: ":computer: single column radiative equilibrium allsky idealized clouds varying insolation"
+      - label: ":sun_with_face: Radiation: All-sky, idealized clouds, time-varying insolation"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_column_ze63.yml
@@ -78,9 +74,59 @@ steps:
           --job_id single_column_radiative_equilibrium_allsky_idealized_clouds
         artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
 
+  - group: "Microphysics"
+    steps:
+      - label: ":umbrella: Microphysics: 1-moment sanity check"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/single_column_precipitation_test.yml
+          --job_id single_column_precipitation_test
+        artifact_paths: "single_column_precipitation_test/output_active/*"
+
+      - label: ":umbrella: Microphysics: 2-moment sanity check"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/single_column_precipitation_2M_test.yml
+          --job_id single_column_precipitation_2M_test
+        artifact_paths: "single_column_precipitation_2M_test/output_active/*"
+
+  - group: "Gravity wave"
+    steps:
+      - label: ":wavy_dash: Non-orograpic gravity wave: 3D unit test"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_3d.jl"
+        artifact_paths: "nonorographic_gravity_wave_test_3d/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":wavy_dash: Non-orographic gravity wave: Test against MiMA output"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_mima.jl"
+        artifact_paths: "nonorographic_gravity_wave_test_mima/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":wavy_dash: Non-orographic gravity wave: Single column unit test"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_single_column.jl"
+        artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
+
+      - label: ":wavy_dash: Orographic gravity wave: Base flux calculation unit test"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_baseflux.jl"
+        artifact_paths: "orographic_gravity_wave_test_baseflux/*"
+
+      - label: ":wavy_dash: Orographic gravity wave: 3D calculation unit test"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_3d.jl"
+        artifact_paths: "orographic_gravity_wave_test_3d/*"
+
+      - label: ":wavy_dash: Orographic gravity wave: Drag unit test"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_computed_drag.jl"
+        artifact_paths: "orographic_gravity_wave_test_computed_drag/*"
+
+      - label: ":wavy_dash: Orographic gravity wave: Regression test reproducing Garner 2005"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_garner2005_reproduction.jl"
+        artifact_paths: "orographic_gravity_wave_test_garner2005/*"
+
   - group: "Diagnostic EDMF"
     steps:
-      - label: ":genie: Diagnostic EDMF test in a box"
+      - label: ":ghost: Diagnostic EDMF: Smoke test"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_test_box.yml
@@ -89,7 +135,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Diagnostic EDMF GABLS in a box"
+      - label: ":ghost: Diagnostic EDMF: Stable nocturnal Arctic boundary layer (GABLS)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_gabls_box.yml
@@ -98,7 +144,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Diagnostic EDMF Bomex in a box"
+      - label: ":ghost: Diagnostic EDMF: Trade wind Cu shallow convection (BOMEX)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_box.yml
@@ -107,7 +153,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Diagnostic EDMF DYCOMS_RF01 in a box"
+      - label: ":ghost: Diagnostic EDMF: Nocturnal Sc (DYCOMS-RF01)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_box.yml
@@ -116,7 +162,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":umbrella: Diagnostic EDMF DYCOMS_RF02 in a box"
+      - label: ":ghost: Diagnostic EDMF: Drizzling nocturnal Sc (DYCOMS-RF02)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf02_box.yml
@@ -125,7 +171,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":umbrella: Diagnostic EDMF Rico in a box"
+      - label: ":ghost: Diagnostic EDMF: Precipitating trade wind Cu (RICO)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_rico_box.yml
@@ -134,7 +180,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":umbrella: Diagnostic EDMF TRMM in a box"
+      - label: ":ghost: Diagnostic EDMF: Deep tropical convection (TRMM)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box.yml
@@ -143,7 +189,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":umbrella: Diagnostic EDMF TRMM stretched grid in a box"
+      - label: ":ghost: Diagnostic EDMF: Deep tropical convection (TRMM), stretched grid"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_stretched_box.yml
@@ -152,7 +198,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Diagnostic EDMF TRMM 0M in a box"
+      - label: ":ghost: Diagnostic EDMF: Deep tropical convection (TRMM), 0M"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box_0M.yml
@@ -163,7 +209,7 @@ steps:
 
   - group: "Prognostic EDMF"
     steps:
-      - label: ":genie: Prognostic EDMF advection test in a column"
+      - label: ":genie: Prognostic EDMF: Vertical advection test"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_column.yml
@@ -172,7 +218,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF simple plume test in a column"
+      - label: ":genie: Prognostic EDMF: Idealized plume, SmoothArea detrainment"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column.yml
@@ -181,7 +227,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF Soares in a column"
+      - label: ":genie: Prognostic EDMF: Dry convective boundary layer (Soares)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_soares_column.yml
@@ -190,7 +236,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF GABLS in a column"
+      - label: ":genie: Prognostic EDMF: Stable nocturnal Arctic boundary layer (GABLS)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column.yml
@@ -199,7 +245,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF Bomex with precribed TKE in a column"
+      - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX), fixed TKE"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_column.yml
@@ -208,7 +254,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF Bomex in a column"
+      - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX), prognostic TKE"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
@@ -217,7 +263,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF Bomex in a column (implicit)"
+      - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX), implicit SGS"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
@@ -226,7 +272,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF Dycoms RF01 in a column"
+      - label: ":genie: Prognostic EDMF: Nocturnal Sc (DYCOMS-RF01), explicit SGS"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_column.yml
@@ -235,7 +281,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF Dycoms RF02 in a column"
+      - label: ":genie: Prognostic EDMF: Drizzling nocturnal Sc (DYCOMS-RF02)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf02_column.yml
@@ -244,7 +290,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":umbrella: Prognostic EDMF Rico in a column"
+      - label: ":genie: Prognostic EDMF: Precipitating trade wind Cu (RICO), explicit SGS"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
@@ -253,7 +299,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":umbrella: Prognostic EDMF Rico in a column (implicit)"
+      - label: ":genie: Prognostic EDMF: Precipitating trade wind Cu (RICO), implicit SGS"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_rico_implicit_column.yml
@@ -262,17 +308,17 @@ steps:
         agents:
           slurm_mem: 30GB
 
-      - label: ":umbrella: Prognostic EDMF Rico with 2-moment in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_rico_column_2M.yml
-          --job_id prognostic_edmfx_rico_column_2M
-        artifact_paths: "prognostic_edmfx_rico_column_2M/output_active/*"
-        agents:
-          slurm_mem: 20GB
-        soft_fail: true
-
-      - label: ":umbrella: Prognostic EDMF TRMM in a column"
+      #- label: ":genie: Prognostic EDMF: Precipitating trade wind Cu (RICO), 2M"
+      #  command: >
+      #    julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #    --config_file $CONFIG_PATH/prognostic_edmfx_rico_column_2M.yml
+      #    --job_id prognostic_edmfx_rico_column_2M
+      #  artifact_paths: "prognostic_edmfx_rico_column_2M/output_active/*"
+      #  agents:
+      #    slurm_mem: 20GB
+      #  soft_fail: true
+      #
+      - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
@@ -281,7 +327,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":umbrella: Prognostic EDMF TRMM in a column (implicit)"
+      - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM), implicit SGS, ARS222"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_implicit_column.yml
@@ -290,7 +336,7 @@ steps:
         agents:
           slurm_mem: 35GB
 
-      - label: ":genie: Prognostic EDMF TRMM with 0-moment in a column"
+      - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM), 0M"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_0M.yml
@@ -299,7 +345,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF GCM driven in a column"
+      - label: ":genie: Prognostic EDMF: GCM large-scale forcing (cfsite23), radiation"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_gcmdriven_column.yml
@@ -307,9 +353,8 @@ steps:
         artifact_paths: "prognostic_edmfx_gcmdriven_column/output_active/*"
         agents:
           slurm_mem: 20GB
-        soft_fail: true
 
-      - label: ":genie: Prognostic EDMF ERA5 Time Varying driven in a column"
+      - label: ":genie: Prognostic EDMF: Time-varying ERA5 reanalysis forcing"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_tv_era5driven_column.yml
@@ -318,7 +363,7 @@ steps:
         agents:
           slurm_mem: 12GB
 
-      - label: ":thunder_cloud_and_rain: Prognostic EDMF ERA5 monthly averaged diurnal driven in a column"
+      - label: ":genie: Prognostic EDMF: ERA5 monthly averaged diurnal forcing"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_diurnal_scm_imp.yml
@@ -326,132 +371,10 @@ steps:
         artifact_paths: "prognostic_edmfx_diurnal_scm_imp/output_active/*"
         agents:
           slurm_mem: 12GB
-        soft_fail: true
-
-  - group: "Precipitation"
-    steps:
-      - label: ":umbrella: 1-moment precipitation sanity test single column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/single_column_precipitation_test.yml
-          --job_id single_column_precipitation_test
-        artifact_paths: "single_column_precipitation_test/output_active/*"
-
-      - label: ":umbrella: 2-moment precipitation sanity test single column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/single_column_precipitation_2M_test.yml
-          --job_id single_column_precipitation_2M_test
-        artifact_paths: "single_column_precipitation_2M_test/output_active/*"
-
-  - group: "Gravity wave"
-    steps:
-      - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_3d.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_3d/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":computer: non-orographic gravity wave parameterization test with MiMA output"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_mima.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_mima/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":computer: non-orographic gravity wave parameterization unit test single column"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_single_column.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
-
-      - label: ":computer: orographic gravity wave parameterization unit test for base flux calculation"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_baseflux.jl"
-        artifact_paths: "orographic_gravity_wave_test_baseflux/*"
-
-      - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_3d.jl"
-        artifact_paths: "orographic_gravity_wave_test_3d/*"
-
-      - label: ":computer: orographic gravity wave parameterization unit test for computed drag"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_computed_drag.jl"
-        artifact_paths: "orographic_gravity_wave_test_computed_drag/*"
-
-      - label: ":computer: orographic gravity wave Garner 2005 figure reproduction test"
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_garner2005_reproduction.jl"
-        artifact_paths: "orographic_gravity_wave_test_garner2005/*"
-
-  - group: "Column Examples"
-    steps:
-      - label: ":computer: single column hydrostatic balance float64"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
-          --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
-          --job_id single_column_hydrostatic_balance_ft64
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id single_column_hydrostatic_balance_ft64
-          --out_dir single_column_hydrostatic_balance_ft64/output_active
-        artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
-        agents:
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
-  - group: "Plane Examples"
-    steps:
-      - label: ":computer: Density current experiment"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/plane_density_current_test.yml
-          --job_id plane_density_current_test
-        artifact_paths: "plane_density_current_test/output_active/*"
-
-      - label: ":computer: Density current experiment (AMD)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/plane_density_current_test_amd.yml
-          --job_id plane_density_current_test_amd
-        soft_fail: true
-        artifact_paths: "plane_density_current_test_amd/output_active/*"
-
-  - group: "Box Examples"
-    steps:
-      - label: ":computer: Box hydrostatic balance"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/box_hydrostatic_balance.yml
-          --job_id box_hydrostatic_balance
-        artifact_paths: "box_hydrostatic_balance/output_active/*"
-
-      - label: ":computer: 3D density current"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/box_density_current_test.yml
-          --job_id box_density_current_test
-        artifact_paths: "box_density_current_test/output_active/*"
-
-      - label: ":computer: CRM rcemipii in a box with 1M"
-        command: >
-          julia --color=yes --project=.buildkite runscripts/rcemipii_box_CRM_1M.jl
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id rcemipii_box_CRM_1M
-          --out_dir rcemipii_box_CRM_1M/output_active
-        artifact_paths: "rcemipii_box_CRM_1M/output_active/*"
-
-      - label: ":genie: LES ISDAC in a box"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/les_isdac_box.yml
-          --job_id les_isdac_box
-        artifact_paths: "les_isdac_box/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_mem: 16G
-          slurm_gpus: 1
-        soft_fail: true
 
   - group: "Analytic Tests"
     steps:
-      - label: "GPU: No Topography Test (2D, Float64)"
+      - label: ":crown: Analytic tests: No topography, 2D, Float64, GPU"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_no_topography_float64_test.yml
@@ -466,69 +389,7 @@ steps:
         agents:
           slurm_gpus: 1
 
-      - label: "GPU: Cosine Hills Test (2D, Float64)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/plane_cosine_hills_float64_test.yml
-          --job_id gpu_plane_cosine_hills_float64_test
-        artifact_paths:
-          - "gpu_plane_cosine_hills_float64_test/output_active/*.pdf"
-          - "gpu_plane_cosine_hills_float64_test/output_active/*.yml"
-          - "gpu_plane_cosine_hills_float64_test/output_active/*.toml"
-          - "gpu_plane_cosine_hills_float64_test/output_active/*.dat"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-
-      - label: "GPU: Cosine Hills Test (Extruded 2D, Float64)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/extruded_plane_cosine_hills_float64_test.yml
-          --job_id gpu_extruded_plane_cosine_hills_float64_test
-        artifact_paths:
-          - "gpu_extruded_plane_cosine_hills_float64_test/output_active/*.pdf"
-          - "gpu_extruded_plane_cosine_hills_float64_test/output_active/*.yml"
-          - "gpu_extruded_plane_cosine_hills_float64_test/output_active/*.toml"
-          - "gpu_extruded_plane_cosine_hills_float64_test/output_active/*.dat"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 48GB
-
-      - label: "GPU: Cosine Hills Test (3D, Float64)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/box_cosine_hills_float64_test.yml
-          --job_id gpu_box_cosine_hills_float64_test
-        artifact_paths:
-          - "gpu_box_cosine_hills_float64_test/output_active/*.pdf"
-          - "gpu_box_cosine_hills_float64_test/output_active/*.yml"
-          - "gpu_box_cosine_hills_float64_test/output_active/*.toml"
-          - "gpu_box_cosine_hills_float64_test/output_active/*.dat"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 48GB
-
-      - label: "GPU: Agnesi Mountain Test (2D, Float64)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/plane_agnesi_mountain_float64_test.yml
-          --job_id gpu_plane_agnesi_mountain_float64_test
-        artifact_paths:
-          - "gpu_plane_agnesi_mountain_float64_test/output_active/*.pdf"
-          - "gpu_plane_agnesi_mountain_float64_test/output_active/*.yml"
-          - "gpu_plane_agnesi_mountain_float64_test/output_active/*.toml"
-          - "gpu_plane_agnesi_mountain_float64_test/output_active/*.dat"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-
-      - label: "GPU: Schar Mountain Test (2D, Float64)"
+      - label: ":crown: Analytic tests: Schar mountain wave, 2D, Float64, GPU"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_schar_mountain_float64_test.yml
@@ -543,7 +404,7 @@ steps:
         agents:
           slurm_gpus: 1
 
-      - label: "GPU: Schar Mountain Test (2D, Float32)"
+      - label: ":crown: Analytic tests: Schar mountain wave, 2D, Float32, GPU"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_schar_mountain_float32_test.yml
@@ -558,34 +419,87 @@ steps:
         agents:
           slurm_gpus: 1
 
-  - group: "Conservation check"
+  - group: "Conservation Tests"
     steps:
-      - label: ":computer: baroclinic wave check conservation"
+      - label: ":computer: Conservation tests: Dry baroclinic wave, no sources"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_conservation.yml
           --job_id baroclinic_wave_conservation
         artifact_paths: "baroclinic_wave_conservation/output_active/*"
 
-      - label: ":computer: baroclinic wave moist check conservation with sources"
+      - label: ":computer: Conservation tests: Moist baroclinic wave, with sources, 0M"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_source.yml
           --job_id baroclinic_wave_equil_conservation_source
         artifact_paths: "baroclinic_wave_equil_conservation_source/output_active/*"
         agents:
           slurm_mem: 16GB
+      #
+      #- label: ":computer: Conservation checks: Moist baroclinic wave, with sources 1M"
+      #  command: >
+      #    julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_nonequil_conservation_source.yml
+      #    --job_id baroclinic_wave_nonequil_conservation_source
+      #  artifact_paths: "baroclinic_wave_nonequil_conservation_source/output_active/*"
+      #  agents:
+      #    slurm_mem: 16GB
+      #  soft_fail: true
 
-      - label: ":computer: baroclinic wave nonequil moist check conservation with sources"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_nonequil_conservation_source.yml
-          --job_id baroclinic_wave_nonequil_conservation_source
-        artifact_paths: "baroclinic_wave_nonequil_conservation_source/output_active/*"
-        agents:
-          slurm_mem: 16GB
-        soft_fail: true
-
-  - group: "Sphere Examples (Dycore)"
+  - group: "Non-spherical Examples"
     steps:
-      - label: ":computer: hydrostatic balance float64"
+      - label: ":package: Non-spherical: Reproducibility test for single column hydrostatic balance, Float64"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
+          --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
+          --job_id single_column_hydrostatic_balance_ft64
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
+          --job_id single_column_hydrostatic_balance_ft64
+          --out_dir single_column_hydrostatic_balance_ft64/output_active
+        artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
+        agents:
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":package: Non-spherical: 2D plane, non-hydrostatic density current"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/plane_density_current_test.yml
+          --job_id plane_density_current_test
+        artifact_paths: "plane_density_current_test/output_active/*"
+
+      - label: ":package: Non-spherical: 2D plane, non-hydrostatic density current, AMD LES SGS"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/plane_density_current_test_amd.yml
+          --job_id plane_density_current_test_amd
+        artifact_paths: "plane_density_current_test_amd/output_active/*"
+
+      - label: ":package: Non-spherical: 3D box, hydrostatic balance"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/box_hydrostatic_balance.yml
+          --job_id box_hydrostatic_balance
+        artifact_paths: "box_hydrostatic_balance/output_active/*"
+
+      - label: ":package: Non-spherical: 3D box, density current"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/box_density_current_test.yml
+          --job_id box_density_current_test
+        artifact_paths: "box_density_current_test/output_active/*"
+
+      - label: ":package: Non-spherical: Reproducibility test for radiative convective equilibrium in a 3D box"
+        command: >
+          julia --color=yes --project=.buildkite runscripts/rcemipii_box_CRM_1M.jl
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
+          --job_id rcemipii_box_CRM_1M
+          --out_dir rcemipii_box_CRM_1M/output_active
+        artifact_paths: "rcemipii_box_CRM_1M/output_active/*"
+
+  - group: "Dry Spherical Examples"
+    steps:
+      - label: ":cyclone: Dycore: Global hydrostatic balance, Float64"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/hydrostatic_balance_ft64.yml
@@ -594,7 +508,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":computer: baroclinic wave"
+      - label: ":cyclone: Dycore: Dry baroclinic wave, CPU part of a comparison test"
         key: baroclinic_wave
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -603,34 +517,35 @@ steps:
           --job_id baroclinic_wave
         artifact_paths: "baroclinic_wave/output_active/*"
 
-      - label: ":computer: baroclinic wave equilmoist"
+      - label: ":cyclone: Dycore: Dry baroclinic wave, GPU part of comparison test"
+        key: "baroclinic_wave_gpu"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
-          --config_file $CONFIG_PATH/baroclinic_wave_equil.yml
-          --job_id baroclinic_wave_equil
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id baroclinic_wave_equil
-          --out_dir baroclinic_wave_equil/output_active
-        artifact_paths: "baroclinic_wave_equil/output_active/*"
+          --config_file $CONFIG_PATH/baroclinic_wave.yml
+          --job_id baroclinic_wave_gpu
+        artifact_paths: "baroclinic_wave_gpu/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+          slurm_gpus: 1
+          slurm_mem: 16GB
 
-      # Temporarily disabled until fixed
-      # - label: ":computer: baroclinic wave equilmoist (AMD)"
-      #   command: >
-      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
-      #     --config_file $CONFIG_PATH/baroclinic_wave_equil_amd.yml
-      #     --job_id baroclinic_wave_equil_amd
+      - label: ":cyclone: Dycore: Compare CPU and GPU dry baroclinic wave performance"
+        command: >
+          tar xvf baroclinic_wave/output_active/hdf5_files.tar -C baroclinic_wave
 
-      #   artifact_paths: "baroclinic_wave_equil_amd/output_active/*"
-      #   soft_fail: true
-      #   agents:
-      #     slurm_constraint: icelake|cascadelake|skylake|epyc
+          tar xvf baroclinic_wave_gpu/output_active/hdf5_files.tar -C baroclinic_wave_gpu
 
-      - label: ":computer: held suarez"
+          julia --color=yes --project=.buildkite post_processing/compare_outputs.jl
+          --output_folder_1 baroclinic_wave
+          --output_folder_2 baroclinic_wave_gpu --t_end 10days
+          --compare_state false
+        depends_on:
+          - "baroclinic_wave"
+          - "baroclinic_wave_gpu"
+
+      - label: ":cyclone: Dycore: Dry GCM benchmark, Held-Suarez forcing"
         key: held_suarez
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -639,53 +554,37 @@ steps:
           --job_id held_suarez
         artifact_paths: "held_suarez/output_active/*"
 
-      - label: ":computer: held suarez equilmoist"
+  - group: "Spherical Examples"
+    steps:
+      - label: ":large_blue_circle: Sphere: Reproducibility test for moist baroclinic wave, 0M"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
+          --config_file $CONFIG_PATH/baroclinic_wave_equil.yml
+          --job_id baroclinic_wave_equil
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
+          --job_id baroclinic_wave_equil
+          --out_dir baroclinic_wave_equil/output_active
+        artifact_paths: "baroclinic_wave_equil/output_active/*"
+        agents:
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":large_blue_circle: Sphere: Reproducibility test for Held-Suarez forcing with moisture, 0M"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
           --config_file $CONFIG_PATH/held_suarez_equil.yml
           --job_id held_suarez_equil
 
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
           --job_id held_suarez_equil
           --out_dir held_suarez_equil/output_active
         artifact_paths: "held_suarez_equil/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-  - group: "Sphere Examples (Aquaplanet with parameterizations)"
-    steps:
-      - label: ":umbrella: aquaplanet allsky varying insol gravity wave (gfdl_restart) 2-moment"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/aquaplanet_nonequil_allsky_gw_res_2M.yml
-          --job_id aquaplanet_nonequil_allsky_gw_res_2M
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id aquaplanet_nonequil_allsky_gw_res_2M
-          --out_dir aquaplanet_nonequil_allsky_gw_res_2M/output_active
-        artifact_paths: "aquaplanet_nonequil_allsky_gw_res_2M/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
-      - label: ":computer: aquaplanet equil allsky varying insol gravity wave (raw_topo)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/aquaplanet_equil_allsky_gw_raw.yml
-          --job_id aquaplanet_equil_allsky_gw_raw
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id aquaplanet_equil_allsky_gw_raw
-          --out_dir aquaplanet_equil_allsky_gw_raw/output_active
-        artifact_paths: "aquaplanet_equil_allsky_gw_raw/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
-      - label: ":man_in_business_suit_levitating: EDOnly EDMF aquaplanet"
+      - label: ":large_blue_circle: Aquaplanet: No mass-flux (EDOnly EDMF)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -695,22 +594,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Diagnostic EDMF aquaplanet"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
-          --job_id diagnostic_edmfx_aquaplanet
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id diagnostic_edmfx_aquaplanet
-          --out_dir diagnostic_edmfx_aquaplanet/output_active
-        artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
-      - label: ":computer: aquaplanet rcemipii with diagnostic edmf"
+      - label: ":large_blue_circle: Aquaplanet: Radiative convective equilibrium, diagnostic edmf"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -720,14 +604,59 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF aquaplanet"
+      - label: ":large_blue_circle: Aquaplanet: Reproducibility test for allsky varying insolation, gravity wave (gfdl_restart)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+          --config_file $CONFIG_PATH/aquaplanet_nonequil_allsky_gw_res_2M.yml
+          --job_id aquaplanet_nonequil_allsky_gw_res_2M
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
+          --job_id aquaplanet_nonequil_allsky_gw_res_2M
+          --out_dir aquaplanet_nonequil_allsky_gw_res_2M/output_active
+        artifact_paths: "aquaplanet_nonequil_allsky_gw_res_2M/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":large_blue_circle: Aquaplanet: Reproducibility test for allsky varying insolation, gravity wave (raw_topo)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+          --config_file $CONFIG_PATH/aquaplanet_equil_allsky_gw_raw.yml
+          --job_id aquaplanet_equil_allsky_gw_raw
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
+          --job_id aquaplanet_equil_allsky_gw_raw
+          --out_dir aquaplanet_equil_allsky_gw_raw/output_active
+        artifact_paths: "aquaplanet_equil_allsky_gw_raw/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":large_blue_circle: Aquaplanet: Reproducibility test for diagnostic EDMF, clearsky"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
+          --job_id diagnostic_edmfx_aquaplanet
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
+          --job_id diagnostic_edmfx_aquaplanet
+          --out_dir diagnostic_edmfx_aquaplanet/output_active
+        artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":large_blue_circle: Aquaplanet: Reproducibility test for prognostic EDMF, clearsky"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
           --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
           --job_id prognostic_edmfx_aquaplanet
 
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
           --job_id prognostic_edmfx_aquaplanet
           --out_dir prognostic_edmfx_aquaplanet/output_active
         artifact_paths: "prognostic_edmfx_aquaplanet/output_active/*"
@@ -735,9 +664,36 @@ steps:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-  - group: "Sphere Examples (Topography)"
+      - label: ":large_blue_circle: Aquaplanet: Diagnostic EDMF, GPU"
+        key: "diagnostic_edmfx_aquaplanet_gpu"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_gpu.yml
+          --job_id diagnostic_edmfx_aquaplanet_gpu
+        artifact_paths: "diagnostic_edmfx_aquaplanet_gpu/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+
+      - label: ":large_blue_circle: Aquaplanet: Prognostic EDMF, GPU"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+
+  - group: "Topography"
     steps:
-      - label: ":computer: baroclinic wave topography (dcmip)"
+      - label: ":mount_fuji: Topography: Idealized mountain (dcmip)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -745,7 +701,7 @@ steps:
           --job_id baroclinic_wave_topography_dcmip_rs
         artifact_paths: "baroclinic_wave_topography_dcmip_rs/output_active/*"
 
-      - label: ":computer: Diagnostic Earth surface elevation spectra"
+      - label: ":mount_fuji: Topography: Diagnostic Earth surface elevation spectra"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -753,7 +709,7 @@ steps:
           --job_id baroclinic_wave_equil_earth
         artifact_paths: "baroclinic_wave_equil_earth/output_active/*"
 
-      - label: ":computer: Baroclinic wave equilmoist (Hughes2023 double mountain config)"
+      - label: ":mount_fuji: Topography: Double mountain (Hughes2023)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -763,13 +719,13 @@ steps:
 
   - group: "Restarting"
     steps:
-      - label: ":computer: test restart"
+      - label: ":computer: Restart: Basic correctness"
         command: >
           julia --color=yes --project=.buildkite test/restart.jl
         agents:
           slurm_mem: 16GB
 
-      - label: ":computer: test restart GPU"
+      - label: ":computer: Restart: Basic correctness, GPU"
         command: >
           julia --color=yes --project=.buildkite test/restart.jl
         env:
@@ -778,13 +734,13 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16G
 
-      - label: ":computer: test restart manytests"
+      - label: ":computer: Restart: Using manytests"
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
         agents:
           slurm_mem: 16GB
 
-      - label: ":computer: test restart GPU manytests"
+      - label: ":computer: Restart: Using manytests, GPU"
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
         env:
@@ -795,7 +751,7 @@ steps:
 
       # This job occasionally times out. We add a soft file when the agent is
       # lost because of timeout
-      - label: ":computer: test restart MPI"
+      - label: ":computer: Restart 2-process MPI"
         command: >
           srun julia --color=yes --project=.buildkite test/restart.jl
         env:
@@ -804,13 +760,15 @@ steps:
         soft_fail:
           - exit_status: -1
           - exit_status: 255
+        #soft_fail: true # remove this once MPI issues have been fixed
         agents:
           slurm_ntasks: 2
           slurm_mem: 24G
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
 
       # This job occasionally times out. We add a soft file when the agent is
       # lost because of timeout
-      - label: ":computer: test restart GPU MPI"
+      - label: ":computer: Restart 2-process MPI, GPU"
         command: >
           srun julia --color=yes --project=.buildkite test/restart.jl
         env:
@@ -820,18 +778,20 @@ steps:
         soft_fail:
           - exit_status: -1
           - exit_status: 255
+        #soft_fail: true # remove this once MPI issues have been fixed
         agents:
           slurm_gpus_per_task: 1
           slurm_ntasks: 2
           slurm_mem: 24G
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
 
-      - label: ":computer: test restart_AtmosSimulation"
+      - label: ":computer: Restart: Using AtmosSimulation"
         command: >
           julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
         agents:
           slurm_mem: 16GB
 
-      - label: ":computer: test restart_AtmosSimulation GPU"
+      - label: ":computer: Restart: Using AtmosSimulation, GPU"
         command: >
           julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
         env:
@@ -840,26 +800,26 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16G
 
-      - label: ":computer: test restart_AtmosSimulation manytests"
-        command: >
-          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl --manytests true
-        agents:
-          slurm_mem: 16GB
-        soft_fail: true
+      #- label: ":computer: Restart: Using AtmosSimulation manytests"
+      #  command: >
+      #    julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl --manytests true
+      #  agents:
+      #    slurm_mem: 16GB
+      #  soft_fail: true
 
-      - label: ":computer: test restart_AtmosSimulation GPU manytests"
-        command: >
-          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl --manytests true
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16G
-        soft_fail: true
+      #- label: ":computer: Restart: using AtmosSimulation manytests, GPU"
+      #  command: >
+      #    julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl --manytests true
+      #  env:
+      #    CLIMACOMMS_DEVICE: "CUDA"
+      #  agents:
+      #    slurm_gpus: 1
+      #    slurm_mem: 16G
+      #  soft_fail: true
 
-  - group: "MPI Examples"
+  - group: "MPI"
     steps:
-      - label: ":computer: Prep restart for MPI"
+      - label: ":metro: MPI: Prepare files for baroclininc wave restart test"
         key: "mpi_baro_wave_make_restart"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -871,8 +831,9 @@ steps:
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
 
-      - label: ":computer: Test restart for MPI baroclinic wave"
+      - label: ":metro: MPI: Test restart for baroclinic wave"
         key: "restart_mpi_baro_wave"
         depends_on: "mpi_baro_wave_make_restart"
         command: >
@@ -887,12 +848,12 @@ steps:
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
         timeout_in_minutes: 20
-        soft_fail: true
         #retry:
         #  automatic: true
 
-      - label: ":computer: MPI no lim aquaplanet equilmoist clearsky radiation"
+      - label: ":metro: MPI: Aquaplanet equilmoist clearsky radiation"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $MPI_CONFIG_PATH/mpi_aquaplanet_equil_clearsky.yml
@@ -903,8 +864,9 @@ steps:
         agents:
           slurm_ntasks: 2
           slurm_mem: 16GB
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
 
-      - label: ":computer: Prep for calling remap pipeline"
+      - label: ":metro: MPI: Prepare for calling remap pipeline"
         key: "prep_remap"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -916,8 +878,9 @@ steps:
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
 
-      - label: ":computer: Exercise remap pipeline"
+      - label: ":metro: MPI: Test remap pipeline"
         depends_on: "prep_remap"
         command: >
           tar xvf prep_remap/output_active/hdf5_files.tar -C prep_remap/output_active
@@ -926,16 +889,43 @@ steps:
           --data_dir prep_remap/output_active --out_dir remap_pipeline_output
         artifact_paths: "remap_pipeline_output/*"
 
+      - label: ":metro: MPI: Dry baroclinic wave on 2 GPUs"
+        key: "baroclinic_wave_2gpu"
+        command:
+          - mkdir -p baroclinic_wave_2gpu
+          # - >
+          #   srun --cpu-bind=threads --cpus-per-task=4
+          #   nsys profile --delay 100 --trace=nvtx,cuda,mpi --output=baroclinic_wave_2gpu/output_active/report-%q{PMI_RANK}
+          #   julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          #   --config_file ${CONFIG_PATH}/baroclinic_wave.yml
+          #   --job_id baroclinic_wave_2gpu
+          - >
+            srun --cpu-bind=threads --cpus-per-task=4
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
+            --config_file ${CONFIG_PATH}/baroclinic_wave.yml
+            --job_id baroclinic_wave_2gpu
+        artifact_paths: "baroclinic_wave_2gpu/output_active/*"
+        env:
+          CLIMACOMMS_CONTEXT: "MPI"
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
+          slurm_ntasks: 2
+          slurm_mem: 16GB
+          modules: mpiwrapper/2024_05_27 climacommon/2025_03_18
+
   - group: "Autodiff"
     steps:
-      - label: "baroclinic wave moist check conservation float64 sparse autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_ft64_sparse_autodiff.yml
-          --job_id baroclinic_wave_equil_conservation_ft64_sparse_autodiff
-        artifact_paths: "baroclinic_wave_equil_conservation_ft64_sparse_autodiff/output_active/*"
-        soft_fail: true
+      #- label: "Autodiff: Moist baroclinic wave, check conservation, sparse autodiff, Float64"
+      #  command: >
+      #    julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_ft64_sparse_autodiff.yml
+      #    --job_id baroclinic_wave_equil_conservation_ft64_sparse_autodiff
+      #  artifact_paths: "baroclinic_wave_equil_conservation_ft64_sparse_autodiff/output_active/*"
+      #  soft_fail: true
 
-      - label: "baroclinic wave dense autodiff"
+      - label: ":rocket: Autodiff: Baroclinic wave, dense autodiff"
         key: baroclinic_wave_dense_autodiff
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -944,7 +934,7 @@ steps:
           --job_id baroclinic_wave_dense_autodiff
         artifact_paths: "baroclinic_wave_dense_autodiff/output_active/*"
 
-      - label: "baroclinic wave sparse autodiff"
+      - label: ":rocket: Autodiff: Baroclinic wave, sparse autodiff"
         key: baroclinic_wave_sparse_autodiff
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -982,7 +972,7 @@ steps:
       #     slurm_mem: 20GB
       #   soft_fail: true
 
-      # - label: "Prognostic EDMF aquaplanet dense autodiff"
+      # - label: "Prognostic EDMF aquaplanet dense autodiff, GPU"
       #   command: >
       #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
       #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -995,7 +985,7 @@ steps:
       #     slurm_gpus: 1
       #     slurm_mem: 20GB
 
-      # - label: "Prognostic EDMF aquaplanet sparse autodiff"
+      # - label: "Prognostic EDMF aquaplanet sparse autodiff, GPU"
       #   command: >
       #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
       #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -1008,175 +998,9 @@ steps:
       #     slurm_gpus: 1
       #     slurm_mem: 20GB
 
-  - group: "GPU"
+  - group: "Timestep cost"
     steps:
-      - label: "GPU: Gravity waves"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/sphere_nonorographic_gravity_wave.yml
-          --job_id sphere_nonorographic_gravity_wave
-        artifact_paths: "sphere_nonorographic_gravity_wave/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16GB
-
-      - label: "GPU: baroclinic wave"
-        key: "baroclinic_wave_gpu"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
-          --config_file $CONFIG_PATH/baroclinic_wave.yml
-          --job_id baroclinic_wave_gpu
-        artifact_paths: "baroclinic_wave_gpu/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16GB
-
-      - label: "GPU: baroclinic wave dense autodiff"
-        key: "baroclinic_wave_gpu_dense_autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
-          --config_file $CONFIG_PATH/baroclinic_wave_dense_autodiff.yml
-          --job_id baroclinic_wave_gpu_dense_autodiff
-        artifact_paths: "baroclinic_wave_gpu_dense_autodiff/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16GB
-
-      - label: "GPU: baroclinic wave sparse autodiff"
-        key: "baroclinic_wave_gpu_sparse_autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
-          --config_file $CONFIG_PATH/baroclinic_wave_sparse_autodiff.yml
-          --job_id baroclinic_wave_gpu_sparse_autodiff
-        artifact_paths: "baroclinic_wave_gpu_sparse_autodiff/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16GB
-
-      - label: "GPU: compare BW with CPU"
-        command: >
-          tar xvf baroclinic_wave/output_active/hdf5_files.tar -C baroclinic_wave
-
-          tar xvf baroclinic_wave_gpu/output_active/hdf5_files.tar -C baroclinic_wave_gpu
-
-          julia --color=yes --project=.buildkite post_processing/compare_outputs.jl
-          --output_folder_1 baroclinic_wave
-          --output_folder_2 baroclinic_wave_gpu --t_end 10days
-          --compare_state false
-        depends_on:
-          - "baroclinic_wave"
-          - "baroclinic_wave_gpu"
-
-      - label: "GPU: baroclinic wave - 2 gpus"
-        key: "baroclinic_wave_2gpu"
-        command:
-          - mkdir -p baroclinic_wave_2gpu
-          # - >
-          #   srun --cpu-bind=threads --cpus-per-task=4
-          #   nsys profile --delay 100 --trace=nvtx,cuda,mpi --output=baroclinic_wave_2gpu/output_active/report-%q{PMI_RANK}
-          #   julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          #   --config_file ${CONFIG_PATH}/baroclinic_wave.yml
-          #   --job_id baroclinic_wave_2gpu
-          - >
-            srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
-            --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
-            --config_file ${CONFIG_PATH}/baroclinic_wave.yml
-            --job_id baroclinic_wave_2gpu
-        artifact_paths: "baroclinic_wave_2gpu/output_active/*"
-        env:
-          CLIMACOMMS_CONTEXT: "MPI"
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
-          slurm_ntasks: 2
-          slurm_mem: 16GB
-
-      # Brittle test: to be removed
-      # - label: "GPU: test DYAMOND interpolated initial conditions"
-      #   command: >
-      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-      #     --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_summer.yml
-      #     --job_id gpu_aquaplanet_dyamond_summer
-      #   artifact_paths: "gpu_aquaplanet_dyamond_summer/output_active/*"
-      #   env:
-      #     CLIMACOMMS_DEVICE: "CUDA"
-      #   agents:
-      #     slurm_gpus: 1
-      #     slurm_mem: 16GB
-
-      - label: ":earth_americas: GPU: Diagnostic EDMF ERA5 Weather Model Initial Condition"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_era5_initial_condition.yml
-          --job_id diagnostic_edmfx_era5_initial_condition
-        artifact_paths:
-          - "diagnostic_edmfx_era5_initial_condition/output_active/*.pdf"
-          - "diagnostic_edmfx_era5_initial_condition/output_active/*.yml"
-          - "diagnostic_edmfx_era5_initial_condition/output_active/*.toml"
-          - "diagnostic_edmfx_era5_initial_condition/output_active/*.dat"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16GB
-
-      - label: "GPU: EDOnly EDMF aquaplanet"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/edonly_edmfx_aquaplanet.yml
-          --job_id edonly_edmfx_aquaplanet_gpu
-        artifact_paths: "edonly_edmfx_aquaplanet_gpu/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 20GB
-
-      - label: "GPU: Diagnostic EDMF aquaplanet"
-        key: "diagnostic_edmfx_aquaplanet_gpu"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_gpu.yml
-          --job_id diagnostic_edmfx_aquaplanet_gpu
-        artifact_paths: "diagnostic_edmfx_aquaplanet_gpu/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 20GB
-
-      - label: "GPU: Prognostic EDMF aquaplanet"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
-          --job_id prognostic_edmfx_aquaplanet_gpu
-        artifact_paths: "prognostic_edmfx_aquaplanet_gpu/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 20GB
-
-  - group: "Benchmarks"
-    steps:
-      - label: ":computer: Benchmark: CPU baroclinic wave moist"
+      - label: ":alarm_clock: Timestep cost: Moist baroclinic wave"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark_step.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -1184,7 +1008,7 @@ steps:
           --job_id bm_baroclinic_wave_moist
         artifact_paths: "bm_baroclinic_wave_moist/output_active/*"
 
-      - label: ":computer: Benchmark: GPU baroclinic wave moist"
+      - label: ":alarm_clock: Timestep cost: Moist baroclinic wave, GPU"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark_step.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -1198,7 +1022,7 @@ steps:
           slurm_mem: 16G
           slurm_gpus: 1
 
-      - label: ":computer: Benchmark: CPU default"
+      - label: ":alarm_clock: Timestep cost: Default aquaplanet"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1207,7 +1031,7 @@ steps:
         agents:
           slurm_mem: 24GB
 
-      - label: ":computer: Benchmark: GPU default"
+      - label: ":alarm_clock: Timestep cost: Default aquaplanet, GPU"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1220,7 +1044,7 @@ steps:
           slurm_mem: 24GB
           slurm_gpus: 1
 
-      - label: ":computer: Benchmark: GPU diag edmf"
+      - label: ":alarm_clock: Timestep cost: Aquaplanet, diagnostic EDMF, GPU"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -1233,7 +1057,7 @@ steps:
           slurm_mem: 24GB
           slurm_gpus: 1
 
-      - label: ":computer: Benchmark: GPU prog edmf"
+      - label: ":alarm_clock: Timestep cost: Aquaplenet, prognostic EDMF, GPU"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -1246,9 +1070,9 @@ steps:
           slurm_mem: 28GB
           slurm_gpus: 1
 
-  - group: "Flame graphs"
+  - group: "Allocations budget"
     steps:
-      - label: ":fire: Flame graph: gpu job"
+      - label: ":fire: Allocations budget: Moist baroclininc wave, GPU"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -1262,7 +1086,7 @@ steps:
           slurm_gpus: 1
           gres: "gpu:p100:1"
 
-      - label: ":fire: Flame graph: perf target "
+      - label: ":fire: Allocations budget: Aquaplanet"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1272,7 +1096,7 @@ steps:
         agents:
           slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: 1 moment"
+      - label: ":fire: Allocations budget: 1 moment microphysics"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1282,7 +1106,7 @@ steps:
         agents:
           slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: diagnostics"
+      - label: ":fire: Allocations budget: Diagnostics output"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1292,7 +1116,7 @@ steps:
         agents:
           slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: diagnostics edmf"
+      - label: ":fire: Allocations budget: Aquaplanet, diagnostics edmf"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1302,7 +1126,7 @@ steps:
         agents:
           slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: prognostic edmf"
+      - label: ":fire: Allocations budget: Aquaplanet, prognostic EDMF"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1333,7 +1157,7 @@ steps:
       #   agents:
       #     slurm_mem: 32GB
 
-      - label: ":fire: Flame graph: diffusion"
+      - label: ":fire: Allocations budget: Decay with height diffusion"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1343,7 +1167,7 @@ steps:
         agents:
           slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: perf target (Callbacks)"
+      - label: ":fire: Allocations budget: All callbacks"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1353,7 +1177,7 @@ steps:
         agents:
           slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: gravity wave"
+      - label: ":fire: Allocations budget: Gravity waves"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1367,7 +1191,7 @@ steps:
     steps:
       # TODO: we should somehow decouple this unit test from the perf env / scripts
       # Checkbounds
-      - label: ":computer: checkbounds"
+      - label: ":computer: Checkbounds"
         command: >
           julia --color=yes --check-bounds=yes --project=.buildkite perf/benchmark.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1390,8 +1214,8 @@ steps:
   - wait: ~
     continue_on_failure: true
 
-  - label: ":robot_face: Print new mse tables"
-    command: "julia --color=yes --project=.buildkite reproducibility_tests/mse_summary.jl"
+  - label: ":robot_face: Print new rms tables"
+    command: "julia --color=yes --project=.buildkite reproducibility_tests/rms_summary.jl"
 
   - label: ":robot_face: Print new reference counter"
     command: "julia --color=yes --project=.buildkite reproducibility_tests/print_new_ref_counter.jl"

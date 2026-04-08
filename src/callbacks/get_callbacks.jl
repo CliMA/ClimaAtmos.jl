@@ -343,7 +343,7 @@ function progress_logging_callback(dt, t_start, t_end)
     schedule = CappedGeometricSeriesSchedule(five_percent_steps)
     cond = (u, t, integrator) -> schedule(integrator)
     affect! = (integrator) -> report_walltime(walltime_info, integrator)
-    return (SciMLBase.DiscreteCallback(cond, affect!),)
+    return (CTS.DiscreteCallback(cond, affect!),)
 end
 
 function nan_checking_callback(check_nan_every::Int)
@@ -382,7 +382,7 @@ function checkpoint_callback(
         )
         cond = (u, t, integrator) -> schedule(integrator)
         affect! = (integrator) -> save_state_to_disk_func(integrator, output_dir)
-        return (SciMLBase.DiscreteCallback(cond, affect!),)
+        return (CTS.DiscreteCallback(cond, affect!),)
     end
     return ()
 end
@@ -419,19 +419,35 @@ function scm_external_forcing_callback()
     )
 end
 
-function cloud_fraction_callback(
-    dt_cloud_fraction,
+"""
+    scheduled_callback(affect!, dt_str, dt, t_start, t_end[, checkpoint_frequency])
+
+Build a `call_every_dt` callback from a frequency string (e.g. "6hours"),
+handling ITime/FT conversion, promotion, and checkpoint validation.
+"""
+function scheduled_callback(
+    affect!,
+    dt_str,
     dt,
     t_start,
-    t_end;
+    t_end,
+    checkpoint_frequency = nothing,
 )
     FT = typeof(dt) <: ITime ? Float64 : (dt isa AbstractFloat ? typeof(dt) : Float64)
-    dt_cf_seconds =
-        dt isa ITime ?
-        ITime(time_to_seconds(dt_cloud_fraction)) :
-        FT(time_to_seconds(dt_cloud_fraction))
-    dt_cf_seconds, _, _, _ = promote(dt_cf_seconds, t_start, dt, t_end)
-    return (call_every_dt(cloud_fraction_model_callback!, dt_cf_seconds),)
+    dt_seconds_float = time_to_seconds(dt_str)
+    dt_seconds_val = FT(dt_seconds_float)
+    dt_seconds =
+        dt isa ITime ? ITime(dt_seconds_float) : dt_seconds_val
+    dt_seconds, _, _, _ = promote(dt_seconds, t_start, dt, t_end)
+
+    if !isnothing(checkpoint_frequency) && checkpoint_frequency != Inf
+        dt_s = Dates.Second(round(Int, dt_seconds_val))
+        if !CA.isdivisible(checkpoint_frequency, dt_s)
+            @warn "$(nameof(affect!)) period ($dt_s) is not an even divisor of the checkpoint frequency ($checkpoint_frequency). This simulation will not be reproducible when restarted."
+        end
+    end
+
+    return (call_every_dt(affect!, dt_seconds),)
 end
 
 function radiation_callback(
@@ -440,44 +456,18 @@ function radiation_callback(
     dt,
     t_start,
     t_end,
-    checkpoint_frequency;
+    checkpoint_frequency,
 )
     radiation_mode isa RRTMGPI.AbstractRRTMGPMode || return ()
-
-    # Determine float type: use Float64 if dt is ITime (since float(ITime) -> Float64),
-    # otherwise preserve the float type of dt or default to Float64
-    FT = typeof(dt) <: ITime ? Float64 : (dt isa AbstractFloat ? typeof(dt) : Float64)
-
-    # Convert dt_rad string to seconds (once)
-    dt_rad_seconds_float = time_to_seconds(dt_rad)
-
-    # Compute float value for validation BEFORE promotion
-    # We need this separate value because after promotion with ITime, we can't easily
-    # extract the numeric value for rounding to Int
-    dt_rad_seconds_val = FT(dt_rad_seconds_float)
-
-    # Create dt_rad_seconds matching the type of dt (ITime if dt is ITime, else FT)
-    # This ensures type consistency before promotion
-    dt_rad_seconds =
-        dt isa ITime ?
-        ITime(dt_rad_seconds_float) :
-        dt_rad_seconds_val
-
-    # Promote dt_rad_seconds with other time values to ensure all have compatible types
-    # (e.g., if dt is ITime, all promoted values will be ITime with matching periods)
-    dt_rad_seconds, _, _, _ = promote(dt_rad_seconds, t_start, dt, t_end)
-
-    # Validation against checkpoint frequency using the float value (before promotion)
-    dt_rad_s = Dates.Second(round(Int, dt_rad_seconds_val))
-    if checkpoint_frequency != Inf &&
-       !CA.isdivisible(checkpoint_frequency, dt_rad_s)
-        @warn "Radiation period ($(dt_rad_s)) is not an even divisor of the checkpoint frequency ($checkpoint_frequency)"
-        @warn "This simulation will not be reproducible when restarted"
-    end
-
-    return (call_every_dt(rrtmgp_model_callback!, dt_rad_seconds),)
+    return scheduled_callback(
+        rrtmgp_model_callback!,
+        dt_rad,
+        dt,
+        t_start,
+        t_end,
+        checkpoint_frequency,
+    )
 end
-
 
 function nogw_callback(
     non_orographic_gravity_wave,
@@ -488,44 +478,17 @@ function nogw_callback(
     checkpoint_frequency,
 )
     non_orographic_gravity_wave isa NonOrographicGravityWave || return ()
-
-    # Determine float type: use Float64 if dt is ITime (since float(ITime) -> Float64),
-    # otherwise preserve the float type of dt or default to Float64
-    FT = typeof(dt) <: ITime ? Float64 : (dt isa AbstractFloat ? typeof(dt) : Float64)
-
-    # Convert dt_nogw string to seconds (once)
-    dt_nogw_seconds_float = time_to_seconds(dt_nogw)
-
-    # Compute float value for validation BEFORE promotion
-    # We need this separate value because after promotion with ITime, we can't easily
-    # extract the numeric value for rounding to Int
-    dt_nogw_seconds_val = FT(dt_nogw_seconds_float)
-
-    # Create dt_nogw_seconds matching the type of dt (ITime if dt is ITime, else FT)
-    # This ensures type consistency before promotion
-    dt_nogw_seconds =
-        dt isa ITime ?
-        ITime(dt_nogw_seconds_float) :
-        dt_nogw_seconds_val
-
-    # Promote dt_nogw_seconds with other time values to ensure all have compatible types
-    # (e.g., if dt is ITime, all promoted values will be ITime with matching periods)
-    dt_nogw_seconds, _, _, _ = promote(dt_nogw_seconds, t_start, dt, t_end)
-
-    # Validation against checkpoint frequency using the float value (before promotion)
-    dt_nogw_s = Dates.Second(round(Int, dt_nogw_seconds_val))
-    if checkpoint_frequency != Inf &&
-       !CA.isdivisible(checkpoint_frequency, dt_nogw_s)
-        @warn "Non-orographic gravity wave period ($(dt_nogw_s)) is not an even divisor of the checkpoint frequency ($checkpoint_frequency)"
-        @warn "This simulation will not be reproducible when restarted"
-    end
-
-    return (call_every_dt(nogw_model_callback!, dt_nogw_seconds),)
+    return scheduled_callback(
+        nogw_model_callback!,
+        dt_nogw,
+        dt,
+        t_start,
+        t_end,
+        checkpoint_frequency,
+    )
 end
 
-function edmfx_filter_callback(
-    dt,
-)
+function edmfx_filter_callback(dt)
     return call_every_dt(edmfx_filter_callback!, dt)
 end
 
@@ -538,41 +501,19 @@ function ogw_callback(
     checkpoint_frequency,
 )
     orographic_gravity_wave isa OrographicGravityWave || return ()
-
-    # Determine float type: use Float64 if dt is ITime (since float(ITime) -> Float64),
-    # otherwise preserve the float type of dt or default to Float64
-    FT = typeof(dt) <: ITime ? Float64 : (dt isa AbstractFloat ? typeof(dt) : Float64)
-
-    # Convert dt_ogw string to seconds (once)
-    dt_ogw_seconds_float = time_to_seconds(dt_ogw)
-
-    # Compute float value for validation BEFORE promotion
-    dt_ogw_seconds_val = FT(dt_ogw_seconds_float)
-
-    # Create dt_ogw_seconds matching the type of dt (ITime if dt is ITime, else FT)
-    dt_ogw_seconds =
-        dt isa ITime ?
-        ITime(dt_ogw_seconds_float) :
-        dt_ogw_seconds_val
-
-    # Promote dt_ogw_seconds with other time values to ensure all have compatible types
-    dt_ogw_seconds, _, _, _ = promote(dt_ogw_seconds, t_start, dt, t_end)
-
-    # Validation against checkpoint frequency using the float value (before promotion)
-    dt_ogw_s = Dates.Second(round(Int, dt_ogw_seconds_val))
-    if checkpoint_frequency != Inf &&
-       !CA.isdivisible(checkpoint_frequency, dt_ogw_s)
-        @warn "Orographic gravity wave period ($(dt_ogw_s)) is not an even divisor of the checkpoint frequency ($checkpoint_frequency)"
-        @warn "This simulation will not be reproducible when restarted"
-    end
-
-    return (call_every_dt(ogw_model_callback!, dt_ogw_seconds),)
+    return scheduled_callback(
+        ogw_model_callback!,
+        dt_ogw,
+        dt,
+        t_start,
+        t_end,
+        checkpoint_frequency,
+    )
 end
 
 
 function get_callbacks(config, sim_info, atmos, params, Y, p)
     (; parsed_args, comms_ctx) = config
-    FT = eltype(params)
     (; dt, output_dir, start_date, t_start, t_end) = sim_info
 
     callbacks = ()
@@ -615,8 +556,6 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
        parsed_args["config"] == "column"
         callbacks = (callbacks..., scm_external_forcing_callback()...)
     end
-
-
 
     # Radiation
     callbacks = (
@@ -702,7 +641,7 @@ function default_model_callbacks(component; kwargs...)
 end
 
 function default_model_callbacks(radiation::AtmosRadiation;
-    dt_rad,
+    dt_rad = "6hours",
     start_date,
     dt,
     t_start,
@@ -742,24 +681,6 @@ end
 function default_model_callbacks(turbconv_model::PrognosticEDMFX;
     dt)
     return edmfx_filter_callback(dt)
-end
-
-function default_model_callbacks(water::AtmosWater;
-    dt_cloud_fraction,
-    start_date,
-    dt,
-    t_start,
-    t_end,
-    kwargs...)
-    if !isnothing(water.microphysics_model)
-        return cloud_fraction_callback(
-            dt_cloud_fraction,
-            dt,
-            t_start,
-            t_end,
-        )
-    end
-    return ()
 end
 
 """

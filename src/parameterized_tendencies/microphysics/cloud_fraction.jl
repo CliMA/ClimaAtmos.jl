@@ -2,6 +2,152 @@ import NVTX
 import StaticArrays as SA
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 
+"""
+    set_covariance_cache_and_cloud_fraction!(Y, p)
+
+Update the covariance cache and cloud fraction in a way that is consistent with
+the coupling between cloud fraction, buoyancy gradient, and mixing length.
+
+The buoyancy gradient depends on the cloud fraction, while the cloud fraction
+depends on the covariance cache, whose mixing length depends on the buoyancy
+gradient. This circular dependency is resolved by performing two Picard
+iterations on cloud fraction and then applying a guarded Aitken Δ²
+acceleration,
+
+    cₐ = c₀ - (c₁ - c₀)^2 / (c₂ - 2c₁ + c₀),
+
+where `c₀` is the initial cloud fraction, `c₁ = f(c₀)`, and `c₂ = f(c₁)`.
+
+The accelerated update is only applied when the first two Picard increments
+change sign, since in that case the Aitken value lies between the previously
+computed iterates. Otherwise, the second Picard iterate is retained.
+
+For reproducible restart, the initial cloud fraction is first recomputed using
+`GridScaleCloud()` so that the starting iterate is deterministic.
+
+Note: Vertical gradients (`ᶜgradᵥ_q_tot`, `ᶜgradᵥ_θ_liq_ice`) are always computed
+from grid-mean variables. Ideally PrognosticEDMFX would use environmental
+gradients since the covariances represent sub-grid fluctuations within the
+environment, but this is a current approximation.
+"""
+function set_covariance_cache_and_cloud_fraction!(Y, p)
+    (; cloud_model, microphysics_model) = p.atmos
+    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) = p.precomputed
+    (; ᶜlinear_buoygrad, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜlg = Fields.local_geometry_field(Y.c)
+
+    # Precompute gradients
+    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_nonneg))
+    @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
+        ᶠinterp(
+            TD.liquid_ice_pottemp(
+                thermo_params,
+                ᶜT,
+                Y.c.ρ,
+                ᶜq_tot_nonneg,
+                ᶜq_liq,
+                ᶜq_ice,
+            ),
+        ),
+    )
+
+    # The buoyancy gradient depends on cloud fraction, and cloud fraction depends
+    # on the covariance cache through the mixing length. For reproducible restart,
+    # first reconstruct the initial cloud fraction deterministically.
+    if p.atmos.numerics.reproducible_restart isa ReproducibleRestart
+        set_cloud_fraction!(Y, p, microphysics_model, GridScaleCloud())
+    end
+
+    # One Picard step: use the current cloud fraction to update buoyancy
+    # gradient and covariance cache, then recompute cloud fraction.
+    function picard_step!()
+        @. ᶜlinear_buoygrad = buoyancy_gradients(
+            BuoyGradMean(), # TODO: modify for NonEq + 1M tracers if needed
+            thermo_params,
+            ᶜT,
+            Y.c.ρ,
+            ᶜq_tot_nonneg,
+            ᶜq_liq,
+            ᶜq_ice,
+            ᶜcloud_fraction,
+            C3,
+            ᶜgradᵥ_q_tot,
+            ᶜgradᵥ_θ_liq_ice,
+            ᶜlg,
+        )
+
+        # Cache SGS covariances (no-op for dry/0M/GridScaleCloud configs).
+        # For EDMF: gradients are precomputed above.
+        # For non-EDMF: gradients are computed inside set_covariance_cache!.
+        set_covariance_cache!(Y, p, thermo_params)
+        set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
+        return nothing
+    end
+
+    # Scratch storage for Picard/Aitken iterates:
+    #   c0 = initial cloud fraction
+    #   c1 = first Picard iterate
+    #   c2 = second Picard iterate
+    # ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_5, ᶜtemp_scalar_6 might
+    # change inside the functions that are called in picard_step!() and should not be used
+    # here to store variables before calling picard_step!
+    c0 = p.scratch.ᶜtemp_scalar_4
+    c1 = p.scratch.ᶜtemp_scalar_7
+    c2 = p.scratch.ᶜtemp_scalar
+
+    # Picard iterates: c1 = f(c0), c2 = f(c1)
+    @. c0 = ᶜcloud_fraction
+    picard_step!()
+    @. c1 = ᶜcloud_fraction
+    picard_step!()
+    @. c2 = ᶜcloud_fraction
+
+    # Apply aitken Δ² acceleration for better convergence
+    @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, c2)
+
+    # Recompute buoyancy gradient and covariance cache with the final cloud fraction.
+    @. ᶜlinear_buoygrad = buoyancy_gradients(
+        BuoyGradMean(), # TODO: modify for NonEq + 1M tracers if needed
+        thermo_params,
+        ᶜT,
+        Y.c.ρ,
+        ᶜq_tot_nonneg,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜcloud_fraction,
+        C3,
+        ᶜgradᵥ_q_tot,
+        ᶜgradᵥ_θ_liq_ice,
+        ᶜlg,
+    )
+    set_covariance_cache!(Y, p, thermo_params)
+
+    return nothing
+end
+
+"""
+Guarded Aitken Δ² acceleration:
+  c_acc = c0 - (c1 - c0)^2 / (c2 - 2c1 + c0)
+
+Apply Aitken only when the Picard increments change sign, i.e. when the
+Picard iterates oscillate around the fixed point. In that case, the
+accelerated value is expected to remain between previously computed iterates.
+Otherwise, retain the second Picard iterate.
+"""
+@inline function _aitken_picard_helper(c0, c1, c2)
+    FT = typeof(c0)
+    Δ1 = c1 - c0
+    Δ2 = c2 - c1
+    denom = c2 - 2c1 + c0
+    tol = eps(FT)
+    return ifelse(
+        (Δ1 * Δ2 < zero(FT)) & (abs(denom) > tol),
+        c0 - Δ1^2 / denom,
+        c2,
+    )
+end
+
 # ============================================================================
 # Utility Functions
 # ============================================================================
@@ -19,13 +165,15 @@ function compute_∂T_∂θ!(dest, Y, p, thermo_params)
     (; ᶜT) = p.precomputed
     ᶜρ = Y.c.ρ
     if p.atmos.microphysics_model isa Union{DryModel, EquilibriumMicrophysics0M}
-        (; ᶜq_liq_rai, ᶜq_ice_sno, ᶜq_tot_safe) = p.precomputed
-        ᶜq_liq = ᶜq_liq_rai
-        ᶜq_ice = ᶜq_ice_sno
-        ᶜq_tot = ᶜq_tot_safe
+        (; ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg) = p.precomputed
+        # TODO - follow up with renaming the cached variables to liq and ice
+        ᶜq_liq = ᶜq_liq
+        ᶜq_ice = ᶜq_ice
+        ᶜq_tot = ᶜq_tot_nonneg
     else
-        ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-        ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        # TODO - change in the next PR. Keeping this non behavior changing
+        ᶜq_liq = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ)) # TODO + specific(Y.c.ρq_rai, Y.c.ρ))
+        ᶜq_ice = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ)) # TODO + specific(Y.c.ρq_sno, Y.c.ρ))
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     end
     ᶜθ_li = @. lazy(
@@ -41,23 +189,12 @@ end
     set_covariance_cache!(Y, p, thermo_params)
 
 Materializes T-based SGS covariances into cached fields for use by downstream
-computations (SGS quadrature, cloud fraction).
-
-Called once per stage in `set_explicit_precomputed_quantities!`.
-Populates `p.precomputed.(ᶜT′T′, ᶜq′q′)`.
-
-Note: Vertical gradients (ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) are always computed
-from grid-mean variables. For EDMF configurations, these gradients are computed
-in `set_explicit_precomputed_quantities!` before this function is called. For
-non-EDMF, they are computed here. Ideally PrognosticEDMFX would use environmental
-gradients since the covariances represent sub-grid fluctuations within the
-environment, but this is a current approximation.
+computations (SGS quadrature, cloud fraction). Populates `p.precomputed.(ᶜT′T′, ᶜq′q′)`.
 
 Pipeline:
-1. Compute vertical gradients (non-EDMF only; EDMF gradients are precomputed)
-2. Compute mixing length via `compute_gm_mixing_length` or `ᶜmixing_length`
-3. Materialize θ-based covariances from gradients
-4. Transform θ→T using `compute_∂T_∂θ!`
+1. Compute mixing length via `compute_gm_mixing_length` or `ᶜmixing_length`
+2. Materialize θ-based covariances from gradients
+3. Transform θ→T using `compute_∂T_∂θ!`
 """
 function set_covariance_cache!(Y, p, thermo_params)
     # Covariance fields are only allocated when microphysics needs the
@@ -75,31 +212,6 @@ function set_covariance_cache!(Y, p, thermo_params)
     coeff = CAP.diagnostic_covariance_coeff(p.params)
     turbconv_model = p.atmos.turbconv_model
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
-
-    # Compute gradients for non-EDMF cases (EDMF gradients are precomputed)
-    if isnothing(turbconv_model)
-        needs_gradients =
-            !isnothing(p.atmos.sgs_quadrature) ||
-            p.atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
-        if needs_gradients
-            (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
-            # TODO: replace by 3d gradients
-            @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
-            @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
-                ᶠinterp(
-                    TD.liquid_ice_pottemp(
-                        thermo_params,
-                        ᶜT,
-                        Y.c.ρ,
-                        ᶜq_tot_safe,
-                        ᶜq_liq_rai,
-                        ᶜq_ice_sno,
-                    ),
-                ),
-            )
-        end
-    end
-    # For EDMF: gradients are precomputed in set_explicit_precomputed_quantities!
 
     # NOTE: gradients must be precomputed when using compute_gm_mixing_length
     # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
@@ -140,7 +252,7 @@ end
 """
     compute_cloud_fraction_sd(
         thermo_params, T, ρ, q_tot, q_liq, q_ice, T′T′, q′q′, corr_Tq,
-        cf_steepness_scale, sgs_dist
+        cf_steepness_scale, q_min, sgs_dist
     )
 
 Compute cloud fraction using the Sommeria & Deardorff (1977) approach, but with 
@@ -177,6 +289,7 @@ With zero variance the function returns 0 when no condensate exists and
 - `q′q′`: Moisture variance [(kg/kg)²]
 - `corr_Tq`: Correlation coefficient corr(T', q')
 - `cf_steepness_scale`: Scaling factor for the steepness of the cloud fraction transition versus condensate (default 1).
+- `q_min`: Minimum specific humidity threshold [kg/kg] (from ClimaParams `specific_humidity_minimum`).
 - `sgs_dist`: Assumed sub-grid scale distribution type (`GaussianSGS`, `LogNormalSGS`, or `GridMeanSGS`).
 
 # Returns
@@ -192,7 +305,8 @@ Cloud fraction ∈ [0, 1]
     T′T′,
     q′q′,
     corr_Tq,
-    cf_steepness_scale, # Added cf_steepness_scale to signature
+    cf_steepness_scale,
+    q_min,
     sgs_dist::AbstractSGSDistribution,
 )
     FT = eltype(thermo_params)
@@ -228,20 +342,20 @@ Cloud fraction ∈ [0, 1]
 
     # --- 4. Formulation-Specific Cloud Fraction Helpers ---
     cf_l =
-        _cloud_fraction_helper(Q_hat_l, sig_l, q_tot, cf_steepness_scale, sgs_dist)
+        _cloud_fraction_helper(Q_hat_l, sig_l, q_tot, cf_steepness_scale, q_min, sgs_dist)
     cf_i =
-        _cloud_fraction_helper(Q_hat_i, sig_i, q_tot, cf_steepness_scale, sgs_dist)
+        _cloud_fraction_helper(Q_hat_i, sig_i, q_tot, cf_steepness_scale, q_min, sgs_dist)
 
     # --- 5. Maximum overlap ---
     cf = max(cf_l, cf_i)
 
     # --- 6. No condensate → no cloud (branchless) ---
-    has_cond = (q_liq + q_ice) > FT(0)
+    has_cond = TD.has_condensate(thermo_params, q_liq + q_ice)
     return ifelse(has_cond, cf, zero(FT))
 end
 
 """
-    _cloud_fraction_helper(Q_hat, sig_s, q_tot, cf_steepness_scale, sgs_dist)
+    _cloud_fraction_helper(Q_hat, sig_s, q_tot, cf_steepness_scale, q_min, sgs_dist)
 
 Compute the phase-specific cloud fraction from normalized condensate.
 
@@ -250,6 +364,7 @@ Compute the phase-specific cloud fraction from normalized condensate.
 - `sig_s`: Standard deviation of saturation deficit [kg/kg]
 - `q_tot`: Grid-mean total specific humidity [kg/kg]
 - `cf_steepness_scale`: Scaling factor for the steepness of the cloud fraction transition versus condensate
+- `q_min`: Minimum specific humidity threshold [kg/kg]
 - `sgs_dist`: Assumed sub-grid scale distribution type (`GaussianSGS`, `LogNormalSGS`, or `GridMeanSGS`)
 
 # Returns
@@ -260,6 +375,7 @@ Compute the phase-specific cloud fraction from normalized condensate.
     sig_s,
     q_tot,
     cf_steepness_scale,
+    q_min,
     ::GaussianSGS,
 )
     FT = typeof(Q_hat)
@@ -273,11 +389,12 @@ end
     sig_s,
     q_tot,
     cf_steepness_scale,
+    q_min,
     ::LogNormalSGS,
 )
     FT = typeof(Q_hat)
     # Coefficient of variation (protect against division by zero)
-    C_v = sig_s / max(q_tot, q_min(FT))
+    C_v = sig_s / max(q_tot, q_min)
 
     # Base coefficient corresponds to Gaussian limit (Cv -> 0)
     coeff = (FT(π) / sqrt(FT(6))) * cf_steepness_scale
@@ -294,6 +411,7 @@ end
     sig_s,
     q_tot,
     cf_steepness_scale,
+    q_min,
     ::GridMeanSGS,
 )
     FT = typeof(Q_hat)
@@ -327,10 +445,15 @@ NVTX.@annotate function set_cloud_fraction!(
     ::MoistMicrophysics,
     ::GridScaleCloud,
 )
-    (; ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜq_liq, ᶜq_ice) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
     @. p.precomputed.ᶜcloud_fraction =
-        ifelse(TD.has_condensate(ᶜq_liq_rai + ᶜq_ice_sno), FT(1), FT(0))
+        ifelse(
+            TD.has_condensate(thermo_params, ᶜq_liq + ᶜq_ice),
+            FT(1),
+            FT(0),
+        )
 end
 NVTX.@annotate function set_cloud_fraction!(
     Y,
@@ -346,7 +469,7 @@ NVTX.@annotate function set_cloud_fraction!(
     ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
     # Get condensate means (dispatches on microphysics_model)
-    ᶜq_liq, ᶜq_ice = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
 
     # Get T-based variances from cache
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
@@ -357,18 +480,20 @@ NVTX.@annotate function set_cloud_fraction!(
 
     corr_Tq = correlation_Tq(p.params)
     cf_steepness_scale = CAP.cloud_fraction_steepness_scale(p.params)
+    q_min = CAP.q_min(p.params)
 
     @. p.precomputed.ᶜcloud_fraction = compute_cloud_fraction_sd(
         thermo_params,
         ᶜT_mean,
         ᶜρ_env,
         ᶜq_mean,
-        ᶜq_liq,
-        ᶜq_ice,
+        ᶜq_lcl,
+        ᶜq_icl,
         ᶜT′T′,
         ᶜq′q′,
         corr_Tq,
         cf_steepness_scale,
+        q_min,
         sgs_dist,
     )
 
@@ -386,7 +511,7 @@ NVTX.@annotate function set_cloud_fraction!(
     microphysics_model = p.atmos.microphysics_model
 
     # Get environment state, condensate, and covariances
-    ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_liq, ᶜq_ice, ᶜT′T′, ᶜq′q′ =
+    ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′ =
         _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_model)
 
     set_ml_cloud_fraction!(
@@ -414,22 +539,22 @@ Get environment density, temperature, and specific humidity for cloud fraction.
 Lightweight alternative to `_compute_cloud_state` when only ρ, T, and q are needed.
 """
 function _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
-    (; ᶜp, ᶜT, ᶜq_tot_safe) = p.precomputed
+    (; ᶜp, ᶜT, ᶜq_tot_nonneg) = p.precomputed
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
         ᶜρ_env = @. lazy(
             TD.air_density(
                 thermo_params,
                 ᶜT⁰,
                 ᶜp,
-                ᶜq_tot_safe⁰,
-                ᶜq_liq_rai⁰,
-                ᶜq_ice_sno⁰,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
             ),
         )
-        return ᶜρ_env, ᶜT⁰, ᶜq_tot_safe⁰
+        return ᶜρ_env, ᶜT⁰, ᶜq_tot_nonneg⁰
     else
-        return Y.c.ρ, ᶜT, ᶜq_tot_safe
+        return Y.c.ρ, ᶜT, ᶜq_tot_nonneg
     end
 end
 
@@ -441,51 +566,58 @@ Compute environment state, condensate means, and variances for cloud fraction.
 For PrognosticEDMFX, uses environment (⁰) fields; otherwise uses grid-scale fields.
 
 # Returns
-Tuple: `(ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_liq, ᶜq_ice, ᶜT′T′, ᶜq′q′)`
+Tuple: `(ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′)`
 """
 function _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_model)
-    (; ᶜp, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
 
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
         ᶜρ_env = @. lazy(
-            TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+            TD.air_density(
+                thermo_params,
+                ᶜT⁰,
+                ᶜp,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+            ),
         )
         ᶜT_mean = ᶜT⁰
-        ᶜq_mean = ᶜq_tot_safe⁰
+        ᶜq_mean = ᶜq_tot_nonneg⁰
         ᶜθ_mean = @. lazy(
             TD.liquid_ice_pottemp(
                 thermo_params,
                 ᶜT⁰,
                 ᶜρ_env,
-                ᶜq_tot_safe⁰,
-                ᶜq_liq_rai⁰,
-                ᶜq_ice_sno⁰,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
             ),
         )
     else
         ᶜρ_env = Y.c.ρ
         ᶜT_mean = ᶜT
-        ᶜq_mean = ᶜq_tot_safe
+        ᶜq_mean = ᶜq_tot_nonneg
         ᶜθ_mean = @. lazy(
             TD.liquid_ice_pottemp(
                 thermo_params,
                 ᶜT,
                 Y.c.ρ,
-                ᶜq_tot_safe,
-                ᶜq_liq_rai,
-                ᶜq_ice_sno,
+                ᶜq_tot_nonneg,
+                ᶜq_liq,
+                ᶜq_ice,
             ),
         )
     end
 
     # Get condensate means
-    ᶜq_liq, ᶜq_ice = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
 
     # Get T-based variances from cache
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    return ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_liq, ᶜq_ice, ᶜT′T′, ᶜq′q′
+    return ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′
 end
 
 """
@@ -503,19 +635,19 @@ _get_condensate_means(Y, p, turbconv_model, ::NonEquilibriumMicrophysics) =
 
 Retrieve grid-mean cloud condensate for EquilibriumMicrophysics0M.
 
-For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq_rai⁰, ᶜq_ice_sno⁰).
+For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq⁰, ᶜq_ice⁰).
 Otherwise (including DiagnosticEDMFX), uses grid-scale precomputed condensate.
 
 # Returns
-Tuple: `(ᶜq_liq_mean, ᶜq_ice_mean)` as lazy field expressions.
+Tuple: `(ᶜq_lcl_mean, ᶜq_icl_mean)` as lazy field expressions.
 """
 function _get_condensate_means_equil(p, turbconv_model)
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
-        return ᶜq_liq_rai⁰, ᶜq_ice_sno⁰
+        (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+        return ᶜq_liq⁰, ᶜq_ice⁰
     else
-        (; ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
-        return ᶜq_liq_rai, ᶜq_ice_sno
+        (; ᶜq_liq, ᶜq_ice) = p.precomputed
+        return ᶜq_liq, ᶜq_ice
     end
 end
 
@@ -524,20 +656,20 @@ end
 
 Retrieve grid-mean cloud condensate for NonEquilibriumMicrophysics.
 
-For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq_rai⁰, ᶜq_ice_sno⁰).
+For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq⁰, ᶜq_ice⁰).
 Otherwise (including DiagnosticEDMFX), computes cloud-only condensate from prognostic variables.
 
 # Returns
-Tuple: `(ᶜq_liq_mean, ᶜq_ice_mean)` as lazy field expressions.
+Tuple: `(ᶜq_lcl_mean, ᶜq_icl_mean)` as lazy field expressions.
 """
 function _get_condensate_means_nonequil(Y, p, turbconv_model)
     if turbconv_model isa PrognosticEDMFX # TODO Shouldn't we do this for DiagnosticEDMFX too?
-        (; ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
-        return ᶜq_liq_rai⁰, ᶜq_ice_sno⁰
+        (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+        return ᶜq_liq⁰, ᶜq_ice⁰
     else
-        ᶜq_liq_mean = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-        ᶜq_ice_mean = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-        return ᶜq_liq_mean, ᶜq_ice_mean
+        ᶜq_lcl_mean = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
+        ᶜq_icl_mean = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+        return ᶜq_lcl_mean, ᶜq_icl_mean
     end
 end
 
@@ -561,9 +693,16 @@ function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
     # Weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise)
     if turbconv_model isa PrognosticEDMFX
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
-        (; ᶜT⁰, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
         ᶜρ⁰ = @. lazy(
-            TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰),
+            TD.air_density(
+                thermo_params,
+                ᶜT⁰,
+                ᶜp,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+            ),
         )
         @. p.precomputed.ᶜcloud_fraction *= draft_area(ᶜρa⁰, ᶜρ⁰)
     end
@@ -571,7 +710,7 @@ function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
     # Add contributions from the updrafts if using EDMF
     if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
         n = n_mass_flux_subdomains(turbconv_model)
-        (; ᶜρʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
+        (; ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
         for j in 1:n
             ᶜρaʲ =
                 turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
@@ -579,7 +718,10 @@ function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 
             @. p.precomputed.ᶜcloud_fraction +=
                 ifelse(
-                    TD.has_condensate(ᶜq_liq_raiʲs.:($$j) + ᶜq_ice_snoʲs.:($$j)),
+                    TD.has_condensate(
+                        thermo_params,
+                        ᶜq_liqʲs.:($$j) + ᶜq_iceʲs.:($$j),
+                    ),
                     draft_area(ᶜρaʲ, ᶜρʲs.:($$j)),
                     0,
                 )

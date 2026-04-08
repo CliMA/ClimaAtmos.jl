@@ -1,10 +1,10 @@
-322
+334
 
 # **README**
 #
 # What is the ref_counter?
 #
-# The ref_counter is part of reproduciability tests. The counter identifies a
+# The ref_counter is part of reproducibility tests. The counter identifies a
 # particular snapshot of our code, a "reference". Each PR is tested against this
 # reference to check if it reproduces the expected behavior. This allows us to
 # check that PRs that are expected to not modify the behavior do indeed preserve
@@ -13,13 +13,68 @@
 # When am I allowed to increase the ref_counter?
 #
 # If you know that your PR is changing some behavior (e.g., you are changing
-# parameters, or how things are computed, or added a new component), you should
-# increase the number on top of this file and add an explanation on why it has
-# changed in the comments below. Increasing the ref_counter will make your PR
-# the new reference that other PRs will be compared against.
+# the numeric scheme), you MUST increase the reference counter. Note that
+# structural changes to the testing infrastructure (like switching outputs from
+# MSE to RMS) also require bumping the counter.
+#
+# What happens if I increase the ref_counter?
+#
+# The latest reference folder is saved, and a new one is created.
+#
+# Can we reduce the ref_counter?
+#
+# Never! Reverting broken commits still constitute as a state-change, and
+# should therefore increment the reference counter.
 
+# How to increase the ref counter:
+# 1) Increment the number on the first line of this file.
+# 2) Note the date alongside a brief description of the PR in question.
+# 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+334
+- Change prognostic variable names in 1M scheme: liq->lcl, ice->icl
+
+333
+- Bugfix in microphysics jacobian;
+- Update edmf filter to ensure mass conservation in domain decomposition;
+- Update microphysics to v0.33
+
+332
+- Change the 0M precipitation threshold to be based on supersaturation excess
+  in all places
+
+331
+- Update Thermodynamics to 1.2
+
+330
+- Replace InitialConditions module with Setups module
+
+329
+- Fix mixing length computations; ignore l_tke when net production is negative.
+
+328
+- Downgrade to 1.11 due to CUDA misaligned memory error
+
+327
+- Refactor reproducibility infrastructure to use rms deviations in prognostic variables and only fail when rms deviation exceeds tolerance.
+- Needs ref_counter update because reference table changes to rmse rather than mse.
+
+326
+- Update implicit timestepping for microphysics tendencies, with diagonal Jacobian entries.
+
+325
+- Update CI to 1.12
+
+324
+- Updating to SurfaceFluxesv1:
+  - maxiter in surfacefluxes rootsolver calls is modified,
+    solver is forced now to use 3 iterations
+  - bugfix in evaporation q_tot -> q_vap
+
+323
+- Roundoff errors from change of order of operations - lazy bradcast vs caching values
+  for aquaplanet equil allsky varying insol gravity wave (raw_topo) test.
 
 322
 - Fixed bug in non-orographic gravity wave parameterization where the same scratch field is used for both u and v forcings.
@@ -30,8 +85,8 @@
   SGS quadrature sampling of specific humidity for microphysics tendencies.
 
 320
-- PEDMF: solve sgs u₃ implicit equation first and then use the solution to converge other tracers in 
-  one Newton iteration. 
+- PEDMF: solve sgs u₃ implicit equation first and then use the solution to converge other tracers in
+  one Newton iteration.
 
 319
 - Clip divergence in detrainment
@@ -54,10 +109,10 @@
 - PEDMF: precompute sgs buoyancy; apply edmf filter as a callback; mix unphysical sgs with grid mean
 
 313
-- Change microphysics to using bulk microphysics tendencies, with limiters on total 
+- Change microphysics to using bulk microphysics tendencies, with limiters on total
    tendencies (rather than individual species tendencies).
-- Change cloud fraction calculation to Sommeria-Deardorff moment-based approach, which 
-   underestimates cloud fraction without microphysics quadratures.  
+- Change cloud fraction calculation to Sommeria-Deardorff moment-based approach, which
+   underestimates cloud fraction without microphysics quadratures.
 
 312
 - Relax entr/detr limits for prognostic EDMF when entr/detr is treated implicitly

@@ -39,7 +39,7 @@ This function is dispatched based on the type of the vertical diffusion model
       `F_E = - ρ K_h ∇_v h_{tot}`, where `K_h` is the eddy diffusivity for
       heat and `h_{tot}` is the specific total enthalpy. Zero-flux boundary
       conditions are explicitly applied at the top and bottom for this term.
-    - **Tracers (e.g., `ρq_tot`, `ρq_liq`)**: Based on the divergence of tracer fluxes,
+    - **Tracers (e.g., `ρq_tot`, `ρq_lcl`)**: Based on the divergence of tracer fluxes,
       `F_χ = - ρ K_{h,scaled} ∇_v χ`, where `χ` is the specific
       tracer quantity and `K_{h,scaled}` is the (potentially scaled for certain
       tracers like rain and snow using `α_vert_diff_tracer`) eddy diffusivity
@@ -90,7 +90,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     (; vertical_diffusion) = p.atmos
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜu, ᶜp, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜu, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
     ᶜK_h = p.scratch.ᶜtemp_scalar
     if vertical_diffusion isa DecayWithHeightDiffusion

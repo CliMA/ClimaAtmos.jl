@@ -24,7 +24,10 @@ using Aqua
 end
 
 @testset "Aqua tests (all)" begin
-    Aqua.test_all(ClimaAtmos; persistent_tasks = true)
+    Aqua.test_all(
+        ClimaAtmos;
+        persistent_tasks = true,
+    )
 end
 
 nothing

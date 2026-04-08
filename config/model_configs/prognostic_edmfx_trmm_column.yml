@@ -1,7 +1,5 @@
 FLOAT_TYPE: "Float64"
 initial_condition: TRMM_LBA
-rad: TRMM_LBA
-surface_setup: TRMM_LBA
 turbconv: prognostic_edmfx
 tracer_upwinding: first_order
 implicit_diffusion: true
@@ -16,6 +14,7 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
 microphysics_model: "1M"
+implicit_microphysics: false
 config: column
 z_max: 16400
 x_elem: 2

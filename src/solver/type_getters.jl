@@ -41,7 +41,7 @@ function convert_time_args(dt, t_start, t_end, use_itime, start_date, FT)
     end
 end
 
-function get_atmos(config::AtmosConfig, params)
+function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     (; turbconv_params) = params
     (; parsed_args) = config
     FT = eltype(config)
@@ -65,7 +65,7 @@ function get_atmos(config::AtmosConfig, params)
         parsed_args["implicit_microphysics"]
     @assert implicit_microphysics in (true, false)
 
-    radiation_mode = get_radiation_mode(parsed_args, FT)
+    radiation_mode = get_radiation_mode(parsed_args, FT; setup_type)
     forcing_type = get_forcing_type(parsed_args)
 
 
@@ -116,10 +116,13 @@ function get_atmos(config::AtmosConfig, params)
         FT,
     )
 
-    if parsed_args["prescribed_flow"] == "ShipwayHill2012"
-        prescribed_flow = ShipwayHill2012VelocityProfile{FT}()
+    prescribed_flow = if !isnothing(setup_type)
+        Setups.prescribed_flow_model(setup_type, FT)
     else
-        prescribed_flow = nothing
+        nothing
+    end
+    if isnothing(prescribed_flow) && parsed_args["prescribed_flow"] == "ShipwayHill2012"
+        prescribed_flow = ShipwayHill2012VelocityProfile{FT}()
     end
 
     atmos = AtmosModel(;
@@ -132,18 +135,18 @@ function get_atmos(config::AtmosConfig, params)
         sgs_quadrature,
 
         # SCMSetup - Single-Column Model components
-        subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
-        external_forcing = get_external_forcing_model(parsed_args, FT),
-        ls_adv = get_large_scale_advection_model(parsed_args, FT),
+        subsidence = get_subsidence_model(parsed_args, radiation_mode, FT; setup_type),
+        external_forcing = get_external_forcing_model(parsed_args, FT; setup_type),
+        ls_adv = get_large_scale_advection_model(parsed_args, FT; setup_type),
         advection_test,
-        scm_coriolis = get_scm_coriolis(parsed_args, FT),
+        scm_coriolis = get_scm_coriolis(parsed_args, FT; setup_type),
 
         # PrescribedFlow
         prescribed_flow,
 
         # AtmosRadiation
         radiation_mode = final_radiation_mode,
-        insolation = get_insolation_form(parsed_args),
+        insolation = get_insolation_form(parsed_args; setup_type),
 
         # AtmosTurbconv - Turbulence & Convection
         edmfx_model,
@@ -179,7 +182,7 @@ function get_atmos(config::AtmosConfig, params)
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
 
         # AtmosSurface
-        sfc_temperature = get_sfc_temperature_form(parsed_args),
+        sfc_temperature = Setups.surface_temperature_model(setup_type),
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
 
@@ -366,78 +369,96 @@ function handle_restart(
     return Y, t_start, spaces
 end
 
-function get_initial_condition(parsed_args, atmos)
-    if parsed_args["initial_condition"] in [
-        "DryBaroclinicWave",
-        "MoistBaroclinicWave",
-        "MoistBaroclinicWaveWithEDMF",
-    ]
-        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
-            parsed_args["perturb_initstate"],
-            parsed_args["deep_atmosphere"],
-        )
-    elseif parsed_args["initial_condition"] in
-           ["DecayingProfile", "MoistAdiabaticProfileEDMFX"]
-        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
-            parsed_args["perturb_initstate"],
-        )
-    elseif parsed_args["initial_condition"] in [
-        "GABLS",
-        "Soares",
-        "Bomex",
-        "DYCOMS_RF01",
-        "DYCOMS_RF02",
-        "Rico",
-        "TRMM_LBA",
-        "SimplePlume",
-        "Larcform1",
-    ]
-        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
-            parsed_args["prognostic_tke"],
-        )
-    elseif parsed_args["initial_condition"] == "ISDAC"
-        ICs.ISDAC(
-            parsed_args["prognostic_tke"],
-            parsed_args["perturb_initstate"],
-        )
-    elseif parsed_args["initial_condition"] in [
-        "ConstantBuoyancyFrequencyProfile",
-        "IsothermalProfile",
-        "DryDensityCurrentProfile",
-        "RisingThermalBubbleProfile",
-        "PrecipitatingColumn",
-        "RCEMIPIIProfile_295",
-        "RCEMIPIIProfile_300",
-        "RCEMIPIIProfile_305",
-    ]
-        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
-    elseif isfile(parsed_args["initial_condition"])
-        return ICs.MoistFromFile(parsed_args["initial_condition"])
-    elseif parsed_args["initial_condition"] == "GCM"
-        @assert parsed_args["prognostic_tke"] == true
-        return ICs.GCMDriven(
+
+function get_setup_type(parsed_args, thermo_params)
+    ic_name = parsed_args["initial_condition"]
+    if ic_name == "Bomex"
+        return Setups.Bomex(; prognostic_tke = parsed_args["prognostic_tke"], thermo_params)
+    elseif ic_name == "Rico"
+        return Setups.Rico(; prognostic_tke = parsed_args["prognostic_tke"], thermo_params)
+    elseif ic_name == "Larcform1"
+        return Setups.Larcform1(; prognostic_tke = parsed_args["prognostic_tke"], thermo_params)
+    elseif ic_name == "GCM"
+        return Setups.GCMDriven(
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
-    elseif parsed_args["initial_condition"] == "ReanalysisTimeVarying"
-        return ICs.external_tv_initial_condition(
-            atmos.external_forcing.external_forcing_file,
+    elseif ic_name == "ReanalysisTimeVarying"
+        FT = eltype(thermo_params)
+        external_forcing_file =
+            get_external_daily_forcing_file_path(parsed_args)
+        if !isfile(external_forcing_file) ||
+           !check_daily_forcing_times(external_forcing_file, parsed_args)
+            @info "External forcing file $(external_forcing_file) does not exist or does not cover the expected time range. Generating it now."
+            generate_multiday_era5_external_forcing_file(
+                parsed_args,
+                external_forcing_file,
+                FT,
+                input_data_dir = joinpath(
+                    @clima_artifact("era5_hourly_atmos_raw"),
+                    "daily",
+                ),
+            )
+        end
+        return Setups.InterpolatedColumnProfile(
+            external_forcing_file,
             parsed_args["start_date"],
         )
-    elseif parsed_args["initial_condition"] == "WeatherModel"
-        return ICs.WeatherModel(
+    elseif ic_name == "WeatherModel"
+        return Setups.WeatherModel(
             parsed_args["start_date"],
             parsed_args["era5_initial_condition_dir"],
         )
-    elseif parsed_args["initial_condition"] == "AMIPFromERA5"
-        return ICs.AMIPFromERA5(parsed_args["start_date"])
-    elseif parsed_args["initial_condition"] == "ShipwayHill2012"
-        return ICs.ShipwayHill2012()
-    else
-        error(
-            "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
+    elseif ic_name == "AMIPFromERA5"
+        return Setups.AMIPFromERA5(parsed_args["start_date"])
+    elseif ic_name == "DecayingProfile"
+        return Setups.DecayingProfile(;
+            perturb = parsed_args["perturb_initstate"],
+            thermo_params,
         )
+    elseif ic_name in
+           ("DryBaroclinicWave", "MoistBaroclinicWave", "MoistBaroclinicWaveWithEDMF")
+        return getproperty(Setups, Symbol(ic_name))(;
+            perturb = parsed_args["perturb_initstate"],
+            deep_atmosphere = parsed_args["deep_atmosphere"],
+        )
+    elseif ic_name in ("Soares", "GATE_III", "DYCOMS_RF01", "DYCOMS_RF02", "TRMM_LBA")
+        return getproperty(Setups, Symbol(ic_name))(;
+            prognostic_tke = parsed_args["prognostic_tke"],
+            thermo_params,
+        )
+    elseif ic_name == "GABLS"
+        return Setups.GABLS(;
+            prognostic_tke = parsed_args["prognostic_tke"],
+            thermo_params,
+        )
+    elseif ic_name == "ISDAC"
+        return Setups.ISDAC(;
+            prognostic_tke = parsed_args["prognostic_tke"],
+            perturb = parsed_args["perturb_initstate"],
+            thermo_params,
+        )
+    elseif ic_name in ("IsothermalProfile", "ConstantBuoyancyFrequencyProfile",
+        "DryDensityCurrentProfile", "RisingThermalBubbleProfile")
+        return getproperty(Setups, Symbol(ic_name))()
+    elseif ic_name == "MoistAdiabaticProfileEDMFX"
+        return Setups.MoistAdiabaticProfileEDMFX(;
+            perturb = parsed_args["perturb_initstate"],
+        )
+    elseif ic_name == "SimplePlume"
+        return Setups.SimplePlume(;
+            prognostic_tke = parsed_args["prognostic_tke"],
+        )
+    elseif ic_name in ("RCEMIPIIProfile_295", "RCEMIPIIProfile_300", "RCEMIPIIProfile_305")
+        return getproperty(Setups, Symbol(ic_name))()
+    elseif ic_name == "PrecipitatingColumn"
+        return Setups.PrecipitatingColumn(; thermo_params)
+    elseif ic_name == "ShipwayHill2012"
+        return Setups.ShipwayHill2012(; thermo_params)
+    elseif isfile(ic_name)
+        return Setups.MoistFromFile(ic_name)
     end
+    error("Unknown initial_condition: $ic_name")
 end
 
 function get_topography(FT, parsed_args)
@@ -485,12 +506,20 @@ function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp
     return (; ᶜu, ᶠu)
 end
 
-function get_surface_setup(parsed_args)
-    parsed_args["surface_setup"] == "GCM" && return SurfaceConditions.GCMDriven(
-        parsed_args["external_forcing_file"],
-        parsed_args["cfsite_number"],
-    )
+function get_surface_setup(parsed_args; setup_type = nothing)
+    if !isnothing(setup_type)
+        return function (params)
+            result = Setups.surface_condition(setup_type, params)
+            if !isnothing(result)
+                return result
+            end
+            return _config_surface_setup(parsed_args)(params)
+        end
+    end
+    return _config_surface_setup(parsed_args)
+end
 
+function _config_surface_setup(parsed_args)
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
 end
 
@@ -823,7 +852,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             T_exp_T_lim! = remaining_tendency!
             T_imp_subproblem! =
                 p.atmos.turbconv_model isa PrognosticEDMFX ?
-                SciMLBase.ODEFunction(
+                CTS.ODEFunction(
                     implicit_tendency_sgs_u₃!;
                     jac_prototype = get_jacobian(ode_algo, Y, atmos,
                         use_dense_jacobian, use_auto_jacobian,
@@ -833,7 +862,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                     ),
                     Wfact = update_jacobian_sgs_u₃!,
                 ) : nothing
-            T_imp! = SciMLBase.ODEFunction(
+            T_imp! = CTS.ODEFunction(
                 implicit_tendency!;
                 jac_prototype = get_jacobian(ode_algo, Y, atmos,
                     use_dense_jacobian, use_auto_jacobian,
@@ -858,15 +887,14 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             initialize_subproblem! = initialize_sgs_u₃!,
         )
     end
-    problem = SciMLBase.ODEProblem(tendency_function, Y, tspan, p)
+    problem = CTS.ODEProblem(tendency_function, Y, tspan, p)
     # Promote to ensure t_begin, t_end, and dt_integrator all have the same type
     # dt_integrator can be ITime when use_itime=true, while p.dt is always FT
     t_begin, t_end, dt = promote(tspan[1], tspan[2], dt_integrator)
     # Save solution to integrator.sol at the beginning and end
     saveat = [t_begin, t_end]
     args = (problem, ode_algo)
-    allow_custom_kwargs = (; kwargshandle = CTS.DiffEqBase.KeywordArgSilent)
-    kwargs = (; saveat, callback, dt, adjustfinal = true, allow_custom_kwargs...)
+    kwargs = (; saveat, callback, dt)
     return (args, kwargs)
 end
 
@@ -995,7 +1023,8 @@ end
 function get_simulation(config::AtmosConfig)
     sim_info = get_sim_info(config)
     params = ClimaAtmosParameters(config)
-    atmos = get_atmos(config, params)
+    setup_type = get_setup_type(config.parsed_args, CAP.thermodynamics_params(params))
+    atmos = get_atmos(config, params; setup_type)
     comms_ctx = get_comms_context(config.parsed_args)
     grid = get_grid(config.parsed_args, params, comms_ctx)
 
@@ -1034,12 +1063,12 @@ function get_simulation(config::AtmosConfig)
     end
     @info "Simulation Grid: $(spaces.center_space.grid)"
     # TODO: add more information about the grid - stretch, etc.
-    initial_condition = get_initial_condition(config.parsed_args, atmos)
-    surface_setup = get_surface_setup(config.parsed_args)
+    surface_setup = get_surface_setup(config.parsed_args; setup_type)
     if !sim_info.restart
         s = @timed_str begin
-            Y = ICs.atmos_state(
-                initial_condition(params),
+            Y = Setups.initial_state(
+                setup_type,
+                params,
                 atmos,
                 spaces.center_space,
                 spaces.face_space,
@@ -1047,13 +1076,8 @@ function get_simulation(config::AtmosConfig)
         end
         @info "Allocating Y: $s"
 
-        # In instances where we wish to interpolate existing datasets, e.g.
-        # NetCDF files containing spatially varying thermodynamic properties,
-        # this call to `overwrite_initial_conditions` overwrites the variables
-        # in `Y` (specific to `initial_condition`) with those computed using the
-        # `SpaceVaryingInputs` tool.
-        CA.InitialConditions.overwrite_initial_conditions!(
-            initial_condition,
+        Setups.overwrite_initial_state!(
+            setup_type,
             Y,
             params.thermodynamics_params,
         )
@@ -1154,9 +1178,9 @@ function get_simulation(config::AtmosConfig)
 
     s = @timed_str begin
         all_callbacks =
-            SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
+            CTS.CallbackSet(continuous_callbacks, discrete_callbacks)
     end
-    @info "Prepared SciMLBase.CallbackSet callbacks: $s"
+    @info "Prepared CTS.CallbackSet callbacks: $s"
     steps_cycle_non_diag = n_steps_per_cycle_per_cb(all_callbacks, sim_info.dt)
     steps_cycle = lcm(steps_cycle_non_diag)
     @info "n_steps_per_cycle_per_cb (non diagnostics): $steps_cycle_non_diag"
@@ -1176,7 +1200,7 @@ function get_simulation(config::AtmosConfig)
     end
 
     s = @timed_str begin
-        integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
+        integrator = CTS.init(integrator_args...; integrator_kwargs...)
     end
     @info "init integrator: $s"
 

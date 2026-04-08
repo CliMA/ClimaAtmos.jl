@@ -465,17 +465,17 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     (; params) = p
     (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_ρq, ᶠradiation_flux) =
         p.radiation
-    (; ᶜq_liq_rai) = p.precomputed
+    (; ᶜq_liq) = p.precomputed
     cp_d = CAP.cp_d(params)
     FT = Spaces.undertype(axes(Y.c))
     NT = NamedTuple{(:z, :ρ, :ρq_tot), NTuple{3, FT}}
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
 
-    # TODO: According to the paper, we should replace ᶜq_liq_rai
+    # TODO: According to the paper, we should replace ᶜq_liq
     # with mixing ratio.
     @. ᶜκρq =
-        radiation_mode.kappa * Y.c.ρ * ᶜq_liq_rai
+        radiation_mode.kappa * Y.c.ρ * ᶜq_liq
 
     Operators.column_integral_definite!(∫_0_∞_κρq, ᶜκρq)
 
@@ -539,11 +539,11 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     thermo_params = CAP.thermodynamics_params(params)
     ᶜdTdt_rad = p.radiation.ᶜdTdt_rad
     ᶜρ = Y.c.ρ
-    (; ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     zc = Fields.coordinate_field(axes(ᶜρ)).z
     @. ᶜdTdt_rad = rad(FT(t), zc)
     @. Yₜ.c.ρe_tot +=
-        ᶜρ * TD.cv_m(thermo_params, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) * ᶜdTdt_rad
+        ᶜρ * TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) * ᶜdTdt_rad
     return nothing
 end
 
@@ -555,10 +555,10 @@ radiation_model_cache(Y, radiation_mode::RadiationISDAC; args...) = (;)  # Don't
 function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationISDAC)
     (; F₀, F₁, κ) = radiation_mode
     (; params, precomputed) = p
-    (; ᶜq_liq_rai) = precomputed
+    (; ᶜq_liq) = precomputed
 
     ᶜρq = p.scratch.ᶜtemp_scalar
-    @. ᶜρq = Y.c.ρ * ᶜq_liq_rai
+    @. ᶜρq = Y.c.ρ * ᶜq_liq
 
     LWP_zₜ = p.scratch.temp_field_level  # column integral of LWP (zₜ = top-of-domain)
     Operators.column_integral_definite!(LWP_zₜ, ᶜρq)

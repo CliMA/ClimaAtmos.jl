@@ -43,14 +43,14 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     ᶠJ = Fields.local_geometry_field(Y.f).J
 
     microphysics_tracers = (
-        (@name(ρq_liq), @name(ᶜwₗ)),
-        (@name(ρq_ice), @name(ᶜwᵢ)),
+        (@name(ρq_lcl), @name(ᶜwₗ)),
+        (@name(ρq_icl), @name(ᶜwᵢ)),
         (@name(ρq_rai), @name(ᶜwᵣ)),
         (@name(ρq_sno), @name(ᶜwₛ)),
     )
     internal_energy_func(name) =
-        (name == @name(ρq_liq) || name == @name(ρq_rai)) ? TD.internal_energy_liquid :
-        (name == @name(ρq_ice) || name == @name(ρq_sno)) ? TD.internal_energy_ice :
+        (name == @name(ρq_lcl) || name == @name(ρq_rai)) ? TD.internal_energy_liquid :
+        (name == @name(ρq_icl) || name == @name(ρq_sno)) ? TD.internal_energy_ice :
         nothing
 
     ᶠρ = p.scratch.ᶠtemp_scalar
@@ -87,16 +87,17 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     # grid-mean energy flux equals the sum of the subdomain (updraft/environment) energy fluxes 
     # by accounting for the energy carried by sedimenting tracers.
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs, ᶜTʲs, ᶜq_tot_safeʲs, ᶜq_liq_raiʲs, ᶜq_ice_snoʲs) = p.precomputed
-        (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+        (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+        (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
 
         ᶜρ⁰ = p.scratch.ᶜtemp_scalar
-        @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰)
+        @. ᶜρ⁰ =
+            TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
 
         # TODO the following code works for only one updraft 
         sgs_microphysics_tracers = (
-            (@name(q_liq), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
-            (@name(q_ice), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
+            (@name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
+            (@name(q_icl), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
             (@name(q_rai), @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
             (@name(q_sno), @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
         )

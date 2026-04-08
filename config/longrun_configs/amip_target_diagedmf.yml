@@ -2,7 +2,6 @@ dt_save_state_to_disk: "30days"
 microphysics_model: "0M"
 rad: "allskywithclear"
 dt_rad: "1hours"
-dt_cloud_fraction: "1hours"
 insolation: "timevarying"
 time_varying_trace_gases: ["CO2", "O3"]
 aerosol_radiation: true

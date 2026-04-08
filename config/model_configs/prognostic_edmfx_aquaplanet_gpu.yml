@@ -5,6 +5,8 @@ dz_bottom: 500.0
 rayleigh_sponge: false
 viscous_sponge: false
 dt: 20secs
+start_date: "20250627"
+initial_condition: "WeatherModel"
 surface_setup: DefaultMoninObukhov
 rad: clearsky
 turbconv: prognostic_edmfx
@@ -26,6 +28,8 @@ approximate_linear_solve_iters: 2
 max_newton_iters_ode_subproblem: 3
 max_newton_iters_ode: 1
 microphysics_model: "0M"
+non_orographic_gravity_wave: true
+orographic_gravity_wave: "raw_topo"
 t_end: 1hours
 dt_save_state_to_disk: 600secs
 toml: [toml/prognostic_edmfx.toml]

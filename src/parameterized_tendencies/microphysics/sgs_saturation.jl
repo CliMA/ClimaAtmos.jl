@@ -125,6 +125,7 @@ NamedTuple with SGS-averaged:
     corr_Tq,
 )
     FT = typeof(T_mean)
+    q_min = TD.Parameters.q_min(thermo_params)
     # Create GPU-safe functor (not a closure)
     evaluator = SaturationAdjustmentEvaluator(thermo_params, ρ)
 
@@ -139,7 +140,7 @@ NamedTuple with SGS-averaged:
     # q_mean. Since q_cond = 0 whenever q_hat = 0, this is equivalent to
     # scaling the integrated condensate by ratio.
     # Clamp ratio ≤ 1: only correct downward (lower-bound truncation).
-    ratio = min(one(FT), q_mean / max(result.q_tot_quad, q_min(FT)))
+    ratio = min(one(FT), q_mean / max(result.q_tot_quad, q_min))
     q_liq = result.q_liq * ratio
     q_ice = result.q_ice * ratio
 

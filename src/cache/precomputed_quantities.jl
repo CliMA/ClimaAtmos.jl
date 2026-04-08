@@ -17,9 +17,9 @@ The following grid-scale quantities are treated implicitly and are precomputed:
     - `ᶠu`: contravariant velocity on cell faces
     - `ᶜK`: kinetic energy on cell centers
     - `ᶜT`: air temperature on cell centers
-    - `ᶜq_tot_safe`: total water specific humidity on cell centers
-    - `ᶜq_liq_rai`: liquid water specific humidity on cell centers
-    - `ᶜq_ice_sno`: ice specific humidity on cell centers
+    - `ᶜq_tot_nonneg`: total water specific humidity, clipped to ≥ 0
+    - `ᶜq_liq`: total liquid water (cloud liquid + rain), clipped to ≥ 0
+    - `ᶜq_ice`: total ice water (cloud ice + snow), clipped to ≥ 0
     - `ᶜp`: air pressure on cell centers
 If the `turbconv_model` is `PrognosticEDMFX`, there also two SGS versions of
 every quantity except for `ᶜp` (which is shared across all subdomains):
@@ -52,16 +52,16 @@ function implicit_precomputed_quantities(Y, atmos)
     moist_gs_quantities =
         if microphysics_model isa EquilibriumMicrophysics0M
             (;
-                ᶜq_tot_safe = similar(Y.c, FT),
-                ᶜq_liq_rai = similar(Y.c, FT),
-                ᶜq_ice_sno = similar(Y.c, FT),
+                ᶜq_tot_nonneg = similar(Y.c, FT),
+                ᶜq_liq = similar(Y.c, FT),
+                ᶜq_ice = similar(Y.c, FT),
                 ᶜsa_result = similar(Y.c, sa_result_type),
             )
         else  # DryModel or NonEquilibriumMicrophysics
             (;
-                ᶜq_tot_safe = similar(Y.c, FT),
-                ᶜq_liq_rai = similar(Y.c, FT),
-                ᶜq_ice_sno = similar(Y.c, FT),
+                ᶜq_tot_nonneg = similar(Y.c, FT),
+                ᶜq_liq = similar(Y.c, FT),
+                ᶜq_ice = similar(Y.c, FT),
             )
         end
     sgs_quantities = (;)
@@ -74,31 +74,24 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜK⁰ = similar(Y.c, FT),
             ᶜT⁰ = similar(Y.c, FT),
-            ᶜq_tot_safe⁰ = similar(Y.c, FT),
-            ᶜq_liq_rai⁰ = similar(Y.c, FT),
-            ᶜq_ice_sno⁰ = similar(Y.c, FT),
+            ᶜq_tot_nonneg⁰ = similar(Y.c, FT),
+            ᶜq_liq⁰ = similar(Y.c, FT),
+            ᶜq_ice⁰ = similar(Y.c, FT),
             ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
             ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
             ᶠKᵥʲs = similar(Y.f, NTuple{n, FT}),
             ᶜTʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_tot_safeʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_liq_raiʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_ice_snoʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_tot_nonnegʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
     # Microphysics quantities that are written during set_implicit_precomputed_quantities!
     # and depend on Y (through ρa⁰), so they need Dual-typed copies for autodiff.
-    implicit_mp_quantities =
-        if atmos.microphysics_tendency_timestepping == Implicit() &&
-           microphysics_model isa EquilibriumMicrophysics0M
-            (;
-                ᶜS_ρq_tot = similar(Y.c, FT),
-                ᶜS_ρe_tot = similar(Y.c, FT),
-            )
-        else
-            (;)
-        end
+    # TODO - are they not needed?
+    implicit_mp_quantities = (;)
+
     # Surface precipitation fluxes need Dual-typed copies so that
     # set_precipitation_surface_fluxes! can be called during the implicit
     # stage (AD writes Dual values into these fields).
@@ -179,58 +172,56 @@ function precomputed_quantities(Y, atmos)
     sedimentation_quantities =
         atmos.microphysics_model isa NonEquilibriumMicrophysics ?
         (; ᶜwₗ = similar(Y.c, FT), ᶜwᵢ = similar(Y.c, FT)) : (;)
+
+    # Helper named tuples for microphysics cache
+    MP0_NT = @NamedTuple{dq_tot_dt::FT, e_tot_hlpr::FT}
+    MP1_NT = @NamedTuple{
+        dq_lcl_dt::FT, dq_icl_dt::FT, dq_rai_dt::FT, dq_sno_dt::FT,
+    }
+    MP23_NT = @NamedTuple{
+        dq_lcl_dt::FT, dn_lcl_dt::FT, dq_rai_dt::FT, dn_rai_dt::FT,
+        dq_ice_dt::FT, dq_rim_dt::FT, db_rim_dt::FT,
+    }
+    ∂MP1_NT = @NamedTuple{
+        ∂tendency_∂q_lcl::FT,
+        ∂tendency_∂q_icl::FT,
+        ∂tendency_∂q_rai::FT,
+        ∂tendency_∂q_sno::FT,
+    }
+    ∂MP23_NT = @NamedTuple{
+        ∂tendency_∂q_lcl::FT,
+        ∂tendency_∂n_lcl::FT,
+        ∂tendency_∂q_rai::FT,
+        ∂tendency_∂n_rai::FT,
+    }
+
     if atmos.microphysics_model isa EquilibriumMicrophysics0M
         precipitation_quantities = (;
-            ᶜS_ρq_tot = similar(Y.c, FT),
-            ᶜS_ρe_tot = similar(Y.c, FT),
-            ᶜmp_tendency = similar(Y.c,
-                @NamedTuple{dq_tot_dt::FT, e_int_precip::FT}),
+            ᶜmp_tendency = similar(Y.c, MP0_NT),
+            ᶜρ_dq_tot_dt = similar(Y.c, FT), # Used in implicit tendency and surface fluxes
+            ᶜρ_de_tot_dt = similar(Y.c, FT),
+            ᶜ∂tendency_∂q_tot = similar(Y.c, FT),
         )
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         precipitation_quantities = (;
+            ᶜwₗ = similar(Y.c, FT),
+            ᶜwᵢ = similar(Y.c, FT),
             ᶜwᵣ = similar(Y.c, FT),
             ᶜwₛ = similar(Y.c, FT),
-            ᶜSqₗᵐ = similar(Y.c, FT),
-            ᶜSqᵢᵐ = similar(Y.c, FT),
-            ᶜSqᵣᵐ = similar(Y.c, FT),
-            ᶜSqₛᵐ = similar(Y.c, FT),
-            ᶜmp_tendency = similar(Y.c,
-                @NamedTuple{dq_lcl_dt::FT, dq_icl_dt::FT, dq_rai_dt::FT, dq_sno_dt::FT}
-            ),
-            ᶜmp_derivative = similar(Y.c,
-                @NamedTuple{
-                    ∂tendency_∂q_lcl::FT,
-                    ∂tendency_∂q_icl::FT,
-                }
-            ),
+            ᶜmp_tendency = similar(Y.c, MP1_NT),
+            ᶜmp_derivative = similar(Y.c, ∂MP1_NT),
         )
     elseif atmos.microphysics_model isa
            Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3}
         # 2-moment microphysics
         precipitation_quantities = (;
+            ᶜwₗ = similar(Y.c, FT),
+            ᶜwᵢ = similar(Y.c, FT),
             ᶜwᵣ = similar(Y.c, FT),
             ᶜwₛ = similar(Y.c, FT),
-            ᶜSqₗᵐ = similar(Y.c, FT),
-            ᶜSqᵢᵐ = similar(Y.c, FT),
-            ᶜSqᵣᵐ = similar(Y.c, FT),
-            ᶜSqₛᵐ = similar(Y.c, FT),
             ᶜwₙₗ = similar(Y.c, FT),
             ᶜwₙᵣ = similar(Y.c, FT),
-            ᶜSnₗᵐ = similar(Y.c, FT),
-            ᶜSnᵣᵐ = similar(Y.c, FT),
-            ᶜmp_tendency = similar(Y.c,
-                @NamedTuple{
-                    dq_lcl_dt::FT, dn_lcl_dt::FT,
-                    dq_rai_dt::FT, dn_rai_dt::FT,
-                    dq_ice_dt::FT, dq_rim_dt::FT, db_rim_dt::FT,
-                }
-            ),
-            ᶜmp_derivative = similar(Y.c,
-                @NamedTuple{
-                    ∂tendency_∂q_lcl::FT,
-                    ∂tendency_∂n_lcl::FT,
-                }
-            ),
+            ᶜmp_tendency = similar(Y.c, MP23_NT),
         )
         # Add additional quantities for 2M + P3
         if atmos.microphysics_model isa NonEquilibriumMicrophysics2MP3
@@ -238,7 +229,6 @@ function precomputed_quantities(Y, atmos)
                 # liquid quantities (2M warm rain)
                 precipitation_quantities...,
                 # ice quantities (P3)
-                ᶜwᵢ = similar(Y.c, FT),
                 ᶜwnᵢ = similar(Y.c, FT),
                 ᶜlogλ = similar(Y.c, FT),
                 ᶜScoll = similar(Y.c,
@@ -252,62 +242,52 @@ function precomputed_quantities(Y, atmos)
     else
         precipitation_quantities = (;)
     end
-    # Zero-initialize derivatives to prevent NaN from uninitialized memory
-    # (PrognosticEDMFX paths may not compute ᶜmp_derivative)
-    if haskey(precipitation_quantities, :ᶜmp_derivative)
-        parent(precipitation_quantities.ᶜmp_derivative) .= 0
-    end
-    precipitation_sgs_quantities =
-        atmos.microphysics_model isa EquilibriumMicrophysics0M ?
-        (; ᶜSqₜᵐʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵐ⁰ = similar(Y.c, FT)) :
-        atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
-        (;
-            ᶜSqₗᵐʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSqᵢᵐʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSqᵣᵐʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSqₛᵐʲs = similar(Y.c, NTuple{n, FT}),
-            # BMT cloud derivatives ∂(dq_lcl/dt)/∂q_lcl and ∂(dq_icl/dt)/∂q_icl
-            # evaluated at each updraft state (same pattern as grid-mean ᶜmp_derivative).
-            # Precipitation (q_rai, q_sno) Jacobian is computed inline in
-            # update_microphysics_jacobian! using S/q with the current iterate.
-            ᶜ∂Sqₗʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜ∂Sqᵢʲs = similar(Y.c, NTuple{n, FT}),
+    if atmos.microphysics_model isa EquilibriumMicrophysics0M
+        precipitation_sgs_quantities = (;
+            ᶜmp_tendencyʲs = similar(Y.c, NTuple{n, MP0_NT}),
+            ᶜ∂tendency_∂q_totʲs = similar(Y.c, NTuple{n, FT}),
+        )
+        if atmos.turbconv_model isa PrognosticEDMFX
+            precipitation_sgs_quantities = (;
+                precipitation_sgs_quantities...,
+                ᶜmp_tendency⁰ = similar(Y.c, MP0_NT),
+            )
+        end
+    elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
+        precipitation_sgs_quantities = (;
+            ᶜmp_tendencyʲs = similar(Y.c, NTuple{n, MP1_NT}),
+            ᶜmp_derivativeʲs = similar(Y.c, NTuple{n, ∂MP1_NT}),
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSqₗᵐ⁰ = similar(Y.c, FT),
-            ᶜSqᵢᵐ⁰ = similar(Y.c, FT),
-            ᶜSqᵣᵐ⁰ = similar(Y.c, FT),
-            ᶜSqₛᵐ⁰ = similar(Y.c, FT),
-        ) :
-        atmos.microphysics_model isa NonEquilibriumMicrophysics2M ?
-        (;
-            ᶜSqₗᵐʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSqᵢᵐʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSqᵣᵐʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSqₛᵐʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSnₗᵐʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSnᵣᵐʲs = similar(Y.c, NTuple{n, FT}),
+        )
+        if atmos.turbconv_model isa PrognosticEDMFX
+            precipitation_sgs_quantities = (;
+                precipitation_sgs_quantities...,
+                ᶜmp_tendency⁰ = similar(Y.c, MP1_NT),
+            )
+        end
+    elseif atmos.microphysics_model isa NonEquilibriumMicrophysics2M
+        precipitation_sgs_quantities = (;
+            ᶜmp_tendencyʲs = similar(Y.c, NTuple{n, MP23_NT}),
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₙₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₙᵣʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSqₗᵐ⁰ = similar(Y.c, FT),
-            ᶜSqᵢᵐ⁰ = similar(Y.c, FT),
-            ᶜSqᵣᵐ⁰ = similar(Y.c, FT),
-            ᶜSqₛᵐ⁰ = similar(Y.c, FT),
-            ᶜSnₗᵐ⁰ = similar(Y.c, FT),
-            ᶜSnᵣᵐ⁰ = similar(Y.c, FT),
-        ) : (;)
-    # Zero-initialize updraft cloud Jacobian derivatives to prevent NaN from
-    # uninitialized memory before the first call to set_microphysics_tendency_cache!
-    if haskey(precipitation_sgs_quantities, :ᶜ∂Sqₗʲs)
-        parent(precipitation_sgs_quantities.ᶜ∂Sqₗʲs) .= 0
-        parent(precipitation_sgs_quantities.ᶜ∂Sqᵢʲs) .= 0
+        )
+        if atmos.turbconv_model isa PrognosticEDMFX
+            precipitation_sgs_quantities = (;
+                precipitation_sgs_quantities...,
+                ᶜmp_tendency⁰ = similar(Y.c, MP23_NT),
+            )
+        end
+    else
+        precipitation_sgs_quantities = (;)
     end
+
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
@@ -332,8 +312,8 @@ function precomputed_quantities(Y, atmos)
     diagnostic_precipitation_sgs_quantities =
         atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
         (;
-            ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_lclʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_iclʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_raiʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_snoʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
@@ -346,9 +326,9 @@ function precomputed_quantities(Y, atmos)
             ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
             ᶜTʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_tot_safeʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_liq_raiʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_ice_snoʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_tot_nonnegʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             ᶜmseʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_totʲs = similar(Y.c, NTuple{n, FT}),
@@ -532,7 +512,8 @@ quantities are updated.
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, microphysics_model) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno, ᶜh_tot, ᶜp) = p.precomputed
+    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp) =
+        p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -567,56 +548,85 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     if microphysics_model isa EquilibriumMicrophysics0M
         # Compute thermodynamic state variables using combined getter function.
         # This avoids redundant saturation_adjustment calls for EquilibriumMicrophysics0M.
-        @. ᶜq_tot_safe = max(0, specific(Y.c.ρq_tot, Y.c.ρ))
+        @. ᶜq_tot_nonneg = max(0, specific(Y.c.ρq_tot, Y.c.ρ))
         (; ᶜsa_result) = p.precomputed
         @. ᶜsa_result =
-            saturation_adjustment_tuple(thermo_params, TD.ρe(), Y.c.ρ, ᶜe_int, ᶜq_tot_safe)
+            saturation_adjustment_tuple(
+                thermo_params,
+                TD.ρe(),
+                Y.c.ρ,
+                ᶜe_int,
+                ᶜq_tot_nonneg,
+            )
         @. ᶜT = ᶜsa_result.T
-        @. ᶜq_liq_rai = ᶜsa_result.q_liq
-        @. ᶜq_ice_sno = ᶜsa_result.q_ice
+        @. ᶜq_liq = ᶜsa_result.q_liq
+        @. ᶜq_ice = ᶜsa_result.q_ice
 
         # Two-pass SGS: recompute condensate using SGS quadrature over (T, q_tot)
         sgs_quad = p.atmos.sgs_quadrature
         if !isnothing(sgs_quad)
             (; ᶜT′T′, ᶜq′q′) = p.precomputed
+            corr_Tq = correlation_Tq(p.params)
             @. ᶜsa_result = compute_sgs_saturation_adjustment(
                 thermo_params,
                 $(sgs_quad),
                 Y.c.ρ,
                 ᶜT,
-                ᶜq_tot_safe,
+                ᶜq_tot_nonneg,
                 ᶜT′T′,
                 ᶜq′q′,
-                correlation_Tq(p.params),
+                corr_Tq,
             )
-            @. ᶜq_liq_rai = ᶜsa_result.q_liq
-            @. ᶜq_ice_sno = ᶜsa_result.q_ice
+            @. ᶜq_liq = ᶜsa_result.q_liq
+            @. ᶜq_ice = ᶜsa_result.q_ice
         end
     else  # DryModel or NonEquilibriumMicrophysics
         # For DryModel: q values are set to zero
         # For NonEquilibriumMicrophysics: q values are computed from state variables
         if microphysics_model isa DryModel
-            @. ᶜq_tot_safe = zero(eltype(ᶜT))
-            @. ᶜq_liq_rai = zero(eltype(ᶜT))
-            @. ᶜq_ice_sno = zero(eltype(ᶜT))
+            @. ᶜq_tot_nonneg = zero(eltype(ᶜT))
+            @. ᶜq_liq = zero(eltype(ᶜT))
+            @. ᶜq_ice = zero(eltype(ᶜT))
         else  # NonEquilibriumMicrophysics
-            @. ᶜq_liq_rai =
-                max(0, specific(Y.c.ρq_liq, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
-            @. ᶜq_ice_sno =
-                max(0, specific(Y.c.ρq_ice, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
+            @. ᶜq_liq =
+                max(0, specific(Y.c.ρq_lcl, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
+            @. ᶜq_ice =
+                max(0, specific(Y.c.ρq_icl, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-            @. ᶜq_tot_safe = max(ᶜq_liq_rai + ᶜq_ice_sno, specific(Y.c.ρq_tot, Y.c.ρ))
+            @. ᶜq_tot_nonneg =
+                max(ᶜq_liq + ᶜq_ice, specific(Y.c.ρq_tot, Y.c.ρ))
         end
         # Floor T to prevent negative pressure during implicit Newton iterations
+        T_min_sgs = CAP.T_min_sgs(p.params)
         @. ᶜT = max(
-            CAP.T_min_sgs(p.params),
-            TD.air_temperature(thermo_params, ᶜe_int, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno),
+            T_min_sgs,
+            TD.air_temperature(
+                thermo_params,
+                ᶜe_int,
+                ᶜq_tot_nonneg,
+                ᶜq_liq,
+                ᶜq_ice,
+            ),
         )
     end
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
     @. ᶜh_tot =
-        TD.total_enthalpy(thermo_params, ᶜe_tot, ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno)
+        TD.total_enthalpy(
+            thermo_params,
+            ᶜe_tot,
+            ᶜT,
+            ᶜq_tot_nonneg,
+            ᶜq_liq,
+            ᶜq_ice,
+        )
+    @. ᶜp = TD.air_pressure(
+        thermo_params,
+        ᶜT,
+        Y.c.ρ,
+        ᶜq_tot_nonneg,
+        ᶜq_liq,
+        ᶜq_ice,
+    )
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
@@ -643,39 +653,12 @@ current state `Y`. This is only called before each evaluation of
 `implicit_tendency!` and `remaining_tendency!`.
 """
 NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
-    (; turbconv_model, cloud_model, microphysics_model) = p.atmos
+    (; turbconv_model) = p.atmos
 
-    thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
 
     if !isnothing(p.sfc_setup)
         SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
-    end
-
-    if turbconv_model isa AbstractEDMF
-        (; ᶜT, ᶜq_tot_safe, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
-        @. p.precomputed.ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_safe))
-        @. p.precomputed.ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
-            ᶠinterp(
-                TD.liquid_ice_pottemp(
-                    thermo_params,
-                    ᶜT,
-                    Y.c.ρ,
-                    ᶜq_tot_safe,
-                    ᶜq_liq_rai,
-                    ᶜq_ice_sno,
-                ),
-            ),
-        )
-    end
-
-    # The buoyancy gradient depends on the cloud fraction, and the cloud fraction
-    # depends on the mixing length, which depends on the buoyancy gradient.
-    # We break this circular dependency by using cloud fraction from the previous time step in the
-    # buoyancy gradient calculation. This breaks reproducible restart in general,
-    # but we support reproducible restart by recalculating the cloud fraction with GridScaleCloud here.
-    if p.atmos.numerics.reproducible_restart isa ReproducibleRestart
-        set_cloud_fraction!(Y, p, microphysics_model, GridScaleCloud())
     end
 
     if turbconv_model isa PrognosticEDMFX
@@ -692,10 +675,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         # TODO do I need env precipitation/cloud formation here?
     end
 
-    # Cache SGS covariances (no-op for dry/0M/GridScaleCloud configs).
-    # For EDMF: gradients are precomputed in the closures above.
-    # For non-EDMF: gradients are computed inside set_covariance_cache!.
-    set_covariance_cache!(Y, p, thermo_params)
+    set_covariance_cache_and_cloud_fraction!(Y, p)
 
     # Cache precipitation terminal velocities for grid mean and prognostic EDMF updrafts.
     set_precipitation_velocities!(
@@ -718,8 +698,6 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # Compute surface precipitation fluxes (has to be after microphysics_sources_cache
     # because for the 0 moment microphysics it's an integral of the q_tot sink).
     set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
-
-    set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
 
     set_smagorinsky_lilly_precomputed_quantities!(Y, p, p.atmos.smagorinsky_lilly)
 

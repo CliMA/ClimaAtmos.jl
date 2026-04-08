@@ -1,7 +1,7 @@
 import ClimaCore: Grids
 import ClimaUtilities.TimeManager: ITime
 import ClimaAtmos.Diagnostics as CAD
-import .InitialConditions as ICs
+import .Setups
 
 struct AtmosSimulation{TT, S1 <: AbstractString, S2 <: AbstractString, OW, OD}
     job_id::S1
@@ -116,20 +116,91 @@ end
 
 """
     AtmosSimulation(config::AtmosConfig)
-    AtmosSimulation(; kwargs...)
 
-Construct a simulation.
+Construct a simulation from a YAML-based configuration.
 """
 function AtmosSimulation(config::AtmosConfig)
     return get_simulation(config)
 end
 
+"""
+    AtmosSimulation{FT}(; kwargs...) where {FT}
+
+Construct an atmospheric simulation with floating-point type `FT`.
+
+## Keyword Arguments
+
+### Model and domain
+- `model::AtmosModel = AtmosModel()`: Physics and parameterization configuration.
+- `params::ClimaAtmosParameters = ClimaAtmosParameters(FT)`: Physical parameters.
+- `grid::AbstractGrid = SphereGrid(FT; ...)`: Computational grid.
+  Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or [`SphereGrid`](@ref).
+- `initial_condition = Setups.DecayingProfile(; perturb=true, params)`: Setup defining the
+  initial state. See [Setups](@ref "Setups") for available options.
+- `surface_setup = DefaultExchangeCoefficients()`: Surface exchange parameterization.
+
+### Time
+- `dt = 600`: Timestep in seconds.
+- `t_start = 0`: Start time in seconds.
+- `t_end = 864000`: End time in seconds (default: 10 days).
+- `start_date = DateTime(2010, 1, 1)`: Calendar reference date.
+- `itime::Bool = false`: Use integer time representation for exact time arithmetic.
+
+### Output
+- `job_id::String = "atmos_sim"`: Run identifier, used in output directory naming.
+- `output_dir = nothing`: Output directory path. Auto-generated from `job_id` if `nothing`.
+- `output_dir_style = "activelink"`: Output directory organization style.
+- `checkpoint_frequency = Inf`: How often to save restart checkpoints (seconds).
+- `log_to_file::Bool = false`: Write log output to a file in `output_dir`.
+
+### Diagnostics
+- `default_diagnostics::Bool = true`: Enable standard ClimaAtmos diagnostics.
+- `diagnostics = ()`: Additional diagnostics. Can be `ScheduledDiagnostic` objects or
+  YAML-style diagnostic specifications.
+
+### Callbacks
+- `default_callbacks::Bool = true`: Enable common simulation callbacks.
+- `callbacks = ()`: Additional user-provided callbacks.
+- `callback_kwargs = ()`: Extra keyword arguments forwarded to default callbacks.
+
+### Restarts
+- `restart_file = nothing`: Path to a restart file to resume from.
+- `detect_restart_file::Bool = false`: Automatically detect the latest restart file in
+  a structured output directory.
+
+### Numerics
+- `ode_config`: ODE solver algorithm. Default: `IMEXAlgorithm(ARS343(), NewtonsMethod(...))`.
+- `use_dense_jacobian::Bool = false`: Use a dense Jacobian matrix.
+- `use_auto_jacobian::Bool = false`: Use automatic differentiation for the Jacobian.
+- `approximate_linear_solve_iters::Int = 1`: Number of approximate linear solve iterations.
+- `auto_jacobian_padding_bands::Int = 0`: Extra bandwidth for auto-differentiated Jacobian.
+- `debug_jacobian::Bool = false`: Enable Jacobian debugging output.
+- `tracers = []`: Additional tracer species.
+
+## Example
+
+```julia
+import ClimaAtmos as CA
+
+# Minimal: 1-day global simulation with defaults
+simulation = CA.AtmosSimulation{Float64}(; t_end = 86400)
+CA.solve_atmos!(simulation)
+
+# Single-column BOMEX case
+simulation = CA.AtmosSimulation{Float64}(;
+    grid = CA.ColumnGrid(Float64; z_elem = 60, z_max = 3000.0),
+    initial_condition = CA.Setups.Bomex(),
+    dt = 5,
+    t_end = 3600 * 6,
+)
+```
+"""
 function AtmosSimulation{FT}(;
     model = AtmosModel(),
     params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(FT),
     context::ClimaComms.AbstractCommsContext = ClimaComms.context(),
     grid::Grids.AbstractGrid = SphereGrid(FT; radius = CAP.planet_radius(params), context),
-    initial_condition::ICs.InitialCondition = InitialConditions.DecayingProfile(),
+    initial_condition = Setups.DecayingProfile(; perturb = true, params),
     dt = 600,
     start_date = DateTime(2010, 1, 1),
     t_start = 0,
@@ -196,12 +267,12 @@ function AtmosSimulation{FT}(;
     else
         dt, t_start, t_end = convert_time_args(dt, t_start, t_end, itime, start_date, FT)
         spaces = get_spaces(grid)
-        Y = ICs.atmos_state(
-            initial_condition(params), model,
+        Y = Setups.initial_state(
+            initial_condition, params, model,
             spaces.center_space,
             spaces.face_space,
         )
-        InitialConditions.overwrite_initial_conditions!(
+        Setups.overwrite_initial_state!(
             initial_condition, Y, params.thermodynamics_params,
         )
     end
@@ -232,7 +303,7 @@ function AtmosSimulation{FT}(;
         callbacks
     end
     continuous_callbacks = ()
-    callback_set = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
+    callback_set = CTS.CallbackSet(continuous_callbacks, discrete_callbacks)
 
     integrator_args, integrator_kwargs = args_integrator(
         Y, p, (t_start, t_end), ode_config,
@@ -243,7 +314,7 @@ function AtmosSimulation{FT}(;
         dt,
     )
 
-    integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
+    integrator = CTS.init(integrator_args...; integrator_kwargs...)
 
     # Set up diagnostics and writers
     all_diagnostics, writers, periods_reductions = setup_diagnostics_and_writers(

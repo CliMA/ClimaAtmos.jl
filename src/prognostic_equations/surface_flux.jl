@@ -106,7 +106,7 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
     FT = eltype(Y)
     (; params) = p
     (; turbconv_model) = p.atmos
-    (; sfc_conditions, ᶜT, ᶜq_liq_rai, ᶜq_ice_sno) = p.precomputed
+    (; sfc_conditions, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
 
     if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)

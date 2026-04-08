@@ -88,13 +88,14 @@ function _allocs_cloud_fraction_sd(thp)
     FT = Float64
     T = FT(280.0)
     ρ = FT(1.0)
+    q_min = FT(1e-10)
     CA.compute_cloud_fraction_sd(
         thp, T, ρ, FT(0.011), FT(1e-3), FT(0), FT(1), FT(1e-6), FT(0), FT(1),
-        CA.GaussianSGS(),
+        q_min, CA.GaussianSGS(),
     )
     return @allocated CA.compute_cloud_fraction_sd(
         thp, T, ρ, FT(0.011), FT(1e-3), FT(0), FT(1), FT(1e-6), FT(0), FT(1),
-        CA.GaussianSGS(),
+        q_min, CA.GaussianSGS(),
     )
 end
 
@@ -106,11 +107,21 @@ end
 function _allocs_bmt_0m(mp, thp)
     FT = Float64
     T = FT(280.0)
+    ρ = FT(1.0)
     q_liq = FT(0.001)
     q_ice = FT(0.0005)
-    BMT.bulk_microphysics_tendencies(BMT.Microphysics0Moment(), mp, thp, T, q_liq, q_ice)
+    q_vap_sat = TD.q_vap_saturation(thp, T, ρ)
+    BMT.bulk_microphysics_tendencies(
+        BMT.Microphysics0Moment(),
+        mp,
+        thp,
+        T,
+        q_liq,
+        q_ice,
+        q_vap_sat,
+    )
     return @allocated BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics0Moment(), mp, thp, T, q_liq, q_ice,
+        BMT.Microphysics0Moment(), mp, thp, T, q_liq, q_ice, q_vap_sat,
     )
 end
 
@@ -138,6 +149,7 @@ function _allocs_sgs_sat_adj(thp, quad)
     T′T′ = FT(1.0)
     q′q′ = FT(1e-6)
     corr_Tq = FT(0.6)
+    q_min = FT(1e-10)
     ClimaAtmos.compute_sgs_saturation_adjustment(
         thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq,
     )
@@ -148,7 +160,7 @@ end
 
 # NOTE: closure-based tests are omitted here because Julia closures inherently
 # allocate ~352 bytes from closure capture. In production, integrate_over_sgs
-# is always called with functors (e.g. MicrophysicsEvaluator), which are
+# is always called with functors (e.g. Microphysics1MEvaluator), which are
 # zero-allocation.
 
 struct TestEvaluator{FT}
@@ -281,6 +293,7 @@ end
                     "microphysics_model" => "2M",
                     "config" => "column",
                     "output_default_diagnostics" => false,
+                    "use_sgs_quadrature" => false,
                     "prescribed_aerosols" => ["SSLT01"],
                 ),
                 job_id = "alloc_2M",

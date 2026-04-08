@@ -32,16 +32,26 @@ import ClimaAtmos: limit_sink
                 @testset "dq_tot_dt is always ≤ 0 (sink)" begin
                     # Condensate present → precipitation removes water (sink)
                     T = FT(280.0)
+                    ρ = FT(1.0)
                     q_liq = FT(0.001)
                     q_ice = FT(0.0005)
 
+                    # 3-arg form (condensate threshold)
                     result = BMT.bulk_microphysics_tendencies(
                         BMT.Microphysics0Moment(),
                         mp, thp, T, q_liq, q_ice,
                     )
-                    @test result.dq_tot_dt <= FT(0)
-                    @test isfinite(result.dq_tot_dt)
-                    @test isfinite(result.e_int_precip)
+                    @test result <= FT(0)
+                    @test isfinite(result)
+
+                    # 4-arg form (supersaturation threshold)
+                    q_vap_sat = TD.q_vap_saturation(thp, T, ρ)
+                    result_sat = BMT.bulk_microphysics_tendencies(
+                        BMT.Microphysics0Moment(),
+                        mp, thp, T, q_liq, q_ice, q_vap_sat,
+                    )
+                    @test result_sat <= FT(0)
+                    @test isfinite(result_sat)
                 end
 
                 @testset "dq_tot_dt is zero when no condensate" begin
@@ -49,7 +59,7 @@ import ClimaAtmos: limit_sink
                         BMT.Microphysics0Moment(),
                         mp, thp, FT(280.0), FT(0), FT(0),
                     )
-                    @test result.dq_tot_dt == FT(0)
+                    @test result == FT(0)
                 end
 
                 @testset "limit_sink preserves sign from BMT" begin
@@ -62,7 +72,7 @@ import ClimaAtmos: limit_sink
                         BMT.Microphysics0Moment(),
                         mp, thp, T, q_liq, q_ice,
                     )
-                    limited = limit_sink(bmt_result.dq_tot_dt, q_tot, dt, 1)
+                    limited = limit_sink(bmt_result, q_tot, dt, 1)
 
                     # limit_sink should keep the tendency negative (sink)
                     @test limited <= FT(0)
@@ -85,7 +95,7 @@ import ClimaAtmos: limit_sink
                         BMT.Microphysics0Moment(),
                         mp, thp, T, q_liq, q_ice,
                     )
-                    limited = limit_sink(bmt_result.dq_tot_dt, q_tot, dt, 1)
+                    limited = limit_sink(bmt_result, q_tot, dt, 1)
 
                     # Should still be a sink
                     @test limited <= FT(0)
@@ -99,10 +109,17 @@ import ClimaAtmos: limit_sink
                         BMT.Microphysics0Moment(),
                         mp, thp, FT(280.0), FT(0.001), FT(0.0005),
                     )
-                    @test typeof(result.dq_tot_dt) == FT
-                    @test typeof(result.e_int_precip) == FT
+                    @test typeof(result) == FT
 
-                    limited = limit_sink(result.dq_tot_dt, FT(0.01), FT(60.0), 1)
+                    # 4-arg form
+                    q_vap_sat = TD.q_vap_saturation(thp, FT(280.0), FT(1.0))
+                    result_sat = BMT.bulk_microphysics_tendencies(
+                        BMT.Microphysics0Moment(),
+                        mp, thp, FT(280.0), FT(0.001), FT(0.0005), q_vap_sat,
+                    )
+                    @test typeof(result_sat) == FT
+
+                    limited = limit_sink(result, FT(0.01), FT(60.0), 1)
                     @test typeof(limited) == FT
                 end
             end
@@ -221,12 +238,12 @@ import ClimaAtmos: limit_sink
         end
     end
 
-    @testset "MicrophysicsEvaluator Condensate Logic" begin
+    @testset "Microphysics1MEvaluator Condensate Logic" begin
         import CloudMicrophysics.Parameters as CMP
         import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
         import Thermodynamics as TD
         import ClimaParams as CP
-        using ClimaAtmos: MicrophysicsEvaluator
+        using ClimaAtmos: Microphysics1MEvaluator
 
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
@@ -243,11 +260,10 @@ import ClimaAtmos: limit_sink
                     q_tot_sub = q_sat_mean - FT(0.002)
                     excess_sub = q_tot_sub - q_sat_mean  # -0.002
 
-                    eval_sub = MicrophysicsEvaluator(
+                    eval_sub = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(),
-                        mp, thp, ρ, T_mean, q_tot_sub,
+                        mp, thp, ρ, T_mean,
                         FT(0), FT(0), FT(0), FT(0),
-                        FT(0), q_sat_mean, excess_sub,
                         (),
                     )
 
@@ -255,13 +271,9 @@ import ClimaAtmos: limit_sink
                     q_tot_hat = q_sat_mean + FT(0.001)
                     result = eval_sub(T_mean, q_tot_hat)
 
-                    # Expected: q_cond_hat = max(0, 0.001) = 0.001
-                    λ = TD.liquid_fraction(thp, T_mean, FT(0), FT(0))
-                    q_cond_expected = FT(0.001)
                     res_expected = BMT.bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
-                        q_tot_hat, λ * q_cond_expected,
-                        (1 - λ) * q_cond_expected, FT(0), FT(0),
+                        q_tot_hat, FT(0), FT(0), FT(0), FT(0),
                     )
                     @test result.dq_lcl_dt ≈ res_expected.dq_lcl_dt rtol = FT(1e-4)
                     @test result.dq_icl_dt ≈ res_expected.dq_icl_dt rtol = FT(1e-4)
@@ -273,11 +285,10 @@ import ClimaAtmos: limit_sink
                     excess_sat = q_tot_sat - q_sat_mean  # +0.002
                     λ = TD.liquid_fraction(thp, T_mean, FT(0), FT(0))
 
-                    eval_sat = MicrophysicsEvaluator(
+                    eval_sat = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(),
-                        mp, thp, ρ, T_mean, q_tot_sat,
+                        mp, thp, ρ, T_mean,
                         λ * excess_sat, (1 - λ) * excess_sat, FT(0), FT(0),
-                        excess_sat, q_sat_mean, excess_sat,
                         (),
                     )
 

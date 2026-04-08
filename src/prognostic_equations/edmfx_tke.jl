@@ -79,6 +79,7 @@ function edmfx_tke_tendency!(
         @. Yₜ.c.ρtke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
         # buoyancy production
         @. Yₜ.c.ρtke -= Y.c.ρ * ᶜK_h * ᶜlinear_buoygrad
+        grav = CAP.grav(p.params)
         for j in 1:n
             ᶜρaʲ =
                 turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
@@ -86,26 +87,26 @@ function edmfx_tke_tendency!(
             @. Yₜ.c.ρtke -=
                 ᶜρaʲ * adjoint(CT3(ᶜinterp(ᶠu³ʲs.:($$j) - ᶠu³))) *
                 (ᶜρʲs.:($$j) - Y.c.ρ) *
-                ᶜgradᵥ(CAP.grav(p.params) * ᶠz) / ᶜρʲs.:($$j)
+                ᶜgradᵥ(grav * ᶠz) / ᶜρʲs.:($$j)
         end
         # Note: Adding the following tendency breaks bm_aquaplanet_progedmf_dense_autodiff
         if turbconv_model isa PrognosticEDMFX
             ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-            (; ᶜT⁰, ᶜp, ᶜq_tot_safe⁰, ᶜq_liq_rai⁰, ᶜq_ice_sno⁰) = p.precomputed
+            (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
             ᶜρ⁰ = @. lazy(
                 TD.air_density(
                     thermo_params,
                     ᶜT⁰,
                     ᶜp,
-                    ᶜq_tot_safe⁰,
-                    ᶜq_liq_rai⁰,
-                    ᶜq_ice_sno⁰,
+                    ᶜq_tot_nonneg⁰,
+                    ᶜq_liq⁰,
+                    ᶜq_ice⁰,
                 ),
             )
             @. Yₜ.c.ρtke -=
                 ᶜρa⁰ * adjoint(CT3(ᶜinterp(ᶠu³⁰ - ᶠu³))) *
                 (ᶜρ⁰ - Y.c.ρ) *
-                ᶜgradᵥ(CAP.grav(p.params) * ᶠz) / ᶜρ⁰
+                ᶜgradᵥ(grav * ᶠz) / ᶜρ⁰
         end
     end
     return nothing

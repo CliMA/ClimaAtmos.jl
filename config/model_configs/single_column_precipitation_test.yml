@@ -7,7 +7,6 @@ z_stretch: false
 dt: "10secs"
 t_end: "1500secs"
 dt_save_state_to_disk: "500secs"
-dt_cloud_fraction: "60secs"
 cloud_model: "grid_scale"
 microphysics_model: "1M"
 vert_diff: "DecayWithHeightDiffusion"

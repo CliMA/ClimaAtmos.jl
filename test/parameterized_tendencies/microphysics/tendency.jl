@@ -101,8 +101,10 @@ end
         (; turbconv_model, microphysics_model) = p.atmos
 
         # Expected cache variables for 0-moment
-        expected_vars =
-            (:ᶜS_ρq_tot, :ᶜS_ρe_tot, :surface_rain_flux, :surface_snow_flux, :ᶜwₜqₜ, :ᶜwₕhₜ)
+        expected_vars = (
+            :ᶜmp_tendency, :ᶜρ_dq_tot_dt, :ᶜρ_de_tot_dt,
+            :surface_rain_flux, :surface_snow_flux, :ᶜwₜqₜ, :ᶜwₕhₜ,
+        )
         test_precipitation_setup!(Y, p, expected_vars)
 
         # Test tendency
@@ -112,7 +114,7 @@ end
         @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
 
         # Verify source equals tendency
-        @test ᶜYₜ.c.ρ == p.precomputed.ᶜS_ρq_tot
+        @test ᶜYₜ.c.ρ == p.precomputed.ᶜρ_dq_tot_dt
 
 
     end
@@ -134,7 +136,7 @@ end
 
         # Expected cache variables for 1-moment
         expected_vars = (
-            :ᶜSqₗᵐ, :ᶜSqᵢᵐ, :ᶜSqᵣᵐ, :ᶜSqₛᵐ,
+            :ᶜmp_tendency,
             :surface_rain_flux, :surface_snow_flux,
             :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₜqₜ, :ᶜwₕhₜ,
         )
@@ -147,8 +149,8 @@ end
         test_microphysics_tendency!(ᶜYₜ, Y, p)
 
         # Additional 1M-specific NaN checks
-        @test !any(isnan, ᶜYₜ.c.ρq_liq)
-        @test !any(isnan, ᶜYₜ.c.ρq_ice)
+        @test !any(isnan, ᶜYₜ.c.ρq_lcl)
+        @test !any(isnan, ᶜYₜ.c.ρq_icl)
         @test !any(isnan, ᶜYₜ.c.ρq_rai)
         @test !any(isnan, ᶜYₜ.c.ρq_sno)
 
@@ -168,6 +170,7 @@ end
             Dict(
                 "initial_condition" => "PrecipitatingColumn",
                 "microphysics_model" => "2M",
+                "use_sgs_quadrature" => false,
                 "config" => "column",
                 "output_default_diagnostics" => false,
                 "prescribed_aerosols" => ["SSLT01"],
@@ -181,7 +184,7 @@ end
 
         # Expected cache variables for 2-moment (includes number densities)
         expected_vars = (
-            :ᶜSqₗᵐ, :ᶜSqᵢᵐ, :ᶜSqᵣᵐ, :ᶜSqₛᵐ, :ᶜSnₗᵐ, :ᶜSnᵣᵐ,
+            :ᶜmp_tendency,
             :surface_rain_flux, :surface_snow_flux,
             :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₙₗ, :ᶜwₙᵣ, :ᶜwₜqₜ, :ᶜwₕhₜ,
         )
@@ -191,11 +194,11 @@ end
         test_microphysics_tendency!(ᶜYₜ, Y, p)
 
         # Additional 2M-specific NaN checks (includes number densities)
-        @test !any(isnan, ᶜYₜ.c.ρq_liq)
-        @test !any(isnan, ᶜYₜ.c.ρq_ice)
+        @test !any(isnan, ᶜYₜ.c.ρq_lcl)
+        @test !any(isnan, ᶜYₜ.c.ρq_icl)
         @test !any(isnan, ᶜYₜ.c.ρq_rai)
         @test !any(isnan, ᶜYₜ.c.ρq_sno)
-        @test !any(isnan, ᶜYₜ.c.ρn_liq)
+        @test !any(isnan, ᶜYₜ.c.ρn_lcl)
         @test !any(isnan, ᶜYₜ.c.ρn_rai)
 
         # Terminal velocities must be non-negative (includes number-weighted)
@@ -228,7 +231,7 @@ end
 
         # Quadrature-specific cache variables
         expected_vars = (
-            :ᶜSqₗᵐ, :ᶜSqᵢᵐ, :ᶜSqᵣᵐ, :ᶜSqₛᵐ,
+            :ᶜmp_tendency,
             :surface_rain_flux, :surface_snow_flux,
             :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₜqₜ, :ᶜwₕhₜ,
         )
@@ -238,8 +241,8 @@ end
         test_microphysics_tendency!(ᶜYₜ, Y, p)
 
         # 1M-specific NaN checks
-        @test !any(isnan, ᶜYₜ.c.ρq_liq)
-        @test !any(isnan, ᶜYₜ.c.ρq_ice)
+        @test !any(isnan, ᶜYₜ.c.ρq_lcl)
+        @test !any(isnan, ᶜYₜ.c.ρq_icl)
         @test !any(isnan, ᶜYₜ.c.ρq_rai)
         @test !any(isnan, ᶜYₜ.c.ρq_sno)
 

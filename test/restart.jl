@@ -286,7 +286,6 @@ else
             "dt_rad" => "1secs", "t_end" => "3secs",
             "dt_save_state_to_disk" => "1secs",
             "output_dir" => joinpath(amip_output_loc, amip_job_id),
-            "dt_cloud_fraction" => "1secs",
             "rad" => "allskywithclear",
             "radiation_reset_rng_seed" => true,
             "toml" => [

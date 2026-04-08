@@ -3,6 +3,15 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- Refactor names in 1M microphysics q_liq -> q_lcl, q_ice -> q_icl
+- Refactor names in 0M microphysics q_liq_rai -> q_liq, q_ice_sno -> q_ice
+- Refactor names in 0M microphysics q_tot_safe -> q_tot_nonneg
+
+v0.37
+----
+- Replace `InitialConditions` module with `Setups` module. Remove `surface_temperature` config key.
+
+- [#4361](https://github.com/CliMA/ClimaAtmos.jl/pull/4361) Refactor reproducibility infrastructure to use rms deviations in prognostic variables and only fail when rms deviation exceeds tolerance.
 
 v0.36.1
 -------

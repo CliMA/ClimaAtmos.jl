@@ -51,7 +51,7 @@ There are four methods for enforcing tracer nonnegativity:
 Create a microphysics tracer nonnegativity constraint.
 
 Depending on the microphysics model, the constrained tracers include:
-- `ρq_liq`, `ρq_ice`, `ρq_rai`, `ρq_sno`,
+- `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`,
 - If `include_qtot` is true, `q_tot` is also among the constrained tracers.
 
 # Arguments:
@@ -382,7 +382,7 @@ Whenever `z > zd`, the viscous sponge model applies the tendency
 
  where `β = κ₂ ⋅ ζ` and `χ ∈ {uₕ, u₃, ρe_tot, GS_TRACERS}`;
  the grid-scale tracers `GS_TRACERS` depend on the microphysical model,
- but may include e.g. `ρq_tot`, `ρq_liq`, `ρq_ice`, ...
+ but may include e.g. `ρq_tot`, `ρq_lcl`, `ρq_icl`, ...
  If the `PrognosticEDMFX` scheme is used, the model is additionally applied to `χ ∈ {u₃ʲ}`.
  `κ₂` is a damping coefficient, and `ζ` is the damping function
 
@@ -425,7 +425,7 @@ Whenever `z > zd`, the Rayleigh sponge model applies the tendency
  If `ρtke` is a prognostic variable, it is also damped;
  If the `PrognosticEDMFX` scheme is used, the model is additionally applied to
  `χ ∈ {u₃ʲ, mseʲ, q_totʲ}`, and
- `χ ∈ {q_liqʲ, q_raiʲ, q_iceʲ, q_snoʲ}` (depending on the microphysical model).
+ `χ ∈ {q_lclʲ, q_raiʲ, q_iclʲ, q_snoʲ}` (depending on the microphysical model).
  `α_χ` is a damping coefficient for each variable, and `ζ` is the damping function
 
  ```math
@@ -438,7 +438,7 @@ Whenever `z > zd`, the Rayleigh sponge model applies the tendency
  - `α_uₕ`: horizontal velocity, `uₕ`;
  - `α_w`: vertical velocity, `u₃`, `u₃ʲ`;
  - `α_sgs_tracer`: subgrid-scale tracer variables, `ρtke`, `mseʲ`, `q_totʲ`,
-    `q_liqʲ`, `q_raiʲ`, `q_iceʲ`, `q_snoʲ`.
+    `q_lclʲ`, `q_raiʲ`, `q_iclʲ`, `q_snoʲ`.
 
  By default, damping is only applied to vertical velocity, with:
  - `α_uₕ = 0`
@@ -544,12 +544,6 @@ struct ExternalDrivenTVForcing{FT}
 end
 
 struct ISDACForcing end
-
-struct SCMCoriolis{U, V, FT}
-    prof_ug::U
-    prof_vg::V
-    coriolis_param::FT
-end
 
 abstract type AbstractEnvBuoyGradClosure end
 struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
@@ -746,12 +740,7 @@ Computes the vertical transport `ρwqₜ` at the surface due to prescribed flow.
 - `t`: The current time.
 """
 function get_ρu₃qₜ_surface(flow::ShipwayHill2012VelocityProfile, thermo_params, t)
-    # TODO: Get these values from the initial conditions:
-    # lg_sfc = Fields.level(Fields.local_geometry_field(Y.f), CA.half)
-    # ic = CA.InitialConditions.ShipwayHill2012()(p.params)
-    # get_ρ(ls) = ls.ρ
-    # ᶠρ_sfc = @. get_ρ(ic(lg_sfc)) <-- inconvenient since this materializes a Field
-    # For now, just copy the values from the initial conditions:
+    # TODO: Get these values from the setup instead of hardcoding:
     FT = eltype(thermo_params)
     rv_sfc = FT(0.015)  # water vapour mixing ratio at surface (kg/kg)
     q_tot_sfc = rv_sfc / (1 + rv_sfc)  # 0.0148 kg/kg
@@ -1126,7 +1115,7 @@ Internal testing and calibration components for single-column setups:
 - `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
 - `ls_adv`: nothing or LargeScaleAdvection()
 - `advection_test`: Bool
-- `scm_coriolis`: nothing or SCMCoriolis()
+- `scm_coriolis`: nothing or NamedTuple `(; prof_ug, prof_vg, coriolis_param)`
 
 ## AtmosRadiation
 - `radiation_mode`: Radiation and atmospheric forcing modes
@@ -1482,9 +1471,14 @@ function AtmosConfig(
     config = override_default_config(config)
 
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
+    atmos_toml = map(config["toml"]) do file
+        isfile(file) ? file :
+        isfile(joinpath(pkgdir(@__MODULE__), file)) ?
+        joinpath(pkgdir(@__MODULE__), file) : error("Parameter file $file not found.")
+    end
     toml_dict = CP.create_toml_dict(
         FT;
-        override_file = CP.merge_toml_files(config["toml"]),
+        override_file = CP.merge_toml_files(atmos_toml),
     )
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
 
