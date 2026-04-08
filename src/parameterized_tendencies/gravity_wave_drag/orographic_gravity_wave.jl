@@ -482,6 +482,25 @@ function calc_nonpropagating_forcing!(
         return ᶠp_ref
     end
 
+    # Check that ᶠp is not a nan
+    if any(isnan.(parent(ᶠp)))
+        error(
+            "OGWD: ᶠp contains NaN" *
+            "Some instability elsewhere in the model lead to this ",
+        )
+    end
+
+    # Check that ᶠp_ref was successfully resolved for every column.
+    # If z_ref falls between face levels and no face is within ½Δz,
+    # ᶠp_ref stays NaN, which would poison all downstream weights.
+    if any(isnan.(parent(ᶠp_ref)))
+        error(
+            "OGWD: ᶠp_ref contains NaN — z_ref is too far from any face level. " *
+            "This means the phase-based z_ref search landed between grid faces " *
+            "and no face satisfied |ᶠz - z_ref| < ½Δz. ",
+        )
+    end
+
     # Include cells that overlap with [z_pbl, z_ref):
     # - ᶜright_bias checks upper face > z_pbl (cell extends above z_pbl)
     # - ᶜleft_bias checks lower face < z_ref (cell starts below z_ref)
