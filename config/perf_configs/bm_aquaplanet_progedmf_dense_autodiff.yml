@@ -16,7 +16,6 @@ ode_algo: "ARS222"
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
 dt_rad: 1hours
-dt_cloud_fraction: 1hours
 turbconv: prognostic_edmfx
 max_newton_iters_ode: 3
 prognostic_tke: true
