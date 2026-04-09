@@ -507,9 +507,9 @@ weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolatio
 
 [[deps.CloudMicrophysics]]
 deps = ["ClimaParams", "DocStringExtensions", "ForwardDiff", "InteractiveUtils", "LazyArtifacts", "LogExpFunctions", "RootSolvers", "SpecialFunctions", "StaticArrays", "Thermodynamics", "UnrolledUtilities"]
-git-tree-sha1 = "4239903cdf62fb2b03fa1dad11231f2f5224ccb4"
+git-tree-sha1 = "7040698bbade35d88dd5967edc0d1c679748af63"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.33.0"
+version = "0.34.0"
 
     [deps.CloudMicrophysics.extensions]
     EmulatorModelsExt = ["DataFrames", "MLJ"]
