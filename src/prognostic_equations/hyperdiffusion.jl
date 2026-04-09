@@ -68,6 +68,7 @@ function hyperdiffusion_cache(
         (;
             ᶜ∇²uₕʲs = similar(Y.c, NTuple{n, C12{FT}}),
             ᶜ∇²uᵥʲs = similar(Y.c, NTuple{n, C3{FT}}),
+            ᶜ∇²aʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²mseʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²q_totʲs = similar(Y.c, NTuple{n, FT}),
             moisture_sgs_quantities...,
@@ -100,8 +101,8 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; ᶜp, ᶜu) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
-        (; ᶜuʲs) = p.precomputed
+        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²aʲs, ᶜ∇²mseʲs) = p.hyperdiff
+        (; ᶜuʲs, ᶜρʲs) = p.precomputed
     end
 
     # Grid scale hyperdiffusion
@@ -122,6 +123,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         for j in 1:n
             @. ᶜ∇²uʲs.:($$j) =
                 C123(wgradₕ(divₕ(ᶜuʲs.:($$j)))) - C123(wcurlₕ(C123(curlₕ(ᶜuʲs.:($$j)))))
+            @. ᶜ∇²aʲs.:($$j) = wdivₕ(gradₕ(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
             @. ᶜ∇²mseʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).mse))
             @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
             @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
@@ -146,7 +148,8 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         ᶜρa⁰ = @. lazy(ρa⁰(ᶜρ, Y.c.sgsʲs, turbconv_model))
-        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
+        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²aʲs, ᶜ∇²mseʲs) = p.hyperdiff
+        (; ᶜρʲs) = p.precomputed
     end
     if use_prognostic_tke(turbconv_model)
         (; ᶜ∇²tke) = p.hyperdiff
@@ -176,8 +179,9 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             if point_type <: Geometry.Abstract3DPoint
                 # only need curl-curl part
                 ᶜ∇⁴uᵥʲ = @. ᶜ∇²uᵥʲs.:($$j) = C3(wcurlₕ(C123(curlₕ(ᶜ∇²uʲs.:($$j)))))
-                @. Yₜ.f.sgsʲs.:($$j).u₃ += ν₄_vorticity * ᶠwinterp(ᶜJ * ᶜρ, ᶜ∇⁴uᵥʲ)
+                @. Yₜ.f.sgsʲs.:($$j).u₃ += CAP.α_hyperdiff_tracer(p.params) * ν₄_vorticity * ᶠwinterp(ᶜJ * ᶜρ, ᶜ∇⁴uᵥʲ)
             end
+            @. Yₜ.c.sgsʲs.:($$j).ρa -= CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar * wdivₕ(ᶜρʲs.:($$j) * gradₕ(ᶜ∇²aʲs.:($$j)))
             # Note: It is more correct to have ρa inside and outside the divergence
             @. Yₜ.c.sgsʲs.:($$j).mse -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²mseʲs.:($$j)))
         end
@@ -190,7 +194,7 @@ function dss_hyperdiffusion_tendency_pairs(p)
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     diffuse_tke = use_prognostic_tke(turbconv_model)
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²mseʲs) = p.hyperdiff
+        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²aʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
     if use_prognostic_tke(turbconv_model)
         (; ᶜ∇²tke) = p.hyperdiff
@@ -206,6 +210,7 @@ function dss_hyperdiffusion_tendency_pairs(p)
         (
             ᶜ∇²uₕʲs => buffer.ᶜ∇²uₕʲs,
             ᶜ∇²uᵥʲs => buffer.ᶜ∇²uᵥʲs,
+            ᶜ∇²aʲs => buffer.ᶜ∇²aʲs,
             ᶜ∇²mseʲs => buffer.ᶜ∇²mseʲs,
         ) : ()
     dynamics_pairs = (core_dynamics_pairs..., tc_dynamics_pairs...)
