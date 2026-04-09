@@ -714,6 +714,7 @@ struct ReproducibleRestart end
 abstract type AbstractTimesteppingMode end
 struct Explicit <: AbstractTimesteppingMode end
 struct Implicit <: AbstractTimesteppingMode end
+Base.broadcastable(x::AbstractTimesteppingMode) = tuple(x)
 
 struct QuasiMonotoneLimiter end # For dispatching to use the ClimaCore QuasiMonotoneLimiter.
 

@@ -677,3 +677,11 @@ avoiding the need to extract FT from the space. Variances and correlation are ig
 @inline function integrate_over_sgs(f, ::GridMeanSGS, μ_q, μ_T, q′q′, T′T′, corr_Tq)
     return f(μ_T, μ_q)
 end
+
+"""
+    Return true if no quadrature sampling is chosen.
+"""
+@inline function not_quadrature(sgs_quad)
+    return isnothing(sgs_quad) || sgs_quad isa GridMeanSGS ||
+           (sgs_quad isa SGSQuadrature && sgs_quad.dist isa GridMeanSGS)
+end
