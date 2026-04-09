@@ -66,9 +66,8 @@ function weather_model_data_path(
     else
         # Artifact-based paths
         ic_data_path = joinpath(
-            @clima_artifact("weather_model_ic"),
-            "init",
-            "era5_init_$(start_date_str)_$(start_time).nc",
+            @clima_artifact("wxquest_initial_conditions"),
+            "era5_init_processed_internal_$(start_date_str)_$(start_time).nc",
         )
         return ic_data_path
     end
