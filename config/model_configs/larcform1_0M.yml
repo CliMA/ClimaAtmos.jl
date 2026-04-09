@@ -27,8 +27,7 @@ dt: 30mins
 dt_rad: 30mins
 t_end: 20days # full run length is 20days
 cloud_model: "grid_scale"
-call_cloud_diagnostics_per_stage : true
-toml: [toml/]
+toml: [toml/larcform1_0M.toml]
 netcdf_output_at_levels: true
 #netcdf_interpolation_num_points: [2, 2, 200] # needed?
 output_default_diagnostics: false

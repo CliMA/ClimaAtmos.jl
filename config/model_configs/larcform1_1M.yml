@@ -27,7 +27,6 @@ dt: 10secs
 dt_rad: 10mins
 t_end: 5days # full run length is 20days
 cloud_model: "grid_scale"
-call_cloud_diagnostics_per_stage : true
 toml: [toml/prognostic_edmfx_1M.toml] # this is the same as dianostic_edmfx_1m.toml
 netcdf_output_at_levels: true
 #netcdf_interpolation_num_points: [2, 2, 200] # needed?
