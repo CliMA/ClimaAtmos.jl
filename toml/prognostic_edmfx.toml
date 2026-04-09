@@ -29,7 +29,7 @@ value = 0
 value = 0
 
 [detr_buoy_coeff]
-value = 0
+value = 1
 
 [detr_vertdiv_coeff]
 value = 0
@@ -44,4 +44,4 @@ value = 0
 value = 40.0
 
 [precipitation_timescale]
-value = 100
+value = 3600
