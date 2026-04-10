@@ -820,3 +820,250 @@ add_diagnostic_variable!(short_name = "evu", units = "m^2 s^-1",
     comments = "Vertical diffusion coefficient for momentum due to parameterized eddies",
     compute = compute_evu,
 )
+
+###
+# Microphysics cache diagnostics (1M + PrognosticEDMFX)
+###
+
+###
+# Sedimentation / terminal velocities (3d)
+###
+compute_wlsed(state, cache, time) = compute_wlsed(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_wlsed(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute cloud liquid sedimentation velocity \
+                               with a 1M or 2M model")
+
+compute_wlsed(_, cache, _, ::NonEquilibriumMicrophysics, _) =
+    cache.precomputed.ᶜwₗ
+
+add_diagnostic_variable!(short_name = "wlsed", units = "m s^-1",
+    long_name = "Cloud Liquid Sedimentation Velocity",
+    comments = "Terminal velocity of cloud liquid droplets",
+    compute = compute_wlsed,
+)
+
+compute_wised(state, cache, time) = compute_wised(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_wised(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute cloud ice sedimentation velocity \
+                               with a 1M or 2M model")
+
+compute_wised(_, cache, _, ::NonEquilibriumMicrophysics, _) =
+    cache.precomputed.ᶜwᵢ
+
+add_diagnostic_variable!(short_name = "wised", units = "m s^-1",
+    long_name = "Cloud Ice Sedimentation Velocity",
+    comments = "Terminal velocity of cloud ice crystals",
+    compute = compute_wised,
+)
+
+compute_wrsed(state, cache, time) = compute_wrsed(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_wrsed(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute rain terminal velocity \
+                               with a 1M or 2M model")
+
+compute_wrsed(_, cache, _, ::NonEquilibriumMicrophysics, _) =
+    cache.precomputed.ᶜwᵣ
+
+add_diagnostic_variable!(short_name = "wrsed", units = "m s^-1",
+    long_name = "Rain Terminal Velocity",
+    comments = "Terminal velocity of rain",
+    compute = compute_wrsed,
+)
+
+compute_wssed(state, cache, time) = compute_wssed(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_wssed(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute snow terminal velocity \
+                               with a 1M or 2M model")
+
+compute_wssed(_, cache, _, ::NonEquilibriumMicrophysics, _) =
+    cache.precomputed.ᶜwₛ
+
+add_diagnostic_variable!(short_name = "wssed", units = "m s^-1",
+    long_name = "Snow Terminal Velocity",
+    comments = "Terminal velocity of snow",
+    compute = compute_wssed,
+)
+
+###
+# Total water and energy sedimentation fluxes (3d)
+###
+compute_wtqt(state, cache, time) = compute_wtqt(
+    state, cache, time, cache.atmos.microphysics_model,
+)
+compute_wtqt(_, _, _, _) =
+    error_diagnostic_variable("Can only compute total water sedimentation flux \
+                               with a moist model")
+
+compute_wtqt(_, cache, _, ::MoistMicrophysics) =
+    @. lazy(w_component(cache.precomputed.ᶜwₜqₜ))
+
+add_diagnostic_variable!(short_name = "wtqt", units = "m s^-1",
+    long_name = "Total Water Sedimentation Flux",
+    comments = """
+    Vertical component of the mass-weighted sedimentation flux of total water.
+    Defined as w_l * q_lcl + w_i * q_icl + w_r * q_rai (+ w_s * q_sno when applicable).
+    """,
+    compute = compute_wtqt,
+)
+
+compute_whht(state, cache, time) = compute_whht(
+    state, cache, time, cache.atmos.microphysics_model,
+)
+compute_whht(_, _, _, _) =
+    error_diagnostic_variable("Can only compute energy sedimentation flux \
+                               with a moist model")
+
+compute_whht(_, cache, _, ::MoistMicrophysics) =
+    @. lazy(w_component(cache.precomputed.ᶜwₕhₜ))
+
+add_diagnostic_variable!(short_name = "whht", units = "m^3 s^-3",
+    long_name = "Energy Sedimentation Flux",
+    comments = """
+    Vertical component of the energy-weighted sedimentation flux.
+    Includes internal energy, potential energy and kinetic energy
+    contributions from each sedimenting species.
+    """,
+    compute = compute_whht,
+)
+
+###
+# Environment microphysics tendency components (3d) — ᶜmp_tendency⁰
+###
+compute_mp0dqlcl(state, cache, time) = compute_mp0dqlcl(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_mp0dqlcl(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute environment mp tendency dq_lcl_dt \
+                               with 1M microphysics and PrognosticEDMFX")
+
+compute_mp0dqlcl(_, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
+    cache.precomputed.ᶜmp_tendency⁰.dq_lcl_dt
+
+add_diagnostic_variable!(short_name = "mp0dqlcl", units = "kg kg^-1 s^-1",
+    long_name = "Environment Microphysics Tendency of Cloud Liquid",
+    comments = "dq_lcl_dt component of the environment microphysics tendency (ᶜmp_tendency⁰)",
+    compute = compute_mp0dqlcl,
+)
+
+compute_mp0dqicl(state, cache, time) = compute_mp0dqicl(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_mp0dqicl(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute environment mp tendency dq_icl_dt \
+                               with 1M microphysics and PrognosticEDMFX")
+
+compute_mp0dqicl(_, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
+    cache.precomputed.ᶜmp_tendency⁰.dq_icl_dt
+
+add_diagnostic_variable!(short_name = "mp0dqicl", units = "kg kg^-1 s^-1",
+    long_name = "Environment Microphysics Tendency of Cloud Ice",
+    comments = "dq_icl_dt component of the environment microphysics tendency (ᶜmp_tendency⁰)",
+    compute = compute_mp0dqicl,
+)
+
+compute_mp0dqrai(state, cache, time) = compute_mp0dqrai(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_mp0dqrai(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute environment mp tendency dq_rai_dt \
+                               with 1M microphysics and PrognosticEDMFX")
+
+compute_mp0dqrai(_, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
+    cache.precomputed.ᶜmp_tendency⁰.dq_rai_dt
+
+add_diagnostic_variable!(short_name = "mp0dqrai", units = "kg kg^-1 s^-1",
+    long_name = "Environment Microphysics Tendency of Rain",
+    comments = "dq_rai_dt component of the environment microphysics tendency (ᶜmp_tendency⁰)",
+    compute = compute_mp0dqrai,
+)
+
+compute_mp0dqsno(state, cache, time) = compute_mp0dqsno(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_mp0dqsno(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute environment mp tendency dq_sno_dt \
+                               with 1M microphysics and PrognosticEDMFX")
+
+compute_mp0dqsno(_, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
+    cache.precomputed.ᶜmp_tendency⁰.dq_sno_dt
+
+add_diagnostic_variable!(short_name = "mp0dqsno", units = "kg kg^-1 s^-1",
+    long_name = "Environment Microphysics Tendency of Snow",
+    comments = "dq_sno_dt component of the environment microphysics tendency (ᶜmp_tendency⁰)",
+    compute = compute_mp0dqsno,
+)
+
+###
+# Updraft microphysics tendency components (3d) — ᶜmp_tendencyʲs.:1
+###
+compute_mpupdqlcl(state, cache, time) = compute_mpupdqlcl(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_mpupdqlcl(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute updraft mp tendency dq_lcl_dt \
+                               with 1M microphysics and PrognosticEDMFX")
+
+compute_mpupdqlcl(_, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
+    cache.precomputed.ᶜmp_tendencyʲs.:1.dq_lcl_dt
+
+add_diagnostic_variable!(short_name = "mpupdqlcl", units = "kg kg^-1 s^-1",
+    long_name = "Updraft Microphysics Tendency of Cloud Liquid",
+    comments = "dq_lcl_dt component of the first updraft microphysics tendency (ᶜmp_tendencyʲs.:1)",
+    compute = compute_mpupdqlcl,
+)
+
+compute_mpupdqicl(state, cache, time) = compute_mpupdqicl(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_mpupdqicl(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute updraft mp tendency dq_icl_dt \
+                               with 1M microphysics and PrognosticEDMFX")
+
+compute_mpupdqicl(_, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
+    cache.precomputed.ᶜmp_tendencyʲs.:1.dq_icl_dt
+
+add_diagnostic_variable!(short_name = "mpupdqicl", units = "kg kg^-1 s^-1",
+    long_name = "Updraft Microphysics Tendency of Cloud Ice",
+    comments = "dq_icl_dt component of the first updraft microphysics tendency (ᶜmp_tendencyʲs.:1)",
+    compute = compute_mpupdqicl,
+)
+
+compute_mpupdqrai(state, cache, time) = compute_mpupdqrai(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_mpupdqrai(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute updraft mp tendency dq_rai_dt \
+                               with 1M microphysics and PrognosticEDMFX")
+
+compute_mpupdqrai(_, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
+    cache.precomputed.ᶜmp_tendencyʲs.:1.dq_rai_dt
+
+add_diagnostic_variable!(short_name = "mpupdqrai", units = "kg kg^-1 s^-1",
+    long_name = "Updraft Microphysics Tendency of Rain",
+    comments = "dq_rai_dt component of the first updraft microphysics tendency (ᶜmp_tendencyʲs.:1)",
+    compute = compute_mpupdqrai,
+)
+
+compute_mpupdqsno(state, cache, time) = compute_mpupdqsno(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_mpupdqsno(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute updraft mp tendency dq_sno_dt \
+                               with 1M microphysics and PrognosticEDMFX")
+
+compute_mpupdqsno(_, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
+    cache.precomputed.ᶜmp_tendencyʲs.:1.dq_sno_dt
+
+add_diagnostic_variable!(short_name = "mpupdqsno", units = "kg kg^-1 s^-1",
+    long_name = "Updraft Microphysics Tendency of Snow",
+    comments = "dq_sno_dt component of the first updraft microphysics tendency (ᶜmp_tendencyʲs.:1)",
+    compute = compute_mpupdqsno,
+)
