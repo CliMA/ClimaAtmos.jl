@@ -711,7 +711,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 q_ice_prev_level,
             )
 
-            @. entrʲ_prev_level = entrainment(
+            @. entrʲ_prev_level = compute_entrainment(
                 thermo_params,
                 turbconv_params,
                 z_prev_level,
@@ -876,7 +876,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     local_geometry_prev_level.J * u³ʲ_data_prev_halflevel
                 ) / local_geometry_level.J
 
-            @. detrʲ_prev_level = detrainment(
+            @. detrʲ_prev_level = compute_detrainment(
                 thermo_params,
                 turbconv_params,
                 z_prev_level,

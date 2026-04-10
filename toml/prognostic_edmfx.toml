@@ -20,7 +20,10 @@ value = 0.0001
 value = 0.1
 
 [min_area_limiter_scale]
-value = 0
+value = 0.0001
+
+[min_area_limiter_power]
+value = 1
 
 [detr_inv_tau]
 value = 0
@@ -38,7 +41,10 @@ value = 0
 value = 1
 
 [max_area_limiter_scale]
-value = 0
+value = 0.001
+
+[max_area_limiter_power]
+value = 1
 
 [pressure_normalmode_drag_coeff]
 value = 40.0
