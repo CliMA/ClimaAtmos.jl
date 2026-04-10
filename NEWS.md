@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+v0.38.0
+----
 - Refactor names in 1M microphysics q_liq -> q_lcl, q_ice -> q_icl
 - Refactor names in 0M microphysics q_liq_rai -> q_liq, q_ice_sno -> q_ice
 - Refactor names in 0M microphysics q_tot_safe -> q_tot_nonneg
