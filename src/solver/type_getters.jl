@@ -515,6 +515,8 @@ function get_jacobian(ode_algo, Y, atmos, parsed_args)
         parsed_args["sparse_helmholtz"],
         parsed_args["sparse_helmholtz_2d"],
         parsed_args["helmholtz_backsub_alpha"],
+        parsed_args["helmholtz_2d_solver"],
+        parsed_args["n_helmholtz_2d_iters"],
         ; for_sgs_u₃ = false,
     )
 end
@@ -523,7 +525,9 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
     auto_jacobian_padding_bands,
     approximate_linear_solve_iters, debug_jacobian, n_helmholtz_iters,
     sparse_helmholtz = false, sparse_helmholtz_2d = false,
-    helmholtz_backsub_alpha = 0.0;
+    helmholtz_backsub_alpha = 0.0,
+    helmholtz_2d_solver = "direct",
+    n_helmholtz_2d_iters = 10;
     for_sgs_u₃ = false,
 )
     (ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
@@ -547,6 +551,8 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
             DerivativeFlag(atmos.fully_implicit && sparse_helmholtz),
             DerivativeFlag(atmos.fully_implicit && sparse_helmholtz_2d),
             Float64(helmholtz_backsub_alpha),
+            String(helmholtz_2d_solver),
+            Int(n_helmholtz_2d_iters),
         )
         use_auto_jacobian ?
         AutoSparseJacobian(
@@ -914,6 +920,8 @@ function args_integrator(args, Y, p, tspan, ode_algo, callback, dt_integrator)
         args["sparse_helmholtz"],
         args["sparse_helmholtz_2d"],
         args["helmholtz_backsub_alpha"],
+        args["helmholtz_2d_solver"],
+        args["n_helmholtz_2d_iters"],
         dt_integrator,
     )
 end
@@ -922,7 +930,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
     use_dense_jacobian, use_auto_jacobian, auto_jacobian_padding_bands,
     approximate_linear_solve_iters, debug_jacobian, prescribed_flow,
     fully_implicit, n_helmholtz_iters, sparse_helmholtz, sparse_helmholtz_2d,
-    helmholtz_backsub_alpha,
+    helmholtz_backsub_alpha, helmholtz_2d_solver, n_helmholtz_2d_iters,
     dt_integrator,
 )
     (; atmos) = p
@@ -940,10 +948,18 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                     n_helmholtz_iters,
                     sparse_helmholtz, sparse_helmholtz_2d,
                     helmholtz_backsub_alpha,
+                    helmholtz_2d_solver, n_helmholtz_2d_iters,
                 ),
                 Wfact = update_jacobian!,
             )
-            cache_imp! = set_precomputed_quantities!
+            # Only refresh implicit precomputed quantities (ᶜp, ᶜT, ᶜu, etc.)
+            # during Newton iterations. Explicit precomputed quantities (SGS
+            # covariances, cloud fraction, Smagorinsky coefficients) are not
+            # needed by fully_implicit_tendency! and can fail on non-physical
+            # intermediate Newton states (e.g. negative pressure → log domain
+            # error in liquid_ice_pottemp). The full set_precomputed_quantities!
+            # is still called via cache! at the start of each stage.
+            cache_imp! = set_implicit_precomputed_quantities!
         elseif isnothing(prescribed_flow)
 
             # This is the default case
@@ -958,7 +974,8 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                         approximate_linear_solve_iters, debug_jacobian,
                         n_helmholtz_iters,
                         sparse_helmholtz, sparse_helmholtz_2d,
-                        helmholtz_backsub_alpha;
+                        helmholtz_backsub_alpha,
+                        helmholtz_2d_solver, n_helmholtz_2d_iters;
                         for_sgs_u₃ = true,
                     ),
                     Wfact = update_jacobian_sgs_u₃!,
@@ -972,6 +989,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                     n_helmholtz_iters,
                     sparse_helmholtz, sparse_helmholtz_2d,
                     helmholtz_backsub_alpha,
+                    helmholtz_2d_solver, n_helmholtz_2d_iters,
                 ),
                 Wfact = update_jacobian!,
             )

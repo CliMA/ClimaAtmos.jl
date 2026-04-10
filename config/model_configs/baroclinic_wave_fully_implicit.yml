@@ -1,27 +1,30 @@
 # Fully implicit dry baroclinic wave with 2D sparse Helmholtz preconditioner.
 # Comparable SYPD to HEVI at dt=400s requires dt >> 400s to offset
 # the cost of Newton-Krylov iterations.
-initial_condition: "DryBaroclinicWave"
-t_end: "10days"
+#initial_condition: "DryBaroclinicWave"
+initial_condition: "MoistBaroclinicWave"
+microphysics_model: "0M"
+t_end: "20days"
 disable_surface_flux_tendency: true
-dt_save_state_to_disk: "2days"
 diagnostics:
-  - short_name: [pfull, ua, wa, va, rv, ta, ke]
-    period: 1days
+  - short_name: [pfull, ua, wa, va, rv, ta, ke, hus]
+    period: 2days
 # Fully implicit JFNK solver
 fully_implicit: true
-dt: "3200secs"
+dt: "600secs"
 ode_algo: "ARS222"
 use_krylov_method: true
 max_newton_iters_ode: 10
 use_newton_rtol: true
-newton_rtol: 1.0e-3
+newton_rtol: 5.0e-4
 use_dynamic_krylov_rtol: true
 krylov_rtol: 0.3
 krylov_memory: 50
 krylov_itmax: 200
 update_jacobian_every: "dt"
 use_dense_jacobian: false
-# 2D sparse Helmholtz preconditioner for sphere
+# 2D Helmholtz preconditioner for sphere (matrix-free Chebyshev)
 sparse_helmholtz_2d: true
-helmholtz_backsub_alpha: 0.3
+helmholtz_2d_solver: "chebyshev"
+n_helmholtz_2d_iters: 10
+helmholtz_backsub_alpha: 0.0

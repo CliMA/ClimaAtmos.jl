@@ -73,6 +73,8 @@ solver. Certain groups of derivatives can be toggled on or off by setting their
   the SE stiffness matrix using cubed-sphere topology connectivity with proper
   face/vertex DOF sharing. LU-factorized and applied level-by-level. Requires
   FGMRES.
+- `helmholtz_2d_solver::String`: `"direct"` (sparse LU) or `"chebyshev"` (matrix-free).
+- `n_helmholtz_2d_iters::Int`: Chebyshev iterations for matrix-free 2D Helmholtz.
 """
 struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7, F8, F9, F10} <: SparseJacobian
     topography_flag::F1
@@ -88,6 +90,8 @@ struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7, F8, F9, F10} <: SparseJa
     sparse_helmholtz_flag::F9
     sparse_helmholtz_2d_flag::F10
     helmholtz_backsub_alpha::Float64
+    helmholtz_2d_solver::String
+    n_helmholtz_2d_iters::Int
 end
 
 """
@@ -795,6 +799,150 @@ function sparse_helmholtz_2d_correction!(shc::SparseHelmholtz2DCache{FT}, ΔY) w
     return nothing
 end
 
+"""
+    MatrixFreeHelmholtz2DCache
+
+Matrix-free Chebyshev-accelerated 2D Helmholtz preconditioner for sphere grids.
+Uses ClimaCore's `wdivₕ(gradₕ(...))` operator instead of assembling sparse matrices.
+Solved via Chebyshev semi-iteration with Jacobi preconditioning.
+"""
+struct MatrixFreeHelmholtz2DCache{FT, F, GB}
+    dtγ::Base.RefValue{FT}
+    ᶜcs²::F                       # sound speed squared field
+    ᶜρ::F                         # density field
+    ᶜe_tot::F                     # specific total energy field (back-sub)
+    ᶜα_acoustic::F                # Jacobi preconditioner diagonal
+    α_acoustic_max::Base.RefValue{FT}
+    backsub_alpha::FT
+    # Chebyshev scratch (4 center scalar fields)
+    ᶜhelm_x::F                   # iterate
+    ᶜhelm_dir::F                 # direction
+    ᶜhelm_rhs::F                 # saved RHS
+    ᶜhelm_lap::F                 # wdivₕ(gradₕ(x)) scratch
+    dss_buffer::GB
+    n_iters::Int
+end
+
+"""
+    build_matfree_helmholtz_2d_cache(::Type{FT}, Y; backsub_alpha, n_iters)
+
+Build a matrix-free Chebyshev Helmholtz 2D cache. Allocates scalar fields
+for the Chebyshev iteration and a DSS buffer.
+"""
+function build_matfree_helmholtz_2d_cache(
+    ::Type{FT}, Y;
+    backsub_alpha::FT = FT(0),
+    n_iters::Int = 10,
+) where {FT}
+    ᶜscalar() = similar(Y.c, FT)
+    dss_buf = Spaces.create_dss_buffer(ᶜscalar())
+
+    @info "MatrixFreeHelmholtz2D: n_iters=$n_iters, backsub_alpha=$backsub_alpha"
+
+    return MatrixFreeHelmholtz2DCache{FT, typeof(ᶜscalar()), typeof(dss_buf)}(
+        Ref(FT(0)),          # dtγ
+        ᶜscalar(),           # ᶜcs²
+        ᶜscalar(),           # ᶜρ
+        ᶜscalar(),           # ᶜe_tot
+        ᶜscalar(),           # ᶜα_acoustic
+        Ref(FT(0)),          # α_acoustic_max
+        backsub_alpha,
+        ᶜscalar(),           # ᶜhelm_x
+        ᶜscalar(),           # ᶜhelm_dir
+        ᶜscalar(),           # ᶜhelm_rhs
+        ᶜscalar(),           # ᶜhelm_lap
+        dss_buf,
+        n_iters,
+    )
+end
+
+"""
+    matfree_helmholtz_2d_correction!(mfc::MatrixFreeHelmholtz2DCache, ΔY)
+
+Apply matrix-free Chebyshev 2D Helmholtz correction after column-local solve.
+Uses ClimaCore's `wdivₕ(gradₕ(...))` for the Laplacian operator.
+
+1. RHS = -dtγ · wdivₕ(ρ · z.uₕ)
+2. Chebyshev semi-iteration to solve (I - dtγ²·cs²·∇²h)·Δρ = RHS
+3. ΔY.c.ρ += Δρ
+4. Optional back-sub: uₕ, ρe_tot corrections
+"""
+function matfree_helmholtz_2d_correction!(mfc::MatrixFreeHelmholtz2DCache{FT}, ΔY) where {FT}
+    (; dtγ, ᶜcs², ᶜρ, ᶜe_tot, ᶜα_acoustic, α_acoustic_max, backsub_alpha,
+       ᶜhelm_x, ᶜhelm_dir, ᶜhelm_rhs, ᶜhelm_lap, dss_buffer, n_iters) = mfc
+
+    δtγ_val = dtγ[]
+    α = δtγ_val^2
+
+    # Step 1: Form RHS = -dtγ · wdivₕ(ρ · z.uₕ)
+    @. ᶜhelm_rhs = wdivₕ(ᶜρ * ΔY.c.uₕ)
+    Spaces.weighted_dss!(ᶜhelm_rhs => dss_buffer)
+    @. ᶜhelm_rhs = -δtγ_val * ᶜhelm_rhs
+
+    # Step 2: Chebyshev semi-iteration
+    # Operator: A·x = x - α·cs²·wdivₕ(gradₕ(x))
+    # Preconditioner: M = diag(1 + α_acoustic)
+    # Eigenvalues of M⁻¹A ∈ [1/(1+α_max), 1]
+    α_max = α_acoustic_max[]
+    a = FT(1) / (FT(1) + α_max)
+    b = FT(1)
+    θ = (a + b) / 2
+    δ = (b - a) / 2
+    σ₁ = θ / δ
+
+    @. ᶜhelm_x = ᶜhelm_rhs  # initial guess
+
+    if n_iters >= 1
+        # Chebyshev semi-iteration WITHOUT intermediate DSS.
+        # The element-local operator is used throughout; with the safety-factor-
+        # augmented eigenvalue bounds, the element-local eigenvalues are safely
+        # within [a, b]. The final DSS projects the result to the continuous space.
+        # This avoids the O(n_iters) DSS cost that would destroy performance.
+
+        # Step 1: d₀ = (1/θ) · M⁻¹·r₀
+        @. ᶜhelm_lap = wdivₕ(gradₕ(ᶜhelm_x))
+        @. ᶜhelm_dir =
+            (ᶜhelm_rhs - ᶜhelm_x + α * ᶜcs² * ᶜhelm_lap) /
+            ((FT(1) + ᶜα_acoustic) * θ)
+        @. ᶜhelm_x += ᶜhelm_dir
+
+        # Steps 2..N: Chebyshev three-term recurrence
+        ρ_prev = FT(1) / σ₁
+        for _ in 2:n_iters
+            ρ_new = FT(1) / (2 * σ₁ - FT(1) / ρ_prev)
+            @. ᶜhelm_lap = wdivₕ(gradₕ(ᶜhelm_x))
+            @. ᶜhelm_dir =
+                2 * ρ_new * σ₁ / θ *
+                (ᶜhelm_rhs - ᶜhelm_x + α * ᶜcs² * ᶜhelm_lap) /
+                (FT(1) + ᶜα_acoustic) +
+                ρ_new * ρ_prev * ᶜhelm_dir
+            @. ᶜhelm_x += ᶜhelm_dir
+            ρ_prev = ρ_new
+        end
+    end
+
+    # DSS only the final iterate (project to continuous space)
+    Spaces.weighted_dss!(ᶜhelm_x => dss_buffer)
+
+    # Step 3: Additive ρ correction
+    @. ΔY.c.ρ += ᶜhelm_x
+
+    # Step 4: Optional back-substitution
+    if backsub_alpha > FT(0)
+        α_bs = backsub_alpha
+
+        # uₕ back-sub: ΔY.c.uₕ -= α_bs · dtγ · (cs²/ρ) · C12(gradₕ(Δρ_h))
+        @. ΔY.c.uₕ -= C12(
+            FT(α_bs * δtγ_val) * (ᶜcs² / max(ᶜρ, FT(1e-6))) * gradₕ(ᶜhelm_x),
+        )
+
+        # ρe_tot back-sub: ΔY.c.ρe_tot += α_bs · e_tot · Δρ_h
+        @. ΔY.c.ρe_tot += FT(α_bs) * ᶜe_tot * ᶜhelm_x
+    end
+
+    return nothing
+end
+
 function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     (;
         topography_flag,
@@ -1209,7 +1357,14 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         end
         # 2D sparse Helmholtz for sphere grids
         sparse_helmholtz_2d = if use_derivative(alg.sparse_helmholtz_2d_flag)
-            build_sparse_helmholtz_2d_cache(FT, Y; backsub_alpha = FT(alg.helmholtz_backsub_alpha))
+            if alg.helmholtz_2d_solver == "chebyshev"
+                build_matfree_helmholtz_2d_cache(FT, Y;
+                    backsub_alpha = FT(alg.helmholtz_backsub_alpha),
+                    n_iters = alg.n_helmholtz_2d_iters,
+                )
+            else
+                build_sparse_helmholtz_2d_cache(FT, Y; backsub_alpha = FT(alg.helmholtz_backsub_alpha))
+            end
         else
             nothing
         end
@@ -1677,27 +1832,50 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         assemble_sparse_helmholtz!(shc)
     end
 
-    # 2D Sparse Helmholtz for sphere: extract state and assemble matrix
+    # 2D Sparse Helmholtz for sphere: extract state and assemble/update
     if use_derivative(alg.sparse_helmholtz_2d_flag) && !isnothing(cache.sparse_helmholtz_2d)
         shc2 = cache.sparse_helmholtz_2d
-        shc2.dtγ[] = FT(dtγ)
         γ_d_sh2 = cp_d / cv_d
         ᶜcs²_tmp2 = p.scratch.ᶜtemp_scalar_2
         @. ᶜcs²_tmp2 = γ_d_sh2 * ᶜp / ᶜρ
-        _sparse_helmholtz_2d_field_to_vec!(
-            shc2.cs2_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
-        )
-        _sparse_helmholtz_2d_field_to_vec!(
-            shc2.ρ_vec, ᶜρ, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
-        )
-        # Extract e_tot = ρe_tot/ρ for back-substitution (reuse ᶜcs²_tmp2 as scratch)
-        if shc2.backsub_alpha > 0
-            @. ᶜcs²_tmp2 = Y.c.ρe_tot / ᶜρ
+
+        if shc2 isa MatrixFreeHelmholtz2DCache
+            # Matrix-free: copy fields and compute α_acoustic
+            shc2.dtγ[] = FT(dtγ)
+            @. shc2.ᶜcs² = ᶜcs²_tmp2
+            @. shc2.ᶜρ = ᶜρ
+            if shc2.backsub_alpha > 0
+                @. shc2.ᶜe_tot = Y.c.ρe_tot / ᶜρ
+            end
+            # α_acoustic = dtγ²·cs²·λ_diag/Δx² where λ_diag is the Jacobi
+            # diagonal estimate. The 2π²/Δx² formula used in HEVI underestimates
+            # the true max eigenvalue of the GLL spectral element Laplacian by
+            # ~1.5-2× (due to non-uniform GLL spacing at element boundaries).
+            # At large dt, this causes Chebyshev eigenvalues to exceed b=1 and
+            # the iteration diverges. Safety factor 2.5 ensures the Chebyshev
+            # interval [a,b] contains all eigenvalues of M⁻¹A.
+            hspace = Spaces.horizontal_space(axes(Y.c))
+            Δx_ref = Spaces.node_horizontal_length_scale(hspace)
+            chebyshev_safety = FT(1.5)
+            @. shc2.ᶜα_acoustic = chebyshev_safety * FT(dtγ)^2 * ᶜcs²_tmp2 * FT(2 * π^2) / FT(Δx_ref)^2
+            shc2.α_acoustic_max[] = maximum(parent(shc2.ᶜα_acoustic))
+        else
+            # Sparse direct: extract to vectors and assemble matrix
+            shc2.dtγ[] = FT(dtγ)
             _sparse_helmholtz_2d_field_to_vec!(
-                shc2.e_tot_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
+                shc2.cs2_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
             )
+            _sparse_helmholtz_2d_field_to_vec!(
+                shc2.ρ_vec, ᶜρ, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
+            )
+            if shc2.backsub_alpha > 0
+                @. ᶜcs²_tmp2 = Y.c.ρe_tot / ᶜρ
+                _sparse_helmholtz_2d_field_to_vec!(
+                    shc2.e_tot_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
+                )
+            end
+            assemble_sparse_helmholtz_2d!(shc2)
         end
-        assemble_sparse_helmholtz_2d!(shc2)
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
@@ -2536,9 +2714,13 @@ function invert_jacobian!(alg::ManualSparseJacobian, cache, ΔY, R)
         sparse_helmholtz_correction!(cache.sparse_helmholtz, ΔY)
     end
 
-    # Step 4: 2D sparse direct Helmholtz correction for sphere grids
+    # Step 4: 2D Helmholtz correction for sphere grids (direct or matrix-free)
     if use_derivative(alg.sparse_helmholtz_2d_flag) && !isnothing(cache.sparse_helmholtz_2d)
-        sparse_helmholtz_2d_correction!(cache.sparse_helmholtz_2d, ΔY)
+        if cache.sparse_helmholtz_2d isa MatrixFreeHelmholtz2DCache
+            matfree_helmholtz_2d_correction!(cache.sparse_helmholtz_2d, ΔY)
+        else
+            sparse_helmholtz_2d_correction!(cache.sparse_helmholtz_2d, ΔY)
+        end
     end
 end
 
