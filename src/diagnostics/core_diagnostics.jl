@@ -278,6 +278,23 @@ add_diagnostic_variable!(
 )
 
 ###
+# Total specific energy (3d)
+###
+add_diagnostic_variable!(
+    short_name = "etot",
+    long_name = "Specific Total Energy",
+    units = "m^2 s^-2",
+    comments = "Total energy per unit mass of air (internal + kinetic + potential)",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return state.c.ρe_tot ./ state.c.ρ
+        else
+            out .= state.c.ρe_tot ./ state.c.ρ
+        end
+    end,
+)
+
+###
 # Mixing length (3d)
 ###
 add_diagnostic_variable!(
