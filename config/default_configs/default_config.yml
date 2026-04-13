@@ -246,14 +246,11 @@ use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
   value: true
 sgs_distribution:
-  help: "Distribution type for SGS quadrature over microphysics. [`gaussian`, `lognormal` (default), `mean` (grid-mean only, no SGS sampling)]"
+  help: "Distribution for SGS quadrature. Base: `gaussian`, `lognormal` (default), `mean`. Gridscale-corrected Gaussian/lognormal (Gauss–Legendre in layer height and/or profile–Rosenblatt): `gaussian_gridscale_corrected`, `gaussian_gridscale_corrected_column_tensor`, `gaussian_gridscale_corrected_profile_rosenblatt_brent`, `gaussian_gridscale_corrected_profile_rosenblatt_halley`, `gaussian_gridscale_corrected_profile_rosenblatt_chebyshev`, `lognormal_gridscale_corrected`, `lognormal_gridscale_corrected_column_tensor`, `lognormal_gridscale_corrected_profile_rosenblatt_brent`, `lognormal_gridscale_corrected_profile_rosenblatt_halley`, `lognormal_gridscale_corrected_profile_rosenblatt_chebyshev`."
   value: "lognormal"
 quadrature_order:
   help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 2"
   value: 3
-sgs_quadrature_subcell_geometric_variance:
-  help: "Add subcell geometric variance (1/12)Δz² vertical-gradient contributions to (q_tot,T) variances used only for SGS quadrature and SGS saturation adjustment; does not change cached covariances used for cloud fraction [`false` (default), `true`]"
-  value: false
 perf_summary:
   help: "Flag for collecting performance summary information"
   value: false

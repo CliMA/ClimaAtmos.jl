@@ -49,11 +49,6 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_scalar_5 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_6 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_7 = Fields.Field(FT, center_space),
-        # SGS quadrature subcell geometric moments (quadrature-only; see materialize_sgs_quadrature_moments!)
-        ᶜsgs_quad_var_q = Fields.Field(FT, center_space),
-        ᶜsgs_quad_var_T = Fields.Field(FT, center_space),
-        ᶜsgs_quad_corr = Fields.Field(FT, center_space),
-        ᶜdT_dθ_li_buffer = Fields.Field(FT, center_space),
         ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
         temp_field_level_2 = Fields.level(Fields.Field(FT, center_space), 1),

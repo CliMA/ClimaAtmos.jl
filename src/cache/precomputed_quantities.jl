@@ -161,10 +161,7 @@ function precomputed_quantities(Y, atmos)
         atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
     covariance_quantities =
         uses_sgs_quadrature ?
-        (;
-            ᶜT′T′ = zeros(axes(Y.c)),
-            ᶜq′q′ = zeros(axes(Y.c)),
-        ) : (;)
+        (; ᶜT′T′ = zeros(axes(Y.c)), ᶜq′q′ = zeros(axes(Y.c))) : (;)
     surface_precip_fluxes = (;
         surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
         surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
@@ -566,18 +563,31 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         sgs_quad = p.atmos.sgs_quadrature
         if !isnothing(sgs_quad)
             (; ᶜT′T′, ᶜq′q′) = p.precomputed
-            ᶜσT², ᶜσq², ᶜρ_sgs =
-                sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thermo_params)
-            ᶜρ_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
-            @. ᶜsa_result = compute_sgs_saturation_adjustment(
+            FT = eltype(Y.c.ρ)
+            ρ_param = correlation_Tq(p.params)
+            ε = ϵ_variance_statistics(FT)
+            ᶜdz = Fields.Δz_field(axes(Y.c))
+            ᶜlg = Fields.local_geometry_field(Y.c)
+            (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
+            if sgs_quad.dist isa AbstractGridscaleCorrectedSGS
+                compute_∂T_∂θ!(p.scratch.ᶜtemp_scalar, Y, p, thermo_params)
+            end
+            ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
+            @. ᶜsa_result = compute_sgs_saturation_adjustment_row(
                 thermo_params,
                 $(sgs_quad),
                 Y.c.ρ,
                 ᶜT,
                 ᶜq_tot_nonneg,
-                ᶜσT²,
-                ᶜσq²,
-                ᶜρ_Tq,
+                ρ_param,
+                ε,
+                ᶜdz,
+                ᶜlg,
+                ᶜgradᵥ_q_tot,
+                ᶜgradᵥ_θ_liq_ice,
+                ᶜ∂T_∂θ_buf,
+                ᶜT′T′,
+                ᶜq′q′,
             )
             @. ᶜq_liq = ᶜsa_result.q_liq
             @. ᶜq_ice = ᶜsa_result.q_ice

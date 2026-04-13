@@ -858,8 +858,6 @@ Groups moisture and microphysics-related models and types.
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
-    """If true, add (1/12)Δz²(∂q/∂z)² and (1/12)Δz²(∂T/∂z)² to variances passed only to SGS quadrature and SGS saturation adjustment; cached ᶜq′q′/ᶜT′T′ (e.g. cloud fraction) are unchanged."""
-    sgs_quadrature_subcell_geometric_variance::Bool = false
 end
 
 """
@@ -1057,8 +1055,7 @@ The default AtmosModel provides:
 - `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
 - `cloud_model`: GridScaleCloud(), QuadratureCloud()
 - `microphysics_tendency_timestepping`: Explicit(), Implicit()
-- `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)
-- `sgs_quadrature_subcell_geometric_variance`: add (1/12)Δz² vertical-gradient contributions to **variances** and an effective **T–q correlation** for quadrature / SGS saturation adjustment only (default `false`)
+- `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies). Gridscale-corrected variants are selected via [`get_sgs_distribution`](@ref) / `sgs_distribution` YAML (see `AbstractGridscaleCorrectedSGS`).
 
 
 ## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)

@@ -1,5 +1,5 @@
-# Scalar algebra mirroring `materialize_sgs_quadrature_moments!` in
-# `src/cache/microphysics_cache.jl` for a **single vertical column**:
+# Scalar algebra mirroring `sgs_quadrature_moments_from_gradients` / `variance_statistics.jl`
+# (moment-matched Gaussian subcell geometry) for a **single vertical column**:
 # `dot(WVector(∇q), WVector(∇q)) → (∂q/∂z)²`, same for θ_li, and
 # `dot(WVector(∇q), WVector(∇θ)) → (∂q/∂z)(∂θ_li/∂z)`.
 

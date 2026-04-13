@@ -33,15 +33,18 @@ function _va_finalize_profile_axis_limits!(ax, ylims_height_max::Union{Nothing, 
     if ylims_height_max === nothing
         return
     end
-    # Profiles are drawn on the full native `z` column (zeros / noise aloft), so `autolimits` y-extent is
-    # essentially the model top — **not** “where the cloud ends”. Do **not** do `max(cap, autolimits)`:
-    # that would undo the cloud-top cap (e.g. TRMM ~4.3 km cap vs ~16 km column).
-    M.ylims!(ax, 0.0, Float64(ylims_height_max))
+    cap = Float64(ylims_height_max)
+    (!isfinite(cap) || cap <= 0) && return
+    # Profiles are drawn along the full native `z` column; `autolimits` y-extent is essentially the model top.
+    # Do **not** widen the cap using `autolimits` ymax — that would undo the cloud-top tightening. If curves
+    # look clipped, fix the condensate threshold in `va_condensate_cloud_top_height_m` instead.
+    M.ylims!(ax, 0.0, cap)
     return
 end
 import ClimaAnalysis
 import ClimaAnalysis: SimDir, get, slice, average_xy
 import Statistics: mean
+using Printf
 
 """Legend / title label for a run: parent of `output_active` (e.g. `reference`, `member_003`), not the word `output_active`."""
 function va_run_label_for_output_active_path(path::AbstractString)
@@ -202,15 +205,21 @@ end
 
 """
     va_condensate_cloud_top_height_m(path_list, calibration_truth_series, forward_finest_series;
-        experiment_dir, model_config_rel, q_threshold, padding_m) -> Union{Nothing, Float64}
+        experiment_dir, model_config_rel, padding_m, condensate_floor_kg_kg, condensate_floor_frac_of_peak) -> Union{Nothing, Float64}
 
-Upper **height (m)** for profile **y-axis** limits: **`padding_m`** above the highest level where
-**`clw + cli > q_threshold`** (kg/kg) on **any** sweep line or reference overlay. Used so all profile PNGs
-in a forward-sweep panel share the same vertical extent.
+Upper **height (m)** for profile **y-axis** limits: **`padding_m`** above the **highest level** where the
+horizontal-mean **`clw + cli`** exceeds an **effective threshold** `τ` (kg/kg).
 
-Returns **`nothing`** if `clw`/`cli` are missing from the case YAML, or no level exceeds **`q_threshold`**
-(then callers keep Makie autoscale). **`q_threshold`** should be **positive** so numerical wisp-negatives in
-`clw`/`cli` are not treated as cloud.
+**Threshold** (same for every path; built from the global peak mixing ratio `q_peak` over all walks below):
+
+`τ = max(condensate_floor_kg_kg, condensate_floor_frac_of_peak * q_peak)` when `condensate_floor_frac_of_peak`
+is set; otherwise `τ = condensate_floor_kg_kg` (default **`0`** ⇒ treat as “`> 0`” in practice).
+
+That way a fixed absolute floor does not dominate when the cloud is very weak (`q_peak ~ 1e-11`) or very strong
+(`q_peak ~ 1e-1`): the **relative** term scales with case amplitude; the **absolute** term suppresses pure
+numerical noise.
+
+Returns **`nothing`** if `clw`/`cli` are missing from the case YAML, or no level exceeds `τ` on any path.
 """
 function va_condensate_cloud_top_height_m(
     path_list::AbstractVector{<:AbstractString},
@@ -218,8 +227,9 @@ function va_condensate_cloud_top_height_m(
     forward_finest_series;
     experiment_dir::AbstractString,
     model_config_rel,
-    q_threshold::Float64 = 1e-5,
     padding_m::Float64 = 600.0,
+    condensate_floor_kg_kg::Float64 = 0.0,
+    condensate_floor_frac_of_peak::Union{Nothing, Float64} = nothing,
 )::Union{Nothing, Float64}
     pairs = va_case_yaml_diagnostic_shortname_period_pairs(experiment_dir, model_config_rel)
     per_a = _va_yaml_period_for_short_name(pairs, "clw")
@@ -227,52 +237,63 @@ function va_condensate_cloud_top_height_m(
     (per_a === nothing || per_b === nothing) && return nothing
 
     z_elem = va_z_elem_from_case_yaml(experiment_dir, model_config_rel)
-    z_cloud = -Inf
-    z_data_max = -Inf
 
-    function accum!(simdir_path, z_cap::Union{Nothing, Int})
-        !isdir(simdir_path) && return
-        simdir = SimDir(simdir_path)
-        isempty(simdir.vars) && return
-        vz = _va_profile_pair_sum_xy(simdir, "clw", "cli", per_a, per_b, z_cap)
-        vz === nothing && return
-        x, z = vz
-        for i in eachindex(x, z)
-            zi = z[i]
-            z_data_max = max(z_data_max, zi)
-            if x[i] > q_threshold
-                z_cloud = max(z_cloud, zi)
+    function walk_data!(visit!)
+        function accum!(simdir_path, z_cap::Union{Nothing, Int})
+            !isdir(simdir_path) && return
+            simdir = SimDir(simdir_path)
+            isempty(simdir.vars) && return
+            vz = _va_profile_pair_sum_xy(simdir, "clw", "cli", per_a, per_b, z_cap)
+            vz === nothing && return
+            x, z = vz
+            for i in eachindex(x, z)
+                visit!(x[i], z[i])
             end
+            return
+        end
+        for p in path_list
+            accum!(String(p), z_elem)
+        end
+        if forward_finest_series !== nothing
+            for (ref_path, _) in forward_finest_series
+                accum!(String(ref_path), nothing)
+            end
+        end
+        if calibration_truth_series !== nothing
+            for (ref_path, _) in calibration_truth_series
+                accum!(String(ref_path), nothing)
+            end
+        end
+        for p in path_list
+            accum!(String(p), nothing)
         end
         return
     end
 
-    for p in path_list
-        accum!(String(p), z_elem)
-    end
-    if forward_finest_series !== nothing
-        for (ref_path, _) in forward_finest_series
-            accum!(String(ref_path), nothing)
-        end
-    end
-    if calibration_truth_series !== nothing
-        for (ref_path, _) in calibration_truth_series
-            accum!(String(ref_path), nothing)
-        end
+    q_peak = 0.0
+    z_data_max = -Inf
+    walk_data!() do xi, zi
+        isfinite(xi) && isfinite(zi) || return
+        q_peak = max(q_peak, xi)
+        z_data_max = max(z_data_max, zi)
     end
 
-    # `min(z_hi, z_data_max)` must not use `z_data_max` from **truncated** sweep profiles only: sweep lines
-    # are plotted with `z_cap = z_elem` (first `z_elem` levels), so `accum!(..., z_elem)` can report a
-    # **lower** column top than the native SimDir grid. That made `z_hi` too small vs overlays drawn with
-    # `z_cap = nothing` (full column), so `ylims!(0, z_hi)` could clip the overlay while sweep curves still
-    # looked fine within the truncated z range.
-    for p in path_list
-        accum!(String(p), nothing)
+    τ = condensate_floor_kg_kg
+    if condensate_floor_frac_of_peak !== nothing && q_peak > 0
+        τ = max(τ, condensate_floor_frac_of_peak * q_peak)
+    end
+
+    z_cloud = -Inf
+    walk_data!() do xi, zi
+        isfinite(xi) && isfinite(zi) || return
+        xi > τ || return
+        z_cloud = max(z_cloud, zi)
     end
 
     !isfinite(z_cloud) && return nothing
     z_hi = z_cloud + padding_m
     isfinite(z_data_max) && (z_hi = min(z_hi, z_data_max))
+    (!isfinite(z_hi) || z_hi <= 0) && return nothing
     return z_hi
 end
 
@@ -394,6 +415,23 @@ Writes `outdir/profile_<sum_short>.png`. Returns that path, or **`nothing`** if 
 from the case YAML or no line could be drawn.
 
 Uses the same reference overlays as [`va_plot_all_case_diagnostic_profiles`](@ref).
+
+Optional **`figure_size`**: `(width,height)` in pixels; default is wider-than-tall for profile plots.
+
+**`compact_x_axis`**: fewer x ticks (Wilkinson) and `%.1e` labels with a small rotation — for small mass-fraction
+ranges where default ticks overlap.
+
+**`legend_labelsize`**: optional Makie legend entry font size (e.g. `11` when labels are abbreviated).
+
+**`legend_nbanks`**: optional number of legend columns (`2` helps many short series on one axis).
+
+When **`legend_outside=true`**, **`resize_to_layout!`** runs before **`save`** so the second column is not clipped
+out of the PNG (a common CairoMakie footgun with fixed `Figure(size=...)`).
+
+**`figure_save_px_per_unit`**: passed to **`M.save(...; px_per_unit=...)`** (default **`1`**). Use **`2`**–**`8`**
+for publication / heavy zoom (PNG pixel width ≈ `figure_size[1] * px_per_unit` after layout).
+
+**`save_pdf_also`**: if **`true`**, also writes **`splitext(outpng)[1] * ".pdf"`** (vector lines/text; best for zooming in a PDF viewer).
 """
 function va_plot_profile_shortname_sum!(
     paths::AbstractVector{<:AbstractString};
@@ -418,6 +456,12 @@ function va_plot_profile_shortname_sum!(
     legend_position = :rb,
     ylims_height_max::Union{Nothing, Real} = nothing,
     legend_outside::Bool = false,
+    figure_size::Union{Nothing, Tuple{Int, Int}} = nothing,
+    compact_x_axis::Bool = false,
+    legend_labelsize::Union{Nothing, Real} = nothing,
+    legend_nbanks::Union{Nothing, Int} = nothing,
+    figure_save_px_per_unit::Real = 1,
+    save_pdf_also::Bool = false,
 )::Union{Nothing, String}
     pairs = va_case_yaml_diagnostic_shortname_period_pairs(experiment_dir, model_config_rel)
     per_a = _va_yaml_period_for_short_name(pairs, short_a)
@@ -449,15 +493,34 @@ function va_plot_profile_shortname_sum!(
     outpng = joinpath(outdir, "profile_$(safe).png")
     mkpath(outdir)
 
-    fig = M.Figure(size = (legend_outside ? 660 : 520, 680))
+    default_sz = legend_outside ? (760, 460) : (600, 440)
+    fig = M.Figure(size = something(figure_size, default_sz))
     sum_default_title = "Last time slice, horizontal mean — $sum_short = $short_a + $short_b"
-    ax = M.Axis(
-        fig[1, 1];
-        xlabel = xlabel,
-        ylabel = "height (m)",
-        title = show_axis_title ? something(profile_title, sum_default_title) : "",
-        titlevisible = show_axis_title,
-    )
+    ax = if compact_x_axis
+        M.Axis(
+            fig[1, 1];
+            xlabel = xlabel,
+            ylabel = "height (m)",
+            title = show_axis_title ? something(profile_title, sum_default_title) : "",
+            titlevisible = show_axis_title,
+            xticks = M.WilkinsonTicks(5),
+        )
+    else
+        M.Axis(
+            fig[1, 1];
+            xlabel = xlabel,
+            ylabel = "height (m)",
+            title = show_axis_title ? something(profile_title, sum_default_title) : "",
+            titlevisible = show_axis_title,
+        )
+    end
+    if compact_x_axis
+        ax.xtickformat = (vs) -> [@sprintf("%.1e", v) for v in vs]
+        ax.xticklabelrotation = deg2rad(20)
+        # Makie stores these as Float64 (not Float32); Float32 throws MethodError on setproperty!.
+        ax.xticklabelspace = 12.0
+        ax.xticklabelpad = 4.0
+    end
     n_series, any_line = _va_plot_clw_plus_cli_series_on_axis!(
         ax,
         path_list,
@@ -480,17 +543,32 @@ function va_plot_profile_shortname_sum!(
         @debug "va_plot_profile_shortname_sum!: no drawable lines" sum_short short_a short_b outdir
         return nothing
     end
-    _va_finalize_profile_axis_limits!(ax, ylims_height_max)
+    leg_kw = (; framevisible = true, backgroundcolor = :white)
+    if legend_labelsize !== nothing
+        leg_kw = (; leg_kw..., labelsize = legend_labelsize)
+    end
+    if legend_nbanks !== nothing
+        leg_kw = (; leg_kw..., nbanks = legend_nbanks)
+    end
     if legend_outside && n_series > 1
-        M.Legend(fig[1, 2], ax; framevisible = true, backgroundcolor = :white)
+        M.Legend(fig[1, 2], ax; leg_kw...)
         M.colgap!(fig.layout, 14)
         M.colsize!(fig.layout, 1, M.Auto(1))
-        M.colsize!(fig.layout, 2, M.Auto(0.28))
+        M.colsize!(fig.layout, 2, M.Auto(0.38))
+        M.resize_to_layout!(fig)
     elseif n_series > 1
-        M.axislegend(ax; position = legend_position, framevisible = true, backgroundcolor = :white)
+        M.axislegend(ax; position = legend_position, leg_kw...)
     end
-    M.save(outpng, fig)
-    @info "Wrote summed profile figure" outpng sum_short = sum_short
+    # After legend: layout can reset axis limits in some Makie versions; ylims must be applied last.
+    _va_finalize_profile_axis_limits!(ax, ylims_height_max)
+    ppu = Float64(figure_save_px_per_unit)
+    M.save(outpng, fig; px_per_unit = ppu)
+    @info "Wrote summed profile figure" outpng sum_short = sum_short px_per_unit = ppu
+    if save_pdf_also
+        outpdf = string(splitext(outpng)[1], ".pdf")
+        M.save(outpdf, fig)
+        @info "Wrote summed profile figure (PDF)" outpdf
+    end
     return outpng
 end
 
@@ -760,7 +838,6 @@ function va_plot_all_case_diagnostic_profiles(
             end
         end
         if any_line
-            _va_finalize_profile_axis_limits!(ax, ylims_height_max)
             if legend_outside && n_series > 1
                 M.Legend(fig[1, 2], ax; framevisible = true, backgroundcolor = :white)
                 M.colgap!(fig.layout, 14)
@@ -769,6 +846,7 @@ function va_plot_all_case_diagnostic_profiles(
             elseif n_series > 1
                 M.axislegend(ax; position = legend_position, framevisible = true, backgroundcolor = :white)
             end
+            _va_finalize_profile_axis_limits!(ax, ylims_height_max)
             M.save(outpng, fig)
             push!(written, outpng)
         elseif !spec_resolved_anywhere

@@ -3,6 +3,7 @@
 # [`lib/calibration_sweep_configs.jl`](../../lib/calibration_sweep_configs.jl) (`va_naive_vs_calibrated_varfix_on_yaml_pairs`).
 #
 const _VA_ROOT_NAIVEPLOT = joinpath(@__DIR__, "..", "..") |> abspath
+include(joinpath(_VA_ROOT_NAIVEPLOT, "lib", "experiment_common.jl"))
 include(joinpath(_VA_ROOT_NAIVEPLOT, "lib", "observation_map.jl"))
 
 import ClimaCalibrate as CAL
@@ -34,14 +35,16 @@ function va_plot_naive_vs_calibrated_varfix_on_profiles!(
 )
     off_ex = va_load_experiment_config(experiment_dir, varfix_off_yaml)
     on_ex = va_load_experiment_config(experiment_dir, varfix_on_yaml)
+    off_case = va_load_merged_case_yaml_dict(experiment_dir, off_ex["model_config_path"])
+    on_case = va_load_merged_case_yaml_dict(experiment_dir, on_ex["model_config_path"])
     string(off_ex["case_name"]) == string(on_ex["case_name"]) ||
         error("naive vs calibrated pair: case_name mismatch $(varfix_off_yaml) vs $(varfix_on_yaml)")
     Int(off_ex["quadrature_order"]) == Int(on_ex["quadrature_order"]) ||
         error("naive vs calibrated pair: quadrature_order mismatch")
-    Bool(get(off_ex, "sgs_quadrature_subcell_geometric_variance", false)) &&
-        error("varfix_off_yaml must have varfix off")
-    !Bool(get(on_ex, "sgs_quadrature_subcell_geometric_variance", false)) &&
-        error("varfix_on_yaml must have varfix on")
+    va_varfix_tag(off_ex, off_case) == "varfix_on" &&
+        error("varfix_off_yaml must have varfix off (base sgs_distribution, not *_gridscale_corrected)")
+    va_varfix_tag(on_ex, on_case) == "varfix_off" &&
+        error("varfix_on_yaml must have gridscale-corrected SGS / varfix on")
 
     iter_off = va_latest_eki_iteration_number(experiment_dir, varfix_off_yaml)
     iter_on = va_latest_eki_iteration_number(experiment_dir, varfix_on_yaml)

@@ -125,12 +125,6 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         prescribed_flow = ShipwayHill2012VelocityProfile{FT}()
     end
 
-    sgs_quadrature_subcell_geometric_variance = get(
-        parsed_args,
-        "sgs_quadrature_subcell_geometric_variance",
-        false,
-    )
-
     atmos = AtmosModel(;
         # AtmosWater - Moisture, Precipitation & Clouds
         microphysics_model,
@@ -139,7 +133,6 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
                                              Implicit() : Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(parsed_args),
         sgs_quadrature,
-        sgs_quadrature_subcell_geometric_variance,
 
         # SCMSetup - Single-Column Model components
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT; setup_type),

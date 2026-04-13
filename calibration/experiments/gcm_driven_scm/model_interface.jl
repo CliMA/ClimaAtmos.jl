@@ -70,7 +70,7 @@ end
     if sol_res.ret_code == :simulation_crashed
         !isnothing(sol_res.sol) && sol_res.sol .= eltype(sol_res.sol)(NaN)
         error(
-            "The ClimaAtmos simulation has crashed. See the stack trace for details.",
+            "The ClimaAtmos simulation has crashed. See $(joinpath(simulation.output_dir, "integration_crash.log"))",
         )
     end
 end

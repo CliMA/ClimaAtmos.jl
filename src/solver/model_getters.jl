@@ -377,21 +377,56 @@ end
 
 Parse the SGS distribution type from configuration.
 
-# Config value mapping
-- `"lognormal"` → `LogNormalSGS()`
-- `"gaussian"` → `GaussianSGS()`
-- `"mean"` → `GridMeanSGS()` (grid-mean only, no SGS sampling)
+# Config value mapping (gridscale-corrected: Gauss–Legendre in layer height and/or profile–Rosenblatt)
+- `"gaussian_gridscale_corrected"` → [`GaussianGridscaleCorrectedSGS`](@ref) (default profile–Rosenblatt + Brent)
+- `"gaussian_gridscale_corrected_column_tensor"` → [`GaussianGridscaleCorrectedSGS{SubgridColumnTensor}`](@ref)
+- `"gaussian_gridscale_corrected_profile_rosenblatt_brent"` / `"_halley"` / `"_chebyshev"` → profile–Rosenblatt variants (`_chebyshev`: embedded Chebyshev in `log10(η)`)
+- `"lognormal_gridscale_corrected"` → [`LogNormalGridscaleCorrectedSGS`](@ref) (default profile–Rosenblatt + Brent, same as Gaussian default)
+- `"lognormal_gridscale_corrected_profile_rosenblatt_brent"` / `"_halley"` / `"_chebyshev"` → same as Gaussian, for lognormal `q`
+- `"lognormal_gridscale_corrected_column_tensor"` → [`LogNormalGridscaleCorrectedSGS{SubgridColumnTensor}`](@ref)
+
+# Base names (no layer-profile quadrature in the PDF)
+- `"gaussian"` → [`GaussianSGS`](@ref)
+- `"lognormal"` → [`LogNormalSGS`](@ref)
+- `"mean"` → [`GridMeanSGS`](@ref)
 """
 function get_sgs_distribution(parsed_args)
     dist_name = parsed_args["sgs_distribution"]
-    return if dist_name == "lognormal"
-        LogNormalSGS()
+
+    if dist_name == "gaussian_gridscale_corrected"
+        return GaussianGridscaleCorrectedSGS()
+    elseif dist_name == "gaussian_gridscale_corrected_column_tensor"
+        return GaussianGridscaleCorrectedSGS{SubgridColumnTensor}()
+    elseif dist_name == "gaussian_gridscale_corrected_profile_rosenblatt_brent"
+        return GaussianGridscaleCorrectedSGS{SubgridProfileRosenblatt{ConvolutionQuantilesBracketed}}()
+    elseif dist_name == "gaussian_gridscale_corrected_profile_rosenblatt_halley"
+        return GaussianGridscaleCorrectedSGS{SubgridProfileRosenblatt{ConvolutionQuantilesHalley}}()
+    elseif dist_name == "gaussian_gridscale_corrected_profile_rosenblatt_chebyshev"
+        return GaussianGridscaleCorrectedSGS{SubgridProfileRosenblatt{ConvolutionQuantilesChebyshevLogEta}}()
+    elseif dist_name == "lognormal_gridscale_corrected"
+        return LogNormalGridscaleCorrectedSGS()
+    elseif dist_name == "lognormal_gridscale_corrected_profile_rosenblatt_brent"
+        return LogNormalGridscaleCorrectedSGS{SubgridProfileRosenblatt{ConvolutionQuantilesBracketed}}()
+    elseif dist_name == "lognormal_gridscale_corrected_profile_rosenblatt_halley"
+        return LogNormalGridscaleCorrectedSGS{SubgridProfileRosenblatt{ConvolutionQuantilesHalley}}()
+    elseif dist_name == "lognormal_gridscale_corrected_profile_rosenblatt_chebyshev"
+        return LogNormalGridscaleCorrectedSGS{SubgridProfileRosenblatt{ConvolutionQuantilesChebyshevLogEta}}()
+    elseif dist_name == "lognormal_gridscale_corrected_column_tensor"
+        return LogNormalGridscaleCorrectedSGS{SubgridColumnTensor}()
     elseif dist_name == "gaussian"
-        GaussianSGS()
+        return GaussianSGS()
+    elseif dist_name == "lognormal"
+        return LogNormalSGS()
     elseif dist_name == "mean"
-        GridMeanSGS()
+        return GridMeanSGS()
     else
-        error("Invalid sgs_distribution $(dist_name). Use: lognormal, gaussian, mean")
+        error(
+            "Invalid sgs_distribution $(dist_name). Use: gaussian, lognormal, mean, " *
+                "gaussian_gridscale_corrected, gaussian_gridscale_corrected_column_tensor, " *
+                "gaussian_gridscale_corrected_profile_rosenblatt_brent, gaussian_gridscale_corrected_profile_rosenblatt_halley, gaussian_gridscale_corrected_profile_rosenblatt_chebyshev, " *
+                "lognormal_gridscale_corrected, lognormal_gridscale_corrected_column_tensor, " *
+                "lognormal_gridscale_corrected_profile_rosenblatt_brent, lognormal_gridscale_corrected_profile_rosenblatt_halley, lognormal_gridscale_corrected_profile_rosenblatt_chebyshev",
+        )
     end
 end
 

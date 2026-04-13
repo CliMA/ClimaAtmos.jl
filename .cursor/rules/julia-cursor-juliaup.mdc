@@ -1,0 +1,39 @@
+---
+description: Run Julia/Pkg under Cursor agent and juliaup without launcher or ~/.julia write failures
+alwaysApply: true
+---
+
+# Julia + juliaup + Cursor
+
+## 1. `Could not create lockfile` (juliaup **shim**)
+
+If `julia` on `PATH` is `~/.juliaup/bin/julia`, the **launcher** may try to lock juliaup’s config before starting Julia. **Cursor’s sandboxed terminal** (🔒) and the **agent shell** often cannot create that lock →
+
+`Error: The Julia launcher failed to load a configuration file … Could not create lockfile: Permission denied`.
+
+**Workaround:** call the **versioned binary** directly (no shim), e.g.:
+
+`~/.julia/juliaup/julia-1.12.5+0.x64.linux.gnu/bin/julia`
+
+(Adjust the folder to match `ls ~/.julia/juliaup/julia-*`.)
+
+## 2. `IOError: … .julia/logs/manifest_usage.toml.pid … permission denied`
+
+**Pkg** (even with the direct binary) writes usage locks under the **first** depot in `JULIA_DEPOT_PATH`, default `~/.julia`. Sandboxed environments may not allow writes there.
+
+**Workaround:** prepend a **writable** depot inside the repo, keep the user depot for registries/artifacts (read-mostly):
+
+```bash
+export JULIA_DEPOT_PATH="/ABS/PATH/TO/ClimaAtmos.jl/.cursor_julia_depot:$HOME/.julia"
+```
+
+Then run the **direct** `bin/julia` with `--project=…` and `using Pkg; Pkg.resolve()` / etc.  
+(`.cursor_julia_depot/` is gitignored in this repo.)
+
+## 3. Agent shell
+
+Before claiming Julia cannot run: try **direct binary** + **split `JULIA_DEPOT_PATH`** as above. Do not hand-edit `Manifest.toml`.
+
+## 4. `Pkg.resolve` / compat errors (e.g. ClimaParams)
+
+Those are **normal resolver** issues, unrelated to the launcher lockfile. Fix with `Pkg.update()`, compat changes, or project-specific instructions—not by blaming “sandbox” generically.

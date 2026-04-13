@@ -1,0 +1,67 @@
+\contentsline {section}{\numberline {1}Introduction}{4}{section.1}%
+\contentsline {paragraph}{The quantity of interest.}{4}{section*.2}%
+\contentsline {paragraph}{Why quadrature (and which kind) is subtle.}{4}{section*.3}%
+\contentsline {paragraph}{Contributions of this note.}{4}{section*.4}%
+\contentsline {paragraph}{Reader's map.}{5}{section*.5}%
+\contentsline {section}{\numberline {2}Scope, assumptions, and notation}{5}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Modeling assumptions}{5}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Notation}{5}{subsection.2.2}%
+\contentsline {section}{\numberline {3}Motivating example: saturation excess in $(T,q)$ space}{6}{section.3}%
+\contentsline {section}{\numberline {4}Gaussian quadrature and the measures it encodes}{6}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Univariate Gaussian quadrature: what ``optimal'' means}{6}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Gauss--Legendre = Gaussian quadrature for uniform weight on a bounded interval}{6}{subsection.4.2}%
+\contentsline {paragraph}{Outer integral in\nobreakspace {}$z$.}{7}{section*.7}%
+\contentsline {subsection}{\numberline {4.3}Gauss--Hermite = Gaussian quadrature for Gaussian weight on the line}{7}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}Mismatched rules: why Hermite nodes are wrong for the pill marginal}{7}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}From uniform probability to expectations: the inverse-CDF identity}{7}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}Probability-transform (mapped) Gauss--Legendre for $\mathcal {N}(\bm {\mu },\Sigma )$ in $\mathbb {R}^2$}{8}{subsection.4.6}%
+\contentsline {subsection}{\numberline {4.7}Tensor products, Fubini, and the column-tensor discretization}{8}{subsection.4.7}%
+\contentsline {paragraph}{Tensor-product quadrature.}{8}{section*.8}%
+\contentsline {subsection}{\numberline {4.8}Why Legendre quadrature on the layer alone is insufficient}{8}{subsection.4.8}%
+\contentsline {paragraph}{(A) Only discretizing $z$.}{8}{section*.9}%
+\contentsline {paragraph}{(B) A three-dimensional tensor Gauss--Legendre box in $(z,x_1,x_2)$.}{9}{section*.10}%
+\contentsline {subsection}{\numberline {4.9}Rosenblatt conditioning}{9}{subsection.4.9}%
+\contentsline {section}{\numberline {5}Layer-mean objective and baseline approximations}{9}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Integral statement (moist specialization)}{9}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Center-only: collapse the layer to the center}{9}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Moment-matched: single Gaussian with total variance}{9}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}Column-tensor: tensor product in $z$ and $(T,q)$}{10}{subsection.5.4}%
+\contentsline {subsection}{\numberline {5.5}Profile--Rosenblatt: quadrature along the mean gradient}{10}{subsection.5.5}%
+\contentsline {section}{\numberline {6}Gradient-aligned coordinates: the maps $M$, $M^{-1}$, and path length}{10}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Construction of $M$}{10}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Conditional Gaussian parameters}{11}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Uniform path half-width $L=H$ and degenerate gradients}{11}{subsection.6.3}%
+\contentsline {section}{\numberline {7}The pill marginal along $u$ at fixed $v$}{11}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Where the uniform factor comes from}{11}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}CDF, PDF, and derivatives}{11}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}Inner quadrature: Gauss--Legendre in $p$ (probability space)}{11}{subsection.7.3}%
+\contentsline {section}{\numberline {8}Why root-finding appears, and Brent's method}{12}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Root-finding is not ``physics''}{12}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}Brent's method}{12}{subsection.8.2}%
+\contentsline {subsection}{\numberline {8.3}Complexity and the surrogate motivation}{12}{subsection.8.3}%
+\contentsline {section}{\numberline {9}Surrogate pill inversions}{12}{section.9}%
+\contentsline {subsection}{\numberline {9.1}Hybrid uniform--Gaussian blending (experimental)}{12}{subsection.9.1}%
+\contentsline {subsection}{\numberline {9.2}Halley iteration on $F(x)=p_i$}{13}{subsection.9.2}%
+\contentsline {subsection}{\numberline {9.3}Logistic seed + Householder step}{13}{subsection.9.3}%
+\contentsline {section}{\numberline {10}Chebyshev approximation in $\qopname \relax o{log}_{10}\eta $}{13}{section.10}%
+\contentsline {subsection}{\numberline {10.1}Rationale and operation count}{13}{subsection.10.1}%
+\contentsline {subsection}{\numberline {10.2}Training grid and Brent truth}{13}{subsection.10.2}%
+\contentsline {subsection}{\numberline {10.3}Affine map and symmetry}{13}{subsection.10.3}%
+\contentsline {subsection}{\numberline {10.4}Runtime evaluation and offline validation}{13}{subsection.10.4}%
+\contentsline {section}{\numberline {11}Rational surrogate in $\eta $}{14}{section.11}%
+\contentsline {subsection}{\numberline {11.1}Template and training}{14}{subsection.11.1}%
+\contentsline {subsection}{\numberline {11.2}Failure modes}{14}{subsection.11.2}%
+\contentsline {section}{\numberline {12}Profile--Rosenblatt assembly for $\overline {q_c}$}{14}{section.12}%
+\contentsline {section}{\numberline {13}Numerical study: claims, metrics, interpretation}{15}{section.13}%
+\contentsline {subsection}{\numberline {13.1}C1: Consistency of discretizations}{15}{subsection.13.1}%
+\contentsline {subsection}{\numberline {13.2}C2: Structural bias of the moment-matched Gaussian}{15}{subsection.13.2}%
+\contentsline {subsection}{\numberline {13.3}C3: Surrogate fidelity and total error against a reference}{15}{subsection.13.3}%
+\contentsline {subsection}{\numberline {13.4}C4: Complexity reference values versus surrogates}{15}{subsection.13.4}%
+\contentsline {subsection}{\numberline {13.5}High-resolution reference $\overline {q_c}^{\mathrm {ref}}$}{15}{subsection.13.5}%
+\contentsline {subsection}{\numberline {13.6}Optional graphics}{16}{subsection.13.6}%
+\contentsline {section}{\numberline {14}Worked micro-example ($N=2$ pill quantiles)}{16}{section.14}%
+\contentsline {section}{\numberline {A}Reproducibility protocol for timing (supports C4)}{16}{appendix.A}%
+\contentsline {section}{\numberline {B}Optional implementation crosswalk}{16}{appendix.B}%
+\contentsline {section}{\numberline {C}Example saturation closure for reproducibility}{16}{appendix.C}%
+\contentsline {section}{\numberline {D}Numerical stability knobs}{16}{appendix.D}%
+\contentsline {section}{\numberline {E}Barycentric Floater--Hormann interpolation (optional)}{16}{appendix.E}%

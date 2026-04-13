@@ -20,7 +20,6 @@ microphysics_model: "1M"
 use_sgs_quadrature: true
 sgs_distribution: lognormal
 quadrature_order: 3
-sgs_quadrature_subcell_geometric_variance: false
 config: column
 hyperdiff: "false"
 z_max: 1500

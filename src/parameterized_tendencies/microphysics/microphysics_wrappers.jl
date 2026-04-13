@@ -5,7 +5,7 @@ import CloudMicrophysics.AerosolModel as CMAM
 import CloudMicrophysics.AerosolActivation as CMAA
 
 # Import SGS quadrature utilities
-using ..ClimaAtmos: integrate_over_sgs
+using ..ClimaAtmos: integrate_over_sgs, integrate_over_sgs_linear_profile
 
 ###
 ### 0 Moment Microphysics
@@ -252,11 +252,11 @@ Call sites must convert θ-based variances to T-based variances using the chain 
 ∂T_∂θ = ... # (∂T/∂θ_liq_ice) computed at grid mean state
 T′T′ = (∂T_∂θ)² × θ′θ′
 ```
-The T–q correlation is scalar `correlation_Tq(params)` unless subcell geometric
-variance is enabled, in which case call sites may pass a per-cell effective correlation
-from `sgs_quadrature_Tq_moments` (see `materialize_sgs_quadrature_moments!`).
+The T–q correlation is scalar `correlation_Tq(params)` for uncorrected distributions;
+for [`AbstractGridscaleCorrectedSGS`](@ref), use per-cell effective correlation from
+[`sgs_quadrature_moments_from_gradients`](@ref) at cache call sites that build SGS moments.
 """
-@inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
+@inline function microphysics_tendencies_1m(
     ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, tst, dt,
 )
     local_tendency = BMT.bulk_microphysics_tendencies(
@@ -270,7 +270,8 @@ from `sgs_quadrature_Tq_moments` (see `materialize_sgs_quadrature_moments!`).
     end
     return local_tendency
 end
-@inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
+
+@inline function microphysics_tendencies_1m(
     scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, tst, dt, args...,
 )

@@ -99,7 +99,10 @@ function run_one(;
         return nothing
     end
     cfg["quadrature_order"] = n_quad
-    cfg["sgs_quadrature_subcell_geometric_variance"] = varfix
+    base_dist = string(get(cfg, "sgs_distribution", "lognormal"))
+    cfg["sgs_distribution"] =
+        varfix ? va_base_to_gridscale_corrected_sgs_distribution(base_dist) :
+        base_dist
     if merged_member_toml === nothing
         merged_path = joinpath(cfg["output_dir"], VA_MERGED_SCM_BASELINE_BASENAME)
         va_write_merged_scm_baseline_file!(EXPERIMENT_DIR, scm_toml, merged_path)

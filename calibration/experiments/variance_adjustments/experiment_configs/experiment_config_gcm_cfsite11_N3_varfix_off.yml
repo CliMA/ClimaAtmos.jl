@@ -20,7 +20,6 @@ ensemble_size: 6
 n_iterations: 2
 prior_path: config/prior.toml
 quadrature_order: 3
-sgs_quadrature_subcell_geometric_variance: false
 observations_path: simulation_output/GCM_CFSITE11/N_3/varfix_off/reference/observations.jld2
 observation_noise_std: [0.05, 0.05, 0.05]
 observation_fields:

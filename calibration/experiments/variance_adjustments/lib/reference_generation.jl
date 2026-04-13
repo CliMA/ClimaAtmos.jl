@@ -105,8 +105,7 @@ function reference_config_dict(experiment_dir::AbstractString)
     mkpath(ref_out)
     cfg["output_dir"] = ref_out
     cfg["quadrature_order"] = expc["quadrature_order"]
-    cfg["sgs_quadrature_subcell_geometric_variance"] =
-        expc["sgs_quadrature_subcell_geometric_variance"]
+    cfg["sgs_distribution"] = va_resolve_sgs_distribution_for_atmos_config(cfg, expc)
     merged_scm = _reference_truth_atmos_toml!(experiment_dir, expc, ref_out)
     cfg["toml"] = [merged_scm]
     cfg["output_default_diagnostics"] = get(cfg, "output_default_diagnostics", false)

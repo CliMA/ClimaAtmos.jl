@@ -25,6 +25,7 @@ include(joinpath("utils", "variable_manipulations.jl"))
 include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
 include(joinpath("utils", "era5_observations_to_forcing_file.jl"))
 include(joinpath("utils", "weather_model.jl"))
+include(joinpath("utils", "variance_statistics.jl"))
 
 include(joinpath("utils", "AtmosArtifacts.jl"))
 import .AtmosArtifacts as AA
@@ -38,6 +39,13 @@ include(joinpath("parameterized_tendencies", "radiation", "radiation.jl"))
 
 include(joinpath("cache", "prognostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "diagnostic_edmf_precomputed_quantities.jl"))
+include(
+    joinpath(
+        "parameterized_tendencies",
+        "microphysics",
+        "sgs_distribution_types.jl",
+    ),
+)
 include(joinpath("cache", "microphysics_cache.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
 include(joinpath("cache", "surface_albedo.jl"))

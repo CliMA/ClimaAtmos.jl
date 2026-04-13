@@ -59,10 +59,14 @@ known_dependencies = Set([
     "NCDatasets",
     "NVTX",
     "RRTMGP",
+    # RootSolvers: bracketed roots for uniform–Gaussian convolution quantiles (layer-mean SGS quadrature)
+    "RootSolvers",
     # Random is used to reset seed for random number generator used for cloudy RRTMGP runs to enable bit-wise reproducibility for tests
     "Random",
     # SparseMatrixColorings is used to generate the column coloring of the AutoSparseJacobian
     "SparseMatrixColorings",
+    # SpecialFunctions: erf / normal convolution CDF for subgrid layer-profile quadrature
+    "SpecialFunctions",
     "StaticArrays",
     # Statistics is used to call 'mean' on ClimaCore Fields
     "Statistics",

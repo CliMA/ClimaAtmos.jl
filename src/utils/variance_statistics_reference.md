@@ -36,14 +36,14 @@ The covariance matrix $\Sigma$ is mathematically singular; its determinant is ex
 
 In practical applications, gradients do not stretch to infinity; they are bounded within a discrete cell. Let the state vector at the start of the interval be $\mathbf{a}$ and the state vector at the end of the interval be $\mathbf{b}$. Let the difference vector be $\mathbf{d} = \mathbf{b} - \mathbf{a}$.
 
-Furthermore, assume there is small, isotropic, local Gaussian noise with standard deviation $\sigma$ at every point along the segment.
+Furthermore, assume there is local, correlated Gaussian turbulence at every point along the segment, defined by a fully populated $2 \times 2$ covariance matrix $\Sigma_{local}$.
 
 ### The Naive Gaussian Assumption
 A common, computationally inexpensive approach is to compute the total mean and total covariance of the interval and simply fit a standard Bivariate Gaussian to those moments. 
 
 To match the variance of a uniform gradient spanning $\mathbf{d}$, one can construct a generative Gaussian model using a weight $W \sim \mathcal{N}\left(0, \frac{1}{12}\right)$, matching the variance of a Standard Uniform distribution:
 $$\mathbf{X}_{naive} = \frac{\mathbf{a} + \mathbf{b}}{2} + W\mathbf{d} + \mathbf{Z}_{local}$$
-where $\mathbf{Z}_{local} \sim \mathcal{N}(\mathbf{0}, \sigma^2 \mathbf{I})$.
+where $\mathbf{Z}_{local} \sim \mathcal{N}(\mathbf{0}, \Sigma_{local})$.
 
 ### Shortcomings of the Naive Model
 While $\mathbf{X}_{naive}$ preserves the correct first and second moments (mean and covariance) of the bounded interval, its higher-order moments and spatial structure are fundamentally flawed:
@@ -60,18 +60,18 @@ To accurately model the physics of a constant gradient subjected to local Gaussi
 
 ### Generative Formulation
 Let $U \sim \text{Uniform}(0, 1)$ represent the normalized coordinate along the vector $\mathbf{d}$. 
-Let $\mathbf{Z} \sim \mathcal{N}(\mathbf{0}, \Sigma_{local})$ represent the local isotropic variance, where $\Sigma_{local} = \sigma^2 \mathbf{I}$.
+Let $\mathbf{Z} \sim \mathcal{N}(\mathbf{0}, \Sigma_{local})$ represent the local turbulent variance, where $\Sigma_{local}$ may contain non-zero off-diagonal covariance terms.
 
 The true state $\mathbf{X}$ is the sum of these independent random variables:
 $$\mathbf{X} = \mathbf{a} + U(\mathbf{b} - \mathbf{a}) + \mathbf{Z}$$
 
-This produces a "pill-shaped" distribution that maintains a flat, uniform plateau of probability mass between $\mathbf{a}$ and $\mathbf{b}$, smoothly rolling off into Gaussian tails at the exact boundaries.
+This produces a distribution that maintains a flat, uniform plateau of probability mass smoothly stretching between $\mathbf{a}$ and $\mathbf{b}$, while the local covariance $\Sigma_{local}$ dictates the cross-sectional shape of the "pill".
 
 ---
 
 ## 5. Derivation of Statistical Moments
 
-Because $\mathbf{X}$ is a linear combination of independent random variables, its moments can be derived exactly without complex integration.
+Because $\mathbf{X}$ is a linear combination of independent random variables ($U$ is strictly independent of the instantaneous eddy $\mathbf{Z}$), its moments can be derived exactly without complex integration.
 
 ### The Mean Vector
 Using the linearity of expectation and the fact that $\mathbb{E}[U] = 0.5$ and $\mathbb{E}[\mathbf{Z}] = \mathbf{0}$:
@@ -79,48 +79,57 @@ $$\mathbb{E}[\mathbf{X}] = \mathbf{a} + \mathbb{E}[U](\mathbf{b} - \mathbf{a}) +
 $$\mathbb{E}[\mathbf{X}] = \mathbf{a} + 0.5(\mathbf{b} - \mathbf{a}) = \frac{\mathbf{a} + \mathbf{b}}{2}$$
 
 ### The Covariance Matrix
-Since $U$ and $\mathbf{Z}$ are independent, the variance of their sum is the sum of their variances. The variance of a Standard Uniform distribution is $\text{Var}(U) = \frac{1}{12}$.
+Since $U$ and $\mathbf{Z}$ are independent of each other, the variance of their sum is the sum of their variances. The variance of a Standard Uniform distribution is $\text{Var}(U) = \frac{1}{12}$.
 $$\text{Var}(\mathbf{X}) = \text{Var}(U(\mathbf{b} - \mathbf{a})) + \text{Var}(\mathbf{Z})$$
 $$\Sigma_{total} = \frac{1}{12}(\mathbf{b} - \mathbf{a})(\mathbf{b} - \mathbf{a})^T + \Sigma_{local}$$
 
-This yields a profound geometric result: the total sub-grid covariance is the exact linear superposition of the local turbulent covariance and the structural covariance forced by the background gradient.
+This yields a profound geometric result: the total sub-grid covariance is the exact linear superposition of the local turbulent covariance and the structural covariance mathematically forced by the background gradient.
 
 ---
 
 ## 6. Derivation of the Exact Probability Density Function (PDF)
 
-To evaluate the PDF $f_{\mathbf{X}}(\mathbf{x})$ at an arbitrary point $\mathbf{x} \in \mathbb{R}^2$, we exploit the isotropic nature of $\mathbf{Z}$. Because the local variance is perfectly circular ($\sigma^2 \mathbf{I}$), the 2D space can be orthogonally decoupled into a coordinate parallel to the gradient segment, and a coordinate perpendicular to it.
+To evaluate the PDF $f_{\mathbf{X}}(\mathbf{x})$ at an arbitrary point $\mathbf{x} \in \mathbb{R}^2$, we must account for the fact that $\Sigma_{local}$ is generally correlated. We cannot simply use orthogonal dot-products in the physical space, because the local variance forms an angled ellipse rather than a perfect circle. 
 
-Let $L = \|\mathbf{b} - \mathbf{a}\|$ be the length of the line segment.
-Let $\mathbf{v} = \mathbf{x} - \mathbf{a}$ be the vector from the start of the segment to our evaluation point.
+To solve this, we apply a **Whitening (Mahalanobis) Transformation** to temporarily warp the coordinate space, rendering the local variance perfectly isotropic, evaluating the orthogonal components, and then mapping the density back to physical space.
 
-### Step 1: Orthogonal Decomposition
-We define the parallel projection scalar $p$ and the perpendicular distance squared $d_{\perp}^2$:
-$$p = \frac{\mathbf{v} \cdot (\mathbf{b} - \mathbf{a})}{L}$$
-$$d_{\perp}^2 = \|\mathbf{v}\|^2 - p^2$$
+### Step 1: The Whitening Transformation
+Let $\mathbf{L}$ be the lower triangular matrix resulting from the Cholesky decomposition of the local covariance matrix: $\Sigma_{local} = \mathbf{L}\mathbf{L}^T$.
 
-### Step 2: The Perpendicular Component
-Perpendicular to the gradient segment, the distribution is entirely governed by the local Gaussian noise. The PDF in this 1D cross-section is a standard Normal distribution evaluated at distance $d_{\perp}$:
-$$f_{\perp}(d_{\perp}) = \frac{1}{\sqrt{2\pi}\sigma} \exp\left( -\frac{d_{\perp}^2}{2\sigma^2} \right)$$
+We transform all spatial vectors by multiplying them by the inverse matrix $\mathbf{L}^{-1}$. Let the "tilde" notation represent coordinates in this newly warped space:
+$$\tilde{\mathbf{x}} = \mathbf{L}^{-1}\mathbf{x}$$
+$$\tilde{\mathbf{a}} = \mathbf{L}^{-1}\mathbf{a}$$
+$$\tilde{\mathbf{b}} = \mathbf{L}^{-1}\mathbf{b}$$
 
-### Step 3: The Parallel Component
-Parallel to the gradient segment, the distribution is the 1D convolution of a Uniform distribution (spanning length $L$) and a Normal distribution (with variance $\sigma^2$). The PDF of this convolution is evaluated at distance $p$:
-$$f_{\parallel}(p) = \frac{1}{2L} \left[ \text{erf}\left(\frac{p}{\sigma \sqrt{2}}\right) - \text{erf}\left(\frac{p - L}{\sigma \sqrt{2}}\right) \right]$$
+In this transformed space, the local Gaussian variance is mathematically forced into the Identity matrix ($\tilde{\Sigma}_{local} = \mathbf{I}$). Therefore, the local noise is now perfectly isotropic with standard deviation $\sigma = 1$.
 
-where $\text{erf}(\cdot)$ is the standard Gauss error function.
+### Step 2: Orthogonal Decomposition in Warped Space
+Because the local variance is now isotropic, we can safely decouple the warped space orthogonally. Let $\tilde{\mathbf{d}} = \tilde{\mathbf{b}} - \tilde{\mathbf{a}}$ be the gradient vector, and $\tilde{L} = \|\tilde{\mathbf{d}}\|$ be its length. Let $\tilde{\mathbf{v}} = \tilde{\mathbf{x}} - \tilde{\mathbf{a}}$.
 
-### Step 4: The Joint 2D PDF
-Because the orthogonal components are statistically independent (due to the isotropy of the local variance), the total bivariate PDF is the exact product of the 1D marginals:
+We calculate the parallel projection scalar $p$ and the squared perpendicular distance $d_{\perp}^2$:
+$$p = \frac{\tilde{\mathbf{v}} \cdot \tilde{\mathbf{d}}}{\tilde{L}}$$
+$$d_{\perp}^2 = \max(0, \|\tilde{\mathbf{v}}\|^2 - p^2)$$
 
-$$f_{\mathbf{X}}(\mathbf{x}) = f_{\perp}(d_{\perp}) \cdot f_{\parallel}(p)$$
+### Step 3: Density in the Warped Space
+The probability density in the warped space, $\tilde{f}(\tilde{\mathbf{x}})$, is the product of a standard 1D Normal distribution (perpendicular) and a 1D Uniform-Normal convolution (parallel), evaluated with $\sigma = 1$:
 
-$$f_{\mathbf{X}}(\mathbf{x}) = \left[ \frac{1}{\sqrt{2\pi}\sigma} \exp\left( -\frac{d_{\perp}^2}{2\sigma^2} \right) \right] \left[ \frac{1}{2L} \left( \text{erf}\left(\frac{p}{\sigma \sqrt{2}}\right) - \text{erf}\left(\frac{p - L}{\sigma \sqrt{2}}\right) \right) \right]$$
+$$f_{\perp}(d_{\perp}) = \frac{1}{\sqrt{2\pi}} \exp\left( -\frac{d_{\perp}^2}{2} \right)$$
 
-### Edge Case: Zero Gradient ($L = 0$)
-If the gradient across the discrete interval is zero ($\mathbf{a} = \mathbf{b}$), the length $L \to 0$. By taking the limit of $f_{\parallel}(p)$ as $L \to 0$ (using L'Hôpital's rule or recognizing the definition of the derivative of the error function), the parallel component perfectly collapses back into a standard 1D Gaussian. The entire equation smoothly degenerates into a standard isotropic Bivariate Gaussian centered at $\mathbf{a}$:
-$$\lim_{L \to 0} f_{\mathbf{X}}(\mathbf{x}) = \frac{1}{2\pi\sigma^2} \exp\left( -\frac{\|\mathbf{x} - \mathbf{a}\|^2}{2\sigma^2} \right)$$
+$$f_{\parallel}(p) = \frac{1}{2\tilde{L}} \left[ \text{erf}\left(\frac{p}{\sqrt{2}}\right) - \text{erf}\left(\frac{p - \tilde{L}}{\sqrt{2}}\right) \right]$$
 
-This closed-form solution allows for highly optimized, exact evaluations of the spatial probability density without relying on discrete sampling or multi-dimensional numerical integration.
+$$\tilde{f}(\tilde{\mathbf{x}}) = f_{\perp}(d_{\perp}) \cdot f_{\parallel}(p)$$
+
+### Step 4: Mapping Back to Physical Space
+To find the true probability density $f_{\mathbf{X}}(\mathbf{x})$ in the original physical space, we apply the change of variables formula. We multiply the warped density by the absolute value of the determinant of the transformation matrix, $|\det(\mathbf{L}^{-1})|$, to account for the spatial stretching.
+
+Since $|\det(\mathbf{L}^{-1})| = \frac{1}{\sqrt{\det(\Sigma_{local})}}$, the exact continuous PDF is:
+
+$$f_{\mathbf{X}}(\mathbf{x}) = \frac{\tilde{f}(\tilde{\mathbf{x}})}{\sqrt{\det(\Sigma_{local})}}$$
+
+### Edge Case: Zero Gradient ($\tilde{L} = 0$)
+If the gradient across the discrete interval is zero ($\mathbf{a} = \mathbf{b}$), then $\tilde{L} = 0$. By taking the limit of $f_{\parallel}(p)$ as $\tilde{L} \to 0$, the parallel component collapses to $\frac{1}{\sqrt{2\pi}} \exp(-p^2/2)$. The joint density $\tilde{f}(\tilde{\mathbf{x}})$ becomes a standard isotropic Gaussian in the warped space. Scaled by the determinant, the final formula smoothly and perfectly degenerates into the standard equation for a Bivariate Gaussian centered at $\mathbf{a}$ with covariance $\Sigma_{local}$.
+
+#================================================ #
 
 using SpecialFunctions
 using LinearAlgebra

@@ -1,4 +1,5 @@
-# CLI for forward-sweep comparison plots (see `plot_forward_sweep_body.jl` for `va_plot_forward_sweep_comparisons!`).
+# CLI for forward-sweep comparison plots (see `plot_forward_sweep_body.jl`).
+# Writes per-case profile grids, **`forward_sweep_clw_plus_cli_summary.png`**, and scalar figures.
 #
 # From `calibration/experiments/variance_adjustments`:
 #   julia --project=. analysis/plotting/plot_forward_sweep.jl [--eki-calibrated-forward|--baseline-scm-forward] [--baseline-only] [--registry=REL.yml] [--ladder-*]
@@ -77,6 +78,8 @@ Usage: julia --project=. analysis/plotting/plot_forward_sweep.jl [options]
   --registry=REL.yml            default when omitted: registries/forward_sweep_cases.yml
   --ladder-n-tiers=N  --ladder-coarsen-ratio=R  --ladder-z-elem-min=N  --ladder-min-dz-factor=F
   --figures-dir=DIR   optional; default folder depends on EKI vs baseline mode
+
+Also writes forward_sweep_clw_plus_cli_summary.png in that figures folder.
 """)
             exit(0)
         else
@@ -104,12 +107,17 @@ function _va_run_forward_sweep_plot_cli()
         cfg;
         figure_root = root,
     )
+    summary = va_plot_forward_sweep_clw_plus_cli_summary!(
+        _VA_PFW_EXPERIMENT_DIR,
+        cfg;
+        figure_root = root,
+    )
     scal = va_plot_forward_sweep_scalars_vs_nquad!(
         _VA_PFW_EXPERIMENT_DIR,
         cfg;
         figure_root = root,
     )
-    return (; profiles = profs, scalars = scal)
+    return (; profiles = profs, clw_cli_summary = summary, scalars = scal)
 end
 
 if _va_pfw_is_main()

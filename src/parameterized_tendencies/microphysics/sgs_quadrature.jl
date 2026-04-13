@@ -8,6 +8,9 @@ reusable utilities for cloud fraction, microphysics tendencies, and other SGS di
 
 import StaticArrays as SA
 import Thermodynamics as TD
+import LinearAlgebra: dot
+import ClimaCore.Fields as Fields
+import ClimaCore.Geometry as Geometry
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 import UnrolledUtilities: unrolled_reduce
 
@@ -112,63 +115,31 @@ function gauss_legendre_01(::Type{FT}, N::Int) where {FT}
     end
 end
 
-# ============================================================================
-# Distribution Types
-# ============================================================================
-
 """
-    AbstractSGSDistribution
+    gauss_legendre_neg1_1(FT, N)
 
-Abstract supertype for subgrid-scale probability distributions.
+Gauss–Legendre nodes `t_k` and weights `w_k` on `[-1, 1]` for `∫_{-1}^1 f(t) dt`.
 
-Subtypes determine how specific humidity `q` is sampled in `get_physical_point`.
-Temperature is always sampled from a Gaussian, regardless of distribution type.
+Obtained from [`gauss_legendre_01`](@ref) via `t = 2x - 1`, `w = 2 w_{01}`.
 """
-abstract type AbstractSGSDistribution end
+function gauss_legendre_neg1_1(::Type{FT}, N::Int) where {FT}
+    x, w01 = gauss_legendre_01(FT, N)
+    two = FT(2)
+    t = map(xv -> two * xv - one(FT), x)
+    w = map(wv -> two * wv, w01)
+    return (t, w)
+end
 
-"""
-    GaussianSGS <: AbstractSGSDistribution
-
-Bivariate Gaussian distribution for SGS fluctuations of `(T, q)`.
-
-Both temperature and specific humidity are sampled from correlated Gaussians.
-Negative `q` values at extreme quadrature points are clamped to zero.
-"""
-struct GaussianSGS <: AbstractSGSDistribution end
-
-"""
-    LogNormalSGS <: AbstractSGSDistribution
-
-Log-normal distribution for specific humidity; Gaussian for temperature.
-
-Specific humidity `q` is sampled from a log-normal distribution (positive-definite
-by construction), while temperature `T` remains Gaussian. Correlation between
-`T` and `q` is maintained via a Gaussian copula.
-"""
-struct LogNormalSGS <: AbstractSGSDistribution end
-
-
-
-"""
-    GridMeanSGS <: AbstractSGSDistribution
-
-Grid-mean-only "quadrature" - evaluates at the grid mean without variance.
-
-Uses a single quadrature point at ``(χ_1, χ_2) = (0, 0)`` with weight 1.
-This is the 0th-order option: same code path as full quadrature, but only
-evaluates at the grid mean. Use when SGS fluctuations should be ignored.
-"""
-struct GridMeanSGS <: AbstractSGSDistribution end
-
-# SGS distribution types are scalar arguments in @. broadcast expressions
-Base.broadcastable(x::AbstractSGSDistribution) = tuple(x)
+if !isdefined(@__MODULE__, :AbstractSGSDistribution)
+    include(joinpath(@__DIR__, "sgs_distribution_types.jl"))
+end
 
 # ============================================================================
 # Quadrature Struct
 # ============================================================================
 
 """
-    SGSQuadrature{N, A, W, D, FT} <: AbstractSGSamplingType
+    SGSQuadrature{N, A, W, D, FT, ZZ, ZW} <: AbstractSGSamplingType
 
 Subgrid-scale quadrature configuration for integrating over thermodynamic fluctuations.
 
@@ -204,12 +175,15 @@ rather than being stored in this struct.
 `T_min` and `q_max` are read from ClimaParams (`temperature_minimum` and
 `specific_humidity_maximum`) and passed through at construction time.
 """
-struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSamplingType
-    a::A             # quadrature points
-    w::W             # quadrature weights
-    dist::D          # distribution type
-    T_min::FT        # minimum temperature for physical validity [K]
-    q_max::FT        # maximum specific humidity [kg/kg]
+struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT, ZZ, ZW} <:
+       AbstractSGSamplingType
+    a::A       # Gauss–Hermite nodes (standardized)
+    w::W       # Gauss–Hermite weights
+    dist::D    # distribution type
+    T_min::FT  # minimum temperature for physical validity [K]
+    q_max::FT  # maximum specific humidity [kg/kg]
+    z_t::ZZ    # Gauss–Legendre nodes on [-1,1] for layer height (`nothing` unless column-tensor)
+    z_w::ZW    # matching weights for `(1/2) ∫_{-1}^1` outer average
     function SGSQuadrature(
         ::Type{FT};
         quadrature_order = 3,
@@ -221,13 +195,31 @@ struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSam
         N = distribution isa GridMeanSGS ? 1 : quadrature_order
         a, w = get_quadrature_nodes_weights(distribution, FT, N)
         a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-        return new{N, typeof(a), typeof(w), D, FT}(
-            a,
-            w,
-            distribution,
-            FT(T_min),
-            FT(q_max),
-        )
+        if distribution isa GaussianGridscaleCorrectedSGS{SubgridColumnTensor} ||
+           distribution isa LogNormalGridscaleCorrectedSGS{SubgridColumnTensor}
+            z_t_vec, z_w_vec = gauss_legendre_neg1_1(FT, N)
+            zt = SA.SVector{N, FT}(z_t_vec)
+            zw = SA.SVector{N, FT}(z_w_vec)
+            return new{N, typeof(a), typeof(w), D, FT, typeof(zt), typeof(zw)}(
+                a,
+                w,
+                distribution,
+                FT(T_min),
+                FT(q_max),
+                zt,
+                zw,
+            )
+        else
+            return new{N, typeof(a), typeof(w), D, FT, Nothing, Nothing}(
+                a,
+                w,
+                distribution,
+                FT(T_min),
+                FT(q_max),
+                nothing,
+                nothing,
+            )
+        end
     end
 end
 
@@ -252,6 +244,12 @@ Dispatches to appropriate quadrature method based on distribution:
 - `LogNormalSGS`: Gauss-Hermite (log-space transform in `get_physical_point`)
 """
 @inline get_quadrature_nodes_weights(::GaussianSGS, FT, N) = gauss_hermite(FT, N)
+
+@inline get_quadrature_nodes_weights(::GaussianGridscaleCorrectedSGS, FT, N) =
+    gauss_hermite(FT, N)
+
+@inline get_quadrature_nodes_weights(::LogNormalGridscaleCorrectedSGS, FT, N) =
+    gauss_hermite(FT, N)
 
 @inline function get_quadrature_nodes_weights(::LogNormalSGS, FT, N)
     # Log-normal uses Gauss-Hermite in log-space
@@ -407,34 +405,35 @@ end
 """
     get_physical_point(dist, χ1, χ2, μ_q, μ_T, σ_q, σ_T, corr, T_min, q_max)
 
-Transform quadrature points ``(\\chi_1, \\chi_2)`` to physical space ``(T, q)``.
+Transform Gauss–Hermite abscissae ``(\\chi_1, \\chi_2)`` to physical ``(T, q)`` for
+distributions that use **only** the Gaussian layer (no structural uniform).
 
-Temperature is always Gaussian, clamped to ``T \\geq T_{min}``.
-Specific humidity is clamped to ``0 \\leq q \\leq q_{max}``.
-Sampling depends on `dist`:
-
-**`GaussianSGS`**: correlated bivariate Gaussian
+**`GaussianSGS`**: same Hermite nodes map to the same correlated Gaussian law as in
+Gauss–Hermite quadrature for a bivariate normal with s.d. ``σ_q``, ``σ_T`` and correlation
+``corr`` (then bounds):
 ```math
 q = \\clamp(\\mu_q + \\sqrt{2} \\sigma_q \\chi_1, \\; 0, \\; q_{max})
 ```
 ```math
-T = \\max(T_{min}, \\; \\mu_T + \\sqrt{2} \\sigma_T (\\rho \\chi_1 + \\sqrt{1-\\rho^2} \\chi_2))
+T = \\max(T_{min}, \\; \\mu_T + \\sqrt{2} \\sigma_T (\\rho \\chi_1^{\\mathrm{eff}} + \\sqrt{1-\\rho^2} \\chi_2))
 ```
+with ``\\chi_1^{\\mathrm{eff}}`` inferred from the **clamped** `q` so `T` is conditioned on
+the realized `q` fluctuation.
 
-**`LogNormalSGS`**: log-normal for `q`, Gaussian for `T`, linked by a Gaussian copula
+**`LogNormalSGS`**: log-normal for `q`, Gaussian for `T`, Gaussian copula
 ```math
 q = \\min(q_{max}, \\; \\exp(\\mu_{\\ln} + \\sqrt{2} \\sigma_{\\ln} z_q))
 ```
-where ``z_q = \\chi_1`` and ``z_T = \\rho \\chi_1 + \\sqrt{1-\\rho^2} \\chi_2``.
+with ``z_q = \\chi_1``, ``z_T = \\rho \\chi_1 + \\sqrt{1-\\rho^2} \\chi_2``.
 
 # Arguments
-- `dist`: Distribution type (`GaussianSGS`, `LogNormalSGS`, or `GridMeanSGS`)
-- `χ1`, `χ2`: Quadrature abscissae
+- `dist`: e.g. `GaussianSGS`, `LogNormalSGS`, `GridMeanSGS`, or gridscale wrappers that
+  delegate to these
+- `χ1`, `χ2`: Hermite abscissae
 - `μ_q`, `μ_T`: Mean specific humidity [kg/kg] and temperature [K]
-- `σ_q`, `σ_T`: Standard deviations of `q` and `T`
-- `corr`: Correlation coefficient ``\\rho(T', q')``
-- `T_min`: Minimum temperature floor [K]
-- `q_max`: Maximum specific humidity ceiling [kg/kg]
+- `σ_q`, `σ_T`: Standard deviations of `q` and `T` for the Gaussian layer
+- `corr`: Correlation coefficient ``\\rho`` for that layer
+- `T_min`, `q_max`: Physical bounds
 
 # Returns
 Tuple `(T_hat, q_hat)` of physical values.
@@ -507,6 +506,58 @@ end
     T_hat = max(T_min, μ_T + sqrt2 * σ_T * z_T)
 
     return (T_hat, q_hat)
+end
+
+@inline function get_physical_point(
+    ::GaussianGridscaleCorrectedSGS,
+    χ1,
+    χ2,
+    μ_q,
+    μ_T,
+    σ_q,
+    σ_T,
+    corr,
+    T_min,
+    q_max,
+)
+    return get_physical_point(
+        GaussianSGS(),
+        χ1,
+        χ2,
+        μ_q,
+        μ_T,
+        σ_q,
+        σ_T,
+        corr,
+        T_min,
+        q_max,
+    )
+end
+
+@inline function get_physical_point(
+    ::LogNormalGridscaleCorrectedSGS,
+    χ1,
+    χ2,
+    μ_q,
+    μ_T,
+    σ_q,
+    σ_T,
+    corr,
+    T_min,
+    q_max,
+)
+    return get_physical_point(
+        LogNormalSGS(),
+        χ1,
+        χ2,
+        μ_q,
+        μ_T,
+        σ_q,
+        σ_T,
+        corr,
+        T_min,
+        q_max,
+    )
 end
 
 # GridMeanSGS: evaluates only at the grid mean, ignoring variance
@@ -591,7 +642,7 @@ Approximates the integral:
 
 # Arguments
 - `f`: Point-wise function `(T, q) -> result`
-- `get_x_hat`: Function `(χ1, χ2) -> (T_hat, q_hat)` transforming quadrature points
+- `get_x_hat`: Function `(χ1, χ2) -> (T_hat, q_hat)`
 - `quad`: `SGSQuadrature` struct
 
 # Returns
@@ -601,14 +652,9 @@ function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature{N}) where 
     χ = quad.a
     weights = quad.w
     FT = eltype(χ)
-
     inv_sqrt_pi = one(FT) / sqrt(FT(π))
 
-    # Use loops instead of ntuple for register reuse across iterations
-    # Each loop iteration can release registers from the previous iteration,
-    # dramatically reducing peak register usage (from holding all N² evaluations to just a few)
     outer_sum = rzero(f(get_x_hat(χ[1], χ[1])...))
-
     @inbounds for i in 1:N
         inner_sum = rzero(f(get_x_hat(χ[1], χ[1])...))
         @inbounds for j in 1:N
@@ -619,7 +665,6 @@ function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature{N}) where 
         weighted_inner = inner_sum ⊠ (weights[i] * inv_sqrt_pi)
         outer_sum = outer_sum ⊞ weighted_inner
     end
-
     return outer_sum
 end
 
@@ -643,14 +688,31 @@ determined by `quad.dist` (see [`get_physical_point`](@ref)).
 # Returns
 Weighted sum ``\\approx E[f(T, q)]`` with the same type as `f(T, q)`.
 """
-function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
+function integrate_over_sgs(f, quad::SGSQuadrature, μ_q, μ_T, q′q′, T′T′, corr_Tq)
+    if _is_nonuniform_gridscale_corrected(quad.dist)
+        σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
+        μ_T_p, μ_q_p = promote(μ_T, μ_q)
+        inner = quad.dist isa GaussianGridscaleCorrectedSGS ? GaussianSGS() : LogNormalSGS()
+        transform = PhysicalPointTransform(
+            inner,
+            μ_T_p,
+            μ_q_p,
+            oftype(μ_T_p, σ_T),
+            oftype(μ_T_p, σ_q),
+            oftype(μ_T_p, corr),
+            oftype(μ_T_p, quad.T_min),
+            oftype(μ_T_p, quad.q_max),
+        )
+        inner_quad = SGSQuadrature(
+            typeof(μ_T_p);
+            quadrature_order = quadrature_order(quad),
+            distribution = inner,
+            T_min = quad.T_min,
+            q_max = quad.q_max,
+        )
+        return sum_over_quadrature_points(f, transform, inner_quad)
+    end
     σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
-
-    # Use functor instead of closure to avoid heap allocations.
-    # Field order is (T, q) to match return order of get_physical_point.
-
-    # Promote μ_T and μ_q to the widest type: with autodiff, either may
-    # independently be a Dual (when ρe_tot or ρq_tot is perturbed).
     μ_T_p, μ_q_p = promote(μ_T, μ_q)
     transform = PhysicalPointTransform(
         quad.dist,
@@ -662,8 +724,21 @@ function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
         oftype(μ_T_p, quad.T_min),
         oftype(μ_T_p, quad.q_max),
     )
-
     return sum_over_quadrature_points(f, transform, quad)
+end
+
+function integrate_over_sgs(
+    f,
+    quad::SGSQuadrature,
+    μ_q,
+    μ_T,
+    q′q′,
+    T′T′,
+    corr_Tq,
+    δq_half,
+    δT_half,
+)
+    return integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
 end
 
 """
@@ -679,9 +754,91 @@ avoiding the need to extract FT from the space. Variances and correlation are ig
 end
 
 """
-    Return true if no quadrature sampling is chosen.
+    not_quadrature(sgs_quad)
+
+Return `true` if no quadrature sampling is chosen.
 """
 @inline function not_quadrature(sgs_quad)
     return isnothing(sgs_quad) || sgs_quad isa GridMeanSGS ||
            (sgs_quad isa SGSQuadrature && sgs_quad.dist isa GridMeanSGS)
 end
+
+"""
+    sgs_quadrature_moments_at_point(
+        dist::AbstractSGSDistribution,
+        ρ_param, ε, Δz, w_grad_q_sq, w_grad_θ_sq, ∂T∂θ_li, wq_dot_wθ,
+        T′T′, q′q′,
+    )
+
+Per-cell **scalar** moments for SGS quadrature: returns
+`(T_var, q_var, ρ_corr, δq_half, δT_half)` for use with [`integrate_over_sgs`](@ref).
+
+- Base distributions ([`GaussianSGS`](@ref), [`LogNormalSGS`](@ref)): raw turbulent
+  variances, `ρ_param`, zero segment half-widths.
+- [`GaussianGridscaleCorrectedSGS`](@ref) / [`LogNormalGridscaleCorrectedSGS`](@ref): raw
+  turbulent variances and `ρ_param` (layer-profile quadrature uses gradients separately);
+  `δq_half` and `δT_half` are zero.
+"""
+@inline function sgs_quadrature_moments_at_point(
+    dist::AbstractSGSDistribution,
+    ρ_param,
+    ε,
+    Δz,
+    w_grad_q_sq,
+    w_grad_θ_sq,
+    ∂T∂θ_li,
+    wq_dot_wθ,
+    T′T′,
+    q′q′,
+)
+    FT = typeof(q′q′)
+    z = zero(FT)
+    if dist isa AbstractGridscaleCorrectedSGS
+        return T′T′, q′q′, ρ_param, z, z
+    end
+    return T′T′, q′q′, ρ_param, z, z
+end
+
+"""
+    sgs_quadrature_moments_from_gradients(
+        dist::AbstractSGSDistribution,
+        ρ_param, ε, Δz, local_geometry, grad_q, grad_θ, ∂T∂θ_li, T′T′, q′q′,
+    )
+
+Like [`sgs_quadrature_moments_at_point`](@ref) but forms W-vector squared norms and
+`dot(∇q, ∇θ)` from `grad_q`, `grad_θ` (e.g. `ᶜgradᵥ` outputs) using
+`WVector(·, local_geometry)` (ClimaCore requires `LocalGeometry` for covariant → W).
+"""
+@inline function sgs_quadrature_moments_from_gradients(
+    dist::AbstractSGSDistribution,
+    ρ_param,
+    ε,
+    Δz,
+    local_geometry,
+    grad_q,
+    grad_θ,
+    ∂T∂θ_li,
+    T′T′,
+    q′q′,
+)
+    wvq = Geometry.WVector(grad_q, local_geometry)
+    wvθ = Geometry.WVector(grad_θ, local_geometry)
+    wgq = dot(wvq, wvq)
+    wgθ = dot(wvθ, wvθ)
+    wqdot = dot(wvq, wvθ)
+    return sgs_quadrature_moments_at_point(
+        dist,
+        ρ_param,
+        ε,
+        Δz,
+        wgq,
+        wgθ,
+        ∂T∂θ_li,
+        wqdot,
+        T′T′,
+        q′q′,
+    )
+end
+
+include(joinpath(@__DIR__, "convolution_quantile_chebyshev_tables.jl"))
+include(joinpath(@__DIR__, "subgrid_layer_profile_quadrature.jl"))

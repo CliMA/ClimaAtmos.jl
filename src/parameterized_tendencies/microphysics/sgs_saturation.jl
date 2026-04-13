@@ -123,15 +123,25 @@ NamedTuple with SGS-averaged:
     T′T′,
     q′q′,
     corr_Tq,
+    δq_half,
+    δT_half,
 )
     FT = typeof(T_mean)
     q_min = TD.Parameters.q_min(thermo_params)
     # Create GPU-safe functor (not a closure)
     evaluator = SaturationAdjustmentEvaluator(thermo_params, ρ)
 
-    # Integrate over quadrature points
-    result =
-        integrate_over_sgs(evaluator, SG_quad, q_mean, T_mean, q′q′, T′T′, corr_Tq)
+    result = integrate_over_sgs(
+        evaluator,
+        SG_quad,
+        q_mean,
+        T_mean,
+        q′q′,
+        T′T′,
+        corr_Tq,
+        δq_half,
+        δT_half,
+    )
 
     # Weight adjustment for truncated distribution (correct for any q distribution
     # but will be no-op for lognormal q distribution):
@@ -148,4 +158,81 @@ NamedTuple with SGS-averaged:
     # (e_int, q_tot, q_liq_sgs, q_ice_sgs) would yield a temperature
     # inconsistent with saturation equilibrium (causing problems in Jacobian approximations).
     return (; T = T_mean, q_liq, q_ice)
+end
+
+"""
+    compute_sgs_saturation_adjustment_row(
+        thermo_params, sgs_quad, ρ, T_mean, q_mean,
+        ρ_param, ε,
+        Δz, local_geometry, grad_q, grad_θ, ∂T∂θ_li, T′T′, q′q′,
+    )
+
+Pointwise wrapper: moments from `sgs_quad.dist` (vertical gradients + `∂T/∂θ_li` when
+using [`AbstractGridscaleCorrectedSGS`](@ref)), then [`compute_sgs_saturation_adjustment`](@ref).
+No persistent SGS-moment Fields.
+"""
+@inline function compute_sgs_saturation_adjustment_row(
+    thermo_params,
+    sgs_quad::SGSQuadrature,
+    ρ,
+    T_mean,
+    q_mean,
+    ρ_param,
+    ε,
+    Δz,
+    local_geometry,
+    grad_q,
+    grad_θ,
+    ∂T∂θ_li,
+    T′T′,
+    q′q′,
+)
+    if sgs_quad.dist isa GaussianGridscaleCorrectedSGS ||
+       sgs_quad.dist isa LogNormalGridscaleCorrectedSGS
+        FT = typeof(T_mean)
+        q_min = TD.Parameters.q_min(thermo_params)
+        evaluator = SaturationAdjustmentEvaluator(thermo_params, ρ)
+        result = integrate_over_sgs_linear_profile(
+            evaluator,
+            sgs_quad,
+            q_mean,
+            T_mean,
+            q′q′,
+            T′T′,
+            ρ_param,
+            Δz,
+            local_geometry,
+            grad_q,
+            grad_θ,
+            ∂T∂θ_li,
+        )
+        ratio = min(one(FT), q_mean / max(result.q_tot_quad, q_min))
+        q_liq = result.q_liq * ratio
+        q_ice = result.q_ice * ratio
+        return (; T = T_mean, q_liq, q_ice)
+    end
+    σT², σq², ρ_Tq, δq, δT = sgs_quadrature_moments_from_gradients(
+        sgs_quad.dist,
+        ρ_param,
+        ε,
+        Δz,
+        local_geometry,
+        grad_q,
+        grad_θ,
+        ∂T∂θ_li,
+        T′T′,
+        q′q′,
+    )
+    return compute_sgs_saturation_adjustment(
+        thermo_params,
+        sgs_quad,
+        ρ,
+        T_mean,
+        q_mean,
+        σT²,
+        σq²,
+        ρ_Tq,
+        δq,
+        δT,
+    )
 end

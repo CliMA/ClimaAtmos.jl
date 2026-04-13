@@ -56,14 +56,67 @@ function va_load_experiment_config(
     return YAML.load_file(va_experiment_config_path(experiment_dir, explicit))
 end
 
-"""
-    va_varfix_tag(expc) -> String
+"""YAML `sgs_distribution` values that imply gridscale-corrected quadrature moments."""
+const VA_GRIDSCALE_CORRECTED_SGS_DISTRIBUTIONS = (
+    "gaussian_gridscale_corrected",
+    "gaussian_gridscale_corrected_column_tensor",
+    "gaussian_gridscale_corrected_profile_rosenblatt_brent",
+    "gaussian_gridscale_corrected_profile_rosenblatt_halley",
+    "gaussian_gridscale_corrected_profile_rosenblatt_chebyshev",
+    "lognormal_gridscale_corrected",
+    "lognormal_gridscale_corrected_column_tensor",
+    "lognormal_gridscale_corrected_profile_rosenblatt_brent",
+    "lognormal_gridscale_corrected_profile_rosenblatt_halley",
+    "lognormal_gridscale_corrected_profile_rosenblatt_chebyshev",
+)
 
-`"varfix_on"` or `"varfix_off"` from `sgs_quadrature_subcell_geometric_variance`.
 """
-function va_varfix_tag(expc)
-    Bool(get(expc, "sgs_quadrature_subcell_geometric_variance", false)) ? "varfix_on" :
-    "varfix_off"
+    va_base_to_gridscale_corrected_sgs_distribution(base_dist) -> String
+
+For sweeps that toggle “varfix”: map a base `sgs_distribution` string to the default
+gridscale-corrected counterpart (`gaussian` → `gaussian_gridscale_corrected`, etc.).
+"""
+function va_base_to_gridscale_corrected_sgs_distribution(base_dist::AbstractString)
+    b = String(base_dist)
+    b == "gaussian" && return "gaussian_gridscale_corrected"
+    b == "lognormal" && return "lognormal_gridscale_corrected"
+    return b
+end
+
+"""
+    va_resolve_sgs_distribution_for_atmos_config(config_dict, expc) -> String
+
+Effective `sgs_distribution` for `AtmosConfig`: `expc["sgs_distribution"]` if set,
+otherwise the case YAML `sgs_distribution` (default `lognormal`).
+"""
+function va_resolve_sgs_distribution_for_atmos_config(config_dict, expc)
+    base = string(get(config_dict, "sgs_distribution", "lognormal"))
+    if haskey(expc, "sgs_distribution") && expc["sgs_distribution"] !== nothing
+        return string(expc["sgs_distribution"])
+    end
+    return base
+end
+
+"""
+    va_varfix_tag(expc, merged_case_cfg = nothing) -> String
+
+`"varfix_on"` if the effective `sgs_distribution` is gridscale-corrected.
+Uses `expc["sgs_distribution"]` when set; otherwise `merged_case_cfg["sgs_distribution"]` when
+`merged_case_cfg` is provided (merged case YAML).
+"""
+function va_varfix_tag(expc, merged_case_cfg = nothing)
+    d = ""
+    if haskey(expc, "sgs_distribution") && expc["sgs_distribution"] !== nothing
+        s = string(expc["sgs_distribution"])
+        isempty(strip(s)) || (d = s)
+    end
+    if isempty(d) && merged_case_cfg !== nothing
+        d = string(get(merged_case_cfg, "sgs_distribution", ""))
+    end
+    if !isempty(d) && d in VA_GRIDSCALE_CORRECTED_SGS_DISTRIBUTIONS
+        return "varfix_on"
+    end
+    return "varfix_off"
 end
 
 """
@@ -80,9 +133,10 @@ function va_reference_output_dir(experiment_dir::AbstractString, expc)
         !isempty(strip(s)) || error("reference_output_dir is empty")
         return isabspath(s) ? String(s) : joinpath(experiment_dir, s)
     end
+    merged_case = va_load_merged_case_yaml_dict(experiment_dir, expc["model_config_path"])
     case = string(expc["case_name"])
     n = Int(expc["quadrature_order"])
-    tag = va_varfix_tag(expc)
+    tag = va_varfix_tag(expc, merged_case)
     return joinpath(experiment_dir, "simulation_output", case, "N_$(n)", tag, "reference")
 end
 
@@ -94,7 +148,8 @@ Subfolder under `analysis/figures/` for post-run plots (avoids clobbering betwee
 function va_default_figure_dir(experiment_dir::AbstractString, expc)
     case = replace(string(get(expc, "case_name", "case")), r"[^\w\.\-]+" => "_")
     n = Int(get(expc, "quadrature_order", 0))
-    vf = va_varfix_tag(expc)
+    merged_case = va_load_merged_case_yaml_dict(experiment_dir, expc["model_config_path"])
+    vf = va_varfix_tag(expc, merged_case)
     mode = replace(string(get(expc, "calibration_mode", "run")), r"[^\w\.\-]+" => "_")
     return joinpath(experiment_dir, "analysis", "figures", "$(case)_N$(n)_$(vf)_$(mode)")
 end

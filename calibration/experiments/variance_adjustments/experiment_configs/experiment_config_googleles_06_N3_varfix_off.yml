@@ -20,7 +20,6 @@ ensemble_size: 6
 n_iterations: 2
 prior_path: config/prior.toml
 quadrature_order: 3
-sgs_quadrature_subcell_geometric_variance: false
 observations_path: simulation_output/GOOGLELES_06/N_3/varfix_off/reference/observations.jld2
 googleles_forcing_path: simulation_output/GOOGLELES_06/N_3/varfix_off/reference/googleles_shen_forcing.nc
 observation_noise_std: [0.05, 0.05, 0.05]

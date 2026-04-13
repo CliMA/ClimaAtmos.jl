@@ -39,7 +39,7 @@ function CAL.forward_model(iteration, member, config_dict = nothing)
     sol_res = CA.solve_atmos!(simulation)
     if sol_res.ret_code == :simulation_crashed
         error(
-            "The ClimaAtmos simulation has crashed. See the stack trace for details.",
+            "The ClimaAtmos simulation has crashed. See $(joinpath(simulation.output_dir, "integration_crash.log"))",
         )
     end
     return simulation

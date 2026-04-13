@@ -290,7 +290,7 @@ With zero variance the function returns 0 when no condensate exists and
 - `corr_Tq`: Correlation coefficient corr(T', q')
 - `cf_steepness_scale`: Scaling factor for the steepness of the cloud fraction transition versus condensate (default 1).
 - `q_min`: Minimum specific humidity threshold [kg/kg] (from ClimaParams `specific_humidity_minimum`).
-- `sgs_dist`: Assumed sub-grid scale distribution type (`GaussianSGS`, `LogNormalSGS`, or `GridMeanSGS`).
+- `sgs_dist`: Assumed sub-grid scale distribution type (see [`AbstractSGSDistribution`](@ref)).
 
 # Returns
 Cloud fraction ∈ [0, 1]
@@ -365,11 +365,47 @@ Compute the phase-specific cloud fraction from normalized condensate.
 - `q_tot`: Grid-mean total specific humidity [kg/kg]
 - `cf_steepness_scale`: Scaling factor for the steepness of the cloud fraction transition versus condensate
 - `q_min`: Minimum specific humidity threshold [kg/kg]
-- `sgs_dist`: Assumed sub-grid scale distribution type (`GaussianSGS`, `LogNormalSGS`, or `GridMeanSGS`)
+- `sgs_dist`: Assumed sub-grid scale distribution type (see [`AbstractSGSDistribution`](@ref))
 
 # Returns
 - Phase-specific cloud fraction ∈ [0, 1]
 """
+@inline function _cloud_fraction_helper(
+    Q_hat,
+    sig_s,
+    q_tot,
+    cf_steepness_scale,
+    q_min,
+    ::GaussianGridscaleCorrectedSGS,
+)
+    return _cloud_fraction_helper(
+        Q_hat,
+        sig_s,
+        q_tot,
+        cf_steepness_scale,
+        q_min,
+        GaussianSGS(),
+    )
+end
+
+@inline function _cloud_fraction_helper(
+    Q_hat,
+    sig_s,
+    q_tot,
+    cf_steepness_scale,
+    q_min,
+    ::LogNormalGridscaleCorrectedSGS,
+)
+    return _cloud_fraction_helper(
+        Q_hat,
+        sig_s,
+        q_tot,
+        cf_steepness_scale,
+        q_min,
+        LogNormalSGS(),
+    )
+end
+
 @inline function _cloud_fraction_helper(
     Q_hat,
     sig_s,

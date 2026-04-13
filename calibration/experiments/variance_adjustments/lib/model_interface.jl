@@ -87,8 +87,8 @@ function build_atmos_config_dict(
     config_dict["toml"] = [combined_path]
 
     config_dict["quadrature_order"] = expc["quadrature_order"]
-    config_dict["sgs_quadrature_subcell_geometric_variance"] =
-        expc["sgs_quadrature_subcell_geometric_variance"]
+    config_dict["sgs_distribution"] =
+        va_resolve_sgs_distribution_for_atmos_config(config_dict, expc)
 
     config_dict["output_default_diagnostics"] = get(config_dict, "output_default_diagnostics", false)
     return config_dict
@@ -109,7 +109,10 @@ function CAL.forward_model(iteration, member, config_dict = nothing)
     simulation = CA.get_simulation(atmos_config)
     sol_res = CA.solve_atmos!(simulation)
     if sol_res.ret_code == :simulation_crashed
-        error("ClimaAtmos simulation crashed; see stack trace.")
+        error(
+            "The ClimaAtmos simulation has crashed. Exception details are emitted via `@error` in the process log; " *
+                "partial state may have been written under $(simulation.output_dir).",
+        )
     end
     return simulation
 end

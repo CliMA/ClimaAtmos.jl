@@ -1,0 +1,11 @@
+---
+description: Jupyter notebooks must be edited with reviewable tools, not shell JSON rewrites
+globs: "**/*.ipynb"
+alwaysApply: false
+---
+
+# Jupyter / `.ipynb` edits
+
+- Do **not** modify notebooks by running Python or shell scripts that `json.load` the entire `.ipynb`, mutate cell sources, and `json.dump` the file back. That bypasses normal editor/agent diff tracking and is hard to review.
+- Use **`EditNotebook`** (or equivalent structured patches on the notebook JSON via the editor’s patch path) so changes show up clearly in the modified-files / diff UI.
+- Prefer **one logical change per tool invocation** when practical (e.g. one new markdown cell, or one code cell edit).

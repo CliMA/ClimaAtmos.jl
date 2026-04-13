@@ -64,8 +64,9 @@ function run_naive_one(
     cfg::NaiveForwardConfig = NaiveForwardConfig(),
 )
     expc = YAML.load_file(joinpath(experiment_dir, config_relp))
-    if Bool(get(expc, "sgs_quadrature_subcell_geometric_variance", false))
-        @warn "Skipping naive forward: source YAML has varfix on" config_relp
+    atmos_cfg_early = va_load_merged_case_yaml_dict(experiment_dir, expc["model_config_path"])
+    if va_varfix_tag(expc, atmos_cfg_early) == "varfix_on"
+        @warn "Skipping naive forward: source YAML has gridscale-corrected SGS / varfix on" config_relp
         return nothing
     end
     out_rel = expc["output_dir"]
@@ -83,7 +84,7 @@ function run_naive_one(
         va_write_combined_member_atmos_parameters_toml(scm_baseline, p_small, merged)
     end
 
-    atmos_cfg = va_load_merged_case_yaml_dict(experiment_dir, expc["model_config_path"])
+    atmos_cfg = atmos_cfg_early
     cas = string(expc["case_name"])
     n = Int(expc["quadrature_order"])
     out_sub = joinpath(cas, "N_$(n)", "varfix_on", "naive_from_varfix_off", "forward_only")
@@ -103,7 +104,9 @@ function run_naive_one(
     end
 
     atmos_cfg["quadrature_order"] = n
-    atmos_cfg["sgs_quadrature_subcell_geometric_variance"] = true
+    base_dist = string(get(atmos_cfg, "sgs_distribution", "lognormal"))
+    atmos_cfg["sgs_distribution"] =
+        va_base_to_gridscale_corrected_sgs_distribution(base_dist)
     atmos_cfg["toml"] = [merged]
     atmos_cfg["output_default_diagnostics"] = get(atmos_cfg, "output_default_diagnostics", false)
 
