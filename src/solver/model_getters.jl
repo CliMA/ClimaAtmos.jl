@@ -534,6 +534,7 @@ function get_external_forcing_model(
         "ReanalysisTimeVarying",
         "ReanalysisMonthlyAveragedDiurnal",
         "ISDAC",
+        "MAGIC",
     )
     if external_forcing in
        ("ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal")
@@ -580,6 +581,8 @@ function get_external_forcing_model(
 
     elseif external_forcing == "ISDAC"
         ISDACForcing()
+    elseif external_forcing == "MAGIC"
+        MAGICForcing{FT}(parsed_args["external_forcing_file"])
     end
 end
 

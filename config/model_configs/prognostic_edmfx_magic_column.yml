@@ -1,0 +1,60 @@
+initial_condition: "MAGIC"
+external_forcing_file: "/home/cchristo/clima/DEPHY-SCM/MAGIC/LEG15A/MAGIC_LEG15A_DEF_driver.nc"
+# Enable MAGIC external forcing
+external_forcing: "MAGIC"
+turbconv: "prognostic_edmfx"
+tracer_upwinding: first_order
+implicit_diffusion: true
+implicit_sgs_advection: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
+implicit_sgs_vertdiff: true
+implicit_sgs_mass_flux: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode_subproblem: 0
+max_newton_iters_ode: 3
+rayleigh_sponge: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+microphysics_model: "0M"
+config: "column"
+hyperdiff: "false"
+z_max: 25e3
+z_elem: 60
+z_stretch: true
+dz_bottom: 30
+perturb_initstate: false
+dt: "60secs"
+dt_rad: "30mins"
+t_end: "4days"
+dt_save_state_to_disk: "1000days"
+# toml: [toml/prognostic_edmfx_gcmdriven.toml]
+toml: [toml/prognostic_edmfx_gcmdriven_saj_detr.toml]
+# toml: [toml/prognostic_edmfx_gcmdriven.toml]
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60]
+output_default_diagnostics: false
+rad: allskywithclear
+insolation: "timevarying"
+start_date: "20130720"
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
+    period: 10mins
+  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu, turbentr]
+    period: 10mins
+  - short_name: [tnhusmf, tnhused, tnenemf, tneneed]
+    period: 10mins
+  - short_name: [rlut, rlutcs, rsut, rsutcs, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv, prra, prsn, rwp]
+    period: 10mins
+  - reduction_time: max
+    short_name: tke
+    period: 10mins
+ode_algo: "ARS222"

@@ -32,6 +32,12 @@ function update_surface_conditions!(Y, p, t)
         (; surface_inputs, surface_timevaryinginputs) = p.external_forcing
         evaluate!(surface_inputs.ts, surface_timevaryinginputs.ts, t)
         sfc_temp_var = Fields.field_values(surface_inputs.ts)
+    elseif p.atmos.sfc_temperature isa MAGICTimeVaryingSST
+        # MAGIC uses a simple time interpolator for SST (not TimeVaryingInput)
+        (; sst_interpolator, surface_ts) = p.external_forcing
+        # Evaluate SST at current time (t is seconds since start)
+        parent(surface_ts) .= sst_interpolator(t)
+        sfc_temp_var = Fields.field_values(surface_ts)
     elseif p.atmos.surface_model isa SlabOceanSST
         sfc_temp_var = Fields.field_values(Y.sfc.T)
     else

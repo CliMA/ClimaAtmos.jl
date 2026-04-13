@@ -43,10 +43,11 @@ import Thermodynamics.Parameters.ThermodynamicsParameters
 
 # Model types returned by setup interface methods
 import ..ZonallySymmetricSST
-import ..GCMForcing, ..ISDACForcing
+import ..GCMForcing, ..ISDACForcing, ..MAGICForcing
 import ..GCMDrivenInsolation, ..ExternalTVInsolation
 import ..RCEMIPIIInsolation, ..RCEMIPIISST
 import ..ExternalTVColumnSST
+import ..MAGICTimeVaryingSST
 import ..ShipwayHill2012VelocityProfile
 import ..RadiationDYCOMS, ..RadiationTRMM_LBA, ..RadiationISDAC
 import ..SurfaceConditions: MoninObukhov, SurfaceState
@@ -253,6 +254,7 @@ include("ShipwayHill2012.jl")
 # File-based setups (depend on common/overwrite_from_file.jl)
 include("common/overwrite_from_file.jl")
 include("GCMDriven.jl")
+include("MAGIC.jl")
 include("InterpolatedColumnProfile.jl")
 include("MoistFromFile.jl")
 include("WeatherModel.jl")

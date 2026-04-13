@@ -381,6 +381,8 @@ function get_setup_type(parsed_args, thermo_params)
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
+    elseif ic_name == "MAGIC"
+        return Setups.MAGIC(parsed_args["external_forcing_file"])
     elseif ic_name == "ReanalysisTimeVarying"
         FT = eltype(thermo_params)
         external_forcing_file =

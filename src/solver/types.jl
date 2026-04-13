@@ -146,6 +146,7 @@ abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct RCEMIPIISST <: AbstractSST end
 struct ExternalTVColumnSST <: AbstractSST end
+struct MAGICTimeVaryingSST <: AbstractSST end
 
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
@@ -492,6 +493,16 @@ struct ExternalDrivenTVForcing{FT}
 end
 
 struct ISDACForcing end
+
+"""
+    MAGICForcing{FT}
+
+Forcing specified by DEPHY-SCM format external forcing file (e.g., MAGIC field campaign).
+Contains time-varying advection tendencies, vertical velocity, and nudging profiles.
+"""
+struct MAGICForcing{FT}
+    external_forcing_file::String
+end
 
 abstract type AbstractEnvBuoyGradClosure end
 struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
