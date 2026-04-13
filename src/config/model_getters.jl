@@ -638,9 +638,11 @@ function get_detrainment_model(parsed_args)
 end
 
 function get_tracers(parsed_args)
+    # TODO rename with prescribed/prognostic convention
     aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
     time_varying_trace_gas_names = Tuple(parsed_args["time_varying_trace_gases"])
-    return (; aerosol_names, time_varying_trace_gas_names)
+    parameterized_aerosol_names = Tuple(parsed_args["parameterized_aerosols"])
+    return (; aerosol_names, time_varying_trace_gas_names, parameterized_aerosol_names)
 end
 
 function check_case_consistency(parsed_args)
