@@ -1012,7 +1012,7 @@ compute_mpupdqlcl(_, _, _, _, _) =
                                with 1M microphysics and PrognosticEDMFX")
 
 compute_mpupdqlcl(_, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
-    cache.precomputed.ᶜmp_tendencyʲs.:1.dq_lcl_dt
+    (cache.precomputed.ᶜmp_tendencyʲs.:1).dq_lcl_dt
 
 add_diagnostic_variable!(short_name = "mpupdqlcl", units = "kg kg^-1 s^-1",
     long_name = "Updraft Microphysics Tendency of Cloud Liquid",
@@ -1028,7 +1028,7 @@ compute_mpupdqicl(_, _, _, _, _) =
                                with 1M microphysics and PrognosticEDMFX")
 
 compute_mpupdqicl(_, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
-    cache.precomputed.ᶜmp_tendencyʲs.:1.dq_icl_dt
+    (cache.precomputed.ᶜmp_tendencyʲs.:1).dq_icl_dt
 
 add_diagnostic_variable!(short_name = "mpupdqicl", units = "kg kg^-1 s^-1",
     long_name = "Updraft Microphysics Tendency of Cloud Ice",
@@ -1044,7 +1044,7 @@ compute_mpupdqrai(_, _, _, _, _) =
                                with 1M microphysics and PrognosticEDMFX")
 
 compute_mpupdqrai(_, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
-    cache.precomputed.ᶜmp_tendencyʲs.:1.dq_rai_dt
+    (cache.precomputed.ᶜmp_tendencyʲs.:1).dq_rai_dt
 
 add_diagnostic_variable!(short_name = "mpupdqrai", units = "kg kg^-1 s^-1",
     long_name = "Updraft Microphysics Tendency of Rain",
@@ -1060,7 +1060,7 @@ compute_mpupdqsno(_, _, _, _, _) =
                                with 1M microphysics and PrognosticEDMFX")
 
 compute_mpupdqsno(_, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
-    cache.precomputed.ᶜmp_tendencyʲs.:1.dq_sno_dt
+    (cache.precomputed.ᶜmp_tendencyʲs.:1).dq_sno_dt
 
 add_diagnostic_variable!(short_name = "mpupdqsno", units = "kg kg^-1 s^-1",
     long_name = "Updraft Microphysics Tendency of Snow",
