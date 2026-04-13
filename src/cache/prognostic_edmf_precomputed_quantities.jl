@@ -237,7 +237,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜw_vert_div = p.scratch.ᶜtemp_scalar_3
     for j in 1:n
         # entrainment/detrainment
-        @. ᶜentrʲs.:($$j) = entrainment(
+        @. ᶜentrʲs.:($$j) = compute_entrainment(
             thermo_params,
             turbconv_params,
             ᶜz,
@@ -288,7 +288,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         @. ᶜmassflux_vert_div =
             ᶜdivᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) * ᶠu³ʲs.:($$j))
         @. ᶜw_vert_div = ᶜdivᵥ(ᶠu³ʲs.:($$j))
-        @. ᶜdetrʲs.:($$j) = detrainment(
+        @. ᶜdetrʲs.:($$j) = compute_detrainment(
             thermo_params,
             turbconv_params,
             ᶜz,

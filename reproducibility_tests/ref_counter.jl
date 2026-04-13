@@ -1,4 +1,4 @@
-335
+336
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+336
+- Introduce a smooth area-fraction limiter for generalized detrainment;
+- Lower the area-fraction threshold for mixing SGS variables with the grid mean in the EDMF filter.
+
 335
 - Remove buoyancy clipping and allow negative buoyancy; solve sgs updraft velocity equation 
   analytically in initialize_sgs_u₃ (and use 0 number of Newton iterations for solving this 

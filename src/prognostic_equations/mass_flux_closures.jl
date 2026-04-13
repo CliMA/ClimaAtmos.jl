@@ -217,9 +217,7 @@ end
     edmfx_filter_tendency!(Y, p, t, turbconv_model)
 
 Apply EDMF physical constraints: immediately mix the updraft with the environment if
-  - area fraction is negative or negligible (smaller than eps)
-  - updraft velocity is negative or negligible
-  - updraft air is heavier than the grid mean (negative buoyancy)
+area fraction is non-positive
 """
 edmfx_filter_tendency!(Y, p, t, turbconv_model) = nothing
 
@@ -247,13 +245,21 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
 
             # clip updraft velocity to zero if the face-averaged area fraction is negligible.
             @. Y.f.sgsʲs.:($$j).u₃ =
-                ifelse(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) < eps(FT), C3(0), Y.f.sgsʲs.:($$j).u₃)
+                ifelse(
+                    ᶠinterp(Y.c.sgsʲs.:($$j).ρa) < ϵ_numerics(FT),
+                    C3(0),
+                    Y.f.sgsʲs.:($$j).u₃,
+                )
 
-            # mix updraft mse and q_tot with the grid mean values if any of the above conditions happened
+            # mix updraft mse and q_tot with the grid mean values if area fraction is negligible
             @. Y.c.sgsʲs.:($$j).mse =
-                ifelse(Y.c.sgsʲs.:($$j).ρa < eps(FT), ᶜh_tot - ᶜK, Y.c.sgsʲs.:($$j).mse)
+                ifelse(
+                    Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
+                    ᶜh_tot - ᶜK,
+                    Y.c.sgsʲs.:($$j).mse,
+                )
             @. Y.c.sgsʲs.:($$j).q_tot = ifelse(
-                Y.c.sgsʲs.:($$j).ρa < eps(FT),
+                Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
                 specific(Y.c.ρq_tot, Y.c.ρ),
                 # ensure mass conservation in subdomain decomposition ρaχʲ < ρχ
                 min(Y.c.sgsʲs.:($$j).q_tot, max(0, Y.c.ρq_tot) / Y.c.sgsʲs.:($$j).ρa),
@@ -265,7 +271,7 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
                 @. ᶜχʲ = ifelse(
-                    Y.c.sgsʲs.:($$j).ρa < eps(FT),
+                    Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
                     specific(ᶜρχ, Y.c.ρ),
                     # ensure mass conservation in subdomain decomposition ρaχʲ < ρχ
                     min(ᶜχʲ, max(0, ᶜρχ) / Y.c.sgsʲs.:($$j).ρa),
