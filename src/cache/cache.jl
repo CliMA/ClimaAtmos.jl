@@ -14,6 +14,7 @@ struct AtmosCache{
     ORGW,
     RAD,
     TRAC,
+    SFRAC,
     NETFLUXTOA,
     NETFLUXSFC,
     SSV,
@@ -57,6 +58,9 @@ struct AtmosCache{
     radiation::RAD
     tracers::TRAC
 
+    """Static 2D surface fraction fields (land_sea_mask, and future additions like desert_fraction)"""
+    surface_fractions::SFRAC
+
     """Net energy flux coming through top of atmosphere and surface"""
     net_energy_flux_toa::NETFLUXTOA
     net_energy_flux_sfc::NETFLUXSFC
@@ -94,6 +98,7 @@ function build_cache(
     time_varying_trace_gas_names,
     steady_state_velocity,
     vwb_species = nothing,
+    land_sea_mask_file = "",
 )
     FT = eltype(params)
     dt = FT(dt)
@@ -199,6 +204,7 @@ function build_cache(
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
     tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
+    surface_fractions = surface_fractions_cache(Y, land_sea_mask_file)
 
     args = (
         dt,
@@ -216,6 +222,7 @@ function build_cache(
         orographic_gravity_wave,
         radiation,
         tracers,
+        surface_fractions,
         net_energy_flux_toa,
         net_energy_flux_sfc,
         steady_state_velocity,

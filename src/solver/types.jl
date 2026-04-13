@@ -934,7 +934,7 @@ Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, PAN}
     water::W
     scm_setup::SCM
     radiation::R
@@ -948,6 +948,9 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
 
     """Whether to apply surface flux tendency (independent of surface conditions)"""
     disable_surface_flux_tendency::Bool
+
+    """Aerosol bins treated as prognostic tracers (e.g., (:SSLT01, :SSLT02))"""
+    parameterized_aerosols::PA
 end
 
 # Map grouped struct types to their names in AtmosModel struct
@@ -1140,6 +1143,8 @@ function AtmosModel(; kwargs...)
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
+    parameterized_aerosols =
+        get(atmos_model_kwargs, :parameterized_aerosols, ())
 
     prescribed_flow = get(atmos_model_kwargs, :prescribed_flow, nothing)
 
@@ -1154,6 +1159,7 @@ function AtmosModel(; kwargs...)
         typeof(sponge),
         typeof(surface),
         typeof(numerics),
+        typeof(parameterized_aerosols),
     }(
         water,
         scm_setup,
@@ -1166,6 +1172,7 @@ function AtmosModel(; kwargs...)
         surface,
         numerics,
         disable_surface_flux_tendency,
+        parameterized_aerosols,
     )
 end
 

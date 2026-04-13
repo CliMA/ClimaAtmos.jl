@@ -29,7 +29,7 @@ end
 """
     grid_scale_center_variables(physical_state, local_geometry, params, atmos_model)
 
-Build the grid-scale prognostic variables (ρ, uₕ, ρe_tot, moisture, precip)
+Build the grid-scale prognostic variables (ρ, uₕ, ρe_tot, moisture, precip, aerosols)
 from a physical-state NamedTuple.
 """
 function grid_scale_center_variables(physical_state, local_geometry, params, atmos_model)
@@ -48,8 +48,16 @@ function grid_scale_center_variables(physical_state, local_geometry, params, atm
         ρe_tot,
         moisture_variables(ρ, physical_state, atmos_model.microphysics_model)...,
         precip_variables(ρ, physical_state, atmos_model.microphysics_model)...,
+        parameterized_aerosol_variables(ρ, atmos_model.parameterized_aerosols)...,
     )
 end
+
+function parameterized_aerosol_variables(ρ, names::NTuple{N, Symbol}) where {N}
+    ρ_names = ntuple(i -> Symbol(:ρ, names[i]), Val(N))
+    vals = ntuple(_ -> zero(ρ), Val(N))
+    return NamedTuple{ρ_names}(vals)
+end
+parameterized_aerosol_variables(ρ, ::Tuple{}) = (;)
 
 # ============================================================================
 # Moisture dispatch
