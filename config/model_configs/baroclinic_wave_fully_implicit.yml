@@ -11,7 +11,7 @@ diagnostics:
     period: 2days
 # Fully implicit JFNK solver
 fully_implicit: true
-dt: "600secs"
+dt: "1800secs"
 ode_algo: "ARS222"
 use_krylov_method: true
 max_newton_iters_ode: 10

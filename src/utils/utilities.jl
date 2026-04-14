@@ -6,6 +6,122 @@ import ClimaCore: Spaces, Topologies, Fields, Geometry
 import LinearAlgebra: norm_sqr
 using Dates: DateTime, @dateformat_str
 import StaticArrays: SVector, SMatrix
+import ClimaTimeSteppers as CTS
+
+import Krylov
+import LinearAlgebra
+
+# ClimaTimeSteppers' generic `allocate_cache(::KrylovMethod, x_prototype)` builds Krylov
+# workspaces with `S(undef, n)` where `S = Krylov.ktypeof(x_prototype)`. For
+# ClimaCore.Fields.FieldVector, `FieldVector(undef, n)` is not defined, so we use
+# `Krylov.KrylovConstructor` (Krylov ≥ 0.9) which allocates via `similar` instead.
+#
+# KrylovConstructor stores the vector type `S` as `typeof(vm)` (the concrete
+# FieldVector type), while ClimaCore's KrylovExt overrides `ktypeof(::FieldVector)`
+# to return the underlying 1D array type (e.g. CuArray{Float32, 1}). This causes a
+# type mismatch at solve time (`ktypeof(b) == S` in fgmres.jl). We override
+# `ktypeof` here so it returns `typeof(x)` for FieldVector, matching what
+# KrylovConstructor stores.
+#
+# With `restart=false` (Krylov's default for FGMRES), iterations beyond `memory`
+# call `push!(V, S(undef, n))` (fgmres.jl). FieldVector has no such constructor;
+# we define `FieldVector{T,M}(::UndefInitializer, n)` using a template set in
+# `allocate_cache` (same `zero(x_prototype)` as KrylovConstructor). This is
+# process-global state and is only correct while a single matching Krylov solve
+# uses that workspace (normal ClimaAtmos driver usage).
+#
+# Krylov also needs GPU-compatible `dot`, `rmul!`, `axpy!`, and `axpby!` for
+# FieldVector. ClimaCore defines `norm` and broadcasting-based `fill!`/`copyto!`,
+# but the remaining LinearAlgebra operations fall back to generic scalar-indexing
+# implementations. We define them here via component-wise recursion (for `dot`)
+# or broadcasting (for the rest).
+
+Krylov.ktypeof(x::Fields.FieldVector) = typeof(x)
+
+# Template for Krylov.jl `S(undef, n)` when FGMRES grows the basis past `memory`.
+const _krylov_fieldvector_undef_template =
+    Ref{Union{Nothing, Fields.FieldVector}}(nothing)
+
+function Fields.FieldVector{T,M}(::UndefInitializer, n::Int) where {T,M}
+    tmpl = _krylov_fieldvector_undef_template[]
+    tmpl === nothing && error(
+        "FieldVector(::UndefInitializer, $n) is only supported when a Krylov " *
+        "cache has been allocated via ClimaAtmos (missing template).",
+    )
+    fv = tmpl::Fields.FieldVector{T,M}
+    length(fv) == n || error(
+        "FieldVector(::UndefInitializer, $n): template length $(length(fv)) ≠ $n",
+    )
+    return similar(fv)
+end
+
+# --- GPU-compatible LinearAlgebra operations for FieldVector ---
+
+# dot: recursively sum dot products of each component's backing array.
+# For Field components, parent(field) returns the raw array (CuArray on GPU),
+# and LinearAlgebra.dot on CuArrays dispatches to CUBLAS.
+_fv_dot(x::Fields.Field, y::Fields.Field) =
+    LinearAlgebra.dot(parent(x), parent(y))
+function _fv_dot(x::Fields.FieldVector, y::Fields.FieldVector)
+    _nt_dot(
+        Tuple(getfield(x, :values)),
+        Tuple(getfield(y, :values)),
+        zero(eltype(x)),
+    )
+end
+_nt_dot(::Tuple{}, ::Tuple{}, acc) = acc
+function _nt_dot(xt::Tuple, yt::Tuple, acc)
+    _nt_dot(Base.tail(xt), Base.tail(yt), acc + _fv_dot(first(xt), first(yt)))
+end
+LinearAlgebra.dot(x::Fields.FieldVector, y::Fields.FieldVector) = _fv_dot(x, y)
+
+# rmul!, axpy!, axpby!: delegate to FieldVector broadcasting (GPU-compatible
+# via ClimaCore's FieldVectorStyle / copyto_per_field!).
+LinearAlgebra.rmul!(x::Fields.FieldVector, s::Number) = (x .*= s; return x)
+function LinearAlgebra.axpy!(
+    a::Number, x::Fields.FieldVector, y::Fields.FieldVector,
+)
+    y .+= a .* x
+    return y
+end
+function LinearAlgebra.axpby!(
+    a::Number, x::Fields.FieldVector, b::Number, y::Fields.FieldVector,
+)
+    y .= a .* x .+ b .* y
+    return y
+end
+
+# --- Krylov workspace allocation for FieldVector ---
+
+@inline _krylov_workspace_type(::CTS.KrylovMethod{Val{W}}) where {W} = W
+
+function CTS.allocate_cache(alg::CTS.KrylovMethod, x_prototype::Fields.FieldVector)
+    (; jacobian_free_jvp, forcing_term, args, kwargs, debugger) = alg
+    W = _krylov_workspace_type(alg)
+
+    if Base.pkgversion(Krylov) < v"0.10"
+        args = isempty(args) ? (20,) : ()
+        kwargs =
+            haskey(kwargs, :memory) ?
+            Base.structdiff(kwargs, NamedTuple{(:memory,)}((kwargs[:memory],))) : kwargs
+    end
+
+    zproto = zero(x_prototype)
+    _krylov_fieldvector_undef_template[] = zproto
+    kc = Krylov.KrylovConstructor(zproto)
+    solver = W(kc; kwargs...)
+
+    return (;
+        jacobian_free_jvp_cache = isnothing(jacobian_free_jvp) ? nothing :
+                                  CTS.allocate_cache(jacobian_free_jvp, x_prototype),
+        forcing_term_cache = CTS.allocate_cache(forcing_term, x_prototype),
+        solver,
+        debugger_cache = isnothing(debugger) ? nothing :
+                         CTS.allocate_cache(debugger, x_prototype),
+    )
+end
+
+
 
 """
     enforce_mass_energy_consistency!(Y, p, ᶜΔρq_tot)

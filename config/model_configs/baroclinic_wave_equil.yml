@@ -3,7 +3,7 @@ dt_save_state_to_disk: "2days"
 reproducibility_test: true
 initial_condition: "MoistBaroclinicWave"
 dt: "450secs"
-t_end: "6days"
+t_end: "20days"
 disable_surface_flux_tendency: true
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]

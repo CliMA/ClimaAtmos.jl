@@ -17,10 +17,6 @@ import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
 
-# Krylov workspaces must use `Krylov.ktypeof(x)` (ClimaCore KrylovExt maps FieldVector →
-# Vector / CuVector). A KrylovConstructor(similar(x)) workspace keeps S = FieldVector and
-# fails Krylov 0.10's `ktypeof(b) == S` check in fgmres! against KrylovExt's ktypeof.
-
 if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()
     config = CA.AtmosConfig(config_file; job_id)
