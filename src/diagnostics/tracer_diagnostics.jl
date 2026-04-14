@@ -13,17 +13,26 @@ function compute_tracer!(out, state, cache, time, tracer_name)
 end
 
 function compute_aerosol!(out, state, cache, time, aerosol_name)
-    :prescribed_aerosols_field in propertynames(cache.tracers) ||
-        error("Aerosols do not exist in the model")
-    aerosol_name in propertynames(cache.tracers.prescribed_aerosols_field) ||
+    has_prescribed = :prescribed_aerosols_field in propertynames(cache.tracers) &&
+        aerosol_name in propertynames(cache.tracers.prescribed_aerosols_field)
+    ρname = Symbol(:ρ, aerosol_name)
+    has_prognostic = ρname in propertynames(state.c)
+    has_prescribed || has_prognostic ||
         error("$aerosol_name does not exist in the model")
     if isnothing(out)
-        return copy(
-            getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name),
-        )
+        if has_prognostic
+            return copy(specific(getproperty(state.c, ρname), state.c.ρ))
+        else
+            return copy(
+                getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name),
+            )
+        end
     else
-        out .=
-            getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name)
+        if has_prognostic
+            out .= specific(getproperty(state.c, ρname), state.c.ρ)
+        else
+            out .= getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name)
+        end
     end
 end
 
@@ -66,39 +75,51 @@ function compute_dust!(out, state, cache, time)
 end
 
 function compute_sea_salt!(out, state, cache, time)
-    :prescribed_aerosols_field in propertynames(cache.tracers) ||
-        error("Aerosols do not exist in the model")
-    any(
-        x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
-        [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05],
-    ) || error("Sea salt does not exist in the model")
+    has_prescribed = :prescribed_aerosols_field in propertynames(cache.tracers) &&
+        any(
+            x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
+            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05],
+        )
+    has_prognostic = any(
+        x -> x in propertynames(state.c),
+        [:ρSSLT01, :ρSSLT02, :ρSSLT03, :ρSSLT04, :ρSSLT05],
+    )
+    has_prescribed || has_prognostic || error("Sea salt does not exist in the model")
     if isnothing(out)
         aero_conc = cache.scratch.ᶜtemp_scalar
         @. aero_conc = 0
-        for prescribed_aerosol_name in
-            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field
+        if has_prescribed
+            for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+                if name in propertynames(cache.tracers.prescribed_aerosols_field)
+                    @. aero_conc += getproperty(cache.tracers.prescribed_aerosols_field, name)
+                end
+            end
+        end
+        if has_prognostic
+            for ρname in [:ρSSLT01, :ρSSLT02, :ρSSLT03, :ρSSLT04, :ρSSLT05]
+                if ρname in propertynames(state.c)
+                    ρχ = getproperty(state.c, ρname)
+                    @. aero_conc += specific(ρχ, state.c.ρ)
+                end
             end
         end
         return aero_conc
     else
         aero_conc = cache.scratch.ᶜtemp_scalar
         @. aero_conc = 0
-        for prescribed_aerosol_name in
-            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field
+        if has_prescribed
+            for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+                if name in propertynames(cache.tracers.prescribed_aerosols_field)
+                    @. aero_conc += getproperty(cache.tracers.prescribed_aerosols_field, name)
+                end
+            end
+        end
+        if has_prognostic
+            for ρname in [:ρSSLT01, :ρSSLT02, :ρSSLT03, :ρSSLT04, :ρSSLT05]
+                if ρname in propertynames(state.c)
+                    ρχ = getproperty(state.c, ρname)
+                    @. aero_conc += specific(ρχ, state.c.ρ)
+                end
             end
         end
         out .= aero_conc
@@ -159,7 +180,7 @@ add_diagnostic_variable!(
 )
 
 ###
-# Dust concentration (3d)
+# Dust concentration (3d) — total and per-bin
 ###
 add_diagnostic_variable!(
     short_name = "mmrdust",
@@ -170,17 +191,49 @@ add_diagnostic_variable!(
     compute! = (out, u, p, t) -> compute_dust!(out, u, p, t),
 )
 
+for (bin, long_bin) in (
+    (:DST01, "bin 1 (0.1–1 μm)"),
+    (:DST02, "bin 2 (1–2.5 μm)"),
+    (:DST03, "bin 3 (2.5–5 μm)"),
+    (:DST04, "bin 4 (5–10 μm)"),
+    (:DST05, "bin 5 (10–20 μm)"),
+)
+    add_diagnostic_variable!(
+        short_name = "mmr$(lowercase(string(bin)))",
+        long_name = "Dust Aerosol Mass Mixing Ratio $long_bin",
+        units = "kg kg^-1",
+        comments = "Dry mass fraction of dust aerosol $long_bin.",
+        compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, bin),
+    )
+end
+
 ###
-# Sea salt concentration (3d)
+# Sea salt concentration (3d) — total and per-bin
 ###
 add_diagnostic_variable!(
     short_name = "mmrss",
     long_name = "Sea-Salt Aerosol Mass Mixing Ratio",
     standard_name = "mass_fraction_of_sea_salt_dry_aerosol_particles_in_air",
     units = "kg kg^-1",
-    comments = "Prescribed dry mass fraction of sea salt aerosol particles in air.",
+    comments = "Dry mass fraction of sea salt aerosol particles in air.",
     compute! = (out, u, p, t) -> compute_sea_salt!(out, u, p, t),
 )
+
+for (bin, long_bin) in (
+    (:SSLT01, "bin 1 (0.03–0.1 μm)"),
+    (:SSLT02, "bin 2 (0.1–0.5 μm)"),
+    (:SSLT03, "bin 3 (0.5–1.5 μm)"),
+    (:SSLT04, "bin 4 (1.5–5 μm)"),
+    (:SSLT05, "bin 5 (5–10 μm)"),
+)
+    add_diagnostic_variable!(
+        short_name = "mmr$(lowercase(string(bin)))",
+        long_name = "Sea-Salt Aerosol Mass Mixing Ratio $long_bin",
+        units = "kg kg^-1",
+        comments = "Dry mass fraction of sea salt aerosol $long_bin.",
+        compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, bin),
+    )
+end
 
 ###
 # Sulfate concentration (3d)

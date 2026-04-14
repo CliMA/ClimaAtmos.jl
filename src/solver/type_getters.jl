@@ -192,7 +192,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         vertical_diffusion,
         numerics = get_numerics(parsed_args, FT),
         disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
-        parameterized_aerosols = Tuple(Symbol.(parsed_args["parameterized_aerosols"])),
+        prognostic_aerosols = Tuple(Symbol.(parsed_args["prognostic_aerosols"])),
     )
     # TODO: Should this go in the AtmosModel constructor?
     @assert !@any_reltype(atmos, (UnionAll, DataType))
@@ -1089,8 +1089,6 @@ function get_simulation(config::AtmosConfig)
             nothing  # Default: apply to all tracers
         end
 
-    land_sea_mask_file = config.parsed_args["land_sea_mask_file"]
-
     s = @timed_str begin
         p = build_cache(
             Y,
@@ -1103,7 +1101,6 @@ function get_simulation(config::AtmosConfig)
             tracers.time_varying_trace_gas_names,
             steady_state_velocity,
             vwb_species,
-            land_sea_mask_file,
         )
     end
     @info "Allocating cache (p): $s"

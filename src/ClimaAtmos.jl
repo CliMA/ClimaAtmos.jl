@@ -41,7 +41,6 @@ include(joinpath("cache", "diagnostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "microphysics_cache.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
 include(joinpath("cache", "surface_albedo.jl"))
-include(joinpath("cache", "surface_fractions.jl"))
 
 # Microphysics module (SGS quadrature, cloud fraction, tendency limiters, wrappers)
 include(joinpath("parameterized_tendencies", "microphysics", "microphysics.jl"))
