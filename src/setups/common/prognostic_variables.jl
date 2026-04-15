@@ -218,12 +218,8 @@ Follows the same broadcast-over-local-geometry pattern as
 surface_prognostic_variables(local_geometry, ::PrescribedSST) = (;)
 function surface_prognostic_variables(local_geometry, ::SlabOceanSST)
     FT = Geometry.float_type(local_geometry.coordinates)
-    coord = local_geometry.coordinates
-    T = if :lat in propertynames(coord)
-        FT(271 + 29 * exp(-coord.lat^2 / (2 * 26^2)))
-    else
-        FT(300)
-    end
+    # HACK: hardcoded to 250 K for Larcform1 testing. Do not merge.
+    T = FT(250)
     return (; T, water = FT(0))
 end
 function surface_prognostic_variables(local_geometry, ::EisenmanSeaIce)
