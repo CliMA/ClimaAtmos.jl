@@ -142,10 +142,11 @@ function MLCloud_constructor(model)
     return MLCloud{typeof(static_model)}(static_model)
 end
 
-abstract type AbstractSST end
-struct ZonallySymmetricSST <: AbstractSST end
-struct RCEMIPIISST <: AbstractSST end
-struct ExternalTVColumnSST <: AbstractSST end
+"""Spatial pattern or data source for prescribed sea-surface temperature."""
+abstract type SSTFormula end
+struct ZonallySymmetricSST <: SSTFormula end
+struct RCEMIPIISST <: SSTFormula end
+struct ExternalColumnInputSST <: SSTFormula end
 
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
@@ -180,9 +181,10 @@ Use monthly-average cloud properties from ERA5.
 """
 struct PrescribedCloudInRadiation <: AbstractCloudInRadiation end
 
-abstract type AbstractSurfaceTemperature end
-struct PrescribedSST <: AbstractSurfaceTemperature end
-@kwdef struct SlabOceanSST{FT} <: AbstractSurfaceTemperature
+"""Temporal evolution model for surface temperature (fixed vs prognostic)."""
+abstract type SurfaceTemperatureModel end
+struct PrescribedSST <: SurfaceTemperatureModel end
+@kwdef struct SlabOceanSST{FT} <: SurfaceTemperatureModel
     # optional slab ocean parameters:
     depth_ocean::FT = 40 # ocean mixed layer depth [m]
     ρ_ocean::FT = 1020 # ocean density [kg / m³]
@@ -1090,7 +1092,7 @@ Internal testing and calibration components for single-column setups:
 - `rayleigh_sponge`: nothing or RayleighSponge()
 
 ## AtmosSurface
-- `sfc_temperature`: ZonallySymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
+- `sfc_temperature`: ZonallySymmetricSST(), RCEMIPIISST(), ExternalColumnInputSST()
 - `surface_model`: PrescribedSST(), SlabOceanSST()
 - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
 
@@ -1127,6 +1129,13 @@ function AtmosModel(; kwargs...)
         _create_grouped_struct(AtmosSponge, atmos_model_kwargs, group_kwargs)
     surface =
         _create_grouped_struct(AtmosSurface, atmos_model_kwargs, group_kwargs)
+    if surface.sfc_temperature isa ExternalColumnInputSST &&
+       surface.surface_model isa SlabOceanSST
+        error(
+            "Cannot combine ExternalColumnInputSST with SlabOceanSST: " *
+            "both provide surface temperature. Use one or the other.",
+        )
+    end
     numerics =
         _create_grouped_struct(AtmosNumerics, atmos_model_kwargs, group_kwargs)
 

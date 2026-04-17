@@ -657,9 +657,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
 
     FT = eltype(p.params)
 
-    if !isnothing(p.sfc_setup)
-        SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
-    end
+    SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)

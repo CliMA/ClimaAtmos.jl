@@ -1,12 +1,26 @@
 # Surface types
 """
-    PrescribedSurface()
+    CouplerManagedSurface()
 
-Used to indicate that there is no surface parameterization and
-that the surface conditions will be explicitly prescribed (e.g. by the coupler).
+Sentinel indicating the coupler manages surface conditions externally.
+ClimaAtmos will not compute surface fluxes when this is the active setup.
+The coupler writes directly to `p.precomputed.sfc_conditions`.
 """
-struct PrescribedSurface end
-(surface_setup::PrescribedSurface)(params) = nothing
+struct CouplerManagedSurface end
+(::CouplerManagedSurface)(params) = CouplerManagedSurface()
+
+"""
+    PrescribedSurface
+
+Deprecated: use [`CouplerManagedSurface`](@ref) instead.
+"""
+function PrescribedSurface()
+    Base.depwarn(
+        "`PrescribedSurface` is deprecated, use `CouplerManagedSurface` instead.",
+        :PrescribedSurface,
+    )
+    return CouplerManagedSurface()
+end
 """
     DefaultMoninObukhov()
 

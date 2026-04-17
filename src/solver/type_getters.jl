@@ -504,6 +504,13 @@ function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp
     return (; ᶜu, ᶠu)
 end
 
+"""
+    get_surface_setup(parsed_args; setup_type = nothing)
+
+Return a callable `params -> SurfaceState` for the state-layer surface config.
+
+Priority: `Setup.surface_condition(setup_type, params)` > config `"surface_setup"` key.
+"""
 function get_surface_setup(parsed_args; setup_type = nothing)
     if !isnothing(setup_type)
         return function (params)

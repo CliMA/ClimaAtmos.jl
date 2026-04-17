@@ -50,4 +50,4 @@ function surface_condition(::InterpolatedColumnProfile, params)
 end
 
 insolation_model(::InterpolatedColumnProfile) = ExternalTVInsolation()
-surface_temperature_model(::InterpolatedColumnProfile) = ExternalTVColumnSST()
+surface_temperature_model(::InterpolatedColumnProfile) = ExternalColumnInputSST()

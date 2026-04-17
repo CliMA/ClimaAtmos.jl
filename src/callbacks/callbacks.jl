@@ -66,7 +66,7 @@ function external_driven_single_column!(integrator)
     p = integrator.p
     t = integrator.t
 
-    @assert p.atmos.sfc_temperature isa ExternalTVColumnSST (
+    @assert p.atmos.sfc_temperature isa ExternalColumnInputSST (
         "SCM reanalysis timevarying setup requires `initial_condition` " *
         "and `external_forcing` to be set to `ReanalysisTimeVarying`"
     )

@@ -13,7 +13,6 @@ import ClimaCore.Utilities: half
 const z0m = 1e-3
 const z0b = 1e-5
 const gustiness = 1
-const beta = 1
 const T1 = 300
 const T2 = 290
 
@@ -56,7 +55,6 @@ const T2 = 290
         ),
         T = FT(NaN),
         gustiness = FT(gustiness),
-        beta = FT(beta),
     )
     sfc_setup = similar(Spaces.level(Y.f, half), typeof(surface_state))
     @. sfc_setup = (surface_state,)
@@ -94,8 +92,43 @@ const T2 = 290
     @test all(isequal(T2), parent(sfc_T))
 end
 
+@testset "Coupler Direct Write (Real Pattern)" begin
+    # This tests the actual coupler integration pattern: CouplerManagedSurface
+    # makes update_surface_conditions! a no-op, so values written directly to
+    # sfc_conditions persist across timesteps.
+    config = CA.AtmosConfig(
+        Dict(
+            "surface_setup" => "CouplerManagedSurface",
+            "microphysics_model" => "0M",
+            "config" => "column",
+            "output_default_diagnostics" => false,
+        );
+        job_id = "coupler_compatibility2",
+    )
+    simulation = CA.AtmosSimulation(config)
+    (; integrator) = simulation
+    (; p, t) = integrator
+    Y = integrator.u
+    FT = eltype(Y)
+
+    # Write a known T_sfc directly to sfc_conditions (as the coupler does).
+    test_T = FT(271.5)
+    p.precomputed.sfc_conditions.T_sfc .= test_T
+
+    # Run set_precomputed_quantities! — should NOT overwrite our value.
+    CA.set_precomputed_quantities!(Y, p, t)
+    @test all(isequal(test_T), parent(p.precomputed.sfc_conditions.T_sfc))
+
+    # Write a different value and verify it also persists.
+    test_T2 = FT(260.0)
+    p.precomputed.sfc_conditions.T_sfc .= test_T2
+    CA.set_precomputed_quantities!(Y, p, t)
+    @test all(isequal(test_T2), parent(p.precomputed.sfc_conditions.T_sfc))
+end
+
 @testset "Coupler Initialization" begin
-    # Verify that using PrescribedSurface does not break the initialization of
+    # Verify that using PrescribedSurface (alias for CouplerManagedSurface) does
+    # not break the initialization of
     # RRTMGP or diagnostic EDMF. We currently need a moisture model in order to
     # use diagnostic EDMF.
     #

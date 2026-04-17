@@ -212,7 +212,7 @@ function AtmosSimulation{FT}(;
             update_j = CTS.UpdateEvery(CTS.NewNewtonIteration),
         ),
     ),
-    surface_setup = SurfaceConditions.DefaultExchangeCoefficients(),
+    surface_setup = SurfaceConditions.DefaultExchangeCoefficients(), # state-layer config; overridden by Setup.surface_condition() when a setup is active
     itime = false,
     job_id = "atmos_sim",
     output_dir = nothing,

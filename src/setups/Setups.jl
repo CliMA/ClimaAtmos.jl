@@ -46,7 +46,7 @@ import ..ZonallySymmetricSST
 import ..GCMForcing, ..ISDACForcing
 import ..GCMDrivenInsolation, ..ExternalTVInsolation
 import ..RCEMIPIIInsolation, ..RCEMIPIISST
-import ..ExternalTVColumnSST
+import ..ExternalColumnInputSST
 import ..ShipwayHill2012VelocityProfile
 import ..RadiationDYCOMS, ..RadiationTRMM_LBA, ..RadiationISDAC
 import ..SurfaceConditions: MoninObukhov, SurfaceState
@@ -113,7 +113,16 @@ coriolis_forcing(setup, ::Type{FT}) where {FT} = nothing
 """
     surface_condition(setup, params)
 
-Return the surface state for this setup, or `nothing`.
+Return the **state-layer** surface configuration for this setup, or `nothing`.
+
+This controls the surface flux parameterization and boundary values (roughness
+lengths, exchange coefficients, prescribed T/q, etc.) — i.e. what gets stored
+in `p.sfc_setup`. It does *not* control the type of temperature evolution
+(prescribed vs. prognostic vs. external), which is set in the model layer via
+`AtmosSurface.sfc_temperature` and `AtmosSurface.surface_model`.
+
+When a setup provides a non-`nothing` return, it takes priority over the
+`surface_setup` config key / kwarg.
 
 The return value may be:
 - A `SurfaceState` (static surface conditions)

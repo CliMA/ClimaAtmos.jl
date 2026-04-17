@@ -179,9 +179,11 @@ function build_cache(
         external_forcing,
     )
 
-    # Coupler compatibility
-    isnothing(precomputing_arguments.sfc_setup) &&
+    # Coupler mode: fill sfc_conditions with placeholders so EDMF can initialize
+    # before the coupler provides real values.
+    if sfc_setup isa SurfaceConditions.CouplerManagedSurface
         SurfaceConditions.set_dummy_surface_conditions!(precomputing_arguments)
+    end
 
     set_precomputed_quantities!(Y, precomputing_arguments, FT(0))
 

@@ -7,7 +7,7 @@ abstract type PrescribedFluxes{FT} end
 abstract type SurfaceParameterization{FT} end
 
 """
-    SurfaceState(; parametrization, T, p, q_vap, u, v, gustiness, beta)
+    SurfaceState(; parameterization, T, p, q_vap, u, v, gustiness)
 
 A container for state variables at the ground level, for use with SurfaceFluxes.
 """
@@ -20,7 +20,6 @@ struct SurfaceState{
     FTN4 <: Union{FT, Nothing},
     FTN5 <: Union{FT, Nothing},
     FTN6 <: Union{FT, Nothing},
-    FTN7 <: Union{FT, Nothing},
 }
     parameterization::SFP
     T::FTN1
@@ -29,7 +28,6 @@ struct SurfaceState{
     u::FTN4
     v::FTN5
     gustiness::FTN6
-    beta::FTN7
 end
 
 float_type(::Type{<:SurfaceParameterization{FT}}) where {FT} = FT
@@ -42,10 +40,9 @@ SurfaceState(;
     u::FTN4 = nothing,
     v::FTN5 = nothing,
     gustiness::FTN6 = nothing,
-    beta::FTN7 = nothing,
-) where {SFP <: SurfaceParameterization, FTN1, FTN2, FTN3, FTN4, FTN5, FTN6, FTN7} =
-    SurfaceState{float_type(SFP), SFP, FTN1, FTN2, FTN3, FTN4, FTN5, FTN6, FTN7}(
-        parameterization, T, p, q_vap, u, v, gustiness, beta,
+) where {SFP <: SurfaceParameterization, FTN1, FTN2, FTN3, FTN4, FTN5, FTN6} =
+    SurfaceState{float_type(SFP), SFP, FTN1, FTN2, FTN3, FTN4, FTN5, FTN6}(
+        parameterization, T, p, q_vap, u, v, gustiness,
     )
 
 """

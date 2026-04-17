@@ -2,10 +2,16 @@
     update_surface_conditions!(Y, p, t)
 
 Updates the value of `p.precomputed.sfc_conditions` based on the current state `Y` and time
-`t`. This function will only update the surface conditions if the surface_setup
-is not a PrescribedSurface.
+`t`, using the surface setup stored in `p.sfc_setup`. No-op when the coupler
+manages surface conditions externally.
 """
-function update_surface_conditions!(Y, p, t)
+update_surface_conditions!(Y, p, t) =
+    update_surface_conditions!(Y, p, t, p.sfc_setup)
+
+# Coupler manages surface conditions externally — nothing to compute.
+update_surface_conditions!(Y, p, t, ::CouplerManagedSurface) = nothing
+
+function update_surface_conditions!(Y, p, t, sfc_setup)
     # Need to extract the field values so that we can do
     # a DataLayout broadcast rather than a Field broadcast
     # because we are mixing surface and interior fields
@@ -15,7 +21,7 @@ function update_surface_conditions!(Y, p, t)
     int_local_geometry_values =
         Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
     (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜu, sfc_conditions) = p.precomputed
-    (; params, sfc_setup, atmos) = p
+    (; params, atmos) = p
     thermo_params = CAP.thermodynamics_params(params)
     surface_fluxes_params = CAP.surface_fluxes_params(params)
     surface_temp_params = CAP.surface_temp_params(params)
@@ -28,11 +34,11 @@ function update_surface_conditions!(Y, p, t)
     int_z_values = Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
     sfc_conditions_values = Fields.field_values(sfc_conditions)
     wrapped_sfc_setup = sfc_setup_wrapper(sfc_setup)
-    if p.atmos.sfc_temperature isa ExternalTVColumnSST
+    if atmos.sfc_temperature isa ExternalColumnInputSST
         (; surface_inputs, surface_timevaryinginputs) = p.external_forcing
         evaluate!(surface_inputs.ts, surface_timevaryinginputs.ts, t)
         sfc_temp_var = Fields.field_values(surface_inputs.ts)
-    elseif p.atmos.surface_model isa SlabOceanSST
+    elseif atmos.surface_model isa SlabOceanSST
         sfc_temp_var = Fields.field_values(Y.sfc.T)
     else
         sfc_temp_var = nothing
@@ -79,12 +85,14 @@ surface_state(
 ) where {F <: Function} =
     wrapped_sfc_setup(sfc_local_geometry_values.coordinates, int_z_values, t)
 
-# This is a hack for meeting the August 7th deadline. It is to ensure that the
-# coupler will be able to construct an integrator before overwriting its surface
-# conditions, but without throwing an error during the computation of
-# precomputed quantities for diagnostic EDMF due to uninitialized surface
-# conditions.
-# TODO: Refactor the surface conditions API to avoid needing to do this.
+
+"""
+    set_dummy_surface_conditions!(p)
+
+Fill `p.precomputed.sfc_conditions` with safe placeholder values. Called during
+cache construction for coupler-managed simulations so that diagnostic EDMF and
+other initialization code can run before the coupler provides real values.
+"""
 function set_dummy_surface_conditions!(p)
     (; params, atmos) = p
     (; sfc_conditions) = p.precomputed
@@ -98,39 +106,38 @@ function set_dummy_surface_conditions!(p)
         @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
     end
     @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
-
-    # Zero out the surface momentum flux
     c = p.scratch.ᶠtemp_scalar
-    # elsewhere known as 𝒢
     sfc_local_geometry = Fields.level(Fields.local_geometry_field(c), half)
     @. sfc_conditions.ρ_flux_uₕ = tensor_from_components(0, 0, sfc_local_geometry)
 end
-
 ifelsenothing(x, default) = x
 ifelsenothing(x::Nothing, default) = default
 
 """
+    resolve_surface_temperature(sfc_temp_var, state_T, sfc_temperature, coordinates, params)
+
+Determine the surface temperature from the available sources.
+
+- If `sfc_temp_var` is not `nothing` (external forcing or prognostic slab), use it directly.
+- Otherwise fall back to the `SurfaceState.T` field if set, or the `SSTFormula` dispatch.
+"""
+resolve_surface_temperature(sfc_temp_var, _, _, _, _) = sfc_temp_var
+resolve_surface_temperature(::Nothing, state_T, _, _, _) = state_T
+resolve_surface_temperature(::Nothing, ::Nothing, sfc_temperature, coordinates, params) =
+    surface_temperature(sfc_temperature, coordinates, params)
+
+"""
     surface_state_to_conditions(
-        wrapped_sfc_setup,
-        surface_local_geometry,
-        T_int,
-        ρ_int,
-        q_tot_int,
-        q_liq_int,
-        q_ice_int,
-        u_int,
-        v_int,
-        z_int,
-        thermo_params,
-        surface_fluxes_params,
-        surface_temp_params,
-        atmos,
-        sfc_prognostic_temp,
-        t,
+        wrapped_sfc_setup, surface_local_geometry,
+        T_int, ρ_int, q_tot_int, q_liq_int, q_ice_int,
+        u_int, v_int, z_int,
+        thermo_params, surface_fluxes_params, surface_temp_params,
+        atmos, sfc_temp_var, t,
     )
 
 Computes the surface conditions, given information about the surface and the
-first interior point. Implements the assumptions listed for `SurfaceState`.
+first interior point. Surface temperature is resolved from `sfc_temp_var`,
+`SurfaceState.T`, or an `SSTFormula` dispatch (in that priority order).
 """
 function surface_state_to_conditions(
     wrapped_sfc_setup::WSS,
@@ -160,15 +167,10 @@ function surface_state_to_conditions(
     (!isnothing(surf_state.q_vap) && atmos.microphysics_model isa DryModel) &&
         error("surface q_vap cannot be specified when using a DryModel")
 
-    T_sfc = if isnothing(sfc_temp_var)
-        if isnothing(surf_state.T)
-            surface_temperature(atmos.sfc_temperature, coordinates, surface_temp_params)
-        else
-            surf_state.T
-        end
-    else
-        sfc_temp_var
-    end
+    T_sfc = resolve_surface_temperature(
+        sfc_temp_var, surf_state.T, atmos.sfc_temperature, coordinates,
+        surface_temp_params,
+    )
     u = ifelsenothing(surf_state.u, FT(0))
     v = ifelsenothing(surf_state.v, FT(0))
 
@@ -241,6 +243,10 @@ function surface_state_to_conditions(
         surface_local_geometry,
     )
 end
+
+# SST formula dispatch — called by `resolve_surface_temperature` only when
+# the `PrescribedSST` path (no external or prognostic temperature) and `surf_state.T`
+# is `nothing`. Each `SSTFormula` subtype provides one or more methods below.
 
 #Sphere SST distribution from Wing et al. (2023) https://gmd.copernicus.org/preprints/gmd-2023-235/
 function surface_temperature(
