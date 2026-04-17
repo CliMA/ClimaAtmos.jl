@@ -743,6 +743,42 @@ add_diagnostic_variable!(
 )
 
 ###
+# Obukhov length (2d)
+###
+add_diagnostic_variable!(
+    short_name = "lmo",
+    long_name = "Obukhov Length",
+    units = "m",
+    comments = "Monin-Obukhov length scale at the surface",
+    compute! = (out, state, cache, time) -> begin
+        (; obukhov_length) = cache.precomputed.sfc_conditions
+        if isnothing(out)
+            return copy(obukhov_length)
+        else
+            out .= obukhov_length
+        end
+    end,
+)
+
+###
+# Friction velocity (2d)
+###
+add_diagnostic_variable!(
+    short_name = "ustar",
+    long_name = "Friction Velocity",
+    units = "m s^-1",
+    comments = "Surface friction velocity",
+    compute! = (out, state, cache, time) -> begin
+        (; ustar) = cache.precomputed.sfc_conditions
+        if isnothing(out)
+            return copy(ustar)
+        else
+            out .= ustar
+        end
+    end,
+)
+
+###
 # Surface energy flux (2d) - TODO: this may need to be split into sensible and latent heat fluxes
 ###
 function compute_hfes!(out, state, cache, time)

@@ -820,3 +820,342 @@ add_diagnostic_variable!(short_name = "evu", units = "m^2 s^-1",
     comments = "Vertical diffusion coefficient for momentum due to parameterized eddies",
     compute = compute_evu,
 )
+
+###
+# Updraft mass flux (3d)
+###
+compute_mfup(state, cache, time) =
+    compute_mfup(state, cache, time, cache.atmos.turbconv_model)
+compute_mfup(_, _, _, turbconv_model) =
+    error_diagnostic_variable("mfup", turbconv_model)
+
+function compute_mfup(state, cache, _, ::PrognosticEDMFX)
+    (; ᶠu³ʲs, ᶜρʲs) = cache.precomputed
+    ᶜρaʲ = (state.c.sgsʲs.:1).ρa
+    ᶜJ = Fields.local_geometry_field(state.c).J
+    ᶠJ = Fields.local_geometry_field(cache.precomputed.ᶠu³).J
+    ᶠflux = @. lazy(ᶠinterp(ᶜρaʲ * ᶜJ) / ᶠJ * ᶠu³ʲs.:1)
+    return @. lazy(ᶜinterp(w_component(Geometry.WVector(ᶠflux))))
+end
+
+function compute_mfup(state, cache, _, ::DiagnosticEDMFX)
+    (; ᶜρaʲs, ᶠu³ʲs) = cache.precomputed
+    ᶜJ = Fields.local_geometry_field(state.c).J
+    ᶠJ = Fields.local_geometry_field(cache.precomputed.ᶠu³).J
+    ᶠflux = @. lazy(ᶠinterp(ᶜρaʲs.:1 * ᶜJ) / ᶠJ * ᶠu³ʲs.:1)
+    return @. lazy(ᶜinterp(w_component(Geometry.WVector(ᶠflux))))
+end
+
+add_diagnostic_variable!(short_name = "mfup", units = "kg m^-2 s^-1",
+    long_name = "Updraft Mass Flux",
+    comments = """
+    Vertical mass flux of the first updraft: ρa * w.
+    Represents the mass transport by the updraft per unit area.
+    Computed on faces with Jacobian terms for metric consistency, then interpolated to cell centers.
+    """,
+    compute = compute_mfup,
+)
+
+###
+# Total SGS mass flux (3d)
+###
+compute_sgsmf(state, cache, time) =
+    compute_sgsmf(state, cache, time, cache.atmos.turbconv_model)
+compute_sgsmf(_, _, _, turbconv_model) =
+    error_diagnostic_variable("sgsmf", turbconv_model)
+
+function compute_sgsmf(state, cache, _, turbconv_model::PrognosticEDMFX)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; ᶠu³) = cache.precomputed
+    (; ᶠu³ʲs, ᶜρʲs) = cache.precomputed
+    (; ᶠu³⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜp) = cache.precomputed
+
+    ᶜJ = Fields.local_geometry_field(state.c).J
+    ᶠJ = Fields.local_geometry_field(ᶠu³).J
+
+    ᶜρ⁰ = @. lazy(
+        TD.air_density(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+        ),
+    )
+    ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))
+
+    # Updraft 1 contribution (assuming n=1 for simplicity, can be extended)
+    ᶜρaʲ = (state.c.sgsʲs.:1).ρa
+    ᶠu³_diffʲ = @. lazy(ᶠu³ʲs.:1 - ᶠu³)
+    ᶠfluxʲ = @. lazy(ᶠinterp(ᶜρaʲ * ᶜJ) / ᶠJ * ᶠu³_diffʲ)
+
+    # Environment contribution
+    ᶠu³_diff⁰ = @. lazy(ᶠu³⁰ - ᶠu³)
+    ᶠflux⁰ = @. lazy(ᶠinterp(ᶜρa⁰ * ᶜJ) / ᶠJ * ᶠu³_diff⁰)
+
+    # Total flux
+    ᶠflux_total = @. lazy(ᶠfluxʲ + ᶠflux⁰)
+    return @. lazy(ᶜinterp(w_component(Geometry.WVector(ᶠflux_total))))
+end
+
+function compute_sgsmf(state, cache, _, turbconv_model::DiagnosticEDMFX)
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; ᶠu³) = cache.precomputed
+    (; ᶜρaʲs, ᶠu³ʲs) = cache.precomputed
+
+    ᶜJ = Fields.local_geometry_field(state.c).J
+    ᶠJ = Fields.local_geometry_field(ᶠu³).J
+
+    # Updraft 1 contribution (DiagnosticEDMFX doesn't include environment in mass flux)
+    ᶠu³_diffʲ = @. lazy(ᶠu³ʲs.:1 - ᶠu³)
+    ᶠflux = @. lazy(ᶠinterp(ᶜρaʲs.:1 * ᶜJ) / ᶠJ * ᶠu³_diffʲ)
+    return @. lazy(ᶜinterp(w_component(Geometry.WVector(ᶠflux))))
+end
+
+add_diagnostic_variable!(short_name = "sgsmf", units = "kg m^-2 s^-1",
+    long_name = "SGS Mass Flux",
+    comments = """
+    Total subgrid-scale vertical mass flux from EDMFX updrafts and environment.
+    Computed as the sum of ρa * (w - w̄) over all subdomains, where w̄ is the grid-mean velocity.
+    Uses Jacobian terms for metric consistency, matching the actual tendency computation.
+    """,
+    compute = compute_sgsmf,
+)
+
+###
+# SGS mass flux of total enthalpy (3d)
+###
+compute_sgsmfht(state, cache, time) =
+    compute_sgsmfht(state, cache, time, cache.atmos.turbconv_model)
+compute_sgsmfht(_, _, _, turbconv_model) =
+    error_diagnostic_variable("sgsmfht", turbconv_model)
+
+function compute_sgsmfht(state, cache, _, turbconv_model::PrognosticEDMFX)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; ᶠu³) = cache.precomputed
+    (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = cache.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜp) = cache.precomputed
+    (; ᶜh_tot) = cache.precomputed
+
+    ᶜJ = Fields.local_geometry_field(state.c).J
+    ᶠJ = Fields.local_geometry_field(ᶠu³).J
+
+    ᶜρ⁰ = @. lazy(
+        TD.air_density(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+        ),
+    )
+    ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))
+
+    # Updraft 1 contribution
+    ᶜρaʲ = (state.c.sgsʲs.:1).ρa
+    ᶜρʲ = ᶜρʲs.:1
+    ᶜmseʲ = (state.c.sgsʲs.:1).mse
+    ᶜh_devʲ = @. lazy((ᶜmseʲ + ᶜKʲs.:1 - ᶜh_tot) * draft_area(ᶜρaʲ, ᶜρʲ))
+    ᶠu³_diffʲ = @. lazy(ᶠu³ʲs.:1 - ᶠu³)
+    ᶠfluxʲ = @. lazy(ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ * ᶠu³_diffʲ * ᶠinterp(ᶜh_devʲ))
+
+    # Environment contribution
+    ᶜmse⁰ = ᶜspecific_env_mse(state, cache)
+    ᶜh_dev⁰ = @. lazy((ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰))
+    ᶠu³_diff⁰ = @. lazy(ᶠu³⁰ - ᶠu³)
+    ᶠflux⁰ = @. lazy(ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ * ᶠu³_diff⁰ * ᶠinterp(ᶜh_dev⁰))
+
+    # Total flux
+    ᶠflux_total = @. lazy(ᶠfluxʲ + ᶠflux⁰)
+    return @. lazy(ᶜinterp(w_component(Geometry.WVector(ᶠflux_total))))
+end
+
+function compute_sgsmfht(state, cache, _, turbconv_model::DiagnosticEDMFX)
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; ᶠu³) = cache.precomputed
+    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs) = cache.precomputed
+    (; ᶜh_tot) = cache.precomputed
+
+    ᶜJ = Fields.local_geometry_field(state.c).J
+    ᶠJ = Fields.local_geometry_field(ᶠu³).J
+
+    # Updraft 1 contribution
+    ᶜh_devʲ = @. lazy((ᶜmseʲs.:1 + ᶜKʲs.:1 - ᶜh_tot) * draft_area(ᶜρaʲs.:1, ᶜρʲs.:1))
+    ᶠu³_diffʲ = @. lazy(ᶠu³ʲs.:1 - ᶠu³)
+    ᶠflux = @. lazy(ᶠinterp(ᶜρʲs.:1 * ᶜJ) / ᶠJ * ᶠu³_diffʲ * ᶠinterp(ᶜh_devʲ))
+    return @. lazy(ᶜinterp(w_component(Geometry.WVector(ᶠflux))))
+end
+
+add_diagnostic_variable!(short_name = "sgsmfht", units = "W m^-2",
+    long_name = "SGS Mass Flux of Total Enthalpy",
+    comments = """
+    Subgrid-scale vertical mass flux of total enthalpy from EDMFX updrafts and environment.
+    Represents transport of energy by resolved SGS circulations relative to the grid mean flow.
+    Computed on faces with Jacobian terms for metric consistency, matching the actual tendency computation.
+    """,
+    compute = compute_sgsmfht,
+)
+
+###
+# SGS mass flux of total moisture (3d)
+###
+compute_sgsmfqt(state, cache, time) = compute_sgsmfqt(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_sgsmfqt(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute SGS mass flux of moisture \
+                               with a moist model and with EDMFX")
+
+function compute_sgsmfqt(state, cache, _,
+    ::MoistMicrophysics, turbconv_model::PrognosticEDMFX,
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; ᶠu³) = cache.precomputed
+    (; ᶠu³ʲs, ᶜρʲs) = cache.precomputed
+    (; ᶠu³⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜp) = cache.precomputed
+
+    ᶜJ = Fields.local_geometry_field(state.c).J
+    ᶠJ = Fields.local_geometry_field(ᶠu³).J
+
+    ᶜρ⁰ = @. lazy(
+        TD.air_density(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+        ),
+    )
+    ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))
+    ᶜq_tot = @. lazy(specific(state.c.ρq_tot, state.c.ρ))
+
+    # Updraft 1 contribution
+    ᶜρaʲ = (state.c.sgsʲs.:1).ρa
+    ᶜρʲ = ᶜρʲs.:1
+    ᶜq_totʲ = (state.c.sgsʲs.:1).q_tot
+    ᶜq_devʲ = @. lazy((ᶜq_totʲ - ᶜq_tot) * draft_area(ᶜρaʲ, ᶜρʲ))
+    ᶠu³_diffʲ = @. lazy(ᶠu³ʲs.:1 - ᶠu³)
+    ᶠfluxʲ = @. lazy(ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ * ᶠu³_diffʲ * ᶠinterp(ᶜq_devʲ))
+
+    # Environment contribution
+    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), state, cache)
+    ᶜq_dev⁰ = @. lazy((ᶜq_tot⁰ - ᶜq_tot) * draft_area(ᶜρa⁰, ᶜρ⁰))
+    ᶠu³_diff⁰ = @. lazy(ᶠu³⁰ - ᶠu³)
+    ᶠflux⁰ = @. lazy(ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ * ᶠu³_diff⁰ * ᶠinterp(ᶜq_dev⁰))
+
+    # Total flux
+    ᶠflux_total = @. lazy(ᶠfluxʲ + ᶠflux⁰)
+    return @. lazy(ᶜinterp(w_component(Geometry.WVector(ᶠflux_total))))
+end
+
+function compute_sgsmfqt(state, cache, _,
+    ::MoistMicrophysics, turbconv_model::DiagnosticEDMFX,
+)
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; ᶠu³) = cache.precomputed
+    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜq_totʲs) = cache.precomputed
+
+    ᶜJ = Fields.local_geometry_field(state.c).J
+    ᶠJ = Fields.local_geometry_field(ᶠu³).J
+    ᶜq_tot = @. lazy(specific(state.c.ρq_tot, state.c.ρ))
+
+    # Updraft 1 contribution
+    ᶜq_devʲ = @. lazy((ᶜq_totʲs.:1 - ᶜq_tot) * draft_area(ᶜρaʲs.:1, ᶜρʲs.:1))
+    ᶠu³_diffʲ = @. lazy(ᶠu³ʲs.:1 - ᶠu³)
+    ᶠflux = @. lazy(ᶠinterp(ᶜρʲs.:1 * ᶜJ) / ᶠJ * ᶠu³_diffʲ * ᶠinterp(ᶜq_devʲ))
+    return @. lazy(ᶜinterp(w_component(Geometry.WVector(ᶠflux))))
+end
+
+add_diagnostic_variable!(short_name = "sgsmfqt", units = "kg m^-2 s^-1",
+    long_name = "SGS Mass Flux of Total Moisture",
+    comments = """
+    Subgrid-scale vertical mass flux of total specific humidity from EDMFX updrafts and environment.
+    Represents transport of moisture by resolved SGS circulations relative to the grid mean flow.
+    Computed on faces with Jacobian terms for metric consistency, matching the actual tendency computation.
+    """,
+    compute = compute_sgsmfqt,
+)
+
+###
+# SGS diffusive flux of total enthalpy (3d)
+###
+compute_sgsdfht(state, cache, time) =
+    compute_sgsdfht(state, cache, time, cache.atmos.turbconv_model)
+compute_sgsdfht(_, _, _, turbconv_model) =
+    error_diagnostic_variable("sgsdfht", turbconv_model)
+
+function compute_sgsdfht(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX})
+    (; params) = cache
+    turbconv_params = CAP.turbconv_params(params)
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜh_tot) = cache.precomputed
+    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
+    ᶜmixing_length_field = ᶜmixing_length(state, cache)
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
+    ᶜprandtl_nvec = @. lazy(
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+    )
+    ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+
+    # Face-centered diffusive flux: -ρ K_h ∂h_tot/∂z
+    # Matches actual tendency: ᶠρaK_h = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h)
+    ᶠρK_h = @. lazy(ᶠinterp(state.c.ρ) * ᶠinterp(ᶜK_h))
+    ᶠflux = @. lazy(-(ᶠρK_h * ᶠgradᵥ(ᶜh_tot)))
+    return @. lazy(ᶜinterp(w_component(Geometry.WVector(ᶠflux))))
+end
+
+add_diagnostic_variable!(short_name = "sgsdfht", units = "W m^-2",
+    long_name = "SGS Diffusive Flux of Total Enthalpy",
+    comments = """
+    Subgrid-scale vertical diffusive flux of total enthalpy from EDMFX environment turbulence.
+    Parameterized using eddy diffusivity closure: -ρ K_h ∂h_tot/∂z
+    Computed on faces then interpolated to cell centers, matching the actual tendency computation.
+    """,
+    compute = compute_sgsdfht,
+)
+
+###
+# SGS diffusive flux of total moisture (3d)
+###
+compute_sgsdfqt(state, cache, time) = compute_sgsdfqt(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_sgsdfqt(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute SGS diffusive flux of moisture \
+                               with a moist model and with EDMFX")
+
+function compute_sgsdfqt(state, cache, _,
+    ::MoistMicrophysics, ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX},
+)
+    (; params) = cache
+    turbconv_params = CAP.turbconv_params(params)
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
+    ᶜmixing_length_field = ᶜmixing_length(state, cache)
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
+    ᶜprandtl_nvec = @. lazy(
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+    )
+    ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+
+    # Face-centered diffusive flux: -ρ K_h ∂q_tot/∂z
+    ᶜq_tot = @. lazy(specific(state.c.ρq_tot, state.c.ρ))
+    ᶠρK_h = @. lazy(ᶠinterp(state.c.ρ) * ᶠinterp(ᶜK_h))
+    ᶠflux = @. lazy(-(ᶠρK_h * ᶠgradᵥ(ᶜq_tot)))
+    return @. lazy(ᶜinterp(w_component(Geometry.WVector(ᶠflux))))
+end
+
+add_diagnostic_variable!(short_name = "sgsdfqt", units = "kg m^-2 s^-1",
+    long_name = "SGS Diffusive Flux of Total Moisture",
+    comments = """
+    Subgrid-scale vertical diffusive flux of total specific humidity from EDMFX environment turbulence.
+    Parameterized using eddy diffusivity closure: -ρ K_h ∂q_tot/∂z
+    Computed on faces then interpolated to cell centers, matching the actual tendency computation.
+    """,
+    compute = compute_sgsdfqt,
+)
