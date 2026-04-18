@@ -21,7 +21,7 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1.11'
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - name: Install dependencies
         shell: julia --project=docs {0}
         run: |
