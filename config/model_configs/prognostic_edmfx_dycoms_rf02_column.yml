@@ -12,6 +12,7 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
 microphysics_model: "1M"
+microphysics_n_substeps: 1
 config: "column"
 x_elem: 2
 y_elem: 2

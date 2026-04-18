@@ -249,7 +249,10 @@ sgs_distribution:
   help: "Distribution type for SGS quadrature over microphysics. [`gaussian`, `lognormal` (default), `mean` (grid-mean only, no SGS sampling)]"
   value: "lognormal"
 quadrature_order:
-  help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 2"
+  help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 3"
+  value: 3
+microphysics_n_substeps:
+  help: "Number of susbteps for time averaging bulk microphysics tendencies. Default: 3"
   value: 3
 perf_summary:
   help: "Flag for collecting performance summary information"

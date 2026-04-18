@@ -114,14 +114,13 @@ is limited by the available water.
 - `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
 - `q′q′`: Variance of q_tot ``\\langle q'^2 \\rangle``
 - `corr_Tq`: Correlation coefficient ρ(T', q')
-- `tst`: microphysics timestepping configuration
 - `dt`: model timestep length [s]
 
 # Returns
 NamedTuple with `dq_tot_dt` and `e_tot_hlpr`.
 """
 @inline function microphysics_tendencies_0m(
-    SG_quad, cmp, thp, ρ, T, q_tot_nonneg, T′T′, q′q′, corr_Tq, Φ, tst, dt,
+    SG_quad, cmp, thp, ρ, T, q_tot_nonneg, T′T′, q′q′, corr_Tq, Φ, dt,
 )
     # Create GPU-safe functor (Φ is constant within a grid cell)
     # The evaluator does saturation adjustment, computes saturation vapor pressure
@@ -132,14 +131,13 @@ NamedTuple with `dq_tot_dt` and `e_tot_hlpr`.
     (; dq_tot_dt, e_tot_hlpr) = integrate_over_sgs(
         evaluator, SG_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
     )
-    # Apply limiter if using explicit microphysics timestepping
-    if tst isa Explicit
-        dq_tot_dt = explicit_0m_tendency_limit(dq_tot_dt, q_tot_nonneg, dt)
-    end
+    # Apply limiter
+    dq_tot_dt = apply_0m_tendency_limit(dq_tot_dt, q_tot_nonneg, dt)
+
     return (; dq_tot_dt, e_tot_hlpr)
 end
 @inline function microphysics_tendencies_0m(
-    cmp, thp, ρ, T, q_tot_nonneg, q_liq, q_ice, Φ, tst, dt,
+    cmp, thp, ρ, T, q_tot_nonneg, q_liq, q_ice, Φ, dt,
 )
     # Computes saturation vapor pressure, total water sink and energy helper
     # based on provided mean temperature, total water, liquid and ice specific humidities.
@@ -150,10 +148,9 @@ end
     )
     e_tot_hlpr = e_tot_0M_precipitation_sources_helper(thp, T, q_liq, q_ice, Φ)
 
-    # Apply limiter if using explicit microphysics timestepping
-    if tst isa Explicit
-        dq_tot_dt = explicit_0m_tendency_limit(dq_tot_dt, q_tot_nonneg, dt)
-    end
+    # Apply limiter
+    dq_tot_dt = apply_0m_tendency_limit(dq_tot_dt, q_tot_nonneg, dt)
+
     return (; dq_tot_dt, e_tot_hlpr)
 end
 
@@ -179,6 +176,7 @@ at each quadrature point is assumed to equal its mean value.
 - `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
+- `dt`: Model timestep [s] (for tendency averaging)
 """
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
@@ -191,6 +189,7 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     q_icl::FT
     q_rai::FT
     q_sno::FT
+    dt::FT
     args::Args
 end
 @inline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
@@ -200,29 +199,28 @@ end
     q_tot_hat = max(FT(0), q_tot_hat)
 
     # Call CloudMicrophysics point-wise tendencies
-    return BMT.bulk_microphysics_tendencies(
+    # Average tendencies over dt with nsubs = 1 because with sgs quadrature the resulting
+    # tendencies are smoother and one substep for time-averaging suffices
+    return BMT.average_bulk_microphysics_tendencies(
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        eval.q_lcl, eval.q_icl, eval.q_rai, eval.q_sno, eval.args...,
+        eval.q_lcl, eval.q_icl, eval.q_rai, eval.q_sno, eval.dt, 1, eval.args...,
     )
 end
 
 """
-    microphysics_tendencies_1m(ρ, q_tot, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, tst, dt,)
+    microphysics_tendencies_1m(ρ, q_tot, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,)
     microphysics_tendencies_1m(
         scheme, sgs_quad, cmp, thp, ρ, T, q_tot,
-        q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, tst, dt,
+        q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, dt,
     )
 
-Computes 1-moment microphysics tendencies. When using SGS-quadratures,
+Computes time-averaged 1-moment microphysics tendencies. When using SGS-quadratures,
 the tendencies are integrated over the joint PDF of (T, q_tot).
 ```math
 \\bar{S} = \\int\\int S(T, q, \\dots) P(T, q) \\, dT \\, dq
 ```
 The option without SGS-quadratures can be used in the EDMF updrafts, or to compute
 grid-mean tendency without taking account of fluctuations.
-
-When running with explicit microphysics timestepping,
-the total water sink is limited by the available water.
 
 # Arguments
 - `scheme`: Microphysics scheme type (from CloudMicrophysics.BulkMicrophysicsTendencies)
@@ -236,8 +234,8 @@ the total water sink is limited by the available water.
 - `q′q′`: Variance of q_tot ``\\langle q'^2 \\rangle``
 - `corr_Tq`: Correlation coefficient ρ(T', q') obtained from `correlation_Tq(params)`.
 - `args...`: Additional arguments (e.g., N_lcl for 2M)
-- `tst`: microphysics timestepping configuration
-- `dt`: Model timestep [s] (for tendency limiting)
+- `dt`: Model timestep [s] (for tendency averaging)
+- `nsubs`: Number of substeps for computing average tendencies over time
 
 # Returns
 NamedTuple with microphysics source terms:
@@ -247,22 +245,17 @@ NamedTuple with microphysics source terms:
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
 """
 @inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
-    ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, tst, dt,
+    ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,
 )
-    local_tendency = BMT.bulk_microphysics_tendencies(
+    local_tendency = BMT.average_bulk_microphysics_tendencies(
         BMT.Microphysics1Moment(), cmp, thp, ρ, T,
-        q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno,
+        q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
     )
-    if tst isa Explicit
-        local_tendency = explicit_1m_tendency_limit(
-            local_tendency..., thp, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt,
-        )
-    end
     return local_tendency
 end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
     scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
-    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, tst, dt, args...,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, dt, args...,
 )
     # Clamp species humidities to prevent negativity in quadratures
     q_lcl_nonneg = max(0, q_lcl)
@@ -273,18 +266,12 @@ end
     # Create functor
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ, T, q_lcl_nonneg, q_icl_nonneg,
-        q_rai_nonneg, q_sno_nonneg, args,
+        q_rai_nonneg, q_sno_nonneg, dt, args,
     )
     # Integrate over quadrature points using functor (GPU-safe, no closure)
     local_tendency = integrate_over_sgs(
         evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
     )
-    if tst isa Explicit
-        local_tendency = explicit_1m_tendency_limit(
-            local_tendency..., thp, q_tot_nonneg, q_lcl_nonneg, q_icl_nonneg,
-            q_rai_nonneg, q_sno_nonneg, dt,
-        )
-    end
     return local_tendency
 end
 
