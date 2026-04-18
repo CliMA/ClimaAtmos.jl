@@ -52,7 +52,7 @@ compute_waup(state, cache, time) =
 compute_waup(_, _, _, turbconv_model) = error_diagnostic_variable("waup", turbconv_model)
 
 compute_waup(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
-    @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜuʲs.:1)))
+    @. lazy(w_component(WVec(cache.precomputed.ᶜuʲs.:1)))
 
 add_diagnostic_variable!(short_name = "waup", units = "m s^-1",
     long_name = "Updraft Upward Air Velocity",
@@ -434,7 +434,7 @@ compute_waen(state, cache, time) =
 compute_waen(_, _, _, turbconv_model) = error_diagnostic_variable("waen", turbconv_model)
 
 compute_waen(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
-    @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜu⁰)))
+    @. lazy(w_component(WVec(cache.precomputed.ᶜu⁰)))
 
 add_diagnostic_variable!(short_name = "waen", units = "m s^-1",
     long_name = "Environment Upward Air Velocity",
