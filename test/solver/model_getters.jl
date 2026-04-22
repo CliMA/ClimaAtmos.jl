@@ -41,7 +41,7 @@ import ClimaAtmos as CA
         ),
         job_id = "test_hyperdiff_cam_se_wrong_args",
     )
-    @test_throws AssertionError CA.AtmosSimulation(config_wrong)
+    @test_throws AssertionError CA.get_simulation(config_wrong)
 
     @info "Test unrecognized Hyperdiffusion scheme"
     config_unknown = CA.AtmosConfig(

@@ -1242,56 +1242,6 @@ function _throw_unknown_atmos_model_argument_error(unknown_args)
     )
 end
 
-# Convenience constructors for common configurations
-
-"""
-    DryAtmosModel(; kwargs...)
-
-Create a dry atmospheric model with sensible defaults for dry simulations.
-
-# Example
-```julia
-model = DryAtmosModel(;
-    radiation_mode = HeldSuarezForcing(),
-    hyperdiff = Hyperdiffusion(; ν₄_vorticity_coeff = 1e15, divergence_damping_factor = 1.0, prandtl_number = 1.0)
-)
-```
-"""
-function DryAtmosModel(; kwargs...)
-    defaults = (microphysics_model = DryModel(),)
-    return AtmosModel(; defaults..., kwargs...)
-end
-
-"""
-    EquilMoistAtmosModel(; kwargs...)
-
-Create an equilibrium moist atmospheric model with sensible defaults for moist simulations.
-"""
-function EquilMoistAtmosModel(; kwargs...)
-    defaults = (
-        microphysics_model = EquilibriumMicrophysics0M(),
-        cloud_model = GridScaleCloud(),
-        surface_model = PrescribedSST(),
-        sfc_temperature = ZonallySymmetricSST(),
-        insolation = IdealizedInsolation(),
-    )
-    return AtmosModel(; defaults..., kwargs...)
-end
-
-"""
-    NonEquilMoistAtmosModel(; kwargs...)
-
-Create a non-equilibrium moist atmospheric model with sensible defaults.
-"""
-function NonEquilMoistAtmosModel(; kwargs...)
-    defaults = (
-        microphysics_model = NonEquilibriumMicrophysics1M(),
-        microphysics_tendency_timestepping = Explicit(),
-    )
-    return AtmosModel(; defaults..., kwargs...)
-end
-
-
 abstract type AbstractCallbackFrequency end
 struct EveryNSteps <: AbstractCallbackFrequency
     n::Int

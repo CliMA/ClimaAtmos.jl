@@ -18,7 +18,7 @@ Random.seed!(1234)
 
     @testset "ConstantAlbedo" begin
         config = ClimaAtmos.AtmosConfig(base_config; job_id = "surface_albedo_constant")
-        simulation = ClimaAtmos.AtmosSimulation(config)
+        simulation = ClimaAtmos.get_simulation(config)
         (; u, p, t) = simulation.integrator
 
         ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
@@ -30,7 +30,7 @@ Random.seed!(1234)
     @testset "RegressionFunctionAlbedo" begin
         config_dict = merge(base_config, Dict("albedo_model" => "RegressionFunctionAlbedo"))
         config = ClimaAtmos.AtmosConfig(config_dict; job_id = "surface_albedo_regression")
-        simulation = ClimaAtmos.AtmosSimulation(config)
+        simulation = ClimaAtmos.get_simulation(config)
         (; u, p, t) = simulation.integrator
 
         ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
@@ -43,7 +43,7 @@ Random.seed!(1234)
     @testset "CouplerAlbedo" begin
         config_dict = merge(base_config, Dict("albedo_model" => "CouplerAlbedo"))
         config = ClimaAtmos.AtmosConfig(config_dict; job_id = "surface_albedo_coupler")
-        simulation = ClimaAtmos.AtmosSimulation(config)
+        simulation = ClimaAtmos.get_simulation(config)
         (; u, p) = simulation.integrator
 
         # At t=0, should initialize to default (0.38)

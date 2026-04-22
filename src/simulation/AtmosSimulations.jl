@@ -118,15 +118,23 @@ end
     AtmosSimulation(config::AtmosConfig)
 
 Construct a simulation from a YAML-based configuration.
+Construct an atmospheric simulation with the default floating-point type `Float32`.
+Equivalent to `AtmosSimulation{Float32}(; kwargs...)`.
 """
-function AtmosSimulation(config::AtmosConfig)
-    return get_simulation(config)
-end
+AtmosSimulation(config::AtmosConfig) = get_simulation(config)
+
+"""
+    AtmosSimulation(; kwargs...)
+
+Construct an atmospheric simulation with the default floating-point type `Float32`.
+Equivalent to `AtmosSimulation{Float32}(; kwargs...)`.
+"""
+AtmosSimulation(; kwargs...) = AtmosSimulation{Float32}(; kwargs...)
 
 """
     AtmosSimulation{FT}(; kwargs...) where {FT}
 
-Construct an atmospheric simulation with floating-point type `FT`.
+Construct an atmospheric simulation with floating-point type `FT` (default: Float32).
 
 ## Keyword Arguments
 
@@ -135,7 +143,7 @@ Construct an atmospheric simulation with floating-point type `FT`.
 - `params::ClimaAtmosParameters = ClimaAtmosParameters(FT)`: Physical parameters.
 - `grid::AbstractGrid = SphereGrid(FT; ...)`: Computational grid.
   Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or [`SphereGrid`](@ref).
-- `initial_condition = Setups.DecayingProfile(; perturb=true, params)`: Setup defining the
+- `setup = Setups.DecayingProfile(; perturb=true, params)`: Setup defining the
   initial state. See [Setups](@ref "Setups") for available options.
 - `surface_setup = DefaultExchangeCoefficients()`: Surface exchange parameterization.
 
@@ -144,7 +152,6 @@ Construct an atmospheric simulation with floating-point type `FT`.
 - `t_start = 0`: Start time in seconds.
 - `t_end = 864000`: End time in seconds (default: 10 days).
 - `start_date = DateTime(2010, 1, 1)`: Calendar reference date.
-- `itime::Bool = false`: Use integer time representation for exact time arithmetic.
 
 ### Output
 - `job_id::String = "atmos_sim"`: Run identifier, used in output directory naming.
@@ -189,7 +196,7 @@ CA.solve_atmos!(simulation)
 # Single-column BOMEX case
 simulation = CA.AtmosSimulation{Float64}(;
     grid = CA.ColumnGrid(Float64; z_elem = 60, z_max = 3000.0),
-    initial_condition = CA.Setups.Bomex(),
+    setup = CA.Setups.Bomex(),
     dt = 5,
     t_end = 3600 * 6,
 )
@@ -200,7 +207,7 @@ function AtmosSimulation{FT}(;
     params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(FT),
     context::ClimaComms.AbstractCommsContext = ClimaComms.context(),
     grid::Grids.AbstractGrid = SphereGrid(FT; radius = CAP.planet_radius(params), context),
-    initial_condition = Setups.DecayingProfile(; perturb = true, params),
+    setup = Setups.DecayingProfile(; perturb = true, params),
     dt = 600,
     start_date = DateTime(2010, 1, 1),
     t_start = 0,
@@ -213,7 +220,6 @@ function AtmosSimulation{FT}(;
         ),
     ),
     surface_setup = SurfaceConditions.DefaultExchangeCoefficients(),
-    itime = false,
     job_id = "atmos_sim",
     output_dir = nothing,
     output_dir_style = "activelink",  # TODO: Should this be an actual type?
@@ -246,34 +252,24 @@ function AtmosSimulation{FT}(;
     if !isnothing(restart_file)
         # Handle restart: validates t_start, loads state, logs info, extracts spaces
         (Y, t_start, spaces) = handle_restart(
-            restart_file, t_start, start_date, model, context, itime, FT,
+            restart_file, t_start, start_date, model, context, true, FT,
         )
         # t_start is already converted from restart file, but we still need to convert dt and t_end
-        if itime
-            # convert time string to seconds
-            to_seconds(t) = t isa AbstractString ? time_to_seconds(t) : Float64(t)
-            dt_seconds = to_seconds(dt)
-            t_end_seconds = to_seconds(t_end)
-            dt = ITime(dt_seconds)
-            t_end = ITime(t_end_seconds, epoch = start_date)
-            # Promote with t_start to ensure all have compatible types
-            (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
-        else
-            # convert time string to FT
-            to_ft(t) = t isa AbstractString ? FT(time_to_seconds(t)) : FT(t)
-            dt = to_ft(dt)
-            t_end = to_ft(t_end)
-        end
+        to_seconds(t) = t isa AbstractString ? time_to_seconds(t) : Float64(t)
+        dt = ITime(to_seconds(dt))
+        t_end = ITime(to_seconds(t_end), epoch = start_date)
+        # Promote with t_start to ensure all have compatible types
+        (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
     else
-        dt, t_start, t_end = convert_time_args(dt, t_start, t_end, itime, start_date, FT)
+        dt, t_start, t_end = convert_time_args(dt, t_start, t_end, true, start_date, FT)
         spaces = get_spaces(grid)
         Y = Setups.initial_state(
-            initial_condition, params, model,
+            setup, params, model,
             spaces.center_space,
             spaces.face_space,
         )
         Setups.overwrite_initial_state!(
-            initial_condition, Y, params.thermodynamics_params,
+            setup, Y, params.thermodynamics_params,
         )
     end
 
@@ -316,7 +312,6 @@ function AtmosSimulation{FT}(;
 
     integrator = CTS.init(integrator_args...; integrator_kwargs...)
 
-    # Set up diagnostics and writers
     all_diagnostics, writers, periods_reductions = setup_diagnostics_and_writers(
         default_diagnostics, diagnostics, model,
         Y, p, dt,
@@ -324,7 +319,6 @@ function AtmosSimulation{FT}(;
         output_dir,
     )
 
-    # Validate checkpoint-diagnostics consistency
     validate_checkpoint_diagnostics_consistency(
         checkpoint_frequency, periods_reductions,
     )
