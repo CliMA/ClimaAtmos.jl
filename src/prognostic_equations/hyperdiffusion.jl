@@ -181,7 +181,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 ᶜ∇⁴uᵥʲ = @. ᶜ∇²uᵥʲs.:($$j) = C3(wcurlₕ(C123(curlₕ(ᶜ∇²uʲs.:($$j)))))
                 @. Yₜ.f.sgsʲs.:($$j).u₃ += CAP.α_hyperdiff_tracer(p.params) * ν₄_vorticity * ᶠwinterp(ᶜJ * ᶜρ, ᶜ∇⁴uᵥʲ)
             end
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar * wdivₕ(ᶜρʲs.:($$j) * gradₕ(ᶜ∇²aʲs.:($$j)))
+            # @. Yₜ.c.sgsʲs.:($$j).ρa -= CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar * wdivₕ(ᶜρʲs.:($$j) * gradₕ(ᶜ∇²aʲs.:($$j)))
             # Note: It is more correct to have ρa inside and outside the divergence
             @. Yₜ.c.sgsʲs.:($$j).mse -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²mseʲs.:($$j)))
         end
