@@ -1157,9 +1157,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
 
 
-                ᶜ∂p∂ρq_tot = @. lazy(
+                ᶜ∂p∂ρq_tot = p.scratch.ᶜtemp_scalar_2
+                @. ᶜ∂p∂ρq_tot =
                     ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (ᶜT - T_0)) + ΔR_v * ᶜT
-                )
 
                 ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
                 @. ∂ᶜρe_tot_err_∂ᶜρ +=
