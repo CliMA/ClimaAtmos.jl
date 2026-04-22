@@ -97,20 +97,24 @@ end
     @testset "HEVI vs fully implicit vertical motion and theta max (short run)" begin
         t_compare = 3.0
 
-        cfg_hevi = load_hevi_config(; overrides = Dict(
-            "dt" => "0.3secs",
-            "t_end" => "$(t_compare)secs",
-        ))
+        cfg_hevi = load_hevi_config(;
+            overrides = Dict(
+                "dt" => "0.3secs",
+                "t_end" => "$(t_compare)secs",
+            ),
+        )
         sim_hevi = CA.get_simulation(cfg_hevi)
         integ_hevi, _ = run_to_time!(sim_hevi, t_compare)
         Y_hevi = copy(integ_hevi.u)
         p_hevi = integ_hevi.p
         CA.set_precomputed_quantities!(Y_hevi, p_hevi, t_compare)
 
-        cfg_fi = load_fi_config_f64(; overrides = Dict(
-            "dt" => "0.3secs",
-            "t_end" => "$(t_compare)secs",
-        ))
+        cfg_fi = load_fi_config_f64(;
+            overrides = Dict(
+                "dt" => "0.3secs",
+                "t_end" => "$(t_compare)secs",
+            ),
+        )
         sim_fi = CA.get_simulation(cfg_fi)
         integ_fi, _ = run_to_time!(sim_fi, t_compare)
         Y_fi = copy(integ_fi.u)
@@ -137,20 +141,24 @@ end
     @testset "HEVI vs fully implicit diagnostics at 30s" begin
         t_compare = 30.0
 
-        cfg_hevi = load_hevi_config(; overrides = Dict(
-            "dt" => "3secs",
-            "t_end" => "$(t_compare)secs",
-        ))
+        cfg_hevi = load_hevi_config(;
+            overrides = Dict(
+                "dt" => "3secs",
+                "t_end" => "$(t_compare)secs",
+            ),
+        )
         sim_hevi = CA.get_simulation(cfg_hevi)
         integ_hevi, _ = run_to_time!(sim_hevi, t_compare)
         Y_hevi = copy(integ_hevi.u)
         p_hevi = integ_hevi.p
         CA.set_precomputed_quantities!(Y_hevi, p_hevi, t_compare)
 
-        cfg_fi = load_fi_config_f64(; overrides = Dict(
-            "dt" => "3secs",
-            "t_end" => "$(t_compare)secs",
-        ))
+        cfg_fi = load_fi_config_f64(;
+            overrides = Dict(
+                "dt" => "3secs",
+                "t_end" => "$(t_compare)secs",
+            ),
+        )
         sim_fi = CA.get_simulation(cfg_fi)
         integ_fi, _ = run_to_time!(sim_fi, t_compare)
         Y_fi = copy(integ_fi.u)
@@ -173,4 +181,3 @@ end
     end
 
 end
-
