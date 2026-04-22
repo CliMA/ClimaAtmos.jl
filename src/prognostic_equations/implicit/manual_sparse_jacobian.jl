@@ -477,17 +477,22 @@ struct GPUSparseHelmholtz2DCache{FT, GM, SV, GV}
     # GPU work vectors (length N_h)
     rhs_gpu::GV
     sol_gpu::GV
-    # CPU gather/scatter buffers (length N_h)
+    # CPU gather/scatter buffers (length N_h) — used only in assembly path
     rhs_cpu::Vector{FT}
     sol_cpu::Vector{FT}
-    # State vectors (length N_h * N_v, level-major)
+    # State vectors: CPU (length N_h * N_v, level-major) for assembly
     cs2_vec::Vector{FT}
     ρ_vec::Vector{FT}
     e_tot_vec::Vector{FT}
+    # State vectors: GPU (length N_h * N_v) for GPU-native field extraction
+    cs2_vec_gpu::GV
+    ρ_vec_gpu::GV
+    e_tot_vec_gpu::GV
     dtγ::Base.RefValue{FT}
     backsub_alpha::FT
     # DOF mapping and quadrature
     dof_map::Array{Int, 3}
+    dof_map_gpu::Any               # CuArray{Int32, 3} — GPU copy of DOF map
     D_matrix::Matrix{FT}
     weights::Vector{FT}
     K1D_ref::Matrix{FT}
@@ -516,6 +521,12 @@ function assemble_gpu_sparse_helmholtz_2d!(shc)
     error(_CUDSS_EXT_MSG)
 end
 function gpu_sparse_helmholtz_2d_correction!(shc, ΔY)
+    error(_CUDSS_EXT_MSG)
+end
+function gpu_sparse_helmholtz_2d_field_to_vec!(gpu_vec, field, shc)
+    error(_CUDSS_EXT_MSG)
+end
+function gpu_sparse_helmholtz_2d_vec_to_field!(field, gpu_vec, shc)
     error(_CUDSS_EXT_MSG)
 end
 
@@ -1973,21 +1984,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 chebyshev_safety * FT(dtγ)^2 * ᶜcs²_tmp2 * FT(2 * π^2) / FT(Δx_ref)^2
             shc2.α_acoustic_max[] = maximum(parent(shc2.ᶜα_acoustic))
         elseif shc2 isa GPUSparseHelmholtz2DCache
-            # GPU sparse direct: extract to vectors and assemble/factorize on GPU
+            # GPU sparse direct: GPU-native field→vec, then copy to CPU for assembly
             shc2.dtγ[] = FT(dtγ)
-            _sparse_helmholtz_2d_field_to_vec!(
-                shc2.cs2_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v,
-                shc2.N_h,
-            )
-            _sparse_helmholtz_2d_field_to_vec!(
-                shc2.ρ_vec, ᶜρ, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
-            )
+            # Extract cs² on GPU, then copy to CPU for assembly
+            gpu_sparse_helmholtz_2d_field_to_vec!(shc2.cs2_vec_gpu, ᶜcs²_tmp2, shc2)
+            copyto!(shc2.cs2_vec, shc2.cs2_vec_gpu)
+            # Extract ρ on GPU, then copy to CPU for assembly
+            gpu_sparse_helmholtz_2d_field_to_vec!(shc2.ρ_vec_gpu, ᶜρ, shc2)
+            copyto!(shc2.ρ_vec, shc2.ρ_vec_gpu)
             if shc2.backsub_alpha > 0
                 @. ᶜcs²_tmp2 = Y.c.ρe_tot / ᶜρ
-                _sparse_helmholtz_2d_field_to_vec!(
-                    shc2.e_tot_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v,
-                    shc2.N_h,
-                )
+                gpu_sparse_helmholtz_2d_field_to_vec!(shc2.e_tot_vec_gpu, ᶜcs²_tmp2, shc2)
+                copyto!(shc2.e_tot_vec, shc2.e_tot_vec_gpu)
             end
             assemble_gpu_sparse_helmholtz_2d!(shc2)
         else
