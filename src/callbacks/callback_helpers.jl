@@ -16,7 +16,7 @@ function call_every_n_steps(
         previous_step = Ref(0)
         (u, t, integrator) ->
             (previous_step[] += 1) % n == 0 ||
-                (call_at_end && t == integrator.sol.prob.tspan[2])
+            (call_at_end && t == integrator.sol.prob.tspan[2])
     else
         condition
     end

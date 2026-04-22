@@ -477,7 +477,7 @@ end
 
 function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp_type)
     initial_condition == "ConstantBuoyancyFrequencyProfile" &&
-        mesh_warp_type == "Linear" ||
+    mesh_warp_type == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half
@@ -530,9 +530,11 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
     n_helmholtz_2d_iters = 10;
     for_sgs_u₃ = false,
 )
-    (ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
+    (
+        ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         (isdefined(CTS, :DIRKAlgorithm) &&
-            ode_algo isa getproperty(CTS, :DIRKAlgorithm))) ||
+         ode_algo isa getproperty(CTS, :DIRKAlgorithm))
+    ) ||
         return nothing
     jacobian_algorithm = if use_dense_jacobian
         AutoDenseJacobian()
@@ -650,7 +652,8 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
            ode_algo_name <:
            getproperty(CTS, :DIRKAlgorithmName)
         # Use FGMRES when Helmholtz correction is enabled (variable preconditioner)
-        krylov_workspace_type = (n_helmholtz_iters > 0 || sparse_helmholtz || sparse_helmholtz_2d) ?
+        krylov_workspace_type =
+            (n_helmholtz_iters > 0 || sparse_helmholtz || sparse_helmholtz_2d) ?
             Val(Krylov.FgmresWorkspace) : Val(Krylov.GmresWorkspace)
         newtons_method = CTS.NewtonsMethod(;
             max_iters = max_newton_iters_ode,
@@ -692,7 +695,8 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
             update_j = update_j_freq,
         )
         # Use FGMRES when Helmholtz correction is enabled (variable preconditioner)
-        krylov_workspace_type = (n_helmholtz_iters > 0 || sparse_helmholtz || sparse_helmholtz_2d) ?
+        krylov_workspace_type =
+            (n_helmholtz_iters > 0 || sparse_helmholtz || sparse_helmholtz_2d) ?
             Val(Krylov.FgmresWorkspace) : Val(Krylov.GmresWorkspace)
         newtons_method = CTS.NewtonsMethod(;
             max_iters = max_newton_iters_ode,

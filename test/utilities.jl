@@ -93,7 +93,7 @@ end
     day_sec(t) = (floor(Int, t / 86400), floor(Int, t % 86400))
     filenames(d, s) = "day$d.$s.hdf5"
     filenames(t) = filenames(day_sec(t)...)
-    t = map(i -> rand(1:(10^6)), 1:100)
+    t = map(i -> rand(1:(10 ^ 6)), 1:100)
     t_sorted = sort(t)
     fns = filenames.(t)
     sort!(fns)

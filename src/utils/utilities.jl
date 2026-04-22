@@ -42,13 +42,13 @@ Krylov.ktypeof(x::Fields.FieldVector) = typeof(x)
 const _krylov_fieldvector_undef_template =
     Ref{Union{Nothing, Fields.FieldVector}}(nothing)
 
-function Fields.FieldVector{T,M}(::UndefInitializer, n::Int) where {T,M}
+function Fields.FieldVector{T, M}(::UndefInitializer, n::Int) where {T, M}
     tmpl = _krylov_fieldvector_undef_template[]
     tmpl === nothing && error(
         "FieldVector(::UndefInitializer, $n) is only supported when a Krylov " *
         "cache has been allocated via ClimaAtmos (missing template).",
     )
-    fv = tmpl::Fields.FieldVector{T,M}
+    fv = tmpl::Fields.FieldVector{T, M}
     length(fv) == n || error(
         "FieldVector(::UndefInitializer, $n): template length $(length(fv)) ≠ $n",
     )

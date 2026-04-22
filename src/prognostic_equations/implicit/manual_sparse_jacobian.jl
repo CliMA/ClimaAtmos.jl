@@ -251,7 +251,7 @@ Parent layout: (Nv, Ni, Nf, Nh) = (N_v, Nq, 1, helem)
 function _sparse_helmholtz_field_to_vec!(
     vec::Vector{FT}, field, helem, npoly, N_v, N_h,
 ) where {FT}
-    arr = parent(field)
+    arr = Array(parent(field))  # copy to CPU for scalar iteration
     @inbounds for e in 1:helem
         for q in 1:npoly
             i_h = (e - 1) * npoly + q
@@ -269,7 +269,7 @@ Write a flat vector back to a center scalar field.
 function _sparse_helmholtz_vec_to_field!(
     field, vec::Vector{FT}, helem, npoly, Nq, N_v, N_h,
 ) where {FT}
-    arr = parent(field)
+    arr = Array(parent(field))  # copy to CPU for scalar iteration
     @inbounds for e in 1:helem
         for q in 1:npoly
             i_h = (e - 1) * npoly + q
@@ -285,6 +285,7 @@ function _sparse_helmholtz_vec_to_field!(
             arr[k, Nq, 1, e] = arr[k, 1, 1, next_e]
         end
     end
+    copyto!(parent(field), arr)  # copy back to GPU
     return field
 end
 
@@ -296,7 +297,7 @@ and compute its LU factorization.
 """
 function assemble_sparse_helmholtz!(shc::SparseHelmholtzCache{FT}) where {FT}
     (; H_sparse, cs2_vec, D_matrix, weights, elem_Δx, dtγ,
-       helem, npoly, Nq, N_h, N_v) = shc
+        helem, npoly, Nq, N_h, N_v) = shc
 
     J_e = elem_Δx / 2
     δtγ² = dtγ[]^2
@@ -338,8 +339,8 @@ Apply additive sparse Helmholtz correction after column-local solve.
 """
 function sparse_helmholtz_correction!(shc::SparseHelmholtzCache{FT}, ΔY) where {FT}
     (; H_factorization, rhs_vec, sol_vec, dtγ, ρ_vec,
-       weights, elem_Δx, helem, npoly, Nq, N_h, N_v, N_dof,
-       _scratch_ρ, _scratch_div, rhs_work64, sol_work64) = shc
+        weights, elem_Δx, helem, npoly, Nq, N_h, N_v, N_dof,
+        _scratch_ρ, _scratch_div, rhs_work64, sol_work64) = shc
 
     J_e = elem_Δx / 2
     M_elem = weights .* J_e
@@ -350,7 +351,7 @@ function sparse_helmholtz_correction!(shc::SparseHelmholtzCache{FT}, ΔY) where 
     Spaces.weighted_dss!(_scratch_div)
 
     rhs_vec .= FT(0)
-    arr_div = parent(_scratch_div)
+    arr_div = Array(parent(_scratch_div))  # copy to CPU for scalar gather
     @inbounds for e in 1:helem
         for q in 1:Nq
             i_h = _sparse_helmholtz_h_dof(e, q, npoly, Nq, helem)
@@ -479,7 +480,8 @@ function build_sparse_helmholtz_2d_dof_map(topology, Nq)
     @inline raw_idx(i, j, e) = (e - 1) * Nq * Nq + (j - 1) * Nq + i
 
     # Merge shared face DOFs using interior_faces
-    for (e1, f1, e2, f2, reversed) in Topologies.interior_faces(topology)
+    # Copy to CPU for scalar iteration (interior_faces is a GPU array on CUDADevice)
+    for (e1, f1, e2, f2, reversed) in Array(Topologies.interior_faces(topology))
         for q in 1:Nq
             i1, j1 = Topologies.face_node_index(f1, Nq, q, false)
             i2, j2 = Topologies.face_node_index(f2, Nq, q, reversed)
@@ -515,7 +517,11 @@ Build the 2D sparse Helmholtz cache for sphere grids. Computes the DOF mapping
 from cubed-sphere topology connectivity, builds the sparsity pattern for the
 2D SE Helmholtz operator, and allocates work vectors.
 """
-function build_sparse_helmholtz_2d_cache(::Type{FT}, Y; backsub_alpha::FT = FT(0)) where {FT}
+function build_sparse_helmholtz_2d_cache(
+    ::Type{FT},
+    Y;
+    backsub_alpha::FT = FT(0),
+) where {FT}
     cspace = axes(Y.c)
     hspace = Spaces.horizontal_space(cspace)
     topology = Spaces.topology(hspace)
@@ -572,7 +578,7 @@ function build_sparse_helmholtz_2d_cache(::Type{FT}, Y; backsub_alpha::FT = FT(0
     # Extract WJ values from horizontal local geometry, store by DOF
     WJ_vec = zeros(FT, N_h)
     lg_data = Spaces.local_geometry_data(hspace)
-    WJ_arr = parent(lg_data.WJ)  # shape (Nq, Nq, 1, nelem) for IJFH
+    WJ_arr = Array(parent(lg_data.WJ))  # shape (Nq, Nq, 1, nelem) for IJFH; copy to CPU
 
     @inbounds for e in 1:nelem
         for j in 1:Nq, i in 1:Nq
@@ -626,7 +632,7 @@ For shared DOFs, the last-written value wins (should be identical post-DSS).
 function _sparse_helmholtz_2d_field_to_vec!(
     vec::Vector{FT}, field, dof_map, Nq, nelem, N_v, N_h,
 ) where {FT}
-    arr = parent(field)
+    arr = Array(parent(field))  # copy to CPU for scalar iteration
     @inbounds for e in 1:nelem
         for j in 1:Nq, i in 1:Nq
             h_dof = dof_map[i, j, e]
@@ -645,7 +651,7 @@ All (i,j,e) mapping to the same DOF receive the same value.
 function _sparse_helmholtz_2d_vec_to_field!(
     field, vec::Vector{FT}, dof_map, Nq, nelem, N_v, N_h,
 ) where {FT}
-    arr = parent(field)
+    arr = Array(parent(field))  # copy to CPU for scalar iteration
     @inbounds for e in 1:nelem
         for j in 1:Nq, i in 1:Nq
             h_dof = dof_map[i, j, e]
@@ -654,6 +660,7 @@ function _sparse_helmholtz_2d_vec_to_field!(
             end
         end
     end
+    copyto!(parent(field), arr)  # copy back to GPU
     return field
 end
 
@@ -670,7 +677,7 @@ Each level is assembled and LU-factorized independently (N_h × N_h).
 """
 function assemble_sparse_helmholtz_2d!(shc::SparseHelmholtz2DCache{FT}) where {FT}
     (; H_levels, H_level_factors, cs2_vec, WJ_vec, K1D_ref, weights, dtγ,
-       dof_map, Nq, nelem, N_h, N_v) = shc
+        dof_map, Nq, nelem, N_h, N_v) = shc
 
     δtγ² = dtγ[]^2
 
@@ -727,17 +734,17 @@ Apply additive 2D sparse Helmholtz correction after column-local solve.
 """
 function sparse_helmholtz_2d_correction!(shc::SparseHelmholtz2DCache{FT}, ΔY) where {FT}
     (; H_level_factors, rhs_lev, sol_lev, dtγ, ρ_vec,
-       backsub_alpha, cs2_vec, e_tot_vec,
-       dof_map, Nq, nelem, N_h, N_v,
-       _scratch_ρ, _scratch_div, _scratch_e_tot, rhs_work64, sol_work64) = shc
+        backsub_alpha, cs2_vec, e_tot_vec,
+        dof_map, Nq, nelem, N_h, N_v,
+        _scratch_ρ, _scratch_div, _scratch_e_tot, rhs_work64, sol_work64) = shc
 
     # Step 1: Form wdivₕ(ρ · z.uₕ) into scratch field
     _sparse_helmholtz_2d_vec_to_field!(_scratch_ρ, ρ_vec, dof_map, Nq, nelem, N_v, N_h)
     @. _scratch_div = wdivₕ(_scratch_ρ * ΔY.c.uₕ)
     Spaces.weighted_dss!(_scratch_div)
 
-    arr_div = parent(_scratch_div)  # VIJFH: (Nv, Nq, Nq, 1, nelem)
-    arr_out = parent(_scratch_ρ)    # reuse for output
+    arr_div = Array(parent(_scratch_div))  # copy to CPU for scalar gather
+    arr_out = Array(parent(_scratch_ρ))    # CPU buffer for scatter
 
     δtγ_val = dtγ[]
 
@@ -755,9 +762,15 @@ function sparse_helmholtz_2d_correction!(shc::SparseHelmholtz2DCache{FT}, ΔY) w
         # Solve H_k · sol = rhs
         Fac = H_level_factors[k][]
         if rhs_work64 !== nothing
-            @inbounds for h in 1:N_h; rhs_work64[h] = rhs_lev[h]; end
+            @inbounds for h in 1:N_h
+                ;
+                rhs_work64[h] = rhs_lev[h];
+            end
             LinearAlgebra.ldiv!(sol_work64, Fac, rhs_work64)
-            @inbounds for h in 1:N_h; sol_lev[h] = FT(sol_work64[h]); end
+            @inbounds for h in 1:N_h
+                ;
+                sol_lev[h] = FT(sol_work64[h]);
+            end
         else
             LinearAlgebra.ldiv!(sol_lev, Fac, rhs_lev)
         end
@@ -771,7 +784,8 @@ function sparse_helmholtz_2d_correction!(shc::SparseHelmholtz2DCache{FT}, ΔY) w
         end
     end
 
-    # Step 3: DSS the Δρ correction and add to ΔY
+    # Copy scattered result back to GPU and DSS
+    copyto!(parent(_scratch_ρ), arr_out)
     Spaces.weighted_dss!(_scratch_ρ)
     @. ΔY.c.ρ += _scratch_ρ
 
@@ -781,16 +795,40 @@ function sparse_helmholtz_2d_correction!(shc::SparseHelmholtz2DCache{FT}, ΔY) w
         α = backsub_alpha
 
         # Reconstruct cs²/ρ into _scratch_div (free after step 1)
-        _sparse_helmholtz_2d_vec_to_field!(_scratch_div, cs2_vec, dof_map, Nq, nelem, N_v, N_h)
+        _sparse_helmholtz_2d_vec_to_field!(
+            _scratch_div,
+            cs2_vec,
+            dof_map,
+            Nq,
+            nelem,
+            N_v,
+            N_h,
+        )
         # _scratch_e_tot temporarily holds ρ field for division
-        _sparse_helmholtz_2d_vec_to_field!(_scratch_e_tot, ρ_vec, dof_map, Nq, nelem, N_v, N_h)
+        _sparse_helmholtz_2d_vec_to_field!(
+            _scratch_e_tot,
+            ρ_vec,
+            dof_map,
+            Nq,
+            nelem,
+            N_v,
+            N_h,
+        )
         @. _scratch_div = _scratch_div / max(_scratch_e_tot, FT(1e-6))
 
         # uₕ back-sub: ΔY.c.uₕ -= α · dtγ · (cs²/ρ) · C12(gradₕ(Δρ_h))
         @. ΔY.c.uₕ -= C12(FT(α * δtγ_val) * _scratch_div * gradₕ(_scratch_ρ))
 
         # Reconstruct e_tot into _scratch_e_tot
-        _sparse_helmholtz_2d_vec_to_field!(_scratch_e_tot, e_tot_vec, dof_map, Nq, nelem, N_v, N_h)
+        _sparse_helmholtz_2d_vec_to_field!(
+            _scratch_e_tot,
+            e_tot_vec,
+            dof_map,
+            Nq,
+            nelem,
+            N_v,
+            N_h,
+        )
 
         # ρe_tot back-sub: ΔY.c.ρe_tot += α · e_tot · Δρ_h
         @. ΔY.c.ρe_tot += FT(α) * _scratch_e_tot * _scratch_ρ
@@ -867,9 +905,12 @@ Uses ClimaCore's `wdivₕ(gradₕ(...))` for the Laplacian operator.
 3. ΔY.c.ρ += Δρ
 4. Optional back-sub: uₕ, ρe_tot corrections
 """
-function matfree_helmholtz_2d_correction!(mfc::MatrixFreeHelmholtz2DCache{FT}, ΔY) where {FT}
+function matfree_helmholtz_2d_correction!(
+    mfc::MatrixFreeHelmholtz2DCache{FT},
+    ΔY,
+) where {FT}
     (; dtγ, ᶜcs², ᶜρ, ᶜe_tot, ᶜα_acoustic, α_acoustic_max, backsub_alpha,
-       ᶜhelm_x, ᶜhelm_dir, ᶜhelm_rhs, ᶜhelm_lap, dss_buffer, n_iters) = mfc
+        ᶜhelm_x, ᶜhelm_dir, ᶜhelm_rhs, ᶜhelm_lap, dss_buffer, n_iters) = mfc
 
     δtγ_val = dtγ[]
     α = δtγ_val^2
@@ -1096,7 +1137,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                         atmos.vertical_diffusion,
                     ) ? similar(Y.c, TridiagonalRow) :
                 use_derivative(acoustic_diagonal_flag) ?
-                    similar(Y.c, DiagonalRow) : FT(-1) * I,
+                similar(Y.c, DiagonalRow) : FT(-1) * I,
         )
     elseif atmos.microphysics_model isa DryModel
         if use_derivative(acoustic_diagonal_flag)
@@ -1136,7 +1177,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             )...,
             (@name(c.uₕ), @name(c.uₕ)) =>
                 use_derivative(acoustic_diagonal_flag) ?
-                    similar(Y.c, DiagonalRow) : FT(-1) * I,
+                similar(Y.c, DiagonalRow) : FT(-1) * I,
         )
     end
 
@@ -1363,7 +1404,11 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                     n_iters = alg.n_helmholtz_2d_iters,
                 )
             else
-                build_sparse_helmholtz_2d_cache(FT, Y; backsub_alpha = FT(alg.helmholtz_backsub_alpha))
+                build_sparse_helmholtz_2d_cache(
+                    FT,
+                    Y;
+                    backsub_alpha = FT(alg.helmholtz_backsub_alpha),
+                )
             end
         else
             nothing
@@ -1791,10 +1836,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. ∂ᶜρe_tot_err_∂ᶜρe_tot = DiagonalMatrixRow(-(FT(1) + ᶜα_acoustic))
         end
 
-        uₕ_already_initialized = use_derivative(diffusion_flag) && (
-            !isnothing(p.atmos.turbconv_model) ||
-            !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
-        )
+        uₕ_already_initialized =
+            use_derivative(diffusion_flag) && (
+                !isnothing(p.atmos.turbconv_model) ||
+                !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
+            )
         ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
         if uₕ_already_initialized
             @. ∂ᶜuₕ_err_∂ᶜuₕ += DiagonalMatrixRow(FT(-1) * ᶜα_acoustic)
@@ -1857,13 +1903,15 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             hspace = Spaces.horizontal_space(axes(Y.c))
             Δx_ref = Spaces.node_horizontal_length_scale(hspace)
             chebyshev_safety = FT(1.5)
-            @. shc2.ᶜα_acoustic = chebyshev_safety * FT(dtγ)^2 * ᶜcs²_tmp2 * FT(2 * π^2) / FT(Δx_ref)^2
+            @. shc2.ᶜα_acoustic =
+                chebyshev_safety * FT(dtγ)^2 * ᶜcs²_tmp2 * FT(2 * π^2) / FT(Δx_ref)^2
             shc2.α_acoustic_max[] = maximum(parent(shc2.ᶜα_acoustic))
         else
             # Sparse direct: extract to vectors and assemble matrix
             shc2.dtγ[] = FT(dtγ)
             _sparse_helmholtz_2d_field_to_vec!(
-                shc2.cs2_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
+                shc2.cs2_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v,
+                shc2.N_h,
             )
             _sparse_helmholtz_2d_field_to_vec!(
                 shc2.ρ_vec, ᶜρ, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
@@ -1871,7 +1919,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             if shc2.backsub_alpha > 0
                 @. ᶜcs²_tmp2 = Y.c.ρe_tot / ᶜρ
                 _sparse_helmholtz_2d_field_to_vec!(
-                    shc2.e_tot_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
+                    shc2.e_tot_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v,
+                    shc2.N_h,
                 )
             end
             assemble_sparse_helmholtz_2d!(shc2)
@@ -2743,9 +2792,9 @@ Sequentially updates (ρ, uₕ, ρe_tot, tracers):
 function helmholtz_correction!(cache, ΔY)
     (; helmholtz_state, helmholtz_scratch) = cache
     (; dtγ, α_acoustic_max, ᶜα_acoustic, ᶜcs², ᶜρ, ᶜe_tot, ᶜh_tot,
-       n_helmholtz_iters) = helmholtz_state
+        n_helmholtz_iters) = helmholtz_state
     (; ᶜhelmholtz_ρ, ᶜhelmholtz_rhs, ᶜhelmholtz_laplacian,
-       ᶜhelmholtz_ρe, ᶜhelmholtz_dir, ᶜhelmholtz_dss_buffer) =
+        ᶜhelmholtz_ρe, ᶜhelmholtz_dir, ᶜhelmholtz_dss_buffer) =
         helmholtz_scratch
 
     FT = eltype(dtγ)
