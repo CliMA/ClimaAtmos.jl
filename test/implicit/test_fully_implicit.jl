@@ -191,18 +191,22 @@ end
         # but solutions should be qualitatively similar
         t_compare = 3.0
 
-        cfg_hevi = load_hevi_config(; overrides = Dict(
-            "dt" => "0.3secs",
-            "t_end" => "$(t_compare)secs",
-        ))
+        cfg_hevi = load_hevi_config(;
+            overrides = Dict(
+                "dt" => "0.3secs",
+                "t_end" => "$(t_compare)secs",
+            ),
+        )
         sim_hevi = CA.get_simulation(cfg_hevi)
         run_to_time!(sim_hevi, t_compare)
         Y_hevi = copy(sim_hevi.integrator.u)
 
-        cfg_fi = load_fi_config(; overrides = Dict(
-            "dt" => "0.3secs",
-            "t_end" => "$(t_compare)secs",
-        ))
+        cfg_fi = load_fi_config(;
+            overrides = Dict(
+                "dt" => "0.3secs",
+                "t_end" => "$(t_compare)secs",
+            ),
+        )
         sim_fi = CA.get_simulation(cfg_fi)
         run_to_time!(sim_fi, t_compare)
         Y_fi = copy(sim_fi.integrator.u)
@@ -219,10 +223,12 @@ end
         @info "HEVI vs FI agreement" linf_diff l2_diff
 
         # Both should have produced nonzero state change from initial
-        cfg_init = load_fi_config(; overrides = Dict(
-            "dt" => "0.3secs",
-            "t_end" => "$(t_compare)secs",
-        ))
+        cfg_init = load_fi_config(;
+            overrides = Dict(
+                "dt" => "0.3secs",
+                "t_end" => "$(t_compare)secs",
+            ),
+        )
         sim_init = CA.get_simulation(cfg_init)
         Y_init = copy(sim_init.integrator.u)
 
@@ -238,10 +244,12 @@ end
         for dt_val in [1.0, 3.0, 9.0]
             t_end_val = max(30.0, 3 * dt_val)
             @testset "dt = $(dt_val)s" begin
-                cfg = load_fi_config(; overrides = Dict(
-                    "dt" => "$(dt_val)secs",
-                    "t_end" => "$(t_end_val)secs",
-                ))
+                cfg = load_fi_config(;
+                    overrides = Dict(
+                        "dt" => "$(dt_val)secs",
+                        "t_end" => "$(t_end_val)secs",
+                    ),
+                )
                 sim = CA.get_simulation(cfg)
                 integ, n = run_to_time!(sim, t_end_val)
                 @test integ.t >= t_end_val

@@ -460,6 +460,66 @@ struct SparseHelmholtz2DCache{FT}
 end
 
 """
+    GPUSparseHelmholtz2DCache
+
+GPU-native sparse Helmholtz preconditioner using CUDSS.jl for direct solves.
+Same mathematical formulation as `SparseHelmholtz2DCache` but factorization
+and solve happen on-device via `CuSparseMatrixCSR` + `CudssSolver`.
+
+Assembly is done on CPU (into `H_levels_cpu`), then nzvals are copied to GPU
+and refactorized per Newton step. The solve is GPU-native per vertical level.
+"""
+struct GPUSparseHelmholtz2DCache{FT, GM, SV, GV}
+    # Per-level Helmholtz matrices: CPU for assembly, GPU for solve
+    H_levels_cpu::Vector{SparseMatrixCSC{FT, Int}}
+    H_levels_gpu::Vector{GM}       # CuSparseMatrixCSR per level
+    H_solvers::Vector{SV}          # CudssSolver per level
+    # GPU work vectors (length N_h)
+    rhs_gpu::GV
+    sol_gpu::GV
+    # CPU gather/scatter buffers (length N_h)
+    rhs_cpu::Vector{FT}
+    sol_cpu::Vector{FT}
+    # State vectors (length N_h * N_v, level-major)
+    cs2_vec::Vector{FT}
+    ρ_vec::Vector{FT}
+    e_tot_vec::Vector{FT}
+    dtγ::Base.RefValue{FT}
+    backsub_alpha::FT
+    # DOF mapping and quadrature
+    dof_map::Array{Int, 3}
+    D_matrix::Matrix{FT}
+    weights::Vector{FT}
+    K1D_ref::Matrix{FT}
+    WJ_vec::Vector{FT}
+    # Mesh metadata
+    Nq::Int
+    nelem::Int
+    N_h::Int
+    N_v::Int
+    N_dof::Int
+    # Scratch fields for ClimaCore broadcasts
+    _scratch_ρ::Any
+    _scratch_div::Any
+    _scratch_e_tot::Any
+end
+
+# Stubs for GPU sparse Helmholtz — implemented by ext/ClimaAtmosCUDSSExt.jl
+const _CUDSS_EXT_MSG =
+    "helmholtz_2d_solver=\"gpu_direct\" requires CUDA.jl and CUDSS.jl. " *
+    "Add `using CUDA, CUDSS` before loading ClimaAtmos."
+
+function build_gpu_sparse_helmholtz_2d_cache(::Type{FT}, Y; kwargs...) where {FT}
+    error(_CUDSS_EXT_MSG)
+end
+function assemble_gpu_sparse_helmholtz_2d!(shc)
+    error(_CUDSS_EXT_MSG)
+end
+function gpu_sparse_helmholtz_2d_correction!(shc, ΔY)
+    error(_CUDSS_EXT_MSG)
+end
+
+"""
     build_sparse_helmholtz_2d_dof_map(topology, Nq)
 
 Build the unique horizontal DOF mapping for a 2D spectral element topology
@@ -1403,6 +1463,12 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                     backsub_alpha = FT(alg.helmholtz_backsub_alpha),
                     n_iters = alg.n_helmholtz_2d_iters,
                 )
+            elseif alg.helmholtz_2d_solver == "gpu_direct"
+                build_gpu_sparse_helmholtz_2d_cache(
+                    FT,
+                    Y;
+                    backsub_alpha = FT(alg.helmholtz_backsub_alpha),
+                )
             else
                 build_sparse_helmholtz_2d_cache(
                     FT,
@@ -1906,8 +1972,26 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. shc2.ᶜα_acoustic =
                 chebyshev_safety * FT(dtγ)^2 * ᶜcs²_tmp2 * FT(2 * π^2) / FT(Δx_ref)^2
             shc2.α_acoustic_max[] = maximum(parent(shc2.ᶜα_acoustic))
+        elseif shc2 isa GPUSparseHelmholtz2DCache
+            # GPU sparse direct: extract to vectors and assemble/factorize on GPU
+            shc2.dtγ[] = FT(dtγ)
+            _sparse_helmholtz_2d_field_to_vec!(
+                shc2.cs2_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v,
+                shc2.N_h,
+            )
+            _sparse_helmholtz_2d_field_to_vec!(
+                shc2.ρ_vec, ᶜρ, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v, shc2.N_h,
+            )
+            if shc2.backsub_alpha > 0
+                @. ᶜcs²_tmp2 = Y.c.ρe_tot / ᶜρ
+                _sparse_helmholtz_2d_field_to_vec!(
+                    shc2.e_tot_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v,
+                    shc2.N_h,
+                )
+            end
+            assemble_gpu_sparse_helmholtz_2d!(shc2)
         else
-            # Sparse direct: extract to vectors and assemble matrix
+            # CPU sparse direct: extract to vectors and assemble matrix
             shc2.dtγ[] = FT(dtγ)
             _sparse_helmholtz_2d_field_to_vec!(
                 shc2.cs2_vec, ᶜcs²_tmp2, shc2.dof_map, shc2.Nq, shc2.nelem, shc2.N_v,
@@ -2767,6 +2851,8 @@ function invert_jacobian!(alg::ManualSparseJacobian, cache, ΔY, R)
     if use_derivative(alg.sparse_helmholtz_2d_flag) && !isnothing(cache.sparse_helmholtz_2d)
         if cache.sparse_helmholtz_2d isa MatrixFreeHelmholtz2DCache
             matfree_helmholtz_2d_correction!(cache.sparse_helmholtz_2d, ΔY)
+        elseif cache.sparse_helmholtz_2d isa GPUSparseHelmholtz2DCache
+            gpu_sparse_helmholtz_2d_correction!(cache.sparse_helmholtz_2d, ΔY)
         else
             sparse_helmholtz_2d_correction!(cache.sparse_helmholtz_2d, ΔY)
         end

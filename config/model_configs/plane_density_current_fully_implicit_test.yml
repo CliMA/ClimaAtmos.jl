@@ -4,7 +4,7 @@ initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
 z_elem: 32
 dt: "3secs"
-t_end: "900secs"
+t_end: "950secs"
 z_stretch: false
 x_elem: 128
 nh_poly: 4
@@ -17,6 +17,8 @@ cloud_model: "grid_scale"
 use_sgs_quadrature: false
 fully_implicit: true
 ode_algo: "ARS222"
+sparse_helmholtz: true
+helmholtz_2d_solver: "chebyshev"
 use_krylov_method: true
 max_newton_iters_ode: 10
 use_newton_rtol: true

@@ -78,7 +78,7 @@ helmholtz_backsub_alpha:
   help: "Damping parameter for uₕ/ρe_tot back-substitution after Helmholtz ρ correction (0.0 = ρ-only, 0.1-0.5 = damped back-sub, 1.0 = full back-sub). Only used when sparse_helmholtz_2d is true."
   value: 0.0
 helmholtz_2d_solver:
-  help: "Solver for 2D Helmholtz: 'direct' (sparse LU) or 'chebyshev' (matrix-free). Only when sparse_helmholtz_2d is true."
+  help: "Solver for 2D Helmholtz: 'direct' (CPU sparse LU), 'chebyshev' (matrix-free), or 'gpu_direct' (GPU sparse LU via CUDSS). Only when sparse_helmholtz_2d is true."
   value: "direct"
 n_helmholtz_2d_iters:
   help: "Chebyshev iterations for matrix-free 2D Helmholtz. Typical: 5 (low-res) to 15 (high-res)."
