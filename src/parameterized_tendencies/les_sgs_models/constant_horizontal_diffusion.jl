@@ -40,17 +40,14 @@ function horizontal_constant_diffusion_tendency!(
     if turbconv_model isa PrognosticEDMFX
         n = n_mass_flux_subdomains(turbconv_model)
         (; ᶜρʲs) = p.precomputed
-        ᶜJ = Fields.local_geometry_field(Y.c).J
-        ᶜρ = Y.c.ρ
         for j in 1:n
             # Area fraction diffusion: ∂(ρa)/∂t += ∇·(ρⱼ D ∇aⱼ)
             ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
             @. Yₜ.c.sgsʲs.:($$j).ρa += wdivₕ(ᶜρʲs.:($$j) * ᶜD * gradₕ(ᶜaʲ))
 
-            # Vertical velocity diffusion
-            ᶜuʲ = p.precomputed.ᶜuʲs.:($j)
-            ᶜ∇²uʲ = @. p.hyperdiff.ᶜ∇²u = C123(wgradₕ(divₕ(ᶜuʲ))) - C123(wcurlₕ(C123(curlₕ(ᶜuʲ))))
-            @. Yₜ.f.sgsʲs.:($$j).u₃ += ᶠwinterp(ᶜJ * ᶜρ, C3(ᶜD * ᶜ∇²uʲ))
+            # Vertical velocity diffusion (scalar Laplacian on faces, no F→C→F interpolation)
+            @. Yₜ.f.sgsʲs.:($$j).u₃.components.data.:1 +=
+                $(FT(chd.D)) * wdivₕ(gradₕ(Y.f.sgsʲs.:($$j).u₃.components.data.:1))
         end
     end
 end
