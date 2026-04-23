@@ -77,7 +77,6 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
         ᶜtemp_CT123 = Fields.Field(CT123{FT}, center_space),
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
-        ᶠtemp_CT3_2 = Fields.Field(CT3{FT}, face_space),
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
         ᶠtemp_CT12ʲs = Fields.Field(
             NTuple{n_mass_flux_subdomains(atmos.turbconv_model), CT12{FT}},
@@ -121,20 +120,6 @@ function temporary_quantities(Y, atmos)
             },
         ),
         ᶜtracer_advection_matrix = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, C3{FT}}}),
-        ᶠdiagonal_matrix_ct3xct3 = similar(
-            Y.f,
-            DiagonalMatrixRow{
-                ClimaCore.Geometry.AxisTensor{
-                    FT,
-                    2,
-                    Tuple{
-                        ClimaCore.Geometry.ContravariantAxis{(3,)},
-                        ClimaCore.Geometry.ContravariantAxis{(3,)},
-                    },
-                    SMatrix{1, 1, FT, 1},
-                },
-            },
-        ),
         ᶠbidiagonal_matrix_ct3_2 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
         ᶠbidiagonal_matrix_ct3xct12 = similar(
             Y.f,
@@ -150,7 +135,6 @@ function temporary_quantities(Y, atmos)
                 },
             },
         ),
-        ᶜbidiagonal_matrix_scalar = similar(Y.c, BidiagonalMatrixRow{FT}),
         ᶜadvection_matrix = similar(
             Y.c,
             BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
