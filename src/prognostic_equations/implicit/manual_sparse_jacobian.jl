@@ -527,8 +527,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
 
-    ᶜθ_v = p.scratch.ᶜtemp_scalar_3
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+    ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration:
     #              grad(p) / ρ + grad(Φ)  =  cp_d * θ_v * grad(Π) + grad(Φ).
@@ -1056,11 +1055,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             # vertical diffusion of updrafts
             if use_derivative(sgs_vertdiff_flag)
                 α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
-                @. p.scratch.ᶜbidiagonal_adjoint_matrix_c3 =
-                    ᶜadvdivᵥ_matrix() ⋅
-                    DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1)) * ᶠinterp(ᶜK_h))
                 @. ᶜdiffusion_h_matrix =
-                    p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ ᶠgradᵥ_matrix()
+                    ᶜadvdivᵥ_matrix() ⋅
+                    DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1)) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
 
                 @. ∂ᶜmseʲ_err_∂ᶜmseʲ +=
                     dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
@@ -1224,40 +1221,34 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ) / ᶠJ * (g³³(ᶠgⁱʲ)),
                     )
 
-                @. p.scratch.ᶠdiagonal_matrix_ct3xct3 = DiagonalMatrixRow(
-                    ᶠinterp(
-                        (Y.c.sgsʲs.:(1).q_tot - ᶜq_tot) *
-                        ᶜρʲs.:(1) *
-                        ᶜJ *
-                        draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                    ) / ᶠJ * (g³³(ᶠgⁱʲ)),
-                )
-
                 ∂ᶜρq_tot_err_∂ᶠu₃ = matrix[@name(c.ρq_tot), @name(f.u₃)]
                 @. ∂ᶜρq_tot_err_∂ᶠu₃ +=
-                    dtγ * ᶜadvdivᵥ_matrix() ⋅ p.scratch.ᶠdiagonal_matrix_ct3xct3
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(
+                        ᶠinterp(
+                            (Y.c.sgsʲs.:(1).q_tot - ᶜq_tot) *
+                            ᶜρʲs.:(1) *
+                            ᶜJ *
+                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                        ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+                    )
 
                 # grid-mean ∂/∂(rho*a)
                 ∂ᶜρe_tot_err_∂ᶜρa =
                     matrix[@name(c.ρe_tot), @name(c.sgsʲs.:(1).ρa)]
-                @. p.scratch.ᶠtemp_CT3_2 =
-                    (ᶠu³ʲs.:(1) - ᶠu³) *
-                    ᶠinterp((Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot)) / ᶠJ
-                @. p.scratch.ᶜbidiagonal_matrix_scalar =
-                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(p.scratch.ᶠtemp_CT3_2)
                 @. ∂ᶜρe_tot_err_∂ᶜρa =
-                    p.scratch.ᶜbidiagonal_matrix_scalar ⋅ ᶠinterp_matrix() ⋅
+                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                        (ᶠu³ʲs.:(1) - ᶠu³) *
+                        ᶠinterp((Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot)) / ᶠJ,
+                    ) ⋅ ᶠinterp_matrix() ⋅
                     DiagonalMatrixRow(ᶜJ)
 
                 ∂ᶜρq_tot_err_∂ᶜρa =
                     matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).ρa)]
-                @. p.scratch.ᶠtemp_CT3_2 =
-                    (ᶠu³ʲs.:(1) - ᶠu³) *
-                    ᶠinterp((Y.c.sgsʲs.:(1).q_tot - ᶜq_tot)) / ᶠJ
-                @. p.scratch.ᶜbidiagonal_matrix_scalar =
-                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(p.scratch.ᶠtemp_CT3_2)
                 @. ∂ᶜρq_tot_err_∂ᶜρa =
-                    p.scratch.ᶜbidiagonal_matrix_scalar ⋅ ᶠinterp_matrix() ⋅
+                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                        (ᶠu³ʲs.:(1) - ᶠu³) *
+                        ᶠinterp((Y.c.sgsʲs.:(1).q_tot - ᶜq_tot)) / ᶠJ,
+                    ) ⋅ ᶠinterp_matrix() ⋅
                     DiagonalMatrixRow(ᶜJ)
 
                 # grid-mean tracers
