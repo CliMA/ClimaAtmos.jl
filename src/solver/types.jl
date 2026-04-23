@@ -151,6 +151,7 @@ abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct RCEMIPIISST <: AbstractSST end
 struct ExternalTVColumnSST <: AbstractSST end
+struct ARMVARANALTimeVaryingSST <: AbstractSST end
 
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
@@ -161,6 +162,18 @@ end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
 struct ExternalTVInsolation <: AbstractInsolation end
+
+"""
+    ColumnTimeVaryingInsolation{FT}
+
+Time-varying insolation for single-column models with explicit lat/lon.
+Used when coordinate system doesn't include lat/lon (e.g., ZPoint columns).
+"""
+struct ColumnTimeVaryingInsolation{FT} <: AbstractInsolation
+    start_date::Dates.DateTime
+    latitude::FT
+    longitude::FT
+end
 
 """
     AbstractCloudInRadiation
@@ -497,6 +510,26 @@ struct ExternalDrivenTVForcing{FT}
 end
 
 struct ISDACForcing end
+
+
+"""
+    ARMVARANALForcing{FT}
+
+Forcing specified by ARM VARANAL format NetCDF file for semi-continuous forcing.
+
+The VARANAL (Variational Analysis) product from ARM provides time-varying
+atmospheric state and forcing tendencies on pressure levels (hPa). Contains:
+- Temperature and moisture advection tendencies (horizontal + vertical)
+- Large-scale vertical velocity (omega, in hPa/hr)
+- Surface fluxes (LH, SH)
+- Atmospheric state profiles for nudging (T, q, u, v)
+
+Fields:
+- `external_forcing_file`: Path to the ARM VARANAL NetCDF file.
+"""
+struct ARMVARANALForcing{FT}
+    external_forcing_file::String
+end
 
 abstract type AbstractEnvBuoyGradClosure end
 struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
