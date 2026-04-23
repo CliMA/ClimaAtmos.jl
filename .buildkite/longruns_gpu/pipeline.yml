@@ -22,6 +22,7 @@ steps:
     key: "init_gpu_env"
     command:
       - echo "--- Instantiate examples"
+      - julia --project=.buildkite -e 'using Pkg; Pkg.add(;url="https://github.com/CliMA/ClimaCore.jl", rev="dy/math_wrapper")'
       - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'
       - julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'
       - julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'

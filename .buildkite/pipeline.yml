@@ -25,6 +25,7 @@ steps:
       - "echo $$JULIA_DEPOT_PATH"
 
       - echo "--- Instantiate .buildkite"
+      - julia --project=.buildkite -e 'using Pkg; Pkg.add(;url="https://github.com/CliMA/ClimaCore.jl", rev="dy/math_wrapper")'
       - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.precompile(;strict=true); Pkg.status()'"
 
     agents:

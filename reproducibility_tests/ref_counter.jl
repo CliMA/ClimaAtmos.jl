@@ -1,4 +1,4 @@
-340
+341
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+341
+- Update ClimaCore version
+
 340
 - Update to ClimaTimeSteppers v 0.9
 - Remove sgs u3 implicit subproblem tendency and Jacobian
