@@ -68,6 +68,16 @@ struct CoupledTemperature{F} <: SurfaceTemperature
     field::F
 end
 
+"""
+    ARMVARANALTimeVaryingSST()
+
+Surface temperature read from ARM VARANAL forcing data.
+`surface_temperature(::ARMVARANALTimeVaryingSST, Y, p, t)` evaluates the
+time-varying interpolator from `p.external_forcing.T_sfc_tvi` into
+`p.external_forcing.surface_ts`.
+"""
+struct ARMVARANALTimeVaryingSST <: SurfaceTemperature end
+
 # ============================================================================
 # surface_temperature: dispatch from temperature type to the value used in
 # update_surface_conditions!. Returns either the temperature struct itself
@@ -90,3 +100,9 @@ surface_temperature(::SlabOceanTemperature, Y, p, _) =
 
 surface_temperature(t::CoupledTemperature, Y, p, _) =
     Fields.field_values(t.field)
+
+function surface_temperature(::ARMVARANALTimeVaryingSST, Y, p, t_time)
+    (; T_sfc_tvi, surface_ts) = p.external_forcing
+    evaluate!(surface_ts, T_sfc_tvi, t_time)
+    return Fields.field_values(surface_ts)
+end
