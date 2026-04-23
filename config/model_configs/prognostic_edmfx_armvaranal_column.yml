@@ -1,0 +1,97 @@
+# ARM VARANAL SCM configuration
+# Semi-continuous forcing from ARM Variational Analysis product
+# Default site: SGP (Southern Great Plains)
+
+initial_condition: "ARMVARANAL"
+external_forcing: "ARMVARANAL"
+armvaranal_case_name: "SGP_VARANAL"
+
+# Path to ARM VARANAL format NetCDF file
+# Monthly files from: https://adc.arm.gov/discovery/
+external_forcing_file: "/net/sampo/data1/cchristo/ARM_data/arm_265588/sgp60varanarucC1.c1/sgp60varanarucC1.c1.20100801.000000.cdf"
+
+# Surface flux handling:
+# true: Prescribe time-varying LH/SH from observations (interpolated from file)
+# false: Compute fluxes interactively via Monin-Obukhov using time-varying T_skin
+prescribe_surface_fluxes: true
+
+# Physics configuration
+turbconv: "prognostic_edmfx"
+tracer_upwinding: first_order
+implicit_diffusion: true
+implicit_sgs_advection: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
+implicit_sgs_vertdiff: true
+implicit_sgs_mass_flux: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode_subproblem: 0
+max_newton_iters_ode: 3
+
+# Sponge and turbulence
+rayleigh_sponge: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+
+# Microphysics
+microphysics_model: "0M"
+
+# Grid configuration
+config: "column"
+hyperdiff: "false"
+# ARM VARANAL data extends to ~16 km (100 hPa).
+z_max: 15e3
+z_elem: 45
+z_stretch: true
+dz_bottom: 30
+perturb_initstate: false
+
+# Time stepping
+# VARANAL data is hourly (720 timesteps = 30 days)
+dt: "80secs"
+dt_rad: "120mins"
+t_end: "10days"
+dt_save_state_to_disk: "1000days"
+ode_algo: "ARS222"
+
+# Parameter file
+# toml: [toml/prognostic_edmfx_gcmdriven.toml]
+toml: [toml/prognostic_edmfx_gcmdriven_saj_detr.toml]
+
+# Radiation and insolation
+rad: allskywithclear
+insolation: "timevarying"
+
+# Start date (YYYYMMDD format from the VARANAL file)
+start_date: "20100801"
+
+# SGP site coordinates (for Coriolis, insolation calculations)
+# lat: 36.61, lon: -97.49
+latitude: 36.61
+longitude: -97.49
+
+# Output configuration
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60]
+output_default_diagnostics: false
+
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
+    period: 10mins
+  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu, turbentr]
+    period: 10mins
+  - short_name: [tnhusmf, tnhused, tnenemf, tneneed]
+    period: 10mins
+  - short_name: [rlut, rlutcs, rsut, rsutcs, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv]
+    period: 10mins
+  - reduction_time: max
+    short_name: tke
+    period: 10mins

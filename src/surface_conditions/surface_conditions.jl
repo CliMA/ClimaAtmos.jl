@@ -32,6 +32,12 @@ function update_surface_conditions!(Y, p, t)
         (; surface_inputs, surface_timevaryinginputs) = p.external_forcing
         evaluate!(surface_inputs.ts, surface_timevaryinginputs.ts, t)
         sfc_temp_var = Fields.field_values(surface_inputs.ts)
+    elseif p.atmos.sfc_temperature isa ARMVARANALTimeVaryingSST
+        # ARM VARANAL uses time interpolator for SST (T_srf in degC, convert to K)
+        (; sst_interpolator, surface_ts) = p.external_forcing
+        # Evaluate SST at current time (t is seconds since start), convert degC to K
+        parent(surface_ts) .= sst_interpolator(t) .+ 273.15
+        sfc_temp_var = Fields.field_values(surface_ts)
     elseif p.atmos.surface_model isa SlabOceanSST
         sfc_temp_var = Fields.field_values(Y.sfc.T)
     else

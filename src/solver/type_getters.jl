@@ -381,6 +381,14 @@ function get_setup_type(parsed_args, thermo_params)
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
+    elseif ic_name == "ARMVARANAL"
+        case_name = get(parsed_args, "armvaranal_case_name", "SGP_VARANAL")
+        prescribe_fluxes = get(parsed_args, "prescribe_surface_fluxes", true)
+        return Setups.ARMVARANAL(
+            parsed_args["external_forcing_file"], 
+            case_name;
+            prescribe_surface_fluxes = prescribe_fluxes,
+        )
     elseif ic_name == "ReanalysisTimeVarying"
         FT = eltype(thermo_params)
         external_forcing_file =

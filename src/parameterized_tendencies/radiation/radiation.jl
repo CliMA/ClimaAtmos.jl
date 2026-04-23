@@ -419,6 +419,15 @@ function insolation_cache(::TimeVaryingInsolation, Y)
         )
     )
 end
+function insolation_cache(::ColumnTimeVaryingInsolation, Y)
+    FT = Spaces.undertype(axes(Y.c))
+    return (;
+        insolation_tuple = similar(
+            Spaces.level(Y.c, 1),
+            @NamedTuple{F::FT, S::FT, μ::FT, ζ::FT}
+        )
+    )
+end
 
 function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
