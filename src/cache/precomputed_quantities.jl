@@ -568,11 +568,15 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
             ε = ϵ_variance_statistics(FT)
             ᶜdz = Fields.Δz_field(axes(Y.c))
             ᶜlg = Fields.local_geometry_field(Y.c)
-            (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
             if sgs_quad.dist isa AbstractGridscaleCorrectedSGS
                 compute_∂T_∂θ!(p.scratch.ᶜtemp_scalar, Y, p, thermo_params)
             end
             ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
+            ᶜθ_li_sgs = @. lazy(
+                TD.liquid_ice_pottemp(
+                    thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+                ),
+            )
             @. ᶜsa_result = compute_sgs_saturation_adjustment_row(
                 thermo_params,
                 $(sgs_quad),
@@ -583,9 +587,15 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
                 ε,
                 ᶜdz,
                 ᶜlg,
-                ᶜgradᵥ_q_tot,
-                ᶜgradᵥ_θ_liq_ice,
+                ᶜleft_bias(ᶠgradᵥ(ᶜq_tot_nonneg)),
+                ᶜright_bias(ᶠgradᵥ(ᶜq_tot_nonneg)),
+                ᶜleft_bias(ᶠgradᵥ(ᶜθ_li_sgs)),
+                ᶜright_bias(ᶠgradᵥ(ᶜθ_li_sgs)),
                 ᶜ∂T_∂θ_buf,
+                ᶜleft_bias(ᶠgradᵥ(ᶜq′q′)),
+                ᶜright_bias(ᶠgradᵥ(ᶜq′q′)),
+                ᶜleft_bias(ᶠgradᵥ(ᶜT′T′)),
+                ᶜright_bias(ᶠgradᵥ(ᶜT′T′)),
                 ᶜT′T′,
                 ᶜq′q′,
             )

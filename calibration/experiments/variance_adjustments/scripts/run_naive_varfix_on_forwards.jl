@@ -8,8 +8,8 @@
 #   --skip-done              Skip if output_active exists
 #   --eki-iteration=N        EKI iteration (default: latest on disk)
 #   --eki-member=N|best|auto Default: best (min Mahalanobis to obs); or fixed index
-#   --print-task-count       Print number of naive slices and exit
-#   --task-id=N              Run slice N only (0-based); else NAIVE_SWEEP_TASK_ID or SLURM_ARRAY_TASK_ID
+#   --print-task-count       Print number of naive sweep tasks and exit
+#   --task-id=N              Run sweep task N only (0-based); else NAIVE_SWEEP_TASK_ID or SLURM_ARRAY_TASK_ID
 #   --help
 #
 using Pkg: Pkg
@@ -66,7 +66,7 @@ function run_naive_one(
     expc = YAML.load_file(joinpath(experiment_dir, config_relp))
     atmos_cfg_early = va_load_merged_case_yaml_dict(experiment_dir, expc["model_config_path"])
     if va_varfix_tag(expc, atmos_cfg_early) == "varfix_on"
-        @warn "Skipping naive forward: source YAML has gridscale-corrected SGS / varfix on" config_relp
+        @warn "Skipping naive forward: source YAML has vertical-profile SGS / varfix on" config_relp
         return nothing
     end
     out_rel = expc["output_dir"]
@@ -106,7 +106,7 @@ function run_naive_one(
     atmos_cfg["quadrature_order"] = n
     base_dist = string(get(atmos_cfg, "sgs_distribution", "lognormal"))
     atmos_cfg["sgs_distribution"] =
-        va_base_to_gridscale_corrected_sgs_distribution(base_dist)
+        va_base_to_vertical_profile_sgs_distribution(base_dist)
     atmos_cfg["toml"] = [merged]
     atmos_cfg["output_default_diagnostics"] = get(atmos_cfg, "output_default_diagnostics", false)
 

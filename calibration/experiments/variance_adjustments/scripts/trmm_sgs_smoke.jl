@@ -1,4 +1,8 @@
-# TRMM_LBA diagnostic EDMF: run several `sgs_distribution` strings (default N_quad=3), then plot clw+cli.
+# TRMM_LBA diagnostic EDMF: run several `sgs_distribution` strings (default N_quad=3), then plot a condensate
+# profile sum (default **`clw` + `cli`**).
+#
+# "Smoke" here means a **light regression / integration check** (many `sgs_distribution` strings end-to-end), not
+# hardware power-on.
 #
 # Paths below are **absolute** (independent of shell `cwd`). Replace `<REPO>` with your ClimaAtmos.jl clone root.
 # At runtime, `va_trmm_sgs_smoke_*` defaults use `VA_TRMM_SGS_SMOKE_ROOT` (the `variance_adjustments` directory).
@@ -20,7 +24,8 @@
 # ```
 #
 # With `continue_on_errors=true`, failed distributions are logged under `simulation_output/sgs_smoke/_failures/`
-# and plotting still runs for any case that produced `output_active`.
+# as one stable `*_N<n>_<dist_slug>.txt` per failing combo (overwrites on reruns; no timestamp suffix).
+# Plotting still runs for any case that produced `output_active`.
 #
 # ## Parallelism
 #
@@ -38,10 +43,10 @@
 #
 # ## REPL setup (one session; cwd arbitrary)
 #
+# `include` activates this file’s parent project (`variance_adjustments`) so CairoMakie and other deps load.
+#
 # ```julia
-# const VA_ROOT = "/absolute/path/to/ClimaAtmos.jl/calibration/experiments/variance_adjustments"
-# using Pkg; Pkg.activate(VA_ROOT)
-# include(joinpath(VA_ROOT, "scripts", "trmm_sgs_smoke.jl"))
+# include("/absolute/path/to/.../variance_adjustments/scripts/trmm_sgs_smoke.jl")
 # ```
 #
 # Then either `va_run_and_plot_trmm_sgs_smoke(...)` (recommended) or `va_run_trmm_sgs_smoke()` and later `va_plot_trmm_sgs_smoke()`.
@@ -53,15 +58,16 @@
 #   julia --project=<VA_ROOT> <VA_ROOT>/scripts/trmm_sgs_smoke.jl both --parallel=distributed --distributed-procs=4
 #
 # Outputs: `<REPO>/calibration/experiments/variance_adjustments/simulation_output/sgs_smoke/<slug>/.../output_active`
-# Figure:   `<REPO>/calibration/experiments/variance_adjustments/analysis/figures/sgs_smoke/<slug>/profile_clw_plus_cli.png`
+# Figure (default `profile_sum_short`): `<REPO>/.../analysis/figures/sgs_smoke/<slug>/profile_clw_plus_cli.png`
+#          (basename follows `profile_sum_short`; see `va_plot_trmm_sgs_smoke` keyword docs in this file.)
+#
+# Stale `…/N_<n>/<dist>/` trees (old `dist` names no longer in `VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS`) trigger plot
+# warnings. Remove them with `va_trmm_sgs_smoke_remove_stale_dist_dirs!(; dry_run=true)` then `dry_run=false`.
 
 const VA_TRMM_SGS_SMOKE_SCRIPT_PATH = abspath(@__FILE__)
+import Pkg
+Pkg.activate(joinpath(@__DIR__, "..") |> abspath)
 import Distributed
-
-if abspath(PROGRAM_FILE) == @__FILE__
-    import Pkg
-    Pkg.activate(joinpath(@__DIR__, "..") |> abspath)
-end
 
 include(joinpath(@__DIR__, "trmm_sgs_smoke_core.jl"))
 
@@ -185,7 +191,8 @@ end
 """
     va_run_and_plot_trmm_sgs_smoke(; kwargs...)
 
-Calls `va_run_trmm_sgs_smoke` then `va_plot_trmm_sgs_smoke` with the resolved grid slug. Same keywords as `va_run_trmm_sgs_smoke`.
+Calls `va_run_trmm_sgs_smoke` then `va_plot_trmm_sgs_smoke` with the resolved grid slug. Same keywords as `va_run_trmm_sgs_smoke`,
+plus optional **`profile_*`** keywords forwarded to `va_plot_trmm_sgs_smoke`.
 With `continue_on_errors=true`, failures are logged under `simulation_output/sgs_smoke/_failures/` and plotting still runs for successful outputs.
 """
 function va_run_and_plot_trmm_sgs_smoke(;
@@ -200,6 +207,10 @@ function va_run_and_plot_trmm_sgs_smoke(;
     cfsite_number::Union{Nothing, AbstractString} = nothing,
     parallel::Symbol = :sequential,
     distributed_procs::Int = 0,
+    profile_short_a::AbstractString = "clw",
+    profile_short_b::AbstractString = "cli",
+    profile_sum_short::AbstractString = "clw_plus_cli",
+    profile_xlabel::AbstractString = "clw+cli (kg/kg)",
 )
     va_run_trmm_sgs_smoke(;
         experiment_dir,
@@ -214,7 +225,15 @@ function va_run_and_plot_trmm_sgs_smoke(;
         parallel,
         distributed_procs,
     )
-    va_plot_trmm_sgs_smoke(; experiment_dir, slug = nothing, n_quad)
+    va_plot_trmm_sgs_smoke(;
+        experiment_dir,
+        slug = nothing,
+        n_quad,
+        profile_short_a,
+        profile_short_b,
+        profile_sum_short,
+        profile_xlabel,
+    )
     return nothing
 end
 
@@ -276,6 +295,56 @@ function va_collect_sgs_smoke_output_actives(
 end
 
 """
+    va_trmm_sgs_smoke_remove_stale_dist_dirs!(; experiment_dir, n_quad, dry_run) -> Vector{String}
+
+Collect paths to `simulation_output/sgs_smoke/<case>/<tier>/N_<n_quad>/<dist>/` where `dist` is **not** in
+`VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS` (same rule as plotting). With `dry_run=true` (default), only log what
+would be deleted; with `dry_run=false`, call `rm(...; recursive=true)` on each. Skips `_failures/`.
+"""
+function va_trmm_sgs_smoke_remove_stale_dist_dirs!(;
+    experiment_dir::AbstractString = VA_TRMM_SGS_SMOKE_ROOT,
+    n_quad::Int = 3,
+    dry_run::Bool = true,
+)::Vector{String}
+    allowed = Set{String}(VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS)
+    root = joinpath(experiment_dir, "simulation_output", "sgs_smoke")
+    to_remove = String[]
+    isdir(root) || return to_remove
+    n_seg = "N_$(n_quad)"
+    for case in readdir(root)
+        case == "_failures" && continue
+        case_path = joinpath(root, case)
+        isdir(case_path) || continue
+        for tier in readdir(case_path)
+            tier_p = joinpath(case_path, tier)
+            isdir(tier_p) || continue
+            n_p = joinpath(tier_p, n_seg)
+            isdir(n_p) || continue
+            for dist in readdir(n_p)
+                dist in allowed && continue
+                dpath = joinpath(n_p, dist)
+                isdir(dpath) || continue
+                push!(to_remove, abspath(dpath))
+            end
+        end
+    end
+    sort!(to_remove)
+    if dry_run
+        if isempty(to_remove)
+            @info "dry_run: no stale sgs_smoke dist dirs under N_$(n_quad) (all folder names ⊆ default list)" root
+        else
+            @info "dry_run: would remove $(length(to_remove)) stale dir(s); rerun with dry_run=false to delete" to_remove
+        end
+    else
+        for p in to_remove
+            rm(p; recursive = true)
+        end
+        @info "Removed $(length(to_remove)) stale sgs_smoke dist dir(s)" to_remove
+    end
+    return to_remove
+end
+
+"""
     _va_trmm_sgs_smoke_pairs_matching_grid(pairs, case_slug, res_seg)
 
 Restrict to paths under `simulation_output/sgs_smoke/<slug>/<res_seg>/...` so stale runs from another
@@ -298,7 +367,37 @@ function _va_trmm_sgs_smoke_pairs_matching_grid(
     return out
 end
 
-"""Order paths for plotting/legend: all **lognormal** (by variant index) then all **gaussian**."""
+function _va_trmm_sgs_smoke_ln_slugs_ordered()::Vector{String}
+    return String[d for d in VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS if startswith(d, "lognormal")]
+end
+
+function _va_trmm_sgs_smoke_g_slugs_ordered()::Vector{String}
+    return String[d for d in VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS if startswith(d, "gaussian")]
+end
+
+"""1-based index of `slug` in the default smoke LN (or G) list; stable sort key and unique line styling."""
+function _va_trmm_sgs_smoke_series_index(slug::AbstractString)::Int
+    s = String(slug)
+    if startswith(s, "lognormal")
+        lst = _va_trmm_sgs_smoke_ln_slugs_ordered()
+    elseif startswith(s, "gaussian")
+        lst = _va_trmm_sgs_smoke_g_slugs_ordered()
+    else
+        error(
+            "sgs_smoke plot: unexpected distribution folder name $(repr(s)); expected a string starting with " *
+                "`lognormal` or `gaussian` (same spelling as YAML `sgs_distribution`).",
+        )
+    end
+    i = findfirst(==(s), lst)
+    i === nothing && error(
+        "sgs_smoke plot: folder name $(repr(s)) is not in the LN/G ordering derived from " *
+            "`VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS`. Output dirs must use `va_sgs_dist_path_slug(sgs_distribution)` " *
+            "matching that list exactly (no silent fallback styling).",
+    )
+    return i
+end
+
+"""Order paths for plotting/legend: all **lognormal** (default list order) then all **gaussian**."""
 function _va_trmm_sgs_sort_pairs_ln_then_g(pairs::Vector{Tuple{String, String}})
     ln = Tuple{String, String}[]
     g = Tuple{String, String}[]
@@ -313,65 +412,39 @@ function _va_trmm_sgs_sort_pairs_ln_then_g(pairs::Vector{Tuple{String, String}})
             push!(other, p)
         end
     end
-    ln_s = sort(ln; by = x -> _va_trmm_sgs_variant_index(x[2]))
-    g_s = sort(g; by = x -> _va_trmm_sgs_variant_index(x[2]))
+    ln_s = sort(ln; by = x -> _va_trmm_sgs_smoke_series_index(x[2]))
+    g_s = sort(g; by = x -> _va_trmm_sgs_smoke_series_index(x[2]))
     return [ln_s; g_s; other]
 end
 
 """
     va_trmm_sgs_smoke_short_label(slug) -> String
 
-Compact legend text for an `sgs_distribution` slug. For publication-quality captions, spell out the full
-ClimaAtmos `sgs_distribution` string (or define symbols in the figure caption).
-
-Glossary (smoke figures only):
-
-- **`LN`** / **`G`**: lognormal / gaussian (no gridscale correction in the name).
-- **`+gsc`**: gridscale-corrected family in YAML (`*_gridscale_corrected*`). The short name
-  `lognormal_gridscale_corrected` / `gaussian_gridscale_corrected` builds the **same type** as the explicit
-  `…_profile_rosenblatt_brent` strings (`get_sgs_distribution` in `model_getters.jl`). TRMM smoke uses the
-  explicit Brent slug so output dirs and legends name the discretization, not an implicit default.
-- **`colT`**: column-tensor subgrid formulation (avoids **`Ct`**, which reads like cloud liquid).
-- **`Ros·Brent`**, **`Ros·Halley`**, **`Ros·Chebyshev`**: **profile–Rosenblatt** construction (`Ros`), with the
-  **named 1D root finder** used for the CDF / quantile map spelled out (Brent’s method, Halley’s method,
-  Chebyshev-type iteration — same names as in the YAML slug, not arbitrary letters).
-
-Examples: `LN+gsc·Ros·Brent` (profile–Rosenblatt + Brent, explicit YAML), `G+gsc·colT`, `LN+gsc·Ros·Halley`.
+Legend text for an `sgs_distribution` path folder / slug: **`LN`/`G`** for the two baselines; otherwise the
+YAML tail after `lognormal_` / `gaussian_` / `*_vertical_profile_`, with underscores shown as **`·`** so every
+default smoke case gets a **unique** label (matches the string you would pass in YAML up to typography).
 """
-function va_trmm_sgs_smoke_short_label(slug::AbstractString)::String
-    s = String(slug)
-    pref = if startswith(s, "lognormal")
-        "LN"
-    elseif startswith(s, "gaussian")
-        "G"
-    else
-        return s
-    end
-    if !occursin("gridscale_corrected", s)
-        return pref
-    end
-    tail = String[]
-    occursin("column_tensor", s) && push!(tail, "colT")
-    if occursin("profile_rosenblatt_chebyshev", s)
-        push!(tail, "Ros·Chebyshev")
-    elseif occursin("profile_rosenblatt_halley", s)
-        push!(tail, "Ros·Halley")
-    elseif occursin("profile_rosenblatt_brent", s) || occursin("profile_rosenblatt", s)
-        push!(tail, "Ros·Brent")
-    end
-    return isempty(tail) ? pref * "+gsc" : pref * "+gsc·" * join(tail, "·")
+function _va_sgs_smoke_legend_tail(s::AbstractString)::String
+    return replace(String(s), '_' => '·')
 end
 
-"""Which variant (1 = base distribution … 6 = Rosenblatt–Chebyshev) for color/linestyle lookup."""
-function _va_trmm_sgs_variant_index(s::AbstractString)::Int
-    if !occursin("gridscale_corrected", s)
-        return 1
+function va_trmm_sgs_smoke_short_label(slug::AbstractString)::String
+    s = String(slug)
+    if s == "lognormal"
+        return "LN"
+    elseif s == "gaussian"
+        return "G"
+    elseif startswith(s, "lognormal_vertical_profile_")
+        return "LN·" * _va_sgs_smoke_legend_tail(chopprefix(s, "lognormal_vertical_profile_"))
+    elseif startswith(s, "gaussian_vertical_profile_")
+        return "G·" * _va_sgs_smoke_legend_tail(chopprefix(s, "gaussian_vertical_profile_"))
+    elseif startswith(s, "lognormal_")
+        return "LN·" * _va_sgs_smoke_legend_tail(chopprefix(s, "lognormal_"))
+    elseif startswith(s, "gaussian_")
+        return "G·" * _va_sgs_smoke_legend_tail(chopprefix(s, "gaussian_"))
+    else
+        return _va_sgs_smoke_legend_tail(s)
     end
-    occursin("column_tensor", s) && return 3
-    occursin("profile_rosenblatt_chebyshev", s) && return 6
-    occursin("profile_rosenblatt_halley", s) && return 5
-    (occursin("profile_rosenblatt_brent", s) || occursin("profile_rosenblatt", s)) && return 4
-    return 2
 end
 
 # **Lognormal = cool family** (blue → cyan → teal → indigo): deliberately *not* green so it won’t read as
@@ -393,55 +466,115 @@ const _VA_SGS_G_COLORS = (
     CM.RGBf(0.62, 0.28, 0.10),  # 5 rust / brown-red
     CM.RGBf(1.00, 0.55, 0.00),  # 6 vivid orange
 )
+const _VA_SGS_LN_BASELINE_COLOR = CM.RGBf(0.10, 0.74, 0.98)  # bright cyan-blue
+const _VA_SGS_LN_CUBATURE_COLOR = CM.RGBf(0.00, 0.18, 0.52)  # deep navy
+const _VA_SGS_G_BASELINE_COLOR = CM.RGBf(1.00, 0.62, 0.18)   # bright orange
+const _VA_SGS_G_CUBATURE_COLOR = CM.RGBf(0.60, 0.08, 0.08)   # deep red
 
-function _va_trmm_sgs_linestyle_for_vi(vi::Int)
-    vi == 1 && return :solid
-    vi == 2 && return :dash
-    vi == 3 && return :dashdot
-    vi == 4 && return :dot
-    vi == 5 && return :dashdotdot
-    # Do not use `Linestyle([...])` here: Makie’s outside `Legend(fig[1,2], ax)` often drops entries or
-    # mis-sizes the layout so the legend is clipped out of the saved PNG.
-    return :dash
+# Built-in symbols only (custom `Linestyle` vectors break outside legends in CairoMakie).
+const _VA_SGS_SMOKE_LINE_STYLE_CYCLE = (:solid, :dash, :dashdot, :dot, :dashdotdot)
+
+@inline function _va_trmm_style_method_key(slug::AbstractString)::String
+    s = String(slug)
+    if s == "lognormal" || s == "gaussian"
+        return "baseline_2d"
+    elseif occursin("_vertical_profile_full_cubature", s)
+        return "full_cubature"
+    elseif occursin("_vertical_profile_inner_bracketed", s)
+        return "inner_bracketed"
+    elseif occursin("_vertical_profile_inner_halley", s)
+        return "inner_halley"
+    elseif occursin("_vertical_profile_lhs_z", s)
+        return "lhs_z"
+    elseif occursin("_vertical_profile_principal_axis", s)
+        return "principal_axis"
+    elseif occursin("_vertical_profile_voronoi", s)
+        return "voronoi"
+    elseif occursin("_vertical_profile_barycentric", s)
+        return "barycentric"
+    else
+        return "other"
+    end
 end
 
 """
 Deterministic `(color, linestyle, linewidth)` for a path slug.
 
-**Color:** **lognormal** uses a **cool** palette (blue / cyan / teal / violet); **gaussian** uses **warm**
-oranges, reds, golds, and rust so the two families split by hue angle, not two kinds of green.
-
-**Linestyle:** built-in symbols only (custom `Linestyle` vectors break outside legends in CairoMakie). Variants
-**2** and **6** both use **`:dash`**; separate them with **linewidth** (thin vs heavy dash).
+Uses one slot per entry in `VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS` within the LN / G block (see
+[`_va_trmm_sgs_smoke_series_index`](@ref)) so many `*_vertical_profile_*` strings do not share the same
+Makie attributes (which would draw indistinguishable overlays even when the NetCDF profiles differ).
 """
 function _va_trmm_sgs_style_for_dist_slug(slug::AbstractString)
     s = String(slug)
-    vi = _va_trmm_sgs_variant_index(s)
-    i = clamp(vi, 1, 6)
-    color = if startswith(s, "lognormal")
-        _VA_SGS_LN_COLORS[i]
+    vi = _va_trmm_sgs_smoke_series_index(s)
+    is_lognormal = startswith(s, "lognormal")
+    colors = if is_lognormal
+        _VA_SGS_LN_COLORS
     elseif startswith(s, "gaussian")
-        _VA_SGS_G_COLORS[i]
+        _VA_SGS_G_COLORS
     else
-        CM.RGBf(0.45, 0.45, 0.45)
+        error("sgs_smoke plot: cannot assign palette for $(repr(s))")
     end
-    ls = _va_trmm_sgs_linestyle_for_vi(vi)
-    lw = if vi == 1
-        3.15f0
-    elseif vi == 6
-        3.05f0
-    elseif vi == 2
-        2.05f0
+    nc = length(colors)
+    nls = length(_VA_SGS_SMOKE_LINE_STYLE_CYCLE)
+    color = colors[mod1(vi, nc)]
+    method_key = _va_trmm_style_method_key(s)
+    # Width hierarchy for readability:
+    #   full cubature (truth proxy) > baseline 2D > all reduced 3D→2D variants.
+    is_full_cubature = method_key == "full_cubature"
+    is_baseline_2d = method_key == "baseline_2d"
+    ls = if method_key == "full_cubature"
+        :solid
+    elseif method_key == "baseline_2d"
+        :dash
+    elseif method_key == "inner_bracketed"
+        :dashdot
+    elseif method_key == "inner_halley"
+        :dot
+    elseif method_key == "lhs_z"
+        :dashdotdot
+    elseif method_key == "principal_axis"
+        :dash
+    elseif method_key == "voronoi"
+        :dashdot
+    elseif method_key == "barycentric"
+        :dot
     else
-        2.45f0
+        _VA_SGS_SMOKE_LINE_STYLE_CYCLE[mod1(vi + 1, nls)]
+    end
+    color = if method_key == "full_cubature"
+        is_lognormal ? _VA_SGS_LN_CUBATURE_COLOR : _VA_SGS_G_CUBATURE_COLOR
+    elseif method_key == "baseline_2d"
+        is_lognormal ? _VA_SGS_LN_BASELINE_COLOR : _VA_SGS_G_BASELINE_COLOR
+    else
+        color
+    end
+    lw = if is_full_cubature
+        3.4f0
+    elseif is_baseline_2d
+        2.3f0
+    else
+        1.7f0
     end
     return (color, ls, lw)
 end
 
+"""
+    va_plot_trmm_sgs_smoke(; kwargs...)
+
+Write the TRMM SGS smoke summed-profile figure from completed `output_active` runs.
+
+**`profile_short_a`**, **`profile_short_b`**, **`profile_sum_short`**, **`profile_xlabel`** are forwarded to
+`va_plot_profile_shortname_sum!` in `analysis/plotting/plot_profiles.jl` (defaults: `clw` + `cli` → `clw_plus_cli`).
+"""
 function va_plot_trmm_sgs_smoke(;
     experiment_dir::AbstractString = VA_TRMM_SGS_SMOKE_ROOT,
     slug::Union{Nothing, AbstractString} = nothing,
     n_quad::Int = 3,
+    profile_short_a::AbstractString = "clw",
+    profile_short_b::AbstractString = "cli",
+    profile_sum_short::AbstractString = "clw_plus_cli",
+    profile_xlabel::AbstractString = "clw+cli (kg/kg)",
 )
     g = va_trmm_sgs_smoke_resolve_grid(; experiment_dir)
     fig_slug = g.slug
@@ -453,7 +586,7 @@ function va_plot_trmm_sgs_smoke(;
     end
     # Only plot distributions in the current smoke list. `walkdir` still finds every `output_active` under the
     # case/tier — including stale dirs left after changing `VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS` or runs
-    # from another clone — which would otherwise add e.g. bare `*_gridscale_corrected` lines back in.
+    # from another clone — which would otherwise add stale slug lines back in.
     allowed = Set{String}(VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS)
     skipped = String[]
     pairs_f = Tuple{String, String}[]
@@ -466,15 +599,15 @@ function va_plot_trmm_sgs_smoke(;
         end
     end
     if !isempty(skipped)
-        @warn "Skipping sgs_smoke output_active not in VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS (remove those dirs or they linger on disk)" unique_skipped =
+        @warn "Skipping sgs_smoke output_active not in VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS (remove those dirs or they linger on disk). Delete with `va_trmm_sgs_smoke_remove_stale_dist_dirs!(; dry_run=false)` after `dry_run=true`." unique_skipped =
             unique(sort(skipped))
     end
     pairs = pairs_f
     if isempty(pairs)
         root = abspath(joinpath(experiment_dir, "simulation_output", "sgs_smoke"))
         tier_allow_hint =
-            n_after_tier > 0 && !isempty(skipped) ?
-            "\n  Under this grid tier, found $n_after_tier `output_active` path(s) whose dist folder name is not in `VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS` (see @warn above). Delete stale `…/N_$n_quad/<dist>/` trees or re-run smoke with the current default list." :
+            !isempty(skipped) ?
+            "\n  Under this grid tier, found $(length(skipped)) `output_active` path(s) whose dist folder name is not in `VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS` (see @warn above). Delete stale `…/N_$n_quad/<dist>/` trees (e.g. `va_trmm_sgs_smoke_remove_stale_dist_dirs!(; dry_run=false)`) or re-run smoke with the current default list." :
             ""
         hint = if !isdir(root)
             "Directory does not exist: $root\n  → Runs write under the same `experiment_dir` as `VA_TRMM_SGS_SMOKE_ROOT` " *
@@ -497,11 +630,14 @@ function va_plot_trmm_sgs_smoke(;
     pairs = _va_trmm_sgs_sort_pairs_ln_then_g(pairs)
     paths = String[p[1] for p in pairs]
     labels = String[p[2] for p in pairs]
+    model_config_rel = VA_TRMM_SGS_SMOKE_CASE_LAYERS
+    if length(unique(paths)) != length(paths)
+        error(
+            "sgs_smoke plot: duplicate `output_active` path(s) — each series must come from a distinct run directory. " *
+                "labels = $(repr(labels))",
+        )
+    end
     short_labels = String[va_trmm_sgs_smoke_short_label(lab) for lab in labels]
-    model_config_rel = String[
-        "model_configs/master_column_varquad_diagnostic_edmfx.yml",
-        "model_configs/trmm_column_varquad_hires.yml",
-    ]
     sty = [_va_trmm_sgs_style_for_dist_slug(lab) for lab in labels]
     colors = CM.RGBf[s[1] for s in sty]
     path_linestyles = Any[s[2] for s in sty]
@@ -520,12 +656,13 @@ function va_plot_trmm_sgs_smoke(;
     analysis_dir = joinpath(experiment_dir, "analysis")
     figdir = joinpath(analysis_dir, "figures", "sgs_smoke", fig_slug)
     n_series = length(paths)
-    # Legend: own column; series order is LN (6) then G (6) so one column reads as two stacked blocks.
+    # Legend: own column; series order is LN block then G block (each in `VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS` order).
     # `plot_profiles.jl` calls `resize_to_layout!` before `save`.
     # Aspect: profile plots read best with height ≥ axis width; keep total Figure narrower (~½ previous width).
     # PNG: `px_per_unit` keeps output ~4–5k px tall so zoom stays sharp; PDF is vector (`save_pdf_also`).
     fig_w = 620
     fig_h = 720
+    prof_sum_human = "$(profile_short_a) + $(profile_short_b)"
     p = va_plot_profile_shortname_sum!(
         paths;
         experiment_dir,
@@ -535,7 +672,11 @@ function va_plot_trmm_sgs_smoke(;
         path_colors = colors,
         path_linestyles = path_linestyles,
         path_linewidths = path_linewidths,
-        profile_title = "TRMM SGS smoke (N=$(n_quad), $(g.res_seg)): clw + cli, last time\n" *
+        short_a = profile_short_a,
+        short_b = profile_short_b,
+        sum_short = profile_sum_short,
+        xlabel = profile_xlabel,
+        profile_title = "TRMM SGS smoke (N=$(n_quad), $(g.res_seg)): $(prof_sum_human), final output time\n" *
             "(cool hues = lognormal · warm hues = gaussian; legend lists LN then G)",
         legend_outside = true,
         ylims_height_max = z_top_m,
@@ -545,7 +686,8 @@ function va_plot_trmm_sgs_smoke(;
         figure_save_px_per_unit = 7,
         save_pdf_also = true,
     )
-    p === nothing && error("Plotting produced no lines (missing clw/cli in output?)")
+    p === nothing &&
+        error("Plotting produced no lines (missing $(repr(profile_short_a)) / $(repr(profile_short_b)) in output or case YAML?)")
     @info "Wrote figure" p
     return p
 end
@@ -587,12 +729,12 @@ This script:              $(VA_TRMM_SGS_SMOKE_SCRIPT_PATH)
     (omit --slug to scan every case under sgs_smoke; use --slug=auto same as omit)
   julia --project=$(VA_TRMM_SGS_SMOKE_ROOT) $(VA_TRMM_SGS_SMOKE_SCRIPT_PATH) both [same options as run]
 
-  `both` = run all cases, then write analysis/figures/sgs_smoke/<slug>/profile_clw_plus_cli.png .
+  `both` = run all cases, then write analysis/figures/sgs_smoke/<slug>/profile_<sum_short>.png (default clw_plus_cli).
   With `--continue-on-errors`, failed jobs are logged under _failures/ and plotting still runs for successful outputs.
 
 Options (run / both): --skip-done  --continue-on-errors  --n-quad=N  --distributions=a,b,c  --print-only
   --parallel=sequential|distributed   --distributed-procs=N  (spawn N workers; optional if you already used -p)
-Failures: full stacktraces under simulation_output/sgs_smoke/_failures/*.txt
+Failures: full stacktraces under simulation_output/sgs_smoke/_failures/<slug>_N<n>_<dist>.txt (stable name; overwrites on rerun)
 """)
             return
         elseif startswith(a, "--parallel=")

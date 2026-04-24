@@ -5,35 +5,62 @@ alwaysApply: true
 
 # Julia + juliaup + Cursor
 
-## 1. `Could not create lockfile` (juliaup **shim**)
+## 0. TL;DR (the rule that matters)
 
-If `julia` on `PATH` is `~/.juliaup/bin/julia`, the **launcher** may try to lock juliaup’s config before starting Julia. **Cursor’s sandboxed terminal** (🔒) and the **agent shell** often cannot create that lock →
+When a Julia / `Pkg` call fails under the agent shell with **`Permission denied`**
+on `~/.juliaup/...`, `~/.julia/logs/...`, `~/.julia/compiled/...`, or any other
+`.pidfile` / lock path — **that is the Cursor agent sandbox, not juliaup, and
+not the depot.** The fix is to **re-run the Shell tool with
+`required_permissions: ["all"]`** (which prompts the user to approve
+disabling the sandbox for that command). **Do not** edit `JULIA_DEPOT_PATH`
+and **do not** reach for a full `~/.julia/juliaup/julia-X.Y.Z+...` binary
+path to work around it. The user prefers a one-time approval prompt over
+environment hacks.
 
-`Error: The Julia launcher failed to load a configuration file … Could not create lockfile: Permission denied`.
+```
+# ❌ BAD — invents depot + binary workarounds the user did not ask for
+export JULIA_DEPOT_PATH="$PWD/.cursor_julia_depot:$HOME/.julia"
+~/.julia/juliaup/julia-1.12.5+0.x64.linux.gnu/bin/julia --project=. -e 'using ClimaAtmos'
 
-**Workaround:** call the **versioned binary** directly (no shim), e.g.:
-
-`~/.julia/juliaup/julia-1.12.5+0.x64.linux.gnu/bin/julia`
-
-(Adjust the folder to match `ls ~/.julia/juliaup/julia-*`.)
-
-## 2. `IOError: … .julia/logs/manifest_usage.toml.pid … permission denied`
-
-**Pkg** (even with the direct binary) writes usage locks under the **first** depot in `JULIA_DEPOT_PATH`, default `~/.julia`. Sandboxed environments may not allow writes there.
-
-**Workaround:** prepend a **writable** depot inside the repo, keep the user depot for registries/artifacts (read-mostly):
-
-```bash
-export JULIA_DEPOT_PATH="/ABS/PATH/TO/ClimaAtmos.jl/.cursor_julia_depot:$HOME/.julia"
+# ✅ GOOD — let the user approve the sandbox escape once, keep the default shim
+julia --project=. -e 'using ClimaAtmos'
+# (invoke the Shell tool with required_permissions: ["all"])
 ```
 
-Then run the **direct** `bin/julia` with `--project=…` and `using Pkg; Pkg.resolve()` / etc.  
-(`.cursor_julia_depot/` is gitignored in this repo.)
+If you set `JULIA_DEPOT_PATH` or `JULIA_BIN` for any reason, **always
+`unset`** them before the next `julia` call so the shell state doesn't leak
+across tool calls (Cursor's agent shell persists env vars).
 
-## 3. Agent shell
+## 1. Shim lockfile / launcher errors — ask first
 
-Before claiming Julia cannot run: try **direct binary** + **split `JULIA_DEPOT_PATH`** as above. Do not hand-edit `Manifest.toml`.
+The juliaup shim on `PATH` (`~/.juliaup/bin/julia`) occasionally wants to
+write a launcher lockfile. **Before** trying any workaround, retry the same
+command with `required_permissions: ["all"]`. That is sufficient in 99% of
+cases.
 
-## 4. `Pkg.resolve` / compat errors (e.g. ClimaParams)
+## 2. `~/.julia/compiled/**` precompile lock errors — same fix
 
-Those are **normal resolver** issues, unrelated to the launcher lockfile. Fix with `Pkg.update()`, compat changes, or project-specific instructions—not by blaming “sandbox” generically.
+`using ClimaAtmos` (or any non-precompiled dep) writes under
+`~/.julia/compiled/v1.x/.../.pidfile`. A sandboxed shell can't create that
+file. **Do not** override `JULIA_DEPOT_PATH` to a repo-local depot for this
+— it forces a full recompile under the repo, wastes minutes, and pollutes
+the tree. Re-run with `required_permissions: ["all"]`.
+
+## 3. When permission-escalation genuinely isn't enough
+
+Only in the rare case where the user explicitly declines the prompt, or a
+long-lived background task needs to stay sandboxed, consider:
+
+1. Prepending a writable depot: `export JULIA_DEPOT_PATH="$PWD/.cursor_julia_depot:$HOME/.julia"`
+   (repo-local depot already gitignored in this repo). Unset afterwards.
+2. Calling the versioned binary directly, e.g.
+   `~/.julia/juliaup/julia-*/bin/julia`, to bypass the shim.
+
+These are **escalation-blocked** workarounds, not defaults. Prefer (0).
+
+## 4. Real `Pkg` resolver issues (compat, manifest) are unrelated
+
+`Pkg.resolve` / compat errors (e.g. ClimaParams version pins) are genuine
+resolver problems, not sandbox problems. Fix with `Pkg.update()`, compat
+bumps, or project-specific instructions — don't blame the sandbox, and
+don't hand-edit `Manifest.toml`.

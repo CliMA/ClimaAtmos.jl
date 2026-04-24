@@ -18,6 +18,15 @@ cloud_model: quadrature
 microphysics_model: "1M"
 use_sgs_quadrature: true
 sgs_distribution: lognormal
+# When the forward sweep sets **varfix_on**, `scripts/sweep_forward_core.jl` uses this full string if present;
+# otherwise it maps `lognormal` -> `lognormal_vertical_profile` only. Swap to any vertical-profile / 3D
+# variant documented under `sgs_distribution` in `config/default_configs/default_config.yml`, e.g.:
+#   *_vertical_profile_full_cubature, *_vertical_profile_lhs_z, *_vertical_profile_principal_axis,
+#   *_vertical_profile_voronoi, *_vertical_profile_barycentric, *_vertical_profile_inner_bracketed,
+#   *_vertical_profile_inner_halley, *_vertical_profile_inner_chebyshev, …
+# To run **several** varfix-on discretizations in one sweep, add `forward_sweep_varfix_on_distributions:` (list of
+# strings) on a case overlay — see `model_configs/trmm_column_varquad_hires.yml`.
+sgs_distribution_varfix_on: lognormal_vertical_profile_full_cubature
 quadrature_order: 3
 config: column
 x_elem: 2

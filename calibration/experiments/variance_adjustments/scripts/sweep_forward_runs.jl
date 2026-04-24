@@ -22,7 +22,8 @@
 #   --parallel=MODE            sequential | threads | distributed
 #   --distributed-workers=N
 #   --distributed-worker-threads=N   per-worker `-t` for distributed mode (default 1)
-#   (… plus resolution-ladder, registry, skip-done, fail-fast, task-id, ladder-*, print-task-count, --help)
+#   --varfix=both|on|off|off,on   Varfix axis (default both). Env: VA_FORWARD_SWEEP_VARFIX
+#   (… plus resolution-ladder, registry, case-slugs, skip-done, fail-fast, task-id, ladder-*, print-task-count, --help)
 #
 import Pkg
 Pkg.activate(joinpath(@__DIR__, ".."))
@@ -43,6 +44,7 @@ Usage: julia --project=. scripts/sweep_forward_runs.jl [flags]
   --resolution-ladder        Multiple vertical tiers (default)
   --baseline-only            Single YAML tier only
   --registry=PATH            Case registry YAML
+  --case-slugs=a,b,c         Only these merged case slugs (subset of registry). Env: VA_FORWARD_SWEEP_CASE_SLUGS
   --skip-done                Skip if output_active exists
   --fail-fast                Stop entire sweep on first failed run (default: continue)
   --print-task-count         Print N tasks and exit
@@ -51,6 +53,7 @@ Usage: julia --project=. scripts/sweep_forward_runs.jl [flags]
   --ladder-coarsen-ratio=R   Default 2
   --ladder-z-elem-min=N      Default 4
   --ladder-min-dz-factor=F   Default 2
+  --varfix=both|on|off|off,on   Which varfix legs to run (default both). Env: VA_FORWARD_SWEEP_VARFIX
 """)
     va_flush_stdio()
     return nothing
@@ -88,6 +91,8 @@ function parse_forward_sweep_cli(argv::Vector{String})::ForwardSweepConfig
             cfg.resolution_ladder = false
         elseif startswith(a, "--registry=")
             cfg.registry_path = String(split(a, '=', limit = 2)[2])
+        elseif startswith(a, "--case-slugs=")
+            cfg.case_slugs = va_forward_sweep_parse_case_slugs(String(split(a, '=', limit = 2)[2]))
         elseif a == "--skip-done"
             cfg.skip_done = true
         elseif a == "--fail-fast"
@@ -128,6 +133,8 @@ function parse_forward_sweep_cli(argv::Vector{String})::ForwardSweepConfig
                 p.z_elem_min,
                 parse(Float64, split(a, '=', limit = 2)[2]),
             )
+        elseif startswith(a, "--varfix=")
+            cfg.varfix_values = va_forward_sweep_varfix_values_from_spec(split(a, '=', limit = 2)[2])
         else
             error("Unknown argument: $(repr(a)). Try --help.")
         end

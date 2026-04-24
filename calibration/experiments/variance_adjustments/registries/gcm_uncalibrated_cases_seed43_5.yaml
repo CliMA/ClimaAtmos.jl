@@ -1,3 +1,0 @@
-# Deterministic subset of cfSite indices for **uncalibrated** GCM-forced forwards (seed 43, sample 5 of 1..30).
-# Matching `model_configs/gcm_forced_column_varquad_site*.yml` and `registries/forward_sweep_cases_uncalibrated.yml`.
-cfsites: [2, 5, 10, 23, 25]

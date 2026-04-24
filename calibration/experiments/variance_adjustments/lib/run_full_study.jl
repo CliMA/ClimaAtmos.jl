@@ -1,5 +1,10 @@
 # Full experiment driver: ensure LES `observations.jld2` per sweep YAML → EKI sweep → naive forwards → forward sweep (merged θ) → figures.
 #
+# Default forward registry `registries/forward_sweep_cases.yml` uses **GoogleLES** cases only (GCM cfSite rows removed
+# from that sweep; cfSite could still *run* but was dropped for study quality). Varfix-on SGS variant:
+# `sgs_distribution_varfix_on` in `model_configs/master_column_varquad_diagnostic_edmfx.yml`.
+# Default **`config/experiment_config.yml`** stays **TRMM** (fewer prerequisites than GoogleLES forcing).
+#
 # **Uncalibrated study (SCM-only forwards, no EKI):** use `--uncalibrated-study` or pass `--forward-registry=registries/forward_sweep_cases_uncalibrated.yml`
 # with `--forward-baseline-scm` and `--skip-calib` / `--skip-naive` (the preset sets these). Example:
 #   julia --project=. scripts/run_full_study.jl --uncalibrated-study 2>&1 | tee logs/uncalibrated_full_study.log
@@ -30,7 +35,7 @@
 #   --figures-only              # same as skipping forward, calib, naive, instantiate (re-run post-analysis only)
 #   --forward-skip-done         # passed to forward sweep (--skip-done)
 #   --forward-fail-fast         # forward sweep: abort on first failed run (--fail-fast); needs merged TOMLs unless --forward-baseline-scm
-#   --calib-fail-fast           # EKI sweep: abort on first failed slice (--fail-fast)
+#   --calib-fail-fast           # EKI sweep: abort on first failed calibration YAML (--fail-fast)
 #   --naive-fail-fast           # naive forwards: abort on first failure (--fail-fast)
 #   --naive-skip-done           # passed to naive script (--skip-done)
 #   --help
@@ -39,7 +44,7 @@
 # Job arrays may still set `SWEEP_TASK_ID` / `SLURM_ARRAY_TASK_ID` / `NAIVE_SWEEP_TASK_ID` when not using `--task-id=`.
 #
 # **Parallelism:** The full study runs **in one Julia process**: EKI uses `EkiCalibrationOptions` (`addprocs` /
-# `rmprocs` per slice), forward sweep uses `ForwardSweepConfig` (`addprocs` / `rmprocs` for `parallel=:distributed`).
+# `rmprocs` after each EKI calibration YAML), forward sweep uses `ForwardSweepConfig` (`addprocs` / `rmprocs` for `parallel=:distributed`).
 # No extra `julia` subprocesses for calibration / naive / forward (avoids duplicate compilation and orphan PIDs).
 #
 isdefined(Main, :_VA_ROOT) ||
@@ -104,6 +109,27 @@ Base.@kwdef mutable struct FullStudyOptions
     """
     forward_registry::Union{Nothing, String} = nothing
     """
+    If set, forward sweep and forward-sweep figures only include registry rows whose merged case slug is in this list
+    (same strings as directory names under `simulation_output/`, e.g. `TRMM_LBA`, `GOOGLELES_01`). Env: **`VA_FORWARD_SWEEP_CASE_SLUGS`** (comma-separated). CLI: **`--forward-case-slugs=...`**.
+    """
+    forward_case_slugs::Union{Nothing, Vector{String}} = nothing
+    """
+    If true (uncalibrated study only), only **`forward_sweep_clw_plus_cli_summary.png`** is built from the **full**
+    uncalibrated registry (`registries/forward_sweep_cases_uncalibrated.yml`, no [`forward_case_slugs`](@ref)), so every
+    case row with data on disk appears in the summary. Per-case profile and scalar plots
+    ([`va_plot_forward_sweep_comparisons!`](@ref), [`va_plot_forward_sweep_scalars_vs_nquad!`](@ref)) still use the **same**
+    filter as [`run_forward_sweep!`](@ref), so e.g. only new GCM rows get refreshed individual PNGs. Env:
+    **`VA_FORWARD_FIGURES_FULL_UNCALIBRATED_REGISTRY=1`**. CLI: **`--forward-figures-full-uncalibrated-registry`**.
+    """
+    forward_figures_full_uncalibrated_registry::Bool = false
+    """
+    If set, forward sweep runs only these varfix legs (e.g. `[true]` = varfix-on / vertical-profile SGS only).
+    Overrides **`VA_FORWARD_SWEEP_VARFIX`** after env merge. Default **`nothing`** → **`[false, true]`** on
+    [`ForwardSweepConfig`](@ref) unless env sets otherwise. CLI: **`--forward-varfix=...`** (same tokens as
+    [`va_forward_sweep_varfix_values_from_spec`](@ref)).
+    """
+    forward_varfix_values::Union{Nothing, Vector{Bool}} = nothing
+    """
     Preset: skip LES-obs build, calibration, naive forwards; use `--baseline-scm-forward` and
     `registries/forward_sweep_cases_uncalibrated.yml` unless `forward_registry` is set. One-command uncalibrated pipeline.
     """
@@ -166,11 +192,18 @@ function va_full_study_merge_env!(opts::FullStudyOptions)
     if opts.forward_registry === nothing && haskey(ENV, "VA_FORWARD_SWEEP_REGISTRY")
         opts.forward_registry = String(strip(ENV["VA_FORWARD_SWEEP_REGISTRY"]))
     end
+    if opts.forward_case_slugs === nothing && haskey(ENV, "VA_FORWARD_SWEEP_CASE_SLUGS")
+        opts.forward_case_slugs = va_forward_sweep_parse_case_slugs(ENV["VA_FORWARD_SWEEP_CASE_SLUGS"])
+    end
     if !opts.uncalibrated_study && strip(get(ENV, "VA_UNCALIBRATED_STUDY", "")) in ("1", "true", "yes")
         opts.uncalibrated_study = true
     end
     if !opts.figures_only && strip(get(ENV, "VA_FIGURES_ONLY", "")) in ("1", "true", "yes")
         opts.figures_only = true
+    end
+    if !opts.forward_figures_full_uncalibrated_registry &&
+            strip(get(ENV, "VA_FORWARD_FIGURES_FULL_UNCALIBRATED_REGISTRY", "")) in ("1", "true", "yes")
+        opts.forward_figures_full_uncalibrated_registry = true
     end
     return opts
 end
@@ -204,6 +237,9 @@ Usage: julia --project=. scripts/run_full_study.jl [flags]
   --calib-backend=worker|julia VARIANCE_CALIB_BACKEND
   --skip-les-observations     Skip building missing LES `observations.jld2` before EKI (see also `VA_SKIP_LES_OBSERVATIONS_BUILD`)
   --forward-registry=REL.yml  Forward sweep + figures: pass `--registry=` to `sweep_forward_runs.jl` (default: `registries/forward_sweep_cases.yml`)
+  --forward-case-slugs=a,b,c   Only these merged case slugs (subset of the registry). Env: VA_FORWARD_SWEEP_CASE_SLUGS
+  --forward-figures-full-uncalibrated-registry   Figures: full uncalibrated registry + no slug filter (forwards unchanged). Env: VA_FORWARD_FIGURES_FULL_UNCALIBRATED_REGISTRY
+  --forward-varfix=both|on|off|off,on   Varfix axis for forward sweep (default both). Env: VA_FORWARD_SWEEP_VARFIX
   --uncalibrated-study        Preset: SCM-only forwards on `registries/forward_sweep_cases_uncalibrated.yml` (skips calib, naive, LES obs build)
 
 REPL: include(\"scripts/run_full_study.jl\"); run_full_study!(; skip_forward = true)
@@ -264,6 +300,12 @@ function parse_full_study_cli(argv::Vector{String})::FullStudyOptions
             opts.skip_les_observations_build = true
         elseif startswith(a, "--forward-registry=")
             opts.forward_registry = String(strip(split(a, '=', limit = 2)[2]))
+        elseif startswith(a, "--forward-case-slugs=")
+            opts.forward_case_slugs = va_forward_sweep_parse_case_slugs(String(split(a, '=', limit = 2)[2]))
+        elseif a == "--forward-figures-full-uncalibrated-registry"
+            opts.forward_figures_full_uncalibrated_registry = true
+        elseif startswith(a, "--forward-varfix=")
+            opts.forward_varfix_values = va_forward_sweep_varfix_values_from_spec(split(a, '=', limit = 2)[2])
         elseif a == "--uncalibrated-study"
             opts.uncalibrated_study = true
         else
@@ -305,6 +347,28 @@ function va_full_study_forward_sweep_config(opts::FullStudyOptions)::ForwardSwee
     if opts.forward_distributed_worker_threads !== nothing
         cfg.distributed_worker_threads = opts.forward_distributed_worker_threads
     end
+    if opts.forward_varfix_values !== nothing
+        cfg.varfix_values = copy(opts.forward_varfix_values)
+    end
+    if opts.forward_case_slugs !== nothing
+        cfg.case_slugs = copy(opts.forward_case_slugs)
+    end
+    return cfg
+end
+
+"""Forward-sweep plotting config: optionally full uncalibrated grid while forwards used a subset."""
+function va_full_study_forward_sweep_figure_config(opts::FullStudyOptions)::ForwardSweepConfig
+    cfg = va_full_study_forward_sweep_config(opts)
+    if !opts.forward_figures_full_uncalibrated_registry
+        return cfg
+    end
+    if !opts.uncalibrated_study
+        @warn "forward_figures_full_uncalibrated_registry: ignored (requires uncalibrated_study = true)"
+        return cfg
+    end
+    cfg = deepcopy(cfg)
+    cfg.case_slugs = nothing
+    cfg.registry_path = "registries/forward_sweep_cases_uncalibrated.yml"
     return cfg
 end
 
@@ -324,7 +388,7 @@ function run_full_study!(opts::FullStudyOptions)
     end
 
     if !opts.skip_calib && !opts.skip_les_observations_build
-        @info "Ensuring LES observations (observations.jld2) for each calibration slice" configs =
+        @info "Ensuring LES observations (observations.jld2) for each calibration sweep YAML" configs =
             va_calibration_sweep_configs()
         va_ensure_les_observations_for_calibration_sweep!(_VA_ROOT, String.(va_calibration_sweep_configs()))
     elseif !opts.skip_calib && opts.skip_les_observations_build
@@ -358,22 +422,26 @@ function run_full_study!(opts::FullStudyOptions)
         end
         @info "Forward grid (registry × N_quad × varfix × resolution ladder)" forward_skip_done =
             opts.forward_skip_done forward_resolution_ladder = opts.forward_resolution_ladder forward_baseline_scm =
-            opts.forward_baseline_scm forward_registry = opts.forward_registry
+            opts.forward_baseline_scm forward_registry = opts.forward_registry forward_case_slugs =
+            opts.forward_case_slugs
         run_forward_sweep!(va_full_study_forward_sweep_config(opts); merge_env = false)
     else
         @info "Skipping forward grid (--skip-forward)"
     end
 
     if !opts.skip_figures
-        fs_plot_cfg = ForwardSweepConfig(;
-            resolution_ladder = opts.forward_resolution_ladder,
-            forward_parameters = opts.forward_baseline_scm ? VA_FORWARD_PARAM_BASELINE_SCM :
-                VA_FORWARD_PARAM_EKI_CALIBRATED,
-            registry_path = opts.forward_registry,
-        )
-        va_plot_forward_sweep_comparisons!(_VA_ROOT, fs_plot_cfg)
-        va_plot_forward_sweep_clw_plus_cli_summary!(_VA_ROOT, fs_plot_cfg)
-        va_plot_forward_sweep_scalars_vs_nquad!(_VA_ROOT, fs_plot_cfg)
+        cfg_fig_summary = va_full_study_forward_sweep_figure_config(opts)
+        cfg_fig_cases = va_full_study_forward_sweep_config(opts)
+        if opts.forward_figures_full_uncalibrated_registry && opts.uncalibrated_study
+            @info "Forward-sweep figures: summary = full uncalibrated registry; per-case profile/scalar PNGs = forward filter only"
+            va_plot_forward_sweep_comparisons!(_VA_ROOT, cfg_fig_cases)
+            va_plot_forward_sweep_clw_plus_cli_summary!(_VA_ROOT, cfg_fig_summary)
+            va_plot_forward_sweep_scalars_vs_nquad!(_VA_ROOT, cfg_fig_cases)
+        else
+            va_plot_forward_sweep_comparisons!(_VA_ROOT, cfg_fig_summary)
+            va_plot_forward_sweep_clw_plus_cli_summary!(_VA_ROOT, cfg_fig_summary)
+            va_plot_forward_sweep_scalars_vs_nquad!(_VA_ROOT, cfg_fig_summary)
+        end
         if !opts.skip_calib && !opts.skip_naive
             va_plot_all_naive_vs_calibrated_varfix_on_profiles!(_VA_ROOT)
         end
@@ -403,7 +471,7 @@ function run_full_study!(opts::FullStudyOptions)
                 end
             end
         else
-            @info "Skipping per-slice EKI post-analysis (--skip-calib or uncalibrated study)"
+            @info "Skipping EKI post-analysis per calibration case (--skip-calib or uncalibrated study)"
         end
     else
         @info "Skipping figures (--skip-figures)"

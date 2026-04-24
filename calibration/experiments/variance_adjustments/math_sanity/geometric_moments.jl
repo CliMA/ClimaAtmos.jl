@@ -1,5 +1,18 @@
-# Scalar algebra mirroring `sgs_quadrature_moments_from_gradients` / `variance_statistics.jl`
-# (moment-matched Gaussian subcell geometry) for a **single vertical column**:
+# Scalar math-sanity check of the **single-slope, cell-wide moment-matched Gaussian**
+# subcell geometry (legacy single-gradient reference only).
+# This file is retained **only as a self-contained reference algebra**: a single
+# ∂q/∂z and ∂θ/∂z per cell, with `(1/12) Δz² (∂·/∂z)²` variance increments and a
+# single geometric cross term in the covariance.
+#
+# The **production** path is the two-slope, face-anchored reconstruction in
+# `src/utils/variance_statistics.jl` (`subcell_geometric_variance_increment`,
+# `subcell_geometric_covariance_Tq`, `subcell_layer_mean_excursion`) — with four
+# half-slopes per cell and independent `d`/`D` channels — and is driven end-to-end
+# by `ClimaAtmos.integrate_over_sgs_linear_profile`. The moment-matched Gaussian
+# itself is deliberately **not** exposed in production (spurious Gaussian tails
+# mass saturation thresholds); see calibration `docs/subgrid_quadrature_methodology.tex`.
+#
+# Column-mean dot-product identities still hold pointwise:
 # `dot(WVector(∇q), WVector(∇q)) → (∂q/∂z)²`, same for θ_li, and
 # `dot(WVector(∇q), WVector(∇θ)) → (∂q/∂z)(∂θ_li/∂z)`.
 

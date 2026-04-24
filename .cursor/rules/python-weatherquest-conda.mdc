@@ -1,0 +1,37 @@
+---
+description: Python in this repo uses conda env WeatherQuest; agent shells + permissions
+alwaysApply: true
+---
+
+# Python + WeatherQuest + Cursor agent
+
+## 0. TL;DR
+
+- **All** Python here that needs SciPy / calibration notebooks / `calibration/experiments/variance_adjustments/**/*.py` must run under the **`WeatherQuest`** conda environment — **not** system `/usr/bin/python3` and not an ambiguous bare `python3` when the active env is unknown.
+- **Workflow:** `conda activate WeatherQuest` then `python …` in the **same** shell command chain (same line or `&&`).
+- **First** run `conda activate WeatherQuest && python …` with default tool settings; on typical dev machines (including this repo’s Cursor agent) **`conda` is already initialized** as a shell function — no sourcing required.
+- If `conda` is **actually missing** (`command -v conda` fails), `conda activate` errors, or you see **`NoWritableEnvsDirError`** / env dirs not writable, **then** re-run with **`required_permissions: ["all"]`**, or initialize conda for that shell (`source …/etc/profile.d/conda.sh` / `bash -lc '…'`). **Do not** skip WeatherQuest by falling back to system Python.
+- **Do not** “discover” WeatherQuest by walking `~/miniconda3/envs/.../bin/python` paths. **Do not** tell the user to hand-paste paths unless `conda activate` truly does not exist after `all` permissions.
+
+## 1. When `conda.sh` / login shells matter
+
+**Checked on this workspace’s agent shell:** `conda` is already a function and `conda activate WeatherQuest && python -c "import scipy"` succeeds **without** sourcing `~/.bashrc` or `conda.sh`.
+
+Reserve `source <conda_base>/etc/profile.d/conda.sh` or `bash -lc '…'` for environments where **`command -v conda` fails** (some CI images, stripped containers, or rare agent setups). Do not add sourcing by default.
+
+## 2. Examples
+
+```bash
+# ❌ BAD — system Python, no SciPy, wrong env
+python3 -c "import scipy"
+
+# ❌ BAD — conda run when the user’s conda rejects it in sandbox; don’t silently switch to system python
+python3 calibration/.../test_foo.py
+
+# ✅ GOOD — WeatherQuest (default; add required_permissions: ["all"] only if conda/env errors)
+conda activate WeatherQuest && cd calibration/experiments/variance_adjustments && python test_variance_mixture_consistency.py
+```
+
+## 3. Brent / rootfinding wording (variance-adjustments docs)
+
+Do **not** describe bracketed Brent as the default **operational** fallback for profile–Rosenblatt quantiles unless product owners say so. Prefer: **Halley (or future cheap surrogate) for operations**; Brent / heavy rootfinding **for tests and cross-checks only** when updating docs in this area.

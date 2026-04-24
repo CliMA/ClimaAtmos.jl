@@ -4,6 +4,7 @@ Unit tests for SGS Quadrature utilities (src/cache/sgs_quadrature.jl)
 
 using Test
 using ClimaAtmos
+using Statistics
 
 import ClimaComms
 import ClimaCore: Domains, Geometry, Meshes, Topologies, Spaces, Grids, Fields
@@ -35,20 +36,133 @@ end
 
 @testset "SGS Quadrature" begin
 
-    @testset "subcell geometric variance increment" begin
-        # Arguments are squared vertical gradients (∂q/∂z)² and (∂T/∂z)²
-        Δq, ΔT =
-            ClimaAtmos.subcell_geometric_variance_increment(2.0, 0.01, 0.16)
-        @test Δq ≈ (1 / 12) * 4 * 0.01
-        @test ΔT ≈ (1 / 12) * 4 * 0.16
+    # Run first: every YAML `sgs_distribution` that selects a vertical-profile
+    # gridscale-corrected type must resolve (catches deleted marker structs /
+    # renamed types before hundreds of unrelated tests pass).
+    @testset "get_sgs_distribution: all vertical-profile keys construct" begin
+        names = [
+            "gaussian_vertical_profile",
+            "gaussian_vertical_profile_full_cubature",
+            "gaussian_vertical_profile_inner_bracketed",
+            "gaussian_vertical_profile_inner_halley",
+            "gaussian_vertical_profile_inner_chebyshev",
+            "lognormal_vertical_profile",
+            "lognormal_vertical_profile_full_cubature",
+            "lognormal_vertical_profile_inner_bracketed",
+            "lognormal_vertical_profile_inner_halley",
+            "lognormal_vertical_profile_inner_chebyshev",
+            "gaussian_vertical_profile_lhs_z",
+            "gaussian_vertical_profile_principal_axis",
+            "gaussian_vertical_profile_voronoi",
+            "gaussian_vertical_profile_barycentric",
+            "lognormal_vertical_profile_lhs_z",
+            "lognormal_vertical_profile_principal_axis",
+            "lognormal_vertical_profile_voronoi",
+            "lognormal_vertical_profile_barycentric",
+        ]
+        for s in names
+            pa = Dict{String, Any}("sgs_distribution" => s)
+            d = ClimaAtmos.get_sgs_distribution(pa)
+            @test d isa ClimaAtmos.AbstractSGSDistribution
+        end
     end
 
-    @testset "subcell geometric T–q covariance" begin
+    @testset "1M: layer-profile SGS (linear profile vs bivariate strip)" begin
+        FT = Float64
+        quad_ln = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3, distribution = ClimaAtmos.LogNormalSGS())
+        q_ct = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 3,
+            distribution = ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}(),
+        )
+        q_pr = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 3,
+            distribution = ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+                ClimaAtmos.DefaultGridscaleProfileQuadrature,
+            }(),
+        )
+        @test !ClimaAtmos.sgs_1m_uses_sgs_linear_profile(quad_ln)
+        @test ClimaAtmos.sgs_1m_uses_sgs_linear_profile(q_ct)
+        @test ClimaAtmos.sgs_1m_uses_sgs_linear_profile(q_pr)
+        q_lhs = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 3,
+            distribution = ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridLatinHypercubeZ}(),
+        )
+        @test ClimaAtmos.sgs_1m_uses_sgs_linear_profile(q_lhs)
+        @test ClimaAtmos.throw_if_unsupported_1m_sgs_gridscale_distribution(q_lhs) === nothing
+        @test ClimaAtmos.throw_if_unsupported_1m_sgs_gridscale_distribution(quad_ln) === nothing
+        @test ClimaAtmos.throw_if_unsupported_1m_sgs_gridscale_distribution(q_ct) === nothing
+        @test ClimaAtmos.throw_if_unsupported_1m_sgs_gridscale_distribution(q_pr) === nothing
+        f(T, q) = T + FT(5) * q
+        μ_q = FT(0.012)
+        μ_T = FT(285)
+        qv = FT(1e-7)
+        Tv = FT(0.4)
+        ρc = FT(0.55)
+        # Bivariate `integrate_over_sgs` collapses Ln gridscale S to the same inner rule:
+        i1 = ClimaAtmos.integrate_over_sgs(f, q_ct, μ_q, μ_T, qv, Tv, ρc)
+        i2 = ClimaAtmos.integrate_over_sgs(f, q_pr, μ_q, μ_T, qv, Tv, ρc)
+        @test i1 ≈ i2
+    end
+
+    @testset "subcell geometric variance increment (two-slope face-anchored)" begin
         Δz = 2.0
-        ∂T∂θ = 0.5
-        dot_wq_wθ = 0.02  # e.g. (∂q/∂z)(∂θ/∂z) in a column
-        cov_geom = ClimaAtmos.subcell_geometric_covariance_Tq(Δz, ∂T∂θ, dot_wq_wθ)
-        @test cov_geom ≈ (1 / 12) * Δz^2 * ∂T∂θ * dot_wq_wθ
+        # Symmetric-slope limit (s_dn == s_up) recovers the classical (1/12) Δz² d²:
+        s_q = 0.1
+        s_T = 0.4
+        Δq_sym, ΔT_sym = ClimaAtmos.subcell_geometric_variance_increment(
+            Δz, s_q, s_q, s_T, s_T,
+        )
+        @test Δq_sym ≈ (1 / 12) * Δz^2 * s_q^2
+        @test ΔT_sym ≈ (1 / 12) * Δz^2 * s_T^2
+
+        # Asymmetric slopes: centered d and asymmetry D both contribute
+        # (variance = d² Δz² / 12 + D² Δz² / 192).
+        s_q_dn, s_q_up = -0.05, 0.15
+        s_T_dn, s_T_up = 0.30, 0.50
+        Δq, ΔT = ClimaAtmos.subcell_geometric_variance_increment(
+            Δz, s_q_dn, s_q_up, s_T_dn, s_T_up,
+        )
+        d_q, D_q = (s_q_up + s_q_dn) / 2, s_q_up - s_q_dn
+        d_T, D_T = (s_T_up + s_T_dn) / 2, s_T_up - s_T_dn
+        @test Δq ≈ (Δz^2) * (d_q^2 / 12 + D_q^2 / 192)
+        @test ΔT ≈ (Δz^2) * (d_T^2 / 12 + D_T^2 / 192)
+        # Sign- and sign-flip-invariance properties:
+        Δq_neg, _ = ClimaAtmos.subcell_geometric_variance_increment(
+            Δz, -s_q_dn, -s_q_up, s_T_dn, s_T_up,
+        )
+        @test Δq_neg ≈ Δq
+    end
+
+    @testset "subcell geometric T–q covariance (two-slope face-anchored)" begin
+        Δz = 2.0
+        # Symmetric-slope limit recovers the classical (1/12) Δz² d^q d^T
+        s_q = 0.05
+        s_T = 0.20  # already in T-space: caller applies ∂T/∂θ_li before passing.
+        cov_sym = ClimaAtmos.subcell_geometric_covariance_Tq(
+            Δz, s_q, s_q, s_T, s_T,
+        )
+        @test cov_sym ≈ (1 / 12) * Δz^2 * s_q * s_T
+
+        # Asymmetric slopes: (1/12) Δz² d^q d^T + (1/192) Δz² D^q D^T.
+        s_q_dn, s_q_up = -0.01, 0.03
+        s_T_dn, s_T_up = 0.15, 0.25
+        cov = ClimaAtmos.subcell_geometric_covariance_Tq(
+            Δz, s_q_dn, s_q_up, s_T_dn, s_T_up,
+        )
+        d_q, D_q = (s_q_up + s_q_dn) / 2, s_q_up - s_q_dn
+        d_T, D_T = (s_T_up + s_T_dn) / 2, s_T_up - s_T_dn
+        @test cov ≈ (Δz^2) * (d_q * d_T / 12 + D_q * D_T / 192)
+    end
+
+    @testset "subcell layer-mean excursion" begin
+        Δz = 2.0
+        # Symmetric-slope limit: no excursion.
+        @test ClimaAtmos.subcell_layer_mean_excursion(Δz, 0.3, 0.3) ≈ 0.0
+        # Asymmetric slopes: ΔΦ = (Δz / 8) * (s_up - s_dn).
+        @test ClimaAtmos.subcell_layer_mean_excursion(Δz, -0.1, 0.2) ≈ Δz / 8 * 0.3
     end
 
     @testset "uniform_normal_convolution_pdf (univariate)" begin
@@ -57,28 +171,6 @@ end
         xs = range(FT(-3), FT(3); length = 2000)
         dens = [ClimaAtmos.uniform_normal_convolution_pdf(x, a, b, σ) for x in xs]
         @test sum(dens) * step(xs) ≈ 1 rtol = 0.02
-    end
-
-    @testset "sgs_quadrature_moments_at_point (no subcell geometry)" begin
-        FT = Float64
-        ρp = FT(0.55)
-        ε = ClimaAtmos.ϵ_variance_statistics(FT)
-        Tv, qv, ρc, δq, δT = ClimaAtmos.sgs_quadrature_moments_at_point(
-            ClimaAtmos.GaussianSGS(),
-            ρp,
-            ε,
-            FT(100),
-            FT(0),
-            FT(0),
-            FT(0),
-            FT(0),
-            FT(0.25),
-            FT(1e-7),
-        )
-        @test Tv == FT(0.25)
-        @test qv == FT(1e-7)
-        @test ρc == ρp
-        @test iszero(δq) && iszero(δT)
     end
 
     @testset "Gauss-Hermite Quadrature" begin
@@ -374,6 +466,89 @@ end
                     ClimaAtmos.integrate_over_sgs(f_nt, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
                 @test haskey(result_nt, :val1)
                 @test haskey(result_nt, :val2)
+            end
+        end
+    end
+
+    @testset "Vertical-profile SGS: integrate_over_sgs + saturation (all YAML keys)" begin
+        import Thermodynamics as TD
+        import ClimaParams as CP
+        # Every `sgs_distribution` string mapped to `AbstractGridscaleCorrectedSGS` in
+        # `get_sgs_distribution` (see `get_sgs_distribution linear-profile keys` below).
+        profile_keys = String[
+            "gaussian_vertical_profile_inner_chebyshev",
+            "gaussian_vertical_profile",
+            "gaussian_vertical_profile_full_cubature",
+            "gaussian_vertical_profile_inner_bracketed",
+            "gaussian_vertical_profile_inner_halley",
+            "lognormal_vertical_profile",
+            "lognormal_vertical_profile_full_cubature",
+            "lognormal_vertical_profile_inner_bracketed",
+            "lognormal_vertical_profile_inner_halley",
+            "lognormal_vertical_profile_inner_chebyshev",
+            "gaussian_vertical_profile_lhs_z",
+            "gaussian_vertical_profile_principal_axis",
+            "gaussian_vertical_profile_voronoi",
+            "gaussian_vertical_profile_barycentric",
+            "lognormal_vertical_profile_lhs_z",
+            "lognormal_vertical_profile_principal_axis",
+            "lognormal_vertical_profile_voronoi",
+            "lognormal_vertical_profile_barycentric",
+        ]
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                toml_dict = CP.create_toml_dict(FT)
+                thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+                f_const(T, q) = one(FT)
+                f_T(T, q) = T
+                μ_q, μ_T = FT(0.01), FT(300.0)
+                T′T′, q′q′ = FT(1.0), FT(1e-6)
+                corr_Tq = FT(0.5)
+                zδ = zero(FT)
+                ρ = FT(1.0)
+                T_mean = FT(280.0)
+                q_mean = FT(0.01)
+                for key in profile_keys
+                    dist = ClimaAtmos.get_sgs_distribution(Dict{String, Any}("sgs_distribution" => key))
+                    @test dist isa ClimaAtmos.AbstractGridscaleCorrectedSGS
+                    quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3, distribution = dist)
+                    r1 = ClimaAtmos.integrate_over_sgs(
+                        f_const,
+                        quad,
+                        μ_q,
+                        μ_T,
+                        q′q′,
+                        T′T′,
+                        corr_Tq,
+                    )
+                    @test isfinite(r1)
+                    @test r1 ≈ one(FT) atol = FT(0.08)
+                    rT = ClimaAtmos.integrate_over_sgs(
+                        f_T,
+                        quad,
+                        μ_q,
+                        μ_T,
+                        q′q′,
+                        T′T′,
+                        corr_Tq,
+                    )
+                    @test isfinite(rT)
+                    @test rT ≈ μ_T rtol = FT(0.08)
+                    adj = ClimaAtmos.compute_sgs_saturation_adjustment(
+                        thp,
+                        quad,
+                        ρ,
+                        T_mean,
+                        q_mean,
+                        T′T′,
+                        q′q′,
+                        corr_Tq,
+                        zδ,
+                        zδ,
+                    )
+                    @test isfinite(adj.T) && isfinite(adj.q_liq) && isfinite(adj.q_ice)
+                    @test adj.q_liq >= zero(FT) && adj.q_ice >= zero(FT)
+                end
             end
         end
     end
@@ -1037,7 +1212,60 @@ end
         end
     end
 
-    @testset "linear layer-mean profile quadrature (column-tensor vs profile–Rosenblatt Brent)" begin
+    @testset "1M SGS wrapper integration: profile Rosenblatt finite tendencies" begin
+        # Integration-level regression for the exact smoke-family failures:
+        # `microphysics_tendencies_1m` with profile Rosenblatt distributions must
+        # return finite NamedTuple tendencies (no `NamedTuple * Float` errors).
+        import Thermodynamics as TD
+        import ClimaParams as CP
+        import CloudMicrophysics.Parameters as CMP
+        import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
+        FT = Float32
+        toml_dict = CP.create_toml_dict(FT)
+        thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+        mp_1m = CMP.Microphysics1MParams(toml_dict)
+        ρ = FT(1.0)
+        T = FT(280.0)
+        q_tot = FT(0.015)
+        q_lcl = FT(0.001)
+        q_icl = FT(0.0005)
+        q_rai = FT(0.0001)
+        q_sno = FT(0.00005)
+        T′T′ = FT(1.0)
+        q′q′ = FT(1e-6)
+        corr_Tq = FT(0.6)
+        tst = nothing
+        dt = FT(1.0)
+        dists = (
+            ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+            }(),
+            ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+            }(),
+            ClimaAtmos.GaussianGridscaleCorrectedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+            }(),
+            ClimaAtmos.GaussianGridscaleCorrectedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+            }(),
+        )
+        for d in dists
+            quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3, distribution = d)
+            out = ClimaAtmos.microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T,
+                q_tot, q_lcl, q_icl, q_rai, q_sno,
+                T′T′, q′q′, corr_Tq, tst, dt,
+            )
+            @test out isa NamedTuple
+            @test isfinite(out.dq_lcl_dt)
+            @test isfinite(out.dq_icl_dt)
+            @test isfinite(out.dq_rai_dt)
+            @test isfinite(out.dq_sno_dt)
+        end
+    end
+
+    @testset "linear layer-mean profile quadrature (column-tensor vs layer-mean CDF / Brent)" begin
         using ClimaCore.Geometry
         FT = Float64
         lg = _fd_column_center_local_geometry(FT; ilevel = 4)
@@ -1049,8 +1277,14 @@ end
         ρc = FT(0.55)
         H = FT(400)
         ∂T∂θ = FT(0.45)
-        gq = Covariant123Vector(FT(0), FT(0), FT(2e-6))
-        gθ = Covariant123Vector(FT(0), FT(0), FT(0.008))
+        # Symmetric half-slopes (s_dn = s_up) reproduce a classical single-slope
+        # test while exercising the new two-slope signature.
+        gq_dn = Covariant123Vector(FT(0), FT(0), FT(2e-6))
+        gq_up = Covariant123Vector(FT(0), FT(0), FT(2e-6))
+        gθ_dn = Covariant123Vector(FT(0), FT(0), FT(0.008))
+        gθ_up = Covariant123Vector(FT(0), FT(0), FT(0.008))
+        # Zero variance half-slopes (F2 correction off): Σ_turb independent of z along each half.
+        gzero = Covariant123Vector(FT(0), FT(0), FT(0))
         quad_ct = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
@@ -1065,15 +1299,19 @@ end
         )
         @test quad_ct.z_t !== nothing
         ict = ClimaAtmos.integrate_over_sgs_linear_profile(
-            f, quad_ct, μ_q, μ_T, qv, Tv, ρc, H, lg, gq, gθ, ∂T∂θ,
+            f, quad_ct, μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
         )
         ipr = ClimaAtmos.integrate_over_sgs_linear_profile(
-            f, quad_pr, μ_q, μ_T, qv, Tv, ρc, H, lg, gq, gθ, ∂T∂θ,
+            f, quad_pr, μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
         )
         @test ict ≈ ipr rtol = FT(0.05) atol = FT(1e-4)
     end
 
-    @testset "linear layer-mean profile quadrature (lognormal: column-tensor vs profile–Rosenblatt Brent)" begin
+    @testset "linear layer-mean profile quadrature (lognormal: column-tensor vs layer-mean CDF / Brent)" begin
         using ClimaCore.Geometry
         FT = Float64
         lg = _fd_column_center_local_geometry(FT; ilevel = 4)
@@ -1085,8 +1323,11 @@ end
         ρc = FT(0.55)
         H = FT(400)
         ∂T∂θ = FT(0.45)
-        gq = Covariant123Vector(FT(0), FT(0), FT(2e-6))
-        gθ = Covariant123Vector(FT(0), FT(0), FT(0.008))
+        gq_dn = Covariant123Vector(FT(0), FT(0), FT(2e-6))
+        gq_up = Covariant123Vector(FT(0), FT(0), FT(2e-6))
+        gθ_dn = Covariant123Vector(FT(0), FT(0), FT(0.008))
+        gθ_up = Covariant123Vector(FT(0), FT(0), FT(0.008))
+        gzero = Covariant123Vector(FT(0), FT(0), FT(0))
         quad_ct = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
@@ -1101,15 +1342,19 @@ end
         )
         @test quad_ct.z_t !== nothing
         ict = ClimaAtmos.integrate_over_sgs_linear_profile(
-            f, quad_ct, μ_q, μ_T, qv, Tv, ρc, H, lg, gq, gθ, ∂T∂θ,
+            f, quad_ct, μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
         )
         ipr = ClimaAtmos.integrate_over_sgs_linear_profile(
-            f, quad_pr, μ_q, μ_T, qv, Tv, ρc, H, lg, gq, gθ, ∂T∂θ,
+            f, quad_pr, μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
         )
         @test ict ≈ ipr rtol = FT(0.05) atol = FT(1e-4)
     end
 
-    @testset "profile–Rosenblatt degenerate ‖d‖ → center-only" begin
+    @testset "layer-mean CDF degenerate ‖d‖ → center-only" begin
         using ClimaCore.Geometry
         FT = Float64
         lg = _fd_column_center_local_geometry(FT; ilevel = 4)
@@ -1123,8 +1368,7 @@ end
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
             }(),
         )
-        gzero_q = Covariant123Vector(FT(0), FT(0), FT(0))
-        gzero_θ = Covariant123Vector(FT(0), FT(0), FT(0))
+        gzero = Covariant123Vector(FT(0), FT(0), FT(0))
         ipr = ClimaAtmos.integrate_over_sgs_linear_profile(
             f,
             quad_pr,
@@ -1135,107 +1379,683 @@ end
             FT(0),
             FT(200),
             lg,
-            gzero_q,
-            gzero_θ,
-            FT(0.5),
+            gzero, gzero, gzero, gzero, FT(0.5),
+            gzero, gzero, gzero, gzero,
         )
         @test ipr ≈ f(μ_T, μ_q)
     end
 
-    @testset "ConvolutionQuantilesChebyshevLogEta (pure surrogate vs Brent reference)" begin
+    @testset "two-slope asymmetry: layer-mean CDF ≠ symmetric limit" begin
+        # With a genuinely asymmetric reconstruction (s_dn ≠ s_up), the two-slope
+        # layer-mean CDF integral must differ from the single-slope
+        # (centered-gradient only) limit. Otherwise the asymmetry channel is dead.
+        using ClimaCore.Geometry
         FT = Float64
-        br = ClimaAtmos.ConvolutionQuantilesBracketed()
-        ch = ClimaAtmos.ConvolutionQuantilesChebyshevLogEta()
-        ℓ0, ℓ1 = ClimaAtmos.CHEB_CONV_ETA_LOG10_RANGE
-        Fcdf = ClimaAtmos.uniform_gaussian_convolution_cdf
-        # RootSolvers/Brent reference `ub` can leave |F(ub)-p| ~1e-5 on awkward brackets; this test compares Chebyshev to `ub`.
-        tol_F_brent = FT(5e-5)
-        # Degree-12 Chebyshev: typical O(1e-3) |u| slack vs Brent on random (L, η); allow slack vs tiny ub.
-        max_abs_u_err = zero(FT)
-        for N in 1:5
-            p_nodes, _ = ClimaAtmos.gauss_legendre_01(FT, N)
-            for i in 1:N
-                p = FT(p_nodes[i])
-                for _ in 1:25
-                    L = FT(0.25) + FT(0.75) * rand(FT)
-                    logη = ℓ0 + (ℓ1 - ℓ0) * rand(FT)
-                    s = (10^logη) * L
-                    ub = ClimaAtmos._quantile_u(br, p, L, s, N, i)
-                    uc = ClimaAtmos._quantile_u(ch, p, L, s, N, i)
-                    @test abs(Fcdf(ub, L, s) - p) < tol_F_brent
-                    max_abs_u_err = max(max_abs_u_err, abs(uc - ub))
-                    @test abs(uc - ub) <
-                          max(FT(8e-3), FT(0.04) * max(FT(1e-8), abs(ub)))
-                end
-            end
-        end
-        @test max_abs_u_err < FT(0.05)  # sanity: global max in this random sample stays O(1e-2)
-        c31 = ClimaAtmos.chebyshev_convolution_coeffs(FT, 3, 1)
-        @test length(c31) == ClimaAtmos.NCOEFF_CONV_CHEB
-        @test eltype(c31) == FT
-        @test_throws ErrorException ClimaAtmos.chebyshev_convolution_coeffs(FT, 99, 1)
-        @test_throws ErrorException ClimaAtmos.chebyshev_convolution_coeffs(FT, 3, 10)
-        @test_throws ErrorException ClimaAtmos._quantile_u(
-            ch,
-            FT(0.5),
-            FT(1),
-            FT(0),
-            3,
-            1,
-        )  # η = 0: Chebyshev path must error, not fall back to Brent
+        lg = _fd_column_center_local_geometry(FT; ilevel = 4)
+        f(T, q) = T + FT(5) * q
+        μ_q = FT(0.012)
+        μ_T = FT(285)
+        qv = FT(1e-7)
+        Tv = FT(0.4)
+        ρc = FT(0.55)
+        H = FT(400)
+        ∂T∂θ = FT(0.45)
+        # Centered slope identical to the symmetric test; asymmetry injected via
+        # larger up-slope and smaller dn-slope (same mean d, nonzero D = s_up - s_dn).
+        d_q, D_q = FT(2e-6), FT(6e-6)     # s_dn = -1e-6, s_up = 5e-6
+        d_θ, D_θ = FT(0.008), FT(0.012)   # s_dn = 0.002, s_up = 0.014
+        gq_dn = Covariant123Vector(FT(0), FT(0), d_q - D_q / 2)
+        gq_up = Covariant123Vector(FT(0), FT(0), d_q + D_q / 2)
+        gθ_dn = Covariant123Vector(FT(0), FT(0), d_θ - D_θ / 2)
+        gθ_up = Covariant123Vector(FT(0), FT(0), d_θ + D_θ / 2)
+        gsym_q = Covariant123Vector(FT(0), FT(0), d_q)
+        gsym_θ = Covariant123Vector(FT(0), FT(0), d_θ)
+        gzero = Covariant123Vector(FT(0), FT(0), FT(0))
+        quad_pr = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 3,
+            distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+            }(),
+        )
+        i_asym = ClimaAtmos.integrate_over_sgs_linear_profile(
+            f, quad_pr, μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
+        )
+        i_sym = ClimaAtmos.integrate_over_sgs_linear_profile(
+            f, quad_pr, μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gsym_q, gsym_q, gsym_θ, gsym_θ, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
+        )
+        @test isfinite(i_asym)
+        @test isfinite(i_sym)
+        # Asymmetry must perturb the integral away from the symmetric baseline.
+        @test abs(i_asym - i_sym) > FT(1e-6)
     end
 
-    @testset "ConvolutionQuantilesHalley (one Halley step vs Brent)" begin
+    @testset "layer-mean CDF: Halley ≈ Brent at the integral level" begin
+        # Swapping the quantile method (Halley vs Brent) should only change the
+        # integral by a small residual (set by Halley's per-quantile slack).
+        using ClimaCore.Geometry
         FT = Float64
-        br = ClimaAtmos.ConvolutionQuantilesBracketed()
-        ha = ClimaAtmos.ConvolutionQuantilesHalley()
-        Fcdf = ClimaAtmos.uniform_gaussian_convolution_cdf
-        tol_F_brent = FT(3e-6)  # RootSolvers residual; slightly looser than 1e-6 for rare draws
-        for N in 1:5
+        lg = _fd_column_center_local_geometry(FT; ilevel = 4)
+        f(T, q) = T + FT(5) * q
+        μ_q = FT(0.012)
+        μ_T = FT(285)
+        qv = FT(1e-7)
+        Tv = FT(0.4)
+        ρc = FT(0.55)
+        H = FT(400)
+        ∂T∂θ = FT(0.45)
+        gq_dn = Covariant123Vector(FT(0), FT(0), FT(1e-6))
+        gq_up = Covariant123Vector(FT(0), FT(0), FT(3e-6))
+        gθ_dn = Covariant123Vector(FT(0), FT(0), FT(0.004))
+        gθ_up = Covariant123Vector(FT(0), FT(0), FT(0.012))
+        gzero = Covariant123Vector(FT(0), FT(0), FT(0))
+        mk(method) = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 3,
+            distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{method},
+            }(),
+        )
+        i_brent = ClimaAtmos.integrate_over_sgs_linear_profile(
+            f, mk(ClimaAtmos.ConvolutionQuantilesBracketed), μ_q, μ_T,
+            qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
+        )
+        i_halley = ClimaAtmos.integrate_over_sgs_linear_profile(
+            f, mk(ClimaAtmos.ConvolutionQuantilesHalley), μ_q, μ_T,
+            qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
+        )
+        @test i_halley ≈ i_brent rtol = FT(1e-3) atol = FT(1e-4)
+    end
+
+    @testset "two-slope profile Rosenblatt matches independent half-wise truth" begin
+        # Operational regression guard: validate the full two-half profile path
+        # (mean-path + half-combination) against an independent high-order
+        # reference that directly integrates each half with frozen covariance.
+        using ClimaCore.Geometry
+        FT = Float64
+        lg = _fd_column_center_local_geometry(FT; ilevel = 4)
+        f(T, q) = max(T - FT(273.15), zero(FT))^2 * (q + FT(1e-6))
+        μ_q = FT(0.011)
+        μ_T = FT(286.0)
+        qv = FT(3e-7)
+        Tv = FT(0.55)
+        ρc = FT(0.42)
+        H = FT(360)
+        ∂T∂θ = FT(0.5)
+        # Asymmetric two-slope means; frozen covariance (variance slopes = 0).
+        gq_dn = Covariant123Vector(FT(0), FT(0), FT(-8e-7))
+        gq_up = Covariant123Vector(FT(0), FT(0), FT(3e-6))
+        gθ_dn = Covariant123Vector(FT(0), FT(0), FT(0.002))
+        gθ_up = Covariant123Vector(FT(0), FT(0), FT(0.011))
+        gzero = Covariant123Vector(FT(0), FT(0), FT(0))
+
+        q_br = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 5,
+            distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+            }(),
+        )
+        i_prof = ClimaAtmos.integrate_over_sgs_linear_profile(
+            f, q_br, μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
+        )
+
+        # Independent truth: average of two one-sided half-cell integrals.
+        function half_truth(dT_dz::FT, dq_dz::FT)
+            Nz_ref = 201
+            Nh_ref = 5
+            χ, wgh = ClimaAtmos.gauss_hermite(FT, Nh_ref)
+            inv_sqrt_pi = one(FT) / sqrt(FT(π))
+            σ_q, σ_T, ρ = ClimaAtmos.sgs_stddevs_and_correlation(qv, Tv, ρc)
+            D = ClimaAtmos.GaussianSGS()
+            acc = zero(FT)
+            @inbounds for kz in 1:Nz_ref
+                ξ = (kz - FT(0.5)) / Nz_ref
+                z = ξ * (H / FT(2))
+                μ_Tz = μ_T + z * dT_dz
+                μ_qz = μ_q + z * dq_dz
+                wz = one(FT) / Nz_ref
+                @inbounds for i in eachindex(χ), j in eachindex(χ)
+                    wi = wgh[i] * inv_sqrt_pi
+                    wj = wgh[j] * inv_sqrt_pi
+                    T_hat, q_hat = ClimaAtmos.get_physical_point(
+                        D, χ[i], χ[j], μ_qz, μ_Tz,
+                        σ_q, σ_T, ρ, q_br.T_min, q_br.q_max,
+                    )
+                    acc += wz * wi * wj * f(T_hat, q_hat)
+                end
+            end
+            return acc
+        end
+
+        dT_dn = ∂T∂θ * WVector(gθ_dn, lg)[1]
+        dT_up = ∂T∂θ * WVector(gθ_up, lg)[1]
+        dq_dn = WVector(gq_dn, lg)[1]
+        dq_up = WVector(gq_up, lg)[1]
+        i_ref = FT(0.5) * (half_truth(dT_dn, dq_dn) + half_truth(dT_up, dq_up))
+
+        @test isfinite(i_prof)
+        @test isfinite(i_ref)
+        @test abs(i_ref) > FT(1e-8)
+        @test abs(i_prof - i_ref) / abs(i_ref) < FT(0.03)
+    end
+
+    @testset "single-convolution quantiles: Brent/Chebyshev vs brute-force truth" begin
+        # Notebook-style truth construction: brute-force the target distribution
+        # directly (PDF integration + inverse CDF), then compare fast quantile
+        # methods against that independent reference.
+        FT = Float64
+        L = FT(1.0)
+        η_grid = exp10.(range(-2, 1; length = 20))
+        max_err_br = zero(FT)
+        max_err_ch = zero(FT)
+        rel_err_br = FT[]
+        rel_err_ch = FT[]
+        function brute_quantile(p::FT, L::FT, s::FT)
+            lo = -L / FT(2) - FT(8) * s
+            hi = L / FT(2) + FT(8) * s
+            ngrid = 50_001
+            xs = range(lo, hi; length = ngrid)
+            dx = step(xs)
+            pdfvals = similar(collect(xs))
+            @inbounds for k in eachindex(xs)
+                pdfvals[k] = ClimaAtmos.uniform_gaussian_convolution_pdf(xs[k], L, s)
+            end
+            cdfvals = similar(pdfvals)
+            cdfvals[1] = zero(FT)
+            @inbounds for k in 2:ngrid
+                # trapezoidal cumulative integral
+                cdfvals[k] = cdfvals[k - 1] + (pdfvals[k - 1] + pdfvals[k]) * dx / FT(2)
+            end
+            z = cdfvals[end]
+            z <= FT(0) && return zero(FT)
+            @inbounds for k in eachindex(cdfvals)
+                cdfvals[k] /= z
+            end
+            idx = searchsortedfirst(cdfvals, p)
+            if idx <= 1
+                return xs[1]
+            elseif idx > ngrid
+                return xs[end]
+            else
+                x0, x1 = xs[idx - 1], xs[idx]
+                c0, c1 = cdfvals[idx - 1], cdfvals[idx]
+                t = (p - c0) / max(c1 - c0, eps(FT))
+                return x0 + t * (x1 - x0)
+            end
+        end
+        for N in (3, 5)
             p_nodes, _ = ClimaAtmos.gauss_legendre_01(FT, N)
-            for i in 1:N
-                p = FT(p_nodes[i])
-                for _ in 1:15
-                    L = FT(0.25) + FT(0.75) * rand(FT)
-                    s = FT(1e-4) + FT(1.0) * rand(FT)
-                    ub = ClimaAtmos._quantile_u(br, p, L, s, N, i)
-                    uh = ClimaAtmos._quantile_u(ha, p, L, s, N, i)
-                    @test abs(Fcdf(ub, L, s) - p) < tol_F_brent
-                    @test abs(uh - ub) <
-                          max(FT(0.08), FT(0.2) * max(FT(1e-8), abs(ub)))
+            for η in η_grid
+                s = η * L
+                for i in 1:N
+                    ut = brute_quantile(p_nodes[i], L, s)
+                    ub = ClimaAtmos.centered_uniform_gaussian_convolution_quantile_brent(
+                        p_nodes[i], L, s,
+                    )
+                    uc = ClimaAtmos.centered_uniform_gaussian_convolution_quantile_chebyshev(
+                        L, s, N, i,
+                    )
+                    eb = abs(ub - ut)
+                    ec = abs(uc - ut)
+                    scale = max(abs(ut), FT(1e-6))
+                    push!(rel_err_br, eb / scale)
+                    push!(rel_err_ch, ec / scale)
+                    max_err_br = max(max_err_br, eb)
+                    max_err_ch = max(max_err_ch, ec)
                 end
             end
         end
+        @test max_err_br < FT(2e-3)
+        @test max_err_ch < FT(2e-2)
+        @test Statistics.median(rel_err_br) < FT(1e-3)
+        @test Statistics.median(rel_err_ch) < FT(1e-2)
+    end
+
+    @testset "profile Rosenblatt supports NamedTuple-valued integrands" begin
+        # Regression for smoke runs: profile branches average DN/UP halves and must
+        # use `⊠`/`⊞` so NamedTuple tendencies scale/sum correctly.
+        using ClimaCore.Geometry
+        FT = Float32
+        lg = _fd_column_center_local_geometry(FT; ilevel = 4)
+        f(T, q) = (; dq_lcl_dt = T * q, dq_icl_dt = T + q, dq_rai_dt = q, dq_sno_dt = T)
+        μ_q = FT(0.012)
+        μ_T = FT(285)
+        qv = FT(1e-7)
+        Tv = FT(0.4)
+        ρc = FT(0.55)
+        H = FT(400)
+        ∂T∂θ = FT(0.45)
+        gq_dn = Covariant123Vector(FT(0), FT(0), FT(1e-6))
+        gq_up = Covariant123Vector(FT(0), FT(0), FT(3e-6))
+        gθ_dn = Covariant123Vector(FT(0), FT(0), FT(0.004))
+        gθ_up = Covariant123Vector(FT(0), FT(0), FT(0.012))
+        gzero = Covariant123Vector(FT(0), FT(0), FT(0))
+        mk(method) = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 3,
+            distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{method},
+            }(),
+        )
+        out_b = ClimaAtmos.integrate_over_sgs_linear_profile(
+            f, mk(ClimaAtmos.ConvolutionQuantilesBracketed), μ_q, μ_T,
+            qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
+        )
+        out_h = ClimaAtmos.integrate_over_sgs_linear_profile(
+            f, mk(ClimaAtmos.ConvolutionQuantilesHalley), μ_q, μ_T,
+            qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
+        )
+        @test out_b isa NamedTuple
+        @test out_h isa NamedTuple
+        @test all(isfinite, Tuple(values(out_b)))
+        @test all(isfinite, Tuple(values(out_h)))
+    end
+
+    @testset "alternate layer discretizations: linear_profile runs and is not silently identical" begin
+        # Regression guard: `SubgridLatinHypercubeZ` et al. must hit real branches in
+        # `integrate_over_sgs_linear_profile` (not only `sgs_1m_uses_sgs_linear_profile` /
+        # `throw_if` plumbing). With vertical structure in means and subcell variance
+        # slopes, reduced rules (LHS, principal axis, …) must differ from full
+        # column-tensor cubature and from each other.
+        using ClimaCore.Geometry
+        FT = Float64
+        lg = _fd_column_center_local_geometry(FT; ilevel = 4)
+        f(T, q) = T^2 * q + FT(0.5) * q^2
+        μ_q = FT(0.012)
+        μ_T = FT(285)
+        qv = FT(1e-7)
+        Tv = FT(0.4)
+        ρc = FT(0.55)
+        H = FT(400)
+        ∂T∂θ = FT(0.45)
+        d_q, D_q = FT(2e-6), FT(6e-6)
+        d_θ, D_θ = FT(0.008), FT(0.012)
+        gq_dn = Covariant123Vector(FT(0), FT(0), d_q - D_q / 2)
+        gq_up = Covariant123Vector(FT(0), FT(0), d_q + D_q / 2)
+        gθ_dn = Covariant123Vector(FT(0), FT(0), d_θ - D_θ / 2)
+        gθ_up = Covariant123Vector(FT(0), FT(0), d_θ + D_θ / 2)
+        gzero = Covariant123Vector(FT(0), FT(0), FT(0))
+        gqq_dn = Covariant123Vector(FT(0), FT(0), FT(5e-9))
+        gqq_up = Covariant123Vector(FT(0), FT(0), FT(1.5e-8))
+        gTT_dn = Covariant123Vector(FT(0), FT(0), FT(2e-4))
+        gTT_up = Covariant123Vector(FT(0), FT(0), FT(6e-4))
+        function mk_quad(::Type{S}) where {S}
+            ClimaAtmos.SGSQuadrature(
+                FT;
+                quadrature_order = 3,
+                distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{S}(),
+            )
+        end
+        args = (
+            μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gqq_dn, gqq_up, gTT_dn, gTT_up,
+        )
+        ict = ClimaAtmos.integrate_over_sgs_linear_profile(f, mk_quad(ClimaAtmos.SubgridColumnTensor), args...)
+        ilhs = ClimaAtmos.integrate_over_sgs_linear_profile(f, mk_quad(ClimaAtmos.SubgridLatinHypercubeZ), args...)
+        ipa = ClimaAtmos.integrate_over_sgs_linear_profile(f, mk_quad(ClimaAtmos.SubgridPrincipalAxisLayer), args...)
+        ivor = ClimaAtmos.integrate_over_sgs_linear_profile(f, mk_quad(ClimaAtmos.SubgridVoronoiRepresentatives), args...)
+        ibar = ClimaAtmos.integrate_over_sgs_linear_profile(f, mk_quad(ClimaAtmos.SubgridBarycentricSeeds), args...)
+        @test ict isa FT && ilhs isa FT && ipa isa FT && ivor isa FT && ibar isa FT
+        @test all(isfinite, (ict, ilhs, ipa, ivor, ibar))
+        mn, mx = extrema((ict, ilhs, ipa, ivor, ibar))
+        @test mx - mn > FT(1e-6)
+        @test abs(ict - ilhs) > FT(1e-8)
+    end
+
+    @testset "layer schemes conserve quadrature mass (f=1)" begin
+        using ClimaCore.Geometry
+        FT = Float64
+        lg = _fd_column_center_local_geometry(FT; ilevel = 4)
+        μ_q = FT(0.012)
+        μ_T = FT(285)
+        qv = FT(1e-7)
+        Tv = FT(0.4)
+        ρc = FT(0.55)
+        H = FT(400)
+        ∂T∂θ = FT(0.45)
+        gq_dn = Covariant123Vector(FT(0), FT(0), FT(1e-6))
+        gq_up = Covariant123Vector(FT(0), FT(0), FT(3e-6))
+        gθ_dn = Covariant123Vector(FT(0), FT(0), FT(0.004))
+        gθ_up = Covariant123Vector(FT(0), FT(0), FT(0.012))
+        gqq_dn = Covariant123Vector(FT(0), FT(0), FT(5e-9))
+        gqq_up = Covariant123Vector(FT(0), FT(0), FT(1.5e-8))
+        gTT_dn = Covariant123Vector(FT(0), FT(0), FT(2e-4))
+        gTT_up = Covariant123Vector(FT(0), FT(0), FT(6e-4))
+        args = (
+            μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gqq_dn, gqq_up, gTT_dn, gTT_up,
+        )
+        schemes = (
+            ClimaAtmos.SubgridColumnTensor,
+            ClimaAtmos.SubgridLatinHypercubeZ,
+            ClimaAtmos.SubgridPrincipalAxisLayer,
+            ClimaAtmos.SubgridVoronoiRepresentatives,
+            ClimaAtmos.SubgridBarycentricSeeds,
+            ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+        )
+        for S in schemes
+            quad = ClimaAtmos.SGSQuadrature(
+                FT; quadrature_order = 3,
+                distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{S}(),
+            )
+            m = ClimaAtmos.integrate_over_sgs_linear_profile((T, q) -> FT(1), quad, args...)
+            @test m ≈ FT(1) atol = FT(1e-8)
+        end
+    end
+
+    @testset "coverage matrix: all 1M-supported gridscale SGS return finite tendencies" begin
+        # Broad integration coverage for 1M+SGS dispatch:
+        # every gridscale-corrected family/type listed in `sgs_1m_uses_sgs_linear_profile`
+        # should run through `microphysics_tendencies_1m` and return finite outputs.
+        import Thermodynamics as TD
+        import ClimaParams as CP
+        import CloudMicrophysics.Parameters as CMP
+        import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
+        FT = Float32
+        toml_dict = CP.create_toml_dict(FT)
+        thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+        mp_1m = CMP.Microphysics1MParams(toml_dict)
+        ρ = FT(1.0)
+        T = FT(280.0)
+        q_tot = FT(0.015)
+        q_lcl = FT(0.001)
+        q_icl = FT(0.0005)
+        q_rai = FT(0.0001)
+        q_sno = FT(0.00005)
+        T′T′ = FT(1.0)
+        q′q′ = FT(1e-6)
+        corr_Tq = FT(0.6)
+        tst = nothing
+        dt = FT(1.0)
+        # Include all currently supported gridscale S families across Gaussian/LogNormal.
+        dists = (
+            ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}(),
+            ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}(),
+            ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridLatinHypercubeZ}(),
+            ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridLatinHypercubeZ}(),
+            ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridPrincipalAxisLayer}(),
+            ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridPrincipalAxisLayer}(),
+            ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridVoronoiRepresentatives}(),
+            ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridVoronoiRepresentatives}(),
+            ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridBarycentricSeeds}(),
+            ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridBarycentricSeeds}(),
+            ClimaAtmos.GaussianGridscaleCorrectedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+            }(),
+            ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+            }(),
+            ClimaAtmos.GaussianGridscaleCorrectedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+            }(),
+            ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+            }(),
+        )
+        for d in dists
+            quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3, distribution = d)
+            @test ClimaAtmos.sgs_1m_uses_sgs_linear_profile(quad)
+            @test ClimaAtmos.throw_if_unsupported_1m_sgs_gridscale_distribution(quad) === nothing
+            out = ClimaAtmos.microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T,
+                q_tot, q_lcl, q_icl, q_rai, q_sno,
+                T′T′, q′q′, corr_Tq, tst, dt,
+            )
+            @test out isa NamedTuple
+            @test isfinite(out.dq_lcl_dt)
+            @test isfinite(out.dq_icl_dt)
+            @test isfinite(out.dq_rai_dt)
+            @test isfinite(out.dq_sno_dt)
+        end
+    end
+
+    @testset "two-component uniform–Gaussian mixture: CDF, PDF, PDF′ primitives" begin
+        # Sanity: F is monotone in u, f is its derivative, ∫ f = 1.
+        FT = Float64
+        L_dn, s_dn, L_up, s_up = FT(1.2), FT(0.3), FT(0.8), FT(0.2)
+        us = range(FT(-L_dn - 6 * s_dn), FT(L_up + 6 * s_up); length = 4000)
+        Fs = [
+            ClimaAtmos.mixture_uniform_gaussian_convolution_cdf(
+                u, L_dn, s_dn, L_up, s_up,
+            ) for u in us
+        ]
+        @test all(diff(Fs) .>= -1e-12)                # monotone (non-decreasing)
+        @test Fs[1] < FT(1e-3) && Fs[end] > FT(1 - 1e-3)  # approaches 0 / 1 at tails
+        fs = [
+            ClimaAtmos.mixture_uniform_gaussian_convolution_pdf(
+                u, L_dn, s_dn, L_up, s_up,
+            ) for u in us
+        ]
+        @test sum(fs) * step(us) ≈ FT(1) rtol = FT(0.01)
+        # Numerical derivative of F matches analytic PDF (central difference).
+        dF = diff(Fs) ./ step(us)
+        f_mid = (fs[1:end-1] .+ fs[2:end]) ./ 2
+        @test maximum(abs, dF .- f_mid) < FT(5e-3)
+        # Analytic mean and variance from closed form.
+        μ_exp, var_exp = ClimaAtmos.mixture_uniform_gaussian_convolution_mean_var(
+            L_dn, s_dn, L_up, s_up,
+        )
+        μ_num = sum(fs .* us) * step(us)
+        var_num = sum(fs .* (us .- μ_num) .^ 2) * step(us)
+        @test μ_num ≈ μ_exp rtol = FT(0.02) atol = FT(1e-3)
+        @test var_num ≈ var_exp rtol = FT(0.05)
+    end
+
+    @testset "mixture Brent quantile matches brute-force CDF inversion" begin
+        # Independent truth for the deployed bracketed path:
+        # build CDF by numerical integration of analytic mixture PDF, then invert.
+        FT = Float64
+        function brute_quantile_mix(
+            p::FT, L_dn::FT, s_dn::FT, L_up::FT, s_up::FT,
+        ) where {FT}
+            lo = -L_dn - FT(8) * max(s_dn, s_up)
+            hi = L_up + FT(8) * max(s_dn, s_up)
+            ngrid = 60_001
+            xs = range(lo, hi; length = ngrid)
+            dx = step(xs)
+            pdfvals = similar(collect(xs))
+            @inbounds for k in eachindex(xs)
+                pdfvals[k] = ClimaAtmos.mixture_uniform_gaussian_convolution_pdf(
+                    xs[k], L_dn, s_dn, L_up, s_up,
+                )
+            end
+            cdfvals = similar(pdfvals)
+            cdfvals[1] = zero(FT)
+            @inbounds for k in 2:ngrid
+                cdfvals[k] = cdfvals[k - 1] + (pdfvals[k - 1] + pdfvals[k]) * dx / FT(2)
+            end
+            z = cdfvals[end]
+            z <= FT(0) && return zero(FT)
+            @inbounds for k in eachindex(cdfvals)
+                cdfvals[k] /= z
+            end
+            idx = searchsortedfirst(cdfvals, p)
+            if idx <= 1
+                return xs[1]
+            elseif idx > ngrid
+                return xs[end]
+            else
+                x0, x1 = xs[idx - 1], xs[idx]
+                c0, c1 = cdfvals[idx - 1], cdfvals[idx]
+                t = (p - c0) / max(c1 - c0, eps(FT))
+                return x0 + t * (x1 - x0)
+            end
+        end
+        max_abs = zero(FT)
+        med_rel = FT[]
+        for (L_dn, s_dn, L_up, s_up) in (
+            (FT(0.2), FT(0.05), FT(0.9), FT(0.2)),
+            (FT(0.8), FT(0.15), FT(0.3), FT(0.08)),
+            (FT(1.2), FT(0.35), FT(1.1), FT(0.32)),
+        )
+            for p in (FT(0.1), FT(0.25), FT(0.5), FT(0.75), FT(0.9))
+                ub = ClimaAtmos.mixture_convolution_quantile_brent(
+                    p, L_dn, s_dn, L_up, s_up,
+                )
+                ut = brute_quantile_mix(p, L_dn, s_dn, L_up, s_up)
+                e = abs(ub - ut)
+                max_abs = max(max_abs, e)
+                push!(med_rel, e / max(abs(ut), FT(1e-6)))
+            end
+        end
+        @test max_abs < FT(5e-3)
+        @test Statistics.median(med_rel) < FT(2e-3)
+    end
+
+    @testset "mixture quantile: Halley ≈ Brent on the CDF inverse" begin
+        # Brent is the tight reference (O(1e-6) residual); Halley is a one-step
+        # approximate quantile whose sole production invariant is that the
+        # *integral* it drives matches Brent's (covered by the "Halley ≈ Brent
+        # at the integral level" test). Here we only require:
+        # (a) Brent is a genuine root to tight tolerance, and
+        # (b) Halley lands in the same neighborhood as Brent in u.
+        # The second is measured vs the distribution's characteristic width,
+        # not per-p F-residual (which blows up in rare ill-conditioned draws).
+        FT = Float64
+        max_rel_u_err = zero(FT)
+        for _ in 1:80
+            L_dn = FT(0.1) + FT(1.5) * rand(FT)
+            L_up = FT(0.1) + FT(1.5) * rand(FT)
+            s_dn = FT(1e-2) + FT(0.5) * rand(FT)
+            s_up = FT(1e-2) + FT(0.5) * rand(FT)
+            span = L_dn + L_up + 6 * max(s_dn, s_up)
+            for p in (FT(0.1), FT(0.25), FT(0.5), FT(0.75), FT(0.9))
+                ub = ClimaAtmos.mixture_convolution_quantile_brent(
+                    p, L_dn, s_dn, L_up, s_up,
+                )
+                uh = ClimaAtmos.mixture_convolution_quantile_halley(
+                    p, L_dn, s_dn, L_up, s_up,
+                )
+                Fb = ClimaAtmos.mixture_uniform_gaussian_convolution_cdf(
+                    ub, L_dn, s_dn, L_up, s_up,
+                )
+                @test isfinite(uh)
+                @test abs(Fb - p) < FT(5e-6)
+                max_rel_u_err = max(max_rel_u_err, abs(uh - ub) / max(span, FT(1e-8)))
+                @test abs(uh - ub) < FT(0.35) * span
+            end
+        end
+        @test max_rel_u_err < FT(0.35)
+    end
+
+    @testset "Chebyshev vs Brent: single centered uniform⊛Gaussian only" begin
+        # Tables (`chebyshev_convolution_coeffs`) are fit for ONE law:
+        #   uniform[-L/2, L/2] ⊛ N(0, s²),  η = s/L,
+        # at each Gauss–Legendre node p on a fixed order N_gl (see gen script).
+        # They do **not** approximate the two-component **mixture** marginal.
+        FT = Float64
+        L = FT(1.2)
+        s = FT(0.15)
+        N = 3
+        p_nodes, _ = ClimaAtmos.gauss_legendre_01(FT, N)
+        for i in 1:N
+            p = p_nodes[i]
+            ub = ClimaAtmos.centered_uniform_gaussian_convolution_quantile_brent(
+                p, L, s,
+            )
+            uc = ClimaAtmos.centered_uniform_gaussian_convolution_quantile_chebyshev(
+                L, s, N, i,
+            )
+            @test abs(uc - ub) < FT(0.01) * max(L, s, FT(1e-6))
+        end
+    end
+
+    @testset "Chebyshev mixture dispatch still errors (no 4-parameter surrogate)" begin
+        FT = Float64
+        ch = ClimaAtmos.ConvolutionQuantilesChebyshevLogEta()
+        @test_throws ErrorException ClimaAtmos._mixture_quantile_u(
+            ch, FT(0.5), FT(0.3), FT(0.1), FT(0.9), FT(0.2),
+        )
     end
 
     @testset "get_sgs_distribution linear-profile keys" begin
-        pa = Dict{String, Any}("sgs_distribution" => "gaussian_gridscale_corrected")
+        # Default YAML `gaussian_vertical_profile` matches production default inner quantiles (Halley dispatch).
+        # Bracketed roots are explicit `_inner_bracketed` YAML.
+        pa = Dict{String, Any}("sgs_distribution" => "gaussian_vertical_profile_inner_chebyshev")
         @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.GaussianGridscaleCorrectedSGS{
-            ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+            ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesChebyshevLogEta},
         }
-        pa["sgs_distribution"] = "gaussian_gridscale_corrected_column_tensor"
+        pa = Dict{String, Any}("sgs_distribution" => "gaussian_vertical_profile")
+        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+        }
+        pa["sgs_distribution"] = "gaussian_vertical_profile_full_cubature"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
               ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}
-        pa["sgs_distribution"] = "gaussian_gridscale_corrected_profile_rosenblatt_brent"
+        pa["sgs_distribution"] = "gaussian_vertical_profile_inner_bracketed"
         @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.GaussianGridscaleCorrectedSGS{
             ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
         }
-        pa["sgs_distribution"] = "lognormal_gridscale_corrected"
-        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.LogNormalGridscaleCorrectedSGS{
-            ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+        pa["sgs_distribution"] = "gaussian_vertical_profile_inner_halley"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
         }
-        pa["sgs_distribution"] = "lognormal_gridscale_corrected_profile_rosenblatt_brent"
-        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.LogNormalGridscaleCorrectedSGS{
-            ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
-        }
-        pa["sgs_distribution"] = "lognormal_gridscale_corrected_profile_rosenblatt_halley"
+        pa["sgs_distribution"] = "lognormal_vertical_profile"
         @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.LogNormalGridscaleCorrectedSGS{
             ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
         }
-        pa["sgs_distribution"] = "lognormal_gridscale_corrected_profile_rosenblatt_chebyshev"
+        pa["sgs_distribution"] = "lognormal_vertical_profile_full_cubature"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa
+              ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}
+        pa["sgs_distribution"] = "lognormal_vertical_profile_inner_bracketed"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+            ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+        }
+        pa["sgs_distribution"] = "lognormal_vertical_profile_inner_halley"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+            ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+        }
+        pa["sgs_distribution"] = "lognormal_vertical_profile_inner_chebyshev"
         @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.LogNormalGridscaleCorrectedSGS{
             ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesChebyshevLogEta},
         }
+        pa["sgs_distribution"] = "gaussian_vertical_profile_full_cubature"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa
+              ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}
+        pa["sgs_distribution"] = "gaussian_vertical_profile_lhs_z"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa
+              ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridLatinHypercubeZ}
+        pa["sgs_distribution"] = "gaussian_vertical_profile_principal_axis"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa
+              ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridPrincipalAxisLayer}
+        pa["sgs_distribution"] = "gaussian_vertical_profile_voronoi"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa
+              ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridVoronoiRepresentatives}
+        pa["sgs_distribution"] = "gaussian_vertical_profile_barycentric"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa
+              ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridBarycentricSeeds}
+        pa["sgs_distribution"] = "lognormal_vertical_profile_full_cubature"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa
+              ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}
+        pa["sgs_distribution"] = "lognormal_vertical_profile_lhs_z"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa
+              ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridLatinHypercubeZ}
+        pa["sgs_distribution"] = "lognormal_vertical_profile_principal_axis"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa
+              ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridPrincipalAxisLayer}
+        pa["sgs_distribution"] = "lognormal_vertical_profile_voronoi"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa
+              ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridVoronoiRepresentatives}
+        pa["sgs_distribution"] = "lognormal_vertical_profile_barycentric"
+        @test ClimaAtmos.get_sgs_distribution(pa) isa
+              ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridBarycentricSeeds}
     end
 
     @testset "get_physical_point respects T_min (inner SGS layer)" begin

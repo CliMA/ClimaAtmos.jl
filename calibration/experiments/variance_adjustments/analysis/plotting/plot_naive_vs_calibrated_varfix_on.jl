@@ -23,7 +23,7 @@ end
 """
     va_plot_naive_vs_calibrated_varfix_on_profiles!(experiment_dir, varfix_off_yaml, varfix_on_yaml; eki_member) -> Vector{String}
 
-Overlay **reference** (varfix-off slice), **EKI member varfix off**, **naive varfix on** (same parameters as
+Overlay **reference** (varfix-off baseline), **EKI member varfix off**, **naive varfix on** (same parameters as
 varfix-off member), and **EKI member varfix on** (separate calibration). Writes under
 `analysis/figures/<CASE>_N<n>_naive_vs_calibrated_varfix_on/profiles/`.
 """
@@ -42,9 +42,9 @@ function va_plot_naive_vs_calibrated_varfix_on_profiles!(
     Int(off_ex["quadrature_order"]) == Int(on_ex["quadrature_order"]) ||
         error("naive vs calibrated pair: quadrature_order mismatch")
     va_varfix_tag(off_ex, off_case) == "varfix_on" &&
-        error("varfix_off_yaml must have varfix off (base sgs_distribution, not *_gridscale_corrected)")
+        error("varfix_off_yaml must have varfix off (base sgs_distribution, not a *_vertical_profile* name)")
     va_varfix_tag(on_ex, on_case) == "varfix_off" &&
-        error("varfix_on_yaml must have gridscale-corrected SGS / varfix on")
+        error("varfix_on_yaml must use a vertical-profile SGS name (`*_vertical_profile*`) / varfix on")
 
     iter_off = va_latest_eki_iteration_number(experiment_dir, varfix_off_yaml)
     iter_on = va_latest_eki_iteration_number(experiment_dir, varfix_on_yaml)
@@ -72,7 +72,7 @@ function va_plot_naive_vs_calibrated_varfix_on_profiles!(
         push!(linewidths, lw)
     end
 
-    offer!(ref, "reference (varfix-off slice)", :black, :solid, 2.35)
+    offer!(ref, "reference (varfix-off baseline)", :black, :solid, 2.35)
     offer!(
         m_off,
         "EKI varfix off (iter=$(iter_off), m=$(mem_off))",

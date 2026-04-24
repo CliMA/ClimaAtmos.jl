@@ -1,20 +1,16 @@
 # Precomputed Chebyshev coefficients for uniform–Gaussian convolution quantiles u/L
 # in mapped log10(η), same pattern as [`gauss_hermite`](@ref): static branches, no mutable cache.
-#
-# Regenerate (ClimaAtmos repo):
-#   julia --project=calibration/experiments/variance_adjustments \\
-#       calibration/experiments/variance_adjustments/scripts/gen_convolution_chebyshev_tables.jl
-# Tune degree `DEG` in that script to match `NCOEFF` below.
+# Coefficients are checked into this module; any regeneration must keep `NCOEFF` / `DEG` / `CHEB_CONV_MAX_N_GL` consistent.
 
 import StaticArrays as SA
 
 """`(log10(η_min), log10(η_max))` for the offline fit (Float64). Runtime quantiles use `log10(FT(1e-4))`, `log10(FT(1e2))` so τ stays in `FT`."""
 const CHEB_CONV_ETA_LOG10_RANGE = (log10(1.0e-4), log10(1.0e2))
 
-"""Number of Chebyshev coefficients (degree 12); must match `DEG` in `gen_convolution_chebyshev_tables.jl`."""
+"""Number of Chebyshev coefficients (degree 12); must match the offline fit degree used to generate the tables."""
 const NCOEFF_CONV_CHEB = 13
 
-"""Largest Gauss–Legendre order with embedded convolution Chebyshev tables (must match `gen_convolution_chebyshev_tables.jl`)."""
+"""Largest Gauss–Legendre order with embedded convolution Chebyshev tables."""
 const CHEB_CONV_MAX_N_GL = 5
 
 """
@@ -26,7 +22,7 @@ Errors if the pair is unsupported (same contract as [`gauss_legendre_01`](@ref):
 
 Truncated series in ``\\tau``: at degree 12 the offline fit reports worst **~6e-3** absolute error on ``u/L`` vs dense truth on the generator grid; random checks vs Brent quantiles are typically **O(1e-3)** (see tests). Runtime uses **no** iteration after evaluation.
 
-Coefficients are produced by `gen_convolution_chebyshev_tables.jl`.
+Coefficients are static `SVector` data in this module.
 """
 @inline function chebyshev_convolution_coeffs(::Type{FT}, N_GL::Int, i_node::Int) where {FT}
     if N_GL == 1 && i_node == 1

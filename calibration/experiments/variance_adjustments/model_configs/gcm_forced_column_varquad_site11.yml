@@ -1,0 +1,3 @@
+# HadGEM2-A AMIP July; cfSite 11. Merge after `gcm_forced_column_varquad_hires.yml`.
+forward_sweep_case_slug: GCM_CFSITE11
+cfsite_number: "site11"

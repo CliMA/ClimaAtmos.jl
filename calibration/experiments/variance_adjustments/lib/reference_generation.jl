@@ -41,7 +41,7 @@ latest completed iteration), **`member`** (`best` or integer; **`best`** uses
 you do not have **`y`** yet).
 
 There is **no** SCM-baseline-only path for **`y`**. If EKI output is missing, run calibration first or copy an
-existing **`iteration_*`** tree into this slice’s **`output_dir`**.
+existing **`iteration_*`** tree into this case’s **`output_dir`**.
 """
 function _reference_truth_atmos_toml!(
     experiment_dir::AbstractString,
@@ -60,7 +60,7 @@ function _reference_truth_atmos_toml!(
         if !_eki_root_has_iteration_dir(eki_root)
             error(
                 "reference_truth_from_eki requires EKI output under $eki_root (at least one iteration_* directory). " *
-                    "Run calibration for this slice first, or copy an existing EKI output tree there.",
+                    "Run calibration for this experiment YAML first, or copy an existing EKI output tree there.",
             )
         end
         iter_raw = get(spec, "iteration", nothing)
@@ -83,7 +83,7 @@ function _reference_truth_atmos_toml!(
         member_path = CAL.path_to_ensemble_member(eki_root, iteration, member)
         param_path = joinpath(member_path, "parameters.toml")
         isfile(param_path) || error(
-            "Missing EKI parameters at $param_path — run calibration for this slice first, or fix reference_truth_from_eki.",
+            "Missing EKI parameters at $param_path — run calibration for this experiment YAML first, or fix reference_truth_from_eki.",
         )
         baseline = va_merge_scm_baseline_dict(experiment_dir, expc["scm_toml"])
         out_toml = joinpath(ref_out, _REFERENCE_MERGED_TRUTH_TOML_BASENAME)

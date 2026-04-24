@@ -69,6 +69,8 @@ function _va_parse_forward_sweep_plot_cli(argv::Vector{String})::ForwardSweepCon
             )
         elseif startswith(a, "--figures-dir=")
             continue
+        elseif startswith(a, "--varfix=")
+            cfg.varfix_values = va_forward_sweep_varfix_values_from_spec(split(a, '=', limit = 2)[2])
         elseif a == "--help" || a == "-h"
             println("""
 Usage: julia --project=. analysis/plotting/plot_forward_sweep.jl [options]
@@ -78,6 +80,7 @@ Usage: julia --project=. analysis/plotting/plot_forward_sweep.jl [options]
   --registry=REL.yml            default when omitted: registries/forward_sweep_cases.yml
   --ladder-n-tiers=N  --ladder-coarsen-ratio=R  --ladder-z-elem-min=N  --ladder-min-dz-factor=F
   --figures-dir=DIR   optional; default folder depends on EKI vs baseline mode
+  --varfix=both|on|off|off,on   Must match the forward sweep axis used when writing outputs
 
 Also writes forward_sweep_clw_plus_cli_summary.png in that figures folder.
 """)

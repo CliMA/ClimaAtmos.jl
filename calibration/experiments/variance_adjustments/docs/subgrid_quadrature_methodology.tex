@@ -15,7 +15,7 @@
 \lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single}
 
 \title{\textbf{Layer-averaged expectations with a linear-in-height mean profile:\\
-Gaussian subgrid variability, quadrature design, and a pill marginal}}
+Gaussian subgrid variability, quadrature design, and a bounded layer marginal}}
 \author{}
 \date{\today}
 
@@ -38,7 +38,7 @@ We study the numerical computation of
 \]
 where $\mathbf{X}(z)\in\mathbb{R}^2$ is a subgrid state with \textbf{linear} layer-mean profile in a coordinate~$z$ (layer depth~$H$), homogeneous Gaussian fluctuations~$\Sigma$, and a possibly nonlinear, possibly non-smooth response~$g$.
 The note is \textbf{model-agnostic}: the same statistics appear whenever a coarse column carries a linear trend plus multivariate Gaussian noise and one seeks the layer average of $\mathbb{E}[g(\mathbf{X})\mid z]$.
-We explain \emph{which} Gaussian quadrature rule matches \emph{which} measure (Gauss--Legendre for uniform~$z$; Gauss--Hermite for Gaussian marginals; inverse-CDF Gauss--Legendre for non-Gaussian laws such as a Gaussian--uniform convolution), derive the tensor-product structure of the natural $\mathcal{O}(N^3)$ reference discretization (\columntensor), clarify why ``Legendre in~$z$ only'' cannot replace the inner expectations, and give a Rosenblatt-conditioned $\mathcal{O}(N^2)$ scheme (\profileros) whose inner axis is the \emph{pill} distribution.
+We explain \emph{which} Gaussian quadrature rule matches \emph{which} measure (Gauss--Legendre for uniform~$z$; Gauss--Hermite for Gaussian marginals; inverse-CDF Gauss--Legendre for non-Gaussian laws such as a Gaussian--uniform convolution), derive the tensor-product structure of the natural $\mathcal{O}(N^3)$ reference discretization (\columntensor), clarify why ``Legendre in~$z$ only'' cannot replace the inner expectations, and give a Rosenblatt-conditioned $\mathcal{O}(N^2)$ scheme (\profileros) whose inner axis is the \emph{bounded Gaussian--uniform marginal} along the mean-gradient direction.
 We justify scalar root-finding for quantiles as a \textbf{numerical design choice} (not part of the stochastic model), record Brent as a reference inverter, and summarize Chebyshev/rational surrogates with an operation-count comparison.
 A moist example---$(T,q)$ with saturation excess---is used only for illustration; an appendix records one fixed $q_{\mathrm{sat}}$ closure for reproducibility.
 \end{abstract}
@@ -69,14 +69,21 @@ It is \emph{not} the expectation under a single bivariate Gaussian unless one co
 \paragraph{Why quadrature (and which kind) is subtle.}
 The outer average is with respect to \textbf{Lebesgue measure} on a \textbf{compact} interval; the inner integral is with respect to a \textbf{Gaussian} on $\mathbb{R}^2$ at each~$z$.
 Gauss--Legendre (GL) and Gauss--Hermite (GH) rules are not interchangeable names for ``high-order integration'': each is Gaussian quadrature for a \textbf{specific weight} on a specific domain, hence exact for a \textbf{specific} class of polynomials in the correct variables~\cite{golub,gautschi}.
-Using GH nodes as if the marginal along an axis were standard normal when it is actually a \textbf{pill} (Gaussian convolved with a uniform) misplaces mass and can grossly distort expectations when $g$ grows in the tails.
+Using GH nodes as if the marginal along an axis were standard normal when it is actually a \textbf{bounded Gaussian--uniform convolution} misplaces mass and can grossly distort expectations when $g$ grows in the tails.
+
+\paragraph{CliMA calibration: mixture marginal vs.\ segment kernels in \emph{this} note.}
+This document derives the \textbf{closed-form segment objects} and the assembled \profileros\ quadrature (Gaussian--uniform marginals, $\Psi_\nu$ tails, Mills identities, stable \texttt{erf}/\texttt{erfc} algebra) that appear in Python \texttt{profile\_rosenblatt\_two\_half\_cell.py} and Julia \texttt{subgrid\_layer\_profile\_quadrature.jl}.
+Separately, the CliMA variance-adjustments stack defines a \textbf{two-half} mixture marginal $p_{\mathrm{mix}}(T,q)$ as a uniform $z$-average of DN/UP bivariate normals; see \path{ORACLE_SGS.md} in the same repository area.
+\textbf{Calibration Python} evaluates that definition via \texttt{mixture\_pdf\_grid}: a Riemann sum over $z$ of exact multivariate-normal PDFs.
+Those are \textbf{different layers}: the derivations here are \textbf{not} ``missing''---they power two-half profile cubature---while \texttt{mixture\_pdf\_grid} is the \textbf{specified reference evaluator} for $p_{\mathrm{mix}}$ unless an alternate implementation is proved equivalent in tests.
+\textbf{Documentation error} (not a missing proof) is to conflate ``\texttt{mixture\_pdf\_grid} does not call routine X'' with ``nothing was derived.''
 
 \paragraph{Contributions of this note.}
 \begin{enumerate}
   \item We state four baselines---\centeronly, \momentmatched, \columntensor, and \profileros---as \textbf{approximations to the same measure} on $(z,\mathbf{x})$ (or to a reduced equivalent), with clear bias mechanisms (especially \momentmatched\ infinite tails versus compact support along the mean-gradient path).
   \item We derive the \textbf{tensor-product} reference discretization (\columntensor) from Fubini's theorem and record the \textbf{exactness class}: tensor products of univariate Gaussian quadrature rules integrate tensor products of polynomials up to the usual univariate degrees---\emph{not} all polynomials of a fixed \textbf{total} degree in $(z,x_1,x_2)$; sparse grids (Smolyak) address that different design goal~\cite{gerstner}.
   \item We explain why \textbf{Legendre quadrature in $z$ alone} does not solve the problem unless the inner $\mathbb{R}^2$ expectations are treated separately, and why a naive \textbf{three-dimensional GL tensor on a box} in $(z,x_1,x_2)$ is \textbf{wrong} (Gaussian states are not uniform on a compact box).
-  \item We present the \profileros\ scheme as \textbf{Rosenblatt conditioning} in coordinates aligned with the mean gradient~$\mathbf{d}$: outer quadrature for a Gaussian marginal, inner \textbf{inverse-CDF} (probability-space GL) for the pill marginal at each outer node.
+  \item We present the \profileros\ scheme as \textbf{Rosenblatt conditioning} in coordinates aligned with the mean gradient~$\mathbf{d}$: outer quadrature for a Gaussian marginal, inner \textbf{inverse-CDF} (probability-space GL) for the bounded inner marginal at each outer node.
   \item We justify \textbf{Brent's method} as inversion of a known monotone CDF $F$ at fixed GL probabilities---a \textbf{numerical} step, not part of the physics---and list alternatives (adaptive integration in~$u$, custom quadrature for weight~$f$, Monte Carlo).
   \item We frame Chebyshev/rational surrogates by an \textbf{operation-count} bottleneck and validate with \textbf{interpretable claims} (consistency, structural bias, surrogate fidelity), not timing recipes alone.
 \end{enumerate}
@@ -86,7 +93,7 @@ Section~\ref{sec:notation} fixes notation.
 Section~\ref{sec:motivating-example} gives a moist $(T,q)$ example.
 Section~\ref{sec:quad-background} answers: \emph{What measure does each quadrature rule encode?}
 Section~\ref{sec:baselines} defines \centeronly, \momentmatched, \columntensor, and \profileros.
-Sections~\ref{sec:grad-align-coords}--\ref{sec:brent} build the pill and quantiles.
+Sections~\ref{sec:grad-align-coords}--\ref{sec:brent} build the inner marginal and quantiles.
 Sections~\ref{sec:surrogates}--\ref{sec:rational-impl} cover surrogates.
 Section~\ref{sec:validation} states numerical claims C1--C4.
 Appendices record stability knobs, optional interpolation, reproducibility, and an example saturation closure.
@@ -127,19 +134,19 @@ $\Sigma_{uv}$ & $M\,\Sigma_{\mathrm{turb}}\,M^\top$ \\
 $s_v,\,s_{u\mid v}$ & Marginal and conditional standard deviations in $(u,v)$ \\
 $L$ & Half-width of uniform component along mean path; here $L=H$ \\
 $\eta$ & $s_{u\mid v}/L$ \\
-$F,\,f,\,f',\,f''$ & CDF/PDF of pill marginal and derivatives (\S\ref{sec:pill-marginal}) \\
+$F,\,f,\,f',\,f''$ & CDF/PDF of inner marginal and derivatives (\S\ref{sec:pill-marginal}) \\
 \midrule
 \multicolumn{2}{@{}l@{}}{\textbf{Discretization names} (Section~\ref{sec:baselines}):} \\
 \centeronly & Gaussian SGS at layer center only; no $z$-integral \\
 \momentmatched & Single bivariate Gaussian with $\Sigma_{\mathrm{tot}}=\Sigma_{\mathrm{turb}}+\frac{H^2}{12}\mathbf{d}\mathbf{d}^\top$ \\
 \columntensor & Gauss--Legendre in $z$ $\times$ mapped GL in $\mathbf{x}$ at each $z_k$ (reference $\mathcal{O}(N^3)$) \\
-\profileros & Rosenblatt factorization along $\mathbf{d}$ with pill inner marginal ($\mathcal{O}(N^2)$) \\
+\profileros & Rosenblatt factorization along $\mathbf{d}$ with bounded inner marginal ($\mathcal{O}(N^2)$) \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \textbf{Path half-width $L=H$.}
-The coordinate~$u$ along the mean direction is normalized so that one unit of~$u$ corresponds to one unit of physical~$z$ along the layer; the uniform factor in the pill has support $[-L/2,L/2]=[-H/2,H/2]$.
+The coordinate~$u$ along the mean direction is normalized so that one unit of~$u$ corresponds to one unit of physical~$z$ along the layer; the uniform factor in the inner marginal has support $[-L/2,L/2]=[-H/2,H/2]$.
 This is \emph{not} arc length $H\|\mathbf{d}\|$ in state space; Jacobians are absorbed in~$M$.
 
 In Sections~\ref{sec:grad-align-coords}--\ref{sec:profros-assembly} we write $\nabla\phi$ for $\mathbf{d}$ to match common meteorological notation in $(T,q)$ coordinates.
@@ -159,8 +166,11 @@ The nonlinearity is strong (Clausius--Clapeyron-type $q_{\mathrm{sat}}$) and the
 
 Gaussian SGS is a \textbf{tractable} baseline PDF closure; skewed moisture PDFs and horizontal heterogeneity are outside scope.
 
-The \textbf{cost} of a naive tensor discretization with $N_z\sim N$ nodes in~$z$ and $N^2$ nodes in $(T,q)$ per slice is $\mathcal{O}(N^3)$ evaluations of~$g$ (and any functions composed with it).
+The \textbf{cost} of a naive tensor discretization with $N_z\sim N$ nodes in~$z$ and $N^2$ nodes in $(T,q)$ per vertical layer is $\mathcal{O}(N^3)$ evaluations of~$g$ (and any functions composed with it).
 The \profileros\ reduction achieves $\mathcal{O}(N^2)$ under the stated linear-mean and homogeneous-covariance assumptions.
+
+\paragraph{Two-half face model (single oracle).}
+For one column cell, calibration utilities build \textbf{one} mixture marginal $p_{\mathrm{mix}}(T,Q)$ in $(T,q)$ by averaging, for each $z_k$ on $[0,L_{\!1/2}]$, the sum of DN- and UP-facing Gaussians with \emph{distinct} mean slopes toward each face and face-anchored linear $\Sigma(z)$ (including optional linear drift of $\mathrm{cov}_{Tq}$ along each half). The condensate expectation $\mathbb{E}[\max(q-q_{\mathrm{sat}}(T),0)]$ under this law is the \textbf{numerical oracle} (dense $(T,q)$ grid and/or tensor Gauss--Hermite in $(T,q)$ at each~$z$, averaged in~$z$). Any other discretization advertised for the \textbf{same} cell---including the two-half \profileros\ cell construction used in production---must converge to that oracle as resolution increases; a persistent gap indicates \textbf{wrong or incomplete code}, not a second acceptable answer. Implementations use stable $\mathrm{erfc}/\mathrm{erfcx}$ segment kernels and the $\nu\in\{3/2,1/2,-1/2\}$ reduction for linear-in-$z$ variance laws; see \texttt{profile\_rosenblatt\_two\_half\_cell.py}, \texttt{ORACLE\_SGS.md}, and high-precision tests.
 
 %==============================================================================
 \section{Gaussian quadrature and the measures it encodes}
@@ -210,8 +220,8 @@ for $h(z)=\tilde h(z/\sqrt{2})$ and $\phi$ the standard normal PDF.
 Thus GH implements Gaussian quadrature for the \textbf{normal weight} $\phi(z)\,dz$ on $\mathbb{R}$~\cite{gautschi}.
 Tensor products of GH rules in two coordinates integrate tensor polynomials against \textbf{bivariate standard normal} weight.
 
-\subsection{Mismatched rules: why Hermite nodes are wrong for the pill marginal}
-Along the inner axis of the \profileros\ scheme (at fixed outer~$v$), the relevant 1D law is the \textbf{pill}: convolution of a Gaussian with a uniform on $[-L/2,L/2]$.
+\subsection{Mismatched rules: why Hermite nodes are wrong for the inner marginal}
+Along the inner axis of the \profileros\ scheme (at fixed outer~$v$), the relevant 1D law is the \textbf{bounded Gaussian--uniform convolution}: convolution of a Gaussian with a uniform on $[-L/2,L/2]$.
 Its density $f_{\mathrm{pill}}$ is flat in the center with Gaussian tails---not proportional to $\phi$.
 Gauss--Hermite quadrature is constructed to be exact for polynomials multiplied by~$\phi$; using GH as if the marginal were standard normal allocates nodes as if mass were Gaussian throughout, missing the uniform core.
 The correct repair is either (i)~quadrature with respect to the true weight~$f_{\mathrm{pill}}$ (non-classical: requires orthogonal polynomials for~$f_{\mathrm{pill}}$ or adaptive methods), or (ii) the \textbf{inverse-CDF} construction of \S\ref{sec:invcdf}, which applies GL on $[0,1]$ to $\int_0^1 h(F^{-1}(p))\,dp$.
@@ -232,7 +242,7 @@ Therefore
   \mathbb{E}[h(X)] \approx \sum_{i=1}^N \frac{w_i}{2}\,h\bigl(F^{-1}(p_i)\bigr)
 \]
 is \textbf{Gaussian quadrature for uniform measure on $[0,1]$ applied to the composite function} $p\mapsto h(F^{-1}(p))$.
-This is the source of all ``$p_i=(t_i+1)/2$'' factors in the pill inner rule.
+This is the source of all ``$p_i=(t_i+1)/2$'' factors in the inverse-CDF inner rule.
 It is \emph{not} Gauss--Hermite on the $x$-axis; the Hermite construction would target $\int h(x)\phi(x)\,dx$ instead of $\int h(x)f_{\mathrm{pill}}(x)\,dx$.
 
 \subsection{\texorpdfstring{Probability-transform (mapped) Gauss--Legendre for $\mathcal{N}(\boldsymbol{\mu},\Sigma)$ in $\mathbb{R}^2$}{Mapped Gauss--Legendre for bivariate normal}}
@@ -284,14 +294,14 @@ Quadrature in~$z$ addresses only the \textbf{outer} average once $F(z)$ is avail
 \paragraph{(B) A three-dimensional tensor Gauss--Legendre box in $(z,x_1,x_2)$.}
 If one mapped $(z,x_1,x_2)$ to $[-1,1]^3$ and applied GL in each coordinate, one would implicitly integrate against a \textbf{uniform} density on a \textbf{compact parallelepiped}.
 But $\mathbf{X}(z)$ is \textbf{unbounded} with Gaussian tails at every~$z$; the correct inner measure is not uniform on any box.
-The valid 3D structure is \textbf{mixed}: compact uniform~$z$ (after normalization) $\times$ non-compact Gaussian in~$\mathbf{x}$ at each~$z$ (\columntensor), or, after \profileros, uniform-in-$z$ folded into a pill times a Gaussian in~$v$.
+The valid 3D structure is \textbf{mixed}: compact uniform~$z$ (after normalization) $\times$ non-compact Gaussian in~$\mathbf{x}$ at each~$z$ (\columntensor), or, after \profileros, uniform-in-$z$ compressed into a bounded inner marginal times a Gaussian in~$v$.
 
 \subsection{Rosenblatt conditioning}
 \label{sec:rosenblatt}
 For a bivariate density $f_{UV}$, always $f_{UV}(u,v)=f_V(v)\,f_{U\mid V}(u\mid v)$.
 A consistent product quadrature uses a rule for $f_V$ in~$v$ and, \textbf{for each}~$v_j$, a rule for $f_{U\mid V}(\cdot\mid v_j)$ in~$u$.
 Rotating $(x_1,x_2)$ to decorrelate without conditioning and then tensoring \textbf{marginal} 1D rules for $u$ and~$v$ is generally \textbf{incorrect}: the joint iso-density curves are not aligned with the coordinate grid implied by independent marginals.
-Rosenblatt's transform~\cite{rosenblatt} systematizes monotone triangular maps that factor a multivariate law into univariate conditionals; the \profileros\ construction is the instance aligned with the mean gradient~$\mathbf{d}$ in which the inner marginal becomes the pill.
+Rosenblatt's transform~\cite{rosenblatt} systematizes monotone triangular maps that factor a multivariate law into univariate conditionals; the \profileros\ construction is the instance aligned with the mean gradient~$\mathbf{d}$ in which the inner marginal becomes the Gaussian--uniform convolution described in \S\ref{sec:pill-marginal}.
 
 %==============================================================================
 \section{Layer-mean objective and baseline approximations}
@@ -366,7 +376,7 @@ Accumulate $\sum_k (w^{(z)}_k/2)\,I_k$.
 
 \subsection{Profile--Rosenblatt: quadrature along the mean gradient}
 \textbf{Reduced representation.}
-Under linear mean in~$z$ and homogeneous $\Sigma_{\mathrm{turb}}$, the $z$-average and bivariate Gaussian can be combined so that $\overline{q_c}$ becomes a double sum: an outer quadrature in a Gaussian coordinate~$v$ transverse to~$\mathbf{d}$ in state space, and an inner quadrature in~$u$ along~$\mathbf{d}$ against the \textbf{pill} marginal at each~$v$ (Sections~\ref{sec:grad-align-coords}--\ref{sec:profros-assembly}).
+Under linear mean in~$z$ and homogeneous $\Sigma_{\mathrm{turb}}$, the $z$-average and bivariate Gaussian can be combined so that $\overline{q_c}$ becomes a double sum: an outer quadrature in a Gaussian coordinate~$v$ transverse to~$\mathbf{d}$ in state space, and an inner quadrature in~$u$ along~$\mathbf{d}$ against the \textbf{bounded inner} marginal at each~$v$ (Sections~\ref{sec:grad-align-coords}--\ref{sec:profros-assembly}).
 
 \textbf{Cost.} $\mathcal{O}(N^2)$ evaluations of~$g$ for equal orders~$N$.
 
@@ -410,14 +420,14 @@ $L=H$ identifies the uniform factor with $z\in[-H/2,H/2]$.
 If $\|\nabla\phi\|<\varepsilon$, use the \centeronly\ scheme at~$\boldsymbol{\mu}$ instead of forcing \profileros.
 
 %==============================================================================
-\section{\texorpdfstring{The pill marginal along $u$ at fixed $v$}{Pill marginal along u at fixed v}}
+\section{\texorpdfstring{The bounded inner marginal along $u$ at fixed $v$}{Bounded inner marginal along u at fixed v}}
 \label{sec:pill-marginal}
 %==============================================================================
 
 \subsection{Where the uniform factor comes from}
 At fixed~$v$, SGS contributes Gaussian uncertainty along~$u$ with variance $s_{u\mid v}^2$.
 The layer average over uniform~$z$ adds an independent uniform displacement of width~$H$ along the same physical direction (after the normalization of~$M$).
-Their sum is the \textbf{pill}; its density is trapezoidal in the center with Gaussian tails.
+Their sum is the \textbf{bounded Gaussian--uniform convolution}; its density is trapezoidal in the center with Gaussian tails.
 
 \subsection{CDF, PDF, and derivatives}
 Let $s\equiv s_{u\mid v}$, $Y\sim\mathcal{N}(0,s^2)$, $U_{\mathrm{un}}\sim\mathrm{Unif}([-L/2,L/2])$ independent, and $X=Y+U_{\mathrm{un}}$ (centering via $\mu_{u\mid v}(v)$ handled in Algorithm~\ref{alg:profros}).
@@ -443,7 +453,7 @@ By~\eqref{eq:prob-transform},
 \]
 The integrand on $[0,1]$ is a \textbf{composition} of $g_{\mathrm{cond}}\circ F^{-1}$.
 Gauss--Legendre on $[-1,1]$ mapped to $[0,1]$ ($p_i=(t_i+1)/2$, weights $w_i/2$) is Gaussian quadrature for \textbf{uniform}~$p$.
-Nodes $u_i=F^{-1}(p_i)$ are \textbf{quantiles} of the pill; this is standard \emph{inverse-CDF} or \emph{quantile} quadrature~\cite{gautschi}.
+Nodes $u_i=F^{-1}(p_i)$ are \textbf{quantiles} of this marginal; this is standard \emph{inverse-CDF} or \emph{quantile} quadrature~\cite{gautschi}.
 \textbf{Contrast:} Gauss--Hermite quadrature in~$u$ targets $\int \cdot\,\phi(u)\,du$, not $\int \cdot\,f_{\mathrm{pill}}(u)\,du$, and is the wrong tool for this marginal.
 
 %==============================================================================
@@ -453,7 +463,7 @@ Nodes $u_i=F^{-1}(p_i)$ are \textbf{quantiles} of the pill; this is standard \em
 
 \subsection{Root-finding is not ``physics''}
 The identity~\eqref{eq:prob-transform} requires $u_i=F^{-1}(p_i)$.
-For the pill, $F$ is explicit~\eqref{eq:pill-cdf} but $F^{-1}$ is not elementary.
+Here $F$ is explicit~\eqref{eq:pill-cdf} but $F^{-1}$ is not elementary.
 \textbf{Alternatives} to bracketing root-finding include:
 (i)~adaptive quadrature of $\int g_{\mathrm{cond}}(u)f(u)\,du$ without fixed quantile nodes;
 (ii)~constructing Gaussian quadrature abscissas for the non-classical weight~$f$ (solve the orthogonal-polynomial / moment problem---substantial preprocessing);
@@ -467,7 +477,7 @@ Brent's method~\cite{brent1973} robustly solves $F(x)-p_i=0$ for monotone~$F$.
 \textbf{Degenerate $s\to 0$:} $F^{-1}(p_i)=t_i L/2$ with GL weights $w_i/2$ on the uniform limit.
 
 \begin{algorithm}[H]
-\caption{Brent quantiles for pill marginal}
+\caption{Brent quantiles for bounded inner marginal}
 \label{alg:brent-pill}
 \begin{algorithmic}[1]
 \STATE Input: $L>0$, $s\ge 0$, Legendre $\{t_i,w_i\}_{i=1}^N$
@@ -485,12 +495,12 @@ Brent's method~\cite{brent1973} robustly solves $F(x)-p_i=0$ for monotone~$F$.
 \end{algorithm}
 
 \subsection{Complexity and the surrogate motivation}
-For each outer node~$v_j$, \profileros\ needs $\{u_i\}$ at $s=s_{u\mid v}(v_j)$: $\mathcal{O}(N)$ Brent solves per slice, $\mathcal{O}(N^2)$ per layer if done naively.
+For each outer node~$v_j$, \profileros\ needs $\{u_i\}$ at $s=s_{u\mid v}(v_j)$: $\mathcal{O}(N)$ Brent solves along the conditional curve, $\mathcal{O}(N^2)$ per layer if done naively.
 Each Brent iteration evaluates $F$ (and possibly $f,f'$ for Halley).
 Surrogates replace most Brent work by evaluating a polynomial or rational in~$\eta=s/L$ (Section~\ref{sec:surrogates}).
 
 %==============================================================================
-\section{Surrogate pill inversions}
+\section{Surrogate quantile inversions}
 \label{sec:surrogates}
 %==============================================================================
 
@@ -526,7 +536,7 @@ With $h=(p_i-F(x_0))/f(x_0)$,
 
 \subsection{Rationale and operation count}
 Offline: for each $\eta_k$ on a log grid, run Algorithm~\ref{alg:brent-pill} once ($\mathcal{O}(N)$ Brent solves $\times$ $n_\eta$ points).
-Online: evaluate degree-$D$ Chebyshev sums---$\mathcal{O}(ND)$ flops per layer slice versus $\mathcal{O}(N)$ iterative solves $\times$ cost per iteration for Brent.
+Online: evaluate degree-$D$ Chebyshev sums---$\mathcal{O}(ND)$ flops per layer versus $\mathcal{O}(N)$ iterative solves $\times$ cost per iteration for Brent.
 
 \subsection{Training grid and Brent truth}
 \begin{equation}
@@ -640,7 +650,7 @@ This is not ``quadrature error'' in the usual sense; changing $N$ cannot remove 
 
 \subsection{C3: Surrogate fidelity and total error against a reference}
 Let $\varepsilon_{\mathrm{abs}}$ be a tiny positive floor and $\overline{q_c}^{\mathrm{ref}}$ a high-resolution reference (\S\ref{sec:qcref}).
-Define (subscript $\mathrm{PR}$ denotes \profileros; $\mathrm{B}$ / $\mathrm{R}$ denote Brent vs.\ rational pill inversion)
+Define (subscript $\mathrm{PR}$ denotes \profileros; $\mathrm{B}$ / $\mathrm{R}$ denote Brent vs.\ rational inversion)
 \begin{align}
   e_{\mathrm{PR,B}}(N) &= \frac{\bigl|\overline{q_c}^{\mathrm{PR,Brent}}(N)-\overline{q_c}^{\mathrm{ref}}\bigr|}{\max(|\overline{q_c}^{\mathrm{ref}}|,\varepsilon_{\mathrm{abs}})}, \\
   e_{\mathrm{PR,R}}(N) &= \frac{\bigl|\overline{q_c}^{\mathrm{PR,rational}}(N)-\overline{q_c}^{\mathrm{ref}}\bigr|}{\max(|\overline{q_c}^{\mathrm{ref}}|,\varepsilon_{\mathrm{abs}})}, \\
@@ -649,7 +659,7 @@ Define (subscript $\mathrm{PR}$ denotes \profileros; $\mathrm{B}$ / $\mathrm{R}$
 \textbf{Interpretation.}
 $e_{\mathrm{PR,B}}$ is total quadrature error of Brent-based \profileros\ against the reference (includes reference bias).
 $e_{\mathrm{PR,R}}$ adds surrogate error in the same norm.
-$e_{\mathrm{pill}}$ \textbf{isolates} inverse-CDF surrogate error with all other \profileros\ choices identical.
+$e_{\mathrm{pill}}$ \textbf{isolates} inverse-CDF surrogate error with all other \profileros\ choices identical (subscript kept for compatibility with earlier drafts).
 Small pointwise errors in $u_i$ can still move $\overline{q_c}$ substantially if $g$ is sharply varying (e.g.\ saturation boundary); report $\max_{k,i}|u_i^{\mathrm{Brent}}-u_i^{\mathrm{approx}}|$ on an $\eta$ grid to catch unstable fits.
 
 \subsection{C4: Complexity reference values versus surrogates}
@@ -668,7 +678,7 @@ A dense uniform grid in~$z$ (e.g.\ $n_z=250$) with high-order inner mapped GL in
 Plots of nodes in $(T,q)$ with weights illustrate measure mismatch for \momentmatched\ versus \profileros; they support intuition but are not normative.
 
 %==============================================================================
-\section{\texorpdfstring{Worked micro-example ($N=2$ pill quantiles)}{Worked micro-example N equals 2 pill quantiles}}
+\section{\texorpdfstring{Worked micro-example ($N=2$ inverse-CDF quantiles)}{Worked micro-example N equals 2 inverse-CDF quantiles}}
 For $N=2$, $t_i=\pm 1/\sqrt{3}$, $p_i=(1\pm 1/\sqrt{3})/2$, weights $w_i/2=1/2$.
 Brent solves $F(u_i)=p_i$; this is the optimal GL pair on $[0,1]$ composed with $F^{-1}$.
 
@@ -682,7 +692,7 @@ Relate observed ratios to the expected dominance of iterative $F$ evaluations ve
 
 \section{Optional implementation crosswalk}
 \label{sec:julia-crosswalk}
-One atmosphere-model codebase exposes helpers such as \texttt{gauss\_hermite}, \texttt{gauss\_legendre\_01}, and gradient-aware SGS drivers; the full \profileros\ pipeline (gradient-aligned map~$M$, pill quantiles, Brent reference, cached surrogates) may not be complete in any given repository version.
+One atmosphere-model codebase exposes helpers such as \texttt{gauss\_hermite}, \texttt{gauss\_legendre\_01}, and gradient-aware SGS drivers; the full \profileros\ pipeline (gradient-aligned map~$M$, bounded-marginal quantiles, Brent reference, cached surrogates) may not be complete in any given repository version.
 Porting order: implement Algorithm~\ref{alg:brent-pill}; validate; serialize surrogate tables; implement Algorithm~\ref{alg:profros}.
 
 \section{Example saturation closure for reproducibility}

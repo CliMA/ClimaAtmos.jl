@@ -377,15 +377,20 @@ end
 
 Parse the SGS distribution type from configuration.
 
-# Config value mapping (gridscale-corrected: Gauss–Legendre in layer height and/or profile–Rosenblatt)
-- `"gaussian_gridscale_corrected"` → [`GaussianGridscaleCorrectedSGS`](@ref) (default profile–Rosenblatt + Brent)
-- `"gaussian_gridscale_corrected_column_tensor"` → [`GaussianGridscaleCorrectedSGS{SubgridColumnTensor}`](@ref)
-- `"gaussian_gridscale_corrected_profile_rosenblatt_brent"` / `"_halley"` / `"_chebyshev"` → profile–Rosenblatt variants (`_chebyshev`: embedded Chebyshev in `log10(η)`)
-- `"lognormal_gridscale_corrected"` → [`LogNormalGridscaleCorrectedSGS`](@ref) (default profile–Rosenblatt + Brent, same as Gaussian default)
-- `"lognormal_gridscale_corrected_profile_rosenblatt_brent"` / `"_halley"` / `"_chebyshev"` → same as Gaussian, for lognormal `q`
-- `"lognormal_gridscale_corrected_column_tensor"` → [`LogNormalGridscaleCorrectedSGS{SubgridColumnTensor}`](@ref)
+# Vertical-profile family (half-cell layer means; varying means and second moments in height)
 
-# Base names (no layer-profile quadrature in the PDF)
+- `"gaussian_vertical_profile"` → [`GaussianGridscaleCorrectedSGS`](@ref) (default [`SubgridProfileRosenblatt`](@ref) + [`ConvolutionQuantilesHalley`](@ref))
+- `"gaussian_vertical_profile_full_cubature"` → [`GaussianGridscaleCorrectedSGS{SubgridColumnTensor}`](@ref)
+- `"gaussian_vertical_profile_lhs_z"` / `"_principal_axis"` / `"_voronoi"` / `"_barycentric"` → alternate layer-mean discretizations (`SubgridLatinHypercubeZ`, `SubgridPrincipalAxisLayer`, …)
+- `"gaussian_vertical_profile_inner_bracketed"` / `"_inner_halley"` → [`ConvolutionQuantilesBracketed`](@ref) or [`ConvolutionQuantilesHalley`](@ref)
+- `"gaussian_vertical_profile_inner_chebyshev"` / `"lognormal_vertical_profile_inner_chebyshev"` → [`ConvolutionQuantilesChebyshevLogEta`](@ref) (tables for one centered uniform×Gaussian convolution; see type docstring)
+- `"lognormal_vertical_profile"` → [`LogNormalGridscaleCorrectedSGS`](@ref)
+- `"lognormal_vertical_profile_full_cubature"` → [`LogNormalGridscaleCorrectedSGS{SubgridColumnTensor}`](@ref)
+- `"lognormal_vertical_profile_lhs_z"` / `"_principal_axis"` / `"_voronoi"` / `"_barycentric"` → same alternate discretizations for lognormal `q`
+- `"lognormal_vertical_profile_inner_*"` → same inner-rule variants for lognormal `q`
+
+# Baseline (no vertical layer-profile quadrature in the PDF)
+
 - `"gaussian"` → [`GaussianSGS`](@ref)
 - `"lognormal"` → [`LogNormalSGS`](@ref)
 - `"mean"` → [`GridMeanSGS`](@ref)
@@ -393,26 +398,42 @@ Parse the SGS distribution type from configuration.
 function get_sgs_distribution(parsed_args)
     dist_name = parsed_args["sgs_distribution"]
 
-    if dist_name == "gaussian_gridscale_corrected"
+    if dist_name == "gaussian_vertical_profile"
         return GaussianGridscaleCorrectedSGS()
-    elseif dist_name == "gaussian_gridscale_corrected_column_tensor"
-        return GaussianGridscaleCorrectedSGS{SubgridColumnTensor}()
-    elseif dist_name == "gaussian_gridscale_corrected_profile_rosenblatt_brent"
+    elseif dist_name == "gaussian_vertical_profile_inner_bracketed"
         return GaussianGridscaleCorrectedSGS{SubgridProfileRosenblatt{ConvolutionQuantilesBracketed}}()
-    elseif dist_name == "gaussian_gridscale_corrected_profile_rosenblatt_halley"
+    elseif dist_name == "gaussian_vertical_profile_inner_halley"
         return GaussianGridscaleCorrectedSGS{SubgridProfileRosenblatt{ConvolutionQuantilesHalley}}()
-    elseif dist_name == "gaussian_gridscale_corrected_profile_rosenblatt_chebyshev"
+    elseif dist_name == "gaussian_vertical_profile_inner_chebyshev"
         return GaussianGridscaleCorrectedSGS{SubgridProfileRosenblatt{ConvolutionQuantilesChebyshevLogEta}}()
-    elseif dist_name == "lognormal_gridscale_corrected"
+    elseif dist_name == "lognormal_vertical_profile"
         return LogNormalGridscaleCorrectedSGS()
-    elseif dist_name == "lognormal_gridscale_corrected_profile_rosenblatt_brent"
+    elseif dist_name == "lognormal_vertical_profile_inner_bracketed"
         return LogNormalGridscaleCorrectedSGS{SubgridProfileRosenblatt{ConvolutionQuantilesBracketed}}()
-    elseif dist_name == "lognormal_gridscale_corrected_profile_rosenblatt_halley"
+    elseif dist_name == "lognormal_vertical_profile_inner_halley"
         return LogNormalGridscaleCorrectedSGS{SubgridProfileRosenblatt{ConvolutionQuantilesHalley}}()
-    elseif dist_name == "lognormal_gridscale_corrected_profile_rosenblatt_chebyshev"
+    elseif dist_name == "lognormal_vertical_profile_inner_chebyshev"
         return LogNormalGridscaleCorrectedSGS{SubgridProfileRosenblatt{ConvolutionQuantilesChebyshevLogEta}}()
-    elseif dist_name == "lognormal_gridscale_corrected_column_tensor"
+    elseif dist_name == "gaussian_vertical_profile_full_cubature"
+        return GaussianGridscaleCorrectedSGS{SubgridColumnTensor}()
+    elseif dist_name == "gaussian_vertical_profile_lhs_z"
+        return GaussianGridscaleCorrectedSGS{SubgridLatinHypercubeZ}()
+    elseif dist_name == "gaussian_vertical_profile_principal_axis"
+        return GaussianGridscaleCorrectedSGS{SubgridPrincipalAxisLayer}()
+    elseif dist_name == "gaussian_vertical_profile_voronoi"
+        return GaussianGridscaleCorrectedSGS{SubgridVoronoiRepresentatives}()
+    elseif dist_name == "gaussian_vertical_profile_barycentric"
+        return GaussianGridscaleCorrectedSGS{SubgridBarycentricSeeds}()
+    elseif dist_name == "lognormal_vertical_profile_full_cubature"
         return LogNormalGridscaleCorrectedSGS{SubgridColumnTensor}()
+    elseif dist_name == "lognormal_vertical_profile_lhs_z"
+        return LogNormalGridscaleCorrectedSGS{SubgridLatinHypercubeZ}()
+    elseif dist_name == "lognormal_vertical_profile_principal_axis"
+        return LogNormalGridscaleCorrectedSGS{SubgridPrincipalAxisLayer}()
+    elseif dist_name == "lognormal_vertical_profile_voronoi"
+        return LogNormalGridscaleCorrectedSGS{SubgridVoronoiRepresentatives}()
+    elseif dist_name == "lognormal_vertical_profile_barycentric"
+        return LogNormalGridscaleCorrectedSGS{SubgridBarycentricSeeds}()
     elseif dist_name == "gaussian"
         return GaussianSGS()
     elseif dist_name == "lognormal"
@@ -422,10 +443,12 @@ function get_sgs_distribution(parsed_args)
     else
         error(
             "Invalid sgs_distribution $(dist_name). Use: gaussian, lognormal, mean, " *
-                "gaussian_gridscale_corrected, gaussian_gridscale_corrected_column_tensor, " *
-                "gaussian_gridscale_corrected_profile_rosenblatt_brent, gaussian_gridscale_corrected_profile_rosenblatt_halley, gaussian_gridscale_corrected_profile_rosenblatt_chebyshev, " *
-                "lognormal_gridscale_corrected, lognormal_gridscale_corrected_column_tensor, " *
-                "lognormal_gridscale_corrected_profile_rosenblatt_brent, lognormal_gridscale_corrected_profile_rosenblatt_halley, lognormal_gridscale_corrected_profile_rosenblatt_chebyshev",
+                "gaussian_vertical_profile, gaussian_vertical_profile_full_cubature, gaussian_vertical_profile_lhs_z, " *
+                "gaussian_vertical_profile_principal_axis, gaussian_vertical_profile_voronoi, gaussian_vertical_profile_barycentric, " *
+                "gaussian_vertical_profile_inner_bracketed, gaussian_vertical_profile_inner_halley, " *
+                "lognormal_vertical_profile, lognormal_vertical_profile_full_cubature, lognormal_vertical_profile_lhs_z, " *
+                "lognormal_vertical_profile_principal_axis, lognormal_vertical_profile_voronoi, lognormal_vertical_profile_barycentric, " *
+                "lognormal_vertical_profile_inner_bracketed, lognormal_vertical_profile_inner_halley",
         )
     end
 end

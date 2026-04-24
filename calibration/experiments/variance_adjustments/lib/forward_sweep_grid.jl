@@ -2,6 +2,13 @@
 # Included after `experiment_common.jl` and `scripts/resolution_ladder.jl` are loaded.
 import YAML
 
+"""Filesystem-safe slug for an `sgs_distribution` string (used in output paths and job ids)."""
+function va_sgs_dist_path_slug(dist::AbstractString)::String
+    s = replace(String(dist), r"[^A-Za-z0-9_.-]+" => "_")
+    s = strip(s, '_')
+    return isempty(s) ? "dist" : s
+end
+
 """Default forward-sweep case registry (relative to the experiment directory)."""
 const VA_FORWARD_SWEEP_REGISTRY_DEFAULT_RELPATH = joinpath("registries", "forward_sweep_cases.yml")
 
@@ -19,7 +26,7 @@ Base.@kwdef mutable struct ForwardSweepConfig
     task_id::Union{Nothing, Int} = nothing
     ladder::VALadderParams = VALadderParams()
     """
-    `:eki_calibrated` (default): each run uses merged `_atmos_merged_parameters.toml` from the EKI slice
+    `:eki_calibrated` (default): each run uses merged `_atmos_merged_parameters.toml` from the EKI calibration YAML
     named in the registry (`eki_varfix_off_config` / optional `eki_varfix_on_config`). Output under
     `forward_eki/`. `:baseline_scm`: registry `scm_toml` only; output under `forward_only/` (exploratory).
     """
@@ -42,6 +49,60 @@ Base.@kwdef mutable struct ForwardSweepConfig
     distributed_workers::Int = min(32, max(1, Sys.CPU_THREADS))
     """`Distributed.addprocs` worker Julia thread count (`-t` per worker); typically `1` when the driver uses `julia -t N`."""
     distributed_worker_threads::Int = 1
+    """
+    Which **varfix** legs to run (same ordering as nested loops). Default **`[false, true]`** = off then on.
+    REPL: `ForwardSweepConfig(; varfix_values = [true])` for varfix-on only. CLI: `--varfix=on` / `off` / `both` or
+    `--varfix=off,on`. Env: **`VA_FORWARD_SWEEP_VARFIX`** (same tokens as CLI).
+    """
+    varfix_values::Vector{Bool} = Bool[false, true]
+    """
+    If set, only registry rows whose merged [`va_forward_sweep_case_slug`](@ref) is in this list are run and plotted.
+    REPL: `ForwardSweepConfig(; case_slugs = ["TRMM_LBA", "Bomex"])`. Env: comma-separated **`VA_FORWARD_SWEEP_CASE_SLUGS`**.
+    CLI (`sweep_forward_runs.jl`): **`--case-slugs=a,b,c`**. `run_full_study.jl`: **`--forward-case-slugs=...`**.
+    """
+    case_slugs::Union{Nothing, Vector{String}} = nothing
+end
+
+"""
+    va_forward_sweep_varfix_values_from_spec(s::AbstractString) -> Vector{Bool}
+
+Build the varfix axis for [`ForwardSweepConfig`](@ref). Tokens (comma-separated) are case-insensitive:
+
+  - **`off`**, **`vf0`**, **`false`**, **`0`** → `false` (base `sgs_distribution`, no vertical-profile SGS)
+  - **`on`**, **`vf1`**, **`true`**, **`1`** → `true` (`(gaussian|lognormal)_vertical_profile*`)
+
+Shorthand when the whole string has no comma: **`both`** → `[false, true]`; **`off`** alone → `[false]`; **`on`** alone → `[true]`.
+"""
+function va_forward_sweep_varfix_values_from_spec(s::AbstractString)::Vector{Bool}
+    t = String(strip(s))
+    isempty(t) && error("Empty varfix spec $(repr(s))")
+    if !occursin(',', t)
+        w = lowercase(t)
+        w == "both" && return Bool[false, true]
+        w in ("off", "vf0", "varfix_off", "false", "0") && return Bool[false]
+        w in ("on", "vf1", "varfix_on", "true", "1") && return Bool[true]
+        error("Unknown varfix spec $(repr(s)); use both, off, on, or comma-separated off/on/0/1/…")
+    end
+    out = Bool[]
+    for part in split(t, ',', keepempty = false)
+        w = lowercase(String(strip(part)))
+        isempty(w) && continue
+        if w in ("off", "vf0", "varfix_off", "false", "0")
+            push!(out, false)
+        elseif w in ("on", "vf1", "varfix_on", "true", "1")
+            push!(out, true)
+        else
+            error("Unknown varfix token $(repr(part)) in $(repr(s))")
+        end
+    end
+    isempty(out) && error("No varfix tokens parsed from $(repr(s))")
+    return out
+end
+
+function va_forward_sweep_assert_nonempty_varfix!(cfg::ForwardSweepConfig)
+    isempty(cfg.varfix_values) &&
+        error("ForwardSweepConfig.varfix_values must be non-empty (e.g. [false], [true], or [false, true]).")
+    return cfg
 end
 
 """
@@ -83,7 +144,19 @@ function va_forward_sweep_merge_env!(cfg::ForwardSweepConfig)
     if !isempty(s)
         cfg.task_id = parse(Int, s)
     end
+    if haskey(ENV, "VA_FORWARD_SWEEP_VARFIX")
+        cfg.varfix_values = va_forward_sweep_varfix_values_from_spec(ENV["VA_FORWARD_SWEEP_VARFIX"])
+    end
+    if haskey(ENV, "VA_FORWARD_SWEEP_CASE_SLUGS")
+        cfg.case_slugs = va_forward_sweep_parse_case_slugs(ENV["VA_FORWARD_SWEEP_CASE_SLUGS"])
+    end
     return cfg
+end
+
+"""Parse comma-separated slugs from CLI / env (empty tokens dropped)."""
+function va_forward_sweep_parse_case_slugs(s::AbstractString)::Vector{String}
+    parts = split(s, ','; keepempty = false)
+    return String[strip(p) for p in parts if !isempty(strip(p))]
 end
 
 """Convenience: `ForwardSweepConfig()` with `va_forward_sweep_merge_env!` applied (REPL / scripts)."""
@@ -141,6 +214,15 @@ function va_load_forward_sweep_case_rows(experiment_dir::AbstractString, cfg::Fo
             ),
         )
     end
+    if cfg.case_slugs !== nothing && !isempty(cfg.case_slugs)
+        wanted = Set{String}(String.(strip.(cfg.case_slugs)))
+        have = Set(r.slug for r in rows)
+        miss = setdiff(wanted, have)
+        if !isempty(miss)
+            @warn "case_slugs: not found in registry (check spelling vs merged YAML slugs)" missing = collect(miss)
+        end
+        rows = [r for r in rows if r.slug ∈ wanted]
+    end
     return rows
 end
 
@@ -184,15 +266,52 @@ function va_forward_sweep_case_dz_bottom(case_dict::AbstractDict)
 end
 
 """
+    va_forward_sweep_varfix_on_distribution_list(case_dict) -> Union{Nothing,Vector{String}}
+
+If merged case YAML defines **`forward_sweep_varfix_on_distributions`** (non-empty list of strings), the forward
+sweep runs **one varfix-on task per entry** (each under `simulation_output/.../varfix_on_<slug>/...`). If the key is
+absent, varfix-on uses a single task and the usual `.../varfix_on/...` directory (see [`run_one`](@ref) in
+`sweep_forward_core.jl`).
+"""
+function va_forward_sweep_varfix_on_distribution_list(case_dict::AbstractDict)::Union{Nothing, Vector{String}}
+    raw = get(case_dict, "forward_sweep_varfix_on_distributions", nothing)
+    raw isa AbstractVector || return nothing
+    out = String[]
+    for x in raw
+        s = String(strip(string(x)))
+        isempty(s) || push!(out, s)
+    end
+    return isempty(out) ? nothing : out
+end
+
+"""Directory segment under `N_<n>/` for this varfix leg (`varfix_off`, `varfix_on`, or `varfix_on_<dist_slug>`)."""
+function va_forward_sweep_varfix_dir_segment(
+    varfix::Bool,
+    forced_varfix_on_dist::Union{Nothing, AbstractString},
+)::String
+    varfix || return "varfix_off"
+    if forced_varfix_on_dist === nothing
+        return "varfix_on"
+    end
+    s = String(strip(string(forced_varfix_on_dist)))
+    return isempty(s) ? "varfix_on" : string("varfix_on_", va_sgs_dist_path_slug(s))
+end
+
+"""
     va_flatten_forward_sweep_tasks(experiment_dir, cfg) -> Vector{Tuple}
 
-Each row: `(model_config_layers, scm_toml, slug, n_quad, varfix_bool, tier, z_stretch, yaml_dz, eki_off, eki_on)`
+Each row: `(model_config_layers, scm_toml, slug, n_quad, varfix_bool, tier, z_stretch, yaml_dz, eki_off, eki_on, forced_varfix_on_dist)`
 where **`model_config_layers`** is `Vector{String}` (merge order); **`yaml_rel`** for grouping is `layers[end]`.
 with `eki_off` / `eki_on` optional registry-relative experiment YAML names (or `nothing`).
-Output layout: `simulation_output/<slug>/<res_seg>/N_<n>/(varfix_on|varfix_off)/<forward_subdir>/output_active/`
+The last field is **`nothing`** unless **`varfix_bool`** is true and the merged case YAML lists
+[`va_forward_sweep_varfix_on_distribution_list`](@ref); then it is the **`sgs_distribution`** string for that task.
+
+Output layout: `simulation_output/<slug>/<res_seg>/N_<n>/(varfix_off|varfix_on|varfix_on_<dist_slug>)/<forward_subdir>/output_active/`
 where `<forward_subdir>` is `forward_eki` or `forward_only` (see [`va_forward_sweep_forward_subdir`](@ref)).
+Varfix legs are those in **`cfg.varfix_values`** (default both off and on).
 """
 function va_flatten_forward_sweep_tasks(experiment_dir::AbstractString, cfg::ForwardSweepConfig)
+    va_forward_sweep_assert_nonempty_varfix!(cfg)
     rows = va_load_forward_sweep_case_rows(experiment_dir, cfg)
     n_list = va_forward_sweep_quadrature_orders()
     tasks = Tuple{
@@ -206,27 +325,51 @@ function va_flatten_forward_sweep_tasks(experiment_dir::AbstractString, cfg::For
         Float64,
         Union{Nothing, String},
         Union{Nothing, String},
+        Union{Nothing, String},
     }[]
     for row in rows
         tiers = va_resolution_tiers_for_forward(row.case_dict, cfg)
         z_stretch = va_forward_sweep_case_z_stretch(row.case_dict)
         yaml_dz = va_forward_sweep_case_dz_bottom(row.case_dict)
-        for tier in tiers, n in n_list, vf in (false, true)
-            push!(
-                tasks,
-                (
-                    row.model_config_layers,
-                    row.scm_toml,
-                    row.slug,
-                    n,
-                    vf,
-                    tier,
-                    z_stretch,
-                    yaml_dz,
-                    row.eki_varfix_off_config,
-                    row.eki_varfix_on_config,
-                ),
-            )
+        vo_list = va_forward_sweep_varfix_on_distribution_list(row.case_dict)
+        for tier in tiers, n in n_list, vf in cfg.varfix_values
+            if vf && vo_list !== nothing
+                for d in vo_list
+                    push!(
+                        tasks,
+                        (
+                            row.model_config_layers,
+                            row.scm_toml,
+                            row.slug,
+                            n,
+                            vf,
+                            tier,
+                            z_stretch,
+                            yaml_dz,
+                            row.eki_varfix_off_config,
+                            row.eki_varfix_on_config,
+                            d,
+                        ),
+                    )
+                end
+            else
+                push!(
+                    tasks,
+                    (
+                        row.model_config_layers,
+                        row.scm_toml,
+                        row.slug,
+                        n,
+                        vf,
+                        tier,
+                        z_stretch,
+                        yaml_dz,
+                        row.eki_varfix_off_config,
+                        row.eki_varfix_on_config,
+                        nothing,
+                    ),
+                )
+            end
         end
     end
     return tasks
@@ -243,9 +386,10 @@ function va_forward_sweep_output_active_path(
     res_seg::AbstractString,
     n::Int,
     varfix::Bool,
-    cfg::ForwardSweepConfig,
+    cfg::ForwardSweepConfig;
+    forced_varfix_on_distribution::Union{Nothing, AbstractString} = nothing,
 )
-    tag = varfix ? "varfix_on" : "varfix_off"
+    tag = va_forward_sweep_varfix_dir_segment(varfix, varfix ? forced_varfix_on_distribution : nothing)
     leaf = va_forward_sweep_forward_subdir(cfg)
     return joinpath(
         experiment_dir,
@@ -272,6 +416,7 @@ function va_forward_sweep_finest_completed_active(
     cfg::ForwardSweepConfig;
     n_quad::Int = 3,
     varfix::Bool = false,
+    forced_varfix_on_distribution::Union{Nothing, AbstractString} = nothing,
 )::Union{Nothing, Tuple{Int, String}}
     rows = va_load_forward_sweep_case_rows(experiment_dir, cfg)
     row = nothing
@@ -290,7 +435,15 @@ function va_forward_sweep_finest_completed_active(
     best_path = nothing
     for tier in tiers
         seg = va_tier_path_segment(tier, z_stretch, yaml_dz)
-        ap = va_forward_sweep_output_active_path(experiment_dir, slug, seg, n_quad, varfix, cfg)
+        ap = va_forward_sweep_output_active_path(
+            experiment_dir,
+            slug,
+            seg,
+            n_quad,
+            varfix,
+            cfg;
+            forced_varfix_on_distribution = varfix ? forced_varfix_on_distribution : nothing,
+        )
         !isdir(ap) && continue
         tdz = va_effective_dz_bottom(tier, yaml_dz)
         if tier.z_elem > best_z
@@ -347,6 +500,7 @@ function va_forward_sweep_reference_finer_than_panel(
     panel_res_seg::AbstractString;
     n_quad::Int = 3,
     varfix::Bool = false,
+    forced_varfix_on_distribution::Union{Nothing, AbstractString} = nothing,
 )::Union{Nothing, Tuple{Int, String, String}}
     rows = va_load_forward_sweep_case_rows(experiment_dir, cfg)
     row = nothing
@@ -369,7 +523,15 @@ function va_forward_sweep_reference_finer_than_panel(
     best_seg = ""
     for tier in tiers
         seg = va_tier_path_segment(tier, z_stretch, yaml_dz)
-        ap = va_forward_sweep_output_active_path(experiment_dir, slug, seg, n_quad, varfix, cfg)
+        ap = va_forward_sweep_output_active_path(
+            experiment_dir,
+            slug,
+            seg,
+            n_quad,
+            varfix,
+            cfg;
+            forced_varfix_on_distribution = varfix ? forced_varfix_on_distribution : nothing,
+        )
         !isdir(ap) && continue
         tz = tier.z_elem
         tdz = va_effective_dz_bottom(tier, yaml_dz)

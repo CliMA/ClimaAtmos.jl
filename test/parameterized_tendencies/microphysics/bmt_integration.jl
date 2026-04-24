@@ -1,6 +1,6 @@
 #=
-Unit tests for BMT (BulkMicrophysicsTendencies) integration
-Validates that the new BMT API produces equivalent results to legacy wrappers.
+Unit tests for BMT (BulkMicrophysicsTendencies) integration: direct `BMT.bulk_microphysics_tendencies`
+calls with finite, type-stable outputs for 0M / 1M / 2M (+P3 ice) parameter bundles.
 =#
 
 using Test

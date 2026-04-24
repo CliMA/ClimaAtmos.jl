@@ -27,7 +27,7 @@ end
 If `ranges` carries `R_q` / `R_T` (dimensionless grid), return `(σ_q_vec, σ_T_vec)` from
 `σ_q = Δz·(∂q/∂z)/R_q`, `σ_T = Δz·(∂T/∂z)/R_T` using **`geo`** gradients and `dz_use` (defaults to `geo.dz`).
 
-For legacy `(σ_q, σ_T)` grids, returns those vectors unchanged.
+If `ranges` already stores `σ_q` / `σ_T` vectors (no `R_q` / `R_T`), returns those vectors unchanged.
 """
 function mathsanity_inner_sigmas_for_gaussian_grid(ranges, geo; dz_use = nothing)
     if hasproperty(ranges, :R_q) && hasproperty(ranges, :R_T)
@@ -67,7 +67,7 @@ end
 
 """
 Floor for **standardized** `(q,T) → (z_q,z_T)` maps when `σ_q` or `σ_T` is zero on the grid.
-Physical `(q,T)` mosaic panels do not divide by `σ`; only legacy z-space plots need this.
+Physical `(q,T)` mosaic panels do not divide by `σ`; standardized `(z_q,z_T)` panels use this floor when `σ` hits zero on the grid.
 """
 mathsanity_sigma_floor_standardized(::Type{FT}) where {FT} = FT(1e-12)
 mathsanity_sigma_floor_standardized() = mathsanity_sigma_floor_standardized(Float64)
@@ -114,7 +114,7 @@ Default **4³ = 64** Gaussian mosaic grid: nondimensional inner **`R_q`, `R_T`**
 
 `R_q = (Δz_ref·∂q/∂z)/σ_q`, `R_T = (Δz_ref·∂T/∂z)/σ_T` at `dz_ref` from `mathsanity_default_geometric_knobs`.
 
-For **legacy 4⁴** sweeps (including a **μ_T** axis), use `mathsanity_legacy_gaussian_grid_ranges_sigma()` or widen `μ_T` yourself.
+For **4⁴** sweeps with a **μ_T** axis and inner axes given directly as **`(σ_q, σ_T)`** (including zeros on an endpoint), use `mathsanity_gaussian_grid_ranges_sigma_axes()` or widen `μ_T` yourself.
 """
 function mathsanity_default_gaussian_grid_ranges(FT::Type{<:Real} = Float32)
     g = mathsanity_default_geometric_knobs(FT)
@@ -143,8 +143,8 @@ function mathsanity_default_gaussian_grid_ranges(FT::Type{<:Real} = Float32)
     )
 end
 
-"""Legacy `(σ_q, σ_T, ρ, μ_T)` tensor grid (`σ` may be zero on an endpoint)."""
-function mathsanity_legacy_gaussian_grid_ranges_sigma(FT::Type{<:Real} = Float32)
+"""`(σ_q, σ_T, ρ, μ_T)` tensor grid with inner axes in **physical σ** (`σ` may be zero on an endpoint)."""
+function mathsanity_gaussian_grid_ranges_sigma_axes(FT::Type{<:Real} = Float32)
     (;
         σ_q = range(FT(0.0), FT(0.004); length = 4),
         σ_T = range(FT(0.0), FT(0.55); length = 4),
@@ -155,7 +155,7 @@ end
 
 """
 Multiline caption for figure headers / footers: **SI reference values** used to recover turbulent `σ` from
-dimensionless `(R_q,R_T)` (or to state legacy grids), plus outer-range summaries—so a user can reproduce
+dimensionless `(R_q,R_T)` (or to state **`σ_q,σ_T`** grids when `show_R` is false), plus outer-range summaries—so a user can reproduce
 or debug without reading source.
 
 `dz_layer` is the **mosaic layer thickness** passed into geometry (`mathsanity_sgs_quad_moments_with_geometry`);
@@ -204,7 +204,7 @@ function mathsanity_mosaic_reference_debug_caption(
             maximum(RT),
         )
     else
-        "Inner grid: legacy (σ_q, σ_T) from ranges (no R→σ recovery)."
+        "Inner grid: (σ_q, σ_T) taken directly from ranges (no R→σ recovery)."
     end
     s4 = @sprintf(
         "geo defaults (turbulent variances in knobs; not panel σ): default dz_knob=%.5g m, qq=%.3g, TT=%.3g, ρ_param=%.4g",

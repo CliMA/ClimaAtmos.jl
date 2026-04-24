@@ -78,7 +78,7 @@ end
 
 """
     compute_sgs_saturation_adjustment(
-        thermo_params, SG_quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq,
+        thermo_params, SG_quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq, δq_half, δT_half,
     )
 
 Compute SGS-averaged saturation adjustment by integrating over the joint PDF
@@ -107,6 +107,9 @@ integrated condensate by `ratio`.
 - `T′T′`: Temperature variance [K²]
 - `q′q′`: Moisture variance [(kg/kg)²]
 - `corr_Tq`: Correlation coefficient corr(T', q')
+- `δq_half`, `δT_half`: Subcell mean slopes passed through to [`integrate_over_sgs`](@ref); use
+  `zero(FT)` when calling the scalar helper directly (face-anchored means use
+  [`compute_sgs_saturation_adjustment_row`](@ref) instead).
 
 # Returns
 NamedTuple with SGS-averaged:
@@ -164,12 +167,17 @@ end
     compute_sgs_saturation_adjustment_row(
         thermo_params, sgs_quad, ρ, T_mean, q_mean,
         ρ_param, ε,
-        Δz, local_geometry, grad_q, grad_θ, ∂T∂θ_li, T′T′, q′q′,
+        Δz, local_geometry,
+        grad_q_dn, grad_q_up, grad_θ_dn, grad_θ_up, ∂T∂θ_li,
+        grad_qq_dn, grad_qq_up, grad_TT_dn, grad_TT_up,
+        T′T′, q′q′,
     )
 
-Pointwise wrapper: moments from `sgs_quad.dist` (vertical gradients + `∂T/∂θ_li` when
-using [`AbstractGridscaleCorrectedSGS`](@ref)), then [`compute_sgs_saturation_adjustment`](@ref).
-No persistent SGS-moment Fields.
+Pointwise wrapper: two-slope face-anchored layer-mean quadrature for
+[`AbstractGridscaleCorrectedSGS`](@ref); single-point quadrature for the
+non-gridscale-corrected base distributions. No persistent SGS-moment fields:
+callers pass half-cell gradients of means and turbulent variances inline
+via `ᶜleft_bias(ᶠgradᵥ(·))` / `ᶜright_bias(ᶠgradᵥ(·))`.
 """
 @inline function compute_sgs_saturation_adjustment_row(
     thermo_params,
@@ -181,9 +189,15 @@ No persistent SGS-moment Fields.
     ε,
     Δz,
     local_geometry,
-    grad_q,
-    grad_θ,
+    grad_q_dn,
+    grad_q_up,
+    grad_θ_dn,
+    grad_θ_up,
     ∂T∂θ_li,
+    grad_qq_dn,
+    grad_qq_up,
+    grad_TT_dn,
+    grad_TT_up,
     T′T′,
     q′q′,
 )
@@ -202,37 +216,33 @@ No persistent SGS-moment Fields.
             ρ_param,
             Δz,
             local_geometry,
-            grad_q,
-            grad_θ,
+            grad_q_dn,
+            grad_q_up,
+            grad_θ_dn,
+            grad_θ_up,
             ∂T∂θ_li,
+            grad_qq_dn,
+            grad_qq_up,
+            grad_TT_dn,
+            grad_TT_up,
         )
         ratio = min(one(FT), q_mean / max(result.q_tot_quad, q_min))
         q_liq = result.q_liq * ratio
         q_ice = result.q_ice * ratio
         return (; T = T_mean, q_liq, q_ice)
     end
-    σT², σq², ρ_Tq, δq, δT = sgs_quadrature_moments_from_gradients(
-        sgs_quad.dist,
-        ρ_param,
-        ε,
-        Δz,
-        local_geometry,
-        grad_q,
-        grad_θ,
-        ∂T∂θ_li,
-        T′T′,
-        q′q′,
-    )
+    # Non-gridscale-corrected path: raw center variances, no subcell adjustment.
+    FT = typeof(q′q′)
     return compute_sgs_saturation_adjustment(
         thermo_params,
         sgs_quad,
         ρ,
         T_mean,
         q_mean,
-        σT²,
-        σq²,
-        ρ_Tq,
-        δq,
-        δT,
+        T′T′,
+        q′q′,
+        ρ_param,
+        zero(FT),
+        zero(FT),
     )
 end

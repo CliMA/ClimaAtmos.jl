@@ -196,7 +196,15 @@ struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT, ZZ, ZW} <:
         a, w = get_quadrature_nodes_weights(distribution, FT, N)
         a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
         if distribution isa GaussianGridscaleCorrectedSGS{SubgridColumnTensor} ||
-           distribution isa LogNormalGridscaleCorrectedSGS{SubgridColumnTensor}
+           distribution isa LogNormalGridscaleCorrectedSGS{SubgridColumnTensor} ||
+           distribution isa GaussianGridscaleCorrectedSGS{SubgridLatinHypercubeZ} ||
+           distribution isa LogNormalGridscaleCorrectedSGS{SubgridLatinHypercubeZ} ||
+           distribution isa GaussianGridscaleCorrectedSGS{SubgridPrincipalAxisLayer} ||
+           distribution isa LogNormalGridscaleCorrectedSGS{SubgridPrincipalAxisLayer} ||
+           distribution isa GaussianGridscaleCorrectedSGS{SubgridVoronoiRepresentatives} ||
+           distribution isa LogNormalGridscaleCorrectedSGS{SubgridVoronoiRepresentatives} ||
+           distribution isa GaussianGridscaleCorrectedSGS{SubgridBarycentricSeeds} ||
+           distribution isa LogNormalGridscaleCorrectedSGS{SubgridBarycentricSeeds}
             z_t_vec, z_w_vec = gauss_legendre_neg1_1(FT, N)
             zt = SA.SVector{N, FT}(z_t_vec)
             zw = SA.SVector{N, FT}(z_w_vec)
@@ -669,6 +677,23 @@ function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature{N}) where 
 end
 
 """
+    tensor_gh_row_split(N::Int) -> (n1::Int, n2::Int)
+
+`n1 = N ÷ 2`, `n2 = N - n1` with `n1 + n2 == N`. For **two-branch mixture** tensor
+Gauss–Hermite, partition the first Hermite factor ``χ_1`` (the ``j`` index in
+`gauss_hermite_nodes_bivariate_chi1_slice`), giving `N^2` nodes per height instead of `2 N^2`.
+
+[`sum_over_quadrature_points`](@ref) for [`SubgridColumnTensor`](@ref) evaluates **one**
+bivariate Gaussian per height with a full `N × N` tensor (`N^2` evaluations per `z`);
+the `2 N^2` budget story applies to the toy mixture DN/UP stack, not that inner loop.
+"""
+function tensor_gh_row_split(N::Int)
+    N < 2 && throw(ArgumentError("tensor_gh_row_split requires N >= 2"))
+    n1 = N ÷ 2
+    return n1, N - n1
+end
+
+"""
     integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
 
 Integrate `f(T, q)` over the bivariate SGS distribution.
@@ -677,6 +702,20 @@ Converts variances to standard deviations, constructs a `PhysicalPointTransform`
 for the distribution type in `quad`, and evaluates the Gauss-Hermite quadrature.
 Temperature is always Gaussian; the distribution of specific humidity is
 determined by `quad.dist` (see [`get_physical_point`](@ref)).
+
+# Gridscale-corrected ``quad.dist``
+
+For [`AbstractGridscaleCorrectedSGS`](@ref), the branch below applies only a
+**bivariate (T, q)** map at cell center (inner `GaussianSGS` / `LogNormalSGS`); the
+**layer-profile** type parameter `S` is not used. Layer-mean, gradient-aware rules live in
+[`integrate_over_sgs_linear_profile`](@ref) (0M saturation, and 1M when
+[`sgs_1m_uses_sgs_linear_profile`](@ref) lists the distribution; column tensor, LHS, principal
+axis, Voronoi/barycentric seeds, profile–Rosenblatt, …). A **1M** + gridscale ``S`` not
+implemented in the linear-profile kernel still hits
+[`throw_if_unsupported_1m_sgs_gridscale_distribution`](@ref) in
+[`microphysics_tendencies_1m`](@ref) and does **not** reach this bivariate helper. This
+path remains for **base** `GaussianSGS` / `LogNormalSGS` and other cell-center bivariate
+uses.
 
 # Arguments
 - `f`: Point-wise function `(T, q) -> result`

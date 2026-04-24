@@ -26,6 +26,13 @@ end
 """Finer-mesh overlay: black, drawn last so it sits above sweep lines (and above observations-y when both exist)."""
 const _VA_FORWARD_FINER_MESH_COLOR = CM.RGBf(0.0, 0.0, 0.0)
 
+# Match TRMM smoke / profile plots: relative floor scales τ with case amplitude; padding above cloud top.
+const _VA_FORWARD_SWEEP_CLOUD_TOP_KW = (
+    padding_m = 380.0,
+    condensate_floor_kg_kg = 1e-12,
+    condensate_floor_frac_of_peak = 1e-4,
+)
+
 """
     va_plot_forward_sweep_comparisons!(experiment_dir, cfg::ForwardSweepConfig; figure_root) -> Vector{String}
 
@@ -52,20 +59,34 @@ function va_plot_forward_sweep_comparisons!(
         ),
     )
     tasks = va_flatten_forward_sweep_tasks(experiment_dir, cfg)
-    groups = Dict{Tuple{String, String, String}, Vector{Tuple{Int, Bool, String, String}}}()
-    for (layers, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _eo, _en) in tasks
+    groups = Dict{Tuple{String, String, String}, Vector{Tuple{Int, Bool, String, String, Union{Nothing, String}}}}()
+    for (layers, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _eo, _en, vfon) in tasks
         yml = layers[end]
         res_seg = va_tier_path_segment(tier, z_stretch, yaml_dz)
-        ap = va_forward_sweep_output_active_path(experiment_dir, slug, res_seg, n, vf, cfg)
+        ap = va_forward_sweep_output_active_path(
+            experiment_dir,
+            slug,
+            res_seg,
+            n,
+            vf,
+            cfg;
+            forced_varfix_on_distribution = vfon,
+        )
         !isdir(ap) && continue
         k = (slug, yml, res_seg)
-        lab = vf ? "N=$(n) vf_on" : "N=$(n) vf_off"
-        push!(get!(groups, k, Tuple{Int, Bool, String, String}[]), (n, vf, ap, lab))
+        lab = if !vf
+            "N=$(n) vf_off"
+        elseif vfon === nothing
+            "N=$(n) vf_on (default)"
+        else
+            string("N=$(n) vf_on ", va_sgs_dist_path_slug(vfon))
+        end
+        push!(get!(groups, k, Tuple{Int, Bool, String, String, Union{Nothing, String}}[]), (n, vf, ap, lab, vfon))
     end
     all_pngs = String[]
     for ((slug, yml, res_seg), cells) in groups
-        # N_quad ascending, then varfix off before on
-        sort!(cells; by = x -> (x[1], x[2] ? 1 : 0))
+        # N_quad ascending, then varfix off before on, then explicit varfix-on distribution (if any)
+        sort!(cells; by = x -> (x[1], x[2] ? 1 : 0, something(x[5], "")))
         paths = String[c[3] for c in cells]
         paths_abs = String[abspath(p) for p in paths]
         labels = String[c[4] for c in cells]
@@ -117,6 +138,7 @@ function va_plot_forward_sweep_comparisons!(
             forward_finest_series;
             experiment_dir,
             model_config_rel = cfg_layers,
+            _VA_FORWARD_SWEEP_CLOUD_TOP_KW...,
         )
         written = va_plot_all_case_diagnostic_profiles(
             paths;
@@ -181,6 +203,10 @@ Writes **`forward_sweep_clw_plus_cli_summary.png`** under the same `figure_root`
 **Y limits:** Within each case row, all panels share the same height cap: the **maximum** of per-panel
 [`va_condensate_cloud_top_height_m`](@ref) values (so coarse and fine tiers align vertically). If no panel
 returns a cap, panels fall back to individual caps / autoscale.
+
+**X limits:** After drawing, each row’s panels share the same **x** range (union of per-panel data limits plus small
+padding) so mixing-ratio columns are comparable. **X tick labels** are shown on **every** row; the **x-axis label**
+string stays on the **bottom** row only (avoids repeating `clw+cli (kg/kg)` on every row).
 """
 function va_plot_forward_sweep_clw_plus_cli_summary!(
     experiment_dir::AbstractString,
@@ -198,15 +224,29 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
         ),
     )
     tasks = va_flatten_forward_sweep_tasks(experiment_dir, cfg)
-    groups = Dict{Tuple{String, String, String}, Vector{Tuple{Int, Bool, String, String}}}()
-    for (layers, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _eo, _en) in tasks
+    groups = Dict{Tuple{String, String, String}, Vector{Tuple{Int, Bool, String, String, Union{Nothing, String}}}}()
+    for (layers, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _eo, _en, vfon) in tasks
         yml = layers[end]
         res_seg = va_tier_path_segment(tier, z_stretch, yaml_dz)
-        ap = va_forward_sweep_output_active_path(experiment_dir, slug, res_seg, n, vf, cfg)
+        ap = va_forward_sweep_output_active_path(
+            experiment_dir,
+            slug,
+            res_seg,
+            n,
+            vf,
+            cfg;
+            forced_varfix_on_distribution = vfon,
+        )
         !isdir(ap) && continue
         k = (slug, yml, res_seg)
-        lab = vf ? "N=$(n) vf_on" : "N=$(n) vf_off"
-        push!(get!(groups, k, Tuple{Int, Bool, String, String}[]), (n, vf, ap, lab))
+        lab = if !vf
+            "N=$(n) vf_off"
+        elseif vfon === nothing
+            "N=$(n) vf_on (default)"
+        else
+            string("N=$(n) vf_on ", va_sgs_dist_path_slug(vfon))
+        end
+        push!(get!(groups, k, Tuple{Int, Bool, String, String, Union{Nothing, String}}[]), (n, vf, ap, lab, vfon))
     end
 
     rows = va_load_forward_sweep_case_rows(experiment_dir, cfg)
@@ -267,9 +307,9 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
             end
             res_seg = segs[ci]
             k = (row.slug, row.yaml_rel, res_seg)
-            cells = get(groups, k, Tuple{Int, Bool, String, String}[])
+            cells = get(groups, k, Tuple{Int, Bool, String, String, Union{Nothing, String}}[])
             isempty(cells) && continue
-            sort!(cells; by = x -> (x[1], x[2] ? 1 : 0))
+            sort!(cells; by = x -> (x[1], x[2] ? 1 : 0, something(x[5], "")))
             paths = String[c[3] for c in cells]
             paths_abs = String[abspath(p) for p in paths]
             calibration_truth_series = nothing
@@ -307,19 +347,23 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
                 forward_finest_series;
                 experiment_dir,
                 model_config_rel = row.model_config_layers,
+                _VA_FORWARD_SWEEP_CLOUD_TOP_KW...,
             )
         end
         finite_row_caps = Float64[c for c in row_ylim_caps if c !== nothing]
         ylim_row = isempty(finite_row_caps) ? nothing : maximum(finite_row_caps)
 
+        # After drawing, set one shared x-range per row so resolution columns are comparable side-by-side.
+        row_axes_for_xlink = CM.Axis[]
         for ci in 1:max_cols
             ax = CM.Axis(
                 fig[ri+1, ci+1];
                 xlabel = ri == n_rows ? "clw+cli (kg/kg)" : "",
                 ylabel = ci == 1 ? "height (m)" : "",
                 titlevisible = false,
-                xticklabelsvisible = ri == n_rows,
-                xticksvisible = ri == n_rows,
+                # Show x tick **labels** on every row (not only the bottom); x-axis **title** stays on bottom row only.
+                xticklabelsvisible = true,
+                xticksvisible = true,
                 yticklabelsvisible = ci == 1,
                 yticksvisible = ci == 1,
             )
@@ -330,13 +374,13 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
             end
             res_seg = segs[ci]
             k = (row.slug, row.yaml_rel, res_seg)
-            cells = get(groups, k, Tuple{Int, Bool, String, String}[])
+            cells = get(groups, k, Tuple{Int, Bool, String, String, Union{Nothing, String}}[])
             if isempty(cells)
                 CM.hidedecorations!(ax)
                 CM.hidespines!(ax)
                 continue
             end
-            sort!(cells; by = x -> (x[1], x[2] ? 1 : 0))
+            sort!(cells; by = x -> (x[1], x[2] ? 1 : 0, something(x[5], "")))
             paths = String[c[3] for c in cells]
             paths_abs = String[abspath(p) for p in paths]
             labels = String[c[4] for c in cells]
@@ -401,8 +445,28 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
             any_panel = true
             ylims_apply = ylim_row !== nothing ? ylim_row : ylims_h_panel
             _va_finalize_profile_axis_limits!(ax, ylims_apply)
+            push!(row_axes_for_xlink, ax)
             if legend_ax === nothing && n_series > 1
                 legend_ax = ax
+            end
+        end
+        # Shared x limits for every populated panel in this case row (mixing ratio scale aligned).
+        if !isempty(row_axes_for_xlink)
+            xmin = Inf
+            xmax = -Inf
+            for ax in row_axes_for_xlink
+                fl = ax.finallimits[]
+                x0 = Float64(fl.origin[1])
+                x1 = Float64(fl.origin[1] + fl.widths[1])
+                xmin = min(xmin, x0)
+                xmax = max(xmax, x1)
+            end
+            if isfinite(xmin) && isfinite(xmax) && xmax > xmin
+                dx = xmax - xmin
+                pad = max(dx * 0.04, 1e-15)
+                for ax in row_axes_for_xlink
+                    CM.xlims!(ax, xmin - pad, xmax + pad)
+                end
             end
         end
     end
@@ -432,8 +496,9 @@ end
     va_plot_forward_sweep_scalars_vs_nquad!(experiment_dir, cfg; figure_root, scalar_short_names, period_yaml) -> Vector{String}
 
 For each `(case_slug, res_segment)` in the sweep grid, write **`scalar_<name>_vs_nquad.png`** with **LWP / ice path
-(`clivi`) / …** vs **`quadrature_order`** (lines for **varfix off** and **varfix on**), plus a **black** horizontal
-line for the **EKI reference** scalar when that run exists. Requires the diagnostics in SimDir output (add
+(`clivi`) / …** vs **`quadrature_order`** (one line per **varfix off**, **varfix on (default)**, and each explicit
+**varfix-on** distribution when `forward_sweep_varfix_on_distributions` is set in merged case YAML), plus a **black**
+horizontal line for the **EKI reference** scalar when that run exists. Requires the diagnostics in SimDir output (add
 **`lwp`** / **`clivi`** to the case YAML `diagnostics` if missing).
 """
 function va_plot_forward_sweep_scalars_vs_nquad!(
@@ -455,10 +520,18 @@ function va_plot_forward_sweep_scalars_vs_nquad!(
     )
     tasks = va_flatten_forward_sweep_tasks(experiment_dir, cfg)
     panel_keys = Set{Tuple{String, String, String}}()
-    for (layers, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _eo, _en) in tasks
+    for (layers, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _eo, _en, vfon) in tasks
         yml = layers[end]
         res_seg = va_tier_path_segment(tier, z_stretch, yaml_dz)
-        ap = va_forward_sweep_output_active_path(experiment_dir, slug, res_seg, n, vf, cfg)
+        ap = va_forward_sweep_output_active_path(
+            experiment_dir,
+            slug,
+            res_seg,
+            n,
+            vf,
+            cfg;
+            forced_varfix_on_distribution = vfon,
+        )
         !isdir(ap) && continue
         push!(panel_keys, (slug, yml, res_seg))
     end
@@ -481,18 +554,56 @@ function va_plot_forward_sweep_scalars_vs_nquad!(
                 titlevisible = false,
             )
             any_line = false
-            for (vf, linestyle, lab_prefix, ci) in (
-                (false, :dash, "vf_off", 1),
-                (true, :solid, "vf_on", 2),
-            )
+            line_keys = Tuple{Bool, Union{Nothing, String}}[]
+            for (layers2, _scm, slug2, n, vf2, tier, z_stretch, yaml_dz, _eo, _en, vfon2) in tasks
+                slug2 != slug && continue
+                layers2[end] != yml && continue
+                va_tier_path_segment(tier, z_stretch, yaml_dz) != res_seg && continue
+                lk = (vf2, vf2 ? vfon2 : nothing)
+                ap = va_forward_sweep_output_active_path(
+                    experiment_dir,
+                    slug,
+                    res_seg,
+                    n,
+                    vf2,
+                    cfg;
+                    forced_varfix_on_distribution = vfon2,
+                )
+                !isdir(ap) && continue
+                sdir = SimDir(ap)
+                isempty(sdir.vars) && continue
+                v = va_scalar_surface_mean_last(sdir, string(name), period_yaml)
+                v === nothing && continue
+                lk ∉ line_keys && push!(line_keys, lk)
+            end
+            sort!(line_keys; by = x -> (x[1] ? 1 : 0, something(x[2], "")))
+            for (ci, lk) in enumerate(line_keys)
+                vf, vfon = lk
+                linestyle = vf ? :solid : :dash
+                lab_prefix = if !vf
+                    "vf_off"
+                elseif vfon === nothing
+                    "vf_on (default)"
+                else
+                    string("vf_on ", va_sgs_dist_path_slug(vfon))
+                end
                 ns = Int[]
                 vals = Float64[]
-                for (layers2, _scm, slug2, n, vf2, tier, z_stretch, yaml_dz, _eo, _en) in tasks
+                for (layers2, _scm, slug2, n, vf2, tier, z_stretch, yaml_dz, _eo, _en, vfon2) in tasks
                     slug2 != slug && continue
                     layers2[end] != yml && continue
                     va_tier_path_segment(tier, z_stretch, yaml_dz) != res_seg && continue
                     vf2 != vf && continue
-                    ap = va_forward_sweep_output_active_path(experiment_dir, slug, res_seg, n, vf, cfg)
+                    (vf2 ? vfon2 : nothing) != (vf ? vfon : nothing) && continue
+                    ap = va_forward_sweep_output_active_path(
+                        experiment_dir,
+                        slug,
+                        res_seg,
+                        n,
+                        vf2,
+                        cfg;
+                        forced_varfix_on_distribution = vfon2,
+                    )
                     !isdir(ap) && continue
                     sdir = SimDir(ap)
                     isempty(sdir.vars) && continue

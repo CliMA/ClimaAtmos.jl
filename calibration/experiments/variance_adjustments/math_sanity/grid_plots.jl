@@ -523,7 +523,7 @@ end
 - If **`length(μ_T) ≥ 2`** and **`length(ρ) ≥ 2`**, blocks sit at the **corners** of the `(ρ, μ_T)` grid.
 - If **`μ_T` is fixed** (`length(μ_T)==1`) and **`length(ρ) ≥ 4`**, blocks use **four ρ indices** spaced along the ρ axis (same fixed `μ_T`).
 
-Inner axes sweep `(R_q, R_T)` or legacy `(σ_q, σ_T)` depending on `ranges`. For the **full** mosaic, use
+Inner axes sweep `(R_q, R_T)` when `ranges` carries `R_q`/`R_T`, or **`(σ_q, σ_T)`** when those fields are set instead. For the **full** mosaic, use
 `mathsanity_plot_gaussian_parameter_mosaic` (panel count from `ranges`, e.g. default `mathsanity_default_gaussian_grid_ranges`).
 """
 function mathsanity_plot_gaussian_parameter_mosaic_preview(
@@ -735,7 +735,7 @@ end
 - **`axes = :physical`:** **`(q,T)`** as before.
 
 Inner axes sweep **`(R_q, R_T)`** by default (`mathsanity_default_gaussian_grid_ranges`); use
-`mathsanity_legacy_gaussian_grid_ranges_sigma()` for the old `(σ_q,σ_T)` tensor (including zeros).
+`mathsanity_gaussian_grid_ranges_sigma_axes()` for a **`(σ_q,σ_T)`** inner tensor (including zeros).
 
 **Clamping:** `clamped=true` is a **secondary** diagnostic (piecewise maps); core geometry is clearest in the unclamped case.
 

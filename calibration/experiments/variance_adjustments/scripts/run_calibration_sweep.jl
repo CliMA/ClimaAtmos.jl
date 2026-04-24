@@ -1,5 +1,5 @@
-# Run EKI calibration for each listed experiment YAML **in-process** (no extra `julia` subprocess per slice).
-# Uses `Distributed.addprocs` / `rmprocs` inside `run_variance_calibration!` + cleanup after each slice so workers
+# Run EKI calibration for each listed experiment YAML **in-process** (no extra `julia` subprocess per sweep row).
+# Uses `Distributed.addprocs` / `rmprocs` inside `run_variance_calibration!` + cleanup after each calibration case so workers
 # do not leak into the forward sweep.
 #
 #   julia --project=. scripts/run_calibration_sweep.jl
@@ -8,10 +8,10 @@
 #   CALIB_SWEEP_TASK_ID=0 julia --project=. scripts/run_calibration_sweep.jl
 #   # or SLURM_ARRAY_TASK_ID
 #
-# Edit `lib/calibration_sweep_configs.jl` → `va_calibration_sweep_configs()` to choose slices.
+# Edit `lib/calibration_sweep_configs.jl` → `va_calibration_sweep_configs()` to choose which experiment YAMLs run.
 #
 # Flags:
-#   --fail-fast    abort sequential sweep on first failed slice (default: log and continue)
+#   --fail-fast    abort sequential sweep on first failed calibration case (default: log and continue)
 #
 import Pkg
 
@@ -29,7 +29,7 @@ end
 
 using Distributed
 
-function run_calibration_slice_inprocess(config_relp::AbstractString, opts::EkiCalibrationOptions)
+function run_calibration_case_inprocess(config_relp::AbstractString, opts::EkiCalibrationOptions)
     old = get(ENV, "VA_EXPERIMENT_CONFIG", nothing)
     ENV["VA_EXPERIMENT_CONFIG"] = config_relp
     try
@@ -54,16 +54,16 @@ function run_calibration_sweep!(opts::EkiCalibrationOptions = va_eki_calibration
         i = parse(Int, tid) + 1
         (1 <= i <= length(configs)) ||
             error("Task index $(i - 1) out of range; need 0:$(length(configs) - 1)")
-        return run_calibration_slice_inprocess(configs[i], opts)
+        return run_calibration_case_inprocess(configs[i], opts)
     end
     failed = String[]
     for c in configs
         @info "Calibration sweep cell" c
         try
-            run_calibration_slice_inprocess(c, opts)
+            run_calibration_case_inprocess(c, opts)
         catch err
             push!(failed, c)
-            @error "Calibration slice failed" config = c exception = (err, catch_backtrace())
+            @error "Calibration case failed" config = c exception = (err, catch_backtrace())
             va_flush_stdio()
             fail_fast && rethrow()
         end

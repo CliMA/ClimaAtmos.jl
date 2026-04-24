@@ -1134,13 +1134,34 @@ function set_microphysics_tendency_cache!(
     else
         _fill_∂T_∂θ_li_for_sgs_subcell!(Y, p, thp)
         (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
-        ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
-        corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
-        @. ᶜmp_tendency = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
-            ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜσT², ᶜσq², corr_Tq, $(tst), dt,
-        )
+        if sgs_1m_uses_sgs_linear_profile(sgs_quad)
+            ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
+            ρ_param = correlation_Tq(p.params)
+            ᶜdz = Fields.Δz_field(axes(Y.c))
+            ᶜlg = Fields.local_geometry_field(Y.c)
+            ᶜθ_li_sgs = @. lazy(
+                TD.liquid_ice_pottemp(
+                    thp, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl,
+                ),
+            )
+            @. ᶜmp_tendency = microphysics_tendencies_1m_sgs_row(
+                BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
+                ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, ᶜT′T′, ᶜq′q′, ρ_param,
+                ᶜdz, ᶜlg, ᶜleft_bias(ᶠgradᵥ(ᶜq_tot_nonneg)),
+                ᶜright_bias(ᶠgradᵥ(ᶜq_tot_nonneg)), ᶜleft_bias(ᶠgradᵥ(ᶜθ_li_sgs)),
+                ᶜright_bias(ᶠgradᵥ(ᶜθ_li_sgs)), ᶜ∂T_∂θ_buf,
+                ᶜleft_bias(ᶠgradᵥ(ᶜq′q′)), ᶜright_bias(ᶠgradᵥ(ᶜq′q′)),
+                ᶜleft_bias(ᶠgradᵥ(ᶜT′T′)), ᶜright_bias(ᶠgradᵥ(ᶜT′T′)), $(tst), dt,
+            )
+        else
+            ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+            corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
+            @. ᶜmp_tendency = microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
+                ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, ᶜσT², ᶜσq², corr_Tq,
+                $(tst), dt,
+            )
+        end
     end
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
     # grid-mean state for the implicit Jacobian diagonal.
@@ -1179,13 +1200,34 @@ function set_microphysics_tendency_cache!(
     else
         _fill_∂T_∂θ_li_for_sgs_subcell!(Y, p, thp)
         (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
-        ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
-        corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
-        @. ᶜmp_tendency = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
-            ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜσT², ᶜσq², corr_Tq, $(tst), dt,
-        )
+        if sgs_1m_uses_sgs_linear_profile(sgs_quad)
+            ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
+            ρ_param = correlation_Tq(p.params)
+            ᶜdz = Fields.Δz_field(axes(Y.c))
+            ᶜlg = Fields.local_geometry_field(Y.c)
+            ᶜθ_li_sgs = @. lazy(
+                TD.liquid_ice_pottemp(
+                    thp, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl,
+                ),
+            )
+            @. ᶜmp_tendency = microphysics_tendencies_1m_sgs_row(
+                BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
+                ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, ᶜT′T′, ᶜq′q′, ρ_param,
+                ᶜdz, ᶜlg, ᶜleft_bias(ᶠgradᵥ(ᶜq_tot_nonneg)),
+                ᶜright_bias(ᶠgradᵥ(ᶜq_tot_nonneg)), ᶜleft_bias(ᶠgradᵥ(ᶜθ_li_sgs)),
+                ᶜright_bias(ᶠgradᵥ(ᶜθ_li_sgs)), ᶜ∂T_∂θ_buf,
+                ᶜleft_bias(ᶠgradᵥ(ᶜq′q′)), ᶜright_bias(ᶠgradᵥ(ᶜq′q′)),
+                ᶜleft_bias(ᶠgradᵥ(ᶜT′T′)), ᶜright_bias(ᶠgradᵥ(ᶜT′T′)), $(tst), dt,
+            )
+        else
+            ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+            corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
+            @. ᶜmp_tendency = microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
+                ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, ᶜσT², ᶜσq², corr_Tq,
+                $(tst), dt,
+            )
+        end
     end
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
     # grid-mean state for the implicit Jacobian diagonal.
@@ -1247,13 +1289,34 @@ function set_microphysics_tendency_cache!(
     else
         _fill_∂T_∂θ_li_for_sgs_subcell!(Y, p, thp)
         (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
-        ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
-        corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
-            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜσT², ᶜσq², corr_Tq, $(tst), dt,
-        )
+        if sgs_1m_uses_sgs_linear_profile(sgs_quad)
+            ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
+            ρ_param = correlation_Tq(p.params)
+            ᶜdz = Fields.Δz_field(axes(Y.c))
+            ᶜlg = Fields.local_geometry_field(Y.c)
+            ᶜθ_li_sgs = @. lazy(
+                TD.liquid_ice_pottemp(
+                    thp, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+                ),
+            )
+            @. ᶜmp_tendency⁰ = microphysics_tendencies_1m_sgs_row(
+                BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
+                ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜT′T′, ᶜq′q′, ρ_param,
+                ᶜdz, ᶜlg, ᶜleft_bias(ᶠgradᵥ(ᶜq_tot_nonneg⁰)),
+                ᶜright_bias(ᶠgradᵥ(ᶜq_tot_nonneg⁰)), ᶜleft_bias(ᶠgradᵥ(ᶜθ_li_sgs)),
+                ᶜright_bias(ᶠgradᵥ(ᶜθ_li_sgs)), ᶜ∂T_∂θ_buf,
+                ᶜleft_bias(ᶠgradᵥ(ᶜq′q′)), ᶜright_bias(ᶠgradᵥ(ᶜq′q′)),
+                ᶜleft_bias(ᶠgradᵥ(ᶜT′T′)), ᶜright_bias(ᶠgradᵥ(ᶜT′T′)), $(tst), dt,
+            )
+        else
+            ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+            corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
+            @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
+                ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜσT², ᶜσq², corr_Tq,
+                $(tst), dt,
+            )
+        end
     end
     # Compute microphysics derivatives ∂(dqₓ/dt)/∂qₓ at the
     # grid-mean state for the implicit Jacobian diagonal.

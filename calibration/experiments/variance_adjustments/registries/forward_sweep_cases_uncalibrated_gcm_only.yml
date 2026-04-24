@@ -1,0 +1,5 @@
+# **Deprecated:** this file previously listed only HadGEM2-A GCM cfSite columns. Those runs are **disabled**
+# in the variance_adjustments study (broken forcing / registry). Kept as a stub so old CLI paths do not 404.
+#
+# Use `forward_sweep_cases_uncalibrated.yml` (idealized + GoogleLES) or `forward_sweep_cases.yml` (EKI + GoogleLES).
+cases: []

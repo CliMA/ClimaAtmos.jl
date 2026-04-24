@@ -35,9 +35,9 @@ function _va_finalize_profile_axis_limits!(ax, ylims_height_max::Union{Nothing, 
     end
     cap = Float64(ylims_height_max)
     (!isfinite(cap) || cap <= 0) && return
-    # Profiles are drawn along the full native `z` column; `autolimits` y-extent is essentially the model top.
-    # Do **not** widen the cap using `autolimits` ymax — that would undo the cloud-top tightening. If curves
-    # look clipped, fix the condensate threshold in `va_condensate_cloud_top_height_m` instead.
+    # Use **`cap` only** for the upper y bound. Do **not** merge with `autolimits` / `finallimits` ymax: profile
+    # polylines include **every** vertical level out to the model top, so Makie’s ymax is ~column height (~40 km)
+    # even when condensate is only in the lower troposphere — `max(cap, ymax)` then erased the cloud-top zoom.
     M.ylims!(ax, 0.0, cap)
     return
 end
@@ -99,7 +99,11 @@ function _va_resolve_profile_spec_for_simdir(
     return nothing
 end
 
-"""Horizontal mean at the **last time with finite data** (walks backward if the final instant is all-NaN in the file)."""
+"""Horizontal mean at the **final output time** (`times(v)[end]`), then earlier instants only if that slice has no finite data (NaN padding recovery).
+
+Uses the same **`time`** coordinate for every `SimDir` when schedules match (e.g. repeated SCM smoke), so
+overlayed lines are comparable. It does **not** pick different “last cloudy” instants per run.
+"""
 function _va_horiz_mean_last_slice(simdir, spec)
     v = get(
         simdir;
@@ -109,7 +113,21 @@ function _va_horiz_mean_last_slice(simdir, spec)
     )
     tcoord = ClimaAnalysis.times(v)
     isempty(tcoord) && return nothing
-    for ti in reverse(tcoord)
+    ti_end = tcoord[end]
+    # Pass 1: final output time (preferred for cross-run comparison).
+    for ti in (ti_end,)
+        s = slice(v, time = ti)
+        prof = if haskey(s.dims, "x") && haskey(s.dims, "y")
+            average_xy(s)
+        else
+            s
+        end
+        any(isfinite, prof.data) && return prof
+    end
+    # Pass 2: walk backward only to recover from an all-non-finite final slice (file/NaN issues).
+    for i in length(tcoord):-1:1
+        ti = tcoord[i]
+        ti == ti_end && continue
         s = slice(v, time = ti)
         prof = if haskey(s.dims, "x") && haskey(s.dims, "y")
             average_xy(s)
@@ -117,9 +135,8 @@ function _va_horiz_mean_last_slice(simdir, spec)
             s
         end
         any(isfinite, prof.data) || continue
-        if ti != tcoord[end]
-            @debug "Profile slice: last time all-NaN; using earlier instant" spec.short_name spec.reduction spec.period time = ti t_last = tcoord[end]
-        end
+        @debug "Profile: final output time had no finite data; using earlier instant" spec.short_name spec.reduction spec.period ti t_end =
+            ti_end
         return prof
     end
     return nothing
@@ -181,7 +198,7 @@ function _va_yaml_period_for_short_name(
     return nothing
 end
 
-"""Pointwise sum of two profile fields on the same vertical grid (e.g. `clw` + `cli`)."""
+"""Pointwise sum of two profile fields on the same vertical grid (e.g. `clw` + `cli`) at the same output instant (see [`_va_horiz_mean_last_slice`](@ref))."""
 function _va_profile_pair_sum_xy(
     simdir,
     short_a::AbstractString,
@@ -220,6 +237,9 @@ That way a fixed absolute floor does not dominate when the cloud is very weak (`
 numerical noise.
 
 Returns **`nothing`** if `clw`/`cli` are missing from the case YAML, or no level exceeds `τ` on any path.
+
+The returned height is **`z_cloud + padding_m`** (not clamped to the highest native `z` level) so a thin margin
+remains above the cloud when it reaches the column top.
 """
 function va_condensate_cloud_top_height_m(
     path_list::AbstractVector{<:AbstractString},
@@ -271,11 +291,9 @@ function va_condensate_cloud_top_height_m(
     end
 
     q_peak = 0.0
-    z_data_max = -Inf
     walk_data!() do xi, zi
         isfinite(xi) && isfinite(zi) || return
         q_peak = max(q_peak, xi)
-        z_data_max = max(z_data_max, zi)
     end
 
     τ = condensate_floor_kg_kg
@@ -292,7 +310,8 @@ function va_condensate_cloud_top_height_m(
 
     !isfinite(z_cloud) && return nothing
     z_hi = z_cloud + padding_m
-    isfinite(z_data_max) && (z_hi = min(z_hi, z_data_max))
+    # Do **not** clamp `z_hi` to the max native `z` level: when cloud reaches the column top,
+    # `min(z_hi, z_data_max)` removed all padding and profiles looked clipped against the upper axis edge.
     (!isfinite(z_hi) || z_hi <= 0) && return nothing
     return z_hi
 end
@@ -495,7 +514,7 @@ function va_plot_profile_shortname_sum!(
 
     default_sz = legend_outside ? (760, 460) : (600, 440)
     fig = M.Figure(size = something(figure_size, default_sz))
-    sum_default_title = "Last time slice, horizontal mean — $sum_short = $short_a + $short_b"
+    sum_default_title = "Final output time, horizontal mean — $sum_short = $short_a + $short_b"
     ax = if compact_x_axis
         M.Axis(
             fig[1, 1];

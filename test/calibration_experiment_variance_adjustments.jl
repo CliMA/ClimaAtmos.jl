@@ -13,14 +13,30 @@ include(joinpath(_VA_DIR, "lib", "forward_sweep_grid.jl"))
     @test va_model_config_path_layers(Any[Any["a.yml", "b.yml"]]) == ["a.yml", "b.yml"]
     @test va_parse_eki_calibration_backend("worker") === :worker
     @test va_parse_eki_calibration_backend("julia") === :julia
-    expc = YAML.load_file(va_experiment_config_path(_VA_DIR))
     @test isfile(va_experiment_config_path(_VA_DIR))
-    @test va_reference_output_dir(_VA_DIR, expc) ==
-          joinpath(_VA_DIR, "simulation_output", "GCM_CFSITE04", "N_3", "varfix_off", "reference")
-    @test va_observations_abs_path(_VA_DIR, expc) ==
-          joinpath(_VA_DIR, "simulation_output", "GCM_CFSITE04", "N_3", "varfix_off", "reference", "observations.jld2")
-    @test va_eki_output_root(_VA_DIR, expc) ==
-          joinpath(_VA_DIR, "simulation_output", "GCM_CFSITE04", "N_3", "varfix_off", "eki")
+    # Path helpers: use a **named** experiment YAML so this test does not track whatever happens to be the repo
+    # default under `config/experiment_config.yml` (TRMM vs GCM vs …). Changing defaults should not require edits here.
+    expc_paths = va_load_experiment_config(
+        _VA_DIR,
+        "experiment_configs/experiment_config_bomex_N3_varfix_off.yml",
+    )
+    merged_paths = va_load_merged_case_yaml_dict(_VA_DIR, expc_paths["model_config_path"])
+    @test va_reference_output_dir(_VA_DIR, expc_paths) == joinpath(
+        _VA_DIR,
+        "simulation_output",
+        string(expc_paths["case_name"]),
+        "N_$(Int(expc_paths["quadrature_order"]))",
+        va_varfix_tag(expc_paths, merged_paths),
+        "reference",
+    )
+    obs_rel = string(expc_paths["observations_path"])
+    @test va_observations_abs_path(_VA_DIR, expc_paths) ==
+          (isabspath(obs_rel) ? obs_rel : joinpath(_VA_DIR, obs_rel))
+    out_rel = string(expc_paths["output_dir"])
+    @test va_eki_output_root(_VA_DIR, expc_paths) ==
+          (isabspath(out_rel) ? out_rel : joinpath(_VA_DIR, out_rel))
+
+    expc = YAML.load_file(va_experiment_config_path(_VA_DIR))
     withenv("VA_EXPERIMENT_CONFIG" => "experiment_configs/experiment_config_trmm_N3_varfix_on.yml") do
         p = va_experiment_config_path(_VA_DIR)
         @test basename(p) == "experiment_config_trmm_N3_varfix_on.yml"
@@ -65,7 +81,8 @@ end
     cfg0 = ForwardSweepConfig(; resolution_ladder = false)
     tasks = va_flatten_forward_sweep_tasks(_VA_DIR, cfg0)
     @test !isempty(tasks)
-    _yml, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _, _ = first(tasks)
+    _yml, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _, _, vfon = first(tasks)
+    @test vfon === nothing
     seg = va_tier_path_segment(tier, z_stretch, yaml_dz)
     ap_eki = va_forward_sweep_output_active_path(_VA_DIR, slug, seg, n, vf, ForwardSweepConfig())
     @test occursin("/forward_eki/output_active", ap_eki)
@@ -78,16 +95,17 @@ end
         ForwardSweepConfig(; forward_parameters = VA_FORWARD_PARAM_BASELINE_SCM),
     )
     @test occursin("/forward_only/output_active", ap_scm)
+    # Default forward sweep registry is GoogleLES-only (HadGEM cfSite columns removed); first row is site 01.
     row = va_forward_sweep_registry_row_for(
         _VA_DIR,
-        "GCM",
-        "model_configs/gcm_forced_column_varquad_hires.yml",
+        "GOOGLELES",
+        "model_configs/googleles_column_varquad_hires.yml",
         ForwardSweepConfig(),
     )
     @test row !== nothing
-    @test row.eki_varfix_off_config == "experiment_configs/experiment_config_gcm_cfsite04_N3_varfix_off.yml"
-    @test va_forward_sweep_task_count(_VA_DIR, ForwardSweepConfig(; resolution_ladder = false)) == 60
-    @test va_forward_sweep_task_count(_VA_DIR, ForwardSweepConfig(; resolution_ladder = true)) == 240
+    @test row.eki_varfix_off_config == "experiment_configs/experiment_config_googleles_01_N3_varfix_off.yml"
+    @test va_forward_sweep_task_count(_VA_DIR, ForwardSweepConfig(; resolution_ladder = false)) == 100
+    @test va_forward_sweep_task_count(_VA_DIR, ForwardSweepConfig(; resolution_ladder = true)) == 400
     expc_yaml = YAML.load_file(va_experiment_config_path(_VA_DIR))
     pairs_exp = va_model_diagnostic_shortname_period_pairs(_VA_DIR)
     pairs_case = va_case_yaml_diagnostic_shortname_period_pairs(_VA_DIR, expc_yaml["model_config_path"])
@@ -117,11 +135,18 @@ end
         resolution_ladder = false,
         forward_parameters = VA_FORWARD_PARAM_BASELINE_SCM,
     )
-    @test va_forward_sweep_task_count(_VA_DIR, uc) == 100
+    @test va_forward_sweep_task_count(_VA_DIR, uc) == 95
+    uc2 = ForwardSweepConfig(;
+        registry_path = "registries/forward_sweep_cases_uncalibrated.yml",
+        resolution_ladder = false,
+        forward_parameters = VA_FORWARD_PARAM_BASELINE_SCM,
+        case_slugs = ["TRMM_LBA", "Bomex"],
+    )
+    @test va_forward_sweep_task_count(_VA_DIR, uc2) == 55
     row = va_forward_sweep_registry_row_for(
         _VA_DIR,
-        "GCM_CFSITE02",
-        "model_configs/gcm_forced_column_varquad_site02.yml",
+        "TRMM_LBA",
+        "model_configs/trmm_column_varquad_hires.yml",
         uc,
     )
     @test row !== nothing

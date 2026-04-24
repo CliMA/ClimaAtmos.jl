@@ -7,3 +7,15 @@ dz_bottom: 30
 dt: 150secs
 t_end: 12hours
 netcdf_interpolation_num_points: [8, 8, 164]
+# When the forward sweep runs **varfix_on**, expand the grid to one run per string (LHS / Voronoi / …), each under
+# `simulation_output/.../varfix_on_<slug>/...` (see `lib/forward_sweep_grid.jl`). Other cases that merge only the
+# shared master without this overlay keep a single varfix-on directory.
+forward_sweep_varfix_on_distributions:
+  - lognormal_vertical_profile_full_cubature
+  - lognormal_vertical_profile_full_cubature
+  - lognormal_vertical_profile_lhs_z
+  - lognormal_vertical_profile_principal_axis
+  - lognormal_vertical_profile_voronoi
+  - lognormal_vertical_profile_barycentric
+  - lognormal_vertical_profile_inner_bracketed
+  - lognormal_vertical_profile_inner_halley

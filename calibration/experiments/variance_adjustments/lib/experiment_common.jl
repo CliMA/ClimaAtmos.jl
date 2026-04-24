@@ -6,8 +6,9 @@ import ClimaComms
 import ClimaAtmos as CA
 
 """
-Subdirectory of the experiment root holding **named EKI slice** YAMLs (`experiment_config_*_*.yml`).
-The default slice YAML is **`config/experiment_config.yml`** (see [`va_experiment_config_path`](@ref)).
+Subdirectory of the experiment root holding **named calibration experiment YAMLs** (`experiment_config_*_*.yml`;
+each file is one independent EKI configuration / sweep row, not a different binary).
+The **default** YAML when none is selected is **`config/experiment_config.yml`** (see [`va_experiment_config_path`](@ref)).
 """
 const VA_EXPERIMENT_CONFIGS_DIR = "experiment_configs"
 
@@ -27,11 +28,11 @@ end
 Path to the active experiment YAML. If `explicit` is set (non-empty), it is interpreted relative to
 `experiment_dir` unless absolute. Else if **`VA_EXPERIMENT_CONFIG`** is set in the environment, use that
 (same relative/absolute rules). Else **`experiment_dir/config/experiment_config.yml`** (if that file exists),
-otherwise a legacy root **`experiment_dir/experiment_config.yml`** if present, else the canonical
+otherwise **`experiment_dir/experiment_config.yml`** at the experiment root if present, else the canonical
 **`config/experiment_config.yml`** path (load may error until the file exists).
 
-Named slice YAMLs (per-case / per-parameter EKI configs) live under **`experiment_dir/$(VA_EXPERIMENT_CONFIGS_DIR)/`**
-(e.g. `experiment_configs/experiment_config_gcm_cfsite19_N3_varfix_off.yml`).
+Named experiment YAMLs (per-case / per-parameter EKI configs) live under **`experiment_dir/$(VA_EXPERIMENT_CONFIGS_DIR)/`**
+(e.g. `experiment_configs/experiment_config_googleles_01_N3_varfix_off.yml`).
 """
 function va_experiment_config_path(
     experiment_dir::AbstractString,
@@ -56,30 +57,24 @@ function va_load_experiment_config(
     return YAML.load_file(va_experiment_config_path(experiment_dir, explicit))
 end
 
-"""YAML `sgs_distribution` values that imply gridscale-corrected quadrature moments."""
-const VA_GRIDSCALE_CORRECTED_SGS_DISTRIBUTIONS = (
-    "gaussian_gridscale_corrected",
-    "gaussian_gridscale_corrected_column_tensor",
-    "gaussian_gridscale_corrected_profile_rosenblatt_brent",
-    "gaussian_gridscale_corrected_profile_rosenblatt_halley",
-    "gaussian_gridscale_corrected_profile_rosenblatt_chebyshev",
-    "lognormal_gridscale_corrected",
-    "lognormal_gridscale_corrected_column_tensor",
-    "lognormal_gridscale_corrected_profile_rosenblatt_brent",
-    "lognormal_gridscale_corrected_profile_rosenblatt_halley",
-    "lognormal_gridscale_corrected_profile_rosenblatt_chebyshev",
-)
+"""True if `sgs_distribution` selects the vertical half-cell layer-profile SGS path (varfix “on”)."""
+function va_is_vertical_profile_sgs_distribution(d::AbstractString)
+    return occursin(r"^(gaussian|lognormal)_vertical_profile", String(strip(d)))
+end
 
 """
-    va_base_to_gridscale_corrected_sgs_distribution(base_dist) -> String
+    va_base_to_vertical_profile_sgs_distribution(base_dist) -> String
 
 For sweeps that toggle “varfix”: map a base `sgs_distribution` string to the default
-gridscale-corrected counterpart (`gaussian` → `gaussian_gridscale_corrected`, etc.).
+vertical-profile counterpart (`gaussian` → `gaussian_vertical_profile`, etc.).
+
+**Forward sweep override:** if merged case YAML defines `sgs_distribution_varfix_on`, `sweep_forward_core.jl`
+uses that full string for `varfix_on` instead of this mapping (then deletes the key before `AtmosConfig`).
 """
-function va_base_to_gridscale_corrected_sgs_distribution(base_dist::AbstractString)
+function va_base_to_vertical_profile_sgs_distribution(base_dist::AbstractString)
     b = String(base_dist)
-    b == "gaussian" && return "gaussian_gridscale_corrected"
-    b == "lognormal" && return "lognormal_gridscale_corrected"
+    b == "gaussian" && return "gaussian_vertical_profile"
+    b == "lognormal" && return "lognormal_vertical_profile"
     return b
 end
 
@@ -100,7 +95,7 @@ end
 """
     va_varfix_tag(expc, merged_case_cfg = nothing) -> String
 
-`"varfix_on"` if the effective `sgs_distribution` is gridscale-corrected.
+`"varfix_on"` if the effective `sgs_distribution` uses the vertical-profile family.
 Uses `expc["sgs_distribution"]` when set; otherwise `merged_case_cfg["sgs_distribution"]` when
 `merged_case_cfg` is provided (merged case YAML).
 """
@@ -113,7 +108,7 @@ function va_varfix_tag(expc, merged_case_cfg = nothing)
     if isempty(d) && merged_case_cfg !== nothing
         d = string(get(merged_case_cfg, "sgs_distribution", ""))
     end
-    if !isempty(d) && d in VA_GRIDSCALE_CORRECTED_SGS_DISTRIBUTIONS
+    if !isempty(d) && va_is_vertical_profile_sgs_distribution(d)
         return "varfix_on"
     end
     return "varfix_off"
@@ -143,7 +138,7 @@ end
 """
     va_default_figure_dir(experiment_dir, expc) -> String
 
-Subfolder under `analysis/figures/` for post-run plots (avoids clobbering between slices).
+Subfolder under `analysis/figures/` for post-run plots (avoids clobbering between calibration cases).
 """
 function va_default_figure_dir(experiment_dir::AbstractString, expc)
     case = replace(string(get(expc, "case_name", "case")), r"[^\w\.\-]+" => "_")
@@ -160,7 +155,7 @@ function va_observations_abs_path(experiment_dir::AbstractString, expc)
     return isabspath(p) ? String(p) : joinpath(experiment_dir, p)
 end
 
-"""Root directory of EKI outputs for this experiment slice (`output_dir` from YAML, resolved relative to `experiment_dir`)."""
+"""Root directory of EKI outputs for this experiment YAML (`output_dir` from YAML, resolved relative to `experiment_dir`)."""
 function va_eki_output_root(experiment_dir::AbstractString, expc)
     out = expc["output_dir"]
     return isabspath(out) ? String(out) : joinpath(experiment_dir, out)
@@ -624,7 +619,7 @@ end
 """
     va_prior_abs_path(experiment_dir[, config_path]) -> String
 
-Absolute path to `prior_path` from the active experiment YAML. Each slice can use a different file; the same
+Absolute path to `prior_path` from the active experiment YAML. Each calibration case can use a different file; the same
 parameter **name** can therefore have a different prior distribution in another case’s `prior*.toml`.
 """
 function va_prior_abs_path(

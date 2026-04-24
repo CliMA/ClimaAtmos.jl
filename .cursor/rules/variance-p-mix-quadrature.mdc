@@ -1,0 +1,12 @@
+---
+description: Local optional Python for variance experiment (if present under local_python/)
+globs:
+  - calibration/experiments/variance_adjustments/**/*.py
+  - calibration/experiments/variance_adjustments/**/*.md
+---
+
+# Plot / quantity vocabulary
+
+Authoritative terminology and `sgs_distribution` strings live in [`calibration/experiments/variance_adjustments/README.md`](calibration/experiments/variance_adjustments/README.md).
+
+When editing optional scripts under **`local_python/`** (ignored by git): describe figures using standard statistics language—layer-mean densities, Gauss–Hermite nodes, Gauss–Legendre in height, baseline vs vertical-profile quadrature—not informal nicknames.

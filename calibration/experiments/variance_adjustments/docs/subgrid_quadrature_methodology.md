@@ -1,7 +1,5 @@
-# Sub-grid quadrature documentation
+# Supporting material
 
-**Authoritative source:** compile [`subgrid_quadrature_methodology.tex`](subgrid_quadrature_methodology.tex) to PDF. That document is the full specification (motivation, M1–M4, pill/Brent/Chebyshev/rational recipes, validation, Julia crosswalk).
+Authoritative framing and YAML vocabulary for this branch are in [`../README.md`](../README.md).
 
-**Notebook:** [`../Variance_Stuff.ipynb`](../Variance_Stuff.ipynb) — interactive figures and widgets; the first markdown cell is a search-string map to the TeX sections.
-
-**Cursor rule:** [`.cursor/rules/jupyter-edits.mdc`](../../../../.cursor/rules/jupyter-edits.mdc) — notebooks must be edited with reviewable tools, not bulk JSON scripts.
+The extended TeX manuscript [`subgrid_quadrature_methodology.tex`](subgrid_quadrature_methodology.tex) remains an optional derivation archive; compile locally if needed. Interactive exploration may live under [`../local_python/`](../local_python/) (git-ignored).

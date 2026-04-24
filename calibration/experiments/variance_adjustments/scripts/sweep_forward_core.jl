@@ -66,6 +66,7 @@ function run_one(;
     out_subdir::AbstractString,
     skip_done::Bool,
     merged_member_toml::Union{Nothing, AbstractString} = nothing,
+    varfix_on_distribution::Union{Nothing, AbstractString} = nothing,
 )
     cfg = va_load_merged_case_yaml_dict(EXPERIMENT_DIR, case_yaml_layers)
     # Same as `model_interface.jl` / README: forward sweep does not use `experiment_config.yml`, so honor env overrides.
@@ -100,9 +101,20 @@ function run_one(;
     end
     cfg["quadrature_order"] = n_quad
     base_dist = string(get(cfg, "sgs_distribution", "lognormal"))
-    cfg["sgs_distribution"] =
-        varfix ? va_base_to_gridscale_corrected_sgs_distribution(base_dist) :
-        base_dist
+    vo = get(cfg, "sgs_distribution_varfix_on", nothing)
+    if varfix
+        if varfix_on_distribution !== nothing && !isempty(strip(string(varfix_on_distribution)))
+            cfg["sgs_distribution"] = String(strip(string(varfix_on_distribution)))
+        else
+            cfg["sgs_distribution"] =
+                vo !== nothing && !isempty(strip(string(vo))) ? String(strip(string(vo))) :
+                va_base_to_vertical_profile_sgs_distribution(base_dist)
+        end
+    else
+        cfg["sgs_distribution"] = base_dist
+    end
+    # Not a ClimaAtmos key — only for sweep driver (would warn as unused in `AtmosConfig`).
+    pop!(cfg, "sgs_distribution_varfix_on", nothing)
     if merged_member_toml === nothing
         merged_path = joinpath(cfg["output_dir"], VA_MERGED_SCM_BASELINE_BASENAME)
         va_write_merged_scm_baseline_file!(EXPERIMENT_DIR, scm_toml, merged_path)
@@ -114,6 +126,10 @@ function run_one(;
     z_stretch = va_forward_sweep_case_z_stretch(cfg)
     yaml_dz = va_forward_sweep_case_dz_bottom(cfg)
     res_slug = va_tier_path_segment(tier, z_stretch, yaml_dz)
+    job_suffix = ""
+    if varfix && varfix_on_distribution !== nothing && !isempty(strip(string(varfix_on_distribution)))
+        job_suffix = string("_", va_sgs_dist_path_slug(String(strip(string(varfix_on_distribution)))))
+    end
     job_id = string(
         "va_sweep_",
         cas_slug,
@@ -123,6 +139,7 @@ function run_one(;
         n_quad,
         "_",
         varfix ? "vf1" : "vf0",
+        job_suffix,
     )
     atmos_config = CA.AtmosConfig(
         cfg;
@@ -143,9 +160,9 @@ function run_sweep_task_row(
     cfg::ForwardSweepConfig;
     task_id_for_log::Union{Nothing, Int} = nothing,
 )
-    layers, scm, slug, n, vf, tier, z_stretch, yaml_dz, eki_off, eki_on = tasks[i]
+    layers, scm, slug, n, vf, tier, z_stretch, yaml_dz, eki_off, eki_on, vfon = tasks[i]
     res_seg = va_tier_path_segment(tier, z_stretch, yaml_dz)
-    tag = vf ? "varfix_on" : "varfix_off"
+    tag = va_forward_sweep_varfix_dir_segment(vf, vf ? vfon : nothing)
     leaf = va_forward_sweep_forward_subdir(cfg)
     sub = joinpath(slug, res_seg, "N_$(n)", tag, leaf)
     merged = _va_resolve_sweep_merged_toml(EXPERIMENT_DIR, cfg, vf, eki_off, eki_on)
@@ -165,6 +182,7 @@ function run_sweep_task_row(
         out_subdir = sub,
         skip_done = cfg.skip_done,
         merged_member_toml = merged,
+        varfix_on_distribution = vfon,
     )
 end
 
@@ -177,9 +195,9 @@ function run_task_index(task_id::Int, cfg::ForwardSweepConfig)
 end
 
 function _va_sweep_task_label(tasks, i::Int)::String
-    layers, scm, slug, n, vf, tier, z_stretch, yaml_dz, eki_off, eki_on = tasks[i]
+    layers, scm, slug, n, vf, tier, z_stretch, yaml_dz, eki_off, eki_on, vfon = tasks[i]
     res_seg = va_tier_path_segment(tier, z_stretch, yaml_dz)
-    tag = vf ? "varfix_on" : "varfix_off"
+    tag = va_forward_sweep_varfix_dir_segment(vf, vf ? vfon : nothing)
     return "$(slug) $(res_seg) N=$(n) $(tag)"
 end
 
@@ -238,8 +256,8 @@ function run_forward_sweep!(cfg::ForwardSweepConfig = ForwardSweepConfig(); merg
             catch err
                 lab = _va_sweep_task_label(tasks, i)
                 push!(failed_labels, lab)
-                layers, scm, slug, n, vf, tier, z_stretch, yaml_dz, eki_off, eki_on = tasks[i]
-                @error "Forward run failed" label = lab slug n vf tier exception = (err, catch_backtrace())
+                layers, scm, slug, n, vf, tier, z_stretch, yaml_dz, eki_off, eki_on, vfon = tasks[i]
+                @error "Forward run failed" label = lab slug n vf tier vfon exception = (err, catch_backtrace())
                 va_flush_stdio()
                 cfg.fail_fast && rethrow()
             end
@@ -262,8 +280,8 @@ function run_forward_sweep!(cfg::ForwardSweepConfig = ForwardSweepConfig(); merg
                 lock(lk) do
                     push!(failed_labels, lab)
                 end
-                layers, scm, slug, n, vf, tier, z_stretch, yaml_dz, eki_off, eki_on = tasks[i]
-                @error "Forward run failed" label = lab slug n vf tier exception = (err, catch_backtrace())
+                layers, scm, slug, n, vf, tier, z_stretch, yaml_dz, eki_off, eki_on, vfon = tasks[i]
+                @error "Forward run failed" label = lab slug n vf tier vfon exception = (err, catch_backtrace())
                 va_flush_stdio()
                 cfg.fail_fast && rethrow()
             end

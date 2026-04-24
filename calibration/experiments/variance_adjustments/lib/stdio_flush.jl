@@ -32,7 +32,7 @@ end
     va_setup_stdio_flushing!()
 
 Install [`FlushingLogger`](@ref) around the current global logger (idempotent). Safe to call in
-every subprocess (`run_full_study`, forward sweep, EKI slice, etc.).
+every subprocess (`run_full_study`, forward sweep, EKI calibration sweep, etc.).
 """
 function va_setup_stdio_flushing!()
     lg = Logging.global_logger()

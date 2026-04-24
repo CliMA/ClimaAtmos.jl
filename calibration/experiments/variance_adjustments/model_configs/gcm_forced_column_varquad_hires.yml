@@ -1,5 +1,8 @@
-# GCM-forced column — default mesh + HadGEM2-A forcing. Thin overlay (merge after the shared column master in `model_config_path`).
-# `cfsite_number` matches the default EKI slice (cfSite 4); other cfSites use `gcm_forced_column_varquad_site*.yml`.
+# GCM-forced column — shared mesh, time step, duration, and HadGEM2-A July forcing.
+# Uncalibrated forwards merge: `master_column_varquad_diagnostic_edmfx.yml` → **this file** → `gcm_forced_column_varquad_siteNN.yml`
+# (site overlay sets `forward_sweep_case_slug` and, when needed, overrides `cfsite_number`).
+# EKI reference runs (`experiment_config_gcm_cfsiteNN_*.yml`) merge **master + this file**; `cfsite_number` is set from `les_truth` in `model_interface.jl`.
+# Default `cfsite_number` is cfSite 4 when no overlay / no `les_truth` override applies.
 initial_condition: GCM
 external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
 cfsite_number: "site4"

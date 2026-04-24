@@ -3,7 +3,7 @@
 # Rows omit **`eki_varfix_off_config`**. For analysis, treat the **finest vertical tier** at **`N_quad=3`**, **`varfix_off`**
 # as a stand-in “truth” when comparing to coarser runs (no LES observations involved).
 #
-# Registry: five idealized columns + five HadGEM2-A **artifact** cfSites (`registries/gcm_uncalibrated_cases_seed43_5.yaml`).
+# **HadGEM2-A GCM cfSite artifact columns** were removed (broken in this study). Use GoogleLES + idealized SCMs.
 cases:
   - model_config_path:
       - model_configs/master_column_varquad_diagnostic_edmfx.yml
@@ -37,31 +37,7 @@ cases:
       - toml/uncalibrated_stability_overlay.toml
   - model_config_path:
       - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/gcm_forced_column_varquad_site02.yml
-    scm_toml:
-      - diagnostic_edmfx_1M.toml
-      - toml/uncalibrated_stability_overlay.toml
-  - model_config_path:
-      - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/gcm_forced_column_varquad_site05.yml
-    scm_toml:
-      - diagnostic_edmfx_1M.toml
-      - toml/uncalibrated_stability_overlay.toml
-  - model_config_path:
-      - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/gcm_forced_column_varquad_site10.yml
-    scm_toml:
-      - diagnostic_edmfx_1M.toml
-      - toml/uncalibrated_stability_overlay.toml
-  - model_config_path:
-      - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/gcm_forced_column_varquad_site23.yml
-    scm_toml:
-      - diagnostic_edmfx_1M.toml
-      - toml/uncalibrated_stability_overlay.toml
-  - model_config_path:
-      - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/gcm_forced_column_varquad_site25.yml
+      - model_configs/googleles_column_varquad_hires.yml
     scm_toml:
       - diagnostic_edmfx_1M.toml
       - toml/uncalibrated_stability_overlay.toml

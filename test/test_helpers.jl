@@ -1,5 +1,4 @@
 ### BoilerPlate Code
-using IntervalSets
 
 import ClimaComms
 import ClimaCore:
@@ -273,14 +272,18 @@ function get_cartesian_spaces(; FT = Float32)
     stretch = Meshes.Uniform()
     device = ClimaComms.CPUSingleThreaded()
     comms_context = ClimaComms.SingletonCommsContext(device)
-    # Horizontal Grid Construction
     quad = Quadratures.GLL{npoly + 1}()
-    horzdomain = Domains.RectangleDomain(
-        Geometry.XPoint{FT}(xlim[1]) .. Geometry.XPoint{FT}(xlim[2]),
-        Geometry.YPoint{FT}(xlim[1]) .. Geometry.YPoint{FT}(xlim[2]),
-        x1periodic = true,
-        x2periodic = true,
+    x_domain = Domains.IntervalDomain(
+        Geometry.XPoint{FT}(xlim[1]),
+        Geometry.XPoint{FT}(xlim[2]);
+        periodic = true,
     )
+    y_domain = Domains.IntervalDomain(
+        Geometry.YPoint{FT}(xlim[1]),
+        Geometry.YPoint{FT}(xlim[2]);
+        periodic = true,
+    )
+    horzdomain = Domains.RectangleDomain(x_domain, y_domain)
     # Assume same number of elems (helem) in (x,y) directions
     horzmesh = Meshes.RectilinearMesh(horzdomain, helem, helem)
     horz_topology = Topologies.Topology2D(

@@ -150,11 +150,12 @@ function _allocs_sgs_sat_adj(thp, quad)
     q′q′ = FT(1e-6)
     corr_Tq = FT(0.6)
     q_min = FT(1e-10)
+    z = zero(FT)
     ClimaAtmos.compute_sgs_saturation_adjustment(
-        thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq,
+        thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq, z, z,
     )
     return @allocated ClimaAtmos.compute_sgs_saturation_adjustment(
-        thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq,
+        thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq, z, z,
     )
 end
 

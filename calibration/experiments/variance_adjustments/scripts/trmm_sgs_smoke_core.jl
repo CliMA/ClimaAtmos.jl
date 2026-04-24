@@ -13,7 +13,6 @@ include(joinpath(VA_TRMM_SGS_SMOKE_ROOT, "lib", "forward_sweep_grid.jl"))
 
 import CairoMakie as CM
 import ClimaAtmos as CA
-import Dates
 
 const VA_TRMM_SGS_SMOKE_CASE_LAYERS = String[
     "model_configs/master_column_varquad_diagnostic_edmfx.yml",
@@ -22,29 +21,34 @@ const VA_TRMM_SGS_SMOKE_CASE_LAYERS = String[
 
 const VA_TRMM_SGS_SMOKE_SCM_TOML = Any["diagnostic_edmfx_1M.toml", "toml/uncalibrated_stability_overlay.toml"]
 
-# Omit bare `*_gridscale_corrected`: it is **type-identical** to `*_profile_rosenblatt_brent` (see
-# `get_sgs_distribution` / `DefaultGridscaleProfileQuadrature`) but hides that in the string. Smoke uses the
-# explicit YAML so regressions are tied to the named discretization, not to whatever `*()` defaults to.
+# Smoke lists **explicit** `sgs_distribution` strings so regressions name the discretization (see this branch’s
+# `calibration/experiments/variance_adjustments/README.md`). Omit bare `*_vertical_profile` if you want every
+# run to spell out an inner-quadrature variant.
 const VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS = String[
     "lognormal",
     "gaussian",
-    "lognormal_gridscale_corrected_profile_rosenblatt_brent",
-    "lognormal_gridscale_corrected_column_tensor",
-    "lognormal_gridscale_corrected_profile_rosenblatt_halley",
-    "lognormal_gridscale_corrected_profile_rosenblatt_chebyshev",
-    "gaussian_gridscale_corrected_profile_rosenblatt_brent",
-    "gaussian_gridscale_corrected_column_tensor",
-    "gaussian_gridscale_corrected_profile_rosenblatt_halley",
-    "gaussian_gridscale_corrected_profile_rosenblatt_chebyshev",
+    "lognormal_vertical_profile_inner_bracketed",
+    "lognormal_vertical_profile_full_cubature",
+    "lognormal_vertical_profile_lhs_z",
+    "lognormal_vertical_profile_principal_axis",
+    "lognormal_vertical_profile_voronoi",
+    "lognormal_vertical_profile_barycentric",
+    "lognormal_vertical_profile_inner_halley",
+    "gaussian_vertical_profile_inner_bracketed",
+    "gaussian_vertical_profile_full_cubature",
+    "gaussian_vertical_profile_lhs_z",
+    "gaussian_vertical_profile_principal_axis",
+    "gaussian_vertical_profile_voronoi",
+    "gaussian_vertical_profile_barycentric",
+    "gaussian_vertical_profile_inner_halley",
 ]
 
-function _va_sgs_dist_path_slug(dist::AbstractString)::String
-    s = replace(String(dist), r"[^A-Za-z0-9_.-]+" => "_")
-    s = strip(s, '_')
-    return isempty(s) ? "dist" : s
-end
+"""
+Write `showerror` + truncated backtrace for a failed smoke run (REPL truncates; open this file instead).
 
-"""Write `showerror` + truncated backtrace for a failed smoke run (REPL truncates; open this file instead)."""
+Filename is stable per `(case_slug, quadrature_order, sgs_distribution)` and **overwrites** on a later failure
+for the same triple so `_failures/` does not accumulate timestamped copies.
+"""
 function _va_sgs_smoke_write_failure!(
     experiment_dir::AbstractString,
     slug::AbstractString,
@@ -56,9 +60,8 @@ function _va_sgs_smoke_write_failure!(
 )::String
     fail_root = joinpath(experiment_dir, "simulation_output", "sgs_smoke", "_failures")
     mkpath(fail_root)
-    ts = Dates.format(Dates.now(), Dates.DateFormat("yyyymmdd_HHMMSS"))
-    safe_dist = _va_sgs_dist_path_slug(dist)
-    path = joinpath(fail_root, "$(slug)_N$(n_quad)_$(safe_dist)_$(ts).txt")
+    safe_dist = va_sgs_dist_path_slug(dist)
+    path = joinpath(fail_root, "$(slug)_N$(n_quad)_$(safe_dist).txt")
     open(path, "w") do io
         println(io, "sgs_distribution = ", dist)
         println(io, "case_slug = ", slug, "  quadrature_order = ", n_quad)
@@ -151,7 +154,7 @@ function va_run_trmm_sgs_smoke_one(;
     if nip isa AbstractVector && length(nip) >= 3
         cfg["netcdf_interpolation_num_points"] = Any[nip[1], nip[2], tier.z_elem]
     end
-    dist_slug = _va_sgs_dist_path_slug(dist)
+    dist_slug = va_sgs_dist_path_slug(dist)
     cfg["output_dir"] = joinpath(
         experiment_dir,
         "simulation_output",

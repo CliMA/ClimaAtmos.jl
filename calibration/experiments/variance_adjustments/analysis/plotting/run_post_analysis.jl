@@ -8,13 +8,13 @@
 # **CLI** (from `calibration/experiments/variance_adjustments`):
 #   julia --project=. analysis/plotting/run_post_analysis.jl [--figures-dir=DIR] [--experiment-config=REL.yml] [output_active path1 [path2 ...]]
 #
-# One slice (default figure dir, losses + parameters + case diagnostics):
+# One calibration case (default figure dir, losses + parameters + case diagnostics):
 #   julia --project=. analysis/plotting/run_post_analysis.jl --experiment-config=config/experiment_config.yml
 #
-# All slices in `va_calibration_sweep_configs()` (same as full study’s figure pass):
+# All experiment YAMLs in `va_calibration_sweep_configs()` (same as full study’s figure pass):
 #   julia --project=. scripts/run_full_study.jl --figures-only
 #
-# Figures default to `analysis/figures/<CASE>_N<n>_<varfix>_<calibration_mode>/` so different slices do not overwrite.
+# Figures default to `analysis/figures/<CASE>_N<n>_<varfix>_<calibration_mode>/` so different cases do not overwrite.
 #
 _va_analysis_is_main() =
     !isempty(Base.PROGRAM_FILE) && abspath(Base.PROGRAM_FILE) == abspath(@__FILE__)
@@ -55,7 +55,7 @@ end
 Generate standard figures after calibration. Resolves the experiment YAML via [`va_experiment_config_path`](@ref)
 (`VA_EXPERIMENT_CONFIG` or optional `experiment_config` relative path).
 
-`figure_root` defaults to [`va_default_figure_dir`](@ref) so each slice writes under its own subfolder of
+`figure_root` defaults to [`va_default_figure_dir`](@ref) so each calibration case writes under its own subfolder of
 `analysis/figures/`.
 
 - `do_observation_profiles`: if `true`, writes `profiles_eki_observation_stack.png` under `figure_root`.

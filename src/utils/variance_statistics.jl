@@ -1,8 +1,8 @@
 #####
 ##### Subgrid / subcell variance statistics (pure scalar kernels)
 #####
-##### Used by SGS quadrature and precomputed quantities.  See
-##### `variance_statistics_reference.md` for PDF / moment-matched Gaussian discussion.
+##### Used by SGS quadrature and precomputed quantities (two-slope, face-anchored
+##### reconstruction of subcell geometric contributions to variances / covariance).
 
 import SpecialFunctions: erf
 
@@ -15,70 +15,99 @@ Numerical floor for variance–correlation algebra (same idea as `ϵ_numerics` i
 @inline ϵ_variance_statistics(FT) = cbrt(floatmin(FT))
 
 """
-    subcell_geometric_variance_increment(Δz, dqdz_sq, dTdz_sq)
+    _two_slope_d_D(s_dn, s_up)
 
-Return `(Δq′q′, ΔT′T′)` from subcell linear reconstruction over thickness `Δz`
-(``(1/12) Δz^2 (∂q/∂z)^2`` and ``(1/12) Δz^2 (∂T/∂z)^2``). Arguments `dqdz_sq`
-and `dTdz_sq` are **squared** vertical derivatives in quadrature variables.
+Centered slope ``d = (s_+ + s_-) / 2`` and slope asymmetry ``D = s_+ - s_-`` from
+backward / forward half-slopes ``s_-, s_+`` of a center-defined field on a two-slope
+piecewise-linear reconstruction.
 """
-@inline function subcell_geometric_variance_increment(Δz, dqdz_sq, dTdz_sq)
-    geom = (one(typeof(Δz)) / 12) * Δz^2
-    return geom * dqdz_sq, geom * dTdz_sq
+@inline function _two_slope_d_D(s_dn, s_up)
+    half = one(typeof(s_dn)) / 2
+    d = half * (s_up + s_dn)
+    D = s_up - s_dn
+    return d, D
 end
 
 """
-    subcell_geometric_covariance_Tq(Δz, ∂T∂θ_li, dot_wq_wθ)
+    subcell_geometric_variance_increment(Δz, s_q_dn, s_q_up, s_T_dn, s_T_up)
 
-Subcell geometric contribution to ``\\mathrm{Cov}(T', q')`` for a linear-in-`z` profile:
-``(1/12) Δz^2 (∂T/∂z)(∂q/∂z)`` with ``∂T/∂z ≈ (∂T/∂θ_{li})(∂θ_{li}/∂z)``.
-Here `dot_wq_wθ` is `dot(WVector(∇q), WVector(∇θ_{li}))` (column geometry).
+Layer-mean **geometric** variance increment of a center-defined field reconstructed
+two-slope piecewise-linearly across one cell of thickness `Δz` (eq.
+`two-slope-geomvar` of the methods section):
+
+```math
+\\overline{(\\phi - \\bar\\phi)^2}
+  \\;=\\; \\frac{d^2 \\, \\Delta z^2}{12}
+       \\;+\\; \\frac{D^2 \\, \\Delta z^2}{192},
+```
+
+with centered slope ``d = (s_+ + s_-)/2`` and asymmetry ``D = s_+ - s_-``.
+Returns `(Δq′q′, ΔT′T′)`. Reduces to the classical ``\\tfrac{1}{12}\\Delta z^2 d^2``
+form when `s_dn == s_up`.
+
+Arguments are **half-slopes in `z`** (i.e. forward and backward differences of
+adjacent center values divided by `Δz`); the caller is responsible for converting
+``\\theta_{li}``-space half-slopes to ``T``-space via the local Jacobian
+``\\partial T / \\partial \\theta_{li}`` before passing `s_T_dn, s_T_up`.
 """
-@inline function subcell_geometric_covariance_Tq(Δz, ∂T∂θ_li, dot_wq_wθ)
-    return (one(typeof(Δz)) / 12) * Δz^2 * ∂T∂θ_li * dot_wq_wθ
-end
-
-"""
-    effective_sgs_quadrature_moments_matched_gaussian(
-        q′q′, T′T′, ρ_param, ε, Δz, w_grad_q_sq, w_grad_θ_sq, ∂T∂θ_li, wq_dot_wθ,
-    )
-
-Moment-matched **Gaussian** effective variances and correlation for SGS quadrature
-when subcell linear-in-`z` geometry is folded into the moments passed to
-Gauss–Hermite quadrature (same algebra previously implemented in
-`materialize_sgs_quadrature_moments!`).
-
-Returns `(q_var_eff, T_var_eff, ρ_eff)` with `ρ_eff ∈ [-1, 1]`.
-"""
-@inline function effective_sgs_quadrature_moments_matched_gaussian(
-    q′q′,
-    T′T′,
-    ρ_param,
-    ε,
+@inline function subcell_geometric_variance_increment(
     Δz,
-    w_grad_q_sq,
-    w_grad_θ_sq,
-    ∂T∂θ_li,
-    wq_dot_wθ,
+    s_q_dn,
+    s_q_up,
+    s_T_dn,
+    s_T_up,
 )
-    FT = typeof(q′q′)
+    FT = typeof(Δz)
     twelfth = one(FT) / 12
-    q_var =
-        q′q′ +
-        twelfth * Δz^2 * w_grad_q_sq
-    T_var =
-        T′T′ +
-        twelfth * Δz^2 * ∂T∂θ_li^2 * w_grad_θ_sq
-    num =
-        ρ_param *
-        sqrt(max(zero(FT), q′q′)) *
-        sqrt(max(zero(FT), T′T′)) +
-        twelfth * Δz^2 * ∂T∂θ_li * wq_dot_wθ
-    den = max(
-        oftype(q_var, ε),
-        sqrt(max(zero(FT), q_var)) * sqrt(max(zero(FT), T_var)),
-    )
-    ρ_eff = clamp(num / den, -one(FT), one(FT))
-    return q_var, T_var, ρ_eff
+    one192 = one(FT) / 192
+    d_q, D_q = _two_slope_d_D(s_q_dn, s_q_up)
+    d_T, D_T = _two_slope_d_D(s_T_dn, s_T_up)
+    Δz2 = Δz^2
+    Δq = twelfth * Δz2 * d_q^2 + one192 * Δz2 * D_q^2
+    ΔT = twelfth * Δz2 * d_T^2 + one192 * Δz2 * D_T^2
+    return Δq, ΔT
+end
+
+"""
+    subcell_geometric_covariance_Tq(Δz, s_q_dn, s_q_up, s_T_dn, s_T_up)
+
+Layer-mean **geometric** ``\\mathrm{Cov}(T', q')`` increment for two two-slope
+piecewise-linear fields (eq. `two-slope-geomcov` of the methods section):
+
+```math
+\\overline{(T-\\bar T)(q-\\bar q)}
+  \\;=\\; \\frac{d^T d^q \\, \\Delta z^2}{12}
+       \\;+\\; \\frac{D^T D^q \\, \\Delta z^2}{192}.
+```
+
+Half-slopes are in `z` and in **`T`-space** (caller supplies the ``\\partial T /
+\\partial \\theta_{li}`` rotation).
+"""
+@inline function subcell_geometric_covariance_Tq(
+    Δz,
+    s_q_dn,
+    s_q_up,
+    s_T_dn,
+    s_T_up,
+)
+    FT = typeof(Δz)
+    twelfth = one(FT) / 12
+    one192 = one(FT) / 192
+    d_q, D_q = _two_slope_d_D(s_q_dn, s_q_up)
+    d_T, D_T = _two_slope_d_D(s_T_dn, s_T_up)
+    Δz2 = Δz^2
+    return twelfth * Δz2 * d_q * d_T + one192 * Δz2 * D_q * D_T
+end
+
+"""
+    subcell_layer_mean_excursion(Δz, s_dn, s_up)
+
+Cell-mean offset ``\\bar\\phi - \\phi_c = \\tfrac{\\Delta z}{8}\\,D`` induced by a
+two-slope piecewise-linear reconstruction with asymmetry `D = s_up - s_dn`
+(eq. `two-slope-layer-mean` of the methods section). Zero when `s_dn == s_up`.
+"""
+@inline function subcell_layer_mean_excursion(Δz, s_dn, s_up)
+    return (Δz / oftype(Δz, 8)) * (s_up - s_dn)
 end
 
 """
@@ -110,14 +139,10 @@ marginal is a univariate uniform–normal convolution on
 
 That is **not** a statement that moisture and temperature are uncoupled in the real SGS
 closure: operationally we still carry **`q′q′`**, **`T′T′`**, and **`corr_Tq`**
-(`correlation_Tq`), with geometry in `subcell_geometric_covariance_Tq` and
-`effective_sgs_quadrature_moments_matched_gaussian`, and quadrature uses
-`sgs_stddevs_and_correlation` in `sgs_quadrature.jl`. This function is only the
-**diagonal-`Σ_turb`, product-density** special case for tests and pencil-and-paper checks;
-it does **not** accept `corr_Tq` or distinct `σ_q`, `σ_T`.
-
-For the segment + full 2×2 turbulent covariance model (idealized PDF), see
-`variance_statistics_reference.md` §4–6.
+(`correlation_Tq`), with geometry in `subcell_geometric_covariance_Tq` and the
+production layer-profile quadrature in `subgrid_layer_profile_quadrature.jl`. This
+function is only the **diagonal-`Σ_turb`, product-density** special case for tests and
+pencil-and-paper checks; it does **not** accept `corr_Tq` or distinct `σ_q`, `σ_T`.
 """
 function bivariate_uniform_normal_isotropic_pdf(
     q,

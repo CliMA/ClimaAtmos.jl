@@ -1,6 +1,6 @@
 # End-to-end pipeline in one Julia process (one precompile).
 #
-# What this does (single slice only):
+# What this does (single experiment YAML only):
 #   1) Optional `Pkg.instantiate`
 #   2) EKI calibration into `output_dir` — **requires** existing **`observations.jld2`** at **`observations_path`**
 #      (place it there from your workflow before running; EKI cannot start without **y**).
