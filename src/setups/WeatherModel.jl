@@ -56,9 +56,15 @@ function initial_state(
     center_ic(lg) = center_prognostic_variables(
         physical_state(; T = FT(NaN), p = FT(NaN)), lg, params, atmos_model,
     )
-    face_ic(lg) = face_prognostic_variables(
-        (; w = FT(0), w_draft = FT(0)), lg, atmos_model,
-    )
+    # Extract turbconv_model outside the closure so dispatch inside face_ic is on
+    # a concrete captured type rather than going through @generated getproperty,
+    # which prevents Julia from inferring face_ic's return type statically.
+    turbconv_m = atmos_model.turbconv_model
+    face_ic(lg) = begin
+        u₃ = C3(Geometry.WVector(FT(0)), lg)
+        w_draft = Geometry.WVector(FT(0))
+        (; u₃, turbconv_face_variables(u₃, w_draft, lg, turbconv_m)...)
+    end
     surface_space = Fields.level(face_space, Fields.half)
     return Fields.FieldVector(;
         c = center_ic.(Fields.local_geometry_field(center_space)),
