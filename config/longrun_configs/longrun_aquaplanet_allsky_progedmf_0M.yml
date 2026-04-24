@@ -1,3 +1,4 @@
+h_elem: 12
 implicit_sgs_advection: true
 implicit_sgs_mass_flux: true
 implicit_sgs_entr_detr: true
@@ -6,7 +7,7 @@ implicit_sgs_vertdiff: true
 max_newton_iters_ode: 3
 ode_algo: "ARS222"
 dt: "120secs"
-t_end: "240days"
+t_end: "186days"
 dt_save_state_to_disk: "30days"
 rad: "allskywithclear"
 dt_rad: "1hours"
