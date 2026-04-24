@@ -5,7 +5,7 @@
 import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
 import ClimaCore: Geometry
-import LinearAlgebra: tr
+import LinearAlgebra: norm_sqr, tr
 
 """
     set_amd_precomputed_quantities!(Y, p)
@@ -63,6 +63,7 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = scratch
     (; ᶜtemp_scalar, ᶠtemp_scalar, ᶠtemp_scalar_2, ᶜtemp_UVW, ᶠtemp_UVW) =
         scratch
+    (; ᶜtemp_amd_∇u_norm_sqr) = scratch
 
     ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
     ᶠgradᵥ_uvw = Operators.GradientC2F(
@@ -93,6 +94,9 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     ᶜS = @. ᶜtemp_strain = (∇ᶜu_uvw + adjoint(∇ᶜu_uvw)) / 2
     ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
 
+    # Store ‖∇u‖² before ∂̂ overwrites ᶜtemp_UVWxUVW (same buffer as ∇ᶜu_uvw).
+    @. ᶜtemp_amd_∇u_norm_sqr = norm_sqr(∇ᶜu_uvw)
+
     # Scaled Derivatives ∂̂ᵢ = Δ₍ᵢ₎∂ᵢ
     ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
     @. ᶜ∂̂u_uvw += ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))
@@ -102,9 +106,8 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
 
     ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
     ᶠ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶠ∂̂u_uvw * adjoint(ᶠ∂̂u_uvw))
-    ᶜ∂ₗuₘ∂ₗuₘ = @. lazy(CA.norm_sqr(∇ᶜu_uvw))
 
-    # AMD eddy viscosity
+    # AMD eddy viscosity (denominator uses ‖∇u‖² stored in ᶜtemp_amd_∇u_norm_sqr)
     ᶜνₜ = @. ᶜtemp_scalar = max(
         FT(0),
         -c_amd *
@@ -112,7 +115,7 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
             (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:1 +
             (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:5 +
             (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:9
-        ) / max.(eps(FT), ᶜ∂ₗuₘ∂ₗuₘ),
+        ) / max.(eps(FT), ᶜtemp_amd_∇u_norm_sqr),
     )
     ᶠνₜ = @. ᶠtemp_scalar = ᶠinterp(ᶜνₜ)
 
@@ -137,7 +140,7 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
             (ᶜ∂̂u_uvw * ∂̂h_tot ⊗ ∇h_tot).components.data.:5 +
             (ᶜ∂̂u_uvw * ∂̂h_tot ⊗ ∇h_tot).components.data.:9
         ) /
-        max(eps(FT), CA.norm_sqr(gradₕ(ᶜh_tot))),
+        max(eps(FT), norm_sqr(gradₕ(ᶜh_tot))),
     )
     @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_amd * gradₕ(ᶜh_tot))
 
@@ -154,7 +157,7 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
                 (ᶜ∂̂u_uvw * ∂̂ᶜχ ⊗ ∇ᶜχ).components.data.:5 +
                 (ᶜ∂̂u_uvw * ∂̂ᶜχ ⊗ ∇ᶜχ).components.data.:9
             ) /
-            max(eps(FT), CA.norm_sqr(gradₕ(ᶜχ))),
+            max(eps(FT), norm_sqr(gradₕ(ᶜχ))),
         )
         ᶜρχₜ_diffusion = @. lazy(wdivₕ(Y.c.ρ * ᶜD_amd * gradₕ(ᶜχ)))
         @. ᶜρχₜ += ᶜρχₜ_diffusion
@@ -221,6 +224,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = p.scratch
     (; ᶜtemp_scalar, ᶠtemp_scalar, ᶜtemp_UVW, ᶠtemp_UVW) =
         p.scratch
+    (; ᶜtemp_amd_∇u_norm_sqr) = p.scratch
 
     ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
     ᶠgradᵥ_uvw = Operators.GradientC2F(
@@ -256,7 +260,9 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     ᶜS = @. ᶜtemp_strain = (∇ᶜu_uvw + adjoint(∇ᶜu_uvw)) / 2
     ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
 
-    # Do we need scratch variables at all?
+    # Store ‖∇u‖² before ∂̂ overwrites ᶜtemp_UVWxUVW (same buffer as ∇ᶜu_uvw).
+    @. ᶜtemp_amd_∇u_norm_sqr = norm_sqr(∇ᶜu_uvw)
+
     # Scaled Derivatives ∂̂ᵢ = Δ₍ᵢ₎∂ᵢ
     ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
     @. ᶜ∂̂u_uvw += ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))
@@ -266,9 +272,8 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
 
     ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
     ᶠ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶠ∂̂u_uvw * adjoint(ᶠ∂̂u_uvw))
-    ᶜ∂ₗuₘ∂ₗuₘ = @. lazy(CA.norm_sqr(∇ᶜu_uvw))
 
-    # AMD eddy viscosity
+    # AMD eddy viscosity (denominator uses ‖∇u‖² stored in ᶜtemp_amd_∇u_norm_sqr)
     ᶜνₜ = @. ᶜtemp_scalar = max(
         FT(0),
         -c_amd *
@@ -276,7 +281,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
             (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:1 +
             (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:5 +
             (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:9
-        ) / max.(eps(FT), ᶜ∂ₗuₘ∂ₗuₘ),
+        ) / max.(eps(FT), ᶜtemp_amd_∇u_norm_sqr),
     )
     ᶠνₜ = @. ᶠtemp_scalar = ᶠinterp(ᶜνₜ)
 
@@ -306,7 +311,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
             (ᶠ∂̂u_uvw * ∂̂h_tot ⊗ ∇h_tot).components.data.:5 +
             (ᶠ∂̂u_uvw * ∂̂h_tot ⊗ ∇h_tot).components.data.:9
         ) /
-        max(eps(FT), CA.norm_sqr(∇h_tot)),
+        max(eps(FT), norm_sqr(∇h_tot)),
     )
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρ * ᶠD_amd * ᶠgradᵥ(ᶜh_tot)))
 
@@ -328,7 +333,7 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
                 (ᶠ∂̂u_uvw * ∂̂ᶜχ ⊗ ∇ᶜχ).components.data.:5 +
                 (ᶠ∂̂u_uvw * ∂̂ᶜχ ⊗ ∇ᶜχ).components.data.:9
             ) /
-            max(eps(FT), CA.norm_sqr(∇ᶜχ)),
+            max(eps(FT), norm_sqr(∇ᶜχ)),
         )
         ᶜ∇ᵥρD∇χₜ =
             @. lazy(ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_amd * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ)))))
