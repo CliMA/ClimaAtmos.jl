@@ -813,7 +813,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     q_liqʲ_prev_level,
                     q_iceʲ_prev_level,
                     Φ_prev_level,
-                    $(p.atmos.microphysics_tendency_timestepping),
                     dt,
                 )
             elseif microphysics_model isa NonEquilibriumMicrophysics1M
@@ -830,8 +829,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     Tʲ_prev_level,
                     microphys_1m_params,
                     thermo_params,
-                    $(p.atmos.microphysics_tendency_timestepping),
                     dt,
+                    $(microphysics_model.n_substeps),
                 )
             end
 

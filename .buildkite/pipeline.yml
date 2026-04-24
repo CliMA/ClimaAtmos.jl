@@ -327,7 +327,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM), implicit SGS, ARS222"
+      - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM), implicit SGS"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_implicit_column.yml

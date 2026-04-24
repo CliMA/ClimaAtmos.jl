@@ -139,87 +139,19 @@ end
 # 0M Tendency Limiting
 # ============================================================================
 """
-    explicit_0m_tendency_limit(dq_tot_dt, q_tot, dt)
+    apply_0m_tendency_limit(dq_tot_dt, q_tot, dt)
 
 Apply a limiter to 0M microphysics total water sink.
-To be used with explicit microphysics timesteppiong.
 """
-@inline function explicit_0m_tendency_limit(dq_tot_dt, q_tot, dt)
+@inline function apply_0m_tendency_limit(dq_tot_dt, q_tot, dt)
     return limit_sink(dq_tot_dt, q_tot, dt)
 end
 
 # ============================================================================
 # 1M Tendency Limiting
 # ============================================================================
-
-"""
-    explicit_1m_tendency_limit(
-        dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt, tps, q_tot, q_liq, q_ice, q_rai, q_sno, dt
-    )
-
-Explicit 1-moment microphysics tendency limiting (called inside broadcast).
-
-Two layers of limiting are applied:
-1. **Mass conservation**: prevents unphysical depletion of each species beyond
-   available sources (via `tendency_limiter`). Each species is limited
-   bidirectionally against its maximal cross-species source pool:
-   - `dq_lcl_dt`: source = `q_vap + q_icl`, sink = `q_lcl`
-   - `dq_icl_dt`: source = `q_vap + q_lcl`, sink = `q_icl`
-   - `dq_rai_dt`: source = `q_lcl + q_sno`, sink = `q_rai`
-   - `dq_sno_dt`: source = `q_icl`, sink = `q_sno`
-2. **Combined temperature rate**: caps the combined tendency to a maximum equivalent
-   temperature change `dT/dt = (L_v/c_p)·dq_lcl + (L_s/c_p)·dq_icl`
-   and rescales `dq_lcl_dt` and `dq_icl_dt` uniformly.
-"""
-@inline function explicit_1m_tendency_limit(
-    dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt, tps,
-    q_tot, q_lcl, q_icl, q_rai, q_sno, dt,
-)
-    FT = typeof(q_tot)
-    # Guard against negative q_vap from numerical errors (AD-safe via max)
-    q_vap = max(zero(q_tot), q_tot - q_lcl - q_icl - q_rai - q_sno)
-
-    # Mass-conservation limits using cross-species source pools
-    # n_sink: number of timesteps over which species would be depleted
-    n_sink = 5
-    # n_source: number of timesteps over which sources are depleted
-    n_source = 30
-
-    dq_lcl_dt = tendency_limiter(
-        dq_lcl_dt, limit(q_vap + q_icl, dt, n_source), limit(q_lcl, dt, n_sink),
-    )
-    dq_icl_dt = tendency_limiter(
-        dq_icl_dt, limit(q_vap + q_lcl, dt, n_source), limit(q_icl, dt, n_sink),
-    )
-    dq_rai_dt = tendency_limiter(
-        dq_rai_dt, limit(q_lcl + q_sno, dt, n_source), limit(q_rai, dt, n_sink),
-    )
-    dq_sno_dt = tendency_limiter(
-        dq_sno_dt, limit(q_icl, dt, n_source), limit(q_sno, dt, n_sink),
-    )
-
-    # Combined temperature-rate limiter:
-    # Condensate tendencies are expressed as possible temperature changes (although they
-    # may not be realized).
-    # A single combined scale factor preserves the ratio between condensate species,
-    # preventing mass-energy decoupling that can drive temperatures negative.
-    Lv_over_cp = TD.Parameters.LH_v0(tps) / TD.Parameters.cp_d(tps)
-    Ls_over_cp = TD.Parameters.LH_s0(tps) / TD.Parameters.cp_d(tps)
-
-    # Max 5 K temperature change per timestep
-    # TODO: arbitrary choice; remove or make very large once microphysics is implicit
-    dT_dt_max = FT(5) / dt
-
-    dT_dt = Lv_over_cp * dq_lcl_dt + Ls_over_cp * dq_icl_dt
-    scale = min(FT(1), dT_dt_max / max(abs(dT_dt), eps(FT)))
-
-    return (
-        dq_lcl_dt = dq_lcl_dt * scale,
-        dq_icl_dt = dq_icl_dt * scale,
-        dq_rai_dt = dq_rai_dt,
-        dq_sno_dt = dq_sno_dt,
-    )
-end
+# For 1M microphysics we use average bulk tendencies over dt from CloudMicrophysics
+# which preserves positivity of specific humidities.
 
 # ============================================================================
 # 2M Tendency Limiting

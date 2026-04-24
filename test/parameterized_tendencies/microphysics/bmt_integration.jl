@@ -99,9 +99,10 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                 q_ice = FT(0.0005)   # kg/kg
                 q_rai = FT(0.0002)   # kg/kg
                 q_sno = FT(0.0001)   # kg/kg
+                dt = FT(60)  # s
 
                 # Test BMT call
-                result = BMT.bulk_microphysics_tendencies(
+                result = BMT.average_bulk_microphysics_tendencies(
                     BMT.Microphysics1Moment(),
                     mp,
                     thp,
@@ -112,6 +113,7 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                     q_ice,
                     q_rai,
                     q_sno,
+                    dt,
                 )
 
                 # Verify return type (includes fields and value types)
@@ -214,8 +216,9 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                 q_ice = FT(0.001)
                 q_rai = FT(0.001)
                 q_sno = FT(0.0005)
+                dt = FT(60)
 
-                result = BMT.bulk_microphysics_tendencies(
+                result = BMT.average_bulk_microphysics_tendencies(
                     BMT.Microphysics1Moment(),
                     mp,
                     thp,
@@ -226,6 +229,7 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                     q_ice,
                     q_rai,
                     q_sno,
+                    dt,
                 )
 
                 # Total water should be conserved (no external sources/sinks)
@@ -249,7 +253,7 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                 thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
 
                 # Zero hydrometeors
-                result = BMT.bulk_microphysics_tendencies(
+                result = BMT.average_bulk_microphysics_tendencies(
                     BMT.Microphysics1Moment(),
                     mp,
                     thp,
@@ -260,6 +264,7 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                     FT(0.0),     # q_ice
                     FT(0.0),     # q_rai
                     FT(0.0),     # q_sno
+                    FT(60),      # dt
                 )
 
                 # With no hydrometeors, tendencies should be zero or near-zero
