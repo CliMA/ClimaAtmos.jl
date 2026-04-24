@@ -35,16 +35,29 @@ function WeatherModel(
     )
 end
 
+# Zero-size isbits stand-in for WeatherModel used only in GPU broadcast closures.
+# Both center_initial_condition and face_initial_condition for WeatherModel ignore
+# `setup` entirely, so any isbits type with the same dispatch suffices.
+struct WeatherModelGPUSafe end
+
 function center_initial_condition(setup::WeatherModel, local_geometry, params)
     FT = eltype(params)
     return physical_state(; T = FT(NaN), p = FT(NaN))
 end
+function center_initial_condition(::WeatherModelGPUSafe, local_geometry, params)
+    FT = eltype(params)
+    return physical_state(; T = FT(NaN), p = FT(NaN))
+end
+function face_initial_condition(::WeatherModelGPUSafe, local_geometry, params)
+    FT = eltype(params)
+    return (; w = FT(0), w_draft = FT(0))
+end
 
-# The generic initial_state captures `setup` in the GPU broadcast closure, but
-# WeatherModel{String} is non-isbits (era5_initial_condition_dir::String blocks GPU
-# kernel compilation). This override avoids that: center_initial_condition for
-# WeatherModel never reads any setup field, so inlining the NaN values directly is
-# equivalent. The real ERA5 data is loaded by overwrite_initial_state! afterward.
+# WeatherModel{String} is non-isbits, so the generic initial_state can't compile
+# GPU kernels for its closures. This override uses WeatherModelGPUSafe (isbits,
+# zero-size) in the closures instead. The dispatch pattern is otherwise identical
+# to the generic initial_state, preserving the same type inference paths.
+# ERA5 data is loaded afterward by overwrite_initial_state!.
 function initial_state(
     setup::WeatherModel,
     params,
@@ -52,19 +65,13 @@ function initial_state(
     center_space,
     face_space,
 )
-    FT = eltype(params)
+    gpu_safe = WeatherModelGPUSafe()
     center_ic(lg) = center_prognostic_variables(
-        physical_state(; T = FT(NaN), p = FT(NaN)), lg, params, atmos_model,
+        center_initial_condition(gpu_safe, lg, params), lg, params, atmos_model,
     )
-    # Extract turbconv_model outside the closure so dispatch inside face_ic is on
-    # a concrete captured type rather than going through @generated getproperty,
-    # which prevents Julia from inferring face_ic's return type statically.
-    turbconv_m = atmos_model.turbconv_model
-    face_ic(lg) = begin
-        u₃ = C3(Geometry.WVector(FT(0)), lg)
-        w_draft = Geometry.WVector(FT(0))
-        (; u₃, turbconv_face_variables(u₃, w_draft, lg, turbconv_m)...)
-    end
+    face_ic(lg) = face_prognostic_variables(
+        face_initial_condition(gpu_safe, lg, params), lg, atmos_model,
+    )
     surface_space = Fields.level(face_space, Fields.half)
     return Fields.FieldVector(;
         c = center_ic.(Fields.local_geometry_field(center_space)),
