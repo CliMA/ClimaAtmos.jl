@@ -40,6 +40,33 @@ function center_initial_condition(setup::WeatherModel, local_geometry, params)
     return physical_state(; T = FT(NaN), p = FT(NaN))
 end
 
+# The generic initial_state captures `setup` in the GPU broadcast closure, but
+# WeatherModel{String} is non-isbits (era5_initial_condition_dir::String blocks GPU
+# kernel compilation). This override avoids that: center_initial_condition for
+# WeatherModel never reads any setup field, so inlining the NaN values directly is
+# equivalent. The real ERA5 data is loaded by overwrite_initial_state! afterward.
+function initial_state(
+    setup::WeatherModel,
+    params,
+    atmos_model,
+    center_space,
+    face_space,
+)
+    FT = eltype(params)
+    center_ic(lg) = center_prognostic_variables(
+        physical_state(; T = FT(NaN), p = FT(NaN)), lg, params, atmos_model,
+    )
+    face_ic(lg) = face_prognostic_variables(
+        (; w = FT(0), w_draft = FT(0)), lg, atmos_model,
+    )
+    surface_space = Fields.level(face_space, Fields.half)
+    return Fields.FieldVector(;
+        c = center_ic.(Fields.local_geometry_field(center_space)),
+        f = face_ic.(Fields.local_geometry_field(face_space)),
+        surface_kwargs(surface_space, atmos_model.surface_model)...,
+    )
+end
+
 function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
     regridder_type = :InterpolationsRegridder
     interpolation_method = Intp.Linear()
