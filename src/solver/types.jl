@@ -857,12 +857,13 @@ end
 
 Groups moisture and microphysics-related models and types.
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TVM}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
+    terminal_velocity_mode::TVM = DiagnosticTerminalVelocity()
 end
 
 """
@@ -1061,6 +1062,7 @@ The default AtmosModel provides:
 - `cloud_model`: GridScaleCloud(), QuadratureCloud()
 - `microphysics_tendency_timestepping`: Explicit(), Implicit()
 - `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)
+- `terminal_velocity_mode`: FixedTerminalVelocity or DiagnosticTerminalVelocity
 
 
 ## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)

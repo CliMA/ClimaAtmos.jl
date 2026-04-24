@@ -254,6 +254,9 @@ quadrature_order:
 microphysics_n_substeps:
   help: "Number of susbteps for time averaging bulk microphysics tendencies. Default: 3"
   value: 3
+fixed_terminal_velocity:
+  help: "Use fixed terminal velocities for microphysics tracers [`true` (default), `false`]"
+  value: true
 perf_summary:
   help: "Flag for collecting performance summary information"
   value: false

@@ -214,29 +214,69 @@ function edmfx_vertical_diffusion_tendency!(
 end
 
 """
-    edmfx_filter_tendency!(Y, p, t, turbconv_model)
+    enforce_physical_constraints!(Y, p, t, turbconv_model)
 
-Apply EDMF physical constraints: immediately mix the updraft with the environment if
-area fraction is non-positive
+Enforce physical constraints on the model state `Y` in-place.
+
+This function is used as a callback and is not a tendency evaluation. It applies
+local corrective updates to keep prognostic variables in a physically admissible
+range.
+
+Currently, this includes:
+- For prognostic EDMF, handling non-positive updraft area fractions by
+  immediately mixing the affected updraft state with the environment.
+- For one- and two-moment microphysics, enforcing non-negative condensate
+  masses.
+- When total moisture is positive, rescaling condensate masses so that their
+  sum does not exceed total moisture.
+
+These corrections are intended to prevent nonphysical states such as negative
+area fractions, negative condensate masses, or condensate mass exceeding the
+available total moisture. Ideally, the need for this correction is minimized 
+by the numerical scheme.
 """
-edmfx_filter_tendency!(Y, p, t, turbconv_model) = nothing
+enforce_physical_constraints!(Y, p, t, turbconv_model) = nothing
 
-function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
-
-    (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
-    FT = eltype(p.params)
-    n = n_mass_flux_subdomains(turbconv_model)
-
-    microphysics_tracers = (
-        (@name(c.sgsʲs.:(1).q_lcl), @name(c.ρq_lcl)),
-        (@name(c.sgsʲs.:(1).q_icl), @name(c.ρq_icl)),
-        (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
-        (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
-        (@name(c.sgsʲs.:(1).n_lcl), @name(c.ρn_lcl)),
-        (@name(c.sgsʲs.:(1).n_rai), @name(c.ρn_rai)),
-    )
+function enforce_physical_constraints!(Y, p, t, turbconv_model::PrognosticEDMFX)
 
     if p.atmos.edmfx_model.filter isa Val{true}
+        (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
+        FT = eltype(p.params)
+        n = n_mass_flux_subdomains(turbconv_model)
+
+        # Microphysics constraints
+        if p.atmos.microphysics_model isa
+           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+
+            ρq_cond = p.scratch.ᶜtemp_scalar
+            ratio = p.scratch.ᶜtemp_scalar_2
+            @. Y.c.ρq_lcl = max(0, Y.c.ρq_lcl)
+            @. Y.c.ρq_icl = max(0, Y.c.ρq_icl)
+            @. Y.c.ρq_rai = max(0, Y.c.ρq_rai)
+            @. Y.c.ρq_sno = max(0, Y.c.ρq_sno)
+
+            @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_icl + Y.c.ρq_rai + Y.c.ρq_sno
+            @. ratio = ifelse(
+                ρq_cond > eps(FT),
+                min(1, max(0, Y.c.ρq_tot) / ρq_cond),
+                1,
+            )
+
+            @. Y.c.ρq_lcl *= ratio
+            @. Y.c.ρq_icl *= ratio
+            @. Y.c.ρq_rai *= ratio
+            @. Y.c.ρq_sno *= ratio
+        end
+
+        # Apply updraft constraints
+        microphysics_tracers = (
+            (@name(c.sgsʲs.:(1).q_lcl), @name(c.ρq_lcl)),
+            (@name(c.sgsʲs.:(1).q_icl), @name(c.ρq_icl)),
+            (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
+            (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
+            (@name(c.sgsʲs.:(1).n_lcl), @name(c.ρn_lcl)),
+            (@name(c.sgsʲs.:(1).n_rai), @name(c.ρn_rai)),
+        )
         for j in 1:n
             # clip updraft velocity and area fraction to zero if they are negative
             @. Y.c.sgsʲs.:($$j).ρa = max(0, min(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
@@ -262,7 +302,10 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
                 Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
                 specific(Y.c.ρq_tot, Y.c.ρ),
                 # ensure mass conservation in subdomain decomposition ρaχʲ < ρχ
-                min(Y.c.sgsʲs.:($$j).q_tot, max(0, Y.c.ρq_tot) / Y.c.sgsʲs.:($$j).ρa),
+                min(
+                    max(0, Y.c.sgsʲs.:($$j).q_tot),
+                    max(0, Y.c.ρq_tot) / Y.c.sgsʲs.:($$j).ρa,
+                ),
             )
 
             # mix the rest of the updraft microphysics tracers
@@ -274,7 +317,7 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
                     Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
                     specific(ᶜρχ, Y.c.ρ),
                     # ensure mass conservation in subdomain decomposition ρaχʲ < ρχ
-                    min(ᶜχʲ, max(0, ᶜρχ) / Y.c.sgsʲs.:($$j).ρa),
+                    min(max(0, ᶜχʲ), max(0, ᶜρχ) / Y.c.sgsʲs.:($$j).ρa),
                 )
             end
         end

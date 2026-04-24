@@ -20,7 +20,7 @@ z_elem: 30
 z_max: 1500
 z_stretch: false
 perturb_initstate: false
-dt: 10secs
+dt: 5secs
 t_end: 5hours
 dt_save_state_to_disk: 10mins
 toml: [toml/prognostic_edmfx_1M.toml]

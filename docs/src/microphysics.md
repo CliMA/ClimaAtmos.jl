@@ -64,8 +64,10 @@ In nonequilibrium cloud formation and the 1-moment and 2-moment schemes,
 
 ## Sedimentation
 
-All microphysics tracers sediment with a bulk (group) sedimentation velocity
-  parameterized via [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl).
+All microphysics tracers sediment with a bulk (group) sedimentation velocity.
+The sedimentation velocity can be parameterized via CloudMicrophysics.jl or
+specified as a fixed value for each tracer.
+
 Sedimentation is done implicitly through a first-order upwinding scheme.
 Because all tracers are part of the working fluid, their sedimentation
   results in sedimentation terms for density and total energy.
@@ -87,65 +89,31 @@ Most common causes of those errors are:
 - use of hyperdiffusion.
 Our strategy is to minimize the untoward effects of those errors.
 
-### Limiters
-
-All microphysics source terms are individually limited by the available mass of the source tracer ``x``.
-We typically set ``lim_x = \frac{q_x}{a \; dt}`` where ``a > 1``.
-The limiter caps positive tendencies (sources) and negative tendencies (sinks) independently:
-
-```math
-\text{tendency\_limiter}(\mathcal{S}, lim_{pos}, lim_{neg}) =
-\begin{cases}
-\min(\mathcal{S}, lim_{pos}), & \mathcal{S} \geq 0 \\
--\min(-\mathcal{S}, lim_{neg}), & \mathcal{S} < 0
-\end{cases}
-```
-
-If the source tendency exceeds the available tracer ``lim_{pos}``,
-  it is capped at the available amount.
-Similarly, sink tendencies are capped by ``lim_{neg}``.
-Below figure illustrates the behavior of the limiter for positive and negative force
-  with the positive bound set to 5 and the negative bound set to 2.
-
-```@example
-include("limiter_plots.jl") # hide
-```
-
-![] (assets/limiters_plot.png)
-
 ### Implicit treatment of microphysics sinks
 
-Microphysical processes can produce large negative tendencies (sinks) for tracer variables. When treated explicitly, these sinks can impose severe timestep restrictions and may lead to negative tracer values.
+Microphysical processes can produce large negative tendencies (sinks) for tracer variables. These tendencies are handled through a time-averaged formulation in CloudMicrophysics.jl, in which sink terms are locally linearized and incorporated into the time integration scheme (see [here](https://clima.github.io/CloudMicrophysics.jl/dev/BulkTendencies/)).
 
-ClimaAtmos therefore provides an option to treat microphysics sinks implicitly. This option is enabled by default but can be disabled if desired.
+### Enforcing physical constraints
 
-When the implicit option is enabled, negative microphysics tendencies are represented as linear sinks and handled by the time integration scheme. Given a microphysics tendency ``S`` acting on tracer ``q``, we distinguish between sources and sinks:
+An additional correction is applied through the callback
 
-```math
-T(q) =
-\begin{cases}
-S, & S \ge 0 \\
-D q, & S < 0
-\end{cases}
+```
+enforce_physical_constraints!(Y, p, t, turbconv_model)
 ```
 
-where the sink coefficient ``D`` is obtained from a local linearization
+This function applies local corrective updates to keep prognostic variables
+in a physically admissible range.
 
-```math
-D \approx S / q.
-```
+Currently, this includes:
 
-In practice, the denominator is regularized to avoid excessively large coefficients when ``q`` becomes very small, i.e.
+- enforcing non-negative condensate masses,
+- rescaling condensate when the total condensate exceeds total moisture,
+- handling non-positive updraft area fractions by mixing the affected updraft
+  state with the environment (EDMF filter),
+- ensuring subdomain consistency ``\rho a^j \chi^j \le \rho \chi``.
 
-```math
-D \approx S / \max(q, \varepsilon),
-```
-
-where ``\varepsilon`` is a small positive constant.
-
-This representation allows the destruction term to be treated implicitly, which significantly improves stability for large sink rates.
-
-During multi-stage time integration, stage extrapolation may occasionally produce small negative values of ``q`` even though the tendencies were computed from a positive state. To mitigate this artifact, a small restoring source may be applied that drives negative values back toward zero over the stage time scale. This correction is purely numerical and does not represent a physical microphysics process.
+These corrections are intended to prevent nonphysical states such as negative
+tracer values or condensate mass exceeding the available total moisture.
 
 ### Hyperdiffusion
 

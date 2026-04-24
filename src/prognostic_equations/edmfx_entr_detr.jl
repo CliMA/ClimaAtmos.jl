@@ -557,6 +557,7 @@ function detrainment(
     detr_inv_tau = CAP.detr_inv_tau(turbconv_params)
     detr_coeff = CAP.detr_coeff(turbconv_params)
     detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
+    detr_buoy_inv_tau_max = CAP.detr_buoy_inv_tau_max(turbconv_params)
     detr_vertdiv_coeff = CAP.detr_vertdiv_coeff(turbconv_params)
     detr_massflux_vertdiv_coeff =
         CAP.detr_massflux_vertdiv_coeff(turbconv_params)
@@ -564,10 +565,13 @@ function detrainment(
     max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
     a_max = CAP.max_area(turbconv_params)
 
-    # Clip buoyancy time scale to 100s (inverse time scale to 0.01 1/s) to avoid 
-    # too fast detrainment when velocity is small (TODO make it a parameter)
+    # Clip buoyancy time scale to `buoy_inv_time_scale` to avoid too fast detrainment
+    # when velocity is small
     buoy_inv_time_scale =
-        min(FT(0.01), abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) / max(eps(FT), abs(ᶜwʲ - ᶜw⁰)))
+        min(
+            detr_buoy_inv_tau_max,
+            abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) / max(eps(FT), abs(ᶜwʲ - ᶜw⁰)),
+        )
 
     # Extra detrainment for a > a_max that smoothly relaxes the area back
     # toward a_max (0 at a_max, max_area_limiter_scale at a = 1).

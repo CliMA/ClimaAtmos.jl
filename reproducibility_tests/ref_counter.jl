@@ -1,4 +1,4 @@
-337
+338
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+338
+- Add fixed terminal velocity option;
+- Enforce physical constraints in a callback.
+
 337
 - Use time-averaged 1m microphysics tendencies and delete tendency limiters
 
