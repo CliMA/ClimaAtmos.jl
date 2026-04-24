@@ -52,12 +52,15 @@ function grid_scale_center_variables(physical_state, local_geometry, params, atm
     )
 end
 
-function prognostic_aerosol_variables(ρ, names::NTuple{N, Symbol}) where {N}
-    ρ_names = ntuple(i -> Symbol(:ρ, names[i]), Val(N))
-    vals = ntuple(_ -> zero(ρ), Val(N))
-    return NamedTuple{ρ_names}(vals)
+@generated function prognostic_aerosol_variables(ρ, ::Val{names}) where {names}
+    N = length(names)
+    ρ_names = ntuple(i -> Symbol(:ρ, names[i]), N)
+    vals = ntuple(_ -> :(zero(ρ)), N)
+    return quote
+        NamedTuple{$ρ_names}(($(vals...),))
+    end
 end
-prognostic_aerosol_variables(ρ, ::Tuple{}) = (;)
+prognostic_aerosol_variables(ρ, ::Val{()}) = (;)
 
 # ============================================================================
 # Moisture dispatch

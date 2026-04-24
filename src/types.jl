@@ -958,7 +958,7 @@ Base.broadcastable(x::AtmosSurface) = tuple(x)
 # struct definition (later in this file) so the type is in scope when those
 # methods are parsed.
 
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, PAN}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, PA}
     water::W
     scm_setup::SCM
     radiation::R
