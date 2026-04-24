@@ -934,7 +934,7 @@ Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, PAN}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, PA}
     water::W
     scm_setup::SCM
     radiation::R

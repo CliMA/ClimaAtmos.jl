@@ -1,6 +1,9 @@
 import SurfaceFluxes.Parameters as SFP
 import SurfaceFluxes.UniversalFunctions as UF
 
+# Unwrap Val{names} stored in atmos.prognostic_aerosols
+_aerosol_names(::Val{names}) where {names} = names
+
 # BIN DEFNITIONS
 const SEA_SALT_BIN_BOUNDS = (
     (0.03, 0.1 ),   # μm, SSLT01
@@ -91,6 +94,39 @@ function sea_salt_emission_flux(u_10, T_sfc, bin_index)
 end
 
 """
+    sea_salt_emission_tendency_debug!(Yₜ, Y, p, t)
+
+Constant-emission version of `sea_salt_emission_tendency!` for debugging.
+Applies a uniform flux of `1e-10 kg m⁻² s⁻¹` per bin at all ocean grid cells,
+skipping all Monin-Obukhov and Gong (2003) computations. Swap this in place of
+`sea_salt_emission_tendency!` in `surface_flux.jl` to isolate tracer transport
+issues from emission parameterization issues.
+"""
+function sea_salt_emission_tendency_debug!(Yₜ, Y, p, t)
+    aerosol_names = _aerosol_names(p.atmos.prognostic_aerosols)
+    isempty(aerosol_names) && return
+
+    FT = eltype(Y)
+    # Rough global-mean sea salt emission: ~5000 Tg/yr total, 5 bins,
+    # ~3.6e14 m² ocean area → ~1e-10 kg m⁻² s⁻¹ per bin.
+    const_flux = FT(1e-10)
+    ocean_fraction = p.ocean_fraction
+
+    for name in aerosol_names
+        ρχ_name = Symbol(:ρ, name)
+        ᶜρχ = getproperty(Y.c, ρχ_name)
+        ᶜρχₜ = getproperty(Yₜ.c, ρχ_name)
+        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+
+        sfc_flux = p.scratch.sfc_temp_C3
+        @. sfc_flux = C3(const_flux * ocean_fraction)
+
+        btt = boundary_tendency_scalar(ᶜχ, sfc_flux)
+        @. ᶜρχₜ += btt
+    end
+end
+
+"""
     sea_salt_emission_tendency!(Yₜ, Y, p, t)
 
 Apply surface emission tendencies for prognostic sea salt bins (ρSSLT01 …).
@@ -106,7 +142,8 @@ as a bottom boundary condition using `boundary_tendency_scalar`, which
 localises it to the lowest model layer.
 """
 function sea_salt_emission_tendency!(Yₜ, Y, p, t)
-    isempty(p.atmos.prognostic_aerosols) && return
+    aerosol_names = _aerosol_names(p.atmos.prognostic_aerosols)
+    isempty(aerosol_names) && return
 
     FT = eltype(Y)
     (; sfc_conditions) = p.precomputed
@@ -127,7 +164,7 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
     T_sfc = sfc_conditions.T_sfc
     ocean_fraction = p.ocean_fraction
 
-    for (bin_index, name) in enumerate(p.atmos.prognostic_aerosols)
+    for (bin_index, name) in enumerate(aerosol_names)
         ρχ_name = Symbol(:ρ, name)
         ᶜρχ = getproperty(Y.c, ρχ_name)
         ᶜρχₜ = getproperty(Yₜ.c, ρχ_name)
@@ -163,7 +200,8 @@ Fine bins (SSLT01–SSLT02) are genuinely passive and do not need settling.
 TODO: make half-lives bin-specific and load from ClimaParams.
 """
 function sea_salt_deposition_tendency!(Yₜ, Y, p, t)
-    isempty(p.atmos.prognostic_aerosols) && return
+    aerosol_names = _aerosol_names(p.atmos.prognostic_aerosols)
+    isempty(aerosol_names) && return
 
     FT = eltype(Y)
 
@@ -171,7 +209,7 @@ function sea_salt_deposition_tendency!(Yₜ, Y, p, t)
     half_life = FT(0.55 * 86400)  # 1 day placeholder, in seconds
     λ = FT(log(2)) / half_life
 
-    for name in p.atmos.prognostic_aerosols
+    for name in aerosol_names
         ρχ_name = Symbol(:ρ, name)
         ᶜρχ = getproperty(Y.c, ρχ_name)
         ᶜρχₜ = getproperty(Yₜ.c, ρχ_name)
