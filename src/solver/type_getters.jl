@@ -47,7 +47,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     FT = eltype(config)
     check_case_consistency(parsed_args)
     microphysics_model = get_microphysics_model(parsed_args, params)
-    sgs_quadrature = get_sgs_quadrature(parsed_args, params; microphysics_model)
+    sgs_quadrature = get_sgs_quadrature(parsed_args, params)
     cloud_model = get_cloud_model(parsed_args, params)
 
     if microphysics_model isa DryModel

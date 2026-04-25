@@ -34,19 +34,14 @@ function _fd_column_center_local_geometry(
     return Fields.field_values(Fields.level(lgf, i))[1]
 end
 
-# Test-only: assert every `AbstractGridscaleCorrectedSGS` used for 1M is listed in
-# `sgs_1m_uses_sgs_linear_profile` and implemented in `integrate_over_sgs_linear_profile`.
+# Test-only: assert every `AbstractVerticallyResolvedSGS` used for 1M is
+# wired to the long-arity `integrate_over_sgs` via `microphysics_tendencies_1m_sgs_row`.
 # (Not part of the library API — production uses dispatch on `microphysics_tendencies_1m`.)
 function _assert_1m_sgs_gridscale_supported_for_tests(sgs_quad::ClimaAtmos.SGSQuadrature)
     d = sgs_quad.dist
-    if d isa ClimaAtmos.AbstractGridscaleCorrectedSGS &&
-       !ClimaAtmos.sgs_1m_uses_sgs_linear_profile(sgs_quad)
-        error(
-            "NonEquilibriumMicrophysics 1M + SGS: `sgs_distribution` selects " *
-                "$(typeof(d)), which is not implemented for 1M layer-mean SGS " *
-                "(`integrate_over_sgs_linear_profile` in `subgrid_layer_profile_quadrature.jl`). " *
-                "Add this `S` to `sgs_1m_uses_sgs_linear_profile` and the linear-profile integrator.",
-        )
+    if d isa ClimaAtmos.AbstractVerticallyResolvedSGS
+        # If it's vertically resolved, it should be handled by the row entrypoint.
+        # No further gating needed — dispatch covers all AbstractVerticallyResolvedSGS.
     end
     return nothing
 end
@@ -90,24 +85,23 @@ end
         q_ct = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
-            distribution = ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}(),
+            distribution = ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridColumnTensor}(),
         )
         q_pr = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
-            distribution = ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.DefaultGridscaleProfileQuadrature,
             }(),
         )
-        @test !ClimaAtmos.sgs_1m_uses_sgs_linear_profile(quad_ln)
-        @test ClimaAtmos.sgs_1m_uses_sgs_linear_profile(q_ct)
-        @test ClimaAtmos.sgs_1m_uses_sgs_linear_profile(q_pr)
+        @test ClimaAtmos._is_vertically_resolved_sgs(q_ct.dist)
+        @test ClimaAtmos._is_vertically_resolved_sgs(q_pr.dist)
         q_lhs = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
-            distribution = ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridLatinHypercubeZ}(),
+            distribution = ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridLatinHypercubeZ}(),
         )
-        @test ClimaAtmos.sgs_1m_uses_sgs_linear_profile(q_lhs)
+        @test ClimaAtmos._is_vertically_resolved_sgs(q_lhs.dist)
         @test _assert_1m_sgs_gridscale_supported_for_tests(q_lhs) === nothing
         @test _assert_1m_sgs_gridscale_supported_for_tests(quad_ln) === nothing
         @test _assert_1m_sgs_gridscale_supported_for_tests(q_ct) === nothing
@@ -123,6 +117,8 @@ end
         i2 = ClimaAtmos.integrate_over_sgs(f, q_pr, μ_q, μ_T, qv, Tv, ρc)
         @test i1 ≈ i2
     end
+
+
 
     @testset "subcell geometric variance increment (two-slope face-anchored)" begin
         Δz = 2.0
@@ -188,6 +184,34 @@ end
         xs = range(FT(-3), FT(3); length = 2000)
         dens = [ClimaAtmos.uniform_normal_convolution_pdf(x, a, b, σ) for x in xs]
         @test sum(dens) * step(xs) ≈ 1 rtol = 0.02
+    end
+
+    @testset "uniform_lognormal_convolution (univariate)" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                μ_q = FT(1.0)
+                L = FT(0.5)
+                σ_ln = FT(0.3)
+                y_min = μ_q - L / 2
+                y_max = μ_q + L / 2
+                
+                # Test CDF property: F(0) ≈ 0, F(∞) ≈ 1
+                @test ClimaAtmos.uniform_lognormal_convolution_cdf(FT(0.0), y_min, y_max, σ_ln) ≈ FT(0.0) atol = 1e-6
+                @test ClimaAtmos.uniform_lognormal_convolution_cdf(FT(10.0), y_min, y_max, σ_ln) ≈ FT(1.0) atol = 1e-4
+                
+                # Test PDF integration: ∫ f(q) dq ≈ 1
+                qs = range(FT(0.01), FT(5.0); length = 2000)
+                dens = [ClimaAtmos.uniform_lognormal_convolution_pdf(q, y_min, y_max, σ_ln) for q in qs]
+                @test sum(dens) * (qs[2] - qs[1]) ≈ FT(1.0) rtol = 0.01
+                
+                # Test CDF matches integration of PDF
+                q_test = FT(1.2)
+                f_q = ClimaAtmos.uniform_lognormal_convolution_cdf(q_test, y_min, y_max, σ_ln)
+                qs_part = range(FT(0.001), q_test; length = 2000)
+                dens_part = [ClimaAtmos.uniform_lognormal_convolution_pdf(q, y_min, y_max, σ_ln) for q in qs_part]
+                @test f_q ≈ sum(dens_part) * (qs_part[2] - qs_part[1]) rtol = 0.01
+            end
+        end
     end
 
     @testset "Gauss-Hermite Quadrature" begin
@@ -490,7 +514,7 @@ end
     @testset "Vertical-profile SGS: integrate_over_sgs + saturation (all YAML keys)" begin
         import Thermodynamics as TD
         import ClimaParams as CP
-        # Every `sgs_distribution` string mapped to `AbstractGridscaleCorrectedSGS` in
+        # Every `sgs_distribution` string mapped to `AbstractVerticallyResolvedSGS` in
         # `get_sgs_distribution` (see `get_sgs_distribution linear-profile keys` below).
         profile_keys = String[
             "gaussian_vertical_profile_inner_chebyshev",
@@ -527,7 +551,7 @@ end
                 q_mean = FT(0.01)
                 for key in profile_keys
                     dist = ClimaAtmos.get_sgs_distribution(Dict{String, Any}("sgs_distribution" => key))
-                    @test dist isa ClimaAtmos.AbstractGridscaleCorrectedSGS
+                    @test dist isa ClimaAtmos.AbstractVerticallyResolvedSGS
                     quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3, distribution = dist)
                     r1 = ClimaAtmos.integrate_over_sgs(
                         f_const,
@@ -1260,16 +1284,16 @@ end
         tst = nothing
         dt = FT(1.0)
         dists = (
-            ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+            ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
             }(),
-            ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+            ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
             }(),
-            ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
             }(),
-            ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
             }(),
         )
@@ -1323,22 +1347,22 @@ end
         quad_ct = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
-            distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}(),
+            distribution = ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridColumnTensor}(),
         )
         quad_pr = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
-            distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
             }(),
         )
         @test quad_ct.z_t !== nothing
-        ict = ClimaAtmos.integrate_over_sgs_linear_profile(
+        ict = ClimaAtmos.integrate_over_sgs(
             f, quad_ct, μ_q, μ_T, qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
         )
-        ipr = ClimaAtmos.integrate_over_sgs_linear_profile(
+        ipr = ClimaAtmos.integrate_over_sgs(
             f, quad_pr, μ_q, μ_T, qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
@@ -1346,7 +1370,7 @@ end
         @test ict ≈ ipr rtol = FT(0.05) atol = FT(1e-4)
     end
 
-    @testset "integrate_over_sgs_linear_profile rejects non-finite half-cell inputs (Profile Rosenblatt)" begin
+    @testset "integrate_over_sgs rejects non-finite half-cell inputs (Profile Rosenblatt)" begin
         using ClimaCore.Geometry
         FT = Float64
         lg = _fd_column_center_local_geometry(FT; ilevel = 4)
@@ -1366,11 +1390,11 @@ end
         quad_pr = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
-            distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
             }(),
         )
-        @test_throws ErrorException ClimaAtmos.integrate_over_sgs_linear_profile(
+        @test_throws ErrorException ClimaAtmos.integrate_over_sgs(
             f, quad_pr, μ_q, μ_T, qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
@@ -1397,22 +1421,26 @@ end
         quad_ct = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
-            distribution = ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}(),
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
+                ClimaAtmos.SubgridColumnTensor,
+                ClimaAtmos.LogNormalSGS,
+            }(),
         )
         quad_pr = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
-            distribution = ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+                ClimaAtmos.LogNormalSGS,
             }(),
         )
         @test quad_ct.z_t !== nothing
-        ict = ClimaAtmos.integrate_over_sgs_linear_profile(
+        ict = ClimaAtmos.integrate_over_sgs(
             f, quad_ct, μ_q, μ_T, qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
         )
-        ipr = ClimaAtmos.integrate_over_sgs_linear_profile(
+        ipr = ClimaAtmos.integrate_over_sgs(
             f, quad_pr, μ_q, μ_T, qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
@@ -1430,12 +1458,12 @@ end
         quad_pr = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
-            distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
             }(),
         )
         gzero = Covariant123Vector(FT(0), FT(0), FT(0))
-        ipr = ClimaAtmos.integrate_over_sgs_linear_profile(
+        ipr = ClimaAtmos.integrate_over_sgs(
             f,
             quad_pr,
             μ_q,
@@ -1480,16 +1508,16 @@ end
         quad_pr = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
-            distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
             }(),
         )
-        i_asym = ClimaAtmos.integrate_over_sgs_linear_profile(
+        i_asym = ClimaAtmos.integrate_over_sgs(
             f, quad_pr, μ_q, μ_T, qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
         )
-        i_sym = ClimaAtmos.integrate_over_sgs_linear_profile(
+        i_sym = ClimaAtmos.integrate_over_sgs(
             f, quad_pr, μ_q, μ_T, qv, Tv, ρc, H, lg,
             gsym_q, gsym_q, gsym_θ, gsym_θ, ∂T∂θ,
             gzero, gzero, gzero, gzero,
@@ -1522,17 +1550,17 @@ end
         mk(method) = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
-            distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{method},
             }(),
         )
-        i_brent = ClimaAtmos.integrate_over_sgs_linear_profile(
+        i_brent = ClimaAtmos.integrate_over_sgs(
             f, mk(ClimaAtmos.ConvolutionQuantilesBracketed), μ_q, μ_T,
             qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
         )
-        i_halley = ClimaAtmos.integrate_over_sgs_linear_profile(
+        i_halley = ClimaAtmos.integrate_over_sgs(
             f, mk(ClimaAtmos.ConvolutionQuantilesHalley), μ_q, μ_T,
             qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
@@ -1540,7 +1568,7 @@ end
         )
         # Both use the same composite split inner marginal; Halley is one-step per leg.
         @test i_halley ≈ i_brent rtol = FT(1e-5) atol = FT(1e-6)
-        i_cheb = ClimaAtmos.integrate_over_sgs_linear_profile(
+        i_cheb = ClimaAtmos.integrate_over_sgs(
             f, mk(ClimaAtmos.ConvolutionQuantilesChebyshevLogEta), μ_q, μ_T,
             qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
@@ -1594,11 +1622,11 @@ end
                 quad = ClimaAtmos.SGSQuadrature(
                     FT;
                     quadrature_order = 3,
-                    distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+                    distribution = ClimaAtmos.VerticallyResolvedSGS{
                         ClimaAtmos.SubgridProfileRosenblatt{method},
                     }(),
                 )
-                v = ClimaAtmos.integrate_over_sgs_linear_profile(
+                v = ClimaAtmos.integrate_over_sgs(
                     f, quad, μ_q, μ_T, qv, Tv, ρc, H, lg,
                     gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
                     gzero, gzero, gzero, gzero,
@@ -1633,11 +1661,12 @@ end
         q_br = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 5,
-            distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+                ClimaAtmos.LogNormalSGS,
             }(),
         )
-        i_prof = ClimaAtmos.integrate_over_sgs_linear_profile(
+        i_prof = ClimaAtmos.integrate_over_sgs(
             f, q_br, μ_q, μ_T, qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
@@ -1777,23 +1806,23 @@ end
         mk(method) = ClimaAtmos.SGSQuadrature(
             FT;
             quadrature_order = 3,
-            distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{method},
             }(),
         )
-        out_b = ClimaAtmos.integrate_over_sgs_linear_profile(
+        out_b = ClimaAtmos.integrate_over_sgs(
             f, mk(ClimaAtmos.ConvolutionQuantilesBracketed), μ_q, μ_T,
             qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
         )
-        out_h = ClimaAtmos.integrate_over_sgs_linear_profile(
+        out_h = ClimaAtmos.integrate_over_sgs(
             f, mk(ClimaAtmos.ConvolutionQuantilesHalley), μ_q, μ_T,
             qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
         )
-        out_c = ClimaAtmos.integrate_over_sgs_linear_profile(
+        out_c = ClimaAtmos.integrate_over_sgs(
             f, mk(ClimaAtmos.ConvolutionQuantilesChebyshevLogEta), μ_q, μ_T,
             qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
@@ -1813,7 +1842,7 @@ end
 
     @testset "alternate layer discretizations: linear_profile runs and is not silently identical" begin
         # Regression guard: `SubgridLatinHypercubeZ` et al. must hit real branches in
-        # `integrate_over_sgs_linear_profile` (not only `sgs_1m_uses_sgs_linear_profile` /
+        # `integrate_over_sgs` (not only dispatch /
         # `throw_if` plumbing). With vertical structure in means and subcell variance
         # slopes, reduced rules (LHS, principal axis, …) must differ from full
         # column-tensor cubature and from each other.
@@ -1843,7 +1872,7 @@ end
             ClimaAtmos.SGSQuadrature(
                 FT;
                 quadrature_order = 3,
-                distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{S}(),
+                distribution = ClimaAtmos.VerticallyResolvedSGS{S}(),
             )
         end
         args = (
@@ -1851,11 +1880,11 @@ end
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gqq_dn, gqq_up, gTT_dn, gTT_up,
         )
-        ict = ClimaAtmos.integrate_over_sgs_linear_profile(f, mk_quad(ClimaAtmos.SubgridColumnTensor), args...)
-        ilhs = ClimaAtmos.integrate_over_sgs_linear_profile(f, mk_quad(ClimaAtmos.SubgridLatinHypercubeZ), args...)
-        ipa = ClimaAtmos.integrate_over_sgs_linear_profile(f, mk_quad(ClimaAtmos.SubgridPrincipalAxisLayer), args...)
-        ivor = ClimaAtmos.integrate_over_sgs_linear_profile(f, mk_quad(ClimaAtmos.SubgridVoronoiRepresentatives), args...)
-        ibar = ClimaAtmos.integrate_over_sgs_linear_profile(f, mk_quad(ClimaAtmos.SubgridBarycentricSeeds), args...)
+        ict = ClimaAtmos.integrate_over_sgs(f, mk_quad(ClimaAtmos.SubgridColumnTensor), args...)
+        ilhs = ClimaAtmos.integrate_over_sgs(f, mk_quad(ClimaAtmos.SubgridLatinHypercubeZ), args...)
+        ipa = ClimaAtmos.integrate_over_sgs(f, mk_quad(ClimaAtmos.SubgridPrincipalAxisLayer), args...)
+        ivor = ClimaAtmos.integrate_over_sgs(f, mk_quad(ClimaAtmos.SubgridVoronoiRepresentatives), args...)
+        ibar = ClimaAtmos.integrate_over_sgs(f, mk_quad(ClimaAtmos.SubgridBarycentricSeeds), args...)
         @test ict isa FT && ilhs isa FT && ipa isa FT && ivor isa FT && ibar isa FT
         @test all(isfinite, (ict, ilhs, ipa, ivor, ibar))
         mn, mx = extrema((ict, ilhs, ipa, ivor, ibar))
@@ -1900,9 +1929,9 @@ end
         for S in schemes
             quad = ClimaAtmos.SGSQuadrature(
                 FT; quadrature_order = 3,
-                distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{S}(),
+                distribution = ClimaAtmos.VerticallyResolvedSGS{S}(),
             )
-            m = ClimaAtmos.integrate_over_sgs_linear_profile((T, q) -> FT(1), quad, args...)
+            m = ClimaAtmos.integrate_over_sgs((T, q) -> FT(1), quad, args...)
             @test m ≈ FT(1) atol = FT(1e-8)
         end
     end
@@ -1936,11 +1965,11 @@ end
                 quad = ClimaAtmos.SGSQuadrature(
                     FT;
                     quadrature_order = Nq,
-                    distribution = ClimaAtmos.GaussianGridscaleCorrectedSGS{
+                    distribution = ClimaAtmos.VerticallyResolvedSGS{
                         ClimaAtmos.SubgridProfileRosenblatt{M},
                     }(),
                 )
-                m = ClimaAtmos.integrate_over_sgs_linear_profile((T, q) -> FT(1), quad, args...)
+                m = ClimaAtmos.integrate_over_sgs((T, q) -> FT(1), quad, args...)
                 @test m ≈ FT(1) atol = FT(1e-7) rtol = FT(1e-10)
             end
         end
@@ -1948,7 +1977,7 @@ end
 
     @testset "coverage matrix: all 1M-supported gridscale SGS return finite tendencies" begin
         # Broad integration coverage for 1M+SGS dispatch:
-        # every gridscale-corrected family/type listed in `sgs_1m_uses_sgs_linear_profile`
+        # every vertically resolved SGS family/type
         # should run through `microphysics_tendencies_1m_sgs_row` and return finite outputs.
         import Thermodynamics as TD
         import ClimaParams as CP
@@ -1978,38 +2007,44 @@ end
         dt = FT(1.0)
         # Include all currently supported gridscale S families across Gaussian/LogNormal.
         dists = (
-            ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}(),
-            ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}(),
-            ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridLatinHypercubeZ}(),
-            ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridLatinHypercubeZ}(),
-            ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridPrincipalAxisLayer}(),
-            ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridPrincipalAxisLayer}(),
-            ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridVoronoiRepresentatives}(),
-            ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridVoronoiRepresentatives}(),
-            ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridBarycentricSeeds}(),
-            ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridBarycentricSeeds}(),
-            ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridColumnTensor, ClimaAtmos.GaussianSGS}(),
+            ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridColumnTensor, ClimaAtmos.LogNormalSGS}(),
+            ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridLatinHypercubeZ, ClimaAtmos.GaussianSGS}(),
+            ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridLatinHypercubeZ, ClimaAtmos.LogNormalSGS}(),
+            ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridPrincipalAxisLayer, ClimaAtmos.GaussianSGS}(),
+            ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridPrincipalAxisLayer, ClimaAtmos.LogNormalSGS}(),
+            ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridVoronoiRepresentatives, ClimaAtmos.GaussianSGS}(),
+            ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridVoronoiRepresentatives, ClimaAtmos.LogNormalSGS}(),
+            ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridBarycentricSeeds, ClimaAtmos.GaussianSGS}(),
+            ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridBarycentricSeeds, ClimaAtmos.LogNormalSGS}(),
+            ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+                ClimaAtmos.GaussianSGS,
             }(),
-            ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+            ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+                ClimaAtmos.LogNormalSGS,
             }(),
-            ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+                ClimaAtmos.GaussianSGS,
             }(),
-            ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+            ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+                ClimaAtmos.LogNormalSGS,
             }(),
-            ClimaAtmos.GaussianGridscaleCorrectedSGS{
+            ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesChebyshevLogEta},
+                ClimaAtmos.GaussianSGS,
             }(),
-            ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+            ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesChebyshevLogEta},
+                ClimaAtmos.LogNormalSGS,
             }(),
         )
         for d in dists
             quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3, distribution = d)
-            @test ClimaAtmos.sgs_1m_uses_sgs_linear_profile(quad)
+            @test ClimaAtmos._is_vertically_resolved_sgs(d)
             @test _assert_1m_sgs_gridscale_supported_for_tests(quad) === nothing
             out = ClimaAtmos.microphysics_tendencies_1m_sgs_row(
                 BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T,
@@ -2195,73 +2230,73 @@ end
         # Default YAML `gaussian_vertical_profile` matches production default inner quantiles (Halley dispatch).
         # Bracketed roots are explicit `_inner_bracketed` YAML.
         pa = Dict{String, Any}("sgs_distribution" => "gaussian_vertical_profile_inner_chebyshev")
-        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.GaussianGridscaleCorrectedSGS{
+        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.VerticallyResolvedSGS{
             ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesChebyshevLogEta},
         }
         pa = Dict{String, Any}("sgs_distribution" => "gaussian_vertical_profile")
-        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.GaussianGridscaleCorrectedSGS{
+        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.VerticallyResolvedSGS{
             ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
         }
         pa["sgs_distribution"] = "gaussian_vertical_profile_full_cubature"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
-              ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}
+              ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridColumnTensor}
         pa["sgs_distribution"] = "gaussian_vertical_profile_inner_bracketed"
-        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.GaussianGridscaleCorrectedSGS{
+        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.VerticallyResolvedSGS{
             ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
         }
         pa["sgs_distribution"] = "gaussian_vertical_profile_inner_halley"
-        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.GaussianGridscaleCorrectedSGS{
+        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.VerticallyResolvedSGS{
             ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
         }
         pa["sgs_distribution"] = "lognormal_vertical_profile"
-        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.VerticallyResolvedSGS{
             ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
         }
         pa["sgs_distribution"] = "lognormal_vertical_profile_full_cubature"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
-              ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}
+              ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridColumnTensor}
         pa["sgs_distribution"] = "lognormal_vertical_profile_inner_bracketed"
-        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.VerticallyResolvedSGS{
             ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
         }
         pa["sgs_distribution"] = "lognormal_vertical_profile_inner_halley"
-        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.VerticallyResolvedSGS{
             ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
         }
         pa["sgs_distribution"] = "lognormal_vertical_profile_inner_chebyshev"
-        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.LogNormalGridscaleCorrectedSGS{
+        @test ClimaAtmos.get_sgs_distribution(pa) isa ClimaAtmos.VerticallyResolvedSGS{
             ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesChebyshevLogEta},
         }
         pa["sgs_distribution"] = "gaussian_vertical_profile_full_cubature"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
-              ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}
+              ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridColumnTensor}
         pa["sgs_distribution"] = "gaussian_vertical_profile_lhs_z"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
-              ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridLatinHypercubeZ}
+              ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridLatinHypercubeZ}
         pa["sgs_distribution"] = "gaussian_vertical_profile_principal_axis"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
-              ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridPrincipalAxisLayer}
+              ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridPrincipalAxisLayer}
         pa["sgs_distribution"] = "gaussian_vertical_profile_voronoi"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
-              ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridVoronoiRepresentatives}
+              ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridVoronoiRepresentatives}
         pa["sgs_distribution"] = "gaussian_vertical_profile_barycentric"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
-              ClimaAtmos.GaussianGridscaleCorrectedSGS{ClimaAtmos.SubgridBarycentricSeeds}
+              ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridBarycentricSeeds}
         pa["sgs_distribution"] = "lognormal_vertical_profile_full_cubature"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
-              ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridColumnTensor}
+              ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridColumnTensor}
         pa["sgs_distribution"] = "lognormal_vertical_profile_lhs_z"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
-              ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridLatinHypercubeZ}
+              ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridLatinHypercubeZ}
         pa["sgs_distribution"] = "lognormal_vertical_profile_principal_axis"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
-              ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridPrincipalAxisLayer}
+              ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridPrincipalAxisLayer}
         pa["sgs_distribution"] = "lognormal_vertical_profile_voronoi"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
-              ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridVoronoiRepresentatives}
+              ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridVoronoiRepresentatives}
         pa["sgs_distribution"] = "lognormal_vertical_profile_barycentric"
         @test ClimaAtmos.get_sgs_distribution(pa) isa
-              ClimaAtmos.LogNormalGridscaleCorrectedSGS{ClimaAtmos.SubgridBarycentricSeeds}
+              ClimaAtmos.VerticallyResolvedSGS{ClimaAtmos.SubgridBarycentricSeeds}
     end
 
     @testset "get_physical_point respects T_min (inner SGS layer)" begin

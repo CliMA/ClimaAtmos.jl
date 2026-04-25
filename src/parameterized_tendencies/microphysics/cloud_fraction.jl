@@ -376,7 +376,7 @@ Compute the phase-specific cloud fraction from normalized condensate.
     q_tot,
     cf_steepness_scale,
     q_min,
-    ::GaussianGridscaleCorrectedSGS,
+    ::VerticallyResolvedSGS{<:Any, GaussianSGS},
 )
     return _cloud_fraction_helper(
         Q_hat,
@@ -394,7 +394,7 @@ end
     q_tot,
     cf_steepness_scale,
     q_min,
-    ::LogNormalGridscaleCorrectedSGS,
+    ::VerticallyResolvedSGS{<:Any, LogNormalSGS},
 )
     return _cloud_fraction_helper(
         Q_hat,

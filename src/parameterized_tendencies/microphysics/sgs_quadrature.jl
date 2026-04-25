@@ -195,16 +195,13 @@ struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT, ZZ, ZW} <:
         N = distribution isa GridMeanSGS ? 1 : quadrature_order
         a, w = get_quadrature_nodes_weights(distribution, FT, N)
         a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-        if distribution isa GaussianGridscaleCorrectedSGS{SubgridColumnTensor} ||
-           distribution isa LogNormalGridscaleCorrectedSGS{SubgridColumnTensor} ||
-           distribution isa GaussianGridscaleCorrectedSGS{SubgridLatinHypercubeZ} ||
-           distribution isa LogNormalGridscaleCorrectedSGS{SubgridLatinHypercubeZ} ||
-           distribution isa GaussianGridscaleCorrectedSGS{SubgridPrincipalAxisLayer} ||
-           distribution isa LogNormalGridscaleCorrectedSGS{SubgridPrincipalAxisLayer} ||
-           distribution isa GaussianGridscaleCorrectedSGS{SubgridVoronoiRepresentatives} ||
-           distribution isa LogNormalGridscaleCorrectedSGS{SubgridVoronoiRepresentatives} ||
-           distribution isa GaussianGridscaleCorrectedSGS{SubgridBarycentricSeeds} ||
-           distribution isa LogNormalGridscaleCorrectedSGS{SubgridBarycentricSeeds}
+        # Vertically resolved SGS types that are NOT profile–Rosenblatt need
+        # Gauss–Legendre z-nodes for their column-tensor / LHS / principal-axis /
+        # Voronoi / barycentric-seeds inner loops.
+        needs_z_nodes =
+            distribution isa AbstractVerticallyResolvedSGS &&
+            !(distribution isa VerticallyResolvedSGS{<:SubgridProfileRosenblatt})
+        if needs_z_nodes
             z_t_vec, z_w_vec = gauss_legendre_neg1_1(FT, N)
             zt = SA.SVector{N, FT}(z_t_vec)
             zw = SA.SVector{N, FT}(z_w_vec)
@@ -253,10 +250,7 @@ Dispatches to appropriate quadrature method based on distribution:
 """
 @inline get_quadrature_nodes_weights(::GaussianSGS, FT, N) = gauss_hermite(FT, N)
 
-@inline get_quadrature_nodes_weights(::GaussianGridscaleCorrectedSGS, FT, N) =
-    gauss_hermite(FT, N)
-
-@inline get_quadrature_nodes_weights(::LogNormalGridscaleCorrectedSGS, FT, N) =
+@inline get_quadrature_nodes_weights(::VerticallyResolvedSGS, FT, N) =
     gauss_hermite(FT, N)
 
 @inline function get_quadrature_nodes_weights(::LogNormalSGS, FT, N)
@@ -407,6 +401,21 @@ Tuple `(σ_q, σ_T, corr)` of standard deviations and clamped correlation.
 end
 
 # ============================================================================
+# Inner Distribution Accessor
+# ============================================================================
+
+"""
+    _inner_dist(dist::VerticallyResolvedSGS{S, I})
+
+Return the inner bivariate distribution instance (`GaussianSGS()` or `LogNormalSGS()`)
+from a [`VerticallyResolvedSGS`](@ref). Used by both the short-arity
+[`integrate_over_sgs`](@ref) (cell-center bivariate path) and the long-arity method
+(layer-profile path in `subgrid_layer_profile_quadrature.jl`).
+"""
+@inline _inner_dist(::VerticallyResolvedSGS{<:Any, GaussianSGS}) = GaussianSGS()
+@inline _inner_dist(::VerticallyResolvedSGS{<:Any, LogNormalSGS}) = LogNormalSGS()
+
+# ============================================================================
 # Physical Point Computation
 # ============================================================================
 
@@ -517,7 +526,7 @@ end
 end
 
 @inline function get_physical_point(
-    ::GaussianGridscaleCorrectedSGS,
+    ::VerticallyResolvedSGS{<:Any, GaussianSGS},
     χ1,
     χ2,
     μ_q,
@@ -543,7 +552,7 @@ end
 end
 
 @inline function get_physical_point(
-    ::LogNormalGridscaleCorrectedSGS,
+    ::VerticallyResolvedSGS{<:Any, LogNormalSGS},
     χ1,
     χ2,
     μ_q,
@@ -703,25 +712,24 @@ for the distribution type in `quad`, and evaluates the Gauss-Hermite quadrature.
 Temperature is always Gaussian; the distribution of specific humidity is
 determined by `quad.dist` (see [`get_physical_point`](@ref)).
 
-# Relation to [`integrate_over_sgs_linear_profile`](@ref)
+# Relation to long-arity `integrate_over_sgs`
 
-Both approximate ``\\mathbb{E}[f]`` over SGS noise. The linear-profile entrypoint could be
-expressed as extra methods of `integrate_over_sgs` (different arity and arguments); the
-separate name documents that **layer thickness, `LocalGeometry`, and subcell gradients**
-are part of the public contract, not optional refinements.
+Both approximate ``\\mathbb{E}[f]`` over SGS noise. The long-arity method (defined in
+`subgrid_layer_profile_quadrature.jl`) takes additional arguments: **layer thickness,
+`LocalGeometry`, and subcell gradients** as part of the public contract for vertically
+resolved SGS.
 
-# Gridscale-corrected ``quad.dist``
+# Vertically resolved ``quad.dist``
 
-For [`AbstractGridscaleCorrectedSGS`](@ref), the branch below applies only a
+For [`AbstractVerticallyResolvedSGS`](@ref), the branch below applies only a
 **bivariate (T, q)** map at cell center (inner `GaussianSGS` / `LogNormalSGS`); the
-**layer-profile** type parameter `S` is not used. Layer-mean, gradient-aware rules live in
-[`integrate_over_sgs_linear_profile`](@ref) (0M saturation, and 1M via
-[`microphysics_tendencies_1m_sgs_row`](@ref) when [`sgs_1m_uses_sgs_linear_profile`](@ref) lists
-the distribution; column tensor, LHS, principal axis, Voronoi/barycentric seeds,
-profile–Rosenblatt, …). Bivariate **1M** only dispatches
+**layer-profile** type parameter `S` is not used. Layer-mean, gradient-aware rules
+use the long-arity `integrate_over_sgs` (0M saturation, and 1M via
+[`microphysics_tendencies_1m_sgs_row`](@ref); column tensor, LHS, principal axis,
+Voronoi/barycentric seeds, profile–Rosenblatt, …). Bivariate **1M** only dispatches
 [`microphysics_tendencies_1m`](@ref) for base
 [`GaussianSGS`](@ref) / [`LogNormalSGS`](@ref) / [`GridMeanSGS`](@ref); it does not accept
-gridscale `SGSQuadrature` at the type level. This
+vertically resolved `SGSQuadrature` at the type level. This
 path remains for **base** `GaussianSGS` / `LogNormalSGS` and other cell-center bivariate
 uses.
 
@@ -736,10 +744,10 @@ uses.
 Weighted sum ``\\approx E[f(T, q)]`` with the same type as `f(T, q)`.
 """
 function integrate_over_sgs(f, quad::SGSQuadrature, μ_q, μ_T, q′q′, T′T′, corr_Tq)
-    if _is_nonuniform_gridscale_corrected(quad.dist)
+    if _is_vertically_resolved_sgs(quad.dist)
         σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
         μ_T_p, μ_q_p = promote(μ_T, μ_q)
-        inner = quad.dist isa GaussianGridscaleCorrectedSGS ? GaussianSGS() : LogNormalSGS()
+        inner = _inner_dist(quad.dist)
         transform = PhysicalPointTransform(
             inner,
             μ_T_p,
@@ -822,7 +830,7 @@ Per-cell **scalar** moments for SGS quadrature: returns
 
 - Base distributions ([`GaussianSGS`](@ref), [`LogNormalSGS`](@ref)): raw turbulent
   variances, `ρ_param`, zero segment half-widths.
-- [`GaussianGridscaleCorrectedSGS`](@ref) / [`LogNormalGridscaleCorrectedSGS`](@ref): raw
+- [`VerticallyResolvedSGS`](@ref): raw
   turbulent variances and `ρ_param` (layer-profile quadrature uses gradients separately);
   `δq_half` and `δT_half` are zero.
 """
@@ -840,7 +848,7 @@ Per-cell **scalar** moments for SGS quadrature: returns
 )
     FT = typeof(q′q′)
     z = zero(FT)
-    if dist isa AbstractGridscaleCorrectedSGS
+    if dist isa AbstractVerticallyResolvedSGS
         return T′T′, q′q′, ρ_param, z, z
     end
     return T′T′, q′q′, ρ_param, z, z

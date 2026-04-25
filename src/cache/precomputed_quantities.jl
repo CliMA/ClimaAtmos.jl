@@ -568,7 +568,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
             ε = ϵ_variance_statistics(FT)
             ᶜdz = Fields.Δz_field(axes(Y.c))
             ᶜlg = Fields.local_geometry_field(Y.c)
-            if sgs_quad.dist isa AbstractGridscaleCorrectedSGS
+            if sgs_quad.dist isa AbstractVerticallyResolvedSGS
                 compute_∂T_∂θ!(p.scratch.ᶜtemp_scalar, Y, p, thermo_params)
             end
             ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar

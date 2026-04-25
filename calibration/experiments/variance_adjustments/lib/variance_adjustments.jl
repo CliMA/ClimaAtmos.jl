@@ -6,7 +6,7 @@
 #   four face-anchored half-slopes.
 # - `ClimaAtmos.subcell_geometric_covariance_Tq` / `ClimaAtmos.subcell_layer_mean_excursion` —
 #   same file (`src/utils/variance_statistics.jl`), same two-slope signature.
-# - `ClimaAtmos.integrate_over_sgs_linear_profile` in
+# - `ClimaAtmos.integrate_over_sgs` (long-arity) in
 #   `src/parameterized_tendencies/microphysics/subgrid_layer_profile_quadrature.jl` —
 #   the end-to-end layer-mean quadrature driver (column-tensor and
 #   `SubgridProfileRosenblatt`: composite split inner marginal (½ DN / ½ UP half-cell

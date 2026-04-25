@@ -174,8 +174,8 @@ end
     )
 
 Pointwise wrapper: two-slope face-anchored layer-mean quadrature for
-[`AbstractGridscaleCorrectedSGS`](@ref); single-point quadrature for the
-non-gridscale-corrected base distributions. No persistent SGS-moment fields:
+[`AbstractVerticallyResolvedSGS`](@ref); single-point quadrature for the
+non-vertically-resolved base distributions. No persistent SGS-moment fields:
 callers pass half-cell gradients of means and turbulent variances inline
 via `ᶜleft_bias(ᶠgradᵥ(·))` / `ᶜright_bias(ᶠgradᵥ(·))`.
 """
@@ -201,12 +201,11 @@ via `ᶜleft_bias(ᶠgradᵥ(·))` / `ᶜright_bias(ᶠgradᵥ(·))`.
     T′T′,
     q′q′,
 )
-    if sgs_quad.dist isa GaussianGridscaleCorrectedSGS ||
-       sgs_quad.dist isa LogNormalGridscaleCorrectedSGS
+    if sgs_quad.dist isa AbstractVerticallyResolvedSGS
         FT = typeof(T_mean)
         q_min = TD.Parameters.q_min(thermo_params)
         evaluator = SaturationAdjustmentEvaluator(thermo_params, ρ)
-        result = integrate_over_sgs_linear_profile(
+        result = integrate_over_sgs(
             evaluator,
             sgs_quad,
             q_mean,
@@ -231,7 +230,7 @@ via `ᶜleft_bias(ᶠgradᵥ(·))` / `ᶜright_bias(ᶠgradᵥ(·))`.
         q_ice = result.q_ice * ratio
         return (; T = T_mean, q_liq, q_ice)
     end
-    # Non-gridscale-corrected path: raw center variances, no subcell adjustment.
+    # Non-vertically-resolved path: raw center variances, no subcell adjustment.
     FT = typeof(q′q′)
     return compute_sgs_saturation_adjustment(
         thermo_params,

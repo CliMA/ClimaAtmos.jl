@@ -5,7 +5,7 @@ import CloudMicrophysics.AerosolModel as CMAM
 import CloudMicrophysics.AerosolActivation as CMAA
 
 # Import SGS quadrature utilities
-using ..ClimaAtmos: integrate_over_sgs, integrate_over_sgs_linear_profile
+using ..ClimaAtmos: integrate_over_sgs
 
 ###
 ### 0 Moment Microphysics
@@ -206,64 +206,7 @@ end
     )
 end
 
-"""
-    sgs_1m_uses_sgs_linear_profile(quad::SGSQuadrature)
-    sgs_1m_uses_sgs_linear_profile(dist::AbstractSGSDistribution)
 
-Return `true` if 1M SGS should integrate with [`integrate_over_sgs_linear_profile`](@ref)
-(same subcolumn/gradient discretization as SGS **saturation** for
-[`SubgridColumnTensor`](@ref) and profile–Rosenblatt rules). Return `false` for
-base `GaussianSGS` / `LogNormalSGS`, and for other `sgs_distribution` families
-(such as a novel `S` not listed in
-[`sgs_1m_uses_sgs_linear_profile`](@ref)).
-"""
-@inline sgs_1m_uses_sgs_linear_profile(quad::SGSQuadrature) = sgs_1m_uses_sgs_linear_profile(quad.dist)
-@inline sgs_1m_uses_sgs_linear_profile(::Union{
-    GaussianGridscaleCorrectedSGS{SubgridColumnTensor},
-    LogNormalGridscaleCorrectedSGS{SubgridColumnTensor},
-    GaussianGridscaleCorrectedSGS{<:SubgridProfileRosenblatt},
-    LogNormalGridscaleCorrectedSGS{<:SubgridProfileRosenblatt},
-    GaussianGridscaleCorrectedSGS{SubgridLatinHypercubeZ},
-    LogNormalGridscaleCorrectedSGS{SubgridLatinHypercubeZ},
-    GaussianGridscaleCorrectedSGS{SubgridPrincipalAxisLayer},
-    LogNormalGridscaleCorrectedSGS{SubgridPrincipalAxisLayer},
-    GaussianGridscaleCorrectedSGS{SubgridVoronoiRepresentatives},
-    LogNormalGridscaleCorrectedSGS{SubgridVoronoiRepresentatives},
-    GaussianGridscaleCorrectedSGS{SubgridBarycentricSeeds},
-    LogNormalGridscaleCorrectedSGS{SubgridBarycentricSeeds},
-}) = true
-@inline sgs_1m_uses_sgs_linear_profile(::AbstractSGSDistribution) = false
-# (New `S` for `AbstractGridscaleCorrectedSGS` must be added to the union above **and**
-# implemented in `integrate_over_sgs_linear_profile` before use.)
-
-"""
-    assert_sgs_quadrature_valid_for_1m_microphysics(sgs_quad)
-
-Fail fast when building the atmosphere if **non-equilibrium 1M** is combined with an SGS
-quadrature whose gridscale layer discretization is not wired for 1M layer-mean integration
-([`sgs_1m_uses_sgs_linear_profile`](@ref) and [`integrate_over_sgs_linear_profile`](@ref)).
-
-[`get_sgs_distribution`](@ref) only returns distributions that satisfy this rule, so **every
-documented YAML `sgs_distribution` (including Voronoi, profile–Rosenblatt, etc.) passes** for
-1M. The check catches invalid **programmatic** `SGSQuadrature` construction (e.g. a new
-`GaussianGridscaleCorrectedSGS{S}` type added in Julia without updating the support union and
-[`integrate_over_sgs_linear_profile`](@ref)). Called from [`get_sgs_quadrature`](@ref) when
-`microphysics_model isa NonEquilibriumMicrophysics1M`.
-"""
-function assert_sgs_quadrature_valid_for_1m_microphysics(sgs_quad)
-    isnothing(sgs_quad) && return nothing
-    sgs_quad isa SGSQuadrature || return nothing
-    d = sgs_quad.dist
-    if d isa AbstractGridscaleCorrectedSGS && !sgs_1m_uses_sgs_linear_profile(sgs_quad)
-        error(
-            "NonEquilibriumMicrophysics 1M + SGS: quadrature distribution $(typeof(d)) is not " *
-                "supported for 1M layer-mean SGS (see `sgs_1m_uses_sgs_linear_profile` and " *
-                "`integrate_over_sgs_linear_profile`). Use a supported `sgs_distribution` key " *
-                "from `get_sgs_distribution`, or extend both the support union and the linear-profile integrator.",
-        )
-    end
-    return nothing
-end
 
 @inline function microphysics_tendencies_1m_sgs_row(
     scheme,
@@ -302,7 +245,7 @@ end
         scheme, cmp, thp, ρ, T, q_lcl_nonneg, q_icl_nonneg,
         q_rai_nonneg, q_sno_nonneg, (),
     )
-    local_tendency = integrate_over_sgs_linear_profile(
+    local_tendency = integrate_over_sgs(
         evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, ρ_Tq, Δz, local_geometry,
         grad_q_dn, grad_q_up, grad_θ_dn, grad_θ_up, ∂T∂θ_li,
         grad_qq_dn, grad_qq_up, grad_TT_dn, grad_TT_up,
@@ -363,7 +306,7 @@ Call sites must convert θ-based variances to T-based variances using the chain 
 T′T′ = (∂T_∂θ)² × θ′θ′
 ```
 The T–q correlation is scalar `correlation_Tq(params)` for uncorrected distributions;
-for [`AbstractGridscaleCorrectedSGS`](@ref), use per-cell effective correlation from
+for [`AbstractVerticallyResolvedSGS`](@ref), use per-cell effective correlation from
 [`sgs_quadrature_moments_from_gradients`](@ref) at cache call sites that build SGS moments.
 """
 @inline function microphysics_tendencies_1m(
@@ -391,8 +334,8 @@ end
     D <: Union{GaussianSGS, LogNormalSGS, GridMeanSGS},
 }
     # Bivariate ``(T,q)`` [`integrate_over_sgs`](@ref) only for base distributions.
-    # [`AbstractGridscaleCorrectedSGS`](@ref) must use [`microphysics_tendencies_1m_sgs_row`](@ref)
-    # and [`integrate_over_sgs_linear_profile`](@ref). (Dispatch excludes the wrong types.)
+    # [`AbstractVerticallyResolvedSGS`](@ref) must use [`microphysics_tendencies_1m_sgs_row`](@ref)
+    # and the long-arity [`integrate_over_sgs`](@ref). (Dispatch excludes the wrong types.)
     # Clamp species humidities to prevent negativity in quadratures
     q_lcl_nonneg = max(0, q_lcl)
     q_icl_nonneg = max(0, q_icl)
@@ -404,8 +347,8 @@ end
         scheme, cmp, thp, ρ, T, q_lcl_nonneg, q_icl_nonneg,
         q_rai_nonneg, q_sno_nonneg, args,
     )
-    # Gridscale *vertical_profile* 1M uses `integrate_over_sgs_linear_profile` at the
-    # `microphysics_cache` call site when [`sgs_1m_uses_sgs_linear_profile`](@ref). Here:
+    # Vertically resolved 1M uses the long-arity `integrate_over_sgs` at the
+    # `microphysics_cache` call site for [`AbstractVerticallyResolvedSGS`](@ref). Here:
     # base (non-gridscale) bivariate (T, q) integration.
     local_tendency = integrate_over_sgs(
         evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
@@ -421,13 +364,13 @@ end
 
 function microphysics_tendencies_1m(
     ::Any,
-    sgs_quad::SGSQuadrature{<:Any, <:Any, <:Any, <:AbstractGridscaleCorrectedSGS},
+    sgs_quad::SGSQuadrature{<:Any, <:Any, <:Any, <:AbstractVerticallyResolvedSGS},
     args...,
 )
     d = sgs_quad.dist
     throw(
         ArgumentError(
-            "1M SGS with `AbstractGridscaleCorrectedSGS` (got $(typeof(d))) " *
+            "1M SGS with `AbstractVerticallyResolvedSGS` (got $(typeof(d))) " *
             "must use `microphysics_tendencies_1m_sgs_row` with layer geometry and gradients, " *
             "not the bivariate `microphysics_tendencies_1m` wrapper.",
         ),

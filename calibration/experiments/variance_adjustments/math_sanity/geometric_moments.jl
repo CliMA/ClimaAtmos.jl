@@ -8,7 +8,7 @@
 # `src/utils/variance_statistics.jl` (`subcell_geometric_variance_increment`,
 # `subcell_geometric_covariance_Tq`, `subcell_layer_mean_excursion`) — with four
 # half-slopes per cell and independent `d`/`D` channels — and is driven end-to-end
-# by `ClimaAtmos.integrate_over_sgs_linear_profile`. The moment-matched Gaussian
+# by `ClimaAtmos.integrate_over_sgs` (long-arity). The moment-matched Gaussian
 # itself is deliberately **not** exposed in production (spurious Gaussian tails
 # mass saturation thresholds); see calibration `docs/subgrid_quadrature_methodology.tex`.
 #

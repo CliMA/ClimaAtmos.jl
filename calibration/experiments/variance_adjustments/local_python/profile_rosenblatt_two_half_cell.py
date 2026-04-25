@@ -1,6 +1,6 @@
 r"""
 Two-half-cell profile–Rosenblatt SGS condensate cubature, mirroring Julia
-``subgrid_layer_profile_quadrature.jl`` / ``integrate_over_sgs_linear_profile``.
+``subgrid_layer_profile_quadrature.jl`` / ``integrate_over_sgs`` (long-arity).
 
 **Cell rule (matches production):** for each **mean-gradient choice**
 (``"avg" | "dn" | "up"`` in :func:`two_slope_rosenblatt_params` — the same

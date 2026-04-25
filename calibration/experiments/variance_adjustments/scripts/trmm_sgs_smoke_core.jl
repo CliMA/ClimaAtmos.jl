@@ -35,6 +35,7 @@ const VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS = String[
     "lognormal_vertical_profile_voronoi",
     "lognormal_vertical_profile_barycentric",
     "lognormal_vertical_profile_inner_halley",
+    "lognormal_vertical_profile_inner_chebyshev",
     "gaussian_vertical_profile_inner_bracketed",
     "gaussian_vertical_profile_full_cubature",
     "gaussian_vertical_profile_lhs_z",
@@ -42,6 +43,7 @@ const VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS = String[
     "gaussian_vertical_profile_voronoi",
     "gaussian_vertical_profile_barycentric",
     "gaussian_vertical_profile_inner_halley",
+    "gaussian_vertical_profile_inner_chebyshev",
 ]
 
 """

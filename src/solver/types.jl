@@ -1055,7 +1055,7 @@ The default AtmosModel provides:
 - `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
 - `cloud_model`: GridScaleCloud(), QuadratureCloud()
 - `microphysics_tendency_timestepping`: Explicit(), Implicit()
-- `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies). Gridscale-corrected variants are selected via [`get_sgs_distribution`](@ref) / `sgs_distribution` YAML (see `AbstractGridscaleCorrectedSGS`).
+- `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies). Vertically resolved variants are selected via [`get_sgs_distribution`](@ref) / `sgs_distribution` YAML (see `AbstractVerticallyResolvedSGS`).
 
 
 ## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)

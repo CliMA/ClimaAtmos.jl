@@ -142,7 +142,7 @@ def _pick_half_slope(zeta: float, s_dn: float, s_up: float) -> float:
 def column_tensor_mu_cov_zeta(zeta: float, par: dict) -> tuple[np.ndarray, np.ndarray]:
     """
     ``(μ(ζ), Σ(ζ))`` aligned with Julia ``SubgridColumnTensor`` in
-    ``integrate_over_sgs_linear_profile``: piecewise slopes from cell center, diagonal
+    ``integrate_over_sgs`` (long-arity): piecewise slopes from cell center, diagonal
     ``σ_k^2(ζ) = σ_{k,c}^2 + ζ · ∂σ_k^2/∂z`` with the DN vs UP gradient chosen by ``sign(ζ)``,
     and **fixed** correlation coefficient from cell center (``covTq / √(σ_{T,c}^2 σ_{q,c}^2)``)
     mapped to ``ρ · σ_T(ζ) σ_q(ζ)`` on the off-diagonal — matching ``PhysicalPointTransform``

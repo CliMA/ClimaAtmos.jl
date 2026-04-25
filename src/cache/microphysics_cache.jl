@@ -17,7 +17,7 @@ const Iᵢ = TD.internal_energy_ice
 
 @inline function _fill_∂T_∂θ_li_for_sgs_subcell!(Y, p, thermo_params)
     sq = p.atmos.sgs_quadrature
-    if !isnothing(sq) && sq.dist isa AbstractGridscaleCorrectedSGS
+    if !isnothing(sq) && sq.dist isa AbstractVerticallyResolvedSGS
         compute_∂T_∂θ!(p.scratch.ᶜtemp_scalar, Y, p, thermo_params)
     end
     return nothing
@@ -28,14 +28,14 @@ end
 
 Return effective variance fields and optional per-cell correlation for SGS microphysics
 (`nothing` correlation ⇒ use `correlation_Tq` at the call site). For
-`AbstractGridscaleCorrectedSGS`, moments use `sgs_quadrature_moments_from_gradients`
+`AbstractVerticallyResolvedSGS`, moments use `sgs_quadrature_moments_from_gradients`
 with `p.precomputed` gradients and `p.scratch.ᶜtemp_scalar` as ``∂T/∂θ``.
 The `thermo_params` argument is unused (call-site API).
 """
 function sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, _)
     sq = p.atmos.sgs_quadrature
     dist = sq.dist
-    if !(dist isa AbstractGridscaleCorrectedSGS)
+    if !(dist isa AbstractVerticallyResolvedSGS)
         return ᶜT′T′, ᶜq′q′, nothing
     end
     FT = eltype(Y.c.ρ)
@@ -1134,7 +1134,7 @@ function set_microphysics_tendency_cache!(
     else
         _fill_∂T_∂θ_li_for_sgs_subcell!(Y, p, thp)
         (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
-        if sgs_1m_uses_sgs_linear_profile(sgs_quad)
+        if sgs_quad.dist isa AbstractVerticallyResolvedSGS
             ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
             ρ_param = correlation_Tq(p.params)
             ᶜdz = Fields.Δz_field(axes(Y.c))
@@ -1200,7 +1200,7 @@ function set_microphysics_tendency_cache!(
     else
         _fill_∂T_∂θ_li_for_sgs_subcell!(Y, p, thp)
         (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
-        if sgs_1m_uses_sgs_linear_profile(sgs_quad)
+        if sgs_quad.dist isa AbstractVerticallyResolvedSGS
             ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
             ρ_param = correlation_Tq(p.params)
             ᶜdz = Fields.Δz_field(axes(Y.c))
@@ -1289,7 +1289,7 @@ function set_microphysics_tendency_cache!(
     else
         _fill_∂T_∂θ_li_for_sgs_subcell!(Y, p, thp)
         (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
-        if sgs_1m_uses_sgs_linear_profile(sgs_quad)
+        if sgs_quad.dist isa AbstractVerticallyResolvedSGS
             ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
             ρ_param = correlation_Tq(p.params)
             ᶜdz = Fields.Δz_field(axes(Y.c))

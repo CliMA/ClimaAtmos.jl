@@ -36,9 +36,9 @@ struct LogNormalSGS <: AbstractSGSDistribution end
 """
     AbstractSubgridLayerProfileQuadrature
 
-Selects how layer-mean SGS expectations are discretized for gridscale-corrected
-Gaussian / lognormal distributions when the conditional layer mean varies linearly
-in height and turbulent fluctuations are homogeneous Gaussian.
+Selects how vertically resolved SGS expectations are discretized when the
+conditional layer mean varies linearly in height and turbulent fluctuations
+are homogeneous Gaussian.
 
 See [`SubgridColumnTensor`](@ref), [`SubgridProfileRosenblatt`](@ref),
 [`SubgridLatinHypercubeZ`](@ref), [`SubgridPrincipalAxisLayer`](@ref),
@@ -48,7 +48,7 @@ abstract type AbstractSubgridLayerProfileQuadrature end
 
 """
 Reference tensor quadrature: Gauss–Legendre in layer height × inner fluctuation rule.
-See the column-tensor branch of [`integrate_over_sgs_linear_profile`](@ref).
+See the column-tensor branch of the long-arity [`integrate_over_sgs`](@ref).
 """
 struct SubgridColumnTensor <: AbstractSubgridLayerProfileQuadrature end
 
@@ -57,7 +57,7 @@ struct SubgridColumnTensor <: AbstractSubgridLayerProfileQuadrature end
 
 Structured ``N^2`` pairing: permute which Gauss–Legendre ``z`` level is tied to each
 Hermite fluctuation node in ``(T,q)`` (LHS-style staggering). See the
-Latin-hypercube-``z`` branch of [`integrate_over_sgs_linear_profile`](@ref).
+Latin-hypercube-``z`` branch of the long-arity [`integrate_over_sgs`](@ref).
 """
 struct SubgridLatinHypercubeZ <: AbstractSubgridLayerProfileQuadrature end
 
@@ -66,7 +66,7 @@ struct SubgridLatinHypercubeZ <: AbstractSubgridLayerProfileQuadrature end
 
 Cheap inner fluctuation rule: one Gauss–Hermite line along the dominant correlation axis
 instead of a full ``N \\times N`` inner tensor. Implemented in the principal-axis branch
-of [`integrate_over_sgs_linear_profile`](@ref).
+of the long-arity [`integrate_over_sgs`](@ref).
 """
 struct SubgridPrincipalAxisLayer <: AbstractSubgridLayerProfileQuadrature end
 
@@ -74,7 +74,7 @@ struct SubgridPrincipalAxisLayer <: AbstractSubgridLayerProfileQuadrature end
     SubgridVoronoiRepresentatives <: AbstractSubgridLayerProfileQuadrature
 
 ``N^2`` representatives chosen from a dense index pool via Voronoi-style clustering
-(see the Voronoi branch of [`integrate_over_sgs_linear_profile`](@ref)).
+(see the Voronoi branch of the long-arity [`integrate_over_sgs`](@ref)).
 """
 struct SubgridVoronoiRepresentatives <: AbstractSubgridLayerProfileQuadrature end
 
@@ -83,7 +83,7 @@ struct SubgridVoronoiRepresentatives <: AbstractSubgridLayerProfileQuadrature en
 
 Deterministic ``N^2`` seeds in ``(z, \\text{index})`` space with barycentric mass
 accumulation from streamed candidates. See the barycentric-seeds branch of
-[`integrate_over_sgs_linear_profile`](@ref); `quadrature_order` must match seed layout
+the long-arity [`integrate_over_sgs`](@ref); `quadrature_order` must match seed layout
 in the kernel.
 """
 struct SubgridBarycentricSeeds <: AbstractSubgridLayerProfileQuadrature end
@@ -113,7 +113,7 @@ Default / production per-leg rule: one **Halley** step on each single centered
 struct ConvolutionQuantilesHalley <: AbstractConvolutionQuantileMethod end
 
 """
-Chebyshev surrogate in `τ` for **each** leg’s centered `uniform[-L/2,L/2] ⊛ N(0,s²)`
+Chebyshev surrogate in `τ` for **each** leg's centered `uniform[-L/2,L/2] ⊛ N(0,s²)`
 quantile at fixed Gauss–Legendre node index (same `N_gl` and node order as
 [`gauss_legendre_01`](@ref)). See [`centered_uniform_gaussian_convolution_quantile_chebyshev`](@ref).
 """
@@ -133,48 +133,54 @@ struct SubgridProfileRosenblatt{B <: AbstractConvolutionQuantileMethod} <:
        AbstractSubgridLayerProfileQuadrature end
 
 """
-Default gridscale-corrected discretization: profile–Rosenblatt with per-leg **Halley**
+Default vertically resolved discretization: profile–Rosenblatt with per-leg **Halley**
 inners (composite split marginal).
 """
 const DefaultGridscaleProfileQuadrature =
     SubgridProfileRosenblatt{ConvolutionQuantilesHalley}
 
 """
-    AbstractGridscaleCorrectedSGS <: AbstractSGSDistribution
+    AbstractVerticallyResolvedSGS <: AbstractSGSDistribution
 
-Subtypes use vertical subcell geometry for SGS quadrature and saturation adjustment
-(see [`AbstractSubgridLayerProfileQuadrature`](@ref) on Gaussian / lognormal gridscale types).
+Subtypes use the cell's **vertical extent** (Δz, faces, gradients) for SGS quadrature
+and saturation adjustment via long-arity [`integrate_over_sgs`](@ref). See
+[`AbstractSubgridLayerProfileQuadrature`](@ref) for the available layer-profile
+discretization schemes.
 """
-abstract type AbstractGridscaleCorrectedSGS <: AbstractSGSDistribution end
-
-"""
-    GaussianGridscaleCorrectedSGS{S} <: AbstractGridscaleCorrectedSGS
-
-Gridscale-corrected Gaussian SGS. Type parameter `S` selects the layer-profile
-quadrature (default [`DefaultGridscaleProfileQuadrature`](@ref) = profile–Rosenblatt + per-leg Halley).
-"""
-struct GaussianGridscaleCorrectedSGS{S <: AbstractSubgridLayerProfileQuadrature} <:
-       AbstractGridscaleCorrectedSGS end
-
-GaussianGridscaleCorrectedSGS() = GaussianGridscaleCorrectedSGS{DefaultGridscaleProfileQuadrature}()
+abstract type AbstractVerticallyResolvedSGS <: AbstractSGSDistribution end
 
 """
-    LogNormalGridscaleCorrectedSGS{S} <: AbstractGridscaleCorrectedSGS
+    VerticallyResolvedSGS{S, I} <: AbstractVerticallyResolvedSGS
 
-Gridscale-corrected log-normal `q` / Gaussian `T`. Default matches [`GaussianGridscaleCorrectedSGS`](@ref)
-(profile–Rosenblatt + per-leg Halley). [`SubgridColumnTensor`](@ref) is also available for explicit vertical quadrature.
+Vertically resolved SGS distribution. Type parameter `S` selects the layer-profile
+quadrature (default [`DefaultGridscaleProfileQuadrature`](@ref) = profile–Rosenblatt
++ per-leg Halley). Type parameter `I` selects the inner bivariate distribution
+([`GaussianSGS`](@ref) or [`LogNormalSGS`](@ref)) used at each quadrature point.
+
+# Glossary
+
+- **Vertically resolved SGS:** quadrature through the cell's vertical extent
+  (`S`, **Δz**, faces, gradients) via long-arity [`integrate_over_sgs`](@ref),
+  plus row-style microphysics entrypoints.
+- **Center-only:** [`GaussianSGS`](@ref) / [`LogNormalSGS`](@ref) / [`GridMeanSGS`](@ref)
+  + short-arity [`integrate_over_sgs`](@ref).
 """
-struct LogNormalGridscaleCorrectedSGS{S <: AbstractSubgridLayerProfileQuadrature} <:
-       AbstractGridscaleCorrectedSGS end
+struct VerticallyResolvedSGS{
+    S <: AbstractSubgridLayerProfileQuadrature,
+    I <: Union{GaussianSGS, LogNormalSGS},
+} <: AbstractVerticallyResolvedSGS end
 
-LogNormalGridscaleCorrectedSGS() = LogNormalGridscaleCorrectedSGS{DefaultGridscaleProfileQuadrature}()
+# Convenience constructors matching old API
+VerticallyResolvedSGS{S}() where {S <: AbstractSubgridLayerProfileQuadrature} =
+    VerticallyResolvedSGS{S, GaussianSGS}()
 
-@inline function _is_nonuniform_gridscale_corrected(
-    ::Union{GaussianGridscaleCorrectedSGS, LogNormalGridscaleCorrectedSGS},
-)
+# Default constructor: Gaussian inner + default profile quadrature
+VerticallyResolvedSGS() = VerticallyResolvedSGS{DefaultGridscaleProfileQuadrature, GaussianSGS}()
+
+@inline function _is_vertically_resolved_sgs(::VerticallyResolvedSGS)
     return true
 end
-@inline _is_nonuniform_gridscale_corrected(::AbstractSGSDistribution) = false
+@inline _is_vertically_resolved_sgs(::AbstractSGSDistribution) = false
 
 """
     GridMeanSGS <: AbstractSGSDistribution
