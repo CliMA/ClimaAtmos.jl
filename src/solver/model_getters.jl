@@ -17,7 +17,7 @@ function get_microphysics_model(parsed_args, params = nothing)
     end
 end
 
-function get_sgs_quadrature(parsed_args, params = nothing)
+function get_sgs_quadrature(parsed_args, params = nothing; microphysics_model = nothing)
     use_sgs_quadrature = get(parsed_args, "use_sgs_quadrature", false)
     use_sgs_quadrature || return nothing
     FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
@@ -25,7 +25,15 @@ function get_sgs_quadrature(parsed_args, params = nothing)
     quadrature_order = get(parsed_args, "quadrature_order", 2)
     T_min = isnothing(params) ? FT(150) : FT(CAP.T_min_sgs(params))
     q_max = isnothing(params) ? FT(0.1) : FT(CAP.q_max_sgs(params))
-    return SGSQuadrature(FT; quadrature_order, distribution, T_min, q_max)
+    quad = SGSQuadrature(FT; quadrature_order, distribution, T_min, q_max)
+    # Every `sgs_distribution` string in `get_sgs_distribution` is already valid for 1M
+    # (gridscale keys match `sgs_1m_uses_sgs_linear_profile`). This assert only fails if
+    # someone builds an `AbstractGridscaleCorrectedSGS{S}` with a new `S` in code without
+    # extending that union and `integrate_over_sgs_linear_profile` — not a YAML user issue.
+    if microphysics_model isa NonEquilibriumMicrophysics1M
+        assert_sgs_quadrature_valid_for_1m_microphysics(quad)
+    end
+    return quad
 end
 
 function get_insolation_form(parsed_args; setup_type = nothing)
@@ -395,6 +403,13 @@ Parse the SGS distribution type from configuration.
 - `"gaussian"` → [`GaussianSGS`](@ref)
 - `"lognormal"` → [`LogNormalSGS`](@ref)
 - `"mean"` → [`GridMeanSGS`](@ref)
+
+# Non-equilibrium 1M + SGS
+
+Every supported key above yields a distribution compatible with 1M layer-mean SGS when
+`use_sgs_quadrature` is true; [`get_sgs_quadrature`](@ref) runs
+[`assert_sgs_quadrature_valid_for_1m_microphysics`](@ref) for
+[`NonEquilibriumMicrophysics1M`](@ref) so invalid combinations fail at model construction.
 """
 function get_sgs_distribution(parsed_args)
     dist_name = parsed_args["sgs_distribution"]

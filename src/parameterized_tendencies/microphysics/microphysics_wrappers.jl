@@ -236,6 +236,35 @@ base `GaussianSGS` / `LogNormalSGS`, and for other `sgs_distribution` families
 # (New `S` for `AbstractGridscaleCorrectedSGS` must be added to the union above **and**
 # implemented in `integrate_over_sgs_linear_profile` before use.)
 
+"""
+    assert_sgs_quadrature_valid_for_1m_microphysics(sgs_quad)
+
+Fail fast when building the atmosphere if **non-equilibrium 1M** is combined with an SGS
+quadrature whose gridscale layer discretization is not wired for 1M layer-mean integration
+([`sgs_1m_uses_sgs_linear_profile`](@ref) and [`integrate_over_sgs_linear_profile`](@ref)).
+
+[`get_sgs_distribution`](@ref) only returns distributions that satisfy this rule, so **every
+documented YAML `sgs_distribution` (including Voronoi, profile–Rosenblatt, etc.) passes** for
+1M. The check catches invalid **programmatic** `SGSQuadrature` construction (e.g. a new
+`GaussianGridscaleCorrectedSGS{S}` type added in Julia without updating the support union and
+[`integrate_over_sgs_linear_profile`](@ref)). Called from [`get_sgs_quadrature`](@ref) when
+`microphysics_model isa NonEquilibriumMicrophysics1M`.
+"""
+function assert_sgs_quadrature_valid_for_1m_microphysics(sgs_quad)
+    isnothing(sgs_quad) && return nothing
+    sgs_quad isa SGSQuadrature || return nothing
+    d = sgs_quad.dist
+    if d isa AbstractGridscaleCorrectedSGS && !sgs_1m_uses_sgs_linear_profile(sgs_quad)
+        error(
+            "NonEquilibriumMicrophysics 1M + SGS: quadrature distribution $(typeof(d)) is not " *
+                "supported for 1M layer-mean SGS (see `sgs_1m_uses_sgs_linear_profile` and " *
+                "`integrate_over_sgs_linear_profile`). Use a supported `sgs_distribution` key " *
+                "from `get_sgs_distribution`, or extend both the support union and the linear-profile integrator.",
+        )
+    end
+    return nothing
+end
+
 @inline function microphysics_tendencies_1m_sgs_row(
     scheme,
     sgs_quad,
