@@ -1,14 +1,8 @@
 """
 High-precision checks for closed-form primitives in ``profile_rosenblatt_two_half_cell``.
 
-CDFs and tail integrals are compared to ``scipy.integrate.quad`` and ``scipy.special``
-definitions—**truth is the math**, not a cross-bless between Julia and Python. See
-``PROFILE_MATH_AUDIT.md`` in this directory.
-
-``mixture_linvar_*`` tests build keyword arguments the same way as
-:func:`profile_rosenblatt_two_half_cell.profile_rosenblatt_cubature` (center covariance,
-``two_slope_rosenblatt_params``, outer Gauss–Hermite abscissa ``h_x[j]``), not
-independent random hypercubes.
+CDFs for ``uniform`` and ``mixture`` convolutions are compared to integrals of the
+analytic PDF. See ``PROFILE_MATH_AUDIT.md`` in this directory for the audit trail.
 """
 from __future__ import annotations
 
@@ -16,118 +10,12 @@ import unittest
 
 import numpy as np
 from scipy import integrate
-from scipy.special import gamma as spgamma, gammaincc, ndtr, roots_hermite
+from scipy.special import roots_hermite
 
 import profile_rosenblatt_two_half_cell as pr
 import variance_dashboard_interactive as vd
 
 from test_variance_mixture_consistency import _PAR_A, _PAR_B
-
-
-def mixture_linvar_kw_profile_outer_node(
-    par: dict,
-    *,
-    H_layer: float | None = None,
-    outer_hermite_index: int = 0,
-    n_hermite: int = 8,
-) -> dict | None:
-    """
-    Keyword args for ``mixture_linvar_*`` at outer GH node ``j``, matching the inner
-    ``j`` loop of :func:`profile_rosenblatt_two_half_cell.profile_rosenblatt_cubature`
-    (same ``s0sq`` on both halves as in production Halley / CDF).
-    """
-    H = float(vd.H_LAYER if H_layer is None else H_layer)
-    cov0 = vd._center_cov0(par)
-    mu_t, mu_q, _, _ = vd._layer_mu_sigma(par)
-    s_t2 = max(float(cov0[0, 0]), pr._NUM_EPS**2)
-    s_q2 = max(float(cov0[1, 1]), pr._NUM_EPS**2)
-    c12 = float(cov0[0, 1])
-    rho = c12 / (np.sqrt(s_t2 * s_q2) + pr._NUM_EPS)
-
-    out = pr.two_slope_rosenblatt_params(
-        mu_t=mu_t,
-        mu_q=mu_q,
-        sig_t2_c=s_t2,
-        sig_q2_c=s_q2,
-        rho_tq=rho,
-        m_t_dn=par["mT_dn"],
-        m_t_up=par["mT_up"],
-        m_q_dn=par["mQ_dn"],
-        m_q_up=par["mQ_up"],
-        s_t_dn=par["sT_dn"],
-        s_t_up=par["sT_up"],
-        s_q_dn=par["sQ_dn"],
-        s_q_up=par["sQ_up"],
-        H=H,
-    )
-    if out is None or not out.get("use_linvar", False):
-        return None
-
-    h_x, _ = roots_hermite(int(n_hermite))
-    j = int(outer_hermite_index) % len(h_x)
-    sqrt2 = np.sqrt(2.0)
-    vj = sqrt2 * float(out["s_v"]) * float(h_x[j])
-    r_c = float(out["r_c"])
-    r_fdn = float(out["r_fdn"])
-    r_fup = float(out["r_fup"])
-    L_dn = float(out["L_dn"])
-    L_up = float(out["L_up"])
-    eps = pr._NUM_EPS
-    mu0 = r_c * vj
-    mus_dn = (r_fdn - r_c) * vj / max(L_dn, eps) if L_dn > eps else 0.0
-    mus_up = (r_fup - r_c) * vj / max(L_up, eps) if L_up > eps else 0.0
-    s0sq = float(out["s0sq"])
-    return {
-        "mu0": float(mu0),
-        "L_dn": L_dn,
-        "mus_dn": float(mus_dn),
-        "s0sq_dn": s0sq,
-        "s_slope_dn": float(out["s_slope_dn"]),
-        "L_up": L_up,
-        "mus_up": float(mus_up),
-        "s0sq_up": s0sq,
-        "s_slope_up": float(out["s_slope_up"]),
-    }
-
-
-def _reference_const_sigma_segment_cdf(
-    u: float, L: float, mu0: float, mus: float, sig: float
-) -> float:
-    """``(1/L) ∫_0^L Φ((u - μ_0 - mus·z)/sig) dz`` with constant ``sig``."""
-    sigp = max(float(sig), 1e-15)
-    Lp = max(float(L), 1e-15)
-
-    def integrand(z: float) -> float:
-        return float(ndtr((u - mu0 - mus * z) / sigp))
-
-    y, _ = integrate.quad(integrand, 0.0, Lp, limit=300, epsabs=1e-12, epsrel=1e-10)
-    return float(y / Lp)
-
-
-def _reference_segment_linvar_cdf_quadrature(
-    u: float, L: float, mu0: float, mus: float, s0sq: float, s_slope: float
-) -> float:
-    """``(1/L) ∫_0^L Φ((u - μ_0 - μ_s z)/σ(z)) dz`` with ``σ²(z)=s0sq + s_slope·z``."""
-    Lp = max(float(L), pr._NUM_EPS)
-
-    def integrand(z: float) -> float:
-        sig2 = max(float(s0sq) + float(s_slope) * z, 1e-18)
-        sig = float(np.sqrt(sig2))
-        return float(ndtr((u - mu0 - mus * z) / sig))
-
-    y, _ = integrate.quad(integrand, 0.0, Lp, limit=500, epsabs=1e-12, epsrel=1e-10)
-    return float(y / Lp)
-
-
-def _reference_mixture_linvar_cdf_quadrature(u: float, kw: dict) -> float:
-    """Defining mixture CDF: average DN/UP segment CDFs (same ``σ(z)`` per half as ``pr``)."""
-    a = _reference_segment_linvar_cdf_quadrature(
-        u, kw["L_dn"], kw["mu0"], kw["mus_dn"], kw["s0sq_dn"], kw["s_slope_dn"]
-    )
-    b = _reference_segment_linvar_cdf_quadrature(
-        u, kw["L_up"], kw["mu0"], kw["mus_up"], kw["s0sq_up"], kw["s_slope_up"]
-    )
-    return 0.5 * (a + b)
 
 
 class TestUniformGaussianConvolution(unittest.TestCase):
@@ -162,153 +50,6 @@ class TestMixtureUniformConvolution(unittest.TestCase):
             num, _ = integrate.quad(pdf, -25.0, x, limit=300, epsabs=1e-10, epsrel=1e-8)
             ana = pr.mixture_uniform_convolution_cdf(x, L_dn, s_dn, L_up, s_up)
             self.assertLess(abs(num - ana), 5e-7, msg=f"x={x} L_dn={L_dn} num={num} ana={ana}")
-
-
-class TestConstSigmaSegmentCDF(unittest.TestCase):
-    """Mills / closed form vs defining integral (random ``μ_s ≠ 0``)."""
-
-    def test_matches_quadrature_definition(self):
-        rng = np.random.default_rng(11)
-        for _ in range(25):
-            L = float(rng.uniform(0.1, 0.45))
-            sig = float(rng.uniform(0.12, 0.5))
-            mu0 = float(rng.uniform(-0.2, 0.2))
-            mus = float(rng.uniform(-0.12, 0.12))
-            if abs(mus) < 5e-4:
-                continue
-            u = float(rng.uniform(-1.5, 1.5))
-            ana = pr._half_cell_segment_linvar_const_sigma_cdf(u, L, mu0, mus, sig)
-            ref = _reference_const_sigma_segment_cdf(u, L, mu0, mus, sig)
-            self.assertLess(
-                abs(ana - ref), 2e-7, msg=f"u={u} L={L} sig={sig} mus={mus} ana={ana} ref={ref}"
-            )
-
-
-class TestMixtureLinvar(unittest.TestCase):
-    def test_symmetric_frozen_halves_cdf_matches_integral_of_pdf(self):
-        """Smoke path with ``μ_s=0`` and constant ``σ`` (no production coupling needed)."""
-        kw = dict(
-            mu0=0.05,
-            L_dn=0.28,
-            mus_dn=0.0,
-            s0sq_dn=0.06,
-            s_slope_dn=0.0,
-            L_up=0.28,
-            mus_up=0.0,
-            s0sq_up=0.06,
-            s_slope_up=0.0,
-        )
-        for u in (-1.1, 0.0, 0.73):
-            def f(t: float) -> float:
-                return pr.mixture_linvar_pdf(t, **kw)
-
-            num, _ = integrate.quad(f, -40.0, float(u), limit=400, epsabs=1e-11, epsrel=1e-9)
-            ana = pr.mixture_linvar_cdf(float(u), **kw)
-            self.assertLess(abs(ana - num), 8e-6, msg=f"u={u} ana={ana} num={num}")
-
-    def test_production_outer_nodes_cdf_matches_defining_quadrature(self):
-        n_gh = 8
-        for par in (_PAR_A, _PAR_B):
-            for j in range(n_gh):
-                kw = mixture_linvar_kw_profile_outer_node(
-                    par, outer_hermite_index=j, n_hermite=n_gh
-                )
-                self.assertIsNotNone(kw, msg=f"expected lin-var path for fixture par j={j}")
-                for u in np.linspace(-5.0, 5.0, 11):
-                    ana = pr.mixture_linvar_cdf(float(u), **kw)
-                    ref = _reference_mixture_linvar_cdf_quadrature(float(u), kw)
-                    self.assertLess(
-                        abs(ana - ref),
-                        6e-6,
-                        msg=f"par keys={sorted(par.keys())} j={j} u={u} ana={ana} ref={ref}",
-                    )
-
-    def test_production_outer_nodes_pdf_mass_one(self):
-        n_gh = 8
-        for par in (_PAR_A, _PAR_B):
-            for j in range(n_gh):
-                kw = mixture_linvar_kw_profile_outer_node(
-                    par, outer_hermite_index=j, n_hermite=n_gh
-                )
-                self.assertIsNotNone(kw)
-
-                def f(t: float) -> float:
-                    return pr.mixture_linvar_pdf(t, **kw)
-
-                mass, _ = integrate.quad(f, -120.0, 120.0, limit=600, epsabs=1e-10, epsrel=1e-8)
-                self.assertLess(abs(mass - 1.0), 2e-5, msg=f"j={j} mass={mass} kw={kw}")
-
-    def test_production_perturbed_columns_match_quadrature(self):
-        rng = np.random.default_rng(101)
-        base = dict(_PAR_B)
-        n_gh = 8
-        for _ in range(14):
-            par = {k: float(v) for k, v in base.items()}
-            par["mT_dn"] += float(rng.normal(0.0, 0.02))
-            par["mT_up"] += float(rng.normal(0.0, 0.02))
-            par["mQ_dn"] += float(rng.normal(0.0, 0.02))
-            par["mQ_up"] += float(rng.normal(0.0, 0.02))
-            par["sT_dn"] += float(rng.normal(0.0, 0.01))
-            par["sT_up"] += float(rng.normal(0.0, 0.01))
-            par["sQ_dn"] += float(rng.normal(0.0, 0.01))
-            par["sQ_up"] += float(rng.normal(0.0, 0.01))
-            j = int(rng.integers(0, n_gh))
-            kw = mixture_linvar_kw_profile_outer_node(
-                par, outer_hermite_index=j, n_hermite=n_gh
-            )
-            if kw is None:
-                continue
-            u = float(rng.uniform(-3.5, 3.5))
-            ana = pr.mixture_linvar_cdf(u, **kw)
-            ref = _reference_mixture_linvar_cdf_quadrature(u, kw)
-            self.assertLess(abs(ana - ref), 6e-6, msg=f"u={u} ana={ana} ref={ref}")
-
-
-class TestGammaTailNu(unittest.TestCase):
-    def test_nu_half_b_zero_matches_upper_incomplete_gamma(self):
-        for t in (0.03, 0.4, 2.5, 8.0):
-            got = pr.gamma_tail_nu_half(t, 0.0)
-            exp = float(gammaincc(0.5, t) * spgamma(0.5))
-            self.assertLess(abs(got - exp), 1e-10, msg=f"t={t}")
-
-    def test_nu_half_positive_b_vs_quadrature(self):
-        rng = np.random.default_rng(3)
-        for _ in range(8):
-            b = float(rng.uniform(0.02, 0.8))
-            t = float(rng.uniform(0.02, 1.5))
-
-            def f(tau: float) -> float:
-                return tau**(-0.5) * np.exp(-tau - b / tau)
-
-            num, _ = integrate.quad(f, t, np.inf, limit=400, epsabs=1e-11, epsrel=1e-8)
-            ana = pr.gamma_tail_nu_half(t, b)
-            self.assertLess(abs(ana - num), 5e-6, msg=f"t={t} b={b}")
-
-    def test_nu_mhalf_vs_quadrature(self):
-        rng = np.random.default_rng(4)
-        for _ in range(6):
-            b = float(rng.uniform(0.05, 0.7))
-            t = float(rng.uniform(0.05, 1.2))
-
-            def f(tau: float) -> float:
-                return tau ** (-1.5) * np.exp(-tau - b / tau)
-
-            num, _ = integrate.quad(f, t, np.inf, limit=400, epsabs=1e-11, epsrel=1e-8)
-            ana = pr.gamma_tail_nu_mhalf(t, b)
-            self.assertLess(abs(ana - num), 8e-6, msg=f"t={t} b={b}")
-
-    def test_nu_three_halves_vs_quadrature(self):
-        rng = np.random.default_rng(5)
-        for _ in range(6):
-            b = float(rng.uniform(0.05, 0.7))
-            t = float(rng.uniform(0.05, 1.2))
-
-            def f(tau: float) -> float:
-                return tau**0.5 * np.exp(-tau - b / tau)
-
-            num, _ = integrate.quad(f, t, np.inf, limit=400, epsabs=1e-11, epsrel=1e-8)
-            ana = pr.gamma_tail_nu_3halves(t, b)
-            self.assertLess(abs(ana - num), 8e-6, msg=f"t={t} b={b}")
 
 
 class TestMeanGradientAxis(unittest.TestCase):
@@ -378,13 +119,20 @@ class TestMeanGradientAxis(unittest.TestCase):
         )
 
 
-class TestMixtureQuantileHalley(unittest.TestCase):
+class TestMixtureQuantileBrent(unittest.TestCase):
     def test_quantiles_increase_with_probability(self):
         L_dn, s_dn, L_up, s_up = 0.22, 0.11, 0.19, 0.13
         ps = np.linspace(0.02, 0.98, 25)
-        us = [pr.mixture_convolution_quantile_halley(float(p), L_dn, s_dn, L_up, s_up) for p in ps]
+        us = [pr.mixture_convolution_quantile_brent(float(p), L_dn, s_dn, L_up, s_up) for p in ps]
         for a, b in zip(us, us[1:]):
             self.assertLessEqual(a, b + 1e-12)
+
+    def test_brent_hits_target_cdf(self):
+        L_dn, s_dn, L_up, s_up = 0.22, 0.11, 0.19, 0.13
+        for p in np.linspace(0.05, 0.95, 13):
+            u_b = pr.mixture_convolution_quantile_brent(float(p), L_dn, s_dn, L_up, s_up)
+            f_b = pr.mixture_uniform_convolution_cdf(u_b, L_dn, s_dn, L_up, s_up)
+            self.assertLess(abs(f_b - float(p)), 5e-10)
 
 
 class TestMInvVsNotebookRotation(unittest.TestCase):
@@ -483,7 +231,7 @@ def _profile_two_half_pdf_box_normalized(
 
 
 class TestProfileTwoHalfPhysicalDensityOnGrid(unittest.TestCase):
-    """``profile_rosenblatt_two_half_physical_density`` vs tensor cubature (same transport as ``q_c``)."""
+    """``profile_rosenblatt_two_half_physical_density`` vs tensor cubature (same ½–½ mean-gradient–axis blend as ``q_c``)."""
 
     def test_box_mass_one_after_renormalization(self):
         par = _PAR_A

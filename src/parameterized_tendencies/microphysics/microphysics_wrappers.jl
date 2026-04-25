@@ -236,36 +236,6 @@ base `GaussianSGS` / `LogNormalSGS`, and for other `sgs_distribution` families
 # (New `S` for `AbstractGridscaleCorrectedSGS` must be added to the union above **and**
 # implemented in `integrate_over_sgs_linear_profile` before use.)
 
-"""
-    throw_if_unsupported_1m_sgs_gridscale_distribution(sgs_quad::SGSQuadrature)
-
-For **1M + SGS**, either (1) **bivariate** ``(T,q)`` for base
-[`GaussianSGS`](@ref) / [`LogNormalSGS`](@ref) / [`GridMeanSGS`](@ref) (no `S`), or
-(2) [`integrate_over_sgs_linear_profile`](@ref) when [`sgs_1m_uses_sgs_linear_profile`](@ref)
-is true: column tensor, Latin hypercube in `z`, principal axis, Voronoi/barycentric seed
-grids, profile–Rosenblatt, etc. (see the union in this file and
-`subgrid_layer_profile_quadrature.jl`). A **new** `S` not in that union and not implemented
-in the linear-profile integrator will throw here. The bivariate
-[`integrate_over_sgs`](@ref) path also **does not** use layer `S`.
-
-Tests may call this to assert configuration support without running a full column.
-"""
-function throw_if_unsupported_1m_sgs_gridscale_distribution(sgs_quad::SGSQuadrature)
-    d = sgs_quad.dist
-    if d isa AbstractGridscaleCorrectedSGS && !sgs_1m_uses_sgs_linear_profile(sgs_quad)
-        error(
-            "NonEquilibriumMicrophysics 1M + SGS: `sgs_distribution` selects " *
-                "$(typeof(d)), which is not implemented for 1M layer-mean SGS " *
-                "(`integrate_over_sgs_linear_profile` in `subgrid_layer_profile_quadrature.jl`). " *
-                "The bivariate-only `integrate_over_sgs` path would not use this layer " *
-                "discretization. Use `gaussian` / `lognormal` (no vertical profile), or a " *
-                "a supported `AbstractGridscaleCorrectedSGS` key, or add " *
-                "this `S` to the linear-profile integrator.",
-        )
-    end
-    return nothing
-end
-
 @inline function microphysics_tendencies_1m_sgs_row(
     scheme,
     sgs_quad,
@@ -383,14 +353,17 @@ for [`AbstractGridscaleCorrectedSGS`](@ref), use per-cell effective correlation 
 end
 
 @inline function microphysics_tendencies_1m(
-    scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
+    scheme, sgs_quad::SGSQuadrature{N, A, W, D}, cmp, thp, ρ, T, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, tst, dt, args...,
-)
-    # Only base `GaussianSGS` / `LogNormalSGS` (no `AbstractGridscaleCorrectedSGS`) may use
-    # [`integrate_over_sgs`](@ref). Gridscale `S` (Voronoi, …) require
-    # [`integrate_over_sgs_linear_profile`](@ref) via [`microphysics_tendencies_1m_sgs_row`](@ref);
-    # fail here so no caller can silently reach the bivariate shortcut for those types.
-    throw_if_unsupported_1m_sgs_gridscale_distribution(sgs_quad)
+) where {
+    N,
+    A,
+    W,
+    D <: Union{GaussianSGS, LogNormalSGS, GridMeanSGS},
+}
+    # Bivariate ``(T,q)`` [`integrate_over_sgs`](@ref) only for base distributions.
+    # [`AbstractGridscaleCorrectedSGS`](@ref) must use [`microphysics_tendencies_1m_sgs_row`](@ref)
+    # and [`integrate_over_sgs_linear_profile`](@ref). (Dispatch excludes the wrong types.)
     # Clamp species humidities to prevent negativity in quadratures
     q_lcl_nonneg = max(0, q_lcl)
     q_icl_nonneg = max(0, q_icl)
@@ -415,6 +388,21 @@ end
         )
     end
     return local_tendency
+end
+
+function microphysics_tendencies_1m(
+    ::Any,
+    sgs_quad::SGSQuadrature{<:Any, <:Any, <:Any, <:AbstractGridscaleCorrectedSGS},
+    args...,
+)
+    d = sgs_quad.dist
+    throw(
+        ArgumentError(
+            "1M SGS with `AbstractGridscaleCorrectedSGS` (got $(typeof(d))) " *
+            "must use `microphysics_tendencies_1m_sgs_row` with layer geometry and gradients, " *
+            "not the bivariate `microphysics_tendencies_1m` wrapper.",
+        ),
+    )
 end
 
 ###

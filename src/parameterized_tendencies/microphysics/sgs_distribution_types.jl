@@ -46,14 +46,18 @@ See [`SubgridColumnTensor`](@ref), [`SubgridProfileRosenblatt`](@ref),
 """
 abstract type AbstractSubgridLayerProfileQuadrature end
 
-"""Reference tensor quadrature: Gauss–Legendre in layer height × inner fluctuation rule."""
+"""
+Reference tensor quadrature: Gauss–Legendre in layer height × inner fluctuation rule.
+See the column-tensor branch of [`integrate_over_sgs_linear_profile`](@ref).
+"""
 struct SubgridColumnTensor <: AbstractSubgridLayerProfileQuadrature end
 
 """
     SubgridLatinHypercubeZ <: AbstractSubgridLayerProfileQuadrature
 
 Structured ``N^2`` pairing: permute which Gauss–Legendre ``z`` level is tied to each
-Hermite fluctuation node in ``(T,q)`` (LHS-style staggering).
+Hermite fluctuation node in ``(T,q)`` (LHS-style staggering). See the
+Latin-hypercube-``z`` branch of [`integrate_over_sgs_linear_profile`](@ref).
 """
 struct SubgridLatinHypercubeZ <: AbstractSubgridLayerProfileQuadrature end
 
@@ -61,7 +65,8 @@ struct SubgridLatinHypercubeZ <: AbstractSubgridLayerProfileQuadrature end
     SubgridPrincipalAxisLayer <: AbstractSubgridLayerProfileQuadrature
 
 Cheap inner fluctuation rule: one Gauss–Hermite line along the dominant correlation axis
-instead of a full ``N \\times N`` tensor (see calibration README §3.5).
+instead of a full ``N \\times N`` inner tensor. Implemented in the principal-axis branch
+of [`integrate_over_sgs_linear_profile`](@ref).
 """
 struct SubgridPrincipalAxisLayer <: AbstractSubgridLayerProfileQuadrature end
 
@@ -69,7 +74,7 @@ struct SubgridPrincipalAxisLayer <: AbstractSubgridLayerProfileQuadrature end
     SubgridVoronoiRepresentatives <: AbstractSubgridLayerProfileQuadrature
 
 ``N^2`` representatives chosen from a dense index pool via Voronoi-style clustering
-(see calibration README §3.3).
+(see the Voronoi branch of [`integrate_over_sgs_linear_profile`](@ref)).
 """
 struct SubgridVoronoiRepresentatives <: AbstractSubgridLayerProfileQuadrature end
 
@@ -77,72 +82,59 @@ struct SubgridVoronoiRepresentatives <: AbstractSubgridLayerProfileQuadrature en
     SubgridBarycentricSeeds <: AbstractSubgridLayerProfileQuadrature
 
 Deterministic ``N^2`` seeds in ``(z, \\text{index})`` space with barycentric mass
-accumulation from streamed candidates (see calibration README §3.4; `quadrature_order`
-must match seed layout in the kernel).
+accumulation from streamed candidates. See the barycentric-seeds branch of
+[`integrate_over_sgs_linear_profile`](@ref); `quadrature_order` must match seed layout
+in the kernel.
 """
 struct SubgridBarycentricSeeds <: AbstractSubgridLayerProfileQuadrature end
 
 """
     AbstractConvolutionQuantileMethod
 
-Numerical method for `F^{-1}(p)` with `F` the CDF of a uniform–Gaussian convolution
-along the layer-mean-gradient direction (used inside profile–Rosenblatt quadrature).
+Selects the **per-leg** uniform–Gaussian quantile rule inside profile–Rosenblatt.
+The inner marginal is always discretized as a **composite** of lower and upper
+half-cell laws (½ weight each, same Gauss–Legendre nodes on ``[0,1]`` per leg); this
+type chooses Brent, one-step Halley, or Chebyshev **on each single shifted**
+`uniform ⊛ Gaussian` leg—not a scalar inversion of the mixture CDF `F_{mix}`.
 """
 abstract type AbstractConvolutionQuantileMethod end
 
 """
-Bracketed root of `F(u) - p` via Brent on the two-component
-uniform–Gaussian mixture CDF (see
-[`mixture_convolution_quantile_brent`](@ref)). Robust safety net and
-validation reference. Costs O(10–20) CDF evaluations per quantile node;
-prefer `ConvolutionQuantilesHalley` in production.
+Per-leg **Brent** inverse of each shifted `uniform ⊛ Gaussian` half law (exact bracketed
+root on the single-component CDF). Slower than [`ConvolutionQuantilesHalley`](@ref) but
+maximally robust for validation.
 """
 struct ConvolutionQuantilesBracketed <: AbstractConvolutionQuantileMethod end
 
 """
-Production default. One **Halley** correction to `F(u) = p` from a
-closed-form Cornish–Fisher initial guess on the moment-matched Gaussian of
-the two-component uniform–Gaussian mixture (mean `(L_+ − L_−)/4`,
-variance `(5L_+² + 6 L_+ L_− + 5 L_−²)/48 + (s_−² + s_+²)/2`). Total cost
-≈ 4 `erf`/`exp` per quantile, no iteration loop. See
-[`mixture_convolution_quantile_halley`](@ref).
+Default / production per-leg rule: one **Halley** step on each single centered
+`uniform[-L/2,L/2] ⊛ N(0,s²)` law (then map to the DN/UP shifted `u` coordinate).
 """
 struct ConvolutionQuantilesHalley <: AbstractConvolutionQuantileMethod end
 
 """
-Chebyshev polynomial in `τ` for `u/L` at fixed Gauss–Legendre nodes in `p`, fit
-offline for **one** law: centered `uniform[-L/2,L/2] ⊛ N(0,s²)` with `η = s/L`
-(mapped `log10(η)` → `τ`). See
-[`centered_uniform_gaussian_convolution_quantile_chebyshev`](@ref) and
-`chebyshev_convolution_coeffs` / `gen_convolution_chebyshev_tables.jl`.
-
-For the **two-component** layer mixture, `F^{-1}(p)` depends on
-`(L_−, L_+, s_−, s_+)`; no checked-in Chebyshev surrogate exists for that
-four-parameter family. [`_mixture_quantile_u`](@ref) with this type therefore
-`error`s at runtime so YAML that selects it fails loudly instead of silently
-using the single-law table. The struct remains so a mixture-tabulated dispatch
-can be added later without renaming the API.
+Chebyshev surrogate in `τ` for **each** leg’s centered `uniform[-L/2,L/2] ⊛ N(0,s²)`
+quantile at fixed Gauss–Legendre node index (same `N_gl` and node order as
+[`gauss_legendre_01`](@ref)). See [`centered_uniform_gaussian_convolution_quantile_chebyshev`](@ref).
 """
 struct ConvolutionQuantilesChebyshevLogEta <: AbstractConvolutionQuantileMethod end
 
 """
     SubgridProfileRosenblatt{B} <: AbstractSubgridLayerProfileQuadrature
 
-Profile–Rosenblatt factorization: Gaussian outer quadrature in `v` × inverse-CDF
-Gauss–Legendre in `p` on the inner `u` marginal. That marginal is the **two-component**
-uniform–Gaussian mixture (one half-cell below center, one above), with **piecewise-linear**
-conditional mean along the half in physical space and **face-anchored** conditional
-standard deviation `σ_{u|v}` on each half (constant on that half in `u`). Quantiles use
-`B <: AbstractConvolutionQuantileMethod` (Halley default, Brent bracketed, or Chebyshev
-placeholder for a future mixture surrogate).
+Profile–Rosenblatt factorization: Gaussian outer quadrature in `v` × composite inner
+rule on the two-component uniform–Gaussian **layer** marginal: for each outer `v`,
+``\\tfrac12\\sum_i w_i h(u_{dn,i}) + \\tfrac12\\sum_i w_i h(u_{up,i})`` with `u_{dn,i}`,
+`u_{up,i}` from the DN/UP single-law inverses at the same GL abscissas. `B` selects
+Brent ([`ConvolutionQuantilesBracketed`](@ref)), one-step Halley per leg
+([`ConvolutionQuantilesHalley`](@ref)), or Chebyshev per leg ([`ConvolutionQuantilesChebyshevLogEta`](@ref)).
 """
 struct SubgridProfileRosenblatt{B <: AbstractConvolutionQuantileMethod} <:
        AbstractSubgridLayerProfileQuadrature end
 
 """
-Default gridscale-corrected discretization: profile–Rosenblatt with
-**Halley** quantiles (one-step, closed-form guess). Avoids rootfinding
-in the inner loop; Brent is available as a safety-net fallback.
+Default gridscale-corrected discretization: profile–Rosenblatt with per-leg **Halley**
+inners (composite split marginal).
 """
 const DefaultGridscaleProfileQuadrature =
     SubgridProfileRosenblatt{ConvolutionQuantilesHalley}
@@ -159,7 +151,7 @@ abstract type AbstractGridscaleCorrectedSGS <: AbstractSGSDistribution end
     GaussianGridscaleCorrectedSGS{S} <: AbstractGridscaleCorrectedSGS
 
 Gridscale-corrected Gaussian SGS. Type parameter `S` selects the layer-profile
-quadrature (default [`DefaultGridscaleProfileQuadrature`](@ref) = profile–Rosenblatt + Brent).
+quadrature (default [`DefaultGridscaleProfileQuadrature`](@ref) = profile–Rosenblatt + per-leg Halley).
 """
 struct GaussianGridscaleCorrectedSGS{S <: AbstractSubgridLayerProfileQuadrature} <:
        AbstractGridscaleCorrectedSGS end
@@ -170,7 +162,7 @@ GaussianGridscaleCorrectedSGS() = GaussianGridscaleCorrectedSGS{DefaultGridscale
     LogNormalGridscaleCorrectedSGS{S} <: AbstractGridscaleCorrectedSGS
 
 Gridscale-corrected log-normal `q` / Gaussian `T`. Default matches [`GaussianGridscaleCorrectedSGS`](@ref)
-(profile–Rosenblatt + Brent). [`SubgridColumnTensor`](@ref) is also available for explicit vertical quadrature.
+(profile–Rosenblatt + per-leg Halley). [`SubgridColumnTensor`](@ref) is also available for explicit vertical quadrature.
 """
 struct LogNormalGridscaleCorrectedSGS{S <: AbstractSubgridLayerProfileQuadrature} <:
        AbstractGridscaleCorrectedSGS end

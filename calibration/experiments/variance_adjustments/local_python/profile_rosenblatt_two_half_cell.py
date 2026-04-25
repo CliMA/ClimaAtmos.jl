@@ -2,22 +2,19 @@ r"""
 Two-half-cell profile–Rosenblatt SGS condensate cubature, mirroring Julia
 ``subgrid_layer_profile_quadrature.jl`` / ``integrate_over_sgs_linear_profile``.
 
-**Cell rule:** profile–Rosen cubature on the **DN** mean-gradient path and separately on the **UP**
-path, combined with **½–½** weights when both succeed (otherwise the surviving half gets full
-weight). Matches the explicit two-transport branch in production Julia.
+**Cell rule (matches production):** for each **mean-gradient choice**
+(``"avg" | "dn" | "up"`` in :func:`two_slope_rosenblatt_params` — the same
+semantics as Julia’s ``mean_gradient_axis``), use **face-anchored** ``σ_{u|v}``
+on each half, shift ``μ_0 = r_c v`` on the inner ``u`` coordinate, and
+``uniform ⊛ N`` / ``mixture_convolution_quantile_brent`` for the inner
+``p``-nodes (same story as the frozen-σ ``mixture_uniform_convolution_*`` path
+in Julia for this Python port’s single-``u`` quantile). **Two-half-averaging**
+of DN vs UP mean-gradient builds is in :func:`profile_rosenblatt_cubature_two_halves_cell`.
 
-- **Frozen σ** in each half: the same ½( U⊛N_− + U⊛N_+ ) ``erf``-based
-  u-marginal and Halley p-quantile as Julia.
-- **Linear-in-z** segment law: the **same** ``_half_cell_segment_linvar_*_psi``
-  reduction as production. The only ``ν ∈ {3/2, 1/2, −1/2}`` generalized tails
-  are implemented with **O(1)** `erfc` / `erfcx` and the algebraic
-  Ψ\_{−1/2} ↔ Ψ\_{1/2} and Ψ\_{3/2} recurrences (no k-loop, no mpmath).
-- **Two-half cell:** :func:`profile_rosenblatt_cubature_two_halves_cell` implements that DN/UP split
-  (``mean_gradient`` in :func:`two_slope_rosenblatt_params`).
+This module focuses on the production-aligned profile path: per-half
+face-anchored conditional widths and a composite ``uniform ⊛ N`` inner inverse.
 
-**Environment:** this module needs SciPy (same stack as
-``Variance_Stuff.ipynb`` in the project conda env, e.g. WeatherQuest), not
-the system ``python3`` with no ``scipy``.
+**Environment:** SciPy (``scipy.special``, ``numpy``) is required.
 """
 from __future__ import annotations
 
@@ -25,15 +22,8 @@ from collections.abc import Callable
 
 import numpy as np
 from numpy.polynomial.legendre import leggauss
-from scipy.special import (
-    erf,
-    erfc,
-    erfcx,
-    erfinv,
-    gamma,
-    gammaincc,
-    roots_hermite,
-)
+from scipy.optimize import brentq
+from scipy.special import erf, erfinv, roots_hermite
 
 _NUM_EPS = 1.0e-9
 
@@ -124,411 +114,16 @@ def mixture_uniform_mean_var(
     return float(mu), float(var)
 
 
-def mixture_convolution_quantile_halley(
+def mixture_convolution_quantile_brent(
     p: float, L_dn: float, s_dn: float, L_up: float, s_up: float
 ) -> float:
-    """Unshifted u s.t. F_mixture(u) = p (one Halley step from moment-matched Gaussian, Julia production default)."""
-    t = 2.0 * p - 1.0
-    t = np.clip(t, -1.0 + 100.0 * _NUM_EPS, 1.0 - 100.0 * _NUM_EPS)
-    z = np.sqrt(2.0) * erfinv(t)
-    mu, varm = mixture_uniform_mean_var(L_dn, s_dn, L_up, s_up)
-    sig = np.sqrt(max(varm, _NUM_EPS**2))
-    u = mu + sig * z
-    Fv = mixture_uniform_convolution_cdf(u, L_dn, s_dn, L_up, s_up)
-    g = Fv - p
-    fv = mixture_uniform_convolution_pdf(u, L_dn, s_dn, L_up, s_up)
-    if abs(fv) < _NUM_EPS:
-        return u
-    fpv = mixture_uniform_convolution_pdf_prime(u, L_dn, s_dn, L_up, s_up)
-    denom = 2.0 * fv**2 - g * fpv
-    if denom == 0.0:
-        denom = 1.0e-15
-    denom = float(np.copysign(max(abs(denom), 1.0e-15), denom))
-    return float(u - 2.0 * fv * g / denom)
-
-
-# ---------------------------------------------------------------------------
-# Generalized tail Γ(ν, t, b) = ∫_t^∞ τ^{ν-1} e^{-τ - b/τ} dτ  for
-# ν ∈ {3/2, 1/2, −1/2} using only erfc/erfcx (ν=1/2) and the two recurrences
-# (same as the “ExactAnalyticTailEngine” + method-notes Ψ_ν family).
-# No Taylor loop in k, no mpmath.
-# ---------------------------------------------------------------------------
-
-
-def _upper_incomplete_gamma_ordinary(nu: float, t: float) -> float:
-    """Ordinary upper incomplete Γ(ν, t) = ∫_t^∞ τ^{ν-1} e^{-τ} dτ (b = 0)."""
-    t = max(float(t), _NUM_EPS)
-    return float(gammaincc(nu, t) * gamma(nu))
-
-
-def gamma_tail_nu_half(t: float, b: float) -> float:
-    """
-    ∫_t^∞ τ^{-1/2} e^{-τ - b/τ} dτ  (Julia ``_gamma_gen_upper(1/2, t, b)`` for b > 0 path).
-
-    Closed form (ν = 1/2 “base” case) with `erfc` / `erfcx`; at t=0, ``√π e^{-2√b}``.
-    """
-    b = max(float(b), 0.0)
-    t = float(t)
-    if b <= _NUM_EPS**2:
-        return _upper_incomplete_gamma_ordinary(0.5, t)
-    if t <= _NUM_EPS:
-        return float(np.sqrt(np.pi) * np.exp(-2.0 * np.sqrt(b)))
-    t_safe = max(t, 1.0e-16)
-    sqrt_t = np.sqrt(t_safe)
-    sqrt_b = np.sqrt(b)
-    sqrt_b_over_t = np.sqrt(b / t_safe)
-    term1 = np.exp(-2.0 * sqrt_b) * erfc(sqrt_t - sqrt_b_over_t)
-    term2 = np.exp(-t_safe - b / t_safe) * erfcx(sqrt_t + sqrt_b_over_t)
-    return float(0.5 * np.sqrt(np.pi) * (term1 + term2))
-
-
-def gamma_tail_nu_mhalf(t: float, b: float) -> float:
-    r"""
-    ν = -1/2:  Ψ\_{-1/2}(t,b) = \frac{1}{\sqrt{b}} \left[Ψ\_{1/2}(0,b) - Ψ\_{1/2}(b/t,b)\right].
-    """
-    b = max(float(b), 0.0)
-    t = max(float(t), 0.0)
-    if b <= _NUM_EPS**2:
-        return _upper_incomplete_gamma_ordinary(-0.5, t)
-    h0 = gamma_tail_nu_half(0.0, b)
-    h1 = gamma_tail_nu_half(b / max(t, 1.0e-16), b)
-    return float((h0 - h1) / np.sqrt(b))
-
-
-def gamma_tail_nu_3halves(t: float, b: float) -> float:
-    r"""
-    ν = 3/2:  Ψ\_{3/2} = ½Ψ\_{1/2} + √t\,e^{-(t+b/t)} + b\,Ψ\_{-1/2}  (integration by parts).
-    """
-    b = max(float(b), 0.0)
-    t = max(float(t), 0.0)
-    if b <= _NUM_EPS**2:
-        return _upper_incomplete_gamma_ordinary(1.5, t)
-    t_safe = max(t, 1.0e-16)
-    em = np.exp(-(t_safe + b / t_safe))
-    return float(
-        0.5 * gamma_tail_nu_half(t, b) + np.sqrt(t_safe) * em + b * gamma_tail_nu_mhalf(t, b)
-    )
-
-
-def _gamma_gen_upper(nu: float, t: float, b: float) -> float:
-    """
-    ``Γ(ν, t, b) = ∫_t^∞ τ^{ν-1} e^{-τ - b/τ} dτ`` for ν ∈ {3/2, 1/2, −1/2}.
-    b ≈ 0: ordinary ``SpecialFunctions.gamma(ν, t)``; else closed forms.
-    """
-    b = max(float(b), 0.0)
-    t = max(float(t), 0.0)
-    if b <= _NUM_EPS**2:
-        return _upper_incomplete_gamma_ordinary(nu, t)
-    if abs(nu - 0.5) < 1.0e-12:
-        return gamma_tail_nu_half(t, b)
-    if abs(nu + 0.5) < 1.0e-12:
-        return gamma_tail_nu_mhalf(t, b)
-    if abs(nu - 1.5) < 1.0e-12:
-        return gamma_tail_nu_3halves(t, b)
-    raise ValueError(f"nu={nu} not in {{3/2, 1/2, -1/2}}")
-
-
-def _gamma_gen_segment(nu: float, tau_lo: float, tau_hi: float, b: float) -> float:
-    a = min(tau_lo, tau_hi)
-    c = max(tau_lo, tau_hi)
-    return _gamma_gen_upper(nu, a, b) - _gamma_gen_upper(nu, c, b)
-
-
-def _psi_nu_tau_integrals(
-    tau_lo: float, tau_hi: float, b: float
-) -> tuple[float, float, float]:
-    I32 = _gamma_gen_segment(1.5, tau_lo, tau_hi, b)
-    I12 = _gamma_gen_segment(0.5, tau_lo, tau_hi, b)
-    Im12 = _gamma_gen_segment(-0.5, tau_lo, tau_hi, b)
-    return I32, I12, Im12
-
-
-def _psi_nu_from_integrals(nu: float, b2: float, i_nu: float) -> float:
-    eps2 = _NUM_EPS**2
-    b2c = max(float(b2), eps2)
-    return float(np.exp(nu * (np.log(2.0) - np.log(b2c))) * i_nu)
-
-
-# --- half-cell linear-variance (Ψ_ν) — same branches as ``_half_cell_segment_linvar_*_psi`` in Julia
-
-
-def _regularize_mu_slope(mu_slope: float, s_slope: float) -> float:
-    eps = _NUM_EPS
-    e_mu = max(eps, np.sqrt(eps) * max(1.0, abs(s_slope)))
-    if abs(mu_slope) >= e_mu:
-        return float(mu_slope)
-    if abs(mu_slope) <= eps:
-        return float(np.copysign(e_mu, s_slope))
-    return float(np.copysign(e_mu, mu_slope))
-
-
-def _G_mills(t: float) -> float:
-    return float(t * _std_normal_cdf(t) + _std_normal_pdf(np.array([t]))[0])
-
-
-def _half_cell_segment_linvar_const_sigma_cdf(
-    u: float, L: float, mu0: float, mus: float, sig: float
-) -> float:
-    """
-    ``F(u) = (1/L) ∫_0^L Φ((u - μ_0 - μ_s z)/σ) dz`` with constant ``σ``.
-
-    Mills form: ``(σ/L)(G(t_a)-G(t_b))`` equals ``μ_s × F(u)`` for
-    ``t_a=(u-μ_0)/σ``, ``t_b=(u-μ_0-μ_s L)/σ`` and ``G(t)=tΦ(t)+φ(t)``; divide
-    by ``μ_s`` so ``F`` matches the defining integral above (checked in
-    ``test_profile_rosenblatt_primitives.py`` vs quadrature). Neither language is
-    the authority—only this integral definition is.
-    """
-    eps = _NUM_EPS
-    L = max(L, eps)
-    sigp = max(sig, eps)
-    mu_l = mu0 + mus * L
-    if abs(mus) <= eps * max(1.0, abs(mu_l)):
-        return float(_std_normal_cdf((u - mu0) / sigp))
-    ta = (u - mu0) / sigp
-    tb = (u - mu_l) / sigp
-    mills = float((sigp / L) * (_G_mills(ta) - _G_mills(tb)))
-    return mills / float(mus)
-
-
-def _half_cell_segment_linvar_const_sigma_pdf(
-    u: float, L: float, mu0: float, mus: float, sig: float
-) -> float:
-    eps = _NUM_EPS
-    L = max(L, eps)
-    sigp = max(sig, eps)
-    mu_l = mu0 + mus * L
-    if abs(mus) <= eps * max(1.0, abs(mu_l)):
-        y = (u - mu0) / sigp
-        return float(_std_normal_pdf(np.array([y]))[0] / sigp)
-    ta = (u - mu0) / sigp
-    tb = (u - mu_l) / sigp
-    return float((1.0 / (L * mus)) * (_std_normal_cdf(ta) - _std_normal_cdf(tb)))
-
-
-def _half_cell_segment_linvar_const_sigma_pdf_prime(
-    u: float, L: float, mu0: float, mus: float, sig: float
-) -> float:
-    eps = _NUM_EPS
-    L = max(L, eps)
-    sigp = max(sig, eps)
-    mu_l = mu0 + mus * L
-    if abs(mus) <= eps * max(1.0, abs(mu_l)):
-        y = (u - mu0) / sigp
-        return float((-y / (sigp**2)) * _std_normal_pdf(np.array([y]))[0])
-    ta = (u - mu0) / sigp
-    tb = (u - mu_l) / sigp
-    return float(
-        (1.0 / (L * sigp * mus))
-        * (_std_normal_pdf(np.array([ta]))[0] - _std_normal_pdf(np.array([tb]))[0])
-    )
-
-
-def _half_cell_segment_linvar_cdf_psi(
-    u: float, L: float, mu0: float, mus: float, s0sq: float, s_sl: float
-) -> float:
-    eps = _NUM_EPS
-    esig = max(eps**2, 1.0e-10)
-    L = max(L, eps)
-    if abs(s_sl) * L <= esig * max(abs(s0sq), 1.0):
-        sig = np.sqrt(max(s0sq, eps**2))
-        return _half_cell_segment_linvar_const_sigma_cdf(u, L, mu0, mus, float(sig))
-    mus_u = _regularize_mu_slope(mus, s_sl)
-    b = mus_u / s_sl
-    b2 = b**2
-    if not (b2 > esig):
-        sig = np.sqrt(max(s0sq, eps**2))
-        return _half_cell_segment_linvar_const_sigma_cdf(u, L, mu0, mus, float(sig))
-    s0c = max(s0sq, eps**2)
-    v_dn = s0c
-    v_up = max(s0sq + s_sl * L, eps**2)
-    t_dn = (b2 * v_dn) * 0.5
-    t_up = (b2 * v_up) * 0.5
-    t_lo = min(t_dn, t_up)
-    t_hi = max(t_dn, t_up)
-    if not (t_hi > t_lo + eps * max(1.0, t_lo)):
-        mu_l = mu0 + mus * L
-        s_l = np.sqrt(v_up)
-        return float(_std_normal_cdf((u - mu_l) / max(s_l, eps)))
-    a = u - mu0 + mus_u * s0sq / s_sl
-    bpar = (a**2 * b2) * 0.25
-    i32, i12, im12 = _psi_nu_tau_integrals(t_lo, t_hi, bpar)
-    y32 = _psi_nu_from_integrals(1.5, b2, i32)
-    y12 = _psi_nu_from_integrals(0.5, b2, i12)
-    ym12 = _psi_nu_from_integrals(-0.5, b2, im12)
-    mu_l = mu0 + mus * L
-    s_l = np.sqrt(max(s0sq + s_sl * L, eps**2))
-    phi_l = float(_std_normal_cdf((u - mu_l) / s_l))
-    # ``|s_sl|``: the closed form is invariant under sign of ``s_sl``; ``1/(L s_sl)``
-    # incorrectly flips the Ψ correction when ``s_sl < 0`` (see defining ``z`` integral).
-    c = np.exp(a * b) / (L * abs(s_sl) * np.sqrt(2.0 * np.pi))
-    return float(phi_l + 0.5 * c * (b * y32 + (a - b * s0sq) * y12 - a * s0sq * ym12))
-
-
-def _half_cell_segment_linvar_pdf_psi(
-    u: float, L: float, mu0: float, mus: float, s0sq: float, s_sl: float
-) -> float:
-    eps = _NUM_EPS
-    esig = max(eps**2, 1.0e-10)
-    L = max(L, eps)
-    if abs(s_sl) * L <= esig * max(abs(s0sq), 1.0):
-        sig = np.sqrt(max(s0sq, eps**2))
-        return _half_cell_segment_linvar_const_sigma_pdf(u, L, mu0, mus, float(sig))
-    mus_u = _regularize_mu_slope(mus, s_sl)
-    b = mus_u / s_sl
-    b2 = b**2
-    if not (b2 > esig):
-        sig = np.sqrt(max(s0sq, eps**2))
-        return _half_cell_segment_linvar_const_sigma_pdf(u, L, mu0, mus, float(sig))
-    s0c = max(s0sq, eps**2)
-    v_dn = s0c
-    v_up = max(s0sq + s_sl * L, eps**2)
-    t_dn = (b2 * v_dn) * 0.5
-    t_up = (b2 * v_up) * 0.5
-    t_lo = min(t_dn, t_up)
-    t_hi = max(t_dn, t_up)
-    if not (t_hi > t_lo + eps * max(1.0, t_lo)):
-        mu_l = mu0 + mus * L
-        s_l = np.sqrt(v_up)
-        y = (u - mu_l) / max(s_l, eps)
-        return float(_std_normal_pdf(np.array([y]))[0] / max(s_l, eps))
-    a = u - mu0 + mus_u * s0sq / s_sl
-    bpar = (a**2 * b2) * 0.25
-    _i32, i12, _im12 = _psi_nu_tau_integrals(t_lo, t_hi, bpar)
-    y12 = _psi_nu_from_integrals(0.5, b2, i12)
-    c = np.exp(a * b) / (L * abs(s_sl) * np.sqrt(2.0 * np.pi))
-    return float(c * y12)
-
-
-def _half_cell_segment_linvar_pdf_prime_psi(
-    u: float, L: float, mu0: float, mus: float, s0sq: float, s_sl: float
-) -> float:
-    eps = _NUM_EPS
-    esig = max(eps**2, 1.0e-10)
-    L = max(L, eps)
-    if abs(s_sl) * L <= esig * max(abs(s0sq), 1.0):
-        sig = np.sqrt(max(s0sq, eps**2))
-        return _half_cell_segment_linvar_const_sigma_pdf_prime(u, L, mu0, mus, float(sig))
-    mus_u = _regularize_mu_slope(mus, s_sl)
-    b = mus_u / s_sl
-    b2 = b**2
-    if not (b2 > esig):
-        sig = np.sqrt(max(s0sq, eps**2))
-        return _half_cell_segment_linvar_const_sigma_pdf_prime(u, L, mu0, mus, float(sig))
-    s0c = max(s0sq, eps**2)
-    v_dn = s0c
-    v_up = max(s0sq + s_sl * L, eps**2)
-    t_dn = (b2 * v_dn) * 0.5
-    t_up = (b2 * v_up) * 0.5
-    t_lo = min(t_dn, t_up)
-    t_hi = max(t_dn, t_up)
-    if not (t_hi > t_lo + eps * max(1.0, t_lo)):
-        mu_l = mu0 + mus * L
-        s_l = np.sqrt(v_up)
-        y = (u - mu_l) / max(s_l, eps)
-        return float((-y / (max(s_l, eps) ** 2)) * _std_normal_pdf(np.array([y]))[0])
-    a = u - mu0 + mus_u * s0sq / s_sl
-    bpar = (a**2 * b2) * 0.25
-    _i32, i12, im12 = _psi_nu_tau_integrals(t_lo, t_hi, bpar)
-    y12 = _psi_nu_from_integrals(0.5, b2, i12)
-    ym12 = _psi_nu_from_integrals(-0.5, b2, im12)
-    c = np.exp(a * b) / (L * abs(s_sl) * np.sqrt(2.0 * np.pi))
-    return float(c * (-a * ym12 + b * y12))
-
-
-def _half_cell_segment_linvar_mean_var(
-    L: float, mu0: float, mus: float, s0sq: float, s_sl: float
-) -> tuple[float, float]:
-    if L <= 0.0:
-        return float(mu0), max(s0sq, 0.0)
-    mean = mu0 + mus * L * 0.5
-    var = max(s0sq + s_sl * L * 0.5, 0.0) + (mus**2) * (L**2) / 12.0
-    return float(mean), float(var)
-
-
-def mixture_linvar_cdf(
-    u: float,
-    mu0: float,
-    L_dn: float, mus_dn: float, s0sq_dn: float, s_slope_dn: float,
-    L_up: float, mus_up: float, s0sq_up: float, s_slope_up: float,
-) -> float:
-    f_dn = _half_cell_segment_linvar_cdf_psi(u, L_dn, mu0, mus_dn, s0sq_dn, s_slope_dn)
-    f_up = _half_cell_segment_linvar_cdf_psi(u, L_up, mu0, mus_up, s0sq_up, s_slope_up)
-    return 0.5 * (f_dn + f_up)
-
-
-def mixture_linvar_pdf(
-    u: float,
-    mu0: float,
-    L_dn: float, mus_dn: float, s0sq_dn: float, s_slope_dn: float,
-    L_up: float, mus_up: float, s0sq_up: float, s_slope_up: float,
-) -> float:
-    f_dn = _half_cell_segment_linvar_pdf_psi(u, L_dn, mu0, mus_dn, s0sq_dn, s_slope_dn)
-    f_up = _half_cell_segment_linvar_pdf_psi(u, L_up, mu0, mus_up, s0sq_up, s_slope_up)
-    return 0.5 * (f_dn + f_up)
-
-
-def mixture_linvar_pdf_prime(
-    u: float,
-    mu0: float,
-    L_dn: float, mus_dn: float, s0sq_dn: float, s_slope_dn: float,
-    L_up: float, mus_up: float, s0sq_up: float, s_slope_up: float,
-) -> float:
-    fp_dn = _half_cell_segment_linvar_pdf_prime_psi(
-        u, L_dn, mu0, mus_dn, s0sq_dn, s_slope_dn
-    )
-    fp_up = _half_cell_segment_linvar_pdf_prime_psi(
-        u, L_up, mu0, mus_up, s0sq_up, s_slope_up
-    )
-    return 0.5 * (fp_dn + fp_up)
-
-
-def mixture_linvar_mean_var(
-    mu0: float,
-    L_dn: float, mus_dn: float, s0sq_dn: float, s_slope_dn: float,
-    L_up: float, mus_up: float, s0sq_up: float, s_slope_up: float,
-) -> tuple[float, float]:
-    m_dn, v_dn = _half_cell_segment_linvar_mean_var(L_dn, mu0, mus_dn, s0sq_dn, s_slope_dn)
-    m_up, v_up = _half_cell_segment_linvar_mean_var(L_up, mu0, mus_up, s0sq_up, s_slope_up)
-    mu = 0.5 * (m_dn + m_up)
-    within = 0.5 * (v_dn + v_up)
-    between = 0.5 * ((m_dn - mu) ** 2 + (m_up - mu) ** 2)
-    return float(mu), float(within + between)
-
-
-def mixture_linvar_quantile_halley(
-    p: float,
-    mu0: float,
-    L_dn: float, mus_dn: float, s0sq: float, s_slope_dn: float,
-    L_up: float, mus_up: float, s_slope_up: float,
-) -> float:
-    """
-    One Halley step on the linear-variance mixture CDF (same as Julia production).
-    Both halves use the same center-face ``s0² = σ²_{u|v}(0)`` (``s0sq``) as in
-    ``integrate_over_sgs_linear_profile``.
-    """
-    eps = _NUM_EPS
-    t2 = 2.0 * p - 1.0
-    t2 = float(np.clip(t2, -1.0 + 100.0 * eps, 1.0 - 100.0 * eps))
-    z = np.sqrt(2.0) * erfinv(t2)
-    m_mix, v_mix = mixture_linvar_mean_var(
-        mu0, L_dn, mus_dn, s0sq, s_slope_dn, L_up, mus_up, s0sq, s_slope_up
-    )
-    sig = np.sqrt(max(v_mix, eps**2))
-    u0 = m_mix + sig * z
-    g = mixture_linvar_cdf(
-        u0, mu0, L_dn, mus_dn, s0sq, s_slope_dn, L_up, mus_up, s0sq, s_slope_up
-    ) - p
-    fv = mixture_linvar_pdf(
-        u0, mu0, L_dn, mus_dn, s0sq, s_slope_dn, L_up, mus_up, s0sq, s_slope_up
-    )
-    if abs(fv) < eps:
-        return float(u0)
-    fpv = mixture_linvar_pdf_prime(
-        u0, mu0, L_dn, mus_dn, s0sq, s_slope_dn, L_up, mus_up, s0sq, s_slope_up
-    )
-    denom = 2.0 * fv**2 - g * fpv
-    denom = float(np.copysign(max(abs(denom), 1.0e-15), denom))
-    return float(u0 - 2.0 * fv * g / denom)
+    """Unshifted ``u`` s.t. ``F_mixture(u) = p`` from bracketed Brent root-finding."""
+    p = float(np.clip(float(p), _NUM_EPS, 1.0 - _NUM_EPS))
+    smax = max(float(s_dn), float(s_up), _NUM_EPS)
+    lo = -float(L_dn) - 6.0 * smax
+    hi = float(L_up) + 6.0 * smax
+    f = lambda x: mixture_uniform_convolution_cdf(x, L_dn, s_dn, L_up, s_up) - p
+    return float(brentq(f, lo, hi))
 
 
 # --- Two-slope Rosenblatt parameters (translation of _two_slope_rosenblatt_params) ---
@@ -553,14 +148,17 @@ def two_slope_rosenblatt_params(
     mean_gradient: str = "avg",
 ) -> dict | None:
     """
-    ``mean_gradient`` selects the **transport direction** for Rosenblatt outer axis and ``M_inv``:
+    ``mean_gradient`` selects which **vertical mean-gradient** of the
+    piecewise-linear cell means defines the inner Rosenblatt ``u`` direction and
+    ``M_inv`` (same idea as Julia ``mean_gradient_axis`` on
+    ``_two_slope_rosenblatt_params``; not a dynamics “transport” term):
 
-    - ``\"avg\"`` — legacy centered gradient ``(m_{T,dn}+m_{T,up})/2`` (matches Julia
-      ``_two_slope_rosenblatt_params`` before the two-half cell fix).
-    - ``\"dn\"`` / ``\"up\"`` — use the DN-only or UP-only mean-gradient vector. Averaging
-      two cubatures with ``\"dn\"`` and ``\"up\"`` targets the same **two-half** story as
-      the mixture PDF (separate mean paths toward each face) far better than a single
-      averaged axis when DN/UP slopes differ.
+    - ``\"avg\"`` — mean of the below- and above-center slopes
+      (``(m_{T,dn}+m_{T,up})/2`` in ``T`` and the same in ``q``).
+    - ``\"dn\"`` / ``\"up\"`` — only the below-center or only the above-center
+      half. Running DN and UP cubatures and averaging (see
+      :func:`profile_rosenblatt_cubature_two_halves_cell`) matches the production
+      two-mean-gradient-axis pass when the half slopes differ.
     """
     eps = _NUM_EPS
     mg = str(mean_gradient).lower()
@@ -614,25 +212,6 @@ def two_slope_rosenblatt_params(
     m_inv = np.array(
         [[d_t, -d_q * inv_a], [d_q, d_t * inv_a]], dtype=float
     )
-    s0sq = s_u_c**2
-    if L_dn > eps:
-        invldn = 1.0 / L_dn
-    else:
-        invldn = 0.0
-    if L_up > eps:
-        invlup = 1.0 / L_up
-    else:
-        invlup = 0.0
-    s_s_dn = (s_u_dn**2 - s0sq) * invldn
-    s_s_up = (s_u_up**2 - s0sq) * invlup
-    tol_s = 100.0 * eps * max(1.0, s0sq)
-    tol_r = 100.0 * eps * max(1.0, abs(r_c))
-    use_linvar = bool(
-        abs(s_s_dn) > tol_s
-        or abs(s_s_up) > tol_s
-        or abs(r_fdn - r_c) * invldn > tol_r
-        or abs(r_fup - r_c) * invlup > tol_r
-    )
     s_max_leg = max(s_u_c, s_u_dn, s_u_up, eps)
 
     return {
@@ -646,10 +225,6 @@ def two_slope_rosenblatt_params(
         "r_c": r_c,
         "r_fdn": r_fdn,
         "r_fup": r_fup,
-        "s0sq": s0sq,
-        "s_slope_dn": s_s_dn,
-        "s_slope_up": s_s_up,
-        "use_linvar": use_linvar,
         "d_T": d_t,
         "d_q": d_q,
         "inv_α2": inv_a,
@@ -762,9 +337,9 @@ def profile_rosenblatt_cubature(
     """
     Returns
     -------
-    q_c, t_nodes, q_nodes, w_flat, u_in, v_in, use_linvar, status
-        ``(u_in, v_in)`` are inner Rosenblatt coordinates before `M_inv` (same as
-        the Julia state prior to `get_physical_point`). status is ``"ok"`` or
+    q_c, t_nodes, q_nodes, w_flat, u_in, v_in, _reserved, status
+        The seventh return value is always ``False`` (kept for a stable API). ``(u_in, v_in)``
+        are inner Rosenblatt coordinates before `M_inv`. status is ``"ok"`` or
         ``"degenerate_gradient_fallback_center_gh"``.
     """
     s_t2 = max(float(cov0[0, 0]), _NUM_EPS**2)
@@ -813,10 +388,7 @@ def profile_rosenblatt_cubature(
     M = out["M_inv"]
     s_v = out["s_v"]
     L_dn, L_up = out["L_dn"], out["L_up"]
-    s0sq = out["s0sq"]
     r_c, r_fdn, r_fup = out["r_c"], out["r_fdn"], out["r_fup"]
-    use_l = out["use_linvar"]
-    s_s_dn, s_s_up = out["s_slope_dn"], out["s_slope_up"]
     s_udn, s_uup = out["s_u_dn"], out["s_u_up"]
     if (L_dn + L_up) <= _NUM_EPS and max(out["s_u_c"], s_udn, s_uup) <= _NUM_EPS:
         t_hat = np.full(1, mu_t)
@@ -829,7 +401,7 @@ def profile_rosenblatt_cubature(
             np.array([1.0]),
             np.array([0.0]),
             np.array([0.0]),
-            use_l,
+            False,
             "ok",
         )
 
@@ -847,27 +419,13 @@ def profile_rosenblatt_cubature(
         vj = sqrt2 * s_v * h_x[j]
         wj = w_outer[j]
         mu0 = r_c * vj
-        mus_dn = (r_fdn - r_c) * vj / max(L_dn, _NUM_EPS) if L_dn > _NUM_EPS else 0.0
-        mus_up = (r_fup - r_c) * vj / max(L_up, _NUM_EPS) if L_up > _NUM_EPS else 0.0
         for i in range(n):
             pi_ = p_nodes[i]
             wi_ = p_w[i]
             if (L_dn + L_up) <= _NUM_EPS and max(out["s_u_c"], s_udn, s_uup) <= _NUM_EPS:
                 ui = mu0
-            elif use_l:
-                ui = mixture_linvar_quantile_halley(
-                    float(pi_),
-                    mu0,
-                    L_dn,
-                    mus_dn,
-                    s0sq,
-                    s_s_dn,
-                    L_up,
-                    mus_up,
-                    s_s_up,
-                )
             else:
-                ui = mixture_convolution_quantile_halley(float(pi_), L_dn, s_udn, L_up, s_uup) + mu0
+                ui = mixture_convolution_quantile_brent(float(pi_), L_dn, s_udn, L_up, s_uup) + mu0
             du = M[0, 0] * ui + M[0, 1] * vj
             dqv = M[1, 0] * ui + M[1, 1] * vj
             # Same center Gaussian as affine ``(μ_T+δT, μ_q+δq)`` until SGS bounds bite.
@@ -890,7 +448,7 @@ def profile_rosenblatt_cubature(
     w_arr = np.array(w_list, dtype=float)
     u_arr = np.array(u_list, dtype=float)
     v_arr = np.array(v_list, dtype=float)
-    return acc, t_arr, q_arr, w_arr, u_arr, v_arr, use_l, "ok"
+    return acc, t_arr, q_arr, w_arr, u_arr, v_arr, False, "ok"
 
 
 def profile_rosenblatt_cubature_two_halves_cell(
@@ -913,9 +471,9 @@ def profile_rosenblatt_cubature_two_halves_cell(
 ]:
     """
     **Two-half cell** profile–Rosen condensate: average the DN-only cubature and the
-    UP-only cubature along their respective mean-gradient axes (``½`` weight each when both
-    succeed). This matches the explicit two-half mean paths used in the mixture
-    marginal far better than a single transport built from **averaged** slopes.
+    UP-only cubature under their respective mean-gradient axes (``½`` weight each when both
+    succeed). This matches the two-axis profile–Rosen pass in production better than
+    a **single** inner axis built from **averaged** mean slopes.
 
     Physical ``(T,q)`` nodes count ``2 N^2`` when both halves are non-degenerate.
     Returns the same tuple shape as :func:`profile_rosenblatt_cubature`.
@@ -989,9 +547,9 @@ def _profile_half_physical_density_core(
     in ``(u,v)`` space, then pushforward to ``(T,Q)`` via ``(δ_T,δ_Q)^T = M (u,v)^T`` with
     ``M = out['M_inv']`` (``|det M| = 1`` here). With **unclamped** :func:`fluc_to_tq`,
     ``(T,Q) = (μ_T+δ_T, μ_q+δ_Q)``, so ``f_{T,Q}(μ+δ) = f_{U,V}(M^{-1}δ)``. Here ``V ~ N(0, s_v^2)``,
-    and ``U|V`` is either ``mixture_linvar`` (``use_linvar``) or ``mixture_uniform_convolution``
-    (frozen-σ branch), **before** ``q``/``T`` physical clamps. Same ``M`` as production / notebook
-    rotation tests.
+    and the inner ``U|V`` marginal along ``u`` is the face-anchored
+    ``½ (\\text{DN law} + \\text{UP law})`` (``mixture_uniform_convolution_*``) after subtracting
+    the mean shift ``μ_0 = r_c v`` from ``u``, **before** ``q``/``T`` physical clamps.
     """
     M = np.asarray(out["M_inv"], dtype=float).reshape(2, 2)
     s_v = float(out["s_v"])
@@ -1000,12 +558,6 @@ def _profile_half_physical_density_core(
     s_udn = float(out["s_u_dn"])
     s_uup = float(out["s_u_up"])
     r_c = float(out["r_c"])
-    r_fdn = float(out["r_fdn"])
-    r_fup = float(out["r_fup"])
-    s0sq = float(out["s0sq"])
-    s_s_dn = float(out["s_slope_dn"])
-    s_s_up = float(out["s_slope_up"])
-    use_l = bool(out["use_linvar"])
     eps = _NUM_EPS
 
     dT = np.asarray(T, dtype=float) - float(mu_t)
@@ -1021,31 +573,12 @@ def _profile_half_physical_density_core(
     sv = max(s_v, eps)
     fV = (1.0 / (np.sqrt(2.0 * np.pi) * sv)) * np.exp(-0.5 * (vr / sv) ** 2)
     mu0r = r_c * vr
-    inv_ldn = 1.0 / max(L_dn, eps)
-    inv_lup = 1.0 / max(L_up, eps)
-    mus_dn_v = np.where(L_dn > eps, (r_fdn - r_c) * vr * inv_ldn, 0.0)
-    mus_up_v = np.where(L_up > eps, (r_fup - r_c) * vr * inv_lup, 0.0)
 
     n = ur.size
     fU = np.empty(n, dtype=float)
-    if use_l:
-        for k in range(n):
-            fU[k] = mixture_linvar_pdf(
-                float(ur[k]),
-                float(mu0r[k]),
-                L_dn,
-                float(mus_dn_v[k]),
-                s0sq,
-                s_s_dn,
-                L_up,
-                float(mus_up_v[k]),
-                s0sq,
-                s_s_up,
-            )
-    else:
-        for k in range(n):
-            u0 = float(ur[k]) - float(mu0r[k])
-            fU[k] = mixture_uniform_convolution_pdf(u0, L_dn, s_udn, L_up, s_uup)
+    for k in range(n):
+        u0 = float(ur[k]) - float(mu0r[k])
+        fU[k] = mixture_uniform_convolution_pdf(u0, L_dn, s_udn, L_up, s_uup)
     dens = (fU * fV).reshape(shp)
     return dens
 
@@ -1061,7 +594,8 @@ def profile_rosenblatt_two_half_physical_density(
     mu_q: float,
 ) -> tuple[np.ndarray, str]:
     r"""
-    **Two-half** profile–Rosenblatt physical ``(T,Q)`` density (same transport weights as
+    **Two-half** profile–Rosenblatt physical ``(T,Q)`` density (same ½–½
+    DN/UP **mean-gradient-axis** blend as
     :func:`profile_rosenblatt_cubature_two_halves_cell`):
 
     ``p(T,Q) = a_{\mathrm{dn}}\,p_{\mathrm{dn}}(T,Q) + a_{\mathrm{up}}\,p_{\mathrm{up}}(T,Q)``,
@@ -1134,15 +668,3 @@ def profile_rosenblatt_two_half_physical_density(
             T, Q, mu_t=mu_t, mu_q=mu_q, out=out_up
         )
     return p, "ok"
-
-
-class ExactAnalyticTailEngine:
-    """
-    Same ν = 1/2 ``erfc`` / ``erfcx`` closed form as in ``Variance_Stuff`` derivations;
-    delegates to :func:`gamma_tail_nu_half` (scalar or NumPy arrays).
-    """
-
-    def psi_1_2(self, t, b):
-        t = np.asarray(t, dtype=float)
-        b = np.asarray(b, dtype=float)
-        return np.vectorize(gamma_tail_nu_half, otypes=[float])(t, b)

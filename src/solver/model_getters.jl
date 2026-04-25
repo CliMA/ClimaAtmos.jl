@@ -379,11 +379,12 @@ Parse the SGS distribution type from configuration.
 
 # Vertical-profile family (half-cell layer means; varying means and second moments in height)
 
-- `"gaussian_vertical_profile"` → [`GaussianGridscaleCorrectedSGS`](@ref) (default [`SubgridProfileRosenblatt`](@ref) + [`ConvolutionQuantilesHalley`](@ref))
+- `"gaussian_vertical_profile"` → [`GaussianGridscaleCorrectedSGS`](@ref) (default [`SubgridProfileRosenblatt`](@ref) + per-leg [`ConvolutionQuantilesHalley`](@ref) on the composite split marginal)
 - `"gaussian_vertical_profile_full_cubature"` → [`GaussianGridscaleCorrectedSGS{SubgridColumnTensor}`](@ref)
 - `"gaussian_vertical_profile_lhs_z"` / `"_principal_axis"` / `"_voronoi"` / `"_barycentric"` → alternate layer-mean discretizations (`SubgridLatinHypercubeZ`, `SubgridPrincipalAxisLayer`, …)
-- `"gaussian_vertical_profile_inner_bracketed"` / `"_inner_halley"` → [`ConvolutionQuantilesBracketed`](@ref) or [`ConvolutionQuantilesHalley`](@ref)
-- `"gaussian_vertical_profile_inner_chebyshev"` / `"lognormal_vertical_profile_inner_chebyshev"` → [`ConvolutionQuantilesChebyshevLogEta`](@ref) (tables for one centered uniform×Gaussian convolution; see type docstring)
+- `"gaussian_vertical_profile_inner_bracketed"` / `"lognormal_vertical_profile_inner_bracketed"` → per-leg Brent (exact bracketed root on each shifted half-cell `uniform⊛Gaussian` law inside the composite inner marginal)
+- `"gaussian_vertical_profile_inner_halley"` / `"lognormal_vertical_profile_inner_halley"` → per-leg one-step Halley on each centered single law (default)
+- `"gaussian_vertical_profile_inner_chebyshev"` / `"lognormal_vertical_profile_inner_chebyshev"` → per-leg Chebyshev tables (`η=s/L` fit for the centered single law; one table evaluation per half-cell `(L_±, s_±)`)
 - `"lognormal_vertical_profile"` → [`LogNormalGridscaleCorrectedSGS`](@ref)
 - `"lognormal_vertical_profile_full_cubature"` → [`LogNormalGridscaleCorrectedSGS{SubgridColumnTensor}`](@ref)
 - `"lognormal_vertical_profile_lhs_z"` / `"_principal_axis"` / `"_voronoi"` / `"_barycentric"` → same alternate discretizations for lognormal `q`

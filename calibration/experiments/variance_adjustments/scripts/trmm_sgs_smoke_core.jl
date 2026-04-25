@@ -13,6 +13,7 @@ include(joinpath(VA_TRMM_SGS_SMOKE_ROOT, "lib", "forward_sweep_grid.jl"))
 
 import CairoMakie as CM
 import ClimaAtmos as CA
+import NCDatasets as NCD
 
 const VA_TRMM_SGS_SMOKE_CASE_LAYERS = String[
     "model_configs/master_column_varquad_diagnostic_edmfx.yml",
@@ -86,6 +87,50 @@ function _va_sgs_smoke_write_failure!(
         println(io)
     end
     return path
+end
+
+"""
+Raise if final `clw`/`cli` profile slice contains non-finite values.
+
+This guards against runs that return `:success` yet write NaN diagnostics, which
+would otherwise be silently backfilled by plotting code to an earlier time slice.
+"""
+function _va_sgs_smoke_assert_finite_final_condensate!(output_dir::AbstractString)
+    active = joinpath(output_dir, "output_active")
+    clw_path = joinpath(active, "clw_10m_inst.nc")
+    cli_path = joinpath(active, "cli_10m_inst.nc")
+    if !(isfile(clw_path) && isfile(cli_path))
+        throw(
+            ErrorException(
+                "Missing clw/cli diagnostics in output_active.\n" *
+                "  clw: $clw_path\n" *
+                "  cli: $cli_path",
+            ),
+        )
+    end
+    ds_clw = NCD.Dataset(clw_path, "r")
+    ds_cli = NCD.Dataset(cli_path, "r")
+    try
+        clw = ds_clw["clw"][:, :, :, :]
+        cli = ds_cli["cli"][:, :, :, :]
+        nt = size(clw, 1)
+        nt == 0 && throw(ErrorException("No time slices in clw/cli diagnostics."))
+        s = clw[nt, :, :, :] .+ cli[nt, :, :, :]
+        n_total = length(s)
+        n_finite = count(isfinite, s)
+        n_nan = count(isnan, s)
+        n_inf = n_total - n_finite - n_nan
+        n_finite == n_total && return nothing
+        throw(
+            ErrorException(
+                "Non-finite final condensate profile in output_active (clw+cli at last time).\n" *
+                "  total=$n_total finite=$n_finite nan=$n_nan inf=$n_inf",
+            ),
+        )
+    finally
+        close(ds_clw)
+        close(ds_cli)
+    end
 end
 
 function _va_apply_case_overrides!(
@@ -197,6 +242,7 @@ function va_run_trmm_sgs_smoke_one(;
             "Smoke summary written to:\n  $fail_path",
         )
     end
+    _va_sgs_smoke_assert_finite_final_condensate!(cfg["output_dir"])
     @info "Finished sgs_smoke run" dist output_dir = cfg["output_dir"]
     return sim
 end

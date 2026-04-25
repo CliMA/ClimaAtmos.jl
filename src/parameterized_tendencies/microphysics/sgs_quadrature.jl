@@ -703,17 +703,25 @@ for the distribution type in `quad`, and evaluates the Gauss-Hermite quadrature.
 Temperature is always Gaussian; the distribution of specific humidity is
 determined by `quad.dist` (see [`get_physical_point`](@ref)).
 
+# Relation to [`integrate_over_sgs_linear_profile`](@ref)
+
+Both approximate ``\\mathbb{E}[f]`` over SGS noise. The linear-profile entrypoint could be
+expressed as extra methods of `integrate_over_sgs` (different arity and arguments); the
+separate name documents that **layer thickness, `LocalGeometry`, and subcell gradients**
+are part of the public contract, not optional refinements.
+
 # Gridscale-corrected ``quad.dist``
 
 For [`AbstractGridscaleCorrectedSGS`](@ref), the branch below applies only a
 **bivariate (T, q)** map at cell center (inner `GaussianSGS` / `LogNormalSGS`); the
 **layer-profile** type parameter `S` is not used. Layer-mean, gradient-aware rules live in
-[`integrate_over_sgs_linear_profile`](@ref) (0M saturation, and 1M when
-[`sgs_1m_uses_sgs_linear_profile`](@ref) lists the distribution; column tensor, LHS, principal
-axis, Voronoi/barycentric seeds, profile–Rosenblatt, …). A **1M** + gridscale ``S`` not
-implemented in the linear-profile kernel still hits
-[`throw_if_unsupported_1m_sgs_gridscale_distribution`](@ref) in
-[`microphysics_tendencies_1m`](@ref) and does **not** reach this bivariate helper. This
+[`integrate_over_sgs_linear_profile`](@ref) (0M saturation, and 1M via
+[`microphysics_tendencies_1m_sgs_row`](@ref) when [`sgs_1m_uses_sgs_linear_profile`](@ref) lists
+the distribution; column tensor, LHS, principal axis, Voronoi/barycentric seeds,
+profile–Rosenblatt, …). Bivariate **1M** only dispatches
+[`microphysics_tendencies_1m`](@ref) for base
+[`GaussianSGS`](@ref) / [`LogNormalSGS`](@ref) / [`GridMeanSGS`](@ref); it does not accept
+gridscale `SGSQuadrature` at the type level. This
 path remains for **base** `GaussianSGS` / `LogNormalSGS` and other cell-center bivariate
 uses.
 

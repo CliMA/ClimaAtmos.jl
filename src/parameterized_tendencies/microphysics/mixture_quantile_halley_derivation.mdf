@@ -1,0 +1,749 @@
+# Derivation: two-slope uniform–Gaussian mixture CDF and its quantile (Halley context)
+
+## 0. Starting point: the grid cell, bivariate \((T,q)\), and where \(u\) comes from
+
+### 0.1 Vertical cell and centered thermodynamic statistics
+
+Fix one atmospheric column cell of physical height \(H=\Delta z>0\). Place the cell
+**center** at \(z=0\); the **face** is the interface between the **lower**
+half-cell \(z\in[-H/2,0)\) and the **upper** half-cell \(z\in(0,H/2]\).
+
+At the cell center we specify (at least) the **means** \(\bar T\), \(\bar q\) of
+temperature and specific humidity (in the sense used by the microphysics package),
+the **variances** \(\sigma_T^2\), \(\sigma_q^2\) of subgrid fluctuations about those
+means, and a **correlation** \(\rho\in(-1,1)\) between the fluctuation pair
+\((T',q')=(T-\bar T,\,q-\bar q)\) at the reference level used by the closure. The
+covariance matrix \(\Sigma\) of \((T',q')\) at that level is thus positive definite
+with off-diagonal \(\rho\,\sigma_T\sigma_q\).
+
+**Different slopes above and below center.** The **grid-scale mean profiles**
+\(\bar T(z)\), \(\bar q(z)\) are taken piecewise linear in \(z\) with one slope on
+the lower half and another on the upper half (face-anchored reconstruction). So
+the **deterministic** displacement of the mean state through the layer is a **dog-leg**
+in \((\bar T,\bar q)\) space: below-center gradients
+\((\partial_z\bar T)_-\), \((\partial_z\bar q)_-\) and above-center
+\((\partial_z\bar T)_+\), \((\partial_z\bar q)_+\) generally differ. That geometry is
+the whole reason a “single Gaussian at the center only” is a poor surrogate for the
+**layer** integral you actually want.
+
+### 0.2 Layer integral vs “only the local law at the center”
+
+Microphysics and other sources are nonlinear in \((T,q)\). A faithful **layer-mean**
+or layer-integrated tendency must average those nonlinearities under a measure that
+knows the **path** of the mean through the cell and the **spread** of fluctuations
+around it—not only the bivariate Gaussian (or other) law evaluated at \(z=0\).
+
+**\(N^2\)-style quadrature (schematic).** A common compromise is to approximate the
+layer fluctuation integral by **two nested** one-dimensional quadrature rules in
+fluctuation space (after optional whitening by \(\Sigma\)): order \(N\) in one
+direction × order \(N\) in the other, giving \(\mathcal O(N^2)\) evaluations of
+the closure per cell per time step, while a dense \((T,q,z)\) tensor would scale as
+\(\mathcal O(N^3)\). Alternate layouts (Latin hypercube in \(z\), Voronoi, etc.)
+change **how** height is paired with \((T,q)\) nodes but share the same design goal:
+**respect vertical structure and correlation** without collapsing the entire layer
+to one point mass at the center.
+
+### 0.3 Reduction to inner \(u\), outer \(v\), and the two-leg mixture story
+
+In a **profile–Rosenblatt** construction one **rotates** the fluctuation vector
+\((T',q')\) into an **inner** coordinate \(u\) along the **mean-gradient direction**
+(which half’s slope defines that axis depends on bookkeeping below/above center)
+and an **outer** coordinate \(v\) orthogonal to it in the Mahalanobis sense tied to
+\(\Sigma\). Outer quadrature in \(v\) (e.g.\ Hermite nodes) and inner quadrature in
+\(p_u\in(0,1)\) then replace a full 2D draw by a structured **transport**:
+first draw \(v\), then map a uniform \(p_u\) through the **conditional** CDF of
+\(u\) given that \(v\).
+
+The nonnegative half-widths \(L_{dn},L_{up}\) that appear in §1 are exactly the
+**ranges** of the deterministic inner coordinate \(u_{\mathrm{det}}(z)\) as \(z\)
+sweeps one vertical half (e.g.\ proportional to \(\|(\partial_z\bar T,\partial_z\bar q)\|\,
+H/2\) on that half in the gradient-aligned row); they are **not** the mixture weights
+in front of \(F_{dn}\) and \(F_{up}\).
+
+**What §§1–7 of this note complete.** After fixing \(v\) and the face-anchored
+second-moment scalars on each vertical half, the **conditional inner marginal** of
+\(u\) along the mean-gradient row is modeled as: **uniform contribution of height
+within each half** (pushforward of uniform \(Z\) on that half) **plus** independent
+Gaussian turbulent broadening with half-specific variance \(s^2\). That is exactly
+the **two-component uniform\(\oplus\)Gaussian mixture** derived from first principles
+starting in §1.1. The rest of the document is therefore **not** starting “in the
+middle”: it is the **analytic completion** of the inner line of the \(N^2\) story
+once the modeling chain has already committed to the profile–Rosenblatt split.
+
+### 0.4 Design fork: scalar \(F_{\mathrm{mix}}\) inversion vs.\ tensor \((u,v)\) cubature
+
+The **forward** identity \(F_{\mathrm{mix}}=\tfrac12(F_{dn}+F_{up})\) is exact for the
+inner marginal under the §1 construction. **Discretizing** that physics is **not**
+unique: two families of algorithms both use the same \(F_{dn},F_{up}\) formulas but
+**generate different quadrature measures** in \((T',q')\).
+
+**Route A — scalar marginal (the backbone of §§1–4).** For each inner probability
+node \(p\), find **one** \(u\) solving \(F_{\mathrm{mix}}(u)=p\) (Brent, or Halley
+with a seed chosen from a small finite set). This **literally** enforces the
+mixture CDF at a single abscissa per \(p\). It is operationally cheap but **not**
+reliably accurate in **one** Halley step: residuals \(|F_{\mathrm{mix}}(u)-p|\) can
+still be \(\mathcal O(10^{-1})\) in hard regions unless you **iterate** the
+rootfinder or accept bracketed cost. A four-point \(|F-p|\) screen **only** optimizes
+within four candidates—it is **not** a certificate of small error.
+
+**Route B — split-\(p\) tensor in \((u_{\mathrm{leg}},v)\) (Whitened \(N\times N\)).**
+Partition inner mass at the face (e.g.\ map \(p\in[0,\tfrac12]\) to a lower-leg
+probability and \(p\in(\tfrac12,1]\) to an upper-leg probability), invert **each
+leg’s** one-dimensional \(F_{dn}\) or \(F_{up}\) separately in its local \(u\)
+coordinate, treat \(p=\tfrac12\) as a **junction** rule, and pair with an outer
+\(v\)-quadrature after Cholesky whitening of \(\Sigma\)—a strict \(N^2\) node budget
+in fluctuation space. This **bypasses** repeated inversion of the **sum**
+\(F_{\mathrm{mix}}\) at every \(p\) and is often the right hammer when nonlinear
+integrands (condensation, limits) need stable sampling along the dog-leg. It is **not
+automatically** the same discrete measure as Route A; **equivalence** to the layer
+definition must be argued (same pushforward of uniform \(Z\) + same \(\Sigma\) model,
+same face statistics, etc.).
+
+**These routes are not “equally good” on inverse accuracy.** If one construction
+achieves \(\mathcal O(10^{-3})\) on the residual you care about in one cheap pass,
+while another leaves \(\mathcal O(10^{-1})\), then **for that goal the second is not
+acceptable**—regardless of whether the underlying \(\tfrac12(F_{dn}+F_{up})\)
+identity is exact on paper. Route A’s selling point is **flop count**, not
+**uniform** one-step accuracy.
+
+**Clarifying §2 vs.\ “work the halves separately.”** §2 forbids a **specific**
+mathematical mistake: treating \(F_{dn}^{-1}(p)\) and \(F_{up}^{-1}(p)\) at the **same**
+\(p\) as if either were \(F_{\mathrm{mix}}^{-1}(p)\) for the **scalar** equation
+\(\tfrac12 F_{dn}(u)+\tfrac12 F_{up}(u)=p\). That is **not** the same thing as a
+**deliberate quadrature design** that **splits the \(p\)-interval** at the face,
+inverts **one** leg’s CDF under the remapped probability \(2p\) or \(2p-1\), and
+pairs with outer \(v\) nodes (Route B). Conflating those two ideas was misleading:
+Route B is **not** “violating the mixture”; it is **not using** the monolithic scalar
+inverse as its engine.
+
+### 0.5 Section map (what follows, in order)
+
+1. **§1.3–1.6:** uniform \(Z\) on \([-H/2,H/2]\), \(\tfrac12\) weights, affine map to
+   \(u\), exact \(F_{\mathrm{mix}},f_{\mathrm{mix}},f'_{\mathrm{mix}}\).
+2. **§2:** scalar quantile \(G(u)=0\); half-quantile fallacy; \(2p\) / \(2p-1\)
+   asymptotics; Rosenblatt \((p,v)\) vs this marginal (§2.2).
+3. **§3:** Halley on exact \(G,G',G''\); local cubic meaning; damage from bad \(u\).
+4. **§4:** finite seed sets \(S\); worked \(|S|=4\) screen (§4.3).
+5. **§5–7:** finite precision, research gaps on seeds, summary.
+
+**Prerequisites:** probability (CDF, convolution, conditioning), linear algebra
+(rotation in \(\mathbb R^2\)), calculus (Taylor remainders for rootfinding).
+
+**Read §1.6 first if the question is “are we moment-matching each leg?”** No:
+\(F_{dn},F_{up},F_{\mathrm{mix}}\) and their derivatives used in Halley are the
+**exact** uniform\(\oplus\)Gaussian convolution formulas (\(\mathrm{erf}\) /
+Mills integral). Gaussian / two-moment constructions appear only in **inverse
+initializers**, not in the forward CDF that defines \(G(u)=F_{\mathrm{mix}}(u)-p\).
+
+All symbols are defined below; only standard probability and real analysis are
+assumed.
+
+### Roadmap: closed-form **forward** vs. non-elementary **inverse**
+
+Everything Halley (or Newton, or bisection) needs at a trial point \(u\) is built
+from **explicit** formulas below:
+
+- \(F_{\mathrm{mix}}(u)\), \(f_{\mathrm{mix}}(u)=F'_{\mathrm{mix}}(u)\), and
+  \(f'_{\mathrm{mix}}(u)=f''_{\mathrm{mix}}(u)\) are finite compositions of
+  polynomials, \(\mathrm{erf}\), \(\Phi\), \(\phi\), and exponentials—no “moment
+  matched Gaussian law” is substituted for these.
+- One Halley step on \(G(u)=F_{\mathrm{mix}}(u)-p\) is algebraically
+  \[
+  u \leftarrow u-\frac{2f_{\mathrm{mix}}(u)\,G(u)}{2f_{\mathrm{mix}}(u)^2-G(u)\,f'_{\mathrm{mix}}(u)}.
+  \]
+  The **only** subtlety is numerical (denominator near zero), not missing
+  closed forms for \(F_{\mathrm{mix}}\) or \(f_{\mathrm{mix}}\).
+
+What is **not** a short closed form in elementary \((p,L_{dn},s_{dn},L_{up},s_{up})\):
+the **value** \(u^\ast\) solving \(F_{\mathrm{mix}}(u^\ast)=p\) in one algebraic
+line—same obstruction already for a **single** leg’s
+\(F_{\mathrm{box}}^{-1}(p;L,s)\). **That** is why a **seed** \(u_0\) may use a
+Gaussian proxy (or a tabulated rational map, or bracketed iteration): it targets
+\(|G(u_0)|\) small, not a different definition of \(F_{\mathrm{mix}}\).
+
+---
+
+## 1. Construction of the inner marginal (exact)
+
+### 1.1 Two half-cell laws
+
+Lower half (length \(L_{dn}>0\)): random variable
+
+\[
+X_{dn} = U_{dn} + Z_{dn},
+\quad
+U_{dn} \sim \mathrm{Uniform}(-L_{dn},0),
+\quad
+Z_{dn}\sim\mathcal N(0,s_{dn}^2),
+\quad
+U_{dn}\perp Z_{dn}.
+\]
+
+Upper half (length \(L_{up}>0\)): similarly
+
+\[
+X_{up} = U_{up} + Z_{up},
+\quad
+U_{up}\sim\mathrm{Uniform}(0,L_{up}),
+\quad
+Z_{up}\sim\mathcal N(0,s_{up}^2),
+\quad
+U_{up}\perp Z_{up}.
+\]
+
+Let \(F_{dn}(x)=\mathbb P(X_{dn}\le x)\), \(F_{up}(x)=\mathbb P(X_{up}\le x)\).
+
+### 1.2 Mixture CDF as \(\tfrac12 F_{dn}+\tfrac12 F_{up}\) (packaging)
+
+One equivalent packaging is an auxiliary label \(C\in\{dn,up\}\) with
+\(\mathbb P(C=dn)=\mathbb P(C=up)=\tfrac12\), independent of the component
+draws, and
+
+\[
+X = X_{dn}\mathbf 1_{\{C=dn\}} + X_{up}\mathbf 1_{\{C=up\}}.
+\]
+
+Then for every \(x\in\mathbb R\),
+
+\[
+F_{\mathrm{mix}}(x)
+:=\mathbb P(X\le x)
+=\tfrac12\,\mathbb P(X_{dn}\le x)+\tfrac12\,\mathbb P(X_{up}\le x)
+=\tfrac12 F_{dn}(x)+\tfrac12 F_{up}(x).
+\]
+
+**Conclusion (exact identity):** the forward CDF is the **average of the two
+component CDFs evaluated at the same** \(x\). There is no “optional summing”
+heuristic here; this is the **CDF of the marginal** derived from the
+**uniform-\(z\)** cell model in §1.3 (any numerical layer average that claims this
+model should use the same pushforward; a different outer \(z\)-measure changes
+the weights and must be re-derived).
+
+### 1.3 First principles: \(\tfrac12\) weights from **cell geometry**
+
+This subsection is the **truth standard**: measure on the **vertical** cell,
+then push forward.
+
+**Assumption A (outer vertical measure in the layer).** Let \(Z\) be height
+within one cell, \(Z\in[-\Delta z/2,\Delta z/2]\), equipped with **normalized
+Lebesgue measure** (probability density \(1/\Delta z\) w.r.t.\ \(dz\)). This is
+the natural “uniform in physical height” model for a **volume-averaged** layer
+statistic when no extra weighting of sublayers is imposed.
+
+**Step 1 — equal split of \(Z\)-mass.** Let
+\(I_-=[-\Delta z/2,0]\), \(I_+=(0,\Delta z/2]\). Then
+
+\[
+\mathbb P(Z\in I_-)=\mathbb P(Z\in I_+)=\frac{\Delta z/2}{\Delta z}=\tfrac12.
+\]
+
+So **\(\tfrac12\)** is not a tunable parameter: it is the ratio of **equal**
+vertical half-cell lengths under uniform \(Z\).
+
+**Step 2 — piecewise affine map to the inner coordinate \(u\).** Along the
+chosen mean-gradient direction in the reduced fluctuation coordinates, write the
+**deterministic** face-anchored
+two-slope reconstruction of the conditional mean displacement as **piecewise
+affine** in \(z\):
+
+\[
+u_{\mathrm{det}}(z)=a_- z + b \quad (z\in I_-),\qquad
+u_{\mathrm{det}}(z)=a_+ z + b \quad (z\in I_+),
+\]
+
+with continuity at \(z=0\) (same intercept \(b=u_{\mathrm{det}}(0)\) from both
+sides). The slopes \(a_\pm\) are fixed by the backward/forward half-slopes and
+the gradient-aligned row; their magnitudes tie the half-cell **\(u\)-extent**
+to \(\Delta z/2\) via
+
+\[
+|a_\pm|(\Delta z/2)=L_\pm,
+\]
+
+which is exactly how \(L_\pm=\|\mathbf d_\pm\|\Delta z/2\) enter as **ranges of**
+\(u_{\mathrm{det}}\) as \(z\) sweeps one vertical half, not weights in a
+length-ratio mixture.
+
+**Step 3 — pushforward of uniform \(Z\) on one vertical half.** If
+\(Z\mid (Z\in I_-)\sim\mathrm{Unif}(I_-)\), then \(U_{\mathrm{det}}=u_{\mathrm{det}}(Z)\)
+is uniform on the interval of \(u\)-values traced as \(z\) runs through \(I_-\),
+an interval of length \(L_-\) (possibly reflected). The same holds on \(I_+\)
+with length \(L_+\).
+
+**Step 4 — add independent Gaussian smoothing along \(u\) at fixed \(v\).** On
+each vertical half the model fixes a **conditional**
+variance of the turbulent fluctuation along \(u\) on that half, denoted
+\(s_{u\mid v}^{(\pm)}\). Independence of that Gaussian increment from
+\(Z\) (within the modeling assumptions of the closure) turns each half’s law
+into exactly a **shifted uniform⊛Gaussian** on the corresponding \(u\)-support
+\([-L_-,0]\) or \([0,L_+]\).
+
+**Step 5 — law of total probability / conditioning on vertical half.** Let
+\(f^{(-)},f^{(+)}\) be the densities of the lower/upper **\(z\)-conditioned**
+laws of \(U\) at the fixed outer \(v\) (the lower/upper half components). Then the
+**unconditional** density is
+
+\[
+f_U(u)=\mathbb P(Z\in I_-)\,f^{(-)}(u)+\mathbb P(Z\in I_+)\,f^{(+)}(u)
+=\tfrac12 f^{(-)}(u)+\tfrac12 f^{(+)}(u).
+\]
+
+Integrating gives the same \(\tfrac12\) split for CDFs. **No coin was introduced
+as a free modeling choice:** \(\mathbf 1_{\{Z\in I_\pm\}}\) is the indicator of
+which **vertical** half of the **same** cell you occupy.
+
+**Caveat (discrete \(z\) weights).** If a **numerical** layer average replaces
+uniform \(Z\) by a discrete rule with unequal masses across \(z=0\) (or any other
+deliberate weighting), then the **discrete** analogue of Step 1 is not
+\(\tfrac12\) each: the mixture weights should match the **chosen quadrature
+masses** on the outer \(z\) axis. That is a statement about **discretization** of
+Assumption A, not about the continuous identity above.
+
+### 1.4 “Coin flip” wording vs one continuous profile
+
+The objection that “mixture ≠ piecewise profile” is resolved **under Assumption
+A and the affine-map + independent Gaussian model above**: the profile is
+continuous in \(z\); the **\(\tfrac12\) law** is the marginal of **\(U\)** induced
+by **uniform \(Z\)** through that profile plus noise. That is not the same
+mathematical object as “sample \(U\) uniformly on \([-L_-,L_+]\) in \(u\)” (which
+would indeed suggest weights \(\propto L_\pm\)); see §1.5.
+
+If the physical layer average you want is **not** uniform in \(z\), **replace
+Assumption A** and re-derive the marginal.
+
+### 1.5 Why weights are **not** \(L_-/(L_-+L_+)\) under this model
+
+Length-ratio weights answer the question: “pick a random **\(u\)** uniformly in
+the union of the two half-intervals in \(u\)-space.” That is a **different**
+experiment from “pick **\(z\)** uniformly in the cell, then map to \(u\).” Under
+the latter, **\(\tfrac12\)** is fixed by Step 1; **\(L_\pm\)** enter only the
+**within-half** uniform supports (Step 3), hence the shapes of \(F_{dn},F_{up}\),
+not the scalar weights in front of them.
+
+Swapping to \(L_-/(L_-+L_+)\) without changing the underlying \(Z\)-measure is
+**not** a small edit: it asserts a different physical sampling of the cell.
+
+**Corollary (numerical evaluation):** if \(\widehat F_{dn}(x)\) and
+\(\widehat F_{up}(x)\) are approximations to the component CDFs at \(x\), then
+\(\tfrac12(\widehat F_{dn}+\widehat F_{up})\) approximates \(F_{\mathrm{mix}}(x)\)
+with error bounded by the **average** of the component errors at that same
+\(x\) (triangle inequality). There is no mechanism for the forward **sum** to
+amplify errors by orders of magnitude relative to per-component evaluation
+error at the **same** \(x\).
+
+### 1.6 Forward law on each leg: **exact** uniform\(\oplus\)Gaussian CDF/PDF (no moment matching)
+
+This subsection gives the **closed forms** for \(F_{dn},F_{up},f_{dn},f_{up}\) and
+therefore for \(F_{\mathrm{mix}},f_{\mathrm{mix}}\). If the note is silent here,
+readers infer (wrongly) that “each leg” is being replaced by a Gaussian matched in
+moments.
+
+**Model on one leg.** Fix a half-interval of length \(L>0\). After centering,
+consider
+
+\[
+Y = U_\ast + Z,\qquad
+U_\ast\sim\mathrm{Uniform}(-L/2,L/2),\quad Z\sim\mathcal N(0,s^2),\quad U_\ast\perp Z.
+\]
+
+Let \(\Phi,\phi\) be the standard normal CDF and PDF. Define the Mills-type
+antiderivative \(I(y):=y\,\Phi(y)+\phi(y)\). Then the **CDF** of \(Y\) at
+\(x\in\mathbb R\) is the closed form
+
+\[
+F_{\mathrm{box}}(x;L,s)
+=\frac{s}{L}\Bigl[I\!\Bigl(\frac{x+L/2}{s}\Bigr)-I\!\Bigl(\frac{x-L/2}{s}\Bigr)\Bigr].
+\]
+
+The **PDF** is
+
+\[
+f_{\mathrm{box}}(x;L,s)
+=\frac{1}{2L}\Bigl[\mathrm{erf}\!\Bigl(\frac{x+L/2}{s\sqrt2}\Bigr)
+-\mathrm{erf}\!\Bigl(\frac{x-L/2}{s\sqrt2}\Bigr)\Bigr],
+\]
+
+Writing \(u_1:=(x+L/2)/s\) and \(u_2:=(x-L/2)/s\), the **derivative** of the PDF is
+the explicit combination of Gaussian exponentials
+
+\[
+f'_{\mathrm{box}}(x;L,s)
+=\frac{1}{Ls\sqrt{2\pi}}\Bigl(e^{-u_1^2/2}-e^{-u_2^2/2}\Bigr)
+=\frac{1}{Ls}\Bigl(\phi(u_1)-\phi(u_2)\Bigr),
+\]
+
+with \(\phi\) the standard normal density. **No** Edgeworth truncation and **no**
+“match two moments then call that the law” is involved in these three formulas:
+they are the convolution definition carried out with \(\mathrm{erf}\), \(\phi\),
+and the Mills antiderivative \(I\) only.
+
+**Map to the two physical half supports.** For an interval \([a,b]\) with
+midpoint \(\mu=(a+b)/2\) and length \(L=b-a\), the shifted law \(U\sim\mathrm{Unif}(a,b)\)
+plus independent \(\mathcal N(0,s^2)\) has CDF \(x\mapsto F_{\mathrm{box}}(x-\mu;L,s)\).
+Lower half: \([a,b]=[-L_{dn},0]\). Upper half: \([0,L_{up}]\). The mixture forward
+objects are **exact averages**
+
+\[
+F_{\mathrm{mix}}(x)=\tfrac12 F_{dn}(x)+\tfrac12 F_{up}(x),\qquad
+f_{\mathrm{mix}}(x)=\tfrac12 f_{dn}(x)+\tfrac12 f_{up}(x),
+\]
+
+and, by linearity of differentiation,
+
+\[
+f'_{\mathrm{mix}}(x)=\tfrac12 f'_{dn}(x)+\tfrac12 f'_{up}(x),
+\]
+
+where each \(f'_{dn},f'_{up}\) is the shifted \(f'_{\mathrm{box}}\) of §1.6 on its
+half-interval. Again **no** moment closure on \(F_{\mathrm{mix}}\).
+
+**What is *not* elementary.** Even for a **single** leg, the **quantile**
+\(u=F_{\mathrm{box}}^{-1}(p;L,s)\) is not a finite closed form in elementary
+functions of \((p,L,s)\); in practice one uses **bracketed rootfinding** or a
+**tabulated / rational surrogate** on the one-parameter family. For the
+**four-parameter mixture**, the natural object is again a **scalar root** of
+\(G(u)=F_{\mathrm{mix}}(u)-p\) using the **exact**
+\(F_{\mathrm{mix}},f_{\mathrm{mix}},f'_{\mathrm{mix}}\) from above (e.g.\ one or
+more Halley or Newton steps, or bisection). Any “Gaussian with variance
+\(L^2/12+s^2\)” construction is a **cheap surrogate for choosing an initial
+\(u_0\)**, not a replacement for \(F_{dn}\) or \(F_{\mathrm{mix}}\) in the forward
+map.
+
+---
+
+## 2. Quantile problem (what is *not* the same as “each half separately”)
+
+Given \(p\in(0,1)\), the **mixture \(p\)-quantile** \(u^\*\) satisfies the **scalar
+root equation**
+
+\[
+G(u^\*)=0,
+\qquad
+G(u):=F_{\mathrm{mix}}(u)-p=\tfrac12 F_{dn}(u)+\tfrac12 F_{up}(u)-p.
+\]
+
+### 2.1 Component quantiles solve *different* equations
+
+Define \(u_{dn}\) and \(u_{up}\) by
+
+\[
+F_{dn}(u_{dn})=p,
+\qquad
+F_{up}(u_{up})=p.
+\]
+
+These are **not** equivalent to \(G(u)=0\) unless the two components happen to
+give equal split at the same \(u\). In general,
+
+\[
+\tfrac12 F_{dn}(u_{dn})+\tfrac12 F_{up}(u_{dn})
+=\tfrac12 p + \tfrac12 F_{up}(u_{dn})\neq p
+\]
+
+unless \(F_{up}(u_{dn})=p\) as well (accident). The same holds with roles
+swapped.
+
+**Conclusion:** “run the one-half problem at probability \(p\) twice” produces
+two numbers \(u_{dn},u_{up}\) that solve **two different equations** from the
+mixture quantile equation \(G(u)=0\). Any claim that those two runs *compose*
+into the mixture inverse without an additional coupling step is **not**
+justified by the mixture definition above.
+
+### 2.2 What quadrature “on each half” actually targets
+
+A tensor / outer quadrature that samples \((p,v)\) or \((\chi_1,\chi_2)\) in a
+bivariate Rosenblatt construction is integrating (or inverting) a **different**
+object than “invert \(F_{\mathrm{mix}}(u)=p\)” for the **marginal** \(u\) along
+one axis at fixed face-anchored \((L_{dn},s_{dn},L_{up},s_{up})\). Comparing
+operation counts across those tasks mixes dimensions and is not a valid
+shortcut to a scalar quantile map unless you write the full transport and show
+equivalence.
+
+### 2.3 Low-overlap asymptotics vs §2.1: why “\(2p\) / \(2p-1\) on one leg” shows up (and is still not exact)
+
+§2.1 warns against the **wrong** coupling: solving \(F_{dn}(u_{dn})=p\) and
+\(F_{up}(u_{up})=p\) with the **same** \(p\) and treating either \(u_{dn}\) or
+\(u_{up}\) as if it solved \(G(u)=0\). That is incorrect because the mixture
+equation is \(\tfrac12 F_{dn}(u)+\tfrac12 F_{up}(u)=p\): both terms are evaluated
+at the **same** \(u\) and both contribute.
+
+A **different** (asymptotic) story is sometimes used as an **initializer** when
+Gaussian smoothing is small relative to half-widths so the two component laws
+have **little probability overlap** near the relevant \(u\). Suppose the root
+\(u^\ast\) lies in a region where one component CDF is nearly constant on the
+relevant scale—e.g.\ \(F_{up}(u^\ast)\approx 0\) while \(F_{dn}(u^\ast)\) carries
+the variation (left-tail / DN-dominated geometry). Then
+\(\tfrac12 F_{dn}(u^\ast)+\tfrac12 F_{up}(u^\ast)\approx \tfrac12 F_{dn}(u^\ast)\),
+so enforcing \(G(u^\ast)=0\) is **approximately** the scalar equation
+\(F_{dn}(u^\ast)\approx 2p\). Similarly, when \(F_{dn}\approx 1\) on the solution
+and \(F_{up}\) varies, one gets \(F_{up}(u^\ast)\approx 2p-1\). The factors
+\(2p\) and \(2p-1\) are **not** “run the same \(p\) twice”; they are a
+**probability-mass bookkeeping** approximation tied to the **\(\tfrac12\)** coin
+weight, and they are only as good as the “one component is flat here” premise.
+
+**Where “moment matching on each leg” enters:** only in **initializers**, never
+in §1.6’s forward \(F_{dn},F_{up}\). Even the **corrected** scalar targets
+\(F_{dn}(u)=2p\) or \(F_{up}(u)=2p-1\) are still **transcendental** equations in
+the true half laws. A common **cheap** substitute is to replace each **component**
+inverse by the quantile of a **Gaussian with the same mean and variance** as
+\(X_{dn}\) or \(X_{up}\) (for the supports in §1.1,
+\(\mathbb E[X_{dn}]=-L_{dn}/2\),
+\(\mathrm{Var}(X_{dn})=L_{dn}^2/12+s_{dn}^2\), and analogously on the upper half).
+That is **two-moment closure for seeding only**—a **surrogate** for
+\(F_{dn}^{-1}(2p)\) or \(F_{up}^{-1}(2p-1)\), **not** a change to how
+\(F_{dn},F_{up}\) are evaluated in \(G\). One Halley step always uses the **exact**
+\(F_{\mathrm{mix}},f_{\mathrm{mix}},f'_{\mathrm{mix}}\) from §1.6.
+
+**Pedagogical gap this subsection closes:** earlier versions of this note
+emphasized “not two independent \(p\)-quantiles at the same \(p\)” but did not
+spell the **\(2p\)** / **\(2p-1\)** asymptotic or the fact that **per-leg
+Gaussian seeds** are an extra approximation layer on top of that asymptotic.
+Readers could also miss §1.6 and wrongly equate “Gaussian line in \(u\)” with the
+true \(F_{dn}\). The forward per-leg objects are **§1.6**; Gaussian lines are
+optional **seeds**. That is separate from a **different** (bivariate) failure
+mode: replacing a **path mixture in physical fluctuation space** by one joint
+Gaussian with fitted bulk moments—a modeling error in \((T,q)\), not the scalar
+convolution formulas of §1.6.
+
+---
+
+## 3. Halley on \(G(u)=F_{\mathrm{mix}}(u)-p\): order, limits, and why inner error matters
+
+This section belongs **in the document** (not only in discussion): it states
+precisely what “one Halley step” is, what “third order” refers to, and why a
+bad inner value is a **real** accuracy problem for the whole quadrature chain.
+
+### 3.1 Rootfinding vs closed-form \(F_{\mathrm{mix}}^{-1}\)
+
+One seeks a **scalar root** of
+
+\[
+G(u)=F_{\mathrm{mix}}(u)-p.
+\]
+
+That is **rootfinding** on a known smooth function \(F_{\mathrm{mix}}\) (e.g.\
+bisection, Newton, Halley). At any iterate \(u\), Halley’s formula uses **only**
+the closed forms from §1.6 for \(F_{\mathrm{mix}}(u)\), \(f_{\mathrm{mix}}(u)\), and
+\(f'_{\mathrm{mix}}(u)\)—the same objects as in the Roadmap display before §1.
+It is **not** the same object as an **analytic** closed
+form \(u=F_{\mathrm{mix}}^{-1}(p)\) in finitely many elementary functions of
+\((p,L_{dn},s_{dn},L_{up},s_{up})\)—no such global formula is assumed here.
+
+**Vocabulary:** calling the Halley update a “correction” is acceptable only in the
+sense “correction toward the root in one Newton-type step.” It is **not** a
+small **definitional** adjustment to an already-exact inverse; the exact inverse
+would satisfy \(G(u^\*)=0\) **exactly**, which one finite-precision step will
+generally not achieve.
+
+### 3.2 What “third order” actually means (iterative Halley)
+
+Assume \(G\in C^3\) near a simple root \(u^\*\) with \(G'(u^\*)=f_{\mathrm{mix}}(u^\*)>0\).
+Halley’s update is
+
+\[
+u_{1}=u_0-\frac{2G'(u_0)G(u_0)}{2G'(u_0)^2-G(u_0)G''(u_0)},
+\qquad
+G'(u)=f_{\mathrm{mix}}(u),\quad G''(u)=f'_{\mathrm{mix}}(u).
+\]
+
+**As an iteration** \(u_{n}\mapsto u_{n+1}\) with the same formula, Halley has
+**cubic local convergence** near \(u^\*\): under standard hypotheses,
+
+\[
+|u_{n+1}-u^\ast| = \mathcal O\!\left(|u_n-u^\ast|^3\right)
+\quad\text{as } n\to\infty .
+\]
+
+That is the precise sense in which Halley is a **high-order** rootfinder: each
+**successful** iteration gains roughly **three** correct decimal digits asymptotically,
+once you are close enough that Taylor remainders are negligible.
+
+### 3.3 One Halley step is **not** automatically “third-order accurate \(F^{-1}\)”
+
+A **single** application \(u_0\mapsto u_1\) satisfies a **local** expansion of the
+form
+
+\[
+u_1 - u^\ast = \mathcal O\!\left(|u_0-u^\ast|^3\right)
+\]
+
+**only in the same asymptotic regime** as the iteration theorem: i.e.\ when
+\(|u_0-u^\ast|\) is small enough that the cubic-term dominance is meaningful.
+If \(|u_0-u^\ast|\) is **not** small (bad initializer), then
+
+- the step can **undershoot or overshoot** badly (Halley is not globally contractive),
+- the residual \(|G(u_1)|\) can remain **large** even though each evaluation of
+  \(F_{\mathrm{mix}}\) is **forward-correct**,
+- calling the result “third-order accurate inverse” without that caveat is
+  **misleading**.
+
+So: **high order** is a property of the **map as an iteration**, not a blanket
+certificate for **one** step from an arbitrary \(u_0\).
+
+### 3.4 When “one step evades bracketed iteration” succeeds or fails
+
+The **design intent** of a one-step Halley rule is computational: each step uses
+only a **bounded** number of evaluations of \(\Phi\), \(\phi\), and the same
+transcendental arithmetic that defines \(F_{\mathrm{mix}}\) (hence bounded work
+per node in an outer quadrature rule). That **does** “evade a long inner loop”
+**only in the operational sense** “no iteration to tight tolerance on \(u\).”
+
+It **does not** logically replace the mathematical statement “find \(u^\ast\) with
+\(F_{\mathrm{mix}}(u^\ast)=p\) to arbitrary accuracy.” If \(|G(u_0)|\) is not small,
+one Halley step is simply a **cheap approximate root**—not an automatic substitute
+for bracketed inversion.
+
+### 3.5 Yes: a bad inner \(u\) is bad for the whole scheme
+
+The inner quantile \(u\) is not an end in itself: it is fed through \(M^{-1}\),
+physical fluctuation maps, and nonlinear microphysics/saturation. Evaluating the
+integrand at a **wrong** \(u_1\) means the **composition** \((F_{\mathrm{mix}}\text{ correct})
+\circ (\text{poor }u_1)\) is wrong for the intended **pullback** of the measure.
+
+That is **not** a cosmetic issue: it biases integrated tendencies and can interact
+with maps that are only defined on subdomains (e.g.\ logarithms of quantities that
+must remain positive). So **inner-inverse quality is a first-class accuracy
+concern**, separate from the correctness of the forward \(\tfrac12\)-sum formula
+for \(F_{\mathrm{mix}}\) itself.
+
+### 3.6 What breaks when \(u_0\) is only moment-matched Gaussian
+
+If \(u_0\) is taken from a **two-moment** Gaussian proxy to the mixture (leading
+Cornish–Fisher / moment match), then \(G(u_0)\) can be large when the mixture CDF
+shape is far from Gaussian (e.g.\ strong \((L_{dn},L_{up})\) asymmetry with small
+\(s\)). That is **not** a failure of \(\tfrac12(F_{dn}+F_{up})\); it is a failure of
+the **initializer** for a **single** high-order local step.
+
+---
+
+## 4. “Derive a fix” vs “add candidates” (what is actually being optimized)
+
+### 4.1 What a finite candidate set optimizes
+
+Fix a finite set \(S=\{u^{(1)},\dots,u^{(K)}\}\) of trial points (each defined
+closed-form from \((p,L_{dn},s_{dn},L_{up},s_{up})\)). Choose
+
+\[
+u_0 \in \arg\min_{u\in S} |F_{\mathrm{mix}}(u)-p| = \arg\min_{u\in S} |G(u)|.
+\]
+
+This is a **discrete** approximation problem: minimize the **initial residual**
+of the root-finding map before applying one Halley step.
+
+**Proposition (trivial but precise):** among **fixed** \(S\), picking \(u_0\) by
+minimizing \(|G(u)|\) is the best *feasible* way (within \(S\)) to make the
+first Newton/Halley correction operate from the smallest \(|G|\) value attainable
+without evaluating \(G\) outside \(S\). It is **not** generally equal to the
+global minimizer of \(|G|\) over \(\mathbb R\), nor is it Bayes-optimal under a
+prior on parameters unless you add that statistical model.
+
+**“Optimal” in the sense used above:** optimal **within the restricted class**
+“one Halley update after evaluating \(G\) only on \(S\)” (plus derivatives at the
+chosen point). It is **not** a claim of global optimality over all algorithms
+with the same flop budget.
+
+### 4.2 Why more than one candidate can be necessary at fixed \(K=1\) Halley
+
+If \(S=\{u_{\mathrm{cf}}\}\) only, there exist \((p,L_{dn},s_{dn},L_{up},s_{up})\)
+where \(|G(u_{\mathrm{cf}})|\) is not small. Adding points to \(S\) that encode
+**geometry of the support** (e.g. the join at \(u=0\) between the two shifted
+supports) or **per-half Gaussian proxies** changes **only** \(u_0\), not the
+definition of \(F_{\mathrm{mix}}\).
+
+This is not a derivation that “4 is minimal”; proving a minimal \(K\) for a
+uniform accuracy target over a compact parameter box is a separate
+**approximation theory** problem (covering arguments / Remez-type ideas in
+function space). The honest engineering statement is: **larger \(S\)** reduces
+the set of parameters where \(|G(u_0)|\) is large, at **linear** cost in \(|S|\)
+for evaluating \(F_{\mathrm{mix}}\) on \(S\).
+
+### 4.3 Illustrative fixed \(S\) with \(|S|=4\) (reproducible benchmark, not minimal)
+
+One concrete pattern (purely notational—any equivalent reparametrization is fine)
+is to build a standard-normal quantile \(z:=\Phi^{-1}(p)\) (equivalently
+\(z=\sqrt2\,\mathrm{erf}^{-1}(2p-1)\) after clamping \(p\) slightly inside \((0,1)\)
+if needed for numerics); then set
+
+- \(u_{\mathrm{cf}}:=\mu_{\mathrm{mix}}+\sigma_{\mathrm{mix}} z\) where
+  \((\mu_{\mathrm{mix}},\sigma_{\mathrm{mix}}^2)\) are the **exact** mixture mean
+  and variance from the laws in §1.1–1.6 (two-moment Gaussian **proxy** for the
+  whole mixture, not a replacement for \(F_{\mathrm{mix}}\));
+- \(u_{\mathrm{join}}:=0\) (the join between the two shifted uniform supports);
+- \(u_{dn}:=\mu_{dn}+\sigma_{dn} z\) and \(u_{up}:=\mu_{up}+\sigma_{up} z\) with
+  \(\mu_{dn}=-L_{dn}/2\), \(\mu_{up}=L_{up}/2\),
+  \(\sigma_{dn}^2=L_{dn}^2/12+s_{dn}^2\), \(\sigma_{up}^2=L_{up}^2/12+s_{up}^2\)
+  (per-half two-moment Gaussian **lines**, sharing the **same** \(z\) as
+  \(u_{\mathrm{cf}}\)).
+
+Take \(S=\{u_{\mathrm{cf}},u_{\mathrm{join}},u_{dn},u_{up}\}\), pick the seed
+\(u_{\mathrm{seed}}\in S\) by minimizing \(|F_{\mathrm{mix}}(u)-p|\) over \(S\)
+(four evaluations of \(F_{\mathrm{mix}}\) only—no iteration), then apply one
+Halley step from \(u_{\mathrm{seed}}\) using §1.6.
+
+**Bracketed reference root:** for a scalar bisection-style or Brent-style solve of
+\(G(u)=0\), choose any interval \([a,b]\) with \(G(a)G(b)<0\) (monotonicity of
+\(F_{\mathrm{mix}}\) guarantees one exists between left and right tail brackets
+derived from support and \(s_\pm\)). Iterate until \(|G(u)|\) is below a set
+tolerance; that defines a **high-accuracy** \(u_{\mathrm{ref}}\) independent of
+the one-step Halley pipeline, useful when comparing seeds.
+
+---
+
+## 5. Finite precision and composition (orthogonal to §1)
+
+When the same mathematics is evaluated in **finite floating-point arithmetic**,
+two issues arise that are **not** contradictions of §1’s identities:
+
+- **Inverse normal / quantile maps** near \(p\in\{0,1\}\) blow up in the ideal
+  continuum; a numerical scheme must clamp or re-scale arguments consistently
+  with the precision used for \(F_{\mathrm{mix}}\).
+- **Halley denominators** involve \(f_{\mathrm{mix}}\); if \(f_{\mathrm{mix}}(u_0)\)
+  is rounded to zero while \(G(u_0)\neq 0\), the step is ill-conditioned. That is
+  numerical analysis on a **correct** \(G\), not an error in the \(\tfrac12\) CDF
+  sum.
+
+Separately, if \(u\) is fed into **other nonlinear maps** (saturation,
+logarithms of quantities that must stay positive, etc.), a poor approximate root
+can produce **out-of-domain** arguments. That is a **composition** issue: the
+forward mixture formula in §1 can still be evaluated exactly in real arithmetic at
+the same \(u\).
+
+---
+
+## 6. What would count as a stronger analytic theory for the initializer
+
+If the goal is to **remove multi-point screening** while keeping one Halley step,
+one needs a **closed-form** or **provably accurate** initializer \(u_0(p,\cdot)\)
+such that \(\sup |G(u_0)|\le \varepsilon\) over the intended parameter set, or
+a **theorem** that one Halley step reduces residual below a target from that
+\(u_0\). That is closer to **analytic inversion / asymptotic expansions** of
+\(F_{\mathrm{mix}}\) than to adding points heuristically.
+
+Concrete research directions:
+
+- Uniform asymptotic expansions of \(F_{dn},F_{up}\) in \((L/s)\) regimes, then
+  solve \(\tfrac12(F_{dn}+F_{up})=p\) by matched asymptotics.
+- A provable bracket \([a,b]\) from monotonicity + support bounds, then a
+  **single** explicit map (e.g. rational approximation) fitted **offline** on a
+  compact \((L_{dn},s_{dn},L_{up},s_{up},\eta)\) cell—i.e.\ a **mixture-specific**
+  surrogate for \(F_{\mathrm{mix}}^{-1}\), separate from the single-law tables
+  that exist only when \(L_{dn}\approx L_{up}\) and \(s_{dn}\approx s_{up}\).
+
+---
+
+## 7. Bottom line
+
+1. **Exact:** \(F_{\mathrm{mix}}(x)=\tfrac12 F_{dn}(x)+\tfrac12 F_{up}(x)\).
+2. **Quantile:** solve one scalar \(G(u)=0\); **not** solvable by independent
+   “half quantiles at the same \(p\)” without an extra coupling equation.
+3. **One Halley (§3):** not closed-form \(F^{-1}\); cubic order is an **iterative**
+   local property. One step from a bad \(u_0\) can leave large \(|G(u_1)|\); that
+   **does** hurt the outer quadrature / physics chain (§3.5).
+4. **Finite candidate screens:** optimize \(|G|\) over a restricted \(S\);
+   “optimal” means **within that restricted class**, not globally optimal.
+
+Together, §§0–7 give a closed mathematical account of the inner mixture law, its
+exact \(F,f,f'\), the quantile root problem, seed strategies (including a worked
+four-point screen), Halley’s role, finite-precision behavior, and the open gap for
+sharper initializers. Implementation details (language, brackets, tolerances) are
+the standard translation of §§1.6 and 5 into code once this algebra is fixed.

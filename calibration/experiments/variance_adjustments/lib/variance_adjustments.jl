@@ -9,8 +9,8 @@
 # - `ClimaAtmos.integrate_over_sgs_linear_profile` in
 #   `src/parameterized_tendencies/microphysics/subgrid_layer_profile_quadrature.jl` —
 #   the end-to-end layer-mean quadrature driver (column-tensor and
-#   `SubgridProfileRosenblatt`: two-component uniform–Gaussian mixture per vertical
-#   half-cell; default inverse-CDF via `ConvolutionQuantilesHalley`).
+#   `SubgridProfileRosenblatt`: composite split inner marginal (½ DN / ½ UP half-cell
+#   `uniform⊛Gaussian` laws); default per-leg inverse via `ConvolutionQuantilesHalley`).
 #
 # With a base `sgs_distribution` (not `(gaussian|lognormal)_vertical_profile*`), quadrature uses cached
 # **(T′T′, q′q′)** and scalar `correlation_Tq(params)`. With a vertical-profile
