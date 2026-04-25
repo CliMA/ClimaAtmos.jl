@@ -131,9 +131,13 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
 
     # Note: We have to use FT(-1) * I instead of -I because inv(-1) == -1.0,
     # which means that multiplying inv(-1) by a Float32 will yield a Float64.
+    prognostic_aerosol_field_names = ntuple(
+        i -> MatrixFields.FieldName(:c, Symbol(:ρ, _aerosol_names(atmos.prognostic_aerosols)[i])),
+        Val(length(_aerosol_names(atmos.prognostic_aerosols))),
+    )
     identity_blocks = MatrixFields.unrolled_map(
         name -> (name, name) => FT(-1) * I,
-        (@name(c.ρ), sfc_if_available...),
+        (@name(c.ρ), sfc_if_available..., prognostic_aerosol_field_names...),
     )
 
     active_scalar_names = (@name(c.ρ), @name(c.ρe_tot), ρq_tot_if_available...)
@@ -313,6 +317,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     available_scalar_names = (
         mass_and_surface_names...,
         available_tracer_names...,
+        prognostic_aerosol_field_names...,
         @name(c.ρe_tot),
         ρtke_if_available...,
         available_sgs_scalar_names...,
