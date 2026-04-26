@@ -11,9 +11,43 @@ include(joinpath(VA_TRMM_SGS_SMOKE_ROOT, "analysis", "plotting", "plot_profiles.
 include(joinpath(VA_TRMM_SGS_SMOKE_ROOT, "scripts", "resolution_ladder.jl"))
 include(joinpath(VA_TRMM_SGS_SMOKE_ROOT, "lib", "forward_sweep_grid.jl"))
 
+import Base.CoreLogging: AbstractLogger, handle_message, shouldlog, min_enabled_level
+import Logging: ConsoleLogger, SimpleLogger, with_logger
 import CairoMakie as CM
 import ClimaAtmos as CA
 import NCDatasets as NCD
+
+"""Forward all log messages to two loggers (stderr + per-run file) so `@error` from `solve_atmos!` is not lost when batching."""
+struct _VA_TeeLogger <: AbstractLogger
+    a::AbstractLogger
+    b::AbstractLogger
+end
+function handle_message(tee::_VA_TeeLogger, level, message, m, g, i, f, l; k...)
+    if shouldlog(tee.a, level, m, g, i)
+        handle_message(tee.a, level, message, m, g, i, f, l; k...)
+    end
+    if shouldlog(tee.b, level, m, g, i)
+        handle_message(tee.b, level, message, m, g, i, f, l; k...)
+    end
+    return nothing
+end
+function shouldlog(tee::_VA_TeeLogger, a...)
+    return shouldlog(tee.a, a...) || shouldlog(tee.b, a...)
+end
+min_enabled_level(tee::_VA_TeeLogger) = min(min_enabled_level(tee.a), min_enabled_level(tee.b))
+
+function _va_read_file_tail(path::AbstractString; max_bytes::Int = 12_000)::String
+    isfile(path) || return ""
+    s = filesize(path)
+    return open(String(path), "r") do io
+        if s <= max_bytes
+            read(io, String)
+        else
+            seek(io, s - max_bytes)
+            read(io, String)
+        end
+    end
+end
 
 const VA_TRMM_SGS_SMOKE_CASE_LAYERS = String[
     "model_configs/master_column_varquad_diagnostic_edmfx.yml",
@@ -22,6 +56,12 @@ const VA_TRMM_SGS_SMOKE_CASE_LAYERS = String[
 
 const VA_TRMM_SGS_SMOKE_SCM_TOML = Any["diagnostic_edmfx_1M.toml", "toml/uncalibrated_stability_overlay.toml"]
 
+# TRMM + LogNormal VPF (esp. `*_vertical_profile_*`) vs Gaussian: the crash in logs is *where* it surfaces
+# (often `exner`/`liquid_ice_pottemp` with invalid pressure), not *why*. The suspect upstream bug was VPF
+# mixing `d(ln q)/dz` with layer/Rosenblatt geometry that assumes physical `dq/dz` — see
+# `subgrid_layer_profile_quadrature.jl` `integrate_over_sgs` (LogNormal branch) and comments there.
+# Gaussian does not use that re-sloping path.
+#
 # Smoke lists **explicit** `sgs_distribution` strings so regressions name the discretization (see this branch’s
 # `calibration/experiments/variance_adjustments/README.md`). Omit bare `*_vertical_profile` if you want every
 # run to spell out an inner-quadrature variant.
@@ -49,6 +89,10 @@ const VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS = String[
 """
 Write `showerror` + truncated backtrace for a failed smoke run (REPL truncates; open this file instead).
 
+If `solver_log_path` is provided and the file exists, a tail of that file is appended. That log is written
+ during `solve_atmos!` and captures the `@error` block from `ClimaAtmos` (the exception is not returned in
+`AtmosSolveResults` when `ret_code == :simulation_crashed`).
+
 Filename is stable per `(case_slug, quadrature_order, sgs_distribution)` and **overwrites** on a later failure
 for the same triple so `_failures/` does not accumulate timestamped copies.
 """
@@ -60,6 +104,8 @@ function _va_sgs_smoke_write_failure!(
     err,
     bt;
     max_backtrace_lines::Int = 48,
+    solver_log_path::Union{Nothing, String} = nothing,
+    solver_log_tail_max_bytes::Int = 12_000,
 )::String
     fail_root = joinpath(experiment_dir, "simulation_output", "sgs_smoke", "_failures")
     mkpath(fail_root)
@@ -87,8 +133,42 @@ function _va_sgs_smoke_write_failure!(
             print(io, bt_s)
         end
         println(io)
+        if solver_log_path !== nothing && isfile(solver_log_path)
+            println(io, repeat("=", 72))
+            println(io, "tail of solver log (from solve_atmos!): ", solver_log_path)
+            println(io, repeat("=", 72))
+            print(io, _va_read_file_tail(solver_log_path; max_bytes = solver_log_tail_max_bytes))
+            println(io)
+        elseif solver_log_path !== nothing
+            println(io, repeat("=", 72))
+            println(io, "solver log path (missing file): ", solver_log_path)
+            println(io, repeat("=", 72))
+        end
     end
     return path
+end
+
+function _va_solver_log_path(;
+    experiment_dir::AbstractString,
+    slug::AbstractString,
+    n_quad::Int,
+    dist::AbstractString,
+    tier,
+    z_stretch::Bool,
+    yaml_dz::Float64,
+)
+    dist_slug = va_sgs_dist_path_slug(dist)
+    return joinpath(
+        experiment_dir,
+        "simulation_output",
+        "sgs_smoke",
+        slug,
+        va_tier_path_segment(tier, z_stretch, yaml_dz),
+        "N_$(n_quad)",
+        dist_slug,
+        "forward_only",
+        "sgs_smoke_solve.log",
+    )
 end
 
 """
@@ -163,6 +243,25 @@ function _va_apply_case_overrides!(
     return cfg
 end
 
+"""If non-empty, append this under `.../forward_only/` so optional `dt`/`t_end` smokes do not clobber the default tree."""
+function _va_sgs_smoke_output_sweep_id(
+    dt_str_override::Union{Nothing, AbstractString},
+    t_end_override::Union{Nothing, AbstractString},
+)::Union{Nothing, String}
+    if dt_str_override === nothing && t_end_override === nothing
+        return nothing
+    end
+    parts = String[]
+    if dt_str_override !== nothing
+        push!(parts, "dt" * va_dt_path_slug(String(dt_str_override)))
+    end
+    if t_end_override !== nothing
+        s = replace(lowercase(String(t_end_override)), r"[^0-9a-z]+" => "")
+        !isempty(s) && push!(parts, "tend" * s)
+    end
+    return isempty(parts) ? nothing : join(parts, "_")
+end
+
 function va_trmm_sgs_smoke_resolve_grid(;
     experiment_dir::AbstractString = VA_TRMM_SGS_SMOKE_ROOT,
     case_layers::Vector{String} = VA_TRMM_SGS_SMOKE_CASE_LAYERS,
@@ -189,11 +288,16 @@ function va_run_trmm_sgs_smoke_one(;
     skip_done::Bool = false,
     external_forcing_file::Union{Nothing, AbstractString} = nothing,
     cfsite_number::Union{Nothing, AbstractString} = nothing,
+    dt_str_override::Union{Nothing, AbstractString} = nothing,
+    t_end_override::Union{Nothing, AbstractString} = nothing,
 )
     cfg = va_load_merged_case_yaml_dict(experiment_dir, case_layers)
     _va_apply_case_overrides!(cfg; external_forcing_file, cfsite_number)
     cfg["z_elem"] = tier.z_elem
-    cfg["dt"] = tier.dt_str
+    cfg["dt"] = dt_str_override === nothing ? tier.dt_str : String(dt_str_override)
+    if t_end_override !== nothing
+        cfg["t_end"] = String(t_end_override)
+    end
     if tier.dz_bottom_written !== nothing
         cfg["dz_bottom"] = tier.dz_bottom_written
     end
@@ -202,16 +306,19 @@ function va_run_trmm_sgs_smoke_one(;
         cfg["netcdf_interpolation_num_points"] = Any[nip[1], nip[2], tier.z_elem]
     end
     dist_slug = va_sgs_dist_path_slug(dist)
-    cfg["output_dir"] = joinpath(
-        experiment_dir,
-        "simulation_output",
-        "sgs_smoke",
-        slug,
-        va_tier_path_segment(tier, z_stretch, yaml_dz),
-        "N_$(n_quad)",
-        dist_slug,
-        "forward_only",
-    )
+    sweep = _va_sgs_smoke_output_sweep_id(dt_str_override, t_end_override)
+    cfg["output_dir"] = let base = joinpath(
+            experiment_dir,
+            "simulation_output",
+            "sgs_smoke",
+            slug,
+            va_tier_path_segment(tier, z_stretch, yaml_dz),
+            "N_$(n_quad)",
+            dist_slug,
+            "forward_only",
+        )
+        sweep === nothing ? base : joinpath(base, sweep)
+    end
     mkpath(cfg["output_dir"])
     active = joinpath(cfg["output_dir"], "output_active")
     if skip_done && isdir(active)
@@ -224,27 +331,51 @@ function va_run_trmm_sgs_smoke_one(;
     va_write_merged_scm_baseline_file!(experiment_dir, scm_toml, merged_path)
     cfg["toml"] = [merged_path]
     cfg["output_default_diagnostics"] = get(cfg, "output_default_diagnostics", false)
-    job_id = string("va_sgs_smoke_", slug, "_", dist_slug)
+    job_id = string(
+        "va_sgs_smoke_",
+        slug,
+        "_",
+        dist_slug,
+        sweep === nothing ? "" : string("_", sweep),
+    )
     atmos_config = CA.AtmosConfig(cfg; comms_ctx = va_comms_ctx(), job_id)
     sim = CA.get_simulation(atmos_config)
-    sol_res = CA.solve_atmos!(sim)
-    # `solve_atmos!` catches timestep failures and returns `:simulation_crashed` instead of throwing,
-    # so without this check the smoke script would log "Finished" and leave no `output_active` with no `_failures/` entry.
+    solver_log = joinpath(cfg["output_dir"], "sgs_smoke_solve.log")
+    isfile(solver_log) && rm(solver_log)
+    log_io = open(solver_log, "w")
+    local sol_res
+    try
+        with_logger(
+            _VA_TeeLogger(ConsoleLogger(stderr), SimpleLogger(log_io)),
+        ) do
+            sol_res = CA.solve_atmos!(sim)
+        end
+    finally
+        flush(log_io)
+        close(log_io)
+    end
+    # `solve_atmos!` catches integration failures and returns `:simulation_crashed` instead of throwing;
+    # the ClimaAtmos catch block uses `@error` (see `src/solver/solve.jl`), which is duplicated to
+    # `stderr` and `solver_log` via `_VA_TeeLogger` above.
     if sol_res.ret_code == :simulation_crashed
         od = String(sim.output_dir)
         exc = ErrorException(
             "solve_atmos! returned :simulation_crashed (time integration failed). " *
-            "ClimaAtmos logs the underlying exception and backtrace via `@error` in this process's output (capture stderr to keep it). " *
+            "See the tail of the solver log appended below (same content as the `@error` in src/solver/solve.jl). " *
             "Partial state may exist under output_dir:\n  $od",
         )
         bt = backtrace()
-        fail_path = _va_sgs_smoke_write_failure!(experiment_dir, slug, n_quad, dist, exc, bt)
+        fail_path = _va_sgs_smoke_write_failure!(
+            experiment_dir, slug, n_quad, dist, exc, bt;
+            solver_log_path = isfile(solver_log) ? String(solver_log) : nothing,
+        )
         error(
             "ClimaAtmos integration failed for sgs_distribution=$(repr(dist)). " *
             "Smoke summary written to:\n  $fail_path",
         )
     end
     _va_sgs_smoke_assert_finite_final_condensate!(cfg["output_dir"])
+    isfile(solver_log) && rm(solver_log; force = true)
     @info "Finished sgs_smoke run" dist output_dir = cfg["output_dir"]
     return sim
 end
@@ -269,13 +400,23 @@ function _va_run_trmm_sgs_smoke_job(job::NamedTuple)
         return (; ok = true, dist = job.dist, log_path = nothing, summary = nothing)
     catch e
         bt = catch_backtrace()
+        sol_log = _va_solver_log_path(;
+            experiment_dir = job.experiment_dir,
+            slug = job.slug,
+            n_quad = job.n_quad,
+            dist = job.dist,
+            tier = job.tier,
+            z_stretch = job.z_stretch,
+            yaml_dz = job.yaml_dz,
+        )
         path = _va_sgs_smoke_write_failure!(
             job.experiment_dir,
             job.slug,
             job.n_quad,
             job.dist,
             e,
-            bt,
+            bt;
+            solver_log_path = isfile(sol_log) ? String(sol_log) : nothing,
         )
         return (; ok = false, dist = job.dist, log_path = path, summary = sprint(showerror, e))
     end

@@ -69,54 +69,6 @@ end
     return c * (exp(-u1^2 / FT(2)) - exp(-u2^2 / FT(2)))
 end
 
-# ============================================================================
-# Exact Uniform-LogNormal Convolution
-# ============================================================================
-
-"""
-    _uniform_lognormal_convolution_I(q, y, σ_ln)
-
-Antiderivative `I(y) = y Φ(x) - q exp(σ_ln²) Φ(x + σ_ln)` where `x = (ln(q/y) + σ_ln²/2)/σ_ln`.
-"""
-@inline function _uniform_lognormal_convolution_I(q::FT, y::FT, σ_ln::FT) where {FT}
-    ε = ϵ_numerics(FT)
-    yp = max(y, ε)
-    qp = max(q, ε)
-    σ_p = max(σ_ln, ε)
-    x = (log(qp / yp) + σ_p^2 / FT(2)) / σ_p
-    return yp * _std_normal_cdf(x) - qp * exp(σ_p^2) * _std_normal_cdf(x + σ_p)
-end
-
-@inline function uniform_lognormal_convolution_cdf(q::FT, y_min::FT, y_max::FT, σ_ln::FT) where {FT}
-    ε = ϵ_numerics(FT)
-    Δy = max(y_max - y_min, ε)
-    I_max = _uniform_lognormal_convolution_I(q, y_max, σ_ln)
-    I_min = _uniform_lognormal_convolution_I(q, y_min, σ_ln)
-    return max(zero(FT), min(one(FT), (I_max - I_min) / Δy))
-end
-
-@inline function uniform_lognormal_convolution_pdf(q::FT, y_min::FT, y_max::FT, σ_ln::FT) where {FT}
-    ε = ϵ_numerics(FT)
-    Δy = max(y_max - y_min, ε)
-    qp = max(q, ε)
-    σ_p = max(σ_ln, ε)
-    x_max = (log(qp / max(y_max, ε)) + σ_p^2 / FT(2)) / σ_p
-    x_min = (log(qp / max(y_min, ε)) + σ_p^2 / FT(2)) / σ_p
-    val = (exp(σ_p^2) / Δy) * (_std_normal_cdf(x_min + σ_p) - _std_normal_cdf(x_max + σ_p))
-    return max(zero(FT), val)
-end
-
-@inline function uniform_lognormal_convolution_pdf_prime(q::FT, y_min::FT, y_max::FT, σ_ln::FT) where {FT}
-    ε = ϵ_numerics(FT)
-    Δy = max(y_max - y_min, ε)
-    qp = max(q, ε)
-    σ_p = max(σ_ln, ε)
-    x_max = (log(qp / max(y_max, ε)) + σ_p^2 / FT(2)) / σ_p
-    x_min = (log(qp / max(y_min, ε)) + σ_p^2 / FT(2)) / σ_p
-    val = (exp(σ_p^2) / (qp * σ_p * Δy)) * (_std_normal_pdf(x_min + σ_p) - _std_normal_pdf(x_max + σ_p))
-    return val
-end
-
 """Brent inverse of `uniform[-L/2,L/2] ⊛ N(0,s²)` at quantile level `p` (reference for Chebyshev tables)."""
 function centered_uniform_gaussian_convolution_quantile_brent(
     p::FT, L::FT, s::FT,
@@ -342,45 +294,6 @@ end
     return (fp_dn + fp_up) / FT(2)
 end
 
-@inline function mixture_uniform_lognormal_convolution_cdf(
-    q::FT, μ_q::FT, L_dn::FT, L_up::FT, σ_ln::FT,
-) where {FT}
-    ε = ϵ_numerics(FT)
-    y_min = max(ε, μ_q - L_dn)
-    y_max = max(ε, μ_q + L_up)
-    y_mid = max(ε, μ_q)
-    
-    F_dn = uniform_lognormal_convolution_cdf(q, y_min, y_mid, σ_ln)
-    F_up = uniform_lognormal_convolution_cdf(q, y_mid, y_max, σ_ln)
-    return (F_dn + F_up) / FT(2)
-end
-
-@inline function mixture_uniform_lognormal_convolution_pdf(
-    q::FT, μ_q::FT, L_dn::FT, L_up::FT, σ_ln::FT,
-) where {FT}
-    ε = ϵ_numerics(FT)
-    y_min = max(ε, μ_q - L_dn)
-    y_max = max(ε, μ_q + L_up)
-    y_mid = max(ε, μ_q)
-    
-    f_dn = uniform_lognormal_convolution_pdf(q, y_min, y_mid, σ_ln)
-    f_up = uniform_lognormal_convolution_pdf(q, y_mid, y_max, σ_ln)
-    return (f_dn + f_up) / FT(2)
-end
-
-@inline function mixture_uniform_lognormal_convolution_pdf_prime(
-    q::FT, μ_q::FT, L_dn::FT, L_up::FT, σ_ln::FT,
-) where {FT}
-    ε = ϵ_numerics(FT)
-    y_min = max(ε, μ_q - L_dn)
-    y_max = max(ε, μ_q + L_up)
-    y_mid = max(ε, μ_q)
-    
-    fp_dn = uniform_lognormal_convolution_pdf_prime(q, y_min, y_mid, σ_ln)
-    fp_up = uniform_lognormal_convolution_pdf_prime(q, y_mid, y_max, σ_ln)
-    return (fp_dn + fp_up) / FT(2)
-end
-
 """
     mixture_uniform_gaussian_convolution_mean_var(L_dn, s_dn, L_up, s_up)
 
@@ -426,7 +339,16 @@ function mixture_uniform_gaussian_convolution_quantile_brent(
     return sol.root
 end
 
-@inline function _rosenblatt_dn_half_u(
+"""
+    _rosenblatt_half_w_dn(method, p, L_dn, s_dn, N_gl, i_node)
+    _rosenblatt_half_w_up(method, p, L_up, s_up, N_gl, i_node)
+
+Dispatch layer-profile half-leg quantile solves in transformed `w`-space
+(`w = q` for Gaussian, `w = ln(q)` for LogNormal wrappers). These helpers are
+pure uniform-normal half-convolution solvers and do not perform any outer
+mapping to physical `(T, q)` coordinates.
+"""
+@inline function _rosenblatt_half_w_dn(
     ::ConvolutionQuantilesBracketed,
     p::FT,
     L_dn::FT,
@@ -437,7 +359,7 @@ end
     return dn_half_uniform_gaussian_convolution_quantile_brent(p, L_dn, s_dn)
 end
 
-@inline function _rosenblatt_dn_half_u(
+@inline function _rosenblatt_half_w_dn(
     ::ConvolutionQuantilesHalley,
     p::FT,
     L_dn::FT,
@@ -448,7 +370,7 @@ end
     return dn_half_uniform_gaussian_convolution_quantile_halley(p, L_dn, s_dn)
 end
 
-@inline function _rosenblatt_dn_half_u(
+@inline function _rosenblatt_half_w_dn(
     ::ConvolutionQuantilesChebyshevLogEta,
     ::FT,
     L_dn::FT,
@@ -461,7 +383,7 @@ end
     )
 end
 
-@inline function _rosenblatt_up_half_u(
+@inline function _rosenblatt_half_w_up(
     ::ConvolutionQuantilesBracketed,
     p::FT,
     L_up::FT,
@@ -472,7 +394,7 @@ end
     return up_half_uniform_gaussian_convolution_quantile_brent(p, L_up, s_up)
 end
 
-@inline function _rosenblatt_up_half_u(
+@inline function _rosenblatt_half_w_up(
     ::ConvolutionQuantilesHalley,
     p::FT,
     L_up::FT,
@@ -483,7 +405,7 @@ end
     return up_half_uniform_gaussian_convolution_quantile_halley(p, L_up, s_up)
 end
 
-@inline function _rosenblatt_up_half_u(
+@inline function _rosenblatt_half_w_up(
     ::ConvolutionQuantilesChebyshevLogEta,
     ::FT,
     L_up::FT,
@@ -496,7 +418,23 @@ end
     )
 end
 
-@inline function _rosenblatt_dn_half_q(
+"""
+    _rosenblatt_lognormal_half_q_dn(method, p, μ_q, L_dn, σ_ln, q_max, N_gl, i_node)
+    _rosenblatt_lognormal_half_q_up(method, p, μ_q, L_up, σ_ln, q_max, N_gl, i_node)
+
+LogNormal half-leg quantile helpers for `SubgridProfileRosenblatt`.
+
+These functions operate in transformed space (`ln(q)`) and then map back to
+physical `q` with `exp(·)`. They are separate from the Gaussian `u`-helpers
+(`_rosenblatt_{dn,up}_half_u`) because LogNormal quantiles include moisture
+state parameters (`μ_q`, `σ_ln`) and positive-domain clamping via `q_max`.
+
+Method variants:
+- `ConvolutionQuantilesBracketed`: Brent solve in transformed uniform-normal law
+- `ConvolutionQuantilesHalley`: one-step Halley in transformed law
+- `ConvolutionQuantilesChebyshevLogEta`: transformed-space Chebyshev surrogate
+"""
+@inline function _rosenblatt_lognormal_half_q_dn(
     method::ConvolutionQuantilesChebyshevLogEta,
     p,
     μ_q,
@@ -507,12 +445,12 @@ end
     i_node,
 )
     FT = promote_type(typeof(p), typeof(μ_q), typeof(L_dn), typeof(σ_ln), typeof(q_max))
-    return _rosenblatt_dn_half_q_impl(
+    return _rosenblatt_lognormal_half_q_dn_impl(
         method, FT(p), FT(μ_q), FT(L_dn), FT(σ_ln), FT(q_max), N_gl, i_node
     )
 end
 
-@inline function _rosenblatt_dn_half_q(
+@inline function _rosenblatt_lognormal_half_q_dn(
     method,
     p,
     μ_q,
@@ -523,12 +461,12 @@ end
     i_node,
 )
     FT = promote_type(typeof(p), typeof(μ_q), typeof(L_dn), typeof(σ_ln), typeof(q_max))
-    return _rosenblatt_dn_half_q_impl(
+    return _rosenblatt_lognormal_half_q_dn_impl(
         method, FT(p), FT(μ_q), FT(L_dn), FT(σ_ln), FT(q_max)
     )
 end
 
-@inline function _rosenblatt_up_half_q(
+@inline function _rosenblatt_lognormal_half_q_up(
     method::ConvolutionQuantilesChebyshevLogEta,
     p,
     μ_q,
@@ -539,12 +477,12 @@ end
     i_node,
 )
     FT = promote_type(typeof(p), typeof(μ_q), typeof(L_up), typeof(σ_ln), typeof(q_max))
-    return _rosenblatt_up_half_q_impl(
+    return _rosenblatt_lognormal_half_q_up_impl(
         method, FT(p), FT(μ_q), FT(L_up), FT(σ_ln), FT(q_max), N_gl, i_node
     )
 end
 
-@inline function _rosenblatt_up_half_q(
+@inline function _rosenblatt_lognormal_half_q_up(
     method,
     p,
     μ_q,
@@ -555,12 +493,12 @@ end
     i_node,
 )
     FT = promote_type(typeof(p), typeof(μ_q), typeof(L_up), typeof(σ_ln), typeof(q_max))
-    return _rosenblatt_up_half_q_impl(
+    return _rosenblatt_lognormal_half_q_up_impl(
         method, FT(p), FT(μ_q), FT(L_up), FT(σ_ln), FT(q_max)
     )
 end
 
-@inline function _rosenblatt_dn_half_q_impl(
+@inline function _rosenblatt_lognormal_half_q_dn_impl(
     ::ConvolutionQuantilesBracketed,
     p::FT,
     μ_q::FT,
@@ -569,14 +507,14 @@ end
     q_max::FT,
 ) where {FT}
     ε = ϵ_numerics(FT)
-    y_min = max(ε, μ_q - L_dn)
-    y_max = max(ε, μ_q)
-    f = q -> uniform_lognormal_convolution_cdf(q, y_min, y_max, σ_ln) - p
-    sol = RS.find_zero(f, RS.BrentsMethod{FT}(ε, q_max), RS.CompactSolution())
-    return sol.root
+    μ_ln = log(max(μ_q, ε))
+    w = _rosenblatt_half_w_dn(
+        ConvolutionQuantilesBracketed(), p, L_dn, σ_ln, 0, 0
+    )
+    return clamp(exp(μ_ln + w), ε, q_max)
 end
 
-@inline function _rosenblatt_dn_half_q_impl(
+@inline function _rosenblatt_lognormal_half_q_dn_impl(
     ::ConvolutionQuantilesHalley,
     p::FT,
     μ_q::FT,
@@ -585,24 +523,12 @@ end
     q_max::FT,
 ) where {FT}
     ε = ϵ_numerics(FT)
-    y_min = max(ε, μ_q - L_dn)
-    y_max = max(ε, μ_q)
-    y_avg = (y_min + y_max) / 2
-    q = y_avg * exp(-σ_ln^2 / 2)
-    for _ in 1:5
-        f = uniform_lognormal_convolution_cdf(q, y_min, y_max, σ_ln) - p
-        fp = uniform_lognormal_convolution_pdf(q, y_min, y_max, σ_ln)
-        fpp = uniform_lognormal_convolution_pdf_prime(q, y_min, y_max, σ_ln)
-        den = 2 * fp^2 - f * fpp
-        abs(den) < ε && break
-        Δ = (2 * f * fp) / den
-        q = clamp(q - Δ, ε, q_max)
-        abs(Δ) < ε * q && break
-    end
-    return q
+    μ_ln = log(max(μ_q, ε))
+    w = _rosenblatt_half_w_dn(ConvolutionQuantilesHalley(), p, L_dn, σ_ln, 0, 0)
+    return clamp(exp(μ_ln + w), ε, q_max)
 end
 
-@inline function _rosenblatt_dn_half_q_impl(
+@inline function _rosenblatt_lognormal_half_q_dn_impl(
     ::ConvolutionQuantilesChebyshevLogEta,
     p::FT,
     μ_q::FT,
@@ -616,13 +542,13 @@ end
     # on the lower half interval [ln(μ_q)-L_dn, ln(μ_q)].
     ε = ϵ_numerics(FT)
     μ_ln = log(max(μ_q, ε))
-    w = dn_half_uniform_gaussian_convolution_quantile_chebyshev(
-        L_dn, σ_ln, N_gl, i_node,
+    w = _rosenblatt_half_w_dn(
+        ConvolutionQuantilesChebyshevLogEta(), p, L_dn, σ_ln, N_gl, i_node,
     )
     return clamp(exp(μ_ln + w), ε, q_max)
 end
 
-@inline function _rosenblatt_up_half_q_impl(
+@inline function _rosenblatt_lognormal_half_q_up_impl(
     ::ConvolutionQuantilesChebyshevLogEta,
     p::FT,
     μ_q::FT,
@@ -636,13 +562,13 @@ end
     # on the upper half interval [ln(μ_q), ln(μ_q)+L_up].
     ε = ϵ_numerics(FT)
     μ_ln = log(max(μ_q, ε))
-    w = up_half_uniform_gaussian_convolution_quantile_chebyshev(
-        L_up, σ_ln, N_gl, i_node,
+    w = _rosenblatt_half_w_up(
+        ConvolutionQuantilesChebyshevLogEta(), p, L_up, σ_ln, N_gl, i_node,
     )
     return clamp(exp(μ_ln + w), ε, q_max)
 end
 
-@inline function _rosenblatt_up_half_q_impl(
+@inline function _rosenblatt_lognormal_half_q_up_impl(
     ::ConvolutionQuantilesBracketed,
     p::FT,
     μ_q::FT,
@@ -651,14 +577,12 @@ end
     q_max::FT,
 ) where {FT}
     ε = ϵ_numerics(FT)
-    y_min = max(ε, μ_q)
-    y_max = max(ε, μ_q + L_up)
-    f = q -> uniform_lognormal_convolution_cdf(q, y_min, y_max, σ_ln) - p
-    sol = RS.find_zero(f, RS.BrentsMethod{FT}(ε, q_max), RS.CompactSolution())
-    return sol.root
+    μ_ln = log(max(μ_q, ε))
+    w = _rosenblatt_half_w_up(ConvolutionQuantilesBracketed(), p, L_up, σ_ln, 0, 0)
+    return clamp(exp(μ_ln + w), ε, q_max)
 end
 
-@inline function _rosenblatt_up_half_q_impl(
+@inline function _rosenblatt_lognormal_half_q_up_impl(
     ::ConvolutionQuantilesHalley,
     p::FT,
     μ_q::FT,
@@ -667,21 +591,9 @@ end
     q_max::FT,
 ) where {FT}
     ε = ϵ_numerics(FT)
-    y_min = max(ε, μ_q)
-    y_max = max(ε, μ_q + L_up)
-    y_avg = (y_min + y_max) / 2
-    q = y_avg * exp(-σ_ln^2 / 2)
-    for _ in 1:5
-        f = uniform_lognormal_convolution_cdf(q, y_min, y_max, σ_ln) - p
-        fp = uniform_lognormal_convolution_pdf(q, y_min, y_max, σ_ln)
-        fpp = uniform_lognormal_convolution_pdf_prime(q, y_min, y_max, σ_ln)
-        den = 2 * fp^2 - f * fpp
-        abs(den) < ε && break
-        Δ = (2 * f * fp) / den
-        q = clamp(q - Δ, ε, q_max)
-        abs(Δ) < ε * q && break
-    end
-    return q
+    μ_ln = log(max(μ_q, ε))
+    w = _rosenblatt_half_w_up(ConvolutionQuantilesHalley(), p, L_up, σ_ln, 0, 0)
+    return clamp(exp(μ_ln + w), ε, q_max)
 end
 
 
@@ -693,8 +605,8 @@ end
 function _integrate_over_sgs_profile_rosenblatt(
     f,
     quad::SGSQuadrature,
-    dist::VerticallyResolvedSGS{<:SubgridProfileRosenblatt},
-    innerD,
+    dist::VerticallyResolvedSGS{<:SubgridProfileRosenblatt, I},
+    innerD::I,
     μ_q,
     μ_T,
     q′q′,
@@ -709,10 +621,25 @@ function _integrate_over_sgs_profile_rosenblatt(
     dqq_dz_up,
     dTT_dz_dn,
     dTT_dz_up,
-)
+    seed,
+) where {I <: Union{GaussianSGS, LogNormalSGS}}
+    # Core layer-profile Rosenblatt integration:
+    # 1) build two half-cell parameter packs (`:dn`, `:up`) from mean and variance
+    #    slopes via `_two_slope_rosenblatt_params`;
+    # 2) outer Gauss-Hermite loop samples `v`;
+    # 3) inner Gauss-Legendre loop inverts half-leg marginals (u for Gaussian,
+    #    transformed ln(q) for LogNormal) using Bracketed/Halley/Chebyshev;
+    # 4) map samples back to `(T, q)` and accumulate weighted tendencies.
+    #
+    # For LogNormal Profile–Rosenblatt, this path treats the q-axis in ln-space
+    # consistently: the incoming `dq_dz_*` are already converted to d(ln q)/dz at
+    # the `integrate_over_sgs` entry point, `_two_slope_rosenblatt_params` builds
+    # the rotated map with that axis, and `_profile_rosenblatt_emit_inner_sample`
+    # converts `(δT, δln q)` to physical `q` only at the final local map.
     FT = typeof(H)
     μ_T_p = convert(FT, μ_T)
     μ_q_p = convert(FT, μ_q)
+    ε = ϵ_numerics(FT)
     σ_q_c, σ_T_c, _ = sgs_stddevs_and_correlation(
         convert(FT, q′q′),
         convert(FT, T′T′),
@@ -732,7 +659,7 @@ function _integrate_over_sgs_profile_rosenblatt(
         χ = quad.a
         wgh = quad.w
         inv_sqrt_pi = one(FT) / sqrt(FT(π))
-        acc = rzero(f(μ_T_p, μ_q_p))
+        acc = rzero(seed)
         sqrt2 = sqrt(FT(2))
         @inbounds for j in 1:N
             vj = sqrt2 * s_v * χ[j]
@@ -744,113 +671,35 @@ function _integrate_over_sgs_profile_rosenblatt(
             if degenerate
                 @inbounds for i in 1:N
                     wi = p_w[i]
-                    if innerD isa LogNormalSGS
-                        # Solve for q_hat directly
-                        # In degenerate case, it's just the conditional LogNormal
-                        σ_q_eff = max(σ_q_c, ε)
-                        μ_q_eff = max(μ_q_p, ε)
-                        ratio = σ_q_eff / μ_q_eff
-                        σ_ln = sqrt(log(one(FT) + ratio^2))
-                        μ_ln = log(μ_q_eff) - σ_ln^2 / 2
-                        
-                        # Conditional parameters given vj
-                        # Normal deviate z_v = vj / s_v (if s_v > 0)
-                        zv = s_v > ε ? vj / s_v : zero(FT)
-                        # Conditional log-mean: μ_ln + ρ * σ_ln * zv
-                        μ_ln_c = μ_ln + ρ_c * σ_ln * zv
-                        σ_ln_c = σ_ln * sqrt(max(zero(FT), one(FT) - ρ_c^2))
-                        
-                        # Quantile p_i of LogNormal(μ_ln_c, σ_ln_c²)
-                        # ln(q) = μ_ln_c + σ_ln_c * sqrt(2) * inv_erf(2p - 1)
-                        # We use the standard Gaussian quantile z_p = quad.a[i]
-                        q_hat = exp(μ_ln_c + sqrt2 * σ_ln_c * χ[i])
-                        q_hat = clamp(q_hat, zero(FT), quad.q_max)
-                        
-                        # Emit sample with q_hat directly
-                        # We still need T_hat. T_hat is Gaussian.
-                        # T = μ_T_p + δvec[1]. 
-                        # Since degenerate and no macro gradient, δvec = M_inv * (μ_0, vj)
-                        vec = SA.SVector(μ_0, vj)
-                        δvec = M_inv * vec
-                        T_hat = max(quad.T_min, μ_T_p + δvec[1])
-                        acc = acc ⊞ f(T_hat, q_hat) ⊠ (wvj * wi)
-                    else
-                        ui = μ_0
-                        acc = _profile_rosenblatt_emit_inner_sample(
-                            acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
-                            quad, M_inv, ui, μ_0, vj, wvj, wi,
-                            method,
-                        )
-                    end
+                    ui = μ_0
+                    acc = _profile_rosenblatt_emit_inner_sample(
+                        acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
+                        quad, M_inv, ui, μ_0, vj, wvj, wi,
+                        method,
+                    )
                 end
             else
                 @inbounds for i in 1:N
                     pi = p_nodes[i]
                     wi_half = p_w[i] * FT(0.5)
-                    if innerD isa LogNormalSGS
-                        # Use exact Uniform-LogNormal convolution
-                        σ_q_eff = max(σ_q_c, ε)
-                        μ_q_eff = max(μ_q_p, ε)
-                        ratio = σ_q_eff / μ_q_eff
-                        σ_ln = sqrt(log(one(FT) + ratio^2))
-                        
-                        # We need the conditional σ_ln given the v-marginal
-                        σ_ln_c = σ_ln * sqrt(max(zero(FT), one(FT) - ρ_c^2))
-                        
-                        # We also need the conditional μ_q shift from the v-marginal.
-                        # In the Gaussian copula, the "base" μ_q for the convolution
-                        # is shifted by the correlation with the v-marginal.
-                        zv = s_v > ε ? vj / s_v : zero(FT)
-                        μ_q_shifted =
-                            μ_q_p * exp(ρ_c * σ_ln * zv - FT(0.5) * ρ_c^2 * σ_ln^2)
-                        
-                        # Lower half-cell
-                        q_hat_dn = _rosenblatt_dn_half_q(
-                            method, pi, μ_q_shifted, L_dn, σ_ln_c, quad.q_max, N, i
-                        )
-                        # Corresponding T_hat
-                        # Since T is Gaussian, we use the copula:
-                        # T = μ_T + σ_T * (ρ * z_q + sqrt(1-ρ²) * z_v)
-                        # z_q is the standard normal deviate of q_hat_dn
-                        z_q_dn = (
-                            log(max(ε, q_hat_dn)) - (
-                                log(max(ε, μ_q_shifted)) - FT(0.5) * σ_ln_c^2
-                            )
-                        ) / max(ε, σ_ln_c)
-                        T_hat_dn = max(quad.T_min, μ_T_p + σ_T_c * (ρ_c * z_q_dn + sqrt(max(zero(FT), one(FT) - ρ_c^2)) * zv))
-                        acc = acc ⊞ f(T_hat_dn, q_hat_dn) ⊠ (wvj * wi_half)
-                        
-                        # Upper half-cell
-                        q_hat_up = _rosenblatt_up_half_q(
-                            method, pi, μ_q_shifted, L_up, σ_ln_c, quad.q_max, N, i
-                        )
-                        z_q_up = (
-                            log(max(ε, q_hat_up)) - (
-                                log(max(ε, μ_q_shifted)) - FT(0.5) * σ_ln_c^2
-                            )
-                        ) / max(ε, σ_ln_c)
-                        T_hat_up = max(quad.T_min, μ_T_p + σ_T_c * (ρ_c * z_q_up + sqrt(max(zero(FT), one(FT) - ρ_c^2)) * zv))
-                        acc = acc ⊞ f(T_hat_up, q_hat_up) ⊠ (wvj * wi_half)
-                    else
-                        ui =
-                            _rosenblatt_dn_half_u(
-                                method, pi, L_dn, s_u_cond_dn, N, i,
-                            ) + μ_0
-                        acc = _profile_rosenblatt_emit_inner_sample(
-                            acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
-                            quad, M_inv, ui, μ_0, vj, wvj, wi_half,
-                            method,
-                        )
-                        ui_up =
-                            _rosenblatt_up_half_u(
-                                method, pi, L_up, s_u_cond_up, N, i,
-                            ) + μ_0
-                        acc = _profile_rosenblatt_emit_inner_sample(
-                            acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
-                            quad, M_inv, ui_up, μ_0, vj, wvj, wi_half,
-                            method,
-                        )
-                    end
+                    ui =
+                        _rosenblatt_half_w_dn(
+                            method, pi, L_dn, s_u_cond_dn, N, i,
+                        ) + μ_0
+                    acc = _profile_rosenblatt_emit_inner_sample(
+                        acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
+                        quad, M_inv, ui, μ_0, vj, wvj, wi_half,
+                        method,
+                    )
+                    ui_up =
+                        _rosenblatt_half_w_up(
+                            method, pi, L_up, s_u_cond_up, N, i,
+                        ) + μ_0
+                    acc = _profile_rosenblatt_emit_inner_sample(
+                        acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
+                        quad, M_inv, ui_up, μ_0, vj, wvj, wi_half,
+                        method,
+                    )
                 end
             end
         end
@@ -873,7 +722,41 @@ function _integrate_over_sgs_profile_rosenblatt(
         mean_gradient_axis = Val(:up),
     )
     if !has_dn && !has_up
-        return f(μ_T_p, μ_q_p)
+        # ‖(d_T, d_q)‖ = 0 on both half-gradient packs: the Rosenblatt half-cell
+        # `uniform ⊛ Gaussian` construction has no axis. Fall back to the **same**
+        # cell-center bivariate Gauss–Hermite rule used by the 2D SGS overload of
+        # `integrate_over_sgs` for [`VerticallyResolvedSGS`](@ref) (see
+        # `sgs_quadrature.jl`), not a single grid-mean sample `f(μ_T, μ_q)` (which
+        # would kill SGS variance for every `f`).
+        σ_q_0, σ_T_0, ρ_0 = sgs_stddevs_and_correlation(
+            convert(FT, q′q′),
+            convert(FT, T′T′),
+            convert(FT, ρ_c),
+        )
+        χ = quad.a
+        weights = quad.w
+        inv_sqrt_pi = one(FT) / sqrt(FT(π))
+        acc0 = rzero(seed)
+        @inbounds for i in eachindex(χ)
+            inner_sum = rzero(acc0)
+            @inbounds for j in eachindex(χ)
+                T_hat, q_hat = get_physical_point(
+                    innerD,
+                    χ[i],
+                    χ[j],
+                    μ_q_p,
+                    μ_T_p,
+                    oftype(μ_T_p, σ_q_0),
+                    oftype(μ_T_p, σ_T_0),
+                    oftype(μ_T_p, ρ_0),
+                    oftype(μ_T_p, quad.T_min),
+                    oftype(μ_T_p, quad.q_max),
+                )
+                inner_sum = inner_sum ⊞ (f(T_hat, q_hat) ⊠ (weights[j] * inv_sqrt_pi))
+            end
+            acc0 = acc0 ⊞ (inner_sum ⊠ (weights[i] * inv_sqrt_pi))
+        end
+        return acc0
     elseif has_dn && has_up
         p_dn = _two_slope_rosenblatt_params(
             μ_T_p, μ_q_p, σT²p, σq²p, ρp,
@@ -935,12 +818,55 @@ end
     )
 end
 
+@inline function _physical_Tq_from_lnq_fluctuations(
+    μ_q::FT,
+    μ_T::FT,
+    δlnq::FT,
+    δT::FT,
+    T_min::FT,
+    q_max::FT,
+) where {FT}
+    ε = ϵ_numerics(FT)
+    q_hat = clamp(exp(log(max(μ_q, ε)) + δlnq), ε, q_max)
+    T_hat = max(T_min, μ_T + δT)
+    return (T_hat, q_hat)
+end
+
 # ----------------------------------------------------------------------------
 # Two-slope helpers (piecewise-linear reconstruction; no persistent fields).
 # ----------------------------------------------------------------------------
 
 @inline function _pick_half_slope(ζ::FT, s_dn::FT, s_up::FT) where {FT}
     return ζ >= zero(FT) ? s_up : s_dn
+end
+
+"""
+    _vertical_layer_mean_q(innerD, μ_q, ζ, dq_dz_dn_eff, dq_dz_up_eff, FT)
+
+Piecewise-linear **layer-center** mean of `q` at vertical offset `ζ` from the
+layer midpoint (same half-slope convention as [`_pick_half_slope`](@ref)).
+
+For [`LogNormalSGS`](@ref), `dq_dz_*_eff` are **ln(q)** slopes along `z`
+(see the `dq_dz_*_eff` projection in [`integrate_over_sgs`](@ref) for vertically
+resolved distributions); the conditional mean follows
+``μ_q(ζ) = \\exp(\\ln μ_q + ζ\\, s_{\\ln q})``. For [`GaussianSGS`](@ref),
+`dq_dz_*_eff` are physical `q` slopes and ``μ_q(ζ) = μ_q + ζ\\, s_q``.
+"""
+@inline function _vertical_layer_mean_q(
+    innerD,
+    μ_q::FT,
+    ζ::FT,
+    dq_dz_dn_eff::FT,
+    dq_dz_up_eff::FT,
+    ::Type{FT},
+) where {FT}
+    sμ_q = _pick_half_slope(ζ, dq_dz_dn_eff, dq_dz_up_eff)
+    if innerD isa LogNormalSGS
+        ε = ϵ_numerics(FT)
+        ln_μ = log(max(μ_q, ε))
+        return exp(ln_μ + ζ * sμ_q)
+    end
+    return μ_q + ζ * sμ_q
 end
 
 """
@@ -1018,7 +944,7 @@ inversion: `s_u_cond_dn` / `s_u_cond_up` come from the rotated turbulent
 covariance at the **lower** / **upper** half-center after the piecewise-linear
 `Σ_{turb}(z)` reconstruction, not from linearly interpolating `σ²_{u|v}` in
 `z` along the half. Half-center `r_fdn`/`r_fup` are included in the return dict for
-inspection; the long-arity [`integrate_over_sgs`](@ref) only applies the center
+inspection; the layer-profile [`integrate_over_sgs`](@ref) overload only applies the center
 ratio `r_c` in the shift on `u`, and does not use a linear-in-`z` conditional
 variance inside the closed-form half marginal.
 
@@ -1158,8 +1084,14 @@ end
 """
     _profile_rosenblatt_emit_inner_sample(...)
 
-Evaluate the subgrid physical state for a given inner convolution quantile `ui` 
-and an outer Gaussian deviate `vj`.
+Evaluate one Profile–Rosenblatt inner sample for a given inner quantile `ui`
+and outer Gaussian deviate `vj`.
+
+For `LogNormalSGS` in Profile–Rosenblatt, the local map is evaluated in
+`(T, ln(q))`: the rotated state provides `(δT, δln(q))`, then `q = exp(ln(μ_q)+δln(q))`
+is applied at the end. This avoids mixing a ln-space Rosenblatt construction with
+the bivariate `get_physical_point(LogNormalSGS, ...)` mapping that expects
+Gaussian `q` fluctuations in physical `q`.
 """
 function _profile_rosenblatt_emit_inner_sample(
     acc,
@@ -1180,17 +1112,27 @@ function _profile_rosenblatt_emit_inner_sample(
     method,
 )
     FT = typeof(μ_T_p)
-    ε = ϵ_numerics(FT)
-    
+
     vec = SA.SVector(ui - μ_0, vj)
     δvec = M_inv * vec
-    
-    T_hat, q_hat = _physical_Tq_from_fluctuations(
-        innerD, μ_q_p, μ_T_p,
-        δvec[2], δvec[1],
-        σ_q_c, σ_T_c, oftype(μ_T_p, ρ_c),
-        quad.T_min, quad.q_max,
-    )
+
+    T_hat, q_hat = if innerD isa LogNormalSGS
+        _physical_Tq_from_lnq_fluctuations(
+            oftype(μ_T_p, μ_q_p),
+            μ_T_p,
+            oftype(μ_T_p, δvec[2]),
+            oftype(μ_T_p, δvec[1]),
+            oftype(μ_T_p, quad.T_min),
+            oftype(μ_T_p, quad.q_max),
+        )
+    else
+        _physical_Tq_from_fluctuations(
+            innerD, μ_q_p, μ_T_p,
+            δvec[2], δvec[1],
+            σ_q_c, σ_T_c, oftype(μ_T_p, ρ_c),
+            quad.T_min, quad.q_max,
+        )
+    end
     return acc ⊞ f(T_hat, q_hat) ⊠ wvj ⊠ wi
 end
 
@@ -1250,7 +1192,8 @@ Dispatch on the layer quadrature type `S`:
     [`_rosenblatt_up_half_u`](@ref)).
 """
 function integrate_over_sgs(
-    f, quad::SGSQuadrature,
+    f,
+    quad::SGSQuadrature{NQ, A, W, D, QFT, ZZ, ZW},
     μ_q, μ_T, q′q′, T′T′, ρ_Tq,
     H, local_geometry,
     grad_q_dn, grad_q_up,
@@ -1258,7 +1201,76 @@ function integrate_over_sgs(
     ∂T∂θ_li,
     grad_qq_dn, grad_qq_up,
     grad_TT_dn, grad_TT_up,
-)
+) where {
+    NQ, A, W,
+    S <: SubgridProfileRosenblatt,
+    I <: Union{GaussianSGS, LogNormalSGS},
+    D <: VerticallyResolvedSGS{S, I},
+    QFT, ZZ, ZW,
+}
+    dist = quad.dist
+    μ_T_p, μ_q_p = promote(μ_T, μ_q)
+    FT = typeof(μ_T_p)
+    innerD = _inner_dist(dist)
+    dq_dz_dn = Geometry.WVector(grad_q_dn, local_geometry)[1]
+    dq_dz_up = Geometry.WVector(grad_q_up, local_geometry)[1]
+    dθ_dz_dn = Geometry.WVector(grad_θ_dn, local_geometry)[1]
+    dθ_dz_up = Geometry.WVector(grad_θ_up, local_geometry)[1]
+    dT_dz_dn = ∂T∂θ_li * dθ_dz_dn
+    dT_dz_up = ∂T∂θ_li * dθ_dz_up
+    dqq_dz_dn = Geometry.WVector(grad_qq_dn, local_geometry)[1]
+    dqq_dz_up = Geometry.WVector(grad_qq_up, local_geometry)[1]
+    dTT_dz_dn = Geometry.WVector(grad_TT_dn, local_geometry)[1]
+    dTT_dz_up = Geometry.WVector(grad_TT_up, local_geometry)[1]
+    dq_dz_dn_eff = dq_dz_dn
+    dq_dz_up_eff = dq_dz_up
+    if innerD isa LogNormalSGS
+        ε = ϵ_numerics(FT)
+        q_face_dn = μ_q_p - dq_dz_dn * (H / FT(2))
+        q_face_up = μ_q_p + dq_dz_up * (H / FT(2))
+        ln_q_mean = log(max(μ_q_p, ε))
+        ln_q_face_dn = log(max(q_face_dn, ε))
+        ln_q_face_up = log(max(q_face_up, ε))
+        dq_dz_dn_eff = (ln_q_mean - ln_q_face_dn) / (H / FT(2))
+        dq_dz_up_eff = (ln_q_face_up - ln_q_mean) / (H / FT(2))
+    end
+    if !(
+        isfinite(μ_T_p) & isfinite(μ_q_p) &
+        isfinite(T′T′) & isfinite(q′q′) & isfinite(ρ_Tq) &
+        isfinite(H) & isfinite(∂T∂θ_li) &
+        isfinite(dq_dz_dn) & isfinite(dq_dz_up) &
+        isfinite(dθ_dz_dn) & isfinite(dθ_dz_up) &
+        isfinite(dT_dz_dn) & isfinite(dT_dz_up) &
+        isfinite(dqq_dz_dn) & isfinite(dqq_dz_up) &
+        isfinite(dTT_dz_dn) & isfinite(dTT_dz_up)
+    )
+        error(
+            "integrate_over_sgs (layer-profile): non-finite SGS layer-mean inputs. " *
+            "μ_T=$(μ_T_p), μ_q=$(μ_q_p), T′T′=$(T′T′), q′q′=$(q′q′), ρ_Tq=$(ρ_Tq), " *
+            "H=$(H), ∂T∂θ=$(∂T∂θ_li), slopes: " *
+            "dq=($(dq_dz_dn),$(dq_dz_up)), dθ=($(dθ_dz_dn),$(dθ_dz_up)), " *
+            "dT=($(dT_dz_dn),$(dT_dz_up)), dqq=($(dqq_dz_dn),$(dqq_dz_up)), " *
+            "dTT=($(dTT_dz_dn),$(dTT_dz_up)).",
+        )
+    end
+    seed = f(μ_T_p, μ_q_p)
+    return _integrate_over_sgs_profile_rosenblatt(
+        f, quad, dist, innerD, μ_q_p, μ_T_p, q′q′, T′T′, ρ_Tq, H,
+        dq_dz_dn_eff, dq_dz_up_eff, dT_dz_dn, dT_dz_up,
+        dqq_dz_dn, dqq_dz_up, dTT_dz_dn, dTT_dz_up, seed,
+    )::typeof(seed)
+end
+
+function integrate_over_sgs(
+    f, quad::SGSQuadrature{NQ, A, W, D, QFT, ZZ, ZW},
+    μ_q, μ_T, q′q′, T′T′, ρ_Tq,
+    H, local_geometry,
+    grad_q_dn, grad_q_up,
+    grad_θ_dn, grad_θ_up,
+    ∂T∂θ_li,
+    grad_qq_dn, grad_qq_up,
+    grad_TT_dn, grad_TT_up,
+) where {NQ, A, W, D <: AbstractSGSDistribution, QFT, ZZ, ZW}
     dist = quad.dist
     μ_T_p, μ_q_p = promote(μ_T, μ_q)
     FT = typeof(μ_T_p)
@@ -1274,6 +1286,20 @@ function integrate_over_sgs(
     dqq_dz_up = Geometry.WVector(grad_qq_up, local_geometry)[1]
     dTT_dz_dn = Geometry.WVector(grad_TT_dn, local_geometry)[1]
     dTT_dz_up = Geometry.WVector(grad_TT_up, local_geometry)[1]
+    dq_dz_dn_eff = dq_dz_dn
+    dq_dz_up_eff = dq_dz_up
+    if innerD isa LogNormalSGS
+        # Keep one vertical model for all vertically resolved LogNormal schemes:
+        # convert reconstructed q-face values to ln(q), then reproject as slopes.
+        ε = ϵ_numerics(FT)
+        q_face_dn = μ_q_p - dq_dz_dn * (H / FT(2))
+        q_face_up = μ_q_p + dq_dz_up * (H / FT(2))
+        ln_q_mean = log(max(μ_q_p, ε))
+        ln_q_face_dn = log(max(q_face_dn, ε))
+        ln_q_face_up = log(max(q_face_up, ε))
+        dq_dz_dn_eff = (ln_q_mean - ln_q_face_dn) / (H / FT(2))
+        dq_dz_up_eff = (ln_q_face_up - ln_q_mean) / (H / FT(2))
+    end
     # Reject any non-finite half-cell means / slopes / F2 terms before the various
     # quadrature paths (prevents `NaN` from bypassing the `α_sq <= ε` early exit in
     # `_two_slope_rosenblatt_params` and then poisoning the inner `u`/`v` map).
@@ -1288,7 +1314,7 @@ function integrate_over_sgs(
         isfinite(dTT_dz_dn) & isfinite(dTT_dz_up)
     )
         error(
-            "integrate_over_sgs (long-arity): non-finite SGS layer-mean inputs. " *
+            "integrate_over_sgs (layer-profile): non-finite SGS layer-mean inputs. " *
             "μ_T=$(μ_T_p), μ_q=$(μ_q_p), T′T′=$(T′T′), q′q′=$(q′q′), ρ_Tq=$(ρ_Tq), " *
             "H=$(H), ∂T∂θ=$(∂T∂θ_li), slopes: " *
             "dq=($(dq_dz_dn),$(dq_dz_up)), dθ=($(dθ_dz_dn),$(dθ_dz_up)), " *
@@ -1297,11 +1323,12 @@ function integrate_over_sgs(
         )
     end
     if dist isa VerticallyResolvedSGS{<:SubgridProfileRosenblatt}
+        seed = f(μ_T_p, μ_q_p)
         return _integrate_over_sgs_profile_rosenblatt(
             f, quad, dist, innerD, μ_q_p, μ_T_p, q′q′, T′T′, ρ_Tq, H,
-            dq_dz_dn, dq_dz_up, dT_dz_dn, dT_dz_up,
-            dqq_dz_dn, dqq_dz_up, dTT_dz_dn, dTT_dz_up,
-        )
+            dq_dz_dn_eff, dq_dz_up_eff, dT_dz_dn, dT_dz_up,
+            dqq_dz_dn, dqq_dz_up, dTT_dz_dn, dTT_dz_up, seed,
+        )::typeof(seed)
     end
     # Center stddevs for inner Hermite (clamped / Cauchy–Schwarz enforced).
     σ_q_c, σ_T_c, ρ_c = sgs_stddevs_and_correlation(q′q′, T′T′, ρ_Tq)
@@ -1319,11 +1346,12 @@ function integrate_over_sgs(
             ζ = (H / FT(2)) * quad.z_t[k]
             wk = quad.z_w[k] / FT(2)
             sμ_T = _pick_half_slope(ζ, dT_dz_dn, dT_dz_up)
-            sμ_q = _pick_half_slope(ζ, dq_dz_dn, dq_dz_up)
             sσT = _pick_half_slope(ζ, dTT_dz_dn, dTT_dz_up)
             sσq = _pick_half_slope(ζ, dqq_dz_dn, dqq_dz_up)
             μ_Tk = μ_T_p + ζ * sμ_T
-            μ_qk = μ_q_p + ζ * sμ_q
+            μ_qk = _vertical_layer_mean_q(
+                innerD, μ_q_p, ζ, dq_dz_dn_eff, dq_dz_up_eff, FT,
+            )
             σT²k = max(T′T′ + ζ * sσT, zero(FT))
             σq²k = max(q′q′ + ζ * sσq, zero(FT))
             σ_Tk = sqrt(σT²k)
@@ -1367,11 +1395,12 @@ function integrate_over_sgs(
                 wi, wj = wgh[i] * inv_sqrt_pi, wgh[j] * inv_sqrt_pi
                 wp = w_z * wi * wj
                 sμ_T = _pick_half_slope(ζ, dT_dz_dn, dT_dz_up)
-                sμ_q = _pick_half_slope(ζ, dq_dz_dn, dq_dz_up)
                 sσT = _pick_half_slope(ζ, dTT_dz_dn, dTT_dz_up)
                 sσq = _pick_half_slope(ζ, dqq_dz_dn, dqq_dz_up)
                 μ_Tk = μ_T_p + ζ * sμ_T
-                μ_qk = μ_q_p + ζ * sμ_q
+                μ_qk = _vertical_layer_mean_q(
+                    innerD, μ_q_p, ζ, dq_dz_dn_eff, dq_dz_up_eff, FT,
+                )
                 σT²k = max(T′T′ + ζ * sσT, zero(FT))
                 σq²k = max(q′q′ + ζ * sσq, zero(FT))
                 σ_Tk = sqrt(σT²k)
@@ -1405,11 +1434,12 @@ function integrate_over_sgs(
             ζ = (H / FT(2)) * quad.z_t[kz]
             wk = quad.z_w[kz] / FT(2)
             sμ_T = _pick_half_slope(ζ, dT_dz_dn, dT_dz_up)
-            sμ_q = _pick_half_slope(ζ, dq_dz_dn, dq_dz_up)
             sσT = _pick_half_slope(ζ, dTT_dz_dn, dTT_dz_up)
             sσq = _pick_half_slope(ζ, dqq_dz_dn, dqq_dz_up)
             μ_Tk = μ_T_p + ζ * sμ_T
-            μ_qk = μ_q_p + ζ * sμ_q
+            μ_qk = _vertical_layer_mean_q(
+                innerD, μ_q_p, ζ, dq_dz_dn_eff, dq_dz_up_eff, FT,
+            )
             σT²k = max(T′T′ + ζ * sσT, zero(FT))
             σq²k = max(q′q′ + ζ * sσq, zero(FT))
             σ_Tk = sqrt(σT²k)
@@ -1451,11 +1481,12 @@ function integrate_over_sgs(
         @inbounds for k in 1:N
             ζ = (H / FT(2)) * quad.z_t[k]
             sμ_T = _pick_half_slope(ζ, dT_dz_dn, dT_dz_up)
-            sμ_q = _pick_half_slope(ζ, dq_dz_dn, dq_dz_up)
             sσT = _pick_half_slope(ζ, dTT_dz_dn, dTT_dz_up)
             sσq = _pick_half_slope(ζ, dqq_dz_dn, dqq_dz_up)
             μ_Tk = μ_T_p + ζ * sμ_T
-            μ_qk = μ_q_p + ζ * sμ_q
+            μ_qk = _vertical_layer_mean_q(
+                innerD, μ_q_p, ζ, dq_dz_dn_eff, dq_dz_up_eff, FT,
+            )
             σT²k = max(T′T′ + ζ * sσT, zero(FT))
             σq²k = max(q′q′ + ζ * sσq, zero(FT))
             σ_Tk = sqrt(σT²k)
@@ -1567,11 +1598,12 @@ function integrate_over_sgs(
         @inbounds for k in 1:N
             ζ = (H / FT(2)) * quad.z_t[k]
             sμ_T = _pick_half_slope(ζ, dT_dz_dn, dT_dz_up)
-            sμ_q = _pick_half_slope(ζ, dq_dz_dn, dq_dz_up)
             sσT = _pick_half_slope(ζ, dTT_dz_dn, dTT_dz_up)
             sσq = _pick_half_slope(ζ, dqq_dz_dn, dqq_dz_up)
             μ_Tk = μ_T_p + ζ * sμ_T
-            μ_qk = μ_q_p + ζ * sμ_q
+            μ_qk = _vertical_layer_mean_q(
+                innerD, μ_q_p, ζ, dq_dz_dn_eff, dq_dz_up_eff, FT,
+            )
             σT²k = max(T′T′ + ζ * sσT, zero(FT))
             σq²k = max(q′q′ + ζ * sσq, zero(FT))
             σ_Tk = sqrt(σT²k)
@@ -1615,5 +1647,5 @@ function integrate_over_sgs(
         return acc
     end
 
-    error("integrate_over_sgs (long-arity): unsupported distribution $(typeof(dist)).")
+    error("integrate_over_sgs (layer-profile): unsupported distribution $(typeof(dist)).")
 end

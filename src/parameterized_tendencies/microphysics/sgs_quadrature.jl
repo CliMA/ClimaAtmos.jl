@@ -408,9 +408,9 @@ end
     _inner_dist(dist::VerticallyResolvedSGS{S, I})
 
 Return the inner bivariate distribution instance (`GaussianSGS()` or `LogNormalSGS()`)
-from a [`VerticallyResolvedSGS`](@ref). Used by both the short-arity
-[`integrate_over_sgs`](@ref) (cell-center bivariate path) and the long-arity method
-(layer-profile path in `subgrid_layer_profile_quadrature.jl`).
+from a [`VerticallyResolvedSGS`](@ref). Used by both the cell-center
+[`integrate_over_sgs`](@ref) overload (bivariate path) and the layer-profile overload
+defined in `subgrid_layer_profile_quadrature.jl`.
 """
 @inline _inner_dist(::VerticallyResolvedSGS{<:Any, GaussianSGS}) = GaussianSGS()
 @inline _inner_dist(::VerticallyResolvedSGS{<:Any, LogNormalSGS}) = LogNormalSGS()
@@ -712,9 +712,9 @@ for the distribution type in `quad`, and evaluates the Gauss-Hermite quadrature.
 Temperature is always Gaussian; the distribution of specific humidity is
 determined by `quad.dist` (see [`get_physical_point`](@ref)).
 
-# Relation to long-arity `integrate_over_sgs`
+# Relation to layer-profile `integrate_over_sgs`
 
-Both approximate ``\\mathbb{E}[f]`` over SGS noise. The long-arity method (defined in
+Both approximate ``\\mathbb{E}[f]`` over SGS noise. The layer-profile overload (defined in
 `subgrid_layer_profile_quadrature.jl`) takes additional arguments: **layer thickness,
 `LocalGeometry`, and subcell gradients** as part of the public contract for vertically
 resolved SGS.
@@ -724,7 +724,7 @@ resolved SGS.
 For [`AbstractVerticallyResolvedSGS`](@ref), the branch below applies only a
 **bivariate (T, q)** map at cell center (inner `GaussianSGS` / `LogNormalSGS`); the
 **layer-profile** type parameter `S` is not used. Layer-mean, gradient-aware rules
-use the long-arity `integrate_over_sgs` (0M saturation, and 1M via
+use the layer-profile `integrate_over_sgs` overload (0M saturation, and 1M via
 [`microphysics_tendencies_1m_sgs_row`](@ref); column tensor, LHS, principal axis,
 Voronoi/barycentric seeds, profile–Rosenblatt, …). Bivariate **1M** only dispatches
 [`microphysics_tendencies_1m`](@ref) for base

@@ -5,6 +5,7 @@ Unit tests for SGS Quadrature utilities (src/cache/sgs_quadrature.jl)
 using Test
 using ClimaAtmos
 using Statistics
+using StaticArrays
 
 import ClimaComms
 import ClimaCore: Domains, Geometry, Meshes, Topologies, Spaces, Grids, Fields
@@ -186,31 +187,29 @@ end
         @test sum(dens) * step(xs) ≈ 1 rtol = 0.02
     end
 
-    @testset "uniform_lognormal_convolution (univariate)" begin
+    @testset "lognormal half quantiles match transformed uniform-normal" begin
         for FT in (Float32, Float64)
-            @testset "FT = $FT" begin
-                μ_q = FT(1.0)
-                L = FT(0.5)
-                σ_ln = FT(0.3)
-                y_min = μ_q - L / 2
-                y_max = μ_q + L / 2
-                
-                # Test CDF property: F(0) ≈ 0, F(∞) ≈ 1
-                @test ClimaAtmos.uniform_lognormal_convolution_cdf(FT(0.0), y_min, y_max, σ_ln) ≈ FT(0.0) atol = 1e-6
-                @test ClimaAtmos.uniform_lognormal_convolution_cdf(FT(10.0), y_min, y_max, σ_ln) ≈ FT(1.0) atol = 1e-4
-                
-                # Test PDF integration: ∫ f(q) dq ≈ 1
-                qs = range(FT(0.01), FT(5.0); length = 2000)
-                dens = [ClimaAtmos.uniform_lognormal_convolution_pdf(q, y_min, y_max, σ_ln) for q in qs]
-                @test sum(dens) * (qs[2] - qs[1]) ≈ FT(1.0) rtol = 0.01
-                
-                # Test CDF matches integration of PDF
-                q_test = FT(1.2)
-                f_q = ClimaAtmos.uniform_lognormal_convolution_cdf(q_test, y_min, y_max, σ_ln)
-                qs_part = range(FT(0.001), q_test; length = 2000)
-                dens_part = [ClimaAtmos.uniform_lognormal_convolution_pdf(q, y_min, y_max, σ_ln) for q in qs_part]
-                @test f_q ≈ sum(dens_part) * (qs_part[2] - qs_part[1]) rtol = 0.01
-            end
+            μ_q = FT(0.012)
+            L_dn = FT(0.004)
+            L_up = FT(0.003)
+            σ_ln = FT(0.35)
+            q_max = FT(1)
+            p = FT(0.37)
+            N = 3
+            i_node = 2
+            μ_ln = log(μ_q)
+            q_dn_b = ClimaAtmos._rosenblatt_lognormal_half_q_dn(
+                ClimaAtmos.ConvolutionQuantilesBracketed(),
+                p, μ_q, L_dn, σ_ln, q_max, N, i_node,
+            )
+            q_dn_ref = exp(μ_ln + ClimaAtmos.dn_half_uniform_gaussian_convolution_quantile_brent(p, L_dn, σ_ln))
+            q_up_h = ClimaAtmos._rosenblatt_lognormal_half_q_up(
+                ClimaAtmos.ConvolutionQuantilesHalley(),
+                p, μ_q, L_up, σ_ln, q_max, N, i_node,
+            )
+            q_up_ref = exp(μ_ln + ClimaAtmos.up_half_uniform_gaussian_convolution_quantile_halley(p, L_up, σ_ln))
+            @test q_dn_b ≈ q_dn_ref rtol = FT(1e-6) atol = FT(1e-8)
+            @test q_up_h ≈ q_up_ref rtol = FT(1e-6) atol = FT(1e-8)
         end
     end
 
@@ -240,8 +239,8 @@ end
     end
 
     @testset "LogNormal Chebyshev path uses 1D ln(q)-space tables" begin
-        # Guard against method-label mismatch: ChebyshevLogEta must run its own
-        # LogNormal path (with table lookup/interpolation), not dispatch Halley.
+        # LogNormal reuses Gaussian 1D coefficient tables in transformed space.
+        # Quantiles should remain close to Halley for the same transformed law.
         FT = Float64
         N = 3
         i_node = 2
@@ -255,25 +254,25 @@ end
         coeffs_ln = ClimaAtmos.chebyshev_convolution_coeffs(ClimaAtmos.LogNormalSGS(), FT, N, i_node)
         coeffs_g = ClimaAtmos.chebyshev_convolution_coeffs(ClimaAtmos.GaussianSGS(), FT, N, i_node)
         @test coeffs_ln == coeffs_g
-        q_dn_ch = ClimaAtmos._rosenblatt_dn_half_q(
+        q_dn_ch = ClimaAtmos._rosenblatt_lognormal_half_q_dn(
             ClimaAtmos.ConvolutionQuantilesChebyshevLogEta(),
             p, μ_q, L_dn, σ_ln, q_max, N, i_node,
         )
-        q_dn_h = ClimaAtmos._rosenblatt_dn_half_q(
+        q_dn_h = ClimaAtmos._rosenblatt_lognormal_half_q_dn(
             ClimaAtmos.ConvolutionQuantilesHalley(),
             p, μ_q, L_dn, σ_ln, q_max, N, i_node,
         )
-        q_up_ch = ClimaAtmos._rosenblatt_up_half_q(
+        q_up_ch = ClimaAtmos._rosenblatt_lognormal_half_q_up(
             ClimaAtmos.ConvolutionQuantilesChebyshevLogEta(),
             p, μ_q, L_up, σ_ln, q_max, N, i_node,
         )
-        q_up_h = ClimaAtmos._rosenblatt_up_half_q(
+        q_up_h = ClimaAtmos._rosenblatt_lognormal_half_q_up(
             ClimaAtmos.ConvolutionQuantilesHalley(),
             p, μ_q, L_up, σ_ln, q_max, N, i_node,
         )
         @test isfinite(q_dn_ch) && isfinite(q_up_ch)
-        @test abs(q_dn_ch - q_dn_h) > FT(10) * eps(FT)
-        @test abs(q_up_ch - q_up_h) > FT(10) * eps(FT)
+        @test q_dn_ch ≈ q_dn_h rtol = FT(1e-3) atol = FT(1e-8)
+        @test q_up_ch ≈ q_up_h rtol = FT(1e-3) atol = FT(1e-8)
     end
 
     @testset "Gauss-Hermite Quadrature" begin
@@ -1430,6 +1429,132 @@ end
             gzero, gzero, gzero, gzero,
         )
         @test ict ≈ ipr rtol = FT(0.05) atol = FT(1e-4)
+    end
+
+    @testset "Reference primitives: U⊛N Brent quantile inverts analytic CDF" begin
+        # `uniform_gaussian_convolution_cdf` is closed-form; `centered_uniform_gaussian_convolution_quantile_brent`
+        # inverts it. This is a non-cheatable roundtrip (no quadrature, no SGS heuristics).
+        for FT in (Float64, Float32)
+            rtolv = FT === Float32 ? FT(1e-4) : FT(1e-5)
+            atolv = FT === Float32 ? FT(1e-4) : FT(1e-5)
+            for L in (FT(0.2), FT(0.6), FT(1.0))
+                for s in (FT(0.05), FT(0.2), FT(0.5))
+                    for p in (FT(0.03), FT(0.2), FT(0.5), FT(0.8), FT(0.97))
+                        w = ClimaAtmos.centered_uniform_gaussian_convolution_quantile_brent(p, L, s)
+                        @test ClimaAtmos.uniform_gaussian_convolution_cdf(w, L, s) ≈ p rtol = rtolv atol = atolv
+                    end
+                end
+            end
+        end
+    end
+
+    @testset "Reference: all-zero subcell vertical gradients, Profile–Rosenblatt vs bivariate SGS" begin
+        # Spec: with **no** vertical mean-gradient or F2 (variance-gradient) subgrid structure, the
+        # profile–Rosenblatt discretization must still approximate the **same** cell-center
+        # bivariate (T, q) SGS as short-arity `integrate_over_sgs` (same inner I and same moments),
+        # not a single point evaluation f(μ_T, μ_q). Nonlinear f exposes missing variance; using
+        # centered second moments is numerically well-scaled.
+        using ClimaCore.Geometry
+        for FT in (Float64, Float32)
+            Nq = 4
+            T_min, q_max = FT(150), FT(0.1)
+            lg = _fd_column_center_local_geometry(FT; ilevel = 4)
+            μ_q = FT(0.012)
+            μ_T = FT(285)
+            qv = FT(1e-6)
+            Tv = FT(0.4)
+            ρc = FT(0.55)
+            H = FT(400)
+            ∂T∂θ = FT(0.45)
+            g0 = Covariant123Vector(FT(0), FT(0), FT(0))
+            short_args = (μ_q, μ_T, qv, Tv, ρc)
+            long_args = (
+                μ_q, μ_T, qv, Tv, ρc, H, lg,
+                g0, g0, g0, g0, ∂T∂θ,
+                g0, g0, g0, g0,
+            )
+            quad_g = ClimaAtmos.SGSQuadrature(
+                FT; quadrature_order = Nq, distribution = ClimaAtmos.GaussianSGS(), T_min, q_max
+            )
+            quad_ln = ClimaAtmos.SGSQuadrature(
+                FT; quadrature_order = Nq, distribution = ClimaAtmos.LogNormalSGS(), T_min, q_max
+            )
+            for M in (
+                ClimaAtmos.ConvolutionQuantilesHalley,
+                ClimaAtmos.ConvolutionQuantilesBracketed,
+            )
+                q_pr_g = ClimaAtmos.SGSQuadrature(
+                    FT; quadrature_order = Nq,
+                    distribution = ClimaAtmos.VerticallyResolvedSGS{
+                        ClimaAtmos.SubgridProfileRosenblatt{M},
+                        ClimaAtmos.GaussianSGS,
+                    }(),
+                    T_min, q_max,
+                )
+                q_pr_ln = ClimaAtmos.SGSQuadrature(
+                    FT; quadrature_order = Nq,
+                    distribution = ClimaAtmos.VerticallyResolvedSGS{
+                        ClimaAtmos.SubgridProfileRosenblatt{M},
+                        ClimaAtmos.LogNormalSGS,
+                    }(),
+                    T_min, q_max,
+                )
+                fT(T, q) = (T - μ_T)^2
+                fQ(T, q) = (q - μ_q)^2
+                refT = ClimaAtmos.integrate_over_sgs(fT, quad_g, short_args...)
+                refQ = ClimaAtmos.integrate_over_sgs(fQ, quad_ln, short_args...)
+                longT = ClimaAtmos.integrate_over_sgs(fT, q_pr_g, long_args...)
+                longQ = ClimaAtmos.integrate_over_sgs(fQ, q_pr_ln, long_args...)
+                # Tight bivariate-identity tolerances: both moments are O(0.1–1) here.
+                @test longT ≈ refT rtol = FT(1e-2) atol = FT(1e-3)
+                @test longQ ≈ refQ rtol = FT(1e-2) atol = FT(1e-3)
+            end
+        end
+    end
+
+    @testset "Spec regression: LogNormal Rosenblatt inner sample must use ln(q) displacement" begin
+        # Directly probes the inner sample map used by Profile–Rosenblatt.
+        # In the pure-q direction (δT=0, δq = u), the intended ln-space model is:
+        #   q = exp(log(μ_q) + u)
+        # If the implementation treats `u` as a physical-q displacement before applying
+        # LogNormal get_physical_point, this assertion fails.
+        FT = Float64
+        μ_q = FT(0.012)
+        μ_T = FT(285)
+        σ_q = FT(1e-3)
+        σ_T = FT(0.6)
+        ρ = FT(0)
+        quad = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 3,
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+                ClimaAtmos.LogNormalSGS,
+            }(),
+        )
+        # δvec = M_inv * [u - μ0, v]; choose row2=[1,0], row1=[0,0] => δq = u, δT = 0.
+        M_inv = @SMatrix [FT(0) FT(0); FT(1) FT(0)]
+        u = FT(0.03)
+        q_prod = ClimaAtmos._profile_rosenblatt_emit_inner_sample(
+            zero(FT),
+            (T, q) -> q,
+            ClimaAtmos.LogNormalSGS(),
+            μ_q,
+            μ_T,
+            σ_q,
+            σ_T,
+            ρ,
+            quad,
+            M_inv,
+            u,
+            zero(FT),   # μ0
+            zero(FT),   # v
+            one(FT),    # outer weight
+            one(FT),    # inner weight
+            ClimaAtmos.ConvolutionQuantilesBracketed(),
+        )
+        q_spec = exp(log(μ_q) + u)
+        @test q_prod ≈ q_spec rtol = FT(1e-3) atol = FT(1e-8)
     end
 
     @testset "integrate_over_sgs rejects non-finite half-cell inputs (Profile Rosenblatt)" begin

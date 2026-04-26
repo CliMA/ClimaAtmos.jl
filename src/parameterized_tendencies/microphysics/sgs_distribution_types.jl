@@ -48,7 +48,7 @@ abstract type AbstractSubgridLayerProfileQuadrature end
 
 """
 Reference tensor quadrature: Gauss–Legendre in layer height × inner fluctuation rule.
-See the column-tensor branch of the long-arity [`integrate_over_sgs`](@ref).
+See the column-tensor branch of the layer-profile [`integrate_over_sgs`](@ref) overload.
 """
 struct SubgridColumnTensor <: AbstractSubgridLayerProfileQuadrature end
 
@@ -57,7 +57,7 @@ struct SubgridColumnTensor <: AbstractSubgridLayerProfileQuadrature end
 
 Structured ``N^2`` pairing: permute which Gauss–Legendre ``z`` level is tied to each
 Hermite fluctuation node in ``(T,q)`` (LHS-style staggering). See the
-Latin-hypercube-``z`` branch of the long-arity [`integrate_over_sgs`](@ref).
+Latin-hypercube-``z`` branch of the layer-profile [`integrate_over_sgs`](@ref) overload.
 """
 struct SubgridLatinHypercubeZ <: AbstractSubgridLayerProfileQuadrature end
 
@@ -66,7 +66,7 @@ struct SubgridLatinHypercubeZ <: AbstractSubgridLayerProfileQuadrature end
 
 Cheap inner fluctuation rule: one Gauss–Hermite line along the dominant correlation axis
 instead of a full ``N \\times N`` inner tensor. Implemented in the principal-axis branch
-of the long-arity [`integrate_over_sgs`](@ref).
+of the layer-profile [`integrate_over_sgs`](@ref) overload.
 """
 struct SubgridPrincipalAxisLayer <: AbstractSubgridLayerProfileQuadrature end
 
@@ -74,7 +74,7 @@ struct SubgridPrincipalAxisLayer <: AbstractSubgridLayerProfileQuadrature end
     SubgridVoronoiRepresentatives <: AbstractSubgridLayerProfileQuadrature
 
 ``N^2`` representatives chosen from a dense index pool via Voronoi-style clustering
-(see the Voronoi branch of the long-arity [`integrate_over_sgs`](@ref)).
+(see the Voronoi branch of the layer-profile [`integrate_over_sgs`](@ref) overload).
 """
 struct SubgridVoronoiRepresentatives <: AbstractSubgridLayerProfileQuadrature end
 
@@ -83,8 +83,8 @@ struct SubgridVoronoiRepresentatives <: AbstractSubgridLayerProfileQuadrature en
 
 Deterministic ``N^2`` seeds in ``(z, \\text{index})`` space with barycentric mass
 accumulation from streamed candidates. See the barycentric-seeds branch of
-the long-arity [`integrate_over_sgs`](@ref); `quadrature_order` must match seed layout
-in the kernel.
+the layer-profile [`integrate_over_sgs`](@ref) overload; `quadrature_order` must match
+seed layout in the kernel.
 """
 struct SubgridBarycentricSeeds <: AbstractSubgridLayerProfileQuadrature end
 
@@ -143,7 +143,7 @@ const DefaultGridscaleProfileQuadrature =
     AbstractVerticallyResolvedSGS <: AbstractSGSDistribution
 
 Subtypes use the cell's **vertical extent** (Δz, faces, gradients) for SGS quadrature
-and saturation adjustment via long-arity [`integrate_over_sgs`](@ref). See
+and saturation adjustment via the layer-profile [`integrate_over_sgs`](@ref) overload. See
 [`AbstractSubgridLayerProfileQuadrature`](@ref) for the available layer-profile
 discretization schemes.
 """
@@ -160,10 +160,10 @@ quadrature (default [`DefaultGridscaleProfileQuadrature`](@ref) = profile–Rose
 # Glossary
 
 - **Vertically resolved SGS:** quadrature through the cell's vertical extent
-  (`S`, **Δz**, faces, gradients) via long-arity [`integrate_over_sgs`](@ref),
+  (`S`, **Δz**, faces, gradients) via the layer-profile [`integrate_over_sgs`](@ref) overload,
   plus row-style microphysics entrypoints.
 - **Center-only:** [`GaussianSGS`](@ref) / [`LogNormalSGS`](@ref) / [`GridMeanSGS`](@ref)
-  + short-arity [`integrate_over_sgs`](@ref).
+  + the cell-center [`integrate_over_sgs`](@ref) overload.
 """
 struct VerticallyResolvedSGS{
     S <: AbstractSubgridLayerProfileQuadrature,
