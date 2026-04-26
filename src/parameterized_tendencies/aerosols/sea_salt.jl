@@ -31,66 +31,62 @@ end
 
 
 """
-    gong2003_dF_dr(r, u_10, theta)
+    _gong2003_r_integrand(r, theta)
 
-Gong (2003) sea salt number emission spectrum (particles m⁻² s⁻¹ μm⁻¹) at
-dry radius `r` (μm), 10 m wind speed `u_10` (m s⁻¹), and temperature-
-dependent parameter `theta`.
+The radius-dependent part of the Gong (2003) integrand with u_10 and SST
+factored out:
 
-Reference: Gong, S. L. (2003), A parameterization of sea-salt aerosol source
-function for sub- and super-micron particles, Global Biogeochem. Cycles,
-17(4), 1097, doi:10.1029/2003GB002079.
+    dF/dr = 1.373 · u_10^3.41 · SST_factor(SST) · _gong2003_r_integrand(r, theta)
+
+This factorization allows the r-integral to be precomputed once per bin.
 """
-function gong2003_dF_dr(r, u_10, ϴ, SST; SST_adj=true)
-    A = 4.7 * (1 + ϴ * r)^(-0.017 * r^(-1.44))
+function _gong2003_r_integrand(r, theta)
+    A = 4.7 * (1 + theta * r)^(-0.017 * r^(-1.44))
     B = (0.433 - log10(r)) / 0.433
-
-    dF_dr = 1.373 * u_10^3.41 * r^(-A) * (1 + 0.057 * r^3.45) * 10^(1.607 * exp(-B^2))
-
-    if SST_adj
-        SST_factor = 0.3 + 0.1 * SST - 0.0076 * SST^2 + 0.00021 * SST^3
-        dF_dr *= SST_factor
-    end
-
-    return dF_dr
+    return 1.373 * r^(-A) * (1 + 0.057 * r^3.45) * 10^(1.607 * exp(-B^2))
 end
 
-"""
-    integrate_bin_gong2003(r_lo, r_hi, u_10, theta, SST, ::Val{N}) where {N}
-
-Integrate `gong2003_dF_dr` over the radius interval [r_lo, r_hi] (μm) using
-an N-point composite trapezoidal rule. Returns particle number flux
-(particles m⁻² s⁻¹) for the bin.
-
-Using `Val{N}` keeps N a compile-time constant so this is GPU-compatible.
-The number of quadrature points is set by the caller via e.g. `Val(32)`.
-"""
-function integrate_bin_gong2003(r_lo, r_hi, u_10, theta, SST, ::Val{N}) where {N}
+# Precompute ∫_{r_lo}^{r_hi} _gong2003_r_integrand(r, 30) dr for each bin
+# using a high-accuracy 512-point trapezoidal rule at Float64 precision.
+# This runs once at module load time, not per timestep or grid cell.
+function _precompute_bin_integral(r_lo, r_hi, N = 512)
+    theta = 30.0
     dr = (r_hi - r_lo) / N
-    # trapezoidal: 0.5 * (f(r0) + f(rN)) + sum f(r1..r_{N-1})
-    s = (gong2003_dF_dr(r_lo, u_10, theta, SST) + gong2003_dF_dr(r_hi, u_10, theta, SST)) / 2
-    s += sum(ntuple(i -> gong2003_dF_dr(r_lo + i * dr, u_10, theta, SST), Val(N - 1)))
+    s = (_gong2003_r_integrand(r_lo, theta) + _gong2003_r_integrand(r_hi, theta)) / 2
+    for i in 1:(N - 1)
+        s += _gong2003_r_integrand(r_lo + i * dr, theta)
+    end
     return s * dr
 end
+
+const SEA_SALT_BIN_R_INTEGRALS = ntuple(
+    i -> _precompute_bin_integral(SEA_SALT_BIN_BOUNDS[i]...),
+    Val(5),
+)
 
 """
     sea_salt_emission_flux(u_10, T_sfc, bin_index)
 
 Compute the upward sea salt number flux (particles m⁻² s⁻¹) for the bin
-given by `bin_index` (1–5, corresponding to SSLT01–SSLT05), using the
-Gong (2003) parameterization integrated over the bin's radius range.
+given by `bin_index` (1–5) using Gong (2003).
 
-`u_10` is 10 m wind speed (m s⁻¹), `T_sfc` is sea surface temperature (K).
+The r-integral is precomputed once per bin at module load time
+(`SEA_SALT_BIN_R_INTEGRALS`). At runtime this reduces to:
 
-TODO: convert number flux → mass flux (kg m⁻² s⁻¹) using assumed particle
-density and bin mean radius.
+    F = bin_integral · u_10^3.41 · SST_factor(T_sfc)
+
 TODO: add SST-dependent theta correction (currently fixed at theta = 30).
 TODO: apply land-sea mask upstream so this is only called over ocean.
 """
-function sea_salt_emission_flux(u_10, T_sfc, bin_index)
-    theta = typeof(u_10)(30) # default value from Gong (2003)
-    r_lo, r_hi = typeof(u_10).(SEA_SALT_BIN_BOUNDS[bin_index])
-    return integrate_bin_gong2003(r_lo, r_hi, u_10, theta, T_sfc, Val(32))
+function sea_salt_emission_flux(u_10, T_sfc, bin_index; SST_adj = true)
+    FT = typeof(u_10)
+    bin_integral = FT(SEA_SALT_BIN_R_INTEGRALS[bin_index])
+    number_flux = bin_integral * u_10^FT(3.41)
+    if SST_adj
+        SST_factor = FT(0.3) + FT(0.1) * T_sfc - FT(0.0076) * T_sfc^2 + FT(0.00021) * T_sfc^3
+        number_flux *= SST_factor
+    end
+    return number_flux
 end
 
 """
@@ -163,6 +159,17 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
     )
     T_sfc = sfc_conditions.T_sfc
     ocean_fraction = p.ocean_fraction
+    aero_params = p.params.prescribed_aerosol_params
+    bin_radii = (
+        aero_params.SSLT01_radius, aero_params.SSLT02_radius, aero_params.SSLT03_radius,
+        aero_params.SSLT04_radius, aero_params.SSLT05_radius,
+    )
+    # Precompute mass per particle for each bin once — constant, independent of
+    # grid cell state, so no reason to recompute inside the broadcast.
+    mass_per_particle = ntuple(
+        i -> FT(4 / 3 * π * bin_radii[i]^3 * aero_params.seasalt_density),
+        Val(5),
+    )
 
     for (bin_index, name) in enumerate(aerosol_names)
         ρχ_name = Symbol(:ρ, name)
@@ -170,8 +177,9 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
         ᶜρχₜ = getproperty(Yₜ.c, ρχ_name)
         ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
 
+        m_p = mass_per_particle[bin_index]
         sfc_flux = p.scratch.sfc_temp_C3
-        @. sfc_flux = C3(sea_salt_emission_flux(u_10, T_sfc, bin_index) * ocean_fraction)
+        @. sfc_flux = C3(sea_salt_emission_flux(u_10, T_sfc, bin_index) * m_p * ocean_fraction)
 
         btt = boundary_tendency_scalar(ᶜχ, sfc_flux)
         @. ᶜρχₜ += btt
