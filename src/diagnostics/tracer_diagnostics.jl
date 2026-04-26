@@ -127,41 +127,53 @@ function compute_sea_salt!(out, state, cache, time)
 end
 
 function compute_sea_salt_column!(out, state, cache, time)
-    :prescribed_aerosols_field in propertynames(cache.tracers) ||
-        error("Aerosols do not exist in the model")
-    any(
-        x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
-        [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05],
-    ) || error("Sea salt does not exist in the model")
+    has_prognostic =
+        any(n -> hasproperty(state.c, Symbol(:ρ, n)), [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05])
+    has_prescribed =
+        :prescribed_aerosols_field in propertynames(cache.tracers) &&
+        any(
+            x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
+            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05],
+        )
+    has_prognostic || has_prescribed || error("Sea salt does not exist in the model")
+
+    # column_integral_definite! integrates kg/m³ over altitude to give kg/m²,
+    # so aero_conc must be in kg/m³ (not mixing ratio kg/kg).
+    # Prognostic: ρχ is already kg/m³. Prescribed: multiply mixing ratio by ρ.
+    aero_conc = cache.scratch.ᶜtemp_scalar
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
-        aero_conc = cache.scratch.ᶜtemp_scalar
         @. aero_conc = 0
-        for prescribed_aerosol_name in
-            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field * state.c.ρ
+        if has_prognostic
+            for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+                ρχ_name = Symbol(:ρ, name)
+                if hasproperty(state.c, ρχ_name)
+                    @. aero_conc += getproperty(state.c, ρχ_name)
+                end
+            end
+        else
+            for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+                if name in propertynames(cache.tracers.prescribed_aerosols_field)
+                    @. aero_conc += getproperty(cache.tracers.prescribed_aerosols_field, name) * state.c.ρ
+                end
             end
         end
         Operators.column_integral_definite!(out, aero_conc)
         return out
     else
-        aero_conc = cache.scratch.ᶜtemp_scalar
         @. aero_conc = 0
-        for prescribed_aerosol_name in
-            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field * state.c.ρ
+        if has_prognostic
+            for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+                ρχ_name = Symbol(:ρ, name)
+                if hasproperty(state.c, ρχ_name)
+                    @. aero_conc += getproperty(state.c, ρχ_name)
+                end
+            end
+        else
+            for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+                if name in propertynames(cache.tracers.prescribed_aerosols_field)
+                    @. aero_conc += getproperty(cache.tracers.prescribed_aerosols_field, name) * state.c.ρ
+                end
             end
         end
         Operators.column_integral_definite!(out, aero_conc)
