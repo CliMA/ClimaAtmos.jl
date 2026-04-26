@@ -12,7 +12,9 @@
 # (constant on that half’s segment in `u`). There is **no** implemented closed form for a
 # linear-in-`z` conditional variance inside the half’s inner marginal; variance
 # slopes from the cache still enter the **half-center** reconstruction that sets
-# `s_u_cond_dn` / `s_u_cond_up`. The `uniform_gaussian_convolution_*` primitives
+# `s_u_cond_dn` / `s_u_cond_up`. Outer `v` uses **per-half** marginal scales `s_v_fdn` / `s_v_fup`
+# and shifts `r_fdn` / `r_fup` from the same half-center `Σ` as each inner `u` leg (same `χ[j]`,
+# same Gauss–Hermite weights). The `uniform_gaussian_convolution_*` primitives
 # below are the analytic core (`erf` / Mills integral algebra only).
 
 import ClimaCore.Geometry as Geometry
@@ -647,12 +649,21 @@ function _integrate_over_sgs_profile_rosenblatt(
     )
     method = _profile_rosenblatt_method(dist)
     function _profile_rosenblatt_accumulate(params)
-        (;
-            M_inv, s_v,
-            L_dn, L_up,
-            s_u_cond_c, s_u_cond_dn, s_u_cond_up,
-            r_c,
-        ) = params
+        M_inv = params.M_inv
+        s_v_fdn = params.s_v_fdn
+        s_v_fup = params.s_v_fup
+        L_dn = params.L_dn
+        L_up = params.L_up
+        s_u_cond_c = params.s_u_cond_c
+        s_u_cond_dn = params.s_u_cond_dn
+        s_u_cond_up = params.s_u_cond_up
+        r_c = params.r_c
+        r_fdn = params.r_fdn
+        r_fup = params.r_fup
+        σ_T_fdn = params.σ_T_fdn
+        σ_q_fdn = params.σ_q_fdn
+        σ_T_fup = params.σ_T_fup
+        σ_q_fup = params.σ_q_fup
         ε = ϵ_numerics(FT)
         N = quadrature_order(quad)
         p_nodes, p_w = gauss_legendre_01(FT, N)
@@ -662,44 +673,93 @@ function _integrate_over_sgs_profile_rosenblatt(
         acc = rzero(seed)
         sqrt2 = sqrt(FT(2))
         @inbounds for j in 1:N
-            vj = sqrt2 * s_v * χ[j]
+            χj = χ[j]
             wvj = wgh[j] * inv_sqrt_pi
-            μ_0 = r_c * vj
+            vj_fdn = sqrt2 * s_v_fdn * χj
+            vj_fup = sqrt2 * s_v_fup * χj
+            μ_0_fdn = r_fdn * vj_fdn
+            μ_0_fup = r_fup * vj_fup
+            # Fully degenerate inner marginal: fall back to one outer draw using the larger
+            # half-center `v` scale so `v_j` remains resolved when one half has zero spread.
+            s_v_deg = max(s_v_fdn, s_v_fup, ε)
+            vj_deg = sqrt2 * s_v_deg * χj
+            μ_0_deg = r_c * vj_deg
             degenerate =
                 (L_dn + L_up) <= ε &&
                 max(s_u_cond_c, s_u_cond_dn, s_u_cond_up) <= ε
             if degenerate
                 @inbounds for i in 1:N
                     wi = p_w[i]
-                    ui = μ_0
+                    ui = μ_0_deg
                     acc = _profile_rosenblatt_emit_inner_sample(
                         acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
-                        quad, M_inv, ui, μ_0, vj, wvj, wi,
+                        quad, M_inv, ui, μ_0_deg, vj_deg, wvj, wi,
                         method,
                     )
                 end
             else
                 @inbounds for i in 1:N
                     pi = p_nodes[i]
-                    wi_half = p_w[i] * FT(0.5)
-                    ui =
-                        _rosenblatt_half_w_dn(
-                            method, pi, L_dn, s_u_cond_dn, N, i,
-                        ) + μ_0
-                    acc = _profile_rosenblatt_emit_inner_sample(
-                        acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
-                        quad, M_inv, ui, μ_0, vj, wvj, wi_half,
-                        method,
-                    )
-                    ui_up =
-                        _rosenblatt_half_w_up(
-                            method, pi, L_up, s_u_cond_up, N, i,
-                        ) + μ_0
-                    acc = _profile_rosenblatt_emit_inner_sample(
-                        acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
-                        quad, M_inv, ui_up, μ_0, vj, wvj, wi_half,
-                        method,
-                    )
+                    wi = p_w[i]
+                    # When `L_up` or `L_dn` vanishes on this mean-gradient axis, that half's
+                    # `uniform ⊛ Gaussian` leg has **zero width** in `u`. The CDF helpers clamp
+                    # `L → max(L, ε)`, which invents a spurious inner law and (with huge
+                    # `s_u_cond_*` from the other half's rotation) can make Brent vs Halley disagree
+                    # badly. Skip zero-width legs; use full `wi` on each surviving leg so inner
+                    # mass still sums like Gauss–Legendre on `[0,1]`.
+                    use_dn = L_dn > ε
+                    use_up = L_up > ε
+                    if use_dn && use_up
+                        wi_half = wi * FT(0.5)
+                        ui =
+                            _rosenblatt_half_w_dn(
+                                method, pi, L_dn, s_u_cond_dn, N, i,
+                            ) + μ_0_fdn
+                        acc = _profile_rosenblatt_emit_inner_sample(
+                            acc, f, innerD, μ_q_p, μ_T_p, σ_q_fdn, σ_T_fdn, ρ_c,
+                            quad, M_inv, ui, μ_0_fdn, vj_fdn, wvj, wi_half,
+                            method,
+                        )
+                        ui_up =
+                            _rosenblatt_half_w_up(
+                                method, pi, L_up, s_u_cond_up, N, i,
+                            ) + μ_0_fup
+                        acc = _profile_rosenblatt_emit_inner_sample(
+                            acc, f, innerD, μ_q_p, μ_T_p, σ_q_fup, σ_T_fup, ρ_c,
+                            quad, M_inv, ui_up, μ_0_fup, vj_fup, wvj, wi_half,
+                            method,
+                        )
+                    elseif use_dn
+                        ui =
+                            _rosenblatt_half_w_dn(
+                                method, pi, L_dn, s_u_cond_dn, N, i,
+                            ) + μ_0_fdn
+                        acc = _profile_rosenblatt_emit_inner_sample(
+                            acc, f, innerD, μ_q_p, μ_T_p, σ_q_fdn, σ_T_fdn, ρ_c,
+                            quad, M_inv, ui, μ_0_fdn, vj_fdn, wvj, wi,
+                            method,
+                        )
+                    elseif use_up
+                        ui_up =
+                            _rosenblatt_half_w_up(
+                                method, pi, L_up, s_u_cond_up, N, i,
+                            ) + μ_0_fup
+                        acc = _profile_rosenblatt_emit_inner_sample(
+                            acc, f, innerD, μ_q_p, μ_T_p, σ_q_fup, σ_T_fup, ρ_c,
+                            quad, M_inv, ui_up, μ_0_fup, vj_fup, wvj, wi,
+                            method,
+                        )
+                    else
+                        # Both half-widths vanish: inner `p` nodes collapse to `μ_0` (same as the
+                        # `degenerate` branch above, but reachable when `L_dn + L_up > ε` in raw
+                        # storage while each leg is still below `ε` after projection).
+                        ui = μ_0_deg
+                        acc = _profile_rosenblatt_emit_inner_sample(
+                            acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
+                            quad, M_inv, ui, μ_0_deg, vj_deg, wvj, wi,
+                            method,
+                        )
+                    end
                 end
             end
         end
@@ -938,15 +998,19 @@ Assemble **profile–Rosenblatt** inner-marginal parameters: half-widths `L_±` 
 half-center** (piecewise-linear turbulent covariances in `(T,q)` then
 [`_rotated_sigma_uv`](@ref) into the `(u,v)` frame built from the chosen **mean
 slopes**), and ratios `r = s12/s2²` at center and half-centers (`r_c`, `r_fdn`, `r_fup`).
-`SubgridProfileRosenblatt` integration here applies the shift `μ_0 = r_c v` (outer
-`v`) and **half-center-anchored** `σ_{u|v}` on each half in the `uniform ⊛ N`
-inversion: `s_u_cond_dn` / `s_u_cond_up` come from the rotated turbulent
-covariance at the **lower** / **upper** half-center after the piecewise-linear
-`Σ_{turb}(z)` reconstruction, not from linearly interpolating `σ²_{u|v}` in
-`z` along the half. Half-center `r_fdn`/`r_fup` are included in the return dict for
-inspection; the layer-profile [`integrate_over_sgs`](@ref) overload only applies the center
-ratio `r_c` in the shift on `u`, and does not use a linear-in-`z` conditional
-variance inside the closed-form half marginal.
+`SubgridProfileRosenblatt` integration applies **half-local** shifts on `u` for each
+inner leg: `μ0_dn = r_fdn * vj_dn` and `μ0_up = r_fup * vj_up` with
+`vj_leg = sqrt(2) * s_v_leg * χ_j`, using half-center `r_fdn` / `r_fup` from the same
+`Σ` slice as that leg’s `s_u_cond_*`. The **fully degenerate** inner marginal (all `L` and
+conditional inner spreads below `ε`) still uses `μ0 = r_c * v` with `r_c` from **cell-center**
+`Σ` and a resolved outer scale `max(s_v_fdn, s_v_fup, ε)` so the outer Hermite axis does
+not vanish.
+
+The inner `uniform ⊛ N` inversion uses **half-center-anchored** `σ_{u|v}` on each half:
+`s_u_cond_dn` / `s_u_cond_up` come from the rotated turbulent covariance at the **lower** /
+**upper** half-center after the piecewise-linear `Σ_{turb}(z)` reconstruction, not from
+linearly interpolating `σ²_{u|v}` in `z` along the half. There is **no** linear-in-`z`
+conditional variance inside each half’s closed-form inner marginal.
 
 Center/half-center/face convention:
 - means and mean-gradients follow the two half-cell mean reconstructions;
@@ -967,7 +1031,11 @@ the inner `u` direction and `M_inv` for *this* parameter pack:
     (`:dn` and `:up`) and **averages** their cubature contributions
     (factor `1/2` each) so both axes are represented when DN and UP means differ.
 
-Returns `(; M_inv, s_v, L_dn, L_up, s_u_cond_c, s_u_cond_dn, s_u_cond_up, r_c, r_fdn, r_fup)`.
+Returns `(; M_inv, s_v_fdn, s_v_fup, s2sq_v_fdn, s2sq_v_fup, L_dn, L_up, ...)` with
+`s2sq_v_fdn` / `s2sq_v_fup` the marginal `v` variances (third output of [`_rotated_sigma_uv`](@ref))
+at lower/upper half-center `Σ`, and `s_v_fdn = sqrt(max(s2sq_v_fdn, 0))` (and similarly `fup`).
+Half-center `σ_T`, `σ_q` match the `Σ_turb(z)` reconstruction
+used for `s_u_cond_dn/up` (correlation in [`_profile_rosenblatt_emit_inner_sample`](@ref) remains `ρ_Tq`).
 Degenerate/non-finite axis checks are handled by
 `_two_slope_rosenblatt_has_valid_axis` before calling this constructor.
 """
@@ -1018,6 +1086,11 @@ function _two_slope_rosenblatt_params(
     sTq_c = ρc * sqrt(max(σ_T²_c, zero(FT)) * max(σ_q²_c, zero(FT)))
     sTq_fdn = ρc * sqrt(σT²_fdn * σq²_fdn)
     sTq_fup = ρc * sqrt(σT²_fup * σq²_fup)
+    # Std devs at each half-center (same Σ reconstruction as `s_u_cond_dn/up`).
+    σ_T_fdn = sqrt(σT²_fdn)
+    σ_q_fdn = sqrt(σq²_fdn)
+    σ_T_fup = sqrt(σT²_fup)
+    σ_q_fup = sqrt(σq²_fup)
     # Rotations (center → axes; half-centers → conditional std)
     s1sq_c, s12_c, s2sq_c = _rotated_sigma_uv(
         max(σ_T²_c, zero(FT)), max(σ_q²_c, zero(FT)), sTq_c,
@@ -1029,8 +1102,12 @@ function _two_slope_rosenblatt_params(
     s1sq_fup, s12_fup, s2sq_fup = _rotated_sigma_uv(
         σT²_fup, σq²_fup, sTq_fup, u_row_T, u_row_q, d_T, d_q,
     )
-    # Outer v axis uses centered Σ_turb (consistent with outer Gaussian-v quadrature).
-    s_v = sqrt(max(s2sq_c, zero(FT)))
+    # Marginal `v` variance at each half-center `Σ` (same frame as `s_u_cond_dn/up`); no averaging
+    # of the two halves — each leg pairs its own `s_v_f*` / `r_f*` with the same Hermite node `χ[j]`.
+    s2sq_v_fdn = s2sq_fdn
+    s2sq_v_fup = s2sq_fup
+    s_v_fdn = sqrt(max(s2sq_fdn, zero(FT)))
+    s_v_fup = sqrt(max(s2sq_fup, zero(FT)))
     s2_c_eff = max(s2sq_c, ε)
     # Conditional σ_{u|v} at center and each half-center (piecewise-linear Σ_turb(z)).
     s_u_cond_c = sqrt(max(s1sq_c - s12_c^2 / s2_c_eff, zero(FT)))
@@ -1048,10 +1125,11 @@ function _two_slope_rosenblatt_params(
         d_q   d_T*inv_α
     ]
     return (;
-        M_inv, s_v,
+        M_inv, s_v_fdn, s_v_fup, s2sq_v_fdn, s2sq_v_fup,
         L_dn, L_up,
         s_u_cond_c, s_u_cond_dn, s_u_cond_up,
         r_c, r_fdn, r_fup,
+        σ_T_fdn, σ_q_fdn, σ_T_fup, σ_q_fup,
     )
 end
 
@@ -1092,6 +1170,11 @@ For `LogNormalSGS` in Profile–Rosenblatt, the local map is evaluated in
 is applied at the end. This avoids mixing a ln-space Rosenblatt construction with
 the bivariate `get_physical_point(LogNormalSGS, ...)` mapping that expects
 Gaussian `q` fluctuations in physical `q`.
+
+For [`GaussianSGS`](@ref), `σ_q` / `σ_T` must match the turbulent second moments used to build the
+inner `u` draw: [`_profile_rosenblatt_accumulate`](@ref) passes **half-center** `σ_T_fdn`/`σ_q_fdn`
+or `σ_T_fup`/`σ_q_fup` from [`_two_slope_rosenblatt_params`](@ref) per inner leg (cell-center
+values only for degenerate / collapsed-`u` branches).
 """
 function _profile_rosenblatt_emit_inner_sample(
     acc,

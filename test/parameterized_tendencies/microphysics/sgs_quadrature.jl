@@ -236,6 +236,11 @@ end
         σq²_half_up = max(σ_q²_c + (H / FT(4)) * sqq_up, zero(FT))
         @test p.s_u_cond_dn ≈ sqrt(σq²_half_dn) rtol = FT(1e-10)
         @test p.s_u_cond_up ≈ sqrt(σq²_half_up) rtol = FT(1e-10)
+        @test p.σ_q_fdn ≈ sqrt(σq²_half_dn) rtol = FT(1e-10)
+        @test p.σ_q_fup ≈ sqrt(σq²_half_up) rtol = FT(1e-10)
+        # Outer `v` width: half-local marginal `v` std at each half-center `Σ`.
+        @test p.s_v_fdn^2 ≈ max(p.s2sq_v_fdn, zero(FT)) rtol = FT(1e-10)
+        @test p.s_v_fup^2 ≈ max(p.s2sq_v_fup, zero(FT)) rtol = FT(1e-10)
     end
 
     @testset "LogNormal Chebyshev path uses 1D ln(q)-space tables" begin
@@ -1428,7 +1433,7 @@ end
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
         )
-        @test ict ≈ ipr rtol = FT(0.05) atol = FT(1e-4)
+        @test ict ≈ ipr rtol = FT(1e-5) atol = FT(1e-6)
     end
 
     @testset "Reference primitives: U⊛N Brent quantile inverts analytic CDF" begin
@@ -1451,7 +1456,7 @@ end
     @testset "Reference: all-zero subcell vertical gradients, Profile–Rosenblatt vs bivariate SGS" begin
         # Spec: with **no** vertical mean-gradient or F2 (variance-gradient) subgrid structure, the
         # profile–Rosenblatt discretization must still approximate the **same** cell-center
-        # bivariate (T, q) SGS as short-arity `integrate_over_sgs` (same inner I and same moments),
+        # bivariate (T, q) SGS as the cell-center `integrate_over_sgs` overload (same inner I and same moments),
         # not a single point evaluation f(μ_T, μ_q). Nonlinear f exposes missing variance; using
         # centered second moments is numerically well-scaled.
         using ClimaCore.Geometry
@@ -1593,6 +1598,7 @@ end
         FT = Float64
         lg = _fd_column_center_local_geometry(FT; ilevel = 4)
         f(T, q) = T + FT(5) * q
+        fq(T, q) = q
         μ_q = FT(0.012)
         μ_T = FT(285)
         qv = FT(1e-7)
@@ -1622,17 +1628,78 @@ end
             }(),
         )
         @test quad_ct.z_t !== nothing
-        ict = ClimaAtmos.integrate_over_sgs(
-            f, quad_ct, μ_q, μ_T, qv, Tv, ρc, H, lg,
+        args = (
+            μ_q, μ_T, qv, Tv, ρc, H, lg,
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
         )
-        ipr = ClimaAtmos.integrate_over_sgs(
-            f, quad_pr, μ_q, μ_T, qv, Tv, ρc, H, lg,
-            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+        ict = ClimaAtmos.integrate_over_sgs(f, quad_ct, args...)
+        ipr = ClimaAtmos.integrate_over_sgs(f, quad_pr, args...)
+        # `T + 5q` is dominated by `T`; use a tight tolerance here anyway (the two rules agree
+        # to ~1e-7 relative for this case once the vertical `q` mean is consistent).
+        @test ict ≈ ipr rtol = FT(1e-5) atol = FT(1e-6)
+        # `q`-only exposes vertical mean placement along `ζ` (would miss a ln-vs-linear μ_qk bug
+        # that `T + 5q` can mask). Column-tensor vs profile–Rosenblatt are still different
+        # quadratures in `(z, χ)`; empirically they match here to ~5e-4 relative at N=3.
+        ict_q = ClimaAtmos.integrate_over_sgs(fq, quad_ct, args...)
+        ipr_q = ClimaAtmos.integrate_over_sgs(fq, quad_pr, args...)
+        @test ict_q ≈ ipr_q rtol = FT(8e-4) atol = FT(1e-7)
+        # Asymmetric physical `q` slopes → different `dq_dz_*_eff` ln-slopes; stronger
+        # regression on the column-tensor vertical mean (linear misuse blows up ~O(1) on `q`).
+        d_q, D_q = FT(2e-6), FT(6e-6)
+        gq_dn_a = Covariant123Vector(FT(0), FT(0), d_q - D_q / 2)
+        gq_up_a = Covariant123Vector(FT(0), FT(0), d_q + D_q / 2)
+        args_a = (
+            μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn_a, gq_up_a, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
         )
-        @test ict ≈ ipr rtol = FT(0.05) atol = FT(1e-4)
+        quad_ct5 = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 5,
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
+                ClimaAtmos.SubgridColumnTensor,
+                ClimaAtmos.LogNormalSGS,
+            }(),
+        )
+        quad_pr5 = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 5,
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+                ClimaAtmos.LogNormalSGS,
+            }(),
+        )
+        ict_q_a = ClimaAtmos.integrate_over_sgs(fq, quad_ct5, args_a...)
+        ipr_q_a = ClimaAtmos.integrate_over_sgs(fq, quad_pr5, args_a...)
+        @test ict_q_a ≈ ipr_q_a rtol = FT(2e-3) atol = FT(1e-7)
+    end
+
+    @testset "Vertical LogNormal layer mean along ζ (_vertical_layer_mean_q)" begin
+        # Direct unit guard: column-style paths must not treat ln(`q`) slopes as physical `∂q/∂z`
+        # when forming `μ_q(ζ)` (see `subgrid_layer_profile_quadrature.jl`).
+        FT = Float64
+        μ = FT(0.012)
+        s_dn, s_up = FT(1.5e-3), FT(-0.5e-3)
+        ζ_dn = FT(-180)
+        μ_ln_dn = ClimaAtmos._vertical_layer_mean_q(
+            ClimaAtmos.LogNormalSGS(), μ, ζ_dn, s_dn, s_up, FT,
+        )
+        @test μ_ln_dn ≈ exp(log(μ) + ζ_dn * s_dn) rtol = FT(1e-12) atol = FT(1e-14)
+        ζ_up = FT(120)
+        μ_ln_up = ClimaAtmos._vertical_layer_mean_q(
+            ClimaAtmos.LogNormalSGS(), μ, ζ_up, s_dn, s_up, FT,
+        )
+        @test μ_ln_up ≈ exp(log(μ) + ζ_up * s_up) rtol = FT(1e-12) atol = FT(1e-14)
+        # Gaussian branch: `dq_dz_*_eff` are physical slopes → linear in `q`.
+        s_dn_g, s_up_g = FT(3e-7), FT(5e-7)
+        μ_g = ClimaAtmos._vertical_layer_mean_q(
+            ClimaAtmos.GaussianSGS(), μ, ζ_dn, s_dn_g, s_up_g, FT,
+        )
+        @test μ_g ≈ μ + ζ_dn * s_dn_g rtol = FT(1e-12) atol = FT(1e-14)
+        # Deliberate "wrong linear" misuse would be off by ~O(1) in `q` for these numbers.
+        wrong_linear = μ + ζ_dn * s_dn
+        @test abs(μ_ln_dn - wrong_linear) > FT(0.01)
     end
 
     @testset "layer-mean CDF degenerate ‖d‖ → center-only" begin

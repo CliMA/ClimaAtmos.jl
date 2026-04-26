@@ -183,11 +183,12 @@ def two_slope_rosenblatt_params(
     a_up = max(a_up_raw, 0.0)
     L_dn = a_dn * (0.5 * H)
     L_up = a_up * (0.5 * H)
-    half = 0.5 * H
-    s_t2_fdn = max(sig_t2_c - half * s_t_dn, 0.0)
-    s_t2_fup = max(sig_t2_c + half * s_t_up, 0.0)
-    s_q2_fdn = max(sig_q2_c - half * s_q_dn, 0.0)
-    s_q2_fup = max(sig_q2_c + half * s_q_up, 0.0)
+    # Half-center walk from layer midpoint (match Julia `H/4`, not `H/2`).
+    dz_q = 0.25 * H
+    s_t2_fdn = max(sig_t2_c - dz_q * s_t_dn, 0.0)
+    s_t2_fup = max(sig_t2_c + dz_q * s_t_up, 0.0)
+    s_q2_fdn = max(sig_q2_c - dz_q * s_q_dn, 0.0)
+    s_q2_fup = max(sig_q2_c + dz_q * s_q_up, 0.0)
     rh = float(np.clip(rho_tq, -1.0, 1.0))
     s_tq_c = rh * np.sqrt(max(sig_t2_c, 0.0) * max(sig_q2_c, 0.0))
     s_tq_fdn = rh * np.sqrt(s_t2_fdn * s_q2_fdn)
@@ -205,6 +206,12 @@ def two_slope_rosenblatt_params(
     s_u_c = np.sqrt(max(s1c - s12c**2 / s2c_eff, 0.0))
     s_u_dn = np.sqrt(max(s1f_dn - s12f_dn**2 / s2fdn, 0.0))
     s_u_up = np.sqrt(max(s1f_up - s12f_up**2 / s2fup, 0.0))
+    s2sq_v_fdn = float(s2f_dn)
+    s2sq_v_fup = float(s2f_up)
+    s_v_fdn = float(np.sqrt(max(s2sq_v_fdn, 0.0)))
+    s_v_fup = float(np.sqrt(max(s2sq_v_fup, 0.0)))
+    # Legacy single-scale cubature (`profile_rosenblatt_cubature`) still uses one `s_v`; keep
+    # center `s2c` until that path is refactored to the per-leg outer `v` used in production Julia.
     s_v = float(np.sqrt(max(s2c, 0.0)))
     r_c = s12c / s2c_eff
     r_fdn = s12f_dn / s2fdn
@@ -217,6 +224,10 @@ def two_slope_rosenblatt_params(
     return {
         "M_inv": m_inv,
         "s_v": s_v,
+        "s_v_fdn": s_v_fdn,
+        "s_v_fup": s_v_fup,
+        "s2sq_v_fdn": s2sq_v_fdn,
+        "s2sq_v_fup": s2sq_v_fup,
         "L_dn": L_dn,
         "L_up": L_up,
         "s_u_c": s_u_c,
