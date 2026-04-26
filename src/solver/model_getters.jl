@@ -452,10 +452,10 @@ function get_sgs_distribution(parsed_args)
             "Invalid sgs_distribution $(dist_name). Use: gaussian, lognormal, mean, " *
                 "gaussian_vertical_profile, gaussian_vertical_profile_full_cubature, gaussian_vertical_profile_lhs_z, " *
                 "gaussian_vertical_profile_principal_axis, gaussian_vertical_profile_voronoi, gaussian_vertical_profile_barycentric, " *
-                "gaussian_vertical_profile_inner_bracketed, gaussian_vertical_profile_inner_halley, " *
+                "gaussian_vertical_profile_inner_bracketed, gaussian_vertical_profile_inner_halley, gaussian_vertical_profile_inner_chebyshev, " *
                 "lognormal_vertical_profile, lognormal_vertical_profile_full_cubature, lognormal_vertical_profile_lhs_z, " *
                 "lognormal_vertical_profile_principal_axis, lognormal_vertical_profile_voronoi, lognormal_vertical_profile_barycentric, " *
-                "lognormal_vertical_profile_inner_bracketed, lognormal_vertical_profile_inner_halley",
+                "lognormal_vertical_profile_inner_bracketed, lognormal_vertical_profile_inner_halley, lognormal_vertical_profile_inner_chebyshev",
         )
     end
 end

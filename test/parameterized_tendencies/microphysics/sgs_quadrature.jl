@@ -120,7 +120,7 @@ end
 
 
 
-    @testset "subcell geometric variance increment (two-slope face-anchored)" begin
+    @testset "subcell geometric variance increment (two-slope half-center anchored)" begin
         Δz = 2.0
         # Symmetric-slope limit (s_dn == s_up) recovers the classical (1/12) Δz² d²:
         s_q = 0.1
@@ -149,7 +149,7 @@ end
         @test Δq_neg ≈ Δq
     end
 
-    @testset "subcell geometric T–q covariance (two-slope face-anchored)" begin
+    @testset "subcell geometric T–q covariance (two-slope half-center anchored)" begin
         Δz = 2.0
         # Symmetric-slope limit recovers the classical (1/12) Δz² d^q d^T
         s_q = 0.05
@@ -212,6 +212,68 @@ end
                 @test f_q ≈ sum(dens_part) * (qs_part[2] - qs_part[1]) rtol = 0.01
             end
         end
+    end
+
+    @testset "two-slope Rosenblatt uses half-center covariances (H/4)" begin
+        # Regression guard for center vs half-center semantics:
+        # `s_u_cond_dn/up` must be built from Σ_turb at z = ±H/4, not ±H/2 faces.
+        FT = Float64
+        μ_T, μ_q = FT(285), FT(0.01)
+        σ_T²_c, σ_q²_c = FT(0.25), FT(1e-6)
+        ρ_Tq = FT(0)
+        dT_dz_dn, dT_dz_up = FT(0), FT(0)
+        dq_dz_dn, dq_dz_up = FT(1), FT(1)
+        sTT_dn, sTT_up = FT(0), FT(0)
+        sqq_dn, sqq_up = FT(1e-9), FT(2e-9)
+        H = FT(400)
+        p = ClimaAtmos._two_slope_rosenblatt_params(
+            μ_T, μ_q,
+            σ_T²_c, σ_q²_c, ρ_Tq,
+            dT_dz_dn, dT_dz_up, dq_dz_dn, dq_dz_up,
+            sTT_dn, sTT_up, sqq_dn, sqq_up,
+            H,
+        )
+        σq²_half_dn = max(σ_q²_c - (H / FT(4)) * sqq_dn, zero(FT))
+        σq²_half_up = max(σ_q²_c + (H / FT(4)) * sqq_up, zero(FT))
+        @test p.s_u_cond_dn ≈ sqrt(σq²_half_dn) rtol = FT(1e-10)
+        @test p.s_u_cond_up ≈ sqrt(σq²_half_up) rtol = FT(1e-10)
+    end
+
+    @testset "LogNormal Chebyshev path uses 1D ln(q)-space tables" begin
+        # Guard against method-label mismatch: ChebyshevLogEta must run its own
+        # LogNormal path (with table lookup/interpolation), not dispatch Halley.
+        FT = Float64
+        N = 3
+        i_node = 2
+        p_nodes, _ = ClimaAtmos.gauss_legendre_01(FT, N)
+        p = p_nodes[i_node]
+        μ_q = FT(0.012)
+        L_dn = FT(0.004)
+        L_up = FT(0.003)
+        σ_ln = FT(0.35)
+        q_max = FT(1.0)
+        coeffs_ln = ClimaAtmos.chebyshev_convolution_coeffs(ClimaAtmos.LogNormalSGS(), FT, N, i_node)
+        coeffs_g = ClimaAtmos.chebyshev_convolution_coeffs(ClimaAtmos.GaussianSGS(), FT, N, i_node)
+        @test coeffs_ln == coeffs_g
+        q_dn_ch = ClimaAtmos._rosenblatt_dn_half_q(
+            ClimaAtmos.ConvolutionQuantilesChebyshevLogEta(),
+            p, μ_q, L_dn, σ_ln, q_max, N, i_node,
+        )
+        q_dn_h = ClimaAtmos._rosenblatt_dn_half_q(
+            ClimaAtmos.ConvolutionQuantilesHalley(),
+            p, μ_q, L_dn, σ_ln, q_max, N, i_node,
+        )
+        q_up_ch = ClimaAtmos._rosenblatt_up_half_q(
+            ClimaAtmos.ConvolutionQuantilesChebyshevLogEta(),
+            p, μ_q, L_up, σ_ln, q_max, N, i_node,
+        )
+        q_up_h = ClimaAtmos._rosenblatt_up_half_q(
+            ClimaAtmos.ConvolutionQuantilesHalley(),
+            p, μ_q, L_up, σ_ln, q_max, N, i_node,
+        )
+        @test isfinite(q_dn_ch) && isfinite(q_up_ch)
+        @test abs(q_dn_ch - q_dn_h) > FT(10) * eps(FT)
+        @test abs(q_up_ch - q_up_h) > FT(10) * eps(FT)
     end
 
     @testset "Gauss-Hermite Quadrature" begin
@@ -1663,7 +1725,7 @@ end
             quadrature_order = 5,
             distribution = ClimaAtmos.VerticallyResolvedSGS{
                 ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
-                ClimaAtmos.LogNormalSGS,
+                ClimaAtmos.GaussianSGS,
             }(),
         )
         i_prof = ClimaAtmos.integrate_over_sgs(

@@ -208,6 +208,21 @@ end
 
 
 
+"""
+    microphysics_tendencies_1m_sgs_row(...)
+
+Row-wise 1M SGS tendency integration for vertically resolved SGS layouts.
+
+For `LogNormalSGS`, this wrapper maps moisture gradients into `ln(q)` space
+before calling the long-arity [`integrate_over_sgs`](@ref):
+
+- reconstruct `q` at lower/upper faces from center value and half-gradients,
+- map center/face values via `ln(q)`,
+- compute half-gradients in log-space that hit both ends of the cell.
+
+This keeps the inner LogNormal profile path consistent with analytic
+uniform-lognormal convolution primitives used downstream.
+"""
 @inline function microphysics_tendencies_1m_sgs_row(
     scheme,
     sgs_quad,
@@ -245,9 +260,42 @@ end
         scheme, cmp, thp, ρ, T, q_lcl_nonneg, q_icl_nonneg,
         q_rai_nonneg, q_sno_nonneg, (),
     )
+    # LogNormalSGS path: convert to ln(q)-gradients over each half-cell.
+    # The reconstructed q at z = ±H/2 is used so each half-gradient lands on
+    # both the center and its corresponding face endpoint.
+    FT = eltype(q_tot_nonneg)
+    ε = ϵ_numerics(FT)
+    dist = sgs_quad.dist
+    
+    # If dist is a wrapper (e.g. VerticallyResolvedSGS), inspect the inner/base law.
+    base_dist = if dist isa AbstractVerticallyResolvedSGS
+        _inner_dist(dist)
+    else
+        dist
+    end
+
+    if base_dist isa LogNormalSGS
+        H = Δz
+        q_mean = q_tot_nonneg
+        dq_dz_dn_val = Geometry.WVector(grad_q_dn, local_geometry)[1]
+        dq_dz_up_val = Geometry.WVector(grad_q_up, local_geometry)[1]
+        q_face_dn = q_mean - dq_dz_dn_val * (H / 2)
+        q_face_up = q_mean + dq_dz_up_val * (H / 2)
+        
+        ln_q_mean = log(max(q_mean, ε))
+        ln_q_face_dn = log(max(q_face_dn, ε))
+        ln_q_face_up = log(max(q_face_up, ε))
+        
+        gq_dn = (ln_q_mean - ln_q_face_dn) / (H / 2)
+        gq_up = (ln_q_face_up - ln_q_mean) / (H / 2)
+    else
+        gq_dn = grad_q_dn
+        gq_up = grad_q_up
+    end
+
     local_tendency = integrate_over_sgs(
         evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, ρ_Tq, Δz, local_geometry,
-        grad_q_dn, grad_q_up, grad_θ_dn, grad_θ_up, ∂T∂θ_li,
+        gq_dn, gq_up, grad_θ_dn, grad_θ_up, ∂T∂θ_li,
         grad_qq_dn, grad_qq_up, grad_TT_dn, grad_TT_up,
     )
     if tst isa Explicit

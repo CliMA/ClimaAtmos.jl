@@ -1,5 +1,5 @@
 # Layer-mean profile quadrature for vertically resolved SGS distributions
-# (column-tensor and profile–Rosenblatt). Two-slope face-anchored reconstruction
+# (column-tensor and profile–Rosenblatt). Two-slope half-center reconstruction
 # from layer-mean and half-cell slopes passed in as scalars (see `microphysics_cache.jl`
 # broadcasts). No persistent scratch fields.
 #
@@ -8,10 +8,10 @@
 # Inner marginal is **always** the composite split: ½ mass on each shifted
 # half-cell `uniform⊛Gaussian` law, with per-leg inverse chosen by
 # `ConvolutionQuantiles{Halley,Bracketed,ChebyshevLogEta}` (no scalar `F_mix^{-1}`).
-# Each half uses **face-anchored** conditional std `σ_{u|v}`
+# Each half uses **half-center-anchored** conditional std `σ_{u|v}`
 # (constant on that half’s segment in `u`). There is **no** implemented closed form for a
 # linear-in-`z` conditional variance inside the half’s inner marginal; variance
-# slopes from the cache still enter the **face** reconstruction that sets
+# slopes from the cache still enter the **half-center** reconstruction that sets
 # `s_u_cond_dn` / `s_u_cond_up`. The `uniform_gaussian_convolution_*` primitives
 # below are the analytic core (`erf` / Mills integral algebra only).
 
@@ -612,22 +612,14 @@ end
     N_gl::Int,
     i_node::Int,
 ) where {FT}
-    # 2D mapping: centered fit uses μ_eff = (y_min + y_max)/2 and ξ = (y_max - y_min)/μ_eff
-    # DN leg: y_min = μ_q - L_dn, y_max = μ_q
-    μ_eff = max(eps(FT), μ_q - L_dn / 2)
-    ξ_eff = L_dn / μ_eff
-    
-    ℓσ = log10(max(σ_ln, eps(FT)))
-    
-    σ0, σ1 = FT.(CHEB_CONV_LN_SIGMA_LOG10_RANGE)
-    ξ0, ξ1 = FT.(CHEB_CONV_LN_XI_RANGE)
-    
-    τσ = clamp(2 * (ℓσ - σ0) / (σ1 - σ0) - 1, -one(FT), one(FT))
-    τξ = clamp(2 * (ξ_eff - ξ0) / (ξ1 - ξ0) - 1, -one(FT), one(FT))
-    
-    coeffs = chebyshev_convolution_coeffs(LogNormalSGS(), FT, N_gl, i_node)
-    q_norm = chebyshev_evaluate_2d(coeffs, τσ, τξ)
-    return min(q_norm * μ_eff, q_max)
+    # Evaluate the 1D uniform-normal Chebyshev surrogate in ln(q)-space
+    # on the lower half interval [ln(μ_q)-L_dn, ln(μ_q)].
+    ε = ϵ_numerics(FT)
+    μ_ln = log(max(μ_q, ε))
+    w = dn_half_uniform_gaussian_convolution_quantile_chebyshev(
+        L_dn, σ_ln, N_gl, i_node,
+    )
+    return clamp(exp(μ_ln + w), ε, q_max)
 end
 
 @inline function _rosenblatt_up_half_q_impl(
@@ -640,22 +632,14 @@ end
     N_gl::Int,
     i_node::Int,
 ) where {FT}
-    # 2D mapping: centered fit uses μ_eff = (y_min + y_max)/2 and ξ = (y_max - y_min)/μ_eff
-    # UP leg: y_min = μ_q, y_max = μ_q + L_up
-    μ_eff = μ_q + L_up / 2
-    ξ_eff = L_up / μ_eff
-    
-    ℓσ = log10(max(σ_ln, eps(FT)))
-    
-    σ0, σ1 = FT.(CHEB_CONV_LN_SIGMA_LOG10_RANGE)
-    ξ0, ξ1 = FT.(CHEB_CONV_LN_XI_RANGE)
-    
-    τσ = clamp(2 * (ℓσ - σ0) / (σ1 - σ0) - 1, -one(FT), one(FT))
-    τξ = clamp(2 * (ξ_eff - ξ0) / (ξ1 - ξ0) - 1, -one(FT), one(FT))
-    
-    coeffs = chebyshev_convolution_coeffs(LogNormalSGS(), FT, N_gl, i_node)
-    q_norm = chebyshev_evaluate_2d(coeffs, τσ, τξ)
-    return min(q_norm * μ_eff, q_max)
+    # Evaluate the 1D uniform-normal Chebyshev surrogate in ln(q)-space
+    # on the upper half interval [ln(μ_q), ln(μ_q)+L_up].
+    ε = ϵ_numerics(FT)
+    μ_ln = log(max(μ_q, ε))
+    w = up_half_uniform_gaussian_convolution_quantile_chebyshev(
+        L_up, σ_ln, N_gl, i_node,
+    )
+    return clamp(exp(μ_ln + w), ε, q_max)
 end
 
 @inline function _rosenblatt_up_half_q_impl(
@@ -727,9 +711,13 @@ function _integrate_over_sgs_profile_rosenblatt(
     dTT_dz_up,
 )
     FT = typeof(H)
-    μ_T_p = oftype(FT, μ_T)
-    μ_q_p = oftype(FT, μ_q)
-    σ_q_c, σ_T_c, _ = sgs_stddevs_and_correlation(oftype(FT, q′q′), oftype(FT, T′T′), oftype(FT, ρ_c))
+    μ_T_p = convert(FT, μ_T)
+    μ_q_p = convert(FT, μ_q)
+    σ_q_c, σ_T_c, _ = sgs_stddevs_and_correlation(
+        convert(FT, q′q′),
+        convert(FT, T′T′),
+        convert(FT, ρ_c),
+    )
     method = _profile_rosenblatt_method(dist)
     function _profile_rosenblatt_accumulate(params)
         (;
@@ -813,7 +801,8 @@ function _integrate_over_sgs_profile_rosenblatt(
                         # In the Gaussian copula, the "base" μ_q for the convolution
                         # is shifted by the correlation with the v-marginal.
                         zv = s_v > ε ? vj / s_v : zero(FT)
-                        μ_q_shifted = μ_q_p * exp(ρ_c * σ_ln * zv - 0.5 * ρ_c^2 * σ_ln^2)
+                        μ_q_shifted =
+                            μ_q_p * exp(ρ_c * σ_ln * zv - FT(0.5) * ρ_c^2 * σ_ln^2)
                         
                         # Lower half-cell
                         q_hat_dn = _rosenblatt_dn_half_q(
@@ -823,7 +812,11 @@ function _integrate_over_sgs_profile_rosenblatt(
                         # Since T is Gaussian, we use the copula:
                         # T = μ_T + σ_T * (ρ * z_q + sqrt(1-ρ²) * z_v)
                         # z_q is the standard normal deviate of q_hat_dn
-                        z_q_dn = (log(max(ε, q_hat_dn)) - (log(max(ε, μ_q_shifted)) - 0.5*σ_ln_c^2)) / max(ε, σ_ln_c)
+                        z_q_dn = (
+                            log(max(ε, q_hat_dn)) - (
+                                log(max(ε, μ_q_shifted)) - FT(0.5) * σ_ln_c^2
+                            )
+                        ) / max(ε, σ_ln_c)
                         T_hat_dn = max(quad.T_min, μ_T_p + σ_T_c * (ρ_c * z_q_dn + sqrt(max(zero(FT), one(FT) - ρ_c^2)) * zv))
                         acc = acc ⊞ f(T_hat_dn, q_hat_dn) ⊠ (wvj * wi_half)
                         
@@ -831,7 +824,11 @@ function _integrate_over_sgs_profile_rosenblatt(
                         q_hat_up = _rosenblatt_up_half_q(
                             method, pi, μ_q_shifted, L_up, σ_ln_c, quad.q_max, N, i
                         )
-                        z_q_up = (log(max(ε, q_hat_up)) - (log(max(ε, μ_q_shifted)) - 0.5*σ_ln_c^2)) / max(ε, σ_ln_c)
+                        z_q_up = (
+                            log(max(ε, q_hat_up)) - (
+                                log(max(ε, μ_q_shifted)) - FT(0.5) * σ_ln_c^2
+                            )
+                        ) / max(ε, σ_ln_c)
                         T_hat_up = max(quad.T_min, μ_T_p + σ_T_c * (ρ_c * z_q_up + sqrt(max(zero(FT), one(FT) - ρ_c^2)) * zv))
                         acc = acc ⊞ f(T_hat_up, q_hat_up) ⊠ (wvj * wi_half)
                     else
@@ -1012,18 +1009,23 @@ end
 
 Assemble **profile–Rosenblatt** inner-marginal parameters: half-widths `L_±` on
 `u`, conditional standard deviations `σ_{u|v}` at the **cell center and each
-face** (piecewise-linear turbulent covariances in `(T,q)` then
+half-center** (piecewise-linear turbulent covariances in `(T,q)` then
 [`_rotated_sigma_uv`](@ref) into the `(u,v)` frame built from the chosen **mean
-slopes**), and ratios `r = s12/s2²` at center and faces (`r_c`, `r_fdn`, `r_fup`).
+slopes**), and ratios `r = s12/s2²` at center and half-centers (`r_c`, `r_fdn`, `r_fup`).
 `SubgridProfileRosenblatt` integration here applies the shift `μ_0 = r_c v` (outer
-`v`) and **face-anchored** `σ_{u|v}` on each half in the `uniform ⊛ N`
+`v`) and **half-center-anchored** `σ_{u|v}` on each half in the `uniform ⊛ N`
 inversion: `s_u_cond_dn` / `s_u_cond_up` come from the rotated turbulent
-covariance at the **lower** / **upper** face after the piecewise-linear
+covariance at the **lower** / **upper** half-center after the piecewise-linear
 `Σ_{turb}(z)` reconstruction, not from linearly interpolating `σ²_{u|v}` in
-`z` along the half. Face-level `r_fdn`/`r_fup` are included in the return dict for
+`z` along the half. Half-center `r_fdn`/`r_fup` are included in the return dict for
 inspection; the long-arity [`integrate_over_sgs`](@ref) only applies the center
 ratio `r_c` in the shift on `u`, and does not use a linear-in-`z` conditional
 variance inside the closed-form half marginal.
+
+Center/half-center/face convention:
+- means and mean-gradients follow the two half-cell mean reconstructions;
+- turbulent covariance used for `s_u_cond_dn/up` is sampled at half-centers (`±H/4`);
+- full faces (`±H/2`) are not used for `σ_{u|v}` in this implementation.
 
 Abscissas `quadrature_order(quad) → (ξ_01, w_01)` drive the **composite** split
 (DN half-law + UP half-law at the same `p` nodes, each weighted `1/2` in the
@@ -1080,17 +1082,17 @@ function _two_slope_rosenblatt_params(
     α_up = max(α_up_raw, zero(FT))
     L_dn = α_dn * (H / FT(2))
     L_up = α_up * (H / FT(2))
-    # Face-level Σ_turb from piecewise-linear reconstruction of σ²
-    σT²_fdn = max(σ_T²_c - (H / FT(2)) * sTT_dn, zero(FT))
-    σT²_fup = max(σ_T²_c + (H / FT(2)) * sTT_up, zero(FT))
-    σq²_fdn = max(σ_q²_c - (H / FT(2)) * sqq_dn, zero(FT))
-    σq²_fup = max(σ_q²_c + (H / FT(2)) * sqq_up, zero(FT))
-    # ρ_Tq is a ClimaParams constant ⇒ face s_Tq = ρ √(σ_T² · σ_q²)
+    # Half-center Σ_turb from piecewise-linear reconstruction of σ²
+    σT²_fdn = max(σ_T²_c - (H / FT(4)) * sTT_dn, zero(FT))
+    σT²_fup = max(σ_T²_c + (H / FT(4)) * sTT_up, zero(FT))
+    σq²_fdn = max(σ_q²_c - (H / FT(4)) * sqq_dn, zero(FT))
+    σq²_fup = max(σ_q²_c + (H / FT(4)) * sqq_up, zero(FT))
+    # ρ_Tq is a ClimaParams constant ⇒ half-center s_Tq = ρ √(σ_T² · σ_q²)
     ρc = clamp(ρ_Tq, -one(FT), one(FT))
     sTq_c = ρc * sqrt(max(σ_T²_c, zero(FT)) * max(σ_q²_c, zero(FT)))
     sTq_fdn = ρc * sqrt(σT²_fdn * σq²_fdn)
     sTq_fup = ρc * sqrt(σT²_fup * σq²_fup)
-    # Rotations (center → axes; faces → conditional std)
+    # Rotations (center → axes; half-centers → conditional std)
     s1sq_c, s12_c, s2sq_c = _rotated_sigma_uv(
         max(σ_T²_c, zero(FT)), max(σ_q²_c, zero(FT)), sTq_c,
         u_row_T, u_row_q, d_T, d_q,
@@ -1104,13 +1106,13 @@ function _two_slope_rosenblatt_params(
     # Outer v axis uses centered Σ_turb (consistent with outer Gaussian-v quadrature).
     s_v = sqrt(max(s2sq_c, zero(FT)))
     s2_c_eff = max(s2sq_c, ε)
-    # Conditional σ_{u|v} at center and each face (piecewise-linear Σ_turb(z)).
+    # Conditional σ_{u|v} at center and each half-center (piecewise-linear Σ_turb(z)).
     s_u_cond_c = sqrt(max(s1sq_c - s12_c^2 / s2_c_eff, zero(FT)))
     s2_fdn_eff = max(s2sq_fdn, ε)
     s2_fup_eff = max(s2sq_fup, ε)
     s_u_cond_dn = sqrt(max(s1sq_fdn - s12_fdn^2 / s2_fdn_eff, zero(FT)))
     s_u_cond_up = sqrt(max(s1sq_fup - s12_fup^2 / s2_fup_eff, zero(FT)))
-    # Linear-in-z conditional mean μ_{u|v}(z) ≈ (s12/s2²)(z) · v  → slopes from center to face.
+    # Linear-in-z conditional mean μ_{u|v}(z) ≈ (s12/s2²)(z) · v  → slopes from center to half-center.
     r_c = s12_c / s2_c_eff
     r_fdn = s12_fdn / s2_fdn_eff
     r_fup = s12_fup / s2_fup_eff
@@ -1204,7 +1206,7 @@ end
         grad_qq_dn, grad_qq_up, grad_TT_dn, grad_TT_up,
     )
 
-Two-slope face-anchored layer-mean quadrature for
+Two-slope half-center-anchored layer-mean quadrature for
 [`VerticallyResolvedSGS{S,I}`](@ref) with `S <: AbstractSubgridLayerProfileQuadrature`.
 
 # Inputs
