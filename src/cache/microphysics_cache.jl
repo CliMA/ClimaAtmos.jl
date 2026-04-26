@@ -542,17 +542,6 @@ function set_precipitation_velocities!(Y, p,
     return nothing
 end
 
-function my_get_distribution_logλ(scheme, ρq_ice, ρn_ice, ρq_rim, ρb_rim)
-    ρq_ice_safe = max(zero(ρq_ice), ρq_ice)
-    ρn_ice_safe = max(zero(ρn_ice), ρn_ice)
-    ϵₘ = CMP3.UT.ϵ_numerics_2M_M(eltype(ρq_ice))
-    # F_rim = ifelse(ρq_ice < ϵₘ, zero(ρq_ice), ρq_rim / ρq_ice)
-    F_rim = rime_mass_fraction(ρq_rim, ρq_ice)
-    ρ_rim = ifelse(ρq_ice < ϵₘ, zero(ρq_ice), ρq_rim / ρb_rim)
-    state_p3 = CMP3.P3State(scheme, ρq_ice_safe, ρn_ice_safe, F_rim, ρ_rim)
-    logλ = CMP3.get_distribution_logλ(state_p3)
-    return logλ
-end
 
 function set_precipitation_velocities!(Y, p, ::NonEquilibriumMicrophysics2M, _)
     params_2m = CAP.microphysics_2m_params(p.params)
@@ -606,7 +595,7 @@ function set_precipitation_velocities!(Y, p, ::NonEquilibriumMicrophysics2M, _)
 
     ## Idea: moving operations into pointwise functions
     # THIS WORKS!!! We'll have it in a pointwise function yay
-    @. ᶜlogλ = my_get_distribution_logλ(scheme, ρq_ice, ρn_ice, ρq_rim, ρb_rim)
+    @. ᶜlogλ = CMP3.get_distribution_logλ_from_prognostic(scheme, ρq_ice, ρn_ice, ρq_rim, ρb_rim)
 
     # Try this: THIS DOES NOT WORK
     # ᶜρq_ice_safe = @. max(zero(ρq_ice), ρq_ice)
@@ -662,7 +651,7 @@ function set_precipitation_velocities!(Y, p, ::NonEquilibriumMicrophysics2M, _)
     @. ᶜwₕhₜ =
         Geometry.WVector(
             ᶜwₗ * ρq_lcl * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
-            ᶜwᵢ * ρq_icl * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
+            ᶜwᵢ * ρq_ice * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
             ᶜwᵣ * ρq_rai * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))),
         ) / ρ
     return nothing
@@ -1061,7 +1050,7 @@ end
 function set_microphysics_tendency_cache!(Y, p, ::NonEquilibriumMicrophysics2M, _)
     (; dt) = p
     (; ᶜT, ᶜp, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency, ᶜlogλ) = p.precomputed
-    @unpack_sup (; 
+    @unpack_sup (;
         ᶜρ, ᶜρq_lcl, ᶜρn_lcl, ᶜρq_rai, ᶜρn_rai, ᶜρq_ice, ᶜρn_ice, ᶜρq_rim, ᶜρb_rim) = Y
     (; microphysics_tendency_timestepping) = p.atmos
 
@@ -1073,28 +1062,29 @@ function set_microphysics_tendency_cache!(Y, p, ::NonEquilibriumMicrophysics2M, 
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
     # TODO - looks like only grid-mean version is implemented now
     sgs_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    @. ᶜmp_tendency = microphysics_tendencies_quadrature_and_explicit_limits_2m(
+    # Cell-centered vertical velocity for w/p-dependent activation schemes
+    # (Twomey, FixedARG). DiagnosticNc / NoActivation ignore them.
+    ᶜw = @. lazy(w_component(Geometry.WVector(ᶜu)))
+    @. ᶜmp_tendency = microphysics_tendencies_quadrature_and_limits_2m(
         # bulk tendency args
-        sgs_quad, cmp, thp, ᶜρ, ᶜT, ᶜq_tot_safe,
+        sgs_quad, cmp, thp, ᶜρ, ᶜT, ᶜq_tot_nonneg,
         specific(ᶜρq_lcl, ᶜρ), specific(ᶜρn_lcl, ᶜρ),
         specific(ᶜρq_rai, ᶜρ), specific(ᶜρn_rai, ᶜρ),
         specific(ᶜρq_ice, ᶜρ), specific(ᶜρn_ice, ᶜρ),
         specific(ᶜρq_rim, ᶜρ), specific(ᶜρb_rim, ᶜρ),
         ᶜlogλ,
-        # additional args for tendency limiter
+        # inpc_log_shift, w, p — w/p ride through to the activation scheme
+        zero(ᶜρ), ᶜw, ᶜp,
+        # tendency-limiter dispatch (Implicit / Explicit / Nothing)
         microphysics_tendency_timestepping, dt,
     )
 
     # Aerosol activation based on ARG 2000. Requires prescribed aerosols.
     # TODO - should be part of BMT
     # TODO - also only acting on grid mean
-    if hasproperty(p, :tracers) &&
-       hasproperty(p.tracers, :prescribed_aerosols_field)
-
-        # Get aerosol parameters and vertical velocity
+    if hasproperty(p, :tracers) && hasproperty(p.tracers, :prescribed_aerosols_field)
         pap = p.params.prescribed_aerosol_params
         acp = CAP.microphysics_cloud_params(p.params).activation
-        ᶜw = @. lazy(w_component(Geometry.WVector(ᶜu)))
 
         # Get prescribed aerosol concentrations
         seasalt_num = p.scratch.ᶜtemp_scalar
@@ -1159,20 +1149,27 @@ function set_microphysics_tendency_cache!(
     end
 
     ### Updraft contribution
+    sgs_quad_j = something(p.atmos.sgs_quadrature, GridMeanSGS())
     for j in 1:n
-        # Microphysics
-        compute_2m_precipitation_tendencies!(
-            ᶜmp_tendencyʲs.:($j), ᶜρʲs.:($j), ᶜq_tot_nonnegʲs.:($j),
-            Y.c.sgsʲs.:($j).q_lcl, Y.c.sgsʲs.:($j).n_lcl,
-            Y.c.sgsʲs.:($j).q_rai, Y.c.sgsʲs.:($j).n_rai,
-            ᶜTʲs.:($j), dt, cm2p, thp,
-            p.atmos.microphysics_tendency_timestepping,
+        # Microphysics. `ᶜwʲ_pos` is the per-updraft vertical velocity
+        # used by w/p-dependent activation schemes (Twomey, FixedARG);
+        # DiagnosticNc / NoActivation ignore it. Updraft microphysics is
+        # warm-only here (no P3 ice fields), so q_ice…logλ are zero-padded.
+        ᶜwʲ = @. lazy(max(0, w_component(Geometry.WVector(ᶜuʲs.:($$j)))))
+        ᶜρʲ = ᶜρʲs.:($j)
+        @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_quadrature_and_limits_2m(
+            sgs_quad_j, cm2p, thp, ᶜρʲ, ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+            Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).n_lcl,
+            Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).n_rai,
+            zero(ᶜρʲ), zero(ᶜρʲ), zero(ᶜρʲ), zero(ᶜρʲ), zero(ᶜρʲ),  # q_ice…logλ
+            zero(ᶜρʲ),                                              # inpc_log_shift
+            ᶜwʲ, ᶜp,
+            p.atmos.microphysics_tendency_timestepping, dt,
         )
         #ᶜmp_tendencyʲs.:($j).dq_ice_dt = 0
         #ᶜmp_tendencyʲs.:($j).dq_rim_dt = 0
         #ᶜmp_tendencyʲs.:($j).db_rim_dt = 0
         # Aerosol activation
-        ᶜwʲ = @. lazy(max(0, w_component(Geometry.WVector(ᶜuʲs.:($$j)))))
         @. ᶜmp_tendencyʲs.:($$j).dn_lcl_dt += aerosol_activation_sources(
             acp, seasalt_num, seasalt_mean_radius, sulfate_num,
             ᶜq_tot_nonnegʲs.:($$j),
@@ -1197,21 +1194,26 @@ function set_microphysics_tendency_cache!(
     # Environment mean or quadrature sum over the SGS fluctuations
     # TODO - looks like only mean version is implemented now
     SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_2m(
+    # Cell-centered environment vertical velocity for w/p-dependent
+    # activation schemes (Twomey, FixedARG); also reused for the aerosol
+    # activation block below.
+    ᶜw⁰ = @. lazy(w_component(Geometry.WVector(ᶜu⁰)))
+    # Single broadcast: bulk tendency + tendency limiter via
+    # `microphysics_tendencies_quadrature_and_limits_2m`. Warm-only here, so
+    # q_ice…logλ are zero-padded.
+    @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_and_limits_2m(
         SG_quad, cm2p, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
         ᶜq_lcl⁰, ᶜn_lcl⁰, ᶜq_rai⁰, ᶜn_rai⁰,
-    )
-    # Apply the limiter
-    apply_2m_tendency_limits!(
-        ᶜmp_tendency⁰, p.atmos.microphysics_tendency_timestepping,
-        ᶜq_lcl⁰, ᶜn_lcl⁰, ᶜq_rai⁰, ᶜn_rai⁰, dt,
+        zero(ᶜρ⁰), zero(ᶜρ⁰), zero(ᶜρ⁰), zero(ᶜρ⁰), zero(ᶜρ⁰),  # q_ice…logλ
+        zero(ᶜρ⁰),                                              # inpc_log_shift
+        ᶜw⁰, ᶜp,
+        p.atmos.microphysics_tendency_timestepping, dt,
     )
     #@. ᶜmp_tendency⁰.dq_ice_dt = 0
     #@. ᶜmp_tendency⁰.dq_sno_dt = 0
     # Aerosol activation
     # TODO - make it part of BMT
     # TODO - should be included in limiting
-    ᶜw⁰ = @. lazy(w_component(Geometry.WVector(ᶜu⁰)))
     @. ᶜmp_tendency⁰.dn_lcl_dt += aerosol_activation_sources(
         acp, seasalt_num, seasalt_mean_radius, sulfate_num, ᶜq_tot_nonneg⁰,
         ᶜq_lcl⁰ + ᶜq_rai⁰, ᶜq_icl⁰ + ᶜq_sno⁰, ᶜn_lcl⁰ + ᶜn_rai⁰,
@@ -1274,10 +1276,16 @@ function set_precipitation_surface_fluxes!(Y, p,
 
     # Constant extrapolation to surface, consistent with simple downwinding
     # Temporary scratch variables are used here until CC.field_values supports <lazy> fields
+    # Note: the 1M state uses `ρq_icl` for cloud ice while the 2M+P3 state
+    # uses `ρq_ice`. Branch on the microphysics model to pick the right field.
     ᶜq_rai = @. p.scratch.ᶜtemp_scalar = specific(Y.c.ρq_rai, Y.c.ρ)
     ᶜq_lcl = @. p.scratch.ᶜtemp_scalar_2 = specific(Y.c.ρq_lcl, Y.c.ρ)
-    ᶜq_ice = @. p.scratch.ᶜtemp_scalar_3 = specific(Y.c.ρq_ice, Y.c.ρ)
-    
+    if microphysics_model isa NonEquilibriumMicrophysics1M
+        ᶜq_ice = @. p.scratch.ᶜtemp_scalar_3 = specific(Y.c.ρq_icl, Y.c.ρ)
+    else
+        ᶜq_ice = @. p.scratch.ᶜtemp_scalar_3 = specific(Y.c.ρq_ice, Y.c.ρ)
+    end
+
     sfc_qᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜq_rai, 1)), sfc_space)
     sfc_qₗ = Fields.Field(Fields.field_values(Fields.level(ᶜq_lcl, 1)), sfc_space)
     sfc_qᵢ = Fields.Field(Fields.field_values(Fields.level(ᶜq_ice, 1)), sfc_space)
@@ -1292,7 +1300,6 @@ function set_precipitation_surface_fluxes!(Y, p,
     @. col_integrated_precip_energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
     if microphysics_model isa NonEquilibriumMicrophysics1M
         (; ᶜwₛ) = p.precomputed
-        @. ᶜq_sno = specific(Y.c.ρq_sno, Y.c.ρ)
         ᶜq_sno = @. p.scratch.ᶜtemp_scalar_4 = specific(Y.c.ρq_sno, Y.c.ρ)
         sfc_qₛ = Fields.Field(Fields.field_values(Fields.level(ᶜq_sno, 1)), sfc_space)
         sfc_wₛ = Fields.Field(Fields.field_values(Fields.level(ᶜwₛ, 1)), sfc_space)

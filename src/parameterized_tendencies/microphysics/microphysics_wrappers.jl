@@ -452,36 +452,6 @@ function aerosol_activation_sources(
     )
 end
 
-"""
-    compute_2m_precipitation_tendencies!(mp_tendency, ρ, qₜ, qₗ, nₗ, qᵣ, nᵣ, T, dt, mp, thp)
-
-Compute 2-moment warm rain microphysics tendencies (cloud condensation/evaporation,
-autoconversion, accretion, and precipitation) in a single call.
-
-# Arguments
-- `mp_tendency`: Output NamedTuple for liquid mass, liquid number, rain mass, rain number tendencies
-- `ρ`: Air density [kg/m³]
-- `qₜ`: Total water specific humidity [kg/kg]
-- `qₗ`: Cloud liquid specific humidity [kg/kg]
-- `nₗ`: Cloud liquid number concentration [1/kg]
-- `qᵣ`: Rain specific humidity [kg/kg]
-- `nᵣ`: Rain number concentration [1/kg]
-- `T`: Air temperature [K]
-- `dt`: Model timestep [s] (for tendency limiting)
-- `mp`: Microphysics parameters (`CMP.Microphysics2MParams`)
-- `thp`: Thermodynamics parameters
-
-# Output
-Modifies mp_tendency in-place with limited tendencies.
-"""
-function compute_2m_precipitation_tendencies!(
-    mp_tendency, ρ, qₜ, qₗ, nₗ, qᵣ, nᵣ, T, dt, mp, thp, timestepping,
-)
-    @. mp_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(), mp, thp, ρ, T, qₜ, qₗ, nₗ, qᵣ, nᵣ,
-    )
-    apply_2m_tendency_limits!(mp_tendency, timestepping, qₗ, nₗ, qᵣ, nᵣ, dt)
-end
 
 """
     microphysics_tendencies_quadrature_2m(::SGSQuadrature, args...)

@@ -173,7 +173,12 @@ function compute_∂T_∂θ!(dest, Y, p, thermo_params)
     else
         # TODO - change in the next PR. Keeping this non behavior changing
         ᶜq_liq = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ)) # TODO + specific(Y.c.ρq_rai, Y.c.ρ))
-        ᶜq_ice = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ)) # TODO + specific(Y.c.ρq_sno, Y.c.ρ))
+        # 1M uses ρq_icl (cloud ice) + ρq_sno (snow); 2M+P3 uses ρq_ice.
+        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
+            ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        else
+            ᶜq_ice = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ)) # TODO + specific(Y.c.ρq_sno, Y.c.ρ))
+        end
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     end
     ᶜθ_li = @. lazy(
@@ -668,7 +673,12 @@ function _get_condensate_means_nonequil(Y, p, turbconv_model)
         return ᶜq_liq⁰, ᶜq_ice⁰
     else
         ᶜq_lcl_mean = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
-        ᶜq_icl_mean = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+        # 1M uses ρq_icl for cloud ice; 2M+P3 uses ρq_ice.
+        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
+            ᶜq_icl_mean = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        else
+            ᶜq_icl_mean = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+        end
         return ᶜq_lcl_mean, ᶜq_icl_mean
     end
 end

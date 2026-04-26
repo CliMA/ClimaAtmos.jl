@@ -310,8 +310,11 @@ compute_cli(_, _, _, model) = error_diagnostic_variable("cli", model)
 
 compute_cli(_, cache, _, ::EquilibriumMicrophysics0M) = cache.precomputed.ᶜq_ice
 
-compute_cli(state, _, _, ::NonEquilibriumMicrophysics) =
+compute_cli(state, _, _, ::NonEquilibriumMicrophysics1M) =
     @. lazy(specific(state.c.ρq_icl, state.c.ρ))
+
+compute_cli(state, _, _, ::NonEquilibriumMicrophysics2M) =
+    @. lazy(specific(state.c.ρq_ice, state.c.ρ))
 
 add_diagnostic_variable!(short_name = "cli", units = "kg kg^-1",
     long_name = "Mass Fraction of Cloud Ice",
@@ -661,9 +664,16 @@ function compute_clwvi(state, cache, _, ::EquilibriumMicrophysics0M)
     return out
 end
 
-function compute_clwvi(state, cache, _, ::NonEquilibriumMicrophysics)
+function compute_clwvi(state, cache, _, ::NonEquilibriumMicrophysics1M)
     out = cache.scratch.ᶠtemp_field_level
     clw = @. lazy(state.c.ρq_lcl + state.c.ρq_icl)
+    Operators.column_integral_definite!(out, clw)
+    return out
+end
+
+function compute_clwvi(state, cache, _, ::NonEquilibriumMicrophysics2M)
+    out = cache.scratch.ᶠtemp_field_level
+    clw = @. lazy(state.c.ρq_lcl + state.c.ρq_ice)
     Operators.column_integral_definite!(out, clw)
     return out
 end
