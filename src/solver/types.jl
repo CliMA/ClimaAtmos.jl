@@ -18,18 +18,15 @@ struct NonEquilibriumMicrophysics1M <: AbstractMicrophysicsModel
     end
 end
 struct NonEquilibriumMicrophysics2M <: AbstractMicrophysicsModel end
-struct NonEquilibriumMicrophysics2MP3 <: AbstractMicrophysicsModel end
 
 const NonEquilibriumMicrophysics = Union{
     NonEquilibriumMicrophysics1M,
     NonEquilibriumMicrophysics2M,
-    NonEquilibriumMicrophysics2MP3,
 }
 const MoistMicrophysics = Union{
     EquilibriumMicrophysics0M,
     NonEquilibriumMicrophysics1M,
     NonEquilibriumMicrophysics2M,
-    NonEquilibriumMicrophysics2MP3,
 }
 
 """
@@ -683,6 +680,89 @@ function (::ShipwayHill2012VelocityProfile{FT})(z, t) where {FT}
 end
 
 """
+    Jouan2020VelocityProfile{FT} <: PrescribedFlow{FT}
+
+Prescribed vertical-velocity field for the Jouan et al. (2020) Arctic
+mixed-phase cloud case. Velocity is separable: `w(z, t) = shape(z) * f(t)`
+where `shape(z)` is a piecewise-linear profile (cm/s) sampled at 20
+`(z, w)` nodes between z = 0 and z = 15 km, clipped to zero above 15 km,
+and `f(t)` is a piecewise-linear temporal modulation (antisymmetric
+about t = 180 min, with ramps and plateaus) over a 360-min horizon.
+The final velocity is converted from cm/s to m/s.
+"""
+struct Jouan2020VelocityProfile{FT} <: PrescribedFlow{FT} end
+
+# Piecewise-linear interpolation on sorted knots (x_knots, y_knots).
+# Flat (clip-to-zero) extrapolation outside the knot span.
+@inline function _jouan_pl_interp(x, x_knots::NTuple{N, FT},
+    y_knots::NTuple{N, FT}) where {N, FT}
+    x < x_knots[1] && return zero(FT)
+    x >= x_knots[N] && return zero(FT)
+    @inbounds for i in 1:(N - 1)
+        x1 = x_knots[i]
+        x2 = x_knots[i + 1]
+        if x >= x1 && x <= x2
+            s = (x - x1) / (x2 - x1)
+            return y_knots[i] + s * (y_knots[i + 1] - y_knots[i])
+        end
+    end
+    return zero(FT)
+end
+
+# Piecewise-linear interpolation WITHOUT clipping — used for f(t) which
+# can be negative. Saturates at the endpoints.
+@inline function _jouan_pl_interp_signed(x, x_knots::NTuple{N, FT},
+    y_knots::NTuple{N, FT}) where {N, FT}
+    x <= x_knots[1] && return y_knots[1]
+    x >= x_knots[N] && return y_knots[N]
+    @inbounds for i in 1:(N - 1)
+        x1 = x_knots[i]
+        x2 = x_knots[i + 1]
+        if x >= x1 && x <= x2
+            s = (x - x1) / (x2 - x1)
+            return y_knots[i] + s * (y_knots[i + 1] - y_knots[i])
+        end
+    end
+    return zero(FT)
+end
+
+# Spatial shape w(z) in cm/s, with z in metres (knots specified in km).
+@inline function _jouan_w_shape(z::FT) where {FT}
+    z_km = (
+        FT(0.0), FT(0.8), FT(1.0), FT(1.5), FT(2.0),
+        FT(2.5), FT(3.1), FT(4.3), FT(5.7), FT(6.5),
+        FT(7.4), FT(8.4), FT(9.4), FT(10.0), FT(10.7),
+        FT(11.4), FT(12.1), FT(13.0), FT(13.9), FT(15.0),
+    )
+    w_cm = (
+        FT(0.0), FT(0.0), FT(1.3), FT(2.4), FT(3.5),
+        FT(4.0), FT(4.0), FT(3.6), FT(2.3), FT(1.9),
+        FT(1.8), FT(1.4), FT(0.2), FT(0.3), FT(1.0),
+        FT(1.2), FT(1.2), FT(0.4), FT(0.0), FT(0.0),
+    )
+    return _jouan_pl_interp(z / FT(1000), z_km, w_cm)
+end
+
+# Temporal modulation f(t), with t in seconds (knots specified in minutes).
+@inline function _jouan_time_modulation(t::FT) where {FT}
+    t_min = (
+        FT(0.0), FT(10.0), FT(30.0), FT(150.0), FT(170.0),
+        FT(190.0), FT(210.0), FT(330.0), FT(350.0), FT(360.0),
+    )
+    f_vals = (
+        FT(0.0), FT(0.0), FT(1.0), FT(1.0), FT(0.0),
+        FT(0.0), FT(-1.0), FT(-1.0), FT(0.0), FT(0.0),
+    )
+    return _jouan_pl_interp_signed(t / FT(60), t_min, f_vals)
+end
+
+# Full velocity w(z, t) in m/s (× 1/100 to convert from cm/s).
+function (::Jouan2020VelocityProfile{FT})(z, t) where {FT}
+    w_cm = _jouan_w_shape(FT(z)) * _jouan_time_modulation(FT(t))
+    return w_cm * FT(0.01)
+end
+
+"""
     get_ρu₃qₜ_surface(flow::PrescribedFlow{FT}, thermo_params, t) where {FT}
 
 Computes the vertical transport `ρwqₜ` at the surface due to prescribed flow.
@@ -692,6 +772,18 @@ Computes the vertical transport `ρwqₜ` at the surface due to prescribed flow.
 - `thermo_params`: The thermodynamic parameters, needed to compute surface air density.
 - `t`: The current time.
 """
+function get_ρu₃qₜ_surface(flow::Jouan2020VelocityProfile, thermo_params, t)
+    # Surface-level values from the Jouan sounding (first row of
+    # src/setups/data/Jouan_initial_condition.txt, z = 5.0 m).
+    FT = eltype(thermo_params)
+    T_sfc = FT(286.9)
+    p_sfc = FT(99_877)
+    q_tot_sfc = FT(0.00941)
+    ρ_sfc = TD.air_density(thermo_params, T_sfc, p_sfc, q_tot_sfc)
+    w_sfc = Geometry.WVector(flow(FT(0), t))
+    return ρ_sfc * w_sfc * q_tot_sfc
+end
+
 function get_ρu₃qₜ_surface(flow::ShipwayHill2012VelocityProfile, thermo_params, t)
     # TODO: Get these values from the setup instead of hardcoding:
     FT = eltype(thermo_params)
@@ -955,6 +1047,7 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosRadiation, :radiation),
     (AtmosTurbconv, :turbconv),
     (ShipwayHill2012VelocityProfile, :prescribed_flow),
+    (Jouan2020VelocityProfile, :prescribed_flow),
     (AtmosGravityWave, :gravity_wave),
     (AtmosSponge, :sponge),
     (AtmosSurface, :surface),
@@ -1057,7 +1150,7 @@ The default AtmosModel provides:
 # Available Structs
 
 ## AtmosWater
-- `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
+- `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M()
 - `cloud_model`: GridScaleCloud(), QuadratureCloud()
 - `microphysics_tendency_timestepping`: Explicit(), Implicit()
 - `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)

@@ -15,32 +15,67 @@ More reading: https://discourse.julialang.org/t/print-vs-two-argument-show-repr-
 ### Helper methods for show ###
 ### ----------------------- ###
 
+_type_name(x; with_module_prefix = false) =
+    if with_module_prefix
+        # name with module prefix, e.g. CloudMicrophysics.Parameters.SB2006
+        typeof(x).name.wrapper
+    else
+        # name without module prefix, e.g. SB2006
+        string(typeof(x).name.name)
+    end
+
+"""
+    field_units(x)
+
+Return a `NamedTuple` mapping field names to unit strings for type `x`,
+or `nothing` if no units are defined.
+
+Types that want unit annotations in their verbose `show` output should
+define a method, e.g.:
+
+```julia
+ShowMethods.field_units(::MyType) = (; mass = "kg", velocity = "m/s")
+```
+
+Fields present in the `NamedTuple` get `[unit]` printed after their value.
+Fields *not* in the `NamedTuple` (but whose type does define `field_units`)
+get `[-]` (dimensionless). Types with no `field_units` method get no
+unit annotations at all.
+"""
+field_units(_) = nothing
+
+"Print unit annotation for field `k` based on the units spec."
+_print_unit(::IO, _, _) = nothing
+function _print_unit(io::IO, units::NamedTuple, k::Symbol)
+    unit = haskey(units, k) ? units[k] : "-"
+    print(io, " [", unit, "]")
+end
+
+"""
+    _is_nested_struct(v)
+
+Return `true` if `v` is a composite struct that should be recursively
+pretty-printed (i.e. a non-trivial struct with fields, but not a
+`Number`, `AbstractString`, `Symbol`, or `Nothing`).
+"""
+_is_nested_struct(v) =
+    isstructtype(typeof(v)) &&
+    fieldcount(typeof(v)) > 0 &&
+    !(v isa Union{Number, AbstractString, Symbol, Nothing})
+
+
 """
     verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)
 
 Print a verbose representation of the type and fields of `x` to `io`.
-
-# Examples
-```julia-repl
-julia> import ClimaAtmos as CA
-
-julia> CA.RRTMGPInterface.AllSkyRadiation()
-AllSkyRadiation
-  ├─ idealized_h2o = false
-  ├─ idealized_clouds = false
-  ├─ cloud = ClimaAtmos.InteractiveCloudInRadiation()
-  ├─ add_isothermal_boundary_layer = true
-  ├─ aerosol_radiation = false
-  ├─ reset_rng_seed = false
-  └─ deep_atmosphere = true
-
-```
 """
-function verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)
+function verbose_show_type_and_fields(io::IO, mime::MIME"text/plain", x; with_module_prefix = false)
     compact = get(io, :compact, false)::Bool
-    typename = typeof(x).name.name  # name without module prefix
+    indent = get(io, :indent, "")::String
+    typename = _type_name(x; with_module_prefix)
     keys = fieldnames(typeof(x))
     vals = [getfield(x, k) for k in keys]
+    units = field_units(x)
     print(io, "$(typename)")
     if compact
         print(io, "(")
@@ -50,50 +85,82 @@ function verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)
         end
         print(io, ")")
     else
-        for (k, v) in zip(keys, vals)
-            prefix = k == keys[end] ? "└─ " : "├─ "
-            print(io, "\n  " * prefix * "$k = ", v)
+        for (i, (k, v)) in enumerate(zip(keys, vals))
+            is_last = i == length(keys)
+            connector = is_last ? "└─ " : "├─ "
+            continuation = is_last ? "   " : "│  "
+            if _is_nested_struct(v)
+                print(io, "\n$(indent)$(connector)$(k): ")
+                nested_io = IOContext(io, :indent => indent * continuation)
+                show(nested_io, mime, v)
+            else
+                print(io, "\n$(indent)$(connector)$(k) = ", v)
+                _print_unit(io, units, k)
+            end
         end
     end
 end
 
 """
-	parseable_show_with_fields_no_type_header(io::IO, x; with_kwargs = ())
+    compact_show_type_and_fields(io::IO, ::MIME"text/plain", x; kw...)
 
-Print a parseable representation of the type that allows reconstruction of `x`.
+Print a compact one-line representation of `x`: `TypeName(field = value, ...)`.
 
-# Arguments
-- `with_kwargs`: If true, print the fields as keyword arguments.
-	- This is relevant for structs definitions prefixed with `@kwdef`
-- `skip_fields_by_value`: A tuple of values that are not printed for any fields with those values.
-	- Note: Because the printed representation should reconstruct an equivalent instance,
-		the values provided here should be the default values for the fields.
-	- By default, no fields are skipped.
+# Keyword arguments
+- `with_units = true`: Append unit annotations from [`field_units`](@ref).
+- `with_kwargs = true`: Print fields as keyword arguments (`field = value`).
+- `with_module_prefix = false`: Use module-qualified type name.
+- `skip_fields_by_value = ()`: Skip fields whose values are in this tuple.
 
-# Examples
+# Example output
 ```julia-repl
-julia> show(stdout, CA.AtmosRadiation())
-ClimaAtmos.AtmosRadiation(insolation = ClimaAtmos.IdealizedInsolation())
+julia> import CloudMicrophysics.Parameters as CMP
+
+julia> ap = CMP.AirProperties(Float32)
+AirProperties(K_therm = 0.024 [W/m/K], D_vapor = 2.26e-5 [m²/s], ν_air = 1.6e-5 [m²/s])
 ```
 """
-function parseable_show_with_fields_no_type_header(io::IO, x;
-    with_kwargs = true, skip_fields_by_value = (),
+function compact_show_type_and_fields(io::IO, ::MIME"text/plain", x;
+    with_units = true, with_kwargs = true,
+    with_module_prefix = false, skip_fields_by_value = (),
 )
-    typename = typeof(x).name.wrapper  # name with module prefix, e.g. ClimaAtmos.QuadratureCloud
+    typename = _type_name(x; with_module_prefix)
     keys = fieldnames(typeof(x))
     vals = [getfield(x, k) for k in keys]
-    show(io, typename)
-    print(io, "(")
-    printed_first_arg = false
+    units = with_units ? field_units(x) : nothing
+    print(io, typename, "(")
+    printed_first = false
     for (k, v) in zip(keys, vals)
         v ∈ skip_fields_by_value && continue
-        printed_first_arg && print(io, ", ")
-        with_kwargs && print(io, "$k = ")
+        printed_first && print(io, ", ")
+        with_kwargs && print(io, k, " = ")
         show(io, v)
-        printed_first_arg = true
+        _print_unit(io, units, k)
+        printed_first = true
     end
     print(io, ")")
 end
+
+"""
+	parseable_show_with_fields_no_type_header(io::IO, x; kw...)
+
+Print a parseable (copy-pasteable) one-line representation of `x`.
+Thin wrapper around [`compact_show_type_and_fields`](@ref) with
+`with_units = false` and `with_module_prefix = true` by default.
+
+Note: This assumes that the type 
+
+# Examples
+```julia-repl
+julia> show(stdout, CM.Parameters.NumberAdjustmentHorn2012(τ = 3.0f0))
+CloudMicrophysics.Parameters.NumberAdjustmentHorn2012(τ = 3.0f0)
+```
+"""
+parseable_show_with_fields_no_type_header(io::IO, x; with_module_prefix = true, kw...) =
+    compact_show_type_and_fields(io, MIME("text/plain"), x;
+        with_units = false, with_module_prefix, kw...,
+    )
+
 
 ### ------------------------------ ###
 ### Show methods for model structs ###

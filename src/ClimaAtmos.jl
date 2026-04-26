@@ -9,6 +9,7 @@ import LazyBroadcast: lazy
 import Thermodynamics as TD
 import Thermodynamics
 import ClimaCore.MatrixFields: @name
+import UnrolledUtilities as UU
 
 
 include("compat.jl")

@@ -3,7 +3,7 @@ import JLD2
 
 function get_microphysics_model(parsed_args, params = nothing)
     model_name = parsed_args["microphysics_model"]
-    @assert model_name in ("dry", "0M", "1M", "2M", "2MP3")
+    @assert model_name in ("dry", "0M", "1M", "2M")
     if model_name == "dry"
         DryModel()
     elseif model_name == "0M"
@@ -13,8 +13,6 @@ function get_microphysics_model(parsed_args, params = nothing)
         NonEquilibriumMicrophysics1M(; n_substeps)
     elseif model_name == "2M"
         NonEquilibriumMicrophysics2M()
-    elseif model_name == "2MP3"
-        NonEquilibriumMicrophysics2MP3()
     end
 end
 

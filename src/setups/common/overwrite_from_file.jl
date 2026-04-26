@@ -144,7 +144,7 @@ function assign_moisture_edmf!(
     if hasproperty(Y.c, :ρq_icl)
         fill!(Y.c.ρq_icl, 0)
     end
-    if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
+    if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)  # TODO: Update to support 2M+P3
         has_microphysics_vars = NC.NCDataset(file_path) do ds
             haskey(ds, "cswc") && haskey(ds, "crwc")
         end

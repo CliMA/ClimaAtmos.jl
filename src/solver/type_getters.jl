@@ -453,6 +453,8 @@ function get_setup_type(parsed_args, thermo_params)
         return Setups.PrecipitatingColumn(; thermo_params)
     elseif ic_name == "ShipwayHill2012"
         return Setups.ShipwayHill2012(; thermo_params)
+    elseif ic_name == "Jouan2020"
+        return Setups.Jouan2020(; thermo_params)
     elseif isfile(ic_name)
         return Setups.MoistFromFile(ic_name)
     end

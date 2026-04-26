@@ -231,7 +231,7 @@ function edmfx_filter_tendency!(Y, p, t, turbconv_model::PrognosticEDMFX)
         (@name(c.sgsʲs.:(1).q_lcl), @name(c.ρq_lcl)),
         (@name(c.sgsʲs.:(1).q_icl), @name(c.ρq_icl)),
         (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
-        (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
+        (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),  # TODO: Fix for 2M+P3
         (@name(c.sgsʲs.:(1).n_lcl), @name(c.ρn_lcl)),
         (@name(c.sgsʲs.:(1).n_rai), @name(c.ρn_rai)),
     )

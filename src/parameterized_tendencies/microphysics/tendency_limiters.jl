@@ -158,37 +158,84 @@ end
 # ============================================================================
 
 """
-    apply_2m_tendency_limits!(ᶜmp_tendency, timestepping, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, dt)
+    apply_2m_tendency_limits(mp_tendency, timestepping, q_lcl, n_lcl, q_rai, n_rai, q_ice, n_ice, dt) -> NamedTuple
 
-Apply physical limiting to 2M microphysics tendencies in-place.
+Pointwise limiter for one cell's 2M microphysics tendency. Dispatches on
+the timestepping kind:
 
-No-op for implicit timestepping as the Jacobian handles stability.
+- `Explicit`: scales `(dq_*, dn_*)` by the coupled-sink factor so that no
+  reservoir empties below zero in `dt` — the explicit-Euler stability
+  guard. Returns a new NamedTuple with scaled fields.
+- `Implicit` / `Nothing`: no-op; the Jacobian (or the absence of a stiff
+  step) handles stability. Returns `mp_tendency` unchanged.
+
+Designed to be called inside a `@.` broadcast — the dispatch is on the
+timestepping value, all other args are scalars per cell. Replaces the
+older field-wise `apply_2m_tendency_limits!` (in-place mutation; deleted)
+which was redundant with this + broadcast.
 """
-@inline apply_2m_tendency_limits!(ᶜmp_tendency, ::Implicit, args...) = nothing
-@inline function apply_2m_tendency_limits!(
-    ᶜmp_tendency, ::Explicit, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, dt,
+@inline apply_2m_tendency_limits(mp_tendency, ::Implicit, args...) = mp_tendency
+@inline apply_2m_tendency_limits(mp_tendency, ::Nothing,  args...) = mp_tendency
+@inline function apply_2m_tendency_limits(
+    mp_tendency, ::Explicit,
+    q_lcl, n_lcl, q_rai, n_rai, q_ice, n_ice, dt,
 )
-    @. ᶜmp_tendency = _explicit_2m_tendency_limits(
-        ᶜmp_tendency, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, dt,
+    (; dq_lcl_dt, dn_lcl_dt, dq_rai_dt, dn_rai_dt) = mp_tendency
+    (; dq_ice_dt, dn_ice_dt, dq_rim_dt, db_rim_dt) = mp_tendency
+    f_liq = coupled_sink_limit_factor(dq_lcl_dt, dn_lcl_dt, q_lcl, n_lcl, dt)
+    f_rai = coupled_sink_limit_factor(dq_rai_dt, dn_rai_dt, q_rai, n_rai, dt)
+    f_ice = coupled_sink_limit_factor(dq_ice_dt, dn_ice_dt, q_ice, n_ice, dt)
+    return (;
+        dq_lcl_dt = dq_lcl_dt * f_liq,
+        dn_lcl_dt = dn_lcl_dt * f_liq,
+        dq_rai_dt = dq_rai_dt * f_rai,
+        dn_rai_dt = dn_rai_dt * f_rai,
+        dq_ice_dt = dq_ice_dt * f_ice,
+        dn_ice_dt = dn_ice_dt * f_ice,
+        dq_rim_dt = dq_rim_dt,
+        db_rim_dt = db_rim_dt,
     )
 end
-@inline apply_2m_tendency_limits!(ᶜmp_tendency, ::Nothing, args...) = nothing
 
-@inline function _explicit_2m_tendency_limits(mp_tendency, q_liq, n_liq, q_rai, n_rai, dt)
-    f_liq = coupled_sink_limit_factor(
-        mp_tendency.dq_lcl_dt, mp_tendency.dn_lcl_dt, q_liq, n_liq, dt,
-    )
-    f_rai = coupled_sink_limit_factor(
-        mp_tendency.dq_rai_dt, mp_tendency.dn_rai_dt, q_rai, n_rai, dt,
-    )
+"""
+    microphysics_tendencies_quadrature_and_limits_2m(
+        sgs_quad, cmp, thp, ρ, T, q_tot,
+        q_lcl, n_lcl, q_rai, n_rai, q_ice, n_ice, q_rim, b_rim, logλ,
+        inpc_log_shift, w, p,
+        timestepping, dt,
+    ) -> NamedTuple
 
-    return (
-        dq_lcl_dt = mp_tendency.dq_lcl_dt * f_liq,
-        dn_lcl_dt = mp_tendency.dn_lcl_dt * f_liq,
-        dq_rai_dt = mp_tendency.dq_rai_dt * f_rai,
-        dn_rai_dt = mp_tendency.dn_rai_dt * f_rai,
-        dq_ice_dt = mp_tendency.dq_ice_dt,
-        dq_rim_dt = mp_tendency.dq_rim_dt,
-        db_rim_dt = mp_tendency.db_rim_dt,
+Single pointwise function that combines:
+1. SGS-quadrature integration of `bulk_microphysics_tendencies` (currently
+   `GridMeanSGS` only — `SGSQuadrature` errors out).
+2. Tendency limiting via [`apply_2m_tendency_limits`](@ref) — dispatches
+   on `Explicit` / `Implicit` / `Nothing`.
+
+This is the unified path for all 2M call sites in CA (grid-mean,
+PrognosticEDMFX updrafts, PrognosticEDMFX environment), replacing the
+older split between `microphysics_tendencies_quadrature_2m` +
+`apply_2m_tendency_limits!` and the legacy `compute_2m_precipitation_tendencies!`
+wrapper. Designed for `@.` broadcast use.
+"""
+@inline function microphysics_tendencies_quadrature_and_limits_2m(
+    # arguments for bulk tendency
+    sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
+    q_lcl, n_lcl, q_rai, n_rai, q_ice, n_ice, q_rim, b_rim, logλ,
+    # per-cell ambient inputs read by w/p-dependent activation schemes
+    # (Twomey, FixedARG); ignored by DiagnosticNc and NoActivation.
+    inpc_log_shift, w, p,
+    # tendency-limiter dispatch
+    timestepping, dt,
+)
+    F_rim = rime_mass_fraction(q_rim, q_ice)
+    q_rim = F_rim * q_ice  # TODO: Should probably limit q_rim in one place
+    mp_tendency = microphysics_tendencies_quadrature_2m(
+        sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
+        q_lcl, n_lcl, q_rai, n_rai, q_ice, n_ice, q_rim, b_rim, logλ,
+        inpc_log_shift, w, p,
+    )
+    return apply_2m_tendency_limits(
+        mp_tendency, timestepping,
+        q_lcl, n_lcl, q_rai, n_rai, q_ice, n_ice, dt,
     )
 end

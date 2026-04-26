@@ -1,5 +1,75 @@
 import ClimaCore.MatrixFields: @name
 import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
+import REPL
+
+const _sup_to_reg = Dict(v => k for (k, v) in REPL.REPLCompletions.superscripts)
+
+"""
+    @unpack_sup ((; ᶜfield1, ᶠfield2, ...) = Y)
+
+Unpack fields from a nested struct by converting each variable's leading Unicode
+superscript character to the corresponding regular character, then using that as
+the sub-struct accessor.
+
+For a variable `ᶜX`, this expands to `ᶜX = S.c.X`, where the superscript prefix
+is mapped to its regular equivalent (ᶜ → c, ᶠ → f, ᵀ → T, ² → 2, etc.). Any
+character in `REPL.REPLCompletions.superscripts` is supported.
+
+# Example
+```julia
+Y = (c = (q_tot = 1.0, T = 2.0), f = (w = 3.0,))
+
+@unpack_sup (; ᶜq_tot, ᶠw, ᶜT) = Y
+# equivalent to:
+# ᶜq_tot = Y.c.q_tot
+# ᶠw     = Y.f.w
+# ᶜT     = Y.c.T
+```
+"""
+macro unpack_sup(expr)
+    expr.head == :(=) && expr.args[1].head == :tuple ||
+        error("@unpack_sup: expected `(; vars...) = Y`")
+    Y_expr = expr.args[2]
+    params = expr.args[1].args[1]
+    Meta.isexpr(params, :parameters) ||
+        error("@unpack_sup: expected `(; vars...) = Y`, did you forget the `;`?")
+    Y_local = gensym(:Y)
+    assignments = Base.mapany(params.args) do var
+        s = String(var)
+        first_char = first(s)
+        haskey(_sup_to_reg, first_char) ||
+            error("@unpack_sup: variable '$var' must start with a superscript character")
+        sub = Symbol(_sup_to_reg[first_char])
+        field = Symbol(s[nextind(s, 1):end])
+        :($var = $Y_local.$sub.$field)
+    end
+    result = quote
+        $Y_local = $Y_expr
+        $(assignments...)
+        $Y_local
+    end
+    return esc(result)
+end
+
+"""
+    condensate_names(mm)
+
+Returns a tuple of `@name`s for the condensate species in the microphysics model `mm`.
+
+# Arguments
+- `mm`: Microphysics model (dispatched on `NonEquilibriumMicrophysics1M`
+  or `NonEquilibriumMicrophysics2M`)
+
+# Returns
+Tuple of `@name`s for the condensate species:
+- `NonEquilibriumMicrophysics1M`: `(@name(ρq_lcl), @name(ρq_icl), @name(ρq_rai), @name(ρq_sno))`
+- `NonEquilibriumMicrophysics2M`: `(@name(ρq_lcl), @name(ρq_ice), @name(ρq_rai))`
+"""
+@inline condensate_names(::NonEquilibriumMicrophysics1M) = 
+    (@name(ρq_lcl), @name(ρq_icl), @name(ρq_rai), @name(ρq_sno))
+
+@inline condensate_names(::NonEquilibriumMicrophysics2M) = 
+    (@name(ρq_lcl), @name(ρq_ice), @name(ρq_rai))
 
 """
     specific(ρχ, ρ)
@@ -53,6 +123,31 @@ function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     # For negligible ρa the weight is also zero, and autodiff can still produce NaNs.
     # The ifelse handles both cases explicitly by returning the grid-mean value when ρa < eps.
     return ρa < eps(typeof(ρ)) ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
+end
+
+"""
+    rime_mass_fraction(q_rim, q_ice, q_ice_half)
+
+Calculates the rime mass fraction `F_rim = q_rim / q_ice`.
+
+This function includes regularization to handle cases where `q_ice` is zero
+or vanishingly small. It uses `sgs_weight_function` to smoothly blend between
+the computed ratio `q_rim / q_ice` and a fallback value of zero. Since the
+fallback is zero, the result simplifies to `weight * q_rim / q_ice`.
+
+Arguments:
+- `q_rim`: The rime specific humidity (mass of rime per unit mass of air).
+- `q_ice`: The total ice specific humidity (mass of ice per unit mass of air).
+- `q_ice_half`: The value of `q_ice` at which the weight function equals 0.5,
+  controlling the transition point of the smooth blending.
+
+Returns:
+- The rime mass fraction `F_rim`, smoothly approaching 0 when `q_ice` is small.
+"""
+function rime_mass_fraction(q_rim, q_ice, q_ice_half = eps(typeof(q_ice)))
+    weight = sgs_weight_function(q_ice, q_ice_half)
+    ϵ = eps(typeof(q_ice))
+    return ifelse(q_ice < ϵ^2, zero(q_rim), weight * min(q_rim, q_ice) / q_ice)
 end
 
 # Internal method that checks if its input is @name(ρχ) for some variable χ.

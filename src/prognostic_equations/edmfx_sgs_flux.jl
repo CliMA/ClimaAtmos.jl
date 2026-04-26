@@ -132,7 +132,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 (@name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl), @name(q_lcl)),
                 (@name(c.ρq_icl), @name(c.sgsʲs.:(1).q_icl), @name(q_icl)),
                 (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai), @name(q_rai)),
-                (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno), @name(q_sno)),
+                (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno), @name(q_sno)),  # TODO: Fix for 2M+P3
                 (@name(c.ρn_lcl), @name(c.sgsʲs.:(1).n_lcl), @name(n_lcl)),
                 (@name(c.ρn_rai), @name(c.sgsʲs.:(1).n_rai), @name(n_rai)),
             )
@@ -263,7 +263,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 (@name(c.ρq_lcl), @name(ᶜq_lclʲs.:(1))),
                 (@name(c.ρq_icl), @name(ᶜq_iclʲs.:(1))),
                 (@name(c.ρq_rai), @name(ᶜq_raiʲs.:(1))),
-                (@name(c.ρq_sno), @name(ᶜq_snoʲs.:(1))),
+                (@name(c.ρq_sno), @name(ᶜq_snoʲs.:(1))),  # TODO: Fix for 2M+P3
                 (@name(c.ρn_lcl), @name(ᶜn_lclʲs.:(1))),
                 (@name(c.ρn_rai), @name(ᶜn_raiʲs.:(1))),
             )
@@ -461,7 +461,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             (@name(c.ρq_lcl), FT(1)),
             (@name(c.ρq_icl), FT(1)),
             (@name(c.ρq_rai), α_precip),
-            (@name(c.ρq_sno), α_precip),
+            (@name(c.ρq_sno), α_precip),  # TODO: Fix for 2M+P3
             (@name(c.ρn_lcl), FT(1)),
             (@name(c.ρn_rai), α_precip),
         )

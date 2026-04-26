@@ -113,7 +113,7 @@ function tracer_nonnegativity_constraint!(Y, p, t,
     ᶜρq_tot = Y.c.ρq_tot
 
     tracer_mass_names = (
-        @name(ρq_lcl), @name(ρq_rai), @name(ρq_icl), @name(ρq_sno),
+        @name(ρq_lcl), @name(ρq_rai), @name(ρq_icl), @name(ρq_ice), @name(ρq_sno),
         @name(ρq_tot),
     )
 
@@ -144,6 +144,12 @@ function tracer_nonnegativity_constraint!(Y, p, t,
 end
 
 prescribe_flow!(_, _, _, ::Nothing) = nothing
+
+_prescribe_flow_setup(::ShipwayHill2012VelocityProfile, thermo_params) =
+    Setups.ShipwayHill2012(; thermo_params)
+_prescribe_flow_setup(::Jouan2020VelocityProfile, thermo_params) =
+    Setups.Jouan2020(; thermo_params)
+
 function prescribe_flow!(Y, p, t, flow::PrescribedFlow)
     (; ᶜΦ) = p.core
     ᶠlg = Fields.local_geometry_field(Y.f)
@@ -152,23 +158,42 @@ function prescribe_flow!(Y, p, t, flow::PrescribedFlow)
 
     ᶜlg = Fields.local_geometry_field(Y.c)
     thermo_params = CAP.thermodynamics_params(p.params)
-    setup = Setups.ShipwayHill2012(; thermo_params)
-    function _shipway_ρ_dry(lg)
+    setup = _prescribe_flow_setup(flow, thermo_params)
+    function _setup_ρ_dry(lg)
         ps = Setups.center_initial_condition(setup, lg, p.params)
         ρ = Setups.air_density(ps, p.params)
         return ρ * (1 - ps.q_tot)
     end
-    _shipway_T(lg) = Setups.center_initial_condition(setup, lg, p.params).T
-    ᶜρ_init_dry = @. lazy(_shipway_ρ_dry(ᶜlg))
-    ᶜT_init = @. lazy(_shipway_T(ᶜlg))
+    _setup_T(lg) = Setups.center_initial_condition(setup, lg, p.params).T
+    ᶜρ_init_dry = @. lazy(_setup_ρ_dry(ᶜlg))
+    ᶜT_init = @. lazy(_setup_T(ᶜlg))
 
     # Clamp ρq_tot to non-negative to prevent the feedback loop:
     # negative ρq_tot → lower ρ → more negative q_tot → blowup
     @. Y.c.ρq_tot = max(Y.c.ρq_tot, 0)
+    # Re-pin ρ to the initial-profile dry density + current ρq_tot. ρ must
+    # remain pinned because there is no pressure/momentum equation in the
+    # kinematic column; letting ρ drift would break hydrostatic balance
+    # with the prescribed updraft.
     @. Y.c.ρ = ᶜρ_init_dry + Y.c.ρq_tot
+    # Allow T to evolve in the interior, but keep
+    # ρe_tot pinned to the initial-profile temperature at the top and
+    # bottom boundary cells. The vertical advection of ρe_tot has no
+    # surface/top Dirichlet BC (compare `get_ρu₃qₜ_surface` for ρq_tot),
+    # so when the prescribed flow has nonzero w at the boundary faces,
+    # the unconstrained ρe_tot would blow up in the first and last
+    # interior cells. Pinning just the boundary cells acts as the
+    # missing Dirichlet BC while leaving the interior free to cool
+    # adiabatically in updrafts and to absorb microphysics latent heat.
     ᶜq_tot = @. lazy(Y.c.ρq_tot / Y.c.ρ)
     ᶜe_kin = compute_kinetic(Y.c.uₕ, Y.f.u₃)
-    # Fix energy to initial temperature
-    @. Y.c.ρe_tot = Y.c.ρ * TD.total_energy(thermo_params, ᶜe_kin, ᶜΦ, ᶜT_init, ᶜq_tot)
+    ᶜρe_tot_init = p.scratch.ᶜtemp_scalar
+    @. ᶜρe_tot_init =
+        Y.c.ρ * TD.total_energy(thermo_params, ᶜe_kin, ᶜΦ, ᶜT_init, ᶜq_tot)
+    # Pin only the first and last interior centers.
+    nz = Spaces.nlevels(axes(Y.c))
+    Fields.level(Y.c.ρe_tot, 1) .= Fields.level(ᶜρe_tot_init, 1)
+    Fields.level(Y.c.ρe_tot, nz) .= Fields.level(ᶜρe_tot_init, nz)
+    # @. Y.c.ρe_tot = ᶜρe_tot_init  # uncomment to pin ρe_tot everywhere
     return nothing
 end

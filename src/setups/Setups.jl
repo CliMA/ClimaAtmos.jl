@@ -29,7 +29,6 @@ import ..DryModel
 import ..EquilibriumMicrophysics0M
 import ..NonEquilibriumMicrophysics1M
 import ..NonEquilibriumMicrophysics2M
-import ..NonEquilibriumMicrophysics2MP3
 import ..NonEquilibriumMicrophysics
 import ..MoistMicrophysics
 import ..PrognosticEDMFX
@@ -48,8 +47,10 @@ import ..GCMDrivenInsolation, ..ExternalTVInsolation
 import ..RCEMIPIIInsolation, ..RCEMIPIISST
 import ..ExternalTVColumnSST
 import ..ShipwayHill2012VelocityProfile
+import ..Jouan2020VelocityProfile
 import ..RadiationDYCOMS, ..RadiationTRMM_LBA, ..RadiationISDAC
 import ..SurfaceConditions: MoninObukhov, SurfaceState
+import ..SurfaceConditions
 
 # ============================================================================
 # Layer 1 interface — implemented by each setup
@@ -249,6 +250,7 @@ include("MoistBaroclinicWave.jl")
 include("RCEMIPIIProfile.jl")
 include("PrecipitatingColumn.jl")
 include("ShipwayHill2012.jl")
+include("Jouan2020.jl")
 
 # File-based setups (depend on common/overwrite_from_file.jl)
 include("common/overwrite_from_file.jl")

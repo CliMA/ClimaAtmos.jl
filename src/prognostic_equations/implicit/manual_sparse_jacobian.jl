@@ -92,6 +92,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     condensate_mass_names = (
         @name(c.ρq_lcl),
         @name(c.ρq_icl),
+        @name(c.ρq_ice),
         @name(c.ρq_rai),
         @name(c.ρq_sno),
     )
@@ -537,6 +538,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         (
             (@name(c.ρq_lcl), e_int_v0, Δcv_l),
             (@name(c.ρq_icl), e_int_s0, Δcv_i),
+            (@name(c.ρq_ice), e_int_s0, Δcv_i),
             (@name(c.ρq_rai), e_int_v0, Δcv_l),
             (@name(c.ρq_sno), e_int_s0, Δcv_i),
         ) : (;)
@@ -571,17 +573,19 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     tracer_info = (
         (@name(c.ρq_lcl), @name(ᶜwₗ), FT(1)),
         (@name(c.ρq_icl), @name(ᶜwᵢ), FT(1)),
+        (@name(c.ρq_ice), @name(ᶜwᵢ), FT(1)),
         (@name(c.ρq_rai), @name(ᶜwᵣ), α_vert_diff_tracer),
         (@name(c.ρq_sno), @name(ᶜwₛ), α_vert_diff_tracer),
         (@name(c.ρn_lcl), @name(ᶜwₙₗ), FT(1)),
         (@name(c.ρn_rai), @name(ᶜwₙᵣ), α_vert_diff_tracer),
-        (@name(c.ρn_ice), @name(ᶜwnᵢ), FT(1)),
+        (@name(c.ρn_ice), @name(ᶜwₙᵢ), FT(1)),
         (@name(c.ρq_rim), @name(ᶜwᵢ), FT(1)),
         (@name(c.ρb_rim), @name(ᶜwᵢ), FT(1)),
     )
     internal_energy_func(name) =
         (name == @name(c.ρq_lcl) || name == @name(c.ρq_rai)) ? TD.internal_energy_liquid :
-        (name == @name(c.ρq_icl) || name == @name(c.ρq_sno)) ? TD.internal_energy_ice :
+        (name == @name(c.ρq_icl) || name == @name(c.ρq_ice) || name == @name(c.ρq_sno)) ?
+            TD.internal_energy_ice :
         nothing
     if !(p.atmos.microphysics_model isa DryModel) || use_derivative(diffusion_flag)
         ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
@@ -614,7 +618,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 p.scratch.ᶠband_matrix_wvec - (I,)
 
             if ρχₚ_name in
-               (@name(c.ρq_lcl), @name(c.ρq_icl), @name(c.ρq_rai), @name(c.ρq_sno))
+               (@name(c.ρq_lcl), @name(c.ρq_icl), @name(c.ρq_ice), @name(c.ρq_rai), @name(c.ρq_sno))
                 ∂ᶜρq_tot_err_∂ᶜρq = matrix[@name(c.ρq_tot), ρχₚ_name]
                 @. ∂ᶜρq_tot_err_∂ᶜρq =
                     p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅

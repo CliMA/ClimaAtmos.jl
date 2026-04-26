@@ -45,12 +45,14 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     microphysics_tracers = (
         (@name(ρq_lcl), @name(ᶜwₗ)),
         (@name(ρq_icl), @name(ᶜwᵢ)),
+        (@name(ρq_ice), @name(ᶜwᵢ)),
         (@name(ρq_rai), @name(ᶜwᵣ)),
         (@name(ρq_sno), @name(ᶜwₛ)),
     )
     internal_energy_func(name) =
         (name == @name(ρq_lcl) || name == @name(ρq_rai)) ? TD.internal_energy_liquid :
-        (name == @name(ρq_icl) || name == @name(ρq_sno)) ? TD.internal_energy_ice :
+        (name == @name(ρq_icl) || name == @name(ρq_ice) || name == @name(ρq_sno)) ?
+            TD.internal_energy_ice :
         nothing
 
     ᶠρ = p.scratch.ᶠtemp_scalar

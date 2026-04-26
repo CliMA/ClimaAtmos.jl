@@ -452,41 +452,12 @@ function aerosol_activation_sources(
     )
 end
 
-"""
-    compute_2m_precipitation_tendencies!(mp_tendency, ρ, qₜ, qₗ, nₗ, qᵣ, nᵣ, T, dt, mp, thp)
-
-Compute 2-moment warm rain microphysics tendencies (cloud condensation/evaporation,
-autoconversion, accretion, and precipitation) in a single call.
-
-# Arguments
-- `mp_tendency`: Output NamedTuple for liquid mass, liquid number, rain mass, rain number tendencies
-- `ρ`: Air density [kg/m³]
-- `qₜ`: Total water specific humidity [kg/kg]
-- `qₗ`: Cloud liquid specific humidity [kg/kg]
-- `nₗ`: Cloud liquid number concentration [1/kg]
-- `qᵣ`: Rain specific humidity [kg/kg]
-- `nᵣ`: Rain number concentration [1/kg]
-- `T`: Air temperature [K]
-- `dt`: Model timestep [s] (for tendency limiting)
-- `mp`: Microphysics parameters (`CMP.Microphysics2MParams`)
-- `thp`: Thermodynamics parameters
-
-# Output
-Modifies mp_tendency in-place with limited tendencies.
-"""
-function compute_2m_precipitation_tendencies!(
-    mp_tendency, ρ, qₜ, qₗ, nₗ, qᵣ, nᵣ, T, dt, mp, thp, timestepping,
-)
-    @. mp_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(), mp, thp, ρ, T, qₜ, qₗ, nₗ, qᵣ, nᵣ,
-    )
-    apply_2m_tendency_limits!(mp_tendency, timestepping, qₗ, nₗ, qᵣ, nᵣ, dt)
-end
 
 """
-    microphysics_tendencies_quadrature_2m(...)
+    microphysics_tendencies_quadrature_2m(::SGSQuadrature, args...)
+    microphysics_tendencies_quadrature_2m(::GridMeanSGS, args...)
 
-SGS quadrature integration for Microphysics2Moment (warm rain only).
+SGS quadrature integration for Microphysics2Moment
 
 !!! warning "Limited SGS support"
     Only `GridMeanSGS` is currently supported for 2-moment microphysics.
@@ -504,23 +475,20 @@ SGS quadrature integration for Microphysics2Moment (warm rain only).
 - `n_liq`: Cloud liquid number [1/kg]
 - `q_rai`: Rain [kg/kg]
 - `n_rai`: Rain number [1/kg]
+- `q_ice`: Ice [kg/kg]
+- `n_ice`: Ice number [1/kg]
+- `q_rim`: Rime [kg/kg]
+- `b_rim`: Rime volume [m³/kg]
+- `logλ`: Log of P3 distribution slope parameter [log(1/m)]
 
 # Returns
 NamedTuple with tendencies: `dq_lcl_dt`, `dn_lcl_dt`, `dq_rai_dt`, `dn_rai_dt`
 """
-@inline function microphysics_tendencies_quadrature_2m(
-    ::GridMeanSGS, cmp, tps, ρ, T, q_tot, q_liq, n_liq, q_rai, n_rai,
-)
+@inline microphysics_tendencies_quadrature_2m(::GridMeanSGS, args...) =
     # Direct GridMeanSGS dispatch for 2M: evaluates BMT at grid mean.
-    return BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(), cmp, tps, ρ, T,
-        q_tot, q_liq, n_liq, q_rai, n_rai,
-    )
-end
-@inline function microphysics_tendencies_quadrature_2m(
-    SG_quad::SGSQuadrature, cmp, tps, ρ, T,
-    q_tot, q_liq, n_liq, q_rai, n_rai,
-)
+    return BMT.bulk_microphysics_tendencies(BMT.Microphysics2Moment(), args...)
+
+@inline function microphysics_tendencies_quadrature_2m(SG_quad::SGSQuadrature, args...)
     error("Not implemented yet")
     return nothing
 end

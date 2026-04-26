@@ -27,6 +27,7 @@ function jacobian_sgs_u₃_cache(alg::ManualSparseJacobian, Y, atmos)
         @name(c.ρq_tot),
         @name(c.ρq_lcl),
         @name(c.ρq_icl),
+        @name(c.ρq_ice),
         @name(c.ρq_rai),
         @name(c.ρq_sno),
         @name(c.ρn_lcl),
