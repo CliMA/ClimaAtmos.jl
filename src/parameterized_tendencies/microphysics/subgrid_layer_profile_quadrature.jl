@@ -4,10 +4,23 @@
 # broadcasts). No persistent scratch fields.
 #
 # Profile–Rosenblatt (`SubgridProfileRosenblatt`): outer Hermite in `v` × inner
-# Gauss–Legendre in `p` on the **two-component** uniform–Gaussian layer marginal.
-# Inner marginal is **always** the composite split: ½ mass on each shifted
-# half-cell `uniform⊛Gaussian` law, with per-leg inverse chosen by
-# `ConvolutionQuantiles{Halley,Bracketed,ChebyshevLogEta}` (no scalar `F_mix^{-1}`).
+# Gauss–Legendre in `p` on ``[0,1]``, **``N^2`` closure evaluations** at order ``N`` when both
+# half-axes are valid.
+#
+# The lower and upper half-cell are **independent** as random objects: they use separate
+# parameter packs ``p_{\\mathrm{dn}}`` / ``p_{\\mathrm{up}}`` from
+# ``_two_slope_rosenblatt_params(..., mean_gradient_axis = :dn)`` and ``:up`` (separate
+# ``M_{\\mathrm{inv}}``, half-center ``(σ_T,σ_q)``, and outer-``v`` couplings; no cross-talk).
+# **Split-``p``** ([`_profile_rosenblatt_accumulate_split_p_dual_local_axes`](@ref)) assigns each
+# inner abscissa ``p_i \\in (0,1)`` to **one** leg: the left / right halves of the node set
+# (roughly ``N/2`` each; odd ``N`` adds a one-node mid bridge) map through ``p_\\mathrm{leg} = 2p``
+# or ``2p-1`` so the inverse CDF is always evaluated at a **leg-local** quantile in ``(0,1)``
+# (full range for *that* half’s shifted law: leg quantile ``p_\\mathrm{leg}\\in(0,1)``, not a truncated CDF in ``p``).
+#
+# When only one Rosenblatt axis is valid, [`_profile_rosenblatt_accumulate`](@ref) may still
+# split ``p`` on that axis the same way if both ``L_{dn},L_{up} > 0``.
+# Per-leg inverse uses
+# `ConvolutionQuantiles{Halley,Bracketed,ChebyshevLogEta}` on the **single** shifted half law.
 # Each half uses **half-center-anchored** conditional std `σ_{u|v}`
 # (constant on that half’s segment in `u`). There is **no** implemented closed form for a
 # linear-in-`z` conditional variance inside the half’s inner marginal; variance
@@ -322,8 +335,9 @@ Bracketed Brent inverse of the analytic mixture CDF
 [`mixture_uniform_gaussian_convolution_cdf`](@ref): returns `u` such that
 `F_mix(u) = p`.
 
-This helper is provided for robustness checks and analysis. The production
-profile integrator uses composite per-leg inverses, not a single `F_mix^{-1}`.
+This helper is provided for robustness checks and analysis. Production
+profile–Rosenblatt uses **split-``p``** half-leg inverses (see file header), not
+this scalar mixture inverse.
 """
 function mixture_uniform_gaussian_convolution_quantile_brent(
     p::FT, L_dn::FT, s_dn::FT, L_up::FT, s_up::FT,
@@ -418,6 +432,100 @@ end
     return up_half_uniform_gaussian_convolution_quantile_chebyshev(
         L_up, s_up, N_gl, i_node,
     )
+end
+
+"""Bracket sorted GL abscissas ``p_1 \\le \\cdots \\le p_N`` on ``[0,1]`` for interpolation at ``p_\\mathrm{leg}``."""
+@inline function _gl_bracket_pair_indices(
+    p_nodes::AbstractVector{FT}, p_leg::FT, N::Int,
+) where {FT}
+    if p_leg <= p_nodes[1]
+        return 1, 1
+    elseif p_leg >= p_nodes[N]
+        return N, N
+    end
+    @inbounds for k in 1:(N - 1)
+        if p_leg <= p_nodes[k + 1]
+            return k, k + 1
+        end
+    end
+    return N, N
+end
+
+"""Chebyshev-tabulated half-leg ``u`` at arbitrary ``p_\\mathrm{leg}\\in(0,1)``: linear blend in ``p`` of the two tabulated GL-node Chebyshev quantiles bracketing ``p_\\mathrm{leg}`` (still ``ConvolutionQuantilesChebyshevLogEta`` dispatch only; no Brent/Halley substitution)."""
+@inline function _rosenblatt_half_w_dn_chebyshev_split_p_interp(
+    method::ConvolutionQuantilesChebyshevLogEta,
+    p_leg::FT,
+    L_dn::FT,
+    s_dn::FT,
+    N::Int,
+    p_nodes::AbstractVector{FT},
+) where {FT}
+    ε = ϵ_numerics(FT)
+    i_lo, i_hi = _gl_bracket_pair_indices(p_nodes, p_leg, N)
+    u_lo = _rosenblatt_half_w_dn(method, zero(FT), L_dn, s_dn, N, i_lo)
+    if i_lo == i_hi
+        return u_lo
+    end
+    u_hi = _rosenblatt_half_w_dn(method, zero(FT), L_dn, s_dn, N, i_hi)
+    p_lo, p_hi = p_nodes[i_lo], p_nodes[i_hi]
+    w = (p_leg - p_lo) / max(p_hi - p_lo, ε)
+    return (one(FT) - w) * u_lo + w * u_hi
+end
+
+@inline function _rosenblatt_half_w_up_chebyshev_split_p_interp(
+    method::ConvolutionQuantilesChebyshevLogEta,
+    p_leg::FT,
+    L_up::FT,
+    s_up::FT,
+    N::Int,
+    p_nodes::AbstractVector{FT},
+) where {FT}
+    ε = ϵ_numerics(FT)
+    i_lo, i_hi = _gl_bracket_pair_indices(p_nodes, p_leg, N)
+    u_lo = _rosenblatt_half_w_up(method, zero(FT), L_up, s_up, N, i_lo)
+    if i_lo == i_hi
+        return u_lo
+    end
+    u_hi = _rosenblatt_half_w_up(method, zero(FT), L_up, s_up, N, i_hi)
+    p_lo, p_hi = p_nodes[i_lo], p_nodes[i_hi]
+    w = (p_leg - p_lo) / max(p_hi - p_lo, ε)
+    return (one(FT) - w) * u_lo + w * u_hi
+end
+
+@inline function _rosenblatt_half_u_dn_split_p(
+    method,
+    p_leg::FT,
+    L_dn::FT,
+    s_dn::FT,
+    N::Int,
+    i_global::Int,
+    p_nodes::AbstractVector{FT},
+) where {FT}
+    if method isa ConvolutionQuantilesChebyshevLogEta
+        return _rosenblatt_half_w_dn_chebyshev_split_p_interp(
+            method, p_leg, L_dn, s_dn, N, p_nodes,
+        )
+    else
+        return _rosenblatt_half_w_dn(method, p_leg, L_dn, s_dn, N, i_global)
+    end
+end
+
+@inline function _rosenblatt_half_u_up_split_p(
+    method,
+    p_leg::FT,
+    L_up::FT,
+    s_up::FT,
+    N::Int,
+    i_global::Int,
+    p_nodes::AbstractVector{FT},
+) where {FT}
+    if method isa ConvolutionQuantilesChebyshevLogEta
+        return _rosenblatt_half_w_up_chebyshev_split_p_interp(
+            method, p_leg, L_up, s_up, N, p_nodes,
+        )
+    else
+        return _rosenblatt_half_w_up(method, p_leg, L_up, s_up, N, i_global)
+    end
 end
 
 """
@@ -604,6 +712,144 @@ end
     ::VerticallyResolvedSGS{<:SubgridProfileRosenblatt{B}},
 ) where {B <: AbstractConvolutionQuantileMethod} = B()
 
+"""
+    _profile_rosenblatt_accumulate_split_p_dual_local_axes(...)
+
+**Split-``p``** on **one** inner Gauss–Legendre rule of order ``N`` on ``(0,1)`` (total ``N^2``
+``f`` evaluations with Hermite order ``N``), when both below- and above-center Rosenblatt axes
+are valid. Nodes with ``p < ½`` use only pack ``p_{\\mathrm{dn}}`` and leg quantile
+``p_\\mathrm{leg} = 2p \\in (0,1)``; nodes with ``p > ½`` use only ``p_{\\mathrm{up}}`` and
+``p_\\mathrm{leg} = 2p-1``; ``p \\approx ½`` (odd ``N``) bridges with a ``:avg``-axis pack
+when that axis is non-degenerate, else ``p_{\\mathrm{dn}}``.
+
+This matches the half-local frames in
+``calibration/experiments/variance_adjustments/local_python/profile_cell_brute_pdf_quadrature_convergence.py``
+``notebook_split_p_quadrature`` (separate Cholesky / mean-gradient geometry per leg), while
+keeping a **single** ``N \\times N`` tensor—not two full ``(N, N)`` quadratures
+(``2N^2``) and not an extra ``½`` sum over duplicate inner rules.
+"""
+function _profile_rosenblatt_accumulate_split_p_dual_local_axes(
+    f,
+    quad::SGSQuadrature,
+    innerD,
+    μ_q_p,
+    μ_T_p,
+    σ_q_c,
+    σ_T_c,
+    ρ_c,
+    method,
+    seed,
+    p_dn,
+    p_up,
+    p_mid,
+)
+    FT = typeof(μ_T_p)
+    ε = ϵ_numerics(FT)
+    N = quadrature_order(quad)
+    p_nodes, p_w = gauss_legendre_01(FT, N)
+    χ = quad.a
+    wgh = quad.w
+    inv_sqrt_pi = one(FT) / sqrt(FT(π))
+    acc = rzero(seed)
+    sqrt2 = sqrt(FT(2))
+    degenerate =
+        (p_dn.L_dn + p_dn.L_up) <= ε &&
+        max(p_dn.s_u_cond_c, p_dn.s_u_cond_dn, p_dn.s_u_cond_up) <= ε
+    use_dn_lo = p_dn.L_dn > ε
+    use_up_hi = p_up.L_up > ε
+    @inbounds for j in 1:N
+        χj = χ[j]
+        wvj = wgh[j] * inv_sqrt_pi
+        vj_fdn_lo = sqrt2 * p_dn.s_v_fdn * χj
+        μ_0_fdn_lo = p_dn.r_fdn * vj_fdn_lo
+        vj_fup_hi = sqrt2 * p_up.s_v_fup * χj
+        μ_0_fup_hi = p_up.r_fup * vj_fup_hi
+        s_v_deg_dn = max(p_dn.s_v_fdn, p_dn.s_v_fup, ε)
+        vj_deg_dn = sqrt2 * s_v_deg_dn * χj
+        μ_0_deg_dn = p_dn.r_c * vj_deg_dn
+        s_v_deg_mid = max(p_mid.s_v_fdn, p_mid.s_v_fup, ε)
+        vj_deg_mid = sqrt2 * s_v_deg_mid * χj
+        μ_0_deg_mid = p_mid.r_c * vj_deg_mid
+        if degenerate
+            @inbounds for i in 1:N
+                wi = p_w[i]
+                acc = _profile_rosenblatt_emit_inner_sample(
+                    acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
+                    quad, p_dn.M_inv, μ_0_deg_dn, μ_0_deg_dn, vj_deg_dn, wvj, wi,
+                    method,
+                )
+            end
+        else
+            @inbounds for i in 1:N
+                pi = p_nodes[i]
+                wi = p_w[i]
+                if use_dn_lo && use_up_hi
+                    mid = FT(0.5)
+                    mid_w = FT(64) * ε
+                    if abs(pi - mid) <= mid_w
+                        ui_mid = μ_0_deg_mid
+                        acc = _profile_rosenblatt_emit_inner_sample(
+                            acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
+                            quad, p_mid.M_inv, ui_mid, μ_0_deg_mid, vj_deg_mid, wvj, wi,
+                            method,
+                        )
+                    elseif pi < mid
+                        p_leg = FT(2) * pi
+                        ui =
+                            _rosenblatt_half_u_dn_split_p(
+                                method, p_leg, p_dn.L_dn, p_dn.s_u_cond_dn, N, i, p_nodes,
+                            ) + μ_0_fdn_lo
+                        acc = _profile_rosenblatt_emit_inner_sample(
+                            acc, f, innerD, μ_q_p, μ_T_p, p_dn.σ_q_fdn, p_dn.σ_T_fdn, ρ_c,
+                            quad, p_dn.M_inv, ui, μ_0_fdn_lo, vj_fdn_lo, wvj, wi,
+                            method,
+                        )
+                    else
+                        p_leg = FT(2) * pi - one(FT)
+                        ui_up =
+                            _rosenblatt_half_u_up_split_p(
+                                method, p_leg, p_up.L_up, p_up.s_u_cond_up, N, i, p_nodes,
+                            ) + μ_0_fup_hi
+                        acc = _profile_rosenblatt_emit_inner_sample(
+                            acc, f, innerD, μ_q_p, μ_T_p, p_up.σ_q_fup, p_up.σ_T_fup, ρ_c,
+                            quad, p_up.M_inv, ui_up, μ_0_fup_hi, vj_fup_hi, wvj, wi,
+                            method,
+                        )
+                    end
+                elseif use_dn_lo
+                    ui =
+                        _rosenblatt_half_w_dn(
+                            method, pi, p_dn.L_dn, p_dn.s_u_cond_dn, N, i,
+                        ) + μ_0_fdn_lo
+                    acc = _profile_rosenblatt_emit_inner_sample(
+                        acc, f, innerD, μ_q_p, μ_T_p, p_dn.σ_q_fdn, p_dn.σ_T_fdn, ρ_c,
+                        quad, p_dn.M_inv, ui, μ_0_fdn_lo, vj_fdn_lo, wvj, wi,
+                        method,
+                    )
+                elseif use_up_hi
+                    ui_up =
+                        _rosenblatt_half_w_up(
+                            method, pi, p_up.L_up, p_up.s_u_cond_up, N, i,
+                        ) + μ_0_fup_hi
+                    acc = _profile_rosenblatt_emit_inner_sample(
+                        acc, f, innerD, μ_q_p, μ_T_p, p_up.σ_q_fup, p_up.σ_T_fup, ρ_c,
+                        quad, p_up.M_inv, ui_up, μ_0_fup_hi, vj_fup_hi, wvj, wi,
+                        method,
+                    )
+                else
+                    ui = μ_0_deg_dn
+                    acc = _profile_rosenblatt_emit_inner_sample(
+                        acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
+                        quad, p_dn.M_inv, ui, μ_0_deg_dn, vj_deg_dn, wvj, wi,
+                        method,
+                    )
+                end
+            end
+        end
+    end
+    return acc
+end
+
 function _integrate_over_sgs_profile_rosenblatt(
     f,
     quad::SGSQuadrature,
@@ -629,8 +875,9 @@ function _integrate_over_sgs_profile_rosenblatt(
     # 1) build two half-cell parameter packs (`:dn`, `:up`) from mean and variance
     #    slopes via `_two_slope_rosenblatt_params`;
     # 2) outer Gauss-Hermite loop samples `v`;
-    # 3) inner Gauss-Legendre loop inverts half-leg marginals (u for Gaussian,
-    #    transformed ln(q) for LogNormal) using Bracketed/Halley/Chebyshev;
+    # 3) inner Gauss-Legendre on ``[0,1]``: split-``p`` chooses **one** half-leg per node
+    #    when both legs are on (otherwise the surviving leg); then Bracketed/Halley/Chebyshev
+    #    on that **single** shifted law (Gaussian `u` or LogNormal `ln q`);
     # 4) map samples back to `(T, q)` and accumulate weighted tendencies.
     #
     # For LogNormal Profile–Rosenblatt, this path treats the q-axis in ln-space
@@ -710,25 +957,38 @@ function _integrate_over_sgs_profile_rosenblatt(
                     use_dn = L_dn > ε
                     use_up = L_up > ε
                     if use_dn && use_up
-                        wi_half = wi * FT(0.5)
-                        ui =
-                            _rosenblatt_half_w_dn(
-                                method, pi, L_dn, s_u_cond_dn, N, i,
-                            ) + μ_0_fdn
-                        acc = _profile_rosenblatt_emit_inner_sample(
-                            acc, f, innerD, μ_q_p, μ_T_p, σ_q_fdn, σ_T_fdn, ρ_c,
-                            quad, M_inv, ui, μ_0_fdn, vj_fdn, wvj, wi_half,
-                            method,
-                        )
-                        ui_up =
-                            _rosenblatt_half_w_up(
-                                method, pi, L_up, s_u_cond_up, N, i,
-                            ) + μ_0_fup
-                        acc = _profile_rosenblatt_emit_inner_sample(
-                            acc, f, innerD, μ_q_p, μ_T_p, σ_q_fup, σ_T_fup, ρ_c,
-                            quad, M_inv, ui_up, μ_0_fup, vj_fup, wvj, wi_half,
-                            method,
-                        )
+                        mid = FT(0.5)
+                        mid_w = FT(64) * ε
+                        if abs(pi - mid) <= mid_w
+                            ui_mid = μ_0_deg
+                            acc = _profile_rosenblatt_emit_inner_sample(
+                                acc, f, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c,
+                                quad, M_inv, ui_mid, μ_0_deg, vj_deg, wvj, wi,
+                                method,
+                            )
+                        elseif pi < mid
+                            p_leg = FT(2) * pi
+                            ui =
+                                _rosenblatt_half_u_dn_split_p(
+                                    method, p_leg, L_dn, s_u_cond_dn, N, i, p_nodes,
+                                ) + μ_0_fdn
+                            acc = _profile_rosenblatt_emit_inner_sample(
+                                acc, f, innerD, μ_q_p, μ_T_p, σ_q_fdn, σ_T_fdn, ρ_c,
+                                quad, M_inv, ui, μ_0_fdn, vj_fdn, wvj, wi,
+                                method,
+                            )
+                        else
+                            p_leg = FT(2) * pi - one(FT)
+                            ui_up =
+                                _rosenblatt_half_u_up_split_p(
+                                    method, p_leg, L_up, s_u_cond_up, N, i, p_nodes,
+                                ) + μ_0_fup
+                            acc = _profile_rosenblatt_emit_inner_sample(
+                                acc, f, innerD, μ_q_p, μ_T_p, σ_q_fup, σ_T_fup, ρ_c,
+                                quad, M_inv, ui_up, μ_0_fup, vj_fup, wvj, wi,
+                                method,
+                            )
+                        end
                     elseif use_dn
                         ui =
                             _rosenblatt_half_w_dn(
@@ -830,9 +1090,26 @@ function _integrate_over_sgs_profile_rosenblatt(
             dTT_dz_dn, dTT_dz_up, dqq_dz_dn, dqq_dz_up, Hp;
             mean_gradient_axis = Val(:up),
         )
-        a_dn = _profile_rosenblatt_accumulate(p_dn)
-        a_up = _profile_rosenblatt_accumulate(p_up)
-        return a_dn ⊠ FT(0.5) ⊞ a_up ⊠ FT(0.5)
+        has_mid_axis = _two_slope_rosenblatt_has_valid_axis(
+            μ_T_p, μ_q_p, σT²p, σq²p, ρp,
+            dT_dz_dn, dT_dz_up, dq_dz_dn, dq_dz_up,
+            dTT_dz_dn, dTT_dz_up, dqq_dz_dn, dqq_dz_up, Hp;
+            mean_gradient_axis = Val(:avg),
+        )
+        p_mid = if has_mid_axis
+            _two_slope_rosenblatt_params(
+                μ_T_p, μ_q_p, σT²p, σq²p, ρp,
+                dT_dz_dn, dT_dz_up, dq_dz_dn, dq_dz_up,
+                dTT_dz_dn, dTT_dz_up, dqq_dz_dn, dqq_dz_up, Hp;
+                mean_gradient_axis = Val(:avg),
+            )
+        else
+            p_dn
+        end
+        return _profile_rosenblatt_accumulate_split_p_dual_local_axes(
+            f, quad, innerD, μ_q_p, μ_T_p, σ_q_c, σ_T_c, ρ_c, method, seed,
+            p_dn, p_up, p_mid,
+        )
     elseif has_dn
         p_dn = _two_slope_rosenblatt_params(
             μ_T_p, μ_q_p, σT²p, σq²p, ρp,
@@ -1017,19 +1294,24 @@ Center/half-center/face convention:
 - turbulent covariance used for `s_u_cond_dn/up` is sampled at half-centers (`±H/4`);
 - full faces (`±H/2`) are not used for `σ_{u|v}` in this implementation.
 
-Abscissas `quadrature_order(quad) → (ξ_01, w_01)` drive the **composite** split
-(DN half-law + UP half-law at the same `p` nodes, each weighted `1/2` in the
-two-half integration when combining the separate `:dn` and `:up` parameter packs).
+Abscissas `quadrature_order(quad) → (ξ_01, w_01)` on ``[0,1]`` drive the inner coordinate
+(see [`_integrate_over_sgs_profile_rosenblatt`](@ref)). When both DN and UP Rosenblatt axes are
+valid, production uses **one** order-``N`` GL rule in ``p`` and **split-``p``** with
+half-local ``p_{\\mathrm{dn}}`` / ``p_{\\mathrm{up}}`` packs
+([`_profile_rosenblatt_accumulate_split_p_dual_local_axes`](@ref))—**``N^2``** total samples,
+roughly **``N/2``** inner nodes on each leg (remap **``2p``** / **``2p-1``** to a **full** ``(0,1)``
+leg quantile per visit). When only one axis is valid but both half-widths are positive, the
+single-pack [`_profile_rosenblatt_accumulate`](@ref) may still split ``p`` the same way.
 
 **Keyword** `mean_gradient_axis` selects which **vertical mean-gradient** (slopes
 of the piecewise-linear cell-mean fields in each half) defines
 the inner `u` direction and `M_inv` for *this* parameter pack:
 
-  - `:avg` — mean of the below- and above-center half slopes.
-  - `:dn` / `:up` — the below-center or above-center **half** only. The
-    production `SubgridProfileRosenblatt` path builds **two** such packs
-    (`:dn` and `:up`) and **averages** their cubature contributions
-    (factor `1/2` each) so both axes are represented when DN and UP means differ.
+  - `:avg` — mean of the below- and above-center half slopes (``:avg``-axis pack is used
+    for the split-``p`` **mid** bridge in [`_profile_rosenblatt_accumulate_split_p_dual_local_axes`](@ref) when that axis is non-degenerate).
+  - `:dn` / `:up` — the below-center or above-center **half** only: pack for the
+    corresponding **``p<½``** or **``p>½``** inner nodes in split-``p`` when both axes
+    exist, or the sole pack when only one axis is valid.
 
 Returns `(; M_inv, s_v_fdn, s_v_fup, s2sq_v_fdn, s2sq_v_fup, L_dn, L_up, ...)` with
 `s2sq_v_fdn` / `s2sq_v_fup` the marginal `v` variances (third output of [`_rotated_sigma_uv`](@ref))
@@ -1173,8 +1455,9 @@ Gaussian `q` fluctuations in physical `q`.
 
 For [`GaussianSGS`](@ref), `σ_q` / `σ_T` must match the turbulent second moments used to build the
 inner `u` draw: [`_profile_rosenblatt_accumulate`](@ref) passes **half-center** `σ_T_fdn`/`σ_q_fdn`
-or `σ_T_fup`/`σ_q_fup` from [`_two_slope_rosenblatt_params`](@ref) per inner leg (cell-center
-values only for degenerate / collapsed-`u` branches).
+or `σ_T_fup`/`σ_q_fup` from [`_two_slope_rosenblatt_params`](@ref) on split-``p`` lower/upper branches;
+**cell-center** `σ_T_c`/`σ_q_c` for the fully degenerate inner marginal, the split-``p`` **mid**
+node (`p \\approx ½`), and collapsed single-leg cases that already used center scales.
 """
 function _profile_rosenblatt_emit_inner_sample(
     acc,
@@ -1268,11 +1551,13 @@ Dispatch on the layer quadrature type `S`:
   - `SubgridBarycentricSeeds`: initialize `N²` seeds over `(k,i)` and stream all
     `N³` candidates into nearest seeds with weighted centroid updates
     (deterministic order); evaluate `f` at seed centroids with pooled mass.
-  - `SubgridProfileRosenblatt{M}`: Gauss–Hermite outer `v` × **composite** inner `p` rule
-    (½ weight per shifted half-cell law; each GL abscissa used on DN and UP legs).
-    `M` selects per-leg inversion: Brent, one-step Halley, or Chebyshev on the **single**
-    centered `uniform⊛Gaussian` for each half ([`_rosenblatt_dn_half_u`](@ref) /
-    [`_rosenblatt_up_half_u`](@ref)).
+  - `SubgridProfileRosenblatt{M}`: Gauss–Hermite outer `v` × Gauss–Legendre inner `p` on ``[0,1]``;
+    when both DN/UP **axes** are valid, **split-``p``** with **half-local** ``p_{\\mathrm{dn}}``/
+    ``p_{\\mathrm{up}}`` (separate ``M_{\\mathrm{inv}}`` per leg) gives **one** ``N^2`` tensor; when
+    only one axis is valid, split-``p`` can still use a single pack if both ``L_{dn},L_{up}`` are
+    positive. ``p \\approx ½`` (odd ``N``) can bridge with a ``:avg``-axis pack. `M` selects
+    per-leg inversion: Brent, one-step Halley, or Chebyshev on the **single** shifted
+    `uniform⊛Gaussian` for the active half.
 """
 function integrate_over_sgs(
     f,
@@ -1470,7 +1755,7 @@ function integrate_over_sgs(
         inv_sqrt_pi = one(FT) / sqrt(FT(π))
         acc = rzero(f(μ_T_p, μ_q_p))
         wsum = zero(FT)
-        @inbounds for i in 1:N
+            @inbounds for i in 1:N
             @inbounds for j in 1:N
                 k = mod(i + j - 2, N) + 1
                 ζ = (H / FT(2)) * quad.z_t[k]

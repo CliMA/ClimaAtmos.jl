@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
 """
-Scatter **(T, q)** nodes for the **current Julia-style** profile–Rosenblatt accumulate:
+Scatter **(T, q)** nodes for **Julia-style** profile–Rosenblatt (split-``p`` inner rule):
 
-  * **Inner mixture (same mean-gradient pass):** same GL abscissa ``p_i`` on ``[0,1]``,
-    but **two** per-leg inverses (dn + up) with weight ``w_i/2`` each when both legs are on.
-    That is **not** “two grid cells”; it is **two components of the inner u marginal** for
-    **one** choice of mean-gradient axis.
+  * **Split-``p`` (same mean-gradient pass):** GL abscissa ``p_i`` on ``[0,1]``; if both
+    half-legs are on, ``p_i < 0.5`` → lower half only (remap ``2p``), ``p_i > 0.5`` → upper
+    (``2p-1``), ``p_i \\approx 0.5`` → bridge sample (cell-center ``\\sigma_{T,q}``, ``u = \\mu_0``).
+    **One** ``(T,q)`` per ``(j,i)`` → ``N^2`` nodes per pass (same idea as
+    ``notebook_split_p_quadrature`` in ``profile_cell_brute_pdf_quadrature_convergence.py``).
 
-  * **Two mean-gradient passes (same physical layer):** below-center vs above-center slopes
-    define **different** ``u`` directions / ``M_inv`` / ``L_*``. When both are valid, Julia
-    averages **two full** accumulates → up to **4 N^2** ``(T,q)`` samples for plotting.
+  * **Two mean-gradient passes:** when DN and UP axes are both valid, Julia still averages
+    ``0.5*(\\mathrm{dn} + \\mathrm{up})`` → **``2 N^2``** samples for plotting.
 
-This script does **not** use ``profile_rosenblatt_cubature`` (that path still uses a **single**
-mixture inverse per ``(j,i)``). It mirrors ``subgrid_layer_profile_quadrature.jl`` accumulate
-logic for visualization only.
+This script mirrors ``subgrid_layer_profile_quadrature.jl`` for visualization only.
 
 Run from repo root (or adjust ``sys.path``):
 
@@ -147,30 +145,59 @@ def collect_tq_cloud_julia_style(
                 pi_ = float(p_nodes[i])
                 wi_ = float(p_w[i])
                 if use_dn and use_up:
-                    wi_half = 0.5 * wi_
-                    hw_dn = _half_leg_u_quantile_brent(pi_, L_dn, s_udn, -L_dn, 0.0)
-                    hw_up = _half_leg_u_quantile_brent(pi_, L_up, s_uup, 0.0, L_up)
-                    for hw, vj, mu0, sigt, sigq, leg_tag in (
-                        (hw_dn, vj_fdn, mu0_fdn, sig_t_fdn, sig_q_fdn, 0),
-                        (hw_up, vj_fup, mu0_fup, sig_t_fup, sig_q_fup, 1),
-                    ):
-                        dT = M[0, 0] * hw + M[0, 1] * vj
-                        dq = M[1, 0] * hw + M[1, 1] * vj
-                        t_hat, q_hat = fluc_to_tq(
-                            np.array([dT]),
-                            np.array([dq]),
-                            mu_t,
-                            mu_q,
-                            sigt,
-                            sigq,
-                            rho,
-                            t_min,
-                            q_max,
+                    mid, tol = 0.5, 64.0 * eps
+                    s_v_deg = max(s_v_fdn, s_v_fup, eps)
+                    vj_deg = sqrt2 * s_v_deg * chi_j
+                    mu0_deg = float(out["r_c"]) * vj_deg
+                    if abs(pi_ - mid) <= tol:
+                        hw = mu0_deg
+                        vj, mu0, sigt, sigq = vj_deg, mu0_deg, float(np.sqrt(s_t2)), float(
+                            np.sqrt(s_q2)
                         )
-                        T_list.append(float(t_hat[0]))
-                        q_list.append(float(q_hat[0]))
-                        w_list.append(wj * wi_half)
-                        tag_list.append(2 * mg_i + leg_tag)
+                        leg_tag = 2
+                    elif pi_ < mid:
+                        p_leg = 2.0 * pi_
+                        hw = (
+                            _half_leg_u_quantile_brent(p_leg, L_dn, s_udn, -L_dn, 0.0)
+                            + mu0_fdn
+                        )
+                        vj, mu0, sigt, sigq, leg_tag = (
+                            vj_fdn,
+                            mu0_fdn,
+                            sig_t_fdn,
+                            sig_q_fdn,
+                            0,
+                        )
+                    else:
+                        p_leg = 2.0 * pi_ - 1.0
+                        hw = (
+                            _half_leg_u_quantile_brent(p_leg, L_up, s_uup, 0.0, L_up)
+                            + mu0_fup
+                        )
+                        vj, mu0, sigt, sigq, leg_tag = (
+                            vj_fup,
+                            mu0_fup,
+                            sig_t_fup,
+                            sig_q_fup,
+                            1,
+                        )
+                    dT = M[0, 0] * (hw - mu0) + M[0, 1] * vj
+                    dq = M[1, 0] * (hw - mu0) + M[1, 1] * vj
+                    t_hat, q_hat = fluc_to_tq(
+                        np.array([dT]),
+                        np.array([dq]),
+                        mu_t,
+                        mu_q,
+                        sigt,
+                        sigq,
+                        rho,
+                        t_min,
+                        q_max,
+                    )
+                    T_list.append(float(t_hat[0]))
+                    q_list.append(float(q_hat[0]))
+                    w_list.append(wj * wi_)
+                    tag_list.append(2 * mg_i + leg_tag)
                 elif use_dn:
                     hw = _half_leg_u_quantile_brent(pi_, L_dn, s_udn, -L_dn, 0.0)
                     dT = M[0, 0] * hw + M[0, 1] * vj_fdn

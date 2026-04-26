@@ -380,11 +380,11 @@ Parse the SGS distribution type from configuration.
 
 # Vertical-profile family (half-cell layer means; varying means and second moments in height)
 
-- `"gaussian_vertical_profile"` → [`VerticallyResolvedSGS{DefaultGridscaleProfileQuadrature, GaussianSGS}`](@ref) (default [`SubgridProfileRosenblatt`](@ref) + per-leg [`ConvolutionQuantilesHalley`](@ref) on the composite split marginal)
-- `"gaussian_vertical_profile_full_cubature"` → [`VerticallyResolvedSGS{SubgridColumnTensor, GaussianSGS}`](@ref)
+- `"gaussian_vertical_profile"` → [`VerticallyResolvedSGS{DefaultGridscaleProfileQuadrature, GaussianSGS}`](@ref) (default [`SubgridProfileRosenblatt`](@ref) + per-leg [`ConvolutionQuantilesHalley`](@ref); inner Gauss–Legendre uses **split-``p``** half-leg sampling when both half-widths are active)
+- `"gaussian_vertical_profile_full_cubature"` → [`VerticallyResolvedSGS{SubgridColumnTensor, GaussianSGS}`](@ref) (depth Gauss–Legendre × inner `(T,q)` Gauss–Hermite; **uniform-``ζ`` column marginal**, not profile–Rosenblatt)
 - `"gaussian_vertical_profile_lhs_z"` / `"_principal_axis"` / `"_voronoi"` / `"_barycentric"` → alternate layer-mean discretizations
 - `"gaussian_vertical_profile_inner_bracketed"` / `"lognormal_vertical_profile_inner_bracketed"` → per-leg Brent
-- `"gaussian_vertical_profile_inner_halley"` / `"lognormal_vertical_profile_inner_halley"` → per-leg one-step Halley (default)
+- `"gaussian_vertical_profile_inner_halley"` / `"lognormal_vertical_profile_inner_halley"` → same profile–Rosenblatt path as default, explicit key (per-leg one-step Halley on the single centered law)
 - `"gaussian_vertical_profile_inner_chebyshev"` / `"lognormal_vertical_profile_inner_chebyshev"` → per-leg Chebyshev tables
 - `"lognormal_vertical_profile"` → [`VerticallyResolvedSGS{DefaultGridscaleProfileQuadrature, LogNormalSGS}`](@ref)
 - `"lognormal_vertical_profile_full_cubature"` → [`VerticallyResolvedSGS{SubgridColumnTensor, LogNormalSGS}`](@ref)

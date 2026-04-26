@@ -92,10 +92,10 @@ struct SubgridBarycentricSeeds <: AbstractSubgridLayerProfileQuadrature end
     AbstractConvolutionQuantileMethod
 
 Selects the **per-leg** uniform–Gaussian quantile rule inside profile–Rosenblatt.
-The inner marginal is always discretized as a **composite** of lower and upper
-half-cell laws (½ weight each, same Gauss–Legendre nodes on ``[0,1]`` per leg); this
-type chooses Brent, one-step Halley, or Chebyshev **on each single shifted**
-`uniform ⊛ Gaussian` leg—not a scalar inversion of the mixture CDF `F_{mix}`.
+When both half-cell laws are active, inner Gauss–Legendre nodes on ``[0,1]`` use **split-``p``**
+(one leg per node via ``2p`` / ``2p-1`` remaps; see `subgrid_layer_profile_quadrature.jl` header);
+this type chooses Brent, one-step Halley, or Chebyshev **on the single shifted**
+`uniform ⊛ Gaussian` law for that node’s half—not two composite draws at the same ``p``.
 """
 abstract type AbstractConvolutionQuantileMethod end
 

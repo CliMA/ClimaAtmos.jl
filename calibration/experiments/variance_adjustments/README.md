@@ -118,43 +118,37 @@ Until such a reduction exists in closed form, **barycentric-style** and **LHS-st
 | **Voronoi-style anchors** (§3.3) | Implemented (`*_vertical_profile_voronoi`). |
 | **Barycentric buckets** (§3.4) | Implemented (`*_vertical_profile_barycentric`; matching `quadrature_order` required). |
 | **Principal-axis sweep** (§3.5) | Implemented (`*_vertical_profile_principal_axis`). |
-| **Regression / inner marginal** | `test/parameterized_tendencies/microphysics/sgs_quadrature.jl` exercises the composite per-leg path: `Bracketed` / `Halley` / `ChebyshevLogEta` for `SubgridProfileRosenblatt`, unit mass for `quadrature_order` 1–5, full-profile integrals, `Float32`, NamedTuple 1M outputs, and scalar mixture CDF algebra separately. |
+| **Regression / inner marginal** | `test/parameterized_tendencies/microphysics/sgs_quadrature.jl` exercises `SubgridProfileRosenblatt` with `Bracketed` / `Halley` / `ChebyshevLogEta` inner rules, split-`p` inner bookkeeping, unit mass for `quadrature_order` 1–5, full-profile integrals, `Float32`, NamedTuple 1M outputs, and scalar mixture CDF algebra separately. |
 
 **Note:** Voronoi/barycentric kernels use small allocations for index clustering; principal-axis replaces the inner \(N\times N\) fluctuation tensor by a correlation-axis approximation (limitations in §3.5).
 
 ---
 
-## 7. Default vertical-profile path (`SubgridProfileRosenblatt`): two halves, composite inner marginal
+## 7. Default vertical-profile path (`SubgridProfileRosenblatt`): two halves, split-`p` inner quadrature
 
 YAML `gaussian_vertical_profile` / `lognormal_vertical_profile` select **`SubgridProfileRosenblatt`** in `src/parameterized_tendencies/microphysics/sgs_distribution_types.jl`. The implementation is **two vertical half cells**—below-center (DN) and above-center (UP)—each built from face-anchored slopes of the **cell means**, then rotated into `(u,v)` using a chosen **mean-gradient axis** (which half’s ``(\partial_z\bar T,\partial_z\bar q)`` defines the inner ``u`` direction; not advection).
 
 ### 7.1 What matches the “README-first” analytic story
 
 - **Means:** piecewise linear in \(z\) within each half (different slopes DN vs UP).
-- **Inner marginal along \(u\)** (after rotating fluctuations): the **density** is still the closed-form **two-component mixture** of uniform×Gaussian convolutions (one convolution per half-cell segment). **Quadrature** along that marginal uses a **composite split**: for each outer Hermite coordinate \(v\), the same Gauss–Legendre nodes \(p_i,w_i\) on \((0,1)\) are used **twice**—once for the DN half-law and once for the UP half-law—with inner weights **`w_i/2`** each, so the inner mass per \(v\) remains normalized. Each visit inverts the **single-law** CDF \(F_{dn}\) or \(F_{up}\) at \(p_i\), not the mixture equation \(\tfrac12 F_{dn}(u)+\tfrac12 F_{up}(u)=p_i\).
-- **Second moments on the inner \(u\) marginal:** each half uses **one** scalar \(\sigma_{u|v}\) from the **face-anchored** reconstruction (DN half: DN-face limit; UP half: UP-face limit), held **constant on that half** in \(u\). Turbulent **variance slopes** (\(\partial_z \sigma_T^2\), \(\partial_z \sigma_q^2\)) therefore affect the quadrature only through those face values (and through alternate §3 layouts if selected)—not through a linear-in-\(z\) \(\sigma^2_{u|v}\) inside the half’s closed-form mixture (that path was attempted, found wrong, and removed).
+- **Inner marginal along \(u\)** (after rotating fluctuations): the **density** is still the closed-form **two-component mixture** of uniform×Gaussian convolutions (one convolution per half-cell segment). **Quadrature** uses **one** Gauss–Legendre rule of order \(N\) on \(p\in(0,1)\) with **split-`p`**: when both **Rosenblatt** axes (below-center / above-center means) are valid, nodes with \(p_i<\tfrac12\) use only the **`p_{\mathrm{dn}}`** pack (below-center mean slopes for `M_inv` / outer \(v\)) and remapped leg quantile \(2p_i\in(0,1)\); nodes with \(p_i>\tfrac12\) use only **`p_{\mathrm{up}}`** and \(2p_i-1\); odd \(N\) can use a one-node `p\approx\tfrac12` **mid** bridge. That is **\(N^2\)** microphysics samples per column at order \(N\), not **\(2N^2\)**. When only one **axis** is valid, a **single** mean-gradient pass may still split \(p\) if both half-widths \(L_{dn},L_{up}\) are positive on that pass.
+- **Second moments on the inner \(u\) marginal:** each half uses **one** scalar \(\sigma_{u|v}\) from the **half-center** reconstruction (DN at \(-H/4\), UP at \(+H/4\) in \(z\)), held **constant on that half** in \(u\). Turbulent **variance slopes** (\(\partial_z \sigma_T^2\), \(\partial_z \sigma_q^2\)) enter through those half-center values (and through alternate §3 layouts if selected). The correlation scalar \(\rho\) is still **cell-center**; there is **no** \(\partial_z\rho\) model.
 
-### 7.2 Correlation / tensor bookkeeping (physical \((T,q)\) mapping)
+### 7.2 Physical \((T,q)\) mapping
 
-`SubgridProfileRosenblatt` maps inner fluctuations to physical \((T,q)\) with **exactly** \(2N^2\) evaluations
-of the closure per **mean-gradient-axis** accumulation (DN and UP axes are averaged in code; each contributes the composite inner loop). **Hermite rows** \(j\) select which **mean-gradient axis** builds the inner marginal (`BelowCenterMeanGradientAxis` vs `AboveCenterMeanGradientAxis` in code): rows
-\(j \le \lfloor N/2\rfloor\) use **below-center** mid-half \(\mu,\sigma_T,\sigma_q\) (marched by \(-H/4\)
-along DN mean and variance slopes); rows \(j \ge \lfloor N/2\rfloor+2\) use **above-center** mid-half
-values (\(+H/4\) along UP). When \(N\) is odd, the middle row \(j=\lfloor N/2\rfloor+1\) uses **cell-center**
-\(\mu,\sigma_T,\sigma_q\) with the **same below-center axis** as the lower rows. The correlation scalar \(\rho\) is still **cell-center**; there is **no**
-\(\partial_z\rho\) model.
+With **two valid axes**, the implementation uses **separate** `M_inv` and half packs for the inner nodes assigned to the DN vs UP legs via split-`p` (see `subgrid_layer_profile_quadrature.jl`), not a **second** full \(N^2\) tensor and not an extra `\tfrac12` sum over two identical inner rules.
 
 ### 7.3 Per-leg quantile solvers (YAML `_inner_*`)
 
-All three select **only** how each **single** shifted half-cell `uniform⊛Gaussian` quantile is computed inside the composite inner loop (`subgrid_layer_profile_quadrature.jl`).
+These select **only** how each **single** shifted half-cell `uniform⊛Gaussian` quantile is evaluated when that leg is active (`subgrid_layer_profile_quadrature.jl`). **Bracketed** and **Halley** use the remapped leg probability \(p_\mathrm{leg}\in(0,1)\) directly. **Chebyshev** tables are defined on the Gauss–Legendre abscissas for order `N`; under split-`p`, \(p_\mathrm{leg}\) is generally **not** one of those nodes, so the implementation **linearly interpolates in \(p\)** between the two tabulated Chebyshev quantiles that bracket \(p_\mathrm{leg}\)—still only `ConvolutionQuantilesChebyshevLogEta` table evaluations, not a silent Brent/Halley substitution.
 
 | YAML suffix | Julia type | Role |
 | :--- | :--- | :--- |
-| *(default)* | `ConvolutionQuantilesHalley` | One Halley step on the **centered** `uniform[-L/2,L/2]⊛N(0,s²)` law at abscissa \(p_i\), then map to DN/UP shifted \(u\) (two evaluations per inner node: DN leg + UP leg). |
-| `_inner_bracketed` | `ConvolutionQuantilesBracketed` | Brent (exact bracketed root) on that same centered single law per leg. |
-| `_inner_chebyshev` | `ConvolutionQuantilesChebyshevLogEta` | Chebyshev tabulation in \(\tau(\log_{10}\eta)\), \(\eta=s/L\), for the **centered** single law at GL node index \(i\) matching order `N` (one table lookup per leg per inner node). Asymmetric \((L_{dn},s_{dn})\) vs \((L_{up},s_{up})\) is fine: each leg uses its own \((L,s)\) row. |
+| *(default)* | `ConvolutionQuantilesHalley` | One Halley step on the **centered** `uniform[-L/2,L/2]⊛N(0,s²)` law at the **leg** remapped \(p_\mathrm{leg}\), then shift to DN/UP \(u\). |
+| `_inner_bracketed` | `ConvolutionQuantilesBracketed` | Brent (exact bracketed root) on that same centered single law at \(p_\mathrm{leg}\). |
+| `_inner_chebyshev` | `ConvolutionQuantilesChebyshevLogEta` | Chebyshev tabulation in \(\tau(\log_{10}\eta)\), \(\eta=s/L\), at tabulated \(p\)-nodes; under split-`p`, linear **\(p\)**-interpolation between the two bracketing tabulated nodes (per leg, own \((L,s)\)). |
 
-**Brent vs Halley (why both exist):** A bracketed solve of \(F_{\mathrm{mix}}(u)=p\) on the **mixture** CDF is valid in principle, but the profile integrator does **not** use a scalar `F_mix^{-1}`: it inverts each **single** half-cell law and combines those nodes in the composite rule. `_inner_bracketed` runs Brent on **each leg’s** \(F_{dn}\) and \(F_{up}\) separately. Halley remains a **cheap one-step** on each **single** (centered-then-shifted) law. The mixture CDF and PDF are still implemented for analysis; `test/parameterized_tendencies/microphysics/sgs_quadrature.jl` checks the half-sum definition, CDF monotonicity, and (via a test-local bracketed inverse) that `F_mix` is numerically consistent with a trapezoidal PDF discretization.
+**Mixture CDF:** A scalar \(F_{\mathrm{mix}}^{-1}(p)\) is **not** used in this profile integrator; mixture CDF/PDF helpers exist for analysis and tests. Per-leg inverses are composed by split-`p` quadrature as above.
 
 ### 7.4 Tensor split (`N/2 × N` vs odd \(N\))
 
@@ -193,7 +187,7 @@ Column tensor, LHS-\(z\), Voronoi, barycentric, and principal-axis variants are 
 
 | Value | Meaning |
 | :--- | :--- |
-| `gaussian_vertical_profile` | Default vertical-profile Gaussian SGS: `SubgridProfileRosenblatt` + per-leg `ConvolutionQuantilesHalley` on the composite split inner marginal (§7). |
+| `gaussian_vertical_profile` | Default vertical-profile Gaussian SGS: `SubgridProfileRosenblatt` + per-leg `ConvolutionQuantilesHalley` with split-`p` inner quadrature (§7). |
 | `gaussian_vertical_profile_full_cubature` | Column-tensor vertical quadrature (`SubgridColumnTensor`; dense \(N_z\times N^2\) path, §3.1). |
 | `gaussian_vertical_profile_lhs_z` | Latin-square style pairing of Hermite `(i,j)` with one GL \(z\) level (`SubgridLatinHypercubeZ`). |
 | `gaussian_vertical_profile_principal_axis` | Dominant-correlation-axis 1D Hermite inner rule (`SubgridPrincipalAxisLayer`). |

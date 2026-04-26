@@ -1856,7 +1856,7 @@ end
         end
     end
 
-    @testset "Profile Rosenblatt composite: Float32 Bracketed and Halley finite (same f)" begin
+    @testset "Profile Rosenblatt split-p: Float32 Bracketed and Halley finite (same f)" begin
         using ClimaCore.Geometry
         for FT in (Float32, Float64)
             lg = _fd_column_center_local_geometry(FT; ilevel = 4)
