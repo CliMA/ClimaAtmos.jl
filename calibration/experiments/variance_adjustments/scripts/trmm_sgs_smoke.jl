@@ -34,7 +34,11 @@
 # - **Distributed:** `parallel=:distributed` runs one case per **worker process** via `Distributed.pmap` (separate
 #   Julia heaps — safe for Atmos; unlike `Threads.@threads` over multiple solves in one process, which hits global
 #   caches and **“Multiple concurrent writes to Dict”**). Start with `julia -p N --project=...` or pass
-#   `distributed_procs=N` to spawn workers with the same `--project` as this experiment directory.
+#   `distributed_procs=N` to target `N` workers with the same `--project` as this experiment directory.
+#   You can also use `distributed_procs=:match_jobs` (or CLI `--distributed-procs=auto`) to target
+#   one worker per smoke job (`length(distributions)`).
+#   Spawning is **idempotent** in a long REPL session: only missing workers are added (target count,
+#   not that many new workers on every call).
 #
 # - **Column threading (`julia -t`):** that parallelizes *inside* one column solve, not across smoke cases.
 #
@@ -58,8 +62,9 @@
 #   julia --project=<VA_ROOT> <VA_ROOT>/scripts/trmm_sgs_smoke.jl both --parallel=distributed --distributed-procs=4
 #
 # Outputs: `<REPO>/calibration/experiments/variance_adjustments/simulation_output/sgs_smoke/<slug>/.../output_active`
-# Figure (default `profile_sum_short`): `<REPO>/.../analysis/figures/sgs_smoke/<slug>/profile_clw_plus_cli.png`
-#          (basename follows `profile_sum_short`; see `va_plot_trmm_sgs_smoke` keyword docs in this file.)
+# Figure (default `profile_sum_short`): `<REPO>/.../analysis/figures/sgs_smoke/<slug>/<res_seg>/N_<n>/profile_clw_plus_cli.png`
+#          (`<res_seg>` / `N_<n>` match the simulation tree so different quadrature or tier do not overwrite.)
+#          Basename follows `profile_sum_short`; see `va_plot_trmm_sgs_smoke` keyword docs in this file.
 #
 # Stale `…/N_<n>/<dist>/` trees (old `dist` names no longer in `VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS`) trigger plot
 # warnings. Remove them with `va_trmm_sgs_smoke_remove_stale_dist_dirs!(; dry_run=true)` then `dry_run=false`.
@@ -98,7 +103,7 @@ function va_run_trmm_sgs_smoke(;
     external_forcing_file::Union{Nothing, AbstractString} = nothing,
     cfsite_number::Union{Nothing, AbstractString} = nothing,
     parallel::Symbol = :sequential,
-    distributed_procs::Int = 0,
+    distributed_procs::Union{Int, Symbol} = 0,
 )
     parallel in (:sequential, :distributed) ||
         error("parallel must be :sequential or :distributed, got $(repr(parallel))")
@@ -126,7 +131,9 @@ function va_run_trmm_sgs_smoke(;
                 )
             catch e
                 bt = catch_backtrace()
-                path = _va_sgs_smoke_write_failure!(experiment_dir, g.slug, n_quad, d, e, bt)
+                path = _va_sgs_smoke_write_failure!(
+                    experiment_dir, g.slug, n_quad, d, e, bt; res_segment = g.res_seg,
+                )
                 n_fail += 1
                 @error "Run failed (full stacktrace in file)" dist = d log_path = path summary =
                     sprint(showerror, e)
@@ -140,14 +147,31 @@ function va_run_trmm_sgs_smoke(;
         return nothing
     end
 
-    if distributed_procs > 0
+    if distributed_procs isa Symbol &&
+       !(distributed_procs in (:match_jobs, :auto, :match))
+        error(
+            "distributed_procs symbol must be one of :match_jobs / :auto / :match; got $(repr(distributed_procs))",
+        )
+    end
+    target_workers = if distributed_procs isa Symbol
+        # Match the job count (`length(distributions)`): convenient when the smoke list grows.
+        length(distributions)
+    else
+        distributed_procs
+    end
+    if target_workers > 0
         proj = abspath(experiment_dir)
-        Distributed.addprocs(distributed_procs; exeflags = `--project=$(proj)`)
+        # `addprocs(n)` always *adds* n new processes — repeated REPL calls would pile up workers.
+        # Match a **target** worker count: only spawn the shortfall vs. `nworkers()`.
+        need = target_workers - Distributed.nworkers()
+        if need > 0
+            Distributed.addprocs(need; exeflags = `--project=$(proj)`)
+        end
     end
     if isempty(Distributed.workers())
         error(
             "parallel=:distributed requires Julia worker processes. Start with `julia -p N ...`, or pass " *
-                "keyword `distributed_procs > 0`, or `Distributed.addprocs` before calling.",
+                "keyword `distributed_procs > 0` (or `:match_jobs`), or `Distributed.addprocs` before calling.",
         )
     end
     _va_trmm_sgs_smoke_load_distributed!(experiment_dir)
@@ -206,7 +230,7 @@ function va_run_and_plot_trmm_sgs_smoke(;
     external_forcing_file::Union{Nothing, AbstractString} = nothing,
     cfsite_number::Union{Nothing, AbstractString} = nothing,
     parallel::Symbol = :sequential,
-    distributed_procs::Int = 0,
+    distributed_procs::Union{Int, Symbol} = 0,
     profile_short_a::AbstractString = "clw",
     profile_short_b::AbstractString = "cli",
     profile_sum_short::AbstractString = "clw_plus_cli",
@@ -654,7 +678,9 @@ function va_plot_trmm_sgs_smoke(;
         condensate_floor_frac_of_peak = 1e-4,
     )
     analysis_dir = joinpath(experiment_dir, "analysis")
-    figdir = joinpath(analysis_dir, "figures", "sgs_smoke", fig_slug)
+    # Match `simulation_output/sgs_smoke/<slug>/<res_seg>/N_<n>/…` so figures for different `n_quad` or
+    # resolved grid tier do not overwrite each other.
+    figdir = joinpath(analysis_dir, "figures", "sgs_smoke", fig_slug, g.res_seg, "N_$(n_quad)")
     n_series = length(paths)
     # Legend: own column; series order is LN block then G block (each in `VA_TRMM_SGS_SMOKE_DEFAULT_DISTRIBUTIONS` order).
     # `plot_profiles.jl` calls `resize_to_layout!` before `save`.
@@ -713,7 +739,7 @@ function va_trmm_sgs_smoke_cli_run(argv::Vector{String})
     dists = String[]
     print_only = false
     parallel = :sequential
-    distributed_procs = 0
+    distributed_procs::Union{Int, Symbol} = 0
     for a in argv
         if a == "-h" || a == "--help"
             println("""
@@ -729,12 +755,12 @@ This script:              $(VA_TRMM_SGS_SMOKE_SCRIPT_PATH)
     (omit --slug to scan every case under sgs_smoke; use --slug=auto same as omit)
   julia --project=$(VA_TRMM_SGS_SMOKE_ROOT) $(VA_TRMM_SGS_SMOKE_SCRIPT_PATH) both [same options as run]
 
-  `both` = run all cases, then write analysis/figures/sgs_smoke/<slug>/profile_<sum_short>.png (default clw_plus_cli).
+  `both` = run all cases, then write analysis/figures/sgs_smoke/<slug>/<res_seg>/N_<n>/profile_<sum_short>.png (default clw_plus_cli).
   With `--continue-on-errors`, failed jobs are logged under _failures/ and plotting still runs for successful outputs.
 
 Options (run / both): --skip-done  --continue-on-errors  --n-quad=N  --distributions=a,b,c  --print-only
-  --parallel=sequential|distributed   --distributed-procs=N  (spawn N workers; optional if you already used -p)
-Failures: full stacktraces under simulation_output/sgs_smoke/_failures/<slug>_N<n>_<dist>.txt (stable name; overwrites on rerun)
+  --parallel=sequential|distributed   --distributed-procs=N|auto  (target N workers, or match smoke job count; optional if you already used -p)
+Failures: full stacktraces under simulation_output/sgs_smoke/_failures/<slug>/<res_seg>/N_<n>/<dist>.txt (stable name; overwrites on rerun; res_seg matches the resolved grid path segment)
 """)
             return
         elseif startswith(a, "--parallel=")
@@ -751,7 +777,12 @@ Failures: full stacktraces under simulation_output/sgs_smoke/_failures/<slug>_N<
                 error("Unknown --parallel=$(repr(v)); use sequential or distributed.")
             end
         elseif startswith(a, "--distributed-procs=")
-            distributed_procs = parse(Int, split(a, '=', limit = 2)[2])
+            v = String(strip(split(a, '=', limit = 2)[2]))
+            if lowercase(v) in ("auto", "match", "match_jobs", "jobs")
+                distributed_procs = :match_jobs
+            else
+                distributed_procs = parse(Int, v)
+            end
         elseif a == "--skip-done"
             skip_done = true
         elseif a == "--continue-on-errors"

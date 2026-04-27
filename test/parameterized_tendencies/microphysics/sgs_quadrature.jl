@@ -36,147 +36,217 @@ function _fd_column_center_local_geometry(
 end
 
 """
-    _one_half_layer_riemann_hermite_marginal(f, μ_q, μ_T, qv, Tv, ρc, H, dT_dz, dq_dz, T_min, q_max, FT; ...)
+    _toy_q_sat_kgkg(T; p_pa = 85_000)
 
-**Test-only** reference for one vertical half: uniform Riemann in `z` on ``(0, H/2)`` (from cell center
-toward that face) with linear means, **frozen** center covariance `Σ(qv, Tv, ρc)`, and tensor
-Gauss–Hermite on the inner `(χ1, χ2)`.
-
-This does **not** call `integrate_over_sgs` or the Profile–Rosenblatt path; it is a separate
-discretization of the same *idealized* model (slab on one half) used in
-`"two-slope profile Rosenblatt matches independent half-wise truth"`.
-
-**When to trust vs Profile–Rosenblatt:** if `dσ²/dz` from the cache is **zero** (`gqq`/`gTT` = 0),
-then `_two_slope_rosenblatt_params` gives `σT²_fdn = σT²_c - (H/4)·0` and similarly for `fup` — i.e.
-**half-center turbulent** `σ_T², σ_q², ρ` **coincide** with the cell-center `sgs_stddevs_and_correlation`
-values. The helper’s “use center Σ at every Riemann `z`” is then **the same** second-moment data the
-code uses, not a conflicting slab physics: what differs is only **quadrature** (Riemann×GH here vs
-split-``p``/Hermite in `integrate_over_sgs`).
-
-With **nonzero** `gqq`/`gTT`, center Σ and walked half-center Σ **diverge**; this helper must not be
-used as a reference without a `z`-walked Σ (or other independent method).
+Toy Magnus-style saturation specific humidity [kg / kg] at pressure ``p_\\mathrm{Pa}``; matches
+``q_sat_kgkg`` in ``local_python/profile_cell_brute_pdf_quadrature_convergence.py``. Used for
+``max(0, q - q_\\mathrm{sat}(T))`` diagnostics, not full CliMA thermodynamics.
 """
-function _one_half_layer_riemann_hermite_marginal(
-    f,
-    μ_q,
-    μ_T,
-    qv,
-    Tv,
-    ρc,
-    H,
-    dT_dz,
-    dq_dz,
-    T_min,
-    q_max,
-    ::Type{FT};
-    Nz_ref = 201,
-    Nh_ref = 5,
-) where {FT}
-    χ, wgh = ClimaAtmos.gauss_hermite(FT, Nh_ref)
-    inv_sqrt_pi = one(FT) / sqrt(FT(π))
-    σ_q, σ_T, ρ = ClimaAtmos.sgs_stddevs_and_correlation(qv, Tv, ρc)
-    D = ClimaAtmos.GaussianSGS()
-    acc = zero(FT)
-    @inbounds for kz in 1:Nz_ref
-        ξ = (kz - FT(0.5)) / Nz_ref
-        z = ξ * (H / FT(2))
-        μ_Tz = μ_T + z * dT_dz
-        μ_qz = μ_q + z * dq_dz
-        wz = one(FT) / Nz_ref
-        for i in eachindex(χ), j in eachindex(χ)
-            wi = wgh[i] * inv_sqrt_pi
-            wj = wgh[j] * inv_sqrt_pi
-            T_hat, q_hat = ClimaAtmos.get_physical_point(
-                D, χ[i], χ[j], μ_qz, μ_Tz,
-                σ_q, σ_T, ρ, T_min, q_max,
-            )
-            acc += wz * wi * wj * f(T_hat, q_hat)
-        end
+@inline function _toy_q_sat_kgkg(T::FT, p_pa::FT = oftype(T, 85_000)) where {FT}
+    es = FT(611.2) * exp(FT(17.67) * (T - FT(273.15)) / (T - FT(29.65)))
+    return FT(0.622) * es / (p_pa - es + FT(1e-9))
+end
+
+const _BRUTE_DEBUG_LOG_PATH = "/home/jbenjami/Research_Schneider/CliMA/ClimaAtmos.jl/.cursor/debug-f80635.log"
+const _BRUTE_DEBUG_SESSION_ID = "f80635"
+
+@inline function _brute_dbg_enabled()
+    return get(ENV, "CLIMA_PR_DEBUG", "0") == "1"
+end
+
+@inline function _brute_dbg_json_value(x)
+    if x isa Bool
+        return x ? "true" : "false"
+    elseif x isa Real
+        return isfinite(x) ? string(x) : "\"$(x)\""
+    else
+        s = replace(string(x), "\\" => "\\\\", "\"" => "\\\"")
+        return "\"$(s)\""
     end
-    return acc
+end
+
+function _brute_dbg_emit(hypothesis_id::AbstractString, message::AbstractString, data_pairs...)
+    _brute_dbg_enabled() || return nothing
+    ts = time_ns() ÷ 1_000_000
+    msg = replace(message, "\\" => "\\\\", "\"" => "\\\"")
+    payload_data =
+        isempty(data_pairs) ? "" :
+        join(["\"$(k)\":$(_brute_dbg_json_value(v))" for (k, v) in data_pairs], ",")
+    line =
+        "{\"sessionId\":\"$(_BRUTE_DEBUG_SESSION_ID)\"," *
+        "\"runId\":\"pre-fix\"," *
+        "\"hypothesisId\":\"$(replace(hypothesis_id, "\"" => "\\\""))\"," *
+        "\"id\":\"brute_$(ts)\"," *
+        "\"timestamp\":$(ts)," *
+        "\"location\":\"sgs_quadrature.jl\"," *
+        "\"message\":\"$(msg)\"," *
+        "\"data\":{$(payload_data)}}\n"
+    #region agent log
+    open(_BRUTE_DEBUG_LOG_PATH, "a") do io
+        write(io, line)
+    end
+    #endregion
+    return nothing
 end
 
 """
-    _one_half_layer_riemann_hermite_slab_halfcenter_sigma(...; half = :dn|:up)
+    _auto_brute_extents(σ_T²_c, σ_q²_c, H, dT_dz_dn, dq_dz_dn, dT_dz_up, dq_dz_up, sTT_dn, sTT_up, sqq_dn, sqq_up, FT; ...)
 
-**Test-only** Riemann-in-``z`` × tensor Gauss–Hermite on ``(T,q)`` for **one** vertical half, using
-**constant** bivariate second moments on that half set to the **same** H/4 half-center values as
-[`ClimaAtmos._two_slope_rosenblatt_params`](@ref) (`σT²_fdn` / `σT²_fup` and matching `q` variances
-from `sqq_*`).
-
-Means are **linear in** ``z`` (cell center → face) in the Riemann loop. **Turbulent** second moments
-on that half use **one** set ``(σ_T,σ_q,ρ)`` built from the **H/4 half-center** walk — i.e. **no**
-linear-in-``z`` *variance* inside the half, matching the *idea* in the Profile–Rosenblatt docs (Σ sampled
-at half-center, not interpolated along ``z`` for the inner marginal; see
-`subgrid_layer_profile_quadrature.jl` docstring for `_two_slope_rosenblatt_params`).
-
-What this helper is **not**: it is **not** the `SubgridProfileRosenblatt` implementation path
-(split-``p``, outer-``v``, Bracketed/Halley/Chebyshev on the shifted **uniform**⊛**Gaussian** law).
-The helper is an independent **slab** discretization: Riemann in ``z`` × tensor Gauss–Hermite in
-``(χ_1,χ_2)`` with `get_physical_point`. It uses the **same** H/4 **Σ_turb** walk as
-`_two_slope_rosenblatt_params`, so the **half–cell Σ anchoring** matches the same modeling choice as
-the PR docs; the **quadrature** and **Rosenblatt** factorization differ, so the test is a
-cross-check with a tolerance, not a duplicate of the v×p inner solve. For cell-center-``Σ`` only, see
-`_one_half_layer_riemann_hermite_marginal`.
+Programmatic `(T,q)` integration windows for [`_brute_pdf_z_stack_expectation`](@ref):
+- reach of the two-slope mean path (`max(|d_*|) * H/2`)
+- plus `k_sigma * max(σ_half)` from the H/4 half-center variance walk.
 """
-function _one_half_layer_riemann_hermite_slab_halfcenter_sigma(
-    f,
-    μ_q,
-    μ_T,
-    qv,
-    Tv,
-    ρc,
-    H,
-    dT_dz,
-    dq_dz,
-    sTT_side,
-    sqq_side,
-    half,
-    T_min,
-    q_max,
+function _auto_brute_extents(
+    σ_T²_c::FT,
+    σ_q²_c::FT,
+    H::FT,
+    dT_dz_dn::FT,
+    dq_dz_dn::FT,
+    dT_dz_up::FT,
+    dq_dz_up::FT,
+    sTT_dn::FT,
+    sTT_up::FT,
+    sqq_dn::FT,
+    sqq_up::FT,
     ::Type{FT};
-    Nz_ref = 201,
-    Nh_ref = 5,
+    k_sigma::FT = FT(6),
+    min_extent_t::FT = FT(2),
+    min_extent_q::FT = FT(2e-4),
 ) where {FT}
-    σ_q_c, σ_T_c, ρc_in = ClimaAtmos.sgs_stddevs_and_correlation(qv, Tv, ρc)
-    σ_T²_c = σ_T_c^2
-    σ_q²_c = σ_q_c^2
-    ρ0 = clamp(ρc_in, -one(FT), one(FT))
-    ε = ClimaAtmos.ϵ_numerics(FT)
-    if half === :dn
-        σT²_f = max(σ_T²_c - (H / FT(4)) * sTT_side, zero(FT))
-        σq²_f = max(σ_q²_c - (H / FT(4)) * sqq_side, zero(FT))
-    elseif half === :up
-        σT²_f = max(σ_T²_c + (H / FT(4)) * sTT_side, zero(FT))
-        σq²_f = max(σ_q²_c + (H / FT(4)) * sqq_side, zero(FT))
-    else
-        error("half must be :dn or :up, got $half")
-    end
-    σ_Tf = sqrt(σT²_f)
-    σ_qf = sqrt(σq²_f)
-    sTq_f = ρ0 * sqrt(max(σT²_f, zero(FT)) * max(σq²_f, zero(FT)))
-    ρf = sTq_f / max(σ_Tf * σ_qf, ε)
-    ρf = clamp(ρf, -one(FT), one(FT))
-    D = ClimaAtmos.GaussianSGS()
-    χ, wgh = ClimaAtmos.gauss_hermite(FT, Nh_ref)
-    inv_sqrt_pi = one(FT) / sqrt(FT(π))
+    dz_q = H / FT(4)
+    σT²_lo = max(σ_T²_c - dz_q * sTT_dn, zero(FT))
+    σT²_hi = max(σ_T²_c + dz_q * sTT_up, zero(FT))
+    σq²_lo = max(σ_q²_c - dz_q * sqq_dn, zero(FT))
+    σq²_hi = max(σ_q²_c + dz_q * sqq_up, zero(FT))
+    maxσT = max(sqrt(σT²_lo), sqrt(σT²_hi))
+    maxσq = max(sqrt(σq²_lo), sqrt(σq²_hi))
+    Δμ_T = max(abs(dT_dz_dn), abs(dT_dz_up)) * (H / FT(2))
+    Δμ_q = max(abs(dq_dz_dn), abs(dq_dz_up)) * (H / FT(2))
+    extent_t = max(min_extent_t, Δμ_T + k_sigma * maxσT)
+    extent_q = max(min_extent_q, Δμ_q + k_sigma * maxσq)
+    return extent_t, extent_q
+end
+
+"""
+    _brute_pdf_z_stack_expectation(f, μ_T, μ_q, ...; ...)
+
+Deterministic **truth-style** reference matching Python ``brute_pdf_z_stack`` in
+``calibration/experiments/variance_adjustments/local_python/profile_cell_brute_pdf_quadrature_convergence.py``:
+Riemann average over ``n_z`` centered heights in ``[-H/2,H/2]``, and on each slice a bivariate
+Gaussian with piecewise-linear means and **H/4** walked ``Σ`` per half (same story as that script).
+
+**Not** Monte Carlo: tensor Riemann sum on ``(T,q)`` with the closed-form bivariate normal
+PDF at each ``z``.
+
+Half-layer mean offsets follow the script: ``ΔT_dn = dT/dz_dn * (-H/2)`` (center → lower face),
+``ΔT_up = dT/dz_up * (H/2)``, and similarly for ``q``, with ``dT/dz_*``, ``dq/dz_*`` the same scalars
+passed to ``integrate_over_sgs`` (from ``WVector`` × ``∂T/∂θ`` for temperature).
+"""
+function _brute_pdf_z_stack_expectation(
+    f,
+    μ_T_center::FT,
+    μ_q_center::FT,
+    σ_T²_c::FT,
+    σ_q²_c::FT,
+    ρ_c::FT,
+    H::FT,
+    dT_dz_dn::FT,
+    dq_dz_dn::FT,
+    dT_dz_up::FT,
+    dq_dz_up::FT,
+    sTT_dn::FT,
+    sTT_up::FT,
+    sqq_dn::FT,
+    sqq_up::FT,
+    ::Type{FT};
+    n_grid::Int = 101,
+    nz::Int = 101,
+    extent_t::FT = FT(6),
+    extent_q::FT = FT(6//1000),
+) where {FT}
+    ΔT_dn = dT_dz_dn * (-H / FT(2))
+    Δq_dn = dq_dz_dn * (-H / FT(2))
+    ΔT_up = dT_dz_up * (H / FT(2))
+    Δq_up = dq_dz_up * (H / FT(2))
+    dz_q = H / FT(4)
+    ρ0 = clamp(ρ_c, FT(-0.99), FT(0.99))
+    σT²_lo = max(σ_T²_c - dz_q * sTT_dn, zero(FT))
+    σq²_lo = max(σ_q²_c - dz_q * sqq_dn, zero(FT))
+    σT²_hi = max(σ_T²_c + dz_q * sTT_up, zero(FT))
+    σq²_hi = max(σ_q²_c + dz_q * sqq_up, zero(FT))
+    sig11_lo = max(σT²_lo, eps(FT)^FT(0.75))
+    sig22_lo = max(σq²_lo, eps(FT)^FT(0.75))
+    sig12_lo = ρ0 * sqrt(sig11_lo * sig22_lo)
+    sig11_hi = max(σT²_hi, eps(FT)^FT(0.75))
+    sig22_hi = max(σq²_hi, eps(FT)^FT(0.75))
+    sig12_hi = ρ0 * sqrt(sig11_hi * sig22_hi)
+
+    dT_axis = range(-extent_t, extent_t; length = n_grid)
+    dq_axis = range(-extent_q, extent_q; length = n_grid)
+    δT = step(dT_axis)
+    δq = step(dq_axis)
+    dA = δT * δq
+
     acc = zero(FT)
-    @inbounds for kz in 1:Nz_ref
-        ξ = (kz - FT(0.5)) / Nz_ref
-        z = ξ * (H / FT(2))
-        μ_Tz = μ_T + z * dT_dz
-        μ_qz = μ_q + z * dq_dz
-        wz = one(FT) / Nz_ref
-        for i in eachindex(χ), j in eachindex(χ)
-            wi = wgh[i] * inv_sqrt_pi
-            wj = wgh[j] * inv_sqrt_pi
-            T_hat, q_hat = ClimaAtmos.get_physical_point(
-                D, χ[i], χ[j], μ_qz, μ_Tz,
-                σ_qf, σ_Tf, ρf, T_min, q_max,
+    inv_nz = one(FT) / FT(nz)
+    _brute_dbg_emit(
+        "H4",
+        "brute_entry",
+        "mu_T" => μ_T_center,
+        "mu_q" => μ_q_center,
+        "qvar" => σ_q²_c,
+        "Tvar" => σ_T²_c,
+        "H" => H,
+        "extent_t" => extent_t,
+        "extent_q" => extent_q,
+        "n_grid" => n_grid,
+        "nz" => nz,
+    )
+    @inbounds for kz in 1:nz
+        z = (kz - FT(0.5)) / FT(nz) * H - H / FT(2)
+        slice_acc = zero(FT)
+        if z <= zero(FT)
+            μ_t = μ_T_center + ΔT_dn * (-FT(2) * z / H)
+            μ_q = μ_q_center + Δq_dn * (-FT(2) * z / H)
+            σ11, σ12, σ22 = sig11_lo, sig12_lo, sig22_lo
+        else
+            μ_t = μ_T_center + ΔT_up * (FT(2) * z / H)
+            μ_q = μ_q_center + Δq_up * (FT(2) * z / H)
+            σ11, σ12, σ22 = sig11_hi, sig12_hi, sig22_hi
+        end
+        for i in eachindex(dT_axis), j in eachindex(dq_axis)
+            T = μ_T_center + dT_axis[i]
+            q = μ_q_center + dq_axis[j]
+            detΣ = σ11 * σ22 - σ12 * σ12
+            if detΣ > zero(FT)
+                inv11 = σ22 / detΣ
+                inv12 = -σ12 / detΣ
+                inv22 = σ11 / detΣ
+                dt = T - μ_t
+                dqfl = q - μ_q
+                quad = dt * (inv11 * dt + inv12 * dqfl) + dqfl * (inv12 * dt + inv22 * dqfl)
+                p_slice =
+                    inv(FT(2π) * sqrt(detΣ)) * exp(-quad / FT(2))
+            else
+                p_slice = zero(FT)
+            end
+            cell = inv_nz * p_slice * f(T, q) * dA
+            acc += cell
+            slice_acc += cell
+        end
+        if _brute_dbg_enabled() && kz <= 8
+            _brute_dbg_emit(
+                "H4",
+                "brute_slice",
+                "kz" => kz,
+                "z" => z,
+                "mu_t" => μ_t,
+                "mu_q" => μ_q,
+                "slice_acc" => slice_acc,
             )
-            acc += wz * wi * wj * f(T_hat, q_hat)
         end
     end
+    _brute_dbg_emit("H4", "brute_exit", "acc" => acc)
     return acc
 end
 
@@ -379,13 +449,59 @@ end
         )
         σq²_half_dn = max(σ_q²_c - (H / FT(4)) * sqq_dn, zero(FT))
         σq²_half_up = max(σ_q²_c + (H / FT(4)) * sqq_up, zero(FT))
-        @test p.s_u_cond_dn ≈ sqrt(σq²_half_dn) rtol = FT(1e-10)
-        @test p.s_u_cond_up ≈ sqrt(σq²_half_up) rtol = FT(1e-10)
+        m11, m12 = p.M_inv[1, 1], p.M_inv[1, 2]
+        m21, m22 = p.M_inv[2, 1], p.M_inv[2, 2]
+        c11_dn, c12_dn, c22_dn = ClimaAtmos._uv_cov_from_m_inv_and_sigma(
+            m11, m12, m21, m22,
+            σ_T²_c, σq²_half_dn, FT(0),
+        )
+        c11_up, c12_up, c22_up = ClimaAtmos._uv_cov_from_m_inv_and_sigma(
+            m11, m12, m21, m22,
+            σ_T²_c, σq²_half_up, FT(0),
+        )
+        ε = ClimaAtmos.ϵ_numerics(FT)
+        s_u_cond_dn_ref = sqrt(max(c11_dn - c12_dn^2 / max(c22_dn, ε), zero(FT)))
+        s_u_cond_up_ref = sqrt(max(c11_up - c12_up^2 / max(c22_up, ε), zero(FT)))
+        @test p.s_u_cond_dn ≈ s_u_cond_dn_ref rtol = FT(1e-10)
+        @test p.s_u_cond_up ≈ s_u_cond_up_ref rtol = FT(1e-10)
         @test p.σ_q_fdn ≈ sqrt(σq²_half_dn) rtol = FT(1e-10)
         @test p.σ_q_fup ≈ sqrt(σq²_half_up) rtol = FT(1e-10)
         # Outer `v` width: half-local marginal `v` std at each half-center `Σ`.
         @test p.s_v_fdn^2 ≈ max(p.s2sq_v_fdn, zero(FT)) rtol = FT(1e-10)
         @test p.s_v_fup^2 ≈ max(p.s2sq_v_fup, zero(FT)) rtol = FT(1e-10)
+    end
+
+    @testset "Profile Rosenblatt split-p midpoint routing is odd-N only" begin
+        @test !ClimaAtmos._is_split_p_middle_node(1, 2)
+        @test !ClimaAtmos._is_split_p_middle_node(2, 2)
+        @test ClimaAtmos._is_split_p_middle_node(2, 3)
+        @test !ClimaAtmos._is_split_p_middle_node(1, 3)
+        @test !ClimaAtmos._is_split_p_middle_node(3, 3)
+        @test ClimaAtmos._is_split_p_middle_node(3, 5)
+    end
+
+    @testset "two-slope Rosenblatt widths come from distances, not clamp-to-zero" begin
+        FT = Float64
+        μ_T, μ_q = FT(285), FT(0.01)
+        σ_T²_c, σ_q²_c = FT(0.25), FT(1e-6)
+        ρ_Tq = FT(0)
+        sTT_dn, sTT_up = FT(0), FT(0)
+        sqq_dn, sqq_up = FT(0), FT(0)
+        H = FT(100)
+        p_dn = ClimaAtmos._two_slope_rosenblatt_params(
+            μ_T, μ_q, σ_T²_c, σ_q²_c, ρ_Tq,
+            FT(1), FT(-1), FT(0), FT(0),
+            sTT_dn, sTT_up, sqq_dn, sqq_up, H;
+            mean_gradient_axis = Val(:dn),
+        )
+        p_up = ClimaAtmos._two_slope_rosenblatt_params(
+            μ_T, μ_q, σ_T²_c, σ_q²_c, ρ_Tq,
+            FT(-1), FT(1), FT(0), FT(0),
+            sTT_dn, sTT_up, sqq_dn, sqq_up, H;
+            mean_gradient_axis = Val(:up),
+        )
+        @test p_dn.L_up > 0
+        @test p_up.L_dn > 0
     end
 
     @testset "LogNormal Chebyshev path uses 1D ln(q)-space tables" begin
@@ -2035,10 +2151,8 @@ end
         end
     end
 
-    @testset "two-slope profile Rosenblatt matches independent half-wise truth" begin
-        # Operational regression guard: validate the full two-half profile path
-        # (mean-path + half-combination) against an independent high-order
-        # reference that directly integrates each half with frozen covariance.
+    @testset "two-slope profile Rosenblatt: z-stack Riemann truth vs PR (nonsmooth f)" begin
+        # Deterministic oracle: `_brute_pdf_z_stack_expectation` (Python `brute_pdf_z_stack` parity).
         using ClimaCore.Geometry
         FT = Float64
         lg = _fd_column_center_local_geometry(FT; ilevel = 4)
@@ -2050,18 +2164,34 @@ end
         ρc = FT(0.42)
         H = FT(360)
         ∂T∂θ = FT(0.5)
-        # Asymmetric two-slope means; frozen covariance (variance slopes = 0).
         gq_dn = Covariant123Vector(FT(0), FT(0), FT(-8e-7))
         gq_up = Covariant123Vector(FT(0), FT(0), FT(3e-6))
         gθ_dn = Covariant123Vector(FT(0), FT(0), FT(0.002))
         gθ_up = Covariant123Vector(FT(0), FT(0), FT(0.011))
         gzero = Covariant123Vector(FT(0), FT(0), FT(0))
-
+        dT_dn = ∂T∂θ * WVector(gθ_dn, lg)[1]
+        dT_up = ∂T∂θ * WVector(gθ_up, lg)[1]
+        dq_dn = WVector(gq_dn, lg)[1]
+        dq_up = WVector(gq_up, lg)[1]
+        extent_t, extent_q = _auto_brute_extents(
+            Tv,
+            qv,
+            H,
+            dT_dn,
+            dq_dn,
+            dT_up,
+            dq_up,
+            FT(0),
+            FT(0),
+            FT(0),
+            FT(0),
+            FT,
+        )
         q_br = ClimaAtmos.SGSQuadrature(
             FT;
-            quadrature_order = 5,
+            quadrature_order = 64,
             distribution = ClimaAtmos.VerticallyResolvedSGS{
-                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesBracketed},
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
                 ClimaAtmos.GaussianSGS,
             }(),
         )
@@ -2070,31 +2200,154 @@ end
             gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
             gzero, gzero, gzero, gzero,
         )
+        truth = _brute_pdf_z_stack_expectation(
+            f, μ_T, μ_q, Tv, qv, ρc, H,
+            dT_dn, dq_dn, dT_up, dq_up,
+            FT(0), FT(0), FT(0), FT(0), FT;
+            n_grid = 201,
+            nz = 101,
+            extent_t = extent_t,
+            extent_q = extent_q,
+        )
+        @test isfinite(i_prof) && isfinite(truth) && abs(truth) > FT(1e-8)
+        # Calibrated: ~0.25% at `N=64` (split-p tensor rule vs the z-stack Riemann target).
+        @test i_prof ≈ truth rtol = FT(5e-3) atol = FT(1e-3)
+    end
 
-        # Independent truth: average of two one-sided half-cell integrals
-        # (`_one_half_layer_riemann_hermite_marginal`), not `integrate_over_sgs`.
+    @testset "Profile Rosenblatt (Gaussian inner): z-stack Riemann truth vs integrate_over_sgs" begin
+        # Independent reference = Python `brute_pdf_z_stack` (same ζ-centers, piecewise μ, H/4 Σ walk),
+        # implemented here as `_brute_pdf_z_stack_expectation` — **not** Monte Carlo.
+        using ClimaCore.Geometry
+        FT = Float64
+        lg = _fd_column_center_local_geometry(FT; ilevel = 4)
+        f(T, q) = T + FT(5) * q
+        μ_q = FT(0.012)
+        μ_T = FT(285)
+        qv = FT(1e-7)
+        Tv = FT(0.4)
+        ρc = FT(0.55)
+        H = FT(400)
+        ∂T∂θ = FT(0.45)
+        gq_dn = Covariant123Vector(FT(0), FT(0), FT(1e-6))
+        gq_up = Covariant123Vector(FT(0), FT(0), FT(3e-6))
+        gθ_dn = Covariant123Vector(FT(0), FT(0), FT(0.004))
+        gθ_up = Covariant123Vector(FT(0), FT(0), FT(0.012))
+        gzero = Covariant123Vector(FT(0), FT(0), FT(0))
         dT_dn = ∂T∂θ * WVector(gθ_dn, lg)[1]
         dT_up = ∂T∂θ * WVector(gθ_up, lg)[1]
         dq_dn = WVector(gq_dn, lg)[1]
         dq_up = WVector(gq_up, lg)[1]
-        T_min, q_max = q_br.T_min, q_br.q_max
-        i_ref = FT(0.5) * (
-            _one_half_layer_riemann_hermite_marginal(
-                f, μ_q, μ_T, qv, Tv, ρc, H, dT_dn, dq_dn, T_min, q_max, FT;
-                Nz_ref = 201,
-                Nh_ref = 5,
-            ) +
-            _one_half_layer_riemann_hermite_marginal(
-                f, μ_q, μ_T, qv, Tv, ρc, H, dT_up, dq_up, T_min, q_max, FT;
-                Nz_ref = 201,
-                Nh_ref = 5,
-            )
+        extent_t, extent_q = _auto_brute_extents(
+            Tv,
+            qv,
+            H,
+            dT_dn,
+            dq_dn,
+            dT_up,
+            dq_up,
+            FT(0),
+            FT(0),
+            FT(0),
+            FT(0),
+            FT,
         )
 
-        @test isfinite(i_prof)
-        @test isfinite(i_ref)
-        @test abs(i_ref) > FT(1e-8)
-        @test abs(i_prof - i_ref) / abs(i_ref) < FT(0.03)
+        quad = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 64,
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+                ClimaAtmos.GaussianSGS,
+            }(),
+        )
+        i_pr = ClimaAtmos.integrate_over_sgs(
+            f, quad, μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
+        )
+
+        truth_b = _brute_pdf_z_stack_expectation(
+            f, μ_T, μ_q, Tv, qv, ρc, H,
+            dT_dn, dq_dn, dT_up, dq_up,
+            FT(0), FT(0), FT(0), FT(0),
+            FT;
+            n_grid = 101,
+            nz = 81,
+            extent_t = extent_t,
+            extent_q = extent_q,
+        )
+
+        @test i_pr ≈ truth_b rtol = FT(1e-6) atol = FT(1e-5)
+    end
+
+    @testset "Profile Rosenblatt: toy `saturation_excess` integrand (finite; z-stack not tight)" begin
+        # `saturation_excess = max(0, q - q_sat(T))` with `_toy_q_sat_kgkg` (same as Python
+        # `local_python/profile_cell_brute_pdf_quadrature_convergence.py`). The layer is tuned slightly
+        # subsaturated at center (`μ_q = q_sat(μ_T) - 4e-4` [kg/kg]) so mass straddles the CC curve.
+        #
+        # **Known gap (do not over-tighten here):** at fixed high `N`, `integrate_over_sgs` and the z-stack
+        # Riemann can differ by O(1) in relative terms for this nondifferentiable, strongly nonlinear
+        # boundary functional split-p is not a plain tensor Gaussian expectation of `max(0,·)`.
+        # This block still locks in the *setup* and guards against `NaN`/zeros.
+        using ClimaCore.Geometry
+        FT = Float64
+        lg = _fd_column_center_local_geometry(FT; ilevel = 4)
+        ∂T∂θ = FT(0.45)
+        μ_T = FT(285.0)
+        p_Pa = FT(85_000.0)
+        μ_q = max(_toy_q_sat_kgkg(μ_T, p_Pa) - FT(4e-4), FT(1e-8))
+        qv = FT(1e-7)
+        Tv = FT(0.4)
+        ρc = FT(0.55)
+        H = FT(400.0)
+        gq_dn = Covariant123Vector(FT(0), FT(0), FT(1e-6))
+        gq_up = Covariant123Vector(FT(0), FT(0), FT(3e-6))
+        gθ_dn = Covariant123Vector(FT(0), FT(0), FT(0.004))
+        gθ_up = Covariant123Vector(FT(0), FT(0), FT(0.012))
+        gzero = Covariant123Vector(FT(0), FT(0), FT(0))
+        f_sat(T, q) = max(zero(T), q - _toy_q_sat_kgkg(T, p_Pa))
+        dT_dn = ∂T∂θ * WVector(gθ_dn, lg)[1]
+        dT_up = ∂T∂θ * WVector(gθ_up, lg)[1]
+        dq_dn = WVector(gq_dn, lg)[1]
+        dq_up = WVector(gq_up, lg)[1]
+        extent_t, extent_q = _auto_brute_extents(
+            Tv,
+            qv,
+            H,
+            dT_dn,
+            dq_dn,
+            dT_up,
+            dq_up,
+            FT(0),
+            FT(0),
+            FT(0),
+            FT(0),
+            FT,
+        )
+        quad = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 48,
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+                ClimaAtmos.GaussianSGS,
+            }(),
+        )
+        i_pr = ClimaAtmos.integrate_over_sgs(
+            f_sat, quad, μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
+        )
+        truth = _brute_pdf_z_stack_expectation(
+            f_sat, μ_T, μ_q, Tv, qv, ρc, H,
+            dT_dn, dq_dn, dT_up, dq_up,
+            FT(0), FT(0), FT(0), FT(0), FT;
+            n_grid = 301,
+            nz = 120,
+            extent_t = extent_t,
+            extent_q = extent_q,
+        )
+        @test isfinite(i_pr) && isfinite(truth) && isfinite(μ_q)
+        @test truth > FT(0) && i_pr > FT(0)
     end
 
     @testset "single-convolution quantiles: Brent/Chebyshev vs brute-force truth" begin
@@ -2365,24 +2618,11 @@ end
         end
     end
 
-    @testset "Profile Rosenblatt: nontrivial f matches Riemann–Hermite layer reference (zero variance slopes)" begin
-        # `integrate_over_sgs` (full `_two_slope_rosenblatt_params` + split-``p``) vs Riemann+GH
-        # [`_one_half_layer_riemann_hermite_marginal`](@ref). **This calls the real PR implementation**
-        # with the same public arguments as in runs; `gqq`/`gTT` = 0 is one physical case the function
-        # must support, not a different entrypoint.
-        #
-        # **Asymmetric means (real):** `gq_dn≠gq_up`, `gθ_dn≠gθ_up` ⇒ distinct per-half mean slopes
-        # and thus distinct `L_dn`,`L_up`, per-leg inverses, etc. (operationally *not* a single
-        # column-mean slab for means).
-        #
-        # **Half-center variances (degenerate sub-case):** with `gqq`/`gTT` = 0, the code still evaluates
-        # the H/4 walk in `subgrid_layer_profile_quadrature.jl` (`σT²_fdn`/`σT²_fup` etc.), but
-        # `sTT=sqq=0` makes those **equal** `σT²_c`,`σq²_c`. So the “center-Σ Riemann” reference
-        # matches the **values** the PR path uses for turbulent second moments, while **not** yet
-        # testing a bug that only shows when `σ²` at half-center ≠ `σ²` at center (needs a follow-up
-        # test with nonzero `gqq`/`gTT` and a `z`-walked or brute reference).
-        #
-        # Polynomial `f` stresses the `(T,q)` map. (Pattern matches the two-slope `gzero` tests above.)
+    @testset "Profile Rosenblatt: polynomial f vs z-stack truth (gqq=gTT=0, Halley N=64)" begin
+        # **Truth target** is `_brute_pdf_z_stack_expectation` (Python `brute_pdf_z_stack`), not PR-vs-PR
+        # and not the older “average of two one-sided half Riemann+GH” helper—the latter is a *different* scheme.
+        # Calibrated: ~0.4% @ `N=64` for this polynomial (cross-terms); linear functionals of `(T,q)` match much tighter
+        # (see the `T + 5q` test above).
         using ClimaCore.Geometry
         FT = Float64
         lg = _fd_column_center_local_geometry(FT; ilevel = 4)
@@ -2400,52 +2640,48 @@ end
         dT_up = ∂T∂θ * WVector(gθ_up, lg)[1]
         dq_dn = WVector(gq_dn, lg)[1]
         dq_up = WVector(gq_up, lg)[1]
-        for M in (
-            ClimaAtmos.ConvolutionQuantilesBracketed,
-            ClimaAtmos.ConvolutionQuantilesHalley,
-            ClimaAtmos.ConvolutionQuantilesChebyshevLogEta,
+        extent_t, extent_q = _auto_brute_extents(
+            Tv,
+            qv,
+            H,
+            dT_dn,
+            dq_dn,
+            dT_up,
+            dq_up,
+            FT(0),
+            FT(0),
+            FT(0),
+            FT(0),
+            FT,
         )
-            q_br = ClimaAtmos.SGSQuadrature(
-                FT;
-                quadrature_order = 5,
-                distribution = ClimaAtmos.VerticallyResolvedSGS{
-                    ClimaAtmos.SubgridProfileRosenblatt{M},
-                    ClimaAtmos.GaussianSGS,
-                }(),
-            )
-            T_min, q_max = q_br.T_min, q_br.q_max
-            i_ref = FT(0.5) * (
-                _one_half_layer_riemann_hermite_marginal(
-                    f, μ_q, μ_T, qv, Tv, ρc, H, dT_dn, dq_dn, T_min, q_max, FT;
-                    Nz_ref = 201,
-                    Nh_ref = 5,
-                ) +
-                _one_half_layer_riemann_hermite_marginal(
-                    f, μ_q, μ_T, qv, Tv, ρc, H, dT_up, dq_up, T_min, q_max, FT;
-                    Nz_ref = 201,
-                    Nh_ref = 5,
-                )
-            )
-            i_prof = ClimaAtmos.integrate_over_sgs(
-                f, q_br, μ_q, μ_T, qv, Tv, ρc, H, lg,
-                gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
-                gzero, gzero, gzero, gzero,
-            )
-            @test isfinite(i_prof) && isfinite(i_ref)
-            @test abs(i_ref) > FT(1e-10)
-            @test abs(i_prof - i_ref) / abs(i_ref) < FT(0.04)
-        end
+        q_br = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 64,
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+                ClimaAtmos.GaussianSGS,
+            }(),
+        )
+        i_pr = ClimaAtmos.integrate_over_sgs(
+            f, q_br, μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
+        )
+        truth = _brute_pdf_z_stack_expectation(
+            f, μ_T, μ_q, Tv, qv, ρc, H,
+            dT_dn, dq_dn, dT_up, dq_up,
+            FT(0), FT(0), FT(0), FT(0), FT;
+            n_grid = 201,
+            nz = 151,
+            extent_t = extent_t,
+            extent_q = extent_q,
+        )
+        @test isfinite(i_pr) && isfinite(truth) && abs(truth) > FT(1e-10)
+        @test i_pr ≈ truth rtol = FT(5e-3) atol = FT(1e-3)
     end
 
-    @testset "Profile Rosenblatt: nontrivial f vs half-center-Σ Riemann (nonzero gqq, gTT)" begin
-        # Same polynomial `f` and mean gradients as the zero-slope test, but with **subcell
-        # variance slopes** from realistic `gqq_*` / `gTT_*` (WVector → scalars as in production).
-        # Reference: [`_one_half_layer_riemann_hermite_slab_halfcenter_sigma`](@ref) — Riemann in `z`
-        # with **constant** per-half `(σ_T,σ_q,ρ)` set to the **H/4 half-center** moments matching
-        # `σT²_fdn` / `σT²_fup` in `subgrid_layer_profile_quadrature.jl`, not center Σ. Still a
-        # **slab** discretization (not split-``p``), but it **does** test the walk used operationally;
-        # remaining gap is z-interpolation of `Σ` within a half (PR samples half-center `Σ` for
-        # inner structure — see that file’s docstring).
+    @testset "Profile Rosenblatt: polynomial f vs z-stack truth (nonzero gqq, gTT, Halley N=64)" begin
+        # Same **z-stack** reference as the test above, with H/4 variance walks from `gqq_*` / `gTT_*`.
         using ClimaCore.Geometry
         FT = Float64
         lg = _fd_column_center_local_geometry(FT; ilevel = 4)
@@ -2470,42 +2706,105 @@ end
         sTT_up = WVector(gTT_up, lg)[1]
         sqq_dn = WVector(gqq_dn, lg)[1]
         sqq_up = WVector(gqq_up, lg)[1]
-        for M in (
-            ClimaAtmos.ConvolutionQuantilesBracketed,
-            ClimaAtmos.ConvolutionQuantilesHalley,
-            ClimaAtmos.ConvolutionQuantilesChebyshevLogEta,
+        extent_t, extent_q = _auto_brute_extents(
+            Tv,
+            qv,
+            H,
+            dT_dn,
+            dq_dn,
+            dT_up,
+            dq_up,
+            sTT_dn,
+            sTT_up,
+            sqq_dn,
+            sqq_up,
+            FT,
         )
-            q_br = ClimaAtmos.SGSQuadrature(
-                FT;
-                quadrature_order = 5,
-                distribution = ClimaAtmos.VerticallyResolvedSGS{
-                    ClimaAtmos.SubgridProfileRosenblatt{M},
-                    ClimaAtmos.GaussianSGS,
-                }(),
-            )
-            T_min, q_max = q_br.T_min, q_br.q_max
-            i_ref = FT(0.5) * (
-                _one_half_layer_riemann_hermite_slab_halfcenter_sigma(
-                    f, μ_q, μ_T, qv, Tv, ρc, H, dT_dn, dq_dn, sTT_dn, sqq_dn, :dn, T_min, q_max, FT;
-                    Nz_ref = 201,
-                    Nh_ref = 5,
-                ) +
-                _one_half_layer_riemann_hermite_slab_halfcenter_sigma(
-                    f, μ_q, μ_T, qv, Tv, ρc, H, dT_up, dq_up, sTT_up, sqq_up, :up, T_min, q_max, FT;
-                    Nz_ref = 201,
-                    Nh_ref = 5,
-                )
-            )
-            i_prof = ClimaAtmos.integrate_over_sgs(
-                f, q_br, μ_q, μ_T, qv, Tv, ρc, H, lg,
-                gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
-                gqq_dn, gqq_up, gTT_dn, gTT_up,
-            )
-            @test isfinite(i_prof) && isfinite(i_ref)
-            @test abs(i_ref) > FT(1e-10)
-            # Slab (Riemann+GH, constant half-center Σ per half) vs split-``p``/Hermite: not identical discretizations.
-            @test abs(i_prof - i_ref) / abs(i_ref) < FT(0.12)
-        end
+        q_br = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 64,
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+                ClimaAtmos.GaussianSGS,
+            }(),
+        )
+        i_pr = ClimaAtmos.integrate_over_sgs(
+            f, q_br, μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gqq_dn, gqq_up, gTT_dn, gTT_up,
+        )
+        truth = _brute_pdf_z_stack_expectation(
+            f, μ_T, μ_q, Tv, qv, ρc, H,
+            dT_dn, dq_dn, dT_up, dq_up, sTT_dn, sTT_up, sqq_dn, sqq_up, FT;
+            n_grid = 201,
+            nz = 151,
+            extent_t = extent_t,
+            extent_q = extent_q,
+        )
+        @test isfinite(i_pr) && isfinite(truth) && abs(truth) > FT(1e-10)
+        @test i_pr ≈ truth rtol = FT(5e-3) atol = FT(1e-3)
+    end
+
+    @testset "Profile Rosenblatt: FD column Δz vs SGS layer thickness H (documented)" begin
+        # Toy column from `_fd_column_center_local_geometry`: uniform centers on ``[0,z_top]``.
+        # ``H`` in `integrate_over_sgs` is the **two-slope layer thickness** for profile math, not FD ``Δz``.
+        using ClimaCore.Geometry
+        FT = Float64
+        z_top = FT(10_000)
+        nelems = 8
+        Δz_fd = z_top / FT(nelems)
+        H_sgs_typical = FT(400)
+        @test Δz_fd == FT(1250)
+        @test H_sgs_typical == FT(400)
+    end
+
+    @testset "Profile Rosenblatt: DN/UP mean slopes with q-gradient kink (opposite half signs)" begin
+        # ``(dT/dz,dq/dz)`` are **scalars** from ``WVector(grad, lg)`` (column-vertical gradients only).
+        # Raw ``(dT/dz,dq/dz)`` in SI units are almost colinear in ``ℝ^2`` because ``|dT/dz|`` and ``|dq/dz|``
+        # sit on different scales (cf. ``σ_T`` vs ``σ_q`` from ``sgs_stddevs_and_correlation``). For “angle”
+        # between lower vs upper **mean-gradient** directions, compare **fluctuation-normalized** vectors
+        # ``( (dT/dz)/σ_T,\\, (dq/dz)/σ_q )`` using the **same** center ``(σ_T,σ_q)`` for both halves.
+        using ClimaCore.Geometry
+        FT = Float64
+        lg = _fd_column_center_local_geometry(FT; ilevel = 4)
+        ∂T∂θ = FT(0.45)
+        gθ_dn = Covariant123Vector(FT(0), FT(0), FT(0.004))
+        gθ_up = Covariant123Vector(FT(0), FT(0), FT(0.010))
+        gq_dn = Covariant123Vector(FT(0), FT(0), FT(4e-6))
+        gq_up = Covariant123Vector(FT(0), FT(0), FT(-6e-6))
+        dT_dn = ∂T∂θ * WVector(gθ_dn, lg)[1]
+        dT_up = ∂T∂θ * WVector(gθ_up, lg)[1]
+        dq_dn = WVector(gq_dn, lg)[1]
+        dq_up = WVector(gq_up, lg)[1]
+        @test dq_dn * dq_up < FT(0)
+        @test dT_dn * dT_up > FT(0)
+        μ_q, μ_T = FT(0.012), FT(285)
+        qv, Tv, ρc = FT(1e-7), FT(0.4), FT(0.55)
+        σ_q, σ_T, _ = ClimaAtmos.sgs_stddevs_and_correlation(qv, Tv, ρc)
+        vn1, vn2 = dT_dn / σ_T, dq_dn / σ_q
+        vu1, vu2 = dT_up / σ_T, dq_up / σ_q
+        nd = hypot(vn1, vn2)
+        nu = hypot(vu1, vu2)
+        cos_norm = (vn1 * vu1 + vn2 * vu2) / (nd * nu)
+        @test cos_norm < FT(-0.5)
+        quad = ClimaAtmos.SGSQuadrature(
+            FT;
+            quadrature_order = 5,
+            distribution = ClimaAtmos.VerticallyResolvedSGS{
+                ClimaAtmos.SubgridProfileRosenblatt{ClimaAtmos.ConvolutionQuantilesHalley},
+                ClimaAtmos.GaussianSGS,
+            }(),
+        )
+        H = FT(400)
+        gzero = Covariant123Vector(FT(0), FT(0), FT(0))
+        f(T, q) =
+            (T - FT(280))^2 * (q + FT(1e-5)) + FT(0.1) * (T - μ_T) * (q - μ_q)
+        v = ClimaAtmos.integrate_over_sgs(
+            f, quad, μ_q, μ_T, qv, Tv, ρc, H, lg,
+            gq_dn, gq_up, gθ_dn, gθ_up, ∂T∂θ,
+            gzero, gzero, gzero, gzero,
+        )
+        @test isfinite(v)
     end
 
     @testset "coverage matrix: all 1M-supported gridscale SGS return finite tendencies" begin

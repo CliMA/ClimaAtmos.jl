@@ -8,16 +8,55 @@ reusable utilities for cloud fraction, microphysics tendencies, and other SGS di
 
 import StaticArrays as SA
 import Thermodynamics as TD
-import LinearAlgebra: dot
+import LinearAlgebra: SymTridiagonal, dot, eigen
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 import UnrolledUtilities: unrolled_reduce
 
+# Golub–Welsch lets us support moderate orders beyond small precomputed tables (tests,
+# convergence studies, offline calibration) without maintaining huge closed-form lists.
+const _MAX_GAUSS_HERMITE_ORDER_GW = 64
+const _MAX_GAUSS_LEGENDRE_ORDER_GW = 64
 
-# ============================================================================
-# Gauss-Hermite Quadrature
-# ============================================================================
+function _gauss_hermite_golub_welsch(::Type{FT}, n::Int) where {FT}
+    (n >= 1 && n <= _MAX_GAUSS_HERMITE_ORDER_GW) ||
+        error("Gauss-Hermite Golub–Welsch requires 1 ≤ n ≤ $_MAX_GAUSS_HERMITE_ORDER_GW; got $n.")
+    if n == 1
+        return (FT[0], FT[sqrt(FT(π))])
+    end
+    dv = zeros(FT, n)
+    ev = [sqrt(FT(i) / FT(2)) for i in 1:(n - 1)]
+    J = SymTridiagonal(dv, ev)
+    F = eigen(J)
+    nodes = F.values
+    V = F.vectors
+    w = zeros(FT, n)
+    πv = sqrt(FT(π))
+    @inbounds for j in 1:n
+        w[j] = πv * V[1, j]^2
+    end
+    return (nodes, w)
+end
+
+function _gauss_legendre_neg1_1_golub_welsch(::Type{FT}, n::Int) where {FT}
+    (n >= 1 && n <= _MAX_GAUSS_LEGENDRE_ORDER_GW) ||
+        error("Gauss-Legendre Golub–Welsch requires 1 ≤ n ≤ $_MAX_GAUSS_LEGENDRE_ORDER_GW; got $n.")
+    if n == 1
+        return (FT[0], FT[2])
+    end
+    dv = zeros(FT, n)
+    ev = [FT(k) / sqrt(FT(4 * k * k - 1)) for k in 1:(n - 1)]
+    J = SymTridiagonal(dv, ev)
+    F = eigen(J)
+    nodes = F.values
+    V = F.vectors
+    w = zeros(FT, n)
+    @inbounds for j in 1:n
+        w[j] = 2 * V[1, j]^2
+    end
+    return (nodes, w)
+end
 
 """
     gauss_hermite(FT, N)
@@ -29,7 +68,7 @@ Weights are standard Gauss-Hermite weights for integration against ``e^{-x^2}``.
 
 # Arguments
 - `FT`: Floating-point type
-- `N::Int`: Quadrature order (1-5 supported)
+- `N::Int`: Quadrature order (`1 ≤ N ≤ 5` tabulated; `6 ≤ N ≤ 64` via Golub–Welsch)
 
 # Returns
 Tuple `(nodes, weights)` as `Vector{FT}`.
@@ -59,8 +98,12 @@ function gauss_hermite(::Type{FT}, N::Int) where {FT}
         w1 = sqrt(FT(π)) * (FT(7) + FT(2) * sqrt(FT(10))) / 60
         w2 = sqrt(FT(π)) * (FT(7) - FT(2) * sqrt(FT(10))) / 60
         return (FT[-a2, -a1, 0, a1, a2], FT[w2, w1, w0, w1, w2])
+    elseif N <= _MAX_GAUSS_HERMITE_ORDER_GW
+        return _gauss_hermite_golub_welsch(FT, N)
     else
-        error("Gauss-Hermite quadrature order $N not implemented. Use N ∈ {1,2,3,4,5}.")
+        error(
+            "Gauss-Hermite quadrature order $N not implemented. Use N ∈ {1,…,5} (tabulated) or N ∈ {6,…,$(_MAX_GAUSS_HERMITE_ORDER_GW)} (Golub–Welsch).",
+        )
     end
 end
 
@@ -73,7 +116,7 @@ Precomputed from standard ``[-1,1]`` quadrature via ``x = (t+1)/2``, ``w_{01} = 
 
 # Arguments
 - `FT`: Floating-point type
-- `N::Int`: Quadrature order (1-5 supported)
+- `N::Int`: Quadrature order (`1 ≤ N ≤ 5` tabulated; `6 ≤ N ≤ 64` via Golub–Welsch)
 
 # Returns
 Tuple `(nodes, weights)` as `Vector{FT}`.
@@ -110,8 +153,16 @@ function gauss_legendre_01(::Type{FT}, N::Int) where {FT}
             FT[(1 - a2) * half, (1 - a1) * half, half, (1 + a1) * half, (1 + a2) * half],
             FT[w2 * half, w1 * half, w0 * half, w1 * half, w2 * half],
         )
+    elseif N <= _MAX_GAUSS_LEGENDRE_ORDER_GW
+        t, w = _gauss_legendre_neg1_1_golub_welsch(FT, N)
+        two = FT(2)
+        x01 = map(tv -> (tv + one(FT)) / two, t)
+        w01 = map(wv -> wv / two, w)
+        return (x01, w01)
     else
-        error("Gauss-Legendre quadrature order $N not implemented. Use N ∈ {1,2,3,4,5}.")
+        error(
+            "Gauss-Legendre quadrature order $N not implemented. Use N ∈ {1,…,5} (tabulated) or N ∈ {6,…,$(_MAX_GAUSS_LEGENDRE_ORDER_GW)} (Golub–Welsch).",
+        )
     end
 end
 

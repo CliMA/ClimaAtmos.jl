@@ -93,8 +93,11 @@ If `solver_log_path` is provided and the file exists, a tail of that file is app
  during `solve_atmos!` and captures the `@error` block from `ClimaAtmos` (the exception is not returned in
 `AtmosSolveResults` when `ret_code == :simulation_crashed`).
 
-Filename is stable per `(case_slug, quadrature_order, sgs_distribution)` and **overwrites** on a later failure
-for the same triple so `_failures/` does not accumulate timestamped copies.
+Filename is stable per `(case_slug, [res_segment,] quadrature_order, sgs_distribution)` and **overwrites** on
+a later failure for the same key so `_failures/` does not accumulate timestamped copies. When
+`res_segment` is set (default), the path is nested as
+`_failures/<slug>/<res_segment>/N_<n>/<dist>.txt` to mirror the simulation tree.
+If omitted, this falls back to a flat legacy filename.
 """
 function _va_sgs_smoke_write_failure!(
     experiment_dir::AbstractString,
@@ -103,6 +106,7 @@ function _va_sgs_smoke_write_failure!(
     dist::AbstractString,
     err,
     bt;
+    res_segment::Union{Nothing, AbstractString} = nothing,
     max_backtrace_lines::Int = 48,
     solver_log_path::Union{Nothing, String} = nothing,
     solver_log_tail_max_bytes::Int = 12_000,
@@ -110,10 +114,20 @@ function _va_sgs_smoke_write_failure!(
     fail_root = joinpath(experiment_dir, "simulation_output", "sgs_smoke", "_failures")
     mkpath(fail_root)
     safe_dist = va_sgs_dist_path_slug(dist)
-    path = joinpath(fail_root, "$(slug)_N$(n_quad)_$(safe_dist).txt")
+    path = if res_segment === nothing
+        joinpath(fail_root, "$(slug)_N$(n_quad)_$(safe_dist).txt")
+    else
+        rs = replace(String(res_segment), r"[^\w\.\-]+" => "_")
+        joinpath(fail_root, String(slug), rs, "N_$(n_quad)", "$(safe_dist).txt")
+    end
+    mkpath(dirname(path))
     open(path, "w") do io
         println(io, "sgs_distribution = ", dist)
-        println(io, "case_slug = ", slug, "  quadrature_order = ", n_quad)
+        println(
+            io,
+            "case_slug = ", slug, "  res_segment = ", res_segment === nothing ? "(none)" : res_segment,
+            "  quadrature_order = ", n_quad,
+        )
         println(io, repeat("=", 72))
         println(io)
         showerror(io, err, bt)
@@ -365,8 +379,10 @@ function va_run_trmm_sgs_smoke_one(;
             "Partial state may exist under output_dir:\n  $od",
         )
         bt = backtrace()
+        rseg = String(va_tier_path_segment(tier, z_stretch, yaml_dz))
         fail_path = _va_sgs_smoke_write_failure!(
             experiment_dir, slug, n_quad, dist, exc, bt;
+            res_segment = rseg,
             solver_log_path = isfile(solver_log) ? String(solver_log) : nothing,
         )
         error(
@@ -409,6 +425,7 @@ function _va_run_trmm_sgs_smoke_job(job::NamedTuple)
             z_stretch = job.z_stretch,
             yaml_dz = job.yaml_dz,
         )
+        rseg = String(va_tier_path_segment(job.tier, job.z_stretch, job.yaml_dz))
         path = _va_sgs_smoke_write_failure!(
             job.experiment_dir,
             job.slug,
@@ -416,6 +433,7 @@ function _va_run_trmm_sgs_smoke_job(job::NamedTuple)
             job.dist,
             e,
             bt;
+            res_segment = rseg,
             solver_log_path = isfile(sol_log) ? String(sol_log) : nothing,
         )
         return (; ok = false, dist = job.dist, log_path = path, summary = sprint(showerror, e))
