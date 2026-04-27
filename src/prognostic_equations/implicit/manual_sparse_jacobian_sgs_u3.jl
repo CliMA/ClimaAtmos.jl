@@ -7,9 +7,8 @@ function jacobian_sgs_u₃_cache(alg, cache, Y, p, dtγ, t)
     error("jacobian_sgs_u₃_cache is not implemented for the given Jacobian algorithm!!!")
 end
 function jacobian_sgs_u₃_cache(alg::ManualSparseJacobian, Y, atmos)
-    (;
-        sgs_advection_flag,
-    ) = alg
+    derivative_flags = _derivative_flags(atmos, Y)
+    (; sgs_advection_flag) = derivative_flags
     FT = Spaces.undertype(axes(Y.c))
 
     DiagonalRow_C3xACT3 =
@@ -80,7 +79,10 @@ function jacobian_sgs_u₃_cache(alg::ManualSparseJacobian, Y, atmos)
     alg = MatrixFields.BlockDiagonalSolve(
     )
 
-    return (; matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, alg))
+    return (;
+        matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, alg),
+        derivative_flags,
+    )
 end
 
 function update_jacobian_sgs_u₃!(alg, cache, Y, p, dtγ, t)
@@ -91,7 +93,7 @@ function update_jacobian_sgs_u₃!(alg::ManualSparseJacobian, cache, Y, p, dtγ,
         sgs_advection_flag,
         sgs_entr_detr_flag,
         sgs_nh_pressure_flag,
-    ) = alg
+    ) = cache.derivative_flags
     (; matrix) = cache
     (; params) = p
     (; ᶠtridiagonal_matrix_c3,) = p.scratch

@@ -522,47 +522,43 @@ function _config_surface_setup(parsed_args)
 end
 
 function get_jacobian(ode_algo, Y, atmos, parsed_args)
+    jacobian = jacobian_from_parsed_args(parsed_args)
     return get_jacobian(
-        ode_algo,
-        Y,
-        atmos,
-        parsed_args["use_dense_jacobian"],
-        parsed_args["use_auto_jacobian"],
-        parsed_args["auto_jacobian_padding_bands"],
-        parsed_args["approximate_linear_solve_iters"],
-        parsed_args["debug_jacobian"],
-        false,
+        ode_algo, Y, atmos, jacobian, parsed_args["debug_jacobian"],
     )
 end
 
-function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
-    auto_jacobian_padding_bands,
-    approximate_linear_solve_iters, debug_jacobian; for_sgs_u₃ = false,
+# Translate YAML config keys into a user-facing JacobianAlgorithm stub.
+function jacobian_from_parsed_args(parsed_args)
+    approximate_solve_iters = parsed_args["approximate_linear_solve_iters"]
+    if parsed_args["use_dense_jacobian"]
+        return AutoDenseJacobian()
+    elseif parsed_args["use_auto_jacobian"]
+        return AutoSparseJacobian(;
+            approximate_solve_iters,
+            padding_bands_per_block = parsed_args["auto_jacobian_padding_bands"],
+        )
+    else
+        return ManualSparseJacobian(; approximate_solve_iters)
+    end
+end
+
+function get_jacobian(
+    ode_algo, Y, atmos, jacobian::JacobianAlgorithm, debug_jacobian;
+    for_sgs_u₃ = false,
 )
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
-    jacobian_algorithm = if use_dense_jacobian
-        AutoDenseJacobian()
-    else
-        manual_jacobian_algorithm = ManualSparseJacobian(
-            DerivativeFlag(has_topography(axes(Y.c))),
-            DerivativeFlag(atmos.diff_mode),
-            DerivativeFlag(atmos.sgs_adv_mode),
-            DerivativeFlag(atmos.sgs_entr_detr_mode),
-            DerivativeFlag(atmos.sgs_mf_mode),
-            DerivativeFlag(atmos.sgs_nh_pressure_mode),
-            DerivativeFlag(atmos.sgs_vertdiff_mode),
-            approximate_linear_solve_iters,
+    @info "Jacobian algorithm: $(summary_string(jacobian))"
+    jac = Jacobian(jacobian, Y, atmos, for_sgs_u₃; verbose = debug_jacobian)
+    if hasproperty(jac.cache, :derivative_flags)
+        flags_str = join(
+            ("$k = $(typeof(v).name.name)" for (k, v) in pairs(jac.cache.derivative_flags)),
+            ", ",
         )
-        use_auto_jacobian ?
-        AutoSparseJacobian(
-            manual_jacobian_algorithm,
-            auto_jacobian_padding_bands,
-        ) : manual_jacobian_algorithm
+        @info "Jacobian derivative flags: $flags_str"
     end
-    @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
-    verbose = debug_jacobian
-    return Jacobian(jacobian_algorithm, Y, atmos, for_sgs_u₃; verbose)
+    return jac
 end
 
 function ode_configuration(::Type{FT}, args) where {FT}
@@ -827,10 +823,7 @@ end
 
 function args_integrator(args, Y, p, tspan, ode_algo, callback, dt_integrator)
     return args_integrator(Y, p, tspan, ode_algo, callback,
-        args["use_dense_jacobian"],
-        args["use_auto_jacobian"],
-        args["auto_jacobian_padding_bands"],
-        args["approximate_linear_solve_iters"],
+        jacobian_from_parsed_args(args),
         args["debug_jacobian"],
         args["prescribed_flow"],
         dt_integrator,
@@ -838,9 +831,7 @@ function args_integrator(args, Y, p, tspan, ode_algo, callback, dt_integrator)
 end
 
 function args_integrator(Y, p, tspan, ode_algo, callback,
-    use_dense_jacobian, use_auto_jacobian, auto_jacobian_padding_bands,
-    approximate_linear_solve_iters, debug_jacobian, prescribed_flow,
-    dt_integrator,
+    jacobian, debug_jacobian, prescribed_flow, dt_integrator,
 )
     (; atmos) = p
     s = @timed_str begin
@@ -852,20 +843,16 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                 p.atmos.turbconv_model isa PrognosticEDMFX ?
                 CTS.ODEFunction(
                     implicit_tendency_sgs_u₃!;
-                    jac_prototype = get_jacobian(ode_algo, Y, atmos,
-                        use_dense_jacobian, use_auto_jacobian,
-                        auto_jacobian_padding_bands,
-                        approximate_linear_solve_iters, debug_jacobian,
+                    jac_prototype = get_jacobian(
+                        ode_algo, Y, atmos, jacobian, debug_jacobian;
                         for_sgs_u₃ = true,
                     ),
                     Wfact = update_jacobian_sgs_u₃!,
                 ) : nothing
             T_imp! = CTS.ODEFunction(
                 implicit_tendency!;
-                jac_prototype = get_jacobian(ode_algo, Y, atmos,
-                    use_dense_jacobian, use_auto_jacobian,
-                    auto_jacobian_padding_bands,
-                    approximate_linear_solve_iters, debug_jacobian,
+                jac_prototype = get_jacobian(
+                    ode_algo, Y, atmos, jacobian, debug_jacobian,
                 ),
                 Wfact = update_jacobian!,
             )
