@@ -78,10 +78,10 @@ The r-integral is precomputed once per bin at module load time
 TODO: add SST-dependent theta correction (currently fixed at theta = 30).
 TODO: apply land-sea mask upstream so this is only called over ocean.
 """
-function sea_salt_emission_flux(u_10, T_sfc, bin_index; SST_adj = true)
+function sea_salt_emission_flux(u_10, T_sfc, bin_index; SST_adj = false)
     FT = typeof(u_10)
     bin_integral = FT(SEA_SALT_BIN_R_INTEGRALS[bin_index])
-    number_flux = bin_integral * u_10^FT(3.41)
+    number_flux = bin_integral * abs(u_10) ^ FT(3.41)
     if SST_adj
         SST_factor = FT(0.3) + FT(0.1) * T_sfc - FT(0.0076) * T_sfc^2 + FT(0.00021) * T_sfc^3
         number_flux *= SST_factor
@@ -118,7 +118,7 @@ function sea_salt_emission_tendency_debug!(Yₜ, Y, p, t)
         @. sfc_flux = C3(const_flux * ocean_fraction)
 
         btt = boundary_tendency_scalar(ᶜχ, sfc_flux)
-        @. ᶜρχₜ += btt
+        @. ᶜρχₜ -= btt
     end
 end
 
@@ -171,6 +171,8 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
         Val(5),
     )
 
+    @. p.tracers.sea_salt_emission_flux_sfc = 0
+
     for (bin_index, name) in enumerate(aerosol_names)
         ρχ_name = Symbol(:ρ, name)
         ᶜρχ = getproperty(Y.c, ρχ_name)
@@ -179,10 +181,13 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
 
         m_p = mass_per_particle[bin_index]
         sfc_flux = p.scratch.sfc_temp_C3
-        @. sfc_flux = C3(sea_salt_emission_flux(u_10, T_sfc, bin_index) * m_p * ocean_fraction)
+        bin_flux_cache = getproperty(p.tracers.sea_salt_emission_flux_bins_sfc, name)
+        @. bin_flux_cache = sea_salt_emission_flux(u_10, T_sfc, bin_index) * m_p * ocean_fraction
+        @. p.tracers.sea_salt_emission_flux_sfc += bin_flux_cache
+        @. sfc_flux = C3(bin_flux_cache)
 
         btt = boundary_tendency_scalar(ᶜχ, sfc_flux)
-        @. ᶜρχₜ += btt
+        @. ᶜρχₜ -= btt
     end
 end
 
