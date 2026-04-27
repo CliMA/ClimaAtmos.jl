@@ -330,8 +330,8 @@ add_diagnostic_variable!(
 # and stored in cache.tracers.sea_salt_emission_flux_sfc. The diagnostic just reads it,
 # so the time-average exactly matches what was applied to the tracers.
 function compute_sea_salt_emission_flux!(out, state, cache, time)
-    isempty(_aerosol_names(cache.atmos.prognostic_aerosols)) &&
-        error("No prognostic sea salt bins in this run")
+    :sea_salt_emission_flux_sfc in propertynames(cache.tracers) ||
+        error("sea_salt_emission_flux_sfc not in cache — is sea_salt_emission_tendency! active?")
     flux = cache.tracers.sea_salt_emission_flux_sfc
     if isnothing(out)
         return copy(flux)
@@ -349,8 +349,8 @@ add_diagnostic_variable!(
 )
 
 function compute_sea_salt_emission_flux_bin!(out, state, cache, time, bin_name)
-    isempty(_aerosol_names(cache.atmos.prognostic_aerosols)) &&
-        error("No prognostic sea salt bins in this run")
+    :sea_salt_emission_flux_bins_sfc in propertynames(cache.tracers) ||
+        error("sea_salt_emission_flux_bins_sfc not in cache — is sea_salt_emission_tendency! active?")
     flux = getproperty(cache.tracers.sea_salt_emission_flux_bins_sfc, bin_name)
     if isnothing(out)
         return copy(flux)
