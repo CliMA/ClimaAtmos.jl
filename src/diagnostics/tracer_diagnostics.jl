@@ -21,17 +21,18 @@ function compute_aerosol!(out, state, cache, time, aerosol_name)
         error("$aerosol_name does not exist in the model")
     if isnothing(out)
         if has_prognostic
-            return copy(specific(getproperty(state.c, ρname), state.c.ρ))
+            ρχ = getproperty(state.c, ρname)
+            return copy(@. specific(ρχ, state.c.ρ))
         else
-            return copy(
-                getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name),
-            )
+            return copy(getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name))
         end
     else
         if has_prognostic
-            out .= specific(getproperty(state.c, ρname), state.c.ρ)
+            ρχ = getproperty(state.c, ρname)
+            @. out = specific(ρχ, state.c.ρ)
         else
-            out .= getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name)
+            aerosol_field = getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name)
+            out .= aerosol_field
         end
     end
 end
