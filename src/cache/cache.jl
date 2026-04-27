@@ -83,6 +83,7 @@ Adapt.@adapt_structure AtmosCache
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
+# null
 function build_cache(
     Y,
     atmos,
