@@ -103,8 +103,7 @@ function amip_target_diagedmf(context, output_dir)
 
     grid = CA.SphereGrid(FT; topography, h_elem, z_elem, z_max, dz_bottom, context)
 
-    # TODO: Use jacobian flags
-    approximate_linear_solve_iters = 2
+    jacobian = CA.ManualSparseJacobian(; approximate_solve_iters = 2)
     max_newton_iters_ode = 1
 
     newtons_method = CTS.NewtonsMethod(;
@@ -127,7 +126,7 @@ function amip_target_diagedmf(context, output_dir)
         dt = 1secs,
         t_end = 3secs,
         checkpoint_frequency = 1secs,
-        approximate_linear_solve_iters,
+        jacobian,
         callback_kwargs,
         ode_config,
         surface_setup,

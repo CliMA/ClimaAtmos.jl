@@ -148,7 +148,7 @@ simulation = CA.AtmosSimulation{FT}(; job_id,
     default_diagnostics = false,
     diagnostics,
     # Numerics
-    approximate_linear_solve_iters = 2,  # TODO: Fix implicit diffusion for LES
+    jacobian = CA.ManualSparseJacobian(; approximate_solve_iters = 2),  # TODO: Fix implicit diffusion for LES
     # Misc
     checkpoint_frequency = "1days",
     log_to_file = true,

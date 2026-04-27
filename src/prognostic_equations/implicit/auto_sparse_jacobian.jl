@@ -20,8 +20,29 @@ struct AutoSparseJacobian{A <: SparseJacobian, P} <: SparseJacobian
     sparse_jacobian_alg::A
     padding_bands_per_block::P
 end
+
+"""
+    AutoSparseJacobian(sparse_jacobian_alg, [padding_bands_per_block = nothing])
+
+Construct an [`AutoSparseJacobian`](@ref) that reuses the sparsity structure
+of the given `sparse_jacobian_alg`.
+"""
 AutoSparseJacobian(sparse_jacobian_alg) =
     AutoSparseJacobian(sparse_jacobian_alg, nothing)
+
+"""
+    AutoSparseJacobian(; approximate_solve_iters = 1, padding_bands_per_block = nothing)
+
+Construct an [`AutoSparseJacobian`](@ref) that reuses the sparsity structure
+of an inner [`ManualSparseJacobian`](@ref) built from `approximate_solve_iters`.
+"""
+AutoSparseJacobian(;
+    approximate_solve_iters::Int = 1,
+    padding_bands_per_block = nothing,
+) = AutoSparseJacobian(
+    ManualSparseJacobian(; approximate_solve_iters),
+    padding_bands_per_block,
+)
 
 function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
     (; sparse_jacobian_alg, padding_bands_per_block) = alg

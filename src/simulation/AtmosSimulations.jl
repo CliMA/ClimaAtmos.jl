@@ -177,10 +177,9 @@ Construct an atmospheric simulation with floating-point type `FT` (default: Floa
 
 ### Numerics
 - `ode_config`: ODE solver algorithm. Default: `IMEXAlgorithm(ARS343(), NewtonsMethod(...))`.
-- `use_dense_jacobian::Bool = false`: Use a dense Jacobian matrix.
-- `use_auto_jacobian::Bool = false`: Use automatic differentiation for the Jacobian.
-- `approximate_linear_solve_iters::Int = 1`: Number of approximate linear solve iterations.
-- `auto_jacobian_padding_bands::Int = 0`: Extra bandwidth for auto-differentiated Jacobian.
+- `jacobian::JacobianAlgorithm = ManualSparseJacobian(; approximate_solve_iters = 1)`:
+  Jacobian algorithm for the implicit solve. Use [`ManualSparseJacobian`](@ref),
+  [`AutoSparseJacobian`](@ref), or [`AutoDenseJacobian`](@ref).
 - `debug_jacobian::Bool = false`: Enable Jacobian debugging output.
 - `tracers = []`: Additional tracer species.
 
@@ -234,11 +233,8 @@ function AtmosSimulation{FT}(;
     default_diagnostics = true, # Enable standard ClimaAtmos diagnostics
     diagnostics = (),           # User-provided diagnostics (YAML string format or ScheduledDiagnostics )
     # Numerics
-    use_dense_jacobian = false,
-    use_auto_jacobian = false,
-    approximate_linear_solve_iters = 1,
-    auto_jacobian_padding_bands = 0,
-    debug_jacobian = false,
+    jacobian::JacobianAlgorithm = ManualSparseJacobian(approximate_solve_iters = 1),
+    debug_jacobian::Bool = false,
     # Misc 
     checkpoint_frequency = Inf,
     log_to_file = false,
@@ -304,8 +300,7 @@ function AtmosSimulation{FT}(;
     integrator_args, integrator_kwargs = args_integrator(
         Y, p, (t_start, t_end), ode_config,
         callback_set,
-        use_dense_jacobian, use_auto_jacobian, auto_jacobian_padding_bands,
-        approximate_linear_solve_iters, debug_jacobian,
+        jacobian, debug_jacobian,
         nothing,
         dt,
     )
