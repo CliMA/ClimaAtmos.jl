@@ -341,7 +341,7 @@ function compute_sea_salt_emission_flux!(out, state, cache, time)
 end
 
 add_diagnostic_variable!(
-    short_name = "emissss",
+    short_name = "emiss",
     long_name = "Sea-Salt Aerosol Surface Emission Flux",
     units = "kg m^-2 s^-1",
     comments = "Total upward sea salt mass flux at the surface, summed over all bins.",
@@ -367,7 +367,7 @@ for (bin, long_bin) in (
     (:SSLT05, "bin 5 (5–10 μm)"),
 )
     add_diagnostic_variable!(
-        short_name = "emiss$(lowercase(string(bin)))",
+        short_name = "emi$(lowercase(string(bin)))",
         long_name = "Sea-Salt Aerosol Surface Emission Flux $long_bin",
         units = "kg m^-2 s^-1",
         comments = "Upward sea salt mass flux at the surface for $long_bin.",
