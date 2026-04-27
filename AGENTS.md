@@ -6,6 +6,7 @@
 
 ## Pull request reviews
 
+- At the start of each review, tell the user that you have read [docs/agents/review.md](docs/agents/review.md) and will apply it to the review.
 - When asked to review a pull request, follow [docs/agents/review.md](docs/agents/review.md).
 - Apply the full checklist and output schema in [docs/agents/review.md](docs/agents/review.md); keep reviews concise, evidence-based, and findings-first.
 - During review, also enforce [docs/agents/software_design_patterns.md](docs/agents/software_design_patterns.md) for changed code and adjacent affected code, as required by [docs/agents/review.md](docs/agents/review.md).
