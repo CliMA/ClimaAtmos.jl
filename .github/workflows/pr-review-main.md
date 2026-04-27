@@ -56,7 +56,7 @@ Review the target pull request against the ClimaAtmos review rubric.
 
 ## Review Instructions
 
-{{#runtime-import docs/agents/review.md}}
+{{#runtime-import ../../docs/agents/review.md}}
 
 ## Task
 
