@@ -1,4 +1,5 @@
-h_elem: 12
+h_elem: 36
+nh_poly: 1
 implicit_sgs_advection: true
 implicit_sgs_mass_flux: true
 implicit_sgs_entr_detr: true
