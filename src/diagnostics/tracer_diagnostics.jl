@@ -91,7 +91,8 @@ function compute_sea_salt!(out, state, cache, time)
         if has_prescribed
             for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
                 if name in propertynames(cache.tracers.prescribed_aerosols_field)
-                    @. aero_conc += getproperty(cache.tracers.prescribed_aerosols_field, name)
+                    aerosol_field = getproperty(cache.tracers.prescribed_aerosols_field, name)
+                    @. aero_conc += aerosol_field
                 end
             end
         end
@@ -110,7 +111,8 @@ function compute_sea_salt!(out, state, cache, time)
         if has_prescribed
             for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
                 if name in propertynames(cache.tracers.prescribed_aerosols_field)
-                    @. aero_conc += getproperty(cache.tracers.prescribed_aerosols_field, name)
+                    aerosol_field = getproperty(cache.tracers.prescribed_aerosols_field, name)
+                    @. aero_conc += aerosol_field
                 end
             end
         end
@@ -148,13 +150,15 @@ function compute_sea_salt_column!(out, state, cache, time)
             for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
                 ρχ_name = Symbol(:ρ, name)
                 if hasproperty(state.c, ρχ_name)
-                    @. aero_conc += getproperty(state.c, ρχ_name)
+                    ρχ = getproperty(state.c, ρχ_name)
+                    @. aero_conc += ρχ
                 end
             end
         else
             for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
                 if name in propertynames(cache.tracers.prescribed_aerosols_field)
-                    @. aero_conc += getproperty(cache.tracers.prescribed_aerosols_field, name) * state.c.ρ
+                    aerosol_field = getproperty(cache.tracers.prescribed_aerosols_field, name)
+                    @. aero_conc += aerosol_field * state.c.ρ
                 end
             end
         end
@@ -166,13 +170,15 @@ function compute_sea_salt_column!(out, state, cache, time)
             for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
                 ρχ_name = Symbol(:ρ, name)
                 if hasproperty(state.c, ρχ_name)
-                    @. aero_conc += getproperty(state.c, ρχ_name)
+                    ρχ = getproperty(state.c, ρχ_name)
+                    @. aero_conc += ρχ
                 end
             end
         else
             for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
                 if name in propertynames(cache.tracers.prescribed_aerosols_field)
-                    @. aero_conc += getproperty(cache.tracers.prescribed_aerosols_field, name) * state.c.ρ
+                    aerosol_field = getproperty(cache.tracers.prescribed_aerosols_field, name)
+                    @. aero_conc += aerosol_field * state.c.ρ
                 end
             end
         end
