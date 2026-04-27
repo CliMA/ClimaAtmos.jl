@@ -321,3 +321,57 @@ add_diagnostic_variable!(
     comments = "The total dry mass of sea salt aerosol particles per unit area.",
     compute! = (out, u, p, t) -> compute_sea_salt_column!(out, u, p, t),
 )
+
+###
+# Sea salt surface emission flux (2d) — total and per-bin
+###
+
+# The total sea salt emission flux is computed each timestep by sea_salt_emission_tendency!
+# and stored in cache.tracers.sea_salt_emission_flux_sfc. The diagnostic just reads it,
+# so the time-average exactly matches what was applied to the tracers.
+function compute_sea_salt_emission_flux!(out, state, cache, time)
+    isempty(_aerosol_names(cache.atmos.prognostic_aerosols)) &&
+        error("No prognostic sea salt bins in this run")
+    flux = cache.tracers.sea_salt_emission_flux_sfc
+    if isnothing(out)
+        return copy(flux)
+    else
+        out .= flux
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "emissss",
+    long_name = "Sea-Salt Aerosol Surface Emission Flux",
+    units = "kg m^-2 s^-1",
+    comments = "Total upward sea salt mass flux at the surface, summed over all bins.",
+    compute! = (out, u, p, t) -> compute_sea_salt_emission_flux!(out, u, p, t),
+)
+
+function compute_sea_salt_emission_flux_bin!(out, state, cache, time, bin_name)
+    isempty(_aerosol_names(cache.atmos.prognostic_aerosols)) &&
+        error("No prognostic sea salt bins in this run")
+    flux = getproperty(cache.tracers.sea_salt_emission_flux_bins_sfc, bin_name)
+    if isnothing(out)
+        return copy(flux)
+    else
+        out .= flux
+    end
+end
+
+for (bin, long_bin) in (
+    (:SSLT01, "bin 1 (0.03–0.1 μm)"),
+    (:SSLT02, "bin 2 (0.1–0.5 μm)"),
+    (:SSLT03, "bin 3 (0.5–1.5 μm)"),
+    (:SSLT04, "bin 4 (1.5–5 μm)"),
+    (:SSLT05, "bin 5 (5–10 μm)"),
+)
+    add_diagnostic_variable!(
+        short_name = "emiss$(lowercase(string(bin)))",
+        long_name = "Sea-Salt Aerosol Surface Emission Flux $long_bin",
+        units = "kg m^-2 s^-1",
+        comments = "Upward sea salt mass flux at the surface for $long_bin.",
+        compute! = (out, u, p, t) -> compute_sea_salt_emission_flux_bin!(out, u, p, t, bin),
+    )
+end
+

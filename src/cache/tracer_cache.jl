@@ -115,5 +115,21 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
         co2_cache_nt = (;)
     end
 
-    return (; aerosol_cache..., o3_cache..., co2_cache_nt...)
+    # Pre-allocated 2D surface fields for sea salt emission flux (kg m⁻² s⁻¹).
+    # Written each timestep by sea_salt_emission_tendency! so diagnostics
+    # read the already-computed value rather than recomputing it.
+    sfc_space = axes(Fields.level(Y.f, Fields.half))
+    sslt_bin_names = (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05)
+    sea_salt_emission_flux_sfc = zeros(sfc_space)
+    sea_salt_emission_flux_bins_sfc = similar(
+        Fields.level(Y.f, Fields.half),
+        NamedTuple{sslt_bin_names, NTuple{5, eltype(Y.c.ρ)}},
+    )
+    sea_salt_emission_flux_bins_sfc .= zero(eltype(Y.c.ρ))
+
+    return (;
+        aerosol_cache..., o3_cache..., co2_cache_nt...,
+        sea_salt_emission_flux_sfc,
+        sea_salt_emission_flux_bins_sfc,
+    )
 end
