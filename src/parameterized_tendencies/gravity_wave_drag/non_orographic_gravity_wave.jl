@@ -54,7 +54,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             uforcing = zero(Y.c.ρ),
             vforcing = zero(Y.c.ρ),
             gw_ncval = Val(nc),
-            # Beres fields (always allocated, inactive for column/box)
+            # Beres fields (always allocated)
             gw_Q0 = similar(Fields.level(Y.c.ρ, 1)),
             gw_h_heat = similar(Fields.level(Y.c.ρ, 1)),
             gw_u_heat = similar(Fields.level(Y.c.ρ, 1)),
