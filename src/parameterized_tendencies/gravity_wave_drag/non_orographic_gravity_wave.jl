@@ -19,8 +19,8 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
         FT = Spaces.undertype(axes(Y.c))
         (; source_height, Bw, Bn, Bt_0, dc, cmax, c0, nk, cw, cn) = gw
 
-        nc = Int(floor(FT(2 * cmax / dc + 1)))
-        c = ntuple(n -> FT((n - 1) * dc - cmax), Val(nc))
+        nc = Int(floor(FT(2 * 3.25 / dc + 1)))
+        c = ntuple(n -> FT((n - 1) * dc - 3.25), Val(nc))
         source_ρ_z_u_v_level =
             similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT})
         ᶜlevel = similar(Y.c.ρ, FT)
@@ -35,7 +35,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_Bn = Bn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
             gw_c = c,
             gw_dc = dc,
-            gw_cmax = cmax,
+            gw_cmax = 3.25,
             gw_cw = cw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
             gw_cn = cn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
             gw_c0 = c0,
@@ -61,8 +61,8 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
         (; source_pressure, damp_pressure, Bw, Bn, Bt_0, Bt_n, Bt_s, Bt_eq) = gw
         (; ϕ0_s, ϕ0_n, dϕ_n, dϕ_s, dc, cmax, c0, nk, cw, cw_tropics, cn) = gw
 
-        nc = Int(floor(FT(2 * cmax / dc + 1)))
-        c = ntuple(n -> FT((n - 1) * dc - cmax), Val(nc))
+        nc = Int(floor(FT(2 * 3.25 / dc + 1)))
+        c = ntuple(n -> FT((n - 1) * dc - 3.25), Val(nc))
 
         ᶜlocal_geometry = Fields.local_geometry_field(Fields.level(Y.c, 1))
         lat = ᶜlocal_geometry.coordinates.lat
@@ -112,7 +112,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_cw = gw_cw,
             gw_cn = gw_cn,
             gw_dc = dc,
-            gw_cmax = cmax,
+            gw_cmax = 3.25,
             gw_c0 = c0,
             gw_flag = gw_flag,
             gw_nk = Int(nk),
