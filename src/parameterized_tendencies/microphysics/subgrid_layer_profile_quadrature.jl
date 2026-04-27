@@ -1437,21 +1437,23 @@ end
 
 Assemble **profile–Rosenblatt** inner-marginal parameters in a whitening-first
 construction. The chosen mean-gradient axis is first mapped to a local
-Mahalanobis-whitened frame (center covariance), where `(u,v)` axes are built as
+Mahalanobis-whitened frame (axis-local covariance: dn/up use their own half-center
+`Σ`, odd-`N` middle node uses the average of half-center `Σ`), where `(u,v)` axes are built as
 along-path (`u`) and orthogonal (`v`) unit directions. Node-space coordinates
 are then mapped back to physical `(δT,δq)` by `M_inv`.
 
 The returned half-widths `L_±` are endpoint distances along whitened `u`
 between layer center and each face projection (no clamping/remap). Conditional
 standard deviations `σ_{u|v}` are evaluated from the covariance transformed by
-that same `M_inv` frame at center and half-centers.
+that same `M_inv` frame at center and half-centers (center moments are retained
+for diagnostics/continuity fields; active branch sampling is half-local).
 `SubgridProfileRosenblatt` integration applies **half-local** shifts on `u` for each
 inner leg: `μ0_dn = r_fdn * vj_dn` and `μ0_up = r_fup * vj_up` with
 `vj_leg = sqrt(2) * s_v_leg * χ_j`, using half-center `r_fdn` / `r_fup` from the same
-`Σ` slice as that leg’s `s_u_cond_*`. The **fully degenerate** inner marginal (all `L` and
-conditional inner spreads below `ε`) still uses `μ0 = r_c * v` with `r_c` from **cell-center**
-`Σ` and a resolved outer scale `max(s_v_fdn, s_v_fup, ε)` so the outer Hermite axis does
-not vanish.
+`Σ` slice as that leg’s `s_u_cond_*`. The **fully degenerate** inner marginal
+(`L_dn,L_up` and conditional inner spreads below `ε`) remains branch-local:
+lower/upper nodes use their own half offsets/scales, and the odd-`N` middle node
+uses half-averaged center-strip quantities.
 
 The inner `uniform ⊛ N` inversion uses **half-center-anchored** `σ_{u|v}` on each half:
 `s_u_cond_dn` / `s_u_cond_up` come from the rotated turbulent covariance at the **lower** /
@@ -1640,12 +1642,24 @@ end
     d_T, d_q = _mean_gradient_slopes(
         mean_gradient_axis, dT_dz_dn, dT_dz_up, dq_dz_dn, dq_dz_up,
     )
+    σT²_fdn = max(σ_T²_c - (H / FT(4)) * sTT_dn, zero(FT))
+    σT²_fup = max(σ_T²_c + (H / FT(4)) * sTT_up, zero(FT))
+    σq²_fdn = max(σ_q²_c - (H / FT(4)) * sqq_dn, zero(FT))
+    σq²_fup = max(σ_q²_c + (H / FT(4)) * sqq_up, zero(FT))
     ρc = clamp(ρ_Tq, -one(FT), one(FT))
-    sTq_c =
-        ρc * sqrt(max(σ_T²_c, zero(FT)) * max(σ_q²_c, zero(FT)))
-    Σ11 = max(σ_T²_c, ε^2)
-    Σ22 = max(σ_q²_c, ε^2)
-    Σ12 = sTq_c
+    sTq_fdn = ρc * sqrt(σT²_fdn * σq²_fdn)
+    sTq_fup = ρc * sqrt(σT²_fup * σq²_fup)
+    Σ11, Σ22, Σ12 = if mean_gradient_axis isa Val{:dn}
+        (max(σT²_fdn, ε^2), max(σq²_fdn, ε^2), sTq_fdn)
+    elseif mean_gradient_axis isa Val{:up}
+        (max(σT²_fup, ε^2), max(σq²_fup, ε^2), sTq_fup)
+    else
+        (
+            max((σT²_fdn + σT²_fup) / FT(2), ε^2),
+            max((σq²_fdn + σq²_fup) / FT(2), ε^2),
+            (sTq_fdn + sTq_fup) / FT(2),
+        )
+    end
     ℓ11 = sqrt(Σ11)
     ℓ21 = Σ12 / max(ℓ11, ε)
     ℓ22_sq = max(Σ22 - ℓ21^2, ε^2)
@@ -1674,8 +1688,8 @@ Gaussian `q` fluctuations in physical `q`.
 For [`GaussianSGS`](@ref), `σ_q` / `σ_T` must match the turbulent second moments used to build the
 inner `u` draw: [`_profile_rosenblatt_accumulate`](@ref) passes **half-center** `σ_T_fdn`/`σ_q_fdn`
 or `σ_T_fup`/`σ_q_fup` from [`_two_slope_rosenblatt_params`](@ref) on split-``p`` lower/upper branches;
-**cell-center** `σ_T_c`/`σ_q_c` for the fully degenerate inner marginal, the split-``p`` **mid**
-node (`p \\approx ½`), and single-leg degenerate cases that already used center scales.
+the odd-`N` split-``p`` middle node uses half-averaged center-strip scales, and
+fully degenerate paths keep lower/upper nodes half-local.
 """
 function _profile_rosenblatt_emit_inner_sample(
     acc,
