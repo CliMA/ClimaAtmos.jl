@@ -22,7 +22,7 @@ import ClimaCore:
 
 function generate_test_simulation(config)
     parsed_args = config.parsed_args
-    simulation = CA.AtmosSimulation(config)
+    simulation = CA.get_simulation(config)
     (; integrator) = simulation
     Y = integrator.u
     p = integrator.p

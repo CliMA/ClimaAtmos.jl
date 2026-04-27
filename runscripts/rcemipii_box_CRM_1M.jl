@@ -57,7 +57,7 @@ params = CA.ClimaAtmosParameters(
 ## RCEMIP-II model prescriptions
 insolation = CA.RCEMIPIIInsolation()
 sfc_temperature = CA.RCEMIPIISST()
-initial_condition = CA.Setups.RCEMIPIIProfile_300()
+setup = CA.Setups.RCEMIPIIProfile_300()
 
 
 ## Construct the model
@@ -137,7 +137,7 @@ end
 ## Assemble simulation
 simulation = CA.AtmosSimulation{FT}(; job_id,
     model, params, context, grid,
-    initial_condition,
+    setup,
     surface_setup = CA.SurfaceConditions.DefaultMoninObukhov(),
     dt, t_end,
     ode_config,

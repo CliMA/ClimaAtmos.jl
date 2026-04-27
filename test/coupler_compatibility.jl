@@ -40,7 +40,7 @@ const T2 = 290
         );
         job_id = "coupler_compatibility1",
     )
-    simulation = CA.AtmosSimulation(config)
+    simulation = CA.get_simulation(config)
     (; integrator) = simulation
     (; p, t) = integrator
     Y = integrator.u
@@ -116,5 +116,5 @@ end
         );
         job_id = "coupler_compatibility3",
     )
-    simulation = CA.AtmosSimulation(config)
+    simulation = CA.get_simulation(config)
 end

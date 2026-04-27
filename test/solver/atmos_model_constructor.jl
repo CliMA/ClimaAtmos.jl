@@ -93,22 +93,6 @@ end
         @test model.insolation isa CA.IdealizedInsolation
         @test model.numerics.diff_mode isa CA.Explicit
     end
-
-    @testset "Convenience constructors work with defaults" begin
-        # Test that convenience constructors properly override defaults
-        models = [
-            ("dry", CA.DryAtmosModel(), CA.DryModel),
-            ("equil", CA.EquilMoistAtmosModel(), CA.EquilibriumMicrophysics0M),
-            ("nonequil", CA.NonEquilMoistAtmosModel(), CA.NonEquilibriumMicrophysics1M),
-        ]
-
-        for (name, model, expected_microphysics_type) in models
-            @test model.microphysics_model isa expected_microphysics_type
-            @test model.surface_model isa CA.PrescribedSST  # default preserved
-            @test model.numerics.diff_mode isa CA.Explicit  # default preserved
-            @test model.numerics.hyperdiff isa Union{Nothing, CA.Hyperdiffusion}  # default is nothing or Hyperdiffusion
-        end
-    end
 end
 
 @testset "Documentation Examples" begin

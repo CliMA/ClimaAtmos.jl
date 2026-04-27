@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- Added a `Presets` module with convenience constructors for common module/simulation configurations.
+- Add a keyword-based constructor `AtmosSimulation(; kwargs)` that always runs with Float32.
+- Set the existing keyword-based constructor `AtmosSimulation{FT}(;kwargs)` to always use ITime. Removed the `itime` kwarg.
 
 v0.38.0
 ----

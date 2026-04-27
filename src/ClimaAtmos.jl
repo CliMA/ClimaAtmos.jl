@@ -153,6 +153,8 @@ include(joinpath("parameters", "create_parameters.jl"))
 include(joinpath("simulation", "grids.jl"))
 include(joinpath("simulation", "AtmosSimulations.jl"))
 
+include("presets.jl")
+
 include(joinpath("solver", "model_getters.jl")) # high-level (using parsed_args) model getters
 include(joinpath("solver", "type_getters.jl"))
 include(joinpath("solver", "yaml_helper.jl"))

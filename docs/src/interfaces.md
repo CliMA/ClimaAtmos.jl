@@ -46,7 +46,7 @@ job_id: "my_run"
 import ClimaAtmos as CA
 
 config = CA.AtmosConfig("config.yml")
-simulation = CA.AtmosSimulation(config)
+simulation = CA.get_simulation(config)
 CA.solve_atmos!(simulation)
 ```
 
