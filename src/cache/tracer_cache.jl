@@ -125,7 +125,9 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
         Fields.level(Y.f, Fields.half),
         NamedTuple{sslt_bin_names, NTuple{5, eltype(Y.c.ρ)}},
     )
-    sea_salt_emission_flux_bins_sfc .= zero(eltype(Y.c.ρ))
+    for name in sslt_bin_names
+        getproperty(sea_salt_emission_flux_bins_sfc, name) .= zero(eltype(Y.c.ρ))
+    end
 
     return (;
         aerosol_cache..., o3_cache..., co2_cache_nt...,
