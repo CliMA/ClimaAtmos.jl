@@ -447,6 +447,18 @@ Base.@kwdef struct BeresSourceParams{FT}
     n_h_avg::Int = 1     # number of h values to average over (1 = no averaging)
     Δh_frac::FT = FT(0.1) # fractional half-range for h averaging: h ± Δh_frac * h
     h_heat_min::FT = FT(1000.0) # m, minimum heating depth to activate (filters shallow convection)
+
+    function BeresSourceParams{FT}(args...) where {FT}
+        obj = new{FT}(args...)
+        if (obj.n_ν - 1) % 4 != 0
+            error(
+                "BeresSourceParams: n_ν must satisfy (n_ν - 1) % 4 == 0 " *
+                "(i.e. n_ν ∈ {5, 9, 13, ...}) for composite Boole's rule, " *
+                "got n_ν = $(obj.n_ν)",
+            )
+        end
+        return obj
+    end
 end
 
 Base.@kwdef struct NonOrographicGravityWave{FT, BS} <: AbstractGravityWave
