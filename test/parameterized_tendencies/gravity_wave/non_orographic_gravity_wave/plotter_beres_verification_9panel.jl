@@ -1,14 +1,11 @@
 """
-    plotter_beres_verification.jl
+    plotter_beres_verification_9panel.jl
 
-Verification plots for the Beres (2004) convective GW source with mass-flux divergence heating.
-Produces a 3×4 multi-panel figure.
+Trimmed 3×3 verification plot for the Beres (2004) convective GW source.
+Panels: precip, Q₀, h_depth | arup, waup, scatter | heating, u-drag, v-drag
 
 Usage:
-    julia --project=.buildkite plotter_beres_verification.jl [--inst] <output_dir> [t_end_days] [avg_days]
-
-Pass --inst to use a single instantaneous snapshot (peak beres_active timestep)
-instead of time-averaged diagnostics.
+    julia --project=.buildkite plotter_beres_verification_9panel.jl [--inst] <output_dir> [t_end_days] [avg_days]
 """
 
 import ClimaAnalysis
@@ -33,34 +30,19 @@ if isfile(tar_path) && isempty(filter(f -> endswith(f, ".nc"), readdir(output_di
 end
 
 # --- Configuration ---
-figsize = (2800, 2400)
+figsize = (1200, 800)
 z_max_edmf = 20000.0
 z_max_gw = 60000.0
-n_hotspots = 11
-hotspot_percentiles = [1.00, 0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55, 0.50]
-hotspot_colors = [
-    :darkred,
-    :red,
-    :orangered,
-    :orange,
-    :goldenrod,
-    :olive,
-    :teal,
-    :steelblue,
-    :blue,
-    :slateblue,
-    :purple,
-]
-hotspot_labels =
-    ["p100", "p95", "p90", "p85", "p80", "p75", "p70", "p65", "p60", "p55", "p50"]
+n_hotspots = 3
+hotspot_percentiles = [1.00, 0.85, 0.70]
+hotspot_colors = [:darkred, :orange, :teal]
+hotspot_labels = ["p100", "p85", "p70"]
 
 simdir = ClimaAnalysis.SimDir(output_dir)
 
 # Snapshot kwargs used throughout
 snap_kw = Dict(:t_end_days => T_END_DAYS, :avg_window_days => AVG_WINDOW_DAYS)
 
-# Use daily resolution for all fields to avoid temporal mismatch between
-# hourly 2D fields (Q₀) and daily 3D profiles (arup, waup, etc.)
 const PREFER_PERIOD = "1d"
 
 # In inst mode, find peak active timestep restricted to daily timestamps
@@ -86,12 +68,10 @@ pr_var = load_var_for_mode(simdir, "pr", mode; prefer_period = pp)
 Q0_var = load_var_for_mode(simdir, "nogw_Q0", mode; prefer_period = pp)
 h_heat_var = load_var_for_mode(simdir, "nogw_h_heat", mode; prefer_period = pp)
 ua_var = load_var_for_mode(simdir, "ua", mode; prefer_period = pp)
-ta_var = load_var_for_mode(simdir, "ta", mode; prefer_period = pp)
-ha_var = load_var_for_mode(simdir, "ha", mode; prefer_period = pp)
 arup_var = load_var_for_mode(simdir, "arup", mode; prefer_period = pp)
 waup_var = load_var_for_mode(simdir, "waup", mode; prefer_period = pp)
-taup_var = load_var_for_mode(simdir, "taup", mode; prefer_period = pp)
 haup_var = load_var_for_mode(simdir, "haup", mode; prefer_period = pp)
+ha_var = load_var_for_mode(simdir, "ha", mode; prefer_period = pp)
 rhoa_var = load_var_for_mode(simdir, "rhoa", mode; prefer_period = pp)
 utend_var = load_var_for_mode(simdir, "utendnogw", mode; prefer_period = pp)
 vtend_var = load_var_for_mode(simdir, "vtendnogw", mode; prefer_period = pp)
@@ -132,17 +112,18 @@ h_heat_masked.data .= ifelse.(active_mask, h_heat_masked.data, NaN)
 pr_pos = deepcopy(pr_last)
 pr_pos.data .= .-pr_pos.data .* DAY_S
 
-# Find hotspot columns
-println("Finding convective hotspots (p99–p50 precip)...")
-hotspots = find_at_percentiles(pr_pos, hotspot_percentiles)
+# Find hotspot columns — rank by Q0 itself so every hotspot is guaranteed
+# Beres-active (positive Q0 and h_heat) for the sine-reference / scatter panels.
+println("Finding convective hotspots among Beres-active columns (ranked by Q0)...")
+hotspots = find_at_percentiles(Q0_masked, hotspot_percentiles)
 println("Selected hotspots (lon, lat): ", hotspots)
 
 # Helper: profile at a hotspot using current mode
 _profile(var, lon, lat) = profile_at(var, lon, lat, mode; snap_kw...)
 
 # --- Create figure ---
-fig = CairoMakie.Figure(size = figsize, fontsize = 14)
-CairoMakie.Label(fig[0, 1:4], mode_str; fontsize = 16, tellwidth = false)
+fig = CairoMakie.Figure(size = figsize, fontsize = 10)
+CairoMakie.Label(fig[0, 1:3], mode_str; fontsize = 12, tellwidth = false)
 
 # ========== ROW 1: Lat-lon maps ==========
 println("Plotting Row 1: lat-lon maps...")
@@ -176,7 +157,30 @@ else
     CairoMakie.Axis(fig[1, 3]; title = "h_heat — no active columns")
 end
 
-# Panel (1,4): Q0 vs max(a·w·Δh) above 3 km
+# ========== ROW 2: EDMF profiles + scatter ==========
+println("Plotting Row 2: EDMF profiles + scatter...")
+
+ax21 = CairoMakie.Axis(fig[2, 1];
+    title = "Updraft Area Frac", xlabel = "arup", ylabel = "Height (m)",
+    limits = (nothing, (0, z_max_edmf)),
+)
+for (ih, (lon, lat)) in enumerate(hotspots)
+    z, data = _profile(arup_var, lon, lat)
+    CairoMakie.lines!(ax21, data, z; color = hotspot_colors[ih],
+        label = "$(hotspot_labels[ih])")
+end
+!isempty(hotspots) && CairoMakie.axislegend(ax21; position = :rt, labelsize = 10)
+
+ax22 = CairoMakie.Axis(fig[2, 2];
+    title = "Updraft Velocity", xlabel = "waup (m/s)", ylabel = "Height (m)",
+    limits = (nothing, (0, z_max_edmf)),
+)
+for (ih, (lon, lat)) in enumerate(hotspots)
+    z, data = _profile(waup_var, lon, lat)
+    CairoMakie.lines!(ax22, data, z; color = hotspot_colors[ih])
+end
+
+# Panel (2,3): Q0 vs max(a·w·Δh) above 3 km
 waup_snap = get_snapshot(waup_var, mode; snap_kw...)
 arup_snap = get_snapshot(arup_var, mode; snap_kw...)
 haup_snap = get_snapshot(haup_var, mode; snap_kw...)
@@ -206,17 +210,11 @@ active_flat = active_mask[:]
 valid = .!isnan.(Q0_data) .& .!isnan.(mf_data) .& active_flat .& (mf_data .> 0)
 mf_hi = any(valid) ? quantile(mf_data[valid], 0.99) : 50.0
 Q0_hi = any(valid) ? quantile(Q0_data[valid], 0.99) : 1.5e-4
-ax14 = CairoMakie.Axis(fig[1, 4];
-    title = "Q₀ vs max(a·w·Δh) z>3km",
-    xlabel = "max arup·waup·Δh (W/m²)",
-    ylabel = "Q₀ (K/s)",
-    limits = ((0, mf_hi * 1.1), (0, Q0_hi * 1.1)),
-)
-if any(valid)
-    CairoMakie.scatter!(ax14, mf_data[valid], Q0_data[valid];
-        markersize = 5, alpha = 0.4, color = :steelblue)
-end
-for (ih, (lon, lat)) in enumerate(hotspots)
+
+# Pre-compute hotspot scatter coordinates so axis limits can include them
+hotspot_mf = Float64[]
+hotspot_Q0 = Float64[]
+for (lon, lat) in hotspots
     w_col = slice(waup_snap; lon = lon, lat = lat).data
     a_col = slice(arup_snap; lon = lon, lat = lat).data
     haup_col = slice(haup_snap; lon = lon, lat = lat).data
@@ -225,91 +223,73 @@ for (ih, (lon, lat)) in enumerate(hotspots)
     mf_dh = abs.(a_col[1:n] .* w_col[1:n] .* (haup_col[1:n] .- ha_col[1:n]))
     vals_above = mf_dh[z_mask_above_3km[1:n]]
     valid_vals = filter(x -> !isnan(x), vals_above)
-    mf_val = isempty(valid_vals) ? 0.0 : maximum(valid_vals)
-    Q0_val = slice(Q0_last; lon = lon, lat = lat).data[1]
-    CairoMakie.scatter!(ax14, [mf_val], [Q0_val];
-        markersize = 18, color = hotspot_colors[ih], marker = :xcross)
+    push!(hotspot_mf, isempty(valid_vals) ? 0.0 : maximum(valid_vals))
+    push!(hotspot_Q0, slice(Q0_last; lon = lon, lat = lat).data[1])
 end
 
-# ========== ROW 2: EDMF vertical profiles ==========
-println("Plotting Row 2: EDMF profiles...")
-
-ax21 = CairoMakie.Axis(fig[2, 1];
-    title = "Updraft Area Frac", xlabel = "arup", ylabel = "Height (m)",
-    limits = (nothing, (0, z_max_edmf)),
-)
-for (ih, (lon, lat)) in enumerate(hotspots)
-    z, data = _profile(arup_var, lon, lat)
-    CairoMakie.lines!(ax21, data, z; color = hotspot_colors[ih],
-        label = "$(hotspot_labels[ih])")
-end
-!isempty(hotspots) && CairoMakie.axislegend(ax21; position = :rt, labelsize = 10)
-
-ax22 = CairoMakie.Axis(fig[2, 2];
-    title = "Updraft Velocity", xlabel = "waup (m/s)", ylabel = "Height (m)",
-    limits = (nothing, (0, z_max_edmf)),
-)
-for (ih, (lon, lat)) in enumerate(hotspots)
-    z, data = _profile(waup_var, lon, lat)
-    CairoMakie.lines!(ax22, data, z; color = hotspot_colors[ih])
-end
+# Expand axis limits to include hotspot markers (with 10% padding)
+xlim_hi = max(mf_hi, isempty(hotspot_mf) ? 0.0 : maximum(hotspot_mf)) * 1.1
+ylim_hi = max(Q0_hi, isempty(hotspot_Q0) ? 0.0 : maximum(hotspot_Q0)) * 1.1
 
 ax23 = CairoMakie.Axis(fig[2, 3];
-    title = "Enthalpy Anomaly", xlabel = "haup - ha (J/kg)", ylabel = "Height (m)",
-    limits = (nothing, (0, z_max_edmf)),
+    title = "Q₀ vs max(a·w·Δh) z>3km",
+    xlabel = "max arup·waup·Δh (W/m²)",
+    ylabel = "Q₀ (K/s)",
+    limits = ((0, xlim_hi), (0, ylim_hi)),
 )
-for (ih, (lon, lat)) in enumerate(hotspots)
-    z_up, haup_data = _profile(haup_var, lon, lat)
-    z_ha, ha_data = _profile(ha_var, lon, lat)
-    n = min(length(haup_data), length(ha_data))
-    delta_h = haup_data[1:n] .- ha_data[1:n]
-    CairoMakie.lines!(ax23, delta_h, z_up[1:n]; color = hotspot_colors[ih])
-    h_val = slice(h_heat_last; lon = lon, lat = lat).data[1]
-    CairoMakie.hlines!(ax23, [0.0, h_val];
-        color = hotspot_colors[ih], linestyle = :dash, linewidth = 0.5)
+if any(valid)
+    CairoMakie.scatter!(ax23, mf_data[valid], Q0_data[valid];
+        markersize = 5, alpha = 0.4, color = :steelblue)
 end
-
-ax24 = CairoMakie.Axis(fig[2, 4];
-    title = "Temp Anomaly", xlabel = "ΔT (K)", ylabel = "Height (m)",
-    limits = (nothing, (0, z_max_edmf)),
-)
-for (ih, (lon, lat)) in enumerate(hotspots)
-    z_up, taup_data = _profile(taup_var, lon, lat)
-    z_ta, ta_data = _profile(ta_var, lon, lat)
-    n = min(length(taup_data), length(ta_data))
-    delta_T = taup_data[1:n] .- ta_data[1:n]
-    CairoMakie.lines!(ax24, delta_T, z_up[1:n]; color = hotspot_colors[ih])
+for ih in eachindex(hotspots)
+    CairoMakie.scatter!(ax23, [hotspot_mf[ih]], [hotspot_Q0[ih]];
+        markersize = 18, color = hotspot_colors[ih], marker = :xcross)
 end
 
 # ========== ROW 3: Beres / GW outputs ==========
 println("Plotting Row 3: Beres outputs...")
 
+# Compute y-limit from max heating depth across hotspots (with 20% padding)
+h_vals_hotspots =
+    [slice(h_heat_last; lon = lon, lat = lat).data[1] for (lon, lat) in hotspots]
+z_max_heating = maximum(filter(x -> x > 0, h_vals_hotspots); init = z_max_edmf) * 1.2
+
 ax31 = CairoMakie.Axis(fig[3, 1];
     title = "Heating: sin ref (dash) vs EDMF (solid)",
     xlabel = "Q₁ (K/s)", ylabel = "Height (m)",
-    limits = (nothing, (0, z_max_edmf)),
+    limits = (nothing, (0, z_max_heating)),
 )
-for (ih, (lon, lat)) in enumerate(hotspots)
-    h_val = slice(h_heat_last; lon = lon, lat = lat).data[1]
-    Q0_val = slice(Q0_last; lon = lon, lat = lat).data[1]
-    if h_val > 1000 && Q0_val > 0
-        z_ref = range(0, h_val; length = 100)
-        sin_ref = Q0_val .* sin.(π .* z_ref ./ h_val)
-        CairoMakie.lines!(ax31, sin_ref, collect(z_ref);
-            color = hotspot_colors[ih], linestyle = :dash, linewidth = 2,
-            label = ih == 1 ? "sin(πz/h)" : nothing)
+let sin_label_done = false, edmf_label_done = false
+    for (ih, (lon, lat)) in enumerate(hotspots)
+        h_val = slice(h_heat_last; lon = lon, lat = lat).data[1]
+        Q0_val = slice(Q0_last; lon = lon, lat = lat).data[1]
+        println(
+            "  Hotspot $(hotspot_labels[ih]) ($(lon), $(lat)): h_val=$h_val, Q0_val=$Q0_val",
+        )
+        if h_val > 1000 && Q0_val > 0
+            z_ref = range(0, h_val; length = 100)
+            sin_ref = Q0_val .* sin.(π .* z_ref ./ h_val)
+            lbl_sin = sin_label_done ? nothing : "sin(πz/h)"
+            sin_label_done = true
+            CairoMakie.lines!(ax31, sin_ref, collect(z_ref);
+                color = hotspot_colors[ih], linestyle = :dash, linewidth = 2,
+                label = lbl_sin)
+        end
+
+        z_up, haup_data = _profile(haup_var, lon, lat)
+        z_ha, ha_data = _profile(ha_var, lon, lat)
+        z_ar, arup_data = _profile(arup_var, lon, lat)
+        z_w, waup_data = _profile(waup_var, lon, lat)
+        z_rho, rho_data = _profile(rhoa_var, lon, lat)
+
+        z_q, Q1 =
+            reconstruct_Qconv(z_up, rho_data, arup_data, waup_data, haup_data, ha_data)
+        lbl_edmf = edmf_label_done ? nothing : "EDMF |∂flux/∂z|"
+        edmf_label_done = true
+        CairoMakie.lines!(ax31, abs.(Q1), z_q; color = hotspot_colors[ih], alpha = 0.5,
+            linewidth = 1,
+            label = lbl_edmf)
     end
-
-    z_up, haup_data = _profile(haup_var, lon, lat)
-    z_ha, ha_data = _profile(ha_var, lon, lat)
-    z_ar, arup_data = _profile(arup_var, lon, lat)
-    z_w, waup_data = _profile(waup_var, lon, lat)
-    z_rho, rho_data = _profile(rhoa_var, lon, lat)
-
-    z_q, Q1 = reconstruct_Qconv(z_up, rho_data, arup_data, waup_data, haup_data, ha_data)
-    CairoMakie.lines!(ax31, abs.(Q1), z_q; color = hotspot_colors[ih], alpha = 0.5,
-        linewidth = 1,
-        label = ih == 1 ? "EDMF |∂flux/∂z|" : nothing)
 end
 !isempty(hotspots) && CairoMakie.axislegend(ax31; position = :rt, labelsize = 9)
 
@@ -331,55 +311,7 @@ for (ih, (lon, lat)) in enumerate(hotspots)
     CairoMakie.lines!(ax33, data .* 1e5, z; color = hotspot_colors[ih])
 end
 
-# Panel (3,4): Beres source spectrum B(c) — offline computation
-ax34 = CairoMakie.Axis(fig[3, 4];
-    title = "Beres Spectrum B(c)", xlabel = "Phase speed c (m/s)", ylabel = "MF (arb.)",
-)
-try
-    @eval using ClimaAtmos
-
-    dc = 4.0
-    cmax = 100.0
-    nc_bins = Int(floor(2 * cmax / dc + 1))
-    c_tuple = ntuple(nn -> (nn - 1) * dc - cmax, nc_bins)
-    gw_ncval = Val(nc_bins)
-
-    beres = ClimaAtmos.BeresSourceParams{Float64}(;
-        Q0_threshold = 1.0e-5, beres_scale_factor = 1.0,
-        σ_x = 4000.0, ν_min = 8.727e-4, ν_max = 1.047e-2, n_ν = 9,
-    )
-
-    for (ih, (lon, lat)) in enumerate(hotspots)
-        Q0_val = Float64(slice(Q0_last; lon = lon, lat = lat).data[1])
-        h_val = Float64(slice(h_heat_last; lon = lon, lat = lat).data[1])
-        z_ua, ua_data = _profile(ua_var, lon, lat)
-        z_ta, ta_data = _profile(ta_var, lon, lat)
-
-        h_mask = z_ua .<= h_val
-        u_heat = any(h_mask) ? Float64(mean(ua_data[h_mask])) : 0.0
-
-        g = 9.81
-        cp_d = 1004.0
-        N_vals = Float64[]
-        for k in 2:(length(z_ta) - 1)
-            dTdz = (ta_data[k + 1] - ta_data[k - 1]) / (z_ta[k + 1] - z_ta[k - 1])
-            N2 = (g / ta_data[k]) * (dTdz + g / cp_d)
-            N2 > 0 && push!(N_vals, sqrt(N2))
-        end
-        N_source = isempty(N_vals) ? 0.012 : mean(N_vals)
-
-        B = ClimaAtmos.wave_source(
-            c_tuple, u_heat, Q0_val, h_val, N_source, beres, gw_ncval,
-        )
-        CairoMakie.lines!(ax34, collect(c_tuple), collect(B); color = hotspot_colors[ih])
-    end
-catch e
-    println("Spectrum plot skipped: $e")
-    CairoMakie.text!(ax34, 0.5, 0.5;
-        text = "ClimaAtmos\nnot loaded", space = :relative, align = (:center, :center))
-end
-
 # --- Save ---
-outfile = output_filename(output_dir, "beres_verification", mode)
+outfile = output_filename(output_dir, "beres_verification_9panel", mode)
 CairoMakie.save(outfile, fig)
 println("Saved figure to: $outfile")
