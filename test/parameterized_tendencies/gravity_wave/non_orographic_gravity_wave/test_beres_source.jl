@@ -7,8 +7,8 @@ const wave_source = CA.wave_source
 # NOTE: The wave_source / Beres spectrum computation is EDMF-mode-agnostic.
 # It takes (Q0, h, u_heat, N_source) directly, so these unit tests apply
 # identically whether the upstream EDMF is diagnostic or prognostic.
-# The prognostic EDMF integration path is tested separately in
-# test_beres_progedmf_integration.jl.
+# The prognostic EDMF integration path is covered by the aquaplanet
+# longrun (longrun_aquaplanet_allsky_progedmf_0M.yml).
 
 @testset "Beres (2004) source spectrum" begin
     FT = Float64
@@ -271,14 +271,14 @@ const wave_source = CA.wave_source
         # All bins well above u_heat should have B > 0
         for i in (c_hat_idx + 2):nc
             if abs(B[i]) > 1e-40
-                @test B[i] > 0 "Expected B[$(i)] > 0 for c=$(c[i]) > u_heat=$(u_heat), got $(B[i])"
+                @test B[i] > 0
             end
         end
 
         # All bins well below u_heat should have B < 0
         for i in 1:(c_hat_idx - 2)
             if abs(B[i]) > 1e-40
-                @test B[i] < 0 "Expected B[$(i)] < 0 for c=$(c[i]) < u_heat=$(u_heat), got $(B[i])"
+                @test B[i] < 0
             end
         end
 
@@ -286,6 +286,156 @@ const wave_source = CA.wave_source
         # about c=0 when u_heat ≠ 0 (Doppler shift breaks symmetry)
         asymmetry = sum(abs, B[i] + B[nc + 1 - i] for i in 1:mid)
         total = sum(abs, B)
-        @test asymmetry / total > 1e-4 "Spectrum should be asymmetric with nonzero u_heat"
+        @test asymmetry / total > 1e-4
+    end
+end
+
+# ============================================================================
+# Beres (2004) §4 squall-line spectrum — asymmetric case with u_heat ≠ 0
+#
+# Uses the Beres (2004) Section 4 squall-line parameters (σ_x = 2500 m,
+# h = 5000 m, u_heat = −5 m/s, N = 0.012 s⁻¹, Q₀ = 0.004 K/s) but note
+# that our implementation uses a WHITE-NOISE time spectrum, not the CRM-derived
+# red-noise spectrum in Beres' Figs. 12–13.  This means:
+#   - Peak locations are roughly symmetric in |ĉ| about u_heat, at
+#     |ĉ_peak| ≈ 14 m/s (from the U=0 Fig. 1b test above).  Beres' Fig. 13
+#     shows asymmetric peaks at ĉ ≈ +25 and −6 because his red-noise spectrum
+#     weights lower frequencies more heavily.
+#   - The spectrum decays slowly at large |c| instead of cutting off sharply,
+#     because white noise excites all frequencies.
+#
+# Assertions below test the white-noise implementation against physics that
+# hold regardless of the time spectrum: sign convention, critical level,
+# Doppler-shifted peak symmetry, east > west asymmetry from σ_x.
+#
+# Does NOT test: vertical propagation/drag (see test_beres_column_drag.jl),
+# or full-simulation wiring (see test_beres_squall_line_integration.jl).
+# ============================================================================
+@testset "Beres 2004 §4 squall-line spectrum (white-noise)" begin
+    FT = Float64
+
+    # --- Beres (2004) Section 4 squall-line parameters ---
+    σ_x = FT(2500.0)   # m, narrow convective cell (Fig. 13 / Fig. 1b)
+    h = FT(5000.0)   # m, heating depth
+    u_heat = FT(-5.0)     # m/s, mean wind in heating region
+    N = FT(0.012)    # s⁻¹, buoyancy frequency
+    Q0 = FT(0.004)    # K/s, peak heating rate
+
+    # Fine phase-speed grid covering ±60 m/s (dc = 2 m/s, nc = 61)
+    # dc=2 keeps nc small enough to avoid ntuple/Val compile-time blowup.
+    dc_sq = FT(2.0)
+    cmax_sq = FT(60.0)
+    nc_sq = Int(2 * cmax_sq / dc_sq + 1)  # 61
+    c_sq = ntuple(n -> FT((n - 1) * dc_sq - cmax_sq), Val(nc_sq))
+
+    beres_sq = BeresSourceParams{FT}(;
+        Q0_threshold = FT(0),
+        beres_scale_factor = FT(1.0),
+        σ_x = σ_x,
+        ν_min = FT(2π / (120 * 60)),   # period 120 min
+        ν_max = FT(2π / (10 * 60)),    # period 10 min
+        n_ν = 9,
+    )
+
+    B_sq = wave_source(c_sq, u_heat, Q0, h, N, beres_sq, Val(nc_sq))
+
+    # Helper: find index of c closest to a target value
+    function closest_idx(target)
+        _, idx = findmin(n -> abs(c_sq[n] - target), 1:nc_sq)
+        return idx
+    end
+
+    # Find eastward peak (max positive B, restricted to c > u_heat)
+    i_uheat = closest_idx(u_heat)
+    east_max_val = FT(0)
+    east_peak_c = FT(0)
+    for i in (i_uheat + 1):nc_sq
+        if B_sq[i] > east_max_val
+            east_max_val = B_sq[i]
+            east_peak_c = c_sq[i]
+        end
+    end
+
+    # Find westward peak (most negative B, restricted to c < u_heat)
+    west_min_val = FT(0)
+    west_peak_c = FT(0)
+    for i in 1:(i_uheat - 1)
+        if B_sq[i] < west_min_val
+            west_min_val = B_sq[i]
+            west_peak_c = c_sq[i]
+        end
+    end
+
+    # Intrinsic phase speeds at peaks
+    east_chat = east_peak_c - u_heat
+    west_chat = west_peak_c - u_heat
+
+    println("Squall-line spectrum (white-noise):")
+    println(
+        "  Eastward peak: c = $(east_peak_c) m/s (ĉ = $(east_chat)), B = $(east_max_val)",
+    )
+    println(
+        "  Westward peak: c = $(west_peak_c) m/s (ĉ = $(west_chat)), B = $(west_min_val)",
+    )
+
+    @testset "Peak locations: Doppler-shifted from U=0 reference" begin
+        # With U=0, the Fig. 1b test finds peak at c ≈ 14 m/s.  With
+        # u_heat = -5, peaks should Doppler-shift to c ≈ u_heat ± 14,
+        # i.e. eastward peak near +9, westward near -19.
+        # Tolerance: ±5 m/s for quadrature discretisation.
+        @test 4.0 < east_peak_c < 16.0
+        @test -24.0 < west_peak_c < -14.0
+    end
+
+    @testset "Intrinsic peak symmetry (white-noise → |ĉ| symmetric)" begin
+        # White-noise time spectrum means the integrand is symmetric in
+        # |ν̂|, so the magnitude spectrum |B_0| should be roughly
+        # symmetric about u_heat in intrinsic phase speed.
+        @test abs(east_chat) ≈ abs(west_chat) atol = 4.0
+    end
+
+    @testset "East-west asymmetry (σ_x = 2.5 km)" begin
+        # With σ_x = 2.5 km (narrow cell) and u_heat = -5 m/s, the
+        # eastward lobe is larger than the westward lobe.  This asymmetry
+        # comes from the Gaussian spatial spectrum G_k: eastward waves
+        # (c > 0) map to smaller |k| = ν/c than westward waves (c < 0),
+        # and the Gaussian G_k ∝ exp(-k²σ_x²/2) favours smaller |k|.
+        @test east_max_val > abs(west_min_val)
+    end
+
+    @testset "Critical level: B small near c = u_heat" begin
+        # At c = u_heat, ĉ = 0 and B_0 = 0 exactly.  With dc = 2 m/s,
+        # u_heat = -5 doesn't land on a grid point — the nearest point
+        # has |ĉ| = 1 m/s, so B is small but nonzero.  Check that it's
+        # negligible relative to the peak (< 1%).
+        B_at_uheat = B_sq[closest_idx(u_heat)]
+        max_B = maximum(abs, B_sq)
+        @test abs(B_at_uheat) < 0.01 * max_B
+    end
+
+    @testset "Spectrum decays at large |c|" begin
+        # White noise means the spectrum doesn't cut off sharply, but it
+        # should still decay substantially at large |c|.  Check that the
+        # amplitude at the grid edges (|c| = 60) is < 1% of peak.
+        max_B = maximum(abs, B_sq)
+        edge_B = max(abs(B_sq[1]), abs(B_sq[nc_sq]))
+        println("  Edge/peak ratio: $(edge_B / max_B)")
+        @test edge_B < 0.01 * max_B
+    end
+
+    @testset "Sign convention: sgn(ĉ) consistency" begin
+        # B > 0 for c > u_heat (eastward intrinsic propagation)
+        # B < 0 for c < u_heat (westward intrinsic propagation)
+        noise_floor = 1e-3 * maximum(abs, B_sq)
+        for i in 1:nc_sq
+            if abs(B_sq[i]) > noise_floor
+                c_hat = c_sq[i] - u_heat
+                if c_hat > FT(1e-6)
+                    @test B_sq[i] > 0
+                elseif c_hat < -FT(1e-6)
+                    @test B_sq[i] < 0
+                end
+            end
+        end
     end
 end
