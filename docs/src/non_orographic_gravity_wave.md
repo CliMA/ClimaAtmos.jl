@@ -66,20 +66,29 @@ When `nogw_beres_source` is enabled, the AD99 Gaussian source spectrum is replac
 
 ### Convective heating extraction
 
-Convective heating properties are extracted from the EDMF updraft fields at each column. The convective heating rate $Q_1$ is computed from the mass-flux divergence (Yanai $Q_1$):
+Convective heating properties are extracted from the EDMF updraft fields at each column. The DSE-based mass-flux $Q_1$ (Yanai apparent heat source) is computed from the mass-flux divergence of dry static energy anomalies:
 ```math
-Q_1 = -\frac{1}{\rho c_p} \frac{\partial}{\partial z} \left[ \sum_j \rho^j (w^j - \bar{w}) a^j (\text{mse}^j + K^j - h_{\text{tot}}) \right]
+Q_1 = -\frac{1}{\rho} \frac{\partial}{\partial z} \left[ \sum_j \rho^j (w^j - \bar{w}) a^j \, (T^j - \bar{T}) \right]
 ```
-where $\rho^j$, $w^j$, $a^j$, $\text{mse}^j$, and $K^j$ are the density, vertical velocity, area fraction, moist static energy, and kinetic energy of updraft $j$, and $h_{\text{tot}}$ is the grid-mean total enthalpy.
+where $\rho^j$, $w^j$, $a^j$, and $T^j$ are the density, vertical velocity, area fraction, and temperature of updraft $j$, and $\bar{T}$ is the grid-mean temperature.
+
+The dry static energy $s = c_p T + gz$ is used because $T^j$ is computed via saturation adjustment and already reflects the warming from condensation along the parcel trajectory. Since $s^j - \bar{s} = c_p(T^j - \bar{T})$ (the $gz$ terms are identical at a given level and cancel in the anomaly), no explicit $L_v(c-e)$ correction is needed.
 
 From the column profile of $Q_1$, we extract:
 
 - **Peak heating rate**: $Q_0 = \max_z |Q_1(z)|$ — the maximum absolute convective heating rate in the column.
-- **Heating depth**: $h = z_{\text{top}} - z_{\text{bot}}$ — the vertical extent of the heating layer (levels where $|Q_1| > 0$), clamped to a minimum of 1000 m.
-- **Mean wind in heating layer**: density-weighted averages over active levels,
+- **Heating depth**: $h = z_{\text{top}} - z_{\text{bot}}$ — the vertical extent of the convective envelope, determined from updraft structure: $z_{\text{top}}$ is the highest level where the total updraft area fraction exceeds $10^{-3}$, $z_{\text{peak}}$ is the height of maximum updraft velocity, and $z_{\text{bot}} = \max(2 z_{\text{peak}} - z_{\text{top}},\; 3000\;\text{m})$.
+- **Mean wind in heating layer**: mass-weighted averages over levels within the envelope $[z_{\text{bot}}, z_{\text{top}}]$,
 ```math
-\bar{u}_{\text{heat}} = \frac{\sum_k u_k |Q_1(z_k)| \rho_k}{\sum_k |Q_1(z_k)| \rho_k}, \quad \bar{N}_{\text{source}} = \frac{\sum_k N_k |Q_1(z_k)| \rho_k}{\sum_k |Q_1(z_k)| \rho_k}.
+\bar{u}_{\text{heat}} = \frac{\sum_k u_k \rho_k \Delta z_k}{\sum_k \rho_k \Delta z_k}, \quad \bar{N}_{\text{source}} = \frac{\sum_k N_k \rho_k \Delta z_k}{\sum_k \rho_k \Delta z_k}.
 ```
+
+**Design choices.**
+The envelope detection makes several deliberate simplifications:
+- **Symmetric envelope.** $z_{\text{bot}} = 2 z_{\text{peak}} - z_{\text{top}}$ mirrors the upper half of the plume around the velocity peak to produce a single envelope depth $h$ for the half-sine response function in Beres (2004). Asymmetric profiles (e.g., bottom-heavy congestus or top-heavy stratiform regimes) are approximated by this symmetric construction.
+- **Velocity peak as envelope center.** $z_{\text{peak}}$ is the height of maximum updraft velocity, not the height of maximum $|Q_1|$. The velocity field is smoother than the $Q_1$ divergence field, making it a more robust proxy. It tends to sit slightly above the true heating peak because buoyancy integrates heating upward.
+- **Shallow convection.** Columns with $z_{\text{top}} < 3000$ m produce $z_{\text{bot}} \geq z_{\text{top}}$ and thus $h \leq 0$, which is filtered out by the activation criterion $h > h_{\min}$ (see below). This is by design: the Beres spectrum is intended for deep convection only. (As the choice of $z_{\text{bot}}$ affects the activation threshold, it should be kept consistent with $h_{\min}$.)
+- **Mass-weighted means.** $\bar{u}_{\text{heat}}$ and $\bar{N}_{\text{source}}$ are weighted by mass ($\rho \Delta z$) over the geometric envelope, not by $|Q_1|$. This is consistent with the geometric (rather than heating-based) envelope definition. Beres (2004) assumes constant $U$ over the heating depth, so either weighting is a defensible discretization choice; in sheared environments the difference can affect the asymmetry of the source spectrum.
 
 ### Activation criteria
 
@@ -87,39 +96,48 @@ The Beres source activates in a column only when both conditions are met:
 - $Q_0 > Q_{0,\text{threshold}}$ (default $1.157 \times 10^{-4}$ K/s, approximately 10 K/day)
 - $h > h_{\min}$ (default 3000 m)
 
-This filters out shallow or weak convection that would produce unreliable wave spectra. In columns where Beres is inactive, the AD99 Gaussian source is used instead.
+This filters out shallow or weak convection. In columns where Beres is inactive, the AD99 Gaussian source is used instead.
 
-### Source spectrum $B(c)$
+### Source spectrum $B_0(c)$
 
-The momentum flux spectrum at the source level is computed following Eqs. (23), (29)-(30) of [beres2004](@cite). The convective heating profile is assumed sinusoidal with depth $h$ and amplitude $Q_0$.
+The momentum flux spectrum at the source level is computed following the linear analysis of [beres2004](@cite). The convective heating profile is assumed half-sine in the vertical with depth $h$ and peak amplitude $Q_0$ (Beres Eq. 8), Gaussian in the horizontal with half-width $\sigma_x$ (Beres Eq. 7), and white-noise in time (see "Time spectrum" below). Only the nonstationary ($\nu > 0$) component is retained; the stationary, mountain-wave-like response from the interaction of $\bar{u}_{\text{heat}}$ with the steady part of the heating (Beres Eqs. 32–33) is **not** included in the present implementation. This is a deliberate simplification — Beres' §5 conclusions emphasize that both components can dominate depending on convective regime, so this omission is a known limitation of the current scheme.
 
-**Fourier decomposition of the heating:** For horizontal wavenumber $k$, the spectral power of the heating is
+**Fourier decomposition of the heating (Beres Eq. 11).** For horizontal wavenumber $k$, the squared spectral amplitude of the Gaussian horizontal heating profile is
 ```math
-G_k^2 = \frac{Q_0^2 \sigma_x^2}{2} \exp\left( -\frac{k^2 \sigma_x^2}{2} \right)
+G_k^2 = \frac{Q_0^2 \sigma_x^2}{2} \exp\left( -\frac{k^2 \sigma_x^2}{2} \right).
 ```
-where $\sigma_x$ is the convective cell half-width (default 4000 m).
+The default $\sigma_x = 4000$ m sits between Beres' two test values (2.5 km for narrow squall-line cells, 18 km for broader heating); the spectrum's east–west asymmetry under shear is sensitive to this choice (compare Beres Fig. 1a vs. 1b).
 
-**Vertical wavenumber:** For intrinsic frequency $\hat{\nu} = \nu - k \bar{u}_{\text{heat}}$,
+**Vertical wavenumber (Beres Eq. 18).** For ground-relative frequency $\nu$ and intrinsic frequency $\hat{\nu} = \nu - k \bar{u}_{\text{heat}}$,
 ```math
 m^2 = k^2 \left( \frac{N^2}{\hat{\nu}^2} - 1 \right).
 ```
-Waves exist only when $m^2 > 0$ and $|\hat{\nu}| < N$.
+Vertically propagating waves require $|\hat{\nu}| < N$; outside this range the response vanishes.
 
-**Response function:** The atmospheric response to the sinusoidal heating is
+**Response function.** The atmospheric response to the half-sine vertical heating profile is
 ```math
-R = \frac{\pi m h \, \text{sinc}(mh - \pi)}{(mh + \pi)(N^2 - \hat{\nu}^2)}.
+R(k, \nu) = \frac{\pi m h \, \text{sinc}(mh - \pi)}{(mh + \pi)(N^2 - \hat{\nu}^2)},
 ```
+with $\text{sinc}(x) = \sin(x)/x$. This is the response factor extracted from $|B_{k\nu}|^2$ in Beres Eq. (23) after substituting the dispersion relation; the resonance at $mh = \pi$ corresponds to a vertical wavelength of $2h$, exactly matching the half-sine projection.
 
-**Spectral flux density:** The momentum flux density in $(k, \nu)$ space is
-```math
-F(k, \nu) = \frac{1}{\sqrt{2\pi}} \frac{\sqrt{N^2 - \hat{\nu}^2}}{|\hat{\nu}|} \, G_k^2 \, R^2.
-```
+**Time spectrum.** Beres' analysis carries an additional factor $|Q_t(\nu)|^2$ — the squared temporal Fourier transform of the heating's time dependence. The present implementation sets $|Q_t(\nu)|^2 = 1$ (white noise), absorbing the overall normalization into the scale factor $\alpha$ below. Beres recommends (their §5) a red-noise time spectrum, which their Fig. 13 shows reproduces CRM-derived spectra noticeably better than white. Adding a frequency-dependent $|Q_t(\nu)|^2$ is a future improvement.
 
-**Phase speed spectrum:** The source spectrum $B_0(c)$ is obtained by integrating over frequency $\nu \in [\nu_{\min}, \nu_{\max}]$ with Boole's rule quadrature and applying the Jacobian $\nu / c^2$ to transform from $(k, \nu)$ to $(c, \nu)$ space:
+**Spectral flux density (Beres Eq. 30).** Combining the above, the momentum flux density in $(k, \nu)$ space is
 ```math
-B_0(c) = \text{sgn}(\hat{c}) \cdot \alpha \int_{\nu_{\min}}^{\nu_{\max}} F(k, \nu) \frac{\nu}{c^2} \, d\nu
+F(k, \nu) = \frac{1}{\sqrt{2\pi}} \, \frac{\sqrt{N^2 - \hat{\nu}^2}}{|\hat{\nu}|} \, G_k^2 \, R^2(k, \nu) \qquad \text{for } 0 < |\hat{\nu}| < N,
 ```
-where $\hat{c} = c - \bar{u}_{\text{heat}}$ and $\alpha$ is the `beres_scale_factor`.
+and zero otherwise. Beres' prefactor of $\rho_0 / (L\tau)$ — where $L$ and $\tau$ are reference horizontal and temporal scales — is absorbed into $\alpha$.
+
+**Phase speed transformation.** The source spectrum $B_0(c)$ is obtained by changing variables from $(k, \nu)$ to $(c, \nu)$ at fixed $\nu$ via $k = \nu/c$, with Jacobian $|dk/dc| = \nu/c^2$, and integrating over frequency:
+```math
+B_0(c) = \text{sgn}(\hat{c}) \cdot \alpha \int_{\nu_{\min}}^{\nu_{\max}} F\!\left(k = \frac{\nu}{c},\; \nu\right) \frac{\nu}{c^2} \, d\nu,
+```
+where $\hat{c} = c - \bar{u}_{\text{heat}}$ is the intrinsic phase speed. The integration uses Boole's rule quadrature. The integration limits $\nu_{\min}$ and $\nu_{\max}$ should satisfy:
+
+- $\nu_{\min} > 0$, both for numerical reasons (the integrand contains $\nu/c^2$ and $1/|\hat{\nu}|$) and to formalize the exclusion of the steady component noted above.
+- $\nu_{\max}$ small enough that propagating waves exist over the resolved $c$ range; $|\hat{\nu}| \geq N$ contributes zero by construction.
+
+The factor $\alpha$ (`beres_scale_factor`) bundles the dimensional prefactor $\rho_0/(L\tau)$ from Beres Eq. (30), the white-noise $|Q_t|^2$ normalization, and any empirical tuning multiplier needed to match observations or higher-resolution simulations. The sign convention $\text{sgn}(\hat{c})$ outside the integral matches the CAM/WACCM-style Beres implementations and assumes the downstream propagator interprets the spectrum in the heating-cell frame; this differs from the $\text{sgn}(\hat{\nu})$-inside-the-integrand form in Beres Eq. (30) by a factor of $\text{sgn}(c)$, and consistency with the propagator should be verified by reproducing the analytical Beres result at $\bar{u}_{\text{heat}} \neq 0$ as a unit test.
 
 ### Heating depth averaging
 
@@ -132,208 +150,33 @@ Once the Beres source spectrum $B_0(c)$ replaces the AD99 Gaussian, the upward p
 
 ## Implementation Details
 
-### Structs and type dispatch
+### Runtime pipeline
 
-The Beres extension is gated at the type level. `NonOrographicGravityWave{FT, BS}` (`src/solver/types.jl`) carries a `beres_source::BS` field that is either `nothing` (AD99-only) or a `BeresSourceParams{FT}`:
-
-```
-BeresSourceParams{FT}
-  Q0_threshold::FT        # K/s — min heating rate to activate
-  beres_scale_factor::FT  # dimensionless amplitude scaling (α)
-  σ_x::FT                 # m — convective cell half-width
-  ν_min::FT               # rad/s — min frequency for quadrature
-  ν_max::FT               # rad/s — max frequency for quadrature
-  n_ν::Int                # quadrature points (must be 4k+1)
-  n_h_avg::Int            # number of h values to average (1 = no averaging)
-  Δh_frac::FT             # fractional half-range for h averaging
-  h_heat_min::FT          # m — min heating depth to activate
-```
-
-When `BS = Nothing`, all Beres code paths are eliminated at compile time via `isnothing(gw_beres_source)`. Config parsing and construction happens in `src/solver/model_getters.jl`; the `nogw_beres_source` key requires `turbconv` to be `diagnostic_edmfx` or `prognostic_edmfx`.
-
-### Cache fields
-
-`non_orographic_gravity_wave_cache()` (`non_orographic_gravity_wave.jl`) allocates both AD99 and Beres fields. The Beres-specific fields are always allocated (to keep the cache type stable) but only populated when `gw_beres_source` is not `nothing`:
-
-| Cache field | Shape | Description |
-|---|---|---|
-| `gw_Q0` | 2D (horizontal) | Peak convective heating rate $Q_0$ (K/s) |
-| `gw_h_heat` | 2D | Heating depth $h$ (m) |
-| `gw_u_heat` / `gw_v_heat` | 2D | Density-weighted mean wind in heating layer (m/s) |
-| `gw_N_source` | 2D | Density-weighted mean buoyancy frequency in heating layer (1/s) |
-| `gw_beres_active` | 2D | Activation flag (1 or 0) |
-| `gw_zbot` / `gw_ztop` | 2D | Bottom/top of convective envelope (m) |
-| `gw_Q_conv` | 3D (column) | Full $Q_1$ profile persisted from scratch |
-| `gw_reduce_result` | 2D (6-tuple) | Scratch for `column_reduce!` passes |
-| `gw_deep_count` / `gw_cb_count` | 2D | Counters: deep-convection events and callback invocations |
-
-### Runtime pipeline (detailed stacktrace)
-
-Abbreviation: `nogw.jl` = `src/parameterized_tendencies/gravity_wave_drag/non_orographic_gravity_wave.jl`.
+The parameterization runs on a callback timer (`dt_nogw`) and applies the accumulated forcing every integrator step.
 
 ```
 Every dt_nogw seconds:
-  nogw_model_callback!(integrator)                      [callbacks.jl]
-    └─ non_orographic_gravity_wave_compute_tendency!()   [nogw.jl]
-        │
-        ├─ Step 1: Buoyancy frequency N(z)
-        │   ᶜdTdz = vertical gradient of temperature
-        │   N² = (g/T)(dT/dz + g/cp), clamped so N² ≥ 2.5e-5
-        │
-        ├─ Step 2: Source / damp level identification
-        │   Column mode: closest level to source_height
-        │   Sphere mode: highest level with p > source_pressure
-        │   Damp level:  lowest level with p < damp_pressure
-        │
-        ├─ Step 3: Beres convective heating  [only when beres_source ≠ nothing]
-        │   compute_beres_convective_heating!(Y, p)
-        │   │
-        │   ├─ 3a: Mass-flux divergence (Yanai Q₁)
-        │   │   For each updraft j = 1..n_updrafts:
-        │   │     ᶠu³_diff = ᶠu³ʲ - ᶠu³         (face velocity anomaly)
-        │   │     ᶜa_scalar = (mseʲ + Kʲ - h_tot) × (ρaʲ / ρʲ)
-        │   │     divergence via vertical_transport(ρʲ, ᶠu³_diff, ᶜa_scalar)
-        │   │     ᶜQ_conv += divergence / (ρ · cp)
-        │   │   Sources: ᶠu³ʲs, ᶜKʲs, ᶜρʲs, ᶜh_tot, ᶠu³ from p.precomputed
-        │   │   Pattern mirrors edmfx_sgs_flux.jl SGS flux computation
-        │   │
-        │   ├─ 3b: Convective envelope detection
-        │   │   Pass 1 (column_reduce! over updraft fields):
-        │   │     z_peak = height of maximum updraft vertical velocity
-        │   │     z_top  = highest level where area fraction > 1e-3
-        │   │     z_bot  = max(2·z_peak − z_top,  3000 m)
-        │   │     h      = z_top − z_bot
-        │   │   Uses updraft structure (not Q₁ thresholding) for robustness
-        │   │
-        │   ├─ 3c: Heating layer properties
-        │   │   Pass 2 (column_reduce! over [z_bot, z_top] envelope):
-        │   │     Q_integral = Σ(Q_conv · Δz)
-        │   │     u_heat, v_heat  = density-weighted mean horizontal winds
-        │   │     N_source        = density-weighted mean buoyancy frequency
-        │   │     Q₀ = (π/2) · Q_integral / h,  clamped ≥ 0
-        │   │
-        │   └─ 3d: Activation flag
-        │       beres_active = (Q₀ > Q0_threshold) AND (h > h_heat_min)
-        │
-        ├─ Step 4: Zero forcing accumulators (uforcing, vforcing = 0)
-        │
-        └─ Step 5: Gravity wave forcing
-            non_orographic_gravity_wave_forcing()
-            │
-            ├─ 5a: Shift fields up one level
-            │   ρ, u, v, bf, z → ρ_p1, u_p1, v_p1, bf_p1, z_p1
-            │   (needed for level-pair breaking computation)
-            │
-            ├─ 5b: Pack broadcast inputs
-            │   input_u, input_v: 21-element tuples of all per-column fields
-            │   Both AD99 and Beres fields included (zeros when Beres inactive)
-            │
-            └─ 5c: Wavenumber loop  (ink = 1..nk)
-                For each horizontal wavenumber k = 2π / (30·10^ink km):
-                │
-                ├─ AD99 pass (always runs):
-                │   waveforcing_column_accumulate!(..., Val(:ad99))
-                │   │
-                │   ├─ At level 1 — source spectrum:
-                │   │   wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag)
-                │   │   B₀(c) = sign(c−u)·[Bw·exp(−ln2·((c−c₀)/cw)²)
-                │   │                        + Bn·exp(−ln2·((c−c₀)/cn)²)]
-                │   │   Reference frame: ground-relative extratropics,
-                │   │   source-wind-relative tropics (flag controls blending)
-                │   │
-                │   ├─ At each level above source — propagation:
-                │   │   Reflection:  |c−u|·k ≥ ωᵣ        → remove wave
-                │   │   Breaking:    B₀/(c−u)³ ≥ ½(ρ/ρ₀)k/N → deposit flux
-                │   │   Critical:    c−u sign flip         → deposit flux
-                │   │   Model top:   all remaining flux deposited
-                │   │
-                │   ├─ Intermittency:
-                │   │   ε = source_ampl / (ρ₀ · nk · Σ|B₀|)
-                │   │   (prescribed latitude-dependent total flux)
-                │   │
-                │   └─ postprocess_and_accumulate!()
-                │       gw_average!  (center → face interpolation)
-                │       gw_deposit   (sponge layer: escaped flux above damp level)
-                │       uforcing += u_waveforcing
-                │
-                └─ Beres pass (only when beres_source ≠ nothing):
-                    waveforcing_column_accumulate!(..., Val(:beres))
-                    │
-                    ├─ At level 1 — source spectrum:
-                    │   compute_beres_spectrum(beres, beres_active, ...)
-                    │   If beres_active > 0.5:
-                    │     wave_source(c, u_heat, Q₀, h, N, beres)
-                    │       └─ _beres_spectrum_single_h()   [inner integral]
-                    │            Boole's rule quadrature over ν ∈ [ν_min, ν_max]
-                    │            weights = [7, 32, 12, 32, 7] × 2dν/45
-                    │            For each frequency ν_j:
-                    │              k   = ν/c
-                    │              ν̂   = ν − k·u_heat        (intrinsic freq)
-                    │              m²  = k²(N²/ν̂² − 1)      (vertical wavenumber)
-                    │              R   = πmh·sinc(mh−π) / [(mh+π)(N²−ν̂²)]
-                    │              Gk² = Q₀²σ_x²/2 · exp(−k²σ_x²/2)
-                    │              F(k,ν) = (1/√2π)·√(N²−ν̂²)/|ν̂| · Gk²·R²
-                    │            B₀(c) = sign(ĉ) · α · ∫ F·(ν/c²) dν
-                    │       Optional h-averaging: repeat for n_h_avg values
-                    │       in [h − Δh_frac·h,  h + Δh_frac·h], then average
-                    │   Else (non-convecting column): all zeros
-                    │
-                    ├─ Propagation: same reflection/breaking logic as AD99
-                    │
-                    ├─ Intermittency:
-                    │   ε = 1 / (ρ₀ · nk)
-                    │   (scale factor α already baked into B₀)
-                    │
-                    └─ postprocess_and_accumulate!()  (same as AD99)
+  nogw_model_callback!
+    └─ non_orographic_gravity_wave_compute_tendency!
+        ├─ 1. Compute buoyancy frequency N(z) and identify source/damp levels
+        ├─ 2. [Beres only] Extract convective heating from EDMF updrafts
+        │       ├─ Compute Q₁ (mass-flux divergence of DSE anomalies)
+        │       ├─ Detect convective envelope (z_bot, z_top, h)
+        │       ├─ Extract heating-layer properties (Q₀, u_heat, N_source)
+        │       └─ Activate if Q₀ > threshold AND h > h_min
+        └─ 3. For each horizontal wavenumber k:
+                ├─ AD99: Gaussian source spectrum B₀(c)
+                ├─ [Beres active]: Beres source spectrum B₀(c) from Q₀, h, N
+                ├─ Propagate upward: reflection / breaking / critical level
+                ├─ Apply intermittency factor
+                └─ Accumulate momentum flux deposit into uforcing, vforcing
 
 Every dt (integrator step):
-  non_orographic_gravity_wave_apply_tendency!()
-    ├─ Clamp forcing to ±3×10⁻³ m/s², zero any NaN/Inf
-    └─ Yₜ.c.uₕ += Covariant12Vector(uforcing, vforcing)
+  non_orographic_gravity_wave_apply_tendency!
+    └─ Clamp forcing, zero NaN/Inf, apply to wind tendencies
 ```
 
-### Key design decisions
-
-- **Additive two-pass architecture.** AD99 and Beres forcing are computed in separate `column_accumulate!` passes within the same wavenumber loop and summed into the same `uforcing`/`vforcing` accumulators. In non-convecting columns the Beres pass contributes zero; in convecting columns both the AD99 background and Beres convective sources contribute.
-
-- **Intermittency difference.** AD99 uses $\varepsilon = \text{source\_ampl} / (\rho_0 \cdot n_k \cdot \sum|B_0|)$ where `source_ampl` is a prescribed latitude-dependent total flux. Beres uses $\varepsilon = 1/(\rho_0 \cdot n_k)$ because the amplitude scaling factor $\alpha$ (`beres_scale_factor`) is already applied inside the spectrum $B_0(c)$.
-
-- **Convective envelope from updraft structure.** The heating depth $h$ is determined from the EDMF updraft velocity peak and area fraction ($z_{\text{peak}}$, $z_{\text{top}}$) rather than thresholding the $Q_1$ profile directly. This is more robust because $Q_1$ (a divergence) can be noisy near column boundaries, while the updraft kinematic fields are smoother.
-
-- **GPU compatibility.** All vertical operations use `column_accumulate!` / `column_reduce!` (ClimaCore operators). The `@noinline` annotation on `unrolled_reduce` prevents CPU compilation blowup for large phase-speed grids while having no effect on GPU (kernel code is always inlined). `StaticBitVector` stores the wave-breaking mask efficiently (8 booleans per `UInt8`, supporting up to 256 phase speeds).
-
-- **Type dispatch for zero-cost abstraction.** `NonOrographicGravityWave{FT, BS}` is parameterised on `BS`. When `BS = Nothing` (no Beres), the `isnothing(gw_beres_source)` branches are eliminated at compile time, so AD99-only runs pay no overhead for the Beres code paths.
-
-### Configuration
-
-| Config key | Default | Description |
-|---|---|---|
-| `non_orographic_gravity_wave` | `false` | Enable NOGW parameterization |
-| `nogw_beres_source` | `false` | Enable Beres convective source (requires EDMF turbconv) |
-| `dt_nogw` | `1800secs` | Callback interval for NOGW computation |
-| `beres_Q0_threshold` | `1.0e-5` | Min heating rate to activate (K/s, ~1 K/day) |
-| `beres_scale_factor` | `2.0e-6` | Amplitude scaling for Beres momentum flux |
-| `beres_sigma_x` | `4000.0` | Convective cell half-width (m) |
-| `beres_nu_min` | `8.727e-4` | Min angular frequency for integration (rad/s) |
-| `beres_nu_max` | `1.047e-2` | Max angular frequency for integration (rad/s) |
-| `beres_n_nu` | `9` | Quadrature points for frequency integration (must be 4k+1) |
-| `beres_h_heat_min` | `1000.0` | Min heating depth to activate (m) |
-
-### Diagnostics
-
-| Short name | Description |
-|---|---|
-| `utendnogw` | Eastward acceleration due to non-orographic GW drag (m/s²) |
-| `vtendnogw` | Northward acceleration due to non-orographic GW drag (m/s²) |
-| `nogw_Q0` | Peak convective heating rate (K/s, Beres-only; gated by `beres_active`) |
-| `nogw_h_heat` | Convective heating depth (m, Beres-only; gated by `beres_active`) |
-
-### Key source files
-
-| File | Description |
-|---|---|
-| `src/parameterized_tendencies/gravity_wave_drag/non_orographic_gravity_wave.jl` | All NOGW runtime: cache allocation, `compute_beres_convective_heating!`, `non_orographic_gravity_wave_forcing`, AD99 and Beres `wave_source` dispatches, `_beres_spectrum_single_h` quadrature |
-| `src/solver/types.jl` | `NonOrographicGravityWave{FT,BS}` and `BeresSourceParams{FT}` struct definitions |
-| `src/solver/model_getters.jl` | Config parsing, EDMF requirement check, `BeresSourceParams` construction |
-| `src/diagnostics/gravitywave_diagnostics.jl` | `nogw_Q0` and `nogw_h_heat` diagnostic definitions (type-dispatched on `BeresSourceParams`) |
-| `src/callbacks/callbacks.jl` | `nogw_model_callback!` — triggers `compute_tendency!` every `dt_nogw` |
+Key entry points in `src/parameterized_tendencies/gravity_wave_drag/non_orographic_gravity_wave.jl`:
+- `non_orographic_gravity_wave_compute_tendency!` — main driver
+- `compute_beres_convective_heating!` — EDMF heating extraction (Step 2)
+- `non_orographic_gravity_wave_forcing` / `waveforcing_column_accumulate!` — column-wise propagation and breaking (Step 3)
