@@ -2,13 +2,13 @@
 
 ## Repo exploration
 
-- Before broad repo search or codebase exploration, read [docs/agents/repo_structure.md](docs/agents/repo_structure.md).
+- Before broad repo search or codebase exploration, read [.github/agents/repo_structure.md](.github/agents/repo_structure.md).
 
 ## Pull request reviews
 
-- When asked to review a pull request, follow [docs/agents/review.md](docs/agents/review.md).
-- Apply the full checklist and output schema in [docs/agents/review.md](docs/agents/review.md); keep reviews concise, evidence-based, and findings-first.
-- During review, also enforce [docs/agents/software_design_patterns.md](docs/agents/software_design_patterns.md) for changed code and adjacent affected code, as required by [docs/agents/review.md](docs/agents/review.md).
+- When asked to review a pull request, follow [.github/agents/review.md](.github/agents/review.md).
+- Apply the full checklist and output schema in [.github/agents/review.md](.github/agents/review.md); keep reviews concise, evidence-based, and findings-first.
+- During review, also enforce [.github/agents/software_design_patterns.md](.github/agents/software_design_patterns.md) for changed code and adjacent affected code, as required by [.github/agents/review.md](.github/agents/review.md).
 
 ## Local norms
 
@@ -17,9 +17,9 @@
 - For package tests, prefer `Pkg.test()` over manually `include`ing `test/runtests.jl` because test-only deps are loaded through the package test path.
 - Keep edits inside the owning subtree when possible; use [src/ClimaAtmos.jl](src/ClimaAtmos.jl) to trace where a feature is wired.
 - Match existing style: explicit names, narrow imports, comments that explain why.
-- Follow the software design patterns in [docs/agents/software_design_patterns.md](docs/agents/software_design_patterns.md) for new code and refactor toward them when touching existing code.
+- Follow the software design patterns in [.github/agents/software_design_patterns.md](.github/agents/software_design_patterns.md) for new code and refactor toward them when touching existing code.
 
 ## Self-correction
 
-- If the code map in [docs/agents/repo_structure.md](docs/agents/repo_structure.md) is discovered to be stale, update it.
+- If the code map in [.github/agents/repo_structure.md](.github/agents/repo_structure.md) is discovered to be stale, update it.
 - If the user gives a correction about how work should be done in this repo, add it to `Local norms` or another clearly labeled persistent section in this file so future sessions inherit it.
