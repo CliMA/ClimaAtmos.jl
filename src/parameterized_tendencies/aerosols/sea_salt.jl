@@ -172,6 +172,7 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
     )
 
     @. p.tracers.sea_salt_emission_flux_sfc = 0
+    @. p.tracers.sea_salt_u10_sfc = abs(u_10)
 
     for (bin_index, name) in enumerate(aerosol_names)
         ρχ_name = Symbol(:ρ, name)
