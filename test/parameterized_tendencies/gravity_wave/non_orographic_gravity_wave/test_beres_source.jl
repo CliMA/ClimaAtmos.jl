@@ -7,8 +7,8 @@ const wave_source = CA.wave_source
 # NOTE: The wave_source / Beres spectrum computation is EDMF-mode-agnostic.
 # It takes (Q0, h, u_heat, N_source) directly, so these unit tests apply
 # identically whether the upstream EDMF is diagnostic or prognostic.
-# The prognostic EDMF integration path is covered by the conv_gw aquaplanet
-# longrun (longrun_aquaplanet_allsky_progedmf_0M_conv_gw.yml).
+# The prognostic EDMF integration path is covered by the aquaplanet
+# longrun (longrun_aquaplanet_allsky_progedmf_0M.yml).
 
 @testset "Beres (2004) source spectrum" begin
     FT = Float64
@@ -287,5 +287,129 @@ const wave_source = CA.wave_source
         asymmetry = sum(abs, B[i] + B[nc + 1 - i] for i in 1:mid)
         total = sum(abs, B)
         @test asymmetry / total > 1e-4 "Spectrum should be asymmetric with nonzero u_heat"
+    end
+end
+
+# ============================================================================
+# Beres (2004) §4 squall-line validation — asymmetric spectrum with u_heat ≠ 0
+#
+# Validates B_0(c) against the physics of Beres, Alexander & Holton (2004,
+# JAS), Section 4 / Figure 13.  Parameters are the paper's squall-line case.
+#
+# Does NOT test: vertical propagation/drag (see test_beres_column_drag.jl),
+# the three documented simplifications (white-noise time spectrum, fixed σ_x,
+# no steady component), or full-simulation wiring (see
+# test_beres_squall_line_integration.jl).
+# ============================================================================
+@testset "Beres 2004 §4 squall-line spectrum (Fig. 13)" begin
+    FT = Float64
+
+    # --- Beres (2004) Section 4 squall-line parameters ---
+    σ_x     = FT(2500.0)   # m, narrow convective cell (Fig. 13 / Fig. 1b)
+    h       = FT(5000.0)   # m, heating depth
+    u_heat  = FT(-5.0)     # m/s, mean wind in heating region
+    N       = FT(0.012)    # s⁻¹, buoyancy frequency
+    Q0      = FT(0.004)    # K/s, peak heating rate
+
+    # Fine phase-speed grid covering ±60 m/s (dc = 1 m/s, nc = 121)
+    dc_sq = FT(1.0)
+    cmax_sq = FT(60.0)
+    nc_sq = Int(2 * cmax_sq / dc_sq + 1)  # 121
+    c_sq = ntuple(n -> FT((n - 1) * dc_sq - cmax_sq), Val(nc_sq))
+
+    beres_sq = BeresSourceParams{FT}(;
+        Q0_threshold = FT(0),
+        beres_scale_factor = FT(1.0),
+        σ_x = σ_x,
+        ν_min = FT(2π / (120 * 60)),   # period 120 min
+        ν_max = FT(2π / (10 * 60)),    # period 10 min
+        n_ν = 9,
+    )
+
+    B_sq = wave_source(c_sq, u_heat, Q0, h, N, beres_sq, Val(nc_sq))
+
+    # Helper: find index of c closest to a target value
+    function closest_idx(target)
+        _, idx = findmin(n -> abs(c_sq[n] - target), 1:nc_sq)
+        return idx
+    end
+
+    # Find eastward peak (max positive B, restricted to c > u_heat)
+    i_uheat = closest_idx(u_heat)
+    east_max_val = FT(0)
+    east_peak_c = FT(0)
+    for i in (i_uheat + 1):nc_sq
+        if B_sq[i] > east_max_val
+            east_max_val = B_sq[i]
+            east_peak_c = c_sq[i]
+        end
+    end
+
+    # Find westward peak (most negative B, restricted to c < u_heat)
+    west_min_val = FT(0)
+    west_peak_c = FT(0)
+    for i in 1:(i_uheat - 1)
+        if B_sq[i] < west_min_val
+            west_min_val = B_sq[i]
+            west_peak_c = c_sq[i]
+        end
+    end
+
+    println("Squall-line spectrum (Fig. 13):")
+    println("  Eastward peak: c = $(east_peak_c) m/s, B = $(east_max_val)")
+    println("  Westward peak: c = $(west_peak_c) m/s, B = $(west_min_val)")
+
+    @testset "Eastward peak location (Fig. 13: ~+20 m/s)" begin
+        # Beres Fig. 13 shows eastward lobe peaking near +20 m/s.
+        # Tolerance: ±5 m/s accounts for white-noise time spectrum
+        # and Boole quadrature discretisation.
+        @test 15.0 < east_peak_c < 25.0
+    end
+
+    @testset "Westward peak location (Fig. 13: ~-11 m/s)" begin
+        # Beres Fig. 13 shows westward lobe peaking near -11 m/s.
+        @test -15.0 < west_peak_c < -8.0
+    end
+
+    @testset "East-west asymmetry (σ_x = 2.5 km, Figs. 1b & 13)" begin
+        # With σ_x = 2.5 km (narrow cell) and u_heat = -5 m/s, the
+        # eastward lobe is larger than the westward lobe — this is the
+        # key asymmetry feature of Beres (2004) Fig. 1b.
+        @test east_max_val > abs(west_min_val)
+    end
+
+    @testset "Critical level: B(c ≈ u_heat) = 0" begin
+        # At c = u_heat, ĉ = c - u_heat = 0, so B_0(c) = 0 by definition
+        # (the implementation returns zero when |ĉ| < 1e-6).
+        B_at_uheat = B_sq[closest_idx(u_heat)]
+        @test abs(B_at_uheat) < FT(1e-30)
+    end
+
+    @testset "Spectrum vanishes outside propagating regime" begin
+        # Vertically propagating waves require |ĉ| < N·h/π ≈ 19 m/s
+        # (for the dominant mode). Beyond ~55 m/s in absolute phase speed,
+        # essentially no propagating modes exist.
+        max_B = maximum(abs, B_sq)
+        for i in 1:nc_sq
+            if abs(c_sq[i]) > 55.0
+                @test abs(B_sq[i]) < 1e-3 * max_B "B_0 should vanish at c = $(c_sq[i]) m/s"
+            end
+        end
+    end
+
+    @testset "Sign convention: sgn(ĉ) consistency" begin
+        # B > 0 for c > u_heat (eastward intrinsic propagation)
+        # B < 0 for c < u_heat (westward intrinsic propagation)
+        noise_floor = 1e-3 * maximum(abs, B_sq)
+        for i in 1:nc_sq
+            if abs(B_sq[i]) > noise_floor
+                c_hat = c_sq[i] - u_heat
+                if c_hat > FT(1e-6)
+                    @test B_sq[i] > 0 "Expected B > 0 at c=$(c_sq[i]) (ĉ > 0)"
+                elseif c_hat < -FT(1e-6)
+                    @test B_sq[i] < 0 "Expected B < 0 at c=$(c_sq[i]) (ĉ < 0)"
+                end
+            end
+        end
     end
 end

@@ -7,18 +7,27 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 
 # ============================================================================
-# Sphere integration test for Beres squall-line forcing.
-# Uses the same physics config as the working CI run
-# (longrun_aquaplanet_allsky_diagedmf_0M_conv_gw.yml) but with a minimal grid
-# and t_end=0. Builds the simulation, injects hardcoded squall-line values,
-# calls non_orographic_gravity_wave_forcing, and verifies nonzero drag.
+# Beres convective GW forcing — sphere integration smoke test
+#
+# Builds a minimal sphere simulation (h_elem=4), injects Beres (2004) §4
+# squall-line parameters, calls non_orographic_gravity_wave_forcing, and
+# verifies the output is finite and within the physically expected magnitude
+# range (~1e-5 m/s², i.e. ~1 m/s/day).
+#
+# Does NOT validate spectral shape (see test_beres_source.jl) or vertical
+# drag structure (see test_beres_column_drag.jl).  This test catches wiring
+# bugs and gross magnitude regressions only.
+#
+# Beres (2004) §4 squall-line reference values:
+#   Q₀ = 0.004 K/s, h = 5000 m, ū_heat = −5 m/s, N = 0.012 s⁻¹,
+#   σ_x = 2500 m  (set via beres_squall_integration_test.yml)
 # ============================================================================
-@testset "Beres squall-line sphere integration" begin
+@testset "Beres convective GW forcing -- sphere integration smoke test" begin
     comms_ctx = ClimaComms.SingletonCommsContext()
     config_files = [
         joinpath(
             @__DIR__,
-            "../../../../config/longrun_configs/longrun_aquaplanet_allsky_diagedmf_0M_conv_gw.yml",
+            "../../../../config/longrun_configs/longrun_aquaplanet_allsky_diagedmf_0M.yml",
         ),
         joinpath(
             @__DIR__,
@@ -27,7 +36,10 @@ import ClimaCore.Fields as Fields
     ]
     config = CA.AtmosConfig(config_files; job_id = "beres_squall_sph", comms_ctx)
 
-    # Override for a minimal test grid
+    # Minimal grid for fast compilation / testing.
+    # h_elem=4 gives a coarse cubed-sphere; z_elem=30 up to 45 km is enough
+    # for stratospheric wave breaking.  t_end=0 means no time integration —
+    # we only call the forcing routine once.
     config.parsed_args["h_elem"] = 4
     config.parsed_args["z_elem"] = 30
     config.parsed_args["z_max"] = 45000.0
@@ -41,11 +53,11 @@ import ClimaCore.Fields as Fields
     p = simulation.integrator.p
     Y = simulation.integrator.u
 
-    # Get FT from the simulation (Float32 for longrun configs)
     FT = eltype(Y.c.ρ)
 
-    # Verify Beres is enabled
+    # Verify Beres is enabled and σ_x matches squall-line case
     @test p.non_orographic_gravity_wave.gw_beres_source isa CA.BeresSourceParams
+    @test p.non_orographic_gravity_wave.gw_beres_source.σ_x == FT(2500.0)
 
     # Extract NOGW cache
     (; gw_ncval, ᶜbuoyancy_frequency, ᶜlevel, u_waveforcing, v_waveforcing,
@@ -54,21 +66,26 @@ import ClimaCore.Fields as Fields
         gw_beres_active, gw_flag,
     ) = p.non_orographic_gravity_wave
 
-    # Get coordinates
     ᶜz = Fields.coordinate_field(Y.c).z
 
     # ------------------------------------------------------------------
-    # Fill atmospheric state with tropical-like profiles
+    # Fill atmospheric state with a uniform tropical-like profile.
+    # The specific values don't matter much for a smoke test — we just
+    # need a physically plausible atmosphere so the forcing routine
+    # doesn't hit edge cases.
     # ------------------------------------------------------------------
     ᶜρ = Y.c.ρ
     ᶜu = similar(ᶜρ, FT)
     ᶜv = similar(ᶜρ, FT)
 
-    parent(ᶜu) .= FT(-5.0)
+    # Uniform wind matching u_heat — no Doppler shift in the column,
+    # so the forcing is purely from the Beres spectrum shape.
+    parent(ᶜu) .= FT(-5.0)     # m/s, matches Beres §4 ū_heat
     parent(ᶜv) .= FT(0.0)
-    parent(ᶜbuoyancy_frequency) .= FT(0.01)
+    # Buoyancy frequency: 0.012 s⁻¹ matches Beres §4 N
+    parent(ᶜbuoyancy_frequency) .= FT(0.012)
 
-    # Compute source/damp levels (sphere uses pressure-based)
+    # Compute source/damp levels (sphere mode uses pressure-based search)
     (; source_level, damp_level, source_p_ρ_z_u_v_level) =
         p.non_orographic_gravity_wave
     (; ᶜp) = p.precomputed
@@ -105,14 +122,19 @@ import ClimaCore.Fields as Fields
     end
 
     # ------------------------------------------------------------------
-    # Fill squall-line values
+    # Fill Beres convective-source fields with squall-line values.
+    # These are normally computed by compute_beres_convective_heating!
+    # from EDMF output; here we inject them directly.
     # ------------------------------------------------------------------
-    fill!(gw_Q0, FT(0.004))
-    fill!(gw_h_heat, FT(6000.0))
-    fill!(gw_u_heat, FT(-5.0))
-    fill!(gw_v_heat, FT(0.0))
-    fill!(gw_N_source, FT(0.01))
-    fill!(gw_beres_active, FT(1.0))
+    fill!(gw_Q0, FT(0.004))         # K/s — peak heating rate (Beres §4)
+    fill!(gw_h_heat, FT(5000.0))    # m — heating depth (Beres §4)
+    fill!(gw_u_heat, FT(-5.0))      # m/s — mean wind in heating region (Beres §4)
+    fill!(gw_v_heat, FT(0.0))       # m/s — no meridional wind
+    fill!(gw_N_source, FT(0.012))   # s⁻¹ — buoyancy frequency (Beres §4)
+    fill!(gw_beres_active, FT(1.0)) # 1.0 = Beres branch active for all columns
+    # gw_flag = 0 means "tropics" for the AD99 background spectrum: use
+    # Doppler-shifted phase speeds (c - u_source) rather than ground-relative c.
+    # This does NOT affect the Beres dispatch.
     fill!(gw_flag, FT(0.0))
 
     # ------------------------------------------------------------------
@@ -155,8 +177,12 @@ import ClimaCore.Fields as Fields
 
     @testset "Forcing magnitude is physical" begin
         max_uf = maximum(abs, uf_data)
-        @test max_uf > 1e-8       # nonzero drag
-        @test max_uf < 1.0        # not unphysically large (< 1 m/s²)
+        # Expected magnitude for squall-line inputs: ~1e-5 m/s² (~1 m/s/day).
+        # Lower bound: must produce measurable drag.
+        @test max_uf > 1e-8
+        # Upper bound: 1e-3 m/s² ≈ 86 m/s/day — well above physical but
+        # catches order-of-magnitude blowups (previous bound was 1.0).
+        @test max_uf < 1e-3
     end
 
     @testset "N_source values" begin
