@@ -602,6 +602,19 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         enforce_physical_constraints_callback(dt),
     )
 
+    # Sea salt 
+    # Sea salt spike debugger
+    flux_threshold = FT(1.2e-6)  # corresponds to u_10 ≈ 50 m/s via Gong (2003)
+    callbacks = (
+        callbacks...,
+        call_every_n_steps(
+            integrator -> sea_salt_spike_debug!(integrator, flux_threshold),
+            1;
+            skip_first = true,
+        ),
+    )
+
+
     return callbacks
 end
 

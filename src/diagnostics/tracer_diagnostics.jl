@@ -375,3 +375,39 @@ for (bin, long_bin) in (
     )
 end
 
+###
+# Sea salt emission debugging — 10 m wind, friction velocity, ocean fraction
+###
+add_diagnostic_variable!(
+    short_name = "sslt_u10",
+    long_name = "10 m Wind Speed (Sea Salt Emission)",
+    units = "m s^-1",
+    comments = "10 m wind speed from Monin-Obukhov theory, as used in the sea salt emission parameterization.",
+    compute! = (out, u, p, t) -> begin
+        :sea_salt_u10_sfc in propertynames(p.tracers) ||
+            error("sea_salt_u10_sfc not in cache — is sea_salt_emission_tendency! active?")
+        isnothing(out) ? copy(p.tracers.sea_salt_u10_sfc) : (out .= p.tracers.sea_salt_u10_sfc)
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "ustar",
+    long_name = "Surface Friction Velocity",
+    units = "m s^-1",
+    comments = "Friction velocity from the surface flux scheme, used in Monin-Obukhov wind reconstruction.",
+    compute! = (out, u, p, t) -> begin
+        isnothing(out) ? copy(p.precomputed.sfc_conditions.ustar) :
+            (out .= p.precomputed.sfc_conditions.ustar)
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "oceanfrac",
+    long_name = "Ocean Fraction",
+    units = "1",
+    comments = "Fraction of each grid cell covered by ocean. Sea salt emission is weighted by this; non-zero values over land indicate a coupler masking issue.",
+    compute! = (out, u, p, t) -> begin
+        isnothing(out) ? copy(p.ocean_fraction) : (out .= p.ocean_fraction)
+    end,
+)
+
