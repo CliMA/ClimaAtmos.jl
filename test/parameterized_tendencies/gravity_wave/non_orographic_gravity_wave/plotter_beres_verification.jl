@@ -38,8 +38,21 @@ z_max_edmf = 20000.0
 z_max_gw = 60000.0
 n_hotspots = 11
 hotspot_percentiles = [1.00, 0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55, 0.50]
-hotspot_colors = [:darkred, :red, :orangered, :orange, :goldenrod, :olive, :teal, :steelblue, :blue, :slateblue, :purple]
-hotspot_labels = ["p100", "p95", "p90", "p85", "p80", "p75", "p70", "p65", "p60", "p55", "p50"]
+hotspot_colors = [
+    :darkred,
+    :red,
+    :orangered,
+    :orange,
+    :goldenrod,
+    :olive,
+    :teal,
+    :steelblue,
+    :blue,
+    :slateblue,
+    :purple,
+]
+hotspot_labels =
+    ["p100", "p95", "p90", "p85", "p80", "p75", "p70", "p65", "p60", "p55", "p50"]
 
 simdir = ClimaAnalysis.SimDir(output_dir)
 
@@ -59,7 +72,9 @@ if mode == MODE_INST
     snap_kw[:inst_time] = inst_time
 end
 
-mode_str = mode == MODE_INST ? "INST (t=$(round(inst_time / DAY_S, digits=2))d)" : "AVG (last $(AVG_WINDOW_DAYS)d)"
+mode_str =
+    mode == MODE_INST ? "INST (t=$(round(inst_time / DAY_S, digits=2))d)" :
+    "AVG (last $(AVG_WINDOW_DAYS)d)"
 println("Mode: $mode_str")
 
 # --- Load fields ---
@@ -90,11 +105,24 @@ h_heat_last = get_snapshot(h_heat_var, mode; snap_kw...)
 Q0_threshold = 1.0e-5
 h_heat_min = 1000.0
 lat_max = 89.0
-println("Max Q0: ", maximum(filter(!isnan, Q0_last.data)), " (threshold: ", Q0_threshold, ")")
-println("Max h_heat: ", maximum(filter(!isnan, h_heat_last.data)), " (threshold: ", h_heat_min, ")")
+println(
+    "Max Q0: ",
+    maximum(filter(!isnan, Q0_last.data)),
+    " (threshold: ",
+    Q0_threshold,
+    ")",
+)
+println(
+    "Max h_heat: ",
+    maximum(filter(!isnan, h_heat_last.data)),
+    " (threshold: ",
+    h_heat_min,
+    ")",
+)
 lats_2d = [lat for _ in Q0_last.dims["lon"], lat in Q0_last.dims["lat"]]
 tropical_mask = abs.(lats_2d) .< lat_max
-active_mask = (Q0_last.data .> Q0_threshold) .& (h_heat_last.data .> h_heat_min) .& tropical_mask
+active_mask =
+    (Q0_last.data .> Q0_threshold) .& (h_heat_last.data .> h_heat_min) .& tropical_mask
 println("Active columns: ", count(active_mask), " / ", length(active_mask))
 Q0_masked = deepcopy(Q0_last)
 Q0_masked.data .= ifelse.(active_mask, Q0_masked.data, NaN)
@@ -279,7 +307,8 @@ for (ih, (lon, lat)) in enumerate(hotspots)
     z_rho, rho_data = _profile(rhoa_var, lon, lat)
 
     z_q, Q1 = reconstruct_Qconv(z_up, rho_data, arup_data, waup_data, haup_data, ha_data)
-    CairoMakie.lines!(ax31, abs.(Q1), z_q; color = hotspot_colors[ih], alpha = 0.5, linewidth = 1,
+    CairoMakie.lines!(ax31, abs.(Q1), z_q; color = hotspot_colors[ih], alpha = 0.5,
+        linewidth = 1,
         label = ih == 1 ? "EDMF |∂flux/∂z|" : nothing)
 end
 !isempty(hotspots) && CairoMakie.axislegend(ax31; position = :rt, labelsize = 9)
