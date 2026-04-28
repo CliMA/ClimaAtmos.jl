@@ -3,7 +3,9 @@
 # Rows omit **`eki_varfix_off_config`**. For analysis, treat the **finest vertical tier** at **`N_quad=3`**, **`varfix_off`**
 # as a stand-in “truth” when comparing to coarser runs (no LES observations involved).
 #
-# **HadGEM2-A GCM cfSite artifact columns** were removed (broken in this study). Use GoogleLES + idealized SCMs.
+# **HadGEM2-A GCM cfSite artifact columns** were removed (broken in this study). **GoogleLES** is omitted from
+# this default uncalibrated grid (not verified for production); add a row with
+# `model_configs/googleles_column_varquad_hires.yml` locally if needed.
 cases:
   - model_config_path:
       - model_configs/master_column_varquad_diagnostic_edmfx.yml
@@ -32,12 +34,6 @@ cases:
   - model_config_path:
       - model_configs/master_column_varquad_diagnostic_edmfx.yml
       - model_configs/gabls_column_varquad_hires.yml
-    scm_toml:
-      - diagnostic_edmfx_1M.toml
-      - toml/uncalibrated_stability_overlay.toml
-  - model_config_path:
-      - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/googleles_column_varquad_hires.yml
     scm_toml:
       - diagnostic_edmfx_1M.toml
       - toml/uncalibrated_stability_overlay.toml

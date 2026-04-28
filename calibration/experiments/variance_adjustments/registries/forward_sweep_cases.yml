@@ -1,65 +1,37 @@
-# Registry for `scripts/sweep_forward_runs.jl`: add rows for new columns (cfSite, GoogleLES, etc.).
-# Override path: `julia ... scripts/sweep_forward_runs.jl --registry=registries/forward_sweep_cases.yml` (or any REL path under this experiment).
+# Default EKI-parameter forward sweep (`sweep_forward_runs.jl` / `run_full_study.jl` when not using
+# `--uncalibrated-study` and not overriding `--forward-registry=`).
 #
-# `model_config_path`: column YAML under this experiment (or repo-relative if you prefer absolute in env).
-# `scm_toml`: string or YAML list (master + overlays); used only for **`--baseline-scm-forward`**.
+# **GoogleLES / CloudBench** (`googleles_column_varquad_hires.yml` + `experiment_config_googleles_*`) is **not** listed
+# here: that track is still under development / verification. To run it, use a custom registry or add rows locally.
 #
-# **EKI-parameter ladder (default):** set `eki_varfix_off_config` to the experiment YAML whose EKI output
-# supplies the merged member TOML for **`varfix_off`** cells. Set optional `eki_varfix_on_config` for
-# **`varfix_on`** cells; if omitted, **`varfix_on`** uses the **same** merged TOML as varfix off (so there is no
-# separate varfix-on parameter ladder—at coarser resolutions this is **the same SCM parameters as varfix off**,
-# i.e. “naive on grid” rather than a dedicated varfix-on calibration). Run calibration **before** this sweep when using EKI mode.
+# HadGEM2-A GCM cfSite columns are not part of this default set. This file matches
+# `va_idealized_calibration_sweep_configs()` in `lib/calibration_sweep_configs.jl` (TRMM, DYCOMS, BOMEX, GABLS).
 #
-# **GCM HadGEM2-A cfSite columns** were removed (broken / unmaintained in this study). Forward sweep uses **GoogleLES**
-# seed-42 cases only (matches `va_calibration_sweep_configs()`).
+# `scm_toml` is used for **`--baseline-scm-forward`** only; EKI cells use merged member TOMLs from
+# `eki_varfix_off_config`.
 cases:
   - model_config_path:
       - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/googleles_column_varquad_hires.yml
+      - model_configs/trmm_column_varquad_hires.yml
     scm_toml: prognostic_edmfx.toml
-    eki_varfix_off_config: experiment_configs/experiment_config_googleles_01_N3_varfix_off.yml
+    eki_varfix_off_config: experiment_configs/experiment_config_trmm_N3_varfix_off.yml
   - model_config_path:
       - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/googleles_column_varquad_hires.yml
+      - model_configs/dycoms_rf01_column_varquad_hires.yml
     scm_toml: prognostic_edmfx.toml
-    eki_varfix_off_config: experiment_configs/experiment_config_googleles_02_N3_varfix_off.yml
+    eki_varfix_off_config: experiment_configs/experiment_config_dycoms_rf01_N3_varfix_off.yml
   - model_config_path:
       - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/googleles_column_varquad_hires.yml
+      - model_configs/dycoms_rf02_column_varquad_hires.yml
     scm_toml: prognostic_edmfx.toml
-    eki_varfix_off_config: experiment_configs/experiment_config_googleles_03_N3_varfix_off.yml
+    eki_varfix_off_config: experiment_configs/experiment_config_dycoms_rf02_N3_varfix_off.yml
   - model_config_path:
       - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/googleles_column_varquad_hires.yml
+      - model_configs/bomex_column_varquad_hires.yml
     scm_toml: prognostic_edmfx.toml
-    eki_varfix_off_config: experiment_configs/experiment_config_googleles_04_N3_varfix_off.yml
+    eki_varfix_off_config: experiment_configs/experiment_config_bomex_N3_varfix_off.yml
   - model_config_path:
       - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/googleles_column_varquad_hires.yml
+      - model_configs/gabls_column_varquad_hires.yml
     scm_toml: prognostic_edmfx.toml
-    eki_varfix_off_config: experiment_configs/experiment_config_googleles_05_N3_varfix_off.yml
-  - model_config_path:
-      - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/googleles_column_varquad_hires.yml
-    scm_toml: prognostic_edmfx.toml
-    eki_varfix_off_config: experiment_configs/experiment_config_googleles_06_N3_varfix_off.yml
-  - model_config_path:
-      - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/googleles_column_varquad_hires.yml
-    scm_toml: prognostic_edmfx.toml
-    eki_varfix_off_config: experiment_configs/experiment_config_googleles_07_N3_varfix_off.yml
-  - model_config_path:
-      - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/googleles_column_varquad_hires.yml
-    scm_toml: prognostic_edmfx.toml
-    eki_varfix_off_config: experiment_configs/experiment_config_googleles_08_N3_varfix_off.yml
-  - model_config_path:
-      - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/googleles_column_varquad_hires.yml
-    scm_toml: prognostic_edmfx.toml
-    eki_varfix_off_config: experiment_configs/experiment_config_googleles_09_N3_varfix_off.yml
-  - model_config_path:
-      - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/googleles_column_varquad_hires.yml
-    scm_toml: prognostic_edmfx.toml
-    eki_varfix_off_config: experiment_configs/experiment_config_googleles_10_N3_varfix_off.yml
+    eki_varfix_off_config: experiment_configs/experiment_config_gabls_N3_varfix_off.yml

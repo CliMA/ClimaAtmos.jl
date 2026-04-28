@@ -11,21 +11,15 @@
 _va_analysis_is_main() =
     !isempty(Base.PROGRAM_FILE) && abspath(Base.PROGRAM_FILE) == abspath(@__FILE__)
 
-const _VA_PLOTTING_DIR = @__DIR__
-const _VA_ANALYSIS_DIR = joinpath(_VA_PLOTTING_DIR, "..") |> abspath
-const _VA_EXPERIMENT_DIR = joinpath(_VA_ANALYSIS_DIR, "..") |> abspath
-const _VA_FIGURES_DIR = joinpath(_VA_ANALYSIS_DIR, "figures")
+include(joinpath(@__DIR__, "plot_paths.jl"))
 
 if _va_analysis_is_main()
     import Pkg
-    Pkg.activate(_VA_EXPERIMENT_DIR)
+    Pkg.activate(va_variance_adjustments_plot_paths().experiment)
 end
 
-include(joinpath(_VA_EXPERIMENT_DIR, "lib", "experiment_common.jl"))
+include(joinpath(va_variance_adjustments_plot_paths().experiment, "lib", "experiment_common.jl"))
 import CairoMakie as M
-
-# Default finer-mesh overlay (same intent as `plot_forward_sweep_body.jl`): black, drawn last.
-const _VA_FINER_MESH_DEFAULT_COLOR = M.RGBf(0.0, 0.0, 0.0)
 
 """After `autolimits!`, optionally set `ylims` from `va_condensate_cloud_top_height_m` (cloud top + padding)."""
 function _va_finalize_profile_axis_limits!(ax, ylims_height_max::Union{Nothing, Real})
@@ -468,7 +462,7 @@ function va_plot_profile_shortname_sum!(
     calibration_truth_series = nothing,
     forward_finest_series = nothing,
     reference_series = nothing,
-    forward_finest_color = _VA_FINER_MESH_DEFAULT_COLOR,
+    forward_finest_color = M.RGBf(0.0, 0.0, 0.0),
     forward_finest_linewidth = 2.65,
     profile_title::Union{Nothing, AbstractString} = nothing,
     show_axis_title::Bool = true,
@@ -602,9 +596,12 @@ Figure size is tuned for a **tall** z axis (meteorology-style x = quantity, y = 
 """
 function va_plot_profiles(
     paths::AbstractVector{<:AbstractString} = String[];
-    experiment_dir::AbstractString = _VA_EXPERIMENT_DIR,
+    experiment_dir::AbstractString = va_variance_adjustments_plot_paths().experiment,
     experiment_config::Union{Nothing, AbstractString} = nothing,
-    outpng::AbstractString = joinpath(_VA_FIGURES_DIR, "profiles_eki_observation_stack.png"),
+    outpng::AbstractString = joinpath(
+        va_variance_adjustments_plot_paths().figures,
+        "profiles_eki_observation_stack.png",
+    ),
 )
     mkpath(dirname(outpng))
     expc = va_load_experiment_config(experiment_dir, experiment_config)
@@ -699,9 +696,9 @@ Returns paths of PNGs written.
 """
 function va_plot_all_case_diagnostic_profiles(
     paths::AbstractVector{<:AbstractString} = String[];
-    experiment_dir::AbstractString = _VA_EXPERIMENT_DIR,
+    experiment_dir::AbstractString = va_variance_adjustments_plot_paths().experiment,
     experiment_config::Union{Nothing, AbstractString} = nothing,
-    outdir::AbstractString = joinpath(_VA_FIGURES_DIR, "profiles"),
+    outdir::AbstractString = joinpath(va_variance_adjustments_plot_paths().figures, "profiles"),
     path_labels::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
     model_config_rel = nothing,
     path_colors = nothing,
@@ -710,7 +707,7 @@ function va_plot_all_case_diagnostic_profiles(
     calibration_truth_series = nothing,
     forward_finest_series = nothing,
     reference_series = nothing,
-    forward_finest_color = _VA_FINER_MESH_DEFAULT_COLOR,
+    forward_finest_color = M.RGBf(0.0, 0.0, 0.0),
     forward_finest_linewidth = 2.65,
     profile_title::Union{Nothing, AbstractString} = nothing,
     show_axis_title::Bool = true,
@@ -880,7 +877,7 @@ end
 
 function _va_plot_profiles_cli()
     paths = length(ARGS) >= 1 ? collect(String, ARGS) : String[]
-    va_plot_profiles(paths; experiment_dir = _VA_EXPERIMENT_DIR)
+    va_plot_profiles(paths; experiment_dir = va_variance_adjustments_plot_paths().experiment)
 end
 
 if _va_analysis_is_main()

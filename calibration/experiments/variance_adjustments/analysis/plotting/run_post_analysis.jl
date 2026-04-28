@@ -19,19 +19,18 @@
 _va_analysis_is_main() =
     !isempty(Base.PROGRAM_FILE) && abspath(Base.PROGRAM_FILE) == abspath(@__FILE__)
 
-const _VA_PLOTTING_DIR = @__DIR__
-const _VA_ANALYSIS_DIR = joinpath(_VA_PLOTTING_DIR, "..") |> abspath
-const _VA_EXPERIMENT_DIR = joinpath(_VA_ANALYSIS_DIR, "..") |> abspath
-const _VA_FIGURES_DIR = joinpath(_VA_ANALYSIS_DIR, "figures")
+include(joinpath(@__DIR__, "plot_paths.jl"))
 
 if _va_analysis_is_main()
     import Pkg
-    Pkg.activate(_VA_EXPERIMENT_DIR)
+    Pkg.activate(va_variance_adjustments_plot_paths().experiment)
 end
 
-include(joinpath(_VA_PLOTTING_DIR, "plot_profiles.jl"))
-include(joinpath(_VA_PLOTTING_DIR, "plot_losses.jl"))
-include(joinpath(_VA_PLOTTING_DIR, "plot_parameters.jl"))
+let d = va_variance_adjustments_plot_paths()
+    include(joinpath(d.plotting, "plot_profiles.jl"))
+    include(joinpath(d.plotting, "plot_losses.jl"))
+    include(joinpath(d.plotting, "plot_parameters.jl"))
+end
 
 function _va_parse_post_analysis_cli_args(args::Vector{String})
     figure_root = nothing
@@ -62,7 +61,7 @@ Generate standard figures after calibration. Resolves the experiment YAML via [`
 - `do_case_diagnostic_profiles`: one PNG per case diagnostic → `figure_root/profiles/profile_<name>.png`.
 """
 function va_run_post_analysis!(;
-    experiment_dir::AbstractString = _VA_EXPERIMENT_DIR,
+    experiment_dir::AbstractString = va_variance_adjustments_plot_paths().experiment,
     experiment_config::Union{Nothing, AbstractString} = nothing,
     figure_root::Union{Nothing, AbstractString} = nothing,
     profile_paths::AbstractVector{<:AbstractString} = String[],
@@ -120,7 +119,7 @@ function _va_run_post_analysis_cli()
     opts = _va_parse_post_analysis_cli_args(collect(String, ARGS))
     va_run_post_analysis!(;
         profile_paths = opts.paths,
-        experiment_dir = _VA_EXPERIMENT_DIR,
+        experiment_dir = va_variance_adjustments_plot_paths().experiment,
         experiment_config = opts.experiment_config,
         figure_root = opts.figure_root,
     )

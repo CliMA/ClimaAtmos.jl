@@ -96,8 +96,8 @@ function va_resolve_les_stats_path(experiment_dir::AbstractString, expc)
         if !_va_caltech_hpc_allowed()
             error(
                 "les_truth.source=gcm_forced_cfsite with cluster path resolution requires **`VA_CALTECH_HPC=1`** " *
-                    "(Caltech HPC). Off-cluster, use **GoogleLES** experiment YAMLs (`les_truth.source: googleles_cloudbench`, default track) " *
-                    "or set **`LES_STATS_FILE`** / **`les_truth.stats_file`** to a local `Stats*.nc`.",
+                    "(Caltech HPC). Off-cluster, use **`LES_STATS_FILE`** / **`les_truth.stats_file`** with a local `Stats*.nc` " *
+                    "(idealized configs under `experiment_configs/`), or **`les_truth.source: googleles_cloudbench`** if CloudBench zarr is available.",
             )
         end
         cfsite = Int(lt["cfsite"])

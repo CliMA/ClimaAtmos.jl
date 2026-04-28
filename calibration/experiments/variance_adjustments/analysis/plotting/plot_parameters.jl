@@ -12,17 +12,14 @@
 _va_analysis_is_main() =
     !isempty(Base.PROGRAM_FILE) && abspath(Base.PROGRAM_FILE) == abspath(@__FILE__)
 
-const _VA_PLOTTING_DIR = @__DIR__
-const _VA_ANALYSIS_DIR = joinpath(_VA_PLOTTING_DIR, "..") |> abspath
-const _VA_EXPERIMENT_DIR = joinpath(_VA_ANALYSIS_DIR, "..") |> abspath
-const _VA_FIGURES_DIR = joinpath(_VA_ANALYSIS_DIR, "figures")
+include(joinpath(@__DIR__, "plot_paths.jl"))
 
 if _va_analysis_is_main()
     import Pkg
-    Pkg.activate(_VA_EXPERIMENT_DIR)
+    Pkg.activate(va_variance_adjustments_plot_paths().experiment)
 end
 
-include(joinpath(_VA_EXPERIMENT_DIR, "lib", "experiment_common.jl"))
+include(joinpath(va_variance_adjustments_plot_paths().experiment, "lib", "experiment_common.jl"))
 import CairoMakie as M
 import JLD2
 import EnsembleKalmanProcesses as EKP
@@ -46,9 +43,9 @@ thin colored lines = ensemble members, thick black = ensemble mean. Subplot titl
 function va_plot_parameters(
     eki_jld2_path::Union{Nothing, AbstractString} = nothing,
     prior_path::Union{Nothing, AbstractString} = nothing;
-    experiment_dir::AbstractString = _VA_EXPERIMENT_DIR,
+    experiment_dir::AbstractString = va_variance_adjustments_plot_paths().experiment,
     experiment_config::Union{Nothing, AbstractString} = nothing,
-    outpng::AbstractString = joinpath(_VA_FIGURES_DIR, "parameters.png"),
+    outpng::AbstractString = joinpath(va_variance_adjustments_plot_paths().figures, "parameters.png"),
 )
     mkpath(dirname(outpng))
     eki_path = something(eki_jld2_path, va_latest_eki_jld2_path(experiment_dir, experiment_config))
@@ -94,7 +91,7 @@ end
 function _va_plot_parameters_cli()
     eki_path = length(ARGS) >= 1 ? ARGS[1] : nothing
     prior_path = length(ARGS) >= 2 ? ARGS[2] : nothing
-    va_plot_parameters(eki_path, prior_path; experiment_dir = _VA_EXPERIMENT_DIR)
+    va_plot_parameters(eki_path, prior_path; experiment_dir = va_variance_adjustments_plot_paths().experiment)
 end
 
 if _va_analysis_is_main()

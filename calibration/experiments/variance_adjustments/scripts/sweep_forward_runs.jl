@@ -23,7 +23,7 @@
 #   --distributed-workers=N
 #   --distributed-worker-threads=N   per-worker `-t` for distributed mode (default 1)
 #   --varfix=both|on|off|off,on   Varfix axis (default both). Env: VA_FORWARD_SWEEP_VARFIX
-#   (… plus resolution-ladder, registry, case-slugs, skip-done, fail-fast, task-id, ladder-*, print-task-count, --help)
+#   (… plus resolution-ladder, registry, case-slugs, quadrature-orders, skip-done, fail-fast, task-id, ladder-*, print-task-count, --help)
 #
 import Pkg
 Pkg.activate(joinpath(@__DIR__, ".."))
@@ -45,6 +45,7 @@ Usage: julia --project=. scripts/sweep_forward_runs.jl [flags]
   --baseline-only            Single YAML tier only
   --registry=PATH            Case registry YAML
   --case-slugs=a,b,c         Only these merged case slugs (subset of registry). Env: VA_FORWARD_SWEEP_CASE_SLUGS
+  --quadrature-orders=1,2,3|1:5   Gauss–Hermite column orders (subset of 1:5; default 1:5). Env: VA_FORWARD_SWEEP_QUADRATURE_ORDERS
   --skip-done                Skip if output_active exists
   --fail-fast                Stop entire sweep on first failed run (default: continue)
   --print-task-count         Print N tasks and exit
@@ -135,11 +136,14 @@ function parse_forward_sweep_cli(argv::Vector{String})::ForwardSweepConfig
             )
         elseif startswith(a, "--varfix=")
             cfg.varfix_values = va_forward_sweep_varfix_values_from_spec(split(a, '=', limit = 2)[2])
+        elseif startswith(a, "--quadrature-orders=")
+            cfg.quadrature_orders =
+                va_parse_forward_sweep_quadrature_orders_spec(String(split(a, '=', limit = 2)[2]))
         else
             error("Unknown argument: $(repr(a)). Try --help.")
         end
     end
-    return cfg
+    return va_forward_sweep_assert_quadrature_orders!(cfg)
 end
 
 """CLI entry for `julia …/sweep_forward_runs.jl` (does not run on bare `include`)."""

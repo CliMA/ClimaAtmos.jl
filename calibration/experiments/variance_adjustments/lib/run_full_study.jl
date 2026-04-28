@@ -1,9 +1,9 @@
 # Full experiment driver: ensure LES `observations.jld2` per sweep YAML → EKI sweep → naive forwards → forward sweep (merged θ) → figures.
 #
-# Default forward registry `registries/forward_sweep_cases.yml` uses **GoogleLES** cases only (GCM cfSite rows removed
-# from that sweep; cfSite could still *run* but was dropped for study quality). Varfix-on SGS variant:
+# Default forward registry `registries/forward_sweep_cases.yml` lists **idealized SCM columns** only (TRMM, DYCOMS,
+# BOMEX, GABLS); **GoogleLES is omitted** until verified — see registry comments. Varfix-on SGS variant:
 # `sgs_distribution_varfix_on` in `model_configs/master_column_varquad_diagnostic_edmfx.yml`.
-# Default **`config/experiment_config.yml`** stays **TRMM** (fewer prerequisites than GoogleLES forcing).
+# Default **`config/experiment_config.yml`** stays **TRMM**.
 #
 # **Uncalibrated study (SCM-only forwards, no EKI):** use `--uncalibrated-study` or pass `--forward-registry=registries/forward_sweep_cases_uncalibrated.yml`
 # with `--forward-baseline-scm` and `--skip-calib` / `--skip-naive` (the preset sets these). Example:
@@ -40,7 +40,11 @@
 #   --naive-skip-done           # passed to naive script (--skip-done)
 #   --help
 #
-# **Configuration:** options are carried on `FullStudyOptions`; env is merged in `va_full_study_merge_env!` (before argv).
+# **Configuration:** options are carried on `FullStudyOptions`; `va_full_study_merge_env!` fills **unset** fields from
+# `VA_*` / `VARIANCE_*` (and forward-sweep `SWEEP_TASK_ID` / `SLURM_ARRAY_TASK_ID` into `forward_task_id`) so REPL/CLI
+# can override. The forward grid uses the same rule as `sweep_forward_runs.jl`: **defaults →
+# `va_forward_sweep_merge_env!(cfg)` on a fresh `ForwardSweepConfig` → explicit `FullStudyOptions` / kwargs override.**
+# `run_forward_sweep!` is then called with `merge_env=false` (no second `ENV` read).
 # Job arrays may still set `SWEEP_TASK_ID` / `SLURM_ARRAY_TASK_ID` / `NAIVE_SWEEP_TASK_ID` when not using `--task-id=`.
 #
 # **Parallelism:** The full study runs **in one Julia process**: EKI uses `EkiCalibrationOptions` (`addprocs` /
@@ -124,11 +128,22 @@ Base.@kwdef mutable struct FullStudyOptions
     forward_figures_full_uncalibrated_registry::Bool = false
     """
     If set, forward sweep runs only these varfix legs (e.g. `[true]` = varfix-on / vertical-profile SGS only).
-    Overrides **`VA_FORWARD_SWEEP_VARFIX`** after env merge. Default **`nothing`** → **`[false, true]`** on
-    [`ForwardSweepConfig`](@ref) unless env sets otherwise. CLI: **`--forward-varfix=...`** (same tokens as
-    [`va_forward_sweep_varfix_values_from_spec`](@ref)).
+    If **`nothing`**, `va_full_study_merge_env!` may set this from **`VA_FORWARD_SWEEP_VARFIX`**; else the forward
+    sweep config uses [`ForwardSweepConfig`](@ref) after env merge (default **`[false, true]`** on the struct).
+    CLI: **`--forward-varfix=...`** (same tokens as [`va_forward_sweep_varfix_values_from_spec`](@ref)).
     """
     forward_varfix_values::Union{Nothing, Vector{Bool}} = nothing
+    """
+    Gauss–Hermite orders **`N`** for the forward grid (nonempty subset of `1:5`). If **`nothing`**, the merge step may
+    set this from **`VA_FORWARD_SWEEP_QUADRATURE_ORDERS`**; else `ForwardSweepConfig` defaults to **`1:5`** after
+    `va_forward_sweep_merge_env!` on the config. CLI: **`--forward-quadrature-orders=1,2,3`** or **`1:5`**.
+    """
+    forward_quadrature_orders::Union{Nothing, Vector{Int}} = nothing
+    """
+    **0-based** index for a single forward-sweep task (Slurm / `sweep_forward_runs.jl --task-id=`). If **`nothing`**, the
+    merge step may set this from **`SWEEP_TASK_ID`** or **`SLURM_ARRAY_TASK_ID`**. CLI: **`--forward-task-id=`**.
+    """
+    forward_task_id::Union{Nothing, Int} = nothing
     """
     Preset: skip LES-obs build, calibration, naive forwards; use `--baseline-scm-forward` and
     `registries/forward_sweep_cases_uncalibrated.yml` unless `forward_registry` is set. One-command uncalibrated pipeline.
@@ -205,6 +220,17 @@ function va_full_study_merge_env!(opts::FullStudyOptions)
             strip(get(ENV, "VA_FORWARD_FIGURES_FULL_UNCALIBRATED_REGISTRY", "")) in ("1", "true", "yes")
         opts.forward_figures_full_uncalibrated_registry = true
     end
+    if opts.forward_varfix_values === nothing && haskey(ENV, "VA_FORWARD_SWEEP_VARFIX")
+        opts.forward_varfix_values = va_forward_sweep_varfix_values_from_spec(ENV["VA_FORWARD_SWEEP_VARFIX"])
+    end
+    if opts.forward_quadrature_orders === nothing && haskey(ENV, "VA_FORWARD_SWEEP_QUADRATURE_ORDERS")
+        opts.forward_quadrature_orders =
+            va_parse_forward_sweep_quadrature_orders_spec(ENV["VA_FORWARD_SWEEP_QUADRATURE_ORDERS"])
+    end
+    s_task = strip(get(ENV, "SWEEP_TASK_ID", get(ENV, "SLURM_ARRAY_TASK_ID", "")))
+    if opts.forward_task_id === nothing && !isempty(s_task)
+        opts.forward_task_id = parse(Int, s_task)
+    end
     return opts
 end
 
@@ -239,7 +265,9 @@ Usage: julia --project=. scripts/run_full_study.jl [flags]
   --forward-registry=REL.yml  Forward sweep + figures: pass `--registry=` to `sweep_forward_runs.jl` (default: `registries/forward_sweep_cases.yml`)
   --forward-case-slugs=a,b,c   Only these merged case slugs (subset of the registry). Env: VA_FORWARD_SWEEP_CASE_SLUGS
   --forward-figures-full-uncalibrated-registry   Figures: full uncalibrated registry + no slug filter (forwards unchanged). Env: VA_FORWARD_FIGURES_FULL_UNCALIBRATED_REGISTRY
-  --forward-varfix=both|on|off|off,on   Varfix axis for forward sweep (default both). Env: VA_FORWARD_SWEEP_VARFIX
+  --forward-varfix=both|on|off|off,on   Varfix axis for forward sweep. Env: VA_FORWARD_SWEEP_VARFIX
+  --forward-quadrature-orders=1,2,3|1:5   Gauss–Hermite column orders (subset of 1:5). Env: VA_FORWARD_SWEEP_QUADRATURE_ORDERS
+  --forward-task-id=N   0-based single sweep task; else SWEEP_TASK_ID / SLURM_ARRAY_TASK_ID
   --uncalibrated-study        Preset: SCM-only forwards on `registries/forward_sweep_cases_uncalibrated.yml` (skips calib, naive, LES obs build)
 
 REPL: include(\"scripts/run_full_study.jl\"); run_full_study!(; skip_forward = true)
@@ -306,6 +334,11 @@ function parse_full_study_cli(argv::Vector{String})::FullStudyOptions
             opts.forward_figures_full_uncalibrated_registry = true
         elseif startswith(a, "--forward-varfix=")
             opts.forward_varfix_values = va_forward_sweep_varfix_values_from_spec(split(a, '=', limit = 2)[2])
+        elseif startswith(a, "--forward-quadrature-orders=")
+            opts.forward_quadrature_orders =
+                va_parse_forward_sweep_quadrature_orders_spec(String(split(a, '=', limit = 2)[2]))
+        elseif startswith(a, "--forward-task-id=")
+            opts.forward_task_id = parse(Int, split(a, '=', limit = 2)[2])
         elseif a == "--uncalibrated-study"
             opts.uncalibrated_study = true
         else
@@ -350,10 +383,16 @@ function va_full_study_forward_sweep_config(opts::FullStudyOptions)::ForwardSwee
     if opts.forward_varfix_values !== nothing
         cfg.varfix_values = copy(opts.forward_varfix_values)
     end
+    if opts.forward_quadrature_orders !== nothing
+        cfg.quadrature_orders = copy(opts.forward_quadrature_orders)
+    end
+    if opts.forward_task_id !== nothing
+        cfg.task_id = opts.forward_task_id
+    end
     if opts.forward_case_slugs !== nothing
         cfg.case_slugs = copy(opts.forward_case_slugs)
     end
-    return cfg
+    return va_forward_sweep_assert_quadrature_orders!(cfg)
 end
 
 """Forward-sweep plotting config: optionally full uncalibrated grid while forwards used a subset."""
@@ -423,7 +462,8 @@ function run_full_study!(opts::FullStudyOptions)
         @info "Forward grid (registry × N_quad × varfix × resolution ladder)" forward_skip_done =
             opts.forward_skip_done forward_resolution_ladder = opts.forward_resolution_ladder forward_baseline_scm =
             opts.forward_baseline_scm forward_registry = opts.forward_registry forward_case_slugs =
-            opts.forward_case_slugs
+            opts.forward_case_slugs forward_quadrature_orders = opts.forward_quadrature_orders forward_task_id =
+            opts.forward_task_id forward_varfix = opts.forward_varfix_values
         run_forward_sweep!(va_full_study_forward_sweep_config(opts); merge_env = false)
     else
         @info "Skipping forward grid (--skip-forward)"

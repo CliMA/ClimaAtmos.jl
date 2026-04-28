@@ -2,9 +2,11 @@
 # Requires `plot_profiles.jl` (`va_plot_all_case_diagnostic_profiles`, `va_load_experiment_config`, …) and
 # [`lib/calibration_sweep_configs.jl`](../../lib/calibration_sweep_configs.jl) (`va_naive_vs_calibrated_varfix_on_yaml_pairs`).
 #
-const _VA_ROOT_NAIVEPLOT = joinpath(@__DIR__, "..", "..") |> abspath
-include(joinpath(_VA_ROOT_NAIVEPLOT, "lib", "experiment_common.jl"))
-include(joinpath(_VA_ROOT_NAIVEPLOT, "lib", "observation_map.jl"))
+include(joinpath(@__DIR__, "plot_paths.jl"))
+let r = va_variance_adjustments_plot_paths().experiment
+    include(joinpath(r, "lib", "experiment_common.jl"))
+    include(joinpath(r, "lib", "observation_map.jl"))
+end
 
 import ClimaCalibrate as CAL
 

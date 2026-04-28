@@ -7,20 +7,20 @@
 _va_pfw_is_main() =
     !isempty(Base.PROGRAM_FILE) && abspath(Base.PROGRAM_FILE) == abspath(@__FILE__)
 
-const _VA_PFW_PLOT_DIR = @__DIR__
-const _VA_PFW_ANALYSIS_DIR = joinpath(_VA_PFW_PLOT_DIR, "..") |> abspath
-const _VA_PFW_EXPERIMENT_DIR = joinpath(_VA_PFW_ANALYSIS_DIR, "..") |> abspath
+include(joinpath(@__DIR__, "plot_paths.jl"))
 
 if _va_pfw_is_main()
     import Pkg
-    Pkg.activate(_VA_PFW_EXPERIMENT_DIR)
+    Pkg.activate(va_variance_adjustments_plot_paths().experiment)
 end
 
-include(joinpath(_VA_PFW_EXPERIMENT_DIR, "lib", "experiment_common.jl"))
-include(joinpath(_VA_PFW_EXPERIMENT_DIR, "scripts", "resolution_ladder.jl"))
-include(joinpath(_VA_PFW_EXPERIMENT_DIR, "lib", "forward_sweep_grid.jl"))
-include(joinpath(_VA_PFW_PLOT_DIR, "plot_profiles.jl"))
-include(joinpath(_VA_PFW_PLOT_DIR, "plot_forward_sweep_body.jl"))
+let expd = va_variance_adjustments_plot_paths().experiment, pdir = @__DIR__
+    include(joinpath(expd, "lib", "experiment_common.jl"))
+    include(joinpath(expd, "scripts", "resolution_ladder.jl"))
+    include(joinpath(expd, "lib", "forward_sweep_grid.jl"))
+    include(joinpath(pdir, "plot_profiles.jl"))
+    include(joinpath(pdir, "plot_forward_sweep_body.jl"))
+end
 
 function _va_parse_forward_sweep_plot_cli(argv::Vector{String})::ForwardSweepConfig
     cfg = ForwardSweepConfig(; resolution_ladder = true)
@@ -105,18 +105,19 @@ function _va_run_forward_sweep_plot_cli()
     argv = collect(String, ARGS)
     cfg = _va_parse_forward_sweep_plot_cli(argv)
     root = _va_forward_sweep_plot_figure_root(argv)
+    expd = va_variance_adjustments_plot_paths().experiment
     profs = va_plot_forward_sweep_comparisons!(
-        _VA_PFW_EXPERIMENT_DIR,
+        expd,
         cfg;
         figure_root = root,
     )
     summary = va_plot_forward_sweep_clw_plus_cli_summary!(
-        _VA_PFW_EXPERIMENT_DIR,
+        expd,
         cfg;
         figure_root = root,
     )
     scal = va_plot_forward_sweep_scalars_vs_nquad!(
-        _VA_PFW_EXPERIMENT_DIR,
+        expd,
         cfg;
         figure_root = root,
     )

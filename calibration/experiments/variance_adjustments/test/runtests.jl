@@ -1,9 +1,12 @@
-# Utilities for `calibration/experiments/variance_adjustments` (no ClimaAtmos solve).
+# Regression tests for this experiment only (`calibration/experiments/variance_adjustments`).
+# Not run by root `Pkg.test("ClimaAtmos")`. From this experiment directory:
+#   julia --project=. test/runtests.jl
 using Test
 using LinearAlgebra
 import YAML
 
-const _VA_DIR = joinpath(@__DIR__, "..", "calibration", "experiments", "variance_adjustments")
+const _VA_DIR = dirname(@__DIR__) |> abspath
+
 include(joinpath(_VA_DIR, "lib", "experiment_common.jl"))
 include(joinpath(_VA_DIR, "scripts", "resolution_ladder.jl"))
 include(joinpath(_VA_DIR, "lib", "forward_sweep_grid.jl"))
@@ -95,17 +98,27 @@ end
         ForwardSweepConfig(; forward_parameters = VA_FORWARD_PARAM_BASELINE_SCM),
     )
     @test occursin("/forward_only/output_active", ap_scm)
-    # Default forward sweep registry is GoogleLES-only (HadGEM cfSite columns removed); first row is site 01.
+    # Default forward sweep registry (`forward_sweep_cases.yml`): idealized columns only (GoogleLES excluded).
     row = va_forward_sweep_registry_row_for(
         _VA_DIR,
-        "GOOGLELES",
-        "model_configs/googleles_column_varquad_hires.yml",
+        "TRMM_LBA",
+        "model_configs/trmm_column_varquad_hires.yml",
         ForwardSweepConfig(),
     )
     @test row !== nothing
-    @test row.eki_varfix_off_config == "experiment_configs/experiment_config_googleles_01_N3_varfix_off.yml"
-    @test va_forward_sweep_task_count(_VA_DIR, ForwardSweepConfig(; resolution_ladder = false)) == 100
-    @test va_forward_sweep_task_count(_VA_DIR, ForwardSweepConfig(; resolution_ladder = true)) == 400
+    @test row.eki_varfix_off_config == "experiment_configs/experiment_config_trmm_N3_varfix_off.yml"
+    @test va_forward_sweep_task_count(_VA_DIR, ForwardSweepConfig(; resolution_ladder = false)) == 85
+    @test va_forward_sweep_task_count(_VA_DIR, ForwardSweepConfig(; resolution_ladder = true)) == 340
+    @test va_forward_sweep_task_count(
+        _VA_DIR,
+        ForwardSweepConfig(; resolution_ladder = false, quadrature_orders = [1, 2]),
+    ) == 34
+    @test va_parse_forward_sweep_quadrature_orders_spec("1:3") == [1, 2, 3]
+    @test va_parse_forward_sweep_quadrature_orders_spec("2,1,1") == [2, 1, 1]
+    let cfg = ForwardSweepConfig(; quadrature_orders = [2, 1, 1])
+        va_forward_sweep_assert_quadrature_orders!(cfg)
+        @test cfg.quadrature_orders == [1, 2]
+    end
     expc_yaml = YAML.load_file(va_experiment_config_path(_VA_DIR))
     pairs_exp = va_model_diagnostic_shortname_period_pairs(_VA_DIR)
     pairs_case = va_case_yaml_diagnostic_shortname_period_pairs(_VA_DIR, expc_yaml["model_config_path"])
@@ -135,7 +148,16 @@ end
         resolution_ladder = false,
         forward_parameters = VA_FORWARD_PARAM_BASELINE_SCM,
     )
-    @test va_forward_sweep_task_count(_VA_DIR, uc) == 95
+    @test va_forward_sweep_task_count(_VA_DIR, uc) == 85
+    @test va_forward_sweep_task_count(
+        _VA_DIR,
+        ForwardSweepConfig(;
+            registry_path = "registries/forward_sweep_cases_uncalibrated.yml",
+            resolution_ladder = false,
+            forward_parameters = VA_FORWARD_PARAM_BASELINE_SCM,
+            quadrature_orders = [3],
+        ),
+    ) == 17
     uc2 = ForwardSweepConfig(;
         registry_path = "registries/forward_sweep_cases_uncalibrated.yml",
         resolution_ladder = false,

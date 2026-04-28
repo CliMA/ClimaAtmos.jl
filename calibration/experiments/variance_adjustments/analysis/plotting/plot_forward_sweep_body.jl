@@ -3,35 +3,37 @@
 import CairoMakie as CM
 import ClimaAnalysis: SimDir
 
+"""Default kwargs for [`va_condensate_cloud_top_height_m`](@ref) in forward-sweep figures (TRMM-style floors + padding)."""
+function _va_forward_sweep_cloud_top_height_kw()
+    return (;
+        padding_m = 380.0,
+        condensate_floor_kg_kg = 1e-12,
+        condensate_floor_frac_of_peak = 1e-4,
+    )
+end
+
 # Distinct hues per N_quad (cycles if N > length). N=4 vs N=5 use purple vs cyan so they do not read as one brown family.
-const _VA_NQUAD_LINE_COLORS = CM.RGBf[
-    CM.RGBf(0.121569, 0.466667, 0.705882),  # blue
-    CM.RGBf(0.172549, 0.627451, 0.172549),  # green
-    CM.RGBf(0.839216, 0.152941, 0.156863),  # red
-    CM.RGBf(0.580392, 0.403922, 0.741176),  # purple (N=4)
-    CM.RGBf(0.090196, 0.745098, 0.811765),  # cyan (N=5; was brown — too close to purple at a glance)
-    CM.RGBf(0.890196, 0.466667, 0.760784),  # pink
-    CM.RGBf(0.498039, 0.498039, 0.498039),  # gray
-    CM.RGBf(0.737255, 0.741176, 0.133333),  # olive
-    CM.RGBf(0.549020, 0.337255, 0.294118),  # brown
-    CM.RGBf(0.631373, 0.854902, 0.223529),  # lime
-]
+function _va_nquad_line_color_palette()
+    return CM.RGBf[
+        CM.RGBf(0.121569, 0.466667, 0.705882),  # blue
+        CM.RGBf(0.172549, 0.627451, 0.172549),  # green
+        CM.RGBf(0.839216, 0.152941, 0.156863),  # red
+        CM.RGBf(0.580392, 0.403922, 0.741176),  # purple (N=4)
+        CM.RGBf(0.090196, 0.745098, 0.811765),  # cyan (N=5; was brown — too close to purple at a glance)
+        CM.RGBf(0.890196, 0.466667, 0.760784),  # pink
+        CM.RGBf(0.498039, 0.498039, 0.498039),  # gray
+        CM.RGBf(0.737255, 0.741176, 0.133333),  # olive
+        CM.RGBf(0.549020, 0.337255, 0.294118),  # brown
+        CM.RGBf(0.631373, 0.854902, 0.223529),  # lime
+    ]
+end
 
 """Distinct colors per quadrature order **N** (cycles if N > length of palette)."""
 function _va_forward_sweep_nquad_colors(nmax::Int)
+    pal = _va_nquad_line_color_palette()
     n = max(nmax, 1)
-    return [_VA_NQUAD_LINE_COLORS[mod1(i, length(_VA_NQUAD_LINE_COLORS))] for i in 1:n]
+    return [pal[mod1(i, length(pal))] for i in 1:n]
 end
-
-"""Finer-mesh overlay: black, drawn last so it sits above sweep lines (and above observations-y when both exist)."""
-const _VA_FORWARD_FINER_MESH_COLOR = CM.RGBf(0.0, 0.0, 0.0)
-
-# Match TRMM smoke / profile plots: relative floor scales τ with case amplitude; padding above cloud top.
-const _VA_FORWARD_SWEEP_CLOUD_TOP_KW = (
-    padding_m = 380.0,
-    condensate_floor_kg_kg = 1e-12,
-    condensate_floor_frac_of_peak = 1e-4,
-)
 
 """
     va_plot_forward_sweep_comparisons!(experiment_dir, cfg::ForwardSweepConfig; figure_root) -> Vector{String}
@@ -138,7 +140,7 @@ function va_plot_forward_sweep_comparisons!(
             forward_finest_series;
             experiment_dir,
             model_config_rel = cfg_layers,
-            _VA_FORWARD_SWEEP_CLOUD_TOP_KW...,
+            _va_forward_sweep_cloud_top_height_kw()...,
         )
         written = va_plot_all_case_diagnostic_profiles(
             paths;
@@ -152,7 +154,7 @@ function va_plot_forward_sweep_comparisons!(
             path_linewidths,
             calibration_truth_series,
             forward_finest_series,
-            forward_finest_color = _VA_FORWARD_FINER_MESH_COLOR,
+            forward_finest_color = CM.RGBf(0.0, 0.0, 0.0),
             forward_finest_linewidth = 4.35,
             show_axis_title = false,
             legend_position = :lt,
@@ -171,7 +173,7 @@ function va_plot_forward_sweep_comparisons!(
             path_linewidths,
             calibration_truth_series,
             forward_finest_series,
-            forward_finest_color = _VA_FORWARD_FINER_MESH_COLOR,
+            forward_finest_color = CM.RGBf(0.0, 0.0, 0.0),
             forward_finest_linewidth = 4.35,
             show_axis_title = false,
             legend_position = :lt,
@@ -347,7 +349,7 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
                 forward_finest_series;
                 experiment_dir,
                 model_config_rel = row.model_config_layers,
-                _VA_FORWARD_SWEEP_CLOUD_TOP_KW...,
+                _va_forward_sweep_cloud_top_height_kw()...,
             )
         end
         finite_row_caps = Float64[c for c in row_ylim_caps if c !== nothing]
@@ -434,7 +436,7 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
                 path_linewidths,
                 calibration_truth_series,
                 forward_finest_series,
-                _VA_FORWARD_FINER_MESH_COLOR,
+                CM.RGBf(0.0, 0.0, 0.0),
                 4.35,
             )
             if !any_line

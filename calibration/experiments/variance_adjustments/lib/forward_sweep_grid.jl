@@ -50,6 +50,13 @@ Base.@kwdef mutable struct ForwardSweepConfig
     """`Distributed.addprocs` worker Julia thread count (`-t` per worker); typically `1` when the driver uses `julia -t N`."""
     distributed_worker_threads::Int = 1
     """
+    Gauss–Hermite quadrature orders **`N`** for the outer column sweep (`quadrature_order` at runtime). Must be a
+    nonempty subset of **`1:5`** (ClimaAtmos `gauss_hermite`). Default **`1:5`** matches historic grids.
+    Env: **`VA_FORWARD_SWEEP_QUADRATURE_ORDERS`** (`1,2,3` or `1:5`). CLI: **`--quadrature-orders=`** on
+    `scripts/sweep_forward_runs.jl`; full study: kwargs / **`--forward-quadrature-orders=`** in `lib/run_full_study.jl`.
+    """
+    quadrature_orders::Vector{Int} = collect(1:5)
+    """
     Which **varfix** legs to run (same ordering as nested loops). Default **`[false, true]`** = off then on.
     REPL: `ForwardSweepConfig(; varfix_values = [true])` for varfix-on only. CLI: `--varfix=on` / `off` / `both` or
     `--varfix=off,on`. Env: **`VA_FORWARD_SWEEP_VARFIX`** (same tokens as CLI).
@@ -105,6 +112,40 @@ function va_forward_sweep_assert_nonempty_varfix!(cfg::ForwardSweepConfig)
     return cfg
 end
 
+"""Parse comma-separated ints or a single inclusive range `a:b` (e.g. `1:5`)."""
+function va_parse_forward_sweep_quadrature_orders_spec(s::AbstractString)::Vector{Int}
+    t = String(strip(s))
+    isempty(t) && error("Empty quadrature_orders spec $(repr(s))")
+    if occursin(':', t) && !occursin(',', t)
+        parts = split(t, ':'; limit = 3)
+        length(parts) >= 2 || error("Invalid quadrature range $(repr(s)); use e.g. 1:5")
+        lo = parse(Int, strip(parts[1]))
+        hi = parse(Int, strip(parts[2]))
+        lo <= hi || error("Invalid quadrature range $(repr(s)): lower bound exceeds upper bound")
+        return collect(lo:hi)
+    end
+    out = Int[]
+    for part in split(t, ','; keepempty = false)
+        u = strip(part)
+        isempty(u) && continue
+        push!(out, parse(Int, u))
+    end
+    isempty(out) && error("No integers parsed from quadrature_orders spec $(repr(s))")
+    return out
+end
+
+"""Sort, de-duplicate, and validate `quadrature_orders` for [`ForwardSweepConfig`](@ref) (`1:5` only)."""
+function va_forward_sweep_assert_quadrature_orders!(cfg::ForwardSweepConfig)
+    unique!(sort!(cfg.quadrature_orders))
+    isempty(cfg.quadrature_orders) &&
+        error("ForwardSweepConfig.quadrature_orders must be non-empty.")
+    for n in cfg.quadrature_orders
+        (n >= 1 && n <= 5) ||
+            error("ForwardSweepConfig.quadrature_orders must use integers in 1:5 (ClimaAtmos GH limit); got $(repr(n)).")
+    end
+    return cfg
+end
+
 """
     va_parse_forward_sweep_parallel_mode(s::AbstractString) -> Symbol
 
@@ -129,6 +170,11 @@ end
 **Single boundary** for `VA_FORWARD_SWEEP_*` and `SWEEP_TASK_ID` / `SLURM_ARRAY_TASK_ID`: populate `cfg` from the
 environment. Call from CLI entry points **before** argv overrides; the forward sweep driver (`run_forward_sweep!` in
 `scripts/sweep_forward_core.jl`) reads **`cfg` only**, not `ENV` directly.
+
+The full-study driver applies **`va_forward_sweep_merge_env!(cfg)`** to a fresh
+[`ForwardSweepConfig`](@ref) before REPL/CLI options override, then calls
+`run_forward_sweep!(cfg; merge_env=false)` so there is a **single** `ENV` read and no drift vs
+`scripts/sweep_forward_runs.jl`.
 """
 function va_forward_sweep_merge_env!(cfg::ForwardSweepConfig)
     if haskey(ENV, "VA_FORWARD_SWEEP_PARALLEL")
@@ -150,7 +196,10 @@ function va_forward_sweep_merge_env!(cfg::ForwardSweepConfig)
     if haskey(ENV, "VA_FORWARD_SWEEP_CASE_SLUGS")
         cfg.case_slugs = va_forward_sweep_parse_case_slugs(ENV["VA_FORWARD_SWEEP_CASE_SLUGS"])
     end
-    return cfg
+    if haskey(ENV, "VA_FORWARD_SWEEP_QUADRATURE_ORDERS")
+        cfg.quadrature_orders = va_parse_forward_sweep_quadrature_orders_spec(ENV["VA_FORWARD_SWEEP_QUADRATURE_ORDERS"])
+    end
+    return va_forward_sweep_assert_quadrature_orders!(cfg)
 end
 
 """Parse comma-separated slugs from CLI / env (empty tokens dropped)."""
@@ -241,11 +290,6 @@ function va_forward_sweep_registry_row_for(
     return nothing
 end
 
-"""Quadrature orders for the forward grid; must match ClimaAtmos `gauss_hermite` (`N` ≤ 5)."""
-function va_forward_sweep_quadrature_orders()
-    return 1:5
-end
-
 function va_resolution_tiers_for_forward(case_dict::AbstractDict, cfg::ForwardSweepConfig)
     if cfg.resolution_ladder
         return va_resolution_tiers_from_case_dict(case_dict, cfg.ladder)
@@ -312,8 +356,9 @@ Varfix legs are those in **`cfg.varfix_values`** (default both off and on).
 """
 function va_flatten_forward_sweep_tasks(experiment_dir::AbstractString, cfg::ForwardSweepConfig)
     va_forward_sweep_assert_nonempty_varfix!(cfg)
+    va_forward_sweep_assert_quadrature_orders!(cfg)
     rows = va_load_forward_sweep_case_rows(experiment_dir, cfg)
-    n_list = va_forward_sweep_quadrature_orders()
+    n_list = cfg.quadrature_orders
     tasks = Tuple{
         Vector{String},
         Any,

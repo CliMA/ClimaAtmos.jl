@@ -228,3 +228,13 @@ Optional notebooks and exploratory scripts may live under:
 `calibration/experiments/variance_adjustments/local_python/`
 
 listed in this folder’s `.gitignore`. Not required to build or test ClimaAtmos.
+
+---
+
+## 12. Regression tests (this experiment only)
+
+Helpers under `lib/` and forward-sweep wiring are covered by **`test/runtests.jl`** in this directory (uses this folder’s `Project.toml`). They are **not** run by the root package `Pkg.test("ClimaAtmos")`. This directory is an **environment** project (not a registered sub-package), so invoke tests directly from `calibration/experiments/variance_adjustments`:
+
+```bash
+julia --project=. test/runtests.jl
+```
