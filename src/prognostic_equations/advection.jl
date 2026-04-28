@@ -46,14 +46,14 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     end
 
     @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, 1)
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= split_divₕ(
-                Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j),
-                1,
-            )
-        end
-    end
+    # if p.atmos.turbconv_model isa PrognosticEDMFX
+    #     for j in 1:n
+    #         @. Yₜ.c.sgsʲs.:($$j).ρa -= split_divₕ(
+    #             Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j),
+    #             1,
+    #         )
+    #     end
+    # end
 
     (; ᶜh_tot) = p.precomputed
     @. Yₜ.c.ρe_tot -= split_divₕ(Y.c.ρ * ᶜu, ᶜh_tot)
@@ -293,22 +293,22 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
             (ᶜf³ + ᶜω³) × CT12(ᶜu)
         @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
+        # for j in 1:n
+        #     @. Yₜ.f.sgsʲs.:($$j).u₃ -=
+        #         ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
+        #         ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
+        # end
     else
         # deep atmosphere
         @. Yₜ.c.uₕ -=
             ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
             (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
         @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
+        # for j in 1:n
+        #     @. Yₜ.f.sgsʲs.:($$j).u₃ -=
+        #         (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
+        #         ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
+        # end
     end
 
     if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
