@@ -3,6 +3,7 @@ z_max: 30000.0
 z_elem: 10
 dz_bottom: 500.0
 dt: 20secs
+constant_horizontal_diffusion: true
 surface_setup: DefaultMoninObukhov
 rad: clearsky
 turbconv: prognostic_edmfx

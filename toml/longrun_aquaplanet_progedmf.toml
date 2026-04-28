@@ -7,8 +7,11 @@ value = 40000.0
 [alpha_rayleigh_sgs_tracer]
 value = 1e-3
 
-[precipitation_timescale]
-value = 600
+[EDMF_surface_area]
+value = 0.1
+
+[min_area_limiter_scale]
+value = 0
 
 [EDMF_min_area]
 value = 1.0e-5
@@ -17,31 +20,46 @@ value = 1.0e-5
 value = 0.7
 
 [entr_inv_tau]
-value = 0.0002
+value = 0.0001
 
 [entr_coeff]
-value = 0.2
-
-[min_area_limiter_scale]
-value = 0
-
-[min_area_limiter_power]
-value = 100
+value = 0.1
 
 [detr_inv_tau]
-value = 0
+value = 0.0001
 
 [detr_coeff]
 value = 0
 
 [detr_buoy_coeff]
-value = 0
+value = 1
 
 [detr_vertdiv_coeff]
-value = 0
+value = 1
 
 [detr_massflux_vertdiv_coeff]
+value = 0
+
+[entr_detr_limit_inv_tau]
+value = 0.01
+
+[precipitation_timescale]
+value = 600
+
+[mixing_length_eddy_viscosity_coefficient]
+value = 0.56
+
+[mixing_length_diss_coeff]
+value = 0.22
+
+[min_area_limiter_power]
 value = 1
+
+[max_area_limiter_power]
+value = 1
+
+[tracer_hyperdiffusion_factor]
+value = 1.0
 
 [pressure_normalmode_drag_coeff]
 value = 40.0
