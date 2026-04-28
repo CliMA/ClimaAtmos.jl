@@ -13,6 +13,26 @@ import ClimaCore.Fields as Fields
 
 const Iₗ = TD.internal_energy_liquid
 const Iᵢ = TD.internal_energy_ice
+internal_energy_func(
+    ::Union{
+        MatrixFields.FieldName{(:q_lcl,)},
+        MatrixFields.FieldName{(:q_rai,)},
+        MatrixFields.FieldName{(:ρq_lcl,)},
+        MatrixFields.FieldName{(:ρq_rai,)},
+        MatrixFields.FieldName{(:c, :ρq_lcl)},
+        MatrixFields.FieldName{(:c, :ρq_rai)},
+    },
+) = TD.internal_energy_liquid
+internal_energy_func(
+    ::Union{
+        MatrixFields.FieldName{(:q_icl,)},
+        MatrixFields.FieldName{(:q_sno,)},
+        MatrixFields.FieldName{(:ρq_icl,)},
+        MatrixFields.FieldName{(:ρq_sno,)},
+        MatrixFields.FieldName{(:c, :ρq_icl)},
+        MatrixFields.FieldName{(:c, :ρq_sno)},
+    },
+) = TD.internal_energy_ice
 
 """
    Kin(ᶜw_precip, ᶜu_air)
@@ -56,8 +76,6 @@ function set_precipitation_velocities!(Y, p, _, _)
     @. ᶜwₕhₜ = Geometry.WVector(0)
     return nothing
 end
-# TODO - a lot of code repetition between microphysic categories within functions
-# and between different microphysics options. Refactor!
 function set_precipitation_velocities!(
     Y,
     p,
@@ -66,51 +84,51 @@ function set_precipitation_velocities!(
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
+    (; terminal_velocity_mode) = p.atmos
     cmc = CAP.microphysics_cloud_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
 
-    # compute the precipitation terminal velocity [m/s]
-    @. ᶜwᵣ = CM1.terminal_velocity(
-        cmp.precip.rain,
-        cmp.terminal_velocity.rain,
-        Y.c.ρ,
-        max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
-    )
-    @. ᶜwₛ = CM1.terminal_velocity(
-        cmp.precip.snow,
-        cmp.terminal_velocity.snow,
-        Y.c.ρ,
-        max(zero(Y.c.ρ), Y.c.ρq_sno / Y.c.ρ),
-    )
-    # compute sedimentation velocity for cloud condensate [m/s]
-    @. ᶜwₗ = CMNe.terminal_velocity(
-        cmc.liquid,
-        cmc.stokes,
-        Y.c.ρ,
-        max(zero(Y.c.ρ), Y.c.ρq_lcl / Y.c.ρ),
-    )
-    @. ᶜwᵢ = CMNe.terminal_velocity(
-        cmc.ice,
-        cmc.Ch2022.small_ice,
-        Y.c.ρ,
-        max(zero(Y.c.ρ), Y.c.ρq_icl / Y.c.ρ),
+    # scratch for adding energy fluxes over subdomains
+    ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar
+    @. ᶜρwₕhₜ = 0
+
+    terminal_velocity_function(name, ρ, q) = terminal_velocity(
+        microphysics_model,
+        terminal_velocity_mode,
+        name,
+        cmc,
+        cmp,
+        ρ,
+        q,
     )
 
+    microphysics_tracers = (
+        (@name(q_lcl), @name(ᶜwₗ)),
+        (@name(q_icl), @name(ᶜwᵢ)),
+        (@name(q_rai), @name(ᶜwᵣ)),
+        (@name(q_sno), @name(ᶜwₛ)),
+    )
+    MatrixFields.unrolled_foreach(microphysics_tracers) do (χ_name, w_name)
+        MatrixFields.has_field(Y.c, get_ρχ_name(χ_name)) || return
+
+        e_int_func = internal_energy_func(χ_name)
+
+        ᶜρχ = MatrixFields.get_field(Y.c, get_ρχ_name(χ_name))
+        ᶜw = MatrixFields.get_field(p.precomputed, w_name)
+        @. ᶜw = terminal_velocity_function(χ_name, Y.c.ρ, max(zero(Y.c.ρ), ᶜρχ / Y.c.ρ))
+
+        @. ᶜρwₕhₜ += ᶜw * ᶜρχ * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜu)))
+    end
+
     # compute their contributions to energy and total water advection
+    @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
     @. ᶜwₜqₜ =
         Geometry.WVector(
             ᶜwₗ * Y.c.ρq_lcl +
             ᶜwᵢ * Y.c.ρq_icl +
             ᶜwᵣ * Y.c.ρq_rai +
             ᶜwₛ * Y.c.ρq_sno,
-        ) / Y.c.ρ
-    @. ᶜwₕhₜ =
-        Geometry.WVector(
-            ᶜwₗ * Y.c.ρq_lcl * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
-            ᶜwᵢ * Y.c.ρq_icl * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
-            ᶜwᵣ * Y.c.ρq_rai * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))) +
-            ᶜwₛ * Y.c.ρq_sno * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu))),
         ) / Y.c.ρ
     return nothing
 end
@@ -125,8 +143,8 @@ function set_precipitation_velocities!(
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜTʲs, ᶜρʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; terminal_velocity_mode) = p.atmos
 
-    FT = eltype(p.params)
     cmc = CAP.microphysics_cloud_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
@@ -147,174 +165,71 @@ function set_precipitation_velocities!(
     ᶜρχ = p.scratch.ᶜtemp_scalar_2
     # scratch for adding energy fluxes over subdomains
     ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
+    @. ᶜρwₕhₜ = 0
 
     # Compute gs sedimentation velocity based on subdomain velocities
     # assuming grid-scale flux equals to the sum of sub-grid-scale fluxes.
-    # TODO - below code is very repetetive between liquid, ice, rain and snow,
-    # but also not exactly the same. Also repeated in 2m microphysics.
-    # Think of a way to fix that.
 
-    ###
-    ### Cloud liquid
-    ###
-    ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
-    ᶜρa⁰χ⁰ = @. lazy(max(zero(Y.c.ρ), ᶜρa⁰) * max(zero(Y.c.ρ), ᶜq_lcl⁰))
-    @. ᶜρχ = ᶜρa⁰χ⁰
-    @. ᶜwₗ = ᶜρa⁰χ⁰ * CMNe.terminal_velocity(
-        cmc.liquid,
-        cmc.stokes,
-        ᶜρ⁰,
-        ᶜq_lcl⁰,
+    terminal_velocity_function(name, ρ, q) = terminal_velocity(
+        microphysics_model,
+        terminal_velocity_mode,
+        name,
+        cmc,
+        cmp,
+        ρ,
+        q,
     )
-    @. ᶜimplied_env_mass_flux = 0
-    # add updraft contributions
-    for j in 1:n
-        ᶜρaʲχʲ = @. lazy(
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa) *
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_lcl),
-        )
-        @. ᶜρχ += ᶜρaʲχʲ
-        @. ᶜwₗʲs.:($$j) = CMNe.terminal_velocity(
-            cmc.liquid,
-            cmc.stokes,
-            max(zero(Y.c.ρ), ᶜρʲs.:($$j)),
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_lcl),
-        )
-        @. ᶜwₗ += ᶜρaʲχʲ * ᶜwₗʲs.:($$j)
-        @. ᶜimplied_env_mass_flux -=
-            Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_lcl * ᶜwₗʲs.:($$j)
-    end
-    # average (clamp to prevent spurious negatives from numerical errors at low mass)
-    @. ᶜwₗ = ifelse(ᶜρχ > ϵ_numerics(FT), max(ᶜwₗ / ᶜρχ, zero(ᶜwₗ / ᶜρχ)), zero(ᶜwₗ))
-    @. ᶜimplied_env_mass_flux += Y.c.ρq_lcl * ᶜwₗ
-    # contribution of env q_liq sedimentation to htot
-    @. ᶜρwₕhₜ = ᶜimplied_env_mass_flux * (Iₗ(thp, ᶜT⁰) + ᶜΦ)
 
-    ###
-    ### Cloud ice
-    ###
-    ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
-    ᶜρa⁰χ⁰ = @. lazy(max(zero(Y.c.ρ), ᶜρa⁰) * max(zero(Y.c.ρ), ᶜq_icl⁰))
-    @. ᶜρχ = ᶜρa⁰χ⁰
-    @. ᶜwᵢ = ᶜρa⁰χ⁰ * CMNe.terminal_velocity(
-        cmc.ice,
-        cmc.Ch2022.small_ice,
-        ᶜρ⁰,
-        ᶜq_icl⁰,
+    microphysics_tracers = (
+        (@name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
+        (@name(q_icl), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
+        (@name(q_rai), @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
+        (@name(q_sno), @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
     )
-    @. ᶜimplied_env_mass_flux = 0
-    # add updraft contributions
-    for j in 1:n
-        ᶜρaʲχʲ = @. lazy(
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa) *
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_icl),
-        )
-        @. ᶜρχ += ᶜρaʲχʲ
-        @. ᶜwᵢʲs.:($$j) = CMNe.terminal_velocity(
-            cmc.ice,
-            cmc.Ch2022.small_ice,
-            max(zero(Y.c.ρ), ᶜρʲs.:($$j)),
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_icl),
-        )
-        @. ᶜwᵢ += ᶜρaʲχʲ * ᶜwᵢʲs.:($$j)
-        @. ᶜimplied_env_mass_flux -=
-            Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_icl * ᶜwᵢʲs.:($$j)
-    end
-    # average (clamp to prevent spurious negatives from numerical errors at low mass)
-    @. ᶜwᵢ = ifelse(ᶜρχ > ϵ_numerics(FT), max(ᶜwᵢ / ᶜρχ, zero(ᶜwᵢ / ᶜρχ)), zero(ᶜwᵢ))
-    @. ᶜimplied_env_mass_flux += Y.c.ρq_icl * ᶜwᵢ
-    # contribution of env q_liq sedimentation to htot
-    @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (Iᵢ(thp, ᶜT⁰) + ᶜΦ)
+    MatrixFields.unrolled_foreach(microphysics_tracers) do (χ_name, wʲ_name, w_name)
+        MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name) || return
 
-    ###
-    ### Rain
-    ###
-    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
-    ᶜρa⁰χ⁰ = @. lazy(max(zero(Y.c.ρ), ᶜρa⁰) * max(zero(Y.c.ρ), ᶜq_rai⁰))
-    @. ᶜρχ = ᶜρa⁰χ⁰
-    @. ᶜwᵣ =
-        ᶜρa⁰χ⁰ * CM1.terminal_velocity(
-            cmp.precip.rain,
-            cmp.terminal_velocity.rain,
-            ᶜρ⁰,
-            ᶜq_rai⁰,
-        )
-    @. ᶜimplied_env_mass_flux = 0
-    # add updraft contributions
-    for j in 1:n
-        ᶜρaʲχʲ = @. lazy(
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa) *
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
-        )
-        @. ᶜρχ += ᶜρaʲχʲ
-        @. ᶜwᵣʲs.:($$j) = CM1.terminal_velocity(
-            cmp.precip.rain,
-            cmp.terminal_velocity.rain,
-            max(zero(Y.c.ρ), ᶜρʲs.:($$j)),
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
-        )
-        @. ᶜwᵣ += ᶜρaʲχʲ * ᶜwᵣʲs.:($$j)
-        @. ᶜimplied_env_mass_flux -=
-            Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai * ᶜwᵣʲs.:($$j)
-    end
-    # average (clamp to prevent spurious negatives from numerical errors at low mass)
-    @. ᶜwᵣ = ifelse(ᶜρχ > ϵ_numerics(FT), max(ᶜwᵣ / ᶜρχ, zero(ᶜwᵣ / ᶜρχ)), zero(ᶜwᵣ))
-    @. ᶜimplied_env_mass_flux += Y.c.ρq_rai * ᶜwᵣ
-    # contribution of env q_liq sedimentation to htot
-    @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (Iₗ(thp, ᶜT⁰) + ᶜΦ)
+        e_int_func = internal_energy_func(χ_name)
+        ᶜw = MatrixFields.get_field(p.precomputed, w_name)
 
-    ###
-    ### Snow
-    ###
-    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
-    ᶜρa⁰χ⁰ = @. lazy(max(zero(Y.c.ρ), ᶜρa⁰) * max(zero(Y.c.ρ), ᶜq_sno⁰))
-    @. ᶜρχ = ᶜρa⁰χ⁰
-    @. ᶜwₛ =
-        ᶜρa⁰χ⁰ * CM1.terminal_velocity(
-            cmp.precip.snow,
-            cmp.terminal_velocity.snow,
-            ᶜρ⁰,
-            ᶜq_sno⁰,
-        )
-    @. ᶜimplied_env_mass_flux = 0
-    # add updraft contributions
-    for j in 1:n
-        ᶜρaʲχʲ = @. lazy(
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa) *
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_sno),
-        )
-        @. ᶜρχ += ᶜρaʲχʲ
-        # compute terminal velocity for precipitation
-        @. ᶜwₛʲs.:($$j) = CM1.terminal_velocity(
-            cmp.precip.snow,
-            cmp.terminal_velocity.snow,
-            max(zero(Y.c.ρ), ᶜρʲs.:($$j)),
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_sno),
-        )
-        @. ᶜwₛ += ᶜρaʲχʲ * ᶜwₛʲs.:($$j)
-        @. ᶜimplied_env_mass_flux -=
-            Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno * ᶜwₛʲs.:($$j)
-    end
-    # average (clamp to prevent spurious negatives from numerical errors at low mass)
-    @. ᶜwₛ = ifelse(ᶜρχ > ϵ_numerics(FT), max(ᶜwₛ / ᶜρχ, zero(ᶜwₛ / ᶜρχ)), zero(ᶜwₛ))
-    @. ᶜimplied_env_mass_flux += Y.c.ρq_sno * ᶜwₛ
-    # contribution of env q_liq sedimentation to htot
-    @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (Iᵢ(thp, ᶜT⁰) + ᶜΦ)
+        ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+        ᶜρa⁰χ⁰ = @. lazy(max(zero(Y.c.ρ), ᶜρa⁰) * max(zero(Y.c.ρ), ᶜχ⁰))
+        @. ᶜρχ = ᶜρa⁰χ⁰
+        @. ᶜw = ᶜρa⁰χ⁰ * terminal_velocity_function(χ_name, ᶜρ⁰, ᶜχ⁰)
+        @. ᶜimplied_env_mass_flux = 0
+        # add updraft contributions
+        for j in 1:n
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+            ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
 
-    # Add contributions to energy and total water advection
-    # TODO do we need to add kinetic energy of subdomains?
-    for j in 1:n
-        @. ᶜρwₕhₜ +=
-            Y.c.sgsʲs.:($$j).ρa *
-            (
-                ᶜwₗʲs.:($$j) * Y.c.sgsʲs.:($$j).q_lcl * (Iₗ(thp, ᶜTʲs.:($$j)) + ᶜΦ) +
-                ᶜwᵢʲs.:($$j) * Y.c.sgsʲs.:($$j).q_icl * (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ) +
-                ᶜwᵣʲs.:($$j) * Y.c.sgsʲs.:($$j).q_rai * (Iₗ(thp, ᶜTʲs.:($$j)) + ᶜΦ) +
-                ᶜwₛʲs.:($$j) * Y.c.sgsʲs.:($$j).q_sno * (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ)
+            ᶜρaʲχʲ = @. lazy(
+                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa) *
+                max(zero(Y.c.ρ), ᶜχʲ),
             )
-    end
-    @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
+            @. ᶜρχ += ᶜρaʲχʲ
+            @. ᶜwʲ = terminal_velocity_function(χ_name, ᶜρʲs.:($$j), max(zero(Y.c.ρ), ᶜχʲ))
+            @. ᶜw += ᶜρaʲχʲ * ᶜwʲ
+            @. ᶜimplied_env_mass_flux -=
+                Y.c.sgsʲs.:($$j).ρa * ᶜχʲ * ᶜwʲ
 
+            # Add contributions to energy and total water advection
+            @. ᶜρwₕhₜ +=
+                Y.c.sgsʲs.:($$j).ρa * ᶜwʲ * ᶜχʲ * (e_int_func(thp, ᶜTʲs.:($$j)) + ᶜΦ)
+        end
+        # average
+        @. ᶜw = gs_terminal_velocity(
+            microphysics_model,
+            terminal_velocity_mode,
+            χ_name,
+            ᶜw,
+            ᶜρχ,
+        )
+        @. ᶜimplied_env_mass_flux += MatrixFields.get_field(Y.c, get_ρχ_name(χ_name)) * ᶜw
+        # contribution of env sedimentation to htot
+        @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (e_int_func(thp, ᶜT⁰) + ᶜΦ)
+    end
+
+    @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
     @. ᶜwₜqₜ =
         Geometry.WVector(
             ᶜwₗ * Y.c.ρq_lcl +

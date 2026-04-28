@@ -49,6 +49,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     microphysics_model = get_microphysics_model(parsed_args, params)
     sgs_quadrature = get_sgs_quadrature(parsed_args, params)
     cloud_model = get_cloud_model(parsed_args, params)
+    terminal_velocity_mode = get_terminal_velocity_mode(parsed_args, params, FT)
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
@@ -133,6 +134,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
                                              Implicit() : Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(parsed_args),
         sgs_quadrature,
+        terminal_velocity_mode,
 
         # SCMSetup - Single-Column Model components
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT; setup_type),

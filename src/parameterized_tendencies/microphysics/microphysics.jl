@@ -10,6 +10,7 @@
 # - Microphysics wrappers calling CloudMicrophysics.jl
 # - Unified microphysics tendencies (cloud condensate + precipitation)
 # - Moisture fixers
+# - Terminal velocity utilities
 
 # Core utilities (used by other files)
 include("sgs_quadrature.jl")
@@ -23,3 +24,6 @@ include("cloud_fraction.jl")
 include("microphysics_wrappers.jl")
 include("tendency.jl")
 include("moisture_fixers.jl")
+
+# Terminal velocity computations
+include("terminal_velocity_utils.jl")

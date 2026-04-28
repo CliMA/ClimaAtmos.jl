@@ -443,6 +443,16 @@ function get_cloud_model(parsed_args, params)
     end
 end
 
+function get_terminal_velocity_mode(parsed_args, params, ::Type{FT}) where {FT}
+    return parsed_args["fixed_terminal_velocity"] ?
+           FixedTerminalVelocity{FT}(
+        CAP.fixed_cloud_liquid_terminal_velocity(params),
+        CAP.fixed_cloud_ice_terminal_velocity(params),
+        CAP.fixed_rain_terminal_velocity(params),
+        CAP.fixed_snow_terminal_velocity(params),
+    ) : DiagnosticTerminalVelocity()
+end
+
 function get_cloud_in_radiation(parsed_args)
     isnothing(parsed_args["prescribe_clouds_in_radiation"]) && return nothing
     return parsed_args["prescribe_clouds_in_radiation"] ?
