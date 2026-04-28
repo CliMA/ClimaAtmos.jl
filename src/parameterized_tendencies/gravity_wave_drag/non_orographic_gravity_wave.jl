@@ -61,7 +61,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_v_heat = similar(Fields.level(Y.c.ρ, 1)),
             gw_N_source = similar(Fields.level(Y.c.ρ, 1)),
             gw_beres_active = similar(Fields.level(Y.c.ρ, 1)),
-            gw_beres_source = nothing,
+            gw_beres_source = gw.beres_source,
             gw_zbot = similar(Fields.level(Y.c.ρ, 1)),
             gw_ztop = similar(Fields.level(Y.c.ρ, 1)),
             gw_Q_conv = similar(Y.c.ρ),

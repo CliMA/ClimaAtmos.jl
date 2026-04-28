@@ -58,6 +58,7 @@ The `states` dict maps symbol keys to (Y, p) tuples. Available keys:
   :m1             — NonEquilibriumMicrophysics1M, column
   :m2             — NonEquilibriumMicrophysics2M, column
   :nogw           — 0M + NonOrographicGravityWave, column
+  :nogw_beres     — 0M + NonOrographicGravityWave + BeresSourceParams, column
   :m0_slab_sphere — 0M + SlabOceanSST, sphere (watero)
   :smag           — SmagorinskyLilly, sphere
   :m0_pedmfx      — 0M + PrognosticEDMFX, column
@@ -189,6 +190,30 @@ microphysics_model = CA.EquilibriumMicrophysics0M()
 model_nogw = CA.AtmosModel(; microphysics_model, non_orographic_gravity_wave)
 (Y_nogw, p_nogw) = build_state_cache(FT, model_nogw; grid = column);
 
+## Non-orographic gravity wave with Beres source
+beres_source = CA.BeresSourceParams{FT}(;
+    Q0_threshold = FT(1e-4), beres_scale_factor = FT(1),
+    σ_x = FT(12_000), ν_min = FT(8.7e-5), ν_max = FT(1.05e-2), n_ν = 5,
+)
+nogw_beres = CA.NonOrographicGravityWave(;
+    (f => getfield(nogw_params, f) for f in fieldnames(typeof(nogw_params)))...,
+    beres_source,
+)
+model_nogw_beres = CA.AtmosModel(;
+    microphysics_model = CA.EquilibriumMicrophysics0M(),
+    non_orographic_gravity_wave = nogw_beres,
+)
+(Y_nogw_beres, p_nogw_beres) = build_state_cache(FT, model_nogw_beres; grid = column);
+# Zero-initialize uninitialized Beres cache fields so diagnostics return finite values
+let c = p_nogw_beres.non_orographic_gravity_wave
+    c.gw_beres_active .= 0
+    c.gw_Q0 .= 0
+    c.gw_h_heat .= 0
+    c.gw_zbot .= 0
+    c.gw_ztop .= 0
+    c.gw_Q_conv .= 0
+end
+
 ## Sphere with moist model + slab ocean (watero needs MoistMicrophysics + SpectralElementSpace2D)
 model_0m_slab = CA.AtmosModel(;
     microphysics_model = CA.EquilibriumMicrophysics0M(),
@@ -267,6 +292,7 @@ states = Dict(
     :m1             => (Y_1m,             p_1m),
     :m2             => (Y_2m,             p_2m),
     :nogw           => (Y_nogw,           p_nogw),
+    :nogw_beres     => (Y_nogw_beres,     p_nogw_beres),
     :m0_slab_sphere => (Y_0m_slab_sphere, p_0m_slab_sphere),
     :smag           => (Y_smag,           p_smag),
     :m0_pedmfx      => (Y_0m_pedmfx,      p_0m_pedmfx),
@@ -338,6 +364,9 @@ VALID_CASES = [
     # gravitywave_diagnostics.jl
     # ---------------------------------------------------------------------------
     cases(("utendnogw", "vtendnogw"), :nogw)...,
+    # Beres source diagnostics (require NonOrographicGravityWave with BeresSourceParams)
+    cases(("nogw_beres_active", "nogw_Q0", "nogw_h_heat", "nogw_zbot",
+           "nogw_ztop", "nogw_Q_conv", "nogw_deep_frac"), :nogw_beres)...,
 
     # ---------------------------------------------------------------------------
     # radiation_diagnostics.jl
@@ -435,6 +464,17 @@ end
         "cdnc", "ncra", "utendnogw", "vtendnogw")
         @testset "$name errors on dry model" begin
             @test_throws Exception compute_diag(getdiag(name), Y_dry, p_dry)
+        end
+    end
+
+    # Beres diagnostics error on dry model (no NOGW) and on NOGW without Beres source
+    for name in ("nogw_beres_active", "nogw_Q0", "nogw_h_heat",
+        "nogw_zbot", "nogw_ztop", "nogw_Q_conv", "nogw_deep_frac")
+        @testset "$name errors on dry model" begin
+            @test_throws Exception compute_diag(getdiag(name), Y_dry, p_dry)
+        end
+        @testset "$name errors on NOGW without Beres" begin
+            @test_throws Exception compute_diag(getdiag(name), Y_nogw, p_nogw)
         end
     end
 
