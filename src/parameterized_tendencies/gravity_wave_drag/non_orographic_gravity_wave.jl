@@ -342,7 +342,7 @@ function compute_beres_convective_heating!(Y, p)
     # _beres_dbg_count[] += 1
     # _do_debug = true  # always print — debugging active
 
-    (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs, ᶜh_tot, ᶜuʲs) = p.precomputed
+    (; ᶠu³ʲs, ᶜρʲs, ᶜuʲs, ᶜTʲs, ᶜT) = p.precomputed
     (; ᶠu³) = p.precomputed
     (;
         gw_Q0,
@@ -365,9 +365,14 @@ function compute_beres_convective_heating!(Y, p)
     ᶜρ = Y.c.ρ
     ᶜz = Fields.coordinate_field(Y.c).z
 
-    # Compute convective heating via mass-flux divergence (Yanai Q₁):
-    #   Q₁ = -1/(ρ·cp) · ∂/∂z [Σⱼ ρʲ·(u³ʲ-u³)·aʲ·(mseʲ + Kʲ - h_tot)]
-    # Following the same pattern as edmfx_sgs_flux.jl:54-88.
+    # Compute DSE-based mass-flux Q₁ (Yanai apparent heat source):
+    #   ρ·Q₁ ≈ -∂/∂z [Mᶜ·(s_c − s̄)]  where s = cp_d·T + g·z
+    # MSE (h = cp·T + gz + Lv·q) is conserved under condensation, so its
+    # mass-flux divergence gives Q₁−Q₂, masking the latent-heating signal.
+    # DSE works because Tʲ is saturation-adjusted: the warming from
+    # condensation along the parcel trajectory is already encoded in Tʲ,
+    # so cp_d·(Tʲ − T̄) carries the cumulative latent heat release.
+    # The g·z terms cancel in (sʲ − s̄), leaving cp_d·(Tʲ − T̄).
     ᶜQ_conv = p.scratch.ᶜtemp_scalar_2
     ᶜQ_conv .= FT(0)
     cp_d = FT(CAP.cp_d(p.params))
@@ -376,36 +381,29 @@ function compute_beres_convective_heating!(Y, p)
     ᶠu³_diff = p.scratch.ᶠtemp_CT3
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
 
-    # For DiagnosticEDMFX, ρa and mse are in p.precomputed
-    # For PrognosticEDMFX, ρa and mse are in Y.c.sgsʲs.:($j)
+    # For DiagnosticEDMFX, ρa is in p.precomputed
+    # For PrognosticEDMFX, ρa is in Y.c.sgsʲs.:($j)
     has_prognostic_sgs =
         hasproperty(Y.c, :sgsʲs) && n_updrafts > 0
     if !has_prognostic_sgs && haskey(p.precomputed, :ᶜρaʲs)
         ᶜρaʲs_all = p.precomputed.ᶜρaʲs
-        ᶜmseʲs_all = p.precomputed.ᶜmseʲs
     end
 
     for j in 1:n_updrafts
         # Velocity anomaly at faces (contravariant)
         @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
 
-        # Enthalpy anomaly × area fraction (same as edmfx_sgs_flux.jl:65-67)
-        ᶜmseʲ = if has_prognostic_sgs
-            Y.c.sgsʲs.:($j).mse
-        else
-            ᶜmseʲs_all.:($j)
-        end
         ᶜρaʲ = if has_prognostic_sgs
             Y.c.sgsʲs.:($j).ρa
         else
             ᶜρaʲs_all.:($j)
         end
 
-        # Area fraction = ρaʲ/ρʲ; protect against 0/0 when no updraft
+        # DSE anomaly × area fraction: cp_d·(Tʲ − T̄) · (ρaʲ/ρʲ)
         @. ᶜa_scalar =
             ifelse(
                 ᶜρʲs.:($$j) > eps(FT),
-                (ᶜmseʲ + ᶜKʲs.:($$j) - ᶜh_tot) * (ᶜρaʲ / ᶜρʲs.:($$j)),
+                cp_d * (ᶜTʲs.:($$j) - ᶜT) * (ᶜρaʲ / ᶜρʲs.:($$j)),
                 FT(0),
             )
 
@@ -420,11 +418,6 @@ function compute_beres_convective_heating!(Y, p)
         )
         # Convert from W/m³ to heating rate K/s
         @. ᶜQ_conv += vtt / (ᶜρ * cp_d)
-
-        # if _do_debug
-        #     _Q_data = Array(parent(ᶜQ_conv))
-        #     println("[Beres debug] cb=$(_beres_dbg_count[]) j=$j Q_conv: min=$(minimum(_Q_data)) max=$(maximum(_Q_data)) NaN=$(count(isnan, _Q_data))")
-        # end
     end
 
     # Clean NaN/Inf from boundary stencil artifacts
