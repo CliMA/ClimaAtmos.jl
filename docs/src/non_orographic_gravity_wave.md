@@ -102,9 +102,9 @@ This filters out shallow or weak convection. In columns where Beres is inactive,
 
 The momentum flux spectrum at the source level is computed following the linear analysis of [beres2004](@cite). The convective heating profile is assumed half-sine in the vertical with depth $h$ and peak amplitude $Q_0$ (Beres Eq. 8), Gaussian in the horizontal with half-width $\sigma_x$ (Beres Eq. 7), and white-noise in time (see "Time spectrum" below). Only the nonstationary ($\nu > 0$) component is retained; the stationary, mountain-wave-like response from the interaction of $\bar{u}_{\text{heat}}$ with the steady part of the heating (Beres Eqs. 32–33) is **not** included in the present implementation. This is a deliberate simplification — Beres' §5 conclusions emphasize that both components can dominate depending on convective regime, so this omission is a known limitation of the current scheme.
 
-**Fourier decomposition of the heating (Beres Eq. 11).** For horizontal wavenumber $k$, the squared spectral amplitude of the Gaussian horizontal heating profile is
+**Fourier decomposition of the heating (Beres Eqs. 7, 11).** The horizontal heating profile in physical space is $q_x(x) = Q_0 \exp[-(x-x_0)^2/\sigma_x^2]$, a Gaussian bump with peak amplitude $Q_0$ and half-width $\sigma_x$. Its Fourier transform decomposes into horizontal wavenumbers $k$ as $Q_x(k) = Q_0 \, G_k$, where the shape factor $G_k$ depends only on $\sigma_x$:
 ```math
-G_k^2 = \frac{Q_0^2 \sigma_x^2}{2} \exp\left( -\frac{k^2 \sigma_x^2}{2} \right).
+G_k = \frac{\sigma_x}{\sqrt{2}} \exp\!\left(-\frac{k^2 \sigma_x^2}{4}\right).
 ```
 The default $\sigma_x = 4000$ m sits between Beres' two test values (2.5 km for narrow squall-line cells, 18 km for broader heating); the spectrum's east–west asymmetry under shear is sensitive to this choice (compare Beres Fig. 1a vs. 1b).
 
@@ -124,9 +124,9 @@ with $\text{sinc}(x) = \sin(x)/x$. This is the response factor extracted from $|
 
 **Spectral flux density (Beres Eq. 30).** Combining the above, the momentum flux density in $(k, \nu)$ space is
 ```math
-F(k, \nu) = \frac{1}{\sqrt{2\pi}} \, \frac{\sqrt{N^2 - \hat{\nu}^2}}{|\hat{\nu}|} \, G_k^2 \, R^2(k, \nu) \qquad \text{for } 0 < |\hat{\nu}| < N,
+F(k, \nu) = \frac{1}{\sqrt{2\pi}} \, \frac{\sqrt{N^2 - \hat{\nu}^2}}{|\hat{\nu}|} \, Q_0^2 \, G_k^2 \, R^2(k, \nu) \qquad \text{for } 0 < |\hat{\nu}| < N,
 ```
-and zero otherwise. Beres' prefactor of $\rho_0 / (L\tau)$ — where $L$ and $\tau$ are reference horizontal and temporal scales — is absorbed into $\alpha$.
+and zero otherwise. Beres' prefactor of $\rho_0 / (L\tau)$, where $L$ and $\tau$ are reference horizontal and temporal scales, is absorbed into $\alpha$ below.
 
 **Phase speed transformation.** The source spectrum $B_0(c)$ is obtained by changing variables from $(k, \nu)$ to $(c, \nu)$ at fixed $\nu$ via $k = \nu/c$, with Jacobian $|dk/dc| = \nu/c^2$, and integrating over frequency:
 ```math
@@ -134,23 +134,23 @@ B_0(c) = \text{sgn}(\hat{c}) \cdot \alpha \int_{\nu_{\min}}^{\nu_{\max}} F\!\lef
 ```
 where $\hat{c} = c - \bar{u}_{\text{heat}}$ is the intrinsic phase speed. The integration uses Boole's rule quadrature. The integration limits $\nu_{\min}$ and $\nu_{\max}$ should satisfy:
 
-- $\nu_{\min} > 0$, both for numerical reasons (the integrand contains $\nu/c^2$ and $1/|\hat{\nu}|$) and to formalize the exclusion of the steady component noted above.
+- $\nu_{\min} > 0$, both for numerical reasons (the integrand contains $\nu/c^2$ and $1/|\hat{\nu}|$) and to exclude the steady component noted above.
 - $\nu_{\max}$ small enough that propagating waves exist over the resolved $c$ range; $|\hat{\nu}| \geq N$ contributes zero by construction.
 
-The factor $\alpha$ (`beres_scale_factor`) bundles the dimensional prefactor $\rho_0/(L\tau)$ from Beres Eq. (30), the white-noise $|Q_t|^2$ normalization, and any empirical tuning multiplier needed to match observations or higher-resolution simulations. The sign convention $\text{sgn}(\hat{c})$ outside the integral matches the CAM/WACCM-style Beres implementations and assumes the downstream propagator interprets the spectrum in the heating-cell frame; this differs from the $\text{sgn}(\hat{\nu})$-inside-the-integrand form in Beres Eq. (30) by a factor of $\text{sgn}(c)$, and consistency with the propagator should be verified by reproducing the analytical Beres result at $\bar{u}_{\text{heat}} \neq 0$ as a unit test.
+The factor $\alpha$ (`beres_scale_factor`) bundles the dimensional prefactor $\rho_0/(L\tau)$ from Beres Eq. (30), the white-noise $|Q_t|^2$ normalization, and any empirical tuning multiplier.
+
+**Sign convention.** The code applies $\text{sgn}(\hat{c})$ outside the integral, whereas Beres Eq. (30) places $\text{sgn}(\hat{\nu})$ inside the integrand. Since $k = \nu/c$ with $\nu > 0$, the two are related by $\text{sgn}(\hat{\nu}) = \text{sgn}(c) \cdot \text{sgn}(\hat{c})$, so the forms differ by a factor of $\text{sgn}(c)$ for negative phase speeds. The $\text{sgn}(\hat{c})$ convention is correct for the AD99 propagator, which interprets $B_0(c) < 0$ as westward momentum flux for westward-propagating waves ($c < 0$).
 
 ### Heating depth averaging
 
-Optionally, the spectrum can be averaged over $n_{h,\text{avg}}$ values of $h$ in the range $[h - \Delta h, h + \Delta h]$ where $\Delta h = \Delta h_{\text{frac}} \cdot h$. This smooths the resonance peaks in the response function that arise from the sinusoidal heating assumption, following the recommendation in Section 2, Figure 4 of [beres2004](@cite).
+Optionally, the spectrum may be computed and averaged at $n_{h,\text{avg}}$ values of $h$ uniformly spaced in $[h - \Delta h, h + \Delta h]$, with $\Delta h = \Delta h_{\text{frac}} \cdot h$. This averaging smooths the resonance at $mh = \pi$ (vertical wavelength $\lambda_z = 2h$) in the response function $R$, which is sharp for any single $h$ but unphysical, as real columns contain cells of varying depth. [beres2004](@cite) applies the same regularization to the steady-component factor $\beta$ in §2.b, Fig. 4 (using $n_{h,\text{avg}} = 20$, $\Delta h_{\text{frac}} \approx 0.17$); the resonance has the same origin in the nonstationary spectrum described above, and so a similar averaging may be applied. Note that `n_h_avg = 1`, and heating depth averaging is off by default.
 
 ### Propagation and breaking
 
 Once the Beres source spectrum $B_0(c)$ replaces the AD99 Gaussian, the upward propagation, wave breaking, and momentum deposition logic is **identical** to the AD99 method described above. The same reflection criterion, instability condition, intermittency factor, and sponge layer redistribution apply.
 
 
-## Implementation Details
-
-### Runtime pipeline
+## Implementation Summary
 
 The parameterization runs on a callback timer (`dt_nogw`) and applies the accumulated forcing every integrator step.
 
@@ -175,8 +175,3 @@ Every dt (integrator step):
   non_orographic_gravity_wave_apply_tendency!
     └─ Clamp forcing, zero NaN/Inf, apply to wind tendencies
 ```
-
-Key entry points in `src/parameterized_tendencies/gravity_wave_drag/non_orographic_gravity_wave.jl`:
-- `non_orographic_gravity_wave_compute_tendency!` — main driver
-- `compute_beres_convective_heating!` — EDMF heating extraction (Step 2)
-- `non_orographic_gravity_wave_forcing` / `waveforcing_column_accumulate!` — column-wise propagation and breaking (Step 3)
