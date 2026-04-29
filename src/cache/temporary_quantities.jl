@@ -145,5 +145,6 @@ function temporary_quantities(Y, atmos)
         ᶜtridiagonal_matrix_scalar = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶠtridiagonal_matrix_c3 = similar(Y.f, TridiagonalMatrixRow{C3{FT}}),
         (!isnothing(atmos.prescribed_flow) ? (; temp_Yₜ_imp = similar(Y)) : (;))...,
+        (!isnothing(atmos.numerics.dt_fast) ? (; Y_fast = similar(Y)) : (;))...,
     )
 end

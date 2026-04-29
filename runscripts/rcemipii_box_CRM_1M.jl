@@ -82,7 +82,7 @@ model = CA.AtmosModel(;
     surface_albedo = CA.ConstantAlbedo{FT}(; α = 0.07),
 
     # numerics
-    numerics = CA.AtmosNumerics(; hyperdiff = nothing),
+    numerics = CA.AtmosNumerics(; hyperdiff = nothing, n_horizontal_substeps = 5),
 )
 # @info "AtmosModel: \n$(summary(atmos))"
 
