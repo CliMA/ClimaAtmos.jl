@@ -26,7 +26,7 @@ value = 0.0001
 value = 1
 
 [detr_inv_tau]
-value = 0
+value = 0.0001
 
 [detr_coeff]
 value = 0
@@ -48,6 +48,9 @@ value = 1
 
 [pressure_normalmode_drag_coeff]
 value = 40.0
+
+[mixing_length_eddy_viscosity_coefficient]
+value = 0.56
 
 [precipitation_timescale]
 value = 3600

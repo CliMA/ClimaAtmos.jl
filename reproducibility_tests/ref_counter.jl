@@ -1,4 +1,4 @@
-338
+339
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+339
+- Unify prognostic EDMF parameters in 0M and 1M
+
 338
 - Add fixed terminal velocity option;
 - Enforce physical constraints in a callback.

@@ -49,6 +49,9 @@ value = 1
 [pressure_normalmode_drag_coeff]
 value = 40.0
 
+[mixing_length_eddy_viscosity_coefficient]
+value = 0.56
+
 [tracer_vertical_diffusion_factor]
 value = 0
 
