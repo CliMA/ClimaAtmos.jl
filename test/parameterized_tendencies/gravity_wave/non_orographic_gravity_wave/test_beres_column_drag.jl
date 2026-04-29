@@ -83,11 +83,12 @@ import ClimaCore.Fields as Fields
     # Ranges from -10 m/s at surface to +10 m/s at model top.
     # Creates critical levels for waves with different phase speeds,
     # producing non-trivial vertical drag structure.
-    parent(ᶜu) .= FT(-10.0) .+ center_z .* FT(20.0 / z_max)
-    parent(ᶜv) .= FT(0.0)
+    # Use ClimaCore field broadcast (GPU-compatible) instead of parent().
+    @. ᶜu = FT(-10.0) + ᶜz * FT(20.0 / z_max)
+    fill!(ᶜv, FT(0.0))
 
     # Uniform buoyancy frequency matching Beres §4
-    parent(ᶜbuoyancy_frequency) .= FT(0.012)
+    fill!(ᶜbuoyancy_frequency, FT(0.012))
 
     # Source and damp level fields
     ᶜρ_source = Fields.level(ᶜρ, source_level)
