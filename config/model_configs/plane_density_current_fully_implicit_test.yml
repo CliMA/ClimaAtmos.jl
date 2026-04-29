@@ -2,11 +2,11 @@
 dt_save_state_to_disk: "Inf"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
-z_elem: 32
 dt: "3secs"
 t_end: "950secs"
 z_stretch: false
-x_elem: 128
+x_elem: 256
+z_elem: 64
 nh_poly: 4
 config: "plane"
 z_max: 6400.0
@@ -17,8 +17,8 @@ cloud_model: "grid_scale"
 use_sgs_quadrature: false
 fully_implicit: true
 ode_algo: "ARS222"
-sparse_helmholtz: true
-helmholtz_2d_solver: "chebyshev"
+sparse_helmholtz_2d: true
+helmholtz_2d_solver: "pmg"
 use_krylov_method: true
 max_newton_iters_ode: 10
 use_newton_rtol: true

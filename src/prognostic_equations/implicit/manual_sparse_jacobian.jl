@@ -1055,6 +1055,466 @@ function matfree_helmholtz_2d_correction!(
     return nothing
 end
 
+# ============================================================================
+# P-multigrid Helmholtz 2D Preconditioner
+# ============================================================================
+
+"""
+    PMGHelmholtz2DCache
+
+Two-level p-multigrid preconditioner for the horizontal 2D Helmholtz operator
+  (I + dtγ²·cs²·(-∇²_h))·x = rhs
+
+Fine level (Nq):   matrix-free operator via wdivₕ(gradₕ(·)); Chebyshev smoother.
+Coarse level (2):  assembled sparse system; direct LU solve (CPU, tiny system).
+Restriction:       injection at GLL corner nodes (corner of Nq element = node of Nq_c=2).
+Prolongation:      bilinear (linear ⊗ linear) interpolation from Nq_c=2 to Nq.
+DSS coupling:      fine-level DSS via ClimaCore; coarse assembly via accumulated WJ.
+
+GPU-native on fine level (all ClimaCore broadcast ops); coarse solve via small
+CPU D2H + LU factorize + H2D, with negligible transfer cost (~N_h_c·N_v floats).
+"""
+struct PMGHelmholtz2DCache{FT, F, GB}
+    # ── Shared parameters ──
+    dtγ::Base.RefValue{FT}
+    backsub_alpha::FT
+    n_pre::Int
+    n_post::Int
+    # ── Fine-level state fields (updated each wfact! call) ──
+    ᶜcs²::F
+    ᶜρ::F
+    ᶜe_tot::F
+    ᶜα_acoustic::F                  # Jacobi preconditioner diagonal
+    α_acoustic_max::Base.RefValue{FT}
+    # ── Fine-level Chebyshev scratch ──
+    ᶜhelm_x::F                      # current fine iterate
+    ᶜhelm_dir::F                    # Chebyshev direction
+    ᶜhelm_rhs::F                    # saved RHS
+    ᶜhelm_lap::F                    # wdivₕ(gradₕ(x)) scratch
+    ᶜhelm_res::F                    # residual = rhs - A·x (for V-cycle)
+    ᶜcoarse_corr::F                 # prolongated coarse correction (fine field)
+    dss_buffer::GB
+    # ── Mesh metadata ──
+    Nq::Int                         # fine polynomial order
+    nelem::Int
+    N_h::Int                        # unique fine horizontal DOFs
+    N_v::Int
+    # ── Coarse level (Nq_c = 2) ──
+    N_h_c::Int                      # unique coarse horizontal DOFs
+    dof_map_coarse::Array{Int, 3}   # (2, 2, nelem) → coarse global DOF (1-based)
+    weights_c::Vector{FT}           # GLL{2} quadrature weights
+    K1D_c::Matrix{FT}               # 2×2 coarse 1D stiffness matrix
+    WJ_coarse::Vector{FT}           # N_h_c assembled mass weights
+    inv_coarse_count::Vector{FT}    # 1/(# elements sharing each coarse DOF)
+    P1D::Matrix{FT}                 # (Nq, 2) prolongation: fine ← coarse (linear interp)
+    H_coarse::Vector{SparseMatrixCSC{FT, Int}}  # N_h_c × N_h_c sparse per level
+    H_coarse_lu::Vector{Any}        # LU factorizations per level
+    coarse_rhs::Matrix{FT}          # (N_h_c, N_v) coarse right-hand side
+    coarse_sol::Matrix{FT}          # (N_h_c, N_v) coarse correction
+    cs2_coarse::Matrix{FT}          # (N_h_c, N_v) cs² at coarse nodes (for assembly)
+    # Float64 work buffers for UMFPACK (which always factorizes in Float64).
+    # Non-nothing only when FT === Float32.
+    coarse_rhs64::Union{Vector{Float64}, Nothing}
+    coarse_sol64::Union{Vector{Float64}, Nothing}
+    # ── CPU scratch for field ↔ coarse transfers ──
+    # Layout matches ClimaCore VIJFH: (N_v, Nq, Nq, 1, nelem)
+    fine_buf_cpu::Array{FT, 5}
+end
+
+"""
+    build_pmg_helmholtz_2d_cache(::Type{FT}, Y; backsub_alpha, n_pre, n_post)
+
+Construct a `PMGHelmholtz2DCache`. Builds the coarse DOF map (Nq_c=2), assembles
+the coarse sparsity pattern, and precomputes the restriction/prolongation operators.
+"""
+function build_pmg_helmholtz_2d_cache(
+    ::Type{FT}, Y;
+    backsub_alpha::FT = FT(0),
+    n_pre::Int = 3,
+    n_post::Int = 3,
+) where {FT}
+    cspace = axes(Y.c)
+    hspace = Spaces.horizontal_space(cspace)
+    topology = Spaces.topology(hspace)
+    quad = Spaces.quadrature_style(hspace)
+    Nq = Quadratures.degrees_of_freedom(quad)
+    nelem = Topologies.nlocalelems(topology)
+    N_v = Spaces.nlevels(cspace)
+
+    ᶜscalar() = similar(Y.c, FT)
+    dss_buf = Spaces.create_dss_buffer(ᶜscalar())
+
+    # Fine DOF count (for logging)
+    _, N_h = build_sparse_helmholtz_2d_dof_map(topology, Nq)
+
+    # Coarse DOF map: same topology, Nq_c = 2
+    dof_map_coarse_raw, N_h_c = build_sparse_helmholtz_2d_dof_map(topology, 2)
+    dof_map_coarse = Array{Int, 3}(dof_map_coarse_raw)
+
+    # Coarse GLL data (2-point Gauss-Lobatto-Legendre)
+    points_c, w_c = Quadratures.quadrature_points(FT, Quadratures.GLL{2}())
+    D_c = Matrix{FT}(Quadratures.differentiation_matrix(FT, Quadratures.GLL{2}()))
+    weights_c = Vector{FT}(w_c)
+    K1D_c = D_c' * Diagonal(weights_c) * D_c  # 2×2
+
+    # Fine GLL node positions (for prolongation matrix)
+    points_f, w_f = Quadratures.quadrature_points(FT, quad)
+    x_f = Vector{FT}(points_f)
+    w_fine = Vector{FT}(w_f)
+
+    # Prolongation P1D[i_f, i_c]: linear Lagrange basis of coarse node i_c
+    # evaluated at fine GLL node x_f[i_f].  Coarse nodes: x_c = {-1, +1}.
+    P1D = Matrix{FT}(undef, Nq, 2)
+    for i in 1:Nq
+        P1D[i, 1] = (FT(1) - x_f[i]) / FT(2)   # basis at x_c = -1
+        P1D[i, 2] = (FT(1) + x_f[i]) / FT(2)   # basis at x_c = +1
+    end
+
+    # Coarse WJ assembly: w_c[i_c]*w_c[j_c]*J_corner, accumulated over elements.
+    # J at corner (fi, fj) of element e ≈ WJ_fine[fi,fj,1,e] / (w_fine[fi]*w_fine[fj]).
+    lg_data = Spaces.local_geometry_data(hspace)
+    WJ_arr = Array(parent(lg_data.WJ))  # (Nq, Nq, 1, nelem)
+    WJ_coarse = zeros(FT, N_h_c)
+    coarse_count = zeros(Int, N_h_c)
+    for e in 1:nelem
+        for j_c in 1:2, i_c in 1:2
+            h_c = dof_map_coarse[i_c, j_c, e]
+            fi = (i_c == 1) ? 1 : Nq
+            fj = (j_c == 1) ? 1 : Nq
+            J_corner = FT(WJ_arr[fi, fj, 1, e]) / (w_fine[fi] * w_fine[fj])
+            WJ_coarse[h_c] += weights_c[i_c] * weights_c[j_c] * J_corner
+            coarse_count[h_c] += 1
+        end
+    end
+    inv_coarse_count = FT.(1.0 ./ coarse_count)
+
+    # Coarse sparsity pattern: same structure as fine but at Nq_c=2
+    I_idx = Int[]
+    J_idx = Int[]
+    for e in 1:nelem
+        for j1 in 1:2, i1 in 1:2
+            h_row = dof_map_coarse[i1, j1, e]
+            for i2 in 1:2
+                push!(I_idx, h_row)
+                push!(J_idx, dof_map_coarse[i2, j1, e])
+            end
+            for j2 in 1:2
+                j2 == j1 && continue
+                push!(I_idx, h_row)
+                push!(J_idx, dof_map_coarse[i1, j2, e])
+            end
+        end
+    end
+    H_template_c = sparse(I_idx, J_idx, zeros(FT, length(I_idx)), N_h_c, N_h_c)
+    H_coarse = [copy(H_template_c) for _ in 1:N_v]
+    H_coarse_lu = Vector{Any}(undef, N_v)
+    for k in 1:N_v
+        ;
+        H_coarse_lu[k] = nothing;
+    end
+
+    @info "PMGHelmholtz2D: Nq=$Nq→2, nelem=$nelem, N_h=$N_h→$N_h_c, N_v=$N_v, n_pre=$n_pre, n_post=$n_post"
+
+    return PMGHelmholtz2DCache{FT, typeof(ᶜscalar()), typeof(dss_buf)}(
+        Ref(FT(0)),         # dtγ
+        backsub_alpha,
+        n_pre,
+        n_post,
+        ᶜscalar(),          # ᶜcs²
+        ᶜscalar(),          # ᶜρ
+        ᶜscalar(),          # ᶜe_tot
+        ᶜscalar(),          # ᶜα_acoustic
+        Ref(FT(0)),         # α_acoustic_max
+        ᶜscalar(),          # ᶜhelm_x
+        ᶜscalar(),          # ᶜhelm_dir
+        ᶜscalar(),          # ᶜhelm_rhs
+        ᶜscalar(),          # ᶜhelm_lap
+        ᶜscalar(),          # ᶜhelm_res
+        ᶜscalar(),          # ᶜcoarse_corr
+        dss_buf,
+        Nq,
+        nelem,
+        N_h,
+        N_v,
+        N_h_c,
+        dof_map_coarse,
+        weights_c,
+        K1D_c,
+        WJ_coarse,
+        inv_coarse_count,
+        P1D,
+        H_coarse,
+        H_coarse_lu,
+        zeros(FT, N_h_c, N_v),              # coarse_rhs
+        zeros(FT, N_h_c, N_v),              # coarse_sol
+        zeros(FT, N_h_c, N_v),              # cs2_coarse
+        FT === Float32 ? zeros(Float64, N_h_c) : nothing,  # coarse_rhs64
+        FT === Float32 ? zeros(Float64, N_h_c) : nothing,  # coarse_sol64
+        zeros(FT, N_v, Nq, Nq, 1, nelem),  # fine_buf_cpu  (VIJFH layout)
+    )
+end
+
+"""
+    assemble_pmg_coarse!(pmg, dtγ)
+
+Extract cs² at coarse corner nodes from the fine field, assemble the coarse
+Helmholtz matrix per vertical level, and LU-factorize.  Called from wfact!.
+"""
+function assemble_pmg_coarse!(pmg::PMGHelmholtz2DCache{FT}, dtγ_val::FT) where {FT}
+    (; ᶜcs², dof_map_coarse, weights_c, K1D_c, WJ_coarse, inv_coarse_count,
+        H_coarse, H_coarse_lu, cs2_coarse, N_h_c, N_v, nelem) = pmg
+
+    Nq_fine = pmg.Nq
+    δtγ² = dtγ_val^2
+
+    # ── Extract cs² at coarse nodes (D2H fine field → CPU buffer) ──
+    cs2_parent = Array(parent(ᶜcs²))  # (N_v, Nq, Nq, 1, nelem); D2H on GPU
+
+    fill!(cs2_coarse, FT(0))
+    @inbounds for e in 1:nelem
+        for j_c in 1:2, i_c in 1:2
+            h_c = dof_map_coarse[i_c, j_c, e]
+            fi = (i_c == 1) ? 1 : Nq_fine
+            fj = (j_c == 1) ? 1 : Nq_fine
+            for k in 1:N_v
+                cs2_coarse[h_c, k] += FT(cs2_parent[k, fi, fj, 1, e])
+            end
+        end
+    end
+    # Average over elements sharing each coarse DOF
+    @inbounds for k in 1:N_v, h_c in 1:N_h_c
+        cs2_coarse[h_c, k] *= inv_coarse_count[h_c]
+    end
+
+    # ── Assemble and factorize coarse Helmholtz per level ──
+    @inbounds for k in 1:N_v
+        Hk = H_coarse[k]
+        Hk.nzval .= FT(0)
+
+        # Mass (diagonal)
+        for h_c in 1:N_h_c
+            Hk[h_c, h_c] += WJ_coarse[h_c]
+        end
+
+        # Stiffness (tensor-product, same structure as fine)
+        for e in 1:nelem
+            for j1 in 1:2, i1 in 1:2
+                h_row = dof_map_coarse[i1, j1, e]
+                cs2_row = cs2_coarse[h_row, k]
+                w_j1 = weights_c[j1]
+                w_i1 = weights_c[i1]
+
+                # Direction 1: (i1,j1) → (i2,j1)
+                for i2 in 1:2
+                    h_col = dof_map_coarse[i2, j1, e]
+                    Hk[h_row, h_col] += δtγ² * cs2_row * w_j1 * K1D_c[i1, i2]
+                end
+
+                # Direction 2: (i1,j1) → (i1,j2), j2 ≠ j1
+                for j2 in 1:2
+                    j2 == j1 && continue
+                    h_col = dof_map_coarse[i1, j2, e]
+                    Hk[h_row, h_col] += δtγ² * cs2_row * w_i1 * K1D_c[j1, j2]
+                end
+            end
+        end
+
+        H_coarse_lu[k] = lu(Hk)
+    end
+
+    return nothing
+end
+
+"""
+    _pmg_chebyshev_smooth!(pmg, n_iters)
+
+Apply `n_iters` Chebyshev-accelerated damped-Richardson steps to `ᶜhelm_x`
+using the Jacobi-preconditioned fine operator M⁻¹A, where:
+  A·x = x - dtγ²·cs²·wdivₕ(gradₕ(x)),   M·x = (1 + ᶜα_acoustic)·x.
+
+Operates in-place on `ᶜhelm_x`.  No DSS is applied (caller's responsibility).
+"""
+function _pmg_chebyshev_smooth!(pmg::PMGHelmholtz2DCache{FT}, n_iters::Int) where {FT}
+    n_iters == 0 && return nothing
+
+    (; ᶜhelm_x, ᶜhelm_dir, ᶜhelm_rhs, ᶜhelm_lap,
+        ᶜcs², ᶜα_acoustic, α_acoustic_max, dtγ) = pmg
+
+    α = FT(dtγ[]^2)
+    # High-frequency multigrid smoother: target upper half of the M⁻¹A spectrum.
+    # Full spectrum is [1/(1+α_max), 1]; targeting [0.5, 1.0] gives ~3300x reduction
+    # in 5 steps (vs 3.5% for the full spectrum at κ≈3×10⁵). Low-frequency modes
+    # (eigenvalues < 0.5) are left for the coarse-grid correction.
+    a = FT(0.5)
+    b = FT(1)
+    θ = (a + b) / 2
+    δ = (b - a) / 2
+    σ₁ = θ / δ
+
+    # Step 1
+    @. ᶜhelm_lap = wdivₕ(gradₕ(ᶜhelm_x))
+    @. ᶜhelm_dir =
+        (ᶜhelm_rhs - ᶜhelm_x + α * ᶜcs² * ᶜhelm_lap) /
+        ((FT(1) + ᶜα_acoustic) * θ)
+    @. ᶜhelm_x += ᶜhelm_dir
+
+    # Steps 2..n_iters: three-term Chebyshev recurrence
+    ρ_prev = FT(1) / σ₁
+    for _ in 2:n_iters
+        ρ_new = FT(1) / (2 * σ₁ - FT(1) / ρ_prev)
+        @. ᶜhelm_lap = wdivₕ(gradₕ(ᶜhelm_x))
+        @. ᶜhelm_dir =
+            2 * ρ_new * σ₁ / θ *
+            (ᶜhelm_rhs - ᶜhelm_x + α * ᶜcs² * ᶜhelm_lap) /
+            (FT(1) + ᶜα_acoustic) +
+            ρ_new * ρ_prev * ᶜhelm_dir
+        @. ᶜhelm_x += ᶜhelm_dir
+        ρ_prev = ρ_new
+    end
+
+    return nothing
+end
+
+"""
+    pmg_helmholtz_correction!(pmg, ΔY)
+
+Apply the two-level p-multigrid V-cycle as a preconditioner for the horizontal
+Helmholtz operator.  Solves (approximately):
+  (I + dtγ²·cs²·(-∇²_h)) · Δρ = -dtγ · wdivₕ(ρ · ΔY.c.uₕ)
+and applies the additive corrections to ΔY.c.ρ (and optionally ΔY.c.uₕ,
+ΔY.c.ρe_tot via back-substitution).
+
+V-cycle:
+  1. Form RHS: r = -dtγ · wdivₕ(ρ · uₕ) + DSS
+  2. Initial guess: x ← r
+  3. Pre-smooth:  n_pre Chebyshev steps on (A, x, r)
+  4. Residual:    res = r - A·x, then DSS
+  5. Restrict:    coarse_rhs = R · res  (injection at GLL corners, D2H)
+  6. Coarse solve: coarse_sol = H_coarse \\ coarse_rhs  (LU, CPU)
+  7. Prolongate:  ᶜcoarse_corr = P · coarse_sol  (bilinear, H2D + DSS)
+  8. Correct:     x += ᶜcoarse_corr
+  9. Post-smooth: n_post Chebyshev steps on (A, x, r)
+  10. Final DSS + apply to ΔY
+"""
+function pmg_helmholtz_correction!(pmg::PMGHelmholtz2DCache{FT}, ΔY) where {FT}
+    (; dtγ, ᶜcs², ᶜρ, ᶜe_tot, backsub_alpha,
+        ᶜhelm_x, ᶜhelm_rhs, ᶜhelm_lap, ᶜhelm_res, ᶜcoarse_corr,
+        dss_buffer, n_pre, n_post,
+        Nq, nelem, N_h_c, N_v,
+        dof_map_coarse, inv_coarse_count, P1D,
+        WJ_coarse,
+        H_coarse_lu, coarse_rhs, coarse_sol, coarse_rhs64, coarse_sol64,
+        fine_buf_cpu) = pmg
+
+    δtγ_val = dtγ[]
+    α = FT(δtγ_val^2)
+
+    # ── Step 1: RHS = -dtγ · wdivₕ(ρ · uₕ) + DSS ──
+    @. ᶜhelm_rhs = wdivₕ(ᶜρ * ΔY.c.uₕ)
+    Spaces.weighted_dss!(ᶜhelm_rhs => dss_buffer)
+    @. ᶜhelm_rhs = -δtγ_val * ᶜhelm_rhs
+
+    # ── Step 2: Initial guess ──
+    @. ᶜhelm_x = ᶜhelm_rhs
+
+    # ── Step 3: Pre-smoothing ──
+    _pmg_chebyshev_smooth!(pmg, n_pre)
+
+    # ── Step 4: Residual res = rhs - A·x, then DSS ──
+    # A·x = x - α·cs²·wdivₕ(gradₕ(x))
+    @. ᶜhelm_lap = wdivₕ(gradₕ(ᶜhelm_x))
+    @. ᶜhelm_res = ᶜhelm_rhs - ᶜhelm_x + α * ᶜcs² * ᶜhelm_lap
+    Spaces.weighted_dss!(ᶜhelm_res => dss_buffer)
+
+    # ── Step 5: Restrict residual to coarse level ──
+    # D2H: copy fine residual parent (VIJFH: N_v×Nq×Nq×1×nelem) to CPU
+    copyto!(fine_buf_cpu, parent(ᶜhelm_res))
+    fill!(coarse_rhs, FT(0))
+    @inbounds for e in 1:nelem
+        for j_c in 1:2, i_c in 1:2
+            h_c = dof_map_coarse[i_c, j_c, e]
+            fi = (i_c == 1) ? 1 : Nq
+            fj = (j_c == 1) ? 1 : Nq
+            for k in 1:N_v
+                coarse_rhs[h_c, k] += fine_buf_cpu[k, fi, fj, 1, e]
+            end
+        end
+    end
+    # Average over shared-DOF contributions (fine space is CG so values agree)
+    @inbounds for k in 1:N_v, h_c in 1:N_h_c
+        coarse_rhs[h_c, k] *= inv_coarse_count[h_c]
+    end
+
+    # ── Step 5b: Scale coarse RHS by mass matrix ──
+    # The fine operator is mass-preconditioned: A_fine = M_fine⁻¹·H_fine, so the
+    # fine residual lives in coefficient space.  The coarse matrix is assembled in
+    # the integrated (H_coarse = M_coarse + δtγ²·K_coarse) space.  To solve the
+    # coarse problem in the same coefficient space as the fine problem we need:
+    #   H_coarse · e = M_coarse · r_c   ↔   A_coarse · e = r_c
+    # Without this scaling the constant mode (A·c = c) gets a correction that is
+    # smaller than it should be by a factor of ~WJ_coarse ≈ element_area, which
+    # makes the V-cycle coarse correction negligibly small at large dt/CFL.
+    @inbounds for k in 1:N_v, h_c in 1:N_h_c
+        coarse_rhs[h_c, k] *= WJ_coarse[h_c]
+    end
+
+    # ── Step 6: Coarse solve (CPU LU) ──
+    # UMFPACK always factorizes in Float64; use pre-allocated Float64 buffers
+    # when FT=Float32 to avoid a type mismatch in ldiv!.
+    @inbounds for k in 1:N_v
+        if isnothing(coarse_rhs64)
+            LinearAlgebra.ldiv!(
+                view(coarse_sol, :, k),
+                H_coarse_lu[k],
+                view(coarse_rhs, :, k),
+            )
+        else
+            coarse_rhs64 .= view(coarse_rhs, :, k)
+            LinearAlgebra.ldiv!(coarse_sol64, H_coarse_lu[k], coarse_rhs64)
+            coarse_sol[:, k] .= FT.(coarse_sol64)
+        end
+    end
+
+    # ── Step 7: Prolongate coarse correction to fine level ──
+    fill!(fine_buf_cpu, FT(0))
+    @inbounds for e in 1:nelem
+        for j in 1:Nq, i in 1:Nq
+            for k in 1:N_v
+                val = FT(0)
+                for j_c in 1:2, i_c in 1:2
+                    h_c = dof_map_coarse[i_c, j_c, e]
+                    val += P1D[i, i_c] * P1D[j, j_c] * coarse_sol[h_c, k]
+                end
+                fine_buf_cpu[k, i, j, 1, e] = val
+            end
+        end
+    end
+    # H2D: write prolongated correction into fine ClimaCore field + DSS
+    copyto!(parent(ᶜcoarse_corr), fine_buf_cpu)
+    Spaces.weighted_dss!(ᶜcoarse_corr => dss_buffer)
+
+    # ── Step 8: Correction ──
+    @. ᶜhelm_x += ᶜcoarse_corr
+
+    # ── Step 9: Post-smoothing ──
+    _pmg_chebyshev_smooth!(pmg, n_post)
+
+    # ── Step 10: Final DSS and apply additive ρ correction ──
+    Spaces.weighted_dss!(ᶜhelm_x => dss_buffer)
+    @. ΔY.c.ρ += ᶜhelm_x
+
+    # ── Step 11: Optional back-substitution ──
+    if backsub_alpha > FT(0)
+        α_bs = backsub_alpha
+        @. ΔY.c.uₕ -= C12(
+            FT(α_bs * δtγ_val) * (ᶜcs² / max(ᶜρ, FT(1e-6))) * gradₕ(ᶜhelm_x),
+        )
+        @. ΔY.c.ρe_tot += FT(α_bs) * ᶜe_tot * ᶜhelm_x
+    end
+
+    return nothing
+end
+
 function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     (;
         topography_flag,
@@ -1473,6 +1933,15 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 build_matfree_helmholtz_2d_cache(FT, Y;
                     backsub_alpha = FT(alg.helmholtz_backsub_alpha),
                     n_iters = alg.n_helmholtz_2d_iters,
+                )
+            elseif alg.helmholtz_2d_solver == "pmg"
+                build_pmg_helmholtz_2d_cache(FT, Y;
+                    backsub_alpha = FT(alg.helmholtz_backsub_alpha),
+                    n_pre = max(1, alg.n_helmholtz_2d_iters ÷ 2),
+                    n_post = max(
+                        1,
+                        alg.n_helmholtz_2d_iters - alg.n_helmholtz_2d_iters ÷ 2,
+                    ),
                 )
             elseif alg.helmholtz_2d_solver == "gpu_direct"
                 build_gpu_sparse_helmholtz_2d_cache(
@@ -1962,8 +2431,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         ᶜcs²_tmp2 = p.scratch.ᶜtemp_scalar_2
         @. ᶜcs²_tmp2 = γ_d_sh2 * ᶜp / ᶜρ
 
-        if shc2 isa MatrixFreeHelmholtz2DCache
-            # Matrix-free: copy fields and compute α_acoustic
+        if shc2 isa MatrixFreeHelmholtz2DCache || shc2 isa PMGHelmholtz2DCache
+            # Matrix-free / PMG: copy fields and compute α_acoustic for Chebyshev smoother
             shc2.dtγ[] = FT(dtγ)
             @. shc2.ᶜcs² = ᶜcs²_tmp2
             @. shc2.ᶜρ = ᶜρ
@@ -1983,6 +2452,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. shc2.ᶜα_acoustic =
                 chebyshev_safety * FT(dtγ)^2 * ᶜcs²_tmp2 * FT(2 * π^2) / FT(Δx_ref)^2
             shc2.α_acoustic_max[] = maximum(parent(shc2.ᶜα_acoustic))
+            if shc2 isa PMGHelmholtz2DCache
+                assemble_pmg_coarse!(shc2, FT(dtγ))
+            end
         elseif shc2 isa GPUSparseHelmholtz2DCache
             # GPU sparse direct: GPU-native field→vec, then copy to CPU for assembly
             shc2.dtγ[] = FT(dtγ)
@@ -2855,9 +3327,11 @@ function invert_jacobian!(alg::ManualSparseJacobian, cache, ΔY, R)
         sparse_helmholtz_correction!(cache.sparse_helmholtz, ΔY)
     end
 
-    # Step 4: 2D Helmholtz correction for sphere grids (direct or matrix-free)
+    # Step 4: 2D Helmholtz correction for sphere grids (direct, matrix-free, or PMG)
     if use_derivative(alg.sparse_helmholtz_2d_flag) && !isnothing(cache.sparse_helmholtz_2d)
-        if cache.sparse_helmholtz_2d isa MatrixFreeHelmholtz2DCache
+        if cache.sparse_helmholtz_2d isa PMGHelmholtz2DCache
+            pmg_helmholtz_correction!(cache.sparse_helmholtz_2d, ΔY)
+        elseif cache.sparse_helmholtz_2d isa MatrixFreeHelmholtz2DCache
             matfree_helmholtz_2d_correction!(cache.sparse_helmholtz_2d, ΔY)
         elseif cache.sparse_helmholtz_2d isa GPUSparseHelmholtz2DCache
             gpu_sparse_helmholtz_2d_correction!(cache.sparse_helmholtz_2d, ΔY)

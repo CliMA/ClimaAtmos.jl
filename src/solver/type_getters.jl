@@ -389,10 +389,14 @@ function get_initial_condition(parsed_args, atmos)
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
             parsed_args["perturb_initstate"],
         )
+    elseif parsed_args["initial_condition"] == "Bomex"
+        return ICs.Bomex(
+            parsed_args["prognostic_tke"],
+            parsed_args["perturb_initstate"],
+        )
     elseif parsed_args["initial_condition"] in [
         "GABLS",
         "Soares",
-        "Bomex",
         "DYCOMS_RF01",
         "DYCOMS_RF02",
         "Rico",

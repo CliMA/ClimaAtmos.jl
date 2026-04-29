@@ -1,3 +1,8 @@
-[C_E]
-value = 0.044
+[c_smag]
+value = 0.2
+
+[zd_rayleigh]
+value = 2500.0
+
+
 

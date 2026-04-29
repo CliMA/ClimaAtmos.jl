@@ -1510,9 +1510,10 @@ balanced pressure profile.
 """
 Base.@kwdef struct Bomex <: InitialCondition
     prognostic_tke::Bool = false
+    perturb::Bool = false
 end
 
-for IC in (:Soares, :Bomex)
+for IC in (:Soares,)
     θ_func_name = Symbol(IC, :_θ_liq_ice)
     q_tot_func_name = Symbol(IC, :_q_tot)
     u_func_name = Symbol(IC, :_u)
@@ -1521,11 +1522,7 @@ for IC in (:Soares, :Bomex)
         (; prognostic_tke) = initial_condition
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
-        p_0 = FT(
-            $IC <: Bomex ? 101500.0 :
-            $IC <: Soares ? 100000.0 :
-            error("Invalid Initial Condition : $($IC)"),
-        )
+        p_0 = FT(100000.0)
         θ = APL.$θ_func_name(FT)
         q_tot = APL.$q_tot_func_name(FT)
         p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
@@ -1548,6 +1545,46 @@ for IC in (:Soares, :Bomex)
         end
         return local_state
     end
+end
+
+function (initial_condition::Bomex)(params)
+    (; prognostic_tke, perturb) = initial_condition
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    p_0 = FT(101500.0)
+    θ = APL.Bomex_θ_liq_ice(FT)
+    q_tot = APL.Bomex_q_tot(FT)
+    p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
+    u = APL.Bomex_u(FT)
+    tke = APL.Bomex_tke_prescribed(FT)
+    function local_state(local_geometry)
+        coords = local_geometry.coordinates
+        (; z) = coords
+        T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot(z))
+        if perturb && z < FT(100)
+            # Small temperature perturbation in the subcloud layer to seed turbulence.
+            # sin(x)*sin(y) with x,y in metres gives pseudo-random spatial variation
+            # across GLL nodes; the linear ramp ensures continuity at z = 100 m.
+            # Amplitude 0.1 K is the standard LES spinup value.
+            T +=
+                FT(0.1) *
+                sin(coords.x) *
+                sin(coords.y) *
+                (FT(1) - z / FT(100))
+        end
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            T = T,
+            p = p(z),
+            q_tot = q_tot(z),
+            velocity = Geometry.UVector(u(z)),
+            turbconv_state = EDMFState(;
+                tke = prognostic_tke ? FT(0) : tke(z),
+            ),
+        )
+    end
+    return local_state
 end
 
 """
