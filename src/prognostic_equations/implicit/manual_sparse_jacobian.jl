@@ -861,17 +861,19 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             ∂ᶜρaʲ_err_∂ᶜρaʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).ρa)]
+            @. ∂ᶜρaʲ_err_∂ᶜρaʲ = zero(typeof(∂ᶜρaʲ_err_∂ᶜρaʲ)) - (I,)
             @. ᶜadvection_matrix =
                 -(ᶜadvdivᵥ_matrix()) ⋅
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ)
-            @. ∂ᶜρaʲ_err_∂ᶜρaʲ =
-                dtγ * ᶜadvection_matrix ⋅
-                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
-                DiagonalMatrixRow(1 / ᶜρʲs.:(1)) - (I,)
+            # @. ∂ᶜρaʲ_err_∂ᶜρaʲ =
+            #     dtγ * ᶜadvection_matrix ⋅
+            #     ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
+            #     DiagonalMatrixRow(1 / ᶜρʲs.:(1)) - (I,)
 
             # contribution of ρʲ variations in vertical transport of ρa and updraft buoyancy eq
             ∂ᶜρaʲ_err_∂ᶜmseʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)]
+            @. ∂ᶜρaʲ_err_∂ᶜmseʲ = zero(typeof(∂ᶜρaʲ_err_∂ᶜmseʲ))
             @. ᶠbidiagonal_matrix_ct3 =
                 DiagonalMatrixRow(
                     ᶠset_upwind_bcs(
@@ -889,9 +891,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 DiagonalMatrixRow(
                     Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
                 )
-            @. ∂ᶜρaʲ_err_∂ᶜmseʲ =
-                dtγ * ᶜadvdivᵥ_matrix() ⋅
-                (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
+            # @. ∂ᶜρaʲ_err_∂ᶜmseʲ =
+            #     dtγ * ᶜadvdivᵥ_matrix() ⋅
+            #     (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
 
             turbconv_params = CAP.turbconv_params(params)
             α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
@@ -920,6 +922,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
                 # ∂ᶜρaʲ_err_∂ᶜqʲ through ρʲ variations in vertical transport of ρa
                 ∂ᶜρaʲ_err_∂ᶜqʲ = matrix[@name(c.sgsʲs.:(1).ρa), qʲ_name]
+                @. ∂ᶜρaʲ_err_∂ᶜqʲ = zero(typeof(∂ᶜρaʲ_err_∂ᶜqʲ))
                 @. ᶠbidiagonal_matrix_ct3 =
                     DiagonalMatrixRow(
                         ᶠset_upwind_bcs(
@@ -937,9 +940,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     DiagonalMatrixRow(
                         Y.c.sgsʲs.:(1).ρa / ᶜp * ᶜ∂RmT∂qʲ,
                     )
-                @. ∂ᶜρaʲ_err_∂ᶜqʲ =
-                    dtγ * ᶜadvdivᵥ_matrix() ⋅
-                    (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
+                # @. ∂ᶜρaʲ_err_∂ᶜqʲ =
+                #     dtγ * ᶜadvdivᵥ_matrix() ⋅
+                #     (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
 
                 # ∂ᶜmseʲ_err_∂ᶜqʲ through ρʲ variations in buoyancy term in mse eq
                 ∂ᶜmseʲ_err_∂ᶜqʲ = matrix[@name(c.sgsʲs.:(1).mse), qʲ_name]
@@ -1039,21 +1042,22 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
                 @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ +=
                     dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
-                @. ∂ᶜρaʲ_err_∂ᶜρaʲ +=
-                    dtγ * DiagonalMatrixRow(1 / (1 - Y.c.sgsʲs.:(1).q_tot) / ᶜρʲs.:(1)) ⋅
-                    ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot)
+                # @. ∂ᶜρaʲ_err_∂ᶜρaʲ +=
+                #     dtγ * DiagonalMatrixRow(1 / (1 - Y.c.sgsʲs.:(1).q_tot) / ᶜρʲs.:(1)) ⋅
+                #     ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot)
                 ∂ᶜρaʲ_err_∂ᶜq_totʲ =
                     matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).q_tot)]
-                @. ∂ᶜρaʲ_err_∂ᶜq_totʲ +=
-                    dtγ * DiagonalMatrixRow(
-                        Y.c.sgsʲs.:(1).ρa / (1 - Y.c.sgsʲs.:(1).q_tot) / ᶜρʲs.:(1),
-                    ) ⋅
-                    ᶜdiffusion_h_matrix
-                @. ∂ᶜρaʲ_err_∂ᶜq_totʲ +=
-                    dtγ * DiagonalMatrixRow(
-                        Y.c.sgsʲs.:(1).ρa / (1 - Y.c.sgsʲs.:(1).q_tot)^2 / ᶜρʲs.:(1),
-                    ) ⋅
-                    ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot)
+                @. ∂ᶜρaʲ_err_∂ᶜq_totʲ = zero(typeof(∂ᶜρaʲ_err_∂ᶜq_totʲ))
+                # @. ∂ᶜρaʲ_err_∂ᶜq_totʲ +=
+                #     dtγ * DiagonalMatrixRow(
+                #         Y.c.sgsʲs.:(1).ρa / (1 - Y.c.sgsʲs.:(1).q_tot) / ᶜρʲs.:(1),
+                #     ) ⋅
+                #     ᶜdiffusion_h_matrix
+                # @. ∂ᶜρaʲ_err_∂ᶜq_totʲ +=
+                #     dtγ * DiagonalMatrixRow(
+                #         Y.c.sgsʲs.:(1).ρa / (1 - Y.c.sgsʲs.:(1).q_tot)^2 / ᶜρʲs.:(1),
+                #     ) ⋅
+                #     ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot)
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
                     NonEquilibriumMicrophysics2M,
@@ -1084,8 +1088,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
                 @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
                     dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
-                @. ∂ᶜρaʲ_err_∂ᶜρaʲ +=
-                    dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) - ᶜdetrʲs.:(1))
+                # @. ∂ᶜρaʲ_err_∂ᶜρaʲ +=
+                #     dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) - ᶜdetrʲs.:(1))
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
                     NonEquilibriumMicrophysics2M,
@@ -1320,7 +1324,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         @. ᶠbidiagonal_matrix_ct3_2 =
                             ᶠset_tracer_upwind_matrix_bcs(
                                 ᶠtracer_upwind_matrix(CT3(sign(ᶠu³⁰_data))),
-                            ) ⋅ DiagonalMatrixRow(ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰))
+                            ) ⋅ DiagonalMatrixRow(ᶜχ⁰ * env_draft_area(ᶜρa⁰, ᶜρ⁰))
                         @. ∂ᶜρχ_err_∂ᶜρa +=
                             dtγ *
                             ᶜtracer_advection_matrix ⋅
@@ -1347,7 +1351,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             DiagonalMatrixRow(
                                 ᶠset_tracer_upwind_bcs(
                                     ᶠtracer_upwind(CT3(sign(ᶠu³⁰_data)),
-                                        ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰),
+                                        ᶜχ⁰ * env_draft_area(ᶜρa⁰, ᶜρ⁰),
                                     ),
                                 ) * adjoint(C3(sign(ᶠu³⁰_data))) *
                                 ᶠinterp(Y.c.ρ / ᶜρa⁰) * g³³(ᶠgⁱʲ),

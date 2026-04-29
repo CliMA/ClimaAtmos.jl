@@ -116,7 +116,7 @@ function microphysics_tendency!(Yₜ, Y, p, t,
             Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt *
             ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
         # ... and updraft tendency
-        @. Yₜ.c.sgsʲs.:($$j).ρa += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
+        # @. Yₜ.c.sgsʲs.:($$j).ρa += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
         @. Yₜ.c.sgsʲs.:($$j).q_tot +=
             ᶜmp_tendencyʲs.:($$j).dq_tot_dt *
             (1 - Y.c.sgsʲs.:($$j).q_tot)

@@ -387,7 +387,7 @@ function compute_aren(state, cache, _, turbconv_model::PrognosticEDMFX)
             ᶜq_ice⁰,
         ),
     )
-    return @. lazy(draft_area(ᶜρa⁰, ᶜρ⁰))
+    return @. lazy(env_draft_area(ᶜρa⁰, ᶜρ⁰))
 end
 
 compute_aren(_, cache, _, ::DiagnosticEDMFX) =

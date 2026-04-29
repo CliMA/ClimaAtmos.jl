@@ -84,7 +84,7 @@ function edmfx_sgs_mass_flux_tendency!(
         # Add the environment fluxes
         @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
         ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-        @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
+        @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * env_draft_area(ᶜρa⁰, ᶜρ⁰)
         vtt = vertical_transport(
             ᶜρ⁰,
             ᶠu³_diff,
@@ -114,7 +114,7 @@ function edmfx_sgs_mass_flux_tendency!(
             ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar =
-                (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
+                (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) * env_draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
@@ -165,7 +165,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 MatrixFields.has_field(Y, ρχ_name) || continue
 
                 ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-                @. ᶜa_scalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
+                @. ᶜa_scalar = ᶜχ⁰ * env_draft_area(ᶜρa⁰, ᶜρ⁰)
                 vtt = vertical_transport(
                     ᶜρ⁰,
                     ᶠu³⁰,

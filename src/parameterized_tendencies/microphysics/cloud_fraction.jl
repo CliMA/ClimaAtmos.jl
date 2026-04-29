@@ -704,7 +704,7 @@ function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
                 ᶜq_ice⁰,
             ),
         )
-        @. p.precomputed.ᶜcloud_fraction *= draft_area(ᶜρa⁰, ᶜρ⁰)
+        @. p.precomputed.ᶜcloud_fraction *= env_draft_area(ᶜρa⁰, ᶜρ⁰)
     end
 
     # Add contributions from the updrafts if using EDMF

@@ -318,9 +318,9 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         (; ᶜ∇²q_totʲs) = p.hyperdiff
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
-            @. Yₜ.c.sgsʲs.:($$j).ρa -=
-                ν₄_scalar * Y.c.sgsʲs.:($$j).ρa / (1 - Y.c.sgsʲs.:($$j).q_tot) *
-                wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+            # @. Yₜ.c.sgsʲs.:($$j).ρa -=
+            #     ν₄_scalar * Y.c.sgsʲs.:($$j).ρa / (1 - Y.c.sgsʲs.:($$j).q_tot) *
+            #     wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
         end
         if microphysics_model isa NonEquilibriumMicrophysics1M
             (; ᶜ∇²q_lclʲs, ᶜ∇²q_iclʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs) = p.hyperdiff

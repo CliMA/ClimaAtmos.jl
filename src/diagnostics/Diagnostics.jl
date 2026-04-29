@@ -55,6 +55,7 @@ import ..SlabOceanSST
 
 # functions used to calculate diagnostics
 import ..draft_area
+import ..env_draft_area
 import ..compute_gm_mixing_length
 
 import ..horizontal_integral_at_boundary

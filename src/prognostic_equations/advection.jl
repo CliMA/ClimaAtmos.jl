@@ -46,14 +46,14 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     end
 
     @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, 1)
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= split_divₕ(
-                Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j),
-                1,
-            )
-        end
-    end
+    # if p.atmos.turbconv_model isa PrognosticEDMFX
+    #     for j in 1:n
+    #         @. Yₜ.c.sgsʲs.:($$j).ρa -= split_divₕ(
+    #             Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j),
+    #             1,
+    #         )
+    #     end
+    # end
 
     (; ᶜh_tot) = p.precomputed
     @. Yₜ.c.ρe_tot -= split_divₕ(Y.c.ρ * ᶜu, ᶜh_tot)
@@ -399,7 +399,7 @@ function edmfx_sgs_vertical_advection_tendency!(
         # Flux form vertical advection of area farction with the grid mean velocity
         vtt =
             vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_mse_q_tot_upwinding)
-        @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
+        # @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
 
         # Advective form advection of mse and q_tot with the grid mean velocity
         # Note: This allocates because the function is too long

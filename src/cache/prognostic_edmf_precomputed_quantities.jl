@@ -101,6 +101,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
+    FT = eltype(thermo_params)
 
     (; ᶜΦ,) = p.core
     (;
@@ -129,6 +130,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         ᶜρʲ = ᶜρʲs.:($j)
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+        
 
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
@@ -182,6 +185,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
                 ᶜq_liqʲ,
                 ᶜq_iceʲ,
             )
+        @. ᶜρaʲ = ᶜρʲ * FT(0.1)
     end
     return nothing
 end

@@ -62,8 +62,12 @@ end
     Returns:
     - The draft area fraction
 """
-function draft_area(ρa, ρ)
-    return ρa / ρ
+function draft_area(ρa::FT, ρ) where {FT}
+    return FT(0.1)
+end
+
+function env_draft_area(ρa::FT, ρ) where {FT}
+    return FT(0.9)
 end
 
 """
@@ -175,9 +179,9 @@ function edmfx_vertical_diffusion_tendency!(
                 ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
                 ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
-            @. Yₜ.c.sgsʲs.:($$j).ρa -=
-                Y.c.sgsʲs.:($$j).ρa / (1 - Y.c.sgsʲs.:($$j).q_tot) *
-                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
+            # @. Yₜ.c.sgsʲs.:($$j).ρa -=
+            #     Y.c.sgsʲs.:($$j).ρa / (1 - Y.c.sgsʲs.:($$j).q_tot) *
+            #     ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
         end
 
         if p.atmos.microphysics_model isa
