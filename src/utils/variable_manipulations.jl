@@ -486,7 +486,7 @@ A wrapper for Julia's `mapreduce` function that automatically determines
 the initial value (`init`) for the reduction.
 
 This is useful for iterators whose elements are custom structs or
-`ClimaCore.Geometry.AxisTensor`s, where the zero element cannot be inferred
+`ClimaCore.Geometry.AbstractTensor`s, where the zero element cannot be inferred
 as a simple scalar. It uses `ClimaCore.RecursiveApply` tools (`rzero`,
 `rpromote_type`) to create a type-stable, correctly-structured zero element
 based on the output of the function `f` applied to the first elements of the
@@ -514,7 +514,7 @@ failures.
 
 It uses `ClimaCore.RecursiveApply` operators (`⊞` for addition, `⊠` for
 multiplication), which allows it to handle dot products of tuples containing
-complex, nested types such as `ClimaCore.Geometry.AxisTensor`s.
+complex, nested types such as `ClimaCore.Geometry.AbstractTensor`s.
 
 Arguments:
 - `a`: The first `Tuple`.

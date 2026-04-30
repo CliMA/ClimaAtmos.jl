@@ -87,7 +87,7 @@ to either a scaled negative identity matrix (if `row_name == col_name`, i.e.,
 a diagonal block) or zero (if `row_name != col_name`, i.e., an off-diagonal block).
 
 Specifically, for diagonal blocks, it sets the entry to represent `-I` (negative
-identity), where `I` is an `AxisTensor` identity of the appropriate type and structure.
+identity), where `I` is a `Tensor` identity of the appropriate type and structure.
 This is used within `zero_velocity_jacobian!` to modify Jacobian contributions
 related to velocity variables during an advection test.
 
@@ -99,10 +99,7 @@ Arguments:
 """
 function set_identity_matrix_entry!(matrix_entry, row_name, col_name)
     identity_matrix_entry_value = if row_name == col_name
-        # TODO: Add a method for one(::Axis2Tensor) to simplify this.
-        T = eltype(eltype(matrix_entry))
-        tensor_data = UniformScaling(one(eltype(T)))
-        -DiagonalMatrixRow(Geometry.AxisTensor(axes(T), tensor_data))
+        -DiagonalMatrixRow(one(eltype(eltype(matrix_entry))))
     else
         zero(eltype(matrix_entry))
     end
