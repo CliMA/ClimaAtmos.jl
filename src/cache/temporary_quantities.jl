@@ -83,7 +83,7 @@ function temporary_quantities(Y, atmos)
             face_space,
         ), # ᶠω¹²ʲs
         ᶜbidiagonal_adjoint_matrix_c3 = Fields.Field(
-            BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
+            BidiagonalMatrixRow{typeof(C3(FT(0))')},
             center_space,
         ),
         ᶜtemp_bdmr = similar(Y.c, BidiagonalMatrixRow{FT}),
@@ -99,8 +99,8 @@ function temporary_quantities(Y, atmos)
         # TODO: Remove this hack
         sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
         # Implicit solver cache:
-        ∂ᶜK_∂ᶜuₕ = similar(Y.c, DiagonalMatrixRow{Adjoint{FT, CT12{FT}}}),
-        ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
+        ∂ᶜK_∂ᶜuₕ = similar(Y.c, DiagonalMatrixRow{typeof(CT12(FT(0), FT(0))')}),
+        ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{typeof(CT3(FT(0))')}),
         ᶠp_grad_matrix = similar(Y.f, BidiagonalMatrixRow{C3{FT}}),
         ᶠbidiagonal_matrix_ct3 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
         ᶠband_matrix_wvec = similar(
@@ -119,17 +119,17 @@ function temporary_quantities(Y, atmos)
                 ClimaCore.Geometry.WVector{FT},
             },
         ),
-        ᶜtracer_advection_matrix = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, C3{FT}}}),
+        ᶜtracer_advection_matrix = similar(Y.c, BidiagonalMatrixRow{typeof(C3(FT(0))')}),
         ᶠbidiagonal_matrix_ct3_2 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
         ᶠbidiagonal_matrix_ct3xct12 = similar(
             Y.f,
             BidiagonalMatrixRow{
-                ClimaCore.Geometry.AxisTensor{
-                    FT,
+                ClimaCore.Geometry.Tensor{
                     2,
+                    FT,
                     Tuple{
-                        ClimaCore.Geometry.ContravariantAxis{(3,)},
-                        ClimaCore.Geometry.ContravariantAxis{(1, 2)},
+                        ClimaCore.Geometry.Contravariant3Axis,
+                        ClimaCore.Geometry.Contravariant12Axis,
                     },
                     SMatrix{1, 2, FT, 2},
                 },
@@ -137,7 +137,7 @@ function temporary_quantities(Y, atmos)
         ),
         ᶜadvection_matrix = similar(
             Y.c,
-            BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
+            BidiagonalMatrixRow{typeof(C3(FT(0))')},
         ),
         ᶜtridiagonal_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜdiffusion_h_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),

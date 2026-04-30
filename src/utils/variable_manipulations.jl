@@ -486,7 +486,7 @@ A wrapper for Julia's `mapreduce` function that automatically determines
 the initial value (`init`) for the reduction.
 
 This is useful for iterators whose elements are custom structs or
-`ClimaCore.Geometry.AxisTensor`s, where the zero element cannot be inferred
+`ClimaCore.Geometry.AbstractTensor`s, where the zero element cannot be inferred
 as a simple scalar. It uses `ClimaCore.RecursiveApply` tools (`rzero`,
 `rpromote_type`) to create a type-stable, correctly-structured zero element
 based on the output of the function `f` applied to the first elements of the
@@ -514,7 +514,7 @@ failures.
 
 It uses `ClimaCore.RecursiveApply` operators (`⊞` for addition, `⊠` for
 multiplication), which allows it to handle dot products of tuples containing
-complex, nested types such as `ClimaCore.Geometry.AxisTensor`s.
+complex, nested types such as `ClimaCore.Geometry.AbstractTensor`s.
 
 Arguments:
 - `a`: The first `Tuple`.
@@ -523,8 +523,8 @@ Arguments:
 Returns:
 - The result of the dot product, `Σᵢ a[i] * b[i]`.
 """
-promote_type_mul(n::Number, x::Geometry.AxisTensor) = typeof(x)
-promote_type_mul(x::Geometry.AxisTensor, n::Number) = typeof(x)
+promote_type_mul(n::Number, x::Geometry.AbstractTensor) = typeof(x)
+promote_type_mul(x::Geometry.AbstractTensor, n::Number) = typeof(x)
 @inline function unrolled_dotproduct(a::Tuple, b::Tuple)
     r = rzero(promote_type_mul(first(a), first(b)))
     unrolled_dotproduct(r, a, b)
