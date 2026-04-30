@@ -10,9 +10,6 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
-    # TODO: Needs to be updated to use the new microphysics
-    # tendency function with quadrature if implicit_microphysics is true
-
     if p.atmos.microphysics_tendency_timestepping == Implicit()
         microphysics_tendency!(
             Yₜ,
@@ -71,6 +68,8 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+
+    sgs_u₃_implicit_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     # NOTE: This will zero out all momentum tendencies in the edmfx advection test
     # DO NOT add additional velocity tendencies after this function
