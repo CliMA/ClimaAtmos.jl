@@ -171,6 +171,11 @@ function assign_moisture_edmf!(
             hasproperty(s, :ρa) && fill!(s.ρa, 0)
             hasproperty(s, :mse) && (s.mse .= ᶜmse)
             hasproperty(s, :q_tot) && (s.q_tot .= ᶜq_tot)
+            # SGS 1M microphysics tracers
+            hasproperty(s, :q_lcl) && fill!(s.q_lcl, 0)
+            hasproperty(s, :q_icl) && fill!(s.q_icl, 0)
+            hasproperty(s, :q_rai) && fill!(s.q_rai, 0)
+            hasproperty(s, :q_sno) && fill!(s.q_sno, 0)
         end
     end
 
