@@ -182,6 +182,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
                 ᶜq_liqʲ,
                 ᶜq_iceʲ,
             )
+
+        # Add boundary kinematic contribution to entrainment to compensate
+        # advective area loss (∂(ρaw)/∂z) in the first cell. Using a one-sided
+        # estimate (zero flux below the surface), we add ᶠw₂ / ᶜdz₁ =  ᶠu³ʲs[2]
+        # so that entrainment can effectively relax area toward `surface_area`.
+        buoyancy_flux_val = Fields.field_values(p.precomputed.sfc_conditions.buoyancy_flux)
+        entr_int_val = Fields.field_values(Fields.level(p.precomputed.ᶜentrʲs.:($j), 1))
+        @. p.scratch.ᶜtemp_scalar_4 = ᶜright_bias(ᶠu³ʲ.components.data.:1)
+        w_over_dz_val = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar_4, 1))
+        @. entr_int_val += ifelse(buoyancy_flux_val < 0, 0, w_over_dz_val)
     end
     return nothing
 end
@@ -384,14 +394,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         else
             @. detr_int_val = limit_detrainment(detr_int_val, entr_int_val, ᶜaʲ_int_val, dt)
         end
-        # Add boundary kinematic contribution to entrainment to compensate
-        # advective area loss (∂(ρaw)/∂z) in the first cell. Using a one-sided
-        # estimate (zero flux below the surface), we add ᶠw₂ / ᶜdz₁ =  ᶠu³ʲs[2]
-        # so that entrainment can effectively relax area toward `surface_area`.
-        @. p.scratch.ᶜtemp_scalar_4 =
-            ᶜright_bias(p.precomputed.ᶠu³ʲs.:($$j).components.data.:1)
-        w_over_dz_val = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar_4, 1))
-        @. entr_int_val += ifelse(buoyancy_flux_val < 0, 0, w_over_dz_val)
 
         @. ᶠρ_diffʲs.:($$j) = ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) / ᶠinterp(ᶜρʲs.:($$j))
     end

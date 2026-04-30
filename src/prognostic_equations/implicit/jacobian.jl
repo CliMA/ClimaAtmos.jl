@@ -27,13 +27,9 @@ struct Jacobian{A <: JacobianAlgorithm, C}
     alg::A
     cache::C
 end
-function Jacobian(alg, Y, atmos, for_sgs_u₃; verbose = false)
+function Jacobian(alg, Y, atmos; verbose = false)
     krylov_cache = (; ΔY_krylov = similar(Y), R_krylov = similar(Y))
-    matrix_cache =
-        for_sgs_u₃ ?
-        jacobian_sgs_u₃_cache(alg, Y, atmos) :
-        jacobian_cache(alg, Y, atmos)
-    cache = (; matrix_cache..., krylov_cache...)
+    cache = (; jacobian_cache(alg, Y, atmos; verbose)..., krylov_cache...)
     return Jacobian(alg, cache)
 end
 
@@ -49,8 +45,6 @@ Base.zero(jacobian::Jacobian) = jacobian
 # ClimaTimeSteppers.jl calls this to set the Jacobian before each linear solve.
 NVTX.@annotate update_jacobian!(jacobian, Y, p, dtγ, t) =
     update_jacobian!(jacobian.alg, jacobian.cache, Y, p, eltype(Y)(dtγ), t)
-NVTX.@annotate update_jacobian_sgs_u₃!(jacobian, Y, p, dtγ, t) =
-    update_jacobian_sgs_u₃!(jacobian.alg, jacobian.cache, Y, p, eltype(Y)(dtγ), t)
 
 # ClimaTimeSteppers.jl calls this to perform each linear solve.
 NVTX.@annotate LinearAlgebra.ldiv!(

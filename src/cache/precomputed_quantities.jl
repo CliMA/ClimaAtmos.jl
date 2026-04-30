@@ -280,6 +280,7 @@ function precomputed_quantities(Y, atmos)
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
             ᶠρ_diffʲs = similar(Y.f, NTuple{n, FT}),
+            ᶠu₃_tendencyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             precipitation_sgs_quantities...,
         ) : (;)
 
