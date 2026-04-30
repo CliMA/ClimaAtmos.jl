@@ -59,9 +59,6 @@ use_newton_rtol:
 newton_rtol:
   help: "Relative tolerance of Newton's method (only for ClimaTimeSteppers.jl; only used when `use_newton_rtol` is `true`)"
   value: 1.0e-5
-split_ode:
-  help: "Use split of ODE problem. Examples: [`true` (implicit, default), `false` (explicit)]"
-  value: true
 use_krylov_method:
   help: "Whether to use a Krylov method to solve the linear system in Newton's method (only for ClimaTimeSteppers.jl)"
   value: false
@@ -254,9 +251,6 @@ microphysics_n_substeps:
 fixed_terminal_velocity:
   help: "Use fixed terminal velocities for microphysics tracers [`true` (default), `false`]"
   value: true
-perf_summary:
-  help: "Flag for collecting performance summary information"
-  value: false
 viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false
