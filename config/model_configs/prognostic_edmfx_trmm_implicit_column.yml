@@ -9,7 +9,6 @@ implicit_sgs_nh_pressure: true
 implicit_sgs_vertdiff: true
 implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
-max_newton_iters_ode: 1
 debug_jacobian: false # disabled due to performance on small box
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"

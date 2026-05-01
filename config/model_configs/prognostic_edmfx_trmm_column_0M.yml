@@ -7,7 +7,6 @@ implicit_sgs_nh_pressure: true
 implicit_sgs_vertdiff: true
 implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
-max_newton_iters_ode: 1
 edmfx_entr_model: "PiGroups"
 edmfx_detr_model: "SmoothArea"
 edmfx_sgs_mass_flux: true
