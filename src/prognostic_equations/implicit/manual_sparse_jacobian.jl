@@ -15,61 +15,52 @@ use_derivative(::UseDerivative) = true
 use_derivative(::IgnoreDerivative) = false
 
 """
-    ManualSparseJacobian(
-        topography_flag,
-        diffusion_flag,
-        sgs_advection_flag,
-        sgs_entr_detr_flag,
-        sgs_mass_flux_flag,
-        sgs_nh_pressure_flag,
-        sgs_vertdiff_flag,
-        approximate_solve_iters,
-    )
+    ManualSparseJacobian(; approximate_solve_iters = 1)
 
 A [`JacobianAlgorithm`](@ref) that approximates the Jacobian using analytically
 derived tendency derivatives and inverts it using a specialized nested linear
-solver. Certain groups of derivatives can be toggled on or off by setting their
-`DerivativeFlag`s to either `UseDerivative` or `IgnoreDerivative`.
+solver.
+
+Which derivative blocks are computed is determined automatically from the
+`AtmosModel` (topography, diffusion mode, EDMF modes) when the cache is
+built — users do not configure them directly.
 
 # Arguments
 
-- `topography_flag::DerivativeFlag`: whether the derivative of vertical
-  contravariant velocity with respect to horizontal covariant velocity should be
-  computed
-- `diffusion_flag::DerivativeFlag`: whether the derivatives of the grid-scale
-  diffusion tendency should be computed
-- `sgs_advection_flag::DerivativeFlag`: whether the derivatives of the
-  subgrid-scale advection tendency should be computed
-- `sgs_entr_detr_flag::DerivativeFlag`: whether the derivatives of the
-  subgrid-scale entrainment and detrainment tendencies should be computed
-- `sgs_mass_flux_flag::DerivativeFlag`: whether the derivatives of the
-  subgrid-scale mass flux tendency should be computed
-- `sgs_nh_pressure_flag::DerivativeFlag`: whether the derivatives of the
-  subgrid-scale non-hydrostatic pressure drag tendency should be computed
-- `sgs_vertdiff_flag::DerivativeFlag`: whether the derivatives of the
-  subgrid-scale vertical diffusion tendency should be computed
-- `approximate_solve_iters::Int`: number of iterations to take for the
-  approximate linear solve required when the `diffusion_flag` is `UseDerivative`
+- `approximate_solve_iters::Int = 1`: number of iterations to take for the
+  approximate linear solve required when grid-scale diffusion is treated
+  implicitly.
 """
-struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7} <: SparseJacobian
-    topography_flag::F1
-    diffusion_flag::F2
-    sgs_advection_flag::F3
-    sgs_entr_detr_flag::F4
-    sgs_mass_flux_flag::F5
-    sgs_nh_pressure_flag::F6
-    sgs_vertdiff_flag::F7
+struct ManualSparseJacobian <: SparseJacobian
     approximate_solve_iters::Int
+end
+ManualSparseJacobian(; approximate_solve_iters::Int = 1) =
+    ManualSparseJacobian(approximate_solve_iters)
+
+# Compute the seven DerivativeFlags that specialize the manual-sparse cache.
+# Flags are dispatch-relevant at cache build time, so we return them as a
+# NamedTuple of concrete `UseDerivative`/`IgnoreDerivative` instances.
+function _derivative_flags(atmos, Y)
+    return (;
+        topography_flag = DerivativeFlag(has_topography(axes(Y.c))),
+        diffusion_flag = DerivativeFlag(atmos.diff_mode),
+        sgs_advection_flag = DerivativeFlag(atmos.sgs_adv_mode),
+        sgs_entr_detr_flag = DerivativeFlag(atmos.sgs_entr_detr_mode),
+        sgs_mass_flux_flag = DerivativeFlag(atmos.sgs_mf_mode),
+        sgs_nh_pressure_flag = DerivativeFlag(atmos.sgs_nh_pressure_mode),
+        sgs_vertdiff_flag = DerivativeFlag(atmos.sgs_vertdiff_mode),
+    )
 end
 
 function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
+    derivative_flags = _derivative_flags(atmos, Y)
     (;
         topography_flag,
         diffusion_flag,
         sgs_advection_flag,
         sgs_mass_flux_flag,
-        approximate_solve_iters,
-    ) = alg
+    ) = derivative_flags
+    approximate_solve_iters = alg.approximate_solve_iters
     FT = Spaces.undertype(axes(Y.c))
 
     DiagonalRow = DiagonalMatrixRow{FT}
@@ -382,7 +373,10 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             )
         end
 
-    return (; matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, full_alg))
+    return (;
+        matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, full_alg),
+        derivative_flags,
+    )
 end
 
 # TODO: There are a few for loops in this function. This is because
@@ -395,7 +389,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         sgs_entr_detr_flag,
         sgs_mass_flux_flag,
         sgs_vertdiff_flag,
-    ) = alg
+    ) = cache.derivative_flags
     (; matrix) = cache
     (; params) = p
     (; ᶜΦ) = p.core
