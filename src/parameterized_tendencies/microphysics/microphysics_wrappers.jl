@@ -84,7 +84,11 @@ end
     e_tot_hlpr = e_tot_0M_precipitation_sources_helper(
         eval.sat_eval.thermo_params, T_hat, sa.q_liq, sa.q_ice, eval.Φ,
     )
-    return (; dq_tot_dt, e_tot_hlpr)
+
+    FT = eltype(T_hat)
+    scale = max(FT(0.2), min((sa.q_liq + sa.q_ice) / FT(5e-5), FT(1)))
+
+    return (; dq_tot_dt = scale * dq_tot_dt, e_tot_hlpr = scale * e_tot_hlpr)
 end
 
 """
@@ -147,6 +151,11 @@ end
         BMT.Microphysics0Moment(), cmp, thp, T, q_liq, q_ice, q_vap_sat,
     )
     e_tot_hlpr = e_tot_0M_precipitation_sources_helper(thp, T, q_liq, q_ice, Φ)
+
+    FT = typeof(ρ)
+    scale = max(FT(0.2), min((q_liq + q_ice) / FT(5e-5), FT(1)))
+    dq_tot_dt = scale * dq_tot_dt
+    e_tot_hlpr = scale * e_tot_hlpr
 
     # Apply limiter
     dq_tot_dt = apply_0m_tendency_limit(dq_tot_dt, q_tot_nonneg, dt)
