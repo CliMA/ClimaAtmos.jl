@@ -18,6 +18,10 @@ env:
 
 steps:
   - label: "Initialize"
+    retry: &retry_policy
+      automatic:
+        - exit_status: -1  # Retry on agent lost
+          limit: 1
     key: "init_cpu_env"
     concurrency: 1
     concurrency_group: "depot/climaatmos-ci"
@@ -38,11 +42,13 @@ steps:
   - group: "Reproducibility"
     steps:
       - label: ":green_book: Reproducibility: Test infrastructure"
+        retry: *retry_policy
         command: "julia --color=yes --project=.buildkite test/unit_reproducibility_infra.jl"
 
   - group: "Radiation"
     steps:
       - label: ":sun_with_face: Radiation: Gray"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_column_ze63.yml
@@ -51,6 +57,7 @@ steps:
         artifact_paths: "single_column_radiative_equilibrium_gray/output_active/*"
 
       - label: ":sun_with_face: Radiation: Clear-sky, no clouds, idealized water."
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_column_ze63.yml
@@ -59,6 +66,7 @@ steps:
         artifact_paths: "single_column_radiative_equilibrium_clearsky/output_active/*"
 
       - label: ":sun_with_face: Radiation: Clear-sky, prognostic surface temperature (interactive slab)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_column_ze63.yml
@@ -67,6 +75,7 @@ steps:
         artifact_paths: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/output_active/*"
 
       - label: ":sun_with_face: Radiation: All-sky, idealized clouds, time-varying insolation"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_column_ze63.yml
@@ -77,6 +86,7 @@ steps:
   - group: "Microphysics"
     steps:
       - label: ":umbrella: Microphysics: 1-moment sanity check"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/single_column_precipitation_test.yml
@@ -84,6 +94,7 @@ steps:
         artifact_paths: "single_column_precipitation_test/output_active/*"
 
       - label: ":umbrella: Microphysics: 2-moment sanity check"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/single_column_precipitation_2M_test.yml
@@ -93,40 +104,48 @@ steps:
   - group: "Gravity wave"
     steps:
       - label: ":wavy_dash: Non-orograpic gravity wave: 3D unit test"
+        retry: *retry_policy
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_3d.jl"
         artifact_paths: "nonorographic_gravity_wave_test_3d/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":wavy_dash: Non-orographic gravity wave: Test against MiMA output"
+        retry: *retry_policy
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_mima.jl"
         artifact_paths: "nonorographic_gravity_wave_test_mima/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":wavy_dash: Non-orographic gravity wave: Single column unit test"
+        retry: *retry_policy
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_single_column.jl"
         artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
 
       - label: ":wavy_dash: Orographic gravity wave: Base flux calculation unit test"
+        retry: *retry_policy
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_baseflux.jl"
         artifact_paths: "orographic_gravity_wave_test_baseflux/*"
 
       - label: ":wavy_dash: Orographic gravity wave: 3D calculation unit test"
+        retry: *retry_policy
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_3d.jl"
         artifact_paths: "orographic_gravity_wave_test_3d/*"
 
       - label: ":wavy_dash: Orographic gravity wave: Drag unit test"
+        retry: *retry_policy
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_computed_drag.jl"
         artifact_paths: "orographic_gravity_wave_test_computed_drag/*"
 
       - label: ":wavy_dash: Orographic gravity wave: Regression test reproducing Garner 2005"
+        retry: *retry_policy
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_garner2005_reproduction.jl"
         artifact_paths: "orographic_gravity_wave_test_garner2005/*"
 
   - group: "Diagnostic EDMF"
     steps:
       - label: ":ghost: Diagnostic EDMF: Smoke test"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_test_box.yml
@@ -136,6 +155,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":ghost: Diagnostic EDMF: Stable nocturnal Arctic boundary layer (GABLS)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_gabls_box.yml
@@ -145,6 +165,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":ghost: Diagnostic EDMF: Trade wind Cu shallow convection (BOMEX)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_box.yml
@@ -154,6 +175,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":ghost: Diagnostic EDMF: Nocturnal Sc (DYCOMS-RF01)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_box.yml
@@ -163,6 +185,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":ghost: Diagnostic EDMF: Drizzling nocturnal Sc (DYCOMS-RF02)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf02_box.yml
@@ -172,6 +195,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":ghost: Diagnostic EDMF: Precipitating trade wind Cu (RICO)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_rico_box.yml
@@ -181,6 +205,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":ghost: Diagnostic EDMF: Deep tropical convection (TRMM)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box.yml
@@ -190,6 +215,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":ghost: Diagnostic EDMF: Deep tropical convection (TRMM), stretched grid"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_stretched_box.yml
@@ -199,6 +225,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":ghost: Diagnostic EDMF: Deep tropical convection (TRMM), 0M"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box_0M.yml
@@ -210,6 +237,7 @@ steps:
   - group: "Prognostic EDMF"
     steps:
       - label: ":genie: Prognostic EDMF: Vertical advection test"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_column.yml
@@ -219,6 +247,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: Idealized plume, SmoothArea detrainment"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column.yml
@@ -228,6 +257,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: Dry convective boundary layer (Soares)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_soares_column.yml
@@ -237,6 +267,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: Stable nocturnal Arctic boundary layer (GABLS)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column.yml
@@ -246,6 +277,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX), fixed TKE"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_column.yml
@@ -255,6 +287,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX), prognostic TKE"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
@@ -264,6 +297,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX), implicit SGS"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
@@ -273,6 +307,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: Nocturnal Sc (DYCOMS-RF01), explicit SGS"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_column.yml
@@ -282,6 +317,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: Drizzling nocturnal Sc (DYCOMS-RF02)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf02_column.yml
@@ -291,6 +327,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: Precipitating trade wind Cu (RICO), explicit SGS"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
@@ -300,6 +337,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: Precipitating trade wind Cu (RICO), implicit SGS"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_rico_implicit_column.yml
@@ -319,6 +357,7 @@ steps:
       #  soft_fail: true
       #
       - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
@@ -328,6 +367,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM), implicit SGS"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_implicit_column.yml
@@ -337,6 +377,7 @@ steps:
           slurm_mem: 35GB
 
       - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM), 0M"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_0M.yml
@@ -346,6 +387,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: GCM large-scale forcing (cfsite23), radiation"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_gcmdriven_column.yml
@@ -355,6 +397,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMF: Time-varying ERA5 reanalysis forcing"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_tv_era5driven_column.yml
@@ -364,6 +407,7 @@ steps:
           slurm_mem: 12GB
 
       - label: ":genie: Prognostic EDMF: ERA5 monthly averaged diurnal forcing"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_diurnal_scm_imp.yml
@@ -375,6 +419,7 @@ steps:
   - group: "Analytic Tests"
     steps:
       - label: ":crown: Analytic tests: No topography, 2D, Float64, GPU"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_no_topography_float64_test.yml
@@ -390,6 +435,7 @@ steps:
           slurm_gpus: 1
 
       - label: ":crown: Analytic tests: Schar mountain wave, 2D, Float64, GPU"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_schar_mountain_float64_test.yml
@@ -405,6 +451,7 @@ steps:
           slurm_gpus: 1
 
       - label: ":crown: Analytic tests: Schar mountain wave, 2D, Float32, GPU"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_schar_mountain_float32_test.yml
@@ -422,12 +469,14 @@ steps:
   - group: "Conservation Tests"
     steps:
       - label: ":computer: Conservation tests: Dry baroclinic wave, no sources"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_conservation.yml
           --job_id baroclinic_wave_conservation
         artifact_paths: "baroclinic_wave_conservation/output_active/*"
 
       - label: ":computer: Conservation tests: Moist baroclinic wave, with sources, 0M"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_source.yml
           --job_id baroclinic_wave_equil_conservation_source
@@ -447,6 +496,7 @@ steps:
   - group: "Non-spherical Examples"
     steps:
       - label: ":package: Non-spherical: Reproducibility test for single column hydrostatic balance, Float64"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -461,6 +511,7 @@ steps:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":package: Non-spherical: 2D plane, non-hydrostatic density current"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_density_current_test.yml
@@ -468,6 +519,7 @@ steps:
         artifact_paths: "plane_density_current_test/output_active/*"
 
       - label: ":package: Non-spherical: 2D plane, non-hydrostatic density current, AMD LES SGS"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/plane_density_current_test_amd.yml
@@ -475,6 +527,7 @@ steps:
         artifact_paths: "plane_density_current_test_amd/output_active/*"
 
       - label: ":package: Non-spherical: 3D box, hydrostatic balance"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/box_hydrostatic_balance.yml
@@ -482,6 +535,7 @@ steps:
         artifact_paths: "box_hydrostatic_balance/output_active/*"
 
       - label: ":package: Non-spherical: 3D box, density current"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/box_density_current_test.yml
@@ -489,6 +543,7 @@ steps:
         artifact_paths: "box_density_current_test/output_active/*"
 
       - label: ":package: Non-spherical: Reproducibility test for radiative convective equilibrium in a 3D box"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite runscripts/rcemipii_box_CRM_1M.jl
 
@@ -500,6 +555,7 @@ steps:
   - group: "Dry Spherical Examples"
     steps:
       - label: ":cyclone: Dycore: Global hydrostatic balance, Float64"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/hydrostatic_balance_ft64.yml
@@ -509,6 +565,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":cyclone: Dycore: Dry baroclinic wave, CPU part of a comparison test"
+        retry: *retry_policy
         key: baroclinic_wave
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -518,6 +575,7 @@ steps:
         artifact_paths: "baroclinic_wave/output_active/*"
 
       - label: ":cyclone: Dycore: Dry baroclinic wave, GPU part of comparison test"
+        retry: *retry_policy
         key: "baroclinic_wave_gpu"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -532,6 +590,7 @@ steps:
           slurm_mem: 16GB
 
       - label: ":cyclone: Dycore: Compare CPU and GPU dry baroclinic wave performance"
+        retry: *retry_policy
         command: >
           tar xvf baroclinic_wave/output_active/hdf5_files.tar -C baroclinic_wave
 
@@ -546,6 +605,7 @@ steps:
           - "baroclinic_wave_gpu"
 
       - label: ":cyclone: Dycore: Dry GCM benchmark, Held-Suarez forcing"
+        retry: *retry_policy
         key: held_suarez
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -557,6 +617,7 @@ steps:
   - group: "Spherical Examples"
     steps:
       - label: ":large_blue_circle: Sphere: Reproducibility test for moist baroclinic wave, 0M"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -571,6 +632,7 @@ steps:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":large_blue_circle: Sphere: Reproducibility test for Held-Suarez forcing with moisture, 0M"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -585,6 +647,7 @@ steps:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":large_blue_circle: Aquaplanet: No mass-flux (EDOnly EDMF)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -595,6 +658,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":large_blue_circle: Aquaplanet: Radiative convective equilibrium, diagnostic edmf"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -605,6 +669,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":large_blue_circle: Aquaplanet: Reproducibility test for allsky varying insolation, gravity wave (gfdl_restart)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -620,6 +685,7 @@ steps:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":large_blue_circle: Aquaplanet: Reproducibility test for allsky varying insolation, gravity wave (raw_topo)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -635,6 +701,7 @@ steps:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":large_blue_circle: Aquaplanet: Reproducibility test for diagnostic EDMF, clearsky"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -650,6 +717,7 @@ steps:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":large_blue_circle: Aquaplanet: Reproducibility test for prognostic EDMF, clearsky"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -665,6 +733,7 @@ steps:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":large_blue_circle: Aquaplanet: Diagnostic EDMF, GPU"
+        retry: *retry_policy
         key: "diagnostic_edmfx_aquaplanet_gpu"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -679,6 +748,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":large_blue_circle: Aquaplanet: Prognostic EDMF, GPU"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -694,6 +764,7 @@ steps:
   - group: "Topography"
     steps:
       - label: ":mount_fuji: Topography: Idealized mountain (dcmip)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -702,6 +773,7 @@ steps:
         artifact_paths: "baroclinic_wave_topography_dcmip_rs/output_active/*"
 
       - label: ":mount_fuji: Topography: Diagnostic Earth surface elevation spectra"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -710,6 +782,7 @@ steps:
         artifact_paths: "baroclinic_wave_equil_earth/output_active/*"
 
       - label: ":mount_fuji: Topography: Double mountain (Hughes2023)"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -720,12 +793,14 @@ steps:
   - group: "Restarting"
     steps:
       - label: ":computer: Restart: Basic correctness"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite test/restart.jl
         agents:
           slurm_mem: 16GB
 
       - label: ":computer: Restart: Basic correctness, GPU"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite test/restart.jl
         env:
@@ -735,12 +810,14 @@ steps:
           slurm_mem: 16G
 
       - label: ":computer: Restart: Using manytests"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
         agents:
           slurm_mem: 16GB
 
       - label: ":computer: Restart: Using manytests, GPU"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
         env:
@@ -756,7 +833,7 @@ steps:
           srun julia --color=yes --project=.buildkite test/restart.jl
         env:
           CLIMACOMMS_CONTEXT: "MPI"
-        timeout_in_minutes: 20
+        timeout_in_minutes: 30
         soft_fail:
           - exit_status: -1
           - exit_status: 255
@@ -772,7 +849,7 @@ steps:
         env:
           CLIMACOMMS_CONTEXT: "MPI"
           CLIMACOMMS_DEVICE: "CUDA"
-        timeout_in_minutes: 20
+        timeout_in_minutes: 30
         soft_fail:
           - exit_status: -1
           - exit_status: 255
@@ -782,12 +859,14 @@ steps:
           slurm_mem: 24G
 
       - label: ":computer: Restart: Using AtmosSimulation"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
         agents:
           slurm_mem: 16GB
 
       - label: ":computer: Restart: Using AtmosSimulation, GPU"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
         env:
@@ -816,6 +895,7 @@ steps:
   - group: "MPI"
     steps:
       - label: ":metro: MPI: Prepare files for baroclininc wave restart test"
+        retry: *retry_policy
         key: "mpi_baro_wave_make_restart"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -829,6 +909,7 @@ steps:
           slurm_mem: 16G
 
       - label: ":metro: MPI: Test restart for baroclinic wave"
+        retry: *retry_policy
         key: "restart_mpi_baro_wave"
         depends_on: "mpi_baro_wave_make_restart"
         command: >
@@ -848,6 +929,7 @@ steps:
         #  automatic: true
 
       - label: ":metro: MPI: Aquaplanet equilmoist clearsky radiation"
+        retry: *retry_policy
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $MPI_CONFIG_PATH/mpi_aquaplanet_equil_clearsky.yml
@@ -860,6 +942,7 @@ steps:
           slurm_mem: 16GB
 
       - label: ":metro: MPI: Prepare for calling remap pipeline"
+        retry: *retry_policy
         key: "prep_remap"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -873,6 +956,7 @@ steps:
           slurm_mem: 16G
 
       - label: ":metro: MPI: Test remap pipeline"
+        retry: *retry_policy
         depends_on: "prep_remap"
         command: >
           tar xvf prep_remap/output_active/hdf5_files.tar -C prep_remap/output_active
@@ -882,6 +966,7 @@ steps:
         artifact_paths: "remap_pipeline_output/*"
 
       - label: ":metro: MPI: Dry baroclinic wave on 2 GPUs"
+        retry: *retry_policy
         key: "baroclinic_wave_2gpu"
         command:
           - mkdir -p baroclinic_wave_2gpu
@@ -917,6 +1002,7 @@ steps:
       #  soft_fail: true
 
       - label: ":rocket: Autodiff: Baroclinic wave, dense autodiff"
+        retry: *retry_policy
         key: baroclinic_wave_dense_autodiff
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -926,6 +1012,7 @@ steps:
         artifact_paths: "baroclinic_wave_dense_autodiff/output_active/*"
 
       - label: ":rocket: Autodiff: Baroclinic wave, sparse autodiff"
+        retry: *retry_policy
         key: baroclinic_wave_sparse_autodiff
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -992,6 +1079,7 @@ steps:
   - group: "Timestep cost"
     steps:
       - label: ":alarm_clock: Timestep cost: Moist baroclinic wave"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/benchmark_step.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -1000,6 +1088,7 @@ steps:
         artifact_paths: "bm_baroclinic_wave_moist/output_active/*"
 
       - label: ":alarm_clock: Timestep cost: Moist baroclinic wave, GPU"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/benchmark_step.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -1014,6 +1103,7 @@ steps:
           slurm_gpus: 1
 
       - label: ":alarm_clock: Timestep cost: Default aquaplanet"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1023,6 +1113,7 @@ steps:
           slurm_mem: 24GB
 
       - label: ":alarm_clock: Timestep cost: Default aquaplanet, GPU"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1036,6 +1127,7 @@ steps:
           slurm_gpus: 1
 
       - label: ":alarm_clock: Timestep cost: Aquaplanet, diagnostic EDMF, GPU"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -1049,6 +1141,7 @@ steps:
           slurm_gpus: 1
 
       - label: ":alarm_clock: Timestep cost: Aquaplenet, prognostic EDMF, GPU"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
@@ -1064,6 +1157,7 @@ steps:
   - group: "Allocations budget"
     steps:
       - label: ":fire: Allocations budget: Moist baroclininc wave, GPU"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
@@ -1078,6 +1172,7 @@ steps:
           gres: "gpu:p100:1"
 
       - label: ":fire: Allocations budget: Aquaplanet"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1088,6 +1183,7 @@ steps:
           slurm_mem: 24GB
 
       - label: ":fire: Allocations budget: 1 moment microphysics"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1098,6 +1194,7 @@ steps:
           slurm_mem: 24GB
 
       - label: ":fire: Allocations budget: Diagnostics output"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1108,6 +1205,7 @@ steps:
           slurm_mem: 24GB
 
       - label: ":fire: Allocations budget: Aquaplanet, diagnostics edmf"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1118,6 +1216,7 @@ steps:
           slurm_mem: 24GB
 
       - label: ":fire: Allocations budget: Aquaplanet, prognostic EDMF"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1149,6 +1248,7 @@ steps:
       #     slurm_mem: 32GB
 
       - label: ":fire: Allocations budget: Decay with height diffusion"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1159,6 +1259,7 @@ steps:
           slurm_mem: 24GB
 
       - label: ":fire: Allocations budget: All callbacks"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1169,6 +1270,7 @@ steps:
           slurm_mem: 24GB
 
       - label: ":fire: Allocations budget: Gravity waves"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1183,6 +1285,7 @@ steps:
       # TODO: we should somehow decouple this unit test from the perf env / scripts
       # Checkbounds
       - label: ":computer: Checkbounds"
+        retry: *retry_policy
         command: >
           julia --color=yes --check-bounds=yes --project=.buildkite perf/benchmark.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1194,6 +1297,7 @@ steps:
 
       # Latency
       - label: ":mag::rocket: Invalidations"
+        retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/invalidations.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
@@ -1206,12 +1310,15 @@ steps:
     continue_on_failure: true
 
   - label: ":robot_face: Print new rms tables"
+    retry: *retry_policy
     command: "julia --color=yes --project=.buildkite reproducibility_tests/rms_summary.jl"
 
   - label: ":robot_face: Print new reference counter"
+    retry: *retry_policy
     command: "julia --color=yes --project=.buildkite reproducibility_tests/print_new_ref_counter.jl"
 
   - label: ":bar_chart: Tabulate performance summary"
+    retry: *retry_policy
     command: "julia --color=yes --project=.buildkite perf/tabulate_perf_summary.jl"
 
   # - label: ":chart_with_downwards_trend: build history"
@@ -1223,4 +1330,5 @@ steps:
   - wait
 
   - label: ":robot_face: Move main results"
+    retry: *retry_policy
     command: "julia --color=yes --project=.buildkite reproducibility_tests/move_output.jl"
