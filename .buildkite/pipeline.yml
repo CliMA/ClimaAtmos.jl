@@ -386,6 +386,9 @@ steps:
           - "gpu_plane_no_topography_float64_test/output_active/*.dat"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_gpus: 1
 
@@ -401,6 +404,9 @@ steps:
           - "gpu_plane_schar_mountain_float64_test/output_active/*.dat"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_gpus: 1
 
@@ -416,6 +422,9 @@ steps:
           - "gpu_plane_schar_mountain_float32_test/output_active/*.dat"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_gpus: 1
 
@@ -527,6 +536,9 @@ steps:
         artifact_paths: "baroclinic_wave_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_gpus: 1
           slurm_mem: 16GB
@@ -674,6 +686,9 @@ steps:
         artifact_paths: "diagnostic_edmfx_aquaplanet_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_gpus: 1
           slurm_mem: 20GB
@@ -687,6 +702,9 @@ steps:
         artifact_paths: "prognostic_edmfx_aquaplanet_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_gpus: 1
           slurm_mem: 20GB
@@ -730,6 +748,9 @@ steps:
           julia --color=yes --project=.buildkite test/restart.jl
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
@@ -745,6 +766,9 @@ steps:
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
@@ -772,6 +796,9 @@ steps:
         env:
           CLIMACOMMS_CONTEXT: "MPI"
           CLIMACOMMS_DEVICE: "CUDA"
+        retry:
+          automatic:
+            - exit_status: -1
         timeout_in_minutes: 20
         soft_fail:
           - exit_status: -1
@@ -792,6 +819,9 @@ steps:
           julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
@@ -901,6 +931,9 @@ steps:
         env:
           CLIMACOMMS_CONTEXT: "MPI"
           CLIMACOMMS_DEVICE: "CUDA"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -1009,6 +1042,9 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_mem: 16G
           slurm_gpus: 1
@@ -1031,6 +1067,9 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
@@ -1044,6 +1083,9 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
@@ -1057,6 +1099,9 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_mem: 28GB
           slurm_gpus: 1
@@ -1072,6 +1117,9 @@ steps:
         artifact_paths: "flame_baroclinic_wave_moist_gpu/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+        retry:
+          automatic:
+            - exit_status: -1
         agents:
           slurm_mem: 48GB
           slurm_gpus: 1
