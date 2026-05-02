@@ -17,6 +17,20 @@ function create_physical_constraints_config(job_id = "physical_constraints_test"
     return CA.AtmosConfig(config_dict; job_id)
 end
 
+function create_diagnostic_physical_constraints_config(
+    job_id = "diag_physical_constraints_test",
+)
+    config_dict = Dict(
+        "config" => "column",
+        "initial_condition" => "DecayingProfile",
+        "turbconv" => "diagnostic_edmfx",
+        "edmfx_filter" => true,
+        "microphysics_model" => "1M",
+        "output_default_diagnostics" => false,
+    )
+    return CA.AtmosConfig(config_dict; job_id)
+end
+
 function introduce_constant!(field, value)
     FT = eltype(field)
     parent(field) .= FT(value)
@@ -34,7 +48,6 @@ end
         (; Y, p) = generate_test_simulation(config)
 
         FT = eltype(Y)
-        turbconv_model = p.atmos.turbconv_model
 
         introduce_constant!(Y.c.ρq_lcl, -1e-7)
         introduce_constant!(Y.c.ρq_icl, 2e-7)
@@ -44,7 +57,7 @@ end
         @test minimum(parent(Y.c.ρq_lcl)) < FT(0)
         @test minimum(parent(Y.c.ρq_rai)) < FT(0)
 
-        CA.enforce_physical_constraints!(Y, p, FT(0), turbconv_model)
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
 
         @test all_geq_zero(Y.c.ρq_lcl)
         @test all_geq_zero(Y.c.ρq_icl)
@@ -57,7 +70,6 @@ end
         (; Y, p) = generate_test_simulation(config)
 
         FT = eltype(Y)
-        turbconv_model = p.atmos.turbconv_model
 
         introduce_constant!(Y.c.ρq_tot, 1e-3)
 
@@ -74,7 +86,7 @@ end
 
         @test maximum(parent(ρq_cond_before .- Y.c.ρq_tot)) > FT(0)
 
-        CA.enforce_physical_constraints!(Y, p, FT(0), turbconv_model)
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
 
         ρq_cond_after =
             Y.c.ρq_lcl .+
@@ -94,7 +106,6 @@ end
         (; Y, p) = generate_test_simulation(config)
 
         FT = eltype(Y)
-        turbconv_model = p.atmos.turbconv_model
 
         introduce_constant!(Y.c.ρq_tot, -1e-6)
 
@@ -103,7 +114,7 @@ end
         introduce_constant!(Y.c.ρq_rai, 1e-4)
         introduce_constant!(Y.c.ρq_sno, 1e-4)
 
-        CA.enforce_physical_constraints!(Y, p, FT(0), turbconv_model)
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
 
         @test maximum(abs.(parent(Y.c.ρq_lcl))) <= 10 * eps(FT)
         @test maximum(abs.(parent(Y.c.ρq_icl))) <= 10 * eps(FT)
@@ -116,15 +127,14 @@ end
         (; Y, p) = generate_test_simulation(config)
 
         FT = eltype(Y)
-        turbconv_model = p.atmos.turbconv_model
-        n = CA.n_mass_flux_subdomains(turbconv_model)
+        n = CA.n_mass_flux_subdomains(p.atmos.turbconv_model)
 
         CA.set_precomputed_quantities!(Y, p, FT(0))
 
         for j in 1:n
             introduce_constant!(Y.c.sgsʲs.:($j).ρa, -1e-12)
 
-            CA.enforce_physical_constraints!(Y, p, FT(0), turbconv_model)
+            CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
 
             @test minimum(parent(Y.c.sgsʲs.:($j).ρa)) >= FT(0)
         end
@@ -135,7 +145,6 @@ end
         (; Y, p) = generate_test_simulation(config)
 
         FT = eltype(Y)
-        turbconv_model = p.atmos.turbconv_model
         j = 1
 
         CA.set_precomputed_quantities!(Y, p, FT(0))
@@ -145,7 +154,7 @@ end
         introduce_constant!(Y.c.sgsʲs.:($j).mse, 999)
         introduce_constant!(Y.c.sgsʲs.:($j).q_tot, 999)
 
-        CA.enforce_physical_constraints!(Y, p, FT(0), turbconv_model)
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
 
         @test maximum(abs.(parent(Y.c.sgsʲs.:($j).mse .- (ᶜh_tot .- ᶜK)))) <=
               100 * eps(FT)
@@ -165,14 +174,13 @@ end
         (; Y, p) = generate_test_simulation(config)
 
         FT = eltype(Y)
-        turbconv_model = p.atmos.turbconv_model
         j = 1
 
         parent(Y.f.sgsʲs.:($j).u₃.components.data.:1) .= -FT(1)
 
         @test minimum(parent(Y.f.sgsʲs.:($j).u₃.components.data.:1)) < FT(0)
 
-        CA.enforce_physical_constraints!(Y, p, FT(0), turbconv_model)
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
 
         @test minimum(parent(Y.f.sgsʲs.:($j).u₃.components.data.:1)) >= FT(0)
     end
@@ -183,13 +191,12 @@ end
         (; Y, p) = generate_test_simulation(config)
 
         FT = eltype(Y)
-        turbconv_model = p.atmos.turbconv_model
         j = 1
 
         introduce_constant!(Y.c.sgsʲs.:($j).ρa, 0)
         parent(Y.f.sgsʲs.:($j).u₃.components.data.:1) .= FT(1)
 
-        CA.enforce_physical_constraints!(Y, p, FT(0), turbconv_model)
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
 
         @test maximum(abs.(parent(Y.f.sgsʲs.:($j).u₃.components.data.:1))) <=
               10 * eps(FT)
@@ -200,14 +207,13 @@ end
         (; Y, p) = generate_test_simulation(config)
 
         FT = eltype(Y)
-        turbconv_model = p.atmos.turbconv_model
         j = 1
 
         introduce_constant!(Y.c.sgsʲs.:($j).ρa, 0.1)
         introduce_constant!(Y.c.ρq_tot, 1e-3)
         introduce_constant!(Y.c.sgsʲs.:($j).q_tot, 1)
 
-        CA.enforce_physical_constraints!(Y, p, FT(0), turbconv_model)
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
 
         bound_violation =
             Y.c.sgsʲs.:($j).ρa .* Y.c.sgsʲs.:($j).q_tot .- Y.c.ρq_tot
@@ -216,15 +222,141 @@ end
         @test minimum(parent(Y.c.sgsʲs.:($j).q_tot)) >= FT(0)
     end
 
-    @testset "No-op method for non-PrognosticEDMFX turbulence model" begin
-        config = create_physical_constraints_config("physical_constraints_noop")
+    @testset "No EDMF + 0M: enforce_physical_constraints! is a no-op" begin
+        # Verifies that when neither 1M/2M microphysics nor EDMF is active,
+        # calling enforce_physical_constraints! does not modify Y.
+        config_dict = Dict(
+            "config" => "column",
+            "initial_condition" => "DecayingProfile",
+            "microphysics_model" => "0M",
+            "output_default_diagnostics" => false,
+        )
+        config = CA.AtmosConfig(
+            config_dict;
+            job_id = "physical_constraints_noop",
+        )
         (; Y, p) = generate_test_simulation(config)
 
         FT = eltype(Y)
         ref_Y = deepcopy(Y)
 
-        CA.enforce_physical_constraints!(Y, p, FT(0), nothing)
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
 
         @test Y == ref_Y
+    end
+end
+
+@testset "Enforce Physical Constraints — DiagnosticEDMFX" begin
+
+    @testset "Diagnostic EDMF: condensate non-negativity" begin
+        config = create_diagnostic_physical_constraints_config(
+            "diag_physical_constraints_nonnegativity",
+        )
+        (; Y, p) = generate_test_simulation(config)
+
+        FT = eltype(Y)
+
+        introduce_constant!(Y.c.ρq_lcl, -1e-7)
+        introduce_constant!(Y.c.ρq_icl, 2e-7)
+        introduce_constant!(Y.c.ρq_rai, -3e-7)
+        introduce_constant!(Y.c.ρq_sno, 4e-7)
+
+        @test minimum(parent(Y.c.ρq_lcl)) < FT(0)
+        @test minimum(parent(Y.c.ρq_rai)) < FT(0)
+
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
+
+        @test all_geq_zero(Y.c.ρq_lcl)
+        @test all_geq_zero(Y.c.ρq_icl)
+        @test all_geq_zero(Y.c.ρq_rai)
+        @test all_geq_zero(Y.c.ρq_sno)
+    end
+
+    @testset "Diagnostic EDMF: condensate mass does not exceed total moisture" begin
+        config = create_diagnostic_physical_constraints_config(
+            "diag_physical_constraints_condensate_bound",
+        )
+        (; Y, p) = generate_test_simulation(config)
+
+        FT = eltype(Y)
+
+        introduce_constant!(Y.c.ρq_tot, 1e-3)
+
+        introduce_constant!(Y.c.ρq_lcl, 8e-4)
+        introduce_constant!(Y.c.ρq_icl, 8e-4)
+        introduce_constant!(Y.c.ρq_rai, 8e-4)
+        introduce_constant!(Y.c.ρq_sno, 8e-4)
+
+        ρq_cond_before =
+            Y.c.ρq_lcl .+
+            Y.c.ρq_icl .+
+            Y.c.ρq_rai .+
+            Y.c.ρq_sno
+
+        @test maximum(parent(ρq_cond_before .- Y.c.ρq_tot)) > FT(0)
+
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
+
+        ρq_cond_after =
+            Y.c.ρq_lcl .+
+            Y.c.ρq_icl .+
+            Y.c.ρq_rai .+
+            Y.c.ρq_sno
+
+        @test maximum(parent(ρq_cond_after .- Y.c.ρq_tot)) <= 10 * eps(FT)
+        @test all_geq_zero(Y.c.ρq_lcl)
+        @test all_geq_zero(Y.c.ρq_icl)
+        @test all_geq_zero(Y.c.ρq_rai)
+        @test all_geq_zero(Y.c.ρq_sno)
+    end
+
+    @testset "Diagnostic EDMF: condensate is removed when total moisture is non-positive" begin
+        config = create_diagnostic_physical_constraints_config(
+            "diag_physical_constraints_negative_qtot",
+        )
+        (; Y, p) = generate_test_simulation(config)
+
+        FT = eltype(Y)
+
+        introduce_constant!(Y.c.ρq_tot, -1e-6)
+
+        introduce_constant!(Y.c.ρq_lcl, 1e-4)
+        introduce_constant!(Y.c.ρq_icl, 1e-4)
+        introduce_constant!(Y.c.ρq_rai, 1e-4)
+        introduce_constant!(Y.c.ρq_sno, 1e-4)
+
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
+
+        @test maximum(abs.(parent(Y.c.ρq_lcl))) <= 10 * eps(FT)
+        @test maximum(abs.(parent(Y.c.ρq_icl))) <= 10 * eps(FT)
+        @test maximum(abs.(parent(Y.c.ρq_rai))) <= 10 * eps(FT)
+        @test maximum(abs.(parent(Y.c.ρq_sno))) <= 10 * eps(FT)
+    end
+
+    @testset "Diagnostic EDMF: grid-mean fixers always run (edmfx_filter does not gate microphysics)" begin
+        config_dict = Dict(
+            "config" => "column",
+            "initial_condition" => "DecayingProfile",
+            "turbconv" => "diagnostic_edmfx",
+            "edmfx_filter" => false,          # filter is off
+            "microphysics_model" => "1M",
+            "output_default_diagnostics" => false,
+        )
+        config = CA.AtmosConfig(
+            config_dict;
+            job_id = "diag_physical_constraints_filter_off",
+        )
+        (; Y, p) = generate_test_simulation(config)
+
+        FT = eltype(Y)
+
+        introduce_constant!(Y.c.ρq_lcl, -1e-7)
+        introduce_constant!(Y.c.ρq_rai, -3e-7)
+
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
+
+        # Grid-mean microphysics fixers always run — negative values must be clipped
+        @test all_geq_zero(Y.c.ρq_lcl)
+        @test all_geq_zero(Y.c.ρq_rai)
     end
 end
