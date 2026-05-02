@@ -152,12 +152,7 @@ NVTX.@annotate function enforce_physical_constraints_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    enforce_physical_constraints!(
-        Y,
-        p,
-        t,
-        p.atmos.turbconv_model,
-    )
+    enforce_physical_constraints!(Y, p, t, p.atmos)
     return nothing
 end
 
