@@ -14,27 +14,28 @@ const SEA_SALT_BIN_BOUNDS = (
 )
 
 """
-    monin_obukhov_wind_at_height(z_target, ustar, L, uf_params, κ, z₀)
+    monin_obukhov_wind_at_height(z_target, ustar, L, buoyancy_flux, uf_params, κ, z₀;
+                                  gustiness_coeff = nothing, zi = nothing)
 
-Reconstruct mean wind speed at height `z_target` (m) from Monin-Obukhov
-similarity theory, given friction velocity `ustar`, Obukhov length `L`,
-universal function params `uf_params`, von Kármán constant `κ`, and
-roughness length `z₀`.
+Reconstruct mean wind speed at height `z_target` (m) from Monin-Obukhov similarity
+theory. `buoyancy_flux` and the keyword args `gustiness_coeff`/`zi` are only used for
+the optional Beljaars (1995) free-convection gustiness correction; pass `buoyancy_flux = 0`
+and omit the keyword args to get the plain MOST profile.
 """
-function monin_obukhov_wind_at_height(z_target, ustar, L, buoyancy_flux,
-                                       uf_params, κ, z₀; gustiness_coeff = nothing, zi = nothing)
+function monin_obukhov_wind_at_height(z_target, ustar, L, 
+                                       uf_params, κ, z₀; 
+                                       buoyancy_flux = nothing, gustiness_coeff = nothing, zi = nothing)
     FT = typeof(ustar)
-src/parameterized_tendencies/aerosols
+
     # MOST profile, clamped to match SurfaceFluxes.jl internal bounds
     ζ = ifelse(iszero(L), FT(0), clamp(z_target / L, FT(-100), FT(100)))
     F_m = UF.dimensionless_profile(uf_params, z_target, ζ, z₀, UF.MomentumTransport())
     u_MOST = max(ustar / κ * F_m, FT(0))
 
     # Beljaars (1995) free-convection gustiness floor
-    if !isnothing(gustiness_coeff) && !isnothingzi
+    if !isnothing(gustiness_coeff) && !isnothing(zi)
         w_star = cbrt(max(buoyancy_flux * zi, FT(0)))
         u_gust = gustiness_coeff * w_star
-
         return sqrt(u_MOST^2 + u_gust^2)
     end
 
@@ -252,7 +253,7 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
         sfc_conditions.obukhov_length,
         uf_params,
         κ,
-        z₀,
+        z₀
     )
     T_sfc = sfc_conditions.T_sfc
     ocean_fraction = p.ocean_fraction
