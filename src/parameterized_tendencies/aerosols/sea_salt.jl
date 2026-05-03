@@ -20,13 +20,25 @@ Reconstruct mean wind speed at height `z_target` (m) from Monin-Obukhov
 similarity theory, given friction velocity `ustar`, Obukhov length `L`,
 universal function params `uf_params`, von Kármán constant `κ`, and
 roughness length `z₀`.
-
-Pure scalar function — GPU-compatible, no allocations.
 """
-function monin_obukhov_wind_at_height(z_target, ustar, L, uf_params, κ, z₀)
-    ψ = UF.psi(uf_params, z_target / L, UF.MomentumTransport())
-    u_z = ustar / κ * (log(z_target / z₀) - ψ)
-    return u_z
+function monin_obukhov_wind_at_height(z_target, ustar, L, buoyancy_flux,
+                                       uf_params, κ, z₀; gustiness_coeff = nothing, zi = nothing)
+    FT = typeof(ustar)
+src/parameterized_tendencies/aerosols
+    # MOST profile, clamped to match SurfaceFluxes.jl internal bounds
+    ζ = ifelse(iszero(L), FT(0), clamp(z_target / L, FT(-100), FT(100)))
+    F_m = UF.dimensionless_profile(uf_params, z_target, ζ, z₀, UF.MomentumTransport())
+    u_MOST = max(ustar / κ * F_m, FT(0))
+
+    # Beljaars (1995) free-convection gustiness floor
+    if !isnothing(gustiness_coeff) && !isnothingzi
+        w_star = cbrt(max(buoyancy_flux * zi, FT(0)))
+        u_gust = gustiness_coeff * w_star
+
+        return sqrt(u_MOST^2 + u_gust^2)
+    end
+
+    return u_MOST
 end
 
 
@@ -87,6 +99,91 @@ function sea_salt_emission_flux(u_10, T_sfc, bin_index; SST_adj = false)
         number_flux *= SST_factor
     end
     return number_flux
+end
+
+# Cached topology: which flat indices are structurally isolated inland cells.
+# `nothing` = not yet initialised; `BitVector` = ready to apply.
+const _OCEAN_ISOLATED_CELLS = Ref{Union{Nothing, BitVector}}(nothing)
+
+"""
+    compute_ocean_mask!(ocean_fraction; threshold = 0.25, search_radius_deg = 1.5)
+
+Filter `ocean_fraction` in-place to zero isolated inland freshwater cells. A cell is
+zeroed if every neighbor within `search_radius_deg` great-circle degrees has
+`ocean_fraction < threshold`; cells with at least one above-threshold neighbor are left
+unchanged.
+
+On the first call the topology is detected in O(N log N + N·K) and cached in the
+module-level `_OCEAN_ISOLATED_CELLS` BitVector. Every subsequent call just applies
+that cached BitVector in O(N), so this is cheap to call after every coupler update.
+
+To force a re-detection (e.g. after a land/sea change), set
+`ClimaAtmos._OCEAN_ISOLATED_CELLS[] = nothing` before calling.
+
+Non-spherical (flat) spaces have no lat/lon coordinates and are returned unchanged.
+"""
+function compute_ocean_mask!(ocean_fraction; threshold = 0.25, search_radius_deg = 1.5)
+    if isnothing(_OCEAN_ISOLATED_CELLS[])
+        _init_ocean_isolated_cells!(ocean_fraction, threshold, search_radius_deg)
+    end
+
+    isolated = _OCEAN_ISOLATED_CELLS[]
+    isempty(isolated) && return ocean_fraction
+
+    FT = eltype(ocean_fraction)
+    vals = vec(Array(parent(ocean_fraction)))
+    vals[isolated] .= FT(0)
+    copyto!(parent(ocean_fraction), reshape(vals, size(parent(ocean_fraction))))
+    return ocean_fraction
+end
+
+function _init_ocean_isolated_cells!(ocean_fraction, threshold, search_radius_deg)
+    coords = Fields.coordinate_field(axes(ocean_fraction))
+    ET = eltype(coords)
+
+    if !hasfield(ET, :lat) || !hasfield(ET, :long)
+        _OCEAN_ISOLATED_CELLS[] = BitVector()
+        return
+    end
+
+    lats = vec(Array(parent(coords.lat)))
+    lons = vec(Array(parent(coords.long)))
+    vals = vec(Array(parent(ocean_fraction)))
+    n    = length(vals)
+
+    isolated    = falses(n)
+    perm        = sortperm(lats)
+    sorted_lats = lats[perm]
+    r           = Float64(search_radius_deg)
+    thr         = Float64(threshold)
+
+    for i in 1:n
+        Float64(vals[i]) < thr && continue  # below-threshold cells are not frozen
+
+        lat_i = Float64(lats[i])
+        lon_i = Float64(lons[i])
+
+        lo = searchsortedfirst(sorted_lats, lat_i - r)
+        hi = searchsortedlast(sorted_lats,  lat_i + r)
+
+        has_ocean_neighbor = false
+        for k in lo:hi
+            j = perm[k]
+            j == i && continue
+            Float64(vals[j]) < thr && continue
+            dlon = abs(Float64(lons[j]) - lon_i)
+            dlon > 180.0 && (dlon = 360.0 - dlon)
+            dlat = Float64(sorted_lats[k]) - lat_i
+            if dlat^2 + (dlon * cosd(lat_i))^2 ≤ r^2
+                has_ocean_neighbor = true
+                break
+            end
+        end
+
+        isolated[i] = !has_ocean_neighbor
+    end
+
+    _OCEAN_ISOLATED_CELLS[] = isolated
 end
 
 """

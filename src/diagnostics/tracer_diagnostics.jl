@@ -402,6 +402,17 @@ add_diagnostic_variable!(
 )
 
 add_diagnostic_variable!(
+    short_name = "obukhovlen",
+    long_name = "Obukhov Length",
+    units = "m",
+    comments = "Monin-Obukhov length from the surface flux scheme. Positive over stable conditions, negative over unstable.",
+    compute! = (out, u, p, t) -> begin
+        isnothing(out) ? copy(p.precomputed.sfc_conditions.obukhov_length) :
+            (out .= p.precomputed.sfc_conditions.obukhov_length)
+    end,
+)
+
+add_diagnostic_variable!(
     short_name = "oceanfrac",
     long_name = "Ocean Fraction",
     units = "1",

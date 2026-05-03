@@ -18,7 +18,7 @@ import ClimaUtilities.TimeVaryingInputs: evaluate!
 
 include("callback_helpers.jl")
 
-# Returns (value, lat, lon) at the max or min of a 2D surface field.
+# Returns (value, flat_index, lat, lon) at the max or min of a 2D surface field.
 # lat/lon are `nothing` for non-spherical spaces.
 function _sfc_extremum_with_latlon(field, find_max::Bool)
     vals = vec(Array(parent(field)))
@@ -28,29 +28,38 @@ function _sfc_extremum_with_latlon(field, find_max::Bool)
     if hasfield(ET, :lat) && hasfield(ET, :long)
         lat = round(vec(Array(parent(coords.lat)))[idx]; digits = 2)
         lon = round(vec(Array(parent(coords.long)))[idx]; digits = 2)
-        return val, lat, lon
+        return val, idx, lat, lon
     end
-    return val, nothing, nothing
+    return val, idx, nothing, nothing
 end
+
+# Returns the value of `field` at the given flat index (from a co-located field's extremum).
+_sfc_val_at_idx(field, idx) = vec(Array(parent(field)))[idx]
 
 function sea_salt_spike_debug!(integrator, flux_threshold)
     p = integrator.p
     t = integrator.t
 
     flux = p.tracers.sea_salt_emission_flux_sfc
-    max_flux, lat_mf, lon_mf = _sfc_extremum_with_latlon(flux, true)
+    max_flux, spike_idx, lat_mf, lon_mf = _sfc_extremum_with_latlon(flux, true)
     max_flux < flux_threshold && return nothing
 
-    u10 = p.tracers.sea_salt_u10_sfc
-    ustar = p.precomputed.sfc_conditions.ustar
-    L = p.precomputed.sfc_conditions.obukhov_length
+    u10    = p.tracers.sea_salt_u10_sfc
+    ustar  = p.precomputed.sfc_conditions.ustar
+    L      = p.precomputed.sfc_conditions.obukhov_length
 
-    max_u10, lat_u10, lon_u10 = _sfc_extremum_with_latlon(u10, true)
-    max_ustar, lat_us, lon_us = _sfc_extremum_with_latlon(ustar, true)
-    min_L, lat_minL, lon_minL = _sfc_extremum_with_latlon(L, false)
-    max_L, lat_maxL, lon_maxL = _sfc_extremum_with_latlon(L, true)
+    max_u10, _, lat_u10, lon_u10 = _sfc_extremum_with_latlon(u10, true)
 
-    @warn "Sea salt flux spike at t=$(t)s" max_flux lat_mf lon_mf max_u10 lat_u10 lon_u10 max_ustar lat_us lon_us min_L lat_minL lon_minL max_L lat_maxL lon_maxL
+    # ustar and L co-located with the flux spike — these are the physically meaningful values
+    ustar_at_spike = _sfc_val_at_idx(ustar, spike_idx)
+    L_at_spike     = _sfc_val_at_idx(L, spike_idx)
+
+    # Global ustar/L extrema for broader context
+    max_ustar, _, lat_us, lon_us   = _sfc_extremum_with_latlon(ustar, true)
+    min_L, _, lat_minL, lon_minL   = _sfc_extremum_with_latlon(L, false)
+    max_L, _, lat_maxL, lon_maxL   = _sfc_extremum_with_latlon(L, true)
+
+    @warn "Sea salt flux spike at t=$(t)s" max_flux lat_mf lon_mf max_u10 lat_u10 lon_u10 ustar_at_spike L_at_spike max_ustar lat_us lon_us min_L lat_minL lon_minL max_L lat_maxL lon_maxL
 
     # Optional: dump full state to disk for adjacent-timestep inspection
     # save_state_to_disk_func(integrator, joinpath(p.output_dir, "spike_dumps"))
