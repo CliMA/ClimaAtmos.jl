@@ -50,7 +50,15 @@ inst_time = nothing
 if mode == MODE_INST
     _ref_var = load_var_inst(simdir, "arup"; prefer_period = PREFER_PERIOD)
     _ref_times = haskey(_ref_var.dims, "time") ? _ref_var.dims["time"] : nothing
-    inst_time, n_active = find_peak_active_time(simdir; candidate_times = _ref_times)
+    if T_END_DAYS == Inf
+        # Default: use the last available timestep (shows state before crash)
+        inst_time = isnothing(_ref_times) ? nothing : _ref_times[end]
+    else
+        # User specified a day: snap to nearest available time
+        target = T_END_DAYS * DAY_S
+        inst_time = isnothing(_ref_times) ? nothing :
+            _ref_times[argmin(abs.(_ref_times .- target))]
+    end
     snap_kw[:inst_time] = inst_time
 end
 
@@ -229,20 +237,20 @@ end
 
 # Expand axis limits to include hotspot markers (with 10% padding)
 xlim_hi = max(mf_hi, isempty(hotspot_mf) ? 0.0 : maximum(hotspot_mf)) * 1.1
-ylim_hi = max(Q0_hi, isempty(hotspot_Q0) ? 0.0 : maximum(hotspot_Q0)) * 1.1
+ylim_hi = max(Q0_hi, isempty(hotspot_Q0) ? 0.0 : maximum(hotspot_Q0)) * DAY_S * 1.1
 
 ax23 = CairoMakie.Axis(fig[2, 3];
     title = "Q₀ vs max(a·w·Δh) z>3km",
     xlabel = "max arup·waup·Δh (W/m²)",
-    ylabel = "Q₀ (K/s)",
+    ylabel = "Q₀ (K/day)",
     limits = ((0, xlim_hi), (0, ylim_hi)),
 )
 if any(valid)
-    CairoMakie.scatter!(ax23, mf_data[valid], Q0_data[valid];
+    CairoMakie.scatter!(ax23, mf_data[valid], Q0_data[valid] .* DAY_S;
         markersize = 5, alpha = 0.4, color = :steelblue)
 end
 for ih in eachindex(hotspots)
-    CairoMakie.scatter!(ax23, [hotspot_mf[ih]], [hotspot_Q0[ih]];
+    CairoMakie.scatter!(ax23, [hotspot_mf[ih]], [hotspot_Q0[ih] * DAY_S];
         markersize = 18, color = hotspot_colors[ih], marker = :xcross)
 end
 
