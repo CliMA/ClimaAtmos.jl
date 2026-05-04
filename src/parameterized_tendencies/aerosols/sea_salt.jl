@@ -102,90 +102,6 @@ function sea_salt_emission_flux(u_10, T_sfc, bin_index; SST_adj = false)
     return number_flux
 end
 
-# Cached topology: which flat indices are structurally isolated inland cells.
-# `nothing` = not yet initialised; `BitVector` = ready to apply.
-const _OCEAN_ISOLATED_CELLS = Ref{Union{Nothing, BitVector}}(nothing)
-
-"""
-    compute_ocean_mask!(ocean_fraction; threshold = 0.25, search_radius_deg = 1.5)
-
-Filter `ocean_fraction` in-place to zero isolated inland freshwater cells. A cell is
-zeroed if every neighbor within `search_radius_deg` great-circle degrees has
-`ocean_fraction < threshold`; cells with at least one above-threshold neighbor are left
-unchanged.
-
-On the first call the topology is detected in O(N log N + N·K) and cached in the
-module-level `_OCEAN_ISOLATED_CELLS` BitVector. Every subsequent call just applies
-that cached BitVector in O(N), so this is cheap to call after every coupler update.
-
-To force a re-detection (e.g. after a land/sea change), set
-`ClimaAtmos._OCEAN_ISOLATED_CELLS[] = nothing` before calling.
-
-Non-spherical (flat) spaces have no lat/lon coordinates and are returned unchanged.
-"""
-function compute_ocean_mask!(ocean_fraction; threshold = 0.25, search_radius_deg = 1.5)
-    if isnothing(_OCEAN_ISOLATED_CELLS[])
-        _init_ocean_isolated_cells!(ocean_fraction, threshold, search_radius_deg)
-    end
-
-    isolated = _OCEAN_ISOLATED_CELLS[]
-    isempty(isolated) && return ocean_fraction
-
-    FT = eltype(ocean_fraction)
-    vals = vec(Array(parent(ocean_fraction)))
-    vals[isolated] .= FT(0)
-    copyto!(parent(ocean_fraction), reshape(vals, size(parent(ocean_fraction))))
-    return ocean_fraction
-end
-
-function _init_ocean_isolated_cells!(ocean_fraction, threshold, search_radius_deg)
-    coords = Fields.coordinate_field(axes(ocean_fraction))
-    ET = eltype(coords)
-
-    if !hasfield(ET, :lat) || !hasfield(ET, :long)
-        _OCEAN_ISOLATED_CELLS[] = BitVector()
-        return
-    end
-
-    lats = vec(Array(parent(coords.lat)))
-    lons = vec(Array(parent(coords.long)))
-    vals = vec(Array(parent(ocean_fraction)))
-    n    = length(vals)
-
-    isolated    = falses(n)
-    perm        = sortperm(lats)
-    sorted_lats = lats[perm]
-    r           = Float64(search_radius_deg)
-    thr         = Float64(threshold)
-
-    for i in 1:n
-        Float64(vals[i]) < thr && continue  # below-threshold cells are not frozen
-
-        lat_i = Float64(lats[i])
-        lon_i = Float64(lons[i])
-
-        lo = searchsortedfirst(sorted_lats, lat_i - r)
-        hi = searchsortedlast(sorted_lats,  lat_i + r)
-
-        has_ocean_neighbor = false
-        for k in lo:hi
-            j = perm[k]
-            j == i && continue
-            Float64(vals[j]) < thr && continue
-            dlon = abs(Float64(lons[j]) - lon_i)
-            dlon > 180.0 && (dlon = 360.0 - dlon)
-            dlat = Float64(sorted_lats[k]) - lat_i
-            if dlat^2 + (dlon * cosd(lat_i))^2 ≤ r^2
-                has_ocean_neighbor = true
-                break
-            end
-        end
-
-        isolated[i] = !has_ocean_neighbor
-    end
-
-    _OCEAN_ISOLATED_CELLS[] = isolated
-end
 
 """
     sea_salt_emission_tendency_debug!(Yₜ, Y, p, t)
@@ -271,6 +187,14 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
 
     @. p.tracers.sea_salt_emission_flux_sfc = 0
     @. p.tracers.sea_salt_u10_sfc = abs(u_10)
+
+    # Wind comparison diagnostics: MO-reconstructed vs actual model wind at level 1.
+    # z_c1 is the geometric height at the first cell center (varies with topography).
+    z_c1 = Fields.level(Fields.coordinate_field(axes(Y.c)).z, 1)
+    @. p.tracers.sea_salt_u_mo_lowest_sfc = monin_obukhov_wind_at_height(
+        z_c1, sfc_conditions.ustar, sfc_conditions.obukhov_length, uf_params, κ, z₀,
+    )
+    @. p.tracers.sea_salt_u_actual_lowest_sfc = norm(Fields.level(Y.c.uₕ, 1))
 
     for (bin_index, name) in enumerate(aerosol_names)
         ρχ_name = Symbol(:ρ, name)
