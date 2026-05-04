@@ -128,12 +128,16 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
     for name in sslt_bin_names
         getproperty(sea_salt_emission_flux_bins_sfc, name) .= zero(eltype(Y.c.ρ))
     end
-    sea_salt_u10_sfc = zeros(sfc_space)   # 10 m wind speed (m s⁻¹) from MO theory
+    sea_salt_u10_sfc         = zeros(sfc_space)  # 10 m wind speed (m s⁻¹) from MO theory
+    sea_salt_u_mo_lowest_sfc = zeros(sfc_space)  # MO-reconstructed wind at z₁ (m s⁻¹)
+    sea_salt_u_actual_lowest_sfc = zeros(sfc_space)  # actual model wind speed at level 1 (m s⁻¹)
 
     return (;
         aerosol_cache..., o3_cache..., co2_cache_nt...,
         sea_salt_emission_flux_sfc,
         sea_salt_emission_flux_bins_sfc,
         sea_salt_u10_sfc,
+        sea_salt_u_mo_lowest_sfc,
+        sea_salt_u_actual_lowest_sfc,
     )
 end

@@ -24,7 +24,9 @@ and omit the keyword args to get the plain MOST profile.
 """
 function monin_obukhov_wind_at_height(z_target, ustar, L, 
                                        uf_params, κ, z₀; 
-                                       buoyancy_flux = nothing, gustiness_coeff = nothing, zi = nothing)
+                                       buoyancy_flux = nothing,
+                                       gustiness_coeff = nothing, 
+                                       zi = nothing)
     FT = typeof(ustar)
 
     # MOST profile, clamped to match SurfaceFluxes.jl internal bounds
@@ -59,9 +61,6 @@ function _gong2003_r_integrand(r, theta)
     return 1.373 * r^(-A) * (1 + 0.057 * r^3.45) * 10^(1.607 * exp(-B^2))
 end
 
-# Precompute ∫_{r_lo}^{r_hi} _gong2003_r_integrand(r, 30) dr for each bin
-# using a high-accuracy 512-point trapezoidal rule at Float64 precision.
-# This runs once at module load time, not per timestep or grid cell.
 function _precompute_bin_integral(r_lo, r_hi, N = 512)
     theta = 30.0
     dr = (r_hi - r_lo) / N
@@ -88,8 +87,6 @@ The r-integral is precomputed once per bin at module load time
 
     F = bin_integral · u_10^3.41 · SST_factor(T_sfc)
 
-TODO: add SST-dependent theta correction (currently fixed at theta = 30).
-TODO: apply land-sea mask upstream so this is only called over ocean.
 """
 function sea_salt_emission_flux(u_10, T_sfc, bin_index; SST_adj = false)
     FT = typeof(u_10)
@@ -102,39 +99,6 @@ function sea_salt_emission_flux(u_10, T_sfc, bin_index; SST_adj = false)
     return number_flux
 end
 
-
-"""
-    sea_salt_emission_tendency_debug!(Yₜ, Y, p, t)
-
-Constant-emission version of `sea_salt_emission_tendency!` for debugging.
-Applies a uniform flux of `1e-10 kg m⁻² s⁻¹` per bin at all ocean grid cells,
-skipping all Monin-Obukhov and Gong (2003) computations. Swap this in place of
-`sea_salt_emission_tendency!` in `surface_flux.jl` to isolate tracer transport
-issues from emission parameterization issues.
-"""
-function sea_salt_emission_tendency_debug!(Yₜ, Y, p, t)
-    aerosol_names = _aerosol_names(p.atmos.prognostic_aerosols)
-    isempty(aerosol_names) && return
-
-    FT = eltype(Y)
-    # Rough global-mean sea salt emission: ~5000 Tg/yr total, 5 bins,
-    # ~3.6e14 m² ocean area → ~1e-10 kg m⁻² s⁻¹ per bin.
-    const_flux = FT(1e-10)
-    ocean_fraction = p.ocean_fraction
-
-    for name in aerosol_names
-        ρχ_name = Symbol(:ρ, name)
-        ᶜρχ = getproperty(Y.c, ρχ_name)
-        ᶜρχₜ = getproperty(Yₜ.c, ρχ_name)
-        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-
-        sfc_flux = p.scratch.sfc_temp_C3
-        @. sfc_flux = C3(const_flux * ocean_fraction)
-
-        btt = boundary_tendency_scalar(ᶜχ, sfc_flux)
-        @. ᶜρχₜ -= btt
-    end
-end
 
 """
     sea_salt_emission_tendency!(Yₜ, Y, p, t)

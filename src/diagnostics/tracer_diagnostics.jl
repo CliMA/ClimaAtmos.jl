@@ -402,6 +402,32 @@ add_diagnostic_variable!(
 )
 
 add_diagnostic_variable!(
+    short_name = "u_mo_lowest",
+    long_name = "MO-Reconstructed Wind Speed at Lowest Model Level",
+    units = "m s^-1",
+    comments = "Wind speed from Monin-Obukhov similarity theory evaluated at the height of the first model-level cell center z₁ (varies with topography). Stored each timestep by sea_salt_emission_tendency!.",
+    compute! = (out, u, p, t) -> begin
+        :sea_salt_u_mo_lowest_sfc in propertynames(p.tracers) ||
+            error("sea_salt_u_mo_lowest_sfc not in cache — is sea_salt_emission_tendency! active?")
+        isnothing(out) ? copy(p.tracers.sea_salt_u_mo_lowest_sfc) :
+            (out .= p.tracers.sea_salt_u_mo_lowest_sfc)
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "u_actual_lowest",
+    long_name = "Actual Wind Speed at Lowest Model Level",
+    units = "m s^-1",
+    comments = "Magnitude of the model horizontal wind vector at the first cell-center level. Used as ground truth for comparison against the MO-reconstructed wind.",
+    compute! = (out, u, p, t) -> begin
+        :sea_salt_u_actual_lowest_sfc in propertynames(p.tracers) ||
+            error("sea_salt_u_actual_lowest_sfc not in cache — is sea_salt_emission_tendency! active?")
+        isnothing(out) ? copy(p.tracers.sea_salt_u_actual_lowest_sfc) :
+            (out .= p.tracers.sea_salt_u_actual_lowest_sfc)
+    end,
+)
+
+add_diagnostic_variable!(
     short_name = "obukhovlen",
     long_name = "Obukhov Length",
     units = "m",
