@@ -19,19 +19,26 @@ Load computed drag data: try local file first, fall back to ClimaArtifacts artif
 Returns a ClimaCore Field with (hmax, hmin, t11, t12, t21, t22).
 """
 function load_computed_drag(parsed_args, comms_ctx)
-    (; output_filename) = CA.gen_fn(parsed_args)
-    h_elem = parsed_args["h_elem"]
+    topo_kwargs = (;
+        topography = parsed_args["topography"],
+        topo_smoothing = parsed_args["topo_smoothing"],
+        topography_damping_factor = parsed_args["topography_damping_factor"],
+        h_elem = parsed_args["h_elem"],
+    )
+    (; output_filename) = CA.generate_drag_filename(; topo_kwargs...)
 
     # Try local file first
     local_path = joinpath(pkgdir(CA), "$(output_filename).hdf5")
     if isfile(local_path)
         @info "Loading computed drag from local file: $(local_path)"
-        return CA.load_preprocessed_topography(parsed_args)
+        return CA.load_preprocessed_topography(; topo_kwargs...)
     end
 
     # Fall back to ClimaArtifacts
     @info "Local file not found, loading from ClimaArtifacts..."
-    artifact_path = AA.ogw_computed_drag_file_path(; h_elem, context = comms_ctx)
+    artifact_path = AA.ogw_computed_drag_file_path(;
+        h_elem = topo_kwargs.h_elem, context = comms_ctx,
+    )
     @info "Loading from: $(artifact_path)"
     reader = InputOutput.HDF5Reader(artifact_path, comms_ctx)
     drag = InputOutput.read_field(reader, "computed_drag")

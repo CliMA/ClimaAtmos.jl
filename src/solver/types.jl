@@ -935,6 +935,10 @@ Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
+# `AtmosX(config::AtmosConfig, ...)` constructors live below the `AtmosConfig`
+# struct definition (later in this file) so the type is in scope when those
+# methods are parsed.
+
 struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
     water::W
     scm_setup::SCM
@@ -1405,6 +1409,231 @@ function AtmosConfig(
         config_files,
         job_id,
     )
+end
+
+# AtmosConfig-aware constructors for the AtmosModel group structs.
+# Each consolidates the YAML→typed-object translation for one group.
+
+function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
+    pa = config.parsed_args
+    microphys_model_str = pa["microphysics_model"]
+    @assert microphys_model_str in ("dry", "0M", "1M", "2M", "2MP3")
+    microphysics_model =
+        if microphys_model_str == "dry"
+            DryModel()
+        elseif microphys_model_str == "0M"
+            EquilibriumMicrophysics0M()
+        elseif microphys_model_str == "1M"
+            NonEquilibriumMicrophysics1M(; n_substeps = pa["microphysics_n_substeps"])
+        elseif microphys_model_str == "2M"
+            NonEquilibriumMicrophysics2M()
+        elseif microphys_model_str == "2MP3"
+            NonEquilibriumMicrophysics2MP3()
+        end
+
+    sgs_quadrature = get_sgs_quadrature(pa, params)
+
+    if microphysics_model isa DryModel
+        @warn "Running simulations without any moisture present."
+    end
+    if microphysics_model isa EquilibriumMicrophysics0M && isnothing(sgs_quadrature)
+        error(
+            "EquilibriumMicrophysics0M requires use_sgs_quadrature: true. " *
+            "GridMeanSGS fallback is not supported for 0-moment microphysics.",
+        )
+    end
+
+    cloud_model = get_cloud_model(pa, params)
+
+    terminal_velocity_mode =
+        pa["fixed_terminal_velocity"] ?
+        FixedTerminalVelocity{FT}(
+            CAP.fixed_cloud_liquid_terminal_velocity(params),
+            CAP.fixed_cloud_ice_terminal_velocity(params),
+            CAP.fixed_rain_terminal_velocity(params),
+            CAP.fixed_snow_terminal_velocity(params),
+        ) : DiagnosticTerminalVelocity()
+
+    implicit_microphysics = pa["implicit_microphysics"]
+    @assert implicit_microphysics in (true, false)
+
+    return AtmosWater(;
+        microphysics_model,
+        cloud_model,
+        microphysics_tendency_timestepping = implicit_microphysics ? Implicit() :
+                                             Explicit(),
+        tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
+        sgs_quadrature,
+        terminal_velocity_mode,
+    )
+end
+
+function AtmosRadiation(config::AtmosConfig, ::Type{FT}; setup_type = nothing) where {FT}
+    pa = config.parsed_args
+
+    radiation_mode = get_radiation_mode(pa, FT; setup_type)
+
+    # Legacy `forcing: held_suarez` selects HeldSuarezForcing as the radiation
+    # mode (deprecated; prefer `rad: held_suarez`).
+    forcing = pa["forcing"]
+    @assert forcing in (nothing, "held_suarez")
+    if forcing == "held_suarez"
+        @warn "The 'held_suarez' forcing option is deprecated. Use rad='held_suarez' instead."
+        radiation_mode = HeldSuarezForcing()
+    end
+
+    return AtmosRadiation(;
+        radiation_mode,
+        insolation = get_insolation_form(pa; setup_type),
+    )
+end
+
+function AtmosGravityWave(config::AtmosConfig, params, ::Type{FT}) where {FT}
+    pa = config.parsed_args
+    return AtmosGravityWave(;
+        non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(pa, params, FT),
+        orographic_gravity_wave = get_orographic_gravity_wave_model(pa, params, FT),
+    )
+end
+
+function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
+    pa = config.parsed_args
+    turbconv_params = CAP.turbconv_params(params)
+
+    implicit_sgs_advection = pa["implicit_sgs_advection"]
+    @assert implicit_sgs_advection in (true, false)
+    implicit_sgs_entr_detr = pa["implicit_sgs_entr_detr"]
+    @assert implicit_sgs_entr_detr in (true, false)
+    implicit_sgs_nh_pressure = pa["implicit_sgs_nh_pressure"]
+    @assert implicit_sgs_nh_pressure in (true, false)
+    implicit_sgs_vertdiff = pa["implicit_sgs_vertdiff"]
+    @assert implicit_sgs_vertdiff in (true, false)
+    implicit_sgs_mass_flux = pa["implicit_sgs_mass_flux"]
+    @assert implicit_sgs_mass_flux in (true, false)
+
+    scale_blending_method =
+        if pa["edmfx_scale_blending"] == "SmoothMinimum"
+            SmoothMinimumBlending()
+        elseif pa["edmfx_scale_blending"] == "HardMinimum"
+            HardMinimumBlending()
+        else
+            error("Unknown edmfx_scale_blending method: $(pa["edmfx_scale_blending"])")
+        end
+
+    edmfx_model = EDMFXModel(;
+        entr_model = get_entrainment_model(pa),
+        detr_model = get_detrainment_model(pa),
+        sgs_mass_flux = pa["edmfx_sgs_mass_flux"],
+        sgs_diffusive_flux = pa["edmfx_sgs_diffusive_flux"],
+        nh_pressure = pa["edmfx_nh_pressure"],
+        vertical_diffusion = pa["edmfx_vertical_diffusion"],
+        filter = pa["edmfx_filter"],
+        scale_blending_method,
+    )
+
+    n = pa["smagorinsky_lilly"]
+    smagorinsky_lilly =
+        isnothing(n) ? nothing : SmagorinskyLilly(; axes = Symbol(n))
+
+    amd_les_active = pa["amd_les"]
+    @assert amd_les_active in (true, false)
+    amd_les = amd_les_active ? AnisotropicMinimumDissipation{FT}(pa["c_amd"]) : nothing
+
+    chd_active = pa["constant_horizontal_diffusion"]
+    @assert chd_active in (true, false)
+    constant_horizontal_diffusion =
+        chd_active ?
+        ConstantHorizontalDiffusion{FT}(CAP.constant_horizontal_diffusion_D(params)) :
+        nothing
+
+    return AtmosTurbconv(;
+        edmfx_model,
+        turbconv_model = get_turbconv_model(FT, pa, turbconv_params),
+        sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
+        sgs_entr_detr_mode = implicit_sgs_entr_detr ? Implicit() : Explicit(),
+        sgs_nh_pressure_mode = implicit_sgs_nh_pressure ? Implicit() : Explicit(),
+        sgs_vertdiff_mode = implicit_sgs_vertdiff ? Implicit() : Explicit(),
+        sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
+        smagorinsky_lilly,
+        amd_les,
+        constant_horizontal_diffusion,
+    )
+end
+
+AtmosNumerics(config::AtmosConfig, ::Type{FT}) where {FT} =
+    get_numerics(config.parsed_args, FT)
+
+function SCMSetup(config::AtmosConfig, ::Type{FT};
+    setup_type = nothing, radiation_mode = nothing) where {FT}
+    pa = config.parsed_args
+
+    advection_test = pa["advection_test"]
+    @assert advection_test in (false, true)
+
+    return SCMSetup(;
+        subsidence = get_subsidence_model(pa, radiation_mode, FT; setup_type),
+        external_forcing = get_external_forcing_model(pa, FT; setup_type),
+        ls_adv = get_large_scale_advection_model(pa, FT; setup_type),
+        advection_test,
+        scm_coriolis = get_scm_coriolis(pa, FT; setup_type),
+    )
+end
+
+function AtmosSponge(config::AtmosConfig, params)
+    pa = config.parsed_args
+
+    vs_name = pa["viscous_sponge"]
+    viscous_sponge = if vs_name in ("false", false, "none")
+        nothing
+    elseif vs_name in ("true", true, "ViscousSponge")
+        ViscousSponge(params)
+    else
+        error("Uncaught viscous sponge model `$vs_name`.")
+    end
+
+    rs_name = pa["rayleigh_sponge"]
+    rayleigh_sponge = if rs_name in ("false", false)
+        nothing
+    elseif rs_name in ("true", true, "RayleighSponge")
+        RayleighSponge(params)
+    else
+        error("Uncaught rayleigh sponge model `$rs_name`.")
+    end
+
+    return AtmosSponge(; viscous_sponge, rayleigh_sponge)
+end
+
+function AtmosSurface(
+    config::AtmosConfig, params, ::Type{FT}; setup_type = nothing,
+) where {FT}
+    pa = config.parsed_args
+
+    sfc_temperature = Setups.surface_temperature_model(setup_type)
+
+    surface_model =
+        if pa["prognostic_surface"] in ("false", false, "PrescribedSST")
+            PrescribedSST()
+        elseif pa["prognostic_surface"] in ("true", true, "SlabOceanSST")
+            SlabOceanSST()
+        else
+            error("Uncaught surface model `$(pa["prognostic_surface"])`.")
+        end
+
+    surface_albedo =
+        if pa["albedo_model"] == "ConstantAlbedo"
+            ConstantAlbedo{FT}(; α = params.idealized_ocean_albedo)
+        elseif pa["albedo_model"] == "RegressionFunctionAlbedo"
+            isnothing(pa["rad"]) && error(
+                "Radiation model not specified, so cannot use RegressionFunctionAlbedo",
+            )
+            RegressionFunctionAlbedo{FT}(; n = params.water_refractive_index)
+        elseif pa["albedo_model"] == "CouplerAlbedo"
+            CouplerAlbedo()
+        else
+            error("Uncaught surface albedo model `$(pa["albedo_model"])`.")
+        end
+
+    return AtmosSurface(; sfc_temperature, surface_model, surface_albedo)
 end
 
 """
