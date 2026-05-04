@@ -206,16 +206,11 @@ function remap_to_latlon(
     config::PlotConfig,
     FT = Float64,
 )
-    # Create directory if needed
-    if !isdir(remap_dir)
-        mkpath(remap_dir)
-    end
-
-    # Create timestamped filenames
-    timestamp = Dates.format(now(), "yyyymmdd_HHMMSS")
-    datafile_cg = joinpath(remap_dir, "data_cg_$(timestamp).nc")
-    weightfile = joinpath(remap_dir, "remap_weights_$(timestamp).nc")
-    datafile_rll = joinpath(remap_dir, "data_rll_$(timestamp).nc")
+    isdir(remap_dir) || mkpath(remap_dir)
+    call_dir = mktempdir(remap_dir; cleanup = false)
+    datafile_cg = joinpath(call_dir, "data_cg.nc")
+    weightfile = joinpath(call_dir, "remap_weights.nc")
+    datafile_rll = joinpath(call_dir, "data_rll.nc")
 
     # Write ClimaCore fields to NetCDF
     NCDataset(datafile_cg, "c") do nc
