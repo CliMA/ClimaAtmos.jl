@@ -1,107 +1,46 @@
-function get_diagnostics(
-    parsed_args,
-    atmos_model,
-    Y, p, dt,
-    t_start, start_date, output_dir,
+# Reduction-time keys allowed in diagnostic spec dicts.
+# Lowercased so callers can use "Max" or "max" interchangeably.
+const _DIAG_ALLOWED_REDUCTIONS = Dict(
+    "inst" => (nothing, nothing),       # just dump the variable
+    "nothing" => (nothing, nothing),    # also accepts the literal string "nothing"
+    "max" => (max, nothing),
+    "min" => (min, nothing),
+    "average" => ((+), CAD.average_pre_output_hook!),
 )
 
+"""
+    scheduled_diagnostics_from_specs(specs, Y, t_start, start_date, writers)
+
+Convert a list of YAML-style diagnostic spec dicts into a flat
+`Vector{ScheduledDiagnostic}`. Each spec must contain at least `short_name`
+and `period`; supports optional `reduction_time`, `writer`, `output_name`,
+`pressure_coordinates`, and `compute_every`.
+
+`writers` is a tuple `(dict, hdf5, netcdf [, pressure_netcdf])` whose
+instances are bound to the resulting diagnostics' `output_writer` fields.
+Errors if any spec requests pressure coordinates but the writers tuple does
+not include a pressure NetCDFWriter.
+"""
+function scheduled_diagnostics_from_specs(
+    specs,
+    Y,
+    t_start,
+    start_date,
+    writers,
+)
     FT = Spaces.undertype(axes(Y.c))
 
-    # We either get the diagnostics section in the YAML file, or we return an empty list
-    # (which will result in an empty list being created by the map below)
-    yaml_diagnostics = get(parsed_args, "diagnostics", [])
-
-    # ALLOWED_REDUCTIONS is the collection of reductions we support. The keys are the
-    # strings that have to be provided in the YAML file. The values are tuples with the
-    # function that has to be passed to reduction_time_func and the one that has to passed
-    # to pre_output_hook!
-
-    # We make "nothing" a string so that we can accept also the word "nothing", in addition
-    # to the absence of the value
-    #
-    # NOTE: Everything has to be lowercase in ALLOWED_REDUCTIONS (so that we can match
-    # "max" and "Max")
-    ALLOWED_REDUCTIONS = Dict(
-        "inst" => (nothing, nothing), # nothing is: just dump the variable
-        "nothing" => (nothing, nothing),
-        "max" => (max, nothing),
-        "min" => (min, nothing),
-        "average" => ((+), CAD.average_pre_output_hook!),
-    )
-
-    dict_writer = CAD.DictWriter()
-    hdf5_writer = CAD.HDF5Writer(output_dir)
-
-    if !isnothing(parsed_args["netcdf_interpolation_num_points"])
-        num_netcdf_points =
-            tuple(parsed_args["netcdf_interpolation_num_points"]...)
-    else
-        # From the given space, calculate the number of diagnostic grid points if not
-        # specified by the user
-        num_netcdf_points = default_netcdf_points(axes(Y.c), parsed_args)
-    end
-
-    z_sampling_method =
-        parsed_args["netcdf_output_at_levels"] ? CAD.LevelsMethod() :
-        CAD.FakePressureLevelsMethod()
-
-    # Map config string to ClimaCore.Remapping type (NetCDFWriter expects AbstractRemappingMethod)
-    netcdf_horizontal_str = get(parsed_args, "netcdf_horizontal_method", "spectral")
-    horizontal_method = if netcdf_horizontal_str == "bilinear"
-        CC.Remapping.BilinearRemapping()
-    elseif netcdf_horizontal_str == "spectral"
-        CC.Remapping.SpectralElementRemapping()
-    else
+    dict_writer, hdf5_writer, netcdf_writer = writers[1], writers[2], writers[3]
+    pressure_netcdf_writer = length(writers) >= 4 ? writers[4] : nothing
+    if any(d -> get(d, "pressure_coordinates", false), specs) &&
+       isnothing(pressure_netcdf_writer)
         error(
-            "netcdf_horizontal_method must be \"bilinear\" or \"spectral\", got \"$(netcdf_horizontal_str)\"",
+            "diagnostic specs request pressure coordinates, but the writers \
+            tuple does not include a pressure NetCDFWriter.",
         )
     end
 
-    # The start_date keyword was added in v0.2.9. For prior versions, the diagnostics will
-    # not contain the date
-    maybe_add_start_date =
-        pkgversion(CAD.ClimaDiagnostics) >= v"0.2.9" ? (; start_date) : (;)
-
-    netcdf_writer = CAD.NetCDFWriter(
-        axes(Y.c),
-        output_dir,
-        num_points = num_netcdf_points;
-        z_sampling_method,
-        horizontal_method,
-        sync_schedule = CAD.EveryStepSchedule(),
-        init_time = t_start,
-        maybe_add_start_date...,
-    )
-
-    # Create NetCDF writer for diagnostics in pressure coordinates if they
-    # exist
-    write_in_pressure_coords = any(yaml_diagnostics) do yaml_diag
-        get(yaml_diag, "pressure_coordinates", false)
-    end
-    pressure_netcdf_writer = nothing
-    if write_in_pressure_coords
-        z_sampling_method = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
-            p.precomputed.ᶜp,
-            t_start,
-        )
-        pressure_space = ClimaDiagnostics.Writers.pressure_space(z_sampling_method)
-        pressure_netcdf_writer = CAD.NetCDFWriter(
-            pressure_space,
-            output_dir,
-            num_points = num_netcdf_points;
-            z_sampling_method,
-            horizontal_method,
-            sync_schedule = CAD.EveryStepSchedule(),
-            init_time = t_start,
-            maybe_add_start_date...,
-        )
-    end
-
-    writers = (dict_writer, hdf5_writer, netcdf_writer)
-    isnothing(pressure_netcdf_writer) || (writers = (writers..., pressure_netcdf_writer))
-
-    # The default writer is netcdf
-    ALLOWED_WRITERS = Dict(
+    allowed_writers = Dict(
         "nothing" => netcdf_writer,
         "dict" => dict_writer,
         "h5" => hdf5_writer,
@@ -110,10 +49,10 @@ function get_diagnostics(
         "netcdf" => netcdf_writer,
     )
 
-    diagnostics_ragged = map(yaml_diagnostics) do yaml_diag
-        short_names = yaml_diag["short_name"]
-        output_name = get(yaml_diag, "output_name", nothing)
-        in_pressure_coords = get(yaml_diag, "pressure_coordinates", false)
+    diagnostics_ragged = map(specs) do spec
+        short_names = spec["short_name"]
+        output_name = get(spec, "output_name", nothing)
+        in_pressure_coords = get(spec, "pressure_coordinates", false)
 
         if short_names isa Vector
             isnothing(output_name) || error(
@@ -124,61 +63,51 @@ function get_diagnostics(
         end
 
         map(short_names) do short_name
-            # Return "nothing" if "reduction_time" is not in the YAML block
-            #
-            # We also normalize everything to lowercase, so that can accept "max" but
-            # also "Max"
-            reduction_time_yaml =
-                lowercase(get(yaml_diag, "reduction_time", "nothing"))
+            reduction_key = lowercase(get(spec, "reduction_time", "nothing"))
+            haskey(_DIAG_ALLOWED_REDUCTIONS, reduction_key) ||
+                error("reduction $reduction_key not implemented")
+            reduction_time_func, pre_output_hook! =
+                _DIAG_ALLOWED_REDUCTIONS[reduction_key]
 
-            if !haskey(ALLOWED_REDUCTIONS, reduction_time_yaml)
-                error("reduction $reduction_time_yaml not implemented")
-            else
-                reduction_time_func, pre_output_hook! =
-                    ALLOWED_REDUCTIONS[reduction_time_yaml]
-            end
-
-            writer_ext = lowercase(get(yaml_diag, "writer", "nothing"))
-
-            if !haskey(ALLOWED_WRITERS, writer_ext)
+            writer_ext = lowercase(get(spec, "writer", "nothing"))
+            haskey(allowed_writers, writer_ext) ||
                 error("writer $writer_ext not implemented")
+            writer = if in_pressure_coords
+                writer_ext in ("netcdf", "nothing") ||
+                    error("Writing in pressure coordinates is only \
+                    compatible with the NetCDF writer")
+                pressure_netcdf_writer
             else
-                writer = if in_pressure_coords
-                    writer_ext in ("netcdf", "nothing") ||
-                        error("Writing in pressure coordinates is only \
-                        compatible with the NetCDF writer")
-                    pressure_netcdf_writer
-                else
-                    ALLOWED_WRITERS[writer_ext]
-                end
+                allowed_writers[writer_ext]
             end
 
-            haskey(yaml_diag, "period") ||
+            haskey(spec, "period") ||
                 error("period keyword required for diagnostics")
 
-            period_str = yaml_diag["period"]
             output_schedule =
-                parse_frequency_to_schedule(FT, period_str, start_date, t_start)
+                parse_frequency_to_schedule(FT, spec["period"], start_date, t_start)
             compute_schedule =
-                parse_frequency_to_schedule(FT, period_str, start_date, t_start)
+                parse_frequency_to_schedule(FT, spec["period"], start_date, t_start)
 
-            if isnothing(output_name)
-                output_short_name = CAD.descriptive_short_name(
+            output_short_name = if isnothing(output_name)
+                CAD.descriptive_short_name(
                     CAD.get_diagnostic_variable(short_name),
                     output_schedule,
                     reduction_time_func,
                     pre_output_hook!,
                 )
+            else
+                output_name
             end
 
-            if isnothing(reduction_time_func)
-                compute_every = compute_schedule
-            elseif !("compute_every" in keys(yaml_diag))
-                compute_every = CAD.EveryStepSchedule()
+            compute_every = if isnothing(reduction_time_func)
+                compute_schedule
+            elseif !haskey(spec, "compute_every")
+                CAD.EveryStepSchedule()
             else
-                compute_every_str = yaml_diag["compute_every"]
-                compute_every =
-                    parse_frequency_to_schedule(FT, compute_every_str, start_date, t_start)
+                parse_frequency_to_schedule(
+                    FT, spec["compute_every"], start_date, t_start,
+                )
             end
 
             CAD.ScheduledDiagnostic(
@@ -193,41 +122,7 @@ function get_diagnostics(
         end
     end
 
-    # Flatten the array of arrays of diagnostics
-    diagnostics = vcat(diagnostics_ragged...)
-
-    if parsed_args["output_default_diagnostics"]
-        diagnostics = [
-            CAD.default_diagnostics(
-                atmos_model,
-                dt isa ITime ?
-                ITime(time_to_seconds(parsed_args["t_end"])) - t_start :
-                FT(time_to_seconds(parsed_args["t_end"]) - t_start),
-                start_date,
-                t_start;
-                output_writer = netcdf_writer,
-                topography = has_topography(axes(Y.c)),
-            )...,
-            diagnostics...,
-        ]
-    end
-    diagnostics = collect(diagnostics)
-
-    periods_reductions = extract_diagnostic_periods(diagnostics)
-    periods_str = join(CA.promote_period.(periods_reductions), ", ")
-    @info "Saving accumulated diagnostics to disk with frequency: $(periods_str)"
-
-    for writer in writers
-        writer_str = nameof(typeof(writer))
-        diags_with_writer =
-            filter((x) -> getproperty(x, :output_writer) == writer, diagnostics)
-        diags_outputs = [
-            getproperty(diag, :output_short_name) for diag in diags_with_writer
-        ]
-        @info "$writer_str: $diags_outputs"
-    end
-
-    return diagnostics, writers, periods_reductions
+    return collect(Iterators.flatten(diagnostics_ragged))
 end
 
 """
@@ -512,99 +407,6 @@ function ogw_callback(
 end
 
 
-function get_callbacks(config, sim_info, atmos, params, Y, p)
-    (; parsed_args, comms_ctx) = config
-    (; dt, output_dir, start_date, t_start, t_end) = sim_info
-
-    callbacks = ()
-
-    # Progress logging
-    if parsed_args["log_progress"]
-        callbacks = (callbacks..., progress_logging_callback(dt, t_start, t_end)...)
-    end
-
-    # NaN checking
-    check_nan_every = parsed_args["check_nan_every"]
-    callbacks = (callbacks..., nan_checking_callback(check_nan_every)...)
-
-    # Graceful exit
-    callbacks = (callbacks..., graceful_exit_callback(output_dir)...)
-
-    # Checkpointing
-    checkpoint_frequency = parse_checkpoint_frequency(parsed_args["dt_save_state_to_disk"])
-    callbacks = (
-        callbacks...,
-        checkpoint_callback(
-            checkpoint_frequency,
-            output_dir,
-            start_date,
-            t_start,
-        )...,
-    )
-
-    # Garbage collection
-    callbacks = (callbacks..., gc_callback(comms_ctx)...)
-
-    # Conservation checking
-    if parsed_args["check_conservation"]
-        callbacks = (callbacks..., conservation_checking_callback()...)
-    end
-
-    # External forcing
-    if parsed_args["external_forcing"] in
-       ["ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal"] &&
-       parsed_args["config"] == "column"
-        callbacks = (callbacks..., scm_external_forcing_callback()...)
-    end
-
-    # Radiation
-    callbacks = (
-        callbacks...,
-        radiation_callback(
-            atmos.radiation_mode,
-            parsed_args["dt_rad"],
-            dt,
-            t_start,
-            t_end,
-            checkpoint_frequency,
-        )...,
-    )
-
-    # Non-orographic gravity wave
-    callbacks = (
-        callbacks...,
-        nogw_callback(
-            atmos.non_orographic_gravity_wave,
-            parsed_args["dt_nogw"],
-            dt,
-            t_start,
-            t_end,
-            checkpoint_frequency,
-        )...,
-    )
-
-    # Orographic gravity wave
-    callbacks = (
-        callbacks...,
-        ogw_callback(
-            atmos.orographic_gravity_wave,
-            parsed_args["dt_ogw"],
-            dt,
-            t_start,
-            t_end,
-            checkpoint_frequency,
-        )...,
-    )
-
-    # Enforce physical constraints filter
-    callbacks = (
-        callbacks...,
-        enforce_physical_constraints_callback(dt),
-    )
-
-    return callbacks
-end
-
 """
     default_model_callbacks(model::AtmosModel; kwargs...)
 
@@ -636,9 +438,7 @@ function default_model_callbacks(model::AtmosModel; kwargs...)
 end
 
 
-function default_model_callbacks(component; kwargs...)
-    return ()
-end
+default_model_callbacks(component; kwargs...) = ()
 
 function default_model_callbacks(radiation::AtmosRadiation;
     dt_rad = "6hours",
@@ -654,56 +454,78 @@ function default_model_callbacks(radiation::AtmosRadiation;
         dt,
         t_start,
         t_end,
-        checkpoint_frequency;
+        checkpoint_frequency,
     )
 end
 
-# Gravity wave component callbacks
+# Gravity-wave component callbacks (both orographic and non-orographic)
 function default_model_callbacks(gravity_wave::AtmosGravityWave;
     dt_nogw = "3hours",
+    dt_ogw = "6hours",
     start_date,
     dt,
     t_start,
     t_end,
     checkpoint_frequency,
     kwargs...)
-    return nogw_callback(
-        gravity_wave.non_orographic_gravity_wave,
-        dt_nogw,
-        dt,
-        t_start,
-        t_end,
-        checkpoint_frequency;
+    return (
+        nogw_callback(
+            gravity_wave.non_orographic_gravity_wave,
+            dt_nogw, dt, t_start, t_end, checkpoint_frequency,
+        )...,
+        ogw_callback(
+            gravity_wave.orographic_gravity_wave,
+            dt_ogw, dt, t_start, t_end, checkpoint_frequency,
+        )...,
     )
 end
 
-# Enforce physical constraints callbacks
-function default_model_callbacks(turbconv_model::PrognosticEDMFX;
-    dt)
-    return enforce_physical_constraints_callback(dt)
-end
+# Walk into AtmosTurbconv so per-turbconv-model dispatches (e.g. PrognosticEDMFX)
+# are reachable via the AtmosModel-level loop over top-level fields.
+default_model_callbacks(turbconv::AtmosTurbconv; kwargs...) =
+    default_model_callbacks(turbconv.turbconv_model; kwargs...)
+
+# Walk into SCMSetup for the SCM external-forcing callback.
+default_model_callbacks(scm::SCMSetup; kwargs...) =
+    default_model_callbacks(scm.external_forcing; kwargs...)
+
+# Enforce physical constraints filter for PrognosticEDMFX
+default_model_callbacks(turbconv_model::PrognosticEDMFX; dt, kwargs...) =
+    (enforce_physical_constraints_callback(dt),)
+
+# Single-column external forcing (ReanalysisTimeVarying / ReanalysisMonthlyAveragedDiurnal
+# in YAML both construct ExternalDrivenTVForcing).
+default_model_callbacks(::ExternalDrivenTVForcing; kwargs...) =
+    scm_external_forcing_callback()
 
 """
-    common_callbacks(model, dt, output_dir, start_date, t_start, t_end, comms_ctx; kwargs...)
+    common_callbacks(model, dt, output_dir, start_date, t_start, t_end, comms_ctx, checkpoint_frequency; kwargs...)
 
 Get commonly used callbacks like progress logging, NaN checking, conservation, etc.
 These are not model-specific but are frequently needed across simulations.
 
 # Keyword Arguments
-- `progress_logging = false`: Enable progress reporting
-- `checkpoint_frequency`: Frequency for saving state to disk
-- `external_forcing_column = false`: Enable external forcing for single column
+- `log_progress::Bool = true`: Emit periodic progress logging callback.
+- `check_nan_every::Int = 1024`: Step cadence for the NaN-detection callback.
+  Set to `0` to disable.
+- `check_conservation::Bool = false`: Enable the conservation-check callback.
 """
 function common_callbacks(
-    model, dt, output_dir, start_date, t_start, t_end, comms_ctx, checkpoint_frequency,
+    model, dt, output_dir, start_date, t_start, t_end, comms_ctx, checkpoint_frequency;
+    log_progress::Bool = true,
+    check_nan_every::Int = 1024,
+    check_conservation::Bool = false,
+    kwargs...,
 )
     callbacks = ()
 
     # Progress logging
-    callbacks = (callbacks..., progress_logging_callback(dt, t_start, t_end)...)
+    if log_progress
+        callbacks = (callbacks..., progress_logging_callback(dt, t_start, t_end)...)
+    end
 
     # NaN checking
-    callbacks = (callbacks..., nan_checking_callback(1024)...)
+    callbacks = (callbacks..., nan_checking_callback(check_nan_every)...)
 
     # Graceful exit
     callbacks = (callbacks..., graceful_exit_callback(output_dir)...)
@@ -716,6 +538,11 @@ function common_callbacks(
 
     # Garbage collection
     callbacks = (callbacks..., gc_callback(comms_ctx)...)
+
+    # Conservation checking
+    if check_conservation
+        callbacks = (callbacks..., conservation_checking_callback()...)
+    end
 
     return callbacks
 end

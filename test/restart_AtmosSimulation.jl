@@ -392,7 +392,7 @@ if MANYTESTS
                         grid,
                         job_id,
                         callback_kwargs,
-                        default_diagnostics = false,
+                        diagnostics = CA.DiagnosticsConfig(; default = false),
                         dt = 1secs,
                         t_end = 3secs,
                         checkpoint_frequency = 1secs,

@@ -15,30 +15,18 @@ import ClimaUtilities.TimeManager: ITime
 import ClimaDiagnostics
 
 """
-    convert_time_args(dt, t_start, t_end, use_itime, start_date, FT)
+    convert_time_args(dt, t_start, t_end, start_date)
 
-Convert dt, t_start, and t_end to either ITime or FloatType based on the use_itime flag.
+Convert dt, t_start, and t_end to ITime.
 """
-function convert_time_args(dt, t_start, t_end, use_itime, start_date, FT)
-    # Helper to convert time to seconds (handles both numbers and strings)
+function convert_time_args(dt, t_start, t_end, start_date)
     to_seconds(t) = t isa AbstractString ? time_to_seconds(t) : Float64(t)
-
-    if use_itime
-        dt_seconds = to_seconds(dt)
-        t_start_seconds = to_seconds(t_start)
-        t_end_seconds = to_seconds(t_end)
-        dt = ITime(dt_seconds)
-        t_start = ITime(t_start_seconds, epoch = start_date)
-        t_end = ITime(t_end_seconds, epoch = start_date)
-        # ITime(0) is added for backward compatibility (since t_start used to always be 0)
-        (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
-        return (dt, t_start, t_end)
-    else
-        dt = dt isa AbstractString ? FT(time_to_seconds(dt)) : FT(dt)
-        t_start = t_start isa AbstractString ? FT(time_to_seconds(t_start)) : FT(t_start)
-        t_end = t_end isa AbstractString ? FT(time_to_seconds(t_end)) : FT(t_end)
-        return (dt, t_start, t_end)
-    end
+    dt = ITime(to_seconds(dt))
+    t_start = ITime(to_seconds(t_start), epoch = start_date)
+    t_end = ITime(to_seconds(t_end), epoch = start_date)
+    # ITime(0) is added for backward compatibility (since t_start used to always be 0)
+    (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
+    return (dt, t_start, t_end)
 end
 
 function get_atmos(config::AtmosConfig, params; setup_type = nothing)
@@ -284,14 +272,11 @@ function get_spaces(grid)
 end
 
 function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
-    (; parsed_args, comms_ctx) = config
-    (; start_date) = get_sim_info(config)
     return get_state_restart(
         restart_file,
-        start_date,
+        parse_date(config.parsed_args["start_date"]),
         atmos_model_hash,
-        comms_ctx,
-        parsed_args["use_itime"],
+        config.comms_ctx,
     )
 end
 
@@ -300,14 +285,13 @@ function get_state_restart(
     start_date,
     atmos_model_hash,
     comms_ctx,
-    use_itime,
 )
     @assert !isnothing(restart_file)
     reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
     # TODO: Do not use InputOutput.HDF5 directly
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
-    t_start = use_itime ? ITime(t_start; epoch = start_date) : t_start
+    t_start = ITime(t_start; epoch = start_date)
     if "atmos_model_hash" in keys(InputOutput.HDF5.attrs(reader.file))
         atmos_model_hash_in_restart =
             InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
@@ -319,7 +303,7 @@ function get_state_restart(
 end
 
 """
-    handle_restart(restart_file, t_start_original, start_date, model, context, itime, FT)
+    handle_restart(restart_file, t_start_original, start_date, model, context)
 
 Handle restart file loading with validation and logging.
 
@@ -328,7 +312,7 @@ logs restart information, and returns the state, t_start, and spaces.
 
 Returns:
 - `Y`: State loaded from restart file
-- `t_start`: Time from restart file (already converted to ITime or FT)
+- `t_start`: Time from restart file (ITime)
 - `spaces`: Named tuple with center_space and face_space extracted from Y
 """
 function handle_restart(
@@ -337,8 +321,6 @@ function handle_restart(
     start_date,
     model,
     context,
-    itime,
-    FT,
 )
     # Validate t_start before restart (matches get_simulation behavior)
     t_start_seconds =
@@ -348,23 +330,11 @@ function handle_restart(
         @warn "Non zero `t_start` passed with a restarting simulation. The provided `t_start` will be ignored."
     end
 
-    (Y, t_start_from_restart) = get_state_restart(
-        restart_file, start_date, hash(model), context, itime,
+    (Y, t_start) = get_state_restart(
+        restart_file, start_date, hash(model), context,
     )
 
-    # Ensure t_start is properly typed (convert to FT if not using itime)
-    t_start = if itime
-        t_start_from_restart  # Already ITime from get_state_restart
-    else
-        # Ensure it's the correct FloatType
-        t_start_from_restart isa AbstractString ?
-        FT(time_to_seconds(t_start_from_restart)) : FT(t_start_from_restart)
-    end
-
-    restart_time = t_start isa ITime ?
-                   string(t_start) :
-                   "$(t_start) seconds"
-    @info "Restarting simulation from file" restart_file restart_time
+    @info "Restarting simulation from file" restart_file restart_time = string(t_start)
 
     spaces = (; center_space = axes(Y.c), face_space = axes(Y.f))
 
@@ -746,7 +716,6 @@ end
 
 function get_sim_info(config::AtmosConfig)
     (; comms_ctx, parsed_args) = config
-    FT = eltype(config)
 
     (; job_id) = config
 
@@ -777,9 +746,7 @@ function get_sim_info(config::AtmosConfig)
         parsed_args["dt"],
         parsed_args["t_start"],
         parsed_args["t_end"],
-        parsed_args["use_itime"],
         epoch,
-        FT,
     )
     sim = (;
         output_dir,
@@ -857,7 +824,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
     end
     problem = CTS.ODEProblem(tendency_function, Y, tspan, p)
     # Promote to ensure t_begin, t_end, and dt_integrator all have the same type
-    # dt_integrator can be ITime when use_itime=true, while p.dt is always FT
+    # (dt_integrator is ITime, p.dt is FT)
     t_begin, t_end, dt = promote(tspan[1], tspan[2], dt_integrator)
     # Save solution to integrator.sol at the beginning and end
     saveat = [t_begin, t_end]
@@ -988,6 +955,32 @@ function get_grid(parsed_args, params, context)
     end
 end
 
+"""
+    callback_kwargs_from_parsed_args(parsed_args)
+
+Bundle the YAML callback knobs (per-component frequencies + universal
+toggles) into a NamedTuple suitable for splatting into
+`default_model_callbacks` and `common_callbacks`.
+"""
+callback_kwargs_from_parsed_args(parsed_args) = (;
+    dt_rad = parsed_args["dt_rad"],
+    dt_nogw = parsed_args["dt_nogw"],
+    dt_ogw = parsed_args["dt_ogw"],
+    log_progress = parsed_args["log_progress"],
+    check_nan_every = parsed_args["check_nan_every"],
+    check_conservation = parsed_args["check_conservation"],
+)
+
+function diagnostics_config_from_parsed_args(parsed_args)
+    enabled = parsed_args["enable_diagnostics"]
+    return DiagnosticsConfig(;
+        default = enabled && parsed_args["output_default_diagnostics"],
+        additional = enabled ? get(parsed_args, "diagnostics", ()) : (),
+        interpolation_num_points = parsed_args["netcdf_interpolation_num_points"],
+        output_at_levels = parsed_args["netcdf_output_at_levels"],
+    )
+end
+
 function get_simulation(config::AtmosConfig)
     sim_info = get_sim_info(config)
     params = ClimaAtmosParameters(config)
@@ -1019,8 +1012,6 @@ function get_simulation(config::AtmosConfig)
                 sim_info.start_date,
                 atmos,
                 comms_ctx,
-                config.parsed_args["use_itime"],
-                eltype(params),
             )
             # Fix the t_start in sim_info with the one from the restart
             sim_info = merge(sim_info, (; t_start))
@@ -1111,35 +1102,59 @@ function get_simulation(config::AtmosConfig)
     @info "ode_configuration: $s"
 
     s = @timed_str begin
-        callback = get_callbacks(config, sim_info, atmos, params, Y, p)
+        checkpoint_frequency = parse_checkpoint_frequency(
+            config.parsed_args["dt_save_state_to_disk"],
+        )
+        callback_kwargs = callback_kwargs_from_parsed_args(config.parsed_args)
+        callback = (
+            default_model_callbacks(
+                atmos;
+                start_date = sim_info.start_date,
+                dt = sim_info.dt,
+                t_start = sim_info.t_start,
+                t_end = sim_info.t_end,
+                output_dir = sim_info.output_dir,
+                checkpoint_frequency,
+                callback_kwargs...,
+            )...,
+            common_callbacks(
+                atmos,
+                sim_info.dt,
+                sim_info.output_dir,
+                sim_info.start_date,
+                sim_info.t_start,
+                sim_info.t_end,
+                config.comms_ctx,
+                checkpoint_frequency;
+                callback_kwargs...,
+            )...,
+        )
     end
-    @info "get_callbacks: $s"
+    @info "Built callbacks: $s"
 
     # Initialize diagnostics
-    if config.parsed_args["enable_diagnostics"]
-        s = @timed_str begin
-            scheduled_diagnostics, writers, periods_reductions =
-                get_diagnostics(
-                    config.parsed_args,
-                    atmos,
-                    Y,
-                    p,
-                    sim_info.dt,
-                    sim_info.t_start,
-                    sim_info.start_date,
-                    output_dir,
-                )
-        end
-        @info "initializing diagnostics: $s"
-
-        # Check for consistency between diagnostics and checkpoints
-        validate_checkpoint_diagnostics_consistency(
-            parse_checkpoint_frequency(config.parsed_args["dt_save_state_to_disk"]),
-            periods_reductions,
-        )
-    else
-        writers = nothing
+    s = @timed_str begin
+        diag_cfg = diagnostics_config_from_parsed_args(config.parsed_args)
+        scheduled_diagnostics, writers, periods_reductions =
+            setup_diagnostics_and_writers(
+                diag_cfg,
+                atmos,
+                Y,
+                p,
+                sim_info.dt,
+                sim_info.t_start,
+                sim_info.t_end,
+                sim_info.start_date,
+                output_dir,
+            )
     end
+    @info "initializing diagnostics: $s"
+
+    # Check for consistency between diagnostics and checkpoints
+    validate_checkpoint_diagnostics_consistency(
+        parse_checkpoint_frequency(config.parsed_args["dt_save_state_to_disk"]),
+        periods_reductions,
+    )
 
     continuous_callbacks = tuple()
     discrete_callbacks = callback
@@ -1172,7 +1187,7 @@ function get_simulation(config::AtmosConfig)
     end
     @info "init integrator: $s"
 
-    if config.parsed_args["enable_diagnostics"]
+    if !isempty(scheduled_diagnostics)
         s = @timed_str begin
             integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
                 integrator,

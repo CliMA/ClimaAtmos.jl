@@ -1,3 +1,4 @@
+import ClimaCore
 import ClimaCore: Grids
 import ClimaUtilities.TimeManager: ITime
 import ClimaAtmos.Diagnostics as CAD
@@ -18,8 +19,7 @@ ClimaComms.device(sim::AtmosSimulation) = ClimaComms.device(sim.integrator.u.c)
 
 
 function setup_diagnostics_and_writers(
-    use_default_diagnostics,
-    diagnostics,
+    diagnostics_config::CAD.DiagnosticsConfig,
     model,
     Y,
     p,
@@ -29,24 +29,36 @@ function setup_diagnostics_and_writers(
     start_date,
     output_dir,
 )
-    all_diagnostics = []
-    writers = ()
+    (; default, additional, interpolation_num_points, output_at_levels) =
+        diagnostics_config
 
-    # Helper function to create default NetCDF writer
-    default_nc_writer() = CAD.NetCDFWriter(
+    all_diagnostics = []
+
+    num_points = if isnothing(interpolation_num_points)
+        ClimaDiagnostics.Writers.default_num_points(axes(Y.c))
+    else
+        tuple(interpolation_num_points...)
+    end
+    z_sampling_method =
+        output_at_levels ? CAD.LevelsMethod() : CAD.FakePressureLevelsMethod()
+    horizontal_method = ClimaCore.Remapping.BilinearRemapping()
+
+    # Build writers once. All paths below bind diagnostics to these instances.
+    netcdf_writer = CAD.NetCDFWriter(
         axes(Y.c),
-        output_dir,
-        num_points = ClimaDiagnostics.Writers.default_num_points(axes(Y.c));
-        z_sampling_method = CAD.LevelsMethod(),  # TODO: Could make this configurable
+        output_dir;
+        num_points,
+        z_sampling_method,
+        horizontal_method,
         sync_schedule = CAD.EveryStepSchedule(),
         init_time = t_start,
         start_date,
     )
+    writers = (CAD.DictWriter(), CAD.HDF5Writer(output_dir), netcdf_writer)
 
     # Add default diagnostics if enabled
-    if use_default_diagnostics
+    if default
         sim_duration = t_end isa ITime ? t_end - dt : t_end
-        netcdf_writer = default_nc_writer()
         default_diag_list = CAD.default_diagnostics(
             model,
             sim_duration,
@@ -57,49 +69,46 @@ function setup_diagnostics_and_writers(
         )
         append!(all_diagnostics, default_diag_list)
         @info "Added $(length(default_diag_list)) default ClimaAtmos diagnostics"
-        # Create default writers tuple (matches get_diagnostics pattern)
-        writers = (
-            CAD.DictWriter(),
-            CAD.HDF5Writer(output_dir),
-            netcdf_writer,
-        )
     end
 
     # Add user-provided diagnostics
-    if !isempty(diagnostics)
-        if diagnostics isa AbstractVector &&
-           all(d -> d isa CAD.ScheduledDiagnostic, diagnostics)
-            # User provided ScheduledDiagnostic objects directly
-            append!(all_diagnostics, diagnostics)
-            @info "Added $(length(diagnostics)) user-provided ScheduledDiagnostic objects"
+    if !isempty(additional)
+        normalized = map(CAD.normalize_diag_entry, additional)
+        prebuilt = filter(d -> d isa CAD.ScheduledDiagnostic, normalized)
+        dict_specs = filter(d -> d isa AbstractDict, normalized)
 
-            # Create default writers if not already created (from default_diagnostics)
-            if isempty(writers)
-                writers = (
-                    CAD.DictWriter(),
-                    CAD.HDF5Writer(output_dir),
-                    default_nc_writer(),
+        if !isempty(prebuilt)
+            append!(all_diagnostics, prebuilt)
+            @info "Added $(length(prebuilt)) user-provided ScheduledDiagnostic objects"
+        end
+
+        if !isempty(dict_specs)
+            # If any dict spec requests pressure coordinates, build the pressure
+            # writer here and extend the shared writers tuple before delegating.
+            if any(d -> get(d, "pressure_coordinates", false), dict_specs) &&
+               length(writers) < 4
+                pressure_z_sampling = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
+                    p.precomputed.ᶜp, t_start,
                 )
+                pressure_space =
+                    ClimaDiagnostics.Writers.pressure_space(pressure_z_sampling)
+                pressure_netcdf_writer = CAD.NetCDFWriter(
+                    pressure_space,
+                    output_dir;
+                    num_points,
+                    z_sampling_method = pressure_z_sampling,
+                    horizontal_method,
+                    sync_schedule = CAD.EveryStepSchedule(),
+                    init_time = t_start,
+                    start_date,
+                )
+                writers = (writers..., pressure_netcdf_writer)
             end
-        else
-            # YAML-style diagnostics: get_diagnostics will return its own writers
-            diag_config = Dict(
-                "diagnostics" => diagnostics,
-                "netcdf_interpolation_num_points" => nothing,
-                "netcdf_output_at_levels" => false,
-                "output_default_diagnostics" => false,
-                "netcdf_horizontal_method" => "bilinear",
-            )
-            user_scheduled_diagnostics, user_writers, _ = get_diagnostics(
-                diag_config,
-                model,
-                Y, p, dt,
-                t_start, start_date,
-                output_dir,
+
+            user_scheduled_diagnostics = scheduled_diagnostics_from_specs(
+                dict_specs, Y, t_start, start_date, writers,
             )
             append!(all_diagnostics, user_scheduled_diagnostics)
-            # Use writers from get_diagnostics (they match the user's config)
-            writers = user_writers
             @info "Added $(length(user_scheduled_diagnostics)) user-provided YAML-style diagnostics"
         end
     end
@@ -161,9 +170,9 @@ Construct an atmospheric simulation with floating-point type `FT` (default: Floa
 - `log_to_file::Bool = false`: Write log output to a file in `output_dir`.
 
 ### Diagnostics
-- `default_diagnostics::Bool = true`: Enable standard ClimaAtmos diagnostics.
-- `diagnostics = ()`: Additional diagnostics. Can be `ScheduledDiagnostic` objects or
-  YAML-style diagnostic specifications.
+- `diagnostics::DiagnosticsConfig = DiagnosticsConfig()`: Specification of which
+  diagnostics the simulation produces and how their NetCDF output is shaped.
+  See [`DiagnosticsConfig`](@ref).
 
 ### Callbacks
 - `default_callbacks::Bool = true`: Enable common simulation callbacks.
@@ -219,22 +228,23 @@ function AtmosSimulation{FT}(;
         ),
     ),
     surface_setup = SurfaceConditions.DefaultExchangeCoefficients(),
+    steady_state_velocity = nothing, # Predicted steady-state velocity for diagnostics
     job_id = "atmos_sim",
     output_dir = nothing,
     output_dir_style = "activelink",  # TODO: Should this be an actual type?
     restart_file = nothing,
     detect_restart_file = false,
-    tracers = [], # TODO: set these from the model
+    aerosol_names = [], # TODO: set from the model
+    time_varying_trace_gases = (),
     # Callbacks
     default_callbacks = true,   # Enable common simulation callbacks  
     callbacks = (),             # User-provided additional callbacks
     callback_kwargs = (),       # Kwargs for default_callbacks
     # Diagnostics
-    default_diagnostics = true, # Enable standard ClimaAtmos diagnostics
-    diagnostics = (),           # User-provided diagnostics (YAML string format or ScheduledDiagnostics )
+    diagnostics = CAD.DiagnosticsConfig(),
     # Numerics
     jacobian::JacobianAlgorithm = ManualSparseJacobian(approximate_solve_iters = 1),
-    debug_jacobian::Bool = false,
+    debug_jacobian = false,
     # Misc 
     checkpoint_frequency = Inf,
     log_to_file = false,
@@ -248,7 +258,7 @@ function AtmosSimulation{FT}(;
     if !isnothing(restart_file)
         # Handle restart: validates t_start, loads state, logs info, extracts spaces
         (Y, t_start, spaces) = handle_restart(
-            restart_file, t_start, start_date, model, context, true, FT,
+            restart_file, t_start, start_date, model, context,
         )
         # t_start is already converted from restart file, but we still need to convert dt and t_end
         to_seconds(t) = t isa AbstractString ? time_to_seconds(t) : Float64(t)
@@ -257,7 +267,7 @@ function AtmosSimulation{FT}(;
         # Promote with t_start to ensure all have compatible types
         (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
     else
-        dt, t_start, t_end = convert_time_args(dt, t_start, t_end, true, start_date, FT)
+        dt, t_start, t_end = convert_time_args(dt, t_start, t_end, start_date)
         spaces = get_spaces(grid)
         Y = Setups.initial_state(
             setup, params, model,
@@ -269,12 +279,9 @@ function AtmosSimulation{FT}(;
         )
     end
 
-    # TODO: Add steady state velocity
-    steady_state_velocity = nothing
-    time_varying_trace_gas_names = ()
     p = build_cache(
-        Y, model, params, surface_setup, dt, start_date, tracers,
-        time_varying_trace_gas_names, steady_state_velocity,
+        Y, model, params, surface_setup, dt, start_date, aerosol_names,
+        time_varying_trace_gases, steady_state_velocity,
         nothing,  # vwb_species - not available in this context
     )
 
@@ -289,7 +296,8 @@ function AtmosSimulation{FT}(;
             )...,
             common_callbacks(
                 model, dt, output_dir, start_date, t_start, t_end, context,
-                checkpoint_frequency,
+                checkpoint_frequency;
+                callback_kwargs...,
             )...)
     else
         callbacks
@@ -308,7 +316,7 @@ function AtmosSimulation{FT}(;
     integrator = CTS.init(integrator_args...; integrator_kwargs...)
 
     all_diagnostics, writers, periods_reductions = setup_diagnostics_and_writers(
-        default_diagnostics, diagnostics, model,
+        diagnostics, model,
         Y, p, dt,
         t_start, t_end, start_date,
         output_dir,
