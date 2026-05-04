@@ -153,12 +153,18 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
     @. p.tracers.sea_salt_u10_sfc = abs(u_10)
 
     # Wind comparison diagnostics: MO-reconstructed vs actual model wind at level 1.
-    # z_c1 is the geometric height at the first cell center (varies with topography).
-    z_c1 = Fields.level(Fields.coordinate_field(axes(Y.c)).z, 1)
-    @. p.tracers.sea_salt_u_mo_lowest_sfc = monin_obukhov_wind_at_height(
-        z_c1, sfc_conditions.ustar, sfc_conditions.obukhov_length, uf_params, κ, z₀,
-    )
-    @. p.tracers.sea_salt_u_actual_lowest_sfc = norm(Fields.level(Y.c.uₕ, 1))
+    # z_c1 (center-level-1 space) and ustar (face-surface space) are different ClimaCore
+    # Space types even though they share the same (Nq, Nq, 1, Nel) data layout.
+    # Drop to parent-level broadcasts to bypass the space check.
+    z_c1_p   = parent(Fields.level(Fields.coordinate_field(axes(Y.c)).z, 1))
+    ustar_p  = parent(sfc_conditions.ustar)
+    L_p      = parent(sfc_conditions.obukhov_length)
+    parent(p.tracers.sea_salt_u_mo_lowest_sfc) .=
+        monin_obukhov_wind_at_height.(z_c1_p, ustar_p, L_p, uf_params, κ, z₀)
+
+    # Compute norm on center-level-1 space first, then copy the raw data across.
+    parent(p.tracers.sea_salt_u_actual_lowest_sfc) .=
+        parent(norm.(Fields.level(Y.c.uₕ, 1)))
 
     for (bin_index, name) in enumerate(aerosol_names)
         ρχ_name = Symbol(:ρ, name)
