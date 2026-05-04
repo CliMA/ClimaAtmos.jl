@@ -29,80 +29,42 @@ function convert_time_args(dt, t_start, t_end, start_date)
     return (dt, t_start, t_end)
 end
 
+"""
+    ClimaAtmosParameters(config::AtmosConfig)
+
+Translate the YAML config into a typed `ClimaAtmosParameters`. Pre-computes
+the microphysics model and gravity-wave toggles from `parsed_args` so the
+underlying constructor only loads the parameter sets that will actually be
+used.
+"""
+function Parameters.ClimaAtmosParameters(config::AtmosConfig)
+    pa = config.parsed_args
+    return Parameters.ClimaAtmosParameters(
+        config.toml_dict;
+        microphysics_model = get_microphysics_model(pa),
+        has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
+        has_orographic_gw =
+        !isnothing(get(pa, "orographic_gravity_wave", nothing)),
+    )
+end
+
 function get_atmos(config::AtmosConfig, params; setup_type = nothing)
-    (; turbconv_params) = params
-    (; parsed_args) = config
+    pa = config.parsed_args
     FT = eltype(config)
-    check_case_consistency(parsed_args)
-    microphysics_model = get_microphysics_model(parsed_args, params)
-    sgs_quadrature = get_sgs_quadrature(parsed_args, params)
-    cloud_model = get_cloud_model(parsed_args, params)
-    terminal_velocity_mode = get_terminal_velocity_mode(parsed_args, params, FT)
+    check_case_consistency(pa)
 
-    if microphysics_model isa DryModel
-        @warn "Running simulations without any moisture present."
-    end
+    radiation = AtmosRadiation(config, FT; setup_type)
 
-    if microphysics_model isa EquilibriumMicrophysics0M && isnothing(sgs_quadrature)
-        error(
-            "EquilibriumMicrophysics0M requires use_sgs_quadrature: true. " *
-            "GridMeanSGS fallback is not supported for 0-moment microphysics because of poor results.",
-        )
-    end
-
-    implicit_microphysics =
-        parsed_args["implicit_microphysics"]
-    @assert implicit_microphysics in (true, false)
-
-    radiation_mode = get_radiation_mode(parsed_args, FT; setup_type)
-    forcing_type = get_forcing_type(parsed_args)
-
-
-    # HeldSuarezForcing can be set via radiation_mode or legacy forcing option for now
-    final_radiation_mode =
-        forcing_type isa HeldSuarezForcing ? forcing_type : radiation_mode
-    # Note: when disable_momentum_vertical_diffusion is true, the surface flux tendency
-    # for momentum is not applied.
+    # disable_momentum_vertical_diffusion ⇐ HeldSuarezForcing radiation; threads
+    # into VerticalDiffusion construction.
     disable_momentum_vertical_diffusion =
-        final_radiation_mode isa HeldSuarezForcing
+        radiation.radiation_mode isa HeldSuarezForcing
 
-    advection_test = parsed_args["advection_test"]
-    @assert advection_test in (false, true)
-
-    implicit_diffusion = parsed_args["implicit_diffusion"]
+    implicit_diffusion = pa["implicit_diffusion"]
     @assert implicit_diffusion in (true, false)
 
-    implicit_sgs_advection = parsed_args["implicit_sgs_advection"]
-    @assert implicit_sgs_advection in (true, false)
-
-    implicit_sgs_entr_detr = parsed_args["implicit_sgs_entr_detr"]
-    @assert implicit_sgs_entr_detr in (true, false)
-
-    implicit_sgs_nh_pressure = parsed_args["implicit_sgs_nh_pressure"]
-    @assert implicit_sgs_nh_pressure in (true, false)
-
-    implicit_sgs_vertdiff = parsed_args["implicit_sgs_vertdiff"]
-    @assert implicit_sgs_vertdiff in (true, false)
-
-    implicit_sgs_mass_flux = parsed_args["implicit_sgs_mass_flux"]
-    @assert implicit_sgs_mass_flux in (true, false)
-
-    edmfx_model = EDMFXModel(;
-        entr_model = get_entrainment_model(parsed_args),
-        detr_model = get_detrainment_model(parsed_args),
-        sgs_mass_flux = parsed_args["edmfx_sgs_mass_flux"],
-        sgs_diffusive_flux = parsed_args["edmfx_sgs_diffusive_flux"],
-        nh_pressure = parsed_args["edmfx_nh_pressure"],
-        vertical_diffusion = parsed_args["edmfx_vertical_diffusion"],
-        filter = parsed_args["edmfx_filter"],
-        scale_blending_method = get_scale_blending_method(parsed_args),
-    )
-
     vertical_diffusion = get_vertical_diffusion_model(
-        disable_momentum_vertical_diffusion,
-        parsed_args,
-        params,
-        FT,
+        disable_momentum_vertical_diffusion, pa, params, FT,
     )
 
     prescribed_flow = if !isnothing(setup_type)
@@ -110,93 +72,29 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     else
         nothing
     end
-    if isnothing(prescribed_flow) && parsed_args["prescribed_flow"] == "ShipwayHill2012"
+    if isnothing(prescribed_flow) && pa["prescribed_flow"] == "ShipwayHill2012"
         prescribed_flow = ShipwayHill2012VelocityProfile{FT}()
     end
 
     atmos = AtmosModel(;
-        # AtmosWater - Moisture, Precipitation & Clouds
-        microphysics_model,
-        cloud_model,
-        microphysics_tendency_timestepping = implicit_microphysics ?
-                                             Implicit() : Explicit(),
-        tracer_nonnegativity_method = get_tracer_nonnegativity_method(parsed_args),
-        sgs_quadrature,
-        terminal_velocity_mode,
-
-        # SCMSetup - Single-Column Model components
-        subsidence = get_subsidence_model(parsed_args, radiation_mode, FT; setup_type),
-        external_forcing = get_external_forcing_model(parsed_args, FT; setup_type),
-        ls_adv = get_large_scale_advection_model(parsed_args, FT; setup_type),
-        advection_test,
-        scm_coriolis = get_scm_coriolis(parsed_args, FT; setup_type),
-
-        # PrescribedFlow
+        water = AtmosWater(config, params, FT),
+        scm_setup = SCMSetup(config, FT;
+            setup_type, radiation_mode = radiation.radiation_mode),
         prescribed_flow,
-
-        # AtmosRadiation
-        radiation_mode = final_radiation_mode,
-        insolation = get_insolation_form(parsed_args; setup_type),
-
-        # AtmosTurbconv - Turbulence & Convection
-        edmfx_model,
-        turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
-        sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
-        sgs_entr_detr_mode = implicit_sgs_entr_detr ? Implicit() : Explicit(),
-        sgs_nh_pressure_mode = implicit_sgs_nh_pressure ? Implicit() :
-                               Explicit(),
-        sgs_vertdiff_mode = implicit_sgs_vertdiff ? Implicit() : Explicit(),
-        sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
-        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
-        amd_les = get_amd_les_model(parsed_args, FT),
-        constant_horizontal_diffusion = get_constant_horizontal_diffusion_model(
-            parsed_args,
-            params,
-            FT,
-        ),
-
-        # AtmosGravityWave
-        non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
-            parsed_args,
-            params,
-            FT,
-        ),
-        orographic_gravity_wave = get_orographic_gravity_wave_model(
-            parsed_args,
-            params,
-            FT,
-        ),
-
-        # AtmosSponge
-        viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
-        rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
-
-        # AtmosSurface
-        sfc_temperature = Setups.surface_temperature_model(setup_type),
-        surface_model = get_surface_model(parsed_args),
-        surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
-
-        # Top-level options (not grouped)
+        radiation,
+        turbconv = AtmosTurbconv(config, params, FT),
+        gravity_wave = AtmosGravityWave(config, params, FT),
+        sponge = AtmosSponge(config, params),
+        surface = AtmosSurface(config, params, FT; setup_type),
+        numerics = AtmosNumerics(config, FT),
         vertical_diffusion,
-        numerics = get_numerics(parsed_args, FT),
-        disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
+        disable_surface_flux_tendency = pa["disable_surface_flux_tendency"],
     )
     # TODO: Should this go in the AtmosModel constructor?
     @assert !@any_reltype(atmos, (UnionAll, DataType))
 
     @info "AtmosModel: \n$(summary(atmos))"
     return atmos
-end
-
-function get_scale_blending_method(parsed_args)
-    method_name = parsed_args["edmfx_scale_blending"]
-    if method_name == "SmoothMinimum"
-        return SmoothMinimumBlending()
-    elseif method_name == "HardMinimum"
-        return HardMinimumBlending()
-    else
-        error("Unknown edmfx_scale_blending method: $method_name")
-    end
 end
 
 function get_numerics(parsed_args, FT)
@@ -447,18 +345,6 @@ function get_topography(FT, parsed_args)
     return topo_types[topo_str]
 end
 
-function get_steady_state_velocity(params, Y, parsed_args)
-    parsed_args["check_steady_state"] || return nothing
-    FT = eltype(params)
-    return get_steady_state_velocity(
-        params,
-        Y,
-        get_topography(FT, Dict("topography" => parsed_args["topography"])),
-        parsed_args["initial_condition"],
-        parsed_args["mesh_warp_type"],
-    )
-end
-
 function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp_type)
     initial_condition == "ConstantBuoyancyFrequencyProfile" &&
         mesh_warp_type == "Linear" ||
@@ -491,13 +377,6 @@ end
 
 function _config_surface_setup(parsed_args)
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
-end
-
-function get_jacobian(ode_algo, Y, atmos, parsed_args)
-    jacobian = jacobian_from_parsed_args(parsed_args)
-    return get_jacobian(
-        ode_algo, Y, atmos, jacobian, parsed_args["debug_jacobian"],
-    )
 end
 
 # Translate YAML config keys into a user-facing JacobianAlgorithm stub.
@@ -714,62 +593,6 @@ function setup_output_dir(
     return output_dir, final_restart_file
 end
 
-function get_sim_info(config::AtmosConfig)
-    (; comms_ctx, parsed_args) = config
-
-    (; job_id) = config
-
-    output_dir, restart_file = setup_output_dir(
-        job_id,
-        parsed_args["output_dir"],
-        parsed_args["output_dir_style"],
-        parsed_args["detect_restart_file"],
-        parsed_args["restart_file"],
-        comms_ctx,
-    )
-
-    if parsed_args["log_to_file"]
-        @info "Logging to $output_dir/output.log"
-        logger = ClimaComms.FileLogger(comms_ctx, output_dir)
-        Logging.global_logger(logger)
-    end
-    @info "Running on $(nameof(typeof(ClimaComms.device(comms_ctx))))"
-    if comms_ctx isa ClimaComms.SingletonCommsContext
-        @info "Setting up single-process ClimaAtmos run"
-    else
-        @info "Setting up distributed ClimaAtmos run" nprocs =
-            ClimaComms.nprocs(comms_ctx)
-    end
-
-    epoch = parse_date(parsed_args["start_date"])
-    dt, t_start, t_end = convert_time_args(
-        parsed_args["dt"],
-        parsed_args["t_start"],
-        parsed_args["t_end"],
-        epoch,
-    )
-    sim = (;
-        output_dir,
-        restart = !isnothing(restart_file),
-        restart_file,
-        job_id,
-        dt = dt,
-        start_date = epoch,
-        t_start = t_start,
-        t_end = t_end,
-    )
-    n_steps = floor(Int, (sim.t_end - sim.t_start) / sim.dt)
-    @info(
-        "Time info:",
-        dt = parsed_args["dt"],
-        t_start = parsed_args["t_start"],
-        t_end = parsed_args["t_end"],
-        floor_n_steps = n_steps,
-    )
-
-    return sim
-end
-
 """
     fully_explicit_tendency!
 
@@ -780,15 +603,6 @@ function fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     implicit_tendency!(temp_Yₜ_imp, Y, p, t)
     remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ .+= temp_Yₜ_imp
-end
-
-function args_integrator(args, Y, p, tspan, ode_algo, callback, dt_integrator)
-    return args_integrator(Y, p, tspan, ode_algo, callback,
-        jacobian_from_parsed_args(args),
-        args["debug_jacobian"],
-        args["prescribed_flow"],
-        dt_integrator,
-    )
 end
 
 function args_integrator(Y, p, tspan, ode_algo, callback,
@@ -877,6 +691,9 @@ function get_mesh_warp_type(FT, parsed_args)
     end
 end
 
+get_grid(config::AtmosConfig, params) =
+    get_grid(config.parsed_args, params, config.comms_ctx)
+
 function get_grid(parsed_args, params, context)
     FT = eltype(params)
     config = parsed_args["config"]
@@ -956,266 +773,163 @@ function get_grid(parsed_args, params, context)
 end
 
 """
-    callback_kwargs_from_parsed_args(parsed_args)
+    steady_state_velocity_from_config(config::AtmosConfig, params)
 
-Bundle the YAML callback knobs (per-component frequencies + universal
-toggles) into a NamedTuple suitable for splatting into
-`default_model_callbacks` and `common_callbacks`.
+Return a callable `(Y, params) -> velocity` when `check_steady_state` is set,
+else `nothing`. `AtmosSimulation{FT}` invokes the callable after building `Y`.
 """
-callback_kwargs_from_parsed_args(parsed_args) = (;
-    dt_rad = parsed_args["dt_rad"],
-    dt_nogw = parsed_args["dt_nogw"],
-    dt_ogw = parsed_args["dt_ogw"],
-    log_progress = parsed_args["log_progress"],
-    check_nan_every = parsed_args["check_nan_every"],
-    check_conservation = parsed_args["check_conservation"],
-)
+function steady_state_velocity_from_config(config::AtmosConfig, params)
+    config.parsed_args["check_steady_state"] || return nothing
+    parsed_args = config.parsed_args
+    FT = eltype(params)
+    topo = get_topography(FT, Dict("topography" => parsed_args["topography"]))
+    initial_condition = parsed_args["initial_condition"]
+    mesh_warp_type = parsed_args["mesh_warp_type"]
+    return (Y, params) ->
+        get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp_type)
+end
 
-function diagnostics_config_from_parsed_args(parsed_args)
-    enabled = parsed_args["enable_diagnostics"]
-    return DiagnosticsConfig(;
-        default = enabled && parsed_args["output_default_diagnostics"],
-        additional = enabled ? get(parsed_args, "diagnostics", ()) : (),
-        interpolation_num_points = parsed_args["netcdf_interpolation_num_points"],
-        output_at_levels = parsed_args["netcdf_output_at_levels"],
+"""
+    vertical_water_borrowing_species_from_config(config::AtmosConfig)
+
+Returns the parsed VWB-species tuple, or `nothing` if not configured.
+Mirrors the legacy YAML driver's parsing logic.
+"""
+function vertical_water_borrowing_species_from_config(config::AtmosConfig)
+    pa = config.parsed_args
+    method = pa["tracer_nonnegativity_method"]
+    is_vwb =
+        !isnothing(method) && (
+            method == "vertical_water_borrowing" ||
+            startswith(method, "vertical_water_borrowing_")
+        )
+    is_vwb || return nothing
+    species = get(pa, "vertical_water_borrowing_species", nothing)
+    isnothing(species) && return nothing
+    if species isa Vector
+        return tuple(Symbol.(species)...)
+    elseif species isa String
+        return (Symbol(species),)
+    else
+        error(
+            "vertical_water_borrowing_species must be a string or list of strings, got $(typeof(species))",
+        )
+    end
+end
+
+"""
+    callback_kwargs_from_config(config::AtmosConfig)
+
+Bundle YAML callback knobs into the NamedTuple expected by
+`AtmosSimulation{FT}`'s `callback_kwargs` slot.
+"""
+function callback_kwargs_from_config(config::AtmosConfig)
+    pa = config.parsed_args
+    return (;
+        dt_rad = pa["dt_rad"],
+        dt_nogw = pa["dt_nogw"],
+        dt_ogw = pa["dt_ogw"],
+        log_progress = pa["log_progress"],
+        check_nan_every = pa["check_nan_every"],
+        check_conservation = pa["check_conservation"],
     )
 end
 
-function get_simulation(config::AtmosConfig)
-    sim_info = get_sim_info(config)
-    params = ClimaAtmosParameters(config)
-    setup_type = get_setup_type(config.parsed_args, CAP.thermodynamics_params(params))
-    atmos = get_atmos(config, params; setup_type)
-    comms_ctx = get_comms_context(config.parsed_args)
-    grid = get_grid(config.parsed_args, params, comms_ctx)
+"""
+    diagnostics_config_from_config(config::AtmosConfig)
 
-    job_id = sim_info.job_id
-    output_dir = sim_info.output_dir
-    @info "Simulation info" job_id output_dir
+Translate the YAML diagnostic toggles into a `DiagnosticsConfig`. Collapses
+`enable_diagnostics` (master switch) and `output_default_diagnostics` (add
+built-ins) into `DiagnosticsConfig.default`. The user-specified diagnostic
+list passes through to `DiagnosticsConfig.additional`.
+"""
+function diagnostics_config_from_config(config::AtmosConfig)
+    pa = config.parsed_args
+    enabled = pa["enable_diagnostics"]
+    return DiagnosticsConfig(;
+        default = enabled && pa["output_default_diagnostics"],
+        additional = enabled ? get(pa, "diagnostics", ()) : (),
+        interpolation_num_points = pa["netcdf_interpolation_num_points"],
+        output_at_levels = pa["netcdf_output_at_levels"],
+    )
+end
 
+"""
+    log_yaml_and_toml_manifests(config::AtmosConfig, output_dir, job_id)
+
+Side-effect: write the run's TOML parameter manifest and a YAML snapshot of
+the merged config into `output_dir`. YAML-driver-only — programmatic users
+don't get these manifests.
+"""
+function log_yaml_and_toml_manifests(config::AtmosConfig, output_dir, job_id)
     output_toml_file = joinpath(output_dir, "$(job_id)_parameters.toml")
     CP.log_parameter_information(
         config.toml_dict,
-        output_toml_file,
+        output_toml_file;
         strict = config.parsed_args["strict_params"],
     )
-
     output_args = copy(config.parsed_args)
     output_args["toml"] = [abspath(output_toml_file)]
-    YAML.write_file(joinpath(output_dir, "$job_id.yml"), output_args)
-
-    if sim_info.restart
-        s = @timed_str begin
-            (Y, t_start, spaces) = handle_restart(
-                sim_info.restart_file,
-                config.parsed_args["t_start"],
-                sim_info.start_date,
-                atmos,
-                comms_ctx,
-            )
-            # Fix the t_start in sim_info with the one from the restart
-            sim_info = merge(sim_info, (; t_start))
-        end
-        @info "Allocating Y: $s"
-    else
-        spaces = get_spaces(grid)
-    end
-    @info "Simulation Grid: $(spaces.center_space.grid)"
-    # TODO: add more information about the grid - stretch, etc.
-    surface_setup = get_surface_setup(config.parsed_args; setup_type)
-    if !sim_info.restart
-        s = @timed_str begin
-            Y = Setups.initial_state(
-                setup_type,
-                params,
-                atmos,
-                spaces.center_space,
-                spaces.face_space,
-            )
-        end
-        @info "Allocating Y: $s"
-
-        Setups.overwrite_initial_state!(
-            setup_type,
-            Y,
-            params.thermodynamics_params,
-        )
-    end
-
-    tracers = get_tracers(config.parsed_args)
-
-    steady_state_velocity =
-        get_steady_state_velocity(params, Y, config.parsed_args)
-
-    FT = Spaces.undertype(axes(Y.c))
-
-    # Parse vertical_water_borrowing configuration for cache
-    # Check if tracer_nonnegativity_method is vertical_water_borrowing
-    tracer_nonneg_method = config.parsed_args["tracer_nonnegativity_method"]
-    is_vertical_water_borrowing =
-        !isnothing(tracer_nonneg_method) &&
-        (
-            tracer_nonneg_method == "vertical_water_borrowing" ||
-            startswith(tracer_nonneg_method, "vertical_water_borrowing_")
-        )
-
-    vwb_thresholds = is_vertical_water_borrowing ? (FT(0.0),) : nothing
-
-    vwb_species =
-        if is_vertical_water_borrowing &&
-           haskey(config.parsed_args, "vertical_water_borrowing_species") &&
-           !isnothing(config.parsed_args["vertical_water_borrowing_species"])
-            species_config = config.parsed_args["vertical_water_borrowing_species"]
-            if species_config isa Vector
-                tuple(Symbol.(species_config)...)
-            elseif species_config isa String
-                (Symbol(species_config),)
-            else
-                error(
-                    "vertical_water_borrowing_species must be a string or list of strings, got $(typeof(species_config))",
-                )
-            end
-        else
-            nothing  # Default: apply to all tracers
-        end
-
-    s = @timed_str begin
-        p = build_cache(
-            Y,
-            atmos,
-            params,
-            surface_setup,
-            sim_info.dt,
-            sim_info.start_date,
-            tracers.aerosol_names,
-            tracers.time_varying_trace_gas_names,
-            steady_state_velocity,
-            vwb_species,
-        )
-    end
-    @info "Allocating cache (p): $s"
-
-    FT = Spaces.undertype(axes(Y.c))
-    s = @timed_str begin
-        ode_algo = ode_configuration(FT, config.parsed_args)
-    end
-    @info "ode_configuration: $s"
-
-    s = @timed_str begin
-        checkpoint_frequency = parse_checkpoint_frequency(
-            config.parsed_args["dt_save_state_to_disk"],
-        )
-        callback_kwargs = callback_kwargs_from_parsed_args(config.parsed_args)
-        callback = (
-            default_model_callbacks(
-                atmos;
-                start_date = sim_info.start_date,
-                dt = sim_info.dt,
-                t_start = sim_info.t_start,
-                t_end = sim_info.t_end,
-                output_dir = sim_info.output_dir,
-                checkpoint_frequency,
-                callback_kwargs...,
-            )...,
-            common_callbacks(
-                atmos,
-                sim_info.dt,
-                sim_info.output_dir,
-                sim_info.start_date,
-                sim_info.t_start,
-                sim_info.t_end,
-                config.comms_ctx,
-                checkpoint_frequency;
-                callback_kwargs...,
-            )...,
-        )
-    end
-    @info "Built callbacks: $s"
-
-    # Initialize diagnostics
-    s = @timed_str begin
-        diag_cfg = diagnostics_config_from_parsed_args(config.parsed_args)
-        scheduled_diagnostics, writers, periods_reductions =
-            setup_diagnostics_and_writers(
-                diag_cfg,
-                atmos,
-                Y,
-                p,
-                sim_info.dt,
-                sim_info.t_start,
-                sim_info.t_end,
-                sim_info.start_date,
-                output_dir,
-            )
-    end
-    @info "initializing diagnostics: $s"
-
-    # Check for consistency between diagnostics and checkpoints
-    validate_checkpoint_diagnostics_consistency(
-        parse_checkpoint_frequency(config.parsed_args["dt_save_state_to_disk"]),
-        periods_reductions,
-    )
-
-    continuous_callbacks = tuple()
-    discrete_callbacks = callback
-
-    s = @timed_str begin
-        all_callbacks =
-            CTS.CallbackSet(continuous_callbacks, discrete_callbacks)
-    end
-    @info "Prepared CTS.CallbackSet callbacks: $s"
-    steps_cycle_non_diag = n_steps_per_cycle_per_cb(all_callbacks, sim_info.dt)
-    steps_cycle = lcm(steps_cycle_non_diag)
-    @info "n_steps_per_cycle_per_cb (non diagnostics): $steps_cycle_non_diag"
-    @info "n_steps_per_cycle (non diagnostics): $steps_cycle"
-
-    tspan = (sim_info.t_start, sim_info.t_end)
-    s = @timed_str begin
-        integrator_args, integrator_kwargs = args_integrator(
-            config.parsed_args,
-            Y,
-            p,
-            tspan,
-            ode_algo,
-            all_callbacks,
-            sim_info.dt,  # Pass original dt (can be ITime) separately from p.dt (always FT)
-        )
-    end
-
-    s = @timed_str begin
-        integrator = CTS.init(integrator_args...; integrator_kwargs...)
-    end
-    @info "init integrator: $s"
-
-    if !isempty(scheduled_diagnostics)
-        s = @timed_str begin
-            integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
-                integrator,
-                scheduled_diagnostics,
-            )
-        end
-        @info "Added diagnostics: $s"
-    end
-
-    reset_graceful_exit(output_dir)
-
-    return AtmosSimulation(
-        job_id,
-        output_dir,
-        sim_info.start_date,
-        sim_info.t_end,
-        writers,
-        integrator,
-    )
+    YAML.write_file(joinpath(output_dir, "$(job_id).yml"), output_args)
+    return nothing
 end
 
-# Compatibility with old get_integrator
-function get_integrator(config::AtmosConfig)
-    Base.depwarn(
-        "get_integrator is deprecated, use get_simulation instead",
-        :get_integrator,
+"""
+    get_simulation(config::AtmosConfig)
+
+Build an `AtmosSimulation` from a YAML-driven `AtmosConfig`. Translates the
+parsed YAML into the kwargs that `AtmosSimulation{FT}(; ...)` accepts and
+forwards. After the simulation is built, writes the YAML-driver-only TOML
+parameter manifest and YAML config snapshot into the resolved `output_dir`.
+"""
+function get_simulation(config::AtmosConfig)
+    pa = config.parsed_args
+    FT = eltype(config)
+    job_id = config.job_id
+    params = ClimaAtmosParameters(config)
+    setup = get_setup_type(pa, CAP.thermodynamics_params(params))
+    model = get_atmos(config, params; setup_type = setup)
+    grid = get_grid(pa, params, config.comms_ctx)
+    tracers = get_tracers(pa)
+
+    log_context(config.comms_ctx)
+
+    sim = AtmosSimulation{FT}(;
+        model,
+        params,
+        context = config.comms_ctx,
+        grid,
+        setup,
+        surface_setup = get_surface_setup(pa; setup_type = setup),
+        steady_state_velocity = steady_state_velocity_from_config(config, params),
+        dt = pa["dt"],
+        start_date = parse_date(pa["start_date"]),
+        t_start = pa["t_start"],
+        t_end = pa["t_end"],
+        ode_config = ode_configuration(FT, pa),
+        jacobian = jacobian_from_parsed_args(pa),
+        debug_jacobian = pa["debug_jacobian"],
+        aerosol_names = tracers.aerosol_names,
+        time_varying_trace_gases = tracers.time_varying_trace_gas_names,
+        vertical_water_borrowing_species =
+        vertical_water_borrowing_species_from_config(config),
+        job_id,
+        output_dir = pa["output_dir"],
+        output_dir_style = pa["output_dir_style"],
+        restart_file = pa["restart_file"],
+        # YAML driver passes restart_file explicitly (or nothing); no auto-detect.
+        detect_restart_file = false,
+        callback_kwargs = callback_kwargs_from_config(config),
+        diagnostics = diagnostics_config_from_config(config),
+        checkpoint_frequency = pa["dt_save_state_to_disk"],
+        log_to_file = pa["log_to_file"],
     )
-    return get_simulation(config).integrator
+
+    @info "Simulation info" job_id = sim.job_id output_dir = sim.output_dir
+
+    log_yaml_and_toml_manifests(config, sim.output_dir, sim.job_id)
+
+    return sim
 end
 
 """

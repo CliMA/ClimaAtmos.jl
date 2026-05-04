@@ -14,11 +14,19 @@ include(
 include(
     joinpath(pkgdir(CA), "test/parameterized_tendencies/gravity_wave", "gw_plotutils.jl"))
 
-function write_computed_drag!(computed_drag, parsed_args, config)
-    (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem) =
-        CA.gen_fn(parsed_args)
+function write_computed_drag!(
+    computed_drag,
+    comms_ctx;
+    topography,
+    topo_smoothing,
+    topography_damping_factor,
+    h_elem,
+)
+    (; output_filename, topo_damping_factor) = CA.generate_filename(;
+        topography, topo_smoothing, topography_damping_factor, h_elem,
+    )
     # initialize HDF5 output
-    hdfwriter = InputOutput.HDF5Writer("$(output_filename).hdf5", config.comms_ctx)
+    hdfwriter = InputOutput.HDF5Writer("$(output_filename).hdf5", comms_ctx)
 
     # write attributes to the HDF5 file 
     InputOutput.HDF5.write_attribute(hdfwriter.file, "topography", topography)

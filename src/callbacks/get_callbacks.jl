@@ -473,7 +473,7 @@ end
 # Gravity-wave component callbacks (both orographic and non-orographic)
 function default_model_callbacks(gravity_wave::AtmosGravityWave;
     dt_nogw = "3hours",
-    dt_ogw = "6hours",
+    dt_ogw = "3hours",
     start_date,
     dt,
     t_start,

@@ -84,7 +84,7 @@ function setup_diagnostics_and_writers(
 
         if !isempty(dict_specs)
             # If any dict spec requests pressure coordinates, build the pressure
-            # writer here and extend the shared writers tuple before delegating.
+            # writer here and extend the shared writers tuple.
             if any(d -> get(d, "pressure_coordinates", false), dict_specs) &&
                length(writers) < 4
                 pressure_z_sampling = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
@@ -236,6 +236,7 @@ function AtmosSimulation{FT}(;
     detect_restart_file = false,
     aerosol_names = [], # TODO: set from the model
     time_varying_trace_gases = (),
+    vertical_water_borrowing_species = nothing,
     # Callbacks
     default_callbacks = true,   # Enable common simulation callbacks  
     callbacks = (),             # User-provided additional callbacks
@@ -279,10 +280,16 @@ function AtmosSimulation{FT}(;
         )
     end
 
+    # Resolve steady_state_velocity: accept nothing, a precomputed velocity field,
+    # or a callable `(Y, params) -> velocity` that needs Y to be built first.
+    resolved_steady_state_velocity =
+        steady_state_velocity isa Function ? steady_state_velocity(Y, params) :
+        steady_state_velocity
+
     p = build_cache(
         Y, model, params, surface_setup, dt, start_date, aerosol_names,
-        time_varying_trace_gases, steady_state_velocity,
-        nothing,  # vwb_species - not available in this context
+        time_varying_trace_gases, resolved_steady_state_velocity,
+        vertical_water_borrowing_species,
     )
 
     # Combine all callbacks
@@ -309,7 +316,7 @@ function AtmosSimulation{FT}(;
         Y, p, (t_start, t_end), ode_config,
         callback_set,
         jacobian, debug_jacobian,
-        nothing,
+        model.prescribed_flow,
         dt,
     )
 

@@ -34,7 +34,12 @@ spaces = CA.get_spaces(grid)
 
 parsed_args = config.parsed_args
 
-(; output_filename) = CA.gen_fn(parsed_args)
+(; output_filename) = CA.generate_filename(;
+    topography = parsed_args["topography"],
+    topo_smoothing = parsed_args["topo_smoothing"],
+    topography_damping_factor = parsed_args["topography_damping_factor"],
+    h_elem = parsed_args["h_elem"],
+)
 
 
 computed_drag = load_computed_drag(parsed_args, comms_ctx)
