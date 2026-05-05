@@ -377,19 +377,6 @@ end
 
 ###
 # Sea salt emission debugging — 10 m wind, friction velocity, ocean fraction
-###
-add_diagnostic_variable!(
-    short_name = "sslt_u10",
-    long_name = "10 m Wind Speed (Sea Salt Emission)",
-    units = "m s^-1",
-    comments = "10 m wind speed from Monin-Obukhov theory, as used in the sea salt emission parameterization.",
-    compute! = (out, u, p, t) -> begin
-        :sea_salt_u10_sfc in propertynames(p.tracers) ||
-            error("sea_salt_u10_sfc not in cache — is sea_salt_emission_tendency! active?")
-        isnothing(out) ? copy(p.tracers.sea_salt_u10_sfc) : (out .= p.tracers.sea_salt_u10_sfc)
-    end,
-)
-
 add_diagnostic_variable!(
     short_name = "u10_mo",
     long_name = "Surface-Only MOST Wind Speed at 10 m",
@@ -417,7 +404,7 @@ add_diagnostic_variable!(
 )
 
 add_diagnostic_variable!(
-    short_name = "z1_mo",
+    short_name = "uz1_mo",
     long_name = "Surface-Only MOST Wind Speed at z₁",
     units = "m s^-1",
     comments = "Wind reconstructed at the first model-level height z₁ using ustar and Obukhov length alone. Compare with u_actual_lowest to assess MOST accuracy at z₁.",
@@ -430,7 +417,7 @@ add_diagnostic_variable!(
 )
 
 add_diagnostic_variable!(
-    short_name = "z1_ext",
+    short_name = "uz1_ext",
     long_name = "Extrapolated Wind Speed at z₁ (Anchor z₂)",
     units = "m s^-1",
     comments = "Wind at z₁ extrapolated downward from the z₂ model-level wind via the MOST profile ratio. Compare with u_actual_lowest to assess the extrapolation error at z₁.",
@@ -439,6 +426,19 @@ add_diagnostic_variable!(
             error("sea_salt_u_z1_ext_sfc not in cache — is sea_salt_emission_tendency! active?")
         isnothing(out) ? copy(p.tracers.sea_salt_u_z1_ext_sfc) :
             (out .= p.tracers.sea_salt_u_z1_ext_sfc)
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "uz1_true",
+    long_name = "Actual Wind Speed at z₁",
+    units = "m s^-1",
+    comments = "True model-level wind speed at the first model level z₁. Use to validate MOST extrapolations and surface layer schemes.",
+    compute! = (out, u, p, t) -> begin
+        :sea_salt_u_actual_lowest_sfc in propertynames(p.tracers) ||
+            error("sea_salt_u_actual_lowest_sfc not in cache — is sea_salt_emission_tendency! active?")
+        isnothing(out) ? copy(p.tracers.sea_salt_u_actual_lowest_sfc) :
+            (out .= p.tracers.sea_salt_u_actual_lowest_sfc)
     end,
 )
 
@@ -454,7 +454,7 @@ add_diagnostic_variable!(
 )
 
 add_diagnostic_variable!(
-    short_name = "buoy_flux",
+    short_name = "buoyflux",
     long_name = "Surface Buoyancy Flux",
     units = "m^2 s^-3",
     comments = "Surface buoyancy flux from the surface flux scheme. Positive values indicate an unstable surface layer.",
