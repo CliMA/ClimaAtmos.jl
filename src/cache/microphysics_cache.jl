@@ -854,12 +854,20 @@ function set_microphysics_tendency_cache!(
 
     n = n_mass_flux_subdomains(tm)
 
+    FT = eltype(p.params)
+
+    min_scale = FT(CAP.ΔT_y_dry(p.params))
+    qc_threshold = FT(CAP.Δθ_z(p.params))
+
     for j in 1:n
         # Point-wise evaluation of microphysics tendencies in the updraft
         @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_0m(
             cm0, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
             ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j), ᶜΦ, dt,
         )
+        scale = @. lazy(max(min_scale, min((ᶜq_liqʲs.:($$j) + ᶜq_iceʲs.:($$j)) / qc_threshold, FT(1))))
+        @. ᶜmp_tendencyʲs.:($$j).dq_tot_dt *= scale
+        @. ᶜmp_tendencyʲs.:($$j).e_tot_hlpr *= scale
     end
 
     ### Environment contribution with/without quadrature sampling.
@@ -881,6 +889,9 @@ function set_microphysics_tendency_cache!(
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ, dt,
         )
     end
+    scale = @. lazy(max(min_scale, min((ᶜq_liq⁰ + ᶜq_ice⁰) / qc_threshold, FT(1))))
+    @. ᶜmp_tendency⁰.dq_tot_dt *= scale
+    @. ᶜmp_tendency⁰.e_tot_hlpr *= scale
 
     # TODO - duplicated with tendency and implicit cache update
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed

@@ -54,3 +54,9 @@ value = 0.56
 
 [precipitation_timescale]
 value = 3600
+
+[equator_pole_temperature_gradient_dry]
+value = 0.2
+
+[potential_temp_vertical_gradient]
+value = 5e-5
