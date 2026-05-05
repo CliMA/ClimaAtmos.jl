@@ -493,7 +493,7 @@ function calc_nonpropagating_forcing!(
     # Exclude cells with zero weights from the mask to avoid division by zero.
     # Zero weight means p == p_ref at that cell, so it contributes nothing
     # to the pressure-weighted average.
-    @. ᶜmask = ᶜmask && (ᶜweights != FT(0))
+    @. ᶜmask = ᶜmask && (ᶜweights != 0)
 
     parent(ᶜweights) .= parent(ᶜweights .* ᶜmask)
 
