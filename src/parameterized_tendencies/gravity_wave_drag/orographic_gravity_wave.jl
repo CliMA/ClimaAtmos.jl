@@ -511,12 +511,12 @@ function calc_nonpropagating_forcing!(
     # When wtsum=0, the mask is empty (no cells between z_pbl and z_ref),
     # so we set forcing to 0 for those columns
     @. ᶜuforcing += ifelse(
-        ᶜwtsum == FT(0),
+        ᶜwtsum == 0,
         FT(0),
         grav * τ_x * τ_np / τ_l / ᶜwtsum * ᶜweights,
     )
     @. ᶜvforcing += ifelse(
-        ᶜwtsum == FT(0),
+        ᶜwtsum == 0,
         FT(0),
         grav * τ_y * τ_np / τ_l / ᶜwtsum * ᶜweights,
     )
