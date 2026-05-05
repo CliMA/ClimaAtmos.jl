@@ -895,3 +895,383 @@ add_diagnostic_variable!(
     comments = "Concentration of passive gas tracer A in the first updraft",
     compute = compute_q_gas_Aup,
 )
+
+###############################################################################
+# MIXING LENGTH PI GROUPS (features for data-driven mixing length models)
+###############################################################################
+
+###
+# Mixing Length Pi1: strain_rate / buoyancy_gradient
+###
+compute_mlpi1(state, cache, time) =
+    compute_mlpi1(state, cache, time, cache.atmos.turbconv_model)
+compute_mlpi1(_, _, _, turbconv_model) = error_diagnostic_variable("mlpi1", turbconv_model)
+
+function compute_mlpi1(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX})
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+    FT = eltype(ᶜlinear_buoygrad)
+    return @. lazy(ᶜstrain_rate_norm / (ᶜlinear_buoygrad + eps(FT)))
+end
+
+add_diagnostic_variable!(short_name = "mlpi1", units = "",
+    long_name = "Mixing Length Pi1: strain/buoygrad",
+    comments = "Ratio of strain rate norm to buoyancy gradient",
+    compute = compute_mlpi1,
+)
+
+###
+# Mixing Length Pi2: TKE / (buoyancy_gradient * z^2)
+###
+compute_mlpi2(state, cache, time) =
+    compute_mlpi2(state, cache, time, cache.atmos.turbconv_model)
+compute_mlpi2(_, _, _, turbconv_model) = error_diagnostic_variable("mlpi2", turbconv_model)
+
+function compute_mlpi2(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX})
+    (; ᶜlinear_buoygrad) = cache.precomputed
+    ᶜz = Fields.coordinate_field(state.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(state.f).z, Fields.half)
+    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
+    FT = eltype(ᶜlinear_buoygrad)
+    ᶜz_above_sfc = @. lazy(ᶜz - z_sfc)
+    return @. lazy(ᶜtke / (ᶜlinear_buoygrad * ᶜz_above_sfc * ᶜz_above_sfc + eps(FT)))
+end
+
+add_diagnostic_variable!(short_name = "mlpi2", units = "",
+    long_name = "Mixing Length Pi2: TKE/(buoygrad*z^2)",
+    comments = "TKE normalized by stratification and height squared",
+    compute = compute_mlpi2,
+)
+
+###
+# Mixing Length Pi3: TKE / (delta_w)^2
+###
+compute_mlpi3(state, cache, time) =
+    compute_mlpi3(state, cache, time, cache.atmos.turbconv_model)
+compute_mlpi3(_, _, _, turbconv_model) = error_diagnostic_variable("mlpi3", turbconv_model)
+
+function compute_mlpi3(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX})
+    (; ᶜu⁰, ᶜuʲs) = cache.precomputed
+    ᶜlg = Fields.local_geometry_field(state.c)
+    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
+    FT = eltype(ᶜtke)
+    ᶜw_env = @. lazy(get_physical_w(ᶜu⁰, ᶜlg))
+    ᶜw_up = @. lazy(get_physical_w(ᶜuʲs.:1, ᶜlg))
+    ᶜdelta_w_sq = @. lazy(max((ᶜw_up - ᶜw_env)^2, eps(FT)))
+    return @. lazy(ᶜtke / ᶜdelta_w_sq)
+end
+
+add_diagnostic_variable!(short_name = "mlpi3", units = "",
+    long_name = "Mixing Length Pi3: TKE/delta_w^2",
+    comments = "TKE normalized by updraft-environment velocity difference squared",
+    compute = compute_mlpi3,
+)
+
+###
+# z / Obukhov length (stability parameter)
+###
+compute_zobu(state, cache, time) =
+    compute_zobu(state, cache, time, cache.atmos.turbconv_model)
+compute_zobu(_, _, _, turbconv_model) = error_diagnostic_variable("zobu", turbconv_model)
+
+function compute_zobu(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX})
+    (; obukhov_length) = cache.precomputed.sfc_conditions
+    ᶜz = Fields.coordinate_field(state.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(state.f).z, Fields.half)
+    FT = eltype(ᶜz)
+    ᶜz_above_sfc = @. lazy(ᶜz - z_sfc)
+    # Use sign-preserving safe division for Obukhov length
+    obu_safe = @. lazy(ifelse(
+        obukhov_length < FT(0),
+        min(obukhov_length, -eps(FT)),
+        max(obukhov_length, eps(FT)),
+    ))
+    return @. lazy(ᶜz_above_sfc / obu_safe)
+end
+
+add_diagnostic_variable!(short_name = "zobu", units = "",
+    long_name = "z/Obukhov Length",
+    comments = "Monin-Obukhov stability parameter z/L",
+    compute = compute_zobu,
+)
+
+###
+# dz / Obukhov length (resolution parameter)
+###
+compute_resobu(state, cache, time) =
+    compute_resobu(state, cache, time, cache.atmos.turbconv_model)
+compute_resobu(_, _, _, turbconv_model) = error_diagnostic_variable("resobu", turbconv_model)
+
+function compute_resobu(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX})
+    (; obukhov_length) = cache.precomputed.sfc_conditions
+    ᶜdz = Fields.Δz_field(axes(state.c))
+    FT = eltype(ᶜdz)
+    obu_safe = @. lazy(ifelse(
+        obukhov_length < FT(0),
+        min(obukhov_length, -eps(FT)),
+        max(obukhov_length, eps(FT)),
+    ))
+    return @. lazy(ᶜdz / obu_safe)
+end
+
+add_diagnostic_variable!(short_name = "resobu", units = "",
+    long_name = "dz/Obukhov Length",
+    comments = "Grid resolution normalized by Obukhov length",
+    compute = compute_resobu,
+)
+
+###
+# Obukhov length (broadcast to 3D for convenience)
+###
+compute_obukhov(state, cache, time) =
+    compute_obukhov(state, cache, time, cache.atmos.turbconv_model)
+compute_obukhov(_, _, _, turbconv_model) = error_diagnostic_variable("obukhov", turbconv_model)
+
+function compute_obukhov(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX})
+    (; obukhov_length) = cache.precomputed.sfc_conditions
+    FT = eltype(state.c.ρ)
+    return @. lazy(state.c.ρ * FT(0) + obukhov_length)
+end
+
+add_diagnostic_variable!(short_name = "obukhov", units = "m",
+    long_name = "Obukhov Length",
+    comments = "Monin-Obukhov length from surface layer (broadcast to 3D)",
+    compute = compute_obukhov,
+)
+
+###############################################################################
+# ENTRAINMENT/DETRAINMENT PI GROUPS (features for entr/detr models)
+###############################################################################
+
+###
+# Entrainment Pi1: z * (buoy_up - buoy_env) / (w_up - w_env)^2
+###
+compute_entrpi1(state, cache, time) =
+    compute_entrpi1(state, cache, time, cache.atmos.turbconv_model)
+compute_entrpi1(_, _, _, turbconv_model) = error_diagnostic_variable("entrpi1", turbconv_model)
+
+function compute_entrpi1(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX})
+    (; ᶜuʲs, ᶜu⁰, ᶜρʲs) = cache.precomputed
+    (; ᶜgradᵥ_ᶠΦ) = cache.core
+    ᶜz = Fields.coordinate_field(state.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(state.f).z, Fields.half)
+    ᶜlg = Fields.local_geometry_field(state.c)
+    FT = eltype(ᶜz)
+
+    ᶜwʲ = @. lazy(get_physical_w(ᶜuʲs.:1, ᶜlg))
+    ᶜw⁰ = @. lazy(get_physical_w(ᶜu⁰, ᶜlg))
+    ᶜbuoyʲ = @. lazy(vertical_buoyancy_acceleration(state.c.ρ, ᶜρʲs.:1, ᶜgradᵥ_ᶠΦ, ᶜlg))
+    ᶜbuoy⁰ = FT(0)  # Environment buoyancy is reference (zero)
+
+    ᶜz_above_sfc = @. lazy(ᶜz - z_sfc)
+    vel_diff_sq = @. lazy((ᶜwʲ - ᶜw⁰)^2 + eps(FT))
+    return @. lazy(ᶜz_above_sfc * (ᶜbuoyʲ - ᶜbuoy⁰) / vel_diff_sq)
+end
+
+add_diagnostic_variable!(short_name = "entrpi1", units = "",
+    long_name = "Entrainment Pi1: z*delta_buoy/delta_w^2",
+    comments = "Buoyancy-velocity ratio for entrainment",
+    compute = compute_entrpi1,
+)
+
+###
+# Entrainment Pi2: TKE / (w_up - w_env)^2
+###
+compute_entrpi2(state, cache, time) =
+    compute_entrpi2(state, cache, time, cache.atmos.turbconv_model)
+compute_entrpi2(_, _, _, turbconv_model) = error_diagnostic_variable("entrpi2", turbconv_model)
+
+function compute_entrpi2(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX})
+    (; ᶜuʲs, ᶜu⁰) = cache.precomputed
+    ᶜlg = Fields.local_geometry_field(state.c)
+    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
+    FT = eltype(ᶜtke)
+
+    ᶜwʲ = @. lazy(get_physical_w(ᶜuʲs.:1, ᶜlg))
+    ᶜw⁰ = @. lazy(get_physical_w(ᶜu⁰, ᶜlg))
+    vel_diff_sq = @. lazy((ᶜwʲ - ᶜw⁰)^2 + eps(FT))
+    return @. lazy(max(ᶜtke, FT(0)) / vel_diff_sq)
+end
+
+add_diagnostic_variable!(short_name = "entrpi2", units = "",
+    long_name = "Entrainment Pi2: TKE/delta_w^2",
+    comments = "TKE-velocity ratio for entrainment",
+    compute = compute_entrpi2,
+)
+
+###
+# Entrainment Pi3: sqrt(updraft area fraction)
+###
+compute_entrpi3(state, cache, time) =
+    compute_entrpi3(state, cache, time, cache.atmos.turbconv_model)
+compute_entrpi3(_, _, _, turbconv_model) = error_diagnostic_variable("entrpi3", turbconv_model)
+
+function compute_entrpi3(state, cache, _, ::PrognosticEDMFX)
+    (; ᶜρʲs) = cache.precomputed
+    ᶜρaʲ = (state.c.sgsʲs.:1).ρa
+    ᶜaʲ = @. lazy(draft_area(ᶜρaʲ, ᶜρʲs.:1))
+    FT = eltype(ᶜaʲ)
+    return @. lazy(sqrt(max(ᶜaʲ, FT(0))))
+end
+
+function compute_entrpi3(_, cache, _, ::DiagnosticEDMFX)
+    (; ᶜρaʲs, ᶜρʲs) = cache.precomputed
+    ᶜaʲ = @. lazy(draft_area(ᶜρaʲs.:1, ᶜρʲs.:1))
+    FT = eltype(ᶜaʲ)
+    return @. lazy(sqrt(max(ᶜaʲ, FT(0))))
+end
+
+add_diagnostic_variable!(short_name = "entrpi3", units = "",
+    long_name = "Entrainment Pi3: sqrt(area)",
+    comments = "Square root of updraft area fraction",
+    compute = compute_entrpi3,
+)
+
+###
+# Entrainment Pi4: RH_up - RH_env
+###
+compute_entrpi4(state, cache, time) = compute_entrpi4(
+    state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_entrpi4(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute entrpi4 with a moist model and EDMFX")
+
+function compute_entrpi4(_, cache, _, ::MoistMicrophysics, ::PrognosticEDMFX)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜTʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = cache.precomputed
+    (; ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
+    ᶜRHʲ = @. lazy(TD.relative_humidity(
+        thermo_params, ᶜTʲs.:1, ᶜp, ᶜq_tot_nonnegʲs.:1, ᶜq_liqʲs.:1, ᶜq_iceʲs.:1,
+    ))
+    ᶜRH⁰ = @. lazy(TD.relative_humidity(
+        thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+    ))
+    return @. lazy(ᶜRHʲ - ᶜRH⁰)
+end
+
+function compute_entrpi4(_, cache, _, ::MoistMicrophysics, ::DiagnosticEDMFX)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜTʲs, ᶜT, ᶜp, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = cache.precomputed
+    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    ᶜRHʲ = @. lazy(TD.relative_humidity(
+        thermo_params, ᶜTʲs.:1, ᶜp, ᶜq_tot_nonnegʲs.:1, ᶜq_liqʲs.:1, ᶜq_iceʲs.:1,
+    ))
+    ᶜRH⁰ = @. lazy(TD.relative_humidity(
+        thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+    ))
+    return @. lazy(ᶜRHʲ - ᶜRH⁰)
+end
+
+add_diagnostic_variable!(short_name = "entrpi4", units = "",
+    long_name = "Entrainment Pi4: RH_up - RH_env",
+    comments = "Relative humidity difference between updraft and environment",
+    compute = compute_entrpi4,
+)
+
+###
+# Entrainment Pi5: z / pressure_scale_height
+###
+compute_entrpi5(state, cache, time) =
+    compute_entrpi5(state, cache, time, cache.atmos.turbconv_model)
+compute_entrpi5(_, _, _, turbconv_model) = error_diagnostic_variable("entrpi5", turbconv_model)
+
+function compute_entrpi5(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX})
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜp) = cache.precomputed
+    ᶜz = Fields.coordinate_field(state.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(state.f).z, Fields.half)
+    FT = eltype(ᶜz)
+    g = TDP.grav(thermo_params)
+    # Pressure scale height H = p / (ρ * g)
+    ref_H = @. lazy(ᶜp / (state.c.ρ * g))
+    ᶜz_above_sfc = @. lazy(ᶜz - z_sfc)
+    return @. lazy(ᶜz_above_sfc / max(ref_H, eps(FT)))
+end
+
+add_diagnostic_variable!(short_name = "entrpi5", units = "",
+    long_name = "Entrainment Pi5: z/H_scale",
+    comments = "Height normalized by pressure scale height",
+    compute = compute_entrpi5,
+)
+
+###############################################################################
+# ADDITIONAL USEFUL FIELDS FOR ML TRAINING
+###############################################################################
+
+###
+# Updraft - environment vertical velocity difference
+###
+compute_deltaw(state, cache, time) =
+    compute_deltaw(state, cache, time, cache.atmos.turbconv_model)
+compute_deltaw(_, _, _, turbconv_model) = error_diagnostic_variable("deltaw", turbconv_model)
+
+function compute_deltaw(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX})
+    (; ᶜu⁰, ᶜuʲs) = cache.precomputed
+    ᶜlg = Fields.local_geometry_field(state.c)
+    ᶜw_env = @. lazy(get_physical_w(ᶜu⁰, ᶜlg))
+    ᶜw_up = @. lazy(get_physical_w(ᶜuʲs.:1, ᶜlg))
+    return @. lazy(ᶜw_up - ᶜw_env)
+end
+
+add_diagnostic_variable!(short_name = "deltaw", units = "m s^-1",
+    long_name = "Updraft-Environment Vertical Velocity Difference",
+    comments = "w_updraft - w_environment",
+    compute = compute_deltaw,
+)
+
+###
+# Updraft buoyancy
+###
+compute_buoyup(state, cache, time) =
+    compute_buoyup(state, cache, time, cache.atmos.turbconv_model)
+compute_buoyup(_, _, _, turbconv_model) = error_diagnostic_variable("buoyup", turbconv_model)
+
+function compute_buoyup(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX})
+    (; ᶜρʲs) = cache.precomputed
+    (; ᶜgradᵥ_ᶠΦ) = cache.core
+    ᶜlg = Fields.local_geometry_field(state.c)
+    return @. lazy(vertical_buoyancy_acceleration(state.c.ρ, ᶜρʲs.:1, ᶜgradᵥ_ᶠΦ, ᶜlg))
+end
+
+add_diagnostic_variable!(short_name = "buoyup", units = "m s^-2",
+    long_name = "Updraft Buoyancy Acceleration",
+    comments = "Vertical buoyancy acceleration of the first updraft",
+    compute = compute_buoyup,
+)
+
+###
+# Gradient Richardson number
+###
+compute_rigrad(state, cache, time) =
+    compute_rigrad(state, cache, time, cache.atmos.turbconv_model)
+compute_rigrad(_, _, _, turbconv_model) = error_diagnostic_variable("rigrad", turbconv_model)
+
+function compute_rigrad(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX})
+    (; params) = cache
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+    return @. lazy(gradient_richardson_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
+end
+
+add_diagnostic_variable!(short_name = "rigrad", units = "",
+    long_name = "Gradient Richardson Number",
+    comments = "Ratio of buoyancy gradient to shear squared",
+    compute = compute_rigrad,
+)
+
+###
+# Turbulent Prandtl number
+###
+compute_prandtl(state, cache, time) =
+    compute_prandtl(state, cache, time, cache.atmos.turbconv_model)
+compute_prandtl(_, _, _, turbconv_model) = error_diagnostic_variable("prandtl", turbconv_model)
+
+function compute_prandtl(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX})
+    (; params) = cache
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+    return @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
+end
+
+add_diagnostic_variable!(short_name = "prandtl", units = "",
+    long_name = "Turbulent Prandtl Number",
+    comments = "Ratio of momentum diffusivity to heat diffusivity",
+    compute = compute_prandtl,
+)
