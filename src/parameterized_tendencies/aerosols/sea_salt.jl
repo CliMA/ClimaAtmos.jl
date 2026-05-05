@@ -46,6 +46,29 @@ end
 
 
 """
+    monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, z₀)
+
+Reconstruct wind speed at `z_target` (m) by anchoring to a known model-level wind
+`u_anchor` at height `z_anchor` (m) via the MOST profile ratio:
+
+    u(z_target) = u_anchor · F(z_target) / F(z_anchor)
+
+where F(z) = UF.dimensionless_profile(uf_params, z, ζ, z₀, MomentumTransport()).
+κ cancels in the ratio and is therefore not a parameter. Anchoring to the model's
+dynamical wind is more consistent with the model state than the surface-only formula,
+particularly when z_anchor lies within the surface layer.
+"""
+function monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, z₀)
+    FT       = typeof(u_anchor)
+    ζ_target = ifelse(iszero(L), FT(0), clamp(z_target / L, FT(-100), FT(100)))
+    ζ_anchor = ifelse(iszero(L), FT(0), clamp(z_anchor / L, FT(-100), FT(100)))
+    F_target = UF.dimensionless_profile(uf_params, z_target, ζ_target, z₀, UF.MomentumTransport())
+    F_anchor = UF.dimensionless_profile(uf_params, z_anchor, ζ_anchor, z₀, UF.MomentumTransport())
+    return max(u_anchor * F_target / F_anchor, FT(0))
+end
+
+
+"""
     _gong2003_r_integrand(r, theta)
 
 The radius-dependent part of the Gong (2003) integrand with u_10 and SST
@@ -126,15 +149,41 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
     κ = SFP.von_karman_const(surface_fluxes_params)
     z₀ = SFP.z0m_fixed(surface_fluxes_params)
 
-    u_10 = p.scratch.ᶠtemp_field_level
+    # Center-level geometry and horizontal winds.
+    # Both are on center-level-n space, which differs from the face-surface space
+    # of sfc_conditions fields; use parent-level arrays to bypass the space check.
+    z_c1_p = parent(Fields.level(Fields.coordinate_field(axes(Y.c)).z, 1))
+    z_c2_p = parent(Fields.level(Fields.coordinate_field(axes(Y.c)).z, 2))
+    u_z1_p = parent(norm.(Fields.level(Y.c.uₕ, 1)))
+    u_z2_p = parent(norm.(Fields.level(Y.c.uₕ, 2)))
+    ustar_p = parent(sfc_conditions.ustar)
+    L_p     = parent(sfc_conditions.obukhov_length)
+
+    u_10 = p.scratch.ᶠtemp_field_level   # will hold u_10_ext for the emission loop
+
+    # Surface-only MOST at 10 m → diagnostic u10_mo
     @. u_10 = monin_obukhov_wind_at_height(
-        FT(10),
-        sfc_conditions.ustar,
-        sfc_conditions.obukhov_length,
-        uf_params,
-        κ,
-        z₀
+        FT(10), sfc_conditions.ustar, sfc_conditions.obukhov_length, uf_params, κ, z₀,
     )
+    @. p.tracers.sea_salt_u10_mo_sfc = abs(u_10)
+
+    # Extrapolated u_10: anchor = z₁ model wind → used for emission flux and diagnostic u10_ext
+    parent(u_10) .= monin_obukhov_wind_extrapolated.(FT(10), z_c1_p, u_z1_p, L_p, uf_params, z₀)
+
+    # z₁_ext: anchor = z₂ model wind, target = z₁ → diagnostic z1_ext
+    parent(p.tracers.sea_salt_u_z1_ext_sfc) .=
+        monin_obukhov_wind_extrapolated.(z_c1_p, z_c2_p, u_z2_p, L_p, uf_params, z₀)
+
+    # z₁_mo: surface-only MOST at z₁ → diagnostic z1_mo (reuses existing field)
+    parent(p.tracers.sea_salt_u_mo_lowest_sfc) .=
+        monin_obukhov_wind_at_height.(z_c1_p, ustar_p, L_p, uf_params, κ, z₀)
+
+    # Actual model wind at z₁ → ground truth for comparison (reuses existing field)
+    parent(p.tracers.sea_salt_u_actual_lowest_sfc) .= u_z1_p
+
+    @. p.tracers.sea_salt_emission_flux_sfc = 0
+    @. p.tracers.sea_salt_u10_sfc = abs(u_10)   # stores u10_ext (extrapolated, used for flux)
+
     T_sfc = sfc_conditions.T_sfc
     ocean_fraction = p.ocean_fraction
     aero_params = p.params.prescribed_aerosol_params
@@ -148,23 +197,6 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
         i -> FT(4 / 3 * π * bin_radii[i]^3 * aero_params.seasalt_density),
         Val(5),
     )
-
-    @. p.tracers.sea_salt_emission_flux_sfc = 0
-    @. p.tracers.sea_salt_u10_sfc = abs(u_10)
-
-    # Wind comparison diagnostics: MO-reconstructed vs actual model wind at level 1.
-    # z_c1 (center-level-1 space) and ustar (face-surface space) are different ClimaCore
-    # Space types even though they share the same (Nq, Nq, 1, Nel) data layout.
-    # Drop to parent-level broadcasts to bypass the space check.
-    z_c1_p   = parent(Fields.level(Fields.coordinate_field(axes(Y.c)).z, 1))
-    ustar_p  = parent(sfc_conditions.ustar)
-    L_p      = parent(sfc_conditions.obukhov_length)
-    parent(p.tracers.sea_salt_u_mo_lowest_sfc) .=
-        monin_obukhov_wind_at_height.(z_c1_p, ustar_p, L_p, uf_params, κ, z₀)
-
-    # Compute norm on center-level-1 space first, then copy the raw data across.
-    parent(p.tracers.sea_salt_u_actual_lowest_sfc) .=
-        parent(norm.(Fields.level(Y.c.uₕ, 1)))
 
     for (bin_index, name) in enumerate(aerosol_names)
         ρχ_name = Symbol(:ρ, name)
