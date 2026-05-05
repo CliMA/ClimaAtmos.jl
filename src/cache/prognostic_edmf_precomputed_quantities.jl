@@ -267,7 +267,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 ᶜq_iceʲs.:($$j),
             ),
             vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
-            get_physical_w(ᶜu, ᶜlg),
+            FT(0),
             TD.relative_humidity(
                 thermo_params,
                 ᶜT⁰,
@@ -319,7 +319,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 ᶜq_iceʲs.:($$j),
             ),
             vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
-            get_physical_w(ᶜu, ᶜlg),
+            FT(0),
             TD.relative_humidity(
                 thermo_params,
                 ᶜT⁰,

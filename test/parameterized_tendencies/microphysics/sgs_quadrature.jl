@@ -357,7 +357,7 @@ using ClimaAtmos
                     result_direct = BMT.average_bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(),
                         mp, tps, ρ, T_mean,
-                        q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno, dt,
+                        q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno, dt, 2,
                     )
 
                     # Compare all fields
@@ -383,7 +383,7 @@ using ClimaAtmos
                     result_direct = BMT.average_bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(),
                         mp, tps, ρ, T_mean,
-                        q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno, dt,
+                        q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno, dt, 2,
                     )
 
                     @test result_quad.dq_lcl_dt ≈ result_direct.dq_lcl_dt rtol = FT(1e-5)
@@ -669,7 +669,7 @@ using ClimaAtmos
                 result_direct = BMT.average_bulk_microphysics_tendencies(
                     BMT.Microphysics1Moment(),
                     mp, tps, ρ, T_mean,
-                    q_tot, q_liq, q_ice, q_rai, q_sno, dt,
+                    q_tot, q_liq, q_ice, q_rai, q_sno, dt, 2,
                 )
 
                 # They must match exactly (both evaluate at grid mean)
