@@ -120,15 +120,16 @@ function assign_velocity_energy!(
 end
 
 """
-    assign_moisture_edmf!(Y, ᶜT, ᶜq_tot, e_pot, thermo_params, file_path, svi_kwargs)
+    assign_moisture_edmf!(Y, ᶜT, ᶜq_tot, e_pot, thermo_params, ᶜq_rai, ᶜq_sno)
 
-Assign moisture variables, cloud water from file (if available), and
-EDMF subdomain initialization.
+Assign moisture variables and EDMF subdomain initialization.
+
+`ᶜq_rai` and `ᶜq_sno` are the rain and snow specific humidities regridded
+from file, or `nothing` when the file does not contain microphysics fields.
 """
 function assign_moisture_edmf!(
-    Y, ᶜT, ᶜq_tot, e_pot, thermo_params, file_path, svi_kwargs,
+    Y, ᶜT, ᶜq_tot, e_pot, thermo_params, ᶜq_rai, ᶜq_sno,
 )
-    center_space = Fields.axes(Y.c)
 
     if hasproperty(Y.c, :ρq_tot)
         Y.c.ρq_tot .= ᶜq_tot .* Y.c.ρ
@@ -144,22 +145,13 @@ function assign_moisture_edmf!(
     if hasproperty(Y.c, :ρq_icl)
         fill!(Y.c.ρq_icl, 0)
     end
-    if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
-        has_microphysics_vars = NC.NCDataset(file_path) do ds
-            haskey(ds, "cswc") && haskey(ds, "crwc")
-        end
-        if has_microphysics_vars
-            Y.c.ρq_sno .=
-                SpaceVaryingInputs.SpaceVaryingInput(
-                    file_path, "cswc", center_space; svi_kwargs...,
-                ) .* Y.c.ρ
-            Y.c.ρq_rai .=
-                SpaceVaryingInputs.SpaceVaryingInput(
-                    file_path, "crwc", center_space; svi_kwargs...,
-                ) .* Y.c.ρ
+    if hasproperty(Y.c, :ρq_rai) && hasproperty(Y.c, :ρq_sno)
+        if !isnothing(ᶜq_rai)
+            Y.c.ρq_rai .= ᶜq_rai .* Y.c.ρ
+            Y.c.ρq_sno .= ᶜq_sno .* Y.c.ρ
         else
-            fill!(Y.c.ρq_sno, 0)
             fill!(Y.c.ρq_rai, 0)
+            fill!(Y.c.ρq_sno, 0)
         end
     end
 
@@ -174,8 +166,15 @@ function assign_moisture_edmf!(
             # SGS 1M microphysics tracers
             hasproperty(s, :q_lcl) && fill!(s.q_lcl, 0)
             hasproperty(s, :q_icl) && fill!(s.q_icl, 0)
-            hasproperty(s, :q_rai) && fill!(s.q_rai, 0)
-            hasproperty(s, :q_sno) && fill!(s.q_sno, 0)
+            if hasproperty(s, :q_rai) && hasproperty(s, :q_sno)
+                if !isnothing(ᶜq_rai)
+                    s.q_rai .= ᶜq_rai
+                    s.q_sno .= ᶜq_sno
+                else
+                    fill!(s.q_rai, 0)
+                    fill!(s.q_sno, 0)
+                end
+            end
         end
     end
 
@@ -264,9 +263,26 @@ function overwrite_from_file!(
         Y, ᶜT, ᶜq_tot, ᶠp, thermo_params, file_path, svi_kwargs,
     )
 
+    # Microphysics fields from file (rain/snow water content)
+    center_space = Fields.axes(Y.c)
+    has_microphysics_vars = NC.NCDataset(file_path) do ds
+        haskey(ds, "cswc") && haskey(ds, "crwc")
+    end
+    if has_microphysics_vars
+        ᶜq_rai = SpaceVaryingInputs.SpaceVaryingInput(
+            file_path, "crwc", center_space; svi_kwargs...,
+        )
+        ᶜq_sno = SpaceVaryingInputs.SpaceVaryingInput(
+            file_path, "cswc", center_space; svi_kwargs...,
+        )
+    else
+        ᶜq_rai = nothing
+        ᶜq_sno = nothing
+    end
+
     # Moisture and EDMF
     assign_moisture_edmf!(
-        Y, ᶜT, ᶜq_tot, e_pot, thermo_params, file_path, svi_kwargs,
+        Y, ᶜT, ᶜq_tot, e_pot, thermo_params, ᶜq_rai, ᶜq_sno,
     )
 
     return nothing
