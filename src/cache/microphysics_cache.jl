@@ -865,7 +865,9 @@ function set_microphysics_tendency_cache!(
             cm0, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
             ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j), ᶜΦ, dt,
         )
-        scale = @. lazy(max(min_scale, min((ᶜq_liqʲs.:($$j) + ᶜq_iceʲs.:($$j)) / qc_threshold, FT(1))))
+        # scale = @. lazy(max(min_scale, min((ᶜq_liqʲs.:($$j) + ᶜq_iceʲs.:($$j)) / qc_threshold, FT(1))))
+        ᶜz = Fields.coordinate_field(Y.c).z
+        scale = @. lazy(ifelse(ᶜz < FT(1500), min_scale, FT(1)))
         @. ᶜmp_tendencyʲs.:($$j).dq_tot_dt *= scale
         @. ᶜmp_tendencyʲs.:($$j).e_tot_hlpr *= scale
     end
@@ -889,7 +891,9 @@ function set_microphysics_tendency_cache!(
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ, dt,
         )
     end
-    scale = @. lazy(max(min_scale, min((ᶜq_liq⁰ + ᶜq_ice⁰) / qc_threshold, FT(1))))
+    # scale = @. lazy(max(min_scale, min((ᶜq_liq⁰ + ᶜq_ice⁰) / qc_threshold, FT(1))))
+    ᶜz = Fields.coordinate_field(Y.c).z
+    scale = @. lazy(ifelse(ᶜz < FT(1500), min_scale, FT(1)))
     @. ᶜmp_tendency⁰.dq_tot_dt *= scale
     @. ᶜmp_tendency⁰.e_tot_hlpr *= scale
 
