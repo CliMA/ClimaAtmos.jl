@@ -203,7 +203,7 @@ end
     # tendencies are smoother and one substep for time-averaging suffices
     return BMT.average_bulk_microphysics_tendencies(
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        eval.q_lcl, eval.q_icl, eval.q_rai, eval.q_sno, eval.dt, 1, eval.args...,
+        eval.q_lcl, eval.q_icl, eval.q_rai, eval.q_sno, eval.dt, 2, eval.args...,
     )
 end
 
