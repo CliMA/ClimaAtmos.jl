@@ -493,7 +493,7 @@ function calc_nonpropagating_forcing!(
     # Exclude cells with zero weights from the mask to avoid division by zero.
     # Zero weight means p == p_ref at that cell, so it contributes nothing
     # to the pressure-weighted average.
-    @. ᶜmask = ᶜmask && (ᶜweights != FT(0))
+    @. ᶜmask = ᶜmask && (!iszero(ᶜweights))
 
     parent(ᶜweights) .= parent(ᶜweights .* ᶜmask)
 
@@ -511,12 +511,12 @@ function calc_nonpropagating_forcing!(
     # When wtsum=0, the mask is empty (no cells between z_pbl and z_ref),
     # so we set forcing to 0 for those columns
     @. ᶜuforcing += ifelse(
-        ᶜwtsum == FT(0),
+        iszero(ᶜwtsum),
         FT(0),
         grav * τ_x * τ_np / τ_l / ᶜwtsum * ᶜweights,
     )
     @. ᶜvforcing += ifelse(
-        ᶜwtsum == FT(0),
+        iszero(ᶜwtsum),
         FT(0),
         grav * τ_y * τ_np / τ_l / ᶜwtsum * ᶜweights,
     )
