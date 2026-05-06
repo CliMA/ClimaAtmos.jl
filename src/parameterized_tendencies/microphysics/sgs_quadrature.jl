@@ -679,6 +679,54 @@ avoiding the need to extract FT from the space. Variances and correlation are ig
 end
 
 """
+    compute_σ_qc_quadrature(quad, μ_q, μ_T, q′q′, T′T′, corr_Tq, thermo_params, ρ)
+
+Compute the intra-subdomain SGS standard deviation of equilibrium condensate
+using Gauss-Hermite quadrature.
+
+At each quadrature point ``(T_{jk}, q_{jk})`` the mixed-phase equilibrium
+condensate is ``q_c^* = \\max(q_{tot} - q_{sat}(T), 0)``. The variance of
+``q_c^*`` over the SGS distribution gives ``\\sigma_{q_c}^{\\mathrm{iso}}``.
+
+Uses two passes over `integrate_over_sgs`:
+1. Quadrature mean ``\\bar{q}_c^*``
+2. Quadrature variance ``E[(q_c^* - \\bar{q}_c^*)^2]``
+
+At order-3 quadrature this is 2 × 9 = 18 saturation queries per grid cell,
+comparable to the existing microphysics quadrature cost.
+
+No liquid/ice phase split is needed: mixed-phase saturation adjustment at each
+quadrature point partitions condensate automatically.
+"""
+@inline function compute_σ_qc_quadrature(
+    quad::SGSQuadrature,
+    μ_q,
+    μ_T,
+    q′q′,
+    T′T′,
+    corr_Tq,
+    thermo_params,
+    ρ,
+)
+    FT = typeof(μ_q)
+
+    # Pass 1: quadrature mean of equilibrium condensate
+    q_c_mean = integrate_over_sgs(quad, μ_q, μ_T, q′q′, T′T′, corr_Tq) do T_hat, q_hat
+        q_sat = TD.q_vap_saturation(thermo_params, T_hat, ρ)  # mixed-phase
+        max(q_hat - q_sat, zero(FT))
+    end
+
+    # Pass 2: quadrature variance  E[(q_c* - mean)²]
+    q_c_var = integrate_over_sgs(quad, μ_q, μ_T, q′q′, T′T′, corr_Tq) do T_hat, q_hat
+        q_sat = TD.q_vap_saturation(thermo_params, T_hat, ρ)
+        q_c_star = max(q_hat - q_sat, zero(FT))
+        (q_c_star - q_c_mean)^2
+    end
+
+    return sqrt(max(q_c_var, ϵ_numerics(FT)))
+end
+
+"""
     Return true if no quadrature sampling is chosen.
 """
 @inline function not_quadrature(sgs_quad)

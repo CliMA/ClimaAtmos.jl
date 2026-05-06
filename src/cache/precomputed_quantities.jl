@@ -151,6 +151,23 @@ function precomputed_quantities(Y, atmos)
     ᶜcloud_fraction = similar(Y.c, FT)
     @. ᶜcloud_fraction = FT(0)
 
+    # Diagnostic cloud fraction variants: only allocated for NonEquilibriumMicrophysics1M
+    # with sgs_quadrature active. Both remain nothing otherwise, so downstream code
+    # must gate on `!isnothing(p.precomputed.ᶜcloud_fraction_diag_sigma)`.
+    uses_cf_diagnostic =
+        atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
+        !isnothing(atmos.sgs_quadrature)
+    cf_diagnostic_quantities =
+        if uses_cf_diagnostic
+            ᶜcloud_fraction_diag_sigma = similar(Y.c, FT)
+            ᶜcloud_fraction_diag_wmean = similar(Y.c, FT)
+            @. ᶜcloud_fraction_diag_sigma = FT(0)
+            @. ᶜcloud_fraction_diag_wmean = FT(0)
+            (; ᶜcloud_fraction_diag_sigma, ᶜcloud_fraction_diag_wmean)
+        else
+            (;)
+        end
+
     # SGS covariances for cloud fraction (Sommeria & Deardorff closure) and microphysics quadrature.
     # NonEquilibriumMicrophysics1M/2M always route through the quadrature API
     # internally (with GridMeanSGS), so they also need covariance fields allocated.
@@ -367,6 +384,7 @@ function precomputed_quantities(Y, atmos)
         precipitation_quantities...,
         surface_precip_fluxes...,
         ᶜcloud_fraction,
+        cf_diagnostic_quantities...,
         covariance_quantities...,
         smagorinsky_lilly_quantities...,
         amd_les_quantities...)
@@ -661,6 +679,13 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     end
 
     set_covariance_cache_and_cloud_fraction!(Y, p)
+
+    # Fill PROPHET diagnostic cloud fraction fields (two variants).
+    # Only active for NonEquilibriumMicrophysics1M + sgs_quadrature.
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
+       !isnothing(p.atmos.sgs_quadrature)
+        set_cloud_fraction_diagnostic!(Y, p)
+    end
 
     # Cache precipitation terminal velocities for grid mean and prognostic EDMF updrafts.
     set_precipitation_velocities!(

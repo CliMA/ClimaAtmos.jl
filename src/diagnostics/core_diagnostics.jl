@@ -158,6 +158,73 @@ add_diagnostic_variable!(short_name = "cl", units = "%",
 )
 
 ###
+# PROPHET cloud fraction — variant A: single tanh with σ = sqrt(σ_iso² + σ_inter²)
+###
+compute_clprophet_sigma(state, cache, time) =
+    compute_clprophet_sigma(state, cache, time, cache.atmos.microphysics_model)
+compute_clprophet_sigma(_, _, _, model) =
+    error_diagnostic_variable("clprophet_sigma", model)
+
+function compute_clprophet_sigma(_, cache, _, ::NonEquilibriumMicrophysics1M)
+    if isnothing(cache.atmos.sgs_quadrature)
+        error(
+            "clprophet_sigma requires sgs_quadrature to be set in the AtmosModel. " *
+            "Enable quadrature or use the standard `cl` diagnostic instead.",
+        )
+    end
+    return @. lazy(cache.precomputed.ᶜcloud_fraction_diag_sigma * 100)
+end
+
+add_diagnostic_variable!(
+    short_name = "clprophet_sigma",
+    units = "%",
+    long_name = "PROPHET cloud fraction — combined σ variant",
+    comments = """
+    Diagnostic cloud fraction computed via the PROPHET scheme:
+      f_c = tanh(π/√6 · q_c_prog / σ_tot)
+    where q_c_prog is the prognostic grid-mean condensate (q_lcl + q_icl),
+    and σ_tot = sqrt(σ_iso² + σ_inter²).
+    σ_iso: intra-subdomain SGS std dev of equilibrium condensate from quadrature.
+    σ_inter: inter-subdomain spread sqrt(Σⱼ aⱼ (q_c⁽ʲ⁾ - q_c⁰)²).
+    Only available with NonEquilibriumMicrophysics1M + sgs_quadrature.
+    """,
+    compute = compute_clprophet_sigma,
+)
+
+###
+# PROPHET cloud fraction — variant B: EDMF area-weighted mean
+###
+compute_clprophet_wmean(state, cache, time) =
+    compute_clprophet_wmean(state, cache, time, cache.atmos.microphysics_model)
+compute_clprophet_wmean(_, _, _, model) =
+    error_diagnostic_variable("clprophet_wmean", model)
+
+function compute_clprophet_wmean(_, cache, _, ::NonEquilibriumMicrophysics1M)
+    if isnothing(cache.atmos.sgs_quadrature)
+        error(
+            "clprophet_wmean requires sgs_quadrature to be set in the AtmosModel. " *
+            "Enable quadrature or use the standard `cl` diagnostic instead.",
+        )
+    end
+    return @. lazy(cache.precomputed.ᶜcloud_fraction_diag_wmean * 100)
+end
+
+add_diagnostic_variable!(
+    short_name = "clprophet_wmean",
+    units = "%",
+    long_name = "PROPHET cloud fraction — EDMF area-weighted mean variant",
+    comments = """
+    Diagnostic cloud fraction computed via the PROPHET scheme:
+      f_c = a⁰ tanh(π/√6 · q_c⁰/σ_iso) + Σⱼ aⱼ tanh(π/√6 · q_c⁽ʲ⁾/σ_iso)
+    where σ_iso is the intra-subdomain SGS std dev of equilibrium condensate
+    from Gauss-Hermite quadrature over the environment SGS distribution.
+    Only available with NonEquilibriumMicrophysics1M + sgs_quadrature.
+    """,
+    compute = compute_clprophet_wmean,
+)
+
+
+###
 # Total kinetic energy
 ###
 add_diagnostic_variable!(short_name = "ke", units = "m^2 s^-2",

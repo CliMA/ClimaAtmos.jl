@@ -931,3 +931,124 @@ Cloud fraction clamped to [0, 1].
 function apply_cf_nn(model, π_1::FT, π_2::FT, π_3::FT, π_4::FT) where {FT}
     return clamp((model(SA.SVector(π_1, π_2, π_3, π_4))[]), FT(0.0), FT(1.0))
 end
+
+# ============================================================================
+# Diagnostic Cloud Fraction (PROPHET-style, two variants)
+# ============================================================================
+
+"""
+    set_cloud_fraction_diagnostic!(Y, p)
+
+Fill two diagnostic cloud fraction fields:
+
+- `ᶜcloud_fraction_diag_sigma`: single-cell tanh with combined σ
+    ```
+    f_c = tanh(π/√6 · q_c_prog / σ_tot)
+    σ_tot = sqrt(σ_iso² + σ_inter²)
+    ```
+  where `σ_iso` is the intra-subdomain SGS std dev of equilibrium condensate
+  (from Gauss-Hermite quadrature over the environment distribution) and
+  `σ_inter = sqrt(Σⱼ aⱼ (q_c⁽ʲ⁾ - q_c⁰)²)` is the inter-subdomain spread.
+
+- `ᶜcloud_fraction_diag_wmean`: EDMF area-weighted mean of per-subdomain tanh
+    ```
+    f_c = a⁰ tanh(π/√6 · q_c⁰/σ_iso) + Σⱼ aⱼ tanh(π/√6 · q_c⁽ʲ⁾/σ_iso)
+    ```
+
+Both variants use the same `σ_iso` (same intra-subdomain variance for all
+subdomains, consistent with the paper's isotropic covariance formulation).
+
+Restricted to `NonEquilibriumMicrophysics1M`. Errors if `sgs_quadrature` is
+not configured.
+"""
+function set_cloud_fraction_diagnostic!(Y, p)
+    @assert p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M
+    sgs_quad = p.atmos.sgs_quadrature
+    @assert !isnothing(sgs_quad) "set_cloud_fraction_diagnostic! requires sgs_quadrature"
+
+    thermo_params = CAP.thermodynamics_params(p.params)
+    turbconv_model = p.atmos.turbconv_model
+    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    corr_Tq = correlation_Tq(p.params)
+    cf_scale = CAP.cloud_fraction_steepness_scale(p.params)
+    FT = eltype(p.params)
+    coeff = FT(π) / sqrt(FT(6)) * cf_scale
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    # Environment state (temperature, total humidity, density) for quadrature
+    ᶜρ_env, ᶜT_env, ᶜq_env = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+
+    # --- σ_iso: compute once; reuse for environment and all updrafts ---
+    # Uses scratch ᶜtemp_scalar_5 (not touched by cloud_fraction Picard iteration)
+    ᶜσ_iso = p.scratch.ᶜtemp_scalar_5
+    @. ᶜσ_iso = compute_σ_qc_quadrature(
+        sgs_quad,
+        ᶜq_env,
+        ᶜT_env,
+        ᶜq′q′,
+        ᶜT′T′,
+        corr_Tq,
+        thermo_params,
+        ᶜρ_env,
+    )
+
+    # --- Environment prognostic condensate and area fraction ---
+    (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    ᶜq_c_env = @. lazy(ᶜq_liq⁰ + ᶜq_ice⁰)
+
+    # Grid-mean prognostic condensate (numerator for Variant A)
+    ᶜq_c_prog = @. lazy(specific(Y.c.ρq_lcl + Y.c.ρq_icl, Y.c.ρ))
+
+    # Scalar tanh helper clamped to [0,1]; returns 0 when no condensate
+    @inline cf_tanh(q_c, σ) = ifelse(
+        TD.has_condensate(thermo_params, q_c),
+        tanh(coeff * q_c / max(σ, ϵ_numerics(FT))),
+        zero(FT),
+    )
+
+    # --- Variant B: initialise with environment contribution ---
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜp) = p.precomputed
+        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+        ᶜρ⁰ = @. lazy(
+            TD.air_density(thermo_params, ᶜT_env, ᶜp, ᶜq_env, ᶜq_liq⁰, ᶜq_ice⁰)
+        )
+        ᶜa⁰ = @. lazy(draft_area(ᶜρa⁰, ᶜρ⁰))
+        @. p.precomputed.ᶜcloud_fraction_diag_wmean = ᶜa⁰ * cf_tanh(ᶜq_c_env, ᶜσ_iso)
+    else
+        # No EDMF: environment = grid mean, area fraction = 1
+        @. p.precomputed.ᶜcloud_fraction_diag_wmean = cf_tanh(ᶜq_c_env, ᶜσ_iso)
+    end
+
+    # --- Variant A: inter-subdomain σ² accumulator ---
+    # Uses scratch ᶜtemp_scalar_6 (not touched by cloud_fraction Picard iteration)
+    ᶜσ2_inter = p.scratch.ᶜtemp_scalar_6
+    ᶜσ2_inter .= zero(FT)
+
+    # --- Loop over EDMF updrafts: accumulate both variants in one pass ---
+    if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
+        (; ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+        for j in 1:n
+            ᶜρaʲ =
+                turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
+                p.precomputed.ᶜρaʲs.:($j)
+            ᶜaʲ = @. lazy(draft_area(ᶜρaʲ, ᶜρʲs.:($$j)))
+            ᶜq_c_j = @. lazy(ᶜq_liqʲs.:($$j) + ᶜq_iceʲs.:($$j))
+
+            # Variant B: add weighted per-updraft tanh
+            @. p.precomputed.ᶜcloud_fraction_diag_wmean +=
+                ᶜaʲ * cf_tanh(ᶜq_c_j, ᶜσ_iso)
+
+            # Variant A: accumulate inter-subdomain σ²
+            @. ᶜσ2_inter += ᶜaʲ * (ᶜq_c_j - ᶜq_c_env)^2
+        end
+    end
+
+    # --- Variant A: combine σ_iso and σ_inter, then apply tanh ---
+    @. p.precomputed.ᶜcloud_fraction_diag_sigma = cf_tanh(
+        ᶜq_c_prog,
+        sqrt(ᶜσ_iso^2 + ᶜσ2_inter),
+    )
+
+    return nothing
+end
