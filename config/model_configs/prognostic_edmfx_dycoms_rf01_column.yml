@@ -1,7 +1,11 @@
 initial_condition: DYCOMS_RF01
 turbconv: prognostic_edmfx
 implicit_diffusion: true
-implicit_sgs_advection: false
+implicit_sgs_advection: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
+implicit_sgs_vertdiff: true
+implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
@@ -19,8 +23,8 @@ x_elem: 2
 y_elem: 2
 z_elem: 30
 z_stretch: false
-dt: 10secs
-t_end: 4hours
+dt: 120secs
+t_end: 6hours
 dt_save_state_to_disk: 10mins
 toml: [toml/prognostic_edmfx.toml]
 netcdf_interpolation_num_points: [2, 2, 30]

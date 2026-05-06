@@ -304,14 +304,12 @@ using ClimaAtmos
         end
     end
 
-    @testset "Microphysics Tendencies Quadrature" begin
+    @testset "Microphysics Tendencies 1M" begin
         import Thermodynamics as TD
         import ClimaParams as CP
         import CloudMicrophysics.Parameters as CMP
         import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
-
-        # Import from ClimaAtmos - function is in microphysics_wrappers.jl
-        using ClimaAtmos: microphysics_tendencies_quadrature_1m
+        using ClimaAtmos: microphysics_tendencies_1m
 
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
@@ -322,7 +320,6 @@ using ClimaAtmos
 
                 # Grid-mean state
                 ρ = FT(1.2)
-                p_c = FT(1e5)
                 T_mean = FT(280.0)
                 q_tot_mean = FT(0.01)
                 q_lcl_mean = FT(0.0001)
@@ -335,6 +332,10 @@ using ClimaAtmos
                 q′q′ = FT(1e-6)
                 corr_Tq = FT(0.6)
 
+                # No-op timestepping (no limiting)
+                dt = FT(1.0)
+                nsubs = 1
+
                 # Test 1: Single quadrature point should match grid-mean evaluation
                 @testset "Single Point = Grid Mean" begin
                     # Use GaussianSGS: only Gaussian has χ=0 → (μ_T, μ_q)
@@ -344,19 +345,19 @@ using ClimaAtmos
                         distribution = ClimaAtmos.GaussianSGS(),
                     )
 
-                    # Quadrature result
-                    result_quad = microphysics_tendencies_quadrature_1m(
+                    # Quadrature result (no limiting)
+                    result_quad = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad_1pt, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq,
+                        T′T′, q′q′, corr_Tq, dt,
                     )
 
                     # Direct evaluation at grid mean
-                    result_direct = BMT.bulk_microphysics_tendencies(
+                    result_direct = BMT.average_bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(),
                         mp, tps, ρ, T_mean,
-                        q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+                        q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno, dt, 2,
                     )
 
                     # Compare all fields
@@ -371,18 +372,18 @@ using ClimaAtmos
                     quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
 
                     # Zero variances
-                    result_quad = microphysics_tendencies_quadrature_1m(
+                    result_quad = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        FT(0), FT(0), FT(0),  # Zero variances, zero correlation
+                        FT(0), FT(0), FT(0), dt,
                     )
 
                     # Direct evaluation
-                    result_direct = BMT.bulk_microphysics_tendencies(
+                    result_direct = BMT.average_bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(),
                         mp, tps, ρ, T_mean,
-                        q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+                        q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno, dt, 2,
                     )
 
                     @test result_quad.dq_lcl_dt ≈ result_direct.dq_lcl_dt rtol = FT(1e-5)
@@ -393,11 +394,11 @@ using ClimaAtmos
                 @testset "NamedTuple Structure" begin
                     quad = ClimaAtmos.SGSQuadrature(FT)
 
-                    result = microphysics_tendencies_quadrature_1m(
+                    result = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq,
+                        T′T′, q′q′, corr_Tq, dt,
                     )
 
                     @test haskey(result, :dq_lcl_dt)
@@ -412,25 +413,48 @@ using ClimaAtmos
                     quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
 
                     # With variance
-                    result_var = microphysics_tendencies_quadrature_1m(
+                    result_var = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        FT(4.0), FT(1e-5), FT(0.8),  # Non-zero variances
+                        FT(4.0), FT(1e-5), FT(0.8), dt,
                     )
 
                     # Without variance
-                    result_no_var = microphysics_tendencies_quadrature_1m(
+                    result_no_var = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        FT(0), FT(0), FT(0),
+                        FT(0), FT(0), FT(0), dt,
                     )
 
                     # Results should differ (unless microphysics is perfectly linear)
                     # At minimum, they should both be finite
                     @test isfinite(result_var.dq_lcl_dt)
                     @test isfinite(result_no_var.dq_lcl_dt)
+                end
+
+                # Test 5: Non-quadrature (direct) evaluation
+                @testset "Direct (non-quadrature) evaluation" begin
+                    result_direct_wrapper = microphysics_tendencies_1m(
+                        ρ, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+                        T_mean, mp, tps, dt, nsubs,
+                    )
+
+                    result_bmt = BMT.average_bulk_microphysics_tendencies(
+                        BMT.Microphysics1Moment(),
+                        mp, tps, ρ, T_mean,
+                        q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno, dt,
+                    )
+
+                    @test result_direct_wrapper.dq_lcl_dt ≈ result_bmt.dq_lcl_dt rtol =
+                        FT(1e-10)
+                    @test result_direct_wrapper.dq_icl_dt ≈ result_bmt.dq_icl_dt rtol =
+                        FT(1e-10)
+                    @test result_direct_wrapper.dq_rai_dt ≈ result_bmt.dq_rai_dt rtol =
+                        FT(1e-10)
+                    @test result_direct_wrapper.dq_sno_dt ≈ result_bmt.dq_sno_dt rtol =
+                        FT(1e-10)
                 end
             end
         end
@@ -442,7 +466,7 @@ using ClimaAtmos
         import ClimaParams as CP
         import CloudMicrophysics.Parameters as CMP
         import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
-        using ClimaAtmos: microphysics_tendencies_quadrature_1m
+        using ClimaAtmos: microphysics_tendencies_1m
 
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
@@ -453,7 +477,6 @@ using ClimaAtmos
 
                 # Realistic atmospheric state
                 ρ = FT(1.0)
-                p_c = FT(1e5)
                 T = FT(280.0)
                 q_tot = FT(0.015)
                 q_liq = FT(0.002)
@@ -466,10 +489,12 @@ using ClimaAtmos
                 q′q′ = FT(1e-5)
                 corr_Tq = FT(0.6)
 
-                result = microphysics_tendencies_quadrature_1m(
+                dt = FT(1.0)
+
+                result = microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
                     quad, mp, thp, ρ, T, q_tot, q_liq, q_ice, q_rai, q_sno,
-                    T′T′, q′q′, corr_Tq,
+                    T′T′, q′q′, corr_Tq, dt,
                 )
 
                 # Total condensed water tendency
@@ -504,7 +529,7 @@ using ClimaAtmos
         import ClimaParams as CP
         import CloudMicrophysics.Parameters as CMP
         import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
-        using ClimaAtmos: microphysics_tendencies_quadrature_1m
+        using ClimaAtmos: microphysics_tendencies_1m
         using Test: @inferred
 
         # Test both Float32 and Float64 for type stability
@@ -516,7 +541,6 @@ using ClimaAtmos
                 quad = ClimaAtmos.SGSQuadrature(FT)
 
                 ρ = FT(1.0)
-                p_c = FT(1e5)
                 T = FT(280.0)
                 q_tot = FT(0.01)
                 q_liq = FT(0.001)
@@ -526,12 +550,13 @@ using ClimaAtmos
                 T′T′ = FT(1.0)
                 q′q′ = FT(1e-6)
                 corr_Tq = FT(0.6)
+                dt = FT(1.0)
 
                 # Test type stability
-                result = @inferred microphysics_tendencies_quadrature_1m(
+                result = @inferred microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
                     quad, mp, thp, ρ, T, q_tot, q_liq, q_ice, q_rai, q_sno,
-                    T′T′, q′q′, corr_Tq,
+                    T′T′, q′q′, corr_Tq, dt,
                 )
 
                 # Verify return type
@@ -561,20 +586,17 @@ using ClimaAtmos
                 # Grid-mean state
                 ρ = FT(1.0)
                 T_mean = FT(280.0)
-                q_tot_mean = FT(0.01)
                 q_lcl_mean = FT(0.001)
                 q_icl_mean = FT(0.0005)
                 q_rai = FT(0.0002)
                 q_sno = FT(0.0001)
-                q_cond_mean = q_lcl_mean + q_icl_mean
-                q_sat_mean = TD.q_vap_saturation(thp, T_mean, ρ)
-                excess_mean = q_tot_mean - q_sat_mean
+                dt = FT(60)
 
                 # Create evaluator
                 evaluator = Microphysics1MEvaluator(
                     BMT.Microphysics1Moment(),
                     mp, thp, ρ, T_mean,
-                    q_lcl_mean, q_icl_mean, q_rai, q_sno,
+                    q_lcl_mean, q_icl_mean, q_rai, q_sno, dt,
                     (),  # Empty args tuple for 1-moment
                 )
 
@@ -606,7 +628,7 @@ using ClimaAtmos
         import ClimaParams as CP
         import CloudMicrophysics.Parameters as CMP
         import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
-        using ClimaAtmos: microphysics_tendencies_quadrature_1m
+        using ClimaAtmos: microphysics_tendencies_1m
 
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
@@ -616,7 +638,6 @@ using ClimaAtmos
 
                 # Grid-mean state
                 ρ = FT(1.2)
-                p_c = FT(1e5)
                 T_mean = FT(280.0)
                 q_tot = FT(0.01)
                 q_liq = FT(0.001)
@@ -634,20 +655,21 @@ using ClimaAtmos
                 T′T′ = FT(4.0)
                 q′q′ = FT(1e-5)
                 corr_Tq = FT(0.6)
+                dt = FT(1.0)
 
                 # Quadrature path
-                result_quad = microphysics_tendencies_quadrature_1m(
+                result_quad = microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
                     quad_gm, mp, tps, ρ,
                     T_mean, q_tot, q_liq, q_ice, q_rai, q_sno,
-                    T′T′, q′q′, corr_Tq,
+                    T′T′, q′q′, corr_Tq, dt,
                 )
 
                 # Direct BMT call
-                result_direct = BMT.bulk_microphysics_tendencies(
+                result_direct = BMT.average_bulk_microphysics_tendencies(
                     BMT.Microphysics1Moment(),
                     mp, tps, ρ, T_mean,
-                    q_tot, q_liq, q_ice, q_rai, q_sno,
+                    q_tot, q_liq, q_ice, q_rai, q_sno, dt, 2,
                 )
 
                 # They must match exactly (both evaluate at grid mean)
@@ -673,7 +695,7 @@ using ClimaAtmos
             @testset "FT = $FT" begin
                 toml_dict = CP.create_toml_dict(FT)
 
-                @testset "0M quadrature: dq_tot_dt ≤ 0" begin
+                @testset "0M: dq_tot_dt ≤ 0" begin
                     quad = ClimaAtmos.SGSQuadrature(FT)
                     mp_0m = CMP.Microphysics0MParams(toml_dict)
                     thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
@@ -682,52 +704,64 @@ using ClimaAtmos
                     T_mean = FT(280.0)
                     q_tot_mean = FT(0.015)
                     Φ = FT(5000.0)  # geopotential [J/kg]
+                    dt = FT(1.0)
 
-                    # Zero variances (grid-mean evaluation)
-                    result_zero = ClimaAtmos.microphysics_tendencies_quadrature_0m(
+                    # Zero variances (grid-mean evaluation via quadrature)
+                    result_zero = ClimaAtmos.microphysics_tendencies_0m(
                         quad, mp_0m, thp, ρ, T_mean, q_tot_mean,
-                        FT(0), FT(0), FT(0), Φ,
+                        FT(0), FT(0), FT(0), Φ, dt,
                     )
                     @test result_zero.dq_tot_dt <= FT(0)
                     @test isfinite(result_zero.dq_tot_dt)
                     @test isfinite(result_zero.e_tot_hlpr)
 
                     # With variances (SGS fluctuations)
-                    result_var = ClimaAtmos.microphysics_tendencies_quadrature_0m(
+                    result_var = ClimaAtmos.microphysics_tendencies_0m(
                         quad, mp_0m, thp, ρ, T_mean, q_tot_mean,
-                        FT(4.0), FT(1e-5), FT(0.6), Φ,
+                        FT(4.0), FT(1e-5), FT(0.6), Φ, dt,
                     )
                     @test result_var.dq_tot_dt <= FT(0)
                     @test isfinite(result_var.dq_tot_dt)
                     @test isfinite(result_var.e_tot_hlpr)
+
+                    # Direct (non-quadrature) evaluation with reasonable condensate
+                    q_liq = FT(0.001)
+                    q_ice = FT(0.0005)
+                    result_direct = ClimaAtmos.microphysics_tendencies_0m(
+                        mp_0m, thp, ρ, T_mean, q_tot_mean,
+                        q_liq, q_ice, Φ, dt,
+                    )
+                    @test result_direct.dq_tot_dt <= FT(0)
+                    @test isfinite(result_direct.e_tot_hlpr)
                 end
 
-                @testset "1M quadrature: sign consistency" begin
+                @testset "1M: sign consistency" begin
                     quad = ClimaAtmos.SGSQuadrature(FT)
                     mp_1m = CMP.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
                     thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
 
                     ρ = FT(1.0)
-                    p_c = FT(85000.0)
                     T = FT(280.0)
                     q_tot = FT(0.015)
                     q_liq = FT(0.001)
                     q_ice = FT(0.0005)
                     q_rai = FT(0.0001)
                     q_sno = FT(0.00005)
+                    dt = FT(1.0)
+                    nsubs = 1
 
                     # With zero variances, quadrature should match direct BMT
-                    result_quad = ClimaAtmos.microphysics_tendencies_quadrature_1m(
+                    result_quad = ClimaAtmos.microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad, mp_1m, thp, ρ, T,
                         q_tot, q_liq, q_ice, q_rai, q_sno,
-                        FT(0), FT(0), FT(0),
+                        FT(0), FT(0), FT(0), dt,
                     )
 
-                    result_direct = BMT.bulk_microphysics_tendencies(
+                    result_direct = BMT.average_bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(),
                         mp_1m, thp, ρ, T,
-                        q_tot, q_liq, q_ice, q_rai, q_sno,
+                        q_tot, q_liq, q_ice, q_rai, q_sno, dt,
                     )
 
                     # Signs should match between quadrature and direct
@@ -740,17 +774,184 @@ using ClimaAtmos
                     end
 
                     # With non-zero variances, should still be finite
-                    result_var = ClimaAtmos.microphysics_tendencies_quadrature_1m(
+                    result_var = ClimaAtmos.microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad, mp_1m, thp, ρ, T,
                         q_tot, q_liq, q_ice, q_rai, q_sno,
-                        FT(4.0), FT(1e-5), FT(0.6),
+                        FT(4.0), FT(1e-5), FT(0.6), dt,
                     )
                     for field in (:dq_lcl_dt, :dq_icl_dt, :dq_rai_dt, :dq_sno_dt)
                         @test isfinite(getfield(result_var, field))
                     end
+
+                    # Non-quadrature (direct) wrapper should also match
+                    result_direct_wrapper = ClimaAtmos.microphysics_tendencies_1m(
+                        ρ, q_tot, q_liq, q_ice, q_rai, q_sno,
+                        T, mp_1m, thp, dt, nsubs,
+                    )
+                    for field in (:dq_lcl_dt, :dq_icl_dt, :dq_rai_dt, :dq_sno_dt)
+                        @test getfield(result_direct_wrapper, field) ≈
+                              getfield(result_direct, field) rtol = FT(1e-10)
+                    end
                 end
             end
+        end
+    end
+
+    @testset "Performance Scaling" begin
+        # Verify that the computational cost scales as expected with quadrature order
+        # and that the direct (non-quadrature) path has negligible overhead vs raw BMT.
+        import Thermodynamics as TD
+        import ClimaParams as CP
+        import CloudMicrophysics.Parameters as CMP
+        import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
+        using ClimaAtmos: microphysics_tendencies_0m, microphysics_tendencies_1m
+
+        FT = Float64
+        toml_dict = CP.create_toml_dict(FT)
+        thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+        mp_0m = CMP.Microphysics0MParams(toml_dict)
+        mp_1m = CMP.Microphysics1MParams(toml_dict)
+
+        # Shared state
+        ρ = FT(1.0)
+        T = FT(280.0)
+        q_tot = FT(0.015)
+        q_lcl = FT(0.001)
+        q_icl = FT(0.0005)
+        q_rai = FT(0.0001)
+        q_sno = FT(0.00005)
+        q_liq = q_lcl + q_rai
+        q_ice = q_icl + q_sno
+        Φ = FT(5000.0)
+        T′T′ = FT(1.0)
+        q′q′ = FT(1e-6)
+        corr_Tq = FT(0.6)
+        dt = FT(1.0)
+        nsubs = 1
+
+        N_warmup = 100
+        N_bench = 10_000
+
+        # --- 0M Performance ---
+        # We would be getting better measurements with BenchmarkTools, but I did not
+        # want to add them to the dependencies.
+        @testset "0M Performance" begin
+            # Direct BMT 0M
+            q_vap_sat = TD.q_vap_saturation(thp, T, ρ)
+            for _ in 1:N_warmup
+                BMT.bulk_microphysics_tendencies(
+                    BMT.Microphysics0Moment(), mp_0m, thp, T, q_liq, q_ice, q_vap_sat,
+                )
+            end
+            t_direct_0m = @elapsed for _ in 1:N_bench
+                BMT.bulk_microphysics_tendencies(
+                    BMT.Microphysics0Moment(), mp_0m, thp, T, q_liq, q_ice, q_vap_sat,
+                )
+            end
+
+            # Non-quadrature wrapper 0M
+            for _ in 1:N_warmup
+                microphysics_tendencies_0m(
+                    mp_0m, thp, ρ, T, q_tot, q_liq, q_ice, Φ, dt,
+                )
+            end
+            t_wrapper_0m = @elapsed for _ in 1:N_bench
+                microphysics_tendencies_0m(
+                    mp_0m, thp, ρ, T, q_tot, q_liq, q_ice, Φ, dt,
+                )
+            end
+
+            # 1st-order, 3rd-order, 5th-order quadrature 0M
+            timings_0m = Dict{Int, Float64}()
+            for order in (1, 3, 5)
+                quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = order)
+                for _ in 1:N_warmup
+                    microphysics_tendencies_0m(
+                        quad, mp_0m, thp, ρ, T, q_tot,
+                        T′T′, q′q′, corr_Tq, Φ, dt,
+                    )
+                end
+                t = @elapsed for _ in 1:N_bench
+                    microphysics_tendencies_0m(
+                        quad, mp_0m, thp, ρ, T, q_tot,
+                        T′T′, q′q′, corr_Tq, Φ, dt,
+                    )
+                end
+                timings_0m[order] = t
+            end
+
+            @info "0M Performance ($(N_bench) calls)" t_direct_0m t_wrapper_0m timings_0m
+
+            # Non-quadrature wrapper cost should be within direct BMT cost
+            @test t_wrapper_0m < 1.1 * t_direct_0m
+
+            # 3-point should not be more expensive than 3*3 * 1-point
+            @test timings_0m[3] < 9 * timings_0m[1]
+            # 5-point should not be more expensive than 5*5 * 1-point
+            @test timings_0m[5] < 25 * timings_0m[1]
+        end
+
+        # --- 1M Performance ---
+        @testset "1M Performance" begin
+            # Direct BMT 1M
+            for _ in 1:N_warmup
+                BMT.average_bulk_microphysics_tendencies(
+                    BMT.Microphysics1Moment(), mp_1m, thp, ρ, T,
+                    q_tot, q_lcl, q_icl, q_rai, q_sno, dt,
+                )
+            end
+            t_direct_1m = @elapsed for _ in 1:N_bench
+                BMT.average_bulk_microphysics_tendencies(
+                    BMT.Microphysics1Moment(), mp_1m, thp, ρ, T,
+                    q_tot, q_lcl, q_icl, q_rai, q_sno, dt,
+                )
+            end
+
+            # Non-quadrature wrapper 1M
+            for _ in 1:N_warmup
+                microphysics_tendencies_1m(
+                    ρ, q_tot, q_lcl, q_icl, q_rai, q_sno,
+                    T, mp_1m, thp, dt, nsubs,
+                )
+            end
+            t_wrapper_1m = @elapsed for _ in 1:N_bench
+                microphysics_tendencies_1m(
+                    ρ, q_tot, q_lcl, q_icl, q_rai, q_sno,
+                    T, mp_1m, thp, dt, nsubs,
+                )
+            end
+
+            # 1st-order, 3rd-order, 5th-order quadrature 1M
+            timings_1m = Dict{Int, Float64}()
+            for order in (1, 3, 5)
+                quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = order)
+                for _ in 1:N_warmup
+                    microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T,
+                        q_tot, q_lcl, q_icl, q_rai, q_sno,
+                        T′T′, q′q′, corr_Tq, dt,
+                    )
+                end
+                t = @elapsed for _ in 1:N_bench
+                    microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T,
+                        q_tot, q_lcl, q_icl, q_rai, q_sno,
+                        T′T′, q′q′, corr_Tq, dt,
+                    )
+                end
+                timings_1m[order] = t
+            end
+
+            @info "1M Performance ($(N_bench) calls)" t_direct_1m t_wrapper_1m timings_1m
+
+            # Non-quadrature wrapper should be within the cost of direct BMT
+            @test t_wrapper_1m < 1.1 * t_direct_1m
+
+            # 3-point quadrature should not be more expensive than 3*3 * 1-point
+            @test timings_1m[3] < 9 * timings_1m[1]
+            # 5-point quadrature should not be more expensive than 5*5 * 1-point
+            @test timings_1m[5] < 25 * timings_1m[1]
         end
     end
 

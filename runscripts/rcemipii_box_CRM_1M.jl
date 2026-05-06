@@ -57,7 +57,7 @@ params = CA.ClimaAtmosParameters(
 ## RCEMIP-II model prescriptions
 insolation = CA.RCEMIPIIInsolation()
 sfc_temperature = CA.RCEMIPIISST()
-initial_condition = CA.Setups.RCEMIPIIProfile_300()
+setup = CA.Setups.RCEMIPIIProfile_300()
 
 
 ## Construct the model
@@ -137,7 +137,7 @@ end
 ## Assemble simulation
 simulation = CA.AtmosSimulation{FT}(; job_id,
     model, params, context, grid,
-    initial_condition,
+    setup,
     surface_setup = CA.SurfaceConditions.DefaultMoninObukhov(),
     dt, t_end,
     ode_config,
@@ -148,7 +148,7 @@ simulation = CA.AtmosSimulation{FT}(; job_id,
     default_diagnostics = false,
     diagnostics,
     # Numerics
-    approximate_linear_solve_iters = 2,  # TODO: Fix implicit diffusion for LES
+    jacobian = CA.ManualSparseJacobian(; approximate_solve_iters = 2),  # TODO: Fix implicit diffusion for LES
     # Misc
     checkpoint_frequency = "1days",
     log_to_file = true,

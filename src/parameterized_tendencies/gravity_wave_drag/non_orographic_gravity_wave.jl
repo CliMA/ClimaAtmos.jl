@@ -51,8 +51,8 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             v_waveforcing = similar(Y.c.ρ),
             u_waveforcing_top = similar(Fields.level(Y.c.ρ, 1)),
             v_waveforcing_top = similar(Fields.level(Y.c.ρ, 1)),
-            uforcing = similar(Y.c.ρ),
-            vforcing = similar(Y.c.ρ),
+            uforcing = zero(Y.c.ρ),
+            vforcing = zero(Y.c.ρ),
             gw_ncval = Val(nc),
         )
     elseif issphere(axes(Y.c))
@@ -126,8 +126,8 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             v_waveforcing = similar(Y.c.ρ),
             u_waveforcing_top = similar(Fields.level(Y.c.ρ, 1)),
             v_waveforcing_top = similar(Fields.level(Y.c.ρ, 1)),
-            uforcing = similar(Y.c.ρ),
-            vforcing = similar(Y.c.ρ),
+            uforcing = zero(Y.c.ρ),
+            vforcing = zero(Y.c.ρ),
             gw_ncval = Val(nc),
         )
     else

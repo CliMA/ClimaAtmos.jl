@@ -9,7 +9,8 @@ function get_microphysics_model(parsed_args, params = nothing)
     elseif model_name == "0M"
         EquilibriumMicrophysics0M()
     elseif model_name == "1M"
-        NonEquilibriumMicrophysics1M()
+        n_substeps = parsed_args["microphysics_n_substeps"]
+        NonEquilibriumMicrophysics1M(; n_substeps)
     elseif model_name == "2M"
         NonEquilibriumMicrophysics2M()
     elseif model_name == "2MP3"
@@ -455,6 +456,16 @@ function get_cloud_model(parsed_args, params)
     else
         error("Invalid cloud_model $(cloud_model)")
     end
+end
+
+function get_terminal_velocity_mode(parsed_args, params, ::Type{FT}) where {FT}
+    return parsed_args["fixed_terminal_velocity"] ?
+           FixedTerminalVelocity{FT}(
+        CAP.fixed_cloud_liquid_terminal_velocity(params),
+        CAP.fixed_cloud_ice_terminal_velocity(params),
+        CAP.fixed_rain_terminal_velocity(params),
+        CAP.fixed_snow_terminal_velocity(params),
+    ) : DiagnosticTerminalVelocity()
 end
 
 function get_cloud_in_radiation(parsed_args)

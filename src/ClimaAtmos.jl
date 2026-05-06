@@ -57,10 +57,7 @@ include(joinpath("prognostic_equations", "implicit", "jacobian.jl"))
 include(
     joinpath("prognostic_equations", "implicit", "manual_sparse_jacobian.jl"),
 )
-include(joinpath("prognostic_equations", "implicit", "implicit_tendency_sgs_u3.jl"))
-include(
-    joinpath("prognostic_equations", "implicit", "manual_sparse_jacobian_sgs_u3.jl"),
-)
+include(joinpath("prognostic_equations", "implicit", "initialize_implicit_problem.jl"))
 include(joinpath("prognostic_equations", "implicit", "auto_dense_jacobian.jl"))
 include(joinpath("prognostic_equations", "implicit", "auto_sparse_jacobian.jl"))
 include(joinpath("prognostic_equations", "implicit", "autodiff_utils.jl"))
@@ -152,6 +149,8 @@ include(joinpath("parameters", "create_parameters.jl"))
 
 include(joinpath("simulation", "grids.jl"))
 include(joinpath("simulation", "AtmosSimulations.jl"))
+
+include("presets.jl")
 
 include(joinpath("solver", "model_getters.jl")) # high-level (using parsed_args) model getters
 include(joinpath("solver", "type_getters.jl"))

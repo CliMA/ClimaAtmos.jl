@@ -49,6 +49,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     microphysics_model = get_microphysics_model(parsed_args, params)
     sgs_quadrature = get_sgs_quadrature(parsed_args, params)
     cloud_model = get_cloud_model(parsed_args, params)
+    terminal_velocity_mode = get_terminal_velocity_mode(parsed_args, params, FT)
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
@@ -133,6 +134,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
                                              Implicit() : Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(parsed_args),
         sgs_quadrature,
+        terminal_velocity_mode,
 
         # SCMSetup - Single-Column Model components
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT; setup_type),
@@ -524,47 +526,42 @@ function _config_surface_setup(parsed_args)
 end
 
 function get_jacobian(ode_algo, Y, atmos, parsed_args)
+    jacobian = jacobian_from_parsed_args(parsed_args)
     return get_jacobian(
-        ode_algo,
-        Y,
-        atmos,
-        parsed_args["use_dense_jacobian"],
-        parsed_args["use_auto_jacobian"],
-        parsed_args["auto_jacobian_padding_bands"],
-        parsed_args["approximate_linear_solve_iters"],
-        parsed_args["debug_jacobian"],
-        false,
+        ode_algo, Y, atmos, jacobian, parsed_args["debug_jacobian"],
     )
 end
 
-function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
-    auto_jacobian_padding_bands,
-    approximate_linear_solve_iters, debug_jacobian; for_sgs_u₃ = false,
+# Translate YAML config keys into a user-facing JacobianAlgorithm stub.
+function jacobian_from_parsed_args(parsed_args)
+    approximate_solve_iters = parsed_args["approximate_linear_solve_iters"]
+    if parsed_args["use_dense_jacobian"]
+        return AutoDenseJacobian()
+    elseif parsed_args["use_auto_jacobian"]
+        return AutoSparseJacobian(;
+            approximate_solve_iters,
+            padding_bands_per_block = parsed_args["auto_jacobian_padding_bands"],
+        )
+    else
+        return ManualSparseJacobian(; approximate_solve_iters)
+    end
+end
+
+function get_jacobian(
+    ode_algo, Y, atmos, jacobian::JacobianAlgorithm, debug_jacobian,
 )
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
-    jacobian_algorithm = if use_dense_jacobian
-        AutoDenseJacobian()
-    else
-        manual_jacobian_algorithm = ManualSparseJacobian(
-            DerivativeFlag(has_topography(axes(Y.c))),
-            DerivativeFlag(atmos.diff_mode),
-            DerivativeFlag(atmos.sgs_adv_mode),
-            DerivativeFlag(atmos.sgs_entr_detr_mode),
-            DerivativeFlag(atmos.sgs_mf_mode),
-            DerivativeFlag(atmos.sgs_nh_pressure_mode),
-            DerivativeFlag(atmos.sgs_vertdiff_mode),
-            approximate_linear_solve_iters,
+    @info "Jacobian algorithm: $(summary_string(jacobian))"
+    jac = Jacobian(jacobian, Y, atmos; verbose = debug_jacobian)
+    if hasproperty(jac.cache, :derivative_flags)
+        flags_str = join(
+            ("$k = $(typeof(v).name.name)" for (k, v) in pairs(jac.cache.derivative_flags)),
+            ", ",
         )
-        use_auto_jacobian ?
-        AutoSparseJacobian(
-            manual_jacobian_algorithm,
-            auto_jacobian_padding_bands,
-        ) : manual_jacobian_algorithm
+        @info "Jacobian derivative flags: $flags_str"
     end
-    @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
-    verbose = debug_jacobian
-    return Jacobian(jacobian_algorithm, Y, atmos, for_sgs_u₃; verbose)
+    return jac
 end
 
 function ode_configuration(::Type{FT}, args) where {FT}
@@ -573,7 +570,6 @@ function ode_configuration(::Type{FT}, args) where {FT}
         args["ode_algo"],
         args["update_jacobian_every"],
         args["max_newton_iters_ode"],
-        args["max_newton_iters_ode_subproblem"],
         args["use_krylov_method"],
         args["use_dynamic_krylov_rtol"],
         args["eisenstat_walker_forcing_alpha"],
@@ -586,22 +582,11 @@ end
 
 
 function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
-    max_newton_iters_ode, max_newton_iters_ode_subproblem, use_krylov_method,
-    use_dynamic_krylov_rtol, eisenstat_walker_forcing_alpha, krylov_rtol,
-    use_newton_rtol, newton_rtol, jvp_step_adjustment,
+    max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol,
+    eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol, newton_rtol,
+    jvp_step_adjustment,
 ) where {FT}
     ode_algo_name = getproperty(CTS, Symbol(ode_name))
-    update_j_freq = if update_jacobian_every == "dt"
-        CTS.UpdateEvery(CTS.NewTimeStep)
-    elseif update_jacobian_every == "stage"
-        CTS.UpdateEvery(CTS.NewNewtonSolve)
-    elseif update_jacobian_every == "solve"
-        CTS.UpdateEvery(CTS.NewNewtonIteration)
-    else
-        error("Unknown value of `update_jacobian_every`: \
-                $(update_jacobian_every)")
-    end
-
     @info "Using ODE config: `$ode_algo_name`"
     return if ode_algo_name <: CTS.RosenbrockAlgorithmName
         if update_jacobian_every != "solve"
@@ -613,13 +598,18 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
         CTS.ExplicitAlgorithm(ode_algo_name())
     else
         @assert ode_algo_name <: CTS.IMEXARKAlgorithmName
-        newtons_method_subproblem = CTS.NewtonsMethod(;
-            max_iters = max_newton_iters_ode_subproblem,
-            update_j = update_j_freq,
-        )
         newtons_method = CTS.NewtonsMethod(;
             max_iters = max_newton_iters_ode,
-            update_j = update_j_freq,
+            update_j = if update_jacobian_every == "dt"
+                CTS.UpdateEvery(CTS.NewTimeStep)
+            elseif update_jacobian_every == "stage"
+                CTS.UpdateEvery(CTS.NewNewtonSolve)
+            elseif update_jacobian_every == "solve"
+                CTS.UpdateEvery(CTS.NewNewtonIteration)
+            else
+                error("Unknown value of `update_jacobian_every`: \
+                        $(update_jacobian_every)")
+            end,
             krylov_method = if use_krylov_method
                 CTS.KrylovMethod(;
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;
@@ -646,7 +636,7 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
                 nothing
             end,
         )
-        CTS.IMEXAlgorithm(ode_algo_name(), newtons_method_subproblem, newtons_method)
+        CTS.IMEXAlgorithm(ode_algo_name(), newtons_method)
     end
 end
 
@@ -829,10 +819,7 @@ end
 
 function args_integrator(args, Y, p, tspan, ode_algo, callback, dt_integrator)
     return args_integrator(Y, p, tspan, ode_algo, callback,
-        args["use_dense_jacobian"],
-        args["use_auto_jacobian"],
-        args["auto_jacobian_padding_bands"],
-        args["approximate_linear_solve_iters"],
+        jacobian_from_parsed_args(args),
         args["debug_jacobian"],
         args["prescribed_flow"],
         dt_integrator,
@@ -840,9 +827,7 @@ function args_integrator(args, Y, p, tspan, ode_algo, callback, dt_integrator)
 end
 
 function args_integrator(Y, p, tspan, ode_algo, callback,
-    use_dense_jacobian, use_auto_jacobian, auto_jacobian_padding_bands,
-    approximate_linear_solve_iters, debug_jacobian, prescribed_flow,
-    dt_integrator,
+    jacobian, debug_jacobian, prescribed_flow, dt_integrator,
 )
     (; atmos) = p
     s = @timed_str begin
@@ -850,24 +835,10 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
 
             # This is the default case
             T_exp_T_lim! = remaining_tendency!
-            T_imp_subproblem! =
-                p.atmos.turbconv_model isa PrognosticEDMFX ?
-                CTS.ODEFunction(
-                    implicit_tendency_sgs_u₃!;
-                    jac_prototype = get_jacobian(ode_algo, Y, atmos,
-                        use_dense_jacobian, use_auto_jacobian,
-                        auto_jacobian_padding_bands,
-                        approximate_linear_solve_iters, debug_jacobian,
-                        for_sgs_u₃ = true,
-                    ),
-                    Wfact = update_jacobian_sgs_u₃!,
-                ) : nothing
             T_imp! = CTS.ODEFunction(
                 implicit_tendency!;
-                jac_prototype = get_jacobian(ode_algo, Y, atmos,
-                    use_dense_jacobian, use_auto_jacobian,
-                    auto_jacobian_padding_bands,
-                    approximate_linear_solve_iters, debug_jacobian,
+                jac_prototype = get_jacobian(
+                    ode_algo, Y, atmos, jacobian, debug_jacobian,
                 ),
                 Wfact = update_jacobian!,
             )
@@ -876,15 +847,14 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             # `prescribed_flow` is an experimental case where the flow is prescribed,
             # so implicit tendencies are treated explicitly to avoid treatment of sound waves
             T_exp_T_lim! = fully_explicit_tendency!
-            T_imp_subproblem! = nothing
             T_imp! = nothing
             cache_imp! = nothing
         end
         tendency_function = CTS.ClimaODEFunction(;
-            T_exp_T_lim!, T_imp_subproblem!, T_imp!,
+            T_exp_T_lim!, T_imp!,
             cache! = set_precomputed_quantities!, cache_imp!,
             lim! = limiters_func!, dss! = constrain_state!,  # TODO: Rename ClimaODEFunction kwarg to `constrain_state!`
-            initialize_subproblem! = initialize_sgs_u₃!,
+            initialize_imp! = initialize_implicit_stage_problem!,
         )
     end
     problem = CTS.ODEProblem(tendency_function, Y, tspan, p)

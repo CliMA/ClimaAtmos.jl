@@ -15,61 +15,52 @@ use_derivative(::UseDerivative) = true
 use_derivative(::IgnoreDerivative) = false
 
 """
-    ManualSparseJacobian(
-        topography_flag,
-        diffusion_flag,
-        sgs_advection_flag,
-        sgs_entr_detr_flag,
-        sgs_mass_flux_flag,
-        sgs_nh_pressure_flag,
-        sgs_vertdiff_flag,
-        approximate_solve_iters,
-    )
+    ManualSparseJacobian(; approximate_solve_iters = 1)
 
 A [`JacobianAlgorithm`](@ref) that approximates the Jacobian using analytically
 derived tendency derivatives and inverts it using a specialized nested linear
-solver. Certain groups of derivatives can be toggled on or off by setting their
-`DerivativeFlag`s to either `UseDerivative` or `IgnoreDerivative`.
+solver.
+
+Which derivative blocks are computed is determined automatically from the
+`AtmosModel` (topography, diffusion mode, EDMF modes) when the cache is
+built — users do not configure them directly.
 
 # Arguments
 
-- `topography_flag::DerivativeFlag`: whether the derivative of vertical
-  contravariant velocity with respect to horizontal covariant velocity should be
-  computed
-- `diffusion_flag::DerivativeFlag`: whether the derivatives of the grid-scale
-  diffusion tendency should be computed
-- `sgs_advection_flag::DerivativeFlag`: whether the derivatives of the
-  subgrid-scale advection tendency should be computed
-- `sgs_entr_detr_flag::DerivativeFlag`: whether the derivatives of the
-  subgrid-scale entrainment and detrainment tendencies should be computed
-- `sgs_mass_flux_flag::DerivativeFlag`: whether the derivatives of the
-  subgrid-scale mass flux tendency should be computed
-- `sgs_nh_pressure_flag::DerivativeFlag`: whether the derivatives of the
-  subgrid-scale non-hydrostatic pressure drag tendency should be computed
-- `sgs_vertdiff_flag::DerivativeFlag`: whether the derivatives of the
-  subgrid-scale vertical diffusion tendency should be computed
-- `approximate_solve_iters::Int`: number of iterations to take for the
-  approximate linear solve required when the `diffusion_flag` is `UseDerivative`
+- `approximate_solve_iters::Int = 1`: number of iterations to take for the
+  approximate linear solve required when grid-scale diffusion is treated
+  implicitly.
 """
-struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6, F7} <: SparseJacobian
-    topography_flag::F1
-    diffusion_flag::F2
-    sgs_advection_flag::F3
-    sgs_entr_detr_flag::F4
-    sgs_mass_flux_flag::F5
-    sgs_nh_pressure_flag::F6
-    sgs_vertdiff_flag::F7
+struct ManualSparseJacobian <: SparseJacobian
     approximate_solve_iters::Int
+end
+ManualSparseJacobian(; approximate_solve_iters::Int = 1) =
+    ManualSparseJacobian(approximate_solve_iters)
+
+# Compute the seven DerivativeFlags that specialize the manual-sparse cache.
+# Flags are dispatch-relevant at cache build time, so we return them as a
+# NamedTuple of concrete `UseDerivative`/`IgnoreDerivative` instances.
+function _derivative_flags(atmos, Y)
+    return (;
+        topography_flag = DerivativeFlag(has_topography(axes(Y.c))),
+        diffusion_flag = DerivativeFlag(atmos.diff_mode),
+        sgs_advection_flag = DerivativeFlag(atmos.sgs_adv_mode),
+        sgs_entr_detr_flag = DerivativeFlag(atmos.sgs_entr_detr_mode),
+        sgs_mass_flux_flag = DerivativeFlag(atmos.sgs_mf_mode),
+        sgs_nh_pressure_flag = DerivativeFlag(atmos.sgs_nh_pressure_mode),
+        sgs_vertdiff_flag = DerivativeFlag(atmos.sgs_vertdiff_mode),
+    )
 end
 
 function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
+    derivative_flags = _derivative_flags(atmos, Y)
     (;
         topography_flag,
         diffusion_flag,
         sgs_advection_flag,
         sgs_mass_flux_flag,
-        approximate_solve_iters,
-    ) = alg
+    ) = derivative_flags
+    approximate_solve_iters = alg.approximate_solve_iters
     FT = Spaces.undertype(axes(Y.c))
 
     DiagonalRow = DiagonalMatrixRow{FT}
@@ -264,34 +255,10 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) => FT(-1) * I,
             )
         else
-            # When implicit microphysics is active, some SGS scalar entries
-            # need a DiagonalRow so that update_microphysics_jacobian! can
-            # increment them.  UniformScaling is not incrementable in-place.
-            needs_implicit_micro =
-                atmos.microphysics_tendency_timestepping == Implicit()
-            # 0M EDMF writes to q_tot and ρa; 1M EDMF writes to
-            # condensate species (q_liq, q_ice, q_rai, q_sno).
-            sgs_micro_names =
-                needs_implicit_micro ?
-                (
-                    (
-                        atmos.microphysics_model isa EquilibriumMicrophysics0M ?
-                        (
-                            @name(c.sgsʲs.:(1).q_tot),
-                            @name(c.sgsʲs.:(1).ρa),
-                        ) : ()
-                    )...,
-                    (
-                        atmos.microphysics_model isa NonEquilibriumMicrophysics ?
-                        sgs_condensate_mass_names : ()
-                    )...,
-                ) : ()
             (
                 MatrixFields.unrolled_map(
                     name ->
-                        (name, name) =>
-                            name in sgs_micro_names ?
-                            similar(Y.c, DiagonalRow) : FT(-1) * I,
+                        (name, name) => FT(-1) * I,
                     available_sgs_scalar_names,
                 )...,
                 (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) => FT(-1) * I,
@@ -406,7 +373,10 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             )
         end
 
-    return (; matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, full_alg))
+    return (;
+        matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, full_alg),
+        derivative_flags,
+    )
 end
 
 # TODO: There are a few for loops in this function. This is because
@@ -419,7 +389,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         sgs_entr_detr_flag,
         sgs_mass_flux_flag,
         sgs_vertdiff_flag,
-    ) = alg
+    ) = cache.derivative_flags
     (; matrix) = cache
     (; params) = p
     (; ᶜΦ) = p.core
@@ -527,8 +497,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
 
-    ᶜθ_v = p.scratch.ᶜtemp_scalar_3
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+    ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration:
     #              grad(p) / ρ + grad(Φ)  =  cp_d * θ_v * grad(Π) + grad(Φ).
@@ -1056,11 +1025,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             # vertical diffusion of updrafts
             if use_derivative(sgs_vertdiff_flag)
                 α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
-                @. p.scratch.ᶜbidiagonal_adjoint_matrix_c3 =
-                    ᶜadvdivᵥ_matrix() ⋅
-                    DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1)) * ᶠinterp(ᶜK_h))
                 @. ᶜdiffusion_h_matrix =
-                    p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅ ᶠgradᵥ_matrix()
+                    ᶜadvdivᵥ_matrix() ⋅
+                    DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1)) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
 
                 @. ∂ᶜmseʲ_err_∂ᶜmseʲ +=
                     dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
@@ -1224,40 +1191,34 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ) / ᶠJ * (g³³(ᶠgⁱʲ)),
                     )
 
-                @. p.scratch.ᶠdiagonal_matrix_ct3xct3 = DiagonalMatrixRow(
-                    ᶠinterp(
-                        (Y.c.sgsʲs.:(1).q_tot - ᶜq_tot) *
-                        ᶜρʲs.:(1) *
-                        ᶜJ *
-                        draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                    ) / ᶠJ * (g³³(ᶠgⁱʲ)),
-                )
-
                 ∂ᶜρq_tot_err_∂ᶠu₃ = matrix[@name(c.ρq_tot), @name(f.u₃)]
                 @. ∂ᶜρq_tot_err_∂ᶠu₃ +=
-                    dtγ * ᶜadvdivᵥ_matrix() ⋅ p.scratch.ᶠdiagonal_matrix_ct3xct3
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(
+                        ᶠinterp(
+                            (Y.c.sgsʲs.:(1).q_tot - ᶜq_tot) *
+                            ᶜρʲs.:(1) *
+                            ᶜJ *
+                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                        ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+                    )
 
                 # grid-mean ∂/∂(rho*a)
                 ∂ᶜρe_tot_err_∂ᶜρa =
                     matrix[@name(c.ρe_tot), @name(c.sgsʲs.:(1).ρa)]
-                @. p.scratch.ᶠtemp_CT3_2 =
-                    (ᶠu³ʲs.:(1) - ᶠu³) *
-                    ᶠinterp((Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot)) / ᶠJ
-                @. p.scratch.ᶜbidiagonal_matrix_scalar =
-                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(p.scratch.ᶠtemp_CT3_2)
                 @. ∂ᶜρe_tot_err_∂ᶜρa =
-                    p.scratch.ᶜbidiagonal_matrix_scalar ⋅ ᶠinterp_matrix() ⋅
+                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                        (ᶠu³ʲs.:(1) - ᶠu³) *
+                        ᶠinterp((Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot)) / ᶠJ,
+                    ) ⋅ ᶠinterp_matrix() ⋅
                     DiagonalMatrixRow(ᶜJ)
 
                 ∂ᶜρq_tot_err_∂ᶜρa =
                     matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).ρa)]
-                @. p.scratch.ᶠtemp_CT3_2 =
-                    (ᶠu³ʲs.:(1) - ᶠu³) *
-                    ᶠinterp((Y.c.sgsʲs.:(1).q_tot - ᶜq_tot)) / ᶠJ
-                @. p.scratch.ᶜbidiagonal_matrix_scalar =
-                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(p.scratch.ᶠtemp_CT3_2)
                 @. ∂ᶜρq_tot_err_∂ᶜρa =
-                    p.scratch.ᶜbidiagonal_matrix_scalar ⋅ ᶠinterp_matrix() ⋅
+                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                        (ᶠu³ʲs.:(1) - ᶠu³) *
+                        ᶠinterp((Y.c.sgsʲs.:(1).q_tot - ᶜq_tot)) / ᶠJ,
+                    ) ⋅ ᶠinterp_matrix() ⋅
                     DiagonalMatrixRow(ᶜJ)
 
                 # grid-mean tracers
@@ -1391,98 +1352,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         end
     end
 
-    # Microphysics Jacobian entries (extracted to keep this function small).
-    update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
-
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
     zero_velocity_jacobian!(matrix, Y, p, t)
-end
-
-"""
-    update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
-
-Add diagonal Jacobian entries for implicit microphysics tendencies (0M, 1M, 2M,
-and EDMF updraft species).
-
-Extracted from `update_jacobian!` to keep the parent function below Julia's
-optimization threshold — large functions cause the compiler to miss inlining
-opportunities in broadcast expressions, resulting in heap allocations.
-"""
-function update_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_advection_flag)
-    p.atmos.microphysics_tendency_timestepping == Implicit() || return nothing
-
-    gs_deriv_tracers = (
-        (@name(c.ρq_tot), @name(ᶜ∂tendency_∂q_tot)),
-        (@name(c.ρq_lcl), @name(ᶜmp_derivative.∂tendency_∂q_lcl)),
-        (@name(c.ρq_icl), @name(ᶜmp_derivative.∂tendency_∂q_icl)),
-        (@name(c.ρq_rai), @name(ᶜmp_derivative.∂tendency_∂q_rai)),
-        (@name(c.ρq_sno), @name(ᶜmp_derivative.∂tendency_∂q_sno)),
-    )
-    MatrixFields.unrolled_foreach(
-        gs_deriv_tracers,
-    ) do (ρχ_name, ∂tendency_∂q_name)
-        MatrixFields.has_field(p.precomputed, ∂tendency_∂q_name) || return
-        ᶜ∂tendency_∂q = MatrixFields.get_field(p.precomputed, ∂tendency_∂q_name)
-        ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
-        @. ∂ᶜρχ_err_∂ᶜρχ += dtγ * DiagonalMatrixRow(ᶜ∂tendency_∂q)
-    end
-
-    # EDMF microphysics: diagonal entries for updraft variables
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-
-        sgs_deriv_tracers = (
-            (@name(c.sgsʲs.:(1).q_tot), @name(ᶜ∂tendency_∂q_totʲs.:(1))),
-            (@name(c.sgsʲs.:(1).q_lcl), @name(ᶜmp_derivativeʲs.:(1).∂tendency_∂q_lcl)),
-            (@name(c.sgsʲs.:(1).q_icl), @name(ᶜmp_derivativeʲs.:(1).∂tendency_∂q_icl)),
-            (@name(c.sgsʲs.:(1).q_rai), @name(ᶜmp_derivativeʲs.:(1).∂tendency_∂q_rai)),
-            (@name(c.sgsʲs.:(1).q_sno), @name(ᶜmp_derivativeʲs.:(1).∂tendency_∂q_sno)),
-        )
-        MatrixFields.unrolled_foreach(
-            sgs_deriv_tracers,
-        ) do (q_name, ∂tendency_∂q_name)
-            MatrixFields.has_field(p.precomputed, ∂tendency_∂q_name) || return
-            ᶜ∂tendency_∂q = MatrixFields.get_field(p.precomputed, ∂tendency_∂q_name)
-            ∂ᶜq_err_∂ᶜq = matrix[q_name, q_name]
-            if !use_derivative(sgs_advection_flag)
-                @. ∂ᶜq_err_∂ᶜq =
-                    zero(typeof(∂ᶜq_err_∂ᶜq)) - (I,)
-            end
-            @. ∂ᶜq_err_∂ᶜq += dtγ * DiagonalMatrixRow(ᶜ∂tendency_∂q)
-        end
-
-        if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
-            if hasproperty(p.precomputed, :ᶜmp_tendencyʲs)
-                (; ᶜmp_tendencyʲs, ᶜ∂tendency_∂q_totʲs) = p.precomputed
-                dq_tot_dtʲ = @. lazy(
-                    microphysics_tendency_model(
-                        ᶜmp_tendencyʲs.:(1).dq_tot_dt,
-                        ᶜ∂tendency_∂q_totʲs.:(1),
-                        Y.c.sgsʲs.:(1).q_tot,
-                        p.dt,
-                    ),
-                )
-
-                ρa_name = @name(c.sgsʲs.:(1).ρa)
-                if MatrixFields.has_field(Y, ρa_name)
-                    ∂ᶜρa_err_∂ᶜρa = matrix[ρa_name, ρa_name]
-                    if !use_derivative(sgs_advection_flag)
-                        @. ∂ᶜρa_err_∂ᶜρa =
-                            zero(typeof(∂ᶜρa_err_∂ᶜρa)) - (I,)
-                    end
-                    @. ∂ᶜρa_err_∂ᶜρa +=
-                        dtγ * DiagonalMatrixRow(dq_tot_dtʲ)
-                end
-            end
-        end
-
-        # TODO: 2M EDMF updraft Jacobian entries remain to be implemented.
-        # This requires extending the Jacobian sparsity pattern to include
-        # diagonal blocks for updraft n_liq and n_rai species.
-        # Without these entries, 2M microphysics should use explicit
-        # timestepping for stability.
-
-    end
-    return nothing
 end
 
 invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R) =

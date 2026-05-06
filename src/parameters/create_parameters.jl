@@ -170,6 +170,10 @@ atmos_name_map = (;
     :D_horizontal_diffusion => :constant_horizontal_diffusion_D,
     :temperature_minimum => :T_min_sgs,
     :specific_humidity_maximum => :q_max_sgs,
+    :fixed_cloud_liquid_terminal_velocity => :fixed_cloud_liquid_terminal_velocity,
+    :fixed_cloud_ice_terminal_velocity => :fixed_cloud_ice_terminal_velocity,
+    :fixed_rain_terminal_velocity => :fixed_rain_terminal_velocity,
+    :fixed_snow_terminal_velocity => :fixed_snow_terminal_velocity,
 )
 
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
@@ -313,6 +317,7 @@ function TurbulenceConvectionParameters(
         :diagnostic_covariance_coeff => :diagnostic_covariance_coeff,
         :Tq_correlation_coefficient => :Tq_correlation_coefficient,
         :detr_buoy_coeff => :detr_buoy_coeff,
+        :detr_buoy_inv_tau_max => :detr_buoy_inv_tau_max,
         :EDMF_max_area => :max_area,
         :mixing_length_smin_rm => :smin_rm,
         :entr_coeff => :entr_coeff,

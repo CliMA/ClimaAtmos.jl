@@ -39,7 +39,16 @@ if TEST_GROUP in ("infrastructure", "all")
     # Solver tests
     @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
     @safetestset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
+    @safetestset "Presets" begin @time include("presets.jl") end
     @safetestset "Topography tests" begin @time include("topography.jl") end
+
+end
+
+# ============================================================================
+# Diagnostics: Unit tests for diagnostic variables
+# ============================================================================
+if TEST_GROUP in ("diagnostics", "all")
+    @safetestset "Diagnostics unit tests" begin @time include("diagnostics/unit_diagnostics.jl") end
 end
 
 # ============================================================================
@@ -51,6 +60,7 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
     @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
+    @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
 
     # Conservation tests
     @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end

@@ -3,6 +3,12 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- Added a `Presets` module with convenience constructors for common module/simulation configurations.
+- Add a keyword-based constructor `AtmosSimulation(; kwargs)` that always runs with Float32.
+- Set the existing keyword-based constructor `AtmosSimulation{FT}(;kwargs)` to always use ITime. Removed the `itime` kwarg.
+
+v0.38.0
+----
 - Refactor names in 1M microphysics q_liq -> q_lcl, q_ice -> q_icl
 - Refactor names in 0M microphysics q_liq_rai -> q_liq, q_ice_sno -> q_ice
 - Refactor names in 0M microphysics q_tot_safe -> q_tot_nonneg

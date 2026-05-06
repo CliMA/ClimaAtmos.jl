@@ -147,12 +147,12 @@ NVTX.@annotate function ogw_model_callback!(integrator)
     return nothing
 end
 
-NVTX.@annotate function edmfx_filter_callback!(integrator)
+NVTX.@annotate function enforce_physical_constraints_callback!(integrator)
     Y = integrator.u
     p = integrator.p
     t = integrator.t
 
-    edmfx_filter_tendency!(
+    enforce_physical_constraints!(
         Y,
         p,
         t,

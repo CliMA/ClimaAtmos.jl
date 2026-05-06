@@ -12,6 +12,7 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
 microphysics_model: "1M"
+microphysics_n_substeps: 1
 config: "column"
 x_elem: 2
 y_elem: 2
@@ -19,7 +20,7 @@ z_elem: 30
 z_max: 1500
 z_stretch: false
 perturb_initstate: false
-dt: 10secs
+dt: 5secs
 t_end: 5hours
 dt_save_state_to_disk: 10mins
 toml: [toml/prognostic_edmfx_1M.toml]

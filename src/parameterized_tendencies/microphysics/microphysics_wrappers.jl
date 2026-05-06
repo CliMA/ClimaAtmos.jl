@@ -61,12 +61,10 @@ struct Microphysics0MEvaluator{CMP, SAE, FT}
     sat_eval::SAE
     Φ::FT
 end
-
 function Microphysics0MEvaluator(cm_params, thermo_params, ρ, Φ)
     sat_eval = SaturationAdjustmentEvaluator(thermo_params, ρ)
     return Microphysics0MEvaluator(cm_params, sat_eval, Φ)
 end
-
 @inline function (eval::Microphysics0MEvaluator)(T_hat, q_hat)
     # Diagnose condensate via saturation adjustment
     sa = eval.sat_eval(T_hat, q_hat)
@@ -90,59 +88,69 @@ end
 end
 
 """
-    microphysics_tendencies_quadrature_0m(
-        SG_quad, cm_params, thermo_params,
-        ρ, T_mean, q_tot_mean, T′T′, q′q′, corr_Tq, Φ,
-    )
+    microphysics_tendencies_0m(SG_quad, cmp, thp, ρ, T, q_tot, T′T′, q′q′, corr_Tq, Φ, tst, dt)
+    microphysics_tendencies_0m(cmp, thp, ρ, T, q_tot, q_liq, q_ice, Φ, tst, dt)
 
-Compute SGS-averaged 0-moment microphysics tendencies by integrating over
-the joint PDF of (T, q_tot). At each quadrature point, condensate is diagnosed
-from saturation excess, then 0M precipitation removal tendencies are computed.
+Computes 0-moment microphysics tendencies.
 
-# Returns
-NamedTuple with SGS-averaged `dq_tot_dt` and `e_tot_hlpr`.
-"""
-@inline function microphysics_tendencies_quadrature_0m(
-    SG_quad, cm_params, thermo_params, ρ, T_mean, q_tot_mean,
-    T′T′, q′q′, corr_Tq, Φ,
-)
-    # Create GPU-safe functor (Φ is constant within a grid cell)
-    evaluator = Microphysics0MEvaluator(cm_params, thermo_params, ρ, Φ)
-    # Integrate over quadrature points; both dq_tot_dt and e_tot_hlpr
-    # are averaged over the SGS distribution.
-    return integrate_over_sgs(
-        evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq,
-    )
-end
+When using SGS-quadratures, the tendencies are integrated over the joint PDF of (T, q_tot).
+At each quadrature point, condensate is diagnosed from saturation excess,
+then 0M precipitation removal tendencies are computed.
 
-"""
-    microphysics_tendencies_quadrature_0m(
-        ::GridMeanSGS, cm_params, thermo_params, ρ, T, q_tot,
-        q_liq, q_ice, Φ,
-    )
+The option without SGS-quadratures can be used in the EDMF updrafts, or to compute
+grid-mean tendency without taking account of fluctuations. It computes the
+0M precipitation removal tendencies based on the provided point-values of temperature
+and specific humidities.
 
-Fast path for grid-mean 0-moment microphysics evaluation (no SGS quadrature).
-Computes BMT tendencies directly at grid-mean state with supersaturation
-threshold (`q_vap_sat`), plus the energy helper.
+When running with explicit microphysics timestepping, the total water sink
+is limited by the available water.
 
-This dispatch allows updraft code to use the same interface as the environment,
-ensuring consistent threshold definitions.
+# Inputs
+- `SG_quad`: SGSQuadrature configuration
+- `cmp`, `thp` - cloud microphysics and thermodynamics parameters
+- `ρ`, `T` - density [kg/m3] and temperature [K]
+- `q_tot`, `q_liq`, `q_ice` - total water, liquid water and ice specific humidities [kg/kg]
+- `ϕ` - geopotential
+- `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
+- `q′q′`: Variance of q_tot ``\\langle q'^2 \\rangle``
+- `corr_Tq`: Correlation coefficient ρ(T', q')
+- `dt`: model timestep length [s]
 
 # Returns
 NamedTuple with `dq_tot_dt` and `e_tot_hlpr`.
 """
-@inline function microphysics_tendencies_quadrature_0m(
-    ::GridMeanSGS, cm_params, thermo_params, ρ, T, q_tot,
-    q_liq, q_ice, Φ,
+@inline function microphysics_tendencies_0m(
+    SG_quad, cmp, thp, ρ, T, q_tot_nonneg, T′T′, q′q′, corr_Tq, Φ, dt,
 )
-    q_vap_sat = TD.q_vap_saturation(thermo_params, T, ρ)
+    # Create GPU-safe functor (Φ is constant within a grid cell)
+    # The evaluator does saturation adjustment, computes saturation vapor pressure
+    # and computes the total water sink and energy helper from 0M microphysics
+    evaluator = Microphysics0MEvaluator(cmp, thp, ρ, Φ)
+    # Integrate over quadrature points; both dq_tot_dt and e_tot_hlpr
+    # are averaged over the SGS distribution.
+    (; dq_tot_dt, e_tot_hlpr) = integrate_over_sgs(
+        evaluator, SG_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
+    )
+    # Apply limiter
+    dq_tot_dt = apply_0m_tendency_limit(dq_tot_dt, q_tot_nonneg, dt)
+
+    return (; dq_tot_dt, e_tot_hlpr)
+end
+@inline function microphysics_tendencies_0m(
+    cmp, thp, ρ, T, q_tot_nonneg, q_liq, q_ice, Φ, dt,
+)
+    # Computes saturation vapor pressure, total water sink and energy helper
+    # based on provided mean temperature, total water, liquid and ice specific humidities.
+    # Does not take into account SGS fluctuations.
+    q_vap_sat = TD.q_vap_saturation(thp, T, ρ)
     dq_tot_dt = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics0Moment(), cm_params, thermo_params,
-        T, q_liq, q_ice, q_vap_sat,
+        BMT.Microphysics0Moment(), cmp, thp, T, q_liq, q_ice, q_vap_sat,
     )
-    e_tot_hlpr = e_tot_0M_precipitation_sources_helper(
-        thermo_params, T, q_liq, q_ice, Φ,
-    )
+    e_tot_hlpr = e_tot_0M_precipitation_sources_helper(thp, T, q_liq, q_ice, Φ)
+
+    # Apply limiter
+    dq_tot_dt = apply_0m_tendency_limit(dq_tot_dt, q_tot_nonneg, dt)
+
     return (; dq_tot_dt, e_tot_hlpr)
 end
 
@@ -151,46 +159,10 @@ end
 ###
 
 """
-    compute_1m_precipitation_tendencies!(mp_tendency, ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, T, dt, mp, thp)
-
-This function computes all microphysics tendencies (cloud condensation/evaporation,
-autoconversion, accretion, and precipitation) in a single call.
-
-# Arguments
-- `mp_tendency`: Output NamedTuple for liquid, ice, rain, snow tendencies [1/s]
-- `ρ`: Air density [kg/m³]
-- `qₜ`: Total water specific humidity [kg/kg]
-- `qₗ`: Cloud liquid specific humidity [kg/kg]
-- `qᵢ`: Cloud ice specific humidity [kg/kg]
-- `qᵣ`: Rain specific humidity [kg/kg]
-- `qₛ`: Snow specific humidity [kg/kg]
-- `T`: Air temperature [K]
-- `dt`: Model timestep [s] (for tendency limiting)
-- `mp`: Microphysics parameters (`CMP.Microphysics1MParams`)
-- `thp`: Thermodynamics parameters
-
-# Output
-Modifies `mp_tendency` in-place with limited tendencies.
-"""
-function compute_1m_precipitation_tendencies!(
-    mp_tendency, ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, T, dt, mp, thp,
-    microphysics_tendency_timestepping = Explicit(),
-)
-    @. mp_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics1Moment(), mp, thp, ρ, T, qₜ, qₗ, qᵢ, qᵣ, qₛ,
-    )
-    apply_1m_tendency_limits!(
-        mp_tendency, microphysics_tendency_timestepping,
-        thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, dt,
-    )
-end
-
-"""
     (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
 
-Evaluate 1-moment microphysics tendencies at a quadrature point.
-
-This functor computes bulk microphysics tendencies at a perturbed thermodynamic
+GPU-safe functor for computing 1-moment microphysics tendencies at quadrature
+points. Computes bulk microphysics tendencies at a perturbed thermodynamic
 state `(T_hat, q_tot_hat)` for use in SGS quadrature integration. The condensate
 at each quadrature point is assumed to equal its mean value.
 
@@ -204,6 +176,7 @@ at each quadrature point is assumed to equal its mean value.
 - `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
+- `dt`: Model timestep [s] (for tendency averaging)
 """
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
@@ -216,9 +189,9 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     q_icl::FT
     q_rai::FT
     q_sno::FT
+    dt::FT
     args::Args
 end
-
 @inline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
     FT = typeof(eval.ρ)
 
@@ -226,64 +199,63 @@ end
     q_tot_hat = max(FT(0), q_tot_hat)
 
     # Call CloudMicrophysics point-wise tendencies
-    return BMT.bulk_microphysics_tendencies(
+    # Average tendencies over dt with nsubs = 1 because with sgs quadrature the resulting
+    # tendencies are smoother and one substep for time-averaging suffices
+    return BMT.average_bulk_microphysics_tendencies(
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        eval.q_lcl, eval.q_icl, eval.q_rai, eval.q_sno, eval.args...,
+        eval.q_lcl, eval.q_icl, eval.q_rai, eval.q_sno, eval.dt, 2, eval.args...,
     )
 end
 
 """
-    microphysics_tendencies_quadrature_1m(
-        scheme, SG_quad, mp, tps, ρ, T_mean, q_tot_mean,
-        q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, args...
+    microphysics_tendencies_1m(ρ, q_tot, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,)
+    microphysics_tendencies_1m(
+        scheme, sgs_quad, cmp, thp, ρ, T, q_tot,
+        q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, dt,
     )
 
-Compute subgrid-scale (SGS) averaged microphysics tendencies by integrating
-point-wise microphysics over the joint PDF of (T, q_tot):
-
+Computes time-averaged 1-moment microphysics tendencies. When using SGS-quadratures,
+the tendencies are integrated over the joint PDF of (T, q_tot).
 ```math
 \\bar{S} = \\int\\int S(T, q, \\dots) P(T, q) \\, dT \\, dq
 ```
-
-This enables microphysics tendencies to account for subgrid-scale fluctuations
-in temperature and moisture, capturing threshold effects at cloud edges and
-improving representation of phase changes.
+The option without SGS-quadratures can be used in the EDMF updrafts, or to compute
+grid-mean tendency without taking account of fluctuations.
 
 # Arguments
 - `scheme`: Microphysics scheme type (from CloudMicrophysics.BulkMicrophysicsTendencies)
-- `SG_quad`: SGSQuadrature configuration
-- `mp`: Microphysics parameters (scheme-specific)
-- `tps`: Thermodynamics parameters
-- `ρ`: Air density [kg/m³]
-- `T_mean`: Mean temperature [K]
-- `q_tot_mean`: Mean total water [kg/kg]
-- `q_lcl`: Cloud liquid [kg/kg] (not perturbed)
-- `q_icl`: Cloud ice [kg/kg] (not perturbed)
-- `q_rai`: Rain [kg/kg] (not perturbed)
-- `q_sno`: Snow [kg/kg] (not perturbed)
+- `sgs_quad`: SGSQuadrature configuration
+- `cmp`, `thp`: Microphysics and thermodynamics parameters
+- `ρ`, `T`: Air density [kg/m³] and temperature [K]
+- `q_tot`: Total water [kg/kg]
+- `q_lcl`, `q_icl`: Cloud liquid water and cloud ice [kg/kg]
+- `q_rai`, `q_sno`: Rain and snow [kg/kg]
 - `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
 - `q′q′`: Variance of q_tot ``\\langle q'^2 \\rangle``
-- `corr_Tq`: Correlation coefficient ρ(T', q')
+- `corr_Tq`: Correlation coefficient ρ(T', q') obtained from `correlation_Tq(params)`.
 - `args...`: Additional arguments (e.g., N_lcl for 2M)
+- `dt`: Model timestep [s] (for tendency averaging)
+- `nsubs`: Number of substeps for computing average tendencies over time
 
 # Returns
-NamedTuple with averaged source terms:
+NamedTuple with microphysics source terms:
 - `dq_lcl_dt`: Cloud liquid tendency [kg/kg/s]
 - `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
-
-# Note on Variances
-Call sites must convert θ-based variances to T-based variances using the chain rule:
-```julia
-∂T_∂θ = ... # (∂T/∂θ_liq_ice) computed at grid mean state
-T′T′ = (∂T_∂θ)² × θ′θ′
-```
-The T-q correlation coefficient is obtained from `correlation_Tq(params)`.
 """
-@inline function microphysics_tendencies_quadrature_1m(
-    scheme, SG_quad, mp, tps, ρ, T_mean, q_tot_mean,
-    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, args...,
+@inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
+    ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,
+)
+    local_tendency = BMT.average_bulk_microphysics_tendencies(
+        BMT.Microphysics1Moment(), cmp, thp, ρ, T,
+        q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
+    )
+    return local_tendency
+end
+@inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
+    scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, dt, args...,
 )
     # Clamp species humidities to prevent negativity in quadratures
     q_lcl_nonneg = max(0, q_lcl)
@@ -291,26 +263,16 @@ The T-q correlation coefficient is obtained from `correlation_Tq(params)`.
     q_rai_nonneg = max(0, q_rai)
     q_sno_nonneg = max(0, q_sno)
 
-    # Fast path for GridMeanSGS: skip quadrature, call BMT directly at grid mean
-    # This avoids the overhead of the quadrature loop for grid-mean-only evaluation
-    if SG_quad isa GridMeanSGS ||
-       (SG_quad isa SGSQuadrature && SG_quad.dist isa GridMeanSGS)
-        return BMT.bulk_microphysics_tendencies(
-            scheme, mp, tps, ρ, T_mean, q_tot_mean,
-            q_lcl_nonneg, q_icl_nonneg, q_rai_nonneg, q_sno_nonneg, args...,
-        )
-    end
-
-    # Create functor (no closure, GPU-safe)
+    # Create functor
     evaluator = Microphysics1MEvaluator(
-        scheme, mp, tps, ρ, T_mean, q_lcl_nonneg, q_icl_nonneg,
-        q_rai_nonneg, q_sno_nonneg, args,
+        scheme, cmp, thp, ρ, T, q_lcl_nonneg, q_icl_nonneg,
+        q_rai_nonneg, q_sno_nonneg, dt, args,
     )
-
     # Integrate over quadrature points using functor (GPU-safe, no closure)
-    return integrate_over_sgs(
-        evaluator, SG_quad, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq,
+    local_tendency = integrate_over_sgs(
+        evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
     )
+    return local_tendency
 end
 
 ###

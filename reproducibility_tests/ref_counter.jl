@@ -1,4 +1,4 @@
-334
+341
 
 # **README**
 #
@@ -32,6 +32,34 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+- Use two substeps for computing grid-mean microphysics tendencies to avoid fluctuations
+  which can lead to grid-mean instabilities;
+- Pass zero w_0 to entrainment and detrainment computations for prognostic EDMF to avoid
+  artificial area fraction growth when wʲ ≈ 0.
+
+340
+- Update to ClimaTimeSteppers v 0.9
+- Remove sgs u3 implicit subproblem tendency and Jacobian
+
+339
+- Unify prognostic EDMF parameters in 0M and 1M
+
+338
+- Add fixed terminal velocity option;
+- Enforce physical constraints in a callback.
+
+337
+- Use time-averaged 1m microphysics tendencies and delete tendency limiters
+
+336
+- Introduce a smooth area-fraction limiter for generalized detrainment;
+- Lower the area-fraction threshold for mixing SGS variables with the grid mean in the EDMF filter.
+
+335
+- Remove buoyancy clipping and allow negative buoyancy; solve sgs updraft velocity equation 
+  analytically in initialize_sgs_u₃ (and use 0 number of Newton iterations for solving this 
+  equation numerically by default.)
+
 334
 - Change prognostic variable names in 1M scheme: liq->lcl, ice->icl
 

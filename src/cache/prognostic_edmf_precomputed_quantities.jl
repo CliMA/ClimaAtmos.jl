@@ -182,6 +182,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
                 ᶜq_liqʲ,
                 ᶜq_iceʲ,
             )
+
+        # Add boundary kinematic contribution to entrainment to compensate
+        # advective area loss (∂(ρaw)/∂z) in the first cell. Using a one-sided
+        # estimate (zero flux below the surface), we add ᶠw₂ / ᶜdz₁ =  ᶠu³ʲs[2]
+        # so that entrainment can effectively relax area toward `surface_area`.
+        buoyancy_flux_val = Fields.field_values(p.precomputed.sfc_conditions.buoyancy_flux)
+        entr_int_val = Fields.field_values(Fields.level(p.precomputed.ᶜentrʲs.:($j), 1))
+        @. p.scratch.ᶜtemp_scalar_4 = ᶜright_bias(ᶠu³ʲ.components.data.:1)
+        w_over_dz_val = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar_4, 1))
+        @. entr_int_val += ifelse(buoyancy_flux_val < 0, 0, w_over_dz_val)
     end
     return nothing
 end
@@ -237,7 +247,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜw_vert_div = p.scratch.ᶜtemp_scalar_3
     for j in 1:n
         # entrainment/detrainment
-        @. ᶜentrʲs.:($$j) = entrainment(
+        # Pass w₀ = 0: using (ᶜwʲ - ᶜw⁰) introduces residual forcing when ᶜwʲ ≈ 0,
+        # which can spuriously increase area fraction and destabilize trivial updrafts.
+        @. ᶜentrʲs.:($$j) = compute_entrainment(
             thermo_params,
             turbconv_params,
             ᶜz,
@@ -255,7 +267,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 ᶜq_iceʲs.:($$j),
             ),
             vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
-            get_physical_w(ᶜu, ᶜlg),
+            FT(0),
             TD.relative_humidity(
                 thermo_params,
                 ᶜT⁰,
@@ -288,7 +300,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         @. ᶜmassflux_vert_div =
             ᶜdivᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) * ᶠu³ʲs.:($$j))
         @. ᶜw_vert_div = ᶜdivᵥ(ᶠu³ʲs.:($$j))
-        @. ᶜdetrʲs.:($$j) = detrainment(
+        @. ᶜdetrʲs.:($$j) = compute_detrainment(
             thermo_params,
             turbconv_params,
             ᶜz,
@@ -307,7 +319,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 ᶜq_iceʲs.:($$j),
             ),
             vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
-            get_physical_w(ᶜu, ᶜlg),
+            FT(0),
             TD.relative_humidity(
                 thermo_params,
                 ᶜT⁰,
@@ -340,18 +352,19 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             )
         end
 
-        # If the surface buoyancy flux is positive, adjust the first-cell updraft area toward `surface_area`:
-        #   - if area < surface_area: increase entrainment to grow area toward `surface_area`
-        #   - if area > surface_area: increase detrainment to decay area toward `surface_area`
-        # If area is negative or surface buoyancy flux is non-positive (stable/neutral surface), leave
-        # entrainment and detrainment unchanged.
+        # Near the surface, relax the first-cell updraft area toward `surface_area`
+        # when the surface buoyancy flux is non-negative:
+        #   - if a < surface_area, increase entrainment to grow the updraft area
+        #   - if a > surface_area, increase detrainment to reduce the updraft area
+        # For negative surface buoyancy flux, keep entrainment unchanged and require
+        # detr >= entr to prevent area growth from the lower boundary.
         buoyancy_flux_val = Fields.field_values(p.precomputed.sfc_conditions.buoyancy_flux)
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
         sgsʲs_ρa_int_val =
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
-        # Seed a small positive updraft area fraction when surface buoyancy flux is positive.
-        # This perturbation prevents the plume area from staying identically zero,
-        # allowing entrainment to grow it to the prescribed surface area.
+        # Seed a small positive updraft area when the surface buoyancy flux is non-negative.
+        # Without this perturbation, an initially zero-area plume cannot grow toward
+        # the prescribed `surface_area`.
         @. sgsʲs_ρa_int_val += ifelse(buoyancy_flux_val < 0,
             0,
             max(0, sgsʲs_ρ_int_val * $(eps(FT)) - sgsʲs_ρa_int_val),
@@ -367,11 +380,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
         )
         @. detr_int_val = ifelse(
-            buoyancy_flux_val < 0 ||
-            ᶜaʲ_int_val < $(FT(turbconv_params.surface_area)),
-            detr_int_val,
-            entr_int_val -
-            ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
+            buoyancy_flux_val < 0,
+            max(detr_int_val, entr_int_val),
+            ifelse(ᶜaʲ_int_val < $(FT(turbconv_params.surface_area)),
+                detr_int_val,
+                entr_int_val -
+                ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
+            ),
         )
         if p.atmos.sgs_entr_detr_mode == Explicit()
             @. entr_int_val = limit_entrainment(entr_int_val, ᶜaʲ_int_val, dt)
@@ -379,16 +394,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         else
             @. detr_int_val = limit_detrainment(detr_int_val, entr_int_val, ᶜaʲ_int_val, dt)
         end
-        # Add boundary kinematic contribution to entrainment to compensate
-        # advective area loss (∂(ρaw)/∂z) in the first cell. Using a one-sided
-        # estimate (zero flux below the surface), we add ᶠw₂ / ᶜdz₁ =  ᶠu³ʲs[2]
-        # so that entrainment can effectively relax area toward `surface_area`.
-        @. p.scratch.ᶜtemp_scalar_4 =
-            ᶜright_bias(p.precomputed.ᶠu³ʲs.:($$j).components.data.:1)
-        w_over_dz_val = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar_4, 1))
-        @. entr_int_val += ifelse(buoyancy_flux_val < 0, 0, w_over_dz_val)
 
-        @. ᶠρ_diffʲs.:($$j) = min(0, ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ)) / ᶠinterp(ᶜρʲs.:($$j))
+        @. ᶠρ_diffʲs.:($$j) = ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) / ᶠinterp(ᶜρʲs.:($$j))
     end
 
     # TODO: Make strain_rate_norm calculation a function in eddy_diffusion_closures

@@ -20,7 +20,7 @@ using Revise # if you are developing ClimaAtmos
 import ClimaAtmos as CA
 
 # get the configuration arguments
-simulation = CA.AtmosSimulation("config/model_configs/prognostic_edmfx_bomex_column.yml")
+simulation = CA.get_simulation(CA.AtmosConfig("config/model_configs/prognostic_edmfx_bomex_column.yml"))
 sol_res = CA.solve_atmos!(simulation) # run the simulation
 ```
 

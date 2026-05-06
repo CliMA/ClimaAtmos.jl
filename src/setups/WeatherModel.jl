@@ -8,6 +8,8 @@ full prognostic state with ERA5 data obtained via `weather_model_data_path`.
 
 ## Fields
 - `start_date`: DateTime parsed from a date string in format "yyyymmdd" or "yyyymmdd-HHMM".
+- `era5_initial_condition_dir`: Optional directory with pre-processed ERA5 files.
+  When `nothing`, uses the `wxquest_initial_conditions` ClimaArtifact.
 - `use_full_pressure`: If `true`, attempt to read 3D pressure from the file
   rather than computing it hydrostatically. Defaults to `false`.
 
@@ -128,9 +130,25 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
         Y, ᶜT, ᶜq_tot, ᶠp, thermo_params, file_path, svi_kwargs,
     )
 
+    # Microphysics fields from file (rain/snow water content)
+    has_microphysics_vars = NC.NCDataset(file_path) do ds
+        haskey(ds, "cswc") && haskey(ds, "crwc")
+    end
+    if has_microphysics_vars
+        ᶜq_rai = SpaceVaryingInputs.SpaceVaryingInput(
+            file_path, "crwc", center_space; svi_kwargs...,
+        )
+        ᶜq_sno = SpaceVaryingInputs.SpaceVaryingInput(
+            file_path, "cswc", center_space; svi_kwargs...,
+        )
+    else
+        ᶜq_rai = nothing
+        ᶜq_sno = nothing
+    end
+
     # Moisture and EDMF
     assign_moisture_edmf!(
-        Y, ᶜT, ᶜq_tot, e_pot, thermo_params, file_path, svi_kwargs,
+        Y, ᶜT, ᶜq_tot, e_pot, thermo_params, ᶜq_rai, ᶜq_sno,
     )
 
     return nothing

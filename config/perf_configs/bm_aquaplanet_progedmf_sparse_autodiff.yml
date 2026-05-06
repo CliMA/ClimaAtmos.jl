@@ -18,7 +18,6 @@ surface_setup: DefaultMoninObukhov
 rad: allskywithclear
 dt_rad: 1hours
 turbconv: prognostic_edmfx
-max_newton_iters_ode: 3
 prognostic_tke: true
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"

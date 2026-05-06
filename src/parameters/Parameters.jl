@@ -47,6 +47,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     detr_inv_tau::FT
     detr_coeff::FT
     detr_buoy_coeff::FT
+    detr_buoy_inv_tau_max::FT
     detr_vertdiv_coeff::FT
     entr_param_vec::VFT1
     turb_entr_param_vec::VFT2
@@ -174,6 +175,11 @@ Base.@kwdef struct ClimaAtmosParameters{
     # SGS quadrature bounds
     T_min_sgs::FT
     q_max_sgs::FT
+    # Fixed terminal velocities
+    fixed_cloud_liquid_terminal_velocity::FT
+    fixed_cloud_ice_terminal_velocity::FT
+    fixed_rain_terminal_velocity::FT
+    fixed_snow_terminal_velocity::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
