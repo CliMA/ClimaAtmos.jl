@@ -89,5 +89,3 @@ julia --project=.buildkite .buildkite/ci_driver.jl \
 ```
 
 The common configuration provides the numerical setup (grid, time stepping, etc.), while the model configuration provides the physical setup (physics schemes, initial conditions, etc.). The model configuration will override any conflicting settings from the common configuration. Please modify them only if you are certain of the implications.
-
-# Default Configuration

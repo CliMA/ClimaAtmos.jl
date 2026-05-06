@@ -38,7 +38,7 @@ open(output_file, "w") do config_md
     end
     table = make_table_from_config_file(
         default_config_file,
-        "Default configuration",
+        "Default Configuration",
     )
     write(config_md, table)
 end
