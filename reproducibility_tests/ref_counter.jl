@@ -1,4 +1,4 @@
-340
+341
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+- Use two substeps for computing grid-mean microphysics tendencies to avoid fluctuations
+  which can lead to grid-mean instabilities;
+- Pass zero w_0 to entrainment and detrainment computations for prognostic EDMF to avoid
+  artificial area fraction growth when wʲ ≈ 0.
+
 340
 - Update to ClimaTimeSteppers v 0.9
 - Remove sgs u3 implicit subproblem tendency and Jacobian

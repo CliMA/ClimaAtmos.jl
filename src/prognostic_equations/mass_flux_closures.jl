@@ -115,15 +115,15 @@ function edmfx_nh_pressure_drag_tendency!(
        p.atmos.sgs_nh_pressure_mode == Explicit()
         (; params) = p
         n = n_mass_flux_subdomains(turbconv_model)
-        (; ᶠu₃⁰) = p.precomputed
         ᶠlg = Fields.local_geometry_field(Y.f)
         scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+        # assume zero environmental velocity
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠupdraft_nh_pressure_drag(
                 params,
                 ᶠlg,
                 Y.f.sgsʲs.:($$j).u₃,
-                ᶠu₃⁰,
+                C3(0),
                 scale_height,
             )
         end
