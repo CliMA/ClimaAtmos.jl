@@ -516,7 +516,7 @@ function calc_nonpropagating_forcing!(
         grav * τ_x * τ_np / τ_l / ᶜwtsum * ᶜweights,
     )
     @. ᶜvforcing += ifelse(
-        iszero(ᶜwtsum,
+        iszero(ᶜwtsum),
         FT(0),
         grav * τ_y * τ_np / τ_l / ᶜwtsum * ᶜweights,
     )
