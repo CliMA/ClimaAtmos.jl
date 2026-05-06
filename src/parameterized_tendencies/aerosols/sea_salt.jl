@@ -46,15 +46,19 @@ end
 
 
 """
-    monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, buoyancy_flux, uf_params, κ, z₀;
-                                               gustiness_coeff = nothing, zi = nothing)
+    monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, κ, z₀,
+                                    buoyancy_flux = nothing, zi = nothing;
+                                    gustiness_coeff = nothing)
 
 Extrapolate wind speed at `z_target` (m) by anchoring to a known model-level wind
 `u_anchor` at height `z_anchor` (m) via the MOST profile ratio, with optional
-Beljaars (1995) free-convection gustiness correction applied.
+Beljaars (1995) free-convection gustiness correction. Pass `buoyancy_flux`, `zi`,
+and `gustiness_coeff` (all non-nothing) to enable the gustiness branch; otherwise
+the plain MOST profile is returned.
 """
-function monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, buoyancy_flux, uf_params, κ, z₀;
-                                                    gustiness_coeff = nothing, zi = nothing)
+function monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, κ, z₀,
+                                          buoyancy_flux = nothing, zi = nothing;
+                                          gustiness_coeff = nothing)
     FT = typeof(u_anchor)
 
     # MOST extrapolated profile
@@ -65,7 +69,7 @@ function monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, buoyan
     u_MOST = max(u_anchor * F_target / F_anchor, FT(0))
 
     # Beljaars (1995) free-convection gustiness floor
-    if !isnothing(gustiness_coeff) && !isnothing(zi)
+    if !isnothing(gustiness_coeff) && !isnothing(zi) && !isnothing(buoyancy_flux)
         w_star = cbrt(max(buoyancy_flux * zi, FT(0)))
         u_gust = gustiness_coeff * w_star
         return sqrt(u_MOST^2 + u_gust^2)
@@ -175,11 +179,11 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
     @. p.tracers.sea_salt_u10_mo_sfc = abs(u_10)
 
     # Extrapolated u_10: anchor = z₁ model wind → used for emission flux and diagnostic u10_ext
-    parent(u_10) .= monin_obukhov_wind_extrapolated.(FT(10), z_c1_p, u_z1_p, L_p, uf_params, z₀)
+    parent(u_10) .= monin_obukhov_wind_extrapolated.(FT(10), z_c1_p, u_z1_p, L_p, uf_params, κ, z₀)
 
     # z₁_ext: anchor = z₂ model wind, target = z₁ → diagnostic z1_ext
     parent(p.tracers.sea_salt_u_z1_ext_sfc) .=
-        monin_obukhov_wind_extrapolated.(z_c1_p, z_c2_p, u_z2_p, L_p, uf_params, z₀)
+        monin_obukhov_wind_extrapolated.(z_c1_p, z_c2_p, u_z2_p, L_p, uf_params, κ, z₀)
 
     # z₁_mo: surface-only MOST at z₁ → diagnostic z1_mo (reuses existing field)
     parent(p.tracers.sea_salt_u_mo_lowest_sfc) .=
@@ -193,16 +197,18 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
     get_pbl_z!(zi, p.precomputed.ᶜp, p.precomputed.ᶜT, ᶜz, p.params.grav, p.params.cp_d)
     buoyancy_flux = sfc_conditions.buoyancy_flux
     gustiness_coeff = FT(0.5)
-    parent(p.tracers.sea_salt_u_z1_ext_gust_sfc) .= monin_obukhov_wind_extrapolated.(z_c1_p, 
-                                                                                     z_c2_p, 
-                                                                                     u_z2_p, 
-                                                                                     L_p, 
-                                                                                     buoyancy_flux, 
-                                                                                     uf_params, 
-                                                                                     κ, 
-                                                                                     z₀; 
-                                                                                     gustiness_coeff, 
-                                                                                     zi = zi)
+    bflux_p = parent(buoyancy_flux)
+    zi_p    = parent(zi)
+    parent(p.tracers.sea_salt_u_z1_ext_gust_sfc) .= monin_obukhov_wind_extrapolated.(z_c1_p,
+                                                                                     z_c2_p,
+                                                                                     u_z2_p,
+                                                                                     L_p,
+                                                                                     uf_params,
+                                                                                     κ,
+                                                                                     z₀,
+                                                                                     bflux_p,
+                                                                                     zi_p;
+                                                                                     gustiness_coeff)
 
 
     @. p.tracers.sea_salt_emission_flux_sfc = 0
