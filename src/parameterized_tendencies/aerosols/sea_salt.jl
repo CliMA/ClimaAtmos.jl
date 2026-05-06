@@ -30,7 +30,8 @@ function monin_obukhov_wind_at_height(z_target, ustar, L,
     FT = typeof(ustar)
 
     # MOST profile, clamped to match SurfaceFluxes.jl internal bounds
-    ζ = ifelse(iszero(L), FT(0), clamp(z_target / L, FT(-100), FT(100)))
+    # ζ = ifelse(iszero(L), FT(0), clamp(z_target / L, FT(-100), FT(100)))
+    ζ = ifelse(iszero(L), FT(0), z_target / L)
     F_m = UF.dimensionless_profile(uf_params, z_target, ζ, z₀, UF.MomentumTransport())
     u_MOST = max(ustar / κ * F_m, FT(0))
 
@@ -62,8 +63,10 @@ function monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_par
     FT = typeof(u_anchor)
 
     # MOST extrapolated profile
-    ζ_target = ifelse(iszero(L), FT(0), clamp(z_target / L, FT(-100), FT(100)))
-    ζ_anchor = ifelse(iszero(L), FT(0), clamp(z_anchor / L, FT(-100), FT(100)))
+    # ζ_target = ifelse(iszero(L), FT(0), clamp(z_target / L, FT(-100), FT(100)))
+    # ζ_anchor = ifelse(iszero(L), FT(0), clamp(z_anchor / L, FT(-100), FT(100)))
+    ζ_target = ifelse(iszero(L), FT(0), z_target / L)
+    ζ_anchor = ifelse(iszero(L), FT(0), z_anchor / L)
     F_target = UF.dimensionless_profile(uf_params, z_target, ζ_target, z₀, UF.MomentumTransport())
     F_anchor = UF.dimensionless_profile(uf_params, z_anchor, ζ_anchor, z₀, UF.MomentumTransport())
     u_MOST = max(u_anchor * F_target / F_anchor, FT(0))
@@ -193,8 +196,11 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
     parent(p.tracers.sea_salt_u_actual_lowest_sfc) .= u_z1_p
 
     ᶜz = Fields.coordinate_field(axes(Y.c)).z
-    zi = p.scratch.ᶠtemp_field_level
-    get_pbl_z!(zi, p.precomputed.ᶜp, p.precomputed.ᶜT, ᶜz, p.params.grav, p.params.cp_d)
+    # IMPORTANT: must use a different scratch buffer than `u_10` (which aliases
+    # `ᶠtemp_field_level`) — otherwise `get_pbl_z!` overwrites the extrapolated
+    # wind that the emission loop below still reads.
+    zi = p.scratch.temp_field_level_2
+    get_pbl_z!(zi, p.precomputed.ᶜp, p.precomputed.ᶜT, ᶜz, CAP.grav(p.params), CAP.cp_d(p.params))
     buoyancy_flux = sfc_conditions.buoyancy_flux
     gustiness_coeff = FT(0.5)
     bflux_p = parent(buoyancy_flux)
