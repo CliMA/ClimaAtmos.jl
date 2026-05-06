@@ -249,6 +249,35 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     @. toa_flux = insolation_tuple.S
 end
 
+function set_insolation_variables!(Y, p, t, ctvi::ColumnTimeVaryingInsolation)
+    FT = Spaces.undertype(axes(Y.c))
+    params = p.params
+    insolation_params = CAP.insolation_params(params)
+    (; insolation_tuple, rrtmgp_model) = p.radiation
+
+    current_datetime =
+        t isa ITime ? ClimaUtilities.TimeManager.date(t) :
+        ctvi.start_date + Dates.Second(round(Int, t))
+
+    bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
+    cos_zenith =
+        Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
+    toa_flux = Fields.array2field(
+        rrtmgp_model.toa_flux,
+        axes(bottom_coords),
+    )
+
+    # Use explicit lat/lon from the insolation model (for column setups)
+    insolation_tuple .= Ref(Insolation.insolation(
+        current_datetime,
+        ctvi.latitude,
+        ctvi.longitude,
+        insolation_params,
+    ))
+    @. cos_zenith = max(insolation_tuple.μ, eps(FT))
+    @. toa_flux = insolation_tuple.S
+end
+
 NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
     Y = u

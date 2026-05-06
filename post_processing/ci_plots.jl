@@ -1315,6 +1315,7 @@ EDMFColumnPlots = Union{
     Val{:prognostic_edmfx_gcmdriven_column},
     Val{:prognostic_edmfx_tv_era5driven_column},
     Val{:prognostic_edmfx_soares_column},
+    Val{:prognostic_edmfx_armvaranal_column},
 }
 
 EDMFColumnPlotsWithPrecip = Union{
@@ -1628,3 +1629,6 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
     end
     make_plots_generic(output_paths, vars_lines; summary_files = [file_contour])
 end
+
+# ARM VARANAL single-column case (model output + sonde observation comparison)
+include(joinpath(@__DIR__, "plot_varanal.jl"))
