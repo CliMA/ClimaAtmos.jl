@@ -1058,6 +1058,7 @@ AquaplanetPlots = Union{
     Val{:longrun_aquaplanet_allsky_0M},
     Val{:longrun_aquaplanet_allsky_diagedmf_0M},
     Val{:longrun_aquaplanet_allsky_progedmf_0M},
+    Val{:longrun_aquaplanet_allsky_progedmf_0M_conv_gw},
     Val{:longrun_aquaplanet_allsky_0M_earth},
     Val{:longrun_aquaplanet_dyamond},
     Val{:longrun_aquaplanet_allsky_tvinsol_0M_slabocean},
@@ -1107,10 +1108,10 @@ function make_plots(
         period = "1h"
     end
     vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
-        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon
     end
     vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
-        get(simdir; short_name, reduction)
+        get(simdir; short_name, reduction, period)
     end
     short_names_spectra = ["ua", "wa", "ta", "hus"]
     vars_spectra =

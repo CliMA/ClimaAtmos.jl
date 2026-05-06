@@ -266,6 +266,30 @@ orographic_gravity_wave:
 non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
   value: false
+nogw_beres_source:
+  help: "Use Beres (2004) convective source spectrum for tropical NOGW (requires EDMF) [`false` (default), `true`]"
+  value: false
+beres_Q0_threshold:
+  help: "Minimum convective heating rate to activate Beres source (K/s, ~1 K/day = 1e-5)"
+  value: 1.0e-5
+beres_scale_factor:
+  help: "Dimensionless amplitude scaling for Beres momentum flux (controls total wave flux intensity)"
+  value: 2.0e-6
+beres_sigma_x:
+  help: "Convective cell horizontal half-width (m)"
+  value: 4000.0
+beres_nu_min:
+  help: "Minimum angular frequency for Beres integration (rad/s, period ~120 min)"
+  value: 8.727e-4
+beres_nu_max:
+  help: "Maximum angular frequency for Beres integration (rad/s, period ~10 min)"
+  value: 1.047e-2
+beres_n_nu:
+  help: "Number of quadrature points for Beres frequency integration (must be 4k+1: 5, 9, 13...)"
+  value: 9
+beres_h_heat_min:
+  help: "Minimum heating depth to activate Beres source (m), filters out shallow convection"
+  value: 1000.0
 dt_nogw:
   help: "Time between calling non-orographic gravity wave update"
   value: "1800secs"

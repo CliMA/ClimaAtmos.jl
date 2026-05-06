@@ -428,7 +428,40 @@ RayleighSponge(params) = RayleighSponge(;
 ### ------------------- ###
 
 abstract type AbstractGravityWave end
-Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
+
+"""
+    BeresSourceParams{FT}
+
+Parameters for the Beres (2004) convective gravity wave source spectrum.
+When used as the `beres_source` field in `NonOrographicGravityWave`, the
+Beres spectrum replaces the AD Gaussian in tropical columns where EDMF
+convective heating exceeds `Q0_threshold`.
+"""
+Base.@kwdef struct BeresSourceParams{FT}
+    Q0_threshold::FT      # K/s, minimum heating rate to activate Beres
+    beres_scale_factor::FT # dimensionless amplitude scaling
+    σ_x::FT              # m, convective cell horizontal half-width
+    ν_min::FT            # 1/s, min frequency (period ~120 min)
+    ν_max::FT            # 1/s, max frequency (period ~10 min)
+    n_ν::Int             # quadrature points (must be 4k+1: 5, 9, 13...)
+    n_h_avg::Int = 1     # number of h values to average over (1 = no averaging)
+    Δh_frac::FT = FT(0.1) # fractional half-range for h averaging: h ± Δh_frac * h
+    h_heat_min::FT = FT(1000.0) # m, minimum heating depth to activate (filters shallow convection)
+
+    function BeresSourceParams{FT}(args...) where {FT}
+        obj = new{FT}(args...)
+        if (obj.n_ν - 1) % 4 != 0
+            error(
+                "BeresSourceParams: n_ν must satisfy (n_ν - 1) % 4 == 0 " *
+                "(i.e. n_ν ∈ {5, 9, 13, ...}) for composite Boole's rule, " *
+                "got n_ν = $(obj.n_ν)",
+            )
+        end
+        return obj
+    end
+end
+
+Base.@kwdef struct NonOrographicGravityWave{FT, BS} <: AbstractGravityWave
     source_pressure::FT
     damp_pressure::FT
     source_height::FT
@@ -449,6 +482,7 @@ Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
     ϕ0_s::FT
     dϕ_n::FT
     dϕ_s::FT
+    beres_source::BS = nothing  # nothing → AD everywhere; BeresSourceParams → Beres in tropics
 end
 
 abstract type OrographicGravityWave <: AbstractGravityWave end
