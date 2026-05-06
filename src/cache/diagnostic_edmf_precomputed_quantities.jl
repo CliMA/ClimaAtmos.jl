@@ -551,7 +551,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         local_geometry_halflevel = Fields.field_values(
             Fields.level(Fields.local_geometry_field(Y.f), i - half),
         )
-        ∂x∂ξ_level = local_geometry_level.∂x∂ξ.components.data
+        ∂x∂ξ_level = local_geometry_level.metric.tensor.components.data
         end_index = fieldcount(eltype(∂x∂ξ_level)) # This will be 4 in 2D and 9 in 3D.
         ∂x³∂ξ³_level = ∂x∂ξ_level.:($end_index)
 

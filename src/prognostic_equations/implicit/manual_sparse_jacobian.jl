@@ -66,8 +66,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     DiagonalRow = DiagonalMatrixRow{FT}
     TridiagonalRow = TridiagonalMatrixRow{FT}
     BidiagonalRow_C3 = BidiagonalMatrixRow{C3{FT}}
-    TridiagonalRow_ACT12 = TridiagonalMatrixRow{Adjoint{FT, CT12{FT}}}
-    BidiagonalRow_ACT3 = BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
+    TridiagonalRow_ACT12 = TridiagonalMatrixRow{typeof(CT12(FT(0), FT(0))')}
+    BidiagonalRow_ACT3 = BidiagonalMatrixRow{typeof(CT3(FT(0))')}
     BidiagonalRow_C3xACT12 =
         BidiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT12{FT})')}
     TridiagonalRow_C3xACT3 =
