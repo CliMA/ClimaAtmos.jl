@@ -1,4 +1,4 @@
-341
+342
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+342
+- Add physical constrains callback for diagnostic EDMF
+
+341
 - Use two substeps for computing grid-mean microphysics tendencies to avoid fluctuations
   which can lead to grid-mean instabilities;
 - Pass zero w_0 to entrainment and detrainment computations for prognostic EDMF to avoid
@@ -56,8 +60,8 @@
 - Lower the area-fraction threshold for mixing SGS variables with the grid mean in the EDMF filter.
 
 335
-- Remove buoyancy clipping and allow negative buoyancy; solve sgs updraft velocity equation 
-  analytically in initialize_sgs_u₃ (and use 0 number of Newton iterations for solving this 
+- Remove buoyancy clipping and allow negative buoyancy; solve sgs updraft velocity equation
+  analytically in initialize_sgs_u₃ (and use 0 number of Newton iterations for solving this
   equation numerically by default.)
 
 334
