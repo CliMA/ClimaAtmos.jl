@@ -16,4 +16,3 @@ non_orographic_gravity_wave: true
 orographic_gravity_wave: "raw_topo"
 t_end: 12hours
 toml: [toml/diagnostic_edmfx_0M.toml]
-use_itime: true

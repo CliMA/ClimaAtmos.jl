@@ -18,4 +18,3 @@ netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
   - short_name: [wa, ua, va, ta, thetaa, ha]
     period: 5secs
-use_itime: true

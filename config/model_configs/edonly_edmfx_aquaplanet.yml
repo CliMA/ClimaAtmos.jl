@@ -6,4 +6,3 @@ turbconv: edonly_edmfx
 microphysics_model: "0M"
 t_end: 3hours
 dt_save_state_to_disk: 600secs
-use_itime: true
