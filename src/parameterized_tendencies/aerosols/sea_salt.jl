@@ -46,25 +46,32 @@ end
 
 
 """
-    monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, z₀)
+    monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, buoyancy_flux, uf_params, κ, z₀;
+                                               gustiness_coeff = nothing, zi = nothing)
 
-Reconstruct wind speed at `z_target` (m) by anchoring to a known model-level wind
-`u_anchor` at height `z_anchor` (m) via the MOST profile ratio:
-
-    u(z_target) = u_anchor · F(z_target) / F(z_anchor)
-
-where F(z) = UF.dimensionless_profile(uf_params, z, ζ, z₀, MomentumTransport()).
-κ cancels in the ratio and is therefore not a parameter. Anchoring to the model's
-dynamical wind is more consistent with the model state than the surface-only formula,
-particularly when z_anchor lies within the surface layer.
+Extrapolate wind speed at `z_target` (m) by anchoring to a known model-level wind
+`u_anchor` at height `z_anchor` (m) via the MOST profile ratio, with optional
+Beljaars (1995) free-convection gustiness correction applied.
 """
-function monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, z₀)
-    FT       = typeof(u_anchor)
+function monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, buoyancy_flux, uf_params, κ, z₀;
+                                                    gustiness_coeff = nothing, zi = nothing)
+    FT = typeof(u_anchor)
+
+    # MOST extrapolated profile
     ζ_target = ifelse(iszero(L), FT(0), clamp(z_target / L, FT(-100), FT(100)))
     ζ_anchor = ifelse(iszero(L), FT(0), clamp(z_anchor / L, FT(-100), FT(100)))
     F_target = UF.dimensionless_profile(uf_params, z_target, ζ_target, z₀, UF.MomentumTransport())
     F_anchor = UF.dimensionless_profile(uf_params, z_anchor, ζ_anchor, z₀, UF.MomentumTransport())
-    return max(u_anchor * F_target / F_anchor, FT(0))
+    u_MOST = max(u_anchor * F_target / F_anchor, FT(0))
+
+    # Beljaars (1995) free-convection gustiness floor
+    if !isnothing(gustiness_coeff) && !isnothing(zi)
+        w_star = cbrt(max(buoyancy_flux * zi, FT(0)))
+        u_gust = gustiness_coeff * w_star
+        return sqrt(u_MOST^2 + u_gust^2)
+    end
+
+    return u_MOST
 end
 
 
@@ -180,6 +187,23 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
 
     # Actual model wind at z₁ → ground truth for comparison (reuses existing field)
     parent(p.tracers.sea_salt_u_actual_lowest_sfc) .= u_z1_p
+
+    ᶜz = Fields.coordinate_field(axes(Y.c)).z
+    zi = p.scratch.ᶠtemp_field_level
+    get_pbl_z!(zi, p.precomputed.ᶜp, p.precomputed.ᶜT, ᶜz, p.params.grav, p.params.cp_d)
+    buoyancy_flux = sfc_conditions.buoyancy_flux
+    gustiness_coeff = FT(0.5)
+    parent(p.tracers.sea_salt_u_z1_ext_gust_sfc) .= monin_obukhov_wind_extrapolated.(z_c1_p, 
+                                                                                     z_c2_p, 
+                                                                                     u_z2_p, 
+                                                                                     L_p, 
+                                                                                     buoyancy_flux, 
+                                                                                     uf_params, 
+                                                                                     κ, 
+                                                                                     z₀; 
+                                                                                     gustiness_coeff, 
+                                                                                     zi = zi)
+
 
     @. p.tracers.sea_salt_emission_flux_sfc = 0
     @. p.tracers.sea_salt_u10_sfc = abs(u_10)   # stores u10_ext (extrapolated, used for flux)
