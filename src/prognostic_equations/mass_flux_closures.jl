@@ -235,92 +235,118 @@ area fractions, negative condensate masses, or condensate mass exceeding the
 available total moisture. Ideally, the need for this correction is minimized 
 by the numerical scheme.
 """
-enforce_physical_constraints!(Y, p, t, turbconv_model) = nothing
 
-function enforce_physical_constraints!(Y, p, t, turbconv_model::PrognosticEDMFX)
+# Private helper: clips grid-mean condensate tracers to non-negative values and
+# rescales the condensate sum so it cannot exceed the available total moisture.
+function enforce_grid_mean_microphysics_constraints!(Y, p, t)
+    FT = eltype(p.params)
+    ρq_cond = p.scratch.ᶜtemp_scalar
+    ratio = p.scratch.ᶜtemp_scalar_2
+    @. Y.c.ρq_lcl = max(FT(0), Y.c.ρq_lcl)
+    @. Y.c.ρq_icl = max(FT(0), Y.c.ρq_icl)
+    @. Y.c.ρq_rai = max(FT(0), Y.c.ρq_rai)
+    @. Y.c.ρq_sno = max(FT(0), Y.c.ρq_sno)
 
-    if p.atmos.edmfx_model.filter isa Val{true}
-        (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
-        FT = eltype(p.params)
-        n = n_mass_flux_subdomains(turbconv_model)
+    @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_icl + Y.c.ρq_rai + Y.c.ρq_sno
+    @. ratio = ifelse(
+        ρq_cond > eps(FT),
+        min(FT(1), max(FT(0), Y.c.ρq_tot) / ρq_cond),
+        FT(1),
+    )
+    @. Y.c.ρq_lcl *= ratio
+    @. Y.c.ρq_icl *= ratio
+    @. Y.c.ρq_rai *= ratio
+    @. Y.c.ρq_sno *= ratio
+    return nothing
+end
 
-        # Microphysics constraints
-        if p.atmos.microphysics_model isa
-           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+# Private helper: clips prognostic updraft area fraction and vertical velocity,
+# relaxes updraft mse/q_tot toward the grid mean when ρa is negligible, and
+# relaxes updraft microphysics tracers (q_lcl, q_icl, q_rai, q_sno, n_lcl, n_rai)
+# toward the grid mean while enforcing the subdomain mass conservation bound ρaχʲ < ρχ.
+# The microphysics tracer block is a no-op for 0M (has_field returns false).
+# No-op when n_prognostic_mass_flux_subdomains == 0 (DiagnosticEDMFX, etc.).
+function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
+    FT = eltype(p.params)
+    n = n_prognostic_mass_flux_subdomains(turbconv_model)
+    n == 0 && return nothing
+    (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
+    microphysics_tracers = (
+        (@name(c.sgsʲs.:(1).q_lcl), @name(c.ρq_lcl)),
+        (@name(c.sgsʲs.:(1).q_icl), @name(c.ρq_icl)),
+        (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
+        (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
+        (@name(c.sgsʲs.:(1).n_lcl), @name(c.ρn_lcl)),
+        (@name(c.sgsʲs.:(1).n_rai), @name(c.ρn_rai)),
+    )
+    for j in 1:n
+        # clip updraft area fraction and vertical velocity to non-negative values
+        @. Y.c.sgsʲs.:($$j).ρa = max(0, min(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
+        @. Y.f.sgsʲs.:($$j).u₃ =
+            C3(max(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0))
 
-            ρq_cond = p.scratch.ᶜtemp_scalar
-            ratio = p.scratch.ᶜtemp_scalar_2
-            @. Y.c.ρq_lcl = max(0, Y.c.ρq_lcl)
-            @. Y.c.ρq_icl = max(0, Y.c.ρq_icl)
-            @. Y.c.ρq_rai = max(0, Y.c.ρq_rai)
-            @. Y.c.ρq_sno = max(0, Y.c.ρq_sno)
-
-            @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_icl + Y.c.ρq_rai + Y.c.ρq_sno
-            @. ratio = ifelse(
-                ρq_cond > eps(FT),
-                min(1, max(0, Y.c.ρq_tot) / ρq_cond),
-                1,
-            )
-
-            @. Y.c.ρq_lcl *= ratio
-            @. Y.c.ρq_icl *= ratio
-            @. Y.c.ρq_rai *= ratio
-            @. Y.c.ρq_sno *= ratio
-        end
-
-        # Apply updraft constraints
-        microphysics_tracers = (
-            (@name(c.sgsʲs.:(1).q_lcl), @name(c.ρq_lcl)),
-            (@name(c.sgsʲs.:(1).q_icl), @name(c.ρq_icl)),
-            (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
-            (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
-            (@name(c.sgsʲs.:(1).n_lcl), @name(c.ρn_lcl)),
-            (@name(c.sgsʲs.:(1).n_rai), @name(c.ρn_rai)),
+        # clip updraft velocity to zero when face-averaged area fraction is negligible
+        @. Y.f.sgsʲs.:($$j).u₃ = ifelse(
+            ᶠinterp(Y.c.sgsʲs.:($$j).ρa) < ϵ_numerics(FT),
+            C3(0),
+            Y.f.sgsʲs.:($$j).u₃,
         )
-        for j in 1:n
-            # clip updraft velocity and area fraction to zero if they are negative
-            @. Y.c.sgsʲs.:($$j).ρa = max(0, min(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
-            @. Y.f.sgsʲs.:($$j).u₃ =
-                C3(max(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0))
 
-            # clip updraft velocity to zero if the face-averaged area fraction is negligible.
-            @. Y.f.sgsʲs.:($$j).u₃ =
-                ifelse(
-                    ᶠinterp(Y.c.sgsʲs.:($$j).ρa) < ϵ_numerics(FT),
-                    C3(0),
-                    Y.f.sgsʲs.:($$j).u₃,
-                )
+        # relax updraft mse and q_tot toward the grid mean when ρa is negligible
+        @. Y.c.sgsʲs.:($$j).mse = ifelse(
+            Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
+            ᶜh_tot - ᶜK,
+            Y.c.sgsʲs.:($$j).mse,
+        )
+        @. Y.c.sgsʲs.:($$j).q_tot = ifelse(
+            Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
+            specific(Y.c.ρq_tot, Y.c.ρ),
+            # ensure mass conservation: ρaχʲ < ρχ
+            min(
+                max(0, Y.c.sgsʲs.:($$j).q_tot),
+                max(0, Y.c.ρq_tot) / Y.c.sgsʲs.:($$j).ρa,
+            ),
+        )
 
-            # mix updraft mse and q_tot with the grid mean values if area fraction is negligible
-            @. Y.c.sgsʲs.:($$j).mse =
-                ifelse(
-                    Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
-                    ᶜh_tot - ᶜK,
-                    Y.c.sgsʲs.:($$j).mse,
-                )
-            @. Y.c.sgsʲs.:($$j).q_tot = ifelse(
+        # relax updraft microphysics tracers toward the grid mean when ρa is
+        # negligible; enforce mass conservation bound ρaχʲ < ρχ.
+        # has_field returns false for 0M configs, making this block a no-op.
+        MatrixFields.unrolled_foreach(microphysics_tracers) do (χʲ_name, ρχ_name)
+            MatrixFields.has_field(Y, χʲ_name) || return
+            ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+            @. ᶜχʲ = ifelse(
                 Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
-                specific(Y.c.ρq_tot, Y.c.ρ),
-                # ensure mass conservation in subdomain decomposition ρaχʲ < ρχ
-                min(
-                    max(0, Y.c.sgsʲs.:($$j).q_tot),
-                    max(0, Y.c.ρq_tot) / Y.c.sgsʲs.:($$j).ρa,
-                ),
+                specific(ᶜρχ, Y.c.ρ),
+                # ensure mass conservation: ρaχʲ < ρχ
+                min(max(0, ᶜχʲ), max(0, ᶜρχ) / Y.c.sgsʲs.:($$j).ρa),
             )
-
-            # mix the rest of the updraft microphysics tracers
-            MatrixFields.unrolled_foreach(microphysics_tracers) do (χʲ_name, ρχ_name)
-                MatrixFields.has_field(Y, χʲ_name) || return
-                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-                ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-                @. ᶜχʲ = ifelse(
-                    Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
-                    specific(ᶜρχ, Y.c.ρ),
-                    # ensure mass conservation in subdomain decomposition ρaχʲ < ρχ
-                    min(max(0, ᶜχʲ), max(0, ᶜρχ) / Y.c.sgsʲs.:($$j).ρa),
-                )
-            end
         end
-        set_precomputed_quantities!(Y, p, t)
     end
+    return nothing
+end
+
+"""
+    enforce_physical_constraints!(Y, p, t, atmos)
+
+Enforce physical consistency of the model state by calling the appropriate
+constraint helpers based on the active microphysics and turbulence-convection
+models. `set_precomputed_quantities!` is called exactly once at the end.
+"""
+function enforce_physical_constraints!(Y, p, t, atmos::AtmosModel)
+    # Grid-mean microphysics: non-negativity + condensate ≤ total moisture.
+    if atmos.microphysics_model isa
+       Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+        enforce_grid_mean_microphysics_constraints!(Y, p, t)
+    end
+
+    # EDMF updraft constraints: only active when the filter flag is enabled.
+    # Each helper is a no-op for DiagnosticEDMFX (n_prognostic_mass_flux_subdomains == 0).
+    if atmos.turbconv_model isa AbstractEDMF &&
+       atmos.edmfx_model.filter isa Val{true}
+        enforce_edmf_updraft_constraints!(Y, p, t, atmos.turbconv_model)
+    end
+
+    set_precomputed_quantities!(Y, p, t)
+    return nothing
 end

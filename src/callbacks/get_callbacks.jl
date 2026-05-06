@@ -632,8 +632,20 @@ function default_model_callbacks(model::AtmosModel; kwargs...)
             default_model_callbacks(getproperty(model, property); kwargs...)
         callbacks = (callbacks..., component_callbacks...)
     end
+    # Physical constraints callback is registered here rather than at the component
+    # level because the decision depends on both the microphysics model AND the
+    # turbconv model simultaneously — registering from each component independently
+    # would cause double-registration for EDMF + 1M/2M configurations.
+    if needs_enforce_physical_constraints(model)
+        callbacks = (callbacks..., enforce_physical_constraints_callback(kwargs[:dt]))
+    end
     return callbacks
 end
+
+needs_enforce_physical_constraints(model::AtmosModel) =
+    model.microphysics_model isa
+    Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
+    model.turbconv_model isa AbstractEDMF
 
 
 function default_model_callbacks(component; kwargs...)
@@ -675,12 +687,6 @@ function default_model_callbacks(gravity_wave::AtmosGravityWave;
         t_end,
         checkpoint_frequency;
     )
-end
-
-# Enforce physical constraints callbacks
-function default_model_callbacks(turbconv_model::PrognosticEDMFX;
-    dt)
-    return enforce_physical_constraints_callback(dt)
 end
 
 """
