@@ -133,6 +133,7 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
     sea_salt_u_z1_ext_sfc    = zeros(sfc_space)  # MOST extrapolated from z₂ to z₁ (m s⁻¹)
     sea_salt_u_mo_lowest_sfc = zeros(sfc_space)  # surface-only MOST at z₁ (m s⁻¹)
     sea_salt_u_actual_lowest_sfc = zeros(sfc_space)  # actual model wind at z₁ (m s⁻¹)
+    sea_salt_u_z1_ext_gust_sfc = zeros(sfc_space)  # MOST extrapolated from z₂ to z₁ with gustiness (m s⁻¹)
 
     return (;
         aerosol_cache..., o3_cache..., co2_cache_nt...,
@@ -143,5 +144,6 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
         sea_salt_u_z1_ext_sfc,
         sea_salt_u_mo_lowest_sfc,
         sea_salt_u_actual_lowest_sfc,
+        sea_salt_u_z1_ext_gust_sfc,
     )
 end

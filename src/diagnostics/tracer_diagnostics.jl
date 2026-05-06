@@ -417,6 +417,19 @@ add_diagnostic_variable!(
 )
 
 add_diagnostic_variable!(
+    short_name = "uz1_ext_gust",
+    long_name = "Extrapolated Wind Speed at z₁ with Gustiness",
+    units = "m s^-1",
+    comments = "Wind at z₁ extrapolated from z₂ model-level wind via MOST profile with Beljaars (1995) gustiness correction.",
+    compute! = (out, u, p, t) -> begin
+        :sea_salt_u_z1_ext_gust_sfc in propertynames(p.tracers) ||
+            error("sea_salt_u_z1_ext_gust_sfc not in cache — is sea_salt_emission_tendency! active?")
+        isnothing(out) ? copy(p.tracers.sea_salt_u_z1_ext_gust_sfc) :
+            (out .= p.tracers.sea_salt_u_z1_ext_gust_sfc)
+    end,
+)
+
+add_diagnostic_variable!(
     short_name = "uz1_ext",
     long_name = "Extrapolated Wind Speed at z₁ (Anchor z₂)",
     units = "m s^-1",
