@@ -349,3 +349,5 @@ function AtmosSimulation{FT}(;
         job_id, output_dir, start_date, t_end, writers, integrator,
     )
 end
+
+fill_with_nans!(sim::AtmosSimulation) = _fill_struct_with_nans!(sim)

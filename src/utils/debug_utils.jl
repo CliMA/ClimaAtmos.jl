@@ -227,19 +227,20 @@ function _fill_struct_with_nans!(x)
 end
 
 """
-    fill_with_nans!(sim::AtmosSimulation)
+    fill_with_nans!(u, p)
 
-Fill all prognostic state fields (`integrator.u`) and all auxiliary/cache fields
-(`integrator.p`) with NaN. Intended to be called immediately after an
-`AtmosSimulation` is constructed but before the first `step!`, so that any field
-not explicitly initialized by coupling handshake calls (`set_caches!`, `exchange!`,
-etc.) will propagate NaN loudly on the first timestep rather than silently
-producing wrong results.
+Fill all prognostic state fields `u` and all auxiliary/cache fields `p` with NaN.
+Useful when the integrator has been unpacked from the `AtmosSimulation`, e.g. from
+a coupler:
+
+```julia
+CA.fill_with_nans!(integrator.u, integrator.p)
+```
 
 Integer arrays, booleans, strings, and other non-float fields are left untouched.
 """
-function fill_with_nans!(sim::AtmosSimulation)
-    fill_with_nans_generic!(sim.integrator.u)
-    _fill_struct_with_nans!(sim.integrator.p)
+function fill_with_nans!(u, p)
+    fill_with_nans_generic!(u)
+    _fill_struct_with_nans!(p)
     return nothing
 end
