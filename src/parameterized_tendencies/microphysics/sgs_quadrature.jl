@@ -710,6 +710,8 @@ quadrature point partitions condensate automatically.
 )
     FT = typeof(μ_q)
 
+    # TODO - make performant if we decide to go all in on this approach.
+
     # Pass 1: quadrature mean of equilibrium condensate
     q_c_mean = integrate_over_sgs(quad, μ_q, μ_T, q′q′, T′T′, corr_Tq) do T_hat, q_hat
         q_sat = TD.q_vap_saturation(thermo_params, T_hat, ρ)  # mixed-phase

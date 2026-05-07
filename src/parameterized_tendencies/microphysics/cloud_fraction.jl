@@ -978,7 +978,8 @@ function set_cloud_fraction_diagnostic!(Y, p)
     # Environment state (temperature, total humidity, density) for quadrature
     ᶜρ_env, ᶜT_env, ᶜq_env = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
-    # --- σ_iso: compute once; reuse for environment and all updrafts ---
+    # Environment q_c standard deviation from quadrature σ_iso:
+    # compute once and reused for environment and all updrafts
     # Uses scratch ᶜtemp_scalar_5 (not touched by cloud_fraction Picard iteration)
     ᶜσ_iso = p.scratch.ᶜtemp_scalar_5
     @. ᶜσ_iso = compute_σ_qc_quadrature(
@@ -992,11 +993,9 @@ function set_cloud_fraction_diagnostic!(Y, p)
         ᶜρ_env,
     )
 
-    # --- Environment prognostic condensate and area fraction ---
+    # Environment and grid mean condensate
     (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     ᶜq_c_env = @. lazy(ᶜq_liq⁰ + ᶜq_ice⁰)
-
-    # Grid-mean prognostic condensate (numerator for Variant A)
     ᶜq_c_prog = @. lazy(specific(Y.c.ρq_lcl + Y.c.ρq_icl, Y.c.ρ))
 
     # Scalar tanh helper clamped to [0,1]; returns 0 when no condensate
@@ -1006,7 +1005,7 @@ function set_cloud_fraction_diagnostic!(Y, p)
         zero(FT),
     )
 
-    # --- Variant B: initialise with environment contribution ---
+    # CF as weighted sum
     if turbconv_model isa PrognosticEDMFX
         (; ᶜp) = p.precomputed
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
@@ -1020,31 +1019,31 @@ function set_cloud_fraction_diagnostic!(Y, p)
         @. p.precomputed.ᶜcloud_fraction_diag_wmean = cf_tanh(ᶜq_c_env, ᶜσ_iso)
     end
 
-    # --- Variant A: inter-subdomain σ² accumulator ---
+    # CF based on inter and intra-subdomain σ²
     # Uses scratch ᶜtemp_scalar_6 (not touched by cloud_fraction Picard iteration)
     ᶜσ2_inter = p.scratch.ᶜtemp_scalar_6
     ᶜσ2_inter .= zero(FT)
 
-    # --- Loop over EDMF updrafts: accumulate both variants in one pass ---
     if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
         (; ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
         for j in 1:n
+            # Compute the updraft cloud condensate
             ᶜρaʲ =
                 turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
                 p.precomputed.ᶜρaʲs.:($j)
             ᶜaʲ = @. lazy(draft_area(ᶜρaʲ, ᶜρʲs.:($$j)))
             ᶜq_c_j = @. lazy(ᶜq_liqʲs.:($$j) + ᶜq_iceʲs.:($$j))
 
-            # Variant B: add weighted per-updraft tanh
+            # Add weighted per-updraft tanh to diag_wmean CF
             @. p.precomputed.ᶜcloud_fraction_diag_wmean +=
                 ᶜaʲ * cf_tanh(ᶜq_c_j, ᶜσ_iso)
 
-            # Variant A: accumulate inter-subdomain σ²
+            # Compute inter-subdomain σ²
             @. ᶜσ2_inter += ᶜaʲ * (ᶜq_c_j - ᶜq_c_env)^2
         end
     end
 
-    # --- Variant A: combine σ_iso and σ_inter, then apply tanh ---
+    # Combine σ_iso and σ_inter, compute CF for diag_sigma CF
     @. p.precomputed.ᶜcloud_fraction_diag_sigma = cf_tanh(
         ᶜq_c_prog,
         sqrt(ᶜσ_iso^2 + ᶜσ2_inter),

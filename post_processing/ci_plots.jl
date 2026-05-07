@@ -1444,6 +1444,8 @@ function make_plots(
         "cl", "clw", "clwup", "cli", "cliup",
         precip_names...,
     ]
+    # PROPHET diagnostic cloud fractions — only included when available
+    prophet_names = ("clprophet_sigma", "clprophet_wmean")
     reduction = "inst"
 
     available_periods = ClimaAnalysis.available_periods(
@@ -1472,6 +1474,40 @@ function make_plots(
         group in var_groups_zt
     ]
 
+    # ------------------------------------------------------------------
+    # Cloud fraction comparison panel: cl vs clprophet_sigma vs clprophet_wmean
+    # Built for each simdir independently; silently skipped if the PROPHET
+    # fields are not present in the output (e.g., older reference runs).
+    # ------------------------------------------------------------------
+    cf_panel_files = String[]
+    for (si, simdir) in enumerate(simdirs)
+        prophet_cf_groups = try
+            cf_vars = map(["cl", "clprophet_sigma", "clprophet_wmean"]) do sn
+                v = get(simdir; short_name = sn, reduction, period)
+                is_box ? slice(v; x = 0.0, y = 0.0) : v
+            end
+            cf_at_end = map(v -> slice(v; time = LAST_SNAP), cf_vars)
+            # Override long_name to short labels for the legend
+            cf_at_end[1].attributes["long_name"] = "cl (current)"
+            cf_at_end[2].attributes["long_name"] = "clprophet_sigma"
+            cf_at_end[3].attributes["long_name"] = "clprophet_wmean"
+            [(cf_at_end...,)]
+        catch
+            nothing
+        end
+        isnothing(prophet_cf_groups) && continue
+
+        panel_path = make_plots_generic(
+            output_paths[si],
+            prophet_cf_groups;
+            output_name = "cloud_fraction_comparison_sim$(si)",
+            plot_fn = plot_edmf_vert_profile!,
+            MAX_NUM_COLS = 1,
+            MAX_NUM_ROWS = 1,
+        )
+        push!(cf_panel_files, panel_path)
+    end
+
     tmp_file = make_plots_generic(
         output_paths,
         output_name = "tmp",
@@ -1485,7 +1521,7 @@ function make_plots(
         output_paths,
         vcat((var_groups_zt...)...),
         plot_fn = plot_parsed_attribute_title!,
-        summary_files = [tmp_file],
+        summary_files = [cf_panel_files..., tmp_file],
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
     )
