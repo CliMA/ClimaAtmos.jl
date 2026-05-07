@@ -1,3 +1,4 @@
+import SurfaceFluxes as SF
 import SurfaceFluxes.Parameters as SFP
 import SurfaceFluxes.UniversalFunctions as UF
 
@@ -14,72 +15,32 @@ const SEA_SALT_BIN_BOUNDS = (
 )
 
 """
-    monin_obukhov_wind_at_height(z_target, ustar, L, buoyancy_flux, uf_params, κ, z₀;
-                                  gustiness_coeff = nothing, zi = nothing)
+    monin_obukhov_wind_at_height(z_target, ustar, L, uf_params, κ, z₀)
 
 Reconstruct mean wind speed at height `z_target` (m) from Monin-Obukhov similarity
-theory. `buoyancy_flux` and the keyword args `gustiness_coeff`/`zi` are only used for
-the optional Beljaars (1995) free-convection gustiness correction; pass `buoyancy_flux = 0`
-and omit the keyword args to get the plain MOST profile.
+theory.
 """
-function monin_obukhov_wind_at_height(z_target, ustar, L, 
-                                       uf_params, κ, z₀; 
-                                       buoyancy_flux = nothing,
-                                       gustiness_coeff = nothing, 
-                                       zi = nothing)
+function monin_obukhov_wind_at_height(z_target, ustar, L, uf_params, κ, z₀)
     FT = typeof(ustar)
-
-    # MOST profile, clamped to match SurfaceFluxes.jl internal bounds
-    # ζ = ifelse(iszero(L), FT(0), clamp(z_target / L, FT(-100), FT(100)))
     ζ = ifelse(iszero(L), FT(0), z_target / L)
     F_m = UF.dimensionless_profile(uf_params, z_target, ζ, z₀, UF.MomentumTransport())
-    u_MOST = max(ustar / κ * F_m, FT(0))
-
-    # Beljaars (1995) free-convection gustiness floor
-    if !isnothing(gustiness_coeff) && !isnothing(zi)
-        w_star = cbrt(max(buoyancy_flux * zi, FT(0)))
-        u_gust = gustiness_coeff * w_star
-        return sqrt(u_MOST^2 + u_gust^2)
-    end
-
-    return u_MOST
+    return max(ustar / κ * F_m, FT(0))
 end
 
 
 """
-    monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, κ, z₀,
-                                    buoyancy_flux = nothing, zi = nothing,
-                                    gustiness_coeff = nothing)
+    monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, κ, z₀)
 
 Extrapolate wind speed at `z_target` (m) by anchoring to a known model-level wind
-`u_anchor` at height `z_anchor` (m) via the MOST profile ratio, with optional
-Beljaars (1995) free-convection gustiness correction. Pass `buoyancy_flux`, `zi`,
-and `gustiness_coeff` (all non-nothing) to enable the gustiness branch; otherwise
-the plain MOST profile is returned. All optional args are positional (not keyword)
-so the function is GPU-broadcastable — `Pairs` kwargs aren't isbits.
+`u_anchor` at height `z_anchor` (m) via the MOST profile ratio.
 """
-function monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, κ, z₀,
-                                          buoyancy_flux = nothing, zi = nothing,
-                                          gustiness_coeff = nothing)
+function monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, κ, z₀)
     FT = typeof(u_anchor)
-
-    # MOST extrapolated profile
-    # ζ_target = ifelse(iszero(L), FT(0), clamp(z_target / L, FT(-100), FT(100)))
-    # ζ_anchor = ifelse(iszero(L), FT(0), clamp(z_anchor / L, FT(-100), FT(100)))
     ζ_target = ifelse(iszero(L), FT(0), z_target / L)
     ζ_anchor = ifelse(iszero(L), FT(0), z_anchor / L)
     F_target = UF.dimensionless_profile(uf_params, z_target, ζ_target, z₀, UF.MomentumTransport())
     F_anchor = UF.dimensionless_profile(uf_params, z_anchor, ζ_anchor, z₀, UF.MomentumTransport())
-    u_MOST = max(u_anchor * F_target / F_anchor, FT(0))
-
-    # Beljaars (1995) free-convection gustiness floor
-    if !isnothing(gustiness_coeff) && !isnothing(zi) && !isnothing(buoyancy_flux)
-        w_star = cbrt(max(buoyancy_flux * zi, FT(0)))
-        u_gust = gustiness_coeff * w_star
-        return sqrt(u_MOST^2 + u_gust^2)
-    end
-
-    return u_MOST
+    return max(u_anchor * F_target / F_anchor, FT(0))
 end
 
 
@@ -119,12 +80,6 @@ const SEA_SALT_BIN_R_INTEGRALS = ntuple(
 
 Compute the upward sea salt number flux (particles m⁻² s⁻¹) for the bin
 given by `bin_index` (1–5) using Gong (2003).
-
-The r-integral is precomputed once per bin at module load time
-(`SEA_SALT_BIN_R_INTEGRALS`). At runtime this reduces to:
-
-    F = bin_integral · u_10^3.41 · SST_factor(T_sfc)
-
 """
 function sea_salt_emission_flux(u_10, T_sfc, bin_index; SST_adj = false)
     FT = typeof(u_10)
@@ -162,7 +117,6 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
     surface_fluxes_params = CAP.surface_fluxes_params(p.params)
     uf_params = SFP.uf_params(surface_fluxes_params)
     κ = SFP.von_karman_const(surface_fluxes_params)
-    z₀ = SFP.z0m_fixed(surface_fluxes_params)
 
     # Center-level geometry and horizontal winds.
     # Both are on center-level-n space, which differs from the face-surface space
@@ -174,49 +128,42 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
     ustar_p = parent(sfc_conditions.ustar)
     L_p     = parent(sfc_conditions.obukhov_length)
 
+    # COARE 3.0 / Charnock momentum roughness over ocean (Fairall et al. 2003).
+    # Replaces the previous fixed `SFP.z0m_fixed` with a wave-state-dependent z₀
+    # that scales with ustar², closing most of the residual extrapolation bias
+    # over ocean. Land cells get a non-physical value here, but they are masked
+    # out downstream by `ocean_fraction = 0`.
+    # Compute via parent-array form: `temp_field_level` is on center space while
+    # `sfc_conditions.ustar` is on face space, so a Field-level `@.` would fail
+    # the space check.
+    roughness_spec = SF.COARE3RoughnessParams{FT}()
+    z0_eff = p.scratch.temp_field_level
+    z₀_p   = parent(z0_eff)
+    z₀_p  .= SF.momentum_roughness.(
+        roughness_spec, ustar_p, surface_fluxes_params, nothing,
+    )
+
     u_10 = p.scratch.ᶠtemp_field_level   # will hold u_10_ext for the emission loop
 
     # Surface-only MOST at 10 m → diagnostic u10_mo
-    @. u_10 = monin_obukhov_wind_at_height(
-        FT(10), sfc_conditions.ustar, sfc_conditions.obukhov_length, uf_params, κ, z₀,
+    parent(u_10) .= monin_obukhov_wind_at_height.(
+        FT(10), ustar_p, L_p, uf_params, κ, z₀_p,
     )
     @. p.tracers.sea_salt_u10_mo_sfc = abs(u_10)
 
     # Extrapolated u_10: anchor = z₁ model wind → used for emission flux and diagnostic u10_ext
-    parent(u_10) .= monin_obukhov_wind_extrapolated.(FT(10), z_c1_p, u_z1_p, L_p, uf_params, κ, z₀)
+    parent(u_10) .= monin_obukhov_wind_extrapolated.(FT(10), z_c1_p, u_z1_p, L_p, uf_params, κ, z₀_p)
 
     # z₁_ext: anchor = z₂ model wind, target = z₁ → diagnostic z1_ext
     parent(p.tracers.sea_salt_u_z1_ext_sfc) .=
-        monin_obukhov_wind_extrapolated.(z_c1_p, z_c2_p, u_z2_p, L_p, uf_params, κ, z₀)
+        monin_obukhov_wind_extrapolated.(z_c1_p, z_c2_p, u_z2_p, L_p, uf_params, κ, z₀_p)
 
     # z₁_mo: surface-only MOST at z₁ → diagnostic z1_mo (reuses existing field)
     parent(p.tracers.sea_salt_u_mo_lowest_sfc) .=
-        monin_obukhov_wind_at_height.(z_c1_p, ustar_p, L_p, uf_params, κ, z₀)
+        monin_obukhov_wind_at_height.(z_c1_p, ustar_p, L_p, uf_params, κ, z₀_p)
 
     # Actual model wind at z₁ → ground truth for comparison (reuses existing field)
     parent(p.tracers.sea_salt_u_actual_lowest_sfc) .= u_z1_p
-
-    ᶜz = Fields.coordinate_field(axes(Y.c)).z
-    # IMPORTANT: must use a different scratch buffer than `u_10` (which aliases
-    # `ᶠtemp_field_level`) — otherwise `get_pbl_z!` overwrites the extrapolated
-    # wind that the emission loop below still reads.
-    zi = p.scratch.temp_field_level_2
-    get_pbl_z!(zi, p.precomputed.ᶜp, p.precomputed.ᶜT, ᶜz, CAP.grav(p.params), CAP.cp_d(p.params))
-    buoyancy_flux = sfc_conditions.buoyancy_flux
-    gustiness_coeff = FT(0.5)
-    bflux_p = parent(buoyancy_flux)
-    zi_p    = parent(zi)
-    parent(p.tracers.sea_salt_u_z1_ext_gust_sfc) .= monin_obukhov_wind_extrapolated.(z_c1_p,
-                                                                                     z_c2_p,
-                                                                                     u_z2_p,
-                                                                                     L_p,
-                                                                                     uf_params,
-                                                                                     κ,
-                                                                                     z₀,
-                                                                                     bflux_p,
-                                                                                     zi_p,
-                                                                                     gustiness_coeff)
-
 
     @. p.tracers.sea_salt_emission_flux_sfc = 0
     @. p.tracers.sea_salt_u10_sfc = abs(u_10)   # stores u10_ext (extrapolated, used for flux)
