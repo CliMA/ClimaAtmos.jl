@@ -48,17 +48,18 @@ end
 
 """
     monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, κ, z₀,
-                                    buoyancy_flux = nothing, zi = nothing;
+                                    buoyancy_flux = nothing, zi = nothing,
                                     gustiness_coeff = nothing)
 
 Extrapolate wind speed at `z_target` (m) by anchoring to a known model-level wind
 `u_anchor` at height `z_anchor` (m) via the MOST profile ratio, with optional
 Beljaars (1995) free-convection gustiness correction. Pass `buoyancy_flux`, `zi`,
 and `gustiness_coeff` (all non-nothing) to enable the gustiness branch; otherwise
-the plain MOST profile is returned.
+the plain MOST profile is returned. All optional args are positional (not keyword)
+so the function is GPU-broadcastable — `Pairs` kwargs aren't isbits.
 """
 function monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, κ, z₀,
-                                          buoyancy_flux = nothing, zi = nothing;
+                                          buoyancy_flux = nothing, zi = nothing,
                                           gustiness_coeff = nothing)
     FT = typeof(u_anchor)
 
@@ -213,7 +214,7 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
                                                                                      κ,
                                                                                      z₀,
                                                                                      bflux_p,
-                                                                                     zi_p;
+                                                                                     zi_p,
                                                                                      gustiness_coeff)
 
 
