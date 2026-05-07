@@ -728,6 +728,78 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
+"""
+    AtmosNumerics(; kwargs...)
+
+Group struct holding numerical-method choices: per-equation upwinding schemes,
+diffusion timestepping mode, hyperdiffusion, limiter, and debug toggles.
+Accessed on `AtmosModel` via `model.numerics` or directly via `model.<field>`.
+
+# Fields
+
+## `energy_q_tot_upwinding` / `tracer_upwinding` / `edmfx_mse_q_tot_upwinding` / `edmfx_sgsflux_upwinding` / `edmfx_tracer_upwinding`
+Upwinding scheme for each tracer-advection family. Each accepts a `Val{Symbol}`
+(string/symbol values are converted to `Val` at construction).
+
+| Value | YAML | Description |
+|---|---|---|
+| `Val(:none)` | `"none"` | No upwinding (centered). |
+| `Val(:first_order)` | `"first_order"` | First-order upwind. |
+| `Val(:third_order)` | `"third_order"` | Third-order upwind. |
+| `Val(:boris_book)` | `"boris_book"` | Boris-Book limiter. |
+| `Val(:zalesak)` | `"zalesak"` | Zalesak limiter. |
+| `Val(:vanleer_limiter)` | `"vanleer_limiter"` | Van Leer limiter (default for grid-mean tracers). |
+
+The matching YAML keys are `energy_q_tot_upwinding`, `tracer_upwinding`,
+`edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`.
+
+## `test_dycore_consistency`
+Inject NaNs into selected equations for debugging. Default: `nothing`.
+
+| Value | YAML `test_dycore_consistency` | Description |
+|---|---|---|
+| `nothing` | `false` | Disabled. |
+| [`TestDycoreConsistency`](@ref) | `true` | Enable consistency check. |
+
+## `reproducible_restart`
+Force exact bit-reproducibility when restarting from a checkpoint.
+Default: `nothing`.
+
+| Value | YAML `reproducible_restart` | Description |
+|---|---|---|
+| `nothing` | `false` | Standard restart. |
+| [`ReproducibleRestart`](@ref) | `true` | Bit-reproducible restart. |
+
+## `limiter`
+SEM quasi-monotone limiter on tracer transport. Default: `nothing`.
+
+| Value | YAML `apply_sem_quasimonotone_limiter` | Description |
+|---|---|---|
+| `nothing` | `false` | Disabled. |
+| [`QuasiMonotoneLimiter`](@ref) | `true` | Apply ClimaCore's SEM quasi-monotone limiter. |
+
+## `diff_mode`
+Timestepping mode for vertical diffusion. Default: `Explicit()`.
+
+| Value | YAML `implicit_diffusion` | Description |
+|---|---|---|
+| [`Explicit`](@ref) | `false` | Explicit RHS treatment. |
+| [`Implicit`](@ref) | `true` | Included in the implicit Jacobian. |
+
+## `hyperdiff`
+Fourth-order hyperdiffusion. Default: a `Hyperdiffusion{Float32}` with
+ClimaAtmos defaults.
+
+| Value | YAML `hyperdiff` | Description |
+|---|---|---|
+| `nothing` | `false` / `nothing` | Disabled. |
+| [`Hyperdiffusion`](@ref) | `"Hyperdiffusion"` | Custom hyperdiffusion with coefficients from YAML/params. |
+| [`Hyperdiffusion`](@ref) (CAM_SE preset) | `"CAM_SE"` | CAM_SE hyperdiffusion preset; rejects custom coefficients. |
+
+# See also
+
+[`AtmosModel`](@ref), [`Hyperdiffusion`](@ref).
+"""
 struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
     """Enable specific upwinding schemes for specific equations"""
     energy_q_tot_upwinding::EN_UP
@@ -747,12 +819,6 @@ struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
-"""
-    AtmosNumerics(; kwargs...)
-
-Create an AtmosNumerics struct. Upwinding schemes can be specified as symbols or strings,
-which will be automatically converted to Val types for compile-time dispatch.
-"""
 function AtmosNumerics(;
     energy_q_tot_upwinding = :vanleer_limiter,
     tracer_upwinding = :vanleer_limiter,
@@ -837,12 +903,59 @@ end
 # Grouped structs to reduce AtmosModel type parameters
 
 """
-    SCMSetup
+    SCMSetup(; kwargs...)
 
-Groups Single-Column Model and Large-Eddy Simulation specific forcing, advection, and setup models.
+Group struct holding single-column-model (SCM) and large-eddy-simulation (LES)
+specific forcings: subsidence, external forcing, large-scale advection, and
+SCM Coriolis. These are primarily used for testing, calibration, and idealized
+research. Accessed on `AtmosModel` via `model.scm_setup` or directly.
 
-These components are primarily used internally for testing, calibration, and research purposes
-with single-column model setups. Most external users will not need these components.
+# Fields
+
+## `subsidence`
+Vertical subsidence profile. Default: `nothing`.
+
+| Value | YAML `subsidence` | Description |
+|---|---|---|
+| `nothing` | `~` | No subsidence. |
+| [`Subsidence`](@ref) | `"Bomex"` / `"Rico"` / `"DYCOMS"` | Case-specific subsidence profile. |
+
+`"DYCOMS"` requires `radiation_mode isa RadiationDYCOMS` so the divergence
+rate is consistent.
+
+## `external_forcing`
+External (e.g. GCM-driven or reanalysis-driven) forcing. Default: `nothing`.
+
+| Value | YAML `external_forcing` | Description |
+|---|---|---|
+| `nothing` | `~` | No external forcing. |
+| [`GCMForcing`](@ref) | `"GCM"` | GCM-driven SCM forcing read from a NetCDF cfsite file. |
+| [`ExternalDrivenTVForcing`](@ref) | `"ReanalysisTimeVarying"` / `"ReanalysisMonthlyAveragedDiurnal"` | Time-varying ERA5-driven forcing. Column-only. |
+| [`ISDACForcing`](@ref) | `"ISDAC"` | ISDAC case forcing. |
+
+## `ls_adv`
+Large-scale advection profile. Default: `nothing`.
+
+| Value | YAML `ls_adv` | Description |
+|---|---|---|
+| `nothing` | `~` | No large-scale advection. |
+| [`LargeScaleAdvection`](@ref) | `"Bomex"` / `"Rico"` / `"ARM_SGP"` / etc. | Case-specific advection of T and qt. |
+
+## `advection_test`
+Whether to enable the dycore advection test (passive scalar advection check).
+Default: `false`.
+
+## `scm_coriolis`
+SCM Coriolis forcing (geostrophic-wind specification). Default: `nothing`.
+
+| Value | YAML `scm_coriolis` | Description |
+|---|---|---|
+| `nothing` | `~` | No SCM Coriolis. |
+| `NamedTuple{(:prof_ug, :prof_vg, :coriolis_param)}` | `"Bomex"` / `"Rico"` / `"DYCOMS_RF01"` / `"DYCOMS_RF02"` / `"GABLS"` | Case-specific geostrophic profiles. |
+
+# See also
+
+[`AtmosModel`](@ref), [`AbstractForcing`](@ref).
 """
 @kwdef struct SCMSetup{S, EF, LA, AT, SC}
     subsidence::S = nothing
@@ -853,9 +966,87 @@ with single-column model setups. Most external users will not need these compone
 end
 
 """
-    AtmosWater
+    AtmosWater(; kwargs...)
 
-Groups moisture and microphysics-related models and types.
+Group struct holding moisture, microphysics, and cloud configuration. Accessed
+on `AtmosModel` via `model.water` or directly via `model.<field>` (the
+property-forwarding macro flattens these names).
+
+# Fields
+
+## `microphysics_model`
+Microphysics scheme used by the moisture-equation tendency.
+Default: `DryModel()`.
+
+| Value | YAML | Description |
+|---|---|---|
+| [`DryModel`](@ref) | `"dry"` | No moisture tracers; tendencies skipped. |
+| [`EquilibriumMicrophysics0M`](@ref) | `"0M"` | Bulk equilibrium 0-moment scheme. Requires `sgs_quadrature ≠ nothing`. |
+| [`NonEquilibriumMicrophysics1M`](@ref) | `"1M"` | 1-moment microphysics (cloud liquid, ice, rain, snow). |
+| [`NonEquilibriumMicrophysics2M`](@ref) | `"2M"` | 2-moment microphysics (number + mass concentrations). |
+| [`NonEquilibriumMicrophysics2MP3`](@ref) | `"2MP3"` | 2-moment warm rain + P3 ice scheme. |
+
+## `cloud_model`
+Cloud-fraction calculation used by radiation and microphysics.
+Default: `QuadratureCloud()`.
+
+| Value | YAML | Description |
+|---|---|---|
+| [`GridScaleCloud`](@ref) | `"grid_scale"` | Cloud fraction = 0 or 1 from grid-scale state. |
+| [`QuadratureCloud`](@ref) | `"quadrature"` | SGS quadrature over the moisture-distribution PDF. |
+| [`MLCloud`](@ref) | `"MLCloud"` | Neural-network cloud fraction. Requires the `cloud_fraction_nn` artifact. |
+
+## `microphysics_tendency_timestepping`
+Whether microphysics tendencies are integrated implicitly or explicitly.
+Default: `nothing` (set by `AtmosWater(config, params)` based on `implicit_microphysics`).
+
+| Value | YAML `implicit_microphysics` | Description |
+|---|---|---|
+| [`Explicit`](@ref) | `false` | Microphysics treated as an explicit RHS term. |
+| [`Implicit`](@ref) | `true` | Microphysics included in the implicit Jacobian. |
+
+## `tracer_nonnegativity_method`
+Method for enforcing tracer ≥ 0. Default: `nothing` (no enforcement).
+
+| Value | YAML | Description |
+|---|---|---|
+| `nothing` | `~` | No nonnegativity enforcement. |
+| [`TracerNonnegativityElementConstraint`](@ref) | `"elementwise_constraint"`[`_qtot`] | Redistribute tracer mass within each element. |
+| [`TracerNonnegativityVaporConstraint`](@ref) | `"vapor_constraint"`[`_qtot`] | Redistribute mass between tracer and vapor. |
+| [`TracerNonnegativityVaporTendency`](@ref) | `"vapor_tendency"` | Apply a tendency exchanging mass with vapor. |
+| [`TracerNonnegativityVerticalWaterBorrowing`](@ref) | `"vertical_water_borrowing"` | Vertical mass borrowing limiter. |
+
+The `_qtot` suffix on the YAML name (e.g. `"vapor_constraint_qtot"`) extends
+the constraint to the total water tracer; only `elementwise_constraint` and
+`vapor_constraint` accept it.
+
+## `sgs_quadrature`
+Subgrid-scale moisture-distribution quadrature. Default: `nothing` (no SGS quadrature).
+
+| Value | YAML `use_sgs_quadrature` | Description |
+|---|---|---|
+| `nothing` | `false` | No SGS quadrature; grid-mean tendencies. |
+| [`SGSQuadrature`](@ref) | `true` | Gauss-Hermite quadrature over the moisture PDF. |
+
+## `terminal_velocity_mode`
+Terminal-velocity treatment for precipitating species.
+Default: `DiagnosticTerminalVelocity()`.
+
+| Value | YAML `fixed_terminal_velocity` | Description |
+|---|---|---|
+| [`DiagnosticTerminalVelocity`](@ref) | `false` | Diagnostic velocity from microphysics scheme. |
+| [`FixedTerminalVelocity`](@ref) | `true` | Constant velocity from `params.fixed_*_terminal_velocity`. |
+
+# Cross-field constraints
+
+- `EquilibriumMicrophysics0M` requires `sgs_quadrature ≠ nothing`. Validated at
+  construction (`AtmosWater(config, params)` errors when violated).
+- `MLCloud` requires the `cloud_fraction_nn` artifact to be downloadable.
+
+# See also
+
+[`AtmosModel`](@ref), [`AtmosRadiation`](@ref) (for the cloud-in-radiation toggle),
+[`AbstractMicrophysicsModel`](@ref).
 """
 @kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TVM}
     microphysics_model::MM = DryModel()
@@ -867,9 +1058,52 @@ Groups moisture and microphysics-related models and types.
 end
 
 """
-    AtmosRadiation
+    AtmosRadiation(; kwargs...)
 
-Groups radiation-related models and types.
+Group struct holding radiation and insolation configuration. Accessed on
+`AtmosModel` via `model.radiation` or directly via `model.radiation_mode` /
+`model.insolation`.
+
+# Fields
+
+## `radiation_mode`
+Radiation parameterization. Default: `nothing` (no radiation).
+
+| Value | YAML `rad` | Description |
+|---|---|---|
+| `nothing` | `nothing` / `"nothing"` | No radiation. |
+| [`RRTMGPI.GrayRadiation`](@ref) | `"gray"` | RRTMGP gray-atmosphere shortwave + longwave. |
+| [`RRTMGPI.ClearSkyRadiation`](@ref) | `"clearsky"` | RRTMGP clear-sky radiation. |
+| [`RRTMGPI.AllSkyRadiation`](@ref) | `"allsky"` | RRTMGP with cloud optics. |
+| [`RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics`](@ref) | `"allskywithclear"` | All-sky with clear-sky diagnostic outputs. |
+| [`HeldSuarezForcing`](@ref) | `"held_suarez"` | Held-Suarez idealized thermal forcing. |
+| [`RadiationDYCOMS`](@ref) | (setup-driven) | DYCOMS-RF case longwave parameterization. |
+| [`RadiationISDAC`](@ref) | (setup-driven) | ISDAC case radiation. |
+| [`RadiationTRMM_LBA`](@ref) | (setup-driven) | TRMM-LBA case radiation. |
+
+When `radiation_mode isa HeldSuarezForcing`, the YAML driver also forces
+`disable_momentum_vertical_diffusion = true` on `VerticalDiffusion`.
+
+## `insolation`
+Insolation source. Default: `IdealizedInsolation()`.
+
+| Value | YAML `insolation` | Description |
+|---|---|---|
+| [`IdealizedInsolation`](@ref) | `"idealized"` | Diurnally varying insolation, fixed orbit. |
+| [`TimeVaryingInsolation`](@ref) | `"timevarying"` | Realistic time-varying solar declination. |
+| [`RCEMIPIIInsolation`](@ref) | `"rcemipii"` | RCEMIP-II prescribed solar geometry. |
+| [`GCMDrivenInsolation`](@ref) | `"gcmdriven"` | Insolation read from GCM forcing file. |
+| [`ExternalTVInsolation`](@ref) | `"externaldriventv"` | Externally driven time-varying insolation. |
+
+# Cross-field constraints
+
+- All-sky and clear-sky modes interact with `AtmosWater.cloud_model` and the
+  `prescribe_clouds_in_radiation` YAML knob. Setting `idealized_clouds: true`
+  with `prescribe_clouds_in_radiation` is rejected at construction.
+
+# See also
+
+[`AtmosModel`](@ref), [`AtmosWater`](@ref) (cloud model coupling).
 """
 @kwdef struct AtmosRadiation{RM, IN}
     radiation_mode::RM = nothing
@@ -877,9 +1111,71 @@ Groups radiation-related models and types.
 end
 
 """
-    AtmosTurbconv
+    AtmosTurbconv(; kwargs...)
 
-Groups turbulence convection-related models and types.
+Group struct holding turbulence-and-convection configuration: EDMF mass-flux
+modeling, sub-grid-scale (SGS) timestepping modes, and large-eddy-simulation
+(LES) closures. Accessed on `AtmosModel` via `model.turbconv` or directly via
+`model.<field>`.
+
+# Fields
+
+## `edmfx_model`
+EDMF (eddy-diffusivity / mass-flux) model configuration. Default: `nothing`.
+
+Pass `nothing` to disable EDMF, or an [`EDMFXModel`](@ref) instance whose
+fields select the entrainment/detrainment closure, mass-flux toggles, and
+scale-blending method. See [`EDMFXModel`](@ref) for its options.
+
+## `turbconv_model`
+Turbulent-convection scheme. Default: `nothing`.
+
+| Value | YAML `turbconv` | Description |
+|---|---|---|
+| `nothing` | `~` | No turbconv scheme. |
+| [`EDOnlyEDMFX`](@ref) | `"edonly_edmfx"` | Eddy-diffusivity only (no mass flux). |
+| [`PrognosticEDMFX`](@ref) | `"prognostic_edmfx"` | Prognostic EDMF with prognostic updrafts. |
+| [`DiagnosticEDMFX`](@ref) | `"diagnostic_edmfx"` | Diagnostic EDMF with diagnostic updrafts. |
+
+## `sgs_adv_mode` / `sgs_entr_detr_mode` / `sgs_nh_pressure_mode` / `sgs_vertdiff_mode` / `sgs_mf_mode`
+Timestepping mode for the corresponding SGS term. Each accepts:
+
+| Value | YAML | Description |
+|---|---|---|
+| [`Explicit`](@ref) | `false` | Treat the term as an explicit RHS contribution. |
+| [`Implicit`](@ref) | `true` | Include the term in the implicit Jacobian. |
+
+The matching YAML keys are `implicit_sgs_advection`, `implicit_sgs_entr_detr`,
+`implicit_sgs_nh_pressure`, `implicit_sgs_vertdiff`, `implicit_sgs_mass_flux`.
+Default: `Explicit()` for all five.
+
+## `smagorinsky_lilly`
+Smagorinsky-Lilly LES eddy viscosity. Default: `nothing`.
+
+| Value | YAML `smagorinsky_lilly` | Description |
+|---|---|---|
+| `nothing` | `~` | Disabled. |
+| [`SmagorinskyLilly`](@ref) | `"UVW"` / `"UV"` / `"W"` / `"UV_W"` | Smagorinsky-Lilly with the chosen axis combination. |
+
+## `amd_les`
+Anisotropic Minimum Dissipation LES closure. Default: `nothing`.
+
+| Value | YAML `amd_les` | Description |
+|---|---|---|
+| `nothing` | `false` | Disabled. |
+| [`AnisotropicMinimumDissipation`](@ref) | `true` | AMD closure with coefficient from `params.c_amd`. |
+
+## `constant_horizontal_diffusion`
+Constant horizontal diffusion. Default: `nothing`.
+
+| Value | YAML `constant_horizontal_diffusion` | Description |
+|---|---|---|
+| `nothing` | `false` | Disabled. |
+| [`ConstantHorizontalDiffusion`](@ref) | `true` | Constant `D` from `params.constant_horizontal_diffusion_D`. |
+
+# See also
+
+[`AtmosModel`](@ref), [`EDMFXModel`](@ref), [`AbstractEDMF`](@ref).
 """
 @kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD, CHD}
     edmfx_model::EDMFX = nothing
@@ -895,9 +1191,35 @@ Groups turbulence convection-related models and types.
 end
 
 """
-    AtmosGravityWave
+    AtmosGravityWave(; kwargs...)
 
-Groups gravity wave-related models and types.
+Group struct holding non-orographic and orographic gravity-wave drag
+configuration. Accessed on `AtmosModel` via `model.gravity_wave` or directly
+via `model.non_orographic_gravity_wave` / `model.orographic_gravity_wave`.
+
+# Fields
+
+## `non_orographic_gravity_wave`
+Non-orographic gravity-wave-drag parameterization. Default: `nothing`.
+
+| Value | YAML `non_orographic_gravity_wave` | Description |
+|---|---|---|
+| `nothing` | `false` | Disabled. |
+| [`NonOrographicGravityWave`](@ref) | `true` | NGW spectral drag (Alexander-Dunkerton 1999 style). |
+
+## `orographic_gravity_wave`
+Orographic gravity-wave-drag parameterization. Default: `nothing`.
+
+| Value | YAML `orographic_gravity_wave` | Description |
+|---|---|---|
+| `nothing` | `~` | Disabled. |
+| [`LinearOrographicGravityWave`](@ref) | `"linear"` | Linear-mountain wave parameterization. |
+| [`FullOrographicGravityWave`](@ref) | `"raw_topo"` | Full nonlinear scheme using preprocessed topography drag tensor (computed at runtime). |
+| [`FullOrographicGravityWave`](@ref) | `"gfdl_restart"` | Full nonlinear scheme using GFDL-style precomputed drag tensor (loaded from artifact). |
+
+# See also
+
+[`AtmosModel`](@ref), [`OrographicGravityWave`](@ref), [`AbstractGravityWave`](@ref).
 """
 @kwdef struct AtmosGravityWave{NOGW, OGW}
     non_orographic_gravity_wave::NOGW = nothing
@@ -905,9 +1227,33 @@ Groups gravity wave-related models and types.
 end
 
 """
-    AtmosSponge
+    AtmosSponge(; kwargs...)
 
-Groups sponge-related models and types.
+Group struct holding viscous and Rayleigh sponge configuration. Sponges damp
+upward-propagating waves near the model top. Accessed on `AtmosModel` via
+`model.sponge` or directly via `model.viscous_sponge` / `model.rayleigh_sponge`.
+
+# Fields
+
+## `viscous_sponge`
+Viscous sponge (Laplacian damping above `zd`). Default: `nothing`.
+
+| Value | YAML `viscous_sponge` | Description |
+|---|---|---|
+| `nothing` | `false` / `"none"` | Disabled. |
+| [`ViscousSponge`](@ref) | `true` / `"ViscousSponge"` | Damping with coefficients from `params.zd_viscous` and `params.kappa_2_sponge`. |
+
+## `rayleigh_sponge`
+Rayleigh sponge (linear-relaxation damping above `zd`). Default: `nothing`.
+
+| Value | YAML `rayleigh_sponge` | Description |
+|---|---|---|
+| `nothing` | `false` | Disabled. |
+| [`RayleighSponge`](@ref) | `true` / `"RayleighSponge"` | Damping with coefficients from `params.zd_rayleigh`, `alpha_rayleigh_*`. |
+
+# See also
+
+[`AtmosModel`](@ref), [`SpongeModel`](@ref).
 """
 @kwdef struct AtmosSponge{VS, RS}
     viscous_sponge::VS = nothing
@@ -915,9 +1261,46 @@ Groups sponge-related models and types.
 end
 
 """
-    AtmosSurface
+    AtmosSurface(; kwargs...)
 
-Groups surface-related models and types.
+Group struct holding surface-temperature, surface-model, and albedo
+configuration. Accessed on `AtmosModel` via `model.surface` or directly via
+`model.sfc_temperature` / `model.surface_model` / `model.surface_albedo`.
+
+# Fields
+
+## `sfc_temperature`
+Surface-temperature distribution (set by the chosen `Setups.*` setup type, not
+by a YAML knob). Default: `ZonallySymmetricSST()`.
+
+| Value | Description |
+|---|---|
+| [`ZonallySymmetricSST`](@ref) | Latitude-dependent zonally-symmetric SST. |
+| [`RCEMIPIISST`](@ref) | RCEMIP-II prescribed SST distribution. |
+| [`ExternalTVColumnSST`](@ref) | Time-varying SST from external forcing column. |
+
+## `surface_model`
+Surface-model treatment (prognostic vs. prescribed).
+Default: `PrescribedSST()`.
+
+| Value | YAML `prognostic_surface` | Description |
+|---|---|---|
+| [`PrescribedSST`](@ref) | `false` / `"PrescribedSST"` | Surface temperature is prescribed by `sfc_temperature`. |
+| [`SlabOceanSST`](@ref) | `true` / `"SlabOceanSST"` | Slab-ocean prognostic SST. |
+
+## `surface_albedo`
+Surface albedo model. Default: `ConstantAlbedo{Float32}(; α = 0.07)` (low value
+suitable for ocean surfaces).
+
+| Value | YAML `albedo_model` | Description |
+|---|---|---|
+| [`ConstantAlbedo`](@ref) | `"ConstantAlbedo"` | Constant albedo from `params.idealized_ocean_albedo`. |
+| [`RegressionFunctionAlbedo`](@ref) | `"RegressionFunctionAlbedo"` | Refractive-index based regression. Requires `radiation_mode ≠ nothing`. |
+| [`CouplerAlbedo`](@ref) | `"CouplerAlbedo"` | Albedo set externally by the coupler. |
+
+# See also
+
+[`AtmosModel`](@ref), [`AbstractSST`](@ref), [`AbstractSurfaceTemperature`](@ref).
 """
 @kwdef struct AtmosSurface{ST, SM, SA}
     sfc_temperature::ST = ZonallySymmetricSST()
@@ -997,122 +1380,67 @@ Base.broadcastable(x::AtmosModel) = tuple(x)
 """
     AtmosModel(; kwargs...)
 
-Create an AtmosModel with sensible defaults.
+Create an `AtmosModel` with sensible defaults. Configuration is grouped by
+subsystem; every kwarg either targets a group struct directly or is forwarded
+to its owning group via the `@generated` `getproperty` flattening.
 
-This constructor provides sensible defaults for a minimal dry atmospheric model with full customization through keyword arguments.
+# Subsystem groups
 
-All model components are automatically organized into appropriate grouped sub-structs
-internally:
-- [`AtmosWater`](@ref)
-- [`SCMSetup`](@ref)
-- [`AtmosRadiation`](@ref)
-- [`AtmosTurbconv`](@ref)
-- [`AtmosGravityWave`](@ref)
-- [`AtmosSponge`](@ref)
-- [`AtmosSurface`](@ref)
-- [`AtmosNumerics`](@ref)
-The one exception is the top-level `disable_surface_flux_tendency` field, which is not grouped.
+Each group's docstring lists the available options for its fields:
 
-# Property Access
-Arguments can be accessed both directly and through grouped structs:
+- [`AtmosWater`](@ref) — moisture, microphysics, clouds
+- [`AtmosRadiation`](@ref) — radiation mode, insolation
+- [`AtmosTurbconv`](@ref) — EDMF, turbconv scheme, SGS timestepping, LES closures
+- [`AtmosGravityWave`](@ref) — non-orographic and orographic gravity-wave drag
+- [`AtmosSponge`](@ref) — viscous and Rayleigh sponges
+- [`AtmosSurface`](@ref) — surface temperature, surface model, albedo
+- [`AtmosNumerics`](@ref) — upwinding, hyperdiffusion, limiter, debug toggles
+- [`SCMSetup`](@ref) — single-column-model forcings (subsidence, ls_adv, etc.)
+
+Two top-level fields are not grouped:
+
+- `vertical_diffusion`: `nothing`, [`VerticalDiffusion`](@ref), or [`DecayWithHeightDiffusion`](@ref)
+- `disable_surface_flux_tendency::Bool`: skip surface-flux momentum tendency
+
+The `prescribed_flow` field also lives at the top level; see
+[`ShipwayHill2012VelocityProfile`](@ref).
+
+# Flat vs. grouped access
+
+Kwargs accept either flat field names or group structs:
+
 ```julia
+# Flat field name — forwarded to the right group automatically
 model = AtmosModel(; microphysics_model = EquilibriumMicrophysics0M())
-model.microphysics_model        # Direct access
-model.water.microphysics_model  # Grouped access
+
+# Or pass a complete group struct
+model = AtmosModel(; water = AtmosWater(; microphysics_model = EquilibriumMicrophysics0M()))
+
+# Property access works both ways
+model.microphysics_model        # forwarded
+model.water.microphysics_model  # explicit
 ```
 
-# Example: Minimal model (uses defaults)
-```julia
-model = AtmosModel()  # Creates a basic dry atmospheric model
-```
+# Examples
 
-# Example: Dry model with Held-Suarez forcing and hyperdiffusion
 ```julia
-model = AtmosModel(;
-    radiation_mode = HeldSuarezForcing(),
-    hyperdiff = Hyperdiffusion(;
-        ν₄_vorticity_coeff = 1e15,
-        divergence_damping_factor = 1.0,
-        prandtl_number = 1.0
-    )
-)
-```
+# Minimal: dry atmosphere with defaults
+model = AtmosModel()
 
-# Example: Moist model with full radiation
-```julia
+# Held-Suarez idealized forcing
+model = AtmosModel(; radiation_mode = HeldSuarezForcing())
+
+# Moist global model with all-sky radiation
 model = AtmosModel(;
     microphysics_model = EquilibriumMicrophysics0M(),
     radiation_mode = RRTMGPI.AllSkyRadiation(),
 )
 ```
 
-# Default Configuration
-The default AtmosModel provides:
-- **Dry atmosphere**: DryModel()
-- **Basic surface**: PrescribedSST() with ZonallySymmetricSST()
-- **Cloud model**: QuadratureCloud() with SGS quadrature
-- **Idealized insolation**: IdealizedInsolation()
-- **Conservative numerics**: First-order upwinding with Explicit() timestepping
-- **No advanced physics**: No radiation, turbulence, or forcing by default
+# Convenience constructors
 
-# Available Structs
-
-## AtmosWater
-- `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
-- `cloud_model`: GridScaleCloud(), QuadratureCloud()
-- `microphysics_tendency_timestepping`: Explicit(), Implicit()
-- `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)
-- `terminal_velocity_mode`: FixedTerminalVelocity or DiagnosticTerminalVelocity
-
-
-## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
-Internal testing and calibration components for single-column setups:
-- `subsidence`: nothing or Bomex_subsidence, Rico_subsidence, DYCOMS_subsidence, etc
-- `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
-- `ls_adv`: nothing or LargeScaleAdvection()
-- `advection_test`: Bool
-- `scm_coriolis`: nothing or NamedTuple `(; prof_ug, prof_vg, coriolis_param)`
-
-## AtmosRadiation
-- `radiation_mode`: Radiation and atmospheric forcing modes
-  - Global radiation: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation()
-  - Atmospheric forcing: HeldSuarezForcing() (for idealized dynamics)
-  - SCM-specific: RadiationDYCOMS(), RadiationISDAC(), RadiationTRMM_LBA()
-- `insolation`: IdealizedInsolation(), TimeVaryingInsolation(), etc.
-
-## AtmosTurbconv
-- `edmfx_model`: EDMFXModel()
-- `turbconv_model`: nothing, PrognosticEDMFX(), DiagnosticEDMFX(), EDOnlyEDMFX()
-- `sgs_adv_mode`, `sgs_entr_detr_mode`, `sgs_nh_pressure_mode`, `sgs_vertdiff_mode`, `sgs_mf_mode`: Explicit(), Implicit()
-- `smagorinsky_lilly`: nothing or SmagorinskyLilly()
-- `amd_les`: nothing or AnisotropicMinimumDissipation()
-- `constant_horizontal_diffusion`: nothing or ConstantHorizontalDiffusion()
-
-## AtmosGravityWave
-- `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave()
-- `orographic_gravity_wave`: nothing or OrographicGravityWave()
-
-## AtmosSponge
-- `viscous_sponge`: nothing or ViscousSponge()
-- `rayleigh_sponge`: nothing or RayleighSponge()
-
-## AtmosSurface
-- `sfc_temperature`: ZonallySymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
-- `surface_model`: PrescribedSST(), SlabOceanSST()
-- `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
-
-## AtmosNumerics
-- `energy_q_tot_upwinding`, `tracer_upwinding`, `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`: Val() upwinding schemes
-- `test_dycore_consistency`: nothing or TestDycoreConsistency() for debugging
-- `limiter`: nothing or QuasiMonotoneLimiter()
-- `vertical_water_borrowing_species`: internal value `nothing` (apply to all tracers; config default is `~`), empty tuple (apply to none; config `[]`), or Tuple{Symbol, ...} from config string/list (e.g. `["ρq_tot"]`) to apply only to those tracers. See config `vertical_water_borrowing_species` in default_config.yml for YAML options.
-  (Note: The vertical water borrowing limiter is created in the cache based on `AtmosWaterModel.tracer_nonnegativity_method`)
-- `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
-- `hyperdiff`: nothing or Hyperdiffusion()
-
-## Top-level Options
-- `vertical_diffusion`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
-- `disable_surface_flux_tendency`: Bool
+For common scientifically-meaningful configurations, see the
+[`Presets`](@ref ClimaAtmos.Presets) module.
 """
 function AtmosModel(; kwargs...)
     group_kwargs, atmos_model_kwargs = _partition_atmos_model_kwargs(kwargs)
