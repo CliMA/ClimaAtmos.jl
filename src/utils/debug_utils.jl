@@ -212,7 +212,7 @@ function _fill_struct_with_nans!(x)
     if x isa Fields.Field
         parent(x) .= NaN
     elseif x isa AbstractArray{<:AbstractFloat}
-        fill!(x, NaN)
+        ismutabletype(T) && fill!(x, NaN)
     elseif x isa Fields.FieldVector || x isa NamedTuple || x isa Tuple
         for pn in propertynames(x)
             _fill_struct_with_nans!(getproperty(x, pn))
