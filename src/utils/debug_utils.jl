@@ -173,6 +173,7 @@ fill_with_nans_generic!(var::Number) = nothing
 fill_with_nans_generic!(var::AbstractString) = nothing
 fill_with_nans_generic!(var::Bool) = nothing
 fill_with_nans_generic!(var::Nothing) = nothing
+fill_with_nans_generic!(var::AbstractArray{<:AbstractFloat}) = fill!(var, NaN)
 fill_with_nans_generic!(var::Any) = nothing # TODO: should we try to catch more types?
 
 fill_with_nans_generic!(var::Number, colidx) = nothing
@@ -198,3 +199,47 @@ fill_with_nans!(p) =
     fill_with_nans!(p, p.atmos.numerics.test_dycore_consistency)
 fill_with_nans!(p, ::Nothing) = nothing
 fill_with_nans!(p, ::TestDycoreConsistency) = fill_with_nans_generic!(p)
+
+#####
+##### Deep struct-recursive NaN fill (for AtmosSimulation)
+#####
+
+# Recursively fill all AbstractFloat arrays and ClimaCore Fields in an arbitrary
+# Julia struct. Unlike fill_with_nans_generic!, this descends into plain structs
+# (not just NamedTuple/FieldVector) so it can traverse AtmosCache.
+function _fill_struct_with_nans!(x)
+    T = typeof(x)
+    if x isa Fields.Field
+        parent(x) .= NaN
+    elseif x isa AbstractArray{<:AbstractFloat}
+        fill!(x, NaN)
+    elseif x isa Fields.FieldVector || x isa NamedTuple || x isa Tuple
+        for pn in propertynames(x)
+            _fill_struct_with_nans!(getproperty(x, pn))
+        end
+    elseif !isprimitivetype(T) && fieldcount(T) > 0 &&
+           !(x isa Union{Nothing, AbstractString, Bool, Symbol, DataType, Function})
+        for fname in fieldnames(T)
+            isdefined(x, fname) && _fill_struct_with_nans!(getfield(x, fname))
+        end
+    end
+    return nothing
+end
+
+"""
+    fill_with_nans!(sim::AtmosSimulation)
+
+Fill all prognostic state fields (`integrator.u`) and all auxiliary/cache fields
+(`integrator.p`) with NaN. Intended to be called immediately after an
+`AtmosSimulation` is constructed but before the first `step!`, so that any field
+not explicitly initialized by coupling handshake calls (`set_caches!`, `exchange!`,
+etc.) will propagate NaN loudly on the first timestep rather than silently
+producing wrong results.
+
+Integer arrays, booleans, strings, and other non-float fields are left untouched.
+"""
+function fill_with_nans!(sim::AtmosSimulation)
+    fill_with_nans_generic!(sim.integrator.u)
+    _fill_struct_with_nans!(sim.integrator.p)
+    return nothing
+end
