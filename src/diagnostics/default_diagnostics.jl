@@ -288,7 +288,7 @@ function default_diagnostics(
     t_start;
     output_writer,
 )
-    precip_diagnostics = ["husra", "hussn"]
+    precip_diagnostics = ["husra", "hussn", "rwp", "swp"]
     average_func = frequency_averages(duration)
     return [
         _moist_default_diagnostics(duration, start_date, t_start; output_writer)...,
@@ -303,7 +303,7 @@ function default_diagnostics(
     t_start;
     output_writer,
 )
-    precip_diagnostics = ["husra", "hussn", "cdnc", "ncra"]
+    precip_diagnostics = ["husra", "hussn", "rwp", "swp", "cdnc", "ncra"]
     average_func = frequency_averages(duration)
     return [
         _moist_default_diagnostics(duration, start_date, t_start; output_writer)...,
