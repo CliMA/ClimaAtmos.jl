@@ -1012,12 +1012,38 @@ end
 
 add_diagnostic_variable!(short_name = "rwp", units = "kg m^-2",
     long_name = "Rainwater Path",
-    standard_name = "atmosphere_mass_content_of_rainwater",
     comments = """
     The total mass of rainwater per unit area.
     (not just the area of the cloudy portion of the column).
     """,
     compute = compute_rwp,
+)
+
+###
+# Snowwater path (2d)
+###
+compute_swp(state, cache, time) =
+    compute_swp(state, cache, time, cache.atmos.microphysics_model)
+compute_swp(_, _, _, model) = error_diagnostic_variable("swp", model)
+
+function compute_swp(state, cache, _,
+    ::Union{
+        NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
+    },
+)
+    swp = cache.scratch.ᶠtemp_field_level
+    Operators.column_integral_definite!(swp, state.c.ρq_sno)
+    return swp
+end
+
+add_diagnostic_variable!(short_name = "swp", units = "kg m^-2",
+    long_name = "Snowwater Path",
+    comments = """
+    The total mass of snowwater per unit area.
+    (not just the area of the cloudy portion of the column).
+    """,
+    compute = compute_swp,
 )
 
 ###

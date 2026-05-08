@@ -327,7 +327,7 @@ VALID_CASES = [
     # Non-EDMF (Smagorinsky formula), EDMF (mixing-length closure)
     case("lmix",  (:dry, :m0_pedmfx)),
     # 1M / 2M microphysics
-    cases(("husra", "hussn", "rwp"), :m1)...,  # Union{1M, 2M}, single method
+    cases(("husra", "hussn", "rwp", "swp"), :m1)...,  # Union{1M, 2M}, single method
     cases(("cdnc", "ncra"), :m2)...,  # 2M only
     # Smagorinsky-Lilly
     cases(("Dh_smag", "Dv_smag", "strainh_smag", "strainv_smag"), :smag)...,
