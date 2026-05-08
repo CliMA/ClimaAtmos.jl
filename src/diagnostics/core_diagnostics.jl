@@ -223,6 +223,40 @@ add_diagnostic_variable!(
     compute = compute_clprophet_wmean,
 )
 
+###
+# PROPHET cloud fraction — variant C: analytic activation-factor-scaled formula
+###
+compute_clprophet_analytic(state, cache, time) =
+    compute_clprophet_analytic(state, cache, time, cache.atmos.microphysics_model)
+compute_clprophet_analytic(_, _, _, model) =
+    error_diagnostic_variable("clprophet_analytic", model)
+
+function compute_clprophet_analytic(_, cache, _, ::NonEquilibriumMicrophysics1M)
+    if isnothing(cache.atmos.sgs_quadrature)
+        error(
+            "clprophet_analytic requires sgs_quadrature to be set in the AtmosModel. " *
+            "Enable quadrature or use the standard `cl` diagnostic instead.",
+        )
+    end
+    return @. lazy(cache.precomputed.ᶜcloud_fraction_diag_analytic * 100)
+end
+
+add_diagnostic_variable!(
+    short_name = "clprophet_analytic",
+    units = "%",
+    long_name = "PROPHET cloud fraction — analytic activation-factor-scaled variant",
+    comments = """
+    Diagnostic cloud fraction computed via the analytic PROPHET formula (new paper):
+      f_c = Σ_m a^(m) · (1 + tanh(π/√6 · c_f · q_c,eff^(m) / σ_qc^(m))) / 2
+    where q_c,eff = q_c + min(0, q_tot - q_vsat) is the effective saturation excess
+    and σ_qc = (α_l λ + α_i (1-λ)) · σ_s is the activation-factor-scaled std dev.
+    For updraft subdomains, σ_s is shared from the environment (placeholder; per-updraft
+    Jacobians are deferred to a follow-up PR).
+    Only available with NonEquilibriumMicrophysics1M + sgs_quadrature.
+    """,
+    compute = compute_clprophet_analytic,
+)
+
 
 ###
 # Total kinetic energy

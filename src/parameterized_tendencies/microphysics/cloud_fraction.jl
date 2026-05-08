@@ -933,7 +933,133 @@ function apply_cf_nn(model, π_1::FT, π_2::FT, π_3::FT, π_4::FT) where {FT}
 end
 
 # ============================================================================
-# Diagnostic Cloud Fraction (PROPHET-style, two variants)
+# Analytic-path cloud fraction kernel (new PROPHET paper formulation)
+# ============================================================================
+
+"""
+    cf_analytic_subdomain(
+        thermo_params, T, ρ, q_tot, q_liq, q_ice,
+        T′T′, q′q′, corr_Tq, cf_scale, σ_qc_env,
+    )
+
+Compute the per-subdomain cloud fraction from the analytic Sommeria-Deardorff
+path extended with activation factors and an effective saturation excess
+numerator, as described in the PROPHET paper (new formulation).
+
+# Formula
+
+1. **Effective saturation excess** (numerator):
+   ```
+   q_c,eff = q_c + min(0, q_tot - q_vsat)
+   ```
+   where `q_c = q_liq + q_ice` and `q_vsat = λ·qsat_l + (1-λ)·qsat_i`.
+   In saturated regimes `q_c,eff ≈ q_c`; in deeply subsaturated regimes it
+   forces `f_c → 0` even if a numerical trace of condensate remains.
+
+2. **Activation factors** (scale σ down when condensate is depleted):
+   ```
+   α_μ = clamp(q_μ / sqrt(qsat_μ² + ε²), 0, 1)   μ ∈ {l, i}
+   ```
+
+3. **Activation-scaled σ_qc** (denominator):
+   The 2-D Jacobian in (T, q_tot) space gives, via the liquid fraction λ:
+   ```
+   δq_l = λ δq_c,equil,   δq_i = (1-λ) δq_c,equil
+   σ_qc² = (α_l λ + α_i (1-λ))² σ_s²
+   ```
+   where σ_s is the existing 1-D saturation deficit std-dev.  For the
+   environment, `σ_s` is computed fresh; for updraft subdomains, the
+   caller passes `σ_qc_env` as a shared-σ placeholder (TODO: per-updraft
+   Jacobian to be implemented in a subsequent PR).
+
+4. **tanh approximation of erf** (full symmetric form):
+   ```
+   f_c = (1 + tanh(π/√6 · c_f · q_c,eff / max(σ_qc, ε))) / 2
+   ```
+   The `(1 + ·)/2` shift is required because `q_c,eff` can be negative.
+
+# Arguments
+- `thermo_params`: Thermodynamics parameters
+- `T`: Subdomain mean temperature [K]
+- `ρ`: Subdomain mean density [kg/m³]
+- `q_tot`: Subdomain mean total specific humidity [kg/kg]
+- `q_liq`: Subdomain mean cloud liquid [kg/kg]
+- `q_ice`: Subdomain mean cloud ice [kg/kg]
+- `T′T′`: Intra-subdomain temperature variance [K²] (shared across subdomains)
+- `q′q′`: Intra-subdomain moisture variance [(kg/kg)²]
+- `corr_Tq`: SGS correlation corr(T', q_tot')
+- `cf_scale`: Fitting factor c_f (default 1 = Sommeria-Deardorff)
+- `σ_qc_env`: Environment σ_qc (used as placeholder for updraft subdomains;
+              pass `nothing` to compute σ fresh from the local thermodynamic state)
+
+# Returns
+Cloud fraction ∈ [0, 1]
+"""
+@inline function cf_analytic_subdomain(
+    thermo_params,
+    T,
+    ρ,
+    q_tot,
+    q_liq,
+    q_ice,
+    T′T′,
+    q′q′,
+    corr_Tq,
+    cf_scale,
+    σ_qc_env,   # Nothing → compute fresh; FT value → use as shared-σ placeholder
+)
+    FT = typeof(q_tot)
+    ε = ϵ_numerics(FT)
+    coeff = FT(π) / sqrt(FT(6)) * cf_scale
+
+    # ---- Phase-specific saturation ----
+    qsat_l = TD.q_vap_saturation(thermo_params, T, ρ, TD.Liquid())
+    qsat_i = TD.q_vap_saturation(thermo_params, T, ρ, TD.Ice())
+    q_c    = q_liq + q_ice
+
+    # ---- Liquid fraction λ (prognostic-based) ----
+    λ = ifelse(q_c > ε, q_liq / q_c, ifelse(T ≥ TD.Parameters.T_freeze(thermo_params), one(FT), zero(FT)))
+
+    # ---- Effective saturation specific humidity ----
+    q_vsat = λ * qsat_l + (one(FT) - λ) * qsat_i
+
+    # ---- Effective saturation excess (numerator) ----
+    q_c_eff = q_c + min(zero(FT), q_tot - q_vsat)
+
+    # ---- Activation factors ----
+    α_l = clamp(q_liq / sqrt(qsat_l^2 + ε^2), zero(FT), one(FT))
+    α_i = clamp(q_ice / sqrt(qsat_i^2 + ε^2), zero(FT), one(FT))
+
+    # ---- Activation-scaled σ_qc ----
+    # The 2-D Jacobian gives: σ_qc = (α_l λ + α_i (1-λ)) * σ_s
+    # where σ_s is the 1-D saturation-deficit std-dev of the local state.
+    # For updraft subdomains, σ_qc_env is passed as a shared-σ placeholder
+    # (same isotropic intra-subdomain variance as the environment); per-updraft
+    # Jacobians are deferred to a follow-up PR.
+    σ_qc = if isnothing(σ_qc_env)
+        # Compute σ_s from local (T, q_tot) variance
+        L_v = TD.latent_heat_vapor(thermo_params, T)
+        L_s = TD.latent_heat_sublim(thermo_params, T)
+        R_v = TD.Parameters.R_v(thermo_params)
+        b_eff = λ * L_v * qsat_l / (R_v * T^2) + (one(FT) - λ) * L_s * qsat_i / (R_v * T^2)
+        σ_q = sqrt(max(q′q′, zero(FT)))
+        σ_T = sqrt(max(T′T′, zero(FT)))
+        sig2_s = q′q′ + b_eff^2 * T′T′ - FT(2) * b_eff * corr_Tq * σ_T * σ_q
+        σ_s = sqrt(max(sig2_s, zero(FT)))
+        (α_l * λ + α_i * (one(FT) - λ)) * σ_s
+    else
+        # Shared-σ placeholder for updraft subdomains: scale the env σ_qc
+        # by the updraft activation factors relative to the environment limit
+        (α_l * λ + α_i * (one(FT) - λ)) * σ_qc_env
+    end
+
+    # ---- tanh approximation of erf (full symmetric form) ----
+    # (1 + tanh(x))/2 maps q_c_eff: negative → 0, zero → 0.5, positive → 1
+    return (one(FT) + tanh(coeff * q_c_eff / max(σ_qc, ε))) / FT(2)
+end
+
+# ============================================================================
+# Diagnostic Cloud Fraction (PROPHET-style, three variants)
 # ============================================================================
 
 """
@@ -1055,6 +1181,82 @@ function set_cloud_fraction_diagnostic!(Y, p)
         ᶜq_c_prog,
         sqrt(max(ᶜσ_iso^2 + ᶜσ2_inter, zero(FT))),
     )
+
+    # ---- Analytic PROPHET cloud fraction (new paper formulation) ----
+    # Environment: compute σ_qc fresh (pass nothing as σ_qc_env).
+    # Updraft subdomains: share the environment σ_s as a placeholder for the
+    # per-updraft Jacobian (TODO: implement per-updraft Jacobian in follow-up PR).
+    # Uses scratch ᶜtemp_scalar_7 for the bare (un-activation-scaled) environment σ_s.
+    ᶜσ_qc_env = p.scratch.ᶜtemp_scalar_7
+
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_tot_nonneg⁰) = p.precomputed
+        ᶜq_tot_env = ᶜq_tot_nonneg⁰
+
+        # Environment area fraction a⁰ = 1 - Σ aʲ (computed below after updraft loop)
+        # First, fill the analytic field with the environment contribution (a⁰ × f_c⁰).
+        # We will accumulate updraft contributions below, then scale by a⁰ at the end.
+        # For simplicity, write f_c⁰ first; multiply by a⁰ after the updraft loop.
+        @. p.precomputed.ᶜcloud_fraction_diag_analytic = cf_analytic_subdomain(
+            thermo_params, ᶜT_env, ᶜρ_env, ᶜq_tot_env,
+            ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, corr_Tq, cf_scale, nothing,
+        )
+
+        # Compute environment area fraction a⁰ = 1 - Σ aʲ, weight the environment CF,
+        # then accumulate updraft contributions.
+        (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+        ᶜa_env = ᶜσ_qc_env   # reuse scratch for a⁰ computation (overwrite after use below)
+        ᶜa_env .= one(FT)
+        for j in 1:n
+            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+            ᶜaʲ  = @. lazy(draft_area(ᶜρaʲ, ᶜρʲs.:($$j)))
+            @. ᶜa_env -= ᶜaʲ
+        end
+        @. p.precomputed.ᶜcloud_fraction_diag_analytic *= max(ᶜa_env, zero(FT))
+
+        # Now compute σ_s for the environment and store it in ᶜσ_qc_env.
+        @. ᶜσ_qc_env = begin
+            q_c0  = ᶜq_liq⁰ + ᶜq_ice⁰
+            λ0    = ifelse(q_c0 > ϵ_numerics(FT), ᶜq_liq⁰ / q_c0,
+                        ifelse(ᶜT_env ≥ TD.Parameters.T_freeze(thermo_params), one(FT), zero(FT)))
+            qs_l0 = TD.q_vap_saturation(thermo_params, ᶜT_env, ᶜρ_env, TD.Liquid())
+            qs_i0 = TD.q_vap_saturation(thermo_params, ᶜT_env, ᶜρ_env, TD.Ice())
+            Lv0   = TD.latent_heat_vapor(thermo_params, ᶜT_env)
+            Ls0   = TD.latent_heat_sublim(thermo_params, ᶜT_env)
+            Rv0   = TD.Parameters.R_v(thermo_params)
+            b0    = λ0 * Lv0 * qs_l0 / (Rv0 * ᶜT_env^2) +
+                    (one(FT) - λ0) * Ls0 * qs_i0 / (Rv0 * ᶜT_env^2)
+            σq0   = sqrt(max(ᶜq′q′, zero(FT)))
+            σT0   = sqrt(max(ᶜT′T′, zero(FT)))
+            sqrt(max(ᶜq′q′ + b0^2 * ᶜT′T′ - FT(2) * b0 * corr_Tq * σT0 * σq0, zero(FT)))
+        end
+
+        for j in 1:n
+            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+            ᶜaʲ  = @. lazy(draft_area(ᶜρaʲ, ᶜρʲs.:($$j)))
+            # TODO: replace ᶜσ_qc_env with per-updraft Jacobian in follow-up PR
+            @. p.precomputed.ᶜcloud_fraction_diag_analytic +=
+                ᶜaʲ * cf_analytic_subdomain(
+                    thermo_params,
+                    ᶜTʲs.:($$j),
+                    ᶜρʲs.:($$j),
+                    ᶜq_tot_nonnegʲs.:($$j),
+                    ᶜq_liqʲs.:($$j),
+                    ᶜq_iceʲs.:($$j),
+                    ᶜT′T′, ᶜq′q′, corr_Tq, cf_scale,
+                    ᶜσ_qc_env,   # shared-σ placeholder
+                )
+        end
+    else
+        # No EDMF: environment = grid mean; single subdomain with a = 1.
+        # q_liq/q_ice not separately tracked in grid-mean case; pass q_c as liquid.
+        @. p.precomputed.ᶜcloud_fraction_diag_analytic = cf_analytic_subdomain(
+            thermo_params,
+            ᶜT_env, ᶜρ_env, ᶜq_env,
+            ᶜq_c_prog, zero(ᶜq_c_prog),
+            ᶜT′T′, ᶜq′q′, corr_Tq, cf_scale, nothing,
+        )
+    end
 
     return nothing
 end

@@ -1482,7 +1482,7 @@ function make_plots(
     cf_panel_files = String[]
     for (si, simdir) in enumerate(simdirs)
         prophet_cf_groups = try
-            cf_vars = map(["cl", "clprophet_sigma", "clprophet_wmean"]) do sn
+            cf_vars = map(["cl", "clprophet_sigma", "clprophet_wmean", "clprophet_analytic"]) do sn
                 v = get(simdir; short_name = sn, reduction, period)
                 is_box ? slice(v; x = 0.0, y = 0.0) : v
             end
@@ -1491,6 +1491,7 @@ function make_plots(
             cf_at_end[1].attributes["long_name"] = "cl (current)"
             cf_at_end[2].attributes["long_name"] = "clprophet_sigma"
             cf_at_end[3].attributes["long_name"] = "clprophet_wmean"
+            cf_at_end[4].attributes["long_name"] = "clprophet_analytic"
             [(cf_at_end...,)]
         catch
             nothing

@@ -151,9 +151,7 @@ function precomputed_quantities(Y, atmos)
     ᶜcloud_fraction = similar(Y.c, FT)
     @. ᶜcloud_fraction = FT(0)
 
-    # Diagnostic cloud fraction variants: only allocated for NonEquilibriumMicrophysics1M
-    # with sgs_quadrature active. Both remain nothing otherwise, so downstream code
-    # must gate on `!isnothing(p.precomputed.ᶜcloud_fraction_diag_sigma)`.
+    # TODO - tmp for checking different parameterizations for CF
     uses_cf_diagnostic =
         atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
         !isnothing(atmos.sgs_quadrature)
@@ -161,9 +159,11 @@ function precomputed_quantities(Y, atmos)
         if uses_cf_diagnostic
             ᶜcloud_fraction_diag_sigma = similar(Y.c, FT)
             ᶜcloud_fraction_diag_wmean = similar(Y.c, FT)
+            ᶜcloud_fraction_diag_analytic = similar(Y.c, FT)
             @. ᶜcloud_fraction_diag_sigma = FT(0)
             @. ᶜcloud_fraction_diag_wmean = FT(0)
-            (; ᶜcloud_fraction_diag_sigma, ᶜcloud_fraction_diag_wmean)
+            @. ᶜcloud_fraction_diag_analytic = FT(0)
+            (; ᶜcloud_fraction_diag_sigma, ᶜcloud_fraction_diag_wmean, ᶜcloud_fraction_diag_analytic)
         else
             (;)
         end
@@ -680,8 +680,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
 
     set_covariance_cache_and_cloud_fraction!(Y, p)
 
-    # Fill PROPHET diagnostic cloud fraction fields (two variants).
-    # Only active for NonEquilibriumMicrophysics1M + sgs_quadrature.
+    # TODO - tmp for testing
     if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
        !isnothing(p.atmos.sgs_quadrature)
         set_cloud_fraction_diagnostic!(Y, p)

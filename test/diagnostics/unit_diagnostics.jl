@@ -383,7 +383,7 @@ VALID_CASES = [
     # VerticalDiffusion, DecayWithHeightDiffusion, EDMF
     cases(("edt", "evu"), (:vd, :dwh, :m0_pedmfx))...,
     # PROPHET diagnostic cloud fraction — requires 1M + PrognosticEDMFX + sgs_quadrature
-    cases(("clprophet_sigma", "clprophet_wmean"), :m1_pedmfx_sgs)...,
+    cases((\"clprophet_sigma\", \"clprophet_wmean\", \"clprophet_analytic\"), :m1_pedmfx_sgs)...,
 ]
 #! format: on
 #
