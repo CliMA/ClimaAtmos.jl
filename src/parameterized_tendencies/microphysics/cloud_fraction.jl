@@ -1044,9 +1044,11 @@ function set_cloud_fraction_diagnostic!(Y, p)
     end
 
     # Combine σ_iso and σ_inter, compute CF for diag_sigma CF
+    # Note: clamp to zero before sqrt — in Float32, σ_iso² + σ²_inter can be
+    # a tiny negative (~1e-12) due to FP cancellation, causing a DomainError.
     @. p.precomputed.ᶜcloud_fraction_diag_sigma = cf_tanh(
         ᶜq_c_prog,
-        sqrt(ᶜσ_iso^2 + ᶜσ2_inter),
+        sqrt(max(ᶜσ_iso^2 + ᶜσ2_inter, zero(FT))),
     )
 
     return nothing
