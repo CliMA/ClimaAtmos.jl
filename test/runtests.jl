@@ -49,6 +49,7 @@ end
 # ============================================================================
 if TEST_GROUP in ("diagnostics", "all")
     @safetestset "Diagnostics unit tests" begin @time include("diagnostics/unit_diagnostics.jl") end
+    @safetestset "DiagnosticsConfig" begin @time include("diagnostics/diagnostics_config.jl") end
 end
 
 # ============================================================================
