@@ -242,6 +242,15 @@ model_2m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophy
 (Y_1m_dedmfx, p_1m_dedmfx) = build_state_cache(FT, model_1m_dedmfx; grid = column);
 (Y_2m_pedmfx, p_2m_pedmfx) = build_state_cache(FT, model_2m_pedmfx; grid = column);
 
+## 1M + PrognosticEDMFX + SGS quadrature — required for clprophet_* diagnostics
+model_1m_pedmfx_sgs = CA.AtmosModel(;
+    microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+    turbconv_model = pedmfx,
+    edmfx_model,
+    sgs_quadrature = CA.SGSQuadrature(FT; order = 3),
+)
+(Y_1m_pedmfx_sgs, p_1m_pedmfx_sgs) = build_state_cache(FT, model_1m_pedmfx_sgs; grid = column);
+
 ## VerticalDiffusion and DecayWithHeightDiffusion (no EDMF)
 vdp = CAP.vert_diff_params(params)
 model_vd = CA.AtmosModel(;
@@ -273,6 +282,7 @@ states = Dict(
     :m1_pedmfx      => (Y_1m_pedmfx,      p_1m_pedmfx),
     :m1_dedmfx      => (Y_1m_dedmfx,      p_1m_dedmfx),
     :m2_pedmfx      => (Y_2m_pedmfx,      p_2m_pedmfx),
+    :m1_pedmfx_sgs  => (Y_1m_pedmfx_sgs,  p_1m_pedmfx_sgs),
     :vd             => (Y_vd,             p_vd),
     :dwh            => (Y_dwh,            p_dwh),
     :allsky         => (Y_allsky,         p_allsky),
@@ -372,6 +382,8 @@ VALID_CASES = [
     cases(("cdncup", "cdncen", "ncraup", "ncraen"), :m2_pedmfx)...,
     # VerticalDiffusion, DecayWithHeightDiffusion, EDMF
     cases(("edt", "evu"), (:vd, :dwh, :m0_pedmfx))...,
+    # PROPHET diagnostic cloud fraction — requires 1M + PrognosticEDMFX + sgs_quadrature
+    cases(("clprophet_sigma", "clprophet_wmean"), :m1_pedmfx_sgs)...,
 ]
 #! format: on
 #

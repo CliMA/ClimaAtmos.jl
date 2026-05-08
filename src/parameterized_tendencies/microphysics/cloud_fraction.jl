@@ -993,10 +993,15 @@ function set_cloud_fraction_diagnostic!(Y, p)
         ᶜρ_env,
     )
 
-    # Environment and grid mean condensate
-    (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    ᶜq_c_env = @. lazy(ᶜq_liq⁰ + ᶜq_ice⁰)
     ᶜq_c_prog = @. lazy(specific(Y.c.ρq_lcl + Y.c.ρq_icl, Y.c.ρ))
+    # ᶜq_liq⁰/ᶜq_ice⁰ are only allocated for PrognosticEDMFX; fall back to
+    # grid-mean condensate as the environment proxy for other configurations.
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+        ᶜq_c_env = @. lazy(ᶜq_liq⁰ + ᶜq_ice⁰)
+    else
+        ᶜq_c_env = ᶜq_c_prog
+    end
 
     # Scalar tanh helper clamped to [0,1]; returns 0 when no condensate
     @inline cf_tanh(q_c, σ) = ifelse(
