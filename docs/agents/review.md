@@ -1,6 +1,6 @@
-# ClimaAtmos PR Review Instructions
+# PR Review Instructions
 
-You are reviewing PRs for ClimaAtmos.jl.
+You are reviewing PRs for a CliMA package.
 
 Keep the review concise, evidence-based, and findings-first. Optimize for concrete bugs, regressions, and missing validation. Do not write broad architecture summaries.
 
@@ -21,19 +21,23 @@ Work in this order:
 - [ ] Check behavior, numerics, stability, conservation, restart reproducibility, diagnostics, and config semantics.
 - [ ] Prioritize high-risk areas: implicit solver, Jacobian, prognostic equations, parameterized tendencies, restart logic, and output/reproducibility paths.
 - [ ] Label concerns as one of: definite bug, likely regression, or plausible risk.
-- [ ] Flag any user-visible config key, diagnostic name, default, release-facing behavior, or CLI flag change that is missing a `NEWS.md` entry.
+- [ ] Flag any user-visible config key, diagnostic name, default, release-facing behavior, or CLI flag change that is missing a `NEWS.md` entry. See [changelog_hygiene.md](changelog_hygiene.md).
 
 ### Validation
 
-- [ ] Map validation to the test groups in `test/runtests.jl`: infrastructure, diagnostics, dynamics, parameterizations, restarts, era5.
-- [ ] For config or runtime workflow changes, name the affected `.buildkite/ci_driver.jl` jobs.
-- [ ] If validation is missing, name the exact missing test group, nearby test file, or Buildkite job.
+- [ ] Map validation to the test groups defined in the repo's `test/runtests.jl`. The repo-specific guide (linked from [AGENTS.md](../../AGENTS.md)) lists the groups and example jobs.
+- [ ] For config or runtime workflow changes, name the affected CI driver and Buildkite/GitHub Actions jobs explicitly.
+- [ ] If validation is missing, name the exact missing test group, nearby test file, or CI job.
 
 ### Compatibility, performance, and style
 
 - [ ] Check API and config compatibility: keys, defaults, diagnostics/output names, initialization, restart/reproducibility behavior, and downstream public APIs.
-- [ ] Check concrete performance risks in hot paths: allocations, type instability, repeated work, and scaling regressions.
-- [ ] Check consistency with `docs/src/contributor_guide.md` and `.JuliaFormatter.toml`.
+- [ ] Check concrete performance risks in hot paths (see [gpu_performance.md](gpu_performance.md) for the definition of hot path): allocations, type instability, repeated work, and scaling regressions.
+- [ ] Flag data-dependent `if/else` inside GPU kernels as `high` (thread divergence).
+- [ ] Flag closures passed to any `integrate`, `quadrature`, or `bycolumn` call as `high` (functor required).
+- [ ] Flag Float32 literals (`1.0`, `Inf`, integer-base exponentiation like `6^x`) in functions touched by Float32 simulations as `medium`.
+- [ ] Flag new `where {FT}` annotations on non-constructor physics functions as `low` (AD compatibility).
+- [ ] Check consistency with the repo's contributor guide and `.JuliaFormatter.toml`.
 - [ ] Avoid low-signal style commentary unless it hides or causes a real issue.
 
 ## Severity rules
@@ -120,6 +124,7 @@ Then list residual risks briefly.
 
 ## Repo facts to enforce
 
-- Some simulation validation is Buildkite-driven.
+- Some simulation validation is Buildkite-driven; the repo-specific guide names the canonical CI driver.
 - Restart/reproducibility, conservation, diagnostics, and implicit solver changes are especially sensitive.
+- Allocation benchmarks (typically under `perf/`) are not run in CI; allocation regressions must be caught in review using the `@allocated` pattern.
 - If evidence is insufficient, report a risk or open question; do not invent failures.
