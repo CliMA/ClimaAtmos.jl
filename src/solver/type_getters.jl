@@ -17,7 +17,7 @@ import ClimaDiagnostics
 """
     convert_time_args(dt, t_start, t_end, start_date)
 
-Convert dt, t_start, and t_end to ITime.
+Convert dt, t_start, and t_end to ITime. 
 """
 function convert_time_args(dt, t_start, t_end, start_date)
     to_seconds(t) = t isa AbstractString ? time_to_seconds(t) : Float64(t)
