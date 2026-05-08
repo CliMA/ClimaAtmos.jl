@@ -103,3 +103,4 @@ include("negative_scalars_diagnostics.jl")
 
 # Default diagnostics and higher level interfaces
 include("default_diagnostics.jl")
+include("diagnostics_config.jl")

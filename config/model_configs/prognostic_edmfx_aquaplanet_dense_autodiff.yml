@@ -38,4 +38,3 @@ diagnostics:
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     reduction_time: average
     period: 10mins
-use_itime: true

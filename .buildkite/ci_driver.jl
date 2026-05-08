@@ -164,7 +164,7 @@ if config.parsed_args["check_steady_state"]
     @info "    Relative RMSE of u₃ on $n_levels levels closest to the surface:"
     @info "        $level_u₃_rel_errs"
 
-    if t_end > 24 * 60 * 60
+    if Float64(t_end) > 24 * 60 * 60
         # TODO: Float32 simulations currently show significant divergence of uₕ.
         @test ᶜuₕ_rel_err < (FT == Float32 ? 0.05 : 0.005)
         @test ᶠu₃_rel_err < 0.0005

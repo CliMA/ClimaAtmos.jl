@@ -142,6 +142,7 @@ include(joinpath("callbacks", "callbacks.jl"))
 
 include(joinpath("diagnostics", "Diagnostics.jl"))
 import .Diagnostics as CAD
+import .Diagnostics: DiagnosticsConfig
 
 include(joinpath("callbacks", "get_callbacks.jl"))
 
