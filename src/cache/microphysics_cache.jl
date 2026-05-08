@@ -920,6 +920,7 @@ function set_microphysics_tendency_cache!(
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
     sgs_quad = p.atmos.sgs_quadrature
     nsubs = mp1m.n_substeps
+    nsubs_quad = mp1m.n_substeps_quad
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
@@ -931,7 +932,7 @@ function set_microphysics_tendency_cache!(
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, corr_Tq, dt,
+            ᶜT′T′, ᶜq′q′, corr_Tq, dt, nsubs_quad,
         )
     end
 
@@ -959,6 +960,7 @@ function set_microphysics_tendency_cache!(
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
     sgs_quad = p.atmos.sgs_quadrature
     nsubs = mp1m.n_substeps
+    nsubs_quad = mp1m.n_substeps_quad
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, ᶜT, cm1, thp,
@@ -970,7 +972,7 @@ function set_microphysics_tendency_cache!(
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, corr_Tq, dt,
+            ᶜT′T′, ᶜq′q′, corr_Tq, dt, nsubs_quad,
         )
     end
 
@@ -990,6 +992,7 @@ function set_microphysics_tendency_cache!(
 
     n = n_mass_flux_subdomains(tm)
     nsubs = mp1m.n_substeps
+    nsubs_quad = mp1m.n_substeps_quad
 
     ### Updraft contribution
     for j in 1:n
@@ -1021,7 +1024,7 @@ function set_microphysics_tendency_cache!(
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, corr_Tq, dt,
+            ᶜT′T′, ᶜq′q′, corr_Tq, dt, nsubs_quad,
         )
     end
 
