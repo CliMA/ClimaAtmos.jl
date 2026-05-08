@@ -122,7 +122,7 @@ function get_first_interior_variance(
     obukhov_length,
     local_geometry,
 ) where {FT}
-    c_star = -kinematic_scalar_flux / ustar
+    c_star = -kinematic_scalar_flux / max(ustar, eps(FT))
     # TODO: Do we need geometry here? Or is c_star always scalar? Otherwise, replace c_star_sq by c_star * c_star
     c_star_sq = Geometry._norm_sqr(c_star, local_geometry)
     if obukhov_length < 0 # Unstable conditions
