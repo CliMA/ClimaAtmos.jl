@@ -937,6 +937,36 @@ end
 # ============================================================================
 
 """
+    _compute_σs_analytic(thermo_params, T, ρ, q_liq, q_ice, T′T′, q′q′, corr_Tq)
+
+Compute the bare (un-activation-scaled) 1-D saturation-deficit standard deviation
+σ_s for use as the shared isotropic σ passed to updraft subdomains.
+
+σ_s² = q′q′ + b_eff² T′T′ - 2 b_eff corr_Tq σ_T σ_q
+
+where b_eff = λ b_l + (1-λ) b_i is the liquid-fraction-weighted Clausius-Clapeyron
+slope and λ = q_liq / (q_liq + q_ice) is the prognostic liquid fraction.
+"""
+@inline function _compute_σs_analytic(
+    thermo_params, T, ρ, q_liq, q_ice, T′T′, q′q′, corr_Tq,
+)
+    FT = typeof(q_liq)
+    ε  = ϵ_numerics(FT)
+    q_c = q_liq + q_ice
+    λ   = ifelse(q_c > ε, q_liq / q_c,
+              ifelse(T ≥ TD.Parameters.T_freeze(thermo_params), one(FT), zero(FT)))
+    qsat_l = TD.q_vap_saturation(thermo_params, T, ρ, TD.Liquid())
+    qsat_i = TD.q_vap_saturation(thermo_params, T, ρ, TD.Ice())
+    L_v    = TD.latent_heat_vapor(thermo_params, T)
+    L_s    = TD.latent_heat_sublim(thermo_params, T)
+    R_v    = TD.Parameters.R_v(thermo_params)
+    b_eff  = λ * L_v * qsat_l / (R_v * T^2) + (one(FT) - λ) * L_s * qsat_i / (R_v * T^2)
+    σ_q    = sqrt(max(q′q′, zero(FT)))
+    σ_T    = sqrt(max(T′T′, zero(FT)))
+    return sqrt(max(q′q′ + b_eff^2 * T′T′ - FT(2) * b_eff * corr_Tq * σ_T * σ_q, zero(FT)))
+end
+
+"""
     cf_analytic_subdomain(
         thermo_params, T, ρ, q_tot, q_liq, q_ice,
         T′T′, q′q′, corr_Tq, cf_scale, σ_qc_env,
@@ -1214,22 +1244,11 @@ function set_cloud_fraction_diagnostic!(Y, p)
         end
         @. p.precomputed.ᶜcloud_fraction_diag_analytic *= max(ᶜa_env, zero(FT))
 
-        # Now compute σ_s for the environment and store it in ᶜσ_qc_env.
-        @. ᶜσ_qc_env = begin
-            q_c0  = ᶜq_liq⁰ + ᶜq_ice⁰
-            λ0    = ifelse(q_c0 > ϵ_numerics(FT), ᶜq_liq⁰ / q_c0,
-                        ifelse(ᶜT_env ≥ TD.Parameters.T_freeze(thermo_params), one(FT), zero(FT)))
-            qs_l0 = TD.q_vap_saturation(thermo_params, ᶜT_env, ᶜρ_env, TD.Liquid())
-            qs_i0 = TD.q_vap_saturation(thermo_params, ᶜT_env, ᶜρ_env, TD.Ice())
-            Lv0   = TD.latent_heat_vapor(thermo_params, ᶜT_env)
-            Ls0   = TD.latent_heat_sublim(thermo_params, ᶜT_env)
-            Rv0   = TD.Parameters.R_v(thermo_params)
-            b0    = λ0 * Lv0 * qs_l0 / (Rv0 * ᶜT_env^2) +
-                    (one(FT) - λ0) * Ls0 * qs_i0 / (Rv0 * ᶜT_env^2)
-            σq0   = sqrt(max(ᶜq′q′, zero(FT)))
-            σT0   = sqrt(max(ᶜT′T′, zero(FT)))
-            sqrt(max(ᶜq′q′ + b0^2 * ᶜT′T′ - FT(2) * b0 * corr_Tq * σT0 * σq0, zero(FT)))
-        end
+        # Now compute bare σ_s (un-activation-scaled) for the environment and
+        # stash it in ᶜσ_qc_env for use as a shared-σ placeholder in updrafts.
+        @. ᶜσ_qc_env = _compute_σs_analytic(
+            thermo_params, ᶜT_env, ᶜρ_env, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, corr_Tq,
+        )
 
         for j in 1:n
             ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
