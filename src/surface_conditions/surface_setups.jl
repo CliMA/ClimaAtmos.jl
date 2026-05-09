@@ -16,7 +16,7 @@ https://clima.github.io/SurfaceFluxes.jl/dev/SurfaceFluxes/#Monin-Obukhov-Simila
 struct DefaultMoninObukhov end
 function (::DefaultMoninObukhov)(params)
     FT = eltype(params)
-    z0 = FT(1e-5)
+    z0 = FT(1e-3)  # Pithan 2016: matches EC-Earth, ECHAM, ECMWF, WRF
     return SurfaceState(; parameterization = MoninObukhov(; z0))
 end
 
