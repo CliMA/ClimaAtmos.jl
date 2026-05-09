@@ -234,6 +234,7 @@ import ClimaAtmos: limit_sink
                 ρ = FT(1.0)
                 T_mean = FT(280.0)
                 q_sat_mean = TD.q_vap_saturation(thp, T_mean, ρ)
+                nsubs_quad = 1
 
                 @testset "Subsaturated mean" begin
                     # excess_mean < 0, q_cond_mean = 0
@@ -244,6 +245,7 @@ import ClimaAtmos: limit_sink
                         BMT.Microphysics1Moment(),
                         mp, thp, ρ, T_mean,
                         FT(0), FT(0), FT(0), FT(0), FT(60),
+                        nsubs_quad,
                         (),
                     )
 
@@ -253,7 +255,7 @@ import ClimaAtmos: limit_sink
 
                     res_expected = BMT.average_bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
-                        q_tot_hat, FT(0), FT(0), FT(0), FT(0), FT(60), 2,
+                        q_tot_hat, FT(0), FT(0), FT(0), FT(0), FT(60), nsubs_quad,
                     )
                     @test result.dq_lcl_dt ≈ res_expected.dq_lcl_dt rtol = FT(1e-4)
                     @test result.dq_icl_dt ≈ res_expected.dq_icl_dt rtol = FT(1e-4)
@@ -269,6 +271,7 @@ import ClimaAtmos: limit_sink
                         BMT.Microphysics1Moment(),
                         mp, thp, ρ, T_mean,
                         λ * excess_sat, (1 - λ) * excess_sat, FT(0), FT(0), FT(60),
+                        nsubs_quad,
                         (),
                     )
 
@@ -277,7 +280,7 @@ import ClimaAtmos: limit_sink
                     res_direct = BMT.average_bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
                         q_tot_sat, λ * excess_sat,
-                        (1 - λ) * excess_sat, FT(0), FT(0), FT(60), 2,
+                        (1 - λ) * excess_sat, FT(0), FT(0), FT(60), nsubs_quad,
                     )
                     @test result_mean.dq_lcl_dt ≈ res_direct.dq_lcl_dt rtol = FT(1e-4)
                     @test result_mean.dq_icl_dt ≈ res_direct.dq_icl_dt rtol = FT(1e-4)

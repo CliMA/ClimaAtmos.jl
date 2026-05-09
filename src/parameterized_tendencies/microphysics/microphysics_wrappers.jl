@@ -176,7 +176,6 @@ at each quadrature point is assumed to equal its mean value.
 - `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
-- `dt`: Model timestep [s] (for tendency averaging)
 """
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
@@ -190,6 +189,7 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     q_rai::FT
     q_sno::FT
     dt::FT
+    nsubs::Int
     args::Args
 end
 @inline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
@@ -199,11 +199,10 @@ end
     q_tot_hat = max(FT(0), q_tot_hat)
 
     # Call CloudMicrophysics point-wise tendencies
-    # Average tendencies over dt with nsubs = 1 because with sgs quadrature the resulting
-    # tendencies are smoother and one substep for time-averaging suffices
+    # Average tendencies over dt with nsubs substeps
     return BMT.average_bulk_microphysics_tendencies(
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        eval.q_lcl, eval.q_icl, eval.q_rai, eval.q_sno, eval.dt, 2, eval.args...,
+        eval.q_lcl, eval.q_icl, eval.q_rai, eval.q_sno, eval.dt, eval.nsubs, eval.args...,
     )
 end
 
@@ -255,7 +254,7 @@ NamedTuple with microphysics source terms:
 end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
     scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
-    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, dt, args...,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, dt, nsubs, args...,
 )
     # Clamp species humidities to prevent negativity in quadratures
     q_lcl_nonneg = max(0, q_lcl)
@@ -266,7 +265,7 @@ end
     # Create functor
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ, T, q_lcl_nonneg, q_icl_nonneg,
-        q_rai_nonneg, q_sno_nonneg, dt, args,
+        q_rai_nonneg, q_sno_nonneg, dt, nsubs, args,
     )
     # Integrate over quadrature points using functor (GPU-safe, no closure)
     local_tendency = integrate_over_sgs(
