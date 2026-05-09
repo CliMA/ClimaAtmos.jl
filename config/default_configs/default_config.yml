@@ -246,8 +246,11 @@ quadrature_order:
   help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 3"
   value: 3
 microphysics_n_substeps:
-  help: "Number of susbteps for time averaging bulk microphysics tendencies. Default: 3"
+  help: "Number of susbteps for time averaging bulk microphysics tendencies without subgrid-scale quadrature. Default: 3"
   value: 3
+microphysics_n_substeps_quadrature:
+  help: "Number of susbteps for time averaging bulk microphysics tendencies with subgrid-scale quadrature. Default: 2"
+  value: 2
 fixed_terminal_velocity:
   help: "Use fixed terminal velocities for microphysics tracers [`true` (default), `false`]"
   value: true

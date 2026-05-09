@@ -10,7 +10,8 @@ function get_microphysics_model(parsed_args, params = nothing)
         EquilibriumMicrophysics0M()
     elseif model_name == "1M"
         n_substeps = parsed_args["microphysics_n_substeps"]
-        NonEquilibriumMicrophysics1M(; n_substeps)
+        n_substeps_quad = parsed_args["microphysics_n_substeps_quadrature"]
+        NonEquilibriumMicrophysics1M(; n_substeps, n_substeps_quad)
     elseif model_name == "2M"
         NonEquilibriumMicrophysics2M()
     elseif model_name == "2MP3"
