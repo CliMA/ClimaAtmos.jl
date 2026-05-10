@@ -112,7 +112,10 @@ import ClimaParams as CP
                         # perturbations partially cancel in the saturation deficit
                         # s = q − q_sat(T).  The PDF width σ_s² = σ_q² + b²σ_T²
                         # − 2b·corr·σ_T·σ_q shrinks when corr increases (b > 0),
-                        # so Q̂ = q_cond / σ_s grows ⇒ cf grows.
+                        # so q_c_eff / σ_qc grows ⇒ cf grows.
+                        # Use larger σ_q (q'q' = 1e-4) here to keep CF away from
+                        # its saturation tail at q_c_eff ≫ σ_qc, where Float32
+                        # precision would round all values to 1.0.
                         corr_vals = FT[-0.9, -0.6, -0.3, 0.0, 0.3, 0.6, 0.9]
 
                         # Liquid-only case
@@ -120,7 +123,7 @@ import ClimaParams as CP
                             CA.compute_cloud_fraction_sd(
                                 thp, T, ρ, q_tot_base + FT(1e-3),
                                 FT(1e-3), FT(0),
-                                FT(1.0), FT(1e-6), c,
+                                FT(1.0), FT(1e-4), c,
                                 FT(1), q_min, sgs_dist,
                             ) for c in corr_vals
                         ]
@@ -134,7 +137,7 @@ import ClimaParams as CP
                             CA.compute_cloud_fraction_sd(
                                 thp, T_cold, ρ, q_tot_base + FT(1e-3),
                                 FT(0), FT(1e-3),
-                                FT(1.0), FT(1e-6), c,
+                                FT(1.0), FT(1e-4), c,
                                 FT(1), q_min, sgs_dist,
                             ) for c in corr_vals
                         ]

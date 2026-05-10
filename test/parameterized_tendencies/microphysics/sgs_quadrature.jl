@@ -602,6 +602,7 @@ using ClimaAtmos
                     mp, thp, ρ, T_mean,
                     q_lcl_mean, q_icl_mean,    # q_lcl_in_cloud, q_icl_in_cloud
                     q_rai, q_sno,              # q_rai, q_sno
+                    true,                      # has_cloud
                     FT(1),                     # λ
                     dt, nsubs_quad,
                     (),

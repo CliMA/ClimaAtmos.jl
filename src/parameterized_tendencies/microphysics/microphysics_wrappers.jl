@@ -232,9 +232,16 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     # In-cloud cloud condensates: q_mean / max(CF, CF_min)
     q_lcl_in_cloud::FT
     q_icl_in_cloud::FT
-    # Grid-mean precipitation (in-cloud / clear partition not applied)
+    # Precipitation specific humidities. In a cell with cloud, these are the
+    # in-cloud values q_mean/CF, gated on local saturation in the call below
+    # (precip co-located with cloud, max-overlap). In a clear cell (rain or
+    # snow falling through clear air from above), `has_cloud = false` disables
+    # the gating and these are the grid-mean values.
     q_rai::FT
     q_sno::FT
+    # Whether the cell has prognostic cloud condensate above the q_min
+    # threshold. Controls precipitation gating in the evaluator.
+    has_cloud::Bool
     # Prognostic-state liquid fraction, fixed across quadrature points
     λ::FT
     # Numerical parameters
@@ -253,9 +260,24 @@ end
     q_lcl_hat = min(eval.q_lcl_in_cloud, q_lcl_eq_hat)
     q_icl_hat = min(eval.q_icl_in_cloud, q_icl_eq_hat)
 
+    # Gate precipitation by local saturation under max-overlap with cloud.
+    # In a cell with cloud, rain/snow co-locate with cloud: at cloudy
+    # quadrature points (q_lcl_hat > 0 or q_icl_hat > 0) the BMT receives the
+    # in-cloud precip; at clear quadrature points it receives 0, which zeros
+    # out the clear-sky precip terms (rain evap, snow sub, snow melt) so
+    # those processes are not double-counted with the implicit clear/cloudy
+    # partitioning supplied by the quadrature. In a cell without cloud
+    # (`has_cloud = false`), the gate is disabled — quadrature points all see
+    # the grid-mean precip, so clear-air rain evap of precip falling from
+    # above is computed correctly.
+    is_local_cloudy = (q_lcl_hat > zero(q_lcl_hat)) | (q_icl_hat > zero(q_icl_hat))
+    gate_off = eval.has_cloud & !is_local_cloudy
+    q_rai_hat = ifelse(gate_off, zero(eval.q_rai), eval.q_rai)
+    q_sno_hat = ifelse(gate_off, zero(eval.q_sno), eval.q_sno)
+
     return BMT.average_bulk_microphysics_tendencies(
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno, eval.dt, eval.nsubs, eval.args...,
+        q_lcl_hat, q_icl_hat, q_rai_hat, q_sno_hat, eval.dt, eval.nsubs, eval.args...,
     )
 end
 
@@ -331,6 +353,17 @@ end
     q_lcl_in_cloud = q_lcl_nonneg / cf_eff
     q_icl_in_cloud = q_icl_nonneg / cf_eff
 
+    # Apply max-overlap in-cloud scaling to precipitation only when cloud
+    # condensate is present in the cell. When the cell has no cloud (rain/snow
+    # falling through clear air from above), the max-overlap assumption is
+    # meaningless — keep grid-mean values so clear-sky evaporation rates are
+    # not artificially inflated.
+    q_min = TD.Parameters.q_min(thp)
+    has_cloud = (q_lcl_nonneg + q_icl_nonneg) > q_min
+    precip_scaling = ifelse(has_cloud, FT(1) / cf_eff, FT(1))
+    q_rai_in_cloud = q_rai_nonneg * precip_scaling
+    q_sno_in_cloud = q_sno_nonneg * precip_scaling
+
     # Liquid fraction from prognostic cloud-condensate composition
     # (paper Eq. 3.31): q_c = q_l + q_i (cloud condensate only; rain and snow
     # are excluded). Held fixed across quadrature points. TD.liquid_fraction
@@ -341,7 +374,7 @@ end
     # Create functor
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ, T, q_lcl_in_cloud, q_icl_in_cloud,
-        q_rai_nonneg, q_sno_nonneg, λ, dt, nsubs, args,
+        q_rai_in_cloud, q_sno_in_cloud, has_cloud, λ, dt, nsubs, args,
     )
     # Integrate over quadrature points using functor (GPU-safe, no closure)
     local_tendency = integrate_over_sgs(

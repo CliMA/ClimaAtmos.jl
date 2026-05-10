@@ -264,16 +264,24 @@ Given grid-mean condensate (`q_liq`, `q_ice`) and the subgrid variances and
 correlation of `(T, q_tot)`, the cloud fraction is determined by approximately
 matching the predicted condensate to the width of the subgrid saturation deficit PDF.
 
-# Algorithm
-1. Compute phase-specific saturation specific humidities and
-   Clausius-Clapeyron slopes `b = ∂q_sat/∂T = L·q_sat / (R_v·T²)`.
-2. Compute the SGS variance of the saturation deficit:
-   `σ_s² = σ_q² + b²·σ_T² − 2b·corr(T,q)·σ_T·σ_q`
-3. Normalize grid-mean condensate by the PDF width: `Q̂ = q_cond / σ_s`.
-4. Approximate the Gaussian CDF with `tanh(π/√6 · Q̂)` and match implied condensate 
-   from supersaturation to obtain cloud fraction.
-5. Merge liquid and ice via maximum overlap: `cf = max(cf_l, cf_i)`.
-6. Enforce zero cloud fraction when no condensate exists.
+# Algorithm 
+1. Diagnose the prognostic phase partition `λ = q_l / (q_l + q_i)` from
+   cloud condensate only. 
+2. When no condensate is present, fall back to a smooth temperature-based ramp.
+3. Form the phase-partitioned saturation specific humidity
+   `q_v_sat = λ q_sat,l + (1−λ) q_sat,i` and Clausius-Clapeyron slope
+   `b = λ b_l + (1−λ) b_i`.
+4. Compute the SGS variance of the saturation deficit:
+   `σ_s² = σ_q² + b²·σ_T² − 2b·corr(T,q)·σ_T·σ_q`.
+4. Compute the activation factor (combined-phases form):
+   `α = clamp(q_c / sqrt((q_t − q_v_sat)_+² + q_min²), 0, 1)`,
+   then `σ_qc = α σ_s`.
+5. Compute the saturation-deficit-corrected effective condensate
+   `q_c_eff = q_c + min(0, q_t − q_v_sat)`.
+6. Form the cloud fraction:
+   `f_c = ½[1 + erf(c_f q_c_eff / (√2 σ_qc))]`, approximated by a
+   variance-matched logistic CDF (`tanh`).
+7. Gate to zero when no prognostic condensate exists.
 
 With zero variance the function returns 0 when no condensate exists and
 1 when condensate is present, recovering the grid-scale behaviour.
@@ -311,111 +319,125 @@ Cloud fraction ∈ [0, 1]
 )
     FT = eltype(thermo_params)
 
-    # --- 1. Thermodynamic sensitivities (Clausius-Clapeyron) ---
+    # --- 1. Prognostic phase partition ---
+    # Use cloud condensate only; rain and snow are excluded.
+    q_c = q_liq + q_ice
+    λ = TD.liquid_fraction(thermo_params, T, q_liq, q_ice)
+
+    # --- 2. Phase-partitioned saturation specific humidity and CC slope ---
     qsat_l = TD.q_vap_saturation(thermo_params, T, ρ, TD.Liquid())
     qsat_i = TD.q_vap_saturation(thermo_params, T, ρ, TD.Ice())
-
     R_v = TD.Parameters.R_v(thermo_params)
     L_v = TD.latent_heat_vapor(thermo_params, T)
     L_s = TD.latent_heat_sublim(thermo_params, T)
 
-    # b = ∂q_sat/∂T  (Clausius-Clapeyron slope, assuming constant pressure)
-    b_l = L_v * qsat_l / (R_v * T^2)
-    b_i = L_s * qsat_i / (R_v * T^2)
+    # Phase-weighted q_v_sat and Clausius-Clapeyron slope b = ∂q_sat/∂T
+    qsat = λ * qsat_l + (FT(1) - λ) * qsat_i
+    b = (
+        λ * (L_v * qsat_l / (R_v * T * T)) +
+        (FT(1) - λ) * (L_s * qsat_i / (R_v * T * T))
+    )
 
-    # Standard deviations
+    # --- 3. SGS variance of saturation deficit (Sommeria-Deardorff) ---
+    # σ_s² = σ_q² + b²·σ_T² − 2b·corr(T', q')·σ_T·σ_q
     σ_q = sqrt(max(q′q′, zero(FT)))
     σ_T = sqrt(max(T′T′, zero(FT)))
+    sig2_s = q′q′ + b * b * T′T′ - FT(2) * b * corr_Tq * σ_T * σ_q
+    sig_s = sqrt(max(sig2_s, ϵ_numerics(FT)))
 
-    # --- 2. SGS variance of saturation deficit ---
-    # σ_s² = σ_q² + b²·σ_T² − 2b·corr(T', q')·σ_T·σ_q
-    sig2_l = q′q′ + b_l * b_l * T′T′ - FT(2) * b_l * corr_Tq * σ_T * σ_q
-    sig2_i = q′q′ + b_i * b_i * T′T′ - FT(2) * b_i * corr_Tq * σ_T * σ_q
+    # --- 4. Activation factor (combined-phase form) ---
+    # Bounds the SGS spread used in the cloud fraction by what the prognostic
+    # condensate can support relative to the equilibrium excess at the mean.
+    # As q_c → 0 in a clear sub-saturated subdomain, α → 0 and σ_qc → 0 so
+    # the cloud fraction goes smoothly to zero.
+    excess_eq = max(zero(FT), q_tot - qsat)
+    α = min(FT(1), q_c / sqrt(excess_eq * excess_eq + q_min * q_min))
+    σ_qc = α * sig_s
 
-    # Safety floor
-    sig_l = sqrt(max(sig2_l, ϵ_numerics(FT)))
-    sig_i = sqrt(max(sig2_i, ϵ_numerics(FT)))
+    # --- 5. Effective saturation-deficit-corrected condensate ---
+    # q_c_eff = q_c + min(0, q_t - q_v_sat)
+    # Recovers q_c when the grid mean is supersaturated; reduces to (q_t - qsat)
+    # when subsaturated, forcing f_c → 0 in deeply subsaturated states even
+    # if a numerical trace of prognostic condensate remains.
+    q_c_eff = q_c + min(zero(FT), q_tot - qsat)
 
-    # --- 3. Normalize condensate by PDF width ---
-    Q_hat_l = q_liq / sig_l
-    Q_hat_i = q_ice / sig_i
+    # --- 6. Distribution-specific cloud fraction ---
+    cf = _cloud_fraction_helper(
+        q_c_eff, σ_qc, q_tot, cf_steepness_scale, q_min, sgs_dist,
+    )
 
-    # --- 4. Formulation-Specific Cloud Fraction Helpers ---
-    cf_l =
-        _cloud_fraction_helper(Q_hat_l, sig_l, q_tot, cf_steepness_scale, q_min, sgs_dist)
-    cf_i =
-        _cloud_fraction_helper(Q_hat_i, sig_i, q_tot, cf_steepness_scale, q_min, sgs_dist)
-
-    # --- 5. Maximum overlap ---
-    cf = max(cf_l, cf_i)
-
-    # --- 6. No condensate → no cloud (branchless) ---
-    has_cond = TD.has_condensate(thermo_params, q_liq + q_ice)
+    # --- 7. Branchless gate: no prognostic condensate → no cloud ---
+    has_cond = TD.has_condensate(thermo_params, q_c)
     return ifelse(has_cond, cf, zero(FT))
 end
 
 """
-    _cloud_fraction_helper(Q_hat, sig_s, q_tot, cf_steepness_scale, q_min, sgs_dist)
+    _cloud_fraction_helper(q_c_eff, σ_qc, q_tot, cf_steepness_scale, q_min, sgs_dist)
 
-Compute the phase-specific cloud fraction from normalized condensate.
+Compute the cloud fraction from the saturation-deficit-corrected effective
+condensate `q_c_eff` and the activation-scaled standard
+deviation `σ_qc` (combined-phase form).
+
+The Gaussian CDF is approximated by a variance-matched logistic CDF
+(`erf(x/√2) ≈ tanh((π/(2√3)) x)`), giving
+
+    f_c ≈ (1/2) [1 + tanh((π/(2√3)) c_f q_c_eff / σ_qc)]
 
 # Arguments
-- `Q_hat`: Condensate normalized by the standard deviation of saturation deficit
-- `sig_s`: Standard deviation of saturation deficit [kg/kg]
+- `q_c_eff`: Saturation-deficit-corrected condensate [kg/kg]
+- `σ_qc`: Activation-scaled standard deviation of cloud condensate [kg/kg]
 - `q_tot`: Grid-mean total specific humidity [kg/kg]
-- `cf_steepness_scale`: Scaling factor for the steepness of the cloud fraction transition versus condensate
+- `cf_steepness_scale`: Tunable steepness factor `c_f` 
 - `q_min`: Minimum specific humidity threshold [kg/kg]
-- `sgs_dist`: Assumed sub-grid scale distribution type (`GaussianSGS`, `LogNormalSGS`, or `GridMeanSGS`)
+- `sgs_dist`: SGS distribution (`GaussianSGS`, `LogNormalSGS`, or `GridMeanSGS`)
 
 # Returns
-- Phase-specific cloud fraction ∈ [0, 1]
+- Cloud fraction ∈ [0, 1]
 """
 @inline function _cloud_fraction_helper(
-    Q_hat,
-    sig_s,
+    q_c_eff,
+    σ_qc,
     q_tot,
     cf_steepness_scale,
     q_min,
     ::GaussianSGS,
 )
-    FT = typeof(Q_hat)
-    # Analytical CDF approximation: π/√6 matches the variance of the logistic distribution to the normal distribution
-    coeff = (FT(π) / sqrt(FT(6))) * cf_steepness_scale
-    return tanh(coeff * Q_hat)
+    FT = typeof(q_c_eff)
+    # Variance-matched logistic-CDF approximation to the Gaussian CDF.
+    coeff = (FT(π) / (FT(2) * sqrt(FT(3)))) * cf_steepness_scale
+    σ_safe = max(σ_qc, ϵ_numerics(FT))
+    return FT(0.5) * (FT(1) + tanh(coeff * q_c_eff / σ_safe))
 end
 
 @inline function _cloud_fraction_helper(
-    Q_hat,
-    sig_s,
+    q_c_eff,
+    σ_qc,
     q_tot,
     cf_steepness_scale,
     q_min,
     ::LogNormalSGS,
 )
-    FT = typeof(Q_hat)
-    # Coefficient of variation (protect against division by zero)
-    C_v = sig_s / max(q_tot, q_min)
-
-    # Base coefficient corresponds to Gaussian limit (Cv -> 0)
-    coeff = (FT(π) / sqrt(FT(6))) * cf_steepness_scale
-
-    # Modulate coefficient with Cv based on offline optimal fits to lognormal 
-    # distribution for q_tot (RMSE < 5% for C_v in [0, 1])
-    c = coeff * (FT(1) + FT(0.3) * C_v)
-
-    return tanh(c * Q_hat)
+    FT = typeof(q_c_eff)
+    # Coefficient of variation, used to modulate the steepness for non-Gaussian
+    # q_tot tails. The Gaussian limit is recovered as C_v → 0.
+    C_v = σ_qc / max(q_tot, q_min)
+    base = (FT(π) / (FT(2) * sqrt(FT(3)))) * cf_steepness_scale
+    coeff = base * (FT(1) + FT(0.3) * C_v)
+    σ_safe = max(σ_qc, ϵ_numerics(FT))
+    return FT(0.5) * (FT(1) + tanh(coeff * q_c_eff / σ_safe))
 end
 
 @inline function _cloud_fraction_helper(
-    Q_hat,
-    sig_s,
+    q_c_eff,
+    σ_qc,
     q_tot,
     cf_steepness_scale,
     q_min,
     ::GridMeanSGS,
 )
-    FT = typeof(Q_hat)
-    return Q_hat > zero(FT) ? FT(1) : zero(FT)
+    FT = typeof(q_c_eff)
+    # No SGS spread: cloud is either there (q_c_eff > 0) or not.
+    return q_c_eff > zero(FT) ? FT(1) : zero(FT)
 end
 
 # ============================================================================

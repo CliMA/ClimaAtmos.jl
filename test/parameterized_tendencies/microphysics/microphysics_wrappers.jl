@@ -244,6 +244,7 @@ import ClimaAtmos: limit_sink
                         mp, thp, ρ, T_mean,
                         FT(0), FT(0),       # q_lcl_in_cloud, q_icl_in_cloud
                         FT(0), FT(0),       # q_rai, q_sno
+                        false,              # has_cloud
                         FT(1),              # λ
                         FT(60),             # dt
                         nsubs_quad,
@@ -278,6 +279,7 @@ import ClimaAtmos: limit_sink
                         mp, thp, ρ, T_mean,
                         λ * excess_sat, (1 - λ) * excess_sat,  # q_lcl_in_cloud, q_icl_in_cloud
                         FT(0), FT(0),                          # q_rai, q_sno
+                        true,                                  # has_cloud
                         λ,                                     # λ
                         FT(60),                                # dt
                         nsubs_quad,
