@@ -762,6 +762,15 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
             error("Unknown edmfx_scale_blending method: $(pa["edmfx_scale_blending"])")
         end
 
+    mixing_length_closure =
+        if pa["edmfx_mixing_length_closure"] == "HanBretherton2019"
+            HanBretherton2019()
+        elseif pa["edmfx_mixing_length_closure"] == "LopezGomez2020"
+            LopezGomez2020()
+        else
+            error("Unknown edmfx_mixing_length_closure: $(pa["edmfx_mixing_length_closure"])")
+        end
+
     edmfx_model = EDMFXModel(;
         entr_model = get_entrainment_model(pa),
         detr_model = get_detrainment_model(pa),
@@ -771,6 +780,7 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
         vertical_diffusion = pa["edmfx_vertical_diffusion"],
         filter = pa["edmfx_filter"],
         scale_blending_method,
+        mixing_length_closure,
     )
 
     n = pa["smagorinsky_lilly"]

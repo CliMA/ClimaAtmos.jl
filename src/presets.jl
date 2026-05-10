@@ -15,6 +15,7 @@ import ..DiagnosticEDMFX, ..PrognosticEDMFX
 import ..EDMFXModel
 import ..InvZEntrainment, ..BuoyancyVelocityDetrainment
 import ..SmoothMinimumBlending
+import ..HanBretherton2019
 
 # ============================================================================
 # Model presets — return an AtmosModel

@@ -10,6 +10,7 @@ import ClimaCore:
 import ClimaCore.Utilities: half
 import ClimaCore.MatrixFields: @name
 import Thermodynamics as TD
+import Thermodynamics.Parameters as TDP
 
 # compute lazily to reduce allocations
 import ..lazy
@@ -74,7 +75,9 @@ import ..ρa⁰
 import ..specific
 import ..ᶜspecific_env_value
 import ..correlation_Tq
-
+import ..get_physical_w
+import ..vertical_buoyancy_acceleration
+import ..gradient_richardson_number
 
 # We need the abbreviations for symbols like curl, grad, and so on
 include(joinpath("..", "utils", "abbreviations.jl"))
