@@ -22,15 +22,18 @@ saturation adjustment and 0-moment microphysics.
 Given (T_hat, q_hat) at a quadrature point, computes:
 1. Saturation specific humidity q_sat from Clausius-Clapeyron
 2. Condensate as saturation excess: q_cond = max(0, q_hat - q_sat)
-3. Liquid/ice partition using temperature-based ramp function
+3. Liquid/ice partition using a grid-mean liquid fraction `λ_mean`,
+   held fixed across all quadrature points (paper Eq. 3.31)
 
 # Fields
 - `thermo_params`: Thermodynamics parameters
 - `ρ`: Air density [kg/m³]
+- `λ_mean`: Grid-mean liquid fraction, fixed across quadrature points
 """
 struct SaturationAdjustmentEvaluator{TPS, T1}
     thermo_params::TPS
     ρ::T1
+    λ_mean::T1
 end
 
 """
@@ -61,11 +64,12 @@ NamedTuple with:
     # Condensate is the saturation excess (positive only)
     q_cond = max(FT(0), q_hat - q_sat)
 
-    # Partition condensate using liquid fraction based on temperature ramp
-    # liquid_fraction_ramp is appropriate for equilibrium thermodynamics
-    λ = TD.liquid_fraction_ramp(thp, T_hat)
-    q_liq = λ * q_cond
-    q_ice = (FT(1) - λ) * q_cond
+    # Partition condensate using a grid-mean liquid fraction held fixed across
+    # quadrature points (paper Eq. 3.31). The 0M / saturation-adjustment scheme
+    # has no prognostic phase memory, so `λ_mean` is supplied by the caller
+    # using a temperature-based ramp evaluated at the grid-mean temperature.
+    q_liq = eval.λ_mean * q_cond
+    q_ice = (FT(1) - eval.λ_mean) * q_cond
 
     # Return q_tot_quad = q_hat so the caller can compute the effective
     # integrated mean of the (possibly truncated) q_tot distribution.
@@ -126,8 +130,11 @@ NamedTuple with SGS-averaged:
 )
     FT = typeof(T_mean)
     q_min = TD.Parameters.q_min(thermo_params)
+    # Grid-mean liquid fraction, held fixed across all quadrature points
+    # (paper Eq. 3.31, equilibrium fallback)
+    λ_mean = TD.liquid_fraction_ramp(thermo_params, T_mean)
     # Create GPU-safe functor (not a closure)
-    evaluator = SaturationAdjustmentEvaluator(thermo_params, ρ)
+    evaluator = SaturationAdjustmentEvaluator(thermo_params, ρ, λ_mean)
 
     # Integrate over quadrature points
     result =

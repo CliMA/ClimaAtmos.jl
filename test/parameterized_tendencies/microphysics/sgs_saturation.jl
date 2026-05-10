@@ -16,7 +16,9 @@ import ClimaParams as CP
                 thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
                 ρ = FT(1.0)
 
-                evaluator = ClimaAtmos.SaturationAdjustmentEvaluator(thp, ρ)
+                # The evaluator now carries a fixed grid-mean λ. Each subtest
+                # below constructs an evaluator with λ_mean = ramp(T_hat) so the
+                # test semantics still target the partitioning at T_hat.
 
                 @testset "Unsaturated conditions" begin
                     # T and q where q < q_sat (unsaturated)
@@ -24,6 +26,9 @@ import ClimaParams as CP
                     q_sat = TD.q_vap_saturation(thp, T_hat, ρ)
                     q_hat = FT(0.5) * q_sat  # Half saturation
 
+                    λ_mean = TD.liquid_fraction_ramp(thp, T_hat)
+                    evaluator =
+                        ClimaAtmos.SaturationAdjustmentEvaluator(thp, ρ, λ_mean)
                     result = evaluator(T_hat, q_hat)
 
                     @test haskey(result, :T)
@@ -42,6 +47,9 @@ import ClimaParams as CP
                     q_sat = TD.q_vap_saturation(thp, T_hat, ρ)
                     q_hat = FT(1.5) * q_sat  # 50% supersaturated
 
+                    λ_mean = TD.liquid_fraction_ramp(thp, T_hat)
+                    evaluator =
+                        ClimaAtmos.SaturationAdjustmentEvaluator(thp, ρ, λ_mean)
                     result = evaluator(T_hat, q_hat)
 
                     # Should have condensate
@@ -49,8 +57,7 @@ import ClimaParams as CP
                     @test result.q_liq + result.q_ice ≈ q_cond_expected rtol = FT(1e-5)
 
                     # At warm temperatures, should be mostly liquid
-                    λ = TD.liquid_fraction_ramp(thp, T_hat)
-                    @test result.q_liq ≈ λ * q_cond_expected rtol = FT(1e-5)
+                    @test result.q_liq ≈ λ_mean * q_cond_expected rtol = FT(1e-5)
                 end
 
                 @testset "Saturated conditions (cold)" begin
@@ -59,18 +66,23 @@ import ClimaParams as CP
                     q_sat = TD.q_vap_saturation(thp, T_hat, ρ)
                     q_hat = FT(1.5) * q_sat  # 50% supersaturated
 
+                    λ_mean = TD.liquid_fraction_ramp(thp, T_hat)
+                    evaluator =
+                        ClimaAtmos.SaturationAdjustmentEvaluator(thp, ρ, λ_mean)
                     result = evaluator(T_hat, q_hat)
 
                     # At cold temperatures, should be mostly ice
-                    λ = TD.liquid_fraction_ramp(thp, T_hat)
-                    @test λ < FT(0.5)  # Verify it's actually cold enough
+                    @test λ_mean < FT(0.5)  # Verify it's actually cold enough
                     q_cond_expected = q_hat - q_sat
-                    @test result.q_ice ≈ (1 - λ) * q_cond_expected rtol = FT(1e-5)
+                    @test result.q_ice ≈ (1 - λ_mean) * q_cond_expected rtol = FT(1e-5)
                 end
 
                 @testset "Type stability" begin
                     T_hat = FT(280.0)
                     q_hat = FT(0.01)
+                    λ_mean = TD.liquid_fraction_ramp(thp, T_hat)
+                    evaluator =
+                        ClimaAtmos.SaturationAdjustmentEvaluator(thp, ρ, λ_mean)
                     result = evaluator(T_hat, q_hat)
 
                     @test eltype(result.T) == FT

@@ -351,7 +351,7 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad_1pt, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq, dt, nsubs_quad,
+                        T′T′, q′q′, corr_Tq, FT(1), dt, nsubs_quad,
                     )
 
                     # Direct evaluation at grid mean
@@ -377,7 +377,7 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        FT(0), FT(0), FT(0), dt, nsubs_quad,
+                        FT(0), FT(0), FT(0), FT(1), dt, nsubs_quad,
                     )
 
                     # Direct evaluation
@@ -399,7 +399,7 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq, dt, nsubs_quad,
+                        T′T′, q′q′, corr_Tq, FT(1), dt, nsubs_quad,
                     )
 
                     @test haskey(result, :dq_lcl_dt)
@@ -418,7 +418,7 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        FT(4.0), FT(1e-5), FT(0.8), dt, nsubs_quad,
+                        FT(4.0), FT(1e-5), FT(0.8), FT(1), dt, nsubs_quad,
                     )
 
                     # Without variance
@@ -426,7 +426,7 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        FT(0), FT(0), FT(0), dt, nsubs_quad,
+                        FT(0), FT(0), FT(0), FT(1), dt, nsubs_quad,
                     )
 
                     # Results should differ (unless microphysics is perfectly linear)
@@ -496,7 +496,7 @@ using ClimaAtmos
                 result = microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
                     quad, mp, thp, ρ, T, q_tot, q_liq, q_ice, q_rai, q_sno,
-                    T′T′, q′q′, corr_Tq, dt, nsubs_quad,
+                    T′T′, q′q′, corr_Tq, FT(1), dt, nsubs_quad,
                 )
 
                 # Total condensed water tendency
@@ -559,7 +559,7 @@ using ClimaAtmos
                 result = @inferred microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
                     quad, mp, thp, ρ, T, q_tot, q_liq, q_ice, q_rai, q_sno,
-                    T′T′, q′q′, corr_Tq, dt, nsubs_quad,
+                    T′T′, q′q′, corr_Tq, FT(1), dt, nsubs_quad,
                 )
 
                 # Verify return type
@@ -596,13 +596,15 @@ using ClimaAtmos
                 dt = FT(60)
                 nsubs_quad = 1
 
-                # Create evaluator
+                # Create evaluator (CF = 1 → q_in_cloud = q_mean; λ = 1 here for simplicity)
                 evaluator = Microphysics1MEvaluator(
                     BMT.Microphysics1Moment(),
                     mp, thp, ρ, T_mean,
-                    q_lcl_mean, q_icl_mean, q_rai, q_sno, q_lcl_mean, q_icl_mean, FT(1),
-                    FT(1), dt, nsubs_quad,
-                    (),  # Empty args tuple for 1-moment
+                    q_lcl_mean, q_icl_mean,    # q_lcl_in_cloud, q_icl_in_cloud
+                    q_rai, q_sno,              # q_rai, q_sno
+                    FT(1),                     # λ
+                    dt, nsubs_quad,
+                    (),
                 )
 
                 # Verify it's a proper functor (not a closure)
@@ -668,7 +670,7 @@ using ClimaAtmos
                     BMT.Microphysics1Moment(),
                     quad_gm, mp, tps, ρ,
                     T_mean, q_tot, q_liq, q_ice, q_rai, q_sno,
-                    T′T′, q′q′, corr_Tq, dt, nsubs_quad,
+                    T′T′, q′q′, corr_Tq, FT(1), dt, nsubs_quad,
                 )
 
                 # Direct BMT call
@@ -762,7 +764,7 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp_1m, thp, ρ, T,
                         q_tot, q_liq, q_ice, q_rai, q_sno,
-                        FT(0), FT(0), FT(0), dt, nsubs_quad,
+                        FT(0), FT(0), FT(0), FT(1), dt, nsubs_quad,
                     )
 
                     result_direct = BMT.average_bulk_microphysics_tendencies(
@@ -785,7 +787,7 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp_1m, thp, ρ, T,
                         q_tot, q_liq, q_ice, q_rai, q_sno,
-                        FT(4.0), FT(1e-5), FT(0.6), dt, nsubs_quad,
+                        FT(4.0), FT(1e-5), FT(0.6), FT(1), dt, nsubs_quad,
                     )
                     for field in (:dq_lcl_dt, :dq_icl_dt, :dq_rai_dt, :dq_sno_dt)
                         @test isfinite(getfield(result_var, field))
@@ -938,14 +940,14 @@ using ClimaAtmos
                     microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T,
                         q_tot, q_lcl, q_icl, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq, dt, nsubs_quad,
+                        T′T′, q′q′, corr_Tq, FT(1), dt, nsubs_quad,
                     )
                 end
                 t = @elapsed for _ in 1:N_bench
                     microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T,
                         q_tot, q_lcl, q_icl, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq, dt, nsubs_quad,
+                        T′T′, q′q′, corr_Tq, FT(1), dt, nsubs_quad,
                     )
                 end
                 timings_1m[order] = t

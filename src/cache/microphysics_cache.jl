@@ -905,7 +905,7 @@ function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
     (; dt) = p
-    (; ᶜT, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
+    (; ᶜT, ᶜq_tot_nonneg, ᶜmp_tendency, ᶜcloud_fraction) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
@@ -932,7 +932,7 @@ function set_microphysics_tendency_cache!(
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, corr_Tq, dt, nsubs_quad,
+            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜcloud_fraction, dt, nsubs_quad,
         )
     end
 
@@ -943,7 +943,7 @@ function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, ::DiagnosticEDMFX,
 )
     (; dt) = p
-    (; ᶜT, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
+    (; ᶜT, ᶜq_tot_nonneg, ᶜmp_tendency, ᶜcloud_fraction) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
     cm1 = CAP.microphysics_1m_params(p.params)
@@ -972,7 +972,7 @@ function set_microphysics_tendency_cache!(
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, corr_Tq, dt, nsubs_quad,
+            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜcloud_fraction, dt, nsubs_quad,
         )
     end
 
@@ -985,7 +985,7 @@ function set_microphysics_tendency_cache!(
     (; dt) = p
     (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
+    (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs, ᶜcloud_fraction) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
@@ -1024,7 +1024,7 @@ function set_microphysics_tendency_cache!(
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, corr_Tq, dt, nsubs_quad,
+            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜcloud_fraction, dt, nsubs_quad,
         )
     end
 
