@@ -212,7 +212,7 @@ Pair with **`quadrature_order`** as in the main ClimaAtmos configuration.
 
 ## 10. Calibration / EKI layout (this experiment)
 
-Paths (`simulation_output/...`), **`varfix_on` / `varfix_off`**, and sweep drivers live under `lib/` and `scripts/`.
+Paths (`simulation_output/...`), **`varfix_on_<distribution_slug>` / `varfix_off`**, and sweep drivers live under `lib/` and `scripts/`.
 
 - **Varfix “off”:** effective `sgs_distribution` is a **baseline** name from §9 (first table).
 - **Varfix “on”:** effective `sgs_distribution` is a **`(gaussian|lognormal)_vertical_profile*`** name.

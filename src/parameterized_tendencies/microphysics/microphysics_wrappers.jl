@@ -157,6 +157,66 @@ end
     return (; dq_tot_dt, e_tot_hlpr)
 end
 
+function microphysics_tendencies_0m(
+    SG_quad::SGSQuadrature{<:Any, <:Any, <:Any, <:AbstractVerticallyResolvedSGS},
+    args...,
+)
+    d = SG_quad.dist
+    throw(
+        ArgumentError(
+            "0M SGS with `AbstractVerticallyResolvedSGS` (got $(typeof(d))) " *
+            "must use `microphysics_tendencies_0m_sgs_row` with layer geometry and gradients, " *
+            "not the bivariate `microphysics_tendencies_0m` wrapper.",
+        ),
+    )
+end
+
+"""
+    microphysics_tendencies_0m_sgs_row(...)
+
+Row-wise 0M SGS tendency integration for vertically resolved SGS layouts.
+
+Mirrors the architecture of [`microphysics_tendencies_1m_sgs_row`](@ref):
+accepts the full suite of vertical finite-difference gradients and calls the
+18-argument layer-profile [`integrate_over_sgs`](@ref) overload.
+"""
+@inline function microphysics_tendencies_0m_sgs_row(
+    sgs_quad,
+    cmp,
+    thp,
+    ρ,
+    T,
+    q_tot_nonneg,
+    T′T′,
+    q′q′,
+    ρ_Tq,
+    Φ,
+    Δz,
+    local_geometry,
+    grad_q_dn,
+    grad_q_up,
+    grad_θ_dn,
+    grad_θ_up,
+    ∂T∂θ_li,
+    grad_qq_dn,
+    grad_qq_up,
+    grad_TT_dn,
+    grad_TT_up,
+    tst,
+    dt,
+)
+    evaluator = Microphysics0MEvaluator(cmp, thp, ρ, Φ)
+    (; dq_tot_dt, e_tot_hlpr) = integrate_over_sgs(
+        evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, ρ_Tq, Δz, local_geometry,
+        grad_q_dn, grad_q_up, grad_θ_dn, grad_θ_up, ∂T∂θ_li,
+        grad_qq_dn, grad_qq_up, grad_TT_dn, grad_TT_up,
+    )
+    if tst isa Explicit
+        dq_tot_dt = explicit_0m_tendency_limit(dq_tot_dt, q_tot_nonneg, dt)
+    end
+    return (; dq_tot_dt, e_tot_hlpr)
+end
+
 ###
 ### 1 Moment Microphysics
 ###
@@ -641,10 +701,128 @@ NamedTuple with tendencies: `dq_lcl_dt`, `dn_lcl_dt`, `dq_rai_dt`, `dn_rai_dt`
         q_tot, q_liq, n_liq, q_rai, n_rai,
     )
 end
+
+"""
+    Microphysics2MEvaluator
+
+GPU-safe functor for computing 2-moment microphysics tendencies at quadrature
+points. Computes BMT 2-moment tendencies at perturbed thermodynamic states
+`(T_hat, q_tot_hat)` for use in SGS quadrature integration.
+
+Cloud droplet number, rain mass, and rain number are held at their grid-mean
+values; only T and q_tot are perturbed by the SGS quadrature.
+
+# Fields
+- `cmp`: Microphysics 2M parameters
+- `tps`: Thermodynamics parameters
+- `ρ`: Air density [kg/m³]
+- `T_mean`: Grid-mean temperature [K]
+- `q_liq`: Cloud liquid specific humidity [kg/kg]
+- `n_liq`: Cloud liquid number concentration [1/kg]
+- `q_rai`: Rain specific humidity [kg/kg]
+- `n_rai`: Rain number concentration [1/kg]
+"""
+struct Microphysics2MEvaluator{CMP, TPS, FT}
+    cmp::CMP
+    tps::TPS
+    ρ::FT
+    T_mean::FT
+    q_liq::FT
+    n_liq::FT
+    q_rai::FT
+    n_rai::FT
+end
+@inline function (eval::Microphysics2MEvaluator)(T_hat, q_tot_hat)
+    FT = typeof(eval.ρ)
+    q_tot_hat = max(FT(0), q_tot_hat)
+    return BMT.bulk_microphysics_tendencies(
+        BMT.Microphysics2Moment(), eval.cmp, eval.tps, eval.ρ, T_hat,
+        q_tot_hat, eval.q_liq, eval.n_liq, eval.q_rai, eval.n_rai,
+    )
+end
+
 @inline function microphysics_tendencies_quadrature_2m(
-    SG_quad::SGSQuadrature, cmp, tps, ρ, T,
-    q_tot, q_liq, n_liq, q_rai, n_rai,
+    SG_quad::SGSQuadrature{N, A, W, D}, cmp, tps, ρ, T,
+    q_tot, q_liq, n_liq, q_rai, n_rai, T′T′, q′q′, corr_Tq,
+) where {
+    N,
+    A,
+    W,
+    D <: Union{GaussianSGS, LogNormalSGS, GridMeanSGS},
+}
+    # Bivariate (T, q) quadrature for base distributions only.
+    q_liq_nonneg = max(0, q_liq)
+    n_liq_nonneg = max(0, n_liq)
+    q_rai_nonneg = max(0, q_rai)
+    n_rai_nonneg = max(0, n_rai)
+    evaluator = Microphysics2MEvaluator(
+        cmp, tps, ρ, T, q_liq_nonneg, n_liq_nonneg, q_rai_nonneg, n_rai_nonneg,
+    )
+    return integrate_over_sgs(
+        evaluator, SG_quad, q_tot, T, q′q′, T′T′, corr_Tq,
+    )
+end
+
+function microphysics_tendencies_quadrature_2m(
+    SG_quad::SGSQuadrature{<:Any, <:Any, <:Any, <:AbstractVerticallyResolvedSGS},
+    args...,
 )
-    error("Not implemented yet")
-    return nothing
+    d = SG_quad.dist
+    throw(
+        ArgumentError(
+            "2M SGS with `AbstractVerticallyResolvedSGS` (got $(typeof(d))) " *
+            "must use `microphysics_tendencies_quadrature_2m_sgs_row` with layer " *
+            "geometry and gradients, not the bivariate " *
+            "`microphysics_tendencies_quadrature_2m` wrapper.",
+        ),
+    )
+end
+
+"""
+    microphysics_tendencies_quadrature_2m_sgs_row(...)
+
+Row-wise 2M SGS tendency integration for vertically resolved SGS layouts.
+
+Mirrors the architecture of [`microphysics_tendencies_1m_sgs_row`](@ref):
+accepts the full suite of vertical finite-difference gradients and calls the
+18-argument layer-profile [`integrate_over_sgs`](@ref) overload.
+"""
+@inline function microphysics_tendencies_quadrature_2m_sgs_row(
+    sgs_quad,
+    cmp,
+    tps,
+    ρ,
+    T,
+    q_tot,
+    q_liq,
+    n_liq,
+    q_rai,
+    n_rai,
+    T′T′,
+    q′q′,
+    ρ_Tq,
+    Δz,
+    local_geometry,
+    grad_q_dn,
+    grad_q_up,
+    grad_θ_dn,
+    grad_θ_up,
+    ∂T∂θ_li,
+    grad_qq_dn,
+    grad_qq_up,
+    grad_TT_dn,
+    grad_TT_up,
+)
+    q_liq_nonneg = max(0, q_liq)
+    n_liq_nonneg = max(0, n_liq)
+    q_rai_nonneg = max(0, q_rai)
+    n_rai_nonneg = max(0, n_rai)
+    evaluator = Microphysics2MEvaluator(
+        cmp, tps, ρ, T, q_liq_nonneg, n_liq_nonneg, q_rai_nonneg, n_rai_nonneg,
+    )
+    return integrate_over_sgs(
+        evaluator, sgs_quad, q_tot, T, q′q′, T′T′, ρ_Tq, Δz, local_geometry,
+        grad_q_dn, grad_q_up, grad_θ_dn, grad_θ_up, ∂T∂θ_li,
+        grad_qq_dn, grad_qq_up, grad_TT_dn, grad_TT_up,
+    )
 end

@@ -163,6 +163,22 @@ NamedTuple with SGS-averaged:
     return (; T = T_mean, q_liq, q_ice)
 end
 
+@inline function compute_sgs_saturation_adjustment(
+    thermo_params,
+    SG_quad::SGSQuadrature{<:Any, <:Any, <:Any, <:AbstractVerticallyResolvedSGS},
+    args...,
+)
+    d = SG_quad.dist
+    throw(
+        ArgumentError(
+            "SGS saturation adjustment with `AbstractVerticallyResolvedSGS` " *
+            "(got $(typeof(d))) must use `compute_sgs_saturation_adjustment_row` " *
+            "with layer geometry and gradients, not the scalar " *
+            "`compute_sgs_saturation_adjustment` wrapper.",
+        ),
+    )
+end
+
 """
     compute_sgs_saturation_adjustment_row(
         thermo_params, sgs_quad, ρ, T_mean, q_mean,

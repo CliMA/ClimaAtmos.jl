@@ -66,6 +66,10 @@ function external_driven_single_column!(integrator)
     p = integrator.p
     t = integrator.t
 
+    # If external forcing was left unset (e.g., ProvidedColumnTimeVarying without file),
+    # keep callback as a no-op until user rebuilds with a forcing object.
+    haskey(p.external_forcing, :column_timevaryinginputs) || return nothing
+
     @assert p.atmos.sfc_temperature isa ExternalTVColumnSST (
         "SCM reanalysis timevarying setup requires `initial_condition` " *
         "and `external_forcing` to be set to `ReanalysisTimeVarying`"

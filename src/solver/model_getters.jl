@@ -583,6 +583,26 @@ function get_large_scale_advection_model(
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
 
+"""
+    provided_column_timevarying_forcing_file(parsed_args, setup_type)
+
+Prefer `parsed_args[\"external_forcing_file\"]` when non-empty; otherwise use `setup_type.external_forcing_file`
+when present (e.g. [`Setups.InterpolatedColumnProfile`](@ref) from `ReanalysisTimeVarying` IC).
+"""
+function provided_column_timevarying_forcing_file(parsed_args, setup_type)
+    f = parsed_args["external_forcing_file"]
+    if !isnothing(f) && !(f isa AbstractString && isempty(strip(f)))
+        return String(strip(f))
+    end
+    if !isnothing(setup_type) && hasproperty(setup_type, :external_forcing_file)
+        ef = getproperty(setup_type, :external_forcing_file)
+        if ef isa AbstractString && !isempty(strip(ef))
+            return String(strip(ef))
+        end
+    end
+    return nothing
+end
+
 function get_external_forcing_model(
     parsed_args,
     ::Type{FT};
@@ -598,11 +618,15 @@ function get_external_forcing_model(
         "GCM",
         "ReanalysisTimeVarying",
         "ReanalysisMonthlyAveragedDiurnal",
+        "ProvidedColumnTimeVarying",
         "ISDAC",
     )
-    if external_forcing in
-       ("ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal")
-        @assert parsed_args["config"] == "column" "ReanalysisTimeVarying and ReanalysisMonthlyAveragedDiurnal are only supported in column mode."
+    if external_forcing in (
+        "ReanalysisTimeVarying",
+        "ReanalysisMonthlyAveragedDiurnal",
+        "ProvidedColumnTimeVarying",
+    )
+        @assert parsed_args["config"] == "column" "ReanalysisTimeVarying, ReanalysisMonthlyAveragedDiurnal, and ProvidedColumnTimeVarying are only supported in column mode."
     end
     if !isnothing(parsed_args["era5_diurnal_warming"])
         @assert external_forcing == "ReanalysisMonthlyAveragedDiurnal" "era5_diurnal_warming is only supported for ReanalysisMonthlyAveragedDiurnal."
@@ -642,6 +666,19 @@ function get_external_forcing_model(
             )
         end
         ExternalDrivenTVForcing{FT}(external_forcing_file)
+
+    elseif external_forcing == "ProvidedColumnTimeVarying"
+        path = provided_column_timevarying_forcing_file(parsed_args, setup_type)
+        if isnothing(path)
+            @warn(
+                "ProvidedColumnTimeVarying: no `external_forcing_file` in config and setup_type did not supply one, leaving blank. " *
+                    "If you are supplying your own `ProvidedColumnTVForcing` object, remake the `AtmosSimulation` or `AtmosModel` object after inserting your `ProvidedColumnTVForcing` into `AtmosModel` prior to running the model.",
+                maxlog = 1,
+            )
+            return nothing
+        else
+            return ProvidedColumnTVForcing(path, FT)
+        end
 
     elseif external_forcing == "ISDAC"
         ISDACForcing()

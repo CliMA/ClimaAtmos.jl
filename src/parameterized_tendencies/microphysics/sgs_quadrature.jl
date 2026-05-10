@@ -796,27 +796,14 @@ Weighted sum ``\\approx E[f(T, q)]`` with the same type as `f(T, q)`.
 """
 function integrate_over_sgs(f, quad::SGSQuadrature, μ_q, μ_T, q′q′, T′T′, corr_Tq)
     if _is_vertically_resolved_sgs(quad.dist)
-        σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
-        μ_T_p, μ_q_p = promote(μ_T, μ_q)
-        inner = _inner_dist(quad.dist)
-        transform = PhysicalPointTransform(
-            inner,
-            μ_T_p,
-            μ_q_p,
-            oftype(μ_T_p, σ_T),
-            oftype(μ_T_p, σ_q),
-            oftype(μ_T_p, corr),
-            oftype(μ_T_p, quad.T_min),
-            oftype(μ_T_p, quad.q_max),
+        throw(
+            ArgumentError(
+                "Vertically resolved SGS quadratures (got $(typeof(quad.dist))) " *
+                "require the 18-argument gradient signature and cannot be evaluated " *
+                "using the 7-argument fallback. Use the layer-profile " *
+                "`integrate_over_sgs` overload with Δz, LocalGeometry, and subcell gradients.",
+            ),
         )
-        inner_quad = SGSQuadrature(
-            typeof(μ_T_p);
-            quadrature_order = quadrature_order(quad),
-            distribution = inner,
-            T_min = quad.T_min,
-            q_max = quad.q_max,
-        )
-        return sum_over_quadrature_points(f, transform, inner_quad)
     end
     σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
     μ_T_p, μ_q_p = promote(μ_T, μ_q)
@@ -844,6 +831,16 @@ function integrate_over_sgs(
     δq_half,
     δT_half,
 )
+    if _is_vertically_resolved_sgs(quad.dist)
+        throw(
+            ArgumentError(
+                "Vertically resolved SGS quadratures (got $(typeof(quad.dist))) " *
+                "require the 18-argument gradient signature and cannot be evaluated " *
+                "using the 9-argument (δq_half, δT_half) fallback. Use the layer-profile " *
+                "`integrate_over_sgs` overload with Δz, LocalGeometry, and subcell gradients.",
+            ),
+        )
+    end
     return integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
 end
 

@@ -134,6 +134,13 @@ Base.@kwdef mutable struct FullStudyOptions
     """
     forward_varfix_values::Union{Nothing, Vector{Bool}} = nothing
     """
+    Optional global varfix-on SGS distribution list for forward sweep.
+    If set, varfix-on runs one task per entry for every case.
+    Env: **`VA_FORWARD_SWEEP_VARFIX_ON_DISTRIBUTIONS`** (comma-separated). CLI:
+    **`--forward-varfix-on-distributions=a,b,c`**.
+    """
+    forward_varfix_on_distributions::Union{Nothing, Vector{String}} = nothing
+    """
     Gauss–Hermite orders **`N`** for the forward grid (nonempty subset of `1:5`). If **`nothing`**, the merge step may
     set this from **`VA_FORWARD_SWEEP_QUADRATURE_ORDERS`**; else `ForwardSweepConfig` defaults to **`1:5`** after
     `va_forward_sweep_merge_env!` on the config. CLI: **`--forward-quadrature-orders=1,2,3`** or **`1:5`**.
@@ -227,6 +234,11 @@ function va_full_study_merge_env!(opts::FullStudyOptions)
         opts.forward_quadrature_orders =
             va_parse_forward_sweep_quadrature_orders_spec(ENV["VA_FORWARD_SWEEP_QUADRATURE_ORDERS"])
     end
+    if opts.forward_varfix_on_distributions === nothing &&
+            haskey(ENV, "VA_FORWARD_SWEEP_VARFIX_ON_DISTRIBUTIONS")
+        opts.forward_varfix_on_distributions =
+            va_parse_forward_sweep_varfix_on_distributions_spec(ENV["VA_FORWARD_SWEEP_VARFIX_ON_DISTRIBUTIONS"])
+    end
     s_task = strip(get(ENV, "SWEEP_TASK_ID", get(ENV, "SLURM_ARRAY_TASK_ID", "")))
     if opts.forward_task_id === nothing && !isempty(s_task)
         opts.forward_task_id = parse(Int, s_task)
@@ -266,6 +278,7 @@ Usage: julia --project=. scripts/run_full_study.jl [flags]
   --forward-case-slugs=a,b,c   Only these merged case slugs (subset of the registry). Env: VA_FORWARD_SWEEP_CASE_SLUGS
   --forward-figures-full-uncalibrated-registry   Figures: full uncalibrated registry + no slug filter (forwards unchanged). Env: VA_FORWARD_FIGURES_FULL_UNCALIBRATED_REGISTRY
   --forward-varfix=both|on|off|off,on   Varfix axis for forward sweep. Env: VA_FORWARD_SWEEP_VARFIX
+  --forward-varfix-on-distributions=a,b,c   Override varfix-on SGS methods (global). Env: VA_FORWARD_SWEEP_VARFIX_ON_DISTRIBUTIONS
   --forward-quadrature-orders=1,2,3|1:5   Gauss–Hermite column orders (subset of 1:5). Env: VA_FORWARD_SWEEP_QUADRATURE_ORDERS
   --forward-task-id=N   0-based single sweep task; else SWEEP_TASK_ID / SLURM_ARRAY_TASK_ID
   --uncalibrated-study        Preset: SCM-only forwards on `registries/forward_sweep_cases_uncalibrated.yml` (skips calib, naive, LES obs build)
@@ -334,6 +347,9 @@ function parse_full_study_cli(argv::Vector{String})::FullStudyOptions
             opts.forward_figures_full_uncalibrated_registry = true
         elseif startswith(a, "--forward-varfix=")
             opts.forward_varfix_values = va_forward_sweep_varfix_values_from_spec(split(a, '=', limit = 2)[2])
+        elseif startswith(a, "--forward-varfix-on-distributions=")
+            opts.forward_varfix_on_distributions =
+                va_parse_forward_sweep_varfix_on_distributions_spec(String(split(a, '=', limit = 2)[2]))
         elseif startswith(a, "--forward-quadrature-orders=")
             opts.forward_quadrature_orders =
                 va_parse_forward_sweep_quadrature_orders_spec(String(split(a, '=', limit = 2)[2]))
@@ -382,6 +398,9 @@ function va_full_study_forward_sweep_config(opts::FullStudyOptions)::ForwardSwee
     end
     if opts.forward_varfix_values !== nothing
         cfg.varfix_values = copy(opts.forward_varfix_values)
+    end
+    if opts.forward_varfix_on_distributions !== nothing
+        cfg.varfix_on_distributions = copy(opts.forward_varfix_on_distributions)
     end
     if opts.forward_quadrature_orders !== nothing
         cfg.quadrature_orders = copy(opts.forward_quadrature_orders)
@@ -456,15 +475,18 @@ function run_full_study!(opts::FullStudyOptions)
     end
 
     if !opts.skip_forward
+        cfg_forward = va_full_study_forward_sweep_config(opts)
+        n_forward_tasks = va_forward_sweep_task_count(_VA_ROOT, cfg_forward)
         if !opts.forward_baseline_scm && opts.skip_calib
             @warn "Calibration was skipped; EKI-parameter forward sweep expects merged member TOMLs on disk. Use --forward-baseline-scm for SCM-only forwards, or run calibration first."
         end
-        @info "Forward grid (registry × N_quad × varfix × resolution ladder)" forward_skip_done =
+        @info "Forward grid (registry × N_quad × varfix × resolution ladder)" n_forward_tasks =
+            n_forward_tasks forward_skip_done =
             opts.forward_skip_done forward_resolution_ladder = opts.forward_resolution_ladder forward_baseline_scm =
             opts.forward_baseline_scm forward_registry = opts.forward_registry forward_case_slugs =
             opts.forward_case_slugs forward_quadrature_orders = opts.forward_quadrature_orders forward_task_id =
             opts.forward_task_id forward_varfix = opts.forward_varfix_values
-        run_forward_sweep!(va_full_study_forward_sweep_config(opts); merge_env = false)
+        run_forward_sweep!(cfg_forward; merge_env = false)
     else
         @info "Skipping forward grid (--skip-forward)"
     end

@@ -63,6 +63,12 @@ Base.@kwdef mutable struct ForwardSweepConfig
     """
     varfix_values::Vector{Bool} = Bool[false, true]
     """
+    Optional global varfix-on SGS distributions for the forward sweep. If `nothing`, varfix-on uses a single
+    default distribution resolved from each case YAML (`sgs_distribution_varfix_on` when present, else
+    `va_base_to_vertical_profile_sgs_distribution(sgs_distribution)`). If set, varfix-on tasks use exactly this list.
+    """
+    varfix_on_distributions::Union{Nothing, Vector{String}} = nothing
+    """
     If set, only registry rows whose merged [`va_forward_sweep_case_slug`](@ref) is in this list are run and plotted.
     REPL: `ForwardSweepConfig(; case_slugs = ["TRMM_LBA", "Bomex"])`. Env: comma-separated **`VA_FORWARD_SWEEP_CASE_SLUGS`**.
     CLI (`sweep_forward_runs.jl`): **`--case-slugs=a,b,c`**. `run_full_study.jl`: **`--forward-case-slugs=...`**.
@@ -109,6 +115,14 @@ end
 function va_forward_sweep_assert_nonempty_varfix!(cfg::ForwardSweepConfig)
     isempty(cfg.varfix_values) &&
         error("ForwardSweepConfig.varfix_values must be non-empty (e.g. [false], [true], or [false, true]).")
+    return cfg
+end
+
+function va_forward_sweep_assert_varfix_on_distributions!(cfg::ForwardSweepConfig)
+    if cfg.varfix_on_distributions !== nothing
+        isempty(cfg.varfix_on_distributions) &&
+            error("ForwardSweepConfig.varfix_on_distributions must be non-empty when provided.")
+    end
     return cfg
 end
 
@@ -198,6 +212,10 @@ function va_forward_sweep_merge_env!(cfg::ForwardSweepConfig)
     end
     if haskey(ENV, "VA_FORWARD_SWEEP_QUADRATURE_ORDERS")
         cfg.quadrature_orders = va_parse_forward_sweep_quadrature_orders_spec(ENV["VA_FORWARD_SWEEP_QUADRATURE_ORDERS"])
+    end
+    if haskey(ENV, "VA_FORWARD_SWEEP_VARFIX_ON_DISTRIBUTIONS")
+        cfg.varfix_on_distributions =
+            va_parse_forward_sweep_varfix_on_distributions_spec(ENV["VA_FORWARD_SWEEP_VARFIX_ON_DISTRIBUTIONS"])
     end
     return va_forward_sweep_assert_quadrature_orders!(cfg)
 end
@@ -310,35 +328,40 @@ function va_forward_sweep_case_dz_bottom(case_dict::AbstractDict)
 end
 
 """
-    va_forward_sweep_varfix_on_distribution_list(case_dict) -> Union{Nothing,Vector{String}}
+    va_forward_sweep_default_varfix_on_distribution(case_dict) -> String
 
-If merged case YAML defines **`forward_sweep_varfix_on_distributions`** (non-empty list of strings), the forward
-sweep runs **one varfix-on task per entry** (each under `simulation_output/.../varfix_on_<slug>/...`). If the key is
-absent, varfix-on uses a single task and the usual `.../varfix_on/...` directory (see [`run_one`](@ref) in
-`sweep_forward_core.jl`).
+Resolve the single default varfix-on SGS distribution for a case from merged YAML:
+`sgs_distribution_varfix_on` when set; otherwise map base `sgs_distribution` to its vertical-profile variant.
 """
-function va_forward_sweep_varfix_on_distribution_list(case_dict::AbstractDict)::Union{Nothing, Vector{String}}
-    raw = get(case_dict, "forward_sweep_varfix_on_distributions", nothing)
-    raw isa AbstractVector || return nothing
-    out = String[]
-    for x in raw
-        s = String(strip(string(x)))
-        isempty(s) || push!(out, s)
+function va_forward_sweep_default_varfix_on_distribution(case_dict::AbstractDict)::String
+    base_dist = String(get(case_dict, "sgs_distribution", "lognormal"))
+    vo = get(case_dict, "sgs_distribution_varfix_on", nothing)
+    if vo !== nothing
+        s = strip(String(vo))
+        !isempty(s) && return s
     end
-    return isempty(out) ? nothing : out
+    return va_base_to_vertical_profile_sgs_distribution(base_dist)
 end
 
-"""Directory segment under `N_<n>/` for this varfix leg (`varfix_off`, `varfix_on`, or `varfix_on_<dist_slug>`)."""
+"""Parse comma-separated SGS distribution names for varfix-on forward expansion (empty tokens dropped)."""
+function va_parse_forward_sweep_varfix_on_distributions_spec(s::AbstractString)::Vector{String}
+    parts = split(String(s), ','; keepempty = false)
+    out = String[strip(p) for p in parts if !isempty(strip(p))]
+    isempty(out) && error("No distribution names parsed from $(repr(s))")
+    return out
+end
+
+"""Directory segment under `N_<n>/` for this varfix leg (`varfix_off` or `varfix_on_<dist_slug>`)."""
 function va_forward_sweep_varfix_dir_segment(
     varfix::Bool,
     forced_varfix_on_dist::Union{Nothing, AbstractString},
 )::String
     varfix || return "varfix_off"
-    if forced_varfix_on_dist === nothing
-        return "varfix_on"
-    end
+    forced_varfix_on_dist === nothing &&
+        error("varfix_on distribution is required for uniform forward-sweep pathing.")
     s = String(strip(string(forced_varfix_on_dist)))
-    return isempty(s) ? "varfix_on" : string("varfix_on_", va_sgs_dist_path_slug(s))
+    isempty(s) && error("varfix_on distribution cannot be empty for uniform forward-sweep pathing.")
+    return string("varfix_on_", va_sgs_dist_path_slug(s))
 end
 
 """
@@ -347,16 +370,16 @@ end
 Each row: `(model_config_layers, scm_toml, slug, n_quad, varfix_bool, tier, z_stretch, yaml_dz, eki_off, eki_on, forced_varfix_on_dist)`
 where **`model_config_layers`** is `Vector{String}` (merge order); **`yaml_rel`** for grouping is `layers[end]`.
 with `eki_off` / `eki_on` optional registry-relative experiment YAML names (or `nothing`).
-The last field is **`nothing`** unless **`varfix_bool`** is true and the merged case YAML lists
-[`va_forward_sweep_varfix_on_distribution_list`](@ref); then it is the **`sgs_distribution`** string for that task.
+The last field is the varfix-on `sgs_distribution` for varfix-on rows and `nothing` for varfix-off rows.
 
-Output layout: `simulation_output/<slug>/<res_seg>/N_<n>/(varfix_off|varfix_on|varfix_on_<dist_slug>)/<forward_subdir>/output_active/`
+Output layout: `simulation_output/<slug>/<res_seg>/N_<n>/(varfix_off|varfix_on_<dist_slug>)/<forward_subdir>/output_active/`
 where `<forward_subdir>` is `forward_eki` or `forward_only` (see [`va_forward_sweep_forward_subdir`](@ref)).
 Varfix legs are those in **`cfg.varfix_values`** (default both off and on).
 """
 function va_flatten_forward_sweep_tasks(experiment_dir::AbstractString, cfg::ForwardSweepConfig)
     va_forward_sweep_assert_nonempty_varfix!(cfg)
     va_forward_sweep_assert_quadrature_orders!(cfg)
+    va_forward_sweep_assert_varfix_on_distributions!(cfg)
     rows = va_load_forward_sweep_case_rows(experiment_dir, cfg)
     n_list = cfg.quadrature_orders
     tasks = Tuple{
@@ -376,9 +399,13 @@ function va_flatten_forward_sweep_tasks(experiment_dir::AbstractString, cfg::For
         tiers = va_resolution_tiers_for_forward(row.case_dict, cfg)
         z_stretch = va_forward_sweep_case_z_stretch(row.case_dict)
         yaml_dz = va_forward_sweep_case_dz_bottom(row.case_dict)
-        vo_list = va_forward_sweep_varfix_on_distribution_list(row.case_dict)
+        vo_list = if cfg.varfix_on_distributions === nothing
+            String[va_forward_sweep_default_varfix_on_distribution(row.case_dict)]
+        else
+            cfg.varfix_on_distributions
+        end
         for tier in tiers, n in n_list, vf in cfg.varfix_values
-            if vf && vo_list !== nothing
+            if vf
                 for d in vo_list
                     push!(
                         tasks,

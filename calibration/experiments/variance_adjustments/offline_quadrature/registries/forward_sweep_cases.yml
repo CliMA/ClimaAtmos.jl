@@ -1,0 +1,33 @@
+# Local offline_quadrature forward registry.
+#
+# This keeps the workflow self-contained under offline_quadrature/ and avoids borrowing
+# the parent experiment registry or its shared TOML paths.
+# Canonical forward-sweep cases used by the experiment's full study.
+# This mirrors calibration/experiments/variance_adjustments/registries/forward_sweep_cases.yml
+# but points `scm_toml` to the vendored offline_quadrature TOML so runs are self-contained.
+cases:
+  - model_config_path:
+      - model_configs/master_column_varquad_diagnostic_edmfx.yml
+      - model_configs/trmm_column_varquad_hires.yml
+    scm_toml: offline_quadrature/toml/prognostic_edmfx.toml
+
+  - model_config_path:
+      - model_configs/master_column_varquad_diagnostic_edmfx.yml
+      - model_configs/dycoms_rf01_column_varquad_hires.yml
+    scm_toml: offline_quadrature/toml/prognostic_edmfx.toml
+
+  - model_config_path:
+      - model_configs/master_column_varquad_diagnostic_edmfx.yml
+      - model_configs/dycoms_rf02_column_varquad_hires.yml
+    scm_toml: offline_quadrature/toml/prognostic_edmfx.toml
+
+  - model_config_path:
+      - model_configs/master_column_varquad_diagnostic_edmfx.yml
+      - model_configs/bomex_column_varquad_hires.yml
+    scm_toml: offline_quadrature/toml/prognostic_edmfx.toml
+
+  # GABLS is available but commented out in the canonical registry; include if desired.
+  # - model_config_path:
+  #     - model_configs/master_column_varquad_diagnostic_edmfx.yml
+  #     - model_configs/gabls_column_varquad_hires.yml
+  #   scm_toml: offline_quadrature/toml/prognostic_edmfx.toml

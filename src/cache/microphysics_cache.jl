@@ -955,12 +955,34 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
         # the nonlinear dependence on condensate at each quadrature point.
         _fill_∂T_∂θ_li_for_sgs_subcell!(Y, p, thp)
         (; ᶜT′T′, ᶜq′q′) = p.precomputed
-        ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
-        corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
-        @. ᶜmp_tendency = microphysics_tendencies_0m(
-            $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
-            ᶜσT², ᶜσq², corr_Tq, ᶜΦ, $(tst), dt,
-        )
+        if sgs_quad.dist isa AbstractVerticallyResolvedSGS
+            ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
+            ρ_param = correlation_Tq(p.params)
+            ᶜdz = Fields.Δz_field(axes(Y.c))
+            ᶜlg = Fields.local_geometry_field(Y.c)
+            (; ᶜq_liq, ᶜq_ice) = p.precomputed
+            ᶜθ_li_sgs = @. lazy(
+                TD.liquid_ice_pottemp(
+                    thp, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+                ),
+            )
+            @. ᶜmp_tendency = microphysics_tendencies_0m_sgs_row(
+                $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
+                ᶜT′T′, ᶜq′q′, ρ_param, ᶜΦ,
+                ᶜdz, ᶜlg, ᶜleft_bias(ᶠgradᵥ(ᶜq_tot_nonneg)),
+                ᶜright_bias(ᶠgradᵥ(ᶜq_tot_nonneg)), ᶜleft_bias(ᶠgradᵥ(ᶜθ_li_sgs)),
+                ᶜright_bias(ᶠgradᵥ(ᶜθ_li_sgs)), ᶜ∂T_∂θ_buf,
+                ᶜleft_bias(ᶠgradᵥ(ᶜq′q′)), ᶜright_bias(ᶠgradᵥ(ᶜq′q′)),
+                ᶜleft_bias(ᶠgradᵥ(ᶜT′T′)), ᶜright_bias(ᶠgradᵥ(ᶜT′T′)), $(tst), dt,
+            )
+        else
+            ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+            corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
+            @. ᶜmp_tendency = microphysics_tendencies_0m(
+                $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
+                ᶜσT², ᶜσq², corr_Tq, ᶜΦ, $(tst), dt,
+            )
+        end
     end
 
     # TODO - duplicated with tendency and implicit cache update
@@ -1000,12 +1022,34 @@ function set_microphysics_tendency_cache!(
     else
         _fill_∂T_∂θ_li_for_sgs_subcell!(Y, p, thp)
         (; ᶜT′T′, ᶜq′q′) = p.precomputed
-        ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
-        corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
-        @. ᶜmp_tendency = microphysics_tendencies_0m(
-            $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
-            ᶜσT², ᶜσq², corr_Tq, ᶜΦ, $(tst), dt,
-        )
+        if sgs_quad.dist isa AbstractVerticallyResolvedSGS
+            ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
+            ρ_param = correlation_Tq(p.params)
+            ᶜdz = Fields.Δz_field(axes(Y.c))
+            ᶜlg = Fields.local_geometry_field(Y.c)
+            (; ᶜq_liq, ᶜq_ice) = p.precomputed
+            ᶜθ_li_sgs = @. lazy(
+                TD.liquid_ice_pottemp(
+                    thp, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+                ),
+            )
+            @. ᶜmp_tendency = microphysics_tendencies_0m_sgs_row(
+                $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
+                ᶜT′T′, ᶜq′q′, ρ_param, ᶜΦ,
+                ᶜdz, ᶜlg, ᶜleft_bias(ᶠgradᵥ(ᶜq_tot_nonneg)),
+                ᶜright_bias(ᶠgradᵥ(ᶜq_tot_nonneg)), ᶜleft_bias(ᶠgradᵥ(ᶜθ_li_sgs)),
+                ᶜright_bias(ᶠgradᵥ(ᶜθ_li_sgs)), ᶜ∂T_∂θ_buf,
+                ᶜleft_bias(ᶠgradᵥ(ᶜq′q′)), ᶜright_bias(ᶠgradᵥ(ᶜq′q′)),
+                ᶜleft_bias(ᶠgradᵥ(ᶜT′T′)), ᶜright_bias(ᶠgradᵥ(ᶜT′T′)), $(tst), dt,
+            )
+        else
+            ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+            corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
+            @. ᶜmp_tendency = microphysics_tendencies_0m(
+                $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
+                ᶜσT², ᶜσq², corr_Tq, ᶜΦ, $(tst), dt,
+            )
+        end
     end
     # Compute derivative
     q_min = CAP.q_min(p.params)
@@ -1074,12 +1118,33 @@ function set_microphysics_tendency_cache!(
         # Evaluate over quadrature points.
         _fill_∂T_∂θ_li_for_sgs_subcell!(Y, p, thp)
         (; ᶜT′T′, ᶜq′q′) = p.precomputed
-        ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
-        corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_0m(
-            $(sgs_quad), cm0, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
-            ᶜσT², ᶜσq², corr_Tq, ᶜΦ, $(tst), dt,
-        )
+        if sgs_quad.dist isa AbstractVerticallyResolvedSGS
+            ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
+            ρ_param = correlation_Tq(p.params)
+            ᶜdz = Fields.Δz_field(axes(Y.c))
+            ᶜlg = Fields.local_geometry_field(Y.c)
+            ᶜθ_li_sgs = @. lazy(
+                TD.liquid_ice_pottemp(
+                    thp, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+                ),
+            )
+            @. ᶜmp_tendency⁰ = microphysics_tendencies_0m_sgs_row(
+                $(sgs_quad), cm0, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
+                ᶜT′T′, ᶜq′q′, ρ_param, ᶜΦ,
+                ᶜdz, ᶜlg, ᶜleft_bias(ᶠgradᵥ(ᶜq_tot_nonneg⁰)),
+                ᶜright_bias(ᶠgradᵥ(ᶜq_tot_nonneg⁰)), ᶜleft_bias(ᶠgradᵥ(ᶜθ_li_sgs)),
+                ᶜright_bias(ᶠgradᵥ(ᶜθ_li_sgs)), ᶜ∂T_∂θ_buf,
+                ᶜleft_bias(ᶠgradᵥ(ᶜq′q′)), ᶜright_bias(ᶠgradᵥ(ᶜq′q′)),
+                ᶜleft_bias(ᶠgradᵥ(ᶜT′T′)), ᶜright_bias(ᶠgradᵥ(ᶜT′T′)), $(tst), dt,
+            )
+        else
+            ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+            corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
+            @. ᶜmp_tendency⁰ = microphysics_tendencies_0m(
+                $(sgs_quad), cm0, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
+                ᶜσT², ᶜσq², corr_Tq, ᶜΦ, $(tst), dt,
+            )
+        end
     end
 
     # TODO - duplicated with tendency and implicit cache update
@@ -1350,13 +1415,47 @@ function set_microphysics_tendency_cache!(
     ᶜn_rai = @. lazy(specific(Y.c.ρn_rai, Y.c.ρ))
 
     # Grid mean or quadrature sum over the SGS fluctuations
-    # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
-    # TODO - looks like only grid-mean version is implemented now
-    sgs_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    @. ᶜmp_tendency = microphysics_tendencies_quadrature_2m(
-        sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
-        ᶜq_tot_nonneg, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai,
-    )
+    sgs_quad = p.atmos.sgs_quadrature
+    tst = p.atmos.microphysics_tendency_timestepping
+    if not_quadrature(sgs_quad)
+        SG_dist = something(sgs_quad, GridMeanSGS())
+        @. ᶜmp_tendency = microphysics_tendencies_quadrature_2m(
+            SG_dist, cmp, thp, Y.c.ρ, ᶜT,
+            ᶜq_tot_nonneg, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai,
+        )
+    else
+        _fill_∂T_∂θ_li_for_sgs_subcell!(Y, p, thp)
+        (; ᶜT′T′, ᶜq′q′) = p.precomputed
+        if sgs_quad.dist isa AbstractVerticallyResolvedSGS
+            ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
+            ρ_param = correlation_Tq(p.params)
+            ᶜdz = Fields.Δz_field(axes(Y.c))
+            ᶜlg = Fields.local_geometry_field(Y.c)
+            ᶜθ_li_sgs = @. lazy(
+                TD.liquid_ice_pottemp(
+                    thp, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, (@. lazy(specific(Y.c.ρq_icl, Y.c.ρ))),
+                ),
+            )
+            @. ᶜmp_tendency = microphysics_tendencies_quadrature_2m_sgs_row(
+                $(sgs_quad), cmp, thp, Y.c.ρ, ᶜT,
+                ᶜq_tot_nonneg, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai,
+                ᶜT′T′, ᶜq′q′, ρ_param,
+                ᶜdz, ᶜlg, ᶜleft_bias(ᶠgradᵥ(ᶜq_tot_nonneg)),
+                ᶜright_bias(ᶠgradᵥ(ᶜq_tot_nonneg)), ᶜleft_bias(ᶠgradᵥ(ᶜθ_li_sgs)),
+                ᶜright_bias(ᶠgradᵥ(ᶜθ_li_sgs)), ᶜ∂T_∂θ_buf,
+                ᶜleft_bias(ᶠgradᵥ(ᶜq′q′)), ᶜright_bias(ᶠgradᵥ(ᶜq′q′)),
+                ᶜleft_bias(ᶠgradᵥ(ᶜT′T′)), ᶜright_bias(ᶠgradᵥ(ᶜT′T′)),
+            )
+        else
+            ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+            corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
+            @. ᶜmp_tendency = microphysics_tendencies_quadrature_2m(
+                $(sgs_quad), cmp, thp, Y.c.ρ, ᶜT,
+                ᶜq_tot_nonneg, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai,
+                ᶜσT², ᶜσq², corr_Tq,
+            )
+        end
+    end
     # Apply the limiter
     apply_2m_tendency_limits!(
         ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping,
@@ -1477,12 +1576,46 @@ function set_microphysics_tendency_cache!(
     )
 
     # Environment mean or quadrature sum over the SGS fluctuations
-    # TODO - looks like only mean version is implemented now
-    SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_2m(
-        SG_quad, cm2p, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
-        ᶜq_lcl⁰, ᶜn_lcl⁰, ᶜq_rai⁰, ᶜn_rai⁰,
-    )
+    sgs_quad = p.atmos.sgs_quadrature
+    if not_quadrature(sgs_quad)
+        SG_dist = something(sgs_quad, GridMeanSGS())
+        @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_2m(
+            SG_dist, cm2p, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
+            ᶜq_lcl⁰, ᶜn_lcl⁰, ᶜq_rai⁰, ᶜn_rai⁰,
+        )
+    else
+        _fill_∂T_∂θ_li_for_sgs_subcell!(Y, p, thp)
+        (; ᶜT′T′, ᶜq′q′) = p.precomputed
+        if sgs_quad.dist isa AbstractVerticallyResolvedSGS
+            ᶜ∂T_∂θ_buf = p.scratch.ᶜtemp_scalar
+            ρ_param = correlation_Tq(p.params)
+            ᶜdz = Fields.Δz_field(axes(Y.c))
+            ᶜlg = Fields.local_geometry_field(Y.c)
+            ᶜθ_li_sgs = @. lazy(
+                TD.liquid_ice_pottemp(
+                    thp, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰,
+                ),
+            )
+            @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_2m_sgs_row(
+                $(sgs_quad), cm2p, thp, ᶜρ⁰, ᶜT⁰,
+                ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜn_lcl⁰, ᶜq_rai⁰, ᶜn_rai⁰,
+                ᶜT′T′, ᶜq′q′, ρ_param,
+                ᶜdz, ᶜlg, ᶜleft_bias(ᶠgradᵥ(ᶜq_tot_nonneg⁰)),
+                ᶜright_bias(ᶠgradᵥ(ᶜq_tot_nonneg⁰)), ᶜleft_bias(ᶠgradᵥ(ᶜθ_li_sgs)),
+                ᶜright_bias(ᶠgradᵥ(ᶜθ_li_sgs)), ᶜ∂T_∂θ_buf,
+                ᶜleft_bias(ᶠgradᵥ(ᶜq′q′)), ᶜright_bias(ᶠgradᵥ(ᶜq′q′)),
+                ᶜleft_bias(ᶠgradᵥ(ᶜT′T′)), ᶜright_bias(ᶠgradᵥ(ᶜT′T′)),
+            )
+        else
+            ᶜσT², ᶜσq², ᶜρ_sgs = sgs_quadrature_Tq_moments(Y, p, ᶜT′T′, ᶜq′q′, thp)
+            corr_Tq = something(ᶜρ_sgs, correlation_Tq(p.params))
+            @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_2m(
+                $(sgs_quad), cm2p, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
+                ᶜq_lcl⁰, ᶜn_lcl⁰, ᶜq_rai⁰, ᶜn_rai⁰,
+                ᶜσT², ᶜσq², corr_Tq,
+            )
+        end
+    end
     # Apply the limiter
     apply_2m_tendency_limits!(
         ᶜmp_tendency⁰, p.atmos.microphysics_tendency_timestepping,

@@ -8,7 +8,12 @@ import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import NCDatasets as NC
-import Interpolations as Intp
+import Dates
+import JLD2
+using Interpolations
+using ClimaUtilities.TimeVaryingInputs
+using ClimaUtilities.TimeVaryingInputs: TimeVaryingInput
+import ClimaUtilities.Utils: period_to_seconds_float
 
 """
     interp_vertical_prof(x, xp, fp)
@@ -27,9 +32,9 @@ Returns:
 - A vector of interpolated values at points `x`.
 """
 function interp_vertical_prof(x, xp, fp)
-    spl = Intp.extrapolate(
-        Intp.interpolate((xp,), fp, Intp.Gridded(Intp.Linear())),
-        Intp.Flat(),
+    spl = Interpolations.extrapolate(
+        Interpolations.interpolate((xp,), fp, Interpolations.Gridded(Interpolations.Linear())),
+        Interpolations.Flat(),
     )
     # Interpolate on a flattened view and reshape back to the original shape.
     x_data = x isa Fields.Field ? parent(x) : x
@@ -285,36 +290,18 @@ Arguments:
 - `t`: Current simulation time (used by time-varying forcings).
 - `external_forcing_type`: The specific external forcing configuration object.
 """
-external_forcing_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+function external_forcing_tendency!(Yₜ, Y, p, t, ::Nothing)
+    if _scm_tv_external_forcing_cache_has_tvis(p.external_forcing)
+        _scm_tv_column_external_forcing_tendency_impl!(Yₜ, Y, p, t)
+    end
+    return nothing
+end
 
-"""
-    external_forcing_tendency!(Yₜ, Y, p, t, ::Union{GCMForcing, ExternalDrivenTVForcing})
+function _scm_tv_external_forcing_cache_has_tvis(ef_nt)
+    return ef_nt isa NamedTuple && haskey(ef_nt, :column_timevaryinginputs)
+end
 
-Applies tendencies from GCM or reanalysis-driven external forcings. This includes:
-- Horizontal advection tendencies for temperature (`ᶜdTdt_hadv`) and total specific
-  humidity (`ᶜdqtdt_hadv`).
-- Vertical eddy fluctuation tendencies (`ᶜdTdt_fluc`, `ᶜdqtdt_fluc`).
-- Nudging (relaxation) of horizontal winds (`uₕ`), temperature, and total specific
-  humidity (`q_tot`) towards prescribed GCM/reanalysis profiles (`ᶜu_nudge`,
-  `ᶜv_nudge`, `ᶜT_nudge`, `ᶜqt_nudge`) using precalculated inverse relaxation
-  timescales (`ᶜinv_τ_wind`, `ᶜinv_τ_scalar`).
-- Subsidence effects on total energy and total specific humidity, using the
-  large-scale subsidence rate `ᶜls_subsidence`.
-
-The sum of horizontal advection, nudging, and vertical fluctuation tendencies for
-temperature and moisture are converted into tendencies for total energy (`ρe_tot`)
-and total specific humidity (`ρq_tot`).
-
-A top boundary condition is applied by zeroing out the `ρe_tot` and `ρq_tot`
-tendencies at the highest model level.
-"""
-function external_forcing_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::Union{GCMForcing, ExternalDrivenTVForcing},
-)
+function _scm_tv_column_external_forcing_tendency_impl!(Yₜ, Y, p, t)
     # horizontal advection, vertical fluctuation, nudging, subsidence (need to add),
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
@@ -389,7 +376,7 @@ function external_forcing_tendency!(
         Val{:first_order}(),
     )
 
-    # Hard set tendencies of ρe_tot and ρq_tot at the top to 0. Otherwise upper 
+    # Hard set tendencies of ρe_tot and ρq_tot at the top to 0. Otherwise upper
     # portion of domain is anomalously cold
     ρe_tot_top = Fields.level(Yₜ.c.ρe_tot, Spaces.nlevels(axes(Y.c)))
     @. ρe_tot_top = 0.0
@@ -402,35 +389,123 @@ function external_forcing_tendency!(
 end
 
 """
-    external_forcing_cache(Y, external_forcing::ExternalDrivenTVForcing, params, start_date)
+    external_forcing_tendency!(
+        Yₜ, Y, p, t,
+        ::Union{GCMForcing, ExternalDrivenTVForcing, ProvidedColumnTVForcing},
+    )
 
-Sets up cache structures for time-varying external forcing, typically from reanalysis
-data such as ERA5, as specified in `external_forcing.external_forcing_file`.
+Applies tendencies from GCM or reanalysis-driven external forcings. This includes:
+- Horizontal advection tendencies for temperature (`ᶜdTdt_hadv`) and total specific
+  humidity (`ᶜdqtdt_hadv`).
+- Vertical eddy fluctuation tendencies (`ᶜdTdt_fluc`, `ᶜdqtdt_fluc`).
+- Nudging (relaxation) of horizontal winds (`uₕ`), temperature, and total specific
+  humidity (`q_tot`) towards prescribed GCM/reanalysis profiles (`ᶜu_nudge`,
+  `ᶜv_nudge`, `ᶜT_nudge`, `ᶜqt_nudge`) using precalculated inverse relaxation
+  timescales (`ᶜinv_τ_wind`, `ᶜinv_τ_scalar`).
+- Subsidence effects on total energy and total specific humidity, using the
+  large-scale subsidence rate `ᶜls_subsidence`.
 
-This involves:
-- Creating `TimeVaryingInput` objects for various atmospheric column variables
-  (e.g., "ta", "hus", "wap") and surface variables (e.g., "coszen", "rsdt", "ts").
-  These objects handle on-the-fly reading and interpolation of time-dependent data.
-- Allocating `ClimaCore.Fields.Field`s to store the instantaneous values of these
-  forcing fields at each timestep.
-- Pre-calculating nudging timescale profiles.
+The sum of horizontal advection, nudging, and vertical fluctuation tendencies for
+temperature and moisture are converted into tendencies for total energy (`ρe_tot`)
+and total specific humidity (`ρq_tot`).
 
-The cached `TimeVaryingInput` objects are updated during the simulation via callbacks.
-This cache does not load all data at once but prepares for its retrieval.
+A top boundary condition is applied by zeroing out the `ρe_tot` and `ρq_tot`
+tendencies at the highest model level.
 """
-function external_forcing_cache(
+function external_forcing_tendency!(
+    Yₜ,
     Y,
-    external_forcing::ExternalDrivenTVForcing,
+    p,
+    t,
+    ::Union{GCMForcing, ExternalDrivenTVForcing, ProvidedColumnTVForcing},
+)
+    return _scm_tv_column_external_forcing_tendency_impl!(Yₜ, Y, p, t)
+end
+
+# Canonical keys for time-varying external column forcing (CMIP-style variable names)
+const _COLUMN_TV_EXTERNAL_VAR_KEYS =
+    (:ta, :hus, :tntva, :wa, :tntha, :tnhusha, :ua, :va, :tnhusva, :rho, :wap)
+const _SURFACE_TV_EXTERNAL_VAR_KEYS = (:coszen, :rsdt, :hfls, :hfss, :ts)
+
+"""
+    _assemble_tv_external_forcing_cache(Y, params, column_tv_nt, surface_tv_nt)
+
+Allocate scratch fields and merge TV inputs into the named tuple layout expected by
+[`external_driven_single_column!`](@ref) and [`surface_conditions`](@ref).
+"""
+function _assemble_tv_external_forcing_cache(
+    Y,
     params,
+    column_timevaryinginputs::NamedTuple,
+    surface_timevaryinginputs::NamedTuple,
+)
+    column_inputs = similar(
+        Y.c,
+        NamedTuple{
+            Tuple(keys(column_timevaryinginputs)),
+            NTuple{
+                length(keys(column_timevaryinginputs)),
+                eltype(Y.c.ρ),
+            },
+        },
+    )
+
+    surface_inputs = similar(
+        Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
+        NamedTuple{
+            Tuple(keys(surface_timevaryinginputs)),
+            NTuple{
+                length(keys(surface_timevaryinginputs)),
+                eltype(params),
+            },
+        },
+    )
+
+    tv_column_cache = (; column_inputs, column_timevaryinginputs)
+    tv_surface_cache = (; surface_inputs, surface_timevaryinginputs)
+
+    FT = Spaces.undertype(axes(Y.c))
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜinv_τ_wind = similar(Y.c, FT)
+    @. ᶜinv_τ_wind = compute_gcm_driven_momentum_inv_τ(ᶜz, params)
+    tv_aux_cache = (;
+        ᶜdTdt_fluc = similar(Y.c, FT),
+        ᶜdqtdt_fluc = similar(Y.c, FT),
+        ᶜdTdt_hadv = similar(Y.c, FT),
+        ᶜdqtdt_hadv = similar(Y.c, FT),
+        ᶜT_nudge = similar(Y.c, FT),
+        ᶜqt_nudge = similar(Y.c, FT),
+        ᶜu_nudge = similar(Y.c, FT),
+        ᶜv_nudge = similar(Y.c, FT),
+        ᶜinv_τ_wind,
+        ᶜinv_τ_scalar = compute_gcm_driven_scalar_inv_τ.(
+            Fields.coordinate_field(Y.c).z,
+            params,
+        ),
+        ᶜls_subsidence = similar(Y.c, FT),
+        toa_flux = similar(
+            Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
+            FT,
+        ),
+        cos_zenith = similar(
+            Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
+            FT,
+        ),
+    )
+    return (; tv_column_cache..., tv_surface_cache..., tv_aux_cache...)
+end
+
+"""
+    _flat_nc_column_surface_tv_namedtuples(Y, external_forcing_file, start_date)
+
+Construct column- and surface-space [`TimeVaryingInput`](@ref)s from a flat NetCDF with CMIP-style names (`ta`, `hus`, …).
+Shared by [`ExternalDrivenTVForcing`](@ref) and YAML `ProvidedColumnTimeVarying` (`format=:netcdf_flat`).
+"""
+function _flat_nc_column_surface_tv_namedtuples(
+    Y,
+    external_forcing_file::AbstractString,
     start_date,
 )
-    # current support is for time varying era5 data which does not require vertical advective tendencies
-    # or surface latent and sensible heat fluxes, i.e., the surface state is set with surface temperature
-    # only. This could be modified to include these terms if needed.
-    (; external_forcing_file) = external_forcing
-
-    # generate forcing files
-
     column_tendencies = [
         "ta",
         "hus",
@@ -448,23 +523,26 @@ function external_forcing_cache(
     column_target_space = axes(Y.c)
     surface_target_space = axes(Fields.level(Y.f.u₃, ClimaCore.Utilities.half))
 
-    extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Linear())
+    extrapolation_bc = (
+        Interpolations.Flat(),
+        Interpolations.Flat(),
+        Interpolations.Linear(),
+    )
 
-    column_timevaryinginputs = [
+    column_tv_vec = [
         TimeVaryingInput(
             external_forcing_file,
             name,
             column_target_space;
             reference_date = start_date,
             regridder_kwargs = (; extrapolation_bc),
-            # useful for monthly averaged diurnal data - does not affect hourly era5 case because of time bounds flag
             method = TimeVaryingInputs.LinearInterpolation(
                 TimeVaryingInputs.PeriodicCalendar(),
             ),
         ) for name in column_tendencies
     ]
 
-    surface_timevaryinginputs = [
+    surface_tv_vec = [
         TimeVaryingInput(
             external_forcing_file,
             name,
@@ -480,58 +558,180 @@ function external_forcing_cache(
     column_variable_names_as_symbols = Symbol.(column_tendencies)
     surface_variable_names_as_symbols = Symbol.(surface_tendencies)
 
-    column_inputs = similar(
-        Y.c,
-        NamedTuple{
-            Tuple(column_variable_names_as_symbols),
-            NTuple{length(column_variable_names_as_symbols), eltype(Y.c.ρ)},
-        },
-    )
-
-    surface_inputs = similar(
-        Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
-        NamedTuple{
-            Tuple(surface_variable_names_as_symbols),
-            NTuple{length(surface_variable_names_as_symbols), eltype(params)},
-        },
-    )
-
     column_timevaryinginputs =
-        (; zip(column_variable_names_as_symbols, column_timevaryinginputs)...)
+        (; zip(column_variable_names_as_symbols, column_tv_vec)...)
     surface_timevaryinginputs =
-        (; zip(surface_variable_names_as_symbols, surface_timevaryinginputs)...)
+        (; zip(surface_variable_names_as_symbols, surface_tv_vec)...)
+    return column_timevaryinginputs, surface_timevaryinginputs
+end
 
-    era5_tv_column_cache = (; column_inputs, column_timevaryinginputs)
-    era5_tv_surface_cache = (; surface_inputs, surface_timevaryinginputs)
-
-    # create cache for external forcing data that will be populated in callbacks
-    FT = Spaces.undertype(axes(Y.c))
-    era5_cache = (;
-        ᶜdTdt_fluc = similar(Y.c, FT),
-        ᶜdqtdt_fluc = similar(Y.c, FT),
-        ᶜdTdt_hadv = similar(Y.c, FT),
-        ᶜdqtdt_hadv = similar(Y.c, FT),
-        ᶜT_nudge = similar(Y.c, FT),
-        ᶜqt_nudge = similar(Y.c, FT),
-        ᶜu_nudge = similar(Y.c, FT),
-        ᶜv_nudge = similar(Y.c, FT),
-        ᶜinv_τ_wind = FT(1 / (6 * 3600)),  # TODO: consider making timescale configurable in params
-        # set relaxation profile toward reference state
-        ᶜinv_τ_scalar = compute_gcm_driven_scalar_inv_τ.(
-            Fields.coordinate_field(Y.c).z,
-            params,
-        ),
-        ᶜls_subsidence = similar(Y.c, FT),
-        toa_flux = similar(
-            Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
-            FT,
-        ),
-        cos_zenith = similar(
-            Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
-            FT,
-        ),
+function _provided_column_nc_2d(ds, varname::String, nz::Int, nt::Int)
+    raw = Array(ds[varname][:])
+    if ndims(raw) == 1 && length(raw) == nz * nt
+        return reshape(raw, nz, nt)
+    elseif ndims(raw) == 2
+        if size(raw) == (nz, nt)
+            return raw
+        elseif size(raw) == (nt, nz)
+            return permutedims(raw, (2, 1))
+        end
+    end
+    error(
+        "ProvidedColumnTVForcing netcdf_flat: variable $(repr(varname)) must have shape (z,t) or (t,z), got $(size(raw)).",
     )
-    return (; era5_tv_column_cache..., era5_tv_surface_cache..., era5_cache...)
+end
+
+function _provided_column_nc_1d(ds, varname::String, nt::Int)
+    raw = Array(ds[varname][:])
+    if ndims(raw) == 1
+        length(raw) == nt || error(
+            "ProvidedColumnTVForcing netcdf_flat: variable $(repr(varname)) length must be length(t)=$(nt), got $(length(raw)).",
+        )
+        return raw
+    elseif ndims(raw) == 2
+        if size(raw, 1) == 1 && size(raw, 2) == nt
+            return vec(raw)
+        elseif size(raw, 2) == 1 && size(raw, 1) == nt
+            return vec(raw)
+        end
+    end
+    error(
+        "ProvidedColumnTVForcing netcdf_flat: variable $(repr(varname)) must be 1D over t, got $(size(raw)).",
+    )
+end
+
+function _provided_column_arrays_from_netcdf(path::AbstractString)
+    NC.Dataset(path, "r") do ds
+        haskey(ds, "z") || error("ProvidedColumnTVForcing netcdf_flat: missing coordinate variable \"z\".")
+        haskey(ds, "time") ||
+            error("ProvidedColumnTVForcing netcdf_flat: missing coordinate variable \"time\".")
+        z = Array(ds["z"][:])
+        t = Array(ds["time"][:])
+        nz = length(z)
+        nt = length(t)
+        col = (; (k => _provided_column_nc_2d(ds, String(k), nz, nt) for k in ColumnTVForcingKeys.column_inputs)...)
+        surf = (; (k => _provided_column_nc_1d(ds, String(k), nt) for k in ColumnTVForcingKeys.surface_inputs)...)
+        return col, surf, (; z, t)
+    end
+end
+
+function _provided_column_arrays_from_jld2(path::AbstractString)
+    d = JLD2.load(path)
+    haskey(d, "column_inputs") && haskey(d, "surface_inputs") && haskey(d, "coords") ||
+        error(
+            "ProvidedColumnTVForcing JLD2 $(repr(path)): expected keys \"column_inputs\", \"surface_inputs\", and \"coords\".",
+        )
+    return d["column_inputs"], d["surface_inputs"], d["coords"]
+end
+
+function _provided_column_time_vector_seconds(tvals, start_date)
+    return map(tvals) do t
+        if t isa Real
+            float(t)
+        elseif t isa Dates.DateTime
+            period_to_seconds_float(t - start_date)
+        elseif t isa Dates.Date
+            period_to_seconds_float(t - Dates.Date(start_date))
+        else
+            error(
+                "ProvidedColumnTVForcing: unsupported time coordinate element type $(typeof(t)); expected Real, Date, or DateTime.",
+            )
+        end
+    end
+end
+
+function _provided_column_profile_func(itp, zmodel, zshape)
+    return t -> begin
+        tt = float(t)
+        return reshape(map(z -> itp(z, tt), zmodel), zshape)
+    end
+end
+
+"""
+    external_forcing_cache(Y, external_forcing::ExternalDrivenTVForcing, params, start_date)
+
+Time-varying column forcing from a tabulated file (reanalysis, LES stats, etc.).
+"""
+function external_forcing_cache(
+    Y,
+    external_forcing::ExternalDrivenTVForcing,
+    params,
+    start_date,
+)
+    (; external_forcing_file) = external_forcing
+    column_timevaryinginputs, surface_timevaryinginputs =
+        _flat_nc_column_surface_tv_namedtuples(Y, external_forcing_file, start_date)
+    return _assemble_tv_external_forcing_cache(
+        Y,
+        params,
+        column_timevaryinginputs,
+        surface_timevaryinginputs,
+    )
+end
+
+"""
+    external_forcing_cache(Y, external_forcing::ProvidedColumnTVForcing, params, start_date)
+
+Canonical key order then [`_assemble_tv_external_forcing_cache`](@ref). YAML file resolution uses
+[`external_forcing_cache`](@ref)`(Y, atmos, …, parsed_args)` when `atmos.external_forcing === nothing`.
+"""
+function external_forcing_cache(
+    Y,
+    external_forcing::ProvidedColumnTVForcing,
+    params,
+    start_date,
+)
+    (; column_inputs, surface_inputs, coords) = external_forcing
+    FT = Spaces.undertype(axes(Y.c))
+    zsrc = FT.(coords.z)
+    tsrc = FT.(_provided_column_time_vector_seconds(coords.t, start_date))
+    zmodel = FT.(vec(parent(Fields.coordinate_field(Y.c).z)))
+    zshape = size(parent(Y.c.ρ))
+
+    # NOTE (temporary workaround):
+    # ClimaUtilities currently exposes TVI constructors for file-backed gridded data
+    # (DataHandler-based) and for 0D (times, vals), but not for in-memory column
+    # profile arrays defined on (z, t). To stay on the public TVI/evaluate! interface,
+    # we wrap the (z, t) interpolation into analytic TimeVaryingInput(func) closures.
+    # This works, but semantically these inputs are tabulated/interpolated data, not
+    # truly analytic sources. The preferred long-term replacement is a native
+    # ClimaUtilities constructor for in-memory profile arrays.
+    column_timevaryinginputs = (;
+        (
+            k => begin
+                itp = Interpolations.extrapolate(
+                    Interpolations.interpolate(
+                        (zsrc, tsrc),
+                        Array(column_inputs[k]),
+                        Interpolations.Gridded(Interpolations.Linear()),
+                    ),
+                    (Interpolations.Flat(), Interpolations.Line()),
+                )
+                TimeVaryingInput(_provided_column_profile_func(itp, zmodel, zshape))
+            end for k in _COLUMN_TV_EXTERNAL_VAR_KEYS
+        )...,
+    )
+    surface_timevaryinginputs = (;
+        (
+            k => begin
+                itp = Interpolations.extrapolate(
+                    Interpolations.interpolate(
+                        (tsrc,),
+                        Array(surface_inputs[k]),
+                        Interpolations.Gridded(Interpolations.Linear()),
+                    ),
+                    Interpolations.Line(),
+                )
+                TimeVaryingInput(t -> itp(float(t)))
+            end for k in _SURFACE_TV_EXTERNAL_VAR_KEYS
+        )...,
+    )
+    return _assemble_tv_external_forcing_cache(
+        Y,
+        params,
+        column_timevaryinginputs,
+        surface_timevaryinginputs,
+    )
 end
 
 """

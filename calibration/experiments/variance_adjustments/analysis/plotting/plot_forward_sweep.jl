@@ -24,6 +24,7 @@ end
 
 function _va_parse_forward_sweep_plot_cli(argv::Vector{String})::ForwardSweepConfig
     cfg = ForwardSweepConfig(; resolution_ladder = true)
+    va_forward_sweep_merge_env!(cfg)
     for a in argv
         if a == "--baseline-scm-forward"
             cfg.forward_parameters = VA_FORWARD_PARAM_BASELINE_SCM
@@ -71,6 +72,11 @@ function _va_parse_forward_sweep_plot_cli(argv::Vector{String})::ForwardSweepCon
             continue
         elseif startswith(a, "--varfix=")
             cfg.varfix_values = va_forward_sweep_varfix_values_from_spec(split(a, '=', limit = 2)[2])
+        elseif startswith(a, "--quadrature-orders=")
+            cfg.quadrature_orders =
+                va_parse_forward_sweep_quadrature_orders_spec(split(a, '=', limit = 2)[2])
+        elseif startswith(a, "--case-slugs=")
+            cfg.case_slugs = va_forward_sweep_parse_case_slugs(split(a, '=', limit = 2)[2])
         elseif a == "--help" || a == "-h"
             println("""
 Usage: julia --project=. analysis/plotting/plot_forward_sweep.jl [options]
@@ -81,6 +87,8 @@ Usage: julia --project=. analysis/plotting/plot_forward_sweep.jl [options]
   --ladder-n-tiers=N  --ladder-coarsen-ratio=R  --ladder-z-elem-min=N  --ladder-min-dz-factor=F
   --figures-dir=DIR   optional; default folder depends on EKI vs baseline mode
   --varfix=both|on|off|off,on   Must match the forward sweep axis used when writing outputs
+  --quadrature-orders=1,2,3|1:5  Filter plotted N_quad values (default from env or 1:5)
+  --case-slugs=a,b,c              Filter plotted case rows by merged slug (e.g. TRMM_LBA,Bomex)
 
 Also writes forward_sweep_clw_plus_cli_summary.png in that figures folder.
 """)

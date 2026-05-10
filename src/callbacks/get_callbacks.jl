@@ -550,9 +550,12 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         callbacks = (callbacks..., conservation_checking_callback()...)
     end
 
-    # External forcing
-    if parsed_args["external_forcing"] in
-       ["ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal"] &&
+    # External forcing (column TV; keys must match `get_external_forcing_model`)
+    if parsed_args["external_forcing"] in [
+           "ReanalysisTimeVarying",
+           "ReanalysisMonthlyAveragedDiurnal",
+           "ProvidedColumnTimeVarying",
+       ] &&
        parsed_args["config"] == "column"
         callbacks = (callbacks..., scm_external_forcing_callback()...)
     end
@@ -609,7 +612,7 @@ end
     default_model_callbacks(model::AtmosModel; kwargs...)
 
 Creates the tuple of model callbacks for any AtmosModel by calling
-`default_model_callbacks` on each physics component. 
+`default_model_callbacks` on each physics component.
 
 # Arguments
 - `model::AtmosModel`: The atmospheric model configuration

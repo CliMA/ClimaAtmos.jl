@@ -1,6 +1,7 @@
 using ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
+import JLD2
 
 @testset "Hyperdiffusion config" begin
     @info "CAM_SE (Special case of Hyperdiffusion)"
@@ -54,4 +55,35 @@ import ClimaAtmos as CA
         parsed_args_unknown,
         FT,
     )
+end
+
+@testset "ProvidedColumnTimeVarying builds model from file when available" begin
+    FT = Float64
+    z = FT[100.0, 200.0]
+    t = FT[0.0, 60.0]
+    column_inputs = (; (k => fill(FT(1), length(z), length(t)) for k in CA.ColumnTVForcingKeys.column_inputs)...)
+    surface_inputs = (; (k => fill(FT(1), length(t)) for k in CA.ColumnTVForcingKeys.surface_inputs)...)
+    coords = (; z, t)
+    path = tempname() * ".jld2"
+    JLD2.save(path, Dict(
+        "column_inputs" => column_inputs,
+        "surface_inputs" => surface_inputs,
+        "coords" => coords,
+    ))
+    pa = Dict(
+        "external_forcing" => "ProvidedColumnTimeVarying",
+        "external_forcing_file" => path,
+        "config" => "column",
+        "era5_diurnal_warming" => nothing,
+    )
+    m = CA.get_external_forcing_model(pa, FT)
+    @test m isa CA.ProvidedColumnTVForcing
+
+    pa_warn = Dict(
+        "external_forcing" => "ProvidedColumnTimeVarying",
+        "external_forcing_file" => nothing,
+        "config" => "column",
+        "era5_diurnal_warming" => nothing,
+    )
+    @test isnothing(CA.get_external_forcing_model(pa_warn, FT))
 end

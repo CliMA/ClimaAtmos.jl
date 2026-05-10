@@ -30,8 +30,9 @@ cases:
       - model_configs/bomex_column_varquad_hires.yml
     scm_toml: prognostic_edmfx.toml
     eki_varfix_off_config: experiment_configs/experiment_config_bomex_N3_varfix_off.yml
-  - model_config_path:
-      - model_configs/master_column_varquad_diagnostic_edmfx.yml
-      - model_configs/gabls_column_varquad_hires.yml
-    scm_toml: prognostic_edmfx.toml
-    eki_varfix_off_config: experiment_configs/experiment_config_gabls_N3_varfix_off.yml
+  # GABLS has no cloud rn
+  # - model_config_path:
+  #     - model_configs/master_column_varquad_diagnostic_edmfx.yml
+  #     - model_configs/gabls_column_varquad_hires.yml
+  #   scm_toml: prognostic_edmfx.toml
+  #   eki_varfix_off_config: experiment_configs/experiment_config_gabls_N3_varfix_off.yml

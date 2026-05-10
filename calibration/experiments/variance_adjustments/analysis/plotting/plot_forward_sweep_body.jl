@@ -36,6 +36,33 @@ function _va_forward_sweep_nquad_colors(nmax::Int)
 end
 
 """
+    _va_forward_sweep_existing_active_path(...) -> Tuple{Union{Nothing,String},Union{Nothing,String}}
+
+Resolve an existing `output_active` directory for one sweep cell.
+Returns `(path_or_nothing, effective_distribution_or_nothing)`.
+"""
+function _va_forward_sweep_existing_active_path(
+    experiment_dir::AbstractString,
+    slug::AbstractString,
+    res_seg::AbstractString,
+    n::Int,
+    varfix::Bool,
+    cfg::ForwardSweepConfig;
+    forced_varfix_on_distribution::Union{Nothing, String} = nothing,
+)
+    ap = va_forward_sweep_output_active_path(
+        experiment_dir,
+        slug,
+        res_seg,
+        n,
+        varfix,
+        cfg;
+        forced_varfix_on_distribution = forced_varfix_on_distribution,
+    )
+    return isdir(ap) ? (ap, forced_varfix_on_distribution) : (nothing, forced_varfix_on_distribution)
+end
+
+"""
     va_plot_forward_sweep_comparisons!(experiment_dir, cfg::ForwardSweepConfig; figure_root) -> Vector{String}
 
 For each `(case_slug, res_segment)` in the sweep grid, collect existing `output_active` paths for all
@@ -65,7 +92,7 @@ function va_plot_forward_sweep_comparisons!(
     for (layers, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _eo, _en, vfon) in tasks
         yml = layers[end]
         res_seg = va_tier_path_segment(tier, z_stretch, yaml_dz)
-        ap = va_forward_sweep_output_active_path(
+        ap, vfon_eff = _va_forward_sweep_existing_active_path(
             experiment_dir,
             slug,
             res_seg,
@@ -74,16 +101,19 @@ function va_plot_forward_sweep_comparisons!(
             cfg;
             forced_varfix_on_distribution = vfon,
         )
-        !isdir(ap) && continue
+        ap === nothing && continue
         k = (slug, yml, res_seg)
         lab = if !vf
             "N=$(n) vf_off"
-        elseif vfon === nothing
+        elseif vfon_eff === nothing
             "N=$(n) vf_on (default)"
         else
-            string("N=$(n) vf_on ", va_sgs_dist_path_slug(vfon))
+            string("N=$(n) vf_on ", va_sgs_dist_path_slug(vfon_eff))
         end
-        push!(get!(groups, k, Tuple{Int, Bool, String, String, Union{Nothing, String}}[]), (n, vf, ap, lab, vfon))
+        push!(
+            get!(groups, k, Tuple{Int, Bool, String, String, Union{Nothing, String}}[]),
+            (n, vf, ap, lab, vfon_eff),
+        )
     end
     all_pngs = String[]
     for ((slug, yml, res_seg), cells) in groups
@@ -230,7 +260,7 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
     for (layers, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _eo, _en, vfon) in tasks
         yml = layers[end]
         res_seg = va_tier_path_segment(tier, z_stretch, yaml_dz)
-        ap = va_forward_sweep_output_active_path(
+        ap, vfon_eff = _va_forward_sweep_existing_active_path(
             experiment_dir,
             slug,
             res_seg,
@@ -239,16 +269,19 @@ function va_plot_forward_sweep_clw_plus_cli_summary!(
             cfg;
             forced_varfix_on_distribution = vfon,
         )
-        !isdir(ap) && continue
+        ap === nothing && continue
         k = (slug, yml, res_seg)
         lab = if !vf
             "N=$(n) vf_off"
-        elseif vfon === nothing
+        elseif vfon_eff === nothing
             "N=$(n) vf_on (default)"
         else
-            string("N=$(n) vf_on ", va_sgs_dist_path_slug(vfon))
+            string("N=$(n) vf_on ", va_sgs_dist_path_slug(vfon_eff))
         end
-        push!(get!(groups, k, Tuple{Int, Bool, String, String, Union{Nothing, String}}[]), (n, vf, ap, lab, vfon))
+        push!(
+            get!(groups, k, Tuple{Int, Bool, String, String, Union{Nothing, String}}[]),
+            (n, vf, ap, lab, vfon_eff),
+        )
     end
 
     rows = va_load_forward_sweep_case_rows(experiment_dir, cfg)
@@ -498,9 +531,9 @@ end
     va_plot_forward_sweep_scalars_vs_nquad!(experiment_dir, cfg; figure_root, scalar_short_names, period_yaml) -> Vector{String}
 
 For each `(case_slug, res_segment)` in the sweep grid, write **`scalar_<name>_vs_nquad.png`** with **LWP / ice path
-(`clivi`) / …** vs **`quadrature_order`** (one line per **varfix off**, **varfix on (default)**, and each explicit
-**varfix-on** distribution when `forward_sweep_varfix_on_distributions` is set in merged case YAML), plus a **black**
-horizontal line for the **EKI reference** scalar when that run exists. Requires the diagnostics in SimDir output (add
+(`clivi`) / …** vs **`quadrature_order`** (one line per **varfix off** plus one line for each varfix-on distribution
+in `cfg.varfix_on_distributions` or the resolved single default), plus a **black** horizontal line for the **EKI
+reference** scalar when that run exists. Requires the diagnostics in SimDir output (add
 **`lwp`** / **`clivi`** to the case YAML `diagnostics` if missing).
 """
 function va_plot_forward_sweep_scalars_vs_nquad!(
@@ -525,7 +558,7 @@ function va_plot_forward_sweep_scalars_vs_nquad!(
     for (layers, _scm, slug, n, vf, tier, z_stretch, yaml_dz, _eo, _en, vfon) in tasks
         yml = layers[end]
         res_seg = va_tier_path_segment(tier, z_stretch, yaml_dz)
-        ap = va_forward_sweep_output_active_path(
+        ap, _vfon_eff = _va_forward_sweep_existing_active_path(
             experiment_dir,
             slug,
             res_seg,
@@ -534,7 +567,7 @@ function va_plot_forward_sweep_scalars_vs_nquad!(
             cfg;
             forced_varfix_on_distribution = vfon,
         )
-        !isdir(ap) && continue
+        ap === nothing && continue
         push!(panel_keys, (slug, yml, res_seg))
     end
     out_all = String[]
@@ -562,7 +595,7 @@ function va_plot_forward_sweep_scalars_vs_nquad!(
                 layers2[end] != yml && continue
                 va_tier_path_segment(tier, z_stretch, yaml_dz) != res_seg && continue
                 lk = (vf2, vf2 ? vfon2 : nothing)
-                ap = va_forward_sweep_output_active_path(
+                ap, vfon2_eff = _va_forward_sweep_existing_active_path(
                     experiment_dir,
                     slug,
                     res_seg,
@@ -571,7 +604,8 @@ function va_plot_forward_sweep_scalars_vs_nquad!(
                     cfg;
                     forced_varfix_on_distribution = vfon2,
                 )
-                !isdir(ap) && continue
+                ap === nothing && continue
+                vf2 && (vfon2 = vfon2_eff)
                 sdir = SimDir(ap)
                 isempty(sdir.vars) && continue
                 v = va_scalar_surface_mean_last(sdir, string(name), period_yaml)
@@ -591,22 +625,22 @@ function va_plot_forward_sweep_scalars_vs_nquad!(
                 end
                 ns = Int[]
                 vals = Float64[]
-                for (layers2, _scm, slug2, n, vf2, tier, z_stretch, yaml_dz, _eo, _en, vfon2) in tasks
+                for (layers2, _scm, slug2, n, vf2, tier, z_stretch, yaml_dz, _eo, _en, vfon2_raw) in tasks
                     slug2 != slug && continue
                     layers2[end] != yml && continue
                     va_tier_path_segment(tier, z_stretch, yaml_dz) != res_seg && continue
                     vf2 != vf && continue
-                    (vf2 ? vfon2 : nothing) != (vf ? vfon : nothing) && continue
-                    ap = va_forward_sweep_output_active_path(
+                    ap, vfon2_eff = _va_forward_sweep_existing_active_path(
                         experiment_dir,
                         slug,
                         res_seg,
                         n,
                         vf2,
                         cfg;
-                        forced_varfix_on_distribution = vfon2,
+                        forced_varfix_on_distribution = vfon2_raw,
                     )
-                    !isdir(ap) && continue
+                    ap === nothing && continue
+                    (vf2 ? vfon2_eff : nothing) != (vf ? vfon : nothing) && continue
                     sdir = SimDir(ap)
                     isempty(sdir.vars) && continue
                     v = va_scalar_surface_mean_last(sdir, string(name), period_yaml)

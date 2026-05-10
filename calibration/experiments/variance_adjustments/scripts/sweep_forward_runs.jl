@@ -46,6 +46,7 @@ Usage: julia --project=. scripts/sweep_forward_runs.jl [flags]
   --registry=PATH            Case registry YAML
   --case-slugs=a,b,c         Only these merged case slugs (subset of registry). Env: VA_FORWARD_SWEEP_CASE_SLUGS
   --quadrature-orders=1,2,3|1:5   Gauss–Hermite column orders (subset of 1:5; default 1:5). Env: VA_FORWARD_SWEEP_QUADRATURE_ORDERS
+  --varfix-on-distributions=a,b,c   Override varfix-on SGS methods (global). Env: VA_FORWARD_SWEEP_VARFIX_ON_DISTRIBUTIONS
   --skip-done                Skip if output_active exists
   --fail-fast                Stop entire sweep on first failed run (default: continue)
   --print-task-count         Print N tasks and exit
@@ -139,6 +140,9 @@ function parse_forward_sweep_cli(argv::Vector{String})::ForwardSweepConfig
         elseif startswith(a, "--quadrature-orders=")
             cfg.quadrature_orders =
                 va_parse_forward_sweep_quadrature_orders_spec(String(split(a, '=', limit = 2)[2]))
+        elseif startswith(a, "--varfix-on-distributions=")
+            cfg.varfix_on_distributions =
+                va_parse_forward_sweep_varfix_on_distributions_spec(String(split(a, '=', limit = 2)[2]))
         else
             error("Unknown argument: $(repr(a)). Try --help.")
         end

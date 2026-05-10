@@ -1,13 +1,16 @@
 ---
-description: Python in this repo uses conda env WeatherQuest; agent shells + permissions
-alwaysApply: true
+description: ClimaAtmos.jl calibration tree — conda env WeatherQuest (SciPy / variance-adjustments notebooks)
+alwaysApply: false
+globs: "**/calibration/**"
 ---
 
-# Python + WeatherQuest + Cursor agent
+# Python + WeatherQuest + Cursor agent *(ClimaAtmos.jl `calibration/` only)*
+
+This rule applies **only** under **`calibration/`** in this repo. It does **not** apply to **`earthcare_analysis`** or other projects in a multi-root workspace — Earth-CARE tooling uses **`EarthCARE`** (see **`earthcare_analysis/README.md`** and that repo’s `.cursor/rules`).
 
 ## 0. TL;DR
 
-- **All** Python here that needs SciPy / calibration notebooks / `calibration/experiments/variance_adjustments/**/*.py` must run under the **`WeatherQuest`** conda environment — **not** system `/usr/bin/python3` and not an ambiguous bare `python3` when the active env is unknown.
+- **All** Python under **`calibration/`** that needs SciPy / calibration notebooks / **`calibration/experiments/variance_adjustments/**/*.py`** must run under the **`WeatherQuest`** conda environment — **not** system **`/usr/bin/python3`** and not an ambiguous bare **`python3`** when the active env is unknown.
 - **Workflow:** `conda activate WeatherQuest` then `python …` in the **same** shell command chain (same line or `&&`).
 - **First** run `conda activate WeatherQuest && python …` with default tool settings; on typical dev machines (including this repo’s Cursor agent) **`conda` is already initialized** as a shell function — no sourcing required.
 - If `conda` is **actually missing** (`command -v conda` fails), `conda activate` errors, or you see **`NoWritableEnvsDirError`** / env dirs not writable, **then** re-run with **`required_permissions: ["all"]`**, or initialize conda for that shell (`source …/etc/profile.d/conda.sh` / `bash -lc '…'`). **Do not** skip WeatherQuest by falling back to system Python.

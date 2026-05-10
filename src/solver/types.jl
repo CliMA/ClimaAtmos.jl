@@ -491,6 +491,136 @@ struct ExternalDrivenTVForcing{FT}
     external_forcing_file::String
 end
 
+"""
+    ProvidedColumnTVForcing(column_inputs, surface_inputs, coords)
+
+Pure array-backed external forcing container for SCM column runs.
+This object stores forcing values and coordinates only (no file path, no payload wrappers):
+- `column_inputs`: 2D arrays keyed by `(:ta, :hus, :tntva, :wa, :tntha, :tnhusha, :ua, :va, :tnhusva, :rho, :wap)`
+- `surface_inputs`: 1D arrays keyed by `(:coszen, :rsdt, :hfls, :hfss, :ts)`
+- `coords`: `(; z, t)` where `z` and `t` are independent coordinate vectors
+
+`t` is intentionally independently typed (it may be numeric simulation seconds, dates, or other time-like coordinates).
+"""
+const ColumnTVForcingKeys = (;
+    column_inputs = (:ta, :hus, :tntva, :wa, :tntha, :tnhusha, :ua, :va, :tnhusva, :rho, :wap),
+    surface_inputs = (:coszen, :rsdt, :hfls, :hfss, :ts),
+    coords = (:z, :t),
+)
+
+struct ProvidedColumnTVForcing{
+    CI <: NamedTuple{ColumnTVForcingKeys.column_inputs},
+    SI <: NamedTuple{ColumnTVForcingKeys.surface_inputs},
+    CO <: NamedTuple{ColumnTVForcingKeys.coords},
+}
+    column_inputs::CI
+    surface_inputs::SI
+    coords::CO
+    function ProvidedColumnTVForcing(
+        column_inputs::NamedTuple,
+        surface_inputs::NamedTuple,
+        coords::NamedTuple,
+    )
+        keys(column_inputs) == ColumnTVForcingKeys.column_inputs || error(
+            "ProvidedColumnTVForcing: column_inputs keys must be $(ColumnTVForcingKeys.column_inputs), got $(keys(column_inputs)).",
+        )
+        keys(surface_inputs) == ColumnTVForcingKeys.surface_inputs || error(
+            "ProvidedColumnTVForcing: surface_inputs keys must be $(ColumnTVForcingKeys.surface_inputs), got $(keys(surface_inputs)).",
+        )
+        keys(coords) == ColumnTVForcingKeys.coords || error(
+            "ProvidedColumnTVForcing: coords keys must be $(ColumnTVForcingKeys.coords), got $(keys(coords)).",
+        )
+        z = coords.z
+        t = coords.t
+        nz = length(z)
+        nt = length(t)
+        for k in ColumnTVForcingKeys.column_inputs
+            arr = column_inputs[k]
+            ndims(arr) == 2 || error("ProvidedColumnTVForcing: column_inputs.$k must be 2D (z,t).")
+            size(arr, 1) == nz || error("ProvidedColumnTVForcing: column_inputs.$k first dim must match length(coords.z).")
+            size(arr, 2) == nt || error("ProvidedColumnTVForcing: column_inputs.$k second dim must match length(coords.t).")
+        end
+        for k in ColumnTVForcingKeys.surface_inputs
+            arr = surface_inputs[k]
+            ndims(arr) == 1 || error("ProvidedColumnTVForcing: surface_inputs.$k must be 1D (t).")
+            length(arr) == nt || error("ProvidedColumnTVForcing: surface_inputs.$k length must match length(coords.t).")
+        end
+        return new{typeof(column_inputs), typeof(surface_inputs), typeof(coords)}(
+            column_inputs,
+            surface_inputs,
+            coords,
+        )
+    end
+end
+
+"""
+    ProvidedColumnTVForcing(path::AbstractString, ::Type{FT}; format = :auto)
+
+Construct array-backed [`ProvidedColumnTVForcing`](@ref) from flat `.nc` or `.jld2`
+without storing a path on the object.
+"""
+function ProvidedColumnTVForcing(
+    path::AbstractString,
+    ::Type{FT};
+    format::Symbol = :auto,
+) where {FT}
+    fmt = format === :auto ? _infer_provided_column_tv_file_format(path) : format
+    col, surf, coords =
+        if fmt === :netcdf_flat
+            _provided_column_arrays_from_netcdf(path)
+        elseif fmt === :jld2
+            _provided_column_arrays_from_jld2(path)
+        else
+            error(
+                "ProvidedColumnTVForcing(path, FT): use format=:auto, :netcdf_flat, or :jld2 (got $(repr(fmt))).",
+            )
+        end
+    col_ft = (; (k => FT.(col[k]) for k in keys(col))...)
+    surf_ft = (; (k => FT.(surf[k]) for k in keys(surf))...)
+    coords_ft = (; z = FT.(coords.z), t = coords.t)
+    return ProvidedColumnTVForcing(col_ft, surf_ft, coords_ft)
+end
+
+function _validate_provided_column_tv_namedtuples!(
+    column_timevaryinginputs::NamedTuple,
+    surface_timevaryinginputs::NamedTuple,
+)
+    cks = Set(keys(column_timevaryinginputs))
+    for k in (
+        :ta,
+        :hus,
+        :tntva,
+        :wa,
+        :tntha,
+        :tnhusha,
+        :ua,
+        :va,
+        :tnhusva,
+        :rho,
+        :wap,
+    )
+        k in cks || error(
+            "ProvidedColumnTVForcing: column_timevaryinginputs must include :$k; have $(sort!(collect(cks)))",
+        )
+    end
+    sks = Set(keys(surface_timevaryinginputs))
+    for k in (:coszen, :rsdt, :hfls, :hfss, :ts)
+        k in sks || error(
+            "ProvidedColumnTVForcing: surface_timevaryinginputs must include :$k; have $(sort!(collect(sks)))",
+        )
+    end
+    return nothing
+end
+
+function _infer_provided_column_tv_file_format(path::AbstractString)
+    ext = lowercase(splitext(path)[2])
+    ext == ".nc" && return :netcdf_flat
+    ext in (".jld2", ".jld") && return :jld2
+    return error(
+        "ProvidedColumnTVForcing: cannot infer format from extension of $(repr(path)); pass format=:netcdf_flat or :jld2.",
+    )
+end
+
 struct ISDACForcing end
 
 abstract type AbstractEnvBuoyGradClosure end
@@ -1061,7 +1191,7 @@ The default AtmosModel provides:
 ## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
 Internal testing and calibration components for single-column setups:
 - `subsidence`: nothing or Bomex_subsidence, Rico_subsidence, DYCOMS_subsidence, etc
-- `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
+- `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ProvidedColumnTVForcing, ISDACForcing)
 - `ls_adv`: nothing or LargeScaleAdvection()
 - `advection_test`: Bool
 - `scm_coriolis`: nothing or NamedTuple `(; prof_ug, prof_vg, coriolis_param)`
