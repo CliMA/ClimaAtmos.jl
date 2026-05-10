@@ -60,3 +60,12 @@ value = 100
 
 [sublimation_deposition_timescale]
 value = 100
+
+[rain_autoconversion_timescale]
+value = 13353.9
+
+[cloud_liquid_water_specific_humidity_autoconversion_threshold]
+value = 5e-4
+
+[rain_cross_section_size_relation_coefficient_chia]
+value = 1
