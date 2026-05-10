@@ -96,6 +96,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         vertical_diffusion = parsed_args["edmfx_vertical_diffusion"],
         filter = parsed_args["edmfx_filter"],
         scale_blending_method = get_scale_blending_method(parsed_args),
+        mixing_length_closure = get_mixing_length_closure(parsed_args),
     )
 
     vertical_diffusion = get_vertical_diffusion_model(
@@ -196,6 +197,17 @@ function get_scale_blending_method(parsed_args)
         return HardMinimumBlending()
     else
         error("Unknown edmfx_scale_blending method: $method_name")
+    end
+end
+
+function get_mixing_length_closure(parsed_args)
+    closure_name = parsed_args["edmfx_mixing_length_closure"]
+    if closure_name == "HanBretherton2019"
+        return HanBretherton2019()
+    elseif closure_name == "LopezGomez2020"
+        return LopezGomez2020()
+    else
+        error("Unknown edmfx_mixing_length_closure: $closure_name")
     end
 end
 

@@ -379,6 +379,9 @@ advection_test:
 edmfx_scale_blending:
   help: "Method for blending physical scales in EDMFX mixing length calculation. [`SmoothMinimum` (default), `HardMinimum`]"
   value: "SmoothMinimum"
+edmfx_mixing_length_closure:
+  help: "Mixing length closure for EDMFX TKE-based diffusion. [`HanBretherton2019` (default), `LopezGomez2020`]"
+  value: "HanBretherton2019"
 implicit_sgs_advection:
   help: "Whether to treat the subgrid-scale vertical advection tendency implicitly [`false` (default), `true`]"
   value: false

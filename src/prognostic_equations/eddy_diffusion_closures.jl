@@ -405,6 +405,132 @@ function mixing_length_lopez_gomez_2020(
     return MixingLength(l_final, l_W, l_TKE, l_N, l_grid)
 end
 
+"""
+    nakanishi_surface_length(vkc, ᶜz, z_sfc, obukhov_length)
+
+Nakanishi (2001, BLM) surface-layer length scale l₁.
+
+Unstable (ζ < 0):  l₁ = κz (1 + α_u |ζ|)^(1/3),   α_u = 100, exponent = 0.2
+Stable   (ζ ≥ 0):  l₁ = κz / (1 + α_s ζ),          α_s = 2.7
+
+These coefficient choices follow Nakanishi (2001, Table 2) and are the
+values used in the GFS TKE-EDMF (Han & Bretherton 2019, Eq. 9).
+"""
+function nakanishi_surface_length(vkc, ᶜz, z_sfc, obukhov_length)
+    FT = eltype(ᶜz)
+    eps_FT = eps(FT)
+
+    l_z = max(ᶜz - z_sfc, FT(0))
+    κz = vkc * l_z
+
+    obukhov_len_safe =
+        obukhov_length < FT(0) ? min(obukhov_length, -eps_FT) : max(obukhov_length, eps_FT)
+    ζ = l_z / obukhov_len_safe
+
+    α_u = FT(100)
+    α_s = FT(2.7)
+
+    l_1 = ifelse(
+        ζ < FT(0),
+        κz * (1 + α_u * min(-ζ, FT(1000)))^FT(0.2),
+        κz / max(1 + α_s * ζ, eps_FT),
+    )
+    return max(l_1, FT(0))
+end
+
+"""
+    mixing_length_han_bretherton_2019(
+        turbconv_params, vkc, ᶜz, z_sfc, ᶜdz,
+        ᶜN²_eff, ᶜtke, obukhov_length,
+    )
+
+Point-wise mixing length following Han & Bretherton (2019, Wea. Forecasting,
+doi:10.1175/WAF-D-18-0146.1).
+
+## Implemented (length-scale closure only)
+- Surface-layer length l₁: Nakanishi (2001) form (see [`nakanishi_surface_length`](@ref))
+- Bougeault–Lacarrère lengths l_up, l_down via **local-N² linearisation**
+  of the buoyancy-work integrals (Eq. 11):
+      l_up ≈ l_down ≈ √(2e / N²)
+- Mixing length:  1/l_k = 1/l₁ + 1/l₂,   l₂ = min(l_up, l_down)   (Eqs. 8, 10)
+- Dissipation length: l_d = √(l_up · l_down)                        (Eq. 10)
+- Grid-scale and minimum-length limiters matching Lopez closure
+
+## Omitted relative to full Han 2019
+- Full column-integral BL parcel-displacement for l_up, l_down (Eq. 11)
+- Mass-flux updraft/downdraft transport
+- Cloud-top driven downdraft mixing
+- Stability-dependent c_m switching (uses host-model c_m uniformly)
+- PBL-height-dependent Prandtl number logic
+
+The `master` field of the returned `MixingLength` stores l_k (for eddy
+diffusivity K = c_m l_k √e). The `buoy` slot stores l_d (dissipation length),
+which can differ from l_k in the Han formulation.
+"""
+function mixing_length_han_bretherton_2019(
+    turbconv_params,
+    vkc,
+    ᶜz,
+    z_sfc,
+    ᶜdz,
+    ᶜN²_eff,
+    ᶜtke,
+    obukhov_length,
+)
+    FT = eltype(ᶜz)
+    eps_FT = eps(FT)
+
+    l_z = max(ᶜz - z_sfc, FT(0))
+
+    # --- l₁: Nakanishi (2001) surface-layer length ---
+    l_1 = nakanishi_surface_length(vkc, ᶜz, z_sfc, obukhov_length)
+
+    # --- l_up, l_down: Bougeault–Lacarrère (1989) via local-N² approximation ---
+    # Linearising the buoyancy integral ∫ (g/θ_v)(θ_v(z) - θ_v(z')) dz' = e
+    # gives l_up ≈ l_down ≈ √(2e / N²) when N² > 0.
+    # For unstable conditions (N² ≤ 0) the parcel is not stopped by buoyancy,
+    # so l_up/l_down are limited by the wall distance l_z.
+    tke_pos = max(ᶜtke, FT(0))
+    N²_pos = max(ᶜN²_eff, FT(0))
+
+    l_BL = ifelse(
+        N²_pos > eps_FT && tke_pos > eps_FT,
+        min(sqrt(2 * tke_pos / N²_pos), l_z),
+        l_z,
+    )
+    l_BL = max(l_BL, FT(0))
+
+    # In the local approximation l_up ≈ l_down, so:
+    l_up = l_BL
+    l_down = l_BL
+    l_2 = min(l_up, l_down)  # = l_BL in this approximation
+
+    # --- Mixing length l_k via harmonic mean (Eq. 8) ---
+    # 1/l_k = 1/l₁ + 1/l₂
+    l_k = ifelse(
+        l_1 > eps_FT && l_2 > eps_FT,
+        (l_1 * l_2) / (l_1 + l_2),
+        min(l_1, l_2),
+    )
+
+    # --- Dissipation length l_d (Eq. 10) ---
+    l_d = sqrt(max(l_up * l_down, FT(0)))
+
+    # --- Limiters (matching Lopez closure conventions) ---
+    l_k = min(l_k, l_z)
+    l_d = min(l_d, l_z)
+
+    l_grid = ᶜdz
+    l_k = min(l_k, l_grid)
+    l_d = min(l_d, l_grid)
+
+    l_k = max(l_k, FT(1))
+    l_d = max(l_d, FT(1))
+
+    # Store: master = l_k, wall = l_1, tke = l_2, buoy = l_d, l_grid
+    return MixingLength(l_k, l_1, l_2, l_d, l_grid)
+end
+
 # GPU-safe field access using Val dispatch
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:master}) = ml.master
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:wall}) = ml.wall
@@ -413,6 +539,14 @@ end
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:l_grid}) = ml.l_grid
 
 function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
+    closure = p.atmos.edmfx_model.mixing_length_closure
+    return ᶜmixing_length(closure, Y, p, property)
+end
+
+function ᶜmixing_length(
+    ::LopezGomez2020,
+    Y, p, property::Val{P} = Val{:master}(),
+) where {P}
     (; params) = p
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
@@ -427,8 +561,6 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     @. ᶜprandtl_nvec =
         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
-    # Extract sub-parameters before the lazy broadcast to avoid capturing
-    # the full ClimaAtmosParameters struct (~4 KiB) in GPU kernel parameters.
     turbconv_params = CAP.turbconv_params(params)
     sf_params = CAP.surface_fluxes_params(params)
     vkc = CAP.von_karman_const(params)
@@ -449,6 +581,37 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
             ᶜstrain_rate_norm,
             ᶜprandtl_nvec,
             p.atmos.edmfx_model.scale_blending_method,
+        ),
+    )
+    return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, property))
+end
+
+function ᶜmixing_length(
+    ::HanBretherton2019,
+    Y, p, property::Val{P} = Val{:master}(),
+) where {P}
+    (; params) = p
+    (; obukhov_length) = p.precomputed.sfc_conditions
+    (; ᶜlinear_buoygrad) = p.precomputed
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+
+    turbconv_params = CAP.turbconv_params(params)
+    vkc = CAP.von_karman_const(params)
+
+    ᶜmixing_length_tuple = @. lazy(
+        mixing_length_han_bretherton_2019(
+            turbconv_params,
+            vkc,
+            ᶜz,
+            z_sfc,
+            ᶜdz,
+            ᶜlinear_buoygrad,
+            ᶜtke,
+            obukhov_length,
         ),
     )
     return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, property))

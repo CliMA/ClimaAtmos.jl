@@ -729,6 +729,37 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
+abstract type AbstractMixingLengthClosure end
+
+"""
+    LopezGomez2020
+
+Mixing length closure from Lopez-Gomez et al. (2020, JAMES).
+
+Combines wall-distance (l_W), TKE-balance (l_TKE), and static-stability (l_N)
+scales via smooth or hard minimum blending.
+"""
+struct LopezGomez2020 <: AbstractMixingLengthClosure end
+
+"""
+    HanBretherton2019
+
+Mixing length closure from Han & Bretherton (2019, Wea. Forecasting).
+
+Surface-layer length l₁ (Nakanishi 2001 form) is combined with a
+Bougeault–Lacarrère buoyancy-displacement length l₂ via harmonic mean:
+    1/l_k = 1/l₁ + 1/l₂
+The dissipation length is l_d = √(l_up · l_down).
+
+This implementation uses the local-N² linearization of the BL integrals,
+so l_up ≈ l_down ≈ √(2e/N²). The full column-integral form is documented
+but not yet implemented. Nakanishi coefficients a₁, a₂, a₃ follow
+Nakanishi (2001, BLM) Table 2.
+"""
+struct HanBretherton2019 <: AbstractMixingLengthClosure end
+
+Base.broadcastable(x::AbstractMixingLengthClosure) = tuple(x)
+
 struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
     """Enable specific upwinding schemes for specific equations"""
     energy_q_tot_upwinding::EN_UP
@@ -795,6 +826,7 @@ struct EDMFXModel{
     EEM, EDM,
     ESMF <: ValTF, ESDF <: ValTF, ENP <: ValTF, EVD <: ValTF, EF <: ValTF,
     SBM <: AbstractScaleBlendingMethod,
+    MLC <: AbstractMixingLengthClosure,
 }
     entr_model::EEM
     detr_model::EDM
@@ -804,6 +836,7 @@ struct EDMFXModel{
     vertical_diffusion::EVD
     filter::EF
     scale_blending_method::SBM
+    mixing_length_closure::MLC
 end
 
 
@@ -818,6 +851,7 @@ function EDMFXModel(;
     vertical_diffusion::Union{Bool, ValTF} = false,
     filter::Union{Bool, ValTF} = false,
     scale_blending_method,
+    mixing_length_closure = HanBretherton2019(),
     kwargs...,
 )
     parse_val_tf(x::Bool) = Val(x)
@@ -832,6 +866,7 @@ function EDMFXModel(;
         parse_val_tf(vertical_diffusion),
         parse_val_tf(filter),
         scale_blending_method,
+        mixing_length_closure,
     )
 end
 
