@@ -927,12 +927,12 @@ function set_microphysics_tendency_cache!(
             ᶜT, cmp, thp, dt, nsubs,
         )
     else
-        (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
+        (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments_mp) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, corr_Tq, dt, nsubs_quad,
+            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments_mp, dt, nsubs_quad,
         )
     end
 
@@ -967,12 +967,12 @@ function set_microphysics_tendency_cache!(
             dt, nsubs,
         )
     else
-        (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
+        (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments_mp) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, corr_Tq, dt, nsubs_quad,
+            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments_mp, dt, nsubs_quad,
         )
     end
 
@@ -1019,12 +1019,12 @@ function set_microphysics_tendency_cache!(
             ᶜT⁰, cmp, thp, dt, nsubs,
         )
     else
-        (; ᶜT′T′, ᶜq′q′) = p.precomputed # T-based variances from cache
+        (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments_mp) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, corr_Tq, dt, nsubs_quad,
+            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments_mp, dt, nsubs_quad,
         )
     end
 

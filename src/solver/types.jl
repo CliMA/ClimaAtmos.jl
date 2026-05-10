@@ -129,7 +129,7 @@ struct GridScaleCloud <: AbstractCloudModel end
 """
     QuadratureCloud
 
-Compute the cloud fraction using Sommeria-Deardorff moment matching.
+Compute the cloud fraction using the hybrid quadrature-moment formula.
 """
 struct QuadratureCloud <: AbstractCloudModel end
 
