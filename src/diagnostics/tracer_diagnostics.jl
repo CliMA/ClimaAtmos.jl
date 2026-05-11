@@ -330,8 +330,13 @@ function compute_sea_salt_emission_flux!(out, state, cache, time)
     :prognostic_aerosols_field in propertynames(cache.tracers) ||
         error("prognostic_aerosols_field not in cache — is sea_salt_emission_tendency! active?")
     bins = cache.tracers.prognostic_aerosols_field
-    total = sum(getproperty(bins, n) for n in propertynames(bins))
-    isnothing(out) ? total : (out .= total)
+    names = propertynames(bins)
+    isnothing(out) && (out = copy(getproperty(bins, first(names))))
+    out .= getproperty(bins, first(names))
+    for n in names[2:end]
+        out .+= getproperty(bins, n)
+    end
+    return out
 end
 
 add_diagnostic_variable!(
