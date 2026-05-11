@@ -326,18 +326,12 @@ add_diagnostic_variable!(
 # Sea salt surface emission flux (2d) — total and per-bin
 ###
 
-# The total sea salt emission flux is computed each timestep by sea_salt_emission_tendency!
-# and stored in cache.tracers.sea_salt_emission_flux_sfc. The diagnostic just reads it,
-# so the time-average exactly matches what was applied to the tracers.
 function compute_sea_salt_emission_flux!(out, state, cache, time)
-    :sea_salt_emission_flux_sfc in propertynames(cache.tracers) ||
-        error("sea_salt_emission_flux_sfc not in cache — is sea_salt_emission_tendency! active?")
-    flux = cache.tracers.sea_salt_emission_flux_sfc
-    if isnothing(out)
-        return copy(flux)
-    else
-        out .= flux
-    end
+    :prognostic_aerosols_field in propertynames(cache.tracers) ||
+        error("prognostic_aerosols_field not in cache — is sea_salt_emission_tendency! active?")
+    bins = cache.tracers.prognostic_aerosols_field
+    total = sum(getproperty(bins, n) for n in propertynames(bins))
+    isnothing(out) ? total : (out .= total)
 end
 
 add_diagnostic_variable!(
@@ -349,9 +343,9 @@ add_diagnostic_variable!(
 )
 
 function compute_sea_salt_emission_flux_bin!(out, state, cache, time, bin_name)
-    :sea_salt_emission_flux_bins_sfc in propertynames(cache.tracers) ||
-        error("sea_salt_emission_flux_bins_sfc not in cache — is sea_salt_emission_tendency! active?")
-    flux = getproperty(cache.tracers.sea_salt_emission_flux_bins_sfc, bin_name)
+    :prognostic_aerosols_field in propertynames(cache.tracers) ||
+        error("prognostic_aerosols_field not in cache — is sea_salt_emission_tendency! active?")
+    flux = getproperty(cache.tracers.prognostic_aerosols_field, bin_name)
     if isnothing(out)
         return copy(flux)
     else
@@ -374,114 +368,4 @@ for (bin, long_bin) in (
         compute! = (out, u, p, t) -> compute_sea_salt_emission_flux_bin!(out, u, p, t, bin),
     )
 end
-
-###
-# Sea salt emission debugging — 10 m wind, friction velocity, ocean fraction
-add_diagnostic_variable!(
-    short_name = "u10_mo",
-    long_name = "Surface-Only MOST Wind Speed at 10 m",
-    units = "m s^-1",
-    comments = "10 m wind reconstructed from ustar and Obukhov length alone (surface-only MOST formula). Compare with u10_ext to assess anchoring correction.",
-    compute! = (out, u, p, t) -> begin
-        :sea_salt_u10_mo_sfc in propertynames(p.tracers) ||
-            error("sea_salt_u10_mo_sfc not in cache — is sea_salt_emission_tendency! active?")
-        isnothing(out) ? copy(p.tracers.sea_salt_u10_mo_sfc) :
-            (out .= p.tracers.sea_salt_u10_mo_sfc)
-    end,
-)
-
-add_diagnostic_variable!(
-    short_name = "u10_ext",
-    long_name = "Extrapolated Wind Speed at 10 m",
-    units = "m s^-1",
-    comments = "10 m wind extrapolated from the z₁ model-level wind via the MOST profile ratio. This is the value used for sea salt emission flux.",
-    compute! = (out, u, p, t) -> begin
-        :sea_salt_u10_sfc in propertynames(p.tracers) ||
-            error("sea_salt_u10_sfc not in cache — is sea_salt_emission_tendency! active?")
-        isnothing(out) ? copy(p.tracers.sea_salt_u10_sfc) :
-            (out .= p.tracers.sea_salt_u10_sfc)
-    end,
-)
-
-add_diagnostic_variable!(
-    short_name = "uz1_mo",
-    long_name = "Surface-Only MOST Wind Speed at z₁",
-    units = "m s^-1",
-    comments = "Wind reconstructed at the first model-level height z₁ using ustar and Obukhov length alone. Compare with u_actual_lowest to assess MOST accuracy at z₁.",
-    compute! = (out, u, p, t) -> begin
-        :sea_salt_u_mo_lowest_sfc in propertynames(p.tracers) ||
-            error("sea_salt_u_mo_lowest_sfc not in cache — is sea_salt_emission_tendency! active?")
-        isnothing(out) ? copy(p.tracers.sea_salt_u_mo_lowest_sfc) :
-            (out .= p.tracers.sea_salt_u_mo_lowest_sfc)
-    end,
-)
-
-add_diagnostic_variable!(
-    short_name = "uz1_ext",
-    long_name = "Extrapolated Wind Speed at z₁ (Anchor z₂)",
-    units = "m s^-1",
-    comments = "Wind at z₁ extrapolated downward from the z₂ model-level wind via the MOST profile ratio. Compare with u_actual_lowest to assess the extrapolation error at z₁.",
-    compute! = (out, u, p, t) -> begin
-        :sea_salt_u_z1_ext_sfc in propertynames(p.tracers) ||
-            error("sea_salt_u_z1_ext_sfc not in cache — is sea_salt_emission_tendency! active?")
-        isnothing(out) ? copy(p.tracers.sea_salt_u_z1_ext_sfc) :
-            (out .= p.tracers.sea_salt_u_z1_ext_sfc)
-    end,
-)
-
-add_diagnostic_variable!(
-    short_name = "uz1_true",
-    long_name = "Actual Wind Speed at z₁",
-    units = "m s^-1",
-    comments = "True model-level wind speed at the first model level z₁. Use to validate MOST extrapolations and surface layer schemes.",
-    compute! = (out, u, p, t) -> begin
-        :sea_salt_u_actual_lowest_sfc in propertynames(p.tracers) ||
-            error("sea_salt_u_actual_lowest_sfc not in cache — is sea_salt_emission_tendency! active?")
-        isnothing(out) ? copy(p.tracers.sea_salt_u_actual_lowest_sfc) :
-            (out .= p.tracers.sea_salt_u_actual_lowest_sfc)
-    end,
-)
-
-add_diagnostic_variable!(
-    short_name = "ustar",
-    long_name = "Surface Friction Velocity",
-    units = "m s^-1",
-    comments = "Friction velocity from the surface flux scheme, used in Monin-Obukhov wind reconstruction.",
-    compute! = (out, u, p, t) -> begin
-        isnothing(out) ? copy(p.precomputed.sfc_conditions.ustar) :
-            (out .= p.precomputed.sfc_conditions.ustar)
-    end,
-)
-
-add_diagnostic_variable!(
-    short_name = "buoyflux",
-    long_name = "Surface Buoyancy Flux",
-    units = "m^2 s^-3",
-    comments = "Surface buoyancy flux from the surface flux scheme. Positive values indicate an unstable surface layer.",
-    compute! = (out, u, p, t) -> begin
-        isnothing(out) ? copy(p.precomputed.sfc_conditions.buoyancy_flux) :
-            (out .= p.precomputed.sfc_conditions.buoyancy_flux)
-    end,
-)
-
-add_diagnostic_variable!(
-    short_name = "obukhovlen",
-    long_name = "Obukhov Length",
-    units = "m",
-    comments = "Monin-Obukhov length from the surface flux scheme. Positive over stable conditions, negative over unstable.",
-    compute! = (out, u, p, t) -> begin
-        isnothing(out) ? copy(p.precomputed.sfc_conditions.obukhov_length) :
-            (out .= p.precomputed.sfc_conditions.obukhov_length)
-    end,
-)
-
-add_diagnostic_variable!(
-    short_name = "oceanfrac",
-    long_name = "Ocean Fraction",
-    units = "1",
-    comments = "Fraction of each grid cell covered by ocean. Sea salt emission is weighted by this; non-zero values over land indicate a coupler masking issue.",
-    compute! = (out, u, p, t) -> begin
-        isnothing(out) ? copy(p.ocean_fraction) : (out .= p.ocean_fraction)
-    end,
-)
 

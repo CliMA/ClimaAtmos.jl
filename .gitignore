@@ -56,3 +56,6 @@ Artifacts.toml
 AGENTS.md
 MEMORY.md
 .agents
+
+# local dev scratch files
+src/diagnostics/local_diagnostics.jl
