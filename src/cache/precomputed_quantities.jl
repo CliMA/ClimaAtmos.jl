@@ -317,6 +317,23 @@ function precomputed_quantities(Y, atmos)
             ᶜq_snoʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
 
+    # Diagnostic updraft sea salt mixing-ratio fields (one NTuple{n_updrafts} per cell
+    # per bin). Allocated only when DiagnosticEDMFX + sgs_mass_flux + the aerosol
+    # flag are all enabled, and prognostic aerosols are present.
+    diagnostic_aerosol_sgs_quantities =
+        (atmos.turbconv_model isa DiagnosticEDMFX &&
+         atmos.edmfx_model isa EDMFXModel &&
+         atmos.edmfx_model.sgs_mass_flux isa Val{true} &&
+         atmos.edmfx_model.prognostic_aerosols isa Val{true} &&
+         !isempty(_aerosol_names(atmos.prognostic_aerosols))) ?
+        (;
+            ᶜSSLT01ʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSSLT02ʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSSLT03ʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSSLT04ʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSSLT05ʲs = similar(Y.c, NTuple{n, FT}),
+        ) : (;)
+
     diagnostic_sgs_quantities =
         atmos.turbconv_model isa DiagnosticEDMFX ?
         (;
@@ -342,6 +359,7 @@ function precomputed_quantities(Y, atmos)
             ρtke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             precipitation_sgs_quantities...,
             diagnostic_precipitation_sgs_quantities...,
+            diagnostic_aerosol_sgs_quantities...,
         ) : (;)
     smagorinsky_lilly_quantities =
         if atmos.smagorinsky_lilly isa SmagorinskyLilly
@@ -659,6 +677,11 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     if !isnothing(p.sfc_setup)
         SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
     end
+
+    # Compute sea-salt surface emission fluxes after surface conditions are
+    # available and before DiagnosticEDMF, so the fluxes can serve as updraft
+    # surface BCs in the EDMF column-march.
+    set_sea_salt_emission_flux!(Y, p)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)

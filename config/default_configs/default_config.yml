@@ -447,6 +447,9 @@ edmfx_sgs_mass_flux:
 edmfx_sgs_diffusive_flux:
   help: "If set to true, it switches on EDMFX SGS diffusive flux.  [`true`, `false` (default)]"
   value: false
+edmfx_aerosols:
+  help: "If set to true, prognostic aerosol bins (e.g. sea salt) are transported by the EDMF SGS mass flux scheme. Otherwise, they are transported only by the grid-mean advection. Has no effect when `edmfx_sgs_mass_flux` is false. [`true`, `false` (default)]"
+  value: false
 updraft_number:
   help: "Sets the number of updrafts for the EDMF scheme"
   value: 1

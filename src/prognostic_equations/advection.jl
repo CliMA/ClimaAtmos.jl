@@ -253,19 +253,15 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     ᶜρ = Y.c.ρ
 
-    # Full vertical advection of passive tracers (like liq, rai, etc) ...
-    # If sgs_mass_flux is true, the advection term is computed from the sum of SGS fluxes
-    if !(
-        p.atmos.turbconv_model isa PrognosticEDMFX &&
-        p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
-    )
-        foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-            if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
-                ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-                vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
-                @. ᶜρχₜ += vtt
-            end
-        end
+    # Per-tracer vertical advection: use grid-mean advection unless the EDMF SGS
+    # mass flux scheme is responsible for a specific tracer (in which case the SGS
+    # flux tendency already provides the full vertical transport, mean + SGS).
+    # `edmf_sgs_advection_handles` is the single registry for this routing decision.
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        edmf_sgs_advection_handles(p.atmos, ρχ_name) && return
+        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
+        @. ᶜρχₜ += vtt
     end
     # ... and upwinding correction of energy and total water.
     # (The central advection of energy and total water is done implicitly.)

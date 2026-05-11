@@ -4,6 +4,52 @@
 #####
 
 """
+    edmf_sgs_advection_handles(atmos, ρχ_name) -> Bool
+
+Return `true` if mean-flow vertical advection should be **skipped** for
+`ρχ_name` because another mechanism already provides the full vertical flux.
+
+Two cases:
+
+1. `ρq_tot` is always skipped — its vertical advection is handled implicitly
+   (central scheme) in `implicit_vertical_advection_tendency!`; adding the
+   explicit upwinding on top would double-count it.
+
+2. `PrognosticEDMFX` with `sgs_mass_flux = true` replaces the grid-mean flux
+   with a full updraft + environment decomposition, so the standard
+   `vertical_transport` call must be suppressed for those tracers.
+
+`DiagnosticEDMFX` is intentionally **not** in this list: it uses a deviatoric
+(`wʲ − w̄`) × (`χʲ − χ̄`) SGS correction that is additive to the mean-flow
+flux, so mean-flow advection must continue running for all tracers under
+DiagnosticEDMFX — including microphysics and sea salt aerosols.
+"""
+function edmf_sgs_advection_handles(atmos, ρχ_name)
+    # ρq_tot vertical advection is always handled implicitly — never add
+    # the explicit upwinding version on top regardless of EDMF state.
+    ρχ_name == @name(ρq_tot) && return true
+
+    # Only PrognosticEDMFX replaces (rather than augments) grid-mean advection.
+    atmos.turbconv_model isa PrognosticEDMFX || return false
+    atmos.edmfx_model isa EDMFXModel || return false
+    atmos.edmfx_model.sgs_mass_flux isa Val{true} || return false
+
+    # Microphysics tracers carried by PrognosticEDMFX full-transport updrafts.
+    if atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+        ρχ_name in (
+            @name(ρq_lcl), @name(ρq_icl), @name(ρq_rai), @name(ρq_sno),
+            @name(ρn_lcl), @name(ρn_rai),
+        ) && return true
+    end
+
+    # Sea salt aerosols are NOT listed here: under DiagnosticEDMFX (the current
+    # config) the SGS flux is additive, so mean-flow advection must stay on.
+    # If PrognosticEDMFX sea salt is ever implemented, add the bin names here.
+
+    return false
+end
+
+"""
     edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
 
 Computes and applies tendencies to the grid-mean prognostic variables due to the
@@ -304,6 +350,39 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. ᶜρχₜ += vtt
             end
         end
+
+        # Sea salt aerosol tracers (passive — no in-updraft source)
+        if p.atmos.edmfx_model.prognostic_aerosols isa Val{true}
+            aerosol_tracers = (
+                (@name(c.ρSSLT01), @name(ᶜSSLT01ʲs.:(1))),
+                (@name(c.ρSSLT02), @name(ᶜSSLT02ʲs.:(1))),
+                (@name(c.ρSSLT03), @name(ᶜSSLT03ʲs.:(1))),
+                (@name(c.ρSSLT04), @name(ᶜSSLT04ʲs.:(1))),
+                (@name(c.ρSSLT05), @name(ᶜSSLT05ʲs.:(1))),
+            )
+            @. ᶠu³_diff = ᶠu³ʲs.:(1) - ᶠu³
+            for (ρχ_name, χʲ_name) in aerosol_tracers
+                MatrixFields.has_field(Y, ρχ_name) || continue
+                MatrixFields.has_field(p.precomputed, χʲ_name) || continue
+                ᶜχʲ = MatrixFields.get_field(p.precomputed, χʲ_name)
+                ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+                ᶜχ  = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
+                @. ᶜa_scalar =
+                    (ᶜχʲ - ᶜχ) * min(
+                        min(draft_area(ᶜρaʲs.:(1), ᶜρʲs.:(1)), a_max),
+                        FT(0.02) / max(
+                            Geometry.WVector(ᶜinterp(ᶠu³_diff)).components.data.:1,
+                            eps(FT),
+                        ),
+                    )
+                vtt = vertical_transport(
+                    ᶜρʲs.:(1), ᶠu³_diff, ᶜa_scalar, dt, edmfx_tracer_upwinding,
+                )
+                ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+                @. ᶜρχₜ += vtt
+            end
+        end
+
         # TODO: the following adds the environment flux to the tendency
         # Make active and test later
         # @. ᶠu³_diff = p.precomputed.ᶠu³⁰ - ᶠu³
