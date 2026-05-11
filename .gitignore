@@ -56,3 +56,4 @@ Artifacts.toml
 AGENTS.md
 MEMORY.md
 .agents
+.claude/worktrees/
