@@ -3,6 +3,35 @@ using Glob
 """
 """
 
+# ========================================================= #
+
+cluster_name() = get(ENV, "SLURM_CLUSTER_NAME", nothing)
+
+hostname_fqdn() = try
+    strip(read(`hostname -f`, String))
+catch
+    gethostname()
+end
+
+function node_role()
+    h = hostname_fqdn()
+    startswith(h, "login") && return :login
+    startswith(h, "hpc-")  && return :compute
+    return :other
+end
+
+const CENTRAL_PUBLIC_LOGIN = "login.hpc.caltech.edu"
+
+function on_central_cluster()
+    c = cluster_name()
+    r = node_role()
+    # Compute nodes have SLURM_CLUSTER_NAME == "central"
+    # Login nodes look like login*.cm.cluster
+    return c == "central" || (r == :login && occursin(".cm.cluster", hostname_fqdn()))
+end
+
+# ========================================================= #
+
 function get_les_calibration_library()
     les_library = get_shallow_LES_library()
     # AMIP4K data: July, NE Pacific
@@ -14,6 +43,102 @@ function get_les_calibration_library()
     ]
     return (ref_paths, cfsite_numbers)
 end
+
+"""
+    get_les_calibration_library(; max_cases = nothing, models = nothing)
+
+Collect AMIP LES stats paths and cfSite numbers across shallow and deep cases.
+Returns a tuple `(ref_dirs, cfsite_numbers)` where `ref_dirs::Vector{String}`
+are paths to stats files and `cfsite_numbers::Vector{Int}` are corresponding
+site IDs. Optionally limit to the first `max_cases` and/or a subset of models.
+
+Arguments:
+- max_cases: Optional `Int`. If provided, only the first N cases are returned.
+- models: Optional `String` or iterable of `String`. Restrict to these models.
+
+Examples:
+```julia
+# All models
+paths, sites = get_les_calibration_library()
+
+# Limit number of cases
+paths, sites = get_les_calibration_library(max_cases = 50)
+
+# Single model
+paths, sites = get_les_calibration_library(models = "HadGEM2-A")
+
+# Multiple models
+paths, sites = get_les_calibration_library(models = ["HadGEM2-A", "CNRM-CM5"])
+```
+"""
+function get_les_calibration_library(; max_cases = 120, models = "HadGEM2-A")
+    les_library = get_LES_library()
+
+    models_iter = models === nothing ? collect(keys(les_library)) :
+                 (isa(models, AbstractString) ? [models] : collect(models))
+    for m in models_iter
+        @assert haskey(les_library, m) "Model $(m) not found in LES library."
+    end
+
+    ref_dirs = []
+    cfsite_numbers = Int[]
+    i = 0
+    for model in models_iter
+        for month in keys(les_library[model])
+
+
+            cfsite_numbers_month = map(
+                k -> parse(Int, k),
+                collect(keys(les_library[model][month]["cfsite_numbers"])),
+            )
+            
+            les_kwargs = (
+                forcing_model = model,
+                month = parse(Int, month),
+                experiment = "amip",
+            )
+
+            @warn "i = $i; model = $model; month = $month; cfsite_numbers_month = $cfsite_numbers_month, max_cases = $max_cases"
+            cfsite_numbers_month = cfsite_numbers_month[1:min(max_cases-i, lastindex(cfsite_numbers_month))]
+            i += length(cfsite_numbers_month)
+            @warn "--> i = $i; model = $model; month = $month; cfsite_numbers_month = $cfsite_numbers_month, max_cases = $max_cases"
+
+            paths_for_month = [
+                get_stats_path(
+                    get_cfsite_les_dir(cfsite_number; les_kwargs...),
+                ) for cfsite_number in cfsite_numbers_month
+            ]
+            append!(ref_dirs, paths_for_month)
+            append!(cfsite_numbers, cfsite_numbers_month)
+
+            if i == max_cases
+                continue
+            end
+        end
+    end
+
+    if max_cases !== nothing
+        n = min(max_cases, length(ref_dirs))
+        ref_dirs = ref_dirs[1:n]
+        cfsite_numbers = cfsite_numbers[1:n]
+    end
+    return (ref_dirs, cfsite_numbers)
+end
+
+function get_cfsite_type(i, cfsite_numbers)
+    return get_cfsite_type(cfsite_numbers[i])
+end
+
+function get_cfsite_type(cfsite_number::Int)
+    if cfsite_number in CFSITE_TYPES["shallow"]
+        return "shallow"
+    elseif cfsite_number in CFSITE_TYPES["deep"]
+        return "deep"
+    else
+        @error "cfSite number $(cfsite_number) not found in available sites."
+    end
+end
+
 
 """
     get_LES_library
@@ -181,28 +306,99 @@ Outputs:
 
 - les_dir - path to les simulation containing stats folder
 """
-function get_cfsite_les_dir(
+# function get_cfsite_les_dir(
+#     cfsite_number::Integer;
+#     forcing_model::String = "HadGEM2-A",
+#     month::Integer = 7,
+#     experiment::String = "amip",
+# )
+#     month = string(month, pad = 2)
+#     cfsite_number = string(cfsite_number)
+#     root_dir = "/resnick/groups/esm/zhaoyi/GCMForcedLES/cfsite/$month/$forcing_model/$experiment/"
+#     rel_dir = join(
+#         [
+#             "Output.cfsite$cfsite_number",
+#             forcing_model,
+#             experiment,
+#             "2004-2008.$month.4x",
+#         ],
+#         "_",
+#     )
+#     les_dir = joinpath(root_dir, rel_dir)
+#     # Check lespath is valid
+#     valid_lespath(les_dir)
+#     return les_dir
+# end
+
+
+function get_cfsite_les_dir_hpc( # this is caltech cluster path.
     cfsite_number::Integer;
     forcing_model::String = "HadGEM2-A",
     month::Integer = 7,
     experiment::String = "amip",
 )
-    month = string(month, pad = 2)
-    cfsite_number = string(cfsite_number)
-    root_dir = "/resnick/groups/esm/zhaoyi/GCMForcedLES/cfsite/$month/$forcing_model/$experiment/"
-    rel_dir = join(
+    month_str = string(month, pad = 2)
+    cf_str    = string(cfsite_number)
+    root_dir  = "/resnick/groups/esm/zhaoyi/GCMForcedLES/cfsite/$month_str/$forcing_model/$experiment/"
+    rel_dir   = join(
         [
-            "Output.cfsite$cfsite_number",
+            "Output.cfsite$cf_str",
             forcing_model,
             experiment,
-            "2004-2008.$month.4x",
+            "2004-2008.$month_str.4x",
         ],
         "_",
     )
     les_dir = joinpath(root_dir, rel_dir)
-    # Check lespath is valid
-    valid_lespath(les_dir)
+    valid_lespath(les_dir)  # your existing check
     return les_dir
+end
+
+function get_cfsite_les_dir(
+    cfsite_number::Integer;
+    forcing_model::String = "HadGEM2-A",
+    month::Integer = 7,
+    experiment::String = "amip",
+    user::AbstractString = get(ENV, "USER", ""),
+    local_root_dir  = joinpath(pkgdir(CA), "calibration", "experiments", "gcm_driven_scm")
+)
+    remote_dir = get_cfsite_les_dir_hpc(cfsite_number;
+                                        forcing_model = forcing_model,
+                                        month         = month,
+                                        experiment    = experiment)
+
+    if on_central_cluster()
+        # On central, just use the shared filesystem path
+        return remote_dir
+    end
+
+    # Else: rsync from central login to a local cache
+    cache_root = joinpath(local_root_dir, ".cfsite_les_cache", "central")
+    mkpath(cache_root)
+    local_dir = joinpath(cache_root, basename(remote_dir))
+    
+    # Inline “exists and non-empty” check
+    if isdir(local_dir)
+        try
+            if !isempty(readdir(local_dir))
+                return local_dir
+            end
+        catch
+            # fall through to rsync if readdir fails
+        end
+    end
+
+    mkpath(local_dir)
+
+    remote_spec = string(user, "@", CENTRAL_PUBLIC_LOGIN, ":", remote_dir, "/")
+    cmd = `rsync -av --progress $remote_spec $local_dir`
+
+    println("Syncing LES data from central:")
+    println("  ", cmd)
+    println("You may be prompted for your SSH password or key passphrase.")
+    run(cmd)  # interactive SSH prompt via ssh
+
+    return local_dir
 end
 
 

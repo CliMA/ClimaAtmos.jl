@@ -241,10 +241,13 @@ function progress_logging_callback(dt, t_start, t_end)
     return (CTS.DiscreteCallback(cond, affect!),)
 end
 
-function nan_checking_callback(check_nan_every::Int)
+function nan_checking_callback(check_nan_every::Int, output_dir = nothing)
     if check_nan_every > 0
         return (
-            call_every_n_steps((integrator) -> check_nans(integrator), check_nan_every),
+            call_every_n_steps(
+                (integrator) -> check_nans(integrator, output_dir),
+                check_nan_every,
+            ),
         )
     end
     return ()

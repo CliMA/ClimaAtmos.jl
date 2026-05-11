@@ -31,7 +31,7 @@ const n_vert_levels = config_dict["dims_per_var"]
 model_config_dict =
     YAML.load_file(joinpath(output_dir, "configs", "model_config.yml"))
 
-ref_paths, _ = get_les_calibration_library()
+ref_paths, _ = get_les_calibration_library(; max_cases = 1)
 atmos_config = CA.AtmosConfig(model_config_dict)
 
 # get/store LES obs and norm factors 
