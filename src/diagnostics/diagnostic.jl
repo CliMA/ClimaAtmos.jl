@@ -101,6 +101,7 @@ include("gravitywave_diagnostics.jl")
 include("conservation_diagnostics.jl")
 include("negative_scalars_diagnostics.jl")
 include("microphysics_diagnostics.jl")
+isfile(joinpath(@__DIR__, "local_diagnostics.jl")) && include("local_diagnostics.jl")
 
 # Default diagnostics and higher level interfaces
 include("default_diagnostics.jl")

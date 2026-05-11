@@ -14,19 +14,6 @@ const SEA_SALT_BIN_BOUNDS = (
     (5.0,  10.0),   # μm, SSLT05
 )
 
-"""
-    monin_obukhov_wind_at_height(z_target, ustar, L, uf_params, κ, z₀)
-
-Reconstruct mean wind speed at height `z_target` (m) from Monin-Obukhov similarity
-theory.
-"""
-function monin_obukhov_wind_at_height(z_target, ustar, L, uf_params, κ, z₀)
-    FT = typeof(ustar)
-    ζ = ifelse(iszero(L), FT(0), z_target / L)
-    F_m = UF.dimensionless_profile(uf_params, z_target, ζ, z₀, UF.MomentumTransport())
-    return max(ustar / κ * F_m, FT(0))
-end
-
 
 """
     monin_obukhov_wind_extrapolated(z_target, z_anchor, u_anchor, L, uf_params, κ, z₀)
@@ -116,39 +103,34 @@ function set_sea_salt_emission_flux!(Y, p)
     κ = SFP.von_karman_const(surface_fluxes_params)
 
     z_c1_p  = parent(Fields.level(Fields.coordinate_field(axes(Y.c)).z, 1))
-    z_c2_p  = parent(Fields.level(Fields.coordinate_field(axes(Y.c)).z, 2))
     u_z1_p  = parent(norm.(Fields.level(Y.c.uₕ, 1)))
-    u_z2_p  = parent(norm.(Fields.level(Y.c.uₕ, 2)))
     ustar_p = parent(sfc_conditions.ustar)
     L_p     = parent(sfc_conditions.obukhov_length)
-
     roughness_spec = SF.COARE3RoughnessParams{FT}()
     z0_eff = p.scratch.temp_field_level
     z₀_p   = parent(z0_eff)
     z₀_p  .= SF.momentum_roughness.(roughness_spec, ustar_p, surface_fluxes_params, nothing)
 
     u_10 = p.scratch.ᶠtemp_field_level
-
-    parent(u_10) .= monin_obukhov_wind_at_height.(FT(10), ustar_p, L_p, uf_params, κ, z₀_p)
-    @. p.tracers.sea_salt_u10_mo_sfc = abs(u_10)
-
     parent(u_10) .= monin_obukhov_wind_extrapolated.(FT(10), z_c1_p, u_z1_p, L_p, uf_params, κ, z₀_p)
+    # @. p.tracers.sea_salt_u10_sfc = abs(u_10)
 
-    parent(p.tracers.sea_salt_u_z1_ext_sfc) .=
-        monin_obukhov_wind_extrapolated.(z_c1_p, z_c2_p, u_z2_p, L_p, uf_params, κ, z₀_p)
-    parent(p.tracers.sea_salt_u_mo_lowest_sfc) .=
-        monin_obukhov_wind_at_height.(z_c1_p, ustar_p, L_p, uf_params, κ, z₀_p)
-    parent(p.tracers.sea_salt_u_actual_lowest_sfc) .= u_z1_p
-
-    @. p.tracers.sea_salt_emission_flux_sfc = 0
-    @. p.tracers.sea_salt_u10_sfc = abs(u_10)
-
+    # Compare method for z1 winds to ground truth
+    # z_c2_p  = parent(Fields.level(Fields.coordinate_field(axes(Y.c)).z, 2))
+    # u_z2_p  = parent(norm.(Fields.level(Y.c.uₕ, 2)))
+    # parent(p.tracers.sea_salt_u_z1_ext_sfc) .=
+    #     monin_obukhov_wind_extrapolated.(z_c1_p, z_c2_p, u_z2_p, L_p, uf_params, κ, z₀_p)
+    # parent(p.tracers.sea_salt_u_actual_lowest_sfc) .= u_z1_p
+    
     T_sfc = sfc_conditions.T_sfc
     ocean_fraction = p.ocean_fraction
     aero_params = p.params.prescribed_aerosol_params
     bin_radii = (
-        aero_params.SSLT01_radius, aero_params.SSLT02_radius, aero_params.SSLT03_radius,
-        aero_params.SSLT04_radius, aero_params.SSLT05_radius,
+        aero_params.SSLT01_radius, 
+        aero_params.SSLT02_radius, 
+        aero_params.SSLT03_radius,
+        aero_params.SSLT04_radius, 
+        aero_params.SSLT05_radius,
     )
     mass_per_particle = ntuple(
         i -> FT(4 / 3 * π * bin_radii[i]^3 * aero_params.seasalt_density),
@@ -156,9 +138,8 @@ function set_sea_salt_emission_flux!(Y, p)
     )
 
     for (bin_index, name) in enumerate(aerosol_names)
-        bin_flux_cache = getproperty(p.tracers.sea_salt_emission_flux_bins_sfc, name)
+        bin_flux_cache = getproperty(p.tracers.prognostic_aerosols_field, name)
         @. bin_flux_cache = sea_salt_emission_flux(u_10, T_sfc, bin_index) * mass_per_particle[bin_index] * ocean_fraction
-        @. p.tracers.sea_salt_emission_flux_sfc += bin_flux_cache
     end
 end
 
@@ -167,7 +148,7 @@ end
 
 Apply surface emission tendencies for prognostic sea salt bins (ρSSLT01 …).
 
-Reads per-bin fluxes from `p.tracers.sea_salt_emission_flux_bins_sfc`, which
+Reads per-bin fluxes from `p.tracers.prognostic_aerosols_field`, which
 are pre-computed by `set_sea_salt_emission_flux!` during the precomputed-
 quantities stage. The flux is applied as a bottom boundary condition using
 `boundary_tendency_scalar`, which localises it to the lowest model layer.
@@ -182,7 +163,7 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
         ᶜρχₜ = getproperty(Yₜ.c, ρχ_name)
         ᶜχ   = @. lazy(specific(ᶜρχ, Y.c.ρ))
 
-        bin_flux_cache = getproperty(p.tracers.sea_salt_emission_flux_bins_sfc, name)
+        bin_flux_cache = getproperty(p.tracers.prognostic_aerosols_field, name)
         sfc_flux = p.scratch.sfc_temp_C3
         @. sfc_flux = C3(bin_flux_cache)
 

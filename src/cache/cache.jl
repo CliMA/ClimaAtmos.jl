@@ -202,10 +202,8 @@ function build_cache(
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
-    tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
-    # Initialized to 1 (all ocean). Populated by the coupler via
-    # Interfacer.update_field! before the first timestep.
-    ocean_fraction = ones(axes(Fields.level(Y.f, Fields.half)))
+    tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date, _aerosol_names(atmos.prognostic_aerosols))
+    ocean_fraction = ones(axes(Fields.level(Y.f, Fields.half))) # Populated via Interfacer.update_field! before first timestep
 
     args = (
         dt,

@@ -55,7 +55,7 @@ function co2_cache(Y, start_date)
     return (; co2, prescribed_co2_timevaryinginput)
 end
 
-function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, start_date)
+function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, start_date, prognostic_aerosol_names = ())
     if !isempty(prescribed_aerosol_names)
         target_space = axes(Y.c)
 
@@ -68,7 +68,6 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
         # configuration. The file also has to be defined on the globe and provide
         # time series of lon-lat-z data.
         prescribed_aerosol_names_as_symbols = Symbol.(Tuple(prescribed_aerosol_names))
-        target_space = axes(Y.c)
         extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
         timevaryinginputs = [
             TimeVaryingInput(
@@ -97,11 +96,33 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
         )
         prescribed_aerosol_timevaryinginputs =
             (; zip(prescribed_aerosol_names_as_symbols, timevaryinginputs)...)
-        aerosol_cache =
+        prescribed_aerosol_cache =
             (; prescribed_aerosols_field, prescribed_aerosol_timevaryinginputs)
     else
-        aerosol_cache = (;)
+        prescribed_aerosol_cache = (;)
     end
+
+    if !isempty(prognostic_aerosol_names)
+        # sfc_space = axes(Fields.level(Y.f, Fields.half))
+        prognostic_aerosols_field = similar(
+            Fields.level(Y.f, Fields.half),
+            NamedTuple{prognostic_aerosol_names, NTuple{length(prognostic_aerosol_names), eltype(Y.c.ρ)}},
+        )
+        for name in prognostic_aerosol_names
+            getproperty(prognostic_aerosols_field, name) .= zero(eltype(Y.c.ρ))
+        end
+        prognostic_aerosol_cache = (;
+            prognostic_aerosols_field,
+            # TODO: add to separate diagnostic_cache
+            # u10 = zeros(sfc_space),
+            # uz1_ext = zeros(sfc_space),
+            # uz1_true = zeros(sfc_space),
+        )
+    else
+        prognostic_aerosol_cache = (;)
+    end
+
+    aerosol_cache = (; prescribed_aerosol_cache..., prognostic_aerosol_cache...)
 
     if :O3 in Symbol.(time_varying_trace_gases)
         o3_cache = ozone_cache(Y, start_date)
@@ -115,33 +136,5 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
         co2_cache_nt = (;)
     end
 
-    # Pre-allocated 2D surface fields for sea salt emission flux (kg m⁻² s⁻¹).
-    # Written each timestep by sea_salt_emission_tendency! so diagnostics
-    # read the already-computed value rather than recomputing it.
-    sfc_space = axes(Fields.level(Y.f, Fields.half))
-    sslt_bin_names = (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05)
-    sea_salt_emission_flux_sfc = zeros(sfc_space)
-    sea_salt_emission_flux_bins_sfc = similar(
-        Fields.level(Y.f, Fields.half),
-        NamedTuple{sslt_bin_names, NTuple{5, eltype(Y.c.ρ)}},
-    )
-    for name in sslt_bin_names
-        getproperty(sea_salt_emission_flux_bins_sfc, name) .= zero(eltype(Y.c.ρ))
-    end
-    sea_salt_u10_sfc         = zeros(sfc_space)  # extrapolated u_10 (m s⁻¹) — used for flux
-    sea_salt_u10_mo_sfc      = zeros(sfc_space)  # surface-only MOST at 10 m (m s⁻¹)
-    sea_salt_u_z1_ext_sfc    = zeros(sfc_space)  # MOST extrapolated from z₂ to z₁ (m s⁻¹)
-    sea_salt_u_mo_lowest_sfc = zeros(sfc_space)  # surface-only MOST at z₁ (m s⁻¹)
-    sea_salt_u_actual_lowest_sfc = zeros(sfc_space)  # actual model wind at z₁ (m s⁻¹)
-
-    return (;
-        aerosol_cache..., o3_cache..., co2_cache_nt...,
-        sea_salt_emission_flux_sfc,
-        sea_salt_emission_flux_bins_sfc,
-        sea_salt_u10_sfc,
-        sea_salt_u10_mo_sfc,
-        sea_salt_u_z1_ext_sfc,
-        sea_salt_u_mo_lowest_sfc,
-        sea_salt_u_actual_lowest_sfc,
-    )
+    return (; aerosol_cache..., o3_cache..., co2_cache_nt...)
 end
