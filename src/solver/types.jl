@@ -793,6 +793,7 @@ const ValTF = Union{Val{true}, Val{false}}
 struct EDMFXModel{
     EEM, EDM,
     ESMF <: ValTF, ESDF <: ValTF, ENP <: ValTF, EVD <: ValTF, EF <: ValTF,
+    PA <: ValTF,
     SBM <: AbstractScaleBlendingMethod,
 }
     entr_model::EEM
@@ -802,6 +803,7 @@ struct EDMFXModel{
     nh_pressure::ENP
     vertical_diffusion::EVD
     filter::EF
+    prognostic_aerosols::PA
     scale_blending_method::SBM
 end
 
@@ -816,6 +818,7 @@ function EDMFXModel(;
     nh_pressure::Union{Bool, ValTF} = false,
     vertical_diffusion::Union{Bool, ValTF} = false,
     filter::Union{Bool, ValTF} = false,
+    prognostic_aerosols::Union{Bool, ValTF} = false,
     scale_blending_method,
     kwargs...,
 )
@@ -830,6 +833,7 @@ function EDMFXModel(;
         parse_val_tf(nh_pressure),
         parse_val_tf(vertical_diffusion),
         parse_val_tf(filter),
+        parse_val_tf(prognostic_aerosols),
         scale_blending_method,
     )
 end

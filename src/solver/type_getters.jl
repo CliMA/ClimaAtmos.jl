@@ -107,6 +107,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         nh_pressure = parsed_args["edmfx_nh_pressure"],
         vertical_diffusion = parsed_args["edmfx_vertical_diffusion"],
         filter = parsed_args["edmfx_filter"],
+        prognostic_aerosols = parsed_args["edmfx_aerosols"],
         scale_blending_method = get_scale_blending_method(parsed_args),
     )
 

@@ -401,6 +401,40 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
         end
 
         @. ρaʲ_int_level = ρʲ_int_level * FT(turbconv_params.surface_area)
+
+        # Initialize updraft sea salt at the first interior level.
+        # Sea salt emission is injected into the grid-mean tracer (not as a kinematic
+        # surface flux into the updraft), so sfc_ρ_flux_scalar = 0. The updraft is
+        # initialized at the grid-mean concentration; the SGS flux arises from vertical
+        # gradient differences accumulated by the column-march below.
+        if p.atmos.edmfx_model isa EDMFXModel &&
+           p.atmos.edmfx_model.sgs_mass_flux isa Val{true} &&
+           p.atmos.edmfx_model.prognostic_aerosols isa Val{true}
+            for (bin_sym, ρbin_sym) in (
+                (:ᶜSSLT01ʲs, :ρSSLT01), (:ᶜSSLT02ʲs, :ρSSLT02),
+                (:ᶜSSLT03ʲs, :ρSSLT03), (:ᶜSSLT04ʲs, :ρSSLT04),
+                (:ᶜSSLT05ʲs, :ρSSLT05),
+            )
+                hasproperty(p.precomputed, bin_sym) || continue
+                hasproperty(Y.c, ρbin_sym) || continue
+                ᶜχʲs = getproperty(p.precomputed, bin_sym)
+                ᶜρχ  = getproperty(Y.c, ρbin_sym)
+                χ_int_level  = Fields.field_values(Fields.level(
+                    @. lazy(specific(ᶜρχ, Y.c.ρ)), 1))
+                χʲ_int_level = Fields.field_values(Fields.level(ᶜχʲs.:($j), 1))
+                @. χʲ_int_level = sgs_scalar_first_interior_bc(
+                    z_int_level - z_sfc_halflevel,
+                    ρ_int_level,
+                    FT(turbconv_params.surface_area),
+                    χ_int_level,
+                    buoyancy_flux_sfc_halflevel,
+                    FT(0),  # no kinematic surface flux into updraft for sea salt
+                    ustar_sfc_halflevel,
+                    obukhov_length_sfc_halflevel,
+                    local_geometry_int_halflevel,
+                )
+            end
+        end
     end
 
     ρaʲs_int_level = Fields.field_values(Fields.level(ᶜρaʲs, 1))
@@ -513,6 +547,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
         (; ᶜq_lclʲs, ᶜq_iclʲs, ᶜq_raiʲs, ᶜq_snoʲs) = p.precomputed
     end
+
 
     thermo_params = CAP.thermodynamics_params(params)
     microphys_0m_params = CAP.microphysics_0m_params(params)
@@ -1168,6 +1203,48 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 )
             end
 
+            ###
+            ### Prognostic sea salt bins (passive tracers — no in-updraft source)
+            ###
+            if p.atmos.edmfx_model isa EDMFXModel &&
+               p.atmos.edmfx_model.sgs_mass_flux isa Val{true} &&
+               p.atmos.edmfx_model.prognostic_aerosols isa Val{true}
+                ρaʲu³ʲ_dataq_ = p.scratch.temp_data_level_3
+                for (bin_sym, ρbin_sym) in (
+                    (:ᶜSSLT01ʲs, :ρSSLT01), (:ᶜSSLT02ʲs, :ρSSLT02),
+                    (:ᶜSSLT03ʲs, :ρSSLT03), (:ᶜSSLT04ʲs, :ρSSLT04),
+                    (:ᶜSSLT05ʲs, :ρSSLT05),
+                )
+                    hasproperty(p.precomputed, bin_sym) || continue
+                    hasproperty(Y.c, ρbin_sym) || continue
+                    ᶜχʲs = getproperty(p.precomputed, bin_sym)
+                    ᶜρχ   = getproperty(Y.c, ρbin_sym)
+                    ᶜχ    = @. lazy(specific(ᶜρχ, Y.c.ρ))
+                    χ_level      = Fields.field_values(Fields.level(ᶜχ, i))
+                    χ_prev_level = Fields.field_values(Fields.level(ᶜχ, i - 1))
+                    χʲ_level     = Fields.field_values(Fields.level(ᶜχʲs.:($j), i))
+                    χʲ_prev_level = Fields.field_values(Fields.level(ᶜχʲs.:($j), i - 1))
+                    @. ρaʲu³ʲ_dataq_ =
+                        diag_edmf_advection(
+                            local_geometry_halflevel.J,
+                            local_geometry_prev_halflevel.J,
+                            ρaʲ_prev_level,
+                            u³ʲ_data_prev_halflevel,
+                            χʲ_prev_level,
+                        ) + entr_detr(
+                            local_geometry_halflevel.J,
+                            local_geometry_prev_level.J,
+                            ρaʲ_prev_level,
+                            entrʲ_prev_level,
+                            detrʲ_prev_level,
+                            turb_entrʲ_prev_level,
+                            χ_prev_level,
+                            χʲ_prev_level,
+                        )
+                    @. χʲ_level = ifelse(kill_updraft, χ_level, ρaʲu³ʲ_dataq_ / ρaʲu³ʲ_data)
+                end
+            end
+
             # set updraft to grid-mean if vertical velocity is too small
             if i > 2
                 kill_updraft_2 = @. lazy(
@@ -1191,6 +1268,24 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         ifelse(kill_updraft_2, q_rai_level, q_raiʲ_level)
                     @. q_snoʲ_level =
                         ifelse(kill_updraft_2, q_sno_level, q_snoʲ_level)
+                end
+                if p.atmos.edmfx_model isa EDMFXModel &&
+                   p.atmos.edmfx_model.sgs_mass_flux isa Val{true} &&
+                   p.atmos.edmfx_model.prognostic_aerosols isa Val{true}
+                    for (bin_sym, ρbin_sym) in (
+                        (:ᶜSSLT01ʲs, :ρSSLT01), (:ᶜSSLT02ʲs, :ρSSLT02),
+                        (:ᶜSSLT03ʲs, :ρSSLT03), (:ᶜSSLT04ʲs, :ρSSLT04),
+                        (:ᶜSSLT05ʲs, :ρSSLT05),
+                    )
+                        hasproperty(p.precomputed, bin_sym) || continue
+                        hasproperty(Y.c, ρbin_sym) || continue
+                        ᶜχʲs = getproperty(p.precomputed, bin_sym)
+                        ᶜρχ   = getproperty(Y.c, ρbin_sym)
+                        ᶜχ    = @. lazy(specific(ᶜρχ, Y.c.ρ))
+                        χ_level  = Fields.field_values(Fields.level(ᶜχ, i))
+                        χʲ_level = Fields.field_values(Fields.level(ᶜχʲs.:($j), i))
+                        @. χʲ_level = ifelse(kill_updraft_2, χ_level, χʲ_level)
+                    end
                 end
             end
 

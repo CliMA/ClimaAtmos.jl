@@ -94,21 +94,18 @@ end
 
 
 """
-    sea_salt_emission_tendency!(Yₜ, Y, p, t)
+    set_sea_salt_emission_flux!(Y, p)
 
-Apply surface emission tendencies for prognostic sea salt bins (ρSSLT01 …).
+Compute per-bin and total sea salt surface emission fluxes (kg m⁻² s⁻¹) and
+store them in `p.tracers`, along with wind diagnostic fields.
 
-Only emits over ocean grid cells (weighted by `p.ocean_fraction`, which is
-set by the coupler before the first timestep and defaults to 1 everywhere
-in uncoupled runs).
-Reads 2.5 m wind speed from the lowest model layer and SST from
-`p.precomputed.sfc_conditions.T_sfc`.
+Called during `set_explicit_precomputed_quantities!` — after surface conditions
+(ustar, L) are available but before the DiagnosticEDMF column-march — so
+the fluxes are ready to serve as updraft surface BCs for the EDMF scheme.
 
-The flux from `sea_salt_emission_flux` is in kg m⁻² s⁻¹ and is applied
-as a bottom boundary condition using `boundary_tendency_scalar`, which
-localises it to the lowest model layer.
+`sea_salt_emission_tendency!` reads the cached values rather than recomputing.
 """
-function sea_salt_emission_tendency!(Yₜ, Y, p, t)
+function set_sea_salt_emission_flux!(Y, p)
     aerosol_names = _aerosol_names(p.atmos.prognostic_aerosols)
     isempty(aerosol_names) && return
 
@@ -118,55 +115,33 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
     uf_params = SFP.uf_params(surface_fluxes_params)
     κ = SFP.von_karman_const(surface_fluxes_params)
 
-    # Center-level geometry and horizontal winds.
-    # Both are on center-level-n space, which differs from the face-surface space
-    # of sfc_conditions fields; use parent-level arrays to bypass the space check.
-    z_c1_p = parent(Fields.level(Fields.coordinate_field(axes(Y.c)).z, 1))
-    z_c2_p = parent(Fields.level(Fields.coordinate_field(axes(Y.c)).z, 2))
-    u_z1_p = parent(norm.(Fields.level(Y.c.uₕ, 1)))
-    u_z2_p = parent(norm.(Fields.level(Y.c.uₕ, 2)))
+    z_c1_p  = parent(Fields.level(Fields.coordinate_field(axes(Y.c)).z, 1))
+    z_c2_p  = parent(Fields.level(Fields.coordinate_field(axes(Y.c)).z, 2))
+    u_z1_p  = parent(norm.(Fields.level(Y.c.uₕ, 1)))
+    u_z2_p  = parent(norm.(Fields.level(Y.c.uₕ, 2)))
     ustar_p = parent(sfc_conditions.ustar)
     L_p     = parent(sfc_conditions.obukhov_length)
 
-    # COARE 3.0 / Charnock momentum roughness over ocean (Fairall et al. 2003).
-    # Replaces the previous fixed `SFP.z0m_fixed` with a wave-state-dependent z₀
-    # that scales with ustar², closing most of the residual extrapolation bias
-    # over ocean. Land cells get a non-physical value here, but they are masked
-    # out downstream by `ocean_fraction = 0`.
-    # Compute via parent-array form: `temp_field_level` is on center space while
-    # `sfc_conditions.ustar` is on face space, so a Field-level `@.` would fail
-    # the space check.
     roughness_spec = SF.COARE3RoughnessParams{FT}()
     z0_eff = p.scratch.temp_field_level
     z₀_p   = parent(z0_eff)
-    z₀_p  .= SF.momentum_roughness.(
-        roughness_spec, ustar_p, surface_fluxes_params, nothing,
-    )
+    z₀_p  .= SF.momentum_roughness.(roughness_spec, ustar_p, surface_fluxes_params, nothing)
 
-    u_10 = p.scratch.ᶠtemp_field_level   # will hold u_10_ext for the emission loop
+    u_10 = p.scratch.ᶠtemp_field_level
 
-    # Surface-only MOST at 10 m → diagnostic u10_mo
-    parent(u_10) .= monin_obukhov_wind_at_height.(
-        FT(10), ustar_p, L_p, uf_params, κ, z₀_p,
-    )
+    parent(u_10) .= monin_obukhov_wind_at_height.(FT(10), ustar_p, L_p, uf_params, κ, z₀_p)
     @. p.tracers.sea_salt_u10_mo_sfc = abs(u_10)
 
-    # Extrapolated u_10: anchor = z₁ model wind → used for emission flux and diagnostic u10_ext
     parent(u_10) .= monin_obukhov_wind_extrapolated.(FT(10), z_c1_p, u_z1_p, L_p, uf_params, κ, z₀_p)
 
-    # z₁_ext: anchor = z₂ model wind, target = z₁ → diagnostic z1_ext
     parent(p.tracers.sea_salt_u_z1_ext_sfc) .=
         monin_obukhov_wind_extrapolated.(z_c1_p, z_c2_p, u_z2_p, L_p, uf_params, κ, z₀_p)
-
-    # z₁_mo: surface-only MOST at z₁ → diagnostic z1_mo (reuses existing field)
     parent(p.tracers.sea_salt_u_mo_lowest_sfc) .=
         monin_obukhov_wind_at_height.(z_c1_p, ustar_p, L_p, uf_params, κ, z₀_p)
-
-    # Actual model wind at z₁ → ground truth for comparison (reuses existing field)
     parent(p.tracers.sea_salt_u_actual_lowest_sfc) .= u_z1_p
 
     @. p.tracers.sea_salt_emission_flux_sfc = 0
-    @. p.tracers.sea_salt_u10_sfc = abs(u_10)   # stores u10_ext (extrapolated, used for flux)
+    @. p.tracers.sea_salt_u10_sfc = abs(u_10)
 
     T_sfc = sfc_conditions.T_sfc
     ocean_fraction = p.ocean_fraction
@@ -175,24 +150,40 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
         aero_params.SSLT01_radius, aero_params.SSLT02_radius, aero_params.SSLT03_radius,
         aero_params.SSLT04_radius, aero_params.SSLT05_radius,
     )
-    # Precompute mass per particle for each bin once — constant, independent of
-    # grid cell state, so no reason to recompute inside the broadcast.
     mass_per_particle = ntuple(
         i -> FT(4 / 3 * π * bin_radii[i]^3 * aero_params.seasalt_density),
         Val(5),
     )
 
     for (bin_index, name) in enumerate(aerosol_names)
-        ρχ_name = Symbol(:ρ, name)
-        ᶜρχ = getproperty(Y.c, ρχ_name)
-        ᶜρχₜ = getproperty(Yₜ.c, ρχ_name)
-        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-
-        m_p = mass_per_particle[bin_index]
-        sfc_flux = p.scratch.sfc_temp_C3
         bin_flux_cache = getproperty(p.tracers.sea_salt_emission_flux_bins_sfc, name)
-        @. bin_flux_cache = sea_salt_emission_flux(u_10, T_sfc, bin_index) * m_p * ocean_fraction
+        @. bin_flux_cache = sea_salt_emission_flux(u_10, T_sfc, bin_index) * mass_per_particle[bin_index] * ocean_fraction
         @. p.tracers.sea_salt_emission_flux_sfc += bin_flux_cache
+    end
+end
+
+"""
+    sea_salt_emission_tendency!(Yₜ, Y, p, t)
+
+Apply surface emission tendencies for prognostic sea salt bins (ρSSLT01 …).
+
+Reads per-bin fluxes from `p.tracers.sea_salt_emission_flux_bins_sfc`, which
+are pre-computed by `set_sea_salt_emission_flux!` during the precomputed-
+quantities stage. The flux is applied as a bottom boundary condition using
+`boundary_tendency_scalar`, which localises it to the lowest model layer.
+"""
+function sea_salt_emission_tendency!(Yₜ, Y, p, t)
+    aerosol_names = _aerosol_names(p.atmos.prognostic_aerosols)
+    isempty(aerosol_names) && return
+
+    for (bin_index, name) in enumerate(aerosol_names)
+        ρχ_name = Symbol(:ρ, name)
+        ᶜρχ  = getproperty(Y.c, ρχ_name)
+        ᶜρχₜ = getproperty(Yₜ.c, ρχ_name)
+        ᶜχ   = @. lazy(specific(ᶜρχ, Y.c.ρ))
+
+        bin_flux_cache = getproperty(p.tracers.sea_salt_emission_flux_bins_sfc, name)
+        sfc_flux = p.scratch.sfc_temp_C3
         @. sfc_flux = C3(bin_flux_cache)
 
         btt = boundary_tendency_scalar(ᶜχ, sfc_flux)
