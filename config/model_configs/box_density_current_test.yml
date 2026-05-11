@@ -10,7 +10,7 @@ x_elem: 45
 y_elem: 45
 z_elem: 45
 z_stretch: false
-dt: "0.25secs"
+dt: "0.5secs"
 t_end: "10secs"
 dt_save_state_to_disk: "5secs"
 disable_surface_flux_tendency: true

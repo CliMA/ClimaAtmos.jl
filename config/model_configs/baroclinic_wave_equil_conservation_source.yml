@@ -1,4 +1,5 @@
 initial_condition: "MoistBaroclinicWave"
+dt: "1200secs"
 t_end: "5days"
 surface_setup: DefaultMoninObukhov
 prognostic_surface: "SlabOceanSST"
