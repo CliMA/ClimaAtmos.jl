@@ -16,9 +16,9 @@ After implementing or modifying hot-path code, verify zero allocations:
 
 ```julia
 # Warm up (forces compilation)
-set_tendencies!(Yₜ, Y, p, t)
+remaining_tendency!(Yₜ, Y, p, t)
 # Assert zero allocations on the hot path
-@test (@allocated set_tendencies!(Yₜ, Y, p, t)) == 0
+@test (@allocated remaining_tendency!(Yₜ, Y, p, t)) == 0
 ```
 
 Allocation benchmarks in `perf/` are not run automatically in CI. Allocation regressions must be caught during review.

@@ -105,11 +105,21 @@ end
 
 ## 7. Define `isbits` structs when possible
 
-If a new struct does not contain `ClimaCore` objects, verify a representative instance is `isbits`:
+Anything passed into a GPU kernel must be `isbits` *after device adaptation*, not necessarily on the host. ClimaCore objects (e.g. `Field`, `Space`) are deliberately not `isbits` on the host and become `isbits` only after `Adapt.adapt(CUDA.KernelAdaptor(), x)` (i.e. `CUDA.cudaconvert(x)`).
+
+For a new struct that does not wrap device-resident arrays, the host-side check suffices:
 
 ```julia
 isbits(A(...))
 ```
+
+For a struct that *does* wrap a `Field`, `CuArray`, or similar, the meaningful check is the post-adapt one (see [gpu_performance.md §8](gpu_performance.md)):
+
+```julia
+isbits(CUDA.cudaconvert(A(...)))
+```
+
+In the wrapping case, also define `Adapt.adapt_structure` so the post-adapt object actually becomes `isbits`.
 
 ## 8. Do not use `mutable struct`
 
@@ -138,14 +148,14 @@ Follow project conventions that avoid `@views`.
 
 ## 14. Duck-type physics functions; avoid explicit `where {FT}` on non-constructors
 
-Prefer `function f(x, y)` over `function f(x::FT, y::FT) where {FT}` in tendency and physics functions. Concrete type annotations on arguments break Dual-number propagation needed for Automatic Differentiation (AD).
+Prefer `function f(x, y)` over `function f(x::FT, y::FT) where {FT}` in tendency and physics functions. The `where {FT}` form binds every annotated argument to the *same* concrete element type, which rejects mixed-AD calls (e.g. `f(Dual(1.0), 2.0)`) and rejects `ClimaCore.Field`s whose `eltype`s differ from each other or from a `Float`. Duck typing lets each argument carry its own type and lets AD flow through naturally.
 
 Exception: struct constructors that statically allocate `SVector`/`SMatrix` need `::Type{FT}` to determine the element type at compile time.
 
 Bad:
 
 ```julia
-# Dual numbers don't satisfy ::FT
+# Rejects f(Dual(1.0), 2.0) and any caller with mismatched eltypes
 @inline function compute(x::FT, y::FT) where {FT}
     return x^2 + y
 end

@@ -26,7 +26,7 @@ Treat anything not in the package's `docs/` as internal and unstable.
 ## CloudMicrophysics.jl
 
 - The microphysics scheme is passed as a singleton type; dispatch on it eliminates dead branches at compile time.
-- Return values are `NamedTuple`s. Use the Materialization or Tuple-Fusion patterns (see [GPU Performance Guide](gpu_performance.md)) to extract fields without extra heap allocations.
+- Return values are `NamedTuple`s. Materialize them into a pre-allocated `NamedTuple`-of-`Field`s scratch slot in the cache and then issue one `@.` per target field — see the "Materialization" and "Multi-field updates" subsections in [GPU Performance Guide §3](gpu_performance.md).
 - Float32 pollution: verify that integer-base exponentiation and float literals inside CloudMicrophysics functions are written with the element type (for example, `FT(6)^x`, not `6^x`).
 
 ## SurfaceFluxes.jl

@@ -16,7 +16,9 @@ This guide covers patterns for writing Julia code that is compatible with Automa
 ## Before / after example
 
 ```julia
-# ❌ Breaks AD — Dual doesn't match ::FT; FT(0)/FT(1) break type propagation
+# ❌ AD-fragile — `where {FT}` forces x and y to share a type, so a mixed call
+# like compute(Dual(1.0), 2.0) fails to dispatch; the if/else also introduces a
+# non-differentiable kink and is problematic for reverse-mode AD (Enzyme).
 @inline function compute(x::FT, y::FT) where {FT}
     if x > FT(0)
         return FT(1) - x^2
@@ -25,7 +27,8 @@ This guide covers patterns for writing Julia code that is compatible with Automa
     end
 end
 
-# ✅ AD-compatible — duck typed, branchless, type-agnostic constants
+# ✅ AD-compatible — duck typed (each arg has its own type), branchless,
+# type-agnostic constants derived from the input.
 @inline function compute(x, y)
     return ifelse(x > zero(x), one(x) - x^2, zero(x))
 end
@@ -70,7 +73,7 @@ For multi-argument functions, use `ForwardDiff.gradient` or `ForwardDiff.jacobia
 ## Common pitfalls
 
 1. **Type annotations on arguments**: `f(x::Float64)` rejects `ForwardDiff.Dual{Float64}`. Use duck typing.
-2. **`FT(constant)` inside hot loops**: If `FT` was derived from a `where` clause bound to `Float64`, `FT(1.2)` will reject Dual inputs. Use `one(x)`, `zero(x)`, or derive `FT` from the input value.
+2. **Constants typed from the wrong source**: `FT(1.2)`, `Float64(1.2)`, or any constant whose type is hardcoded (or captured from an unrelated source like `eltype(params)`) does not pick up the `Dual` type of the live input. Mixed arithmetic still promotes to `Dual`, so simple expressions work, but the `Float64` value silently loses partials if it escapes into a context typed by the wrong `FT` — e.g. returned, assigned to a `Float64` field, or stored in a `Float64`-typed array. Prefer `one(x)` / `zero(x)`, or derive `FT` from the actual input via `typeof(x)` / `eltype(x)`.
 3. **Mutation**: In-place modification of arrays or mutable structs can break reverse-mode AD (Enzyme). Prefer returning new values from pure functions.
 4. **String interpolation**: `"value is $x"` inside a kernel triggers dynamic dispatch and is incompatible with GPU and some AD backends.
 

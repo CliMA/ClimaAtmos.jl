@@ -21,9 +21,9 @@ ArrayType = ClimaComms.array_type(device)
 buffer = ArrayType{FT}(undef, n)
 ```
 
-### Move data with `ClimaComms.allowscalar` only behind a clear guard
+### Move data to host only behind a clear guard
 
-Do not silently call `Array(field)` on a GPU field to peek at values; this triggers a host transfer that is invisible to readers and breaks performance. Use it only inside diagnostics or test code where the cost is acceptable, and document why.
+Do not silently call `Array(field)` on a GPU field to peek at values; this triggers a host transfer that is invisible to readers and breaks performance. Use it only inside diagnostics or test code where the cost is acceptable, and document why. The same applies to scalar indexing (`field[i]`), which requires `CUDA.@allowscalar` on a GPU array — wrap the call so the cost is visible.
 
 ### `CUDA.allowscalar(false)` in tests
 

@@ -21,7 +21,7 @@ Use `ifelse(cond, a, b)` to compute both branches and select the result branchle
 
 **Critical pitfalls of `ifelse`**:
 
-- Both arguments are always evaluated. Guard mathematically invalid operations (`log`, `sqrt`, division) with `max(x, eps(x))` **before** passing them as arguments.
+- Both arguments are always evaluated. Guard mathematically invalid operations (`log`, `sqrt`, division) with `max(x, eps(eltype(x)))` **before** passing them as arguments.
 - Never use `begin...end` blocks inside `ifelse` arguments — side effects and complex blocks execute unconditionally.
 - Do not use `ifelse` to select between a base case and a recursive call. Since both branches evaluate, this causes infinite recursion. Use a standard `if` statement for recursion.
 
@@ -36,7 +36,7 @@ result = ifelse(x > 0,
 )
 
 # ✅ Pre-compute safely, select with ifelse
-safe_x = max(x, eps(x))
+safe_x = max(x, eps(eltype(x)))
 log_term = log(safe_x) + one(x)
 result = ifelse(x > zero(x), log_term, zero(x))
 ```
@@ -95,20 +95,9 @@ limited_field = @. limit_tendencies(A, B, C)
 
 **General rule**: any `Field` that is computed inside a function called during timestepping must be pre-allocated in the cache (typically in `src/cache/`). The cache is built once during model construction. Never allocate new `Field`s inside tendency functions, callbacks, or any code that runs per-timestep.
 
-### Tuple-Fusion pattern
+### Multi-field updates
 
-For zero-allocation multi-field updates, have the physics function return a plain `Tuple` and use tuple assignment in the broadcast:
-
-```julia
-# ✅ Zero allocations — no intermediate Field
-@inline function limited_tendency(ρ, args...)
-    lim = compute_limits(args...)
-    return (ρ * lim.Sqₗᵐ, ρ * lim.Sqᵢᵐ, ρ * lim.Sqᵣᵐ, ρ * lim.Sqₛᵐ)
-end
-
-@. (Yₜ.c.ρq_liq, Yₜ.c.ρq_ice, Yₜ.c.ρq_rai, Yₜ.c.ρq_sno) +=
-    limited_tendency(Y.c.ρ, ...)
-```
+ClimaCore's broadcast machinery does not support a tuple of `Field`s on the LHS — `@. (Yₜ.c.ρq_liq, Yₜ.c.ρq_ice) += f(...)` fails in `check_broadcast_shape` / `copyto!`. Use the scratch-field pattern from the previous section: materialize the multi-field result into a pre-allocated `NamedTuple`-of-`Field`s in the cache, then issue one `@.` per target. The cost of repeating the broadcast is paid back because the RHS is just a field load, not a recomputation.
 
 ## 4. `@.` broadcast rules
 
@@ -159,19 +148,30 @@ error("Invalid value encountered")
 
 ## 8. `isbits` requirement
 
-Structs used inside GPU kernels must be `isbits` — meaning all fields are immutable, concrete, and contain no heap-allocated data (`Vector`, `String`, abstract `Function`).
-
-Verify with:
+Anything passed into a GPU kernel must be `isbits` *after device adaptation*. That is the actual contract — not that the host-side object is `isbits`. Many ClimaCore objects (notably `Field`, `Space`, and anything wrapping a `CuArray`) are deliberately not `isbits` on the host because they hold `Array`/`CuArray` payloads; they become `isbits` only after `Adapt.adapt(CUDA.KernelAdaptor(), x)` (equivalently `CUDA.cudaconvert(x)`) rewrites the array fields into device-side `CuDeviceArray`s and similar.
 
 ```julia
-@assert isbits(MyStruct(...))
+julia> a = fill(0.0f0, axes(Y.c));   # ClimaCore Field
+julia> isbits(a)
+false
+julia> isbits(CUDA.cudaconvert(a))
+true
 ```
 
-If `isbits` returns `false`, check for:
-- `Vector` or `Array` fields (use `SVector` or `Tuple` instead)
+Verify with the post-adapt check:
+
+```julia
+@assert isbits(CUDA.cudaconvert(MyStruct(...)))
+```
+
+If the post-adapt check returns `false`, check for:
+
+- `Vector` or `Array` fields that aren't backed by a `CuArray` and don't have an `Adapt.adapt_structure` method (use `SVector`/`Tuple`, or add an `Adapt` rule that rewrites the field to a device-side equivalent)
 - `String` fields
 - `Function` fields without a type parameter (use `struct A{F <: Function}; f::F; end`)
 - `mutable struct` (use immutable structs)
+
+When defining a new struct that wraps device-resident arrays, add an `Adapt.adapt_structure(to, x::MyStruct) = MyStruct(adapt(to, x.field1), ...)` method so the post-adapt object becomes `isbits`.
 
 ## 9. Allocation verification workflow
 
@@ -179,9 +179,9 @@ After implementing or modifying hot-path code, verify zero allocations:
 
 ```julia
 # Warm up (forces compilation)
-set_tendencies!(Yₜ, Y, p, t)
+remaining_tendency!(Yₜ, Y, p, t)
 # Assert zero allocations
-@test (@allocated set_tendencies!(Yₜ, Y, p, t)) == 0
+@test (@allocated remaining_tendency!(Yₜ, Y, p, t)) == 0
 ```
 
 Allocation benchmarks in `perf/` are not run automatically in CI. Allocation regressions must be caught during review.

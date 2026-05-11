@@ -11,17 +11,18 @@ This file contains everything specific to the ClimaAtmos.jl repository: director
 - `src/prognostic_equations/`: tendency accumulation and implicit/explicit splitting.
 - `src/parameterized_tendencies/`: parameterization implementations.
   - `microphysics/`: microphysics tendency orchestration, SGS quadrature, limiters, Jacobian.
-  - `turbulence_convection/`: EDMF prognostic and diagnostic closures.
-  - `radiation/`: RRTMGP wrappers.
-  - `gravity_wave/`: non-orographic and orographic GWD.
-  - `surface_temperature/`: SST and surface coupling.
+  - `radiation/`: RRTMGP wrappers and idealized radiation (`held_suarez.jl`).
+  - `gravity_wave_drag/`: non-orographic and orographic GWD.
+  - `les_sgs_models/`: Smagorinsky–Lilly, anisotropic minimum dissipation, constant horizontal diffusion.
+  - `sponge/`: Rayleigh and viscous sponge tendencies.
+- EDMF code lives in `src/cache/{prognostic,diagnostic}_edmf_precomputed_quantities.jl` and `src/prognostic_equations/edmfx_*.jl`, not under `parameterized_tendencies/`.
 - `src/callbacks/`, `src/diagnostics/`, `src/setups/`, `src/surface_conditions/`, `src/topography/`, `src/parameters/`, `src/utils/`: remaining domain subtrees. Search by physics/runtime concept first.
 - `config/`: YAML/TOML config library. `default_configs/default_config.yml` is the schema baseline; `common_configs/` holds reusable numerics; `model_configs/`, `gpu_configs/`, `mpi_configs/`, `perf_configs/`, and `longrun_configs/` are scenario overlays.
 - `.buildkite/ci_driver.jl`: canonical run entry for CI-style simulations. It parses config, builds the simulation, runs `solve_atmos!`, and performs validation/output checks.
 - `.buildkite/pipeline.yml`: authoritative list of Buildkite jobs and their config combinations. Use it to see which config families are combined in automation.
 - `docs/make.jl` and `docs/src/`: Documenter entry point plus user/contributor docs. Good references for API usage and config recipes.
 - `perf/`: allocation and performance benchmarks run separately from unit tests. Not run in CI; regressions must be caught in review.
-- `reproducibility_tests/`: MSE threshold monitoring. Reference counters must be incremented when simulation output intentionally changes.
+- `reproducibility_tests/`: reproducibility test infrastructure. `ref_counter.jl` holds a single integer counter that partitions commit history into reference bins — increment it when simulation output intentionally changes.
 - `post_processing/`, `calibration/`, `runscripts/`, `examples/`: analysis scripts, calibration workflows, launch scripts, and smaller usage examples.
 
 ## Mapping the architectural layers to ClimaAtmos directories
@@ -74,12 +75,12 @@ When reviewing or writing changes, name the validation surface explicitly:
 
 - **`test/runtests.jl` test groups** for unit-level coverage.
 - **`.buildkite/ci_driver.jl` jobs** for config or runtime-workflow changes. Check `.buildkite/pipeline.yml` to identify the affected jobs.
-- **`reproducibility_tests/`** for changes that may shift simulation output. Reference counters must be incremented when output intentionally changes; do not edit them without explicit direction from the user.
+- **`reproducibility_tests/`** for changes that may shift simulation output. The reference counter in `reproducibility_tests/ref_counter.jl` must be incremented when output intentionally changes; do not edit it without explicit direction from the user.
 - **`perf/` allocation benchmarks** are not run in CI. Allocation regressions must be caught during review using the `@allocated` pattern.
 
 ## MSE / reproducibility
 
-- Reference counters live in `reproducibility_tests/`. Increment the counter when intentionally changing simulation output. Never edit reference data without explicit user direction (see [agent_autonomy.md](agent_autonomy.md)).
+- The reference counter lives in `reproducibility_tests/ref_counter.jl`. Increment it when intentionally changing simulation output. Never edit it without explicit user direction (see [agent_autonomy.md](agent_autonomy.md)).
 - Float32 simulations may have looser MSE thresholds. Document this explicitly when setting a new threshold.
 
 ## Local commands
