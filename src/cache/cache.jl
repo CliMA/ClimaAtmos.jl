@@ -171,6 +171,8 @@ function build_cache(
     scratch = temporary_quantities(Y, atmos)
 
     precomputed = precomputed_quantities(Y, atmos)
+    tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date, _aerosol_names(atmos.prognostic_aerosols))
+    ocean_fraction = ones(axes(Fields.level(Y.f, Fields.half))) # Populated via Interfacer.update_field! before first timestep
     precomputing_arguments = (;
         atmos,
         core,
@@ -181,6 +183,8 @@ function build_cache(
         dt,
         conservation_check,
         external_forcing,
+        tracers,
+        ocean_fraction,
     )
 
     # Coupler compatibility
@@ -202,8 +206,6 @@ function build_cache(
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
-    tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date, _aerosol_names(atmos.prognostic_aerosols))
-    ocean_fraction = ones(axes(Fields.level(Y.f, Fields.half))) # Populated via Interfacer.update_field! before first timestep
 
     args = (
         dt,
