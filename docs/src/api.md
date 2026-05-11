@@ -25,6 +25,12 @@ ClimaAtmos.AutoDenseJacobian
 ClimaAtmos.AutoSparseJacobian
 ```
 
+## Diagnostics
+
+```@docs
+ClimaAtmos.DiagnosticsConfig
+```
+
 ## Topography
 
 ```@docs

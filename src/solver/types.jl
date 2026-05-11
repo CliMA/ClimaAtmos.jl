@@ -12,9 +12,10 @@ abstract type AbstractMicrophysicsModel end
 struct DryModel <: AbstractMicrophysicsModel end
 struct EquilibriumMicrophysics0M <: AbstractMicrophysicsModel end
 struct NonEquilibriumMicrophysics1M <: AbstractMicrophysicsModel
-    n_substeps::Int  # number of susteps for time averaging tendencies
-    function NonEquilibriumMicrophysics1M(; n_substeps = 1)
-        return new(n_substeps)
+    n_substeps::Int  # number of microphysics substeps
+    n_substeps_quad::Int  # number of microphysics substeps with sgs quadrature
+    function NonEquilibriumMicrophysics1M(; n_substeps = 1, n_substeps_quad = 1)
+        return new(n_substeps, n_substeps_quad)
     end
 end
 struct NonEquilibriumMicrophysics2M <: AbstractMicrophysicsModel end
