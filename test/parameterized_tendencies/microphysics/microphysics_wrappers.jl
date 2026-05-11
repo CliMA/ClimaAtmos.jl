@@ -236,27 +236,22 @@ import ClimaAtmos: limit_sink
                 q_sat_mean = TD.q_vap_saturation(thp, T_mean, ρ)
                 nsubs_quad = 1
 
-                @testset "Subsaturated mean" begin
-                    # q_cond_mean = 0 → q_in_cloud = 0, so cap forces q_lcl_hat = 0
-                    # at every quadrature point regardless of local saturation.
+                @testset "Subsaturated mean (no condensate)" begin
+                    # Evaluator with zero condensates and a slightly supersaturated
+                    # quadrature point: BMT receives the same (T, q_tot, 0, 0, 0, 0)
+                    # state because the evaluator holds condensate fixed.
                     eval_sub = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(),
                         mp, thp, ρ, T_mean,
-                        FT(0), FT(0),       # q_lcl_in_cloud, q_icl_in_cloud
-                        FT(0), FT(0),       # q_rai, q_sno
-                        false,              # has_cloud
-                        FT(1),              # λ
-                        FT(60),             # dt
+                        FT(0), FT(0), FT(0), FT(0),  # q_lcl, q_icl, q_rai, q_sno
+                        FT(60),                       # dt
                         nsubs_quad,
                         (),
                     )
 
-                    # Quadrature point slightly supersaturated
                     q_tot_hat = q_sat_mean + FT(0.001)
                     result = eval_sub(T_mean, q_tot_hat)
 
-                    # Cap at q_in_cloud=0 forces q_lcl_hat = q_icl_hat = 0,
-                    # so phase-change tendencies match the all-vapor BMT call.
                     res_expected = BMT.average_bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
                         q_tot_hat, FT(0), FT(0), FT(0), FT(0), FT(60), nsubs_quad,
@@ -265,34 +260,26 @@ import ClimaAtmos: limit_sink
                     @test result.dq_icl_dt ≈ res_expected.dq_icl_dt rtol = FT(1e-4)
                 end
 
-                @testset "Saturated equilibrium mean (CF = 1)" begin
-                    # excess_mean > 0, q_cond_mean = excess_mean (equilibrium),
-                    # CF = 1 → q_in_cloud = q_cond_mean.
+                @testset "Saturated equilibrium mean" begin
                     q_tot_sat = q_sat_mean + FT(0.002)
-                    excess_sat = q_tot_sat - q_sat_mean  # +0.002
-                    q_lcl_mean = excess_sat
-                    q_icl_mean = FT(0)
-                    λ = TD.liquid_fraction(thp, T_mean, q_lcl_mean, q_icl_mean)
+                    excess_sat = q_tot_sat - q_sat_mean
+                    q_lcl = excess_sat
+                    q_icl = FT(0)
 
                     eval_sat = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(),
                         mp, thp, ρ, T_mean,
-                        λ * excess_sat, (1 - λ) * excess_sat,  # q_lcl_in_cloud, q_icl_in_cloud
-                        FT(0), FT(0),                          # q_rai, q_sno
-                        true,                                  # has_cloud
-                        λ,                                     # λ
-                        FT(60),                                # dt
+                        q_lcl, q_icl, FT(0), FT(0),  # q_lcl, q_icl, q_rai, q_sno
+                        FT(60),                       # dt
                         nsubs_quad,
                         (),
                     )
 
-                    # At grid mean: equilibrium fluctuation equals in-cloud cap,
-                    # so q_lcl_hat = λ * excess_sat. Should match direct BMT call.
+                    # Evaluator passes fixed condensates straight through to BMT.
                     result_mean = eval_sat(T_mean, q_tot_sat)
                     res_direct = BMT.average_bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
-                        q_tot_sat, λ * excess_sat,
-                        (1 - λ) * excess_sat, FT(0), FT(0), FT(60), nsubs_quad,
+                        q_tot_sat, q_lcl, q_icl, FT(0), FT(0), FT(60), nsubs_quad,
                     )
                     @test result_mean.dq_lcl_dt ≈ res_direct.dq_lcl_dt rtol = FT(1e-4)
                     @test result_mean.dq_icl_dt ≈ res_direct.dq_icl_dt rtol = FT(1e-4)

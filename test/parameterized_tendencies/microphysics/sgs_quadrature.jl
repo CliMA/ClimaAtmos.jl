@@ -318,14 +318,19 @@ using ClimaAtmos
                 tps = TD.Parameters.ThermodynamicsParameters(toml_dict)
                 mp = CMP.Microphysics1MParams(toml_dict)
 
-                # Grid-mean state
+                # Grid-mean state. Choose q_tot so the cell is at saturation
+                # equilibrium (q_v_mean = q_sat); the new microphysics-tendency
+                # decomposition forces q_v = q_sat inside the cloudy fraction,
+                # so the per-quadrature-point and direct-BMT evaluations agree
+                # only when the grid-mean state is itself saturated.
                 ρ = FT(1.2)
                 T_mean = FT(280.0)
-                q_tot_mean = FT(0.01)
                 q_lcl_mean = FT(0.0001)
                 q_icl_mean = FT(0.00005)
                 q_rai = FT(0.0001)
                 q_sno = FT(0.00001)
+                q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
+                q_tot_mean = q_sat_mean + q_lcl_mean + q_icl_mean + q_rai + q_sno
 
                 # Variances and correlation
                 T′T′ = FT(1.0)
@@ -596,14 +601,11 @@ using ClimaAtmos
                 dt = FT(60)
                 nsubs_quad = 1
 
-                # Create evaluator (CF = 1 → q_in_cloud = q_mean; λ = 1 here for simplicity)
+                # Create evaluator with fixed grid-mean condensates
                 evaluator = Microphysics1MEvaluator(
                     BMT.Microphysics1Moment(),
                     mp, thp, ρ, T_mean,
-                    q_lcl_mean, q_icl_mean,    # q_lcl_in_cloud, q_icl_in_cloud
-                    q_rai, q_sno,              # q_rai, q_sno
-                    true,                      # has_cloud
-                    FT(1),                     # λ
+                    q_lcl_mean, q_icl_mean, q_rai, q_sno,  # condensate species
                     dt, nsubs_quad,
                     (),
                 )
@@ -644,14 +646,16 @@ using ClimaAtmos
                 tps = TD.Parameters.ThermodynamicsParameters(toml_dict)
                 mp = CMP.Microphysics1MParams(toml_dict)
 
-                # Grid-mean state
+                # Grid-mean state at saturation equilibrium so the in-cloud
+                # branch (which forces q_v = q_sat) reproduces direct BMT.
                 ρ = FT(1.2)
                 T_mean = FT(280.0)
-                q_tot = FT(0.01)
                 q_liq = FT(0.001)
                 q_ice = FT(0.0005)
                 q_rai = FT(0.0002)
                 q_sno = FT(0.0001)
+                q_sat_mean = TD.q_vap_saturation(tps, T_mean, ρ)
+                q_tot = q_sat_mean + q_liq + q_ice + q_rai + q_sno
 
                 # GridMeanSGS inside SGSQuadrature
                 quad_gm = ClimaAtmos.SGSQuadrature(
@@ -751,11 +755,14 @@ using ClimaAtmos
 
                     ρ = FT(1.0)
                     T = FT(280.0)
-                    q_tot = FT(0.015)
                     q_liq = FT(0.001)
                     q_ice = FT(0.0005)
                     q_rai = FT(0.0001)
                     q_sno = FT(0.00005)
+                    # Grid mean at saturation equilibrium so the cloudy branch
+                    # (which forces q_v = q_sat) matches direct BMT.
+                    q_sat_eq = TD.q_vap_saturation(thp, T, ρ)
+                    q_tot = q_sat_eq + q_liq + q_ice + q_rai + q_sno
                     dt = FT(1.0)
                     nsubs = 1
                     nsubs_quad = 1

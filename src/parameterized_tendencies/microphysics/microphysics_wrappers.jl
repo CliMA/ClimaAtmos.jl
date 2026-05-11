@@ -62,9 +62,9 @@ struct Microphysics0MEvaluator{CMP, SAE, FT}
     Φ::FT
 end
 function Microphysics0MEvaluator(cm_params, thermo_params, ρ, T_mean, Φ)
-    # Grid-mean liquid fraction, held fixed across quadrature points
-    # (paper Eq. 3.31, equilibrium fallback). The 0M scheme has no prognostic
-    # phase memory, so we use a temperature-based ramp at the grid mean.
+    # Grid-mean liquid fraction, held fixed across quadrature points.
+    # The 0M scheme has no prognostic phase memory, so we use a
+    # temperature-based ramp at the grid mean.
     λ_mean = TD.liquid_fraction_ramp(thermo_params, T_mean)
     sat_eval = SaturationAdjustmentEvaluator(thermo_params, ρ, λ_mean)
     return Microphysics0MEvaluator(cm_params, sat_eval, Φ)
@@ -163,32 +163,16 @@ end
 ###
 
 """
-    equilibrium_cloud_condensates_1m(tps, T, ρ, q_tot, λ, q_rai, q_sno)
-
-Compute the equilibrium cloud liquid and cloud ice specific humidities
-(`q_lcl_eq`, `q_icl_eq`) for a thermodynamic state `(T, ρ, q_tot)` using
-a prescribed (grid-mean) liquid fraction `λ`. Rain and snow condensates
-are removed from the equilibrium partition.
-
-Returns `(q_lcl_eq, q_icl_eq)`.
-"""
-@inline function equilibrium_cloud_condensates_1m(tps, T, ρ, q_tot, λ, q_rai, q_sno)
-    FT = typeof(ρ)
-    q_sat = TD.q_vap_saturation(tps, T, ρ)
-    excess = max(FT(0), q_tot - q_sat)
-    q_lcl_eq = max(FT(0), λ * excess - q_rai)
-    q_icl_eq = max(FT(0), (FT(1) - λ) * excess - q_sno)
-    return q_lcl_eq, q_icl_eq
-end
-
-"""
     (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
 
 GPU-safe functor for computing 1-moment microphysics tendencies at SGS
 quadrature points. The local thermodynamic state `(T_hat, q_tot_hat)` is
-sampled from the SGS distribution; the local condensate is diagnosed from
-the local saturation excess and capped at the *in-cloud* condensate
-`q_lcl_in_cloud = q_lcl_mean / max(CF, CF_min)` (and analogously for ice).
+sampled from the SGS distribution; condensate species are held fixed at
+their grid-mean values across all quadrature points. The quadrature thus
+captures thermodynamic variability in phase-change rates (cloud-water
+condensation/evaporation, rain evaporation, snow sublimation, snow melt)
+while preserving exact ⟨q_lcl_hat⟩ = q_lcl_mean and ⟨q_tot⟩ = q_t_mean,
+i.e. the prognostic condensate budget.
 
 # Arguments
 - `T_hat`: Temperature at quadrature point [K]
@@ -200,84 +184,30 @@ the local saturation excess and capped at the *in-cloud* condensate
 - `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
 - `dq_sno_dt`: Snow tendency [kg/kg/s]
-
-# Condensate Diagnosis
-
-At each quadrature point, the local cloud condensate is
-
-    q_lcl_hat = min(q_lcl_in_cloud,
-                    max(0, λ (q_tot_hat - q_sat(T_hat, ρ)) - q_rai))
-
-with `λ` the prognostic-state liquid fraction (held fixed across all
-quadrature points of the subdomain). At clear quadrature points
-(`q_tot_hat ≤ q_sat(T_hat, ρ)`), `q_lcl_hat = 0`. At strongly supersaturated
-points, `q_lcl_hat` saturates at the in-cloud value. This bounds the
-Jensen's-inequality amplification of nonlinear sinks (autoconversion,
-accretion) by the standard GCM in-cloud / clear partition while letting the
-quadrature respond to local thermodynamic variability through the
-saturation curve.
-
-When the subdomain is clear (`q_lcl_mean = 0`), `q_lcl_in_cloud = 0` and the
-local condensate is identically zero at every quadrature point;
-phase-change rates remain responsive to local SGS supersaturation through
-`q_v_hat - q_sat(T_hat, ρ)` inside `BMT`.
 """
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
     mp::MP
     tps::TPS
     ρ::FT
-    # Grid-mean temperature (passed through; quadrature varies T_hat)
+    # Grid-mean state (held fixed across quadrature points)
     T_mean::FT
-    # In-cloud cloud condensates: q_mean / max(CF, CF_min)
-    q_lcl_in_cloud::FT
-    q_icl_in_cloud::FT
-    # Precipitation specific humidities. In a cell with cloud, these are the
-    # in-cloud values q_mean/CF, gated on local saturation in the call below
-    # (precip co-located with cloud, max-overlap). In a clear cell (rain or
-    # snow falling through clear air from above), `has_cloud = false` disables
-    # the gating and these are the grid-mean values.
+    q_lcl::FT
+    q_icl::FT
     q_rai::FT
     q_sno::FT
-    # Whether the cell has prognostic cloud condensate above the q_min
-    # threshold. Controls precipitation gating in the evaluator.
-    has_cloud::Bool
-    # Prognostic-state liquid fraction, fixed across quadrature points
-    λ::FT
     # Numerical parameters
     dt::FT
     nsubs::Int
     args::Args
 end
 @inline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
-
-    q_lcl_eq_hat, q_icl_eq_hat = equilibrium_cloud_condensates_1m(
-        eval.tps, T_hat, eval.ρ, q_tot_hat, eval.λ, eval.q_rai, eval.q_sno,
-    )
-
-    # Cap the local equilibrium fluctuation at the in-cloud condensate so that
-    # nonlinear sinks see at most the in-cloud value within the cloudy fraction.
-    q_lcl_hat = min(eval.q_lcl_in_cloud, q_lcl_eq_hat)
-    q_icl_hat = min(eval.q_icl_in_cloud, q_icl_eq_hat)
-
-    # Gate precipitation by local saturation under max-overlap with cloud.
-    # In a cell with cloud, rain/snow co-locate with cloud: at cloudy
-    # quadrature points (q_lcl_hat > 0 or q_icl_hat > 0) the BMT receives the
-    # in-cloud precip; at clear quadrature points it receives 0, which zeros
-    # out the clear-sky precip terms (rain evap, snow sub, snow melt) so
-    # those processes are not double-counted with the implicit clear/cloudy
-    # partitioning supplied by the quadrature. In a cell without cloud
-    # (`has_cloud = false`), the gate is disabled — quadrature points all see
-    # the grid-mean precip, so clear-air rain evap of precip falling from
-    # above is computed correctly.
-    is_local_cloudy = (q_lcl_hat > zero(q_lcl_hat)) | (q_icl_hat > zero(q_icl_hat))
-    gate_off = eval.has_cloud & !is_local_cloudy
-    q_rai_hat = ifelse(gate_off, zero(eval.q_rai), eval.q_rai)
-    q_sno_hat = ifelse(gate_off, zero(eval.q_sno), eval.q_sno)
-
+    FT = typeof(eval.ρ)
+    q_tot_hat = max(FT(0), q_tot_hat)
     return BMT.average_bulk_microphysics_tendencies(
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        q_lcl_hat, q_icl_hat, q_rai_hat, q_sno_hat, eval.dt, eval.nsubs, eval.args...,
+        eval.q_lcl, eval.q_icl, eval.q_rai, eval.q_sno,
+        eval.dt, eval.nsubs, eval.args...,
     )
 end
 
@@ -285,34 +215,62 @@ end
     microphysics_tendencies_1m(ρ, q_tot, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,)
     microphysics_tendencies_1m(
         scheme, sgs_quad, cmp, thp, ρ, T, q_tot,
-        q_lcl_mean, q_icl_mean, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+        q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
         cloud_fraction, dt, nsubs,
     )
 
-Computes time-averaged 1-moment microphysics tendencies. When using SGS-quadratures,
-the tendencies are integrated over the joint PDF of (T, q_tot), with the
-condensate at each quadrature point taken from the local equilibrium excess
-capped at the in-cloud condensate `q_lcl_mean / max(CF, CF_min)` (similarly
-for ice). The grid-mean (no-quadrature) path takes condensate inputs as-is.
+Computes time-averaged 1-moment microphysics tendencies.
+
+The 4-argument (no `sgs_quad`) form takes condensate inputs as-is and is used
+in EDMF updrafts or wherever the grid-mean state is to be evaluated directly.
+
+The quadrature form uses a top-hat decomposition into a cloudy fraction
+(weight CF) and a clear fraction (weight 1−CF), with max-overlap of cloud
+condensate with itself and **random overlap of precipitation**
+(`q_rai`, `q_sno` are the same in both fractions):
+
+- **Fully-clear cell** (`q_lcl + q_icl ≤ q_min`): quadrature over the joint
+  `(T, q_tot)` SGS PDF with `q_lcl = q_icl = 0` and grid-mean precipitation.
+  Below-cloud rain evaporation and snow sublimation are captured through
+  subsaturated quadrature points. Unit weight.
+
+- **Cell with cloud**:
+  - *Cloudy fraction (CF)*: single BMT call at `T_mean` with in-cloud cloud
+    condensate `q_lcl/cf_eff` (likewise for ice) and grid-mean precipitation,
+    where `cf_eff = sqrt(CF² + CF_min²)` is a smooth floor on the cloud
+    fraction. The in-cloud water vapor is set to
+    `q_v_in_cloud = max(q_v_grid_mean, q_sat(T_mean, ρ))`:
+    when the grid mean is supersaturated, the cloudy BMT condenses the
+    excess via MM2015; when the grid mean is at or below saturation, the
+    in-cloud vapor is clamped to `q_sat` so MM2015 does not spuriously
+    evaporate cloud water at a subsaturated grid-mean state. The quadrature
+    is dropped in the cloudy fraction because the local `(T, q_tot)`
+    variability has small effect on the rates once `q_v` is at or near
+    `q_sat`.
+  - *Clear fraction (1−CF)*: quadrature over the joint `(T, q_tot)` PDF
+    with no cloud condensate (`q_lcl = q_icl = 0`) and grid-mean
+    precipitation; captures below-cloud rain evaporation and snow
+    sublimation at partly-cloudy levels.
+
 ```math
-\\bar{S} = \\int\\int S(T, q, q_l(T, q; q_l^{ic}), \\dots) P(T, q) \\, dT \\, dq
+\\bar{S}_{\\rm grid} = CF \\cdot \\bar{S}_{\\rm cloudy} +
+                      (1-CF) \\cdot \\bar{S}_{\\rm clear}
 ```
-The option without SGS-quadratures can be used in the EDMF updrafts, or to compute
-grid-mean tendency without taking account of fluctuations.
 
 # Arguments
 - `scheme`: Microphysics scheme type (from CloudMicrophysics.BulkMicrophysicsTendencies)
 - `sgs_quad`: SGSQuadrature configuration
 - `cmp`, `thp`: Microphysics and thermodynamics parameters
-- `ρ`, `T`: Air density [kg/m³] and temperature [K]
-- `q_tot`: Total water [kg/kg]
-- `q_lcl_mean`, `q_icl_mean`: Mean cloud liquid water and cloud ice [kg/kg]
-- `q_rai`, `q_sno`: Rain and snow [kg/kg]
+- `ρ`, `T`: Air density [kg/m³] and temperature [K] (grid-mean)
+- `q_tot`: Grid-mean total water [kg/kg]
+- `q_lcl`, `q_icl`: Grid-mean cloud liquid water and cloud ice [kg/kg]
+- `q_rai`, `q_sno`: Grid-mean rain and snow [kg/kg]
 - `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
 - `q′q′`: Variance of q_tot ``\\langle q'^2 \\rangle``
 - `corr_Tq`: Correlation coefficient ρ(T', q') obtained from `correlation_Tq(params)`.
-- `cloud_fraction`: Subdomain cloud fraction CF ∈ [0, 1], used to convert grid-mean
-  condensates to in-cloud values via `q_lcl_in_cloud = q_lcl_mean / max(CF, CF_min)`.
+- `cloud_fraction`: Subdomain cloud fraction CF ∈ [0, 1]; used in cloudy
+  cells to convert grid-mean species to in-cloud values
+  `q_in_cloud = q / max(CF, CF_min)` and to weight the cloudy contribution.
 - `args...`: Additional arguments (e.g., N_lcl for 2M)
 - `dt`: Model timestep [s] (for tendency averaging)
 - `nsubs`: Number of substeps for computing average tendencies over time
@@ -335,52 +293,96 @@ NamedTuple with microphysics source terms:
 end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
     scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
-    q_lcl_mean, q_icl_mean, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
     cloud_fraction, dt, nsubs, args...,
 )
     FT = typeof(ρ)
-
-    # Clamp specific humidities to prevent negativity in quadratures
-    q_lcl_nonneg = max(FT(0), q_lcl_mean)
-    q_icl_nonneg = max(FT(0), q_icl_mean)
+    # Clamp specific humidities to non-negative.
+    q_lcl_nonneg = max(FT(0), q_lcl)
+    q_icl_nonneg = max(FT(0), q_icl)
     q_rai_nonneg = max(FT(0), q_rai)
     q_sno_nonneg = max(FT(0), q_sno)
 
-    # Convert grid-mean cloud condensates to in-cloud values, q_in_cloud = q_mean / CF.
-    # Floor CF to keep q_in_cloud finite at small cloud fractions.
-    CF_min = FT(0.01)
-    cf_eff = max(cloud_fraction, CF_min)
-    q_lcl_in_cloud = q_lcl_nonneg / cf_eff
-    q_icl_in_cloud = q_icl_nonneg / cf_eff
-
-    # Apply max-overlap in-cloud scaling to precipitation only when cloud
-    # condensate is present in the cell. When the cell has no cloud (rain/snow
-    # falling through clear air from above), the max-overlap assumption is
-    # meaningless — keep grid-mean values so clear-sky evaporation rates are
-    # not artificially inflated.
     q_min = TD.Parameters.q_min(thp)
     has_cloud = (q_lcl_nonneg + q_icl_nonneg) > q_min
-    precip_scaling = ifelse(has_cloud, FT(1) / cf_eff, FT(1))
-    q_rai_in_cloud = q_rai_nonneg * precip_scaling
-    q_sno_in_cloud = q_sno_nonneg * precip_scaling
 
-    # Liquid fraction from prognostic cloud-condensate composition
-    # (paper Eq. 3.31): q_c = q_l + q_i (cloud condensate only; rain and snow
-    # are excluded). Held fixed across quadrature points. TD.liquid_fraction
-    # returns q_l/(q_l+q_i) when condensate exists and a smooth temperature
-    # ramp around T_freeze otherwise.
-    λ = TD.liquid_fraction(thp, T, q_lcl_nonneg, q_icl_nonneg)
+    if !has_cloud
+        # Fully-clear cell: quadrature over (T, q_tot) with grid-mean
+        # precipitation. q_lcl = q_icl = 0, so autoconversion / accretion
+        # vanish; the quadrature captures below-cloud rain evaporation and
+        # snow sublimation through subsaturated (T_hat, q_tot_hat) points.
+        evaluator = Microphysics1MEvaluator(
+            scheme, cmp, thp, ρ, T,
+            zero(FT), zero(FT), q_rai_nonneg, q_sno_nonneg,
+            dt, nsubs, args,
+        )
+        return integrate_over_sgs(
+            evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
+        )
+    end
 
-    # Create functor
-    evaluator = Microphysics1MEvaluator(
-        scheme, cmp, thp, ρ, T, q_lcl_in_cloud, q_icl_in_cloud,
-        q_rai_in_cloud, q_sno_in_cloud, has_cloud, λ, dt, nsubs, args,
+    # Cell with cloud: top-hat decomposition into cloudy (CF) and clear (1-CF)
+    # fractions. Cloud condensate uses max-overlap (q_lcl_in_cloud = q_lcl/CF,
+    # zero in the clear fraction). Precipitation uses random overlap
+    # (q_rai = q_sno = grid-mean in both fractions); this satisfies mass
+    # conservation and allows the clear-fraction BMT call to evaporate rain
+    # and sublimate snow with q_v < q_sat.
+    #
+    # CF floor uses a smooth quadrature `cf_eff = min(1, sqrt(CF² + CF_min²))`
+    # to avoid the discontinuity in q_in_cloud = q_mean / cf_eff as CF crosses
+    # the floor. For CF >> CF_min, cf_eff ≈ CF; for CF << CF_min,
+    # cf_eff ≈ CF_min; the upper cap preserves cf_eff = 1 at CF = 1 so the
+    # cloudy/clear partition has unit weight sum.
+    CF_min = FT(0.01)
+    cf_eff = min(FT(1), sqrt(cloud_fraction * cloud_fraction + CF_min * CF_min))
+    inv_cf = FT(1) / cf_eff
+    one_minus_cf = FT(1) - cf_eff
+    q_lcl_in_cloud = q_lcl_nonneg * inv_cf
+    q_icl_in_cloud = q_icl_nonneg * inv_cf
+
+    # Cloudy fraction: single BMT call at T_mean. The in-cloud water vapor is
+    # set to `max(q_v_grid_mean, q_sat)`:
+    #   - If the grid mean is supersaturated (q_v_grid > q_sat), the cloudy
+    #     BMT receives the actual supersaturation and the MM2015 relaxation
+    #     condenses the excess into cloud water — the in-cloud condensation
+    #     source.
+    #   - If the grid mean is at or below saturation, q_v_in_cloud is clamped
+    #     to q_sat so MM2015 does not spuriously evaporate cloud water at a
+    #     subsaturated grid-mean state where in-cloud air is in fact
+    #     saturated.
+    # q_tot_in_cloud = q_v_in_cloud + Σ in-cloud species. Quadrature is
+    # dropped in the cloudy fraction because the local (T, q_tot) variability
+    # has small effect once q_v is pinned (or close to) q_sat.
+    q_sat_mean = TD.q_vap_saturation(thp, T, ρ)
+    q_vap_grid =
+        q_tot_nonneg - q_lcl_nonneg - q_icl_nonneg - q_rai_nonneg - q_sno_nonneg
+    q_vap_in_cloud = max(q_vap_grid, q_sat_mean)
+    q_tot_in_cloud =
+        q_vap_in_cloud + q_lcl_in_cloud + q_icl_in_cloud + q_rai_nonneg + q_sno_nonneg
+    cloudy_tend = BMT.average_bulk_microphysics_tendencies(
+        scheme, cmp, thp, ρ, T, q_tot_in_cloud,
+        q_lcl_in_cloud, q_icl_in_cloud, q_rai_nonneg, q_sno_nonneg,
+        dt, nsubs, args...,
     )
-    # Integrate over quadrature points using functor (GPU-safe, no closure)
-    local_tendency = integrate_over_sgs(
-        evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
+
+    # Clear fraction: quadrature over (T, q_tot) with no cloud condensate
+    # and grid-mean precipitation. Captures below-cloud rain evaporation,
+    # snow sublimation, and snow melt where q_v_hat < q_sat(T_hat).
+    clear_evaluator = Microphysics1MEvaluator(
+        scheme, cmp, thp, ρ, T,
+        zero(FT), zero(FT), q_rai_nonneg, q_sno_nonneg,
+        dt, nsubs, args,
     )
-    return local_tendency
+    clear_tend = integrate_over_sgs(
+        clear_evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
+    )
+
+    return (
+        dq_lcl_dt = cf_eff * cloudy_tend.dq_lcl_dt + one_minus_cf * clear_tend.dq_lcl_dt,
+        dq_icl_dt = cf_eff * cloudy_tend.dq_icl_dt + one_minus_cf * clear_tend.dq_icl_dt,
+        dq_rai_dt = cf_eff * cloudy_tend.dq_rai_dt + one_minus_cf * clear_tend.dq_rai_dt,
+        dq_sno_dt = cf_eff * cloudy_tend.dq_sno_dt + one_minus_cf * clear_tend.dq_sno_dt,
+    )
 end
 
 ###

@@ -23,7 +23,7 @@ Given (T_hat, q_hat) at a quadrature point, computes:
 1. Saturation specific humidity q_sat from Clausius-Clapeyron
 2. Condensate as saturation excess: q_cond = max(0, q_hat - q_sat)
 3. Liquid/ice partition using a grid-mean liquid fraction `λ_mean`,
-   held fixed across all quadrature points (paper Eq. 3.31)
+   held fixed across all quadrature points
 
 # Fields
 - `thermo_params`: Thermodynamics parameters
@@ -65,9 +65,9 @@ NamedTuple with:
     q_cond = max(FT(0), q_hat - q_sat)
 
     # Partition condensate using a grid-mean liquid fraction held fixed across
-    # quadrature points (paper Eq. 3.31). The 0M / saturation-adjustment scheme
-    # has no prognostic phase memory, so `λ_mean` is supplied by the caller
-    # using a temperature-based ramp evaluated at the grid-mean temperature.
+    # quadrature points. The 0M / saturation-adjustment scheme has no
+    # prognostic phase memory, so `λ_mean` is supplied by the caller using a
+    # temperature-based ramp evaluated at the grid-mean temperature.
     q_liq = eval.λ_mean * q_cond
     q_ice = (FT(1) - eval.λ_mean) * q_cond
 
@@ -130,8 +130,7 @@ NamedTuple with SGS-averaged:
 )
     FT = typeof(T_mean)
     q_min = TD.Parameters.q_min(thermo_params)
-    # Grid-mean liquid fraction, held fixed across all quadrature points
-    # (paper Eq. 3.31, equilibrium fallback)
+    # Grid-mean liquid fraction, held fixed across all quadrature points.
     λ_mean = TD.liquid_fraction_ramp(thermo_params, T_mean)
     # Create GPU-safe functor (not a closure)
     evaluator = SaturationAdjustmentEvaluator(thermo_params, ρ, λ_mean)
