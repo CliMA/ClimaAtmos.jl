@@ -113,93 +113,6 @@ function get_vertical_diffusion_model(
     end
 end
 
-function get_surface_model(parsed_args)
-    prognostic_surface_name = parsed_args["prognostic_surface"]
-    return if prognostic_surface_name in ("false", false, "PrescribedSST")
-        PrescribedSST()
-    elseif prognostic_surface_name in ("true", true, "SlabOceanSST")
-        SlabOceanSST()
-    else
-        error("Uncaught surface model `$prognostic_surface_name`.")
-    end
-end
-
-function get_surface_albedo_model(parsed_args, params, ::Type{FT}) where {FT}
-    albedo_name = parsed_args["albedo_model"]
-    return if albedo_name in ("ConstantAlbedo",)
-        ConstantAlbedo{FT}(; α = params.idealized_ocean_albedo)
-    elseif albedo_name in ("RegressionFunctionAlbedo",)
-        isnothing(parsed_args["rad"]) && error(
-            "Radiation model not specified, so cannot use RegressionFunctionAlbedo",
-        )
-        RegressionFunctionAlbedo{FT}(; n = params.water_refractive_index)
-    elseif albedo_name in ("CouplerAlbedo",)
-        CouplerAlbedo()
-    else
-        error("Uncaught surface albedo model `$albedo_name`.")
-    end
-end
-
-function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
-    vs_name = parsed_args["viscous_sponge"]
-    return if vs_name in ("false", false, "none")
-        nothing
-    elseif vs_name in ("true", true, "ViscousSponge")
-        zd = params.zd_viscous
-        κ₂ = params.kappa_2_sponge
-        ViscousSponge{FT}(; zd, κ₂)
-    else
-        error("Uncaught viscous sponge model `$vs_name`.")
-    end
-end
-
-"""
-    get_smagorinsky_lilly_model(parsed_args)
-
-Get the Smagorinsky-Lilly turbulence model based on `parsed_args["smagorinsky_lilly"]`
-
-The possible model configurations flags are:
-- `UVW`: Applies the model to all spatial directions.
-- `UV`: Applies the model to the horizontal direction only.
-- `W`: Applies the model to the vertical direction only.
-- `UV_W`: Applies the model to the horizontal and vertical directions separately.
-"""
-function get_smagorinsky_lilly_model(parsed_args)
-    smag = parsed_args["smagorinsky_lilly"]
-    isnothing(smag) && return nothing
-    return SmagorinskyLilly(; axes = Symbol(smag))
-end
-
-function get_amd_les_model(parsed_args, ::Type{FT}) where {FT}
-    is_model_active = parsed_args["amd_les"]
-    @assert is_model_active in (true, false)
-    return is_model_active ? AnisotropicMinimumDissipation{FT}(parsed_args["c_amd"]) :
-           nothing
-end
-
-function get_constant_horizontal_diffusion_model(parsed_args, params, ::Type{FT}) where {FT}
-    is_model_active = parsed_args["constant_horizontal_diffusion"]
-    @assert is_model_active in (true, false)
-    return is_model_active ?
-           ConstantHorizontalDiffusion{FT}(CAP.constant_horizontal_diffusion_D(params)) :
-           nothing
-end
-
-function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
-    rs_name = parsed_args["rayleigh_sponge"]
-    return if rs_name in ("false", false)
-        nothing
-    elseif rs_name in ("true", true, "RayleighSponge")
-        zd = params.zd_rayleigh
-        α_uₕ = params.alpha_rayleigh_uh
-        α_w = params.alpha_rayleigh_w
-        α_sgs_tracer = params.alpha_rayleigh_sgs_tracer
-        RayleighSponge{FT}(; zd, α_uₕ, α_w, α_sgs_tracer)
-    else
-        error("Uncaught rayleigh sponge model `$rs_name`.")
-    end
-end
-
 function get_non_orographic_gravity_wave_model(
     parsed_args,
     params,
@@ -444,30 +357,10 @@ function get_cloud_model(parsed_args, params)
     end
 end
 
-function get_terminal_velocity_mode(parsed_args, params, ::Type{FT}) where {FT}
-    return parsed_args["fixed_terminal_velocity"] ?
-           FixedTerminalVelocity{FT}(
-        CAP.fixed_cloud_liquid_terminal_velocity(params),
-        CAP.fixed_cloud_ice_terminal_velocity(params),
-        CAP.fixed_rain_terminal_velocity(params),
-        CAP.fixed_snow_terminal_velocity(params),
-    ) : DiagnosticTerminalVelocity()
-end
-
 function get_cloud_in_radiation(parsed_args)
     isnothing(parsed_args["prescribe_clouds_in_radiation"]) && return nothing
     return parsed_args["prescribe_clouds_in_radiation"] ?
            PrescribedCloudInRadiation() : InteractiveCloudInRadiation()
-end
-
-function get_forcing_type(parsed_args)
-    forcing = parsed_args["forcing"]
-    @assert forcing in (nothing, "held_suarez")
-    if forcing == "held_suarez"
-        @warn "The 'held_suarez' forcing option is deprecated. Use rad='held_suarez' instead to set HeldSuarezForcing as a radiation mode."
-        return HeldSuarezForcing()  # Still return the object for backward compatibility
-    end
-    return nothing
 end
 
 
