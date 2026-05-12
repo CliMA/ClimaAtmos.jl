@@ -7,6 +7,7 @@ import Thermodynamics.TemperatureProfiles: DecayingTemperatureProfile, DryAdiaba
 import AtmosphericProfilesLibrary as APL
 
 import ..Parameters as CAP
+import ..fill_with_nans_generic!
 import ..geopotential
 import ..C12, ..C3
 import ..background_p_and_T, ..background_u
