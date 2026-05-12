@@ -196,9 +196,9 @@ end
 Fill a data structure's `Field`s / `FieldVector`s with NaNs.
 """
 fill_with_nans!(p) =
-    fill_with_nans!(p, p.atmos.numerics.test_dycore_consistency)
-fill_with_nans!(p, ::Nothing) = nothing
-fill_with_nans!(p, ::TestDycoreConsistency) = fill_with_nans_generic!(p)
+    fill_with_nans_generic!(p)#, p.atmos.numerics.test_dycore_consistency)
+# fill_with_nans!(p, ::Nothing) = nothing
+# fill_with_nans!(p, ::TestDycoreConsistency) = fill_with_nans_generic!(p)
 
 #####
 ##### Deep struct-recursive NaN fill (for AtmosSimulation)
