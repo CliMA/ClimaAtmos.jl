@@ -218,11 +218,19 @@ function initial_state(
     )
     surface_space = Fields.level(face_space, Fields.half)
 
-    return Fields.FieldVector(;
+    # First pass allocates the FieldVector with the correct structure and type.
+    Y = Fields.FieldVector(;
         c = center_ic.(Fields.local_geometry_field(center_space)),
         f = face_ic.(Fields.local_geometry_field(face_space)),
         surface_kwargs(surface_space, atmos_model.surface_model)...,
     )
+    # Overwrite with NaN, then re-apply ICs in-place. Any field that
+    # center_prognostic_variables / face_prognostic_variables does not set
+    # will remain NaN and propagate loudly on the first timestep.
+    fill_with_nans_generic!(Y)
+    Y.c .= center_ic.(Fields.local_geometry_field(center_space))
+    Y.f .= face_ic.(Fields.local_geometry_field(face_space))
+    return Y
 end
 
 # ============================================================================
