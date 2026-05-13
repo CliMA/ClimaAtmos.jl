@@ -1,4 +1,4 @@
-342
+343
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+343
+- Add three new reproducibility tests for 1M prognostic EDMFX SCM cases
+  (RICO, TRMM, DYCOMS-RF02); unify and clean up their configurations.
+
 342
 - Add physical constrains callback for diagnostic EDMF
 
