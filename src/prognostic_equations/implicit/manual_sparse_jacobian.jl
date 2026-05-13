@@ -87,7 +87,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         @name(c.ρq_sno),
     )
     available_condensate_mass_names =
-        MatrixFields.unrolled_filter(is_in_Y, condensate_mass_names)
+        filter(is_in_Y, condensate_mass_names)
     condensate_names = (
         condensate_mass_names...,
         @name(c.ρn_lcl),
@@ -96,7 +96,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         @name(c.ρn_ice), @name(c.ρq_rim), @name(c.ρb_rim),
     )
     available_condensate_names =
-        MatrixFields.unrolled_filter(is_in_Y, condensate_names)
+        filter(is_in_Y, condensate_names)
     available_tracer_names =
         (ρq_tot_if_available..., available_condensate_names...)
 
@@ -109,12 +109,12 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         @name(c.sgsʲs.:(1).q_sno),
     )
     available_sgs_condensate_mass_names =
-        MatrixFields.unrolled_filter(is_in_Y, sgs_condensate_mass_names)
+        filter(is_in_Y, sgs_condensate_mass_names)
 
     sgs_condensate_names =
         (sgs_condensate_mass_names..., @name(c.sgsʲs.:(1).n_lcl), @name(c.sgsʲs.:(1).n_rai))
     available_sgs_condensate_names =
-        MatrixFields.unrolled_filter(is_in_Y, sgs_condensate_names)
+        filter(is_in_Y, sgs_condensate_names)
 
     sgs_scalar_names =
         (
@@ -124,14 +124,14 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             @name(c.sgsʲs.:(1).ρa)
         )
     available_sgs_scalar_names =
-        MatrixFields.unrolled_filter(is_in_Y, sgs_scalar_names)
+        filter(is_in_Y, sgs_scalar_names)
 
     sgs_u³_if_available =
         is_in_Y(@name(f.sgsʲs.:(1).u₃)) ? (@name(f.sgsʲs.:(1).u₃),) : ()
 
     # Note: We have to use FT(-1) * I instead of -I because inv(-1) == -1.0,
     # which means that multiplying inv(-1) by a Float32 will yield a Float64.
-    identity_blocks = MatrixFields.unrolled_map(
+    identity_blocks = map(
         name -> (name, name) => FT(-1) * I,
         (@name(c.ρ), sfc_if_available...),
     )
@@ -140,22 +140,22 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     advection_blocks = (
         (
             use_derivative(topography_flag) ?
-            MatrixFields.unrolled_map(
+            map(
                 name ->
                     (name, @name(c.uₕ)) =>
                         similar(Y.c, TridiagonalRow_ACT12),
                 active_scalar_names,
             ) : ()
         )...,
-        MatrixFields.unrolled_map(
+        map(
             name -> (name, @name(f.u₃)) => similar(Y.c, BidiagonalRow_ACT3),
             active_scalar_names,
         )...,
-        MatrixFields.unrolled_map(
+        map(
             name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
             active_scalar_names,
         )...,
-        MatrixFields.unrolled_map(
+        map(
             name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
             available_condensate_mass_names,
         )...,
@@ -166,11 +166,11 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     diffused_scalar_names = (@name(c.ρe_tot), available_tracer_names...)
     diffusion_blocks = if use_derivative(diffusion_flag)
         (
-            MatrixFields.unrolled_map(
+            map(
                 name -> (name, @name(c.ρ)) => similar(Y.c, TridiagonalRow),
                 (diffused_scalar_names..., ρtke_if_available...),
             )...,
-            MatrixFields.unrolled_map(
+            map(
                 name -> (name, name) => similar(Y.c, TridiagonalRow),
                 (diffused_scalar_names..., ρtke_if_available...),
             )...,
@@ -181,11 +181,11 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                         similar(Y.c, TridiagonalRow),
                 ) : ()
             )...,
-            MatrixFields.unrolled_map(
+            map(
                 name -> (@name(c.ρe_tot), name) => similar(Y.c, TridiagonalRow),
                 available_condensate_mass_names,
             )...,
-            MatrixFields.unrolled_map(
+            map(
                 name -> (@name(c.ρq_tot), name) => similar(Y.c, TridiagonalRow),
                 available_condensate_mass_names,
             )...,
@@ -196,27 +196,27 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                     ) ? similar(Y.c, TridiagonalRow) : FT(-1) * I,
         )
     elseif atmos.microphysics_model isa DryModel
-        MatrixFields.unrolled_map(
+        map(
             name -> (name, name) => FT(-1) * I,
             (diffused_scalar_names..., ρtke_if_available..., @name(c.uₕ)),
         )
     else
         (
-            MatrixFields.unrolled_map(
+            map(
                 name -> (name, name) => similar(Y.c, TridiagonalRow),
                 diffused_scalar_names,
             )...,
-            MatrixFields.unrolled_map(
+            map(
                 name -> (@name(c.ρe_tot), name) => similar(Y.c, TridiagonalRow),
                 available_condensate_mass_names,
             )...,
-            MatrixFields.unrolled_map(
+            map(
                 name -> (@name(c.ρq_tot), name) => similar(Y.c, TridiagonalRow),
                 available_condensate_mass_names,
             )...,
             (@name(c.ρe_tot), @name(c.ρq_tot)) =>
                 similar(Y.c, TridiagonalRow),
-            MatrixFields.unrolled_map(
+            map(
                 name -> (name, name) => FT(-1) * I,
                 (ρtke_if_available..., @name(c.uₕ)),
             )...,
@@ -226,22 +226,22 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     sgs_advection_blocks = if atmos.turbconv_model isa PrognosticEDMFX
         if use_derivative(sgs_advection_flag)
             (
-                MatrixFields.unrolled_map(
+                map(
                     name -> (name, name) => similar(Y.c, TridiagonalRow),
                     available_sgs_scalar_names,
                 )...,
-                MatrixFields.unrolled_map(
+                map(
                     name ->
                         (@name(c.sgsʲs.:(1).q_tot), name) =>
                             similar(Y.c, TridiagonalRow),
                     available_sgs_condensate_mass_names,
                 )...,
-                MatrixFields.unrolled_map(
+                map(
                     name ->
                         (@name(c.sgsʲs.:(1).ρa), name) => similar(Y.c, TridiagonalRow),
                     available_sgs_condensate_mass_names,
                 )...,
-                MatrixFields.unrolled_map(
+                map(
                     name ->
                         (@name(c.sgsʲs.:(1).mse), name) => similar(Y.c, DiagonalRow),
                     available_sgs_condensate_mass_names,
@@ -256,7 +256,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             )
         else
             (
-                MatrixFields.unrolled_map(
+                map(
                     name ->
                         (name, name) => FT(-1) * I,
                     available_sgs_scalar_names,
@@ -271,19 +271,19 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     sgs_massflux_blocks = if atmos.turbconv_model isa PrognosticEDMFX
         if use_derivative(sgs_mass_flux_flag)
             (
-                MatrixFields.unrolled_map(
+                map(
                     name ->
                         (name, get_χʲ_name_from_ρχ_name(name)) =>
                             similar(Y.c, TridiagonalRow),
                     available_tracer_names,
                 )...,
-                MatrixFields.unrolled_map(
+                map(
                     name ->
                         (name, @name(c.sgsʲs.:(1).ρa)) =>
                             similar(Y.c, TridiagonalRow),
                     available_tracer_names,
                 )...,
-                MatrixFields.unrolled_map(
+                map(
                     name ->
                         (name, @name(f.u₃)) =>
                             similar(Y.c, BidiagonalRow_ACT3),
