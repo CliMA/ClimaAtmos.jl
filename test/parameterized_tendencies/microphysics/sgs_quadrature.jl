@@ -600,8 +600,7 @@ using ClimaAtmos
                 evaluator = Microphysics1MEvaluator(
                     BMT.Microphysics1Moment(),
                     mp, thp, ρ, T_mean,
-                    q_lcl_mean, q_icl_mean, q_rai, q_sno, q_lcl_mean, q_icl_mean, FT(1),
-                    FT(1), dt, nsubs_quad,
+                    q_lcl_mean, q_icl_mean, q_rai, q_sno, dt, nsubs_quad,
                     (),  # Empty args tuple for 1-moment
                 )
 
