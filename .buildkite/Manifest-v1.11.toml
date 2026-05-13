@@ -149,8 +149,8 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 version = "1.11.0"
 
 [[deps.AtmosphericProfilesLibrary]]
-deps = ["Interpolations", "LinearAlgebra"]
-git-tree-sha1 = "4f5654bb77c179b6021c21c25ad336fe886258f6"
+deps = ["ClimaParams", "Interpolations", "LinearAlgebra", "Thermodynamics"]
+path = "../../AtmosphericProfilesLibrary.jl"
 uuid = "86bc3604-9858-485a-bdbe-831ec50de11d"
 version = "0.1.7"
 
