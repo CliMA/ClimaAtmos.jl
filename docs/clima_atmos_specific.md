@@ -5,7 +5,7 @@ This file contains everything specific to the ClimaAtmos.jl repository: director
 ## Codebase map
 
 - `src/ClimaAtmos.jl`: package entry point. It `include`s the main subsystems; start here when you need the owning source area.
-- `src/solver/`: configuration and CLI wiring. `cli_options.jl` defines `--config_file` and `--job_id`; `yaml_helper.jl` loads `config/default_configs/default_config.yml` and merges overlay YAML; `types.jl`, `model_getters.jl`, `type_getters.jl`, and `solve.jl` turn config into a runnable model.
+- `src/config/`: YAML→typed-object translation layer (formerly `src/solver/`). `cli_options.jl` defines `--config_file` and `--job_id`; `yaml_helper.jl` loads `config/default_configs/default_config.yml` and merges overlay YAML; `atmos_config.jl` defines `AtmosConfig`; `model_getters.jl` and `type_getters.jl` translate config into a runnable model; `solve.jl` runs it. `parsed_args` reads are confined to this folder.
 - `src/simulation/AtmosSimulations.jl`: high-level `AtmosSimulation(config)` construction.
 - `src/cache/`: precomputed quantities allocated once per stage. Naming convention: `set_*_precomputed_quantities!(Y, p, t)` — never allocate inside these functions.
 - `src/prognostic_equations/`: tendency accumulation and implicit/explicit splitting.
@@ -30,7 +30,7 @@ This file contains everything specific to the ClimaAtmos.jl repository: director
 The universal layer model in [architectural_boundaries.md](architectural_boundaries.md) maps to ClimaAtmos as follows:
 
 - **Parameterizations layer**: `src/parameterized_tendencies/`. Defines *how* a physical tendency is computed.
-- **Infrastructure layer**: `src/cache/`, `src/prognostic_equations/`, `src/solver/`, `src/simulation/`. Defines *where* results are stored and *how* the model time-steps them.
+- **Infrastructure layer**: `src/cache/`, `src/prognostic_equations/`, `src/config/`, `src/simulation/`. Defines *where* results are stored and *how* the model time-steps them.
 
 A file under `src/parameterized_tendencies/` should not contain orchestration logic; orchestration belongs in `src/prognostic_equations/` or `src/cache/`.
 
@@ -65,7 +65,7 @@ julia +1.11 --project=test -e '
 
 ### Test layout
 
-- `test/solver/`, `test/diagnostics/`, `test/prognostic_equations/`, `test/parameterized_tendencies/`, `test/conservation/` mostly mirror the source layout.
+- `test/config/`, `test/diagnostics/`, `test/prognostic_equations/`, `test/parameterized_tendencies/`, `test/conservation/` mostly mirror the source layout.
 - `test/test_helpers.jl`: shared testing utilities.
 - `test/config.jl`: config invariants and uniqueness checks; inspect this before changing config semantics.
 

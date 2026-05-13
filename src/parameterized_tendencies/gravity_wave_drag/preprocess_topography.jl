@@ -47,7 +47,7 @@ function write_computed_drag!(
     topography_damping_factor,
     h_elem,
 )
-    (; output_filename, topo_damping_factor) = CA.generate_drag_filename(;
+    (; output_filename, topo_damping_factor) = generate_drag_filename(;
         topography, topo_smoothing, topography_damping_factor, h_elem,
     )
     # initialize HDF5 output

@@ -2,7 +2,7 @@
 ##### Utility functions
 #####
 import ClimaComms
-import ClimaCore: Spaces, Topologies, Fields, Geometry
+import ClimaCore: Spaces, Topologies, Fields, Geometry, Quadratures
 import LinearAlgebra: norm_sqr
 using Dates: DateTime, @dateformat_str
 import StaticArrays: SVector, SMatrix

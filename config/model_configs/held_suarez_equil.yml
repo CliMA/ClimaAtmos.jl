@@ -4,7 +4,7 @@ approximate_linear_solve_iters: 1
 dt_save_state_to_disk: "1days"
 t_end: "1days"
 vert_diff: "VerticalDiffusion"
-forcing: "held_suarez"
+rad: "held_suarez"
 microphysics_model: "0M"
 reproducibility_test: true
 toml: [toml/sphere_held_suarez.toml]

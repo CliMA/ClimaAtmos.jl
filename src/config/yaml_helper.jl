@@ -1,4 +1,6 @@
 import YAML
+import ClimaUtilities.ClimaArtifacts: @clima_artifact
+import LazyArtifacts
 
 const config_path = joinpath(dirname(@__FILE__), "..", "..", "config")
 
@@ -232,3 +234,56 @@ end
 # Can we do better?
 config_id_from_config_files(config_files::Union{Tuple, Vector}) =
     join(map(x -> config_id_from_config_file(x), config_files), "_")
+"""
+    maybe_resolve_and_acquire_artifacts(input_str::AbstractString, context)
+
+When given a string of the form `artifact"name"/something/else`, resolve the
+artifact path and download it (if not already available).
+
+In all the other cases, return the input unchanged.
+"""
+function maybe_resolve_and_acquire_artifacts(
+    input_str::AbstractString,
+    context,
+)
+    matched = match(r"artifact\"([a-zA-Z0-9_]+)\"(\/.*)?", input_str)
+    if isnothing(matched)
+        return input_str
+    else
+        artifact_name, other_path = matched
+        return joinpath(
+            @clima_artifact(string(artifact_name), context),
+            lstrip(other_path, '/'),
+        )
+    end
+end
+
+function maybe_resolve_and_acquire_artifacts(
+    input,
+    _,
+)
+    return input
+end
+
+"""
+    config_with_resolved_and_acquired_artifacts(input_str::AbstractString, context)
+
+Substitute strings of the form `artifact"name"/something/else` with the actual
+artifact path.
+"""
+function config_with_resolved_and_acquired_artifacts(
+    config::AbstractDict,
+    context,
+)
+    return Dict(
+        k => maybe_resolve_and_acquire_artifacts(v, context) for
+        (k, v) in config
+    )
+end
+
+function config_summary(io::IO, config_files)
+    print(io, '\n')
+    for x in config_files
+        println(io, "   $x")
+    end
+end
