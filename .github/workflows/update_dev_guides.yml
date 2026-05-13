@@ -1,7 +1,7 @@
 name: Update Dev Guides
 on:
   schedule:
-    - cron: '0 0 * * 1' # Every Monday at midnight UTC
+    - cron: '0 0 1 * *' # Every 1st of the month at midnight UTC
   workflow_dispatch:
 
 jobs:

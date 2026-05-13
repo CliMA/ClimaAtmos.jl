@@ -6,6 +6,9 @@ Please refer to the shared CliMA agent index for ecosystem-wide rules regarding 
 
 - [docs/dev-guides/AGENTS.md](docs/dev-guides/AGENTS.md) — Shared CliMA agent guidelines.
 
+> Shared guides live at `docs/dev-guides/` and are vendored from the canonical source:
+> https://github.com/CliMA/DeveloperGuides. Edit shared guides there, not here.
+
 ## Repo-Specific Guidelines
 
 Always read the ClimaAtmos-specific guide before working in this repository:
