@@ -69,3 +69,23 @@ normalize_diag_entry(x) = error(
     ScheduledDiagnostic, a Pair (short_name => period or short_name => NamedTuple), \
     a NamedTuple, or a Dict.",
 )
+
+"""
+    extract_diagnostic_periods(diagnostics)
+
+Extract accumulation periods from diagnostics that have reduction functions.
+Returns a Set of Period objects.
+"""
+function extract_diagnostic_periods(diagnostics)
+    schedule_period(s::EveryDtSchedule) = Dates.Second(s.dt)
+    schedule_period(s::EveryCalendarDtSchedule) = s.dt
+    schedule_period(_) = nothing
+
+    return Set(
+        Iterators.filter(
+            !isnothing,
+            schedule_period(d.output_schedule_func) for
+            d in diagnostics if !isnothing(d.reduction_time_func)
+        ),
+    )
+end

@@ -125,7 +125,7 @@ setup implementations section.
 
 ### 3. Wire the setup in `get_setup_type`
 
-Add a branch in `get_setup_type` in `src/solver/type_getters.jl` that maps
+Add a branch in `get_setup_type` in `src/config/type_getters.jl` that maps
 the `initial_condition` config string to your setup constructor:
 
 ```julia

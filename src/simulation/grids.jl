@@ -338,3 +338,24 @@ end
 
 get_stretching(::Type{FT}, z_stretch, dz_bottom) where {FT} =
     z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
+
+"""
+    get_spaces(grid)
+
+Create center and face spaces from a ClimaCore grid.
+"""
+function get_spaces(grid)
+    if grid isa Grids.ExtrudedFiniteDifferenceGrid
+        center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
+        face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
+    elseif grid isa Grids.FiniteDifferenceGrid
+        center_space = Spaces.CenterFiniteDifferenceSpace(grid)
+        face_space = Spaces.FaceFiniteDifferenceSpace(grid)
+    else
+        error(
+            """Unsupported grid type: $(typeof(grid)). Expected \
+            ExtrudedFiniteDifferenceGrid or FiniteDifferenceGrid""",
+        )
+    end
+    return (; center_space, face_space)
+end
