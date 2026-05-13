@@ -1424,7 +1424,10 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
         elseif microphys_model_str == "0M"
             EquilibriumMicrophysics0M()
         elseif microphys_model_str == "1M"
-            NonEquilibriumMicrophysics1M(; n_substeps = pa["microphysics_n_substeps"])
+            NonEquilibriumMicrophysics1M(;
+                n_substeps = pa["microphysics_n_substeps"],
+                n_substeps_quad = pa["microphysics_n_substeps_quadrature"],
+            )
         elseif microphys_model_str == "2M"
             NonEquilibriumMicrophysics2M()
         elseif microphys_model_str == "2MP3"
