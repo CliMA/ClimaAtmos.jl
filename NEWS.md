@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- [#4486](https://github.com/CliMA/ClimaAtmos.jl/pull/4486) [badge-💥breaking]
+  Updated YAML config schema:
+  - `vert_diff: true` → `"VerticalDiffusion"`; `false` → `~`.
+  - `hyperdiff: false` → `~`.
+  - `prognostic_surface: true` → `"SlabOceanSST"`; `false` → `"PrescribedSST"`.
+  - Removed keys: `subsidence`, `ls_adv`, `scm_coriolis`.
+  - `rad`: dropped `"nothing"` string alias; use `~`.
 
 v0.38.4
 -------

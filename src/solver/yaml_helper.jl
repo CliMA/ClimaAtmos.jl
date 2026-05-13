@@ -60,39 +60,99 @@ function override_default_config(::Nothing)
     return default_config_dict()
 end
 
+# Keys that bypass scalar coercion: `named String | nothing` unions
+# (hyperdiff has a String default but accepts `~` to disable) and structured
+# values (`diagnostics` is a list of dicts).
+const EXCEPTED_KEYS = Set([
+    "hyperdiff",
+    "diagnostics",
+])
+
+"""
+    coerce_to_default(::Type{T}, v) -> T
+
+Coerce a user-supplied YAML value `v` to the type `T` of the corresponding
+default in `default_config.yml`. Used by [`override_default_config`](@ref) to
+enforce a single canonical type per key.
+
+Dispatch order, most specific first:
+
+1. `coerce_to_default(::Type{T}, v::T) = v` — same type, identity. The
+   common path; most YAML values already load with the expected type.
+2. `coerce_to_default(::Type{Bool}, v::AbstractString)` — `"true"`/`"false"`
+   → `true`/`false` via `parse(Bool, v)`. Anything else throws
+   `ArgumentError`.
+3. `coerce_to_default(::Type{<:Integer}, v::AbstractString)` — `"42"` → `42`.
+4. `coerce_to_default(::Type{<:AbstractFloat}, v::AbstractString)` — `"3.14"`
+   → `3.14`. Note `"42"` also parses as a `Float64` here if the schema
+   default is float.
+5. `coerce_to_default(::Type{T}, v) = convert(T, v)` — fallback. Catches
+   things like `Int → Float64` (schema default `1.0`, user wrote `1`).
+   For unrelated types this throws `MethodError`.
+
+# Examples
+
+```julia-repl
+julia> coerce_to_default(Bool, "true")       # 2
+true
+
+julia> coerce_to_default(Int, "42")          # 3
+42
+
+julia> coerce_to_default(Float64, "3.14")    # 4
+3.14
+
+julia> coerce_to_default(Float64, 1)         # 5 (Int → Float)
+1.0
+
+julia> coerce_to_default(Bool, true)         # 1 (identity)
+true
+
+julia> coerce_to_default(Bool, "yes")        # 2, throws
+ERROR: ArgumentError: invalid value for Bool: "yes"
+```
+
+Keys whose schema default is `nothing` or that appear in [`EXCEPTED_KEYS`]
+bypass coercion entirely and pass through unchanged.
+"""
+coerce_to_default(::Type{T}, v::T) where {T} = v
+coerce_to_default(::Type{Bool}, v::AbstractString) = parse(Bool, v)
+coerce_to_default(::Type{T}, v::AbstractString) where {T <: Integer} =
+    parse(T, v)
+coerce_to_default(::Type{T}, v::AbstractString) where {T <: AbstractFloat} =
+    parse(T, v)
+coerce_to_default(::Type{T}, v) where {T} = convert(T, v)
+
 function override_default_config(config_dict::AbstractDict;)
     default_config = default_config_dict()
     config = deepcopy(default_config)
     # Allow unused keys in config_dict for coupler
     for k in intersect(keys(config_dict), keys(default_config))
-        default_type = typeof(default_config[k])
         v = config_dict[k]
-
-        # Attempt to convert user value `v` to the same type as
-        # the default. If that fails, throw an informative warning.
-        config[k] = try
-            isnothing(default_config[k]) ? v : convert(default_type, v)
-        catch e
-            # A failed conversion should result in a MethodError
-            e isa MethodError || rethrow(e)
-            @warn """Failed to convert `config_dict["$k"] = $v` to default type $default_type, keeping original value"""
-            v
+        # `nothing` defaults and excepted keys pass through unchanged;
+        # everything else must coerce cleanly to the default's type.
+        if isnothing(default_config[k]) || k in EXCEPTED_KEYS
+            config[k] = v
+        else
+            default_type = typeof(default_config[k])
+            config[k] = try
+                coerce_to_default(default_type, v)
+            catch e
+                e isa Union{MethodError, ArgumentError} || rethrow(e)
+                error(
+                    "Cannot coerce `$k = $(repr(v))` to expected type $default_type.",
+                )
+            end
         end
     end
 
-    excluded_keys = ("diagnostics", "job_id")
+    # `job_id` is set by the AtmosConfig constructor, not the YAML schema.
     unused_keys = filter(
-        k -> !haskey(default_config, k) && !(k in excluded_keys),
+        k -> !haskey(default_config, k) && k != "job_id",
         keys(config_dict),
     )
     if !isempty(unused_keys)
         @warn "The configuration passed to ClimaAtmos contains unused keys: $(join(unused_keys, ", "))"
-    end
-
-    # The "diagnostics" entry is a more complex type that doesn't fit the schema described in
-    # the previous lines. So, we manually add it.
-    if haskey(config_dict, "diagnostics")
-        config["diagnostics"] = config_dict["diagnostics"]
     end
 
     config == default_config && @info "Using default configuration"

@@ -7,6 +7,6 @@ t_end: "10secs"
 log_progress: false
 surface_setup: "DefaultMoninObukhov"
 rad: "allskywithclear"
-vert_diff: true
+vert_diff: "VerticalDiffusion"
 microphysics_model: "0M"
 perf_summary: true
