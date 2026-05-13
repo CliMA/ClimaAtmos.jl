@@ -2,6 +2,10 @@
 # edonly EDMFX, 1M microphysics, quadrature SGS clouds.
 # Pithan 2016 Arctic SCM column at 80°N, slab ocean h=1m.
 
+# job setup
+job_id: lf1_slab_standalone
+FLOAT_TYPE: "Float64"
+
 # Atmosphere
 initial_condition: Larcform1
 rayleigh_sponge: true
@@ -12,13 +16,12 @@ surface_setup: DefaultMoninObukhov
 disable_surface_flux_tendency: false
 
 # Temporal
+start_date: "20010101"
 t_end: 20days
 dt: 30secs
 dt_rad: 30secs
 
 # Spatial — column SCM (Pithan 80°N is enforced via the coupled config; standalone
-# ClimaAtmos column physics are lat-independent for Larcform1 — insolation=larcform1
-# gives toa_flux=0 and the IC profiles are hardcoded.)
 config: "column"
 z_max: 9000.0
 z_elem: 90
@@ -26,10 +29,12 @@ z_stretch: true
 dz_bottom: 20.0
 x_elem: 1
 y_elem: 1
+h_elem: 6 # This is for the cubed sphere and shouldn't impact SCM
 
 # Solver
 approximate_linear_solve_iters: 2
 ode_algo: ARS343
+implicit_microphysics: true
 
 # Parameters
 toml: [toml/larcform1_1M_edonly_edmfx.toml]
@@ -58,7 +63,6 @@ log_to_file: true
 check_conservation: false
 netcdf_output_at_levels: true
 output_default_diagnostics: false
-job_id: larcform1_slab_standalone
 
 diagnostics:
   - short_name: [ta, thetaa, pfull, rhoa, hus, hur, ts, tas]
