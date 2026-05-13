@@ -100,9 +100,9 @@ version = "1.1.2"
 
 [[deps.ArrayInterface]]
 deps = ["Adapt", "LinearAlgebra"]
-git-tree-sha1 = "54f895554d05c83e3dd59f6a396671dae8999573"
+git-tree-sha1 = "3d0cabd25fab32390e3bcb82cd67e700aebd9816"
 uuid = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
-version = "7.24.0"
+version = "7.25.0"
 
     [deps.ArrayInterface.extensions]
     ArrayInterfaceAMDGPUExt = "AMDGPU"
@@ -328,9 +328,9 @@ version = "0.4.3+0"
 
 [[deps.CUDA_Driver_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "TOML"]
-git-tree-sha1 = "3b759ec65ac87ad192c2925114fa5c126657a5bd"
+git-tree-sha1 = "69bb8fdf66c687e35149ac9b2bd1d582fd58a792"
 uuid = "4ee394cb-3365-5eb0-8335-949819d2adfc"
-version = "13.2.1+0"
+version = "13.2.1+2"
 
 [[deps.CUDA_Runtime_Discovery]]
 deps = ["Libdl"]
@@ -397,9 +397,9 @@ version = "1.0.0"
 
 [[deps.ClimaAnalysis]]
 deps = ["Artifacts", "Dates", "Interpolations", "NCDatasets", "NaNStatistics", "OrderedCollections", "Reexport", "Statistics", "Unitful"]
-git-tree-sha1 = "cb6ecefc26f10370756ccd7f9a1b89294a813f5a"
+git-tree-sha1 = "611225df08ea210d8c7a8f17063cc4ad4de745d3"
 uuid = "29b5916a-a76c-4e73-9657-3c8fd22e65e6"
-version = "0.5.21"
+version = "0.5.22"
 
     [deps.ClimaAnalysis.extensions]
     ClimaAnalysisGeoMakieExt = "GeoMakie"
@@ -1296,9 +1296,9 @@ version = "0.6.4"
 
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
-git-tree-sha1 = "0533e564aae234aff59ab625543145446d8b6ec2"
+git-tree-sha1 = "7204148362dafe5fe6a273f855b8ccbe4df8173e"
 uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
-version = "1.7.1"
+version = "1.8.0"
 
 [[deps.JSON]]
 deps = ["Dates", "Logging", "Parsers", "PrecompileTools", "StructUtils", "UUIDs", "Unicode"]
@@ -1384,9 +1384,9 @@ version = "4.1.0+0"
 
 [[deps.LLVM]]
 deps = ["CEnum", "LLVMExtra_jll", "Libdl", "PrecompileTools", "Preferences", "Printf", "Unicode"]
-git-tree-sha1 = "85592339c4363f40863f0b61f9cba80b885070c3"
+git-tree-sha1 = "6884c216a5e3671990d245514aa94c67046b6e40"
 uuid = "929cbde3-209d-540e-8aea-75f648917ca0"
-version = "9.7.1"
+version = "9.8.1"
 weakdeps = ["BFloat16s"]
 
     [deps.LLVM.extensions]
@@ -1394,9 +1394,9 @@ weakdeps = ["BFloat16s"]
 
 [[deps.LLVMExtra_jll]]
 deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
-git-tree-sha1 = "f1d1adfff151fd02b4062d1af82df02052dc4a0c"
+git-tree-sha1 = "a7f7333df8ee998f8f8f65f08b49f04baf8db623"
 uuid = "dad2f222-ce93-54a1-a47d-0025e8a3acab"
-version = "0.0.42+0"
+version = "0.0.43+0"
 
 [[deps.LLVMLoopInfo]]
 git-tree-sha1 = "2e5c102cfc41f48ae4740c7eca7743cc7e7b75ea"
@@ -1895,10 +1895,10 @@ uuid = "0b1bfda6-eb8a-41d2-88d8-f5af5cad476f"
 version = "0.2.11"
 
 [[deps.OpenBLAS32_jll]]
-deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "dd0d9979377e43918a80486a562ddedcc6d9bdf3"
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "libblastrampoline_jll"]
+git-tree-sha1 = "565175ce692c065e50ad32efbb61ba69b1586593"
 uuid = "656ef2d0-ae68-5445-9ca0-591084a874a2"
-version = "0.3.33+0"
+version = "0.3.33+1"
 
 [[deps.OpenBLASConsistentFPCSR_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
@@ -3010,9 +3010,9 @@ version = "1.59.0+0"
 
 [[deps.oneTBB_jll]]
 deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl"]
-git-tree-sha1 = "1350188a69a6e46f799d3945beef36435ed7262f"
+git-tree-sha1 = "da8c1f6eee04831f14edcfa5dae611d309807e57"
 uuid = "1317d2d5-d96f-522e-a858-c73665f53c3e"
-version = "2022.0.0+1"
+version = "2022.3.0+0"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]

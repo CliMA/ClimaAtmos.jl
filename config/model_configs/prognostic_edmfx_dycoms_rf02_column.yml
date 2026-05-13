@@ -1,7 +1,12 @@
 initial_condition: DYCOMS_RF02
 turbconv: "prognostic_edmfx"
-tracer_upwinding: first_order
-implicit_diffusion: false
+reproducibility_test: true
+implicit_diffusion: true
+implicit_sgs_advection: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
+implicit_sgs_vertdiff: true
+implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
@@ -12,7 +17,6 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
 microphysics_model: "1M"
-microphysics_n_substeps: 1
 config: "column"
 x_elem: 2
 y_elem: 2
@@ -20,8 +24,8 @@ z_elem: 30
 z_max: 1500
 z_stretch: false
 perturb_initstate: false
-dt: 5secs
-t_end: 5hours
+dt: 120secs
+t_end: 6hours
 dt_save_state_to_disk: 10mins
 toml: [toml/prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [8, 8, 30]
