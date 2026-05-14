@@ -78,8 +78,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
 
     atmos = AtmosModel(;
         water = AtmosWater(config, params, FT),
-        scm_setup = SCMSetup(config, FT;
-            setup_type, radiation_mode = radiation.radiation_mode),
+        scm_setup = SCMSetup(config, FT; setup_type),
         prescribed_flow,
         radiation,
         turbconv = AtmosTurbconv(config, params, FT),

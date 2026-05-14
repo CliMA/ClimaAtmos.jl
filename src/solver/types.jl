@@ -1567,18 +1567,18 @@ AtmosNumerics(config::AtmosConfig, ::Type{FT}) where {FT} =
     get_numerics(config.parsed_args, FT)
 
 function SCMSetup(config::AtmosConfig, ::Type{FT};
-    setup_type = nothing, radiation_mode = nothing) where {FT}
+    setup_type = nothing) where {FT}
     pa = config.parsed_args
 
     advection_test = pa["advection_test"]
     @assert advection_test in (false, true)
 
     return SCMSetup(;
-        subsidence = get_subsidence_model(pa, radiation_mode, FT; setup_type),
+        subsidence = get_subsidence_model(FT; setup_type),
         external_forcing = get_external_forcing_model(pa, FT; setup_type),
-        ls_adv = get_large_scale_advection_model(pa, FT; setup_type),
+        ls_adv = get_large_scale_advection_model(FT; setup_type),
         advection_test,
-        scm_coriolis = get_scm_coriolis(pa, FT; setup_type),
+        scm_coriolis = get_scm_coriolis(FT; setup_type),
     )
 end
 

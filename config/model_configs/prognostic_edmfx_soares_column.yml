@@ -15,7 +15,7 @@ edmfx_filter: true
 prognostic_tke: true
 microphysics_model: "0M"
 config: "column"
-hyperdiff: "false"
+hyperdiff: ~
 z_max: 3750
 z_elem: 75
 z_stretch: false

@@ -2,7 +2,7 @@ reference_job_id: "les_box"
 initial_condition: "DryDensityCurrentProfile"
 config: "box"
 smagorinsky_lilly: "UVW"
-hyperdiff: "false"
+hyperdiff: ~
 x_max: 51200.0
 y_max: 51200.0
 z_max: 6400.0
