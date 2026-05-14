@@ -1,3 +1,25 @@
+# Diagnostic GPU-memory probe used by `build_cache` to attribute live device
+# memory growth to specific allocation phases. Set
+# `ENV["CLIMAATMOS_DEBUG_GPU_MEM"] = "1"` before launching the run to enable.
+# No-op on CPU or when CUDA isn't loaded.
+function _log_gpu_mem(label::AbstractString)
+    haskey(ENV, "CLIMAATMOS_DEBUG_GPU_MEM") || return nothing
+    isdefined(Main, :CUDA) || return nothing
+    CUDA = getfield(Main, :CUDA)
+    try
+        GC.gc(false)
+        free_b = Base.invokelatest(CUDA.available_memory)
+        total_b = Base.invokelatest(CUDA.total_memory)
+        used_gib = (total_b - free_b) / 2^30
+        free_gib = free_b / 2^30
+        @info "GPU mem [$label]" used = round(used_gib; digits = 3) free =
+            round(free_gib; digits = 3)
+    catch e
+        @warn "GPU mem probe failed at $label" exception = (e, catch_backtrace())
+    end
+    return nothing
+end
+
 struct AtmosCache{
     FT,
     AM,
@@ -98,6 +120,8 @@ function build_cache(
     FT = eltype(params)
     dt = FT(dt)
 
+    _log_gpu_mem("build_cache:enter")
+
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     grav = FT(CAP.grav(params))
@@ -162,11 +186,15 @@ function build_cache(
             unit_basis_vector_data.(CT3, sfc_local_geometry),
         ),
     )
+    _log_gpu_mem("after core+coriolis+ghost+conservation+limiters")
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)
+    _log_gpu_mem("after external_forcing")
     sfc_setup = surface_setup(params)
     scratch = temporary_quantities(Y, atmos)
+    _log_gpu_mem("after scratch (temporary_quantities)")
 
     precomputed = precomputed_quantities(Y, atmos)
+    _log_gpu_mem("after precomputed_quantities")
     precomputing_arguments = (;
         atmos,
         core,
@@ -184,6 +212,7 @@ function build_cache(
         SurfaceConditions.set_dummy_surface_conditions!(precomputing_arguments)
 
     set_precomputed_quantities!(Y, precomputing_arguments, FT(0))
+    _log_gpu_mem("after set_precomputed_quantities!")
 
     radiation_args =
         atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
@@ -195,10 +224,15 @@ function build_cache(
             atmos.insolation,
         ) : ()
     hyperdiff = hyperdiffusion_cache(Y, atmos)
+    _log_gpu_mem("after hyperdiffusion_cache")
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
+    _log_gpu_mem("after non_orographic_gravity_wave_cache")
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
+    _log_gpu_mem("after orographic_gravity_wave_cache")
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
+    _log_gpu_mem("after radiation_model_cache")
     tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
+    _log_gpu_mem("after tracer_cache")
 
     args = (
         dt,

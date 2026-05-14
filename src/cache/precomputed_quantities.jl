@@ -134,6 +134,9 @@ function precomputed_quantities(Y, atmos)
             !(atmos.turbconv_model isa PrognosticEDMFX)
     @assert isnothing(atmos.turbconv_model) ||
             isnothing(atmos.vertical_diffusion)
+    _log_gpu_mem("precomputed:enter")
+    implicit_pq = implicit_precomputed_quantities(Y, atmos)
+    _log_gpu_mem("precomputed: after implicit_precomputed_quantities")
     sa_result_type = @NamedTuple{T::FT, q_liq::FT, q_ice::FT}
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
@@ -147,9 +150,11 @@ function precomputed_quantities(Y, atmos)
         ᶜstrain_rate_norm = similar(Y.c, FT),
         sfc_conditions = similar(Spaces.level(Y.f, half), SCT),
     )
+    _log_gpu_mem("precomputed: after gs_quantities")
     # Cloud fraction is used to calculate buoyancy gradient, so we initialize it to 0 here.
     ᶜcloud_fraction = similar(Y.c, FT)
     @. ᶜcloud_fraction = FT(0)
+    _log_gpu_mem("precomputed: after cloud_fraction + covariance")
 
     # SGS covariances for cloud fraction (Sommeria & Deardorff closure) and microphysics quadrature.
     # NonEquilibriumMicrophysics1M/2M always route through the quadrature API
@@ -272,6 +277,7 @@ function precomputed_quantities(Y, atmos)
         precipitation_sgs_quantities = (;)
     end
 
+    _log_gpu_mem("precomputed: after precipitation_quantities + precipitation_sgs_quantities")
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
@@ -303,6 +309,7 @@ function precomputed_quantities(Y, atmos)
             ᶜq_snoʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
 
+    _log_gpu_mem("precomputed: after advective_sgs + edonly + sgs_quantities + diagnostic_precip_sgs")
     diagnostic_sgs_quantities =
         atmos.turbconv_model isa DiagnosticEDMFX ?
         (;
@@ -356,8 +363,9 @@ function precomputed_quantities(Y, atmos)
             (;)
         end
 
+    _log_gpu_mem("precomputed: after diagnostic_sgs + smag + amd")
     return (;
-        implicit_precomputed_quantities(Y, atmos)...,
+        implicit_pq...,
         gs_quantities...,
         sgs_quantities...,
         advective_sgs_quantities...,
