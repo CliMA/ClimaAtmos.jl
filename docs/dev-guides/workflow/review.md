@@ -11,7 +11,7 @@ Work in this order:
 1. Review changed files first.
 2. Step to the nearest controlling compute paths only when needed to confirm behavior or risk.
 3. Use local evidence: changed code, nearby tests, call sites, docs, and config usage.
-4. Check [software_design_patterns.md](software_design_patterns.md) for changed code and any adjacent code whose behavior is directly affected.
+4. Check [software_design_patterns.md](../architecture/software_design_patterns.md) for changed code and any adjacent code whose behavior is directly affected.
 5. Report only evidence-backed findings or clearly labeled risks/open questions.
 
 ## Review checklist
@@ -21,18 +21,18 @@ Work in this order:
 - [ ] Check behavior, numerics, stability, conservation, restart reproducibility, diagnostics, and config semantics.
 - [ ] Prioritize high-risk areas: implicit solver, Jacobian, prognostic equations, parameterized tendencies, restart logic, and output/reproducibility paths.
 - [ ] Label concerns as one of: definite bug, likely regression, or plausible risk.
-- [ ] Flag any user-visible config key, diagnostic name, default, release-facing behavior, or CLI flag change that is missing a `NEWS.md` entry. See [changelog_hygiene.md](changelog_hygiene.md).
+- [ ] Flag any user-visible config key, diagnostic name, default, release-facing behavior, or CLI flag change that is missing a `NEWS.md` entry. See [changelogs_and_versions.md](../code-quality/changelogs_and_versions.md).
 
 ### Validation
 
-- [ ] Map validation to the test groups defined in the repo's `test/runtests.jl`. The repo-specific guide (linked from [AGENTS.md](../../AGENTS.md)) lists the groups and example jobs.
+- [ ] Map validation to the test groups defined in the repo's `test/runtests.jl`. The repo-specific guide (linked from [AGENTS.md](../AGENTS.md)) lists the groups and example jobs.
 - [ ] For config or runtime workflow changes, name the affected CI driver and Buildkite/GitHub Actions jobs explicitly.
 - [ ] If validation is missing, name the exact missing test group, nearby test file, or CI job.
 
 ### Compatibility, performance, and style
 
 - [ ] Check API and config compatibility: keys, defaults, diagnostics/output names, initialization, restart/reproducibility behavior, and downstream public APIs.
-- [ ] Check concrete performance risks in hot paths (see [gpu_performance.md](gpu_performance.md) for the definition of hot path): allocations, type instability, repeated work, and scaling regressions.
+- [ ] Check concrete performance risks in hot paths (see [gpu_performance.md](../performance/gpu_performance.md) for the definition of hot path): allocations, type instability, repeated work, and scaling regressions.
 - [ ] Flag data-dependent `if/else` inside GPU kernels as `high` (thread divergence).
 - [ ] Flag closures passed to any `integrate`, `quadrature`, or `bycolumn` call as `high` (functor required).
 - [ ] Flag Float32 literals (`1.0`, `Inf`, integer-base exponentiation like `6^x`) in functions touched by Float32 simulations as `medium`.

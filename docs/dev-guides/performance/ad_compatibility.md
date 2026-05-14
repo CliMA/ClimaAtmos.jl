@@ -4,21 +4,21 @@ This guide covers patterns for writing Julia code that is compatible with Automa
 
 ## Core rules
 
-| Rule | Rationale |
-|:---|:---|
-| Duck-type functions ([SDP 14](software_design_patterns.md)) | Dual numbers flow through without type annotation barriers |
-| `FT = typeof(x)` or `eltype(x)` ([SDP 15](software_design_patterns.md)) | Lets AD supply the numeric type |
-| `zero(x)` / `one(x)` ([SDP 16](software_design_patterns.md)) | Type-agnostic; correct for Dual numbers |
-| `ifelse` not `if-else` on floating-point values ([SDP 17](software_design_patterns.md)) | Both branches needed for gradient computation; avoids non-differentiable kinks |
-| `@inline` every kernel function | Required for kernel fusion; transparent to AD |
-| No mutation of scalar locals inside kernel | Enzyme and ForwardDiff prefer pure functional code |
+| Rule                                                                                    | Rationale |
+|:----------------------------------------------------------------------------------------|:----------|
+| Duck-type functions ([SDP 14](../architecture/software_design_patterns.md))             | Dual numbers flow through without type-annotation barriers |
+| `FT = typeof(x)` or `eltype(x)` ([SDP 15](../architecture/software_design_patterns.md)) | Lets AD supply the numeric type |
+| `zero(x)` / `one(x)` ([SDP 16](../architecture/software_design_patterns.md))            | Type-agnostic; correctly typed for `Dual` |
+| Prefer `ifelse` to `if/else` ([SDP 17](../architecture/software_design_patterns.md))    | Type-stable, branchless on GPU. |
+| `@inline` every kernel function                                                         | Required for kernel fusion; transparent to AD |
+| Do not write `Dual` values into `Float`-typed buffers                                   | Strips partials under ForwardDiff (`convert(Float, dual)` returns only the primal). |
 
 ## Before / after example
 
 ```julia
 # ❌ AD-fragile — `where {FT}` forces x and y to share a type, so a mixed call
-# like compute(Dual(1.0), 2.0) fails to dispatch; the if/else also introduces a
-# non-differentiable kink and is problematic for reverse-mode AD (Enzyme).
+# like compute(Dual(1.0), 2.0) fails to dispatch. The `FT(0)`/`FT(1)` constants
+# also discard partials if `FT` was bound to a non-Dual type.
 @inline function compute(x::FT, y::FT) where {FT}
     if x > FT(0)
         return FT(1) - x^2
@@ -27,12 +27,14 @@ This guide covers patterns for writing Julia code that is compatible with Automa
     end
 end
 
-# ✅ AD-compatible — duck typed (each arg has its own type), branchless,
+# ✅ AD-compatible — duck typed (each arg has its own type), branchless on GPU,
 # type-agnostic constants derived from the input.
 @inline function compute(x, y)
     return ifelse(x > zero(x), one(x) - x^2, zero(x))
 end
 ```
+
+Note: the `if/else` form is *itself* fine for both ForwardDiff and Enzyme — branches are differentiated separately. The reasons to prefer `ifelse` are (a) GPU thread divergence (see [SDP 17](../architecture/software_design_patterns.md)) and (b) keeping the body small enough to inline cleanly.
 
 ## When type constraints are OK
 
@@ -44,14 +46,13 @@ Type annotations are acceptable in these specific contexts:
 
 ## AD-compatible clamping
 
-Standard `clamp(x, low, high)` is generally safe, but for zero-clamping where gradient information must be preserved through the zero boundary:
+Standard `clamp(x, low, high)` is generally safe for AD. For zero-clamping the simplest idiom — used in `CloudMicrophysics.Utilities.clamp_to_nonneg` — is:
 
 ```julia
-# Keeps the Dual value zero while preserving type
-@inline clamp_to_nonneg(x) = ifelse(x < zero(x), zero(x) * x, x)
+@inline clamp_to_nonneg(x) = max(zero(x), x)
 ```
 
-The `zero(x) * x` idiom ensures the result has the same type (including Dual partials) as `x`, while the value is zeroed.
+`max` propagates the Dual partials through whichever argument wins. An equivalent branchless form is `ifelse(x < zero(x), zero(x) * x, x)`; the `zero(x) * x` term ensures the negative branch carries the same type (including Dual partials) as `x`.
 
 ## Testing AD compatibility
 

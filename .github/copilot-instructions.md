@@ -8,9 +8,9 @@ were inlined here.
 In particular:
 
 - For **code review**, follow the rubric in
-  [`docs/agents/review.md`](../docs/agents/review.md).
+  [`docs/dev-guides/workflow/review.md`](../docs/dev-guides/workflow/review.md).
 - For **writing or modifying code**, follow the patterns in
-  [`docs/agents/software_design_patterns.md`](../docs/agents/software_design_patterns.md).
+  [`docs/dev-guides/architecture/software_design_patterns.md`](../docs/dev-guides/architecture/software_design_patterns.md).
 - For **contributor workflow** (formatting, tests, NEWS.md, configs), defer to
   [`docs/src/contributor_guide.md`](../docs/src/contributor_guide.md).
 

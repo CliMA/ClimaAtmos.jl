@@ -1,6 +1,6 @@
 # Navigating a CliMA repository
 
-This file describes how to orient yourself in any CliMA Julia package. For the concrete directory tree of this specific repository, see the repo-specific guide (linked from [AGENTS.md](../../AGENTS.md)).
+This file describes how to orient yourself in any CliMA Julia package. For the concrete directory tree of this specific repository, see the repo-specific guide (linked from [AGENTS.md](../AGENTS.md)).
 
 ## Where to start
 
@@ -39,7 +39,7 @@ Most CliMA Julia packages share these directories:
 
 ## When a repo deviates from these conventions
 
-Repos like ClimaCore, Thermodynamics, and CloudMicrophysics have different source layouts than model repos. Read `src/<PackageName>.jl` and `docs/src/` first; do not assume an Atmos-style layout.
+Repos like ClimaCore, Thermodynamics, and CloudMicrophysics have different source layouts than model repos. Read `src/<PackageName>.jl` and `docs/src/` first.
 
 ## Self-correction
 

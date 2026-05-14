@@ -7,9 +7,9 @@ This guide covers patterns and pitfalls for writing high-performance, GPU-compat
 The rules below apply whenever the surrounding code is a *kernel* or runs inside a *hot path*. Define both concretely:
 
 - **Kernel**: the right-hand side of a `@.` broadcast, the body of a `ClimaCore.lazy()` expression, the closure passed to `Operators.column_integral_*`, `Operators.column_reduce!`, or `Fields.bycolumn`, and any function transitively `@inline`d into one of the above.
-- **Hot path**: any function called once per timestep (or once per Runge–Kutta stage) for every column or every grid point. Concretely: tendency functions in `prognostic_equations/`, the entries of `parameterized_tendencies/`, the `set_*_precomputed_quantities!` family in `cache/`, the Jacobian-update functions, and any `@.` broadcast they execute.
+- **Hot path**: any function called once per timestep (or once per Runge–Kutta stage) for every column or every grid point. In model repos this includes tendency functions, precomputed-quantity setters, and Jacobian-update functions. In library repos (e.g. Thermodynamics.jl, CloudMicrophysics.jl), it includes any function that is designed to be called from a broadcast kernel.
 
-If a function is called in either context, treat every rule in this file and in [software_design_patterns.md](software_design_patterns.md) as binding.
+If a function is called in either context, treat every rule in this file and in [software_design_patterns.md](../architecture/software_design_patterns.md) as binding.
 
 ## 1. SIMT and thread divergence
 
@@ -17,16 +17,18 @@ On GPU architectures (CUDA, ROCm), threads are grouped into warps (typically 32 
 
 ### The remedy: `ifelse`
 
-Use `ifelse(cond, a, b)` to compute both branches and select the result branchlessly. See [SDP 17](software_design_patterns.md) for the full pattern.
+Use `ifelse(cond, a, b)` to remove the divergent branch predicate. See [SDP 17](../architecture/software_design_patterns.md) for the canonical pattern.
 
-**Critical pitfalls of `ifelse`**:
+**Underlying principle**: `ifelse` is an ordinary function call. Both `a` and `b` are evaluated to a value *on every thread* before the call; `ifelse` only selects which value to return. Using `ifelse` does **not** save the work of the un-taken branch — its purpose is to eliminate the warp-divergent predicate, not to skip computation. If one branch is significantly more expensive than the other, every thread still pays its cost; sometimes a divergent `if/else` is the better trade and you should measure.
 
-- Both arguments are always evaluated. Guard mathematically invalid operations (`log`, `sqrt`, division) with `max(x, eps(eltype(x)))` **before** passing them as arguments.
-- Never use `begin...end` blocks inside `ifelse` arguments — side effects and complex blocks execute unconditionally.
-- Do not use `ifelse` to select between a base case and a recursive call. Since both branches evaluate, this causes infinite recursion. Use a standard `if` statement for recursion.
+Three consequences follow:
+
+- **Guard mathematically invalid operations** (`log` of a non-positive, `sqrt` of a negative, division by a possibly-zero denominator) *before* the `ifelse`. See [Numerical Robustness §1–2](numerical_robustness.md) for how to choose the floor (it is not `eps(FT)` in general).
+- **No `begin...end` blocks in arguments.** Statements inside `begin...end` run unconditionally — they are not "guarded" by the condition.
+- **No recursion through `ifelse`.** Since both branches evaluate, using `ifelse` to choose between a base case and a recursive call produces unbounded recursion. Use a plain `if` for recursion.
 
 ```julia
-# ❌ Pitfall: log(x) executes even when x ≤ 0; begin blocks always run
+# ❌ Bad: log(x) executes even when x ≤ 0; the begin-block runs unconditionally
 result = ifelse(x > 0,
     begin
         y = log(x)  # NaN when x ≤ 0
@@ -35,7 +37,9 @@ result = ifelse(x > 0,
     zero(x)
 )
 
-# ✅ Pre-compute safely, select with ifelse
+# ✅ Preferred: pre-compute safely, then select. The wrong log_term for x ≤ 0
+# is discarded by the ifelse, so max(x, eps) is acceptable here even though
+# it would not be a safe NaN-guard on its own (see Numerical Robustness §1).
 safe_x = max(x, eps(eltype(x)))
 log_term = log(safe_x) + one(x)
 result = ifelse(x > zero(x), log_term, zero(x))
@@ -43,7 +47,7 @@ result = ifelse(x > zero(x), log_term, zero(x))
 
 ## 2. Functors over closures
 
-Closures that capture local variables produce heap allocations ("boxed variables") and may trigger `InvalidIRError: unsupported dynamic function invocation` on GPU. Replace them with callable structs (functors). See [SDP 18](software_design_patterns.md).
+Closures that capture local variables produce heap allocations ("boxed variables") and may trigger `InvalidIRError: unsupported dynamic function invocation` on GPU. Replace them with callable structs (functors). See [SDP 18](../architecture/software_design_patterns.md).
 
 Performance comparison (microphysics case study):
 
@@ -60,12 +64,14 @@ Validation: after a warm-up call, `@allocated integrate(functor, data)` should r
 
 ### When to use `lazy()`
 
-Use `@. lazy(expr)` for any intermediate computed quantity that is consumed by a subsequent broadcast. This prevents heap allocation of a temporary `Field`.
+`lazy` is exported by the [`LazyBroadcast.jl`](https://github.com/CliMA/LazyBroadcast.jl) package (`import LazyBroadcast: lazy`) and is re-exported through `ClimaCore`. Use `@. lazy(expr)` for any intermediate computed quantity that is consumed by a subsequent broadcast — it prevents heap allocation of a temporary `Field`.
 
 ```julia
 # ✅ Lazy: no temporary Field allocated
-T = @. lazy(air_temperature(thp, ts))
-result = @. lazy(physics_func(T, ρ))
+ᶜT = @. lazy(TD.air_temperature(thp, TD.ρe(), Y.c.ρe / Y.c.ρ,
+                                Y.c.ρq_tot / Y.c.ρ, Y.c.ρq_liq / Y.c.ρ,
+                                Y.c.ρq_ice / Y.c.ρ))
+result = @. lazy(physics_func(ᶜT, Y.c.ρ))
 @. output_field = result  # terminal: fuses everything into one kernel
 ```
 
@@ -112,7 +118,7 @@ Use `$expr` to prevent the `@.` macro from broadcasting over a subexpression. Th
 
 ### Do not use `Ref()` as a broadcast scalar escape
 
-`Ref()` is not the standard broadcast-escape pattern in this codebase. Its use in `src/` is limited to mutable scalar boxes in callbacks and non-broadcast contexts. Prefer parameter extraction ([SDP 20](software_design_patterns.md)).
+`Ref()` is not the standard broadcast-escape pattern in this codebase. Its use in `src/` is limited to mutable scalar boxes in callbacks and non-broadcast contexts. Prefer parameter extraction ([SDP 20](../architecture/software_design_patterns.md)).
 
 ### Parameter extraction
 
@@ -131,11 +137,11 @@ Large functions (roughly > 200–300 lines) may exceed the Julia compiler's inli
 
 ## 6. Fixed iteration solvers (advisory)
 
-Convergence-based loops (`while err > tol`) cause thread divergence when different threads converge at different rates. Where the physics allows it, prefer a fixed number of iterations. See [SDP 19](software_design_patterns.md).
+Convergence-based loops (`while err > tol`) cause thread divergence when different threads converge at different rates. Where the physics allows it, prefer a fixed number of iterations. See [SDP 19](../architecture/software_design_patterns.md).
 
 ## 7. GPU-safe error handling
 
-- Use `error("message")`, not `@assert`. See [SDP 11](software_design_patterns.md).
+- Use `error("message")`, not `@assert`. See [SDP 11](../architecture/software_design_patterns.md).
 - Do not interpolate runtime variables into error strings inside kernels. The string interpolation allocates and may trigger dynamic dispatch.
 
 ```julia
@@ -169,7 +175,7 @@ If the post-adapt check returns `false`, check for:
 - `Vector` or `Array` fields that aren't backed by a `CuArray` and don't have an `Adapt.adapt_structure` method (use `SVector`/`Tuple`, or add an `Adapt` rule that rewrites the field to a device-side equivalent)
 - `String` fields
 - `Function` fields without a type parameter (use `struct A{F <: Function}; f::F; end`)
-- `mutable struct` (use immutable structs)
+- `mutable struct` (prefer immutable structs for data passed into kernels; `mutable struct` is acceptable for infrastructure objects like grids and integrators that are never passed into kernels)
 
 When defining a new struct that wraps device-resident arrays, add an `Adapt.adapt_structure(to, x::MyStruct) = MyStruct(adapt(to, x.field1), ...)` method so the post-adapt object becomes `isbits`.
 
