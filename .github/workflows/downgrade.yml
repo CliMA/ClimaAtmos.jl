@@ -17,11 +17,21 @@ concurrency:
 
 jobs:
   test:
-    name: Downgrade ${{ matrix.version }} - ubuntu-latest
+    name: Downgrade ${{ matrix.version }} - ubuntu-latest - ${{ matrix.test_group }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         version: ['1.10', '1.11']
+        test_group:
+          - infrastructure
+          - diagnostics
+          - dynamics
+          - parameterizations
+          - restarts
+          - era5
+    env:
+      TEST_GROUP: ${{ matrix.test_group }}
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@latest
