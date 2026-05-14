@@ -7,4 +7,7 @@ reproducibility_test_job_ids() = [
     "single_column_hydrostatic_balance_ft64",
     "prognostic_edmfx_aquaplanet",
     "rcemipii_box_CRM_1M",
+    "prognostic_edmfx_dycoms_rf02_column",
+    "prognostic_edmfx_rico_column",
+    "prognostic_edmfx_trmm_column",
 ]
