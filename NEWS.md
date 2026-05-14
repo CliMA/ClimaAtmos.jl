@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+v0.39.0
+-------
 - [#4486](https://github.com/CliMA/ClimaAtmos.jl/pull/4486) [badge-💥breaking]
   Updated YAML config schema:
   - `vert_diff: true` → `"VerticalDiffusion"`; `false` → `~`.
