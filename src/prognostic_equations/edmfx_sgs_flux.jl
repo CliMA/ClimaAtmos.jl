@@ -3,6 +3,13 @@
 ##### fluxes computed by the EDMFX scheme
 #####
 
+# One-shot guard for SSLT diagnostic 4.1.
+# When `false`, the SSLT block in `edmfx_sgs_mass_flux_tendency!` dumps
+# (ᶜχʲ − ᶜχ) vs χ̄ stats at levels 5/10/20 for each bin, then flips this to
+# `true` so subsequent calls skip the print. Used to localize the EDMF blowup
+# (column-march drift vs SGS-flux-tendency math). Reset between runs.
+const SSLT_DIAG_FIRED = Ref(false)
+
 """
     edmf_sgs_advection_handles(atmos, ρχ_name) -> Bool
 
@@ -367,6 +374,26 @@ function edmfx_sgs_mass_flux_tendency!(
                 ᶜχʲ = MatrixFields.get_field(p.precomputed, χʲ_name)
                 ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
                 ᶜχ  = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
+
+                # Diagnostic 4.1: on the first call, dump (χʲ − χ̄) magnitude vs
+                # χ̄ at boundary-layer levels 5/10/20. ratio_max ≈ O(1) indicates
+                # the column-march is producing physical updraft values;
+                # ratio_max ≫ 1 indicates χʲ is leaving the {χ̄, χʲ_prev} hull
+                # (column-march math is the bug). One-shot via SSLT_DIAG_FIRED.
+                if !SSLT_DIAG_FIRED[]
+                    ᶜdiff = p.scratch.ᶜtemp_scalar_2
+                    ᶜchi  = p.scratch.ᶜtemp_scalar_3
+                    @. ᶜdiff = ᶜχʲ - ᶜχ
+                    @. ᶜchi  = specific(ᶜρχ, Y.c.ρ)
+                    for i_lvl in (5, 10, 20)
+                        diff_lvl = Array(parent(Fields.level(ᶜdiff, i_lvl)))
+                        chi_lvl  = Array(parent(Fields.level(ᶜchi,  i_lvl)))
+                        chiʲ_lvl = Array(parent(Fields.level(ᶜχʲ,   i_lvl)))
+                        χ_scale  = max(maximum(abs, chi_lvl), eps(FT))
+                        @info "[SSLT-diag-4.1] (χʲ−χ̄) vs χ̄" bin=ρχ_name level=i_lvl t=t diff_min=minimum(diff_lvl) diff_max=maximum(diff_lvl) χ_min=minimum(chi_lvl) χ_max=maximum(chi_lvl) χʲ_min=minimum(chiʲ_lvl) χʲ_max=maximum(chiʲ_lvl) ratio_max=maximum(abs, diff_lvl) / χ_scale
+                    end
+                end
+
                 @. ᶜa_scalar =
                     (ᶜχʲ - ᶜχ) * min(
                         min(draft_area(ᶜρaʲs.:(1), ᶜρʲs.:(1)), a_max),
@@ -381,6 +408,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
                 @. ᶜρχₜ += vtt
             end
+            SSLT_DIAG_FIRED[] = true
         end
 
         # TODO: the following adds the environment flux to the tendency
