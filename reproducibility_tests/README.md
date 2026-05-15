@@ -55,7 +55,8 @@ Add `--test_broken_report_flakiness true` to the `test_reproducibility.jl` comma
 
  1. Set `reproducibility_test: true` in your config YAML.
  2. Add `julia --project=.buildkite reproducibility_tests/test_reproducibility.jl --job_id [job_id] --out_dir [job_id]/output_active` as a separate command in the pipeline.
- 3. Add the job ID to `reproducibility_test_job_ids.jl`.
+
+The job ID is discovered automatically from the presence of `[job_id]/output_active/reproducibility_bundle/prog_state.hdf5` after the run.
 
 ## Developer details
 

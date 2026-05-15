@@ -1,7 +1,6 @@
 include(joinpath(@__DIR__, "reproducibility_utils.jl"))
-include(joinpath(@__DIR__, "reproducibility_test_job_ids.jl"))
 
-job_ids = reproducibility_test_job_ids()
+job_ids = discover_reproducibility_job_ids()
 
 buildkite_ci = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) == "climaatmos-ci"
 in_merge_queue =
