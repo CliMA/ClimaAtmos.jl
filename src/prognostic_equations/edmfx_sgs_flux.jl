@@ -3,12 +3,15 @@
 ##### fluxes computed by the EDMFX scheme
 #####
 
-# One-shot guard for SSLT diagnostic 4.1.
-# When `false`, the SSLT block in `edmfx_sgs_mass_flux_tendency!` dumps
-# (ᶜχʲ − ᶜχ) vs χ̄ stats at levels 5/10/20 for each bin, then flips this to
-# `true` so subsequent calls skip the print. Used to localize the EDMF blowup
-# (column-march drift vs SGS-flux-tendency math). Reset between runs.
-const SSLT_DIAG_FIRED = Ref(false)
+# Multi-shot counter for SSLT diagnostic 4.1.
+# Counts calls to `edmfx_sgs_mass_flux_tendency!`. The SSLT block dumps stats
+# only when the post-increment value is in SSLT_DIAG_FIRE_AT. Skipping count=1
+# avoids the t=0 build_cache call where all SSLT state is still zero.
+# Sampling at counts 2, 6, 12, 30 catches early-step evolution (the blowup has
+# an e-fold of ~1 h ≈ tens of tendency calls) so we can see whether (χʲ − χ̄)
+# stays O(χ̄) or blows up.
+const SSLT_DIAG_COUNTER = Ref(0)
+const SSLT_DIAG_FIRE_AT = (2, 6, 12, 30, 100)
 
 """
     edmf_sgs_advection_handles(atmos, ρχ_name) -> Bool
@@ -368,6 +371,9 @@ function edmfx_sgs_mass_flux_tendency!(
                 (@name(c.ρSSLT05), @name(ᶜSSLT05ʲs.:(1))),
             )
             @. ᶠu³_diff = ᶠu³ʲs.:(1) - ᶠu³
+            sslt_diag_fire =
+                p.atmos.edmfx_model.prognostic_aerosols isa Val{true} &&
+                ((SSLT_DIAG_COUNTER[] + 1) in SSLT_DIAG_FIRE_AT)
             for (ρχ_name, χʲ_name) in aerosol_tracers
                 MatrixFields.has_field(Y, ρχ_name) || continue
                 MatrixFields.has_field(p.precomputed, χʲ_name) || continue
@@ -375,12 +381,13 @@ function edmfx_sgs_mass_flux_tendency!(
                 ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
                 ᶜχ  = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
 
-                # Diagnostic 4.1: on the first call, dump (χʲ − χ̄) magnitude vs
-                # χ̄ at boundary-layer levels 5/10/20. ratio_max ≈ O(1) indicates
-                # the column-march is producing physical updraft values;
-                # ratio_max ≫ 1 indicates χʲ is leaving the {χ̄, χʲ_prev} hull
-                # (column-march math is the bug). One-shot via SSLT_DIAG_FIRED.
-                if !SSLT_DIAG_FIRED[]
+                # Diagnostic 4.1: at a few call counts (skipping t=0 init),
+                # dump (χʲ − χ̄) magnitude vs χ̄ at boundary-layer levels 5/10/20.
+                # ratio_max ≈ O(1) → column-march producing physical updraft values;
+                # ratio_max ≫ 1 → χʲ is leaving the {χ̄, χʲ_prev} hull (column-march bug).
+                # Track ratio_max across the firing counts to see whether the blowup
+                # is born in column-march or accumulates via SGS-flux feedback.
+                if sslt_diag_fire
                     ᶜdiff = p.scratch.ᶜtemp_scalar_2
                     ᶜchi  = p.scratch.ᶜtemp_scalar_3
                     @. ᶜdiff = ᶜχʲ - ᶜχ
@@ -390,7 +397,7 @@ function edmfx_sgs_mass_flux_tendency!(
                         chi_lvl  = Array(parent(Fields.level(ᶜchi,  i_lvl)))
                         chiʲ_lvl = Array(parent(Fields.level(ᶜχʲ,   i_lvl)))
                         χ_scale  = max(maximum(abs, chi_lvl), eps(FT))
-                        @info "[SSLT-diag-4.1] (χʲ−χ̄) vs χ̄" bin=ρχ_name level=i_lvl t=t diff_min=minimum(diff_lvl) diff_max=maximum(diff_lvl) χ_min=minimum(chi_lvl) χ_max=maximum(chi_lvl) χʲ_min=minimum(chiʲ_lvl) χʲ_max=maximum(chiʲ_lvl) ratio_max=maximum(abs, diff_lvl) / χ_scale
+                        @info "[SSLT-diag-4.1] (χʲ−χ̄) vs χ̄" call=SSLT_DIAG_COUNTER[]+1 bin=ρχ_name level=i_lvl t=t diff_min=minimum(diff_lvl) diff_max=maximum(diff_lvl) χ_min=minimum(chi_lvl) χ_max=maximum(chi_lvl) χʲ_min=minimum(chiʲ_lvl) χʲ_max=maximum(chiʲ_lvl) ratio_max=maximum(abs, diff_lvl) / χ_scale
                     end
                 end
 
@@ -408,7 +415,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
                 @. ᶜρχₜ += vtt
             end
-            SSLT_DIAG_FIRED[] = true
+            SSLT_DIAG_COUNTER[] += 1
         end
 
         # TODO: the following adds the environment flux to the tendency
