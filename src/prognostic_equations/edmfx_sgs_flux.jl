@@ -5,13 +5,13 @@
 
 # Multi-shot counter for SSLT diagnostic 4.1.
 # Counts calls to `edmfx_sgs_mass_flux_tendency!`. The SSLT block dumps stats
-# only when the post-increment value is in SSLT_DIAG_FIRE_AT. Skipping count=1
-# avoids the t=0 build_cache call where all SSLT state is still zero.
-# Sampling at counts 2, 6, 12, 30 catches early-step evolution (the blowup has
-# an e-fold of ~1 h ≈ tens of tendency calls) so we can see whether (χʲ − χ̄)
-# stays O(χ̄) or blows up.
+# when `sslt_diag_should_fire(count)` returns true. Skipping count=1 avoids the
+# t=0 build_cache call where all SSLT state is still zero. After the initial
+# count=2 sample, the predicate fires every 100 calls — dense enough to localize
+# the call window where ratio_max transitions from O(1) to O(1e10+), and the
+# fixed cadence makes growth-rate fits straightforward.
 const SSLT_DIAG_COUNTER = Ref(0)
-const SSLT_DIAG_FIRE_AT = (2, 6, 12, 30, 100)
+sslt_diag_should_fire(c) = c == 2 || c % 100 == 0
 
 """
     edmf_sgs_advection_handles(atmos, ρχ_name) -> Bool
@@ -373,7 +373,7 @@ function edmfx_sgs_mass_flux_tendency!(
             @. ᶠu³_diff = ᶠu³ʲs.:(1) - ᶠu³
             sslt_diag_fire =
                 p.atmos.edmfx_model.prognostic_aerosols isa Val{true} &&
-                ((SSLT_DIAG_COUNTER[] + 1) in SSLT_DIAG_FIRE_AT)
+                sslt_diag_should_fire(SSLT_DIAG_COUNTER[] + 1)
             for (ρχ_name, χʲ_name) in aerosol_tracers
                 MatrixFields.has_field(Y, ρχ_name) || continue
                 MatrixFields.has_field(p.precomputed, χʲ_name) || continue
