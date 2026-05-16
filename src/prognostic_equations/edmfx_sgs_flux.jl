@@ -251,7 +251,7 @@ function edmfx_sgs_mass_flux_tendency!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
-    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
+    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶠu³⁰) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     FT = eltype(Y)
@@ -413,52 +413,115 @@ function edmfx_sgs_mass_flux_tendency!(
                     ᶜρʲs.:(1), ᶠu³_diff, ᶜa_scalar, dt, edmfx_tracer_upwinding,
                 )
                 ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-                # DIAGNOSTIC EXPERIMENT (isolate SGS flux as blowup source).
-                # If output matches output_0031 (EDMF-off baseline, ~1e-9 kg/kg
-                # physical), the remaining blowup originates in this tendency
-                # despite the conservative divergence math. If output still
-                # blows up, the bug is upstream (horizontal advection without
-                # the SEM quasi-monotone limiter, emission, or mean-flow vertical
-                # advection). Restore the `@. ᶜρχₜ += vtt` line after the test.
-                # @. ᶜρχₜ += vtt
+                @. ᶜρχₜ += vtt
             end
             SSLT_DIAG_COUNTER[] += 1
+
+            # === Environment branch (completes the canonical SGS decomposition) ===
+            # The updraft-only flux above is asymmetric and was driving runaway
+            # accumulation of grid-mean SSLT (output_0035..0041 blowups). Adding
+            # the env branch restores the full Reynolds decomposition
+            #   F_SGS = ρa^j(wʲ−w̄)(χʲ−χ̄) + ρa⁰(w⁰−w̄)(χ⁰−χ̄)
+            # which by the EDMF identity equals ρ·a^j·a⁰·(wʲ−w⁰)(χʲ−χ⁰) — a
+            # sign-balanced two-sided eddy flux. Mirror of the PrognosticEDMFX
+            # env branches at lines ~140 (energy), ~170 (q_tot) of this file.
+            #
+            # χ⁰ comes from the n=1 mass-balance identity
+            #   ρχ̄ = ρa^j·χʲ + ρa⁰·χ⁰   ⇒   χ⁰ = (ρχ − ρa^j·χʲ)/ρa⁰.
+            # ρ⁰ is approximated by Y.c.ρ — exact in the flux integrand because
+            # the operator density and draft_area denominator cancel:
+            #   flux = ρ⁰·u·(χ⁰−χ̄)·ρa⁰/ρ⁰ = ρa⁰·u·(χ⁰−χ̄)
+            # so any value with ρ⁰ ≈ ρ̄ is fine.
+            ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, ᶜρaʲs, turbconv_model))
+            @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
+            for (ρχ_name, χʲ_name) in aerosol_tracers
+                MatrixFields.has_field(Y, ρχ_name) || continue
+                MatrixFields.has_field(p.precomputed, χʲ_name) || continue
+                ᶜχʲ = MatrixFields.get_field(p.precomputed, χʲ_name)
+                ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+                ᶜχ⁰ = @. lazy(
+                    (ᶜρχ - ᶜρaʲs.:(1) * ᶜχʲ) / max(ᶜρa⁰, eps(FT)),
+                )
+                @. ᶜa_scalar =
+                    (ᶜχ⁰ - specific(ᶜρχ, Y.c.ρ)) *
+                    draft_area(ᶜρa⁰, Y.c.ρ)
+                vtt = vertical_transport(
+                    Y.c.ρ, ᶠu³_diff, ᶜa_scalar, dt, edmfx_tracer_upwinding,
+                )
+                ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+                @. ᶜρχₜ += vtt
+            end
         end
 
-        # TODO: the following adds the environment flux to the tendency
-        # Make active and test later
-        # @. ᶠu³_diff = p.precomputed.ᶠu³⁰ - ᶠu³
-        # ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
-        # ᶜρ⁰ = p.scratch.ᶜtemp_scalar_2
-        # @. ᶜρ⁰ = TD.air_density(
-        #     CAP.thermodynamics_params(p.params),
-        #     p.precomputed.ᶜts⁰,
-        # )
-        # ᶜmse⁰ = @.lazy(ᶜspecific_env_mse(Y, p))
-        # @. ᶜa_scalar =
-        #     (ᶜmse⁰ + p.precomputed.ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
-        # vtt = vertical_transport(
-        #     ᶜρ⁰,
-        #     ᶠu³_diff,
-        #     ᶜa_scalar,
-        #     dt,
-        #     edmfx_sgsflux_upwinding,
-        # )
-        # @. Yₜ.c.ρe_tot += vtt
-        # if !(p.atmos.microphysics_model isa DryModel)
-        #     ᶜq_tot⁰ = @specific_env_value(:q_tot, Y.c, turbconv_model))
-        #     @. ᶜa_scalar =
-        #         (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) *
-        #         draft_area(ᶜρa⁰, ᶜρ⁰)
-        #     vtt = vertical_transport(
-        #         ᶜρ⁰,
-        #         ᶠu³_diff,
-        #         ᶜa_scalar,
-        #         dt,
-        #         edmfx_sgsflux_upwinding,
-        #     )
-        #     @. Yₜ.c.ρq_tot += vtt
-        # end
+        # === TODO: Extend the env-branch fix to other DiagnosticEDMFX tracers ===
+        # The same one-sided SGS asymmetry exists for energy / q_tot / 1M / 2M
+        # microphysics tracers above. It's only currently visible for SSLT
+        # because (a) sea salt has slow sinks (no settling for coarse bins, only
+        # a slow exponential decay) and (b) baseline magnitudes are ~1e-10,
+        # where even ~1% relative noise becomes the signal. Energy / q_tot /
+        # microphysics have fast sinks (radiation, surface fluxes,
+        # precipitation) and large baselines that absorb the noise. Adding env
+        # branches here would make the SGS scheme canonical for all
+        # DiagnosticEDMFX tracers and remove the latent bug from the codebase.
+        # Pattern mirrors the SSLT env branch above. Each χ⁰ comes from the
+        # n=1 mass-balance identity
+        #   ρχ̄ = ρa^j·χʲ + ρa⁰·χ⁰   ⇒   χ⁰ = (ρχ − ρa^j·χʲ)/ρa⁰
+        # and ρ⁰ ≈ Y.c.ρ as a proxy (cancels in flux integrand via draft_area).
+        # Energy is the awkward one: mse_grid is not a direct state variable
+        # and must be derived from ρe_tot via h_tot − K_grid.
+        #
+        # ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, ᶜρaʲs, turbconv_model))
+        # @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
+        #
+        # # --- Energy env branch ---
+        # # ᶜmse⁰ = (ρ·(h_tot − K_grid) − ρa^j·mseʲ) / ρa⁰  (work out the exact
+        # # derivation against existing energy bookkeeping before activating).
+        # # @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, Y.c.ρ)
+        # # vtt = vertical_transport(Y.c.ρ, ᶠu³_diff, ᶜa_scalar, dt, edmfx_sgsflux_upwinding)
+        # # @. Yₜ.c.ρe_tot += vtt
+        #
+        # # --- q_tot env branch ---
+        # # if !(p.atmos.microphysics_model isa DryModel)
+        # #     ᶜq_tot⁰ = @. lazy(
+        # #         (Y.c.ρq_tot - ᶜρaʲs.:(1) * ᶜq_totʲs.:(1)) /
+        # #         max(ᶜρa⁰, eps(FT)),
+        # #     )
+        # #     @. ᶜa_scalar =
+        # #         (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) *
+        # #         draft_area(ᶜρa⁰, Y.c.ρ)
+        # #     vtt = vertical_transport(
+        # #         Y.c.ρ, ᶠu³_diff, ᶜa_scalar, dt, edmfx_sgsflux_upwinding,
+        # #     )
+        # #     @. Yₜ.c.ρq_tot += vtt
+        # # end
+        #
+        # # --- 1M / 2M microphysics env branches ---
+        # # if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+        # #     microphysics_env_tracers = (
+        # #         (@name(c.ρq_lcl), @name(ᶜq_lclʲs.:(1))),
+        # #         (@name(c.ρq_icl), @name(ᶜq_iclʲs.:(1))),
+        # #         (@name(c.ρq_rai), @name(ᶜq_raiʲs.:(1))),
+        # #         (@name(c.ρq_sno), @name(ᶜq_snoʲs.:(1))),
+        # #         (@name(c.ρn_lcl), @name(ᶜn_lclʲs.:(1))),
+        # #         (@name(c.ρn_rai), @name(ᶜn_raiʲs.:(1))),
+        # #     )
+        # #     for (ρχ_name, χʲ_name) in microphysics_env_tracers
+        # #         MatrixFields.has_field(Y, ρχ_name) || continue
+        # #         ᶜχʲ = MatrixFields.get_field(p.precomputed, χʲ_name)
+        # #         ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+        # #         ᶜχ⁰ = @. lazy(
+        # #             (ᶜρχ - ᶜρaʲs.:(1) * ᶜχʲ) / max(ᶜρa⁰, eps(FT)),
+        # #         )
+        # #         @. ᶜa_scalar =
+        # #             (ᶜχ⁰ - specific(ᶜρχ, Y.c.ρ)) *
+        # #             draft_area(ᶜρa⁰, Y.c.ρ)
+        # #         vtt = vertical_transport(
+        # #             Y.c.ρ, ᶠu³_diff, ᶜa_scalar, dt, edmfx_tracer_upwinding,
+        # #         )
+        # #         ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+        # #         @. ᶜρχₜ += vtt
+        # #     end
+        # # end
     end
 
 end
