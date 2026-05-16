@@ -4,6 +4,8 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- ![][badge-🔥behavioralΔ] Unify cloud fraction and microphysics SGS quadrature via a shared `sgs_moments` pre-pass. Replace the Sommeria–Deardorff cloud fraction with a hybrid CDF formula, with variances from quadratures, and introduce a mass-conserving shape-function partition in the `Microphysics1MEvaluator`.
+
 v0.39.0
 -------
 - [#4486](https://github.com/CliMA/ClimaAtmos.jl/pull/4486) [badge-💥breaking]
@@ -19,6 +21,7 @@ v0.38.4
 
 v0.38.3
 -------
+
 - Added a `Presets` module with convenience constructors for common module/simulation configurations.
 - Add a keyword-based constructor `AtmosSimulation(; kwargs)` that always runs with Float32.
 - Set the existing keyword-based constructor `AtmosSimulation{FT}(;kwargs)` to always use ITime. Removed the `itime` kwarg.
@@ -31,12 +34,14 @@ v0.38.1
 
 v0.38.0
 ----
+
 - Refactor names in 1M microphysics q_liq -> q_lcl, q_ice -> q_icl
 - Refactor names in 0M microphysics q_liq_rai -> q_liq, q_ice_sno -> q_ice
 - Refactor names in 0M microphysics q_tot_safe -> q_tot_nonneg
 
 v0.37
 ----
+
 - Replace `InitialConditions` module with `Setups` module. Remove `surface_temperature` config key.
 
 - [#4361](https://github.com/CliMA/ClimaAtmos.jl/pull/4361) Refactor reproducibility infrastructure to use rms deviations in prognostic variables and only fail when rms deviation exceeds tolerance.
@@ -65,10 +70,12 @@ v0.35.2
 
 v0.35.1
 -------
+
 - [4276](https://github.com/CliMA/ClimaAtmos.jl/pull/4276) Create IC type to allow initializing AMIP with ERA5 on model levels. Add artifact which corresponds to default AMIP start date (Jan 1, 2010). Also removes unused ᶜspecific in the precomputed cache.
 
 v0.35.0
 -------
+
 - [#4225](https://github.com/CliMA/ClimaAtmos.jl/pull/4225) Add an option for vertical water borrowing limiter. Configure via `tracer_nonnegativity_method: "vertical_water_borrowing"`
   and optionally `vertical_water_borrowing_species` (defaults to all tracers if not specified).
   The limiter enforces non-negativity using a single threshold (0.0) that applies uniformly to all selected tracers.
@@ -91,6 +98,7 @@ thermo state, including ᶜts in p.precomputed.sfc_conditions.
 
 v0.34.0
 -------
+
 - [#4198](https://github.com/CliMA/ClimaAtmos.jl/pull/4198) [badge-💥breaking] modifies surface conditions
 to use SurfaceFluxes v0.15.
 
@@ -101,6 +109,7 @@ v0.33.2
 
 v0.33.1
 -------
+
 - PR [#4185](https://github.com/CliMA/ClimaAtmos.jl/pull/4185) adds a new cloud fraction parameterization `MLCloud`. It can be set in the toml under `cloud_model`.
 
 - PR [#4191](https://github.com/CliMA/ClimaAtmos.jl/pull/4191) renames ρatke to ρtke and move it out of sgs⁰.
@@ -109,6 +118,7 @@ v0.33.1
 
 v0.33.0
 -------
+
 - ![#4169](https://github.com/CliMA/ClimaAtmos.jl/pull/4169) [badge-💥breaking]
 Remove the options `co2_model` and `prescribe_ozone`. These are both fixed by
 default now, and can be set to time-varying by including one or both in the
@@ -116,6 +126,7 @@ option `time_varying_trace_gases: ["CO2", "O3]`.
 
 v0.32.0
 -------
+
 - PR [#4162](https://github.com/CliMA/ClimaAtmos.jl/pull/4162) adds an option for
 reproducible restart. It is set to false by default. This shouldn't affect restart
 in the coupler as the coupler save the cache for restarting.
@@ -137,6 +148,7 @@ v0.31.6
 
 v0.31.5
 -------
+
 PR [#3975](https://github.com/CliMA/ClimaAtmos.jl/pull/3975) updates the pressure gradient formulation to subtract a reference state and use the Exner pressure.
 
 v0.31.4
@@ -149,6 +161,7 @@ v0.31.2
 -------
 
 ### Add RWP diagnostic
+
 PR [#3946](https://github.com/CliMA/ClimaAtmos.jl/pull/3946) adds rainwater path diagnostic variable.
 
 v0.31.1
@@ -170,28 +183,31 @@ factor speedup. The associated documentation section, "Single Column Model", was
 
 v0.30.4
 -------
+
 PR [#3856](https://github.com/CliMA/ClimaAtmos.jl/pull/3856) adds number adjustment tendencies to the two-moment microphysics scheme.
 
 v0.30.3
 -------
 
 ### Add diagnostic for CAPE
+
 PR [#3820](https://github.com/CliMA/ClimaAtmos.jl/pull/3820) adds support for computing convective available potential energy (CAPE), or the vertical integral of the buoyancy differential between a parcel lifted from the surface and the environment. Exemplified in the TRMM deep convection case.
 
 v0.30.2
 -------
 
 ### Add limiting by max Prandtl number
+
 This is part of a larger refactoring of the Eddy Diffusivity code for EDMF
 
 v0.30.1
 -------
 
-
 v0.30.0
 -------
 
 ### Add support for reanalysis-driven single column model with time-varying forcing
+
 PR [#3758](https://github.com/CliMA/ClimaAtmos.jl/pull/3758) adds support for driving single-column model (SCM) simulations with time-varying ERA5 reanalysis data. This extends the existing GCM-driven SCM interface to allow site-specific simulations that resolve the diurnal cycle and are suited for calibration against observations. Users can now run reanalysis-driven cases globally using only a date and lat/lon, thanks to integrated data handling via ClimaArtifacts.jl. See the updated “Single Column Model” docs page for details on setup, variable requirements, and how to prepare ERA5 input files.
 
 ### Non-orographic gravity wave tendency as a callback
@@ -207,6 +223,7 @@ v0.29.1
 -------
 
 ### Remove contribution from condensate, precip diffusion in mass tendency
+
 PR[#3721](https://github.com/CliMA/ClimaAtmos.jl/pull/3721)
 Diffusion of condensate (liq, ice) and precip (rai, sno) vars no longer
 contributes to the mass tendency terms (updates in vert diffusion boundary layer,
@@ -222,6 +239,7 @@ v0.29.0
 -------
 
 ### Remove precipitation from cache
+
 And move all the fields into precomputed
 
 v0.28.6
@@ -230,6 +248,7 @@ v0.28.6
 ### Features
 
 ### Add a flag for disabling surface flux tendency
+
 Surface flux tendency is not controlled by `vert_diff` or `edmfx_sgs_diffusive_flux` anymore.
 Instead, it is controlled by the new flag `disable_surface_flux_tendency`. When it is set to
 true, no surface flux tendency is applied, no matter what `surface_setup` is.
@@ -259,8 +278,8 @@ PR [3622](https://github.com/CliMA/ClimaAtmos.jl/pull/3622) adds a new
 simplified EDMF model that only implements the Eddy-Diffusivity part of the
 scheme (not the Mass-Flux).
 
-
 ### Update default configuration to use deep-atmosphere eqns, fix diagnostic bug
+
 PR [3422](https://github.com/CliMA/ClimaAtmos.jl/pull/3422)
 Updates the `default_config` to set `deep_atmosphere=true`, and updates the
 `rv` relative vorticity diagnostic to store the curl of horizontal velocity.
@@ -280,10 +299,12 @@ PR [3592](https://github.com/CliMA/ClimaAtmos.jl/pull/3592)
 
 v0.28.4
 -------
+
 ### Development
 
 The `.dev` was deprecated. The two utilities in this folder can be replaced with
 more established and better developed tools:
+
 - instead of `clima_format`, use `JuliaFormatter`,
 - instead of `up_deps`, use `PkgDevTools`.
 See the [documentation](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/#Formatting) for more information.
@@ -301,6 +322,7 @@ See [ClimaComms documentation](https://clima.github.io/ClimaComms.jl/dev/logging
 
 v0.28.3
 -------
+
 ### Read CO2 from file
 
 `ClimaAtmos` now support using data from the Mauna Loa CO2 measurements to set
@@ -317,6 +339,7 @@ toml. PR [3534](https://github.com/CliMA/ClimaAtmos.jl/pull/3534)
 
 v0.28.2
 -------
+
 ### Features
 
 ### Add van Leer class operator
@@ -332,6 +355,7 @@ interpolated NetCDF datasets.
 
 To use this feature from the YAML interface, just pass the path of the file.
 We expect the file to contain the following variables:
+
 - `p`, for pressure,
 - `t`, for temperature,
 - `q`, for humidity,
@@ -339,9 +363,11 @@ We expect the file to contain the following variables:
 - `cswc, crwc` for snow and rain water content (for 1 moment microphysics).
 
 For example, to use the DYAMONDSummer initial condition, set
+
 ```
 initial_condition: "artifact\"DYAMONDSummer\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 ```
+
 in your configuration file.
 
 ### Write diagnostics to text files
@@ -375,7 +401,7 @@ When `prescribe_clouds_in_radiation` is set to true, clouds in radiation
 is prescribed from a file (monthly cloud properties in 2010 from ERA5).
 PR [3405](https://github.com/CliMA/ClimaAtmos.jl/pull/3405)
 
-### ETOPO2022 60arc-second topography dataset.
+### ETOPO2022 60arc-second topography dataset
 
 - Update artifacts to use 60arc-second ETOPO2022 ice-surface topography
   dataset. Update surface smoothing functions to rely only on spectral
@@ -448,26 +474,30 @@ more information.
 
 v0.27.5
 -------
+
 - Update RRTMGP and allow multiple aerosols for radiation.
   Note: Don't use sea salt as there is an issue with the lookup
   table. PR [#3264](https://github.com/CliMA/ClimaAtmos.jl/pull/3264)
 
 v0.27.4
 -------
+
 - Add artifact decoding from YAML
   PR [#3256](https://github.com/CliMA/ClimaAtmos.jl/pull/3256)
 
 v0.27.3
 -------
+
 - Add support for monthly calendar diagnostics
   PR [#3235](https://github.com/CliMA/ClimaAtmos.jl/pull/3241)
 - Use period filling interpolation for aerosol time series
-  PR [#3246] (https://github.com/CliMA/ClimaAtmos.jl/pull/3246)
+  PR [#3246] (<https://github.com/CliMA/ClimaAtmos.jl/pull/3246>)
 - Add prescribe time and spatially varying ozone
   PR [#3241](https://github.com/CliMA/ClimaAtmos.jl/pull/3241)
 
 v0.27.2
 -------
+
 - Use new aerosol artifact and change start date
   PR [#3216](https://github.com/CliMA/ClimaAtmos.jl/pull/3216)
 - Add a gpu scaling job with diagnostics
@@ -475,6 +505,7 @@ v0.27.2
 
 v0.27.1
 -------
+
 - Allow different aerosol types for radiation.
   PR [#3180](https://github.com/CliMA/ClimaAtmos.jl/pull/3180)
 - ![][badge-🔥behavioralΔ] Switch from `Dierckz` to `Interpolations`. `Interpolations`
@@ -483,6 +514,7 @@ v0.27.1
 
 v0.27.0
 -------
+
 - ![][badge-💥breaking] Change `radiation_model` in the radiation cache to `rrtmgp_model`.
   PR [#3167](https://github.com/CliMA/ClimaAtmos.jl/pull/3167)
 - ![][badge-💥breaking] Change the `idealized_insolation` argument to `insolation`,
@@ -492,6 +524,7 @@ v0.27.0
 
 v0.26.3
 -------
+
 - Add ClimaCoupler downstream test.
   PR [#3152](https://github.com/CliMA/ClimaAtmos.jl/pull/3152)
 - Add an option to use aerosol radiation. This is not fully working yet.
@@ -503,11 +536,13 @@ v0.26.3
 
 v0.26.2
 -------
+
 - Limit temperature input to RRTMGP within the lookup table range.
   PR [#3124](https://github.com/CliMA/ClimaAtmos.jl/pull/3124)
 
 v0.26.1
 -------
+
 - Updated RRTMGP compat from 0.15 to 0.16
   PR [#3114](https://github.com/CliMA/ClimaAtmos.jl/pull/3114)
 - ![][badge-🔥behavioralΔ] Removed the filter for shortwave radiative fluxes.
@@ -515,12 +550,14 @@ v0.26.1
 
 v0.26.0
 -------
+
 - ![][badge-💥breaking] Add precipitation fluxes to 1M microphysics output.
   Rename col_integrated_rain (and snow) to surface_rain_flux (and snow)
   PR [#3084](https://github.com/CliMA/ClimaAtmos.jl/pull/3084).
 
 v0.25.0
 -------
+
 - ![][badge-💥breaking] Remove reference state from the dycore and the
   relevant config. PR [#3074](https://github.com/CliMA/ClimaAtmos.jl/pull/3074).
 - Make prognostic and diagnostic EDMF work with 1-moment microphysics on GPU
@@ -530,20 +567,23 @@ v0.25.0
 
 v0.24.2
 -------
+
 - ![][badge-🔥behavioralΔ] Fixed incorrect surface fluxes for uh. PR [#3064]
-  (https://github.com/CliMA/ClimaAtmos.jl/pull/3064).
+  (<https://github.com/CliMA/ClimaAtmos.jl/pull/3064>).
 
 v0.24.1
 -------
 
 v0.24.0
 -------
+
 - ![][badge-💥breaking]. CPU/GPU runs can now share the same yaml files. The driver now calls `AtmosConfig` via `(; config_file, job_id) = ClimaAtmos.commandline_kwargs(); config = ClimaAtmos.AtmosConfig(config_file; job_id)`, which recovers the original behavior. PR [#2994](https://github.com/CliMA/ClimaAtmos.jl/pull/2994), issue [#2651](https://github.com/CliMA/ClimaAtmos.jl/issues/2651).
 - Move config files for gpu jobs on ci to config/model_configs/.
   PR [#2948](https://github.com/CliMA/ClimaAtmos.jl/pull/2948).
 
 v0.23.0
 -------
+
 - ![][badge-✨feature/enhancement]![][badge-💥breaking]. Use
   [ClimaUtilities](https://github.com/CliMA/ClimaUtilities.jl) for
   `TimeVaryingInputs` to read in prescribed aerosol mass concentrations. This PR
@@ -561,6 +601,7 @@ v0.23.0
 
 v0.22.1
 -------
+
 - ![][badge-🚀performance] Reduced the number of allocations in the NetCDF
   writer. PRs [#2772](https://github.com/CliMA/ClimaAtmos.jl/pull/2772),
   [#2773](https://github.com/CliMA/ClimaAtmos.jl/pull/2773).
@@ -581,7 +622,6 @@ Contributors are welcome to begin the description of changelog items with badge(
 -->
 
 [badge-🔥behavioralΔ]: https://img.shields.io/badge/🔥behavioralΔ-orange.svg
-[badge-🤖precisionΔ]: https://img.shields.io/badge/🤖precisionΔ-black.svg
 [badge-💥breaking]: https://img.shields.io/badge/💥BREAKING-red.svg
 [badge-🚀performance]: https://img.shields.io/badge/🚀performance-green.svg
 [badge-✨feature/enhancement]: https://img.shields.io/badge/feature/enhancement-blue.svg

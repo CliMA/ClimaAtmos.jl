@@ -1,4 +1,4 @@
-343
+344
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+344
+- Unify cloud fraction and microphysics quadrature via a shared sgs_moments
+  pre-pass; replace Sommeria-Deardorff cloud fraction with hybrid logistic-CDF;
+  use shape-function partition in 1M microphysics for exact mass conservation.
+
 343
 - Add three new reproducibility tests for 1M prognostic EDMFX SCM cases
   (RICO, TRMM, DYCOMS-RF02); unify and clean up their configurations.

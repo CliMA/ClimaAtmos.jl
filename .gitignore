@@ -56,4 +56,5 @@ Artifacts.toml
 AGENTS.md
 MEMORY.md
 .agents
+# Claude Code worktrees
 .claude/worktrees/
