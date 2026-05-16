@@ -413,7 +413,14 @@ function edmfx_sgs_mass_flux_tendency!(
                     ᶜρʲs.:(1), ᶠu³_diff, ᶜa_scalar, dt, edmfx_tracer_upwinding,
                 )
                 ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-                @. ᶜρχₜ += vtt
+                # DIAGNOSTIC EXPERIMENT (isolate SGS flux as blowup source).
+                # If output matches output_0031 (EDMF-off baseline, ~1e-9 kg/kg
+                # physical), the remaining blowup originates in this tendency
+                # despite the conservative divergence math. If output still
+                # blows up, the bug is upstream (horizontal advection without
+                # the SEM quasi-monotone limiter, emission, or mean-flow vertical
+                # advection). Restore the `@. ᶜρχₜ += vtt` line after the test.
+                # @. ᶜρχₜ += vtt
             end
             SSLT_DIAG_COUNTER[] += 1
         end
