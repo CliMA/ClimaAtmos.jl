@@ -1240,7 +1240,25 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                             χ_prev_level,
                             χʲ_prev_level,
                         )
-                    @. χʲ_level = ifelse(kill_updraft, χ_level, ρaʲu³ʲ_dataq_ / ρaʲu³ʲ_data)
+                    # Hull projection (TVD safeguard) for passive sea salt tracer.
+                    # Sea salt has no in-updraft source, so by the maximum principle
+                    # the new updraft value must lie in the convex hull of the inputs
+                    # at the previous level — environment χ̄_{i-1} and updraft χʲ_{i-1}.
+                    # The discrete entr/detr formula can violate this when the
+                    # χʲ_prev coefficient (J_h·u³ʲ − J_pℓ·(δ+ϵₜ)) turns negative,
+                    # producing out-of-hull χʲ that drives the SGS-flux blowup
+                    # observed in output_0035 et al. The clamp is conservative for
+                    # grid-mean ρχ because the SGS-flux tendency uses ᶜadvdivᵥ with
+                    # zero-flux top/bottom BCs (column-integrated mass unchanged).
+                    @. χʲ_level = ifelse(
+                        kill_updraft,
+                        χ_level,
+                        clamp(
+                            ρaʲu³ʲ_dataq_ / ρaʲu³ʲ_data,
+                            min(χ_prev_level, χʲ_prev_level),
+                            max(χ_prev_level, χʲ_prev_level),
+                        ),
+                    )
                 end
             end
 
