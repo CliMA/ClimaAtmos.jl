@@ -45,30 +45,26 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         (; ᶜuʲs) = p.precomputed
     end
 
-    @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, 1)
+    @. Yₜ.c.ρ -= wdivₕ(Y.c.ρ * ᶜu)
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= split_divₕ(
-                Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j),
-                1,
-            )
+            @. Yₜ.c.sgsʲs.:($$j).ρa -= wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
         end
     end
 
     (; ᶜh_tot) = p.precomputed
-    @. Yₜ.c.ρe_tot -= split_divₕ(Y.c.ρ * ᶜu, ᶜh_tot)
+    @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).mse -=
-                split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).mse) -
-                Y.c.sgsʲs.:($$j).mse * split_divₕ(ᶜuʲs.:($$j), 1)
+                wdivₕ(Y.c.sgsʲs.:($$j).mse * ᶜuʲs.:($$j)) -
+                Y.c.sgsʲs.:($$j).mse * wdivₕ(ᶜuʲs.:($$j))
         end
     end
 
     if use_prognostic_tke(p.atmos.turbconv_model)
-        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        @. Yₜ.c.ρtke -= split_divₕ(Y.c.ρ * ᶜu, ᶜtke)
+        @. Yₜ.c.ρtke -= wdivₕ(Y.c.ρtke * ᶜu)
     end
 
     (; ᶜq_tot_nonneg) = p.precomputed
@@ -77,15 +73,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
-    ᶜθ_v_diff = @. lazy(ᶜθ_v - ᶜθ_vr)
-    # split form pressure gradient: 0.5 * cp_d * [θv ∇Π + ∇(θv Π) - Π∇θv]
-    @. Yₜ.c.uₕ -= C12(
-        gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) +
-        cp_d *
-        (
-            ᶜθ_v_diff * gradₕ(ᶜΠ) + gradₕ(ᶜθ_v_diff * ᶜΠ) - ᶜΠ * gradₕ(ᶜθ_v_diff)
-        ) / 2,
-    )
+    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) + cp_d * (ᶜθ_v - ᶜθ_vr) * gradₕ(ᶜΠ))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end
@@ -122,39 +110,38 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     end
 
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
-        ᶜχ = @. lazy(specific(Y.c.:($$ρχ_name), Y.c.ρ))
-        @. Yₜ.c.:($$ρχ_name) -= split_divₕ(Y.c.ρ * ᶜu, ᶜχ)
+        @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_tot) -
-                Y.c.sgsʲs.:($$j).q_tot * split_divₕ(ᶜuʲs.:($$j), 1)
+                wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
+                Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
             if p.atmos.microphysics_model isa Union{
                 NonEquilibriumMicrophysics1M,
                 NonEquilibriumMicrophysics2M,
             }
                 @. Yₜ.c.sgsʲs.:($$j).q_lcl -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_lcl) -
-                    Y.c.sgsʲs.:($$j).q_lcl * split_divₕ(ᶜuʲs.:($$j), 1)
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_lcl * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).q_lcl * wdivₕ(ᶜuʲs.:($$j))
                 @. Yₜ.c.sgsʲs.:($$j).q_icl -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_icl) -
-                    Y.c.sgsʲs.:($$j).q_icl * split_divₕ(ᶜuʲs.:($$j), 1)
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_icl * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).q_icl * wdivₕ(ᶜuʲs.:($$j))
                 @. Yₜ.c.sgsʲs.:($$j).q_rai -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_rai) -
-                    Y.c.sgsʲs.:($$j).q_rai * split_divₕ(ᶜuʲs.:($$j), 1)
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_rai * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).q_rai * wdivₕ(ᶜuʲs.:($$j))
                 @. Yₜ.c.sgsʲs.:($$j).q_sno -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_sno) -
-                    Y.c.sgsʲs.:($$j).q_sno * split_divₕ(ᶜuʲs.:($$j), 1)
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_sno * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).q_sno * wdivₕ(ᶜuʲs.:($$j))
             end
             if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
                 @. Yₜ.c.sgsʲs.:($$j).n_lcl -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_lcl) -
-                    Y.c.sgsʲs.:($$j).n_lcl * split_divₕ(ᶜuʲs.:($$j), 1)
+                    wdivₕ(Y.c.sgsʲs.:($$j).n_lcl * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).n_lcl * wdivₕ(ᶜuʲs.:($$j))
                 @. Yₜ.c.sgsʲs.:($$j).n_rai -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_rai) -
-                    Y.c.sgsʲs.:($$j).n_rai * split_divₕ(ᶜuʲs.:($$j), 1)
+                    wdivₕ(Y.c.sgsʲs.:($$j).n_rai * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).n_rai * wdivₕ(ᶜuʲs.:($$j))
             end
         end
     end
