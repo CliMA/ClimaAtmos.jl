@@ -245,6 +245,9 @@ sgs_distribution:
 quadrature_order:
   help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 3"
   value: 3
+water_filling_max_alpha:
+  help: "Maximum water-filling strength α in SGS microphysics (0 disables partition P = λ + α ΔS′; 1 is full). Used when use_sgs_quadrature is true."
+  value: 1.0
 microphysics_n_substeps:
   help: "Number of susbteps for time averaging bulk microphysics tendencies without subgrid-scale quadrature. Default: 3"
   value: 3

@@ -39,12 +39,15 @@ used.
 """
 function ClimaAtmosParameters(config::AtmosConfig)
     pa = config.parsed_args
+    FT = eltype(config)
+    wfα = haskey(pa, "water_filling_max_alpha") ? FT(pa["water_filling_max_alpha"]) : nothing
     return ClimaAtmosParameters(
         config.toml_dict;
         microphysics_model = get_microphysics_model(pa),
         has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),
+        water_filling_max_alpha = wfα,
     )
 end
 

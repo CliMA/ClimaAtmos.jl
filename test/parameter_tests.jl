@@ -57,6 +57,19 @@ end
     end
 end
 
+@testset "water_filling_max_alpha YAML override" begin
+    for α in (0.0, 0.5, 1.0)
+        config = CA.AtmosConfig(
+            Dict("job_id" => "wf_alpha_$(α)", "water_filling_max_alpha" => α);
+            job_id = "wf_alpha_$(α)",
+        )
+        params = CA.ClimaAtmosParameters(config)
+        @test CAP.water_filling_max_alpha(params) == α
+        quad = CA.get_sgs_quadrature(config.parsed_args, params)
+        @test quad.α_max == α
+    end
+end
+
 @testset "TOML Integration" begin
     # Iterate over all TOML files in the package to ensure they load without error
     # This preserves the original test intent but cleanly

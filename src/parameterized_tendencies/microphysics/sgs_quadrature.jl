@@ -210,12 +210,14 @@ struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSam
     dist::D          # distribution type
     T_min::FT        # minimum temperature for physical validity [K]
     q_max::FT        # maximum specific humidity [kg/kg]
+    α_max::FT        # maximum water-filling alpha
     function SGSQuadrature(
         ::Type{FT};
         quadrature_order = 3,
         distribution::D = GaussianSGS(),
         T_min = FT(150),  # Reasonable default for atmospheric applications
         q_max = FT(0.1),  # Maximum humidity: ~100 g/kg (well above physical max)
+        α_max = FT(1),    # Default water-filling alpha
     ) where {FT, D <: AbstractSGSDistribution}
         # GridMeanSGS always uses N=1 (single point at origin)
         N = distribution isa GridMeanSGS ? 1 : quadrature_order
@@ -227,6 +229,7 @@ struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSam
             distribution,
             FT(T_min),
             FT(q_max),
+            FT(α_max),
         )
     end
 end

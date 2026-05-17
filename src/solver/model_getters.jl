@@ -27,7 +27,8 @@ function get_sgs_quadrature(parsed_args, params = nothing)
     quadrature_order = get(parsed_args, "quadrature_order", 2)
     T_min = isnothing(params) ? FT(150) : FT(CAP.T_min_sgs(params))
     q_max = isnothing(params) ? FT(0.1) : FT(CAP.q_max_sgs(params))
-    return SGSQuadrature(FT; quadrature_order, distribution, T_min, q_max)
+    α_max = isnothing(params) ? FT(1) : FT(CAP.water_filling_max_alpha(params))
+    return SGSQuadrature(FT; quadrature_order, distribution, T_min, q_max, α_max)
 end
 
 function get_insolation_form(parsed_args; setup_type = nothing)

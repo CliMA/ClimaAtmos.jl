@@ -11,7 +11,8 @@ import StaticArrays as SA
     ClimaAtmosParameters(FT::AbstractFloat)
     ClimaAtmosParameters(toml_dict; microphysics_model = nothing,
                                     has_non_orographic_gw = false,
-                                    has_orographic_gw = false)
+                                    has_orographic_gw = false,
+                                    water_filling_max_alpha = nothing)
 
 Construct the parameter set for any ClimaAtmos configuration.
 
@@ -28,6 +29,7 @@ function ClimaAtmosParameters(
     microphysics_model = nothing,
     has_non_orographic_gw::Bool = false,
     has_orographic_gw::Bool = false,
+    water_filling_max_alpha = nothing,
 ) where {TD <: CP.ParamDict}
     FT = CP.float_type(toml_dict)
 
@@ -98,6 +100,15 @@ function ClimaAtmosParameters(
 
     parameters =
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
+
+    # Default water-filling max alpha to 1 if not specified
+    if !haskey(parameters, :water_filling_max_alpha)
+        parameters = merge(parameters, (; water_filling_max_alpha = FT(1)))
+    end
+    if !isnothing(water_filling_max_alpha)
+        parameters = merge(parameters, (; water_filling_max_alpha = FT(water_filling_max_alpha)))
+    end
+
     return CAP.ClimaAtmosParameters{
         FT,
         TP,

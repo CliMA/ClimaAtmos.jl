@@ -191,6 +191,25 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     dt::FT
     nsubs::Int
     args::Args
+    λ::FT
+    α::FT
+    S_mean::FT
+    lf::FT # this should really be created on the fly
+    scale_pos::FT
+    use_water_filling_partition::Bool
+end
+function Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, T_mean, q_lcl, q_icl, q_rai, q_sno, dt, nsubs::Int, args::Tuple,
+)
+    FT = typeof(T_mean)
+    q_lcl_nonneg = max(FT(0), q_lcl)
+    q_icl_nonneg = max(FT(0), q_icl)
+    q_cond = q_lcl_nonneg + q_icl_nonneg
+    lf = q_cond > FT(0) ? q_lcl_nonneg / q_cond : TD.liquid_fraction(tps, T_mean, q_lcl_nonneg, q_icl_nonneg)
+    return Microphysics1MEvaluator(
+        scheme, mp, tps, ρ, T_mean, q_lcl_nonneg, q_icl_nonneg, q_rai, q_sno,
+        dt, nsubs, args, FT(0), FT(1), FT(0), lf, FT(1), false,
+    )
 end
 @inline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
     FT = typeof(eval.ρ)
@@ -198,11 +217,21 @@ end
     # Ensure non-negative and clamp to physical bounds
     q_tot_hat = max(FT(0), q_tot_hat)
 
-    # Call CloudMicrophysics point-wise tendencies
-    # Average tendencies over dt with nsubs substeps
+    q_lcl_hat = eval.q_lcl
+    q_icl_hat = eval.q_icl
+    # Water-filling partition: P = λ + α ΔS′; sub-capacity uses uniform scale_pos = q_cond / q_c(μ, A).
+    if eval.use_water_filling_partition
+        q_cond = qcond_hat_water_filling(
+            eval.tps, eval.ρ, q_tot_hat, T_hat, eval.S_mean, eval.λ, eval.α;
+            scale_pos=eval.scale_pos,
+        )
+        q_lcl_hat = eval.lf * q_cond
+        q_icl_hat = (one(FT) - eval.lf) * q_cond
+    end
+
     return BMT.average_bulk_microphysics_tendencies(
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        eval.q_lcl, eval.q_icl, eval.q_rai, eval.q_sno, eval.dt, eval.nsubs, eval.args...,
+        q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno, eval.dt, eval.nsubs, eval.args...,
     )
 end
 
@@ -252,6 +281,9 @@ NamedTuple with microphysics source terms:
     )
     return local_tendency
 end
+
+@inline get_max_water_filling_alpha(sgs_quad) = sgs_quad.α_max # this could be a function one day of e.g. local microphysics rates, species, turbulence, etc
+
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
     scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq, dt, nsubs, args...,
@@ -262,10 +294,21 @@ end
     q_rai_nonneg = max(0, q_rai)
     q_sno_nonneg = max(0, q_sno)
 
-    # Create functor
+    # Water-filling: threshold λ = μ + λ₀ with λ₀ ≥ 0; partition P = λ + α ΔS′.
+    q_cond_mean = q_lcl_nonneg + q_icl_nonneg
+    lf = q_cond_mean > 0 ? q_lcl_nonneg / q_cond_mean : zero(eltype(q_lcl_nonneg))
+    α = get_max_water_filling_alpha(sgs_quad)
+    σ_S = compute_sigma_S(thp, ρ, q_tot_nonneg, T, q′q′, T′T′, corr_Tq; lf=lf)
+    q_sat_mean = TD.q_vap_saturation(thp, T, ρ)
+    μ = q_tot_nonneg - q_sat_mean
+    σ_α = α * σ_S
+    λ, scale_pos = water_filling_λ_scale_pos(
+        q_cond_mean, μ, σ_α, α, thp, ρ, q_tot_nonneg, T, q′q′, T′T′, corr_Tq; iters = 1, lf,
+    )
+
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ, T, q_lcl_nonneg, q_icl_nonneg,
-        q_rai_nonneg, q_sno_nonneg, dt, nsubs, args,
+        q_rai_nonneg, q_sno_nonneg, dt, nsubs, args, λ, α, μ, lf, scale_pos, true,
     )
     # Integrate over quadrature points using functor (GPU-safe, no closure)
     local_tendency = integrate_over_sgs(

@@ -180,6 +180,8 @@ Base.@kwdef struct ClimaAtmosParameters{
     fixed_cloud_ice_terminal_velocity::FT
     fixed_rain_terminal_velocity::FT
     fixed_snow_terminal_velocity::FT
+    # Water-filling parameter
+    water_filling_max_alpha::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT

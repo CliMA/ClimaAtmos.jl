@@ -142,10 +142,10 @@ import ClimaAtmos: limit_sink
                 q_sno = FT(0.00005)
                 dt = FT(60.0)
 
-                result = BMT.average_bulk_microphysics_tendencies(
+                result = BMT.bulk_microphysics_tendencies(
                     BMT.Microphysics1Moment(),
                     mp, thp, ρ, T,
-                    q_tot, q_liq, q_ice, q_rai, q_sno, dt,
+                    q_tot, q_liq, q_ice, q_rai, q_sno,
                 )
 
                 @testset "return type" begin
@@ -253,9 +253,9 @@ import ClimaAtmos: limit_sink
                     q_tot_hat = q_sat_mean + FT(0.001)
                     result = eval_sub(T_mean, q_tot_hat)
 
-                    res_expected = BMT.average_bulk_microphysics_tendencies(
+                    res_expected = BMT.bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
-                        q_tot_hat, FT(0), FT(0), FT(0), FT(0), FT(60), nsubs_quad,
+                        q_tot_hat, FT(0), FT(0), FT(0), FT(0),
                     )
                     @test result.dq_lcl_dt ≈ res_expected.dq_lcl_dt rtol = FT(1e-4)
                     @test result.dq_icl_dt ≈ res_expected.dq_icl_dt rtol = FT(1e-4)
@@ -277,10 +277,10 @@ import ClimaAtmos: limit_sink
 
                     # At grid mean: should recover q_cond_mean (zero-variance)
                     result_mean = eval_sat(T_mean, q_tot_sat)
-                    res_direct = BMT.average_bulk_microphysics_tendencies(
+                    res_direct = BMT.bulk_microphysics_tendencies(
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
                         q_tot_sat, λ * excess_sat,
-                        (1 - λ) * excess_sat, FT(0), FT(0), FT(60), nsubs_quad,
+                        (1 - λ) * excess_sat, FT(0), FT(0),
                     )
                     @test result_mean.dq_lcl_dt ≈ res_direct.dq_lcl_dt rtol = FT(1e-4)
                     @test result_mean.dq_icl_dt ≈ res_direct.dq_icl_dt rtol = FT(1e-4)

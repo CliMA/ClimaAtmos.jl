@@ -20,6 +20,9 @@ include("tendency_limiters.jl")
 # Cloud diagnostics
 include("cloud_fraction.jl")
 
+# Water-filling λ / scale_pos (used by microphysics_wrappers)
+include("water_filling_solver.jl")
+
 # Microphysics processes
 include("microphysics_wrappers.jl")
 include("tendency.jl")
