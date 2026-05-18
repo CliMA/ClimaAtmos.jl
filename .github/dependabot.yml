@@ -1,19 +1,21 @@
 # https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
 # Julia support: https://discourse.julialang.org/t/psa-github-dependabot-now-supports-julia/134997
-version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/" # Location of package manifests
-    schedule:
-      interval: "weekly"
-  - package-ecosystem: "julia"
-    directories: 
-      - "/"
-      - ".buildkite"  # TODO: remove this if/when we move to [workspaces]
-    schedule:
-      interval: "weekly"
-      day: "wednesday"
-    groups: # groups all julia package updates into a single PR
-      all-julia-packages:
-        patterns:
-          - "*"
+- directory: /
+  ignore:
+  - dependency-name: "github/gh-aw-actions/**" # Managed by gh aw compile. Version-locked to the gh-aw compiler; do not bump.
+  package-ecosystem: github-actions
+  schedule:
+    interval: weekly
+- directories:
+  - /
+  - .buildkite
+  groups:
+    all-julia-packages:
+      patterns:
+      - "*"
+  package-ecosystem: julia
+  schedule:
+    day: wednesday
+    interval: weekly
+version: 2
