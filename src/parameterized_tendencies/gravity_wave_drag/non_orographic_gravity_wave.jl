@@ -71,6 +71,11 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             ),
             gw_deep_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
             gw_cb_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
+            # Beres launch-level state (ρ, z, u, v, level) — per-column,
+            # populated from gw_ztop in compute_tendency!. Kernel uses this
+            # in MODE == :beres; AD99 path ignores it.
+            beres_source_ρ_z_u_v_level =
+                similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT}),
         )
     elseif issphere(axes(Y.c))
 
@@ -163,6 +168,11 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             ),
             gw_deep_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
             gw_cb_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
+            # Beres launch-level state (ρ, z, u, v, level) — per-column,
+            # populated from gw_ztop in compute_tendency!. Kernel uses this
+            # in MODE == :beres; AD99 path ignores it.
+            beres_source_ρ_z_u_v_level =
+                similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT}),
         )
     else
         error("Only sphere and columns are supported")
@@ -286,9 +296,36 @@ function non_orographic_gravity_wave_compute_tendency!(
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
-    # Compute Beres convective heating if enabled
+    # Compute Beres convective heating if enabled. Pass the local
+    # ᶜbuoyancy_frequency (already √ N²) so the routine doesn't have to
+    # re-derive N from the cache (which still holds N² in-place from line 206).
     if !isnothing(p.non_orographic_gravity_wave.gw_beres_source)
-        compute_beres_convective_heating!(Y, p)
+        compute_beres_convective_heating!(Y, p, ᶜbuoyancy_frequency)
+
+        # Per-column Beres launch level: lowest model level with z ≥ gw_ztop.
+        # Beres' source spectrum B₀(c) is the far-field flux radiated above the
+        # heating layer, so the correct launch level is the top of the
+        # convective envelope (gw_ztop) — NOT the AD99 fixed source_pressure
+        # level. The AD99 source_level remains as-is for the AD99 spectrum.
+        # When Beres is inactive in a column, gw_ztop = 0 and the bottom level
+        # is picked; the spectrum is zero anyway so the choice is irrelevant.
+        (; gw_ztop, beres_source_ρ_z_u_v_level) = p.non_orographic_gravity_wave
+        beres_input = Base.Broadcast.broadcasted(
+            tuple, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
+        )
+        Operators.column_reduce!(
+            beres_source_ρ_z_u_v_level,
+            beres_input;
+            init = (FT(0), FT(-Inf), FT(0), FT(0), FT(0)),
+        ) do (ρ_prev, z_prev, u_prev, v_prev, level_prev),
+        (ρ, z, u, v, level, ztop)
+            # Take the first level (going up) whose z meets/exceeds ztop.
+            if (z_prev < ztop) && (z >= ztop)
+                return (ρ, z, u, v, level)
+            else
+                return (ρ_prev, z_prev, u_prev, v_prev, level_prev)
+            end
+        end
     end
 
     uforcing .= 0
@@ -317,13 +354,24 @@ function non_orographic_gravity_wave_compute_tendency!(
 end
 
 """
-    compute_beres_convective_heating!(Y, p)
+    compute_beres_convective_heating!(Y, p, ᶜN)
 
 Extract convective heating properties from EDMF for the Beres (2004) source spectrum.
 Computes per-column: Q0 (max heating rate), h (heating depth), u_heat/v_heat (mean wind),
 N_source (buoyancy freq), and beres_active flag.
+
+The convective envelope is `[z_bot, z_top]` where
+  * `z_top` = highest level with updraft area fraction above `1e-3`,
+  * `z_bot` = lowest level with `z ≥ z_bot_floor` AND `Q_conv > z_bot_Q_threshold`.
+The altitude floor is required because EDMF Q_conv has a strong PBL/dry-thermal
+signal below ~1 km that would otherwise drag z_bot to the surface (see audit Q4).
+
+`ᶜN` is the cell-centre buoyancy frequency N (s⁻¹) — passed in directly because
+the cached `ᶜbuoyancy_frequency` field still holds N² from the in-place write
+in `non_orographic_gravity_wave_compute_tendency!` and shouldn't be re-sqrt'd
+inside this routine.
 """
-function compute_beres_convective_heating!(Y, p)
+function compute_beres_convective_heating!(Y, p, ᶜN)
     (; turbconv_model) = p.atmos
     n_updrafts = n_mass_flux_subdomains(turbconv_model)
 
@@ -349,7 +397,6 @@ function compute_beres_convective_heating!(Y, p)
         gw_reduce_result,
         gw_deep_count,
         gw_cb_count,
-        ᶜbuoyancy_frequency,
     ) = p.non_orographic_gravity_wave
 
     FT = Spaces.undertype(axes(Y.c))
@@ -380,10 +427,8 @@ function compute_beres_convective_heating!(Y, p)
         ᶜρaʲs_all = p.precomputed.ᶜρaʲs
     end
 
-    # Compute Q_conv, max updraft velocity, and total area fraction in one pass.
-    ᶜw_up = p.scratch.ᶜtemp_scalar_3
+    # Compute Q_conv and total area fraction in one pass.
     ᶜa_up = p.scratch.ᶜtemp_scalar_4
-    ᶜw_up .= FT(0)
     ᶜa_up .= FT(0)
     for j in 1:n_updrafts
         # Velocity anomaly at faces (contravariant)
@@ -415,8 +460,7 @@ function compute_beres_convective_heating!(Y, p)
         # Convert from W/m³ to heating rate K/s
         @. ᶜQ_conv += vtt / (ᶜρ * cp_d)
 
-        # Max updraft velocity and total area fraction
-        @. ᶜw_up = max(ᶜw_up, w_component(Geometry.WVector(ᶜuʲs.:($$j))))
+        # Total updraft area fraction (used to set z_top below)
         @. ᶜa_up += ifelse(ᶜρʲs.:($$j) > eps(FT), ᶜρaʲ / ᶜρʲs.:($$j), FT(0))
     end
 
@@ -427,42 +471,50 @@ function compute_beres_convective_heating!(Y, p)
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
     # Pass 1: find convective envelope [z_bot, z_top].
-    # z_peak: height of max updraft velocity (convective core)
-    # z_top: highest level where area fraction > threshold (plume top)
-    # z_bot = z_top - 2*z_peak, clamped to ≥ 3 km (above PBL)
+    #   z_top: highest level where updraft area fraction > a_thresh (plume top).
+    #   z_bot: lowest level above z_bot_floor where Q_conv > Q_threshold
+    #          (deep-convective heating, not PBL/dry-thermal contamination — the
+    #          floor is essential because EDMF Q_conv has a strong PBL signal
+    #          below ~1 km in the tropics; see audit Q4).
     result_field = gw_reduce_result
-    input1 = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜw_up, ᶜa_up)
-    # Accumulator: (w_max, z_peak, z_top, _unused, _unused, _unused)
-    reduce_init =
-        (FT(0), FT(0), FT(-Inf), FT(0), FT(0), FT(0))
-    let _a_thresh = FT(1e-3)
+    input1 = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜa_up, ᶜQ_conv)
+    # Accumulator: (z_top, z_bot_raw, _3, _4, _5, _6). Sentinels:
+    #   z_top  = -Inf → no level qualified
+    #   z_bot  = +Inf → no level qualified
+    reduce_init = (FT(-Inf), FT(Inf), FT(0), FT(0), FT(0), FT(0))
+    let _a_thresh = FT(1e-3),
+        _Q_thresh = gw_beres_source.z_bot_Q_threshold,
+        _z_floor = gw_beres_source.z_bot_floor
+
         Operators.column_reduce!(
             result_field,
             input1;
             init = reduce_init,
-        ) do (w_max, z_peak_prev, z_top_prev, _4, _5, _6), (z, w, a)
-            # Track height of maximum updraft velocity
-            new_peak = w > w_max
-            w_best = ifelse(new_peak, w, w_max)
-            z_peak = ifelse(new_peak, z, z_peak_prev)
-            # Track highest level where area fraction exceeds threshold
+        ) do (z_top_prev, z_bot_prev, _3, _4, _5, _6), (z, a, Q)
             z_top = ifelse(a > _a_thresh, max(z_top_prev, z), z_top_prev)
-            return (w_best, z_peak, z_top, _4, _5, _6)
+            z_bot = ifelse(
+                (z >= _z_floor) & (Q > _Q_thresh),
+                min(z_bot_prev, z),
+                z_bot_prev,
+            )
+            return (z_top, z_bot, _3, _4, _5, _6)
         end
     end
 
-    # Extract results and compute z_bot
-    @. gw_N_source = result_field.:2   # temporarily holds z_peak
-    @. gw_v_heat = result_field.:3     # z_top
-    # z_bot = 2*z_peak - z_top, clamped above 3 km to exclude BL thermals
-    # (mirrors the upper half of the plume below the peak)
-    @. gw_u_heat = max(
-        FT(2) * gw_N_source - gw_v_heat,
-        FT(3000),
+    # Extract z_top, z_bot_raw. Sanitize: if either sentinel survives (no level
+    # qualified), force the envelope to zero so beres_active flips off downstream.
+    # Read the unaltered result_field slots inside ifelse to avoid in-place
+    # ordering hazards (the validity test depends on BOTH slots).
+    @. gw_v_heat = ifelse(
+        isfinite(result_field.:1) & isfinite(result_field.:2),
+        result_field.:1,
+        FT(0),
     )
-    # Sanitize: if z_top was never set (no active updraft), zero everything
-    @. gw_u_heat = ifelse(gw_v_heat < FT(0), FT(0), gw_u_heat)
-    @. gw_v_heat = ifelse(gw_v_heat < FT(0), FT(0), gw_v_heat)
+    @. gw_u_heat = ifelse(
+        isfinite(result_field.:1) & isfinite(result_field.:2),
+        result_field.:2,
+        FT(0),
+    )
     @. gw_h_heat = max(gw_v_heat - gw_u_heat, FT(0))
     @. gw_h_heat = ifelse(isnan(gw_h_heat) | isinf(gw_h_heat), FT(0), gw_h_heat)
 
@@ -479,13 +531,12 @@ function compute_beres_convective_heating!(Y, p)
     #   - Mass-weighted mean wind (u, v) and buoyancy frequency (N)
     # All quantities drawn from the same physical envelope — the continuous
     # convective column from cloud base to plume top.
-    ᶜN = p.scratch.ᶜtemp_scalar
-    @. ᶜN = sqrt(abs(ᶜbuoyancy_frequency))
+    # `ᶜN` is supplied by the caller (already √ N², s⁻¹).
     ᶜΔz = Fields.Δz_field(axes(Y.c))
     # Precompute 3D envelope mask (2D z_bot/z_top broadcast over column)
     ᶜz_bot = gw_u_heat  # 2D field, broadcasts over column via @.
     ᶜz_top = gw_v_heat
-    ᶜin_env = p.scratch.ᶜtemp_scalar_3  # reuse (ᶜw_up no longer needed)
+    ᶜin_env = p.scratch.ᶜtemp_scalar_3  # free scratch (no longer holds ᶜw_up)
     @. ᶜin_env = ifelse((ᶜz >= ᶜz_bot) & (ᶜz <= ᶜz_top), FT(1), FT(0))
     input2 = Base.Broadcast.broadcasted(
         tuple,
@@ -611,7 +662,16 @@ function non_orographic_gravity_wave_forcing(
         gw_v_heat,
         gw_N_source,
         gw_beres_source,
+        beres_source_ρ_z_u_v_level,
     ) = p.non_orographic_gravity_wave
+
+    # Beres launch-level state (per-column). Always extracted — even in
+    # AD99-only mode the values flow through the kernel input tuple, but the
+    # MODE == :ad99 branch ignores them.
+    beres_ρ_source = beres_source_ρ_z_u_v_level.:1
+    beres_u_source = beres_source_ρ_z_u_v_level.:3
+    beres_v_source = beres_source_ρ_z_u_v_level.:4
+    beres_source_level = beres_source_ρ_z_u_v_level.:5
 
     # Temporary scratch fields for shifting levels up
     ᶜρ_p1 = p.scratch.ᶜtemp_scalar
@@ -695,6 +755,9 @@ function non_orographic_gravity_wave_forcing(
             gw_h_heat,
             gw_u_heat,
             gw_N_source,
+            beres_source_level,
+            beres_ρ_source,
+            beres_u_source,
         ),
     )
     input_v = @. lazy(
@@ -720,6 +783,9 @@ function non_orographic_gravity_wave_forcing(
             gw_h_heat,
             gw_v_heat,
             gw_N_source,
+            beres_source_level,
+            beres_ρ_source,
+            beres_v_source,
         ),
     )
 
@@ -892,13 +958,25 @@ function waveforcing_column_accumulate!(
         h_val,
         u_heat_val,
         N_val,
+        beres_source_level,
+        beres_ρ_source,
+        beres_u_source,
     )
+
+        # MODE-dispatched launch-level state. AD99 keeps its fixed source level
+        # (pressure-based on sphere, height-based in column). Beres launches at
+        # the top of the convective heating envelope (gw_ztop), populated per
+        # column in compute_tendency!. The ternary on MODE is a compile-time
+        # branch via Val{MODE}, so the dead path is elided.
+        source_level_eff = MODE == :ad99 ? source_level : beres_source_level
+        ρ_source_eff = MODE == :ad99 ? ρ_source : beres_ρ_source
+        u_source_eff = MODE == :ad99 ? u_source : beres_u_source
 
         FT1 = typeof(u_kp1)
         kwv = 2.0 * π / ((30.0 * (10.0^ink)) * 1.e3) # wave number of gravity waves
         k2 = kwv * kwv
 
-        fac = FT1(0.5) * (ρ_kp1 / ρ_source) * kwv / bf_kp1
+        fac = FT1(0.5) * (ρ_kp1 / ρ_source_eff) * kwv / bf_kp1
         Hb = (z_kp1 - z_k) / log(ρ_k / ρ_kp1) # density scale height
         alp2 = FT1(0.25) / (Hb * Hb)
         ω_r = sqrt((bf_kp1 * bf_kp1 * k2) / (k2 + alp2)) # omc: (critical frequency that marks total internal reflection)
@@ -908,7 +986,7 @@ function waveforcing_column_accumulate!(
             mask = StaticBitVector{nc}(_ -> true)
             B1 = if MODE == :ad99
                 compute_ad99_spectrum(
-                    c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval,
+                    c, u_source_eff, Bw, Bn, cw, cn, c0, flag, gw_ncval,
                 )
             else # MODE == :beres
                 compute_beres_spectrum(
@@ -922,7 +1000,7 @@ function waveforcing_column_accumulate!(
             B0_or_NaNs, Bsum_or_NaN
         end
 
-        if level >= source_level - 1
+        if level >= source_level_eff - 1
             # check break condition for each gravity waves and calculate momentum flux of breaking gravity waves at each level
             # We use the unrolled_reduce function here because it performs better for parallel execution on the GPU, avoiding type instabilities.
             # However, we need to prevent it from being inlined on the CPU to avoid large compilation times for several test cases in CI.
@@ -937,7 +1015,7 @@ function waveforcing_column_accumulate!(
                     if c_hat == 0.0
                         mask = Base.setindex(mask, false, n)
                     else
-                        c_hat0 = c[n] - u_source
+                        c_hat0 = c[n] - u_source_eff
                         # define the criterion which determines if wave is reflected at this level (test).
                         test = abs(c_hat) * kwv - ω_r
                         if test >= 0.0
@@ -950,7 +1028,7 @@ function waveforcing_column_accumulate!(
                                 # is deposited to the extra level being added so that
                                 # momentum flux is conserved
                                 mask = Base.setindex(mask, false, n)
-                                if level >= source_level
+                                if level >= source_level_eff
                                     fm = fm + B0[n]
                                 end
                             else
@@ -965,7 +1043,7 @@ function waveforcing_column_accumulate!(
                                 Foc = B0[n] / (c_hat)^3 - fac
                                 if Foc >= 0.0 || (c_hat0 * c_hat <= 0.0)
                                     mask = Base.setindex(mask, false, n)
-                                    if level >= source_level
+                                    if level >= source_level_eff
                                         fm = fm + B0[n]
                                     end
                                 end
@@ -980,7 +1058,7 @@ function waveforcing_column_accumulate!(
             # compute the gravity wave momentum flux forcing
             # obtained across the entire wave spectrum at this level.
             eps = if MODE == :ad99
-                calc_intermitency(ρ_source, source_ampl, nk, FT1(Bsum))
+                calc_intermitency(ρ_source_eff, source_ampl, nk, FT1(Bsum))
             else # MODE == :beres
                 # Beres B₀(c) is already in physical momentum-flux units (Q₀², σ_x², α
                 # all bundled in compute_beres_spectrum). No amplitude rescaling needed.
@@ -989,11 +1067,11 @@ function waveforcing_column_accumulate!(
                 #   1/nk        — distributes total flux across nk azimuths
                 # Unlike AD99, no intermittency rescaling by Bsum is needed:
                 # the Beres B₀(c) already encodes the physical Q₀ amplitude.
-                FT1(1.0) / (ρ_source * FT1(nk))
+                FT1(1.0) / (ρ_source_eff * FT1(nk))
             end
-            if level >= source_level
+            if level >= source_level_eff
                 rbh = sqrt(ρ_k * ρ_kp1)
-                wave_forcing = (ρ_source / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
+                wave_forcing = (ρ_source_eff / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
             else
                 wave_forcing = FT1(0.0)
             end

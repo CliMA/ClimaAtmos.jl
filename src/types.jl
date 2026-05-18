@@ -427,10 +427,15 @@ Parameters for the Beres (2004) convective gravity wave source spectrum.
 When used as the `beres_source` field in `NonOrographicGravityWave`, the
 Beres spectrum replaces the AD Gaussian in tropical columns where EDMF
 convective heating exceeds `Q0_threshold`.
+
+`beres_scale_factor` absorbs the `L⁻²` from Beres (2004) Eq. (30) (where
+`L` ≈ 1000 km is the assumed convective-system length) plus any other
+prefactors not retained explicitly in `_beres_spectrum_single_h`. It is a
+tuning knob, not a derived constant.
 """
 Base.@kwdef struct BeresSourceParams{FT}
     Q0_threshold::FT      # K/s, minimum heating rate to activate Beres
-    beres_scale_factor::FT # dimensionless amplitude scaling
+    beres_scale_factor::FT # dimensionless; absorbs L⁻² + other prefactors — see docstring
     σ_x::FT              # m, convective cell horizontal half-width
     ν_min::FT            # 1/s, min frequency (period ~120 min)
     ν_max::FT            # 1/s, max frequency (period ~10 min)
@@ -438,6 +443,8 @@ Base.@kwdef struct BeresSourceParams{FT}
     n_h_avg::Int = 1     # number of h values to average over (1 = no averaging)
     Δh_frac::FT = FT(0.1) # fractional half-range for h averaging: h ± Δh_frac * h
     h_heat_min::FT = FT(1000.0) # m, minimum heating depth to activate (filters shallow convection)
+    z_bot_Q_threshold::FT = FT(1.157e-5) # K/s, min Q_conv to count as envelope bottom (≈ 1 K/day)
+    z_bot_floor::FT = FT(2000.0) # m, minimum allowed z_bot (excludes PBL turbulence in Q_conv)
 
     function BeresSourceParams{FT}(args...) where {FT}
         obj = new{FT}(args...)

@@ -315,6 +315,10 @@ function get_non_orographic_gravity_wave_model(
                 ν_max = FT(parsed_args["beres_nu_max"]),
                 n_ν = Int(parsed_args["beres_n_nu"]),
                 h_heat_min = FT(parsed_args["beres_h_heat_min"]),
+                n_h_avg = Int(parsed_args["beres_n_h_avg"]),
+                Δh_frac = FT(parsed_args["beres_delta_h_frac"]),
+                z_bot_Q_threshold = FT(parsed_args["beres_z_bot_Q_threshold"]),
+                z_bot_floor = FT(parsed_args["beres_z_bot_floor"]),
             )
         else
             nothing

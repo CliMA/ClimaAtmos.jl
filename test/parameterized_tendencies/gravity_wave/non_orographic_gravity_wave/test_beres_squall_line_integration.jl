@@ -27,7 +27,7 @@ import ClimaCore.Fields as Fields
     config_files = [
         joinpath(
             @__DIR__,
-            "../../../../config/longrun_configs/longrun_aquaplanet_allsky_diagedmf_0M.yml",
+            "../../../../config/longrun_configs/longrun_aquaplanet_allsky_progedmf_0M.yml",
         ),
         joinpath(
             @__DIR__,
