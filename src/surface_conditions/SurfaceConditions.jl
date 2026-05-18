@@ -5,6 +5,7 @@ import ..DryModel
 import ..ZonallySymmetricSST
 import ..RCEMIPIISST
 import ..ExternalTVColumnSST
+import ..ARMVARANALTimeVaryingSST
 import ..SlabOceanSST
 import ..PrescribedSST
 import ..CT1, ..CT2, ..C12, ..CT12, ..C3

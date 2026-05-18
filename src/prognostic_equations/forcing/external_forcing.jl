@@ -9,6 +9,10 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import NCDatasets as NC
 import Interpolations as Intp
+import Dates
+using Statistics: mean
+import ClimaUtilities.TimeVaryingInputs
+import ClimaUtilities.TimeVaryingInputs: TimeVaryingInput, evaluate!
 
 """
     interp_vertical_prof(x, xp, fp)
@@ -617,4 +621,418 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
 
     # total specific humidity
     @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt_nudging
+end
+
+################
+# ARM VARANAL Forcing Helpers
+
+"""
+    omega_to_w(omega_hPa_hr, p_hPa, T, q_gkg, params)
+
+Convert pressure vertical velocity (omega, hPa/hr) to geometric vertical velocity (w, m/s).
+
+Uses the hydrostatic approximation: w ≈ -ω / (ρg)
+where ω is in Pa/s and ρ is density.
+
+Arguments:
+- omega_hPa_hr: Pressure vertical velocity in hPa/hr
+- p_hPa: Pressure in hPa
+- T: Temperature in K
+- q_gkg: Water vapor mixing ratio in g/kg
+- params: ClimaAtmos parameters (for physical constants)
+
+Returns vertical velocity w in m/s (positive upward).
+"""
+function omega_to_w(omega_hPa_hr, p_hPa, T, q_gkg, params)
+    g = CAP.grav(params)
+    R_d = CAP.R_d(params)
+    R_v = CAP.R_v(params)
+    
+    omega_Pa_s = omega_hPa_hr .* 100.0 ./ 3600.0 #[hPa/hr] to [Pa/s]
+    p_Pa = p_hPa .* 100.0 #[hPa] to [Pa]
+    q_kgkg = q_gkg ./ 1000.0  #[g/kg] to [kg/kg]
+
+    Tv = T .* (1.0 .+ (R_v / R_d - 1.0) .* q_kgkg)
+    rho = p_Pa ./ (R_d .* Tv)
+
+    return -omega_Pa_s ./ (rho .* g)
+end
+
+"""
+    varanal_2d_interpolator(ds, varname, lev_hPa, params)
+
+Create a 2D (height, time) interpolator for an ARM VARANAL forcing field.
+Returns an interpolator that can be called as `interp(height, time)`.
+
+The VARANAL files have time and lev (pressure) dimensions.
+We convert pressure levels to height using the temperature and humidity profiles.
+
+Arguments:
+- `ds`: NCDataset handle
+- `varname`: Variable name in the file
+- `lev_hPa`: Pressure levels in hPa
+- `params`: ClimaAtmos parameters (for physical constants and FT)
+"""
+function varanal_2d_interpolator(ds, varname, lev_hPa, params)
+    FT = eltype(params)
+    
+    # Read time coordinate - handle DateTime or numeric
+    time_raw = vec(ds["time"][:])
+    time_sec = if eltype(time_raw) <: Dates.DateTime
+        base_time = time_raw[1]
+        FT.([Float64(Dates.value(t - base_time)) / 1000.0 for t in time_raw])
+    else
+        FT.(time_raw)
+    end
+
+    data_lev_time = FT.(Array(ds[varname]))
+    T_lev_time = FT.(Array(ds["T"]))
+    q_lev_time = FT.(Array(ds["q"]))  # g/kg
+    
+    # Use time-mean T and q profiles for height conversion (stable grid)
+    T_mean = vec(mean(T_lev_time, dims = 2))
+    q_mean = vec(mean(q_lev_time, dims = 2)) ./ 1000.0  # g/kg → kg/kg
+    
+    # Convert pressure levels to height (expects Pa, K, kg/kg)
+    thermo_params = CAP.thermodynamics_params(params)
+    z_lev = pressure_to_height(lev_hPa .* 100.0, T_mean, q_mean, thermo_params)
+    
+    # Sort by height (Interpolations.jl requires increasing order)
+    sort_idx = sortperm(z_lev)
+    z_sorted = z_lev[sort_idx]
+    data_sorted = data_lev_time[sort_idx, :]
+    
+    # Create 2D interpolator (height, time) with flat extrapolation
+    Intp.extrapolate(
+        Intp.interpolate((z_sorted, time_sec), data_sorted, Intp.Gridded(Intp.Linear())),
+        Intp.Flat(),
+    )
+end
+
+"""
+    external_forcing_cache(Y, external_forcing::ARMVARANALForcing, params, _)
+
+Prepares cached fields and time interpolators for ARM VARANAL forcing.
+
+Unlike GCM-driven forcing which uses time-mean profiles, ARM VARANAL uses
+**time-varying** forcing that evolves throughout the simulation.
+
+Creates:
+- 2D (height, time) interpolators for advection tendencies, vertical velocity,
+  and state profiles
+- 1D time interpolators for surface temperature and fluxes
+- Working fields updated at each timestep
+"""
+function external_forcing_cache(Y, external_forcing::ARMVARANALForcing, params, _)
+    FT = Spaces.undertype(axes(Y.c))
+    
+    # Working fields - updated each timestep from interpolators
+    ᶜdTdt_hadv = similar(Y.c, FT)
+    ᶜdTdt_vadv = similar(Y.c, FT)
+    ᶜdqtdt_hadv = similar(Y.c, FT)
+    ᶜdqtdt_vadv = similar(Y.c, FT)
+    ᶜT_nudge = similar(Y.c, FT)
+    ᶜqt_nudge = similar(Y.c, FT)
+    ᶜu_nudge = similar(Y.c, FT)
+    ᶜv_nudge = similar(Y.c, FT)
+    ᶜls_subsidence = similar(Y.c, FT)
+    
+    # Nudging timescale fields (constant in time)
+    ᶜinv_τ_wind = similar(Y.c, FT)
+    ᶜinv_τ_scalar = similar(Y.c, FT)
+    
+    # Surface fields
+    surface_ts = similar(
+        Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
+        FT,
+    )
+
+    (; external_forcing_file) = external_forcing
+    
+    # Create all time interpolators from the forcing file
+    interpolators = NC.Dataset(external_forcing_file, "r") do ds
+        # Pressure levels in hPa
+        lev_hPa = Float64.(vec(ds["lev"][:]))
+        
+        # Temperature advection tendencies (K/hr in file)
+        T_adv_h_interp = varanal_2d_interpolator(ds, "T_adv_h", lev_hPa, params)
+        T_adv_v_interp = varanal_2d_interpolator(ds, "T_adv_v", lev_hPa, params)
+        
+        # Moisture advection tendencies (g/kg/hr in file)
+        q_adv_h_interp = varanal_2d_interpolator(ds, "q_adv_h", lev_hPa, params)
+        q_adv_v_interp = varanal_2d_interpolator(ds, "q_adv_v", lev_hPa, params)
+        
+        # Vertical velocity (hPa/hr in file)
+        omega_interp = varanal_2d_interpolator(ds, "omega", lev_hPa, params)
+        
+        # State profiles for nudging
+        T_interp = varanal_2d_interpolator(ds, "T", lev_hPa, params)
+        q_interp = varanal_2d_interpolator(ds, "q", lev_hPa, params)  # g/kg
+        u_interp = varanal_2d_interpolator(ds, "u", lev_hPa, params)
+        v_interp = varanal_2d_interpolator(ds, "v", lev_hPa, params)
+        
+        # Surface skin temperature (degC in file → K)
+        sfc_temp_var = "T_skin" in keys(ds) ? "T_skin" : "T_srf"
+        T_sfc_raw = FT.(vec(ds[sfc_temp_var][:]))
+        T_sfc_data = replace(T_sfc_raw, FT(-9999) => FT(NaN)) .+ FT(273.15)
+        time_raw = vec(ds["time"][:])
+        T_sfc_time = if eltype(time_raw) <: Dates.DateTime
+            FT.([Float64(Dates.value(t - time_raw[1])) / 1000.0 for t in time_raw])
+        else
+            FT.(time_raw)
+        end
+        T_sfc_tvi = TimeVaryingInput(
+            T_sfc_time,
+            T_sfc_data;
+            method = TimeVaryingInputs.LinearInterpolation(TimeVaryingInputs.Flat())
+        )
+
+        # Store height coordinate for omega conversion
+        T_data = FT.(Array(ds["T"]))
+        q_data = FT.(Array(ds["q"]))  # g/kg
+        T_mean = vec(mean(T_data, dims = 2))
+        q_mean = vec(mean(q_data, dims = 2)) ./ 1000.0  # g/kg → kg/kg
+        thermo_params = CAP.thermodynamics_params(params)
+        z_lev = pressure_to_height(lev_hPa .* 100.0, T_mean, q_mean, thermo_params)
+        sort_idx = sortperm(z_lev)
+        z_sorted = z_lev[sort_idx]
+        lev_hPa_sorted = lev_hPa[sort_idx]
+        T_mean_sorted = T_mean[sort_idx]
+        q_mean_sorted = q_mean[sort_idx]
+        
+        (;
+            T_adv_h_interp,
+            T_adv_v_interp,
+            q_adv_h_interp,
+            q_adv_v_interp,
+            omega_interp,
+            T_interp,
+            q_interp,
+            u_interp,
+            v_interp,
+            T_sfc_tvi,
+            z_sorted,
+            lev_hPa_sorted,
+            T_mean_sorted,
+            q_mean_sorted,
+        )
+    end
+    
+    zc_model = Fields.coordinate_field(Y.c).z
+    @. ᶜinv_τ_scalar = compute_gcm_driven_scalar_inv_τ(zc_model, params)
+    @. ᶜinv_τ_wind = compute_gcm_driven_momentum_inv_τ(zc_model, params)
+
+    return (;
+        ᶜdTdt_hadv,
+        ᶜdTdt_vadv,
+        ᶜdqtdt_hadv,
+        ᶜdqtdt_vadv,
+        ᶜT_nudge,
+        ᶜqt_nudge,
+        ᶜu_nudge,
+        ᶜv_nudge,
+        ᶜls_subsidence,
+        surface_ts,
+        # Constant fields
+        ᶜinv_τ_wind,
+        ᶜinv_τ_scalar,
+        # Time interpolators
+        T_adv_h_interp = interpolators.T_adv_h_interp,
+        T_adv_v_interp = interpolators.T_adv_v_interp,
+        q_adv_h_interp = interpolators.q_adv_h_interp,
+        q_adv_v_interp = interpolators.q_adv_v_interp,
+        omega_interp = interpolators.omega_interp,
+        T_interp = interpolators.T_interp,
+        q_interp = interpolators.q_interp,
+        u_interp = interpolators.u_interp,
+        v_interp = interpolators.v_interp,
+        T_sfc_tvi = interpolators.T_sfc_tvi,
+        z_sorted = interpolators.z_sorted,
+        lev_hPa_sorted = interpolators.lev_hPa_sorted,
+        T_mean_sorted = interpolators.T_mean_sorted,
+        q_mean_sorted = interpolators.q_mean_sorted,
+    )
+end
+
+"""
+    update_varanal_forcing_fields!(p, t)
+
+Update ARM VARANAL forcing fields by evaluating time interpolators at current time `t`.
+This is called at the start of each tendency evaluation.
+"""
+function update_varanal_forcing_fields!(p, t)
+    FT = eltype(p.params)
+    (;
+        ᶜdTdt_hadv,
+        ᶜdTdt_vadv,
+        ᶜdqtdt_hadv,
+        ᶜdqtdt_vadv,
+        ᶜT_nudge,
+        ᶜqt_nudge,
+        ᶜu_nudge,
+        ᶜv_nudge,
+        ᶜls_subsidence,
+        T_adv_h_interp,
+        T_adv_v_interp,
+        q_adv_h_interp,
+        q_adv_v_interp,
+        omega_interp,
+        T_interp,
+        q_interp,
+        u_interp,
+        v_interp,
+        z_sorted,
+        lev_hPa_sorted,
+        T_mean_sorted,
+        q_mean_sorted,
+    ) = p.external_forcing
+
+    zc_field = Fields.coordinate_field(p.precomputed.ᶜT).z
+    zc_parent = parent(zc_field)
+    zc_vec = vec(zc_parent)
+    field_shape = size(zc_parent)
+    
+    # Evaluate advection tendencies at current time
+    # T_adv [K/hr] -> [K/s]
+    T_adv_h_at_t = [FT(T_adv_h_interp(z, t) / 3600.0) for z in zc_vec]
+    T_adv_v_at_t = [FT(T_adv_v_interp(z, t) / 3600.0) for z in zc_vec]
+    parent(ᶜdTdt_hadv) .= reshape(T_adv_h_at_t, field_shape)
+    parent(ᶜdTdt_vadv) .= reshape(T_adv_v_at_t, field_shape)
+    
+    # q_adv [g/kg/hr] -> [kg/kg/s]
+    q_adv_h_at_t = [FT(q_adv_h_interp(z, t) / 1000.0 / 3600.0) for z in zc_vec]
+    q_adv_v_at_t = [FT(q_adv_v_interp(z, t) / 1000.0 / 3600.0) for z in zc_vec]
+    parent(ᶜdqtdt_hadv) .= reshape(q_adv_h_at_t, field_shape)
+    parent(ᶜdqtdt_vadv) .= reshape(q_adv_v_at_t, field_shape)
+    
+    # Subsidence: omega [hPa/hr] -> w [m/s]
+    omega_at_t = [omega_interp(z, t) for z in zc_vec]
+    T_at_t = [T_interp(z, t) for z in zc_vec]
+    q_at_t = [q_interp(z, t) for z in zc_vec]  # g/kg
+    # Estimate pressure from height using barometric formula
+    p_at_z = [pressure_from_height(z, z_sorted, lev_hPa_sorted) for z in zc_vec]
+    w_at_t = omega_to_w(omega_at_t, p_at_z, T_at_t, q_at_t, p.params)
+    parent(ᶜls_subsidence) .= reshape(FT.(w_at_t), field_shape)
+    
+    # Nudging targets at current time
+    parent(ᶜT_nudge) .= reshape(FT.([T_interp(z, t) for z in zc_vec]), field_shape)
+    # q [g/kg] -> [kg/kg] for nudging
+    parent(ᶜqt_nudge) .= reshape(FT.([q_interp(z, t) / 1000.0 for z in zc_vec]), field_shape)
+    parent(ᶜu_nudge) .= reshape(FT.([u_interp(z, t) for z in zc_vec]), field_shape)
+    parent(ᶜv_nudge) .= reshape(FT.([v_interp(z, t) for z in zc_vec]), field_shape)
+    
+    return nothing
+end
+
+"""
+    pressure_from_height(z, z_ref, p_ref)
+
+Estimate pressure at height z given reference height and pressure arrays.
+Uses linear interpolation in log(p) vs z.
+"""
+function pressure_from_height(z, z_ref, p_ref_hPa)
+    # Create interpolator for log(p) vs z
+    log_p = log.(p_ref_hPa)
+    sort_idx = sortperm(z_ref)
+    interp = Intp.extrapolate(
+        Intp.interpolate((z_ref[sort_idx],), log_p[sort_idx], Intp.Gridded(Intp.Linear())),
+        Intp.Flat(),
+    )
+    return exp(interp(z))
+end
+
+"""
+    external_forcing_tendency!(Yₜ, Y, p, t, ::ARMVARANALForcing)
+
+Applies time-varying tendencies from ARM VARANAL external forcings.
+
+This includes:
+- Time-varying horizontal and vertical advection tendencies for temperature and moisture
+- Time-varying nudging towards observed profiles
+- Time-varying subsidence (computed from omega)
+
+The tendencies are converted into tendencies for total energy (`ρe_tot`)
+and total specific humidity (`ρq_tot`).
+"""
+function external_forcing_tendency!(Yₜ, Y, p, t, ::ARMVARANALForcing)
+    # Update forcing fields from time interpolators
+    update_varanal_forcing_fields!(p, t)
+    
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜT) = p.precomputed
+    (;
+        ᶜdTdt_hadv,
+        ᶜdTdt_vadv,
+        ᶜdqtdt_hadv,
+        ᶜdqtdt_vadv,
+        ᶜT_nudge,
+        ᶜqt_nudge,
+        ᶜu_nudge,
+        ᶜv_nudge,
+        ᶜls_subsidence,
+        ᶜinv_τ_wind,
+        ᶜinv_τ_scalar,
+    ) = p.external_forcing
+
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜuₕ_nudge = p.scratch.ᶜtemp_C12
+    @. ᶜuₕ_nudge = C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg)
+    @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind
+
+    (; ᶜh_tot, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    # Nudging tendency
+    ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
+    ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
+    @. ᶜdTdt_nudging = -(ᶜT - ᶜT_nudge) * ᶜinv_τ_scalar
+    @. ᶜdqtdt_nudging =
+        -(specific(Y.c.ρq_tot, Y.c.ρ) - ᶜqt_nudge) * ᶜinv_τ_scalar
+
+    # Total advection = horizontal + vertical
+    ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
+    ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
+    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_vadv + ᶜdTdt_nudging
+    @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_vadv + ᶜdqtdt_nudging
+
+    T_0 = TD.Parameters.T_0(thermo_params)
+    Lv_0 = TD.Parameters.LH_v0(thermo_params)
+    cv_v = TD.Parameters.cv_v(thermo_params)
+    R_v = TD.Parameters.R_v(thermo_params)
+    # Total energy
+    @. Yₜ.c.ρe_tot +=
+        Y.c.ρ * (
+            TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) *
+            ᶜdTdt_sum +
+            (cv_v * (ᶜT - T_0) + Lv_0 - R_v * T_0) * ᶜdqtdt_sum
+        )
+    # Total specific humidity
+    @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt_sum
+
+    # Subsidence tendency
+    ᶠls_subsidence³ = p.scratch.ᶠtemp_CT3
+    @. ᶠls_subsidence³ =
+        ᶠinterp(ᶜls_subsidence * CT3(unit_basis_vector_data(CT3, ᶜlg)))
+    subsidence!(
+        Yₜ.c.ρe_tot,
+        Y.c.ρ,
+        ᶠls_subsidence³,
+        ᶜh_tot,
+        Val{:first_order}(),
+    )
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    subsidence!(
+        Yₜ.c.ρq_tot,
+        Y.c.ρ,
+        ᶠls_subsidence³,
+        ᶜq_tot,
+        Val{:first_order}(),
+    )
+
+    ρe_tot_top = Fields.level(Yₜ.c.ρe_tot, Spaces.nlevels(axes(Y.c)))
+    @. ρe_tot_top = 0.0
+
+    ρq_tot_top = Fields.level(Yₜ.c.ρq_tot, Spaces.nlevels(axes(Y.c)))
+    @. ρq_tot_top = 0.0
+
+    return nothing
 end

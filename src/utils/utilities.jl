@@ -6,6 +6,7 @@ import ClimaCore: Spaces, Topologies, Fields, Geometry
 import LinearAlgebra: norm_sqr
 using Dates: DateTime, @dateformat_str
 import StaticArrays: SVector, SMatrix
+import Thermodynamics.Parameters as TDP
 
 """
     enforce_mass_energy_consistency!(Y, p, ᶜΔρq_tot)
@@ -54,6 +55,54 @@ where:
 - `z` is the height
 """
 geopotential(grav, z) = grav * z
+
+"""
+    pressure_to_height(p, T, q, thermo_params)
+
+Convert pressure levels to approximate geometric height using the hypsometric equation.
+
+Arguments:
+- `p`: Pressure levels in Pa
+- `T`: Temperature profile in K
+- `q`: Specific humidity in kg/kg
+- `thermo_params`: Thermodynamics parameters (for physical constants g, R_d, R_v)
+
+Returns heights in meters above the surface (z[surface] = 0).
+
+Uses virtual temperature: Tv = T * (1 + (R_v/R_d - 1) * q)
+"""
+function pressure_to_height(p, T, q, thermo_params)
+    g = TDP.grav(thermo_params)
+    R_d = TDP.R_d(thermo_params)
+    R_v = TDP.R_v(thermo_params)
+    
+    p_pa = Float64.(p)
+    q_kgkg = Float64.(q)
+    T_K = Float64.(T)
+    
+    # Sort by pressure (descending = surface to TOA)
+    sort_idx = sortperm(p_pa, rev = true)
+    p_sorted = p_pa[sort_idx]
+    T_sorted = T_K[sort_idx]
+    q_sorted = q_kgkg[sort_idx]
+
+    Tv = T_sorted .* (1.0 .+ (R_v / R_d - 1.0) .* q_sorted)
+
+    # Integrate hypsometric equation from surface
+    n = length(p_sorted)
+    z = zeros(n)
+    z[1] = 0.0  # Surface
+    
+    for i in 2:n
+        Tv_mean = 0.5 * (Tv[i-1] + Tv[i])
+        dz = R_d * Tv_mean / g * log(p_sorted[i-1] / p_sorted[i])
+        z[i] = z[i-1] + dz
+    end
+    
+    # Return in original order
+    inv_sort_idx = invperm(sort_idx)
+    return z[inv_sort_idx]
+end
 
 """
     time_from_filename(file)
