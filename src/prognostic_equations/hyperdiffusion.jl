@@ -165,7 +165,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ -= ν₄_vorticity * C12(ᶜ∇⁴u)
     @. Yₜ.f.u₃ -= ν₄_vorticity * ᶠwinterp(ᶜJ * ᶜρ, C3(ᶜ∇⁴u))
 
-    @. Yₜ.c.ρe_tot -= ν₄_scalar * wdivₕ(ᶜρ * gradₕ(ᶜ∇²specific_energy))
+    @. Yₜ.c.ρe_tot -= CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar * wdivₕ(ᶜρ * gradₕ(ᶜ∇²specific_energy))
 
     if (turbconv_model isa AbstractEDMF) && diffuse_tke
         @. Yₜ.c.ρtke -= ν₄_vorticity * wdivₕ(ᶜρ * gradₕ(ᶜ∇²tke))
@@ -307,11 +307,11 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         ν₄_scalar_for_χ =
             ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai)) ?
             ν₄_scalar_for_precip : ν₄_scalar
-        @. ᶜρχₜ -= ν₄_scalar_for_χ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
+        @. ᶜρχₜ -= CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar_for_χ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
 
         # Take into account the effect of total water diffusion on density.
         if ρχ_name == @name(ρq_tot)
-            @. Yₜ.c.ρ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
+            @. Yₜ.c.ρ -= CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
         end
     end
     if turbconv_model isa PrognosticEDMFX

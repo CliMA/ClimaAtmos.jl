@@ -6,3 +6,6 @@ value = 40000.0
 
 [precipitation_timescale]
 value = 120
+
+[tracer_hyperdiffusion_factor]
+value = 1.0

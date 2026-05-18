@@ -20,7 +20,14 @@ const UVW = Geometry.UVWVector
 
 const divₕ = Operators.Divergence()
 const wdivₕ = Operators.WeakDivergence()
-const split_divₕ = Operators.SplitDivergence()
+# const split_divₕ = Operators.SplitDivergence()
+function split_divₕ end
+# General case: ψ is a field
+Base.Broadcast.broadcasted(::typeof(split_divₕ), ρu, ψ) =
+    @. lazy((wdivₕ(ρu * ψ) + ψ * wdivₕ(ρu) + dot(Geometry.Contravariant12Vector(ρu), gradₕ(ψ))) / 2)
+# Scalar case: gradₕ(scalar) = 0, so the formula simplifies
+Base.Broadcast.broadcasted(::typeof(split_divₕ), ρu, ψ::Number) =
+    @. lazy((wdivₕ(ρu * ψ) + ψ * wdivₕ(ρu)) / 2)
 const gradₕ = Operators.Gradient()
 const wgradₕ = Operators.WeakGradient()
 const curlₕ = Operators.Curl()
