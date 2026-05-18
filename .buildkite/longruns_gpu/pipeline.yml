@@ -36,8 +36,8 @@ steps:
 
   - wait
 
-  - group: "helem 30 dycore"
-    steps:
+  # - group: "helem 30 dycore"
+  #   steps:
 
       # - label: ":computer: hydrostatic balance"
       #   command: >
@@ -67,19 +67,19 @@ steps:
       #     CLIMACOMMS_DEVICE: "CUDA"
       #     JOB_NAME: "longrun_dry_baroclinic_wave_he60"
 
-      - label: ":computer: baroclinic wave equilmoist high res"
-        command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze43.yml
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml 
-          --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_moist_baroclinic_wave_he60"
+      # - label: ":computer: baroclinic wave equilmoist high res"
+      #   command: >
+      #     srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
+      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze43.yml
+      #     --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+      #     --job_id $$JOB_NAME
+      #   artifact_paths: "$$JOB_NAME/output_active/*"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_time: 24:00:00
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #     JOB_NAME: "longrun_moist_baroclinic_wave_he60"
 
       # - label: ":computer: dry held-suarez"
       #   command: >
@@ -138,7 +138,7 @@ steps:
       #     CLIMACOMMS_DEVICE: "CUDA"
       #     JOB_NAME: "longrun_aquaplanet_allsky_diagedmf_0M"
 
-      - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf + 0M microphysics"
+      - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf + 1M microphysics"
         command: >
           srun julia --project=.buildkite .buildkite/ci_driver.jl 
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
@@ -149,7 +149,7 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_progedmf_0M"
+          JOB_NAME: "longrun_aquaplanet_allsky_progedmf_1M"
 
   #     - label: ":computer: aquaplanet equilmoist allsky radiation + 0M microphysics + earth topography"
   #       command: >
