@@ -11,6 +11,20 @@ import Thermodynamics as TD
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 import UnrolledUtilities: unrolled_reduce
 
+# Device-conditional function barrier around a single quadrature-point
+# evaluation of `f`. The GPU/CPU choice is carried as a `Val{is_gpu}` flag
+# (resolved on the host from the run device) rather than the device object
+# itself, because `ClimaComms.CUDADevice` is iterable and would be
+# `collect`ed by ClimaCore broadcasting instead of treated as a scalar.
+#
+# `Val{true}` (GPU): `@noinline` prevents the heavy microphysics tendency
+# code from being inlined N² times into the unrolled quadrature loop, which
+# dramatically lowers register pressure and raises occupancy.
+# `Val{false}` (CPU): `@inline` keeps the call byte-identical to the
+# original code so there is no CPU regression.
+@noinline _eval_quad_point(f, x_hat, ::Val{true}) = f(x_hat...)
+@inline _eval_quad_point(f, x_hat, ::Val{false}) = f(x_hat...)
+
 
 # ============================================================================
 # Gauss-Hermite Quadrature
@@ -168,25 +182,21 @@ Base.broadcastable(x::AbstractSGSDistribution) = tuple(x)
 # ============================================================================
 
 """
-    SGSQuadrature{A, W, D, FT} <: AbstractSGSamplingType
+    SGSQuadrature{N, A, W, D, FT} <: AbstractSGSamplingType
 
 Subgrid-scale quadrature configuration for integrating over thermodynamic fluctuations.
 
-The quadrature order is carried in the runtime `N::Int` field rather than as a
-type parameter, so the integration loops in `sum_over_quadrature_points` keep a
-runtime trip count and are not unrolled by the compiler.
-
 # Type Parameters
-- `A`: Type of quadrature nodes (`SVector{MAX_QUADRATURE_ORDER}`)
+- `N`: Quadrature order
+- `A`: Type of quadrature nodes (`SVector`)
 - `W`: Type of quadrature weights (`SVector`)
 - `D`: Distribution type (`<: AbstractSGSDistribution`)
 - `FT`: Floating-point type
 
 # Fields
-- `a::A`: Quadrature nodes (padded to `MAX_QUADRATURE_ORDER`)
-- `w::W`: Quadrature weights (padded to `MAX_QUADRATURE_ORDER`)
+- `a::A`: Quadrature nodes
+- `w::W`: Quadrature weights
 - `dist::D`: Distribution type
-- `N::Int`: Active quadrature order (runtime value, not a type parameter)
 - `T_min::FT`: Minimum temperature for physical validity [K]. Used to clamp
   sampled temperatures in `get_physical_point` to prevent domain errors in
   thermodynamics calculations. Set from ClimaParams `temperature_minimum`.
@@ -208,21 +218,10 @@ rather than being stored in this struct.
 `T_min` and `q_max` are read from ClimaParams (`temperature_minimum` and
 `specific_humidity_maximum`) and passed through at construction time.
 """
-# Maximum supported quadrature order. Nodes/weights are stored in a fixed-size
-# `SVector{MAX_QUADRATURE_ORDER}` so that `SGSQuadrature` has a single concrete
-# type regardless of the order in use. The active order is carried in the
-# runtime `N::Int` field — deliberately *not* a type parameter — so the
-# integration loops in `sum_over_quadrature_points` keep a runtime trip count
-# and are not unrolled by the compiler. Unrolling replicates the heavy per-point
-# `average_bulk_microphysics_tendencies` call N² times in the kernel, which
-# crushes GPU occupancy via register pressure.
-const MAX_QUADRATURE_ORDER = 5
-
-struct SGSQuadrature{A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSamplingType
-    a::A             # quadrature points  (SVector{MAX_QUADRATURE_ORDER,FT}, padded)
-    w::W             # quadrature weights (SVector{MAX_QUADRATURE_ORDER,FT}, padded)
+struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSamplingType
+    a::A             # quadrature points
+    w::W             # quadrature weights
     dist::D          # distribution type
-    N::Int           # active quadrature order (runtime value, not a type param)
     T_min::FT        # minimum temperature for physical validity [K]
     q_max::FT        # maximum specific humidity [kg/kg]
     function SGSQuadrature(
@@ -234,23 +233,12 @@ struct SGSQuadrature{A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSampli
     ) where {FT, D <: AbstractSGSDistribution}
         # GridMeanSGS always uses N=1 (single point at origin)
         N = distribution isa GridMeanSGS ? 1 : quadrature_order
-        N <= MAX_QUADRATURE_ORDER || error(
-            "quadrature_order $N exceeds MAX_QUADRATURE_ORDER $MAX_QUADRATURE_ORDER",
-        )
         a, w = get_quadrature_nodes_weights(distribution, FT, N)
-        # Pad to a fixed length so the struct's concrete type is independent of
-        # N. Entries beyond N are never read (loops are bounded by N).
-        a_pad = SA.SVector{MAX_QUADRATURE_ORDER, FT}(
-            ntuple(i -> i <= N ? FT(a[i]) : zero(FT), MAX_QUADRATURE_ORDER),
-        )
-        w_pad = SA.SVector{MAX_QUADRATURE_ORDER, FT}(
-            ntuple(i -> i <= N ? FT(w[i]) : zero(FT), MAX_QUADRATURE_ORDER),
-        )
-        return new{typeof(a_pad), typeof(w_pad), D, FT}(
-            a_pad,
-            w_pad,
+        a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
+        return new{N, typeof(a), typeof(w), D, FT}(
+            a,
+            w,
             distribution,
-            N,
             FT(T_min),
             FT(q_max),
         )
@@ -262,7 +250,7 @@ end
 
 Return the quadrature order `N`.
 """
-@inline quadrature_order(quad::SGSQuadrature) = quad.N
+@inline quadrature_order(::SGSQuadrature{N}) where {N} = N
 
 # ============================================================================
 # Quadrature Nodes and Weights
@@ -549,10 +537,12 @@ Approximates the integral:
 # Returns
 Weighted sum with the same type as `f(T, q)`.
 """
-function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature)
-    # N is read from the runtime field (not a type parameter) so the loops
-    # below keep a runtime trip count and are NOT unrolled by the compiler.
-    N = quad.N
+function sum_over_quadrature_points(
+    f,
+    get_x_hat,
+    quad::SGSQuadrature{N},
+    is_gpu::Val = Val(false),
+) where {N}
     χ = quad.a
     weights = quad.w
     FT = eltype(χ)
@@ -566,19 +556,29 @@ function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature)
     # saves one full evaluation of `f` per cell (≈ 11% of work at N = 3).
     @inbounds begin
         x_hat = get_x_hat(χ[1], χ[1])
-        inner_sum = f(x_hat...) ⊠ (weights[1] * inv_sqrt_pi)
+        inner_sum =
+            _eval_quad_point(f, x_hat, is_gpu) ⊠ (weights[1] * inv_sqrt_pi)
         for j in 2:N
             x_hat = get_x_hat(χ[1], χ[j])
-            inner_sum = inner_sum ⊞ (f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi))
+            inner_sum =
+                inner_sum ⊞ (
+                    _eval_quad_point(f, x_hat, is_gpu) ⊠
+                    (weights[j] * inv_sqrt_pi)
+                )
         end
         outer_sum = inner_sum ⊠ (weights[1] * inv_sqrt_pi)
 
         for i in 2:N
             x_hat = get_x_hat(χ[i], χ[1])
-            inner_sum = f(x_hat...) ⊠ (weights[1] * inv_sqrt_pi)
+            inner_sum =
+                _eval_quad_point(f, x_hat, is_gpu) ⊠ (weights[1] * inv_sqrt_pi)
             for j in 2:N
                 x_hat = get_x_hat(χ[i], χ[j])
-                inner_sum = inner_sum ⊞ (f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi))
+                inner_sum =
+                    inner_sum ⊞ (
+                        _eval_quad_point(f, x_hat, is_gpu) ⊠
+                        (weights[j] * inv_sqrt_pi)
+                    )
             end
             outer_sum = outer_sum ⊞ (inner_sum ⊠ (weights[i] * inv_sqrt_pi))
         end
@@ -607,7 +607,16 @@ determined by `quad.dist` (see [`get_physical_point`](@ref)).
 # Returns
 Weighted sum ``\\approx E[f(T, q)]`` with the same type as `f(T, q)`.
 """
-function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
+function integrate_over_sgs(
+    f,
+    quad,
+    μ_q,
+    μ_T,
+    q′q′,
+    T′T′,
+    corr_Tq,
+    is_gpu::Val = Val(false),
+)
     σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
 
     # Use functor instead of closure to avoid heap allocations.
@@ -627,7 +636,7 @@ function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
         oftype(μ_T_p, quad.q_max),
     )
 
-    return sum_over_quadrature_points(f, transform, quad)
+    return sum_over_quadrature_points(f, transform, quad, is_gpu)
 end
 
 """
@@ -638,7 +647,16 @@ Simplified grid-mean integration: evaluates `f(μ_T, μ_q)` directly.
 This allows using `GridMeanSGS()` directly without wrapping in `SGSQuadrature`,
 avoiding the need to extract FT from the space. Variances and correlation are ignored.
 """
-@inline function integrate_over_sgs(f, ::GridMeanSGS, μ_q, μ_T, q′q′, T′T′, corr_Tq)
+@inline function integrate_over_sgs(
+    f,
+    ::GridMeanSGS,
+    μ_q,
+    μ_T,
+    q′q′,
+    T′T′,
+    corr_Tq,
+    is_gpu::Val = Val(false),
+)
     return f(μ_T, μ_q)
 end
 
