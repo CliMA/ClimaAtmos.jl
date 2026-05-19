@@ -59,6 +59,9 @@ makedocs(;
 deploydocs(
     repo = "github.com/CliMA/ClimaAtmos.jl.git",
     devbranch = "main",
-    push_preview = true,
+    push_preview = all(
+        !isempty,
+        (get(ENV, "GITHUB_TOKEN", ""), get(ENV, "DOCUMENTER_KEY", "")),
+    ),
     forcepush = true,
 )
