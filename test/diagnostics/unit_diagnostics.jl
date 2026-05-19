@@ -306,7 +306,7 @@ VALID_CASES = [
     # ---------------------------------------------------------------------------
     # no dispatch (universal)
     cases((
-        "rhoa", "ua", "va", "wa", "ta", "thetaa", "ha", "pfull", "zg",
+        "rhoa", "ua", "va", "wa", "ta", "thetaa", "ha", "msea", "pfull", "zg",
         "bgrad", "strain", "cl", "ke", "ts", "tas", "uas", "vas", "tauu", "tauv",
         "hfes", "dsevi", "env_q_tot_variance", "env_temperature_variance",
         "env_q_tot_temperature_covariance", "env_q_tot_temperature_correlation",
