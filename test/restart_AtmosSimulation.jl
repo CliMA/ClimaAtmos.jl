@@ -13,7 +13,7 @@
 
 include("restart_utils.jl")
 
-function amip_target_diagedmf(context, output_dir)
+function amip_target(context, output_dir)
     FT = Float32
     start_date = DateTime(2010, 1, 1)
 
@@ -131,7 +131,7 @@ function amip_target_diagedmf(context, output_dir)
         ode_config,
         surface_setup,
         context,
-        job_id = "amip_target_diagedmf",
+        job_id = "amip_target",
         output_dir)
     simulation = CA.AtmosSimulation{FT}(; args...)
 
@@ -228,6 +228,8 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :data_handler,
             # Covariance fields are recomputed in set_precomputed_quantities!
             :ᶜT′T′, :ᶜq′q′,
+            # Scratch field for prognostic EDMF (uninitialized until tendencies run)
+            :ᶠu₃_tendencyʲs,
             rrtmgp_clear_fix...,
             # Config-specific
             more_ignore...,
@@ -416,9 +418,9 @@ else
     push!(
         TESTING,
         (;
-            amip_target_diagedmf(
+            amip_target(
                 comms_ctx,
-                joinpath(output_dir, "amip_target_diagedmf"),
+                joinpath(output_dir, "amip_target"),
             )...,
             more_ignore = Symbol[],
         ),

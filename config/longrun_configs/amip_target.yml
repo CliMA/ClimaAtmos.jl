@@ -1,5 +1,11 @@
+implicit_sgs_advection: true
+implicit_sgs_mass_flux: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
+implicit_sgs_vertdiff: true
+ode_algo: "ARS222"
 dt_save_state_to_disk: "30days"
-microphysics_model: "0M"
+t_end: "60days"
 rad: "allskywithclear"
 dt_rad: "1hours"
 insolation: "timevarying"
@@ -7,13 +13,16 @@ time_varying_trace_gases: ["CO2", "O3"]
 aerosol_radiation: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05", "OC1", "OC2", "SO4", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
 surface_setup: "DefaultMoninObukhov"
-turbconv: "diagnostic_edmfx"
+turbconv: "prognostic_edmfx"
 prognostic_tke: true
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-t_end: "240days"
-toml: [toml/longrun_aquaplanet_diagedmf.toml]
-netcdf_output_at_levels: true
+microphysics_model: "1M"
+topography: "Earth"
+topo_smoothing: true
+toml: [toml/progedmf_edmfx_1M.toml]
