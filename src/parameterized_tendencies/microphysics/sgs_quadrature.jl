@@ -168,21 +168,25 @@ Base.broadcastable(x::AbstractSGSDistribution) = tuple(x)
 # ============================================================================
 
 """
-    SGSQuadrature{N, A, W, D, FT} <: AbstractSGSamplingType
+    SGSQuadrature{A, W, D, FT} <: AbstractSGSamplingType
 
 Subgrid-scale quadrature configuration for integrating over thermodynamic fluctuations.
 
+The quadrature order is carried in the runtime `N::Int` field rather than as a
+type parameter, so the integration loops in `sum_over_quadrature_points` keep a
+runtime trip count and are not unrolled by the compiler.
+
 # Type Parameters
-- `N`: Quadrature order
-- `A`: Type of quadrature nodes (`SVector`)
+- `A`: Type of quadrature nodes (`SVector{MAX_QUADRATURE_ORDER}`)
 - `W`: Type of quadrature weights (`SVector`)
 - `D`: Distribution type (`<: AbstractSGSDistribution`)
 - `FT`: Floating-point type
 
 # Fields
-- `a::A`: Quadrature nodes
-- `w::W`: Quadrature weights
+- `a::A`: Quadrature nodes (padded to `MAX_QUADRATURE_ORDER`)
+- `w::W`: Quadrature weights (padded to `MAX_QUADRATURE_ORDER`)
 - `dist::D`: Distribution type
+- `N::Int`: Active quadrature order (runtime value, not a type parameter)
 - `T_min::FT`: Minimum temperature for physical validity [K]. Used to clamp
   sampled temperatures in `get_physical_point` to prevent domain errors in
   thermodynamics calculations. Set from ClimaParams `temperature_minimum`.
@@ -204,10 +208,21 @@ rather than being stored in this struct.
 `T_min` and `q_max` are read from ClimaParams (`temperature_minimum` and
 `specific_humidity_maximum`) and passed through at construction time.
 """
-struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSamplingType
-    a::A             # quadrature points
-    w::W             # quadrature weights
+# Maximum supported quadrature order. Nodes/weights are stored in a fixed-size
+# `SVector{MAX_QUADRATURE_ORDER}` so that `SGSQuadrature` has a single concrete
+# type regardless of the order in use. The active order is carried in the
+# runtime `N::Int` field — deliberately *not* a type parameter — so the
+# integration loops in `sum_over_quadrature_points` keep a runtime trip count
+# and are not unrolled by the compiler. Unrolling replicates the heavy per-point
+# `average_bulk_microphysics_tendencies` call N² times in the kernel, which
+# crushes GPU occupancy via register pressure.
+const MAX_QUADRATURE_ORDER = 5
+
+struct SGSQuadrature{A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSamplingType
+    a::A             # quadrature points  (SVector{MAX_QUADRATURE_ORDER,FT}, padded)
+    w::W             # quadrature weights (SVector{MAX_QUADRATURE_ORDER,FT}, padded)
     dist::D          # distribution type
+    N::Int           # active quadrature order (runtime value, not a type param)
     T_min::FT        # minimum temperature for physical validity [K]
     q_max::FT        # maximum specific humidity [kg/kg]
     function SGSQuadrature(
@@ -219,12 +234,23 @@ struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSam
     ) where {FT, D <: AbstractSGSDistribution}
         # GridMeanSGS always uses N=1 (single point at origin)
         N = distribution isa GridMeanSGS ? 1 : quadrature_order
+        N <= MAX_QUADRATURE_ORDER || error(
+            "quadrature_order $N exceeds MAX_QUADRATURE_ORDER $MAX_QUADRATURE_ORDER",
+        )
         a, w = get_quadrature_nodes_weights(distribution, FT, N)
-        a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-        return new{N, typeof(a), typeof(w), D, FT}(
-            a,
-            w,
+        # Pad to a fixed length so the struct's concrete type is independent of
+        # N. Entries beyond N are never read (loops are bounded by N).
+        a_pad = SA.SVector{MAX_QUADRATURE_ORDER, FT}(
+            ntuple(i -> i <= N ? FT(a[i]) : zero(FT), MAX_QUADRATURE_ORDER),
+        )
+        w_pad = SA.SVector{MAX_QUADRATURE_ORDER, FT}(
+            ntuple(i -> i <= N ? FT(w[i]) : zero(FT), MAX_QUADRATURE_ORDER),
+        )
+        return new{typeof(a_pad), typeof(w_pad), D, FT}(
+            a_pad,
+            w_pad,
             distribution,
+            N,
             FT(T_min),
             FT(q_max),
         )
@@ -236,7 +262,7 @@ end
 
 Return the quadrature order `N`.
 """
-@inline quadrature_order(::SGSQuadrature{N}) where {N} = N
+@inline quadrature_order(quad::SGSQuadrature) = quad.N
 
 # ============================================================================
 # Quadrature Nodes and Weights
@@ -523,7 +549,10 @@ Approximates the integral:
 # Returns
 Weighted sum with the same type as `f(T, q)`.
 """
-function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature{N}) where {N}
+function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature)
+    # N is read from the runtime field (not a type parameter) so the loops
+    # below keep a runtime trip count and are NOT unrolled by the compiler.
+    N = quad.N
     χ = quad.a
     weights = quad.w
     FT = eltype(χ)
