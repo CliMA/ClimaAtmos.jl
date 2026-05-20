@@ -36,12 +36,11 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
     @safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
 
-    # Solver tests
-    @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
-    @safetestset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
+    # Config tests
+    @safetestset "Model getters" begin @time include("config/model_from_config.jl") end
+    @safetestset "AtmosModel Constructor" begin @time include("config/atmos_model_constructor.jl") end
     @safetestset "Presets" begin @time include("presets.jl") end
     @safetestset "Topography tests" begin @time include("topography.jl") end
-
 end
 
 # ============================================================================

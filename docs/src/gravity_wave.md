@@ -369,7 +369,7 @@ The computed tendencies are constrained to ``\pm 3 \times 10^{-3}`` m/s² to ens
 | `src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave_helper.jl` | Offline preprocessing: tensor computation, velocity potential, regridding, HDF5 I/O |
 | `src/parameterized_tendencies/gravity_wave_drag/preprocess_topography.jl` | Preprocessing driver utilities: HDF5 writing, NetCDF diagnostics, plotting |
 | `src/topography/topography.jl` | Analytical topography functions (DCMIP200, Hughes2023, Agnesi, Schar, Cosine) |
-| `src/solver/types.jl` | Type definitions: `OrographicGravityWave`, `FullOrographicGravityWave`, `LinearOrographicGravityWave` |
+| `src/types.jl` | Type definitions: `OrographicGravityWave`, `FullOrographicGravityWave`, `LinearOrographicGravityWave` |
 | `src/callbacks/callbacks.jl` | `ogw_model_callback!` that triggers the compute step |
 
 ### Testing and Validation

@@ -339,3 +339,17 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)
 end
+
+"""
+    fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+
+Experimental timestepping mode where all implicit tendencies are treated
+explicitly. Used by `args_integrator` when `prescribed_flow` is set, to
+avoid implicit treatment of sound waves.
+"""
+function fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    (; temp_Yₜ_imp) = p.scratch
+    implicit_tendency!(temp_Yₜ_imp, Y, p, t)
+    remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    Yₜ .+= temp_Yₜ_imp
+end
