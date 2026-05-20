@@ -4,6 +4,7 @@
 
 # job setup
 job_id: lf1_slab_standalone
+output_dir: "/Users/jeff/clima/larcform1-experiments/output/lf1-slab-standalone"
 FLOAT_TYPE: "Float64"
 
 # Atmosphere

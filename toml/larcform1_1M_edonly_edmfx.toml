@@ -67,7 +67,4 @@ value = 0
 value = 100
 
 [sublimation_deposition_timescale]
-value = 400
-
-
-
+value = 400                                 # Increased to try to sustain clw
