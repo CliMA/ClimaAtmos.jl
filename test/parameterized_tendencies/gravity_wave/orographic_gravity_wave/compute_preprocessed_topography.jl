@@ -59,12 +59,15 @@ elevation_data =
 
 load_preprocessed_topography = false
 
+topo_kwargs = (;
+    topography = parsed_args["topography"],
+    topo_smoothing = parsed_args["topo_smoothing"],
+    topography_damping_factor = parsed_args["topography_damping_factor"],
+    h_elem = parsed_args["h_elem"],
+)
+
 if load_preprocessed_topography
-    (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem) =
-        CA.gen_fn(parsed_args)
-    topo_cg = CA.load_preprocessed_topography(
-        parsed_args,
-    )
+    topo_cg = CA.load_preprocessed_topography(; topo_kwargs...)
 else
     topo_cg = CA.compute_OGW_info(
         Y, elevation_data, earth_radius, γ, h_frac;
@@ -72,7 +75,7 @@ else
     )
 end
 
-output_filename = write_computed_drag!(topo_cg, parsed_args, config)
+output_filename = write_computed_drag!(topo_cg, config.comms_ctx; topo_kwargs...)
 
 datafile_cg, weightfile = save_nc_data(output_filename, topo_cg, spaces)
 

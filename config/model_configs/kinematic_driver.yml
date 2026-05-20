@@ -9,7 +9,7 @@ use_sgs_quadrature: false
 #sgs_distribution: "lognormal"
 #quadrature_order: 3
 config: "column"
-hyperdiff: "false"
+hyperdiff: ~
 ## Simulation
 # z_max: 2e3  # TODO: Update top boundary condition for ρu₃qₜ to allow lower z_max
 # z_elem: 128

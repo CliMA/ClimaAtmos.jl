@@ -85,10 +85,12 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
             @assert isapprox(cam_coef, config_val, atol = 1e-8) "CAM_SE hyperdiffusion overwrites $config_coef, use `hyperdiff: Hyperdiffusion` to set this value manually in the config instead."
         end
         return cam_se_hyperdiff
-    elseif hyperdiff_name ∈ ("false", false, nothing)
+    elseif isnothing(hyperdiff_name)
         return nothing
     else
-        error("Uncaught hyperdiffusion model type.")
+        error(
+            "Uncaught hyperdiff `$hyperdiff_name`. Expected: ~ | \"Hyperdiffusion\" | \"CAM_SE\".",
+        )
     end
 end
 
@@ -100,118 +102,21 @@ function get_vertical_diffusion_model(
 ) where {FT}
     vert_diff_name = parsed_args["vert_diff"]
     vdp = CAP.vert_diff_params(params)
-    return if vert_diff_name in ("false", false, "none")
+    return if isnothing(vert_diff_name)
         nothing
-    elseif vert_diff_name in ("true", true, "VerticalDiffusion")
+    elseif vert_diff_name == "VerticalDiffusion"
         VerticalDiffusion{disable_momentum_vertical_diffusion, FT}(;
             C_E = vdp.C_E,
         )
-    elseif vert_diff_name in ("DecayWithHeightDiffusion",)
+    elseif vert_diff_name == "DecayWithHeightDiffusion"
         DecayWithHeightDiffusion{disable_momentum_vertical_diffusion, FT}(;
             H = vdp.H,
             D₀ = vdp.D₀,
         )
     else
-        error("Uncaught diffusion model `$vert_diff_name`.")
-    end
-end
-
-function get_surface_model(parsed_args)
-    prognostic_surface_name = parsed_args["prognostic_surface"]
-    return if prognostic_surface_name in ("false", false, "PrescribedSST")
-        PrescribedSST()
-    elseif prognostic_surface_name in ("true", true, "SlabOceanSST")
-        SlabOceanSST()
-    elseif lowercase(strip(prognostic_surface_name)) in ("eisenmanseaice", "seaice") # Allows any casing and spacing permutations on these strings
-        FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32 # infer FT from parsed_args
-        EisenmanSeaIce{FT}()
-    elseif prognostic_surface_name == "FixedSeaIceState"
-        FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32 # infer FT from parsed_args
-        FixedSeaIceState{FT}()
-    elseif prognostic_surface_name == "PrognosticSurfaceTemperature"
-        @warn "The `PrognosticSurfaceTemperature` option is deprecated. Use `SlabOceanSST` instead."
-        SlabOceanSST()
-    elseif prognostic_surface_name == "PrescribedSurfaceTemperature"
-        @warn "The `PrescribedSurfaceTemperature` option is deprecated. Use `PrescribedSST` instead."
-        PrescribedSST()
-    else
-        error("Uncaught surface model `$prognostic_surface_name`.")
-    end
-end
-
-function get_surface_albedo_model(parsed_args, params, ::Type{FT}) where {FT}
-    albedo_name = parsed_args["albedo_model"]
-    return if albedo_name in ("ConstantAlbedo",)
-        ConstantAlbedo{FT}(; α = params.idealized_ocean_albedo)
-    elseif albedo_name in ("RegressionFunctionAlbedo",)
-        isnothing(parsed_args["rad"]) && error(
-            "Radiation model not specified, so cannot use RegressionFunctionAlbedo",
+        error(
+            "Uncaught vert_diff `$vert_diff_name`. Expected: ~ | \"VerticalDiffusion\" | \"DecayWithHeightDiffusion\".",
         )
-        RegressionFunctionAlbedo{FT}(; n = params.water_refractive_index)
-    elseif albedo_name in ("CouplerAlbedo",)
-        CouplerAlbedo()
-    else
-        error("Uncaught surface albedo model `$albedo_name`.")
-    end
-end
-
-function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
-    vs_name = parsed_args["viscous_sponge"]
-    return if vs_name in ("false", false, "none")
-        nothing
-    elseif vs_name in ("true", true, "ViscousSponge")
-        zd = params.zd_viscous
-        κ₂ = params.kappa_2_sponge
-        ViscousSponge{FT}(; zd, κ₂)
-    else
-        error("Uncaught viscous sponge model `$vs_name`.")
-    end
-end
-
-"""
-    get_smagorinsky_lilly_model(parsed_args)
-
-Get the Smagorinsky-Lilly turbulence model based on `parsed_args["smagorinsky_lilly"]`
-
-The possible model configurations flags are:
-- `UVW`: Applies the model to all spatial directions.
-- `UV`: Applies the model to the horizontal direction only.
-- `W`: Applies the model to the vertical direction only.
-- `UV_W`: Applies the model to the horizontal and vertical directions separately.
-"""
-function get_smagorinsky_lilly_model(parsed_args)
-    smag = parsed_args["smagorinsky_lilly"]
-    isnothing(smag) && return nothing
-    return SmagorinskyLilly(; axes = Symbol(smag))
-end
-
-function get_amd_les_model(parsed_args, ::Type{FT}) where {FT}
-    is_model_active = parsed_args["amd_les"]
-    @assert is_model_active in (true, false)
-    return is_model_active ? AnisotropicMinimumDissipation{FT}(parsed_args["c_amd"]) :
-           nothing
-end
-
-function get_constant_horizontal_diffusion_model(parsed_args, params, ::Type{FT}) where {FT}
-    is_model_active = parsed_args["constant_horizontal_diffusion"]
-    @assert is_model_active in (true, false)
-    return is_model_active ?
-           ConstantHorizontalDiffusion{FT}(CAP.constant_horizontal_diffusion_D(params)) :
-           nothing
-end
-
-function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
-    rs_name = parsed_args["rayleigh_sponge"]
-    return if rs_name in ("false", false)
-        nothing
-    elseif rs_name in ("true", true, "RayleighSponge")
-        zd = params.zd_rayleigh
-        α_uₕ = params.alpha_rayleigh_uh
-        α_w = params.alpha_rayleigh_w
-        α_sgs_tracer = params.alpha_rayleigh_sgs_tracer
-        RayleighSponge{FT}(; zd, α_uₕ, α_w, α_sgs_tracer)
-    else
-        error("Uncaught rayleigh sponge model `$rs_name`.")
     end
 end
 
@@ -326,7 +231,6 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_type = nothing) where
     deep_atmosphere = parsed_args["deep_atmosphere"]
     @assert radiation_name in (
         nothing,
-        "nothing",
         "clearsky",
         "gray",
         "allsky",
@@ -459,89 +363,29 @@ function get_cloud_model(parsed_args, params)
     end
 end
 
-function get_terminal_velocity_mode(parsed_args, params, ::Type{FT}) where {FT}
-    return parsed_args["fixed_terminal_velocity"] ?
-           FixedTerminalVelocity{FT}(
-        CAP.fixed_cloud_liquid_terminal_velocity(params),
-        CAP.fixed_cloud_ice_terminal_velocity(params),
-        CAP.fixed_rain_terminal_velocity(params),
-        CAP.fixed_snow_terminal_velocity(params),
-    ) : DiagnosticTerminalVelocity()
-end
-
 function get_cloud_in_radiation(parsed_args)
     isnothing(parsed_args["prescribe_clouds_in_radiation"]) && return nothing
     return parsed_args["prescribe_clouds_in_radiation"] ?
            PrescribedCloudInRadiation() : InteractiveCloudInRadiation()
 end
 
-function get_forcing_type(parsed_args)
-    forcing = parsed_args["forcing"]
-    @assert forcing in (nothing, "held_suarez")
-    if forcing == "held_suarez"
-        @warn "The 'held_suarez' forcing option is deprecated. Use rad='held_suarez' instead to set HeldSuarezForcing as a radiation mode."
-        return HeldSuarezForcing()  # Still return the object for backward compatibility
-    end
-    return nothing
-end
 
-
-function get_subsidence_model(parsed_args, radiation_mode, FT; setup_type = nothing)
-    subsidence = parsed_args["subsidence"]
-    if isnothing(subsidence) && !isnothing(setup_type)
-        profile = Setups.subsidence_forcing(setup_type, FT)
-        !isnothing(profile) && return Subsidence(profile)
-    end
-    isnothing(subsidence) && return nothing
-
-    prof = if subsidence == "Bomex"
-        APL.Bomex_subsidence(FT)
-    elseif subsidence == "Rico"
-        APL.Rico_subsidence(FT)
-    elseif subsidence == "DYCOMS"
-        @assert radiation_mode isa RadiationDYCOMS
-        # For DYCOMS case, subsidence is linearly proportional to height
-        # with slope equal to the divergence rate specified in radiation mode
-        z -> -z * radiation_mode.divergence
-    elseif subsidence == "ISDAC"
-        APL.ISDAC_subsidence(FT)
-    else
-        error("Uncaught case")
-    end
-    return Subsidence(prof)
+function get_subsidence_model(::Type{FT}; setup_type = nothing) where {FT}
+    isnothing(setup_type) && return nothing
+    profile = Setups.subsidence_forcing(setup_type, FT)
+    return isnothing(profile) ? nothing : Subsidence(profile)
 end
 
 function get_large_scale_advection_model(
-    parsed_args, ::Type{FT}; setup_type = nothing,
+    ::Type{FT}; setup_type = nothing,
 ) where {FT}
-    ls_adv = parsed_args["ls_adv"]
-    if isnothing(ls_adv) && !isnothing(setup_type)
-        data = Setups.large_scale_advection_forcing(setup_type, FT)
-        if !isnothing(data)
-            prof_dqtdt = (thermo_params, p, t, z) -> data.prof_dqtdt(z)
-            prof_dTdt =
-                (thermo_params, p, t, z) ->
-                    data.prof_dTdt(TD.exner_given_pressure(thermo_params, p), z)
-            return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
-        end
-    end
-    ls_adv == nothing && return nothing
-
-    (prof_dTdt₀, prof_dqtdt₀) = if ls_adv == "Bomex"
-        (APL.Bomex_dTdt(FT), APL.Bomex_dqtdt(FT))
-    elseif ls_adv == "Rico"
-        (APL.Rico_dTdt(FT), APL.Rico_dqtdt(FT))
-    else
-        error("Uncaught case")
-    end
-    # See https://clima.github.io/AtmosphericProfilesLibrary.jl/dev/
-    # for which functions accept which arguments.
-    # TODO: do not assume dry air?
-    prof_dqtdt = (thermo_params, ᶜp, t, z) -> prof_dqtdt₀(z)
+    isnothing(setup_type) && return nothing
+    data = Setups.large_scale_advection_forcing(setup_type, FT)
+    isnothing(data) && return nothing
+    prof_dqtdt = (_, _, _, z) -> data.prof_dqtdt(z)
     prof_dTdt =
-        (thermo_params, ᶜp, t, z) ->
-            prof_dTdt₀(TD.exner_given_pressure(thermo_params, ᶜp), z)
-
+        (thermo_params, p, _, z) ->
+            data.prof_dTdt(TD.exner_given_pressure(thermo_params, p), z)
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
 
@@ -610,35 +454,9 @@ function get_external_forcing_model(
     end
 end
 
-function get_scm_coriolis(parsed_args, ::Type{FT}; setup_type = nothing) where {FT}
-    scm_coriolis = parsed_args["scm_coriolis"]
-    if isnothing(scm_coriolis) && !isnothing(setup_type)
-        data = Setups.coriolis_forcing(setup_type, FT)
-        !isnothing(data) && return data
-    end
-    isnothing(scm_coriolis) && return nothing
-    (prof_u, prof_v) = if scm_coriolis == "Bomex"
-        (APL.Bomex_geostrophic_u(FT), z -> FT(0))
-    elseif scm_coriolis == "Rico"
-        (APL.Rico_geostrophic_ug(FT), APL.Rico_geostrophic_vg(FT))
-    elseif scm_coriolis == "DYCOMS_RF01"
-        (z -> FT(7), z -> FT(-5.5))
-    elseif scm_coriolis == "DYCOMS_RF02"
-        (z -> FT(5), z -> FT(-5.5))
-    elseif scm_coriolis == "GABLS"
-        (APL.GABLS_geostrophic_ug(FT), APL.GABLS_geostrophic_vg(FT))
-    else
-        error("Uncaught case")
-    end
-
-    coriolis_params = Dict()
-    coriolis_params["Bomex"] = FT(0.376e-4)
-    coriolis_params["Rico"] = FT(4.5e-5)
-    coriolis_params["DYCOMS_RF01"] = FT(0) # TODO: check this
-    coriolis_params["DYCOMS_RF02"] = FT(0) # TODO: check this
-    coriolis_params["GABLS"] = FT(1.39e-4)
-    coriolis_param = coriolis_params[scm_coriolis]
-    return (; prof_ug = prof_u, prof_vg = prof_v, coriolis_param)
+function get_scm_coriolis(::Type{FT}; setup_type = nothing) where {FT}
+    isnothing(setup_type) && return nothing
+    return Setups.coriolis_forcing(setup_type, FT)
 end
 
 function get_turbconv_model(FT, parsed_args, turbconv_params)
@@ -700,15 +518,11 @@ function get_tracers(parsed_args)
 end
 
 function check_case_consistency(parsed_args)
-    # if any flags is ISDAC, check that all are ISDAC
     ic = parsed_args["initial_condition"]
-    subs = parsed_args["subsidence"]
     surf = parsed_args["surface_setup"]
     rad = parsed_args["rad"]
-    cor = parsed_args["scm_coriolis"]
     forc = parsed_args["forcing"]
     microphysics = parsed_args["microphysics_model"]
-    ls_adv = parsed_args["ls_adv"]
     extf = parsed_args["external_forcing"]
     imp_vert_diff = parsed_args["implicit_diffusion"]
     vert_diff = parsed_args["vert_diff"]
@@ -716,11 +530,14 @@ function check_case_consistency(parsed_args)
     topography = parsed_args["topography"]
     prescribed_flow = parsed_args["prescribed_flow"]
 
-    ISDAC_mandatory = (ic, subs, surf, rad, extf)
+    # ISDAC consistency: when initial_condition is ISDAC, surface/rad/external
+    # forcing must all be set to the matching ISDAC variants. Subsidence,
+    # scm_coriolis, and ls_adv are owned by the setup, not the YAML schema.
+    ISDAC_mandatory = (ic, surf, rad, extf)
     if "ISDAC" in ISDAC_mandatory
         @assert(
             allequal(ISDAC_mandatory) &&
-            all(isnothing, (cor, forc, ls_adv)) &&
+            isnothing(forc) &&
             microphysics != "dry",
             "ISDAC setup not consistent"
         )

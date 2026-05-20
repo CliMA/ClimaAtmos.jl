@@ -862,23 +862,38 @@ function set_topo_info_target_space(topo_info, ᶜtarget_space)
     return topo_info
 end
 
-function gen_fn(parsed_args)
-    ### generate output filename
-    # get grid info necessary to specify unique output file
-    topography = parsed_args["topography"]
-    topo_smoothing = parsed_args["topo_smoothing"]
-    topo_damping_factor = parsed_args["topography_damping_factor"]
-    h_elem = parsed_args["h_elem"]
+"""
+    generate_drag_filename(; topography, topo_smoothing, topography_damping_factor, h_elem)
 
-    # construct output filename
-    output_filename = "computed_drag_$(topography)_$(topo_smoothing)_$(topo_damping_factor)_$(h_elem)"
-
-    return (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem)
+Build a unique filename and metadata NamedTuple identifying the
+preprocessed-drag output for a given topography configuration.
+"""
+function generate_drag_filename(;
+    topography,
+    topo_smoothing,
+    topography_damping_factor,
+    h_elem,
+)
+    output_filename = "computed_drag_$(topography)_$(topo_smoothing)_$(topography_damping_factor)_$(h_elem)"
+    return (;
+        output_filename,
+        topography,
+        topo_smoothing,
+        topo_damping_factor = topography_damping_factor,
+        h_elem,
+    )
 end
 
 
-function load_preprocessed_topography(parsed_args::Dict{String, Any})
-    (; output_filename,) = gen_fn(parsed_args)
+function load_preprocessed_topography(;
+    topography,
+    topo_smoothing,
+    topography_damping_factor,
+    h_elem,
+)
+    (; output_filename) = generate_drag_filename(;
+        topography, topo_smoothing, topography_damping_factor, h_elem,
+    )
     @info "loading topography drag vector: $(output_filename)"
 
     reader = InputOutput.HDF5Reader(

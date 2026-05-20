@@ -4,7 +4,7 @@ surface_setup: DefaultMoninObukhov
 prognostic_surface: "SlabOceanSST"
 rad: "clearsky"
 microphysics_model: "0M"
-vert_diff: true
+vert_diff: "VerticalDiffusion"
 dt_save_state_to_disk: "5days"
 check_conservation: true
 # Implicit 0M + SGS quadrature produces nonlinear precipitation

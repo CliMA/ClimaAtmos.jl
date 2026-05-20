@@ -1,14 +1,19 @@
 # ClimaAtmos Agent Guide
 
-## Repo exploration
+## Ecosystem Guidelines
 
-- Before broad repo search or codebase exploration, read [docs/agents/repo_structure.md](docs/agents/repo_structure.md).
+Please refer to the shared CliMA agent index for ecosystem-wide rules regarding architecture, performance, code quality, infrastructure, and workflows:
 
-## Pull request reviews
+- [docs/dev-guides/AGENTS.md](docs/dev-guides/AGENTS.md) — Shared CliMA agent guidelines.
 
-- When asked to review a pull request, follow [docs/agents/review.md](docs/agents/review.md).
-- Apply the full checklist and output schema in [docs/agents/review.md](docs/agents/review.md); keep reviews concise, evidence-based, and findings-first.
-- During review, also enforce [docs/agents/software_design_patterns.md](docs/agents/software_design_patterns.md) for changed code and adjacent affected code, as required by [docs/agents/review.md](docs/agents/review.md).
+> Shared guides live at `docs/dev-guides/` and are vendored from the canonical source:
+> https://github.com/CliMA/DeveloperGuides. Edit shared guides there, not here.
+
+## Repo-Specific Guidelines
+
+Always read the ClimaAtmos-specific guide before working in this repository:
+
+- [docs/clima_atmos_specific.md](docs/clima_atmos_specific.md) — directory tree, test groups, and reproducibility specifics for *this* repo.
 
 ## Local norms
 
@@ -17,9 +22,10 @@
 - For package tests, prefer `Pkg.test()` over manually `include`ing `test/runtests.jl` because test-only deps are loaded through the package test path.
 - Keep edits inside the owning subtree when possible; use [src/ClimaAtmos.jl](src/ClimaAtmos.jl) to trace where a feature is wired.
 - Match existing style: explicit names, narrow imports, comments that explain why.
-- Follow the software design patterns in [docs/agents/software_design_patterns.md](docs/agents/software_design_patterns.md) for new code and refactor toward them when touching existing code.
+- Follow the software design patterns in [docs/dev-guides/architecture/software_design_patterns.md](docs/dev-guides/architecture/software_design_patterns.md) for new code and refactor toward them when touching existing code.
+- Run `julia -e 'using JuliaFormatter; format(\".\")'` before committing code.
 
 ## Self-correction
 
-- If the code map in [docs/agents/repo_structure.md](docs/agents/repo_structure.md) is discovered to be stale, update it.
-- If the user gives a correction about how work should be done in this repo, add it to `Local norms` or another clearly labeled persistent section in this file so future sessions inherit it.
+- If the code map in [docs/clima_atmos_specific.md](docs/clima_atmos_specific.md) is discovered to be stale, update it.
+- If the user gives a correction about how work should be done in this repo, add it to `Local norms` or another clearly labeled persistent section in this file or in [docs/clima_atmos_specific.md](docs/clima_atmos_specific.md) so future sessions inherit it.

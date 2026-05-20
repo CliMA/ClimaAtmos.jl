@@ -647,3 +647,12 @@ function clima_to_era5_name_dict()
         "hfss" => "sshf",
     )
 end
+
+function log_context(context)
+    device = nameof(typeof(ClimaComms.device(context)))
+    if context isa ClimaComms.SingletonCommsContext
+        @info "Single-process ClimaAtmos run on $device"
+    else
+        @info "Distributed ClimaAtmos run" device nprocs = ClimaComms.nprocs(context)
+    end
+end

@@ -9,20 +9,25 @@ import StaticArrays as SA
 
 """
     ClimaAtmosParameters(FT::AbstractFloat)
-    ClimaAtmosParameters(toml_dict)
-    ClimaAtmosParameters(config::AtmosConfig)
+    ClimaAtmosParameters(toml_dict; microphysics_model = nothing,
+                                    has_non_orographic_gw = false,
+                                    has_orographic_gw = false)
 
 Construct the parameter set for any ClimaAtmos configuration.
-"""
-ClimaAtmosParameters(config::AtmosConfig) =
-    ClimaAtmosParameters(config.toml_dict, config.parsed_args)
 
+When `microphysics_model` is supplied, only the microphysics-parameter sets
+relevant to that model are loaded; the rest are stored as `nothing` to save
+memory. Likewise the gravity-wave parameter sets are loaded only when their
+corresponding flag is `true`.
+"""
 ClimaAtmosParameters(::Type{FT}) where {FT <: AbstractFloat} =
     ClimaAtmosParameters(CP.create_toml_dict(FT))
 
 function ClimaAtmosParameters(
-    toml_dict::TD,
-    parsed_args = nothing,
+    toml_dict::TD;
+    microphysics_model = nothing,
+    has_non_orographic_gw::Bool = false,
+    has_orographic_gw::Bool = false,
 ) where {TD <: CP.ParamDict}
     FT = CP.float_type(toml_dict)
 
@@ -56,17 +61,18 @@ function ClimaAtmosParameters(
     microphysics_2m_params = microphys_2m_parameters(toml_dict)
     microphysics_2mp3_params = get_microphysics_2m_p3_parameters(toml_dict)
 
-    # If parsed_args is provided, we can save parameter space by only loading parameters
-    # needed for the microphysics model that is actually used.
-    if !isnothing(parsed_args)
-        cm_model = get_microphysics_model(parsed_args)
-        cm_model isa EquilibriumMicrophysics0M ||
+    # When a microphysics model is supplied, only keep the parameter sets it
+    # actually uses; nullify the rest to save memory.
+    if !isnothing(microphysics_model)
+        microphysics_model isa EquilibriumMicrophysics0M ||
             (microphysics_0m_params = nothing)
-        cm_model isa Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
+        microphysics_model isa
+        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
             (microphysics_1m_params = nothing)
-        cm_model isa Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3} ||
+        microphysics_model isa
+        Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3} ||
             (microphysics_2m_params = nothing)
-        cm_model isa NonEquilibriumMicrophysics2MP3 ||
+        microphysics_model isa NonEquilibriumMicrophysics2MP3 ||
             (microphysics_2mp3_params = nothing)
     end
     MP0M = typeof(microphysics_0m_params)
@@ -82,19 +88,11 @@ function ClimaAtmosParameters(
 
     prescribed_aerosol_params = prescribed_aerosol_parameters(toml_dict)
     PAP = typeof(prescribed_aerosol_params)
-    # Only load gravity wave parameters if enabled in config
-    non_orographic_gravity_wave_params = nothing
-    orographic_gravity_wave_params = nothing
-    if !isnothing(parsed_args)
-        if get(parsed_args, "non_orographic_gravity_wave", false)
-            non_orographic_gravity_wave_params =
-                NonOrographicGravityWaveParameters(toml_dict)
-        end
-        if !isnothing(get(parsed_args, "orographic_gravity_wave", nothing))
-            orographic_gravity_wave_params =
-                OrographicGravityWaveParameters(toml_dict)
-        end
-    end
+    # Only load gravity-wave parameters if enabled
+    non_orographic_gravity_wave_params =
+        has_non_orographic_gw ? NonOrographicGravityWaveParameters(toml_dict) : nothing
+    orographic_gravity_wave_params =
+        has_orographic_gw ? OrographicGravityWaveParameters(toml_dict) : nothing
     NOGWP = typeof(non_orographic_gravity_wave_params)
     OGWP = typeof(orographic_gravity_wave_params)
 

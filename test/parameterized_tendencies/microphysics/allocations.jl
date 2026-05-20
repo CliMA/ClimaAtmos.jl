@@ -84,18 +84,23 @@ end
 
 # --- Function barrier helpers ---
 
-function _allocs_cloud_fraction_sd(thp)
+function _allocs_cloud_fraction_hybrid(thp)
     FT = Float64
     T = FT(280.0)
     ρ = FT(1.0)
     q_min = FT(1e-10)
-    CA.compute_cloud_fraction_sd(
-        thp, T, ρ, FT(0.011), FT(1e-3), FT(0), FT(1), FT(1e-6), FT(0), FT(1),
-        q_min, CA.GaussianSGS(),
+    q_tot = FT(0.011)
+    moments = (
+        mu_S = FT(1e-3), sigma_S_sq = FT(1e-7),
+        M_l = FT(1e-3), M_i = FT(0),
     )
-    return @allocated CA.compute_cloud_fraction_sd(
-        thp, T, ρ, FT(0.011), FT(1e-3), FT(0), FT(1), FT(1e-6), FT(0), FT(1),
-        q_min, CA.GaussianSGS(),
+    CA.compute_cloud_fraction_hybrid(
+        thp, T, ρ, q_tot, FT(1e-3), FT(0), moments, FT(0), FT(1), q_min,
+        CA.GaussianSGS(),
+    )
+    return @allocated CA.compute_cloud_fraction_hybrid(
+        thp, T, ρ, q_tot, FT(1e-3), FT(0), moments, FT(0), FT(1), q_min,
+        CA.GaussianSGS(),
     )
 end
 
@@ -195,7 +200,7 @@ end
         quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
 
         # Warm up the barrier functions themselves (JIT)
-        _allocs_cloud_fraction_sd(thp)
+        _allocs_cloud_fraction_hybrid(thp)
         _allocs_coupled_sink()
         _allocs_bmt_0m(mp, thp)
         _allocs_energy_helper(thp)
@@ -203,8 +208,8 @@ end
         _allocs_sgs_sat_adj(thp, quad)
         _allocs_integrate_sgs_functor(quad, FT)
 
-        @testset "compute_cloud_fraction_sd" begin
-            @test _allocs_cloud_fraction_sd(thp) == 0
+        @testset "compute_cloud_fraction_hybrid" begin
+            @test _allocs_cloud_fraction_hybrid(thp) == 0
         end
 
         @testset "coupled_sink_limit_factor" begin

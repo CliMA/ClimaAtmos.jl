@@ -4,7 +4,6 @@ for more detailed information on how reproducibility tests work.
 =#
 @info "########################################## Reproducibility tests"
 
-include(joinpath(@__DIR__, "reproducibility_test_job_ids.jl"))
 include(joinpath(@__DIR__, "reproducibility_tools.jl"))
 
 (; job_id, out_dir, test_broken_report_flakiness) =

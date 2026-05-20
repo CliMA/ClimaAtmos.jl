@@ -151,7 +151,7 @@ function precomputed_quantities(Y, atmos)
     ᶜcloud_fraction = similar(Y.c, FT)
     @. ᶜcloud_fraction = FT(0)
 
-    # SGS covariances for cloud fraction (Sommeria & Deardorff closure) and microphysics quadrature.
+    # SGS covariances for hybrid cloud fraction and microphysics quadrature.
     # NonEquilibriumMicrophysics1M/2M always route through the quadrature API
     # internally (with GridMeanSGS), so they also need covariance fields allocated.
     uses_sgs_quadrature =
@@ -159,12 +159,26 @@ function precomputed_quantities(Y, atmos)
         atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
         atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
-    covariance_quantities =
-        uses_sgs_quadrature ?
-        (;
+    # `ᶜsgs_moments_mp` caches the SGS-mean equilibrium cloud condensate
+    # `(M_l, M_i)` used by the `Microphysics1MEvaluator` shape-function
+    # partition. It is allocated only for schemes that consume it. The
+    # `(μ_S, σ_S²)` moments needed by `compute_cloud_fraction_hybrid` are
+    # computed inline in the cloud-fraction broadcast and never stored.
+    uses_microphysics_quadrature_moments =
+        atmos.microphysics_model isa
+        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+    SGSMomentsMPNT = @NamedTuple{M_l::FT, M_i::FT}
+    covariance_quantities = if uses_sgs_quadrature
+        base = (;
             ᶜT′T′ = zeros(axes(Y.c)),
             ᶜq′q′ = zeros(axes(Y.c)),
-        ) : (;)
+        )
+        uses_microphysics_quadrature_moments ?
+        (; base..., ᶜsgs_moments_mp = similar(Y.c, SGSMomentsMPNT)) :
+        base
+    else
+        (;)
+    end
     surface_precip_fluxes = (;
         surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
         surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),

@@ -88,6 +88,31 @@ function string_all_files_in_dir(dir)
     return msg
 end
 
+"""
+    discover_reproducibility_job_ids(;
+        root = pwd(),
+        subfolder = joinpath("output_active", "reproducibility_bundle"),
+        marker = "prog_state.hdf5",
+    )
+
+Return the sorted list of job ids in `root` that produced reproducibility
+output, identified by the presence of `<root>/<job_id>/<subfolder>/<marker>`.
+"""
+function discover_reproducibility_job_ids(;
+    root = pwd(),
+    subfolder = joinpath("output_active", "reproducibility_bundle"),
+    marker = "prog_state.hdf5",
+)
+    isdir(root) || return String[]
+    job_ids = String[]
+    for entry in readdir(root)
+        isfile(joinpath(root, entry, subfolder, marker)) || continue
+        push!(job_ids, entry)
+    end
+    sort!(job_ids)
+    return job_ids
+end
+
 """Return a flat vector of all file paths (recursively) under `dir`."""
 function all_files_in_dir(dir)
     all_files = String[]

@@ -97,7 +97,7 @@ debug_jacobian:
   value: false
 # Radiation
 rad:
-  help: "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"
+  help: "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`, `held_suarez`, `DYCOMS`, `TRMM_LBA`, `ISDAC`]"
   value: ~
 idealized_h2o:
   help: "Use idealized H2O in radiation model [`false` (default), `true`]"
@@ -149,8 +149,8 @@ reference_job_id:
     Identifier of job to use as the "reference" solution in the quicklook plot; the current job's results get compared to the results of the quicklook job on the main branch
   value: ~
 vert_diff:
-  help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `DecayWithHeightDiffusion`]"
-  value: "false"
+  help: "Vertical diffusion [`~` (no diffusion, default), `VerticalDiffusion`, `DecayWithHeightDiffusion`]"
+  value: ~
 hyperdiff:
   help: |
     Fourth-order hyperdiffusion. Options:
@@ -158,7 +158,7 @@ hyperdiff:
       set these with the `vorticity_hyperdiffusion_coefficient`, `hyperdiffusion_prandtl_number`,
       `divergence_damping_factor` config options.
     - `CAM_SE` (Lauritzen et al. 2018): Use CAM_SE coefficients for hyperdiffusion
-    - `false`: Disable hyperdiffusion
+    - `~`: Disable hyperdiffusion
   value: "Hyperdiffusion"
 amd_les:
   help: "AMD LES closure [`true`, `false` (default)]"
@@ -287,9 +287,6 @@ check_conservation:
 check_steady_state:
   help: "Compare steady-state velocity to analytic solution; only available for certain choices of `topography` [`false` (default), `true`]"
   value: false
-ls_adv:
-  help: "Large-scale advection [`nothing` (default), `Bomex`, `Rico`]"
-  value: ~
 external_forcing:
   help: "External forcing for single column experiments [`nothing` (default), `GCM`, `Reanalysis`, `ReanalysisTimeVarying`, `ReanalysisMonthlyAveragedDiurnal`]"
   value: ~
@@ -308,9 +305,6 @@ site_longitude:
 era5_diurnal_warming:
   help: Applies a warming scenario by adding a constant temperature offset (in Kelvin). Supported only by the `ReanalysisMonthlyAveragedDiurnal` forcing model. This affects the target surface temperature for the entire simulation, the initial atmospheric temperature profile, and the relaxation temperature profile above `gcmdriven_relaxation_minimum_height`. Specific humidity is increased to hold relative humidity constant in the initial and relaxation profiles.
   value: ~
-subsidence:
-  help: "Subsidence [`nothing` (default), `Bomex`, `Rico`, `DYCOMS`, `ISDAC`]"
-  value: ~
 toml:
   help: "TOML file(s) used to override model parameters"
   value: []
@@ -321,8 +315,8 @@ prognostic_tke:
   help: "A flag for prognostic TKE [`false` (default), `true`]"
   value: false
 prognostic_surface:
-  help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `SlabOceanSST`, `PrescribedSST`]"
-  value: "false"
+  help: "Surface temperature model [`PrescribedSST` (default), `SlabOceanSST`]"
+  value: "PrescribedSST"
 albedo_model:
   help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`, `CouplerAlbedo`]"
   value: "ConstantAlbedo"
@@ -338,6 +332,9 @@ output_default_diagnostics:
 enable_diagnostics:
   help: "Set to false to fully disable the diagnostics"
   value: true
+diagnostics:
+  help: "User-specified diagnostics, as a list of dicts each containing at least `short_name` and `period`. See https://clima.github.io/ClimaAtmos.jl/dev/diagnostics/ for the full schema."
+  value: []
 netcdf_output_at_levels:
   help: "Do not perform any vertical interpolation in the output NetCDF files. Instead, interpolate horizontally and output the level. "
   value: true
@@ -396,9 +393,6 @@ implicit_sgs_vertdiff:
 implicit_sgs_mass_flux:
   help: "Whether to treat the subgrid-scale mass flux tendency implicitly or explicitly in grid-mean equations. Currently updraft only with Jacobian terms 0. [`false` (default), `true`]. Setting it to true only works if both implicit_sgs_advection and implicit_diffusion are set to true."
   value: false
-scm_coriolis:
-  help: "SCM Coriolis [`nothing` (default), `Bomex`, `Rico`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
-  value: ~
 edmfx_filter:
   help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
   value: false

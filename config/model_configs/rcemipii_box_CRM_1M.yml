@@ -9,7 +9,7 @@ approximate_linear_solve_iters: 2  # only valid when implicit_diffusion=true
 rayleigh_sponge: true  # set sponge level in toml file
 
 # Diffusion
-hyperdiff: "false"
+hyperdiff: ~
 implicit_diffusion: false
 smagorinsky_lilly: "UV_W"  # horizontal + vertical
 # smagorinsky_lilly: "UV"  # horizontal

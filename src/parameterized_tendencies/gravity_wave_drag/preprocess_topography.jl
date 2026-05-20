@@ -14,11 +14,44 @@ include(
 include(
     joinpath(pkgdir(CA), "test/parameterized_tendencies/gravity_wave", "gw_plotutils.jl"))
 
-function write_computed_drag!(computed_drag, parsed_args, config)
-    (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem) =
-        CA.gen_fn(parsed_args)
+"""
+    write_computed_drag!(
+        computed_drag, 
+        comms_ctx; 
+        topography, 
+        topo_smoothing, 
+        topography_damping_factor, 
+        h_elem
+    )
+
+Writes the precomputed orographic gravity wave drag data and its associated configuration attributes to an HDF5 file. 
+
+# Arguments
+- `computed_drag`: The computed drag data field to be saved.
+- `comms_ctx`: The communication context used to initialize the HDF5 writer.
+
+# Keyword Arguments
+- `topography`: The name or type of the topography used.
+- `topo_smoothing`: Boolean flag indicating whether topography smoothing was applied.
+- `topography_damping_factor`: Damping factor applied to the topography.
+- `h_elem`: The number of horizontal elements in the grid.
+
+# Returns
+- `String`: The base output filename of the written HDF5 file.
+"""
+function write_computed_drag!(
+    computed_drag,
+    comms_ctx;
+    topography,
+    topo_smoothing,
+    topography_damping_factor,
+    h_elem,
+)
+    (; output_filename, topo_damping_factor) = CA.generate_drag_filename(;
+        topography, topo_smoothing, topography_damping_factor, h_elem,
+    )
     # initialize HDF5 output
-    hdfwriter = InputOutput.HDF5Writer("$(output_filename).hdf5", config.comms_ctx)
+    hdfwriter = InputOutput.HDF5Writer("$(output_filename).hdf5", comms_ctx)
 
     # write attributes to the HDF5 file 
     InputOutput.HDF5.write_attribute(hdfwriter.file, "topography", topography)

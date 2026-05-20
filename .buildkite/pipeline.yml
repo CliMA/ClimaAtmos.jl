@@ -316,35 +316,35 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF: Drizzling nocturnal Sc (DYCOMS-RF02)"
+      - label: ":genie: Prognostic EDMF: Reproducibility test for drizzling nocturnal Sc (DYCOMS-RF02)"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf02_column.yml
           --job_id prognostic_edmfx_dycoms_rf02_column
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
+          --job_id prognostic_edmfx_dycoms_rf02_column
+          --out_dir prognostic_edmfx_dycoms_rf02_column/output_active
         artifact_paths: "prognostic_edmfx_dycoms_rf02_column/output_active/*"
         agents:
           slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":genie: Prognostic EDMF: Precipitating trade wind Cu (RICO), explicit SGS"
+      - label: ":genie: Prognostic EDMF: Reproducibility test for precipitating trade wind Cu (RICO)"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
           --job_id prognostic_edmfx_rico_column
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
+          --job_id prognostic_edmfx_rico_column
+          --out_dir prognostic_edmfx_rico_column/output_active
         artifact_paths: "prognostic_edmfx_rico_column/output_active/*"
         agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMF: Precipitating trade wind Cu (RICO), implicit SGS"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_rico_implicit_column.yml
-          --job_id prognostic_edmfx_rico_implicit_column
-        artifact_paths: "prognostic_edmfx_rico_implicit_column/output_active/*"
-        agents:
           slurm_mem: 30GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
       #- label: ":genie: Prognostic EDMF: Precipitating trade wind Cu (RICO), 2M"
       #  command: >
@@ -356,25 +356,20 @@ steps:
       #    slurm_mem: 20GB
       #  soft_fail: true
       #
-      - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM)"
+      - label: ":genie: Prognostic EDMF: Reproducibility test for deep tropical convection (TRMM)"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
           --job_id prognostic_edmfx_trmm_column
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
+          --job_id prognostic_edmfx_trmm_column
+          --out_dir prognostic_edmfx_trmm_column/output_active
         artifact_paths: "prognostic_edmfx_trmm_column/output_active/*"
         agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM), implicit SGS"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_implicit_column.yml
-          --job_id prognostic_edmfx_trmm_implicit_column
-        artifact_paths: "prognostic_edmfx_trmm_implicit_column/output_active/*"
-        agents:
           slurm_mem: 35GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM), 0M"
         retry: *retry_policy
@@ -1039,16 +1034,7 @@ steps:
       #   agents:
       #     slurm_mem: 20GB
 
-      # Temporarily disabled until fixed
-      # - label: "Prognostic EDMF TRMM in a column sparse autodiff"
-      #   command: >
-      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-      #     --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_sparse_autodiff.yml
-      #     --job_id prognostic_edmfx_trmm_column_sparse_autodiff
-      #   artifact_paths: "prognostic_edmfx_trmm_column_sparse_autodiff/output_active/*"
-      #   agents:
-      #     slurm_mem: 20GB
-      #   soft_fail: true
+
 
       # - label: "Prognostic EDMF aquaplanet dense autodiff, GPU"
       #   command: >
