@@ -254,6 +254,30 @@ microphysics_n_substeps_quadrature:
 fixed_terminal_velocity:
   help: "Use fixed terminal velocities for microphysics tracers [`true` (default), `false`]"
   value: true
+cloud_liquid_formation:
+  help: "Cloud liquid formation timescale option for 1M microphysics [`constant_timescale` (default)]"
+  value: "constant_timescale"
+cloud_ice_formation:
+  help: "Cloud ice formation timescale option for 1M microphysics [`constant_timescale` (default), `temperature_dependent`]"
+  value: "constant_timescale"
+cloud_ice_melt:
+  help: "Cloud ice melting option for 1M microphysics [`melt_to_liquid` (default), `none`]"
+  value: "melt_to_liquid"
+cloud_liquid_autoconversion:
+  help: "Cloud liquid autoconversion option for 1M microphysics [`1M`, `2M` (default)]"
+  value: "2M"
+snow_autoconversion:
+  help: "Snow autoconversion option for 1M microphysics [`no_supersat` (default), `with_supersat`]"
+  value: "no_supersat"
+rain_evaporation:
+  help: "Rain evaporation option for 1M microphysics [`evaporation_only` (default)]"
+  value: "evaporation_only"
+snow_sublimation:
+  help: "Snow sublimation/deposition option for 1M microphysics [`deposition_sublimation` (default), `sublimation_only`]"
+  value: "deposition_sublimation"
+snow_melt:
+  help: "Snow melting option for 1M microphysics [`melt` (default)]"
+  value: "melt"
 viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false

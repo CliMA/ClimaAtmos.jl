@@ -10,6 +10,7 @@ import StaticArrays as SA
 """
     ClimaAtmosParameters(FT::AbstractFloat)
     ClimaAtmosParameters(toml_dict; microphysics_model = nothing,
+                                    microphysics_1m_options = CM.Parameters.Microphysics1MOptions(),
                                     has_non_orographic_gw = false,
                                     has_orographic_gw = false)
 
@@ -26,6 +27,7 @@ ClimaAtmosParameters(::Type{FT}) where {FT <: AbstractFloat} =
 function ClimaAtmosParameters(
     toml_dict::TD;
     microphysics_model = nothing,
+    microphysics_1m_options = CM.Parameters.Microphysics1MOptions(),
     has_non_orographic_gw::Bool = false,
     has_orographic_gw::Bool = false,
 ) where {TD <: CP.ParamDict}
@@ -57,7 +59,8 @@ function ClimaAtmosParameters(
     MPC = typeof(microphysics_cloud_params)
 
     microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
-    microphysics_1m_params = microphys_1m_parameters(toml_dict)
+    microphysics_1m_params =
+        microphys_1m_parameters(toml_dict; options = microphysics_1m_options)
     microphysics_2m_params = microphys_2m_parameters(toml_dict)
     microphysics_2mp3_params = get_microphysics_2m_p3_parameters(toml_dict)
 
@@ -191,11 +194,17 @@ cloud_parameters(toml_dict::CP.ParamDict) = (;
     activation = CM.Parameters.AerosolActivationParameters(toml_dict),
 )
 
-microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
-    microphys_1m_parameters(CP.create_toml_dict(FT))
+microphys_1m_parameters(
+    ::Type{FT};
+    options = CM.Parameters.Microphysics1MOptions(),
+) where {FT <: AbstractFloat} =
+    microphys_1m_parameters(CP.create_toml_dict(FT); options)
 
-microphys_1m_parameters(toml_dict::CP.ParamDict) =
-    CM.Parameters.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
+microphys_1m_parameters(
+    toml_dict::CP.ParamDict;
+    options = CM.Parameters.Microphysics1MOptions(),
+) =
+    CM.Parameters.Microphysics1MParams(toml_dict; options)
 
 microphys_2m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     microphys_2m_parameters(CP.create_toml_dict(FT))
