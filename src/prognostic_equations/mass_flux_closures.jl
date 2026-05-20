@@ -89,18 +89,16 @@ end
    - ᶠu3ʲ, ᶠu3⁰ - covariant3 or contravariant3 velocity for updraft and environment.
                   covariant3 velocity is used in prognostic edmf, and contravariant3
                   velocity is used in diagnostic edmf.
-   - scale height - an approximation for updraft top height
+   - aʲ - updraft area fraction
 """
-function ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰, scale_height)
+function ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰, aʲ)
+    FT = eltype(params)
     turbconv_params = CAP.turbconv_params(params)
     # factor multiplier for pressure drag
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-    H_up_min = CAP.min_updraft_top(turbconv_params)
-
-    # Independence of aspect ratio hardcoded: α₂_asp_ratio² = FT(0)
     # We also used to have advection term here: α_a * w_up * div_w_up
     return α_d * (ᶠu3ʲ - ᶠu3⁰) * CC.Geometry._norm(ᶠu3ʲ - ᶠu3⁰, ᶠlg) /
-           max(scale_height, H_up_min)
+           (FT(1e5) * max(sqrt(aʲ), ϵ_numerics(FT)))
 end
 
 edmfx_nh_pressure_drag_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
@@ -114,17 +112,18 @@ function edmfx_nh_pressure_drag_tendency!(
     if p.atmos.edmfx_model.nh_pressure isa Val{true} &&
        p.atmos.sgs_nh_pressure_mode == Explicit()
         (; params) = p
+        (; ᶜρʲs) = p.precomputed
         n = n_mass_flux_subdomains(turbconv_model)
         ᶠlg = Fields.local_geometry_field(Y.f)
-        scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
         # assume zero environmental velocity
         for j in 1:n
+            ᶠaʲ = @. lazy(ᶠinterp(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
             @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠupdraft_nh_pressure_drag(
                 params,
                 ᶠlg,
                 Y.f.sgsʲs.:($$j).u₃,
                 C3(0),
-                scale_height,
+                ᶠaʲ,
             )
         end
     end

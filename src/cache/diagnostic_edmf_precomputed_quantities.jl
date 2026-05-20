@@ -662,9 +662,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             nh_pressure³_dragʲ_prev_halflevel = Fields.field_values(
                 Fields.level(ᶠnh_pressure³_dragʲ, i - 1 - half),
             )
-            scale_height =
-                CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-
             ᶜmp_tendencyʲ_prev_level =
                 if microphysics_model isa MoistMicrophysics
                     Fields.field_values(Fields.level(ᶜmp_tendencyʲ, i - 1))
@@ -774,7 +771,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 dt,
             )
 
-            # TODO: use updraft top instead of scale height
             if p.atmos.edmfx_model.nh_pressure isa Val{true}
                 @. nh_pressure³_buoyʲ_prev_halflevel =
                     ᶠupdraft_nh_pressure_buoyancy(
@@ -788,7 +784,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         local_geometry_prev_halflevel,
                         u³ʲ_prev_halflevel,
                         u³⁰_prev_halflevel,
-                        scale_height,
+                        draft_area(ρaʲ_prev_level, ρʲ_prev_level),
                     )
             else
                 @. nh_pressure³_buoyʲ_prev_halflevel = CT3(0)

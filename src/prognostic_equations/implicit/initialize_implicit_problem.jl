@@ -127,7 +127,7 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
 
     (; params) = p
     (; turbconv_model, rayleigh_sponge) = p.atmos
-    (; ᶠρ_diffʲs) = p.precomputed
+    (; ᶠρ_diffʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜturb_entrʲs, ᶜentrʲs) = p.precomputed
     FT = eltype(p.params)
@@ -135,9 +135,6 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
     turbconv_params = CAP.turbconv_params(params)
     α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-    H_up_min = CAP.min_updraft_top(turbconv_params)
-    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-    drag_coeff = α_d / max(H_up_min, scale_height)
 
     # Approximation factor used in w₀ - w ≈ -(ρ / ρa⁰) w (single-updraft case).
     # For multiple updrafts we approximate ρ / ρa⁰ ≈ 1, which implies w₀ ≈ 0.
@@ -168,7 +165,9 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         # Implicit NH pressure drag contributes a quadratic sink in w².
         if p.atmos.edmfx_model.nh_pressure isa Val{true} &&
            p.atmos.sgs_nh_pressure_mode == Implicit()
-            @. ᶠa += ᶠinterp(drag_coeff * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
+            ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
+            ᶜdrag_coeff = @. lazy(α_d / (FT(1e5) * max(sqrt(ᶜaʲ), ϵ_numerics(FT))))
+            @. ᶠa += ᶠinterp(ᶜdrag_coeff * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
         end
 
         # Optional Rayleigh sponge adds extra linear damping near the top.
