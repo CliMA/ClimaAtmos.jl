@@ -1,4 +1,4 @@
-349
+350
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+350
+- Update to CloudMicrophysics.jl v0.36 process-option API; restructured linearized
+  solver introduces small floating-point rounding differences.
+
 349
 - Implicit entrainment and detrainment: split entr/detr into velocity-dependent
   coefficient and background terms; entr/detr rates updated after implicit u₃ solve.

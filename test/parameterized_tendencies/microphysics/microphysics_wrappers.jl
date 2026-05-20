@@ -130,7 +130,9 @@ import ClimaAtmos: limit_sink
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 toml_dict = CP.create_toml_dict(FT)
-                mp = CMP.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
+                mp = CMP.Microphysics1MParams(toml_dict;
+                    rain_autoconversion = CMP.PrescribedNd(toml_dict),
+                )
                 thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
 
                 ρ = FT(1.0)
@@ -142,7 +144,8 @@ import ClimaAtmos: limit_sink
                 q_sno = FT(0.00005)
                 dt = FT(60.0)
 
-                result = BMT.average_bulk_microphysics_tendencies(
+                result = BMT.bulk_microphysics_tendencies(
+                    BMT.LinearizedAverage(),
                     BMT.Microphysics1Moment(),
                     mp, thp, ρ, T,
                     q_tot, q_liq, q_ice, q_rai, q_sno, dt,
@@ -268,7 +271,8 @@ import ClimaAtmos: limit_sink
                     q_tot_hat = q_sat_mean + FT(0.001)
                     result = eval_sub(T_mean, q_tot_hat)
 
-                    res_expected = BMT.average_bulk_microphysics_tendencies(
+                    res_expected = BMT.bulk_microphysics_tendencies(
+                        BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
                         q_tot_hat, FT(0), FT(0), FT(0), FT(0), FT(60), nsubs_quad,
                     )
@@ -297,7 +301,8 @@ import ClimaAtmos: limit_sink
                     # M_l = excess and q_lcl_eq_hat(T_mean, q_tot_sat) = excess
                     # so q_lcl_hat = q_lcl_mean exactly.
                     result_mean = eval_sat(T_mean, q_tot_sat)
-                    res_direct = BMT.average_bulk_microphysics_tendencies(
+                    res_direct = BMT.bulk_microphysics_tendencies(
+                        BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
                         q_tot_sat, q_lcl, FT(0), FT(0), FT(0), FT(60), nsubs_quad,
                     )
@@ -320,7 +325,8 @@ import ClimaAtmos: limit_sink
                     # Subsaturated quadrature point: q_lcl_eq_hat = 0.
                     q_tot_dry = q_sat_mean - FT(1e-4)
                     result = eval_stale(T_mean, q_tot_dry)
-                    res_expected = BMT.average_bulk_microphysics_tendencies(
+                    res_expected = BMT.bulk_microphysics_tendencies(
+                        BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
                         q_tot_dry, q_lcl_stale, FT(0), FT(0), FT(0),
                         FT(60), nsubs_quad,
