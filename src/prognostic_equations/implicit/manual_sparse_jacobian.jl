@@ -66,8 +66,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     DiagonalRow = DiagonalMatrixRow{FT}
     TridiagonalRow = TridiagonalMatrixRow{FT}
     BidiagonalRow_C3 = BidiagonalMatrixRow{C3{FT}}
-    TridiagonalRow_ACT12 = TridiagonalMatrixRow{Adjoint{FT, CT12{FT}}}
-    BidiagonalRow_ACT3 = BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
+    TridiagonalRow_ACT12 = TridiagonalMatrixRow{typeof(CT12(FT(0), FT(0))')}
+    BidiagonalRow_ACT3 = BidiagonalMatrixRow{typeof(CT3(FT(0))')}
     BidiagonalRow_C3xACT12 =
         BidiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT12{FT})')}
     TridiagonalRow_C3xACT3 =
@@ -381,6 +381,70 @@ end
 
 # TODO: There are a few for loops in this function. This is because
 # using unrolled_foreach allocates (breaks the flame tests)
+# Extracted from `update_jacobian!` as a function barrier. The parent function
+# is ~1000 lines, which exhausts Julia's per-function type-inference budget:
+# past the exhaustion point, matrix-product element types widen to `Any`, and
+# `multiply_matrix_at_index` then throws on `rzero(Any)`. A separate function
+# gets a fresh inference budget; `@noinline` guarantees the barrier is not
+# inlined back into the parent.
+@noinline function update_dycore_jacobian_blocks!(Y, p, cache, dtγ)
+    (; topography_flag) = cache.derivative_flags
+    (; matrix) = cache
+    (; ᶜh_tot) = p.precomputed
+    (; ∂ᶜK_∂ᶜuₕ, ∂ᶜK_∂ᶠu₃, ᶠp_grad_matrix, ᶜadvection_matrix) = p.scratch
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    ᶠu₃ = Y.f.u₃
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
+    ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
+
+    if use_derivative(topography_flag)
+        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
+            adjoint(CT12(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ),
+        )
+    else
+        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CT12(ᶜuₕ)))
+    end
+    @. ∂ᶜK_∂ᶠu₃ =
+        ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
+        DiagonalMatrixRow(adjoint(CT3(ᶜuₕ))) ⋅ ᶜinterp_matrix()
+
+    @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix()
+
+    @. ᶜadvection_matrix =
+        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
+    @. p.scratch.ᶠbidiagonal_matrix_ct3xct12 =
+        ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
+    if use_derivative(topography_flag)
+        ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
+        @. ∂ᶜρ_err_∂ᶜuₕ =
+            dtγ * ᶜadvection_matrix ⋅ p.scratch.ᶠbidiagonal_matrix_ct3xct12
+    end
+    ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
+    @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+
+    tracer_info = (@name(c.ρe_tot), @name(c.ρq_tot))
+
+    MatrixFields.unrolled_foreach(tracer_info) do ρχ_name
+        MatrixFields.has_field(Y, ρχ_name) || return
+        ᶜχ = ρχ_name === @name(c.ρe_tot) ? ᶜh_tot : (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
+
+        if use_derivative(topography_flag)
+            ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
+            @. ∂ᶜρχ_err_∂ᶜuₕ =
+                dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ)) ⋅
+                p.scratch.ᶠbidiagonal_matrix_ct3xct12
+        end
+
+        ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
+        @. ∂ᶜρχ_err_∂ᶠu₃ =
+            dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
+    end
+    return nothing
+end
+
 function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     (;
         topography_flag,
@@ -451,48 +515,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ᶜ∂p∂ρq_tot = p.scratch.ᶜtemp_scalar_2
     @. ᶜ∂p∂ρq_tot = ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (ᶜT - T_0)) + ΔR_v * ᶜT
 
-    if use_derivative(topography_flag)
-        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
-            adjoint(CT12(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ),
-        )
-    else
-        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CT12(ᶜuₕ)))
-    end
-    @. ∂ᶜK_∂ᶠu₃ =
-        ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
-        DiagonalMatrixRow(adjoint(CT3(ᶜuₕ))) ⋅ ᶜinterp_matrix()
-
-    @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix()
-
-    @. ᶜadvection_matrix =
-        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
-    @. p.scratch.ᶠbidiagonal_matrix_ct3xct12 =
-        ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
-    if use_derivative(topography_flag)
-        ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
-        @. ∂ᶜρ_err_∂ᶜuₕ =
-            dtγ * ᶜadvection_matrix ⋅ p.scratch.ᶠbidiagonal_matrix_ct3xct12
-    end
-    ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
-    @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
-
-    tracer_info = (@name(c.ρe_tot), @name(c.ρq_tot))
-
-    MatrixFields.unrolled_foreach(tracer_info) do ρχ_name
-        MatrixFields.has_field(Y, ρχ_name) || return
-        ᶜχ = ρχ_name === @name(c.ρe_tot) ? ᶜh_tot : (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
-
-        if use_derivative(topography_flag)
-            ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
-            @. ∂ᶜρχ_err_∂ᶜuₕ =
-                dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ)) ⋅
-                p.scratch.ᶠbidiagonal_matrix_ct3xct12
-        end
-
-        ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
-        @. ∂ᶜρχ_err_∂ᶠu₃ =
-            dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
-    end
+    # Dycore matrix blocks (∂ᶜK/∂*, pressure-gradient, ρ/ρχ continuity advection)
+    # are computed in a separate function as an inference-budget barrier — see
+    # the `update_dycore_jacobian_blocks!` comment. The scratch fields and
+    # `matrix` blocks it fills are mutated in place, so the bindings below still
+    # see the results.
+    update_dycore_jacobian_blocks!(Y, p, cache, dtγ)
 
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]

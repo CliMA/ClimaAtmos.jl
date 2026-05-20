@@ -21,7 +21,7 @@ Arguments:
 - `ᶜρ`: Cell-center air density field.
 - `ᶜuₕ`: Cell-center horizontal velocity field (used for type/structure, not value in flux calc).
 - `ρ_flux_uₕ_surface`: The vertical flux of horizontal momentum through the bottom
-  boundary. This is a `ClimaCore.Geometry.AxisTensor` of type
+  boundary. This is a `ClimaCore.Geometry.Tensor` of type
   `C3{FT} ⊗ C12{FT}` (e.g., representing surface stress `τ` as
   `e_3 ⊗ τ` if defined as flux into the domain, or simply
   the stress vector `τ` if the `SetValue` operator handles the normal).

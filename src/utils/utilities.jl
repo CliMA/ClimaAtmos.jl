@@ -230,7 +230,7 @@ end
     g³³_field(space)
 
 Extracts the value of `g³³`, the 3rd component of the metric terms that convert
-Covariant AxisTensors to Contravariant AxisTensors, from the given space.
+Covariant Tensors to Contravariant Tensors, from the given space.
 """
 function g³³_field(space)
     g_field = Fields.local_geometry_field(space).gⁱʲ.components.data
@@ -243,10 +243,13 @@ end
 
 Extracts the `g³³` sub-tensor from the `gⁱʲ` tensor.
 """
-g³³(gⁱʲ) = Geometry.AxisTensor(
-    (Geometry.Contravariant3Axis(), Geometry.Contravariant3Axis()),
-    Geometry.components(gⁱʲ)[end],
-)
+function g³³(gⁱʲ)
+    FT = eltype(parent(gⁱʲ))
+    Geometry.Tensor(
+        SMatrix{1, 1, FT, 1}(parent(gⁱʲ)[end]),
+        (Geometry.Contravariant3Axis(), Geometry.Contravariant3Axis()),
+    )
+end
 
 
 """
@@ -270,6 +273,9 @@ function g³ʰ(gⁱʲ)
     elseif full_CT_axis == Geometry.Contravariant23Axis()
         @inbounds val = gⁱʲ_components[N, 1]
         SMatrix{1, 2, FT, 2}(zero(FT), val)
+    elseif full_CT_axis == Geometry.Contravariant3Axis()
+        # Single-column geometry: no horizontal axes, no off-diagonal terms
+        SMatrix{1, 2, FT, 2}(zero(FT), zero(FT))
     else
         error("$full_CT_axis is missing either vertical or horizontal sub-axes")
     end
