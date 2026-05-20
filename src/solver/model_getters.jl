@@ -19,6 +19,105 @@ function get_microphysics_model(parsed_args, params = nothing)
     end
 end
 
+import CloudMicrophysics as CM
+
+"""
+    get_microphysics_1m_options(parsed_args)
+
+Parse the YAML config keys for 1-moment microphysics process options and
+return a `CMP.Microphysics1MOptions` struct.
+
+Each YAML key maps to one field of `Microphysics1MOptions`, selecting the
+singleton type that controls dispatch inside `bulk_microphysics_tendencies`.
+"""
+function get_microphysics_1m_options(parsed_args)
+    CMP = CM.Parameters
+
+    cloud_liquid_formation = _parse_option(
+        parsed_args["cloud_liquid_formation"],
+        Dict(
+            "constant_timescale" =>
+                CMP.ConstantTimescaleCloudLiquidFormation(),
+        ),
+        "cloud_liquid_formation",
+    )
+    cloud_ice_formation = _parse_option(
+        parsed_args["cloud_ice_formation"],
+        Dict(
+            "constant_timescale" =>
+                CMP.ConstantTimescaleCloudIceFormation(),
+            "temperature_dependent" =>
+                CMP.TemperatureDependentCloudIceFormation(),
+        ),
+        "cloud_ice_formation",
+    )
+    cloud_ice_melt = _parse_option(
+        parsed_args["cloud_ice_melt"],
+        Dict(
+            "melt_to_liquid" => CMP.CloudIceMeltToLiquid(),
+            "none" => CMP.NoCloudIceMelt(),
+        ),
+        "cloud_ice_melt",
+    )
+    cloud_liquid_autoconversion = _parse_option(
+        parsed_args["cloud_liquid_autoconversion"],
+        Dict(
+            "1M" => CMP.LiquidAutoconv1M(),
+            "2M" => CMP.LiquidAutoconv2M(),
+        ),
+        "cloud_liquid_autoconversion",
+    )
+    snow_autoconversion = _parse_option(
+        parsed_args["snow_autoconversion"],
+        Dict(
+            "no_supersat" => CMP.SnowAutoconvNoSupersat(),
+            "with_supersat" => CMP.SnowAutoconvWithSupersat(),
+        ),
+        "snow_autoconversion",
+    )
+    rain_evaporation = _parse_option(
+        parsed_args["rain_evaporation"],
+        Dict("evaporation_only" => CMP.EvaporationOnly()),
+        "rain_evaporation",
+    )
+    snow_sublimation = _parse_option(
+        parsed_args["snow_sublimation"],
+        Dict(
+            "sublimation_only" => CMP.SublimationOnly(),
+            "deposition_sublimation" => CMP.DepositionSublimation(),
+        ),
+        "snow_sublimation",
+    )
+    snow_melt = _parse_option(
+        parsed_args["snow_melt"],
+        Dict("melt" => CMP.SnowMelt()),
+        "snow_melt",
+    )
+
+    return CMP.Microphysics1MOptions(;
+        cloud_liquid_formation,
+        cloud_ice_formation,
+        cloud_ice_melt,
+        cloud_liquid_autoconversion,
+        snow_autoconversion,
+        rain_evaporation,
+        snow_sublimation,
+        snow_melt,
+    )
+end
+
+"""
+    _parse_option(value, options_map, key_name)
+
+Look up `value` in `options_map` (a `Dict{String, T}`), returning the
+corresponding singleton. Throws an informative error if the value is invalid.
+"""
+function _parse_option(value, options_map, key_name)
+    haskey(options_map, value) && return options_map[value]
+    valid = join(sort(collect(keys(options_map))), ", ")
+    error("Invalid `$key_name`: \"$value\". Valid options: $valid")
+end
+
 function get_sgs_quadrature(parsed_args, params = nothing)
     use_sgs_quadrature = get(parsed_args, "use_sgs_quadrature", false)
     use_sgs_quadrature || return nothing
