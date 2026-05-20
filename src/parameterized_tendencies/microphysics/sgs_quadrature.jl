@@ -11,6 +11,20 @@ import Thermodynamics as TD
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 import UnrolledUtilities: unrolled_reduce
 
+# Device-conditional function barrier around a single quadrature-point
+# evaluation of `f`. The GPU/CPU choice is carried as a `Val{is_gpu}` flag
+# (resolved on the host from the run device) rather than the device object
+# itself, because `ClimaComms.CUDADevice` is iterable and would be
+# `collect`ed by ClimaCore broadcasting instead of treated as a scalar.
+#
+# `Val{true}` (GPU): `@noinline` prevents the heavy microphysics tendency
+# code from being inlined N² times into the unrolled quadrature loop, which
+# dramatically lowers register pressure and raises occupancy.
+# `Val{false}` (CPU): `@inline` keeps the call byte-identical to the
+# original code so there is no CPU regression.
+@noinline _eval_quad_point(f, x_hat, ::Val{true}) = f(x_hat...)
+@inline _eval_quad_point(f, x_hat, ::Val{false}) = f(x_hat...)
+
 
 # ============================================================================
 # Gauss-Hermite Quadrature
@@ -523,7 +537,12 @@ Approximates the integral:
 # Returns
 Weighted sum with the same type as `f(T, q)`.
 """
-function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature{N}) where {N}
+function sum_over_quadrature_points(
+    f,
+    get_x_hat,
+    quad::SGSQuadrature{N},
+    is_gpu::Val = Val(false),
+) where {N}
     χ = quad.a
     weights = quad.w
     FT = eltype(χ)
@@ -537,19 +556,29 @@ function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature{N}) where 
     # saves one full evaluation of `f` per cell (≈ 11% of work at N = 3).
     @inbounds begin
         x_hat = get_x_hat(χ[1], χ[1])
-        inner_sum = f(x_hat...) ⊠ (weights[1] * inv_sqrt_pi)
+        inner_sum =
+            _eval_quad_point(f, x_hat, is_gpu) ⊠ (weights[1] * inv_sqrt_pi)
         for j in 2:N
             x_hat = get_x_hat(χ[1], χ[j])
-            inner_sum = inner_sum ⊞ (f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi))
+            inner_sum =
+                inner_sum ⊞ (
+                    _eval_quad_point(f, x_hat, is_gpu) ⊠
+                    (weights[j] * inv_sqrt_pi)
+                )
         end
         outer_sum = inner_sum ⊠ (weights[1] * inv_sqrt_pi)
 
         for i in 2:N
             x_hat = get_x_hat(χ[i], χ[1])
-            inner_sum = f(x_hat...) ⊠ (weights[1] * inv_sqrt_pi)
+            inner_sum =
+                _eval_quad_point(f, x_hat, is_gpu) ⊠ (weights[1] * inv_sqrt_pi)
             for j in 2:N
                 x_hat = get_x_hat(χ[i], χ[j])
-                inner_sum = inner_sum ⊞ (f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi))
+                inner_sum =
+                    inner_sum ⊞ (
+                        _eval_quad_point(f, x_hat, is_gpu) ⊠
+                        (weights[j] * inv_sqrt_pi)
+                    )
             end
             outer_sum = outer_sum ⊞ (inner_sum ⊠ (weights[i] * inv_sqrt_pi))
         end
@@ -578,7 +607,16 @@ determined by `quad.dist` (see [`get_physical_point`](@ref)).
 # Returns
 Weighted sum ``\\approx E[f(T, q)]`` with the same type as `f(T, q)`.
 """
-function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
+function integrate_over_sgs(
+    f,
+    quad,
+    μ_q,
+    μ_T,
+    q′q′,
+    T′T′,
+    corr_Tq,
+    is_gpu::Val = Val(false),
+)
     σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
 
     # Use functor instead of closure to avoid heap allocations.
@@ -598,7 +636,7 @@ function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
         oftype(μ_T_p, quad.q_max),
     )
 
-    return sum_over_quadrature_points(f, transform, quad)
+    return sum_over_quadrature_points(f, transform, quad, is_gpu)
 end
 
 """
@@ -609,7 +647,16 @@ Simplified grid-mean integration: evaluates `f(μ_T, μ_q)` directly.
 This allows using `GridMeanSGS()` directly without wrapping in `SGSQuadrature`,
 avoiding the need to extract FT from the space. Variances and correlation are ignored.
 """
-@inline function integrate_over_sgs(f, ::GridMeanSGS, μ_q, μ_T, q′q′, T′T′, corr_Tq)
+@inline function integrate_over_sgs(
+    f,
+    ::GridMeanSGS,
+    μ_q,
+    μ_T,
+    q′q′,
+    T′T′,
+    corr_Tq,
+    is_gpu::Val = Val(false),
+)
     return f(μ_T, μ_q)
 end
 
