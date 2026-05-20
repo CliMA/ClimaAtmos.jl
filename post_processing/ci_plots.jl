@@ -40,10 +40,12 @@
 
 import CairoMakie
 import CairoMakie.Makie
+import ClimaAtmos as CA
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
 import ClimaAnalysis: SimDir, slice, average_xy, window, average_time
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
+import OrderedCollections: OrderedDict
 
 import ClimaCoreSpectra: power_spectrum_2d
 
@@ -353,8 +355,7 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
 
     FT = eltype(var.data)
 
-    mass_weight =
-        isnothing(mass_weight) ? ones(FT, length(var.dims[dim3])) : mass_weight
+    mass_weight = isnothing(mass_weight) ? ones(FT, length(var.dims[dim3])) : mass_weight
 
     # Number of spherical wave numbers, excluding the first and the last
     # This number was reverse-engineered from ClimaCoreSpectra
@@ -363,18 +364,14 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
     mesh_info = nothing
 
     if !isempty(times)
-        output_spectrum =
-            zeros((length(times), num_output, length(var.dims[dim3])))
+        output_spectrum = zeros((length(times), num_output, length(var.dims[dim3])))
         dims = Dict(time => times)
         dim_attributes = Dict(time => var.dim_attributes[time])
         for index in 1:length(times)
             spectrum_data, _wave_numbers, _spherical, mesh_info =
                 power_spectrum_2d(FT, var.data[index, :, :, :], mass_weight)
             output_spectrum[index, :, :] .=
-                dropdims(sum(spectrum_data, dims = 1), dims = 1)[
-                    (begin + 1):(end - 1),
-                    :,
-                ]
+                dropdims(sum(spectrum_data, dims = 1), dims = 1)[(begin + 1):(end - 1), :]
         end
     else
         dims = Dict{String, Vector{FT}}()
@@ -383,10 +380,7 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
         spectrum_data, _wave_numbers, _spherical, mesh_info =
             power_spectrum_2d(FT, var.data[:, :, :], mass_weight)
         output_spectrum[:, :] .=
-            dropdims(sum(spectrum_data, dims = 1), dims = 1)[
-                (begin + 1):(end - 1),
-                :,
-            ]
+            dropdims(sum(spectrum_data, dims = 1), dims = 1)[(begin + 1):(end - 1), :]
     end
 
     w_numbers = collect(1:1:(mesh_info.num_spherical - 1))
@@ -397,17 +391,111 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
     dim_attributes[dim3] = var.dim_attributes[dim3]
 
     attributes = Dict(
-        "short_name" => "log_spectrum_" * var.attributes["short_name"],
-        "long_name" => "Spectrum of " * var.attributes["long_name"],
+        "short_name" => "log_spectrum_" * short_name(var),
+        "long_name" => "Spectrum of " * long_name(var),
         "units" => "",
     )
 
     return ClimaAnalysis.OutputVar(
-        attributes,
-        dims,
-        dim_attributes,
-        log10.(output_spectrum),
+        attributes, dims, dim_attributes, log10.(output_spectrum),
     )
+end
+
+import ClimaCoreSpectra.FFTW
+
+"""
+    compute_average_cartesian_spectrum_1d(
+        x::ClimaAnalysis.OutputVar;
+        spectrum_dim::String,
+        average_dims::Tuple = (),
+    )
+
+Compute a 1D power spectrum of `x` along `spectrum_dim`, optionally averaging
+the power over `average_dims`.
+
+# Arguments
+- `spectrum_dim`: The dimension to FFT along (e.g. `"x"` or `"y"`).
+- `average_dims`: Dimensions over which to average the power spectrum
+  (e.g. `["time"]`).  Omit to keep all other dimensions.
+
+Returns a `ClimaAnalysis.OutputVar` with raw (not log-scaled) power
+values.  Apply `log10` during plotting if desired.
+"""
+function compute_average_cartesian_spectrum_1d(
+    x::ClimaAnalysis.OutputVar;
+    spectrum_dim::String,
+    average_dims::Tuple = (),
+)
+    @assert haskey(x.dims, spectrum_dim) LazyString(
+        "Dimension \"", spectrum_dim, "\" not found in OutputVar",
+    )
+    for d in average_dims
+        @assert haskey(x.dims, d) LazyString("Dimension \"", d, "\" not found in OutputVar")
+    end
+
+    # Grid spacing along the spectrum dimension (assumed uniform)
+    grid_vals = x.dims[spectrum_dim]
+    n = length(grid_vals)
+    Δ = abs(grid_vals[end] - grid_vals[1]) / (n - 1)
+
+    # FFT along spectrum_dim
+    spectrum_axis = x.dim2index[spectrum_dim]
+    x̂ = FFTW.rfft(x.data, spectrum_axis)
+
+    # Compute norm using Parseval's theorem, equivalent to `sum(abs2, fft(x.data)) / n`
+    normalization = sum(abs2, x.data; dims = spectrum_axis)
+
+    # Average over requested dimensions
+    average_inds = map(k -> x.dim2index[k], average_dims)
+    power_spectrum = @. abs2(x̂) / normalization
+    avg_power_spectrum = mean(power_spectrum; dims = average_inds)
+
+    # Build output dimensions, dropping averaged dims and replacing
+    # spectrum_dim with the chosen independent variable.
+    unchanged_dims = setdiff(keys(x.dims), (average_dims..., spectrum_dim))
+
+    # Physical wavenumber: rfftfreq(n, 1/Δ) gives cycles per metre (1/m)
+    freq = collect(FFTW.rfftfreq(n, 1 / Δ))
+
+    # Drop the zero-frequency (DC) bin
+    freq = freq[2:end]
+
+    # Slice power to drop the DC bin along the spectrum axis.
+    # We also need to drop singleton dims from averaging.
+    idx = ntuple(ndims(x.data)) do i
+        if i == spectrum_axis
+            2:size(x̂, i)  # remove DC bin
+        elseif i in average_inds
+            1  # removes averaged dimensions
+        else  # `unchanged_dims`
+            1:size(x̂, i)  # keep other dimensions
+        end
+    end
+    avg_power_spectrum_sliced = avg_power_spectrum[idx...]
+
+    # Build output dims OrderedDict
+    # Need to get the right order of dimensions
+    new_dims = typeof(x.dims)()
+    new_dim_attr = typeof(x.dim_attributes)()
+    for d in keys(x.dims)
+        if d == spectrum_dim
+            new_dims["wavenumber"] = freq
+            new_dim_attr["wavenumber"] = Dict("units" => "1/m")
+        elseif d in unchanged_dims
+            new_dims[d] = x.dims[d]
+            new_dim_attr[d] = get(x.dim_attributes, d, Dict("units" => ""))
+        end
+    end
+
+    attr = Dict(
+        "short_name" => "spectrum_" * short_name(x),
+        "long_name" =>
+            "Spectrum along " * spectrum_dim * " of " * long_name(x) *
+            ";\naveraged over " * join(average_dims, ", "),
+        "units" => "(" * x.attributes["units"] * ")^2",
+    )
+
+    return ClimaAnalysis.OutputVar(attr, new_dims, new_dim_attr, avg_power_spectrum_sliced)
 end
 
 """
@@ -500,6 +588,79 @@ function plot_spectrum_with_line!(grid_loc, spectrum; exponent = -3.0)
         text = "k^$exponent";
         color,
     )
+
+    return nothing
+end
+
+function plot_1d_spectra_same_axis!(grid_loc, spectra; reference_exponent = -3.0)
+    get_slice_dims(spectrum) = begin
+        slice_keys = filter(
+            k -> startswith(k, "slice_") && !endswith(k, "_units"),
+            keys(spectrum.attributes),
+        )
+        map(Tuple(slice_keys)) do slice_key
+            chop(slice_key; head = 6, tail = 0)
+        end
+    end
+    get_slice_label(spectrum) = begin
+        slice_dims = get_slice_dims(spectrum)
+        join(map(slice_dims) do slice_dim
+                val = spectrum.attributes["slice_" * slice_dim]
+                "$slice_dim = $val"
+            end, "; ")
+    end
+
+    @assert "wavenumber" in spectra[1].index2dim
+    spectrum1, spectra2... = spectra
+    label1 = get_slice_label(spectrum1)
+    slice_dims = get_slice_dims(spectrum1)
+    long_name_fix = long_name(spectrum1)  # loop is big hack to get long_name without slice info (since we add that in the label)
+    for pattern in (" " .* get_slice_dims(spectrum1) .* " = ")
+        long_name_fix = split(long_name_fix, pattern)[1]
+    end
+    more_kwargs = Dict(
+        :axis => Dict(
+            :title => long_name_fix,
+            :xscale => log10, :yscale => log10,
+        ),
+        :plot => Dict(:label => label1),
+    )
+    viz.plot!(grid_loc, spectrum1; more_kwargs)
+    for spectrum in spectra2
+        label = get_slice_label(spectrum)
+        x = spectrum.dims["wavenumber"]
+        CairoMakie.lines!(x, spectrum.data; label)
+    end
+    CairoMakie.axislegend(CairoMakie.current_axis(); position = :lb)
+
+    if reference_exponent isa Real
+        # Short reference power-law line covering the last ~1/3 of the
+        # wavenumber range (in log-space), hovering above the data.
+        wn = spectrum1.dims["wavenumber"]
+
+        # Start 2/3 of the way across the log-spaced range
+        log_k_start = log10(wn[1])
+        log_k_end = log10(wn[end])
+        log_k_ref_start = log_k_start + 3 / 4 * (log_k_end - log_k_start)
+        ref_range = filter(i -> log10(wn[i]) >= log_k_ref_start, eachindex(wn))
+        wn_ref = wn[ref_range]
+
+        # Anchor the line to the first spectrum's value at the start of the range,
+        # shifted up by 5× so it hovers above the data
+        k_anchor = wn_ref[1]
+        p_anchor = spectrum1.data[ref_range[1]]
+        C = 3 * p_anchor / k_anchor^reference_exponent
+        ref_vals = C .* wn_ref .^ reference_exponent
+
+        ax = CairoMakie.current_axis()
+        CairoMakie.lines!(ax, wn_ref, ref_vals; color = :gray, linestyle = :dash)
+
+        # Place label at the midpoint of the reference line
+        mid = length(wn_ref) ÷ 2
+        CairoMakie.text!(ax, wn_ref[mid], ref_vals[mid];
+            text = "k^$(reference_exponent)", color = :gray,
+        )
+    end
 
     return nothing
 end
@@ -1213,13 +1374,15 @@ Helper function for `make_plots_generic`. Takes a list of variables and plots
 them on the same axis.
 """
 function plot_les_vert_profile!(grid_loc, var_group)
-    z = var_group[1].dims["z"]
-    units = var_group[1].attributes["units"]
+    var1 = var_group[1]
+    units = var1.attributes["units"]
+    z = var1.dims["z"]
+    z_units = var1.dim_attributes["z"]["units"]
     ax = CairoMakie.Axis(
         grid_loc[1, 1],
-        ylabel = "z [$(var_group[1].dim_attributes["z"]["units"])]",
-        xlabel = "$(short_name(var_group[1])) [$units]",
-        title = parse_var_attributes(var_group[1]),
+        ylabel = "z [$z_units]",
+        xlabel = "$(short_name(var1)) [$units]",
+        title = parse_var_attributes(var1),
     )
 
     for var in var_group
@@ -1228,61 +1391,80 @@ function plot_les_vert_profile!(grid_loc, var_group)
     length(var_group) > 1 && Makie.axislegend(ax)
 end
 
-function make_plots(
-    sim_type::Union{LESBoxPlots},
-    output_paths::Vector{<:AbstractString},
-)
+function make_plots(::LESBoxPlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
 
     reduction = "inst"
-    short_names = [
+    short_names_xyzt = [
         "wa", "ua", "va", "ta", "thetaa", "ha",
         "hus", "hur", "cl", "clw", "cli", "ke",
         "Dh_smag", "strainh_smag",  # smag horizontal
         "Dv_smag", "strainv_smag",  # smag vertical
         "edt",  # DecayWithHeight vertical diffusivity
+        "husra", "hussn", # 1M microphysics
+        "cdnc", "ncra",   # 2M microphysics
     ]
-    short_names = short_names ∩ collect(keys(simdirs[1].vars))
+    short_names_spectra = ["ua", "va", "wa"]
+
+    # Filter out variables that are not actually present in the simulations
+    short_names_xyzt = short_names_xyzt ∩ collect(keys(simdirs[1].vars))
+    short_names_spectra = short_names_spectra ∩ collect(keys(simdirs[1].vars))
 
     # Window average from instantaneous snapshots?
-    function horizontal_average(var)
-        return average_xy(var)
-    end
-    function windowed_reduction(var)
-        hours = 3600.0
+    function average_t_last2hrs(var)
         window_end = last(var.dims["time"])
-        window_start = window_end - 2hours
-        var_window = ClimaAnalysis.window(
-            var, "time"; left = window_start, right = window_end,
+        window_start = window_end - CA.time_to_seconds("2hours")
+        var_window = ClimaAnalysis.window(var, "time";
+            left = window_start, right = window_end,
         )
-        var_reduced = horizontal_average(average_time(var_window))
-        return var_reduced
+        return average_xy(average_time(var_window))
     end
 
-    var_groups_xyt_reduced =
-        map_comparison(simdirs, short_names) do simdir, short_name
-            return [get(simdir; short_name, reduction) |> windowed_reduction]
-        end
+    var_groups_z_avg_xyt = map_comparison(simdirs, short_names_xyzt) do simdir, short_name
+        return [get(simdir; short_name, reduction) |> average_t_last2hrs]
+    end
 
-    var_groups_xy_reduced =
-        map_comparison(simdirs, short_names) do simdir, short_name
-            return [get(simdir; short_name, reduction) |> horizontal_average]
-        end
+    var_groups_tz_avg_xy = map_comparison(simdirs, short_names_xyzt) do simdir, short_name
+        return [get(simdir; short_name, reduction) |> average_xy]
+    end
 
-    tmp_file = make_plots_generic(
-        output_paths,
-        var_groups_xyt_reduced,
-        output_name = "tmp";
+    tmp_file = make_plots_generic(output_paths, var_groups_z_avg_xyt;
+        output_name = "tmp",
         plot_fn = plot_les_vert_profile!,
-        MAX_NUM_COLS = 2,
-        MAX_NUM_ROWS = 4,
+        MAX_NUM_COLS = 2, MAX_NUM_ROWS = 4,
     )
+
+    summary_file = make_plots_generic(output_paths, vcat(var_groups_tz_avg_xy...);
+        output_name = isempty(short_names_spectra) ? "summary" : "tmp2",
+        plot_fn = plot_parsed_attribute_title!,
+        summary_files = [tmp_file],
+        MAX_NUM_COLS = 2, MAX_NUM_ROWS = 4,
+    )
+
+    isempty(short_names_spectra) && return summary_file
+    # If spectra are available, make additional plots
+
+    # x spectrum, averaged over y and last 7 days at z = 600, 6000, 10_000 m
+    var_groups_x_spectra_zs_comparison =
+        map_comparison(simdirs, short_names_spectra) do simdir, short_name
+            var = get(simdir; short_name, reduction)
+            last_t = last(var.dims["time"])
+            data = window(var, "time"; left = last_t - CA.time_to_seconds("7days"))
+            spectrum_data = compute_average_cartesian_spectrum_1d(
+                data; spectrum_dim = "x", average_dims = ("time", "y"),
+            )
+            [
+                slice(spectrum_data; z = 600),
+                slice(spectrum_data; z = 6000),
+                slice(spectrum_data; z = 10_000),
+            ]
+        end
 
     make_plots_generic(
         output_paths,
-        vcat(var_groups_xy_reduced...),
-        plot_fn = plot_parsed_attribute_title!,
-        summary_files = [tmp_file],
+        var_groups_x_spectra_zs_comparison;
+        summary_files = [summary_file],
+        plot_fn = plot_1d_spectra_same_axis!,
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
     )
