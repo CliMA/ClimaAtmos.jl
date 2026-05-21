@@ -1,4 +1,4 @@
-344
+345
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+345
+- Remove duplicate `enforce_physical_constraints_callback` call
+
 344
 - Unify cloud fraction and microphysics quadrature via a shared sgs_moments
   pre-pass; replace Sommeria-Deardorff cloud fraction with hybrid logistic-CDF;

@@ -543,10 +543,5 @@ function common_callbacks(
     if check_conservation
         callbacks = (callbacks..., conservation_checking_callback()...)
     end
-
-    # Enforce physical constraints filter (no-op fallback for non-EDMF models;
-    # keep unconditional so EDMF runs always get it without extra wiring).
-    callbacks = (callbacks..., enforce_physical_constraints_callback(dt))
-
     return callbacks
 end
