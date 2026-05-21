@@ -232,8 +232,13 @@ end
 ##### Reusable callback builder functions
 #####
 
-function progress_logging_callback(dt, t_start, t_end)
-    walltime_info = WallTimeInfo()
+function progress_logging_callback(
+    dt,
+    t_start,
+    t_end;
+    first_update_after_t_simulation = typemin(dt),
+)
+    walltime_info = WallTimeInfo(; first_update_after_t_simulation)
     tot_steps = ceil(Int, (t_end - t_start) / dt)
     five_percent_steps = ceil(Int, 0.05 * tot_steps)
     schedule = CappedGeometricSeriesSchedule(five_percent_steps)
@@ -522,30 +527,41 @@ function common_callbacks(
     kwargs...,
 )
     callbacks = ()
-
-    # Progress logging
-    if log_progress
-        callbacks = (callbacks..., progress_logging_callback(dt, t_start, t_end)...)
-    end
-
     # NaN checking
     callbacks = (callbacks..., nan_checking_callback(check_nan_every)...)
-
-    # Graceful exit
-    callbacks = (callbacks..., graceful_exit_callback(output_dir)...)
-
+    # Conservation checking
+    if check_conservation
+        callbacks = (callbacks..., conservation_checking_callback()...)
+    end
     # Checkpointing
     callbacks = (
         callbacks...,
         checkpoint_callback(checkpoint_frequency, output_dir, start_date, t_start)...,
     )
-
+    # Progress logging
+    if log_progress
+        # avoid estimating SYPD until the above (non-cleanup cbs) callbacks are compiled.
+        # raw SYPD between each call is still reported
+        steps_per_cycle = n_steps_per_cycle(callbacks, dt)
+        tot_steps = ceil(Int, float(t_end - t_start) / float(dt))
+        # it is possible for `steps_per_cycle` >= `tot_steps`. In that case, we want to
+        # ensure at least a few estimates are emitted, so we cap the SYPD estimate delay at tot_steps/4.
+        sypd_estimate_step_delay = min(steps_per_cycle, div(tot_steps, 4))
+        first_update_after_t_simulation = float(t_start + sypd_estimate_step_delay * dt)
+        callbacks = (
+            callbacks...,
+            progress_logging_callback(
+                dt,
+                t_start,
+                t_end;
+                first_update_after_t_simulation,
+            )...,
+        )
+    end
+    # Graceful exit
+    callbacks = (callbacks..., graceful_exit_callback(output_dir)...)
     # Garbage collection
     callbacks = (callbacks..., gc_callback(comms_ctx)...)
 
-    # Conservation checking
-    if check_conservation
-        callbacks = (callbacks..., conservation_checking_callback()...)
-    end
     return callbacks
 end
