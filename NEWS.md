@@ -4,6 +4,8 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+v0.39.1
+-------
 - ![][badge-🔥behavioralΔ] Unify cloud fraction and microphysics SGS quadrature via a shared `sgs_moments` pre-pass. Replace the Sommeria–Deardorff cloud fraction with a hybrid CDF formula, with variances from quadratures, and introduce a mass-conserving shape-function partition in the `Microphysics1MEvaluator`.
 
 v0.39.0
