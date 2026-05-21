@@ -17,13 +17,14 @@ import .Parameters as CAP
 
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "gpu_compat.jl"))
-include(joinpath("solver", "types.jl"))
-include(joinpath("solver", "cli_options.jl"))
+include("types.jl")
+include(joinpath("config", "atmos_config.jl"))
+include(joinpath("config", "cli_options.jl"))
 include(joinpath("utils", "utilities.jl"))
 include(joinpath("utils", "debug_utils.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
 include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
-include(joinpath("utils", "era5_observations_to_forcing_file.jl"))
+include(joinpath("config", "era5_observations_to_forcing_file.jl"))
 include(joinpath("utils", "weather_model.jl"))
 
 include(joinpath("utils", "AtmosArtifacts.jl"))
@@ -149,14 +150,16 @@ include(joinpath("callbacks", "get_callbacks.jl"))
 include(joinpath("parameters", "create_parameters.jl"))
 
 include(joinpath("simulation", "grids.jl"))
+include(joinpath("simulation", "restart.jl"))
+include(joinpath("simulation", "integrator.jl"))
 include(joinpath("simulation", "AtmosSimulations.jl"))
+include(joinpath("simulation", "solve.jl"))
 
 include("presets.jl")
 
-include(joinpath("solver", "model_getters.jl")) # high-level (using parsed_args) model getters
-include(joinpath("solver", "type_getters.jl"))
-include(joinpath("solver", "yaml_helper.jl"))
-include(joinpath("solver", "solve.jl"))
+include(joinpath("config", "model_getters.jl"))
+include(joinpath("config", "type_getters.jl"))
+include(joinpath("config", "yaml_helper.jl"))
 
 include(joinpath("utils", "show.jl"))
 
