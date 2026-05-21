@@ -103,33 +103,6 @@ function ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰, scale_hei
            max(scale_height, H_up_min)
 end
 
-edmfx_nh_pressure_drag_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
-function edmfx_nh_pressure_drag_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    turbconv_model::PrognosticEDMFX,
-)
-    if p.atmos.edmfx_model.nh_pressure isa Val{true} &&
-       p.atmos.sgs_nh_pressure_mode == Explicit()
-        (; params) = p
-        n = n_mass_flux_subdomains(turbconv_model)
-        ᶠlg = Fields.local_geometry_field(Y.f)
-        scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-        # assume zero environmental velocity
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠupdraft_nh_pressure_drag(
-                params,
-                ᶠlg,
-                Y.f.sgsʲs.:($$j).u₃,
-                C3(0),
-                scale_height,
-            )
-        end
-    end
-end
-
 edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_vertical_diffusion_tendency!(
