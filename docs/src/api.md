@@ -58,6 +58,52 @@ ClimaAtmos.SLEVEWarp
 ClimaAtmos.LinearWarp
 ```
 
+## Surface
+
+See the [Surface Conditions](@ref "Surface Conditions") page for a guide to
+these types and how to choose among them.
+
+```@docs
+ClimaAtmos.AtmosSurface
+```
+
+### Flux schemes
+
+```@docs
+ClimaAtmos.SurfaceConditions.SurfaceParameterization
+ClimaAtmos.SurfaceConditions.MoninObukhov
+ClimaAtmos.SurfaceConditions.ExchangeCoefficients
+ClimaAtmos.SurfaceConditions.HeatFluxes
+ClimaAtmos.SurfaceConditions.θAndQFluxes
+ClimaAtmos.SurfaceConditions.DefaultMoninObukhov
+ClimaAtmos.SurfaceConditions.DefaultExchangeCoefficients
+```
+
+### Surface temperature
+
+```@docs
+ClimaAtmos.SurfaceConditions.SurfaceTemperature
+ClimaAtmos.SurfaceConditions.AnalyticTemperature
+ClimaAtmos.SurfaceConditions.SlabOceanTemperature
+ClimaAtmos.SurfaceConditions.ExternalTemperature
+ClimaAtmos.SurfaceConditions.CoupledTemperature
+```
+
+### Boundary overrides
+
+```@docs
+ClimaAtmos.SurfaceConditions.SurfaceBoundaryOverrides
+```
+
+### Surface albedo
+
+```@docs
+ClimaAtmos.SurfaceAlbedoModel
+ClimaAtmos.ConstantAlbedo
+ClimaAtmos.RegressionFunctionAlbedo
+ClimaAtmos.CouplerAlbedo
+```
+
 ## Internals
 
 ```@docs

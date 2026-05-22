@@ -8,8 +8,7 @@ import ..DryModel
 import ..EquilibriumMicrophysics0M
 import ..NonEquilibriumMicrophysics1M
 import ..GridScaleCloud
-import ..PrescribedSST
-import ..ZonallySymmetricSST
+import ..SurfaceConditions
 import ..IdealizedInsolation
 import ..Explicit
 import ..DiagnosticEDMFX, ..PrognosticEDMFX
@@ -43,8 +42,9 @@ function equil_moist_0m(; kwargs...)
     defaults = (;
         microphysics_model = EquilibriumMicrophysics0M(),
         cloud_model = GridScaleCloud(),
-        surface_model = PrescribedSST(),
-        sfc_temperature = ZonallySymmetricSST(),
+        temperature = SurfaceConditions.AnalyticTemperature(
+            Setups.zonally_symmetric_temperature,
+        ),
         insolation = IdealizedInsolation(),
     )
     return AtmosModel(; defaults..., kwargs...)
@@ -64,8 +64,9 @@ function nonequil_moist_1m(; kwargs...)
         microphysics_model = NonEquilibriumMicrophysics1M(),
         microphysics_tendency_timestepping = Explicit(),
         cloud_model = GridScaleCloud(),
-        surface_model = PrescribedSST(),
-        sfc_temperature = ZonallySymmetricSST(),
+        temperature = SurfaceConditions.AnalyticTemperature(
+            Setups.zonally_symmetric_temperature,
+        ),
         insolation = IdealizedInsolation(),
     )
     return AtmosModel(; defaults..., kwargs...)

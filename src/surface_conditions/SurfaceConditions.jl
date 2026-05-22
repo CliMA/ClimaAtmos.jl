@@ -2,11 +2,6 @@ module SurfaceConditions
 
 import ..Parameters as CAP
 import ..DryModel
-import ..ZonallySymmetricSST
-import ..RCEMIPIISST
-import ..ExternalTVColumnSST
-import ..SlabOceanSST
-import ..PrescribedSST
 import ..CT1, ..CT2, ..C12, ..CT12, ..C3
 import ..unit_basis_vector_data, ..projected_vector_data
 import ..geopotential
@@ -24,6 +19,7 @@ import Interpolations
 import StaticArrays as SA
 
 include("surface_state.jl")
+include("surface_temperature.jl")
 include("surface_conditions.jl")
 include("surface_setups.jl")
 

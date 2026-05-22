@@ -4,56 +4,55 @@
 
 abstract type PrescribedFluxes{FT} end
 
+"""
+    SurfaceParameterization
+
+Abstract supertype for surface flux closures. Concrete subtypes
+([`MoninObukhov`](@ref), [`ExchangeCoefficients`](@ref)) determine how
+`surface_state_to_conditions` turns the air–surface state difference into the
+turbulent surface fluxes.
+"""
 abstract type SurfaceParameterization{FT} end
 
-"""
-    SurfaceState(; parametrization, T, p, q_vap, u, v, gustiness, beta)
-
-A container for state variables at the ground level, for use with SurfaceFluxes.
-"""
-struct SurfaceState{
-    FT,
-    SFP <: SurfaceParameterization{FT},
-    FTN1 <: Union{FT, Nothing},
-    FTN2 <: Union{FT, Nothing},
-    FTN3 <: Union{FT, Nothing},
-    FTN4 <: Union{FT, Nothing},
-    FTN5 <: Union{FT, Nothing},
-    FTN6 <: Union{FT, Nothing},
-    FTN7 <: Union{FT, Nothing},
-}
-    parameterization::SFP
-    T::FTN1
-    p::FTN2
-    q_vap::FTN3
-    u::FTN4
-    v::FTN5
-    gustiness::FTN6
-    beta::FTN7
-end
+Base.broadcastable(p::SurfaceParameterization) = tuple(p)
 
 float_type(::Type{<:SurfaceParameterization{FT}}) where {FT} = FT
 
-SurfaceState(;
-    parameterization::SFP,
-    T::FTN1 = nothing,
-    p::FTN2 = nothing,
-    q_vap::FTN3 = nothing,
-    u::FTN4 = nothing,
-    v::FTN5 = nothing,
-    gustiness::FTN6 = nothing,
-    beta::FTN7 = nothing,
-) where {SFP <: SurfaceParameterization, FTN1, FTN2, FTN3, FTN4, FTN5, FTN6, FTN7} =
-    SurfaceState{float_type(SFP), SFP, FTN1, FTN2, FTN3, FTN4, FTN5, FTN6, FTN7}(
-        parameterization, T, p, q_vap, u, v, gustiness, beta,
-    )
+"""
+    SurfaceBoundaryOverrides(; p, q_vap, u, v, gustiness, beta)
+
+Per-point overrides for surface boundary values used by `SurfaceFluxes`. Fields
+default to `nothing`, in which case sensible defaults are used:
+
+- `p`: surface pressure (default: hydrostatic from interior)
+- `q_vap`: surface specific humidity (default: `q_vap_sat` at `T_sfc`)
+- `u`, `v`: surface horizontal winds (default: 0)
+- `gustiness`: turbulent gustiness (default: 1)
+- `beta`: moisture availability (default: 1)
+
+For the coupler use case, a `Fields.Field{<:SurfaceBoundaryOverrides}` may be
+stored on the cache so that the coupler can override per-cell values.
+"""
+Base.@kwdef struct SurfaceBoundaryOverrides{PN, QN, UN, VN, GN, BN}
+    p::PN = nothing
+    q_vap::QN = nothing
+    u::UN = nothing
+    v::VN = nothing
+    gustiness::GN = nothing
+    beta::BN = nothing
+end
 
 """
-    HeatFluxes(; shf, lhf)
+    HeatFluxes(; shf, lhf = nothing)
 
-Container for heat fluxes
- - shf: Sensible heat flux
- - lhf: Latent heat flux
+Prescribed surface turbulent energy fluxes, used as the `fluxes` field of a
+[`MoninObukhov`](@ref) closure. Both use the sign convention that positive is
+*upward* (directed from the surface into the atmosphere).
+
+- `shf`: sensible heat flux (W/m²).
+- `lhf`: latent heat flux (W/m²). Optional — `nothing` is treated as zero, and
+  `lhf` must be left unset for a `DryModel` (specifying it with a dry model is an
+  error).
 """
 Base.@kwdef struct HeatFluxes{FT, FTN <: Union{FT, Nothing}} <: PrescribedFluxes{FT}
     shf::FT
@@ -61,9 +60,17 @@ Base.@kwdef struct HeatFluxes{FT, FTN <: Union{FT, Nothing}} <: PrescribedFluxes
 end
 
 """
-    θAndQFluxes(; θ_flux, q_flux)
+    θAndQFluxes(; θ_flux, q_flux = nothing)
 
-Container for quantities used to calculate sensible and latent heat fluxes.
+Prescribed surface *kinematic* fluxes of potential temperature and total
+specific humidity, used as the `fluxes` field of a [`MoninObukhov`](@ref)
+closure. They are converted per surface point into the sensible/latent heat
+fluxes actually applied, via `shf = θ_flux * ρ_sfc * cp_m` and
+`lhf = q_flux * ρ_sfc * Lᵥ`. Positive is *upward* (surface into atmosphere).
+
+- `θ_flux`: potential-temperature flux (K·m/s).
+- `q_flux`: total-specific-humidity flux (kg/kg·m/s). Optional — `nothing` is
+  treated as zero, and `q_flux` must be left unset for a `DryModel`.
 """
 Base.@kwdef struct θAndQFluxes{FT, FTN <: Union{FT, Nothing}} <: PrescribedFluxes{FT}
     θ_flux::FT
@@ -72,11 +79,18 @@ end
 
 """
     ExchangeCoefficients(; Cd, Ch)
-    ExchangeCoefficients(; C)
+    ExchangeCoefficients(C)
 
-Exchange coefficients
- - Cd: Momentum Exchange Coefficient
- - Ch: Thermal Exchange Coefficient
+Bulk-aerodynamic surface flux closure with fixed, dimensionless exchange
+coefficients — a [`SurfaceParameterization`](@ref) alternative to
+[`MoninObukhov`](@ref) in which the turbulent fluxes scale linearly with the
+near-surface wind speed and the air–surface differences (rather than being
+derived from Monin–Obukhov stability).
+
+- `Cd`: momentum (drag) exchange coefficient.
+- `Ch`: thermal/scalar (heat and moisture) exchange coefficient.
+
+The single-argument form `ExchangeCoefficients(C)` sets `Cd = Ch = C`.
 """
 Base.@kwdef struct ExchangeCoefficients{FT} <: SurfaceParameterization{FT}
     Cd::FT
@@ -88,14 +102,18 @@ ExchangeCoefficients(C) = ExchangeCoefficients(Cd = C, Ch = C)
     MoninObukhov(; z0, z0m, z0b, fluxes, shf, lhf, θ_flux, q_flux, ustar)
 
 Container for storing values used to calculate surface conditions using
-Monin-Obukhov Similarity Theory. See SurfaceFluxes docs for more information.
+Monin-Obukhov Similarity Theory. See the
+[SurfaceFluxes.jl MOST documentation](https://clima.github.io/SurfaceFluxes.jl/dev/SurfaceFluxes/#Monin-Obukhov-Similarity-Theory-(MOST))
+for more information.
 
 ## Roughness (required)
 - `z0`: Roughness (sets both `z0m` and `z0b`)
 - `z0m`, `z0b`: Roughness for momentum and scalars (specify both, or use `z0`)
 
 ## Prescribed fluxes (optional) — specify via one of:
-- `fluxes`: A `HeatFluxes` or `θAndQFluxes` struct directly
+- `fluxes`: A [`HeatFluxes`](@ref)/[`θAndQFluxes`](@ref) struct, or a callable
+  `(t, FT) -> HeatFluxes/θAndQFluxes` for time-varying fluxes (resolved once per
+  surface update by `resolve_flux_scheme`, before the per-cell broadcast)
 - `shf`, `lhf`: Sensible/latent heat fluxes (W/m²) — constructs `HeatFluxes`
 - `θ_flux`, `q_flux`: θ and q fluxes (K·m/s, kg/kg·m/s) — constructs `θAndQFluxes`
 
@@ -110,7 +128,7 @@ Valid combinations:
 """
 struct MoninObukhov{
     FT,
-    PFN <: Union{PrescribedFluxes{FT}, Nothing},
+    PFN <: Union{PrescribedFluxes, Nothing, Function},
     FTN <: Union{FT, Nothing},
 } <: SurfaceParameterization{FT}
     z0m::FT
@@ -156,7 +174,9 @@ function MoninObukhov(;
         MoninObukhov(z0m, z0b, fluxes, nothing)
     m_o(z0m::Number, z0b::Number, ::Nothing, ustar::Number) =
         MoninObukhov(z0m, z0b, nothing, ustar)
-    m_o(z0m::Number, z0b::Number, fluxes::PrescribedFluxes, ustar::Number) =
+    # `fluxes` may be a `PrescribedFluxes` struct or a time-varying callable
+    # `(t, FT) -> PrescribedFluxes` (resolved later by `resolve_flux_scheme`).
+    m_o(z0m::Number, z0b::Number, fluxes::Union{PrescribedFluxes, Function}, ustar::Number) =
         MoninObukhov(z0m, z0b, fluxes, ustar)
     return m_o(z0m, z0b, fluxes, ustar)
 end

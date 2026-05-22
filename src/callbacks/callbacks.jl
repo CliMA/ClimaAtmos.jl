@@ -28,7 +28,7 @@ function flux_accumulation!(integrator)
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
             FT(Δt)
-        if p.atmos.surface_model isa PrescribedSST
+        if !(p.atmos.surface.temperature isa SurfaceConditions.SlabOceanTemperature)
             net_energy_flux_sfc[] +=
                 horizontal_integral_at_boundary(ᶠradiation_flux, half) *
                 FT(Δt)
@@ -64,7 +64,7 @@ function external_driven_single_column!(integrator)
     p = integrator.p
     t = integrator.t
 
-    @assert p.atmos.sfc_temperature isa ExternalTVColumnSST (
+    @assert p.atmos.surface.temperature isa SurfaceConditions.ExternalTemperature (
         "SCM reanalysis timevarying setup requires `initial_condition` " *
         "and `external_forcing` to be set to `ReanalysisTimeVarying`"
     )

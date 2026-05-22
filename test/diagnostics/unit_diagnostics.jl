@@ -95,7 +95,6 @@ under test actually requires (e.g. `aerosol_names` for aerosol diagnostics,
 function build_state_cache(FT, model; grid,
     params = CA.ClimaAtmosParameters(FT),
     ic = CA.Setups.DecayingProfile(; params),
-    surface_setup = CA.SurfaceConditions.DefaultExchangeCoefficients(),
     dt = FT(1.0), start_date = DateTime(2010, 1, 1),
     aerosol_names = [], time_varying_trace_gas_names = (),
     set_steady_state_velocity = false,
@@ -110,7 +109,7 @@ function build_state_cache(FT, model; grid,
             params, Y, CA.NoTopography(), "ConstantBuoyancyFrequencyProfile", "Linear",
         ) : nothing
     p = CA.build_cache(
-        Y, model, params, surface_setup, dt, start_date,
+        Y, model, params, dt, start_date,
         aerosol_names, time_varying_trace_gas_names, steady_state_velocity, vwb_species,
     )
     return Y, p
@@ -156,7 +155,10 @@ column = CA.ColumnGrid(FT)
 
 ## Dry model, also tests slab ocean
 model_dry =
-    CA.AtmosModel(; microphysics_model = CA.DryModel(), surface_model = CA.SlabOceanSST())
+    CA.AtmosModel(;
+        microphysics_model = CA.DryModel(),
+        temperature = CA.SurfaceConditions.SlabOceanTemperature{FT}(),
+    )
 (Y_dry, p_dry) = build_state_cache(FT, model_dry; grid = column);
 
 ## Sphere with dry model
@@ -192,7 +194,7 @@ model_nogw = CA.AtmosModel(; microphysics_model, non_orographic_gravity_wave)
 ## Sphere with moist model + slab ocean (watero needs MoistMicrophysics + SpectralElementSpace2D)
 model_0m_slab = CA.AtmosModel(;
     microphysics_model = CA.EquilibriumMicrophysics0M(),
-    surface_model = CA.SlabOceanSST(),
+    temperature = CA.SurfaceConditions.SlabOceanTemperature{FT}(),
 )
 (Y_0m_slab_sphere, p_0m_slab_sphere) = build_state_cache(FT, model_0m_slab; grid = sphere);
 
