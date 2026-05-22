@@ -1,0 +1,32 @@
+# Canonical pre-commit configuration for ClimaAtmos.jl.
+#
+# Works with either `prek` (https://prek.j178.dev, recommended) or the original
+# `pre-commit`. Install the git hooks once with `prek install`, then the hooks
+# below run automatically on `git commit` against your staged files. Run them
+# over the whole repo with `prek run --all-files`.
+#
+# Setup instructions live in docs/src/contributor_guide.md ("Pre-commit hooks").
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # JuliaFormatter does not strip all trailing whitespace (e.g. in comments
+      # and non-.jl files), so trim it here. --markdown-linebreak-ext=md keeps
+      # the two-trailing-spaces hard line break in Markdown.
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+
+  - repo: local
+    hooks:
+      - id: julia-formatter
+        name: JuliaFormatter (matches CI)
+        # Uses the pinned .dev/format environment so the formatting matches the
+        # julia-actions/julia-format CI check regardless of the JuliaFormatter
+        # version in your base environment. Requires `julia` on your PATH.
+        # Pkg.instantiate is a no-op once the environment is resolved.
+        entry: julia --startup-file=no --project=.dev/format -e 'using Pkg; Pkg.instantiate(; io = devnull); using JuliaFormatter; format(ARGS)'
+        language: system
+        types: [julia]
+        pass_filenames: true
+        require_serial: true
