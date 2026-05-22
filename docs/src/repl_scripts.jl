@@ -1,5 +1,5 @@
 const ca_dir = joinpath(@__DIR__, "..", "..")
-include(joinpath(ca_dir, "src", "solver", "yaml_helper.jl"))
+include(joinpath(ca_dir, "src", "config", "yaml_helper.jl"))
 using PrettyTables
 
 function print_repl_script(config)

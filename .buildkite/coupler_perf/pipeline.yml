@@ -1,0 +1,55 @@
+# A pipeline for downstream performance checks
+agents:
+  queue: clima
+  slurm_time: 14:00:00
+  modules: climacommon/2025_05_15
+
+env:
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/default"
+  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  GKSwstype: 100
+  SLURM_KILL_BAD_EXIT: 1
+  COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
+  COUPLER_COMMIT: "6beb62031cb6a8a8a18a4fcd81008d93e1ff0a8f"
+  CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
+  BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
+
+timeout_in_minutes: 840
+
+steps:
+  - label: "init :GPU:"
+    key: "init_gpu_env"
+    command:
+      - git clone https://github.com/CliMA/ClimaCoupler.jl.git $COUPLER_PATH && bash -c "cd $COUPLER_PATH && git checkout $COUPLER_COMMIT"
+      - "echo $$JULIA_DEPOT_PATH"
+      - echo "--- Instantiate AMIP env"
+      # Instantiate and dev install ClimaCore
+      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.develop(path=".")'''
+      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add("MPI")'''
+      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.status()'"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+      JULIA_MAX_NUM_PRECOMPILE_FILES: 50
+
+  - label: "Flagship AMIP GPU with prognostic EDMF + 1M + integrated land (16 helems)"
+    key: "gpu_amip_progedmf_1M_land_he16"
+    depends_on: "init_gpu_env"
+    command:
+      - "srun julia --threads=3 --color=yes --project=$COUPLER_PATH/experiments/AMIP/ $COUPLER_PATH/experiments/AMIP/run_simulation.jl --config_file $BENCHMARK_CONFIG_PATH/amip_progedmf_1m_land_he16.yml --job_id gpu_amip_progedmf_1M_land_he16"
+      - echo "--- Checking SYPD from artifacts"
+      - bash .buildkite/coupler_perf/check-sypd.sh
+    artifact_paths: "output/gpu_amip_progedmf_1M_land_he16/artifacts/*"
+    env:
+      CLIMACOMMS_DEVICE: "CUDA"
+      BASELINE_SYPD: "0.24"
+      MIN_PERCENT_CHANGE: "-1"
+    agents:
+      slurm_gpus_per_task: 1
+      slurm_cpus_per_task: 4
+      slurm_ntasks: 1
+      slurm_mem: 16GB

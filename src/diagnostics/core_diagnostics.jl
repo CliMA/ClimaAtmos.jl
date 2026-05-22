@@ -116,6 +116,30 @@ add_diagnostic_variable!(short_name = "ha", units = "m^2 s^-2",
 )
 
 ###
+# Moist static energy (3d)
+###
+function compute_msea(_, cache, _)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    (; ᶜΦ) = cache.core
+    return @. lazy(
+        TD.moist_static_energy(
+            thermo_params,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_tot_nonneg,
+            ᶜq_liq,
+            ᶜq_ice,
+        ),
+    )
+end
+
+add_diagnostic_variable!(short_name = "msea", units = "m^2 s^-2",
+    long_name = "Moist Static Energy",
+    compute = compute_msea,
+)
+
+###
 # Air pressure (3d)
 ###
 add_diagnostic_variable!(short_name = "pfull", units = "Pa",

@@ -1061,8 +1061,7 @@ AquaplanetPlots = Union{
     Val{:longrun_aquaplanet_allsky_0M_earth},
     Val{:longrun_aquaplanet_dyamond},
     Val{:longrun_aquaplanet_allsky_tvinsol_0M_slabocean},
-    Val{:amip_target_diagedmf},
-    Val{:amip_target_edonly},
+    Val{:amip_target},
 }
 
 function make_plots(
