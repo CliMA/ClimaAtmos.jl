@@ -110,7 +110,7 @@ function callback_from_affect(affect!)
     return nothing
 end
 function atmos_callbacks(cbs)
-    all_cbs = [cbs.continuous_callbacks..., cbs.discrete_callbacks...]
+    all_cbs = collect(cbs.discrete_callbacks)
     callback_objs = map(cb -> callback_from_affect(cb.affect!), all_cbs)
     filter!(x -> (x isa AtmosCallback), callback_objs)
     return callback_objs
