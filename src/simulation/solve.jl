@@ -2,7 +2,7 @@ import ClimaTimeSteppers as CTS
 import Base.Sys: maxrss
 
 # Empty integrator.tstops to stop time-marching.
-function terminate!(integrator::CTS.DistributedODEIntegrator)
+function terminate!(integrator::CTS.TimeStepperIntegrator)
     @info "Gracefully exiting simulation."
     empty!(integrator.tstops)
 end
@@ -121,7 +121,7 @@ end
 
 check_conservation(simulation::AtmosSimulation) =
     check_conservation(simulation.integrator.sol)
-check_conservation(integrator::CTS.DistributedODEIntegrator) =
+check_conservation(integrator::CTS.TimeStepperIntegrator) =
     check_conservation(integrator.sol)
 check_conservation(atmos_sol::AtmosSolveResults) =
     check_conservation(atmos_sol.sol)

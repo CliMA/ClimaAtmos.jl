@@ -323,8 +323,7 @@ function AtmosSimulation{FT}(;
     else
         callbacks
     end
-    continuous_callbacks = ()
-    callback_set = CTS.CallbackSet(continuous_callbacks, discrete_callbacks)
+    callback_set = CTS.CallbackSet(discrete_callbacks...)
 
     integrator_args, integrator_kwargs = args_integrator(
         Y, p, (t_start, t_end), ode_config,
