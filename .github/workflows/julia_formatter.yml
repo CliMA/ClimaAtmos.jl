@@ -1,3 +1,12 @@
+# Canonical JuliaFormatter CI check for CliMA Julia packages.
+#
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║ SYNCED FROM CliMA/DeveloperGuides — DO NOT EDIT IN THIS REPO.            ║
+# ║ This file is overwritten on every dev-guides sync. To change it, open a  ║
+# ║ PR at https://github.com/CliMA/DeveloperGuides (sync/managed/).          ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+#
+# The `version:` pin below must stay in lockstep with .dev/format/Project.toml.
 name: JuliaFormatter
 
 on:

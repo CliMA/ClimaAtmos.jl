@@ -1,6 +1,6 @@
 # Code Style Guide
 
-This guide covers formatting, variable conventions, and Git workflow for CliMA repositories.
+This guide covers formatting and naming conventions for CliMA repositories. For Git workflow and feature-removal protocol, see [onboarding.md §§5, 7](../workflow/onboarding.md).
 
 ## 1. JuliaFormatter
 
@@ -11,12 +11,15 @@ julia -e 'using JuliaFormatter; format(".")'
 ```
 
 or install JuliaFormatter as an app and use directly from the command-line:
+
 ```julia-repl
 julia> import Pkg; Pkg.Apps.add("JuliaFormatter")
 ```
+
 and add `~/.julia/bin/` to your PATH.
 
 Then you can run the formatter directly:
+
 ```bash
 jlfmt -i .
 ```
@@ -31,7 +34,43 @@ Match the JuliaFormatter version used in CI to prevent unnecessary diff churn. R
     version: '1'   # JuliaFormatter major version; check the repo's workflow file
 ```
 
-Note: the JuliaFormatter major version is not uniform across CliMA repos — some pin `'1'`, others `'2'`, and some leave the default. Always cross-check `.github/workflows/JuliaFormatter.yml` (or `julia_formatter.yml`) in the repo you're working in before formatting. Run the formatter with `julia -e 'using JuliaFormatter; format(".")'` from the repo root.
+Repos subscribed to DeveloperGuides pin JuliaFormatter to **v1** via two enforced files that are kept in lockstep: `.github/workflows/julia_formatter.yml` (`version: '1'`) and the dedicated `.dev/format/Project.toml` environment used by the pre-commit hook below. The surest way to match CI locally is to use that hook (next section), which formats from the pinned env regardless of the JuliaFormatter version in your base environment — `Pkg.add("JuliaFormatter")` now installs v2 by default and produces a different diff. If you are in a repo that is not yet subscribed, cross-check `.github/workflows/JuliaFormatter.yml` (or `julia_formatter.yml`) before formatting.
+
+### Pre-commit hooks (recommended)
+
+To avoid ever seeing a formatter-only CI failure, set up the git pre-commit hooks defined in the repo's `.pre-commit-config.yaml`. They run on each `git commit` against your staged files and:
+
+- run `JuliaFormatter` from a dedicated, version-pinned environment (`.dev/format/`) so the result matches the `.github/workflows/julia_formatter.yml` CI check regardless of which `JuliaFormatter` version is in your base environment, and
+- trim trailing whitespace that `JuliaFormatter` leaves behind (for example in comments).
+
+The hooks are managed with [`prek`](https://prek.j178.dev), a fast drop-in replacement for `pre-commit`. `prek` is a Python tool; the easiest way to get it without touching your Julia setup is via [`uv`](https://docs.astral.sh/uv/):
+
+```sh
+# Install uv (see https://docs.astral.sh/uv/getting-started/installation/)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install prek as a standalone tool
+uv tool install prek
+```
+
+Then, from the repository root, install the git hooks once:
+
+```sh
+prek install
+```
+
+That's it — the hooks now run automatically on every commit. `julia` must be on your `PATH`; the first run instantiates and precompiles `.dev/format/`, which takes a minute, and is fast thereafter.
+
+To format and clean the whole repository on demand (handy after a large change):
+
+```sh
+prek run --all-files
+```
+
+The original `pre-commit` works too if you already have it (`pip install pre-commit` / `uv tool install pre-commit`, then `pre-commit install`); the config file is shared.
+
+> [!NOTE]
+> When a hook reformats a staged file, the commit is aborted and the file is left changed on disk — this is expected. Review the changes, `git add` them, and commit again.
 
 ### Avoiding formatting noise
 
@@ -68,44 +107,7 @@ The `test/` directory structure should mirror `src/`:
 - **Source**: `src/parameterized_tendencies/microphysics/tendency.jl`
 - **Test**: `test/parameterized_tendencies/microphysics/tendency.jl`
 
-## 4. Git workflow
-
-### Rebasing over merging
-
-Prefer **rebasing** over merging to maintain a linear commit history:
-
-```bash
-git fetch origin main
-git rebase origin/main
-```
-
-### Starting a new task
-
-Ensure your branch is based on the latest remote `main`:
-
-```bash
-git stash
-git checkout main
-git pull origin main
-git checkout -b your/branch-name
-git stash pop
-```
-
-### Functional commits
-
-Each commit should represent a logical unit of work and maintain model compilability.
-
-## 5. Feature removal
-
-When a feature is deprecated or removed, follow the full cleanup protocol:
-
-1. **Source removal**: delete implementation code, structs, and methods.
-2. **Configuration purge**: remove options from config files and parsers. Ensure that choosing a removed option triggers a clear `error` listing valid alternatives.
-3. **Test suite cleanup**: delete targeted tests; update integration tests to use supported alternatives. Mirror changes between `src/` and `test/`.
-4. **Dependency slimming**: remove packages that were exclusively used by the removed feature from `Project.toml`. See [Dependency Management Guide](../architecture/dependency_management.md).
-5. **Documentation update**: update docstrings and docs to reflect the removal.
-
-## 6. Naming and Syntax conventions
+## 4. Naming and syntax conventions
 
 ### Capitalization
 
