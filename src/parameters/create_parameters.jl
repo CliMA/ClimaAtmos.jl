@@ -195,12 +195,7 @@ microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     microphys_1m_parameters(CP.create_toml_dict(FT))
 
 microphys_1m_parameters(toml_dict::CP.ParamDict) =
-    CM.Parameters.Microphysics1MParams(
-        toml_dict;
-        options = CM.Parameters.Microphysics1MOptions(
-            cloud_liquid_autoconversion = CM.Parameters.LiquidAutoconv2M(),
-        ),
-    )
+    CM.Parameters.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
 
 microphys_2m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     microphys_2m_parameters(CP.create_toml_dict(FT))

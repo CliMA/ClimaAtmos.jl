@@ -130,7 +130,7 @@ import ClimaAtmos: limit_sink
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 toml_dict = CP.create_toml_dict(FT)
-                mp = CMP.Microphysics1MParams(toml_dict; options = CMP.Microphysics1MOptions(cloud_liquid_autoconversion = CMP.LiquidAutoconv2M()))
+                mp = CMP.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
                 thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
 
                 ρ = FT(1.0)
