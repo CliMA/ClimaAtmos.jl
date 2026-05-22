@@ -1,0 +1,13 @@
+# Parameters used in the Atmos simulation for generating the perfect model
+# data.
+[fixed_rain_terminal_velocity]
+value = 5.0
+type = "float"
+
+[fixed_snow_terminal_velocity]
+value = 1.0
+type = "float"
+
+[fixed_cloud_liquid_terminal_velocity]
+value = 0.01
+type = "float"
