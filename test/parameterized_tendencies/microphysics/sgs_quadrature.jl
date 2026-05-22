@@ -798,7 +798,7 @@ using ClimaAtmos
 
                 @testset "1M: sign consistency" begin
                     quad = ClimaAtmos.SGSQuadrature(FT)
-                    mp_1m = CMP.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
+                    mp_1m = CMP.Microphysics1MParams(toml_dict; options = CMP.Microphysics1MOptions(cloud_liquid_autoconversion = CMP.LiquidAutoconv2M()))
                     thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
 
                     ρ = FT(1.0)
