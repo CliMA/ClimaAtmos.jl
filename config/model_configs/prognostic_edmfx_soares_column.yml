@@ -2,8 +2,6 @@ initial_condition: "Soares"
 rayleigh_sponge: true
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
-implicit_sgs_advection: true
-implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "SmoothArea"
