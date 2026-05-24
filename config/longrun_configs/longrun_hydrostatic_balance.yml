@@ -3,7 +3,7 @@ rayleigh_sponge: false
 viscous_sponge: false
 implicit_diffusion: false
 approximate_linear_solve_iters: 1
-dt_save_state_to_disk: "10days"
+dt_save_state_to_disk: "30days"
 t_end: "360days"
 perturb_initstate: false
 disable_surface_flux_tendency: true
