@@ -348,6 +348,7 @@ VALID_CASES = [
     cases(("rld", "rlds", "rlu", "rlut", "rlus"), :allsky)...,
     cases(("rsdcs", "rsdscs", "rsucs", "rsutcs"), :allsky)...,
     cases(("rsuscs", "rldcs", "rldscs", "rlucs", "rlutcs"), :allsky)...,
+    cases(("clt", "cltl"), :allsky)...,
     cases(("reffclw", "reffcli", "od550aer", "odsc550aer"), :allsky)...,
 
     # ---------------------
