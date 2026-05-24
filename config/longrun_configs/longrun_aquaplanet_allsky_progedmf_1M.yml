@@ -15,4 +15,4 @@ edmfx_filter: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 microphysics_model: "1M"
-toml: [toml/progedmf_edmfx_1M.toml]
+toml: [toml/prognostic_edmfx_1M.toml]

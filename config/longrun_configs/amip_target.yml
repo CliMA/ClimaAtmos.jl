@@ -20,4 +20,4 @@ edmfx_sgs_diffusive_flux: true
 microphysics_model: "1M"
 topography: "Earth"
 topo_smoothing: true
-toml: [toml/progedmf_edmfx_1M.toml]
+toml: [toml/prognostic_edmfx_1M.toml]
