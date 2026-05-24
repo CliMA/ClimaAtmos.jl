@@ -1,6 +1,6 @@
 ode_algo: "ARS222"
 dt: "120secs"
-t_end: "240days"
+t_end: "360days"
 dt_save_state_to_disk: "30days"
 rad: "allskywithclear"
 dt_rad: "1hours"
