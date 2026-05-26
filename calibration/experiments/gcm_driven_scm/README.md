@@ -47,6 +47,10 @@ LES profiles are available for different geolocations ("cfsites"), spanning seas
 
 ## Troubleshooting
 
+- **Simulation Duration vs Observation Window**: The model config `t_end` must be at least as long as `g_t_end_sec` in `experiment_config.yml`. If the simulation is shorter than the observation window, the observation map silently fails for every ensemble member (all-NaN `G_ensemble`), which causes `EKP.update_ensemble!` to hang indefinitely. A startup check in `run_calibration.jl` validates this, but keep it in mind when switching model configs.
+
+- **Restart Behavior**: `run_calibration.jl` detects whether an `eki_file.jld2` already exists before calling `initialize`. This avoids overwriting the EKP object (and its random minibatch) on restart, which would create a mismatch between the new minibatch and the existing simulation output directories (`config_$i`). To start fresh, delete the output directory contents.
+
 - **Memory Issues**: If you encounter out of memory errors, increase the memory allocation in both `run_calibration.sbatch` and the `experiment_config.yml` file. This is particularly important when working with larger batch sizes. Example error message:
   ```
   srun: error: hpc-92-10: task 9: Out Of Memory

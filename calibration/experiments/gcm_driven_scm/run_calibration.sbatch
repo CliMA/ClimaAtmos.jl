@@ -2,7 +2,7 @@
 
 #SBATCH --time=12:00:00   # walltime
 #SBATCH -J "scm_calibration"   # job name
-#SBATCH --ntasks=120  # Number of tasks (~ num ensemble members)
+#SBATCH --ntasks=101  # Number of tasks (~ num ensemble members)
 #SBATCH --mem-per-cpu=25G
 #SBATCH --cpus-per-task=1  # CPUs per task
 #SBATCH --output=scm_calibration.out

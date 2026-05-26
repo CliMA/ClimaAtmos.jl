@@ -39,7 +39,10 @@ CFSITE_TYPES = Dict(
 function get_les_calibration_library()
     les_library = get_shallow_LES_library()
     # AMIP data: July, NE Pacific
-    cfsite_numbers = (2, 3, 4, 5, 6, 7) #baseline run
+    # cfsite_numbers = (2, 3, 4, 5, 6, 7) #baseline run
+    # cfsite_numbers = (3, 4, 5, 17, 21, 23) #baseline run
+    # cfsite_numbers = (3, 4, 5, 8, 17, 21, 23, 30, 33, 66, 82)
+    cfsite_numbers = (3, 4, 5, 21, 23,)#30, 66, 82)
 
     # cfsite_numbers = (17, 30,)# 94)
     les_kwargs = (forcing_model = "HadGEM2-A", month = 10, experiment = "amip")
