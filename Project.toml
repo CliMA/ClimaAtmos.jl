@@ -38,6 +38,9 @@ SurfaceFluxes = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
 Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 UnrolledUtilities = "0fe1646c-419e-43be-ac14-22321958931b"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
+Musica = "d3d182ee-e566-4962-9279-3a9916be1802"
+
+
 
 [compat]
 Adapt = "4.1"
@@ -85,6 +88,9 @@ Thermodynamics = "1.2"
 UnrolledUtilities = "0.1.9"
 YAML = "0.4"
 julia = "1.9"
+Musica = "0.15"
+
+
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
