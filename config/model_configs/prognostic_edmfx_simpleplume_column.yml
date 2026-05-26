@@ -2,7 +2,6 @@ initial_condition: "SimplePlume"
 disable_surface_flux_tendency: true
 turbconv: "prognostic_edmfx"
 implicit_diffusion: false
-implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "SmoothArea"

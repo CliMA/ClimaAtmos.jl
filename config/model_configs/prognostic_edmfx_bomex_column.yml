@@ -1,7 +1,6 @@
 initial_condition: "Bomex"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
-implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"

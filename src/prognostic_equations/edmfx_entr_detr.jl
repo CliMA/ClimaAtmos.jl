@@ -633,7 +633,6 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
-    (; ᶠu₃⁰) = p.precomputed
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
@@ -667,12 +666,6 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
             ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
             @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)
-        end
-
-        if p.atmos.sgs_entr_detr_mode == Explicit()
-            @. Yₜ.f.sgsʲs.:($$j).u₃ +=
-                (ᶠinterp(ᶜentrʲ) .+ ᶠinterp(ᶜturb_entrʲ)) *
-                (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)
         end
     end
     return nothing

@@ -503,3 +503,47 @@ add_diagnostic_variable!(short_name = "odsc550aer", units = "",
     comments = "Aerosol scattering optical depth from the ambient aerosols at wavelength 550 nm",
     compute = compute_odsc550aer,
 )
+
+###
+# SW and LW McICA cloud cover (2d)
+###
+
+# Maps a (ncol,) array stored in the rrtmgp_model to a surface-level ClimaCore field.
+function ᶜcloud_cover_field(state, cache, field_name::Symbol)
+    field = getproperty(cache.radiation.rrtmgp_model, field_name)
+    cloud_cover = Fields.array2field(field, axes(Fields.level(state.f, half)))
+    return @. lazy(cloud_cover * 100)
+end
+
+const _AllSkyModes = Union{
+    RRTMGPI.AllSkyRadiation,
+    RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+}
+
+compute_clt(state, cache, time) =
+    compute_clt(state, cache, time, cache.atmos.radiation_mode)
+compute_clt(_, _, _, radiation_mode) =
+    error_diagnostic_variable("clt", radiation_mode)
+compute_clt(state, cache, _, ::_AllSkyModes) =
+    ᶜcloud_cover_field(state, cache, :sw_cloud_cover)
+
+add_diagnostic_variable!(short_name = "clt", units = "%",
+    long_name = "Total Cloud Cover Percentage",
+    standard_name = "cloud_area_fraction",
+    comments = "Cloud cover from shortwave McICA sampling",
+    compute = compute_clt,
+)
+
+compute_cltl(state, cache, time) =
+    compute_cltl(state, cache, time, cache.atmos.radiation_mode)
+compute_cltl(_, _, _, radiation_mode) =
+    error_diagnostic_variable("cltl", radiation_mode)
+compute_cltl(state, cache, _, ::_AllSkyModes) =
+    ᶜcloud_cover_field(state, cache, :lw_cloud_cover)
+
+add_diagnostic_variable!(short_name = "cltl", units = "%",
+    long_name = "Total Cloud Cover Percentage",
+    standard_name = "cloud_area_fraction",
+    comments = "Cloud cover from longwave McICA sampling",
+    compute = compute_cltl,
+)

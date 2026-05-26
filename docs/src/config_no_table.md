@@ -70,7 +70,7 @@ ClimaAtmos provides a set of common numerical configurations that can be used as
 ### Sphere Configurations
 - **`numerics_sphere_he6ze10.yml`**: Spherical configuration with 6 horizontal elements (550km), 10 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
 
-- **`numerics_sphere_he6ze31.yml`**: Spherical configuration with 6 horizontal elements (550km) , 31 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+- **`numerics_sphere_he6ze31.yml`**: Spherical configuration with 6 horizontal elements (550km), 31 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
 - **`numerics_sphere_he16ze63.yml`**: Spherical configuration with 16 horizontal elements (206km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 

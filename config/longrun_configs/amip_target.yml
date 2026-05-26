@@ -1,8 +1,3 @@
-implicit_sgs_advection: true
-implicit_sgs_mass_flux: true
-implicit_sgs_entr_detr: true
-implicit_sgs_nh_pressure: true
-implicit_sgs_vertdiff: true
 ode_algo: "ARS222"
 dt_save_state_to_disk: "30days"
 t_end: "60days"
@@ -25,4 +20,4 @@ edmfx_sgs_diffusive_flux: true
 microphysics_model: "1M"
 topography: "Earth"
 topo_smoothing: true
-toml: [toml/progedmf_edmfx_1M.toml]
+toml: [toml/prognostic_edmfx_1M.toml]

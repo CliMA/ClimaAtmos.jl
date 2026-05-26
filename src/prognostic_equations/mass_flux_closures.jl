@@ -81,7 +81,9 @@ function ᶠupdraft_nh_pressure_buoyancy(params, ᶠbuoyʲ)
 end
 
 """
-   Return the drag term of the pressure closure for updrafts [m/s2 * m]
+   Return the drag term of the pressure closure for updrafts [m/s2 * m].
+   This is a simplified version where the length scale is fixed at scale height.
+   This is only used in diagnostic EDMF.
 
    Inputs (everything defined on cell faces):
    - params - set with model parameters
@@ -89,45 +91,15 @@ end
    - ᶠu3ʲ, ᶠu3⁰ - covariant3 or contravariant3 velocity for updraft and environment.
                   covariant3 velocity is used in prognostic edmf, and contravariant3
                   velocity is used in diagnostic edmf.
-   - scale height - an approximation for updraft top height
 """
-function ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰, scale_height)
+function ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰)
     turbconv_params = CAP.turbconv_params(params)
-    # factor multiplier for pressure drag
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
     H_up_min = CAP.min_updraft_top(turbconv_params)
-
-    # Independence of aspect ratio hardcoded: α₂_asp_ratio² = FT(0)
+    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
     # We also used to have advection term here: α_a * w_up * div_w_up
     return α_d * (ᶠu3ʲ - ᶠu3⁰) * CC.Geometry._norm(ᶠu3ʲ - ᶠu3⁰, ᶠlg) /
            max(scale_height, H_up_min)
-end
-
-edmfx_nh_pressure_drag_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
-function edmfx_nh_pressure_drag_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    turbconv_model::PrognosticEDMFX,
-)
-    if p.atmos.edmfx_model.nh_pressure isa Val{true} &&
-       p.atmos.sgs_nh_pressure_mode == Explicit()
-        (; params) = p
-        n = n_mass_flux_subdomains(turbconv_model)
-        ᶠlg = Fields.local_geometry_field(Y.f)
-        scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-        # assume zero environmental velocity
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠupdraft_nh_pressure_drag(
-                params,
-                ᶠlg,
-                Y.f.sgsʲs.:($$j).u₃,
-                C3(0),
-                scale_height,
-            )
-        end
-    end
 end
 
 edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing

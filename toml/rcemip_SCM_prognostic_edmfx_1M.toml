@@ -41,7 +41,7 @@ value = 1
 value = 0
 
 [pressure_normalmode_drag_coeff]
-value = 40.0
+value = 8.0
 
 [tracer_vertical_diffusion_factor]
 value = 0
