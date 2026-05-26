@@ -894,14 +894,9 @@ end
 
 Groups turbulence convection-related models and types.
 """
-@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD, CHD}
+@kwdef struct AtmosTurbconv{EDMFX, TCM, SL, AMD, CHD}
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
-    sgs_adv_mode::SAM = Explicit()
-    sgs_entr_detr_mode::SEDM = Explicit()
-    sgs_nh_pressure_mode::SNPM = Explicit()
-    sgs_vertdiff_mode::SVM = Explicit()
-    sgs_mf_mode::SMM = Explicit()
     smagorinsky_lilly::SL = nothing
     amd_les::AMD = nothing
     constant_horizontal_diffusion::CHD = nothing
@@ -1102,7 +1097,6 @@ Internal testing and calibration components for single-column setups:
 ## AtmosTurbconv
 - `edmfx_model`: EDMFXModel()
 - `turbconv_model`: nothing, PrognosticEDMFX(), DiagnosticEDMFX(), EDOnlyEDMFX()
-- `sgs_adv_mode`, `sgs_entr_detr_mode`, `sgs_nh_pressure_mode`, `sgs_vertdiff_mode`, `sgs_mf_mode`: Explicit(), Implicit()
 - `smagorinsky_lilly`: nothing or SmagorinskyLilly()
 - `amd_les`: nothing or AnisotropicMinimumDissipation()
 - `constant_horizontal_diffusion`: nothing or ConstantHorizontalDiffusion()

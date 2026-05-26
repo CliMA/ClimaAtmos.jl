@@ -414,6 +414,36 @@ function ρa⁰(ρ, sgsʲs, turbconv_model)
 end
 
 """
+    a⁰(sgsʲs, ᶜρʲs, turbconv_model)
+
+Computes the environment area fraction (`a⁰`).
+
+This function calculates the environment area fraction by subtracting the sum of all draft subdomain area fractions (`aʲ`) from 1 for `PrognosticEDMFX`, or returns 1 otherwise.
+
+Arguments:
+- `sgsʲs`: Iterable of draft subdomain quantities.
+    - For `PrognosticEDMFX`: typically `Y.c.sgsʲs`
+- `ᶜρʲs`: Iterable of draft densities.
+    - Typically `p.precomputed.ᶜρʲs`
+- `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`, or others).
+
+Returns:
+- The area fraction of the environment (`a⁰`).
+"""
+function a⁰(sgsʲs, ᶜρʲs, turbconv_model)
+    if turbconv_model isa PrognosticEDMFX
+        return 1 - mapreduce_with_init(
+            (sgsʲ, ᶜρʲ) -> draft_area(sgsʲ.ρa, ᶜρʲ),
+            +,
+            sgsʲs,
+            ᶜρʲs,
+        )
+    else
+        return 1
+    end
+end
+
+"""
     ᶜspecific_env_mse(Y, p)
 
 Computes the specific moist static energy (`mse`) in the environment (`mse⁰`).

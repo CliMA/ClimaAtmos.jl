@@ -286,16 +286,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
         )
 
-        if p.atmos.sgs_entr_detr_mode == Explicit()
-            @. ᶜentrʲs.:($$j) = limit_entrainment(
-                ᶜentrʲs.:($$j),
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-                dt,
-            )
-            @. ᶜturb_entrʲs.:($$j) =
-                limit_turb_entrainment(ᶜentrʲs.:($$j), ᶜturb_entrʲs.:($$j), dt)
-        end
-
         @. ᶜvert_div = ᶜdivᵥ(ᶠinterp(ᶜρʲs.:($$j)) * ᶠu³ʲs.:($$j)) / ᶜρʲs.:($$j)
         @. ᶜmassflux_vert_div =
             ᶜdivᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) * ᶠu³ʲs.:($$j))
@@ -337,20 +327,12 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             p.atmos.edmfx_model.detr_model,
         )
 
-        if p.atmos.sgs_entr_detr_mode == Explicit()
-            @. ᶜdetrʲs.:($$j) = limit_detrainment(
-                ᶜdetrʲs.:($$j),
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-                dt,
-            )
-        else
-            @. ᶜdetrʲs.:($$j) = limit_detrainment(
-                ᶜdetrʲs.:($$j),
-                ᶜentrʲs.:($$j),
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-                dt,
-            )
-        end
+        @. ᶜdetrʲs.:($$j) = limit_detrainment(
+            ᶜdetrʲs.:($$j),
+            ᶜentrʲs.:($$j),
+            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+            dt,
+        )
 
         # Near the surface, relax the first-cell updraft area toward `surface_area`
         # when the surface buoyancy flux is non-negative:
@@ -388,12 +370,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 ($(FT(turbconv_params.surface_area)) / ᶜaʲ_int_val - 1) / dt,
             ),
         )
-        if p.atmos.sgs_entr_detr_mode == Explicit()
-            @. entr_int_val = limit_entrainment(entr_int_val, ᶜaʲ_int_val, dt)
-            @. detr_int_val = limit_detrainment(detr_int_val, ᶜaʲ_int_val, dt)
-        else
-            @. detr_int_val = limit_detrainment(detr_int_val, entr_int_val, ᶜaʲ_int_val, dt)
-        end
+        @. detr_int_val = limit_detrainment(detr_int_val, entr_int_val, ᶜaʲ_int_val, dt)
 
         @. ᶠρ_diffʲs.:($$j) = ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) / ᶠinterp(ᶜρʲs.:($$j))
     end

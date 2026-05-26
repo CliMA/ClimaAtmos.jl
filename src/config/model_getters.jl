@@ -532,12 +532,7 @@ function check_case_consistency(parsed_args)
         )
         @assert(
             !parsed_args["implicit_microphysics"] &&
-            !parsed_args["implicit_diffusion"] &&
-            !parsed_args["implicit_sgs_advection"] &&
-            !parsed_args["implicit_sgs_entr_detr"] &&
-            !parsed_args["implicit_sgs_nh_pressure"] &&
-            !parsed_args["implicit_sgs_vertdiff"] &&
-            !parsed_args["implicit_sgs_mass_flux"],
+            !parsed_args["implicit_diffusion"],
             "Prescribed flow does not use the implicit solver."
         )
     end
@@ -604,12 +599,6 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
     pa = config.parsed_args
     turbconv_params = CAP.turbconv_params(params)
 
-    implicit_sgs_advection = pa["implicit_sgs_advection"]
-    implicit_sgs_entr_detr = pa["implicit_sgs_entr_detr"]
-    implicit_sgs_nh_pressure = pa["implicit_sgs_nh_pressure"]
-    implicit_sgs_vertdiff = pa["implicit_sgs_vertdiff"]
-    implicit_sgs_mass_flux = pa["implicit_sgs_mass_flux"]
-
     scale_blending_method =
         if pa["edmfx_scale_blending"] == "SmoothMinimum"
             SmoothMinimumBlending()
@@ -646,11 +635,6 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
     return AtmosTurbconv(;
         edmfx_model,
         turbconv_model = get_turbconv_model(FT, pa, turbconv_params),
-        sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
-        sgs_entr_detr_mode = implicit_sgs_entr_detr ? Implicit() : Explicit(),
-        sgs_nh_pressure_mode = implicit_sgs_nh_pressure ? Implicit() : Explicit(),
-        sgs_vertdiff_mode = implicit_sgs_vertdiff ? Implicit() : Explicit(),
-        sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
         smagorinsky_lilly,
         amd_les,
         constant_horizontal_diffusion,

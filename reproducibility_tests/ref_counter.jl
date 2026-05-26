@@ -1,4 +1,4 @@
-345
+347
 
 # **README**
 #
@@ -32,6 +32,14 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+347
+- Make the pressure drag term dependent on area fraction in prognostic EDMF.
+
+346
+- Remove explicit/implicit options for SGS advection, entr/detr, NH pressure drag,
+  SGS vertical diffusion, and SGS mass flux. All SGS tendencies are now always
+  implicit. DiagnosticEDMFX mass flux tendency moves from explicit to implicit stage.
+
 345
 - Remove duplicate `enforce_physical_constraints_callback` call
 

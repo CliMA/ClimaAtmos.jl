@@ -357,45 +357,21 @@ function edmfx_sgs_vertical_advection_tendency!(
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; dt) = p
     (; edmfx_mse_q_tot_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
-    (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs, ᶠρ_diffʲs) = p.precomputed
-    (; ᶠgradᵥ_ᶜΦ) = p.core
+    (; ᶠu³ʲs, ᶜρʲs) = p.precomputed
 
     FT = eltype(p.params)
-    turbconv_params = CAP.turbconv_params(params)
-    α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     ᶠz = Fields.coordinate_field(Y.f).z
-    ᶜu₃ʲ = p.scratch.ᶜtemp_C3
-    ᶜKᵥʲ = p.scratch.ᶜtemp_scalar_2
-    ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
 
     grav = CAP.grav(params)
     for j in 1:n
-        if p.atmos.sgs_adv_mode == Explicit()
-            # TODO: Add a biased GradientF2F operator in ClimaCore
-            @. ᶜu₃ʲ = ᶜinterp(Y.f.sgsʲs.:($$j).u₃)
-            @. ᶜKᵥʲ = ifelse(
-                ᶜu₃ʲ.components.data.:1 > 0,
-                ᶜleft_bias(ᶠKᵥʲs.:($$j)),
-                ᶜright_bias(ᶠKᵥʲs.:($$j)),
-            )
-            # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
-            # and calcuate the buoyancy term relative to the grid-mean density.
-            # We also include the buoyancy term in the nonhydrostatic pressure closure here.
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                (1 - α_b) * ᶠρ_diffʲs.:($$j) * ᶠgradᵥ_ᶜΦ + ᶠgradᵥ(ᶜKᵥʲ)
-        end
-
         # buoyancy term in mse equation
         @. Yₜ.c.sgsʲs.:($$j).mse +=
             adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃))) *
             (ᶜρʲs.:($$j) - Y.c.ρ) *
             ᶜgradᵥ(grav * ᶠz) / ᶜρʲs.:($$j)
-    end
 
-    for j in 1:n
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
-
         # Flux form vertical advection of area farction with the grid mean velocity
         vtt =
             vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_mse_q_tot_upwinding)
