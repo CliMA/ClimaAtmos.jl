@@ -6,6 +6,20 @@
 ClimaAtmos.AtmosSimulation
 ```
 
+## Presets
+
+```@docs
+ClimaAtmos.Presets.aquaplanet
+ClimaAtmos.Presets.baroclinic_wave
+ClimaAtmos.Presets.bomex
+ClimaAtmos.Presets.dry
+ClimaAtmos.Presets.equil_moist_0m
+ClimaAtmos.Presets.nonequil_moist_1m
+ClimaAtmos.Presets.diagnostic_edmf
+ClimaAtmos.Presets.prognostic_edmf
+ClimaAtmos.Presets.prognostic_edmf_1m
+```
+
 ## Grids
 
 ```@docs
