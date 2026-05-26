@@ -46,6 +46,9 @@ include(joinpath("cache", "surface_albedo.jl"))
 # Microphysics module (SGS quadrature, cloud fraction, tendency limiters, wrappers)
 include(joinpath("parameterized_tendencies", "microphysics", "microphysics.jl"))
 
+# Chemistry module (gas-phase chemistry with a MUSICA backend)
+include(joinpath("parameterized_tendencies", "chemistry", "chemistry.jl"))
+
 include(joinpath("surface_conditions", "SurfaceConditions.jl"))
 include(joinpath("setups", "Setups.jl"))
 include(joinpath("utils", "refstate_thermodynamics.jl"))
