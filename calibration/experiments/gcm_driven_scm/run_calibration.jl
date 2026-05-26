@@ -13,8 +13,13 @@ using Logging
 import JLD2
 using LinearAlgebra
 
+function tprintln(msg)
+    println("[$(Dates.now())] $msg")
+    flush(stdout)
+end
+using Dates
+
 include("helper_funcs.jl")
-include("observation_map.jl")
 include("get_les_metadata.jl")
 include("nn_helpers.jl")
 
@@ -23,6 +28,10 @@ experiment_dir = dirname(Base.active_project())
 const model_interface = joinpath(experiment_dir, "model_interface.jl")
 const experiment_config =
     YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
+
+struct GCMDrivenSCMInterface <: CAL.AbstractModelInterface end
+
+include("observation_map.jl")
 
 
 # unpack experiment_config vars into scope 
@@ -34,8 +43,38 @@ end
 model_config_dict = YAML.load_file(model_config)
 atmos_config = CA.AtmosConfig(model_config_dict)
 
+# --- Validate config consistency ---
+let
+    t_end_str = model_config_dict["t_end"]
+    # Parse t_end to seconds (supports "Nhours", "Ndays", "Nsecs" formats)
+    t_end_sec = if occursin("hours", t_end_str)
+        parse(Float64, replace(t_end_str, "hours" => "")) * 3600
+    elseif occursin("days", t_end_str)
+        parse(Float64, replace(t_end_str, "days" => "")) * 86400
+    elseif occursin("secs", t_end_str)
+        parse(Float64, replace(t_end_str, "secs" => ""))
+    else
+        @warn "Could not parse model t_end='$t_end_str'; skipping config validation"
+        nothing
+    end
+
+    if !isnothing(t_end_sec)
+        g_t_end = experiment_config["g_t_end_sec"]
+        g_t_end_max = isa(g_t_end, AbstractFloat) ? g_t_end :
+                      maximum(values(g_t_end))
+        if t_end_sec < g_t_end_max
+            error(
+                "Config mismatch: model t_end=$(t_end_str) ($(t_end_sec)s) " *
+                "is shorter than g_t_end_sec=$(g_t_end_max)s. " *
+                "The observation map requires simulation data up to g_t_end_sec. " *
+                "Increase t_end in the model config or decrease g_t_end_sec.",
+            )
+        end
+    end
+end
+
 # add workers
-@info "Starting $ensemble_size workers."
+tprintln("Starting $ensemble_size workers...")
 addprocs(
     CAL.SlurmManager(Int(ensemble_size)),
     t = experiment_config["slurm_time"],
@@ -44,6 +83,8 @@ addprocs(
 )
 
 
+tprintln("Workers added. Loading packages on workers...")
+
 @everywhere begin
     using ClimaCalibrate
     import ClimaCalibrate as CAL
@@ -51,16 +92,15 @@ addprocs(
     import JLD2
     import YAML
 
-    include("observation_map.jl")
-
     experiment_dir = dirname(Base.active_project())
-    const model_interface = joinpath(experiment_dir, "model_interface.jl")
     const experiment_config =
         YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
-    include(model_interface)
-
+    include(joinpath(experiment_dir, "model_interface.jl"))
+    include(joinpath(experiment_dir, "observation_map.jl"))
 end
+
+tprintln("Worker setup complete.")
 
 
 if get(model_config_dict, "mixing_length_model", "") == "nn"
@@ -200,16 +240,15 @@ observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
 
 ###  EKI hyperparameters/settings
-@info "Initializing calibration" n_iterations ensemble_size output_dir
+tprintln("Initializing calibration: n_iterations=$n_iterations, ensemble_size=$ensemble_size")
 
-eki = CAL.calibrate(
-    CAL.WorkerBackend(),
-    ensemble_size,
-    n_iterations,
+initial_ensemble =
+    EKP.construct_initial_ensemble(prior, Int(ensemble_size))
+
+ekp = EKP.EnsembleKalmanProcess(
+    initial_ensemble,
     observations,
-    nothing, # noise already specified in observations
-    prior,
-    output_dir;
+    EKP.Inversion();
     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
     localization_method = EKP.Localizers.NoLocalization(),
     ## localization_method = EKP.Localizers.SECNice(nice_loc_ug, nice_loc_gg),
@@ -217,3 +256,79 @@ eki = CAL.calibrate(
     accelerator = EKP.DefaultAccelerator(),
     #     # accelerator = EKP.NesterovAccelerator(),
 )
+
+interface = GCMDrivenSCMInterface()
+backend = CAL.WorkerBackend()
+
+tprintln("Starting calibration loop...")
+
+output_dir_abs = abspath(output_dir)
+ensemble_size_int = EKP.get_N_ens(ekp)
+
+# Only initialize if this is a fresh run; avoid overwriting the EKP
+# (and its minibatch) when restarting from existing simulation data.
+if !isfile(CAL.Calibration.ekp_path(output_dir_abs, 1))
+    tprintln("Fresh run — initializing EKP and saving parameters...")
+    ekp = CAL.Calibration.initialize(ekp, prior, output_dir_abs)
+else
+    tprintln("Resuming — loading existing EKP from iteration 1...")
+    ekp = CAL.Calibration.load_ekp_struct(output_dir_abs, 1)
+end
+
+first_iter = CAL.Calibration.last_completed_iteration(output_dir_abs) + 1
+tprintln("First iteration: $first_iter")
+
+for iter in first_iter:Int(n_iterations)
+    tprintln("=== Iteration $iter: starting forward model ===")
+    t0 = time()
+    CAL.Calibration.run_iteration(
+        backend,
+        interface,
+        iter,
+        ensemble_size_int,
+        output_dir_abs,
+    )
+    tprintln("=== Iteration $iter: forward model done ($(round(time()-t0, digits=1))s) ===")
+
+    tprintln("=== Iteration $iter: loading EKP struct ===")
+    t1 = time()
+    ekp = CAL.Calibration.load_ekp_struct(output_dir_abs, iter)
+    tprintln("=== Iteration $iter: EKP struct loaded ($(round(time()-t1, digits=1))s) ===")
+
+    tprintln("=== Iteration $iter: running observation_map ===")
+    t2 = time()
+    g_ensemble = CAL.observation_map(interface, iter)
+    tprintln("=== Iteration $iter: observation_map done ($(round(time()-t2, digits=1))s) ===")
+
+    # Sanity-check G_ensemble before proceeding
+    n_nan_cols = sum(all(isnan, g_ensemble, dims = 1))
+    n_ens = size(g_ensemble, 2)
+    nan_frac = n_nan_cols / n_ens
+    tprintln("=== Iteration $iter: G_ensemble NaN columns: $n_nan_cols / $n_ens ($(round(nan_frac*100, digits=1))%) ===")
+    if n_nan_cols == n_ens
+        error(
+            "Observation map failed for ALL $n_ens ensemble members. " *
+            "Check simulation output and config consistency (t_end vs g_t_end_sec).",
+        )
+    end
+
+    tprintln("=== Iteration $iter: saving G_ensemble ===")
+    CAL.Calibration.save_G_ensemble(output_dir_abs, iter, g_ensemble)
+    tprintln("=== Iteration $iter: G_ensemble saved ===")
+
+    tprintln("=== Iteration $iter: running EKP update_ensemble! ===")
+    t3 = time()
+    terminate = CAL.Calibration.update_ensemble!(
+        ekp,
+        g_ensemble,
+        output_dir_abs,
+        iter,
+        prior,
+    )
+    tprintln("=== Iteration $iter: EKP update done ($(round(time()-t3, digits=1))s) ===")
+
+    tprintln("=== Iteration $iter: COMPLETE ===")
+    !isnothing(terminate) && break
+end
+
+tprintln("Calibration finished.")

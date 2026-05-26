@@ -14,18 +14,20 @@ using Statistics
 include("helper_funcs.jl")
 
 
-output_dir = "/resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/output_diagedmf_cal_v2/exp1" # path to calibration output
-iteration = 7
-# prefix = "prog_1M"
-prefix = "diag_0M_diagedmf_cal_v2_exp1"
+# output_dir = "/resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/output_diagedmf_cal_v2/exp1" # path to calibration output
+# iteration = 7
+# prefix = "diag_0M_diagedmf_cal_v2_exp1"
+
+output_dir = "/resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/output_progedmf_cal_v3/exp10"
+iteration = 6
+prefix = "prog_1M_progedmf_cal_v3_exp10"
 
 
 
 write_optimal_toml_dir = "./scm_runner/optimal_tomls"
-param_overrides_path = "./scm_tomls/diagnostic_edmfx.toml"
-
-# write_optimal_toml_dir = "./scm_runner/optimal_tomls"
+# param_overrides_path = "./scm_tomls/diagnostic_edmfx.toml"
 # param_overrides_path = "./scm_tomls/prognostic_edmfx.toml"
+param_overrides_path = "./scm_tomls/prognostic_edmfx_1M_turb_entr.toml"
 
 
 
@@ -70,7 +72,24 @@ param_nearest = TOML.parsefile(param_toml_path)
 
 param_overrides = TOML.parsefile(param_overrides_path)
 
-merged_params = merge(param_nearest, param_overrides)
+# Also load any extra TOML files from the saved model config (e.g. forcing overrides)
+saved_configs_dir = joinpath(output_dir, "configs")
+model_config_path = joinpath(saved_configs_dir, "model_config.yml")
+model_config_dict = YAML.load_file(model_config_path)
+extra_toml_params = Dict{String, Any}()
+if haskey(model_config_dict, "toml") && !isnothing(model_config_dict["toml"])
+    for toml_rel_path in model_config_dict["toml"]
+        toml_path = joinpath(saved_configs_dir, toml_rel_path)
+        if isfile(toml_path)
+            merge!(extra_toml_params, TOML.parsefile(toml_path))
+        else
+            @warn "TOML file from model config not found: $toml_path"
+        end
+    end
+end
+
+# Merge: base overrides < extra tomls < calibrated params (calibrated wins)
+merged_params = merge(param_overrides, extra_toml_params, param_nearest)
 
 # write optimal toml to file 
 exp_match = match(r"exp(\d+)", output_dir)
