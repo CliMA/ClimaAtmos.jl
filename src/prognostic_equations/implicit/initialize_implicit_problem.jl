@@ -122,7 +122,7 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
 
     (; params) = p
     (; turbconv_model, rayleigh_sponge) = p.atmos
-    (; ᶠρ_diffʲs) = p.precomputed
+    (; ᶠρ_diffʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜturb_entrʲs, ᶜentrʲs) = p.precomputed
     FT = eltype(p.params)
@@ -130,9 +130,8 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
     turbconv_params = CAP.turbconv_params(params)
     α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-    H_up_min = CAP.min_updraft_top(turbconv_params)
+    a_min = CAP.min_area(turbconv_params)
     scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-    drag_coeff = α_d / max(H_up_min, scale_height)
 
     # Approximation factor used in w₀ - w ≈ -(ρ / ρa⁰) w (single-updraft case).
     # For multiple updrafts we approximate ρ / ρa⁰ ≈ 1, which implies w₀ ≈ 0.
@@ -160,7 +159,15 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
 
         # Implicit NH pressure drag contributes a quadratic sink in w².
         if p.atmos.edmfx_model.nh_pressure isa Val{true}
-            @. ᶠa += ᶠinterp(drag_coeff * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
+            ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
+            ᶜa⁰ = @. lazy(a⁰(Y.c.sgsʲs, ᶜρʲs, turbconv_model))
+            # Use a scratch scalar here as @lazy results in a large fused kernel
+            # that doesn't work on P100 GPUs.
+            ᶜdrag_coeff = p.scratch.ᶜtemp_scalar_2
+            @. ᶜdrag_coeff =
+                α_d / (2 * scale_height) *
+                (1 / sqrt(max(ᶜaʲ, a_min)) + 1 / sqrt(max(ᶜa⁰, a_min)))
+            @. ᶠa += ᶠinterp(ᶜdrag_coeff * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
         end
 
         # Optional Rayleigh sponge adds extra linear damping near the top.
