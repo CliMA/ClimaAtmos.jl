@@ -1,5 +1,6 @@
 import ClimaAtmos as CA
 import YAML
+import TOML
 import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 using ClimaUtilities.ClimaArtifacts
@@ -19,6 +20,12 @@ const output_dir = experiment_config_dict["output_dir"]
 const model_config = experiment_config_dict["model_config"]
 const batch_size = experiment_config_dict["batch_size"]
 
+struct GCMDrivenSCMInterface <: CAL.AbstractModelInterface end
+
+CAL.experiment_dir(::GCMDrivenSCMInterface) = dirname(Base.active_project())
+CAL.model_interface_filepath(::GCMDrivenSCMInterface) =
+    joinpath(@__DIR__, "model_interface.jl")
+
 @everywhere function run_atmos_simulation(atmos_config)
     simulation = CA.get_simulation(atmos_config)
     sol_res = CA.solve_atmos!(simulation)
@@ -37,7 +44,39 @@ const batch_size = experiment_config_dict["batch_size"]
     end
 end
 
-function CAL.forward_model(iteration, member)
+"""
+    filter_toml_duplicates(toml_paths, parameter_path, dest_dir)
+
+Given a list of base TOML override files and a calibrated `parameters.toml`,
+write filtered copies of the base files to `dest_dir` with any keys that appear
+in `parameters.toml` removed. Returns the list of paths to use (filtered copies
+for files that had overlaps, originals for files that didn't).
+"""
+function filter_toml_duplicates(toml_paths, parameter_path, dest_dir)
+    calibrated_keys = Set(keys(TOML.parsefile(parameter_path)))
+    filtered_paths = String[]
+    for toml_path in toml_paths
+        toml_path == parameter_path && continue
+        base_data = TOML.parsefile(toml_path)
+        overlapping = intersect(keys(base_data), calibrated_keys)
+        if isempty(overlapping)
+            push!(filtered_paths, toml_path)
+        else
+            filtered = filter(kv -> !(kv.first in calibrated_keys), base_data)
+            filtered_path =
+                joinpath(dest_dir, "filtered_" * basename(toml_path))
+            open(filtered_path, "w") do io
+                TOML.print(io, filtered)
+            end
+            @info "Removed calibrated keys $(collect(overlapping)) from $(basename(toml_path))"
+            push!(filtered_paths, filtered_path)
+        end
+    end
+    push!(filtered_paths, parameter_path)
+    return filtered_paths
+end
+
+function CAL.forward_model(::GCMDrivenSCMInterface, iteration, member)
     base_config_dict = YAML.load_file(joinpath(@__DIR__, model_config))
 
     iter_path = CAL.path_to_iteration(output_dir, iteration)
@@ -77,7 +116,6 @@ function CAL.forward_model(iteration, member)
                 if haskey(config, "toml")
                     config["toml"] = abspath.(config["toml"])
                     push!(config["toml"], forcing_config_path)
-                    @info "Added forcing config: $forcing_config_path for case $i"
                 else
                     config["toml"] = [forcing_config_path]
                 end
@@ -87,6 +125,14 @@ function CAL.forward_model(iteration, member)
         else
             @warn "No forcing config file specified for type '$forcing_type' for case $i."
         end
+
+        config_dest = joinpath(member_path, "config_$i")
+        mkpath(config_dest)
+        config["toml"] = filter_toml_duplicates(
+            config["toml"],
+            parameter_path,
+            config_dest,
+        )
 
         comms_ctx = ClimaComms.SingletonCommsContext()
         CA.AtmosConfig(config; comms_ctx)

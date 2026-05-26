@@ -9,12 +9,12 @@ using Plots
 using LinearAlgebra
 using DataFrames
 
-output_dir = "/resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/output_progedmf_cal_v2/exp11"
-iterations = 0:6
+output_dir = "/resnick/groups/esm/cchristo/data/climaatmos_scm_calibrations/output_progedmf_cal_v3/exp10"
+iterations = 1:6
 # iterations = nothing
 
 # Plot output directory (relative path, user can change this)
-plot_output_dir = "plots/eki_plots/progedmf_cal_v2_exp11"
+plot_output_dir = "plots/eki_plots/progedmf_cal_v3_exp10"
 
 # If true, combine all parameter evolution plots into a single figure (sorted by relative change)
 combine_param_plots = true

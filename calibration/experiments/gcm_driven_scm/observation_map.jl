@@ -13,7 +13,28 @@ function suppress_logs(f, args...; kwargs...)
     end
 end
 
+"""
+    precompute_z_grids(config_dict)
+
+Compute z-grids once for each forcing type (e.g. "shallow", "deep") to avoid
+repeatedly creating expensive CA.AtmosConfig objects inside the observation map loop.
+"""
+function precompute_z_grids(config_dict)
+    z_cal_grid = config_dict["z_cal_grid"]
+    model_config_dict =
+        YAML.load_file(joinpath(dirname(Base.active_project()), config_dict["model_config"]))
+    atmos_config = suppress_logs(CA.AtmosConfig, model_config_dict)
+
+    z_grids = Dict{String, Vector{Float64}}()
+    for forcing_type in keys(z_cal_grid)
+        z_grids[forcing_type] =
+            get_cal_z_grid(atmos_config, z_cal_grid, forcing_type)
+    end
+    return z_grids
+end
+
 function CAL.observation_map(
+    ::GCMDrivenSCMInterface,
     iteration;
     config_dict = YAML.load_file(
         joinpath(dirname(Base.active_project()), "experiment_config.yml"),
@@ -30,6 +51,11 @@ function CAL.observation_map(
 
     iter_path = CAL.path_to_iteration(config_dict["output_dir"], iteration)
     eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
+
+    z_grids_by_type = precompute_z_grids(config_dict)
+
+    n_failures = 0
+    first_error = nothing
     for m in 1:config_dict["ensemble_size"]
         member_path =
             path_to_ensemble_member(config_dict["output_dir"], iteration, m)
@@ -41,15 +67,28 @@ function CAL.observation_map(
                 t_start = config_dict["g_t_start_sec"],
                 t_end = config_dict["g_t_end_sec"],
                 z_max = config_dict["z_max"],
-                z_cal_grid = config_dict["z_cal_grid"],
+                z_grids_by_type = z_grids_by_type,
                 norm_factors_dict = config_dict["norm_factors_by_var"],
                 log_vars = config_dict["log_vars"],
             )
         catch err
-            @info "Error during observation map for ensemble member $m" err
+            n_failures += 1
+            if isnothing(first_error)
+                first_error = (m, err, catch_backtrace())
+            end
             G_ensemble[:, m] .= NaN
         end
     end
+
+    N = config_dict["ensemble_size"]
+    if n_failures > 0
+        m, err, bt = first_error
+        @warn "Observation map: $n_failures / $N members failed. First failure (member $m):"
+        showerror(stderr, err, bt)
+        println(stderr)
+        flush(stderr)
+    end
+
     return G_ensemble
 end
 
@@ -61,7 +100,7 @@ function process_member_data(
     t_start,
     t_end,
     z_max = nothing,
-    z_cal_grid = nothing,
+    z_grids_by_type = nothing,
     norm_factors_dict = nothing,
     log_vars = [],
 )
@@ -70,14 +109,12 @@ function process_member_data(
     for i in forcing_file_indices
         simulation_dir = joinpath(member_path, "config_$i", "output_active")
         model_config_dict = YAML.load_file(joinpath(simulation_dir, ".yml"))
-        # suppress logs when creating model config, z grids to avoid cluttering output
-        model_config = suppress_logs(CA.AtmosConfig, model_config_dict)
 
         cfsite_number = model_config_dict["cfsite_number"]
         site_num = parse(Int, replace(cfsite_number, r"[^0-9]" => ""))
         forcing_type = get_cfsite_type(site_num)
 
-        z_interp = get_cal_z_grid(model_config, z_cal_grid, forcing_type)
+        z_interp = z_grids_by_type[forcing_type]
 
         simdir = SimDir(simulation_dir)
         for (i, y_name) in enumerate(y_names)
@@ -130,7 +167,11 @@ function process_profile_variable(
     end
 
     if sim_t_end < 0.95 * t_end
-        throw(ErrorException("Simulation failed at: $sim_t_end"))
+        throw(ErrorException(
+            "Simulation too short: sim_t_end=$(sim_t_end)s but need " *
+            "0.95 * g_t_end=$(0.95 * t_end)s. Check that model config " *
+            "t_end >= experiment config g_t_end_sec.",
+        ))
     end
 
     # take time-mean
