@@ -413,7 +413,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
     ᶠz = Fields.coordinate_field(Y.f).z
-    zmax = z_max(axes(Y.f))
+    zmax = Spaces.z_max(axes(Y.f))
 
     ᶜkappa_m = p.scratch.ᶜtemp_scalar
     @. ᶜkappa_m =

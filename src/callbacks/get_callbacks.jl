@@ -1,3 +1,4 @@
+import ClimaUtilities.OnlineLogging: WallTimeInfo, report_walltime
 # Reduction-time keys allowed in diagnostic spec dicts.
 # Lowercased so callers can use "Max" or "max" interchangeably.
 const _DIAG_ALLOWED_REDUCTIONS = Dict(
