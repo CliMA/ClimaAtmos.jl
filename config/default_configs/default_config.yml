@@ -233,6 +233,21 @@ cloud_model:
 cloud_nn_architecture:
   help: "Cloud neural network architecture to use when `cloud_model` is set to `MLCloud` [`arch_2layers_8nodes.jld2` (default), etc.]"
   value: "arch_2layers_8nodes.jld2"
+ml_correction_model:
+  help: "ML tendency correction model path (BSON file). Set to a file path to enable, `~` to disable. The model is trained offline against ERA5 reanalysis."
+  value: ~
+ml_correction_mode:
+  help: "ML correction prediction mode [`direct` (default), `flux`]. `direct` predicts tendency corrections; `flux` predicts vertical flux profiles and applies -dF/dz."
+  value: "direct"
+ml_correction_relaxation:
+  help: "Relaxation factor scaling the ML correction tendency [0.0–1.0]. Default 1.0 (full correction)."
+  value: 1.0
+ml_correction_z_max:
+  help: "Maximum height (m) at which the ML correction is applied. Corrections are zeroed above this altitude. Default 10000."
+  value: 10000.0
+dt_ml_correction:
+  help: "Frequency at which the ML correction callback is evaluated (e.g. `1days`, `6hours`). Default `1days`."
+  value: "1days"
 implicit_microphysics:
   help: "Whether to treat microphysics tendencies implicitly [`true` (default), `false`]"
   value: true

@@ -148,6 +148,33 @@ function MLCloud_constructor(model)
     return MLCloud{typeof(static_model)}(static_model)
 end
 
+"""
+    AbstractMLCorrectionModel
+
+Base type for ML-based tendency corrections trained against reanalysis data.
+"""
+abstract type AbstractMLCorrectionModel end
+
+"""
+    MLCorrectionDirect
+
+Lightweight marker indicating that an ML tendency correction model is active
+in *direct* mode (predicting dT/dt, dq/dt). The heavy data (parameters,
+state, normalization statistics) lives in `p.ml_correction` — not in the
+`AtmosModel` — so that `AtmosModel` remains `isbitstype`-safe for GPU kernels.
+"""
+struct MLCorrectionDirect <: AbstractMLCorrectionModel end
+
+"""
+    MLCorrectionFlux
+
+Lightweight marker indicating that an ML flux correction model is active.
+See [`MLCorrectionDirect`](@ref) for storage convention.
+"""
+struct MLCorrectionFlux <: AbstractMLCorrectionModel end
+
+const MLCorrectionModel = Union{MLCorrectionDirect, MLCorrectionFlux}
+
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct RCEMIPIISST <: AbstractSST end
@@ -882,7 +909,7 @@ end
 
 Groups turbulence convection-related models and types.
 """
-@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD, CHD}
+@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD, CHD, MLC}
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     sgs_adv_mode::SAM = Explicit()
@@ -893,6 +920,7 @@ Groups turbulence convection-related models and types.
     smagorinsky_lilly::SL = nothing
     amd_les::AMD = nothing
     constant_horizontal_diffusion::CHD = nothing
+    ml_correction_model::MLC = nothing
 end
 
 """
@@ -1549,6 +1577,8 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
         ConstantHorizontalDiffusion{FT}(CAP.constant_horizontal_diffusion_D(params)) :
         nothing
 
+    ml_correction_model = get_ml_correction_model(pa, FT)
+
     return AtmosTurbconv(;
         edmfx_model,
         turbconv_model = get_turbconv_model(FT, pa, turbconv_params),
@@ -1560,6 +1590,7 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
         smagorinsky_lilly,
         amd_les,
         constant_horizontal_diffusion,
+        ml_correction_model,
     )
 end
 

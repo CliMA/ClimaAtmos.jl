@@ -131,6 +131,10 @@ include(
 )
 include(joinpath("prognostic_equations", "advection.jl"))
 
+include(
+    joinpath("parameterized_tendencies", "ml_correction", "ml_correction.jl"),
+)
+
 include(joinpath("cache", "temporary_quantities.jl"))
 include(joinpath("cache", "tracer_cache.jl"))
 include(joinpath("cache", "cache.jl"))

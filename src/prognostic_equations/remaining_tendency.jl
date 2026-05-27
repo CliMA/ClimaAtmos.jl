@@ -302,6 +302,14 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         p.atmos.orographic_gravity_wave,
     )
 
+    ml_correction_apply_tendency!(
+        Yₜ,
+        Y,
+        p,
+        t,
+        p.atmos.ml_correction_model,
+    )
+
     # NOTE: Microphysics tendencies should be applied before calling this function,
     # because precipitation cache is used in this function
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)

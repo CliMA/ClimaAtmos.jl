@@ -147,6 +147,14 @@ NVTX.@annotate function ogw_model_callback!(integrator)
     return nothing
 end
 
+NVTX.@annotate function ml_correction_callback!(integrator)
+    Y = integrator.u
+    p = integrator.p
+
+    ml_correction_compute_tendency!(Y, p, p.atmos.ml_correction_model)
+    return nothing
+end
+
 NVTX.@annotate function enforce_physical_constraints_callback!(integrator)
     Y = integrator.u
     p = integrator.p

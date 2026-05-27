@@ -492,6 +492,38 @@ function default_model_callbacks(gravity_wave::AtmosGravityWave;
     )
 end
 
+function default_model_callbacks(turbconv::AtmosTurbconv;
+    dt_ml_correction = "1days",
+    dt,
+    t_start,
+    t_end,
+    checkpoint_frequency,
+    kwargs...)
+    return ml_correction_callback(
+        turbconv.ml_correction_model,
+        dt_ml_correction, dt, t_start, t_end, checkpoint_frequency,
+    )
+end
+
+function ml_correction_callback(
+    ml_correction_model,
+    dt_ml_corr,
+    dt,
+    t_start,
+    t_end,
+    checkpoint_frequency,
+)
+    isnothing(ml_correction_model) && return ()
+    return scheduled_callback(
+        ml_correction_callback!,
+        dt_ml_corr,
+        dt,
+        t_start,
+        t_end,
+        checkpoint_frequency,
+    )
+end
+
 default_model_callbacks(scm::SCMSetup; kwargs...) =
     default_model_callbacks(scm.external_forcing; kwargs...)
 

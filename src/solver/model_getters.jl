@@ -1,5 +1,6 @@
 using Flux
 import JLD2
+import BSON
 
 function get_microphysics_model(parsed_args, params = nothing)
     model_name = parsed_args["microphysics_model"]
@@ -358,6 +359,73 @@ function get_cloud_model(parsed_args, params)
     else
         error("Invalid cloud_model $(cloud_model)")
     end
+end
+
+"""
+    get_ml_correction_model(parsed_args, ::Type{FT})
+
+Load an ML tendency correction model from a BSON file.
+Returns `nothing` when the config key `ml_correction_model` is null.
+"""
+function get_ml_correction_model(parsed_args, ::Type{FT}) where {FT}
+    model_path = parsed_args["ml_correction_model"]
+    isnothing(model_path) && return nothing
+
+    isfile(model_path) || error(
+        "ml_correction_model path does not exist: $model_path",
+    )
+
+    mode_str = parsed_args["ml_correction_mode"]
+    relaxation = FT(parsed_args["ml_correction_relaxation"])
+    z_max = Float64(parsed_args["ml_correction_z_max"])
+
+    # The training script defines NormStats in Main. BSON embeds the module
+    # path, so loading requires Main.NormStats to exist. We define it lazily
+    # here (runtime only — never during precompilation) to avoid breaking
+    # incremental compilation.
+    if !isdefined(Main, :NormStats)
+        Core.eval(
+            Main,
+            :(struct NormStats
+                mean::Vector{Float32}
+                std::Vector{Float32}
+            end),
+        )
+    end
+
+    data = BSON.load(model_path)
+
+    ps = data[:ps]
+    st = data[:st]
+    x_norm_stats = data[:X_norm_stats]
+    y_norm_stats = data[:Y_norm_stats]
+    nz = data[:nz]::Int
+    input_dim = data[:input_dim]::Int
+    arch = get(data, :arch, :cnn)::Symbol
+    predict_mode = get(data, :predict_mode, :direct)::Symbol
+    target_vars = get(data, :target_vars, :both)::Symbol
+
+    n_features = input_dim ÷ nz
+
+    x_mean = FT.(x_norm_stats.mean)
+    x_std = FT.(x_norm_stats.std)
+    y_mean = FT.(y_norm_stats.mean)
+    y_std = FT.(y_norm_stats.std)
+
+    config_mode = Symbol(mode_str)
+    if config_mode != predict_mode
+        @warn "ml_correction_mode ($config_mode) differs from saved predict_mode " *
+              "($predict_mode) in BSON; using saved predict_mode"
+    end
+
+    set_ml_correction_data!((;
+        ps, st, x_norm_mean = x_mean, x_norm_std = x_std,
+        y_norm_mean = y_mean, y_norm_std = y_std,
+        nz, n_features, target_vars, arch,
+        relaxation = Float64(relaxation), z_max,
+    ))
+
+    return predict_mode == :direct ? MLCorrectionDirect() : MLCorrectionFlux()
 end
 
 function get_cloud_in_radiation(parsed_args)
