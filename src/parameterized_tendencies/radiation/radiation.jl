@@ -379,10 +379,10 @@ function radiation_model_cache(
     )
 end
 
-get_cloud_cache(_, _, _) = (;)
-function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date)
+#get_cloud_cache(_, _, _) = (;)
+function get_cloud_cache(radiation_mode, Y, start_date)
     target_space = axes(Y.c)
-    prescribed_cloud_names = ("cc", "clwc", "ciwc")
+    prescribed_cloud_names = ("t",)
     prescribed_cloud_names_as_symbols = Symbol.(prescribed_cloud_names)
     extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
     timevaryinginputs = [

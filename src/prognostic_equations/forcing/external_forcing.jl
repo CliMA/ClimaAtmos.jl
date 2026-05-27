@@ -618,3 +618,17 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     # total specific humidity
     @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt_nudging
 end
+
+function nudging_tendency!(Yₜ, Y, p, t)
+    FT = Spaces.undertype(axes(Y.c))
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+
+    ᶜdTdt_nudging = @. lazy(-(ᶜT - p.radiation.prescribed_clouds_field.t) / 3600 / 3)
+    @. Yₜ.c.ρe_tot +=
+        Y.c.ρ * (
+            TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) *
+            ᶜdTdt_nudging
+        )
+end
