@@ -2,7 +2,7 @@
 ##### Rayleigh sponge
 #####
 
-import ClimaCore.Fields as Fields
+import ClimaCore: Fields, Spaces
 
 αₘ(s::RayleighSponge, z, α) = ifelse(z > s.zd, α, zero(α))
 ζ_rayleigh(s::RayleighSponge, z, zmax) = sinpi((z - s.zd) / (zmax - s.zd) / 2)^2
@@ -14,27 +14,27 @@ import ClimaCore.Fields as Fields
 function rayleigh_sponge_tendency_uₕ(ᶜuₕ, s)
     s isa Nothing && return NullBroadcasted()
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜuₕ))
-    zmax = z_max(axes(ᶠz))
+    zmax = Spaces.z_max(axes(ᶠz))
     return @. lazy(-β_rayleigh_uₕ(s, ᶜz, zmax) * ᶜuₕ)
 end
 
 function rayleigh_sponge_tendency_u₃(ᶠu₃, s)
     s isa Nothing && return NullBroadcasted()
     ᶠz = Fields.coordinate_field(ᶠu₃).z
-    zmax = z_max(axes(ᶠz))
+    zmax = Spaces.z_max(axes(ᶠz))
     return @. lazy(-β_rayleigh_u₃(s, ᶠz, zmax) * ᶠu₃)
 end
 
 function rayleigh_sponge_tendency_sgs_tracer(ᶜχ, s)
     s isa Nothing && return NullBroadcasted()
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜχ))
-    zmax = z_max(axes(ᶠz))
+    zmax = Spaces.z_max(axes(ᶠz))
     return @. lazy(-β_rayleigh_sgs_tracer(s, ᶜz, zmax) * ᶜχ)
 end
 
 function rayleigh_sponge_tendency_sgs_tracer(ᶜχʲ, ᶜχ, s)
     s isa Nothing && return NullBroadcasted()
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜχ))
-    zmax = z_max(axes(ᶠz))
+    zmax = Spaces.z_max(axes(ᶠz))
     return @. lazy(-β_rayleigh_sgs_tracer(s, ᶜz, zmax) * (ᶜχʲ - ᶜχ))
 end

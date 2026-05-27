@@ -3,7 +3,7 @@
 #####
 
 import ClimaCore
-import ClimaCore: Fields
+import ClimaCore: Fields, Spaces
 
 """
     initialize_implicit_stage_problem!(Y, p, dtγ)
@@ -173,7 +173,7 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         # Optional Rayleigh sponge adds extra linear damping near the top.
         if !isnothing(rayleigh_sponge)
             ᶠz = Fields.coordinate_field(Y.f.u₃).z
-            zmax = z_max(axes(ᶠz))
+            zmax = Spaces.z_max(axes(ᶠz))
             @. ᶠb += β_rayleigh_u₃(rayleigh_sponge, ᶠz, zmax)
         end
 
