@@ -2,7 +2,7 @@
 
 julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "45df2d2280f2cc68574487354f937fc726dad635"
+project_hash = "6dc55dcd2743828c52d667c059aa8515e72171ce"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "bbc22a9a08a0ef6460041086d8a7b27940ed4ffd"
@@ -322,21 +322,21 @@ version = "5.11.2"
 
 [[deps.CUDA_Compiler_jll]]
 deps = ["Artifacts", "CUDA_Driver_jll", "CUDA_Runtime_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
-git-tree-sha1 = "b977706846cb0a75d3842a1fed810ab2e6ab2f94"
+git-tree-sha1 = "6ca8941cec33550807f849ffc566492db6ede90d"
 uuid = "d1e2174e-dfdc-576e-b43e-73b79eb1aca8"
-version = "0.4.3+0"
+version = "0.4.4+0"
 
 [[deps.CUDA_Driver_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "TOML"]
-git-tree-sha1 = "23c51e2c9bb36be09c3f10f92d0b9cc294e1bc5e"
+git-tree-sha1 = "2d6222474d868469a72de5bd47c5c25c0e1fe518"
 uuid = "4ee394cb-3365-5eb0-8335-949819d2adfc"
-version = "13.2.1+3"
+version = "13.3.0+0"
 
 [[deps.CUDA_Runtime_Discovery]]
 deps = ["Libdl"]
-git-tree-sha1 = "4fd010410c0c91c8b9bd6194a9ebdebecd9a8107"
+git-tree-sha1 = "79312abe5261a660f94e746e449d2cb2fe3284d9"
 uuid = "1af6417a-86b4-443c-805f-a4643ffb695f"
-version = "2.0.0"
+version = "2.1.0"
 
 [[deps.CUDA_Runtime_jll]]
 deps = ["Artifacts", "CUDA_Driver_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
@@ -706,9 +706,9 @@ version = "1.15.1"
 
 [[deps.DiskArrays]]
 deps = ["ConstructionBase", "LRUCache", "Mmap", "OffsetArrays"]
-git-tree-sha1 = "e5d9ce1b751ddf9bcd9d36b51249dce8ea73cd55"
+git-tree-sha1 = "ead53bf0bbcd2e487495b2462feaa6043c4bc8c1"
 uuid = "3c3547ce-8d99-4f5e-a174-61eb10b00ae3"
-version = "0.4.19"
+version = "0.4.20"
 
 [[deps.Distances]]
 deps = ["LinearAlgebra", "Statistics", "StatsAPI"]
@@ -781,9 +781,9 @@ version = "2.2.9"
 
 [[deps.Expat_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "8f05e9a2e7c2e3eb524102bb2926c5743c07fbe1"
+git-tree-sha1 = "c307cd83373868391f3ac30b41530bc5d5d05d08"
 uuid = "2e619515-83b5-522b-bb60-26c02a35a201"
-version = "2.8.0+0"
+version = "2.8.1+0"
 
 [[deps.ExprTools]]
 git-tree-sha1 = "27415f162e6028e81c72b82ef756bf321213b6ec"
@@ -1004,9 +1004,9 @@ version = "0.2.0"
 
 [[deps.GPUCompiler]]
 deps = ["ExprTools", "InteractiveUtils", "LLVM", "Libdl", "Logging", "PrecompileTools", "Preferences", "Scratch", "Serialization", "TOML", "Tracy", "UUIDs"]
-git-tree-sha1 = "e9817f6e11bf985b4da0f16fd61476438776f3d2"
+git-tree-sha1 = "21f06bc7874e98849ee7d8b382990903bd7661df"
 uuid = "61eb1bfa-7361-4325-ad38-22787b887f55"
-version = "1.13.1"
+version = "1.13.3"
 
 [[deps.GPUToolbox]]
 deps = ["LLVM"]
@@ -1719,9 +1719,9 @@ version = "1.11.0"
 
 [[deps.MathTeXEngine]]
 deps = ["AbstractTrees", "Automa", "DataStructures", "FreeTypeAbstraction", "GeometryBasics", "LaTeXStrings", "REPL", "RelocatableFolders", "UnicodeFun"]
-git-tree-sha1 = "7eb8cdaa6f0e8081616367c10b31b9d9b34bb02a"
+git-tree-sha1 = "b0abe548c2609d9e3678d5ddf5a227da887ee5ce"
 uuid = "0a4f8689-d25c-4efe-a92b-7142dfc1aa53"
-version = "0.6.7"
+version = "0.6.8"
 
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1997,9 +1997,9 @@ weakdeps = ["StatsBase"]
 
 [[deps.PNGFiles]]
 deps = ["Base64", "CEnum", "ImageCore", "IndirectArrays", "OffsetArrays", "libpng_jll"]
-git-tree-sha1 = "cf181f0b1e6a18dfeb0ee8acc4a9d1672499626c"
+git-tree-sha1 = "32b657a0d57c310a1a172bfc8c8cf68c5e674323"
 uuid = "f57f5aa1-a3ce-4bc8-8ab9-96f992907883"
-version = "0.4.4"
+version = "0.4.5"
 
 [[deps.PackageExtensionCompat]]
 git-tree-sha1 = "fb28e33b8a95c4cee25ce296c817d89cc2e53518"
@@ -2935,9 +2935,9 @@ version = "0.2.3+0"
 
 [[deps.libaec_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "1411bc34c180946d3cef591de1384012afa6edee"
+git-tree-sha1 = "60f4792734488db6f42e2c7699f1d4594780bd03"
 uuid = "477f73a3-ac25-53e9-8cc3-50b2fa2566f0"
-version = "1.1.6+0"
+version = "1.1.7+0"
 
 [[deps.libaom_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
