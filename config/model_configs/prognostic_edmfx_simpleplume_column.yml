@@ -4,7 +4,7 @@ turbconv: "prognostic_edmfx"
 implicit_diffusion: false
 approximate_linear_solve_iters: 2
 edmfx_entr_model: "Generalized"
-edmfx_detr_model: "SmoothArea"
+edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: false
 edmfx_sgs_diffusive_flux: false
 edmfx_nh_pressure: true

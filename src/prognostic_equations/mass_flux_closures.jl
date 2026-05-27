@@ -27,6 +27,7 @@ end
 
 """
     vertical_buoyancy_acceleration(ρ_ref, ρ, gradᵥ_Φ, local_geometry)
+    vertical_buoyancy_acceleration(ρ_diff, gradᵥ_Φ, local_geometry)
 
     Compute the signed vertical component of the buoyancy acceleration vector in physical units.
 
@@ -38,6 +39,7 @@ end
     - `ρ`: Density [kg/m³]
     - `gradᵥ_Φ`: Covariant3Vector — gradient of geopotential (i.e., gravitational acceleration) [m/s²]
     - `local_geometry`: Local geometry object for projecting onto vertical direction
+    - `ρ_diff`: Normalized density difference `(ρ - ρ_ref) / ρ` [-].
 
     Returns:
     - Scalar acceleration in the vertical direction [m/s²], positive when buoyancy acts upward
@@ -45,6 +47,12 @@ end
 function vertical_buoyancy_acceleration(ρ_ref, ρ, gradᵥ_Φ, local_geometry)
     # Compute the full buoyancy acceleration vector (Covariant3Vector)
     buoy_vector = buoyancy(ρ_ref, ρ, gradᵥ_Φ)
+    # Project onto vertical axis and return signed scalar value
+    return projected_vector_data(C3, buoy_vector, local_geometry)
+end
+function vertical_buoyancy_acceleration(ρ_diff, gradᵥ_Φ, local_geometry)
+    # Compute the full buoyancy acceleration vector (Covariant3Vector)
+    buoy_vector = -1 * ρ_diff * gradᵥ_Φ
     # Project onto vertical axis and return signed scalar value
     return projected_vector_data(C3, buoy_vector, local_geometry)
 end

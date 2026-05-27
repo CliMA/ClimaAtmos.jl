@@ -291,9 +291,12 @@ function precomputed_quantities(Y, atmos)
         (;
             ρtke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜentr_vel_scaleʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜentr_nonvelʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜdetr_nonvelʲs = similar(Y.c, NTuple{n, FT}),
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
-            ᶠρ_diffʲs = similar(Y.f, NTuple{n, FT}),
+            ᶜρ_diffʲs = similar(Y.c, NTuple{n, FT}),
             ᶠu₃_tendencyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             precipitation_sgs_quantities...,
         ) : (;)
