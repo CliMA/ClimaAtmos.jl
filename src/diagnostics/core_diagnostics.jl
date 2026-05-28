@@ -85,6 +85,11 @@ add_diagnostic_variable!(short_name = "ta", units = "K",
     compute = (_, cache, _) -> cache.precomputed.ᶜT,
 )
 
+add_diagnostic_variable!(short_name = "tanudged", units = "K",
+    long_name = "Air Temperature",
+    compute = (_, cache, _) -> cache.radiation.prescribed_clouds_field.t,
+)
+
 ###
 # Potential temperature (3d)
 ###
