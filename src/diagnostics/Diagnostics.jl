@@ -71,7 +71,7 @@ import ..correlation_Tq
 
 
 # We need the abbreviations for symbols like curl, grad, and so on
-include(joinpath("..", "utils", "abbreviations.jl"))
+include("../utils/abbreviations.jl")
 
 import ClimaDiagnostics
 

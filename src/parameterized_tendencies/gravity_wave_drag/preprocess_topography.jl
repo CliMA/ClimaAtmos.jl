@@ -1,6 +1,5 @@
 import ClimaDiagnostics.Writers:
     HDF5Writer
-import ClimaAtmos as CA
 import ClimaCore: InputOutput, Spaces, Fields, to_cpu
 import ClimaComms
 
@@ -9,10 +8,10 @@ using NCDatasets
 using ClimaCoreTempestRemap # for apply_remap
 
 include(
-    joinpath(pkgdir(CA), "post_processing/remap", "remap_helpers.jl"),
+    "../../../post_processing/remap/remap_helpers.jl",
 )
 include(
-    joinpath(pkgdir(CA), "test/parameterized_tendencies/gravity_wave", "gw_plotutils.jl"))
+    "../../../test/parameterized_tendencies/gravity_wave/gw_plotutils.jl")
 
 """
     write_computed_drag!(

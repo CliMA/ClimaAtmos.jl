@@ -16,155 +16,115 @@ import ClimaCore: Domains, Spaces, Topologies
 import ClimaDiagnostics
 import RRTMGP
 
-include(joinpath("parameters", "Parameters.jl"))
+include("parameters/Parameters.jl")
 import .Parameters as CAP
 
-include(joinpath("utils", "abbreviations.jl"))
-include(joinpath("utils", "gpu_compat.jl"))
+include("utils/abbreviations.jl")
+include("utils/gpu_compat.jl")
 include("types.jl")
-include(joinpath("config", "atmos_config.jl"))
-include(joinpath("config", "cli_options.jl"))
-include(joinpath("utils", "utilities.jl"))
-include(joinpath("utils", "debug_utils.jl"))
-include(joinpath("utils", "variable_manipulations.jl"))
-include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
-include(joinpath("config", "era5_observations_to_forcing_file.jl"))
-include(joinpath("utils", "weather_model.jl"))
+include("config/atmos_config.jl")
+include("config/cli_options.jl")
+include("utils/utilities.jl")
+include("utils/debug_utils.jl")
+include("utils/variable_manipulations.jl")
+include("utils/read_gcm_driven_scm_data.jl")
+include("config/era5_observations_to_forcing_file.jl")
+include("utils/weather_model.jl")
 
-include(joinpath("utils", "AtmosArtifacts.jl"))
+include("utils/AtmosArtifacts.jl")
 import .AtmosArtifacts as AA
 
-include(joinpath("topography", "topography.jl"))
-include(joinpath("topography", "steady_state_solutions.jl"))
+include("topography/topography.jl")
+include("topography/steady_state_solutions.jl")
 
-include(joinpath("parameterized_tendencies", "radiation", "RRTMGPInterface.jl"))
+include("parameterized_tendencies/radiation/RRTMGPInterface.jl")
 import .RRTMGPInterface as RRTMGPI
-include(joinpath("parameterized_tendencies", "radiation", "radiation.jl"))
+include("parameterized_tendencies/radiation/radiation.jl")
 
-include(joinpath("cache", "prognostic_edmf_precomputed_quantities.jl"))
-include(joinpath("cache", "diagnostic_edmf_precomputed_quantities.jl"))
-include(joinpath("cache", "microphysics_cache.jl"))
-include(joinpath("cache", "precomputed_quantities.jl"))
-include(joinpath("cache", "surface_albedo.jl"))
+include("cache/prognostic_edmf_precomputed_quantities.jl")
+include("cache/diagnostic_edmf_precomputed_quantities.jl")
+include("cache/microphysics_cache.jl")
+include("cache/precomputed_quantities.jl")
+include("cache/surface_albedo.jl")
 
 # Microphysics module (SGS quadrature, cloud fraction, tendency limiters, wrappers)
-include(joinpath("parameterized_tendencies", "microphysics", "microphysics.jl"))
+include("parameterized_tendencies/microphysics/microphysics.jl")
 
-include(joinpath("surface_conditions", "SurfaceConditions.jl"))
-include(joinpath("setups", "Setups.jl"))
-include(joinpath("utils", "refstate_thermodynamics.jl"))
+include("surface_conditions/SurfaceConditions.jl")
+include("setups/Setups.jl")
+include("utils/refstate_thermodynamics.jl")
 
-include(joinpath("prognostic_equations", "pressure_work.jl"))
-include(joinpath("prognostic_equations", "zero_velocity.jl"))
+include("prognostic_equations/pressure_work.jl")
+include("prognostic_equations/zero_velocity.jl")
 
-include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
-include(joinpath("prognostic_equations", "implicit", "jacobian.jl"))
-include(
-    joinpath("prognostic_equations", "implicit", "manual_sparse_jacobian.jl"),
-)
-include(joinpath("prognostic_equations", "implicit", "initialize_implicit_problem.jl"))
-include(joinpath("prognostic_equations", "implicit", "auto_dense_jacobian.jl"))
-include(joinpath("prognostic_equations", "implicit", "auto_sparse_jacobian.jl"))
-include(joinpath("prognostic_equations", "implicit", "autodiff_utils.jl"))
+include("prognostic_equations/implicit/implicit_tendency.jl")
+include("prognostic_equations/implicit/jacobian.jl")
+include("prognostic_equations/implicit/manual_sparse_jacobian.jl")
+include("prognostic_equations/implicit/initialize_implicit_problem.jl")
+include("prognostic_equations/implicit/auto_dense_jacobian.jl")
+include("prognostic_equations/implicit/auto_sparse_jacobian.jl")
+include("prognostic_equations/implicit/autodiff_utils.jl")
 
-include(joinpath("prognostic_equations", "water_advection.jl"))
-include(joinpath("prognostic_equations", "remaining_tendency.jl"))
-include(joinpath("prognostic_equations", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?
-include(joinpath("prognostic_equations", "forcing", "subsidence.jl"))
-include(joinpath("prognostic_equations", "forcing", "external_forcing.jl"))
+include("prognostic_equations/water_advection.jl")
+include("prognostic_equations/remaining_tendency.jl")
+include("prognostic_equations/forcing/large_scale_advection.jl") # TODO: should this be in tendencies/?
+include("prognostic_equations/forcing/subsidence.jl")
+include("prognostic_equations/forcing/external_forcing.jl")
 
-include(joinpath("prognostic_equations", "surface_temp.jl"))
+include("prognostic_equations/surface_temp.jl")
 
-include(joinpath("parameterized_tendencies", "radiation", "held_suarez.jl"))
+include("parameterized_tendencies/radiation/held_suarez.jl")
 
-include(
-    joinpath(
-        "parameterized_tendencies",
-        "gravity_wave_drag",
-        "non_orographic_gravity_wave.jl",
-    ),
-)
-include(
-    joinpath(
-        "parameterized_tendencies",
-        "gravity_wave_drag",
-        "orographic_gravity_wave_helper.jl",
-    ),
-)
-include(
-    joinpath(
-        "parameterized_tendencies",
-        "gravity_wave_drag",
-        "orographic_gravity_wave.jl",
-    ),
-)
-include(joinpath("prognostic_equations", "hyperdiffusion.jl"))
-include(joinpath("prognostic_equations", "gm_sgs_closures.jl"))
-include(joinpath("prognostic_equations", "scm_coriolis.jl"))
-include(joinpath("prognostic_equations", "eddy_diffusion_closures.jl"))
-include(joinpath("prognostic_equations", "mass_flux_closures.jl"))
-include(joinpath("prognostic_equations", "edmfx_entr_detr.jl"))
-include(joinpath("prognostic_equations", "edmfx_tke.jl"))
-include(joinpath("prognostic_equations", "edmfx_sgs_flux.jl"))
-include(joinpath("prognostic_equations", "edmfx_boundary_condition.jl"))
-include(
-    joinpath("prognostic_equations", "vertical_diffusion_boundary_layer.jl"),
-)
-include(joinpath("prognostic_equations", "surface_flux.jl"))
-include(joinpath("parameterized_tendencies", "sponge", "rayleigh_sponge.jl"))
-include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
-include(
-    joinpath(
-        "parameterized_tendencies",
-        "les_sgs_models",
-        "smagorinsky_lilly.jl",
-    ),
-)
-include(
-    joinpath(
-        "parameterized_tendencies",
-        "les_sgs_models",
-        "anisotropic_minimum_dissipation.jl",
-    ),
-)
-include(
-    joinpath(
-        "parameterized_tendencies",
-        "les_sgs_models",
-        "constant_horizontal_diffusion.jl",
-    ),
-)
-include(joinpath("prognostic_equations", "advection.jl"))
+include("parameterized_tendencies/gravity_wave_drag/non_orographic_gravity_wave.jl")
+include("parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave_helper.jl")
+include("parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl")
+include("prognostic_equations/hyperdiffusion.jl")
+include("prognostic_equations/gm_sgs_closures.jl")
+include("prognostic_equations/scm_coriolis.jl")
+include("prognostic_equations/eddy_diffusion_closures.jl")
+include("prognostic_equations/mass_flux_closures.jl")
+include("prognostic_equations/edmfx_entr_detr.jl")
+include("prognostic_equations/edmfx_tke.jl")
+include("prognostic_equations/edmfx_sgs_flux.jl")
+include("prognostic_equations/edmfx_boundary_condition.jl")
+include("prognostic_equations/vertical_diffusion_boundary_layer.jl")
+include("prognostic_equations/surface_flux.jl")
+include("parameterized_tendencies/sponge/rayleigh_sponge.jl")
+include("parameterized_tendencies/sponge/viscous_sponge.jl")
+include("parameterized_tendencies/les_sgs_models/smagorinsky_lilly.jl")
+include("parameterized_tendencies/les_sgs_models/anisotropic_minimum_dissipation.jl")
+include("parameterized_tendencies/les_sgs_models/constant_horizontal_diffusion.jl")
+include("prognostic_equations/advection.jl")
 
-include(joinpath("cache", "temporary_quantities.jl"))
-include(joinpath("cache", "tracer_cache.jl"))
-include(joinpath("cache", "cache.jl"))
-include(joinpath("cache", "eddy_diffusivity_coefficient.jl"))
-include(joinpath("prognostic_equations", "constrain_state.jl"))
-include(joinpath("prognostic_equations", "limited_tendencies.jl"))
+include("cache/temporary_quantities.jl")
+include("cache/tracer_cache.jl")
+include("cache/cache.jl")
+include("cache/eddy_diffusivity_coefficient.jl")
+include("prognostic_equations/constrain_state.jl")
+include("prognostic_equations/limited_tendencies.jl")
 
-include(joinpath("callbacks", "callbacks.jl"))
+include("callbacks/callbacks.jl")
 
-include(joinpath("diagnostics", "Diagnostics.jl"))
+include("diagnostics/Diagnostics.jl")
 import .Diagnostics as CAD
 import .Diagnostics: DiagnosticsConfig
 
-include(joinpath("callbacks", "get_callbacks.jl"))
+include("callbacks/get_callbacks.jl")
 
-include(joinpath("parameters", "create_parameters.jl"))
+include("parameters/create_parameters.jl")
 
-include(joinpath("simulation", "grids.jl"))
-include(joinpath("simulation", "restart.jl"))
-include(joinpath("simulation", "integrator.jl"))
-include(joinpath("simulation", "AtmosSimulations.jl"))
-include(joinpath("simulation", "solve.jl"))
+include("simulation/grids.jl")
+include("simulation/restart.jl")
+include("simulation/integrator.jl")
+include("simulation/AtmosSimulations.jl")
+include("simulation/solve.jl")
 
 include("presets.jl")
 
-include(joinpath("config", "model_getters.jl"))
-include(joinpath("config", "type_getters.jl"))
-include(joinpath("config", "yaml_helper.jl"))
+include("config/model_getters.jl")
+include("config/type_getters.jl")
+include("config/yaml_helper.jl")
 
-include(joinpath("utils", "show.jl"))
+include("utils/show.jl")
 
 end # module
