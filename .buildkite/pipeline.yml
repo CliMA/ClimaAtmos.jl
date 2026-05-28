@@ -834,7 +834,7 @@ steps:
           - exit_status: 255
         agents:
           slurm_ntasks: 2
-          slurm_mem: 24G
+          slurm_mem: 32G
 
       # This job occasionally times out. We add a soft file when the agent is
       # lost because of timeout
@@ -851,7 +851,7 @@ steps:
         agents:
           slurm_gpus_per_task: 1
           slurm_ntasks: 2
-          slurm_mem: 24G
+          slurm_mem: 32G
 
       - label: ":computer: Restart: Using AtmosSimulation"
         retry: *retry_policy
