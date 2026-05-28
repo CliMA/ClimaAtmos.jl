@@ -243,9 +243,9 @@ end
 
 Extracts the `g³³` sub-tensor from the `gⁱʲ` tensor.
 """
-g³³(gⁱʲ) = Geometry.AxisTensor(
+g³³(gⁱʲ) = reshape(
+    gⁱʲ,
     (Geometry.Contravariant3Axis(), Geometry.Contravariant3Axis()),
-    Geometry.components(gⁱʲ)[end],
 )
 
 
