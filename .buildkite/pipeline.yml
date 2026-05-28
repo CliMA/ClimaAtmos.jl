@@ -246,7 +246,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF: Idealized plume, SmoothArea detrainment"
+      - label: ":genie: Prognostic EDMF: Idealized plume"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl

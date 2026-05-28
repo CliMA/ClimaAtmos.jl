@@ -329,9 +329,8 @@ This function handles:
 - Vertical advection of other updraft moisture species (`q_lclʲ`, `q_iclʲ`, `q_raiʲ`, `q_snoʲ`)
   if using a `NonEquilibriumMicrophysics1M` or `NonEquilibriumMicrophysics2M` microphysics
   model. If the `NonEquilibriumMicrophysics2M` model is used, `n_liqʲ` and `n_raiʲ` are also advected.
-- Buoyancy forcing terms in the updraft vertical momentum (`u₃ʲ`) equation, including
-  adjustments for non-hydrostatic pressure.
-- Buoyancy production/conversion terms in the updraft `mseʲ` equation.
+- Buoyancy source term in the updraft `mseʲ` equation (geopotential work done against
+  the density anomaly).
 
 Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
@@ -353,31 +352,28 @@ function edmfx_sgs_vertical_advection_tendency!(
     t,
     turbconv_model::PrognosticEDMFX,
 )
-    (; params) = p
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; dt) = p
     (; edmfx_mse_q_tot_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
-    (; ᶠu³ʲs, ᶜρʲs) = p.precomputed
+    (; ᶠu³ʲs, ᶜρʲs, ᶜρ_diffʲs) = p.precomputed
+    (; ᶜgradᵥ_ᶠΦ) = p.core
 
     FT = eltype(p.params)
-    ᶠz = Fields.coordinate_field(Y.f).z
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
 
-    grav = CAP.grav(params)
     for j in 1:n
         # buoyancy term in mse equation
         @. Yₜ.c.sgsʲs.:($$j).mse +=
             adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃))) *
-            (ᶜρʲs.:($$j) - Y.c.ρ) *
-            ᶜgradᵥ(grav * ᶠz) / ᶜρʲs.:($$j)
+            ᶜρ_diffʲs.:($$j) * ᶜgradᵥ_ᶠΦ
 
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
-        # Flux form vertical advection of area farction with the grid mean velocity
+        # Flux form vertical advection of area fraction with the updraft velocity
         vtt =
             vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_mse_q_tot_upwinding)
         @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
 
-        # Advective form advection of mse and q_tot with the grid mean velocity
+        # Advective form advection of mse and q_tot with the updraft velocity
         # Note: This allocates because the function is too long
         va = vertical_advection(
             ᶠu³ʲs.:($j),
