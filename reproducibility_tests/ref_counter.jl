@@ -1,4 +1,4 @@
-353
+354
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+354
+- Update to ClimaCore 0.14.54
+
 353
 - Remove q_tot diffusion contribution to updraft area tendency and its Jacobian entries.
 
