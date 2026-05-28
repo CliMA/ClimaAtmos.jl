@@ -1,4 +1,4 @@
-347
+348
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+348
+- Update to ClimaCore v0.14.52
+
 347
 - Make the pressure drag term dependent on area fraction in prognostic EDMF.
 
