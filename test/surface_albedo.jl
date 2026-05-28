@@ -46,15 +46,18 @@ Random.seed!(1234)
         simulation = ClimaAtmos.get_simulation(config)
         (; u, p) = simulation.integrator
 
-        # At t=0, should initialize to default (0.38)
-        ClimaAtmos.set_surface_albedo!(u, p, 0.0, p.atmos.surface_albedo)
-        @test all(p.radiation.rrtmgp_model.direct_sw_surface_albedo .== FT(0.38))
-        @test all(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo .== FT(0.38))
+        direct_albedo_init = deepcopy(p.radiation.rrtmgp_model.direct_sw_surface_albedo)
+        diffuse_albedo_init = deepcopy(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo)
 
-        # At t>0, should remain unchanged (coupler controls updates)
+        # At t=0, albedo should remain unchanged
+        ClimaAtmos.set_surface_albedo!(u, p, 0.0, p.atmos.surface_albedo)
+        @test p.radiation.rrtmgp_model.direct_sw_surface_albedo == direct_albedo_init
+        @test p.radiation.rrtmgp_model.diffuse_sw_surface_albedo == diffuse_albedo_init
+
+        # At t>0, albedo should still remain unchanged
         ClimaAtmos.set_surface_albedo!(u, p, 1.0, p.atmos.surface_albedo)
-        @test all(p.radiation.rrtmgp_model.direct_sw_surface_albedo .== FT(0.38))
-        @test all(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo .== FT(0.38))
+        @test p.radiation.rrtmgp_model.direct_sw_surface_albedo == direct_albedo_init
+        @test p.radiation.rrtmgp_model.diffuse_sw_surface_albedo == diffuse_albedo_init
     end
 end
 
