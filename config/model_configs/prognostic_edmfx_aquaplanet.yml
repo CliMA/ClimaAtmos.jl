@@ -22,7 +22,12 @@ dt_save_state_to_disk: 600secs
 toml: [toml/prognostic_edmfx.toml]
 output_default_diagnostics: false
 reproducibility_test: true
+prescribed_aerosols: ["SO4", "SSLT01"]
 diagnostics:
+  - short_name: [tanudged]
+    reduction_time: average
+    period: 600secs
+    pressure_coordinates: true
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfss, hfls, hur, hus, cl, clw, cli, evspsbl, pr, rsd, rsu, rld, rlu]
     reduction_time: average
     period: 600secs

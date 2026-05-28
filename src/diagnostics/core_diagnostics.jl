@@ -85,9 +85,18 @@ add_diagnostic_variable!(short_name = "ta", units = "K",
     compute = (_, cache, _) -> cache.precomputed.ᶜT,
 )
 
+function compute_tanudged!(out, state, cache, time)
+    if isnothing(out)
+        return copy(cache.radiation.prescribed_clouds_field.t)
+    else
+        out .= cache.radiation.prescribed_clouds_field.t
+    end
+end
+
 add_diagnostic_variable!(short_name = "tanudged", units = "K",
     long_name = "Air Temperature",
-    compute = (_, cache, _) -> cache.radiation.prescribed_clouds_field.t,
+    #compute = (_, cache, _) -> getproperty(cache.radiation.prescribed_clouds_field, :t),
+    compute! = (out, u, p, t) -> compute_tanudged!(out, u, p, t),
 )
 
 ###

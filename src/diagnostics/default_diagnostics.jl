@@ -190,6 +190,7 @@ function core_default_diagnostics(output_writer, duration, start_date, t_start, 
     core_diagnostics = [
         "ts",
         "ta",
+        # "tanudged",
         "tas",
         "uas",
         "vas",
