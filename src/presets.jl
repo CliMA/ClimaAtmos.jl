@@ -25,7 +25,7 @@ import ..SmoothMinimumBlending
     dry(; kwargs...)
 
 Dry atmosphere preset (`microphysics_model = DryModel()`).
-Keyword arguments are forwarded to [`AtmosModel`](@ref).
+Keyword arguments are forwarded to `AtmosModel`.
 """
 function dry(; kwargs...)
     defaults = (; microphysics_model = DryModel())
@@ -37,7 +37,7 @@ end
 
 Equilibrium-moisture preset with 0-moment microphysics, grid-scale cloud,
 prescribed zonally-symmetric SST, and idealized insolation.
-Keyword arguments are forwarded to [`AtmosModel`](@ref).
+Keyword arguments are forwarded to `AtmosModel`.
 """
 function equil_moist_0m(; kwargs...)
     defaults = (;
@@ -57,7 +57,7 @@ Non-equilibrium-moisture preset with 1-moment microphysics, explicit
 microphysics tendency timestepping, grid-scale cloud, prescribed
 zonally-symmetric SST, and idealized insolation. Mirrors [`equil_moist_0m`](@ref)
 but with 1-moment non-equilibrium microphysics in place of 0-moment equilibrium.
-Keyword arguments are forwarded to [`AtmosModel`](@ref).
+Keyword arguments are forwarded to `AtmosModel`.
 """
 function nonequil_moist_1m(; kwargs...)
     defaults = (;
@@ -74,14 +74,14 @@ end
 """
     diagnostic_edmf([FT = Float32]; area_fraction, n_updrafts, prognostic_tke, kwargs...)
 
-Equilibrium-moist model with the [`DiagnosticEDMFX`](@ref) turbulence-convection
+Equilibrium-moist model with the `DiagnosticEDMFX` turbulence-convection
 scheme wired in with `Generalized` entrainment/detrainment, SGS mass & diffusive
 fluxes, and non-hydrostatic pressure drag (matches the canonical
 `diagnostic_edmfx_*` configs).
 
 `area_fraction` defaults to 1e-5.
 Override `microphysics_model` to pair EDMF with a dry or non-equilibrium scheme.
-All remaining keyword arguments are forwarded to [`AtmosModel`](@ref).
+All remaining keyword arguments are forwarded to `AtmosModel`.
 """
 function diagnostic_edmf(
     ::Type{FT} = Float32;
@@ -111,12 +111,12 @@ end
 """
     prognostic_edmf([FT = Float32]; area_fraction, n_updrafts, prognostic_tke, kwargs...)
 
-Equilibrium-moist model with the [`PrognosticEDMFX`](@ref) turbulence-convection
+Equilibrium-moist model with the `PrognosticEDMFX` turbulence-convection
 scheme. In addition to the [`diagnostic_edmf`](@ref) EDMF settings, this also
 enables prognostic updraft vertical diffusion and the relaxation filter on
 negative updraft velocities (matches the canonical `prognostic_edmfx_*` configs).
 
-All remaining keyword arguments are forwarded to [`AtmosModel`](@ref).
+All remaining keyword arguments are forwarded to `AtmosModel`.
 """
 function prognostic_edmf(
     ::Type{FT} = Float32;
@@ -151,7 +151,7 @@ end
 [`prognostic_edmf`](@ref) with 1-moment non-equilibrium microphysics and explicit
 microphysics tendency timestepping (matches the canonical `prognostic_edmfx_*`
 configs that use `microphysics_model: "1M"`). All keyword arguments are
-forwarded to [`prognostic_edmf`](@ref) and on to [`AtmosModel`](@ref).
+forwarded to [`prognostic_edmf`](@ref) and on to `AtmosModel`.
 """
 function prognostic_edmf_1m(::Type{FT} = Float32; kwargs...) where {FT}
     defaults = (;
@@ -170,7 +170,7 @@ end
 
 Aquaplanet simulation preset: global [`SphereGrid`](@ref) with
 [`equil_moist_0m`](@ref) physics (0M microphysics, prescribed zonally-symmetric
-SST, idealized insolation). Uses the default [`DecayingProfile`](@ref) initial
+SST, idealized insolation). Uses the default `DecayingProfile` initial
 condition from [`AtmosSimulation`](@ref).
 Keyword arguments are forwarded to [`AtmosSimulation`](@ref).
 """
@@ -183,7 +183,7 @@ end
     baroclinic_wave([FT = Float32]; kwargs...)
 
 Dry baroclinic-wave simulation preset: global [`SphereGrid`](@ref),
-[`DryBaroclinicWave`](@ref) setup, and a dry model with
+`DryBaroclinicWave` setup, and a dry model with
 `disable_surface_flux_tendency = true`. For the moist variant, pass
 `setup = Setups.MoistBaroclinicWave()` and
 `model = Presets.equil_moist_0m(; disable_surface_flux_tendency = true)`.
