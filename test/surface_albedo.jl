@@ -49,15 +49,15 @@ Random.seed!(1234)
         direct_albedo_init = deepcopy(p.radiation.rrtmgp_model.direct_sw_surface_albedo)
         diffuse_albedo_init = deepcopy(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo)
 
-        # At t=0, albedo should remain unchanged
+        # At t=0, albedo should be set to NaN
         ClimaAtmos.set_surface_albedo!(u, p, 0.0, p.atmos.surface_albedo)
-        @test p.radiation.rrtmgp_model.direct_sw_surface_albedo == direct_albedo_init
-        @test p.radiation.rrtmgp_model.diffuse_sw_surface_albedo == diffuse_albedo_init
+        @test all(isnan.(p.radiation.rrtmgp_model.direct_sw_surface_albedo))
+        @test all(isnan.(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo))
 
-        # At t>0, albedo should still remain unchanged
+        # At t>0, albedo should remain unchanged
         ClimaAtmos.set_surface_albedo!(u, p, 1.0, p.atmos.surface_albedo)
-        @test p.radiation.rrtmgp_model.direct_sw_surface_albedo == direct_albedo_init
-        @test p.radiation.rrtmgp_model.diffuse_sw_surface_albedo == diffuse_albedo_init
+        @test all(isnan.(p.radiation.rrtmgp_model.direct_sw_surface_albedo))
+        @test all(isnan.(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo))
     end
 end
 
