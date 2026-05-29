@@ -139,8 +139,11 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
 
         if turbconv_model isa PrognosticEDMFX
             # assuming one updraft
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c, get_χʲ_name_from_ρχ_name(ρχ_name))
-            @. ᶜχʲₜ -= specific(btt, p.precomputed.ᶜρʲs.:(1))
+            χʲ_name = get_χʲ_name_from_ρχ_name(ρχ_name)
+            if MatrixFields.has_field(Yₜ.c, χʲ_name) # patch so bulk chemistry tracers don't participate in updrafts
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c, χʲ_name)
+                @. ᶜχʲₜ -= specific(btt, p.precomputed.ᶜρʲs.:(1))
+            end
         end
     end
 end

@@ -40,6 +40,8 @@ import ..PrescribedSST
 import ..SlabOceanSST
 import ..Parameters.ClimaAtmosParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
+import ..NoChemistry
+import ..GasPhaseChem
 
 # Model types returned by setup interface methods
 import ..ZonallySymmetricSST

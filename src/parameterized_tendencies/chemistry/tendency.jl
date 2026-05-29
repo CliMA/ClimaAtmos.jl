@@ -8,6 +8,6 @@
 import Musica as MSC
 
 function chemistry_tendency!(Yₜ, Y, p, t, ::GasPhaseChem)
-    println("MUSICA version: ", MSC.get_version())
+    println("MUSICA version now is: ", MSC.get_version())
     return nothing
 end

@@ -1,0 +1,10 @@
+CONC.A,1
+CONC.B,0
+CONC.C,0
+ENV.temperature,272.5
+ENV.pressure,101253.3
+ENV.air_density,1e6
+ENV.time_step,200.0
+PHOTO.r1,0.04
+PHOTO.r2,3e7
+PHOTO.r3,1e4

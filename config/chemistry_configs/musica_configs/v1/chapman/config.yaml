@@ -1,0 +1,125 @@
+---
+name: Chapman
+reactions:
+- type: ARRHENIUS
+  A: 12947602.634
+  B: 0
+  C: 109.94829243348597
+  D: 300
+  E: 0
+  reactants:
+  - species name: O1D
+    coefficient: 1
+  - species name: N2
+    coefficient: 1
+  products:
+  - species name: O
+    coefficient: 1
+  - species name: N2
+    coefficient: 1
+  gas phase: gas
+- type: ARRHENIUS
+  A: 19873064.508
+  B: 0
+  C: 54.97414621674299
+  D: 300
+  E: 0
+  reactants:
+  - species name: O1D
+    coefficient: 1
+  - species name: O2
+    coefficient: 1
+  products:
+  - species name: O
+    coefficient: 1
+  - species name: O2
+    coefficient: 1
+  gas phase: gas
+- type: ARRHENIUS
+  A: 4817712.608
+  B: 0
+  C: -2059.0316582998285
+  D: 300
+  E: 0
+  reactants:
+  - species name: O
+    coefficient: 1
+  - species name: O3
+    coefficient: 1
+  products:
+  - species name: O2
+    coefficient: 2
+  gas phase: gas
+- type: ARRHENIUS
+  A: 217.59707599952029
+  B: -2.4
+  C: 0
+  D: 300
+  E: 0
+  reactants:
+  - species name: O
+    coefficient: 1
+  - species name: O2
+    coefficient: 1
+  - species name: M
+    coefficient: 1
+  products:
+  - species name: O3
+    coefficient: 1
+  - species name: M
+    coefficient: 1
+  gas phase: gas
+- type: PHOTOLYSIS
+  name: jo2_b
+  scaling factor: 1
+  reactants:
+  - species name: O2
+    coefficient: 1
+  products:
+  - species name: O
+    coefficient: 2
+  gas phase: gas
+- type: PHOTOLYSIS
+  name: jo3_b
+  scaling factor: 1
+  reactants:
+  - species name: O3
+    coefficient: 1
+  products:
+  - species name: O1D
+    coefficient: 1
+  - species name: O2
+    coefficient: 1
+  gas phase: gas
+- type: PHOTOLYSIS
+  name: jo3_a
+  scaling factor: 1
+  reactants:
+  - species name: O3
+    coefficient: 1
+  products:
+  - species name: O
+    coefficient: 1
+  - species name: O2
+    coefficient: 1
+  gas phase: gas
+species:
+- name: M
+  is third body: true
+  __description: Third-body molecule. This is any molecule present in the system.
+- name: O1D
+- name: O
+- name: O2
+- name: O3
+  __long name: ozone
+- name: N2
+phases:
+- name: gas
+  species:
+  - name: M
+  - name: O1D
+  - name: O
+  - name: O2
+  - name: O3
+  - name: N2
+version: 1.0.0

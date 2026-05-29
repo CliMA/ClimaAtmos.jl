@@ -48,6 +48,7 @@ function grid_scale_center_variables(physical_state, local_geometry, params, atm
         ρe_tot,
         moisture_variables(ρ, physical_state, atmos_model.microphysics_model)...,
         precip_variables(ρ, physical_state, atmos_model.microphysics_model)...,
+        chemistry_variables(ρ, physical_state, atmos_model.chemistry_model)...,
     )
 end
 
@@ -95,6 +96,16 @@ function precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics2MP3)
     return (; warm_state..., cold_state...)
 end
 
+# ============================================================================
+# Chemistry dispatch
+# ============================================================================
+chemistry_variables(ρ, physical_state, ::NoChemistry) = (;)
+
+function chemistry_variables(ρ, physical_state, ::GasPhaseChem{N, names}) where {N, names}
+    field_names = ntuple(i -> Symbol(:ρ, names[i]), Val(N))
+    field_values = ntuple(_ -> zero(ρ), Val(N))
+    return NamedTuple{field_names}(field_values)
+end
 # ============================================================================
 # Turbconv center dispatch
 # ============================================================================

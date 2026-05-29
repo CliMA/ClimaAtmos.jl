@@ -50,6 +50,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         gravity_wave = AtmosGravityWave(config, params, FT),
         sponge = AtmosSponge(config, params),
         surface = AtmosSurface(config, params, FT; setup_type),
+        chemistry = AtmosChem(config, FT),
         numerics = AtmosNumerics(config, FT),
         vertical_diffusion,
         disable_surface_flux_tendency = pa["disable_surface_flux_tendency"],

@@ -255,7 +255,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     # Chemistry tendencies (gas-phase chemistry with a MUSICA backend)
-    # if p.atmos.chemistry_model !== nothing
+    if !(p.atmos.chemistry.chemistry_model isa NoChemistry)
         chemistry_tendency!(
             Yₜ,
             Y,
@@ -263,7 +263,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             t,
             p.atmos.chemistry_model
         )
-    # end
+    end
 
     # Unified microphysics tendencies (cloud condensation + precipitation)
     if p.atmos.microphysics_tendency_timestepping == Explicit()

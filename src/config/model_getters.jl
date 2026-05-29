@@ -579,6 +579,15 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     )
 end
 
+
+function AtmosChem(config::AtmosConfig, ::Type{FT}) where {FT}
+    return AtmosChem(;
+        chemistry_model = GasPhaseChem(
+            "/Users/psturm/Desktop/ClimaAtmos.jl/config/chemistry_configs/musica_configs/v1/analytical/config.json",
+        ),
+    )
+end
+
 function AtmosRadiation(config::AtmosConfig, ::Type{FT}; setup_type = nothing) where {FT}
     pa = config.parsed_args
     return AtmosRadiation(;

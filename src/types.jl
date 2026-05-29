@@ -859,10 +859,22 @@ end
 Groups chemistry models and types.
 """
 abstract type AbstractChemistryModel end
-struct GasPhaseChem <: AbstractChemistryModel end
+struct NoChemistry <: AbstractChemistryModel end
+
+struct GasPhaseChem{N, names} <: AbstractChemistryModel
+    config_path::String
+end
+species_names(::GasPhaseChem{N, names}) where {N, names} = names
+
+function GasPhaseChem(config_path::String)
+    names = Tuple(musica_species_names(config_path)) 
+    N = length(names)
+    return GasPhaseChem{N, names}(config_path)
+end
+
 
 @kwdef struct AtmosChem{CM}
-    chemistry_model::CM = GasPhaseChem()
+    chemistry_model::CM = NoChemistry()
 end
 
 """

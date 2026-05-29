@@ -1,0 +1,32 @@
+---
+name: analytical test
+reactions:
+- type: ARRHENIUS
+  A: 0.004
+  reactants:
+  - species name: A
+    coefficient: 1
+  products:
+  - species name: B
+    coefficient: 1
+  gas phase: gas
+- type: ARRHENIUS
+  A: 0.004
+  reactants:
+  - species name: B
+    coefficient: 1
+  products:
+  - species name: C
+    coefficient: 1
+  gas phase: gas
+species:
+- name: A
+- name: B
+- name: C
+phases:
+- name: gas
+  species:
+  - name: A
+  - name: B
+  - name: C
+version: 1.0.0
