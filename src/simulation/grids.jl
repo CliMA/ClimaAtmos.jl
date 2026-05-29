@@ -278,7 +278,7 @@ function hypsography_function_from_topography(
     topo_smoothing,
 ) where {FT}
     return function hypsography(h_grid, z_grid)
-        topography isa NoTopography && return Hypsography.Flat()
+        topography isa NoTopography && return Grids.Flat()
 
         # Create horizontal space to work with topography
         h_space = if h_grid isa Grids.SpectralElementGrid1D

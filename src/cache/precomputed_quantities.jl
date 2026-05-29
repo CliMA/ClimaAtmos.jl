@@ -3,7 +3,6 @@
 #####
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
-using Base.Broadcast: materialize
 
 """
     implicit_precomputed_quantities(Y, atmos)

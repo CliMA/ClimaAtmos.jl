@@ -2,7 +2,7 @@ using NCDatasets
 import Interpolations
 using Statistics: mean
 import ClimaUtilities.SpaceVaryingInputs: SpaceVaryingInput
-import ClimaCore: Remapping, Geometry, Fields, Spaces
+import ClimaCore: Geometry, Fields, Spaces
 import ClimaCore.Utilities: half
 
 """
