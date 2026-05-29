@@ -4,7 +4,8 @@ updates:
 - directory: /
   ignore:
   - dependency-name: "github/gh-aw-actions/**" # Managed by gh aw compile. Version-locked to the gh-aw compiler; do not bump.
-  - dependency-name: "github/gh-aw-actions/setup" # Specific helper ignore
+  exclude-paths:
+    - .github/workflows/*.lock.yml
   package-ecosystem: github-actions
   schedule:
     interval: weekly
