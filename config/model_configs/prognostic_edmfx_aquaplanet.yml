@@ -4,7 +4,7 @@ z_elem: 10
 dz_bottom: 500.0
 dt: 20secs
 surface_setup: DefaultMoninObukhov
-rad: clearsky
+rad: allskywithclear
 turbconv: prognostic_edmfx
 prognostic_tke: true
 edmfx_entr_model: "Generalized"
@@ -17,16 +17,21 @@ edmfx_sgs_diffusive_flux: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 microphysics_model: "0M"
-t_end: 1hours
+t_end: 600secs
 dt_save_state_to_disk: 600secs
 toml: [toml/prognostic_edmfx.toml]
 output_default_diagnostics: false
 reproducibility_test: true
+prescribed_aerosols: ["SO4", "SSLT01"]
 diagnostics:
+  - short_name: [cc]
+    reduction_time: average
+    period: 600secs
+    pressure_coordinates: true
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfss, hfls, hur, hus, cl, clw, cli, evspsbl, pr, rsd, rsu, rld, rlu]
     reduction_time: average
-    period: 1hours
+    period: 600secs
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     reduction_time: average
-    period: 1hours
+    period: 600secs
 ode_algo: "ARS222"

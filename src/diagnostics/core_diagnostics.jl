@@ -85,6 +85,21 @@ add_diagnostic_variable!(short_name = "ta", units = "K",
     compute = (_, cache, _) -> cache.precomputed.ᶜT,
 )
 
+function compute_cc!(out, state, cache, time)
+    if isnothing(out)
+        return copy(cache.radiation.prescribed_clouds_field.cc)
+    else
+        out .= cache.radiation.prescribed_clouds_field.cc
+    end
+end
+
+add_diagnostic_variable!(short_name = "cc", units = "",
+    long_name = "Cloud Fraction",
+    compute = (_, cache, _) -> getproperty(cache.radiation.prescribed_clouds_field, :cc),
+    #compute! = (out, u, p, t) -> compute_cc!(out, u, p, t),
+)
+
+
 ###
 # Potential temperature (3d)
 ###
