@@ -625,7 +625,7 @@ function nudging_tendency!(Yₜ, Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
 
-    ᶜdTdt_nudging = @. lazy(-(ᶜT - p.radiation.prescribed_clouds_field.t) / 1800)
+    ᶜdTdt_nudging = @. lazy(-(ᶜT - p.radiation.prescribed_clouds_field.t) / 3600 / 3)
     @. Yₜ.c.ρe_tot +=
         Y.c.ρ * (
             TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) *
@@ -634,17 +634,17 @@ function nudging_tendency!(Yₜ, Y, p, t)
 
     # Also nudge updraft MSE so that the updraft temperature tracks the
     # same ERA5 target.
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
-        n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).mse +=
-                TD.cp_m(
-                    thermo_params,
-                    ᶜq_tot_nonnegʲs.:($$j),
-                    ᶜq_liqʲs.:($$j),
-                    ᶜq_iceʲs.:($$j),
-                ) * ᶜdTdt_nudging
-        end
-    end
+    # if p.atmos.turbconv_model isa PrognosticEDMFX
+    #     (; ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    #     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    #     for j in 1:n
+    #         @. Yₜ.c.sgsʲs.:($$j).mse +=
+    #             TD.cp_m(
+    #                 thermo_params,
+    #                 ᶜq_tot_nonnegʲs.:($$j),
+    #                 ᶜq_liqʲs.:($$j),
+    #                 ᶜq_iceʲs.:($$j),
+    #             ) * ᶜdTdt_nudging
+    #     end
+    # end
 end
