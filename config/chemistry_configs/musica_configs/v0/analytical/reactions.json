@@ -1,0 +1,71 @@
+{
+  "camp-data": [
+    {
+      "type": "MECHANISM",
+      "name": "analytical test",
+      "reactions": [
+        {
+          "type": "ARRHENIUS",
+          "A": 0.004,
+          "C": 50,
+          "reactants": {
+            "A": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "B": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 0.012,
+          "B": -2,
+          "C": 75,
+          "D": 50,
+          "E": 1.0e-6,
+          "reactants": {
+            "B": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "C": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "USER_DEFINED",
+          "MUSICA name": "reaction 1",
+          "reactants": {
+            "D": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "E": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "USER_DEFINED",
+          "MUSICA name": "reaction 2",
+          "reactants": {
+            "E": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "F": {
+              "yield": 1
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

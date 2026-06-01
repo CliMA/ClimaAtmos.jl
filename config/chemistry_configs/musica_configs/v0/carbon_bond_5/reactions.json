@@ -1,0 +1,4766 @@
+{
+  "camp-data": [
+    {
+      "type": "MECHANISM",
+      "name": "music box interactive configuration",
+      "reactions": [
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "NO2",
+          "reactants": {
+            "NO2": {}
+          },
+          "products": {
+            "NO": {
+              "yield": 1
+            },
+            "O": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 6e-34,
+          "Ea": 0,
+          "B": -2.4,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O": {
+              "qty": 1
+            },
+            "O2": {
+              "qty": 1
+            },
+            "M": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "O3": {
+              "yield": 1
+            },
+            "M": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O3": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5.6e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O": {
+              "qty": 1
+            },
+            "NO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 2.5e-31,
+          "k0_B": -1.8,
+          "k0_C": 0,
+          "kinf_A": 2.2e-11,
+          "kinf_B": -0.7,
+          "kinf_C": 0,
+          "Fc": 0.6,
+          "N": 1,
+          "reactants": {
+            "O": {
+              "qty": 1
+            },
+            "NO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 9e-32,
+          "k0_B": -1.5,
+          "k0_C": 0,
+          "kinf_A": 3e-11,
+          "kinf_B": 0,
+          "kinf_C": 0,
+          "Fc": 0.6,
+          "N": 1,
+          "reactants": {
+            "O": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.2e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO2": {
+              "qty": 1
+            },
+            "O3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "O3->O3P",
+          "reactants": {
+            "O3": {}
+          },
+          "products": {
+            "O": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "O3->O1D",
+          "reactants": {
+            "O3": {}
+          },
+          "products": {
+            "O1D": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.1e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O1D": {
+              "qty": 1
+            },
+            "M": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "O": {
+              "yield": 1
+            },
+            "M": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.2e-10,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O1D": {
+              "qty": 1
+            },
+            "H2O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "OH": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.7e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O3": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1e-14,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O3": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "OH": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "NO3->NO2",
+          "reactants": {
+            "NO3": {}
+          },
+          "products": {
+            "NO2": {
+              "yield": 1
+            },
+            "O": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "NO3->NO",
+          "reactants": {
+            "NO3": {}
+          },
+          "products": {
+            "NO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.5e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO3": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4.5e-14,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO3": {
+              "qty": 1
+            },
+            "NO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 2e-30,
+          "k0_B": -4.4,
+          "k0_C": 0,
+          "kinf_A": 1.4e-12,
+          "kinf_B": -0.7,
+          "kinf_C": 0,
+          "Fc": 0.6,
+          "N": 1,
+          "reactants": {
+            "NO3": {
+              "qty": 1
+            },
+            "NO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "N2O5": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.5e-22,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "N2O5": {
+              "qty": 1
+            },
+            "H2O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HNO3": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.8e-39,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "N2O5": {
+              "qty": 1
+            },
+            "H2O": {
+              "qty": 2
+            }
+          },
+          "products": {
+            "HNO3": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 0.001,
+          "k0_B": -3.5,
+          "k0_C": -11000,
+          "kinf_A": 970000000000000,
+          "kinf_B": 0.1,
+          "kinf_C": -11080,
+          "Fc": 0.45,
+          "N": 1,
+          "reactants": {
+            "N2O5": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO3": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.3e-39,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO": {
+              "qty": 2
+            },
+            "O2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5e-40,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO": {
+              "qty": 1
+            },
+            "NO2": {
+              "qty": 1
+            },
+            "H2O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HONO": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 7e-31,
+          "k0_B": -2.6,
+          "k0_C": 0,
+          "kinf_A": 3.6e-11,
+          "kinf_B": -0.1,
+          "kinf_C": 0,
+          "Fc": 0.6,
+          "N": 1,
+          "reactants": {
+            "NO": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HONO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "HONO",
+          "reactants": {
+            "HONO": {}
+          },
+          "products": {
+            "NO": {
+              "yield": 1
+            },
+            "OH": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.8e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "HONO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1e-20,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "HONO": {
+              "qty": 2
+            }
+          },
+          "products": {
+            "NO": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 2e-30,
+          "k0_B": -3,
+          "k0_C": 0,
+          "kinf_A": 2.5e-11,
+          "kinf_B": 0,
+          "kinf_C": 0,
+          "Fc": 0.6,
+          "N": 1,
+          "reactants": {
+            "NO2": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HNO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.4e-14,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "HNO3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 6.5e-34,
+          "k0_B": 0,
+          "k0_C": 1335,
+          "kinf_A": 2.7e-17,
+          "kinf_B": 0,
+          "kinf_C": 2199,
+          "Fc": 1,
+          "N": 1,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "HNO3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.5e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "HO2": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "OH": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 1.8e-31,
+          "k0_B": -3.2,
+          "k0_C": 0,
+          "kinf_A": 4.7e-12,
+          "kinf_B": 0,
+          "kinf_C": 0,
+          "Fc": 0.6,
+          "N": 1,
+          "reactants": {
+            "HO2": {
+              "qty": 1
+            },
+            "NO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "PNA": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 4.1e-05,
+          "k0_B": 0,
+          "k0_C": -10650,
+          "kinf_A": 4800000000000000,
+          "kinf_B": 0,
+          "kinf_C": -11170,
+          "Fc": 0.6,
+          "N": 1,
+          "reactants": {
+            "PNA": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.3e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "PNA": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.3e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "HO2": {
+              "qty": 2
+            }
+          },
+          "products": {
+            "H2O2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.7e-33,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "HO2": {
+              "qty": 2
+            },
+            "M": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "H2O2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.22e-34,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "HO2": {
+              "qty": 2
+            },
+            "H2O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "H2O2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.38e-54,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "HO2": {
+              "qty": 2
+            },
+            "H2O": {
+              "qty": 1
+            },
+            "M": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "H2O2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "H2O2",
+          "reactants": {
+            "H2O2": {}
+          },
+          "products": {
+            "OH": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.9e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "H2O2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.1e-10,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O1D": {
+              "qty": 1
+            },
+            "H2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "OH": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5.5e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "H2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.2e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4.2e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 2
+            }
+          },
+          "products": {
+            "O": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 6.9e-31,
+          "k0_B": -1,
+          "k0_C": 0,
+          "kinf_A": 2.6e-11,
+          "kinf_B": 0,
+          "kinf_C": 0,
+          "Fc": 0.6,
+          "N": 1,
+          "reactants": {
+            "OH": {
+              "qty": 2
+            }
+          },
+          "products": {
+            "H2O2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "HO2": {
+              "qty": 1
+            },
+            "O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "OH": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.4e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "H2O2": {
+              "qty": 1
+            },
+            "O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "OH": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO3": {
+              "qty": 1
+            },
+            "O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.2e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO3": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.5e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO3": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HNO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1e-17,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO3": {
+              "qty": 1
+            },
+            "O3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 8.5e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO3": {
+              "qty": 2
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "PNA",
+          "reactants": {
+            "PNA": {}
+          },
+          "products": {
+            "HO2": {
+              "yield": 0.61
+            },
+            "NO2": {
+              "yield": 0.61
+            },
+            "OH": {
+              "yield": 0.39
+            },
+            "NO3": {
+              "yield": 0.39
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "HNO3",
+          "reactants": {
+            "HNO3": {}
+          },
+          "products": {
+            "OH": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "N2O5",
+          "reactants": {
+            "N2O5": {}
+          },
+          "products": {
+            "NO2": {
+              "yield": 1
+            },
+            "NO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.6e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "XO2": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.6e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "XO2N": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NTR": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 7.5e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "XO2": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ROOH": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 7.5e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "XO2N": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ROOH": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5.9e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NTR": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HNO3": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "FORM": {
+              "yield": 0.33
+            },
+            "ALD2": {
+              "yield": 0.33
+            },
+            "ALDX": {
+              "yield": 0.33
+            },
+            "PAR": {
+              "yield": -0.66
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "NTR",
+          "reactants": {
+            "NTR": {}
+          },
+          "products": {
+            "NO2": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "FORM": {
+              "yield": 0.33
+            },
+            "ALD2": {
+              "yield": 0.33
+            },
+            "ALDX": {
+              "yield": 0.33
+            },
+            "PAR": {
+              "yield": -0.66
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.01e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "ROOH": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "XO2": {
+              "yield": 1
+            },
+            "ALD2": {
+              "yield": 0.5
+            },
+            "ALDX": {
+              "yield": 0.5
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "ROOH",
+          "reactants": {
+            "ROOH": {}
+          },
+          "products": {
+            "OH": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "ALD2": {
+              "yield": 0.5
+            },
+            "ALDX": {
+              "yield": 0.5
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.44e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "CO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.43e-33,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "CO": {
+              "qty": 1
+            },
+            "M": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.45e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "CH4": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "MEO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.8e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "MEO2": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "FORM": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4.1e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "MEO2": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "MEPX": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 9.5e-14,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "MEO2": {
+              "qty": 2
+            }
+          },
+          "products": {
+            "FORM": {
+              "yield": 1.37
+            },
+            "HO2": {
+              "yield": 0.74
+            },
+            "MEOH": {
+              "yield": 0.63
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.8e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "MEPX": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "MEO2": {
+              "yield": 0.7
+            },
+            "XO2": {
+              "yield": 0.3
+            },
+            "HO2": {
+              "yield": 0.3
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "MEPX",
+          "reactants": {
+            "MEPX": {}
+          },
+          "products": {
+            "FORM": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "OH": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 7.3e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "MEOH": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "FORM": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 9e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "FORM": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            },
+            "CO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "FORM->HO2",
+          "reactants": {
+            "FORM": {}
+          },
+          "products": {
+            "HO2": {
+              "yield": 2
+            },
+            "CO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "FORM->CO",
+          "reactants": {
+            "FORM": {}
+          },
+          "products": {
+            "CO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.4e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "FORM": {
+              "qty": 1
+            },
+            "O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "OH": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "CO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5.8e-16,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "FORM": {
+              "qty": 1
+            },
+            "NO3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HNO3": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "CO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 9.7e-15,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "FORM": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HCO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2400000000000,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "HCO3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "FORM": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5.6e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "HCO3": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "FACD": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5.6e-15,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "HCO3": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "MEPX": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "FACD": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.8e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "ALD2": {
+              "qty": 1
+            },
+            "O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "C2O3": {
+              "yield": 1
+            },
+            "OH": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5.6e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "ALD2": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "C2O3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.4e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "ALD2": {
+              "qty": 1
+            },
+            "NO3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "C2O3": {
+              "yield": 1
+            },
+            "HNO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "ALD2",
+          "reactants": {
+            "ALD2": {}
+          },
+          "products": {
+            "MEO2": {
+              "yield": 1
+            },
+            "CO": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 8.1e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "C2O3": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "MEO2": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 2.7e-28,
+          "k0_B": -7.1,
+          "k0_C": 0,
+          "kinf_A": 1.2e-11,
+          "kinf_B": -0.9,
+          "kinf_C": 0,
+          "Fc": 0.3,
+          "N": 1,
+          "reactants": {
+            "C2O3": {
+              "qty": 1
+            },
+            "NO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "PAN": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 0.0049,
+          "k0_B": 0,
+          "k0_C": -12100,
+          "kinf_A": 54000000000000000,
+          "kinf_B": 0,
+          "kinf_C": -13830,
+          "Fc": 0.3,
+          "N": 1,
+          "reactants": {
+            "PAN": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "C2O3": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "PAN",
+          "reactants": {
+            "PAN": {}
+          },
+          "products": {
+            "C2O3": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4.3e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "C2O3": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "PACD": {
+              "yield": 0.8
+            },
+            "AACD": {
+              "yield": 0.2
+            },
+            "O3": {
+              "yield": 0.2
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "C2O3": {
+              "qty": 1
+            },
+            "MEO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "MEO2": {
+              "yield": 0.9
+            },
+            "HO2": {
+              "yield": 0.9
+            },
+            "FORM": {
+              "yield": 1
+            },
+            "AACD": {
+              "yield": 0.1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4.4e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "C2O3": {
+              "qty": 1
+            },
+            "XO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "MEO2": {
+              "yield": 0.9
+            },
+            "AACD": {
+              "yield": 0.1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.9e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "C2O3": {
+              "qty": 2
+            }
+          },
+          "products": {
+            "MEO2": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "PACD": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "C2O3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "PACD",
+          "reactants": {
+            "PACD": {}
+          },
+          "products": {
+            "MEO2": {
+              "yield": 1
+            },
+            "OH": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "AACD": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "MEO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.3e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "ALDX": {
+              "qty": 1
+            },
+            "O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "CXO3": {
+              "yield": 1
+            },
+            "OH": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5.1e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "ALDX": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "CXO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 6.5e-15,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "ALDX": {
+              "qty": 1
+            },
+            "NO3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "CXO3": {
+              "yield": 1
+            },
+            "HNO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "ALDX",
+          "reactants": {
+            "ALDX": {}
+          },
+          "products": {
+            "MEO2": {
+              "yield": 1
+            },
+            "CO": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 6.7e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CXO3": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALD2": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "XO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 2.7e-28,
+          "k0_B": -7.1,
+          "k0_C": 0,
+          "kinf_A": 1.2e-11,
+          "kinf_B": -0.9,
+          "kinf_C": 0,
+          "Fc": 0.3,
+          "N": 1,
+          "reactants": {
+            "CXO3": {
+              "qty": 1
+            },
+            "NO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "PANX": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 0.0049,
+          "k0_B": 0,
+          "k0_C": -12100,
+          "kinf_A": 54000000000000000,
+          "kinf_B": 0,
+          "kinf_C": -13830,
+          "Fc": 0.3,
+          "N": 1,
+          "reactants": {
+            "PANX": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "CXO3": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "PANX",
+          "reactants": {
+            "PANX": {}
+          },
+          "products": {
+            "CXO3": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "PANX": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALD2": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4.3e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CXO3": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "PACD": {
+              "yield": 0.8
+            },
+            "AACD": {
+              "yield": 0.2
+            },
+            "O3": {
+              "yield": 0.2
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CXO3": {
+              "qty": 1
+            },
+            "MEO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALD2": {
+              "yield": 0.9
+            },
+            "XO2": {
+              "yield": 0.9
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "AACD": {
+              "yield": 0.1
+            },
+            "FORM": {
+              "yield": 0.1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4.4e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CXO3": {
+              "qty": 1
+            },
+            "XO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALD2": {
+              "yield": 0.9
+            },
+            "AACD": {
+              "yield": 0.1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.9e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CXO3": {
+              "qty": 2
+            }
+          },
+          "products": {
+            "ALD2": {
+              "yield": 2
+            },
+            "XO2": {
+              "yield": 2
+            },
+            "HO2": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.9e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CXO3": {
+              "qty": 1
+            },
+            "C2O3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "MEO2": {
+              "yield": 1
+            },
+            "XO2": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "ALD2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 8.1e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "PAR": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "XO2": {
+              "yield": 0.87
+            },
+            "XO2N": {
+              "yield": 0.13
+            },
+            "HO2": {
+              "yield": 0.11
+            },
+            "ALD2": {
+              "yield": 0.06
+            },
+            "PAR": {
+              "yield": -0.11
+            },
+            "ROR": {
+              "yield": 0.76
+            },
+            "ALDX": {
+              "yield": 0.05
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1000000000000000,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "ROR": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "XO2": {
+              "yield": 0.96
+            },
+            "ALD2": {
+              "yield": 0.6
+            },
+            "HO2": {
+              "yield": 0.94
+            },
+            "PAR": {
+              "yield": -2.1
+            },
+            "XO2N": {
+              "yield": 0.04
+            },
+            "ROR": {
+              "yield": 0.02
+            },
+            "ALDX": {
+              "yield": 0.5
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1600,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "ROR": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.5e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "ROR": {
+              "qty": 1
+            },
+            "NO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NTR": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O": {
+              "qty": 1
+            },
+            "OLE": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALD2": {
+              "yield": 0.2
+            },
+            "ALDX": {
+              "yield": 0.3
+            },
+            "HO2": {
+              "yield": 0.3
+            },
+            "XO2": {
+              "yield": 0.2
+            },
+            "CO": {
+              "yield": 0.2
+            },
+            "FORM": {
+              "yield": 0.2
+            },
+            "XO2N": {
+              "yield": 0.01
+            },
+            "PAR": {
+              "yield": 0.2
+            },
+            "OH": {
+              "yield": 0.1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.2e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "OLE": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "FORM": {
+              "yield": 0.8
+            },
+            "ALD2": {
+              "yield": 0.33
+            },
+            "ALDX": {
+              "yield": 0.62
+            },
+            "XO2": {
+              "yield": 0.8
+            },
+            "HO2": {
+              "yield": 0.95
+            },
+            "PAR": {
+              "yield": -0.7
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 6.5e-15,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O3": {
+              "qty": 1
+            },
+            "OLE": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALD2": {
+              "yield": 0.18
+            },
+            "FORM": {
+              "yield": 0.74
+            },
+            "ALDX": {
+              "yield": 0.32
+            },
+            "XO2": {
+              "yield": 0.22
+            },
+            "OH": {
+              "yield": 0.1
+            },
+            "CO": {
+              "yield": 0.33
+            },
+            "HO2": {
+              "yield": 0.44
+            },
+            "PAR": {
+              "yield": -1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 7e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO3": {
+              "qty": 1
+            },
+            "OLE": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 1
+            },
+            "FORM": {
+              "yield": 1
+            },
+            "XO2": {
+              "yield": 0.91
+            },
+            "XO2N": {
+              "yield": 0.09
+            },
+            "ALDX": {
+              "yield": 0.56
+            },
+            "ALD2": {
+              "yield": 0.35
+            },
+            "PAR": {
+              "yield": -1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.04e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O": {
+              "qty": 1
+            },
+            "ETH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "FORM": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1.7
+            },
+            "CO": {
+              "yield": 1
+            },
+            "XO2": {
+              "yield": 0.7
+            },
+            "OH": {
+              "yield": 0.3
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 1e-28,
+          "k0_B": -0.8,
+          "k0_C": 0,
+          "kinf_A": 8.8e-12,
+          "kinf_B": 0,
+          "kinf_C": 0,
+          "Fc": 0.6,
+          "N": 1,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "ETH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "XO2": {
+              "yield": 1
+            },
+            "FORM": {
+              "yield": 1.56
+            },
+            "ALDX": {
+              "yield": 0.22
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.2e-14,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O3": {
+              "qty": 1
+            },
+            "ETH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "FORM": {
+              "yield": 1
+            },
+            "CO": {
+              "yield": 0.63
+            },
+            "HO2": {
+              "yield": 0.13
+            },
+            "OH": {
+              "yield": 0.13
+            },
+            "FACD": {
+              "yield": 0.37
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.3e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO3": {
+              "qty": 1
+            },
+            "ETH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 1
+            },
+            "XO2": {
+              "yield": 1
+            },
+            "FORM": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.3e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "IOLE": {
+              "qty": 1
+            },
+            "O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALD2": {
+              "yield": 1.24
+            },
+            "ALDX": {
+              "yield": 0.66
+            },
+            "HO2": {
+              "yield": 0.1
+            },
+            "XO2": {
+              "yield": 0.1
+            },
+            "CO": {
+              "yield": 0.1
+            },
+            "PAR": {
+              "yield": 0.1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "IOLE": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALD2": {
+              "yield": 1.3
+            },
+            "ALDX": {
+              "yield": 0.7
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "XO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 8.4e-15,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "IOLE": {
+              "qty": 1
+            },
+            "O3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALD2": {
+              "yield": 0.65
+            },
+            "ALDX": {
+              "yield": 0.35
+            },
+            "FORM": {
+              "yield": 0.25
+            },
+            "CO": {
+              "yield": 0.25
+            },
+            "O": {
+              "yield": 0.5
+            },
+            "OH": {
+              "yield": 0.5
+            },
+            "HO2": {
+              "yield": 0.5
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 9.6e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "IOLE": {
+              "qty": 1
+            },
+            "NO3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALD2": {
+              "yield": 1.18
+            },
+            "ALDX": {
+              "yield": 0.64
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.8e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "TOL": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 0.44
+            },
+            "XO2": {
+              "yield": 0.08
+            },
+            "CRES": {
+              "yield": 0.36
+            },
+            "TO2": {
+              "yield": 0.56
+            },
+            "TOLRO2": {
+              "yield": 0.765
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 8.1e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "TO2": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 0.9
+            },
+            "HO2": {
+              "yield": 0.9
+            },
+            "OPEN": {
+              "yield": 0.9
+            },
+            "NTR": {
+              "yield": 0.1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4.2,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "TO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "CRES": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4.1e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "CRES": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "CRO": {
+              "yield": 0.4
+            },
+            "XO2": {
+              "yield": 0.6
+            },
+            "HO2": {
+              "yield": 0.6
+            },
+            "OPEN": {
+              "yield": 0.3
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.2e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CRES": {
+              "qty": 1
+            },
+            "NO3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "CRO": {
+              "yield": 1
+            },
+            "HNO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.4e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CRO": {
+              "qty": 1
+            },
+            "NO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NTR": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5.5e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CRO": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "CRES": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 9,
+          "MUSICA name": "OPEN",
+          "reactants": {
+            "OPEN": {}
+          },
+          "products": {
+            "C2O3": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "CO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OPEN": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "XO2": {
+              "yield": 1
+            },
+            "CO": {
+              "yield": 2
+            },
+            "HO2": {
+              "yield": 2
+            },
+            "C2O3": {
+              "yield": 1
+            },
+            "FORM": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5.4e-17,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OPEN": {
+              "qty": 1
+            },
+            "O3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALDX": {
+              "yield": 0.03
+            },
+            "C2O3": {
+              "yield": 0.62
+            },
+            "FORM": {
+              "yield": 0.7
+            },
+            "XO2": {
+              "yield": 0.03
+            },
+            "CO": {
+              "yield": 0.69
+            },
+            "OH": {
+              "yield": 0.08
+            },
+            "HO2": {
+              "yield": 0.76
+            },
+            "MGLY": {
+              "yield": 0.2
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.7e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "XYL": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 0.7
+            },
+            "XO2": {
+              "yield": 0.5
+            },
+            "CRES": {
+              "yield": 0.2
+            },
+            "MGLY": {
+              "yield": 0.8
+            },
+            "PAR": {
+              "yield": 1.1
+            },
+            "TO2": {
+              "yield": 0.3
+            },
+            "XYLRO2": {
+              "yield": 0.804
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.8e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "MGLY": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "XO2": {
+              "yield": 1
+            },
+            "C2O3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "MGLY",
+          "reactants": {
+            "MGLY": {}
+          },
+          "products": {
+            "C2O3": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "CO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.6e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O": {
+              "qty": 1
+            },
+            "ISOP": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ISPD": {
+              "yield": 0.75
+            },
+            "FORM": {
+              "yield": 0.5
+            },
+            "XO2": {
+              "yield": 0.25
+            },
+            "HO2": {
+              "yield": 0.25
+            },
+            "CXO3": {
+              "yield": 0.25
+            },
+            "PAR": {
+              "yield": 0.25
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.54e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "ISOP": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ISPD": {
+              "yield": 0.912
+            },
+            "FORM": {
+              "yield": 0.629
+            },
+            "XO2": {
+              "yield": 0.991
+            },
+            "HO2": {
+              "yield": 0.912
+            },
+            "XO2N": {
+              "yield": 0.088
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 7.86e-15,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O3": {
+              "qty": 1
+            },
+            "ISOP": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ISPD": {
+              "yield": 0.65
+            },
+            "FORM": {
+              "yield": 0.6
+            },
+            "XO2": {
+              "yield": 0.2
+            },
+            "HO2": {
+              "yield": 0.066
+            },
+            "OH": {
+              "yield": 0.266
+            },
+            "CXO3": {
+              "yield": 0.2
+            },
+            "ALDX": {
+              "yield": 0.15
+            },
+            "PAR": {
+              "yield": 0.35
+            },
+            "CO": {
+              "yield": 0.066
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.03e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO3": {
+              "qty": 1
+            },
+            "ISOP": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ISPD": {
+              "yield": 0.2
+            },
+            "NTR": {
+              "yield": 0.8
+            },
+            "XO2": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 0.8
+            },
+            "NO2": {
+              "yield": 0.2
+            },
+            "ALDX": {
+              "yield": 0.8
+            },
+            "PAR": {
+              "yield": 2.4
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.36e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "ISPD": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "PAR": {
+              "yield": 1.565
+            },
+            "FORM": {
+              "yield": 0.167
+            },
+            "XO2": {
+              "yield": 0.713
+            },
+            "HO2": {
+              "yield": 0.503
+            },
+            "CO": {
+              "yield": 0.334
+            },
+            "MGLY": {
+              "yield": 0.168
+            },
+            "ALD2": {
+              "yield": 0.252
+            },
+            "C2O3": {
+              "yield": 0.21
+            },
+            "CXO3": {
+              "yield": 0.25
+            },
+            "ALDX": {
+              "yield": 0.12
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 7.1e-18,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "O3": {
+              "qty": 1
+            },
+            "ISPD": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "C2O3": {
+              "yield": 0.114
+            },
+            "FORM": {
+              "yield": 0.15
+            },
+            "MGLY": {
+              "yield": 0.85
+            },
+            "HO2": {
+              "yield": 0.154
+            },
+            "OH": {
+              "yield": 0.268
+            },
+            "XO2": {
+              "yield": 0.064
+            },
+            "ALD2": {
+              "yield": 0.02
+            },
+            "PAR": {
+              "yield": 0.36
+            },
+            "CO": {
+              "yield": 0.225
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1e-15,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO3": {
+              "qty": 1
+            },
+            "ISPD": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALDX": {
+              "yield": 0.357
+            },
+            "FORM": {
+              "yield": 0.282
+            },
+            "PAR": {
+              "yield": 1.282
+            },
+            "HO2": {
+              "yield": 0.925
+            },
+            "CO": {
+              "yield": 0.643
+            },
+            "NTR": {
+              "yield": 0.85
+            },
+            "CXO3": {
+              "yield": 0.075
+            },
+            "XO2": {
+              "yield": 0.075
+            },
+            "HNO3": {
+              "yield": 0.15
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 0.0036,
+          "MUSICA name": "ISPD",
+          "reactants": {
+            "ISPD": {}
+          },
+          "products": {
+            "CO": {
+              "yield": 0.333
+            },
+            "ALD2": {
+              "yield": 0.067
+            },
+            "FORM": {
+              "yield": 0.9
+            },
+            "PAR": {
+              "yield": 0.832
+            },
+            "HO2": {
+              "yield": 1.033
+            },
+            "XO2": {
+              "yield": 0.7
+            },
+            "C2O3": {
+              "yield": 0.967
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.6e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "TERP": {
+              "qty": 1
+            },
+            "O": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALDX": {
+              "yield": 0.15
+            },
+            "PAR": {
+              "yield": 5.12
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.5e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "TERP": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 0.75
+            },
+            "XO2": {
+              "yield": 1.25
+            },
+            "XO2N": {
+              "yield": 0.25
+            },
+            "FORM": {
+              "yield": 0.28
+            },
+            "PAR": {
+              "yield": 1.66
+            },
+            "ALDX": {
+              "yield": 0.47
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.2e-15,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "TERP": {
+              "qty": 1
+            },
+            "O3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "OH": {
+              "yield": 0.57
+            },
+            "HO2": {
+              "yield": 0.07
+            },
+            "XO2": {
+              "yield": 0.76
+            },
+            "XO2N": {
+              "yield": 0.18
+            },
+            "FORM": {
+              "yield": 0.24
+            },
+            "CO": {
+              "yield": 0.001
+            },
+            "PAR": {
+              "yield": 7
+            },
+            "ALDX": {
+              "yield": 0.21
+            },
+            "CXO3": {
+              "yield": 0.39
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.7e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "TERP": {
+              "qty": 1
+            },
+            "NO3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO2": {
+              "yield": 0.47
+            },
+            "HO2": {
+              "yield": 0.28
+            },
+            "XO2": {
+              "yield": 1.03
+            },
+            "XO2N": {
+              "yield": 0.25
+            },
+            "ALDX": {
+              "yield": 0.47
+            },
+            "NTR": {
+              "yield": 0.53
+            }
+          }
+        },
+        {
+          "type": "TROE",
+          "k0_A": 3e-31,
+          "k0_B": -3.3,
+          "k0_C": 0,
+          "kinf_A": 1.5e-12,
+          "kinf_B": 0,
+          "kinf_C": 0,
+          "Fc": 0.6,
+          "N": 1,
+          "reactants": {
+            "SO2": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "SULF": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 6.9e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "ETOH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            },
+            "ALD2": {
+              "yield": 0.9
+            },
+            "ALDX": {
+              "yield": 0.05
+            },
+            "FORM": {
+              "yield": 0.1
+            },
+            "XO2": {
+              "yield": 0.1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 8.7e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "ETHA": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ALD2": {
+              "yield": 0.991
+            },
+            "XO2": {
+              "yield": 0.991
+            },
+            "XO2N": {
+              "yield": 0.009
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.5e-19,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "NO2": {
+              "qty": 1
+            },
+            "ISOP": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "ISPD": {
+              "yield": 0.2
+            },
+            "NTR": {
+              "yield": 0.8
+            },
+            "XO2": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 0.8
+            },
+            "NO": {
+              "yield": 0.2
+            },
+            "ALDX": {
+              "yield": 0.8
+            },
+            "PAR": {
+              "yield": 2.4
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "CL2",
+          "reactants": {
+            "CL2": {}
+          },
+          "products": {
+            "CL": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.3e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "O3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "CLO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.63e-14,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CLO": {
+              "qty": 2
+            }
+          },
+          "products": {
+            "CL2": {
+              "yield": 0.3
+            },
+            "CL": {
+              "yield": 1.4
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 6.4e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CLO": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "CL": {
+              "yield": 1
+            },
+            "NO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.7e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CLO": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HOCL": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "OH": {
+              "qty": 1
+            },
+            "FMCL": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "CL": {
+              "yield": 1
+            },
+            "CO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 6.6e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "CH4": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HCL": {
+              "yield": 1
+            },
+            "MEO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "PAR": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HCL": {
+              "yield": 1
+            },
+            "XO2": {
+              "yield": 0.87
+            },
+            "XO2N": {
+              "yield": 0.13
+            },
+            "HO2": {
+              "yield": 0.11
+            },
+            "ALD2": {
+              "yield": 0.06
+            },
+            "PAR": {
+              "yield": -0.11
+            },
+            "ROR": {
+              "yield": 0.76
+            },
+            "ALDX": {
+              "yield": 0.05
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 8.3e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "ETHA": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HCL": {
+              "yield": 1
+            },
+            "ALD2": {
+              "yield": 0.991
+            },
+            "XO2": {
+              "yield": 0.991
+            },
+            "XO2N": {
+              "yield": 0.009
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.07e-10,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "ETH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "FMCL": {
+              "yield": 1
+            },
+            "XO2": {
+              "yield": 2
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "FORM": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.5e-10,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "OLE": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "FMCL": {
+              "yield": 1
+            },
+            "ALD2": {
+              "yield": 0.33
+            },
+            "ALDX": {
+              "yield": 0.67
+            },
+            "XO2": {
+              "yield": 2
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "PAR": {
+              "yield": -1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 3.5e-10,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "IOLE": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HCL": {
+              "yield": 0.3
+            },
+            "FMCL": {
+              "yield": 0.7
+            },
+            "ALD2": {
+              "yield": 0.45
+            },
+            "ALDX": {
+              "yield": 0.55
+            },
+            "OLE": {
+              "yield": 0.3
+            },
+            "PAR": {
+              "yield": 0.3
+            },
+            "XO2": {
+              "yield": 1.7
+            },
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 4.3e-10,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "ISOP": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HCL": {
+              "yield": 0.15
+            },
+            "XO2": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "FMCL": {
+              "yield": 0.85
+            },
+            "ISPD": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 8.2e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "FORM": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HCL": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "CO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 7.9e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "ALD2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HCL": {
+              "yield": 1
+            },
+            "C2O3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.3e-10,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "ALDX": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HCL": {
+              "yield": 1
+            },
+            "CXO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 5.5e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "MEOH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HCL": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "FORM": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 8.2e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "CL": {
+              "qty": 1
+            },
+            "ETOH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HCL": {
+              "yield": 1
+            },
+            "HO2": {
+              "yield": 1
+            },
+            "ALD2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 6.58e-13,
+          "Ea": 0,
+          "B": 1.16,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "HCL": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "CL": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.7e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "TOLRO2": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.9e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "TOLRO2": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.7e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "XYLRO2": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.9e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "XYLRO2": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.47e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "BENZENE": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "OH": {
+              "yield": 1
+            },
+            "BENZRO2": {
+              "yield": 0.764
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 2.7e-12,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "BENZRO2": {
+              "qty": 1
+            },
+            "NO": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.9e-13,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "BENZRO2": {
+              "qty": 1
+            },
+            "HO2": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "HO2": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.16e-14,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "SESQ": {
+              "qty": 1
+            },
+            "O3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "O3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.97e-10,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "SESQ": {
+              "qty": 1
+            },
+            "OH": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "OH": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "ARRHENIUS",
+          "A": 1.9e-11,
+          "Ea": 0,
+          "B": 0,
+          "D": 300,
+          "E": 0,
+          "reactants": {
+            "SESQ": {
+              "qty": 1
+            },
+            "NO3": {
+              "qty": 1
+            }
+          },
+          "products": {
+            "NO3": {
+              "yield": 1
+            }
+          }
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "scaling factor": 1,
+          "MUSICA name": "O2",
+          "reactants": {
+            "O2": {}
+          },
+          "products": {
+            "O": {
+              "yield": 2
+            }
+          }
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "NO",
+          "species": "NO"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "NO2",
+          "species": "NO2"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "CO",
+          "species": "CO"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "SO2",
+          "species": "SO2"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "FORM",
+          "species": "FORM"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "MEOH",
+          "species": "MEOH"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "ALD2",
+          "species": "ALD2"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "PAR",
+          "species": "PAR"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "ETH",
+          "species": "ETH"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "OLE",
+          "species": "OLE"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "IOLE",
+          "species": "IOLE"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "TOL",
+          "species": "TOL"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "XYL",
+          "species": "XYL"
+        },
+        {
+          "type": "EMISSION",
+          "scaling factor": 1,
+          "MUSICA name": "ISOP",
+          "species": "ISOP"
+        }
+      ]
+    }
+  ]
+}

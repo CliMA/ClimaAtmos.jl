@@ -1,0 +1,43 @@
+{
+  "camp-data": [
+    {
+      "name": "reaction rates no user defined",
+      "type": "MECHANISM",
+      "reactions": [
+        {
+          "type": "PHOTOLYSIS",
+          "reactants": {
+            "A": {}
+          },
+          "products": {
+            "B": {}
+          },
+          "MUSICA name": "r1"
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "reactants": {
+            "B": { "qty": 2}
+          },
+          "products": {
+            "B": {},
+            "C": {}
+          },
+          "MUSICA name": "r2"
+        },
+        {
+          "type": "PHOTOLYSIS",
+          "reactants": {
+            "B": {},
+            "C": {}
+          },
+          "products": {
+            "A": {},
+            "C": {}
+          },
+          "MUSICA name": "r3"
+        }
+      ]
+    }
+  ]
+}

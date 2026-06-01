@@ -1,0 +1,272 @@
+{
+  "camp-data": [
+    {
+      "name": "AACD",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "ALD2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "ALDX",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "BENZENE",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "BENZRO2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "C2O3",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "CH4",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "CL",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "CL2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "CLO",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "CO",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "CRES",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "CRO",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "CXO3",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "ETH",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "ETHA",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "ETOH",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "FACD",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "FMCL",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "FORM",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "H2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "H2O",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "H2O2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "HCL",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "HCO3",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "HNO3",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "HO2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "HOCL",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "HONO",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "IOLE",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "ISOP",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "ISPD",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "M",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "MEO2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "MEOH",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "MEPX",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "MGLY",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "N2O5",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "NO",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "NO2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "NO3",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "NTR",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "O",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "O1D",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "O3",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "OH",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "O2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "OLE",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "OPEN",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "PACD",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "PAN",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "PANX",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "PAR",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "PNA",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "ROOH",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "ROR",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "SESQ",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "SO2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "SULF",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "TERP",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "TO2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "TOL",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "TOLRO2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "XO2",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "XO2N",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "XYL",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "XYLRO2",
+      "type": "CHEM_SPEC"
+    }
+  ]
+}

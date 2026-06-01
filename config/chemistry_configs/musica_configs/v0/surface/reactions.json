@@ -1,0 +1,24 @@
+{
+  "camp-data": [
+    {
+      "type": "MECHANISM",
+      "name": "music box interactive configuration",
+      "reactions": [
+        {
+          "type": "SURFACE",
+          "MUSICA name": "",
+          "reaction probability": 1.0,
+          "gas-phase reactant": "A",
+          "gas-phase products": {
+            "B": {
+              "yield": 1
+            },
+            "irr__241993b6-c109-44fc-97b0-bc0bc42fe945": {
+              "yield": 1
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

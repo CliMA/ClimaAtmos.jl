@@ -1,0 +1,322 @@
+{
+  "version": "1.0.0",
+  "name": "Full Configuration",
+  "species": [
+    {
+      "name": "A",
+      "molecular weight [kg mol-1]": 0.04607,
+      "__absolute tolerance": 1.0e-30
+    },
+    {
+      "name": "B",
+      "constant concentration [mol m-3]": 1.0e19
+    },
+    {
+      "name": "C",
+      "constant mixing ratio [mol mol-1]": 1.0e-20
+    },
+    {
+      "name": "M",
+      "is third body": true
+    },
+    {
+      "name": "H2O2",
+      "molecular weight [kg mol-1]": 0.0340147,
+      "__absolute tolerance": 1.0e-10
+    },
+    {
+      "name": "ethanol",
+      "molecular weight [kg mol-1]": 0.04607,
+      "__absolute tolerance": 1.0e-20
+    },
+    {
+      "name": "H2O",
+      "molecular weight [kg mol-1]": 0.01801
+    }
+  ],
+  "phases": [
+    {
+      "name": "gas",
+      "species": [
+        {
+          "name": "A",
+          "diffusion coefficient [m2 s-1]": 2.1e-5
+        },
+        {"name": "B"},
+        {"name": "C"},
+        {
+          "name": "ethanol",
+          "diffusion coefficient [m2 s-1]": 2.1e-5
+        },
+        {
+          "name": "H2O2",
+          "diffusion coefficient [m2 s-1]": 2.1e-5
+        }
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "type": "EMISSION",
+      "__irrelevant": 2,
+      "name": "my emission",
+      "scaling factor": 12.3,
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "B",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "__irrelevant": 2,
+      "name": "my first order loss",
+      "scaling factor": 12.3,
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "C",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "PHOTOLYSIS",
+      "__irrelevant": 2,
+      "name": "photo B",
+      "scaling factor": 12.3,
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "B",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "C",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "SURFACE",
+      "__irrelevant": 2,
+      "name": "my surface",
+      "reaction probability": 2.0e-2,
+      "gas phase": "gas",
+      "gas-phase species": "A",
+      "gas-phase products": [
+        {
+          "species name": "B",
+          "coefficient": 1
+        },
+        {
+          "species name": "C",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "TROE",
+      "__irrelevant": 2,
+      "name": "my troe",
+      "k0_A": 1.2e-12,
+      "k0_B": 167,
+      "k0_C": 3,
+      "kinf_A": 136,
+      "kinf_B": 5,
+      "kinf_C": 24,
+      "Fc": 0.9,
+      "N": 0.8,
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "B",
+          "coefficient": 1
+        },
+        {
+          "species name": "M",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "C",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "TERNARY_CHEMICAL_ACTIVATION",
+      "name": "my ternary chemical activation",
+      "gas phase": "gas",
+      "k0_A": 32.1,
+      "k0_B": -2.3,
+      "k0_C": 102.3,
+      "kinf_A": 63.4,
+      "kinf_B": -1.3,
+      "kinf_C": 908.5,
+      "Fc": 1.3,
+      "N": 32.1,
+      "reactants": [
+        {
+          "species name": "B",
+          "coefficient": 1
+        },
+        {
+          "species name": "M",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "C"
+        }
+      ],
+      "__irrelevant": 2
+    },
+    {
+      "type": "BRANCHED_NO_RO2",
+      "__irrelevant": 2,
+      "name": "my branched",
+      "X": 1.2e-4,
+      "Y": 167,
+      "a0": 0.15,
+      "n": 9,
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "A",
+          "coefficient": 1
+        }
+      ],
+      "alkoxy products": [
+        {
+          "species name": "B",
+          "coefficient": 1
+        }
+      ],
+      "nitrate products": [
+        {
+          "species name": "C",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "TUNNELING",
+      "__irrelevant": 2,
+      "name": "my tunneling",
+      "A": 123.45,
+      "B": 1200.0,
+      "C": 1.0e8,
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "B",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "C",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "ARRHENIUS",
+      "name": "my arrhenius",
+      "gas phase": "gas",
+      "A": 32.1,
+      "B": -2.3,
+      "C": 102.3,
+      "D": 63.4,
+      "E": -1.3,
+      "__irrelevant": 2,
+      "reactants": [
+        {
+          "species name": "B",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "C",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "ARRHENIUS",
+      "name": "my other arrhenius",
+      "A": 29.3,
+      "B": -1.5,
+      "Ea": 101.2,
+      "D": 82.6,
+      "E": -0.98,
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "A",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "B",
+          "coefficient": 1.2
+        }
+      ]
+    },
+    {
+      "type": "USER_DEFINED",
+      "__irrelevant": 2,
+      "name": "my user defined",
+      "scaling factor": 12.3,
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "A",
+          "coefficient": 1
+        },
+        {
+          "species name": "B",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "C",
+          "coefficient": 1.3
+        }
+      ]
+    },
+    {
+      "type": "TAYLOR_SERIES",
+      "name": "my taylor series",
+      "A": 12.3,
+      "B": -1.5,
+      "C": 1.0e-6,
+      "D": 340.0,
+      "E": 0.00032,
+      "taylor coefficients": [1.0, 0.1, -0.01],
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "B",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "C",
+          "coefficient": 1
+        }
+      ]
+    }
+  ]
+}

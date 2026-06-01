@@ -1,0 +1,33 @@
+{
+    "camp-data": [
+        {
+            "name": "M",
+            "type": "CHEM_SPEC",
+            "tracer type": "THIRD_BODY"
+        },
+        {
+            "name": "O2",
+            "type": "CHEM_SPEC",
+            "tracer type": "CONSTANT"
+        },
+        {
+            "name": "O",
+            "type": "CHEM_SPEC",
+            "absolute tolerance": 1e-12
+        },
+        {
+            "name": "O1D",
+            "type": "CHEM_SPEC",
+            "absolute tolerance": 1e-12
+        },
+        {
+            "name": "O3",
+            "type": "CHEM_SPEC",
+            "absolute tolerance": 1e-12,
+            "molecular weight [kg mol-1]" : 0.048,
+            "__long name": "ozone",
+            "__atoms": 3,
+            "__do advect": true
+        }
+    ]
+}

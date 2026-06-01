@@ -1,0 +1,1282 @@
+{
+  "camp-data": [
+    {
+      "type": "RELATIVE_TOLERANCE",
+      "value": 1.0e-4
+    },
+    {
+      "name": "ALKNIT",
+      "type": "CHEM_SPEC",
+      "__description": "standard alkyl nitrate from BIGALK+OH chemistry",
+      "molecular weight [kg mol-1]": 0.133141
+    },
+    {
+      "name": "BZOOH",
+      "type": "CHEM_SPEC",
+      "__description": "hydroperoxide from toluene oxidation",
+      "molecular weight [kg mol-1]": 0.124135
+    },
+    {
+      "name": "C6H5OOH",
+      "type": "CHEM_SPEC",
+      "__description": "phenyl hydroperoxide",
+      "molecular weight [kg mol-1]": 0.110109
+    },
+    {
+      "name": "COF2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "O2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "COFCL",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "HF",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "F",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "BENZO2",
+      "type": "CHEM_SPEC",
+      "__description": "bicyclic peroxy radical from OH + benzene",
+      "molecular weight [kg mol-1]": 0.159115
+    },
+    {
+      "name": "BZOO",
+      "type": "CHEM_SPEC",
+      "__description": "peroxy radical from toluene oxidation",
+      "molecular weight [kg mol-1]": 0.123128
+    },
+    {
+      "name": "N2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "E90",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "NH_5",
+      "type": "CHEM_SPEC",
+      "__description": "idealized tracer with 5 day loss rate",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "NH_50",
+      "type": "CHEM_SPEC",
+      "__description": "idealized tracer with 50-day loss rate",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "ST80_25",
+      "type": "CHEM_SPEC",
+      "__description": "Stratospheric loss tracer",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "PAN",
+      "type": "CHEM_SPEC",
+      "__description": "peroxy acetyl nitrate",
+      "molecular weight [kg mol-1]": 0.121048
+    },
+    {
+      "name": "MVK",
+      "type": "CHEM_SPEC",
+      "__description": "methyl vinyl ketone",
+      "molecular weight [kg mol-1]": 0.0700878
+    },
+    {
+      "name": "MACROOH",
+      "type": "CHEM_SPEC",
+      "__description": "peroxide from methacrolein",
+      "molecular weight [kg mol-1]": 0.120101
+    },
+    {
+      "name": "SOAG0",
+      "type": "CHEM_SPEC",
+      "__description": "SOA gas-phase precursor VBS bin 0",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "SOAG1",
+      "type": "CHEM_SPEC",
+      "__description": "SOA gas-phase precursor VBS bin 1",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "SOAG2",
+      "type": "CHEM_SPEC",
+      "__description": "SOA gas-phase precursor VBS bin 2",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "SOAG3",
+      "type": "CHEM_SPEC",
+      "__description": "SOA gas-phase precursor VBS bin 3",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "SOAG4",
+      "type": "CHEM_SPEC",
+      "__description": "SOA gas-phase precursor VBS bin 4",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "soa4_a1",
+      "type": "CHEM_SPEC",
+      "__description": "SOA bin 4, MAM accumulation mode",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "soa5_a1",
+      "type": "CHEM_SPEC",
+      "__description": "SOA bin 5, MAM accumulation mode",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "soa5_a2",
+      "type": "CHEM_SPEC",
+      "__description": "SOA bin 5, MAM Aitken mode",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "soa3_a1",
+      "type": "CHEM_SPEC",
+      "__description": "SOA bin 3, MAM accumulation mode",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "soa2_a1",
+      "type": "CHEM_SPEC",
+      "__description": "SOA bin 2, MAM accumulation mode",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "soa1_a1",
+      "type": "CHEM_SPEC",
+      "__description": "SOA bin 1, MAM accumulation mode",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "soa1_a2",
+      "type": "CHEM_SPEC",
+      "__description": "SOA bin 1, MAM Aitken mode",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "soa2_a2",
+      "type": "CHEM_SPEC",
+      "__description": "SOA bin 2, MAM Aitken mode",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "soa3_a2",
+      "type": "CHEM_SPEC",
+      "__description": "SOA bin 3, MAM Aitken mode",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "soa4_a2",
+      "type": "CHEM_SPEC",
+      "__description": "SOA bin 4, MAM Aitken mode",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "ISOPNITB",
+      "type": "CHEM_SPEC",
+      "__description": "1,4-hydroxynitrate from OH+isoprene chemistry",
+      "molecular weight [kg mol-1]": 0.147031980536874,
+      "diffusion coefficient [m2 s-1]": 1.0e-5
+    },
+    {
+      "name": "SO3",
+      "type": "CHEM_SPEC",
+      "__description": "sulfur trioxide",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "OCS",
+      "type": "CHEM_SPEC",
+      "__description": "carbonyl sulfide",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "SO",
+      "type": "CHEM_SPEC",
+      "__description": "sulfur monoxide",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "S",
+      "type": "CHEM_SPEC",
+      "__description": "atomic sulfur",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "BCARYO2VBS",
+      "type": "CHEM_SPEC",
+      "__description": "BCARY oxidation proxy for NOx-dependent VBS-SOA",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "SF6",
+      "type": "CHEM_SPEC",
+      "__description": "sulfur hexafluoride",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "sink",
+      "type": "CHEM_SPEC",
+      "__description": "sink for sulfur hexaflouride",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "H",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0010074
+    },
+    {
+      "name": "MEK",
+      "type": "CHEM_SPEC",
+      "__description": "methyl ethyl ketone",
+      "molecular weight [kg mol-1]": 0.0721026
+    },
+    {
+      "name": "MTERP",
+      "type": "CHEM_SPEC",
+      "__description": "lumped monoterpenes",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "N2O5",
+      "type": "CHEM_SPEC",
+      "__description": "dinitrogen pentoxide",
+      "molecular weight [kg mol-1]": 0.108023495904642,
+      "diffusion coefficient [m2 s-1]": 1.0e-5
+    },
+    {
+      "name": "HCN",
+      "type": "CHEM_SPEC",
+      "__description": "hydrogen cyanide",
+      "molecular weight [kg mol-1]": 0.0270251
+    },
+    {
+      "name": "SVOC",
+      "type": "CHEM_SPEC",
+      "__description": "semi-volatile organic precursor of VBS SOA",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "ISOPNO3",
+      "type": "CHEM_SPEC",
+      "__description": "peroxy radical from isoprene NO3 oxidation",
+      "molecular weight [kg mol-1]": 0.162118
+    },
+    {
+      "name": "RO2",
+      "type": "CHEM_SPEC",
+      "__description": "peroxy radical from acetone",
+      "molecular weight [kg mol-1]": 0.0890682
+    },
+    {
+      "name": "PHENO2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.175114
+    },
+    {
+      "name": "BENZO2VBS",
+      "type": "CHEM_SPEC",
+      "__description": "benzene oxidation proxy for NOx-dependent VBS-SOA",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "IVOC",
+      "type": "CHEM_SPEC",
+      "__description": "intermediate volatility organic precursor of VBS SOA",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "TERPNIT",
+      "type": "CHEM_SPEC",
+      "__description": "mostly hydroxynitrates from OH+terpene chemistry",
+      "molecular weight [kg mol-1]": 2.15154758199771e-01,
+      "diffusion coefficient [m2 s-1]": 1.0e-5
+    },
+    {
+      "name": "ISOPO2VBS",
+      "type": "CHEM_SPEC",
+      "__description": "isoprene oxidation proxy for NOx-dependent VBS-SOA",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "IVOCO2VBS",
+      "type": "CHEM_SPEC",
+      "__description": "IVOC oxidation proxy for NOx-dependent VBS-SOA",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "HNO3",
+      "type": "CHEM_SPEC",
+      "__description": "nitric acid",
+      "molecular weight [kg mol-1]": 0.0630123
+    },
+    {
+      "name": "ACBZO2",
+      "type": "CHEM_SPEC",
+      "__description": "acylperoxy radical from benzaldehyde",
+      "molecular weight [kg mol-1]": 0.137112
+    },
+    {
+      "name": "CH3COOOH",
+      "type": "CHEM_SPEC",
+      "__description": "peracetic acid",
+      "molecular weight [kg mol-1]": 0.0760498
+    },
+    {
+      "name": "SO2",
+      "type": "CHEM_SPEC",
+      "__description": "sulfur dioxide",
+      "molecular weight [kg mol-1]": 0.0640648
+    },
+    {
+      "name": "MTERPO2VBS",
+      "type": "CHEM_SPEC",
+      "__description": "MTERP oxidation proxy for NOx-dependent VBS-SOA",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "CH4",
+      "type": "CHEM_SPEC",
+      "__description": "methane",
+      "molecular weight [kg mol-1]": 0.0160406
+    },
+    {
+      "name": "CH3CL",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0504859
+    },
+    {
+      "name": "CH3CO3",
+      "type": "CHEM_SPEC",
+      "__description": "acetylperoxy radical",
+      "molecular weight [kg mol-1]": 0.0750424
+    },
+    {
+      "name": "C6H5O2",
+      "type": "CHEM_SPEC",
+      "__description": "phenylperoxy radical",
+      "molecular weight [kg mol-1]": 0.109102
+    },
+    {
+      "name": "TERPROD1",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.168227
+    },
+    {
+      "name": "HYAC",
+      "type": "CHEM_SPEC",
+      "__description": "hydroxyacetone",
+      "molecular weight [kg mol-1]": 0.0740762
+    },
+    {
+      "name": "HPALD",
+      "type": "CHEM_SPEC",
+      "__description": "hydroperoxyaldehyde",
+      "molecular weight [kg mol-1]": 0.116112
+    },
+    {
+      "name": "TOLUO2VBS",
+      "type": "CHEM_SPEC",
+      "__description": "toluene oxidation proxy for NOx-dependent VBS-SOA",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "H2O",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0180142
+    },
+    {
+      "name": "NO2",
+      "type": "CHEM_SPEC",
+      "__description": "nitrogen dioxide",
+      "molecular weight [kg mol-1]": 0.045803364407376784,
+      "diffusion coefficient [m2 s-1]": 1.0e-5
+    },
+    {
+      "name": "EOOH",
+      "type": "CHEM_SPEC",
+      "__description": "hydroxyhydroperoxide from OH + ethene chemistry",
+      "molecular weight [kg mol-1]": 0.0780646
+    },
+    {
+      "name": "NTERPOOH",
+      "type": "CHEM_SPEC",
+      "__description": "nitrooxy-hydroperoxide from NO3+terpene chemistry",
+      "molecular weight [kg mol-1]": 0.23118008751781,
+      "diffusion coefficient [m2 s-1]": 1.0e-5
+    },
+    {
+      "name": "XYLEO2VBS",
+      "type": "CHEM_SPEC",
+      "__description": "xylenes oxidation proxy for NOx-dependent VBS-SOA",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "CCL4",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.153822
+    },
+    {
+      "name": "CF2CLBR",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.165365
+    },
+    {
+      "name": "CF3BR",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.14891
+    },
+    {
+      "name": "CFC11",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.137368
+    },
+    {
+      "name": "CFC113",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.187375
+    },
+    {
+      "name": "CFC114",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.170921
+    },
+    {
+      "name": "CFC115",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.154467
+    },
+    {
+      "name": "CFC12",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.120913
+    },
+    {
+      "name": "CH2BR2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.173834
+    },
+    {
+      "name": "CH3BR",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0949372
+    },
+    {
+      "name": "CH3CCL3",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.133402
+    },
+    {
+      "name": "NO",
+      "type": "CHEM_SPEC",
+      "__description": "nitric oxide",
+      "molecular weight [kg mol-1]": 0.0300061
+    },
+    {
+      "name": "BR",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.079904
+    },
+    {
+      "name": "BRCL",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.115357
+    },
+    {
+      "name": "BRO",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0959034
+    },
+    {
+      "name": "BRONO2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.141909
+    },
+    {
+      "name": "CL",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0354527
+    },
+    {
+      "name": "CL2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0709054
+    },
+    {
+      "name": "CL2O2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.102904
+    },
+    {
+      "name": "CLO",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0514521
+    },
+    {
+      "name": "CLONO2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0974576
+    },
+    {
+      "name": "HCOOH",
+      "type": "CHEM_SPEC",
+      "__description": "formic acid",
+      "molecular weight [kg mol-1]": 0.0460246
+    },
+    {
+      "name": "HBR",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0809114
+    },
+    {
+      "name": "HOBR",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0969108
+    },
+    {
+      "name": "HOCL",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0524595
+    },
+    {
+      "name": "N",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0140067
+    },
+    {
+      "name": "BIGENE",
+      "type": "CHEM_SPEC",
+      "__description": "lumped alkenes C>3",
+      "molecular weight [kg mol-1]": 0.0561032
+    },
+    {
+      "name": "C2H4",
+      "type": "CHEM_SPEC",
+      "__description": "ethene",
+      "molecular weight [kg mol-1]": 0.0280516
+    },
+    {
+      "name": "C2H5O2",
+      "type": "CHEM_SPEC",
+      "__description": "ethylperoxy radical",
+      "molecular weight [kg mol-1]": 0.0610578
+    },
+    {
+      "name": "CH3COCHO",
+      "type": "CHEM_SPEC",
+      "__description": "methyl glyoxal",
+      "molecular weight [kg mol-1]": 0.0720614
+    },
+    {
+      "name": "CH3COCH3",
+      "type": "CHEM_SPEC",
+      "__description": "acetone",
+      "molecular weight [kg mol-1]": 0.0580768
+    },
+    {
+      "name": "O",
+      "type": "CHEM_SPEC",
+      "__description": "ground state atomic oxygen",
+      "molecular weight [kg mol-1]": 0.0159994
+    },
+    {
+      "name": "OCLO",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0674515
+    },
+    {
+      "name": "O1D",
+      "type": "CHEM_SPEC",
+      "__description": "excited state atomic oxygen",
+      "molecular weight [kg mol-1]": 0.0159994
+    },
+    {
+      "name": "PHENO",
+      "type": "CHEM_SPEC",
+      "__description": "phenoxy radical",
+      "molecular weight [kg mol-1]": 0.159115
+    },
+    {
+      "name": "HCFC141B",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.116948
+    },
+    {
+      "name": "HCFC142B",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.100494
+    },
+    {
+      "name": "HCFC22",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0864679
+    },
+    {
+      "name": "DMS",
+      "type": "CHEM_SPEC",
+      "__description": "dimethyl sulfide",
+      "molecular weight [kg mol-1]": 0.0621324
+    },
+    {
+      "name": "C2H5OH",
+      "type": "CHEM_SPEC",
+      "__description": "ethanol",
+      "molecular weight [kg mol-1]": 0.0460658
+    },
+    {
+      "name": "HCL",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0364601
+    },
+    {
+      "name": "BEPOMUC",
+      "type": "CHEM_SPEC",
+      "__description": "unsaturated dialdehydic epoxide from OH + benzene",
+      "molecular weight [kg mol-1]": 0.126109
+    },
+    {
+      "name": "CHBR3",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.25273
+    },
+    {
+      "name": "H2402",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.259824
+    },
+    {
+      "name": "CO2",
+      "type": "CHEM_SPEC",
+      "__description": "carbon dioxide",
+      "molecular weight [kg mol-1]": 0.0440098
+    },
+    {
+      "name": "BZALD",
+      "type": "CHEM_SPEC",
+      "__description": "benzaldehyde",
+      "molecular weight [kg mol-1]": 0.106121
+    },
+    {
+      "name": "BENZENE",
+      "type": "CHEM_SPEC",
+      "__description": "benzene",
+      "molecular weight [kg mol-1]": 0.0781104
+    },
+    {
+      "name": "C3H7O2",
+      "type": "CHEM_SPEC",
+      "__description": "propylperoxy radical",
+      "molecular weight [kg mol-1]": 0.0750836
+    },
+    {
+      "name": "CH3O2",
+      "type": "CHEM_SPEC",
+      "__description": "methylperoxy radical",
+      "molecular weight [kg mol-1]": 0.047032
+    },
+    {
+      "name": "BCARY",
+      "type": "CHEM_SPEC",
+      "__description": "beta-caryophyllene",
+      "molecular weight [kg mol-1]": 0.204343
+    },
+    {
+      "name": "BIGALD",
+      "type": "CHEM_SPEC",
+      "__description": "lumped aldehyde from terpene ozonolysis",
+      "molecular weight [kg mol-1]": 0.0980982
+    },
+    {
+      "name": "BIGALD2",
+      "type": "CHEM_SPEC",
+      "__description": "4-oxy-2-pentenal, a product of aromatic oxidation",
+      "molecular weight [kg mol-1]": 0.0980982
+    },
+    {
+      "name": "BIGALD3",
+      "type": "CHEM_SPEC",
+      "__description": "2-methyl butenedial, a product of aromatic oxidation",
+      "molecular weight [kg mol-1]": 0.0980982
+    },
+    {
+      "name": "BIGALD4",
+      "type": "CHEM_SPEC",
+      "__description": "2-methyl-4-oxo-2-pentenal, a product of aromatic oxidation",
+      "molecular weight [kg mol-1]": 0.112124
+    },
+    {
+      "name": "BIGALK",
+      "type": "CHEM_SPEC",
+      "__description": "lumped alkanes C>3",
+      "molecular weight [kg mol-1]": 0.0721438
+    },
+    {
+      "name": "H2O2",
+      "type": "CHEM_SPEC",
+      "__description": "hydrogen peroxide",
+      "molecular weight [kg mol-1]": 0.0340136
+    },
+    {
+      "name": "C2H5OOH",
+      "type": "CHEM_SPEC",
+      "__description": "ethyl hydroperoxide",
+      "molecular weight [kg mol-1]": 0.0620652
+    },
+    {
+      "name": "C2H6",
+      "type": "CHEM_SPEC",
+      "__description": "ethane",
+      "molecular weight [kg mol-1]": 0.0300664
+    },
+    {
+      "name": "C3H8",
+      "type": "CHEM_SPEC",
+      "__description": "propane",
+      "molecular weight [kg mol-1]": 0.0440922
+    },
+    {
+      "name": "C3H6",
+      "type": "CHEM_SPEC",
+      "__description": "propene",
+      "molecular weight [kg mol-1]": 0.0420774
+    },
+    {
+      "name": "CH2O",
+      "type": "CHEM_SPEC",
+      "__description": "formaldehyde",
+      "molecular weight [kg mol-1]": 0.0300252
+    },
+    {
+      "name": "CH3CN",
+      "type": "CHEM_SPEC",
+      "__description": "acetonitrile",
+      "molecular weight [kg mol-1]": 0.0410509
+    },
+    {
+      "name": "C2H2",
+      "type": "CHEM_SPEC",
+      "__description": "ethyne",
+      "molecular weight [kg mol-1]": 0.0260368
+    },
+    {
+      "name": "CH3OH",
+      "type": "CHEM_SPEC",
+      "__description": "methanol",
+      "molecular weight [kg mol-1]": 0.03204
+    },
+    {
+      "name": "CH3OOH",
+      "type": "CHEM_SPEC",
+      "__description": "methyl hydroperoxide",
+      "molecular weight [kg mol-1]": 0.0480394
+    },
+    {
+      "name": "CRESOL",
+      "type": "CHEM_SPEC",
+      "__description": "lumped cresols (hydroxymethylbenzenes)",
+      "molecular weight [kg mol-1]": 0.108136
+    },
+    {
+      "name": "ENEO2",
+      "type": "CHEM_SPEC",
+      "__description": "lumped hydroxyperoxy radical from OH + large alkenes",
+      "molecular weight [kg mol-1]": 0.105109
+    },
+    {
+      "name": "MACRO2",
+      "type": "CHEM_SPEC",
+      "__description": "peroxy radical from methacrolein oxidation",
+      "molecular weight [kg mol-1]": 0.119093
+    },
+    {
+      "name": "ISOPAO2",
+      "type": "CHEM_SPEC",
+      "__description": "1,2-isomer of isoprene peroxy radical",
+      "molecular weight [kg mol-1]": 0.11712
+    },
+    {
+      "name": "MALO2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.115064
+    },
+    {
+      "name": "ISOPBO2",
+      "type": "CHEM_SPEC",
+      "__description": "1,4-isomer of isoprene peroxy radical",
+      "molecular weight [kg mol-1]": 0.11712
+    },
+    {
+      "name": "MCO3",
+      "type": "CHEM_SPEC",
+      "__description": "peroxy radical from OH abstraction reaction with MACR",
+      "molecular weight [kg mol-1]": 0.101079
+    },
+    {
+      "name": "MDIALO2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.117079
+    },
+    {
+      "name": "MEKO2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.103094
+    },
+    {
+      "name": "EO2",
+      "type": "CHEM_SPEC",
+      "__description": "hydroxyperoxy radical from OH + ethene chemistry",
+      "molecular weight [kg mol-1]": 0.0770572
+    },
+    {
+      "name": "EO",
+      "type": "CHEM_SPEC",
+      "__description": "hydroxyalkoxy radical from OH + ethene chemistry",
+      "molecular weight [kg mol-1]": 0.0610578
+    },
+    {
+      "name": "GLYOXAL",
+      "type": "CHEM_SPEC",
+      "__description": "glyoxal",
+      "molecular weight [kg mol-1]": 0.0580064525191708,
+      "diffusion coefficient [m2 s-1]": 1e300
+    },
+    {
+      "name": "MPAN",
+      "type": "CHEM_SPEC",
+      "__description": "methacrylol peroxynitrate",
+      "molecular weight [kg mol-1]": 0.147085
+    },
+    {
+      "name": "NC4CH2OH",
+      "type": "CHEM_SPEC",
+      "__description": "nitrooxy-alcohol from NO3+isoprene chemistry",
+      "molecular weight [kg mol-1]": 0.147031980536874,
+      "diffusion coefficient [m2 s-1]": 1.0e-5
+    },
+    {
+      "name": "ISOPOOH",
+      "type": "CHEM_SPEC",
+      "__description": "unsaturated hydroxyhydroperoxide",
+      "molecular weight [kg mol-1]": 0.118127
+    },
+    {
+      "name": "GLYALD",
+      "type": "CHEM_SPEC",
+      "__description": "glycolaldehyde",
+      "molecular weight [kg mol-1]": 0.0600504
+    },
+    {
+      "name": "HO2",
+      "type": "CHEM_SPEC",
+      "__description": "hydroperoxyl radical",
+      "molecular weight [kg mol-1]": 0.03307754409115893,
+      "diffusion coefficient [m2 s-1]": 1.0e-5
+    },
+    {
+      "name": "HOCH2OO",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0630314
+    },
+    {
+      "name": "H2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0020148
+    },
+    {
+      "name": "HYDRALD",
+      "type": "CHEM_SPEC",
+      "__description": "lumped unsturated hydroxycarbonyl",
+      "molecular weight [kg mol-1]": 0.100113
+    },
+    {
+      "name": "ISOP",
+      "type": "CHEM_SPEC",
+      "__description": "isoprene",
+      "molecular weight [kg mol-1]": 0.0681142
+    },
+    {
+      "name": "NTERPO2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.230232
+    },
+    {
+      "name": "TOLO2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.173141
+    },
+    {
+      "name": "TERP2O2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.199219
+    },
+    {
+      "name": "XYLENO2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.187166
+    },
+    {
+      "name": "TERPO2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.185234
+    },
+    {
+      "name": "XYLOLO2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.203166
+    },
+    {
+      "name": "PBZNIT",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.183118
+    },
+    {
+      "name": "XYLENES",
+      "type": "CHEM_SPEC",
+      "__description": "lumped xylenes",
+      "molecular weight [kg mol-1]": 0.106162
+    },
+    {
+      "name": "PO2",
+      "type": "CHEM_SPEC",
+      "__description": "propene peroxy radical",
+      "molecular weight [kg mol-1]": 0.091083
+    },
+    {
+      "name": "TOLUENE",
+      "type": "CHEM_SPEC",
+      "__description": "toluene",
+      "molecular weight [kg mol-1]": 0.0921362
+    },
+    {
+      "name": "XO2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.149119
+    },
+    {
+      "name": "XOOH",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.150126
+    },
+    {
+      "name": "TERPROD2",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.154201
+    },
+    {
+      "name": "MEKOOH",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.104101
+    },
+    {
+      "name": "MACR",
+      "type": "CHEM_SPEC",
+      "__description": "methacrolein",
+      "molecular weight [kg mol-1]": 0.0700878
+    },
+    {
+      "name": "HONITR",
+      "type": "CHEM_SPEC",
+      "__description": "lumped hydroxynitrates from various compounds (formula updated 2017-04-06)",
+      "molecular weight [kg mol-1]": 0.133362340623015,
+      "diffusion coefficient [m2 s-1]": 1.0e-5
+    },
+    {
+      "name": "ISOPNITA",
+      "type": "CHEM_SPEC",
+      "__description": "1,2-hydroxynitrate from OH+isoprene chemistry",
+      "molecular weight [kg mol-1]": 0.147031980536874,
+      "diffusion coefficient [m2 s-1]": 1.0e-5
+    },
+    {
+      "name": "ISOPNOOH",
+      "type": "CHEM_SPEC",
+      "__description": "nitroxy-hydroperoxide from NO3+isoprene chemistry",
+      "molecular weight [kg mol-1]": 0.163125
+    },
+    {
+      "name": "IEPOX",
+      "type": "CHEM_SPEC",
+      "__description": "isoprene epoxide",
+      "molecular weight [kg mol-1]": 0.118127
+    },
+    {
+      "name": "ONITR",
+      "type": "CHEM_SPEC",
+      "__description": "lumped hydroxynitrates (formula updated 2017-04-06)",
+      "molecular weight [kg mol-1]": 0.147031980536874,
+      "diffusion coefficient [m2 s-1]": 1.0e-5
+    },
+    {
+      "name": "H2SO4",
+      "type": "CHEM_SPEC",
+      "__description": "sulfuric acid",
+      "molecular weight [kg mol-1]": 0.0980784
+    },
+    {
+      "name": "N2O",
+      "type": "CHEM_SPEC",
+      "__description": "nitrous oxide",
+      "molecular weight [kg mol-1]": 0.0440129
+    },
+    {
+      "name": "NO3",
+      "type": "CHEM_SPEC",
+      "__description": "nitrate radical",
+      "molecular weight [kg mol-1]": 0.06186298085408304,
+      "diffusion coefficient [m2 s-1]": 1.0e-5
+    },
+    {
+      "name": "OH",
+      "type": "CHEM_SPEC",
+      "__description": "hydroxyl radical",
+      "molecular weight [kg mol-1]": 0.0170068
+    },
+    {
+      "name": "PHENOOH",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.176122
+    },
+    {
+      "name": "PHENOL",
+      "type": "CHEM_SPEC",
+      "__description": "phenol, product of benzene chemistry",
+      "molecular weight [kg mol-1]": 0.0941098
+    },
+    {
+      "name": "XYLOL",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.122161
+    },
+    {
+      "name": "ROOH",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0900756
+    },
+    {
+      "name": "O3",
+      "type": "CHEM_SPEC",
+      "__description": "ozone",
+      "molecular weight [kg mol-1]": 0.0479982
+    },
+    {
+      "name": "TERPOOH",
+      "type": "CHEM_SPEC",
+      "__description": "Hydroxy hydroperoxide from terpene 0 double bonds",
+      "molecular weight [kg mol-1]": 0.186241
+    },
+    {
+      "name": "TOLOOH",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.174148
+    },
+    {
+      "name": "XYLENOOH",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.188174
+    },
+    {
+      "name": "XYLOLOOH",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.204173
+    },
+    {
+      "name": "CO",
+      "type": "CHEM_SPEC",
+      "__description": "carbon monoxide",
+      "molecular weight [kg mol-1]": 0.0280104
+    },
+    {
+      "name": "CH3COOH",
+      "type": "CHEM_SPEC",
+      "__description": "acetic acid",
+      "molecular weight [kg mol-1]": 0.0600504
+    },
+    {
+      "name": "CH3CHO",
+      "type": "CHEM_SPEC",
+      "__description": "acetaldehyde",
+      "molecular weight [kg mol-1]": 0.044051
+    },
+    {
+      "name": "BIGALD1",
+      "type": "CHEM_SPEC",
+      "__description": "butenedial, a product of aromatic oxidation",
+      "molecular weight [kg mol-1]": 0.0840724
+    },
+    {
+      "name": "ALKOOH",
+      "type": "CHEM_SPEC",
+      "__description": "lumped alkane peroxide",
+      "molecular weight [kg mol-1]": 0.104143
+    },
+    {
+      "name": "DICARBO2",
+      "type": "CHEM_SPEC",
+      "__description": "acylperoxy radical formed from aromatic oxidation, via unsaturated dicarbonyl chemistry",
+      "molecular weight [kg mol-1]": 0.12909
+    },
+    {
+      "name": "BENZOOH",
+      "type": "CHEM_SPEC",
+      "__description": "bicyclic hydroperoxide from OH + benzene",
+      "molecular weight [kg mol-1]": 0.160122
+    },
+    {
+      "name": "ALKO2",
+      "type": "CHEM_SPEC",
+      "__description": "lumped alkane peroxy radical from BIGALK",
+      "molecular weight [kg mol-1]": 0.103135
+    },
+    {
+      "name": "HO2NO2",
+      "type": "CHEM_SPEC",
+      "__description": "pernitric acid",
+      "molecular weight [kg mol-1]": 0.0790117
+    },
+    {
+      "name": "C3H7OOH",
+      "type": "CHEM_SPEC",
+      "__description": "propyl hydrogen peroxide",
+      "molecular weight [kg mol-1]": 0.076091
+    },
+    {
+      "name": "NH3",
+      "type": "CHEM_SPEC",
+      "__description": "ammonia",
+      "molecular weight [kg mol-1]": 0.017031
+    },
+    {
+      "name": "TERP2OOH",
+      "type": "CHEM_SPEC",
+      "__description": "2nd generation terpene hydroperoxide",
+      "molecular weight [kg mol-1]": 0.200226
+    },
+    {
+      "name": "POOH",
+      "type": "CHEM_SPEC",
+      "__description": "",
+      "molecular weight [kg mol-1]": 0.0920904
+    },
+    {
+      "name": "NOA",
+      "type": "CHEM_SPEC",
+      "__description": "nitrooxyacetone, largely from NO3+propene chemistry",
+      "molecular weight [kg mol-1]": 0.119074
+    },
+    {
+      "name": "NC4CHO",
+      "type": "CHEM_SPEC",
+      "__description": "nitrooxy-aldehyde from NO3+isoprene chemistry",
+      "molecular weight [kg mol-1]": 0.14461174234895102,
+      "diffusion coefficient [m2 s-1]": 1.0e-5
+    },
+    {
+      "name": "TEPOMUC",
+      "type": "CHEM_SPEC",
+      "__description": "toluene, xylenes product",
+      "molecular weight [kg mol-1]": 0.140134
+    },
+    {
+      "name": "NH4",
+      "type": "CHEM_SPEC",
+      "__description": "Ammonium",
+      "molecular weight [kg mol-1]": 0
+    },
+    {
+      "name": "M",
+      "type": "CHEM_SPEC",
+      "tracer type": "THIRD_BODY",
+      "__description": "third-body species"
+    }
+
+  ]
+}

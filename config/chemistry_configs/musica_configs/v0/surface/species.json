@@ -1,0 +1,22 @@
+{
+  "camp-data": [
+    {
+      "name": "A",
+      "type": "CHEM_SPEC",
+      "diffusion coefficient [m2 s-1]": "2"
+    },
+    {
+      "name": "B",
+      "type": "CHEM_SPEC"
+    },
+    {
+      "name": "M",
+      "type": "CHEM_SPEC",
+      "tracer type": "THIRD_BODY"
+    },
+    {
+      "name": "irr__241993b6-c109-44fc-97b0-bc0bc42fe945",
+      "type": "CHEM_SPEC"
+    }
+  ]
+}
