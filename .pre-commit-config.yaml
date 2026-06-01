@@ -2,8 +2,9 @@
 #
 # Works with either `prek` (https://prek.j178.dev, recommended) or the original
 # `pre-commit`. Install the git hooks once with `prek install`, then the hooks
-# below run automatically on `git commit` against your staged files. Run them
-# over the whole repo with `prek run --all-files`.
+# below run automatically on `git commit` against your staged files. For manual
+# runs, `prek run` uses normal hook file matching; use
+# `prek run --all-files` for a whole-repo sweep.
 #
 # Setup instructions live in docs/src/contributor_guide.md ("Pre-commit hooks").
 

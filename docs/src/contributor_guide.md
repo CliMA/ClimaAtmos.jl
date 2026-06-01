@@ -253,7 +253,12 @@ That's it — the hooks now run automatically on every commit. `julia` must be o
 your `PATH`; the first run instantiates and precompiles `.dev/format/`, which
 takes a minute, and is fast thereafter.
 
-To format and clean the whole repository on demand (handy after a large change):
+For manual runs:
+
+* `prek run` checks the files selected by normal hook matching.
+* `prek run --all-files` checks the whole repository.
+
+To run a full-repo sweep (handy after a large change):
 
 ``` sh
 prek run --all-files
