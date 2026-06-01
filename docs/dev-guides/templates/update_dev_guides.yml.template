@@ -32,14 +32,15 @@ jobs:
       - name: Pull latest dev guides
         run: |
           git checkout -b update-dev-guides
+          # Exit 0 when there is nothing new to merge (subtree pull errors in that case).
           git subtree pull --prefix docs/dev-guides \
               https://github.com/CliMA/DeveloperGuides.git main --squash \
-              -m "chore: sync dev guides from central repo"
+              -m "chore: sync dev guides from central repo" || true
 
       - name: Check for updates
         id: check
         run: |
-          if [ "$(git rev-parse HEAD)" != "$(git rev-parse main)" ]; then
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
             echo "changes=true" >> $GITHUB_OUTPUT
           else
             echo "changes=false" >> $GITHUB_OUTPUT

@@ -25,10 +25,10 @@ Most CliMA Julia packages share these directories:
 
 ## Conventions to expect
 
-- **Cache / precomputed quantities**: model repos typically have a `src/cache/` (or analogous) area where per-stage scratch state lives. The convention is to allocate once at construction and never inside per-step setters.
-- **Parameter containers**: every package exposes a parameter container (often `*Parameters`) constructed from `ClimaParams.jl` TOML files. Pass the container, not individual constants.
-- **Public API**: the symbols re-exported from `src/<PackageName>.jl` are the supported surface. Internal modules (e.g., `RecursiveApply`) may change without notice.
-- **Test-only deps**: development tooling lives in `[extras]` and the `test` target — never in `[deps]`. See [dependency_management.md](dependency_management.md).
+- **Cache / precomputed quantities**: ClimaAtmos has a `src/cache/` area where per-stage scratch state update functions are defined. The convention is to allocate once at construction and never inside per-step setters.
+- **Parameter containers**: every package exposes a parameter container (often `*Parameters`) constructed from `ClimaParams.jl` TOML files.
+- **Public API**: the symbols re-exported from `src/<PackageName>.jl` are the supported surface. Internal functions and data structures may change without notice.
+- **Test-only deps**: development tooling lives in `[extras]` and is associated with specific `[targets]` like the `test` subdirectory — never in `[deps]`. See [dependency_management.md](dependency_management.md).
 
 ## How to locate a feature
 

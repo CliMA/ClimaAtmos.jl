@@ -9,7 +9,7 @@ The rules below apply whenever the surrounding code is a *kernel* or runs inside
 - **Kernel**: the right-hand side of a `@.` broadcast, the body of a `ClimaCore.lazy()` expression, the closure passed to `Operators.column_integral_*`, `Operators.column_reduce!`, or `Fields.bycolumn`, and any function transitively `@inline`d into one of the above.
 - **Hot path**: any function called once per timestep (or once per Runge–Kutta stage) for every column or every grid point. In model repos this includes tendency functions, precomputed-quantity setters, and Jacobian-update functions. In library repos (e.g. Thermodynamics.jl, CloudMicrophysics.jl), it includes any function that is designed to be called from a broadcast kernel.
 
-If a function is called in either context, treat every rule in this file and in [software_design_patterns.md](../architecture/software_design_patterns.md) as binding.
+If a function is called in either context, treat every rule in this file and in [software_design_patterns.md](../code-quality/software_design_patterns.md) as binding.
 
 ## 1. SIMT and thread divergence
 
@@ -17,7 +17,7 @@ On GPU architectures (CUDA, ROCm), threads are grouped into warps (typically 32 
 
 ### The remedy: `ifelse`
 
-Use `ifelse(cond, a, b)` to remove the divergent branch predicate. See [SDP 17](../architecture/software_design_patterns.md) for the canonical pattern.
+Use `ifelse(cond, a, b)` to remove the divergent branch predicate. See [SDP 17](../code-quality/software_design_patterns.md) for the canonical pattern.
 
 **Underlying principle**: `ifelse` is an ordinary function call. Both `a` and `b` are evaluated to a value *on every thread* before the call; `ifelse` only selects which value to return. Using `ifelse` does **not** save the work of the un-taken branch — its purpose is to eliminate the warp-divergent predicate, not to skip computation. If one branch is significantly more expensive than the other, every thread still pays its cost; sometimes a divergent `if/else` is the better trade and you should measure.
 
@@ -47,16 +47,7 @@ result = ifelse(x > zero(x), log_term, zero(x))
 
 ## 2. Functors over closures
 
-Closures that capture local variables produce heap allocations ("boxed variables") and may trigger `InvalidIRError: unsupported dynamic function invocation` on GPU. Replace them with callable structs (functors). See [SDP 18](../architecture/software_design_patterns.md).
-
-Performance comparison (microphysics case study):
-
-| Implementation | Allocations per grid point | GPU status |
-|:---|:---|:---|
-| Closure | ~1.1 KB | ❌ InvalidIRError |
-| Functor | ~16 bytes (fixed overhead) | ✅ Optimized kernel |
-
-Validation: after a warm-up call, `@allocated integrate(functor, data)` should return 0.
+Closures that capture local variables produce heap allocations ("boxed variables") and may trigger `InvalidIRError: unsupported dynamic function invocation` on GPU. Replace them with callable structs (functors). See [SDP 18](../code-quality/software_design_patterns.md) for the canonical pattern and the closure-vs-functor cost comparison.
 
 ## 3. `lazy()` broadcast fusion
 
@@ -118,16 +109,11 @@ Use `$expr` to prevent the `@.` macro from broadcasting over a subexpression. Th
 
 ### Do not use `Ref()` as a broadcast scalar escape
 
-`Ref()` is not the standard broadcast-escape pattern in this codebase. Its use in `src/` is limited to mutable scalar boxes in callbacks and non-broadcast contexts. Prefer parameter extraction ([SDP 20](../architecture/software_design_patterns.md)).
+`Ref()` is not the standard broadcast-escape pattern in this codebase. Its use in `src/` is limited to mutable scalar boxes in callbacks and non-broadcast contexts. Prefer parameter extraction ([SDP 20](../code-quality/software_design_patterns.md)).
 
 ### Parameter extraction
 
-Extract non-`Field` arguments to local variables before the `@.` block:
-
-```julia
-thp = p.params.thermodynamics_params
-@. result = my_physics(thp, Y.c.T, Y.c.ρ)
-```
+Extract non-`Field` arguments to local variables before the `@.` block — see [SDP 20](../code-quality/software_design_patterns.md) for the rule and rationale.
 
 ## 5. Register pressure and function size
 
@@ -137,20 +123,11 @@ Large functions (roughly > 200–300 lines) may exceed the Julia compiler's inli
 
 ## 6. Fixed iteration solvers (advisory)
 
-Convergence-based loops (`while err > tol`) cause thread divergence when different threads converge at different rates. Where the physics allows it, prefer a fixed number of iterations. See [SDP 19](../architecture/software_design_patterns.md).
+Convergence-based loops (`while err > tol`) cause thread divergence when different threads converge at different rates. Where the physics allows it, prefer a fixed number of iterations. See [SDP 19](../code-quality/software_design_patterns.md).
 
 ## 7. GPU-safe error handling
 
-- Use `error("message")`, not `@assert`. See [SDP 11](../architecture/software_design_patterns.md).
-- Do not interpolate runtime variables into error strings inside kernels. The string interpolation allocates and may trigger dynamic dispatch.
-
-```julia
-# ❌ String interpolation allocates
-error("Invalid value: $x")
-
-# ✅ Static message only
-error("Invalid value encountered")
-```
+Use `error("static message")` instead of `@assert`, and do not interpolate runtime variables into error strings inside kernels. See [SDP 11](../code-quality/software_design_patterns.md).
 
 ## 8. `isbits` requirement
 
@@ -179,18 +156,11 @@ If the post-adapt check returns `false`, check for:
 
 When defining a new struct that wraps device-resident arrays, add an `Adapt.adapt_structure(to, x::MyStruct) = MyStruct(adapt(to, x.field1), ...)` method so the post-adapt object becomes `isbits`.
 
-## 9. Allocation verification workflow
+Avoid using `DataTypes` (e.g. `Float64`) or their aliases (e.g `FT`) directly in broadcast kernels. This can cause `isbits` failures on different julia versions.
 
-After implementing or modifying hot-path code, verify zero allocations:
+## 9. Allocation verification
 
-```julia
-# Warm up (forces compilation)
-remaining_tendency!(Yₜ, Y, p, t)
-# Assert zero allocations
-@test (@allocated remaining_tendency!(Yₜ, Y, p, t)) == 0
-```
-
-Allocation benchmarks in `perf/` are not run automatically in CI. Allocation regressions must be caught during review.
+After implementing or modifying hot-path code, verify zero allocations with the warm-up + `@allocated == 0` regression-test pattern documented in [allocation_debugging.md §1](allocation_debugging.md). Allocation benchmarks in `perf/` are not run automatically in CI, so allocation regressions must be caught at review time.
 
 ## Self-correction
 
