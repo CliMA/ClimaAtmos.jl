@@ -853,6 +853,19 @@ with single-column model setups. Most external users will not need these compone
     scm_coriolis::SC = nothing
 end
 
+
+abstract type AbstractChemistryModel end
+struct GasPhaseChem <: AbstractChemistryModel end
+
+"""
+    AtmosChem
+
+Groups chemistry models and types.
+"""
+@kwdef struct AtmosChem{CM}
+    chemistry_model::CM = nothing
+end
+
 """
     AtmosWater
 
@@ -934,7 +947,7 @@ Base.broadcastable(x::AtmosSurface) = tuple(x)
 # struct definition (later in this file) so the type is in scope when those
 # methods are parsed.
 
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM}
     water::W
     scm_setup::SCM
     radiation::R
@@ -945,6 +958,7 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
     sponge::SP
     surface::SU
     numerics::NU
+    chemistry::CM
 
     """Whether to apply surface flux tendency (independent of surface conditions)"""
     disable_surface_flux_tendency::Bool
@@ -961,6 +975,7 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosSurface, :surface),
     (AtmosNumerics, :numerics),
     (SCMSetup, :scm_setup),
+    (AtmosChem, :chemistry),
 )
 
 # Auto-generate map from property_name to group_field
@@ -1135,6 +1150,8 @@ function AtmosModel(; kwargs...)
         _create_grouped_struct(AtmosSurface, atmos_model_kwargs, group_kwargs)
     numerics =
         _create_grouped_struct(AtmosNumerics, atmos_model_kwargs, group_kwargs)
+    chemistry =
+        _create_grouped_struct(AtmosChem, atmos_model_kwargs, group_kwargs)
 
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     disable_surface_flux_tendency =
@@ -1153,6 +1170,7 @@ function AtmosModel(; kwargs...)
         typeof(sponge),
         typeof(surface),
         typeof(numerics),
+        typeof(chemistry),
     }(
         water,
         scm_setup,
@@ -1164,6 +1182,7 @@ function AtmosModel(; kwargs...)
         sponge,
         surface,
         numerics,
+        chemistry,
         disable_surface_flux_tendency,
     )
 end
