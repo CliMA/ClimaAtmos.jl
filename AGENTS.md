@@ -23,7 +23,8 @@ Always read the ClimaAtmos-specific guide before working in this repository:
 - Keep edits inside the owning subtree when possible; use [src/ClimaAtmos.jl](src/ClimaAtmos.jl) to trace where a feature is wired.
 - Match existing style: explicit names, narrow imports, comments that explain why.
 - Follow the software design patterns in [docs/dev-guides/architecture/software_design_patterns.md](docs/dev-guides/architecture/software_design_patterns.md) for new code and refactor toward them when touching existing code.
-- Run `julia -e 'using JuliaFormatter; format(\".\")'` before committing code.
+- Run `julia -e 'using JuliaFormatter; format(\".\")'` before committing code. The CI formatter check pins JuliaFormatter to the major version in [.github/workflows/julia_formatter.yml](.github/workflows/julia_formatter.yml) (`version:`); the matching pin lives in [.dev/format/Project.toml](.dev/format/Project.toml). `Pkg.add("JuliaFormatter")` now installs v2 by default, which produces a different diff — use the pinned env (or the `prek` hooks below) to match CI.
+- Optional but recommended: install the pre-commit hooks in [.pre-commit-config.yaml](.pre-commit-config.yaml) (`uv tool install prek && prek install`) to auto-format and trim trailing whitespace on commit. See [docs/src/contributor_guide.md](docs/src/contributor_guide.md) ("Pre-commit hooks").
 
 ## Self-correction
 
