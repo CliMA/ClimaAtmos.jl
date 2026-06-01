@@ -86,6 +86,9 @@ if TEST_GROUP in ("parameterizations", "all")
     @safetestset "BMT integration tests" begin @time include("parameterized_tendencies/microphysics/bmt_integration.jl") end
     @safetestset "Allocation tests" begin @time include("parameterized_tendencies/microphysics/allocations.jl") end
 
+    # Chemistry tests
+    @safetestset "Chemistry tendency tests" begin @time include("parameterized_tendencies/chemistry/chemistry_tendency.jl") end
+
     # NOTE: Gravity wave visualization scripts (test_nogw_3d.jl, test_nogw_mima.jl,
     # test_nogw_single_column.jl, test_ogw_3d.jl, test_ogw_baseflux.jl) are not included
     # in the test suite because they have no @test assertions - they only generate
