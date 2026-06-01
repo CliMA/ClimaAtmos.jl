@@ -2,11 +2,6 @@ initial_condition: "Rico"
 turbconv: "prognostic_edmfx"
 reproducibility_test: true
 implicit_diffusion: true
-implicit_sgs_advection: true
-implicit_sgs_entr_detr: true
-implicit_sgs_nh_pressure: true
-implicit_sgs_vertdiff: true
-implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"

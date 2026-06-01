@@ -11,8 +11,6 @@ import .Parameters as CAP
 import ClimaCore: InputOutput
 using Dates
 
-import ClimaCore.Fields: ColumnField
-
 import ClimaUtilities.TimeVaryingInputs: evaluate!
 
 

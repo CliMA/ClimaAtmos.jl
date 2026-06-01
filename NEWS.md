@@ -4,8 +4,16 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+v0.39.2
+-------
+
+- [#4521](https://github.com/CliMA/ClimaAtmos.jl/pull/4521) Make entrainment and detrainment use updated (implicit) velocity
+- [#4514](https://github.com/CliMA/ClimaAtmos.jl/pull/4514) Replace deprecated ClimaTimeSteppers backward-compatibility shims with canonical names (`DistributedODEIntegrator` → `TimeStepperIntegrator`, `CallbackSet(continuous_callbacks, discrete_callbacks)` → `CallbackSet(discrete_callbacks...)`).
+- [#4512](https://github.com/CliMA/ClimaAtmos.jl/pull/4512) ![][badge-🔥behavioralΔ] Remove SGS explicit/implicit timestepping options; all SGS tendencies (advection, entrainment/detrainment, NH pressure drag, vertical diffusion, mass flux) are now always implicit.
+
 v0.39.1
 -------
+
 - ![][badge-🔥behavioralΔ] Unify cloud fraction and microphysics SGS quadrature via a shared `sgs_moments` pre-pass. Replace the Sommeria–Deardorff cloud fraction with a hybrid CDF formula, with variances from quadratures, and introduce a mass-conserving shape-function partition in the `Microphysics1MEvaluator`.
 
 v0.39.0

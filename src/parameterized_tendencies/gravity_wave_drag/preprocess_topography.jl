@@ -1,6 +1,5 @@
 import ClimaDiagnostics.Writers:
     HDF5Writer
-import ClimaAtmos as CA
 import ClimaCore: InputOutput, Spaces, Fields, to_cpu
 import ClimaComms
 

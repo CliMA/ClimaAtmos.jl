@@ -1,14 +1,9 @@
 initial_condition: TRMM_LBA
 turbconv: prognostic_edmfx
 implicit_diffusion: true
-implicit_sgs_advection: true
-implicit_sgs_entr_detr: true
-implicit_sgs_nh_pressure: true
-implicit_sgs_vertdiff: true
-implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 edmfx_entr_model: "PiGroups"
-edmfx_detr_model: "SmoothArea"
+edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true

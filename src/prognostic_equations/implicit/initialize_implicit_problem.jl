@@ -3,7 +3,7 @@
 #####
 
 import ClimaCore
-import ClimaCore: Fields
+import ClimaCore: Fields, Spaces
 
 """
     initialize_implicit_stage_problem!(Y, p, dtγ)
@@ -115,11 +115,6 @@ In this discretization, the prognostic variable is the covariant vertical
 velocity component `u₃`. The physical vertical velocity `w` is obtained via
 a metric scaling (division by Δz), which is consistently applied when
 forming the quadratic coefficients.
-
-If SGS vertical advection is treated implicitly, the system becomes
-vertically coupled and is solved via a column sweep using
-`Operators.column_accumulate!`. Otherwise, each face-local quadratic
-equation is solved independently.
 """
 function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
 
@@ -127,17 +122,16 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
 
     (; params) = p
     (; turbconv_model, rayleigh_sponge) = p.atmos
-    (; ᶠρ_diffʲs) = p.precomputed
+    (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜturb_entrʲs, ᶜentrʲs) = p.precomputed
+    (; ᶜturb_entrʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvelʲs) = p.precomputed
     FT = eltype(p.params)
 
     turbconv_params = CAP.turbconv_params(params)
     α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-    H_up_min = CAP.min_updraft_top(turbconv_params)
+    a_min = CAP.min_area(turbconv_params)
     scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-    drag_coeff = α_d / max(H_up_min, scale_height)
 
     # Approximation factor used in w₀ - w ≈ -(ρ / ρa⁰) w (single-updraft case).
     # For multiple updrafts we approximate ρ / ρa⁰ ≈ 1, which implies w₀ ≈ 0.
@@ -160,53 +154,55 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         @. ᶠb = 1 / dtγ
         @. ᶠc = -1 * (Y.f.sgsʲs.:($$j).u₃.components.data.:1 / dtγ)
 
-        # Implicit entrainment/detrainment contributes a linear sink in w.
-        if p.atmos.sgs_entr_detr_mode == Implicit()
-            @. ᶠb += ᶠinterp((ᶜentrʲs.:($$j) + ᶜturb_entrʲs.:($$j)) * ᶜρ_over_ρa⁰)
-        end
+        # Implicit entrainment: the velocity-dependent coefficient contributes a
+        # quadratic sink (∝ w²) and the background/turbulent entrainment contributes
+        # a linear sink (∝ w), after applying the approximation w₀ - w ≈ -(ρ/ρa⁰) w.
+        @. ᶠa += ᶠinterp(ᶜentr_vel_scaleʲs.:($$j) * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
+        @. ᶠb +=
+            ᶠinterp((ᶜentr_nonvelʲs.:($$j) + ᶜturb_entrʲs.:($$j)) * ᶜρ_over_ρa⁰)
 
         # Implicit NH pressure drag contributes a quadratic sink in w².
-        if p.atmos.edmfx_model.nh_pressure isa Val{true} &&
-           p.atmos.sgs_nh_pressure_mode == Implicit()
-            @. ᶠa += ᶠinterp(drag_coeff * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
+        if p.atmos.edmfx_model.nh_pressure isa Val{true}
+            ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
+            ᶜa⁰ = @. lazy(a⁰(Y.c.sgsʲs, ᶜρʲs, turbconv_model))
+            # Use a scratch scalar here as @lazy results in a large fused kernel
+            # that doesn't work on P100 GPUs.
+            ᶜdrag_coeff = p.scratch.ᶜtemp_scalar_2
+            @. ᶜdrag_coeff =
+                α_d / (2 * scale_height) *
+                (1 / sqrt(max(ᶜaʲ, a_min)) + 1 / sqrt(max(ᶜa⁰, a_min)))
+            @. ᶠa += ᶠinterp(ᶜdrag_coeff * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
         end
 
         # Optional Rayleigh sponge adds extra linear damping near the top.
         if !isnothing(rayleigh_sponge)
             ᶠz = Fields.coordinate_field(Y.f.u₃).z
-            zmax = z_max(axes(ᶠz))
+            zmax = Spaces.z_max(axes(ᶠz))
             @. ᶠb += β_rayleigh_u₃(rayleigh_sponge, ᶠz, zmax)
         end
 
-        if p.atmos.sgs_adv_mode == Implicit()
-            # Implicit advection adds a local w² term and couples each face
-            # to the previously solved face through w_prev².
-            @. ᶠa += (1 / ᶠdz)^2 / 2
-            @. ᶠc += (1 - α_b) * ᶠρ_diffʲs.:($$j) * ᶠgradᵥ_ᶜΦ.components.data.:1
+        # Implicit advection adds a local w² term and couples each face
+        # to the previously solved face through w_prev².
+        @. ᶠa += (1 / ᶠdz)^2 / 2
+        @. ᶠc += (1 - α_b) * ᶠinterp(ᶜρ_diffʲs.:($$j)) * ᶠgradᵥ_ᶜΦ.components.data.:1
 
-            input = @. lazy(tuple(ᶠa, ᶠb, ᶠc, ᶠdz))
-            Operators.column_accumulate!(
-                Y.f.sgsʲs.:($j).u₃,
-                input;
-                init = C3(FT(0)),
-            ) do u₃_prev_face, (a_face, b_face, c_face, dz_face)
+        input = @. lazy(tuple(ᶠa, ᶠb, ᶠc, ᶠdz))
+        Operators.column_accumulate!(
+            Y.f.sgsʲs.:($j).u₃,
+            input;
+            init = C3(FT(0)),
+        ) do u₃_prev_face, (a_face, b_face, c_face, dz_face)
 
-                return C3(
-                    (
-                        -b_face + sqrt(
-                            b_face * b_face -
-                            4 * a_face *
-                            min(0, c_face - (u₃_prev_face[1] / dz_face)^2 / 2),
-                        )
-                    ) / (2 * a_face),
-                )
+            return C3(
+                (
+                    -b_face + sqrt(
+                        b_face * b_face -
+                        4 * a_face *
+                        min(0, c_face - (u₃_prev_face[1] / dz_face)^2 / 2),
+                    )
+                ) / (2 * a_face),
+            )
 
-            end
-        else
-            # Safe quadratic root to avoid cancellation and stay well behaved
-            # when a is small.
-            @. Y.f.sgsʲs.:($$j).u₃ =
-                C3(-2 * min(0, ᶠc) / (ᶠb + sqrt(ᶠb * ᶠb - 4 * ᶠa * min(0, ᶠc))))
         end
     end
 

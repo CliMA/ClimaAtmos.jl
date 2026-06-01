@@ -2,7 +2,7 @@ import ForwardDiff
 import LinearAlgebra: diagind
 
 import ClimaComms
-import ClimaCore.DataLayouts: MArray
+import StaticArrays: MArray
 
 """
     AutoDenseJacobian([max_simultaneous_derivatives])

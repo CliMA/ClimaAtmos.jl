@@ -15,7 +15,7 @@ function viscous_sponge_tendency_uₕ(ᶜuₕ, s)
         return NullBroadcasted()
     end
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜuₕ))
-    zmax = z_max(axes(ᶠz))
+    zmax = Spaces.z_max(axes(ᶠz))
     axis_C12 = (Geometry.Covariant12Axis(),)
     axis_C3 = (Geometry.Covariant3Axis(),)
     # vector Laplacian: ∇²u = ∇·∇u - ∇×(∇×u)
@@ -29,20 +29,20 @@ end
 function viscous_sponge_tendency_u₃(u₃, s)
     s isa Nothing && return NullBroadcasted()
     (; ᶠz) = z_coordinate_fields(axes(u₃))
-    zmax = z_max(axes(ᶠz))
+    zmax = Spaces.z_max(axes(ᶠz))
     return @. lazy(β_viscous(s, ᶠz, zmax) * wdivₕ(gradₕ(u₃.components.data.:1)))
 end
 
 function viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, s)
     s isa Nothing && return NullBroadcasted()
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜρ))
-    zmax = z_max(axes(ᶠz))
+    zmax = Spaces.z_max(axes(ᶠz))
     return @. lazy(β_viscous(s, ᶜz, zmax) * wdivₕ(ᶜρ * gradₕ(ᶜh_tot)))
 end
 
 function viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, s)
     s isa Nothing && return NullBroadcasted()
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜρ))
-    zmax = z_max(axes(ᶠz))
+    zmax = Spaces.z_max(axes(ᶠz))
     return @. lazy(β_viscous(s, ᶜz, zmax) * wdivₕ(ᶜρ * gradₕ(ᶜχ)))
 end

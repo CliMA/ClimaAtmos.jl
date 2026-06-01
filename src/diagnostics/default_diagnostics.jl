@@ -344,23 +344,13 @@ end
 ##################
 # Radiation mode #
 ##################
-function default_diagnostics(
-    ::RRTMGPI.AbstractRRTMGPMode,
-    duration,
-    start_date,
-    t_start;
-    output_writer,
-)
+function _radiation_default_diagnostics(duration, start_date, t_start; output_writer)
     rad_diagnostics = [
-        "rsd",
         "rsdt",
         "rsds",
-        "rsu",
         "rsut",
         "rsus",
-        "rld",
         "rlds",
-        "rlu",
         "rlut",
         "rlus",
     ]
@@ -370,6 +360,30 @@ function default_diagnostics(
     return [average_func(rad_diagnostics...; output_writer, start_date, t_start)...]
 end
 
+function default_diagnostics(
+    ::RRTMGPI.AbstractRRTMGPMode,
+    duration,
+    start_date,
+    t_start;
+    output_writer,
+)
+    return _radiation_default_diagnostics(duration, start_date, t_start; output_writer)
+end
+
+function default_diagnostics(
+    ::RRTMGPI.AllSkyRadiation,
+    duration,
+    start_date,
+    t_start;
+    output_writer,
+)
+    average_func = frequency_averages(duration)
+
+    return [
+        _radiation_default_diagnostics(duration, start_date, t_start; output_writer)...,
+        average_func("clt"; output_writer, start_date, t_start)...,
+    ]
+end
 
 function default_diagnostics(
     ::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
@@ -378,36 +392,24 @@ function default_diagnostics(
     t_start;
     output_writer,
 )
-    rad_diagnostics = [
-        "rsd",
-        "rsdt",
-        "rsds",
-        "rsu",
-        "rsut",
-        "rsus",
-        "rld",
-        "rlds",
-        "rlu",
-        "rlut",
-        "rlus",
-    ]
+    average_func = frequency_averages(duration)
     rad_clearsky_diagnostics = [
-        "rsdcs",
         "rsdscs",
-        "rsucs",
         "rsutcs",
         "rsuscs",
-        "rldcs",
         "rldscs",
-        "rlucs",
         "rlutcs",
     ]
 
-    average_func = frequency_averages(duration)
-
     return [
-        average_func(rad_diagnostics...; output_writer, start_date, t_start)...,
-        average_func(rad_clearsky_diagnostics...; output_writer, start_date, t_start)...,
+        _radiation_default_diagnostics(duration, start_date, t_start; output_writer)...,
+        average_func(
+            "clt",
+            rad_clearsky_diagnostics...;
+            output_writer,
+            start_date,
+            t_start,
+        )...,
     ]
 end
 

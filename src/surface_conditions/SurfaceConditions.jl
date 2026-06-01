@@ -11,7 +11,7 @@ import ..CT1, ..CT2, ..C12, ..CT12, ..C3
 import ..unit_basis_vector_data, ..projected_vector_data
 import ..geopotential
 
-import ClimaCore: DataLayouts, Geometry, Fields
+import ClimaCore: Geometry, Fields
 import ClimaCore.Geometry: ⊗
 import ClimaCore.Utilities: half
 import SurfaceFluxes as SF

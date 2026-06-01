@@ -8,10 +8,14 @@ import LazyBroadcast
 import LazyBroadcast: lazy
 import Thermodynamics as TD
 import Thermodynamics
+import ClimaCore
 import ClimaCore.MatrixFields: @name
 
+import ClimaUtilities
+import ClimaCore: Domains, Spaces, Topologies
+import ClimaDiagnostics
+import RRTMGP
 
-include("compat.jl")
 include(joinpath("parameters", "Parameters.jl"))
 import .Parameters as CAP
 

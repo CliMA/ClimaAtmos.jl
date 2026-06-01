@@ -1,11 +1,6 @@
 initial_condition: GABLS
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
-implicit_sgs_advection: true
-implicit_sgs_entr_detr: true
-implicit_sgs_nh_pressure: true
-implicit_sgs_vertdiff: true
-implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 use_auto_jacobian: true
 update_jacobian_every: stage

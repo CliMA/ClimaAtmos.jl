@@ -10,8 +10,6 @@ import Thermodynamics as TD
 
 using ClimaCore.Utilities: half
 
-import ClimaCore.Fields: ColumnField
-
 """
     constrain_state!(Y, p, t)
 

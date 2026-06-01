@@ -88,89 +88,90 @@ obtained from `turbconv_params` through `CAP.min_area` and `CAP.max_area`.
     a_max = CAP.max_area(turbconv_params)
     min_area_limiter_power = CAP.min_area_limiter_power(turbconv_params)
     max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
+    a_safe = max(eps(FT), a)
     return ifelse(
         entr > detr,
-        (max(0, (1 - a / a_max)))^max_area_limiter_power,
-        (max(0, (1 - a_min / a)))^min_area_limiter_power,
+        (max(0, (1 - a_safe / a_max)))^max_area_limiter_power,
+        (max(0, (1 - a_min / a_safe)))^min_area_limiter_power,
     )
 end
 
 """
-    compute_entrainment(...)
+    compute_entrainment(ᶜentr_vel_scale, ᶜentr_nonvel, ᶜwʲ)
 
-Wrapper around `entrainment` that handles numerical safeguards and shared
-preprocessing before calling the model-specific entrainment formulation.
+Total entrainment rate [1/s] as the sum of a velocity-proportional term
+and a background (time-scale) term:
 
-If the updraft area (or associated mass) becomes numerically negligible,
-entrainment is set to a limiting value to maintain mixing with the
-environment and avoid ill-defined entrainment rates. Otherwise the
-entrainment rate is computed using the selected `entr_model`.
+    entr = entr_vel_scale * |wʲ| + entr_nonvel
+
+`entr_vel_scale` [1/m] and `entr_nonvel` [1/s] are precomputed by
+`entrainment_velocity_scale` and `nonvelocity_entrainment` respectively.
+`ᶜwʲ` is the physical updraft vertical velocity [m/s] (not a difference
+from the environment); the environment velocity is approximated as zero
+when computing the scale (see `set_prognostic_edmf_precomputed_quantities_explicit_closures!`).
 """
-function compute_entrainment(
-    thermo_params,
-    turbconv_params,
-    ᶜz,
-    z_sfc,
-    ᶜp,
-    ᶜρ,
-    ᶜaʲ,
+compute_entrainment(
+    ᶜentr_vel_scale,
+    ᶜentr_nonvel,
     ᶜwʲ,
-    ᶜRHʲ,
-    ᶜbuoyʲ,
-    ᶜw⁰,
-    ᶜRH⁰,
-    ᶜbuoy⁰,
-    ᶜtke,
-    entr_model,
-)
+) = ᶜentr_vel_scale * abs(ᶜwʲ) + ᶜentr_nonvel
 
-    FT = eltype(thermo_params)
-    limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
-    # Entrainment is not well-defined if updraft area is negligible.
-    # Fix at limit_inv_tau to ensure some mixing with the environment.
-    if ᶜaʲ < ϵ_numerics(FT)
-        return limit_inv_tau
-    end
+"""
+    entr_area_limiter_factor(ᶜaʲ, turbconv_params)
 
-    entr = entrainment(
-        thermo_params,
-        turbconv_params,
-        ᶜz,
-        z_sfc,
-        ᶜp,
-        ᶜρ,
-        ᶜaʲ,
-        ᶜwʲ,
-        ᶜRHʲ,
-        ᶜbuoyʲ,
-        ᶜw⁰,
-        ᶜRH⁰,
-        ᶜbuoy⁰,
-        ᶜtke,
-        entr_model,
-    )
+Return a multiplicative limiter for the entrainment rate based on the 
+current subdraft area `ᶜaʲ`.
 
-    return entr
+The factor smoothly damps entrainment as the area approaches 1 (fully
+occupied):
+
+    (1 - clamp(ᶜaʲ, 0, 1))^entr_mult_limiter_coeff
+
+where `entr_mult_limiter_coeff` is obtained from `turbconv_params`.
+"""
+@inline function entr_area_limiter_factor(ᶜaʲ, turbconv_params)
+    FT = eltype(ᶜaʲ)
+    entr_mult_limiter_coeff = CAP.entr_mult_limiter_coeff(turbconv_params)
+    return (FT(1) - min(max(ᶜaʲ, FT(0)), FT(1)))^entr_mult_limiter_coeff
 end
 
 """
-    entrainment(
+    entrainment_velocity_scale(
         thermo_params, turbconv_params, ᶜz, z_sfc, ᶜp, ᶜρ,
         ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ, ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke,
         model_option::AbstractEntrainmentModel,
     )
 
-Calculates the entrainment rate [1/s] based on the specified `model_option`.
+    and
 
-The specific formulation for entrainment depends on the concrete type passed as
+    nonvelocity_entrainment(
+        turbconv_params, ᶜaʲ,
+        model_option::AbstractEntrainmentModel,
+    )
+
+These two functions together decompose the total entrainment rate into
+a velocity-dependent part and a background (time-scale) part:
+
+    entr = entr_vel_scale * abs(wʲ) + entr_nonvel
+
+where `entr` has units of [1/s], `entr_vel_scale` has units of [1/m],
+and `entr_nonvel` has units of [1/s]. `entrainment_velocity_scale` computes
+the velocity-scaling prefactor [1/m] and `nonvelocity_entrainment` computes
+the velocity-independent rate [1/s], both according to the model specified 
+by `model_option`. The total entrainment rate [1/s] is assembled by 
+`compute_entrainment`.
+
+The specific formulation depends on the concrete type passed as
 `model_option`. This argument dispatches to different entrainment models,
-such as `NoEntrainment` (which returns a zero rate), `PiGroupsEntrainment`
-(which uses an entrainment rate based on a linear combination of scaled absolute
-values of non-dimensional Pi-groups and a constant term), or `InvZEntrainment` (a "physically
-inspired" formulation with a term proportional to `1/z`). Each model implements a distinct 
-physical or empirical approach to quantify the entrainment process in updrafts.
+such as `NoEntrainment` (which returns zero entrainment),
+`PiGroupsEntrainment` (which computes an entrainment scale based on
+a linear combination of scaled non-dimensional Pi-groups together with a
+constant background entrainment term), or `InvZEntrainment`
+(a physically inspired formulation with a scale proportional to `1/z`).
+Each model implements a distinct physical or empirical representation
+of entrainment in updrafts.
 
-Arguments (all cell-centered):
+Arguments for `entrainment_velocity_scale` (all cell-centered):
 - `thermo_params`: Thermodynamic parameters.
 - `turbconv_params`: Turbulence convection parameters.
 - `ᶜz`: Height [m].
@@ -185,15 +186,26 @@ Arguments (all cell-centered):
 - `ᶜRH⁰`: Environment relative humidity [-].
 - `ᶜbuoy⁰`: Environment buoyancy [m/s²].
 - `ᶜtke`: Turbulent kinetic energy [m²/s²].
-- `model_option`: An object whose type specifies the entrainment model to use
-                  (e.g., an instance of `NoEntrainment`, `PiGroupsEntrainment`,
-                  or `InvZEntrainment`). This corresponds to the `AbstractEntrainmentModel`
-                  in the function signature.
+- `model_option`: Object specifying the entrainment model
+                  (e.g., `NoEntrainment`, `PiGroupsEntrainment`,
+                  or `InvZEntrainment`).
 
-Returns:
-- Entrainment rate [1/s], computed according to the model selected by `model_option`.
+Arguments for `nonvelocity_entrainment`:
+- `turbconv_params`: Turbulence convection parameters.
+- `ᶜaʲ`: Updraft area fraction [-].
+- `model_option`: Object specifying the entrainment model.
+
+Returns (for each function):
+- `entrainment_velocity_scale`: Velocity-scaling prefactor [1/m].
+- `nonvelocity_entrainment`: Background (velocity-independent) entrainment rate [1/s].
+
+These quantities are combined by `compute_entrainment` as
+
+    entr = entr_vel_scale * abs(w⁰ - wʲ) + entr_nonvel
+
+to obtain the total entrainment rate [1/s].
 """
-function entrainment(
+function entrainment_velocity_scale(
     thermo_params,
     turbconv_params,
     ᶜz,
@@ -213,7 +225,7 @@ function entrainment(
     return zero(eltype(thermo_params))
 end
 
-function entrainment(
+function entrainment_velocity_scale(
     thermo_params,
     turbconv_params,
     ᶜz,
@@ -231,7 +243,6 @@ function entrainment(
     ::PiGroupsEntrainment,
 )
     FT = eltype(thermo_params)
-    entr_inv_tau = CAP.entr_inv_tau(turbconv_params)
 
     elev_above_sfc = ᶜz - z_sfc
     # If elevation above surface is not positive, terms like 1/elev_above_sfc
@@ -265,17 +276,12 @@ function entrainment(
         entr_param_vec[5] * abs(Π₅) +
         entr_param_vec[6]
 
-    inv_timescale_factor = abs(ᶜwʲ - ᶜw⁰) / elev_above_sfc
-
-    entr_mult_limiter_coeff = CAP.entr_mult_limiter_coeff(turbconv_params)
-    area_limiter_factor =
-        (FT(1) - min(max(ᶜaʲ, 0), FT(1)))^entr_mult_limiter_coeff # Ensure ᶜaʲ is clipped to [0,1] for exponent
-
-    entr = area_limiter_factor * (inv_timescale_factor * max(0, pi_sum) + entr_inv_tau)
-    return max(0, entr)
+    area_limiter_factor = entr_area_limiter_factor(ᶜaʲ, turbconv_params)
+    entr_vel_scale = area_limiter_factor * max(0, pi_sum) / elev_above_sfc
+    return max(0, entr_vel_scale)
 end
 
-function entrainment(
+function entrainment_velocity_scale(
     thermo_params,
     turbconv_params,
     ᶜz,
@@ -293,9 +299,45 @@ function entrainment(
     ::InvZEntrainment,
 )
     FT = eltype(thermo_params)
-    entr_mult_limiter_coeff = CAP.entr_mult_limiter_coeff(turbconv_params)
+    entr_vel_scale_param = CAP.entr_coeff(turbconv_params)
+
+    elev_above_sfc = ᶜz - z_sfc
+    # If elevation above surface is not positive, terms like 1/elev_above_sfc
+    # become singular. Model assumes operation above the surface.
+    if elev_above_sfc <= eps(FT)
+        return 0
+    end
+
+    area_limiter_factor = entr_area_limiter_factor(ᶜaʲ, turbconv_params)
+    entr_vel_scale = area_limiter_factor * entr_vel_scale_param / elev_above_sfc
+    return max(0, entr_vel_scale)
+end
+
+function nonvelocity_entrainment(
+    turbconv_params,
+    ᶜaʲ,
+    ::NoEntrainment,
+)
+    return zero(eltype(ᶜaʲ))
+end
+
+function nonvelocity_entrainment(
+    turbconv_params,
+    ᶜaʲ,
+    ::PiGroupsEntrainment,
+)
     entr_inv_tau = CAP.entr_inv_tau(turbconv_params)
-    entr_coeff = CAP.entr_coeff(turbconv_params)
+    area_limiter_factor = entr_area_limiter_factor(ᶜaʲ, turbconv_params)
+    entr_nonvel = area_limiter_factor * entr_inv_tau
+    return max(0, entr_nonvel)
+end
+
+function nonvelocity_entrainment(
+    turbconv_params,
+    ᶜaʲ,
+    ::InvZEntrainment,
+)
+    entr_inv_tau = CAP.entr_inv_tau(turbconv_params)
     min_area_limiter_scale = CAP.min_area_limiter_scale(turbconv_params)
     min_area_limiter_power = CAP.min_area_limiter_power(turbconv_params)
     a_min = CAP.min_area(turbconv_params)
@@ -305,273 +347,138 @@ function entrainment(
     min_area_limiter =
         min_area_limiter_scale * (max(0, a_min - ᶜaʲ) / a_min)^min_area_limiter_power
 
-    elev_above_sfc = ᶜz - z_sfc
-    # Velocity difference term divided by elev_above_sfc; set to zero if elev_above_sfc is 
-    # not positive to prevent division by zero or excessively large values.
-    vel_diff_term = if elev_above_sfc > eps(FT)
-        entr_coeff * abs(ᶜwʲ - ᶜw⁰) / elev_above_sfc
-    else
-        FT(0)
-    end
-
-    area_limiter_factor =
-        (FT(1) - min(max(ᶜaʲ, 0), FT(1)))^entr_mult_limiter_coeff
-
-    entr =
-        area_limiter_factor * (entr_inv_tau + vel_diff_term + min_area_limiter)
-    return max(0, entr)
+    area_limiter_factor = entr_area_limiter_factor(ᶜaʲ, turbconv_params)
+    entr_nonvel = area_limiter_factor * (entr_inv_tau + min_area_limiter)
+    return max(0, entr_nonvel)
 end
 
 """
-    compute_detrainment(...)
+    compute_detrainment(turbconv_params, aʲ, ρaʲ, Δwʲ, Δbuoyʲ,
+                        massflux_vert_div, entr, detr_nonvel, detr_model)
 
-Wrapper around `detrainment` that applies numerical safeguards and common
-post-processing.
+Total detrainment rate [1/s].
 
-If the updraft area fraction `aʲ` becomes numerically negligible,
-detrainment is set to a limiting value to maintain mixing with the
-environment. Otherwise the detrainment rate is computed using the selected
-`detr_model`.
+Calls `detrainment_rate` for the model-specific rate, adds `detr_nonvel`
+(e.g., background detrainment), then applies an area limiter so that near
+`a_min`/`a_max` the net area tendency `(entr - detr)` smoothly approaches zero.
 
-After computing the raw detrainment, an area limiter is applied so that
-near the bounds `a_min` and `a_max` the detrainment approaches entrainment,
-causing the net area tendency `(entr - detr)` to smoothly approach zero.
+Arguments:
+- `turbconv_params`: Turbulence convection parameters.
+- `aʲ`: Updraft area fraction [-].
+- `ρaʲ`: Updraft density-area product [kg/m³].
+- `Δwʲ`: Updraft physical vertical velocity [m/s].
+- `Δbuoyʲ`: Updraft buoyancy (vertical acceleration) [m/s²].
+- `massflux_vert_div`: Vertical divergence of the updraft mass flux [kg/(m³ s)].
+- `entr`: Total entrainment rate [1/s].
+- `detr_nonvel`: Additional (e.g., background) detrainment rate [1/s].
+- `detr_model`: Object specifying the detrainment model.
+
+Returns the total detrainment rate [1/s].
 """
 function compute_detrainment(
-    thermo_params,
     turbconv_params,
-    ᶜz,
-    z_sfc,
-    ᶜp,
-    ᶜρ,
-    ᶜρaʲ,
-    ᶜaʲ,
-    ᶜwʲ,
-    ᶜRHʲ,
-    ᶜbuoyʲ,
-    ᶜw⁰,
-    ᶜRH⁰,
-    ᶜbuoy⁰,
-    ᶜentr,
-    ᶜvert_div,
-    ᶜmassflux_vert_div,
-    ᶜw_vert_div,
-    ᶜtke,
+    aʲ,
+    ρaʲ,
+    Δwʲ,
+    Δbuoyʲ,
+    massflux_vert_div,
+    entr,
+    detr_nonvel,
     detr_model,
 )
 
-    FT = eltype(thermo_params)
-    limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
-    # If ᶜaʲ is negligible, detrainment is not well defined.
-    # Fix at limit_inv_tau to ensure some mixing with the environment.
-    if ᶜaʲ < ϵ_numerics(FT)
-        return limit_inv_tau
-    end
-
-    detr = detrainment(
-        thermo_params,
-        turbconv_params,
-        ᶜz,
-        z_sfc,
-        ᶜp,
-        ᶜρ,
-        ᶜρaʲ,
-        ᶜaʲ,
-        ᶜwʲ,
-        ᶜRHʲ,
-        ᶜbuoyʲ,
-        ᶜw⁰,
-        ᶜRH⁰,
-        ᶜbuoy⁰,
-        ᶜentr,
-        ᶜvert_div,
-        ᶜmassflux_vert_div,
-        ᶜw_vert_div,
-        ᶜtke,
-        detr_model,
-    )
+    detr =
+        detrainment_rate(
+            turbconv_params,
+            ρaʲ,
+            Δwʲ,
+            Δbuoyʲ,
+            massflux_vert_div,
+            detr_model,
+        ) + detr_nonvel
 
     # Adjust detrainment so that near the area bounds it approaches entrainment,
     # causing the net area tendency (entr - detr) to smoothly go to zero.
-    factor = detr_area_limiter_factor(ᶜentr, detr, ᶜaʲ, turbconv_params)
-    return factor * detr + (1 - factor) * ᶜentr
+    factor = detr_area_limiter_factor(entr, detr, aʲ, turbconv_params)
+    return factor * detr + (1 - factor) * entr
 end
 
 """
-    detrainment(
-        thermo_params, turbconv_params, ᶜz, z_sfc, ᶜp, ᶜρ, ᶜρaʲ, ᶜaʲ,
-        ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ, ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜentr, ᶜvert_div,
-        ᶜmassflux_vert_div, ᶜw_vert_div, ᶜtke, model_option::AbstractDetrainmentModel
-    )
+    detrainment_rate(turbconv_params, ᶜρaʲ, ᶜΔwʲ, ᶜΔbuoyʲ, ᶜmassflux_vert_div,
+                     detr_model::AbstractDetrainmentModel)
 
-Calculates the detrainment rate [1/s] based on the specified `model_option`.
+Model-specific detrainment rate [1/s] for a given detrainment model.
 
-The specific formulation for detrainment depends on the concrete type passed as
-`model_option`. This argument dispatches to different detrainment models,
-such as `NoDetrainment` (which returns a zero rate), `PiGroupsDetrainment`
-(which uses non-dimensional Pi-groups and mass flux divergence),
-`BuoyancyVelocityDetrainment` (a physically inspired formulation, based on `buoyancy/vertical velocity`), 
-or `SmoothAreaDetrainment` (based on entrainment and updraft vertical velocity divergence). 
-Each model implements a distinct physical or empirical approach to quantify the detrainment
-process from updrafts.
+This abstract fallback returns zero; concrete subtypes of
+`AbstractDetrainmentModel` should override this method to provide a
+non-trivial rate.
 
-Arguments (all cell-centered):
-- `thermo_params`: Thermodynamic parameters.
+Arguments:
 - `turbconv_params`: Turbulence convection parameters.
-- `ᶜz`: Height [m].
-- `z_sfc`: Surface elevation [m].
-- `ᶜp`: Pressure [Pa].
-- `ᶜρ`: Air density [kg/m³].
-- `ᶜρaʲ`: Updraft effective density (`ρ * a`) [kg/m³].
-- `ᶜaʲ`: Updraft area fraction [-].
-- `ᶜwʲ`: Updraft physical vertical velocity [m/s].
-- `ᶜRHʲ`: Updraft relative humidity [-].
-- `ᶜbuoyʲ`: Updraft buoyancy [m/s²].
-- `ᶜw⁰`: Environment physical vertical velocity [m/s].
-- `ᶜRH⁰`: Environment relative humidity [-].
-- `ᶜbuoy⁰`: Environment buoyancy [m/s²].
-- `ᶜentr`: Entrainment rate [1/s].
-- `ᶜvert_div`: Grid-mean vertical divergence [1/s].
-- `ᶜmassflux_vert_div`: Vertical divergence of updraft mass flux [kg/m²/s²].
-- `ᶜw_vert_div`: Vertical divergence term related to updraft vertical velocity [1/s].
-- `ᶜtke`: Turbulent kinetic energy [m²/s²].
-- `model_option`: An object whose type specifies the detrainment model to use
-                  (e.g., an instance of `NoDetrainment`, `PiGroupsDetrainment`, 
-                  `BuoyancyVelocityDetrainment`, `SmoothAreaDetrainment`, etc.).
-                  This corresponds to the `AbstractDetrainmentModel` in the function signature.
+- `ᶜρaʲ`: Updraft density-area product [kg/m³].
+- `ᶜΔwʲ`: Updraft physical vertical velocity [m/s].
+- `ᶜΔbuoyʲ`: Updraft buoyancy (vertical acceleration) [m/s²].
+- `ᶜmassflux_vert_div`: Vertical divergence of the updraft mass flux [kg/(m³ s)].
+- `detr_model`: Detrainment model dispatch tag.
 
-Returns:
-- Detrainment rate [1/s], computed according to the model selected by `model_option`.
+Returns the model-specific detrainment rate [1/s] (zero for the abstract fallback).
 """
-function detrainment(
-    thermo_params,
+function detrainment_rate(
     turbconv_params,
-    ᶜz,
-    z_sfc,
-    ᶜp,
-    ᶜρ,
     ᶜρaʲ,
-    ᶜaʲ,
-    ᶜwʲ,
-    ᶜRHʲ,
-    ᶜbuoyʲ,
-    ᶜw⁰,
-    ᶜRH⁰,
-    ᶜbuoy⁰,
-    ᶜentr,
-    ᶜvert_div,
+    ᶜΔwʲ,
+    ᶜΔbuoyʲ,
     ᶜmassflux_vert_div,
-    ᶜw_vert_div,
-    ᶜtke,
-    ::NoDetrainment,
+    ::AbstractDetrainmentModel,
 )
-    return zero(eltype(thermo_params))
+    return zero(eltype(ᶜρaʲ))
+end
+function nonvelocity_detrainment(
+    turbconv_params,
+    ᶜaʲ,
+    ::AbstractDetrainmentModel,
+)
+    return zero(eltype(ᶜaʲ))
 end
 
-function detrainment(
-    thermo_params,
+function detrainment_rate(
     turbconv_params,
-    ᶜz,
-    z_sfc,
-    ᶜp,
-    ᶜρ,
     ᶜρaʲ,
-    ᶜaʲ,
-    ᶜwʲ,
-    ᶜRHʲ,
-    ᶜbuoyʲ,
-    ᶜw⁰,
-    ᶜRH⁰,
-    ᶜbuoy⁰,
-    ᶜentr,
-    ᶜvert_div,
+    ᶜΔwʲ,
+    ᶜΔbuoyʲ,
     ᶜmassflux_vert_div,
-    ᶜw_vert_div,
-    ᶜtke,
-    ::PiGroupsDetrainment,
-)
-    FT = eltype(thermo_params)
-    detr_inv_tau = CAP.detr_inv_tau(turbconv_params)
-
-    elev_above_sfc = ᶜz - z_sfc
-    # If elevation above surface is not positive, some Pi-group terms
-    # might be ill-defined or the model assumptions might not hold.
-    if elev_above_sfc <= eps(FT)
-        return 0
-    end
-
-    g = TDP.grav(thermo_params)
-    ref_H = ᶜp / (ᶜρ * g) # Pressure scale height
-
-    Π₁, Π₂, Π₃, Π₄, Π₅ = calculate_pi_groups(
-        elev_above_sfc,
-        ref_H,
-        ᶜaʲ,
-        ᶜwʲ,
-        ᶜRHʲ,
-        ᶜbuoyʲ,
-        ᶜw⁰,
-        ᶜRH⁰,
-        ᶜbuoy⁰,
-        ᶜtke,
-    )
-
-    entr_param_vec = CAP.entr_param_vec(turbconv_params) # Note: Uses indices 7-12 for detrainment
-    pi_sum_detr =
-        entr_param_vec[7] * abs(Π₁) +
-        entr_param_vec[8] * abs(Π₂) +
-        entr_param_vec[9] * abs(Π₃) +
-        entr_param_vec[10] * abs(Π₄) +
-        entr_param_vec[11] * abs(Π₅) +
-        entr_param_vec[12]
-
-    # Detrainment proportional to negative mass flux divergence
-    detr_factor_mass_flux_div = -min(ᶜmassflux_vert_div, FT(0)) / max(eps(FT), ᶜρaʲ)
-    detr = detr_factor_mass_flux_div * max(0, pi_sum_detr) + detr_inv_tau
-    return max(0, detr)
-end
-
-function detrainment(
-    thermo_params,
-    turbconv_params,
-    ᶜz,
-    z_sfc,
-    ᶜp,
-    ᶜρ,
-    ᶜρaʲ,
-    ᶜaʲ,
-    ᶜwʲ,
-    ᶜRHʲ,
-    ᶜbuoyʲ,
-    ᶜw⁰,
-    ᶜRH⁰,
-    ᶜbuoy⁰,
-    ᶜentr,
-    ᶜvert_div,
-    ᶜmassflux_vert_div,
-    ᶜw_vert_div,
-    ᶜtke,
     ::BuoyancyVelocityDetrainment,
 )
-    FT = eltype(thermo_params)
-    detr_inv_tau = CAP.detr_inv_tau(turbconv_params)
-    detr_coeff = CAP.detr_coeff(turbconv_params)
+    FT = eltype(ᶜρaʲ)
     detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
     detr_buoy_inv_tau_max = CAP.detr_buoy_inv_tau_max(turbconv_params)
-    detr_vertdiv_coeff = CAP.detr_vertdiv_coeff(turbconv_params)
     detr_massflux_vertdiv_coeff =
         CAP.detr_massflux_vertdiv_coeff(turbconv_params)
-    max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
-    max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
-    a_max = CAP.max_area(turbconv_params)
 
     # Clip buoyancy time scale to `buoy_inv_time_scale` to avoid too fast detrainment
     # when velocity is small
     buoy_inv_time_scale =
         min(
             detr_buoy_inv_tau_max,
-            abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) / max(eps(FT), abs(ᶜwʲ - ᶜw⁰)),
+            abs(min(ᶜΔbuoyʲ, 0)) / max(eps(FT), abs(ᶜΔwʲ)),
         )
+
+    detr =
+        detr_buoy_coeff * buoy_inv_time_scale -
+        detr_massflux_vertdiv_coeff * min(ᶜmassflux_vert_div, 0) / max(eps(FT), ᶜρaʲ)
+
+    return max(0, detr)
+end
+
+function nonvelocity_detrainment(
+    turbconv_params,
+    ᶜaʲ,
+    ::BuoyancyVelocityDetrainment,
+)
+    detr_inv_tau = CAP.detr_inv_tau(turbconv_params)
+    max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
+    max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
 
     # Extra detrainment for a > a_max that smoothly relaxes the area back
     # toward a_max (0 at a_max, max_area_limiter_scale at a = 1).
@@ -580,45 +487,8 @@ function detrainment(
 
     detr =
         detr_inv_tau +
-        detr_coeff * abs(ᶜwʲ) +
-        detr_buoy_coeff * buoy_inv_time_scale -
-        detr_vertdiv_coeff * min(ᶜvert_div, 0) -
-        detr_massflux_vertdiv_coeff * min(ᶜmassflux_vert_div, 0) / max(eps(FT), ᶜρaʲ) +
         max_area_limiter
 
-    return max(0, detr)
-
-end
-
-function detrainment(
-    thermo_params,
-    turbconv_params,
-    ᶜz,
-    z_sfc,
-    ᶜp,
-    ᶜρ,
-    ᶜρaʲ,
-    ᶜaʲ,
-    ᶜwʲ,
-    ᶜRHʲ,
-    ᶜbuoyʲ,
-    ᶜw⁰,
-    ᶜRH⁰,
-    ᶜbuoy⁰,
-    ᶜentr,
-    ᶜvert_div,
-    ᶜmassflux_vert_div,
-    ᶜw_vert_div,
-    ᶜtke,
-    ::SmoothAreaDetrainment,
-)
-    FT = eltype(thermo_params)
-    # If vertical velocity divergence term is non-negative detrainment is zero.
-    if (ᶜw_vert_div >= 0)
-        detr = FT(0)
-    else
-        detr = ᶜentr - ᶜw_vert_div
-    end
     return max(0, detr)
 end
 
@@ -633,7 +503,6 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
-    (; ᶠu₃⁰) = p.precomputed
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
@@ -668,12 +537,6 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
             @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)
         end
-
-        if p.atmos.sgs_entr_detr_mode == Explicit()
-            @. Yₜ.f.sgsʲs.:($$j).u₃ +=
-                (ᶠinterp(ᶜentrʲ) .+ ᶠinterp(ᶜturb_entrʲ)) *
-                (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)
-        end
     end
     return nothing
 end
@@ -683,9 +546,7 @@ end
 
 Apply first-interior–level entrainment tendencies for each EDMF updraft.
 
-This routine (1) seeds a small positive updraft area fraction when surface
-buoyancy flux is positive—allowing the plume to grow from zero—and  
-(2) adds entrainment tendencies for moist static energy (`mse`) and total
+This routine adds entrainment tendencies for moist static energy (`mse`) and total
 humidity (`q_tot`) in the first model cell.  
 The entrained tracer value is taken from `sgs_scalar_first_interior_bc`.
 """
@@ -794,6 +655,94 @@ function edmfx_first_interior_entr_tendency!(
             entr_int_val * (ᶜq_tot_buoyant_air_int_val - env_q_tot_int_val)
 
     end
+end
+
+"""
+    set_first_cell_entr_detr_bc!(
+        ρaʲ_int, ρʲ_int, entr_nonvel_int, entr_vel_scale_int, detr_nonvel_int,
+        buoyancy_flux, dz_int, surface_area, dt, FT,
+    )
+
+Apply surface boundary conditions for entrainment and detrainment at the first
+model cell for a single EDMF updraft.
+
+When `buoyancy_flux < 0` (convectively stable): the background entrainment and
+entrainment velocity scale are left unchanged; `detr_nonvel` is floored at
+`entr_nonvel` to prevent net area growth from the lower boundary.
+
+When `buoyancy_flux ≥ 0` (convectively unstable): the updraft area is nudged
+toward `surface_area`:
+- `ρaʲ` is seeded so a zero-area plume can start growing.
+- If `a < surface_area`: `entr_nonvel` is set to `(surface_area/a − 1)/dt` and
+  `entr_vel_scale` is set to `2/dz` (the kinematic one-sided estimate of
+  `∂(ρaw)/∂z` at the surface), so entrainment grows the area.
+- If `a ≥ surface_area`: `detr_nonvel` is set to drive area back down;
+  `entr_vel_scale` is still `2/dz`.
+
+!!! note "Two-place first-cell treatment"
+    The first-cell boundary condition is applied in two stages:
+    1. This function sets the input coefficients (bg_entr, entr_coeff, detr_nonvel).
+    2. `update_prognostic_edmfx_entr_detr!` overrides the total detrainment at
+        level 1 to strip the area limiter added by `compute_detrainment`.
+    These two stages should be kept in sync.
+
+Arguments (all level-1 field-value slices unless noted):
+- `ρaʲ_int`             — updraft `ρa` [kg/m³] (read/write; seeded first)
+- `ρʲ_int`              — updraft density [kg/m³] (read-only)
+- `entr_nonvel_int`         — background entrainment [1/s] (read/write)
+- `entr_vel_scale_int`  — entrainment velocity scale [1/m] (read/write)
+- `detr_nonvel_int`     — additional detrainment [1/s] (read/write)
+- `aʲ_int`              — scratch for draft area [-] (write-only; pre-allocated by caller)
+- `buoyancy_flux`       — surface buoyancy flux [m²/s³] (read-only scalar field values)
+- `dz_int`              — first-cell height [m] (read-only)
+- `surface_area`        — target updraft area fraction [-] (scalar)
+- `dt`                  — timestep [s] (scalar)
+- `FT`                  — float type
+"""
+function set_first_cell_entr_detr_bc!(
+    ρaʲ_int,
+    ρʲ_int,
+    entr_nonvel_int,
+    entr_vel_scale_int,
+    detr_nonvel_int,
+    aʲ_int,
+    buoyancy_flux,
+    dz_int,
+    surface_area,
+    dt,
+    ::Type{FT},
+) where {FT}
+    # Seed a small positive area when buoyancy flux is non-negative so that
+    # an initially zero-area plume can grow toward `surface_area`.
+    @. ρaʲ_int += ifelse(buoyancy_flux < 0,
+        FT(0),
+        max(FT(0), ρʲ_int * eps(FT) - ρaʲ_int),
+    )
+    @. aʲ_int = draft_area(ρaʲ_int, ρʲ_int)
+
+    @. entr_nonvel_int = ifelse(
+        buoyancy_flux < 0 || aʲ_int >= FT(surface_area),
+        entr_nonvel_int,
+        (FT(surface_area) / aʲ_int - 1) / FT(dt),
+    )
+    # Replace entrainment coefficient with the kinematic estimate 2/dz when
+    # buoyancy flux is positive so the total entrainment includes the advective
+    # area flux ∂(ρaw)/∂z at the lower boundary (one-sided, zero below surface).
+    @. entr_vel_scale_int = ifelse(
+        buoyancy_flux < 0,
+        entr_vel_scale_int,
+        FT(2) / dz_int,
+    )
+    @. detr_nonvel_int = ifelse(
+        buoyancy_flux < 0,
+        max(detr_nonvel_int, entr_nonvel_int),
+        ifelse(
+            aʲ_int < FT(surface_area),
+            FT(0),
+            entr_nonvel_int - (FT(surface_area) / aʲ_int - 1) / FT(dt),
+        ),
+    )
+    return nothing
 end
 
 # limit entrainment and detrainment rates for prognostic EDMFX
