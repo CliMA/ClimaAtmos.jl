@@ -3,7 +3,7 @@
 #####
 
 import ClimaCore
-import ClimaCore: Fields
+import ClimaCore: Fields, Spaces
 
 """
     initialize_implicit_stage_problem!(Y, p, dtγ)
@@ -122,9 +122,9 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
 
     (; params) = p
     (; turbconv_model, rayleigh_sponge) = p.atmos
-    (; ᶠρ_diffʲs, ᶜρʲs) = p.precomputed
+    (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜturb_entrʲs, ᶜentrʲs) = p.precomputed
+    (; ᶜturb_entrʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvelʲs) = p.precomputed
     FT = eltype(p.params)
 
     turbconv_params = CAP.turbconv_params(params)
@@ -154,8 +154,12 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         @. ᶠb = 1 / dtγ
         @. ᶠc = -1 * (Y.f.sgsʲs.:($$j).u₃.components.data.:1 / dtγ)
 
-        # Implicit entrainment/detrainment contributes a linear sink in w.
-        @. ᶠb += ᶠinterp((ᶜentrʲs.:($$j) + ᶜturb_entrʲs.:($$j)) * ᶜρ_over_ρa⁰)
+        # Implicit entrainment: the velocity-dependent coefficient contributes a
+        # quadratic sink (∝ w²) and the background/turbulent entrainment contributes
+        # a linear sink (∝ w), after applying the approximation w₀ - w ≈ -(ρ/ρa⁰) w.
+        @. ᶠa += ᶠinterp(ᶜentr_vel_scaleʲs.:($$j) * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
+        @. ᶠb +=
+            ᶠinterp((ᶜentr_nonvelʲs.:($$j) + ᶜturb_entrʲs.:($$j)) * ᶜρ_over_ρa⁰)
 
         # Implicit NH pressure drag contributes a quadratic sink in w².
         if p.atmos.edmfx_model.nh_pressure isa Val{true}
@@ -173,14 +177,14 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         # Optional Rayleigh sponge adds extra linear damping near the top.
         if !isnothing(rayleigh_sponge)
             ᶠz = Fields.coordinate_field(Y.f.u₃).z
-            zmax = z_max(axes(ᶠz))
+            zmax = Spaces.z_max(axes(ᶠz))
             @. ᶠb += β_rayleigh_u₃(rayleigh_sponge, ᶠz, zmax)
         end
 
         # Implicit advection adds a local w² term and couples each face
         # to the previously solved face through w_prev².
         @. ᶠa += (1 / ᶠdz)^2 / 2
-        @. ᶠc += (1 - α_b) * ᶠρ_diffʲs.:($$j) * ᶠgradᵥ_ᶜΦ.components.data.:1
+        @. ᶠc += (1 - α_b) * ᶠinterp(ᶜρ_diffʲs.:($$j)) * ᶠgradᵥ_ᶜΦ.components.data.:1
 
         input = @. lazy(tuple(ᶠa, ᶠb, ᶠc, ᶠdz))
         Operators.column_accumulate!(

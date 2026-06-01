@@ -956,9 +956,9 @@ function compute_ogw_drag(
     h_frac,
 )
     FT = eltype(Y)
-    center_space = Fields.axes(Y.c)
+    center_space = axes(Y.c)
     h_elem = Spaces.n_elements_per_panel_direction(center_space)
-    face_space = Fields.axes(Y.f)
+    face_space = axes(Y.f)
     ᶜsurface_space = Fields.level(center_space, 1)
     J_bot = Fields.level(Fields.local_geometry_field(face_space).J, half)
     Δz_bot = Fields.level(Fields.Δz_field(face_space), half)

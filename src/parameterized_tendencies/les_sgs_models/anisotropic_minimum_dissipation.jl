@@ -5,7 +5,7 @@
 import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
 import ClimaCore: Geometry
-import LinearAlgebra: tr, norm_sqr
+import LinearAlgebra: norm_sqr
 
 """
     set_amd_precomputed_quantities!(Y, p)

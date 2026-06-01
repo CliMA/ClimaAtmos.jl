@@ -9,13 +9,16 @@ engine: copilot
 permissions: read-all
 strict: true
 network:
-  allowed: [defaults, chrome, github, local, threat-detection, "172.30.0.30"]
+  allowed: [defaults, chrome, github, local, threat-detection, "172.30.0.30", julia]
 tools:
   bash: true
   cache-memory: true
   github:
     toolsets: [default, pull_requests]
   web-fetch:
+runtimes:
+  julia:
+    version: "1.11"
 safe-outputs:
   noop:
   create-pull-request-review-comment:
