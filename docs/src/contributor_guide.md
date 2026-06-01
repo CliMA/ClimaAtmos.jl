@@ -220,14 +220,54 @@ wrapper around `JuliaFormatter`).
 
 ### Pre-commit hooks (recommended)
 
-Set up the git pre-commit hooks (managed with [`prek`](https://prek.j178.dev) via
-[`uv`](https://docs.astral.sh/uv/)) to auto-format and trim trailing whitespace
-on commit, so you never see a formatter-only CI failure. The full setup —
-installing `uv`/`prek`, `prek install`, and how the pinned `.dev/format/`
-environment matches CI — lives in the shared CliMA guide and is the single source
-of truth:
+To avoid ever seeing a formatter-only CI failure, set up the git pre-commit
+hooks defined in `.pre-commit-config.yaml`. They run on each `git commit`
+against your staged files and:
 
-- [docs/dev-guides/code-quality/code_style.md](dev-guides/code-quality/code_style.md) §1, "Pre-commit hooks".
+* run `JuliaFormatter` from a dedicated, version-pinned environment
+  (`.dev/format/`) so the result matches the
+  [JuliaFormatter CI check](https://github.com/CliMA/ClimaAtmos.jl/blob/main/.github/workflows/julia_formatter.yml)
+  regardless of which `JuliaFormatter` version is in your base environment, and
+* trim trailing whitespace that `JuliaFormatter` leaves behind (for example in
+  comments).
+
+The hooks are managed with [`prek`](https://prek.j178.dev), a fast drop-in
+replacement for `pre-commit`. `prek` is a Python tool; the easiest way to get it
+without touching your Julia setup is via [`uv`](https://docs.astral.sh/uv/):
+
+``` sh
+# Install uv (see https://docs.astral.sh/uv/getting-started/installation/)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install prek as a standalone tool
+uv tool install prek
+```
+
+Then, from the repository root, install the git hooks once:
+
+``` sh
+prek install
+```
+
+That's it — the hooks now run automatically on every commit. `julia` must be on
+your `PATH`; the first run instantiates and precompiles `.dev/format/`, which
+takes a minute, and is fast thereafter.
+
+To format and clean the whole repository on demand (handy after a large change):
+
+``` sh
+prek run --all-files
+```
+
+The original `pre-commit` works too if you already have it (`pip install
+pre-commit` / `uv tool install pre-commit`, then `pre-commit install`); the
+config file is shared.
+
+!!! note
+
+    When a hook reformats a staged file, the commit is aborted and the file is
+    left changed on disk — this is expected. Review the changes, `git add` them,
+    and commit again.
 
 ## Updating environments
 

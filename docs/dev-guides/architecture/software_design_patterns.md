@@ -228,9 +228,31 @@ acc = zero(x)
 
 ## 17. Replace data-dependent `if/else` with `ifelse` inside GPU kernels
 
-A data-dependent `if/else` in a GPU kernel causes warp divergence; `ifelse(cond, a, b)` computes branchlessly. Both arguments are always evaluated, so guard mathematically invalid operations (`log`, `sqrt`, division) *before* the `ifelse`, not inside a `begin...end` block inside it.
+On SIMT architectures, threads in a warp execute in lockstep. A data-dependent `if/else` serializes the two branches across threads (warp divergence). Use `ifelse(cond, a, b)` to compute branchlessly.
 
-For the full explanation — SIMT semantics, why `ifelse` does not skip work, and the worked `log(x)` example — see [GPU Performance Guide §1](../performance/gpu_performance.md). For choosing the right floor in the pre-guard, see [Numerical Robustness §1–2](../performance/numerical_robustness.md).
+Note that `ifelse` does not skip the un-taken branch's work: every thread evaluates both `a` and `b` and the result of one is then selected. The benefit is removing the divergent branch predicate, not reducing computation; an expensive branch is paid on every thread regardless.
+
+**Critical**: both arguments to `ifelse` are always evaluated. Guard mathematically invalid operations (`log`, `sqrt`, division) *before* passing them as arguments — never inside a `begin...end` block inside `ifelse`. See [Numerical Robustness §1–2](../performance/numerical_robustness.md) for choosing the right floor (it is not `eps(FT)` in general).
+
+Bad:
+
+```julia
+# Thread divergence; log(x) also evaluates when x ≤ 0
+result = if x > 0
+    log(x) + 1
+else
+    zero(x)
+end
+```
+
+Preferred:
+
+```julia
+# Branchless; safe_x guards log
+safe_x = max(x, eps(eltype(x)))
+log_term = log(safe_x) + one(x)
+result = ifelse(x > zero(x), log_term, zero(x))
+```
 
 ## 18. Prefer functors over closures in broadcast or high-loop contexts
 
@@ -306,7 +328,29 @@ end
 
 ## 22. Use SafeTestsets.jl to avoid leaky unit tests
 
-Prefer `@safetestset` over `@testset` + nested `include` so variables and imports do not leak between test files. See [testing_and_validation.md](../infrastructure/testing_and_validation.md) for the pattern and per-repo conventions.
+When unit testing, prefer `@safetestset` over standard `@testset` with nested `include` to prevent variables and imports from leaking between test files. Model repos with many independent test files (ClimaAtmos, ClimaLand, ClimaCoupler, ClimaTimeSteppers) use `@safetestset`. ClimaCore uses a custom `UnitTest` driver (`test/tabulated_tests.jl`) that achieves the same isolation. Physics-library repos (Thermodynamics, CloudMicrophysics, SurfaceFluxes) use plain `@testset`s; if you add a new test file there, prefer `@safetestset` for new isolation-sensitive tests.
+
+Bad:
+
+```julia
+@testset "MyPackage" begin
+    include("test_module_A.jl")
+    include("test_module_B.jl")
+end
+```
+
+Preferred:
+
+```julia
+using SafeTestsets
+
+@safetestset "Test module A" begin
+    @time include("test_module_A.jl")
+end
+@safetestset "Test module B" begin
+    @time include("test_module_B.jl")
+end
+```
 
 ## 23. Do not use list comprehensions
 
@@ -324,17 +368,3 @@ x = map(f, (a, b, c))
 # Preferred: input is an SVector → map returns an SVector
 x = map(f, SVector(a, b, c))
 ```
-
-## 24. Limit use of @generated functions
-
-Generated functions are extremely versatile and helpful for debugging, but they have significantly higher compilation latencies than non-generated functions.
-
-To minimize compilation time, only use generated functions when absolutely necessary. This includes the following situations:
-
-- Guaranteeing inlining or unrolling of code, to avoid compilation errors when the compiler fails to perform these optimizations.
-- Dynamically constructing a `String` inside a GPU kernel, which requires runtime allocations.
-- Dynamically constructing a `Symbol` inside a GPU kernel, since `Symbol`s are implemented as interned strings.
-
-## Self-correction
-
-If this guide is discovered to be stale or missing a pattern, update it.

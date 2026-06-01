@@ -1,12 +1,6 @@
 # Isolated, version-pinned environment for the `julia-formatter` pre-commit hook
 # (see ../../.pre-commit-config.yaml).
 #
-# ╔══════════════════════════════════════════════════════════════════════════╗
-# ║ SYNCED FROM CliMA/DeveloperGuides — DO NOT EDIT IN THIS REPO.            ║
-# ║ This file is overwritten on every dev-guides sync. To change it, open a  ║
-# ║ PR at https://github.com/CliMA/DeveloperGuides (sync/managed/).          ║
-# ╚══════════════════════════════════════════════════════════════════════════╝
-#
 # JuliaFormatter is pinned to v1 here so the hook matches the CI formatter check
 # in .github/workflows/julia_formatter.yml (`version: '1'`), independent of
 # whatever JuliaFormatter version lives in your base environment (v2 is now the

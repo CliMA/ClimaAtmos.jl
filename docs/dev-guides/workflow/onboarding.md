@@ -25,7 +25,7 @@ Pkg.status()         # sanity-check the resolved versions
 import <RepoName>    # confirm the package loads
 ```
 
-If `Pkg.instantiate()` fails, see §8 below for the standard recovery sequence.
+If `Pkg.instantiate()` fails, see [dependency_management.md §6](../architecture/dependency_management.md) for the standard recovery sequence.
 
 ## 3. Keep a long-running REPL — and avoid restarting it
 
@@ -58,30 +58,11 @@ using JuliaFormatter
 format(".")
 ```
 
-CI pins a specific JuliaFormatter major version that varies between repos — see [code_style.md §1](../code-quality/code_style.md) for the version-matching procedure and the recommended pre-commit hook.
+CI pins a specific JuliaFormatter major version; check the JuliaFormatter workflow file under `.github/workflows/` (named `JuliaFormatter.yml` in some repos, `julia_formatter.yml` in others) and install the matching version into your base environment to avoid CI-only formatting diffs. See [code_style.md](../code-quality/code_style.md) and [ci_triage.md §10](ci_triage.md).
 
-## 5. Git workflow
+A pre-commit hook that runs `format(".")` is a cheap way to never see a formatter-only CI failure — JuliaFormatter ships [pre-commit instructions](https://domluna.github.io/JuliaFormatter.jl/stable/integrations/#pre-commit).
 
-Prefer **rebasing** over merging to keep history linear:
-
-```bash
-git fetch origin main
-git rebase origin/main
-```
-
-When starting a new task, base your branch on the latest remote `main`:
-
-```bash
-git stash
-git checkout main
-git pull origin main
-git checkout -b <initials>/<short-description>   # e.g. ts/fix-precip-bug
-git stash pop
-```
-
-Each commit should be a logical unit of work and keep the model compilable.
-
-## 6. The first PR loop
+## 5. The first PR loop
 
 A typical first PR follows this rhythm:
 
@@ -94,38 +75,7 @@ A typical first PR follows this rhythm:
 
 For PR-review conventions, see [review.md](review.md). For what AI agents may and may not do without explicit approval, see [agent_autonomy.md](agent_autonomy.md).
 
-## 7. Removing a feature
-
-When a feature is deprecated or removed, follow the full cleanup protocol:
-
-1. **Source removal**: delete implementation code, structs, and methods.
-2. **Configuration purge**: remove options from config files and parsers; ensure that choosing a removed option triggers a clear `error` listing valid alternatives.
-3. **Test cleanup**: delete targeted tests; update integration tests to use supported alternatives. Mirror changes between `src/` and `test/`.
-4. **Dependency slimming**: if a package was used only by the removed feature, drop it from both `[deps]` and `[compat]` ([dependency_management.md §5](../architecture/dependency_management.md)).
-5. **Documentation update**: update docstrings and docs pages to reflect the removal.
-6. **`NEWS.md` entry**: under `![][badge-💥breaking]` if it was a public surface ([changelogs_and_versions.md](../code-quality/changelogs_and_versions.md)).
-
-## 8. Resolving a stuck environment
-
-`Pkg` occasionally fails to find a satisfiable version set — typically after a `[compat]` change. The cheapest-to-most-expensive recovery sequence:
-
-```julia
-import Pkg
-Pkg.instantiate()   # 1. make the manifest match Project.toml
-Pkg.resolve()       # 2. re-run the resolver against current compat bounds
-Pkg.update()        # 3. move every direct dep to its newest compat-allowed version
-```
-
-If those do not converge, one package is usually pinned at a version that no longer fits. Remove and re-add it so the resolver picks a fresh version:
-
-```julia
-Pkg.rm("OffendingPackage")
-Pkg.add("OffendingPackage")
-```
-
-Two mutually-constraining packages should be removed and re-added together. `Pkg.status()` shows current pins; `Pkg.resolve()` prints the resolver's diagnostic — read that before guessing.
-
-## 9. Useful Julia tooling beyond the basics
+## 6. Useful Julia tooling beyond the basics
 
 These all live in your *base* environment, not the project's:
 
@@ -137,7 +87,7 @@ These all live in your *base* environment, not the project's:
   - Add `using OhMyREPL` to `~/.julia/config/startup.jl` to ensure it loads with every REPL session.
 - **[Kaimon.jl](https://github.com/kahliburke/Kaimon.jl)** - provides AI agents with direct access to the Julia REPL, with your standard tools like `Revise` and `Infiltrator` for quick iteration and debugging
 
-## 10. Knowing where to look
+## 7. Knowing where to look
 
 - The Julia manual: [docs.julialang.org](https://docs.julialang.org/en/v1/manual/getting-started/). The [Variables](https://docs.julialang.org/en/v1/manual/variables/) through [Documentation](https://docs.julialang.org/en/v1/manual/documentation/) sections cover what you need for day-to-day work.
 - [Modern Julia Workflows](https://modernjuliaworkflows.org/writing/) — a current, opinionated guide to REPL-driven Julia development.

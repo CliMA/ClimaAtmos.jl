@@ -1,6 +1,0 @@
-# Consumer-side overrides for the CliMA/DeveloperGuides sync. This file is yours
-# and is never synced. See https://github.com/CliMA/DeveloperGuides.
-
-# ClimaAtmos keeps its repo-specific guide at docs/clima_atmos_specific.md, so
-# don't scaffold (or resurrect) the generic docs/repo_specific_guide.md stub.
-skip_scaffold = ["docs/repo_specific_guide.md"]

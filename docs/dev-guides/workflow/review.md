@@ -11,7 +11,7 @@ Work in this order:
 1. Review changed files first.
 2. Step to the nearest controlling compute paths only when needed to confirm behavior or risk.
 3. Use local evidence: changed code, nearby tests, call sites, docs, and config usage.
-4. Check [software_design_patterns.md](../code-quality/software_design_patterns.md) for changed code and any adjacent code whose behavior is directly affected.
+4. Check [software_design_patterns.md](../architecture/software_design_patterns.md) for changed code and any adjacent code whose behavior is directly affected.
 5. Report only evidence-backed findings or clearly labeled risks/open questions.
 
 ## Review checklist
@@ -42,13 +42,51 @@ Work in this order:
 
 ## Severity rules
 
-Use exactly these labels: `high`, `medium`, `low`. Choose the severity based on user-visible and scientific impact, not on how easy the fix is.
+Use exactly these labels for every finding: `high`, `medium`, `low`.
 
-| Label    | When to use                                                                                                      | Examples                                                                                                                                                                                                                     |
-|:---------|:-----------------------------------------------------------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `high`   | Correctness or science regressions, hot-path performance breakage, compatibility breaks with clear impact.       | Wrong numerics; broken conservation; restart non-bit-reproducibility; silently changed defaults; public API broken without deprecation; GPU runs broken; new allocation or type instability in a tendency/Jacobian hot path. |
-| `medium` | Likely regressions, plausible science risk without definitive proof, missing safeguards around changed behavior. | Plausible numerical drift; missing test coverage for changed behavior; undocumented config or diagnostic change; formatting/style violation that hides a real issue.                                                         |
-| `low`    | Issues with no expected behavior impact.                                                                         | Style, naming, or documentation nits; refactor suggestions with no behavior impact. May be batched into one bullet.                                                                                                          |
+Choose the severity based on the user-visible and scientific impact, not on how easy the fix is.
+
+### `high`
+
+Use `high` for correctness or science regressions, hot-path performance breakage, or compatibility breaks with clear impact.
+
+Examples that belong in `high`:
+
+- Wrong numerics.
+- Broken conservation.
+- Restart non-bit-reproducibility.
+- Silently changed defaults that alter a published config.
+- Public API breaking changes without deprecation.
+- GPU runs broken.
+- Allocations or regressions in a tendency hot path.
+- Allocations or regressions in a Jacobian hot path.
+- Type instability inside a hot path.
+- A new allocation introduced inside a hot path.
+
+### `medium`
+
+Use `medium` for likely regressions, plausible science risk without definitive proof, or missing safeguards around changed behavior.
+
+Examples that belong in `medium`:
+
+- Plausible numerical drift.
+- Missing test coverage for changed behavior.
+- Undocumented config change.
+- Undocumented diagnostic change.
+- A formatting or style violation that hides a real issue.
+
+### `low`
+
+Use `low` for issues with no expected behavior impact.
+
+Examples that belong in `low`:
+
+- Style nits.
+- Naming nits.
+- Documentation nits.
+- Refactor suggestions with no behavior impact.
+
+Low-severity items may be batched into a single bullet when that improves readability.
 
 ## Output schema (must follow)
 
@@ -90,7 +128,3 @@ Then list residual risks briefly.
 - Restart/reproducibility, conservation, diagnostics, and implicit solver changes are especially sensitive.
 - Allocation benchmarks (typically under `perf/`) are not run in CI; allocation regressions must be caught in review using the `@allocated` pattern.
 - If evidence is insufficient, report a risk or open question; do not invent failures.
-
-## Self-correction
-
-If this guide is discovered to be stale or missing a pattern, update it.

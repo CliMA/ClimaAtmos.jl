@@ -48,14 +48,14 @@ One bullet per change. Entries under a released version are final and should not
 
 Some repos (notably `ClimaAtmos`, `ClimaCore`, `ClimaTimeSteppers`) prefix entries with a badge that classifies the change. The badge definitions live at the bottom of `NEWS.md` and must not be removed.
 
-| Badge                              | When to use                                                   |
-|:-----------------------------------|:--------------------------------------------------------------|
-| `![][badge-💥breaking]`            | Breaking changes: removed functions/types, API changes        |
-| `![][badge-🔥behavioralΔ]`         | Behavioral changes: new model, different defaults             |
-| `![][badge-🤖precisionΔ]`          | Machine-precision changes: reordered arithmetic               |
-| `![][badge-🚀performance]`         | Performance improvements: fewer allocations, better inference |
-| `![][badge-✨feature/enhancement]` | New features                                                  |
-| `![][badge-🐛bugfix]`              | Bug fixes                                                     |
+| Badge | When to use |
+|:---|:---|
+| `![][badge-💥breaking]` | Breaking changes: removed functions/types, API changes |
+| `![][badge-🔥behavioralΔ]` | Behavioral changes: new model, different defaults |
+| `![][badge-🤖precisionΔ]` | Machine-precision changes: reordered arithmetic |
+| `![][badge-🚀performance]` | Performance improvements: fewer allocations, better inference |
+| `![][badge-✨feature/enhancement]` | New features |
+| `![][badge-🐛bugfix]` | Bug fixes |
 
 Smaller library repos (`CloudMicrophysics`, `SurfaceFluxes`) use plain-text entries without badges. Match the convention already in the repo's `NEWS.md`.
 
@@ -97,15 +97,13 @@ version = "0.38.4"
 
 CliMA packages follow [Julia's modified Semantic Versioning](https://pkgdocs.julialang.org/v1/compatibility/) — the same scheme the General registry enforces. The rules differ for pre-1.0 and post-1.0 packages.
 
-In practice, some CliMA packages deliberately diverge from strict SemVer. ClimaLand, despite being post-1.0, continues to treat the MINOR slot as the breaking slot and reserves a major bump (2.0) for a major milestone (e.g., aligned with a paper submission). Release cadence is also driven by downstream-coupling needs rather than API-stability milestones. Don't infer "no breaking changes" from the absence of a major bump — consult `NEWS.md` for the authoritative record.
-
-| Package state | Bump                          | Format              | Meaning                                                                                                              |
-|:--------------|:------------------------------|:--------------------|:---------------------------------------------------------------------------------------------------------------------|
+| Package state | Bump | Format | Meaning |
+|:--------------|:-----|:-------|:--------|
 | **Post-1.0**  | Major (`1.x.y` → `2.0.0`)     | `MAJOR.MINOR.PATCH` | Breaking change to the public API (removed/renamed symbol, changed signature, changed default that affects results). |
-|               | Minor (`1.2.x` → `1.3.0`)     | `MAJOR.MINOR.PATCH` | Non-breaking new feature or additive API surface.                                                                    |
-|               | Patch (`1.2.0` → `1.2.1`)     | `MAJOR.MINOR.PATCH` | Bug fix or internal change with no API or behavioral effect on callers.                                              |
-| **Pre-1.0**   | "Major" (`0.14.x` → `0.15.0`) | `0.MINOR.PATCH`     | Breaking change — when `MAJOR == 0`, the `MINOR` slot is the breaking slot.                                          |
-|               | "Patch" (`0.14.5` → `0.14.6`) | `0.MINOR.PATCH`     | Anything non-breaking — both new features and bug fixes share this slot pre-1.0.                                     |
+|               | Minor (`1.2.x` → `1.3.0`)     | `MAJOR.MINOR.PATCH` | Non-breaking new feature or additive API surface. |
+|               | Patch (`1.2.0` → `1.2.1`)     | `MAJOR.MINOR.PATCH` | Bug fix or internal change with no API or behavioral effect on callers. |
+| **Pre-1.0**   | "Major" (`0.14.x` → `0.15.0`) | `0.MINOR.PATCH`     | Breaking change — when `MAJOR == 0`, the `MINOR` slot is the breaking slot. |
+|               | "Patch" (`0.14.5` → `0.14.6`) | `0.MINOR.PATCH`     | Anything non-breaking — both new features and bug fixes share this slot pre-1.0. |
 
 Most CliMA packages are still pre-1.0, so for them a `0.X.0` bump signals a breaking change. A handful of packages use a two-component `0.X` form, in which case `X` is the breaking slot. Check the existing `version` line in the package's `Project.toml` before bumping to confirm which regime applies.
 
@@ -122,10 +120,6 @@ A change is breaking if it alters the **public surface** of the package:
 A change is *not* breaking just because it shifts bit-level results — performance refactors, fused broadcasts, and reordered arithmetic are flagged with `🤖precisionΔ` in `NEWS.md` (see §1.4), not by bumping the breaking slot.
 
 Test for breaking-ness: *can a downstream package, pinned to the current compat, keep working without modification?* If the answer is no, bump the breaking slot.
-
-### 2.4 Merging a PR with breaking changes
-
-When merging a PR that contains breaking changes, ensure that the `NEWS.md` entry for the change is properly tagged with `![][badge-💥breaking]`. It is your responsibility to open PRs in downstream repositiories that will be affected when the breaking release is made. Ideally, the PRs in the downstream repositories should be opened before the breaking release is made. They can be tested with the new changes by `dev`ing the branch of the upstream package's repo.
 
 ---
 

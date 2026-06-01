@@ -12,7 +12,16 @@ The canonical home for type-stability tooling (`@inferred`, `JET.@report_opt`, `
 
 ## Allocation regression tests
 
-After implementing or modifying hot-path code, verify zero allocations with the warm-up + `@allocated == 0` regression pattern documented in [allocation_debugging.md §1](../performance/allocation_debugging.md). Allocation benchmarks in `perf/` are not run in CI; allocation regressions must be caught at review time.
+After implementing or modifying hot-path code, verify zero allocations:
+
+```julia
+# Warm up (forces compilation)
+remaining_tendency!(Yₜ, Y, p, t)
+# Assert zero allocations on the hot path
+@test (@allocated remaining_tendency!(Yₜ, Y, p, t)) == 0
+```
+
+Allocation benchmarks in `perf/` are not run automatically in CI. Allocation regressions must be caught during review.
 
 ## Aqua.jl quality checks
 
@@ -70,24 +79,29 @@ When adding new physics functions, add corresponding AD tests. See [AD Compatibi
 
 ## GPU test files
 
-Some CliMA packages maintain a separate `test/runtests_gpu.jl` entry point for GPU-specific tests (Thermodynamics.jl, SurfaceFluxes.jl); others dispatch within `runtests.jl` using `ARGS` or via Buildkite CI jobs (ClimaAtmos, ClimaCore, ClimaTimeSteppers). For the standard `ArrayType` selection pattern and `CUDA.allowscalar(false)` setup, see [clima_comms.md §4](clima_comms.md).
-
-## Test isolation: SafeTestsets
-
-Prefer `@safetestset` over `@testset` + nested `include` so variables and imports do not leak between test files:
+Some CliMA packages maintain a separate `test/runtests_gpu.jl` entry point for GPU-specific tests (for example, Thermodynamics.jl, SurfaceFluxes.jl). Others dispatch within their main `runtests.jl` using `ARGS` or Buildkite CI jobs (for example, ClimaAtmos, ClimaCore, ClimaTimeSteppers). The standard array-type selection pattern:
 
 ```julia
-using SafeTestsets
-
-@safetestset "Test module A" begin
-    @time include("test_module_A.jl")
-end
-@safetestset "Test module B" begin
-    @time include("test_module_B.jl")
+# Determine array type from command-line args or CUDA availability
+arg = get(ARGS, 1, "")
+if arg == "Array"
+    ArrayType = Array
+elseif arg == "CuArray"
+    import CUDA
+    ArrayType = CUDA.CuArray
+    CUDA.allowscalar(false)
+else
+    # Default: use GPU if available
+    try
+        import CUDA
+        ArrayType = CUDA.functional() ? CUDA.CuArray : Array
+    catch
+        ArrayType = Array
+    end
 end
 ```
 
-Model repos with many independent test files (ClimaAtmos, ClimaLand, ClimaCoupler, ClimaTimeSteppers) use `@safetestset`. ClimaCore uses a custom `UnitTest` driver (`test/tabulated_tests.jl`) that achieves the same isolation. Physics-library repos (Thermodynamics, CloudMicrophysics, SurfaceFluxes) use plain `@testset`s; if you add a new isolation-sensitive test file there, prefer `@safetestset`. (See also [SDP 22](../code-quality/software_design_patterns.md).)
+GPU tests should use `CUDA.allowscalar(false)` to catch accidental scalar indexing into GPU arrays.
 
 ## Scientifically meaningful tests
 

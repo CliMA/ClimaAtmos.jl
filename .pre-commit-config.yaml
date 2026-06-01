@@ -1,18 +1,11 @@
-# Canonical pre-commit configuration for CliMA Julia packages.
-#
-# ╔══════════════════════════════════════════════════════════════════════════╗
-# ║ SYNCED FROM CliMA/DeveloperGuides — DO NOT EDIT IN THIS REPO.            ║
-# ║ This file is overwritten on every dev-guides sync. To change it, open a  ║
-# ║ PR at https://github.com/CliMA/DeveloperGuides (sync/managed/).          ║
-# ╚══════════════════════════════════════════════════════════════════════════╝
+# Canonical pre-commit configuration for ClimaAtmos.jl.
 #
 # Works with either `prek` (https://prek.j178.dev, recommended) or the original
 # `pre-commit`. Install the git hooks once with `prek install`, then the hooks
 # below run automatically on `git commit` against your staged files. Run them
 # over the whole repo with `prek run --all-files`.
 #
-# Setup instructions live in docs/dev-guides/code-quality/code_style.md
-# ("Pre-commit hooks").
+# Setup instructions live in docs/src/contributor_guide.md ("Pre-commit hooks").
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
