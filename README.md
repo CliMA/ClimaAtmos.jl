@@ -1,118 +1,71 @@
-<!-- Title -->
-<h1 align="center">
-  <img src="logo.svg" width="180px"> <br>
-ClimaAtmos.jl
-</h1>
+# DeveloperGuides
 
-<!-- description -->
-<p align="center">
-  <strong>Atmosphere components of the CliMA software stack.</strong>
-</p>
+Shared engineering standards, architectural patterns, and development guidelines for human and AI developers across the [CliMA](https://clima.caltech.edu) ecosystem.
 
-[![docsbuild][docs-bld-img]][docs-bld-url]
-[![dev][docs-dev-img]][docs-dev-url]
-[![ghaci][gha-ci-img]][gha-ci-url]
-[![buildkite][bk-ci-img]][bk-ci-url]
-[![codecov][codecov-img]][codecov-url]
-[![discussions][discussions-img]][discussions-url]
-[![col-prac][col-prac-img]][col-prac-url]
-[![downloads][downloads-img]][downloads-url]
+|             |                                        |
+|------------:|:---------------------------------------|
+| **License** | [![license][license-img]][license-url] |
 
-[docs-bld-img]: https://github.com/CliMA/ClimaAtmos.jl/workflows/Documentation/badge.svg
-[docs-bld-url]: https://github.com/CliMA/ClimaAtmos.jl/actions?query=workflow%3ADocumentation
+[license-img]: https://img.shields.io/github/license/CliMA/DeveloperGuides
+[license-url]: https://github.com/CliMA/DeveloperGuides/blob/main/LICENSE
 
-[docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
-[docs-dev-url]: https://CliMA.github.io/ClimaAtmos.jl/dev/
+## Usage
 
-[gha-ci-img]: https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml/badge.svg
-[gha-ci-url]: https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml
+DeveloperGuides is included as a **Git subtree** in CliMA repositories at the standardized path `docs/dev-guides/`. The consuming repo keeps its own `AGENTS.md` at the root, which references `docs/dev-guides/AGENTS.md` (the shared guide index) plus a repo-specific guide (e.g. `docs/clima_atmos_specific.md`). See the [`AGENTS.md`](AGENTS.md) for the full guide index, and [`templates/`](templates/) for ready-to-copy starter files (root `AGENTS.md`, repo-specific guide skeleton, monthly sync workflow).
 
-[bk-ci-img]: https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg/?branch=main
-[bk-ci-url]: https://buildkite.com/clima/climaatmos-ci
+```bash
+# Add the subtree to a new consumer repo
+git subtree add --prefix docs/dev-guides \
+    https://github.com/CliMA/DeveloperGuides.git main --squash
 
-[codecov-img]: https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg
-[codecov-url]: https://codecov.io/gh/CliMA/ClimaAtmos.jl
-
-[col-prac-img]: https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet?style=flat-square
-[col-prac-url]: https://github.com/SciML/ColPrac
-
-[discussions-img]: https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg?style=flat-square
-[discussions-url]: https://github.com/CliMA/ClimaAtmos.jl/discussions
-
-[downloads-img]: https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FClimaAtmos&query=total_requests&suffix=%2Ftotal&label=Downloads
-[downloads-url]: http://juliapkgstats.com/pkg/ClimaAtmos
-
-ClimaAtmos.jl is the atmosphere components of the CliMA software stack. We strive for a user interface that makes ClimaAtmos.jl as friendly and intuitive to use as possible, allowing users to focus on the science.
-
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/778b0c14-a5d7-4907-82db-6d1f8a0c5b07" alt="animation (1)">
-</p>
-
-Condensed water path from a global simulation using diagnostic EDMF and 0M microphysics, initialized with ERA5 on 8-31-25 00Z. Output every 30 minutes; ran for ~4 days.
-
-## Installation instructions
-
-Recommended Julia: Stable release v1.11.6
-
-ClimaAtmos.jl is a [registered Julia package](https://julialang.org/packages/). To install
-
-```julia
-julia> using Pkg
-
-julia> Pkg.add("ClimaAtmos")
+# Pull the latest guides manually (most repos automate this monthly via update_dev_guides.yml)
+git subtree pull --prefix docs/dev-guides \
+    https://github.com/CliMA/DeveloperGuides.git main --squash \
+    -m "chore: sync dev guides from central repo"
 ```
 
-Alternatively, download the `ClimaAtmos`
-[source](https://github.com/CliMA/ClimaAtmos.jl) with:
+> [!NOTE]
+> **Subtree pitfalls.**
+> 
+> - DeveloperGuides ships its own `AGENTS.md`, `LICENSE`, and `README.md` at the repo root, which conflict with the consumer's own root files during `git subtree add`. Resolve by keeping the consumer's versions: `git checkout --ours AGENTS.md LICENSE README.md && git add … && git rebase --continue`.
+> - `git subtree pull` exits with an error when there are no new commits upstream. In an automated workflow, append `|| true` so the step does not fail on months with no DeveloperGuides changes.
 
-```
-$ git clone https://github.com/CliMA/ClimaAtmos.jl.git
-```
+### Contributing back
 
-Now change into the `ClimaAtmos.jl` directory with
+Edits to shared guidelines belong here, not in the vendored copy inside a consumer repo. Open PRs against `CliMA/DeveloperGuides`; once merged, the next subtree pull propagates them to every consumer.
 
-```
-$ cd ClimaAtmos.jl
-```
+## Directory Structure
 
-To use ClimaAtmos, you need to instantiate all dependencies with:
-
-```
-$ julia --project
-julia> ]
-(ClimaAtmos) pkg> instantiate
-```
-
-## Running instructions
-
-Currently, the simulations are stored in the `test` folder. Run all the test cases with the following commands.
-
-First, launch Julia from the `ClimaAtmos.jl/` directory with the project active:
-
-```
-$ julia --project
+```text
+├── AGENTS.md                  # Master index for AI agents
+├── architecture/              # System design, layering, contracts
+├── performance/               # GPU, type stability, numerics, AD
+├── code-quality/              # Style, docstrings, changelogs
+├── infrastructure/            # Testing, device abstraction
+├── workflow/                  # Agent autonomy, PR review
+└── templates/                 # Starter files for consumer repos
 ```
 
-Then, in the Julia REPL, switch to the package manager by pressing `]` and run the tests:
+## Integration with the CliMA Ecosystem
 
-```pkg
-(ClimaAtmos) pkg> test
-```
+DeveloperGuides is the central source of truth for engineering standards across [CliMA](https://github.com/CliMA), including:
 
-Or run from the command line:
-
-```
-$ julia --project -e 'using Pkg; Pkg.test()'
-```
-
-If you run into issues when running the test suite this way, please open an issue.
+- [ClimaAtmos](https://github.com/CliMA/ClimaAtmos.jl)
+- [ClimaCore](https://github.com/CliMA/ClimaCore.jl)
+- [ClimaLand](https://github.com/CliMA/ClimaLand.jl)
+- [ClimaOcean](https://github.com/CliMA/ClimaOcean.jl)
+- [ClimaCoupler](https://github.com/CliMA/ClimaCoupler.jl)
+- [Thermodynamics](https://github.com/CliMA/Thermodynamics.jl)
+- [CloudMicrophysics](https://github.com/CliMA/CloudMicrophysics.jl)
+- [SurfaceFluxes](https://github.com/CliMA/SurfaceFluxes.jl)
+- [ClimaTimeSteppers](https://github.com/CliMA/ClimaTimeSteppers.jl)
 
 ## Contributing
 
-If you're interested in contributing to the development of ClimaAtmos we want your help no matter how big or small a contribution you make! It's always great to have new people look at the code with fresh eyes: you will see errors that other developers have missed.
+- Each guide has a **Self-correction** section: if you discover a guide is stale or missing a pattern, update it directly.
+- New guides should be placed in the appropriate category directory and added to [`AGENTS.md`](AGENTS.md).
+- Cross-references between guides should use relative paths (e.g., `../performance/gpu_performance.md`).
 
-Let us know by [opening an issue](https://github.com/CliMA/ClimaAtmos.jl/issues/new) if you'd like to work on a new feature.
+## Getting Help
 
-Here is the rule of thumb [coding style](https://clima.github.io/ClimateMachine.jl/latest/DevDocs/CodeStyle/) and [unicode usage restrictions](https://clima.github.io/ClimateMachine.jl/latest/DevDocs/AcceptableUnicode/).
-
-For more information, check out our [contributor's guide](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/).
+For questions or suggestions, open an issue on [GitHub](https://github.com/CliMA/DeveloperGuides/issues).

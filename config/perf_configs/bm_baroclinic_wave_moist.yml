@@ -1,9 +1,0 @@
-apply_sem_quasimonotone_limiter: true
-h_elem: 12
-z_elem: 25
-dt: "1secs"
-t_end: "1mins"
-log_progress: false
-initial_condition: "MoistBaroclinicWave"
-disable_surface_flux_tendency: true
-microphysics_model: "0M"

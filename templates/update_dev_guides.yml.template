@@ -1,0 +1,57 @@
+# Drop this file into a consumer repo at `.github/workflows/update_dev_guides.yml`.
+# It pulls the latest DeveloperGuides into `docs/dev-guides/` via `git subtree`
+# on the 1st of every month and opens a PR when there are changes.
+#
+# Prerequisites:
+#   - DeveloperGuides has already been added as a subtree at `docs/dev-guides/`:
+#       git subtree add --prefix docs/dev-guides \
+#           https://github.com/CliMA/DeveloperGuides.git main --squash
+#   - The repo's GitHub Actions are allowed to open pull requests
+#     (Settings → Actions → General → "Allow GitHub Actions to create and
+#     approve pull requests").
+
+name: Update Dev Guides
+on:
+  schedule:
+    - cron: '0 0 1 * *'  # 1st of every month at 00:00 UTC
+  workflow_dispatch:
+
+jobs:
+  update-subtree:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history is required for subtree pull
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Pull latest dev guides
+        run: |
+          git checkout -b update-dev-guides
+          # Exit 0 when there is nothing new to merge (subtree pull errors in that case).
+          git subtree pull --prefix docs/dev-guides \
+              https://github.com/CliMA/DeveloperGuides.git main --squash \
+              -m "chore: sync dev guides from central repo" || true
+
+      - name: Check for updates
+        id: check
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.check.outputs.changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git push -f origin update-dev-guides
+          gh pr create --title "chore: sync dev guides with central repo" \
+                       --body "Automated PR to sync \`docs/dev-guides\` with the latest changes from \`CliMA/DeveloperGuides\`." \
+                       --base main --head update-dev-guides || true
