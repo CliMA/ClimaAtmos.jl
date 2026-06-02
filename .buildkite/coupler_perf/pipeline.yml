@@ -22,6 +22,8 @@ steps:
     command:
       - git clone https://github.com/CliMA/ClimaCoupler.jl.git $COUPLER_PATH && bash -c "cd $COUPLER_PATH && git checkout $COUPLER_COMMIT"
       - "echo $$JULIA_DEPOT_PATH"
+      # Update package registry, since dev installs do not do that with a manifest
+      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.Registry.update()'"
       - echo "--- Instantiate AMIP env"
       # Instantiate and dev install ClimaCore
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
