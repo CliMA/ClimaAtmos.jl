@@ -41,10 +41,11 @@ ClimaAtmos.Setups.face_initial_condition
 
 ## `surface_condition`
 
-Returns surface boundary data for the setup. The return value can be:
-- A `SurfaceConditions.SurfaceState` (static surface conditions)
-- A callable `(surface_coordinates, interior_z, t) -> SurfaceState` (time-varying)
-- `nothing` (falls through to config-based surface setup)
+Returns surface boundary data for the setup as a NamedTuple
+`(; flux_scheme, temperature, overrides)`. Any field may be `nothing` to fall
+through to the config-based default. See the
+[Surface Conditions](@ref "Surface Conditions") page for what each field means
+and the available options.
 
 Not all setups need this — only those that prescribe case-specific surface
 properties (e.g., roughness length, surface fluxes, surface temperature).

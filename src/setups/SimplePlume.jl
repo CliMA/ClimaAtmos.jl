@@ -28,10 +28,11 @@ end
 
 function surface_condition(::SimplePlume, params)
     FT = eltype(params)
-    parameterization = MoninObukhov(;
-        z0 = FT(1e-4), θ_flux = FT(8e-2), q_flux = FT(0), ustar = FT(0.28),
-    )
-    return SurfaceState(;
-        parameterization, T = FT(310), p = FT(101500), q_vap = FT(0.02245),
+    return (;
+        flux_scheme = MoninObukhov(;
+            z0 = FT(1e-4), θ_flux = FT(8e-2), q_flux = FT(0), ustar = FT(0.28),
+        ),
+        temperature = AnalyticTemperature(Returns(FT(310))),
+        overrides = SurfaceBoundaryOverrides(p = FT(101500), q_vap = FT(0.02245)),
     )
 end

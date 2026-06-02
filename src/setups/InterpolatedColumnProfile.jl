@@ -45,9 +45,12 @@ end
 
 function surface_condition(::InterpolatedColumnProfile, params)
     FT = eltype(params)
-    parameterization = MoninObukhov(; z0 = FT(1e-4))
-    return SurfaceState(; parameterization)
+    return (;
+        flux_scheme = MoninObukhov(; z0 = FT(1e-4)),
+        temperature = nothing,
+        overrides = nothing,
+    )
 end
 
 insolation_model(::InterpolatedColumnProfile) = ExternalTVInsolation()
-surface_temperature_model(::InterpolatedColumnProfile) = ExternalTVColumnSST()
+surface_temperature_model(::InterpolatedColumnProfile) = ExternalTemperature()

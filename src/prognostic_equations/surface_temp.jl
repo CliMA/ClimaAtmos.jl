@@ -1,9 +1,11 @@
 #####
-##### Couples the atmospheric model with a slab surface model 
+##### Couples the atmospheric model with a slab surface model
 #####
 
+using .SurfaceConditions: SurfaceTemperature, SlabOceanTemperature
+
 """
-    surface_precipitation_tendency!(Yₜ, Y, p, t, surface_model, microphysics_model)
+    surface_precipitation_tendency!(Yₜ, Y, p, t, temperature, microphysics_model)
 
 Applies the surface water and energy deposition from precipitation.
 
@@ -14,10 +16,10 @@ removal, preserving conservation across IMEX stages.
 """
 surface_precipitation_tendency!(Yₜ, Y, p, t, _, _) = nothing
 
-surface_precipitation_tendency!(Yₜ, Y, p, t, ::SlabOceanSST, ::DryModel) = nothing
+surface_precipitation_tendency!(Yₜ, Y, p, t, ::SlabOceanTemperature, ::DryModel) = nothing
 
 function surface_precipitation_tendency!(
-    Yₜ, Y, p, t, slab::SlabOceanSST, microphysics_model,
+    Yₜ, Y, p, t, slab::SlabOceanTemperature, microphysics_model,
 )
     FT = eltype(Y)
 
@@ -36,16 +38,16 @@ function surface_precipitation_tendency!(
 end
 
 """
-    surface_temp_tendency!(Yₜ, Y, p, t, surface_model)
+    surface_temp_tendency!(Yₜ, Y, p, t, temperature)
 
 Computes the tendency for the prognostic surface temperature (`Y.sfc.T`) and,
 if applicable, prognostic surface water content (`Y.sfc.water`), based on
 surface energy and water fluxes. All fluxes are defined as positive when directed
 from the surface to the atmosphere (upward).
 
-This function is dispatched based on the type of `surface_model`:
-- `::PrescribedSST`: No tendency is computed (surface temperature is fixed).
-- `::SlabOceanSST` (slab model): Calculates tendencies due to:
+Dispatched on the surface temperature type:
+- Anything other than `SlabOceanTemperature`: no tendency (T is fixed/diagnosed).
+- `SlabOceanTemperature` (slab model): calculates tendencies due to:
     - Net upward radiative flux at the surface.
     - Net upward turbulent surface energy flux (sensible + latent heat).
     - Net ocean heat flux divergence in the slab (Q-flux), if enabled.
@@ -55,9 +57,9 @@ Precipitation surface deposition (energy and water) is handled separately by
 `surface_precipitation_tendency!`, which is called from both the implicit and
 explicit tendency paths.
 """
-surface_temp_tendency!(Yₜ, Y, p, t, ::PrescribedSST) = nothing
+surface_temp_tendency!(Yₜ, Y, p, t, ::SurfaceTemperature) = nothing
 
-function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
+function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanTemperature)
     FT = eltype(Y)
     params = p.params
 
@@ -72,7 +74,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
 
     # 1. Radiative energy surface fluxes
     if !isnothing(p.atmos.radiation_mode)
-        # ᶠradiation_flux is positive for net upward flux at the surface 
+        # ᶠradiation_flux is positive for net upward flux at the surface
         # (SW_up - SW_down + LW_up - LW_down)
         (; ᶠradiation_flux) = p.radiation
         sfc_rad_e_flux = Spaces.level(ᶠradiation_flux, half).components.data.:1
@@ -91,7 +93,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
     end
 
     # 3. Idealized Q-fluxes (parameterization of horizontal ocean energy flux divergence),
-    # following Merlis et al. (2013), "Hadley Circulation Response to Orbital Precession. 
+    # following Merlis et al. (2013), "Hadley Circulation Response to Orbital Precession.
     # Part II: Subtropical Continent.", J. Climate, 26, https://doi.org/10.1175/JCLI-D-12-00149.1
     if q_flux_enabled
         ϕ₀ = slab.ϕ₀

@@ -669,19 +669,33 @@ function AtmosSurface(
 ) where {FT}
     pa = config.parsed_args
 
-    sfc_temperature = Setups.surface_temperature_model(setup_type)
+    # Resolve setup-provided surface pieces (flux_scheme, temperature, overrides)
+    setup_pieces =
+        isnothing(setup_type) ?
+        (; flux_scheme = nothing, temperature = nothing, overrides = nothing) :
+        Setups.surface_condition(setup_type, params)
 
-    ps_name = pa["prognostic_surface"]
-    surface_model =
-        if ps_name == "PrescribedSST"
-            PrescribedSST()
-        elseif ps_name == "SlabOceanSST"
-            SlabOceanSST()
-        else
-            error(
-                """Uncaught prognostic_surface `$ps_name`. Expected: "PrescribedSST" | "SlabOceanSST".""",
-            )
-        end
+    temperature = if pa["prognostic_surface"] == "SlabOceanSST"
+        SurfaceConditions.SlabOceanTemperature{FT}()
+    elseif pa["prognostic_surface"] == "PrescribedSST"
+        @something(setup_pieces.temperature, Setups.surface_temperature_model(setup_type))
+    else
+        error(
+            """Uncaught prognostic_surface `$(pa["prognostic_surface"])`. Expected: "PrescribedSST" | "SlabOceanSST".""",
+        )
+    end
+
+    flux_scheme = if !isnothing(setup_pieces.flux_scheme)
+        setup_pieces.flux_scheme
+    elseif pa["surface_setup"] == "PrescribedSurface"
+        nothing
+    else
+        getproperty(SurfaceConditions, Symbol(pa["surface_setup"]))()(params)
+    end
+
+    boundary_overrides = @something(
+        setup_pieces.overrides, SurfaceConditions.SurfaceBoundaryOverrides()
+    )
 
     surface_albedo =
         if pa["albedo_model"] == "ConstantAlbedo"
@@ -697,5 +711,7 @@ function AtmosSurface(
             error("Uncaught surface albedo model `$(pa["albedo_model"])`.")
         end
 
-    return AtmosSurface(; sfc_temperature, surface_model, surface_albedo)
+    return AtmosSurface(;
+        flux_scheme, temperature, boundary_overrides, surface_albedo,
+    )
 end

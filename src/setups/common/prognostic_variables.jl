@@ -208,18 +208,14 @@ end
 # ============================================================================
 
 """
-    surface_prognostic_variables(local_geometry, surface_model)
+    surface_prognostic_variables(local_geometry, temperature)
 
 Pointwise function returning a NamedTuple of surface prognostic variables.
-Follows the same broadcast-over-local-geometry pattern as
-`center_prognostic_variables` and `face_prognostic_variables`.
-
-- `PrescribedSST`: returns empty NamedTuple (no surface prognostic state)
-- `SlabOceanSST`: returns `(; T, water)` — latitude-dependent SST if available,
-  otherwise constant 300K; water depth initialized to zero.
+Only `SlabOceanTemperature` introduces surface prognostic state (`T`, `water`).
 """
-surface_prognostic_variables(local_geometry, ::PrescribedSST) = (;)
-function surface_prognostic_variables(local_geometry, ::SlabOceanSST)
+function surface_prognostic_variables(
+    local_geometry, ::SurfaceConditions.SlabOceanTemperature,
+)
     FT = Geometry.float_type(local_geometry.coordinates)
     coord = local_geometry.coordinates
     T = if :lat in propertynames(coord)
@@ -230,10 +226,13 @@ function surface_prognostic_variables(local_geometry, ::SlabOceanSST)
     return (; T, water = FT(0))
 end
 
-# PrescribedSST has no prognostic surface state, so omit sfc from FieldVector
-surface_kwargs(surface_space, ::PrescribedSST) = (;)
-function surface_kwargs(surface_space, sm)
-    sfc_ic(lg) = surface_prognostic_variables(lg, sm)
+# Only SlabOceanTemperature carries prognostic surface state, other
+# temperature types omit `sfc` from the FieldVector entirely.
+surface_kwargs(surface_space, ::SurfaceConditions.SurfaceTemperature) = (;)
+function surface_kwargs(
+    surface_space, t::SurfaceConditions.SlabOceanTemperature,
+)
+    sfc_ic(lg) = surface_prognostic_variables(lg, t)
     return (; sfc = sfc_ic.(Fields.local_geometry_field(surface_space)))
 end
 

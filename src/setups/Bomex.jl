@@ -67,14 +67,16 @@ end
 
 function surface_condition(::Bomex, params)
     FT = eltype(params)
-    parameterization = MoninObukhov(;
+    flux_scheme = MoninObukhov(;
         z0 = FT(1e-4),
         θ_flux = FT(8e-3),
         q_flux = FT(5.2e-5),
         ustar = FT(0.28),
     )
-    return SurfaceState(;
-        parameterization, T = FT(300.4), p = FT(101500), q_vap = FT(0.02245),
+    return (;
+        flux_scheme,
+        temperature = AnalyticTemperature(Returns(FT(300.4))),
+        overrides = SurfaceBoundaryOverrides(p = FT(101500), q_vap = FT(0.02245)),
     )
 end
 

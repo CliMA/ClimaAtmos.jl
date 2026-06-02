@@ -44,16 +44,14 @@ function center_initial_condition(setup::ShipwayHill2012, local_geometry, params
 end
 
 function surface_condition(::ShipwayHill2012, params)
-    function surface_state(surface_coordinates, interior_z, t)
-        FT = eltype(surface_coordinates)
-        T = FT(297.9)
-        p = FT(100700)
-        rv_0 = FT(0.015)
-        q_vap = rv_0 / (1 + rv_0)
-        parameterization = SurfaceConditions.ExchangeCoefficients(; Cd = FT(0), Ch = FT(0))
-        return SurfaceState(; parameterization, T, p, q_vap)
-    end
-    return surface_state
+    FT = eltype(params)
+    rv_0 = FT(0.015)
+    q_vap = rv_0 / (1 + rv_0)
+    return (;
+        flux_scheme = ExchangeCoefficients(; Cd = FT(0), Ch = FT(0)),
+        temperature = AnalyticTemperature(Returns(FT(297.9))),
+        overrides = SurfaceBoundaryOverrides(p = FT(100700), q_vap = q_vap),
+    )
 end
 
 prescribed_flow_model(::ShipwayHill2012, ::Type{FT}) where {FT} =

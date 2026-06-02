@@ -31,7 +31,6 @@ setup_type = CA.get_setup_type(config.parsed_args, params.thermodynamics_params)
 atmos = CA.get_atmos(config, params; setup_type)
 grid = CA.get_grid(config.parsed_args, params, config.comms_ctx)
 spaces = CA.get_spaces(grid)
-surface_setup = CA.get_surface_setup(config.parsed_args; setup_type)
 hspace = Spaces.horizontal_space(spaces.center_space)
 
 Y = CA.Setups.initial_state(

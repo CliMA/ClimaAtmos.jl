@@ -47,26 +47,46 @@ const T2 = 290
     FT = eltype(Y)
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    # Override p.sfc_setup with a Field of SurfaceStates. The value of T is
-    # irrelevant, since it will get updated.
-    surface_state = CA.SurfaceConditions.SurfaceState(;
-        parameterization = CA.SurfaceConditions.MoninObukhov(;
-            z0m = FT(z0m),
-            z0b = FT(z0b),
-        ),
-        T = FT(NaN),
-        gustiness = FT(gustiness),
-        beta = FT(beta),
+    # Coupler pattern: build an AtmosSurface with a CoupledTemperature whose
+    # field the driver writes into between steps, plus per-cell boundary
+    # overrides for gustiness/beta. Re-build the atmos with this surface and
+    # overwrite p.atmos / p.sfc_setup.
+    sfc_space = Spaces.level(Y.f, half)
+    T_field = similar(sfc_space, FT)
+    @. T_field = FT(NaN)
+    overrides = CA.SurfaceConditions.SurfaceBoundaryOverrides(;
+        gustiness = FT(gustiness), beta = FT(beta),
     )
-    sfc_setup = similar(Spaces.level(Y.f, half), typeof(surface_state))
-    @. sfc_setup = (surface_state,)
+    overrides_field = similar(sfc_space, typeof(overrides))
+    @. overrides_field = (overrides,)
+
+    new_surface = CA.AtmosSurface(
+        CA.SurfaceConditions.MoninObukhov(; z0m = FT(z0m), z0b = FT(z0b)),
+        CA.SurfaceConditions.CoupledTemperature(T_field),
+        overrides_field,
+        p.atmos.surface.surface_albedo,
+    )
+    # AtmosModel is immutable, so swapping in `new_surface` requires rebuilding
+    # the whole struct positionally — the kwarg form would reset every other
+    # field (microphysics, radiation, ...) to its default and lose the config.
+    a = p.atmos
+    new_atmos = CA.AtmosModel{
+        typeof(a.water), typeof(a.scm_setup), typeof(a.radiation),
+        typeof(a.turbconv), typeof(a.prescribed_flow), typeof(a.gravity_wave),
+        typeof(a.vertical_diffusion), typeof(a.sponge), typeof(new_surface),
+        typeof(a.numerics), typeof(a.chemistry),
+    }(
+        a.water, a.scm_setup, a.radiation, a.turbconv, a.prescribed_flow,
+        a.gravity_wave, a.vertical_diffusion, a.sponge, new_surface, a.numerics,
+        a.chemistry, a.disable_surface_flux_tendency,
+    )
     p_overwritten = CA.AtmosCache(
         p.dt,
-        p.atmos,
+        new_atmos,
         p.numerics,
         p.params,
         p.core,
-        sfc_setup,
+        overrides_field,
         p.ghost_buffer,
         p.precomputed,
         p.scratch,
@@ -82,15 +102,13 @@ const T2 = 290
         p.conservation_check,
     )
 
-    # Test that set_precomputed_quantities! can be used to update the surface
-    # temperature to T1 and then to T2.
-    @. sfc_setup.T = FT(T1)
+    @. T_field = FT(T1)
     CA.set_precomputed_quantities!(Y, p_overwritten, t)
-    sfc_T = p.precomputed.sfc_conditions.T_sfc
+    sfc_T = p_overwritten.precomputed.sfc_conditions.T_sfc
     @test all(isequal(T1), parent(sfc_T))
-    @. sfc_setup.T = FT(T2)
+    @. T_field = FT(T2)
     CA.set_precomputed_quantities!(Y, p_overwritten, t)
-    sfc_T = p.precomputed.sfc_conditions.T_sfc
+    sfc_T = p_overwritten.precomputed.sfc_conditions.T_sfc
     @test all(isequal(T2), parent(sfc_T))
 end
 

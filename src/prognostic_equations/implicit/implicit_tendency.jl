@@ -26,7 +26,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             Y,
             p,
             t,
-            p.atmos.surface_model,
+            p.atmos.surface.temperature,
             p.atmos.microphysics_model,
         )
     end

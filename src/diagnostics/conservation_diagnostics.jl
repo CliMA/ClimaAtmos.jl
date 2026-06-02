@@ -53,10 +53,10 @@ add_diagnostic_variable!(
 # Total energy of the slab ocean (scalar)
 ###
 compute_energyo!(out, state, cache, time) =
-    compute_energyo!(out, state, cache, time, cache.atmos.surface_model)
+    compute_energyo!(out, state, cache, time, cache.atmos.surface.temperature)
 compute_energyo!(_, _, _, _, model) = error_diagnostic_variable("energyo", model)
 
-function compute_energyo!(out, state, _, _, surface_model::SlabOceanSST)
+function compute_energyo!(out, state, _, _, surface_model::SlabOceanTemperature)
     sfc_cρh = surface_model.ρ_ocean * surface_model.cp_ocean * surface_model.depth_ocean
     energyo = horizontal_integral_at_boundary(state.sfc.T .* sfc_cρh)
     isnothing(out) && return [energyo]
@@ -72,13 +72,14 @@ add_diagnostic_variable!(short_name = "energyo", units = "J",
 # Total water of the slab ocean (scalar)
 ###
 compute_watero!(out, state, cache, time) = compute_watero!(
-    out, state, cache, time, cache.atmos.microphysics_model, cache.atmos.surface_model,
+    out, state, cache, time, cache.atmos.microphysics_model,
+    cache.atmos.surface.temperature,
 )
 compute_watero!(_, _, _, _, microphysics_model, surface_model) =
     error_diagnostic_variable("Can only compute total water of the ocean \
-                               with a moist model and with SlabOceanSST")
+                               with a moist model and with SlabOceanTemperature")
 
-function compute_watero!(out, state, _, _, ::MoistMicrophysics, ::SlabOceanSST)
+function compute_watero!(out, state, _, _, ::MoistMicrophysics, ::SlabOceanTemperature)
     watero = horizontal_integral_at_boundary(state.sfc.water)
     isnothing(out) && return [watero]
     out .= watero

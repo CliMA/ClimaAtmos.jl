@@ -37,20 +37,20 @@ import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 import ..EDOnlyEDMFX
 import ..n_mass_flux_subdomains
-import ..PrescribedSST
-import ..SlabOceanSST
 import ..Parameters.ClimaAtmosParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
 
 # Model types returned by setup interface methods
-import ..ZonallySymmetricSST
 import ..GCMForcing, ..ISDACForcing
 import ..GCMDrivenInsolation, ..ExternalTVInsolation
-import ..RCEMIPIIInsolation, ..RCEMIPIISST
-import ..ExternalTVColumnSST
+import ..RCEMIPIIInsolation
 import ..ShipwayHill2012VelocityProfile
 import ..RadiationDYCOMS, ..RadiationTRMM_LBA, ..RadiationISDAC
-import ..SurfaceConditions: MoninObukhov, SurfaceState
+import ..SurfaceConditions
+import ..SurfaceConditions:
+    MoninObukhov, ExchangeCoefficients, HeatFluxes,
+    SurfaceBoundaryOverrides,
+    AnalyticTemperature, ExternalTemperature
 
 # ============================================================================
 # Layer 1 interface — implemented by each setup
@@ -114,16 +114,12 @@ coriolis_forcing(setup, ::Type{FT}) where {FT} = nothing
 """
     surface_condition(setup, params)
 
-Return the surface state for this setup, or `nothing`.
-
-The return value may be:
-- A `SurfaceState` (static surface conditions)
-- A callable `(surface_coordinates, interior_z, t) -> SurfaceState` (time-varying)
-- `nothing` (falls through to config-based surface condition)
-
-Default: `nothing`.
+Return a NamedTuple `(; flux_scheme, temperature, overrides)` describing the
+surface for this setup. Any field can be `nothing` to fall through to the
+config/default. Used by `AtmosSurface(::AtmosConfig, params, FT; setup_type)`.
 """
-surface_condition(setup, params) = nothing
+surface_condition(setup, params) =
+    (; flux_scheme = nothing, temperature = nothing, overrides = nothing)
 
 # ============================================================================
 # Model interface — optional, returns model objects directly
@@ -148,13 +144,36 @@ Default: `nothing`.
 insolation_model(setup) = nothing
 
 """
+    zonally_symmetric_temperature(coordinates, surface_temp_params, t)
+
+Default analytic surface-temperature formula. For LatLongZPoint coordinates,
+returns the canonical aquaplanet profile from Neale and Hoskins (2000); for
+other geometries it returns a constant 300 K (assume latitude-0 box).
+"""
+function zonally_symmetric_temperature(coordinates, surface_temp_params, _)
+    (; z) = coordinates
+    FT = eltype(z)
+    return FT(300)
+end
+function zonally_symmetric_temperature(
+    coordinates::Geometry.LatLongZPoint, surface_temp_params, _,
+)
+    (; lat, z) = coordinates
+    FT = eltype(lat)
+    return FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2)) - FT(6.5e-3) * z
+end
+
+"""
     surface_temperature_model(setup)
 
-Return the surface temperature model for this setup.
+Return the default `SurfaceConditions.SurfaceTemperature` for this setup,
+used when `prognostic_surface == "PrescribedSST"` and the setup itself does
+not provide a `temperature` via `surface_condition`.
 
-Default: `ZonallySymmetricSST()`.
+Default: an `AnalyticTemperature` using `zonally_symmetric_temperature`.
 """
-surface_temperature_model(setup) = ZonallySymmetricSST()
+surface_temperature_model(setup) =
+    AnalyticTemperature(zonally_symmetric_temperature)
 
 """
     prescribed_flow_model(setup, ::Type{FT})
@@ -222,7 +241,7 @@ function initial_state(
     return Fields.FieldVector(;
         c = center_ic.(Fields.local_geometry_field(center_space)),
         f = face_ic.(Fields.local_geometry_field(face_space)),
-        surface_kwargs(surface_space, atmos_model.surface_model)...,
+        surface_kwargs(surface_space, atmos_model.surface.temperature)...,
     )
 end
 

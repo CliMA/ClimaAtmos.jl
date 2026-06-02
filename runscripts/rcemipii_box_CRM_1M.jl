@@ -56,8 +56,9 @@ params = CA.ClimaAtmosParameters(
 
 ## RCEMIP-II model prescriptions
 insolation = CA.RCEMIPIIInsolation()
-sfc_temperature = CA.RCEMIPIISST()
 setup = CA.Setups.RCEMIPIIProfile_300()
+# TODO: Clean this up, it's difficult to use a setup with the `AtmosModel` constructor
+temperature = CA.Setups.surface_temperature_model(setup)
 
 
 ## Construct the model
@@ -77,8 +78,8 @@ model = CA.AtmosModel(;
     rayleigh_sponge = CA.RayleighSponge{FT}(; zd = 30_000),
 
     # AtmosSurface
-    sfc_temperature,
-    surface_model = CA.PrescribedSST(),
+    temperature,
+    flux_scheme = CA.SurfaceConditions.DefaultMoninObukhov()(params),
     surface_albedo = CA.ConstantAlbedo{FT}(; α = 0.07),
 
     # numerics
@@ -138,7 +139,6 @@ end
 simulation = CA.AtmosSimulation{FT}(; job_id,
     model, params, context, grid,
     setup,
-    surface_setup = CA.SurfaceConditions.DefaultMoninObukhov(),
     dt, t_end,
     ode_config,
     output_dir,
