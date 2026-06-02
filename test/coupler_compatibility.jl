@@ -74,11 +74,11 @@ const T2 = 290
         typeof(a.water), typeof(a.scm_setup), typeof(a.radiation),
         typeof(a.turbconv), typeof(a.prescribed_flow), typeof(a.gravity_wave),
         typeof(a.vertical_diffusion), typeof(a.sponge), typeof(new_surface),
-        typeof(a.numerics),
+        typeof(a.numerics), typeof(a.chemistry),
     }(
         a.water, a.scm_setup, a.radiation, a.turbconv, a.prescribed_flow,
         a.gravity_wave, a.vertical_diffusion, a.sponge, new_surface, a.numerics,
-        a.disable_surface_flux_tendency,
+        a.chemistry, a.disable_surface_flux_tendency,
     )
     p_overwritten = CA.AtmosCache(
         p.dt,

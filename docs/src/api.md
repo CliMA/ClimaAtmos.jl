@@ -104,6 +104,14 @@ ClimaAtmos.RegressionFunctionAlbedo
 ClimaAtmos.CouplerAlbedo
 ```
 
+### Core functions
+
+```@docs
+ClimaAtmos.SurfaceConditions.update_surface_conditions!
+ClimaAtmos.SurfaceConditions.surface_state_to_conditions
+ClimaAtmos.SurfaceConditions.atmos_surface_conditions
+```
+
 ## Internals
 
 ```@docs

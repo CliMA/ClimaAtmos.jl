@@ -100,16 +100,18 @@ Sets the shortwave reflectivity passed to the radiation scheme. Three models:
 `ConstantAlbedo` sets them equal, `RegressionFunctionAlbedo` computes them
 separately.
 
-**Spectral** All three models write a single value across every shortwave band, and the
-Jin scheme treats the refractive index as wavelength-independent. The RRTMGP
+**Spectral** All three models write a single value across every shortwave band,
+and the [`RegressionFunctionAlbedo`](@ref ClimaAtmos.RegressionFunctionAlbedo)
+scheme treats the refractive index as wavelength-independent. The RRTMGP
 interface arrays are band-resolved (`(nbnd_sw, ncol)`), so per-band albedo is a
-supported extension point but it would require a model that fills bands with distinct values.
+supported extension point but it would require a model that fills bands with
+distinct values.
 
 **Longwave surface reflectivity** Albedo is shortwave-only, longwave surface reflectivity is handled
 separately through `surface_emissivity`. 
 
 See the [Ocean Surface Albedo](@ref "Ocean Surface Albedo") page for the
-Jin (2011) formulation.
+Jin (2011) [`RegressionFunctionAlbedo`](@ref ClimaAtmos.RegressionFunctionAlbedo) formulation..
 
 ### Choosing
 
@@ -119,13 +121,13 @@ either/or:
 
 | If you want… | `flux_scheme` | `temperature` |
 |---|---|---|
-| Stability-dependent fluxes over a prescribed SST | `MoninObukhov(; z0 = …)` | `AnalyticTemperature(…)` |
-| Fixed-coefficient bulk fluxes | `ExchangeCoefficients(; Cd, Ch)` | `AnalyticTemperature(…)` |
-| Prescribed heat fluxes (constant or time-varying) | `MoninObukhov(; z0, shf, lhf)` or `MoninObukhov(; z0, fluxes = (t,FT)->…)` | `AnalyticTemperature(…)` |
-| An interactive slab ocean surface | `MoninObukhov(…)` | `SlabOceanTemperature(…)` |
-| Surface temperature from data | `MoninObukhov(…)` | `ExternalTemperature()` |
-| Coupler owns the surface (atmos skips fluxes) | `nothing` | unused — coupler writes `sfc_conditions` |
-| Coupler sets SST; atmos computes fluxes | `MoninObukhov(…)` | `CoupledTemperature(field)` |
+| Stability-dependent fluxes over a prescribed SST  | [`MoninObukhov(; z0 = …)`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov)                    | [`AnalyticTemperature(…)`](@ref ClimaAtmos.SurfaceConditions.AnalyticTemperature)                                                                                     |
+| Fixed-coefficient bulk fluxes                     | [`ExchangeCoefficients(; Cd, Ch)`](@ref ClimaAtmos.SurfaceConditions.ExchangeCoefficients)    | [`AnalyticTemperature(…)`](@ref ClimaAtmos.SurfaceConditions.AnalyticTemperature)                                                                                     |
+| Prescribed heat fluxes (constant or time-varying) | [`MoninObukhov(; z0, shf, lhf)`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov) or [`MoninObukhov(; z0, fluxes = (t,FT)->…)`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov) | [`AnalyticTemperature(…)`](@ref ClimaAtmos.SurfaceConditions.AnalyticTemperature) |
+| An interactive slab ocean surface                 | [`MoninObukhov(…)`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov)                           | [`SlabOceanTemperature(…)`](@ref ClimaAtmos.SurfaceConditions.SlabOceanTemperature)                                                                                   |
+| Surface temperature from data                     | [`MoninObukhov(…)`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov)                           | [`ExternalTemperature(…)`](@ref ClimaAtmos.SurfaceConditions.ExternalTemperature)                                                                                     |
+| Coupler owns the surface (atmos skips fluxes)     | `nothing`                                                                                     | unused — coupler writes `sfc_conditions`                                                                                                                              |
+| Coupler sets SST; atmos computes fluxes           | [`MoninObukhov(…)`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov)                           | [`CoupledTemperature(field)`](@ref ClimaAtmos.SurfaceConditions.CoupledTemperature)                                                                                   |
 
 !!! note "Prescribed fluxes do not use MOST"
     When you set `shf`/`lhf` (or `θ_flux`/`q_flux`), those fluxes are used **as
@@ -135,6 +137,33 @@ either/or:
     solely for the *momentum* closure, and only when `ustar` is not also
     prescribed — when both fluxes and `ustar` are given (as in every idealized
     LES setup), MOST does nothing and the surface is fully prescribed.
+
+### Setting the surface in a runscript
+
+Build an [`AtmosSurface`](@ref ClimaAtmos.AtmosSurface) and hand it to
+`AtmosModel`. For example, Monin–Obukhov fluxes over a fixed 290 K sea surface
+with a constant albedo:
+
+```julia
+import ClimaAtmos as CA
+import ClimaAtmos.SurfaceConditions as SC
+FT = Float64
+
+surface = CA.AtmosSurface(;
+    flux_scheme = SC.MoninObukhov(; z0 = FT(1e-4)),
+    temperature = SC.AnalyticTemperature(Returns(FT(290))),
+    surface_albedo = CA.ConstantAlbedo{FT}(; α = FT(0.07)),
+    # boundary_overrides defaults to all-`nothing` (physical defaults)
+)
+
+model = CA.AtmosModel(; surface, microphysics_model = CA.DryModel())
+```
+
+Omitted fields take their defaults. You can also pass the surface fields
+directly to `AtmosModel` (`CA.AtmosModel(; flux_scheme = …, temperature = …)`),
+which assembles the `AtmosSurface` for you. To swap in an interactive slab
+ocean use `temperature = SC.SlabOceanTemperature{FT}()`; for prescribed heat
+fluxes, `flux_scheme = SC.MoninObukhov(; z0 = FT(1e-4), shf = …, lhf = …)`.
 
 ### Configuring from YAML
 
@@ -149,6 +178,14 @@ take precedence over these defaults:
   `"PrescribedSST"` (default) or `"SlabOceanSST"` (→ `SlabOceanTemperature`).
 - `albedo_model` sets [`surface_albedo`](@ref "Albedo (surface_albedo)"):
   `"ConstantAlbedo"` (default), `"RegressionFunctionAlbedo"`, or `"CouplerAlbedo"`.
+
+For example:
+
+```yaml
+surface_setup: "DefaultMoninObukhov"   # flux_scheme
+prognostic_surface: "PrescribedSST"    # temperature
+albedo_model: "ConstantAlbedo"         # surface_albedo
+```
 
 The fourth field, [`boundary_overrides`](@ref "Boundary overrides (boundary_overrides)"),
 has no YAML key: it is populated by a setup's
@@ -199,17 +236,14 @@ Surface behavior lives entirely on `atmos.surface`. Principles:
 
 ### Data flow
 
-The entry point `update_surface_conditions!` (called from
-`set_precomputed_quantities!`) does four things: (1) early-return if
+The entry point
+[`update_surface_conditions!`](@ref ClimaAtmos.SurfaceConditions.update_surface_conditions!)
+(called from `set_precomputed_quantities!`) does four things: (1) early-return if
 `isnothing(flux_scheme)`; (2) resolve the temperature via `surface_temperature`;
 (3) resolve the flux scheme via `resolve_flux_scheme` (once per update);
-(4) broadcast `surface_state_to_conditions` over every surface point.
-
-```@docs
-ClimaAtmos.SurfaceConditions.update_surface_conditions!
-ClimaAtmos.SurfaceConditions.surface_state_to_conditions
-ClimaAtmos.SurfaceConditions.atmos_surface_conditions
-```
+(4) broadcast
+[`surface_state_to_conditions`](@ref ClimaAtmos.SurfaceConditions.surface_state_to_conditions)
+over every surface point.
 
 !!! note "Why a `DataLayout` broadcast"
     The kernel mixes *surface*-space and *lowest-interior-level* values, which
@@ -348,7 +382,9 @@ redefine it.
   `AtmosSurface`; setup pieces win via `@something`.
 - `build_cache` (`src/cache/cache.jl`) stores `p.sfc_setup =
   atmos.surface.boundary_overrides` (a scalar, or a `Field` for the coupler) and
-  calls `init_sfc_conditions_zero!` when `isnothing(flux_scheme)`.
+  calls
+  [`init_sfc_conditions_zero!`](@ref ClimaAtmos.SurfaceConditions.init_sfc_conditions_zero!)
+  when `isnothing(flux_scheme)`.
 
 ```@docs
 ClimaAtmos.SurfaceConditions.init_sfc_conditions_zero!

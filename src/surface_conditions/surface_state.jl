@@ -176,7 +176,12 @@ function MoninObukhov(;
         MoninObukhov(z0m, z0b, nothing, ustar)
     # `fluxes` may be a `PrescribedFluxes` struct or a time-varying callable
     # `(t, FT) -> PrescribedFluxes` (resolved later by `resolve_flux_scheme`).
-    m_o(z0m::Number, z0b::Number, fluxes::Union{PrescribedFluxes, Function}, ustar::Number) =
+    m_o(
+        z0m::Number,
+        z0b::Number,
+        fluxes::Union{PrescribedFluxes, Function},
+        ustar::Number,
+    ) =
         MoninObukhov(z0m, z0b, fluxes, ustar)
     return m_o(z0m, z0b, fluxes, ustar)
 end

@@ -192,7 +192,7 @@ steps:
           --job_id diagnostic_edmfx_dycoms_rf02_box
         artifact_paths: "diagnostic_edmfx_dycoms_rf02_box/output_active/*"
         agents:
-          slurm_mem: 20GB
+          slurm_mem: 24GB
 
       - label: ":ghost: Diagnostic EDMF: Precipitating trade wind Cu (RICO)"
         retry: *retry_policy
