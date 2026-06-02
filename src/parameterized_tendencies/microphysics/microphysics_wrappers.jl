@@ -233,7 +233,17 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     nsubs::Int
     args::Args
 end
-@inline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
+# `@noinline` here is the SGS quadrature function barrier. The functor body
+# below (saturation, shape-function partition, plus the heavy
+# `BMT.average_bulk_microphysics_tendencies` call with its `nsubs`
+# substep loop and 4×4 linearized operator) gets invoked N² times from
+# `sum_over_quadrature_points`. Without the barrier those N² copies inline
+# into one giant GPU broadcast kernel, pushing register pressure past the
+# 255-reg hard cap and pinning occupancy at 12.5%. Marking the functor
+# itself (vs a trivial forwarding wrapper) is the strongest signal we can
+# give LLVM/NVPTX not to re-inline this — the body is multi-statement and
+# meaningfully sized, so the late inliner won't undo it.
+@noinline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
     FT = typeof(eval.ρ)
     q_tot_hat = max(FT(0), q_tot_hat)
 
@@ -273,7 +283,7 @@ partition** of cloud condensate (see [`Microphysics1MEvaluator`](@ref)).
 At each quadrature point `(T_hat, q_tot_hat)` sampled from the SGS PDF,
 the local cloud condensate is reconstructed as
 `q_lcl_hat = q_lcl_mean + γ_l (q_lcl_eq_hat - M_l)`, where `M_l = ⟨q_lcl_eq⟩`
-is precomputed in the `compute_sgs_moments` pre-pass. This gives **exact mass 
+is precomputed in the `compute_sgs_moments` pre-pass. This gives **exact mass
 conservation by construction** and unifies the cloudy and clear regimes into one
 quadrature: subsaturated quadrature points contribute below-cloud
 rain evaporation / snow sublimation; saturated points carry the bulk

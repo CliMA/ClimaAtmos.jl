@@ -11,17 +11,6 @@ import Thermodynamics as TD
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 import UnrolledUtilities: unrolled_reduce
 
-# Function barrier around a single quadrature-point evaluation of `f`.
-# `sum_over_quadrature_points` unrolls an N×N loop; without this barrier the
-# heavy microphysics tendency code (`Microphysics1MEvaluator` ->
-# `average_bulk_microphysics_tendencies`) inlines N² times into the GPU
-# broadcast kernel, pushing register pressure past the 255-reg hard cap and
-# pinning occupancy at 12.5%. With the barrier the compiler emits one code
-# path called N² times — same total FLOPs, far smaller per-thread footprint.
-# Applied unconditionally: on CPU the call sits inside an already
-# loop-overhead-bound broadcast and the call overhead is in the noise.
-@noinline _eval_quad_point(f, x_hat) = f(x_hat...)
-
 # ============================================================================
 # Gauss-Hermite Quadrature
 # ============================================================================
@@ -551,23 +540,19 @@ function sum_over_quadrature_points(
     # saves one full evaluation of `f` per cell (≈ 11% of work at N = 3).
     @inbounds begin
         x_hat = get_x_hat(χ[1], χ[1])
-        inner_sum = _eval_quad_point(f, x_hat) ⊠ (weights[1] * inv_sqrt_pi)
+        inner_sum = f(x_hat...) ⊠ (weights[1] * inv_sqrt_pi)
         for j in 2:N
             x_hat = get_x_hat(χ[1], χ[j])
-            inner_sum =
-                inner_sum ⊞
-                (_eval_quad_point(f, x_hat) ⊠ (weights[j] * inv_sqrt_pi))
+            inner_sum = inner_sum ⊞ (f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi))
         end
         outer_sum = inner_sum ⊠ (weights[1] * inv_sqrt_pi)
 
         for i in 2:N
             x_hat = get_x_hat(χ[i], χ[1])
-            inner_sum = _eval_quad_point(f, x_hat) ⊠ (weights[1] * inv_sqrt_pi)
+            inner_sum = f(x_hat...) ⊠ (weights[1] * inv_sqrt_pi)
             for j in 2:N
                 x_hat = get_x_hat(χ[i], χ[j])
-                inner_sum =
-                    inner_sum ⊞
-                    (_eval_quad_point(f, x_hat) ⊠ (weights[j] * inv_sqrt_pi))
+                inner_sum = inner_sum ⊞ (f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi))
             end
             outer_sum = outer_sum ⊞ (inner_sum ⊠ (weights[i] * inv_sqrt_pi))
         end
