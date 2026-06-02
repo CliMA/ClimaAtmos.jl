@@ -662,9 +662,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             nh_pressure³_dragʲ_prev_halflevel = Fields.field_values(
                 Fields.level(ᶠnh_pressure³_dragʲ, i - 1 - half),
             )
-            scale_height =
-                CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-
             ᶜmp_tendencyʲ_prev_level =
                 if microphysics_model isa MoistMicrophysics
                     Fields.field_values(Fields.level(ᶜmp_tendencyʲ, i - 1))
@@ -711,7 +708,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 q_ice_prev_level,
             )
 
-            @. entrʲ_prev_level = compute_entrainment(
+            # temp_data_level is free at this point (used later for u³ʲ_datau³ʲ_data)
+            entr_vel_scale_prev_level = p.scratch.temp_data_level
+            @. entr_vel_scale_prev_level = entrainment_velocity_scale(
                 thermo_params,
                 turbconv_params,
                 z_prev_level,
@@ -738,6 +737,16 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 FT(0),
                 tke_prev_level,
                 p.atmos.edmfx_model.entr_model,
+            )
+            @. entrʲ_prev_level = compute_entrainment(
+                entr_vel_scale_prev_level,
+                nonvelocity_entrainment(
+                    turbconv_params,
+                    draft_area(ρaʲ_prev_level, ρʲ_prev_level),
+                    p.atmos.edmfx_model.entr_model,
+                ),
+                get_physical_w(u³ʲ_prev_halflevel, local_geometry_prev_halflevel) -
+                get_physical_w(u³_prev_halflevel, local_geometry_prev_halflevel),
             )
 
             @. turb_entrʲ_prev_level = turbulent_entrainment(
@@ -774,7 +783,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 dt,
             )
 
-            # TODO: use updraft top instead of scale height
             if p.atmos.edmfx_model.nh_pressure isa Val{true}
                 @. nh_pressure³_buoyʲ_prev_halflevel =
                     ᶠupdraft_nh_pressure_buoyancy(
@@ -788,7 +796,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         local_geometry_prev_halflevel,
                         u³ʲ_prev_halflevel,
                         u³⁰_prev_halflevel,
-                        scale_height,
                     )
             else
                 @. nh_pressure³_buoyʲ_prev_halflevel = CT3(0)
@@ -868,38 +875,30 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     u³ʲ_data_prev_halflevel *
                     ρ_prev_level
                 ) / local_geometry_level.J / ρ_level
-            w_vert_div_level = p.scratch.temp_data_level_3
-            @. w_vert_div_level =
-                (
-                    local_geometry_halflevel.J * u³ʲ_data_halflevel -
-                    local_geometry_prev_level.J * u³ʲ_data_prev_halflevel
-                ) / local_geometry_level.J
 
             @. detrʲ_prev_level = compute_detrainment(
-                thermo_params,
                 turbconv_params,
-                z_prev_level,
-                z_sfc_halflevel,
-                p_prev_level,
-                ρ_prev_level,
-                ρaʲ_prev_level,
                 draft_area(ρaʲ_prev_level, ρʲ_prev_level),
+                ρaʲ_prev_level,
                 get_physical_w(u³ʲ_prev_halflevel, local_geometry_prev_halflevel),
-                rhʲ_prev_level,
                 vertical_buoyancy_acceleration(
                     ρ_prev_level,
                     ρʲ_prev_level,
                     ᶜgradᵥ_ᶠΦ_prev_level,
                     local_geometry_prev_halflevel,
                 ),
-                get_physical_w(u³_prev_halflevel, local_geometry_prev_halflevel),
-                rh_prev_level,
-                FT(0),
+                # Approximate the updraft mass-flux divergence as
+                #   div(ρa u³) ≈ ρa · div(ρu³) / ρ,
+                # which corresponds to assuming that the area fraction does not
+                # vary with height at this level (constant-area approximation).
+                # `vert_div_level` holds div(ρu³) / ρ, so we multiply by ρa here.
+                ρaʲ_prev_level * vert_div_level,
                 entrʲ_prev_level,
-                vert_div_level,
-                FT(0), # mass flux divergence is not implemented for diagnostic edmf
-                w_vert_div_level,
-                tke_prev_level,
+                nonvelocity_detrainment(
+                    turbconv_params,
+                    draft_area(ρaʲ_prev_level, ρʲ_prev_level),
+                    p.atmos.edmfx_model.detr_model,
+                ),
                 p.atmos.edmfx_model.detr_model,
             )
 

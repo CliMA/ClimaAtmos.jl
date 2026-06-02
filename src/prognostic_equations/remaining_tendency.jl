@@ -238,16 +238,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     external_forcing_tendency!(Yₜ, Y, p, t, p.atmos.external_forcing)
 
-    if p.atmos.sgs_adv_mode == Explicit()
-        edmfx_sgs_vertical_advection_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.turbconv_model,
-        )
-    end
-
     if p.atmos.diff_mode == Explicit()
         vertical_diffusion_boundary_layer_tendency!(
             Yₜ,
@@ -262,20 +252,10 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     surface_flux_tendency!(Yₜ, Y, p, t)
 
     radiation_tendency!(Yₜ, Y, p, t, p.atmos.radiation_mode)
-    if p.atmos.sgs_entr_detr_mode == Explicit()
-        edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-        edmfx_first_interior_entr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-    end
-    if p.atmos.sgs_mf_mode == Explicit()
-        edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-    end
-    if p.atmos.sgs_nh_pressure_mode == Explicit()
-        edmfx_nh_pressure_drag_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-    end
-    if p.atmos.sgs_vertdiff_mode == Explicit()
-        edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-    end
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+
+    # Chemistry tendencies
+    chemistry_tendency!(Yₜ, Y, p, t, p.atmos.chemistry_model)
 
     # Unified microphysics tendencies (cloud condensation + precipitation)
     if p.atmos.microphysics_tendency_timestepping == Explicit()
@@ -338,4 +318,18 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # where velocities do not evolve
     # DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)
+end
+
+"""
+    fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+
+Experimental timestepping mode where all implicit tendencies are treated
+explicitly. Used by `args_integrator` when `prescribed_flow` is set, to
+avoid implicit treatment of sound waves.
+"""
+function fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    (; temp_Yₜ_imp) = p.scratch
+    implicit_tendency!(temp_Yₜ_imp, Y, p, t)
+    remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    Yₜ .+= temp_Yₜ_imp
 end

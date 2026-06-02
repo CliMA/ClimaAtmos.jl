@@ -17,7 +17,6 @@ ClimaComms.context(sim::AtmosSimulation) =
     ClimaComms.context(sim.integrator.u.c)
 ClimaComms.device(sim::AtmosSimulation) = ClimaComms.device(sim.integrator.u.c)
 
-
 function setup_diagnostics_and_writers(
     diagnostics_config::CAD.DiagnosticsConfig,
     model,
@@ -114,13 +113,28 @@ function setup_diagnostics_and_writers(
     end
 
     # Extract accumulation periods from all diagnostics
-    periods_reductions = extract_diagnostic_periods(all_diagnostics)
+    periods_reductions = CAD.extract_diagnostic_periods(all_diagnostics)
     if !isempty(periods_reductions)
         periods_str = join(promote_period.(periods_reductions), ", ")
         @info "Saving accumulated diagnostics to disk with frequency: $(periods_str)"
     end
 
     return all_diagnostics, writers, periods_reductions
+end
+
+"""
+    convert_time_args(dt, t_start, t_end, start_date)
+
+Convert dt, t_start, and t_end to ITime.
+"""
+function convert_time_args(dt, t_start, t_end, start_date)
+    to_seconds(t) = t isa AbstractString ? time_to_seconds(t) : Float64(t)
+    dt = ITime(to_seconds(dt))
+    t_start = ITime(to_seconds(t_start), epoch = start_date)
+    t_end = ITime(to_seconds(t_end), epoch = start_date)
+    # ITime(0) is added for backward compatibility (since t_start used to always be 0)
+    (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
+    return (dt, t_start, t_end)
 end
 
 """
@@ -309,8 +323,7 @@ function AtmosSimulation{FT}(;
     else
         callbacks
     end
-    continuous_callbacks = ()
-    callback_set = CTS.CallbackSet(continuous_callbacks, discrete_callbacks)
+    callback_set = CTS.CallbackSet(discrete_callbacks...)
 
     integrator_args, integrator_kwargs = args_integrator(
         Y, p, (t_start, t_end), ode_config,

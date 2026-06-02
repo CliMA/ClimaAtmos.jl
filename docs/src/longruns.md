@@ -65,8 +65,9 @@ Aquaplanet with idealized insolation, all-sky radiation, 1-moment microphysics.
 Use this job to test 1-moment microphysics related features.
 ```
 ```
-amip_target_diagedmf
+amip_target
 
 Aquaplanet setup for AMIP (atmosphere-land simulation). This job includes all the
-working atmosphere components required for AMIP. It will be updated whenever new components are ready.
+working atmosphere components required for AMIP. Currently it uses prognostic EDMF
+and 1M microphysics. It will be updated whenever new components are ready.
 ```

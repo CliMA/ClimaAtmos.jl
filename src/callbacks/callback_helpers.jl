@@ -1,6 +1,51 @@
 import ClimaTimeSteppers as CTS
 
 #####
+##### AtmosCallback — wraps a step function with a frequency and a call counter.
+#####
+
+abstract type AbstractCallbackFrequency end
+
+struct EveryNSteps <: AbstractCallbackFrequency
+    n::Int
+end
+
+struct EveryΔt{FT} <: AbstractCallbackFrequency
+    Δt::FT
+end
+
+struct AtmosCallback{F, CBF <: AbstractCallbackFrequency}
+    f!::F
+    cbf::CBF
+    measured_calls::Base.RefValue{Int}
+end
+
+AtmosCallback(f!, cbf) = AtmosCallback(f!, cbf, Ref(0))
+
+function (cb::AtmosCallback)(integrator)
+    cb.f!(integrator)
+    cb.measured_calls[] += 1
+    return nothing
+end
+
+callback_frequency(cb::AtmosCallback) = cb.cbf
+
+prescribed_every_n_steps(x::EveryNSteps) = x.n
+prescribed_every_n_steps(cb::AtmosCallback) = prescribed_every_n_steps(cb.cbf)
+
+prescribed_every_Δt_steps(x::EveryΔt) = x.Δt
+prescribed_every_Δt_steps(cb::AtmosCallback) = prescribed_every_Δt_steps(cb.cbf)
+
+n_measured_calls(cb::AtmosCallback) = cb.measured_calls[]
+
+# TODO: improve accuracy
+n_expected_calls(cbf::EveryΔt, _, tspan) = (tspan[2] - tspan[1]) / cbf.Δt
+n_expected_calls(cbf::EveryNSteps, dt, tspan) =
+    ((tspan[2] - tspan[1]) / dt) / cbf.n
+n_expected_calls(cb::AtmosCallback, dt, tspan) =
+    n_expected_calls(cb.cbf, dt, tspan)
+
+#####
 ##### Callback helpers
 #####
 
@@ -65,14 +110,14 @@ function callback_from_affect(affect!)
     return nothing
 end
 function atmos_callbacks(cbs)
-    all_cbs = [cbs.continuous_callbacks..., cbs.discrete_callbacks...]
+    all_cbs = collect(cbs.discrete_callbacks)
     callback_objs = map(cb -> callback_from_affect(cb.affect!), all_cbs)
     filter!(x -> (x isa AtmosCallback), callback_objs)
     return callback_objs
 end
 
 n_measured_calls(integrator) =
-    map(x -> x.n_measured_calls, atmos_callbacks(integrator.callback))
+    map(n_measured_calls, atmos_callbacks(integrator.callback))
 
 n_expected_calls(integrator) = n_expected_calls(
     integrator.callback,

@@ -5,11 +5,6 @@ t_end: 16mins
 dt_save_state_to_disk: "Inf"
 log_progress: false
 approximate_linear_solve_iters: 1
-implicit_sgs_advection: true
-implicit_sgs_entr_detr: true
-implicit_sgs_nh_pressure: true
-implicit_sgs_vertdiff: true
-implicit_sgs_mass_flux: true
 use_dense_jacobian: true
 update_jacobian_every: stage
 ode_algo: "ARS222"

@@ -103,7 +103,7 @@ idealized_h2o:
   help: "Use idealized H2O in radiation model [`false` (default), `true`]"
   value: false
 dt_rad:
-  help: "Time between calling radiation callback for sphere configurations"
+  help: "Time between calling radiation callback for sphere configurations. Only applies to RRTMGP modes, ignored for `held_suarez`, which is applied every stage."
   value: "6hours"
 idealized_clouds:
   help: "Use idealized clouds in radiation model [`false` (default), `true`]"
@@ -190,9 +190,6 @@ start_date:
   value: "20100101"
 era5_initial_condition_dir:
   help: "Directory containing ERA5 initial condition files. Filenames inferred from start_date [none (default)]. Generated with `https://github.com/CliMA/WeatherQuest`."
-  value: ~
-forcing:
-  help: "Forcing [`nothing` (default), `held_suarez`]"
   value: ~
 test_dycore_consistency:
   help: "Test dycore consistency [`false` (default), `true`]"
@@ -376,23 +373,6 @@ advection_test:
 edmfx_scale_blending:
   help: "Method for blending physical scales in EDMFX mixing length calculation. [`SmoothMinimum` (default), `HardMinimum`]"
   value: "SmoothMinimum"
-implicit_sgs_advection:
-  help: "Whether to treat the subgrid-scale vertical advection tendency implicitly [`false` (default), `true`]"
-  value: false
-implicit_sgs_entr_detr:
-  help: "Whether to treat the subgrid-scale entrainment and detrainment tendency implicitly [`false` (default), `true`]. Setting it to true only works if implicit_sgs_advection is set to true."
-  value: false
-implicit_sgs_nh_pressure:
-  help: "Whether to treat the subgrid-scale nonhydrostatic pressure closure implicitly. Setting it to true only works if
-  `implicit_sgs_advection` is set to true. This flag only controls whether the drag term in the pressure closure is treated implicitly.
-  The buoyancy term is always treated implicitly. [`false` (default), `true`]"
-  value: false
-implicit_sgs_vertdiff:
-  help: "Whether to treat the subgrid-scale vertical diffusion tendency implicitly [`false` (default), `true`]. Setting it to true only works if implicit_sgs_advection is set to true."
-  value: false
-implicit_sgs_mass_flux:
-  help: "Whether to treat the subgrid-scale mass flux tendency implicitly or explicitly in grid-mean equations. Currently updraft only with Jacobian terms 0. [`false` (default), `true`]. Setting it to true only works if both implicit_sgs_advection and implicit_diffusion are set to true."
-  value: false
 edmfx_filter:
   help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
   value: false

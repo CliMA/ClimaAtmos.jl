@@ -109,6 +109,8 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             # Covariance fields depend on scratch state
             :ᶜT′T′,
             :ᶜq′q′,
+            # Scratch field for prognostic EDMF (uninitialized until tendencies run)
+            :ᶠu₃_tendencyʲs,
             # RRTMGP internal arrays may differ due to RNG state
             rrtmgp_clear_fix...,
             # Config-specific
@@ -260,7 +262,7 @@ else
     # not synced across MPI processes. Let's add an additional check here.
     maybe_wait_filesystem(comms_ctx, amip_output_loc)
 
-    amip_job_id = "amip_target_diagedmf"
+    amip_job_id = "amip_target"
 
     amip_test_dict = merge(
         YAML.load_file(
@@ -272,7 +274,7 @@ else
         YAML.load_file(
             joinpath(
                 @__DIR__,
-                "../config/longrun_configs/amip_target_diagedmf.yml",
+                "../config/longrun_configs/amip_target.yml",
             ),
         ),
         Dict(
@@ -288,8 +290,9 @@ else
             "output_dir" => joinpath(amip_output_loc, amip_job_id),
             "rad" => "allskywithclear",
             "radiation_reset_rng_seed" => true,
+            "microphysics_model" => "0M", # Using 0M because 1M doesn't work on P100 GPUs
             "toml" => [
-                joinpath(@__DIR__, "../toml/longrun_aquaplanet_diagedmf.toml"),
+                joinpath(@__DIR__, "../toml/longrun_aquaplanet_progedmf.toml"),
             ],
         ),
     )

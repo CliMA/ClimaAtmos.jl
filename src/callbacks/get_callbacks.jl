@@ -1,3 +1,4 @@
+import ClimaUtilities.OnlineLogging: WallTimeInfo, report_walltime
 # Reduction-time keys allowed in diagnostic spec dicts.
 # Lowercased so callers can use "Max" or "max" interchangeably.
 const _DIAG_ALLOWED_REDUCTIONS = Dict(
@@ -176,7 +177,7 @@ function parse_frequency_to_schedule(
     else
         period_seconds = FT(time_to_seconds(frequency_str))
         period_dates =
-            CA.promote_period.(Dates.Second(period_seconds))
+            promote_period.(Dates.Second(period_seconds))
     end
 
     return CAD.EveryCalendarDtSchedule(
@@ -216,9 +217,9 @@ function validate_checkpoint_diagnostics_consistency(
     periods_reductions,
 )
     if checkpoint_frequency != Inf
-        if any(x -> !CA.isdivisible(checkpoint_frequency, x), periods_reductions)
-            accum_str = join(CA.promote_period.(collect(periods_reductions)), ", ")
-            checkpt_str = CA.promote_period(checkpoint_frequency)
+        if any(x -> !isdivisible(checkpoint_frequency, x), periods_reductions)
+            accum_str = join(promote_period.(collect(periods_reductions)), ", ")
+            checkpt_str = promote_period(checkpoint_frequency)
             @warn """The checkpointing frequency \
             (checkpoint_frequency = $checkpt_str) should be an integer \
             multiple of all diagnostics accumulation periods ($accum_str) \
@@ -337,7 +338,7 @@ function scheduled_callback(
 
     if !isnothing(checkpoint_frequency) && checkpoint_frequency != Inf
         dt_s = Dates.Second(round(Int, dt_seconds_val))
-        if !CA.isdivisible(checkpoint_frequency, dt_s)
+        if !isdivisible(checkpoint_frequency, dt_s)
             @warn "$(nameof(affect!)) period ($dt_s) is not an even divisor of the checkpoint frequency ($checkpoint_frequency). This simulation will not be reproducible when restarted."
         end
     end
@@ -353,6 +354,9 @@ function radiation_callback(
     t_end,
     checkpoint_frequency,
 )
+    # `dt_rad` only governs RRTMGP-style radiation. For `rad: held_suarez`
+    # (and any other non-RRTMGP mode), the forcing is folded into
+    # `remaining_tendency!` and applied every stage; `dt_rad` is ignored.
     radiation_mode isa RRTMGPI.AbstractRRTMGPMode || return ()
     return scheduled_callback(
         rrtmgp_model_callback!,
@@ -543,10 +547,5 @@ function common_callbacks(
     if check_conservation
         callbacks = (callbacks..., conservation_checking_callback()...)
     end
-
-    # Enforce physical constraints filter (no-op fallback for non-EDMF models;
-    # keep unconditional so EDMF runs always get it without extra wiring).
-    callbacks = (callbacks..., enforce_physical_constraints_callback(dt))
-
     return callbacks
 end

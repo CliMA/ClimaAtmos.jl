@@ -15,7 +15,6 @@ import Dates: Year, Date
 import ClimaUtilities.TimeVaryingInputs:
     TimeVaryingInput,
     PeriodicCalendar,
-    LinearPeriodFillingInterpolation,
     LinearInterpolation
 
 import Interpolations as Intp

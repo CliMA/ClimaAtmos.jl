@@ -278,7 +278,7 @@ function hypsography_function_from_topography(
     topo_smoothing,
 ) where {FT}
     return function hypsography(h_grid, z_grid)
-        topography isa NoTopography && return Hypsography.Flat()
+        topography isa NoTopography && return Grids.Flat()
 
         # Create horizontal space to work with topography
         h_space = if h_grid isa Grids.SpectralElementGrid1D
@@ -338,3 +338,24 @@ end
 
 get_stretching(::Type{FT}, z_stretch, dz_bottom) where {FT} =
     z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
+
+"""
+    get_spaces(grid)
+
+Create center and face spaces from a ClimaCore grid.
+"""
+function get_spaces(grid)
+    if grid isa Grids.ExtrudedFiniteDifferenceGrid
+        center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
+        face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
+    elseif grid isa Grids.FiniteDifferenceGrid
+        center_space = Spaces.CenterFiniteDifferenceSpace(grid)
+        face_space = Spaces.FaceFiniteDifferenceSpace(grid)
+    else
+        error(
+            """Unsupported grid type: $(typeof(grid)). Expected \
+            ExtrudedFiniteDifferenceGrid or FiniteDifferenceGrid""",
+        )
+    end
+    return (; center_space, face_space)
+end

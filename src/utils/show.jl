@@ -108,7 +108,7 @@ end
 ## considering the value of `get(io, :compact, false)`.
 
 
-### src/solver/types.jl
+### src/types.jl
 Base.show(io::IO, x::ConstantAlbedo) =
     parseable_show_with_fields_no_type_header(io, x)
 Base.show(io::IO, x::AbstractCloudModel) =
@@ -194,7 +194,7 @@ function Base.show(io::IO, ::MIME"text/plain", sim::AtmosSimulation)
     )
 end
 
-# src/solver/solve.jl
+# src/simulation/solve.jl
 function Base.show(io::IO, ::MIME"text/plain", sim::AtmosSolveResults)
     return print(
         io,

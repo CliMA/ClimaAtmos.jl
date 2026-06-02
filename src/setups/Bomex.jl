@@ -9,20 +9,25 @@ at construction time before broadcasting).
 
 ## Example
 ```julia
-import Thermodynamics as TD
-import ClimaParams as CP
-FT = Float64
-toml_dict = CP.create_toml_dict(FT)
-thermo_params = TD.Parameters.ThermodynamicsParameters(toml_dict)
-setup = Bomex(; prognostic_tke = true, thermo_params)
+setup = Bomex()                       # Float32 defaults
+setup = Bomex(Float64)                # specify floating-point type
+setup = Bomex(; prognostic_tke = false)
 ```
+
+To use thermodynamics parameters from a non-default `ClimaAtmosParameters`,
+pass them explicitly via `thermo_params`.
 """
 struct Bomex{P}
     prognostic_tke::Bool
     profiles::P
 end
-Bomex(; prognostic_tke, thermo_params) =
-    Bomex(prognostic_tke, bomex_profiles(thermo_params))
+function Bomex(
+    ::Type{FT} = Float32;
+    prognostic_tke = true,
+    thermo_params = ThermodynamicsParameters(FT),
+) where {FT}
+    return Bomex(prognostic_tke, bomex_profiles(thermo_params))
+end
 
 """
     bomex_profiles(thermo_params)

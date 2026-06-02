@@ -2,10 +2,10 @@
 ##### Utility functions
 #####
 import ClimaComms
-import ClimaCore: Spaces, Topologies, Fields, Geometry
+import ClimaCore: Spaces, Topologies, Fields, Geometry, Quadratures, Grids
 import LinearAlgebra: norm_sqr
 using Dates: DateTime, @dateformat_str
-import StaticArrays: SVector, SMatrix
+import StaticArrays: SMatrix
 
 """
     enforce_mass_energy_consistency!(Y, p, ᶜΔρq_tot)
@@ -278,7 +278,7 @@ function g³ʰ(gⁱʲ)
 end
 
 has_topography(space::Spaces.FiniteDifferenceSpace) = false
-has_topography(space) = Spaces.grid(space).hypsography != Spaces.Grids.Flat()
+has_topography(space) = Spaces.grid(space).hypsography != Grids.Flat()
 
 """
     unit_basis_vector_data(type, local_geometry)

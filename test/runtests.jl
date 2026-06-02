@@ -36,12 +36,11 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
     @safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
 
-    # Solver tests
-    @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
-    @safetestset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
+    # Config tests
+    @safetestset "Model getters" begin @time include("config/model_from_config.jl") end
+    @safetestset "AtmosModel Constructor" begin @time include("config/atmos_model_constructor.jl") end
     @safetestset "Presets" begin @time include("presets.jl") end
     @safetestset "Topography tests" begin @time include("topography.jl") end
-
 end
 
 # ============================================================================
@@ -86,6 +85,9 @@ if TEST_GROUP in ("parameterizations", "all")
     @safetestset "SGS saturation tests" begin @time include("parameterized_tendencies/microphysics/sgs_saturation.jl") end
     @safetestset "BMT integration tests" begin @time include("parameterized_tendencies/microphysics/bmt_integration.jl") end
     @safetestset "Allocation tests" begin @time include("parameterized_tendencies/microphysics/allocations.jl") end
+
+    # Chemistry tests
+    @safetestset "Chemistry tendency tests" begin @time include("parameterized_tendencies/chemistry/chemistry_tendency.jl") end
 
     # NOTE: Gravity wave visualization scripts (test_nogw_3d.jl, test_nogw_mima.jl,
     # test_nogw_single_column.jl, test_ogw_3d.jl, test_ogw_baseflux.jl) are not included

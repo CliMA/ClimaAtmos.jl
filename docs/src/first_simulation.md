@@ -32,45 +32,60 @@ simulation = CA.AtmosSimulation{Float32}(; grid, t_end = 3600 * 6)
 nothing # hide
 ```
 
-Other grid types: [`SphereGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref).
-
-### Change the setup
-
-A *setup* defines the initial conditions, boundary conditions, and (optionally)
-forcing for a simulation case. For example, the BOMEX shallow cumulus case:
-
-```julia
-simulation = CA.AtmosSimulation{Float32}(;
-    grid = CA.ColumnGrid(Float32; z_elem = 60, z_max = 3000.0),
-    initial_condition = CA.Setups.Bomex(),
-    dt = 5,
-    t_end = 3600 * 6,
-    job_id = "my_bomex",
-)
-CA.solve_atmos!(simulation)
-```
-
-See the [Setups](setups.md) page for the full list of available setups and how to create
-your own.
+See the [Grids](api.md#Grids) section of the API for all grid types and their options.
 
 ### Change the timestep and duration
 
 `dt` is the timestep in seconds. `t_end` is the total simulation time in
 seconds:
 
-```julia
+```@example first_sim
 simulation = CA.AtmosSimulation{Float32}(;
     dt = 300,           # 5-minute timestep
     t_end = 86400 * 10, # 10 days
 )
+nothing # hide
 ```
+
+### Change the setup
+
+A *setup* defines the initial conditions, boundary conditions, and (optionally)
+forcing for a simulation case. For example, the BOMEX shallow cumulus case:
+
+```@example first_sim
+simulation = CA.AtmosSimulation{Float32}(;
+    grid = CA.ColumnGrid(Float32; z_elem = 60, z_max = 3000.0, z_stretch = false),
+    setup = CA.Setups.Bomex(),
+    dt = 5,
+    t_end = 3600,
+    job_id = "my_bomex",
+)
+nothing # hide
+```
+
+See the [Setups](setups.md) page for the full list of available setups and how to create
+your own.
+
+
+## Presets
+
+Common configurations are available as one-line presets in `CA.Presets`:
+
+```@example first_sim
+simulation = CA.Presets.bomex(Float32; t_end = 600)
+nothing # hide
+```
+
+See the [Presets](api.md#Presets) section of the API for the full list of
+simulation and model presets.
+
 
 ## Inspecting results
 
 After a simulation completes, access the prognostic state through the
 integrator:
 
-```julia
+```@example first_sim
 Y = simulation.integrator.u
 
 # Center (cell-center) variables

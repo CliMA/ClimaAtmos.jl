@@ -3,7 +3,6 @@ import JLD2
 
 function get_microphysics_model(parsed_args, params = nothing)
     model_name = parsed_args["microphysics_model"]
-    @assert model_name in ("dry", "0M", "1M", "2M", "2MP3")
     if model_name == "dry"
         DryModel()
     elseif model_name == "0M"
@@ -16,6 +15,10 @@ function get_microphysics_model(parsed_args, params = nothing)
         NonEquilibriumMicrophysics2M()
     elseif model_name == "2MP3"
         NonEquilibriumMicrophysics2MP3()
+    else
+        error(
+            """Unknown microphysics_model `$model_name`. Expected: "dry", "0M", "1M", "2M", or "2MP3".""",
+        )
     end
 end
 
@@ -36,14 +39,6 @@ function get_insolation_form(parsed_args; setup_type = nothing)
         !isnothing(model) && return model
     end
     insolation = parsed_args["insolation"]
-    @assert insolation in (
-        "idealized",
-        "timevarying",
-        "rcemipii",
-        "gcmdriven",
-        "externaldriventv",
-        "larcform1",
-    )
     return if insolation == "idealized"
         IdealizedInsolation()
     elseif insolation == "timevarying"
@@ -59,6 +54,10 @@ function get_insolation_form(parsed_args; setup_type = nothing)
         ExternalTVInsolation()
     elseif insolation == "larcform1"
         Larcform1Insolation()
+    else
+        error(
+            """Unknown insolation `$insolation`. Expected: "idealized", "timevarying", "rcemipii", "gcmdriven", or "externaldriventv".""",
+        )
     end
 end
 
@@ -89,7 +88,7 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
         return nothing
     else
         error(
-            "Uncaught hyperdiff `$hyperdiff_name`. Expected: ~ | \"Hyperdiffusion\" | \"CAM_SE\".",
+            """Uncaught hyperdiff `$hyperdiff_name`. Expected: ~ | "Hyperdiffusion" | "CAM_SE".""",
         )
     end
 end
@@ -115,7 +114,7 @@ function get_vertical_diffusion_model(
         )
     else
         error(
-            "Uncaught vert_diff `$vert_diff_name`. Expected: ~ | \"VerticalDiffusion\" | \"DecayWithHeightDiffusion\".",
+            """Uncaught vert_diff `$vert_diff_name`. Expected: ~ | "VerticalDiffusion" | "DecayWithHeightDiffusion".""",
         )
     end
 end
@@ -126,7 +125,6 @@ function get_non_orographic_gravity_wave_model(
     ::Type{FT},
 ) where {FT}
     nogw_name = parsed_args["non_orographic_gravity_wave"]
-    @assert nogw_name in (true, false)
     return if nogw_name == true
         (;
             source_pressure,
@@ -179,7 +177,7 @@ end
 
 function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) where {FT}
     ogw_name = parsed_args["orographic_gravity_wave"]
-    @assert ogw_name in (nothing, "gfdl_restart", "raw_topo", "linear")
+    isnothing(ogw_name) && return nothing
     return if ogw_name == "raw_topo" || ogw_name == "gfdl_restart"
         (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) =
             params.orographic_gravity_wave_params
@@ -201,7 +199,9 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
     elseif ogw_name == "linear"
         LinearOrographicGravityWave(; topo_info = Val(:linear))
     else
-        nothing
+        error(
+            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", "raw_topo", or "linear".""",
+        )
     end
 end
 
@@ -213,9 +213,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_type = nothing) where
         !isnothing(model) && return model
     end
     idealized_h2o = parsed_args["idealized_h2o"]
-    @assert idealized_h2o in (true, false)
     idealized_clouds = parsed_args["idealized_clouds"]
-    @assert idealized_clouds in (true, false)
     cloud = get_cloud_in_radiation(parsed_args)
     if idealized_clouds && (cloud isa PrescribedCloudInRadiation)
         error(
@@ -223,23 +221,9 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_type = nothing) where
         )
     end
     add_isothermal_boundary_layer = parsed_args["add_isothermal_boundary_layer"]
-    @assert add_isothermal_boundary_layer in (true, false)
     aerosol_radiation = parsed_args["aerosol_radiation"]
-    @assert aerosol_radiation in (true, false)
     reset_rng_seed = parsed_args["radiation_reset_rng_seed"]
-    @assert reset_rng_seed in (true, false)
     deep_atmosphere = parsed_args["deep_atmosphere"]
-    @assert radiation_name in (
-        nothing,
-        "clearsky",
-        "gray",
-        "allsky",
-        "allskywithclear",
-        "held_suarez",
-        "DYCOMS",
-        "TRMM_LBA",
-        "ISDAC",
-    )
     if !(radiation_name in ("allsky", "allskywithclear")) && reset_rng_seed
         @warn "reset_rng_seed does not have any effect with $radiation_name radiation option"
     end
@@ -287,8 +271,12 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_type = nothing) where
         RadiationTRMM_LBA(FT)
     elseif radiation_name == "ISDAC"
         RadiationISDAC{FT}()
-    else
+    elseif isnothing(radiation_name)
         nothing
+    else
+        error(
+            """Unknown rad `$radiation_name`. Expected: ~, "clearsky", "gray", "allsky", "allskywithclear", "held_suarez", "DYCOMS", "TRMM_LBA", or "ISDAC".""",
+        )
     end
 end
 
@@ -399,13 +387,6 @@ function get_external_forcing_model(
         model = Setups.external_forcing(setup_type, FT)
         !isnothing(model) && return model
     end
-    @assert external_forcing in (
-        nothing,
-        "GCM",
-        "ReanalysisTimeVarying",
-        "ReanalysisMonthlyAveragedDiurnal",
-        "ISDAC",
-    )
     if external_forcing in
        ("ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal")
         @assert parsed_args["config"] == "column" "ReanalysisTimeVarying and ReanalysisMonthlyAveragedDiurnal are only supported in column mode."
@@ -451,6 +432,10 @@ function get_external_forcing_model(
 
     elseif external_forcing == "ISDAC"
         ISDACForcing()
+    else
+        error(
+            """Unknown external_forcing `$external_forcing`. Expected: ~, "GCM", "ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal", or "ISDAC".""",
+        )
     end
 end
 
@@ -461,14 +446,6 @@ end
 
 function get_turbconv_model(FT, parsed_args, turbconv_params)
     turbconv = parsed_args["turbconv"]
-    @assert turbconv in (
-        nothing,
-        "edmfx",
-        "prognostic_edmfx",
-        "diagnostic_edmfx",
-        "edonly_edmfx",
-    )
-
     n_updrafts = parsed_args["updraft_number"]
     prognostic_tke = parsed_args["prognostic_tke"]
     area_fraction = turbconv_params.min_area
@@ -478,8 +455,12 @@ function get_turbconv_model(FT, parsed_args, turbconv_params)
         DiagnosticEDMFX(; n_updrafts, prognostic_tke, area_fraction)
     elseif turbconv == "edonly_edmfx"
         EDOnlyEDMFX()
-    else
+    elseif isnothing(turbconv) || turbconv == "edmfx"
         nothing
+    else
+        error(
+            """Unknown turbconv `$turbconv`. Expected: ~, "edmfx", "prognostic_edmfx", "diagnostic_edmfx", or "edonly_edmfx".""",
+        )
     end
 end
 
@@ -521,7 +502,6 @@ function check_case_consistency(parsed_args)
     ic = parsed_args["initial_condition"]
     surf = parsed_args["surface_setup"]
     rad = parsed_args["rad"]
-    forc = parsed_args["forcing"]
     microphysics = parsed_args["microphysics_model"]
     extf = parsed_args["external_forcing"]
     imp_vert_diff = parsed_args["implicit_diffusion"]
@@ -537,7 +517,6 @@ function check_case_consistency(parsed_args)
     if "ISDAC" in ISDAC_mandatory
         @assert(
             allequal(ISDAC_mandatory) &&
-            isnothing(forc) &&
             microphysics != "dry",
             "ISDAC setup not consistent"
         )
@@ -555,13 +534,170 @@ function check_case_consistency(parsed_args)
         )
         @assert(
             !parsed_args["implicit_microphysics"] &&
-            !parsed_args["implicit_diffusion"] &&
-            !parsed_args["implicit_sgs_advection"] &&
-            !parsed_args["implicit_sgs_entr_detr"] &&
-            !parsed_args["implicit_sgs_nh_pressure"] &&
-            !parsed_args["implicit_sgs_vertdiff"] &&
-            !parsed_args["implicit_sgs_mass_flux"],
+            !parsed_args["implicit_diffusion"],
             "Prescribed flow does not use the implicit solver."
         )
     end
+end
+# AtmosConfig-aware constructors for the AtmosModel group structs.
+# Each consolidates the YAML→typed-object translation for one group.
+
+function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
+    pa = config.parsed_args
+    microphysics_model = get_microphysics_model(pa)
+    sgs_quadrature = get_sgs_quadrature(pa, params)
+
+    if microphysics_model isa DryModel
+        @warn "Running simulations without any moisture present."
+    end
+    if microphysics_model isa EquilibriumMicrophysics0M && isnothing(sgs_quadrature)
+        error(
+            "EquilibriumMicrophysics0M requires use_sgs_quadrature: true. " *
+            "GridMeanSGS fallback is not supported for 0-moment microphysics.",
+        )
+    end
+
+    cloud_model = get_cloud_model(pa, params)
+
+    terminal_velocity_mode =
+        pa["fixed_terminal_velocity"] ?
+        FixedTerminalVelocity{FT}(
+            CAP.fixed_cloud_liquid_terminal_velocity(params),
+            CAP.fixed_cloud_ice_terminal_velocity(params),
+            CAP.fixed_rain_terminal_velocity(params),
+            CAP.fixed_snow_terminal_velocity(params),
+        ) : DiagnosticTerminalVelocity()
+
+    implicit_microphysics = pa["implicit_microphysics"]
+
+    return AtmosWater(;
+        microphysics_model,
+        cloud_model,
+        microphysics_tendency_timestepping = implicit_microphysics ? Implicit() :
+                                             Explicit(),
+        tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
+        sgs_quadrature,
+        terminal_velocity_mode,
+    )
+end
+
+function AtmosRadiation(config::AtmosConfig, ::Type{FT}; setup_type = nothing) where {FT}
+    pa = config.parsed_args
+    return AtmosRadiation(;
+        radiation_mode = get_radiation_mode(pa, FT; setup_type),
+        insolation = get_insolation_form(pa; setup_type),
+    )
+end
+
+function AtmosGravityWave(config::AtmosConfig, params, ::Type{FT}) where {FT}
+    pa = config.parsed_args
+    return AtmosGravityWave(;
+        non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(pa, params, FT),
+        orographic_gravity_wave = get_orographic_gravity_wave_model(pa, params, FT),
+    )
+end
+
+function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
+    pa = config.parsed_args
+    turbconv_params = CAP.turbconv_params(params)
+
+    scale_blending_method =
+        if pa["edmfx_scale_blending"] == "SmoothMinimum"
+            SmoothMinimumBlending()
+        elseif pa["edmfx_scale_blending"] == "HardMinimum"
+            HardMinimumBlending()
+        else
+            error("Unknown edmfx_scale_blending method: $(pa["edmfx_scale_blending"])")
+        end
+
+    edmfx_model = EDMFXModel(;
+        entr_model = get_entrainment_model(pa),
+        detr_model = get_detrainment_model(pa),
+        sgs_mass_flux = pa["edmfx_sgs_mass_flux"],
+        sgs_diffusive_flux = pa["edmfx_sgs_diffusive_flux"],
+        nh_pressure = pa["edmfx_nh_pressure"],
+        vertical_diffusion = pa["edmfx_vertical_diffusion"],
+        filter = pa["edmfx_filter"],
+        scale_blending_method,
+    )
+
+    n = pa["smagorinsky_lilly"]
+    smagorinsky_lilly =
+        isnothing(n) ? nothing : SmagorinskyLilly(; axes = Symbol(n))
+
+    amd_les_active = pa["amd_les"]
+    amd_les = amd_les_active ? AnisotropicMinimumDissipation{FT}(pa["c_amd"]) : nothing
+
+    chd_active = pa["constant_horizontal_diffusion"]
+    constant_horizontal_diffusion =
+        chd_active ?
+        ConstantHorizontalDiffusion{FT}(CAP.constant_horizontal_diffusion_D(params)) :
+        nothing
+
+    return AtmosTurbconv(;
+        edmfx_model,
+        turbconv_model = get_turbconv_model(FT, pa, turbconv_params),
+        smagorinsky_lilly,
+        amd_les,
+        constant_horizontal_diffusion,
+    )
+end
+
+AtmosNumerics(config::AtmosConfig, ::Type{FT}) where {FT} =
+    get_numerics(config.parsed_args, FT)
+
+function SCMSetup(config::AtmosConfig, ::Type{FT};
+    setup_type = nothing) where {FT}
+    return SCMSetup(;
+        subsidence = get_subsidence_model(FT; setup_type),
+        external_forcing = get_external_forcing_model(config.parsed_args, FT; setup_type),
+        ls_adv = get_large_scale_advection_model(FT; setup_type),
+        advection_test = config.parsed_args["advection_test"],
+        scm_coriolis = get_scm_coriolis(FT; setup_type),
+    )
+end
+
+function AtmosSponge(config::AtmosConfig, params)
+    pa = config.parsed_args
+
+    viscous_sponge = pa["viscous_sponge"] ? ViscousSponge(params) : nothing
+    rayleigh_sponge = pa["rayleigh_sponge"] ? RayleighSponge(params) : nothing
+
+    return AtmosSponge(; viscous_sponge, rayleigh_sponge)
+end
+
+function AtmosSurface(
+    config::AtmosConfig, params, ::Type{FT}; setup_type = nothing,
+) where {FT}
+    pa = config.parsed_args
+
+    sfc_temperature = Setups.surface_temperature_model(setup_type)
+
+    ps_name = pa["prognostic_surface"]
+    surface_model =
+        if ps_name == "PrescribedSST"
+            PrescribedSST()
+        elseif ps_name == "SlabOceanSST"
+            SlabOceanSST()
+        else
+            error(
+                """Uncaught prognostic_surface `$ps_name`. Expected: "PrescribedSST" | "SlabOceanSST".""",
+            )
+        end
+
+    surface_albedo =
+        if pa["albedo_model"] == "ConstantAlbedo"
+            ConstantAlbedo{FT}(; α = params.idealized_ocean_albedo)
+        elseif pa["albedo_model"] == "RegressionFunctionAlbedo"
+            isnothing(pa["rad"]) && error(
+                "Radiation model not specified, so cannot use RegressionFunctionAlbedo",
+            )
+            RegressionFunctionAlbedo{FT}(; n = params.water_refractive_index)
+        elseif pa["albedo_model"] == "CouplerAlbedo"
+            CouplerAlbedo()
+        else
+            error("Uncaught surface albedo model `$(pa["albedo_model"])`.")
+        end
+
+    return AtmosSurface(; sfc_temperature, surface_model, surface_albedo)
 end

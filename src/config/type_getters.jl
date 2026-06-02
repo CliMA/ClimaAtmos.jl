@@ -1,33 +1,6 @@
-using Dates: DateTime, @dateformat_str
-import Interpolations
-import NCDatasets
-import ClimaCore
-import ClimaUtilities.OutputPathGenerator
-import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
-import ClimaAtmos.RRTMGPInterface as RRTMGPI
-import ClimaAtmos as CA
-import ClimaCore: Fields, Grids
-import ClimaTimeSteppers as CTS
-import Logging
-
-import ClimaUtilities.TimeManager: ITime
-
-import ClimaDiagnostics
-
-"""
-    convert_time_args(dt, t_start, t_end, start_date)
-
-Convert dt, t_start, and t_end to ITime.
-"""
-function convert_time_args(dt, t_start, t_end, start_date)
-    to_seconds(t) = t isa AbstractString ? time_to_seconds(t) : Float64(t)
-    dt = ITime(to_seconds(dt))
-    t_start = ITime(to_seconds(t_start), epoch = start_date)
-    t_end = ITime(to_seconds(t_end), epoch = start_date)
-    # ITime(0) is added for backward compatibility (since t_start used to always be 0)
-    (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
-    return (dt, t_start, t_end)
-end
+import ClimaComms
+import ClimaCore: Fields, Grids, Spaces
+import Logging, NVTX
 
 """
     ClimaAtmosParameters(config::AtmosConfig)
@@ -53,15 +26,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     FT = eltype(config)
     check_case_consistency(pa)
 
-    radiation = AtmosRadiation(config, FT; setup_type)
-
-    # disable_momentum_vertical_diffusion ⇐ HeldSuarezForcing radiation; threads
-    # into VerticalDiffusion construction.
-    disable_momentum_vertical_diffusion =
-        radiation.radiation_mode isa HeldSuarezForcing
-
-    implicit_diffusion = pa["implicit_diffusion"]
-    @assert implicit_diffusion in (true, false)
+    disable_momentum_vertical_diffusion = pa["rad"] == "held_suarez"
 
     vertical_diffusion = get_vertical_diffusion_model(
         disable_momentum_vertical_diffusion, pa, params, FT,
@@ -80,7 +45,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         water = AtmosWater(config, params, FT),
         scm_setup = SCMSetup(config, FT; setup_type),
         prescribed_flow,
-        radiation,
+        radiation = AtmosRadiation(config, FT; setup_type),
         turbconv = AtmosTurbconv(config, params, FT),
         gravity_wave = AtmosGravityWave(config, params, FT),
         sponge = AtmosSponge(config, params),
@@ -124,7 +89,7 @@ function get_numerics(parsed_args, FT)
     edmfx_tracer_upwinding = Symbol(parsed_args["edmfx_tracer_upwinding"])
 
     limiter =
-        parsed_args["apply_sem_quasimonotone_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
+        parsed_args["apply_sem_quasimonotone_limiter"] ? QuasiMonotoneLimiter() : nothing
 
     diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
 
@@ -147,27 +112,6 @@ function get_numerics(parsed_args, FT)
     return numerics
 end
 
-"""
-    get_spaces(grid)
-
-Create center and face spaces from a ClimaCore grid.
-"""
-function get_spaces(grid)
-    if grid isa Grids.ExtrudedFiniteDifferenceGrid
-        center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
-        face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
-    elseif grid isa Grids.FiniteDifferenceGrid
-        center_space = Spaces.CenterFiniteDifferenceSpace(grid)
-        face_space = Spaces.FaceFiniteDifferenceSpace(grid)
-    else
-        error(
-            """Unsupported grid type: $(typeof(grid)). Expected \
-            ExtrudedFiniteDifferenceGrid or FiniteDifferenceGrid""",
-        )
-    end
-    return (; center_space, face_space)
-end
-
 function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     return get_state_restart(
         restart_file,
@@ -176,68 +120,6 @@ function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
         config.comms_ctx,
     )
 end
-
-function get_state_restart(
-    restart_file,
-    start_date,
-    atmos_model_hash,
-    comms_ctx,
-)
-    @assert !isnothing(restart_file)
-    reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
-    Y = InputOutput.read_field(reader, "Y")
-    # TODO: Do not use InputOutput.HDF5 directly
-    t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
-    t_start = ITime(t_start; epoch = start_date)
-    if "atmos_model_hash" in keys(InputOutput.HDF5.attrs(reader.file))
-        atmos_model_hash_in_restart =
-            InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
-        if atmos_model_hash_in_restart != atmos_model_hash
-            @warn "Restart file $(restart_file) was constructed with a different AtmosModel"
-        end
-    end
-    return (Y, t_start)
-end
-
-"""
-    handle_restart(restart_file, t_start_original, start_date, model, context)
-
-Handle restart file loading with validation and logging.
-
-Validates that t_start is zero when restarting, loads state from restart file,
-logs restart information, and returns the state, t_start, and spaces.
-
-Returns:
-- `Y`: State loaded from restart file
-- `t_start`: Time from restart file (ITime)
-- `spaces`: Named tuple with center_space and face_space extracted from Y
-"""
-function handle_restart(
-    restart_file,
-    t_start_original,
-    start_date,
-    model,
-    context,
-)
-    # Validate t_start before restart (matches get_simulation behavior)
-    t_start_seconds =
-        t_start_original isa AbstractString ?
-        time_to_seconds(t_start_original) : Float64(t_start_original)
-    if t_start_seconds != 0
-        @warn "Non zero `t_start` passed with a restarting simulation. The provided `t_start` will be ignored."
-    end
-
-    (Y, t_start) = get_state_restart(
-        restart_file, start_date, hash(model), context,
-    )
-
-    @info "Restarting simulation from file" restart_file restart_time = string(t_start)
-
-    spaces = (; center_space = axes(Y.c), face_space = axes(Y.f))
-
-    return Y, t_start, spaces
-end
-
 
 function get_setup_type(parsed_args, thermo_params)
     ic_name = parsed_args["initial_condition"]
@@ -395,23 +277,6 @@ function jacobian_from_parsed_args(parsed_args)
     end
 end
 
-function get_jacobian(
-    ode_algo, Y, atmos, jacobian::JacobianAlgorithm, debug_jacobian,
-)
-    ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
-        return nothing
-    @info "Jacobian algorithm: $(summary_string(jacobian))"
-    jac = Jacobian(jacobian, Y, atmos; verbose = debug_jacobian)
-    if hasproperty(jac.cache, :derivative_flags)
-        flags_str = join(
-            ("$k = $(typeof(v).name.name)" for (k, v) in pairs(jac.cache.derivative_flags)),
-            ", ",
-        )
-        @info "Jacobian derivative flags: $flags_str"
-    end
-    return jac
-end
-
 function ode_configuration(::Type{FT}, args) where {FT}
     return ode_configuration(
         FT,
@@ -428,227 +293,6 @@ function ode_configuration(::Type{FT}, args) where {FT}
     )
 end
 
-
-function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
-    max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol,
-    eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol, newton_rtol,
-    jvp_step_adjustment,
-) where {FT}
-    ode_algo_name = getproperty(CTS, Symbol(ode_name))
-    @info "Using ODE config: `$ode_algo_name`"
-    return if ode_algo_name <: CTS.RosenbrockAlgorithmName
-        if update_jacobian_every != "solve"
-            @warn "Rosenbrock algorithms in ClimaTimeSteppers currently only \
-                   support `update_jacobian_every` = \"solve\""
-        end
-        CTS.RosenbrockAlgorithm(CTS.tableau(ode_algo_name()))
-    elseif ode_algo_name <: CTS.ERKAlgorithmName
-        CTS.ExplicitAlgorithm(ode_algo_name())
-    else
-        @assert ode_algo_name <: CTS.IMEXARKAlgorithmName
-        newtons_method = CTS.NewtonsMethod(;
-            max_iters = max_newton_iters_ode,
-            update_j = if update_jacobian_every == "dt"
-                CTS.UpdateEvery(CTS.NewTimeStep)
-            elseif update_jacobian_every == "stage"
-                CTS.UpdateEvery(CTS.NewNewtonSolve)
-            elseif update_jacobian_every == "solve"
-                CTS.UpdateEvery(CTS.NewNewtonIteration)
-            else
-                error("Unknown value of `update_jacobian_every`: \
-                        $(update_jacobian_every)")
-            end,
-            krylov_method = if use_krylov_method
-                CTS.KrylovMethod(;
-                    jacobian_free_jvp = CTS.ForwardDiffJVP(;
-                        step_adjustment = FT(
-                            jvp_step_adjustment,
-                        ),
-                    ),
-                    forcing_term = if use_dynamic_krylov_rtol
-                        α = FT(eisenstat_walker_forcing_alpha)
-                        CTS.EisenstatWalkerForcing(; α)
-                    else
-                        CTS.ConstantForcing(FT(krylov_rtol))
-                    end,
-                )
-            else
-                nothing
-            end,
-            convergence_checker = if use_newton_rtol
-                norm_condition = CTS.MaximumRelativeError(
-                    FT(newton_rtol),
-                )
-                CTS.ConvergenceChecker(; norm_condition)
-            else
-                nothing
-            end,
-        )
-        CTS.IMEXAlgorithm(ode_algo_name(), newtons_method)
-    end
-end
-
-auto_detect_restart_file(::OutputPathGenerator.OutputPathGeneratorStyle, _) =
-    error("auto_detect_restart_file works only with ActiveLink")
-
-"""
-    auto_detect_restart_file(::ActiveLinkStyle, base_output_dir)
-
-Return the most recent restart file in the directory structure in `base_output_dir`, if any.
-
-`auto_detect_restart_file` scans the content of `base_output_dir` matching the expected
-names for output folders generated by `ActiveLinkStyle` (e.g., `output_0000`, `output_0001`).
-It iterates through these folders sorted by number in descending order and returns the latest
-restart file (latest measured by the time in the file name) from the first folder that contains
-restart files matching the pattern `dayDDDD.SSSSS.hdf5`. This ensures that empty or incomplete
-higher-numbered folders are skipped in favor of folders that actually contain restart files.
-If no folder with restart files is found, return `nothing`: this means that the simulation
-cannot be automatically restarted.
-"""
-function auto_detect_restart_file(
-    output_dir_style::OutputPathGenerator.ActiveLinkStyle,
-    base_output_dir,
-)
-    # if base_output_dir does not exist, we return restart_file = nothing because there is
-    # no restart file to be detected
-    isdir(base_output_dir) || return nothing
-
-    # output_dir will be something like ABC/DEF/output_1234
-    name_rx = r"output_(\d\d\d\d)"
-    restart_file_rx = r"day\d+\.\w+\.hdf5"
-    restart_file = nothing
-
-    existing_outputs =
-        filter(x -> !isnothing(match(name_rx, x)), readdir(base_output_dir))
-
-    isempty(existing_outputs) && return nothing
-
-    # Sort folders by number (descending) and find the first with restart files
-    for output_folder in sort(existing_outputs, rev = true)
-        folder_path = joinpath(base_output_dir, output_folder)
-        possible_restart_files =
-            filter(f -> occursin(restart_file_rx, f), readdir(folder_path))
-        if !isempty(possible_restart_files)
-            previous_folder = folder_path
-            restart_file_name = last(CA.sort_files_by_time(possible_restart_files))
-            restart_file = joinpath(previous_folder, restart_file_name)
-            @assert isfile(restart_file) "Restart file does not exist"
-            return restart_file
-        end
-    end
-
-    # No folder with restart files found
-    @warn "No restart files found in any output folder in $(base_output_dir)"
-    return nothing
-end
-
-
-import ClimaUtilities.OutputPathGenerator
-
-"""
-    setup_output_dir(job_id, output_dir, output_dir_style, detect_restart_file, restart_file, comms_ctx)
-
-Unified function for setting up output directories and detecting restart files.
-Used by both AtmosSimulation constructor and get_simulation.
-
-Returns a named tuple with:
-- `output_dir`: The final output directory path
-- `restart_file`: The restart file path (if any)
-"""
-function setup_output_dir(
-    job_id,
-    output_dir,
-    output_dir_style,
-    detect_restart_file,
-    restart_file,
-    comms_ctx,
-)
-    # Set up base output directory
-    default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
-    base_output_dir = isnothing(output_dir) ? default_output : output_dir
-
-    # Validate and get output directory style
-    allowed_dir_styles = Dict(
-        "activelink" => OutputPathGenerator.ActiveLinkStyle(),
-        "removepreexisting" => OutputPathGenerator.RemovePreexistingStyle(),
-    )
-
-    haskey(allowed_dir_styles, lowercase(output_dir_style)) ||
-        error("output_dir_style $(output_dir_style) not available")
-
-    output_dir_style_obj = allowed_dir_styles[lowercase(output_dir_style)]
-
-    final_restart_file = if detect_restart_file && isnothing(restart_file)
-        auto_detect_restart_file(output_dir_style_obj, base_output_dir)
-    else
-        restart_file
-    end
-
-    # Generate the actual output directory
-    output_dir = OutputPathGenerator.generate_output_path(
-        base_output_dir;
-        context = comms_ctx,
-        style = output_dir_style_obj,
-    )
-
-    return output_dir, final_restart_file
-end
-
-"""
-    fully_explicit_tendency!
-
-Experimental timestepping mode where all implicit tendencies are treated explicitly.
-"""
-function fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    (; temp_Yₜ_imp) = p.scratch
-    implicit_tendency!(temp_Yₜ_imp, Y, p, t)
-    remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    Yₜ .+= temp_Yₜ_imp
-end
-
-function args_integrator(Y, p, tspan, ode_algo, callback,
-    jacobian, debug_jacobian, prescribed_flow, dt_integrator,
-)
-    (; atmos) = p
-    s = @timed_str begin
-        if isnothing(prescribed_flow)
-
-            # This is the default case
-            T_exp_T_lim! = remaining_tendency!
-            T_imp! = CTS.ODEFunction(
-                implicit_tendency!;
-                jac_prototype = get_jacobian(
-                    ode_algo, Y, atmos, jacobian, debug_jacobian,
-                ),
-                Wfact = update_jacobian!,
-            )
-            cache_imp! = set_implicit_precomputed_quantities!
-        else
-            # `prescribed_flow` is an experimental case where the flow is prescribed,
-            # so implicit tendencies are treated explicitly to avoid treatment of sound waves
-            T_exp_T_lim! = fully_explicit_tendency!
-            T_imp! = nothing
-            cache_imp! = nothing
-        end
-        tendency_function = CTS.ClimaODEFunction(;
-            T_exp_T_lim!, T_imp!,
-            cache! = set_precomputed_quantities!, cache_imp!,
-            lim! = limiters_func!, dss! = constrain_state!,  # TODO: Rename ClimaODEFunction kwarg to `constrain_state!`
-            initialize_imp! = initialize_implicit_stage_problem!,
-        )
-    end
-    problem = CTS.ODEProblem(tendency_function, Y, tspan, p)
-    # Promote to ensure t_begin, t_end, and dt_integrator all have the same type
-    # (dt_integrator is ITime, p.dt is FT)
-    t_begin, t_end, dt = promote(tspan[1], tspan[2], dt_integrator)
-    # Save solution to integrator.sol at the beginning and end
-    saveat = [t_begin, t_end]
-    args = (problem, ode_algo)
-    kwargs = (; saveat, callback, dt)
-    return (args, kwargs)
-end
-
-import ClimaComms, Logging, NVTX
 function get_comms_context(parsed_args)
     device =
         if !haskey(parsed_args, "device") || parsed_args["device"] === "auto"
@@ -917,7 +561,6 @@ function get_simulation(config::AtmosConfig)
     setup = get_setup_type(pa, CAP.thermodynamics_params(params))
     model = get_atmos(config, params; setup_type = setup)
     grid = get_grid(pa, params, config.comms_ctx)
-    tracers = get_tracers(pa)
 
     log_context(config.comms_ctx)
 
@@ -936,8 +579,8 @@ function get_simulation(config::AtmosConfig)
         ode_config = ode_configuration(FT, pa),
         jacobian = jacobian_from_parsed_args(pa),
         debug_jacobian = pa["debug_jacobian"],
-        aerosol_names = tracers.aerosol_names,
-        time_varying_trace_gases = tracers.time_varying_trace_gas_names,
+        aerosol_names = Tuple(pa["prescribed_aerosols"]),
+        time_varying_trace_gases = Tuple(pa["time_varying_trace_gases"]),
         vertical_water_borrowing_species =
         vertical_water_borrowing_species_from_config(config),
         job_id,
@@ -956,29 +599,4 @@ function get_simulation(config::AtmosConfig)
     log_yaml_and_toml_manifests(config, sim.output_dir, sim.job_id)
 
     return sim
-end
-
-"""
-    extract_diagnostic_periods(diagnostics)
-
-Extract accumulation periods from diagnostics that have reduction functions.
-Returns a Set of Period objects.
-"""
-function extract_diagnostic_periods(diagnostics)
-    periods_reductions = Set()
-    for diag in diagnostics
-        isa_reduction = !isnothing(diag.reduction_time_func)
-        isa_reduction || continue
-
-        if diag.output_schedule_func isa CAD.EveryDtSchedule
-            period = Dates.Second(diag.output_schedule_func.dt)
-        elseif diag.output_schedule_func isa CAD.EveryCalendarDtSchedule
-            period = diag.output_schedule_func.dt
-        else
-            continue
-        end
-
-        push!(periods_reductions, period)
-    end
-    return periods_reductions
 end
