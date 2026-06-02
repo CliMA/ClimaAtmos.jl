@@ -8,7 +8,6 @@ import CloudMicrophysics.Microphysics2M as CM2
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 import Thermodynamics as TD
-import ClimaComms
 import ClimaCore.Operators as Operators
 import ClimaCore.Fields as Fields
 
@@ -930,17 +929,10 @@ function set_microphysics_tendency_cache!(
     else
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments_mp) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
-        # Resolve the run device to a `Val{is_gpu}` flag on the host: it
-        # selects the @inline (CPU) vs @noinline (GPU) quadrature-point
-        # barrier at compile time. A `Val` is non-iterable so ClimaCore
-        # broadcasting treats it as a scalar (the device object itself is
-        # iterable and would be `collect`ed).
-        is_gpu = Val(ClimaComms.device(Y.c) isa ClimaComms.CUDADevice)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments_mp, dt, nsubs_quad,
-            is_gpu,
         )
     end
 
@@ -977,17 +969,10 @@ function set_microphysics_tendency_cache!(
     else
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments_mp) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
-        # Resolve the run device to a `Val{is_gpu}` flag on the host: it
-        # selects the @inline (CPU) vs @noinline (GPU) quadrature-point
-        # barrier at compile time. A `Val` is non-iterable so ClimaCore
-        # broadcasting treats it as a scalar (the device object itself is
-        # iterable and would be `collect`ed).
-        is_gpu = Val(ClimaComms.device(Y.c) isa ClimaComms.CUDADevice)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments_mp, dt, nsubs_quad,
-            is_gpu,
         )
     end
 
@@ -1036,17 +1021,10 @@ function set_microphysics_tendency_cache!(
     else
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments_mp) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
-        # Resolve the run device to a `Val{is_gpu}` flag on the host: it
-        # selects the @inline (CPU) vs @noinline (GPU) quadrature-point
-        # barrier at compile time. A `Val` is non-iterable so ClimaCore
-        # broadcasting treats it as a scalar (the device object itself is
-        # iterable and would be `collect`ed).
-        is_gpu = Val(ClimaComms.device(Y.c) isa ClimaComms.CUDADevice)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments_mp, dt, nsubs_quad,
-            is_gpu,
         )
     end
 

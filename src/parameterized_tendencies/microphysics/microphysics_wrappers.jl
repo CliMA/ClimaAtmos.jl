@@ -316,7 +316,7 @@ end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
     scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-    moments, dt, nsubs, is_gpu::Val = Val(false), args...,
+    moments, dt, nsubs, args...,
 )
     FT = typeof(ρ)
     # Clamp specific humidities to non-negative.
@@ -354,7 +354,7 @@ end
         dt, nsubs, args,
     )
     return integrate_over_sgs(
-        evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq, is_gpu,
+        evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
     )
 end
 
