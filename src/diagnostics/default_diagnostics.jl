@@ -101,7 +101,7 @@ function common_diagnostics(
                     date_last),
                 output_schedule_func = EveryCalendarDtSchedule(
                     period;
-                    reference_date = start_date,
+                    start_date,
                     date_last = date_last,
                 ),
                 reduction_time_func = reduction,
@@ -147,7 +147,7 @@ function make_compute_schedule(variable, period, start_date, date_last)
     compute_every = short_name in HOURLY_DIAGS ? Dates.Hour(1) : Dates.Hour(6)
     return EveryCalendarDtSchedule(
         compute_every;
-        reference_date = start_date,
+        start_date,
         date_last = date_last,
     )
 end
