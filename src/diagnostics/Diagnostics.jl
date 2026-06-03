@@ -50,8 +50,9 @@ import ..DiagnosticEDMFX
 import ..NonOrographicGravityWave
 import ..OrographicGravityWave
 
-# surface_model
-import ..SlabOceanSST
+# surface temperature
+import ..SurfaceConditions
+import ..SurfaceConditions: SlabOceanTemperature
 
 # functions used to calculate diagnostics
 import ..draft_area

@@ -57,4 +57,26 @@ function center_initial_condition(setup::RCEMIPIIProfile, local_geometry, params
 end
 
 insolation_model(::RCEMIPIIProfile) = RCEMIPIIInsolation()
-surface_temperature_model(::RCEMIPIIProfile) = RCEMIPIISST()
+
+# Sphere SST distribution from Wing et al. (2023) https://gmd.copernicus.org/preprints/gmd-2023-235/
+function rcemipii_temperature(
+    coordinates::Union{Geometry.LatLongZPoint, Geometry.LatLongPoint},
+    surface_temp_params, _,
+)
+    (; lat) = coordinates
+    (; SST_mean, SST_delta, SST_wavelength_latitude) = surface_temp_params
+    return SST_mean + SST_delta / 2 * cosd(360 * lat / SST_wavelength_latitude)
+end
+
+# Box SST distribution from Wing et al. (2023)
+function rcemipii_temperature(
+    coordinates::Union{Geometry.XZPoint, Geometry.XYZPoint},
+    surface_temp_params, _,
+)
+    (; x) = coordinates
+    (; SST_mean, SST_delta, SST_wavelength) = surface_temp_params
+    return SST_mean - SST_delta / 2 * cospi(2 * x / SST_wavelength)
+end
+
+surface_temperature_model(::RCEMIPIIProfile) =
+    AnalyticTemperature(rcemipii_temperature)

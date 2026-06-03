@@ -1,6 +1,21 @@
 # we are ignoring the volume reflectance for now
+"""
+    SurfaceAlbedoModel
+
+Abstract supertype for surface shortwave albedo models. Concrete subtypes
+([`ConstantAlbedo`](@ref), [`RegressionFunctionAlbedo`](@ref),
+[`CouplerAlbedo`](@ref)) set the direct and diffuse shortwave reflectivities
+seen by the radiation scheme (via `set_surface_albedo!`).
+"""
 abstract type SurfaceAlbedoModel end
 
+"""
+    CouplerAlbedo()
+
+Surface albedo supplied by an external driver (the coupler), which writes the
+direct/diffuse shortwave albedos into the radiation cache. ClimaAtmos performs
+no albedo computation of its own in this mode.
+"""
 struct CouplerAlbedo <: SurfaceAlbedoModel end
 
 """

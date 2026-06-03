@@ -72,20 +72,21 @@ end
 
 function surface_condition(::TRMM_LBA, params)
     FT = eltype(params)
-    T = FT(296.85)
-    p = FT(99130)
-    q_vap = FT(0.02245)
-    z0 = FT(1e-4)
-    ustar = FT(0.28)
-    function surface_state(surface_coordinates, interior_z, t)
-        _FT = eltype(surface_coordinates)
+    # Prescribed SHF/LHF follow a diurnal cycle resolved once per surface update
+    # by `resolve_flux_scheme`, while z0 and ustar stay constant.
+    function trmm_lba_fluxes(t, ::Type{_FT}) where {_FT}
         value = cos(_FT(π) / 2 * (1 - _FT(t) / (_FT(5.25) * 3600)))
         shf = 270 * max(0, value)^_FT(1.5)
         lhf = 554 * max(0, value)^_FT(1.3)
-        parameterization = MoninObukhov(; z0, shf, lhf, ustar)
-        return SurfaceState(; parameterization, T, p, q_vap)
+        HeatFluxes(; shf, lhf)
     end
-    return surface_state
+    return (;
+        flux_scheme = MoninObukhov(;
+            z0 = FT(1e-4), fluxes = trmm_lba_fluxes, ustar = FT(0.28),
+        ),
+        temperature = AnalyticTemperature(Returns(FT(296.85))),
+        overrides = SurfaceBoundaryOverrides(p = FT(99130), q_vap = FT(0.02245)),
+    )
 end
 
 radiation_model(::TRMM_LBA, ::Type{FT}) where {FT} = RadiationTRMM_LBA(FT)

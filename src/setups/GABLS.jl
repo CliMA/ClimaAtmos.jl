@@ -44,20 +44,15 @@ end
 
 function surface_condition(::GABLS, params)
     FT = eltype(params)
-    p = FT(1e5)
-    q_vap = FT(0)
-    z0 = FT(0.1)
-    parameterization = MoninObukhov(; z0)
-    function surface_state(surface_coordinates, interior_z, t)
-        _FT = eltype(surface_coordinates)
-        SurfaceState(;
-            parameterization,
-            T = 265 - _FT(0.25) * _FT(t) / 3600,
-            p,
-            q_vap,
-        )
-    end
-    return surface_state
+    gabls_T(coords, _, t) =
+        let _FT = eltype(coords)
+            265 - _FT(0.25) * _FT(t) / 3600
+        end
+    return (;
+        flux_scheme = MoninObukhov(; z0 = FT(0.1)),
+        temperature = AnalyticTemperature(gabls_T),
+        overrides = SurfaceBoundaryOverrides(p = FT(1e5), q_vap = FT(0)),
+    )
 end
 
 coriolis_forcing(::GABLS, ::Type{FT}) where {FT} =

@@ -17,15 +17,13 @@ const FT = Float32
     equil = CA.Presets.equil_moist_0m()
     @test equil.microphysics_model isa CA.EquilibriumMicrophysics0M
     @test equil.cloud_model isa CA.GridScaleCloud
-    @test equil.surface_model isa CA.PrescribedSST
-    @test equil.sfc_temperature isa CA.ZonallySymmetricSST
+    @test equil.surface.temperature isa CA.SurfaceConditions.AnalyticTemperature
     @test equil.insolation isa CA.IdealizedInsolation
 
     nonequil = CA.Presets.nonequil_moist_1m()
     @test nonequil.microphysics_model isa CA.NonEquilibriumMicrophysics1M
     @test nonequil.cloud_model isa CA.GridScaleCloud
-    @test nonequil.surface_model isa CA.PrescribedSST
-    @test nonequil.sfc_temperature isa CA.ZonallySymmetricSST
+    @test nonequil.surface.temperature isa CA.SurfaceConditions.AnalyticTemperature
     @test nonequil.insolation isa CA.IdealizedInsolation
 end
 
@@ -38,7 +36,7 @@ end
     m = CA.Presets.equil_moist_0m(; microphysics_model = CA.DryModel())
     @test m.microphysics_model isa CA.DryModel
     # Other equil defaults should still be in place:
-    @test m.sfc_temperature isa CA.ZonallySymmetricSST
+    @test m.surface.temperature isa CA.SurfaceConditions.AnalyticTemperature
 end
 
 @testset "Diagnostic/prognostic EDMF presets" begin

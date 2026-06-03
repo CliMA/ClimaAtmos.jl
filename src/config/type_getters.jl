@@ -243,23 +243,6 @@ function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp
     return (; ᶜu, ᶠu)
 end
 
-function get_surface_setup(parsed_args; setup_type = nothing)
-    if !isnothing(setup_type)
-        return function (params)
-            result = Setups.surface_condition(setup_type, params)
-            if !isnothing(result)
-                return result
-            end
-            return _config_surface_setup(parsed_args)(params)
-        end
-    end
-    return _config_surface_setup(parsed_args)
-end
-
-function _config_surface_setup(parsed_args)
-    return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
-end
-
 # Translate YAML config keys into a user-facing JacobianAlgorithm stub.
 function jacobian_from_parsed_args(parsed_args)
     approximate_solve_iters = parsed_args["approximate_linear_solve_iters"]
@@ -542,7 +525,6 @@ function get_simulation(config::AtmosConfig)
         context = config.comms_ctx,
         grid,
         setup,
-        surface_setup = get_surface_setup(pa; setup_type = setup),
         steady_state_velocity = steady_state_velocity_from_config(config, params),
         dt = pa["dt"],
         start_date = parse_date(pa["start_date"]),
