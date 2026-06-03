@@ -33,4 +33,27 @@ jobs:
           skip: Artifacts, Dates, Downloads, LazyArtifacts, LinearAlgebra, Logging, Printf, Test, Statistics, Random, Pkg, Glib_jll, Musica
 
       - uses: julia-actions/julia-buildpkg@latest
-      - uses: julia-actions/julia-runtest@latest
+      - name: Run infrastructure tests
+        uses: julia-actions/julia-runtest@latest
+        env:
+          TEST_GROUP: infrastructure
+      - name: Run diagnostics tests
+        uses: julia-actions/julia-runtest@latest
+        env:
+          TEST_GROUP: diagnostics
+      - name: Run dynamics tests
+        uses: julia-actions/julia-runtest@latest
+        env:
+          TEST_GROUP: dynamics
+      - name: Run parameterizations tests
+        uses: julia-actions/julia-runtest@latest
+        env:
+          TEST_GROUP: parameterizations
+      - name: Run restarts tests
+        uses: julia-actions/julia-runtest@latest
+        env:
+          TEST_GROUP: restarts
+      - name: Run era5 tests
+        uses: julia-actions/julia-runtest@latest
+        env:
+          TEST_GROUP: era5
