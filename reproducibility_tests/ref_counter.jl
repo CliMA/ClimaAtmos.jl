@@ -1,4 +1,4 @@
-351
+352
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+352
+- Truncated-Gaussian microphysics and cloud fraction closure.
+
 351
 - Add `@noinline` function barrier for SGS microphysics quadrature to improve
   GPU occupancy; this shifts codegen enough to affect reproducibility outputs.
