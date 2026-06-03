@@ -27,7 +27,9 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                 @test hasfield(typeof(mp_0m.precip), :qc_0)
 
                 # 1M parameters
-                mp_1m = CMP.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
+                mp_1m = CMP.Microphysics1MParams(toml_dict;
+                    rain_autoconversion = CMP.PrescribedNd(toml_dict),
+                )
                 @test hasfield(typeof(mp_1m), :cloud)
                 @test hasfield(typeof(mp_1m), :precip)
                 @test hasfield(typeof(mp_1m), :terminal_velocity)
@@ -88,7 +90,9 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 toml_dict = CP.create_toml_dict(FT)
-                mp = CMP.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
+                mp = CMP.Microphysics1MParams(toml_dict;
+                    rain_autoconversion = CMP.PrescribedNd(toml_dict),
+                )
                 thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
 
                 # Realistic atmospheric conditions
@@ -102,7 +106,8 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                 dt = FT(60)  # s
 
                 # Test BMT call
-                result = BMT.average_bulk_microphysics_tendencies(
+                result = BMT.bulk_microphysics_tendencies(
+                    BMT.LinearizedAverage(),
                     BMT.Microphysics1Moment(),
                     mp,
                     thp,
@@ -206,7 +211,9 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 toml_dict = CP.create_toml_dict(FT)
-                mp = CMP.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
+                mp = CMP.Microphysics1MParams(toml_dict;
+                    rain_autoconversion = CMP.PrescribedNd(toml_dict),
+                )
                 thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
 
                 ρ = FT(1.0)
@@ -218,7 +225,8 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                 q_sno = FT(0.0005)
                 dt = FT(60)
 
-                result = BMT.average_bulk_microphysics_tendencies(
+                result = BMT.bulk_microphysics_tendencies(
+                    BMT.LinearizedAverage(),
                     BMT.Microphysics1Moment(),
                     mp,
                     thp,
@@ -249,11 +257,14 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 toml_dict = CP.create_toml_dict(FT)
-                mp = CMP.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
+                mp = CMP.Microphysics1MParams(toml_dict;
+                    rain_autoconversion = CMP.PrescribedNd(toml_dict),
+                )
                 thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
 
                 # Zero hydrometeors
-                result = BMT.average_bulk_microphysics_tendencies(
+                result = BMT.bulk_microphysics_tendencies(
+                    BMT.LinearizedAverage(),
                     BMT.Microphysics1Moment(),
                     mp,
                     thp,

@@ -206,7 +206,7 @@ same quadrature integration.
 - `q_tot_hat`: Total specific humidity at quadrature point [kg/kg]
 
 # Returns
-`NamedTuple` from `BMT.average_bulk_microphysics_tendencies` with fields:
+`NamedTuple` from `BMT.bulk_microphysics_tendencies(BMT.LinearizedAverage(), ...)` with fields:
 - `dq_lcl_dt`: Cloud liquid tendency [kg/kg/s]
 - `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
 - `dq_rai_dt`: Rain tendency [kg/kg/s]
@@ -257,7 +257,8 @@ end
     q_lcl_hat = eval.q_lcl_mean + eval.γ_l * (q_lcl_eq_hat - eval.M_l)
     q_icl_hat = eval.q_icl_mean + eval.γ_i * (q_icl_eq_hat - eval.M_i)
 
-    return BMT.average_bulk_microphysics_tendencies(
+    return BMT.bulk_microphysics_tendencies(
+        BMT.LinearizedAverage(),
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
         q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
         eval.dt, eval.nsubs, eval.args...,
@@ -317,7 +318,8 @@ NamedTuple with microphysics source terms:
 @inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
     ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,
 )
-    local_tendency = BMT.average_bulk_microphysics_tendencies(
+    local_tendency = BMT.bulk_microphysics_tendencies(
+        BMT.LinearizedAverage(),
         BMT.Microphysics1Moment(), cmp, thp, ρ, T,
         q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
     )
