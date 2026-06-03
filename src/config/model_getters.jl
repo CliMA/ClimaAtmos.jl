@@ -733,6 +733,13 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     )
 end
 
+function AtmosChem(config::AtmosConfig, ::Type{FT}) where {FT}
+    pa = config.parsed_args
+    chemistry_config = get(pa, "chemistry_config", nothing)
+    isnothing(chemistry_config) && return AtmosChem()
+    return AtmosChem(; chemistry_model = GasPhaseChem(chemistry_config))
+end
+
 function AtmosRadiation(config::AtmosConfig, ::Type{FT}; setup_type = nothing) where {FT}
     pa = config.parsed_args
     return AtmosRadiation(;

@@ -39,6 +39,7 @@ import ..EDOnlyEDMFX
 import ..n_mass_flux_subdomains
 import ..Parameters.ClimaAtmosParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
+import ..GasPhaseChem
 
 # Model types returned by setup interface methods
 import ..GCMForcing, ..ISDACForcing

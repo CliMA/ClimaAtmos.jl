@@ -459,3 +459,6 @@ log_to_file:
 prescribed_flow:
   help: "Prescribe a flow field [`nothing` (default), `ShipwayHill2012`]"
   value: ~
+chemistry_config:
+  help: "Path to a MUSICA chemistry configuration JSON file. Requires the ClimaAtmosMusica extension (`import Musica`). Defaults to nothing (no chemistry)."
+  value: ~

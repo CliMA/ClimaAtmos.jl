@@ -93,6 +93,12 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         filter(is_in_Y, condensate_names)
     available_tracer_names =
         (ρq_tot_if_available..., available_condensate_names...)
+    chemistry_tracer_names = if atmos.chemistry.chemistry_model isa GasPhaseChem
+        names = species_names(atmos.chemistry.chemistry_model)  
+        Tuple(MatrixFields.FieldName(:c, Symbol(:ρ, s)) for s in names)
+    else
+        ()
+    end
 
     # we define the list of condensate masses separately because ρa and q_tot
     # depend on the masses via sedimentation
@@ -133,7 +139,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         (@name(c.ρ), sfc_if_available...),
     )
 
-    active_scalar_names = (@name(c.ρ), @name(c.ρe_tot), ρq_tot_if_available...)
+    active_scalar_names = (@name(c.ρ), @name(c.ρe_tot), 
+                            ρq_tot_if_available..., chemistry_tracer_names...)
     advection_blocks = (
         (
             use_derivative(topography_flag) ?
@@ -160,7 +167,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
 
-    diffused_scalar_names = (@name(c.ρe_tot), available_tracer_names...)
+    diffused_scalar_names = (@name(c.ρe_tot), available_tracer_names..., chemistry_tracer_names...)
     diffusion_blocks = if use_derivative(diffusion_flag)
         (
             map(
@@ -291,6 +298,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         ρtke_if_available...,
         available_sgs_scalar_names...,
         sgs_ρa_if_available...,
+        chemistry_tracer_names...,
     )
 
     velocity_alg = MatrixFields.BlockLowerTriangularSolve(

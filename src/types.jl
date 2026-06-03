@@ -850,7 +850,14 @@ end
 
 
 abstract type AbstractChemistryModel end
-struct GasPhaseChem <: AbstractChemistryModel end
+
+struct GasPhaseChem{N, names} <: AbstractChemistryModel
+    config_path::String
+end
+species_names(::GasPhaseChem{N, names}) where {N, names} = names
+
+GasPhaseChem(config_path::String, names::NTuple{N, Symbol}) where {N} =
+    GasPhaseChem{N, names}(config_path)
 
 """
     AtmosChem

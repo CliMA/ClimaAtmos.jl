@@ -11,3 +11,5 @@
 No-op: no chemistry model is active.
 """
 chemistry_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+
+function musica_species_names end
