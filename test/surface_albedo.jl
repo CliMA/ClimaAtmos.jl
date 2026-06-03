@@ -46,9 +46,6 @@ Random.seed!(1234)
         simulation = ClimaAtmos.get_simulation(config)
         (; u, p) = simulation.integrator
 
-        direct_albedo_init = deepcopy(p.radiation.rrtmgp_model.direct_sw_surface_albedo)
-        diffuse_albedo_init = deepcopy(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo)
-
         # At t=0, albedo should be set to NaN
         ClimaAtmos.set_surface_albedo!(u, p, 0.0, p.atmos.surface_albedo)
         @test all(isnan.(p.radiation.rrtmgp_model.direct_sw_surface_albedo))
