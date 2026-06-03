@@ -182,7 +182,7 @@ function parse_frequency_to_schedule(
 
     return CAD.EveryCalendarDtSchedule(
         period_dates;
-        reference_date = start_date,
+        start_date,
         date_last = date_last,
     )
 end
@@ -271,7 +271,7 @@ function checkpoint_callback(
     if checkpoint_frequency != Inf
         schedule = CAD.EveryCalendarDtSchedule(
             checkpoint_frequency;
-            reference_date = start_date,
+            start_date,
             date_last = t_start isa ITime ?
                         ClimaUtilities.TimeManager.date(t_start) :
                         start_date + Dates.Second(t_start),
