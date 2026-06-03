@@ -31,3 +31,5 @@ diagnostics:
     period: 10mins
 ode_algo: "ARS222"
 chemistry_config: "config/chemistry_configs/musica_configs/v1/analytical/config.json"
+# chemistry_config: "config/chemistry_configs/musica_configs/v1/chapman/config.json"
+# chemistry_config: "config/chemistry_configs/musica_configs/v1/ts1/ts1.json"
