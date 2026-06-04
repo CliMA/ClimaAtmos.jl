@@ -11,7 +11,7 @@ function argparse_settings()
         "--job_id"
         help = "A unique job identifier, among all possible (parallel) running jobs."
         arg_type = String
-        default = config_id_from_config_file(default_config_file)
+        default = job_id_from_config_file(default_config_file)
     end
     return s
 end

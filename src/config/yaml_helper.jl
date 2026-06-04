@@ -28,19 +28,6 @@ function default_config_dict(config_file = default_config_file)
     return strip_help_messages(config)
 end
 
-"""
-    config_from_target_job(target_job)
-
-Given a job id string, returns the configuration for that job.
-Does not include the default configuration dictionary.
-"""
-function config_from_target_job(target_job)
-    # get(configs_per_config_id(), target_job, error("")) doesn't work for some reason
-    for (job_id, config_tuple) in configs_per_config_id()
-        job_id == target_job && return config_tuple.config
-    end
-end
-
 ContainerType(T) = Union{Tuple{<:T, Vararg{T}}, Vector{<:T}}
 
 """
@@ -177,35 +164,27 @@ function non_default_config_entries(config, defaults = default_config_dict())
 end
 
 """
-    configs_per_config_id(directory)
+    load_all_configs([with_pair])
 
-Walks a directory and reads all of the yaml files that are used to configure the driver,
-then parses them into a vector of dictionaries. Does not include the default configuration.
-To filter only configurations with a certain key/value pair,
-use the `filter_name` keyword argument with a Pair.
+Loads all available configs, excluding the default config, and stores them in a
+Dict that maps each one to a unique string. A key/value pair can also be used to
+filter out all configs which do not associate that key with the specified value.
 """
-function configs_per_config_id(
-    directory::AbstractString = config_path,
-    filter_name = nothing,
-)
-    cmds = Dict()
-    for (root, _, files) in walkdir(directory)
+function load_all_configs(with_pair = nothing)
+    configs = Dict()
+    for (root, _, files) in walkdir(config_path)
         for f in files
             file = joinpath(root, f)
-            !endswith(file, ".yml") && continue
-            occursin("default_configs", file) && continue
+            (endswith(file, ".yml") && file != default_config_file) || continue
             config = load_yaml_file(file)
-            name = config_id_from_config_file(file)
-            cmds[name] = (; config, config_file = file)
+            if !isnothing(with_pair)
+                (key, value) = with_pair
+                (haskey(config, key) && config[key] == value) || continue
+            end
+            configs[job_id_from_config_file(file)] = config
         end
     end
-    if !isnothing(filter_name)
-        (key, value) = filter_name
-        filter!(cmds) do (config_id, nt)
-            get(nt.config, key, "") == value
-        end
-    end
-    return cmds
+    return configs
 end
 
 function is_unique_basename(file, bname = first(splitext(basename(file))))
@@ -221,7 +200,7 @@ function is_unique_basename(file, bname = first(splitext(basename(file))))
     return is_unique
 end
 
-function config_id_from_config_file(config_file::String)
+function job_id_from_config_file(config_file::String)
     @assert isfile(config_file)
     bname = first(splitext(basename(config_file)))
     if is_unique_basename(config_file, bname)
@@ -231,9 +210,9 @@ function config_id_from_config_file(config_file::String)
     end
 end
 
-# Can we do better?
-config_id_from_config_files(config_files::Union{Tuple, Vector}) =
-    join(map(x -> config_id_from_config_file(x), config_files), "_")
+job_id_from_config_files(config_files::Union{Tuple, Vector}) =
+    join(map(x -> job_id_from_config_file(x), config_files), "_")
+
 """
     maybe_resolve_and_acquire_artifacts(input_str::AbstractString, context)
 

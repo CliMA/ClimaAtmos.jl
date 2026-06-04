@@ -1,13 +1,4 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
-import YAML
-
-"""
-    TargetJobConfig(target_job)
-
-Creates a full model configuration from the given target job.
-"""
-TargetJobConfig(target_job) =
-    CA.AtmosConfig(CA.config_from_target_job(target_job))
 
 import ClimaTimeSteppers as CTS
 get_W(i::CTS.DistributedODEIntegrator) =
