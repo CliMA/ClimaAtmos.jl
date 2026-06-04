@@ -11,7 +11,6 @@ import Thermodynamics as TD
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 import UnrolledUtilities: unrolled_reduce
 
-
 # ============================================================================
 # Gauss-Hermite Quadrature
 # ============================================================================
@@ -523,7 +522,11 @@ Approximates the integral:
 # Returns
 Weighted sum with the same type as `f(T, q)`.
 """
-function sum_over_quadrature_points(f, get_x_hat, quad::SGSQuadrature{N}) where {N}
+function sum_over_quadrature_points(
+    f,
+    get_x_hat,
+    quad::SGSQuadrature{N},
+) where {N}
     χ = quad.a
     weights = quad.w
     FT = eltype(χ)

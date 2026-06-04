@@ -1,4 +1,4 @@
-350
+351
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+351
+- Add `@noinline` function barrier for SGS microphysics quadrature to improve
+  GPU occupancy; this shifts codegen enough to affect reproducibility outputs.
+  PR 4503; buildkite run: https://buildkite.com/clima/climaatmos-ci/builds/29967
+
 350
 - Update to CloudMicrophysics.jl v0.36 process-option API; restructured linearized
   solver introduces small floating-point rounding differences.
