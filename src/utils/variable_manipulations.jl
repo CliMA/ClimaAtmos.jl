@@ -190,11 +190,13 @@ entrainment mixing, SGS mass/diffusive flux, Rayleigh sponge,
 filter/constraints).
 
 Analogous to `gs_tracer_names` for grid-scale tracers.
+Returns an empty tuple when `Y.c` has no `sgsʲs` field (e.g., `DiagnosticEDMFX`).
 """
 sgs_tracer_names(Y) =
+    MatrixFields.has_field(Y.c, @name(sgsʲs)) ?
     unrolled_filter(MatrixFields.top_level_names(Y.c.sgsʲs.:(1))) do name
         !(name in (@name(ρa), @name(mse), @name(q_tot)))
-    end
+    end : ()
 
 """
     foreach_sgs_tracer(f, Y_or_similar_values...)
