@@ -407,57 +407,28 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜρʲs.:($$j),
                 turbconv_model,
             )
-            # Flux form sedimentation of mass mixing ratio tracers
+            # Flux form sedimentation of mass and number tracers
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.
             sgs_sedimentation_tracers = (
-                (@name(c.sgsʲs.:(1).q_lcl), @name(q_lcl), @name(ᶜwₗʲs.:(1))),
-                (@name(c.sgsʲs.:(1).q_icl), @name(q_icl), @name(ᶜwᵢʲs.:(1))),
-                (@name(c.sgsʲs.:(1).q_rai), @name(q_rai), @name(ᶜwᵣʲs.:(1))),
-                (@name(c.sgsʲs.:(1).q_sno), @name(q_sno), @name(ᶜwₛʲs.:(1))),
-            )
-
-            MatrixFields.unrolled_foreach(
-                sgs_sedimentation_tracers,
-            ) do (qʲ_name, name, wʲ_name)
-                MatrixFields.has_field(Y, qʲ_name) || return
-
-                ᶜqʲ = MatrixFields.get_field(Y, qʲ_name)
-                ᶜqʲₜ = MatrixFields.get_field(Yₜ, qʲ_name)
-                ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-
-                vtt = p.scratch.ᶜtemp_scalar_4
-                updraft_sedimentation!(
-                    vtt,
-                    p,
-                    ᶜρʲs.:($j),
-                    ᶜwʲ,
-                    ᶜa,
-                    ᶜqʲ,
-                    ᶠJ,
-                )
-                @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
-                @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
-            end
-        end
-
-        # Sedimentation of number concentrations for 2M microphysics
-        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
-
-            # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
-            # TODO - make it work for multiple updrafts
-            if j > 1
-                error("Below code doesn't work for multiple updrafts")
-            end
-
-            # Sedimentation velocities for microphysics number concentrations
-            # (or any tracers that does not directly participate in variations of q_tot and mse)
-            sgs_number_sedimentation_tracers = (
+                (@name(c.sgsʲs.:(1).q_lcl), @name(ᶜwₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_icl), @name(ᶜwᵢʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_rai), @name(ᶜwᵣʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_sno), @name(ᶜwₛʲs.:(1))),
                 (@name(c.sgsʲs.:(1).n_lcl), @name(ᶜwₙₗʲs.:(1))),
                 (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
             )
 
+            # Mass mixing ratio tracers whose sedimentation feeds back
+            # into q_tot (number concentrations do not).
+            mass_sedimentation_names = (
+                @name(c.sgsʲs.:(1).q_lcl),
+                @name(c.sgsʲs.:(1).q_icl),
+                @name(c.sgsʲs.:(1).q_rai),
+                @name(c.sgsʲs.:(1).q_sno),
+            )
+
             MatrixFields.unrolled_foreach(
-                sgs_number_sedimentation_tracers,
+                sgs_sedimentation_tracers,
             ) do (χʲ_name, wʲ_name)
                 MatrixFields.has_field(Y, χʲ_name) || return
 
@@ -465,7 +436,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
 
-                # Flux form sedimentation of tracers
                 vtt = p.scratch.ᶜtemp_scalar_4
                 updraft_sedimentation!(
                     vtt,
@@ -477,6 +447,10 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶠJ,
                 )
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
+                # Compile-time check: mass species contribute to q_tot
+                if χʲ_name in mass_sedimentation_names
+                    @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
+                end
             end
         end
     end

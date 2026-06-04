@@ -251,6 +251,19 @@ Mirrors the grid-scale check in `apply_tracer_hyperdiffusion_tendency!`.
 is_precip_sgs_tracer(χ_name) =
     χ_name in (@name(q_rai), @name(q_sno), @name(n_rai))
 
+"""
+    get_sgsʲ_name(χ_name::FieldName)
+
+Construct the full Jacobian matrix path name for an SGS tracer in updraft 1.
+Maps e.g. `@name(q_lcl)` → `@name(c.sgsʲs.:(1).q_lcl)`.
+
+Used in the manual sparse Jacobian to index matrix blocks for auto-discovered
+SGS tracers. The result is a compile-time constant when `χ_name` is known
+at compile time (as it is inside `unrolled_foreach` or `for ... in Tuple`).
+"""
+get_sgsʲ_name(::MatrixFields.FieldName{names}) where {names} =
+    MatrixFields.FieldName(:c, :sgsʲs, 1, names...)
+
 
 """
     sgs_tracer_names(Y)
