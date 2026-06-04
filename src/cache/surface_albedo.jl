@@ -121,9 +121,9 @@ end
 
 Tell the ClimaAtmos to skip setting the surface albedo, as it is handled by the coupler.
 
-When running in a coupled simulation, set the surface albedo to 0.38 at the beginning of the simulation,
-so the initial callback initialization doesn't lead to NaNs in the radiation model.
-Subsequently, the surface albedo will be updated by the coupler.
+To avoid NaNs or invalid values in the first radiation call, the coupler retrieves
+the albedo initial conditions from the surface models, and provides these to the
+atmosphere model before stepping.
 """
 function set_surface_albedo!(Y, p, t, ::CouplerAlbedo)
     FT = eltype(Y)
@@ -131,10 +131,6 @@ function set_surface_albedo!(Y, p, t, ::CouplerAlbedo)
         # set initial insolation initial conditions
         !(p.atmos.insolation isa IdealizedInsolation) &&
             set_insolation_variables!(Y, p, t, p.atmos.insolation)
-        # set surface albedo to 0.38
-        @warn "Setting surface albedo to 0.38 at the beginning of the simulation"
-        p.radiation.rrtmgp_model.direct_sw_surface_albedo .= FT(0.38)
-        p.radiation.rrtmgp_model.diffuse_sw_surface_albedo .= FT(0.38)
     else
         nothing
     end
