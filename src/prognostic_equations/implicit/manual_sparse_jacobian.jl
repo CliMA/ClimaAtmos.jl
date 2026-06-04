@@ -99,6 +99,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     else
         ()
     end
+    sgs_chemistry_tracer_names = map(get_χʲ_name_from_ρχ_name, chemistry_tracer_names)
+
 
     # we define the list of condensate masses separately because ρa and q_tot
     # depend on the masses via sedimentation
@@ -123,6 +125,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     sgs_scalar_names =
         (
             sgs_condensate_names...,
+            sgs_chemistry_tracer_names...,
             @name(c.sgsʲs.:(1).q_tot),
             @name(c.sgsʲs.:(1).mse),
         )

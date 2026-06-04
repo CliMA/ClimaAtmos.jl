@@ -22,6 +22,7 @@ function center_prognostic_variables(physical_state, local_geometry, params, atm
     sgs = turbconv_center_variables(
         physical_state, local_geometry, params,
         atmos_model.turbconv_model, atmos_model.microphysics_model,
+        atmos_model.chemistry_model,
     )
     return (; gs..., sgs...)
 end
@@ -106,7 +107,10 @@ function chemistry_variables(ρ, physical_state, ::GasPhaseChem{N, names}) where
     field_values = ntuple(_ -> zero(ρ), Val(N))
     return NamedTuple{field_names}(field_values)
 end
-
+chemistry_sgs_variables(q_tot, ::Nothing) = (;)
+function chemistry_sgs_variables(q_tot, ::GasPhaseChem{N, names}) where {N, names}
+    return NamedTuple{names}(ntuple(_ -> zero(q_tot), Val(N)))
+end
 # ============================================================================
 # Turbconv center dispatch
 # ============================================================================
@@ -120,7 +124,7 @@ mass-flux subdomains in `turbconv_model`.
 uniform_subdomains(nt, turbconv_model) =
     ntuple(Returns(nt), Val(n_mass_flux_subdomains(turbconv_model)))
 
-turbconv_center_variables(physical_state, local_geometry, params, ::Nothing, _) = (;)
+turbconv_center_variables(physical_state, local_geometry, params, ::Nothing, _, _) = (;)
 
 function turbconv_center_variables(
     physical_state,
@@ -128,6 +132,7 @@ function turbconv_center_variables(
     params,
     turbconv_model::PrognosticEDMFX,
     microphysics_model,
+    chemistry_model,
 )
     ρ = air_density(physical_state, params)
     (; tke, draft_area, T, q_tot, q_liq, q_ice) = physical_state
@@ -137,7 +142,7 @@ function turbconv_center_variables(
     thermo_params = CAP.thermodynamics_params(params)
     e_pot = geopotential(CAP.grav(params), local_geometry.coordinates.z)
     mse = TD.moist_static_energy(thermo_params, T, e_pot, q_tot, q_liq, q_ice)
-    sgsʲs = uniform_subdomains((; ρa, mse, q_tot), turbconv_model)
+    sgsʲs = uniform_subdomains((; ρa, mse, q_tot, chemistry_sgs_variables(q_tot, chemistry_model)...), turbconv_model)
     return (; ρtke, sgsʲs)
 end
 
@@ -147,6 +152,7 @@ function turbconv_center_variables(
     params,
     turbconv_model::PrognosticEDMFX,
     microphysics_model::NonEquilibriumMicrophysics,
+    chemistry_model,
 )
     (; T, q_tot, q_liq, q_ice, q_rai, q_sno, n_liq, n_rai, tke, draft_area) = physical_state
     ρ = air_density(physical_state, params)
@@ -158,7 +164,9 @@ function turbconv_center_variables(
     mse = TD.moist_static_energy(thermo_params, T, e_pot, q_tot, q_liq, q_ice)
     if microphysics_model isa NonEquilibriumMicrophysics1M
         sgsʲs = uniform_subdomains(
-            (; ρa, mse, q_tot, q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno),
+            (; ρa, mse, q_tot, q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno,
+                chemistry_sgs_variables(q_tot, chemistry_model)...,
+            ),
             turbconv_model,
         )
     else  # NonEquilibriumMicrophysics2M
@@ -166,6 +174,7 @@ function turbconv_center_variables(
             (; ρa, mse, q_tot,
                 q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno,
                 n_lcl = n_liq, n_rai,
+                chemistry_sgs_variables(q_tot, chemistry_model)...,
             ),
             turbconv_model,
         )
@@ -178,7 +187,7 @@ function turbconv_center_variables(
     local_geometry,
     params,
     turbconv_model::Union{EDOnlyEDMFX, DiagnosticEDMFX},
-    _,
+    _, _,
 )
     ρ = air_density(physical_state, params)
     ρtke = ρ * physical_state.tke
