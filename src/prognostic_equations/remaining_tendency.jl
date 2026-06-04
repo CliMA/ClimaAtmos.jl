@@ -36,6 +36,8 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     end
     apply_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
     apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    # Auto-discovered SGS tracers: sequential prep + DSS + apply per tracer
+    sgs_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 end
 
 """
@@ -178,15 +180,15 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             )
             @. Yₜ.c.sgsʲs.:($$j).q_tot += rst_sgs_q_tot
         end
-        # Auto-discovered SGS tracers (microphysics species and any
-        # user-defined passive tracers)
+        # Auto-discovered SGS tracers: Rayleigh sponge
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
+            MatrixFields.has_field(Y.c, ρχ_name) || continue
             ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
             ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
             for j in 1:n
-                ᶜsgs_χ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
-                ᶜsgs_χₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
+                ᶜsgs_χ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+                ᶜsgs_χₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
                 rst_sgs_χ = rayleigh_sponge_tendency_sgs_tracer(ᶜsgs_χ, ᶜχ, rayleigh_sponge)
                 @. ᶜsgs_χₜ += rst_sgs_χ
             end

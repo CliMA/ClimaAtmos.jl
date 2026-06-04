@@ -505,8 +505,8 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         # user-defined passive tracers)
         for χ_name in sgs_tracer_names(Y)
             ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
             @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)
         end
     end

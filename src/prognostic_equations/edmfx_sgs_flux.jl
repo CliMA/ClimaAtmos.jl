@@ -132,7 +132,9 @@ function edmfx_sgs_mass_flux_tendency!(
         # Draft fluxes
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
+            MatrixFields.has_field(Y.c, ρχ_name) || continue
             for j in 1:n
+                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                 ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
                 @. ᶜa_scalar =
                     ᶜχʲ *
@@ -151,6 +153,7 @@ function edmfx_sgs_mass_flux_tendency!(
         # Environment fluxes
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
+            MatrixFields.has_field(Y.c, ρχ_name) || continue
             ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
             @. ᶜa_scalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
@@ -444,16 +447,15 @@ function edmfx_sgs_diffusive_flux_tendency!(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
-        # Auto-discovered grid-scale tracers (microphysics species and any
-        # user-defined passive tracers)
+        # Auto-discovered SGS tracers: grid-mean diffusive flux
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
             MatrixFields.has_field(Y.c, ρχ_name) || continue
             α = is_precip_sgs_tracer(χ_name) ? α_precip : FT(1)
             ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-            ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
             @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α * ᶠgradᵥ(ᶜχ)))
+            ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
 

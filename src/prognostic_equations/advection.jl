@@ -138,8 +138,8 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             # Auto-discovered SGS tracers (microphysics species and any
             # user-defined passive tracers)
             for χ_name in sgs_tracer_names(Y)
-                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
-                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
+                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
                 @. ᶜχʲₜ -=
                     split_divₕ(ᶜuʲs.:($$j), ᶜχʲ) -
                     ᶜχʲ * split_divₕ(ᶜuʲs.:($$j), 1)
@@ -380,8 +380,6 @@ function edmfx_sgs_vertical_advection_tendency!(
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
 
         # Advective form advection of auto-discovered SGS tracers
-        # (microphysics species and any user-defined passive tracers)
-        # with the updraft velocity
         for χ_name in sgs_tracer_names(Y)
             ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
             ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
@@ -393,6 +391,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             @. ᶜχʲₜ += va
         end
 
+        # Sedimentation (physics-specific, stays explicit)
         if p.atmos.microphysics_model isa
            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
@@ -408,9 +407,9 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜρʲs.:($$j),
                 turbconv_model,
             )
-            # Sedimentation
+            # Flux form sedimentation of mass mixing ratio tracers
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.
-            sgs_microphysics_tracers = (
+            sgs_sedimentation_tracers = (
                 (@name(c.sgsʲs.:(1).q_lcl), @name(q_lcl), @name(ᶜwₗʲs.:(1))),
                 (@name(c.sgsʲs.:(1).q_icl), @name(q_icl), @name(ᶜwᵢʲs.:(1))),
                 (@name(c.sgsʲs.:(1).q_rai), @name(q_rai), @name(ᶜwᵣʲs.:(1))),
@@ -418,7 +417,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             )
 
             MatrixFields.unrolled_foreach(
-                sgs_microphysics_tracers,
+                sgs_sedimentation_tracers,
             ) do (qʲ_name, name, wʲ_name)
                 MatrixFields.has_field(Y, qʲ_name) || return
 
@@ -426,7 +425,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜqʲₜ = MatrixFields.get_field(Yₜ, qʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
 
-                # Flux form sedimentation of tracers
                 vtt = p.scratch.ᶜtemp_scalar_4
                 updraft_sedimentation!(
                     vtt,
@@ -453,13 +451,13 @@ function edmfx_sgs_vertical_advection_tendency!(
 
             # Sedimentation velocities for microphysics number concentrations
             # (or any tracers that does not directly participate in variations of q_tot and mse)
-            sgs_microphysics_tracers = (
+            sgs_number_sedimentation_tracers = (
                 (@name(c.sgsʲs.:(1).n_lcl), @name(ᶜwₙₗʲs.:(1))),
                 (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
             )
 
             MatrixFields.unrolled_foreach(
-                sgs_microphysics_tracers,
+                sgs_number_sedimentation_tracers,
             ) do (χʲ_name, wʲ_name)
                 MatrixFields.has_field(Y, χʲ_name) || return
 
