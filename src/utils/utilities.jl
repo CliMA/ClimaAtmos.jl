@@ -656,3 +656,69 @@ function log_context(context)
         @info "Distributed ClimaAtmos run" device nprocs = ClimaComms.nprocs(context)
     end
 end
+
+"""
+    normal_cdf_inv(p)
+
+Approximation of the standard normal quantile function Φ⁻¹(p) using the
+rational approximation of Abramowitz & Stegun (Eq. 26.2.22).
+
+Maximum absolute error ≈ 4.5 × 10⁻⁴ for p ∈ (0, 1).  Uses only `log`,
+`sqrt`, and polynomial arithmetic — no `SpecialFunctions` dependency.
+
+For 0 < p ≤ ½ the approximation is
+
+    t = √(−2 ln p),
+    Φ⁻¹(p) ≈ −(t − (a₀ + a₁t + a₂t²)/(1 + b₁t + b₂t² + b₃t³))
+
+and for p > ½ it uses the antisymmetry Φ⁻¹(p) = −Φ⁻¹(1−p).
+
+Compared with the tanh-based inverse `atanh(2p−1)/coeff_cdf`, this
+correctly captures the Gaussian-tail scaling Φ⁻¹(p) ~ −√(−2 ln p)
+for small p, avoiding the extreme underestimate that causes the Newton
+step to diverge.
+"""
+@inline function normal_cdf_inv(p::FT) where {FT}
+    p_safe = clamp(p, ϵ_numerics(FT), one(FT) - ϵ_numerics(FT))
+    q = min(p_safe, one(FT) - p_safe)   # work in the lower tail
+    t = sqrt(-FT(2) * log(q))
+    num = FT(2.515517) + t * (FT(0.802853) + t * FT(0.010328))
+    den = one(FT) + t * (FT(1.432788) + t * (FT(0.189269) + t * FT(0.001308)))
+    z = t - num / den
+    return ifelse(p_safe < FT(0.5), -z, z)
+end
+
+"""
+    normal_cdf(z)
+
+Accurate approximation of the standard normal CDF Φ(z) using the rational
+approximation of Abramowitz & Stegun (Eq. 26.2.17).
+
+Maximum absolute error ≈ 7.5 × 10⁻⁸ over the full real line.  Uses only
+`exp` and basic arithmetic — no `SpecialFunctions` dependency.
+
+The approximation for z ≥ 0 is
+
+    Φ(z) ≈ 1 − φ(z) · p(t),   t = 1/(1 + 0.2316419 z),
+
+where `p` is a degree-5 polynomial with the A&S coefficients, and
+`Φ(z) = 1 − Φ(−z)` for z < 0.
+"""
+@inline function normal_cdf(z::FT) where {FT}
+    inv_sqrt2pi = one(FT) / sqrt(FT(2) * FT(π))
+    z_abs = abs(z)
+    t = one(FT) / (one(FT) + FT(0.2316419) * z_abs)
+    poly =
+        t * (
+            FT(0.319381530) +
+            t * (
+                FT(-0.356563782) +
+                t * (
+                    FT(1.781477937) +
+                    t * (FT(-1.821255978) + t * FT(1.330274429))
+                )
+            )
+        )
+    q = inv_sqrt2pi * exp(-z_abs * z_abs / 2) * poly
+    return ifelse(z >= zero(FT), one(FT) - q, q)
+end

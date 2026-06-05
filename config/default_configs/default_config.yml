@@ -237,8 +237,8 @@ use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
   value: true
 sgs_distribution:
-  help: "Distribution type for SGS quadrature over microphysics. [`gaussian`, `lognormal` (default), `mean` (grid-mean only, no SGS sampling)]"
-  value: "lognormal"
+  help: "Distribution type for SGS quadrature over microphysics. [`gaussian` (default), `lognormal`, `mean` (grid-mean only, no SGS sampling)]"
+  value: "gaussian"
 quadrature_order:
   help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 3"
   value: 3
@@ -261,8 +261,8 @@ cloud_ice_melt:
   help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt`, ~ (default)]"
   value: ~
 rain_autoconversion:
-  help: "Rain autoconversion option for 1M microphysics [`Kessler1M`, `PrescribedNd` (default), ~]"
-  value: "PrescribedNd"
+  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]"
+  value: "Kessler1M"
 snow_autoconversion:
   help: "Snow autoconversion option for 1M microphysics [`NoSupersaturation` (default), `WithSupersaturation`, ~]"
   value: "NoSupersaturation"

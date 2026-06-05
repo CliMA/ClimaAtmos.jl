@@ -166,40 +166,22 @@ end
     (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
 
 GPU-safe functor for computing 1-moment microphysics tendencies at SGS
-quadrature points using a **shape-function partition** of cloud condensate.
+quadrature points using the truncated-Gaussian Lagrange-multiplier approach.
 
-At each quadrature point `(T_hat, q_tot_hat)` sampled from the SGS PDF,
-the local cloud condensate is constructed as
+At each quadrature point `(T_hat, q_tot_hat)`, the local cloud condensate is
 
-    q_lcl_hat = q_lcl_mean + γ_l · (q_lcl_eq_hat - M_l)
+    S′_hat        = (q_tot_hat − q_sat(T_hat)) − μ_S
+    shifted_excess = max(0, λ_lagrange + α · S′_hat)
+    q_lcl_hat     = max(0, λ · shifted_excess − q_rai)
+    q_icl_hat     = max(0, (1−λ) · shifted_excess − q_sno)
 
-where
-- `q_lcl_eq_hat = max(0, λ·(q_tot_hat − q_sat(T_hat)) − q_rai)` is the
-  *local* equilibrium cloud liquid at the quadrature point, with `λ` held
-  fixed at the grid-mean liquid fraction.
-- `γ_l = min(1, q_lcl_mean ⋅ M_l / (M_scale² + M_l²))` guarantees **exact mass conservation by
-  construction**: `⟨q_lcl_hat⟩ = q_lcl_mean + γ_l · (⟨q_lcl_eq⟩ - M_l) = q_lcl_mean`.
-  `M_l = ⟨q_lcl_eq⟩` is the SGS-mean equilibrium liquid moment supplied by
-  the `compute_sgs_moments` pre-pass.
-- `M_scale = q_min` sets the blending crossover. In the typical regime
-  `M_l ≫ q_min`, `γ_l ≈ min(1, q_lcl_mean/M_l)` and `q_lcl_hat ≈ min(1, q_lcl_mean/M_l) · q_lcl_eq_hat`
-  (pure shape function); in the stale-cloud edge case `M_l → 0` while
-  `q_lcl_mean > 0`, `γ_l → 0` and `q_lcl_hat → q_lcl_mean` (uniform
-  fallback). The ice channel is symmetric.
+where `α = sgs_variance_fidelity` controls the variance propagation fraction
+(currently 1), `λ_lagrange` is the Lagrange multiplier satisfying
+`E[max(0, λ + α·S′)] = q_c`, `μ_S = E[S]` centres the excess, and `λ`
+is the thermodynamic liquid fraction held fixed across quadrature points.
 
-The shape-function formulation unifies the cloudy and clear contributions
-into a single quadrature pass. When `q_lcl_mean ≲ M_l`, the condensate is
-primarily distributed according to the local equilibrium structure
-`q_lcl_eq_hat`, so saturated quadrature points receive most of the cloud
-water while subsaturated points contain little or none. When
-`q_lcl_mean > M_l`, the clipping `γ_l ≤ 1` limits the shape-function
-amplitude and the excess condensate is represented as a uniform background
-offset distributed across all quadrature points. Consequently, saturated
-points still preferentially carry the equilibrium-shaped condensate
-component, while subsaturated points retain the uniform remnant, which can
-evaporate or sublimate against the local subsaturated `q_v_hat`,
-capturing below-cloud rain evaporation and snow sublimation within the
-same quadrature integration.
+Subsaturated quadrature points contribute zero condensate but may still drive
+rain evaporation or snow sublimation against the local `q_v_hat`.
 
 # Arguments
 - `T_hat`: Temperature at quadrature point [K]
@@ -217,17 +199,14 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     mp::MP
     tps::TPS
     ρ::FT
-    # Grid-mean prognostic state (held fixed across quadrature points)
-    q_lcl_mean::FT
-    q_icl_mean::FT
+    # Precipitation (held fixed across quadrature points)
     q_rai::FT
     q_sno::FT
-    # Shape-function inputs from the SGS moments pre-pass
-    λ::FT          # liquid fraction (held fixed across quadrature)
-    γ_l::FT        # precomputed shape-function coefficient for liquid
-    M_l::FT        # SGS-mean equilibrium liquid condensate
-    γ_i::FT        # precomputed shape-function coefficient for ice
-    M_i::FT        # SGS-mean equilibrium ice condensate
+    # Truncated-Gaussian Lagrange multiplier, μ_S, and liquid fraction
+    λ::FT              # liquid fraction (from thermodynamics, held fixed)
+    λ_lagrange::FT # Lagrange multiplier for centred S′: λ = z·α·σ_S
+    mu_S::FT       # SGS mean saturation variable μ_S = E[S]
+    α::FT          # variance fidelity parameter (from sgs_variance_fidelity)
     # Numerical parameters
     dt::FT
     nsubs::Int
@@ -247,15 +226,15 @@ end
     FT = typeof(eval.ρ)
     q_tot_hat = max(FT(0), q_tot_hat)
 
-    # Local equilibrium condensate at the quadrature point (same partition
-    # form as the SGS moments pre-pass, with the prognostic λ held fixed).
+    # Local condensate from the Lagrange-multiplier closure.
+    # The mass conservation equation is E[max(0, λ + α·S′)] = q_c, so the
+    # local shifted excess at each quadrature point is λ + α·S′_hat where
+    # S′_hat = (q_tot_hat − q_sat_hat) − μ_S is the centred saturation excess.
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
-    excess_hat = max(FT(0), q_tot_hat - q_sat_hat)
-    q_lcl_eq_hat = max(FT(0), eval.λ * excess_hat - eval.q_rai)
-    q_icl_eq_hat = max(FT(0), (FT(1) - eval.λ) * excess_hat - eval.q_sno)
-
-    q_lcl_hat = eval.q_lcl_mean + eval.γ_l * (q_lcl_eq_hat - eval.M_l)
-    q_icl_hat = eval.q_icl_mean + eval.γ_i * (q_icl_eq_hat - eval.M_i)
+    S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
+    shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
+    q_lcl_hat = max(FT(0), eval.λ * shifted_excess - eval.q_rai)
+    q_icl_hat = max(FT(0), (FT(1) - eval.λ) * shifted_excess - eval.q_sno)
 
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
@@ -270,7 +249,7 @@ end
     microphysics_tendencies_1m(
         scheme, sgs_quad, cmp, thp, ρ, T, q_tot,
         q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-        moments, dt, nsubs,
+        λ_lagrange, mu_S, α, dt, nsubs,
     )
 
 Computes time-averaged 1-moment microphysics tendencies.
@@ -279,34 +258,37 @@ The 11-argument (no `sgs_quad`) form takes condensate inputs as-is and is
 used in EDMF updrafts or wherever a grid-mean state is to be evaluated
 directly (single BMT call, no SGS averaging).
 
-The quadrature form uses a **single quadrature pass with a shape-function
-partition** of cloud condensate (see [`Microphysics1MEvaluator`](@ref)).
-At each quadrature point `(T_hat, q_tot_hat)` sampled from the SGS PDF,
-the local cloud condensate is reconstructed as
-`q_lcl_hat = q_lcl_mean + γ_l (q_lcl_eq_hat - M_l)`, where `M_l = ⟨q_lcl_eq⟩`
-is precomputed in the `compute_sgs_moments` pre-pass. This gives **exact mass
-conservation by construction** and unifies the cloudy and clear regimes into one
-quadrature: subsaturated quadrature points contribute below-cloud
-rain evaporation / snow sublimation; saturated points carry the bulk
-of the cloud condensate and drive autoconversion / accretion.
+The quadrature form integrates over the SGS PDF using the truncated-Gaussian
+Lagrange-multiplier closure (see [`Microphysics1MEvaluator`](@ref)). At each
+quadrature point `(T_hat, q_tot_hat)` the centred saturation excess is
+`S′_hat = (q_tot_hat − q_sat_hat) − μ_S` and the local condensate is
+
+    shifted_excess = max(0, λ_lagrange + α·S′_hat)
+    q_lcl_hat      = max(0, λ · shifted_excess − q_rai)
+    q_icl_hat      = max(0, (1−λ) · shifted_excess − q_sno)
+
+where `λ_lagrange` is pre-computed to satisfy `E[max(0, λ_lagrange + α·S′)] = q_c`
+and `λ` is the thermodynamic liquid fraction held fixed across quadrature points.
+Subsaturated quadrature points contribute below-cloud rain evaporation and snow
+sublimation; saturated points drive autoconversion and accretion.
 
 # Arguments
 - `scheme`: Microphysics scheme type (from CloudMicrophysics.BulkMicrophysicsTendencies)
 - `sgs_quad`: SGSQuadrature configuration
 - `cmp`, `thp`: Microphysics and thermodynamics parameters
-- `ρ`, `T`: Air density [kg/m³] and temperature [K] (grid-mean)
-- `q_tot`: Grid-mean total water [kg/kg]
-- `q_lcl`, `q_icl`: Grid-mean cloud liquid water and cloud ice [kg/kg]
-- `q_rai`, `q_sno`: Grid-mean rain and snow [kg/kg]
-- `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
-- `q′q′`: Variance of q_tot ``\\langle q'^2 \\rangle``
-- `corr_Tq`: Correlation coefficient ρ(T', q') obtained from `correlation_Tq(params)`.
-- `moments`: Cached `SGSMomentsType` `(mu_S, sigma_S_sq, M_l, M_i)` from
-  the `compute_sgs_moments` pre-pass. Only `M_l` and `M_i` are used by
-  the shape-function partition; `mu_S` and `sigma_S_sq` are ignored here.
-- `args...`: Additional arguments (e.g., N_lcl for 2M)
-- `dt`: Model timestep [s] (for tendency averaging)
-- `nsubs`: Number of substeps for computing average tendencies over time
+- `ρ`, `T`: Air density [kg/m³] and temperature [K]
+- `q_tot`: Total water specific humidity [kg/kg]
+- `q_lcl`, `q_icl`: Cloud liquid and cloud ice specific humidity [kg/kg]
+- `q_rai`, `q_sno`: Rain and snow specific humidity [kg/kg]
+- `T′T′`: Temperature variance ``\\langle T'^2 \\rangle``
+- `q′q′`: Total-water variance ``\\langle q'^2 \\rangle``
+- `corr_Tq`: Correlation coefficient ρ(T′, q′) from `correlation_Tq(params)`
+- `λ_lagrange`: Lagrange multiplier `z·α·σ_S` from `ᶜsgs_moments`, pre-computed
+  to enforce mass conservation `E[max(0, λ_lagrange + α·S′)] = q_c`
+- `mu_S`: SGS mean saturation variable `E[S]` from `ᶜsgs_moments`
+- `α`: Variance fidelity parameter from `sgs_variance_fidelity`
+- `dt`: Timestep [s]
+- `nsubs`: Number of substeps for tendency averaging
 
 # Returns
 NamedTuple with microphysics source terms:
@@ -328,7 +310,7 @@ end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
     scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-    moments, dt, nsubs, args...,
+    λ_lagrange, mu_S, α, dt, nsubs, args...,
 )
     FT = typeof(ρ)
     # Clamp specific humidities to non-negative.
@@ -337,32 +319,13 @@ end
     q_rai_nonneg = max(FT(0), q_rai)
     q_sno_nonneg = max(FT(0), q_sno)
 
-    # Liquid fraction held fixed across quadrature (paper Eq. 3.31). When
-    # both cloud condensates are zero, `TD.liquid_fraction` falls back to a
-    # smooth temperature ramp internally.
+    # Liquid fraction held fixed across quadrature.
     λ = TD.liquid_fraction(thp, T, q_lcl_nonneg, q_icl_nonneg)
-
-    # β-blending crossover scale: when the cached equilibrium moments
-    # `M_l, M_i` fall below `q_min`, the shape function reverts smoothly
-    # to a uniform `q_lcl_mean`/`q_icl_mean` fallback (stale-cloud edge
-    # case). For `M_l ≫ q_min` (typical), β ≈ 0 and the pure shape
-    # function `q_lcl_hat = (q_lcl_mean/M_l)·q_lcl_eq_hat` applies.
-    q_min = TD.Parameters.q_min(thp)
-
-    # Precompute shape-function coefficients once per grid cell (saving
-    # divisions and multiplications inside the quadrature loop).
-    M_l = max(FT(0), moments.M_l)
-    M_i = max(FT(0), moments.M_i)
-    M_sq = q_min * q_min
-    denom_l = M_sq + M_l * M_l
-    denom_i = M_sq + M_i * M_i
-    γ_l = min(FT(1), q_lcl_nonneg * M_l / denom_l)
-    γ_i = min(FT(1), q_icl_nonneg * M_i / denom_i)
 
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ,
-        q_lcl_nonneg, q_icl_nonneg, q_rai_nonneg, q_sno_nonneg,
-        λ, γ_l, M_l, γ_i, M_i,
+        q_rai_nonneg, q_sno_nonneg,
+        λ, λ_lagrange, mu_S, α,
         dt, nsubs, args,
     )
     return integrate_over_sgs(
@@ -419,7 +382,7 @@ end
 @inline function microphysics_tendencies_1m_at_quad_point(
     χ_i, χ_j, scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-    moments, dt, nsubs, args...,
+    λ_lagrange, mu_S, α, dt, nsubs, args...,
 )
     FT = typeof(ρ)
     # Cell-level setup (same as the wrapper). Redundantly computed at each
@@ -429,19 +392,12 @@ end
     q_rai_nonneg = max(FT(0), q_rai)
     q_sno_nonneg = max(FT(0), q_sno)
 
+    # Liquid fraction held fixed across quadrature.
     λ = TD.liquid_fraction(thp, T, q_lcl_nonneg, q_icl_nonneg)
-    q_min = TD.Parameters.q_min(thp)
-    M_l = max(FT(0), moments.M_l)
-    M_i = max(FT(0), moments.M_i)
-    M_sq = q_min * q_min
-    denom_l = M_sq + M_l * M_l
-    denom_i = M_sq + M_i * M_i
-    γ_l = min(FT(1), q_lcl_nonneg * M_l / denom_l)
-    γ_i = min(FT(1), q_icl_nonneg * M_i / denom_i)
 
     # Physical-point transform built locally (host-side `integrate_over_sgs`
     # would normally build this once per cell; here it's rebuilt per
-    # quadrature point — same cheap cost as λ/γ setup above).
+    # quadrature point — same cheap cost as the cell-level setup above).
     σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
     μ_T_p, μ_q_p = promote(T, q_tot_nonneg)
     transform = create_physical_transform(
@@ -451,15 +407,16 @@ end
     )
     T_hat, q_tot_hat = transform(χ_i, χ_j)
 
-    # Local condensate shape-function partition (was the
-    # `Microphysics1MEvaluator` functor body).
+    # Local condensate from the truncated-Gaussian Lagrange-multiplier closure
+    # (identical to the `Microphysics1MEvaluator` functor body): the centred
+    # saturation excess is S′_hat = (q_tot_hat − q_sat_hat) − μ_S, and the
+    # local shifted excess is max(0, λ_lagrange + α·S′_hat).
     q_tot_hat_pos = max(FT(0), q_tot_hat)
     q_sat_hat = TD.q_vap_saturation(thp, T_hat, ρ)
-    excess_hat = max(FT(0), q_tot_hat_pos - q_sat_hat)
-    q_lcl_eq_hat = max(FT(0), λ * excess_hat - q_rai_nonneg)
-    q_icl_eq_hat = max(FT(0), (FT(1) - λ) * excess_hat - q_sno_nonneg)
-    q_lcl_hat = q_lcl_nonneg + γ_l * (q_lcl_eq_hat - M_l)
-    q_icl_hat = q_icl_nonneg + γ_i * (q_icl_eq_hat - M_i)
+    S′_hat = q_tot_hat_pos - q_sat_hat - mu_S
+    shifted_excess = max(FT(0), λ_lagrange + α * S′_hat)
+    q_lcl_hat = max(FT(0), λ * shifted_excess - q_rai_nonneg)
+    q_icl_hat = max(FT(0), (FT(1) - λ) * shifted_excess - q_sno_nonneg)
 
     # Identical call to the baseline `Microphysics1MEvaluator` functor: the
     # `LinearizedAverage` mode + `nsubs` substep loop in
@@ -479,12 +436,12 @@ end
 @inline function _accum_microphysics_tendency_1m(
     acc, w_ij, χ_i, χ_j, scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-    moments, dt, nsubs, args...,
+    λ_lagrange, mu_S, α, dt, nsubs, args...,
 )
     contrib = microphysics_tendencies_1m_at_quad_point(
         χ_i, χ_j, scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
         q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-        moments, dt, nsubs, args...,
+        λ_lagrange, mu_S, α, dt, nsubs, args...,
     )
     return (
         dq_lcl_dt = acc.dq_lcl_dt + w_ij * contrib.dq_lcl_dt,
@@ -501,7 +458,8 @@ end
 @inline function set_microphysics_quadrature_1m!(
     ᶜmp_tendency, scheme, sgs_quad, cmp, thp, ρ_field, T_field,
     q_tot_field, q_lcl_field, q_icl_field, q_rai_field, q_sno_field,
-    T′T′_field, q′q′_field, corr_Tq, moments_field, dt, nsubs, args...,
+    T′T′_field, q′q′_field, corr_Tq, λ_lagrange_field, mu_S_field, α,
+    dt, nsubs, args...,
 )
     N = quadrature_order(sgs_quad)
     χ = sgs_quad.a
@@ -523,7 +481,8 @@ end
             ᶜmp_tendency, w_ij, χ_i, χ_j, scheme, sgs_quad, cmp, thp,
             ρ_field, T_field, q_tot_field,
             q_lcl_field, q_icl_field, q_rai_field, q_sno_field,
-            T′T′_field, q′q′_field, corr_Tq, moments_field, dt, nsubs,
+            T′T′_field, q′q′_field, corr_Tq,
+            λ_lagrange_field, mu_S_field, α, dt, nsubs,
             args...,
         )
     end

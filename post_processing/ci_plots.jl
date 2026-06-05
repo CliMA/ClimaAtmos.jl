@@ -190,6 +190,7 @@ function make_plots_generic(
     summary_files = String[],
     MAX_NUM_COLS = 1,
     MAX_NUM_ROWS = min(4, length(vars)),
+    fig_size = nothing,
     save_jpeg_copy = false,
     kwargs...,
 )
@@ -223,7 +224,7 @@ function make_plots_generic(
 
     # Define fig, grid, and grid_pos, used below. (Needed for scope)
     function makefig()
-        fig = CairoMakie.Figure(; size = (900, 300 * MAX_NUM_ROWS))
+        fig = CairoMakie.Figure(; size = something(fig_size, (900, 300 * MAX_NUM_ROWS)))
         if is_comparison
             for (col, path) in enumerate(output_path)
                 # CairoMakie seems to use this Label to determine the width of the figure.
@@ -1354,6 +1355,40 @@ end
 
 
 """
+    plot_mp1m_row!(grid_loc, row_vars)
+
+Plot a row of 3 mp1m time-height contour panels (grid-mean, updraft,
+environment) with shared symmetric colorbar and divergent RdBu colormap.
+
+`row_vars` is a tuple/vector of 3 OutputVar objects.
+"""
+function plot_mp1m_row!(grid_loc, row_vars)
+    # Compute shared symmetric color range across the row
+    maxabs = maximum(
+        maximum(abs.(v.data)) for v in row_vars;
+        init = eps(Float64),
+    )
+    crange = (-maxabs, maxabs)
+
+    for (col, var) in enumerate(row_vars)
+        gl = grid_loc[1, col] = CairoMakie.GridLayout()
+        viz.plot!(
+            gl,
+            var;
+            more_kwargs = Dict(
+                :axis => ca_kwargs(
+                    title = parse_var_attributes(var),
+                ),
+                :plot => ca_kwargs(
+                    colormap = Makie.Reverse(:RdBu),
+                    colorrange = crange,
+                ),
+            ),
+        )
+    end
+end
+
+"""
     plot_parsed_attribute_title!(grid_loc, var)
 
 Helper function for `make_plots_generic`. Plots an OutputVar `var`,
@@ -1477,11 +1512,101 @@ function make_plots(
         MAX_NUM_ROWS = 4,
     )
 
+    summary_files = [tmp_file]
+
+    # Microphysics 1M process tendency plots (grid-mean, updraft, environment)
+    mp1m_vars_zt = []  # time-z fields for contour plots
+    if sim_type isa EDMFColumnPlotsWithPrecip &&
+       !(sim_type isa Val{:prognostic_edmfx_rico_column_2M})
+        mp1m_source_names = [
+            "S_phase_change_vap_lcl", "S_phase_change_vap_icl",
+            "S_acnv_lcl_rai", "S_acnv_icl_sno",
+            "S_accr_lcl_rai", "S_accr_lcl_sno_cold", "S_accr_lcl_sno_warm",
+            "S_accr_melt_lcl_sno",
+            "S_accr_icl_rai", "S_accr_freeze_icl_rai", "S_accr_icl_sno",
+            "S_accr_rai_sno_cold", "S_accr_rai_sno_warm", "S_accr_melt_rai_sno",
+            "S_phase_change_vap_rai", "S_phase_change_vap_sno",
+            "S_melt_icl_lcl", "S_melt_sno_rai",
+        ]
+
+        # Use only the current simulation (not main branch comparison)
+        # since mp1m diagnostics are new and won't exist in older runs.
+        mp1m_simdirs = simdirs[1:1]
+        mp1m_output_paths = output_paths[1:1]
+
+        # Interleave as (grid-mean, updraft, environment) per source term
+        # so each row in the contour plot shows one process across domains
+        mp1m_all_names = vec(
+            ["mp1m_", "mp1mup_", "mp1men_"] .*
+            permutedims(mp1m_source_names),
+        )
+
+        # Load the time-z fields for all mp1m variables
+        mp1m_vars_zt =
+            map_comparison(mp1m_simdirs, mp1m_all_names) do simdir, sn
+                var = get(simdir; short_name = sn, reduction, period)
+                if is_box
+                    var = slice(var, x = 0.0, y = 0.0)
+                end
+                return var
+            end
+
+        # Group as (grid-mean, updraft, environment) triplets for profile plots
+        mp1m_tuples = [
+            ("mp1m_$(s)", "mp1mup_$(s)", "mp1men_$(s)")
+            for s in mp1m_source_names
+        ]
+
+        mp1m_profile_groups =
+            map_comparison(mp1m_simdirs, mp1m_tuples) do simdir, name_tuple
+                vars = map(name_tuple) do sn
+                    var = get(simdir; short_name = sn, reduction, period)
+                    if is_box
+                        var = slice(var, x = 0.0, y = 0.0)
+                    end
+                    return slice(var, time = LAST_SNAP)
+                end
+                return vars
+            end
+
+        mp1m_file = make_plots_generic(
+            mp1m_output_paths,
+            mp1m_profile_groups;
+            output_name = "mp1m_tendencies",
+            plot_fn = plot_edmf_vert_profile!,
+            MAX_NUM_COLS = 2,
+            MAX_NUM_ROWS = 4,
+        )
+        push!(summary_files, mp1m_file)
+
+        # Time-height contour plots for mp1m: 3 columns (gm, up, en) per row
+        # with shared symmetric colorbar per row and divergent colormap.
+        # Group the flat vars into (gm, up, en) triplets per source term.
+        mp1m_row_groups = [
+            (
+                mp1m_vars_zt[(i - 1) * 3 + 1],
+                mp1m_vars_zt[(i - 1) * 3 + 2],
+                mp1m_vars_zt[(i - 1) * 3 + 3],
+            ) for i in 1:length(mp1m_source_names)
+        ]
+        mp1m_zt_file = make_plots_generic(
+            mp1m_output_paths,
+            mp1m_row_groups;
+            output_name = "mp1m_timeseries",
+            plot_fn = plot_mp1m_row!,
+            MAX_NUM_COLS = 1,
+            MAX_NUM_ROWS = 3,
+            fig_size = (1500, 900),
+        )
+        push!(summary_files, mp1m_zt_file)
+    end
+
+    # Time-height contour plots: existing EDMF variables
     make_plots_generic(
         output_paths,
         collect(Iterators.flatten(var_groups_zt)),
         plot_fn = plot_parsed_attribute_title!,
-        summary_files = [tmp_file],
+        summary_files = summary_files,
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
     )

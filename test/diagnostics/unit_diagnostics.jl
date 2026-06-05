@@ -375,6 +375,14 @@ VALID_CASES = [
     cases(("cdncup", "cdncen", "ncraup", "ncraen"), :m2_pedmfx)...,
     # VerticalDiffusion, DecayWithHeightDiffusion, EDMF
     cases(("edt", "evu"), (:vd, :dwh, :m0_pedmfx))...,
+
+    # ---------------------------------------------------------------------------
+    # microphysics_diagnostics.jl
+    # Grid-mean (mp1m_) needs 1M; updraft/environment need 1M + PrognosticEDMFX
+    # ---------------------------------------------------------------------------
+    cases(vec("mp1m_" .* string.(first.(CA.Diagnostics.MP1M_SOURCE_TERMS))), :m1)...,
+    cases(vec("mp1mup_" .* string.(first.(CA.Diagnostics.MP1M_SOURCE_TERMS))), :m1_pedmfx)...,
+    cases(vec("mp1men_" .* string.(first.(CA.Diagnostics.MP1M_SOURCE_TERMS))), :m1_pedmfx)...,
 ]
 #! format: on
 #
