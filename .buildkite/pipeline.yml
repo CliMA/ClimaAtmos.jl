@@ -1212,6 +1212,17 @@ steps:
         agents:
           slurm_mem: 32GB
 
+      - label: ":fire: Allocations budget: Aquaplanet, prognostic EDMF, 1M"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite perf/flame.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_1m.yml
+          --job_id flame_aquaplanet_progedmf_1m
+        artifact_paths: "flame_aquaplanet_progedmf_1m/*"
+        agents:
+          slurm_mem: 32GB
+
       # This job takes too long (a hour) so it is temporarily disabled
       # - label: ":fire: Flame graph: prognostic edmf dense autodiff"
       #   command: >
