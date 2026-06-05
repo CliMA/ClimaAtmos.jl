@@ -264,6 +264,21 @@ at compile time (as it is inside `unrolled_foreach` or `for ... in Tuple`).
 get_sgsʲ_name(::MatrixFields.FieldName{names}) where {names} =
     MatrixFields.FieldName(:c, :sgsʲs, 1, names...)
 
+"""
+    get_c_ρχ_name(χ_name::FieldName)
+
+Construct the full Jacobian matrix path name for a grid-scale density-weighted
+tracer. Maps e.g. `@name(q_lcl)` → `@name(c.ρq_lcl)`.
+
+Composes `get_ρχ_name` (which gives `@name(ρq_lcl)`) with a `c.` prefix
+for use in `matrix[name1, name2]` indexing.
+"""
+get_c_ρχ_name(χ_name) =
+    get_c_name(get_ρχ_name(χ_name))
+
+get_c_name(::MatrixFields.FieldName{names}) where {names} =
+    MatrixFields.FieldName(:c, names...)
+
 
 """
     sgs_tracer_names(Y)

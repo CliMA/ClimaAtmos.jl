@@ -29,6 +29,10 @@ by the scalar name, e.g. `ρq_tot`, `ρq_lcl`, `ρn_rai`. The utility function
 | Vertical diffusion | Eddy-diffusivity-based mixing |
 | Hyperdiffusion | 4th-order ``\nabla^4`` stabilization with DSS |
 
+Sedimentation is **not** auto-discovered at the grid scale because each
+species requires its own terminal velocity field (e.g. `ᶜwₗ`, `ᶜwᵣ`).
+Terminal velocity mappings must be wired explicitly.
+
 The iteration utility `foreach_gs_tracer(f, Y...)` applies a function `f` to
 each discovered tracer.
 
@@ -68,149 +72,72 @@ changes are needed when adding a new tracer:
 | SGS mass flux (draft + environment → grid mean) | `edmfx_sgs_flux.jl` | `for χ_name in sgs_tracer_names(Y)` |
 | SGS diffusive flux (grid mean) | `edmfx_sgs_flux.jl` | `for χ_name in sgs_tracer_names(Y)` |
 | Updraft vertical diffusion | `mass_flux_closures.jl` | `for χ_name in sgs_tracer_names(Y)` |
-| Updraft constraint enforcement | `mass_flux_closures.jl` | `for χ_name in sgs_tracer_names(Y)` |
-| Rayleigh sponge damping | `remaining_tendency.jl` | `for χ_name in sgs_tracer_names(Y)` |
+| Rayleigh sponge | `remaining_tendency.jl` | `for χ_name in sgs_tracer_names(Y)` |
+| Filter/physical constraints | `mass_flux_closures.jl` | `for χ_name in sgs_tracer_names(Y)` |
+| Hyperdiffusion | `hyperdiffusion.jl` | Sequential prep→DSS→apply |
+| Manual sparse Jacobian | `manual_sparse_jacobian.jl` | Advection, entrainment, diffusion, mass flux |
 
-### Precipitating vs non-precipitating SGS tracers
+Precipitating species (`q_rai`, `q_sno`, `n_rai`) automatically receive
+reduced diffusion coefficients via `is_precip_sgs_tracer(χ_name)`.
 
-Some operations apply different coefficients to precipitating species
-(e.g. reduced vertical diffusion). The `@generated` function
-`is_precip_sgs_tracer(χ_name)` identifies `q_rai`, `q_sno`, and `n_rai`
-as precipitating. All other SGS tracers (including user-defined ones)
-receive the default non-precipitating coefficient.
+### Operations that remain explicitly wired
+
+Some operations couple to thermodynamics or specific physical processes and
+cannot be auto-discovered:
+
+| Operation | Why explicit |
+|---|---|
+| `mse` transport | Couples to enthalpy, buoyancy, kinetic energy |
+| `q_tot` transport | Couples to density (`ρa`), thermodynamics, boundary conditions |
+| `ρa`–`q_tot` coupling in hyperdiffusion | Physics-specific density correction |
+| Sedimentation (terminal velocities) | Per-species velocity fields required |
+| Microphysics source/sink tendencies | Physics-specific |
 
 ## Adding a New Passive Tracer
 
-To add a new passive tracer `A` that is transported through the full
-grid-scale + SGS system, only **two** changes are needed:
+### Grid-scale only
 
-### Step 1: Add `ρA` to the grid-scale prognostic state
+To add a new passive tracer `A` that is advected, diffused, and
+hyperdiffused at the grid scale:
 
-In `prognostic_variables.jl`, add `ρA` to the center variables:
+1. Add `ρA = ρ * A_init` to the initial condition in
+   `prognostic_variables.jl` (or your setup's initialization).
 
-```julia
-ρA = ρ * physical_state.A
-```
+That's it — `gs_tracer_names(Y)` will discover `ρA` automatically.
 
-This gives automatic grid-scale advection, diffusion, hyperdiffusion,
-and surface flux — all handled by `foreach_gs_tracer`.
+### Grid-scale + prognostic EDMF
 
-### Step 2: Add `A` to the SGS updraft state
+To also transport `A` inside EDMF updrafts:
 
-In `prognostic_variables.jl`, add `A` to the SGS struct:
+1. Add `A = A_init` to the SGS physical state (initial condition).
+2. Add `A = physical_state.A` to the `sgsʲs` `NamedTuple` in
+   `prognostic_variables.jl`.
+3. Add `ρA = ρ * physical_state.A` to the grid-scale center variables.
 
-```julia
-sgsʲs = uniform_subdomains((; ρa, mse, q_tot, A = physical_state.A), turbconv_model)
-```
+All EDMF operations (advection, entrainment mixing, SGS mass/diffusive
+flux, Rayleigh sponge, filter/constraints, hyperdiffusion, and the
+corresponding manual Jacobian entries) are picked up automatically by
+`sgs_tracer_names(Y)`.
 
-This gives automatic SGS entrainment, mass flux, diffusive flux,
-vertical diffusion, updraft constraints, advection, and sponge damping —
-all handled by `sgs_tracer_names`.
+## Utility Functions
 
-### Step 3: Initial condition
+The following internal functions power the auto-discovery mechanism:
 
-Set the initial value of `A` in the setup file (e.g. `Bomex.jl`):
-
-```julia
-A = FT(1.0)  # constant initial concentration
-```
-
-That's it — no tendency code changes needed.
-
-### Step 4 (if using implicit solver): Update the Jacobian
-
-The implicit solver's Jacobian (`manual_sparse_jacobian.jl`) uses hardcoded
-tracer lists for performance reasons (`unrolled_foreach` with closures inside
-`@.` broadcasts allocates; see the `TODO` comment at the top of
-`update_jacobian!`). All locations are marked with `# TRACER-JACOBIAN:`
-comments — search for that string to find every block.
-
-For a **passive tracer** (doesn't affect pressure or buoyancy, has no
-sedimentation velocity), update these 4 locations:
-
-#### 4a. Sparsity pattern (`jacobian_cache`)
-
-Add the new tracer to the name lists that define which matrix blocks exist:
-
-- `condensate_mass_names` / `condensate_names`: add `@name(c.ρA)`
-- `sgs_condensate_mass_names` / `sgs_condensate_names`: add `@name(c.sgsʲs.:(1).A)`
-
-#### 4b. SGS vertical diffusion block
-
-Search for `TRACER-JACOBIAN: SGS vertical diffusion`. Add:
-```julia
-(@name(c.sgsʲs.:(1).A), FT(1))          # non-precipitating
-```
-
-#### 4c. SGS entrainment/detrainment block
-
-Search for `TRACER-JACOBIAN: SGS entrainment`. Add:
-```julia
-(@name(c.sgsʲs.:(1).A))
-```
-
-#### 4d. Grid-mean + SGS mass flux block
-
-Search for `TRACER-JACOBIAN: grid-mean + SGS mass flux`. Add:
-```julia
-(@name(c.ρA), @name(c.sgsʲs.:(1).A), @name(A))
-```
-
-For a **moisture species** (affects pressure, buoyancy, and/or sediments),
-also update these physics-specific blocks:
-
-#### 4e. Grid-mean pressure gradient block
-
-Search for `TRACER-JACOBIAN: grid-mean pressure gradient`. Add:
-```julia
-(@name(c.ρA), e_int_A0, Δcv_A)   # thermodynamic coefficients
-```
-
-#### 4f. Grid-mean sedimentation block
-
-Search for `TRACER-JACOBIAN: grid-mean sedimentation`. Add:
-```julia
-(@name(c.ρA), @name(ᶜwA), α)     # sedimentation velocity + diffusion coeff
-```
-
-#### 4g. SGS pressure/buoyancy block
-
-Search for `TRACER-JACOBIAN: SGS pressure/buoyancy`. Add:
-```julia
-(@name(c.sgsʲs.:(1).A), LH_A, ∂cp∂A, ∂Rm∂A)
-```
-
-#### 4h. SGS sedimentation block
-
-Search for `TRACER-JACOBIAN: SGS sedimentation`. Add:
-```julia
-(@name(c.sgsʲs.:(1).A), @name(ᶜwAʲs.:(1)))
-```
-
-### Operations that remain manual
-
-| Operation | Reason |
+| Function | Purpose |
 |---|---|
-| Initial / boundary conditions | Problem-specific |
-| Source / sink terms | Physics-specific |
-| Jacobian blocks (implicit solver) | See Step 4 above |
-| Diagnostics output | User must define short names |
+| `sgs_tracer_names(Y)` | Returns a `Tuple` of `FieldName`s for all SGS tracers in `Y` |
+| `foreach_sgs_tracer(f, Y...)` | Applies `f` to each SGS tracer (uses `unrolled_foreach`) |
+| `is_precip_sgs_tracer(χ_name)` | Returns `true` for precipitating species (`q_rai`, `q_sno`, `n_rai`) |
+| `get_ρχ_name(χ_name)` | Maps `@name(χ)` → `@name(ρχ)` (SGS to grid-scale name) |
+| `get_sgsʲ_name(χ_name)` | Maps `@name(χ)` → `@name(c.sgsʲs.:(1).χ)` (for Jacobian matrix keys) |
+| `get_c_ρχ_name(χ_name)` | Maps `@name(χ)` → `@name(c.ρχ)` (for Jacobian matrix keys) |
+| `gs_tracer_names(Y)` | Returns a `Tuple` of `FieldName`s for all grid-scale tracers in `Y` |
+| `foreach_gs_tracer(f, Y...)` | Applies `f` to each grid-scale tracer |
 
-## Implementation details
-
-The auto-discovery relies on two key patterns:
-
-1. **`@generated` predicates** — `_is_sgs_tracer_name` and
-   `is_ρ_weighted_name` return compile-time `Bool` constants, enabling
-   `unrolled_filter` to resolve the tracer list at compile time with
-   zero runtime cost.
-
-2. **`MatrixFields.get_field` + `FieldName`** — tracer fields are
-   accessed via `MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)` using
-   the discovered `FieldName`. This is equivalent to direct property
-   access (e.g. `Y.c.sgsʲs.:(1).q_lcl`) and compiles to the same code.
+---
 
 # Trace Gases
+
 `ClimaAtmos` implements two modes for each ozone and carbon dioxide: one time varying and one time invariant. These are only relevant for the radiation transfer, and only when RRTMGP is used. All other atmospheric gases are held fixed with default values from RRTMPG that can be changed in the toml file.
 
 ### Time Invariant Ozone Profile

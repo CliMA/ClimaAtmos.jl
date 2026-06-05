@@ -1177,7 +1177,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶠtracer_upwind_matrix(ᶠu³ʲs.:(1)),
                         )
                     for χ_name in sgs_tracer_names(Y)
-                        ρχ_name = get_ρχ_name(χ_name)
+                        ρχ_name = get_c_ρχ_name(χ_name)
                         χʲ_name = get_sgsʲ_name(χ_name)
                         ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
 
@@ -1223,7 +1223,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶠtracer_upwind_matrix(ᶠu³⁰),
                         )
                     for χ_name in sgs_tracer_names(Y)
-                        ρχ_name = get_ρχ_name(χ_name)
+                        ρχ_name = get_c_ρχ_name(χ_name)
                         χʲ_name = get_sgsʲ_name(χ_name)
                         ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
                         ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
