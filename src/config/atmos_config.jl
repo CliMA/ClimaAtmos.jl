@@ -33,12 +33,12 @@ end
 """
     AtmosConfig(
         config_file::String = default_config_file;
-        job_id = config_id_from_config_file(config_file),
+        job_id = job_id_from_config_file(config_file),
         comms_ctx = nothing,
     )
     AtmosConfig(
         config_files::Union{NTuple{<:Any, String} ,Vector{String}};
-        job_id = config_id_from_config_files(config_files),
+        job_id = job_id_from_config_files(config_files),
         comms_ctx = nothing,
     )
 
@@ -47,13 +47,13 @@ and passes it to the AtmosConfig constructor.
 """
 AtmosConfig(
     config_file::String = default_config_file;
-    job_id = config_id_from_config_file(config_file),
+    job_id = job_id_from_config_file(config_file),
     comms_ctx = nothing,
 ) = AtmosConfig((config_file,); job_id, comms_ctx)
 
 function AtmosConfig(
     config_files::TupleOrVector(String);
-    job_id = config_id_from_config_files(config_files),
+    job_id = job_id_from_config_files(config_files),
     comms_ctx = nothing,
 )
 
