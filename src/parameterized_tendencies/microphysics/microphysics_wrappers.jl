@@ -235,8 +235,8 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
 end
 # `@noinline` here is the SGS quadrature function barrier. The functor body
 # below (saturation, shape-function partition, plus the heavy
-# `BMT.average_bulk_microphysics_tendencies` call with its `nsubs`
-# substep loop and 4×4 linearized operator) gets invoked N² times from
+# `BMT.bulk_microphysics_tendencies(::LinearizedAverage, …)` call with its
+# `nsubs` substep loop and 4×4 linearized operator) gets invoked N² times from
 # `sum_over_quadrature_points`. Without the barrier those N² copies inline
 # into one giant GPU broadcast kernel, pushing register pressure past the
 # 255-reg hard cap and pinning occupancy at 12.5%. Marking the functor
@@ -368,6 +368,166 @@ end
     return integrate_over_sgs(
         evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
     )
+end
+
+# ---------------------------------------------------------------------------
+# Split-broadcast 1-moment quadrature path (GPU register-pressure relief)
+# ---------------------------------------------------------------------------
+#
+# The fully-fused quadrature broadcast above runs `Microphysics1MEvaluator`
+# N² times per cell inside a single GPU kernel. That kernel hits the 255-reg
+# hard cap and is pinned at 12.5 % occupancy because the per-thread state
+# (accumulator + transform + evaluator + N² intermediates) blows the
+# register file.
+#
+# The helpers below split the N² quadrature loop across N² separate
+# broadcasts. Each kernel does ONE
+# `BMT.bulk_microphysics_tendencies(::LinearizedAverage, …)` call per thread, accumulating
+# into `ᶜmp_tendency`. Per-thread state drops to a single BMT working set
+# plus the read-then-write accumulator — well below the 255-reg cap, which
+# should let the compiler use fewer registers and/or raise occupancy.
+#
+# The cost paid is 9× memory traffic on the input fields and 9× RMW on
+# `ᶜmp_tendency`. The fused kernel is at 27 % DRAM utilization (NCU), so
+# the headroom exists. Science is unchanged: the same weighted sum of the
+# same per-quadrature-point evaluations, just regrouped across kernels.
+
+# The microphysics scheme (e.g. `BMT.Microphysics1Moment()`) is a scalar
+# configuration argument in the split-quadrature broadcasts below. Mark it as a
+# broadcast scalar so `@.` doesn't treat the empty struct as an iterable and try
+# to `collect` it. The baseline fused `@. microphysics_tendencies_1m(...)` call
+# dodged this because the scheme was constructed *inline* inside `@.` (dotting
+# the constructor); here the scheme arrives as a pre-built variable, which goes
+# through `Base.broadcastable`. Mirrors the SGS/microphysics-model registrations
+# in `types.jl` and `sgs_quadrature.jl`.
+Base.broadcastable(x::BMT.MicrophysicsScheme) = tuple(x)
+
+@inline function _zero_microphysics_tendency_1m(ρ::FT) where {FT}
+    z = zero(FT)
+    return (
+        dq_lcl_dt = z,
+        dq_icl_dt = z,
+        dq_rai_dt = z,
+        dq_sno_dt = z,
+    )
+end
+
+# One quadrature point's worth of 1M microphysics work, factored out of
+# `Microphysics1MEvaluator` and the wrapper's cell-level setup so it can run
+# as the body of a single broadcast kernel (no closure capture across N²
+# call sites).
+@inline function microphysics_tendencies_1m_at_quad_point(
+    χ_i, χ_j, scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    moments, dt, nsubs, args...,
+)
+    FT = typeof(ρ)
+    # Cell-level setup (same as the wrapper). Redundantly computed at each
+    # of the N² quadrature points; cheap relative to the BMT call below.
+    q_lcl_nonneg = max(FT(0), q_lcl)
+    q_icl_nonneg = max(FT(0), q_icl)
+    q_rai_nonneg = max(FT(0), q_rai)
+    q_sno_nonneg = max(FT(0), q_sno)
+
+    λ = TD.liquid_fraction(thp, T, q_lcl_nonneg, q_icl_nonneg)
+    q_min = TD.Parameters.q_min(thp)
+    M_l = max(FT(0), moments.M_l)
+    M_i = max(FT(0), moments.M_i)
+    M_sq = q_min * q_min
+    denom_l = M_sq + M_l * M_l
+    denom_i = M_sq + M_i * M_i
+    γ_l = min(FT(1), q_lcl_nonneg * M_l / denom_l)
+    γ_i = min(FT(1), q_icl_nonneg * M_i / denom_i)
+
+    # Physical-point transform built locally (host-side `integrate_over_sgs`
+    # would normally build this once per cell; here it's rebuilt per
+    # quadrature point — same cheap cost as λ/γ setup above).
+    σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
+    μ_T_p, μ_q_p = promote(T, q_tot_nonneg)
+    transform = create_physical_transform(
+        sgs_quad.dist, μ_q_p, μ_T_p,
+        oftype(μ_T_p, σ_q), oftype(μ_T_p, σ_T), oftype(μ_T_p, corr),
+        oftype(μ_T_p, sgs_quad.T_min), oftype(μ_T_p, sgs_quad.q_max),
+    )
+    T_hat, q_tot_hat = transform(χ_i, χ_j)
+
+    # Local condensate shape-function partition (was the
+    # `Microphysics1MEvaluator` functor body).
+    q_tot_hat_pos = max(FT(0), q_tot_hat)
+    q_sat_hat = TD.q_vap_saturation(thp, T_hat, ρ)
+    excess_hat = max(FT(0), q_tot_hat_pos - q_sat_hat)
+    q_lcl_eq_hat = max(FT(0), λ * excess_hat - q_rai_nonneg)
+    q_icl_eq_hat = max(FT(0), (FT(1) - λ) * excess_hat - q_sno_nonneg)
+    q_lcl_hat = q_lcl_nonneg + γ_l * (q_lcl_eq_hat - M_l)
+    q_icl_hat = q_icl_nonneg + γ_i * (q_icl_eq_hat - M_i)
+
+    # Identical call to the baseline `Microphysics1MEvaluator` functor: the
+    # `LinearizedAverage` mode + `nsubs` substep loop in
+    # `bulk_microphysics_tendencies(::LinearizedAverage, ::Microphysics1Moment, …)`.
+    return BMT.bulk_microphysics_tendencies(
+        BMT.LinearizedAverage(),
+        scheme, cmp, thp, ρ, T_hat, q_tot_hat_pos,
+        q_lcl_hat, q_icl_hat, q_rai_nonneg, q_sno_nonneg,
+        dt, nsubs, args...,
+    )
+end
+
+# Accumulator step for the split-broadcast quadrature. Adds one weighted
+# quadrature-point contribution to the running tendency. Returns a fresh
+# NamedTuple so the broadcast `@. dest = _accum(dest, ...)` works without
+# needing RecursiveApply.
+@inline function _accum_microphysics_tendency_1m(
+    acc, w_ij, χ_i, χ_j, scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    moments, dt, nsubs, args...,
+)
+    contrib = microphysics_tendencies_1m_at_quad_point(
+        χ_i, χ_j, scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
+        q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+        moments, dt, nsubs, args...,
+    )
+    return (
+        dq_lcl_dt = acc.dq_lcl_dt + w_ij * contrib.dq_lcl_dt,
+        dq_icl_dt = acc.dq_icl_dt + w_ij * contrib.dq_icl_dt,
+        dq_rai_dt = acc.dq_rai_dt + w_ij * contrib.dq_rai_dt,
+        dq_sno_dt = acc.dq_sno_dt + w_ij * contrib.dq_sno_dt,
+    )
+end
+
+# Orchestrator: runs the N²+1 broadcasts that together replace the fused
+# `@. ᶜmp_tendency = microphysics_tendencies_1m(...)` quadrature call.
+# `ᶜmp_tendency` is the destination Field of NamedTuples; the rest mirror
+# the 16-arg `microphysics_tendencies_1m` argument list.
+@inline function set_microphysics_quadrature_1m!(
+    ᶜmp_tendency, scheme, sgs_quad, cmp, thp, ρ_field, T_field,
+    q_tot_field, q_lcl_field, q_icl_field, q_rai_field, q_sno_field,
+    T′T′_field, q′q′_field, corr_Tq, moments_field, dt, nsubs, args...,
+)
+    N = quadrature_order(sgs_quad)
+    χ = sgs_quad.a
+    weights = sgs_quad.w
+    FT = eltype(χ)
+    inv_pi = one(FT) / FT(π)
+
+    # Zero the accumulator (one light broadcast).
+    @. ᶜmp_tendency = _zero_microphysics_tendency_1m(ρ_field)
+
+    # N² accumulating broadcasts. χ_i, χ_j, w_ij are scalar values that
+    # change between iterations; their TYPES don't change, so the kernel is
+    # compiled once and launched N² times.
+    for i in 1:N, j in 1:N
+        χ_i = χ[i]
+        χ_j = χ[j]
+        w_ij = weights[i] * weights[j] * inv_pi
+        @. ᶜmp_tendency = _accum_microphysics_tendency_1m(
+            ᶜmp_tendency, w_ij, χ_i, χ_j, scheme, sgs_quad, cmp, thp,
+            ρ_field, T_field, q_tot_field,
+            q_lcl_field, q_icl_field, q_rai_field, q_sno_field,
+            T′T′_field, q′q′_field, corr_Tq, moments_field, dt, nsubs,
+            args...,
+        )
+    end
+    return nothing
 end
 
 ###
