@@ -1006,13 +1006,27 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
                 @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ +=
                     dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
-                for χ_name in sgs_tracer_names(Y)
-                    χʲ_name = get_sgsʲ_name(χ_name)
-                    α = is_precip_sgs_tracer(χ_name) ? α_vert_diff_tracer : FT(1)
-                    ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χʲ_name, χʲ_name]
-                    @. ∂ᶜχʲ_err_∂ᶜχʲ +=
-                        dtγ * α * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅
-                        ᶜdiffusion_h_matrix
+                if p.atmos.microphysics_model isa Union{
+                    NonEquilibriumMicrophysics1M,
+                    NonEquilibriumMicrophysics2M,
+                }
+                    sgs_microphysics_tracers = (
+                        (@name(c.sgsʲs.:(1).q_lcl), FT(1)),
+                        (@name(c.sgsʲs.:(1).q_icl), FT(1)),
+                        (@name(c.sgsʲs.:(1).q_rai), α_vert_diff_tracer),
+                        (@name(c.sgsʲs.:(1).q_sno), α_vert_diff_tracer),
+                        (@name(c.sgsʲs.:(1).n_lcl), FT(1)),
+                        (@name(c.sgsʲs.:(1).n_rai), α_vert_diff_tracer),
+                    )
+                    MatrixFields.unrolled_foreach(
+                        sgs_microphysics_tracers,
+                    ) do (χʲ_name, α)
+                        MatrixFields.has_field(Y, χʲ_name) || return
+                        ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χʲ_name, χʲ_name]
+                        @. ∂ᶜχʲ_err_∂ᶜχʲ +=
+                            dtγ * α * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅
+                            ᶜdiffusion_h_matrix
+                    end
                 end
             end
             # entrainment and detrainment (rates are treated explicitly)
