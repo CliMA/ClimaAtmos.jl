@@ -84,23 +84,48 @@ end
 
 # --- Function barrier helpers ---
 
-function _allocs_cloud_fraction_hybrid(thp)
+function _allocs_cloud_fraction_simple()
+    FT = Float64
+    CA._compute_cloud_fraction(FT(1e-3), FT(1e-7), FT(1))
+    return @allocated CA._compute_cloud_fraction(FT(1e-3), FT(1e-7), FT(1))
+end
+
+function _allocs_cloud_fraction_fused(thp, sgs_quad)
     FT = Float64
     T = FT(280.0)
     ρ = FT(1.0)
-    q_min = FT(1e-10)
     q_tot = FT(0.011)
-    moments = (
-        mu_S = FT(1e-3), sigma_S_sq = FT(1e-7),
-        M_l = FT(1e-3), M_i = FT(0),
+    q_liq = FT(1e-3)
+    q_ice = FT(0)
+    T′T′ = FT(1.0)
+    q′q′ = FT(1e-6)
+    corr_Tq = FT(0)
+    α = FT(1)
+    CA._compute_cloud_fraction(
+        thp,
+        T,
+        ρ,
+        q_tot,
+        q_liq,
+        q_ice,
+        sgs_quad,
+        T′T′,
+        q′q′,
+        corr_Tq,
+        α,
     )
-    CA.compute_cloud_fraction_hybrid(
-        thp, T, ρ, q_tot, FT(1e-3), FT(0), moments, FT(0), FT(1), q_min,
-        CA.GaussianSGS(),
-    )
-    return @allocated CA.compute_cloud_fraction_hybrid(
-        thp, T, ρ, q_tot, FT(1e-3), FT(0), moments, FT(0), FT(1), q_min,
-        CA.GaussianSGS(),
+    return @allocated CA._compute_cloud_fraction(
+        thp,
+        T,
+        ρ,
+        q_tot,
+        q_liq,
+        q_ice,
+        sgs_quad,
+        T′T′,
+        q′q′,
+        corr_Tq,
+        α,
     )
 end
 
@@ -200,7 +225,8 @@ end
         quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
 
         # Warm up the barrier functions themselves (JIT)
-        _allocs_cloud_fraction_hybrid(thp)
+        _allocs_cloud_fraction_simple()
+        _allocs_cloud_fraction_fused(thp, quad)
         _allocs_coupled_sink()
         _allocs_bmt_0m(mp, thp)
         _allocs_energy_helper(thp)
@@ -208,8 +234,9 @@ end
         _allocs_sgs_sat_adj(thp, quad)
         _allocs_integrate_sgs_functor(quad, FT)
 
-        @testset "compute_cloud_fraction_hybrid" begin
-            @test _allocs_cloud_fraction_hybrid(thp) == 0
+        @testset "_compute_cloud_fraction" begin
+            @test _allocs_cloud_fraction_simple() == 0
+            @test _allocs_cloud_fraction_fused(thp, quad) == 0
         end
 
         @testset "coupled_sink_limit_factor" begin

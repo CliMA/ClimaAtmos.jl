@@ -158,22 +158,20 @@ function precomputed_quantities(Y, atmos)
         atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
         atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
-    # `ᶜsgs_moments_mp` caches the SGS-mean equilibrium cloud condensate
-    # `(M_l, M_i)` used by the `Microphysics1MEvaluator` shape-function
-    # partition. It is allocated only for schemes that consume it. The
-    # `(μ_S, σ_S²)` moments needed by `compute_cloud_fraction_hybrid` are
-    # computed inline in the cloud-fraction broadcast and never stored.
+    # `ᶜsgs_moments` caches `(mu_S, sigma_S_sq, λ_lagrange)` — the SGS mean saturation
+    # variable, variance, and Lagrange multiplier used by `Microphysics1MEvaluator`.
+    # Allocated only for 1M/2M microphysics schemes.
     uses_microphysics_quadrature_moments =
         atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-    SGSMomentsMPNT = @NamedTuple{M_l::FT, M_i::FT}
+    SGSMomentsNT = @NamedTuple{mu_S::FT, sigma_S_sq::FT, λ_lagrange::FT}
     covariance_quantities = if uses_sgs_quadrature
         base = (;
             ᶜT′T′ = zeros(axes(Y.c)),
             ᶜq′q′ = zeros(axes(Y.c)),
         )
         uses_microphysics_quadrature_moments ?
-        (; base..., ᶜsgs_moments_mp = similar(Y.c, SGSMomentsMPNT)) :
+        (; base..., ᶜsgs_moments = similar(Y.c, SGSMomentsNT)) :
         base
     else
         (;)
