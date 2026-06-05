@@ -48,7 +48,7 @@ steps:
     artifact_paths: "output/gpu_amip_progedmf_1M_land_he16/artifacts/*"
     env:
       CLIMACOMMS_DEVICE: "CUDA"
-      BASELINE_SYPD: "0.24"
+      BASELINE_SYPD: "0.262"
       MIN_PERCENT_CHANGE: "-1"
     agents:
       slurm_gpus_per_task: 1
