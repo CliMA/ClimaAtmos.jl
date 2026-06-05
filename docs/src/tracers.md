@@ -126,7 +126,6 @@ The following internal functions power the auto-discovery mechanism:
 | Function | Purpose |
 |---|---|
 | `sgs_tracer_names(Y)` | Returns a `Tuple` of `FieldName`s for all SGS tracers in `Y` |
-| `foreach_sgs_tracer(f, Y...)` | Applies `f` to each SGS tracer (uses `unrolled_foreach`) |
 | `is_precip_sgs_tracer(χ_name)` | Returns `true` for precipitating species (`q_rai`, `q_sno`, `n_rai`) |
 | `get_ρχ_name(χ_name)` | Maps `@name(χ)` → `@name(ρχ)` (SGS to grid-scale name) |
 | `get_sgsʲ_name(χ_name)` | Maps `@name(χ)` → `@name(c.sgsʲs.:(1).χ)` (for Jacobian matrix keys) |

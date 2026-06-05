@@ -198,46 +198,6 @@ sgs_tracer_names(Y) =
         !(name in (@name(ρa), @name(mse), @name(q_tot)))
     end : ()
 
-"""
-    foreach_sgs_tracer(f, Y_or_similar_values...)
-
-Applies a function `f` to each SGS updraft tracer discovered by
-`sgs_tracer_names`. Analogous to `foreach_gs_tracer` for grid-scale
-tracers.
-
-The callback `f` receives `(χ_fields..., χ_name)` where `χ_name` is the
-tracer name (e.g., `@name(q_lcl)`) and `χ_fields` are the corresponding
-sub-fields from each input value. The caller is responsible for looping
-over updraft indices `j` as needed.
-
-Each input value is navigated to its first updraft's tracer sub-field:
-- For `Fields.FieldVector` (like `Y` or `Yₜ`): accesses `.c.sgsʲs.:(1).<name>`
-- For `Fields.Field`: accesses `.<name>` directly (for pre-extracted updraft fields)
-
-# Examples
-
-```julia
-# Entrainment mixing for all auto-discovered SGS tracers
-for j in 1:n
-    sgsʲ = Y.c.sgsʲs.:(\$j)
-    sgsʲₜ = Yₜ.c.sgsʲs.:(\$j)
-    foreach_sgs_tracer(Y, sgsʲ, sgsʲₜ) do _, ᶜχʲ, ᶜχʲₜ, χ_name
-        ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-        @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)
-    end
-end
-```
-"""
-foreach_sgs_tracer(f::F, Y_or_similar_values...) where {F} =
-    unrolled_foreach(sgs_tracer_names(Y_or_similar_values[1])) do χ_name
-        χ_fields = unrolled_map(Y_or_similar_values) do value
-            field =
-                value isa Fields.Field ? value :
-                value.c.sgsʲs.:(1)
-            MatrixFields.get_field(field, χ_name)
-        end
-        f(χ_fields..., χ_name)
-    end
 
 """
     is_precip_sgs_tracer(χ_name)
