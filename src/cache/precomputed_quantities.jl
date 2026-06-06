@@ -287,14 +287,12 @@ function precomputed_quantities(Y, atmos)
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
             ρtke_flux = similar(Fields.level(Y.f, half), C3{FT}),
-            ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜentr_vel_scaleʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜentr_nonvelʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜdetr_nonvelʲs = similar(Y.c, NTuple{n, FT}),
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜarea_bounding_entr_detrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρ_diffʲs = similar(Y.c, NTuple{n, FT}),
             ᶠu₃_tendencyʲs = similar(Y.f, NTuple{n, C3{FT}}),
+            ᶜρa_tendencyʲs = similar(Y.c, NTuple{n, FT}),
             precipitation_sgs_quantities...,
         ) : (;)
 

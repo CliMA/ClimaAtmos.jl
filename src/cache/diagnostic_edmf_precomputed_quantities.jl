@@ -740,10 +740,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             )
             @. entrʲ_prev_level = compute_entrainment(
                 entr_vel_scale_prev_level,
-                nonvelocity_entrainment(
+                area_bounding_entr_detr(
                     turbconv_params,
                     draft_area(ρaʲ_prev_level, ρʲ_prev_level),
-                    p.atmos.edmfx_model.entr_model,
                 ),
                 get_physical_w(u³ʲ_prev_halflevel, local_geometry_prev_halflevel) -
                 get_physical_w(u³_prev_halflevel, local_geometry_prev_halflevel),
@@ -880,12 +879,21 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 turbconv_params,
                 draft_area(ρaʲ_prev_level, ρʲ_prev_level),
                 ρaʲ_prev_level,
-                get_physical_w(u³ʲ_prev_halflevel, local_geometry_prev_halflevel),
-                vertical_buoyancy_acceleration(
-                    ρ_prev_level,
-                    ρʲ_prev_level,
-                    ᶜgradᵥ_ᶠΦ_prev_level,
-                    local_geometry_prev_halflevel,
+                # Diagnostic EDMF integrates level-by-level on field-value
+                # slices, so the inverse buoyancy time scale is evaluated
+                # at cell centers (no face/interp pattern available here).
+                detr_buoy_inv_time_scale(
+                    get_physical_w(
+                        u³ʲ_prev_halflevel,
+                        local_geometry_prev_halflevel,
+                    ),
+                    vertical_buoyancy_acceleration(
+                        ρ_prev_level,
+                        ρʲ_prev_level,
+                        ᶜgradᵥ_ᶠΦ_prev_level,
+                        local_geometry_prev_halflevel,
+                    ),
+                    CAP.detr_buoy_inv_tau_max(turbconv_params),
                 ),
                 # Approximate the updraft mass-flux divergence as
                 #   div(ρa u³) ≈ ρa · div(ρu³) / ρ,
@@ -893,11 +901,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 # vary with height at this level (constant-area approximation).
                 # `vert_div_level` holds div(ρu³) / ρ, so we multiply by ρa here.
                 ρaʲ_prev_level * vert_div_level,
-                entrʲ_prev_level,
-                nonvelocity_detrainment(
+                area_bounding_entr_detr(
                     turbconv_params,
                     draft_area(ρaʲ_prev_level, ρʲ_prev_level),
-                    p.atmos.edmfx_model.detr_model,
                 ),
                 p.atmos.edmfx_model.detr_model,
             )

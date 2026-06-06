@@ -365,7 +365,6 @@ function edmfx_sgs_vertical_advection_tendency!(
     turbconv_model::PrognosticEDMFX,
 )
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
-    (; dt) = p
     (; edmfx_mse_q_tot_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
     (; ᶠu³ʲs, ᶜρʲs, ᶜρ_diffʲs) = p.precomputed
     (; ᶜgradᵥ_ᶠΦ) = p.core
@@ -374,16 +373,12 @@ function edmfx_sgs_vertical_advection_tendency!(
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
 
     for j in 1:n
+        ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
+
         # buoyancy term in mse equation
         @. Yₜ.c.sgsʲs.:($$j).mse +=
             adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃))) *
             ᶜρ_diffʲs.:($$j) * ᶜgradᵥ_ᶠΦ
-
-        ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
-        # Flux form vertical advection of area fraction with the updraft velocity
-        vtt =
-            vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_mse_q_tot_upwinding)
-        @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
 
         # Advective form advection of mse and q_tot with the updraft velocity
         # Note: This allocates because the function is too long
