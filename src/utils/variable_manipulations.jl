@@ -208,8 +208,9 @@ that should receive a reduced diffusion/hyperdiffusion coefficient
 
 Mirrors the grid-scale check in `apply_tracer_hyperdiffusion_tendency!`.
 """
-is_precip_sgs_tracer(χ_name) =
-    χ_name in (@name(q_rai), @name(q_sno), @name(n_rai))
+@generated is_precip_sgs_tracer(::MatrixFields.FieldName{names}) where {names} =
+    MatrixFields.FieldName{names}() in
+    (@name(q_rai), @name(q_sno), @name(n_rai))
 
 """
     get_sgsʲ_name(χ_name::FieldName)
@@ -218,10 +219,10 @@ Construct the full Jacobian matrix path name for an SGS tracer in updraft 1.
 Maps e.g. `@name(q_lcl)` → `@name(c.sgsʲs.:(1).q_lcl)`.
 
 Used in the manual sparse Jacobian to index matrix blocks for auto-discovered
-SGS tracers. The result is a compile-time constant when `χ_name` is known
-at compile time (as it is inside `unrolled_foreach` or `for ... in Tuple`).
+SGS tracers. Implemented as `@generated` to ensure the result is a
+compile-time constant with zero runtime allocation.
 """
-get_sgsʲ_name(::MatrixFields.FieldName{names}) where {names} =
+@generated get_sgsʲ_name(::MatrixFields.FieldName{names}) where {names} =
     MatrixFields.FieldName(:c, :sgsʲs, 1, names...)
 
 """
@@ -236,7 +237,7 @@ for use in `matrix[name1, name2]` indexing.
 get_c_ρχ_name(χ_name) =
     get_c_name(get_ρχ_name(χ_name))
 
-get_c_name(::MatrixFields.FieldName{names}) where {names} =
+@generated get_c_name(::MatrixFields.FieldName{names}) where {names} =
     MatrixFields.FieldName(:c, names...)
 
 
