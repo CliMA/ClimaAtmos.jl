@@ -1026,7 +1026,6 @@ compute_rwp(_, _, _, model) = error_diagnostic_variable("rwp", model)
 function compute_rwp(state, cache, _,
     ::Union{
         NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M,
-        NonEquilibriumMicrophysics2MP3,
     },
 )
     rwp = cache.scratch.ᶠtemp_field_level
@@ -1053,7 +1052,6 @@ compute_swp(_, _, _, model) = error_diagnostic_variable("swp", model)
 function compute_swp(state, cache, _,
     ::Union{
         NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M,
-        NonEquilibriumMicrophysics2MP3,
     },
 )
     swp = cache.scratch.ᶠtemp_field_level

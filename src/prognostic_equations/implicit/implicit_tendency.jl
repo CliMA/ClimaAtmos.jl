@@ -181,7 +181,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
-    if microphysics_model isa NonEquilibriumMicrophysics2MP3
+    if microphysics_model isa NonEquilibriumMicrophysics2M
         (; ρ, ρn_ice, ρq_rim, ρb_rim) = Y.c
         ᶜwnᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwnᵢ))
         ᶜwᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwᵢ))
