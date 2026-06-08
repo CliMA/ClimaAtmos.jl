@@ -20,11 +20,15 @@ This function looks like
 using CairoMakie
 import ClimaAtmos
 
-z = range(0, 60000, length=100)
+z = range(0, 60000, length = 100)
 ozone = ClimaAtmos.idealized_ozone.(z)
 
-lines(ozone, z)
+fig = Figure()
+ax = Axis(fig[1, 1]; xlabel = "Ozone (VMR)", ylabel = "Altitude (m)")
+lines!(ax, ozone, z)
+save("idealized_ozone.png", fig); nothing # hide
 ```
+![Idealized ozone profile](idealized_ozone.png)
 
 ### Time Varying Ozone Profile
 
