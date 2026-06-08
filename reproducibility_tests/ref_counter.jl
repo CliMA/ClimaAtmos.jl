@@ -1,4 +1,4 @@
-352
+353
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+353
+- Remove q_tot diffusion contribution to updraft area tendency and its Jacobian entries.
+
 352
 - Truncated-Gaussian microphysics and cloud fraction closure.
 
