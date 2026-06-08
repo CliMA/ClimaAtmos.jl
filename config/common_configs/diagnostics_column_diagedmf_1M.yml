@@ -1,0 +1,14 @@
+diagnostics:
+  - short_name: [ta, thetaa, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, husra, hussn]
+    period: 10mins
+  - short_name: [ts, hfss, hfls, pr, lwp, clivi, rwp, swp]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, husup, hurup, clwup, cliup, husraup, hussnup]
+    period: 10mins
+  - short_name: [husraup, hussnup]
+    period: 1hours
+    reduction_time: average
+  - short_name: [waen, tke, lmix]
+    period: 10mins
+  - short_name: [entr, detr, turbentr, bgrad, strain, edt, evu]
+    period: 10mins

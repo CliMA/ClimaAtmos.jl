@@ -516,8 +516,8 @@ compute_husen(state, cache, time) = compute_husen(state, cache, time,
     cache.atmos.microphysics_model, cache.atmos.turbconv_model,
 )
 compute_husen(_, _, _, _, _) =
-    error_diagnostic_variable("Can only compute updraft specific humidity \
-                               with a moist model and with EDMFX")
+    error_diagnostic_variable("Can only compute environment specific humidity \
+                               with a moist model and with PrognosticEDMFX")
 
 compute_husen(_, cache, _, ::MoistMicrophysics, ::PrognosticEDMFX) =
     cache.precomputed.ᶜq_tot_nonneg⁰
@@ -534,8 +534,8 @@ compute_huren(state, cache, time) = compute_huren(state, cache, time,
     cache.atmos.microphysics_model, cache.atmos.turbconv_model,
 )
 compute_huren(_, _, _, _, _) =
-    error_diagnostic_variable("Can only compute updraft relative humidity \
-                               with a moist model and with EDMFX")
+    error_diagnostic_variable("Can only compute environment relative humidity \
+                               with a moist model and with PrognosticEDMFX")
 
 function compute_huren(_, cache, _, ::MoistMicrophysics, ::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -559,8 +559,10 @@ compute_clwen(state, cache, time) = compute_clwen(state, cache, time,
     cache.atmos.microphysics_model, cache.atmos.turbconv_model,
 )
 compute_clwen(_, _, _, _, _) =
-    error_diagnostic_variable("Can only compute updraft liquid water specific humidity \
-                               with a moist model and with EDMFX")
+    error_diagnostic_variable(
+        "Can only compute environment liquid water specific humidity \
+         with a moist model and with PrognosticEDMFX",
+    )
 
 compute_clwen(_, cache, _, ::EquilibriumMicrophysics0M, ::PrognosticEDMFX) =
     cache.precomputed.ᶜq_liq⁰
@@ -581,8 +583,10 @@ compute_cdncen(state, cache, time) = compute_cdncen(state, cache, time,
     cache.atmos.microphysics_model, cache.atmos.turbconv_model,
 )
 compute_cdncen(_, _, _, _, _) =
-    error_diagnostic_variable("Can only compute updraft cloud liquid water \
-                               number mixing ratio with a 2M model and with EDMFX")
+    error_diagnostic_variable(
+        "Can only compute environment cloud liquid water \
+         number mixing ratio with a 2M model and with PrognosticEDMFX",
+    )
 
 compute_cdncen(state, cache, _, ::NonEquilibriumMicrophysics2M, ::PrognosticEDMFX) =
     ᶜspecific_env_value(@name(n_lcl), state, cache)
@@ -603,8 +607,8 @@ compute_clien(state, cache, time) = compute_clien(
     state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
 )
 compute_clien(_, _, _, _, _) =
-    error_diagnostic_variable("Can only compute updraft ice water specific humidity \
-                               with a moist model and with EDMFX")
+    error_diagnostic_variable("Can only compute environment ice water specific humidity \
+                               with a moist model and with PrognosticEDMFX")
 
 compute_clien(_, cache, _, ::EquilibriumMicrophysics0M, ::PrognosticEDMFX) =
     cache.precomputed.ᶜq_ice⁰
@@ -628,8 +632,8 @@ compute_husraen(state, cache, time) = compute_husraen(
     state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
 )
 compute_husraen(_, _, _, _, _) =
-    error_diagnostic_variable("Can only compute updraft rain specific humidity \
-                               with a 1M or 2M model and with EDMFX")
+    error_diagnostic_variable("Can only compute environment rain specific humidity \
+                               with a 1M or 2M model and with PrognosticEDMFX")
 
 compute_husraen(state, cache, _,
     ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}, ::PrognosticEDMFX,
@@ -648,8 +652,8 @@ compute_ncraen(state, cache, time) = compute_ncraen(
     state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
 )
 compute_ncraen(_, _, _, _, _) =
-    error_diagnostic_variable("Can only compute updraft rain number mixing ratio \
-                               with a 2M model and with EDMFX")
+    error_diagnostic_variable("Can only compute environment rain number mixing ratio \
+                               with a 2M model and with PrognosticEDMFX")
 
 compute_ncraen(state, cache, _, ::NonEquilibriumMicrophysics2M, ::PrognosticEDMFX) =
     ᶜspecific_env_value(@name(n_rai), state, cache)
@@ -670,8 +674,8 @@ compute_hussnen(state, cache, time) = compute_hussnen(
     state, cache, time, cache.atmos.microphysics_model, cache.atmos.turbconv_model,
 )
 compute_hussnen(_, _, _, _, _) =
-    error_diagnostic_variable("Can only compute updraft snow specific humidity \
-                               with a 1M or 2M model and with EDMFX")
+    error_diagnostic_variable("Can only compute environment snow specific humidity \
+                               with a 1M or 2M model and with PrognosticEDMFX")
 
 compute_hussnen(state, cache, _,
     ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}, ::PrognosticEDMFX,

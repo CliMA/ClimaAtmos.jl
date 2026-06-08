@@ -1,4 +1,4 @@
-354
+355
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+355
+- Add plots of some new diagnostics for prognostic EDMF test cases. There is no change in model behavior.
+
 354
 - Update to ClimaCore 0.14.54
 
