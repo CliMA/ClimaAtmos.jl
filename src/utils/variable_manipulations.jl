@@ -180,24 +180,23 @@ foreach_gs_tracer(f::F, Y_or_similar_values...) where {F} =
         f(ρχ_or_χ_fields..., ρχ_name)
     end
 
+
 """
     sgs_tracer_names(Y)
 
-`Tuple` of `@name`s for the SGS updraft tracers in `Y.c.sgsʲs.:(1)`,
-excluding structural variables (`ρa`, `mse`, `q_tot`). These are the
-tracers that receive generic passive-tracer transport (advection,
-entrainment mixing, SGS mass/diffusive flux, Rayleigh sponge,
-filter/constraints).
+Return a `Tuple` of `FieldName`s for all SGS (sub-grid scale) tracers
+present in the first updraft of `Y`. Returns `()` when prognostic EDMF
+is not active (i.e. when `Y.c` has no `sgsʲs` field).
 
-Analogous to `gs_tracer_names` for grid-scale tracers.
-Returns an empty tuple when `Y.c` has no `sgsʲs` field (e.g., `DiagnosticEDMFX`).
+"Tracer" here means any scalar in `Y.c.sgsʲs.:(1)` that is **not** one
+of the core EDMF variables `ρa`, `mse`, or `q_tot` (which receive
+physics-specific treatment).
 """
 sgs_tracer_names(Y) =
-    MatrixFields.has_field(Y.c, @name(sgsʲs)) ?
+    hasfield(typeof(Y.c), :sgsʲs) ?
     unrolled_filter(MatrixFields.top_level_names(Y.c.sgsʲs.:(1))) do name
         !(name in (@name(ρa), @name(mse), @name(q_tot)))
     end : ()
-
 
 """
     is_precip_sgs_tracer(χ_name)
@@ -239,7 +238,6 @@ get_c_ρχ_name(χ_name) =
 
 @generated get_c_name(::MatrixFields.FieldName{names}) where {names} =
     MatrixFields.FieldName(:c, names...)
-
 
 """
     sgs_tracer_names(Y)

@@ -159,18 +159,15 @@ function edmfx_vertical_diffusion_tendency!(
                 ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
         end
 
-        # Auto-discovered SGS tracers: updraft vertical diffusion
-        α_precip = CAP.α_vert_diff_tracer(params)
-        ᶜρʲ = ᶜρʲs.:(1)
-        ᶜdivᵥ_q = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
-        for χ_name in sgs_tracer_names(Y)
-            α = is_precip_sgs_tracer(χ_name) ? α_precip : FT(1)
-            # TODO: make it work for multiple updrafts
-            for j in 1:n
-                ᶜρʲ = ᶜρʲs.:($j)
+        if !isempty(sgs_tracer_names(Y))
+            α_precip = CAP.α_vert_diff_tracer(params)
+            ᶜρʲ = ᶜρʲs.:(1)
+            ᶜdivᵥ_q = Operators.DivergenceF2C(
+                top = Operators.SetValue(C3(FT(0))),
+                bottom = Operators.SetValue(C3(FT(0))),
+            )
+            for χ_name in sgs_tracer_names(Y)
+                α = is_precip_sgs_tracer(χ_name) ? α_precip : FT(1)
                 ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
                 @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
@@ -266,9 +263,8 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
             ),
         )
 
-        # Auto-discovered SGS tracers: relax toward the grid mean when ρa is
+        # Auto-discovered SGS tracers: relax toward grid mean when ρa is
         # negligible; enforce mass conservation bound ρaχʲ < ρχ.
-        # No-op when sgs_tracer_names returns an empty tuple (e.g., 0M configs).
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
             MatrixFields.has_field(Y.c, ρχ_name) || continue
