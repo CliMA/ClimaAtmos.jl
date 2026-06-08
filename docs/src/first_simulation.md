@@ -2,7 +2,7 @@
 
 ## Minimal example
 
-The simplest ClimaAtmos simulation uses all defaults — it solves the dry
+The simplest ClimaAtmos simulation uses all defaults -- it solves the dry
 compressible Euler equations on a global cubed-sphere grid, starting from a
 hydrostatically balanced state with a vertically decaying temperature profile:
 
@@ -11,10 +11,12 @@ using Logging # hide
 Logging.disable_logging(Logging.Info) # hide
 import ClimaAtmos as CA
 
-simulation = CA.AtmosSimulation{Float32}(; t_end = 86400)  # 1 day
-CA.solve_atmos!(simulation)
+simulation = CA.AtmosSimulation{Float32}(; t_end = "1days")
 nothing # hide
 ```
+
+This builds the simulation but does not run it. [Running the simulation](@ref)
+advances it in time.
 
 `AtmosSimulation{FT}(...)` accepts keyword arguments for every aspect of
 the simulation. When omitted, defaults are used (see
@@ -24,11 +26,11 @@ the simulation. When omitted, defaults are used (see
 
 ### Change the grid
 
-Run a single-column model instead of a global sphere:
+Run a single-column model instead of the default global cubed-sphere:
 
 ```@example first_sim
 grid = CA.ColumnGrid(Float32; z_elem = 30, z_max = 30000.0)
-simulation = CA.AtmosSimulation{Float32}(; grid, t_end = 3600 * 6)
+simulation = CA.AtmosSimulation{Float32}(; grid, t_end = "6hours")
 nothing # hide
 ```
 
@@ -36,13 +38,14 @@ See the [Grids](api.md#Grids) section of the API for all grid types and their op
 
 ### Change the timestep and duration
 
-`dt` is the timestep in seconds. `t_end` is the total simulation time in
-seconds:
+`dt` is the timestep and `t_end` the total simulation time. Each accepts either a number
+of seconds, or a duration string with a unit (`secs`, `mins`, `hours`, `days`, `weeks`) --
+the same syntax used by the [config interface](@ref "Script vs Config Interface"):
 
 ```@example first_sim
 simulation = CA.AtmosSimulation{Float32}(;
-    dt = 300,           # 5-minute timestep
-    t_end = 86400 * 10, # 10 days
+    dt = "5mins",     # equivalently, dt = 300
+    t_end = "10days", # equivalently, t_end = 86400 * 10
 )
 nothing # hide
 ```
@@ -63,7 +66,7 @@ simulation = CA.AtmosSimulation{Float32}(;
 nothing # hide
 ```
 
-See the [Setups](setups.md) page for the full list of available setups and how to create
+See the [Setups](@ref) page for the full list of available setups and how to create
 your own.
 
 
@@ -72,12 +75,24 @@ your own.
 Common configurations are available as one-line presets in `CA.Presets`:
 
 ```@example first_sim
-simulation = CA.Presets.bomex(Float32; t_end = 600)
+simulation = CA.Presets.bomex(Float32; t_end = "10mins")
 nothing # hide
 ```
 
 See the [Presets](api.md#Presets) section of the API for the full list of
 simulation and model presets.
+
+
+## Running the simulation
+
+Constructing an `AtmosSimulation` sets everything up but does not advance it in
+time. Call `solve_atmos!` to integrate the simulation forward to `t_end`:
+
+```julia
+CA.solve_atmos!(simulation)
+```
+
+This advances the model to `t_end`.
 
 
 ## Inspecting results
@@ -89,22 +104,25 @@ integrator:
 Y = simulation.integrator.u
 
 # Center (cell-center) variables
-propertynames(Y.c)  # e.g., (:ρ, :ρe_tot, :uₕ, ...)
+propertynames(Y.c)  # e.g., (:ρ, :uₕ, :ρe_tot, :ρq_tot)
 
 # Face (cell-interface) variables
-propertynames(Y.f)  # e.g., (:w, ...)
+propertynames(Y.f)  # e.g., (:u₃,)
 ```
 
-Output files (NetCDF, HDF5) are written to `simulation.output_dir`.
+Output is written to `simulation.output_dir` in two formats, each with a distinct role:
+
+- **NetCDF** (`.nc`) files hold the **diagnostics** -- derived (and often interpolated)
+  output variables such as temperature or precipitation. See
+  [Computing and saving diagnostics](@ref) for how to configure them.
+- **HDF5** (`.h5`) files hold full-resolution **model-state checkpoints**, written when
+  `checkpoint_frequency` is set. These are the files a simulation reads to
+  [restart](@ref "Restarting Simulations in ClimaAtmos").
 
 ## Terminology
 
-These terms appear throughout the codebase and documentation:
-
-- `Y` — the prognostic state vector. `Y.c` holds cell-center variables (density, energy, tracers), `Y.f` holds face variables (vertical velocity).
-- `p` — the cache. Contains parameters, precomputed fields, and model configuration.
-- `t` — current simulation time (seconds from `start_date`).
-- `Yₜ` — the tendency (time derivative of `Y`).
+The state vector `Y`, the cache `p`, the simulation time `t`, and other recurring
+symbols and terms are defined in the [Glossary](@ref).
 
 ## Using the config-based interface
 
@@ -112,6 +130,6 @@ The same simulation can be set up with a YAML file.
 
 ## Next steps
 
-- [Script vs Config Interface](@ref) — detailed comparison of the two workflows
-- [Single Column Models](@ref) — BOMEX, DYCOMS, RICO, and more
-- [Computing and saving diagnostics](@ref) — configure output variables and formats
+- [Script vs Config Interface](@ref) -- detailed comparison of the two workflows
+- [Single Column Models](@ref) -- BOMEX, DYCOMS, RICO, and more
+- [Computing and saving diagnostics](@ref) -- configure output variables and formats
