@@ -44,13 +44,14 @@ end
 
 function surface_condition(::Soares, params)
     FT = eltype(params)
-    parameterization = MoninObukhov(;
-        z0 = FT(0.16),
-        θ_flux = FT(0.06),
-        q_flux = FT(2.5e-5),
-        ustar = FT(0.28),
-    )
-    return SurfaceState(;
-        parameterization, T = FT(300), p = FT(1e5), q_vap = FT(5e-3),
+    return (;
+        flux_scheme = MoninObukhov(;
+            z0 = FT(0.16),
+            θ_flux = FT(0.06),
+            q_flux = FT(2.5e-5),
+            ustar = FT(0.28),
+        ),
+        temperature = AnalyticTemperature(Returns(FT(300))),
+        overrides = SurfaceBoundaryOverrides(p = FT(1e5), q_vap = FT(5e-3)),
     )
 end

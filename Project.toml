@@ -39,6 +39,12 @@ Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 UnrolledUtilities = "0fe1646c-419e-43be-ac14-22321958931b"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
+[weakdeps]
+Musica = "d3d182ee-e566-4962-9279-3a9916be1802"
+
+[extensions]
+ClimaAtmosMusica = "Musica"
+
 [compat]
 Adapt = "4.1"
 Aqua = "0.8.9"
@@ -53,7 +59,7 @@ ClimaInterpolations = "0.1.1"
 ClimaParams = "1.0.17"
 ClimaTimeSteppers = "0.9.0"
 ClimaUtilities = "0.1.27"
-CloudMicrophysics = "0.35"
+CloudMicrophysics = "0.36"
 Dates = "1"
 Distributions = "0.25.87"
 Downloads = "1"
@@ -67,6 +73,7 @@ LazyArtifacts = "1"
 LazyBroadcast = "1"
 LinearAlgebra = "1"
 Logging = "1"
+Musica = "0.15"
 NCDatasets = "0.14.2"
 NVTX = "0.3, 1"
 NullBroadcasts = "0.1"
@@ -92,6 +99,7 @@ CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
+Musica = "d3d182ee-e566-4962-9279-3a9916be1802"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
@@ -99,4 +107,4 @@ SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Aqua", "CairoMakie", "Distributions", "Downloads", "IntervalSets", "OrderedCollections", "Pkg", "PrettyTables", "SafeTestsets", "Test"]
+test = ["Aqua", "CairoMakie", "Distributions", "Downloads", "IntervalSets", "Musica", "OrderedCollections", "Pkg", "PrettyTables", "SafeTestsets", "Test"]

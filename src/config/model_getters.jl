@@ -1,5 +1,6 @@
 using Flux
 import JLD2
+import CloudMicrophysics as CM
 
 function get_microphysics_model(parsed_args, params = nothing)
     model_name = parsed_args["microphysics_model"]
@@ -20,6 +21,152 @@ function get_microphysics_model(parsed_args, params = nothing)
             """Unknown microphysics_model `$model_name`. Expected: "dry", "0M", "1M", "2M", or "2MP3".""",
         )
     end
+end
+
+"""
+    get_microphysics_1m_options(parsed_args, toml_dict)
+
+Parse the YAML config keys for 1-moment microphysics process options and
+return a `NamedTuple` of keyword arguments for `CMP.Microphysics1MParams`.
+
+Each YAML key maps to one field of `get_microphysics_1m_options`, selecting the
+process option type that controls dispatch inside `bulk_microphysics_tendencies`.
+Option types that carry parameters are constructed from `toml_dict`.
+Setting a YAML value to `~` (null) disables the process (`nothing`).
+"""
+function get_microphysics_1m_options(parsed_args, toml_dict)
+    CMP = CM.Parameters
+
+    cloud_liquid_formation = parse_option(
+        parsed_args["cloud_liquid_formation"],
+        Dict(
+            "CloudLiquidFormation" =>
+                CMP.CloudLiquidFormation(toml_dict),
+        ),
+        "cloud_liquid_formation",
+    )
+    cloud_ice_formation = parse_option(
+        parsed_args["cloud_ice_formation"],
+        Dict(
+            "ConstantTimescale" =>
+                CMP.ConstantTimescale(toml_dict),
+            "TemperatureDependent" =>
+                CMP.TemperatureDependent(toml_dict),
+        ),
+        "cloud_ice_formation",
+    )
+    cloud_ice_melt = parse_option(
+        parsed_args["cloud_ice_melt"],
+        Dict("CloudIceMelt" => CMP.CloudIceMelt()),
+        "cloud_ice_melt",
+    )
+    rain_autoconversion = parse_option(
+        parsed_args["rain_autoconversion"],
+        Dict(
+            "Kessler1M" => CMP.Kessler1M(toml_dict),
+            "PrescribedNd" => CMP.PrescribedNd(toml_dict),
+        ),
+        "rain_autoconversion",
+    )
+    snow_autoconversion = parse_option(
+        parsed_args["snow_autoconversion"],
+        Dict(
+            "NoSupersaturation" =>
+                CMP.NoSupersaturation(toml_dict),
+            "WithSupersaturation" =>
+                CMP.WithSupersaturation(toml_dict),
+        ),
+        "snow_autoconversion",
+    )
+    rain_condensation_evaporation = parse_option(
+        parsed_args["rain_condensation_evaporation"],
+        Dict("RainEvaporation" => CMP.RainEvaporation()),
+        "rain_condensation_evaporation",
+    )
+    snow_deposition_sublimation = parse_option(
+        parsed_args["snow_deposition_sublimation"],
+        Dict(
+            "SublimationOnly" => CMP.SublimationOnly(),
+            "DepositionAndSublimation" =>
+                CMP.DepositionAndSublimation(),
+        ),
+        "snow_deposition_sublimation",
+    )
+    snow_melt = parse_option(
+        parsed_args["snow_melt"],
+        Dict("SnowMelt" => CMP.SnowMelt()),
+        "snow_melt",
+    )
+    cloud_liquid_rain_accretion = parse_option(
+        parsed_args["cloud_liquid_rain_accretion"],
+        Dict(
+            "CloudLiquidRainAccretion" =>
+                CMP.CloudLiquidRainAccretion(toml_dict),
+        ),
+        "cloud_liquid_rain_accretion",
+    )
+    cloud_liquid_snow_accretion = parse_option(
+        parsed_args["cloud_liquid_snow_accretion"],
+        Dict(
+            "CloudLiquidSnowAccretion" =>
+                CMP.CloudLiquidSnowAccretion(toml_dict),
+        ),
+        "cloud_liquid_snow_accretion",
+    )
+    cloud_ice_rain_accretion = parse_option(
+        parsed_args["cloud_ice_rain_accretion"],
+        Dict(
+            "CloudIceRainAccretion" =>
+                CMP.CloudIceRainAccretion(toml_dict),
+        ),
+        "cloud_ice_rain_accretion",
+    )
+    cloud_ice_snow_accretion = parse_option(
+        parsed_args["cloud_ice_snow_accretion"],
+        Dict(
+            "CloudIceSnowAccretion" =>
+                CMP.CloudIceSnowAccretion(toml_dict),
+        ),
+        "cloud_ice_snow_accretion",
+    )
+    rain_snow_accretion = parse_option(
+        parsed_args["rain_snow_accretion"],
+        Dict(
+            "RainSnowAccretion" =>
+                CMP.RainSnowAccretion(toml_dict),
+        ),
+        "rain_snow_accretion",
+    )
+
+    return (;
+        cloud_liquid_formation,
+        cloud_ice_formation,
+        cloud_ice_melt,
+        rain_autoconversion,
+        snow_autoconversion,
+        rain_condensation_evaporation,
+        snow_deposition_sublimation,
+        snow_melt,
+        cloud_liquid_rain_accretion,
+        cloud_liquid_snow_accretion,
+        cloud_ice_rain_accretion,
+        cloud_ice_snow_accretion,
+        rain_snow_accretion,
+    )
+end
+
+"""
+    parse_option(value, options_map, key_name)
+
+Look up `value` in `options_map` (a `Dict{String, T}`), returning the
+corresponding option type. Returns `nothing` when `value` is `nothing`
+(YAML `~` / null). Throws an informative error if the value is invalid.
+"""
+function parse_option(value, options_map, key_name)
+    isnothing(value) && return nothing
+    haskey(options_map, value) && return options_map[value]
+    valid = join(sort(collect(keys(options_map))), ", ")
+    error("Invalid `$key_name`: \"$value\". Valid options: $valid")
 end
 
 function get_sgs_quadrature(parsed_args, params = nothing)
@@ -669,19 +816,33 @@ function AtmosSurface(
 ) where {FT}
     pa = config.parsed_args
 
-    sfc_temperature = Setups.surface_temperature_model(setup_type)
+    # Resolve setup-provided surface pieces (flux_scheme, temperature, overrides)
+    setup_pieces =
+        isnothing(setup_type) ?
+        (; flux_scheme = nothing, temperature = nothing, overrides = nothing) :
+        Setups.surface_condition(setup_type, params)
 
-    ps_name = pa["prognostic_surface"]
-    surface_model =
-        if ps_name == "PrescribedSST"
-            PrescribedSST()
-        elseif ps_name == "SlabOceanSST"
-            SlabOceanSST()
-        else
-            error(
-                """Uncaught prognostic_surface `$ps_name`. Expected: "PrescribedSST" | "SlabOceanSST".""",
-            )
-        end
+    temperature = if pa["prognostic_surface"] == "SlabOceanSST"
+        SurfaceConditions.SlabOceanTemperature{FT}()
+    elseif pa["prognostic_surface"] == "PrescribedSST"
+        @something(setup_pieces.temperature, Setups.surface_temperature_model(setup_type))
+    else
+        error(
+            """Uncaught prognostic_surface `$(pa["prognostic_surface"])`. Expected: "PrescribedSST" | "SlabOceanSST".""",
+        )
+    end
+
+    flux_scheme = if !isnothing(setup_pieces.flux_scheme)
+        setup_pieces.flux_scheme
+    elseif pa["surface_setup"] == "PrescribedSurface"
+        nothing
+    else
+        getproperty(SurfaceConditions, Symbol(pa["surface_setup"]))()(params)
+    end
+
+    boundary_overrides = @something(
+        setup_pieces.overrides, SurfaceConditions.SurfaceBoundaryOverrides()
+    )
 
     surface_albedo =
         if pa["albedo_model"] == "ConstantAlbedo"
@@ -697,5 +858,7 @@ function AtmosSurface(
             error("Uncaught surface albedo model `$(pa["albedo_model"])`.")
         end
 
-    return AtmosSurface(; sfc_temperature, surface_model, surface_albedo)
+    return AtmosSurface(;
+        flux_scheme, temperature, boundary_overrides, surface_albedo,
+    )
 end

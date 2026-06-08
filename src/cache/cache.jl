@@ -87,7 +87,6 @@ function build_cache(
     Y,
     atmos,
     params,
-    surface_setup,
     dt,
     start_date,
     aerosol_names,
@@ -163,7 +162,7 @@ function build_cache(
         ),
     )
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)
-    sfc_setup = surface_setup(params)
+    sfc_setup = atmos.surface.boundary_overrides
     scratch = temporary_quantities(Y, atmos)
 
     precomputed = precomputed_quantities(Y, atmos)
@@ -179,9 +178,10 @@ function build_cache(
         external_forcing,
     )
 
-    # Coupler compatibility
-    isnothing(precomputing_arguments.sfc_setup) &&
-        SurfaceConditions.set_dummy_surface_conditions!(precomputing_arguments)
+    # When flux_scheme is nothing, the surface conditions are entirely
+    # supplied by an external driver, so we pre-fill safe defaults
+    isnothing(atmos.surface.flux_scheme) &&
+        SurfaceConditions.init_sfc_conditions_zero!(precomputing_arguments)
 
     set_precomputed_quantities!(Y, precomputing_arguments, FT(0))
 

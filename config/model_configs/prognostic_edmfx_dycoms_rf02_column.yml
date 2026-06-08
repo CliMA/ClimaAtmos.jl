@@ -12,6 +12,7 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
 microphysics_model: "1M"
+rain_autoconversion: "Kessler1M"
 config: "column"
 x_elem: 2
 y_elem: 2
@@ -35,4 +36,38 @@ diagnostics:
     period: 10mins
   - short_name: [husra, hussn]
     period: 10mins
+  - short_name: [
+      mp1m_S_phase_change_vap_lcl, mp1m_S_phase_change_vap_icl,
+      mp1m_S_acnv_lcl_rai, mp1m_S_acnv_icl_sno,
+      mp1m_S_accr_lcl_rai, mp1m_S_accr_lcl_sno_cold, mp1m_S_accr_lcl_sno_warm,
+      mp1m_S_accr_melt_lcl_sno,
+      mp1m_S_accr_icl_rai, mp1m_S_accr_freeze_icl_rai, mp1m_S_accr_icl_sno,
+      mp1m_S_accr_rai_sno_cold, mp1m_S_accr_rai_sno_warm, mp1m_S_accr_melt_rai_sno,
+      mp1m_S_phase_change_vap_rai, mp1m_S_phase_change_vap_sno,
+      mp1m_S_melt_icl_lcl, mp1m_S_melt_sno_rai,
+    ]
+    period: 10mins
+  - short_name: [
+      mp1mup_S_phase_change_vap_lcl, mp1mup_S_phase_change_vap_icl,
+      mp1mup_S_acnv_lcl_rai, mp1mup_S_acnv_icl_sno,
+      mp1mup_S_accr_lcl_rai, mp1mup_S_accr_lcl_sno_cold, mp1mup_S_accr_lcl_sno_warm,
+      mp1mup_S_accr_melt_lcl_sno,
+      mp1mup_S_accr_icl_rai, mp1mup_S_accr_freeze_icl_rai, mp1mup_S_accr_icl_sno,
+      mp1mup_S_accr_rai_sno_cold, mp1mup_S_accr_rai_sno_warm, mp1mup_S_accr_melt_rai_sno,
+      mp1mup_S_phase_change_vap_rai, mp1mup_S_phase_change_vap_sno,
+      mp1mup_S_melt_icl_lcl, mp1mup_S_melt_sno_rai,
+    ]
+    period: 10mins
+  - short_name: [
+      mp1men_S_phase_change_vap_lcl, mp1men_S_phase_change_vap_icl,
+      mp1men_S_acnv_lcl_rai, mp1men_S_acnv_icl_sno,
+      mp1men_S_accr_lcl_rai, mp1men_S_accr_lcl_sno_cold, mp1men_S_accr_lcl_sno_warm,
+      mp1men_S_accr_melt_lcl_sno,
+      mp1men_S_accr_icl_rai, mp1men_S_accr_freeze_icl_rai, mp1men_S_accr_icl_sno,
+      mp1men_S_accr_rai_sno_cold, mp1men_S_accr_rai_sno_warm, mp1men_S_accr_melt_rai_sno,
+      mp1men_S_phase_change_vap_rai, mp1men_S_phase_change_vap_sno,
+      mp1men_S_melt_icl_lcl, mp1men_S_melt_sno_rai,
+    ]
+    period: 10mins
 ode_algo: "ARS222"
+

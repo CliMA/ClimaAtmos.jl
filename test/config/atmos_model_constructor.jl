@@ -37,8 +37,7 @@ end
             # Core physics defaults
             :microphysics_model => CA.DryModel,
             :cloud_model => Union{CA.GridScaleCloud, CA.QuadratureCloud},
-            :surface_model => CA.PrescribedSST,
-            :sfc_temperature => CA.ZonallySymmetricSST,
+            :surface => CA.AtmosSurface,
             :insolation => CA.IdealizedInsolation,
             :disable_surface_flux_tendency => false,
 
@@ -89,7 +88,7 @@ end
         @test model.disable_surface_flux_tendency == true
 
         # Test that non-overridden defaults are preserved
-        @test model.surface_model isa CA.PrescribedSST
+        @test model.surface.temperature isa CA.SurfaceConditions.AnalyticTemperature
         @test model.insolation isa CA.IdealizedInsolation
         @test model.numerics.diff_mode isa CA.Explicit
     end
@@ -98,12 +97,9 @@ end
 @testset "Documentation Examples" begin
     @testset "Basic configurations work as documented" begin
         # Test basic dry model
-        dry_model = CA.AtmosModel(;
-            microphysics_model = CA.DryModel(),
-            surface_model = CA.PrescribedSST(),
-        )
+        dry_model = CA.AtmosModel(; microphysics_model = CA.DryModel())
         @test dry_model.microphysics_model isa CA.DryModel
-        @test dry_model.surface_model isa CA.PrescribedSST
+        @test dry_model.surface isa CA.AtmosSurface
 
         # Test moist model with radiation
         moist_model = CA.AtmosModel(;

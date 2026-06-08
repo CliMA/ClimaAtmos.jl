@@ -37,7 +37,8 @@ function res_file_path(name; context = nothing)
     if _artifact_exists(name)
         full_name = name
     else
-        @warn "Higher resolution $name is not available. Using low-res version. Consult ClimaArtifacts to acquire the higher resolution version."
+        @warn "Higher resolution $name is not available. Using low-res version. Consult ClimaArtifacts to acquire the higher resolution version." _id =
+            Symbol(name) maxlog = 1
         full_name = "$(name)_lowres"
     end
     return joinpath(@clima_artifact(full_name, context), "$(full_name).nc")

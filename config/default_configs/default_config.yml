@@ -237,8 +237,8 @@ use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
   value: true
 sgs_distribution:
-  help: "Distribution type for SGS quadrature over microphysics. [`gaussian`, `lognormal` (default), `mean` (grid-mean only, no SGS sampling)]"
-  value: "lognormal"
+  help: "Distribution type for SGS quadrature over microphysics. [`gaussian` (default), `lognormal`, `mean` (grid-mean only, no SGS sampling)]"
+  value: "gaussian"
 quadrature_order:
   help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 3"
   value: 3
@@ -251,6 +251,46 @@ microphysics_n_substeps_quadrature:
 fixed_terminal_velocity:
   help: "Use fixed terminal velocities for microphysics tracers [`true` (default), `false`]"
   value: true
+cloud_liquid_formation:
+  help: "Cloud liquid formation option for 1M microphysics [`CloudLiquidFormation` (default), ~]"
+  value: "CloudLiquidFormation"
+cloud_ice_formation:
+  help: "Cloud ice formation option for 1M microphysics [`ConstantTimescale` (default), `TemperatureDependent`, ~]"
+  value: "ConstantTimescale"
+cloud_ice_melt:
+  help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt`, ~ (default)]"
+  value: ~
+rain_autoconversion:
+  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]"
+  value: "Kessler1M"
+snow_autoconversion:
+  help: "Snow autoconversion option for 1M microphysics [`NoSupersaturation` (default), `WithSupersaturation`, ~]"
+  value: "NoSupersaturation"
+rain_condensation_evaporation:
+  help: "Rain condensation/evaporation option for 1M microphysics [`RainEvaporation` (default), ~]"
+  value: "RainEvaporation"
+snow_deposition_sublimation:
+  help: "Snow sublimation/deposition option for 1M microphysics [`DepositionAndSublimation` (default), `SublimationOnly`, ~]"
+  value: "DepositionAndSublimation"
+snow_melt:
+  help: "Snow melting option for 1M microphysics [`SnowMelt` (default), ~]"
+  value: "SnowMelt"
+cloud_liquid_rain_accretion:
+  help: "Cloud liquid + rain accretion option for 1M microphysics [`CloudLiquidRainAccretion` (default), ~]"
+  value: "CloudLiquidRainAccretion"
+cloud_liquid_snow_accretion:
+  help: "Cloud liquid + snow accretion option for 1M microphysics [`CloudLiquidSnowAccretion` (default), ~]"
+  value: "CloudLiquidSnowAccretion"
+cloud_ice_rain_accretion:
+  help: "Cloud ice + rain accretion option for 1M microphysics [`CloudIceRainAccretion` (default), ~]"
+  value: "CloudIceRainAccretion"
+cloud_ice_snow_accretion:
+  help: "Cloud ice + snow accretion option for 1M microphysics [`CloudIceSnowAccretion` (default), ~]"
+  value: "CloudIceSnowAccretion"
+rain_snow_accretion:
+  help: "Rain-snow collision accretion option for 1M microphysics [`RainSnowAccretion` (default), ~]"
+  value: "RainSnowAccretion"
+
 viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false

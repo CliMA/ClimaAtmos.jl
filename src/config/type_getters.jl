@@ -15,6 +15,7 @@ function ClimaAtmosParameters(config::AtmosConfig)
     return ClimaAtmosParameters(
         config.toml_dict;
         microphysics_model = get_microphysics_model(pa),
+        microphysics_1m_options = get_microphysics_1m_options(pa, config.toml_dict),
         has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),
@@ -241,23 +242,6 @@ function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp
             steady_state_velocity.(topo, params, Fields.coordinate_field(Y.f), z_top)
     end
     return (; ᶜu, ᶠu)
-end
-
-function get_surface_setup(parsed_args; setup_type = nothing)
-    if !isnothing(setup_type)
-        return function (params)
-            result = Setups.surface_condition(setup_type, params)
-            if !isnothing(result)
-                return result
-            end
-            return _config_surface_setup(parsed_args)(params)
-        end
-    end
-    return _config_surface_setup(parsed_args)
-end
-
-function _config_surface_setup(parsed_args)
-    return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
 end
 
 # Translate YAML config keys into a user-facing JacobianAlgorithm stub.
@@ -542,7 +526,6 @@ function get_simulation(config::AtmosConfig)
         context = config.comms_ctx,
         grid,
         setup,
-        surface_setup = get_surface_setup(pa; setup_type = setup),
         steady_state_velocity = steady_state_velocity_from_config(config, params),
         dt = pa["dt"],
         start_date = parse_date(pa["start_date"]),

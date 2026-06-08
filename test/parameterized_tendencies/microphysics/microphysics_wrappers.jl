@@ -130,7 +130,9 @@ import ClimaAtmos: limit_sink
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 toml_dict = CP.create_toml_dict(FT)
-                mp = CMP.Microphysics1MParams(toml_dict; with_2M_autoconv = true)
+                mp = CMP.Microphysics1MParams(toml_dict;
+                    rain_autoconversion = CMP.PrescribedNd(toml_dict),
+                )
                 thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
 
                 ρ = FT(1.0)
@@ -142,7 +144,8 @@ import ClimaAtmos: limit_sink
                 q_sno = FT(0.00005)
                 dt = FT(60.0)
 
-                result = BMT.average_bulk_microphysics_tendencies(
+                result = BMT.bulk_microphysics_tendencies(
+                    BMT.LinearizedAverage(),
                     BMT.Microphysics1Moment(),
                     mp, thp, ρ, T,
                     q_tot, q_liq, q_ice, q_rai, q_sno, dt,
@@ -218,7 +221,7 @@ import ClimaAtmos: limit_sink
         end
     end
 
-    @testset "Microphysics1MEvaluator Shape-Function Logic" begin
+    @testset "Microphysics1MEvaluator Lagrange-Multiplier Logic" begin
         import CloudMicrophysics.Parameters as CMP
         import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
         import Thermodynamics as TD
@@ -234,98 +237,67 @@ import ClimaAtmos: limit_sink
                 ρ = FT(1.0)
                 T_mean = FT(280.0)
                 q_sat_mean = TD.q_vap_saturation(thp, T_mean, ρ)
-                q_min = FT(1e-10)
-                nsubs_quad = 1
+                q_tot_mean = q_sat_mean + FT(2e-3)
+                # mu_S centres S′: at the grid-mean point S′_hat = 0 by construction.
+                mu_S = q_tot_mean - q_sat_mean
+                dt = FT(60)
+                nsubs = 1
 
-                # Helper to precompute shape-function coefficients from
-                # (M_l, M_i, q_min), matching the production code in
-                # microphysics_tendencies_1m.
-                function _shape_coeffs(M_l, M_i, q_min_val)
-                    M_sq = q_min_val * q_min_val
-                    denom_l = M_sq + M_l * M_l
-                    denom_i = M_sq + M_i * M_i
-                    return (
-                        γ_l = M_l / denom_l,
-                        M_l = M_l,
-                        γ_i = M_i / denom_i,
-                        M_i = M_i,
+                @testset "Large-negative λ_lagrange → zero shifted excess → no condensate" begin
+                    # λ_lagrange << 0 means even the most saturated quadrature
+                    # point has max(0, λ_lagrange + α·S′_hat) = 0, so BMT
+                    # receives zero cloud condensate (only rain/snow evaporation).
+                    eval_clear = Microphysics1MEvaluator(
+                        BMT.Microphysics1Moment(), mp, thp, ρ,
+                        FT(0), FT(0),           # q_rai, q_sno
+                        FT(1), FT(-1), mu_S, FT(1),  # λ, λ_lagrange, mu_S, α
+                        dt, nsubs, (),
                     )
+                    # At the grid-mean point S′_hat = 0, so shifted_excess = max(0,-1) = 0.
+                    result = eval_clear(T_mean, q_tot_mean)
+                    ref = BMT.bulk_microphysics_tendencies(
+                        BMT.LinearizedAverage(),
+                        BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
+                        q_tot_mean, FT(0), FT(0), FT(0), FT(0), dt, nsubs,
+                    )
+                    @test result.dq_lcl_dt ≈ ref.dq_lcl_dt rtol = FT(1e-4)
+                    @test result.dq_icl_dt ≈ ref.dq_icl_dt rtol = FT(1e-4)
                 end
 
-                @testset "Subsaturated mean (no condensate) → q_lcl_hat = 0" begin
-                    # q_lcl_mean = q_icl_mean = 0 makes the shape-function
-                    # output identically zero regardless of the equilibrium
-                    # moments, so BMT is called with no cloud condensate.
-                    sc = _shape_coeffs(FT(0), FT(0), q_min)
-                    eval_sub = Microphysics1MEvaluator(
-                        BMT.Microphysics1Moment(),
-                        mp, thp, ρ,
-                        FT(0), FT(0), FT(0), FT(0),  # q_lcl_mean, q_icl_mean, q_rai, q_sno
-                        FT(1), sc.γ_l, sc.M_l, sc.γ_i, sc.M_i, # λ, γ_l, M_l, γ_i, M_i
-                        FT(60), nsubs_quad, (),
+                @testset "Positive λ_lagrange → condensate at grid-mean point" begin
+                    # At the grid-mean quadrature point S′_hat = 0, so
+                    # shifted_excess = λ_lagrange.  With λ=1 (all liquid) and
+                    # q_rai=0 we get q_lcl_hat = λ_lagrange exactly.
+                    q_c = FT(1e-3)
+                    eval_cloud = Microphysics1MEvaluator(
+                        BMT.Microphysics1Moment(), mp, thp, ρ,
+                        FT(0), FT(0),            # q_rai, q_sno
+                        FT(1), q_c, mu_S, FT(1), # λ, λ_lagrange, mu_S, α
+                        dt, nsubs, (),
                     )
-
-                    q_tot_hat = q_sat_mean + FT(0.001)
-                    result = eval_sub(T_mean, q_tot_hat)
-
-                    res_expected = BMT.average_bulk_microphysics_tendencies(
+                    result = eval_cloud(T_mean, q_tot_mean)
+                    ref = BMT.bulk_microphysics_tendencies(
+                        BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
-                        q_tot_hat, FT(0), FT(0), FT(0), FT(0), FT(60), nsubs_quad,
+                        q_tot_mean, q_c, FT(0), FT(0), FT(0), dt, nsubs,
                     )
-                    @test result.dq_lcl_dt ≈ res_expected.dq_lcl_dt rtol = FT(1e-4)
-                    @test result.dq_icl_dt ≈ res_expected.dq_icl_dt rtol = FT(1e-4)
+                    @test result.dq_lcl_dt ≈ ref.dq_lcl_dt rtol = FT(1e-4)
+                    @test result.dq_icl_dt ≈ ref.dq_icl_dt rtol = FT(1e-4)
                 end
 
-                @testset "Saturated mean at equilibrium → shape-function recovers q_lcl_mean" begin
-                    # When q_lcl_mean = M_l (current state equals SGS-mean
-                    # equilibrium condensate), the shape function at the
-                    # quadrature point (T_mean, q_tot_sat) where
-                    # q_lcl_eq_hat = M_l reduces to q_lcl_hat = q_lcl_mean.
-                    q_tot_sat = q_sat_mean + FT(0.002)
-                    excess_sat = q_tot_sat - q_sat_mean
-                    q_lcl = excess_sat
-
-                    sc = _shape_coeffs(excess_sat, FT(0), q_min)
-                    eval_sat = Microphysics1MEvaluator(
-                        BMT.Microphysics1Moment(),
-                        mp, thp, ρ,
-                        q_lcl, FT(0), FT(0), FT(0),  # q_lcl_mean, q_icl_mean, q_rai, q_sno
-                        FT(1), sc.γ_l, sc.M_l, sc.γ_i, sc.M_i, # λ, γ_l, M_l, γ_i, M_i
-                        FT(60), nsubs_quad, (),
+                @testset "Output is finite NamedTuple" begin
+                    eval = Microphysics1MEvaluator(
+                        BMT.Microphysics1Moment(), mp, thp, ρ,
+                        FT(0), FT(0),
+                        FT(1), FT(5e-4), mu_S, FT(1),
+                        dt, nsubs, (),
                     )
-
-                    # M_l = excess and q_lcl_eq_hat(T_mean, q_tot_sat) = excess
-                    # so q_lcl_hat = q_lcl_mean exactly.
-                    result_mean = eval_sat(T_mean, q_tot_sat)
-                    res_direct = BMT.average_bulk_microphysics_tendencies(
-                        BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
-                        q_tot_sat, q_lcl, FT(0), FT(0), FT(0), FT(60), nsubs_quad,
-                    )
-                    @test result_mean.dq_lcl_dt ≈ res_direct.dq_lcl_dt rtol = FT(1e-4)
-                end
-
-                @testset "Stale-cloud edge case (M_l → 0) → β fallback" begin
-                    # q_lcl_mean > 0 but M_l ≈ 0 (no equilibrium condensate
-                    # anywhere in the SGS PDF). γ ≈ 0, so q_lcl_hat ≈ q_lcl_mean
-                    # — recovering the uniform-condensate fallback.
-                    q_lcl_stale = FT(1e-4)
-                    sc = _shape_coeffs(FT(0), FT(0), q_min) # M_l = 0 ⇒ γ = 0
-                    eval_stale = Microphysics1MEvaluator(
-                        BMT.Microphysics1Moment(),
-                        mp, thp, ρ,
-                        q_lcl_stale, FT(0), FT(0), FT(0),
-                        FT(1), sc.γ_l, sc.M_l, sc.γ_i, sc.M_i,
-                        FT(60), nsubs_quad, (),
-                    )
-                    # Subsaturated quadrature point: q_lcl_eq_hat = 0.
-                    q_tot_dry = q_sat_mean - FT(1e-4)
-                    result = eval_stale(T_mean, q_tot_dry)
-                    res_expected = BMT.average_bulk_microphysics_tendencies(
-                        BMT.Microphysics1Moment(), mp, thp, ρ, T_mean,
-                        q_tot_dry, q_lcl_stale, FT(0), FT(0), FT(0),
-                        FT(60), nsubs_quad,
-                    )
-                    @test result.dq_lcl_dt ≈ res_expected.dq_lcl_dt rtol = FT(1e-3)
+                    result = eval(T_mean, q_tot_mean)
+                    @test result isa NamedTuple
+                    @test isfinite(result.dq_lcl_dt)
+                    @test isfinite(result.dq_icl_dt)
+                    @test isfinite(result.dq_rai_dt)
+                    @test isfinite(result.dq_sno_dt)
                 end
             end
         end

@@ -71,9 +71,10 @@ function surface_condition(::Rico, params)
     p_sat = TD.saturation_vapor_pressure(thermo_params, T_surface, TD.Liquid())
     ϵ_v = TD.Parameters.R_d(thermo_params) / TD.Parameters.R_v(thermo_params)
     q_vap = ϵ_v * p_sat / (p_surface - p_sat * (1 - ϵ_v))
-    parameterization = MoninObukhov(; z0 = FT(1.5e-4))
-    return SurfaceState(;
-        parameterization, T = T_surface, p = p_surface, q_vap = FT(q_vap),
+    return (;
+        flux_scheme = MoninObukhov(; z0 = FT(1.5e-4)),
+        temperature = AnalyticTemperature(Returns(T_surface)),
+        overrides = SurfaceBoundaryOverrides(p = p_surface, q_vap = FT(q_vap)),
     )
 end
 

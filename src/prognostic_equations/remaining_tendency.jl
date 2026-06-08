@@ -254,6 +254,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     radiation_tendency!(Yₜ, Y, p, t, p.atmos.radiation_mode)
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
+    # Chemistry tendencies
+    chemistry_tendency!(Yₜ, Y, p, t, p.atmos.chemistry_model)
+
     # Unified microphysics tendencies (cloud condensation + precipitation)
     if p.atmos.microphysics_tendency_timestepping == Explicit()
         microphysics_tendency!(
@@ -281,14 +284,14 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     # NOTE: Microphysics tendencies should be applied before calling this function,
     # because precipitation cache is used in this function
-    surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
+    surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface.temperature)
     if p.atmos.microphysics_tendency_timestepping == Explicit()
         surface_precipitation_tendency!(
             Yₜ,
             Y,
             p,
             t,
-            p.atmos.surface_model,
+            p.atmos.surface.temperature,
             p.atmos.microphysics_model,
         )
     end

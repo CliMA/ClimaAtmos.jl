@@ -192,7 +192,7 @@ steps:
           --job_id diagnostic_edmfx_dycoms_rf02_box
         artifact_paths: "diagnostic_edmfx_dycoms_rf02_box/output_active/*"
         agents:
-          slurm_mem: 20GB
+          slurm_mem: 24GB
 
       - label: ":ghost: Diagnostic EDMF: Precipitating trade wind Cu (RICO)"
         retry: *retry_policy
@@ -1209,6 +1209,17 @@ steps:
           --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf.yml
           --job_id flame_aquaplanet_progedmf
         artifact_paths: "flame_aquaplanet_progedmf/*"
+        agents:
+          slurm_mem: 32GB
+
+      - label: ":fire: Allocations budget: Aquaplanet, prognostic EDMF, 1M"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite perf/flame.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_1m.yml
+          --job_id flame_aquaplanet_progedmf_1m
+        artifact_paths: "flame_aquaplanet_progedmf_1m/*"
         agents:
           slurm_mem: 32GB
 

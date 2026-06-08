@@ -26,14 +26,8 @@ all metrics can be found in `get_summary`.
 
 ca_dir = joinpath(dirname(@__DIR__))
 
-get_config_ids(buildkite_path; filter_name = nothing) =
-    keys(configs_per_config_id(buildkite_path, filter_name))
-
 function combine_PRs_performance_benchmarks(path)
-    job_ids = get_config_ids(
-        joinpath(ca_dir, "config");
-        filter_name = ("perf_summary" => true),
-    )
+    job_ids = keys(load_all_configs("perf_summary" => true))
     # Combine summaries into one dict
     summaries = OrderedCollections.OrderedDict()
     for job_id in job_ids

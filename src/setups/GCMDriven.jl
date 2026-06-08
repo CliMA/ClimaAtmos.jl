@@ -63,8 +63,11 @@ center_initial_condition(setup::GCMDriven, local_geometry, params) =
 
 function surface_condition(setup::GCMDriven, params)
     FT = eltype(params)
-    parameterization = MoninObukhov(; z0 = FT(1e-4))
-    return SurfaceState(; parameterization, T = FT(setup.T_sfc))
+    return (;
+        flux_scheme = MoninObukhov(; z0 = FT(1e-4)),
+        temperature = AnalyticTemperature(Returns(FT(setup.T_sfc))),
+        overrides = nothing,
+    )
 end
 
 external_forcing(setup::GCMDriven, ::Type{FT}) where {FT} =

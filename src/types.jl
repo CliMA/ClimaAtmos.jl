@@ -148,11 +148,6 @@ function MLCloud_constructor(model)
     return MLCloud{typeof(static_model)}(static_model)
 end
 
-abstract type AbstractSST end
-struct ZonallySymmetricSST <: AbstractSST end
-struct RCEMIPIISST <: AbstractSST end
-struct ExternalTVColumnSST <: AbstractSST end
-
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
 struct TimeVaryingInsolation <: AbstractInsolation
@@ -185,19 +180,6 @@ struct InteractiveCloudInRadiation <: AbstractCloudInRadiation end
 Use monthly-average cloud properties from ERA5.
 """
 struct PrescribedCloudInRadiation <: AbstractCloudInRadiation end
-
-abstract type AbstractSurfaceTemperature end
-struct PrescribedSST <: AbstractSurfaceTemperature end
-@kwdef struct SlabOceanSST{FT} <: AbstractSurfaceTemperature
-    # optional slab ocean parameters:
-    depth_ocean::FT = 40 # ocean mixed layer depth [m]
-    ρ_ocean::FT = 1020 # ocean density [kg / m³]
-    cp_ocean::FT = 4184 # ocean heat capacity [J/(kg * K)]
-    q_flux::Bool = false # use Q-flux (parameterization of horizontal ocean mixing of energy)
-    Q₀::FT = -20 # Q-flux maximum mplitude [W/m²]
-    ϕ₀::FT = 16 # Q-flux meridional scale [deg]
-end
-
 
 ### -------------------- ###
 ### Hyperdiffusion model ###
@@ -853,6 +835,19 @@ with single-column model setups. Most external users will not need these compone
     scm_coriolis::SC = nothing
 end
 
+
+abstract type AbstractChemistryModel end
+struct GasPhaseChem <: AbstractChemistryModel end
+
+"""
+    AtmosChem
+
+Groups chemistry models and types.
+"""
+@kwdef struct AtmosChem{CM}
+    chemistry_model::CM = nothing
+end
+
 """
     AtmosWater
 
@@ -914,11 +909,40 @@ end
     AtmosSurface
 
 Groups surface-related models and types.
+
+- `flux_scheme`: a
+  [`SurfaceConditions.SurfaceParameterization`](@ref ClimaAtmos.SurfaceConditions.SurfaceParameterization)
+  describing the surface flux closure
+  ([`MoninObukhov`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov),
+  [`ExchangeCoefficients`](@ref ClimaAtmos.SurfaceConditions.ExchangeCoefficients);
+  `MoninObukhov` may carry a time-varying `fluxes` callable), or `nothing` to
+  skip atmos-side surface updates (e.g. when an external driver overwrites
+  `sfc_conditions`). YAML configs may also use
+  [`DefaultMoninObukhov`](@ref ClimaAtmos.SurfaceConditions.DefaultMoninObukhov)/[`DefaultExchangeCoefficients`](@ref ClimaAtmos.SurfaceConditions.DefaultExchangeCoefficients)
+  markers, which the config-driven `AtmosSurface` constructor resolves against
+  `params` eagerly.
+- `temperature`: a
+  [`SurfaceConditions.SurfaceTemperature`](@ref ClimaAtmos.SurfaceConditions.SurfaceTemperature)
+  ([`AnalyticTemperature`](@ref ClimaAtmos.SurfaceConditions.AnalyticTemperature),
+  [`ExternalTemperature`](@ref ClimaAtmos.SurfaceConditions.ExternalTemperature),
+  [`SlabOceanTemperature`](@ref ClimaAtmos.SurfaceConditions.SlabOceanTemperature),
+  [`CoupledTemperature`](@ref ClimaAtmos.SurfaceConditions.CoupledTemperature)).
+- `boundary_overrides`: a
+  [`SurfaceConditions.SurfaceBoundaryOverrides`](@ref ClimaAtmos.SurfaceConditions.SurfaceBoundaryOverrides)
+  carrying per-cell defaults for surface pressure / humidity / winds / gustiness
+  / beta.
+- `albedo`: surface albedo model.
 """
-@kwdef struct AtmosSurface{ST, SM, SA}
-    sfc_temperature::ST = ZonallySymmetricSST()
-    surface_model::SM = PrescribedSST()
-    surface_albedo::SA = ConstantAlbedo{Float32}(; α = 0.07)
+@kwdef struct AtmosSurface{FS, ST, BO, AL}
+    flux_scheme::FS = SurfaceConditions.ExchangeCoefficients{Float32}(
+        Cd = 0.0044, Ch = 0.0044,
+    )
+    temperature::ST =
+        SurfaceConditions.AnalyticTemperature(
+            Setups.zonally_symmetric_temperature,
+        )
+    boundary_overrides::BO = SurfaceConditions.SurfaceBoundaryOverrides()
+    surface_albedo::AL = ConstantAlbedo{Float32}(; α = 0.07)
 end
 
 # Add broadcastable for the new grouped types
@@ -934,7 +958,7 @@ Base.broadcastable(x::AtmosSurface) = tuple(x)
 # struct definition (later in this file) so the type is in scope when those
 # methods are parsed.
 
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM}
     water::W
     scm_setup::SCM
     radiation::R
@@ -945,6 +969,7 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU}
     sponge::SP
     surface::SU
     numerics::NU
+    chemistry::CM
 
     """Whether to apply surface flux tendency (independent of surface conditions)"""
     disable_surface_flux_tendency::Bool
@@ -961,6 +986,7 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosSurface, :surface),
     (AtmosNumerics, :numerics),
     (SCMSetup, :scm_setup),
+    (AtmosChem, :chemistry),
 )
 
 # Auto-generate map from property_name to group_field
@@ -1049,7 +1075,7 @@ model = AtmosModel(;
 # Default Configuration
 The default AtmosModel provides:
 - **Dry atmosphere**: DryModel()
-- **Basic surface**: PrescribedSST() with ZonallySymmetricSST()
+- **Basic surface**: AnalyticTemperature (zonally-symmetric SST) with default exchange coefficients
 - **Cloud model**: QuadratureCloud() with SGS quadrature
 - **Idealized insolation**: IdealizedInsolation()
 - **Conservative numerics**: First-order upwinding with Explicit() timestepping
@@ -1096,8 +1122,9 @@ Internal testing and calibration components for single-column setups:
 - `rayleigh_sponge`: nothing or RayleighSponge()
 
 ## AtmosSurface
-- `sfc_temperature`: ZonallySymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
-- `surface_model`: PrescribedSST(), SlabOceanSST()
+- `flux_scheme`: SurfaceConditions.MoninObukhov, SurfaceConditions.ExchangeCoefficients, or a default marker (DefaultMoninObukhov/DefaultExchangeCoefficients), or `nothing` to disable.
+- `temperature`: SurfaceConditions.AnalyticTemperature, ExternalTemperature, SlabOceanTemperature, or CoupledTemperature.
+- `boundary_overrides`: SurfaceConditions.SurfaceBoundaryOverrides
 - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
 
 ## AtmosNumerics
@@ -1135,6 +1162,8 @@ function AtmosModel(; kwargs...)
         _create_grouped_struct(AtmosSurface, atmos_model_kwargs, group_kwargs)
     numerics =
         _create_grouped_struct(AtmosNumerics, atmos_model_kwargs, group_kwargs)
+    chemistry =
+        _create_grouped_struct(AtmosChem, atmos_model_kwargs, group_kwargs)
 
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     disable_surface_flux_tendency =
@@ -1153,6 +1182,7 @@ function AtmosModel(; kwargs...)
         typeof(sponge),
         typeof(surface),
         typeof(numerics),
+        typeof(chemistry),
     }(
         water,
         scm_setup,
@@ -1164,6 +1194,7 @@ function AtmosModel(; kwargs...)
         sponge,
         surface,
         numerics,
+        chemistry,
         disable_surface_flux_tendency,
     )
 end

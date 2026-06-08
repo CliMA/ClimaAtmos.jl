@@ -10,7 +10,7 @@ env:
   GKSwstype: 100
   SLURM_KILL_BAD_EXIT: 1
   COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
-  COUPLER_COMMIT: "6beb62031cb6a8a8a18a4fcd81008d93e1ff0a8f"
+  COUPLER_COMMIT: "44fcb38b98ed31d753c464b54a2b9a910d1aaab9"
   CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
   BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
 
@@ -22,6 +22,8 @@ steps:
     command:
       - git clone https://github.com/CliMA/ClimaCoupler.jl.git $COUPLER_PATH && bash -c "cd $COUPLER_PATH && git checkout $COUPLER_COMMIT"
       - "echo $$JULIA_DEPOT_PATH"
+      # Update package registry, since dev installs do not do that with a manifest
+      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.Registry.update()'"
       - echo "--- Instantiate AMIP env"
       # Instantiate and dev install ClimaCore
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.instantiate(;verbose=true)'"

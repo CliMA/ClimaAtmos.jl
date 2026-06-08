@@ -65,8 +65,6 @@ function amip_target(context, output_dir)
 
     insolation = CA.TimeVaryingInsolation(start_date)
 
-    surface_setup = CA.SurfaceConditions.DefaultMoninObukhov()
-
     n_updrafts = 1
     prognostic_tke = true
     turbconv_model = CA.DiagnosticEDMFX{n_updrafts, prognostic_tke}(1e-5)
@@ -129,7 +127,6 @@ function amip_target(context, output_dir)
         jacobian,
         callback_kwargs,
         ode_config,
-        surface_setup,
         context,
         job_id = "amip_target",
         output_dir)

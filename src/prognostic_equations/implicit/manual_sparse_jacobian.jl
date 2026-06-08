@@ -988,21 +988,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
                 @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ +=
                     dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
-                @. ∂ᶜρaʲ_err_∂ᶜρaʲ +=
-                    dtγ * DiagonalMatrixRow(1 / (1 - Y.c.sgsʲs.:(1).q_tot) / ᶜρʲs.:(1)) ⋅
-                    ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot)
-                ∂ᶜρaʲ_err_∂ᶜq_totʲ =
-                    matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).q_tot)]
-                @. ∂ᶜρaʲ_err_∂ᶜq_totʲ +=
-                    dtγ * DiagonalMatrixRow(
-                        Y.c.sgsʲs.:(1).ρa / (1 - Y.c.sgsʲs.:(1).q_tot) / ᶜρʲs.:(1),
-                    ) ⋅
-                    ᶜdiffusion_h_matrix
-                @. ∂ᶜρaʲ_err_∂ᶜq_totʲ +=
-                    dtγ * DiagonalMatrixRow(
-                        Y.c.sgsʲs.:(1).ρa / (1 - Y.c.sgsʲs.:(1).q_tot)^2 / ᶜρʲs.:(1),
-                    ) ⋅
-                    ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot)
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
                     NonEquilibriumMicrophysics2M,

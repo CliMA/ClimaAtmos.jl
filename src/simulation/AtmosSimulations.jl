@@ -168,8 +168,6 @@ Construct an atmospheric simulation with floating-point type `FT` (default: Floa
   Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or [`SphereGrid`](@ref).
 - `setup = Setups.DecayingProfile(; perturb=true, params)`: Setup defining the
   initial state. See [Setups](@ref "Setups") for available options.
-- `surface_setup = DefaultExchangeCoefficients()`: Surface exchange parameterization.
-
 ### Time
 - `dt = 600`: Timestep in seconds.
 - `t_start = 0`: Start time in seconds.
@@ -241,7 +239,6 @@ function AtmosSimulation{FT}(;
             update_j = CTS.UpdateEvery(CTS.NewNewtonIteration),
         ),
     ),
-    surface_setup = SurfaceConditions.DefaultExchangeCoefficients(),
     steady_state_velocity = nothing, # Predicted steady-state velocity for diagnostics
     job_id = "atmos_sim",
     output_dir = nothing,
@@ -301,7 +298,7 @@ function AtmosSimulation{FT}(;
         steady_state_velocity
 
     p = build_cache(
-        Y, model, params, surface_setup, dt, start_date, aerosol_names,
+        Y, model, params, dt, start_date, aerosol_names,
         time_varying_trace_gases, resolved_steady_state_velocity,
         vertical_water_borrowing_species,
     )
