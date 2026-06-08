@@ -171,8 +171,8 @@ function edmfx_vertical_diffusion_tendency!(
             # TODO: make it work for multiple updrafts
             for j in 1:n
                 ᶜρʲ = ᶜρʲs.:($j)
-                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
                 @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
             end
         end
@@ -272,7 +272,7 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
             MatrixFields.has_field(Y.c, ρχ_name) || continue
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
             ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
             @. ᶜχʲ = ifelse(
                 Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),

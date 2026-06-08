@@ -187,8 +187,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
             ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
             for j in 1:n
-                ᶜsgs_χ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-                ᶜsgs_χₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+                ᶜsgs_χ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+                ᶜsgs_χₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
                 rst_sgs_χ = rayleigh_sponge_tendency_sgs_tracer(ᶜsgs_χ, ᶜχ, rayleigh_sponge)
                 @. ᶜsgs_χₜ += rst_sgs_χ
             end

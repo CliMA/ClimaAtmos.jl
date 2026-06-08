@@ -306,7 +306,7 @@ function sgs_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     for χ_name in sgs_tracer_names(Y)
         # Prep: compute ∇²(χʲ) into the shared scratch field
         for j in 1:n
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
             @. ᶜ∇²sgs_tracerʲs.:($$j) = wdivₕ(gradₕ(ᶜχʲ))
         end
 
@@ -320,7 +320,7 @@ function sgs_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         # Apply
         ν₄_for_χ = is_precip_sgs_tracer(χ_name) ? ν₄_scalar_for_precip : ν₄_scalar
         for j in 1:n
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
             @. ᶜχʲₜ -= ν₄_for_χ * wdivₕ(gradₕ(ᶜ∇²sgs_tracerʲs.:($$j)))
         end
     end

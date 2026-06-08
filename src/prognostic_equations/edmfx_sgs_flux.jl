@@ -134,7 +134,7 @@ function edmfx_sgs_mass_flux_tendency!(
             ρχ_name = get_ρχ_name(χ_name)
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
-                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
                 @. ᶜa_scalar =
                     ᶜχʲ *
                     draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
