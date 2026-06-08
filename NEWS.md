@@ -4,6 +4,14 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+v0.39.3
+-------
+
+- [#4551](https://github.com/CliMA/ClimaAtmos.jl/pull/4551) Remove q_tot diffusion contribution to updraft area tendency and its Jacobian entries
+- [#4546](https://github.com/CliMA/ClimaAtmos.jl/pull/4546) Add consistent non-eq microphysics and cloud fraction based on trancated gaussian distribution of condensates
+- [#4455](https://github.com/CliMA/ClimaAtmos.jl/pull/4455) Refactor surface conditions
+- [#4545](https://github.com/CliMA/ClimaAtmos.jl/pull/4545)  Add microphysics process tendency diagnostics
+
 v0.39.2
 -------
 
