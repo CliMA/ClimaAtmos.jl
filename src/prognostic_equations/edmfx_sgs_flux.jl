@@ -126,6 +126,7 @@ function edmfx_sgs_mass_flux_tendency!(
             @. Yₜ.c.ρq_tot += vtt
         end
 
+
         # Auto-discovered SGS tracer fluxes (microphysics species and any
         # user-defined passive tracers)
         # Draft fluxes
@@ -448,10 +449,11 @@ function edmfx_sgs_diffusive_flux_tendency!(
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
             MatrixFields.has_field(Y.c, ρχ_name) || continue
+            α = is_precip_sgs_tracer(χ_name) ? α_precip : FT(1)
             ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
             ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_microphysics * ᶠgradᵥ(ᶜχ)))
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α * ᶠgradᵥ(ᶜχ)))
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
 

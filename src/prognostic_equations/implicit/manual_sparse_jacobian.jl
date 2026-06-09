@@ -70,6 +70,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         is_in_Y(@name(c.ρtke)) ? (@name(c.ρtke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
+    # TRACER-JACOBIAN: grid-mean condensate mass names (sparsity pattern).
+    # When adding a new grid-mean tracer ρχ, add @name(c.ρχ) here.
     condensate_mass_names = (
         @name(c.ρq_lcl),
         @name(c.ρq_icl),
@@ -78,6 +80,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     )
     available_condensate_mass_names =
         filter(is_in_Y, condensate_mass_names)
+    # TRACER-JACOBIAN: grid-mean condensate names including number concentrations
+    # (sparsity pattern). When adding a new grid-mean tracer ρχ, add @name(c.ρχ) here.
     condensate_names = (
         condensate_mass_names...,
         @name(c.ρn_lcl),
@@ -92,6 +96,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
 
     # we define the list of condensate masses separately because ρa and q_tot
     # depend on the masses via sedimentation
+    # TRACER-JACOBIAN: SGS condensate mass names (sparsity pattern).
+    # When adding a new SGS tracer χ, add @name(c.sgsʲs.:(1).χ) here.
     sgs_condensate_mass_names = (
         @name(c.sgsʲs.:(1).q_lcl),
         @name(c.sgsʲs.:(1).q_icl),
@@ -101,6 +107,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     available_sgs_condensate_mass_names =
         filter(is_in_Y, sgs_condensate_mass_names)
 
+    # TRACER-JACOBIAN: SGS condensate names including number concentrations.
+    # When adding a new SGS tracer χ, add @name(c.sgsʲs.:(1).χ) here.
     sgs_condensate_names =
         (sgs_condensate_mass_names..., @name(c.sgsʲs.:(1).n_lcl), @name(c.sgsʲs.:(1).n_rai))
     available_sgs_condensate_names =
@@ -476,6 +484,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜ∂p∂ρq_tot)
     end
 
+    # TRACER-JACOBIAN: grid-mean pressure gradient block.
+    # When adding a new grid-mean tracer ρχ that affects the equation of state
+    # (e.g. a moisture species), add (@name(c.ρχ), e_int_q0, Δcv_q) here.
+    # Passive tracers that don't affect pressure can skip this block.
     microphysics_tracers =
         p.atmos.microphysics_model isa Union{
             NonEquilibriumMicrophysics1M,
@@ -514,7 +526,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ∂ᶜK_∂ᶠu₃ - (I_u₃,)
     end
 
-    α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
+    α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
+    # TRACER-JACOBIAN: grid-mean sedimentation + vertical diffusion block.
+    # When adding a new grid-mean tracer ρχ with a sedimentation velocity,
+    # add (@name(c.ρχ), @name(ᶜwχ), α) here, where α = FT(1) for
+    # non-precipitating or α_vert_diff_tracer for precipitating species.
+    # Passive tracers without sedimentation can skip this block.
     tracer_info = (
         (@name(c.ρq_lcl), @name(ᶜwₗ)),
         (@name(c.ρq_icl), @name(ᶜwᵢ)),
@@ -800,7 +817,98 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)))
                 ) - (I,)
 
+            ∂ᶜρaʲ_err_∂ᶜρaʲ =
+                matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).ρa)]
+            @. ᶜadvection_matrix =
+                -(ᶜadvdivᵥ_matrix()) ⋅
+                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ)
+            @. ∂ᶜρaʲ_err_∂ᶜρaʲ =
+                dtγ * ᶜadvection_matrix ⋅
+                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
+                DiagonalMatrixRow(1 / ᶜρʲs.:(1)) - (I,)
+
+            # contribution of ρʲ variations in vertical transport of ρa and updraft buoyancy eq
+            ∂ᶜρaʲ_err_∂ᶜmseʲ =
+                matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)]
+            @. ᶠbidiagonal_matrix_ct3 =
+                DiagonalMatrixRow(
+                    ᶠset_upwind_bcs(
+                        ᶠupwind(
+                            ᶠu³ʲs.:(1),
+                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                        ),
+                    ) / ᶠJ,
+                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
+                    ᶜJ * ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
+                )
+            @. ᶠbidiagonal_matrix_ct3_2 =
+                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
+                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
+                DiagonalMatrixRow(
+                    Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
+                )
+            @. ∂ᶜρaʲ_err_∂ᶜmseʲ =
+                dtγ * ᶜadvdivᵥ_matrix() ⋅
+                (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
+
+            turbconv_params = CAP.turbconv_params(params)
+            α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
+            ᶜ∂RmT∂qʲ = p.scratch.ᶜtemp_scalar_2
+            # TRACER-JACOBIAN: SGS pressure/buoyancy block.
+            # When adding a new SGS tracer χ that affects buoyancy (moisture
+            # species), add (@name(c.sgsʲs.:(1).χ), LH, ∂cp∂q, ∂Rm∂q) here.
+            # Passive tracers that don't affect buoyancy can skip this block.
+            sgs_microphysics_tracers =
+                p.atmos.microphysics_model isa Union{
+                    NonEquilibriumMicrophysics1M,
+                    NonEquilibriumMicrophysics2M,
+                } ?
+                (
+                    (@name(c.sgsʲs.:(1).q_tot), -LH_v0, Δcp_v, ΔR_v),
+                    (@name(c.sgsʲs.:(1).q_lcl), LH_v0, Δcp_l, -R_v),
+                    (@name(c.sgsʲs.:(1).q_icl), LH_s0, Δcp_i, -R_v),
+                    (@name(c.sgsʲs.:(1).q_rai), LH_v0, Δcp_l, -R_v),
+                    (@name(c.sgsʲs.:(1).q_sno), LH_s0, Δcp_i, -R_v),
+                ) : (
+                    (@name(c.sgsʲs.:(1).q_tot), -LH_v0, Δcp_v, ΔR_v),
+                )
+
+            for (qʲ_name, LH, ∂cp∂q, ∂Rm∂q) in sgs_microphysics_tracers
+                MatrixFields.has_field(Y, qʲ_name) || continue
+
+                @. ᶜ∂RmT∂qʲ =
+                    ᶜkappa_mʲ / (ᶜkappa_mʲ + 1) * (LH - ∂cp∂q * (ᶜTʲs.:(1) - T_0)) +
+                    ∂Rm∂q * ᶜTʲs.:(1)
+
+                # ∂ᶜρaʲ_err_∂ᶜqʲ through ρʲ variations in vertical transport of ρa
+                ∂ᶜρaʲ_err_∂ᶜqʲ = matrix[@name(c.sgsʲs.:(1).ρa), qʲ_name]
+                @. ᶠbidiagonal_matrix_ct3 =
+                    DiagonalMatrixRow(
+                        ᶠset_upwind_bcs(
+                            ᶠupwind(
+                                ᶠu³ʲs.:(1),
+                                draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                            ),
+                        ) / ᶠJ,
+                    ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
+                        ᶜJ * (ᶜρʲs.:(1))^2 / ᶜp * ᶜ∂RmT∂qʲ,
+                    )
+                @. ᶠbidiagonal_matrix_ct3_2 =
+                    DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
+                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
+                    DiagonalMatrixRow(
+                        Y.c.sgsʲs.:(1).ρa / ᶜp * ᶜ∂RmT∂qʲ,
+                    )
+                @. ∂ᶜρaʲ_err_∂ᶜqʲ =
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅
+                    (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
+            end
+
             # advection and sedimentation of microphysics tracers
+            # TRACER-JACOBIAN: SGS sedimentation block.
+            # When adding a new SGS tracer χ with a sedimentation velocity,
+            # add (@name(c.sgsʲs.:(1).χ), @name(ᶜwχʲs.:(1))) here.
+            # Passive tracers without sedimentation can skip this block.
             if p.atmos.microphysics_model isa Union{
                 NonEquilibriumMicrophysics1M,
                 NonEquilibriumMicrophysics2M,
@@ -887,6 +995,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
                 @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ +=
                     dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
+                # TRACER-JACOBIAN: SGS vertical diffusion block.
+                # When adding a new SGS tracer χ, add an entry here:
+                #   (@name(c.sgsʲs.:(1).χ), FT(1))  for non-precipitating
+                #   (@name(c.sgsʲs.:(1).χ), α_vert_diff_tracer)  for precipitating
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
                     NonEquilibriumMicrophysics2M,
@@ -923,7 +1035,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -=
                     dtγ * DiagonalMatrixRow(ᶜentrʲ + ᶜturb_entrʲs.:(1))
                 @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
-                    dtγ * DiagonalMatrixRow(ᶜentrʲ + ᶜturb_entrʲs.:(1))
+                    dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
+                @. ∂ᶜρaʲ_err_∂ᶜρaʲ +=
+                    dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) - ᶜdetrʲs.:(1))
+                # TRACER-JACOBIAN: SGS entrainment/detrainment block.
+                # When adding a new SGS tracer χ, add @name(c.sgsʲs.:(1).χ) here.
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
                     NonEquilibriumMicrophysics2M,
@@ -1055,7 +1171,28 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ) / ᶠJ * (g³³(ᶠgⁱʲ)),
                     )
 
-                # grid-mean tracers
+                # grid-mean ∂/∂(rho*a)
+                ∂ᶜρe_tot_err_∂ᶜρa =
+                    matrix[@name(c.ρe_tot), @name(c.sgsʲs.:(1).ρa)]
+                @. ∂ᶜρe_tot_err_∂ᶜρa =
+                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                        (ᶠu³ʲs.:(1) - ᶠu³) *
+                        ᶠinterp((Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot)) / ᶠJ,
+                    ) ⋅ ᶠinterp_matrix() ⋅
+                    DiagonalMatrixRow(ᶜJ)
+
+                ∂ᶜρq_tot_err_∂ᶜρa =
+                    matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).ρa)]
+                @. ∂ᶜρq_tot_err_∂ᶜρa =
+                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                        (ᶠu³ʲs.:(1) - ᶠu³) *
+                        ᶠinterp((Y.c.sgsʲs.:(1).q_tot - ᶜq_tot)) / ᶠJ,
+                    ) ⋅ ᶠinterp_matrix() ⋅
+                    DiagonalMatrixRow(ᶜJ)
+
+                # TRACER-JACOBIAN: grid-mean + SGS mass flux block.
+                # When adding a new SGS tracer χ with grid-mean counterpart ρχ,
+                # add a tuple (@name(c.ρχ), @name(c.sgsʲs.:(1).χ), @name(χ)) here.
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
                     NonEquilibriumMicrophysics2M,

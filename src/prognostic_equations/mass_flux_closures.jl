@@ -160,22 +160,17 @@ function edmfx_vertical_diffusion_tendency!(
         end
 
         if !isempty(sgs_tracer_names(Y))
-            α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
+            α_precip = CAP.α_vert_diff_tracer(params)
             ᶜρʲ = ᶜρʲs.:(1)
             ᶜdivᵥ_q = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
             )
             for χ_name in sgs_tracer_names(Y)
+                α = is_precip_sgs_tracer(χ_name) ? α_precip : FT(1)
                 ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
-                @. ᶜχʲₜ -=
-                    ᶜdivᵥ_q(
-                        -(
-                            ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α_vert_diff_microphysics *
-                            ᶠgradᵥ(ᶜχʲ)
-                        ),
-                    ) / ᶜρʲ
+                @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
             end
         end
     end

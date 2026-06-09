@@ -483,7 +483,6 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-    ᶜlg = Fields.local_geometry_field(Y.c)
 
     for j in 1:n
         ᶜentrʲ = @. lazy(
