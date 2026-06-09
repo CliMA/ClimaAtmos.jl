@@ -181,6 +181,70 @@ foreach_gs_tracer(f::F, Y_or_similar_values...) where {F} =
 
 
 """
+    sgs_tracer_names(Y)
+
+Return a `Tuple` of `FieldName`s for all SGS (sub-grid scale) tracers
+present in the first updraft of `Y`. Returns `()` when prognostic EDMF
+is not active (i.e. when `Y.c` has no `sgsʲs` field).
+
+"Tracer" here means any scalar in `Y.c.sgsʲs.:(1)` that is **not** one
+of the core EDMF variables `ρa`, `mse`, or `q_tot` (which receive
+physics-specific treatment).
+"""
+@generated _is_sgs_tracer_name(
+    ::MatrixFields.FieldName{name_chain},
+) where {name_chain} =
+    length(name_chain) == 1 &&
+    !(name_chain[1] in (:ρa, :mse, :q_tot))
+
+sgs_tracer_names(Y) =
+    unrolled_filter(
+        _is_sgs_tracer_name,
+        MatrixFields.top_level_names(Y.c.sgsʲs.:(1)),
+    )
+
+"""
+    is_precip_sgs_tracer(χ_name)
+
+Return `true` if the SGS tracer named `χ_name` is a precipitating species
+that should receive a reduced diffusion/hyperdiffusion coefficient
+(`α_precip` scaling). Currently: `q_rai`, `q_sno`, and `n_rai`.
+
+Mirrors the grid-scale check in `apply_tracer_hyperdiffusion_tendency!`.
+"""
+@generated is_precip_sgs_tracer(::MatrixFields.FieldName{names}) where {names} =
+    MatrixFields.FieldName{names}() in
+    (@name(q_rai), @name(q_sno), @name(n_rai))
+
+"""
+    get_sgsʲ_name(χ_name::FieldName)
+
+Construct the full Jacobian matrix path name for an SGS tracer in updraft 1.
+Maps e.g. `@name(q_lcl)` → `@name(c.sgsʲs.:(1).q_lcl)`.
+
+Used in the manual sparse Jacobian to index matrix blocks for auto-discovered
+SGS tracers. Implemented as `@generated` to ensure the result is a
+compile-time constant with zero runtime allocation.
+"""
+@generated get_sgsʲ_name(::MatrixFields.FieldName{names}) where {names} =
+    MatrixFields.FieldName(:c, :sgsʲs, 1, names...)
+
+"""
+    get_c_ρχ_name(χ_name::FieldName)
+
+Construct the full Jacobian matrix path name for a grid-scale density-weighted
+tracer. Maps e.g. `@name(q_lcl)` → `@name(c.ρq_lcl)`.
+
+Composes `get_ρχ_name` (which gives `@name(ρq_lcl)`) with a `c.` prefix
+for use in `matrix[name1, name2]` indexing.
+"""
+get_c_ρχ_name(χ_name) =
+    get_c_name(get_ρχ_name(χ_name))
+
+@generated get_c_name(::MatrixFields.FieldName{names}) where {names} =
+    MatrixFields.FieldName(:c, names...)
+
+"""
     sgs_weight_function(a, a_half)
 
 Computes a smooth, monotonic weight function `w(a)` that ranges from 0 to 1.
