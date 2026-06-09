@@ -16,7 +16,7 @@ This describes the diagnostic EDMF scheme equations and its discretizations. Whe
 ## Subgrid-scale variables
 * ``\hat{\rho}^j``: _effective density_ in kg/m³. Superscript ``j`` represents the sub-domain. ``\hat{\rho}^j = \rho^j a^j`` where ``\rho^j`` is the sub-domain density and ``a^j`` is the sub-domain area fraction. This is discretized at cell centers.
 * ``\rho^j``: _density_ in kg/m³, derived from the thermodynamic state, reconstructed at cell centers.
-* ``b^{j,3}``: the contravariant 3 component of the buoyancy of updraft, reconstructed at cell centers. 
+* ``b^{j,3}``: the contravariant 3 component of the buoyancy of updraft, reconstructed at cell centers.
   ```math
   b^{j,3} = - \frac{\rho^j-\rho}{\rho^j} (\nabla \Phi)^3
   ```
@@ -54,7 +54,7 @@ This is descritized using the following
 \frac{1}{2} \frac{1}{J[i-1]^2} \left( J[i-\frac{1}{2}]^2 u^{j, 3}[i-\frac{1}{2}]^2 -J[i-\frac{3}{2}] u^{j, 3}[i-\frac{3}{2}]^2 \right)
 = - \frac{\rho^{j}[i-1]-\rho[i-1]}{\rho^{j}[i-1]} \nabla^3 \Phi + E^{j0}[i-1](u^{0, 3}[i-\frac{3}{2}] - u^{j, 3}[i-\frac{3}{2}]) - d^{j, 3}[i-1]
 ```
-    
+
 ### Total energy
 ```math
 \frac{1}{J} \frac{\partial}{\partial \xi^3} ( \hat\rho^j J h_{\mathrm{s}}^j u^{j, 3} )

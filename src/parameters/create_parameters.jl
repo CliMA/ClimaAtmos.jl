@@ -442,7 +442,7 @@ function OrographicGravityWaveParameters(
         :ogw_mountain_shape_parameter => :β, # L(z) = L_b(1 - z/h)^β (equation 12), β=1 for triangular mountains and β<1 for blunt mounrains, β>1 for pointy mountains
         :ogw_critical_height_threshold => :h_frac, # h_crit = h_frac * (V / N)
         :ogw_density_scale_factor => :ρscale,
-        :ogw_reference_mountain_width => :L0, # L_0 = 80 km 
+        :ogw_reference_mountain_width => :L0, # L_0 = 80 km
         :ogw_linear_drag_coefficient => :a0, # a_0 = 0.9
         :ogw_nonlinear_drag_coefficient => :a1, # a_1 = 3.0
         :ogw_critical_froude_number => :Fr_crit, # Fr_crit = 0.7

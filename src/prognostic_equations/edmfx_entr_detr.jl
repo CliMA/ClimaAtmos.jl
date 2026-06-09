@@ -11,7 +11,7 @@ import Thermodynamics.Parameters as TDP
     calculate_pi_groups(
         elev_above_sfc, ref_H, ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ,
         ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke
-    ) 
+    )
 
 Calculates non-dimensional Π-groups used in EDMF entrainment/detrainment models.
 
@@ -615,11 +615,11 @@ function edmfx_first_interior_entr_tendency!(
 
     for j in 1:n
 
-        # Apply entrainment tendencies in the first model cell for moist static energy (mse) 
-        # and total humidity (q_tot). The entrained fluid is assumed to have a scalar value 
-        # given by `sgs_scalar_first_interior_bc` (mean + SGS perturbation). Since 
-        # `edmfx_entr_detr_tendency!` computes entrainment based on the environment–updraft 
-        # contrast, we supply the high-value (entrained) tracer minus the environment value 
+        # Apply entrainment tendencies in the first model cell for moist static energy (mse)
+        # and total humidity (q_tot). The entrained fluid is assumed to have a scalar value
+        # given by `sgs_scalar_first_interior_bc` (mean + SGS perturbation). Since
+        # `edmfx_entr_detr_tendency!` computes entrainment based on the environment–updraft
+        # contrast, we supply the high-value (entrained) tracer minus the environment value
         # here to form the correct tendency.
         entr_int_val = Fields.field_values(Fields.level(ᶜentrʲs.:($j), 1))
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))

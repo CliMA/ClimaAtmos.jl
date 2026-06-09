@@ -257,7 +257,7 @@ function AtmosSimulation{FT}(;
     time_varying_trace_gases = (),
     vertical_water_borrowing_species = nothing,
     # Callbacks
-    default_callbacks = true,   # Enable common simulation callbacks  
+    default_callbacks = true,   # Enable common simulation callbacks
     callbacks = (),             # User-provided additional callbacks
     callback_kwargs = (),       # Kwargs for default_callbacks
     # Diagnostics
@@ -265,7 +265,7 @@ function AtmosSimulation{FT}(;
     # Numerics
     jacobian::JacobianAlgorithm = ManualSparseJacobian(approximate_solve_iters = 1),
     debug_jacobian = false,
-    # Misc 
+    # Misc
     checkpoint_frequency = Inf,
     log_to_file = false,
 ) where {FT}

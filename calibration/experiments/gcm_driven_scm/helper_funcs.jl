@@ -577,7 +577,7 @@ function get_obs(
     Σ_scaling::String = "const",
 ) where {FT <: Real}
 
-    # map to CA names to LES names 
+    # map to CA names to LES names
     y_names = [CLIMADIAGNOSTICS_LES_NAME_MAP[var_i] for var_i in y_names]
     if !isnothing(log_vars)
         log_vars =

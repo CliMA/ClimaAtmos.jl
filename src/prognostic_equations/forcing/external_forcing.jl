@@ -1,5 +1,5 @@
 #####
-##### External forcing for single column experiments, drawing on 
+##### External forcing for single column experiments, drawing on
 ##### Shen et al. (2022), "A Library of Large-Eddy Simulations Forced by Global
 ##### Climate Models", JAMES 14, e2021MS002631. https://doi.org/10.1029/2021MS002631
 #####
@@ -224,7 +224,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
 
         function set_toa_flux!(cc_field)
             # rsdt is TOA insolation. We need
-            # TOA flux and the solar zenith angle separately. So compute 
+            # TOA flux and the solar zenith angle separately. So compute
             #`toa_flux = rsdt/cos(SZA)`.
             parent(cc_field) .= mean(
                 ds.group[cfsite_number]["rsdt"][:] ./
@@ -403,7 +403,7 @@ function external_forcing_tendency!(
         Val{:first_order}(),
     )
 
-    # Hard set tendencies of ρe_tot and ρq_tot at the top to 0. Otherwise upper 
+    # Hard set tendencies of ρe_tot and ρq_tot at the top to 0. Otherwise upper
     # portion of domain is anomalously cold
     ρe_tot_top = Fields.level(Yₜ.c.ρe_tot, Spaces.nlevels(axes(Y.c)))
     @. ρe_tot_top = 0.0

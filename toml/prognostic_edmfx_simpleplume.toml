@@ -2,7 +2,7 @@
 value = 0.1
 
 [EDMF_min_area]
-value = 1.0e-5 
+value = 1.0e-5
 
 [EDMF_max_area]
 value = 0.7

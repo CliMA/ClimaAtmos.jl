@@ -1,5 +1,5 @@
 #####
-##### Apply prescribed large-scale advection tendencies for total 
+##### Apply prescribed large-scale advection tendencies for total
 ##### specific humidity and total energy
 #####
 
@@ -108,7 +108,7 @@ function large_scale_advection_tendency_ρe_tot(
     ᶜdTdt_hadv = @. lazy(prof_dTdt(thermo_params, ᶜp, t, z))
     ᶜdqtdt_hadv = @. lazy(prof_dqtdt(thermo_params, ᶜp, t, z))
 
-    # Moisture advection term does not contain potential energy because 
+    # Moisture advection term does not contain potential energy because
     # it's just horizontal advection of specific humidity
     return @. lazy(
         ᶜρ * (

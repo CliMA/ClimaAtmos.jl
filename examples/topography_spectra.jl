@@ -60,7 +60,7 @@ function generate_spaces(;
         h_space,
     )
     # Fractional damping of smallest resolved scale
-    # Approximated as k₀ ≈ 1/Δx, with n_attenuation 
+    # Approximated as k₀ ≈ 1/Δx, with n_attenuation
     # the factor by which we wish to damp wavenumber
     # k₀. Assume dt == 1 for this example.
     diff_courant = FT(0.05)
@@ -104,11 +104,11 @@ function gen_spectra(test_var)
     hcoords =
         [Geometry.LatLongPoint(lat, long) for long in longpts, lat in latpts]
     test_var = remap_to_array(test_var, hcoords)
-    # Use ClimaCoreSpectra to generate power spectra for orography data. 
+    # Use ClimaCoreSpectra to generate power spectra for orography data.
     len1 = size(test_var)[1]
     len2 = size(test_var)[2]
     @assert len1 == 2len2
-    mass_weight = FT(1) # No weighting applied 
+    mass_weight = FT(1) # No weighting applied
     spectrum_data, wave_numbers, _spherical, mesh_info =
         power_spectrum_2d(FT, test_var, mass_weight)
     power_spectrum =

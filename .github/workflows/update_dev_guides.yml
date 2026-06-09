@@ -24,7 +24,7 @@ jobs:
           git subtree pull --prefix docs/dev-guides \
               https://github.com/CliMA/DeveloperGuides.git main --squash \
               -m "chore: sync dev guides from central repo" || true
-          
+
       - name: Check for updates
         id: check
         run: |

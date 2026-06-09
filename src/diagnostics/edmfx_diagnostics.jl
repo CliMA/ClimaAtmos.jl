@@ -258,7 +258,7 @@ compute_husraup(state, cache, time) = compute_husraup(state, cache, time,
     cache.atmos.microphysics_model, cache.atmos.turbconv_model,
 )
 compute_husraup(_, _, _, _, _) =
-    error_diagnostic_variable("Can only compute updraft rain water specific humidity 
+    error_diagnostic_variable("Can only compute updraft rain water specific humidity
                                with a 1M or 2M precip model and with EDMFX")
 
 compute_husraup(state, _, _,
@@ -280,7 +280,7 @@ compute_ncraup(state, cache, time) = compute_ncraup(state, cache, time,
     cache.atmos.microphysics_model, cache.atmos.turbconv_model,
 )
 compute_ncraup(_, _, _, _, _) =
-    error_diagnostic_variable("Can only compute updraft rain number mixing ratio 
+    error_diagnostic_variable("Can only compute updraft rain number mixing ratio
                                with a 2M precip model and with EDMFX")
 
 compute_ncraup(state, _, _, ::NonEquilibriumMicrophysics2M, ::PrognosticEDMFX) =
@@ -302,7 +302,7 @@ compute_hussnup(state, cache, time) = compute_hussnup(state, cache, time,
     cache.atmos.microphysics_model, cache.atmos.turbconv_model,
 )
 compute_hussnup(_, _, _, _, _) =
-    error_diagnostic_variable("Can only compute updraft snow specific humidity 
+    error_diagnostic_variable("Can only compute updraft snow specific humidity
                                with a 1M or 2M precip model and with EDMFX")
 
 compute_hussnup(state, _, _,

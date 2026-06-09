@@ -15,11 +15,11 @@ include(
 
 """
     write_computed_drag!(
-        computed_drag, 
-        comms_ctx; 
-        topography, 
-        topo_smoothing, 
-        topography_damping_factor, 
+        computed_drag,
+        comms_ctx;
+        topography,
+        topo_smoothing,
+        topography_damping_factor,
         h_elem
     )
 
@@ -55,7 +55,7 @@ function write_computed_drag!(
     # initialize HDF5 output
     hdfwriter = InputOutput.HDF5Writer("$(output_filename).hdf5", comms_ctx)
 
-    # write attributes to the HDF5 file 
+    # write attributes to the HDF5 file
     InputOutput.HDF5.write_attribute(hdfwriter.file, "topography", topography)
     InputOutput.HDF5.write_attribute(hdfwriter.file, "topo_smoothing", topo_smoothing)
     InputOutput.HDF5.write_attribute(

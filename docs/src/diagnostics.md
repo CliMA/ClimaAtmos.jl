@@ -186,7 +186,7 @@ the value of the diagnostic variable.
 
 #### In-place computation
 
-You can alternatively provide a `compute!` function. 
+You can alternatively provide a `compute!` function.
 `compute!` takes a fourth argument, `out`, which is used to avoid extra memory allocations.
 
 ```julia

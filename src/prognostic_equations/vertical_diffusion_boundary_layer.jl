@@ -46,7 +46,7 @@ This function is dispatched based on the type of the vertical diffusion model
       for scalars. Zero-flux boundary conditions are explicitly applied.
     - **Note on mass conservation for `q_tot` diffusion**: The current implementation
       also modifies the tendency of total moist air density `Yₜ.c.ρ` based on the
-      diffusion tendency of total specific humidity `ρq_tot`: 
+      diffusion tendency of total specific humidity `ρq_tot`:
       `Yₜ.c.ρ -= ᶜρχₜ_diffusion_for_q_tot`.
 
 This function is acting as a wrapper around the specific implementations

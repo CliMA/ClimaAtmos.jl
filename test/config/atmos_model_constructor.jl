@@ -129,7 +129,7 @@ end
     # Flat parameter access
     @test model.microphysics_model isa CA.NonEquilibriumMicrophysics1M
 
-    # Grouped struct access  
+    # Grouped struct access
     @test model.water isa CA.AtmosWater
     @test model.water.microphysics_model isa CA.NonEquilibriumMicrophysics1M
 end

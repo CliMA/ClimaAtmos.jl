@@ -12,7 +12,7 @@
         sfc_ρ_flux_scalar,
         ustar,
         obukhov_length,
-        sfc_local_geometry, 
+        sfc_local_geometry,
     ) where {FT}
 
 Calculates a boundary condition for a subgrid-scale (SGS) scalar within an
@@ -93,7 +93,7 @@ end
         ustar::FT,
         z,
         obukhov_length,
-        local_geometry, 
+        local_geometry,
     ) where {FT}
 
 Calculates the variance of a scalar quantity (σ²) at height `z` within the

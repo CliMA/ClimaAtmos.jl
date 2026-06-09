@@ -34,7 +34,7 @@ model_config_dict =
 ref_paths, _ = get_les_calibration_library()
 atmos_config = CA.AtmosConfig(model_config_dict)
 
-# get/store LES obs and norm factors 
+# get/store LES obs and norm factors
 zc_model = get_z_grid(atmos_config, z_max = z_max)
 
 if isnothing(iterations)

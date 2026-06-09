@@ -134,7 +134,7 @@ git-tree-sha1 = "ab898b33fcde4a719ee12cb1271399177d6a3561"
     [[ogw_computed_drag_h30.download]]
     sha256 = "9d5b7d5046911069f4c6917dc01b0c88ca2bb1273f203d45f92577ab2b83442b"
     url = "https://caltech.box.com/shared/static/7ut92ej4qs15pm1g6vpykvmpqw6cjztj.gz"
-    
+
 [ogw_computed_drag_h60]
 git-tree-sha1 = "d11b75df5be566eae42d6a3f2b3f60a381feacf8"
 

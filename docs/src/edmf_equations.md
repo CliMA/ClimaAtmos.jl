@@ -160,13 +160,13 @@ which is stabilized with the addition of a 4th-order hyperdiffusion term on tota
 The equation is discretized as
 ```math
 \frac{\partial}{\partial t} \hat{\rho}^j e^j \approx
-- D_h \left[ 
-    \left( \hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p \right) 
+- D_h \left[
+    \left( \hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p \right)
     \left( \boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j) \right)
   \right]
-- D^c_v \left[ 
+- D^c_v \left[
     WI^f(J,\hat{\rho}^j) \,  \tilde{\boldsymbol{u}}^j \, I^f \left(\frac{\hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p}{\hat{\rho}^j} \right)
-  \right] 
+  \right]
   - \frac{p}{\rho} \frac{\partial}{\partial t} \hat{\rho}^j - \nu_h \hat{\mathcal{D}}_h( \rho \mathcal{G}_h(\psi^j) ) + RHS .
 ```
 where

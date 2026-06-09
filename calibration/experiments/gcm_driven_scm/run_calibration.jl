@@ -16,14 +16,14 @@ const model_interface = joinpath(experiment_dir, "model_interface.jl")
 const experiment_config =
     YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
-# unpack experiment_config vars into scope 
+# unpack experiment_config vars into scope
 for (key, value) in experiment_config
     @eval const $(Symbol(key)) = $value
 end
 
 const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
-# load configs and directories 
+# load configs and directories
 model_config_dict = YAML.load_file(model_config)
 atmos_config = CA.AtmosConfig(model_config_dict)
 zc_model = get_z_grid(atmos_config; z_max)

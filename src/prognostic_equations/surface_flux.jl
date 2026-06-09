@@ -1,5 +1,5 @@
 #####
-##### Apply surface fluxes as boundary conditions and translate them 
+##### Apply surface fluxes as boundary conditions and translate them
 ##### into tendencies for the relevant prognostic variables.
 #####
 

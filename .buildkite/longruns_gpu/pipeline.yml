@@ -41,9 +41,9 @@ steps:
 
       - label: ":computer: hydrostatic balance"
         command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
+          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze63.yml
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+          --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -55,9 +55,9 @@ steps:
 
       - label: ":computer: dry baroclinic wave high res"
         command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
+          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze43.yml
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+          --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -69,9 +69,9 @@ steps:
 
       - label: ":computer: baroclinic wave equilmoist high res"
         command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
+          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze43.yml
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+          --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -83,9 +83,9 @@ steps:
 
       - label: ":computer: dry held-suarez"
         command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
+          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze63.yml
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+          --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -97,9 +97,9 @@ steps:
 
       - label: ":computer: held-suarez, equilmoist"
         command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
+          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze63.yml
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+          --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -114,8 +114,8 @@ steps:
 
       - label: ":umbrella: aquaplanet non-equil moisture allsky radiation + 1M microphysics"
         command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -124,11 +124,11 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_allsky_1M"
-          
+
       - label: ":computer: aquaplanet equilmoist allsky radiation + diagnostic edmf + 0M microphysics"
         command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -140,8 +140,8 @@ steps:
 
       - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf + 0M microphysics"
         command: >
-          srun julia --project=.buildkite .buildkite/ci_driver.jl 
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+          srun julia --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -153,8 +153,8 @@ steps:
 
       - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf + 1M microphysics"
         command: >
-          srun julia --project=.buildkite .buildkite/ci_driver.jl 
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+          srun julia --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -166,8 +166,8 @@ steps:
 
       - label: ":computer: aquaplanet equilmoist allsky radiation + time-varying insolation + 0M microphysics + slab ocean"
         command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -183,8 +183,8 @@ steps:
 
       - label: ":computer: amip target"
         command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl 
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml 
+          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:

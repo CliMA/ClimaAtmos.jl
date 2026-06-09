@@ -596,7 +596,7 @@ function generate_multiday_era5_external_forcing_file(
     output_data_dir = get(ENV, "BUILDKITE", "") == "true" ? mktempdir() :
                       @clima_artifact("era5_hourly_atmos_processed"),
 )
-    # run generate_external_era5_forcing_file for each day if its processed data file not found 
+    # run generate_external_era5_forcing_file for each day if its processed data file not found
     # get range of starttimes and endtimes
     start_date = DateTime(parsed_args["start_date"], "yyyymmdd")
     end_time = start_date + Dates.Second(time_to_seconds(parsed_args["t_end"]))
@@ -630,7 +630,7 @@ function generate_multiday_era5_external_forcing_file(
             )
         end
     end
-    # concatenate data and save 
+    # concatenate data and save
     concat_ds = Dataset(file_list; aggdim = "time")
     NCDatasets.write(forcing_file_path, concat_ds)
 end

@@ -211,7 +211,7 @@ Currently, this includes:
 
 These corrections are intended to prevent nonphysical states such as negative
 area fractions, negative condensate masses, or condensate mass exceeding the
-available total moisture. Ideally, the need for this correction is minimized 
+available total moisture. Ideally, the need for this correction is minimized
 by the numerical scheme.
 """
 

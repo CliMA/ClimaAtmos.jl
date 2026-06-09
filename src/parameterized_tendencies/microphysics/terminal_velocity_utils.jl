@@ -5,7 +5,7 @@ struct FixedTerminalVelocity{FT} <: AbstractTerminalVelocityMode
     ice::FT
     rain::FT
     snow::FT
-    #TODO fixed-velocity sedimentation of 2M/P3 tracers not implemented 
+    #TODO fixed-velocity sedimentation of 2M/P3 tracers not implemented
 end
 Base.broadcastable(x::AbstractTerminalVelocityMode) = tuple(x)
 
