@@ -70,6 +70,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         is_in_Y(@name(c.ρtke)) ? (@name(c.ρtke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
+    # TRACER-JACOBIAN: grid-mean condensate mass names (sparsity pattern).
+    # When adding a new grid-mean tracer ρχ, add @name(c.ρχ) here.
     condensate_mass_names = (
         @name(c.ρq_lcl),
         @name(c.ρq_icl),
@@ -78,6 +80,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     )
     available_condensate_mass_names =
         filter(is_in_Y, condensate_mass_names)
+    # TRACER-JACOBIAN: grid-mean condensate names including number concentrations
+    # (sparsity pattern). When adding a new grid-mean tracer ρχ, add @name(c.ρχ) here.
     condensate_names = (
         condensate_mass_names...,
         @name(c.ρn_lcl),
@@ -92,6 +96,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
 
     # we define the list of condensate masses separately because ρa and q_tot
     # depend on the masses via sedimentation
+    # TRACER-JACOBIAN: SGS condensate mass names (sparsity pattern).
+    # When adding a new SGS tracer χ, add @name(c.sgsʲs.:(1).χ) here.
     sgs_condensate_mass_names = (
         @name(c.sgsʲs.:(1).q_lcl),
         @name(c.sgsʲs.:(1).q_icl),
@@ -101,6 +107,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     available_sgs_condensate_mass_names =
         filter(is_in_Y, sgs_condensate_mass_names)
 
+    # TRACER-JACOBIAN: SGS condensate names including number concentrations.
+    # When adding a new SGS tracer χ, add @name(c.sgsʲs.:(1).χ) here.
     sgs_condensate_names =
         (sgs_condensate_mass_names..., @name(c.sgsʲs.:(1).n_lcl), @name(c.sgsʲs.:(1).n_rai))
     available_sgs_condensate_names =
@@ -495,6 +503,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜ∂p∂ρq_tot)
     end
 
+    # TRACER-JACOBIAN: grid-mean pressure gradient block.
+    # When adding a new grid-mean tracer ρχ that affects the equation of state
+    # (e.g. a moisture species), add (@name(c.ρχ), e_int_q0, Δcv_q) here.
+    # Passive tracers that don't affect pressure can skip this block.
     microphysics_tracers =
         p.atmos.microphysics_model isa Union{
             NonEquilibriumMicrophysics1M,
@@ -534,6 +546,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     end
 
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
+    # TRACER-JACOBIAN: grid-mean sedimentation + vertical diffusion block.
+    # When adding a new grid-mean tracer ρχ with a sedimentation velocity,
+    # add (@name(c.ρχ), @name(ᶜwχ), α) here, where α = FT(1) for
+    # non-precipitating or α_vert_diff_tracer for precipitating species.
+    # Passive tracers without sedimentation can skip this block.
     tracer_info = (
         (@name(c.ρq_lcl), @name(ᶜwₗ), FT(1)),
         (@name(c.ρq_icl), @name(ᶜwᵢ), FT(1)),
@@ -855,6 +872,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             turbconv_params = CAP.turbconv_params(params)
             α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
             ᶜ∂RmT∂qʲ = p.scratch.ᶜtemp_scalar_2
+            # TRACER-JACOBIAN: SGS pressure/buoyancy block.
+            # When adding a new SGS tracer χ that affects buoyancy (moisture
+            # species), add (@name(c.sgsʲs.:(1).χ), LH, ∂cp∂q, ∂Rm∂q) here.
+            # Passive tracers that don't affect buoyancy can skip this block.
             sgs_microphysics_tracers =
                 p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
@@ -902,6 +923,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             end
 
             # advection and sedimentation of microphysics tracers
+            # TRACER-JACOBIAN: SGS sedimentation block.
+            # When adding a new SGS tracer χ with a sedimentation velocity,
+            # add (@name(c.sgsʲs.:(1).χ), @name(ᶜwχʲs.:(1))) here.
+            # Passive tracers without sedimentation can skip this block.
             if p.atmos.microphysics_model isa Union{
                 NonEquilibriumMicrophysics1M,
                 NonEquilibriumMicrophysics2M,
@@ -988,6 +1013,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
                 @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ +=
                     dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
+                # TRACER-JACOBIAN: SGS vertical diffusion block.
+                # When adding a new SGS tracer χ, add an entry here:
+                #   (@name(c.sgsʲs.:(1).χ), FT(1))  for non-precipitating
+                #   (@name(c.sgsʲs.:(1).χ), α_vert_diff_tracer)  for precipitating
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
                     NonEquilibriumMicrophysics2M,
@@ -1020,6 +1049,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
                 @. ∂ᶜρaʲ_err_∂ᶜρaʲ +=
                     dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) - ᶜdetrʲs.:(1))
+                # TRACER-JACOBIAN: SGS entrainment/detrainment block.
+                # When adding a new SGS tracer χ, add @name(c.sgsʲs.:(1).χ) here.
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
                     NonEquilibriumMicrophysics2M,
@@ -1170,7 +1201,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ) ⋅ ᶠinterp_matrix() ⋅
                     DiagonalMatrixRow(ᶜJ)
 
-                # grid-mean tracers
+                # TRACER-JACOBIAN: grid-mean + SGS mass flux block.
+                # When adding a new SGS tracer χ with grid-mean counterpart ρχ,
+                # add a tuple (@name(c.ρχ), @name(c.sgsʲs.:(1).χ), @name(χ)) here.
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
                     NonEquilibriumMicrophysics2M,
