@@ -860,6 +860,11 @@ Groups moisture and microphysics-related models and types.
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
+    # Fill the 2M microphysics tendency cache once per step (in a callback)
+    # instead of once per RK stage, so the IMEX loop sees a constant
+    # (substep-averaged) explicit forcing. Bool is concrete, so no new type
+    # parameter is needed.
+    microphysics_substep_callback::Bool = false
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
     terminal_velocity_mode::TVM = DiagnosticTerminalVelocity()

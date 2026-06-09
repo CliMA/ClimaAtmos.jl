@@ -456,6 +456,33 @@ needs_enforce_physical_constraints(model::AtmosModel) =
 
 default_model_callbacks(component; kwargs...) = ()
 
+# Refill the 2M microphysics tendency cache once per step. With the per-stage
+# fill guarded off (see `set_microphysics_tendency_cache!`), the IMEX loop then
+# sees a constant (substep-averaged) explicit microphysics forcing across the
+# step's stages — a smoother explicit RHS for the implicit Newton iterations.
+function microphysics_substep_callback!(integrator)
+    Y = integrator.u
+    p = integrator.p
+    mp = p.atmos.microphysics_model
+    tm = p.atmos.turbconv_model
+    if mp isa NonEquilibriumMicrophysics2M
+        if tm isa PrognosticEDMFX
+            _fill_2m_tendency_cache_edmf!(Y, p, mp, tm)
+        else
+            _fill_2m_tendency_cache_gridmean!(Y, p, mp)
+        end
+    end
+    return nothing
+end
+
+function default_model_callbacks(water::AtmosWater; kwargs...)
+    if water.microphysics_substep_callback &&
+       water.microphysics_model isa NonEquilibriumMicrophysics2M
+        return (call_every_n_steps(microphysics_substep_callback!, 1),)
+    end
+    return ()
+end
+
 function default_model_callbacks(radiation::AtmosRadiation;
     dt_rad = "6hours",
     start_date,

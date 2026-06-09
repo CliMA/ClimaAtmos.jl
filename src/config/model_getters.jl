@@ -720,6 +720,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
         cloud_model,
         microphysics_tendency_timestepping = implicit_microphysics ? Implicit() :
                                              Explicit(),
+        microphysics_substep_callback = pa["microphysics_substep_callback"],
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
         sgs_quadrature,
         terminal_velocity_mode,

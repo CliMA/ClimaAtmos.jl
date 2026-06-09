@@ -248,6 +248,9 @@ microphysics_n_substeps:
 microphysics_n_substeps_quadrature:
   help: "Number of susbteps for time averaging bulk microphysics tendencies with subgrid-scale quadrature. Default: 2"
   value: 2
+microphysics_substep_callback:
+  help: "Fill the 2M microphysics tendency cache once per step (in a callback) instead of once per RK stage, so the IMEX loop sees a constant substep-averaged explicit forcing. Default: false"
+  value: false
 fixed_terminal_velocity:
   help: "Use fixed terminal velocities for microphysics tracers [`true` (default), `false`]"
   value: true

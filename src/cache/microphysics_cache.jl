@@ -1011,6 +1011,14 @@ function set_microphysics_tendency_cache!(
 end
 
 function set_microphysics_tendency_cache!(
+    Y, p, mp2m::NonEquilibriumMicrophysics2M, tm::PrognosticEDMFX,
+)
+    # See the grid-mean method: skip the per-stage fill when the substep
+    # callback owns it.
+    p.atmos.microphysics_substep_callback && return nothing
+    return _fill_2m_tendency_cache_edmf!(Y, p, mp2m, tm)
+end
+function _fill_2m_tendency_cache_edmf!(
     Y, p, ::NonEquilibriumMicrophysics2M, tm::PrognosticEDMFX,
 )
     (; dt) = p
@@ -1145,10 +1153,20 @@ end
     t.dq_ice_dt, t.dn_ice_dt, t.dq_rim_dt, t.db_rim_dt,
 )
 function set_microphysics_tendency_cache!(
-    Y, p, ::NonEquilibriumMicrophysics2M, _,
+    Y, p, mp2m::NonEquilibriumMicrophysics2M, _,
+)
+    # When the substep callback owns the fill, skip the per-stage fill so the
+    # explicit microphysics forcing stays constant across the step's RK stages.
+    p.atmos.microphysics_substep_callback && return nothing
+    return _fill_2m_tendency_cache_gridmean!(Y, p, mp2m)
+end
+function _fill_2m_tendency_cache_gridmean!(
+    Y, p, mp2m::NonEquilibriumMicrophysics2M,
 )
     (; dt) = p
     (; ᶜT, ᶜmp_tendency, ᶜlogλ) = p.precomputed
+    nsubs = mp2m.n_substeps
+    tstep = p.atmos.microphysics_tendency_timestepping
 
     # get thermodynamics and microphysics params
     cm2p = CAP.microphysics_2m_params(p.params)
@@ -1166,30 +1184,17 @@ function set_microphysics_tendency_cache!(
     ᶜq_rim = @. lazy(specific(Y.c.ρq_rim, Y.c.ρ))
     ᶜb_rim = @. lazy(specific(Y.c.ρb_rim, Y.c.ρ))
 
-    # Compute microphysics tendency
-    # TODO - looks like aerosol activation is missing
-    @. ᶜmp_tendency = _to_mp23_tendency(
-        BMT.bulk_microphysics_tendencies(
-            BMT.Microphysics2Moment(), cm2p, thp, Y.c.ρ, ᶜT, ᶜq_tot,
-            ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_icl, ᶜn_ice, ᶜq_rim, ᶜb_rim,
-            ᶜlogλ,
-        ),
+    # Compute the (substepped, satadj- and coupled-sink-limited) microphysics
+    # tendency. With `n_substeps == 1` this reduces to a single BMT call plus
+    # the satadj cap and coupled-sink limiter; `n_substeps > 1` forward-Eulers
+    # the bulk tendency over `dt/n_substeps` substeps (logλ held fixed) and
+    # returns the dt-averaged result, which the IMEX loop sees as a constant
+    # explicit forcing.
+    # TODO - aerosol activation is not yet wired into the grid-mean path.
+    @. ᶜmp_tendency = bulk_2m_tendencies_substepped(
+        cm2p, thp, Y.c.ρ, ᶜT, ᶜq_tot, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai,
+        ᶜq_icl, ᶜn_ice, ᶜq_rim, ᶜb_rim, ᶜlogλ, dt, nsubs, tstep,
     )
-    # Apply coupled limiting directly
-    ᶜf_liq = @. lazy(
-        coupled_sink_limit_factor(
-            ᶜmp_tendency.dq_lcl_dt, ᶜmp_tendency.dn_lcl_dt, ᶜq_lcl, ᶜn_lcl, dt,
-        ),
-    )
-    ᶜf_rai = @. lazy(
-        coupled_sink_limit_factor(
-            ᶜmp_tendency.dq_rai_dt, ᶜmp_tendency.dn_rai_dt, ᶜq_rai, ᶜn_rai, dt,
-        ),
-    )
-    @. ᶜmp_tendency.dq_lcl_dt *= ᶜf_liq
-    @. ᶜmp_tendency.dn_lcl_dt *= ᶜf_liq
-    @. ᶜmp_tendency.dq_rai_dt *= ᶜf_rai
-    @. ᶜmp_tendency.dn_rai_dt *= ᶜf_rai
     return nothing
 end
 
