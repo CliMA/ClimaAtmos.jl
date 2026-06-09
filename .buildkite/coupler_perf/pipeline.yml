@@ -25,10 +25,12 @@ steps:
       # Update package registry, since dev installs do not do that with a manifest
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.Registry.update()'"
       - echo "--- Instantiate AMIP env"
-      # Instantiate and dev install ClimaCore
+      # Instantiate and dev install ClimaAtmos
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.develop(path=".")'''
       - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add("MPI")'''
+      # Install ClimaCore from main, since that's how the nightly Coupler runs
+      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add(PackageSpec(name="ClimaCore", rev="main"))'''
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.status()'"
     agents:
