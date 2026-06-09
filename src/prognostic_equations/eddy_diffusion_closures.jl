@@ -33,33 +33,36 @@ Calculates the mean vertical buoyancy gradient (`∂b/∂z`) in the environment.
 This gradient is determined by considering contributions from both the unsaturated
 and saturated portions of the environment, weighted by the environmental cloud
 fraction. The calculation involves:
-1. Determining partial derivatives of buoyancy with respect to virtual potential
-   temperature (`θᵥ`) for the unsaturated part, and with respect to liquid-ice
-   potential temperature (`θₗᵢ`) and total specific humidity (`qₜ`) for the
-   saturated part.
-2. Applying the chain rule using the provided vertical gradients of these
-   thermodynamic variables (`∂θᵥ/∂z`, `∂θₗᵢ/∂z`, `∂qₜ/∂z`), obtained from
-   the input fields after projection.
-3. Blending the resulting unsaturated and saturated buoyancy gradients based on
-   the environmental cloud fraction.
+
+ 1. Determining partial derivatives of buoyancy with respect to virtual potential
+    temperature (`θᵥ`) for the unsaturated part, and with respect to liquid-ice
+    potential temperature (`θₗᵢ`) and total specific humidity (`qₜ`) for the
+    saturated part.
+ 2. Applying the chain rule using the provided vertical gradients of these
+    thermodynamic variables (`∂θᵥ/∂z`, `∂θₗᵢ/∂z`, `∂qₜ/∂z`), obtained from
+    the input fields after projection.
+ 3. Blending the resulting unsaturated and saturated buoyancy gradients based on
+    the environmental cloud fraction.
 
 Arguments:
-- `closure`: The environmental buoyancy gradient closure type (e.g., `BuoyGradMean`).
-- `thermo_params`: Thermodynamic parameters from `CLIMAParameters`.
-- `T`: Air temperature [K]
-- `ρ`: Air density [kg/m³]
-- `q_tot`: Total specific humidity [kg/kg]
-- `q_liq`: Liquid specific humidity [kg/kg]
-- `q_ice`: Ice specific humidity [kg/kg]
-- `cf`: Cloud fraction
-- `C3`: The `ClimaCore.Geometry.Covariant3Vector` type, used for projecting input vertical gradients.
-- `∂qt∂z`: Field of vertical gradients of total specific humidity.
-- `∂θli∂z`: Field of vertical gradients of liquid-ice potential temperature.
-- `local_geometry`: Field of local geometry at cell centers, used for gradient projection.
-The second method takes a precomputed `EnvBuoyGradVars` object instead of T, ρ, q_tot, q_liq, q_ice and gradient fields.
+
+  - `closure`: The environmental buoyancy gradient closure type (e.g., `BuoyGradMean`).
+  - `thermo_params`: Thermodynamic parameters from `CLIMAParameters`.
+  - `T`: Air temperature [K]
+  - `ρ`: Air density [kg/m³]
+  - `q_tot`: Total specific humidity [kg/kg]
+  - `q_liq`: Liquid specific humidity [kg/kg]
+  - `q_ice`: Ice specific humidity [kg/kg]
+  - `cf`: Cloud fraction
+  - `C3`: The `ClimaCore.Geometry.Covariant3Vector` type, used for projecting input vertical gradients.
+  - `∂qt∂z`: Field of vertical gradients of total specific humidity.
+  - `∂θli∂z`: Field of vertical gradients of liquid-ice potential temperature.
+  - `local_geometry`: Field of local geometry at cell centers, used for gradient projection.
+    The second method takes a precomputed `EnvBuoyGradVars` object instead of T, ρ, q_tot, q_liq, q_ice and gradient fields.
 
 Returns:
-- `∂b∂z`: The mean vertical buoyancy gradient [s⁻²], as a field of scalars.
+
+  - `∂b∂z`: The mean vertical buoyancy gradient [s⁻²], as a field of scalars.
 """
 function buoyancy_gradients end
 
@@ -150,9 +153,10 @@ Calculates the mean vertical buoyancy gradient (`∂b∂z`) by applying the chai
 to the partial derivatives of buoyancy and then blending based on cloud fraction.
 
 This function takes the partial derivatives of buoyancy with respect to:
-- virtual potential temperature (`∂b/∂θᵥ`) for the unsaturated part,
-- liquid-ice potential temperature (`∂b/∂θₗᵢ,sat`) for the saturated part,
-- total specific humidity (`∂b/∂qₜ,sat`) for the saturated part.
+
+  - virtual potential temperature (`∂b/∂θᵥ`) for the unsaturated part,
+  - liquid-ice potential temperature (`∂b/∂θₗᵢ,sat`) for the saturated part,
+  - total specific humidity (`∂b/∂qₜ,sat`) for the saturated part.
 
 It then multiplies these by the respective vertical gradients of `θᵥ`, `θₗᵢ`, and `qₜ`
 (obtained from `bg_model`)
@@ -163,14 +167,16 @@ Finally, it returns a single mean buoyancy gradient by linearly combining
 (also obtained from `bg_model`).
 
 Arguments:
-- `closure`: The environmental buoyancy gradient closure type.
-- `bg_model`: Precomputed environmental buoyancy gradient variables (`EnvBuoyGradVars`).
-- `thermo_params`: Thermodynamic parameters from `CLIMAParameters`.
-- `∂b∂θli_sat`: Partial derivative of buoyancy w.r.t. liquid-ice potential temperature (saturated part).
-- `∂b∂qt_sat`: Partial derivative of buoyancy w.r.t. total specific humidity (saturated part).
+
+  - `closure`: The environmental buoyancy gradient closure type.
+  - `bg_model`: Precomputed environmental buoyancy gradient variables (`EnvBuoyGradVars`).
+  - `thermo_params`: Thermodynamic parameters from `CLIMAParameters`.
+  - `∂b∂θli_sat`: Partial derivative of buoyancy w.r.t. liquid-ice potential temperature (saturated part).
+  - `∂b∂qt_sat`: Partial derivative of buoyancy w.r.t. total specific humidity (saturated part).
 
 Returns:
-- `∂b∂z`: The mean vertical buoyancy gradient [s⁻²].
+
+  - `∂b∂z`: The mean vertical buoyancy gradient [s⁻²].
 """
 function buoyancy_gradient_chain_rule(
     ::AbstractEnvBuoyGradClosure,
@@ -205,25 +211,28 @@ Calculates the surface flux of TKE, a C3 vector used by
 ClimaAtmos operator boundary conditions.
 
 The flux magnitude is modeled as
-  c_k * ρa_sfc * ustar^3`,
+c_k * ρa_sfc * ustar^3`,
 directed along the surface upward normal.
 
 Details:
-- `c_k`: A dimensionless coefficient (`tke_surface_flux_coeff`) scaling the surface flux of TKE.
-- The formulation `ustar^3` implies that the TKE flux is primarily driven by
-  shear production at the surface.
+
+  - `c_k`: A dimensionless coefficient (`tke_surface_flux_coeff`) scaling the surface flux of TKE.
+  - The formulation `ustar^3` implies that the TKE flux is primarily driven by
+    shear production at the surface.
 
 This flux represents the net input of TKE into the atmosphere from the surface,
 arising from turbulent generation processes by unresolved roughness elements.
 
 Arguments:
-- `turbconv_params`: Set of turbulence and convection model parameters.
-- `ρa_sfc`: Area-fraction weighted air density at the surface [kg/m^3].
-- `ustar`: Friction velocity [m/s].
-- `surface_local_geometry`: The `LocalGeometry` object at the surface.
+
+  - `turbconv_params`: Set of turbulence and convection model parameters.
+  - `ρa_sfc`: Area-fraction weighted air density at the surface [kg/m^3].
+  - `ustar`: Friction velocity [m/s].
+  - `surface_local_geometry`: The `LocalGeometry` object at the surface.
 
 Returns:
-- A `ClimaCore.Geometry.C3` vector representing the TKE flux normal to the surface.
+
+  - A `ClimaCore.Geometry.C3` vector representing the TKE flux normal to the surface.
 """
 function surface_flux_tke(
     turbconv_params,
@@ -465,13 +474,15 @@ of buoyancy term to the shear term in the TKE equation. It is calculated as:
     Ri = ᶜN²_eff / max(2 * |S|, ε)
 
 where:
-- `params`: Parameter set (e.g., CLIMAParameters.AbstractParameterSet), used to determine floating point type.
-- `ᶜN²_eff`: Effective squared Brunt-Väisälä frequency [1/s²].
-- `ᶜstrain_rate_norm`: Frobenius norm of the strain rate tensor, |S| [1/s].
-- `ε` is a small machine epsilon value to prevent division by zero.
+
+  - `params`: Parameter set (e.g., CLIMAParameters.AbstractParameterSet), used to determine floating point type.
+  - `ᶜN²_eff`: Effective squared Brunt-Väisälä frequency [1/s²].
+  - `ᶜstrain_rate_norm`: Frobenius norm of the strain rate tensor, |S| [1/s].
+  - `ε` is a small machine epsilon value to prevent division by zero.
 
 Returns:
-- The gradient Richardson number (dimensionless scalar).
+
+  - The gradient Richardson number (dimensionless scalar).
 """
 function gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
     FT = eltype(params)
@@ -489,9 +500,10 @@ end
     turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
 where:
-- `params`: Parameters set
-- `ᶜN²_eff`: Effective squared Brunt-Väisälä frequency [1/s^2].
-- `ᶜstrain_rate_norm`: Frobenius norm of strain rate tensor, |S| [1/s].
+
+  - `params`: Parameters set
+  - `ᶜN²_eff`: Effective squared Brunt-Väisälä frequency [1/s^2].
+  - `ᶜstrain_rate_norm`: Frobenius norm of strain rate tensor, |S| [1/s].
 
 Returns the turbulent Prandtl number based on the gradient Richardson number.
 
@@ -593,17 +605,19 @@ determined involving the minimum element `x_min` and a factor related to the
 Lambert W function evaluated at 2/e.
 
 Arguments:
- - `l`: An `SVector{N, FT}` of N numbers for which to find the smooth minimum.
- - `smoothness_param`: A parameter (`FT`) influencing the scaling of the smoothness
-                      parameter `λ₀`. A larger value generally leads to a larger `λ₀`
-                      and a smoother minimum.
- - `λ_floor`: The minimum value (`FT`) allowed for the smoothness parameter `λ₀`.
-                  Ensures a minimum level of smoothing and prevents `λ₀` from
-                  becoming zero or negative. Must be positive.
-Returns:
- - The smooth minimum value (`FT`).
+
+  - `l`: An `SVector{N, FT}` of N numbers for which to find the smooth minimum.
+  - `smoothness_param`: A parameter (`FT`) influencing the scaling of the smoothness
+    parameter `λ₀`. A larger value generally leads to a larger `λ₀`
+    and a smoother minimum.
+  - `λ_floor`: The minimum value (`FT`) allowed for the smoothness parameter `λ₀`.
+    Ensures a minimum level of smoothing and prevents `λ₀` from
+    becoming zero or negative. Must be positive.
+    Returns:
+  - The smooth minimum value (`FT`).
 
 Algorithm:
+
  1. Find the hard minimum `x_min = minimum(l)`.
  2. Calculate the smoothness scale:
     `λ₀ = max(x_min * smoothness_param / W(2/e), λ_floor)`,

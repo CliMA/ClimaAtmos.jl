@@ -56,15 +56,17 @@ end
 
 """
     parse_les_path(les_path)
+
 Given path to LES stats file, return cfsite_number, forcing_model, month, and experiment from filename.
-    LES filename should follow pattern: `Stats.cfsite<SITE-NUMBER>_<FORCING-MODEL>_<EXPERIMENT>_2004-2008.<MONTH>.nc`
+LES filename should follow pattern: `Stats.cfsite<SITE-NUMBER>_<FORCING-MODEL>_<EXPERIMENT>_2004-2008.<MONTH>.nc`
 Inputs:
- - les_path - path to les simulation containing stats folder
-Outputs:
- - cfsite_number  :: cfsite number
- - forcing_model :: {"HadGEM2-A", "CNRM-CM5", "CNRM-CM6-1", "IPSL-CM6A-LR"} - name of climate model used for forcing. Currently, only "HadGEM2-A" simulations are available reliably.
- - month :: {1, 4, 7, 10} - month of simulation.
- - experiment :: {"amip", "amip4K"} - experiment from which LES was forced.
+
+  - les_path - path to les simulation containing stats folder
+    Outputs:
+  - cfsite_number  :: cfsite number
+  - forcing_model :: {"HadGEM2-A", "CNRM-CM5", "CNRM-CM6-1", "IPSL-CM6A-LR"} - name of climate model used for forcing. Currently, only "HadGEM2-A" simulations are available reliably.
+  - month :: {1, 4, 7, 10} - month of simulation.
+  - experiment :: {"amip", "amip4K"} - experiment from which LES was forced.
 """
 function parse_les_path(les_path)
     fname = basename(les_path)
@@ -162,24 +164,24 @@ end
 
 """
 get_cfsite_les_dir(
-    cfsite_number::Integer;
-    forcing_model::String = "HadGEM2-A",
-    month::Integer = 7,
-    experiment::String = "amip",)
+cfsite_number::Integer;
+forcing_model::String = "HadGEM2-A",
+month::Integer = 7,
+experiment::String = "amip",)
 
 Given information about an LES run from [Shen2022](@cite),
 fetch LES directory on central cluster.
 
 Inputs:
 
-- cfsite_number  :: cfsite number
-- forcing_model :: {"HadGEM2-A", "CNRM-CM5", "CNRM-CM6-1", "IPSL-CM6A-LR"} - name of climate model used for forcing. Currently, only "HadGEM2-A" simulations are available reliably.
-- month :: {1, 4, 7, 10} - month of simulation.
-- experiment :: {"amip", "amip4K"} - experiment from which LES was forced.
+  - cfsite_number  :: cfsite number
+  - forcing_model :: {"HadGEM2-A", "CNRM-CM5", "CNRM-CM6-1", "IPSL-CM6A-LR"} - name of climate model used for forcing. Currently, only "HadGEM2-A" simulations are available reliably.
+  - month :: {1, 4, 7, 10} - month of simulation.
+  - experiment :: {"amip", "amip4K"} - experiment from which LES was forced.
 
 Outputs:
 
-- les_dir - path to les simulation containing stats folder
+  - les_dir - path to les simulation containing stats folder
 """
 function get_cfsite_les_dir(
     cfsite_number::Integer;

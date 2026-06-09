@@ -162,47 +162,55 @@ Construct an atmospheric simulation with floating-point type `FT` (default: Floa
 ## Keyword Arguments
 
 ### Model and domain
-- `model::AtmosModel = AtmosModel()`: Physics and parameterization configuration.
-- `params::ClimaAtmosParameters = ClimaAtmosParameters(FT)`: Physical parameters.
-- `grid::AbstractGrid = SphereGrid(FT; ...)`: Computational grid.
-  Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or [`SphereGrid`](@ref).
-- `setup = Setups.DecayingProfile(; perturb=true, params)`: Setup defining the
-  initial state. See [Setups](@ref "Setups") for available options.
+
+  - `model::AtmosModel = AtmosModel()`: Physics and parameterization configuration.
+  - `params::ClimaAtmosParameters = ClimaAtmosParameters(FT)`: Physical parameters.
+  - `grid::AbstractGrid = SphereGrid(FT; ...)`: Computational grid.
+    Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or [`SphereGrid`](@ref).
+  - `setup = Setups.DecayingProfile(; perturb=true, params)`: Setup defining the
+    initial state. See [Setups](@ref "Setups") for available options.
+
 ### Time
-- `dt = 600`: Timestep in seconds.
-- `t_start = 0`: Start time in seconds.
-- `t_end = 864000`: End time in seconds (default: 10 days).
-- `start_date = DateTime(2010, 1, 1)`: Calendar reference date.
+
+  - `dt = 600`: Timestep in seconds.
+  - `t_start = 0`: Start time in seconds.
+  - `t_end = 864000`: End time in seconds (default: 10 days).
+  - `start_date = DateTime(2010, 1, 1)`: Calendar reference date.
 
 ### Output
-- `job_id::String = "atmos_sim"`: Run identifier, used in output directory naming.
-- `output_dir = nothing`: Output directory path. Auto-generated from `job_id` if `nothing`.
-- `output_dir_style = "activelink"`: Output directory organization style.
-- `checkpoint_frequency = Inf`: How often to save restart checkpoints (seconds).
-- `log_to_file::Bool = false`: Write log output to a file in `output_dir`.
+
+  - `job_id::String = "atmos_sim"`: Run identifier, used in output directory naming.
+  - `output_dir = nothing`: Output directory path. Auto-generated from `job_id` if `nothing`.
+  - `output_dir_style = "activelink"`: Output directory organization style.
+  - `checkpoint_frequency = Inf`: How often to save restart checkpoints (seconds).
+  - `log_to_file::Bool = false`: Write log output to a file in `output_dir`.
 
 ### Diagnostics
-- `diagnostics::DiagnosticsConfig = DiagnosticsConfig()`: Specification of which
-  diagnostics the simulation produces and how their NetCDF output is shaped.
-  See [`DiagnosticsConfig`](@ref).
+
+  - `diagnostics::DiagnosticsConfig = DiagnosticsConfig()`: Specification of which
+    diagnostics the simulation produces and how their NetCDF output is shaped.
+    See [`DiagnosticsConfig`](@ref).
 
 ### Callbacks
-- `default_callbacks::Bool = true`: Enable common simulation callbacks.
-- `callbacks = ()`: Additional user-provided callbacks.
-- `callback_kwargs = ()`: Extra keyword arguments forwarded to default callbacks.
+
+  - `default_callbacks::Bool = true`: Enable common simulation callbacks.
+  - `callbacks = ()`: Additional user-provided callbacks.
+  - `callback_kwargs = ()`: Extra keyword arguments forwarded to default callbacks.
 
 ### Restarts
-- `restart_file = nothing`: Path to a restart file to resume from.
-- `detect_restart_file::Bool = false`: Automatically detect the latest restart file in
-  a structured output directory.
+
+  - `restart_file = nothing`: Path to a restart file to resume from.
+  - `detect_restart_file::Bool = false`: Automatically detect the latest restart file in
+    a structured output directory.
 
 ### Numerics
-- `ode_config`: ODE solver algorithm. Default: `IMEXAlgorithm(ARS343(), NewtonsMethod(...))`.
-- `jacobian::JacobianAlgorithm = ManualSparseJacobian(; approximate_solve_iters = 1)`:
-  Jacobian algorithm for the implicit solve. Use [`ManualSparseJacobian`](@ref),
-  [`AutoSparseJacobian`](@ref), or [`AutoDenseJacobian`](@ref).
-- `debug_jacobian::Bool = false`: Enable Jacobian debugging output.
-- `tracers = []`: Additional tracer species.
+
+  - `ode_config`: ODE solver algorithm. Default: `IMEXAlgorithm(ARS343(), NewtonsMethod(...))`.
+  - `jacobian::JacobianAlgorithm = ManualSparseJacobian(; approximate_solve_iters = 1)`:
+    Jacobian algorithm for the implicit solve. Use [`ManualSparseJacobian`](@ref),
+    [`AutoSparseJacobian`](@ref), or [`AutoDenseJacobian`](@ref).
+  - `debug_jacobian::Bool = false`: Enable Jacobian debugging output.
+  - `tracers = []`: Additional tracer species.
 
 ## Example
 

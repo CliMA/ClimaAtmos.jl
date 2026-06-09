@@ -3,6 +3,7 @@ import ArgParse
 function argparse_settings()
     s = ArgParse.ArgParseSettings()
     ArgParse.@add_arg_table! s begin
+        #! format: off
         "--config_file"
         help = "A yaml file used to set model configurations. If this is called multiple times, all config files will be merged."
         action = :append_arg
@@ -12,6 +13,7 @@ function argparse_settings()
         help = "A unique job identifier, among all possible (parallel) running jobs."
         arg_type = String
         default = job_id_from_config_file(default_config_file)
+        #! format: on
     end
     return s
 end

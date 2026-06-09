@@ -37,9 +37,10 @@ Validates that t_start is zero when restarting, loads state from restart file,
 logs restart information, and returns the state, t_start, and spaces.
 
 Returns:
-- `Y`: State loaded from restart file
-- `t_start`: Time from restart file (ITime)
-- `spaces`: Named tuple with center_space and face_space extracted from Y
+
+  - `Y`: State loaded from restart file
+  - `t_start`: Time from restart file (ITime)
+  - `spaces`: Named tuple with center_space and face_space extracted from Y
 """
 function handle_restart(
     restart_file,
@@ -128,8 +129,9 @@ Unified function for setting up output directories and detecting restart files.
 Used by both AtmosSimulation constructor and get_simulation.
 
 Returns a named tuple with:
-- `output_dir`: The final output directory path
-- `restart_file`: The restart file path (if any)
+
+  - `output_dir`: The final output directory path
+  - `restart_file`: The restart file path (if any)
 """
 function setup_output_dir(
     job_id,

@@ -107,7 +107,7 @@ comms_ctx = ClimaComms.SingletonCommsContext()
 Compute the maximum absolute eigenvalue of a 2×2 tensor field [[t11, t12], [t21, t22]].
 
 For a 2×2 matrix, eigenvalues are:
-    λ = (t11 + t22)/2 ± sqrt(((t11 - t22)/2)² + t12 * t21)
+λ = (t11 + t22)/2 ± sqrt(((t11 - t22)/2)² + t12 * t21)
 
 Returns a field containing max(|λ₁|, |λ₂|) at each point.
 """
@@ -412,15 +412,16 @@ end
 Create a Garner-style quiver plot with coastlines showing drag vectors.
 
 # Arguments
-- `output_file`: Path to save the figure
-- `datafile_rll`: Path to remapped NetCDF file
-- `τ_x_name`: Variable name for zonal drag component
-- `τ_y_name`: Variable name for meridional drag component
-- `lon_range`: Tuple (lon_min, lon_max) in degrees
-- `lat_range`: Tuple (lat_min, lat_max) in degrees
-- `title`: Plot title
-- `arrow_skip`: Downsample factor for arrows (plot every Nth point)
-- `arrow_scale`: Scale factor for arrow lengths
+
+  - `output_file`: Path to save the figure
+  - `datafile_rll`: Path to remapped NetCDF file
+  - `τ_x_name`: Variable name for zonal drag component
+  - `τ_y_name`: Variable name for meridional drag component
+  - `lon_range`: Tuple (lon_min, lon_max) in degrees
+  - `lat_range`: Tuple (lat_min, lat_max) in degrees
+  - `title`: Plot title
+  - `arrow_skip`: Downsample factor for arrows (plot every Nth point)
+  - `arrow_scale`: Scale factor for arrow lengths
 """
 function plot_garner_quiver(
     output_file::String,
@@ -625,14 +626,15 @@ end
 Create a Garner-style contour plot with coastlines showing scalar field.
 
 # Arguments
-- `output_file`: Path to save the figure
-- `datafile_rll`: Path to remapped NetCDF file
-- `var_name`: Variable name for scalar field
-- `lon_range`: Tuple (lon_min, lon_max) in degrees
-- `lat_range`: Tuple (lat_min, lat_max) in degrees
-- `title`: Plot title
-- `colormap`: Colormap for contours (default :grays)
-- `normalize`: Whether to normalize by global maximum (default true)
+
+  - `output_file`: Path to save the figure
+  - `datafile_rll`: Path to remapped NetCDF file
+  - `var_name`: Variable name for scalar field
+  - `lon_range`: Tuple (lon_min, lon_max) in degrees
+  - `lat_range`: Tuple (lat_min, lat_max) in degrees
+  - `title`: Plot title
+  - `colormap`: Colormap for contours (default :grays)
+  - `normalize`: Whether to normalize by global maximum (default true)
 """
 function plot_garner_contour(
     output_file::String,
@@ -781,13 +783,14 @@ Create a 3-panel Garner Figure 4 style plot showing linear drag from three metho
 Each panel is normalized by its respective global maximum.
 
 # Arguments
-- `output_file`: Path to save the figure
-- `datafile_rll`: Path to remapped NetCDF file
-- `var_names`: Vector of 3 variable names [analytical, gfdl, raw_topo]
-- `titles`: Vector of 3 panel titles
-- `lon_range`: Tuple (lon_min, lon_max) in degrees
-- `lat_range`: Tuple (lat_min, lat_max) in degrees
-- `colormap`: Colormap for contours (default :grays)
+
+  - `output_file`: Path to save the figure
+  - `datafile_rll`: Path to remapped NetCDF file
+  - `var_names`: Vector of 3 variable names [analytical, gfdl, raw_topo]
+  - `titles`: Vector of 3 panel titles
+  - `lon_range`: Tuple (lon_min, lon_max) in degrees
+  - `lat_range`: Tuple (lat_min, lat_max) in degrees
+  - `colormap`: Colormap for contours (default :grays)
 """
 function plot_garner_fig4_tripanel(
     output_file::String,
@@ -949,21 +952,23 @@ This function implements the same formulas as calc_base_flux! but for scalar inp
 bypassing the column_reduce! machinery.
 
 # Arguments
-- `h_max`: Maximum subgrid terrain height (m)
-- `h_min`: Minimum subgrid terrain height (m)
-- `V`: Wind speed (m/s)
-- `N`: Buoyancy frequency (s⁻¹)
-- `ρ`: Air density (kg/m³)
+
+  - `h_max`: Maximum subgrid terrain height (m)
+  - `h_min`: Minimum subgrid terrain height (m)
+  - `V`: Wind speed (m/s)
+  - `N`: Buoyancy frequency (s⁻¹)
+  - `ρ`: Air density (kg/m³)
 
 # Keyword Arguments
-- `γ`: Exponent parameter (default 0.4)
-- `β`: Saturation parameter (default 0.5)
-- `ϵ`: Additional exponent (default 0.0)
-- `Fr_crit`: Critical Froude number (default 0.7)
-- `a0`: Propagating drag coefficient (default 0.9)
-- `a1`: Non-propagating drag coefficient (default 8.1)
-- `ρscale`: Reference density scale (default 1.2)
-- `L0`: Length scale (default 80000.0)
+
+  - `γ`: Exponent parameter (default 0.4)
+  - `β`: Saturation parameter (default 0.5)
+  - `ϵ`: Additional exponent (default 0.0)
+  - `Fr_crit`: Critical Froude number (default 0.7)
+  - `a0`: Propagating drag coefficient (default 0.9)
+  - `a1`: Non-propagating drag coefficient (default 8.1)
+  - `ρscale`: Reference density scale (default 1.2)
+  - `L0`: Length scale (default 80000.0)
 """
 function compute_theoretical_drag(
     h_max::FT,
@@ -1070,13 +1075,14 @@ end
 Create a Garner Figure 5 style plot showing normalized drag curves D/D* vs h_max/h_c.
 
 # Arguments
-- `output_file`: Path to save the figure
-- `x_values`: Vector of h_max/h_c values (x-axis)
-- `Dp_hmin0`: Vector of ⟨D_p⟩/D* for h_min = 0 case
-- `Dp_hmin_eq_hmax`: Vector of ⟨D_p⟩/D* for h_min = h_max case
-- `total_hmin0`: Vector of (D_p + D_np)/D* for h_min = 0 case
-- `total_hmin_eq_hmax`: Vector of (D_p + D_np)/D* for h_min = h_max case
-- `γ`, `β`: Parameters shown in plot annotation (default 0.4, 0.5)
+
+  - `output_file`: Path to save the figure
+  - `x_values`: Vector of h_max/h_c values (x-axis)
+  - `Dp_hmin0`: Vector of ⟨D_p⟩/D* for h_min = 0 case
+  - `Dp_hmin_eq_hmax`: Vector of ⟨D_p⟩/D* for h_min = h_max case
+  - `total_hmin0`: Vector of (D_p + D_np)/D* for h_min = 0 case
+  - `total_hmin_eq_hmax`: Vector of (D_p + D_np)/D* for h_min = h_max case
+  - `γ`, `β`: Parameters shown in plot annotation (default 0.4, 0.5)
 """
 function plot_garner_fig5(
     output_file::String,
@@ -1138,14 +1144,15 @@ end
 Create a 2-panel Garner Figure 6 style plot showing total drag and nonlinear fraction.
 
 # Arguments
-- `output_file`: Path to save the figure
-- `datafile_rll`: Path to remapped NetCDF file
-- `var_names`: Vector of 2 variable names [total_drag, nonlinear_frac]
-- `titles`: Vector of 2 panel titles
-- `colorbar_ranges`: Vector of 2 tuples for colorbar ranges [(min1, max1), (min2, max2)]
-- `lon_range`: Tuple (lon_min, lon_max) in degrees
-- `lat_range`: Tuple (lat_min, lat_max) in degrees
-- `colormap`: Colormap for contours (default :grays)
+
+  - `output_file`: Path to save the figure
+  - `datafile_rll`: Path to remapped NetCDF file
+  - `var_names`: Vector of 2 variable names [total_drag, nonlinear_frac]
+  - `titles`: Vector of 2 panel titles
+  - `colorbar_ranges`: Vector of 2 tuples for colorbar ranges [(min1, max1), (min2, max2)]
+  - `lon_range`: Tuple (lon_min, lon_max) in degrees
+  - `lat_range`: Tuple (lat_min, lat_max) in degrees
+  - `colormap`: Colormap for contours (default :grays)
 """
 function plot_garner_fig6_twopanel(
     output_file::String,
@@ -1295,13 +1302,14 @@ Create a Garner Figure 7 style plot showing vertical propagation of momentum flu
 and forcing for two cases: h̃_min = 0 and h̃_min = h̃_max.
 
 # Arguments
-- `output_file`: Path to save the figure
-- `z_km`: Height array in kilometers (y-axis)
-- `flux_hmin0`: Normalized flux D/D* for h_min = 0 case (solid line)
-- `flux_hmin_eq_hmax`: Normalized flux D/D* for h_min = h_max case (solid line)
-- `forcing_hmin0`: Normalized forcing for h_min = 0 case (dashed line)
-- `forcing_hmin_eq_hmax`: Normalized forcing for h_min = h_max case (dashed line)
-- `wind_profile`: Wind speed V(z) in m/s (right panel)
+
+  - `output_file`: Path to save the figure
+  - `z_km`: Height array in kilometers (y-axis)
+  - `flux_hmin0`: Normalized flux D/D* for h_min = 0 case (solid line)
+  - `flux_hmin_eq_hmax`: Normalized flux D/D* for h_min = h_max case (solid line)
+  - `forcing_hmin0`: Normalized forcing for h_min = 0 case (dashed line)
+  - `forcing_hmin_eq_hmax`: Normalized forcing for h_min = h_max case (dashed line)
+  - `wind_profile`: Wind speed V(z) in m/s (right panel)
 """
 function plot_garner_fig7(
     output_file::String,

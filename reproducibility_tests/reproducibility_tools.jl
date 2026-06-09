@@ -10,7 +10,9 @@ include("reproducibility_utils.jl")
 # RMS result type alias (used throughout)
 # ────────────────────────────────────────────────────────────────────
 
-"""Named-tuple type for per-variable RMS comparison results."""
+"""
+Named-tuple type for per-variable RMS comparison results.
+"""
 const RMSResult = @NamedTuple{
     rms_diff::Float64,
     data_scale::Float64,
@@ -62,7 +64,9 @@ used in [`PHYSICAL_VAR_METADATA`](@ref).
 """
 prop_chain_key(pc) = join(string.(pc), ".")
 
-"""Look up the human-readable label for a property-chain key, falling back to the key itself."""
+"""
+Look up the human-readable label for a property-chain key, falling back to the key itself.
+"""
 function physical_var_label(key::String)
     if haskey(PHYSICAL_VAR_METADATA, key)
         return PHYSICAL_VAR_METADATA[key].label
@@ -73,7 +77,9 @@ function physical_var_label(key::String)
     end
 end
 
-"""Look up the SI unit string for a property-chain key, falling back to `\"\"`."""
+"""
+Look up the SI unit string for a property-chain key, falling back to `\"\"`.
+"""
 function physical_var_unit(key::String)
     if haskey(PHYSICAL_VAR_METADATA, key)
         return PHYSICAL_VAR_METADATA[key].unit
@@ -98,6 +104,7 @@ Compute the root-mean-square (RMS) difference between `dict_computed` and
 `dict_reference` for each key in `reference_keys`.
 
 Returns an `OrderedDict{String, RMSResult}` mapping each key to:
+
   - `rms_diff`     = √(mean((computed - reference)²))  [same units as field]
   - `data_scale`   = mean(|reference|)                  [same units as field]
   - `relative_rms` = rms_diff / data_scale              [dimensionless]
@@ -216,7 +223,7 @@ end
 Test whether each variable's RMS difference is within tolerance.
 
 Returns an `OrderedDict{String, NamedTuple}` mapping each key to:
-    (reproducible::Bool, rms_diff::Float64, tolerance::Float64)
+(reproducible::Bool, rms_diff::Float64, tolerance::Float64)
 """
 function test_reproducibility(;
     rms_results::AbstractDict,
@@ -538,6 +545,7 @@ Print a per-reference table of RMS differences and a summary table,
 then determine reproducibility status.
 
 Returns one of:
+
   - `:reproducible`            — passes tolerance for enough references
   - `:not_reproducible`        — fails tolerance
   - `:not_yet_reproducible`    — flaky/broken test that still fails

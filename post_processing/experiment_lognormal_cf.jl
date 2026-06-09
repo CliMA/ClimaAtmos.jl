@@ -46,8 +46,8 @@ using LinearAlgebra
 """
     exact_lognormal_stats(Cv, q_sat_over_μ)
 
-Calculates the mathematically exact Cloud Fraction and normalized condensate 
-for a Lognormal distribution given a Coefficient of Variation (Cv) and a 
+Calculates the mathematically exact Cloud Fraction and normalized condensate
+for a Lognormal distribution given a Coefficient of Variation (Cv) and a
 saturation ratio (q_sat / μ_q).
 
 Based on Black-Scholes style analytical integrals for Lognormal variables.
@@ -99,7 +99,7 @@ end
 """
     experiment()
 
-Main routine. Runs nonlinear optimization combinations (L-BFGS) to fit various 
+Main routine. Runs nonlinear optimization combinations (L-BFGS) to fit various
 S-curve functional forms against the exact Lognormal dataset generated above.
 """
 function experiment()

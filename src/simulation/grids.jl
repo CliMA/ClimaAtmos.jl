@@ -12,30 +12,32 @@ export SphereGrid, ColumnGrid, BoxGrid, PlaneGrid
 Create an ExtrudedCubedSphereGrid with topography support.
 
 # Arguments
-- `FT`: the floating-point type [`Float32`, `Float64`]
+
+  - `FT`: the floating-point type [`Float32`, `Float64`]
 
 # Keyword Arguments
-- `context = ClimaComms.context()`: the ClimaComms communications context
-- `z_elem = 10`: the number of z-points
-- `z_max = 30000.0`: the domain maximum along the z-direction
-- `z_stretch = true`: whether to use vertical stretching
-- `dz_bottom = 500.0`: bottom layer thickness for stretching
-- `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
-- `radius = 6.371229e6`: the radius of the cubed sphere
-- `h_elem = 6`: the number of horizontal elements per side of every panel (6
-  panels in total)
-- `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
-  1D within each horizontal element is then `n_quad_points = nh_poly + 1`
-- `bubble = false`: enables the "bubble correction" for more accurate element
-  areas when computing the spectral element space
-- `deep_atmosphere = true`: use deep atmosphere equations and metric terms,
-  otherwise assume columns are cylindrical (shallow atmosphere)
-- `topography = NoTopography()`: topography type
-- `topography_damping_factor = 5.0`: factor by which smallest resolved
-  length-scale is to be damped
-- `mesh_warp_type = SLEVEWarp{FT}()`: mesh warping type ([`SLEVEWarp`](@ref) or
-  [`LinearWarp`](@ref))
-- `topo_smoothing = false`: apply topography smoothing
+
+  - `context = ClimaComms.context()`: the ClimaComms communications context
+  - `z_elem = 10`: the number of z-points
+  - `z_max = 30000.0`: the domain maximum along the z-direction
+  - `z_stretch = true`: whether to use vertical stretching
+  - `dz_bottom = 500.0`: bottom layer thickness for stretching
+  - `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
+  - `radius = 6.371229e6`: the radius of the cubed sphere
+  - `h_elem = 6`: the number of horizontal elements per side of every panel (6
+    panels in total)
+  - `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
+    1D within each horizontal element is then `n_quad_points = nh_poly + 1`
+  - `bubble = false`: enables the "bubble correction" for more accurate element
+    areas when computing the spectral element space
+  - `deep_atmosphere = true`: use deep atmosphere equations and metric terms,
+    otherwise assume columns are cylindrical (shallow atmosphere)
+  - `topography = NoTopography()`: topography type
+  - `topography_damping_factor = 5.0`: factor by which smallest resolved
+    length-scale is to be damped
+  - `mesh_warp_type = SLEVEWarp{FT}()`: mesh warping type ([`SLEVEWarp`](@ref) or
+    [`LinearWarp`](@ref))
+  - `topo_smoothing = false`: apply topography smoothing
 """
 function SphereGrid(
     ::Type{FT};
@@ -93,15 +95,17 @@ end
 Create a ColumnGrid.
 
 # Arguments
-- `FT`: the floating-point type [`Float32`, `Float64`]
+
+  - `FT`: the floating-point type [`Float32`, `Float64`]
 
 # Keyword Arguments
-- `context = ClimaComms.context()`: the ClimaComms communications context
-- `z_elem = 10`: the number of z-points
-- `z_max = 30000.0`: the domain maximum along the z-direction
-- `z_stretch = true`: whether to use vertical stretching
-- `dz_bottom = 500.0`: bottom layer thickness for stretching
-- `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
+
+  - `context = ClimaComms.context()`: the ClimaComms communications context
+  - `z_elem = 10`: the number of z-points
+  - `z_max = 30000.0`: the domain maximum along the z-direction
+  - `z_stretch = true`: whether to use vertical stretching
+  - `dz_bottom = 500.0`: bottom layer thickness for stretching
+  - `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
 """
 function ColumnGrid(
     ::Type{FT};
@@ -130,31 +134,33 @@ end
 Create a Box3DGrid with topography support.
 
 # Arguments
-- `FT`: the floating-point type [`Float32`, `Float64`]
+
+  - `FT`: the floating-point type [`Float32`, `Float64`]
 
 # Keyword Arguments
-- `context = ClimaComms.context()`: the ClimaComms communications context
-- `x_elem = 6`: the number of x-points
-- `x_max = 300000.0`: the domain maximum along the x-direction
-- `y_elem = 6`: the number of y-points
-- `y_max = 300000.0`: the domain maximum along the y-direction
-- `z_elem = 10`: the number of z-points
-- `z_max = 30000.0`: the domain maximum along the z-direction
-- `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
-  1D within each horizontal element is then `n_quad_points = nh_poly + 1`
-- `z_stretch = true`: whether to use vertical stretching
-- `dz_bottom = 500.0`: bottom layer thickness for vertical stretching
-- `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
-- `bubble = false`: enables the "bubble correction" for more accurate element
-  areas when computing the spectral element space.
-- `periodic_x = true`: use periodic domain along x-direction
-- `periodic_y = true`: use periodic domain along y-direction
-- `topography = NoTopography()`: topography type
-- `topography_damping_factor = 5.0`: factor by which smallest resolved
-  length-scale is to be damped
-- `mesh_warp_type = LinearWarp()`: mesh warping type ([`SLEVEWarp`](@ref) or
-  [`LinearWarp`](@ref))
-- `topo_smoothing = false`: apply topography smoothing
+
+  - `context = ClimaComms.context()`: the ClimaComms communications context
+  - `x_elem = 6`: the number of x-points
+  - `x_max = 300000.0`: the domain maximum along the x-direction
+  - `y_elem = 6`: the number of y-points
+  - `y_max = 300000.0`: the domain maximum along the y-direction
+  - `z_elem = 10`: the number of z-points
+  - `z_max = 30000.0`: the domain maximum along the z-direction
+  - `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
+    1D within each horizontal element is then `n_quad_points = nh_poly + 1`
+  - `z_stretch = true`: whether to use vertical stretching
+  - `dz_bottom = 500.0`: bottom layer thickness for vertical stretching
+  - `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
+  - `bubble = false`: enables the "bubble correction" for more accurate element
+    areas when computing the spectral element space.
+  - `periodic_x = true`: use periodic domain along x-direction
+  - `periodic_y = true`: use periodic domain along y-direction
+  - `topography = NoTopography()`: topography type
+  - `topography_damping_factor = 5.0`: factor by which smallest resolved
+    length-scale is to be damped
+  - `mesh_warp_type = LinearWarp()`: mesh warping type ([`SLEVEWarp`](@ref) or
+    [`LinearWarp`](@ref))
+  - `topo_smoothing = false`: apply topography smoothing
 """
 function BoxGrid(
     ::Type{FT};
@@ -204,26 +210,28 @@ end
 Create a SliceXZGrid with topography support.
 
 # Arguments
-- `FT`: the floating-point type [`Float32`, `Float64`]
+
+  - `FT`: the floating-point type [`Float32`, `Float64`]
 
 # Keyword Arguments
-- `context = ClimaComms.context()`: the ClimaComms communications context
-- `x_elem = 6`: the number of x-points
-- `x_max = 300000.0`: the domain maximum along the x-direction
-- `z_elem = 10`: the number of z-points
-- `z_max = 30000.0`: the domain maximum along the z-direction
-- `z_mesh = DefaultZMesh(FT; z_min = 0, z_max, z_elem, z_stretch)`: the vertical mesh
-- `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
-  1D within each horizontal element is then `n_quad_points = nh_poly + 1`
-- `z_stretch = true`: whether to use vertical stretching
-- `dz_bottom = 500.0`: bottom layer thickness for stretching
-- `periodic_x = true`: use periodic domain along x-direction
-- `topography = NoTopography()`: topography type
-- `topography_damping_factor = 5.0`: factor by which smallest resolved
-  length-scale is to be damped
-- `mesh_warp_type = LinearWarp()`: mesh warping type ([`SLEVEWarp`](@ref) or
-  [`LinearWarp`](@ref))
-- `topo_smoothing = false`: apply topography smoothing
+
+  - `context = ClimaComms.context()`: the ClimaComms communications context
+  - `x_elem = 6`: the number of x-points
+  - `x_max = 300000.0`: the domain maximum along the x-direction
+  - `z_elem = 10`: the number of z-points
+  - `z_max = 30000.0`: the domain maximum along the z-direction
+  - `z_mesh = DefaultZMesh(FT; z_min = 0, z_max, z_elem, z_stretch)`: the vertical mesh
+  - `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
+    1D within each horizontal element is then `n_quad_points = nh_poly + 1`
+  - `z_stretch = true`: whether to use vertical stretching
+  - `dz_bottom = 500.0`: bottom layer thickness for stretching
+  - `periodic_x = true`: use periodic domain along x-direction
+  - `topography = NoTopography()`: topography type
+  - `topography_damping_factor = 5.0`: factor by which smallest resolved
+    length-scale is to be damped
+  - `mesh_warp_type = LinearWarp()`: mesh warping type ([`SLEVEWarp`](@ref) or
+    [`LinearWarp`](@ref))
+  - `topo_smoothing = false`: apply topography smoothing
 """
 function PlaneGrid(
     ::Type{FT};

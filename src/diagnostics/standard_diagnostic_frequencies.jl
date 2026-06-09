@@ -120,7 +120,6 @@ daily_maxs(FT, short_names...; output_writer, start_date, t_start) =
 """
     daily_max(FT, short_names; output_writer, start_date, t_start)
 
-
 Return a `ScheduledDiagnostics` that computes the daily max for the given variable.
 """
 daily_max(FT, short_names; output_writer, start_date, t_start) =
@@ -191,7 +190,6 @@ hourly_mins(FT, short_names...; output_writer, start_date, t_start) =
     common_diagnostics(Hour(1), min, output_writer, start_date, t_start, short_names...)
 """
     hourly_mins(FT, short_names...; output_writer, start_date, t_start)
-
 
 Return a `ScheduledDiagnostics` that computes the hourly min for the given variable.
 """

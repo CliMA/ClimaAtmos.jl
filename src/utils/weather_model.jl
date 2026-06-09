@@ -105,13 +105,15 @@ end
 Interpolate ERA5 data from native model levels to specified 1D z-levels, column-wise in z.
 
 Args:
-- source_file::String: Input ERA5 NetCDF path
-- target_file::String: Output NetCDF path
-- target_levels::AbstractVector: Target 1D z-levels
-- FT::Type{<:AbstractFloat}: Floating-point element type
+
+  - source_file::String: Input ERA5 NetCDF path
+  - target_file::String: Output NetCDF path
+  - target_levels::AbstractVector: Target 1D z-levels
+  - FT::Type{<:AbstractFloat}: Floating-point element type
 
 Keywords:
-- interp_w::Bool=false: If false, write w=0 everywhere; if true, interpolate w
+
+  - interp_w::Bool=false: If false, write w=0 everywhere; if true, interpolate w
 """
 function to_z_levels_1d(
     source_file,

@@ -9,6 +9,7 @@ The two variants differ only in APL profiles, surface heat fluxes, and
 geostrophic wind. Construct via `DYCOMS_RF01(; ...)` or `DYCOMS_RF02(; ...)`.
 
 ## Example
+
 ```julia
 setup = DYCOMS_RF01(; prognostic_tke = true, thermo_params)
 setup = DYCOMS_RF02(; prognostic_tke = true, thermo_params)

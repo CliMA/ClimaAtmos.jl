@@ -5,9 +5,10 @@ An initial condition following the sounding for RCEMIPII as described by
 Wing et al. (2018) (https://doi.org/10.5194/gmd-11-793-2018).
 
 Three convenience constructors are provided:
-- `RCEMIPIIProfile_295()` — SST = 295 K
-- `RCEMIPIIProfile_300()` — SST = 300 K
-- `RCEMIPIIProfile_305()` — SST = 305 K
+
+  - `RCEMIPIIProfile_295()` — SST = 295 K
+  - `RCEMIPIIProfile_300()` — SST = 300 K
+  - `RCEMIPIIProfile_305()` — SST = 305 K
 
 Note: this should be used for RCE_small and NOT RCE_large — RCE_large must
 be initialized with the final state of RCE_small.

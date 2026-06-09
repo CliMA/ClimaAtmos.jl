@@ -27,9 +27,9 @@ built — users do not configure them directly.
 
 # Arguments
 
-- `approximate_solve_iters::Int = 1`: number of iterations to take for the
-  approximate linear solve required when grid-scale diffusion is treated
-  implicitly.
+  - `approximate_solve_iters::Int = 1`: number of iterations to take for the
+    approximate linear solve required when grid-scale diffusion is treated
+    implicitly.
 """
 struct ManualSparseJacobian <: SparseJacobian
     approximate_solve_iters::Int

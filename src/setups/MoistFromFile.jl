@@ -9,15 +9,17 @@ the full prognostic state with data regridded from the given file via
 `overwrite_from_file!`.
 
 ## Fields
-- `file_path`: Path to the NetCDF file containing initial condition data.
+
+  - `file_path`: Path to the NetCDF file containing initial condition data.
 
 ## Expected variables in the file
-- `p`: pressure (2D surface, broadcast in z)
-- `t`: temperature (3D)
-- `q`: specific humidity (3D)
-- `u, v, w`: velocity (3D)
-- `cswc, crwc`: snow and rain water content (optional)
-- `z_sfc`: surface altitude (optional, for topographic pressure correction)
+
+  - `p`: pressure (2D surface, broadcast in z)
+  - `t`: temperature (3D)
+  - `q`: specific humidity (3D)
+  - `u, v, w`: velocity (3D)
+  - `cswc, crwc`: snow and rain water content (optional)
+  - `z_sfc`: surface altitude (optional, for topographic pressure correction)
 """
 struct MoistFromFile
     file_path::String

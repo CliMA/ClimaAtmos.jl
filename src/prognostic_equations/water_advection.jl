@@ -23,14 +23,16 @@ negated cell-centered specific flux term. The resulting face flux
 is then diverged using the `ᶜprecipdivᵥ` operator.
 
 Arguments:
-- `Yₜ`: The tendency state vector, modified in place.
-- `Y`: The current state vector.
-- `p`: Cache containing parameters, precomputed fields (like `ᶜwₜqₜ`, `ᶜwₕhₜ`, `ᶜwₕʲs`, `ᶜwₜʲs`),
-       and atmospheric model configurations.
-- `t`: Current simulation time (not directly used in these calculations).
+
+  - `Yₜ`: The tendency state vector, modified in place.
+  - `Y`: The current state vector.
+  - `p`: Cache containing parameters, precomputed fields (like `ᶜwₜqₜ`, `ᶜwₕhₜ`, `ᶜwₕʲs`, `ᶜwₜʲs`),
+    and atmospheric model configurations.
+  - `t`: Current simulation time (not directly used in these calculations).
 
 Modifies:
-- `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, and `Yₜ.c.ρq_tot` (always when moisture is present)
+
+  - `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, and `Yₜ.c.ρq_tot` (always when moisture is present)
 """
 function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 

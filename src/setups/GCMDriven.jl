@@ -14,12 +14,14 @@ Surface conditions are read from the same file (mean surface temperature).
 Pointwise column IC driven by GCM forcing NetCDF data.
 
 ## Fields
-- `external_forcing_file`: Path to the GCM forcing NetCDF file.
-- `cfsite_number`: Site identifier within the NetCDF file (e.g., `"site23"`).
-- `profiles`: `ColumnProfiles` of 1D interpolators `(T, u, v, q_tot, ρ)`.
-- `T_sfc`: Mean surface temperature from the forcing file.
+
+  - `external_forcing_file`: Path to the GCM forcing NetCDF file.
+  - `cfsite_number`: Site identifier within the NetCDF file (e.g., `"site23"`).
+  - `profiles`: `ColumnProfiles` of 1D interpolators `(T, u, v, q_tot, ρ)`.
+  - `T_sfc`: Mean surface temperature from the forcing file.
 
 ## Example
+
 ```julia
 setup = GCMDriven("path/to/HadGEM2-A_amip.2004-2008.07.nc", "site23")
 ```

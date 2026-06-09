@@ -223,8 +223,9 @@ get_microphysics_2m_p3_parameters(::Type{FT}) where {FT <: AbstractFloat} =
 Get the parameters for the 2-moment warm rain + P3 ice microphysics scheme.
 
 # Arguments
- - `FT`: The floating point type to use for the parameters, `Float32` or `Float64`.
- - `toml_dict`: A TOML dictionary containing the parameters, see [`CP.create_toml_dict()`](@ref).
+
+  - `FT`: The floating point type to use for the parameters, `Float32` or `Float64`.
+  - `toml_dict`: A TOML dictionary containing the parameters, see [`CP.create_toml_dict()`](@ref).
 """
 function get_microphysics_2m_p3_parameters(toml_dict::CP.ParamDict)
     CM.Parameters.Microphysics2MParams(toml_dict; with_ice = true)

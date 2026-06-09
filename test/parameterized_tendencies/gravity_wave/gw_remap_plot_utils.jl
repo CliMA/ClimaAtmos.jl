@@ -47,16 +47,17 @@ include(joinpath(@__DIR__, "gw_plotutils.jl"))
 Specification for a single panel in a multi-panel plot.
 
 # Fields
-- `variable_name::String`: Name of the variable in the NetCDF file
-- `title_template::String`: Title template (can include {z} placeholder for vertical level)
-- `position::Tuple{Int,Int}`: Grid position (row, col) for this panel
-- `scale_factor::Float64`: Multiplicative scaling factor for the data (default: 1.0)
-- `offset::Float64`: Additive offset for the data (default: 0.0)
-- `custom_process::Union{Function,Nothing}`: Optional custom processing function
-- `colormap::Symbol`: Colormap for this panel (default: :vik100)
-- `colorrange::Union{Nothing,Tuple}`: Override color range for this panel (default: nothing)
-- `extendhigh::Symbol`: Color for values above range (default: :magenta)
-- `extendlow::Symbol`: Color for values below range (default: :cyan)
+
+  - `variable_name::String`: Name of the variable in the NetCDF file
+  - `title_template::String`: Title template (can include {z} placeholder for vertical level)
+  - `position::Tuple{Int,Int}`: Grid position (row, col) for this panel
+  - `scale_factor::Float64`: Multiplicative scaling factor for the data (default: 1.0)
+  - `offset::Float64`: Additive offset for the data (default: 0.0)
+  - `custom_process::Union{Function,Nothing}`: Optional custom processing function
+  - `colormap::Symbol`: Colormap for this panel (default: :vik100)
+  - `colorrange::Union{Nothing,Tuple}`: Override color range for this panel (default: nothing)
+  - `extendhigh::Symbol`: Color for values above range (default: :magenta)
+  - `extendlow::Symbol`: Color for values below range (default: :cyan)
 """
 struct PlotPanel
     variable_name::String
@@ -103,19 +104,20 @@ end
 Configuration for the entire plotting pipeline.
 
 # Fields
-- `plot_mode::Symbol`: Either `:horizontal_slice` (2D fields) or `:vertical_slice` (3D fields with k-indices)
-- `vertical_levels::Vector{Int}`: Which vertical levels (k-indices) to plot (only for :vertical_slice mode)
-- `contour_levels::Union{Int,AbstractRange}`: Number or range of contour levels
-- `nlat::Int`: Number of latitude points in remapped grid (default: 90)
-- `nlon::Int`: Number of longitude points in remapped grid (default: 180)
-- `figure_size::Tuple{Int,Int}`: Figure size in pixels (default: (2000, 2000))
-- `figure_bgcolor::Tuple{Float64,Float64,Float64}`: Background color (default: (0.98, 0.98, 0.98))
-- `fontsize::Int`: Font size (default: 40)
-- `yreversed::Bool`: Reverse y-axis (default: false)
-- `output_prefix::String`: Prefix for output files (default: "plot")
-- `output_format::String`: Output format (default: "png")
-- `remap_mono::Bool`: Use monotone remapping (default: true)
-- `cleanup_remap_files::Bool`: Delete intermediate remap files (default: false)
+
+  - `plot_mode::Symbol`: Either `:horizontal_slice` (2D fields) or `:vertical_slice` (3D fields with k-indices)
+  - `vertical_levels::Vector{Int}`: Which vertical levels (k-indices) to plot (only for :vertical_slice mode)
+  - `contour_levels::Union{Int,AbstractRange}`: Number or range of contour levels
+  - `nlat::Int`: Number of latitude points in remapped grid (default: 90)
+  - `nlon::Int`: Number of longitude points in remapped grid (default: 180)
+  - `figure_size::Tuple{Int,Int}`: Figure size in pixels (default: (2000, 2000))
+  - `figure_bgcolor::Tuple{Float64,Float64,Float64}`: Background color (default: (0.98, 0.98, 0.98))
+  - `fontsize::Int`: Font size (default: 40)
+  - `yreversed::Bool`: Reverse y-axis (default: false)
+  - `output_prefix::String`: Prefix for output files (default: "plot")
+  - `output_format::String`: Output format (default: "png")
+  - `remap_mono::Bool`: Use monotone remapping (default: true)
+  - `cleanup_remap_files::Bool`: Delete intermediate remap files (default: false)
 """
 struct PlotConfig
     plot_mode::Symbol
@@ -187,15 +189,17 @@ end
 Remap ClimaCore fields to a regular lat/lon grid.
 
 # Arguments
-- `remap_dir`: Directory to store intermediate remap files
-- `variable_names`: Names of variables to remap
-- `field_data`: Dictionary mapping variable names to ClimaCore Field objects
-- `Y_cpu`: CPU version of the state vector (for getting axes)
-- `ᶜspace`: Center space for defining coordinates
-- `config`: Plot configuration
+
+  - `remap_dir`: Directory to store intermediate remap files
+  - `variable_names`: Names of variables to remap
+  - `field_data`: Dictionary mapping variable names to ClimaCore Field objects
+  - `Y_cpu`: CPU version of the state vector (for getting axes)
+  - `ᶜspace`: Center space for defining coordinates
+  - `config`: Plot configuration
 
 # Returns
-- Path to the remapped NetCDF file
+
+  - Path to the remapped NetCDF file
 """
 function remap_to_latlon(
     remap_dir::String,
@@ -283,11 +287,12 @@ end
 Create a multi-panel comparison figure from remapped data.
 
 # Arguments
-- `output_path`: Full path for the output figure file
-- `datafile_rll`: Path to the remapped NetCDF file
-- `panels`: Vector of PlotPanel specifications
-- `config`: Plot configuration
-- `vertical_level`: The vertical level index to plot (only for :vertical_slice mode)
+
+  - `output_path`: Full path for the output figure file
+  - `datafile_rll`: Path to the remapped NetCDF file
+  - `panels`: Vector of PlotPanel specifications
+  - `config`: Plot configuration
+  - `vertical_level`: The vertical level index to plot (only for :vertical_slice mode)
 """
 function create_multipanel_figure(
     output_path::String,
@@ -409,17 +414,19 @@ Complete pipeline: remap ClimaCore fields and create multi-panel plots at specif
 vertical levels.
 
 # Arguments
-- `output_dir`: Directory for output plot files
-- `variable_names`: Names of all variables to remap
-- `field_data`: Dictionary mapping variable names to ClimaCore Field objects
-- `Y_cpu`: CPU version of the state vector
-- `ᶜspace`: Center space for defining coordinates
-- `panels`: Vector of PlotPanel specifications describing the layout
-- `config`: Plot configuration
-- `remap_dir`: Directory for intermediate remap files (default: output_dir/remap_data)
-- `FT`: Floating point type (default: Float64)
+
+  - `output_dir`: Directory for output plot files
+  - `variable_names`: Names of all variables to remap
+  - `field_data`: Dictionary mapping variable names to ClimaCore Field objects
+  - `Y_cpu`: CPU version of the state vector
+  - `ᶜspace`: Center space for defining coordinates
+  - `panels`: Vector of PlotPanel specifications describing the layout
+  - `config`: Plot configuration
+  - `remap_dir`: Directory for intermediate remap files (default: output_dir/remap_data)
+  - `FT`: Floating point type (default: Float64)
 
 # Example
+
 ```julia
 # Prepare field data dictionary
 field_data = Dict(
@@ -432,19 +439,19 @@ field_data = Dict(
 
 # Define 2x1 comparison panels
 u_panels = [
-    PlotPanel("ogwd_u", "ClimaAtmos at z = {z} m", (1,1); scale_factor=86400),
-    PlotPanel("gfdl_udt_topo", "GFDL at z = {z} m", (2,1); scale_factor=86400),
+    PlotPanel("ogwd_u", "ClimaAtmos at z = {z} m", (1, 1); scale_factor = 86400),
+    PlotPanel("gfdl_udt_topo", "GFDL at z = {z} m", (2, 1); scale_factor = 86400),
 ]
 
 v_panels = [
-    PlotPanel("ogwd_v", "ClimaAtmos at z = {z} m", (1,1); scale_factor=86400),
-    PlotPanel("gfdl_vdt_topo", "GFDL at z = {z} m", (2,1); scale_factor=86400),
+    PlotPanel("ogwd_v", "ClimaAtmos at z = {z} m", (1, 1); scale_factor = 86400),
+    PlotPanel("gfdl_vdt_topo", "GFDL at z = {z} m", (2, 1); scale_factor = 86400),
 ]
 
 # Plot configuration
 config = PlotConfig(
     vertical_levels = [21, 31],
-    contour_levels = range(-10, 10; length=20),
+    contour_levels = range(-10, 10; length = 20),
 )
 
 # Generate u-forcing plots
@@ -456,7 +463,7 @@ remap_and_plot_3d(
     ᶜspace,
     u_panels,
     config;
-    output_prefix = "uforcing"
+    output_prefix = "uforcing",
 )
 
 # Generate v-forcing plots
@@ -468,7 +475,7 @@ remap_and_plot_3d(
     ᶜspace,
     v_panels,
     config;
-    output_prefix = "vforcing"
+    output_prefix = "vforcing",
 )
 ```
 """
@@ -549,30 +556,32 @@ This is more efficient than calling `remap_and_plot_3d` multiple times because i
 remaps once.
 
 # Arguments
-- `output_dir`: Directory for output plot files
-- `variable_names`: Names of all variables to remap
-- `field_data`: Dictionary mapping variable names to ClimaCore Field objects
-- `Y_cpu`: CPU version of the state vector
-- `ᶜspace`: Center space for defining coordinates
-- `figure_specs`: Dictionary mapping figure names to their panel specifications
-- `config`: Plot configuration
-- `kwargs...`: Additional keyword arguments passed to remap_to_latlon
+
+  - `output_dir`: Directory for output plot files
+  - `variable_names`: Names of all variables to remap
+  - `field_data`: Dictionary mapping variable names to ClimaCore Field objects
+  - `Y_cpu`: CPU version of the state vector
+  - `ᶜspace`: Center space for defining coordinates
+  - `figure_specs`: Dictionary mapping figure names to their panel specifications
+  - `config`: Plot configuration
+  - `kwargs...`: Additional keyword arguments passed to remap_to_latlon
 
 # Example
+
 ```julia
 figure_specs = Dict(
     "uforcing" => [
-        PlotPanel("ogwd_u", "ClimaAtmos u at z = {z} m", (1,1); scale_factor=86400),
-        PlotPanel("gfdl_udt_topo", "GFDL u at z = {z} m", (2,1); scale_factor=86400),
+        PlotPanel("ogwd_u", "ClimaAtmos u at z = {z} m", (1, 1); scale_factor = 86400),
+        PlotPanel("gfdl_udt_topo", "GFDL u at z = {z} m", (2, 1); scale_factor = 86400),
     ],
     "vforcing" => [
-        PlotPanel("ogwd_v", "ClimaAtmos v at z = {z} m", (1,1); scale_factor=86400),
-        PlotPanel("gfdl_vdt_topo", "GFDL v at z = {z} m", (2,1); scale_factor=86400),
+        PlotPanel("ogwd_v", "ClimaAtmos v at z = {z} m", (1, 1); scale_factor = 86400),
+        PlotPanel("gfdl_vdt_topo", "GFDL v at z = {z} m", (2, 1); scale_factor = 86400),
     ],
 )
 
 create_figure_set(output_dir, variable_names, field_data, Y_cpu, ᶜspace,
-                  figure_specs, config)
+    figure_specs, config)
 ```
 """
 function create_figure_set(

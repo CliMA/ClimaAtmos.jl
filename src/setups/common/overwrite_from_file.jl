@@ -198,12 +198,13 @@ Recomputes vertical pressure levels assuming hydrostatic balance from
 surface pressure.
 
 Expected variables in the file:
-- `p`: pressure (2D surface, broadcast in z)
-- `t`: temperature (3D)
-- `q`: specific humidity (3D)
-- `u, v, w`: velocity (3D)
-- `cswc, crwc`: snow and rain water content (optional, for 1-moment microphysics)
-- `z_sfc`: surface altitude (optional, for topographic pressure correction)
+
+  - `p`: pressure (2D surface, broadcast in z)
+  - `t`: temperature (3D)
+  - `q`: specific humidity (3D)
+  - `u, v, w`: velocity (3D)
+  - `cswc, crwc`: snow and rain water content (optional, for 1-moment microphysics)
+  - `z_sfc`: surface altitude (optional, for topographic pressure correction)
 """
 function overwrite_from_file!(
     file_path::String,

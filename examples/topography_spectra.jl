@@ -30,14 +30,15 @@ end
 
 """
     generate_spaces(; h_elem=16)
-For a given number of elements `h_elem`, this function generates a 
+
+For a given number of elements `h_elem`, this function generates a
 horizontal spectral space (ClimaCore.SpectralElementSpace2D) and
 generates an interpolated (using SpaceVaryingInputs) orography field
-on this space. The `diffuse_surface_elevation` function is called 
+on this space. The `diffuse_surface_elevation` function is called
 to apply Laplacian diffusion (canonical diffusion equation) passes,
-with a timescale defined by the attenuation required at the smallest 
+with a timescale defined by the attenuation required at the smallest
 resolved lengthscale.
-Returns a `Field` containing surface orography. 
+Returns a `Field` containing surface orography.
 """
 function generate_spaces(;
     h_elem = 16,
@@ -72,8 +73,9 @@ end
 
 """
     remap_to_array(test_var, hcoords)
+
 Given an Array of `hcoords`, this function remaps a ClimaCore
-Field `test_var` onto `hcoords`. 
+Field `test_var` onto `hcoords`.
 Returns an `Array` containing the values which make up `test_var`.
 """
 function remap_to_array(test_var, hcoords)
@@ -83,12 +85,13 @@ end
 
 """
     gen_spectra(test_var)
+
 Given a Field `test_var`, this function first calls `remap_to_array`
 to remap this spectral element field onto a latitude-longitude
 grid, and computes the spectra.
 Returns (`w_numbers`, `power_spectrum`) which contain the spherical
 wavenumbers and the spectral energy corresponding to this array
-of `w_numbers`. 
+of `w_numbers`.
 """
 function gen_spectra(test_var)
     FT = eltype(test_var)
@@ -117,10 +120,11 @@ end
 
 """
     generate_all_spectra(;h_elem=16)
+
 Uses the spectral calculator and space generation tools in this example file
-to generate a series of surface orography fields with different extents of 
-Laplacian smoothing. 
-Returns a `CairoMakie.Figure`. 
+to generate a series of surface orography fields with different extents of
+Laplacian smoothing.
+Returns a `CairoMakie.Figure`.
 """
 function generate_all_spectra(; h_elem = 16)
     fig = Figure(; size = (1200, 900))
@@ -152,9 +156,10 @@ end
 
 """
     compare_elevation(;h_elem, n_attenuation)
+
 Computes the difference between the (regridded) elevation profile
 on a spectral element grid with `h_elem` without any smoothing against
-the corresponding regridded and smoothed surface elevation field. 
+the corresponding regridded and smoothed surface elevation field.
 Returns regridded arrays of target topography, and differences
 on cubed-sphere with `h_elem` elements per panel.
 (This field can then be plotted with `ClimaCorePlots`)
@@ -192,11 +197,12 @@ end
 
 """
     generate_fig_Δelevation(;h_elem, n_attenuation)
+
 Given elevation data regridded onto a cubed-sphere grid with `h_elem²` panels per
-face, generate a figure with the following plots: 
+face, generate a figure with the following plots:
 (1) Difference in regridded elevation data (raw cubed-sphere data - smoothed cubed-sphere data)
 (2) Surface elevation as seen by the model (smoothed cubed-sphere data)
-The "regridding" step implied here consists of interpolating (linear interoplation by default)the ETOPO2022 
+The "regridding" step implied here consists of interpolating (linear interoplation by default)the ETOPO2022
 raw dataset (via ClimaArtifacts) onto the required ClimaAtmos grid.
 """
 function generate_fig_Δelevation(; h_elem = 16, n_attenuation = 5)

@@ -46,15 +46,17 @@ objects in the cache.
 This callback function evaluates external forcing variables at the current simulation time and
 updates the corresponding fields in the model state. It handles various forcing components:
 
-- Temperature and specific humidity tendencies (vertical eddy terms, horizontal advection)
-- Nudging fields for temperature, humidity, and horizontal wind components
-- Large-scale subsidence computed from vertical velocity
+  - Temperature and specific humidity tendencies (vertical eddy terms, horizontal advection)
+  - Nudging fields for temperature, humidity, and horizontal wind components
+  - Large-scale subsidence computed from vertical velocity
 
 # Arguments
-- `integrator`: The ODE integrator containing the current model state (`u`),
-  cache (`p`), and time (`t`)
+
+  - `integrator`: The ODE integrator containing the current model state (`u`),
+    cache (`p`), and time (`t`)
 
 # Notes
+
 The function extracts time-varying inputs from the `column_timevaryinginputs` structure
 and evaluates them at the current time using the `evaluate!` function, which updates
 the corresponding model fields in place.
@@ -299,6 +301,7 @@ the file contents from 0 to 1, and the running
 simulation will gracefully exit with the integrator.
 
 !!! note
+
     This may not be reliable for MPI jobs.
 """
 function maybe_graceful_exit(output_dir, integrator)

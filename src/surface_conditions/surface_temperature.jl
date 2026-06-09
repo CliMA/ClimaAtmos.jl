@@ -4,12 +4,12 @@
 Abstract supertype for ways of obtaining the surface temperature `T_sfc` used
 when computing surface conditions. Concrete subtypes:
 
-- [`AnalyticTemperature`](@ref): a function `(coordinates, params, t) -> T_sfc`. A
-  spatially and temporally constant `T_sfc` is simply constructed as
-  `AnalyticTemperature(Returns(T_sfc))`.
-- [`ExternalTemperature`](@ref): time-varying input read from a cached Field.
-- [`SlabOceanTemperature`](@ref): prognostic, reads `Y.sfc.T`. Carries slab params.
-- [`CoupledTemperature`](@ref): a Field owned by an external driver (e.g. coupler).
+  - [`AnalyticTemperature`](@ref): a function `(coordinates, params, t) -> T_sfc`. A
+    spatially and temporally constant `T_sfc` is simply constructed as
+    `AnalyticTemperature(Returns(T_sfc))`.
+  - [`ExternalTemperature`](@ref): time-varying input read from a cached Field.
+  - [`SlabOceanTemperature`](@ref): prognostic, reads `Y.sfc.T`. Carries slab params.
+  - [`CoupledTemperature`](@ref): a Field owned by an external driver (e.g. coupler).
 
 `surface_temperature(t, Y, p, t_time)` produces the value(s) that
 [`update_surface_conditions!`](@ref) will broadcast across the surface.

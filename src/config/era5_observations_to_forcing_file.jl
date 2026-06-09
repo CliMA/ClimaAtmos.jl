@@ -112,8 +112,8 @@ end
 """
     check_monthly_forcing_times(path, parsed_args)
 
-Check the times for the 1 day monthly-averaged forcing file are correct. As we are using 
-ClimaUtilities.TimeVaryingInputs.PeriodicCalendar we require the data to cover one day exactly. 
+Check the times for the 1 day monthly-averaged forcing file are correct. As we are using
+ClimaUtilities.TimeVaryingInputs.PeriodicCalendar we require the data to cover one day exactly.
 Return true if the forcing file is valid, false otherwise.
 """
 function check_monthly_forcing_times(path, parsed_args)
@@ -246,24 +246,28 @@ end
 Generate an external forcing file for the ClimaAtmos single column model.
 
 # Input
+
 The reanalysis, e.g., ERA5, input data is expected to be in the `era5_hourly_atmos_raw` artifact directory
 and should contain 3 files:
-    - Column profile dataset, named "forcing_and_cloud_hourly_profiles_"start_date".nc"
-    - Surface sensible and latent heat fluxes, named "hourly_accum_"start_date".nc"
-    - Surface temperature, named "hourly_inst_"start_date".nc"
-The default file names can be overwritten by the `data_strs` argument. Parsed args should contain the site_latitude,
-site_longitude, and start_date. The variables and specific naming convention for these files is better described 
-in the Single Column Model section of the documentation.
+
+  - Column profile dataset, named "forcing_and_cloud_hourly_profiles_"start_date".nc"
+  - Surface sensible and latent heat fluxes, named "hourly_accum_"start_date".nc"
+  - Surface temperature, named "hourly_inst_"start_date".nc"
+    The default file names can be overwritten by the `data_strs` argument. Parsed args should contain the site_latitude,
+    site_longitude, and start_date. The variables and specific naming convention for these files is better described
+    in the Single Column Model section of the documentation.
 
 # Output
-The output file is written to forcing file path, by default stored in the `era5_hourly_atmos_processed` artifact 
+
+The output file is written to forcing file path, by default stored in the `era5_hourly_atmos_processed` artifact
 directory joined with `daily` or `monthly` depending on the simulation type. It contains all forcings required to
 drive the single column model.
 
 Note:
-- Single column runs are treated as boxes, so the dimensions of the variables are expanded to
+
+  - Single column runs are treated as boxes, so the dimensions of the variables are expanded to
     `2x2x(pressure levels)x(time)` to be able to interpolate to the model grid.
-- The end time of the simulation is inferred from the start date and the simulation time, `t_end`.
+  - The end time of the simulation is inferred from the start date and the simulation time, `t_end`.
 """
 function generate_external_forcing_file(
     parsed_args,
@@ -570,15 +574,17 @@ end
 Generate an external forcing file for multi-day single column model runs, reusing daily forcing files if they already exist.
 
 # Arguments
-- `parsed_args`: Dictionary containing simulation parameters including start_date, t_end, site_latitude, and site_longitude
-- `forcing_file_path`: Path where the concatenated forcing file will be saved
-- `FT`: Floating point type for the simulation
+
+  - `parsed_args`: Dictionary containing simulation parameters including start_date, t_end, site_latitude, and site_longitude
+  - `forcing_file_path`: Path where the concatenated forcing file will be saved
+  - `FT`: Floating point type for the simulation
 
 # Keyword Arguments
-- `smooth_amount`: Amount of temporal smoothing to apply (default: 4 - 1° on each side)
-- `time_resolution`: Time resolution in seconds for accumulated variables (defined in ERA5 docs; 3600 for hourly data; 86400 for daily and monthly data)
-- `input_data_dir`: Directory containing raw ERA5 data files, artifact directory by default
-- `output_data_dir`: Directory where individual daily forcing files are stored
+
+  - `smooth_amount`: Amount of temporal smoothing to apply (default: 4 - 1° on each side)
+  - `time_resolution`: Time resolution in seconds for accumulated variables (defined in ERA5 docs; 3600 for hourly data; 86400 for daily and monthly data)
+  - `input_data_dir`: Directory containing raw ERA5 data files, artifact directory by default
+  - `output_data_dir`: Directory where individual daily forcing files are stored
 """
 function generate_multiday_era5_external_forcing_file(
     parsed_args,
@@ -633,7 +639,7 @@ end
     smooth_4D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)
 
 data is an array from ERA5 data, which has dimension order longitude, latitude,
-pressure_level, and time. We want to return smoothed data by a certain amount. 
+pressure_level, and time. We want to return smoothed data by a certain amount.
 Here we choose 4 points on either side which corresponds to a 2° box total. we
 just average the points here, but something more creative could be done.
 """
@@ -652,9 +658,9 @@ end
 """
     smooth_3D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)
 
-data is an array from ERA5, which has dimension order longitude, latitude, and time. 
-This function returns data smoothed by a certain amount. Here, we choose 4 points on 
-either side which corresponds to a 2° box total. wejust average the points here, but 
+data is an array from ERA5, which has dimension order longitude, latitude, and time.
+This function returns data smoothed by a certain amount. Here, we choose 4 points on
+either side which corresponds to a 2° box total. wejust average the points here, but
 something more creative could be done.
 """
 function smooth_3D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)

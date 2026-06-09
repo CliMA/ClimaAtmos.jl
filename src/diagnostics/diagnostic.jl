@@ -28,31 +28,28 @@ Add a new variable to the `ALL_DIAGNOSTICS` dictionary (this function mutates th
 If possible, please follow the naming scheme outline in
 https://airtable.com/appYNLuWqAgzLbhSq/shrKcLEdssxb8Yvcp/tblL7dJkC3vl5zQLb
 
-Keyword arguments
-=================
+# Keyword arguments
 
-- `short_name`: Name used to identify the variable in the output files and in the file names.
-                Short but descriptive.
-                `ClimaAtmos` diagnostics are identified by the short name.
-                We follow the Coupled Model Intercomparison Project conventions.
+  - `short_name`: Name used to identify the variable in the output files and in the file names.
+    Short but descriptive.
+    `ClimaAtmos` diagnostics are identified by the short name.
+    We follow the Coupled Model Intercomparison Project conventions.
 
-- `long_name`: Name used to identify the variable in the output files.
+  - `long_name`: Name used to identify the variable in the output files.
+  - `standard_name`: Standard name, as in
+    http://cfconventions.org/Data/cf-standard-names/71/build/cf-standard-name-table.html
+  - `units`: Physical units of the variable.
+  - `comments`: More verbose explanation of what the variable is,
+    or comments related to how it is defined or computed.
+  - `compute`: Function that compute the diagnostic variable from the state.
+    It has to take three arguments, `compute(state, cache, time)`:
 
-- `standard_name`: Standard name, as in
-                   http://cfconventions.org/Data/cf-standard-names/71/build/cf-standard-name-table.html
-
-- `units`: Physical units of the variable.
-
-- `comments`: More verbose explanation of what the variable is,
-              or comments related to how it is defined or computed.
-
-- `compute`: Function that compute the diagnostic variable from the state.
-             It has to take three arguments, `compute(state, cache, time)`:
-             - The `state` contains the prognostic variables (`Y` in the source code),
-             - The `cache` contains parameters and precomputed quantities (`p` in the source code),
-             - The current `time`, usually in seconds, (`t` in the source code).
+      + The `state` contains the prognostic variables (`Y` in the source code),
+      + The `cache` contains parameters and precomputed quantities (`p` in the source code),
+      + The current `time`, usually in seconds, (`t` in the source code).
 
 !!! Note "Backward compatibility with ClimaDiagnostics v0.2.13"
+
     For backward compatibility, a function can be passed to the
     keyword argument `compute!` instead of `compute`. The function has to take
     four arguments, `compute!(out, state, cache, time)`, where `out` is either
@@ -60,8 +57,6 @@ Keyword arguments
     In the first case, the function should allocate memory and return the result.
     In the second case, the function should write the result in the provided array.
     In both cases, the function should return the result.
-              
-
 """
 function add_diagnostic_variable!(;
     short_name, long_name, standard_name = "", units, comments = "",

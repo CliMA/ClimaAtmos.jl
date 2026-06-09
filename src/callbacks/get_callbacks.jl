@@ -415,19 +415,21 @@ end
     default_model_callbacks(model::AtmosModel; kwargs...)
 
 Creates the tuple of model callbacks for any AtmosModel by calling
-`default_model_callbacks` on each physics component. 
+`default_model_callbacks` on each physics component.
 
 # Arguments
-- `model::AtmosModel`: The atmospheric model configuration
+
+  - `model::AtmosModel`: The atmospheric model configuration
 
 # Keyword Arguments
-- `start_date`: Simulation start date
-- `dt`: Simulation time step 
-- `t_start`: Start time
-- `t_end`: End time
-- `output_dir`: Output directory
-- `checkpoint_frequency`: Checkpoint frequency
-- Component-specific frequency overrides (dt_rad, dt_nogw, etc.)
+
+  - `start_date`: Simulation start date
+  - `dt`: Simulation time step
+  - `t_start`: Start time
+  - `t_end`: End time
+  - `output_dir`: Output directory
+  - `checkpoint_frequency`: Checkpoint frequency
+  - Component-specific frequency overrides (dt_rad, dt_nogw, etc.)
 """
 function default_model_callbacks(model::AtmosModel; kwargs...)
     callbacks = ()
@@ -509,10 +511,11 @@ Get commonly used callbacks like progress logging, NaN checking, conservation, e
 These are not model-specific but are frequently needed across simulations.
 
 # Keyword Arguments
-- `log_progress::Bool = true`: Emit periodic progress logging callback.
-- `check_nan_every::Int = 1024`: Step cadence for the NaN-detection callback.
-  Set to `0` to disable.
-- `check_conservation::Bool = false`: Enable the conservation-check callback.
+
+  - `log_progress::Bool = true`: Emit periodic progress logging callback.
+  - `check_nan_every::Int = 1024`: Step cadence for the NaN-detection callback.
+    Set to `0` to disable.
+  - `check_conservation::Bool = false`: Enable the conservation-check callback.
 """
 function common_callbacks(
     model, dt, output_dir, start_date, t_start, t_end, comms_ctx, checkpoint_frequency;

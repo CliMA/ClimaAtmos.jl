@@ -45,13 +45,14 @@ to updrafts inside the diagnostic vertical integral loop, and the
 `microphysics_tendency` only modifies the grid-mean tendency.
 
 Arguments:
-- `Yₜ`: The tendency state vector.
-- `Y`: The current state vector.
-- `p`: The cache, containing precomputed quantities and parameters.
-- `t`: The current simulation time.
-- `microphysics_model` (e.g., `EquilibriumMicrophysics0M`,
-  `NonEquilibriumMicrophysics1M`, `NonEquilibriumMicrophysics2M`).
-- `turbconv_model`: (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`).
+
+  - `Yₜ`: The tendency state vector.
+  - `Y`: The current state vector.
+  - `p`: The cache, containing precomputed quantities and parameters.
+  - `t`: The current simulation time.
+  - `microphysics_model` (e.g., `EquilibriumMicrophysics0M`,
+    `NonEquilibriumMicrophysics1M`, `NonEquilibriumMicrophysics2M`).
+  - `turbconv_model`: (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`).
 
 Returns: `nothing`, modifies `Yₜ` in place.
 """

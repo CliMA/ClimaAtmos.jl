@@ -11,9 +11,10 @@ const FT = Float32
 
 Test that each field in `model` matches the expected type or value specified in `expected_defaults`.
 For each field:
-- If expected type is `nothing`, test that field is `nothing`
-- If expected type is a Type, test that field is an instance of that type
-- Otherwise, test that field equals the expected value exactly
+
+  - If expected type is `nothing`, test that field is `nothing`
+  - If expected type is a Type, test that field is an instance of that type
+  - Otherwise, test that field equals the expected value exactly
 """
 function test_defaults(model, expected_defaults)
     for (field, expected_type) in expected_defaults

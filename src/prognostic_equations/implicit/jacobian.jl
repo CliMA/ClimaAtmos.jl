@@ -4,11 +4,12 @@
 A description of how to compute the matrix ``∂R/∂Y``, where ``R(Y)`` denotes the
 residual of an implicit step with the state ``Y``. Concrete implementations of
 this abstract type should define 3 methods:
- - `jacobian_cache(alg::JacobianAlgorithm, Y, atmos; [verbose])`
- - `update_jacobian!(alg::JacobianAlgorithm, cache, Y, p, dtγ, t)`
- - `invert_jacobian!(alg::JacobianAlgorithm, cache, ΔY, R)`
-To facilitate debugging, concrete implementations should also define
- - `first_column_block_arrays(alg::JacobianAlgorithm, Y, p, dtγ, t)`
+
+  - `jacobian_cache(alg::JacobianAlgorithm, Y, atmos; [verbose])`
+  - `update_jacobian!(alg::JacobianAlgorithm, cache, Y, p, dtγ, t)`
+  - `invert_jacobian!(alg::JacobianAlgorithm, cache, ΔY, R)`
+    To facilitate debugging, concrete implementations should also define
+  - `first_column_block_arrays(alg::JacobianAlgorithm, Y, p, dtγ, t)`
 
 See [Implicit Solver](@ref) for additional background information.
 """

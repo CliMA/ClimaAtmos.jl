@@ -15,21 +15,23 @@ subsidence (vertical advection by a prescribed large-scale vertical velocity `�
 
 This function is dispatched based on the `scheme` argument to use different
 numerical methods for reconstructing the advective flux `wχ` at cell faces:
-- `::Val{:none}`: Uses a centered reconstruction (`ᶠu³ * ᶠinterp(ᶜχ)`).
-- `::Val{:first_order}`: Uses a first-order upwind reconstruction (`ᶠupwind1(ᶠu³, ᶜχ)`).
-- `::Val{:third_order}`: Uses a third-order upwind reconstruction (`ᶠupwind3(ᶠu³, ᶜχ)`).
+
+  - `::Val{:none}`: Uses a centered reconstruction (`ᶠu³ * ᶠinterp(ᶜχ)`).
+  - `::Val{:first_order}`: Uses a first-order upwind reconstruction (`ᶠupwind1(ᶠu³, ᶜχ)`).
+  - `::Val{:third_order}`: Uses a third-order upwind reconstruction (`ᶠupwind3(ᶠu³, ᶜχ)`).
 
 The formulation `ᶜρ * (ᶜsubdivᵥ(Flux) - ᶜχ * ᶜsubdivᵥ(ᶠu³))` is equivalent to
 `ᶜρ * (ᶠu³ ⋅ ∇ᶜχ)`, implementing the advective form. The result is subtracted
 from `ᶜρχₜ`, effectively adding `ρ * (-ᶠu³ ⋅ ∇ᶜχ)` to it.
 
 Arguments:
-- `ᶜρχₜ`: Field for the tendency of the density-weighted scalar `ρχ`, modified in place.
-- `ᶜρ`: Cell-center density field.
-- `ᶠu³`: Face-valued field of prescribed vertical velocity (subsidence velocity `w`).
-        Typically, `w < 0` for subsidence in an upward `z` coordinate.
-- `ᶜχ`: Cell-center field of the specific scalar quantity `χ` being advected.
-- `scheme`: A `Val` type specifying the advection scheme (e.g., `Val{:first_order}()`).
+
+  - `ᶜρχₜ`: Field for the tendency of the density-weighted scalar `ρχ`, modified in place.
+  - `ᶜρ`: Cell-center density field.
+  - `ᶠu³`: Face-valued field of prescribed vertical velocity (subsidence velocity `w`).
+    Typically, `w < 0` for subsidence in an upward `z` coordinate.
+  - `ᶜχ`: Cell-center field of the specific scalar quantity `χ` being advected.
+  - `scheme`: A `Val` type specifying the advection scheme (e.g., `Val{:first_order}()`).
 """
 subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:none}) =
     @. ᶜρχₜ -= ᶜρ * (ᶜsubdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³)) # Centered difference ρ * (-w * ∂χ/∂z)
@@ -53,13 +55,14 @@ upwind scheme) to compute and apply the vertical advective tendency for each rel
 scalar quantity `χ`.
 
 Arguments:
-- `Yₜ`: The tendency state vector, modified in place.
-- `Y`: The current state vector (used for `Y.c.ρ`).
-- `p`: Cache containing parameters, precomputed fields (`ᶜh_tot`),
-       atmospheric model configurations (`p.atmos.microphysics_model`, `p.atmos.subsidence`),
-       and scratch space.
-- `t`: Current simulation time (unused by this specific tendency calculation).
-- `subsidence_model`: A `Subsidence` object containing the subsidence profile function.
+
+  - `Yₜ`: The tendency state vector, modified in place.
+  - `Y`: The current state vector (used for `Y.c.ρ`).
+  - `p`: Cache containing parameters, precomputed fields (`ᶜh_tot`),
+    atmospheric model configurations (`p.atmos.microphysics_model`, `p.atmos.subsidence`),
+    and scratch space.
+  - `t`: Current simulation time (unused by this specific tendency calculation).
+  - `subsidence_model`: A `Subsidence` object containing the subsidence profile function.
 
 If `subsidence_model` is `Nothing`, no subsidence tendency is applied.
 """

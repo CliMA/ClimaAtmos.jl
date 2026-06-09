@@ -13,14 +13,17 @@ Used to determine the maximum rate at which a source category can be depleted
 without going negative, accounting for multiple simultaneous sinks.
 
 # Arguments
-- `q`: Available quantity (e.g., specific humidity) [kg/kg]
-- `dt`: Model timestep [s]
-- `n::Int`: Number of sinks splitting the available quantity
+
+  - `q`: Available quantity (e.g., specific humidity) [kg/kg]
+  - `dt`: Model timestep [s]
+  - `n::Int`: Number of sinks splitting the available quantity
 
 # Returns
+
 `q / (dt × n)` — the maximum tendency [kg/kg/s] that can be applied.
 
 # Example
+
 ```julia
 # Rain has 3 sinks (evaporation, accretion, self-collection)
 # Each sink can at most consume 1/3 of available rain per timestep
@@ -38,17 +41,21 @@ Limit a sink tendency to prevent species depletion.
 Only applies limiting when `S < 0` (sink), sources (`S ≥ 0`) pass unchanged.
 
 # Arguments
-- `S`: Raw tendency (source or sink) [kg/kg/s]
-- `q`: Available quantity [kg/kg]
-- `dt`: Timestep [s]
-- `n`: Number of competing sinks (default: 3)
+
+  - `S`: Raw tendency (source or sink) [kg/kg/s]
+  - `q`: Available quantity [kg/kg]
+  - `dt`: Timestep [s]
+  - `n`: Number of competing sinks (default: 3)
 
 # Returns
+
 Limited tendency:
-- If `S < 0`: `-min(-S, limit(q, dt, n))`
-- If `S ≥ 0`: `S` (unchanged)
+
+  - If `S < 0`: `-min(-S, limit(q, dt, n))`
+  - If `S ≥ 0`: `S` (unchanged)
 
 # Example
+
 ```julia
 # Limit rain evaporation to available rain
 S_evap_limited = limit_sink(S_evap, q_rain, dt, 3)
@@ -63,8 +70,8 @@ end
 
 Limits a `tendency` to be within `[tend_bound_neg, tend_bound_pos]`.
 
-- If `tendency > 0`: limited by `min(tendency, tend_bound_pos)`
-- If `tendency < 0`: limited by `-min(-tendency, tend_bound_neg)`
+  - If `tendency > 0`: limited by `min(tendency, tend_bound_pos)`
+  - If `tendency < 0`: limited by `-min(-tendency, tend_bound_neg)`
 
 This ensures that sources do not exceed `tend_bound_pos` and sinks do not
 exceed `tend_bound_neg` (magnitude-wise).
@@ -102,18 +109,22 @@ depletes both cloud liquid and number), compute a single scaling factor based on
 the most restrictive constraint.
 
 # Arguments
-- `S1`, `S2`: Raw sink tendencies (must be ≤ 0) [kg/kg/s or #/kg/s]
-- `q1`, `q2`: Available quantities [kg/kg or #/kg]
-- `dt`: Timestep [s]
-- `n`: Number of competing sinks (default: 3)
+
+  - `S1`, `S2`: Raw sink tendencies (must be ≤ 0) [kg/kg/s or #/kg/s]
+  - `q1`, `q2`: Available quantities [kg/kg or #/kg]
+  - `dt`: Timestep [s]
+  - `n`: Number of competing sinks (default: 3)
 
 # Returns
+
 Scaling factor `f ∈ [0, 1]` such that:
-- `|S1 * f| ≤ q1/(dt*n)` and `|S2 * f| ≤ q2/(dt*n)`
-- `f = min(M1/|S1|, M2/|S2|)` when both are sinks
-- `f = 1` if either tendency is not a sink
+
+  - `|S1 * f| ≤ q1/(dt*n)` and `|S2 * f| ≤ q2/(dt*n)`
+  - `f = min(M1/|S1|, M2/|S2|)` when both are sinks
+  - `f = 1` if either tendency is not a sink
 
 # Example
+
 ```julia
 # Autoconversion depletes both q_liq and n_liq
 f = coupled_sink_limit_factor(

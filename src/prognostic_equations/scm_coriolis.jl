@@ -18,14 +18,16 @@ which are typically used in single-column model (SCM) configurations to represen
 large-scale forcing.
 
 Arguments:
-- `ᶜuₕ`: The cell-centered horizontal velocity field [m/s].
-- `scm_coriolis`: A NamedTuple `(; prof_ug, prof_vg, coriolis_param)`, or
-                   `nothing` for no Coriolis forcing.
+
+  - `ᶜuₕ`: The cell-centered horizontal velocity field [m/s].
+  - `scm_coriolis`: A NamedTuple `(; prof_ug, prof_vg, coriolis_param)`, or
+    `nothing` for no Coriolis forcing.
 
 Returns:
-- A `ClimaCore.Fields.Field` (or a lazy broadcast over ClimaCore Fields)
-  representing the Coriolis tendency for `ᶜuₕ` [m/s²],
-  or `NullBroadcasted()` if `scm_coriolis` is nothing.
+
+  - A `ClimaCore.Fields.Field` (or a lazy broadcast over ClimaCore Fields)
+    representing the Coriolis tendency for `ᶜuₕ` [m/s²],
+    or `NullBroadcasted()` if `scm_coriolis` is nothing.
 """
 scm_coriolis_tendency_uₕ(ᶜuₕ, ::Nothing) = NullBroadcasted()
 function scm_coriolis_tendency_uₕ(ᶜuₕ, scm_coriolis)

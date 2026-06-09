@@ -7,13 +7,14 @@ Assigns NaN placeholders during pointwise construction, then overwrites the
 full prognostic state with ERA5 data obtained via `weather_model_data_path`.
 
 ## Fields
-- `start_date`: DateTime parsed from a date string in format "yyyymmdd" or "yyyymmdd-HHMM".
-- `era5_initial_condition_dir`: Optional directory with pre-processed ERA5 files.
-  When `nothing`, uses the `wxquest_initial_conditions` ClimaArtifact.
-- `use_full_pressure`: If `true`, attempt to read 3D pressure from the file
-  rather than computing it hydrostatically. Defaults to `false`.
 
-The optional ERA5 initial condition directory is stored in `_ERA5_IC_DIR` to avoid GPU 
+  - `start_date`: DateTime parsed from a date string in format "yyyymmdd" or "yyyymmdd-HHMM".
+  - `era5_initial_condition_dir`: Optional directory with pre-processed ERA5 files.
+    When `nothing`, uses the `wxquest_initial_conditions` ClimaArtifact.
+  - `use_full_pressure`: If `true`, attempt to read 3D pressure from the file
+    rather than computing it hydrostatically. Defaults to `false`.
+
+The optional ERA5 initial condition directory is stored in `_ERA5_IC_DIR` to avoid GPU
 allocation issues with strings. When `nothing`, uses the `weather_model_ic` ClimaArtifact.
 """
 struct WeatherModel

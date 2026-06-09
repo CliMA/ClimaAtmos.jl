@@ -31,7 +31,8 @@ downloaded, and the `lowres` artifact can always be downloaded.
 The ClimaComms context is needed for lazy artifacts with MPI simulations.
 
 # Returns
-- The full path to the NetCDF file.
+
+  - The full path to the NetCDF file.
 """
 function res_file_path(name; context = nothing)
     if _artifact_exists(name)

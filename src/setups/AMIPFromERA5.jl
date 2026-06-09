@@ -8,9 +8,11 @@ the full prognostic state with ERA5 data from the `era5_inst_model_levels`
 ClimaArtifact, delegating to `overwrite_from_file!`.
 
 ## Fields
-- `start_date`: DateTime parsed from a date string in format "yyyymmdd" or "yyyymmdd-HHMM".
+
+  - `start_date`: DateTime parsed from a date string in format "yyyymmdd" or "yyyymmdd-HHMM".
 
 ## Expected artifact structure
+
 `era5_inst_model_levels/era5_init_processed_internal_YYYYMMDD_0000.nc`
 """
 struct AMIPFromERA5

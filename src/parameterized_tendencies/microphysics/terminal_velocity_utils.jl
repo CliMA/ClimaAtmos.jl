@@ -92,9 +92,9 @@ terminal_velocity(
 
 Return the grid-scale terminal velocity.
 
-- For `FixedTerminalVelocity`, returns the prescribed constant value.
-- For `DiagnosticTerminalVelocity`, returns the mass-weighted velocity
-  `ρwχ / ρχ`.
+  - For `FixedTerminalVelocity`, returns the prescribed constant value.
+  - For `DiagnosticTerminalVelocity`, returns the mass-weighted velocity
+    `ρwχ / ρχ`.
 
 In the diagnostic case, the result is clamped to avoid spurious negative
 velocities arising from numerical errors when `ρχ` is small.

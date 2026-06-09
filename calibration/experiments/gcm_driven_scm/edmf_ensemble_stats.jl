@@ -33,27 +33,41 @@ end
 function parse_args()
     s = ArgParseSettings(description = "Process ensemble Kalman statistics")
     @add_arg_table s begin
-        "--output_dir"
+        """
+        --output_dir
+        """
         help = "Calibration output directory"
         required = true
-        "--var_names"
+        """
+        --var_names
+        """
         help = "Variable names to process (comma-separated)"
         default = "thetaa,hus,clw,arup,entr,detr,waup,tke"
-        "--reduction"
+        """
+        --reduction
+        """
         help = "Reduction method to use (default: inst)"
         default = "inst"
-        "--iterations"
+        """
+        --iterations
+        """
         help = "Iterations to plot (e.g., 0:11), default is all iterations"
         default = nothing
-        "--save_as_csv"
+        """
+        --save_as_csv
+        """
         help = "Save results as CSV"
         default = true
         arg_type = Bool
-        "--load_from_csv"
+        """
+        --load_from_csv
+        """
         help = "Load results from CSV"
         default = false
         arg_type = Bool
-        "--plot_dir"
+        """
+        --plot_dir
+        """
         help = "Directory to save plots (default: edmf_stats_plots)"
         default = "edmf_stats_plots"
     end

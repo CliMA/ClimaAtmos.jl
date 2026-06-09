@@ -51,19 +51,18 @@ O_3(z) = g_1 p^{g_2} e^{(-p / g_3)}
 
 where:
 
-- `O_3(z)` is the ozone concentration in volume mixing ratio (VMR) at altitude `z`.
+  - `O_3(z)` is the ozone concentration in volume mixing ratio (VMR) at altitude `z`.
 
-- `p` is the pressure at altitude `z` calculated using the hydrostatic equation:
-  `p = P_0 exp(-z / H_{Earth})`, where `P_0` is the surface pressure and
-  `H_{Earth}` is the scale height of the Earth's atmosphere (assumed to be 7000
-  meters).
-
-- `g_1`, `g_2`, and `g_3` are empirical constants.
+  - `p` is the pressure at altitude `z` calculated using the hydrostatic equation:
+    `p = P_0 exp(-z / H_{Earth})`, where `P_0` is the surface pressure and
+    `H_{Earth}` is the scale height of the Earth's atmosphere (assumed to be 7000
+    meters).
+  - `g_1`, `g_2`, and `g_3` are empirical constants.
 
 **References**
 
-- Wing, A. A., et al. (2018). Radiative-convective equilibrium model intercomparison
-  project. Geoscientific Model Development, 11(2), 663-690.
+  - Wing, A. A., et al. (2018). Radiative-convective equilibrium model intercomparison
+    project. Geoscientific Model Development, 11(2), 663-690.
 """
 function idealized_ozone(z::FT) where {FT}
     H_EARTH = FT(7000.0)

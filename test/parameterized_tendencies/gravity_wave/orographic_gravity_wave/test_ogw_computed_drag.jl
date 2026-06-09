@@ -109,11 +109,13 @@ field_data = Dict(
 Compute a shared color range across multiple fields for consistent colormaps.
 
 # Arguments
-- `field_data`: Dictionary mapping variable names to field objects
-- `var_names...`: Variable arguments of field names to compute range across
+
+  - `field_data`: Dictionary mapping variable names to field objects
+  - `var_names...`: Variable arguments of field names to compute range across
 
 # Returns
-- Tuple (min_val, max_val) representing the shared color range
+
+  - Tuple (min_val, max_val) representing the shared color range
 """
 function compute_shared_colorrange(field_data, var_names...)
     all_mins = [

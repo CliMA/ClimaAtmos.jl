@@ -8,6 +8,7 @@ The `profiles` field stores precomputed atmospheric profile functions (computed
 at construction time before broadcasting).
 
 ## Example
+
 ```julia
 import Thermodynamics as TD
 import ClimaParams as CP
