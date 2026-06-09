@@ -514,6 +514,9 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         (@name(c.sgsʲs.:(1).q_sno), @name(q_sno)),
         (@name(c.sgsʲs.:(1).n_lcl), @name(n_lcl)),
         (@name(c.sgsʲs.:(1).n_rai), @name(n_rai)),
+        (@name(c.sgsʲs.:(1).n_ice), @name(n_ice)),
+        (@name(c.sgsʲs.:(1).q_rim), @name(q_rim)),
+        (@name(c.sgsʲs.:(1).b_rim), @name(b_rim)),
     )
 
     for j in 1:n

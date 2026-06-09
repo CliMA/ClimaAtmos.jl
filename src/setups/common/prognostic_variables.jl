@@ -130,7 +130,8 @@ function turbconv_center_variables(
     turbconv_model::PrognosticEDMFX,
     microphysics_model::NonEquilibriumMicrophysics,
 )
-    (; T, q_tot, q_liq, q_ice, q_rai, q_sno, n_liq, n_rai, tke, draft_area) = physical_state
+    (; T, q_tot, q_liq, q_ice, q_rai, q_sno, n_liq, n_rai, n_ice, q_rim, b_rim,
+        tke, draft_area) = physical_state
     ρ = air_density(physical_state, params)
     n = n_mass_flux_subdomains(turbconv_model)
     ρtke = ρ * tke
@@ -143,11 +144,12 @@ function turbconv_center_variables(
             (; ρa, mse, q_tot, q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno),
             turbconv_model,
         )
-    else  # NonEquilibriumMicrophysics2M
+    else  # NonEquilibriumMicrophysics2M (2M warm rain + P3 ice)
         sgsʲs = uniform_subdomains(
             (; ρa, mse, q_tot,
                 q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno,
                 n_lcl = n_liq, n_rai,
+                n_ice, q_rim, b_rim,  # P3 cold-state (specific values)
             ),
             turbconv_model,
         )

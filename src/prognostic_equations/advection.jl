@@ -155,6 +155,15 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
                 @. Yₜ.c.sgsʲs.:($$j).n_rai -=
                     split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_rai) -
                     Y.c.sgsʲs.:($$j).n_rai * split_divₕ(ᶜuʲs.:($$j), 1)
+                @. Yₜ.c.sgsʲs.:($$j).n_ice -=
+                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_ice) -
+                    Y.c.sgsʲs.:($$j).n_ice * split_divₕ(ᶜuʲs.:($$j), 1)
+                @. Yₜ.c.sgsʲs.:($$j).q_rim -=
+                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_rim) -
+                    Y.c.sgsʲs.:($$j).q_rim * split_divₕ(ᶜuʲs.:($$j), 1)
+                @. Yₜ.c.sgsʲs.:($$j).b_rim -=
+                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).b_rim) -
+                    Y.c.sgsʲs.:($$j).b_rim * split_divₕ(ᶜuʲs.:($$j), 1)
             end
         end
     end
@@ -460,6 +469,12 @@ function edmfx_sgs_vertical_advection_tendency!(
             sgs_microphysics_tracers = (
                 (@name(c.sgsʲs.:(1).n_lcl), @name(ᶜwₙₗʲs.:(1))),
                 (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
+                # P3 frozen: ice number rides the number-weighted ice velocity;
+                # rime mass/volume ride the mass-weighted ice velocity. None of
+                # these feed q_tot (rime mass already counted inside q_icl).
+                (@name(c.sgsʲs.:(1).n_ice), @name(ᶜwnᵢʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_rim), @name(ᶜwᵢʲs.:(1))),
+                (@name(c.sgsʲs.:(1).b_rim), @name(ᶜwᵢʲs.:(1))),
             )
 
             MatrixFields.unrolled_foreach(

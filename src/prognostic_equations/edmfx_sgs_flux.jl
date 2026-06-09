@@ -135,6 +135,9 @@ function edmfx_sgs_mass_flux_tendency!(
                 (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno), @name(q_sno)),
                 (@name(c.ρn_lcl), @name(c.sgsʲs.:(1).n_lcl), @name(n_lcl)),
                 (@name(c.ρn_rai), @name(c.sgsʲs.:(1).n_rai), @name(n_rai)),
+                (@name(c.ρn_ice), @name(c.sgsʲs.:(1).n_ice), @name(n_ice)),
+                (@name(c.ρq_rim), @name(c.sgsʲs.:(1).q_rim), @name(q_rim)),
+                (@name(c.ρb_rim), @name(c.sgsʲs.:(1).b_rim), @name(b_rim)),
             )
             # TODO using unrolled_foreach here allocates! (breaks the flame tests
             # even though they use 0M microphysics)
@@ -464,6 +467,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
             (@name(c.ρq_sno), α_precip),
             (@name(c.ρn_lcl), FT(1)),
             (@name(c.ρn_rai), α_precip),
+            (@name(c.ρn_ice), FT(1)),
+            (@name(c.ρq_rim), FT(1)),
+            (@name(c.ρb_rim), FT(1)),
         )
         MatrixFields.unrolled_foreach(microphysics_tracers) do (ρχ_name, α)
             MatrixFields.has_field(Y, ρχ_name) || return
