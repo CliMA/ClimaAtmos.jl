@@ -419,8 +419,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
                 hasproperty(Y.c, ρbin_sym) || continue
                 ᶜχʲs = getproperty(p.precomputed, bin_sym)
                 ᶜρχ  = getproperty(Y.c, ρbin_sym)
-                @. p.scratch.ᶜtemp_scalar = specific(ᶜρχ, Y.c.ρ)
-                χ_int_level  = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar, 1))
+                # Same pattern as ᶜq_tot above: bind the lazy specific() to a
+                # variable, then slice it. (Inlining `@. lazy(...)` as a
+                # `Fields.level` argument makes the macro swallow the level
+                # index, producing a `(Broadcasted, Int)` tuple.)
+                ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+                χ_int_level  = Fields.field_values(Fields.level(ᶜχ, 1))
                 χʲ_int_level = Fields.field_values(Fields.level(ᶜχʲs.:($j), 1))
                 @. χʲ_int_level = sgs_scalar_first_interior_bc(
                     z_int_level - z_sfc_halflevel,
@@ -1218,9 +1222,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     hasproperty(Y.c, ρbin_sym) || continue
                     ᶜχʲs = getproperty(p.precomputed, bin_sym)
                     ᶜρχ   = getproperty(Y.c, ρbin_sym)
-                    @. p.scratch.ᶜtemp_scalar = specific(ᶜρχ, Y.c.ρ)
-                    χ_level      = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar, i))
-                    χ_prev_level = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar, i - 1))
+                    # Same pattern as ᶜq_tot: bind the lazy specific() to a
+                    # variable, then slice per level (no materialization).
+                    ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+                    χ_level      = Fields.field_values(Fields.level(ᶜχ, i))
+                    χ_prev_level = Fields.field_values(Fields.level(ᶜχ, i - 1))
                     χʲ_level     = Fields.field_values(Fields.level(ᶜχʲs.:($j), i))
                     χʲ_prev_level = Fields.field_values(Fields.level(ᶜχʲs.:($j), i - 1))
                     @. ρaʲu³ʲ_dataq_ =
@@ -1298,8 +1304,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         hasproperty(Y.c, ρbin_sym) || continue
                         ᶜχʲs = getproperty(p.precomputed, bin_sym)
                         ᶜρχ   = getproperty(Y.c, ρbin_sym)
-                        @. p.scratch.ᶜtemp_scalar = specific(ᶜρχ, Y.c.ρ)
-                        χ_level  = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar, i))
+                        # Same pattern as ᶜq_tot: bind the lazy specific() to a
+                        # variable, then slice per level (no materialization).
+                        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+                        χ_level  = Fields.field_values(Fields.level(ᶜχ, i))
                         χʲ_level = Fields.field_values(Fields.level(ᶜχʲs.:($j), i))
                         @. χʲ_level = ifelse(kill_updraft_2, χ_level, χʲ_level)
                     end

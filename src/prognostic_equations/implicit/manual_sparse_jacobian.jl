@@ -125,9 +125,14 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         i -> MatrixFields.FieldName(:c, Symbol(:ρ, _aerosol_names(atmos.prognostic_aerosols)[i])),
         Val(length(_aerosol_names(atmos.prognostic_aerosols))),
     )
+    # When diffusion is implicit, the aerosol bins get tridiagonal diffusion
+    # blocks (they are diffused in `edmfx_sgs_diffusive_flux_tendency!`);
+    # otherwise they only need identity blocks.
+    prognostic_aerosol_identity_names =
+        use_derivative(diffusion_flag) ? () : prognostic_aerosol_field_names
     identity_blocks = map(
         name -> (name, name) => FT(-1) * I,
-        (@name(c.ρ), sfc_if_available..., prognostic_aerosol_field_names...),
+        (@name(c.ρ), sfc_if_available..., prognostic_aerosol_identity_names...),
     )
 
     active_scalar_names = (@name(c.ρ), @name(c.ρe_tot), ρq_tot_if_available...)
@@ -167,6 +172,13 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             map(
                 name -> (name, name) => similar(Y.c, TridiagonalRow),
                 (diffused_scalar_names..., ρtke_if_available...),
+            )...,
+            # Aerosol bins are diffused like other passive scalars; they only
+            # need the diagonal-in-tracer block ∂(∂ₜρχ)/∂(ρχ) (the ∂/∂ρ
+            # cross-term is zeroed for the other tracers as well).
+            MatrixFields.unrolled_map(
+                name -> (name, name) => similar(Y.c, TridiagonalRow),
+                prognostic_aerosol_field_names,
             )...,
             (
                 is_in_Y(@name(c.ρq_tot)) ?
@@ -683,6 +695,24 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. ∂ᶜρχ_err_∂ᶜρ = zero(typeof(∂ᶜρχ_err_∂ᶜρ))
             @. ∂ᶜρχ_err_∂ᶜρχ +=
                 dtγ * α * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
+        end
+
+        # Prognostic aerosol bins: same diffusion derivative as the tracers
+        # above (α = 1), but assigned rather than accumulated because, unlike
+        # the microphysics tracers, their blocks are not pre-initialized by
+        # the sedimentation section.
+        prognostic_aerosol_field_names = ntuple(
+            i -> MatrixFields.FieldName(
+                :c,
+                Symbol(:ρ, _aerosol_names(p.atmos.prognostic_aerosols)[i]),
+            ),
+            Val(length(_aerosol_names(p.atmos.prognostic_aerosols))),
+        )
+        MatrixFields.unrolled_foreach(prognostic_aerosol_field_names) do ρχ_name
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+            @. ∂ᶜρχ_err_∂ᶜρχ =
+                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ) - (I,)
         end
 
         if MatrixFields.has_field(Y, @name(c.ρtke))

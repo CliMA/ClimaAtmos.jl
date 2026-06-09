@@ -59,7 +59,7 @@ Three integration points, all gated on `p.atmos.edmfx_model.prognostic_aerosols 
 Updraft sea salt at level 1 initialized to grid-mean concentration via `sgs_scalar_first_interior_bc` with zero kinematic surface flux (emission enters the grid-mean, not the updraft directly).
 
 ### 2. Column March (~line 1211)
-Per-level updraft advection using `diag_edmf_advection` + `entr_detr`. Uses a materialized scratch field (`p.scratch.ᶜtemp_scalar`) to compute grid-mean specific mixing ratio before slicing with `Fields.level` — **do not use `@. lazy(...)` here**, it returns a `(Broadcasted, Int)` tuple that `Fields.field_values` cannot accept.
+Per-level updraft advection using `diag_edmf_advection` + `entr_detr`. Grid-mean specific mixing ratio follows the same pattern as `ᶜq_tot` in this function: bind `ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))` to a variable, then slice with `Fields.level(ᶜχ, i)`. (The earlier "(Broadcasted, Int) tuple" failure was a macro-precedence pitfall, not a ClimaCore limitation: inlining `Fields.level(@. lazy(...), i)` makes `@.` swallow the `, i` argument. Bind the lazy first.)
 
 ### 3. Kill-updraft reset (~line 1274)
 When the updraft is killed (weak vertical velocity), updraft sea salt is reset to grid-mean.
@@ -69,13 +69,65 @@ Vertical transport tendency applied to `ρSSLTxx` via `vertical_transport`, usin
 
 ---
 
+## Blowup Diagnosis (2026-06-09)
+
+The "negative tracers + aphysical masses" issue (alternating ± values growing to
+huge magnitudes) was diagnosed by code analysis. Two changes were made:
+
+1. **Root cause: missing eddy-diffusion (ED) term.** Sea salt bins received the
+   EDMF mass-flux (MF) tendency in `edmfx_sgs_mass_flux_tendency!` but were
+   absent from the tracer loop in `edmfx_sgs_diffusive_flux_tendency!`. The
+   deviatoric MF flux `ρa·(wʲ−w̄)(χʲ−χ̄)` contains a `−ρa·(wʲ−w̄)·χ̄` component:
+   an advection of χ̄ with *downward* velocity `−a_eff·Δw`, but `ᶠupwind1`
+   samples against `+Δw`, i.e. from the *downwind* side — a negative-diffusion
+   term on χ̄ (ν ≈ −a_eff·Δw·Δz/2, up to a few m²/s). For energy/q_tot/
+   microphysics this is overwhelmed by their ED flux (K_h ~ 10–100 m²/s damps
+   2Δz modes at 4K/Δz²); sea salt had **no vertical mixing at all**
+   (hyperdiffusion is horizontal-only, vert_diff is off in EDMFX configs).
+   Net result: exponential growth of column-mass-conserving, alternating-sign
+   2Δz noise — exactly the observed symptom (e-folding ~ Δz²/4ν ~ 10³ s).
+   **Fix**: SSLT bins added to the diffusion loop in
+   `edmfx_sgs_diffusive_flux_tendency!` (α = 1). Because vertical diffusion is
+   stiff (the very reason `implicit_diffusion: true` exists, and box EDMFX
+   configs use it), the SSLT bins were also given tridiagonal
+   `∂(∂ₜρχ)/∂(ρχ) = divᵥ ∘ ρK_h gradᵥ ∘ 1/ρ` blocks in
+   `manual_sparse_jacobian.jl`, replacing their identity blocks whenever the
+   diffusion derivative flag is active — the same approximation used for
+   `ρq_tot`, `ρtke`, and the microphysics tracers (∂/∂ρ and ∂K_h/∂tke
+   neglected, exactly as upstream does).
+
+2. **The "blind EDMF fix" environment branch was removed** (was added in commit
+   `1fb1427d1`). Its premise was wrong: algebraically,
+   `ρa⁰(w⁰−w̄)(χ⁰−χ̄) = +(ρaʲ/ρa⁰)·ρaʲ(wʲ−w̄)(χʲ−χ̄)` — the env flux has the
+   *same sign* as the updraft flux (verified numerically), so it amplified
+   rather than balanced the transport, and it bypassed the `0.02/Δw` stability
+   cap. Additionally, reconstructing `χ⁰ = (ρχ−ρaʲχʲ)/ρa⁰` is invalid in
+   DiagnosticEDMFX because the diagnosed updraft is not constrained to satisfy
+   the grid-mean decomposition (upstream's `ᶜspecific_env_value` explicitly
+   errors for DiagnosticEDMFX for this reason); χ⁰ goes strongly negative
+   wherever the plume carries surface concentrations aloft.
+
+Notes from the analysis:
+- The hull clamp in the column march (commit `3d99b9adb`) is sound and was
+  kept: a passive tracer with no in-updraft source must stay in the convex
+  hull of its inputs, and the SGS tendency is column-conservative regardless
+  (zero-flux `ᶜadvdivᵥ` BCs).
+- The `ratio_max` diagnostic (4.1) is misleading: with the hull clamp, a plume
+  legitimately carries surface χ̄ (~1e-9) to levels where local χ̄ ~ 1e-20, so
+  O(1e10) ratios do not localize a bug. The `SSLT_DIAG_COUNTER` instrumentation
+  in `edmfx_sgs_flux.jl` can be removed once runs are clean.
+- Emission sign convention, Gong-2003 units (radius in m from ClimaParams),
+  ocean masking, bottom BC (χʲ₁ = χ̄₁ via zero kinematic flux), kill-updraft
+  resets, and scratch-field usage in the column march were all checked and are
+  correct.
+
 ## Known Issues (as of branch state)
 
-1. **Negative tracers + aphysical masses**: The model produces negative sea salt concentrations and unphysically large masses. Root cause not yet diagnosed. Suspected: SGS mass-flux transport in EDMF is producing spurious sources/sinks. The `vertical_transport` cap may be insufficient, or the updraft initialization at level 1 (grid-mean, not zero) is feeding back incorrectly.
+1. **Deposition is a placeholder**: Single shared exponential half-life, not size-dependent.
 
-2. **`lazy` misuse**: Three instances fixed in `diagnostic_edmf_precomputed_quantities.jl` (lines ~422, ~1222, ~1284) where `Fields.level(@. lazy(...), i)` returned a `(Broadcasted, Int)` tuple. Fixed by materializing into `p.scratch.ᶜtemp_scalar` first. The `lazy` usages in `edmfx_sgs_flux.jl` are fine — they stay inside `@.` broadcast expressions.
+2. **Performance (fixed 2026-06-09)**: the per-bin full-column `specific(ᶜρχ, Y.c.ρ)` scratch broadcast inside the per-level column-march loop (O(nlevels² × nbins)) was removed. All three sea-salt blocks now use the upstream `ᶜq_tot` pattern — a variable-bound `@. lazy(specific(ᶜρχ, Y.c.ρ))` sliced per level with `Fields.level` — which materializes only the level being written and frees `p.scratch.ᶜtemp_scalar` from this file entirely (it is reused as `ᶜa_scalar` in `edmfx_sgs_flux.jl`, so this also removes an aliasing hazard).
 
-3. **Deposition is a placeholder**: Single shared exponential half-life, not size-dependent.
+3. **MF positivity**: even with the ED term restored, the deviatoric MF flux is not positivity-preserving for a tracer with ~zero background aloft; small negatives may still appear and may warrant clipping or a limiter on `ᶜa_scalar` later.
 
 ---
 
