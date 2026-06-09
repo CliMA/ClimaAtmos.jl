@@ -514,17 +514,17 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ∂ᶜK_∂ᶠu₃ - (I_u₃,)
     end
 
-    α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
+    α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
     tracer_info = (
-        (@name(c.ρq_lcl), @name(ᶜwₗ), FT(1)),
-        (@name(c.ρq_icl), @name(ᶜwᵢ), FT(1)),
-        (@name(c.ρq_rai), @name(ᶜwᵣ), α_vert_diff_tracer),
-        (@name(c.ρq_sno), @name(ᶜwₛ), α_vert_diff_tracer),
-        (@name(c.ρn_lcl), @name(ᶜwₙₗ), FT(1)),
-        (@name(c.ρn_rai), @name(ᶜwₙᵣ), α_vert_diff_tracer),
-        (@name(c.ρn_ice), @name(ᶜwnᵢ), FT(1)),
-        (@name(c.ρq_rim), @name(ᶜwᵢ), FT(1)),
-        (@name(c.ρb_rim), @name(ᶜwᵢ), FT(1)),
+        (@name(c.ρq_lcl), @name(ᶜwₗ)),
+        (@name(c.ρq_icl), @name(ᶜwᵢ)),
+        (@name(c.ρq_rai), @name(ᶜwᵣ)),
+        (@name(c.ρq_sno), @name(ᶜwₛ)),
+        (@name(c.ρn_lcl), @name(ᶜwₙₗ)),
+        (@name(c.ρn_rai), @name(ᶜwₙᵣ)),
+        (@name(c.ρn_ice), @name(ᶜwnᵢ)),
+        (@name(c.ρq_rim), @name(ᶜwᵢ)),
+        (@name(c.ρb_rim), @name(ᶜwᵢ)),
     )
     internal_energy_func(name) =
         (name == @name(c.ρq_lcl) || name == @name(c.ρq_rai)) ? TD.internal_energy_liquid :
@@ -547,7 +547,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             dtγ * (-(ᶜprecipdivᵥ_matrix())) ⋅
             DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
 
-        MatrixFields.unrolled_foreach(tracer_info) do (ρχₚ_name, wₚ_name, _)
+        MatrixFields.unrolled_foreach(tracer_info) do (ρχₚ_name, wₚ_name)
             MatrixFields.has_field(Y, ρχₚ_name) || return
 
             ∂ᶜρχₚ_err_∂ᶜρχₚ = matrix[ρχₚ_name, ρχₚ_name]
@@ -652,13 +652,14 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 )
         end
 
-        MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, _, α)
+        MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, _)
             MatrixFields.has_field(Y, ρχ_name) || return
             ∂ᶜρχ_err_∂ᶜρ = matrix[ρχ_name, @name(c.ρ)]
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
             @. ∂ᶜρχ_err_∂ᶜρ = zero(typeof(∂ᶜρχ_err_∂ᶜρ))
             @. ∂ᶜρχ_err_∂ᶜρχ +=
-                dtγ * α * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
+                dtγ * α_vert_diff_microphysics * ᶜdiffusion_h_matrix ⋅
+                DiagonalMatrixRow(1 / ᶜρ)
         end
 
         if MatrixFields.has_field(Y, @name(c.ρtke))
@@ -877,7 +878,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             # vertical diffusion of updrafts — uses ᶜK_h computed in diffusion block
             if use_derivative(diffusion_flag) # sgs_vertdiff always implicit
-                α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
+                α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
                 @. ᶜdiffusion_h_matrix =
                     ᶜadvdivᵥ_matrix() ⋅
                     DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1)) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
@@ -891,20 +892,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     NonEquilibriumMicrophysics2M,
                 }
                     sgs_microphysics_tracers = (
-                        (@name(c.sgsʲs.:(1).q_lcl), FT(1)),
-                        (@name(c.sgsʲs.:(1).q_icl), FT(1)),
-                        (@name(c.sgsʲs.:(1).q_rai), α_vert_diff_tracer),
-                        (@name(c.sgsʲs.:(1).q_sno), α_vert_diff_tracer),
-                        (@name(c.sgsʲs.:(1).n_lcl), FT(1)),
-                        (@name(c.sgsʲs.:(1).n_rai), α_vert_diff_tracer),
+                        (@name(c.sgsʲs.:(1).q_lcl)), (@name(c.sgsʲs.:(1).q_icl)),
+                        (@name(c.sgsʲs.:(1).q_rai)), (@name(c.sgsʲs.:(1).q_sno)),
+                        (@name(c.sgsʲs.:(1).n_lcl)), (@name(c.sgsʲs.:(1).n_rai)),
                     )
                     MatrixFields.unrolled_foreach(
                         sgs_microphysics_tracers,
-                    ) do (χʲ_name, α)
+                    ) do (χʲ_name)
                         MatrixFields.has_field(Y, χʲ_name) || return
                         ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χʲ_name, χʲ_name]
                         @. ∂ᶜχʲ_err_∂ᶜχʲ +=
-                            dtγ * α * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅
+                            dtγ * α_vert_diff_microphysics *
+                            DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅
                             ᶜdiffusion_h_matrix
                     end
                 end

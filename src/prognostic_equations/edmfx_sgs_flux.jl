@@ -453,25 +453,21 @@ function edmfx_sgs_diffusive_flux_tendency!(
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
         end
 
-        α_precip = CAP.α_vert_diff_tracer(params)
+        α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
         ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
         ᶜdivᵥ_ρq = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
         microphysics_tracers = (
-            (@name(c.ρq_lcl), FT(1)),
-            (@name(c.ρq_icl), FT(1)),
-            (@name(c.ρq_rai), α_precip),
-            (@name(c.ρq_sno), α_precip),
-            (@name(c.ρn_lcl), FT(1)),
-            (@name(c.ρn_rai), α_precip),
+            @name(c.ρq_lcl), @name(c.ρq_icl), @name(c.ρq_rai), @name(c.ρq_sno),
+            @name(c.ρn_lcl), @name(c.ρn_rai),
         )
-        MatrixFields.unrolled_foreach(microphysics_tracers) do (ρχ_name, α)
+        MatrixFields.unrolled_foreach(microphysics_tracers) do ρχ_name
             MatrixFields.has_field(Y, ρχ_name) || return
             ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α * ᶠgradᵥ(ᶜχ)))
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_microphysics * ᶠgradᵥ(ᶜχ)))
             ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end

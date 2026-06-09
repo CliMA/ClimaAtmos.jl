@@ -88,7 +88,7 @@ function vertical_diffusion_boundary_layer_tendency!(
 )
     FT = eltype(Y)
     (; vertical_diffusion) = p.atmos
-    α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
+    α_vert_diff_microphysics = CAP.α_vert_diff_tracer(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜu, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
@@ -121,8 +121,11 @@ function vertical_diffusion_boundary_layer_tendency!(
     ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_3
 
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        if ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai))
-            @. ᶜK_h_scaled = α_vert_diff_tracer * ᶜK_h
+        if ρχ_name in (
+            @name(ρq_lcl), @name(ρq_icl), @name(ρq_rai),
+            @name(ρq_sno), @name(ρn_lcl), @name(ρn_rai)
+        )
+            @. ᶜK_h_scaled = α_vert_diff_microphysics * ᶜK_h
         else
             @. ᶜK_h_scaled = ᶜK_h
         end

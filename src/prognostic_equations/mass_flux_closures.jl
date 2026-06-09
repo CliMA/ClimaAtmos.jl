@@ -161,7 +161,7 @@ function edmfx_vertical_diffusion_tendency!(
 
         if p.atmos.microphysics_model isa
            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-            α_precip = CAP.α_vert_diff_tracer(params)
+            α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
             ᶜρʲ = ᶜρʲs.:(1)
             ᶜdivᵥ_q = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
@@ -169,24 +169,27 @@ function edmfx_vertical_diffusion_tendency!(
             )
 
             microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).q_lcl), FT(1)),
-                (@name(c.sgsʲs.:(1).q_icl), FT(1)),
-                (@name(c.sgsʲs.:(1).q_rai), α_precip),
-                (@name(c.sgsʲs.:(1).q_sno), α_precip),
-                (@name(c.sgsʲs.:(1).n_lcl), FT(1)),
-                (@name(c.sgsʲs.:(1).n_rai), α_precip),
+                @name(c.sgsʲs.:(1).q_lcl), @name(c.sgsʲs.:(1).q_icl),
+                @name(c.sgsʲs.:(1).q_rai), @name(c.sgsʲs.:(1).q_sno),
+                @name(c.sgsʲs.:(1).n_lcl), @name(c.sgsʲs.:(1).n_rai),
             )
 
             # TODO: using unrolled_foreach here allocates! (breaks the flame tests
             # even though they use 0M microphysics)
             # MatrixFields.unrolled_foreach(cloud_tracers) do χʲ_name
-            for (χʲ_name, α) in microphysics_tracers
+            for χʲ_name in microphysics_tracers
                 MatrixFields.has_field(Y, χʲ_name) || continue
 
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
 
-                @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
+                @. ᶜχʲₜ -=
+                    ᶜdivᵥ_q(
+                        -(
+                            ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α_vert_diff_microphysics *
+                            ᶠgradᵥ(ᶜχʲ)
+                        ),
+                    ) / ᶜρʲ
             end
         end
     end
