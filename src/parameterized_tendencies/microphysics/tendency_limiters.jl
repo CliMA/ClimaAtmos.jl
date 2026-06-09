@@ -199,7 +199,176 @@ end
         dq_rai_dt = mp_tendency.dq_rai_dt * f_rai,
         dn_rai_dt = mp_tendency.dn_rai_dt * f_rai,
         dq_ice_dt = mp_tendency.dq_ice_dt,
+        dn_ice_dt = mp_tendency.dn_ice_dt,
         dq_rim_dt = mp_tendency.dq_rim_dt,
         db_rim_dt = mp_tendency.db_rim_dt,
+    )
+end
+
+# ============================================================================
+# 2M+P3 saturation-adjustment limiter + substepping
+# ============================================================================
+
+"""
+    apply_2m_satadj_limit(mp_tendency, thp, T, ρ, q_tot, q_lcl, q_rai, q_icl, dt)
+
+Cap the net 2M+P3 condensation/deposition tendencies so a single timestep
+cannot overshoot saturation. The liquid channel `(dq_lcl_dt + dq_rai_dt)` is
+capped against the analytic condensation increment `qcon_satadj`; the ice
+channel `(dq_ice_dt + dq_rim_dt)` is then capped against the deposition
+increment `qdep_satadj` computed from the vapor remaining *after* the liquid
+step. Each channel is scaled by a common, sign-preserving ratio in `[0, 1]`.
+
+A method taking the microphysics timestepping (`::Explicit`/`::Implicit`/
+`::Nothing`) dispatches to this cap only under `Explicit`; it is a no-op
+otherwise (the implicit Jacobian handles stability).
+"""
+@inline function apply_2m_satadj_limit(
+    mp_tendency, thp, T, ρ, q_tot, q_lcl, q_rai, q_icl, dt,
+)
+    (; dq_lcl_dt, dn_lcl_dt, dq_rai_dt, dn_rai_dt,
+        dq_ice_dt, dn_ice_dt, dq_rim_dt, db_rim_dt) = mp_tendency
+    FT = typeof(T)
+    T_safe = max(FT(150), T)
+
+    # Vapor diagnosed from total water minus condensate (no q_sno in P3 here).
+    q_vap = max(zero(FT), q_tot - q_lcl - q_rai - q_icl)
+
+    Rv = TD.Parameters.R_v(thp)
+    cp_d = TD.Parameters.cp_d(thp)
+    L_v = TD.latent_heat_vapor(thp, T_safe)
+    L_s = TD.latent_heat_sublim(thp, T_safe)
+    qv_sat_liq = TD.q_vap_saturation(thp, T_safe, ρ, TD.Liquid())
+    qv_sat_ice = TD.q_vap_saturation(thp, T_safe, ρ, TD.Ice())
+
+    qcon_satadj =
+        (q_vap - qv_sat_liq) /
+        (1 + L_v^2 * qv_sat_liq / (cp_d * Rv * T_safe^2)) / dt
+
+    # Liquid: cap |dq_lcl_dt + dq_rai_dt| against qcon_satadj.
+    net_liq = dq_lcl_dt + dq_rai_dt
+    target_liq = if net_liq > 0
+        min(net_liq, max(zero(FT), qcon_satadj))
+    elseif net_liq < 0
+        max(net_liq, min(zero(FT), qcon_satadj))
+    else
+        zero(FT)
+    end
+    ratio_liq = ifelse(abs(net_liq) > eps(FT), target_liq / net_liq, one(FT))
+    ratio_liq = clamp(ratio_liq, zero(FT), one(FT))
+    dq_lcl_dt *= ratio_liq
+    dq_rai_dt *= ratio_liq
+    dn_lcl_dt *= ratio_liq
+    dn_rai_dt *= ratio_liq
+
+    # Ice: same idea using the vapor remaining after the liquid step.
+    qv_after_liq = max(zero(FT), q_vap - target_liq * dt)
+    qdep_satadj =
+        (qv_after_liq - qv_sat_ice) /
+        (1 + L_s^2 * qv_sat_ice / (cp_d * Rv * T_safe^2)) / dt
+    net_ice = dq_ice_dt + dq_rim_dt
+    target_ice = if net_ice > 0
+        min(net_ice, max(zero(FT), qdep_satadj))
+    elseif net_ice < 0
+        max(net_ice, min(zero(FT), qdep_satadj))
+    else
+        zero(FT)
+    end
+    ratio_ice = ifelse(abs(net_ice) > eps(FT), target_ice / net_ice, one(FT))
+    ratio_ice = clamp(ratio_ice, zero(FT), one(FT))
+    dq_ice_dt *= ratio_ice
+    dq_rim_dt *= ratio_ice
+    dn_ice_dt *= ratio_ice
+    db_rim_dt *= ratio_ice
+
+    return (;
+        dq_lcl_dt, dn_lcl_dt, dq_rai_dt, dn_rai_dt,
+        dq_ice_dt, dn_ice_dt, dq_rim_dt, db_rim_dt,
+    )
+end
+@inline apply_2m_satadj_limit(t, thp, T, ρ, q_tot, q_lcl, q_rai, q_icl, dt, ::Implicit) = t
+@inline apply_2m_satadj_limit(t, thp, T, ρ, q_tot, q_lcl, q_rai, q_icl, dt, ::Nothing) = t
+@inline apply_2m_satadj_limit(t, thp, T, ρ, q_tot, q_lcl, q_rai, q_icl, dt, ::Explicit) =
+    apply_2m_satadj_limit(t, thp, T, ρ, q_tot, q_lcl, q_rai, q_icl, dt)
+
+# Project the full BMT 2M+P3 tendency NamedTuple onto the 8 prognostic fields
+# we integrate (drops the activation/INP diagnostics; keeps dn_ice_dt). Inlined
+# here to avoid coupling to the include order of microphysics_cache.jl.
+@inline _project_mp23(t) = (;
+    t.dq_lcl_dt, t.dn_lcl_dt, t.dq_rai_dt, t.dn_rai_dt,
+    t.dq_ice_dt, t.dn_ice_dt, t.dq_rim_dt, t.db_rim_dt,
+)
+
+@inline function _limited_2m_tendency(
+    cm2p, thp, ρ, T, q_tot, q_lcl, n_lcl, q_rai, n_rai,
+    q_icl, n_ice, q_rim, b_rim, logλ, dt, timestepping,
+)
+    t = _project_mp23(
+        BMT.bulk_microphysics_tendencies(
+            BMT.Microphysics2Moment(), cm2p, thp, ρ, T, q_tot,
+            q_lcl, n_lcl, q_rai, n_rai, q_icl, n_ice, q_rim, b_rim, logλ,
+        ),
+    )
+    t = apply_2m_satadj_limit(t, thp, T, ρ, q_tot, q_lcl, q_rai, q_icl, dt, timestepping)
+    f_liq = coupled_sink_limit_factor(t.dq_lcl_dt, t.dn_lcl_dt, q_lcl, n_lcl, dt)
+    f_rai = coupled_sink_limit_factor(t.dq_rai_dt, t.dn_rai_dt, q_rai, n_rai, dt)
+    return (;
+        dq_lcl_dt = t.dq_lcl_dt * f_liq, dn_lcl_dt = t.dn_lcl_dt * f_liq,
+        dq_rai_dt = t.dq_rai_dt * f_rai, dn_rai_dt = t.dn_rai_dt * f_rai,
+        dq_ice_dt = t.dq_ice_dt, dn_ice_dt = t.dn_ice_dt,
+        dq_rim_dt = t.dq_rim_dt, db_rim_dt = t.db_rim_dt,
+    )
+end
+
+"""
+    bulk_2m_tendencies_substepped(cm2p, thp, ρ, T, q_tot, q_lcl, n_lcl, q_rai,
+        n_rai, q_icl, n_ice, q_rim, b_rim, logλ, dt, nsubs, timestepping)
+
+Forward-Euler the 8-field 2M+P3 bulk tendency over `nsubs` substeps of
+`dt/nsubs`, applying the saturation-adjustment cap and coupled-sink limiter at
+each substep, and return the `dt`-averaged tendency `(state_after − state_before)/dt`.
+`logλ` is held fixed across substeps; `q_tot` is conserved (mass-neutral
+vapor↔condensate exchange); a local temperature `Tsub` evolves via latent
+heating so the satadj cap sees the corrected saturation deficit. Reduces to the
+single-shot limited tendency when `nsubs ≤ 1`.
+"""
+@inline function bulk_2m_tendencies_substepped(
+    cm2p, thp, ρ, T, q_tot, q_lcl, n_lcl, q_rai, n_rai,
+    q_icl, n_ice, q_rim, b_rim, logλ, dt, nsubs, timestepping,
+)
+    FT = typeof(T)
+    if nsubs <= 1
+        return _limited_2m_tendency(
+            cm2p, thp, ρ, T, q_tot, q_lcl, n_lcl, q_rai, n_rai,
+            q_icl, n_ice, q_rim, b_rim, logλ, dt, timestepping,
+        )
+    end
+    dt_sub = dt / FT(nsubs)
+    cp_d = TD.Parameters.cp_d(thp)
+    qlcl, nlcl, qrai, nrai = q_lcl, n_lcl, q_rai, n_rai
+    qicl, nice, qrim, brim = q_icl, n_ice, q_rim, b_rim
+    Tsub = T
+    for _ in 1:nsubs
+        t = _limited_2m_tendency(
+            cm2p, thp, ρ, Tsub, q_tot, qlcl, nlcl, qrai, nrai,
+            qicl, nice, qrim, brim, logλ, dt_sub, timestepping,
+        )
+        qlcl += dt_sub * t.dq_lcl_dt
+        nlcl += dt_sub * t.dn_lcl_dt
+        qrai += dt_sub * t.dq_rai_dt
+        nrai += dt_sub * t.dn_rai_dt
+        qicl += dt_sub * t.dq_ice_dt
+        nice += dt_sub * t.dn_ice_dt
+        qrim += dt_sub * t.dq_rim_dt
+        brim += dt_sub * t.db_rim_dt
+        L_v = TD.latent_heat_vapor(thp, max(FT(150), Tsub))
+        L_s = TD.latent_heat_sublim(thp, max(FT(150), Tsub))
+        Tsub += dt_sub * (L_v * (t.dq_lcl_dt + t.dq_rai_dt) + L_s * t.dq_ice_dt) / cp_d
+    end
+    return (;
+        dq_lcl_dt = (qlcl - q_lcl) / dt, dn_lcl_dt = (nlcl - n_lcl) / dt,
+        dq_rai_dt = (qrai - q_rai) / dt, dn_rai_dt = (nrai - n_rai) / dt,
+        dq_ice_dt = (qicl - q_icl) / dt, dn_ice_dt = (nice - n_ice) / dt,
+        dq_rim_dt = (qrim - q_rim) / dt, db_rim_dt = (brim - b_rim) / dt,
     )
 end
