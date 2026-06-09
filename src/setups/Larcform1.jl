@@ -65,8 +65,8 @@ end
 function center_initial_condition(setup::Larcform1, local_geometry, params)
     FT = eltype(params)
     (; z) = local_geometry.coordinates
-    (; prognostic_tke, profiles) = setup
-    tke = prognostic_tke ? FT(0) : FT(0)
+    (; profiles) = setup
+    tke = FT(0)
     return physical_state(;
         T = profiles.T(z),
         p = profiles.p(z),
