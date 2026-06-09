@@ -38,17 +38,19 @@ function larcform1_profiles(thermo_params)
     Rv_over_Rd = TD.Parameters.Rv_over_Rd(thermo_params)
 
     # RH → q_tot using liquid-water saturation (Pithan 2016 Table 1 specifies wrt liquid)
-    q_tot_prof = APL.ZProfile(z -> if z ≤ z_trop
-        T = T_prof(z)
-        p = p_apl(z)
-        RH = RH_prof(z)
-        p_v_sat = TD.saturation_vapor_pressure(thermo_params, T, TD.Liquid())
-        ϵ = 1 / Rv_over_Rd
-        e = p_v_sat * RH
-        ϵ * e / (p - e + ϵ * e)
-    else
-        q_top
-    end)
+    q_tot_prof = APL.ZProfile(
+        z -> if z ≤ z_trop
+            T = T_prof(z)
+            p = p_apl(z)
+            RH = RH_prof(z)
+            p_v_sat = TD.saturation_vapor_pressure(thermo_params, T, TD.Liquid())
+            ϵ = 1 / Rv_over_Rd
+            e = p_v_sat * RH
+            ϵ * e / (p - e + ϵ * e)
+        else
+            q_top
+        end,
+    )
 
     p_prof = hydrostatic_pressure_profile(;
         thermo_params,
