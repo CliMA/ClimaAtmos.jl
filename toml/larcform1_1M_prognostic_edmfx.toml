@@ -3,4 +3,4 @@
 value = 100
 
 [sublimation_deposition_timescale]
-value = 400
+value = 400                         # increased from 100s in attempt to sustain clw
