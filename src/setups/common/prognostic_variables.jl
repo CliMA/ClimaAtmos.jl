@@ -104,12 +104,17 @@ chemistry_variables(ρ, physical_state, ::Nothing) = (;)
 
 function chemistry_variables(ρ, physical_state, ::GasPhaseChem{N, names}) where {N, names}
     field_names = ntuple(i -> Symbol(:ρ, names[i]), Val(N))
-    field_values = ntuple(_ -> zero(ρ), Val(N))
+    field_values = ntuple(_ -> zero(ρ).+1, Val(N))
+    # print the field values
+        println("Chemistry variables (initialized to 1.0):")
+    for i in 1:N
+        println("  $(field_names[i]) = $(field_values[i])")
+    end
     return NamedTuple{field_names}(field_values)
 end
 chemistry_sgs_variables(q_tot, ::Nothing) = (;)
 function chemistry_sgs_variables(q_tot, ::GasPhaseChem{N, names}) where {N, names}
-    return NamedTuple{names}(ntuple(_ -> zero(q_tot), Val(N)))
+    return NamedTuple{names}(ntuple(_ -> zero(q_tot).+1, Val(N)))
 end
 # ============================================================================
 # Turbconv center dispatch
