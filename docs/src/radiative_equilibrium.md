@@ -23,12 +23,13 @@ t_end: "654days"
 dt: "3hours" 
 dt_save_state_to_disk: "100days" 
 prognostic_surface: true
-job_id: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp"
 ```
 
 Then run the simulation with the following command:
 ```
-julia --project=.buildkite .buildkite/ci_driver.jl --config_file path_to_mysim.yml
+julia --project=.buildkite .buildkite/ci_driver.jl \
+    --config_file path_to_mysim.yml \
+    --job_id single_column_radiative_equilibrium_clearsky_prognostic_surface_temp
 ```
 
 The configuration in the yaml file above can be changed to adjust to the kind of simulation desired. Options such as t\_end can be increased to the desired simulation time. Other arguments such as radiation type can be changed based on the options in `default_config.yml`.

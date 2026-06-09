@@ -102,7 +102,7 @@ function set_identity_matrix_entry!(matrix_entry, row_name, col_name)
         # TODO: Add a method for one(::Axis2Tensor) to simplify this.
         T = eltype(eltype(matrix_entry))
         tensor_data = UniformScaling(one(eltype(T)))
-        -DiagonalMatrixRow(Geometry.AxisTensor(axes(T), tensor_data))
+        -DiagonalMatrixRow(one(eltype(eltype(matrix_entry))))
     else
         zero(eltype(matrix_entry))
     end

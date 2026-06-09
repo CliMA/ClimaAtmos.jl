@@ -3,39 +3,69 @@
 ## Julia
 
 Download and install Julia from [julialang.org/downloads](https://julialang.org/downloads/).
+If you are new to Julia's package manager, the official guides on
+[environments](https://pkgdocs.julialang.org/v1/environments/) and
+[managing packages](https://pkgdocs.julialang.org/v1/managing-packages/) are worth a look.
 
-## ClimaAtmos
+## Installing ClimaAtmos
 
-ClimaAtmos is a registered Julia package:
+ClimaAtmos is a registered Julia package. To install it, open the REPL, type `]` to enter
+the package manager, and add it:
 
-```julia
-using Pkg
-Pkg.add("ClimaAtmos")
+```julia-repl
+pkg> add ClimaAtmos
 ```
 
-To develop or track the latest changes, clone the repository instead:
+(equivalently, `import Pkg; Pkg.add("ClimaAtmos")` from the Julia prompt).
+
+This is the right approach when you want to use ClimaAtmos as a library in your own
+project environment -- for example, to script simulations or post-process output alongside
+other packages. Add it to the environment you are working in, exactly as you would any
+other dependency.
+
+## Running from a cloned repository
+
+Most standalone simulations are launched from a clone of the repository using its bundled 
+`.buildkite` environment, which pins the exact dependency versions used in the
+continuous integration (CI) pipeline. Clone the repository and instantiate that environment:
 
 ```bash
 git clone https://github.com/CliMA/ClimaAtmos.jl.git
 cd ClimaAtmos.jl
-julia --project -e 'using Pkg; Pkg.instantiate()'
+julia --project=.buildkite -e 'using Pkg; Pkg.instantiate()'
 ```
+
+You can then run any configuration through the driver:
+
+```bash
+julia --project=.buildkite .buildkite/ci_driver.jl \
+    --config_file config/model_configs/<config>.yml --job_id <job_id>
+```
+
+The `.buildkite` project `dev`-depends on the checked-out source, so local edits take
+effect immediately. See [Script vs Config Interface](@ref) for the configuration format
+and [Single Column Models](@ref) for ready-made example configurations.
 
 ## GPU support (optional)
 
-To run on GPU, install the appropriate backend and set the device:
+ClimaAtmos selects its compute device through
+[ClimaComms](https://clima.github.io/ClimaComms.jl/stable/). To run on an NVIDIA GPU,
+add `CUDA.jl` to your environment and load the backend with
+[`ClimaComms.@import_required_backends`](@extref):
 
 ```julia
-using Pkg
+import Pkg
 Pkg.add("CUDA")
-```
 
+import ClimaComms
+ClimaComms.@import_required_backends   # loads CUDA.jl when it is installed
+ClimaComms.device()   # `CUDADevice` when a GPU is active, a CPU device otherwise
 
-## Verify
-
-```julia
 import ClimaAtmos as CA
-import CUDA
 ```
 
-If this loads without errors, you're ready to go. Continue to [Your First Simulation](@ref).
+The device is auto-detected: when a CUDA-capable GPU is available it is used by default.
+You can force the choice with the `CLIMACOMMS_DEVICE` environment variable (`"CUDA"` or
+`"CPU"`), or, in a YAML configuration, with the `device` key.
+
+If these load without errors, you're ready to go. Continue to [Your First Simulation](@ref).
