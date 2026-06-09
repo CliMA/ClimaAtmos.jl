@@ -10,7 +10,7 @@ env:
   GKSwstype: 100
   SLURM_KILL_BAD_EXIT: 1
   COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
-  COUPLER_COMMIT: "44fcb38b98ed31d753c464b54a2b9a910d1aaab9"
+  COUPLER_COMMIT: "d6712ed675f9e3f2819a8245514d1eea593ee4d8"
   CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
   BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
 
