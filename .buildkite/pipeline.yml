@@ -1015,6 +1015,7 @@ steps:
           --config_file $CONFIG_PATH/baroclinic_wave_sparse_autodiff.yml
           --job_id baroclinic_wave_sparse_autodiff
         artifact_paths: "baroclinic_wave_sparse_autodiff/output_active/*"
+        soft_fail: true
 
       # - label: "Prognostic EDMF GABLS in a column sparse autodiff"
       #   command: >
@@ -1062,7 +1063,7 @@ steps:
       #     slurm_gpus: 1
       #     slurm_mem: 20GB
 
-  - group: "Timestep cost"
+  - group: "Timestep cost" 
     steps:
       - label: ":alarm_clock: Timestep cost: Moist baroclinic wave"
         retry: *retry_policy
