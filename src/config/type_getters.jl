@@ -189,6 +189,11 @@ function get_setup_type(parsed_args, thermo_params)
             perturb = parsed_args["perturb_initstate"],
             thermo_params,
         )
+    elseif ic_name == "Larcform1"
+        return Setups.Larcform1(;
+            prognostic_tke = parsed_args["prognostic_tke"],
+            thermo_params,
+        )
     elseif ic_name in ("IsothermalProfile", "ConstantBuoyancyFrequencyProfile",
         "DryDensityCurrentProfile", "RisingThermalBubbleProfile")
         return getproperty(Setups, Symbol(ic_name))()

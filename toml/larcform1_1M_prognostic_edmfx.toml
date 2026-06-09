@@ -1,0 +1,6 @@
+# Microphysics timescales (1-moment) for Larcform1
+[condensation_evaporation_timescale]
+value = 100
+
+[sublimation_deposition_timescale]
+value = 400
