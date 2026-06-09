@@ -3,6 +3,7 @@
 #####
 import ClimaComms
 import ClimaCore: Spaces, Topologies, Fields, Geometry, Quadratures, Grids
+import ClimaUtilities.TimeManager: ITime
 import LinearAlgebra: norm_sqr
 using Dates: DateTime, @dateformat_str
 import StaticArrays: SMatrix
@@ -324,15 +325,20 @@ onto the vertical axis.
 """
 get_physical_w(u, local_geometry) = Geometry.WVector(u, local_geometry)[1]
 
-time_to_seconds(t::Number) =
-    t == Inf ? t : error("Uncaught case in computing time from given string.")
-
 """
-    time_to_seconds(s::String)
+    time_to_seconds(t)
 
-Convert a string representing a time to seconds. Supported units: seconds, minutes, hours, days, weeks as
+Normalize a time specification to a number of seconds (`Float64`).
+
+This is the single entry point for the three time representations that flow in
+through the script and YAML interfaces:
+- `Number`: already in seconds, returned as a `Float64` (handles `Inf`).
+- `ITime`: converted to seconds.
+- `String`: parsed. Supported units: seconds, minutes, hours, days, weeks as
 `s`, `secs`, `m`, `mins`, `h`, `hours`, `d`, `days`, `weeks`.
 """
+time_to_seconds(t::Number) = Float64(t)
+time_to_seconds(t::ITime) = float(t)
 function time_to_seconds(s::String)
     s == "Inf" && return Inf
     # match a number followed by one of the supported units of time

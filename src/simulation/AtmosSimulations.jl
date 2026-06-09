@@ -128,10 +128,9 @@ end
 Convert dt, t_start, and t_end to ITime.
 """
 function convert_time_args(dt, t_start, t_end, start_date)
-    to_seconds(t) = t isa AbstractString ? time_to_seconds(t) : Float64(t)
-    dt = ITime(to_seconds(dt))
-    t_start = ITime(to_seconds(t_start), epoch = start_date)
-    t_end = ITime(to_seconds(t_end), epoch = start_date)
+    dt = ITime(time_to_seconds(dt))
+    t_start = ITime(time_to_seconds(t_start), epoch = start_date)
+    t_end = ITime(time_to_seconds(t_end), epoch = start_date)
     # ITime(0) is added for backward compatibility (since t_start used to always be 0)
     (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
     return (dt, t_start, t_end)
@@ -281,9 +280,8 @@ function AtmosSimulation{FT}(;
             restart_file, t_start, start_date, model, context,
         )
         # t_start is already converted from restart file, but we still need to convert dt and t_end
-        to_seconds(t) = t isa AbstractString ? time_to_seconds(t) : Float64(t)
-        dt = ITime(to_seconds(dt))
-        t_end = ITime(to_seconds(t_end), epoch = start_date)
+        dt = ITime(time_to_seconds(dt))
+        t_end = ITime(time_to_seconds(t_end), epoch = start_date)
         # Promote with t_start to ensure all have compatible types
         (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
     else
