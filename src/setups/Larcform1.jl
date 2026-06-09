@@ -43,9 +43,9 @@ function larcform1_profiles(thermo_params)
         p = p_apl(z)
         RH = RH_prof(z)
         p_v_sat = TD.saturation_vapor_pressure(thermo_params, T, TD.Liquid())
-        denom = p - p_v_sat + (1 / Rv_over_Rd) * p_v_sat * RH
-        q_v_sat = p_v_sat * (1 / Rv_over_Rd) / denom
-        q_v_sat * RH
+        ϵ = 1 / Rv_over_Rd
+        e = p_v_sat * RH
+        ϵ * e / (p - e + ϵ * e)
     else
         q_top
     end)
