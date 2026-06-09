@@ -5,12 +5,11 @@ Single-column model setup for the Larcform1 arctic boundary layer case, based on
 Pithan et al. (2016) — SCM intercomparison for the Arctic winter boundary layer.
 
 Canonical conditions (Pithan 2016, Section 2):
-
-  - Location: 80°N
-  - Start date: 1 January (zero solar insolation)
-  - Initial surface temperature: 250 K (sea ice)
-  - Sea ice: 1 m thick, 100% concentration
-  - Geostrophic wind: 5 m/s throughout troposphere
+- Location: 80°N
+- Start date: 1 January (zero solar insolation)
+- Initial surface temperature: 250 K (sea ice)
+- Sea ice: 1 m thick, 100% concentration
+- Geostrophic wind: 5 m/s throughout troposphere
 
 Profiles are sourced from AtmosphericProfilesLibrary. RH is specified with respect
 to liquid water (Pithan 2016, Table 1). The humidity profile is split at the
@@ -40,19 +39,17 @@ function larcform1_profiles(thermo_params)
     Rv_over_Rd = TD.Parameters.Rv_over_Rd(thermo_params)
 
     # RH → q_tot using liquid-water saturation (Pithan 2016 Table 1 specifies wrt liquid)
-    q_tot_prof = APL.ZProfile(
-        z -> if z ≤ z_trop
-            T = T_prof(z)
-            p = p_apl(z)
-            RH = RH_prof(z)
-            p_v_sat = TD.saturation_vapor_pressure(thermo_params, T, TD.Liquid())
-            ϵ = 1 / Rv_over_Rd
-            e = p_v_sat * RH
-            ϵ * e / (p - e + ϵ * e)
-        else
-            q_top
-        end,
-    )
+    q_tot_prof = APL.ZProfile(z -> if z ≤ z_trop
+        T = T_prof(z)
+        p = p_apl(z)
+        RH = RH_prof(z)
+        p_v_sat = TD.saturation_vapor_pressure(thermo_params, T, TD.Liquid())
+        denom = p - p_v_sat + (1 / Rv_over_Rd) * p_v_sat * RH
+        q_v_sat = p_v_sat * (1 / Rv_over_Rd) / denom
+        q_v_sat * RH
+    else
+        q_top
+    end)
 
     p_prof = hydrostatic_pressure_profile(;
         thermo_params,
@@ -68,8 +65,8 @@ end
 function center_initial_condition(setup::Larcform1, local_geometry, params)
     FT = eltype(params)
     (; z) = local_geometry.coordinates
-    (; profiles) = setup
-    tke = FT(0)
+    (; prognostic_tke, profiles) = setup
+    tke = prognostic_tke ? FT(0) : FT(0)
     return physical_state(;
         T = profiles.T(z),
         p = profiles.p(z),
