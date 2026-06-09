@@ -154,6 +154,14 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":genie: Prognostic EDMF: TRMM 2M+P3 column smoke (runscript)"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite runscripts/prognostic_edmfx_trmm_column_2M.jl
+        artifact_paths: "prognostic_edmfx_trmm_column_2M/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":genie: Prognostic EDMF: Idealized plume"
         retry: *retry_policy
         command: >
