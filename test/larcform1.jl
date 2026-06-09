@@ -45,4 +45,9 @@ import AtmosphericProfilesLibrary as APL
     cf = Setups.coriolis_forcing(setup, FT)
     @test cf.coriolis_param ≈ FT(1.432e-4) rtol = 1e-3
     @test cf.prof_ug(0) ≈ FT(5)
+
+    # Surface condition: temperature initialized to 250 K
+    surf_cond = Setups.surface_condition(setup, simulation.integrator.p.params)
+    T_surface = surf_cond.temperature.f()  # Returns(250) function
+    @test T_surface ≈ FT(250) atol = 1e-3
 end
