@@ -131,30 +131,14 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
                 split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_tot) -
                 Y.c.sgsʲs.:($$j).q_tot * split_divₕ(ᶜuʲs.:($$j), 1)
-            if p.atmos.microphysics_model isa Union{
-                NonEquilibriumMicrophysics1M,
-                NonEquilibriumMicrophysics2M,
-            }
-                @. Yₜ.c.sgsʲs.:($$j).q_lcl -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_lcl) -
-                    Y.c.sgsʲs.:($$j).q_lcl * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).q_icl -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_icl) -
-                    Y.c.sgsʲs.:($$j).q_icl * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).q_rai -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_rai) -
-                    Y.c.sgsʲs.:($$j).q_rai * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).q_sno -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_sno) -
-                    Y.c.sgsʲs.:($$j).q_sno * split_divₕ(ᶜuʲs.:($$j), 1)
-            end
-            if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
-                @. Yₜ.c.sgsʲs.:($$j).n_lcl -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_lcl) -
-                    Y.c.sgsʲs.:($$j).n_lcl * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).n_rai -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_rai) -
-                    Y.c.sgsʲs.:($$j).n_rai * split_divₕ(ᶜuʲs.:($$j), 1)
+            # Auto-discovered SGS tracers (microphysics species and any
+            # user-defined passive tracers)
+            for χ_name in sgs_tracer_names(Y)
+                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
+                @. ᶜχʲₜ -=
+                    split_divₕ(ᶜuʲs.:($$j), ᶜχʲ) -
+                    ᶜχʲ * split_divₕ(ᶜuʲs.:($$j), 1)
             end
         end
     end
