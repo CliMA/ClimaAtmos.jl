@@ -1128,8 +1128,10 @@ add_diagnostic_variable!(
 ###
 # Passive tracer A (3d)
 ###
+compute_passiveA(state, _, _) = @. lazy(specific(state.c.ρA, state.c.ρ))
+
 add_diagnostic_variable!(short_name = "passiveA", units = "kg kg^-1",
     long_name = "Passive Tracer A Concentration",
     comments = "Grid-mean specific concentration of passive tracer A",
-    compute = (state, _, _) -> @. lazy(specific(state.c.ρA, state.c.ρ)),
+    compute = compute_passiveA,
 )

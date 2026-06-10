@@ -7,3 +7,6 @@ diagnostics:
     period: 10mins
   - short_name: [entr, detr, turbentr, bgrad, strain, edt, evu]
     period: 10mins
+  - short_name: [passiveA, passiveAup]
+    reduction_time: average
+    period: 1hours

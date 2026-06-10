@@ -124,6 +124,13 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     available_sgs_scalar_names =
         filter(is_in_Y, sgs_scalar_names)
 
+    # Trace-gas names: passive tracers that are NOT moisture species.
+    # When adding a new trace gas B, add @name(c.ρB) / @name(c.sgsʲs.:(1).B) here.
+    trace_gas_names = (@name(c.ρA),)
+    available_trace_gas_names = filter(is_in_Y, trace_gas_names)
+    sgs_trace_gas_names = (@name(c.sgsʲs.:(1).A),)
+    available_sgs_trace_gas_names = filter(is_in_Y, sgs_trace_gas_names)
+
     sgs_u³_if_available =
         is_in_Y(@name(f.sgsʲs.:(1).u₃)) ? (@name(f.sgsʲs.:(1).u₃),) : ()
 
@@ -161,7 +168,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
 
-    diffused_scalar_names = (@name(c.ρe_tot), available_tracer_names...)
+    diffused_scalar_names = (@name(c.ρe_tot), available_tracer_names..., available_trace_gas_names...)
     diffusion_blocks = if use_derivative(diffusion_flag)
         (
             map(
@@ -226,7 +233,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         (
             map(
                 name -> (name, name) => similar(Y.c, TridiagonalRow),
-                available_sgs_scalar_names,
+                (available_sgs_scalar_names..., available_sgs_trace_gas_names...),
             )...,
             map(
                 name ->
@@ -257,19 +264,19 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                     name ->
                         (name, get_χʲ_name_from_ρχ_name(name)) =>
                             similar(Y.c, TridiagonalRow),
-                    available_tracer_names,
+                    (available_tracer_names..., available_trace_gas_names...),
                 )...,
                 map(
                     name ->
                         (name, @name(c.sgsʲs.:(1).ρa)) =>
                             similar(Y.c, TridiagonalRow),
-                    available_tracer_names,
+                    (available_tracer_names..., available_trace_gas_names...),
                 )...,
                 map(
                     name ->
                         (name, @name(f.u₃)) =>
                             similar(Y.c, BidiagonalRow_ACT3),
-                    available_condensate_names,
+                    (available_condensate_names..., available_trace_gas_names...),
                 )...,
                 (@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)) =>
                     similar(Y.c, TridiagonalRow),
@@ -283,6 +290,14 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                     (
                         (@name(c.ρe_tot), @name(c.ρ)) => similar(Y.c, TridiagonalRow),
                         (@name(c.ρq_tot), @name(c.ρ)) => similar(Y.c, TridiagonalRow),
+                    )
+                )...,
+                # Trace gas mass flux blocks: (ρA, ρ) needed when diffusion is explicit
+                (
+                    use_derivative(diffusion_flag) ? () :
+                    map(
+                        name -> (name, @name(c.ρ)) => similar(Y.c, TridiagonalRow),
+                        available_trace_gas_names,
                     )
                 )...,
             )
@@ -302,9 +317,11 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     available_scalar_names = (
         mass_and_surface_names...,
         available_tracer_names...,
+        available_trace_gas_names...,
         @name(c.ρe_tot),
         ρtke_if_available...,
         available_sgs_scalar_names...,
+        available_sgs_trace_gas_names...,
     )
 
     velocity_alg = MatrixFields.BlockLowerTriangularSolve(
@@ -317,17 +334,21 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             gs_scalar_subalg = if !(atmos.microphysics_model isa DryModel)
                 MatrixFields.BlockLowerTriangularSolve(
                     available_condensate_mass_names...,
+                    available_trace_gas_names...,
                     alg₂ = MatrixFields.BlockLowerTriangularSolve(
                         @name(c.ρq_tot),
                     ),
                 )
             else
-                MatrixFields.BlockDiagonalSolve()
+                MatrixFields.BlockLowerTriangularSolve(
+                    available_trace_gas_names...,
+                )
             end
             scalar_subalg =
                 if atmos.turbconv_model isa PrognosticEDMFX
                     MatrixFields.BlockLowerTriangularSolve(
-                        available_sgs_condensate_names...;
+                        available_sgs_condensate_names...,
+                        available_sgs_trace_gas_names...;
                         alg₂ = MatrixFields.BlockLowerTriangularSolve(
                             @name(c.sgsʲs.:(1).q_tot);
                             alg₂ = MatrixFields.BlockLowerTriangularSolve(
@@ -616,6 +637,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     end
 
+    # Trace-gas grid-mean diagonal initialization (no sedimentation)
+    trace_gas_names_init = (
+        @name(c.ρA),
+    )
+    MatrixFields.unrolled_foreach(
+        trace_gas_names_init,
+    ) do ρχ_name
+        MatrixFields.has_field(Y, ρχ_name) || return
+        ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+        @. ∂ᶜρχ_err_∂ᶜρχ = zero(typeof(∂ᶜρχ_err_∂ᶜρχ)) - (I,)
+    end
+
     if use_derivative(diffusion_flag)
         (; turbconv_model) = p.atmos
         turbconv_params = CAP.turbconv_params(params)
@@ -696,6 +729,23 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. ∂ᶜρχ_err_∂ᶜρχ +=
                 dtγ * α * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
+
+
+        # Trace-gas grid-mean diffusion (non-precipitating, α=1)
+        trace_gas_diff_names = (
+            @name(c.ρA),
+        )
+        MatrixFields.unrolled_foreach(
+            trace_gas_diff_names,
+        ) do ρχ_name
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ∂ᶜρχ_err_∂ᶜρ = matrix[ρχ_name, @name(c.ρ)]
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+            @. ∂ᶜρχ_err_∂ᶜρ = zero(typeof(∂ᶜρχ_err_∂ᶜρ))
+            @. ∂ᶜρχ_err_∂ᶜρχ +=
+                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
+        end
+
 
         if MatrixFields.has_field(Y, @name(c.ρtke))
             turbconv_params = CAP.turbconv_params(params)
@@ -845,6 +895,22 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
                 DiagonalMatrixRow(1 / ᶜρʲs.:(1)) - (I,)
 
+            # Trace-gas SGS advection + identity initialization
+            sgs_trace_gases = (
+                @name(c.sgsʲs.:(1).A),
+            )
+            MatrixFields.unrolled_foreach(
+                sgs_trace_gases,
+            ) do χʲ_name
+                MatrixFields.has_field(Y, χʲ_name) || return
+                ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χʲ_name, χʲ_name]
+                @. ∂ᶜχʲ_err_∂ᶜχʲ =
+                    dtγ * (
+                        DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
+                        ᶜadvdivᵥ_matrix() ⋅
+                        ᶠset_tracer_upwind_matrix_bcs(ᶠtracer_upwind_matrix(ᶠu³ʲs.:(1)))
+                    ) - (I,)
+            end
             # contribution of ρʲ variations in vertical transport of ρa and updraft buoyancy eq
             ∂ᶜρaʲ_err_∂ᶜmseʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)]
@@ -1039,6 +1105,20 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶜdiffusion_h_matrix
                     end
                 end
+        
+                # Trace-gas SGS vertical diffusion (non-precipitating)
+                sgs_trace_gases = (
+                    @name(c.sgsʲs.:(1).A),
+                )
+                MatrixFields.unrolled_foreach(
+                    sgs_trace_gases,
+                ) do χʲ_name
+                    MatrixFields.has_field(Y, χʲ_name) || return
+                    ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χʲ_name, χʲ_name]
+                    @. ∂ᶜχʲ_err_∂ᶜχʲ +=
+                        dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅
+                        ᶜdiffusion_h_matrix
+                end
             end
             # entrainment and detrainment (rates are treated explicitly)
             begin # sgs_entr_detr always implicit
@@ -1070,6 +1150,19 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         @. ∂ᶜqʲ_err_∂ᶜqʲ -=
                             dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
                     end
+                end
+        
+                # Trace-gas SGS entrainment/detrainment
+                sgs_trace_gases = (
+                    @name(c.sgsʲs.:(1).A),
+                )
+                MatrixFields.unrolled_foreach(
+                    sgs_trace_gases,
+                ) do χʲ_name
+                    MatrixFields.has_field(Y, χʲ_name) || return
+                    ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χʲ_name, χʲ_name]
+                    @. ∂ᶜχʲ_err_∂ᶜχʲ -=
+                        dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
                 end
             end
 
@@ -1250,6 +1343,33 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
                     end
 
+            
+                    # Trace-gas updraft mass flux contributions
+                    trace_gas_tracers = (
+                        (@name(c.ρA), @name(c.sgsʲs.:(1).A), @name(A)),
+                    )
+                    MatrixFields.unrolled_foreach(
+                        trace_gas_tracers,
+                    ) do (ρχ_name, χʲ_name, χ_name)
+                        MatrixFields.has_field(Y, ρχ_name) || return
+                        ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+
+                        ∂ᶜρχ_err_∂ᶜχʲ =
+                            matrix[ρχ_name, χʲ_name]
+                        @. ∂ᶜρχ_err_∂ᶜχʲ =
+                            dtγ *
+                            ᶜtridiagonal_matrix ⋅
+                            DiagonalMatrixRow(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)))
+
+                        ∂ᶜρχ_err_∂ᶜρa =
+                            matrix[ρχ_name, @name(c.sgsʲs.:(1).ρa)]
+                        @. ∂ᶜρχ_err_∂ᶜρa =
+                            dtγ *
+                            ᶜtridiagonal_matrix ⋅
+                            DiagonalMatrixRow(ᶜχʲ / ᶜρʲs.:(1))
+
+                    end
+
                     # add env flux contributions
                     (; ᶜp) = p.precomputed
                     (; ᶠu³⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) =
@@ -1278,6 +1398,62 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         )
                     MatrixFields.unrolled_foreach(
                         microphysics_tracers,
+                    ) do (ρχ_name, χʲ_name, χ_name)
+                        MatrixFields.has_field(Y, ρχ_name) || return
+                        ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                        ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+
+                        ∂ᶜρχ_err_∂ᶜχʲ =
+                            matrix[ρχ_name, χʲ_name]
+                        @. ∂ᶜρχ_err_∂ᶜχʲ +=
+                            dtγ *
+                            ᶜtridiagonal_matrix ⋅
+                            DiagonalMatrixRow(-1 * Y.c.sgsʲs.:(1).ρa / ᶜρ⁰)
+
+                        ∂ᶜρχ_err_∂ᶜρa =
+                            matrix[ρχ_name, @name(c.sgsʲs.:(1).ρa)]
+                        # pull out and store for kernel performance
+                        @. ᶠbidiagonal_matrix_ct3_2 =
+                            ᶠset_tracer_upwind_matrix_bcs(
+                                ᶠtracer_upwind_matrix(CT3(sign(ᶠu³⁰_data))),
+                            ) ⋅ DiagonalMatrixRow(ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰))
+                        @. ∂ᶜρχ_err_∂ᶜρa +=
+                            dtγ *
+                            ᶜtracer_advection_matrix ⋅
+                            DiagonalMatrixRow(
+                                (ᶠu³⁰_data - ᶠu³ʲ_data) / ᶠinterp(ᶜρa⁰),
+                            ) ⋅ ᶠbidiagonal_matrix_ct3_2
+
+                        @. ∂ᶜρχ_err_∂ᶜρa +=
+                            dtγ *
+                            ᶜtridiagonal_matrix ⋅
+                            DiagonalMatrixRow(-1 * ᶜχʲ / ᶜρ⁰)
+
+                        ∂ᶜρχ_err_∂ᶜρχ =
+                            matrix[ρχ_name, ρχ_name]
+                        @. ∂ᶜρχ_err_∂ᶜρχ +=
+                            dtγ *
+                            ᶜtridiagonal_matrix ⋅
+                            DiagonalMatrixRow(1 / ᶜρ⁰)
+
+                        ∂ᶜρχ_err_∂ᶠu₃ =
+                            matrix[ρχ_name, @name(f.u₃)]
+                        @. ∂ᶜρχ_err_∂ᶠu₃ =
+                            dtγ * ᶜtracer_advection_matrix ⋅
+                            DiagonalMatrixRow(
+                                ᶠset_tracer_upwind_bcs(
+                                    ᶠtracer_upwind(CT3(sign(ᶠu³⁰_data)),
+                                        ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰),
+                                    ),
+                                ) * adjoint(C3(sign(ᶠu³⁰_data))) *
+                                ᶠinterp(Y.c.ρ / ᶜρa⁰) * g³³(ᶠgⁱʲ),
+                            )
+                    end
+
+            
+                    # Trace-gas environment mass flux contributions
+                    MatrixFields.unrolled_foreach(
+                        trace_gas_tracers,
                     ) do (ρχ_name, χʲ_name, χ_name)
                         MatrixFields.has_field(Y, ρχ_name) || return
                         ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
