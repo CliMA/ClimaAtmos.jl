@@ -7,16 +7,17 @@ A fully resolved ClimaAtmos configuration, used to build an `AtmosModel` and
 `AtmosSimulation`.
 
 # Fields
-- `toml_dict`: the merged ClimaParams TOML parameter dictionary (built by
-  `ClimaParams.create_toml_dict` from the files listed under the `toml` config
-  key). It holds the physical parameter values (with units and defaults) that
-  the model reads, as opposed to `parsed_args`, which holds the run/model
-  configuration options. `eltype(toml_dict)` determines the float type `FT`.
-- `parsed_args`: the run configuration as a `key => value` dictionary, obtained
-  by overriding `default_config.yml` with the user-supplied configuration.
-- `comms_ctx`: the `ClimaComms` context (device and MPI information).
-- `config_files`: the configuration files that were merged to build this config.
-- `job_id`: a unique identifier for the run, used e.g. for the output directory.
+
+  - `toml_dict`: the merged ClimaParams TOML parameter dictionary (built by
+    `ClimaParams.create_toml_dict` from the files listed under the `toml` config
+    key). It holds the physical parameter values (with units and defaults) that
+    the model reads, as opposed to `parsed_args`, which holds the run/model
+    configuration options. `eltype(toml_dict)` determines the float type `FT`.
+  - `parsed_args`: the run configuration as a `key => value` dictionary, obtained
+    by overriding `default_config.yml` with the user-supplied configuration.
+  - `comms_ctx`: the `ClimaComms` context (device and MPI information).
+  - `config_files`: the configuration files that were merged to build this config.
+  - `job_id`: a unique identifier for the run, used e.g. for the output directory.
 """
 struct AtmosConfig{FT, TD, PA, C, CF}
     toml_dict::TD

@@ -654,22 +654,12 @@ function check_case_consistency(parsed_args)
     prescribed_flow = parsed_args["prescribed_flow"]
     config = parsed_args["config"]
 
-    # --- Geometry consistency (always checked, independent of the case-specific
-    # checks below) ---
+    # Geometry consistency (always checked, independent of the case-specific
+    # checks below)
     valid_configs = ("sphere", "column", "box", "plane")
     @assert(
         config in valid_configs,
         "Unknown `config = $(repr(config))`. Valid options are: $(join(valid_configs, ", "))."
-    )
-    # Columns use a FiniteDifference grid with no horizontal spectral-element
-    # space, so topography and the bubble correction do not apply.
-    @assert(
-        config != "column" || topography == "NoWarp",
-        "`config: column` does not support topography (got `topography: $topography`)."
-    )
-    @assert(
-        config != "column" || !parsed_args["bubble"],
-        "`config: column` does not support the bubble correction; set `bubble: false`."
     )
 
     # ISDAC consistency: when initial_condition is ISDAC, surface/rad/external

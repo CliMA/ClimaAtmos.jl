@@ -332,10 +332,11 @@ Normalize a time specification to a number of seconds (`Float64`).
 
 This is the single entry point for the three time representations that flow in
 through the script and YAML interfaces:
-- `Number`: already in seconds, returned as a `Float64` (handles `Inf`).
-- `ITime`: converted to seconds.
-- `String`: parsed. Supported units: seconds, minutes, hours, days, weeks as
-`s`, `secs`, `m`, `mins`, `h`, `hours`, `d`, `days`, `weeks`.
+
+  - `Number`: already in seconds, returned as a `Float64` (handles `Inf`).
+  - `ITime`: converted to seconds.
+  - `String`: parsed. Supported units: seconds, minutes, hours, days, weeks as
+    `s`, `secs`, `m`, `mins`, `h`, `hours`, `d`, `days`, `weeks`.
 """
 time_to_seconds(t::Number) = Float64(t)
 time_to_seconds(t::ITime) = float(t)
