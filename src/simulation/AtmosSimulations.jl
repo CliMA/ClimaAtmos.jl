@@ -57,7 +57,7 @@ function setup_diagnostics_and_writers(
 
     # Add default diagnostics if enabled
     if default
-        sim_duration = t_end isa ITime ? t_end - dt : t_end
+        sim_duration = t_end - dt
         default_diag_list = CAD.default_diagnostics(
             model,
             sim_duration,
