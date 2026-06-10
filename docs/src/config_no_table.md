@@ -62,7 +62,7 @@ See below for the full list of configuration arguments.
 
 # Common Configurations
 
-ClimaAtmos provides a set of common numerical configurations that can be used as building blocks for different types of simulations. These configurations are located in `config/common_configs/` and contain standardized settings for grid resolution, time stepping, and numerical schemes.
+ClimaAtmos provides a set of common numerical configurations that can be used as building blocks for different types of simulations. These configurations are located in `config/common_configs/` and contain standardized settings for grid resolution, time stepping, numerical schemes, and diagnostics.
 
 ## Available Common Configurations
 
@@ -80,6 +80,14 @@ ClimaAtmos provides a set of common numerical configurations that can be used as
 
 - **`numerics_sphere_he30ze63.yml`**: Spherical configuration with 30 horizontal elements (110km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
+### Diagnostics Configurations for Prognostic EDMF Columns
+
+Common diagnostics sets for prognostic EDMF single-column runs. Each file defines a `diagnostics:` block mostly at 10-minute output frequency; individual model configs can add case-specific diagnostics on top.
+
+- **`diagnostics_column_progedmf_0M.yml`**: Standard diagnostics for prognostic EDMF columns with 0-moment microphysics (`microphysics_model: "0M"`). Includes atmospheric state, surface fluxes and precipitation, updraft/environment profiles, and entrainment/detrainment variables.
+
+- **`diagnostics_column_progedmf_1M.yml`**: Standard diagnostics for prognostic EDMF columns with 1-moment microphysics (`microphysics_model: "1M"`). Extends the 0M set with rain/snow specific humidities, updraft/environment precipitation variables, and the full suite of 1M bulk microphysics process rates for the environment, updraft, and environment (`mp1m_*`, `mp1mup_*`, `mp1men_*`).
+
 ## Using Common Configurations
 
 Common configurations are designed to be used in combination with model-specific configurations. In the CI pipeline and when running simulations, you can specify multiple configuration files:
@@ -90,4 +98,13 @@ julia --project=.buildkite .buildkite/ci_driver.jl \
   --config_file config/model_configs/your_model_config.yml
 ```
 
-The common configuration provides the numerical setup (grid, time stepping, etc.), while the model configuration provides the physical setup (physics schemes, initial conditions, etc.). The model configuration will override any conflicting settings from the common configuration. Please modify them only if you are certain of the implications.
+For EDMF single-column runs, a diagnostics common config is prepended before the model config:
+
+```bash
+julia --project=.buildkite .buildkite/ci_driver.jl \
+  --config_file config/common_configs/diagnostics_column_progedmf_0M.yml \
+  --config_file config/model_configs/prognostic_edmfx_bomex_column.yml \
+  --job_id prognostic_edmfx_bomex_column
+```
+
+The common configuration provides the numerical setup (grid, time stepping, etc.), or common diagnostics, while the model configuration provides the physical setup (physics schemes, initial conditions, etc.). The model configuration will override any conflicting settings from the common configuration. Please modify them only if you are certain of the implications.

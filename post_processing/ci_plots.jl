@@ -1458,12 +1458,11 @@ function make_plots(
     elseif sim_type isa EDMFColumnPlotsWithPrecip
         if sim_type isa Val{:prognostic_edmfx_rico_column_2M}
             precip_names = (
-                "husra", "hussn", "husraup", "hussnup", "husraen", "hussnen",
-                "cdnc", "ncra", "cdncup", "ncraup", "cdncen", "ncraen",
+                "husra", "hussn", "husraup", "hussnup",
+                "cdnc", "ncra", "cdncup", "ncraup",
             )
         else
-            precip_names =
-                ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen")
+            precip_names = ("husra", "hussn", "husraup", "hussnup")
         end
     else
         precip_names = ()
@@ -1471,26 +1470,61 @@ function make_plots(
 
     short_names = [
         "wa", "waup", "ta", "taup", "hus", "husup", "arup", "tke", "ua",
-        "thetaa", "thetaaup", "ha", "haup", "hur", "hurup", "lmix",
+        "thetaa", "thetaaup", "hur", "hurup", "lmix",
         "cl", "clw", "clwup", "cli", "cliup",
         precip_names...,
     ]
-    reduction = "inst"
+    reduction_avg = "average"
+    reduction_inst = "inst"
 
-    available_periods = ClimaAnalysis.available_periods(
-        simdirs[1];
-        short_name = short_names[1],
-        reduction,
+    available_periods_avg = collect(
+        ClimaAnalysis.available_periods(
+            simdirs[1];
+            short_name = short_names[1],
+            reduction = reduction_avg,
+        ),
     )
-    # choose the shortest available period
-    available_periods = collect(available_periods) # ensure vector for indexing
-    period = available_periods[argmin(CA.time_to_seconds.(available_periods))]
+    period_avg =
+        available_periods_avg[argmin(CA.time_to_seconds.(available_periods_avg))]
+
+    available_periods_inst = collect(
+        ClimaAnalysis.available_periods(
+            simdirs[1];
+            short_name = short_names[1],
+            reduction = reduction_inst,
+        ),
+    )
+    period_inst =
+        available_periods_inst[argmin(CA.time_to_seconds.(available_periods_inst))]
 
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
-            vars = map(short_name -> get(simdir; short_name, reduction, period), name_tuple)
+            vars = map(
+                short_name ->
+                    get(
+                        simdir;
+                        short_name,
+                        reduction = reduction_inst,
+                        period = period_inst,
+                    ),
+                name_tuple,
+            )
             # For box types, slice to a point (x=0, y=0)
+            if is_box
+                return map(var -> slice(var, x = 0.0, y = 0.0), vars)
+            else
+                return vars
+            end
+        end
+
+    var_groups_z_avg =
+        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
+            vars = map(
+                short_name ->
+                    get(simdir; short_name, reduction = reduction_avg, period = period_avg),
+                name_tuple,
+            )
             if is_box
                 return map(var -> slice(var, x = 0.0, y = 0.0), vars)
             else
@@ -1500,7 +1534,7 @@ function make_plots(
 
     var_groups_z = [
         ([slice(v, time = LAST_SNAP) for v in group]...,) for
-        group in var_groups_zt
+        group in var_groups_z_avg
     ]
 
     tmp_file = make_plots_generic(
@@ -1513,6 +1547,17 @@ function make_plots(
     )
 
     summary_files = [tmp_file]
+
+    # Time-height contour plots: existing EDMF variables (intermediate)
+    zt_file = make_plots_generic(
+        output_paths,
+        collect(Iterators.flatten(var_groups_zt));
+        output_name = "zt_contour",
+        plot_fn = plot_parsed_attribute_title!,
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+    push!(summary_files, zt_file)
 
     # Microphysics 1M process tendency plots (grid-mean, updraft, environment)
     mp1m_vars_zt = []  # time-z fields for contour plots
@@ -1544,40 +1589,17 @@ function make_plots(
         # Load the time-z fields for all mp1m variables
         mp1m_vars_zt =
             map_comparison(mp1m_simdirs, mp1m_all_names) do simdir, sn
-                var = get(simdir; short_name = sn, reduction, period)
+                var = get(
+                    simdir;
+                    short_name = sn,
+                    reduction = reduction_inst,
+                    period = period_inst,
+                )
                 if is_box
                     var = slice(var, x = 0.0, y = 0.0)
                 end
                 return var
             end
-
-        # Group as (grid-mean, updraft, environment) triplets for profile plots
-        mp1m_tuples = [
-            ("mp1m_$(s)", "mp1mup_$(s)", "mp1men_$(s)")
-            for s in mp1m_source_names
-        ]
-
-        mp1m_profile_groups =
-            map_comparison(mp1m_simdirs, mp1m_tuples) do simdir, name_tuple
-                vars = map(name_tuple) do sn
-                    var = get(simdir; short_name = sn, reduction, period)
-                    if is_box
-                        var = slice(var, x = 0.0, y = 0.0)
-                    end
-                    return slice(var, time = LAST_SNAP)
-                end
-                return vars
-            end
-
-        mp1m_file = make_plots_generic(
-            mp1m_output_paths,
-            mp1m_profile_groups;
-            output_name = "mp1m_tendencies",
-            plot_fn = plot_edmf_vert_profile!,
-            MAX_NUM_COLS = 2,
-            MAX_NUM_ROWS = 4,
-        )
-        push!(summary_files, mp1m_file)
 
         # Time-height contour plots for mp1m: 3 columns (gm, up, en) per row
         # with shared symmetric colorbar per row and divergent colormap.
@@ -1601,11 +1623,28 @@ function make_plots(
         push!(summary_files, mp1m_zt_file)
     end
 
-    # Time-height contour plots: existing EDMF variables
+    # Timeseries line plots for column-integrated variables (no z dimension)
+    # This is the final assembling call — merges all summary_files into summary.pdf
+    timeseries_names = ["lwp", "clivi", "rwp", "swp", "pr"]
+    timeseries_names_avail =
+        timeseries_names ∩ collect(keys(simdirs[1].vars))
+    vars_timeseries =
+        map_comparison(simdirs, timeseries_names_avail) do simdir, short_name
+            var = get(
+                simdir;
+                short_name,
+                reduction = reduction_inst,
+                period = period_inst,
+            )
+            if is_box
+                var = slice(var, x = 0.0, y = 0.0)
+            end
+            return var
+        end
     make_plots_generic(
         output_paths,
-        collect(Iterators.flatten(var_groups_zt)),
-        plot_fn = plot_parsed_attribute_title!,
+        vars_timeseries;
+        output_name = "summary",
         summary_files = summary_files,
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
