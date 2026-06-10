@@ -77,68 +77,68 @@ boundary faces. To get cell center values from cell face values, it is only used
 for interpolation.
 
 For `BestFit`, we start by assuming that there is some constant lapse rate
-    ∂T(z)/∂z = L.
+∂T(z)/∂z = L.
 This tells us that, for some constant T₀,
-    T(z) = T₀ + L * z.
+T(z) = T₀ + L * z.
 Since T(z₁) = T₁ and T(z₂) = T₂, for some z₁ != z₂, we have that
-    T₁ = T₀ + L * z₁ and T₂ = T₀ + L * z₂ ==>
-    T₂ - T₁ = L * (z₂ - z₁) ==>
-    L = (T₂ - T₁) / (z₂ - z₁) ==>
-    T₁ = T₀ + (T₂ - T₁) / (z₂ - z₁) * z₁ ==>
-    T₀ = (T₁ * z₂ - T₂ * z₁) / (z₂ - z₁) ==>
-    T(z) = T₁ + (T₂ - T₁) / (z₂ - z₁) * (z - z₁).
+T₁ = T₀ + L * z₁ and T₂ = T₀ + L * z₂ ==>
+T₂ - T₁ = L * (z₂ - z₁) ==>
+L = (T₂ - T₁) / (z₂ - z₁) ==>
+T₁ = T₀ + (T₂ - T₁) / (z₂ - z₁) * z₁ ==>
+T₀ = (T₁ * z₂ - T₂ * z₁) / (z₂ - z₁) ==>
+T(z) = T₁ + (T₂ - T₁) / (z₂ - z₁) * (z - z₁).
 To get p(z), we do different things depending on whether or not T₁ == T₂ (i.e.,
 whether or not L == 0).
 If T₁ == T₂, we assume hydrostatic equilibrium, so that, for some constant C,
-    ∂p(z)/∂z = C * p(z).
+∂p(z)/∂z = C * p(z).
 This tells us that, for some constant p₀,
-    p(z) = p₀ * exp(C * z).
+p(z) = p₀ * exp(C * z).
 Since p(z₁) = p₁ and p(z₂) = p₂, we have that
-    p₁ = p₀ * exp(C * z₁) and p₂ = p₀ * exp(C * z₂) ==>
-    p₂ / p₁ = exp(C * (z₂ - z₁)) ==>
-    C = log(p₂ / p₁) / (z₂ - z₁) ==>
-    p₁ = p₀ * (p₂ / p₁)^(z₁ / (z₂ - z₁)) ==>
-    p₀ = p₁ / (p₂ / p₁)^(z₁ / (z₂ - z₁)) ==>
-    p(z) = p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁)).
+p₁ = p₀ * exp(C * z₁) and p₂ = p₀ * exp(C * z₂) ==>
+p₂ / p₁ = exp(C * (z₂ - z₁)) ==>
+C = log(p₂ / p₁) / (z₂ - z₁) ==>
+p₁ = p₀ * (p₂ / p₁)^(z₁ / (z₂ - z₁)) ==>
+p₀ = p₁ / (p₂ / p₁)^(z₁ / (z₂ - z₁)) ==>
+p(z) = p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁)).
 If T₁ != T₂, we assume that p and T are governed by an isentropic process, so
 that, for some constants A and B,
-    p(z) = A * T(z)^B.
+p(z) = A * T(z)^B.
 Since p(z₁) = p₁, p(z₂) = p₂, T(z₁) = T₁, and T(z₂) = T₂, we have that
-    p₁ = A * T₁^B and p₂ = A * T₂^B ==>
-    p₂ / p₁ = (T₂ / T₁)^B ==>
-    B = log(p₂ / p₁) / log(T₂ / T₁) ==>
-    p₁ = A * (p₂ / p₁)^(log(T₁) / log(T₂ / T₁)) ==>
-    A = p₁ / (p₂ / p₁)^(log(T₁) / log(T₂ / T₁)) ==>
-    p(z) = p₁ * (p₂ / p₁)^(log(T(z) / T₁) / log(T₂ / T₁)).
+p₁ = A * T₁^B and p₂ = A * T₂^B ==>
+p₂ / p₁ = (T₂ / T₁)^B ==>
+B = log(p₂ / p₁) / log(T₂ / T₁) ==>
+p₁ = A * (p₂ / p₁)^(log(T₁) / log(T₂ / T₁)) ==>
+A = p₁ / (p₂ / p₁)^(log(T₁) / log(T₂ / T₁)) ==>
+p(z) = p₁ * (p₂ / p₁)^(log(T(z) / T₁) / log(T₂ / T₁)).
 So, in conclusion, we have that
-    T(z) = T₁ + (T₂ - T₁) / (z₂ - z₁) * (z - z₁) and
-    p(z) = T₁ == T₂ ?
-           p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁)) :
-           p₁ * (p₂ / p₁)^(log(T(z) / T₁) / log(T₂ / T₁)).
+T(z) = T₁ + (T₂ - T₁) / (z₂ - z₁) * (z - z₁) and
+p(z) = T₁ == T₂ ?
+p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁)) :
+p₁ * (p₂ / p₁)^(log(T(z) / T₁) / log(T₂ / T₁)).
 
 `UniformZ`, `UniformP`, and `GeometricMean` are all special cases of `BestFit`
 that assume a particular value for z in order to avoid requiring z-coordinates.
 For `UniformZ`, we assume that
-    z = (z₁ + z₂) / 2.
+z = (z₁ + z₂) / 2.
 This tells us that
-    T(z) = (T₁ + T₂) / 2 and
-    p(z) = T₁ == T₂ ?
-        sqrt(p₁ * p₂) :
-        p₁ * (p₂ / p₁)^(log(T(z) / T₁) / log(T₂ / T₁)).
+T(z) = (T₁ + T₂) / 2 and
+p(z) = T₁ == T₂ ?
+sqrt(p₁ * p₂) :
+p₁ * (p₂ / p₁)^(log(T(z) / T₁) / log(T₂ / T₁)).
 For `UniformP`, we assume that T₁ != T₂ and p₁ != p₂, and that
-    z = z₁ + (z₂ - z₁) / (T₂ / T₁ - 1) *
-        ((T₂ / T₁)^(log((1 + p₂ / p₁) / 2) / log(p₂ / p₁)) - 1).
+z = z₁ + (z₂ - z₁) / (T₂ / T₁ - 1) *
+((T₂ / T₁)^(log((1 + p₂ / p₁) / 2) / log(p₂ / p₁)) - 1).
 This tells us that
-    T(z) = T₁ * (T₂ / T₁)^(log(p(z) / p₁) / log(p₂ / p₁)) and
-    p(z) = (p₁ + p₂) / 2.
+T(z) = T₁ * (T₂ / T₁)^(log(p(z) / p₁) / log(p₂ / p₁)) and
+p(z) = (p₁ + p₂) / 2.
 For `GeometricMean`, we assume that
-    z = z₁ + (z₂ - z₁) / (sqrt(T₂ / T₁) + 1).
+z = z₁ + (z₂ - z₁) / (sqrt(T₂ / T₁) + 1).
 This tells us that
-    T(z) = sqrt(T₁ * T₂) and p(z) = sqrt(p₁ * p₂).
+T(z) = sqrt(T₁ * T₂) and p(z) = sqrt(p₁ * p₂).
 
 Finally, `ArithmeticMean` is the simplest possible interpolation method:
-    T(z) = (T₁ + T₂) / 2 and
-    p(z) = (p₁ + p₂) / 2.
+T(z) = (T₁ + T₂) / 2 and
+p(z) = (p₁ + p₂) / 2.
 """
 abstract type AbstractInterpolation end
 struct NoInterpolation <: AbstractInterpolation end
@@ -161,25 +161,25 @@ while `UseSurfaceTempAtBottom` does not.
 
 For `UseSurfaceTempAtBottom` and `HydrostaticBottom`, we assume that we have a
 dry ideal gas undergoing an isentropic process, so that, for some constant A,
-    p(z) = A * T(z)^(cₚ / R).
+p(z) = A * T(z)^(cₚ / R).
 Since p(z⁺) = p⁺ and T(z⁺) = T⁺, where z⁺ is the z-coordinate of the first cell
 center above the bottom cell face, we have that
-    p⁺ = A * T⁺^(cₚ / R) ==>
-    A = p⁺ / T⁺^(cₚ / R) ==>
-    p(z) = p⁺ * (T(z) / T⁺)^(cₚ / R).
+p⁺ = A * T⁺^(cₚ / R) ==>
+A = p⁺ / T⁺^(cₚ / R) ==>
+p(z) = p⁺ * (T(z) / T⁺)^(cₚ / R).
 
 For `UseSurfaceTempAtBottom`, we assume that the air at the bottom cell face is
 in thermal equilibrium with the surface, whose temperature is Tₛ, so that
-    T(z) = Tₛ.
+T(z) = Tₛ.
 
 For `HydrostaticBottom`, we assume that the lapse rate in the bottom cell is
-    ∂T(z)/∂z = g / cₚ.
+∂T(z)/∂z = g / cₚ.
 This tells us that, for some constant T₀,
-    T(z) = T₀ + g / cₚ * z.
+T(z) = T₀ + g / cₚ * z.
 Since T(z⁺) = T⁺, we have that
-    T⁺ = T₀ + g / cₚ * z⁺ ==>
-    T₀ = T⁺ - g / cₚ * z⁺ ==>
-    T(z) = T⁺ + g / cₚ * (z - z⁺).
+T⁺ = T₀ + g / cₚ * z⁺ ==>
+T₀ = T⁺ - g / cₚ * z⁺ ==>
+T(z) = T⁺ + g / cₚ * (z - z⁺).
 """
 abstract type AbstractBottomExtrapolation end
 struct SameAsInterpolation <: AbstractBottomExtrapolation end
@@ -312,11 +312,12 @@ with all of the data required to use it. Provides easy access to `RRTMGP`'s
 inputs and outputs (e.g., `model.center_temperature` and `model.face_flux`).
 
 After constructing an `RRTMGPModel`, use it as follows:
-- update all the inputs that have changed since it was constructed; e.g.,
-  `model.center_temperature .= field2array(current_center_temperature_field)`
-- call `update_fluxes!(model)`
-- use the values of any fluxes of interest; e.g.,
-  `field2array(face_flux_field) .= model.face_flux`
+
+  - update all the inputs that have changed since it was constructed; e.g.,
+    `model.center_temperature .= field2array(current_center_temperature_field)`
+  - call `update_fluxes!(model)`
+  - use the values of any fluxes of interest; e.g.,
+    `field2array(face_flux_field) .= model.face_flux`
 
 The `RRTMGPModel` assumes that pressure and temperature live on cell centers,
 and internally interpolates data to cell faces when needed.
@@ -331,95 +332,108 @@ top/bottom of the atmosphere can be specified as a scalar, or as the full 1D
 array.
 
 # Positional Arguments
-- Artifacts stored in `RRTMGPReferenceData/<file_name>`.
-   Should be callable with filenames:
-  - `lookup_tables/clearsky_lw.nc`
-  - `lookup_tables/cloudysky_lw.nc`
-  - `lookup_tables/clearsky_sw.nc`
-  - `lookup_tables/cloudysky_sw.nc`
-- `FT`: floating-point number type (performance with `Float32` is questionable)
-- `DA`: array type (defaults to `CuArray` when a compatible GPU is available)
+
+  - Artifacts stored in `RRTMGPReferenceData/<file_name>`.
+    Should be callable with filenames:
+
+      + `lookup_tables/clearsky_lw.nc`
+      + `lookup_tables/cloudysky_lw.nc`
+      + `lookup_tables/clearsky_sw.nc`
+      + `lookup_tables/cloudysky_sw.nc`
+
+  - `FT`: floating-point number type (performance with `Float32` is questionable)
+  - `DA`: array type (defaults to `CuArray` when a compatible GPU is available)
 
 # Keyword Arguments
-- `ncol`: number of vertical columns in the domain/extension
-- `domain_nlay`: number of cells (layers) in the domain
-- `radiation_mode`: overall mode for running `RRTMGP`; available options are
-    - `GrayRadiation`: uniform absorption across all frequencies
-    - `ClearSkyRadiation`: full RRTMGP model, but without clouds
-    - `AllSkyRadiation`: full RRTMGP model
-    - `AllSkyRadiationWithClearSkyDiagnostics`: computes the fluxes for both
-      `AllSkyRadiation` and `ClearSkyRadiation`
-- `interpolation`: method for determining implied values (if there are any);
-  see documentation for `AbstractInterpolation` for available options
-- `bottom_extrapolation`: method for determining implied values at the bottom
-  cell face (only used when the cell face values are implied); see documentation
-  for `AbstractInterpolation` for available options
-- `use_global_means_for_well_mixed_gases`: whether to use a scalar value to
-  represent the volume mixing ratio of each well-mixed gas (i.e., a gas that is
-  not water vapor or ozone), instead of using an array that represents a
-  spatially varying volume mixing ratio
-- `center_pressure` and/or `face_pressure`: air pressure in Pa on cell centers
-  and on cell faces (either one or both of these must be specified)
-- `center_temperature` and/or `face_temperature`: air temperature in K on cell
-  centers and on cell faces (if `center_pressure` is specified, then
-  `center_temperature` must also be specified, and, if `face_pressure` is
-  specified, then `face_temperature` must also be specified)
-- `surface_temperature`: temperature of the surface in K (required)
-- `surface_emissivity`: longwave emissivity of the surface (required)
-- `top_of_atmosphere_lw_flux_dn`: incoming longwave radiation in W/m^2
-  (assumed to be 0 by default)
-- `direct_sw_surface_albedo`: direct shortwave albedo of the surface
-  (required)
-- `diffuse_sw_surface_albedo`: diffuse shortwave albedo of the surface
-  (required)
-- `cos_zenith`: cosine of the zenith angle of sun in radians (required)
-- `toa_flux`: irradiance of sun in W/m^2 (required); the incoming
-  direct shortwave radiation is given by
-  `model.toa_flux .* model.cos_zenith`
-- `top_of_atmosphere_diffuse_sw_flux_dn`: incoming diffuse shortwave
-  radiation in W/m^2 (assumed to be 0 by default)
-- arguments only available when `radiation_mode isa GrayRadiation`:
-    - `lapse_rate`: a scalar value that specifies the lapse rate throughout the
-      atmosphere (required); this is a constant that can't be modified after the
-      model is constructed
-    - `optical_thickness_parameter`: the longwave optical depth at the surface
-      (required)
-- arguments only available when `!(radiation_mode isa GrayRadiation)`:
-    - `center_volume_mixing_ratio_h2o`: volume mixing ratio of water vapor on
-      cell centers (required)
-    - `center_volume_mixing_ratio_o3`: volume mixing ratio of ozone on cell
-      centers (required)
-    - arguments only available when `use_global_means_for_well_mixed_gases`:
-        - `volume_mixing_ratio_<gas_name>` for `gas_name` in `co2`, `n2o`, `co`,
-          `ch4`, `o2`, `n2`, `ccl4`, `cfc11`, `cfc12`, `cfc22`, `hfc143a`,
-          `hfc125`, `hfc23`, `hfc32`, `hfc134a`, `cf4`, `no2`: a scalar value
-          that specifies the volume mixing ratio of each well-mixed gas
-          throughout the atmosphere (required)
-    - arguments only available when `!use_global_means_for_well_mixed_gases`:
-        - `center_volume_mixing_ratio_<gas_name>` for `gas_name` in `co2`,
-          `n2o`, `co`,`ch4`, `o2`, `n2`, `ccl4`, `cfc11`, `cfc12`, `cfc22`,
-          `hfc143a`, `hfc125`, `hfc23`, `hfc32`, `hfc134a`, `cf4`, `no2`: volume
-          mixing ratio of each well-mixed gas on cell centers (required)
-    - arguments only available when `!(radiation_mode isa ClearSkyRadiation)`:
-        - `center_cloud_liquid_effective_radius`: effective radius of cloud
-        liquid water in m on cell centers (required)
-        - `center_cloud_ice_effective_radius`: effective radius of cloud ice
-        water in m on cell centers (required)
-        - `center_cloud_liquid_water_path`: mean path length of cloud liquid
-        water in m on cell centers (required)
-        - `center_cloud_ice_water_path`: mean path length of cloud ice water in
-        m on cell centers (required)
-        - `center_cloud_fraction`: cloud fraction on cell centers (required)
-        - `ice_roughness`: either 1, 2, or 3, with 3 corresponding to the
-        roughest ice (required); this is a constant that can't be modified after
-        the model is constructed
-    - `latitude`: latitude in degrees (assumed to be 45 by default); used for
-      computing the concentration of air in molecules/cm^2
-- arguments only available when
-  `requires_z(interpolation) || requires_z(bottom_extrapolation)`:
-    - `center_z`: z-coordinate in m at cell centers
-    - `face_z`: z-coordinate in m at cell faces
-    - `planet_radius`: planet radius (used to compute metric scaling factor)
+
+  - `ncol`: number of vertical columns in the domain/extension
+
+  - `domain_nlay`: number of cells (layers) in the domain
+  - `radiation_mode`: overall mode for running `RRTMGP`; available options are
+
+      + `GrayRadiation`: uniform absorption across all frequencies
+      + `ClearSkyRadiation`: full RRTMGP model, but without clouds
+      + `AllSkyRadiation`: full RRTMGP model
+      + `AllSkyRadiationWithClearSkyDiagnostics`: computes the fluxes for both
+        `AllSkyRadiation` and `ClearSkyRadiation`
+  - `interpolation`: method for determining implied values (if there are any);
+    see documentation for `AbstractInterpolation` for available options
+  - `bottom_extrapolation`: method for determining implied values at the bottom
+    cell face (only used when the cell face values are implied); see documentation
+    for `AbstractInterpolation` for available options
+  - `use_global_means_for_well_mixed_gases`: whether to use a scalar value to
+    represent the volume mixing ratio of each well-mixed gas (i.e., a gas that is
+    not water vapor or ozone), instead of using an array that represents a
+    spatially varying volume mixing ratio
+  - `center_pressure` and/or `face_pressure`: air pressure in Pa on cell centers
+    and on cell faces (either one or both of these must be specified)
+  - `center_temperature` and/or `face_temperature`: air temperature in K on cell
+    centers and on cell faces (if `center_pressure` is specified, then
+    `center_temperature` must also be specified, and, if `face_pressure` is
+    specified, then `face_temperature` must also be specified)
+  - `surface_temperature`: temperature of the surface in K (required)
+  - `surface_emissivity`: longwave emissivity of the surface (required)
+  - `top_of_atmosphere_lw_flux_dn`: incoming longwave radiation in W/m^2
+    (assumed to be 0 by default)
+  - `direct_sw_surface_albedo`: direct shortwave albedo of the surface
+    (required)
+  - `diffuse_sw_surface_albedo`: diffuse shortwave albedo of the surface
+    (required)
+  - `cos_zenith`: cosine of the zenith angle of sun in radians (required)
+  - `toa_flux`: irradiance of sun in W/m^2 (required); the incoming
+    direct shortwave radiation is given by
+    `model.toa_flux .* model.cos_zenith`
+  - `top_of_atmosphere_diffuse_sw_flux_dn`: incoming diffuse shortwave
+    radiation in W/m^2 (assumed to be 0 by default)
+  - arguments only available when `radiation_mode isa GrayRadiation`:
+
+      + `lapse_rate`: a scalar value that specifies the lapse rate throughout the
+        atmosphere (required); this is a constant that can't be modified after the
+        model is constructed
+      + `optical_thickness_parameter`: the longwave optical depth at the surface
+        (required)
+  - arguments only available when `!(radiation_mode isa GrayRadiation)`:
+
+      + `center_volume_mixing_ratio_h2o`: volume mixing ratio of water vapor on
+        cell centers (required)
+
+      + `center_volume_mixing_ratio_o3`: volume mixing ratio of ozone on cell
+        centers (required)
+      + arguments only available when `use_global_means_for_well_mixed_gases`:
+
+          * `volume_mixing_ratio_<gas_name>` for `gas_name` in `co2`, `n2o`, `co`,
+            `ch4`, `o2`, `n2`, `ccl4`, `cfc11`, `cfc12`, `cfc22`, `hfc143a`,
+            `hfc125`, `hfc23`, `hfc32`, `hfc134a`, `cf4`, `no2`: a scalar value
+            that specifies the volume mixing ratio of each well-mixed gas
+            throughout the atmosphere (required)
+      + arguments only available when `!use_global_means_for_well_mixed_gases`:
+
+          * `center_volume_mixing_ratio_<gas_name>` for `gas_name` in `co2`,
+            `n2o`, `co`,`ch4`, `o2`, `n2`, `ccl4`, `cfc11`, `cfc12`, `cfc22`,
+            `hfc143a`, `hfc125`, `hfc23`, `hfc32`, `hfc134a`, `cf4`, `no2`: volume
+            mixing ratio of each well-mixed gas on cell centers (required)
+      + arguments only available when `!(radiation_mode isa ClearSkyRadiation)`:
+
+          * `center_cloud_liquid_effective_radius`: effective radius of cloud
+            liquid water in m on cell centers (required)
+          * `center_cloud_ice_effective_radius`: effective radius of cloud ice
+            water in m on cell centers (required)
+          * `center_cloud_liquid_water_path`: mean path length of cloud liquid
+            water in m on cell centers (required)
+          * `center_cloud_ice_water_path`: mean path length of cloud ice water in
+            m on cell centers (required)
+          * `center_cloud_fraction`: cloud fraction on cell centers (required)
+          * `ice_roughness`: either 1, 2, or 3, with 3 corresponding to the
+            roughest ice (required); this is a constant that can't be modified after
+            the model is constructed
+      + `latitude`: latitude in degrees (assumed to be 45 by default); used for
+        computing the concentration of air in molecules/cm^2
+  - arguments only available when
+    `requires_z(interpolation) || requires_z(bottom_extrapolation)`:
+
+      + `center_z`: z-coordinate in m at cell centers
+      + `face_z`: z-coordinate in m at cell faces
+      + `planet_radius`: planet radius (used to compute metric scaling factor)
 """
 RRTMGPModel(
     params::RRTMGP.Parameters.ARP,
@@ -885,15 +899,16 @@ end
 Updates the fluxes in the `RRTMGPModel` based on its internal state. Returns the
 net flux at cell faces in the domain, `model.face_flux`. The full set of fluxes
 available in the model after calling this function is
-- `face_flux`
-- `face_lw_flux`, `face_lw_flux_dn`, `face_lw_flux_up`
-- `face_sw_flux`, `face_sw_flux_dn`, `face_sw_flux_up`, `face_sw_direct_flux_dn`
-If `radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics`, the set of
-available fluxes also includes
-- `face_clear_flux`
-- `face_clear_lw_flux`, `face_clear_lw_flux_dn`, `face_clear_lw_flux_up`
-- `face_clear_sw_flux`, `face_clear_sw_flux_dn`, `face_clear_sw_flux_up`,
-  `face_clear_sw_direct_flux_dn`
+
+  - `face_flux`
+  - `face_lw_flux`, `face_lw_flux_dn`, `face_lw_flux_up`
+  - `face_sw_flux`, `face_sw_flux_dn`, `face_sw_flux_up`, `face_sw_direct_flux_dn`
+    If `radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics`, the set of
+    available fluxes also includes
+  - `face_clear_flux`
+  - `face_clear_lw_flux`, `face_clear_lw_flux_dn`, `face_clear_lw_flux_up`
+  - `face_clear_sw_flux`, `face_clear_sw_flux_dn`, `face_clear_sw_flux_up`,
+    `face_clear_sw_direct_flux_dn`
 """
 NVTX.@annotate function update_fluxes!(model, seedval)
     (; radiation_mode) = model

@@ -12,22 +12,22 @@ on each iteration of the implicit solver). This includes all quantities related
 to velocity and thermodynamics that are used in the implicit tendency.
 
 The following grid-scale quantities are treated implicitly and are precomputed:
-    - `ᶜu`: covariant velocity on cell centers
-    - `ᶠu`: contravariant velocity on cell faces
-    - `ᶜK`: kinetic energy on cell centers
-    - `ᶜT`: air temperature on cell centers
-    - `ᶜq_tot_nonneg`: total water specific humidity, clipped to ≥ 0
-    - `ᶜq_liq`: total liquid water (cloud liquid + rain), clipped to ≥ 0
-    - `ᶜq_ice`: total ice water (cloud ice + snow), clipped to ≥ 0
-    - `ᶜp`: air pressure on cell centers
-If the `turbconv_model` is `PrognosticEDMFX`, there also two SGS versions of
-every quantity except for `ᶜp` (which is shared across all subdomains):
-    - `_⁰`: value for the environment
-    - `_ʲs`: a tuple of values for the mass-flux subdomains
-In addition, there are several other SGS quantities for `PrognosticEDMFX`:
-    - `ᶜρʲs`: a tuple of the air densities of the mass-flux subdomains on cell
-        centers
 
+  - `ᶜu`: covariant velocity on cell centers
+  - `ᶠu`: contravariant velocity on cell faces
+  - `ᶜK`: kinetic energy on cell centers
+  - `ᶜT`: air temperature on cell centers
+  - `ᶜq_tot_nonneg`: total water specific humidity, clipped to ≥ 0
+  - `ᶜq_liq`: total liquid water (cloud liquid + rain), clipped to ≥ 0
+  - `ᶜq_ice`: total ice water (cloud ice + snow), clipped to ≥ 0
+  - `ᶜp`: air pressure on cell centers
+    If the `turbconv_model` is `PrognosticEDMFX`, there also two SGS versions of
+    every quantity except for `ᶜp` (which is shared across all subdomains):
+  - `_⁰`: value for the environment
+  - `_ʲs`: a tuple of values for the mass-flux subdomains
+    In addition, there are several other SGS quantities for `PrognosticEDMFX`:
+  - `ᶜρʲs`: a tuple of the air densities of the mass-flux subdomains on cell
+    centers
 
 TODO: Rename `ᶜK` to `ᶜκ`.
 """

@@ -51,6 +51,7 @@ import ArgParse
 function parse_commandline()
     s = ArgParse.ArgParseSettings()
     ArgParse.@add_arg_table! s begin
+        #! format: off
         "--data_dir"
         help = "Data directory"
         arg_type = String
@@ -65,6 +66,7 @@ function parse_commandline()
         help = "Number of longitude points"
         arg_type = Int
         default = 180
+        #! format: on
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)

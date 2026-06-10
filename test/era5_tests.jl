@@ -85,7 +85,7 @@ end
         @test all(isapprox.(processed_data[clima_var][:], 0, atol = 1e-10))
     end
 
-    # data is stored from top of atmosphere to surface 
+    # data is stored from top of atmosphere to surface
     @test monotonic_decreasing(processed_data["zg"], 3)
     @test monotonic_increasing(processed_data["ta"], 3)
     @test monotonic_increasing(processed_data["hus"], 3)
@@ -115,7 +115,7 @@ end
     # Test time check
     @test CA.check_daily_forcing_times(sim_forcing_daily, parsed_args)
 
-    # The monthly diurnal case data and processing happen exactly the 
+    # The monthly diurnal case data and processing happen exactly the
     # same as single day files (just the source files are different).
     # So we can test the monthly time check in the same way.
     @test CA.check_monthly_forcing_times(sim_forcing_daily, parsed_args)
@@ -262,7 +262,7 @@ end
 
     # Analytical validation:
     # 1. Temperature advection: u = 1, v = 0, T = 300 + lon
-    # ∂T/∂x = (∂T/∂lon) / (R cos(lat) * π/180) 
+    # ∂T/∂x = (∂T/∂lon) / (R cos(lat) * π/180)
     #       = 1.0 / (R * 1.0 * π/180) = 180 / (π R)
     # tntha = -u * ∂T/∂x = -1.0 * 180 / (π R)
     expected_tntha = -1.0 * 180.0 / (π * external_tv_params.planet_radius)

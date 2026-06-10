@@ -72,14 +72,18 @@ In other words, we strip out `output_dir/`, and swap `job_id` and
 # Configuration: enable debug output only on the CI pipeline
 # ────────────────────────────────────────────────────────────────────
 
-"""Return `true` when running on the ClimaAtmos CI pipeline."""
+"""
+Return `true` when running on the ClimaAtmos CI pipeline.
+"""
 debug_reproducibility() =
     get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) == "climaatmos-ci"
 
 import Dates
 import OrderedCollections
 
-"""Return a string listing all files (recursively) in `dir`."""
+"""
+Return a string listing all files (recursively) in `dir`.
+"""
 function string_all_files_in_dir(dir)
     msg = "Files in dir $dir\n"
     for file in all_files_in_dir(dir)
@@ -113,7 +117,9 @@ function discover_reproducibility_job_ids(;
     return job_ids
 end
 
-"""Return a flat vector of all file paths (recursively) under `dir`."""
+"""
+Return a flat vector of all file paths (recursively) under `dir`.
+"""
 function all_files_in_dir(dir)
     all_files = String[]
     for (root, dirs, files) in walkdir(dir)
@@ -130,7 +136,9 @@ end
 # Reference counter: monotonically increasing version identifier
 # ────────────────────────────────────────────────────────────────────
 
-"""Read the reference counter (integer on the first line) from `file`."""
+"""
+Read the reference counter (integer on the first line) from `file`.
+"""
 read_ref_counter(file) = parse(Int, first(readlines(file)))
 
 """
@@ -233,7 +241,7 @@ end
 Return all subfolders in vectory of directory, `dirs`, that meet the following
 criteria:
 
- - A `ref_counter.jl` file is missing
+  - A `ref_counter.jl` file is missing
 """
 function invalid_reference_folders(dirs)
     invalid_folders = filter(dirs) do p
@@ -249,8 +257,9 @@ end
 Return a vector of reproducibility bins.
 
 Bins are sorted from newest to oldest:
- - `bins[1], bins[end]` are the newest and oldest bins
- - `bins[i][1], bins[i][end]` are the newest oldest comparable states.
+
+  - `bins[1], bins[end]` are the newest and oldest bins
+  - `bins[i][1], bins[i][end]` are the newest oldest comparable states.
 
 ```
 comparable states
@@ -433,9 +442,9 @@ end
         ref_counter_PR = read_ref_counter(ref_counter_file_PR),
         skip = get(ENV, "BUILDKITE_PIPEL Data movement will occur when this function is called:
 
- - on a job run in buildkite
- - when in the merge queue
- - when on the main branch
+  - on a job run in buildkite
+  - when in the merge queue
+  - when on the main branch
 """
 function move_data_to_save_dir(;
     buildkite_ci = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) ==
@@ -533,12 +542,13 @@ end
     )
 
 Returns the output file, to be saved, given:
- - `src` the source file
- - `job_id` the job ID
- - `dest_root` the destination root directory
- - `commit` the commit hash
- - `repro_folder` reproducibility folder
- - `strip_folder` function to strip folders in output path
+
+  - `src` the source file
+  - `job_id` the job ID
+  - `dest_root` the destination root directory
+  - `commit` the commit hash
+  - `repro_folder` reproducibility folder
+  - `strip_folder` function to strip folders in output path
 """
 function save_dir_transform(
     src;
@@ -563,9 +573,10 @@ end
 
 Return the reproducibility destination directory:
 `root/commit_sha/repro_folder`, given:
- - `dest_root` the destination root directory
- - `commit` the commit hash
- - `repro_folder` reproducibility folder
+
+  - `dest_root` the destination root directory
+  - `commit` the commit hash
+  - `repro_folder` reproducibility folder
 """
 function destination_directory(;
     dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
@@ -601,7 +612,9 @@ function save_dir_in_out_list(; dirs_src, kwargs...)
     return (; files_src, files_dest)
 end
 
-"""Parse a Julia literal expression from `file` and evaluate it."""
+"""
+Parse a Julia literal expression from `file` and evaluate it.
+"""
 parse_file(file) = eval(Meta.parse(read(file, String)))
 
 # ────────────────────────────────────────────────────────────────────
@@ -633,7 +646,7 @@ Returns a Dict mapping each job ID to either the parsed comparison result
 dict (if a computed RMS file was found) or `false` (if not found).
 
 It is expected that files exist in the form:
-    `joinpath(job_ids[1], subfolder, rms_filename)`
+`joinpath(job_ids[1], subfolder, rms_filename)`
 where `is_rms_file(rms_filename)` is `true`.
 """
 function get_computed_rms(;
@@ -700,6 +713,7 @@ import ArgParse
 function reproducibility_test_params()
     s = ArgParse.ArgParseSettings()
     ArgParse.@add_arg_table! s begin
+        #! format: off
         "--job_id"
         help = "Uniquely identifying string for a particular job"
         arg_type = String
@@ -710,6 +724,7 @@ function reproducibility_test_params()
         help = "Bool indicating that the job is flaky, use `@test_broken` on flaky job and report flakiness"
         arg_type = Bool
         default = false
+        #! format: on
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     job_id = parsed_args["job_id"]

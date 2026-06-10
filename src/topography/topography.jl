@@ -24,12 +24,13 @@ struct NoTopography <: AbstractTopography end
 
 """
     CosineTopography{D, FT}(; h_max = 25, λ = 25e3)
-    
+
 Cosine hill topography in 2D or 3D.
 
 # Arguments
-- `h_max::FT`: Maximum elevation (m)
-- `λ::FT`: Wavelength of the cosine hills (m)
+
+  - `h_max::FT`: Maximum elevation (m)
+  - `λ::FT`: Wavelength of the cosine hills (m)
 """
 Base.@kwdef struct CosineTopography{D, FT} <: AbstractTopography
     h_max::FT = 25.0
@@ -51,9 +52,10 @@ topography_cosine(x, y, λ_x, λ_y, h_max) =
 Witch of Agnesi mountain topography for 2D simulations.
 
 # Arguments
-- `h_max`: Maximum elevation (m)
-- `x_center`: Center position (m)
-- `a`: Mountain width parameter (m)
+
+  - `h_max`: Maximum elevation (m)
+  - `x_center`: Center position (m)
+  - `a`: Mountain width parameter (m)
 """
 Base.@kwdef struct AgnesiTopography{FT} <: AbstractTopography
     h_max::FT = 25.0
@@ -70,10 +72,11 @@ topography_function((; h_max, x_center, a)::AgnesiTopography, (; x)) =
 Schar mountain topography for 2D simulations.
 
 # Arguments
-- `h_max`: Maximum elevation (m)
-- `x_center`: Center position (m)
-- `λ`: Wavelength parameter (m)
-- `a`: Mountain width parameter (m)
+
+  - `h_max`: Maximum elevation (m)
+  - `x_center`: Center position (m)
+  - `λ`: Wavelength parameter (m)
+  - `a`: Mountain width parameter (m)
 """
 Base.@kwdef struct ScharTopography{FT} <: AbstractTopography
     h_max::FT = 25.0
@@ -175,11 +178,13 @@ struct LinearWarp <: MeshWarpType end
 Smooth Level Vertical (SLEVE) coordinate warping for terrain-following meshes.
 
 # Arguments
-- `eta`: Threshold parameter (if z/z_top > eta, no warping is applied). Default: 0.7
-- `s`: Decay scale parameter controlling how quickly the warping decays with height. Default: 10.0
+
+  - `eta`: Threshold parameter (if z/z_top > eta, no warping is applied). Default: 0.7
+  - `s`: Decay scale parameter controlling how quickly the warping decays with height. Default: 10.0
 
 # References
-Schär et al. (2002), "A new terrain-following vertical coordinate formulation 
+
+Schär et al. (2002), "A new terrain-following vertical coordinate formulation
 for atmospheric prediction models", Mon. Wea. Rev.
 """
 Base.@kwdef struct SLEVEWarp{FT <: AbstractFloat} <: MeshWarpType

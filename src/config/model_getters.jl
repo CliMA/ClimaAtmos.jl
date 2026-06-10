@@ -432,9 +432,10 @@ end
 Parse the SGS distribution type from configuration.
 
 # Config value mapping
-- `"lognormal"` → `LogNormalSGS()`
-- `"gaussian"` → `GaussianSGS()`
-- `"mean"` → `GridMeanSGS()` (grid-mean only, no SGS sampling)
+
+  - `"lognormal"` → `LogNormalSGS()`
+  - `"gaussian"` → `GaussianSGS()`
+  - `"mean"` → `GridMeanSGS()` (grid-mean only, no SGS sampling)
 """
 function get_sgs_distribution(parsed_args)
     dist_name = parsed_args["sgs_distribution"]

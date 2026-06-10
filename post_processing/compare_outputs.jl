@@ -9,6 +9,7 @@ using LinearAlgebra: norm
 function parse_commandline()
     s = ArgParse.ArgParseSettings()
     ArgParse.@add_arg_table! s begin
+        #! format: off
         "--output_folder_1"
         help = "Output file for job 1"
         arg_type = String
@@ -22,6 +23,7 @@ function parse_commandline()
         help = "A bool: compare the state between output_folder_1 and output_folder_2 [`true` [default], `false`]"
         arg_type = Bool
         default = true
+        #! format: on
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)

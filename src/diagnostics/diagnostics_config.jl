@@ -8,23 +8,25 @@ keyword argument.
 
 # Fields
 
-- `default::Bool = true`: include the built-in ClimaAtmos diagnostic set for
-  the chosen `AtmosModel`.
-- `additional = ()`: extra user-supplied diagnostics. Each entry can be:
-    - a `ClimaDiagnostics.ScheduledDiagnostic` (full control);
-    - a `Pair` like `"ua" => (; period = "30mins", reduction = "average")`
-      (short_name => options as a NamedTuple);
-    - a NamedTuple with at least `short_name` and `period`,
-      e.g. `(; short_name = "ts", period = "1hours")`;
-    - a YAML-style `Dict{String,Any}` (the same shape produced by the
-      `diagnostics:` YAML key).
+  - `default::Bool = true`: include the built-in ClimaAtmos diagnostic set for
+    the chosen `AtmosModel`.
 
-  Mixed lists are allowed.
-- `interpolation_num_points = nothing`: override the NetCDF remap grid (e.g.
-  `(180, 90, 10)`). When `nothing`, falls back to the default chosen from the
-  underlying space.
-- `output_at_levels::Bool = true`: write at model levels (no vertical
-  interpolation). Set `false` to interpolate to pressure levels.
+  - `additional = ()`: extra user-supplied diagnostics. Each entry can be:
+
+      + a `ClimaDiagnostics.ScheduledDiagnostic` (full control);
+      + a `Pair` like `"ua" => (; period = "30mins", reduction = "average")`
+        (short_name => options as a NamedTuple);
+      + a NamedTuple with at least `short_name` and `period`,
+        e.g. `(; short_name = "ts", period = "1hours")`;
+      + a YAML-style `Dict{String,Any}` (the same shape produced by the
+        `diagnostics:` YAML key).
+
+    Mixed lists are allowed.
+  - `interpolation_num_points = nothing`: override the NetCDF remap grid (e.g.
+    `(180, 90, 10)`). When `nothing`, falls back to the default chosen from the
+    underlying space.
+  - `output_at_levels::Bool = true`: write at model levels (no vertical
+    interpolation). Set `false` to interpolate to pressure levels.
 
 A simulation produces no diagnostics when `default = false` and `additional`
 is empty.

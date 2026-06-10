@@ -6,7 +6,6 @@ horizontal_constant_diffusion_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 """
     horizontal_constant_diffusion_tendency!(Yₜ,Y, p, t, ::ConstantHorizontalDiffusion)
-
 """
 function horizontal_constant_diffusion_tendency!(
     Yₜ,

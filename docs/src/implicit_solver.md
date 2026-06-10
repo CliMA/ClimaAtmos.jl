@@ -90,7 +90,7 @@ x^D =
 x + \hat{x}^1 * \varepsilon_1 + \hat{x}^2 * \varepsilon_2 + \ldots +
     \hat{x}^n * \varepsilon_n,
 ```
-where 
+where
 - ``x`` and ``\hat{x}^i`` are real numbers, and
 - ``\varepsilon_i`` is an infinitesimal number with the property that
   ``\varepsilon_i * \varepsilon_j = 0``.

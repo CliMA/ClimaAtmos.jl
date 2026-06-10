@@ -2,7 +2,7 @@
 # experiment_lognormal_cf.jl
 #
 # Description:
-# This script is an offline analysis tool used to evaluate and tune the 
+# This script is an offline analysis tool used to evaluate and tune the
 # mathematical parametrization for the Sub-Grid Scale (SGS) cloud fraction
 # when assuming a Lognormal distribution for total water specific humidity (q_tot).
 #
@@ -10,18 +10,18 @@
 # In atmospheric models, resolving exact cloud boundaries is impossible at
 # macroscopic grid scales. Instead, the "Cloud Fraction" (CF) is calculated
 # by integrating the right-tail of an assumed probability density function (PDF)
-# of moisture that exceeds the saturation threshold. 
+# of moisture that exceeds the saturation threshold.
 #
 # For a Gaussian PDF, the integration yields an Error Function, which is often
-# approximated as: CF_gaussian ≈ tanh(c * Q) where Q is the normalized condensate 
+# approximated as: CF_gaussian ≈ tanh(c * Q) where Q is the normalized condensate
 # and c ≈ π/√6.
 #
-# This script determines the best equivalent analytical approximation for a 
+# This script determines the best equivalent analytical approximation for a
 # *Lognormal* PDF, which has a positive skew (a sharp left side and fat right tail)
 # that becomes more pronounced as the Coefficient of Variation (Cv) increases.
 #
 # Purpose:
-# 1. Calculates the mathematically exact cloud fraction by applying Black-Scholes 
+# 1. Calculates the mathematically exact cloud fraction by applying Black-Scholes
 #    style root-finding to the Lognormal incomplete first moment.
 # 2. Fits multiple analytical proxy functions (Exponential, Tanh, Rational, Arctan)
 #    to finding the one that best minimizes RMSE against the exact numerical integration.
@@ -46,8 +46,8 @@ using LinearAlgebra
 """
     exact_lognormal_stats(Cv, q_sat_over_μ)
 
-Calculates the mathematically exact Cloud Fraction and normalized condensate 
-for a Lognormal distribution given a Coefficient of Variation (Cv) and a 
+Calculates the mathematically exact Cloud Fraction and normalized condensate
+for a Lognormal distribution given a Coefficient of Variation (Cv) and a
 saturation ratio (q_sat / μ_q).
 
 Based on Black-Scholes style analytical integrals for Lognormal variables.
@@ -99,7 +99,7 @@ end
 """
     experiment()
 
-Main routine. Runs nonlinear optimization combinations (L-BFGS) to fit various 
+Main routine. Runs nonlinear optimization combinations (L-BFGS) to fit various
 S-curve functional forms against the exact Lognormal dataset generated above.
 """
 function experiment()
@@ -127,7 +127,7 @@ function experiment()
         return c_opt, rmse
     end
 
-    # Step 1: Evaluate Global Fits 
+    # Step 1: Evaluate Global Fits
     # Assumes a single constant parameter across all atmospheric variance states
     c_exp, err_exp = fit_model(f_exp)
     c_tanh, err_tanh = fit_model(f_tanh)

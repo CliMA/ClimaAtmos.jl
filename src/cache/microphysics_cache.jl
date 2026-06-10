@@ -35,7 +35,7 @@ internal_energy_func(
 ) = TD.internal_energy_ice
 
 """
-   Kin(ᶜw_precip, ᶜu_air)
+Kin(ᶜw_precip, ᶜu_air)
 
     - ᶜw_precip - teminal velocity of cloud consensate or precipitation
     - ᶜu_air - air velocity
@@ -652,13 +652,13 @@ All schemes freeze the specific microphysics tendencies computed in the
 explicit stage; only density-weighted source terms and surface fluxes are
 refreshed here.
 
-- **0M**: recomputes `ρ × mp_tendency.dq_tot_dt` from the frozen
-  `ᶜmp_tendency` (ρ × tendency).  For EDMF variants, the per-subdomain
-  specific tendencies are re-aggregated with the current ρ / ρa.
-- **1M/2M**: refreshes only `set_precipitation_surface_fluxes!`.  The
-  specific tendencies (mp_tendency) are frozen; density weighting is
-  applied at tendency-evaluation time in `tendency.jl`.
-- **default**: no-op (microphysics not active or not implicit).
+  - **0M**: recomputes `ρ × mp_tendency.dq_tot_dt` from the frozen
+    `ᶜmp_tendency` (ρ × tendency).  For EDMF variants, the per-subdomain
+    specific tendencies are re-aggregated with the current ρ / ρa.
+  - **1M/2M**: refreshes only `set_precipitation_surface_fluxes!`.  The
+    specific tendencies (mp_tendency) are frozen; density weighting is
+    applied at tendency-evaluation time in `tendency.jl`.
+  - **default**: no-op (microphysics not active or not implicit).
 """
 update_implicit_microphysics_cache!(Y, p, _, _) = nothing
 
@@ -725,13 +725,13 @@ coefficients, etc.) for the current state `Y`.
 
 **Dispatch table** (microphysics_model × turbconv_model):
 
-| Model    | Nothing / default      | DiagnosticEDMFX | PrognosticEDMFX |
-|----------|------------------------|-----------------|-----------------|
-| DryModel | no-op                  | no-op (fallback)| no-op (fallback)|
-| 0M       | grid-mean (± SGS quad) | EDMF-weighted   | EDMF-weighted   |
-| 1M       | grid-mean (± SGS quad) | EDMF-weighted   | EDMF-weighted   |
-| 2M       | grid-mean              | not implemented | EDMF-weighted   |
-| 2MP3     | grid-mean (no EDMF)    | —               | —               |
+| Model    | Nothing / default      | DiagnosticEDMFX  | PrognosticEDMFX  |
+|:-------- |:---------------------- |:---------------- |:---------------- |
+| DryModel | no-op                  | no-op (fallback) | no-op (fallback) |
+| 0M       | grid-mean (± SGS quad) | EDMF-weighted    | EDMF-weighted    |
+| 1M       | grid-mean (± SGS quad) | EDMF-weighted    | EDMF-weighted    |
+| 2M       | grid-mean              | not implemented  | EDMF-weighted    |
+| 2MP3     | grid-mean (no EDMF)    | —                | —                |
 
 **Non-EDMF path** computes microphysics on the grid-mean state, with an optional sum over
 SGS quadrature points (controlled by `p.atmos.sgs_quadrature`) to sample subgrid variability.
@@ -739,9 +739,10 @@ SGS quadrature points (controlled by `p.atmos.sgs_quadrature`) to sample subgrid
 **EDMF path** computes tendencies separately for updrafts and the environment:
 
 *Updrafts* use direct BMT evaluation (no SGS quadrature) because:
-1. Updrafts are coherent turbulent structures with more homogeneous thermodynamic properties
-2. Updraft area fraction is usually small (~1-10%), so SGS variance within updrafts has limited
-   impact on the grid-mean tendency.
+
+ 1. Updrafts are coherent turbulent structures with more homogeneous thermodynamic properties
+ 2. Updraft area fraction is usually small (~1-10%), so SGS variance within updrafts has limited
+    impact on the grid-mean tendency.
 
 *Environment* uses SGS quadrature integration (when `sgs_quadrature` is configured) because
 the environment dominates the grid-mean variance. The quadrature captures subgrid-scale
@@ -749,7 +750,7 @@ fluctuations in temperature and moisture, which is important for threshold proce
 condensation/evaporation at cloud edges.
 
 The grid-mean source is then the area-weighted sum:
-  `ᶜS_ρq_tot = ᶜSqₜᵐ⁰ * ᶜρa⁰ + Σⱼ ᶜSqₜᵐʲ * ᶜρaʲ`
+`ᶜS_ρq_tot = ᶜSqₜᵐ⁰ * ᶜρa⁰ + Σⱼ ᶜSqₜᵐʲ * ᶜρaʲ`
 """
 set_microphysics_tendency_cache!(Y, p, _, _) = nothing
 

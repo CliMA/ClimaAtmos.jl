@@ -35,13 +35,14 @@ computing `ρaχ / ρa` breaks the assumption of domain decomposition (sum of SG
 domains equals GS) when the approximated area fraction `a` is small.
 
 Arguments:
-- `ρχ`: The grid-mean density-weighted quantity (e.g., `ρe_tot`, `ρq_tot`).
-- `ρ`: The grid-mean density.
-- `ρaχ`: The density-area-weighted SGS quantity (e.g., `sgs.ρa * sgs.h_tot`).
-- `ρa`: The density-area product of the SGS component.
-- `ρχ_fallback`: The grid-mean density-weighted quantity used for the fallback value.
-- `ρ_fallback`: The grid-mean density used for the fallback value.
-- `turbconv_model`: The turbulence convection model, containing parameters for regularization (e.g., `a_half`).
+
+  - `ρχ`: The grid-mean density-weighted quantity (e.g., `ρe_tot`, `ρq_tot`).
+  - `ρ`: The grid-mean density.
+  - `ρaχ`: The density-area-weighted SGS quantity (e.g., `sgs.ρa * sgs.h_tot`).
+  - `ρa`: The density-area product of the SGS component.
+  - `ρχ_fallback`: The grid-mean density-weighted quantity used for the fallback value.
+  - `ρ_fallback`: The grid-mean density used for the fallback value.
+  - `turbconv_model`: The turbulence convection model, containing parameters for regularization (e.g., `a_half`).
 """
 specific(ρχ, ρ) = ρχ / ρ
 
@@ -141,11 +142,11 @@ given by `specific_gs_tracer_names(Y)` instead of density-weighted tracers.
 
 Arguments:
 
-- `f`: The function applied to each grid-scale tracer, which must have the
-  signature `f(ρχ_or_χ_fields..., ρχ_name)`, where `ρχ_or_χ_fields` are
-  grid-scale tracer subfields (either density-weighted or specific) and
-  `ρχ_name` is the `MatrixFields.FieldName` of the tracer.
-- `Y_or_similar_values`: The state `Y` or similar values like the tendency `Yₜ`.
+  - `f`: The function applied to each grid-scale tracer, which must have the
+    signature `f(ρχ_or_χ_fields..., ρχ_name)`, where `ρχ_or_χ_fields` are
+    grid-scale tracer subfields (either density-weighted or specific) and
+    `ρχ_name` is the `MatrixFields.FieldName` of the tracer.
+  - `Y_or_similar_values`: The state `Y` or similar values like the tendency `Yₜ`.
 
 # Examples
 
@@ -191,36 +192,40 @@ function. It ensures a numerically stable and smooth transition between a subgri
 is small.
 
 **Key Properties:**
-- `w(a) = 0` for `a ≤ 0`.
-- `w(a) = 1` for `a ≥ 1`.
-- `w(a_half) = 0.5`.
-- The function is continuously differentiable, with derivatives equal to zero at
-  `a = 0` and `a = 1`, which ensures smooth blending.
-- The functions grows very rapidly near `a = a_half`, and grows very slowly at all other
-  values of `a`.
-- For small `a_half`, the weight rapidly approaches 1 for values of `a` that are
-  a few times larger than `a_half`.
+
+  - `w(a) = 0` for `a ≤ 0`.
+  - `w(a) = 1` for `a ≥ 1`.
+  - `w(a_half) = 0.5`.
+  - The function is continuously differentiable, with derivatives equal to zero at
+    `a = 0` and `a = 1`, which ensures smooth blending.
+  - The functions grows very rapidly near `a = a_half`, and grows very slowly at all other
+    values of `a`.
+  - For small `a_half`, the weight rapidly approaches 1 for values of `a` that are
+    a few times larger than `a_half`.
 
 **Construction Method:**
 The function is piecewise. For `a` between 0 and 1, it is a custom sigmoid curve
 constructed in two main steps to satisfy the key properties:
-1.  **Bounded Sigmoid Creation**: A base sigmoid is created that maps the interval
+
+ 1. **Bounded Sigmoid Creation**: A base sigmoid is created that maps the interval
     `(0, 1)` to `(0, 1)` with zero derivatives at the endpoints. This is achieved
     by composing a standard `tanh` function with the inverse of a slower-growing
     `tanh` function.
-2.  **Midpoint Control**: To ensure the function passes through the control point
+ 2. **Midpoint Control**: To ensure the function passes through the control point
     `(a_half, 0.5)`, the input `a` is first transformed by a specially designed
     power function (`1 - (1 - a)^k`) before being passed to the bounded sigmoid.
     This transformation maps `a_half` to `0.5` while preserving differentiability
     at the boundaries.
 
 Arguments:
-- `a`: The input SGS area fraction (often approximated as `ρa / ρ`).
-- `a_half`: The value of `a` at which the weight function should be 0.5, controlling
-          the transition point of the sigmoid curve.
+
+  - `a`: The input SGS area fraction (often approximated as `ρa / ρ`).
+  - `a_half`: The value of `a` at which the weight function should be 0.5, controlling
+    the transition point of the sigmoid curve.
 
 Returns:
-- The computed weight, a value between 0 and 1.
+
+  - The computed weight, a value between 0 and 1.
 """
 function sgs_weight_function(a, a_half)
     if a < 0
@@ -239,8 +244,9 @@ Computes the sum of a function `f` applied to each draft subdomain
 state `sgsʲ` in the iterator `sgsʲs`.
 
 Arguments:
-- `f`: A function to apply to each element of `sgsʲs`.
-- `sgsʲs`: An iterator over the draft subdomain states.
+
+  - `f`: A function to apply to each element of `sgsʲs`.
+  - `sgsʲs`: An iterator over the draft subdomain states.
 """
 draft_sum(f, sgsʲs) = unrolled_sum(f, sgsʲs)
 
@@ -255,14 +261,16 @@ This is based on the domain decomposition principle for density-area weighted
 quantities: `GridMean(ρχ) = Env(ρaχ) + Sum(Drafts(ρaχ))`.
 
 The function handles both PrognosticEDMFX and DiagnosticEDMFX models:
-- For PrognosticEDMFX: Uses gs.sgsʲs to access draft subdomain states
-- For DiagnosticEDMFX: Uses p.precomputed.ᶜρaʲs for draft area-weighted densities
+
+  - For PrognosticEDMFX: Uses gs.sgsʲs to access draft subdomain states
+  - For DiagnosticEDMFX: Uses p.precomputed.ᶜρaʲs for draft area-weighted densities
 
 Arguments:
-- `grid_scale_value`: The `ρa`-weighted grid-scale value of the quantity.
-- `f_draft`: A function that extracts the corresponding value from a draft subdomain state.
-- `gs`: The grid-scale iteration object, which contains the draft subdomain states `gs.sgsʲs` (for PrognosticEDMFX) from the state `Y.c`, or `ᶜρaʲs` in the cache for DiagnosticEDMFX.
-- `turbconv_model`: The turbulence convection model, used to determine how to access draft data.
+
+  - `grid_scale_value`: The `ρa`-weighted grid-scale value of the quantity.
+  - `f_draft`: A function that extracts the corresponding value from a draft subdomain state.
+  - `gs`: The grid-scale iteration object, which contains the draft subdomain states `gs.sgsʲs` (for PrognosticEDMFX) from the state `Y.c`, or `ᶜρaʲs` in the cache for DiagnosticEDMFX.
+  - `turbconv_model`: The turbulence convection model, used to determine how to access draft data.
 """
 function ᶜenv_value(grid_scale_value, f_draft, gs)
     return @. lazy(grid_scale_value - draft_sum(f_draft, gs))
@@ -287,12 +295,14 @@ regularized `specific` function, which provides a stable result even when the
 environment area fraction is very small.
 
 Arguments:
-- `χ_name`: A `MatrixFields.FieldName`, containing name for the specific quantity `χ` (e.g., `@name(h_tot)`, `@name(q_tot)`).
-- `Y`: The state, containing grid-mean and draft subdomain states.
-- `p`: The cache, containing precomputed quantities and turbconv_model.
+
+  - `χ_name`: A `MatrixFields.FieldName`, containing name for the specific quantity `χ` (e.g., `@name(h_tot)`, `@name(q_tot)`).
+  - `Y`: The state, containing grid-mean and draft subdomain states.
+  - `p`: The cache, containing precomputed quantities and turbconv_model.
 
 Returns:
-- The specific value of the quantity `χ` in the environment.
+
+  - The specific value of the quantity `χ` in the environment.
 """
 function ᶜspecific_env_value(χ_name, Y, p)
     turbconv_model = p.atmos.turbconv_model
@@ -336,9 +346,9 @@ end
 Construct the `FieldName` corresponding to the product ρ·χ.
 
 Given a tracer name `χ_name`, this function returns the new name that
-represents the corresponding density-weighted quantity (ρ times χ). 
+represents the corresponding density-weighted quantity (ρ times χ).
 
-The function works recursively on hierarchical field names: If `χ_name` 
+The function works recursively on hierarchical field names: If `χ_name`
 is a base name (no children), it returns a new name prefixed with `ρ`.
 If `χ_name` has internal structure (e.g. a composite name), the function
 recurses into the child names and prepends `ρ` at the lowest level.
@@ -357,18 +367,19 @@ end
 """
     get_χʲ_name_from_ρχ_name(ρχ_name::FieldName)
 
-Construct the `FieldName` corresponding to the specific tracer in the updraft 
+Construct the `FieldName` corresponding to the specific tracer in the updraft
 (`χʲ` with j = 1) associated with a given density-weighted tracer on the grid mean (`ρ·χ`).
 
-Given the name of a density-weighted tracer `ρχ_name`, this function returns the 
+Given the name of a density-weighted tracer `ρχ_name`, this function returns the
 corresponding name of the specific tracer in the first subgrid updraft.
 
-The function operates recursively on hierarchical field names:  
-- If `ρχ_name` is a base name (no children), it replaces the `ρ` prefix with the 
-  appropriate updraft-specific prefix (e.g. `sgsʲs.:(1)`) and converts the variable 
-  to its specific form.
-- If `ρχ_name` has internal structure (e.g. a composite name), the function 
-  recurses into the child names and applies the transformation at the lowest level.
+The function operates recursively on hierarchical field names:
+
+  - If `ρχ_name` is a base name (no children), it replaces the `ρ` prefix with the
+    appropriate updraft-specific prefix (e.g. `sgsʲs.:(1)`) and converts the variable
+    to its specific form.
+  - If `ρχ_name` has internal structure (e.g. a composite name), the function
+    recurses into the child names and applies the transformation at the lowest level.
 """
 function get_χʲ_name_from_ρχ_name(ρχ_name)
     parent_name = MatrixFields.FieldName(MatrixFields.extract_first(ρχ_name))
@@ -421,14 +432,19 @@ Computes the environment area fraction (`a⁰`).
 This function calculates the environment area fraction by subtracting the sum of all draft subdomain area fractions (`aʲ`) from 1 for `PrognosticEDMFX`, or returns 1 otherwise.
 
 Arguments:
-- `sgsʲs`: Iterable of draft subdomain quantities.
-    - For `PrognosticEDMFX`: typically `Y.c.sgsʲs`
-- `ᶜρʲs`: Iterable of draft densities.
-    - Typically `p.precomputed.ᶜρʲs`
-- `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`, or others).
+
+  - `sgsʲs`: Iterable of draft subdomain quantities.
+
+      + For `PrognosticEDMFX`: typically `Y.c.sgsʲs`
+
+  - `ᶜρʲs`: Iterable of draft densities.
+
+      + Typically `p.precomputed.ᶜρʲs`
+  - `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`, or others).
 
 Returns:
-- The area fraction of the environment (`a⁰`).
+
+  - The area fraction of the environment (`a⁰`).
 """
 function a⁰(sgsʲs, ᶜρʲs, turbconv_model)
     if turbconv_model isa PrognosticEDMFX
@@ -456,12 +472,14 @@ portion of `ρmse` and `ρa` via domain decomposition, and finally calculates th
 value using the regularized `specific` function.
 
 Arguments:
-- `Y`: The state containing `Y.c.ρ` and `Y.c.sgsʲs` (for PrognosticEDMFX).
-- `p`: The cache, containing the turbconv_model and precomputed quantities.
+
+  - `Y`: The state containing `Y.c.ρ` and `Y.c.sgsʲs` (for PrognosticEDMFX).
+  - `p`: The cache, containing the turbconv_model and precomputed quantities.
 
 Returns:
-- A `ClimaCore.Fields.Field` containing the specific moist static energy of the
-  environment (`mse⁰`).
+
+  - A `ClimaCore.Fields.Field` containing the specific moist static energy of the
+    environment (`mse⁰`).
 """
 function ᶜspecific_env_mse(Y, p)
     turbconv_model = p.atmos.turbconv_model
@@ -495,11 +513,12 @@ using the regularized `specific` function to ensure numerical stability when the
 environment area fraction `a⁰` is small.
 
 Arguments:
-- `ρaʲs`: A tuple of area-weighted densities for each draft subdomain.
-- `u₃ʲs`: A tuple of vertical velocities for each draft subdomain.
-- `ρ`: The grid-mean air density.
-- `u₃`: The grid-mean vertical velocity.
-- `turbconv_model`: The turbulence convection model, containing regularization parameters.
+
+  - `ρaʲs`: A tuple of area-weighted densities for each draft subdomain.
+  - `u₃ʲs`: A tuple of vertical velocities for each draft subdomain.
+  - `ρ`: The grid-mean air density.
+  - `u₃`: The grid-mean vertical velocity.
+  - `turbconv_model`: The turbulence convection model, containing regularization parameters.
 """
 u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
     ρ * u₃ - unrolled_dotproduct(ρaʲs, u₃ʲs),
@@ -523,9 +542,10 @@ based on the output of the function `f` applied to the first elements of the
 iterators.
 
 Arguments:
-- `f`: The function to apply to each element.
-- `op`: The reduction operator (e.g., `+`, `*`).
-- `iter...`: One or more iterators.
+
+  - `f`: The function to apply to each element.
+  - `op`: The reduction operator (e.g., `+`, `*`).
+  - `iter...`: One or more iterators.
 """
 function mapreduce_with_init(f, op, iter...)
     r₀ = rzero(rpromote_type(typeof(f(map(first, iter)...))))
@@ -547,11 +567,13 @@ multiplication), which allows it to handle dot products of tuples containing
 complex, nested types such as `ClimaCore.Geometry.AxisTensor`s.
 
 Arguments:
-- `a`: The first `Tuple`.
-- `b`: The second `Tuple`, which must have the same length as `a`.
+
+  - `a`: The first `Tuple`.
+  - `b`: The second `Tuple`, which must have the same length as `a`.
 
 Returns:
-- The result of the dot product, `Σᵢ a[i] * b[i]`.
+
+  - The result of the dot product, `Σᵢ a[i] * b[i]`.
 """
 promote_type_mul(n::Number, x::Geometry.AxisTensor) = typeof(x)
 promote_type_mul(x::Geometry.AxisTensor, n::Number) = typeof(x)

@@ -7,6 +7,7 @@ balanced pressure profile. Profiles are sourced from AtmosphericProfilesLibrary.
 Surface temperature is time-varying: `T = 265 - 0.25t/3600`.
 
 ## Example
+
 ```julia
 setup = GABLS(; prognostic_tke = true, thermo_params)
 ```

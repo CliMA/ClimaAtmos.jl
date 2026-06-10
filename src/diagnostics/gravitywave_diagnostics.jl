@@ -2,7 +2,7 @@
 # Gravity-wave related diagnostics
 
 ###
-# Eastward Non-Orographic Gravity-Wave Tendency 
+# Eastward Non-Orographic Gravity-Wave Tendency
 ###
 compute_utendnogw(state, cache, time) = compute_utendnogw(
     state, cache, time, cache.atmos.non_orographic_gravity_wave,
@@ -21,7 +21,7 @@ add_diagnostic_variable!(short_name = "utendnogw", units = "m s^-2",
 )
 
 ###
-# Northward Non-Orographic Gravity-Wave Tendency 
+# Northward Non-Orographic Gravity-Wave Tendency
 ###
 compute_vtendnogw(state, cache, time) = compute_vtendnogw(
     state, cache, time, cache.atmos.non_orographic_gravity_wave,

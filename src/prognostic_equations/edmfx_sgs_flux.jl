@@ -21,12 +21,13 @@ or `DiagnosticEDMFX`). A generic fallback doing nothing is also provided.
 The function modifies `Yₜ.c` (grid-mean tendencies) in place.
 
 Arguments:
-- `Yₜ`: The tendency state vector for grid-mean variables.
-- `Y`: The current state vector (used for grid-mean and SGS properties).
-- `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
-       and scratch space.
-- `t`: Current simulation time.
-- `turbconv_model`: The turbulence convection model instance.
+
+  - `Yₜ`: The tendency state vector for grid-mean variables.
+  - `Y`: The current state vector (used for grid-mean and SGS properties).
+  - `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
+    and scratch space.
+  - `t`: Current simulation time.
+  - `turbconv_model`: The turbulence convection model instance.
 """
 edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
@@ -361,12 +362,13 @@ doing nothing is also provided. The function modifies `Yₜ.c` (grid-mean tenden
 in place.
 
 Arguments:
-- `Yₜ`: The tendency state vector for grid-mean variables.
-- `Y`: The current state vector (used for grid-mean and SGS properties).
-- `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
-       and scratch space.
-- `t`: Current simulation time.
-- `turbconv_model`: The turbulence convection model instance.
+
+  - `Yₜ`: The tendency state vector for grid-mean variables.
+  - `Y`: The current state vector (used for grid-mean and SGS properties).
+  - `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
+    and scratch space.
+  - `t`: Current simulation time.
+  - `turbconv_model`: The turbulence convection model instance.
 """
 edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 

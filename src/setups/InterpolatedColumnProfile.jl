@@ -8,6 +8,7 @@ This setup is used for single-column simulations initialized from ERA5 reanalysi
 data with time-varying external forcing (e.g., "ReanalysisTimeVarying").
 
 ## Example
+
 ```julia
 setup = InterpolatedColumnProfile("path/to/era5_forcing.nc", "20070701")
 ```

@@ -105,11 +105,12 @@ a quadratic sink in `w²`. After rearrangement, the stage equation reduces to
 which is solved analytically using a numerically stable quadratic formula.
 
 The coefficients `(a, b, c)` include contributions from:
-- the implicit stage term (`dtγ` scaling),
-- entrainment/detrainment,
-- nonhydrostatic pressure drag,
-- optional Rayleigh damping,
-- and (optionally) implicit vertical advection.
+
+  - the implicit stage term (`dtγ` scaling),
+  - entrainment/detrainment,
+  - nonhydrostatic pressure drag,
+  - optional Rayleigh damping,
+  - and (optionally) implicit vertical advection.
 
 In this discretization, the prognostic variable is the covariant vertical
 velocity component `u₃`. The physical vertical velocity `w` is obtained via

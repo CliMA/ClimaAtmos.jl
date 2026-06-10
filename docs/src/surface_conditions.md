@@ -108,7 +108,7 @@ supported extension point but it would require a model that fills bands with
 distinct values.
 
 **Longwave surface reflectivity** Albedo is shortwave-only, longwave surface reflectivity is handled
-separately through `surface_emissivity`. 
+separately through `surface_emissivity`.
 
 See the [Ocean Surface Albedo](@ref "Ocean Surface Albedo") page for the
 Jin (2011) [`RegressionFunctionAlbedo`](@ref ClimaAtmos.RegressionFunctionAlbedo) formulation..

@@ -10,6 +10,7 @@ A moist baroclinic wave setup. Uses the same dynamical core as
 virtual temperature to temperature.
 
 ## Example
+
 ```julia
 setup = MoistBaroclinicWave(; perturb = true, deep_atmosphere = false)
 ```
@@ -29,6 +30,7 @@ The same setup as [`MoistBaroclinicWave`](@ref), but with an initial TKE of 0
 and an initial draft area fraction of 0.2.
 
 ## Example
+
 ```julia
 setup = MoistBaroclinicWaveWithEDMF(; perturb = true, deep_atmosphere = false)
 ```

@@ -119,14 +119,15 @@ Returns a scalar value representing the TKE dissipation rate
 per unit volume, ρ * ε_d [kg m^-1 s^-3].
 
 The physical dissipation is calculated as:
-  ρ * ε_d = c_d * ρtke * sqrt(abs(tke)) / mixing_length
+ρ * ε_d = c_d * ρtke * sqrt(abs(tke)) / mixing_length
 where `c_d` is a parameter.
 
 Arguments:
-- `turbconv_params`: Turbulence and convection model parameters.
-- `ρtke`: ρ_area_weighted * tke [kg m^-2 s^-2].
-- `tke`: Turbulent kinetic energy [m^2 s^-2].
-- `mixing_length`: Turbulent mixing length [m].
+
+  - `turbconv_params`: Turbulence and convection model parameters.
+  - `ρtke`: ρ_area_weighted * tke [kg m^-2 s^-2].
+  - `tke`: Turbulent kinetic energy [m^2 s^-2].
+  - `mixing_length`: Turbulent mixing length [m].
 """
 function tke_dissipation(turbconv_params, ρtke, tke, mixing_length)
     FT = typeof(tke)

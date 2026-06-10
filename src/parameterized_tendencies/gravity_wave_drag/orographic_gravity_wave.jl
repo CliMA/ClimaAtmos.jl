@@ -552,30 +552,35 @@ to identify the transition from the well-mixed boundary layer to the stratified
 free atmosphere above.
 
 # Arguments
-- `result`: Output field to store the computed PBL heights (modified in-place)
-- `ᶜp`: Cell-centered pressure field [Pa]
-- `ᶜT`: Cell-centered temperature field [K]
-- `ᶜz`: Cell-centered geometric height field [m]
-- `grav`: Gravitational acceleration [m/s²]
-- `cp_d`: Specific heat capacity at constant pressure for dry air [J/(kg·K)]
+
+  - `result`: Output field to store the computed PBL heights (modified in-place)
+  - `ᶜp`: Cell-centered pressure field [Pa]
+  - `ᶜT`: Cell-centered temperature field [K]
+  - `ᶜz`: Cell-centered geometric height field [m]
+  - `grav`: Gravitational acceleration [m/s²]
+  - `cp_d`: Specific heat capacity at constant pressure for dry air [J/(kg·K)]
 
 # Algorithm
+
 The function uses a column reduction operation that iterates upward through each
 atmospheric column. At each level, it checks:
-1. **Pressure criterion**: p ≥ 0.5 × p_surface (limits search to lower atmosphere)
-2. **Temperature lapse rate criterion**: (T_sfc + 1.5 - T) > (g/cp_d) × (z - z_sfc)
+
+ 1. **Pressure criterion**: p ≥ 0.5 × p_surface (limits search to lower atmosphere)
+ 2. **Temperature lapse rate criterion**: (T_sfc + 1.5 - T) > (g/cp_d) × (z - z_sfc)
 
 The PBL height is set to the highest level where both conditions are met.
 
 # Physical interpretation
+
 The temperature criterion compares the actual temperature profile against a dry
 adiabatic lapse rate (g/cp_d) with a 1.5 K offset. This effectively detects where
 the atmosphere transitions from the convectively mixed boundary layer to the more
 stable free atmosphere above.
 
 # Implementation notes
-- Uses `Operators.column_reduce!` for GPU compatibility
-- Initializes with surface height if no levels satisfy the criteria
+
+  - Uses `Operators.column_reduce!` for GPU compatibility
+  - Initializes with surface height if no levels satisfy the criteria    # Get surface values (first level values)
 """
 function get_pbl_z!(result, ᶜp, ᶜT, ᶜz, grav, cp_d)
     FT = eltype(ᶜp)
@@ -659,8 +664,8 @@ This is needed to access face values at level `k-1` from within a level-`k` comp
 (e.g., computing `ᶠp[k-1]` for pressure differences across cell layers). ClimaCore `column_reduce` and `column_accumulate` do not support direct `field[k-1]` indexing in broadcast expressions, so we
 construct the shifted view via a round-trip through the cell-center grid:
 
-1. `LeftBiasedF2C` interpolates faces → cell centers using the value from below.
-2. `LeftBiasedC2F` interpolates cell centers → faces using the value from below,
+ 1. `LeftBiasedF2C` interpolates faces → cell centers using the value from below.
+ 2. `LeftBiasedC2F` interpolates cell centers → faces using the value from below,
     with `boundary_value` prescribed at the bottom face.
 
 The net effect is `shifted_field[k] = source_field[k-1]` for interior faces,

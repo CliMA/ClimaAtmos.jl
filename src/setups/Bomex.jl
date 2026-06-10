@@ -8,6 +8,7 @@ The `profiles` field stores precomputed atmospheric profile functions (computed
 at construction time before broadcasting).
 
 ## Example
+
 ```julia
 setup = Bomex()                       # Float32 defaults
 setup = Bomex(Float64)                # specify floating-point type
@@ -33,7 +34,7 @@ end
     bomex_profiles(thermo_params)
 
 Precompute the atmospheric profiles for the Bomex case, given thermodynamic
-parameters `thermo_params`. 
+parameters `thermo_params`.
 
 Returns a NamedTuple of interpolatable profile functions of height `z`.
 """

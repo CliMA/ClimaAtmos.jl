@@ -10,12 +10,13 @@ import ClimaCore: Geometry
     lilly_stratification_correction(Y, p, ᶜS)
 
 Return a lazy representation of the Lilly stratification correction factor
-    based on the local Richardson number.
+based on the local Richardson number.
 
 # Arguments
-- `Y`: The model state.
-- `p`: The model parameters, e.g. `AtmosCache`.
-- `ᶜS`: The cell-centered strain rate tensor.
+
+  - `Y`: The model state.
+  - `p`: The model parameters, e.g. `AtmosCache`.
+  - `ᶜS`: The cell-centered strain rate tensor.
 """
 function lilly_stratification_correction(Y, p, ᶜS)
     (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
@@ -47,7 +48,7 @@ end
     set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
 Compute the Smagorinsky-Lilly horizontal and vertical quantities needed for
-    subgrid-scale diffusive tendencies
+subgrid-scale diffusive tendencies
 
 The subgrid-scale momentum flux tensor is defined by `τ = -2 νₜ ∘ S`,
 where `νₜ` is the Smagorinsky-Lilly eddy viscosity and `S` is the strain rate tensor.
@@ -56,14 +57,18 @@ The turbulent diffusivity is defined as `D = νₜ / Pr_t`,
 where `Pr_t` is the turbulent Prandtl number for neutral stratification.
 
 This method precomputes and stores in `p.precomputed` the following quantities:
-- strain on centers and faces: `ᶜS`, `ᶠS`
-- horizontal and vertical strain rate norm, eddy viscosities, and diffusivities, on centers:
-    - `ᶜS_norm_h`, `ᶜS_norm_v`, `ᶜνₜ_h`, `ᶜνₜ_v`, `ᶜD_h`, `ᶜD_v`
+
+  - strain on centers and faces: `ᶜS`, `ᶠS`
+
+  - horizontal and vertical strain rate norm, eddy viscosities, and diffusivities, on centers:
+
+      + `ᶜS_norm_h`, `ᶜS_norm_v`, `ᶜνₜ_h`, `ᶜνₜ_v`, `ᶜD_h`, `ᶜD_v`
 
 # Arguments
-- `Y`: The model state.
-- `p`: The model parameters, e.g. `AtmosCache`.
-- `model`: The Smagorinsky model type
+
+  - `Y`: The model state.
+  - `p`: The model parameters, e.g. `AtmosCache`.
+  - `model`: The Smagorinsky model type
 """
 function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
     (; ᶜu, ᶠu, ᶜS, ᶠS, ᶜL_h, ᶜL_v, ᶜS_norm_h, ᶜS_norm_v, ᶜνₜ_h, ᶜνₜ_v, ᶜD_h, ᶜD_v) =

@@ -8,6 +8,7 @@ Surface fluxes are time-varying: `shf` and `lhf` follow a cosine ramp over
 the first 5.25 hours.
 
 ## Example
+
 ```julia
 setup = TRMM_LBA(; prognostic_tke = true, thermo_params)
 ```

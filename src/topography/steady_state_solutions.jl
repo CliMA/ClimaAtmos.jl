@@ -57,6 +57,7 @@ and the perturbation's background state is a `ConstantBuoyancyFrequencyProfile`.
 TODO: Generalize this to work with any `HypsographyAdaption` from ClimaCore.
 
 Arguments:
+
   - `params`: `ClimaAtmosParameters` used to define the background state
   - `η`: nondimensional terrain-following coordinate (0 at surface and 1 at top)
   - `k_x`: wavenumber along `x`-direction
@@ -64,6 +65,7 @@ Arguments:
   - `z_top`: elevation at the top of the model domain
 
 References:
+
   - https://www.cosmo-model.org/content/model/documentation/newsLetters/newsLetter09/cnl9-04.pdf
   - http://dx.doi.org/10.1175/1520-0493(2003)131%3C1229:NCOMTI%3E2.0.CO;2
   - https://atmos.uw.edu/academics/classes/2010Q1/536/1503AP_lee_waves.pdf

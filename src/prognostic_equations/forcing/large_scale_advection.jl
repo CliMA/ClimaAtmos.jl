@@ -1,5 +1,5 @@
 #####
-##### Apply prescribed large-scale advection tendencies for total 
+##### Apply prescribed large-scale advection tendencies for total
 ##### specific humidity and total energy
 #####
 
@@ -23,17 +23,19 @@ time (`t`), and height (`ᶜz`). The final tendency for `ρq_tot`
 is then computed as ``ᶜρ * (\\partial q_{tot}/\\partial t)_{LS_adv}``.
 
 Arguments:
-- `ᶜρ`: Cell-center air density field.
-- `thermo_params`: Thermodynamic parameters.
-- `ᶜp`: Cell-center pressure field.
-- `t`: Current simulation time.
-- `ls_adv`: `LargeScaleAdvection` object containing profile functions for tendencies,
-            or another type if large-scale advection is inactive.
+
+  - `ᶜρ`: Cell-center air density field.
+  - `thermo_params`: Thermodynamic parameters.
+  - `ᶜp`: Cell-center pressure field.
+  - `t`: Current simulation time.
+  - `ls_adv`: `LargeScaleAdvection` object containing profile functions for tendencies,
+    or another type if large-scale advection is inactive.
 
 Returns:
-- A `ClimaCore.Fields.Field`, or a lazy broadcast over ClimaCore Fields,
-  representing the tendency `∂(ρq_tot)/∂t` due to
-  large-scale advection of `q_tot`, or `NullBroadcasted` if inactive.
+
+  - A `ClimaCore.Fields.Field`, or a lazy broadcast over ClimaCore Fields,
+    representing the tendency `∂(ρq_tot)/∂t` due to
+    large-scale advection of `q_tot`, or `NullBroadcasted` if inactive.
 """
 function large_scale_advection_tendency_ρq_tot(
     ᶜρ,
@@ -65,7 +67,7 @@ Otherwise, it retrieves profile functions `prof_dTdt` and `prof_dqtdt` from `ls_
 which provide the prescribed advective tendencies ``(\\partial T/\\partial t)_{LS_adv}``
 and ``(\\partial q_{tot}/\\partial t)_{LS_adv}``, respectively.
 The tendency for `ρe_tot` is then computed based on these, using the formula:
-  `ρ * (cv_m * (∂T/∂t)_{LS_adv} + e_int_vapor(T) * (∂q_{tot}/∂t)_{LS_adv})`
+`ρ * (cv_m * (∂T/∂t)_{LS_adv} + e_int_vapor(T) * (∂q_{tot}/∂t)_{LS_adv})`
 where `cv_m` is the specific heat at constant volume for the moist air mixture,
 and `e_int_vapor(T)` is the specific internal energy of water vapor at temperature `T`.
 This conversion accounts for the change in internal energy due to changes in
@@ -73,19 +75,21 @@ temperature and the phase composition (assuming changes in `q_tot` primarily aff
 vapor for this energy calculation).
 
 Arguments:
-- `ᶜρ`: Cell-center air density field.
-- `thermo_params`: Thermodynamic parameters.
-- `ᶜT`: Cell-center temperature field.
-- `ᶜp`: Cell-center pressure field.
-- `q_tot`, `q_liq`, `q_ice`: Specific humidity fields.
-- `t`: Current simulation time.
-- `ls_adv`: `LargeScaleAdvection` object containing profile functions for tendencies,
-            or another type if large-scale advection is inactive.
+
+  - `ᶜρ`: Cell-center air density field.
+  - `thermo_params`: Thermodynamic parameters.
+  - `ᶜT`: Cell-center temperature field.
+  - `ᶜp`: Cell-center pressure field.
+  - `q_tot`, `q_liq`, `q_ice`: Specific humidity fields.
+  - `t`: Current simulation time.
+  - `ls_adv`: `LargeScaleAdvection` object containing profile functions for tendencies,
+    or another type if large-scale advection is inactive.
 
 Returns:
-- A `ClimaCore.Fields.Field`, or a lazy broadcast over ClimaCore Fields,
-  representing the tendency `∂(ρe_tot)/∂t` due to
-  large-scale advection of `T` and `q_tot`, or `NullBroadcasted` if inactive.
+
+  - A `ClimaCore.Fields.Field`, or a lazy broadcast over ClimaCore Fields,
+    representing the tendency `∂(ρe_tot)/∂t` due to
+    large-scale advection of `T` and `q_tot`, or `NullBroadcasted` if inactive.
 """
 function large_scale_advection_tendency_ρe_tot(
     ᶜρ,
@@ -104,7 +108,7 @@ function large_scale_advection_tendency_ρe_tot(
     ᶜdTdt_hadv = @. lazy(prof_dTdt(thermo_params, ᶜp, t, z))
     ᶜdqtdt_hadv = @. lazy(prof_dqtdt(thermo_params, ᶜp, t, z))
 
-    # Moisture advection term does not contain potential energy because 
+    # Moisture advection term does not contain potential energy because
     # it's just horizontal advection of specific humidity
     return @. lazy(
         ᶜρ * (

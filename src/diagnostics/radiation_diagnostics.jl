@@ -17,11 +17,11 @@ geometric_scaling(z, planet_radius) = ((z + planet_radius) / planet_radius)^2
 Compute radiative fluxes as a diagnostic field in 3d, at TOA, or at the surface.
 
 # Arguments
-- `state, cache`: The model state and cache
-- `radiation_mode`: The RRTMGP radiation mode
-- `field_name`: Symbol naming the flux field on `cache.radiation.rrtmgp_model`,
-  e.g. `:face_sw_flux_dn`
 
+  - `state, cache`: The model state and cache
+  - `radiation_mode`: The RRTMGP radiation mode
+  - `field_name`: Symbol naming the flux field on `cache.radiation.rrtmgp_model`,
+    e.g. `:face_sw_flux_dn`
 """
 function ᶠradiation_field_3d(state, cache, radiation_mode, field_name::Symbol)
     (; deep_atmosphere) = radiation_mode

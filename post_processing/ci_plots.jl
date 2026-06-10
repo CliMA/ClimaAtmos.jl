@@ -117,14 +117,14 @@ This could be extended to parse more attributes.
 
 For example, the sample attributes:
 attributes = Dict(
-    "units" => "%",
-    "short_name" => "cl",
-    "slice_y" => "0.0",
-    "long_name" => "Cloud fraction, Instantaneous x = 0.0 m y = 0.0 m",
-    "slice_y_units" => "m",
-    "slice_x_units" => "m",
-    "comments" => "",
-    "slice_x" => "0.0",
+"units" => "%",
+"short_name" => "cl",
+"slice_y" => "0.0",
+"long_name" => "Cloud fraction, Instantaneous x = 0.0 m y = 0.0 m",
+"slice_y_units" => "m",
+"slice_x_units" => "m",
+"comments" => "",
+"slice_x" => "0.0",
 )
 will be parsed into "cl, x = 0.0, y = 0.0"
 """
@@ -159,8 +159,7 @@ end
 
 Use `plot_fn` to plot `vars` properly handling pagination.
 
-Arguments
-=========
+# Arguments
 
 `output_path` can be a `String` or a list of `String`s. When it is a list of `String`s, it
 is assumed that `vars` are coming from different simulations and they have to be compared.
@@ -174,8 +173,7 @@ in the first `output_path`.
 function. This is useful when building larger and more complex reports that required
 different `plot_fn` to be produced.
 
-Extra Arguments
-===============
+# Extra Arguments
 
 `args` and `kwargs` are passed to the plotting function `plot_fn`.
 
@@ -432,10 +430,10 @@ automatically extended to comparing N simulations.
 The signature for `func` has to be `(simdir, arg)`. You can use closures to define
 more complex behaviors. `func` has to return a `OutputVar`.
 
-Example
-===========
+# Example
 
 The simplest example is to directly `get` an `OutputVar`:
+
 ```julia
 short_names = ["ta", "wa"]
 vars = map_comparison(get, simdirs, short_names)
@@ -446,12 +444,14 @@ make_plots_generic(
     more_kwargs = YLINEARSCALE,
 )
 ```
+
 If we want to be more daring, we can mix in some information about `reductions` and `periods`
+
 ```julia
 short_names = ["ta", "wa"]
 reduction, period = "average", "1d"
 vars = map_comparison(simdirs, short_names) do simdir, short_name
-     get(simdir; short_name, reduction, period)
+    get(simdir; short_name, reduction, period)
 end
 make_plots_generic(
     simulation_path,

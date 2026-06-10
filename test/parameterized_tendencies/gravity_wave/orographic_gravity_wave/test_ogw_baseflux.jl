@@ -33,10 +33,11 @@ h_elem = 8
 Compute base flux for a given orographic gravity wave mode.
 
 Returns a named tuple with:
-- tau_x: zonal base flux (on CPU)
-- tau_y: meridional base flux (on CPU)
-- topo_info: named tuple of tensor fields (t11, t12, t21, t22, hmax, hmin) on CPU
-- Y_cpu: state vector (on CPU)
+
+  - tau_x: zonal base flux (on CPU)
+  - tau_y: meridional base flux (on CPU)
+  - topo_info: named tuple of tensor fields (t11, t12, t21, t22, hmax, hmin) on CPU
+  - Y_cpu: state vector (on CPU)
 """
 function compute_base_flux(ogw_mode::String, comms_ctx, config_file, job_id; h_elem = 8)
     @info "Computing base flux for ogw_mode = $ogw_mode"

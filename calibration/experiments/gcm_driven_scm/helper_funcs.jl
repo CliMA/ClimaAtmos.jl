@@ -6,13 +6,19 @@ import ClimaAtmos as CA
 import ClimaCalibrate as CAL
 import Interpolations
 
-"Optional vector"
+"""
+Optional vector
+"""
 const OptVec{T} = Union{Nothing, Vector{T}}
 
-"Optional real"
+"""
+Optional real
+"""
 const OptReal = Union{Real, Nothing}
 
-"Optional dictionary"
+"""
+Optional dictionary
+"""
 const OptDict = Union{Nothing, Dict}
 
 CLIMADIAGNOSTICS_LES_NAME_MAP =
@@ -20,7 +26,9 @@ CLIMADIAGNOSTICS_LES_NAME_MAP =
 
 
 
-"""Get z cell centers coordinates for CA run, given config. """
+"""
+Get z cell centers coordinates for CA run, given config.
+"""
 function get_z_grid(atmos_config; z_max = nothing)
     params = CA.ClimaAtmosParameters(atmos_config)
     grid = CA.get_grid(atmos_config.parsed_args, params, atmos_config.comms_ctx)
@@ -99,11 +107,12 @@ end
 Returns the vertical cell centers or faces of the given configuration.
 
 Inputs:
- - filename :: nc filename.
- - get_faces :: If true, returns the coordinates of cell faces. Otherwise,
+
+  - filename :: nc filename.
+  - get_faces :: If true, returns the coordinates of cell faces. Otherwise,
     returns the coordinates of cell centers.
-Output:
- - z: Vertical level coordinates.
+    Output:
+  - z: Vertical level coordinates.
 """
 function get_height(filename::String; get_faces::Bool = false)
     return get_faces ? nc_fetch(filename, ("zf", "z")) :
@@ -147,11 +156,12 @@ nc_fetch(filename::String, var_name::String) = nc_fetch(filename, (var_name,))
 Returns the netcdf variable `var_name`, possibly interpolated to heights `z_scm`.
 
 Inputs:
- - `var_name` :: Name of variable in the netcdf dataset.
- - `filename` :: nc filename
- - `z_scm` :: Vertical coordinate vector onto which var_name is interpolated.
-Output:
- - The interpolated vector.
+
+  - `var_name` :: Name of variable in the netcdf dataset.
+  - `filename` :: nc filename
+  - `z_scm` :: Vertical coordinate vector onto which var_name is interpolated.
+    Output:
+  - The interpolated vector.
 """
 function nc_fetch_interpolate(
     var_name::String,
@@ -173,15 +183,16 @@ variable needs to be transformed to be equivalent to an SCM variable, applies th
 transformation as well.
 
 Inputs:
- - `var_name` :: Name of variable in the netcdf dataset.
- - `filename` :: nc filename
- - `z_scm` :: Vertical coordinate vector onto which var_name is interpolated.
-Output:
- - The interpolated and transformed vector.
+
+  - `var_name` :: Name of variable in the netcdf dataset.
+  - `filename` :: nc filename
+  - `z_scm` :: Vertical coordinate vector onto which var_name is interpolated.
+    Output:
+  - The interpolated and transformed vector.
 
 ### PyCLES variables that require transformations:
 
-- PyCLES diagnostic vertical fluxes (defined in [AuxiliaryStatistics.pyx](https://github.com/CliMA/pycles/blob/master/AuxiliaryStatistics.pyx#L845)) are specific quantities,
+  - PyCLES diagnostic vertical fluxes (defined in [AuxiliaryStatistics.pyx](https://github.com/CliMA/pycles/blob/master/AuxiliaryStatistics.pyx#L845)) are specific quantities,
     not multiplied by density, and written at cell centers. These include all `resolved_z_flux_(...)` and
     `sgs_z_flux_(...)` diagnostics. For instance the `resolved_z_flux_theta` is ``\\langle{w^*\\theta^*}\\rangle``.
     In contrast, all `massflux_(...)`, `diffusive_flux_(...)` and `total_flux_(...)` outputs from
@@ -190,8 +201,7 @@ Output:
     is that the `total_flux_(...)` in TC.jl simulations includes the full flux, whereas the PyCLES `resolved`
     definitions only include the resolved flux. We must add the `sgs_z_flux_(...)` component here.
 
-
-- PyCLES prognostic vertical fluxes (defined in [ScalarAdvection.pyx](https://github.com/CliMA/pycles/blob/master/ScalarAdvection.pyx#L136),
+  - PyCLES prognostic vertical fluxes (defined in [ScalarAdvection.pyx](https://github.com/CliMA/pycles/blob/master/ScalarAdvection.pyx#L136),
     [ScalarDiffusion.pyx](https://github.com/CliMA/pycles/blob/master/ScalarDiffusion.pyx#L174), MomentumAdvection.pyx,
     MomentumDiffusion.pyx) are defined at cell centers and have already been multiplied by density. They are computed
     at cell faces in the low-level functions in [`scalar_advection.h`](https://github.com/CliMA/pycles/blob/master/Csrc/scalar_diffusion.h#L31) and `scalar_diffusion.h`,
@@ -302,17 +312,18 @@ Perform normalization of the aggregate observation vector `y` using separate
 normalization factors (μ, σ) for each variable, returned as `norm_vec`.
 
 Inputs:
- - `y` :: Aggregate observation vector (containing several variables).
- - `y_names` :: Vector of squares of normalization factors.
- - `prof_dof` :: Degrees of freedom of vertical profiles contained in `y`.
- - `prof_indices` :: Vector of booleans specifying which variables are profiles, and which
+
+  - `y` :: Aggregate observation vector (containing several variables).
+  - `y_names` :: Vector of squares of normalization factors.
+  - `prof_dof` :: Degrees of freedom of vertical profiles contained in `y`.
+  - `prof_indices` :: Vector of booleans specifying which variables are profiles, and which
     are timeseries.
-- `norm_factors_dict` :: Dict of precomputed normalization factors Dict(var_name => (μ, σ)) for each variable.
-- `z_score_norm` :: z-score normalization
-Output:
- - `y_` : normalized `y` vector.
- - `norm_vec` : normalization factors (μ, σ) for each variable.
- The normalized aggregate observation vector.
+  - `norm_factors_dict` :: Dict of precomputed normalization factors Dict(var_name => (μ, σ)) for each variable.
+  - `z_score_norm` :: z-score normalization
+    Output:
+  - `y_` : normalized `y` vector.
+  - `norm_vec` : normalization factors (μ, σ) for each variable.
+    The normalized aggregate observation vector.
 """
 function normalize_profile(
     y::Array{FT},
@@ -379,11 +390,12 @@ end
 Returns the netcdf variable `var_name` interpolated to heights `z_scm`.
 
 Inputs:
- - `var_name` :: Name of variable in the netcdf dataset.
- - `filename` :: nc filename
- - `z_scm` :: Vertical coordinate vector onto which var_name is interpolated.
-Output:
- - The interpolated vector.
+
+  - `var_name` :: Name of variable in the netcdf dataset.
+  - `filename` :: nc filename
+  - `z_scm` :: Vertical coordinate vector onto which var_name is interpolated.
+    Output:
+  - The interpolated vector.
 """
 function vertical_interpolation(
     var_name::String,
@@ -438,16 +450,16 @@ Get time-averaged profiles for variables `y_names`, interpolated to
 
 Inputs:
 
- - `filename`    :: nc filename
- - `y_names`     :: Names of variables to be retrieved.
- - `ti`          :: Initial time of averaging window [s].
- - `tf`          :: Final time of averaging window [s].
- - `z_scm`       :: If given, interpolate LES observations to given levels.
- - `prof_ind`    :: Whether to return a boolean array indicating the variables that are profiles (i.e., not scalars). 
+  - `filename`    :: nc filename
+  - `y_names`     :: Names of variables to be retrieved.
+  - `ti`          :: Initial time of averaging window [s].
+  - `tf`          :: Final time of averaging window [s].
+  - `z_scm`       :: If given, interpolate LES observations to given levels.
+  - `prof_ind`    :: Whether to return a boolean array indicating the variables that are profiles (i.e., not scalars).
 
 Outputs:
 
- - `y` :: Output vector used in the inverse problem, which concatenates the requested profiles.
+  - `y` :: Output vector used in the inverse problem, which concatenates the requested profiles.
 """
 function get_profile(
     filename::String,
@@ -523,30 +535,33 @@ end
 
 Get observational mean `y` and time covariance `Σ`.
 
-The keyword `z_score_norm` specifies whether observations are to be normalized or not. 
+The keyword `z_score_norm` specifies whether observations are to be normalized or not.
 See [`normalize_profile`](@ref) for details. The normalization vector is returned along with `y` and `Σ`.
 
 If `z_scm` is given, interpolate observations to the given levels.
 
 # Arguments
- - `filename`    :: nc filename
- - `y_names`      :: Names of variables to include.
- - `z_scm`        :: If given, interpolate LES observations to given array of vertical levels.
+
+  - `filename`    :: nc filename
+  - `y_names`      :: Names of variables to include.
+  - `z_scm`        :: If given, interpolate LES observations to given array of vertical levels.
 
 # Keywords
- - `model_error`  :: Model error per variable, added to the internal variability noise, and
-                    normalized by the pooled variance of the variable.
- - `ti`          :: Initial time of averaging window [s].
- - `tf`          :: Final time of averaging window [s].
- - `norm_factors_dict` :: Dict of precomputed normalization factors Dict(var_name => (μ, σ)) for each variable.
- - `z_score_norm` :: z-score normalization
- - `Σ_const` :: If given, sets constant diagonal σ^2 to use for noise cov Σ
- -  `Σ_scaling` ::String = {"const", "prop"}
+
+  - `model_error`  :: Model error per variable, added to the internal variability noise, and
+    normalized by the pooled variance of the variable.
+  - `ti`          :: Initial time of averaging window [s].
+  - `tf`          :: Final time of averaging window [s].
+  - `norm_factors_dict` :: Dict of precomputed normalization factors Dict(var_name => (μ, σ)) for each variable.
+  - `z_score_norm` :: z-score normalization
+  - `Σ_const` :: If given, sets constant diagonal σ^2 to use for noise cov Σ
+  - `Σ_scaling` ::String = {"const", "prop"}
 
 # Returns
- - `y::Vector`           :: Mean of observations `y`, possibly interpolated to `z_scm` levels.
- - `Σ::Matrix`           :: Observational covariance matrix `Σ`
-- `norm_vec::Matrix`    :: Normalization mean & std, one row for each variable
+
+  - `y::Vector`           :: Mean of observations `y`, possibly interpolated to `z_scm` levels.
+  - `Σ::Matrix`           :: Observational covariance matrix `Σ`
+  - `norm_vec::Matrix`    :: Normalization mean & std, one row for each variable
 """
 function get_obs(
     filename::String,
@@ -562,7 +577,7 @@ function get_obs(
     Σ_scaling::String = "const",
 ) where {FT <: Real}
 
-    # map to CA names to LES names 
+    # map to CA names to LES names
     y_names = [CLIMADIAGNOSTICS_LES_NAME_MAP[var_i] for var_i in y_names]
     if !isnothing(log_vars)
         log_vars =
@@ -635,14 +650,15 @@ Obtain the covariance matrix of a group of profiles, where the covariance
 is obtained in time.
 
 Inputs:
- - `filename`    :: nc filename
- - `y_names`      :: Names of variables to include.
- - `z_scm`        :: If given, interpolates covariance matrix to this locations.
- - `ti`          :: Initial time, after which covariance is computed [s].
- - `normalize`    :: Whether to normalize the time series before computing the covariance, or not.
- - `model_error`  :: Model error per variable, added to the internal variability noise, and
-                    normalized by the pooled variance of the variable.
- - `pooled_var_dict` :: Dict of precomputed pooled variances
+
+  - `filename`    :: nc filename
+  - `y_names`      :: Names of variables to include.
+  - `z_scm`        :: If given, interpolates covariance matrix to this locations.
+  - `ti`          :: Initial time, after which covariance is computed [s].
+  - `normalize`    :: Whether to normalize the time series before computing the covariance, or not.
+  - `model_error`  :: Model error per variable, added to the internal variability noise, and
+    normalized by the pooled variance of the variable.
+  - `pooled_var_dict` :: Dict of precomputed pooled variances
 """
 function get_time_covariance(
     filename::String,
@@ -725,7 +741,9 @@ function get_time_covariance(
     return cov_mat, pool_var
 end
 
-"""Given calibration output directory, find iterations that contain given config."""
+"""
+Given calibration output directory, find iterations that contain given config.
+"""
 function get_iters_with_config(config_i::Int, config_dict::Dict)
     config_i_dir = "config_$config_i"
     iters_with_config = []
@@ -770,23 +788,26 @@ end
     )
 
 Fetch output vectors `y` for a specific variable across ensemble members.
-    Fills missing data from crash simulations with NaN.
+Fills missing data from crash simulations with NaN.
 
 # Arguments
- - `process_profile_func` :: Function to process profile data (typically the observation map)
- - `iteration`   :: Iteration number for the ensemble data
- - `config_i`    :: Configuration id
- - `config_dict` :: Configuration dictionary
+
+  - `process_profile_func` :: Function to process profile data (typically the observation map)
+  - `iteration`   :: Iteration number for the ensemble data
+  - `config_i`    :: Configuration id
+  - `config_dict` :: Configuration dictionary
 
 # Keywords
- - `var_name`    :: Name of the variable to extract data for
- - `reduction`   :: Type of ClimaDiagnostics data reduction to apply
- - `output_dir`  :: Calibration output dir
- - `z_max`       :: maximum z
- - `n_vert_levels` :: Number of vertical levels in the data
+
+  - `var_name`    :: Name of the variable to extract data for
+  - `reduction`   :: Type of ClimaDiagnostics data reduction to apply
+  - `output_dir`  :: Calibration output dir
+  - `z_max`       :: maximum z
+  - `n_vert_levels` :: Number of vertical levels in the data
 
 # Returns
- - `G_ensemble::Array{Float64}` :: Array containing the data for the specified variable across all ensemble members, with shape (n_vert_levels, ensemble_size).
+
+  - `G_ensemble::Array{Float64}` :: Array containing the data for the specified variable across all ensemble members, with shape (n_vert_levels, ensemble_size).
 """
 function ensemble_data(
     process_profile_func,
@@ -827,7 +848,9 @@ function ensemble_data(
     return G_ensemble
 end
 
-"""Get minimum loss (RMSE) from EKI obj for a given iteration."""
+"""
+Get minimum loss (RMSE) from EKI obj for a given iteration.
+"""
 function get_loss_min(output_dir, iteration; n_lowest = 10, return_rmse = true)
     iter_path = CAL.path_to_iteration(output_dir, iteration)
     eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))

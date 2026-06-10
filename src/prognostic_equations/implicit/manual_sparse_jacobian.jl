@@ -27,9 +27,9 @@ built — users do not configure them directly.
 
 # Arguments
 
-- `approximate_solve_iters::Int = 1`: number of iterations to take for the
-  approximate linear solve required when grid-scale diffusion is treated
-  implicitly.
+  - `approximate_solve_iters::Int = 1`: number of iterations to take for the
+    approximate linear solve required when grid-scale diffusion is treated
+    implicitly.
 """
 struct ManualSparseJacobian <: SparseJacobian
     approximate_solve_iters::Int
@@ -1045,7 +1045,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             # add updraft mass flux contributions to grid-mean
             if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
 
-                # If diffusion is explicit, zero-initialize (ρe_tot, ρ) and 
+                # If diffusion is explicit, zero-initialize (ρe_tot, ρ) and
                 # (ρq_tot, ρ) here so both blocks can safely use +=.
                 if !use_derivative(diffusion_flag)
                     ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]

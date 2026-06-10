@@ -52,8 +52,9 @@ MANYTESTS && @info "Running multiple tests"
     _error(arr1::AbstractArray, arr2::AbstractArray; ABS_TOL = 100eps(eltype(arr1)))
 
 We compute the error in this way:
-- when the absolute value is larger than ABS_TOL, we use the absolute error
-- in the other cases, we compare the relative errors
+
+  - when the absolute value is larger than ABS_TOL, we use the absolute error
+  - in the other cases, we compare the relative errors
 """
 function _error(
     arr1::AbstractArray,
@@ -84,14 +85,13 @@ defines a notion of `error` that is the following: when the absolute value is
 less than `100eps(eltype)`, `error = absolute_error`, otherwise it is relative
 error. The `error` is then compared against a tolerance.
 
-Keyword arguments
-=================
+# Keyword arguments
 
-- `name` is used to collect the name of the property while we go recursively
-  over all the properties. You can pass a base name.
-- `ignore` is a collection of `Symbol`s that identify properties that are
-  ignored when walking through the tree. This is useful for properties that
-  are known to be different (e.g., `output_dir`).
+  - `name` is used to collect the name of the property while we go recursively
+    over all the properties. You can pass a base name.
+  - `ignore` is a collection of `Symbol`s that identify properties that are
+    ignored when walking through the tree. This is useful for properties that
+    are known to be different (e.g., `output_dir`).
 
 `:rc` is some CUDA/CuArray internal object that we don't care about
 """

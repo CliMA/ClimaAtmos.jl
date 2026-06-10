@@ -11,21 +11,22 @@ import Thermodynamics.Parameters as TDP
     calculate_pi_groups(
         elev_above_sfc, ref_H, ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ,
         ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke
-    ) 
+    )
 
 Calculates non-dimensional Π-groups used in EDMF entrainment/detrainment models.
 
 Arguments:
-- `elev_above_sfc`: Difference between cell-center height and surface elevation (ᶜz - z_sfc) [m].
-- `ref_H`: Reference pressure scale height [m].
-- `ᶜaʲ`: Updraft area fraction [-].
-- `ᶜwʲ`: Updraft physical vertical velocity [m/s].
-- `ᶜRHʲ`: Updraft relative humidity [-].
-- `ᶜbuoyʲ`: Updraft buoyancy [m/s²].
-- `ᶜw⁰`: Environment physical vertical velocity [m/s].
-- `ᶜRH⁰`: Environment relative humidity [-].
-- `ᶜbuoy⁰`: Environment buoyancy [m/s²].
-- `ᶜtke`: Turbulent kinetic energy [m²/s²].
+
+  - `elev_above_sfc`: Difference between cell-center height and surface elevation (ᶜz - z_sfc) [m].
+  - `ref_H`: Reference pressure scale height [m].
+  - `ᶜaʲ`: Updraft area fraction [-].
+  - `ᶜwʲ`: Updraft physical vertical velocity [m/s].
+  - `ᶜRHʲ`: Updraft relative humidity [-].
+  - `ᶜbuoyʲ`: Updraft buoyancy [m/s²].
+  - `ᶜw⁰`: Environment physical vertical velocity [m/s].
+  - `ᶜRH⁰`: Environment relative humidity [-].
+  - `ᶜbuoy⁰`: Environment buoyancy [m/s²].
+  - `ᶜtke`: Turbulent kinetic energy [m²/s²].
 
 Returns a tuple of five Π-groups: (Π₁, Π₂, Π₃, Π₄, Π₅).
 Π₁: Related to buoyancy difference and velocity difference.
@@ -33,7 +34,7 @@ Returns a tuple of five Π-groups: (Π₁, Π₂, Π₃, Π₄, Π₅).
 Π₃: Related to updraft area.
 Π₄: Related to relative humidity difference.
 Π₅: Related to normalized elevation above surface.
-Π₁ and Π₂ are scaled by empirical factors (100 and 2 respectively) to 
+Π₁ and Π₂ are scaled by empirical factors (100 and 2 respectively) to
 become O(1) and then clipped to the range [-1, 1].
 """
 function calculate_pi_groups(
@@ -119,7 +120,7 @@ compute_entrainment(
 """
     entr_area_limiter_factor(ᶜaʲ, turbconv_params)
 
-Return a multiplicative limiter for the entrainment rate based on the 
+Return a multiplicative limiter for the entrainment rate based on the
 current subdraft area `ᶜaʲ`.
 
 The factor smoothly damps entrainment as the area approaches 1 (fully
@@ -157,8 +158,8 @@ a velocity-dependent part and a background (time-scale) part:
 where `entr` has units of [1/s], `entr_vel_scale` has units of [1/m],
 and `entr_nonvel` has units of [1/s]. `entrainment_velocity_scale` computes
 the velocity-scaling prefactor [1/m] and `nonvelocity_entrainment` computes
-the velocity-independent rate [1/s], both according to the model specified 
-by `model_option`. The total entrainment rate [1/s] is assembled by 
+the velocity-independent rate [1/s], both according to the model specified
+by `model_option`. The total entrainment rate [1/s] is assembled by
 `compute_entrainment`.
 
 The specific formulation depends on the concrete type passed as
@@ -172,32 +173,35 @@ Each model implements a distinct physical or empirical representation
 of entrainment in updrafts.
 
 Arguments for `entrainment_velocity_scale` (all cell-centered):
-- `thermo_params`: Thermodynamic parameters.
-- `turbconv_params`: Turbulence convection parameters.
-- `ᶜz`: Height [m].
-- `z_sfc`: Surface elevation [m].
-- `ᶜp`: Pressure [Pa].
-- `ᶜρ`: Air density [kg/m³].
-- `ᶜaʲ`: Updraft area fraction [-].
-- `ᶜwʲ`: Updraft physical vertical velocity [m/s].
-- `ᶜRHʲ`: Updraft relative humidity [-].
-- `ᶜbuoyʲ`: Updraft buoyancy [m/s²].
-- `ᶜw⁰`: Environment physical vertical velocity [m/s].
-- `ᶜRH⁰`: Environment relative humidity [-].
-- `ᶜbuoy⁰`: Environment buoyancy [m/s²].
-- `ᶜtke`: Turbulent kinetic energy [m²/s²].
-- `model_option`: Object specifying the entrainment model
-                  (e.g., `NoEntrainment`, `PiGroupsEntrainment`,
-                  or `InvZEntrainment`).
+
+  - `thermo_params`: Thermodynamic parameters.
+  - `turbconv_params`: Turbulence convection parameters.
+  - `ᶜz`: Height [m].
+  - `z_sfc`: Surface elevation [m].
+  - `ᶜp`: Pressure [Pa].
+  - `ᶜρ`: Air density [kg/m³].
+  - `ᶜaʲ`: Updraft area fraction [-].
+  - `ᶜwʲ`: Updraft physical vertical velocity [m/s].
+  - `ᶜRHʲ`: Updraft relative humidity [-].
+  - `ᶜbuoyʲ`: Updraft buoyancy [m/s²].
+  - `ᶜw⁰`: Environment physical vertical velocity [m/s].
+  - `ᶜRH⁰`: Environment relative humidity [-].
+  - `ᶜbuoy⁰`: Environment buoyancy [m/s²].
+  - `ᶜtke`: Turbulent kinetic energy [m²/s²].
+  - `model_option`: Object specifying the entrainment model
+    (e.g., `NoEntrainment`, `PiGroupsEntrainment`,
+    or `InvZEntrainment`).
 
 Arguments for `nonvelocity_entrainment`:
-- `turbconv_params`: Turbulence convection parameters.
-- `ᶜaʲ`: Updraft area fraction [-].
-- `model_option`: Object specifying the entrainment model.
+
+  - `turbconv_params`: Turbulence convection parameters.
+  - `ᶜaʲ`: Updraft area fraction [-].
+  - `model_option`: Object specifying the entrainment model.
 
 Returns (for each function):
-- `entrainment_velocity_scale`: Velocity-scaling prefactor [1/m].
-- `nonvelocity_entrainment`: Background (velocity-independent) entrainment rate [1/s].
+
+  - `entrainment_velocity_scale`: Velocity-scaling prefactor [1/m].
+  - `nonvelocity_entrainment`: Background (velocity-independent) entrainment rate [1/s].
 
 These quantities are combined by `compute_entrainment` as
 
@@ -363,15 +367,16 @@ Calls `detrainment_rate` for the model-specific rate, adds `detr_nonvel`
 `a_min`/`a_max` the net area tendency `(entr - detr)` smoothly approaches zero.
 
 Arguments:
-- `turbconv_params`: Turbulence convection parameters.
-- `aʲ`: Updraft area fraction [-].
-- `ρaʲ`: Updraft density-area product [kg/m³].
-- `Δwʲ`: Updraft physical vertical velocity [m/s].
-- `Δbuoyʲ`: Updraft buoyancy (vertical acceleration) [m/s²].
-- `massflux_vert_div`: Vertical divergence of the updraft mass flux [kg/(m³ s)].
-- `entr`: Total entrainment rate [1/s].
-- `detr_nonvel`: Additional (e.g., background) detrainment rate [1/s].
-- `detr_model`: Object specifying the detrainment model.
+
+  - `turbconv_params`: Turbulence convection parameters.
+  - `aʲ`: Updraft area fraction [-].
+  - `ρaʲ`: Updraft density-area product [kg/m³].
+  - `Δwʲ`: Updraft physical vertical velocity [m/s].
+  - `Δbuoyʲ`: Updraft buoyancy (vertical acceleration) [m/s²].
+  - `massflux_vert_div`: Vertical divergence of the updraft mass flux [kg/(m³ s)].
+  - `entr`: Total entrainment rate [1/s].
+  - `detr_nonvel`: Additional (e.g., background) detrainment rate [1/s].
+  - `detr_model`: Object specifying the detrainment model.
 
 Returns the total detrainment rate [1/s].
 """
@@ -414,12 +419,13 @@ This abstract fallback returns zero; concrete subtypes of
 non-trivial rate.
 
 Arguments:
-- `turbconv_params`: Turbulence convection parameters.
-- `ᶜρaʲ`: Updraft density-area product [kg/m³].
-- `ᶜΔwʲ`: Updraft physical vertical velocity [m/s].
-- `ᶜΔbuoyʲ`: Updraft buoyancy (vertical acceleration) [m/s²].
-- `ᶜmassflux_vert_div`: Vertical divergence of the updraft mass flux [kg/(m³ s)].
-- `detr_model`: Detrainment model dispatch tag.
+
+  - `turbconv_params`: Turbulence convection parameters.
+  - `ᶜρaʲ`: Updraft density-area product [kg/m³].
+  - `ᶜΔwʲ`: Updraft physical vertical velocity [m/s].
+  - `ᶜΔbuoyʲ`: Updraft buoyancy (vertical acceleration) [m/s²].
+  - `ᶜmassflux_vert_div`: Vertical divergence of the updraft mass flux [kg/(m³ s)].
+  - `detr_model`: Detrainment model dispatch tag.
 
 Returns the model-specific detrainment rate [1/s] (zero for the abstract fallback).
 """
@@ -547,7 +553,7 @@ end
 Apply first-interior–level entrainment tendencies for each EDMF updraft.
 
 This routine adds entrainment tendencies for moist static energy (`mse`) and total
-humidity (`q_tot`) in the first model cell.  
+humidity (`q_tot`) in the first model cell.
 The entrained tracer value is taken from `sgs_scalar_first_interior_bc`.
 """
 edmfx_first_interior_entr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
@@ -609,11 +615,11 @@ function edmfx_first_interior_entr_tendency!(
 
     for j in 1:n
 
-        # Apply entrainment tendencies in the first model cell for moist static energy (mse) 
-        # and total humidity (q_tot). The entrained fluid is assumed to have a scalar value 
-        # given by `sgs_scalar_first_interior_bc` (mean + SGS perturbation). Since 
-        # `edmfx_entr_detr_tendency!` computes entrainment based on the environment–updraft 
-        # contrast, we supply the high-value (entrained) tracer minus the environment value 
+        # Apply entrainment tendencies in the first model cell for moist static energy (mse)
+        # and total humidity (q_tot). The entrained fluid is assumed to have a scalar value
+        # given by `sgs_scalar_first_interior_bc` (mean + SGS perturbation). Since
+        # `edmfx_entr_detr_tendency!` computes entrainment based on the environment–updraft
+        # contrast, we supply the high-value (entrained) tracer minus the environment value
         # here to form the correct tendency.
         entr_int_val = Fields.field_values(Fields.level(ᶜentrʲs.:($j), 1))
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
@@ -672,32 +678,36 @@ entrainment velocity scale are left unchanged; `detr_nonvel` is floored at
 
 When `buoyancy_flux ≥ 0` (convectively unstable): the updraft area is nudged
 toward `surface_area`:
-- `ρaʲ` is seeded so a zero-area plume can start growing.
-- If `a < surface_area`: `entr_nonvel` is set to `(surface_area/a − 1)/dt` and
-  `entr_vel_scale` is set to `2/dz` (the kinematic one-sided estimate of
-  `∂(ρaw)/∂z` at the surface), so entrainment grows the area.
-- If `a ≥ surface_area`: `detr_nonvel` is set to drive area back down;
-  `entr_vel_scale` is still `2/dz`.
+
+  - `ρaʲ` is seeded so a zero-area plume can start growing.
+  - If `a < surface_area`: `entr_nonvel` is set to `(surface_area/a − 1)/dt` and
+    `entr_vel_scale` is set to `2/dz` (the kinematic one-sided estimate of
+    `∂(ρaw)/∂z` at the surface), so entrainment grows the area.
+  - If `a ≥ surface_area`: `detr_nonvel` is set to drive area back down;
+    `entr_vel_scale` is still `2/dz`.
 
 !!! note "Two-place first-cell treatment"
+
     The first-cell boundary condition is applied in two stages:
-    1. This function sets the input coefficients (bg_entr, entr_coeff, detr_nonvel).
-    2. `update_prognostic_edmfx_entr_detr!` overrides the total detrainment at
+
+     1. This function sets the input coefficients (bg_entr, entr_coeff, detr_nonvel).
+     2. `update_prognostic_edmfx_entr_detr!` overrides the total detrainment at
         level 1 to strip the area limiter added by `compute_detrainment`.
-    These two stages should be kept in sync.
+        These two stages should be kept in sync.
 
 Arguments (all level-1 field-value slices unless noted):
-- `ρaʲ_int`             — updraft `ρa` [kg/m³] (read/write; seeded first)
-- `ρʲ_int`              — updraft density [kg/m³] (read-only)
-- `entr_nonvel_int`         — background entrainment [1/s] (read/write)
-- `entr_vel_scale_int`  — entrainment velocity scale [1/m] (read/write)
-- `detr_nonvel_int`     — additional detrainment [1/s] (read/write)
-- `aʲ_int`              — scratch for draft area [-] (write-only; pre-allocated by caller)
-- `buoyancy_flux`       — surface buoyancy flux [m²/s³] (read-only scalar field values)
-- `dz_int`              — first-cell height [m] (read-only)
-- `surface_area`        — target updraft area fraction [-] (scalar)
-- `dt`                  — timestep [s] (scalar)
-- `FT`                  — float type
+
+  - `ρaʲ_int`             — updraft `ρa` [kg/m³] (read/write; seeded first)
+  - `ρʲ_int`              — updraft density [kg/m³] (read-only)
+  - `entr_nonvel_int`         — background entrainment [1/s] (read/write)
+  - `entr_vel_scale_int`  — entrainment velocity scale [1/m] (read/write)
+  - `detr_nonvel_int`     — additional detrainment [1/s] (read/write)
+  - `aʲ_int`              — scratch for draft area [-] (write-only; pre-allocated by caller)
+  - `buoyancy_flux`       — surface buoyancy flux [m²/s³] (read-only scalar field values)
+  - `dz_int`              — first-cell height [m] (read-only)
+  - `surface_area`        — target updraft area fraction [-] (scalar)
+  - `dt`                  — timestep [s] (scalar)
+  - `FT`                  — float type
 """
 function set_first_cell_entr_detr_bc!(
     ρaʲ_int,

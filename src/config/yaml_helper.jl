@@ -66,18 +66,18 @@ enforce a single canonical type per key.
 
 Dispatch order, most specific first:
 
-1. `coerce_to_default(::Type{T}, v::T) = v` — same type, identity. The
-   common path; most YAML values already load with the expected type.
-2. `coerce_to_default(::Type{Bool}, v::AbstractString)` — `"true"`/`"false"`
-   → `true`/`false` via `parse(Bool, v)`. Anything else throws
-   `ArgumentError`.
-3. `coerce_to_default(::Type{<:Integer}, v::AbstractString)` — `"42"` → `42`.
-4. `coerce_to_default(::Type{<:AbstractFloat}, v::AbstractString)` — `"3.14"`
-   → `3.14`. Note `"42"` also parses as a `Float64` here if the schema
-   default is float.
-5. `coerce_to_default(::Type{T}, v) = convert(T, v)` — fallback. Catches
-   things like `Int → Float64` (schema default `1.0`, user wrote `1`).
-   For unrelated types this throws `MethodError`.
+ 1. `coerce_to_default(::Type{T}, v::T) = v` — same type, identity. The
+    common path; most YAML values already load with the expected type.
+ 2. `coerce_to_default(::Type{Bool}, v::AbstractString)` — `"true"`/`"false"`
+    → `true`/`false` via `parse(Bool, v)`. Anything else throws
+    `ArgumentError`.
+ 3. `coerce_to_default(::Type{<:Integer}, v::AbstractString)` — `"42"` → `42`.
+ 4. `coerce_to_default(::Type{<:AbstractFloat}, v::AbstractString)` — `"3.14"`
+    → `3.14`. Note `"42"` also parses as a `Float64` here if the schema
+    default is float.
+ 5. `coerce_to_default(::Type{T}, v) = convert(T, v)` — fallback. Catches
+    things like `Int → Float64` (schema default `1.0`, user wrote `1`).
+    For unrelated types this throws `MethodError`.
 
 # Examples
 

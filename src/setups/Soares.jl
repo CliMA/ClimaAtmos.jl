@@ -5,6 +5,7 @@ The Soares setup described in [Soares2004](@cite), with a hydrostatically
 balanced pressure profile. Profiles are sourced from AtmosphericProfilesLibrary.
 
 ## Example
+
 ```julia
 setup = Soares(; prognostic_tke = true, thermo_params)
 ```

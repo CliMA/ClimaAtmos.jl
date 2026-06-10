@@ -11,7 +11,7 @@ Returns a 1D ("z",) `Vector{FT}` of the time-averaged data.
 
 !!! note
 
-    This method currently assumes the underlying data is `Float64`. 
+    This method currently assumes the underlying data is `Float64`.
     If this is not the case, "garbage" data may be returned with no warning.
 """
 function gcm_driven_profile_tmean(ds, varname)
@@ -27,7 +27,7 @@ Returns a 2D ("z", "t") `Matrix` object.
 
 !!! note
 
-    This method currently assumes the underlying data is `Float64`. 
+    This method currently assumes the underlying data is `Float64`.
     If this is not the case, "garbage" data may be returned with no warning.
 """
 function gcm_driven_profile(ds, varname)
@@ -43,20 +43,20 @@ Returns a 1D ("z",) `vec` object.
 
 !!! note
 
-    This method currently assumes the underlying data is `Float64`. 
+    This method currently assumes the underlying data is `Float64`.
     If this is not the case, "garbage" data may be returned with no warning.
 """
 function gcm_height(ds)
     vec(mean(ds["zg"][:, :], dims = 2))
 end
 """
-#    gcm_driven_timeseries(ds, varname)
+# gcm_driven_timeseries(ds, varname)
 
 # Get `varname` from the dataset `ds` and return values
 
 !!! note
 
-    This method currently assumes the underlying data is `Float64`. 
+    This method currently assumes the underlying data is `Float64`.
     If this is not the case, "garbage" data may be returned with no warning.
 """
 function gcm_driven_timeseries(ds, varname)

@@ -236,9 +236,9 @@ Updates cloud properties:
 Updates `cloud_liquid_water_content (ᶜlwp)`, `cloud_ice_water_content (ᶜiwp)`,
 `cloud_fraction (ᶜfrac)`, `ᶜliquid_water_mass_concentration`, `ᶜreliq`, `ᶜreice`.
 Updates aerosol properties for the following supported symbols:
-    seasalt_names = [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-    dust_names = [:DST01, :DST02, :DST03, :DST04, :DST05]
-    SO4_names = [:SO4]
+seasalt_names = [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+dust_names = [:DST01, :DST02, :DST03, :DST04, :DST05]
+SO4_names = [:SO4]
 When prescribed cloud fields are used, time-varying interpolation is applied using
 `ClimaUtilities` functions.
 No updates are applied when `radiation_mode.idealized_clouds` is true.
@@ -367,9 +367,9 @@ end
 """
     ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
 
- - cmc - a struct with cloud and aerosol parameters
- - c_dust, c_seasalt, c_SO4 - dust, seasalt and ammonium sulfate mass concentrations [kg/kg]
- - q_liq - liquid water specific humidity
+  - cmc - a struct with cloud and aerosol parameters
+  - c_dust, c_seasalt, c_SO4 - dust, seasalt and ammonium sulfate mass concentrations [kg/kg]
+  - q_liq - liquid water specific humidity
 
 Returns the liquid cloud droplet number concentration diagnosed based on the
 aerosol loading and cloud liquid water.

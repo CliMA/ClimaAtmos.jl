@@ -39,13 +39,14 @@ const MoistMicrophysics = Union{
 Family of methods for enforcing tracer nonnegativity.
 
 There are four methods for enforcing tracer nonnegativity:
-- `TracerNonnegativityElementConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
+
+  - `TracerNonnegativityElementConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
     tracer mass within an element (i.e. horizontally)
-- `TracerNonnegativityVaporConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
+  - `TracerNonnegativityVaporConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
     tracer mass between vapor (`q_vap = q_tot - q_cond`) and each tracer
-- `TracerNonnegativityVaporTendency`: Enforce nonnegativity by applying a tendency to each tracer,
+  - `TracerNonnegativityVaporTendency`: Enforce nonnegativity by applying a tendency to each tracer,
     exchanging tracer mass between vapor (`q_vap`) and each tracer over time
-- `TracerNonnegativityVerticalWaterBorrowing`: Enforce nonnegativity using VerticalMassBorrowingLimiter,
+  - `TracerNonnegativityVerticalWaterBorrowing`: Enforce nonnegativity using VerticalMassBorrowingLimiter,
     which redistributes tracer mass vertically. Note: `qtot` parameter is not applicable to this method.
 
 `qtot` is a boolean that is `true` if q_tot is among the constrained tracers, and `false` otherwise.
@@ -57,17 +58,21 @@ There are four methods for enforcing tracer nonnegativity:
 Create a microphysics tracer nonnegativity constraint.
 
 Depending on the microphysics model, the constrained tracers include:
-- `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`,
-- If `include_qtot` is true, `q_tot` is also among the constrained tracers.
+
+  - `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`,
+  - If `include_qtot` is true, `q_tot` is also among the constrained tracers.
 
 # Arguments:
-- `method`: Can be
-    - "elementwise_constraint": constructs `TracerNonnegativityElementConstraint{include_qtot}()`
-    - "vapor_constraint": constructs `TracerNonnegativityVaporConstraint{include_qtot}()`
-    - "vapor_tendency": constructs `TracerNonnegativityVaporTendency()`
+
+  - `method`: Can be
+
+      + "elementwise_constraint": constructs `TracerNonnegativityElementConstraint{include_qtot}()`
+      + "vapor_constraint": constructs `TracerNonnegativityVaporConstraint{include_qtot}()`
+      + "vapor_tendency": constructs `TracerNonnegativityVaporTendency()`
 
 # Keyword arguments:
-- `include_qtot`: (default: `false`) Boolean that is `true` if q_tot is among the constrained tracers.
+
+  - `include_qtot`: (default: `false`) Boolean that is `true` if q_tot is among the constrained tracers.
 """
 abstract type TracerNonnegativityMethod end
 abstract type TracerNonnegativityConstraint{qtot} <: TracerNonnegativityMethod end
@@ -96,7 +101,6 @@ function TracerNonnegativityMethod(method::String; include_qtot::Bool = false)
 end
 
 """
-
     AbstractSGSamplingType
 
 How sub-grid scale diagnostic should be sampled in computing cloud fraction.
@@ -242,13 +246,16 @@ abstract type EddyViscosityModel end
 Smagorinsky-Lilly eddy viscosity model.
 
 `AXES` is a symbol indicating along which axes the model is applied. It can be
-- `:UVW` (all axes)
-- `:UV` (horizontal axes)
-- `:W` (vertical axis)
-- `:UV_W` (horizontal and vertical axes treated separately).
+
+  - `:UVW` (all axes)
+  - `:UV` (horizontal axes)
+  - `:W` (vertical axis)
+  - `:UV_W` (horizontal and vertical axes treated separately).
 
 # Examples
+
 Construct a model instance by passing the selected axes as a keyword argument:
+
 ```julia
 smagorinsky_lilly = SmagorinskyLilly(; axes = :UV_W)
 ```
@@ -312,23 +319,24 @@ Viscous sponge model; dampen variables in proportion to the value of their Lapla
 
 Whenever `z > zd`, the viscous sponge model applies the tendency
 
- ```math
- \frac{∂χ}{∂t} = - β ⋅ ∇⋅(∇χ),   z > zd
- ```
+```math
+\frac{∂χ}{∂t} = - β ⋅ ∇⋅(∇χ),   z > zd
+```
 
- where `β = κ₂ ⋅ ζ` and `χ ∈ {uₕ, u₃, ρe_tot, GS_TRACERS}`;
- the grid-scale tracers `GS_TRACERS` depend on the microphysical model,
- but may include e.g. `ρq_tot`, `ρq_lcl`, `ρq_icl`, ...
- If the `PrognosticEDMFX` scheme is used, the model is additionally applied to `χ ∈ {u₃ʲ}`.
- `κ₂` is a damping coefficient, and `ζ` is the damping function
+where `β = κ₂ ⋅ ζ` and `χ ∈ {uₕ, u₃, ρe_tot, GS_TRACERS}`;
+the grid-scale tracers `GS_TRACERS` depend on the microphysical model,
+but may include e.g. `ρq_tot`, `ρq_lcl`, `ρq_icl`, ...
+If the `PrognosticEDMFX` scheme is used, the model is additionally applied to `χ ∈ {u₃ʲ}`.
+`κ₂` is a damping coefficient, and `ζ` is the damping function
 
- ```math
- ζ(z) = sin^2(π(z-zd)/(zmax-zd)/2)
- ```
+```math
+ζ(z) = sin^2(π(z-zd)/(zmax-zd)/2)
+```
 
- with `zd` the lower damping height and `zmax` the domain top height.
+with `zd` the lower damping height and `zmax` the domain top height.
 
 # Examples
+
 ```julia
 # Apply damping above 20km with κ₂ = 10^6 m²/s²
 sponge = ViscousSponge(Float32; zd = 20_000, κ₂ = 1e6)
@@ -353,35 +361,38 @@ Rayleigh sponge model; dampen variables in proportion to their value
 
 Whenever `z > zd`, the Rayleigh sponge model applies the tendency
 
- ```math
- \frac{∂χ}{∂t} = - β ⋅ χ,   z > zd
- ```
+```math
+\frac{∂χ}{∂t} = - β ⋅ χ,   z > zd
+```
 
- where `β = α_χ ⋅ ζ` and `χ ∈ {uₕ, u₃}`;
- If `ρtke` is a prognostic variable, it is also damped;
- If the `PrognosticEDMFX` scheme is used, the model is additionally applied to
- `χ ∈ {u₃ʲ, mseʲ, q_totʲ}`, and
- `χ ∈ {q_lclʲ, q_raiʲ, q_iclʲ, q_snoʲ}` (depending on the microphysical model).
- `α_χ` is a damping coefficient for each variable, and `ζ` is the damping function
+where `β = α_χ ⋅ ζ` and `χ ∈ {uₕ, u₃}`;
+If `ρtke` is a prognostic variable, it is also damped;
+If the `PrognosticEDMFX` scheme is used, the model is additionally applied to
+`χ ∈ {u₃ʲ, mseʲ, q_totʲ}`, and
+`χ ∈ {q_lclʲ, q_raiʲ, q_iclʲ, q_snoʲ}` (depending on the microphysical model).
+`α_χ` is a damping coefficient for each variable, and `ζ` is the damping function
 
- ```math
- ζ(z) = sin^2(π(z-zd)/(zmax-zd)/2)
- ```
+```math
+ζ(z) = sin^2(π(z-zd)/(zmax-zd)/2)
+```
 
- with `zd` the lower damping height and `zmax` the domain top height.
+with `zd` the lower damping height and `zmax` the domain top height.
 
- Separate damping coefficients are used:
- - `α_uₕ`: horizontal velocity, `uₕ`;
- - `α_w`: vertical velocity, `u₃`, `u₃ʲ`;
- - `α_sgs_tracer`: subgrid-scale tracer variables, `ρtke`, `mseʲ`, `q_totʲ`,
+Separate damping coefficients are used:
+
+  - `α_uₕ`: horizontal velocity, `uₕ`;
+  - `α_w`: vertical velocity, `u₃`, `u₃ʲ`;
+  - `α_sgs_tracer`: subgrid-scale tracer variables, `ρtke`, `mseʲ`, `q_totʲ`,
     `q_lclʲ`, `q_raiʲ`, `q_iclʲ`, `q_snoʲ`.
 
- By default, damping is only applied to vertical velocity, with:
- - `α_uₕ = 0`
- - `α_w = 1`
- - `α_sgs_tracer = 0`
+By default, damping is only applied to vertical velocity, with:
+
+  - `α_uₕ = 0`
+  - `α_w = 1`
+  - `α_sgs_tracer = 0`
 
 # Examples
+
 ```julia
 # Apply damping to vertical velocity, above 20km
 sponge = RayleighSponge(Float32; zd = 20_000)
@@ -553,10 +564,13 @@ PrognosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
 Create a PrognosticEDMFX model with the specified number of updrafts, TKE configuration, and area fraction.
 
 # Arguments
-- `n_updrafts::Int`: Number of updraft subdomains
-- `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
-- `area_fraction`: "Small" area fraction threshold, is the `a_half` argument in `sgs_weight_function`
-    - Note: Float type is inferred from this value
+
+  - `n_updrafts::Int`: Number of updraft subdomains
+
+  - `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
+  - `area_fraction`: "Small" area fraction threshold, is the `a_half` argument in `sgs_weight_function`
+
+      + Note: Float type is inferred from this value
 """
 function PrognosticEDMFX(;
     n_updrafts = 1,
@@ -578,9 +592,10 @@ DiagnosticEDMFX{N, TKE}(area_fraction::FT) where {N, TKE, FT} =
 Create a DiagnosticEDMFX model with the specified number of updrafts, TKE configuration, and area fraction.
 
 # Arguments
-- `n_updrafts::Int`: Number of updraft subdomains
-- `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
-- `area_fraction`: Area fraction at half levels (float type is inferred from this value)
+
+  - `n_updrafts::Int`: Number of updraft subdomains
+  - `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
+  - `area_fraction`: Area fraction at half levels (float type is inferred from this value)
 """
 function DiagnosticEDMFX(;
     n_updrafts = 1,
@@ -671,9 +686,10 @@ end
 Computes the vertical transport `ρwqₜ` at the surface due to prescribed flow.
 
 # Arguments
-- `flow`: The prescribed flow model, see [`PrescribedFlow`](@ref).
-- `thermo_params`: The thermodynamic parameters, needed to compute surface air density.
-- `t`: The current time.
+
+  - `flow`: The prescribed flow model, see [`PrescribedFlow`](@ref).
+  - `thermo_params`: The thermodynamic parameters, needed to compute surface air density.
+  - `t`: The current time.
 """
 function get_ρu₃qₜ_surface(flow::ShipwayHill2012VelocityProfile, thermo_params, t)
     # TODO: Get these values from the setup instead of hardcoding:
@@ -910,28 +926,28 @@ end
 
 Groups surface-related models and types.
 
-- `flux_scheme`: a
-  [`SurfaceConditions.SurfaceParameterization`](@ref ClimaAtmos.SurfaceConditions.SurfaceParameterization)
-  describing the surface flux closure
-  ([`MoninObukhov`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov),
-  [`ExchangeCoefficients`](@ref ClimaAtmos.SurfaceConditions.ExchangeCoefficients);
-  `MoninObukhov` may carry a time-varying `fluxes` callable), or `nothing` to
-  skip atmos-side surface updates (e.g. when an external driver overwrites
-  `sfc_conditions`). YAML configs may also use
-  [`DefaultMoninObukhov`](@ref ClimaAtmos.SurfaceConditions.DefaultMoninObukhov)/[`DefaultExchangeCoefficients`](@ref ClimaAtmos.SurfaceConditions.DefaultExchangeCoefficients)
-  markers, which the config-driven `AtmosSurface` constructor resolves against
-  `params` eagerly.
-- `temperature`: a
-  [`SurfaceConditions.SurfaceTemperature`](@ref ClimaAtmos.SurfaceConditions.SurfaceTemperature)
-  ([`AnalyticTemperature`](@ref ClimaAtmos.SurfaceConditions.AnalyticTemperature),
-  [`ExternalTemperature`](@ref ClimaAtmos.SurfaceConditions.ExternalTemperature),
-  [`SlabOceanTemperature`](@ref ClimaAtmos.SurfaceConditions.SlabOceanTemperature),
-  [`CoupledTemperature`](@ref ClimaAtmos.SurfaceConditions.CoupledTemperature)).
-- `boundary_overrides`: a
-  [`SurfaceConditions.SurfaceBoundaryOverrides`](@ref ClimaAtmos.SurfaceConditions.SurfaceBoundaryOverrides)
-  carrying per-cell defaults for surface pressure / humidity / winds / gustiness
-  / beta.
-- `albedo`: surface albedo model.
+  - `flux_scheme`: a
+    [`SurfaceConditions.SurfaceParameterization`](@ref ClimaAtmos.SurfaceConditions.SurfaceParameterization)
+    describing the surface flux closure
+    ([`MoninObukhov`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov),
+    [`ExchangeCoefficients`](@ref ClimaAtmos.SurfaceConditions.ExchangeCoefficients);
+    `MoninObukhov` may carry a time-varying `fluxes` callable), or `nothing` to
+    skip atmos-side surface updates (e.g. when an external driver overwrites
+    `sfc_conditions`). YAML configs may also use
+    [`DefaultMoninObukhov`](@ref ClimaAtmos.SurfaceConditions.DefaultMoninObukhov)/[`DefaultExchangeCoefficients`](@ref ClimaAtmos.SurfaceConditions.DefaultExchangeCoefficients)
+    markers, which the config-driven `AtmosSurface` constructor resolves against
+    `params` eagerly.
+  - `temperature`: a
+    [`SurfaceConditions.SurfaceTemperature`](@ref ClimaAtmos.SurfaceConditions.SurfaceTemperature)
+    ([`AnalyticTemperature`](@ref ClimaAtmos.SurfaceConditions.AnalyticTemperature),
+    [`ExternalTemperature`](@ref ClimaAtmos.SurfaceConditions.ExternalTemperature),
+    [`SlabOceanTemperature`](@ref ClimaAtmos.SurfaceConditions.SlabOceanTemperature),
+    [`CoupledTemperature`](@ref ClimaAtmos.SurfaceConditions.CoupledTemperature)).
+  - `boundary_overrides`: a
+    [`SurfaceConditions.SurfaceBoundaryOverrides`](@ref ClimaAtmos.SurfaceConditions.SurfaceBoundaryOverrides)
+    carrying per-cell defaults for surface pressure / humidity / winds / gustiness
+    / beta.
+  - `albedo`: surface albedo model.
 """
 @kwdef struct AtmosSurface{FS, ST, BO, AL}
     flux_scheme::FS = SurfaceConditions.ExchangeCoefficients{Float32}(
@@ -1029,18 +1045,21 @@ This constructor provides sensible defaults for a minimal dry atmospheric model 
 
 All model components are automatically organized into appropriate grouped sub-structs
 internally:
-- [`AtmosWater`](@ref)
-- [`SCMSetup`](@ref)
-- [`AtmosRadiation`](@ref)
-- [`AtmosTurbconv`](@ref)
-- [`AtmosGravityWave`](@ref)
-- [`AtmosSponge`](@ref)
-- [`AtmosSurface`](@ref)
-- [`AtmosNumerics`](@ref)
-The one exception is the top-level `disable_surface_flux_tendency` field, which is not grouped.
+
+  - [`AtmosWater`](@ref)
+  - [`SCMSetup`](@ref)
+  - [`AtmosRadiation`](@ref)
+  - [`AtmosTurbconv`](@ref)
+  - [`AtmosGravityWave`](@ref)
+  - [`AtmosSponge`](@ref)
+  - [`AtmosSurface`](@ref)
+  - [`AtmosNumerics`](@ref)
+    The one exception is the top-level `disable_surface_flux_tendency` field, which is not grouped.
 
 # Property Access
+
 Arguments can be accessed both directly and through grouped structs:
+
 ```julia
 model = AtmosModel(; microphysics_model = EquilibriumMicrophysics0M())
 model.microphysics_model        # Direct access
@@ -1048,23 +1067,26 @@ model.water.microphysics_model  # Grouped access
 ```
 
 # Example: Minimal model (uses defaults)
+
 ```julia
 model = AtmosModel()  # Creates a basic dry atmospheric model
 ```
 
 # Example: Dry model with Held-Suarez forcing and hyperdiffusion
+
 ```julia
 model = AtmosModel(;
     radiation_mode = HeldSuarezForcing(),
     hyperdiff = Hyperdiffusion(;
         ν₄_vorticity_coeff = 1e15,
         divergence_damping_factor = 1.0,
-        prandtl_number = 1.0
-    )
+        prandtl_number = 1.0,
+    ),
 )
 ```
 
 # Example: Moist model with full radiation
+
 ```julia
 model = AtmosModel(;
     microphysics_model = EquilibriumMicrophysics0M(),
@@ -1073,72 +1095,85 @@ model = AtmosModel(;
 ```
 
 # Default Configuration
+
 The default AtmosModel provides:
-- **Dry atmosphere**: DryModel()
-- **Basic surface**: AnalyticTemperature (zonally-symmetric SST) with default exchange coefficients
-- **Cloud model**: QuadratureCloud() with SGS quadrature
-- **Idealized insolation**: IdealizedInsolation()
-- **Conservative numerics**: First-order upwinding with Explicit() timestepping
-- **No advanced physics**: No radiation, turbulence, or forcing by default
+
+  - **Dry atmosphere**: DryModel()
+  - **Basic surface**: AnalyticTemperature (zonally-symmetric SST) with default exchange coefficients
+  - **Cloud model**: QuadratureCloud() with SGS quadrature
+  - **Idealized insolation**: IdealizedInsolation()
+  - **Conservative numerics**: First-order upwinding with Explicit() timestepping
+  - **No advanced physics**: No radiation, turbulence, or forcing by default
 
 # Available Structs
 
 ## AtmosWater
-- `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
-- `cloud_model`: GridScaleCloud(), QuadratureCloud()
-- `microphysics_tendency_timestepping`: Explicit(), Implicit()
-- `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)
-- `terminal_velocity_mode`: FixedTerminalVelocity or DiagnosticTerminalVelocity
 
+  - `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
+  - `cloud_model`: GridScaleCloud(), QuadratureCloud()
+  - `microphysics_tendency_timestepping`: Explicit(), Implicit()
+  - `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)
+  - `terminal_velocity_mode`: FixedTerminalVelocity or DiagnosticTerminalVelocity
 
 ## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
+
 Internal testing and calibration components for single-column setups:
-- `subsidence`: nothing or Bomex_subsidence, Rico_subsidence, DYCOMS_subsidence, etc
-- `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
-- `ls_adv`: nothing or LargeScaleAdvection()
-- `advection_test`: Bool
-- `scm_coriolis`: nothing or NamedTuple `(; prof_ug, prof_vg, coriolis_param)`
+
+  - `subsidence`: nothing or Bomex_subsidence, Rico_subsidence, DYCOMS_subsidence, etc
+  - `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
+  - `ls_adv`: nothing or LargeScaleAdvection()
+  - `advection_test`: Bool
+  - `scm_coriolis`: nothing or NamedTuple `(; prof_ug, prof_vg, coriolis_param)`
 
 ## AtmosRadiation
-- `radiation_mode`: Radiation and atmospheric forcing modes
-  - Global radiation: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation()
-  - Atmospheric forcing: HeldSuarezForcing() (for idealized dynamics)
-  - SCM-specific: RadiationDYCOMS(), RadiationISDAC(), RadiationTRMM_LBA()
-- `insolation`: IdealizedInsolation(), TimeVaryingInsolation(), etc.
+
+  - `radiation_mode`: Radiation and atmospheric forcing modes
+
+      + Global radiation: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation()
+      + Atmospheric forcing: HeldSuarezForcing() (for idealized dynamics)
+      + SCM-specific: RadiationDYCOMS(), RadiationISDAC(), RadiationTRMM_LBA()
+
+  - `insolation`: IdealizedInsolation(), TimeVaryingInsolation(), etc.
 
 ## AtmosTurbconv
-- `edmfx_model`: EDMFXModel()
-- `turbconv_model`: nothing, PrognosticEDMFX(), DiagnosticEDMFX(), EDOnlyEDMFX()
-- `smagorinsky_lilly`: nothing or SmagorinskyLilly()
-- `amd_les`: nothing or AnisotropicMinimumDissipation()
-- `constant_horizontal_diffusion`: nothing or ConstantHorizontalDiffusion()
+
+  - `edmfx_model`: EDMFXModel()
+  - `turbconv_model`: nothing, PrognosticEDMFX(), DiagnosticEDMFX(), EDOnlyEDMFX()
+  - `smagorinsky_lilly`: nothing or SmagorinskyLilly()
+  - `amd_les`: nothing or AnisotropicMinimumDissipation()
+  - `constant_horizontal_diffusion`: nothing or ConstantHorizontalDiffusion()
 
 ## AtmosGravityWave
-- `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave()
-- `orographic_gravity_wave`: nothing or OrographicGravityWave()
+
+  - `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave()
+  - `orographic_gravity_wave`: nothing or OrographicGravityWave()
 
 ## AtmosSponge
-- `viscous_sponge`: nothing or ViscousSponge()
-- `rayleigh_sponge`: nothing or RayleighSponge()
+
+  - `viscous_sponge`: nothing or ViscousSponge()
+  - `rayleigh_sponge`: nothing or RayleighSponge()
 
 ## AtmosSurface
-- `flux_scheme`: SurfaceConditions.MoninObukhov, SurfaceConditions.ExchangeCoefficients, or a default marker (DefaultMoninObukhov/DefaultExchangeCoefficients), or `nothing` to disable.
-- `temperature`: SurfaceConditions.AnalyticTemperature, ExternalTemperature, SlabOceanTemperature, or CoupledTemperature.
-- `boundary_overrides`: SurfaceConditions.SurfaceBoundaryOverrides
-- `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
 
-## AtmosNumerics
-- `energy_q_tot_upwinding`, `tracer_upwinding`, `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`: Val() upwinding schemes
-- `test_dycore_consistency`: nothing or TestDycoreConsistency() for debugging
-- `limiter`: nothing or QuasiMonotoneLimiter()
-- `vertical_water_borrowing_species`: internal value `nothing` (apply to all tracers; config default is `~`), empty tuple (apply to none; config `[]`), or Tuple{Symbol, ...} from config string/list (e.g. `["ρq_tot"]`) to apply only to those tracers. See config `vertical_water_borrowing_species` in default_config.yml for YAML options.
-  (Note: The vertical water borrowing limiter is created in the cache based on `AtmosWaterModel.tracer_nonnegativity_method`)
-- `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
-- `hyperdiff`: nothing or Hyperdiffusion()
+  - `flux_scheme`: SurfaceConditions.MoninObukhov, SurfaceConditions.ExchangeCoefficients, or a default marker (DefaultMoninObukhov/DefaultExchangeCoefficients), or `nothing` to disable.
+  - `temperature`: SurfaceConditions.AnalyticTemperature, ExternalTemperature, SlabOceanTemperature, or CoupledTemperature.
+  - `boundary_overrides`: SurfaceConditions.SurfaceBoundaryOverrides
+  - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
+
+## AtmosNumerics    # Create grouped structs - use provided complete objects or create from individual fields
+
+  - `energy_q_tot_upwinding`, `tracer_upwinding`, `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`: Val() upwinding schemes
+  - `test_dycore_consistency`: nothing or TestDycoreConsistency() for debugging
+  - `limiter`: nothing or QuasiMonotoneLimiter()
+  - `vertical_water_borrowing_species`: internal value `nothing` (apply to all tracers; config default is `~`), empty tuple (apply to none; config `[]`), or Tuple{Symbol, ...} from config string/list (e.g. `["ρq_tot"]`) to apply only to those tracers. See config `vertical_water_borrowing_species` in default_config.yml for YAML options.
+    (Note: The vertical water borrowing limiter is created in the cache based on `AtmosWaterModel.tracer_nonnegativity_method`)
+  - `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
+  - `hyperdiff`: nothing or Hyperdiffusion()
 
 ## Top-level Options
-- `vertical_diffusion`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
-- `disable_surface_flux_tendency`: Bool
+
+  - `vertical_diffusion`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
+  - `disable_surface_flux_tendency`: Bool
 """
 function AtmosModel(; kwargs...)
     group_kwargs, atmos_model_kwargs = _partition_atmos_model_kwargs(kwargs)

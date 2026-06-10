@@ -62,13 +62,15 @@ For 1D meshes, creates a `SpectralElementSpace1D`.
 For 2D meshes, creates a `SpectralElementSpace2D` with optional bubble correction.
 
 # Arguments
-- `mesh`: The horizontal mesh (1D or 2D)
-- `quad`: The quadrature style
-- `comms_ctx`: Communications context (must be `SingletonCommsContext` for 1D meshes)
-- `bubble`: Enable bubble correction for 2D spaces
+
+  - `mesh`: The horizontal mesh (1D or 2D)
+  - `quad`: The quadrature style
+  - `comms_ctx`: Communications context (must be `SingletonCommsContext` for 1D meshes)
+  - `bubble`: Enable bubble correction for 2D spaces
 
 # Returns
-- A horizontal spectral element space
+
+  - A horizontal spectral element space
 """
 function make_horizontal_space(
     mesh,
@@ -98,16 +100,19 @@ Create a horizontal spectral element space from a mesh and quadrature (distribut
 For distributed contexts, only 2D meshes are supported.
 
 # Arguments
-- `mesh`: The horizontal mesh (must be 2D for distributed contexts)
-- `quad`: The quadrature style
-- `comms_ctx`: Communications context (distributed)
-- `bubble`: Enable bubble correction
+
+  - `mesh`: The horizontal mesh (must be 2D for distributed contexts)
+  - `quad`: The quadrature style
+  - `comms_ctx`: Communications context (distributed)
+  - `bubble`: Enable bubble correction
 
 # Returns
-- A horizontal spectral element space
+
+  - A horizontal spectral element space
 
 # Throws
-- `ErrorException` if a 1D mesh is provided (distributed mode doesn't support 1D spaces)
+
+  - `ErrorException` if a 1D mesh is provided (distributed mode doesn't support 1D spaces)
 """
 function make_horizontal_space(mesh, quad, comms_ctx, bubble)
     if mesh isa Meshes.AbstractMesh1D
@@ -210,7 +215,7 @@ end
 
 Create 3D extruded spherical spaces with a Gaussian mountain for testing.
 Returns center_space, face_space, and domain parameters (radius, z_max).
-The mountain is centered at (lat=0, lon=0) with height 2000m and lataeral 
+The mountain is centered at (lat=0, lon=0) with height 2000m and lataeral
 decay scale 10°.
 """
 function get_spherical_extruded_spaces_with_topography(; FT = Float64)
@@ -348,7 +353,7 @@ end
     get_cartesian_test_velocities(cent_space, face_space)
 
 Generate staggered velocity fields for testing on Cartesian geometry.
-Returns horizontal velocity `uₕ` (Covariant12Vector at centers) and vertical velocity `uᵥ` 
+Returns horizontal velocity `uₕ` (Covariant12Vector at centers) and vertical velocity `uᵥ`
 (Covariant3Vector at faces) based on the Taylor-Green vortex profile.
 """
 function get_cartesian_test_velocities(cent_space, face_space)
@@ -378,13 +383,15 @@ end
 
 Generate staggered velocity fields for testing on spherical geometry.
 Uses separable velocity components with:
-- Horizontal: zonal wind uₕ = U₀ cos(lat)
-- Vertical: w = W₀ sin(πz/z_max)
+
+  - Horizontal: zonal wind uₕ = U₀ cos(lat)
+  - Vertical: w = W₀ sin(πz/z_max)
 
 Returns:
-- `uₕ`: horizontal velocity (Covariant12Vector at centers)
-- `uᵥ`: vertical velocity (Covariant3Vector at faces)
-- `ᶠu_C123`: full velocity (Covariant123Vector at faces) for strain rate tests
+
+  - `uₕ`: horizontal velocity (Covariant12Vector at centers)
+  - `uᵥ`: vertical velocity (Covariant3Vector at faces)
+  - `ᶠu_C123`: full velocity (Covariant123Vector at faces) for strain rate tests
 """
 function get_spherical_test_velocities(cent_space, face_space, z_max; U₀ = 10, W₀ = 1)
     FT = eltype(z_max)
@@ -417,7 +424,7 @@ end
 """
     create_mock_era5_datasets(temporary_dir, start_date, FT; hours = 24, num_lat = 17, num_lon = 17, num_pressure = 37, base_date = "20000101")
 
-Create mock 24 hour ERA5 datasets for testing forcing file generation. Returns paths to the created files. num points set for smoothing 
+Create mock 24 hour ERA5 datasets for testing forcing file generation. Returns paths to the created files. num points set for smoothing
 up to 4 points in each direction (e.g. smoothing over a 2°x2° box).
 
 All datasets use the same time reference (base_date) to avoid concatenation issues.
@@ -567,7 +574,7 @@ end
 """
     temperature_from_geopotential(geopotential_levels; Γ = 0.0065, T_surf = 300, T_min = 200, g = 9.81)
 
-Produce a typical temperature profile from geopotential levels. 
+Produce a typical temperature profile from geopotential levels.
 Γ is the lapse rate in K/m, T_surf is the surface temperature in K, and T_min is the minimum temperature in K, which simulates the tropopause.
 """
 function temperature_from_geopotential(

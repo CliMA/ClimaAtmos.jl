@@ -4,7 +4,7 @@ with top-of-atmosphere radiative shortwave flux in the loss function.
 
 Currently uses ClimaCalibrate.SlurmManager, which integrates with Distributed.jl's workers.
 
-`addprocs(CAL.SlurmManager(10))` starts up an `srun` session consisting of 
+`addprocs(CAL.SlurmManager(10))` starts up an `srun` session consisting of
 10 Julia workers with TCP connections to the host process.
 `calibrate(CAL.WorkerBackend, ...)` uses `remotecall` to execute the `forward_model`
 function (found in `calibration/model_interface.jl`) on the remote workers.

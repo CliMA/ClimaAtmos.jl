@@ -21,6 +21,7 @@ More reading: https://discourse.julialang.org/t/print-vs-two-argument-show-repr-
 Print a verbose representation of the type and fields of `x` to `io`.
 
 # Examples
+
 ```julia-repl
 julia> import ClimaAtmos as CA
 
@@ -33,7 +34,6 @@ AllSkyRadiation
   ├─ aerosol_radiation = false
   ├─ reset_rng_seed = false
   └─ deep_atmosphere = true
-
 ```
 """
 function verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)
@@ -58,19 +58,24 @@ function verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)
 end
 
 """
-	parseable_show_with_fields_no_type_header(io::IO, x; with_kwargs = ())
+    parseable_show_with_fields_no_type_header(io::IO, x; with_kwargs = ())
 
 Print a parseable representation of the type that allows reconstruction of `x`.
 
 # Arguments
-- `with_kwargs`: If true, print the fields as keyword arguments.
-	- This is relevant for structs definitions prefixed with `@kwdef`
-- `skip_fields_by_value`: A tuple of values that are not printed for any fields with those values.
-	- Note: Because the printed representation should reconstruct an equivalent instance,
-		the values provided here should be the default values for the fields.
-	- By default, no fields are skipped.
+
+  - `with_kwargs`: If true, print the fields as keyword arguments.
+
+      + This is relevant for structs definitions prefixed with `@kwdef`
+
+  - `skip_fields_by_value`: A tuple of values that are not printed for any fields with those values.
+
+      + Note: Because the printed representation should reconstruct an equivalent instance,
+        the values provided here should be the default values for the fields.
+      + By default, no fields are skipped.
 
 # Examples
+
 ```julia-repl
 julia> show(stdout, CA.AtmosRadiation())
 ClimaAtmos.AtmosRadiation(insolation = ClimaAtmos.IdealizedInsolation())

@@ -21,7 +21,7 @@ noise = JLD2.load_object(joinpath(artifact_path, "obs_noise_cov.jld2"))
 prior = get_prior(joinpath(experiment_dir, "prior.toml"))
 output_dir = joinpath("output", "sphere_held_suarez_rhoe_equilmoist")
 
-experiment_config = ExperimentConfig(; n_iterations, ensemble_size, 
+experiment_config = ExperimentConfig(; n_iterations, ensemble_size,
                                        observations, noise, output_dir, prior)
 slurm_kwargs = kwargs(time = 50, ntasks = 16, mem_per_cpu = "8G")
 eki = calibrate(CaltechHPCBackend, experiment_config; model_interface, slurm_kwargs, verbose=true)
