@@ -93,7 +93,7 @@ function build_cache(
     params,
     dt,
     start_date,
-    aerosol_names,
+    prescribed_aerosol_names,
     time_varying_trace_gas_names,
     steady_state_velocity,
     vwb_species = nothing,
@@ -170,7 +170,13 @@ function build_cache(
     scratch = temporary_quantities(Y, atmos)
 
     precomputed = precomputed_quantities(Y, atmos)
-    tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date, _aerosol_names(atmos.prognostic_aerosols))
+    tracers = tracer_cache(
+        Y,
+        prescribed_aerosol_names,
+        time_varying_trace_gas_names,
+        start_date,
+        _aerosol_names(atmos.prognostic_aerosols),
+    )
     ocean_fraction = ones(axes(Fields.level(Y.f, Fields.half))) # Populated via Interfacer.update_field! before first timestep
     precomputing_arguments = (;
         atmos,
@@ -193,12 +199,24 @@ function build_cache(
 
     set_precomputed_quantities!(Y, precomputing_arguments, FT(0))
 
+    # The aerosol-radiation support check accepts species supplied by either the
+    # prescribed (climatology) or prognostic (state-variable) path, so pass the
+    # union of both name lists to the radiation cache gate.
+    # TODO: prognostic aerosol mass (Y.c.ρ<name>) is not yet fed to RRTMGP --
+    # update_prescribed_aerosol_concentrations! reads only prescribed_aerosols_field,
+    # so a prognostic-only bin passes this gate but currently contributes 0 to
+    # radiation. Remove prognostic names from this union once the radiation feed
+    # reads prognostic aerosols. See update_inputs.jl.
+    radiation_aerosol_names = (
+        prescribed_aerosol_names...,
+        string.(_aerosol_names(atmos.prognostic_aerosols))...,
+    )
     radiation_args =
         atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
         (
             start_date,
             params,
-            aerosol_names,
+            radiation_aerosol_names,
             time_varying_trace_gas_names,
             atmos.insolation,
         ) : ()

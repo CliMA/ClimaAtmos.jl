@@ -1098,7 +1098,7 @@ function get_simulation(config::AtmosConfig)
             surface_setup,
             sim_info.dt,
             sim_info.start_date,
-            tracers.aerosol_names,
+            tracers.prescribed_aerosol_names,
             tracers.time_varying_trace_gas_names,
             steady_state_velocity,
             vwb_species,

@@ -191,7 +191,7 @@ available in `p.precomputed`.
 
 Extended `get_tracers` to parse the new `prognostic_aerosols` config key
 and return it as `prognostic_aerosol_names` alongside the existing
-`aerosol_names` and `time_varying_trace_gas_names`.
+`prescribed_aerosol_names` (formerly `aerosol_names`) and `time_varying_trace_gas_names`.
 
 ---
 

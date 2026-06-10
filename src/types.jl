@@ -974,7 +974,7 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, PA}
     surface::SU
     numerics::NU
     chemistry::CM
-    parameterized_aerosols::PA
+    prognostic_aerosols::PA
 
     """Whether to apply surface flux tendency (independent of surface conditions)"""
     disable_surface_flux_tendency::Bool
@@ -1190,7 +1190,7 @@ function AtmosModel(; kwargs...)
         typeof(surface),
         typeof(numerics),
         typeof(chemistry),
-        typeof(parameterized_aerosols),
+        typeof(prognostic_aerosols),
     }(
         water,
         scm_setup,
@@ -1203,8 +1203,8 @@ function AtmosModel(; kwargs...)
         surface,
         numerics,
         chemistry,
-        disable_surface_flux_tendency,
         prognostic_aerosols,
+        disable_surface_flux_tendency,
     )
 end
 

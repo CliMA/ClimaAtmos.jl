@@ -245,7 +245,10 @@ function AtmosSimulation{FT}(;
     output_dir_style = "activelink",  # TODO: Should this be an actual type?
     restart_file = nothing,
     detect_restart_file = false,
-    aerosol_names = [], # TODO: set from the model
+    # Forcing data: which MERRA-2 climatology aerosol species to read. This is a
+    # data choice (not state-defining like `model.prognostic_aerosols`), so it is
+    # passed explicitly as forcing config rather than derived from `model`.
+    prescribed_aerosol_names = [],
     time_varying_trace_gases = (),
     vertical_water_borrowing_species = nothing,
     # Callbacks
@@ -298,7 +301,7 @@ function AtmosSimulation{FT}(;
         steady_state_velocity
 
     p = build_cache(
-        Y, model, params, dt, start_date, aerosol_names,
+        Y, model, params, dt, start_date, prescribed_aerosol_names,
         time_varying_trace_gases, resolved_steady_state_velocity,
         vertical_water_borrowing_species,
     )

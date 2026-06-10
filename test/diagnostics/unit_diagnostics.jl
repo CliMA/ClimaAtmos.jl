@@ -89,14 +89,14 @@ import ClimaCore: Fields, Spaces
 
 Construct a minimal state vector `Y` and cache `p` for `model` on `grid`.
 All keyword arguments have sensible defaults; override only what the diagnostic
-under test actually requires (e.g. `aerosol_names` for aerosol diagnostics,
+under test actually requires (e.g. `prescribed_aerosol_names` for aerosol diagnostics,
 `set_steady_state_velocity = true` for steady-state error diagnostics).
 """
 function build_state_cache(FT, model; grid,
     params = CA.ClimaAtmosParameters(FT),
     ic = CA.Setups.DecayingProfile(; params),
     dt = FT(1.0), start_date = DateTime(2010, 1, 1),
-    aerosol_names = [], time_varying_trace_gas_names = (),
+    prescribed_aerosol_names = [], time_varying_trace_gas_names = (),
     set_steady_state_velocity = false,
     vwb_species = nothing,
 )
@@ -110,7 +110,8 @@ function build_state_cache(FT, model; grid,
         ) : nothing
     p = CA.build_cache(
         Y, model, params, dt, start_date,
-        aerosol_names, time_varying_trace_gas_names, steady_state_velocity, vwb_species,
+        prescribed_aerosol_names, time_varying_trace_gas_names, steady_state_velocity,
+        vwb_species,
     )
     return Y, p
 end
@@ -208,7 +209,7 @@ radiation_mode = CA.RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(;
 )
 model_allsky = CA.AtmosModel(; radiation_mode)
 (Y_allsky, p_allsky) = build_state_cache(FT, model_allsky; grid = column,
-    aerosol_names = ("DST01",),
+    prescribed_aerosol_names = ("DST01",),
 );
 # Radiation flux arrays are initialized to NaN by set_and_save! (filled only after solver runs).
 # Zero them so diagnostics return finite values when tested outside a time-stepping loop.

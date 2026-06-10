@@ -13,7 +13,8 @@ function compute_tracer!(out, state, cache, time, tracer_name)
 end
 
 function compute_aerosol!(out, state, cache, time, aerosol_name)
-    has_prescribed = :prescribed_aerosols_field in propertynames(cache.tracers) &&
+    has_prescribed =
+        :prescribed_aerosols_field in propertynames(cache.tracers) &&
         aerosol_name in propertynames(cache.tracers.prescribed_aerosols_field)
     ρname = Symbol(:ρ, aerosol_name)
     has_prognostic = ρname in propertynames(state.c)
@@ -31,8 +32,9 @@ function compute_aerosol!(out, state, cache, time, aerosol_name)
             ρχ = getproperty(state.c, ρname)
             @. out = specific(ρχ, state.c.ρ)
         else
-            aerosol_field = getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name)
-            out .= aerosol_field
+            prescribed_aerosol_field =
+                getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name)
+            out .= prescribed_aerosol_field
         end
     end
 end
@@ -50,11 +52,11 @@ function compute_dust!(out, state, cache, time)
         for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04, :DST05]
             if prescribed_aerosol_name in
                propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
+                prescribed_aerosol_field = getproperty(
                     cache.tracers.prescribed_aerosols_field,
                     prescribed_aerosol_name,
                 )
-                @. aero_conc += aerosol_field
+                @. aero_conc += prescribed_aerosol_field
             end
         end
         return aero_conc
@@ -64,11 +66,11 @@ function compute_dust!(out, state, cache, time)
         for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04, :DST05]
             if prescribed_aerosol_name in
                propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
+                prescribed_aerosol_field = getproperty(
                     cache.tracers.prescribed_aerosols_field,
                     prescribed_aerosol_name,
                 )
-                @. aero_conc += aerosol_field
+                @. aero_conc += prescribed_aerosol_field
             end
         end
         out .= aero_conc
@@ -76,7 +78,8 @@ function compute_dust!(out, state, cache, time)
 end
 
 function compute_sea_salt!(out, state, cache, time)
-    has_prescribed = :prescribed_aerosols_field in propertynames(cache.tracers) &&
+    has_prescribed =
+        :prescribed_aerosols_field in propertynames(cache.tracers) &&
         any(
             x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
             [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05],
@@ -92,8 +95,9 @@ function compute_sea_salt!(out, state, cache, time)
         if has_prescribed
             for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
                 if name in propertynames(cache.tracers.prescribed_aerosols_field)
-                    aerosol_field = getproperty(cache.tracers.prescribed_aerosols_field, name)
-                    @. aero_conc += aerosol_field
+                    prescribed_aerosol_field =
+                        getproperty(cache.tracers.prescribed_aerosols_field, name)
+                    @. aero_conc += prescribed_aerosol_field
                 end
             end
         end
@@ -112,8 +116,9 @@ function compute_sea_salt!(out, state, cache, time)
         if has_prescribed
             for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
                 if name in propertynames(cache.tracers.prescribed_aerosols_field)
-                    aerosol_field = getproperty(cache.tracers.prescribed_aerosols_field, name)
-                    @. aero_conc += aerosol_field
+                    prescribed_aerosol_field =
+                        getproperty(cache.tracers.prescribed_aerosols_field, name)
+                    @. aero_conc += prescribed_aerosol_field
                 end
             end
         end
@@ -131,7 +136,10 @@ end
 
 function compute_sea_salt_column!(out, state, cache, time)
     has_prognostic =
-        any(n -> hasproperty(state.c, Symbol(:ρ, n)), [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05])
+        any(
+            n -> hasproperty(state.c, Symbol(:ρ, n)),
+            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05],
+        )
     has_prescribed =
         :prescribed_aerosols_field in propertynames(cache.tracers) &&
         any(
@@ -158,8 +166,9 @@ function compute_sea_salt_column!(out, state, cache, time)
         else
             for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
                 if name in propertynames(cache.tracers.prescribed_aerosols_field)
-                    aerosol_field = getproperty(cache.tracers.prescribed_aerosols_field, name)
-                    @. aero_conc += aerosol_field * state.c.ρ
+                    prescribed_aerosol_field =
+                        getproperty(cache.tracers.prescribed_aerosols_field, name)
+                    @. aero_conc += prescribed_aerosol_field * state.c.ρ
                 end
             end
         end
@@ -178,8 +187,9 @@ function compute_sea_salt_column!(out, state, cache, time)
         else
             for name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
                 if name in propertynames(cache.tracers.prescribed_aerosols_field)
-                    aerosol_field = getproperty(cache.tracers.prescribed_aerosols_field, name)
-                    @. aero_conc += aerosol_field * state.c.ρ
+                    prescribed_aerosol_field =
+                        getproperty(cache.tracers.prescribed_aerosols_field, name)
+                    @. aero_conc += prescribed_aerosol_field * state.c.ρ
                 end
             end
         end
@@ -328,7 +338,9 @@ add_diagnostic_variable!(
 
 function compute_sea_salt_emission_flux!(out, state, cache, time)
     :prognostic_aerosols_field in propertynames(cache.tracers) ||
-        error("prognostic_aerosols_field not in cache — is sea_salt_emission_tendency! active?")
+        error(
+            "prognostic_aerosols_field not in cache — is sea_salt_emission_tendency! active?",
+        )
     bins = cache.tracers.prognostic_aerosols_field
     names = propertynames(bins)
     isnothing(out) && (out = copy(getproperty(bins, first(names))))
@@ -349,7 +361,9 @@ add_diagnostic_variable!(
 
 function compute_sea_salt_emission_flux_bin!(out, state, cache, time, bin_name)
     :prognostic_aerosols_field in propertynames(cache.tracers) ||
-        error("prognostic_aerosols_field not in cache — is sea_salt_emission_tendency! active?")
+        error(
+            "prognostic_aerosols_field not in cache — is sea_salt_emission_tendency! active?",
+        )
     flux = getproperty(cache.tracers.prognostic_aerosols_field, bin_name)
     if isnothing(out)
         return copy(flux)
@@ -373,4 +387,3 @@ for (bin, long_bin) in (
         compute! = (out, u, p, t) -> compute_sea_salt_emission_flux_bin!(out, u, p, t, bin),
     )
 end
-
