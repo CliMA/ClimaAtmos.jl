@@ -141,7 +141,8 @@ function override_default_config(config_dict::AbstractDict;)
         keys(config_dict),
     )
     if !isempty(unused_keys)
-        @warn "The configuration passed to ClimaAtmos contains unused keys: $(join(unused_keys, ", "))"
+        msg = "The configuration passed to ClimaAtmos contains unused keys: $(join(unused_keys, ", "))"
+        config["strict_config"] ? error(msg) : @warn msg
     end
 
     config == default_config && @info "Using default configuration"
