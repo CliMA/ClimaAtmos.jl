@@ -540,8 +540,49 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
             @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)
         end
+
+        # SCRATCH PROTOTYPE (precip-detrainment, ENV-gated by TRMM_TAU_PD; see
+        # results/ws4c-precip-detr-impl.md). Relax the FALLING-PRECIP updraft
+        # tracers toward the environment at rate 1/τ_pd, on top of the
+        # entr-driven relaxation, to emulate the rain shaft separating from the
+        # buoyant core that a single-updraft EDMF cannot resolve. Cloud condensate
+        # (q_lcl/q_icl/n_lcl/n_ice) is NOT detrained — only the precip shaft.
+        # Grid-mean conserving: q_rai⁰ is diagnostic, so reducing q_raiʲ moves rain
+        # from the updraft partition to the environment partition (verify in-run).
+        # The matching Jacobian diagonal is in manual_sparse_jacobian.jl.
+        let τ_pd = _precip_detr_tau(eltype(Y.c.ρ))
+            if isfinite(τ_pd)
+                precip_detr = inv(τ_pd)
+                precip_tracers = (
+                    (@name(c.sgsʲs.:(1).q_rai), @name(q_rai)),
+                    (@name(c.sgsʲs.:(1).n_rai), @name(n_rai)),
+                    (@name(c.sgsʲs.:(1).q_sno), @name(q_sno)),
+                    (@name(c.sgsʲs.:(1).q_rim), @name(q_rim)),
+                    (@name(c.sgsʲs.:(1).b_rim), @name(b_rim)),
+                )
+                MatrixFields.unrolled_foreach(precip_tracers) do (χʲ_name, χ_name)
+                    MatrixFields.has_field(Y, χʲ_name) || return
+                    ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+                    ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                    ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
+                    @. ᶜχʲₜ += precip_detr * (ᶜχ⁰ - ᶜχʲ)
+                end
+            end
+        end
     end
     return nothing
+end
+
+"""
+    _precip_detr_tau(::Type{FT})
+
+SCRATCH-prototype knob for the precip-detrainment timescale τ_pd [s], read from
+the `TRMM_TAU_PD` environment variable. Returns `FT(Inf)` (term disabled =
+baseline) when unset or `"inf"`. See results/ws4c-precip-detr-impl.md.
+"""
+function _precip_detr_tau(::Type{FT}) where {FT}
+    v = get(ENV, "TRMM_TAU_PD", "inf")
+    return (v == "" || lowercase(v) == "inf") ? FT(Inf) : FT(parse(Float64, v))
 end
 
 """

@@ -1065,6 +1065,31 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         @. ∂ᶜqʲ_err_∂ᶜqʲ -=
                             dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
                     end
+
+                    # SCRATCH PROTOTYPE: match the precip-detrainment tendency term
+                    # (edmfx_entr_detr.jl, ENV-gated by TRMM_TAU_PD). Its diagonal
+                    # is ∂χʲₜ/∂χʲ = -precip_detr for the 5 precip tracers; mirror the
+                    # existing entr linearization (χ⁰ treated as ~frozen).
+                    let τ_pd = _precip_detr_tau(eltype(Y.c.ρ))
+                        if isfinite(τ_pd)
+                            precip_detr = inv(τ_pd)
+                            precip_tracers_jac = (
+                                (@name(c.sgsʲs.:(1).q_rai)),
+                                (@name(c.sgsʲs.:(1).n_rai)),
+                                (@name(c.sgsʲs.:(1).q_sno)),
+                                (@name(c.sgsʲs.:(1).q_rim)),
+                                (@name(c.sgsʲs.:(1).b_rim)),
+                            )
+                            MatrixFields.unrolled_foreach(
+                                precip_tracers_jac,
+                            ) do (qʲ_name)
+                                MatrixFields.has_field(Y, qʲ_name) || return
+                                ∂ᶜqʲ_err_∂ᶜqʲ = matrix[qʲ_name, qʲ_name]
+                                @. ∂ᶜqʲ_err_∂ᶜqʲ -=
+                                    dtγ * DiagonalMatrixRow(precip_detr)
+                            end
+                        end
+                    end
                 end
             end
 
