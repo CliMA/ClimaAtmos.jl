@@ -1,4 +1,4 @@
-355
+356
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+356
+- Changed the default microphysics options
+  - include cloud ice melt
+  - make snow formation depend on supersaturation
+
 355
 - Add plots of some new diagnostics for prognostic EDMF test cases. There is no change in model behavior.
 
