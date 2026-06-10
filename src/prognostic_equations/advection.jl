@@ -373,6 +373,18 @@ function edmfx_sgs_vertical_advection_tendency!(
         )
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
 
+        # Advective form advection of trace gases with the updraft velocity
+        for χ_name in sgs_tracer_names(Y)
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+            va = vertical_advection(
+                ᶠu³ʲs.:($j),
+                ᶜχʲ,
+                edmfx_tracer_upwinding,
+            )
+            @. ᶜχʲₜ += va
+        end
+
         if p.atmos.microphysics_model isa
            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else

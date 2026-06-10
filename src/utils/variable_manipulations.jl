@@ -198,7 +198,7 @@ physics-specific treatment).
     !(name_chain[1] in (:ρa, :mse, :q_tot))
 
 sgs_tracer_names(Y) =
-    _sgs_tracer_names(Val(hasfield(typeof(Y.c), :sgsʲs)), Y)
+    _sgs_tracer_names(Val(hasproperty(Y.c, :sgsʲs)), Y)
 _sgs_tracer_names(::Val{false}, Y) = ()
 _sgs_tracer_names(::Val{true}, Y) =
     unrolled_filter(
