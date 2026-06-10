@@ -48,6 +48,7 @@ function grid_scale_center_variables(physical_state, local_geometry, params, atm
         ρe_tot,
         moisture_variables(ρ, physical_state, atmos_model.microphysics_model)...,
         precip_variables(ρ, physical_state, atmos_model.microphysics_model)...,
+        ρA = ρ * physical_state.A,
     )
 end
 
@@ -125,7 +126,7 @@ function turbconv_center_variables(
     thermo_params = CAP.thermodynamics_params(params)
     e_pot = geopotential(CAP.grav(params), local_geometry.coordinates.z)
     mse = TD.moist_static_energy(thermo_params, T, e_pot, q_tot, q_liq, q_ice)
-    sgsʲs = uniform_subdomains((; ρa, mse, q_tot), turbconv_model)
+    sgsʲs = uniform_subdomains((; ρa, mse, q_tot, A = physical_state.A), turbconv_model)
     return (; ρtke, sgsʲs)
 end
 
@@ -146,7 +147,8 @@ function turbconv_center_variables(
     mse = TD.moist_static_energy(thermo_params, T, e_pot, q_tot, q_liq, q_ice)
     if microphysics_model isa NonEquilibriumMicrophysics1M
         sgsʲs = uniform_subdomains(
-            (; ρa, mse, q_tot, q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno),
+            (; ρa, mse, q_tot, q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno,
+                A = physical_state.A),
             turbconv_model,
         )
     else  # NonEquilibriumMicrophysics2M
@@ -154,6 +156,7 @@ function turbconv_center_variables(
             (; ρa, mse, q_tot,
                 q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno,
                 n_lcl = n_liq, n_rai,
+                A = physical_state.A,
             ),
             turbconv_model,
         )

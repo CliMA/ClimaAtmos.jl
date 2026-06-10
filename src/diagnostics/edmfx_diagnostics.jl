@@ -824,3 +824,20 @@ add_diagnostic_variable!(short_name = "evu", units = "m^2 s^-1",
     comments = "Vertical diffusion coefficient for momentum due to parameterized eddies",
     compute = compute_evu,
 )
+
+###
+# Updraft passive tracer A (3d)
+###
+compute_passiveAup(state, cache, time) =
+    compute_passiveAup(state, cache, time, cache.atmos.turbconv_model)
+compute_passiveAup(_, _, _, turbconv_model) =
+    error_diagnostic_variable("passiveAup", turbconv_model)
+
+compute_passiveAup(state, _, _, ::PrognosticEDMFX) =
+    (state.c.sgsʲs.:1).A
+
+add_diagnostic_variable!(short_name = "passiveAup", units = "kg kg^-1",
+    long_name = "Updraft Passive Tracer A Concentration",
+    comments = "Concentration of passive tracer A in the first updraft",
+    compute = compute_passiveAup,
+)

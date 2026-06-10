@@ -1124,3 +1124,12 @@ add_diagnostic_variable!(
     units = "1",
     compute = compute_env_q_tot_temperature_correlation,
 )
+
+###
+# Passive tracer A (3d)
+###
+add_diagnostic_variable!(short_name = "passiveA", units = "kg kg^-1",
+    long_name = "Passive Tracer A Concentration",
+    comments = "Grid-mean specific concentration of passive tracer A",
+    compute = (state, _, _) -> @. lazy(specific(state.c.ρA, state.c.ρ)),
+)
