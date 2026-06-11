@@ -239,6 +239,14 @@ model_2m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophy
 (Y_1m_pedmfx, p_1m_pedmfx) = build_state_cache(FT, model_1m_pedmfx; grid = column);
 (Y_2m_pedmfx, p_2m_pedmfx) = build_state_cache(FT, model_2m_pedmfx; grid = column);
 
+## Chemistry (passive tracer A) + PrognosticEDMFX
+model_chem_pedmfx = CA.AtmosModel(;
+    microphysics_model = CA.EquilibriumMicrophysics0M(),
+    turbconv_model = pedmfx, edmfx_model,
+    chemistry_model = CA.GasPhaseChem(),
+)
+(Y_chem_pedmfx, p_chem_pedmfx) = build_state_cache(FT, model_chem_pedmfx; grid = column);
+
 ## VerticalDiffusion and DecayWithHeightDiffusion (no EDMF)
 vdp = CAP.vert_diff_params(params)
 model_vd = CA.AtmosModel(;
@@ -269,6 +277,7 @@ states = Dict(
     :m0_pedmfx      => (Y_0m_pedmfx,      p_0m_pedmfx),
     :m1_pedmfx      => (Y_1m_pedmfx,      p_1m_pedmfx),
     :m2_pedmfx      => (Y_2m_pedmfx,      p_2m_pedmfx),
+    :chem_pedmfx    => (Y_chem_pedmfx,    p_chem_pedmfx),
     :vd             => (Y_vd,             p_vd),
     :dwh            => (Y_dwh,            p_dwh),
     :allsky         => (Y_allsky,         p_allsky),
@@ -367,6 +376,9 @@ VALID_CASES = [
     cases(("cdncup", "cdncen", "ncraup", "ncraen"), :m2_pedmfx)...,
     # VerticalDiffusion, DecayWithHeightDiffusion, EDMF
     cases(("edt", "evu"), (:vd, :dwh, :m0_pedmfx))...,
+    # GasPhaseChem + PrognosticEDMFX
+    case("q_gas_A",   :chem_pedmfx),
+    case("q_gas_Aup", :chem_pedmfx),
 
     # ---------------------------------------------------------------------------
     # microphysics_diagnostics.jl

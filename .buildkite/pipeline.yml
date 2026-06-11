@@ -208,6 +208,16 @@ steps:
         artifact_paths: "prognostic_edmfx_bomex_column/output_active/*"
         agents:
           slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMF: BOMEX with passive tracer A (1M, short dt)"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_tracerA_column.yml
+          --job_id prognostic_edmfx_bomex_tracerA_column
+        artifact_paths: "prognostic_edmfx_bomex_tracerA_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
       
       - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX), ML cloud"
         retry: *retry_policy
