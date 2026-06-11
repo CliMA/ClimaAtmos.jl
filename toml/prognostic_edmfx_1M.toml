@@ -13,8 +13,8 @@ value = 1.0e-5
 [EDMF_max_area]
 value = 0.7
 
-[entr_inv_tau]
-value = 0.0001
+[turb_entr_param_vec]
+value = [0.0001, 50.0, 0.0]
 
 [entr_coeff]
 value = 0.1
@@ -25,17 +25,8 @@ value = 0.0001
 [min_area_limiter_power]
 value = 1
 
-[detr_inv_tau]
-value = 0.0001
-
-[detr_coeff]
-value = 0
-
 [detr_buoy_coeff]
 value = 1
-
-[detr_vertdiv_coeff]
-value = 0
 
 [detr_massflux_vertdiv_coeff]
 value = 1

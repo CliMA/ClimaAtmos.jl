@@ -1,4 +1,4 @@
-356
+357
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+357
+- Solve the updraft area-fraction (ρa) equation analytically at the IMEX implicit
+  stage. Refactor entrainment/detrainment.
+
 356
 - Changed the default microphysics options
   - include cloud ice melt

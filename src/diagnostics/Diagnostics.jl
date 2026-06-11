@@ -56,6 +56,11 @@ import ..SurfaceConditions: SlabOceanTemperature
 
 # functions used to calculate diagnostics
 import ..draft_area
+import ..compute_entrainment
+import ..compute_detrainment
+import ..detr_buoy_inv_time_scale
+import ..vertical_buoyancy_acceleration
+import ..get_physical_w
 import ..compute_gm_mixing_length
 
 import ..horizontal_integral_at_boundary

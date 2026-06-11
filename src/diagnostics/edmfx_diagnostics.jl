@@ -327,8 +327,19 @@ compute_entr(state, cache, time) =
     compute_entr(state, cache, time, cache.atmos.turbconv_model)
 compute_entr(_, _, _, turbconv_model) = error_diagnostic_variable("entr", turbconv_model)
 
-compute_entr(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
-    cache.precomputed.ᶜentrʲs.:1
+function compute_entr(state, cache, _, ::PrognosticEDMFX)
+    (; ᶜentr_vel_scaleʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs) = cache.precomputed
+    ᶜlg = Fields.local_geometry_field(state.c)
+    return @. lazy(
+        compute_entrainment(
+            ᶜentr_vel_scaleʲs.:1,
+            ᶜarea_bounding_entr_detrʲs.:1,
+            get_physical_w(ᶜuʲs.:1, ᶜlg),
+        ),
+    )
+end
+
+compute_entr(_, cache, _, ::DiagnosticEDMFX) = cache.precomputed.ᶜentrʲs.:1
 
 add_diagnostic_variable!(short_name = "entr", units = "s^-1",
     long_name = "Entrainment rate",
@@ -357,8 +368,45 @@ compute_detr(state, cache, time) =
     compute_detr(state, cache, time, cache.atmos.turbconv_model)
 compute_detr(_, _, _, turbconv_model) = error_diagnostic_variable("detr", turbconv_model)
 
-compute_detr(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
-    cache.precomputed.ᶜdetrʲs.:1
+function compute_detr(state, cache, _, ::PrognosticEDMFX)
+    (; ᶜρ_diffʲs, ᶜρʲs, ᶜarea_bounding_entr_detrʲs) = cache.precomputed
+    (; ᶠgradᵥ_ᶜΦ) = cache.core
+    turbconv_params = CAP.turbconv_params(cache.params)
+    detr_buoy_inv_tau_max = CAP.detr_buoy_inv_tau_max(turbconv_params)
+    detr_model = cache.atmos.edmfx_model.detr_model
+    ᶠlg = Fields.local_geometry_field(state.f)
+    ᶠdz = Fields.Δz_field(axes(state.f))
+    ρaʲ = state.c.sgsʲs.:(1).ρa
+    u₃ʲ = state.f.sgsʲs.:(1).u₃
+    # Evaluate the buoyancy inverse time scale at faces (where w and grad_Φ are
+    # naturally defined) and interpolate to centers for smoother behaviour.
+    ᶜbuoy_inv_time_scale = @. lazy(
+        ᶜinterp(
+            detr_buoy_inv_time_scale(
+                u₃ʲ.components.data.:1 / ᶠdz,
+                vertical_buoyancy_acceleration(
+                    ᶠinterp(ᶜρ_diffʲs.:1),
+                    ᶠgradᵥ_ᶜΦ,
+                    ᶠlg,
+                ),
+                detr_buoy_inv_tau_max,
+            ),
+        ),
+    )
+    return @. lazy(
+        compute_detrainment(
+            turbconv_params,
+            draft_area(ρaʲ, ᶜρʲs.:1),
+            ρaʲ,
+            ᶜbuoy_inv_time_scale,
+            ᶜdivᵥ(ᶠleft_bias(ρaʲ) * u₃ʲ),
+            ᶜarea_bounding_entr_detrʲs.:1,
+            detr_model,
+        ),
+    )
+end
+
+compute_detr(_, cache, _, ::DiagnosticEDMFX) = cache.precomputed.ᶜdetrʲs.:1
 
 add_diagnostic_variable!(short_name = "detr", units = "s^-1",
     long_name = "Detrainment rate",
