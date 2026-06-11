@@ -258,14 +258,14 @@ cloud_ice_formation:
   help: "Cloud ice formation option for 1M microphysics [`ConstantTimescale` (default), `TemperatureDependent`, ~]"
   value: "ConstantTimescale"
 cloud_ice_melt:
-  help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt`, ~ (default)]"
+  help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt` (default), ~]"
   value: "CloudIceMelt"
 rain_autoconversion:
   help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]"
   value: "Kessler1M"
 snow_autoconversion:
   help: "Snow autoconversion option for 1M microphysics [`NoSupersaturation` (default), `WithSupersaturation`, ~]"
-  value: "WithSupersaturation"
+  value: "NoSupersaturation"
 rain_condensation_evaporation:
   help: "Rain condensation/evaporation option for 1M microphysics [`RainEvaporation` (default), ~]"
   value: "RainEvaporation"
