@@ -1,4 +1,4 @@
-357
+358
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+358
+- Use the same scaling factor for diffusion and hyperdiffusion of condensate and precipitation
+
 357
 - Solve the updraft area-fraction (ρa) equation analytically at the IMEX implicit
   stage. Refactor entrainment/detrainment.
