@@ -768,6 +768,7 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
         nh_pressure = pa["edmfx_nh_pressure"],
         vertical_diffusion = pa["edmfx_vertical_diffusion"],
         filter = pa["edmfx_filter"],
+        prognostic_aerosols = pa["edmfx_aerosols"],
         scale_blending_method,
     )
 

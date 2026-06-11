@@ -1174,7 +1174,7 @@ function AtmosModel(; kwargs...)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
     prognostic_aerosols =
-        get(atmos_model_kwargs, :prognostic_aerosols, ())
+        get(atmos_model_kwargs, :prognostic_aerosols, Val(()))
 
     prescribed_flow = get(atmos_model_kwargs, :prescribed_flow, nothing)
 

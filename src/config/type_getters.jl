@@ -54,6 +54,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         numerics = AtmosNumerics(config, FT),
         vertical_diffusion,
         disable_surface_flux_tendency = pa["disable_surface_flux_tendency"],
+        prognostic_aerosols = Val(Tuple(Symbol.(pa["prognostic_aerosols"]))),
     )
     # TODO: Should this go in the AtmosModel constructor?
     @assert !@any_reltype(atmos, (UnionAll, DataType))
