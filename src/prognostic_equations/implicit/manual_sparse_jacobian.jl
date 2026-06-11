@@ -894,7 +894,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     χʲ_name = get_sgsʲ_name(χ_name)
                     ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χʲ_name, χʲ_name]
                     @. ∂ᶜχʲ_err_∂ᶜχʲ +=
-                        dtγ * α_vert_diff_tracer * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅
+                        dtγ * α_vert_diff_microphysics * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅
                         ᶜdiffusion_h_matrix
                 end
             end
