@@ -4,8 +4,8 @@ This file is included in Diagnostics.jl
 README: Adding a new core diagnostic:
 
 In addition to the metadata (names, comments, ...), the most important step
-in adding a new DiagnosticVariable is defining its compute function. 
-`compute` takes three arguments: (state, cache, time), 
+in adding a new DiagnosticVariable is defining its compute function.
+`compute` takes three arguments: (state, cache, time),
 and returns the diagnostic value, preferring lazy fields when possible.
 
 Often, it is possible to compute certain diagnostics only for specific models
@@ -591,7 +591,7 @@ add_diagnostic_variable!(short_name = "husra", units = "kg kg^-1",
     long_name = "Mass Fraction of Rain",
     standard_name = "mass_fraction_of_rain_in_air",
     comments = """
-    This is calculated as the mass of rain water in the grid cell divided by 
+    This is calculated as the mass of rain water in the grid cell divided by
     the mass of air (dry air + water vapor + cloud condensate) in the grid cells.
     """,
     compute = compute_husra,
@@ -609,7 +609,7 @@ add_diagnostic_variable!(short_name = "hussn", units = "kg kg^-1",
     long_name = "Mass Fraction of Snow",
     standard_name = "mass_fraction_of_snow_in_air",
     comments = """
-    This is calculated as the mass of snow in the grid cell divided by 
+    This is calculated as the mass of snow in the grid cell divided by
     the mass of air (dry air + water vapor + cloud condensate) in the grid cells.
     """,
     compute = compute_hussn,
@@ -1011,7 +1011,7 @@ add_diagnostic_variable!(short_name = "mslp", units = "Pa",
     long_name = "Mean Sea Level Pressure",
     standard_name = "mean_sea_level_pressure",
     comments = """
-    Mean sea level pressure computed using a lapse-rate-dependent hypsometric reduction 
+    Mean sea level pressure computed using a lapse-rate-dependent hypsometric reduction
     (ERA-style; Γ=6.5 K/km with virtual temperature via moist gas constant).""",
     compute = compute_mslp,
 )

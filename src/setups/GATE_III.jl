@@ -6,6 +6,7 @@ hydrostatically balanced pressure profile. Uses T (not θ) for hydrostatic
 integration. Profiles are sourced from AtmosphericProfilesLibrary.
 
 ## Example
+
 ```julia
 setup = GATE_III(; prognostic_tke = true, thermo_params)
 ```

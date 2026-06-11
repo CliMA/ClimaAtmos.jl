@@ -110,7 +110,7 @@ end
 
     Y = (; c = Y_c)
 
-    # Test gs_tracer_names 
+    # Test gs_tracer_names
     # Should find ρq_tot but exclude ρ and ρe_tot (as per implementation)
     names = CA.gs_tracer_names(Y)
     @test @name(ρq_tot) in names

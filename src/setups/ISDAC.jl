@@ -9,6 +9,7 @@ When `perturb` is true, applies pseudorandom temperature perturbations
 of amplitude 0.1 K below 825 m.
 
 ## Example
+
 ```julia
 setup = ISDAC(; prognostic_tke = true, perturb = false, thermo_params)
 ```

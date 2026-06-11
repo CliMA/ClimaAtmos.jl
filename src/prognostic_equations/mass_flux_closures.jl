@@ -75,11 +75,12 @@ function draft_area(ρa, ρ)
 end
 
 """
-   Return the virtual mass term of the pressure closure for updrafts [m/s2 * m]
+Return the virtual mass term of the pressure closure for updrafts [m/s2 * m]
 
-   Inputs (everything defined on cell faces):
-   - params - set with model parameters
-   - ᶠbuoyʲ - covariant3 or contravariant3 updraft buoyancy
+Inputs (everything defined on cell faces):
+
+  - params - set with model parameters
+  - ᶠbuoyʲ - covariant3 or contravariant3 updraft buoyancy
 """
 function ᶠupdraft_nh_pressure_buoyancy(params, ᶠbuoyʲ)
     turbconv_params = CAP.turbconv_params(params)
@@ -89,16 +90,17 @@ function ᶠupdraft_nh_pressure_buoyancy(params, ᶠbuoyʲ)
 end
 
 """
-   Return the drag term of the pressure closure for updrafts [m/s2 * m].
-   This is a simplified version where the length scale is fixed at scale height.
-   This is only used in diagnostic EDMF.
+Return the drag term of the pressure closure for updrafts [m/s2 * m].
+This is a simplified version where the length scale is fixed at scale height.
+This is only used in diagnostic EDMF.
 
-   Inputs (everything defined on cell faces):
-   - params - set with model parameters
-   - ᶠlg - local geometry (needed to compute the norm inside a local function)
-   - ᶠu3ʲ, ᶠu3⁰ - covariant3 or contravariant3 velocity for updraft and environment.
-                  covariant3 velocity is used in prognostic edmf, and contravariant3
-                  velocity is used in diagnostic edmf.
+Inputs (everything defined on cell faces):
+
+  - params - set with model parameters
+  - ᶠlg - local geometry (needed to compute the norm inside a local function)
+  - ᶠu3ʲ, ᶠu3⁰ - covariant3 or contravariant3 velocity for updraft and environment.
+    covariant3 velocity is used in prognostic edmf, and contravariant3
+    velocity is used in diagnostic edmf.
 """
 function ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰)
     turbconv_params = CAP.turbconv_params(params)
@@ -159,7 +161,7 @@ function edmfx_vertical_diffusion_tendency!(
 
         if p.atmos.microphysics_model isa
            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-            α_precip = CAP.α_vert_diff_tracer(params)
+            α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
             ᶜρʲ = ᶜρʲs.:(1)
             ᶜdivᵥ_q = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
@@ -167,24 +169,27 @@ function edmfx_vertical_diffusion_tendency!(
             )
 
             microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).q_lcl), FT(1)),
-                (@name(c.sgsʲs.:(1).q_icl), FT(1)),
-                (@name(c.sgsʲs.:(1).q_rai), α_precip),
-                (@name(c.sgsʲs.:(1).q_sno), α_precip),
-                (@name(c.sgsʲs.:(1).n_lcl), FT(1)),
-                (@name(c.sgsʲs.:(1).n_rai), α_precip),
+                @name(c.sgsʲs.:(1).q_lcl), @name(c.sgsʲs.:(1).q_icl),
+                @name(c.sgsʲs.:(1).q_rai), @name(c.sgsʲs.:(1).q_sno),
+                @name(c.sgsʲs.:(1).n_lcl), @name(c.sgsʲs.:(1).n_rai),
             )
 
             # TODO: using unrolled_foreach here allocates! (breaks the flame tests
             # even though they use 0M microphysics)
             # MatrixFields.unrolled_foreach(cloud_tracers) do χʲ_name
-            for (χʲ_name, α) in microphysics_tracers
+            for χʲ_name in microphysics_tracers
                 MatrixFields.has_field(Y, χʲ_name) || continue
 
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
 
-                @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
+                @. ᶜχʲₜ -=
+                    ᶜdivᵥ_q(
+                        -(
+                            ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α_vert_diff_microphysics *
+                            ᶠgradᵥ(ᶜχʲ)
+                        ),
+                    ) / ᶜρʲ
             end
         end
     end
@@ -209,7 +214,7 @@ Currently, this includes:
 
 These corrections are intended to prevent nonphysical states such as negative
 area fractions, negative condensate masses, or condensate mass exceeding the
-available total moisture. Ideally, the need for this correction is minimized 
+available total moisture. Ideally, the need for this correction is minimized
 by the numerical scheme.
 """
 

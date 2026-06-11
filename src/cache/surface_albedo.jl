@@ -209,6 +209,7 @@ end
 Calculate the diffuse surface albedo using the Jin et al. (2011) empirical formulation.
 
 !!! note
+
     For now we assume that the cloud fraction is 0.0.
 """
 function surface_albedo_diffuse(

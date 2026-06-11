@@ -4,6 +4,7 @@
 A setup with a uniform temperature and barometric pressure profile.
 
 ## Example
+
 ```julia
 setup = IsothermalProfile(; temperature = 300)
 ```

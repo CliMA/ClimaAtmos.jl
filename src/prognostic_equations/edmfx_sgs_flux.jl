@@ -21,12 +21,13 @@ or `DiagnosticEDMFX`). A generic fallback doing nothing is also provided.
 The function modifies `Yₜ.c` (grid-mean tendencies) in place.
 
 Arguments:
-- `Yₜ`: The tendency state vector for grid-mean variables.
-- `Y`: The current state vector (used for grid-mean and SGS properties).
-- `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
-       and scratch space.
-- `t`: Current simulation time.
-- `turbconv_model`: The turbulence convection model instance.
+
+  - `Yₜ`: The tendency state vector for grid-mean variables.
+  - `Y`: The current state vector (used for grid-mean and SGS properties).
+  - `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
+    and scratch space.
+  - `t`: Current simulation time.
+  - `turbconv_model`: The turbulence convection model instance.
 """
 edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
@@ -361,12 +362,13 @@ doing nothing is also provided. The function modifies `Yₜ.c` (grid-mean tenden
 in place.
 
 Arguments:
-- `Yₜ`: The tendency state vector for grid-mean variables.
-- `Y`: The current state vector (used for grid-mean and SGS properties).
-- `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
-       and scratch space.
-- `t`: Current simulation time.
-- `turbconv_model`: The turbulence convection model instance.
+
+  - `Yₜ`: The tendency state vector for grid-mean variables.
+  - `Y`: The current state vector (used for grid-mean and SGS properties).
+  - `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
+    and scratch space.
+  - `t`: Current simulation time.
+  - `turbconv_model`: The turbulence convection model instance.
 """
 edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
@@ -451,25 +453,21 @@ function edmfx_sgs_diffusive_flux_tendency!(
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
         end
 
-        α_precip = CAP.α_vert_diff_tracer(params)
+        α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
         ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
         ᶜdivᵥ_ρq = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
         microphysics_tracers = (
-            (@name(c.ρq_lcl), FT(1)),
-            (@name(c.ρq_icl), FT(1)),
-            (@name(c.ρq_rai), α_precip),
-            (@name(c.ρq_sno), α_precip),
-            (@name(c.ρn_lcl), FT(1)),
-            (@name(c.ρn_rai), α_precip),
+            @name(c.ρq_lcl), @name(c.ρq_icl), @name(c.ρq_rai), @name(c.ρq_sno),
+            @name(c.ρn_lcl), @name(c.ρn_rai),
         )
-        MatrixFields.unrolled_foreach(microphysics_tracers) do (ρχ_name, α)
+        MatrixFields.unrolled_foreach(microphysics_tracers) do ρχ_name
             MatrixFields.has_field(Y, ρχ_name) || return
             ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α * ᶠgradᵥ(ᶜχ)))
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_microphysics * ᶠgradᵥ(ᶜχ)))
             ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end

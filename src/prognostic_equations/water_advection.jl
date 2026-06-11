@@ -1,5 +1,5 @@
 #####
-##### Applies tendencies to density, total energy, and total specific humidity 
+##### Applies tendencies to density, total energy, and total specific humidity
 ##### due to the sedimentation/precipitation of water and its associated enthalpy
 #####
 
@@ -23,14 +23,16 @@ negated cell-centered specific flux term. The resulting face flux
 is then diverged using the `ᶜprecipdivᵥ` operator.
 
 Arguments:
-- `Yₜ`: The tendency state vector, modified in place.
-- `Y`: The current state vector.
-- `p`: Cache containing parameters, precomputed fields (like `ᶜwₜqₜ`, `ᶜwₕhₜ`, `ᶜwₕʲs`, `ᶜwₜʲs`),
-       and atmospheric model configurations.
-- `t`: Current simulation time (not directly used in these calculations).
+
+  - `Yₜ`: The tendency state vector, modified in place.
+  - `Y`: The current state vector.
+  - `p`: Cache containing parameters, precomputed fields (like `ᶜwₜqₜ`, `ᶜwₕhₜ`, `ᶜwₕʲs`, `ᶜwₜʲs`),
+    and atmospheric model configurations.
+  - `t`: Current simulation time (not directly used in these calculations).
 
 Modifies:
-- `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, and `Yₜ.c.ρq_tot` (always when moisture is present)
+
+  - `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, and `Yₜ.c.ρq_tot` (always when moisture is present)
 """
 function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
@@ -83,8 +85,8 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     end
 
     # For prognostic edmf, augment the energy tendencies with the additional energy contributions
-    # so that the total-grid energy flux remains consistent. Specifically, we enforce that the 
-    # grid-mean energy flux equals the sum of the subdomain (updraft/environment) energy fluxes 
+    # so that the total-grid energy flux remains consistent. Specifically, we enforce that the
+    # grid-mean energy flux equals the sum of the subdomain (updraft/environment) energy fluxes
     # by accounting for the energy carried by sedimenting tracers.
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
@@ -94,7 +96,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         @. ᶜρ⁰ =
             TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
 
-        # TODO the following code works for only one updraft 
+        # TODO the following code works for only one updraft
         sgs_microphysics_tracers = (
             (@name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
             (@name(q_icl), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),

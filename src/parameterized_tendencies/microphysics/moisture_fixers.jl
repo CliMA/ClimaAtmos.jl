@@ -16,16 +16,22 @@ returns a positive tendency to restore it toward zero, limited by available
 vapor `q_vap`.
 
 # Arguments
-- `q`: Tracer specific humidity (may be negative) [kg/kg]
-- `q_vap`: Vapor specific humidity (source for correction) [kg/kg]
-- `dt`: Model timestep [s]
+
+  - `q`: Tracer specific humidity (may be negative) [kg/kg]
+  - `q_vap`: Vapor specific humidity (source for correction) [kg/kg]
+  - `dt`: Model timestep [s]
 
 # Returns
+
 Tendency [kg/kg/s] to add to tracer:
-- If `q >= 0`: Returns `0` (no correction needed)
-- If `q < 0`: Returns positive tendency limited by available vapor
+
+  - If `q >= 0`: Returns `0` (no correction needed)
+  - If `q < 0`: Returns positive tendency limited by available vapor
 
 # Notes
+
+    # -min(0, q/dt) gives positive tendency when q < 0
+
 Uses `n=5` in `limit()` to share vapor among multiple tracers that may need correction.
 """
 @inline function tracer_nonnegativity_vapor_tendency(q, q_vap, dt)
@@ -46,17 +52,20 @@ tracer (q_liq, q_ice, q_rai, q_sno) is negative, adds a positive tendency
 sourced from grid-mean vapor.
 
 # Arguments
-- `Yₜ`: Tendency state vector (modified in place)
-- `Y`: State vector
-- `p`: Cache containing `atmos`, `dt`, etc.
-- `t`: Current time
-- `microphysics_model`: Microphysics model (dispatched on `NonEquilibriumMicrophysics1M`
-  or `NonEquilibriumMicrophysics2M`)
+
+  - `Yₜ`: Tendency state vector (modified in place)
+  - `Y`: State vector
+  - `p`: Cache containing `atmos`, `dt`, etc.
+  - `t`: Current time
+  - `microphysics_model`: Microphysics model (dispatched on `NonEquilibriumMicrophysics1M`
+    or `NonEquilibriumMicrophysics2M`)
 
 # Modifies
-- `Yₜ.c.ρq_lcl`, `Yₜ.c.ρq_icl`, `Yₜ.c.ρq_rai`, `Yₜ.c.ρq_sno`
+
+  - `Yₜ.c.ρq_lcl`, `Yₜ.c.ρq_icl`, `Yₜ.c.ρq_rai`, `Yₜ.c.ρq_sno`
 
 # Notes
+
 Only active when `p.atmos.water.tracer_nonnegativity_method` is `TracerNonnegativityVaporTendency`.
 """
 function tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t,

@@ -5,22 +5,24 @@ Orchestrates the calculation and application of hyperdiffusion tendencies to the
 state vector `Y`.
 
 This function follows a sequence:
-1. Prepares hyperdiffusion tendencies for tracers (stored in `Yₜ_lim`).
-2. Prepares hyperdiffusion tendencies for other state variables (e.g., momentum, energy, stored in `Yₜ`).
-3. If Direct Stiffness Summation (DSS) is required and hyperdiffusion is active, performs DSS on the
-   prepared hyperdiffusion tendencies.
-4. Applies the (potentially DSSed) hyperdiffusion tendencies to `Yₜ_lim` and `Yₜ`.
+
+ 1. Prepares hyperdiffusion tendencies for tracers (stored in `Yₜ_lim`).
+ 2. Prepares hyperdiffusion tendencies for other state variables (e.g., momentum, energy, stored in `Yₜ`).
+ 3. If Direct Stiffness Summation (DSS) is required and hyperdiffusion is active, performs DSS on the
+    prepared hyperdiffusion tendencies.
+ 4. Applies the (potentially DSSed) hyperdiffusion tendencies to `Yₜ_lim` and `Yₜ`.
 
 The distinction between `Yₜ` and `Yₜ_lim` allows for separate handling, often
 because tracers might be subject to limiters applied via `Yₜ_lim`.
 
 Arguments:
-- `Yₜ`: The main tendency state vector, modified in place.
-- `Yₜ_lim`: The tendency state vector for tracers (often subject to limiters), modified in place.
-- `Y`: The current state vector.
-- `p`: Cache containing parameters, atmospheric model configuration (e.g., `p.atmos.hyperdiff`),
-       and data for DSS.
-- `t`: Current simulation time.
+
+  - `Yₜ`: The main tendency state vector, modified in place.
+  - `Yₜ_lim`: The tendency state vector for tracers (often subject to limiters), modified in place.
+  - `Y`: The current state vector.
+  - `p`: Cache containing parameters, atmospheric model configuration (e.g., `p.atmos.hyperdiff`),
+    and data for DSS.
+  - `t`: Current simulation time.
 
 Helper functions `prep_..._tendency!`, `dss_hyperdiffusion_tendency_pairs`,
 and `apply_..._tendency!` implement the specific details of hyperdiffusion.
@@ -44,22 +46,25 @@ Computes a set of explicit tendencies for the atmospheric model.
 This function acts as a high-level orchestrator, zeroing out the tendency vectors
 `Yₜ` (for main model variables) and `Yₜ_lim` (for tracers) and then sequentially
 calling various component tendency functions to accumulate contributions from:
-- Horizontal advection (tracers and dynamics).
-- Hyperdiffusion.
-- Explicit vertical advection.
-- Other specialized vertical advection (e.g., for water).
-- A wide range of "additional" tendencies including sponge layers, physical
-  parameterizations, forcings, and EDMFX subgrid-scale processes.
+
+  - Horizontal advection (tracers and dynamics).
+  - Hyperdiffusion.
+  - Explicit vertical advection.
+  - Other specialized vertical advection (e.g., for water).
+  - A wide range of "additional" tendencies including sponge layers, physical
+    parameterizations, forcings, and EDMFX subgrid-scale processes.
 
 Arguments:
-- `Yₜ`: The main tendency state vector, modified in place.
-- `Yₜ_lim`: The tendency state vector for tracers, modified in place.
-- `Y`: The current state vector.
-- `p`: Cache containing parameters, precomputed fields, and model configurations.
-- `t`: Current simulation time.
+
+  - `Yₜ`: The main tendency state vector, modified in place.
+  - `Yₜ_lim`: The tendency state vector for tracers, modified in place.
+  - `Y`: The current state vector.
+  - `p`: Cache containing parameters, precomputed fields, and model configurations.
+  - `t`: Current simulation time.
 
 Returns:
-- `Yₜ`: The populated main tendency state vector.
+
+  - `Yₜ`: The populated main tendency state vector.
 """
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
@@ -84,10 +89,12 @@ Extracts the `z` (vertical) coordinate fields from the cell centers (`ᶜz`)
 and cell faces (`ᶠz`) of a given `ClimaCore.Spaces.AbstractSpace`.
 
 Arguments:
-- `space`: An `AbstractSpace` from which to derive center and face spaces.
+
+  - `space`: An `AbstractSpace` from which to derive center and face spaces.
 
 Returns:
-- A `NamedTuple` with fields `ᶜz` and `ᶠz`, containing the vertical coordinate fields.
+
+  - A `NamedTuple` with fields `ᶜz` and `ᶠz`, containing the vertical coordinate fields.
 """
 function z_coordinate_fields(space::Spaces.AbstractSpace)
     ᶜz = Fields.coordinate_field(Spaces.center_space(space)).z
@@ -104,30 +111,32 @@ and tracer tendency vector `Yₜ_lim` (implicitly via calls to functions that mi
 though this function primarily modifies `Yₜ`).
 
 This function is a central hub for incorporating tendencies from:
-- Sponge layers (viscous and Rayleigh).
-- Idealized forcings (e.g., Held-Suarez).
-- Single Column Model (SCM) specific terms (e.g., SCM Coriolis).
-- Large-scale advection (often prescribed for test cases).
-- Subsidence (prescribed in single-column configurations).
-- External forcings.
-- Explicitly handled components of the EDMFX SGS scheme (vertical advection,
-  diffusive fluxes, entrainment/detrainment, mass fluxes, non-hydrostatic pressure).
-- EDMFX filter and TKE tendencies.
-- Surface fluxes.
-- Radiation.
-- Cloud microphysics (condensation/evaporation).
-- Precipitation processes (grid-scale and EDMFX).
-- Surface temperature evolution.
-- Pressure work terms.
-- Smagorinsky-Lilly SGS turbulence.
-- Gravity wave drag (orographic and non-orographic).
-- Optional zeroing of velocity tendencies for specific tests.
+
+  - Sponge layers (viscous and Rayleigh).
+  - Idealized forcings (e.g., Held-Suarez).
+  - Single Column Model (SCM) specific terms (e.g., SCM Coriolis).
+  - Large-scale advection (often prescribed for test cases).
+  - Subsidence (prescribed in single-column configurations).
+  - External forcings.
+  - Explicitly handled components of the EDMFX SGS scheme (vertical advection,
+    diffusive fluxes, entrainment/detrainment, mass fluxes, non-hydrostatic pressure).
+  - EDMFX filter and TKE tendencies.
+  - Surface fluxes.
+  - Radiation.
+  - Cloud microphysics (condensation/evaporation).
+  - Precipitation processes (grid-scale and EDMFX).
+  - Surface temperature evolution.
+  - Pressure work terms.
+  - Smagorinsky-Lilly SGS turbulence.
+  - Gravity wave drag (orographic and non-orographic).
+  - Optional zeroing of velocity tendencies for specific tests.
 
 Arguments:
-- `Yₜ`: The main tendency state vector, modified in place.
-- `Y`: The current state vector.
-- `p`: Cache containing parameters, precomputed fields, and extensive model configurations.
-- `t`: Current simulation time.
+
+  - `Yₜ`: The main tendency state vector, modified in place.
+  - `Y`: The current state vector.
+  - `p`: Cache containing parameters, precomputed fields, and extensive model configurations.
+  - `t`: Current simulation time.
 
 This function relies on numerous specialized sub-functions to calculate each
 distinct tendency component. The order of calls can be important due to

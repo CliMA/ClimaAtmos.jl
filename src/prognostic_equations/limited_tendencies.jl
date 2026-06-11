@@ -6,11 +6,13 @@ import ClimaCore: Limiters
 Determine if a limiter should be applied to a specific tracer.
 
 # Arguments
-- `ρχ_name::Symbol`: Tracer variable name (e.g., `:ρq_tot`)
-- `species`: Configuration — `nothing`: apply to all; `()`: apply to none;
-  `Tuple{Symbol,...}`: apply only if `ρχ_name ∈ species`
+
+  - `ρχ_name::Symbol`: Tracer variable name (e.g., `:ρq_tot`)
+  - `species`: Configuration — `nothing`: apply to all; `()`: apply to none;
+    `Tuple{Symbol,...}`: apply only if `ρχ_name ∈ species`
 
 # Returns
+
 `true` if the limiter should be applied, `false` otherwise.
 """
 function _should_apply_limiter_to_tracer(ρχ_name, species)
@@ -38,24 +40,26 @@ to all tracers for which the limiter is used. The limiter instance is created as
 filter which tracers the limiter is applied to before calling `apply_limiter!` (since `apply_limiter!`
 doesn't support a species keyword argument). If species is `nothing` (default), the limiter is applied
 to all tracers. Otherwise, only tracers matching the specified tuple of names will have the limiter
-applied. 
+applied.
 
 When the limiter is applied to total water (ρq_tot), the effective tendency Δ(ρq_tot) is
-deduced from the pre- and post-limited states. To keep mass and energy consistent 
+deduced from the pre- and post-limited states. To keep mass and energy consistent
 (https://clima.github.io/ClimaAtmos.jl/dev/microphysics/), density
 and total energy are updated.
-1. **SEM Quasimonotone Limiter** (`sem_quasimonotone_limiter`):
-   Computes bounds from `ref_Y` and applies spectral element limiting.
 
-2. **Vertical Mass Borrowing Limiter** (`vertical_water_borrowing_limiter`):
-   Enforces strict nonnegativity by borrowing mass vertically.
-   Species filtering via `vertical_water_borrowing_species`.
+ 1. **SEM Quasimonotone Limiter** (`sem_quasimonotone_limiter`):
+    Computes bounds from `ref_Y` and applies spectral element limiting.
+
+ 2. **Vertical Mass Borrowing Limiter** (`vertical_water_borrowing_limiter`):
+    Enforces strict nonnegativity by borrowing mass vertically.
+    Species filtering via `vertical_water_borrowing_species`.
 
 # Arguments
-- `Y`: Current state vector (modified in place)
-- `p`: Cache containing `p.numerics` limiter configuration
-- `t`: Current simulation time
-- `ref_Y`: Reference state for bounds computation
+
+  - `Y`: Current state vector (modified in place)
+  - `p`: Cache containing `p.numerics` limiter configuration
+  - `t`: Current simulation time
+  - `ref_Y`: Reference state for bounds computation
 """
 NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
     (;

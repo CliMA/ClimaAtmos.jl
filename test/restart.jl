@@ -109,8 +109,9 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             # Covariance fields depend on scratch state
             :ᶜT′T′,
             :ᶜq′q′,
-            # Scratch field for prognostic EDMF (uninitialized until tendencies run)
+            # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
             :ᶠu₃_tendencyʲs,
+            :ᶜρa_tendencyʲs,
             # RRTMGP internal arrays may differ due to RNG state
             rrtmgp_clear_fix...,
             # Config-specific

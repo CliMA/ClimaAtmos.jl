@@ -117,14 +117,14 @@ This could be extended to parse more attributes.
 
 For example, the sample attributes:
 attributes = Dict(
-    "units" => "%",
-    "short_name" => "cl",
-    "slice_y" => "0.0",
-    "long_name" => "Cloud fraction, Instantaneous x = 0.0 m y = 0.0 m",
-    "slice_y_units" => "m",
-    "slice_x_units" => "m",
-    "comments" => "",
-    "slice_x" => "0.0",
+"units" => "%",
+"short_name" => "cl",
+"slice_y" => "0.0",
+"long_name" => "Cloud fraction, Instantaneous x = 0.0 m y = 0.0 m",
+"slice_y_units" => "m",
+"slice_x_units" => "m",
+"comments" => "",
+"slice_x" => "0.0",
 )
 will be parsed into "cl, x = 0.0, y = 0.0"
 """
@@ -159,8 +159,7 @@ end
 
 Use `plot_fn` to plot `vars` properly handling pagination.
 
-Arguments
-=========
+# Arguments
 
 `output_path` can be a `String` or a list of `String`s. When it is a list of `String`s, it
 is assumed that `vars` are coming from different simulations and they have to be compared.
@@ -174,8 +173,7 @@ in the first `output_path`.
 function. This is useful when building larger and more complex reports that required
 different `plot_fn` to be produced.
 
-Extra Arguments
-===============
+# Extra Arguments
 
 `args` and `kwargs` are passed to the plotting function `plot_fn`.
 
@@ -432,10 +430,10 @@ automatically extended to comparing N simulations.
 The signature for `func` has to be `(simdir, arg)`. You can use closures to define
 more complex behaviors. `func` has to return a `OutputVar`.
 
-Example
-===========
+# Example
 
 The simplest example is to directly `get` an `OutputVar`:
+
 ```julia
 short_names = ["ta", "wa"]
 vars = map_comparison(get, simdirs, short_names)
@@ -446,12 +444,14 @@ make_plots_generic(
     more_kwargs = YLINEARSCALE,
 )
 ```
+
 If we want to be more daring, we can mix in some information about `reductions` and `periods`
+
 ```julia
 short_names = ["ta", "wa"]
 reduction, period = "average", "1d"
 vars = map_comparison(simdirs, short_names) do simdir, short_name
-     get(simdir; short_name, reduction, period)
+    get(simdir; short_name, reduction, period)
 end
 make_plots_generic(
     simulation_path,
@@ -593,11 +593,12 @@ function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
     short_names = ["ta", "wa"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         var = get(simdir; short_name)
-        # Column simulations use a minimal box, so slice x,y to get 1D profiles
-        if haskey(var.dims, "x")
+        # For vertical-only (FiniteDifferenceGrid) spaces, the data may have
+        # extra singleton dimensions. Check and squeeze if needed.
+        if haskey(var.dims, "x") && length(var.dims["x"]) == 1
             var = slice(var; x = var.dims["x"][1])
         end
-        if haskey(var.dims, "y")
+        if haskey(var.dims, "y") && length(var.dims["y"]) == 1
             var = slice(var; y = var.dims["y"][1])
         end
         return var
@@ -658,17 +659,6 @@ function make_plots(
         short_name in short_names
     ]
 
-    # Column simulations use a minimal box, so slice x,y to get 1D profiles
-    vars = map(vars) do var
-        if haskey(var.dims, "x")
-            var = slice(var; x = var.dims["x"][1])
-        end
-        if haskey(var.dims, "y")
-            var = slice(var; y = var.dims["y"][1])
-        end
-        return var
-    end
-
     # We first prepare the axes with all the nice labels with ClimaAnalysis, then we use
     # CairoMakie to add the additional lines.
     fig = CairoMakie.Figure(; size = figsize)
@@ -708,13 +698,6 @@ function make_plots(
 
     # surface_precipitation
     surface_precip = get(simdir; short_name = "pr", reduction = "inst", period = "10s")
-    # Column simulations use a minimal box, so slice x,y
-    if haskey(surface_precip.dims, "x")
-        surface_precip = slice(surface_precip; x = surface_precip.dims["x"][1])
-    end
-    if haskey(surface_precip.dims, "y")
-        surface_precip = slice(surface_precip; y = surface_precip.dims["y"][1])
-    end
     viz.line_plot1D!(
         fig,
         surface_precip;
@@ -1449,8 +1432,8 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
 
-    # All EDMF simulations use a small box for column mode
-    is_box = true
+    # Determine if this is a box or column type
+    is_box = sim_type isa Union{EDMFBoxPlots, DiagEDMFBoxPlotsWithPrecip}
 
     # Determine precipitation names based on type
     if sim_type isa DiagEDMFBoxPlotsWithPrecip
@@ -1458,12 +1441,11 @@ function make_plots(
     elseif sim_type isa EDMFColumnPlotsWithPrecip
         if sim_type isa Val{:prognostic_edmfx_rico_column_2M}
             precip_names = (
-                "husra", "hussn", "husraup", "hussnup", "husraen", "hussnen",
-                "cdnc", "ncra", "cdncup", "ncraup", "cdncen", "ncraen",
+                "husra", "hussn", "husraup", "hussnup",
+                "cdnc", "ncra", "cdncup", "ncraup",
             )
         else
-            precip_names =
-                ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen")
+            precip_names = ("husra", "hussn", "husraup", "hussnup")
         end
     else
         precip_names = ()
@@ -1471,26 +1453,61 @@ function make_plots(
 
     short_names = [
         "wa", "waup", "ta", "taup", "hus", "husup", "arup", "tke", "ua",
-        "thetaa", "thetaaup", "ha", "haup", "hur", "hurup", "lmix",
+        "thetaa", "thetaaup", "hur", "hurup", "lmix",
         "cl", "clw", "clwup", "cli", "cliup",
         precip_names...,
     ]
-    reduction = "inst"
+    reduction_avg = "average"
+    reduction_inst = "inst"
 
-    available_periods = ClimaAnalysis.available_periods(
-        simdirs[1];
-        short_name = short_names[1],
-        reduction,
+    available_periods_avg = collect(
+        ClimaAnalysis.available_periods(
+            simdirs[1];
+            short_name = short_names[1],
+            reduction = reduction_avg,
+        ),
     )
-    # choose the shortest available period
-    available_periods = collect(available_periods) # ensure vector for indexing
-    period = available_periods[argmin(CA.time_to_seconds.(available_periods))]
+    period_avg =
+        available_periods_avg[argmin(CA.time_to_seconds.(available_periods_avg))]
+
+    available_periods_inst = collect(
+        ClimaAnalysis.available_periods(
+            simdirs[1];
+            short_name = short_names[1],
+            reduction = reduction_inst,
+        ),
+    )
+    period_inst =
+        available_periods_inst[argmin(CA.time_to_seconds.(available_periods_inst))]
 
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
-            vars = map(short_name -> get(simdir; short_name, reduction, period), name_tuple)
+            vars = map(
+                short_name ->
+                    get(
+                        simdir;
+                        short_name,
+                        reduction = reduction_inst,
+                        period = period_inst,
+                    ),
+                name_tuple,
+            )
             # For box types, slice to a point (x=0, y=0)
+            if is_box
+                return map(var -> slice(var, x = 0.0, y = 0.0), vars)
+            else
+                return vars
+            end
+        end
+
+    var_groups_z_avg =
+        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
+            vars = map(
+                short_name ->
+                    get(simdir; short_name, reduction = reduction_avg, period = period_avg),
+                name_tuple,
+            )
             if is_box
                 return map(var -> slice(var, x = 0.0, y = 0.0), vars)
             else
@@ -1500,7 +1517,7 @@ function make_plots(
 
     var_groups_z = [
         ([slice(v, time = LAST_SNAP) for v in group]...,) for
-        group in var_groups_zt
+        group in var_groups_z_avg
     ]
 
     tmp_file = make_plots_generic(
@@ -1513,6 +1530,17 @@ function make_plots(
     )
 
     summary_files = [tmp_file]
+
+    # Time-height contour plots: existing EDMF variables (intermediate)
+    zt_file = make_plots_generic(
+        output_paths,
+        collect(Iterators.flatten(var_groups_zt));
+        output_name = "zt_contour",
+        plot_fn = plot_parsed_attribute_title!,
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+    push!(summary_files, zt_file)
 
     # Microphysics 1M process tendency plots (grid-mean, updraft, environment)
     mp1m_vars_zt = []  # time-z fields for contour plots
@@ -1544,40 +1572,17 @@ function make_plots(
         # Load the time-z fields for all mp1m variables
         mp1m_vars_zt =
             map_comparison(mp1m_simdirs, mp1m_all_names) do simdir, sn
-                var = get(simdir; short_name = sn, reduction, period)
+                var = get(
+                    simdir;
+                    short_name = sn,
+                    reduction = reduction_inst,
+                    period = period_inst,
+                )
                 if is_box
                     var = slice(var, x = 0.0, y = 0.0)
                 end
                 return var
             end
-
-        # Group as (grid-mean, updraft, environment) triplets for profile plots
-        mp1m_tuples = [
-            ("mp1m_$(s)", "mp1mup_$(s)", "mp1men_$(s)")
-            for s in mp1m_source_names
-        ]
-
-        mp1m_profile_groups =
-            map_comparison(mp1m_simdirs, mp1m_tuples) do simdir, name_tuple
-                vars = map(name_tuple) do sn
-                    var = get(simdir; short_name = sn, reduction, period)
-                    if is_box
-                        var = slice(var, x = 0.0, y = 0.0)
-                    end
-                    return slice(var, time = LAST_SNAP)
-                end
-                return vars
-            end
-
-        mp1m_file = make_plots_generic(
-            mp1m_output_paths,
-            mp1m_profile_groups;
-            output_name = "mp1m_tendencies",
-            plot_fn = plot_edmf_vert_profile!,
-            MAX_NUM_COLS = 2,
-            MAX_NUM_ROWS = 4,
-        )
-        push!(summary_files, mp1m_file)
 
         # Time-height contour plots for mp1m: 3 columns (gm, up, en) per row
         # with shared symmetric colorbar per row and divergent colormap.
@@ -1601,11 +1606,28 @@ function make_plots(
         push!(summary_files, mp1m_zt_file)
     end
 
-    # Time-height contour plots: existing EDMF variables
+    # Timeseries line plots for column-integrated variables (no z dimension)
+    # This is the final assembling call — merges all summary_files into summary.pdf
+    timeseries_names = ["lwp", "clivi", "rwp", "swp", "pr"]
+    timeseries_names_avail =
+        timeseries_names ∩ collect(keys(simdirs[1].vars))
+    vars_timeseries =
+        map_comparison(simdirs, timeseries_names_avail) do simdir, short_name
+            var = get(
+                simdir;
+                short_name,
+                reduction = reduction_inst,
+                period = period_inst,
+            )
+            if is_box
+                var = slice(var, x = 0.0, y = 0.0)
+            end
+            return var
+        end
     make_plots_generic(
         output_paths,
-        collect(Iterators.flatten(var_groups_zt)),
-        plot_fn = plot_parsed_attribute_title!,
+        vars_timeseries;
+        output_name = "summary",
         summary_files = summary_files,
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,

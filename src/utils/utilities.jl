@@ -14,9 +14,10 @@ Updates density (ρ) and total energy (ρe_tot) to maintain mass and energy cons
 when ρq_tot changes by ᶜΔρq_tot due to limiter application.
 
 Arguments:
-- `Y`: The state vector, modified in place.
-- `p`: Cache containing parameters and precomputed fields.
-- `ᶜΔρq_tot`: The change in total water density due to limiter application.
+
+  - `Y`: The state vector, modified in place.
+  - `p`: Cache containing parameters and precomputed fields.
+  - `ᶜΔρq_tot`: The change in total water density due to limiter application.
 """
 function enforce_mass_energy_consistency!(Y, p, ᶜΔρq_tot)
     thp = CAP.thermodynamics_params(p.params)
@@ -50,8 +51,9 @@ Compute the geopotential (Φ) at height `z` using gravitational acceleration `gr
 Φ = g * z
 
 where:
-- `grav` is the gravitational acceleration
-- `z` is the height
+
+  - `grav` is the gravitational acceleration
+  - `z` is the height
 """
 geopotential(grav, z) = grav * z
 
@@ -61,6 +63,7 @@ geopotential(grav, z) = grav * z
 Returns the time (Float64) from a given filename
 
 ## Example
+
 ```
 time_from_filename("day4.46906.hdf5")
 392506.0
@@ -88,10 +91,10 @@ sort_files_by_time(files) =
 Compute the specific kinetic energy at cell centers, resulting in `κ` from
 individual velocity components:
 
- - `κ = 1/2 (uₕ⋅uʰ + 2uʰ⋅ᶜI(uᵥ) + ᶜI(uᵥ⋅uᵛ))`
- - `uₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
+  - `κ = 1/2 (uₕ⋅uʰ + 2uʰ⋅ᶜI(uᵥ) + ᶜI(uᵥ⋅uᵛ))`
+  - `uₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
     cell centers, and
- - `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
+  - `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
 """
 function compute_kinetic(uₕ, uᵥ)
     @assert eltype(uₕ) <: Union{C1, C2, C12}
@@ -158,16 +161,18 @@ end
 Compute the full strain rate tensor at cell centers from velocity
 
 # Arguments
- - `ᶜε`: Preallocated `UVW x UVW` tensor field for the strain rate at cell centers
- - `ᶜu, ᶠu`: Velocity field at cell centers and faces, respectively.
+
+  - `ᶜε`: Preallocated `UVW x UVW` tensor field for the strain rate at cell centers
+  - `ᶜu, ᶠu`: Velocity field at cell centers and faces, respectively.
     Both reconstructions are needed to compute the full strain rate tensor.
 
 See also [`compute_strain_rate_face_full!`](@ref) for the analogous calculation on cell faces.
 
 # Notes:
-- it is recommended to use `ᶠu` and `ᶜu` as computed by 
+
+  - it is recommended to use `ᶠu` and `ᶜu` as computed by
     [`set_velocity_quantities!`](@ref) and [`set_implicit_precomputed_quantities_part1!`](@ref)
-- Because the computation involves both vertical and horizontal gradients, this
+  - Because the computation involves both vertical and horizontal gradients, this
     calculation cannot be lazified (for now). It requires a pre-allocated output field.
 """
 function compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
@@ -184,18 +189,20 @@ end
 Compute the full strain rate tensor at cell faces from velocity
 
 # Arguments
- - `ᶠε`: Preallocated `UVW x UVW` tensor field for the strain rate at cell centers
- - `ᶜu, ᶠu`: Velocity field at cell centers and faces, respectively.
+
+  - `ᶠε`: Preallocated `UVW x UVW` tensor field for the strain rate at cell centers
+  - `ᶜu, ᶠu`: Velocity field at cell centers and faces, respectively.
     Both reconstructions are needed to compute the full strain rate tensor.
 
 See also [`compute_strain_rate_center_full!`](@ref) for the analogous calculation on cell centers.
 
 # Notes:
-- it is recommended to use `ᶠu` and `ᶜu` as computed by 
+
+  - it is recommended to use `ᶠu` and `ᶜu` as computed by
     [`set_velocity_quantities!`](@ref) and [`set_implicit_precomputed_quantities_part1!`](@ref)
-- Because the computation involves both vertical and horizontal gradients, this
+  - Because the computation involves both vertical and horizontal gradients, this
     calculation cannot be lazified (for now). It requires a pre-allocated output field.
-- The calculation assumes zero vertical gradient boundary conditions
+  - The calculation assumes zero vertical gradient boundary conditions
 """
 function compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu)
     ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
@@ -213,12 +220,13 @@ end
 
 Return a lazy representation of the strain rate norm `|S| = √(2 ∘ S : S)`
 
-If `axis` is provided, project the strain rate tensor `S` onto the specified axis 
-before computing the norm. 
+If `axis` is provided, project the strain rate tensor `S` onto the specified axis
+before computing the norm.
 
-For example, 
-- `axis = Geometry.UVAxis()` computes the horizontal strain rate norm, while 
-- `axis = Geometry.WAxis()` computes the vertical strain rate norm.
+For example,
+
+  - `axis = Geometry.UVAxis()` computes the horizontal strain rate norm, while
+  - `axis = Geometry.WAxis()` computes the vertical strain rate norm.
 """
 function strain_rate_norm(S, axis = Geometry.UVWAxis())
     S_proj = @. lazy(Geometry.project((axis,), S, (axis,)))
@@ -322,7 +330,7 @@ time_to_seconds(t::Number) =
 """
     time_to_seconds(s::String)
 
-Convert a string representing a time to seconds. Supported units: seconds, minutes, hours, days, weeks as 
+Convert a string representing a time to seconds. Supported units: seconds, minutes, hours, days, weeks as
 `s`, `secs`, `m`, `mins`, `h`, `hours`, `d`, `days`, `weeks`.
 """
 function time_to_seconds(s::String)
@@ -498,6 +506,7 @@ In this, take into account the case when periods do not have fixed size, e.g.,
 one month is a variable number of days.
 
 # Examples
+
 ```
 julia> isdivisible(Dates.Year(1), Dates.Month(1))
 true
@@ -549,6 +558,7 @@ unit of time. For example, a period of 24 hours will be promoted to 1 day. If
 a clean promotion is not possible, return the input as it is.
 
 # Examples
+
 ```julia-repl
 julia> promote_period(Hour(24))
 1 day
@@ -592,8 +602,9 @@ end
     parse_date(date_str)
 
 Parse a date string into a `DateTime` object. Currently, only the following formats are supported:
-- yyyymmdd
-- yyyymmdd-HHMM
+
+  - yyyymmdd
+  - yyyymmdd-HHMM
 """
 function parse_date(date_str::AbstractString)
     # Define a mapping between allowed formats and corresponding date format
@@ -618,14 +629,6 @@ function issphere(space)
     return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
            Domains.SphereDomain
 end
-
-function isbox(space)
-    h_space = Spaces.horizontal_space(space)
-    return Meshes.domain(Spaces.topology(h_space)) isa Domains.RectangleDomain
-end
-
-# Check if space is a single-column model (true column or minimal box used as column)
-iscolumn_or_box(space) = iscolumn(space) || isbox(space)
 
 """
     clima_to_era5_name_dict()

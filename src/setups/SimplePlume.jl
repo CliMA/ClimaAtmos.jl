@@ -5,6 +5,7 @@ A simple plume setup using a `DryAdiabaticProfile` with T_surface=310K and
 T_min=290K. No moisture. Used for testing EDMFX plume dynamics.
 
 ## Example
+
 ```julia
 setup = SimplePlume(; prognostic_tke = true)
 ```

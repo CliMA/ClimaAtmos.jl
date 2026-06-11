@@ -46,12 +46,15 @@ surface energy and water fluxes. All fluxes are defined as positive when directe
 from the surface to the atmosphere (upward).
 
 Dispatched on the surface temperature type:
-- Anything other than `SlabOceanTemperature`: no tendency (T is fixed/diagnosed).
-- `SlabOceanTemperature` (slab model): calculates tendencies due to:
-    - Net upward radiative flux at the surface.
-    - Net upward turbulent surface energy flux (sensible + latent heat).
-    - Net ocean heat flux divergence in the slab (Q-flux), if enabled.
-    - For surface water: net upward turbulent surface water flux (evaporation).
+
+  - Anything other than `SlabOceanTemperature`: no tendency (T is fixed/diagnosed).
+
+  - `SlabOceanTemperature` (slab model): calculates tendencies due to:
+
+      + Net upward radiative flux at the surface.
+      + Net upward turbulent surface energy flux (sensible + latent heat).
+      + Net ocean heat flux divergence in the slab (Q-flux), if enabled.
+      + For surface water: net upward turbulent surface water flux (evaporation).
 
 Precipitation surface deposition (energy and water) is handled separately by
 `surface_precipitation_tendency!`, which is called from both the implicit and

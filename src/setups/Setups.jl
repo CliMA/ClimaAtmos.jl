@@ -60,10 +60,12 @@ import ..SurfaceConditions:
     face_initial_condition(setup, local_geometry, params)
 
 Return a NamedTuple of face state variables:
-- `w`: Vertical velocity (m/s)
-- `w_draft`: EDMF draft vertical velocity (m/s)
+
+  - `w`: Vertical velocity (m/s)
+  - `w_draft`: EDMF draft vertical velocity (m/s)
 
 ## Default
+
 Returns `(; w = 0, w_draft = 0)`.
 """
 function face_initial_condition(setup, local_geometry, params)
@@ -210,18 +212,18 @@ include("common/prognostic_variables.jl")
 Construct the full prognostic state vector `Y` (a `Fields.FieldVector`) for the
 given setup. Uses the two-layer design:
 
-1. Call `center_initial_condition` / `face_initial_condition` to get
-   the physical state at each grid point.
-2. Call `center_prognostic_variables` / `face_prognostic_variables`
-   to convert the physical state into model-specific prognostic variables.
+ 1. Call `center_initial_condition` / `face_initial_condition` to get
+    the physical state at each grid point.
+ 2. Call `center_prognostic_variables` / `face_prognostic_variables`
+    to convert the physical state into model-specific prognostic variables.
 
 ## Arguments
 
-- `setup`: A setup instance (e.g. `Bomex`, `Rico`, `GCMDriven`)
-- `params`: ClimaAtmos parameter set
-- `atmos_model`: The atmosphere model (provides model types for dispatch)
-- `center_space`: The center finite-difference space
-- `face_space`: The face finite-difference space
+  - `setup`: A setup instance (e.g. `Bomex`, `Rico`, `GCMDriven`)
+  - `params`: ClimaAtmos parameter set
+  - `atmos_model`: The atmosphere model (provides model types for dispatch)
+  - `center_space`: The center finite-difference space
+  - `face_space`: The face finite-difference space
 """
 function initial_state(
     setup,

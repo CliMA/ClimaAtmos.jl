@@ -11,17 +11,17 @@ To run a radiative equilibrium simulation, create a yaml file (or use a default 
 The yaml file should look something like this:
 `mysim.yml`
 ```
-rad: "clearsky" 
-idealized_h2o: true 
-hyperdiff: "false" 
-config: "column" 
-initial_condition: "IsothermalProfile" 
+rad: "clearsky"
+idealized_h2o: true
+hyperdiff: "false"
+config: "column"
+initial_condition: "IsothermalProfile"
 z_max: 70000
-z_elem: 70 
-dz_bottom: 100 
-t_end: "654days" 
-dt: "3hours" 
-dt_save_state_to_disk: "100days" 
+z_elem: 70
+dz_bottom: 100
+t_end: "654days"
+dt: "3hours"
+dt_save_state_to_disk: "100days"
 prognostic_surface: true
 ```
 

@@ -185,10 +185,10 @@ end
 
 @testset "kinetic_energy (c.f. analytical function)" begin
     # Test compute_kinetic against analytical solution for Taylor-Green vortex
-    # 
+    #
     # Taylor-Green vortex velocities:
     #   u = sin(x) cos(y) cos(z)
-    #   v = -cos(x) sin(y) cos(z)  
+    #   v = -cos(x) sin(y) cos(z)
     #   w = 0
     #
     # Kinetic energy κ = (1/2)(u² + v² + w²):

@@ -25,7 +25,7 @@ const RRTMGP_PARAMS = RRTMGPParameters(CP.create_toml_dict(Float64))
     @test test_array isa Array
     @test length(test_array) == npts
 
-    # Array -> Field  
+    # Array -> Field
     new_field = Fields.array2field(test_array, bubble_space)
     @test new_field == test_field
     @test size(parent(new_field)) == idx
@@ -114,7 +114,7 @@ end
             [Tₛ],
             RRTMGP_PARAMS,
         )
-        # UniformZ: T is computed from uniform_z_p formula  
+        # UniformZ: T is computed from uniform_z_p formula
         @test XT[1] == RRTMGPI.uniform_z_p(XP[1], Tꜜ, p₁, Tꜛ, p₂)
     end
 

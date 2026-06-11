@@ -295,7 +295,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     # Rescale the hyperdiffusivity for precipitating species.
     (; ν₄_scalar) = ν₄(hyperdiff, Y)
-    ν₄_scalar_for_precip = CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar
+    ν₄_scalar_microphysics = CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜ∇²specific_tracers) = p.hyperdiff
@@ -305,8 +305,11 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # by the limiter. Is this a significant problem?
     foreach_gs_tracer(Yₜ, ᶜ∇²specific_tracers) do ᶜρχₜ, ᶜ∇²χ, ρχ_name
         ν₄_scalar_for_χ =
-            ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai)) ?
-            ν₄_scalar_for_precip : ν₄_scalar
+            ρχ_name in (
+                @name(ρq_lcl), @name(ρq_icl), @name(ρq_rai),
+                @name(ρq_sno), @name(ρn_lcl), @name(ρn_rai)
+            ) ?
+            ν₄_scalar_microphysics : ν₄_scalar
         @. ᶜρχₜ -= ν₄_scalar_for_χ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
 
         # Take into account the effect of total water diffusion on density.
@@ -325,26 +328,31 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         if microphysics_model isa NonEquilibriumMicrophysics1M
             (; ᶜ∇²q_lclʲs, ᶜ∇²q_iclʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs) = p.hyperdiff
             for j in 1:n
-                @. Yₜ.c.sgsʲs.:($$j).q_lcl -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_lclʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).q_icl -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_iclʲs.:($$j)))
+                @. Yₜ.c.sgsʲs.:($$j).q_lcl -=
+                    ν₄_scalar_microphysics * wdivₕ(gradₕ(ᶜ∇²q_lclʲs.:($$j)))
+                @. Yₜ.c.sgsʲs.:($$j).q_icl -=
+                    ν₄_scalar_microphysics * wdivₕ(gradₕ(ᶜ∇²q_iclʲs.:($$j)))
                 @. Yₜ.c.sgsʲs.:($$j).q_rai -=
-                    ν₄_scalar_for_precip * wdivₕ(gradₕ(ᶜ∇²q_raiʲs.:($$j)))
+                    ν₄_scalar_microphysics * wdivₕ(gradₕ(ᶜ∇²q_raiʲs.:($$j)))
                 @. Yₜ.c.sgsʲs.:($$j).q_sno -=
-                    ν₄_scalar_for_precip * wdivₕ(gradₕ(ᶜ∇²q_snoʲs.:($$j)))
+                    ν₄_scalar_microphysics * wdivₕ(gradₕ(ᶜ∇²q_snoʲs.:($$j)))
             end
         elseif microphysics_model isa NonEquilibriumMicrophysics2M
             (; ᶜ∇²q_lclʲs, ᶜ∇²q_iclʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs, ᶜ∇²n_lclʲs, ᶜ∇²n_raiʲs) =
                 p.hyperdiff
             for j in 1:n
-                @. Yₜ.c.sgsʲs.:($$j).q_lcl -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_lclʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).q_icl -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_iclʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).n_lcl -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²n_lclʲs.:($$j)))
+                @. Yₜ.c.sgsʲs.:($$j).q_lcl -=
+                    ν₄_scalar_microphysics * wdivₕ(gradₕ(ᶜ∇²q_lclʲs.:($$j)))
+                @. Yₜ.c.sgsʲs.:($$j).q_icl -=
+                    ν₄_scalar_microphysics * wdivₕ(gradₕ(ᶜ∇²q_iclʲs.:($$j)))
+                @. Yₜ.c.sgsʲs.:($$j).n_lcl -=
+                    ν₄_scalar_microphysics * wdivₕ(gradₕ(ᶜ∇²n_lclʲs.:($$j)))
                 @. Yₜ.c.sgsʲs.:($$j).q_rai -=
-                    ν₄_scalar_for_precip * wdivₕ(gradₕ(ᶜ∇²q_raiʲs.:($$j)))
+                    ν₄_scalar_microphysics * wdivₕ(gradₕ(ᶜ∇²q_raiʲs.:($$j)))
                 @. Yₜ.c.sgsʲs.:($$j).q_sno -=
-                    ν₄_scalar_for_precip * wdivₕ(gradₕ(ᶜ∇²q_snoʲs.:($$j)))
+                    ν₄_scalar_microphysics * wdivₕ(gradₕ(ᶜ∇²q_snoʲs.:($$j)))
                 @. Yₜ.c.sgsʲs.:($$j).n_rai -=
-                    ν₄_scalar_for_precip * wdivₕ(gradₕ(ᶜ∇²n_raiʲs.:($$j)))
+                    ν₄_scalar_microphysics * wdivₕ(gradₕ(ᶜ∇²n_raiʲs.:($$j)))
             end
         end
     end

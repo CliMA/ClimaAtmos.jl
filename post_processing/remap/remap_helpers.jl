@@ -17,6 +17,7 @@ A helper for creating weights for ClimaCoreTempestRemap. Example:
 ```julia
 create_weightfile(weightfile, cspace, fspace, nlat, nlon)
 ```
+
 TODO: should this live in ClimaCoreTempestRemap?
 """
 function create_weightfile(

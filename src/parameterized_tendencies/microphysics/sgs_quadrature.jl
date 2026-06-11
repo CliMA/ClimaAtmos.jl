@@ -24,10 +24,12 @@ Nodes are roots of the physicists' Hermite polynomial ``H_N(x)``.
 Weights are standard Gauss-Hermite weights for integration against ``e^{-x^2}``.
 
 # Arguments
-- `FT`: Floating-point type
-- `N::Int`: Quadrature order (1-5 supported)
+
+  - `FT`: Floating-point type
+  - `N::Int`: Quadrature order (1-5 supported)
 
 # Returns
+
 Tuple `(nodes, weights)` as `Vector{FT}`.
 """
 function gauss_hermite(::Type{FT}, N::Int) where {FT}
@@ -68,10 +70,12 @@ Gauss-Legendre quadrature nodes and weights for order `N` on ``[0, 1]``.
 Precomputed from standard ``[-1,1]`` quadrature via ``x = (t+1)/2``, ``w_{01} = w/2``.
 
 # Arguments
-- `FT`: Floating-point type
-- `N::Int`: Quadrature order (1-5 supported)
+
+  - `FT`: Floating-point type
+  - `N::Int`: Quadrature order (1-5 supported)
 
 # Returns
+
 Tuple `(nodes, weights)` as `Vector{FT}`.
 """
 function gauss_legendre_01(::Type{FT}, N::Int) where {FT}
@@ -172,23 +176,25 @@ Base.broadcastable(x::AbstractSGSDistribution) = tuple(x)
 Subgrid-scale quadrature configuration for integrating over thermodynamic fluctuations.
 
 # Type Parameters
-- `N`: Quadrature order
-- `A`: Type of quadrature nodes (`SVector`)
-- `W`: Type of quadrature weights (`SVector`)
-- `D`: Distribution type (`<: AbstractSGSDistribution`)
-- `FT`: Floating-point type
+
+  - `N`: Quadrature order
+  - `A`: Type of quadrature nodes (`SVector`)
+  - `W`: Type of quadrature weights (`SVector`)
+  - `D`: Distribution type (`<: AbstractSGSDistribution`)
+  - `FT`: Floating-point type
 
 # Fields
-- `a::A`: Quadrature nodes
-- `w::W`: Quadrature weights
-- `dist::D`: Distribution type
-- `T_min::FT`: Minimum temperature for physical validity [K]. Used to clamp
-  sampled temperatures in `get_physical_point` to prevent domain errors in
-  thermodynamics calculations. Set from ClimaParams `temperature_minimum`.
-- `q_max::FT`: Maximum specific humidity [kg/kg]. Used to clamp sampled
-  humidity values in `get_physical_point` to prevent extreme supersaturation
-  from driving unphysically low temperatures through excessive latent heat.
-  Set from ClimaParams `specific_humidity_maximum`.
+
+  - `a::A`: Quadrature nodes
+  - `w::W`: Quadrature weights
+  - `dist::D`: Distribution type
+  - `T_min::FT`: Minimum temperature for physical validity [K]. Used to clamp
+    sampled temperatures in `get_physical_point` to prevent domain errors in
+    thermodynamics calculations. Set from ClimaParams `temperature_minimum`.
+  - `q_max::FT`: Maximum specific humidity [kg/kg]. Used to clamp sampled
+    humidity values in `get_physical_point` to prevent extreme supersaturation
+    from driving unphysically low temperatures through excessive latent heat.
+    Set from ClimaParams `specific_humidity_maximum`.
 
 # Constructors
 
@@ -247,8 +253,9 @@ Return the quadrature order `N`.
 Return quadrature nodes and weights for distribution type `dist`.
 
 Dispatches to appropriate quadrature method based on distribution:
-- `GaussianSGS`: Gauss-Hermite
-- `LogNormalSGS`: Gauss-Hermite (log-space transform in `get_physical_point`)
+
+  - `GaussianSGS`: Gauss-Hermite
+  - `LogNormalSGS`: Gauss-Hermite (log-space transform in `get_physical_point`)
 """
 @inline get_quadrature_nodes_weights(::GaussianSGS, FT, N) = gauss_hermite(FT, N)
 
@@ -280,15 +287,19 @@ Starting from `θ_li = T/Π × f(q_c)` where `f` encodes the condensate effect,
 and taking the derivative at constant pressure:
 
 For **unsaturated** air (q_c = 0):
+
 ```math
 \\frac{\\partial T}{\\partial \\theta_{li}} = \\Pi
 ```
 
 For **saturated** air, `q_c = q_{tot} - q_{sat}(T)` varies with T:
+
 ```math
 \\frac{\\partial q_c}{\\partial \\theta_{li}} = -\\frac{\\partial q_{sat}}{\\partial T} \\frac{\\partial T}{\\partial \\theta_{li}}
 ```
+
 Leading to:
+
 ```math
 \\frac{\\partial T}{\\partial \\theta_{li}} = \\frac{\\Pi}{1 + \\Pi \\frac{L_v}{c_p} \\frac{\\partial q_{sat}}{\\partial T}}
 ```
@@ -303,6 +314,7 @@ release partially buffers temperature changes (the "moist adiabatic" effect).
 ```
 
 # Usage
+
 ```julia
 ᶜθ_li = @. lazy(TD.liquid_ice_pottemp(thp, ᶜT, ᶜρ, ᶜq_tot, ᶜq_lcl, ᶜq_icl))
 ᶜ∂T_∂θ = @. lazy(∂T_∂θ_li(thp, ᶜT, ᶜθ_li, ᶜq_lcl, ᶜq_icl, ᶜq_tot, ᶜρ))
@@ -311,15 +323,17 @@ release partially buffers temperature changes (the "moist adiabatic" effect).
 ```
 
 # Arguments
-- `thermo_params`: Thermodynamics parameters (for L_v, c_p, R_v)
-- `T`: Temperature [K]
-- `θ_li`: Liquid-ice potential temperature [K]
-- `q_liq`: Liquid water specific humidity [kg/kg]
-- `q_ice`: Ice specific humidity [kg/kg]
-- `q_tot`: Total water specific humidity [kg/kg]
-- `ρ`: Air density [kg/m³]
+
+  - `thermo_params`: Thermodynamics parameters (for L_v, c_p, R_v)
+  - `T`: Temperature [K]
+  - `θ_li`: Liquid-ice potential temperature [K]
+  - `q_liq`: Liquid water specific humidity [kg/kg]
+  - `q_ice`: Ice specific humidity [kg/kg]
+  - `q_tot`: Total water specific humidity [kg/kg]
+  - `ρ`: Air density [kg/m³]
 
 # Returns
+
 Derivative ∂T/∂θ_li [dimensionless]
 """
 @inline function ∂T_∂θ_li(thermo_params, T, θ_li, q_liq, q_ice, q_tot, ρ)
@@ -362,6 +376,7 @@ Atmospheric T-q correlations on sub-100 km scales relevant to GCM grid cells
 are typically positive (warm air holds more moisture) with values around 0.6.
 
 # Returns
+
 Correlation coefficient corr(T′, q′) ∈ [-1, 1].
 """
 @inline correlation_Tq(params) = CAP.Tq_correlation_coefficient(params)
@@ -376,18 +391,21 @@ Correlation coefficient corr(T′, q′) ∈ [-1, 1].
 Compute standard deviations from variances and enforce physical validity.
 
 Applies two constraints:
-1. Variances are floored at zero before taking the square root
-2. Cauchy-Schwarz inequality: ``|\\rho| \\leq 1`` (enforced via `clamp`)
+
+ 1. Variances are floored at zero before taking the square root
+ 2. Cauchy-Schwarz inequality: ``|\\rho| \\leq 1`` (enforced via `clamp`)
 
 Negative `q_hat` values at extreme quadrature points are handled downstream
 by `max(0, q_hat)` clamping in `get_physical_point`.
 
 # Arguments
-- `q′q′`: Variance of total water ``\\langle q'^2 \\rangle``
-- `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
-- `corr_Tq`: Correlation coefficient ``\\rho(T', q')``
+
+  - `q′q′`: Variance of total water ``\\langle q'^2 \\rangle``
+  - `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
+  - `corr_Tq`: Correlation coefficient ``\\rho(T', q')``
 
 # Returns
+
 Tuple `(σ_q, σ_T, corr)` of standard deviations and clamped correlation.
 """
 @inline function sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
@@ -510,16 +528,19 @@ end
 Compute the weighted sum of `f(T, q)` over quadrature points.
 
 Approximates the integral:
+
 ```math
 \\int\\int f(T, q) P(T, q) \\, dT \\, dq \\approx \\sum_{i,j} w_i w_j f(T_{ij}, q_{ij}) / \\pi
 ```
 
 # Arguments
-- `f`: Point-wise function `(T, q) -> result`
-- `get_x_hat`: Function `(χ1, χ2) -> (T_hat, q_hat)` transforming quadrature points
-- `quad`: `SGSQuadrature` struct
+
+  - `f`: Point-wise function `(T, q) -> result`
+  - `get_x_hat`: Function `(χ1, χ2) -> (T_hat, q_hat)` transforming quadrature points
+  - `quad`: `SGSQuadrature` struct
 
 # Returns
+
 Weighted sum with the same type as `f(T, q)`.
 """
 function sum_over_quadrature_points(
@@ -572,13 +593,15 @@ Temperature is always Gaussian; the distribution of specific humidity is
 determined by `quad.dist` (see [`get_physical_point`](@ref)).
 
 # Arguments
-- `f`: Point-wise function `(T, q) -> result`
-- `quad`: `SGSQuadrature` struct (contains distribution type, nodes, weights)
-- `μ_q`, `μ_T`: Mean specific humidity [kg/kg] and temperature [K]
-- `q′q′`, `T′T′`: Variances of `q` and `T`
-- `corr_Tq`: Correlation coefficient ``ρ(T', q')``
+
+  - `f`: Point-wise function `(T, q) -> result`
+  - `quad`: `SGSQuadrature` struct (contains distribution type, nodes, weights)
+  - `μ_q`, `μ_T`: Mean specific humidity [kg/kg] and temperature [K]
+  - `q′q′`, `T′T′`: Variances of `q` and `T`
+  - `corr_Tq`: Correlation coefficient ``ρ(T', q')``
 
 # Returns
+
 Weighted sum ``\\approx E[f(T, q)]`` with the same type as `f(T, q)`.
 """
 function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)

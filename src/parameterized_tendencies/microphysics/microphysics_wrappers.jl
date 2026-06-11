@@ -20,17 +20,21 @@ The precipitating condensate carries internal energy (weighted by liquid fractio
 plus potential energy. This helper returns the energy per unit mass of precipitate.
 
 # Arguments
-- `thp`: Thermodynamics parameters
-- `T`: Air temperature [K]
-- `q_liq`: Cloud liquid specific humidity [kg/kg]
-- `q_ice`: Cloud ice specific humidity [kg/kg]
-- `Φ`: Geopotential energy [J/kg]
+
+  - `thp`: Thermodynamics parameters
+  - `T`: Air temperature [K]
+  - `q_liq`: Cloud liquid specific humidity [kg/kg]
+  - `q_ice`: Cloud ice specific humidity [kg/kg]
+  - `Φ`: Geopotential energy [J/kg]
 
 # Returns
+
 Energy multiplier [J/kg] computed as:
+
 ```math
 \\lambda I_l + (1 - \\lambda) I_i + \\Phi
 ```
+
 where `λ` is the liquid fraction and `I_l`, `I_i` are liquid/ice internal energies.
 """
 @inline function e_tot_0M_precipitation_sources_helper(thp, T, q_liq, q_ice, Φ)
@@ -52,9 +56,10 @@ Returns a `NamedTuple` with `dq_tot_dt` and `e_tot_hlpr` so that both fields
 are SGS-averaged by `integrate_over_sgs`.
 
 # Fields
-- `cm_params`: 0M microphysics parameters
-- `sat_eval`: `SaturationAdjustmentEvaluator` for condensate diagnosis
-- `Φ`: Geopotential energy [J/kg] (constant within a grid cell)
+
+  - `cm_params`: 0M microphysics parameters
+  - `sat_eval`: `SaturationAdjustmentEvaluator` for condensate diagnosis
+  - `Φ`: Geopotential energy [J/kg] (constant within a grid cell)
 """
 struct Microphysics0MEvaluator{CMP, SAE, FT}
     cm_params::CMP
@@ -110,17 +115,19 @@ When running with explicit microphysics timestepping, the total water sink
 is limited by the available water.
 
 # Inputs
-- `SG_quad`: SGSQuadrature configuration
-- `cmp`, `thp` - cloud microphysics and thermodynamics parameters
-- `ρ`, `T` - density [kg/m3] and temperature [K]
-- `q_tot`, `q_liq`, `q_ice` - total water, liquid water and ice specific humidities [kg/kg]
-- `ϕ` - geopotential
-- `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
-- `q′q′`: Variance of q_tot ``\\langle q'^2 \\rangle``
-- `corr_Tq`: Correlation coefficient ρ(T', q')
-- `dt`: model timestep length [s]
+
+  - `SG_quad`: SGSQuadrature configuration
+  - `cmp`, `thp` - cloud microphysics and thermodynamics parameters
+  - `ρ`, `T` - density [kg/m3] and temperature [K]
+  - `q_tot`, `q_liq`, `q_ice` - total water, liquid water and ice specific humidities [kg/kg]
+  - `ϕ` - geopotential
+  - `T′T′`: Variance of temperature ``\\langle T'^2 \\rangle``
+  - `q′q′`: Variance of q_tot ``\\langle q'^2 \\rangle``
+  - `corr_Tq`: Correlation coefficient ρ(T', q')
+  - `dt`: model timestep length [s]
 
 # Returns
+
 NamedTuple with `dq_tot_dt` and `e_tot_hlpr`.
 """
 @inline function microphysics_tendencies_0m(
@@ -184,15 +191,18 @@ Subsaturated quadrature points contribute zero condensate but may still drive
 rain evaporation or snow sublimation against the local `q_v_hat`.
 
 # Arguments
-- `T_hat`: Temperature at quadrature point [K]
-- `q_tot_hat`: Total specific humidity at quadrature point [kg/kg]
+
+  - `T_hat`: Temperature at quadrature point [K]
+  - `q_tot_hat`: Total specific humidity at quadrature point [kg/kg]
 
 # Returns
+
 `NamedTuple` from `BMT.bulk_microphysics_tendencies(BMT.LinearizedAverage(), ...)` with fields:
-- `dq_lcl_dt`: Cloud liquid tendency [kg/kg/s]
-- `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
-- `dq_rai_dt`: Rain tendency [kg/kg/s]
-- `dq_sno_dt`: Snow tendency [kg/kg/s]
+
+  - `dq_lcl_dt`: Cloud liquid tendency [kg/kg/s]
+  - `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
+  - `dq_rai_dt`: Rain tendency [kg/kg/s]
+  - `dq_sno_dt`: Snow tendency [kg/kg/s]
 """
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
@@ -273,29 +283,32 @@ Subsaturated quadrature points contribute below-cloud rain evaporation and snow
 sublimation; saturated points drive autoconversion and accretion.
 
 # Arguments
-- `scheme`: Microphysics scheme type (from CloudMicrophysics.BulkMicrophysicsTendencies)
-- `sgs_quad`: SGSQuadrature configuration
-- `cmp`, `thp`: Microphysics and thermodynamics parameters
-- `ρ`, `T`: Air density [kg/m³] and temperature [K]
-- `q_tot`: Total water specific humidity [kg/kg]
-- `q_lcl`, `q_icl`: Cloud liquid and cloud ice specific humidity [kg/kg]
-- `q_rai`, `q_sno`: Rain and snow specific humidity [kg/kg]
-- `T′T′`: Temperature variance ``\\langle T'^2 \\rangle``
-- `q′q′`: Total-water variance ``\\langle q'^2 \\rangle``
-- `corr_Tq`: Correlation coefficient ρ(T′, q′) from `correlation_Tq(params)`
-- `λ_lagrange`: Lagrange multiplier `z·α·σ_S` from `ᶜsgs_moments`, pre-computed
-  to enforce mass conservation `E[max(0, λ_lagrange + α·S′)] = q_c`
-- `mu_S`: SGS mean saturation variable `E[S]` from `ᶜsgs_moments`
-- `α`: Variance fidelity parameter from `sgs_variance_fidelity`
-- `dt`: Timestep [s]
-- `nsubs`: Number of substeps for tendency averaging
+
+  - `scheme`: Microphysics scheme type (from CloudMicrophysics.BulkMicrophysicsTendencies)
+  - `sgs_quad`: SGSQuadrature configuration
+  - `cmp`, `thp`: Microphysics and thermodynamics parameters
+  - `ρ`, `T`: Air density [kg/m³] and temperature [K]
+  - `q_tot`: Total water specific humidity [kg/kg]
+  - `q_lcl`, `q_icl`: Cloud liquid and cloud ice specific humidity [kg/kg]
+  - `q_rai`, `q_sno`: Rain and snow specific humidity [kg/kg]
+  - `T′T′`: Temperature variance ``\\langle T'^2 \\rangle``
+  - `q′q′`: Total-water variance ``\\langle q'^2 \\rangle``
+  - `corr_Tq`: Correlation coefficient ρ(T′, q′) from `correlation_Tq(params)`
+  - `λ_lagrange`: Lagrange multiplier `z·α·σ_S` from `ᶜsgs_moments`, pre-computed
+    to enforce mass conservation `E[max(0, λ_lagrange + α·S′)] = q_c`
+  - `mu_S`: SGS mean saturation variable `E[S]` from `ᶜsgs_moments`
+  - `α`: Variance fidelity parameter from `sgs_variance_fidelity`
+  - `dt`: Timestep [s]
+  - `nsubs`: Number of substeps for tendency averaging
 
 # Returns
+
 NamedTuple with microphysics source terms:
-- `dq_lcl_dt`: Cloud liquid tendency [kg/kg/s]
-- `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
-- `dq_rai_dt`: Rain tendency [kg/kg/s]
-- `dq_sno_dt`: Snow tendency [kg/kg/s]
+
+  - `dq_lcl_dt`: Cloud liquid tendency [kg/kg/s]
+  - `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
+  - `dq_rai_dt`: Rain tendency [kg/kg/s] #compute_1m_precipitation_tendencies!(
+  - `dq_sno_dt`: Snow tendency [kg/kg/s]
 """
 @inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
     ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,
@@ -503,16 +516,18 @@ Computes the number concentrations (per unit mass of air) of prescribed sea salt
 the geometric mean radius of sea salt aerosol, and writes the results in-place.
 
 # Arguments
-- `seasalt_num`: Array to be overwritten with the total number concentration of sea salt aerosol [kg⁻¹].
-- `seasalt_mean_radius`: Array to be overwritten with the geometric mean radius of sea salt aerosol [m].
-- `sulfate_num`: Array to be overwritten with the total number concentration of sulfate aerosol [kg⁻¹].
-- `prescribed_aerosol_field`: A container holding mass mixing ratios of aerosol tracers (e.g., `:SSLT01`, `:SO4`).
-- `aerosol_params`: Parameters defining aerosol properties (e.g., density, mode radius, geometric standard deviation, hygroscopicity).
+
+  - `seasalt_num`: Array to be overwritten with the total number concentration of sea salt aerosol [kg⁻¹].
+  - `seasalt_mean_radius`: Array to be overwritten with the geometric mean radius of sea salt aerosol [m].
+  - `sulfate_num`: Array to be overwritten with the total number concentration of sulfate aerosol [kg⁻¹].
+  - `prescribed_aerosol_field`: A container holding mass mixing ratios of aerosol tracers (e.g., `:SSLT01`, `:SO4`).
+  - `aerosol_params`: Parameters defining aerosol properties (e.g., density, mode radius, geometric standard deviation, hygroscopicity).
 
 # Notes
-- Sea salt number concentration and mean radius are computed by aggregating contributions from all available `:SSLT0X` modes.
-- If no sea salt is present, the mean radius is set to zero to avoid division by zero.
-- Aerosol mass is converted to number using assumed particle radii and densities.
+
+  - Sea salt number concentration and mean radius are computed by aggregating contributions from all available `:SSLT0X` modes.
+  - If no sea salt is present, the mean radius is set to zero to avoid division by zero.
+  - Aerosol mass is converted to number using assumed particle radii and densities.
 """
 function compute_prescribed_aerosol_properties!(
     seasalt_num, seasalt_mean_radius, sulfate_num,
@@ -572,25 +587,27 @@ from a bi-modal aerosol distribution (sea salt and sulfate), given local supersa
 velocity. The result is returned as a tendency (per second) of liquid droplet number concentration.
 
 # Arguments
-- `act_params`: Aerosol activation parameters (AerosolActivationParameters)
-- `seasalt_num`: Number concentration per mass of sea salt aerosols [kg⁻¹]
-- `seasalt_mean_radius`: Mean dry radius of sea salt aerosol mode [m]
-- `sulfate_num`: Number concentration per mass of sulfate aerosols [kg⁻¹]
-- `qₜ`: Total water specific humidity [kg/kg]
-- `qₗ`: Liquid water (cloud + rain) specific humidity [kg/kg]
-- `qᵢ`: Ice water (cloud ice + snow) specific humidity [kg/kg]
-- `nₗ`: Liquid droplet number concentration per mass [kg⁻¹]
-- `ρ`: Air density [kg/m³]
-- `w`: Vertical velocity [m/s]
-- `cmp`: Microphysics2MParams parameters
-- `thermo_params`: Thermodynamics parameters
-- `T`: Air temperature [K]
-- `p`: Air pressure [Pa]
-- `dt`: Model timestep [s]
-- `aerosol_params`: Prescribed aerosol parameters (NamedTuple with seasalt/sulfate properties)
+
+  - `act_params`: Aerosol activation parameters (AerosolActivationParameters)
+  - `seasalt_num`: Number concentration per mass of sea salt aerosols [kg⁻¹]
+  - `seasalt_mean_radius`: Mean dry radius of sea salt aerosol mode [m]
+  - `sulfate_num`: Number concentration per mass of sulfate aerosols [kg⁻¹]
+  - `qₜ`: Total water specific humidity [kg/kg]
+  - `qₗ`: Liquid water (cloud + rain) specific humidity [kg/kg]
+  - `qᵢ`: Ice water (cloud ice + snow) specific humidity [kg/kg]
+  - `nₗ`: Liquid droplet number concentration per mass [kg⁻¹]
+  - `ρ`: Air density [kg/m³]
+  - `w`: Vertical velocity [m/s]
+  - `cmp`: Microphysics2MParams parameters
+  - `thermo_params`: Thermodynamics parameters
+  - `T`: Air temperature [K]
+  - `p`: Air pressure [Pa]
+  - `dt`: Model timestep [s]
+  - `aerosol_params`: Prescribed aerosol parameters (NamedTuple with seasalt/sulfate properties)
 
 # Returns
-- Tendency of cloud liquid droplet number concentration per mass of air due to aerosol activation [kg⁻¹/s].
+
+  - Tendency of cloud liquid droplet number concentration per mass of air due to aerosol activation [kg⁻¹/s].
 """
 function aerosol_activation_sources(
     act_params, seasalt_num, seasalt_mean_radius, sulfate_num,
@@ -673,19 +690,21 @@ Compute 2-moment warm rain microphysics tendencies (cloud condensation/evaporati
 autoconversion, accretion, and precipitation) in a single call.
 
 # Arguments
-- `mp_tendency`: Output NamedTuple for liquid mass, liquid number, rain mass, rain number tendencies
-- `ρ`: Air density [kg/m³]
-- `qₜ`: Total water specific humidity [kg/kg]
-- `qₗ`: Cloud liquid specific humidity [kg/kg]
-- `nₗ`: Cloud liquid number concentration [1/kg]
-- `qᵣ`: Rain specific humidity [kg/kg]
-- `nᵣ`: Rain number concentration [1/kg]
-- `T`: Air temperature [K]
-- `dt`: Model timestep [s] (for tendency limiting)
-- `mp`: Microphysics parameters (`CMP.Microphysics2MParams`)
-- `thp`: Thermodynamics parameters
+
+  - `mp_tendency`: Output NamedTuple for liquid mass, liquid number, rain mass, rain number tendencies
+  - `ρ`: Air density [kg/m³]
+  - `qₜ`: Total water specific humidity [kg/kg]
+  - `qₗ`: Cloud liquid specific humidity [kg/kg]
+  - `nₗ`: Cloud liquid number concentration [1/kg]
+  - `qᵣ`: Rain specific humidity [kg/kg]
+  - `nᵣ`: Rain number concentration [1/kg]
+  - `T`: Air temperature [K]
+  - `dt`: Model timestep [s] (for tendency limiting)
+  - `mp`: Microphysics parameters (`CMP.Microphysics2MParams`)
+  - `thp`: Thermodynamics parameters
 
 # Output
+
 Modifies mp_tendency in-place with limited tendencies.
 """
 function compute_2m_precipitation_tendencies!(
@@ -703,23 +722,26 @@ end
 SGS quadrature integration for Microphysics2Moment (warm rain only).
 
 !!! warning "Limited SGS support"
+
     Only `GridMeanSGS` is currently supported for 2-moment microphysics.
     Passing any other distribution type (e.g., `GaussianSGS`) will fall back to
     grid-mean evaluation. Full quadrature integration for 2M would require a
     separate evaluator that handles number concentration perturbations.
 
 # Arguments
-- `SG_quad`: SGSQuadrature configuration (only `GridMeanSGS` supported)
-- `cmp`: Microphysics 2M parameters
-- `tps`: Thermodynamics parameters
-- `ρ`: Air density [kg/m³]
-- `T`: Temperature [K]
-- `q_liq`: Cloud liquid [kg/kg]
-- `n_liq`: Cloud liquid number [1/kg]
-- `q_rai`: Rain [kg/kg]
-- `n_rai`: Rain number [1/kg]
+
+  - `SG_quad`: SGSQuadrature configuration (only `GridMeanSGS` supported)
+  - `cmp`: Microphysics 2M parameters
+  - `tps`: Thermodynamics parameters
+  - `ρ`: Air density [kg/m³]
+  - `T`: Temperature [K]
+  - `q_liq`: Cloud liquid [kg/kg]
+  - `n_liq`: Cloud liquid number [1/kg]
+  - `q_rai`: Rain [kg/kg]
+  - `n_rai`: Rain number [1/kg]
 
 # Returns
+
 NamedTuple with tendencies: `dq_lcl_dt`, `dn_lcl_dt`, `dq_rai_dt`, `dn_rai_dt`
 """
 @inline function microphysics_tendencies_quadrature_2m(

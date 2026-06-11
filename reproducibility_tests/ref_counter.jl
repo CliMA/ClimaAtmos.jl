@@ -1,5 +1,4 @@
-354
-
+359
 # **README**
 #
 # What is the ref_counter?
@@ -32,6 +31,24 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+359
+- Use 1D vertical column instead of minimal box for `config = column`
+
+358
+- Use the same scaling factor for diffusion and hyperdiffusion of condensate and precipitation
+
+357
+- Solve the updraft area-fraction (ρa) equation analytically at the IMEX implicit
+  stage. Refactor entrainment/detrainment.
+
+356
+- Changed the default microphysics options
+  - include cloud ice melt
+  - make snow formation depend on supersaturation
+
+355
+- Add plots of some new diagnostics for prognostic EDMF test cases. There is no change in model behavior.
+
 354
 - Update to ClimaCore 0.14.54
 

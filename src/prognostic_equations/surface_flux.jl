@@ -1,5 +1,5 @@
 #####
-##### Apply surface fluxes as boundary conditions and translate them 
+##### Apply surface fluxes as boundary conditions and translate them
 ##### into tendencies for the relevant prognostic variables.
 #####
 
@@ -18,18 +18,20 @@ adjacent to the bottom boundary. The divergence effectively introduces the
 to yield a tendency for specific horizontal momentum `uₕ`.
 
 Arguments:
-- `ᶜρ`: Cell-center air density field.
-- `ᶜuₕ`: Cell-center horizontal velocity field (used for type/structure, not value in flux calc).
-- `ρ_flux_uₕ_surface`: The vertical flux of horizontal momentum through the bottom
-  boundary. This is a `ClimaCore.Geometry.AxisTensor` of type
-  `C3{FT} ⊗ C12{FT}` (e.g., representing surface stress `τ` as
-  `e_3 ⊗ τ` if defined as flux into the domain, or simply
-  the stress vector `τ` if the `SetValue` operator handles the normal).
-   Conventionally, a positive flux represents momentum transfer from the
-  surface to the atmosphere.
+
+  - `ᶜρ`: Cell-center air density field.
+  - `ᶜuₕ`: Cell-center horizontal velocity field (used for type/structure, not value in flux calc).
+  - `ρ_flux_uₕ_surface`: The vertical flux of horizontal momentum through the bottom
+    boundary. This is a `ClimaCore.Geometry.AxisTensor` of type
+    `C3{FT} ⊗ C12{FT}` (e.g., representing surface stress `τ` as
+    `e_3 ⊗ τ` if defined as flux into the domain, or simply
+    the stress vector `τ` if the `SetValue` operator handles the normal).
+    Conventionally, a positive flux represents momentum transfer from the
+    surface to the atmosphere.
 
 Returns:
-- A `ClimaCore.Field` representing the tendency `∂uₕ/∂t` due to the surface flux.
+
+  - A `ClimaCore.Field` representing the tendency `∂uₕ/∂t` due to the surface flux.
 """
 function boundary_tendency_momentum(ᶜρ, ᶜuₕ, ρ_flux_uₕ_surface)
     FT = eltype(ᶜρ)
@@ -44,24 +46,26 @@ end
 """
     boundary_tendency_scalar(ᶜχ, ρ_flux_χ_surface)
 
-Calculates the tendency contribution for a scalar quantity `χ` (for the prognostic 
+Calculates the tendency contribution for a scalar quantity `χ` (for the prognostic
 variable `ρχ`) due to a specified vertical flux of that scalar at the bottom boundary.
 
 This function constructs a divergence term that is non-zero only in the grid cell
 adjacent to the bottom boundary, effectively introducing `ρ_flux_χ_surface` as a
-source/sink. When positive, the flux `ρ_flux_χ_surface` is directed from the surface to 
-the atmosphere, i.e., represents an atmospheric source.  
+source/sink. When positive, the flux `ρ_flux_χ_surface` is directed from the surface to
+the atmosphere, i.e., represents an atmospheric source.
 
 Arguments:
-- `ᶜχ`: cell-center scalar field (used for eltype and spatial structure,
-  not its values in the flux calculation).
-- `ρ_flux_χ_surface`: The vertical flux of the scalar quantity `χ` (density-weighted,
-  i.e., flux of `ρχ`) through the bottom boundary. This is a
-  `ClimaCore.Geometry.C3{FT}` vector representing the scalar value of the flux.
+
+  - `ᶜχ`: cell-center scalar field (used for eltype and spatial structure,
+    not its values in the flux calculation).
+  - `ρ_flux_χ_surface`: The vertical flux of the scalar quantity `χ` (density-weighted,
+    i.e., flux of `ρχ`) through the bottom boundary. This is a
+    `ClimaCore.Geometry.C3{FT}` vector representing the scalar value of the flux.
 
 Returns:
-- A `ClimaCore.Field` representing the tendency (e.g., `∂(ρχ)/∂t` or `∂χ/∂t`
-  depending on how the caller uses it) due to the surface flux.
+
+  - A `ClimaCore.Field` representing the tendency (e.g., `∂(ρχ)/∂t` or `∂χ/∂t`
+    depending on how the caller uses it) due to the surface flux.
 """
 function boundary_tendency_scalar(ᶜχ, ρ_flux_χ_surface)
     FT = eltype(ᶜχ)
@@ -93,11 +97,12 @@ The application of these tendencies can be globally disabled via
 disabled if vertical diffusion for momentum is inactive.
 
 Arguments:
-- `Yₜ`: The tendency state vector, modified in place.
-- `Y`: The current state vector.
-- `p`: Cache containing parameters, precomputed fields (including `sfc_conditions`),
-       and atmospheric model configurations.
-- `t`: Current simulation time.
+
+  - `Yₜ`: The tendency state vector, modified in place.
+  - `Y`: The current state vector.
+  - `p`: Cache containing parameters, precomputed fields (including `sfc_conditions`),
+    and atmospheric model configurations.
+  - `t`: Current simulation time.
 """
 function surface_flux_tendency!(Yₜ, Y, p, t)
 

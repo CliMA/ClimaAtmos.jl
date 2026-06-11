@@ -2,7 +2,7 @@
 
 `ITime`, or _integer time_, is a time type used by CliMA simulations to keep track
 of simulation time. For more information, refer to the
-[TimeManager section](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/) 
+[TimeManager section](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/)
 in ClimaUtilities.
 
 ## Why not use floating point for simulation time?
@@ -94,7 +94,7 @@ you might need the current date which you can get by using the function `date`
 on `t`. Finally, when working with `ITime`s, the types of the `ITime`s might not
 match (e.g. the periods are different). To handle this, you can use `promote` on
 the two `ITime`s. For more information about developing with `ITime`, see the
-`ITime` [documentation](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/) 
+`ITime` [documentation](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/)
 in ClimaUtilities.
 
 ``` @repl example

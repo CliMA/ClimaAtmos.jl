@@ -12,20 +12,22 @@ Forcibly sets all velocity-related tendencies in `Yₜ` to zero if the
 simulation is configured for an "advection test" (`p.atmos.advection_test == true`).
 
 This includes:
-- Grid-mean horizontal velocity (`Yₜ.c.uₕ`).
-- Grid-mean vertical velocity (`Yₜ.f.u₃`).
-- EDMFX updraft vertical velocities (`Yₜ.f.sgsʲs.:(j).u₃`) if using `PrognosticEDMFX`.
+
+  - Grid-mean horizontal velocity (`Yₜ.c.uₕ`).
+  - Grid-mean vertical velocity (`Yₜ.f.u₃`).
+  - EDMFX updraft vertical velocities (`Yₜ.f.sgsʲs.:(j).u₃`) if using `PrognosticEDMFX`.
 
 This function is called at the end of the tendency calculation pipeline
 during an advection test to ensure that velocities do not evolve, effectively
 keeping them prescribed or frozen for the purpose of the test.
 
 Arguments:
-- `Yₜ`: The tendency state vector, modified in place.
-- `Y`: The current state vector (not directly used but part of standard signature).
-- `p`: Cache containing parameters and atmospheric model configurations (e.g.,
-       `p.atmos.advection_test`, `p.atmos.turbconv_model`).
-- `t`: Current simulation time (not directly used but part of standard signature).
+
+  - `Yₜ`: The tendency state vector, modified in place.
+  - `Y`: The current state vector (not directly used but part of standard signature).
+  - `p`: Cache containing parameters and atmospheric model configurations (e.g.,
+    `p.atmos.advection_test`, `p.atmos.turbconv_model`).
+  - `t`: Current simulation time (not directly used but part of standard signature).
 """
 function zero_velocity_tendency!(Yₜ, Y, p, t)
     p.atmos.advection_test || return nothing
@@ -47,8 +49,9 @@ Modifies the Jacobian matrix `∂Yₜ_err_∂Y` for an "advection test" scenario
 
 For matrix rows corresponding to velocity variables (grid-mean `uₕ`, `u₃`, and
 EDMFX updraft `u₃ʲ` if applicable):
-- Diagonal blocks (e.g., `∂(uₕ_tendency)/∂uₕ`) are set to represent `-I` (negative identity).
-- Off-diagonal blocks (e.g., `∂(uₕ_tendency)/∂(tracer)`) are set to zero.
+
+  - Diagonal blocks (e.g., `∂(uₕ_tendency)/∂uₕ`) are set to represent `-I` (negative identity).
+  - Off-diagonal blocks (e.g., `∂(uₕ_tendency)/∂(tracer)`) are set to zero.
 
 This effectively decouples the velocity evolution from other variables in the
 linearized system used by an implicit solver, or simplifies their implicit
@@ -57,10 +60,11 @@ is for `Y' - Δt J Y'` and `J = -I/Δt`). This is useful if velocities
 are intended to be "frozen" or follow a prescribed path during the test.
 
 Arguments:
-- `∂Yₜ_err_∂Y`: The Jacobian matrix (a `MatrixFields.FieldMatrix`), modified in place.
-- `Y`: The current state vector.
-- `p`: Cache containing parameters and model configurations.
-- `t`: Current simulation time.
+
+  - `∂Yₜ_err_∂Y`: The Jacobian matrix (a `MatrixFields.FieldMatrix`), modified in place.
+  - `Y`: The current state vector.
+  - `p`: Cache containing parameters and model configurations.
+  - `t`: Current simulation time.
 """
 function zero_velocity_jacobian!(∂Yₜ_err_∂Y, Y, p, t)
     p.atmos.advection_test || return nothing
@@ -92,10 +96,11 @@ This is used within `zero_velocity_jacobian!` to modify Jacobian contributions
 related to velocity variables during an advection test.
 
 Arguments:
-- `matrix_entry`: A `ClimaCore.Fields.Field` representing a block of the Jacobian matrix.
-                  It is modified in place.
-- `row_name`: `MatrixFields.FieldName` identifying the row variable of this block.
-- `col_name`: `MatrixFields.FieldName` identifying the column variable of this block.
+
+  - `matrix_entry`: A `ClimaCore.Fields.Field` representing a block of the Jacobian matrix.
+    It is modified in place.
+  - `row_name`: `MatrixFields.FieldName` identifying the row variable of this block.
+  - `col_name`: `MatrixFields.FieldName` identifying the column variable of this block.
 """
 function set_identity_matrix_entry!(matrix_entry, row_name, col_name)
     identity_matrix_entry_value = if row_name == col_name

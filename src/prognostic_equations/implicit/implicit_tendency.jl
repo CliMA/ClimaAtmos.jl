@@ -61,6 +61,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     sgs_u₃_implicit_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    sgs_ρa_implicit_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     # NOTE: This will zero out all momentum tendencies in the edmfx advection test
     # DO NOT add additional velocity tendencies after this function

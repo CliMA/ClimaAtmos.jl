@@ -13,18 +13,20 @@ The assembly layer (`prognostic_variables.jl`) converts this into model-specific
 prognostic variables.
 
 ## Required arguments
-- `T`: Temperature (K)
-- At least one of `p` (pressure, Pa) or `ρ` (density, kg/m³). If only one is
-  provided, the assembly layer computes the other via `Thermodynamics`.
+
+  - `T`: Temperature (K)
+  - At least one of `p` (pressure, Pa) or `ρ` (density, kg/m³). If only one is
+    provided, the assembly layer computes the other via `Thermodynamics`.
 
 ## Optional arguments (default to zero)
-- `u`, `v`: Zonal and meridional velocity (m/s)
-- `q_tot`, `q_liq`, `q_ice`: Specific humidities
-- `tke`: Turbulent kinetic energy (specific)
-- `draft_area`: EDMF draft area fraction
-- `q_rai`, `q_sno`: Precipitation specific humidities
-- `n_liq`, `n_rai`: Number densities (2-moment microphysics)
-- `n_ice`, `q_rim`, `b_rim`: P3 microphysics fields
+
+  - `u`, `v`: Zonal and meridional velocity (m/s)
+  - `q_tot`, `q_liq`, `q_ice`: Specific humidities
+  - `tke`: Turbulent kinetic energy (specific)
+  - `draft_area`: EDMF draft area fraction
+  - `q_rai`, `q_sno`: Precipitation specific humidities
+  - `n_liq`, `n_rai`: Number densities (2-moment microphysics)
+  - `n_ice`, `q_rim`, `b_rim`: P3 microphysics fields
 """
 function physical_state(;
     T,
@@ -131,6 +133,7 @@ A column field object that can be interpolated
 in the z-coordinate. For example:
 
 !!! warn
+
     This function allocates and is not GPU-compatible
     so please avoid using this inside `step!` only use
     this for initialization.

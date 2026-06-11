@@ -20,15 +20,17 @@ quadrature points (T_hat, q_hat). Used by `integrate_over_sgs` for both
 saturation adjustment and 0-moment microphysics.
 
 Given (T_hat, q_hat) at a quadrature point, computes:
-1. Saturation specific humidity q_sat from Clausius-Clapeyron
-2. Condensate as saturation excess: q_cond = max(0, q_hat - q_sat)
-3. Liquid/ice partition using a grid-mean liquid fraction `λ_mean`,
-   held fixed across all quadrature points
+
+ 1. Saturation specific humidity q_sat from Clausius-Clapeyron
+ 2. Condensate as saturation excess: q_cond = max(0, q_hat - q_sat)
+ 3. Liquid/ice partition using a grid-mean liquid fraction `λ_mean`,
+    held fixed across all quadrature points
 
 # Fields
-- `thermo_params`: Thermodynamics parameters
-- `ρ`: Air density [kg/m³]
-- `λ_mean`: Grid-mean liquid fraction, fixed across quadrature points
+
+  - `thermo_params`: Thermodynamics parameters
+  - `ρ`: Air density [kg/m³]
+  - `λ_mean`: Grid-mean liquid fraction, fixed across quadrature points
 """
 struct SaturationAdjustmentEvaluator{TPS, T1}
     thermo_params::TPS
@@ -42,15 +44,18 @@ end
 Compute saturation-adjusted state at a single quadrature point.
 
 # Arguments
-- `T_hat`: Temperature at quadrature point [K]
-- `q_hat`: Total specific humidity at quadrature point [kg/kg]
+
+  - `T_hat`: Temperature at quadrature point [K]
+  - `q_hat`: Total specific humidity at quadrature point [kg/kg]
 
 # Returns
+
 NamedTuple with:
-- `T`: Temperature at quadrature point [K]
-- `q_liq`: Liquid condensate [kg/kg]
-- `q_ice`: Ice condensate [kg/kg]
-- `q_tot_quad`: Total specific humidity at quadrature point [kg/kg]
+
+  - `T`: Temperature at quadrature point [K]
+  - `q_liq`: Liquid condensate [kg/kg]
+  - `q_ice`: Ice condensate [kg/kg]
+  - `q_tot_quad`: Total specific humidity at quadrature point [kg/kg]
 """
 @inline function (eval::SaturationAdjustmentEvaluator)(T_hat, q_hat)
     FT = typeof(q_hat)
@@ -99,24 +104,27 @@ When quadrature points for `q_tot` are clamped to zero (because they sample
 the negative tail of the distribution), the integrated mean `q̃_mean` exceeds
 `q_mean`. To preserve `q_mean`, we conceptually adjust the weights of the
 valid (non-truncated) quadrature points by `ratio = q_mean / q̃_mean`. Since
-condensate is zero whenever `q_hat = 0`, this is equivalent to scaling the 
+condensate is zero whenever `q_hat = 0`, this is equivalent to scaling the
 integrated condensate by `ratio`.
 
 # Arguments
-- `thermo_params`: Thermodynamics parameters
-- `SG_quad`: `SGSQuadrature` configuration
-- `ρ`: Air density [kg/m³]
-- `T_mean`: Grid-mean temperature [K]
-- `q_mean`: Grid-mean total specific humidity [kg/kg]
-- `T′T′`: Temperature variance [K²]
-- `q′q′`: Moisture variance [(kg/kg)²]
-- `corr_Tq`: Correlation coefficient corr(T', q')
+
+  - `thermo_params`: Thermodynamics parameters
+  - `SG_quad`: `SGSQuadrature` configuration
+  - `ρ`: Air density [kg/m³]
+  - `T_mean`: Grid-mean temperature [K]
+  - `q_mean`: Grid-mean total specific humidity [kg/kg]
+  - `T′T′`: Temperature variance [K²]
+  - `q′q′`: Moisture variance [(kg/kg)²]
+  - `corr_Tq`: Correlation coefficient corr(T', q')
 
 # Returns
+
 NamedTuple with SGS-averaged:
-- `T`: Grid-mean temperature [K] (unchanged from saturation adjustment)
-- `q_liq`: Liquid condensate [kg/kg]
-- `q_ice`: Ice condensate [kg/kg]
+
+  - `T`: Grid-mean temperature [K] (unchanged from saturation adjustment)
+  - `q_liq`: Liquid condensate [kg/kg]
+  - `q_ice`: Ice condensate [kg/kg]
 """
 @inline function compute_sgs_saturation_adjustment(
     thermo_params,

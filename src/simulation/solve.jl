@@ -58,9 +58,9 @@ Returns a `AtmosSolveResults`, containing the
 solution, walltime, and a return code `Symbol`
 indicating one of:
 
- - `:success`
- - `:success`
- - `:simulation_crashed`
+  - `:success`
+  - `:success`
+  - `:simulation_crashed`
 
 `try-catch` is used to allow plotting
 results for simulations that have crashed.
@@ -132,9 +132,10 @@ check_conservation(atmos_sol::AtmosSolveResults) =
     check_conservation(integrator)
 
 Return:
-- `energy_conservation = energy_net / energy_total`
-- `mass_conservation = (mass(t_end) - mass(t_0)) / mass(t_0)`
-- `water_conservation = (water_atmos + water_surface) / water_total`
+
+  - `energy_conservation = energy_net / energy_total`
+  - `mass_conservation = (mass(t_end) - mass(t_0)) / mass(t_0)`
+  - `water_conservation = (water_atmos + water_surface) / water_total`
 """
 function check_conservation(sol)
     # energy

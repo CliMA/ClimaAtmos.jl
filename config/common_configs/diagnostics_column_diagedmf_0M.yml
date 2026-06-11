@@ -1,0 +1,9 @@
+diagnostics:
+  - short_name: [ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli]
+    period: 10mins
+  - short_name: [ts, hfss, hfls, pr, lwp, clivi]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
+    period: 10mins
+  - short_name: [entr, detr, turbentr, bgrad, strain, edt, evu]
+    period: 10mins

@@ -223,8 +223,9 @@ get_microphysics_2m_p3_parameters(::Type{FT}) where {FT <: AbstractFloat} =
 Get the parameters for the 2-moment warm rain + P3 ice microphysics scheme.
 
 # Arguments
- - `FT`: The floating point type to use for the parameters, `Float32` or `Float64`.
- - `toml_dict`: A TOML dictionary containing the parameters, see [`CP.create_toml_dict()`](@ref).
+
+  - `FT`: The floating point type to use for the parameters, `Float32` or `Float64`.
+  - `toml_dict`: A TOML dictionary containing the parameters, see [`CP.create_toml_dict()`](@ref).
 """
 function get_microphysics_2m_p3_parameters(toml_dict::CP.ParamDict)
     CM.Parameters.Microphysics2MParams(toml_dict; with_ice = true)
@@ -441,7 +442,7 @@ function OrographicGravityWaveParameters(
         :ogw_mountain_shape_parameter => :β, # L(z) = L_b(1 - z/h)^β (equation 12), β=1 for triangular mountains and β<1 for blunt mounrains, β>1 for pointy mountains
         :ogw_critical_height_threshold => :h_frac, # h_crit = h_frac * (V / N)
         :ogw_density_scale_factor => :ρscale,
-        :ogw_reference_mountain_width => :L0, # L_0 = 80 km 
+        :ogw_reference_mountain_width => :L0, # L_0 = 80 km
         :ogw_linear_drag_coefficient => :a0, # a_0 = 0.9
         :ogw_nonlinear_drag_coefficient => :a1, # a_1 = 3.0
         :ogw_critical_froude_number => :Fr_crit, # Fr_crit = 0.7

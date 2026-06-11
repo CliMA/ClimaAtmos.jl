@@ -25,7 +25,7 @@ other dependency.
 
 ## Running from a cloned repository
 
-Most standalone simulations are launched from a clone of the repository using its bundled 
+Most standalone simulations are launched from a clone of the repository using its bundled
 `.buildkite` environment, which pins the exact dependency versions used in the
 continuous integration (CI) pipeline. Clone the repository and instantiate that environment:
 

@@ -12,7 +12,7 @@
         sfc_ρ_flux_scalar,
         ustar,
         obukhov_length,
-        sfc_local_geometry, 
+        sfc_local_geometry,
     ) where {FT}
 
 Calculates a boundary condition for a subgrid-scale (SGS) scalar within an
@@ -33,22 +33,24 @@ This boundary condition is applied only when the surface buoyancy flux
 is positive (unstable conditions), indicating surface-driven updrafts. When the surface buoyancy flux is non-positive, the updraft scalar value is set to the grid-mean scalar.
 
 Arguments:
-- `ᶜz_int`: Height of the first interior cell center [m].
-- `ᶜρ_int`: Grid-mean air density at `ᶜz_int` [kg/m³].
-- `ᶜaʲ_int`: Area fraction of the specific updraft `j` at `ᶜz_int` (dimensionless).
-- `ᶜscalar_int`: Grid-mean value of the scalar at `ᶜz_int`.
-- `sfc_buoyancy_flux`: Surface buoyancy flux (e.g., w'b'_sfc) [m²/s³ or K⋅m/s].
-                       Positive for unstable conditions.
-- `sfc_ρ_flux_scalar`: Density-weighted surface flux of the scalar (e.g., ρ⋅w'c'_sfc)
-                       [e.g., (kg/m³)⋅K⋅m/s or (kg/m³)⋅(kg/kg)⋅m/s].
-- `ustar`: Friction velocity [m/s].
-- `obukhov_length`: Obukhov length [m].
-- `sfc_local_geometry`: `ClimaCore.Geometry.LocalGeometry` at the surface, passed to
-                        variance calculation.
+
+  - `ᶜz_int`: Height of the first interior cell center [m].
+  - `ᶜρ_int`: Grid-mean air density at `ᶜz_int` [kg/m³].
+  - `ᶜaʲ_int`: Area fraction of the specific updraft `j` at `ᶜz_int` (dimensionless).
+  - `ᶜscalar_int`: Grid-mean value of the scalar at `ᶜz_int`.
+  - `sfc_buoyancy_flux`: Surface buoyancy flux (e.g., w'b'_sfc) [m²/s³ or K⋅m/s].
+    Positive for unstable conditions.
+  - `sfc_ρ_flux_scalar`: Density-weighted surface flux of the scalar (e.g., ρ⋅w'c'_sfc)
+    [e.g., (kg/m³)⋅K⋅m/s or (kg/m³)⋅(kg/kg)⋅m/s].
+  - `ustar`: Friction velocity [m/s].
+  - `obukhov_length`: Obukhov length [m].
+  - `sfc_local_geometry`: `ClimaCore.Geometry.LocalGeometry` at the surface, passed to
+    variance calculation.
 
 Returns:
-- The prescribed scalar value for the SGS updraft at the first interior level.
-  Returns `ᶜscalar_int` if `sfc_buoyancy_flux <= 0`.
+
+  - The prescribed scalar value for the SGS updraft at the first interior level.
+    Returns `ᶜscalar_int` if `sfc_buoyancy_flux <= 0`.
 """
 function sgs_scalar_first_interior_bc(
     ᶜz_int::FT,
@@ -91,29 +93,32 @@ end
         ustar::FT,
         z,
         obukhov_length,
-        local_geometry, 
+        local_geometry,
     ) where {FT}
 
 Calculates the variance of a scalar quantity (σ²) at height `z` within the
 surface layer using Monin-Obukhov Similarity Theory (MOST).
 
 The calculation depends on stability:
-- For unstable conditions (Obukhov length `L < 0`):
-  σ² = C₁ * c²∗ * (1 - C₂ * z / L)^(-2/3)
-- For stable/neutral conditions (Obukhov length `L >= 0`):
-  σ² = C₁ * c²∗
-where `c∗ = -kinematic_scalar_flux / ustar` is the scalar flux scale.
-The constants C₁ and C₂ are empirical (here, C₁=4, C₂=8.3).
+
+  - For unstable conditions (Obukhov length `L < 0`):
+    σ² = C₁ * c²∗ * (1 - C₂ * z / L)^(-2/3)
+  - For stable/neutral conditions (Obukhov length `L >= 0`):
+    σ² = C₁ * c²∗
+    where `c∗ = -kinematic_scalar_flux / ustar` is the scalar flux scale.
+    The constants C₁ and C₂ are empirical (here, C₁=4, C₂=8.3).
 
 Arguments:
-- `kinematic_scalar_flux`: Kinematic surface flux of the scalar (e.g., w'c'_sfc) [K⋅m/s or (kg/kg)⋅m/s].
-- `ustar`: Friction velocity [m/s].
-- `z`: Height above the surface [m].
-- `obukhov_length`: Obukhov length [m].
-- `local_geometry`: `ClimaCore.Geometry.LocalGeometry` object, used for `_norm_sqr` 
+
+  - `kinematic_scalar_flux`: Kinematic surface flux of the scalar (e.g., w'c'_sfc) [K⋅m/s or (kg/kg)⋅m/s].
+  - `ustar`: Friction velocity [m/s].
+  - `z`: Height above the surface [m].
+  - `obukhov_length`: Obukhov length [m].
+  - `local_geometry`: `ClimaCore.Geometry.LocalGeometry` object, used for `_norm_sqr`
 
 Returns:
-- The estimated variance of the scalar quantity [K² or (kg/kg)²].
+
+  - The estimated variance of the scalar quantity [K² or (kg/kg)²].
 """
 function get_first_interior_variance(
     kinematic_scalar_flux,
@@ -144,11 +149,13 @@ based on a Pade approximation (Sergei Winitzki)
 It is valid for `x` in the interval `(-1, 1)`.
 
 Arguments:
-- `x`: The value (scalar or array element) for which to compute erf⁻¹(x).
-       Must be between -1 and 1, exclusive.
+
+  - `x`: The value (scalar or array element) for which to compute erf⁻¹(x).
+    Must be between -1 and 1, exclusive.
 
 Returns:
-- An approximation of erf⁻¹(x).
+
+  - An approximation of erf⁻¹(x).
 
 Note: Numerical precision issues or invalid results may occur if `x` is too
 close to -1 or 1, due to `log(1 - x^2)`. The conditions for the terms under
@@ -176,10 +183,12 @@ normal quantile function and erf⁻¹ is the inverse error function, approximate
 by `approximate_inverf`.
 
 Arguments:
-- `p`: The probability (scalar or array element), ranging from 0 to 1.
+
+  - `p`: The probability (scalar or array element), ranging from 0 to 1.
 
 Returns:
-- The standard normal quantile corresponding to `p`.
+
+  - The standard normal quantile corresponding to `p`.
 """
 function gauss_quantile(p::FT) where {FT}
     return sqrt(FT(2)) * approximate_inverf(2p - 1)
@@ -200,12 +209,14 @@ This gives a coefficient representing the expected value of a fluctuation
 drawn from a specific segment of a Gaussian distribution.
 
 Arguments:
-- `low_percentile`: The lower percentile bound (e.g., 0.8 for the 80th percentile).
-- `high_percentile`: The upper percentile bound (e.g., 0.9 for the 90th percentile).
+
+  - `low_percentile`: The lower percentile bound (e.g., 0.8 for the 80th percentile).
+  - `high_percentile`: The upper percentile bound (e.g., 0.9 for the 90th percentile).
 
 Returns:
-- The mean of the standard normal distribution truncated between the quantiles
-  of `low_percentile` and `high_percentile`.
+
+  - The mean of the standard normal distribution truncated between the quantiles
+    of `low_percentile` and `high_percentile`.
 """
 function percentile_bounds_mean_norm(
     low_percentile,
