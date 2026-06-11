@@ -76,7 +76,7 @@ function initial_state(
     return Fields.FieldVector(;
         c = center_ic.(Fields.local_geometry_field(center_space)),
         f = face_ic.(Fields.local_geometry_field(face_space)),
-        surface_kwargs(surface_space, atmos_model.surface_model)...,
+        surface_kwargs(surface_space, atmos_model.surface.temperature)...,
     )
 end
 
