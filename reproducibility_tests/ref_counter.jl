@@ -1,5 +1,4 @@
-358
-
+359
 # **README**
 #
 # What is the ref_counter?
@@ -32,6 +31,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+359
+- Use 1D vertical column instead of minimal box for `config = column`
+
 358
 - Use the same scaling factor for diffusion and hyperdiffusion of condensate and precipitation
 
