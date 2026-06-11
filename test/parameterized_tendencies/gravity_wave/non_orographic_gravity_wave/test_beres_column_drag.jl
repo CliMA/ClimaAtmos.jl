@@ -59,6 +59,7 @@ import ClimaCore.Fields as Fields
         gw_v_heat,
         gw_N_source,
         gw_beres_active,
+        gw_a_cover,
         gw_flag,
     ) = p.non_orographic_gravity_wave
 
@@ -104,39 +105,43 @@ import ClimaCore.Fields as Fields
     fill!(gw_v_heat, FT(0.0))       # m/s — no meridional wind
     fill!(gw_N_source, FT(0.012))   # s⁻¹ — buoyancy frequency (Beres §4)
     fill!(gw_beres_active, FT(1.0)) # enable Beres branch
+    # ā = 1: no coverage dilution, so the deposited drag equals the local
+    # (in-cloud) Beres flux — preserves this test's expected magnitudes.
+    # The coverage scaling itself is tested below.
+    fill!(gw_a_cover, FT(1.0))
     fill!(gw_flag, FT(0.0))         # tropics flag (AD99 Doppler frame; no effect on Beres)
 
     # ------------------------------------------------------------------
     # Call forcing
     # ------------------------------------------------------------------
-    uforcing .= 0
-    vforcing .= 0
-
-    CA.non_orographic_gravity_wave_forcing(
-        ᶜu,
-        ᶜv,
-        ᶜbuoyancy_frequency,
-        ᶜρ,
-        ᶜz,
-        ᶜlevel,
-        source_level,
-        damp_level,
-        ᶜρ_source,
-        ᶜu_source,
-        ᶜv_source,
-        uforcing,
-        vforcing,
-        gw_ncval,
-        u_waveforcing,
-        v_waveforcing,
-        p,
-    )
-
-    # ------------------------------------------------------------------
-    # Extract results
-    # ------------------------------------------------------------------
-    uf_data = Array(Fields.field2array(uforcing))[:, 1]
-    vf_data = Array(Fields.field2array(vforcing))[:, 1]
+    function call_forcing!()
+        uforcing .= 0
+        vforcing .= 0
+        CA.non_orographic_gravity_wave_forcing(
+            ᶜu,
+            ᶜv,
+            ᶜbuoyancy_frequency,
+            ᶜρ,
+            ᶜz,
+            ᶜlevel,
+            source_level,
+            damp_level,
+            ᶜρ_source,
+            ᶜu_source,
+            ᶜv_source,
+            uforcing,
+            vforcing,
+            gw_ncval,
+            u_waveforcing,
+            v_waveforcing,
+            p,
+        )
+        return (
+            Array(Fields.field2array(uforcing))[:, 1],
+            Array(Fields.field2array(vforcing))[:, 1],
+        )
+    end
+    uf_data, vf_data = call_forcing!()
 
     println("Column drag test:")
     println("  max |uforcing| = $(maximum(abs, uf_data)) m/s²")
@@ -185,5 +190,27 @@ import ClimaCore.Fields as Fields
         if max_uf > 1e-10
             @test max_vf < 0.01 * max_uf
         end
+    end
+
+    @testset "Deposition scales linearly with coverage ā" begin
+        # The Beres deposition factor is ε = ā/(ρ_source·nk): the launched
+        # spectrum (and hence the breaking levels) is independent of ā,
+        # while the deposited drag is exactly linear in it. Difference out
+        # the (ā-independent) AD99 background and check linearity.
+        a_frac = FT(0.05)
+        fill!(gw_a_cover, FT(0.0))
+        uf_ad99, _ = call_forcing!()
+        fill!(gw_a_cover, a_frac)
+        uf_frac, _ = call_forcing!()
+        beres_full = uf_data .- uf_ad99   # ā = 1 Beres contribution
+        beres_frac = uf_frac .- uf_ad99   # ā = 0.05 Beres contribution
+        @test maximum(abs, beres_full) > 0
+        @test isapprox(
+            beres_frac,
+            a_frac .* beres_full;
+            rtol = sqrt(eps(FT)),
+            atol = 100 * eps(FT) * maximum(abs, beres_full),
+        )
+        fill!(gw_a_cover, FT(1.0))  # restore
     end
 end

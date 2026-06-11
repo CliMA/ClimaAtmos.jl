@@ -18,11 +18,11 @@ The non-orographic gravity wave drag parameterization follows the spectra method
 ### Spectrum of the momentum flux sources
 The source spectrum with respect to phase speed is prescribed in Eq. (17) in [alexander1999](@cite). We adapt the equation so that the spectrum writes as a combination of a wide and a narrow band as
 ```math
-B_0(c) = \frac{F_{S0}(c)}{\rho_0} = sgn(c-u_0) \left( Bm\_w \exp\left[ -\left( \frac{c-c_0}{c_{w\_w}} \right)^2 \ln{2} \right] + Bm\_n \exp\left[ -\left( \frac{c-c_0}{c_{w\_n}} \right) \ln{2} \right] \right)
+B_0(c) = \frac{F_{S0}(c)}{\rho_0} = sgn(c-u_0) \left( Bm\_w \exp\left[ -\left( \frac{c-c_0}{c_{w\_w}} \right)^2 \ln{2} \right] + Bm\_n \exp\left[ -\left( \frac{c-c_0}{c_{w\_n}} \right)^2 \ln{2} \right] \right)
 ```
 where the subscript $0$ denotes values at the source level. $c_0$ is the phase speed with the maximum flux magnitude $Bm$. $c_w$ is the half-width at half-maximum of the Gaussian.  $\_w$ and $\_n$ represent the wide and narrow bands of the spectra.
 
-The reference frame for the spectrum is latitude-dependent: it is ground-relative in the extra-tropics and relative to the source-level zonal wind in the tropics, with smoothing applied at the transition.
+The reference frame for the spectrum is latitude-dependent: ground-relative in the extra-tropics and relative to the source-level zonal wind in the tropics. The frame itself switches abruptly at the edge of the tropical band; it is the source *amplitude* $F_{S0}$ (together with the narrow-band weight and the wide-band width $c_w$) that is ramped smoothly with latitude across the transition.
 
 ### Upward propagation and wave breaking
 Waves that are reflected will be removed from the spectrum. A wave that breaks at any level above the source will deposit all its momentum flux into that level and be removed from the spectrum.
@@ -45,7 +45,7 @@ At the source level:
 
 At each level above the source $(z_n > z_0)$, waves are tested in order:
   - **Reflection:** waves with $|\omega(z_n)| = k|c - u(z_n)| \geq \omega_r(z_n)$ are removed from the spectrum.
-  - **Breaking:** among the remaining waves, those with $Q(z_n, c) \geq 1$ break between levels $z_{n-1}$ and $z_n$, and their momentum flux is deposited entirely into that layer.
+  - **Breaking:** among the remaining waves, those that become convectively unstable ($Q(z_n, c) \geq 1$) *or* encounter a critical level — where the intrinsic phase speed has changed sign relative to the source, $(c - u_0)(c - u(z_n)) \leq 0$ — break between levels $z_{n-1}$ and $z_n$, and their momentum flux is deposited entirely into that layer.
 
 The gravity wave drag at half-levels is then
 ```math
@@ -62,41 +62,51 @@ X(z_{n}) = \frac{1}{2} \left[ X(z_{n-1/2}) + X(z_{n+1/2}) \right].
 
 ## Beres (2004) Convective Source Spectrum
 
-When `nogw_beres_source` is enabled, the AD99 Gaussian source spectrum is replaced in columns where convective heating from the EDMF parameterization exceeds activation thresholds. This couples the gravity wave source directly to resolved/parameterized convection, following [beres2004](@cite).
+When `nogw_beres_source` is enabled, the AD99 Gaussian spectrum continues to act as an always-on **background** source, and an *additional* convective source — following [beres2004](@cite) — is launched on top of it in columns where convective heating from the EDMF parameterization exceeds activation thresholds. The two contributions are computed independently and their momentum-flux forcings are summed; the Beres term couples part of the gravity wave source directly to resolved/parameterized convection.
 
 ### Convective heating extraction
 
-Convective heating properties are extracted from the EDMF updraft fields at each column. The DSE-based mass-flux $Q_1$ (Yanai apparent heat source) is computed from the mass-flux divergence of dry static energy anomalies:
+Convective heating properties are extracted from the EDMF updraft fields at each column. Two heating profiles are computed from the mass-flux divergence of dry static energy anomalies:
+
+The **grid-mean** DSE-based mass-flux $Q_1$ (Yanai apparent heat source),
 ```math
-Q_1 = -\frac{1}{\rho} \frac{\partial}{\partial z} \left[ \sum_j \rho^j (w^j - \bar{w}) a^j \, (T^j - \bar{T}) \right]
+Q_1 = -\frac{1}{\rho} \frac{\partial}{\partial z} \left[ \sum_j \rho^j (w^j - \bar{w}) a^j \, (T^j - \bar{T}) \right],
 ```
-where $\rho^j$, $w^j$, $a^j$, and $T^j$ are the density, vertical velocity, area fraction, and temperature of updraft $j$, and $\bar{T}$ is the grid-mean temperature.
+where $\rho^j$, $w^j$, $a^j$, and $T^j$ are the density, vertical velocity, area fraction, and temperature of updraft $j$, and $\bar{T}$ is the grid-mean temperature; and the **in-cloud** (per-draft conditional-mean) heating,
+```math
+Q_{\text{ic}} = \frac{\sum_j \rho a^j Q_{\text{ic}}^j}{\sum_j \rho a^j}, \qquad
+Q_{\text{ic}}^j = -\frac{1}{\rho^j} \frac{\partial}{\partial z} \left[ \rho^j (w^j - \bar{w}) (T^j - \bar{T}) \right],
+```
+which is the same construction *without* the area-fraction dilution. The distinction matters because Beres' linear theory is forced by the **local** heating of the convective cell (her squall-line reference value is $Q_0 \approx 0.004\;\mathrm{K\,s^{-1}}$, far above any grid-mean value): the spectrum amplitude is built from $Q_{\text{ic}}$, while envelope detection and activation gating use $Q_1$ (their thresholds are calibrated to grid-mean magnitudes). The reference WACCM/CAM implementation applies the analogous grid-mean → local conversion with a *fixed* assumed convective fraction (`CF = 20`, i.e. heating concentrated in 5% of the cell, in `gw_convect.F90`); here the EDMF area fraction supplies the conversion per column, and the corresponding *coverage* factor enters the deposition instead (see "Intermittency" below).
 
 The dry static energy $s = c_p T + gz$ is used because $T^j$ is computed via saturation adjustment and already reflects the warming from condensation along the parcel trajectory. Since $s^j - \bar{s} = c_p(T^j - \bar{T})$ (the $gz$ terms are identical at a given level and cancel in the anomaly), no explicit $L_v(c-e)$ correction is needed.
 
-From the column profile of $Q_1$, we extract:
+From the column profiles, we extract:
 
-- **Peak heating rate**: $Q_0 = \max_z |Q_1(z)|$ — the maximum absolute convective heating rate in the column.
-- **Heating depth**: $h = z_{\text{top}} - z_{\text{bot}}$ — the vertical extent of the convective envelope, determined from updraft structure: $z_{\text{top}}$ is the highest level where the total updraft area fraction exceeds $10^{-3}$, $z_{\text{peak}}$ is the height of maximum updraft velocity, and $z_{\text{bot}} = \max(2 z_{\text{peak}} - z_{\text{top}},\; 3000\;\text{m})$.
-- **Mean wind in heating layer**: mass-weighted averages over levels within the envelope $[z_{\text{bot}}, z_{\text{top}}]$,
+- **Heating amplitude** $Q_0$: Beres (2004) assumes a half-sine heating profile of depth $h$ with peak amplitude $Q_0$. Rather than a noisy pointwise maximum, $Q_0$ is recovered from the depth-mean of the in-cloud heating $Q_{\text{ic}}$ over the envelope by inverting the half-sine mean ($\overline{\text{half-sine}} = (2/\pi)\,Q_0$):
 ```math
-\bar{u}_{\text{heat}} = \frac{\sum_k u_k \rho_k \Delta z_k}{\sum_k \rho_k \Delta z_k}, \quad \bar{N}_{\text{source}} = \frac{\sum_k N_k \rho_k \Delta z_k}{\sum_k \rho_k \Delta z_k}.
+Q_0 = \frac{\pi}{2} \, \frac{1}{h} \int_{z_{\text{bot}}}^{z_{\text{top}}} Q_{\text{ic}}(z) \, dz, \qquad (\text{clamped to } Q_0 \geq 0).
 ```
+- **Heating depth** $h = z_{\text{top}} - z_{\text{bot}}$ — the vertical extent of the convective envelope: $z_{\text{top}}$ is the highest level where the total updraft area fraction exceeds $10^{-3}$ (the plume top), and $z_{\text{bot}}$ is the lowest level that lies above an altitude floor $z_{\text{bot,floor}}$ (`beres_z_bot_floor`) **and** carries convective heating above a threshold, $Q_1 > Q_{\text{bot,thresh}}$ (`beres_z_bot_Q_threshold`). The altitude floor is essential because EDMF $Q_1$ has a strong boundary-layer / dry-thermal signal near the surface that would otherwise pull $z_{\text{bot}}$ down to the ground; the heating threshold marks the base of deep convective heating. (See `default_config.yml` for current values.)
+- **Mean wind and stability in heating layer**: mass-weighted averages over the levels within the envelope $[z_{\text{bot}}, z_{\text{top}}]$,
+```math
+\bar{u}_{\text{heat}} = \frac{\sum_k u_k \rho_k \Delta z_k}{\sum_k \rho_k \Delta z_k}, \quad \bar{v}_{\text{heat}} = \frac{\sum_k v_k \rho_k \Delta z_k}{\sum_k \rho_k \Delta z_k}, \quad \bar{N}_{\text{source}} = \frac{\sum_k N_k \rho_k \Delta z_k}{\sum_k \rho_k \Delta z_k}.
+```
+Both horizontal wind components are carried so the convective source can force the zonal and meridional winds independently.
 
 **Design choices.**
 The envelope detection makes several deliberate simplifications:
-- **Symmetric envelope.** $z_{\text{bot}} = 2 z_{\text{peak}} - z_{\text{top}}$ mirrors the upper half of the plume around the velocity peak to produce a single envelope depth $h$ for the half-sine response function in Beres (2004). Asymmetric profiles (e.g., bottom-heavy congestus or top-heavy stratiform regimes) are approximated by this symmetric construction.
-- **Velocity peak as envelope center.** $z_{\text{peak}}$ is the height of maximum updraft velocity, not the height of maximum $|Q_1|$. The velocity field is smoother than the $Q_1$ divergence field, making it a more robust proxy. It tends to sit slightly above the true heating peak because buoyancy integrates heating upward.
-- **Shallow convection.** Columns with $z_{\text{top}} < 3000$ m produce $z_{\text{bot}} \geq z_{\text{top}}$ and thus $h \leq 0$, which is filtered out by the activation criterion $h > h_{\min}$ (see below). This is by design: the Beres spectrum is intended for deep convection only. (As the choice of $z_{\text{bot}}$ affects the activation threshold, it should be kept consistent with $h_{\min}$.)
-- **Mass-weighted means.** $\bar{u}_{\text{heat}}$ and $\bar{N}_{\text{source}}$ are weighted by mass ($\rho \Delta z$) over the geometric envelope, not by $|Q_1|$. This is consistent with the geometric (rather than heating-based) envelope definition. Beres (2004) assumes constant $U$ over the heating depth, so either weighting is a defensible discretization choice; in sheared environments the difference can affect the asymmetry of the source spectrum.
+- **Single envelope depth.** Beres (2004)'s half-sine response function is parameterized by one heating depth $h$. The continuous envelope $[z_{\text{bot}}, z_{\text{top}}]$ collapses a possibly multi-peaked or asymmetric heating profile to a single depth; bottom-heavy congestus and top-heavy stratiform regimes are both approximated by this single-depth construction.
+- **Altitude floor on $z_{\text{bot}}$.** The floor $z_{\text{bot,floor}}$ prevents the boundary-layer / dry-thermal $Q_1$ signal from anchoring the envelope at the surface. It works together with the activation threshold $h_{\min}$: convection that does not extend at least $h_{\min}$ above the floor is filtered out, so the Beres source acts on deep convection only.
+- **Mass-weighted means.** $\bar{u}_{\text{heat}}$, $\bar{v}_{\text{heat}}$, and $\bar{N}_{\text{source}}$ are weighted by mass ($\rho \Delta z$) over the geometric envelope, not by $Q_1$. This is consistent with the geometric (rather than heating-based) envelope definition. Beres (2004) assumes constant $U$ over the heating depth, so either weighting is a defensible discretization choice; in sheared environments the difference can affect the asymmetry of the source spectrum.
 
 ### Activation criteria
 
 The Beres source activates in a column only when both conditions are met:
-- $Q_0 > Q_{0,\text{threshold}}$ (default $1.157 \times 10^{-4}$ K/s, approximately 10 K/day)
-- $h > h_{\min}$ (default 3000 m)
+- $Q_0 > Q_{0,\text{threshold}}$ — a heating-rate threshold of order $1\;\text{K/day}$ (`beres_Q0_threshold`)
+- $h > h_{\min}$ — a heating-depth threshold of order $1\;\text{km}$ (`beres_h_heat_min`)
 
-This filters out shallow or weak convection. In columns where Beres is inactive, the AD99 Gaussian source is used instead.
+(See `default_config.yml` for the current default values.) This filters out shallow or weak convection. In columns where the criteria are not met, the Beres contribution is zero and only the AD99 background source acts; where they are met, the Beres flux is added on top of the AD99 background.
 
 ### Source spectrum $B_0(c)$
 
@@ -106,7 +116,7 @@ The momentum flux spectrum at the source level is computed following the linear 
 ```math
 G_k = \frac{\sigma_x}{\sqrt{2}} \exp\!\left(-\frac{k^2 \sigma_x^2}{4}\right).
 ```
-The default $\sigma_x = 4000$ m sits between Beres' two test values (2.5 km for narrow squall-line cells, 18 km for broader heating); the spectrum's east–west asymmetry under shear is sensitive to this choice (compare Beres Fig. 1a vs. 1b).
+The default $\sigma_x$ (≈ 4 km; see `default_config.yml`) sits between Beres' two test values (2.5 km for narrow squall-line cells, 18 km for broader heating); the spectrum's east–west asymmetry under shear is sensitive to this choice (compare Beres Fig. 1a vs. 1b).
 
 **Vertical wavenumber (Beres Eq. 18).** For ground-relative frequency $\nu$ and intrinsic frequency $\hat{\nu} = \nu - k \bar{u}_{\text{heat}}$,
 ```math
@@ -147,7 +157,12 @@ Optionally, the spectrum may be computed and averaged at $n_{h,\text{avg}}$ valu
 
 ### Propagation and breaking
 
-Once the Beres source spectrum $B_0(c)$ replaces the AD99 Gaussian, the upward propagation, wave breaking, and momentum deposition logic is **identical** to the AD99 method described above. The same reflection criterion, instability condition, intermittency factor, and sponge layer redistribution apply.
+The Beres source spectrum $B_0(c)$ is propagated upward with the **same** reflection criterion, instability/critical-level breaking condition, momentum deposition, and sponge-layer redistribution as the AD99 method described above. Two differences from the AD99 background path are worth noting:
+
+- **Launch level.** $B_0(c)$ is the far-field flux radiated *above* the heating, so each column launches its Beres waves from the top of its convective envelope $z_{\text{top}}$, rather than from the fixed AD99 source level (`nogw_source_pressure`).
+- **Intermittency.** The AD99 forcing carries the intermittency factor $\epsilon = F_{S0} / (\rho_0 \sum |B_0|)$. The Beres $B_0(c)$ is already in physical momentum-flux units for the **local** (in-cloud) heating amplitude — set by $Q_0$, $\sigma_x$, and the scale factor $\alpha$ — so it is not rescaled by the AD99 $\epsilon$. Instead, the deposited flux is diluted by the **convective coverage** $\bar{a}$, the mass-weighted envelope mean of the EDMF updraft area fraction: only the fraction $\bar{a}$ of the grid cell radiates, so the grid-mean flux is $\bar{a}$ times the local flux ($\propto \bar{a}\,Q_0^2$ — linear in coverage, quadratic in local amplitude). This is the exact Beres analog of AD99's intermittency, with $\epsilon_{\text{Beres}} = \bar{a}$ diagnosed per column from EDMF rather than tuned. Breaking levels are still computed at the local amplitude ($B_0$ itself is not rescaled); only the deposition is diluted. The flux is then distributed across the $n_k$ azimuths.
+
+The Beres forcing computed this way is **added** to the AD99 background forcing in each column; the two source spectra are propagated and accumulated independently.
 
 
 ## Implementation Summary
@@ -158,18 +173,27 @@ The parameterization runs on a callback timer (`dt_nogw`) and applies the accumu
 Every dt_nogw seconds:
   nogw_model_callback!
     └─ non_orographic_gravity_wave_compute_tendency!
-        ├─ 1. Compute buoyancy frequency N(z) and identify source/damp levels
+        ├─ 1. Compute buoyancy frequency N(z) and identify AD99 source/damp levels
         ├─ 2. [Beres only] Extract convective heating from EDMF updrafts
-        │       ├─ Compute Q₁ (mass-flux divergence of DSE anomalies)
-        │       ├─ Detect convective envelope (z_bot, z_top, h)
-        │       ├─ Extract heating-layer properties (Q₀, u_heat, N_source)
-        │       └─ Activate if Q₀ > threshold AND h > h_min
+        │       ├─ Compute Q₁ (grid-mean) and Q_ic (in-cloud) mass-flux
+        │       │     divergences of DSE anomalies
+        │       ├─ Detect envelope from Q₁ + updraft area: z_top (plume top),
+        │       │     z_bot (lowest heated level above the altitude floor),
+        │       │     h = z_top − z_bot
+        │       ├─ Heating-layer props: Q₀ = (π/2)·mean(Q_ic), coverage ā,
+        │       │     u_heat, v_heat, N_source
+        │       ├─ Activate if grid-mean amplitude > threshold AND h > h_min
+        │       └─ Set per-column Beres launch level = z_top
         └─ 3. For each horizontal wavenumber k:
-                ├─ AD99: Gaussian source spectrum B₀(c)
-                ├─ [Beres active]: Beres source spectrum B₀(c) from Q₀, h, N
-                ├─ Propagate upward: reflection / breaking / critical level
-                ├─ Apply intermittency factor
-                └─ Accumulate momentum flux deposit into uforcing, vforcing
+                ├─ AD99 background (always on): Gaussian B₀(c)
+                │     → propagate from AD99 source level → ×intermittency ε
+                │     → accumulate into uforcing, vforcing
+                └─ [Beres configured]: convective B₀(c) from Q₀, h, N
+                      (zero unless column is active)
+                      → propagate from z_top → ×coverage ā at deposition
+                      → ADD into uforcing, vforcing
+           (propagation = reflection / instability / critical-level breaking
+            / model-top + sponge redistribution, shared by both sources)
 
 Every dt (integrator step):
   non_orographic_gravity_wave_apply_tendency!

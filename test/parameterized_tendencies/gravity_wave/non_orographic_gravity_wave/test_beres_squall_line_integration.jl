@@ -63,7 +63,7 @@ import ClimaCore.Fields as Fields
     (; gw_ncval, ᶜbuoyancy_frequency, ᶜlevel, u_waveforcing, v_waveforcing,
         uforcing, vforcing,
         gw_Q0, gw_h_heat, gw_u_heat, gw_v_heat, gw_N_source,
-        gw_beres_active, gw_flag,
+        gw_beres_active, gw_a_cover, gw_flag,
     ) = p.non_orographic_gravity_wave
 
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -132,6 +132,9 @@ import ClimaCore.Fields as Fields
     fill!(gw_v_heat, FT(0.0))       # m/s — no meridional wind
     fill!(gw_N_source, FT(0.012))   # s⁻¹ — buoyancy frequency (Beres §4)
     fill!(gw_beres_active, FT(1.0)) # 1.0 = Beres branch active for all columns
+    # ā = 1: no coverage dilution — the deposited drag equals the local
+    # (in-cloud) Beres flux, matching this test's expected magnitudes.
+    fill!(gw_a_cover, FT(1.0))
     # gw_flag = 0 means "tropics" for the AD99 background spectrum: use
     # Doppler-shifted phase speeds (c - u_source) rather than ground-relative c.
     # This does NOT affect the Beres dispatch.

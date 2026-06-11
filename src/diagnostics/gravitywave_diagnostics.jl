@@ -91,7 +91,7 @@ add_diagnostic_variable!(
     compute! = compute_nogw_beres_active!,
 )
 
-# Max convective heating rate Q0 (gated by beres_active)
+# Convective heating amplitude Q0 (gated by beres_active)
 compute_nogw_Q0!(out, state, cache, time) = compute_nogw_Q0!(
     out,
     state,
@@ -117,9 +117,9 @@ end
 
 add_diagnostic_variable!(
     short_name = "nogw_Q0",
-    long_name = "NOGW Max Convective Heating Rate",
+    long_name = "NOGW Convective Heating Amplitude",
     units = "K s-1",
-    comments = "Column-maximum convective heating rate used by the Beres NOGW source spectrum (zero when inactive)",
+    comments = "Half-sine in-cloud convective heating amplitude ((pi/2) times the depth-mean of the in-cloud Q_conv_ic over the convective envelope) forcing the Beres NOGW source spectrum (zero when inactive)",
     compute! = compute_nogw_Q0!,
 )
 
@@ -250,8 +250,75 @@ add_diagnostic_variable!(
     short_name = "nogw_Q_conv",
     long_name = "NOGW Convective Heating Rate",
     units = "K s-1",
-    comments = "3D convective heating rate from EDMF mass-flux divergence used by the Beres NOGW source",
+    comments = "3D grid-mean convective heating rate from EDMF mass-flux divergence; used for Beres envelope detection and activation gating",
     compute! = compute_nogw_Q_conv!,
+)
+
+# 3D in-cloud convective heating rate (Q_conv_ic) — NOT gated (3D field, beres_active is 2D)
+compute_nogw_Q_conv_ic!(out, state, cache, time) = compute_nogw_Q_conv_ic!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.non_orographic_gravity_wave,
+)
+compute_nogw_Q_conv_ic!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("nogw_Q_conv_ic", non_orographic_gravity_wave)
+compute_nogw_Q_conv_ic!(_, _, _, _, ::NonOrographicGravityWave{FT, Nothing}) where {FT} =
+    error_diagnostic_variable("nogw_Q_conv_ic requires Beres source enabled")
+
+function compute_nogw_Q_conv_ic!(
+    out,
+    state,
+    cache,
+    time,
+    ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    if isnothing(out)
+        return copy(cache.non_orographic_gravity_wave.gw_Q_conv_ic)
+    else
+        out .= cache.non_orographic_gravity_wave.gw_Q_conv_ic
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_Q_conv_ic",
+    long_name = "NOGW In-Cloud Convective Heating Rate",
+    units = "K s-1",
+    comments = "3D in-cloud (per-draft conditional-mean) convective heating rate from EDMF mass-flux divergence without the area-fraction dilution; sets the Beres NOGW source spectrum amplitude",
+    compute! = compute_nogw_Q_conv_ic!,
+)
+
+# Convective coverage (envelope-mean updraft area fraction, gated by beres_active)
+compute_nogw_a_cover!(out, state, cache, time) = compute_nogw_a_cover!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.non_orographic_gravity_wave,
+)
+compute_nogw_a_cover!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("nogw_a_cover", non_orographic_gravity_wave)
+compute_nogw_a_cover!(_, _, _, _, ::NonOrographicGravityWave{FT, Nothing}) where {FT} =
+    error_diagnostic_variable("nogw_a_cover requires Beres source enabled")
+
+function compute_nogw_a_cover!(
+    out,
+    state,
+    cache,
+    time,
+    ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    (; gw_a_cover, gw_beres_active) = cache.non_orographic_gravity_wave
+    return _gated_copy!(out, gw_a_cover, gw_beres_active)
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_a_cover",
+    long_name = "NOGW Convective Coverage",
+    units = "1",
+    comments = "Mass-weighted envelope-mean updraft area fraction; dilutes the deposited Beres NOGW momentum flux (intermittency analog, zero when inactive)",
+    compute! = compute_nogw_a_cover!,
 )
 
 # Deep convection fraction: gw_deep_count / gw_cb_count

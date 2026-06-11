@@ -65,9 +65,11 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_zbot = similar(Fields.level(Y.c.ρ, 1)),
             gw_ztop = similar(Fields.level(Y.c.ρ, 1)),
             gw_Q_conv = similar(Y.c.ρ),
+            gw_Q_conv_ic = similar(Y.c.ρ),
+            gw_a_cover = similar(Fields.level(Y.c.ρ, 1)),
             gw_reduce_result = similar(
                 Fields.level(Y.c.ρ, 1),
-                Tuple{FT, FT, FT, FT, FT, FT},
+                Tuple{FT, FT, FT, FT, FT, FT, FT},
             ),
             gw_deep_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
             gw_cb_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
@@ -75,7 +77,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             # populated from gw_ztop in compute_tendency!. Kernel uses this
             # in MODE == :beres; AD99 path ignores it.
             beres_source_ρ_z_u_v_level =
-                similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT}),
+            similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT}),
         )
     elseif issphere(axes(Y.c))
 
@@ -162,9 +164,11 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_zbot = similar(Fields.level(Y.c.ρ, 1)),
             gw_ztop = similar(Fields.level(Y.c.ρ, 1)),
             gw_Q_conv = similar(Y.c.ρ),
+            gw_Q_conv_ic = similar(Y.c.ρ),
+            gw_a_cover = similar(Fields.level(Y.c.ρ, 1)),
             gw_reduce_result = similar(
                 Fields.level(Y.c.ρ, 1),
-                Tuple{FT, FT, FT, FT, FT, FT},
+                Tuple{FT, FT, FT, FT, FT, FT, FT},
             ),
             gw_deep_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
             gw_cb_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
@@ -172,7 +176,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             # populated from gw_ztop in compute_tendency!. Kernel uses this
             # in MODE == :beres; AD99 path ignores it.
             beres_source_ρ_z_u_v_level =
-                similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT}),
+            similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT}),
         )
     else
         error("Only sphere and columns are supported")
@@ -357,8 +361,24 @@ end
     compute_beres_convective_heating!(Y, p, ᶜN)
 
 Extract convective heating properties from EDMF for the Beres (2004) source spectrum.
-Computes per-column: Q0 (max heating rate), h (heating depth), u_heat/v_heat (mean wind),
-N_source (buoyancy freq), and beres_active flag.
+Computes per-column: Q0 (half-sine heating amplitude = (π/2)·depth-mean of the
+IN-CLOUD heating Q_conv_ic), h (heating depth), u_heat/v_heat (mean wind),
+N_source (buoyancy freq), a_cover (envelope-mean updraft area fraction, used as
+the Beres deposition/intermittency factor), and beres_active flag.
+
+Two heating fields are maintained:
+  * `gw_Q_conv` — GRID-MEAN apparent heating Q₁ (the DSE anomaly carries the
+    updraft area fraction aʲ). Used for envelope detection and activation
+    gating, whose thresholds are calibrated to grid-mean magnitudes.
+  * `gw_Q_conv_ic` — IN-CLOUD (per-draft conditional-mean) heating: same DSE
+    mass-flux construction WITHOUT the area factor, normalized by draft density.
+    This is the amplitude convention Beres' linear theory is forced with (her
+    squall-line reference Q₀ ≈ 0.004 K/s); CAM applies the analogous grid-mean →
+    local conversion (`CF = 20`, assumed 5% convective fraction) in
+    `gw_convect.F90`. The spectrum amplitude Q0 is built from this field; the
+    flux deposited on the grid mean is then diluted by `a_cover` (see
+    `waveforcing_column_accumulate!`), giving the physically correct
+    flux ∝ ā·Q_ic² (linear in coverage, quadratic in local amplitude).
 
 The convective envelope is `[z_bot, z_top]` where
   * `z_top` = highest level with updraft area fraction above `1e-3`,
@@ -378,6 +398,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     if n_updrafts == 0
         # No EDMF — Beres inactive everywhere
         p.non_orographic_gravity_wave.gw_beres_active .= 0
+        p.non_orographic_gravity_wave.gw_a_cover .= 0
+        p.non_orographic_gravity_wave.gw_Q_conv_ic .= 0
         return
     end
 
@@ -394,6 +416,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         gw_zbot,
         gw_ztop,
         gw_Q_conv,
+        gw_Q_conv_ic,
+        gw_a_cover,
         gw_reduce_result,
         gw_deep_count,
         gw_cb_count,
@@ -415,9 +439,12 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     ᶜQ_conv .= FT(0)
     cp_d = FT(CAP.cp_d(p.params))
 
-    # Scratch fields for face velocity anomaly and cell-center scalar
+    # Scratch fields for face velocity anomaly and cell-center scalars
     ᶠu³_diff = p.scratch.ᶠtemp_CT3
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
+    # In-cloud DSE anomaly (no area factor) and ρa-weighting denominator
+    ᶜa_scalar_ic = p.scratch.ᶜtemp_scalar_5
+    ᶜρa_sum = p.scratch.ᶜtemp_scalar_6
 
     # For DiagnosticEDMFX, ρa is in p.precomputed
     # For PrognosticEDMFX, ρa is in Y.c.sgsʲs.:($j)
@@ -427,9 +454,12 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         ᶜρaʲs_all = p.precomputed.ᶜρaʲs
     end
 
-    # Compute Q_conv and total area fraction in one pass.
+    # Compute Q_conv (grid-mean), Q_conv_ic (in-cloud) and total area fraction
+    # in one pass.
     ᶜa_up = p.scratch.ᶜtemp_scalar_4
     ᶜa_up .= FT(0)
+    gw_Q_conv_ic .= FT(0)
+    ᶜρa_sum .= FT(0)
     for j in 1:n_updrafts
         # Velocity anomaly at faces (contravariant)
         @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
@@ -440,11 +470,15 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             ᶜρaʲs_all.:($j)
         end
 
+        # In-cloud DSE anomaly: cp_d·(Tʲ − T̄), no area factor
+        @. ᶜa_scalar_ic =
+            ifelse(ᶜρʲs.:($$j) > eps(FT), cp_d * (ᶜTʲs.:($$j) - ᶜT), FT(0))
+
         # DSE anomaly × area fraction: cp_d·(Tʲ − T̄) · (ρaʲ/ρʲ)
         @. ᶜa_scalar =
             ifelse(
                 ᶜρʲs.:($$j) > eps(FT),
-                cp_d * (ᶜTʲs.:($$j) - ᶜT) * (ᶜρaʲ / ᶜρʲs.:($$j)),
+                ᶜa_scalar_ic * (ᶜρaʲ / ᶜρʲs.:($$j)),
                 FT(0),
             )
 
@@ -457,12 +491,35 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             FT(1),
             Val(:none),
         )
-        # Convert from W/m³ to heating rate K/s
+        # Convert from W/m³ to heating rate K/s (grid-mean Q₁)
         @. ᶜQ_conv += vtt / (ᶜρ * cp_d)
 
-        # Total updraft area fraction (used to set z_top below)
+        # In-cloud heating of draft j: same mass-flux divergence WITHOUT the
+        # area factor, normalized by the draft (not grid-mean) density:
+        #   Q_icʲ = −(1/(ρʲ·c_p)) ∂z[ρʲ·(wʲ−w̄)·c_p·(Tʲ−T̄)]
+        # Accumulated ρaʲ-weighted so that for M>1 drafts the result is the
+        # conditional mean over the total draft area (÷ Σρaʲ below).
+        vtt_ic = vertical_transport(
+            ᶜρʲs.:($j),
+            ᶠu³_diff,
+            ᶜa_scalar_ic,
+            FT(1),
+            Val(:none),
+        )
+        @. gw_Q_conv_ic += ifelse(
+            ᶜρʲs.:($$j) > eps(FT),
+            max(ᶜρaʲ, FT(0)) * vtt_ic / (ᶜρʲs.:($$j) * cp_d),
+            FT(0),
+        )
+        @. ᶜρa_sum += max(ᶜρaʲ, FT(0))
+
+        # Total updraft area fraction (used to set z_top and a_cover below)
         @. ᶜa_up += ifelse(ᶜρʲs.:($$j) > eps(FT), ᶜρaʲ / ᶜρʲs.:($$j), FT(0))
     end
+
+    # Finalize the ρa-weighted in-cloud mean over drafts
+    @. gw_Q_conv_ic =
+        ifelse(ᶜρa_sum > eps(FT), gw_Q_conv_ic / ᶜρa_sum, FT(0))
 
     # Persist Q_conv into cache before scratch field is reused
     @. gw_Q_conv = ᶜQ_conv
@@ -478,26 +535,25 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     #          below ~1 km in the tropics; see audit Q4).
     result_field = gw_reduce_result
     input1 = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜa_up, ᶜQ_conv)
-    # Accumulator: (z_top, z_bot_raw, _3, _4, _5, _6). Sentinels:
+    # Accumulator: (z_top, z_bot_raw, _3, _4, _5, _6, _7). Sentinels:
     #   z_top  = -Inf → no level qualified
     #   z_bot  = +Inf → no level qualified
-    reduce_init = (FT(-Inf), FT(Inf), FT(0), FT(0), FT(0), FT(0))
-    let _a_thresh = FT(1e-3),
-        _Q_thresh = gw_beres_source.z_bot_Q_threshold,
+    reduce_init = (FT(-Inf), FT(Inf), FT(0), FT(0), FT(0), FT(0), FT(0))
+    let _a_thresh = FT(1e-3), _Q_thresh = gw_beres_source.z_bot_Q_threshold,
         _z_floor = gw_beres_source.z_bot_floor
 
         Operators.column_reduce!(
             result_field,
             input1;
             init = reduce_init,
-        ) do (z_top_prev, z_bot_prev, _3, _4, _5, _6), (z, a, Q)
+        ) do (z_top_prev, z_bot_prev, _3, _4, _5, _6, _7), (z, a, Q)
             z_top = ifelse(a > _a_thresh, max(z_top_prev, z), z_top_prev)
             z_bot = ifelse(
                 (z >= _z_floor) & (Q > _Q_thresh),
                 min(z_bot_prev, z),
                 z_bot_prev,
             )
-            return (z_top, z_bot, _3, _4, _5, _6)
+            return (z_top, z_bot, _3, _4, _5, _6, _7)
         end
     end
 
@@ -527,8 +583,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     @. gw_deep_count += ifelse(gw_v_heat > FT(10000), FT(1), FT(0))
 
     # Pass 2: within [z_bot, z_top], compute:
-    #   - Q₀ integral: Σ(Q_net · Δz) for Beres half-sine conversion
-    #   - Mass-weighted mean wind (u, v) and buoyancy frequency (N)
+    #   - Q₀ integrals: Σ(Q · Δz) for the grid-mean (gating) and in-cloud
+    #     (spectrum amplitude) heatings
+    #   - Mass-weighted mean wind (u, v), buoyancy frequency (N), and
+    #     updraft area fraction (a_cover, the Beres deposition factor)
     # All quantities drawn from the same physical envelope — the continuous
     # convective column from cloud base to plume top.
     # `ᶜN` is supplied by the caller (already √ N², s⁻¹).
@@ -547,17 +605,27 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         ᶜρ,
         ᶜΔz,
         ᶜin_env,
+        gw_Q_conv_ic,
+        ᶜa_up,
     )
-    # Accumulator: (Q_integral, u_sum, v_sum, N_sum, mass_sum, _unused)
+    # Accumulator: (Q_integral, u_sum, v_sum, N_sum, mass_sum, Qic_integral, a_sum)
     _zero = FT(0)
     _half = FT(0.5)
-    reduce_init2 = (_zero, _zero, _zero, _zero, _zero, _zero)
+    reduce_init2 = (_zero, _zero, _zero, _zero, _zero, _zero, _zero)
     Operators.column_reduce!(
         result_field,
         input2;
         init = reduce_init2,
-    ) do (Q_int_prev, u_sum_prev, v_sum_prev, N_sum_prev, m_sum_prev, _6),
-    (Q, u, v, N, ρ, dz, env)
+    ) do (
+        Q_int_prev,
+        u_sum_prev,
+        v_sum_prev,
+        N_sum_prev,
+        m_sum_prev,
+        Qic_int_prev,
+        a_sum_prev,
+    ),
+    (Q, u, v, N, ρ, dz, env, Q_ic, a_up)
         active = env > _half
         ρdz = ρ * dz
         Q_int = ifelse(active, Q_int_prev + Q * dz, Q_int_prev)
@@ -565,7 +633,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         v_sum = ifelse(active, v_sum_prev + v * ρdz, v_sum_prev)
         N_sum = ifelse(active, N_sum_prev + N * ρdz, N_sum_prev)
         m_sum = ifelse(active, m_sum_prev + ρdz, m_sum_prev)
-        return (Q_int, u_sum, v_sum, N_sum, m_sum, _6)
+        Qic_int = ifelse(active, Qic_int_prev + Q_ic * dz, Qic_int_prev)
+        a_sum = ifelse(active, a_sum_prev + a_up * ρdz, a_sum_prev)
+        return (Q_int, u_sum, v_sum, N_sum, m_sum, Qic_int, a_sum)
     end
 
     # Unpack Pass 2 results
@@ -574,9 +644,18 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     @. gw_v_heat = ifelse(mass_sum > eps(FT), result_field.:3 / mass_sum, FT(0))
     @. gw_N_source =
         ifelse(mass_sum > eps(FT), result_field.:4 / mass_sum, FT(0.01))
-    @. gw_Q0 = result_field.:1
 
-    # Finalize Q₀ = (π/2) · Σ(Q_net·Δz) / h, clamped ≥ 0
+    # Coverage: mass-weighted envelope mean of the updraft area fraction,
+    # clamped to [0, 1]. Used as the Beres deposition (intermittency) factor.
+    @. gw_a_cover = ifelse(
+        mass_sum > eps(FT),
+        min(max(result_field.:7 / mass_sum, FT(0)), FT(1)),
+        FT(0),
+    )
+
+    # Spectrum amplitude from the IN-CLOUD heating:
+    # Q₀ = (π/2) · Σ(Q_ic·Δz) / h, clamped ≥ 0
+    @. gw_Q0 = result_field.:6
     @. gw_Q0 = ifelse(
         gw_h_heat > FT(0),
         max(FT(π) / FT(2) * gw_Q0 / gw_h_heat, FT(0)),
@@ -584,11 +663,19 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     )
     @. gw_Q0 = ifelse(isnan(gw_Q0) | isinf(gw_Q0), FT(0), gw_Q0)
 
-    # Set beres_active flag: Q0 above threshold AND heating depth above minimum
+    # Set beres_active flag: GRID-MEAN amplitude above threshold AND heating
+    # depth above minimum. Gating stays on the grid-mean Q₁ (slot 1) because
+    # `beres_Q0_threshold` is calibrated to grid-mean magnitudes; only the
+    # launch amplitude uses the in-cloud convention.
     Q0_threshold = gw_beres_source.Q0_threshold
     h_heat_min = gw_beres_source.h_heat_min
     @. gw_beres_active = ifelse(
-        (gw_Q0 > Q0_threshold) & (gw_h_heat > h_heat_min),
+        (
+            max(
+                FT(π) / FT(2) * result_field.:1 / max(gw_h_heat, eps(FT)),
+                FT(0),
+            ) > Q0_threshold
+        ) & (gw_h_heat > h_heat_min),
         FT(1),
         FT(0),
     )
@@ -661,6 +748,7 @@ function non_orographic_gravity_wave_forcing(
         gw_u_heat,
         gw_v_heat,
         gw_N_source,
+        gw_a_cover,
         gw_beres_source,
         beres_source_ρ_z_u_v_level,
     ) = p.non_orographic_gravity_wave
@@ -758,6 +846,7 @@ function non_orographic_gravity_wave_forcing(
             beres_source_level,
             beres_ρ_source,
             beres_u_source,
+            gw_a_cover,
         ),
     )
     input_v = @. lazy(
@@ -786,6 +875,7 @@ function non_orographic_gravity_wave_forcing(
             beres_source_level,
             beres_ρ_source,
             beres_v_source,
+            gw_a_cover,
         ),
     )
 
@@ -961,6 +1051,7 @@ function waveforcing_column_accumulate!(
         beres_source_level,
         beres_ρ_source,
         beres_u_source,
+        beres_a_cover,
     )
 
         # MODE-dispatched launch-level state. AD99 keeps its fixed source level
@@ -1060,14 +1151,20 @@ function waveforcing_column_accumulate!(
             eps = if MODE == :ad99
                 calc_intermitency(ρ_source_eff, source_ampl, nk, FT1(Bsum))
             else # MODE == :beres
-                # Beres B₀(c) is already in physical momentum-flux units (Q₀², σ_x², α
-                # all bundled in compute_beres_spectrum). No amplitude rescaling needed.
-                # The factors here are bookkeeping for the shared downstream forcing code:
+                # Beres B₀(c) is in physical momentum-flux units for the LOCAL
+                # (in-cloud) heating amplitude Q₀ (Q₀², σ_x², α all bundled in
+                # compute_beres_spectrum). The deposition is therefore diluted by
+                # the convective coverage ā (envelope-mean updraft area fraction):
+                # only the fraction ā of the grid cell radiates, so the grid-mean
+                # flux is ā·(local flux) — the exact analog of AD99's
+                # intermittency ε. Breaking levels are still computed at the
+                # LOCAL amplitude (B₀ itself is not rescaled).
+                # Remaining factors are bookkeeping for the shared forcing code:
                 #   1/ρ_source — cancels the ρ_source multiplier in wave_forcing
                 #   1/nk        — distributes total flux across nk azimuths
-                # Unlike AD99, no intermittency rescaling by Bsum is needed:
-                # the Beres B₀(c) already encodes the physical Q₀ amplitude.
-                FT1(1.0) / (ρ_source_eff * FT1(nk))
+                # Unlike AD99, no rescaling by Bsum is needed: the Beres B₀(c)
+                # already encodes the physical Q₀ amplitude.
+                beres_a_cover / (ρ_source_eff * FT1(nk))
             end
             if level >= source_level_eff
                 rbh = sqrt(ρ_k * ρ_kp1)
