@@ -66,9 +66,9 @@ x / y
 In this section, we address how to use `ITime` instead of floating point for
 time in a ClimaAtmos simulation and how to write code with `ITime` in mind.
 
-If you are running a simulation from a YAML file, you can simply set `use_itime`
-to `true` to enable `ITime`. If you do not want to use `ITime`, then set
-`use_itime` to `false` to not use `ITime` which will use floating point instead.
+ClimaAtmos always uses `ITime` for simulation time: the time step, start time,
+and end time are converted to `ITime` when the simulation is built, regardless of
+whether they are provided as strings (e.g. `"30secs"`) or numbers.
 
 !!! note "Different results from rounding using `ITime`"
     If `a` is a floating point number and `t` is an `ITime`, then we round

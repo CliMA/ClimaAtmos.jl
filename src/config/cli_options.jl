@@ -10,7 +10,7 @@ function argparse_settings()
         arg_type = String
         default = [default_config_file]
         "--job_id"
-        help = "A unique job identifier, among all possible (parallel) running jobs."
+        help = "A unique job identifier, among all possible (parallel) running jobs. If omitted, it is taken from the `job_id` key in the configuration, or derived from the config file names."
         arg_type = String
         default = job_id_from_config_file(default_config_file)
         #! format: on

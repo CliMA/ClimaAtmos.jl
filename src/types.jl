@@ -154,10 +154,7 @@ end
 
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
-struct TimeVaryingInsolation <: AbstractInsolation
-    # TODO: Remove when we can easily go from time to date
-    start_date::Dates.DateTime
-end
+struct TimeVaryingInsolation <: AbstractInsolation end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
 struct ExternalTVInsolation <: AbstractInsolation end

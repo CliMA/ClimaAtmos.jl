@@ -348,6 +348,9 @@ toml:
 strict_params:
   help: "Raise an error if any overridden parameters are unused."
   value: true
+strict_config:
+  help: "If true, raise an error (instead of a warning) when the configuration contains keys that are not part of the default configuration. [`true`, `false` (default)]"
+  value: false
 prognostic_tke:
   help: "A flag for prognostic TKE [`false` (default), `true`]"
   value: false

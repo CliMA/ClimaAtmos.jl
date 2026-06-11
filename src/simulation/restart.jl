@@ -50,9 +50,7 @@ function handle_restart(
     context,
 )
     # Validate t_start before restart (matches get_simulation behavior)
-    t_start_seconds =
-        t_start_original isa AbstractString ?
-        time_to_seconds(t_start_original) : Float64(t_start_original)
+    t_start_seconds = time_to_seconds(t_start_original)
     if t_start_seconds != 0
         @warn "Non zero `t_start` passed with a restarting simulation. The provided `t_start` will be ignored."
     end
@@ -141,7 +139,9 @@ function setup_output_dir(
     restart_file,
     comms_ctx,
 )
-    # Set up base output directory
+    # Set up base output directory.
+    # The `CI` environment variable (set by our continuous-integration system)
+    # switches the default output location from `output/<job_id>` to `<job_id>`.
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
     base_output_dir = isnothing(output_dir) ? default_output : output_dir
 

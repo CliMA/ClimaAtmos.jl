@@ -202,15 +202,13 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     @. rrtmgp_model.cos_zenith = (1 + FT(0.3) * (1 - 3 * sind(latitude)^2)) * FT(0.5)
 end
 
-function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
+function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
     FT = Spaces.undertype(axes(Y.c))
     params = p.params
     insolation_params = CAP.insolation_params(params)
     (; insolation_tuple, rrtmgp_model) = p.radiation
 
-    current_datetime =
-        t isa ITime ? ClimaUtilities.TimeManager.date(t) :
-        tvi.start_date + Dates.Second(round(Int, t)) # current time
+    current_datetime = ClimaUtilities.TimeManager.date(t)
 
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     cos_zenith =

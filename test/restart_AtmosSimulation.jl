@@ -15,7 +15,6 @@ include("restart_utils.jl")
 
 function amip_target(context, output_dir)
     FT = Float32
-    start_date = DateTime(2010, 1, 1)
 
     param_dict =
         ClimaParams.create_toml_dict(
@@ -63,7 +62,7 @@ function amip_target(context, output_dir)
         deep_atmosphere,
     )
 
-    insolation = CA.TimeVaryingInsolation(start_date)
+    insolation = CA.TimeVaryingInsolation()
 
     n_updrafts = 1
     prognostic_tke = true

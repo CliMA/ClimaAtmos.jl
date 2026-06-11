@@ -152,10 +152,7 @@ function parse_frequency_to_schedule(
         return CAD.DivisorSchedule(steps)
     end
 
-    date_last =
-        t_start isa ITime ?
-        ClimaUtilities.TimeManager.date(t_start) :
-        start_date + Dates.Second(t_start)
+    date_last = ClimaUtilities.TimeManager.date(t_start)
 
     if occursin("months", frequency_str)
         months = match(r"^(\d+)months$", frequency_str)
@@ -272,9 +269,7 @@ function checkpoint_callback(
         schedule = CAD.EveryCalendarDtSchedule(
             checkpoint_frequency;
             start_date,
-            date_last = t_start isa ITime ?
-                        ClimaUtilities.TimeManager.date(t_start) :
-                        start_date + Dates.Second(t_start),
+            date_last = ClimaUtilities.TimeManager.date(t_start),
         )
         cond = (u, t, integrator) -> schedule(integrator)
         affect! = (integrator) -> save_state_to_disk_func(integrator, output_dir)
@@ -329,15 +324,12 @@ function scheduled_callback(
     t_end,
     checkpoint_frequency = nothing,
 )
-    FT = typeof(dt) <: ITime ? Float64 : (dt isa AbstractFloat ? typeof(dt) : Float64)
     dt_seconds_float = time_to_seconds(dt_str)
-    dt_seconds_val = FT(dt_seconds_float)
-    dt_seconds =
-        dt isa ITime ? ITime(dt_seconds_float) : dt_seconds_val
+    dt_seconds = ITime(dt_seconds_float)
     dt_seconds, _, _, _ = promote(dt_seconds, t_start, dt, t_end)
 
     if !isnothing(checkpoint_frequency) && checkpoint_frequency != Inf
-        dt_s = Dates.Second(round(Int, dt_seconds_val))
+        dt_s = Dates.Second(round(Int, dt_seconds_float))
         if !isdivisible(checkpoint_frequency, dt_s)
             @warn "$(nameof(affect!)) period ($dt_s) is not an even divisor of the checkpoint frequency ($checkpoint_frequency). This simulation will not be reproducible when restarted."
         end

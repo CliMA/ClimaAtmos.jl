@@ -291,10 +291,9 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, energy_q_tot_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt - vtt_central
-        if prescribed_flow isa PrescribedFlow
-            vtt_bc = ᶜρq_tot_vertical_transport_bc(prescribed_flow, thermo_params, t, ᶠu³)
-            @. Yₜ.c.ρq_tot += vtt_bc
-        end
+        vtt_bc =
+            ᶜρq_tot_vertical_transport_bc(prescribed_flow, thermo_params, t, ᶠu³)
+        @. Yₜ.c.ρq_tot += vtt_bc
     end
 
     if isnothing(ᶠf¹²)
