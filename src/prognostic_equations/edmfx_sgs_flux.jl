@@ -361,7 +361,7 @@ function edmfx_sgs_mass_flux_tendency!(
             end
         end
 
-        # Sea salt aerosol tracers (passive — no in-updraft source)
+        # Sea salt aerosol tracers
         if p.atmos.edmfx_model.prognostic_aerosols isa Val{true}
             aerosol_tracers = (
                 (@name(c.ρSSLT01), @name(ᶜSSLT01ʲs.:(1))),
@@ -392,12 +392,40 @@ function edmfx_sgs_mass_flux_tendency!(
                     ᶜchi  = p.scratch.ᶜtemp_scalar_3
                     @. ᶜdiff = ᶜχʲ - ᶜχ
                     @. ᶜchi  = specific(ᶜρχ, Y.c.ρ)
-                    for i_lvl in (5, 10, 20)
-                        diff_lvl = Array(parent(Fields.level(ᶜdiff, i_lvl)))
-                        chi_lvl  = Array(parent(Fields.level(ᶜchi,  i_lvl)))
-                        chiʲ_lvl = Array(parent(Fields.level(ᶜχʲ,   i_lvl)))
-                        χ_scale  = max(maximum(abs, chi_lvl), eps(FT))
-                        @info "[SSLT-diag-4.1] (χʲ−χ̄) vs χ̄" call=SSLT_DIAG_COUNTER[]+1 bin=ρχ_name level=i_lvl t=t diff_min=minimum(diff_lvl) diff_max=maximum(diff_lvl) χ_min=minimum(chi_lvl) χ_max=maximum(chi_lvl) χʲ_min=minimum(chiʲ_lvl) χʲ_max=maximum(chiʲ_lvl) ratio_max=maximum(abs, diff_lvl) / χ_scale
+                    # Append one CSV row per level to SSLT_DIAG_FILE (default
+                    # "sslt_diag.csv" in the CWD) instead of logging to console,
+                    # so a full run can be analyzed afterward. Set ENV before run!.
+                    sslt_diag_path = get(ENV, "SSLT_DIAG_FILE", "sslt_diag.csv")
+                    open(sslt_diag_path, "a") do io
+                        position(io) == 0 && println(
+                            io,
+                            "call,bin,level,t,diff_min,diff_max,chi_min,chi_max,chij_min,chij_max,ratio_max",
+                        )
+                        for i_lvl in (5, 10, 20)
+                            diff_lvl = Array(parent(Fields.level(ᶜdiff, i_lvl)))
+                            chi_lvl  = Array(parent(Fields.level(ᶜchi,  i_lvl)))
+                            chiʲ_lvl = Array(parent(Fields.level(ᶜχʲ,   i_lvl)))
+                            χ_scale  = max(maximum(abs, chi_lvl), eps(FT))
+                            println(
+                                io,
+                                join(
+                                    (
+                                        SSLT_DIAG_COUNTER[] + 1,
+                                        ρχ_name,
+                                        i_lvl,
+                                        float(t),
+                                        minimum(diff_lvl),
+                                        maximum(diff_lvl),
+                                        minimum(chi_lvl),
+                                        maximum(chi_lvl),
+                                        minimum(chiʲ_lvl),
+                                        maximum(chiʲ_lvl),
+                                        maximum(abs, diff_lvl) / χ_scale,
+                                    ),
+                                    ",",
+                                ),
+                            )
+                        end
                     end
                 end
 
