@@ -1124,3 +1124,22 @@ add_diagnostic_variable!(
     units = "1",
     compute = compute_env_q_tot_temperature_correlation,
 )
+
+###
+# Passive tracer A (3d)
+###
+compute_passiveA(state, cache, time) =
+    compute_passiveA(state, cache, time, cache.atmos.chemistry_model)
+compute_passiveA(_, _, _, chemistry_model) =
+    error_diagnostic_variable("passiveA", chemistry_model)
+
+compute_passiveA(state, _, _, ::GasPhaseChem) =
+    @. lazy(specific(state.c.ρA, state.c.ρ))
+
+add_diagnostic_variable!(
+    short_name = "passiveA",
+    units = "kg kg^-1",
+    long_name = "Passive Tracer A Concentration",
+    comments = "Grid-mean specific concentration of passive tracer A",
+    compute = compute_passiveA,
+)

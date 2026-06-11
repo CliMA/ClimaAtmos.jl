@@ -50,6 +50,9 @@ import ..DiagnosticEDMFX
 import ..NonOrographicGravityWave
 import ..OrographicGravityWave
 
+# chemistry_model
+import ..GasPhaseChem
+
 # surface temperature
 import ..SurfaceConditions
 import ..SurfaceConditions: SlabOceanTemperature

@@ -27,6 +27,7 @@ prognostic variables.
   - `q_rai`, `q_sno`: Precipitation specific humidities
   - `n_liq`, `n_rai`: Number densities (2-moment microphysics)
   - `n_ice`, `q_rim`, `b_rim`: P3 microphysics fields
+- `A`: Passive tracer concentration (default 0)
 """
 function physical_state(;
     T,
@@ -49,6 +50,7 @@ function physical_state(;
     n_ice = zero(T),
     q_rim = zero(T),
     b_rim = zero(T),
+    A = zero(T),
 )
     # Validate only for real states (T is finite). Placeholder states with
     # T = NaN (e.g. WeatherModel, AMIPFromERA5) skip validation because their
@@ -57,7 +59,7 @@ function physical_state(;
         error("physical_state requires at least one of `p` or `ρ`")
     return (;
         T, p, ρ, u, v, q_tot, q_liq, q_ice, tke, draft_area,
-        q_rai, q_sno, n_liq, n_rai, n_ice, q_rim, b_rim,
+        q_rai, q_sno, n_liq, n_rai, n_ice, q_rim, b_rim, A,
     )
 end
 
