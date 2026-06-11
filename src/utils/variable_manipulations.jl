@@ -182,6 +182,61 @@ foreach_gs_tracer(f::F, Y_or_similar_values...) where {F} =
 
 
 """
+    sgs_tracer_names(Y)
+
+Return a `Tuple` of `FieldName`s for all SGS (sub-grid scale) tracers
+present in the first updraft of `Y`. Returns `()` when prognostic EDMF
+is not active (i.e. when `Y.c` has no `sgsʲs` field).
+
+"Tracer" here means any scalar in `Y.c.sgsʲs.:(1)` that is **not** one
+of the core EDMF variables `ρa`, `mse`, or `q_tot` (which receive
+physics-specific treatment).
+"""
+@generated _is_sgs_tracer_name(
+    ::MatrixFields.FieldName{name_chain},
+) where {name_chain} =
+    length(name_chain) == 1 &&
+    !(name_chain[1] in (:ρa, :mse, :q_tot))
+
+sgs_tracer_names(Y) =
+    unrolled_filter(
+        _is_sgs_tracer_name,
+        MatrixFields.top_level_names(Y.c.sgsʲs.:(1)),
+    )
+
+
+"""
+    get_sgsʲ_name(χ_name::FieldName)
+
+Construct the full Jacobian matrix path name for an SGS tracer in updraft 1.
+Maps e.g. `@name(q_lcl)` → `@name(c.sgsʲs.:(1).q_lcl)`.
+
+Used in the manual sparse Jacobian to index matrix blocks for auto-discovered
+SGS tracers. Implemented as `@generated` to ensure the result is a
+compile-time constant with zero runtime allocation.
+"""
+@generated get_sgsʲ_name(::MatrixFields.FieldName{names}) where {names} =
+    MatrixFields.FieldName(:c, :sgsʲs, 1, names...)
+
+"""
+    get_c_ρχ_name(χ_name::FieldName)
+
+Construct the full Jacobian matrix path name for a grid-scale density-weighted
+tracer. Maps e.g. `@name(q_lcl)` → `@name(c.ρq_lcl)`.
+
+Composes `get_ρχ_name` (which gives `@name(ρq_lcl)`) with a `c.` prefix
+for use in `matrix[name1, name2]` indexing.
+"""
+@generated function get_c_ρχ_name(::MatrixFields.FieldName{names}) where {names}
+    # For a single-level name like (:q_lcl,), produce @name(c.ρq_lcl)
+    ρ_name = Symbol(:ρ, names[1])
+    MatrixFields.FieldName(:c, ρ_name, names[2:end]...)
+end
+
+@generated get_c_name(::MatrixFields.FieldName{names}) where {names} =
+    MatrixFields.FieldName(:c, names...)
+
+"""
     sgs_weight_function(a, a_half)
 
 Computes a smooth, monotonic weight function `w(a)` that ranges from 0 to 1.
