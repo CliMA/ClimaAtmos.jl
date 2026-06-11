@@ -913,9 +913,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -=
                     dtγ * DiagonalMatrixRow(ᶜentrʲ + ᶜturb_entrʲs.:(1))
                 @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
-                    dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
+                    dtγ * DiagonalMatrixRow(ᶜentrʲ + ᶜturb_entrʲs.:(1))
                 @. ∂ᶜρaʲ_err_∂ᶜρaʲ +=
-                    dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) - ᶜdetrʲs.:(1))
+                    dtγ * DiagonalMatrixRow(ᶜentrʲ - p.precomputed.ᶜdetrʲs.:(1))
                 # Auto-discovered SGS tracers (entrainment Jacobian)
                 MatrixFields.unrolled_foreach(
                     sgs_tracer_names(Y),
@@ -923,7 +923,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     χʲ_name = get_sgsʲ_name(χ_name)
                     ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χʲ_name, χʲ_name]
                     @. ∂ᶜχʲ_err_∂ᶜχʲ -=
-                        dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
+                        dtγ * DiagonalMatrixRow(ᶜentrʲ + ᶜturb_entrʲs.:(1))
                 end
             end
 
