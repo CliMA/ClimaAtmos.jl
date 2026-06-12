@@ -34,8 +34,9 @@ end
         config = create_vwb_config()
         (; Y, p) = generate_test_simulation(config)
         FT = eltype(Y)
-        @test p.atmos.water.tracer_nonnegativity_method isa
-              CA.TracerNonnegativityVerticalWaterBorrowing
+        @test CA.water_nonnegativity_method(
+            p.atmos.water.tracer_nonnegativity_method,
+        ) isa CA.TracerNonnegativityVerticalWaterBorrowing
         @test !isnothing(p.numerics.vertical_water_borrowing_limiter)
 
         ref_Y = deepcopy(Y)

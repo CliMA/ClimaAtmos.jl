@@ -38,7 +38,7 @@ const MoistMicrophysics = Union{
 
 Family of methods for enforcing tracer nonnegativity.
 
-There are four methods for enforcing tracer nonnegativity:
+There are five methods for enforcing tracer nonnegativity:
 - `TracerNonnegativityElementConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
     tracer mass within an element (i.e. horizontally)
 - `TracerNonnegativityVaporConstraint{qtot}`: Enforce nonnegativity by instantaneously redistributing
@@ -47,6 +47,10 @@ There are four methods for enforcing tracer nonnegativity:
     exchanging tracer mass between vapor (`q_vap`) and each tracer over time
 - `TracerNonnegativityVerticalWaterBorrowing`: Enforce nonnegativity using VerticalMassBorrowingLimiter,
     which redistributes tracer mass vertically. Note: `qtot` parameter is not applicable to this method.
+- `TracerNonnegativityClip`: Enforce nonnegativity by clipping each tracer to `max(0, ρχ)`.
+    Local and not strictly mass-conserving (clipped negatives are overshoot-sized); unlike the
+    vapor-based methods it has no reservoir interpretation, so it is also applicable to
+    non-water tracers such as prognostic aerosols. Note: `qtot` is not applicable to this method.
 
 `qtot` is a boolean that is `true` if q_tot is among the constrained tracers, and `false` otherwise.
 
@@ -75,6 +79,7 @@ struct TracerNonnegativityElementConstraint{qtot} <: TracerNonnegativityConstrai
 struct TracerNonnegativityVaporConstraint{qtot} <: TracerNonnegativityConstraint{qtot} end
 struct TracerNonnegativityVaporTendency <: TracerNonnegativityMethod end
 struct TracerNonnegativityVerticalWaterBorrowing <: TracerNonnegativityConstraint{false} end
+struct TracerNonnegativityClip <: TracerNonnegativityMethod end
 
 function TracerNonnegativityMethod(method::String; include_qtot::Bool = false)
     if method == "elementwise_constraint"
@@ -90,10 +95,73 @@ function TracerNonnegativityMethod(method::String; include_qtot::Bool = false)
             error("TracerNonnegativityVerticalWaterBorrowing does not support \
                 `include_qtot = true`")
         return TracerNonnegativityVerticalWaterBorrowing()
+    elseif method == "clip"
+        include_qtot &&
+            error("TracerNonnegativityClip does not support `include_qtot = true`")
+        return TracerNonnegativityClip()
     else
         error("Invalid tracer nonnegativity method: $method")
     end
 end
+
+"""
+    TracerNonnegativityPolicy(water, aerosol)
+
+Per-tracer-class nonnegativity policy. Each field holds a
+[`TracerNonnegativityMethod`](@ref) instance, or `nothing` to disable
+enforcement for that class:
+
+- `water`: applied to the microphysics condensate tracers
+  (`ρq_lcl`, `ρq_rai`, `ρq_icl`, `ρq_sno`, and optionally `ρq_tot` via the
+  `qtot` type parameter of the constraint). All five methods are valid.
+- `aerosol`: applied to all prognostic aerosol mass tracers
+  (`ρ<name>` for each name in `AtmosModel.prognostic_aerosols`). Valid
+  methods: `TracerNonnegativityClip`, `TracerNonnegativityElementConstraint`.
+  The vapor-based methods have no meaning for aerosols (there is no vapor
+  reservoir to exchange with) and are rejected at config parsing.
+
+When prognostic aerosols are enabled, leaving `aerosol = nothing` is unstable:
+the EDMFX SGS flux divergence is not sign-preserving for the grid mean, and
+above the boundary layer TKE ≈ 0 so eddy diffusion cannot damp overshoot;
+negative aerosol mass then accumulates aloft and feeds back through the
+updraft column march (see the SSLT notes in edmfx_sgs_flux.jl). The config
+parser therefore defaults the aerosol class to `TracerNonnegativityClip()`
+whenever prognostic aerosols are on (opt out with `aerosol: none`).
+
+Use [`water_nonnegativity_method`](@ref) / [`aerosol_nonnegativity_method`](@ref)
+to read a class method from a value that may be a policy, a bare method
+(legacy water-only configuration), or `nothing`.
+"""
+struct TracerNonnegativityPolicy{W, A}
+    water::W
+    aerosol::A
+end
+
+"""
+    water_nonnegativity_method(x)
+
+Return the water-class nonnegativity method from `x`, which may be a
+[`TracerNonnegativityPolicy`](@ref), a bare [`TracerNonnegativityMethod`](@ref)
+(treated as water-only, for backwards compatibility with direct `AtmosWater`
+construction), or `nothing`.
+"""
+water_nonnegativity_method(::Nothing) = nothing
+# TODO(breaking): the bare-method (water-only) accessor methods here exist
+# only while `get_tracer_nonnegativity_method` returns a bare method for
+# legacy configs; delete them when the parser always returns a policy.
+water_nonnegativity_method(method::TracerNonnegativityMethod) = method
+water_nonnegativity_method(policy::TracerNonnegativityPolicy) = policy.water
+
+"""
+    aerosol_nonnegativity_method(x)
+
+Return the aerosol-class nonnegativity method from `x` (see
+[`water_nonnegativity_method`](@ref)); bare methods and `nothing` carry no
+aerosol policy.
+"""
+aerosol_nonnegativity_method(::Nothing) = nothing
+aerosol_nonnegativity_method(::TracerNonnegativityMethod) = nothing
+aerosol_nonnegativity_method(policy::TracerNonnegativityPolicy) = policy.aerosol
 
 """
 

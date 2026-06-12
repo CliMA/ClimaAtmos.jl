@@ -1061,8 +1061,12 @@ function get_simulation(config::AtmosConfig)
     FT = Spaces.undertype(axes(Y.c))
 
     # Parse vertical_water_borrowing configuration for cache
-    # Check if tracer_nonnegativity_method is vertical_water_borrowing
-    tracer_nonneg_method = config.parsed_args["tracer_nonnegativity_method"]
+    # Check if the water-class tracer_nonnegativity_method is
+    # vertical_water_borrowing (handles string and per-class mapping forms)
+    tracer_nonneg_method =
+        tracer_nonnegativity_class_strings(
+            config.parsed_args["tracer_nonnegativity_method"],
+        ).water
     is_vertical_water_borrowing =
         !isnothing(tracer_nonneg_method) &&
         (

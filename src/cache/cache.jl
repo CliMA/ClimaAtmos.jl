@@ -130,9 +130,19 @@ function build_cache(
         Limiters.QuasiMonotoneLimiter(similar(Y.c, FT))
     end
 
-    nonneg_lim = atmos.water.tracer_nonnegativity_method
-    tracer_nonnegativity_limiter = if nonneg_lim isa TracerNonnegativityElementConstraint
-        Limiters.QuasiMonotoneLimiter(similar(Y.c.ρq_tot, FT))
+    # The nonnegativity field may hold a per-class TracerNonnegativityPolicy
+    # (or a bare method / nothing); build the element limiter if any class
+    # uses the elementwise constraint. The limiter buffer only needs a field
+    # on the center space, so use ρ (ρq_tot may be absent when only the
+    # aerosol class uses the constraint, e.g. under a dry model).
+    nonneg_method = atmos.water.tracer_nonnegativity_method
+    uses_element_constraint =
+        water_nonnegativity_method(nonneg_method) isa
+        TracerNonnegativityElementConstraint ||
+        aerosol_nonnegativity_method(nonneg_method) isa
+        TracerNonnegativityElementConstraint
+    tracer_nonnegativity_limiter = if uses_element_constraint
+        Limiters.QuasiMonotoneLimiter(similar(Y.c.ρ, FT))
     else
         nothing
     end
@@ -140,7 +150,8 @@ function build_cache(
     vertical_water_borrowing_limiter = nothing
     vertical_water_borrowing_species = vwb_species
 
-    if atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVerticalWaterBorrowing
+    if water_nonnegativity_method(nonneg_method) isa
+       TracerNonnegativityVerticalWaterBorrowing
         vertical_water_borrowing_limiter = Limiters.VerticalMassBorrowingLimiter((FT(0.0),))
     end
 

@@ -57,7 +57,8 @@ sourced from grid-mean vapor.
 - `Yₜ.c.ρq_lcl`, `Yₜ.c.ρq_icl`, `Yₜ.c.ρq_rai`, `Yₜ.c.ρq_sno`
 
 # Notes
-Only active when `p.atmos.water.tracer_nonnegativity_method` is `TracerNonnegativityVaporTendency`.
+Only active when the water-class method of
+`p.atmos.water.tracer_nonnegativity_method` is `TracerNonnegativityVaporTendency`.
 """
 function tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t,
     ::Union{
@@ -65,7 +66,8 @@ function tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t,
         NonEquilibriumMicrophysics2M,
     },
 )
-    p.atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVaporTendency || return
+    water_nonnegativity_method(p.atmos.water.tracer_nonnegativity_method) isa
+    TracerNonnegativityVaporTendency || return
 
     moisture_species = (
         MF.@name(ρq_lcl), MF.@name(ρq_icl),

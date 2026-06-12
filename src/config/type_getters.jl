@@ -425,7 +425,10 @@ Mirrors the legacy YAML driver's parsing logic.
 """
 function vertical_water_borrowing_species_from_config(config::AtmosConfig)
     pa = config.parsed_args
-    method = pa["tracer_nonnegativity_method"]
+    # Water-class method string (handles both the legacy string form and the
+    # per-class mapping form of `tracer_nonnegativity_method`).
+    method =
+        tracer_nonnegativity_class_strings(pa["tracer_nonnegativity_method"]).water
     is_vwb =
         !isnothing(method) && (
             method == "vertical_water_borrowing" ||

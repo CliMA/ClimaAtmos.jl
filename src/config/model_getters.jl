@@ -449,8 +449,34 @@ function get_sgs_distribution(parsed_args)
     end
 end
 
-function get_tracer_nonnegativity_method(parsed_args)
-    method = parsed_args["tracer_nonnegativity_method"]
+"""
+    tracer_nonnegativity_class_strings(raw)
+
+Normalize the raw `tracer_nonnegativity_method` config value into per-class
+method strings `(; water, aerosol)` (each a `String` or `nothing`). Accepts:
+- `nothing`: no method for either class,
+- a plain string (legacy form): water-class method only,
+- a mapping with keys `water` and/or `aerosol`.
+"""
+function tracer_nonnegativity_class_strings(raw)
+    raw isa Nothing && return (; water = nothing, aerosol = nothing)
+    raw isa AbstractString && return (; water = String(raw), aerosol = nothing)
+    raw isa AbstractDict || error(
+        "`tracer_nonnegativity_method` must be a string or a mapping with \
+        keys `water`/`aerosol`, got $(typeof(raw))",
+    )
+    unknown = setdiff(collect(keys(raw)), ["water", "aerosol"])
+    isempty(unknown) || error(
+        "Unknown `tracer_nonnegativity_method` classes: $(join(unknown, ", ")). \
+        Supported classes: water, aerosol",
+    )
+    return (;
+        water = get(raw, "water", nothing),
+        aerosol = get(raw, "aerosol", nothing),
+    )
+end
+
+function parse_water_nonnegativity_method(method)
     isnothing(method) && return nothing
     qtot = endswith(method, "_qtot")  # whether to apply tracer nonnegativity to qtot as well
     method = qtot ? chop(method; tail = 5) : method
@@ -466,9 +492,58 @@ function get_tracer_nonnegativity_method(parsed_args)
         qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
                         `_qtot` suffix. qtot will be ignored.")
         TracerNonnegativityVerticalWaterBorrowing()
+    elseif method == "clip"
+        qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
+                        `_qtot` suffix. qtot will be ignored.")
+        TracerNonnegativityClip()
     else
         error("Invalid `tracer_nonnegativity_method` $(method)")
     end
+end
+
+function parse_aerosol_nonnegativity_method(method, parsed_args)
+    has_aerosols = !isempty(parsed_args["prognostic_aerosols"])
+    if isnothing(method)
+        # Default to a nonnegativity floor whenever prognostic aerosols are on:
+        # without one, SGS-flux overshoot above the boundary layer (where TKE≈0
+        # leaves no eddy diffusion) accumulates negative aerosol mass and blows
+        # up. Opt out explicitly with `aerosol: none`.
+        return has_aerosols ? TracerNonnegativityClip() : nothing
+    end
+    method == "none" && return nothing
+    return if method == "clip"
+        TracerNonnegativityClip()
+    elseif method == "elementwise_constraint"
+        TracerNonnegativityElementConstraint{false}()
+    else
+        error(
+            "Invalid aerosol `tracer_nonnegativity_method` $(method). \
+            Supported: clip, elementwise_constraint, none (vapor-based and \
+            borrowing methods are water-only)",
+        )
+    end
+end
+
+function get_tracer_nonnegativity_method(parsed_args)
+    (; water, aerosol) = tracer_nonnegativity_class_strings(
+        parsed_args["tracer_nonnegativity_method"],
+    )
+    water_method = parse_water_nonnegativity_method(water)
+    aerosol_method = parse_aerosol_nonnegativity_method(aerosol, parsed_args)
+    # Return exactly the legacy value (bare method or `nothing`) when the
+    # aerosol class is inactive, so every pre-existing config sees an unchanged
+    # AtmosWater type (same `isa` behavior and restart-relevant model hash).
+    # A policy is only introduced when the aerosol class is active; consumers
+    # must therefore read the field through `water_nonnegativity_method` /
+    # `aerosol_nonnegativity_method` rather than direct `isa` checks.
+    # TODO(breaking): at the next breaking release, always return a
+    # TracerNonnegativityPolicy (drop the bare-method return below), then
+    # delete the bare-method compat shims: the bare-method accessor methods in
+    # types.jl and the bare-method dispatch of tracer_nonnegativity_constraint!
+    # in constrain_state.jl. The plain-string YAML form may be kept (ergonomic)
+    # or folded into the mapping form at the same time.
+    isnothing(aerosol_method) && return water_method
+    return TracerNonnegativityPolicy(water_method, aerosol_method)
 end
 
 function get_cloud_model(parsed_args, params)
@@ -644,7 +719,7 @@ function get_tracers(parsed_args)
     return (;
         prescribed_aerosol_names,
         prognostic_aerosol_names,
-        time_varying_trace_gas_names
+        time_varying_trace_gas_names,
     )
 end
 

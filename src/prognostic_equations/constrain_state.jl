@@ -26,7 +26,6 @@ Currently, these include
 NVTX.@annotate function constrain_state!(Y, p, t)
     prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
     tracer_nonnegativity_constraint!(Y, p, t, p.atmos.water.tracer_nonnegativity_method)
-    aerosol_nonnegativity_constraint!(Y, p.atmos.prognostic_aerosols)
     dss!(Y, p, t)
     return nothing
 end
@@ -102,80 +101,108 @@ NVTX.@annotate function dss!(Y, p, t)
     return nothing
 end
 
+"""
+    tracer_nonnegativity_constraint!(Y, p, t, policy)
+
+Apply the per-tracer-class nonnegativity policy to the state `Y`.
+
+`policy` is typically a [`TracerNonnegativityPolicy`](@ref) holding one
+[`TracerNonnegativityMethod`](@ref) (or `nothing`) per tracer class. A bare
+method is accepted for backwards compatibility and treated as a water-only
+policy.
+
+Each class contributes `(tracer_name, method)` pairs and a single loop
+applies the method-appropriate kernel per pair, so the enforcement kernels
+(elementwise limiter, vapor-gated clip, plain clip) are implemented once and
+shared by all classes. Methods enforced elsewhere in the timestep
+(`VaporTendency` as a tendency, `VerticalWaterBorrowing` via the `lim!`
+hook) fall through every kernel branch and are no-ops here.
+
+The aerosol class requires a floor for stability whenever prognostic
+aerosols are on: the EDMFX SGS flux divergence is not sign-preserving for
+the grid mean, and above the boundary layer TKE ≈ 0 means no eddy diffusion
+damps overshoot, so negative aerosol mass otherwise accumulates aloft and
+feeds back through the updraft column march (blowup in O(10⁴ s); see the
+SSLT notes in edmfx_sgs_flux.jl). The clip kernel is local and not strictly
+mass-conserving; clipped negatives are overshoot-sized (≪ surface emission),
+so the spurious source is negligible.
+"""
 tracer_nonnegativity_constraint!(Y, p, t, _) = nothing
-function tracer_nonnegativity_constraint!(Y, p, t,
-    tracer_nonnegativity::TracerNonnegativityConstraint{constrain_qtot},
-) where {constrain_qtot}
+tracer_nonnegativity_constraint!(Y, p, t, method::TracerNonnegativityMethod) =
+    apply_tracer_nonnegativity!(Y, p, water_nonnegativity_pairs(method))
+function tracer_nonnegativity_constraint!(
+    Y,
+    p,
+    t,
+    policy::TracerNonnegativityPolicy,
+)
+    pairs = (
+        water_nonnegativity_pairs(policy.water)...,
+        aerosol_nonnegativity_pairs(
+            policy.aerosol,
+            p.atmos.prognostic_aerosols,
+        )...,
+    )
+    return apply_tracer_nonnegativity!(Y, p, pairs)
+end
+
+water_nonnegativity_pairs(::Nothing) = ()
+water_nonnegativity_pairs(method::TracerNonnegativityMethod) = (
+    (@name(ρq_lcl), method),
+    (@name(ρq_rai), method),
+    (@name(ρq_icl), method),
+    (@name(ρq_sno), method),
+    (@name(ρq_tot), method),
+)
+
+aerosol_nonnegativity_pairs(::Nothing, ::Val) = ()
+@generated function aerosol_nonnegativity_pairs(
+    method,
+    ::Val{names},
+) where {names}
+    pair_exprs = map(names) do name
+        field_name = MatrixFields.FieldName(Symbol(:ρ, name))
+        :(($field_name, method))
+    end
+    return :(($(pair_exprs...),))
+end
+
+constrains_qtot(::TracerNonnegativityConstraint{qtot}) where {qtot} = qtot
+constrains_qtot(::TracerNonnegativityMethod) = false
+
+function apply_tracer_nonnegativity!(Y, p, pairs)
     (; tracer_nonnegativity_limiter) = p.numerics
     (; ᶜtemp_scalar, ᶜtemp_scalar_2) = p.scratch
     ᶜρ = Y.c.ρ
-    ᶜρq_tot = Y.c.ρq_tot
 
-    tracer_mass_names = (
-        @name(ρq_lcl), @name(ρq_rai), @name(ρq_icl), @name(ρq_sno),
-        @name(ρq_tot),
-    )
-
-    for name in tracer_mass_names
-        MatrixFields.has_field(Y.c, name) || continue
-        name == @name(ρq_tot) && !constrain_qtot && continue
-        # Compute clipped version of ᶜρq
+    MatrixFields.unrolled_foreach(pairs) do (name, method)
+        MatrixFields.has_field(Y.c, name) || return
+        name == @name(ρq_tot) && !constrains_qtot(method) && return
         ᶜρq = MatrixFields.get_field(Y.c, name)
 
-        if tracer_nonnegativity isa TracerNonnegativityElementConstraint
-            if (name == @name(ρq_tot)) && constrain_qtot
+        if method isa TracerNonnegativityElementConstraint
+            is_qtot = name == @name(ρq_tot)
+            if is_qtot
                 ᶜtemp_scalar_2 .= ᶜρq
             end
             ᶜρq_lim = @. ᶜtemp_scalar = max(0, ᶜρq)
             Limiters.compute_bounds!(tracer_nonnegativity_limiter, ᶜρq_lim, ᶜρ)  # bounds are `extrema(ᶜρq_lim) = (0, max(ᶜρq))`
             Limiters.apply_limiter!(ᶜρq, ᶜρ, tracer_nonnegativity_limiter; warn = false)  # ᶜρq is clipped to bounds, effectively ensuring `0 ≤ ᶜρq`
-            if (name == @name(ρq_tot)) && constrain_qtot
+            if is_qtot
                 @. ᶜtemp_scalar_2 = ᶜρq - ᶜtemp_scalar_2
                 enforce_mass_energy_consistency!(Y, p, ᶜtemp_scalar_2)
             end
-        elseif tracer_nonnegativity isa TracerNonnegativityVaporConstraint
+        elseif method isa TracerNonnegativityVaporConstraint
             # If `ρq` is negative, set it to 0 (as long as `ρq_tot` is positive), otherwise keep it as is
+            ᶜρq_tot = Y.c.ρq_tot
             @. ᶜρq = ifelse(ᶜρq_tot > 0, max(0, ᶜρq), ᶜρq)
+        elseif method isa TracerNonnegativityClip
+            @. ᶜρq = max(0, ᶜρq)
         end
-
-    end
-
-end
-
-"""
-    aerosol_nonnegativity_constraint!(Y, prognostic_aerosols)
-
-Clip prognostic aerosol mass (`Y.c.ρ<name>`) to be nonnegative after each
-timestepper stage.
-
-This mirrors the nonnegativity floor that `tracer_nonnegativity_constraint!`
-gives the microphysics condensate tracers, but runs whenever prognostic
-aerosols are enabled, independent of `tracer_nonnegativity_method` (a
-moisture setting). Aerosols share the condensate tracers' vulnerability —
-a near-zero background aloft acted on by the sign-indefinite EDMFX SGS flux
-divergence — but above the boundary layer TKE ≈ 0, so eddy diffusion cannot
-damp overshoot there. Without this floor, negative aerosol mass accumulates
-at upper levels and feeds back through the updraft column march
-(χʲ entrains the negative grid mean), blowing up in O(10⁴ s)
-(see the SSLT notes in edmfx_sgs_flux.jl).
-
-Like `TracerNonnegativityVaporConstraint` for condensate, the clip is local
-and not strictly mass-conserving; the clipped negatives are overshoot-sized
-(≪ surface emission), so the spurious source is negligible.
-"""
-aerosol_nonnegativity_constraint!(Y, ::Val{()}) = nothing
-@generated function aerosol_nonnegativity_constraint!(
-    Y,
-    ::Val{names},
-) where {names}
-    clip_exprs = map(names) do name
-        ρχ = Symbol(:ρ, name)
-        :(Y.c.$ρχ .= max.(0, Y.c.$ρχ))
-    end
-    return quote
-        $(clip_exprs...)
         return nothing
     end
+
+    return nothing
 end
 
 prescribe_flow!(_, _, _, ::Nothing) = nothing
