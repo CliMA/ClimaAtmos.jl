@@ -1,9 +1,9 @@
-dt_save_state_to_disk: "2days"
+dt_save_state_to_disk: "1days"
 initial_condition: "DryBaroclinicWave"
 use_auto_jacobian: true
 update_jacobian_every: dt
 debug_jacobian: true
-t_end: "6days"
+t_end: "2days"
 disable_surface_flux_tendency: true
 diagnostics:
   - short_name: [pfull, ua, wa, va, rv, ta, ke]
