@@ -23,7 +23,7 @@ if !(@isdefined config)
 end
 simulation = CA.get_simulation(config)
 (; integrator) = simulation
-#sol_res = CA.solve_atmos!(simulation)
+sol_res = CA.solve_atmos!(simulation)
 
 (; atmos, params) = integrator.p
 (; p) = integrator
@@ -45,16 +45,16 @@ include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 ref_job_id = config.parsed_args["reference_job_id"]
 reference_job_id = isnothing(ref_job_id) ? simulation.job_id : ref_job_id
 
-#if (
-#    config.parsed_args["debug_jacobian"] &&
+if (
+    config.parsed_args["debug_jacobian"] &&
     !config.parsed_args["use_dense_jacobian"]
-#)
+)
     @info "Debugging Jacobian in first column of final state"
     include(joinpath(@__DIR__, "..", "post_processing", "jacobian_summary.jl"))
     print_jacobian_summary(integrator)
-#end
+end
 
-error()
+#error()
 
 if sol_res.ret_code == :simulation_crashed
     error(
