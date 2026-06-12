@@ -156,7 +156,9 @@ atmos_name_map = (;
     :c_smag => :c_smag,
     :alpha_rayleigh_w => :alpha_rayleigh_w,
     :alpha_rayleigh_uh => :alpha_rayleigh_uh,
-    :alpha_rayleigh_sgs_tracer => :alpha_rayleigh_sgs_tracer,
+    # TODO: rename external CliMA param `alpha_rayleigh_sgs_tracer` → `alpha_rayleigh_tracer`
+    # in ClimaParams.jl; afterwards both sides of this mapping can be renamed in sync.
+    :alpha_rayleigh_sgs_tracer => :alpha_rayleigh_tracer,
     :astronomical_unit => :astro_unit,
     :held_suarez_T_equator_dry => :T_equator_dry,
     :drag_layer_vertical_extent => :σ_b,

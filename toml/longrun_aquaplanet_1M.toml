@@ -18,3 +18,6 @@ value = 40000.0
 
 [zd_viscous]
 value = 40000.0
+
+[alpha_rayleigh_sgs_tracer]
+value = 0.001

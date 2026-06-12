@@ -29,7 +29,7 @@ function amip_target(context, output_dir)
         zd = params.zd_rayleigh,
         α_uₕ = params.alpha_rayleigh_uh,
         α_w = params.alpha_rayleigh_w,
-        α_sgs_tracer = params.alpha_rayleigh_sgs_tracer,
+        α_tracer = params.alpha_rayleigh_tracer,
     )
     viscous_sponge =
         CA.ViscousSponge{FT}(; zd = params.zd_viscous, κ₂ = params.kappa_2_sponge)
