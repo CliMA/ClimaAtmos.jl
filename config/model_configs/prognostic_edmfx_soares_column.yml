@@ -11,7 +11,7 @@ edmfx_nh_pressure: true
 edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
-microphysics_model: "0M"
+microphysics_model: "1M"
 config: "column"
 hyperdiff: ~
 z_max: 3750

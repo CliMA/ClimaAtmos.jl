@@ -1286,26 +1286,26 @@ EDMFBoxPlots = Union{
 
 EDMFColumnPlots = Union{
     Val{:prognostic_edmfx_adv_test_column},
+    Val{:prognostic_edmfx_trmm_column_0M},
+    Val{:prognostic_edmfx_gcmdriven_column},
+    Val{:prognostic_edmfx_tv_era5driven_column},
+}
+
+EDMFColumnPlotsWithPrecip = Union{
+    Val{:prognostic_edmfx_simpleplume_column},
+    Val{:prognostic_edmfx_soares_column},
     Val{:prognostic_edmfx_gabls_column},
     Val{:prognostic_edmfx_gabls_column_sparse_autodiff},
     Val{:prognostic_edmfx_bomex_fixtke_column},
     Val{:prognostic_edmfx_bomex_column},
-    Val{:prognostic_edmfx_bomex_implicit_column},
+    Val{:prognostic_edmfx_bomex_mlcloud_column},
     Val{:prognostic_edmfx_bomex_column_sparse_autodiff},
     Val{:prognostic_edmfx_dycoms_rf01_column},
-    Val{:prognostic_edmfx_trmm_column_0M},
-    Val{:prognostic_edmfx_simpleplume_column},
-    Val{:prognostic_edmfx_gcmdriven_column},
-    Val{:prognostic_edmfx_tv_era5driven_column},
-    Val{:prognostic_edmfx_soares_column},
-}
-
-EDMFColumnPlotsWithPrecip = Union{
+    Val{:prognostic_edmfx_dycoms_rf02_column},
+    Val{:prognostic_edmfx_dycoms_rf02_column_sparse_autodiff},
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_rico_column_2M},
     Val{:prognostic_edmfx_trmm_column},
-    Val{:prognostic_edmfx_dycoms_rf02_column},
-    Val{:prognostic_edmfx_dycoms_rf02_column_sparse_autodiff},
 }
 
 DiagEDMFBoxPlotsWithPrecip = Union{

@@ -258,7 +258,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_0M.yml
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
           --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column.yml
           --job_id prognostic_edmfx_simpleplume_column
         artifact_paths: "prognostic_edmfx_simpleplume_column/output_active/*"
@@ -269,7 +269,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_0M.yml
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
           --config_file $CONFIG_PATH/prognostic_edmfx_soares_column.yml
           --job_id prognostic_edmfx_soares_column
         artifact_paths: "prognostic_edmfx_soares_column/output_active/*"
@@ -280,7 +280,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_0M.yml
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
           --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column.yml
           --job_id prognostic_edmfx_gabls_column
         artifact_paths: "prognostic_edmfx_gabls_column/output_active/*"
@@ -291,40 +291,40 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_0M.yml
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_column.yml
           --job_id prognostic_edmfx_bomex_fixtke_column
         artifact_paths: "prognostic_edmfx_bomex_fixtke_column/output_active/*"
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX), prognostic TKE"
+      - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX)"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_0M.yml
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
           --job_id prognostic_edmfx_bomex_column
         artifact_paths: "prognostic_edmfx_bomex_column/output_active/*"
         agents:
           slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX), implicit SGS"
+      
+      - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX), ML cloud"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_0M.yml
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_implicit_column
-        artifact_paths: "prognostic_edmfx_bomex_implicit_column/output_active/*"
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_mlcloud_column.yml
+          --job_id prognostic_edmfx_bomex_mlcloud_column
+        artifact_paths: "prognostic_edmfx_bomex_mlcloud_column/output_active/*"
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMF: Nocturnal Sc (DYCOMS-RF01), explicit SGS"
+      - label: ":genie: Prognostic EDMF: Nocturnal Sc (DYCOMS-RF01)"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_0M.yml
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
           --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_column.yml
           --job_id prognostic_edmfx_dycoms_rf01_column
         artifact_paths: "prognostic_edmfx_dycoms_rf01_column/output_active/*"
@@ -940,7 +940,7 @@ steps:
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
-        timeout_in_minutes: 20
+        timeout_in_minutes: 30
         #retry:
         #  automatic: true
 

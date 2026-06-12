@@ -1,4 +1,4 @@
-359
+360
 # **README**
 #
 # What is the ref_counter?
@@ -31,6 +31,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+360
+- Changed the default snow autoconversion to NoSupersaturation
+
 359
 - Use 1D vertical column instead of minimal box for `config = column`
 

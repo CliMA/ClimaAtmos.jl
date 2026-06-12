@@ -120,7 +120,7 @@ function override_default_config(config_dict::AbstractDict;)
         v = config_dict[k]
         # `nothing` defaults and excepted keys pass through unchanged;
         # everything else must coerce cleanly to the default's type.
-        if isnothing(default_config[k]) || k in EXCEPTED_KEYS
+        if isnothing(default_config[k]) || isnothing(v) || k in EXCEPTED_KEYS
             config[k] = v
         else
             default_type = typeof(default_config[k])
