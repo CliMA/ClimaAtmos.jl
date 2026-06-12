@@ -135,30 +135,14 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
                 split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_tot) -
                 Y.c.sgsʲs.:($$j).q_tot * split_divₕ(ᶜuʲs.:($$j), 1)
-            if p.atmos.microphysics_model isa Union{
-                NonEquilibriumMicrophysics1M,
-                NonEquilibriumMicrophysics2M,
-            }
-                @. Yₜ.c.sgsʲs.:($$j).q_lcl -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_lcl) -
-                    Y.c.sgsʲs.:($$j).q_lcl * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).q_icl -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_icl) -
-                    Y.c.sgsʲs.:($$j).q_icl * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).q_rai -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_rai) -
-                    Y.c.sgsʲs.:($$j).q_rai * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).q_sno -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_sno) -
-                    Y.c.sgsʲs.:($$j).q_sno * split_divₕ(ᶜuʲs.:($$j), 1)
-            end
-            if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
-                @. Yₜ.c.sgsʲs.:($$j).n_lcl -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_lcl) -
-                    Y.c.sgsʲs.:($$j).n_lcl * split_divₕ(ᶜuʲs.:($$j), 1)
-                @. Yₜ.c.sgsʲs.:($$j).n_rai -=
-                    split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).n_rai) -
-                    Y.c.sgsʲs.:($$j).n_rai * split_divₕ(ᶜuʲs.:($$j), 1)
+            # Auto-discovered SGS tracers (microphysics species and any
+            # user-defined passive tracers)
+            for χ_name in sgs_tracer_names(Y)
+                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
+                @. ᶜχʲₜ -=
+                    split_divₕ(ᶜuʲs.:($$j), ᶜχʲ) -
+                    ᶜχʲ * split_divₕ(ᶜuʲs.:($$j), 1)
             end
         end
     end
@@ -395,6 +379,20 @@ function edmfx_sgs_vertical_advection_tendency!(
         )
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
 
+        # Advective form advection of auto-discovered SGS tracers
+        # (microphysics species and any user-defined passive tracers)
+        # with the updraft velocity
+        for χ_name in sgs_tracer_names(Y)
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+            va = vertical_advection(
+                ᶠu³ʲs.:($j),
+                ᶜχʲ,
+                edmfx_tracer_upwinding,
+            )
+            @. ᶜχʲₜ += va
+        end
+
         if p.atmos.microphysics_model isa
            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
@@ -427,14 +425,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜqʲ = MatrixFields.get_field(Y, qʲ_name)
                 ᶜqʲₜ = MatrixFields.get_field(Yₜ, qʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-
-                # Advective form advection of tracers with updraft velocity
-                va = vertical_advection(
-                    ᶠu³ʲs.:($j),
-                    ᶜqʲ,
-                    edmfx_tracer_upwinding,
-                )
-                @. ᶜqʲₜ += va
 
                 # Flux form sedimentation of tracers
                 vtt = p.scratch.ᶜtemp_scalar_4
@@ -476,14 +466,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-
-                # Advective form advection of tracers with updraft velocity
-                va = vertical_advection(
-                    ᶠu³ʲs.:($j),
-                    ᶜχʲ,
-                    edmfx_tracer_upwinding,
-                )
-                @. ᶜχʲₜ += va
 
                 # Flux form sedimentation of tracers
                 vtt = p.scratch.ᶜtemp_scalar_4

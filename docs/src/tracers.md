@@ -1,5 +1,3 @@
-# Aerosols
-
 # Trace Gases
 `ClimaAtmos` implements two modes for each ozone and carbon dioxide: one time varying and one time invariant. These are only relevant for the radiation transfer, and only when RRTMGP is used. All other atmospheric gases are held fixed with default values from RRTMPG that can be changed in the toml file.
 

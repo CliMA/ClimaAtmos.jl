@@ -182,6 +182,30 @@ foreach_gs_tracer(f::F, Y_or_similar_values...) where {F} =
 
 
 """
+    sgs_tracer_names(Y)
+
+Return a `Tuple` of `FieldName`s for all SGS (sub-grid scale) tracers
+present in the first updraft of `Y`. Returns `()` when prognostic EDMF
+is not active (i.e. when `Y.c` has no `sgsʲs` field).
+
+"Tracer" here means any scalar in `Y.c.sgsʲs.:(1)` that is **not** one
+of the core EDMF variables `ρa`, `mse`, or `q_tot` (which receive
+physics-specific treatment).
+"""
+_is_sgs_tracer_name(::MatrixFields.FieldName{name_chain}) where {name_chain} =
+    !(last(name_chain) in (:ρa, :mse, :q_tot))
+
+sgs_tracer_names(Y) =
+    _sgs_tracer_names(Val(hasproperty(Y.c, :sgsʲs)), Y)
+_sgs_tracer_names(::Val{false}, Y) = ()
+_sgs_tracer_names(::Val{true}, Y) =
+    unrolled_filter(
+        _is_sgs_tracer_name,
+        MatrixFields.top_level_names(Y.c.sgsʲs.:(1)),
+    )
+
+
+"""
     sgs_weight_function(a, a_half)
 
 Computes a smooth, monotonic weight function `w(a)` that ranges from 0 to 1.

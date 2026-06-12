@@ -126,57 +126,41 @@ function edmfx_sgs_mass_flux_tendency!(
             @. Yₜ.c.ρq_tot += vtt
         end
 
-        # Microphysics tracers fluxes
-        if p.atmos.microphysics_model isa
-           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-            microphysics_tracers = (
-                (@name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl), @name(q_lcl)),
-                (@name(c.ρq_icl), @name(c.sgsʲs.:(1).q_icl), @name(q_icl)),
-                (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai), @name(q_rai)),
-                (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno), @name(q_sno)),
-                (@name(c.ρn_lcl), @name(c.sgsʲs.:(1).n_lcl), @name(n_lcl)),
-                (@name(c.ρn_rai), @name(c.sgsʲs.:(1).n_rai), @name(n_rai)),
-            )
-            # TODO using unrolled_foreach here allocates! (breaks the flame tests
-            # even though they use 0M microphysics)
-            # MatrixFields.unrolled_foreach(
-            #     microphysics_tracers,
-            # ) do (ρχ_name, χʲ_name, _)
-            for (ρχ_name, χʲ_name, _) in microphysics_tracers
-                MatrixFields.has_field(Y, ρχ_name) || continue
-
-                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+        # Auto-discovered SGS tracer fluxes (microphysics species and any
+        # user-defined passive tracers)
+        # Draft fluxes
+        for χ_name in sgs_tracer_names(Y)
+            ρχ_name = get_ρχ_name(χ_name)
+            for j in 1:n
+                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
                 @. ᶜa_scalar =
                     ᶜχʲ *
-                    draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                 vtt = vertical_transport(
-                    ᶜρʲs.:(1),
-                    ᶠu³ʲs.:(1),
+                    ᶜρʲs.:($j),
+                    ᶠu³ʲs.:($j),
                     ᶜa_scalar,
                     dt,
                     edmfx_tracer_upwinding,
                 )
-                ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+                ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
                 @. ᶜρχₜ += vtt
             end
-            # MatrixFields.unrolled_foreach(
-            #     microphysics_tracers,
-            # ) do (ρχ_name, _, χ_name)
-            for (ρχ_name, _, χ_name) in microphysics_tracers
-                MatrixFields.has_field(Y, ρχ_name) || continue
-
-                ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-                @. ᶜa_scalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
-                vtt = vertical_transport(
-                    ᶜρ⁰,
-                    ᶠu³⁰,
-                    ᶜa_scalar,
-                    dt,
-                    edmfx_tracer_upwinding,
-                )
-                ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-                @. ᶜρχₜ += vtt
-            end
+        end
+        # Environment fluxes
+        for χ_name in sgs_tracer_names(Y)
+            ρχ_name = get_ρχ_name(χ_name)
+            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+            @. ᶜa_scalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
+            vtt = vertical_transport(
+                ᶜρ⁰,
+                ᶠu³⁰,
+                ᶜa_scalar,
+                dt,
+                edmfx_tracer_upwinding,
+            )
+            ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+            @. ᶜρχₜ += vtt
         end
     end
     # TODO - add vertical momentum fluxes
@@ -459,16 +443,15 @@ function edmfx_sgs_diffusive_flux_tendency!(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
-        microphysics_tracers = (
-            @name(c.ρq_lcl), @name(c.ρq_icl), @name(c.ρq_rai), @name(c.ρq_sno),
-            @name(c.ρn_lcl), @name(c.ρn_rai),
-        )
-        MatrixFields.unrolled_foreach(microphysics_tracers) do ρχ_name
-            MatrixFields.has_field(Y, ρχ_name) || return
-            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+        # Auto-discovered grid-scale tracers (microphysics species and any
+        # user-defined passive tracers)
+        for χ_name in sgs_tracer_names(Y)
+            ρχ_name = get_ρχ_name(χ_name)
+            MatrixFields.has_field(Y.c, ρχ_name) || continue
+            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
             @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_microphysics * ᶠgradᵥ(ᶜχ)))
-            ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
 
