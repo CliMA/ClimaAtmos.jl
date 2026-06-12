@@ -185,7 +185,7 @@ tracer_nonnegativity_method:
     - `clip`: Enforce nonnegativity by clipping each condensate tracer to max(0, ρχ) (local, not strictly mass-conserving)
     - `~` (default): Do not enforce nonnegativity
     Note: append `_qtot` to the method name to enforce nonnegativity of q_tot as well (only applicable to `elementwise_constraint` and `vapor_constraint`).
-    Aerosol-class options (applied to all `prognostic_aerosols` mass tracers): `clip`, `elementwise_constraint`, `none`.
+    Aerosol-class options (applied to all `prognostic_aerosols` mass tracers): `clip`, `elementwise_constraint`, `vertical_water_borrowing`, `none`.
     When prognostic aerosols are enabled the aerosol class defaults to `clip` (required for stability:
     without a floor, SGS-flux overshoot above the boundary layer accumulates negative aerosol mass and blows up);
     use `aerosol: none` to opt out explicitly.

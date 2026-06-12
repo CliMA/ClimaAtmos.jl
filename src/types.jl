@@ -116,7 +116,9 @@ enforcement for that class:
   `qtot` type parameter of the constraint). All five methods are valid.
 - `aerosol`: applied to all prognostic aerosol mass tracers
   (`ρ<name>` for each name in `AtmosModel.prognostic_aerosols`). Valid
-  methods: `TracerNonnegativityClip`, `TracerNonnegativityElementConstraint`.
+  methods: `TracerNonnegativityClip`, `TracerNonnegativityElementConstraint`,
+  `TracerNonnegativityVerticalWaterBorrowing` (mass-conserving column
+  redistribution, shared with the water machinery in limited_tendencies.jl).
   The vapor-based methods have no meaning for aerosols (there is no vapor
   reservoir to exchange with) and are rejected at config parsing.
 

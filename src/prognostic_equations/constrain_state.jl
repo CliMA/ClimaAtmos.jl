@@ -128,8 +128,14 @@ mass-conserving; clipped negatives are overshoot-sized (≪ surface emission),
 so the spurious source is negligible.
 """
 tracer_nonnegativity_constraint!(Y, p, t, _) = nothing
+# TODO below is legacy for water only specifications, remove in breaking rel.
 tracer_nonnegativity_constraint!(Y, p, t, method::TracerNonnegativityMethod) =
-    apply_tracer_nonnegativity!(Y, p, water_nonnegativity_pairs(method))
+    apply_tracer_nonnegativity!(
+        Y,
+        p,
+        nonnegativity_pairs(method, WATER_NONNEGATIVITY_NAMES),
+    )
+
 function tracer_nonnegativity_constraint!(
     Y,
     p,
@@ -137,35 +143,23 @@ function tracer_nonnegativity_constraint!(
     policy::TracerNonnegativityPolicy,
 )
     pairs = (
-        water_nonnegativity_pairs(policy.water)...,
-        aerosol_nonnegativity_pairs(
+        nonnegativity_pairs(policy.water, WATER_NONNEGATIVITY_NAMES)...,
+        nonnegativity_pairs(
             policy.aerosol,
-            p.atmos.prognostic_aerosols,
+            aerosol_mass_names(p.atmos.prognostic_aerosols),
         )...,
     )
     return apply_tracer_nonnegativity!(Y, p, pairs)
 end
 
-water_nonnegativity_pairs(::Nothing) = ()
-water_nonnegativity_pairs(method::TracerNonnegativityMethod) = (
-    (@name(ρq_lcl), method),
-    (@name(ρq_rai), method),
-    (@name(ρq_icl), method),
-    (@name(ρq_sno), method),
-    (@name(ρq_tot), method),
-)
+nonnegativity_pairs(::Nothing, _) = ()
+nonnegativity_pairs(method::TracerNonnegativityMethod, names) =
+    map(name -> (name, method), names)
 
-aerosol_nonnegativity_pairs(::Nothing, ::Val) = ()
-@generated function aerosol_nonnegativity_pairs(
-    method,
-    ::Val{names},
-) where {names}
-    pair_exprs = map(names) do name
-        field_name = MatrixFields.FieldName(Symbol(:ρ, name))
-        :(($field_name, method))
-    end
-    return :(($(pair_exprs...),))
-end
+const WATER_NONNEGATIVITY_NAMES =
+    (@name(ρq_lcl), @name(ρq_rai), @name(ρq_icl), @name(ρq_sno), @name(ρq_tot))
+@generated aerosol_mass_names(::Val{names}) where {names} =
+    :($(map(n -> MatrixFields.FieldName(Symbol(:ρ, n)), names)))
 
 constrains_qtot(::TracerNonnegativityConstraint{qtot}) where {qtot} = qtot
 constrains_qtot(::TracerNonnegativityMethod) = false

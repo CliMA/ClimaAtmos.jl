@@ -476,60 +476,66 @@ function tracer_nonnegativity_class_strings(raw)
     )
 end
 
-function parse_water_nonnegativity_method(method)
-    isnothing(method) && return nothing
+"""
+    parse_tracer_nonnegativity_method(method, class)
+
+Parse one class's `tracer_nonnegativity_method` string into a
+[`TracerNonnegativityMethod`](@ref) instance (`nothing`/"none" disable it).
+`class` (`:water` or `:aerosol`) controls validation: vapor-based methods and
+the `_qtot` suffix are water-only (aerosols have no vapor reservoir, and
+`ρq_tot` is not an aerosol tracer).
+"""
+function parse_tracer_nonnegativity_method(method, class)
+    (isnothing(method) || method == "none") && return nothing
     qtot = endswith(method, "_qtot")  # whether to apply tracer nonnegativity to qtot as well
+    qtot &&
+        class === :aerosol &&
+        error("`_qtot` does not apply to the aerosol class")
     method = qtot ? chop(method; tail = 5) : method
-    return if method == "elementwise_constraint"
+    parsed = if method == "elementwise_constraint"
         TracerNonnegativityElementConstraint{qtot}()
     elseif method == "vapor_constraint"
         TracerNonnegativityVaporConstraint{qtot}()
     elseif method == "vapor_tendency"
-        qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
-                        `_qtot` suffix. qtot will be ignored.")
         TracerNonnegativityVaporTendency()
     elseif method == "vertical_water_borrowing"
-        qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
-                        `_qtot` suffix. qtot will be ignored.")
         TracerNonnegativityVerticalWaterBorrowing()
     elseif method == "clip"
-        qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
+        TracerNonnegativityClip()
+    else
+        error("Invalid `tracer_nonnegativity_method` $(method) for class $(class)")
+    end
+    qtot &&
+        !(
+            parsed isa Union{
+                TracerNonnegativityElementConstraint,
+                TracerNonnegativityVaporConstraint,
+            }
+        ) &&
+        warn("`tracer_nonnegativity_method` $(method) does not support \
                         `_qtot` suffix. qtot will be ignored.")
-        TracerNonnegativityClip()
-    else
-        error("Invalid `tracer_nonnegativity_method` $(method)")
-    end
-end
-
-function parse_aerosol_nonnegativity_method(method, parsed_args)
-    has_aerosols = !isempty(parsed_args["prognostic_aerosols"])
-    if isnothing(method)
-        # Default to a nonnegativity floor whenever prognostic aerosols are on:
-        # without one, SGS-flux overshoot above the boundary layer (where TKE≈0
-        # leaves no eddy diffusion) accumulates negative aerosol mass and blows
-        # up. Opt out explicitly with `aerosol: none`.
-        return has_aerosols ? TracerNonnegativityClip() : nothing
-    end
-    method == "none" && return nothing
-    return if method == "clip"
-        TracerNonnegativityClip()
-    elseif method == "elementwise_constraint"
-        TracerNonnegativityElementConstraint{false}()
-    else
-        error(
-            "Invalid aerosol `tracer_nonnegativity_method` $(method). \
-            Supported: clip, elementwise_constraint, none (vapor-based and \
-            borrowing methods are water-only)",
-        )
-    end
+    class === :aerosol &&
+        parsed isa Union{
+            TracerNonnegativityVaporConstraint,
+            TracerNonnegativityVaporTendency,
+        } &&
+        error("`tracer_nonnegativity_method` $(method) is water-only. \
+            Aerosol options: clip, elementwise_constraint, \
+            vertical_water_borrowing, none")
+    return parsed
 end
 
 function get_tracer_nonnegativity_method(parsed_args)
     (; water, aerosol) = tracer_nonnegativity_class_strings(
         parsed_args["tracer_nonnegativity_method"],
     )
-    water_method = parse_water_nonnegativity_method(water)
-    aerosol_method = parse_aerosol_nonnegativity_method(aerosol, parsed_args)
+    water_method = parse_tracer_nonnegativity_method(water, :water)
+    # Aerosols default to a clip floor whenever prognostic aerosols are on
+    # (required for stability -- see constrain_state.jl); opt out with "none".
+    aerosol_method =
+        isnothing(aerosol) && !isempty(parsed_args["prognostic_aerosols"]) ?
+        TracerNonnegativityClip() :
+        parse_tracer_nonnegativity_method(aerosol, :aerosol)
     # Return exactly the legacy value (bare method or `nothing`) when the
     # aerosol class is inactive, so every pre-existing config sees an unchanged
     # AtmosWater type (same `isa` behavior and restart-relevant model hash).

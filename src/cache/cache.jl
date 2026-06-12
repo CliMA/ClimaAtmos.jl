@@ -87,6 +87,64 @@ Adapt.@adapt_structure AtmosCache
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
+
+"""
+    tracer_nonnegativity_numerics(method, prognostic_aerosols, vwb_species, Y, FT)
+
+Translate the per-class tracer nonnegativity policy (a
+[`TracerNonnegativityPolicy`](@ref), bare method, or `nothing`) into the
+`p.numerics` entries that enforce it:
+
+- `tracer_nonnegativity_limiter`: a `QuasiMonotoneLimiter` if any class uses
+  the elementwise constraint. Its buffer only needs a field on the center
+  space, so it is built from `ρ` (`ρq_tot` may be absent when only the
+  aerosol class uses the constraint, e.g. under a dry model).
+- `vertical_water_borrowing_limiter`: a `VerticalMassBorrowingLimiter` if any
+  class uses vertical borrowing.
+- `vertical_water_borrowing_species`: species tuple for the borrowing loop
+  (limited_tendencies.jl). Water-class borrowing keeps the legacy
+  `vertical_water_borrowing_species` semantics (`nothing` = all tracer vars);
+  aerosol-class borrowing contributes exactly the prognostic bin mass names.
+"""
+function tracer_nonnegativity_numerics(
+    method,
+    prognostic_aerosols,
+    vwb_species,
+    Y,
+    ::Type{FT},
+) where {FT}
+    water = water_nonnegativity_method(method)
+    aerosol = aerosol_nonnegativity_method(method)
+
+    tracer_nonnegativity_limiter =
+        water isa TracerNonnegativityElementConstraint ||
+        aerosol isa TracerNonnegativityElementConstraint ?
+        Limiters.QuasiMonotoneLimiter(similar(Y.c.ρ, FT)) : nothing
+
+    water_vwb = water isa TracerNonnegativityVerticalWaterBorrowing
+    aerosol_vwb = aerosol isa TracerNonnegativityVerticalWaterBorrowing
+    aerosol_vwb_names =
+        aerosol_vwb ?
+        map(n -> Symbol(:ρ, n), _aerosol_names(prognostic_aerosols)) : ()
+    vertical_water_borrowing_limiter =
+        (water_vwb || aerosol_vwb) ?
+        Limiters.VerticalMassBorrowingLimiter((FT(0.0),)) : nothing
+    vertical_water_borrowing_species = if water_vwb
+        isnothing(vwb_species) ? nothing :
+        (vwb_species..., aerosol_vwb_names...)
+    elseif aerosol_vwb
+        aerosol_vwb_names
+    else
+        vwb_species
+    end
+
+    return (;
+        tracer_nonnegativity_limiter,
+        vertical_water_borrowing_limiter,
+        vertical_water_borrowing_species,
+    )
+end
+
 function build_cache(
     Y,
     atmos,
@@ -130,36 +188,15 @@ function build_cache(
         Limiters.QuasiMonotoneLimiter(similar(Y.c, FT))
     end
 
-    # The nonnegativity field may hold a per-class TracerNonnegativityPolicy
-    # (or a bare method / nothing); build the element limiter if any class
-    # uses the elementwise constraint. The limiter buffer only needs a field
-    # on the center space, so use ρ (ρq_tot may be absent when only the
-    # aerosol class uses the constraint, e.g. under a dry model).
-    nonneg_method = atmos.water.tracer_nonnegativity_method
-    uses_element_constraint =
-        water_nonnegativity_method(nonneg_method) isa
-        TracerNonnegativityElementConstraint ||
-        aerosol_nonnegativity_method(nonneg_method) isa
-        TracerNonnegativityElementConstraint
-    tracer_nonnegativity_limiter = if uses_element_constraint
-        Limiters.QuasiMonotoneLimiter(similar(Y.c.ρ, FT))
-    else
-        nothing
-    end
-
-    vertical_water_borrowing_limiter = nothing
-    vertical_water_borrowing_species = vwb_species
-
-    if water_nonnegativity_method(nonneg_method) isa
-       TracerNonnegativityVerticalWaterBorrowing
-        vertical_water_borrowing_limiter = Limiters.VerticalMassBorrowingLimiter((FT(0.0),))
-    end
-
     numerics = (;
         sem_quasimonotone_limiter,
-        tracer_nonnegativity_limiter,
-        vertical_water_borrowing_limiter,
-        vertical_water_borrowing_species,
+        tracer_nonnegativity_numerics(
+            atmos.water.tracer_nonnegativity_method,
+            atmos.prognostic_aerosols,
+            vwb_species,
+            Y,
+            FT,
+        )...,
     )
 
     sfc_local_geometry =
