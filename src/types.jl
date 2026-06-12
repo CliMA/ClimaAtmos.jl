@@ -379,14 +379,14 @@ Separate damping coefficients are used:
 
   - `α_uₕ`: horizontal velocity, `uₕ`;
   - `α_w`: vertical velocity, `u₃`, `u₃ʲ`;
-  - `α_sgs_tracer`: subgrid-scale tracer variables, `ρtke`, `mseʲ`, `q_totʲ`,
-    `q_lclʲ`, `q_raiʲ`, `q_iclʲ`, `q_snoʲ`.
+  - `α_tracer`: tracer variables, `ρtke`, `ρq_lcl`, `ρq_rai`, `ρq_icl`,
+    `ρq_sno`, `mseʲ`, `q_totʲ`, `q_lclʲ`, `q_raiʲ`, `q_iclʲ`, `q_snoʲ`.
 
 By default, damping is only applied to vertical velocity, with:
 
   - `α_uₕ = 0`
   - `α_w = 1`
-  - `α_sgs_tracer = 0`
+  - `α_tracer = 0`
 
 # Examples
 
@@ -402,15 +402,15 @@ sponge = RayleighSponge(Float32; zd = 20_000)
     α_uₕ::FT = 0
     "Damping coefficient for vertical velocity, by default 1 (full damping)"
     α_w::FT = 1
-    "Damping coefficient for subgrid-scale tracer variables, by default 0 (no damping)"
-    α_sgs_tracer::FT = 0
+    "Damping coefficient for tracer variables, by default 0 (no damping)"
+    α_tracer::FT = 0
 end
 
 RayleighSponge(params) = RayleighSponge(;
     zd = params.zd_rayleigh,
     α_uₕ = params.alpha_rayleigh_uh,
     α_w = params.alpha_rayleigh_w,
-    α_sgs_tracer = params.alpha_rayleigh_sgs_tracer,
+    α_tracer = params.alpha_rayleigh_tracer,
 )
 
 

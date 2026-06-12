@@ -161,8 +161,22 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     rst_uₕ = rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge)
 
     if use_prognostic_tke(turbconv_model)
-        rst_ρtke = rayleigh_sponge_tendency_sgs_tracer(Y.c.ρtke, rayleigh_sponge)
+        rst_ρtke = rayleigh_sponge_tendency_tracer(Y.c.ρtke, rayleigh_sponge)
         @. Yₜ.c.ρtke += rst_ρtke
+    end
+    if microphysics_model isa NonEquilibriumMicrophysics1M
+        grid_mean_micro_species = (
+            @name(c.ρq_lcl),
+            @name(c.ρq_icl),
+            @name(c.ρq_rai),
+            @name(c.ρq_sno),
+        )
+        MatrixFields.unrolled_foreach(grid_mean_micro_species) do ρq_name
+            ᶜρq = MatrixFields.get_field(Y, ρq_name)
+            ᶜρqₜ = MatrixFields.get_field(Yₜ, ρq_name)
+            rst_ρq = rayleigh_sponge_tendency_tracer(ᶜρq, rayleigh_sponge)
+            @. ᶜρqₜ += rst_ρq
+        end
     end
     if turbconv_model isa PrognosticEDMFX
         ᶜmse = @. lazy(ᶜh_tot - ᶜK)
