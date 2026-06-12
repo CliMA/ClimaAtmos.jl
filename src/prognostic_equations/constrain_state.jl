@@ -26,6 +26,7 @@ Currently, these include
 NVTX.@annotate function constrain_state!(Y, p, t)
     prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
     tracer_nonnegativity_constraint!(Y, p, t, p.atmos.water.tracer_nonnegativity_method)
+    aerosol_nonnegativity_constraint!(Y, p.atmos.prognostic_aerosols)
     dss!(Y, p, t)
     return nothing
 end
@@ -139,6 +140,42 @@ function tracer_nonnegativity_constraint!(Y, p, t,
 
     end
 
+end
+
+"""
+    aerosol_nonnegativity_constraint!(Y, prognostic_aerosols)
+
+Clip prognostic aerosol mass (`Y.c.ρ<name>`) to be nonnegative after each
+timestepper stage.
+
+This mirrors the nonnegativity floor that `tracer_nonnegativity_constraint!`
+gives the microphysics condensate tracers, but runs whenever prognostic
+aerosols are enabled, independent of `tracer_nonnegativity_method` (a
+moisture setting). Aerosols share the condensate tracers' vulnerability —
+a near-zero background aloft acted on by the sign-indefinite EDMFX SGS flux
+divergence — but above the boundary layer TKE ≈ 0, so eddy diffusion cannot
+damp overshoot there. Without this floor, negative aerosol mass accumulates
+at upper levels and feeds back through the updraft column march
+(χʲ entrains the negative grid mean), blowing up in O(10⁴ s)
+(see the SSLT notes in edmfx_sgs_flux.jl).
+
+Like `TracerNonnegativityVaporConstraint` for condensate, the clip is local
+and not strictly mass-conserving; the clipped negatives are overshoot-sized
+(≪ surface emission), so the spurious source is negligible.
+"""
+aerosol_nonnegativity_constraint!(Y, ::Val{()}) = nothing
+@generated function aerosol_nonnegativity_constraint!(
+    Y,
+    ::Val{names},
+) where {names}
+    clip_exprs = map(names) do name
+        ρχ = Symbol(:ρ, name)
+        :(Y.c.$ρχ .= max.(0, Y.c.$ρχ))
+    end
+    return quote
+        $(clip_exprs...)
+        return nothing
+    end
 end
 
 prescribe_flow!(_, _, _, ::Nothing) = nothing
