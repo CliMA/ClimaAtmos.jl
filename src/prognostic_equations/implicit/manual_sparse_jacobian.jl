@@ -70,8 +70,6 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         is_in_Y(@name(c.ρtke)) ? (@name(c.ρtke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
     ρA_if_available = is_in_Y(@name(c.ρA)) ? (@name(c.ρA),) : ()
-    sgs_A_if_available =
-        is_in_Y(@name(c.sgsʲs.:(1).A)) ? (@name(c.sgsʲs.:(1).A),) : ()
 
     condensate_mass_names = (
         @name(c.ρq_lcl),
@@ -100,6 +98,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         @name(c.sgsʲs.:(1).q_icl),
         @name(c.sgsʲs.:(1).q_rai),
         @name(c.sgsʲs.:(1).q_sno),
+        @name(c.sgsʲs.:(1).A), # TODO
     )
     available_sgs_condensate_mass_names =
         filter(is_in_Y, sgs_condensate_mass_names)
@@ -219,7 +218,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     sgs_advection_blocks = if atmos.turbconv_model isa PrognosticEDMFX
         (
             map(
-                name -> (name, name) => similar(Y.c, TridiagonalRow),
+                name -> (name, name) => name == @name(c.sgsʲs.:(1).A) ? FT(-1) * I : similar(Y.c, TridiagonalRow),
                 available_sgs_scalar_names,
             )...,
             map(
@@ -230,10 +229,6 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             )...,
             (@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).ρa)) => FT(-1) * I,
             (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) => FT(-1) * I,
-            map(
-                name -> (name, name) => FT(-1) * I,
-                sgs_A_if_available,
-            )...,
         )
     else
         ()
