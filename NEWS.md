@@ -4,6 +4,12 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+v0.39.5
+-------
+
+- [#4548](https://github.com/CliMA/ClimaAtmos.jl/pull/4548) ![][badge-✨feature/enhancement] Auto-discover SGS updraft tracers in prognostic EDMF tendency processes via `sgs_tracer_names(Y)`, so adding a passive SGS tracer no longer requires editing each tendency. New documentation in `docs/src/passive_tracers.md`.
+- [#4578](https://github.com/CliMA/ClimaAtmos.jl/pull/4578) ![][badge-🔥behavioralΔ] Add the Rayleigh sponge tendency for microphysics tracers.
+
 v0.39.4
 -------
 

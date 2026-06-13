@@ -150,9 +150,9 @@ version = "1.11.0"
 
 [[deps.AtmosphericProfilesLibrary]]
 deps = ["Interpolations", "LinearAlgebra"]
-git-tree-sha1 = "4f5654bb77c179b6021c21c25ad336fe886258f6"
+git-tree-sha1 = "4f22cccc46fc221f3fa36c31ea6f57098aef8632"
 uuid = "86bc3604-9858-485a-bdbe-831ec50de11d"
-version = "0.1.7"
+version = "0.1.8"
 
 [[deps.Atomix]]
 deps = ["UnsafeAtomics"]
@@ -413,7 +413,7 @@ version = "0.5.22"
 deps = ["Adapt", "ArgParse", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaInterpolations", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Dates", "Flux", "ForwardDiff", "Insolation", "Interpolations", "JLD2", "LazyArtifacts", "LazyBroadcast", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "NullBroadcasts", "RRTMGP", "Random", "SparseMatrixColorings", "StaticArrays", "Statistics", "SurfaceFluxes", "Thermodynamics", "UnrolledUtilities", "YAML"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
-version = "0.39.4"
+version = "0.39.5"
 
     [deps.ClimaAtmos.extensions]
     ClimaAtmosMusica = "Musica"
