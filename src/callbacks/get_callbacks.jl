@@ -425,19 +425,21 @@ Creates the tuple of model callbacks for any AtmosModel by calling
 """
 function default_model_callbacks(model::AtmosModel; kwargs...)
     callbacks = ()
+    # Physical constraints callback is registered here rather than at the component
+    # level because the decision depends on both the microphysics model AND the
+    # turbconv model simultaneously — registering from each component independently
+    # would cause double-registration for EDMF + 1M/2M configurations.
+    # Placed before the component callbacks so it fires before any other component
+    # callback that reads cache fields (e.g. radiation)
+    if needs_enforce_physical_constraints(model)
+        callbacks = (callbacks..., enforce_physical_constraints_callback(kwargs[:dt]))
+    end
     model_component_names =
         filter(x -> x !== :disable_surface_flux_tendency, propertynames(model))
     for property in model_component_names
         component_callbacks =
             default_model_callbacks(getproperty(model, property); kwargs...)
         callbacks = (callbacks..., component_callbacks...)
-    end
-    # Physical constraints callback is registered here rather than at the component
-    # level because the decision depends on both the microphysics model AND the
-    # turbconv model simultaneously — registering from each component independently
-    # would cause double-registration for EDMF + 1M/2M configurations.
-    if needs_enforce_physical_constraints(model)
-        callbacks = (callbacks..., enforce_physical_constraints_callback(kwargs[:dt]))
     end
     return callbacks
 end
