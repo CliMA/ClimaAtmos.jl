@@ -14,7 +14,7 @@ config = joinpath("config", "model_configs", "prognostic_edmfx_trmm_column.yml")
 output_dir = "perfect_scm_calibration"
 diagnostic_dict =
     Dict(
-        "short_name" => ["lwp", "rwp", "clivi", "swp"],
+        "short_name" => ["lwp", "rwp", "iwp", "swp"],
         "period" => "20mins",
         "reduction_time" => "average",
     )

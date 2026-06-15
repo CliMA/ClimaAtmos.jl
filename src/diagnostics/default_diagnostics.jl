@@ -264,6 +264,7 @@ function _moist_default_diagnostics(duration, start_date, t_start; output_writer
         "prsn",
         "prw",
         "lwp",
+        "iwp",
         "clwvi",
         "clivi",
     ]
