@@ -51,6 +51,8 @@ function physical_state(;
     q_rim = zero(T),
     b_rim = zero(T),
     A = zero(T),
+    B = zero(T),
+    AB = zero(T),
 )
     # Validate only for real states (T is finite). Placeholder states with
     # T = NaN (e.g. WeatherModel, AMIPFromERA5) skip validation because their
@@ -59,7 +61,7 @@ function physical_state(;
         error("physical_state requires at least one of `p` or `ρ`")
     return (;
         T, p, ρ, u, v, q_tot, q_liq, q_ice, tke, draft_area,
-        q_rai, q_sno, n_liq, n_rai, n_ice, q_rim, b_rim, A,
+        q_rai, q_sno, n_liq, n_rai, n_ice, q_rim, b_rim, A, B, AB,
     )
 end
 

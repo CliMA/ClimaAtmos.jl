@@ -1,0 +1,55 @@
+version: "1.0.0"
+name: ABBA
+species:
+  - name: A
+    __absolute tolerance: 1e-4
+    __long name: atom_A
+    __do advect: true
+    __initial concentration: 0.0
+    __molar mass: 0.029
+  - name: B
+    __absolute tolerance: 1e-4
+    __long name: atom_B
+    __do advect: true
+    __initial concentration: 0.0
+    __molar mass: 0.029
+  - name: AB
+    __absolute tolerance: 1e-4
+    __long name: molecule_AB
+    __do advect: true
+    __initial concentration: 1.0
+    __molar mass: 0.058
+
+phases:
+  - name: gas
+    species:
+      - A
+      - B
+      - AB
+
+reactions:
+  - type: USER_DEFINED
+    gas phase: gas
+    reactants:
+      - species name: AB
+        coefficient: 1
+    products:
+      - species name: A
+        coefficient: 1
+      - species name: B
+        coefficient: 1
+    scaling factor: 2.0e-3
+    name: forward_AB_to_A_B
+
+  - type: USER_DEFINED
+    gas phase: gas
+    reactants:
+      - species name: A
+        coefficient: 1
+      - species name: B
+        coefficient: 1
+    products:
+      - species name: AB
+        coefficient: 1
+    scaling factor: 1.0e-3
+    name: reverse_A_B_to_AB

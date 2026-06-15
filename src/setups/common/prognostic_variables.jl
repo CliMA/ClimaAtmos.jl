@@ -104,12 +104,12 @@ end
 """Grid-scale chemistry tracers, gated on chemistry model."""
 chemistry_variables(ρ, physical_state, ::Nothing) = (;)
 chemistry_variables(ρ, physical_state, ::AbstractChemistryModel) =
-    (; ρA = ρ * physical_state.A)
+    (; ρA = ρ * physical_state.A, ρB = ρ * physical_state.B, ρAB = ρ * physical_state.AB)
 
 """SGS chemistry tracers to include in the updraft NamedTuple."""
 chemistry_sgs_variables(physical_state, ::Nothing) = (;)
 chemistry_sgs_variables(physical_state, ::AbstractChemistryModel) =
-    (; A = physical_state.A)
+    (; A = physical_state.A, B = physical_state.B, AB = physical_state.AB)
 
 # ============================================================================
 # Turbconv center dispatch

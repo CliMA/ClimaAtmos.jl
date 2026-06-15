@@ -406,7 +406,10 @@ time_varying_trace_gases:
   help: "Trace gases that vary in time, e.g. [\"CO2\", \"O3\"]. Currently, only \"CO2\" and \"O3\" are supported. All other trace gases set fixed to default values from ClimaParams."
   value: []
 chemistry_model:
-  help: "Chemistry model [`~` (default, no passive tracers), `passive` (enables passive tracer A)]"
+  help: "Chemistry model [`~` (default, no passive tracers), `passive` (enables passive tracers)]"
+  value: ~
+chemistry_config:
+  help: "Path to a MUSICA chemistry configuration file. When set, update_chemistry! runs MICM kinetics each timestep."
   value: ~
 
 # EDMF configuration

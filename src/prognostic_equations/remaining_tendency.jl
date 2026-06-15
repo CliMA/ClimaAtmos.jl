@@ -275,6 +275,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     # Chemistry tendencies
     chemistry_tendency!(Yₜ, Y, p, t, p.atmos.chemistry_model)
+    update_chemistry!(Yₜ, Y, p, t, p.atmos.chemistry_model)
 
     # Unified microphysics tendencies (cloud condensation + precipitation)
     if p.atmos.microphysics_tendency_timestepping == Explicit()

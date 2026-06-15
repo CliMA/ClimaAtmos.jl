@@ -1143,3 +1143,41 @@ add_diagnostic_variable!(
     comments = "Grid-mean specific concentration of passive tracer A",
     compute = compute_passiveA,
 )
+
+###
+# Passive tracer B (3d)
+###
+compute_passiveB(state, cache, time) =
+    compute_passiveB(state, cache, time, cache.atmos.chemistry_model)
+compute_passiveB(_, _, _, chemistry_model) =
+    error_diagnostic_variable("passiveB", chemistry_model)
+
+compute_passiveB(state, _, _, ::GasPhaseChem) =
+    @. lazy(specific(state.c.ρB, state.c.ρ))
+
+add_diagnostic_variable!(
+    short_name = "passiveB",
+    units = "kg kg^-1",
+    long_name = "Passive Tracer B Concentration",
+    comments = "Grid-mean specific concentration of passive tracer B",
+    compute = compute_passiveB,
+)
+
+###
+# Passive tracer AB (3d)
+###
+compute_passiveAB(state, cache, time) =
+    compute_passiveAB(state, cache, time, cache.atmos.chemistry_model)
+compute_passiveAB(_, _, _, chemistry_model) =
+    error_diagnostic_variable("passiveAB", chemistry_model)
+
+compute_passiveAB(state, _, _, ::GasPhaseChem) =
+    @. lazy(specific(state.c.ρAB, state.c.ρ))
+
+add_diagnostic_variable!(
+    short_name = "passiveAB",
+    units = "kg kg^-1",
+    long_name = "Passive Tracer AB Concentration",
+    comments = "Grid-mean specific concentration of passive tracer AB",
+    compute = compute_passiveAB,
+)

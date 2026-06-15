@@ -872,10 +872,11 @@ end
 
 function AtmosChem(config::AtmosConfig)
     chem = config.parsed_args["chemistry_model"]
+    chemistry_config = get(config.parsed_args, "chemistry_config", nothing)
     chemistry_model = if isnothing(chem)
         nothing
     elseif chem == "passive"
-        GasPhaseChem()
+        GasPhaseChem(chemistry_config)
     else
         error(
             """Unknown chemistry_model `$chem`. Expected: ~ | "passive".""",

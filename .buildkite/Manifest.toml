@@ -2,7 +2,7 @@
 
 julia_version = "1.11.6"
 manifest_format = "2.0"
-project_hash = "6d3aceaae4d6d674c5ab6f510b6562490777177d"
+project_hash = "ae973641a491a0ba0faeaf0c4620e60895235cb1"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "bbc22a9a08a0ef6460041086d8a7b27940ed4ffd"
@@ -413,13 +413,11 @@ version = "0.5.22"
 deps = ["Adapt", "ArgParse", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaInterpolations", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Dates", "Flux", "ForwardDiff", "Insolation", "Interpolations", "JLD2", "LazyArtifacts", "LazyBroadcast", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "NullBroadcasts", "RRTMGP", "Random", "SparseMatrixColorings", "StaticArrays", "Statistics", "SurfaceFluxes", "Thermodynamics", "UnrolledUtilities", "YAML"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
-version = "0.39.4"
+version = "0.39.3"
+weakdeps = ["Musica"]
 
     [deps.ClimaAtmos.extensions]
     ClimaAtmosMusica = "Musica"
-
-    [deps.ClimaAtmos.weakdeps]
-    Musica = "d3d182ee-e566-4962-9279-3a9916be1802"
 
 [[deps.ClimaComms]]
 deps = ["Adapt", "Logging", "LoggingExtras"]
@@ -670,6 +668,12 @@ deps = ["Distances", "LinearAlgebra", "Printf", "Random", "Statistics", "TaylorS
 git-tree-sha1 = "6ffea589cf350b1582722e57a8de787907d59454"
 uuid = "7445602f-e544-4518-8976-18f8e8ae6cdb"
 version = "0.3.4"
+
+[[deps.CxxWrap]]
+deps = ["Libdl", "MacroTools", "libcxxwrap_julia_jll"]
+git-tree-sha1 = "f7a997d3959648a818c45dda059a45844300b94d"
+uuid = "1f15a43c-97ca-5a2a-ae31-89f07a497df4"
+version = "0.17.5"
 
 [[deps.DataAPI]]
 git-tree-sha1 = "abe83f3a2f1b857aac70ef8b269080af17764bbe"
@@ -1804,6 +1808,18 @@ weakdeps = ["Adapt", "CUDA"]
     [deps.MultiBroadcastFusion.extensions]
     MultiBroadcastFusionCUDAExt = ["CUDA", "Adapt"]
 
+[[deps.Musica]]
+deps = ["CxxWrap", "Musica_jll"]
+git-tree-sha1 = "a01eb86f9f8b0af5d089e3147c999418cceeb7fa"
+uuid = "d3d182ee-e566-4962-9279-3a9916be1802"
+version = "0.15.0"
+
+[[deps.Musica_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "libcxxwrap_julia_jll"]
+git-tree-sha1 = "ebebb1d709e4a99af9af66669849a6fcc49a7392"
+uuid = "f5e5459d-1a87-5129-97d9-bab22ca84fbb"
+version = "0.15.0+0"
+
 [[deps.NCDatasets]]
 deps = ["CFTime", "CommonDataModel", "DataStructures", "Dates", "DiskArrays", "NetCDF_jll", "NetworkOptions", "Printf"]
 git-tree-sha1 = "be1095e2b767c19529409ec670bcfb01b825d717"
@@ -2305,10 +2321,10 @@ uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.3.1"
 
 [[deps.Revise]]
-deps = ["CRC32c", "CodeTracking", "FileWatching", "InteractiveUtils", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Preferences", "REPL", "UUIDs"]
-git-tree-sha1 = "27e3ee13fc8739a59b380d6163d6a82f52c03bd7"
+deps = ["CodeTracking", "FileWatching", "InteractiveUtils", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Preferences", "REPL", "UUIDs"]
+git-tree-sha1 = "65569cca6282716a14177af1358db91ef79300f0"
 uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
-version = "3.15.1"
+version = "3.15.0"
 weakdeps = ["Distributed"]
 
     [deps.Revise.extensions]
@@ -2989,6 +3005,12 @@ version = "0.17.4+0"
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
 version = "5.11.0+0"
+
+[[deps.libcxxwrap_julia_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "63f4a7f164d693aa284ba0e5bf7ce4676614e54d"
+uuid = "3eaa8342-bff7-56a5-9981-c04077f7cee7"
+version = "0.14.10+0"
 
 [[deps.libdrm_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libpciaccess_jll"]
