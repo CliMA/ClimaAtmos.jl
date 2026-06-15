@@ -209,6 +209,9 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     mp::MP
     tps::TPS
     ρ::FT
+    # Condensate (held fixed across quadrature points)
+    q_lcl::FT
+    q_icl::FT
     # Precipitation (held fixed across quadrature points)
     q_rai::FT
     q_sno::FT
@@ -240,16 +243,16 @@ end
     # The mass conservation equation is E[max(0, λ + α·S′)] = q_c, so the
     # local shifted excess at each quadrature point is λ + α·S′_hat where
     # S′_hat = (q_tot_hat − q_sat_hat) − μ_S is the centred saturation excess.
-    q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
-    S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
-    shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
-    q_lcl_hat = max(FT(0), eval.λ * shifted_excess - eval.q_rai)
-    q_icl_hat = max(FT(0), (FT(1) - eval.λ) * shifted_excess - eval.q_sno)
+    # q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
+    # S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
+    # shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
+    # q_lcl_hat = max(FT(0), eval.λ * shifted_excess - eval.q_rai)
+    # q_icl_hat = max(FT(0), (FT(1) - eval.λ) * shifted_excess - eval.q_sno)
 
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
+        eval.q_lcl, eval.q_icl, eval.q_rai, eval.q_sno,
         eval.dt, eval.nsubs, eval.args...,
     )
 end
@@ -337,6 +340,7 @@ end
 
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ,
+        q_lcl_nonneg, q_icl_nonneg,
         q_rai_nonneg, q_sno_nonneg,
         λ, λ_lagrange, mu_S, α,
         dt, nsubs, args,
