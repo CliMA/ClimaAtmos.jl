@@ -86,8 +86,8 @@ end
 
 function _allocs_cloud_fraction_simple()
     FT = Float64
-    CA._compute_cloud_fraction(FT(1e-3), FT(1e-7), FT(1))
-    return @allocated CA._compute_cloud_fraction(FT(1e-3), FT(1e-7), FT(1))
+    CA._compute_cloud_fraction(FT(1e-3), FT(3.16e-4), FT(1))
+    return @allocated CA._compute_cloud_fraction(FT(1e-3), FT(3.16e-4), FT(1))
 end
 
 function _allocs_cloud_fraction_fused(thp, sgs_quad)

@@ -3,8 +3,8 @@ Unit tests for the SGS quadrature infrastructure.
 
 Tests `SGSMomentsEvaluator` and `_sgs_saturation_moments`, verifying:
   - S = q_tot − q_sat always, regardless of SGS distribution type
-  - σ_S² ≥ 0 and → 0 in the zero-variance limit (T′T′ = q′q′ = 0)
-  - σ_S² is monotonically increasing with σ_q
+  - σ_S ≥ ϵ_numerics in the zero-variance limit (T′T′ = q′q′ = 0)
+  - σ_S is monotonically increasing with σ_q
   - grid-mean fallback: nothing and GridMeanSGS give the same result
 =#
 
@@ -40,7 +40,7 @@ const CA = ClimaAtmos
         end
     end
 
-    @testset "_sgs_saturation_moments: zero-variance limit (σ_S² → 0)" begin
+    @testset "_sgs_saturation_moments: zero-variance limit (σ_S → ϵ_numerics)" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 toml_dict = CP.create_toml_dict(FT)
@@ -65,14 +65,14 @@ const CA = ClimaAtmos
                     mom = CA._sgs_saturation_moments(
                         thp, ρ, T_mean, q_tot_mean, quad, FT(0), FT(0), FT(0),
                     )
-                    @test mom.sigma_S_sq ≥ 0
-                    @test mom.sigma_S_sq < FT(1e-10)
+                    @test mom.sigma_S ≥ 0
+                    @test mom.sigma_S < FT(1e-10)
                 end
             end
         end
     end
 
-    @testset "_sgs_saturation_moments: σ_S² increases monotonically with σ_q" begin
+    @testset "_sgs_saturation_moments: σ_S increases monotonically with σ_q" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 toml_dict = CP.create_toml_dict(FT)
@@ -92,10 +92,10 @@ const CA = ClimaAtmos
                     mom = CA._sgs_saturation_moments(
                         thp, ρ, T_mean, q_tot_mean, quad, FT(0), σ_q^2, FT(0),
                     )
-                    @test mom.sigma_S_sq ≥ 0
-                    @test isfinite(mom.sigma_S_sq)
-                    @test mom.sigma_S_sq > prev
-                    prev = mom.sigma_S_sq
+                    @test mom.sigma_S ≥ 0
+                    @test isfinite(mom.sigma_S)
+                    @test mom.sigma_S > prev
+                    prev = mom.sigma_S
                 end
             end
         end
@@ -116,9 +116,9 @@ const CA = ClimaAtmos
                 m2 = CA._sgs_saturation_moments(thp, ρ, T_mean, q_tot_mean,
                     CA.GridMeanSGS(), FT(1), FT(1e-6), FT(0))
 
-                @test isfinite(m1.sigma_S_sq)
-                @test m1.sigma_S_sq ≥ 0
-                @test m2.sigma_S_sq ≈ m1.sigma_S_sq rtol = FT(1e-6)
+                @test isfinite(m1.sigma_S)
+                @test m1.sigma_S ≥ 0
+                @test m2.sigma_S ≈ m1.sigma_S rtol = FT(1e-6)
             end
         end
     end
