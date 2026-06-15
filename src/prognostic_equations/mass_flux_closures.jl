@@ -217,9 +217,9 @@ function enforce_grid_mean_microphysics_constraints!(Y, p, t)
 
     @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_icl + Y.c.ρq_rai + Y.c.ρq_sno
     @. ratio = ifelse(
-        ρq_cond > eps(FT),
-        min(FT(1), max(FT(0), Y.c.ρq_tot) / ρq_cond),
-        FT(1),
+        (ρq_cond > ϵ_numerics(FT)) & (Y.c.ρq_tot > ϵ_numerics(FT)),
+        min(FT(1), Y.c.ρq_tot / ρq_cond),
+        FT(0),
     )
     @. Y.c.ρq_lcl *= ratio
     @. Y.c.ρq_icl *= ratio

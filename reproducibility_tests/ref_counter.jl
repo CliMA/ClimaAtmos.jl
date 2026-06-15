@@ -1,4 +1,4 @@
-361
+362
 # **README**
 #
 # What is the ref_counter?
@@ -31,6 +31,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+362
+- Use ϵ_numerics(FT) (not eps(FT)) as the threshold in enforce_grid_mean_microphysics_constraints!
+  and fall back to ratio = 0 (not 1) below it, so noise-level condensate is zeroed rather than 
+  left untouched. eps(FT) is too large for comparing agains q values close to the domain height
+  where density is small (ρq / ρ can get larger than eps)
+
 361
 - SGS cloud-fraction: bugfix + smooth non-equilibrium floor. Floor `σ_S`
   at `ϵ_numerics(FT)` instead of `sqrt(ϵ_numerics(FT))` (old floor was
