@@ -1,4 +1,4 @@
-360
+361
 # **README**
 #
 # What is the ref_counter?
@@ -31,6 +31,14 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+361
+- SGS cloud-fraction: bugfix + smooth non-equilibrium floor. Floor `σ_S`
+  at `ϵ_numerics(FT)` instead of `sqrt(ϵ_numerics(FT))` (old floor was
+  ~1e-7 in Float32 and incorrectly clipped small `q_c`). Cloud fraction
+  now uses an augmented `σ_aug = α · sqrt(σ_S² + σ_S_fix²)` with
+  hardcoded `σ_S_fix = 1e-6` to prevent CF → 1 when both `q_c` and
+  `σ_S` are tiny. `λ_lagrange` still uses `α · σ_S` for mass conservation.
+
 360
 - Changed the default snow autoconversion to NoSupersaturation
 
