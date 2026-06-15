@@ -49,8 +49,36 @@ value = 0.56
 [tracer_vertical_diffusion_factor]
 value = 0
 
+[fixed_cloud_liquid_terminal_velocity]
+value = 0.01
+
+[fixed_cloud_ice_terminal_velocity]
+value = 0.01
+
+[fixed_rain_terminal_velocity]
+value = 5.0
+
+[fixed_snow_terminal_velocity]
+value = 1.0
+
 [condensation_evaporation_timescale]
 value = 100
 
 [sublimation_deposition_timescale]
 value = 100
+
+[rain_autoconversion_timescale]
+value = 1800
+
+[snow_autoconversion_timescale]
+value = 1800
+
+[rain_cross_section_size_relation_coefficient_chia]
+value = 1
+
+[snow_cross_section_size_relation_coefficient_chia]
+value = 1
+
+[cloud_liquid_water_specific_humidity_autoconversion_threshold]
+value = 0
+

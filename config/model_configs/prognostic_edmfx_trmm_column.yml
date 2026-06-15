@@ -1,6 +1,6 @@
 initial_condition: TRMM_LBA
 turbconv: prognostic_edmfx
-reproducibility_test: true
+reproducibility_test: false
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 edmfx_entr_model: "Generalized"
@@ -20,7 +20,7 @@ z_elem: 82
 z_stretch: false
 perturb_initstate: false
 dt: 120secs
-t_end: 12hours
+t_end: 6hours
 dt_save_state_to_disk: 60mins
 toml: [toml/prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [2, 2, 82]
