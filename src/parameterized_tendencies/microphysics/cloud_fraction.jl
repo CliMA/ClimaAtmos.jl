@@ -346,7 +346,7 @@ end
 # where Φ is the standard normal CDF and φ is its PDF.
 #
 # For the *cloud fraction* we use an augmented variance with a fixed
-# non-equilibrium floor `σ_S_floor` (hardcoded inside
+# non-equilibrium floor `σ_S_floor` (defined inside
 # `_compute_cloud_fraction`):
 #
 #     σ_aug = α · sqrt(σ_S² + σ_S_floor²),
