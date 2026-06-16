@@ -467,7 +467,7 @@ The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
     FT = typeof(sigma_S)
     # TODO: promote ε_rel, σ_abs to calibrated parameters once values are clear.
     # ε_rel should increase with resolution
-    ε_rel = FT(0.02)   # residual fractional saturation variability (~ 1 − RH_crit)
+    ε_rel = FT(0.01)   # residual fractional saturation variability (~ 1 − RH_crit)
     σ_abs = FT(1e-7)   # absolute floor for numerical robustness as q_sat → 0
     σ_S_floor_sq = (ε_rel * q_sat)^2 + σ_abs^2
     σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
