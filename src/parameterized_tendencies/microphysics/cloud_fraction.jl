@@ -504,7 +504,7 @@ materialized to a Field.
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
-    q_sat = TD.q_vap_saturation(thermo_params, T, ρ)
+    q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
     return _compute_cloud_fraction(
         q_liq + q_ice, moments.sigma_S, q_sat, α,
     )
@@ -578,7 +578,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
         ᶜq_lcl + ᶜq_icl,
         p.precomputed.ᶜsgs_moments.sigma_S,
-        TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
+        TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
         FT(α),
     )
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
