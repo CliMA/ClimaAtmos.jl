@@ -14,18 +14,16 @@ disable_surface_flux_tendency: false
 #==========================================================================================#
 
 # Temporal
-t_end: 20days
+t_end: 1days
 dt: 30secs
 dt_rad: 30secs
 
 # Spatial #
 config: "column"
-z_max: 9000.0
-z_elem: 90
-z_stretch: true
+z_max: 6000.0
+z_elem: 60
+z_stretch: false
 dz_bottom: 10.0
-x_elem: 1
-y_elem: 1
 
 # Solver #
 approximate_linear_solve_iters: 2
@@ -43,7 +41,7 @@ insolation: larcform1
 
 # Turbulence and EDMF #
 turbconv: prognostic_edmfx
-implicit_diffusion: false
+implicit_diffusion: true
 edmfx_entr_model: "Generalized"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
@@ -52,7 +50,7 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 
 # Clouds #
-cloud_model: grid_scale
+cloud_model: quadrature
 microphysics_model: 1M
 
 # Logging and Diagnostics
@@ -99,3 +97,37 @@ diagnostics:
   - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
     period: 10mins
     reduction_time: average
+#== Microphysics Tendencies ==#
+  - short_name: [
+      mp1m_S_phase_change_vap_lcl, mp1m_S_phase_change_vap_icl,
+      mp1m_S_acnv_lcl_rai, mp1m_S_acnv_icl_sno,
+      mp1m_S_accr_lcl_rai, mp1m_S_accr_lcl_sno_cold, mp1m_S_accr_lcl_sno_warm,
+      mp1m_S_accr_melt_lcl_sno,
+      mp1m_S_accr_icl_rai, mp1m_S_accr_freeze_icl_rai, mp1m_S_accr_icl_sno,
+      mp1m_S_accr_rai_sno_cold, mp1m_S_accr_rai_sno_warm, mp1m_S_accr_melt_rai_sno,
+      mp1m_S_phase_change_vap_rai, mp1m_S_phase_change_vap_sno,
+      mp1m_S_melt_icl_lcl, mp1m_S_melt_sno_rai,
+    ]
+    period: 10mins
+  - short_name: [
+      mp1mup_S_phase_change_vap_lcl, mp1mup_S_phase_change_vap_icl,
+      mp1mup_S_acnv_lcl_rai, mp1mup_S_acnv_icl_sno,
+      mp1mup_S_accr_lcl_rai, mp1mup_S_accr_lcl_sno_cold, mp1mup_S_accr_lcl_sno_warm,
+      mp1mup_S_accr_melt_lcl_sno,
+      mp1mup_S_accr_icl_rai, mp1mup_S_accr_freeze_icl_rai, mp1mup_S_accr_icl_sno,
+      mp1mup_S_accr_rai_sno_cold, mp1mup_S_accr_rai_sno_warm, mp1mup_S_accr_melt_rai_sno,
+      mp1mup_S_phase_change_vap_rai, mp1mup_S_phase_change_vap_sno,
+      mp1mup_S_melt_icl_lcl, mp1mup_S_melt_sno_rai,
+    ]
+    period: 10mins
+  - short_name: [
+      mp1men_S_phase_change_vap_lcl, mp1men_S_phase_change_vap_icl,
+      mp1men_S_acnv_lcl_rai, mp1men_S_acnv_icl_sno,
+      mp1men_S_accr_lcl_rai, mp1men_S_accr_lcl_sno_cold, mp1men_S_accr_lcl_sno_warm,
+      mp1men_S_accr_melt_lcl_sno,
+      mp1men_S_accr_icl_rai, mp1men_S_accr_freeze_icl_rai, mp1men_S_accr_icl_sno,
+      mp1men_S_accr_rai_sno_cold, mp1men_S_accr_rai_sno_warm, mp1men_S_accr_melt_rai_sno,
+      mp1men_S_phase_change_vap_rai, mp1men_S_phase_change_vap_sno,
+      mp1men_S_melt_icl_lcl, mp1men_S_melt_sno_rai,
+    ]
+    period: 10mins
