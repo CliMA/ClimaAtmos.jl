@@ -1,4 +1,4 @@
-362
+363
 # **README**
 #
 # What is the ref_counter?
@@ -31,9 +31,17 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+363
+- SGS cloud-fraction: non-dimensionalize variance floor and add Edgeworth
+  skewness correction. Replace hardcoded `σ_S_fix = 1e-6` with a
+  scale-aware floor `σ_S_floor = sqrt((ε_rel · q_sat)² + σ_abs²)` that
+  tracks local saturation humidity. Add third-moment (`mu_3`) Edgeworth
+  correction `(γ₁/6)(z² − 1)φ(z)` to the truncated-Gaussian cloud-fraction
+  closure, accounting for asymmetric SGS moisture distributions.
+
 362
 - Use ϵ_numerics(FT) (not eps(FT)) as the threshold in enforce_grid_mean_microphysics_constraints!
-  and fall back to ratio = 0 (not 1) below it, so noise-level condensate is zeroed rather than 
+  and fall back to ratio = 0 (not 1) below it, so noise-level condensate is zeroed rather than
   left untouched. eps(FT) is too large for comparing agains q values close to the domain height
   where density is small (ρq / ρ can get larger than eps)
 
