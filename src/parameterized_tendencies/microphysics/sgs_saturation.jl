@@ -91,7 +91,7 @@ end
     )
 
 Compute SGS-averaged saturation adjustment by integrating over the joint PDF
-of (T, q_tot). At each quadrature point, condensate is diagnosed from
+of `(T, q_tot)`. At each quadrature point, condensate is diagnosed from
 saturation excess, providing a sub-grid-aware estimate of cloud condensate.
 
 This function replaces the grid-mean saturation adjustment when using

@@ -102,7 +102,7 @@ end
 
 Computes 0-moment microphysics tendencies.
 
-When using SGS-quadratures, the tendencies are integrated over the joint PDF of (T, q_tot).
+When using SGS-quadratures, the tendencies are integrated over the joint PDF of `(T, q_tot)`.
 At each quadrature point, condensate is diagnosed from saturation excess,
 then 0M precipitation removal tendencies are computed.
 

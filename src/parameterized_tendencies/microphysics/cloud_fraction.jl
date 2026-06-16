@@ -439,7 +439,7 @@ relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see [`_compute_z`](@ref)) with the
 augmented standard deviation `σ_aug = α · sqrt(σ_S² + σ_S_floor²)`.
 
 Scale-aware non-equilibrium floor. We assume the local condensate `q_c`
-fluctuates partly through the equilibrium variations of (T, q_tot) captured by
+fluctuates partly through the equilibrium variations of `(T, q_tot)` captured by
 the quadrature (`σ_S`), and partly through non-equilibrium variations not
 captured by the equilibrium SGS PDF. `σ_S_floor` models the latter and is scaled
 with the saturation specific humidity,
