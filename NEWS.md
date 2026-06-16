@@ -4,7 +4,7 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
-- ![][badge-🔥behavioralΔ] Non-dimensionalize the variance floor parameter in the truncated-Gaussian cloud-fraction closure. The hardcoded `σ_S_fix = 1e-6` is replaced with a scale-aware floor `σ_S_floor = sqrt((ε_rel · q_sat)² + σ_abs²)` that tracks local saturation humidity. Additionally, an Edgeworth skewness correction using the third central moment (`mu_3`) is added to account for asymmetric SGS moisture distributions.
+- ![][badge-🔥behavioralΔ] Non-dimensionalize the variance floor parameter in the truncated-Gaussian cloud-fraction closure. The hardcoded `σ_S_floor = 1e-6` is replaced with a scale-aware floor `σ_S_floor = sqrt((ε_rel · q_sat)² + σ_abs²)` that tracks local saturation humidity.
 
 v0.39.5
 -------

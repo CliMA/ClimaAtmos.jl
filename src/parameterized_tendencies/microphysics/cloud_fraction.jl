@@ -287,7 +287,7 @@ end
 @inline function (eval::SGSMomentsEvaluator)(T_hat, q_tot_hat)
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     s = q_tot_hat - q_sat_hat
-    return (mu_S = s, s_sq = s * s, s_cube = s^3)
+    return (mu_S = s, s_sq = s^2)
 end
 
 
@@ -302,11 +302,10 @@ The variance is guarded against negative values from quadrature cancellation
 (clipped at zero) and the standard deviation is floored at `ϵ_numerics(FT)`
 so the normalised closure (`C = q_c / (α·σ_S)`) is well-conditioned.
 
-Also returns the third central moment `mu_3 = E[(S − μ_S)³]` (for the Edgeworth
-skewness correction in the cloud fraction) and the mean saturation specific
-humidity `q_sat` (for the `q_sat`-scaled non-equilibrium floor `σ_S_floor`).
+Also returns the mean saturation specific humidity `q_sat` (for the
+`q_sat`-scaled non-equilibrium floor `σ_S_floor`).
 
-Returns `(; mu_S, sigma_S, mu_3, q_sat)`.
+Returns `(; mu_S, sigma_S, q_sat)`.
 """
 @inline function _sgs_saturation_moments(
     thp, ρ, T_mean, q_tot_mean,
@@ -319,12 +318,9 @@ Returns `(; mu_S, sigma_S, mu_3, q_sat)`.
         evaluator, sgs_quad_eff, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq,
     )
     sigma_S_sq = max(raw.s_sq - raw.mu_S * raw.mu_S, zero(FT))
-    # Third central moment: E[(S−μ_S)³] = E[S³] − 3 μ_S E[S²] + 2 μ_S³.
-    mu_3 = raw.s_cube - 3 * raw.mu_S * raw.s_sq + 2 * raw.mu_S^3
     return (;
         mu_S = raw.mu_S,
         sigma_S = max(sqrt(sigma_S_sq), ϵ_numerics(FT)),
-        mu_3 = mu_3,
         q_sat = TD.q_vap_saturation(thp, T_mean, ρ),
     )
 end
@@ -440,12 +436,11 @@ dependent logic.
 end
 
 """
-    _compute_cloud_fraction(q_c, sigma_S, mu_3, q_sat, α)
+    _compute_cloud_fraction(q_c, sigma_S, q_sat, α)
 
-Cloud fraction `CF = Φ(z) + (γ₁/6)(z²−1)φ(z)` (clipped to `[0,1]`), where `z`
-solves the truncated-Gaussian condensate relation `q_c/σ_aug = z·Φ(z) + φ(z)`
-(see [`_compute_z`](@ref)) with the augmented standard deviation
-`σ_aug = α · σ_eff`, `σ_eff = sqrt(σ_S² + σ_S_floor²)`.
+Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
+relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see [`_compute_z`](@ref)) with the
+augmented standard deviation `σ_aug = α · sqrt(σ_S² + σ_S_floor²)`.
 
 Scale-aware non-equilibrium floor. We assume the local condensate `q_c`
 fluctuates partly through the equilibrium variations of (T, q_tot) captured by
@@ -472,30 +467,18 @@ with grid spacing (RH_crit ≈ 0.6–0.85, ε_rel ≈ 0.15–0.4 at 50–200 km)
 The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
 `_compute_sgs_moments`) uses the equilibrium `σ_S`, so mass conservation
 `E[max(0, λ + α·S′)] = q_c` is exactly preserved for the microphysics tendencies.
-
-Edgeworth skewness correction. Cumulus/cirrus saturation-excess distributions
-are positively skewed, where a Gaussian CDF biases CF low. The leading
-Edgeworth term adds `(γ₁/6)(z²−1)φ(z)` with `γ₁ = mu_3 / σ_eff³` clamped to
-`[−1, 1]`; it vanishes in the singular limit (`mu_3 → 0`) and recovers the
-Gaussian CF for symmetric distributions.
 """
-@inline function _compute_cloud_fraction(q_c, sigma_S, mu_3, q_sat, α)
+@inline function _compute_cloud_fraction(q_c, sigma_S, q_sat, α)
     FT = typeof(sigma_S)
-    # TODO: promote ε_rel, σ_abs to calibrated parameters once values are clear. 
+    # TODO: promote ε_rel, σ_abs to calibrated parameters once values are clear.
     # ε_rel should increase with resolution
     ε_rel = FT(0.15)   # residual fractional saturation variability (~ 1 − RH_crit)
     σ_abs = FT(1e-7)   # absolute floor for numerical robustness as q_sat → 0
     σ_S_floor_sq = (ε_rel * q_sat)^2 + σ_abs * σ_abs
-    σ_eff = sqrt(sigma_S * sigma_S + σ_S_floor_sq)
-    σ_aug = α * σ_eff
+    σ_aug = α * sqrt(sigma_S * sigma_S + σ_S_floor_sq)
     C = q_c / σ_aug
     z = _compute_z(C)
-    # Leading Edgeworth (skewness) correction; clamp γ₁ for the validity of the
-    # expansion and clip CF to [0, 1].
-    γ₁ = clamp(mu_3 / (σ_eff * σ_eff * σ_eff), -one(FT), one(FT))
-    φz = exp(-z * z / 2) / sqrt(FT(2) * FT(π))
-    cf = normal_cdf(z) + (γ₁ / 6) * (z * z - one(FT)) * φz
-    return clamp(cf, zero(FT), one(FT))
+    return normal_cdf(z)
 end
 
 """
@@ -527,21 +510,20 @@ materialized to a Field.
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
     return _compute_cloud_fraction(
-        q_liq + q_ice, moments.sigma_S, moments.mu_3, moments.q_sat, α,
+        q_liq + q_ice, moments.sigma_S, moments.q_sat, α,
     )
 end
 
 """
     _compute_sgs_moments(thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α)
 
-Single quadrature pass returning `(mu_S, sigma_S, λ_lagrange, mu_3, q_sat)`:
+Single quadrature pass returning `(mu_S, sigma_S, λ_lagrange, q_sat)`:
 
   - `mu_S       = E[S]`: SGS mean saturation variable.
   - `sigma_S    = sqrt(Var[S])`: SGS standard deviation, clipped at
     `ϵ_numerics(FT)` (see [`_sgs_saturation_moments`](@ref)).
   - `λ_lagrange = z·α·σ_S`: Lagrange multiplier satisfying
     `E[max(0, λ + α·S′)] = q_c`.
-  - `mu_3       = E[(S−μ_S)³]`: third central moment (Edgeworth CF correction).
   - `q_sat`: mean saturation specific humidity (q_sat-scaled CF floor).
 """
 @inline function _compute_sgs_moments(
@@ -558,7 +540,6 @@ Single quadrature pass returning `(mu_S, sigma_S, λ_lagrange, mu_3, q_sat)`:
         moments.mu_S,
         moments.sigma_S,
         λ_lagrange,
-        moments.mu_3,
         moments.q_sat,
     )
 end
@@ -588,7 +569,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    # ONE quadrature pass → (mu_S, sigma_S, λ_lagrange, mu_3, q_sat).
+    # ONE quadrature pass → (mu_S, sigma_S, λ_lagrange, q_sat).
     @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
         thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
         $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
@@ -603,7 +584,6 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
         ᶜq_lcl + ᶜq_icl,
         p.precomputed.ᶜsgs_moments.sigma_S,
-        p.precomputed.ᶜsgs_moments.mu_3,
         p.precomputed.ᶜsgs_moments.q_sat,
         FT(α),
     )
