@@ -27,7 +27,6 @@ MICM kinetics for the species from the config file.
 Only runs when `chemistry_model.config_path` is set.
 """
 function ClimaAtmos.update_chemistry!(
-    Yₜ,
     Y,
     p,
     t,
@@ -37,6 +36,14 @@ function ClimaAtmos.update_chemistry!(
 
     micm = Musica.MICM(; config_path = chemistry_model.config_path)
     state = Musica.create_state(micm)
+    Musica.set_conditions!(state; temperatures=298.15, pressures=101325)
+    Musica.set_user_defined_rate_parameters!(
+        state,
+        Dict(
+            "USER.forward_AB_to_A_B" => 2.0e-3,
+            "USER.reverse_A_B_to_AB" => 1.0e-3,
+        ),
+    )
     species = ClimaAtmos.musica_species_names(chemistry_model.config_path)
     n_cells = length(parent(Y.c.ρ))
 

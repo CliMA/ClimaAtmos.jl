@@ -22,12 +22,12 @@ chemical sources or sinks.
 chemistry_tendency!(Yₜ, Y, p, t, ::GasPhaseChem) = nothing
 
 """
-    update_chemistry!(Yₜ, Y, p, t, chemistry_model)
+    update_chemistry!(Y, p, t, chemistry_model)
 
 Apply in-place chemistry updates to `Y`. The MUSICA-backed implementation is
 provided by the ClimaAtmosMusica extension when `Musica` is loaded.
 """
-update_chemistry!(Yₜ, Y, p, t, ::Nothing) = nothing
-update_chemistry!(Yₜ, Y, p, t, ::GasPhaseChem) = nothing
+update_chemistry!(Y, p, t, ::Nothing) = nothing
+update_chemistry!(Y, p, t, ::GasPhaseChem) = nothing
 
 function musica_species_names end

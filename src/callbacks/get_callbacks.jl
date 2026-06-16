@@ -383,6 +383,10 @@ function enforce_physical_constraints_callback(dt)
     return call_every_dt(enforce_physical_constraints_callback!, dt)
 end
 
+function update_chemistry_callback(dt)
+    return call_every_dt(update_chemistry_callback!, dt)
+end
+
 function ogw_callback(
     orographic_gravity_wave,
     dt_ogw,
@@ -439,6 +443,7 @@ function default_model_callbacks(model::AtmosModel; kwargs...)
     if needs_enforce_physical_constraints(model)
         callbacks = (callbacks..., enforce_physical_constraints_callback(kwargs[:dt]))
     end
+
     return callbacks
 end
 
@@ -449,6 +454,11 @@ needs_enforce_physical_constraints(model::AtmosModel) =
 
 
 default_model_callbacks(component; kwargs...) = ()
+
+function default_model_callbacks(chem::AtmosChem; dt, kwargs...)
+    chem.chemistry_model isa GasPhaseChem || return ()
+    return (update_chemistry_callback(dt),)
+end
 
 function default_model_callbacks(radiation::AtmosRadiation;
     dt_rad = "6hours",
