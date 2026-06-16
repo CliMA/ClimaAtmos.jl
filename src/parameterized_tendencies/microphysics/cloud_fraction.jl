@@ -302,10 +302,7 @@ The variance is guarded against negative values from quadrature cancellation
 (clipped at zero) and the standard deviation is floored at `ϵ_numerics(FT)`
 so the normalised closure (`C = q_c / (α·σ_S)`) is well-conditioned.
 
-Also returns the mean saturation specific humidity `q_sat` (for the
-`q_sat`-scaled non-equilibrium floor `σ_S_floor`).
-
-Returns `(; mu_S, sigma_S, q_sat)`.
+Returns `(; mu_S, sigma_S)`.
 """
 @inline function _sgs_saturation_moments(
     thp, ρ, T_mean, q_tot_mean,
@@ -321,7 +318,6 @@ Returns `(; mu_S, sigma_S, q_sat)`.
     return (;
         mu_S = raw.mu_S,
         sigma_S = max(sqrt(sigma_S_sq), ϵ_numerics(FT)),
-        q_sat = TD.q_vap_saturation(thp, T_mean, ρ),
     )
 end
 
@@ -460,9 +456,8 @@ doi:10.1029/2012JD017495). However, this is an inexact analogy because
 the PDF here is Gaussian (rather than a bounded top-hat as in Quaas 2012),
 so there is no sharp onset, and `ε_rel` is the *intra*-subdomain width
 only; the inter-subdomain (convective) spread is carried explicitly by the
-drafts. The parameter `ε_rel` is a q_sat-scaling whose magnitude grows
-with grid spacing (RH_crit ≈ 0.6–0.85, ε_rel ≈ 0.15–0.4 at 50–200 km).
-`σ_abs` keeps `σ_eff > 0` where `q_sat → 0` (upper stratosphere).
+drafts. The parameter `ε_rel` is a q_sat-scaling whose magnitude should grow
+with grid spacing.
 
 The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
 `_compute_sgs_moments`) uses the equilibrium `σ_S`, so mass conservation
@@ -472,10 +467,10 @@ The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
     FT = typeof(sigma_S)
     # TODO: promote ε_rel, σ_abs to calibrated parameters once values are clear.
     # ε_rel should increase with resolution
-    ε_rel = FT(0.15)   # residual fractional saturation variability (~ 1 − RH_crit)
+    ε_rel = FT(0.02)   # residual fractional saturation variability (~ 1 − RH_crit)
     σ_abs = FT(1e-7)   # absolute floor for numerical robustness as q_sat → 0
-    σ_S_floor_sq = (ε_rel * q_sat)^2 + σ_abs * σ_abs
-    σ_aug = α * sqrt(sigma_S * sigma_S + σ_S_floor_sq)
+    σ_S_floor_sq = (ε_rel * q_sat)^2 + σ_abs^2
+    σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
     C = q_c / σ_aug
     z = _compute_z(C)
     return normal_cdf(z)
@@ -509,22 +504,22 @@ materialized to a Field.
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
+    q_sat = TD.q_vap_saturation(thermo_params, T, ρ)
     return _compute_cloud_fraction(
-        q_liq + q_ice, moments.sigma_S, moments.q_sat, α,
+        q_liq + q_ice, moments.sigma_S, q_sat, α,
     )
 end
 
 """
     _compute_sgs_moments(thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α)
 
-Single quadrature pass returning `(mu_S, sigma_S, λ_lagrange, q_sat)`:
+Single quadrature pass returning `(mu_S, sigma_S, λ_lagrange)`:
 
   - `mu_S       = E[S]`: SGS mean saturation variable.
   - `sigma_S    = sqrt(Var[S])`: SGS standard deviation, clipped at
     `ϵ_numerics(FT)` (see [`_sgs_saturation_moments`](@ref)).
   - `λ_lagrange = z·α·σ_S`: Lagrange multiplier satisfying
     `E[max(0, λ + α·S′)] = q_c`.
-  - `q_sat`: mean saturation specific humidity (q_sat-scaled CF floor).
 """
 @inline function _compute_sgs_moments(
     thp, ρ, T, q_tot, q_c,
@@ -540,7 +535,6 @@ Single quadrature pass returning `(mu_S, sigma_S, λ_lagrange, q_sat)`:
         moments.mu_S,
         moments.sigma_S,
         λ_lagrange,
-        moments.q_sat,
     )
 end
 
@@ -569,7 +563,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    # ONE quadrature pass → (mu_S, sigma_S, λ_lagrange, q_sat).
+    # ONE quadrature pass → (mu_S, sigma_S, λ_lagrange).
     @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
         thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
         $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
@@ -581,10 +575,12 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     # with a value consistent with the final SGS moments, so EDMF weighting
     # must be re-applied here even though `set_cloud_fraction!` already
     # applied it during Picard.
+    # q_sat is computed inline here (not cached) — it's cheap and avoids
+    # adding a field to the ᶜsgs_moments named tuple.
     @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
         ᶜq_lcl + ᶜq_icl,
         p.precomputed.ᶜsgs_moments.sigma_S,
-        p.precomputed.ᶜsgs_moments.q_sat,
+        TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
         FT(α),
     )
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
