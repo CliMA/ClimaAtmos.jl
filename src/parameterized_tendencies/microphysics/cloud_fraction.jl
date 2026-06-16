@@ -575,8 +575,6 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     # with a value consistent with the final SGS moments, so EDMF weighting
     # must be re-applied here even though `set_cloud_fraction!` already
     # applied it during Picard.
-    # q_sat is computed inline here (not cached) — it's cheap and avoids
-    # adding a field to the ᶜsgs_moments named tuple.
     @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
         ᶜq_lcl + ᶜq_icl,
         p.precomputed.ᶜsgs_moments.sigma_S,
