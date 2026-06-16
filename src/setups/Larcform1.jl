@@ -5,17 +5,19 @@ Single-column model setup for the Larcform1 arctic boundary layer case, based on
 Pithan et al. (2016) — SCM intercomparison for the Arctic winter boundary layer.
 
 Canonical conditions (Pithan 2016, Section 2):
-- Location: 80°N
-- Start date: 1 January (zero solar insolation)
-- Initial surface temperature: 250 K (sea ice)
-- Sea ice: 1 m thick, 100% concentration
-- Geostrophic wind: 5 m/s throughout troposphere
+
+  - Location: 80°N
+  - Start date: 1 January (zero solar insolation)
+  - Initial surface temperature: 250 K (sea ice)
+  - Sea ice: 1 m thick, 100% concentration
+  - Geostrophic wind: 5 m/s throughout troposphere
 
 Profiles are sourced from AtmosphericProfilesLibrary. RH is specified with respect
 to liquid water (Pithan 2016, Table 1). The humidity profile is split at the
 tropopause: RH-derived q_tot below, fixed q_top above.
 
 ## Example
+
 ```julia
 setup = Larcform1(; prognostic_tke = true, thermo_params)
 ```
