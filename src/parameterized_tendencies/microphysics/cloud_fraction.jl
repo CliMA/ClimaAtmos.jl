@@ -287,7 +287,7 @@ end
 @inline function (eval::SGSMomentsEvaluator)(T_hat, q_tot_hat)
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     s = q_tot_hat - q_sat_hat
-    return (mu_S = s, s_sq = s * s)
+    return (mu_S = s, s_sq = s^2)
 end
 
 
@@ -346,10 +346,10 @@ end
 # where Φ is the standard normal CDF and φ is its PDF.
 #
 # For the *cloud fraction* we use an augmented variance with a fixed
-# non-equilibrium floor `σ_S_fix` (hardcoded inside
+# non-equilibrium floor `σ_S_floor` (defined inside
 # `_compute_cloud_fraction`):
 #
-#     σ_aug = α · sqrt(σ_S² + σ_S_fix²),
+#     σ_aug = α · sqrt(σ_S² + σ_S_floor²),
 #
 # which keeps CF well-behaved in the singular limit (q_c, σ_S²) → 0.  CF is
 # always computed by solving the truncated-Gaussian closure with `σ_aug`,
@@ -432,30 +432,45 @@ dependent logic.
 end
 
 """
-    _compute_cloud_fraction(q_c, sigma_S, α)
+    _compute_cloud_fraction(q_c, sigma_S, q_sat, α)
 
-Cloud fraction `CF = Φ(z)` where `z` solves the truncated-Gaussian condensate
+Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
 relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see [`_compute_z`](@ref)) with the
-augmented standard deviation `σ_aug = α · sqrt(σ_S² + σ_S_fix²)`.
+augmented standard deviation `σ_aug = α · sqrt(σ_S² + σ_S_floor²)`.
 
-Physical motivation: we assume the local condensate `q_c` fluctuates partly
-through the equilibrium variations of (T, q_tot) captured by the quadrature
-(`σ_S` from `_sgs_saturation_moments`), and partly through additional
-non-equilibrium variations not captured by the equilibrium SGS PDF.
-`σ_S_fix` models that always-present non-equilibrium contribution. We
-include it *only* in the CF computation so that CF stays small when both
-`q_c` and the quadrature `σ_S` are small (the singular limit where the
-unmodified truncated-Gaussian gives the mathematically correct but
-physically unhelpful `CF → 1`). The Lagrange multiplier `λ` and the
-`_compute_z` call inside `_compute_sgs_moments` use only the equilibrium
-`σ_S` so that mass conservation `E[max(0, λ + α·S′)] = q_c` is exactly
-preserved for the microphysics tendencies.
+Scale-aware non-equilibrium floor. We assume the local condensate `q_c`
+fluctuates partly through the equilibrium variations of (T, q_tot) captured by
+the quadrature (`σ_S`), and partly through non-equilibrium variations not
+captured by the equilibrium SGS PDF. `σ_S_floor` models the latter and is scaled
+with the saturation specific humidity,
+
+    σ_S_floor² = (ε_rel · q_sat)² + σ_abs².
+
+The q_sat-scaling implies saturation-excess fluctuations scale with q_sat.
+The parameter `ε_rel` is a condensate-patchiness scale: it indicates the
+condensate-to-q_sat ratio at which a subdomain saturates over its full area
+(`q_c ≫ ε_rel·q_sat ⇒ CF→1`; `q_c ≪ ε_rel·q_sat ⇒` patchy, `CF→0`).
+This is loosely the critical-relative-humidity idea (subgrid humidity
+variance ∝ q_sat, `ε_rel ~ 1 − RH_crit`; Quaas, 2012,
+doi:10.1029/2012JD017495). However, this is an inexact analogy because
+the PDF here is Gaussian (rather than a bounded top-hat as in Quaas 2012),
+so there is no sharp onset, and `ε_rel` is the *intra*-subdomain width
+only; the inter-subdomain (convective) spread is carried explicitly by the
+drafts. The parameter `ε_rel` is a q_sat-scaling whose magnitude should grow
+with grid spacing.
+
+The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
+`_compute_sgs_moments`) uses the equilibrium `σ_S`, so mass conservation
+`E[max(0, λ + α·S′)] = q_c` is exactly preserved for the microphysics tendencies.
 """
-@inline function _compute_cloud_fraction(q_c, sigma_S, α)
+@inline function _compute_cloud_fraction(q_c, sigma_S, q_sat, α)
     FT = typeof(sigma_S)
-    # TODO: promote `σ_S_fix` to a calibrated parameter once values are clear.
-    σ_S_fix = FT(1e-6)
-    σ_aug = α * sqrt(sigma_S * sigma_S + σ_S_fix * σ_S_fix)
+    # TODO: promote ε_rel, σ_abs to calibrated parameters once values are clear.
+    # ε_rel should increase with resolution
+    ε_rel = FT(0.02)   # residual fractional saturation variability (~ 1 − RH_crit)
+    σ_abs = FT(1e-7)   # absolute floor for numerical robustness as q_sat → 0
+    σ_S_floor_sq = (ε_rel * q_sat)^2 + σ_abs^2
+    σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
     C = q_c / σ_aug
     z = _compute_z(C)
     return normal_cdf(z)
@@ -489,7 +504,10 @@ materialized to a Field.
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
-    return _compute_cloud_fraction(q_liq + q_ice, moments.sigma_S, α)
+    q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
+    return _compute_cloud_fraction(
+        q_liq + q_ice, moments.sigma_S, q_sat, α,
+    )
 end
 
 """
@@ -513,7 +531,11 @@ Single quadrature pass returning `(mu_S, sigma_S, λ_lagrange)`:
     C = q_c / σ_S_eff
     z = _compute_z(C)
     λ_lagrange = z * σ_S_eff
-    return (; moments.mu_S, moments.sigma_S, λ_lagrange)
+    return (;
+        moments.mu_S,
+        moments.sigma_S,
+        λ_lagrange,
+    )
 end
 
 """
@@ -556,6 +578,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
         ᶜq_lcl + ᶜq_icl,
         p.precomputed.ᶜsgs_moments.sigma_S,
+        TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
         FT(α),
     )
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)

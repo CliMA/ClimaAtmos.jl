@@ -4,6 +4,8 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- ![][badge-🔥behavioralΔ] Non-dimensionalize the variance floor parameter in the truncated-Gaussian cloud-fraction closure. The hardcoded `σ_S_floor = 1e-6` is replaced with a scale-aware floor `σ_S_floor = sqrt((ε_rel · q_sat)² + σ_abs²)` that tracks local saturation humidity.
+
 v0.39.5
 -------
 
@@ -41,6 +43,7 @@ v0.39.1
 
 v0.39.0
 -------
+
 - [#4486](https://github.com/CliMA/ClimaAtmos.jl/pull/4486) [badge-💥breaking]
   Updated YAML config schema:
   - `vert_diff: true` → `"VerticalDiffusion"`; `false` → `~`.
