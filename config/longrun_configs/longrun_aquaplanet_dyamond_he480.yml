@@ -1,4 +1,4 @@
-h_elem: 480
+h_elem: 480 # Horizontal elements per cubed sphere edge 
 z_max: 45000.0
 z_elem: 43
 dz_bottom: 30.0
@@ -10,23 +10,22 @@ topography: "Earth"
 start_date: "20160801"
 initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 moist: "equil"
-dt: "6secs"
-t_end: "6secs"
+dt: "6secs" # Update based on h_elem and explicit horizontal CFL limits
+t_end: "6secs" # Adjust to match required simulation time
 dt_save_state_to_disk: "10days"
 rad: "allskywithclear"
 insolation: "timevarying"
 aerosol_radiation: true
 co2_model: maunaloa
 edmfx_sgs_diffusive_flux: true
-####
 prescribe_ozone: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05", "OC1", "OC2", "SO4", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
 # SGS Closure Options
-#smagorinsky_lilly: UVW
-turbconv: "edonly_edmfx"
+smagorinsky_lilly: UV # Horizontal diffusion using the Smagorinsky-Lilly closure.
+turbconv: "edonly_edmfx" # Eddy-diffusivity closure (vertical)
 edmfx_sgs_diffusive_flux: true
 precip_model: "0M"
 toml: [toml/dyamond_edonly.toml]
