@@ -594,15 +594,13 @@ function get_turbconv_model(FT, parsed_args, turbconv_params)
     area_fraction = turbconv_params.min_area
     return if turbconv == "prognostic_edmfx"
         PrognosticEDMFX(; n_updrafts, prognostic_tke, area_fraction)
-    elseif turbconv == "diagnostic_edmfx"
-        DiagnosticEDMFX(; n_updrafts, prognostic_tke, area_fraction)
     elseif turbconv == "edonly_edmfx"
         EDOnlyEDMFX()
     elseif isnothing(turbconv) || turbconv == "edmfx"
         nothing
     else
         error(
-            """Unknown turbconv `$turbconv`. Expected: ~, "edmfx", "prognostic_edmfx", "diagnostic_edmfx", or "edonly_edmfx".""",
+            """Unknown turbconv `$turbconv`. Expected: ~, "edmfx", "prognostic_edmfx", or "edonly_edmfx".""",
         )
     end
 end

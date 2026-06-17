@@ -42,7 +42,7 @@ import .RRTMGPInterface as RRTMGPI
 include(joinpath("parameterized_tendencies", "radiation", "radiation.jl"))
 
 include(joinpath("cache", "prognostic_edmf_precomputed_quantities.jl"))
-include(joinpath("cache", "diagnostic_edmf_precomputed_quantities.jl"))
+include(joinpath("cache", "edonly_precomputed_quantities.jl"))
 include(joinpath("cache", "microphysics_cache.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
 include(joinpath("cache", "surface_albedo.jl"))

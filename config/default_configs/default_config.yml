@@ -408,7 +408,7 @@ time_varying_trace_gases:
 
 # EDMF configuration
 turbconv:
-  help: "Turbulence convection scheme [`nothing` (default), 'prognostic_edmfx', 'diagnostic_edmfx']"
+  help: "Turbulence convection scheme [`nothing` (default), 'prognostic_edmfx']"
   value: ~
 advection_test:
   help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"

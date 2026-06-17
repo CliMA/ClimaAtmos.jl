@@ -190,13 +190,13 @@ if MANYTESTS
         if configuration == "sphere"
             microphysics_models = ["1M"]
             topography = "Earth"
-            turbconv_models = [nothing, "diagnostic_edmfx"]
+            turbconv_models = [nothing, "prognostic_edmfx"]
             # turbconv_models = ["prognostic_edmfx"]
             radiations = [nothing, "allsky"]
         else
             microphysics_models = ["0M"]
             topography = "NoWarp"
-            turbconv_models = ["diagnostic_edmfx"]
+            turbconv_models = ["prognostic_edmfx"]
             radiations = ["gray", "allskywithclear"]
         end
 

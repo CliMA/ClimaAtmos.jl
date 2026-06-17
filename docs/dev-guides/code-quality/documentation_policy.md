@@ -371,7 +371,7 @@ Apply microphysics tendencies, reading `mp_tendency` values precomputed in the c
 - `t`: current simulation time [s].
 - `microphysics_model`: dispatch tag, e.g. `EquilibriumMicrophysics0M`,
   `NonEquilibriumMicrophysics1M`.
-- `turbconv_model`: e.g. `PrognosticEDMFX`, `DiagnosticEDMFX`, or `nothing`.
+- `turbconv_model`: e.g. `PrognosticEDMFX`, or `nothing`.
 
 # Returns
 `nothing`. Modifies `Yₜ` in place.

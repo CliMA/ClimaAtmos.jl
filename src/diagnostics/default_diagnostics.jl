@@ -459,45 +459,6 @@ function default_diagnostics(
 end
 
 
-function default_diagnostics(
-    ::DiagnosticEDMFX,
-    duration,
-    start_date,
-    t_start;
-    output_writer,
-)
-    diagnostic_edmfx_draft_diagnostics = [
-        "arup",
-        "rhoaup",
-        "waup",
-        "taup",
-        "thetaaup",
-        "haup",
-        "husup",
-        "hurup",
-        "clwup",
-        "cliup",
-    ]
-    diagnostic_edmfx_env_diagnostics = ["waen", "tke", "lmix"]
-
-    average_func = frequency_averages(duration)
-
-    return [
-        average_func(
-            diagnostic_edmfx_draft_diagnostics...;
-            output_writer,
-            start_date,
-            t_start,
-        )...,
-        average_func(
-            diagnostic_edmfx_env_diagnostics...;
-            output_writer,
-            start_date,
-            t_start,
-        )...,
-    ]
-end
-
 function default_diagnostics(::EDOnlyEDMFX, duration, start_date, t_start; output_writer)
     edonly_edmfx_diagnostics = ["tke"]
 

@@ -233,7 +233,7 @@ end
 # relaxes updraft microphysics tracers (q_lcl, q_icl, q_rai, q_sno, n_lcl, n_rai)
 # toward the grid mean while enforcing the subdomain mass conservation bound ρaχʲ < ρχ.
 # The microphysics tracer block is a no-op for 0M (has_field returns false).
-# No-op when n_prognostic_mass_flux_subdomains == 0 (DiagnosticEDMFX, etc.).
+# No-op when n_prognostic_mass_flux_subdomains == 0 (EDOnlyEDMFX, etc.).
 function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
     FT = eltype(p.params)
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
@@ -301,7 +301,7 @@ function enforce_physical_constraints!(Y, p, t, atmos::AtmosModel)
     end
 
     # EDMF updraft constraints: only active when the filter flag is enabled.
-    # Each helper is a no-op for DiagnosticEDMFX (n_prognostic_mass_flux_subdomains == 0).
+    # Each helper is a no-op for EDOnlyEDMFX (n_prognostic_mass_flux_subdomains == 0).
     if atmos.turbconv_model isa AbstractEDMF &&
        atmos.edmfx_model.filter isa Val{true}
         enforce_edmf_updraft_constraints!(Y, p, t, atmos.turbconv_model)

@@ -674,25 +674,6 @@ function update_implicit_microphysics_cache!(
 end
 
 function update_implicit_microphysics_cache!(
-    Y, p, mm::EquilibriumMicrophysics0M, tm::DiagnosticEDMFX,
-)
-    (; ᶜmp_tendency, ᶜmp_tendencyʲs, ᶜρaʲs) = p.precomputed
-    (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
-    n = n_mass_flux_subdomains(tm)
-
-    @. ᶜρ_dq_tot_dt = ᶜmp_tendency.dq_tot_dt * ρa⁰(Y.c.ρ, ᶜρaʲs, tm)
-    @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
-    for j in 1:n
-        @. ᶜρ_dq_tot_dt += ᶜρaʲs.:($$j) * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
-        @. ᶜρ_de_tot_dt +=
-            ᶜρaʲs.:($$j) * ᶜmp_tendencyʲs.:($$j).dq_tot_dt *
-            ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
-    end
-    set_precipitation_surface_fluxes!(Y, p, mm)
-    return nothing
-end
-
-function update_implicit_microphysics_cache!(
     Y, p, mm::EquilibriumMicrophysics0M, tm::PrognosticEDMFX,
 )
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
@@ -725,13 +706,13 @@ coefficients, etc.) for the current state `Y`.
 
 **Dispatch table** (microphysics_model × turbconv_model):
 
-| Model    | Nothing / default      | DiagnosticEDMFX  | PrognosticEDMFX  |
-|:-------- |:---------------------- |:---------------- |:---------------- |
-| DryModel | no-op                  | no-op (fallback) | no-op (fallback) |
-| 0M       | grid-mean (± SGS quad) | EDMF-weighted    | EDMF-weighted    |
-| 1M       | grid-mean (± SGS quad) | EDMF-weighted    | EDMF-weighted    |
-| 2M       | grid-mean              | not implemented  | EDMF-weighted    |
-| 2MP3     | grid-mean (no EDMF)    | —                | —                |
+| Model    | Nothing / default      | PrognosticEDMFX  |
+|:-------- |:---------------------- |:---------------- |
+| DryModel | no-op                  | no-op (fallback) |
+| 0M       | grid-mean (± SGS quad) | EDMF-weighted    |
+| 1M       | grid-mean (± SGS quad) | EDMF-weighted    |
+| 2M       | grid-mean              | EDMF-weighted    |
+| 2MP3     | grid-mean (no EDMF)    | —                |
 
 **Non-EDMF path** computes microphysics on the grid-mean state, with an optional sum over
 SGS quadrature points (controlled by `p.atmos.sgs_quadrature`) to sample subgrid variability.
@@ -791,51 +772,6 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
 
     @. ᶜρ_dq_tot_dt = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
     @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
-    return nothing
-end
-
-function set_microphysics_tendency_cache!(
-    Y, p, ::EquilibriumMicrophysics0M, tm::DiagnosticEDMFX,
-)
-    (; dt) = p
-    (; ᶜΦ) = p.core
-    (; ᶜmp_tendency) = p.precomputed
-    (; ᶜT, ᶜq_tot_nonneg) = p.precomputed
-
-    thp = CAP.thermodynamics_params(p.params)
-    cm0 = CAP.microphysics_0m_params(p.params)
-
-    ### Updraft contribution is computed in diagnostic EDMF integral loop
-
-    ### Environment contribution on the grid mean or quadrature points
-    sgs_quad = p.atmos.sgs_quadrature
-    if not_quadrature(sgs_quad)
-        (; ᶜq_liq, ᶜq_ice) = p.precomputed
-        @. ᶜmp_tendency = microphysics_tendencies_0m(
-            cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜΦ, dt,
-        )
-    else
-        (; ᶜT′T′, ᶜq′q′) = p.precomputed
-        corr_Tq = correlation_Tq(p.params)
-        @. ᶜmp_tendency = microphysics_tendencies_0m(
-            $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
-            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ, dt,
-        )
-    end
-
-    # TODO - duplicated with tendency and implicit cache update
-    (; ᶜmp_tendencyʲs, ᶜρaʲs) = p.precomputed
-    (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
-    n = n_mass_flux_subdomains(tm)
-    @. ᶜρ_dq_tot_dt = ᶜmp_tendency.dq_tot_dt * ρa⁰(Y.c.ρ, ᶜρaʲs, tm)
-    @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
-    for j in 1:n
-        @. ᶜρ_dq_tot_dt += ᶜρaʲs.:($$j) * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
-        @. ᶜρ_de_tot_dt +=
-            ᶜρaʲs.:($$j) * ᶜmp_tendencyʲs.:($$j).dq_tot_dt *
-            ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
-    end
-
     return nothing
 end
 
@@ -933,48 +869,6 @@ function set_microphysics_tendency_cache!(
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
-            ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, ᶜsgs_moments.mu_S, α,
-            dt, nsubs_quad,
-        )
-    end
-
-    return nothing
-end
-
-function set_microphysics_tendency_cache!(
-    Y, p, mp1m::NonEquilibriumMicrophysics1M, ::DiagnosticEDMFX,
-)
-    (; dt) = p
-    (; ᶜT, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
-
-    thp = CAP.thermodynamics_params(p.params)
-    cm1 = CAP.microphysics_1m_params(p.params)
-
-    ### Updraft contribution is computed in the diagnostic EDMF integral loop
-
-    ### Environment contribution
-    ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
-    ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
-    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-    ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-
-    # Grid mean or quadrature sum over the SGS fluctuations
-    # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
-    sgs_quad = p.atmos.sgs_quadrature
-    nsubs = mp1m.n_substeps
-    nsubs_quad = mp1m.n_substeps_quad
-    if not_quadrature(sgs_quad)
-        @. ᶜmp_tendency = microphysics_tendencies_1m(
-            Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, ᶜT, cm1, thp,
-            dt, nsubs,
-        )
-    else
-        (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
-        corr_Tq = correlation_Tq(p.params)
-        α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
-        @. ᶜmp_tendency = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cm1, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, ᶜsgs_moments.mu_S, α,
             dt, nsubs_quad,
@@ -1106,13 +1000,6 @@ function set_microphysics_tendency_cache!(
                 Y.c.ρ, ᶜw, cmp, thp, ᶜT, ᶜp, dt, (pap,),
             )
     end
-    return nothing
-end
-
-function set_microphysics_tendency_cache!(
-    Y, p, ::NonEquilibriumMicrophysics2M, ::DiagnosticEDMFX,
-)
-    error("Not implemented yet")
     return nothing
 end
 

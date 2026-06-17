@@ -165,7 +165,7 @@ function turbconv_center_variables(
     physical_state,
     local_geometry,
     params,
-    turbconv_model::Union{EDOnlyEDMFX, DiagnosticEDMFX},
+    turbconv_model::EDOnlyEDMFX,
     _,
 )
     ρ = air_density(physical_state, params)
@@ -197,7 +197,6 @@ end
 # ============================================================================
 
 turbconv_face_variables(u₃, w_draft, local_geometry, ::Nothing) = (;)
-turbconv_face_variables(u₃, w_draft, local_geometry, ::DiagnosticEDMFX) = (;)
 turbconv_face_variables(u₃, w_draft, local_geometry, ::EDOnlyEDMFX) = (;)
 function turbconv_face_variables(u₃, w_draft, lg, turbconv_model::PrognosticEDMFX)
     return (; sgsʲs = uniform_subdomains((; u₃ = C3(w_draft, lg)), turbconv_model))
