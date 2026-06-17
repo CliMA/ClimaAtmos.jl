@@ -1,0 +1,37 @@
+h_elem: 480
+z_max: 45000.0
+z_elem: 43
+dz_bottom: 30.0
+rayleigh_sponge: true
+viscous_sponge: true
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+topography: "Earth"
+start_date: "20160801"
+initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
+moist: "equil"
+dt: "6secs"
+t_end: "6secs"
+dt_save_state_to_disk: "10days"
+rad: "allskywithclear"
+insolation: "timevarying"
+aerosol_radiation: true
+co2_model: maunaloa
+edmfx_sgs_diffusive_flux: true
+####
+prescribe_ozone: true
+prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05", "OC1", "OC2", "SO4", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
+dt_rad: "1hours"
+dt_cloud_fraction: "1hours"
+surface_setup: "DefaultMoninObukhov"
+# SGS Closure Options
+#smagorinsky_lilly: UVW
+turbconv: "edonly_edmfx"
+edmfx_sgs_diffusive_flux: true
+precip_model: "0M"
+toml: [toml/dyamond_edonly.toml]
+netcdf_interpolation_num_points: [1440, 720, 43]
+diagnostics:
+  - short_name: [pfull, ps, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr, clwvi]
+    reduction: inst
+    period: 1days
