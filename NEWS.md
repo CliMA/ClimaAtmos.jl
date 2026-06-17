@@ -17,6 +17,8 @@ v0.39.5
 - [#4548](https://github.com/CliMA/ClimaAtmos.jl/pull/4548) ![][badge-✨feature/enhancement] Auto-discover SGS updraft tracers in prognostic EDMF tendency processes via `sgs_tracer_names(Y)`, so adding a passive SGS tracer no longer requires editing each tendency. New documentation in `docs/src/passive_tracers.md`.
 - [#4578](https://github.com/CliMA/ClimaAtmos.jl/pull/4578) ![][badge-🔥behavioralΔ] Add the Rayleigh sponge tendency for microphysics tracers.
 
+v0.39.4
+-------
 
 - [#4568](https://github.com/CliMA/ClimaAtmos.jl/pull/4568) ![][badge-🔥behavioralΔ] `config: column` simulations now use an actual single-column (FiniteDifference) geometry instead of a minimal 2×2 box.
 - [#4558](https://github.com/CliMA/ClimaAtmos.jl/pull/4558) ![][badge-🔥behavioralΔ] Use an analytic area fraction in the implicit stage solve, and refactor entrainment/detrainment.
