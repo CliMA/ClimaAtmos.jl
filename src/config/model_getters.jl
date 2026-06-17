@@ -189,10 +189,7 @@ function get_insolation_form(parsed_args; setup_type = nothing)
     return if insolation == "idealized"
         IdealizedInsolation()
     elseif insolation == "timevarying"
-        # TODO: Remove this argument once we have support for integer time and
-        # we can easily convert from time to date
-        start_date = parse_date(parsed_args["start_date"])
-        TimeVaryingInsolation(start_date)
+        TimeVaryingInsolation()
     elseif insolation == "rcemipii"
         RCEMIPIIInsolation()
     elseif insolation == "gcmdriven"
@@ -655,6 +652,15 @@ function check_case_consistency(parsed_args)
     turbconv = parsed_args["turbconv"]
     topography = parsed_args["topography"]
     prescribed_flow = parsed_args["prescribed_flow"]
+    config = parsed_args["config"]
+
+    # Geometry consistency (always checked, independent of the case-specific
+    # checks below)
+    valid_configs = ("sphere", "column", "box", "plane")
+    @assert(
+        config in valid_configs,
+        "Unknown `config = $(repr(config))`. Valid options are: $(join(valid_configs, ", "))."
+    )
 
     # ISDAC consistency: when initial_condition is ISDAC, surface/rad/external
     # forcing must all be set to the matching ISDAC variants. Subsidence,

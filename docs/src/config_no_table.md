@@ -60,6 +60,21 @@ The `help` field is optional if you don't plan on making a permanent change to t
 
 See below for the full list of configuration arguments.
 
+# Environment variables
+
+A few behaviors are controlled by environment variables rather than the
+configuration file:
+
+- **`CI`**: when set (as it is on our continuous-integration tests), the
+  default output directory is `<job_id>` instead of `output/<job_id>`. Set by
+  the CI system; you normally do not need to set it yourself. (See
+  `setup_output_dir` in `src/simulation/restart.jl`.)
+
+- **`CLIMAATMOS_GC_NSTEPS`**: number of steps between manual garbage-collection
+  calls for distributed (MPI) runs. Defaults to `1000`. Only has an effect when
+  running with more than one process. (See `gc_callback` in
+  `src/callbacks/get_callbacks.jl`.)
+
 # Common Configurations
 
 ClimaAtmos provides a set of common numerical configurations that can be used as building blocks for different types of simulations. These configurations are located in `config/common_configs/` and contain standardized settings for grid resolution, time stepping, numerical schemes, and diagnostics.

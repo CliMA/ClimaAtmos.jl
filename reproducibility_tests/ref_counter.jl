@@ -1,4 +1,4 @@
-359
+363
 # **README**
 #
 # What is the ref_counter?
@@ -31,6 +31,29 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+363
+- SGS cloud-fraction: non-dimensionalize variance floor.
+  Replace hardcoded `σ_S_floor = 1e-6` with a scale-aware
+  floor `σ_S_floor = sqrt((ε_rel · q_sat)² + σ_abs²)` that
+  tracks local saturation humidity.
+
+362
+- Use ϵ_numerics(FT) (not eps(FT)) as the threshold in enforce_grid_mean_microphysics_constraints!
+  and fall back to ratio = 0 (not 1) below it, so noise-level condensate is zeroed rather than
+  left untouched. eps(FT) is too large for comparing agains q values close to the domain height
+  where density is small (ρq / ρ can get larger than eps)
+
+361
+- SGS cloud-fraction: bugfix + smooth non-equilibrium floor. Floor `σ_S`
+  at `ϵ_numerics(FT)` instead of `sqrt(ϵ_numerics(FT))` (old floor was
+  ~1e-7 in Float32 and incorrectly clipped small `q_c`). Cloud fraction
+  now uses an augmented `σ_aug = α · sqrt(σ_S² + σ_S_fix²)` with
+  hardcoded `σ_S_fix = 1e-6` to prevent CF → 1 when both `q_c` and
+  `σ_S` are tiny. `λ_lagrange` still uses `α · σ_S` for mass conservation.
+
+360
+- Changed the default snow autoconversion to NoSupersaturation
+
 359
 - Use 1D vertical column instead of minimal box for `config = column`
 

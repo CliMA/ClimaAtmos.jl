@@ -120,7 +120,7 @@ function override_default_config(config_dict::AbstractDict;)
         v = config_dict[k]
         # `nothing` defaults and excepted keys pass through unchanged;
         # everything else must coerce cleanly to the default's type.
-        if isnothing(default_config[k]) || k in EXCEPTED_KEYS
+        if isnothing(default_config[k]) || isnothing(v) || k in EXCEPTED_KEYS
             config[k] = v
         else
             default_type = typeof(default_config[k])
@@ -141,7 +141,8 @@ function override_default_config(config_dict::AbstractDict;)
         keys(config_dict),
     )
     if !isempty(unused_keys)
-        @warn "The configuration passed to ClimaAtmos contains unused keys: $(join(unused_keys, ", "))"
+        msg = "The configuration passed to ClimaAtmos contains unused keys: $(join(unused_keys, ", "))"
+        config["strict_config"] ? error(msg) : @warn msg
     end
 
     config == default_config && @info "Using default configuration"

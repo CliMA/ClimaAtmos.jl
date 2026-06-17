@@ -47,7 +47,7 @@ using Base.Broadcast: materialize
                 zd = z_damping,
                 α_uₕ = FT(1),
                 α_w = FT(2),
-                α_sgs_tracer = FT(3),
+                α_tracer = FT(3),
             )
 
             # β = α * sin²(π/2 * (z - zd) / (zmax - zd)) for z > zd, else 0
@@ -71,7 +71,7 @@ using Base.Broadcast: materialize
                 zd = z_damping,
                 α_uₕ = FT(1),
                 α_w = FT(1),
-                α_sgs_tracer = FT(1),
+                α_tracer = FT(1),
             )
 
             # Tendency = -β * uₕ
@@ -82,17 +82,17 @@ using Base.Broadcast: materialize
             @test materialize(tendency) ≈ expected
         end
 
-        @testset "Tendency for SGS tracer (single argument)" begin
+        @testset "Tendency for tracer (single argument)" begin
             rs = CA.RayleighSponge(;
                 zd = z_damping,
                 α_uₕ = FT(1),
                 α_w = FT(1),
-                α_sgs_tracer = FT(2),
+                α_tracer = FT(2),
             )
 
             # Tendency = -β * χ
-            tendency = CA.rayleigh_sponge_tendency_sgs_tracer(ᶜχ, rs)
-            β = CA.β_rayleigh_sgs_tracer.(rs, ᶜz, z_max)
+            tendency = CA.rayleigh_sponge_tendency_tracer(ᶜχ, rs)
+            β = CA.β_rayleigh_tracer.(rs, ᶜz, z_max)
             expected = @. -β * ᶜχ
 
             @test materialize(tendency) ≈ expected
@@ -103,12 +103,12 @@ using Base.Broadcast: materialize
                 zd = z_damping,
                 α_uₕ = FT(1),
                 α_w = FT(1),
-                α_sgs_tracer = FT(2),
+                α_tracer = FT(2),
             )
 
             # Tendency = -β * (χʲ - χ)
             tendency = CA.rayleigh_sponge_tendency_sgs_tracer(ᶜχʲ, ᶜχ, rs)
-            β = CA.β_rayleigh_sgs_tracer.(rs, ᶜz, z_max)
+            β = CA.β_rayleigh_tracer.(rs, ᶜz, z_max)
             expected = @. -β * (ᶜχʲ - ᶜχ)
 
             @test materialize(tendency) ≈ expected
@@ -116,7 +116,7 @@ using Base.Broadcast: materialize
 
         @testset "No sponge (nothing) returns NullBroadcasted" begin
             @test CA.rayleigh_sponge_tendency_uₕ(ᶜuₕ, nothing) isa NullBroadcasted
-            @test CA.rayleigh_sponge_tendency_sgs_tracer(ᶜχ, nothing) isa NullBroadcasted
+            @test CA.rayleigh_sponge_tendency_tracer(ᶜχ, nothing) isa NullBroadcasted
             @test CA.rayleigh_sponge_tendency_sgs_tracer(ᶜχʲ, ᶜχ, nothing) isa
                   NullBroadcasted
         end

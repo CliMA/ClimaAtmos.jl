@@ -255,7 +255,7 @@ end
 # SGS Moments — pre-pass quadrature
 # ============================================================================
 #
-# A Gauss-Hermite pass over the SGS PDF computes σ_S² via `_sgs_saturation_moments`,
+# A Gauss-Hermite pass over the SGS PDF computes σ_S via `_sgs_saturation_moments`,
 # which drives the truncated-Gaussian cloud-fraction and λ_lagrange closures.
 #
 # The saturation variable is ALWAYS defined as the linear excess
@@ -287,20 +287,22 @@ end
 @inline function (eval::SGSMomentsEvaluator)(T_hat, q_tot_hat)
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     s = q_tot_hat - q_sat_hat
-    return (mu_S = s, s_sq = s * s)
+    return (mu_S = s, s_sq = s^2)
 end
 
 
 """
-    _sgs_saturation_moments(thp, ρ, T_mean, q_tot_mean, sgs_quad, T′T′, q′q′, corr_Tq)
+    _sgs_saturation_moments(thp, ρ, T_mean, q_tot_mean,
+                            sgs_quad, T′T′, q′q′, corr_Tq)
 
-Compute μ_S = E[S] and σ_S² = Var[S] of the linear saturation excess
+Compute μ_S = E[S] and σ_S = sqrt(Var[S]) of the linear saturation excess
 S = q_tot − q_sat via a single Gauss-Hermite quadrature pass over the SGS PDF.
 
-The SGS distribution type controls how quadrature points are sampled but S is
-always the linear excess (see block comment above).
+The variance is guarded against negative values from quadrature cancellation
+(clipped at zero) and the standard deviation is floored at `ϵ_numerics(FT)`
+so the normalised closure (`C = q_c / (α·σ_S)`) is well-conditioned.
 
-Returns `(; mu_S, sigma_S_sq)`.
+Returns `(; mu_S, sigma_S)`.
 """
 @inline function _sgs_saturation_moments(
     thp, ρ, T_mean, q_tot_mean,
@@ -312,9 +314,10 @@ Returns `(; mu_S, sigma_S_sq)`.
     raw = integrate_over_sgs(
         evaluator, sgs_quad_eff, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq,
     )
+    sigma_S_sq = max(raw.s_sq - raw.mu_S * raw.mu_S, zero(FT))
     return (;
         mu_S = raw.mu_S,
-        sigma_S_sq = max(raw.s_sq - raw.mu_S * raw.mu_S, ϵ_numerics(FT)),
+        sigma_S = max(sqrt(sigma_S_sq), ϵ_numerics(FT)),
     )
 end
 
@@ -330,17 +333,32 @@ end
 #     E[max(0, λ + α·S′)] = q_c,                                     (*)
 #
 # where α = `sgs_variance_fidelity` controls how much of the SGS variance is
-# propagated into the local condensate (currently α = 1).
+# propagated into the local condensate (currently α = 1). The effective
+# scale `σ_S_eff = α · σ_S` uses the standard deviation returned by
+# `_sgs_saturation_moments` (already floored at `ϵ_numerics(FT)` to keep
+# the normalised problem well-conditioned for tiny variances).
 #
-# Introducing  z = λ / (α·σ_S)  and  C = q_c / (α·σ_S),
+# Introducing  z = λ / σ_S_eff  and  C = q_c / σ_S_eff,
 # the truncated-Gaussian expectation in (*) evaluates to:
 #
 #     C = z·Φ(z) + φ(z),
 #
-# where Φ is the standard normal CDF and φ is its PDF.  The cloud fraction
-# (fraction of the α·S′ PDF above −λ, i.e. fraction with positive shifted excess) is:
+# where Φ is the standard normal CDF and φ is its PDF.
 #
-#     CF = P(α·S′ > −λ) = Φ(λ/(α·σ_S)) = Φ(z).
+# For the *cloud fraction* we use an augmented variance with a fixed
+# non-equilibrium floor `σ_S_floor` (defined inside
+# `_compute_cloud_fraction`):
+#
+#     σ_aug = α · sqrt(σ_S² + σ_S_floor²),
+#
+# which keeps CF well-behaved in the singular limit (q_c, σ_S²) → 0.  CF is
+# always computed by solving the truncated-Gaussian closure with `σ_aug`,
+# i.e. `C_aug = q_c / σ_aug`, `z_aug = _compute_z(C_aug)`, `CF = Φ(z_aug)`.
+# `λ_lagrange` is *not* used to recover CF (the natural shortcut
+# `Φ(λ/σ_aug)` would be inconsistent because `λ` is computed with the
+# equilibrium `σ_S_eff`, not `σ_aug`).  `λ_lagrange` is computed from the
+# raw `σ_S_eff` so the mass-conservation constraint (*) is preserved for
+# the microphysics tendencies.
 #
 # Inverting C = z·Φ(z)+φ(z) for z uses Newton iteration on
 # F(z) = z·Φ(z)+φ(z)−C with F′(z) = Φ(z):
@@ -348,11 +366,11 @@ end
 #     z_{n+1} = (C − φ(z_n)) / Φ(z_n).
 #
 # **Algorithm** (one Newton step with a fitted initial guess):
-# 1. Initial guess:  CF₀ = tanh(1.35·C)  [least-squares fit to exact solution],
-#                    z₀  = Φ⁻¹(CF₀)  via `normal_cdf_inv` (A&S 26.2.22).
-#    The A&S inverse correctly scales as −√(−2 ln CF₀) in the tail, avoiding
+# 1. Initial guess:  Φ(z₀) = tanh(1.35·C)  [least-squares fit to exact solution],
+#                    z₀    = Φ⁻¹(Φ(z₀))  via `normal_cdf_inv` (A&S 26.2.22).
+#    The A&S inverse correctly scales as −√(−2 ln Φ(z₀)) in the tail, avoiding
 #    the extreme underestimate of the tanh-based inverse that causes divergence.
-# 2. One Newton step:  z₁ = (C − φ(z₀)) / CF₀  (using Φ(z₀) = CF₀).
+# 2. One Newton step:  z₁ = (C − φ(z₀)) / Φ(z₀).
 # 3. CF = Φ(z₁) via `normal_cdf` (A&S 26.2.17, max error ≈ 7.5×10⁻⁸).
 
 """
@@ -366,8 +384,10 @@ condensate computation:
 
     E[max(0, λ + α·S′)] = q_c,
 
-where `S′ = S − μ_S ~ N(0, σ_S²)`.  The effective standard deviation is
-`α·σ_S`, so `C = q_c / (α·σ_S)` and `λ = z·α·σ_S`.
+where `S′ = S − μ_S ~ N(0, σ_S²)`.  The effective standard deviation used by
+the Lagrange-multiplier closure is `σ_S_eff = α · σ_S` (with `σ_S` clipped at
+`ϵ_numerics(FT)` inside [`_sgs_saturation_moments`](@ref)), so `C = q_c / σ_S_eff`
+and `λ = z · σ_S_eff`.
 
 With the default `cf_steepness_coeff = 1` this gives `α = 1` (full variance
 propagation). Increasing the steepness coefficient sharpens the CF transition
@@ -383,66 +403,77 @@ and reduces `α`.
 sgs_variance_fidelity(cf_steepness_coeff::FT) where {FT} = one(FT) / cf_steepness_coeff
 
 """
-    _compute_z(q_c, sigma_S_sq, α)
+    _compute_z(C)
 
-Compute the normalised threshold `z = λ/(α·σ_S)` that satisfies the
-truncated-Gaussian condensate relation `C = z·Φ(z) + φ(z)`, where
-`C = q_c / (α·σ_S)`, via one Newton step seeded with an analytic initial guess.
-`α` is the variance fidelity parameter from `sgs_variance_fidelity`.
+Compute the normalised threshold `z` that satisfies the truncated-Gaussian
+condensate relation `C = z·Φ(z) + φ(z)` via one Newton step seeded with an
+analytic initial guess.
 
-Does not guard against `q_c = 0`. When `q_c = 0`, `C = 0` and the initial
-guess is clamped to `ϵ_numerics(FT)`, causing `z` to become a large negative
-number (not `-Inf`, but sufficiently negative that `Φ(z)` rounds to zero at
-floating-point precision). Use `_compute_cloud_fraction` if an exact hard zero
-is required.
+`C = q_c / σ_eff` is the normalised condensate; the caller is responsible
+for computing it (typically with `σ_eff = α · σ_S` or `σ_eff = σ_aug` for
+the smooth-floored CF formula) so this helper stays free of parameter-
+dependent logic.
 """
-@inline function _compute_z(q_c, sigma_S_sq, α)
-    FT = typeof(sigma_S_sq)
-    σ_S = α * sqrt(max(sigma_S_sq, ϵ_numerics(FT)))
-    C = q_c / σ_S
+@inline function _compute_z(C)
+    FT = typeof(C)
 
-    # 1. Initial guess: CF₀ = tanh(1.35 · C)
-    cf0 = tanh(FT(1.35) * C)
-    # Upper bound must be representably less than 1: ϵ_numerics(FT) = cbrt(floatmin(FT))
-    # is so small that 1 - ϵ_numerics rounds to exactly 1.0 in floating-point, causing
-    # normal_cdf_inv(1) → log(0) → NaN. eps(FT) is the unit-roundoff at 1, so
-    # 1 - eps(FT) is always the largest Float strictly below 1.
-    cf0_safe = clamp(cf0, ϵ_numerics(FT), one(FT) - eps(FT))
+    # 1. Initial guess: Φ(z₀) = tanh(1.35 · C).
+    Φz0 = tanh(FT(1.35) * C)
+    # Upper bound must be representably less than 1: 1 - eps(FT) is the
+    # largest Float strictly below 1, avoiding normal_cdf_inv(1) → log(0) → NaN.
+    Φz0_safe = clamp(Φz0, ϵ_numerics(FT), one(FT) - eps(FT))
 
-    # z₀ = Φ⁻¹(CF₀) via A&S 26.2.22
-    z0 = normal_cdf_inv(cf0_safe)
+    # z₀ = Φ⁻¹(Φz0) via A&S 26.2.22
+    z0 = normal_cdf_inv(Φz0_safe)
 
     # 2. One Newton step: z₁ = (C − φ(z₀)) / Φ(z₀)
-    phi_z0 = exp(-z0 * z0 / 2) / sqrt(FT(2) * FT(π))
-    return (C - phi_z0) / cf0_safe
+    φz0 = exp(-z0 * z0 / 2) / sqrt(FT(2) * FT(π))
+    return (C - φz0) / Φz0_safe
 end
 
 """
-    _compute_cloud_fraction(q_c, sigma_S_sq, α)
+    _compute_cloud_fraction(q_c, sigma_S, q_sat, α)
 
-Cloud fraction `CF = Φ(z)` where `z` solves the truncated-Gaussian condensate
-relation `q_c/(α·σ_S) = z·Φ(z) + φ(z)`.  Returns exactly `0` when `q_c = 0`.
-`α` is the variance fidelity parameter from `sgs_variance_fidelity`.
-"""
-@inline function _compute_cloud_fraction(q_c, sigma_S_sq, α)
-    FT = typeof(sigma_S_sq)
-    # No condensate → no cloud.
-    q_c > zero(FT) || return zero(FT)
-    return normal_cdf(_compute_z(q_c, sigma_S_sq, α))
-end
+Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
+relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see [`_compute_z`](@ref)) with the
+augmented standard deviation `σ_aug = α · sqrt(σ_S² + σ_S_floor²)`.
 
-"""
-    _cloud_fraction_from_lambda(λ_lagrange, sigma_S_sq, α)
+Scale-aware non-equilibrium floor. We assume the local condensate `q_c`
+fluctuates partly through the equilibrium variations of (T, q_tot) captured by
+the quadrature (`σ_S`), and partly through non-equilibrium variations not
+captured by the equilibrium SGS PDF. `σ_S_floor` models the latter and is scaled
+with the saturation specific humidity,
 
-Recover the cloud fraction `CF = Φ(z)` from the stored Lagrange multiplier
-`λ_lagrange = z·α·σ_S` and the SGS variance `sigma_S_sq`, without re-running
-the Newton iteration.  Since `z = λ_lagrange / (α·σ_S)`, this is simply
-`normal_cdf(λ_lagrange / (α·σ_S))`.
+    σ_S_floor² = (ε_rel · q_sat)² + σ_abs².
+
+The q_sat-scaling implies saturation-excess fluctuations scale with q_sat.
+The parameter `ε_rel` is a condensate-patchiness scale: it indicates the
+condensate-to-q_sat ratio at which a subdomain saturates over its full area
+(`q_c ≫ ε_rel·q_sat ⇒ CF→1`; `q_c ≪ ε_rel·q_sat ⇒` patchy, `CF→0`).
+This is loosely the critical-relative-humidity idea (subgrid humidity
+variance ∝ q_sat, `ε_rel ~ 1 − RH_crit`; Quaas, 2012,
+doi:10.1029/2012JD017495). However, this is an inexact analogy because
+the PDF here is Gaussian (rather than a bounded top-hat as in Quaas 2012),
+so there is no sharp onset, and `ε_rel` is the *intra*-subdomain width
+only; the inter-subdomain (convective) spread is carried explicitly by the
+drafts. The parameter `ε_rel` is a q_sat-scaling whose magnitude should grow
+with grid spacing.
+
+The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
+`_compute_sgs_moments`) uses the equilibrium `σ_S`, so mass conservation
+`E[max(0, λ + α·S′)] = q_c` is exactly preserved for the microphysics tendencies.
 """
-@inline function _cloud_fraction_from_lambda(λ_lagrange, sigma_S_sq, α)
-    FT = typeof(λ_lagrange)
-    σ_S = α * sqrt(max(sigma_S_sq, ϵ_numerics(FT)))
-    return normal_cdf(λ_lagrange / σ_S)
+@inline function _compute_cloud_fraction(q_c, sigma_S, q_sat, α)
+    FT = typeof(sigma_S)
+    # TODO: promote ε_rel, σ_abs to calibrated parameters once values are clear.
+    # ε_rel should increase with resolution
+    ε_rel = FT(0.02)   # residual fractional saturation variability (~ 1 − RH_crit)
+    σ_abs = FT(1e-7)   # absolute floor for numerical robustness as q_sat → 0
+    σ_S_floor_sq = (ε_rel * q_sat)^2 + σ_abs^2
+    σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
+    C = q_c / σ_aug
+    z = _compute_z(C)
+    return normal_cdf(z)
 end
 
 """
@@ -473,31 +504,38 @@ materialized to a Field.
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
-    return _compute_cloud_fraction(q_liq + q_ice, moments.sigma_S_sq, α)
+    q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
+    return _compute_cloud_fraction(
+        q_liq + q_ice, moments.sigma_S, q_sat, α,
+    )
 end
 
 """
     _compute_sgs_moments(thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α)
 
-Single quadrature pass returning `(mu_S, sigma_S_sq, λ_lagrange)`:
+Single quadrature pass returning `(mu_S, sigma_S, λ_lagrange)`:
 
   - `mu_S       = E[S]`: SGS mean saturation variable.
-  - `sigma_S_sq = Var[S]`: SGS saturation variance (used to compute CF cheaply).
-  - `λ_lagrange = z·α·σ_S`: Lagrange multiplier satisfying `E[max(0, λ + α·S′)] = q_c`.
-
-When `q_c = 0`, `_compute_z` gives a large-negative `z`, so `λ_lagrange` is
-a large-negative multiple of `α·σ_S`, driving the shifted excess to zero.
+  - `sigma_S    = sqrt(Var[S])`: SGS standard deviation, clipped at
+    `ϵ_numerics(FT)` (see [`_sgs_saturation_moments`](@ref)).
+  - `λ_lagrange = z·α·σ_S`: Lagrange multiplier satisfying
+    `E[max(0, λ + α·S′)] = q_c`.
 """
 @inline function _compute_sgs_moments(
     thp, ρ, T, q_tot, q_c,
     sgs_quad, T′T′, q′q′, corr_Tq, α,
 )
-    FT = typeof(ρ)
     moments =
         _sgs_saturation_moments(thp, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq)
-    z = _compute_z(q_c, moments.sigma_S_sq, α)
-    λ_lagrange = z * α * sqrt(max(moments.sigma_S_sq, ϵ_numerics(FT)))
-    return (; moments.mu_S, moments.sigma_S_sq, λ_lagrange)
+    σ_S_eff = α * moments.sigma_S
+    C = q_c / σ_S_eff
+    z = _compute_z(C)
+    λ_lagrange = z * σ_S_eff
+    return (;
+        moments.mu_S,
+        moments.sigma_S,
+        λ_lagrange,
+    )
 end
 
 """
@@ -506,9 +544,9 @@ end
 Final post-Aitken update. No-op when `ᶜsgs_moments` is not allocated (dry / 0M).
 
 Uses ONE quadrature pass via `_compute_sgs_moments` to fill
-`ᶜsgs_moments = (mu_S, sigma_S_sq, λ_lagrange)`, then recovers
-`ᶜcloud_fraction = Φ(λ/(α·σ_S))` cheaply via `_cloud_fraction_from_lambda`
-and applies EDMF updraft weighting.
+`ᶜsgs_moments = (mu_S, sigma_S, λ_lagrange)`, then computes
+`ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
+[`_compute_cloud_fraction`](@ref)) and applies EDMF updraft weighting.
 """
 NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
@@ -525,18 +563,22 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    # ONE quadrature pass → (mu_S, sigma_S_sq, λ_lagrange).
+    # ONE quadrature pass → (mu_S, sigma_S, λ_lagrange).
     @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
         thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
         $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
     )
-    # Cheap: recover CF from stored λ and α·σ_S — no Newton iteration.
-    # This overwrites the Picard iterate with a value consistent with the
-    # final SGS moments, so EDMF weighting must be re-applied here even
-    # though set_cloud_fraction! already applied it during Picard.
-    @. p.precomputed.ᶜcloud_fraction = _cloud_fraction_from_lambda(
-        p.precomputed.ᶜsgs_moments.λ_lagrange,
-        p.precomputed.ᶜsgs_moments.sigma_S_sq,
+    # Recompute CF from q_c and σ_S using the augmented-σ closure. We cannot
+    # use `Φ(λ/σ_aug)` because λ was computed with the equilibrium σ_S_eff,
+    # not σ_aug — `Φ(λ/σ_aug)` would not match the truncated-Gaussian
+    # closure for the augmented variance. This overwrites the Picard iterate
+    # with a value consistent with the final SGS moments, so EDMF weighting
+    # must be re-applied here even though `set_cloud_fraction!` already
+    # applied it during Picard.
+    @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
+        ᶜq_lcl + ᶜq_icl,
+        p.precomputed.ᶜsgs_moments.sigma_S,
+        TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
         FT(α),
     )
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)

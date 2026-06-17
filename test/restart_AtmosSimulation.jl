@@ -15,7 +15,6 @@ include("restart_utils.jl")
 
 function amip_target(context, output_dir)
     FT = Float32
-    start_date = DateTime(2010, 1, 1)
 
     param_dict =
         ClimaParams.create_toml_dict(
@@ -30,7 +29,7 @@ function amip_target(context, output_dir)
         zd = params.zd_rayleigh,
         α_uₕ = params.alpha_rayleigh_uh,
         α_w = params.alpha_rayleigh_w,
-        α_sgs_tracer = params.alpha_rayleigh_sgs_tracer,
+        α_tracer = params.alpha_rayleigh_tracer,
     )
     viscous_sponge =
         CA.ViscousSponge{FT}(; zd = params.zd_viscous, κ₂ = params.kappa_2_sponge)
@@ -63,7 +62,7 @@ function amip_target(context, output_dir)
         deep_atmosphere,
     )
 
-    insolation = CA.TimeVaryingInsolation(start_date)
+    insolation = CA.TimeVaryingInsolation()
 
     n_updrafts = 1
     prognostic_tke = true

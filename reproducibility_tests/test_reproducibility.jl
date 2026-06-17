@@ -27,7 +27,12 @@ if isempty(computed_rms_files)
     if isempty(dirs) # no comparable references
         bins = compute_bins()
         if isempty(bins)
-            @warn "No reproducibility data found"
+            # Finding no reference data here usually means it has not finished
+            # being generated/moved into place (or the staging step failed).
+            # Fail loudly rather than silently skipping the reproducibility
+            # check. Outside CI there is legitimately no data, so only warn.
+            msg = "No reproducibility data found"
+            debug_reproducibility() ? error(msg) : @warn msg
         else
             # Verify the ref counter was incremented
             newest_saved_dir =

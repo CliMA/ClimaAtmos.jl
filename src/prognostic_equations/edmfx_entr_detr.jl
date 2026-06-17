@@ -485,15 +485,6 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
-    microphysics_tracers = (
-        (@name(c.sgsʲs.:(1).q_lcl), @name(q_lcl)),
-        (@name(c.sgsʲs.:(1).q_icl), @name(q_icl)),
-        (@name(c.sgsʲs.:(1).q_rai), @name(q_rai)),
-        (@name(c.sgsʲs.:(1).q_sno), @name(q_sno)),
-        (@name(c.sgsʲs.:(1).n_lcl), @name(n_lcl)),
-        (@name(c.sgsʲs.:(1).n_rai), @name(n_rai)),
-    )
-
     for j in 1:n
         ᶜentrʲ = @. lazy(
             compute_entrainment(
@@ -511,11 +502,12 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         @. Yₜ.c.sgsʲs.:($$j).q_tot +=
             (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_tot⁰ - ᶜq_totʲ)
 
-        MatrixFields.unrolled_foreach(microphysics_tracers) do (χʲ_name, χ_name)
-            MatrixFields.has_field(Y, χʲ_name) || return
+        # Auto-discovered SGS tracers (microphysics species and any
+        # user-defined passive tracers)
+        for χ_name in sgs_tracer_names(Y)
             ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-            ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
             @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)
         end
     end

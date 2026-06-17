@@ -161,8 +161,22 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     rst_uₕ = rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge)
 
     if use_prognostic_tke(turbconv_model)
-        rst_ρtke = rayleigh_sponge_tendency_sgs_tracer(Y.c.ρtke, rayleigh_sponge)
+        rst_ρtke = rayleigh_sponge_tendency_tracer(Y.c.ρtke, rayleigh_sponge)
         @. Yₜ.c.ρtke += rst_ρtke
+    end
+    if microphysics_model isa NonEquilibriumMicrophysics1M
+        grid_mean_micro_species = (
+            @name(c.ρq_lcl),
+            @name(c.ρq_icl),
+            @name(c.ρq_rai),
+            @name(c.ρq_sno),
+        )
+        MatrixFields.unrolled_foreach(grid_mean_micro_species) do ρq_name
+            ᶜρq = MatrixFields.get_field(Y, ρq_name)
+            ᶜρqₜ = MatrixFields.get_field(Yₜ, ρq_name)
+            rst_ρq = rayleigh_sponge_tendency_tracer(ᶜρq, rayleigh_sponge)
+            @. ᶜρqₜ += rst_ρq
+        end
     end
     if turbconv_model isa PrognosticEDMFX
         ᶜmse = @. lazy(ᶜh_tot - ᶜK)
@@ -178,21 +192,17 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             )
             @. Yₜ.c.sgsʲs.:($$j).q_tot += rst_sgs_q_tot
         end
-        if microphysics_model isa NonEquilibriumMicrophysics1M
-            # TODO: This doesn't work for multiple updrafts
-            moisture_species = (
-                (@name(c.sgsʲs.:(1).q_lcl), @name(c.ρq_lcl)),
-                (@name(c.sgsʲs.:(1).q_icl), @name(c.ρq_icl)),
-                (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
-                (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
-            )
-            MatrixFields.unrolled_foreach(moisture_species) do (sgs_q_name, ρq_name)
-                ᶜρq = MatrixFields.get_field(Y, ρq_name)
-                ᶜq = @. lazy(specific(ᶜρq, Y.c.ρ))
-                ᶜsgs_q = MatrixFields.get_field(Y, sgs_q_name)
-                ᶜsgs_qₜ = MatrixFields.get_field(Yₜ, sgs_q_name)
-                rst_sgs_q = rayleigh_sponge_tendency_sgs_tracer(ᶜsgs_q, ᶜq, rayleigh_sponge)
-                @. ᶜsgs_qₜ += rst_sgs_q
+        # Auto-discovered SGS tracers (microphysics species and any
+        # user-defined passive tracers)
+        for χ_name in sgs_tracer_names(Y)
+            ρχ_name = get_ρχ_name(χ_name)
+            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+            ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+            for j in 1:n
+                ᶜsgs_χ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+                ᶜsgs_χₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
+                rst_sgs_χ = rayleigh_sponge_tendency_sgs_tracer(ᶜsgs_χ, ᶜχ, rayleigh_sponge)
+                @. ᶜsgs_χₜ += rst_sgs_χ
             end
         end
     end

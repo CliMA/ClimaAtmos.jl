@@ -258,14 +258,14 @@ cloud_ice_formation:
   help: "Cloud ice formation option for 1M microphysics [`ConstantTimescale` (default), `TemperatureDependent`, ~]"
   value: "ConstantTimescale"
 cloud_ice_melt:
-  help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt`, ~ (default)]"
+  help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt` (default), ~]"
   value: "CloudIceMelt"
 rain_autoconversion:
   help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]"
   value: "Kessler1M"
 snow_autoconversion:
   help: "Snow autoconversion option for 1M microphysics [`NoSupersaturation` (default), `WithSupersaturation`, ~]"
-  value: "WithSupersaturation"
+  value: "NoSupersaturation"
 rain_condensation_evaporation:
   help: "Rain condensation/evaporation option for 1M microphysics [`RainEvaporation` (default), ~]"
   value: "RainEvaporation"
@@ -348,6 +348,9 @@ toml:
 strict_params:
   help: "Raise an error if any overridden parameters are unused."
   value: true
+strict_config:
+  help: "If true, raise an error (instead of a warning) when the configuration contains keys that are not part of the default configuration. [`true`, `false` (default)]"
+  value: false
 prognostic_tke:
   help: "A flag for prognostic TKE [`false` (default), `true`]"
   value: false

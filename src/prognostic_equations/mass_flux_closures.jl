@@ -159,30 +159,16 @@ function edmfx_vertical_diffusion_tendency!(
                 ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
         end
 
-        if p.atmos.microphysics_model isa
-           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+        if !isempty(sgs_tracer_names(Y))
             α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
             ᶜρʲ = ᶜρʲs.:(1)
             ᶜdivᵥ_q = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
             )
-
-            microphysics_tracers = (
-                @name(c.sgsʲs.:(1).q_lcl), @name(c.sgsʲs.:(1).q_icl),
-                @name(c.sgsʲs.:(1).q_rai), @name(c.sgsʲs.:(1).q_sno),
-                @name(c.sgsʲs.:(1).n_lcl), @name(c.sgsʲs.:(1).n_rai),
-            )
-
-            # TODO: using unrolled_foreach here allocates! (breaks the flame tests
-            # even though they use 0M microphysics)
-            # MatrixFields.unrolled_foreach(cloud_tracers) do χʲ_name
-            for χʲ_name in microphysics_tracers
-                MatrixFields.has_field(Y, χʲ_name) || continue
-
-                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-                ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
-
+            for χ_name in sgs_tracer_names(Y)
+                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
                 @. ᶜχʲₜ -=
                     ᶜdivᵥ_q(
                         -(
@@ -231,9 +217,9 @@ function enforce_grid_mean_microphysics_constraints!(Y, p, t)
 
     @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_icl + Y.c.ρq_rai + Y.c.ρq_sno
     @. ratio = ifelse(
-        ρq_cond > eps(FT),
-        min(FT(1), max(FT(0), Y.c.ρq_tot) / ρq_cond),
-        FT(1),
+        (ρq_cond > ϵ_numerics(FT)) & (Y.c.ρq_tot > ϵ_numerics(FT)),
+        min(FT(1), Y.c.ρq_tot / ρq_cond),
+        FT(0),
     )
     @. Y.c.ρq_lcl *= ratio
     @. Y.c.ρq_icl *= ratio
@@ -253,14 +239,6 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     n == 0 && return nothing
     (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
-    microphysics_tracers = (
-        (@name(c.sgsʲs.:(1).q_lcl), @name(c.ρq_lcl)),
-        (@name(c.sgsʲs.:(1).q_icl), @name(c.ρq_icl)),
-        (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
-        (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
-        (@name(c.sgsʲs.:(1).n_lcl), @name(c.ρn_lcl)),
-        (@name(c.sgsʲs.:(1).n_rai), @name(c.ρn_rai)),
-    )
     for j in 1:n
         # clip updraft area fraction and vertical velocity to non-negative values
         @. Y.c.sgsʲs.:($$j).ρa = max(0, min(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
@@ -290,13 +268,13 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
             ),
         )
 
-        # relax updraft microphysics tracers toward the grid mean when ρa is
+        # Auto-discovered SGS tracers: relax toward grid mean when ρa is
         # negligible; enforce mass conservation bound ρaχʲ < ρχ.
-        # has_field returns false for 0M configs, making this block a no-op.
-        MatrixFields.unrolled_foreach(microphysics_tracers) do (χʲ_name, ρχ_name)
-            MatrixFields.has_field(Y, χʲ_name) || return
-            ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+        for χ_name in sgs_tracer_names(Y)
+            ρχ_name = get_ρχ_name(χ_name)
+            MatrixFields.has_field(Y.c, ρχ_name) || continue
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
             @. ᶜχʲ = ifelse(
                 Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
                 specific(ᶜρχ, Y.c.ρ),

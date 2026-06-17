@@ -2,7 +2,8 @@
 Unit tests for cloud_fraction.jl
 
 Tests cover:
-1. `_compute_cloud_fraction(q_c, sigma_S_sq, α)` - truncated-Gaussian CF closure
+1. `_compute_cloud_fraction(q_c, sigma_S, q_sat, α)` - truncated-Gaussian CF closure
+   with the smooth non-equilibrium floor (`σ_S_floor`) hardcoded inside.
 =#
 
 using Test
@@ -17,50 +18,66 @@ import ClimaAtmos as CA
                 α = FT(1)
 
                 @testset "No condensate → zero cloud fraction" begin
-                    cf = CA._compute_cloud_fraction(FT(0), FT(1e-8), α)
-                    @test cf == FT(0)
+                    cf = CA._compute_cloud_fraction(FT(0), FT(1e-4), FT(5e-5), α)
+                    @test cf < eps(FT)
                 end
 
                 @testset "Condensate present, nonzero sigma → cf > 0" begin
-                    cf = CA._compute_cloud_fraction(FT(1e-3), FT(1e-7), α)
+                    cf = CA._compute_cloud_fraction(
+                        FT(1e-3),
+                        FT(3.16e-4),
+                        FT(5e-5),
+                        α,
+                    )
                     @test FT(0) < cf <= FT(1)
                 end
 
-                @testset "Zero variance, condensate present → cf ≈ 1" begin
-                    cf = CA._compute_cloud_fraction(FT(1e-3), FT(0), α)
+                @testset "Zero sigma, large condensate → cf ≈ 1" begin
+                    # σ_S = 0 ⇒ σ_aug = σ_S_floor = √((ε_rel·q_sat)² + σ_abs²)
+                    # ≈ 0.15·5e-5 = 7.5e-6; C = 1e-3/7.5e-6 ≫ 1 → CF ≈ 1.
+                    cf = CA._compute_cloud_fraction(FT(1e-3), FT(0), FT(5e-5), α)
                     @test cf > FT(0.99)
                 end
 
-                @testset "Large condensate, small variance → cf ≈ 1" begin
-                    cf = CA._compute_cloud_fraction(FT(1e-2), FT(1e-10), α)
+                @testset "Large condensate, small sigma → cf ≈ 1" begin
+                    cf = CA._compute_cloud_fraction(FT(1e-2), FT(1e-5), FT(5e-5), α)
                     @test cf > FT(0.99)
                 end
 
                 @testset "Type stability" begin
-                    cf = CA._compute_cloud_fraction(FT(1e-3), FT(1e-7), α)
+                    cf = CA._compute_cloud_fraction(
+                        FT(1e-3),
+                        FT(3.16e-4),
+                        FT(5e-5),
+                        α,
+                    )
                     @test cf isa FT
                 end
 
-                @testset "CF monotone in σ_S² at fixed q_c" begin
-                    # Broader PDF → more unsaturated points → CF decreases toward 0.5.
+                @testset "CF monotone in σ_S at fixed q_c" begin
                     cfs = [
-                        CA._compute_cloud_fraction(FT(1e-3), σ², α) for
-                        σ² in FT[1e-9, 1e-8, 1e-7, 1e-6]
+                        CA._compute_cloud_fraction(FT(1e-3), σ, FT(5e-5), α) for
+                        σ in FT[1e-4, 3.16e-4, 1e-3, 3.16e-3]
                     ]
                     for i in 2:length(cfs)
                         @test cfs[i] <= cfs[i - 1] + FT(1e-6)
                     end
                 end
 
-                @testset "Large σ_S², small q_c → cf approaching 0" begin
-                    # C = q_c/(α·σ_S) → 0 ⟹ z → −∞ ⟹ CF = Φ(z) → 0.
-                    cf = CA._compute_cloud_fraction(FT(1e-6), FT(1e-3), α)
+                @testset "Large σ_S, small q_c → cf approaching 0" begin
+                    cf = CA._compute_cloud_fraction(
+                        FT(1e-6),
+                        FT(3.16e-2),
+                        FT(5e-5),
+                        α,
+                    )
                     @test cf < FT(0.01)
                 end
 
-                @testset "σ_S² → 0 limit → cf ≈ 1 when q_c > 0" begin
-                    cf = CA._compute_cloud_fraction(FT(2e-3), FT(1e-12), α)
-                    @test cf > FT(0.99)
+                @testset "Tiny q_c with tiny σ_S → cf stays bounded (smooth floor)" begin
+                    # σ_aug ≈ σ_S_floor ≈ 7.5e-6; C = q_c/σ_aug small ⇒ CF small.
+                    cf = CA._compute_cloud_fraction(FT(1e-9), FT(1e-12), FT(5e-5), α)
+                    @test cf < FT(0.51)
                 end
             end
         end
