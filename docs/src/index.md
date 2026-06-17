@@ -23,7 +23,7 @@ This runs a 1-day global simulation with default settings (cubed-sphere grid, de
 - **Single-column models** for BOMEX, DYCOMS, RICO, and other standard cases
 - **GPU acceleration** via CUDA
 - **ERA5 and GCM-driven** initial conditions and forcing
-- **EDMF turbulence** (prognostic and diagnostic)
+- **Turbulence and convection** (TKE-based diffusion only and prognostic EDMF)
 - **Microphysics** (0-moment, 1-moment, 2-moment)
 - **Configurable diagnostics** with NetCDF and HDF5 output
 - **Restarts and checkpointing** for long simulations
