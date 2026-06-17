@@ -4,7 +4,6 @@ ClimaAtmos.jl Release Notes
 main
 ----
 - [#4567](https://github.com/CliMA/ClimaAtmos.jl/pull/4567/) ![][badge-✨feature/enhancement] Create the Larcform1 case (WIP).
-v0.39.4
 
 0.40.0
 -------
