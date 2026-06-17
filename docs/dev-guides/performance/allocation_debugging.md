@@ -56,7 +56,7 @@ JET.@report_opt my_hot_function(args...)
 JET prints a list of `runtime dispatch detected` entries with the unresolved call and the failing argument type. Reading order:
 
 1. Find the deepest call that is yours (not a stdlib or third-party method).
-2. Look at the *argument types*: a `Union{...}`, `Any`, or `Function` is the giveaway. Track that argument back to where it lost type information (a struct field typed `::Function` instead of `::F`, a `Vector{Any}`, an `Union{Nothing, T}` field accessed without dispatch — see [SDP 6](../architecture/software_design_patterns.md) and [type_stability.md §3](type_stability.md)).
+2. Look at the *argument types*: a `Union{...}`, `Any`, or `Function` is the giveaway. Track that argument back to where it lost type information (a struct field typed `::Function` instead of `::F`, a `Vector{Any}`, an `Union{Nothing, T}` field accessed without dispatch — see [SDP 6](../code-quality/software_design_patterns.md) and [type_stability.md §3](type_stability.md)).
 3. Fix the upstream type instability; the JET entry disappears and the allocation goes with it.
 
 Use `JET.@test_opt my_hot_function(args...)` in a `@testset` for a CI-style regression gate.
@@ -105,13 +105,13 @@ A model-repo equivalent (e.g. `perf/flame.jl` in ClimaAtmos) profiles a single t
 
 | Symptom (in `Profile.Allocs` stacktrace)         | Likely cause                                          | Fix |
 |:-------------------------------------------------|:------------------------------------------------------|:----|
-| `Core.Box` deep inside a kernel                  | Captured local variable in a closure                  | Convert closure to a functor ([SDP 18](../architecture/software_design_patterns.md)) |
-| `jl_apply_generic` with no obvious source        | Dynamic dispatch on a `Function`/`Any` field           | Parameterize the field ([SDP 6](../architecture/software_design_patterns.md)) |
-| Allocation inside a `@.` broadcast               | Non-`isbits` argument captured in the broadcast        | Extract parameters to locals ([SDP 20](../architecture/software_design_patterns.md)); or check `isbits(cudaconvert(...))` ([gpu_performance.md §8](gpu_performance.md)) |
+| `Core.Box` deep inside a kernel                  | Captured local variable in a closure                  | Convert closure to a functor ([SDP 18](../code-quality/software_design_patterns.md)) |
+| `jl_apply_generic` with no obvious source        | Dynamic dispatch on a `Function`/`Any` field           | Parameterize the field ([SDP 6](../code-quality/software_design_patterns.md)) |
+| Allocation inside a `@.` broadcast               | Non-`isbits` argument captured in the broadcast        | Extract parameters to locals ([SDP 20](../code-quality/software_design_patterns.md)); or check `isbits(cudaconvert(...))` ([gpu_performance.md §8](gpu_performance.md)) |
 | `Array{Float64}` allocation in a Float32 path    | A `Float64` literal promoting the result                | Track down the literal ([type_stability.md §1](type_stability.md)) |
 | `Union{T, Nothing}` access in a hot path         | Optional field forces a runtime check                  | Split the method by the field's type parameter ([type_stability.md §3](type_stability.md)) |
-| Allocation inside `ifelse`                       | A `begin...end` block or non-`isbits` branch result    | Pre-compute both branches outside `ifelse` ([SDP 17](../architecture/software_design_patterns.md)) |
-| Allocation only on GPU, not CPU                  | A kernel-incompatible operation (string interp, Dict)  | See [gpu_performance.md §7](gpu_performance.md) and [SDP 13](../architecture/software_design_patterns.md) |
+| Allocation inside `ifelse`                       | A `begin...end` block or non-`isbits` branch result    | Pre-compute both branches outside `ifelse` ([SDP 17](../code-quality/software_design_patterns.md)) |
+| Allocation only on GPU, not CPU                  | A kernel-incompatible operation (string interp, Dict)  | See [gpu_performance.md §7](gpu_performance.md) and [SDP 13](../code-quality/software_design_patterns.md) |
 
 ## 8. When `@allocated` says zero but you still suspect a leak
 

@@ -1,6 +1,6 @@
 # Code Style Guide
 
-This guide covers formatting, variable conventions, and Git workflow for CliMA repositories.
+This guide covers formatting and naming conventions for CliMA repositories. For Git workflow and feature-removal protocol, see [onboarding.md §§5, 7](../workflow/onboarding.md).
 
 ## 1. JuliaFormatter
 
@@ -11,12 +11,15 @@ julia -e 'using JuliaFormatter; format(".")'
 ```
 
 or install JuliaFormatter as an app and use directly from the command-line:
+
 ```julia-repl
 julia> import Pkg; Pkg.Apps.add("JuliaFormatter")
 ```
+
 and add `~/.julia/bin/` to your PATH.
 
 Then you can run the formatter directly:
+
 ```bash
 jlfmt -i .
 ```
@@ -68,44 +71,7 @@ The `test/` directory structure should mirror `src/`:
 - **Source**: `src/parameterized_tendencies/microphysics/tendency.jl`
 - **Test**: `test/parameterized_tendencies/microphysics/tendency.jl`
 
-## 4. Git workflow
-
-### Rebasing over merging
-
-Prefer **rebasing** over merging to maintain a linear commit history:
-
-```bash
-git fetch origin main
-git rebase origin/main
-```
-
-### Starting a new task
-
-Ensure your branch is based on the latest remote `main`:
-
-```bash
-git stash
-git checkout main
-git pull origin main
-git checkout -b your/branch-name
-git stash pop
-```
-
-### Functional commits
-
-Each commit should represent a logical unit of work and maintain model compilability.
-
-## 5. Feature removal
-
-When a feature is deprecated or removed, follow the full cleanup protocol:
-
-1. **Source removal**: delete implementation code, structs, and methods.
-2. **Configuration purge**: remove options from config files and parsers. Ensure that choosing a removed option triggers a clear `error` listing valid alternatives.
-3. **Test suite cleanup**: delete targeted tests; update integration tests to use supported alternatives. Mirror changes between `src/` and `test/`.
-4. **Dependency slimming**: remove packages that were exclusively used by the removed feature from `Project.toml`. See [Dependency Management Guide](../architecture/dependency_management.md).
-5. **Documentation update**: update docstrings and docs to reflect the removal.
-
-## 6. Naming and Syntax conventions
+## 4. Naming and syntax conventions
 
 ### Capitalization
 

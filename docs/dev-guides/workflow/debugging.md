@@ -19,6 +19,8 @@ any(isnan, parent(Y.c.ρ))          # any NaN?
 
 For atmosphere-specific stability heuristics (CFL, hyperviscosity, sponge layers), see the [ClimaAtmos stability wiki](https://github.com/CliMA/ClimaAtmos.jl/wiki/Stability-of-simulations).
 
+4. **Enable `DebugOnly.call_post_op_callback`** if the source of the instability isn't obvious. When enabled, this callback runs after every `ClimaCore` operation, allowing you to determine the exact operation that produces the first NaN. The callback is expensive, so only enable it for debugging. For setup, see the [ClimaCore debugging guide](https://clima.github.io/ClimaCore.jl/dev/debugging/#DebugOnly.call_post_op_callback).
+
 ## 2. Inspecting state with `@show`, `@info`, and `Infiltrator`
 
 In order of intrusiveness:
@@ -93,6 +95,10 @@ For Oceananigans state inspection, the [ClimaCoupler debugging guide](https://cl
 | Float32 simulation diverges where Float64 is fine | A `1.0`/`Inf`/`6^x` literal promoted to Float64 — see [type_stability.md §1](../performance/type_stability.md) |
 | NaN appears only on GPU                          | A scalar-indexing fallback that returns garbage, or a non-`isbits` arg in a kernel — see [gpu_performance.md §§7–8](../performance/gpu_performance.md) |
 | Result depends on MPI rank count                 | A non-associative reduction or per-rank random state — see [clima_comms.md §2](../infrastructure/clima_comms.md) |
+
+## 6. Other common pitfalls
+
+- If an operation on ClimaCore `Field`s shows unexpected values in the REPL, check whether the `Field` has a mask. Masked values can appear as NaN or garbage when printed, even though the non-masked data is correct.
 
 ## Self-correction
 
