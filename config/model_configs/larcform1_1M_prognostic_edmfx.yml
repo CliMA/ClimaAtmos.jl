@@ -14,6 +14,7 @@ disable_surface_flux_tendency: false
 #==========================================================================================#
 
 # Temporal
+FLOAT_TYPE: Float32
 t_end: 1days
 dt: 30secs
 dt_rad: 30secs
@@ -21,8 +22,8 @@ dt_rad: 30secs
 # Spatial #
 config: "column"
 z_max: 6000.0
-z_elem: 60
-z_stretch: false
+z_elem: 90
+z_stretch: true # clw and z-banding both appear very sensitive to this
 dz_bottom: 10.0
 
 # Solver #
@@ -33,21 +34,25 @@ ode_algo: ARS222
 #==========================================================================================#
 
 # Parameters #
-toml: [toml/prognostic_edmfx.toml, toml/larcform1_1M_prognostic_edmfx.toml]
+toml: [toml/larcform1_1M_prognostic_edmfx.toml]
 
 # Radiation #
 rad: allskywithclear
 insolation: larcform1
 
 # Turbulence and EDMF #
+#vert_diff: DecayWithHeightDiffusion
 turbconv: prognostic_edmfx
 implicit_diffusion: true
 edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 edmfx_vertical_diffusion: true
 edmfx_filter: true
+prognostic_tke: true
+hyperdiff: ~
 
 # Clouds #
 cloud_model: quadrature
