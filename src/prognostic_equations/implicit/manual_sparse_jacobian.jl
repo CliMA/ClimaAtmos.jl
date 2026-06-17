@@ -969,6 +969,34 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 end
             end
 
+            # Surface mass-flux BC at level 1 contributes
+            #   ∂F_BC/∂mse[1] = ∂F_BC/∂q_tot[1] = -mass_flux_source/ρa_floor
+            # where ρa_floor = max(ρa, ρ·a_min). Build a level-1-only
+            # rate field (zero elsewhere) and add as a diagonal.
+            begin
+                turbconv_params_local = CAP.turbconv_params(params)
+                a_min = CAP.min_area(turbconv_params_local)
+                ᶜsfc_bc_rate = p.scratch.ᶜtemp_scalar
+                @. ᶜsfc_bc_rate = FT(0)
+                ᶜsfc_bc_rate_first =
+                    Fields.field_values(Fields.level(ᶜsfc_bc_rate, 1))
+                ρʲ_int_val =
+                    Fields.field_values(Fields.level(ᶜρʲs.:(1), 1))
+                ρaʲ_int_val = Fields.field_values(
+                    Fields.level(Y.c.sgsʲs.:(1).ρa, 1),
+                )
+                mass_flux_source_val = Fields.field_values(
+                    Fields.level(p.precomputed.sfc_mass_flux_sourceʲs.:(1), 1),
+                )
+                @. ᶜsfc_bc_rate_first =
+                    mass_flux_source_val /
+                    max(ρaʲ_int_val, ρʲ_int_val * FT(a_min))
+                @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
+                    dtγ * DiagonalMatrixRow(ᶜsfc_bc_rate)
+                @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -=
+                    dtγ * DiagonalMatrixRow(ᶜsfc_bc_rate)
+            end
+
             # add updraft mass flux contributions to grid-mean
             if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
 

@@ -295,6 +295,10 @@ function precomputed_quantities(Y, atmos)
             ᶜρ_diffʲs = similar(Y.c, NTuple{n, FT}),
             ᶠu₃_tendencyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             ᶜρa_tendencyʲs = similar(Y.c, NTuple{n, FT}),
+            # Per-updraft surface conditions at level 1.
+            sfc_mass_flux_sourceʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
+            sfc_mse_buoyantʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
+            sfc_q_tot_buoyantʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
             precipitation_sgs_quantities...,
         ) : (;)
 

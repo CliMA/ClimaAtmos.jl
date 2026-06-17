@@ -201,7 +201,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     (; turbconv_model) = p.atmos
 
     (; params) = p
-    (; dt) = p
     (; ᶜgradᵥ_ᶠΦ) = p.core
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
@@ -238,9 +237,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         # using the true (ᶜwʲ - ᶜw⁰) difference would introduce residual forcing
         # when ᶜwʲ ≈ 0, which can spuriously grow the area fraction and destabilize
         # otherwise trivial updrafts. The total entrainment rate is then assembled
-        # at every tendency call site (`edmfx_entr_detr_tendency!`,
-        # `edmfx_first_interior_entr_tendency!`, and the implicit ρa solve) via
-        # `compute_entrainment` using the (then-updated) updraft velocity |wʲ|.
+        # at every tendency call site (`edmfx_entr_detr_tendency!` and the
+        # implicit ρa solve) via `compute_entrainment` using the
+        # (then-updated) updraft velocity |wʲ|.
         @. ᶜentr_vel_scaleʲs.:($$j) = entrainment_velocity_scale(
             thermo_params,
             turbconv_params,
@@ -281,20 +280,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             turbconv_params,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
         )
-        set_first_cell_entr_detr_bc!(
-            Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1)),
-            Fields.field_values(Fields.level(ᶜρʲs.:($j), 1)),
-            Fields.field_values(Fields.level(ᶜarea_bounding_entr_detrʲs.:($j), 1)),
-            Fields.field_values(Fields.level(ᶜentr_vel_scaleʲs.:($j), 1)),
-            Fields.field_values(p.precomputed.sfc_conditions.buoyancy_flux),
-            Fields.field_values(Fields.level(ᶜdz, 1)),
-            turbconv_params.surface_area,
-            dt,
-            FT,
-        )
 
         @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)
     end
+
+    # Surface BC payload per updraft at level 1 (capped mass flux +
+    # buoyant-air mse/q_tot values).
+    set_edmfx_surface_conditions!(Y, p)
 
     # TODO: Make strain_rate_norm calculation a function in eddy_diffusion_closures
     # TODO: Currently the shear production only includes vertical gradients

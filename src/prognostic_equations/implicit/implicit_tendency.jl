@@ -51,11 +51,12 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     end
 
     edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-    edmfx_first_interior_entr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+
+    edmfx_boundary_condition_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
