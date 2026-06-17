@@ -15,13 +15,13 @@ disable_surface_flux_tendency: false
 
 # Temporal
 FLOAT_TYPE: Float32
-t_end: 1days
+t_end: 5days
 dt: 30secs
-dt_rad: 30secs
+dt_rad: 60secs
 
 # Spatial #
 config: "column"
-z_max: 6000.0
+z_max: 9000.0
 z_elem: 90
 z_stretch: true # clw and z-banding both appear very sensitive to this
 dz_bottom: 10.0
