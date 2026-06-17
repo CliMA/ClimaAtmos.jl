@@ -39,34 +39,27 @@ end
     @test m.surface.temperature isa CA.SurfaceConditions.AnalyticTemperature
 end
 
-@testset "Diagnostic/prognostic EDMF presets" begin
-    diag = CA.Presets.diagnostic_edmf(FT)
-    @test diag.turbconv_model isa CA.DiagnosticEDMFX
-    @test diag.edmfx_model.entr_model isa CA.InvZEntrainment
-    @test diag.edmfx_model.detr_model isa CA.BuoyancyVelocityDetrainment
-    @test diag.edmfx_model.sgs_mass_flux === Val(true)
-    @test diag.edmfx_model.sgs_diffusive_flux === Val(true)
-    @test diag.edmfx_model.nh_pressure === Val(true)
-    # diagnostic does not enable updraft vertical diffusion or the filter
-    @test diag.edmfx_model.vertical_diffusion === Val(false)
-    @test diag.edmfx_model.filter === Val(false)
-
+@testset "Prognostic EDMF preset" begin
     prog = CA.Presets.prognostic_edmf(FT)
     @test prog.turbconv_model isa CA.PrognosticEDMFX
-    # prognostic adds these two on top of diagnostic
+    @test prog.edmfx_model.entr_model isa CA.InvZEntrainment
+    @test prog.edmfx_model.detr_model isa CA.BuoyancyVelocityDetrainment
+    @test prog.edmfx_model.sgs_mass_flux === Val(true)
+    @test prog.edmfx_model.sgs_diffusive_flux === Val(true)
+    @test prog.edmfx_model.nh_pressure === Val(true)
     @test prog.edmfx_model.vertical_diffusion === Val(true)
     @test prog.edmfx_model.filter === Val(true)
 
     # area_fraction kwarg flows through to the turbconv model
-    custom = CA.Presets.diagnostic_edmf(FT; area_fraction = FT(5e-5))
+    custom = CA.Presets.prognostic_edmf(FT; area_fraction = FT(5e-5))
     @test custom.turbconv_model.a_half == FT(5e-5)
 
     # Composing with a different microphysics scheme still gives an EDMF model
-    hybrid = CA.Presets.diagnostic_edmf(
+    hybrid = CA.Presets.prognostic_edmf(
         FT; microphysics_model = CA.NonEquilibriumMicrophysics1M(),
     )
     @test hybrid.microphysics_model isa CA.NonEquilibriumMicrophysics1M
-    @test hybrid.turbconv_model isa CA.DiagnosticEDMFX
+    @test hybrid.turbconv_model isa CA.PrognosticEDMFX
 end
 
 # ============================================================================
@@ -92,11 +85,11 @@ end
     @test sim.integrator.p.atmos.microphysics_model isa CA.EquilibriumMicrophysics0M
 end
 
-@testset "Composing bomex with diagnostic_edmf" begin
+@testset "Composing bomex with prognostic_edmf" begin
     sim = CA.Presets.bomex(
         FT;
         t_end = 600,
-        model = CA.Presets.diagnostic_edmf(FT),
+        model = CA.Presets.prognostic_edmf(FT),
     )
-    @test sim.integrator.p.atmos.turbconv_model isa CA.DiagnosticEDMFX
+    @test sim.integrator.p.atmos.turbconv_model isa CA.PrognosticEDMFX
 end

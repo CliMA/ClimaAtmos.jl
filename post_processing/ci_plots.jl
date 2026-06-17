@@ -1038,7 +1038,6 @@ AquaplanetPlots = Union{
     Val{:mpi_sphere_aquaplanet_rhoe_equil_clearsky},
     Val{:aquaplanet_equil_allsky_gw_raw},
     Val{:aquaplanet_nonequil_allsky_gw_res_2M},
-    Val{:rcemipii_sphere_diagnostic_edmfx},
     Val{:longrun_aquaplanet_allsky_0M},
     Val{:longrun_aquaplanet_allsky_diagedmf_0M},
     Val{:longrun_aquaplanet_allsky_progedmf_0M},
@@ -1271,19 +1270,6 @@ function make_plots(
     )
 end
 
-
-EDMFBoxPlots = Union{
-    Val{:diagnostic_edmfx_test_box},
-    Val{:diagnostic_edmfx_gabls_box},
-    Val{:diagnostic_edmfx_bomex_box},
-    Val{:diagnostic_edmfx_dycoms_rf01_box},
-    Val{:diagnostic_edmfx_trmm_box_0M},
-    Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
-    Val{:prognostic_edmfx_bomex_box},
-    Val{:rcemipii_box_diagnostic_edmfx},
-    Val{:diagnostic_edmfx_trmm_stretched_box},
-}
-
 EDMFColumnPlots = Union{
     Val{:prognostic_edmfx_adv_test_column},
     Val{:prognostic_edmfx_trmm_column_0M},
@@ -1308,11 +1294,6 @@ EDMFColumnPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_trmm_column},
 }
 
-DiagEDMFBoxPlotsWithPrecip = Union{
-    Val{:diagnostic_edmfx_dycoms_rf02_box},
-    Val{:diagnostic_edmfx_rico_box},
-    Val{:diagnostic_edmfx_trmm_box},
-}
 """
     plot_edmf_vert_profile!(grid_loc, var_group)
 
@@ -1423,8 +1404,6 @@ end
 
 function make_plots(
     sim_type::Union{
-        EDMFBoxPlots,
-        DiagEDMFBoxPlotsWithPrecip,
         EDMFColumnPlots,
         EDMFColumnPlotsWithPrecip,
     },
@@ -1432,13 +1411,8 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
 
-    # Determine if this is a box or column type
-    is_box = sim_type isa Union{EDMFBoxPlots, DiagEDMFBoxPlotsWithPrecip}
-
     # Determine precipitation names based on type
-    if sim_type isa DiagEDMFBoxPlotsWithPrecip
-        precip_names = ("husra", "hussn", "husraup", "hussnup")
-    elseif sim_type isa EDMFColumnPlotsWithPrecip
+    if sim_type isa EDMFColumnPlotsWithPrecip
         if sim_type isa Val{:prognostic_edmfx_rico_column_2M}
             precip_names = (
                 "husra", "hussn", "husraup", "hussnup",
@@ -1493,12 +1467,7 @@ function make_plots(
                     ),
                 name_tuple,
             )
-            # For box types, slice to a point (x=0, y=0)
-            if is_box
-                return map(var -> slice(var, x = 0.0, y = 0.0), vars)
-            else
-                return vars
-            end
+            return vars
         end
 
     var_groups_z_avg =
@@ -1508,11 +1477,7 @@ function make_plots(
                     get(simdir; short_name, reduction = reduction_avg, period = period_avg),
                 name_tuple,
             )
-            if is_box
-                return map(var -> slice(var, x = 0.0, y = 0.0), vars)
-            else
-                return vars
-            end
+            return vars
         end
 
     var_groups_z = [
@@ -1578,9 +1543,6 @@ function make_plots(
                     reduction = reduction_inst,
                     period = period_inst,
                 )
-                if is_box
-                    var = slice(var, x = 0.0, y = 0.0)
-                end
                 return var
             end
 
@@ -1619,9 +1581,6 @@ function make_plots(
                 reduction = reduction_inst,
                 period = period_inst,
             )
-            if is_box
-                var = slice(var, x = 0.0, y = 0.0)
-            end
             return var
         end
     make_plots_generic(
@@ -1634,10 +1593,10 @@ function make_plots(
     )
 end
 
-EDMFSpherePlots =
-    Union{Val{:diagnostic_edmfx_aquaplanet}, Val{:prognostic_edmfx_aquaplanet}}
-
-function make_plots(::EDMFSpherePlots, output_paths::Vector{<:AbstractString})
+function make_plots(
+    ::Val{:prognostic_edmfx_aquaplanet},
+    output_paths::Vector{<:AbstractString},
+)
     simdirs = SimDir.(output_paths)
 
     short_names =

@@ -11,7 +11,7 @@ import ..GridScaleCloud
 import ..SurfaceConditions
 import ..IdealizedInsolation
 import ..Explicit
-import ..DiagnosticEDMFX, ..PrognosticEDMFX
+import ..PrognosticEDMFX
 import ..EDMFXModel
 import ..InvZEntrainment, ..BuoyancyVelocityDetrainment
 import ..SmoothMinimumBlending
@@ -73,49 +73,13 @@ function nonequil_moist_1m(; kwargs...)
 end
 
 """
-    diagnostic_edmf([FT = Float32]; area_fraction, n_updrafts, prognostic_tke, kwargs...)
-
-Equilibrium-moist model with the `DiagnosticEDMFX` turbulence-convection
-scheme wired in with `Generalized` entrainment/detrainment, SGS mass & diffusive
-fluxes, and non-hydrostatic pressure drag (matches the canonical
-`diagnostic_edmfx_*` configs).
-
-`area_fraction` defaults to 1e-5.
-Override `microphysics_model` to pair EDMF with a dry or non-equilibrium scheme.
-All remaining keyword arguments are forwarded to `AtmosModel`.
-"""
-function diagnostic_edmf(
-    ::Type{FT} = Float32;
-    area_fraction = FT(1e-5),
-    n_updrafts = 1,
-    prognostic_tke = true,
-    kwargs...,
-) where {FT}
-    defaults = (;
-        microphysics_model = EquilibriumMicrophysics0M(),
-        cloud_model = GridScaleCloud(),
-        turbconv_model = DiagnosticEDMFX(;
-            n_updrafts, prognostic_tke, area_fraction,
-        ),
-        edmfx_model = EDMFXModel(;
-            entr_model = InvZEntrainment(),
-            detr_model = BuoyancyVelocityDetrainment(),
-            sgs_mass_flux = true,
-            sgs_diffusive_flux = true,
-            nh_pressure = true,
-            scale_blending_method = SmoothMinimumBlending(),
-        ),
-    )
-    return AtmosModel(; defaults..., kwargs...)
-end
-
-"""
     prognostic_edmf([FT = Float32]; area_fraction, n_updrafts, prognostic_tke, kwargs...)
 
 Equilibrium-moist model with the `PrognosticEDMFX` turbulence-convection
-scheme. In addition to the [`diagnostic_edmf`](@ref) EDMF settings, this also
-enables prognostic updraft vertical diffusion and the relaxation filter on
-negative updraft velocities (matches the canonical `prognostic_edmfx_*` configs).
+scheme. This uses `Generalized` entrainment/detrainment, SGS mass & diffusive
+fluxes, and non-hydrostatic pressure drag. Also enables prognostic updraft vertical
+diffusion and the relaxation filter on negative updraft velocities
+(matches the canonical `prognostic_edmfx_*` configs).
 
 All remaining keyword arguments are forwarded to `AtmosModel`.
 """
@@ -206,7 +170,7 @@ BOMEX shallow-cumulus single-column simulation preset: [`ColumnGrid`](@ref)
 [`equil_moist_0m`](@ref) physics, `dt = 10 s`, `t_end = 6 h`.
 
 No EDMF turbulence-convection scheme is enabled by default; pass
-`model = Presets.diagnostic_edmf(FT)` or `Presets.prognostic_edmf(FT)` to add one.
+`model = Presets.prognostic_edmf(FT)` to add one.
 Keyword arguments are forwarded to [`AtmosSimulation`](@ref).
 """
 function bomex(::Type{FT} = Float32; kwargs...) where {FT}

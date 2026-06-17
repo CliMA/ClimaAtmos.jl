@@ -16,8 +16,8 @@ deviation of a conserved variable `ϕ` (such as total enthalpy or specific humid
 from its grid-mean value. These terms represent the redistribution of energy and tracers
 by the resolved SGS circulations relative to the grid mean flow.
 
-The specific implementation depends on the `turbconv_model` (e.g., `PrognosticEDMFX`
-or `DiagnosticEDMFX`). A generic fallback doing nothing is also provided.
+The specific implementation depends on the `turbconv_model` (e.g., `PrognosticEDMFX`).
+A generic fallback doing nothing is also provided.
 The function modifies `Yₜ.c` (grid-mean tendencies) in place.
 
 Arguments:
@@ -167,166 +167,6 @@ function edmfx_sgs_mass_flux_tendency!(
     return nothing
 end
 
-function edmfx_sgs_mass_flux_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    turbconv_model::DiagnosticEDMFX,
-)
-
-    turbconv_params = CAP.turbconv_params(p.params)
-    a_max = CAP.max_area(turbconv_params)
-    n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_sgsflux_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
-    (; ᶠu³) = p.precomputed
-    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
-    (; dt) = p
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    FT = eltype(Y)
-
-    if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
-        thermo_params = CAP.thermodynamics_params(p.params)
-        # energy
-        (; ᶜh_tot) = p.precomputed
-        ᶠu³_diff = p.scratch.ᶠtemp_CT3
-        ᶜa_scalar = p.scratch.ᶜtemp_scalar
-        for j in 1:n
-            @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
-            @. ᶜa_scalar =
-                (ᶜmseʲs.:($$j) + ᶜKʲs.:($$j) - ᶜh_tot) * min(
-                    min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
-                    FT(0.02) / max(
-                        Geometry.WVector(ᶜinterp(ᶠu³_diff)).components.data.:1,
-                        eps(FT),
-                    ),
-                )
-            vtt = vertical_transport(
-                ᶜρʲs.:($j),
-                ᶠu³_diff,
-                ᶜa_scalar,
-                dt,
-                edmfx_sgsflux_upwinding,
-            )
-            @. Yₜ.c.ρe_tot += vtt
-        end
-        # TODO: add environment flux?
-
-        if !(p.atmos.microphysics_model isa DryModel)
-            # Specific humidity fluxes
-            for j in 1:n
-                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
-                # @. ᶜa_scalar =
-                #     (ᶜq_totʲs.:($$j) - specific(Y.c.ρq_tot, Y.c.ρ) *
-                #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
-                # TODO: remove this filter when mass flux is treated implicitly
-                @. ᶜa_scalar =
-                    (ᶜq_totʲs.:($$j) - specific(Y.c.ρq_tot, Y.c.ρ)) * min(
-                        min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
-                        FT(0.02) / max(
-                            Geometry.WVector(
-                                ᶜinterp(ᶠu³_diff),
-                            ).components.data.:1,
-                            eps(FT),
-                        ),
-                    )
-                vtt = vertical_transport(
-                    ᶜρʲs.:($j),
-                    ᶠu³_diff,
-                    ᶜa_scalar,
-                    dt,
-                    edmfx_sgsflux_upwinding,
-                )
-                @. Yₜ.c.ρq_tot += vtt
-            end
-        end
-
-        # Microphysics tracers fluxes
-        if p.atmos.microphysics_model isa
-           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-            microphysics_tracers = (
-                (@name(c.ρq_lcl), @name(ᶜq_lclʲs.:(1))),
-                (@name(c.ρq_icl), @name(ᶜq_iclʲs.:(1))),
-                (@name(c.ρq_rai), @name(ᶜq_raiʲs.:(1))),
-                (@name(c.ρq_sno), @name(ᶜq_snoʲs.:(1))),
-                (@name(c.ρn_lcl), @name(ᶜn_lclʲs.:(1))),
-                (@name(c.ρn_rai), @name(ᶜn_raiʲs.:(1))),
-            )
-            # TODO using unrolled_foreach here allocates! (breaks the flame tests
-            # even though they use 0M microphysics)
-            # MatrixFields.unrolled_foreach(
-            #     microphysics_tracers,
-            # ) do (ρχ_name, χʲ_name)
-            @. ᶠu³_diff = ᶠu³ʲs.:(1) - ᶠu³
-            for (ρχ_name, χʲ_name) in microphysics_tracers
-                MatrixFields.has_field(Y, ρχ_name) || continue
-
-                ᶜχʲ = MatrixFields.get_field(p.precomputed, χʲ_name)
-                ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-                ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-                # @. ᶜa_scalar =
-                #     (ᶜχʲ - ᶜχ) *
-                #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
-                # TODO: remove this filter when mass flux is treated implicitly
-                @. ᶜa_scalar =
-                    (ᶜχʲ - ᶜχ) * min(
-                        min(draft_area(ᶜρaʲs.:(1), ᶜρʲs.:(1)), a_max),
-                        FT(0.02) / max(
-                            Geometry.WVector(
-                                ᶜinterp(ᶠu³_diff),
-                            ).components.data.:1,
-                            eps(FT),
-                        ),
-                    )
-                vtt = vertical_transport(
-                    ᶜρʲs.:(1),
-                    ᶠu³_diff,
-                    ᶜa_scalar,
-                    dt,
-                    edmfx_sgsflux_upwinding,
-                )
-                ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-                @. ᶜρχₜ += vtt
-            end
-        end
-        # TODO: the following adds the environment flux to the tendency
-        # Make active and test later
-        # @. ᶠu³_diff = p.precomputed.ᶠu³⁰ - ᶠu³
-        # ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
-        # ᶜρ⁰ = p.scratch.ᶜtemp_scalar_2
-        # @. ᶜρ⁰ = TD.air_density(
-        #     CAP.thermodynamics_params(p.params),
-        #     p.precomputed.ᶜts⁰,
-        # )
-        # ᶜmse⁰ = @.lazy(ᶜspecific_env_mse(Y, p))
-        # @. ᶜa_scalar =
-        #     (ᶜmse⁰ + p.precomputed.ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
-        # vtt = vertical_transport(
-        #     ᶜρ⁰,
-        #     ᶠu³_diff,
-        #     ᶜa_scalar,
-        #     dt,
-        #     edmfx_sgsflux_upwinding,
-        # )
-        # @. Yₜ.c.ρe_tot += vtt
-        # if !(p.atmos.microphysics_model isa DryModel)
-        #     ᶜq_tot⁰ = @specific_env_value(:q_tot, Y.c, turbconv_model))
-        #     @. ᶜa_scalar =
-        #         (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) *
-        #         draft_area(ᶜρa⁰, ᶜρ⁰)
-        #     vtt = vertical_transport(
-        #         ᶜρ⁰,
-        #         ᶠu³_diff,
-        #         ᶜa_scalar,
-        #         dt,
-        #         edmfx_sgsflux_upwinding,
-        #     )
-        #     @. Yₜ.c.ρq_tot += vtt
-        # end
-    end
-
-end
-
 """
     edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
 
@@ -361,7 +201,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     Y,
     p,
     t,
-    turbconv_model::Union{EDOnlyEDMFX, DiagnosticEDMFX, PrognosticEDMFX},
+    turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX},
 )
 
     FT = Spaces.undertype(axes(Y.c))

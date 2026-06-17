@@ -199,7 +199,6 @@ function compute_lmix(state, cache, _)
     # TODO: consolidate remaining mixing length types
     # (smagorinsky_lilly, dz) into a single function
     if isa(turbconv_model, PrognosticEDMFX) ||
-       isa(turbconv_model, DiagnosticEDMFX) ||
        isa(turbconv_model, EDOnlyEDMFX)
         return ᶜmixing_length(state, cache)
     end

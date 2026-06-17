@@ -142,106 +142,6 @@ steps:
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_garner2005_reproduction.jl"
         artifact_paths: "orographic_gravity_wave_test_garner2005/*"
 
-  - group: "Diagnostic EDMF"
-    steps:
-      - label: ":ghost: Diagnostic EDMF: Smoke test"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_test_box.yml
-          --job_id diagnostic_edmfx_test_box
-        artifact_paths: "diagnostic_edmfx_test_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":ghost: Diagnostic EDMF: Stable nocturnal Arctic boundary layer (GABLS)"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_diagedmf_0M.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_gabls_box.yml
-          --job_id diagnostic_edmfx_gabls_box
-        artifact_paths: "diagnostic_edmfx_gabls_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":ghost: Diagnostic EDMF: Trade wind Cu shallow convection (BOMEX)"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_diagedmf_0M.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_box.yml
-          --job_id diagnostic_edmfx_bomex_box
-        artifact_paths: "diagnostic_edmfx_bomex_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":ghost: Diagnostic EDMF: Nocturnal Sc (DYCOMS-RF01)"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_diagedmf_0M.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_box.yml
-          --job_id diagnostic_edmfx_dycoms_rf01_box
-        artifact_paths: "diagnostic_edmfx_dycoms_rf01_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":ghost: Diagnostic EDMF: Drizzling nocturnal Sc (DYCOMS-RF02)"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_diagedmf_1M.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf02_box.yml
-          --job_id diagnostic_edmfx_dycoms_rf02_box
-        artifact_paths: "diagnostic_edmfx_dycoms_rf02_box/output_active/*"
-        agents:
-          slurm_mem: 24GB
-
-      - label: ":ghost: Diagnostic EDMF: Precipitating trade wind Cu (RICO)"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_diagedmf_1M.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_rico_box.yml
-          --job_id diagnostic_edmfx_rico_box
-        artifact_paths: "diagnostic_edmfx_rico_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":ghost: Diagnostic EDMF: Deep tropical convection (TRMM)"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_diagedmf_1M.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box.yml
-          --job_id diagnostic_edmfx_trmm_box
-        artifact_paths: "diagnostic_edmfx_trmm_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":ghost: Diagnostic EDMF: Deep tropical convection (TRMM), stretched grid"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_diagedmf_0M.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_stretched_box.yml
-          --job_id diagnostic_edmfx_trmm_stretched_box
-        artifact_paths: "diagnostic_edmfx_trmm_stretched_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":ghost: Diagnostic EDMF: Deep tropical convection (TRMM), 0M"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_diagedmf_0M.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box_0M.yml
-          --job_id diagnostic_edmfx_trmm_box_0M
-        artifact_paths: "diagnostic_edmfx_trmm_box_0M/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
   - group: "Prognostic EDMF"
     steps:
       - label: ":genie: Prognostic EDMF: Vertical advection test"
@@ -673,17 +573,6 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":large_blue_circle: Aquaplanet: Radiative convective equilibrium, diagnostic edmf"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/rcemipii_sphere_diagnostic_edmfx.yml
-          --job_id rcemipii_sphere_diagnostic_edmfx
-        artifact_paths: "rcemipii_sphere_diagnostic_edmfx/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
       - label: ":large_blue_circle: Aquaplanet: Reproducibility test for allsky varying insolation, gravity wave (gfdl_restart)"
         retry: *retry_policy
         command: >
@@ -716,22 +605,6 @@ steps:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":large_blue_circle: Aquaplanet: Reproducibility test for diagnostic EDMF, clearsky"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
-          --job_id diagnostic_edmfx_aquaplanet
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
-          --job_id diagnostic_edmfx_aquaplanet
-          --out_dir diagnostic_edmfx_aquaplanet/output_active
-        artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
       - label: ":large_blue_circle: Aquaplanet: Reproducibility test for prognostic EDMF, clearsky"
         retry: *retry_policy
         command: >
@@ -747,21 +620,6 @@ steps:
         agents:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
-
-      - label: ":large_blue_circle: Aquaplanet: Diagnostic EDMF, GPU"
-        retry: *retry_policy
-        key: "diagnostic_edmfx_aquaplanet_gpu"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_gpu.yml
-          --job_id diagnostic_edmfx_aquaplanet_gpu
-        artifact_paths: "diagnostic_edmfx_aquaplanet_gpu/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 20GB
 
       - label: ":large_blue_circle: Aquaplanet: Prognostic EDMF, GPU"
         retry: *retry_policy
@@ -1134,20 +992,6 @@ steps:
           slurm_mem: 24GB
           slurm_gpus: 1
 
-      - label: ":alarm_clock: Timestep cost: Aquaplanet, diagnostic EDMF, GPU"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite perf/benchmark.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
-          --config_file $PERF_CONFIG_PATH/bm_aquaplanet_diagedmf.yml
-          --job_id bm_diag_edmf_gpu
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
-        agents:
-          slurm_mem: 24GB
-          slurm_gpus: 1
-
       - label: ":alarm_clock: Timestep cost: Aquaplenet, prognostic EDMF, GPU"
         retry: *retry_policy
         command: >
@@ -1209,17 +1053,6 @@ steps:
           --config_file $PERF_CONFIG_PATH/bm_diagnostics.yml
           --job_id flame_diagnostics
         artifact_paths: "flame_diagnostics/*"
-        agents:
-          slurm_mem: 24GB
-
-      - label: ":fire: Allocations budget: Aquaplanet, diagnostics edmf"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
-          --config_file $PERF_CONFIG_PATH/bm_aquaplanet_diagedmf.yml
-          --job_id flame_aquaplanet_diagedmf
-        artifact_paths: "flame_aquaplanet_diagedmf/*"
         agents:
           slurm_mem: 24GB
 

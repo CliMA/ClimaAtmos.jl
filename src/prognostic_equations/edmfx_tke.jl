@@ -18,7 +18,7 @@
  - `Y`: The current state vector.
  - `p`: The cache, containing precomputed quantities and parameters.
  - `t`: The current simulation time.
- - `turbconv_model`: The turbulence convection model (e.g., `EDOnlyEDMFX`, `PrognosticEDMFX`, `DiagnosticEDMFX`).
+ - `turbconv_model`: The turbulence convection model (e.g., `EDOnlyEDMFX`, `PrognosticEDMFX`).
 
  Returns: `nothing`, modifies `Yₜ` in place.
 """
@@ -49,7 +49,7 @@ function edmfx_tke_tendency!(
     Y,
     p,
     t,
-    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+    turbconv_model::PrognosticEDMFX,
 )
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶠu³, ᶠu³ʲs, ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed

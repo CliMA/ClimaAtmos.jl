@@ -19,7 +19,7 @@ function amip_target(context, output_dir)
     param_dict =
         ClimaParams.create_toml_dict(
             FT;
-            override_file = "toml/longrun_aquaplanet_diagedmf.toml",
+            override_file = "toml/longrun_aquaplanet_progedmf.toml",
         )
     params = CA.ClimaAtmosParameters(param_dict)
 
@@ -66,7 +66,7 @@ function amip_target(context, output_dir)
 
     n_updrafts = 1
     prognostic_tke = true
-    turbconv_model = CA.DiagnosticEDMFX{n_updrafts, prognostic_tke}(1e-5)
+    turbconv_model = CA.PrognosticEDMFX{n_updrafts, prognostic_tke}(1e-5)
 
     edmfx_model = CA.EDMFXModel(;
         entr_model = CA.InvZEntrainment(),
@@ -136,14 +136,14 @@ function amip_target(context, output_dir)
 end
 
 get_edmfx_model(turbconv_model) = nothing
-get_edmfx_model(turbconv_model::CA.DiagnosticEDMFX) = CA.EDMFXModel(;
+get_edmfx_model(turbconv_model::CA.PrognosticEDMFX) = CA.EDMFXModel(;
     entr_model = CA.InvZEntrainment(),
     detr_model = CA.BuoyancyVelocityDetrainment(),
     sgs_mass_flux = true,
     sgs_diffusive_flux = true,
     nh_pressure = true,
-    vertical_diffusion = false,
-    filter = false,
+    vertical_diffusion = true,
+    filter = true,
     scale_blending_method = CA.SmoothMinimumBlending(),
 )
 
@@ -224,8 +224,9 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :data_handler,
             # Covariance fields are recomputed in set_precomputed_quantities!
             :ᶜT′T′, :ᶜq′q′,
-            # Scratch field for prognostic EDMF (uninitialized until tendencies run)
+            # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
             :ᶠu₃_tendencyʲs,
+            :ᶜρa_tendencyʲs,
             rrtmgp_clear_fix...,
             # Config-specific
             more_ignore...,
@@ -298,7 +299,7 @@ if MANYTESTS
             reset_rng_seed = false,
             deep_atmosphere = true,
         )
-    diagnostic_edmfx = CA.DiagnosticEDMFX(; area_fraction = 1e-5)
+    prognostic_edmfx = CA.PrognosticEDMFX(; area_fraction = 1e-5)
     topography = CA.EarthTopography()
     if comms_ctx isa ClimaComms.SingletonCommsContext
         grids = (
@@ -322,12 +323,12 @@ if MANYTESTS
         if mesh isa Meshes.EquiangularCubedSphere
             microphys_models = (CA.NonEquilibriumMicrophysics1M(),)
             topography_type = CA.EarthTopography()
-            turbconv_models = (nothing, diagnostic_edmfx)
+            turbconv_models = (nothing, prognostic_edmfx)
             radiation_modes = (nothing, allsky_radiation)
         else
             microphys_models = (CA.EquilibriumMicrophysics0M(),)
             topography_type = CA.NoTopography()
-            turbconv_models = (diagnostic_edmfx,)
+            turbconv_models = (prognostic_edmfx,)
             gray_radiation = RRTMGPI.GrayRadiation(;
                 add_isothermal_boundary_layer = true,
                 deep_atmosphere = false,
@@ -338,11 +339,6 @@ if MANYTESTS
         for turbconv_model in turbconv_models
             for radiation_mode in radiation_modes
                 for microphysics_model in microphys_models
-                    # EDMF only supports equilibrium moisture
-                    if turbconv_model isa CA.DiagnosticEDMFX &&
-                       microphysics_model isa CA.NonEquilibriumMicrophysics
-                        continue
-                    end
 
                     edmfx_model = get_edmfx_model(turbconv_model)
                     model = CA.AtmosModel(;
@@ -380,7 +376,7 @@ if MANYTESTS
                         isnothing(radiation_mode) ? "none" :
                         radiation_mode isa RRTMGPI.GrayRadiation ? "gray" : "allsky"
                     turbconv_name =
-                        isnothing(turbconv_model) ? "none" : "diagnostic_edmfx"
+                        isnothing(turbconv_model) ? "none" : "prognostic_edmfx"
                     job_id = "$(config_name)_$(microphysics_name)_$(topo_name)_$(rad_name)_$(turbconv_name)"
                     callback_kwargs = (;
                         dt_rad = "1secs",

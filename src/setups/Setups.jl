@@ -34,7 +34,6 @@ import ..NonEquilibriumMicrophysics2MP3
 import ..NonEquilibriumMicrophysics
 import ..MoistMicrophysics
 import ..PrognosticEDMFX
-import ..DiagnosticEDMFX
 import ..EDOnlyEDMFX
 import ..n_mass_flux_subdomains
 import ..Parameters.ClimaAtmosParameters
