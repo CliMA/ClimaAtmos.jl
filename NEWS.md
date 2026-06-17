@@ -20,6 +20,7 @@ v0.39.5
 
 v0.39.4
 -------
+
 - [#4568](https://github.com/CliMA/ClimaAtmos.jl/pull/4568) ![][badge-🔥behavioralΔ] `config: column` simulations now use an actual single-column (FiniteDifference) geometry instead of a minimal 2×2 box.
 - [#4558](https://github.com/CliMA/ClimaAtmos.jl/pull/4558) ![][badge-🔥behavioralΔ] Use an analytic area fraction in the implicit stage solve, and refactor entrainment/detrainment.
 - [#4569](https://github.com/CliMA/ClimaAtmos.jl/pull/4569) ![][badge-🔥behavioralΔ] Use the same diffusion and hyperdiffusion scaling for condensate and precipitation.
