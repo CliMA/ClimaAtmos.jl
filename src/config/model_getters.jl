@@ -319,9 +319,33 @@ function get_non_orographic_gravity_wave_model(
                 Δh_frac = FT(parsed_args["beres_delta_h_frac"]),
                 z_bot_Q_threshold = FT(parsed_args["beres_z_bot_Q_threshold"]),
                 z_bot_floor = FT(parsed_args["beres_z_bot_floor"]),
+                beres_steady_source = get(
+                    parsed_args,
+                    "beres_steady_source",
+                    false,
+                ),
+                beres_steady_dc_frac = FT(
+                    get(parsed_args, "beres_steady_dc_frac", 1.0),
+                ),
+                beres_L_system = FT(
+                    get(parsed_args, "beres_L_system", 1.0e6),
+                ),
             )
         else
             nothing
+        end
+
+        # The steady (ν=0) Beres component deposits into the c=0 phase-speed bin.
+        # Require an exact c=0 grid point (cmax/dc integer) so it lands in a bin
+        # the transient spectrum leaves at zero (no double-counting).
+        if !isnothing(beres_source) && beres_source.beres_steady_source
+            ratio = cmax / dc
+            if abs(ratio - round(ratio)) > sqrt(eps(FT))
+                error(
+                    "beres_steady_source requires an exact c=0 phase-speed bin: " *
+                    "cmax/dc must be an integer (got cmax=$cmax, dc=$dc)",
+                )
+            end
         end
 
         NonOrographicGravityWave(;

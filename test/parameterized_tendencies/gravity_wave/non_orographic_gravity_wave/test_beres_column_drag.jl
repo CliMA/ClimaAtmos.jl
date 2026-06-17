@@ -213,4 +213,86 @@ import ClimaCore.Fields as Fields
         )
         fill!(gw_a_cover, FT(1.0))  # restore
     end
+
+    @testset "Steady (ν=0) flag ON: finite, decelerates U, deposits at c≈0" begin
+        # Smoke test of the full pipeline (source → propagation → breaking →
+        # deposition) with the steady component enabled. Build a second sim with
+        # beres_steady_source = true (this also exercises the construction-time
+        # c=0-bin guard and the config path), fill identical analytic state, and
+        # compare to the steady-OFF result (uf_data) from above.
+        config_on = CA.AtmosConfig(
+            config_file;
+            job_id = "beres_column_drag_steady",
+            comms_ctx,
+        )
+        config_on.parsed_args["beres_sigma_x"] = 2500.0
+        config_on.parsed_args["beres_steady_source"] = true
+        sim_on = CA.get_simulation(config_on)
+        p2 = sim_on.integrator.p
+        Y2 = sim_on.integrator.u
+        @test p2.non_orographic_gravity_wave.gw_beres_source.beres_steady_source
+
+        nogw2 = p2.non_orographic_gravity_wave
+        ᶜρ2 = Y2.c.ρ
+        ᶜu2 = similar(ᶜρ2, FT)
+        ᶜv2 = similar(ᶜρ2, FT)
+        ᶜz2 = Fields.coordinate_field(Y2.c).z
+        @. ᶜu2 = FT(-10.0) + ᶜz2 * FT(20.0 / z_max)
+        fill!(ᶜv2, FT(0.0))
+        fill!(nogw2.ᶜbuoyancy_frequency, FT(0.012))
+        # Same Beres convective-source inputs as the OFF case.
+        fill!(nogw2.gw_Q0, FT(0.004))
+        fill!(nogw2.gw_h_heat, FT(5000.0))
+        fill!(nogw2.gw_u_heat, FT(-5.0))
+        fill!(nogw2.gw_v_heat, FT(0.0))
+        fill!(nogw2.gw_N_source, FT(0.012))
+        fill!(nogw2.gw_beres_active, FT(1.0))
+        fill!(nogw2.gw_a_cover, FT(1.0))
+        fill!(nogw2.gw_flag, FT(0.0))
+
+        nogw2.uforcing .= 0
+        nogw2.vforcing .= 0
+        CA.non_orographic_gravity_wave_forcing(
+            ᶜu2,
+            ᶜv2,
+            nogw2.ᶜbuoyancy_frequency,
+            ᶜρ2,
+            ᶜz2,
+            nogw2.ᶜlevel,
+            source_level,
+            damp_level,
+            Fields.level(ᶜρ2, source_level),
+            Fields.level(ᶜu2, source_level),
+            Fields.level(ᶜv2, source_level),
+            nogw2.uforcing,
+            nogw2.vforcing,
+            nogw2.gw_ncval,
+            nogw2.u_waveforcing,
+            nogw2.v_waveforcing,
+            p2,
+        )
+        uf_on = Array(Fields.field2array(nogw2.uforcing))[:, 1]
+
+        @test all(isfinite, uf_on)
+
+        # Steady contribution = (steady ON) − (steady OFF), identical inputs.
+        steady_contrib = uf_on .- uf_data
+        max_steady = maximum(abs, steady_contrib)
+        max_trans = maximum(abs, uf_data)
+        println(
+            "  steady-ON: max |Δuforcing| = $max_steady m/s² " *
+            "($(round(100 * max_steady / max_trans; digits = 4))% of transient)",
+        )
+        @test max_steady > 0
+
+        # The stationary (c≈0) wave launched in a heating-region wind u_heat=-5
+        # m/s deposits drag that OPPOSES that flow: the mass-weighted net steady
+        # momentum forcing should be positive (decelerating the westward U<0).
+        ρ_col = Array(Fields.field2array(ᶜρ))[:, 1]
+        net_steady = sum(ρ_col .* steady_contrib)
+        println(
+            "  steady-ON: Σρ·Δuforcing = $net_steady (U_heat = -5 ⇒ expect > 0)",
+        )
+        @test net_steady > 0
+    end
 end

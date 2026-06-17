@@ -342,6 +342,15 @@ beres_z_bot_Q_threshold:
 beres_z_bot_floor:
   help: "Minimum allowed convective envelope bottom (m); excludes PBL-turbulence signal in Q_conv"
   value: 2000.0
+beres_steady_source:
+  help: "Enable the steady (nu=0) stationary mechanical component of the Beres convective NOGW source, deposited at c~0 [`false` (default), `true`]"
+  value: false
+beres_steady_dc_frac:
+  help: "Steady Beres DC heating weight: Q_t(0)^2 = beres_steady_dc_frac * nu_min (Trap-2 DC-vs-band convention; scales the steady-vs-transient amplitude)"
+  value: 1.0
+beres_L_system:
+  help: "Largest convective-system scale (m) setting k_min=2*pi/L in the even-folded horizontal constant H of the steady Beres source (steady/transient ratio depends on it only logarithmically)"
+  value: 1.0e6
 dt_nogw:
   help: "Time between calling non-orographic gravity wave update"
   value: "1800secs"

@@ -280,7 +280,6 @@ function non_orographic_gravity_wave_compute_tendency!(
         # get the ρ,u,v value on the source level
 
         # damp level: the index of the lowest level whose pressure is lower than the damp pressure
-
         input = Base.Broadcast.broadcasted(tuple, ᶜlevel, ᶜp)
         Operators.column_reduce!(
             damp_level,
@@ -306,13 +305,6 @@ function non_orographic_gravity_wave_compute_tendency!(
     if !isnothing(p.non_orographic_gravity_wave.gw_beres_source)
         compute_beres_convective_heating!(Y, p, ᶜbuoyancy_frequency)
 
-        # Per-column Beres launch level: lowest model level with z ≥ gw_ztop.
-        # Beres' source spectrum B₀(c) is the far-field flux radiated above the
-        # heating layer, so the correct launch level is the top of the
-        # convective envelope (gw_ztop) — NOT the AD99 fixed source_pressure
-        # level. The AD99 source_level remains as-is for the AD99 spectrum.
-        # When Beres is inactive in a column, gw_ztop = 0 and the bottom level
-        # is picked; the spectrum is zero anyway so the choice is irrelevant.
         (; gw_ztop, beres_source_ρ_z_u_v_level) = p.non_orographic_gravity_wave
         beres_input = Base.Broadcast.broadcasted(
             tuple, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
@@ -360,36 +352,16 @@ end
 """
     compute_beres_convective_heating!(Y, p, ᶜN)
 
-Extract convective heating properties from EDMF for the Beres (2004) source spectrum.
-Computes per-column: Q0 (half-sine heating amplitude = (π/2)·depth-mean of the
-IN-CLOUD heating Q_conv_ic), h (heating depth), u_heat/v_heat (mean wind),
-N_source (buoyancy freq), a_cover (envelope-mean updraft area fraction, used as
-the Beres deposition/intermittency factor), and beres_active flag.
+Extract per-column convective source properties from EDMF for the Beres (2004) spectrum: Q0 (half-sine amplitude), h (depth), u_heat/v_heat (mean wind), N_source, a_cover (envelope-mean updraft area, the deposition factor), and the beres_active flag.
 
-Two heating fields are maintained:
-  * `gw_Q_conv` — GRID-MEAN apparent heating Q₁ (the DSE anomaly carries the
-    updraft area fraction aʲ). Used for envelope detection and activation
-    gating, whose thresholds are calibrated to grid-mean magnitudes.
-  * `gw_Q_conv_ic` — IN-CLOUD (per-draft conditional-mean) heating: same DSE
-    mass-flux construction WITHOUT the area factor, normalized by draft density.
-    This is the amplitude convention Beres' linear theory is forced with (her
-    squall-line reference Q₀ ≈ 0.004 K/s); CAM applies the analogous grid-mean →
-    local conversion (`CF = 20`, assumed 5% convective fraction) in
-    `gw_convect.F90`. The spectrum amplitude Q0 is built from this field; the
-    flux deposited on the grid mean is then diluted by `a_cover` (see
-    `waveforcing_column_accumulate!`), giving the physically correct
-    flux ∝ ā·Q_ic² (linear in coverage, quadratic in local amplitude).
+Heating fields:
 
-The convective envelope is `[z_bot, z_top]` where
-  * `z_top` = highest level with updraft area fraction above `1e-3`,
-  * `z_bot` = lowest level with `z ≥ z_bot_floor` AND `Q_conv > z_bot_Q_threshold`.
-The altitude floor is required because EDMF Q_conv has a strong PBL/dry-thermal
-signal below ~1 km that would otherwise drag z_bot to the surface (see audit Q4).
+  - `gw_Q_conv` — grid-mean heating (carries area fraction aʲ); used for envelope detection and activation gating, calibrated to grid-mean magnitudes.
+  - `gw_Q_conv_ic` — in-cloud heating (no area factor); the amplitude convention Beres' linear theory expects. Q0 is built from this, then deposited flux is diluted by `a_cover` (see `waveforcing_column_accumulate!`), giving flux ∝ ā·Q_ic².
 
-`ᶜN` is the cell-centre buoyancy frequency N (s⁻¹) — passed in directly because
-the cached `ᶜbuoyancy_frequency` field still holds N² from the in-place write
-in `non_orographic_gravity_wave_compute_tendency!` and shouldn't be re-sqrt'd
-inside this routine.
+Envelope `[z_bot, z_top]`: `z_top` = highest level with updraft area > `1e-3`; `z_bot` = lowest level with `z ≥ z_bot_floor` AND `Q_conv > z_bot_Q_threshold` (floor needed to skip the EDMF PBL/dry-thermal signal below ~1 km).
+
+`ᶜN` is N (s⁻¹), passed in because the cached `ᶜbuoyancy_frequency` still holds N².
 """
 function compute_beres_convective_heating!(Y, p, ᶜN)
     (; turbconv_model) = p.atmos
@@ -530,14 +502,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # Pass 1: find convective envelope [z_bot, z_top].
     #   z_top: highest level where updraft area fraction > a_thresh (plume top).
     #   z_bot: lowest level above z_bot_floor where Q_conv > Q_threshold
-    #          (deep-convective heating, not PBL/dry-thermal contamination — the
-    #          floor is essential because EDMF Q_conv has a strong PBL signal
-    #          below ~1 km in the tropics; see audit Q4).
+    #          (the floor is essential because EDMF Q_conv has a strong PBL signal below ~1 km in the tropics).
     result_field = gw_reduce_result
     input1 = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜa_up, ᶜQ_conv)
-    # Accumulator: (z_top, z_bot_raw, _3, _4, _5, _6, _7). Sentinels:
-    #   z_top  = -Inf → no level qualified
-    #   z_bot  = +Inf → no level qualified
     reduce_init = (FT(-Inf), FT(Inf), FT(0), FT(0), FT(0), FT(0), FT(0))
     let _a_thresh = FT(1e-3), _Q_thresh = gw_beres_source.z_bot_Q_threshold,
         _z_floor = gw_beres_source.z_bot_floor
@@ -557,10 +524,6 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         end
     end
 
-    # Extract z_top, z_bot_raw. Sanitize: if either sentinel survives (no level
-    # qualified), force the envelope to zero so beres_active flips off downstream.
-    # Read the unaltered result_field slots inside ifelse to avoid in-place
-    # ordering hazards (the validity test depends on BOTH slots).
     @. gw_v_heat = ifelse(
         isfinite(result_field.:1) & isfinite(result_field.:2),
         result_field.:1,
@@ -1054,11 +1017,8 @@ function waveforcing_column_accumulate!(
         beres_a_cover,
     )
 
-        # MODE-dispatched launch-level state. AD99 keeps its fixed source level
-        # (pressure-based on sphere, height-based in column). Beres launches at
-        # the top of the convective heating envelope (gw_ztop), populated per
-        # column in compute_tendency!. The ternary on MODE is a compile-time
-        # branch via Val{MODE}, so the dead path is elided.
+        # AD99 keeps its fixed source level (pressure-based on sphere, height-based in column). Beres launches at
+        # the top of the convective heating envelope (gw_ztop), populated per column in compute_tendency!.
         source_level_eff = MODE == :ad99 ? source_level : beres_source_level
         ρ_source_eff = MODE == :ad99 ? ρ_source : beres_ρ_source
         u_source_eff = MODE == :ad99 ? u_source : beres_u_source
@@ -1151,19 +1111,6 @@ function waveforcing_column_accumulate!(
             eps = if MODE == :ad99
                 calc_intermitency(ρ_source_eff, source_ampl, nk, FT1(Bsum))
             else # MODE == :beres
-                # Beres B₀(c) is in physical momentum-flux units for the LOCAL
-                # (in-cloud) heating amplitude Q₀ (Q₀², σ_x², α all bundled in
-                # compute_beres_spectrum). The deposition is therefore diluted by
-                # the convective coverage ā (envelope-mean updraft area fraction):
-                # only the fraction ā of the grid cell radiates, so the grid-mean
-                # flux is ā·(local flux) — the exact analog of AD99's
-                # intermittency ε. Breaking levels are still computed at the
-                # LOCAL amplitude (B₀ itself is not rescaled).
-                # Remaining factors are bookkeeping for the shared forcing code:
-                #   1/ρ_source — cancels the ρ_source multiplier in wave_forcing
-                #   1/nk        — distributes total flux across nk azimuths
-                # Unlike AD99, no rescaling by Bsum is needed: the Beres B₀(c)
-                # already encodes the physical Q₀ amplitude.
                 beres_a_cover / (ρ_source_eff * FT1(nk))
             end
             if level >= source_level_eff
@@ -1239,10 +1186,31 @@ function wave_source(
 end
 
 """
+    V_hs_sq(m, h)
+
+Squared vertical half-sine shape factor for heating depth `h` at wavenumber `m`:
+
+    V_hs_sq = (π/h)² · sin²(m·h) / (m² − (π/h)²)²
+
+written in `sinc` form (δ = m·h − π) so it's finite at resonance m = π/h (→ h²/4).
+
+Used by the steady (ν=0) path. Same shape lives inside `R` of `_beres_spectrum_single_h` (R² = V_hs_sq·m²/(N²−ν̂²)²)
+but is deliberately NOT factored out, both path (steady and transient) stays bit-identical.
+
+`sinc` here is unnormalized `sin(x)/x` by choice (consistent). Avoid Base.sinc which is normalized.
+"""
+@inline function V_hs_sq(m, h)
+    FT = typeof(m)
+    δ = m * h - FT(π)
+    sinc_δ = abs(δ) < FT(1e-10) ? FT(1) : sin(δ) / δ
+    return FT(π)^2 * h^2 * sinc_δ^2 / (m * h + FT(π))^2
+end
+
+"""
     _beres_spectrum_single_h(c_n, c_hat, h, ...)
 
 Compute the Beres (2004) momentum flux integrand for a single phase speed bin
-and a single heating depth h. This is the inner frequency integral.
+and a single heating depth h.
 """
 @inline function _beres_spectrum_single_h(
     c_n,
@@ -1312,6 +1280,93 @@ and a single heating depth h. This is the inner frequency integral.
 end
 
 """
+    _beres_steady_horizontal_const(σ_x, L_system)
+
+Horizontal-scale factor `H` of the steady (ν=0) source amplitude (Beres Eq. 32):
+how strongly a convective cell of width `σ_x` projects onto gravity waves, summed
+over horizontal scales down to the system size `L_system`. Closed form:
+
+    H = (σ_x²/4) · E1(x),   x = k_min²·σ_x²/2,   k_min = 2π/L_system
+
+using `E1(x) ≈ −γ − ln(x) + x` (valid since `x ≪ 1`; GPU-safe, just a `log`).
+"""
+@inline function _beres_steady_horizontal_const(σ_x, L_system)
+    FT = typeof(σ_x)
+    γ = FT(0.5772156649015329)
+    a = σ_x^2 / FT(2)
+    k_min = FT(2) * FT(π) / L_system
+    x = a * k_min^2
+    E1 = x < FT(1) ? (-γ - log(x) + x) : FT(0)
+    return a / FT(2) * E1
+end
+
+"""
+    _beres_steady_flux(U, N_source, h, Q0, scale_factor, n_h_avg, Δh_frac, σ_x, L_system, dc_frac, ν_min)
+
+Launch flux of the steady (ν=0) wave for one azimuth: time-mean convective heating
+acts like a hill in the wind `U`, radiating one stationary wave (`m₀ = N/|U|`).
+Signed to decelerate `U`; summed alongside the transient bins (Beres 2004 Eqs. 31–34):
+
+    F_steady = −sign(U) · scale_factor · (1/√(2π)) · Q0² · Q_t(0)² · V_hs_sq(m₀,h) · H / (N·|U|³)
+
+Reuses the transient primitives; the only new pieces are:
+• `H` — horizontal constant (`_beres_steady_horizontal_const`), the sole new `L`-dependence.
+• `Q_t(0)² = dc_frac · ν_min` — the DC weight. `dc_frac` is a user knob (default 1)
+setting the steady's frequency band-width relative to one transient bin.
+
+Steady and transient carry orthogonal frequencies, so no double-counting; their ratio
+is `scale_factor`-independent and ≈ O(1) for defaults (see `beres_steady_reference.py`).
+`U → 0` returns 0 smoothly (guards the `1/U³`).
+"""
+@inline function _beres_steady_flux(
+    U,
+    N_source,
+    h,
+    Q0,
+    scale_factor,
+    n_h_avg,
+    Δh_frac,
+    σ_x,
+    L_system,
+    dc_frac,
+    ν_min,
+)
+    FT = typeof(U)
+    # U → 0 guard: m₀ = N/|U| → ∞, the stationary wave vanishes; also protects
+    # the 1/U³ below from blowing up.
+    if abs(U) < FT(1e-6)
+        return FT(0)
+    end
+    Uabs = abs(U)
+    m0 = N_source / Uabs
+
+    # Half-sine shape, optionally h-averaged to smooth the m₀ ≈ π/h resonance
+    # (identical mechanism to the transient `n_h_avg` loop).
+    Vbar = if n_h_avg <= 1
+        V_hs_sq(m0, h)
+    else
+        Δh = Δh_frac * h
+        h_min = h - Δh
+        dh = FT(2) * Δh / FT(n_h_avg - 1)
+        acc = FT(0)
+        for ih in 1:n_h_avg
+            acc += V_hs_sq(m0, h_min + FT(ih - 1) * dh)
+        end
+        acc / FT(n_h_avg)
+    end
+
+    H = _beres_steady_horizontal_const(σ_x, L_system)
+    Qt0_sq = dc_frac * ν_min
+
+    amp =
+        scale_factor * (FT(1) / sqrt(FT(2) * FT(π))) * Q0^2 * Qt0_sq * Vbar * H /
+        (N_source * Uabs^3)
+
+    # Sign: oppose U (β < 0 ⇒ decelerating mountain-wave-like drag).
+    return -sign(U) * amp
+end
+
+"""
     wave_source(c, u_heat, Q0, h, N_source, beres::BeresSourceParams, gw_ncval)
 
 Compute the Beres (2004) convective gravity wave momentum flux spectrum.
@@ -1333,7 +1388,18 @@ function wave_source(
     beres::BeresSourceParams,
     gw_ncval::Val{nc},
 ) where {nc}
-    (; σ_x, ν_min, ν_max, n_ν, beres_scale_factor, n_h_avg, Δh_frac) = beres
+    (;
+        σ_x,
+        ν_min,
+        ν_max,
+        n_ν,
+        beres_scale_factor,
+        n_h_avg,
+        Δh_frac,
+        beres_steady_source,
+        beres_steady_dc_frac,
+        beres_L_system,
+    ) = beres
     FT = typeof(u_heat)
     scale_factor = FT(beres_scale_factor)
 
@@ -1345,12 +1411,34 @@ function wave_source(
     σ_x_sq = σ_x^2
     Q0_sq = Q0^2
 
+    # Steady (ν=0) contribution: a ground-stationary wave, so it lands in the c≈0 bin
+    # (kept empty by the transient spectrum, so no double-counting). Zero when the flag
+    # is off.
+    steady_flux =
+        beres_steady_source ?
+        _beres_steady_flux(
+            u_heat,
+            N_source,
+            h,
+            Q0,
+            scale_factor,
+            n_h_avg,
+            Δh_frac,
+            σ_x,
+            FT(beres_L_system),
+            FT(beres_steady_dc_frac),
+            ν_min,
+        ) : FT(0)
+    dc = c[2] - c[1]
+    cmax = -c[1]
+    n_zero = clamp(round(Int, cmax / dc) + 1, 1, nc)
+
     ntuple(
         n -> begin
             c_n = c[n]
             c_hat = c_n - u_heat
 
-            if abs(c_hat) < FT(1e-6) || abs(c_n) < FT(1e-6)
+            val = if abs(c_hat) < FT(1e-6) || abs(c_n) < FT(1e-6)
                 FT(0)
             else
                 if n_h_avg <= 1
@@ -1379,6 +1467,9 @@ function wave_source(
 
                 sign(c_hat) * scale_factor * result
             end
+
+            # Deposit the steady (ν=0) flux into the c≈0 bin only.
+            val + steady_flux * FT(n == n_zero)
         end,
         Val(nc),
     )
