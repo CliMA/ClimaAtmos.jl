@@ -1,0 +1,31 @@
+# 120-day aquaplanet CONTROL: all gravity-wave drag OFF (NOGW + Beres + OGW),
+# to isolate whether the day~44 NaN blowup comes from the GW/Beres source or
+# from the baseline prognostic-EDMF aquaplanet itself. Identical to
+# aquaplanet_beres_verify_120d.yml except GW is disabled and the GW-only
+# diagnostics are removed.
+ode_algo: "ARS222"
+dt: "120secs"
+t_end: "120days"
+dt_save_state_to_disk: "30days"
+rad: "allskywithclear"
+dt_rad: "1hours"
+surface_setup: "DefaultMoninObukhov"
+turbconv: "prognostic_edmfx"
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+microphysics_model: "0M"
+non_orographic_gravity_wave: false
+orographic_gravity_wave: ~
+nogw_beres_source: false
+toml: [toml/longrun_aquaplanet_progedmf.toml]
+diagnostics:
+  - short_name: [arup, waup, taup, haup]
+    period: 1days
+  - short_name: [ha, ta, rhoa, pr]
+    period: 1days

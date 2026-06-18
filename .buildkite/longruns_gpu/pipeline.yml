@@ -11,7 +11,7 @@ env:
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   SLURM_KILL_BAD_EXIT: 1
   SLURM_GRES_FLAGS: "allow-task-sharing"
-  CONFIG_PATH: "config/longrun_configs"
+  CONFIG_PATH: "config/model_configs"
   COMMON_CONFIG_PATH: "config/common_configs"
   CLIMAATMOS_GC_NSTEPS: 10
 
@@ -36,83 +36,13 @@ steps:
 
   - wait
 
-  - group: "helem 30 dycore"
+  # DERECHO-REPRO PROBE: run the three 120-day configs that NaN'd on Derecho
+  # (day 44 / 59) on the clima CI cluster, to confirm the crash is the Derecho
+  # environment and not the code/Beres. Same numerics merge as the production
+  # longruns; configs live in config/model_configs (CONFIG_PATH overridden above).
+  - group: "Derecho repro: GW bisection longruns"
     steps:
-
-      - label: ":computer: hydrostatic balance"
-        command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze63.yml
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 12:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_hydrostatic_balance"
-
-      - label: ":computer: dry baroclinic wave high res"
-        command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze43.yml
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 12:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_dry_baroclinic_wave_he60"
-
-      - label: ":computer: baroclinic wave equilmoist high res"
-        command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze43.yml
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_moist_baroclinic_wave_he60"
-
-      - label: ":computer: dry held-suarez"
-        command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze63.yml
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 12:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_dry_held_suarez"
-
-      - label: ":computer: held-suarez, equilmoist"
-        command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze63.yml
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_moist_held_suarez"
-
-  - group: "helem 16 aquaplanet"
-    steps:
-
-      - label: ":umbrella: aquaplanet non-equil moisture allsky radiation + 1M microphysics"
+      - label: ":computer: aquaplanet 0M + full Beres NOGW (crashed Derecho day ~44)"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
@@ -123,9 +53,9 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_1M"
+          JOB_NAME: "aquaplanet_beres_verify_120d"
 
-      - label: ":computer: aquaplanet equilmoist allsky radiation + diagnostic edmf + 0M microphysics"
+      - label: ":computer: aquaplanet 0M + GW OFF control (crashed Derecho day ~59)"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
@@ -136,35 +66,9 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_diagedmf_0M"
+          JOB_NAME: "aquaplanet_noGW_120d"
 
-      - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf + 0M microphysics"
-        command: >
-          srun julia --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_progedmf_0M"
-
-      - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf + 1M microphysics"
-        command: >
-          srun julia --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_progedmf_1M"
-
-      - label: ":computer: aquaplanet equilmoist allsky radiation + time-varying insolation + 0M microphysics + slab ocean"
+      - label: ":computer: aquaplanet 0M + NOGW AD99 only, no Beres"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
@@ -175,21 +79,4 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_tvinsol_0M_slabocean"
-
-  - group: "atmos-only coupler runs"
-
-    steps:
-
-      - label: ":computer: amip target"
-        command: >
-          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target"
+          JOB_NAME: "aquaplanet_AD99only_120d"
