@@ -277,3 +277,31 @@ function Base.summary(io::IO, atmos::AtmosModel)
         print(io, s)
     end
 end
+
+"""
+    summary_microphysics(io::IO, microphysics_model, options)
+
+Print the microphysics settings that `summary(::AtmosModel)` does not surface:
+the substep counts of `NonEquilibriumMicrophysics1M` (struct fields, hidden by
+`typeof`) and the per-process option selections (e.g. which autoconversion or
+accretion scheme is active, or `disabled` when the option is `nothing`). The
+process options live in the parameter set, not in the `AtmosModel`.
+"""
+function summary_microphysics(io::IO, microphysics_model, options)
+    keys = collect(string.(propertynames(options)))
+    is_1m = microphysics_model isa NonEquilibriumMicrophysics1M
+    is_1m && append!(keys, ("n_substeps", "n_substeps_quad"))
+    buf = maximum(length, keys)
+    print(io, '\n')
+    pad(k) = repeat(" ", buf - length(k) + 2)
+    line(k, v) = print(io, "  ", pad(k), '`', k, '`', "::", '`', v, '`', '\n')
+    if is_1m
+        line("n_substeps", microphysics_model.n_substeps)
+        line("n_substeps_quad", microphysics_model.n_substeps_quad)
+    end
+    for pn in propertynames(options)
+        opt = getproperty(options, pn)
+        label = isnothing(opt) ? "disabled" : string(nameof(typeof(opt)))
+        line(string(pn), label)
+    end
+end
