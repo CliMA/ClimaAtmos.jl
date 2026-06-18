@@ -1108,7 +1108,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶜq_ice⁰,
                         ),
                     )
-                    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+                    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
                     ᶠu³⁰_data = ᶠu³⁰.components.data.:1
 
                     # pull common subexpressions that don't depend on which
