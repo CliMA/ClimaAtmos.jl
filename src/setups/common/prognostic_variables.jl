@@ -75,13 +75,7 @@ precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics1M) = (;
     ρq_rai = ρ * physical_state.q_rai,
     ρq_sno = ρ * physical_state.q_sno,
 )
-precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics2M) = (;
-    ρn_lcl = ρ * physical_state.n_liq,
-    ρn_rai = ρ * physical_state.n_rai,
-    ρq_rai = ρ * physical_state.q_rai,
-    ρq_sno = ρ * physical_state.q_sno,
-)
-function precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics2MP3)
+function precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics2M)
     warm_state = (;
         ρn_lcl = ρ * physical_state.n_liq,
         ρn_rai = ρ * physical_state.n_rai,

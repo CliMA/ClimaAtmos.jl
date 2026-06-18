@@ -18,19 +18,20 @@ struct NonEquilibriumMicrophysics1M <: AbstractMicrophysicsModel
         return new(n_substeps, n_substeps_quad)
     end
 end
-struct NonEquilibriumMicrophysics2M <: AbstractMicrophysicsModel end
-struct NonEquilibriumMicrophysics2MP3 <: AbstractMicrophysicsModel end
+# Unified 2-moment warm rain + P3 ice scheme (2M always runs P3 ice).
+struct NonEquilibriumMicrophysics2M <: AbstractMicrophysicsModel
+    n_substeps::Int  # number of substeps for per-cell time-averaging of bulk tendencies
+    NonEquilibriumMicrophysics2M(; n_substeps = 1) = new(n_substeps)
+end
 
 const NonEquilibriumMicrophysics = Union{
     NonEquilibriumMicrophysics1M,
     NonEquilibriumMicrophysics2M,
-    NonEquilibriumMicrophysics2MP3,
 }
 const MoistMicrophysics = Union{
     EquilibriumMicrophysics0M,
     NonEquilibriumMicrophysics1M,
     NonEquilibriumMicrophysics2M,
-    NonEquilibriumMicrophysics2MP3,
 }
 
 """
@@ -1079,7 +1080,7 @@ The default AtmosModel provides:
 
 ## AtmosWater
 
-  - `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
+  - `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M()
   - `cloud_model`: GridScaleCloud(), QuadratureCloud()
   - `microphysics_tendency_timestepping`: Explicit(), Implicit()
   - `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)
