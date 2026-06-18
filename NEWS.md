@@ -4,8 +4,10 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
-- [#4594](https://github.com/CliMA/ClimaAtmos.jl/pull/4594) Remove the `diagnostic_edmfx` model configuration.
+0.40.0
+-------
 
+- [#4594](https://github.com/CliMA/ClimaAtmos.jl/pull/4594) Remove the `diagnostic_edmfx` model configuration.
 - [#4590](https://github.com/CliMA/ClimaAtmos.jl/pull/4590) ![][badge-🔥behavioralΔ] Non-dimensionalize the variance floor parameter in the truncated-Gaussian cloud-fraction closure. The hardcoded `σ_S_floor = 1e-6` is replaced with a scale-aware floor `σ_S_floor = sqrt((ε_rel · q_sat)² + σ_abs²)` that tracks local saturation humidity.
 
 v0.39.5
