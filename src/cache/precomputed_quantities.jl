@@ -256,14 +256,19 @@ function precomputed_quantities(Y, atmos)
             ᶜmp_tendencyʲs = similar(Y.c, NTuple{n, MP23_NT}),
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwnᵢʲs = similar(Y.c, NTuple{n, FT}),  # number-weighted P3 ice vel
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₙₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₙᵣʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜlogλʲs = similar(Y.c, NTuple{n, FT}),  # per-subdomain P3 logλ
         )
         if atmos.turbconv_model isa PrognosticEDMFX
             precipitation_sgs_quantities = (;
                 precipitation_sgs_quantities...,
                 ᶜmp_tendency⁰ = similar(Y.c, MP23_NT),
+                ᶜwnᵢ⁰ = similar(Y.c, FT),   # env number-weighted P3 ice vel
+                ᶜwᵢ⁰ = similar(Y.c, FT),    # env mass-weighted P3 ice vel
+                ᶜlogλ⁰ = similar(Y.c, FT),  # env P3 logλ
             )
         end
     else

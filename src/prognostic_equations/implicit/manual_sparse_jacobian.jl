@@ -106,8 +106,12 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     available_sgs_condensate_mass_names =
         filter(is_in_Y, sgs_condensate_mass_names)
 
-    sgs_condensate_names =
-        (sgs_condensate_mass_names..., @name(c.sgsʲs.:(1).n_lcl), @name(c.sgsʲs.:(1).n_rai))
+    sgs_condensate_names = (
+        sgs_condensate_mass_names...,
+        @name(c.sgsʲs.:(1).n_lcl), @name(c.sgsʲs.:(1).n_rai),
+        @name(c.sgsʲs.:(1).n_ice), @name(c.sgsʲs.:(1).q_rim),
+        @name(c.sgsʲs.:(1).b_rim),
+    )
     available_sgs_condensate_names =
         filter(is_in_Y, sgs_condensate_names)
 
@@ -852,6 +856,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     (@name(c.sgsʲs.:(1).q_sno), @name(ᶜwₛʲs.:(1))),
                     (@name(c.sgsʲs.:(1).n_lcl), @name(ᶜwₙₗʲs.:(1))),
                     (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
+                    (@name(c.sgsʲs.:(1).n_ice), @name(ᶜwnᵢʲs.:(1))),
+                    (@name(c.sgsʲs.:(1).q_rim), @name(ᶜwᵢʲs.:(1))),
+                    (@name(c.sgsʲs.:(1).b_rim), @name(ᶜwᵢʲs.:(1))),
                 )
                 MatrixFields.unrolled_foreach(
                     sgs_microphysics_tracers,
@@ -919,6 +926,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     NonEquilibriumMicrophysics1M,
                     NonEquilibriumMicrophysics2M,
                 }
+                    # Matches the vertical-diffusion tendency in
+                    # mass_flux_closures.jl: the warm fields are diffused; the P3
+                    # frozen fields (n_ice/q_rim/b_rim) are not.
                     sgs_microphysics_tracers = (
                         (@name(c.sgsʲs.:(1).q_lcl)), (@name(c.sgsʲs.:(1).q_icl)),
                         (@name(c.sgsʲs.:(1).q_ice)), (@name(c.sgsʲs.:(1).q_rai)),
@@ -963,6 +973,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         (@name(c.sgsʲs.:(1).q_ice)),
                         (@name(c.sgsʲs.:(1).q_rai)),
                         (@name(c.sgsʲs.:(1).q_sno)),
+                        (@name(c.sgsʲs.:(1).n_lcl)),
+                        (@name(c.sgsʲs.:(1).n_rai)),
+                        (@name(c.sgsʲs.:(1).n_ice)),
+                        (@name(c.sgsʲs.:(1).q_rim)),
+                        (@name(c.sgsʲs.:(1).b_rim)),
                     )
                     MatrixFields.unrolled_foreach(
                         sgs_microphysics_tracers,
@@ -1104,6 +1119,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno), @name(q_sno)),
                         (@name(c.ρn_lcl), @name(c.sgsʲs.:(1).n_lcl), @name(n_lcl)),
                         (@name(c.ρn_rai), @name(c.sgsʲs.:(1).n_rai), @name(n_rai)),
+                        (@name(c.ρn_ice), @name(c.sgsʲs.:(1).n_ice), @name(n_ice)),
+                        (@name(c.ρq_rim), @name(c.sgsʲs.:(1).q_rim), @name(q_rim)),
+                        (@name(c.ρb_rim), @name(c.sgsʲs.:(1).b_rim), @name(b_rim)),
                     )
 
                     # add updraft contributions

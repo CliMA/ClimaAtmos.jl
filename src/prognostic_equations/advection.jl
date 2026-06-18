@@ -140,9 +140,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             for χ_name in sgs_tracer_names(Y)
                 ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
-                @. ᶜχʲₜ -=
-                    split_divₕ(ᶜuʲs.:($$j), ᶜχʲ) -
-                    ᶜχʲ * split_divₕ(ᶜuʲs.:($$j), 1)
+                @. ᶜχʲₜ -= split_divₕ(ᶜuʲs.:($$j), ᶜχʲ) - ᶜχʲ * split_divₕ(ᶜuʲs.:($$j), 1)
             end
         end
     end
@@ -457,6 +455,9 @@ function edmfx_sgs_vertical_advection_tendency!(
             sgs_microphysics_tracers = (
                 (@name(c.sgsʲs.:(1).n_lcl), @name(ᶜwₙₗʲs.:(1))),
                 (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
+                (@name(c.sgsʲs.:(1).n_ice), @name(ᶜwnᵢʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_rim), @name(ᶜwᵢʲs.:(1))),
+                (@name(c.sgsʲs.:(1).b_rim), @name(ᶜwᵢʲs.:(1))),
             )
 
             MatrixFields.unrolled_foreach(
