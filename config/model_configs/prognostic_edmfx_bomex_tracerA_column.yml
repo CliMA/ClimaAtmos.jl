@@ -1,0 +1,73 @@
+initial_condition: "Bomex"
+turbconv: "prognostic_edmfx"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+microphysics_model: "1M"
+cloud_model: "MLCloud"
+config: "column"
+z_max: 3e3
+z_elem: 60
+z_stretch: false
+perturb_initstate: false
+dt: "1secs"
+t_end: "6hours"
+dt_save_state_to_disk: "10mins"
+toml: [toml/prognostic_edmfx_bomex.toml]
+netcdf_interpolation_num_points: [2, 2, 60]
+ode_algo: "ARS222"
+chemistry_model: "passive"
+diagnostics:
+  - short_name: [ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, husra, hussn]
+    period: 10mins
+  - short_name: [ts, hfss, hfls, pr, lwp, clivi, rwp, swp]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, husraup, hussnup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke, lmix]
+    period: 10mins
+  - short_name: [entr, detr, turbentr, bgrad, strain, edt, evu]
+    period: 10mins
+  - short_name: [q_gas_A, q_gas_Aup]
+    period: 10mins
+  - short_name: [husraup, hussnup, q_gas_A, q_gas_Aup]
+    period: 1hours
+    reduction_time: average
+  - short_name: [
+      mp1m_S_phase_change_vap_lcl, mp1m_S_phase_change_vap_icl,
+      mp1m_S_acnv_lcl_rai, mp1m_S_acnv_icl_sno,
+      mp1m_S_accr_lcl_rai, mp1m_S_accr_lcl_sno_cold, mp1m_S_accr_lcl_sno_warm,
+      mp1m_S_accr_melt_lcl_sno,
+      mp1m_S_accr_icl_rai, mp1m_S_accr_freeze_icl_rai, mp1m_S_accr_icl_sno,
+      mp1m_S_accr_rai_sno_cold, mp1m_S_accr_rai_sno_warm, mp1m_S_accr_melt_rai_sno,
+      mp1m_S_phase_change_vap_rai, mp1m_S_phase_change_vap_sno,
+      mp1m_S_melt_icl_lcl, mp1m_S_melt_sno_rai,
+    ]
+    period: 10mins
+  - short_name: [
+      mp1mup_S_phase_change_vap_lcl, mp1mup_S_phase_change_vap_icl,
+      mp1mup_S_acnv_lcl_rai, mp1mup_S_acnv_icl_sno,
+      mp1mup_S_accr_lcl_rai, mp1mup_S_accr_lcl_sno_cold, mp1mup_S_accr_lcl_sno_warm,
+      mp1mup_S_accr_melt_lcl_sno,
+      mp1mup_S_accr_icl_rai, mp1mup_S_accr_freeze_icl_rai, mp1mup_S_accr_icl_sno,
+      mp1mup_S_accr_rai_sno_cold, mp1mup_S_accr_rai_sno_warm, mp1mup_S_accr_melt_rai_sno,
+      mp1mup_S_phase_change_vap_rai, mp1mup_S_phase_change_vap_sno,
+      mp1mup_S_melt_icl_lcl, mp1mup_S_melt_sno_rai,
+    ]
+    period: 10mins
+  - short_name: [
+      mp1men_S_phase_change_vap_lcl, mp1men_S_phase_change_vap_icl,
+      mp1men_S_acnv_lcl_rai, mp1men_S_acnv_icl_sno,
+      mp1men_S_accr_lcl_rai, mp1men_S_accr_lcl_sno_cold, mp1men_S_accr_lcl_sno_warm,
+      mp1men_S_accr_melt_lcl_sno,
+      mp1men_S_accr_icl_rai, mp1men_S_accr_freeze_icl_rai, mp1men_S_accr_icl_sno,
+      mp1men_S_accr_rai_sno_cold, mp1men_S_accr_rai_sno_warm, mp1men_S_accr_melt_rai_sno,
+      mp1men_S_phase_change_vap_rai, mp1men_S_phase_change_vap_sno,
+      mp1men_S_melt_icl_lcl, mp1men_S_melt_sno_rai,
+    ]
+    period: 10mins

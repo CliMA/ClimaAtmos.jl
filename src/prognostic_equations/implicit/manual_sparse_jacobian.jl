@@ -69,6 +69,9 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     ρtke_if_available =
         is_in_Y(@name(c.ρtke)) ? (@name(c.ρtke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
+    ρq_gas_A_if_available = is_in_Y(@name(c.ρq_gas_A)) ? (@name(c.ρq_gas_A),) : ()
+    sgs_q_gas_A_if_available =
+        is_in_Y(@name(c.sgsʲs.:(1).q_gas_A)) ? (@name(c.sgsʲs.:(1).q_gas_A),) : ()
 
     condensate_mass_names = (
         @name(c.ρq_lcl),
@@ -111,6 +114,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             sgs_condensate_names...,
             @name(c.sgsʲs.:(1).q_tot),
             @name(c.sgsʲs.:(1).mse),
+            sgs_q_gas_A_if_available...,
         )
     available_sgs_scalar_names =
         filter(is_in_Y, sgs_scalar_names)
@@ -122,7 +126,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     # which means that multiplying inv(-1) by a Float32 will yield a Float64.
     identity_blocks = map(
         name -> (name, name) => FT(-1) * I,
-        (@name(c.ρ), sfc_if_available...),
+        (@name(c.ρ), sfc_if_available..., ρq_gas_A_if_available...),
     )
 
     active_scalar_names = (@name(c.ρ), @name(c.ρe_tot), ρq_tot_if_available...)
@@ -800,6 +804,20 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)))
                 ) - (I,)
 
+            # advection of passive chemistry tracers (no sedimentation)
+            if MatrixFields.has_field(Y, @name(c.sgsʲs.:(1).q_gas_A))
+                ∂ᶜq_gas_Aʲ_err_∂ᶜq_gas_Aʲ =
+                    matrix[@name(c.sgsʲs.:(1).q_gas_A), @name(c.sgsʲs.:(1).q_gas_A)]
+                @. ∂ᶜq_gas_Aʲ_err_∂ᶜq_gas_Aʲ =
+                    dtγ * (
+                        DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
+                        ᶜadvdivᵥ_matrix() ⋅
+                        ᶠset_tracer_upwind_matrix_bcs(
+                            ᶠtracer_upwind_matrix(ᶠu³ʲs.:(1)),
+                        )
+                    ) - (I,)
+            end
+
             # advection and sedimentation of microphysics tracers
             if p.atmos.microphysics_model isa Union{
                 NonEquilibriumMicrophysics1M,
@@ -943,6 +961,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         @. ∂ᶜqʲ_err_∂ᶜqʲ -=
                             dtγ * DiagonalMatrixRow(ᶜentrʲ + ᶜturb_entrʲs.:(1))
                     end
+                end
+                # passive chemistry tracers
+                if MatrixFields.has_field(Y, @name(c.sgsʲs.:(1).q_gas_A))
+                    @. ∂ᶜq_gas_Aʲ_err_∂ᶜq_gas_Aʲ -=
+                        dtγ * DiagonalMatrixRow(ᶜentrʲ + ᶜturb_entrʲs.:(1))
                 end
             end
 

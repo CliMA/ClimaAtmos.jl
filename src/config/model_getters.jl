@@ -867,3 +867,17 @@ function AtmosSurface(
         flux_scheme, temperature, boundary_overrides, surface_albedo,
     )
 end
+
+function AtmosChem(config::AtmosConfig)
+    chem = config.parsed_args["chemistry_model"]
+    chemistry_model = if isnothing(chem)
+        nothing
+    elseif chem == "passive"
+        GasPhaseChem()
+    else
+        error(
+            """Unknown chemistry_model `$chem`. Expected: ~ | "passive".""",
+        )
+    end
+    return AtmosChem(; chemistry_model)
+end
