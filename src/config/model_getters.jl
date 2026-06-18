@@ -13,12 +13,12 @@ function get_microphysics_model(parsed_args, params = nothing)
         n_substeps_quad = parsed_args["microphysics_n_substeps_quadrature"]
         NonEquilibriumMicrophysics1M(; n_substeps, n_substeps_quad)
     elseif model_name == "2M"
-        NonEquilibriumMicrophysics2M()
-    elseif model_name == "2MP3"
-        NonEquilibriumMicrophysics2MP3()
+        # Unified 2-moment warm rain + P3 ice (2M always runs P3 ice).
+        n_substeps = parsed_args["microphysics_n_substeps"]
+        NonEquilibriumMicrophysics2M(; n_substeps)
     else
         error(
-            """Unknown microphysics_model `$model_name`. Expected: "dry", "0M", "1M", "2M", or "2MP3".""",
+            """Unknown microphysics_model `$model_name`. Expected: "dry", "0M", "1M", or "2M".""",
         )
     end
 end

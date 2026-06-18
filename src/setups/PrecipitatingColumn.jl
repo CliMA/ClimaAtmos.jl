@@ -39,6 +39,7 @@ function center_initial_condition(setup::PrecipitatingColumn, local_geometry, pa
     (; θ, q_tot, p, qR, qS, qL, qI, nL, nR) = setup.profiles
     (; z) = local_geometry.coordinates
 
+    FT = typeof(z)
     q_tot_z = q_tot(z)
     q_liq_z = qL(z) + qR(z)
     q_ice_z = qI(z) + qS(z)
@@ -46,6 +47,11 @@ function center_initial_condition(setup::PrecipitatingColumn, local_geometry, pa
     T = TD.air_temperature(
         thermo_params, TD.pθ_li(), p(z), θ(z), q_tot_z, q_liq_z, q_ice_z,
     )
+
+    # prescribe a fixed mean initial ice particle mass to set `n_ice` from `q_ice`;
+    # ice starts unrimed (`q_rim = b_rim = 0`, i.e. `F_rim = 0`).
+    m_ice_init = FT(1e-10)  # ≈ small ice crystal/aggregate [kg]
+    n_ice_z = q_ice_z > 0 ? q_ice_z / m_ice_init : zero(FT)
 
     return physical_state(;
         T,
@@ -57,5 +63,6 @@ function center_initial_condition(setup::PrecipitatingColumn, local_geometry, pa
         q_sno = qS(z),
         n_liq = nL(z),
         n_rai = nR(z),
+        n_ice = n_ice_z,
     )
 end

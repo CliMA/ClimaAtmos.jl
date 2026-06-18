@@ -158,8 +158,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
-    if microphysics_model isa
-       NonEquilibriumMicrophysics2M
+    if microphysics_model isa NonEquilibriumMicrophysics2M
         (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρn_lcl -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
@@ -181,9 +180,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 Geometry.WVector(-(ᶜwₛ)) * specific(Y.c.ρq_sno, Y.c.ρ),
             ),
         )
-    end
-    if microphysics_model isa NonEquilibriumMicrophysics2MP3
-        (; ρ, ρn_ice, ρq_rim, ρb_rim) = Y.c
+        (; ρ, ρn_ice, ρq_rim, ρb_rim) = Y.c  # TODO use the macro
         ᶜwnᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwnᵢ))
         ᶜwᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwᵢ))
         ᶠρ = @. lazy(ᶠinterp(ρ * ᶜJ) / ᶠJ)

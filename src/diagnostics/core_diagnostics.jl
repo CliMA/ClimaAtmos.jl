@@ -1023,10 +1023,7 @@ compute_rwp(state, cache, time) =
 compute_rwp(_, _, _, model) = error_diagnostic_variable("rwp", model)
 
 function compute_rwp(state, cache, _,
-    ::Union{
-        NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M,
-        NonEquilibriumMicrophysics2MP3,
-    },
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
 )
     rwp = cache.scratch.ᶠtemp_field_level
     Operators.column_integral_definite!(rwp, state.c.ρq_rai)
@@ -1050,10 +1047,7 @@ compute_swp(state, cache, time) =
 compute_swp(_, _, _, model) = error_diagnostic_variable("swp", model)
 
 function compute_swp(state, cache, _,
-    ::Union{
-        NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M,
-        NonEquilibriumMicrophysics2MP3,
-    },
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
 )
     swp = cache.scratch.ᶠtemp_field_level
     Operators.column_integral_definite!(swp, state.c.ρq_sno)
