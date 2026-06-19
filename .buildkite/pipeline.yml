@@ -342,6 +342,16 @@ steps:
         agents:
           slurm_mem: 12GB
 
+      - label: ":genie: Prognostic EDMF: Larcform1 Arctic winter boundary layer (1M)"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/larcform1_1M_prognostic_edmfx.yml
+          --job_id larcform1_1M_prognostic_edmfx
+        artifact_paths: "larcform1_1M_prognostic_edmfx/output_active/*"
+        agents:
+          slurm_mem: 12GB
+
   - group: "Analytic Tests"
     steps:
       - label: ":crown: Analytic tests: No topography, 2D, Float64, GPU"
