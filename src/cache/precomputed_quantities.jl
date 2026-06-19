@@ -125,7 +125,7 @@ treated explicitly (updated only before explicit tendency evaluations).
 
 TODO: Reduce the number of cached values by computing them on the fly.
 """
-function precomputed_quantities(Y, atmos)
+function precomputed_quantities(Y, atmos, params)
     FT = eltype(Y)
     @assert !(atmos.microphysics_model isa DryModel) ||
             !(atmos.turbconv_model isa PrognosticEDMFX)
@@ -191,10 +191,9 @@ function precomputed_quantities(Y, atmos)
     MP1_NT = @NamedTuple{
         dq_lcl_dt::FT, dq_icl_dt::FT, dq_rai_dt::FT, dq_sno_dt::FT,
     }
-    MP23_NT = @NamedTuple{
-        dq_lcl_dt::FT, dn_lcl_dt::FT, dq_rai_dt::FT, dn_rai_dt::FT,
-        dq_ice_dt::FT, dn_ice_dt::FT, dq_rim_dt::FT, db_rim_dt::FT,
-    }
+    MP23_NT =
+        atmos.microphysics_model isa NonEquilibriumMicrophysics2M ?
+        two_moment_tendency_cache_eltype(FT, params) : @NamedTuple{}
 
     if atmos.microphysics_model isa EquilibriumMicrophysics0M
         precipitation_quantities = (;

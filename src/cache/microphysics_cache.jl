@@ -12,6 +12,25 @@ import Thermodynamics as TD
 import ClimaCore.Operators as Operators
 import ClimaCore.Fields as Fields
 
+"""
+    two_moment_tendency_cache_eltype(::Type{FT}, params)
+
+Concrete `NamedTuple` eltype of the 2-moment microphysics tendency cache.
+"""
+function two_moment_tendency_cache_eltype(::Type{FT}, params) where {FT}
+    cm2p = CAP.microphysics_2m_params(params)
+    thp = CAP.thermodynamics_params(params)
+    nt = Core.Compiler.return_type(
+        BMT.bulk_microphysics_tendencies,
+        Tuple{
+            BMT.Microphysics2Moment, typeof(cm2p), typeof(thp),
+            FT, FT, FT, FT, FT, FT, FT, FT, FT, FT, FT, FT,
+        },
+    )
+    @assert isconcretetype(nt) "2M+P3 tendency cache eltype is not concrete: $nt"
+    return nt
+end
+
 const Iₗ = TD.internal_energy_liquid
 const Iᵢ = TD.internal_energy_ice
 internal_energy_func(
@@ -900,14 +919,12 @@ function set_microphysics_tendency_cache!(
         # Microphysics
         ᶜ∂mp_∂tʲ = ᶜmp_tendencyʲs.:($j)
         ᶜYʲ = Y.c.sgsʲs.:($j)
-        @. ᶜ∂mp_∂tʲ = _to_mp23_tendency(
-            BMT.bulk_microphysics_tendencies(
-                BMT.Microphysics2Moment(), cm2p, thp,
-                ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-                ᶜYʲ.q_lcl, ᶜYʲ.n_lcl, ᶜYʲ.q_rai, ᶜYʲ.n_rai,
-                ᶜYʲ.q_ice, ᶜYʲ.n_ice, ᶜYʲ.q_rim, ᶜYʲ.b_rim,
-                ᶜlogλʲs.:($$j),
-            ),
+        @. ᶜ∂mp_∂tʲ = BMT.bulk_microphysics_tendencies(
+            BMT.Microphysics2Moment(), cm2p, thp,
+            ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+            ᶜYʲ.q_lcl, ᶜYʲ.n_lcl, ᶜYʲ.q_rai, ᶜYʲ.n_rai,
+            ᶜYʲ.q_ice, ᶜYʲ.n_ice, ᶜYʲ.q_rim, ᶜYʲ.b_rim,
+            ᶜlogλʲs.:($$j),
         )
         # Coupled-sink limiting on warm-rain pairs, so dn_ice_dt is preserved.
         ᶜf_liq = @. lazy(
@@ -951,12 +968,10 @@ function set_microphysics_tendency_cache!(
 
     # Environment mean or quadrature sum over the SGS fluctuations
     # TODO - looks like only mean version is implemented now
-    @. ᶜmp_tendency⁰ = _to_mp23_tendency(
-        BMT.bulk_microphysics_tendencies(
-            BMT.Microphysics2Moment(), cm2p, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
-            ᶜq_lcl⁰, ᶜn_lcl⁰, ᶜq_rai⁰, ᶜn_rai⁰,
-            ᶜq_ice⁰, ᶜn_ice⁰, ᶜq_rim⁰, ᶜb_rim⁰, ᶜlogλ⁰,
-        ),
+    @. ᶜmp_tendency⁰ = BMT.bulk_microphysics_tendencies(
+        BMT.Microphysics2Moment(), cm2p, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
+        ᶜq_lcl⁰, ᶜn_lcl⁰, ᶜq_rai⁰, ᶜn_rai⁰,
+        ᶜq_ice⁰, ᶜn_ice⁰, ᶜq_rim⁰, ᶜb_rim⁰, ᶜlogλ⁰,
     )
     ᶜf_liq⁰ = @. lazy(
         coupled_sink_limit_factor(
@@ -1009,12 +1024,10 @@ function set_microphysics_tendency_cache!(
 
     # Compute microphysics tendency
     # TODO - looks like aerosol activation is missing
-    @. ᶜmp_tendency = _to_mp23_tendency(
-        BMT.bulk_microphysics_tendencies(
-            BMT.Microphysics2Moment(), cm2p, thp, Y.c.ρ, ᶜT, ᶜq_tot,
-            ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_ice, ᶜn_ice, ᶜq_rim, ᶜb_rim,
-            ᶜlogλ,
-        ),
+    @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
+        BMT.Microphysics2Moment(), cm2p, thp, Y.c.ρ, ᶜT, ᶜq_tot,
+        ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_ice, ᶜn_ice, ᶜq_rim, ᶜb_rim,
+        ᶜlogλ,
     )
     # Apply coupled limiting directly
     ᶜf_liq = @. lazy(

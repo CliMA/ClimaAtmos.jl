@@ -167,7 +167,7 @@ function build_cache(
     sfc_setup = atmos.surface.boundary_overrides
     scratch = temporary_quantities(Y, atmos)
 
-    precomputed = precomputed_quantities(Y, atmos)
+    precomputed = precomputed_quantities(Y, atmos, params)
     precomputing_arguments = (;
         atmos,
         core,
