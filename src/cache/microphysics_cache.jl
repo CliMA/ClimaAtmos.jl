@@ -841,9 +841,12 @@ function set_microphysics_tendency_cache!(
     sgs_quad = p.atmos.sgs_quadrature
     nsubs = mp1m.n_substeps
     nsubs_quad = mp1m.n_substeps_quad
+    # Access the abstract averaging-mode field once; the broadcast
+    # below specializes on the concrete singleton (function barrier).
+    mode = mp1m.averaging_mode
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
-            Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            mode, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
             ᶜT, cmp, thp, dt, nsubs,
         )
     else
@@ -851,7 +854,7 @@ function set_microphysics_tendency_cache!(
         corr_Tq = correlation_Tq(p.params)
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
         @. ᶜmp_tendency = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
+            mode, BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, ᶜsgs_moments.mu_S, α,
             dt, nsubs_quad,
@@ -875,11 +878,14 @@ function set_microphysics_tendency_cache!(
     n = n_mass_flux_subdomains(tm)
     nsubs = mp1m.n_substeps
     nsubs_quad = mp1m.n_substeps_quad
+    # Access the abstract averaging-mode field once; the broadcasts
+    # below specialize on the concrete singleton (function barrier).
+    mode = mp1m.averaging_mode
 
     ### Updraft contribution
     for j in 1:n
         @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
-            ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+            mode, ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
             Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
             Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
             ᶜTʲs.:($$j), cmp, thp, dt, nsubs,
@@ -897,7 +903,7 @@ function set_microphysics_tendency_cache!(
     sgs_quad = p.atmos.sgs_quadrature
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+            mode, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT⁰, cmp, thp, dt, nsubs,
         )
     else
@@ -905,7 +911,7 @@ function set_microphysics_tendency_cache!(
         corr_Tq = correlation_Tq(p.params)
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
+            mode, BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, ᶜsgs_moments.mu_S, α,
             dt, nsubs_quad,

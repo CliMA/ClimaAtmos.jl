@@ -11,12 +11,39 @@ function get_microphysics_model(parsed_args, params = nothing)
     elseif model_name == "1M"
         n_substeps = parsed_args["microphysics_n_substeps"]
         n_substeps_quad = parsed_args["microphysics_n_substeps_quadrature"]
-        NonEquilibriumMicrophysics1M(; n_substeps, n_substeps_quad)
+        averaging_mode = get_microphysics_averaging_mode(parsed_args)
+        NonEquilibriumMicrophysics1M(; n_substeps, n_substeps_quad, averaging_mode)
     elseif model_name == "2M"
         NonEquilibriumMicrophysics2M()
     else
         error(
             """Unknown microphysics_model `$model_name`. Expected: "dry", "0M", "1M", or "2M".""",
+        )
+    end
+end
+
+"""
+    get_microphysics_averaging_mode(parsed_args)
+
+Map the `microphysics_averaging_mode` config string to the corresponding
+1-moment bulk-tendency averaging-mode singleton from
+`CloudMicrophysics.BulkMicrophysicsTendencies`.
+"""
+function get_microphysics_averaging_mode(parsed_args)
+    BMT = CM.BulkMicrophysicsTendencies
+    mode_name = parsed_args["microphysics_averaging_mode"]
+    if mode_name == "instantaneous"
+        BMT.Instantaneous()
+    elseif mode_name == "linearized"
+        BMT.LinearizedAverage()
+    elseif mode_name == "rosenbrock"
+        BMT.rosenbrock_donor()
+    elseif mode_name == "rosenbrock_exact"
+        BMT.rosenbrock_exact()
+    else
+        error(
+            """Unknown microphysics_averaging_mode `$mode_name`. \
+            Expected: "instantaneous", "linearized", "rosenbrock", or "rosenbrock_exact".""",
         )
     end
 end

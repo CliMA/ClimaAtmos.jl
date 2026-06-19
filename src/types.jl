@@ -6,6 +6,7 @@ import Dates
 import ClimaParams as CP
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
+import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 abstract type AbstractMicrophysicsModel end
 
@@ -14,8 +15,17 @@ struct EquilibriumMicrophysics0M <: AbstractMicrophysicsModel end
 struct NonEquilibriumMicrophysics1M <: AbstractMicrophysicsModel
     n_substeps::Int  # number of microphysics substeps
     n_substeps_quad::Int  # number of microphysics substeps with sgs quadrature
-    function NonEquilibriumMicrophysics1M(; n_substeps = 1, n_substeps_quad = 1)
-        return new(n_substeps, n_substeps_quad)
+    # Bulk-tendency averaging mode singleton. Declared abstract so the model
+    # type is not parameterized by the (config-selected) mode; type-stability
+    # is recovered by a function barrier at the `bulk_microphysics_tendencies`
+    # call sites, which dispatch on the concrete mode.
+    averaging_mode::BMT.TendencyMode
+    function NonEquilibriumMicrophysics1M(;
+        n_substeps = 1,
+        n_substeps_quad = 1,
+        averaging_mode = BMT.LinearizedAverage(),
+    )
+        return new(n_substeps, n_substeps_quad, averaging_mode)
     end
 end
 struct NonEquilibriumMicrophysics2M <: AbstractMicrophysicsModel end

@@ -170,6 +170,30 @@ end
 ###
 
 """
+    bulk_microphysics_tendencies_1m(mode, mp, tps, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno, dt, nsubs)
+
+Adapter that calls `BMT.bulk_microphysics_tendencies` for the 1-moment scheme
+with the per-mode argument arity. Time-averaging modes (`LinearizedAverage`,
+`RosenbrockAverage`) consume `dt`/`nsubs`; instantaneous modes (`Instantaneous`,
+`InstantaneousVerbose`) take neither and ignore them here. Dispatch is on the
+concrete `mode` singleton, so this stays type-stable.
+"""
+@inline bulk_microphysics_tendencies_1m(
+    mode::BMT.TendencyMode, mp, tps, ρ, T, q_tot,
+    q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
+) = BMT.bulk_microphysics_tendencies(
+    mode, BMT.Microphysics1Moment(), mp, tps, ρ, T, q_tot,
+    q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
+)
+@inline bulk_microphysics_tendencies_1m(
+    mode::Union{BMT.Instantaneous, BMT.InstantaneousVerbose}, mp, tps, ρ, T, q_tot,
+    q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
+) = BMT.bulk_microphysics_tendencies(
+    mode, BMT.Microphysics1Moment(), mp, tps, ρ, T, q_tot,
+    q_lcl, q_icl, q_rai, q_sno,
+)
+
+"""
     (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
 
 GPU-safe functor for computing 1-moment microphysics tendencies at SGS
@@ -197,14 +221,18 @@ rain evaporation or snow sublimation against the local `q_v_hat`.
 
 # Returns
 
-`NamedTuple` from `BMT.bulk_microphysics_tendencies(BMT.LinearizedAverage(), ...)` with fields:
+`NamedTuple` from `BMT.bulk_microphysics_tendencies(mode, ...)` with fields:
 
   - `dq_lcl_dt`: Cloud liquid tendency [kg/kg/s]
   - `dq_icl_dt`: Cloud ice tendency [kg/kg/s]
   - `dq_rai_dt`: Rain tendency [kg/kg/s]
   - `dq_sno_dt`: Snow tendency [kg/kg/s]
 """
-struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
+struct Microphysics1MEvaluator{M, S, MP, TPS, FT, Args <: Tuple}
+    # Bulk-tendency averaging mode singleton (e.g. `BMT.LinearizedAverage()`),
+    # resolved outside the broadcast and stored as a concrete field so the
+    # functor body's `bulk_microphysics_tendencies` dispatch is type-stable.
+    mode::M
     scheme::S
     mp::MP
     tps::TPS
@@ -246,23 +274,24 @@ end
     q_lcl_hat = max(FT(0), eval.λ * shifted_excess - eval.q_rai)
     q_icl_hat = max(FT(0), (FT(1) - eval.λ) * shifted_excess - eval.q_sno)
 
-    return BMT.bulk_microphysics_tendencies(
-        BMT.LinearizedAverage(),
-        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
+    return bulk_microphysics_tendencies_1m(
+        eval.mode, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
         q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
-        eval.dt, eval.nsubs, eval.args...,
+        eval.dt, eval.nsubs,
     )
 end
 
 """
-    microphysics_tendencies_1m(ρ, q_tot, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,)
+    microphysics_tendencies_1m(mode, ρ, q_tot, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,)
     microphysics_tendencies_1m(
-        scheme, sgs_quad, cmp, thp, ρ, T, q_tot,
+        mode, scheme, sgs_quad, cmp, thp, ρ, T, q_tot,
         q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
         λ_lagrange, mu_S, α, dt, nsubs,
     )
 
-Computes time-averaged 1-moment microphysics tendencies.
+Computes time-averaged 1-moment microphysics tendencies using the bulk-tendency
+averaging `mode` (a `BMT.TendencyMode` singleton). `mode` is resolved outside
+the broadcast at the call site so this dispatch is type-stable.
 
 The 11-argument (no `sgs_quad`) form takes condensate inputs as-is and is
 used in EDMF updrafts or wherever a grid-mean state is to be evaluated
@@ -284,6 +313,8 @@ sublimation; saturated points drive autoconversion and accretion.
 
 # Arguments
 
+  - `mode`: Bulk-tendency averaging mode singleton (a `BMT.TendencyMode`, e.g.
+    `BMT.LinearizedAverage()`)
   - `scheme`: Microphysics scheme type (from CloudMicrophysics.BulkMicrophysicsTendencies)
   - `sgs_quad`: SGSQuadrature configuration
   - `cmp`, `thp`: Microphysics and thermodynamics parameters
@@ -311,16 +342,17 @@ NamedTuple with microphysics source terms:
   - `dq_sno_dt`: Snow tendency [kg/kg/s]
 """
 @inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
+    mode::BMT.TendencyMode,
     ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,
 )
-    local_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.LinearizedAverage(),
-        BMT.Microphysics1Moment(), cmp, thp, ρ, T,
+    local_tendency = bulk_microphysics_tendencies_1m(
+        mode, cmp, thp, ρ, T,
         q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
     )
     return local_tendency
 end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
+    mode::BMT.TendencyMode,
     scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
     λ_lagrange, mu_S, α, dt, nsubs, args...,
@@ -336,7 +368,7 @@ end
     λ = TD.liquid_fraction(thp, T, q_lcl_nonneg, q_icl_nonneg)
 
     evaluator = Microphysics1MEvaluator(
-        scheme, cmp, thp, ρ,
+        mode, scheme, cmp, thp, ρ,
         q_rai_nonneg, q_sno_nonneg,
         λ, λ_lagrange, mu_S, α,
         dt, nsubs, args,
@@ -345,6 +377,24 @@ end
         evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
     )
 end
+# Backward-compatible entries defaulting to `LinearizedAverage`. The src
+# call sites pass the config-resolved mode explicitly; these forward to the
+# mode-explicit methods above.
+@inline microphysics_tendencies_1m(
+    ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,
+) = microphysics_tendencies_1m(
+    BMT.LinearizedAverage(),
+    ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,
+)
+@inline microphysics_tendencies_1m(
+    scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    λ_lagrange, mu_S, α, dt, nsubs, args...,
+) = microphysics_tendencies_1m(
+    BMT.LinearizedAverage(), scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    λ_lagrange, mu_S, α, dt, nsubs, args...,
+)
 
 ###
 ### 2 Moment Microphysics
