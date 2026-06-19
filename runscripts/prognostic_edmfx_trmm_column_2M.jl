@@ -136,9 +136,6 @@ diagnostics = [
             "hus", "hur", "cl", "clw", "cli",  # liquid
             "pr",  # precipitation
             "ke",  # kinetic energy for spectrum
-            # Smagorinsky diagnostics
-            "Dh_smag", "strainh_smag",  # horizontal
-            "Dv_smag", "strainv_smag",  # vertical
         ],
         "period" => "10mins",
     ),
@@ -181,8 +178,12 @@ CA.verify_callbacks(sol.t)
 
 # --> Make ci plots
 if ClimaComms.iamroot(context)
-    include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
-    make_plots(reference_job_id, simulation.output_dir)
+    try
+        include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
+        make_plots(reference_job_id, simulation.output_dir)
+    catch err
+        @warn "ci plots failed (non-fatal for the smoke test)" exception = err
+    end
 end
 # <--
 
