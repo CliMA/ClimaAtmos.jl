@@ -22,6 +22,8 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaAtmos as CA
 import ClimaCore as CC
 import ClimaComms
+import CloudMicrophysics as CM
+const BMT = CM.BulkMicrophysicsTendencies
 ClimaComms.@import_required_backends
 context = CA.get_comms_context(Dict("device" => "auto"))
 
@@ -56,7 +58,9 @@ surface = CA.Setups.surface_condition(initial_condition, params)
 ## Construct the model
 model = CA.AtmosModel(;
     # AtmosWater - Moisture, Precipitation & Clouds
-    microphysics_model = CA.NonEquilibriumMicrophysics2M(; n_substeps = 8),
+    microphysics_model = CA.NonEquilibriumMicrophysics2M(;
+        tendency_mode = BMT.SubsteppedAverage(; n_substeps = 8),
+    ),
     cloud_model = CA.QuadratureCloud(),
     microphysics_tendency_timestepping = CA.Explicit(),  # implicit_microphysics: false
     microphysics_substep_callback = true,
@@ -140,13 +144,16 @@ diagnostics = [
         "period" => "10mins",
     ),
 ]
-### 1M microphysics
-if model.microphysics_model ∈
-   (CA.NonEquilibriumMicrophysics1M(), CA.NonEquilibriumMicrophysics2M())
-    push!(diagnostics, Dict("short_name" => ["husra", "hussn"], "period" => "10mins"))
+### 1M / 2M microphysics
+if model.microphysics_model isa CA.NonEquilibriumMicrophysics
+    push!(diagnostics, Dict("short_name" => ["husra"], "period" => "10mins"))
+end
+### 1M microphysics (snow exists only in 1M)
+if model.microphysics_model isa CA.NonEquilibriumMicrophysics1M
+    push!(diagnostics, Dict("short_name" => ["hussn"], "period" => "10mins"))
 end
 ### 2M microphysics
-if model.microphysics_model == CA.NonEquilibriumMicrophysics2M()
+if model.microphysics_model isa CA.NonEquilibriumMicrophysics2M
     push!(diagnostics, Dict("short_name" => ["cdnc", "ncra"], "period" => "10mins"))
 end
 

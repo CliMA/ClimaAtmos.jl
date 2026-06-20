@@ -11,10 +11,12 @@ function get_microphysics_model(parsed_args, params = nothing)
     elseif model_name == "1M"
         n_substeps = parsed_args["microphysics_n_substeps"]
         n_substeps_quad = parsed_args["microphysics_n_substeps_quadrature"]
-        averaging_mode = get_microphysics_averaging_mode(parsed_args)
-        NonEquilibriumMicrophysics1M(; n_substeps, n_substeps_quad, averaging_mode)
+        tendency_mode = get_microphysics_tendency_mode_1m(parsed_args, n_substeps)
+        NonEquilibriumMicrophysics1M(; tendency_mode, n_substeps_quad)
     elseif model_name == "2M"
-        NonEquilibriumMicrophysics2M()
+        n_substeps = parsed_args["microphysics_n_substeps"]
+        tendency_mode = CM.BulkMicrophysicsTendencies.SubsteppedAverage(; n_substeps)
+        NonEquilibriumMicrophysics2M(; tendency_mode)
     else
         error(
             """Unknown microphysics_model `$model_name`. Expected: "dry", "0M", "1M", or "2M".""",
@@ -23,23 +25,24 @@ function get_microphysics_model(parsed_args, params = nothing)
 end
 
 """
-    get_microphysics_averaging_mode(parsed_args)
+    get_microphysics_tendency_mode_1m(parsed_args, n_substeps)
 
 Map the `microphysics_averaging_mode` config string to the corresponding
-1-moment bulk-tendency averaging-mode singleton from
-`CloudMicrophysics.BulkMicrophysicsTendencies`.
+1-moment bulk-tendency averaging mode from
+`CloudMicrophysics.BulkMicrophysicsTendencies`, carrying `n_substeps` (ignored
+by `Instantaneous`, which takes no substeps).
 """
-function get_microphysics_averaging_mode(parsed_args)
+function get_microphysics_tendency_mode_1m(parsed_args, n_substeps)
     BMT = CM.BulkMicrophysicsTendencies
     mode_name = parsed_args["microphysics_averaging_mode"]
     if mode_name == "instantaneous"
         BMT.Instantaneous()
     elseif mode_name == "linearized"
-        BMT.LinearizedAverage()
+        BMT.LinearizedAverage(; n_substeps)
     elseif mode_name == "rosenbrock"
-        BMT.rosenbrock_donor()
+        BMT.rosenbrock_donor(; n_substeps)
     elseif mode_name == "rosenbrock_exact"
-        BMT.rosenbrock_exact()
+        BMT.rosenbrock_exact(; n_substeps)
     else
         error(
             """Unknown microphysics_averaging_mode `$mode_name`. \
@@ -758,6 +761,18 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
         ) : DiagnosticTerminalVelocity()
 
     implicit_microphysics = pa["implicit_microphysics"]
+    # The 2M+P3 bulk tendency is a substep-averaged explicit forcing (filled per
+    # timestep/stage and held constant within the IMEX solve), so an implicit
+    # IMEX split would add no microphysics-reaction term to the Jacobian. Reject
+    # it explicitly rather than producing a nominally "implicit" configuration;
+    # implicit substepping, if wanted, lives inside the averaging mode (CM).
+    if implicit_microphysics && microphysics_model isa NonEquilibriumMicrophysics2M
+        error(
+            "`implicit_microphysics = true` is not supported for 2-moment (P3) \
+            microphysics: its substep-averaged tendency is an explicit per-step \
+            forcing. Set `implicit_microphysics: false`.",
+        )
+    end
 
     return AtmosWater(;
         microphysics_model,

@@ -535,7 +535,6 @@ function set_precipitation_velocities!(
     # contribution of env rain advection to qtot advection
     @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰ * (Iₗ(thp, ᶜT⁰) + ᶜΦ)
 
-
     # Add contributions to energy and total water advection
     # TODO do we need to add kinetic energy of subdomains?
     for j in 1:n
@@ -839,11 +838,12 @@ function set_microphysics_tendency_cache!(
     # Grid mean or quadrature sum over the SGS fluctuations
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
     sgs_quad = p.atmos.sgs_quadrature
-    nsubs = mp1m.n_substeps
-    nsubs_quad = mp1m.n_substeps_quad
     # Access the abstract averaging-mode field once; the broadcast
-    # below specializes on the concrete singleton (function barrier).
-    mode = mp1m.averaging_mode
+    # below specializes on the concrete mode (function barrier). The mode carries
+    # its own `n_substeps`; the SGS-quadrature path uses `n_substeps_quad`.
+    mode = mp1m.tendency_mode
+    nsubs = _mode_n_substeps(mode)
+    nsubs_quad = mp1m.n_substeps_quad
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             mode, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
@@ -876,11 +876,12 @@ function set_microphysics_tendency_cache!(
     cmp = CAP.microphysics_1m_params(p.params)
 
     n = n_mass_flux_subdomains(tm)
-    nsubs = mp1m.n_substeps
-    nsubs_quad = mp1m.n_substeps_quad
     # Access the abstract averaging-mode field once; the broadcasts
-    # below specialize on the concrete singleton (function barrier).
-    mode = mp1m.averaging_mode
+    # below specialize on the concrete mode (function barrier). The mode carries
+    # its own `n_substeps`; the SGS-quadrature path uses `n_substeps_quad`.
+    mode = mp1m.tendency_mode
+    nsubs = _mode_n_substeps(mode)
+    nsubs_quad = mp1m.n_substeps_quad
 
     ### Updraft contribution
     for j in 1:n
@@ -1065,8 +1066,10 @@ function _fill_2m_tendency_cache_gridmean!(
 )
     (; dt) = p
     (; ᶜT, ᶜmp_tendency, ᶜlogλ) = p.precomputed
-    nsubs = mp2m.n_substeps
-    tstep = p.atmos.microphysics_tendency_timestepping
+    # Access the abstract averaging-mode field once; the broadcast
+    # below specializes on the concrete mode (function barrier). The mode carries
+    # its own `n_substeps` and increment limiter.
+    mode = mp2m.tendency_mode
 
     # get thermodynamics and microphysics params
     cm2p = CAP.microphysics_2m_params(p.params)
@@ -1084,16 +1087,16 @@ function _fill_2m_tendency_cache_gridmean!(
     ᶜq_rim = @. lazy(specific(Y.c.ρq_rim, Y.c.ρ))
     ᶜb_rim = @. lazy(specific(Y.c.ρb_rim, Y.c.ρ))
 
-    # Compute the (substepped, satadj- and coupled-sink-limited) microphysics
-    # tendency. With `n_substeps == 1` this reduces to a single BMT call plus
-    # the satadj cap and coupled-sink limiter; `n_substeps > 1` forward-Eulers
-    # the bulk tendency over `dt/n_substeps` substeps (logλ held fixed) and
-    # returns the dt-averaged result, which the IMEX loop sees as a constant
-    # explicit forcing.
+    # Compute the CloudMicrophysics-averaged (substepped, satadj- and
+    # coupled-sink-limited) microphysics tendency. With `mode.n_substeps == 1`
+    # this reduces to a single BMT call plus the mode's limiter; `n_substeps > 1`
+    # forward-Eulers the bulk tendency over `dt/n_substeps` substeps (logλ held
+    # fixed) and returns the dt-averaged result, which the IMEX loop sees as a
+    # constant explicit forcing.
     # TODO - aerosol activation is not yet wired into the grid-mean path.
-    @. ᶜmp_tendency = bulk_2m_tendencies_substepped(
-        cm2p, thp, Y.c.ρ, ᶜT, ᶜq_tot, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai,
-        ᶜq_ice, ᶜn_ice, ᶜq_rim, ᶜb_rim, ᶜlogλ, dt, nsubs, tstep,
+    @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
+        mode, BMT.Microphysics2Moment(), cm2p, thp, Y.c.ρ, ᶜT, ᶜq_tot,
+        ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_ice, ᶜn_ice, ᶜq_rim, ᶜb_rim, ᶜlogλ, dt,
     )
     return nothing
 end

@@ -12,23 +12,16 @@ abstract type AbstractMicrophysicsModel end
 
 struct DryModel <: AbstractMicrophysicsModel end
 struct EquilibriumMicrophysics0M <: AbstractMicrophysicsModel end
-struct NonEquilibriumMicrophysics1M <: AbstractMicrophysicsModel
-    n_substeps::Int  # number of microphysics substeps
-    n_substeps_quad::Int  # number of microphysics substeps with sgs quadrature
-    # Bulk-tendency averaging mode singleton. Declared abstract so the model
-    # type is not parameterized by the (config-selected) mode; type-stability
-    # is recovered by a function barrier at the `bulk_microphysics_tendencies`
-    # call sites, which dispatch on the concrete mode.
-    averaging_mode::BMT.TendencyMode
-    function NonEquilibriumMicrophysics1M(;
-        n_substeps = 1,
-        n_substeps_quad = 1,
-        averaging_mode = BMT.LinearizedAverage(),
-    )
-        return new(n_substeps, n_substeps_quad, averaging_mode)
-    end
+@kwdef struct NonEquilibriumMicrophysics1M <: AbstractMicrophysicsModel
+    "method for computing the bulk microphysics tendencies"
+    tendency_mode::BMT.TendencyMode = BMT.LinearizedAverage(; n_substeps = 1)
+    "number of bulk-tendency substeps on the SGS-quadrature path"
+    n_substeps_quad::Int = 1
 end
-struct NonEquilibriumMicrophysics2M <: AbstractMicrophysicsModel end
+@kwdef struct NonEquilibriumMicrophysics2M <: AbstractMicrophysicsModel
+    "method for computing the bulk microphysics tendencies"
+    tendency_mode::BMT.TendencyMode = BMT.SubsteppedAverage(; n_substeps = 1)
+end
 
 const NonEquilibriumMicrophysics = Union{
     NonEquilibriumMicrophysics1M,

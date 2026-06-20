@@ -59,6 +59,8 @@ end
 
 moisture_variables(ρ, physical_state, ::DryModel) = (;)
 moisture_variables(ρ, ps, ::EquilibriumMicrophysics0M) = (; ρq_tot = ρ * ps.q_tot)
+# 1M uses the cloud-ice mass field `ρq_icl` (paired with snow `ρq_sno`); 2M+P3
+# has a single unified ice category `ρq_ice` (no snow).
 moisture_variables(ρ, physical_state, ::NonEquilibriumMicrophysics1M) = (;
     ρq_tot = ρ * physical_state.q_tot,
     ρq_lcl = ρ * physical_state.q_liq,
@@ -81,13 +83,13 @@ precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics1M) = (;
     ρq_sno = ρ * physical_state.q_sno,
 )
 function precip_variables(ρ, physical_state, ::NonEquilibriumMicrophysics2M)
+    # No snow in 2M+P3; the ice mass `ρq_ice` lives in `moisture_variables`.
     warm_state = (;
         ρn_lcl = ρ * physical_state.n_liq,
         ρn_rai = ρ * physical_state.n_rai,
         ρq_rai = ρ * physical_state.q_rai,
     )
     cold_state = (;
-        ρq_ice = ρ * physical_state.q_ice,
         ρn_ice = ρ * physical_state.n_ice,
         ρq_rim = ρ * physical_state.q_rim,
         ρb_rim = ρ * physical_state.b_rim,
