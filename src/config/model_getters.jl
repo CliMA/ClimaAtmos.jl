@@ -15,7 +15,7 @@ function get_microphysics_model(parsed_args, params = nothing)
         NonEquilibriumMicrophysics1M(; tendency_mode, n_substeps_quad)
     elseif model_name == "2M"
         n_substeps = parsed_args["microphysics_n_substeps"]
-        tendency_mode = CM.BulkMicrophysicsTendencies.SubsteppedAverage(; n_substeps)
+        tendency_mode = get_microphysics_tendency_mode_2m(parsed_args, n_substeps)
         NonEquilibriumMicrophysics2M(; tendency_mode)
     else
         error(
@@ -42,9 +42,35 @@ function get_microphysics_tendency_mode_1m(parsed_args, n_substeps)
     elseif mode_name == "rosenbrock_exact"
         BMT.rosenbrock_exact(; n_substeps)
     else
+        error("Unknown microphysics_averaging_mode `$mode_name`. Expected: 
+              `instantaneous`, `linearized`, `rosenbrock`, or `rosenbrock_exact`.")
+    end
+end
+
+"""
+    get_microphysics_tendency_mode_2m(parsed_args, n_substeps)
+
+Return the 2-moment + P3 bulk-tendency averaging mode for the
+`microphysics_averaging_mode` config string. 2M+P3 has no donor-based matrix, so
+only the explicit `SubsteppedAverage` (selected by `"substepped"`, or by the
+global default `"linearized"`) and the exact-Jacobian `rosenbrock_exact` are
+available; the `"instantaneous"` and donor-based `"rosenbrock"` modes are
+1-moment-only.
+"""
+function get_microphysics_tendency_mode_2m(parsed_args, n_substeps)
+    BMT = CM.BulkMicrophysicsTendencies
+    mode_name = parsed_args["microphysics_averaging_mode"]
+    if mode_name == "substepped" || mode_name == "linearized"
+        # `linearized` is the default; for 2M+P3 it maps to the explicit
+        # substep-averaged mode (there is no donor-linearized 2M+P3 scheme).
+        BMT.SubsteppedAverage(; n_substeps)
+    elseif mode_name == "rosenbrock_exact"
+        BMT.rosenbrock_exact(; n_substeps)
+    else
         error(
-            """Unknown microphysics_averaging_mode `$mode_name`. \
-            Expected: "instantaneous", "linearized", "rosenbrock", or "rosenbrock_exact".""",
+            "Unsupported `microphysics_averaging_mode` `$mode_name` for the 2-moment model. \
+            Expected: `substepped` (or `linearized`, the default) or `rosenbrock_exact`. \
+            The `instantaneous` and donor-based `rosenbrock` modes are 1-moment-only.",
         )
     end
 end

@@ -243,7 +243,7 @@ quadrature_order:
   help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 3"
   value: 3
 microphysics_averaging_mode:
-  help: "1-moment bulk-tendency averaging mode [`instantaneous`, `linearized` (default), `rosenbrock`, `rosenbrock_exact`]"
+  help: "Bulk-tendency averaging mode. 1-moment: [`instantaneous`, `linearized` (default), `rosenbrock`, `rosenbrock_exact`]. 2-moment + P3 (no donor matrix): [`substepped` (explicit; also selected by the `linearized` default), `rosenbrock_exact`]."
   value: "linearized"
 microphysics_n_substeps:
   help: "Number of susbteps for time averaging bulk microphysics tendencies without subgrid-scale quadrature. Default: 3"

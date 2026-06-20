@@ -55,3 +55,28 @@ import ClimaAtmos as CA
         FT,
     )
 end
+
+@testset "2M+P3 bulk-tendency averaging mode is config-selectable" begin
+    pa(m) =
+        CA.AtmosConfig(
+            Dict(
+                "microphysics_model" => "2M",
+                "microphysics_averaging_mode" => m,
+                "microphysics_n_substeps" => 5,
+            ),
+            job_id = "test_2m_avg_$(m)",
+        ).parsed_args
+    # global default `linearized` and the explicit `substepped` both map to the
+    # explicit SubsteppedAverage for 2M+P3 (no donor-linearized 2M scheme)
+    for m in ("linearized", "substepped")
+        tm = CA.get_microphysics_model(pa(m)).tendency_mode
+        @test nameof(typeof(tm)) == :SubsteppedAverage
+        @test tm.n_substeps == 5
+    end
+    # rosenbrock_exact selects the exact-Jacobian linearized-implicit mode
+    @test nameof(typeof(CA.get_microphysics_model(pa("rosenbrock_exact")).tendency_mode)) ==
+          :RosenbrockAverage
+    # 1-moment-only modes are rejected for 2M+P3
+    @test_throws ErrorException CA.get_microphysics_model(pa("instantaneous"))
+    @test_throws ErrorException CA.get_microphysics_model(pa("rosenbrock"))
+end
