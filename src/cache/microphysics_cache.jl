@@ -936,9 +936,16 @@ function set_microphysics_tendency_cache!(
     return _fill_2m_tendency_cache_edmf!(Y, p, mp2m, tm)
 end
 function _fill_2m_tendency_cache_edmf!(
-    Y, p, ::NonEquilibriumMicrophysics2M, tm::PrognosticEDMFX,
+    Y, p, mp2m::NonEquilibriumMicrophysics2M, tm::PrognosticEDMFX,
 )
     (; dt) = p
+    # Substep-averaging mode (shared with the grid-mean fill). Routing each
+    # subdomain's BMT call through the mode means a selected SubsteppedAverage /
+    # RosenbrockAverage substeps and applies its saturation-adjustment + positivity
+    # limiter in every subdomain, not only the grid mean. With the substep callback
+    # on, this fill runs once per step, so the cost is `nsub` evaluations per
+    # subdomain per cell, once per step.
+    mode = mp2m.tendency_mode
     thp = CAP.thermodynamics_params(p.params)
     cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
@@ -973,27 +980,12 @@ function _fill_2m_tendency_cache_edmf!(
         ᶜ∂mp_∂tʲ = ᶜmp_tendencyʲs.:($j)
         ᶜYʲ = Y.c.sgsʲs.:($j)
         @. ᶜ∂mp_∂tʲ = BMT.bulk_microphysics_tendencies(
-            BMT.Microphysics2Moment(), cm2p, thp,
+            mode, BMT.Microphysics2Moment(), cm2p, thp,
             ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
             ᶜYʲ.q_lcl, ᶜYʲ.n_lcl, ᶜYʲ.q_rai, ᶜYʲ.n_rai,
             ᶜYʲ.q_ice, ᶜYʲ.n_ice, ᶜYʲ.q_rim, ᶜYʲ.b_rim,
-            ᶜlogλʲs.:($$j),
+            ᶜlogλʲs.:($$j), dt,
         )
-        # Coupled-sink limiting on warm-rain pairs, so dn_ice_dt is preserved.
-        ᶜf_liq = @. lazy(
-            coupled_sink_limit_factor(
-                ᶜ∂mp_∂tʲ.dq_lcl_dt, ᶜ∂mp_∂tʲ.dn_lcl_dt, ᶜYʲ.q_lcl, ᶜYʲ.n_lcl, dt,
-            ),
-        )
-        ᶜf_rai = @. lazy(
-            coupled_sink_limit_factor(
-                ᶜ∂mp_∂tʲ.dq_rai_dt, ᶜ∂mp_∂tʲ.dn_rai_dt, ᶜYʲ.q_rai, ᶜYʲ.n_rai, dt,
-            ),
-        )
-        @. ᶜ∂mp_∂tʲ.dq_lcl_dt *= ᶜf_liq
-        @. ᶜ∂mp_∂tʲ.dn_lcl_dt *= ᶜf_liq
-        @. ᶜ∂mp_∂tʲ.dq_rai_dt *= ᶜf_rai
-        @. ᶜ∂mp_∂tʲ.dn_rai_dt *= ᶜf_rai
         # Aerosol activation
         ᶜwʲ = @. lazy(max(0, w_component(Geometry.WVector(ᶜuʲs.:($$j)))))
         @. ᶜ∂mp_∂tʲ.dn_lcl_dt += aerosol_activation_sources(
@@ -1022,26 +1014,12 @@ function _fill_2m_tendency_cache_edmf!(
     # Environment mean or quadrature sum over the SGS fluctuations
     # TODO - looks like only mean version is implemented now
     @. ᶜmp_tendency⁰ = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(), cm2p, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
+        mode, BMT.Microphysics2Moment(), cm2p, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
         ᶜq_lcl⁰, ᶜn_lcl⁰, ᶜq_rai⁰, ᶜn_rai⁰,
-        ᶜq_ice⁰, ᶜn_ice⁰, ᶜq_rim⁰, ᶜb_rim⁰, ᶜlogλ⁰,
+        ᶜq_ice⁰, ᶜn_ice⁰, ᶜq_rim⁰, ᶜb_rim⁰, ᶜlogλ⁰, dt,
     )
-    ᶜf_liq⁰ = @. lazy(
-        coupled_sink_limit_factor(
-            ᶜmp_tendency⁰.dq_lcl_dt, ᶜmp_tendency⁰.dn_lcl_dt,
-            ᶜq_lcl⁰, ᶜn_lcl⁰, dt,
-        ),
-    )
-    ᶜf_rai⁰ = @. lazy(
-        coupled_sink_limit_factor(
-            ᶜmp_tendency⁰.dq_rai_dt, ᶜmp_tendency⁰.dn_rai_dt,
-            ᶜq_rai⁰, ᶜn_rai⁰, dt,
-        ),
-    )
-    @. ᶜmp_tendency⁰.dq_lcl_dt *= ᶜf_liq⁰
-    @. ᶜmp_tendency⁰.dn_lcl_dt *= ᶜf_liq⁰
-    @. ᶜmp_tendency⁰.dq_rai_dt *= ᶜf_rai⁰
-    @. ᶜmp_tendency⁰.dn_rai_dt *= ᶜf_rai⁰
+    # The mode's substep limiter and positivity floor replace the per-pair
+    # warm-rain mass and number sink limiter here.
     # Aerosol activation
     # TODO - make it part of BMT
     # TODO - should be included in limiting
