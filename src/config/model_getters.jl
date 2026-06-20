@@ -27,10 +27,8 @@ end
 """
     get_microphysics_tendency_mode_1m(parsed_args, n_substeps)
 
-Map the `microphysics_averaging_mode` config string to the corresponding
-1-moment bulk-tendency averaging mode from
-`CloudMicrophysics.BulkMicrophysicsTendencies`, carrying `n_substeps` (ignored
-by `Instantaneous`, which takes no substeps).
+Return the 1-moment bulk-tendency averaging mode for the
+`microphysics_averaging_mode` config string.
 """
 function get_microphysics_tendency_mode_1m(parsed_args, n_substeps)
     BMT = CM.BulkMicrophysicsTendencies

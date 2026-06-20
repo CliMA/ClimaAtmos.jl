@@ -354,7 +354,6 @@ add_diagnostic_variable!(short_name = "cli", units = "kg kg^-1",
 ###
 # P3 ice diagnostics (2-moment + P3 only; no CMIP standard names)
 ###
-# Ice number specific content (3d)
 compute_ni(state, cache, time) =
     compute_ni(state, cache, time, cache.atmos.microphysics_model)
 compute_ni(_, _, _, model) = error_diagnostic_variable("ni", model)
@@ -366,7 +365,6 @@ add_diagnostic_variable!(short_name = "ni", units = "kg⁻¹",
     compute = compute_ni,
 )
 
-# Rime mass specific content (3d)
 compute_qrim(state, cache, time) =
     compute_qrim(state, cache, time, cache.atmos.microphysics_model)
 compute_qrim(_, _, _, model) = error_diagnostic_variable("qrim", model)
@@ -390,7 +388,6 @@ add_diagnostic_variable!(short_name = "frim", units = "",
     compute = compute_frim,
 )
 
-# Rime density = q_rim / b_rim (3d) [kg m^-3]
 compute_rhorim(state, cache, time) =
     compute_rhorim(state, cache, time, cache.atmos.microphysics_model)
 compute_rhorim(_, _, _, model) = error_diagnostic_variable("rhorim", model)
