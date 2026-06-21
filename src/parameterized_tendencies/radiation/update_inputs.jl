@@ -5,6 +5,8 @@ import ClimaUtilities.TimeVaryingInputs: evaluate!
 import CloudMicrophysics as CM
 import ..Parameters as CAP
 import ..PrescribedCloudInRadiation
+import ..InteractiveCloudInRadiation
+import ..NonEquilibriumMicrophysics2M
 import ..lazy
 
 update_atmospheric_state!(integrator) =
@@ -332,6 +334,19 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
             ᶜliquid_water_mass_concentration,
         )
 
+        # Cloud-droplet number concentration [m⁻³] fed to the Liu & Hallett
+        # (1997) effective radius.
+        ᶜN_liquid = radiation_cloud_liquid_droplet_number(
+            radiation_mode.cloud,
+            p.atmos.microphysics_model,
+            u.c,
+            cmc,
+            dust_aero_conc,
+            seasalt_aero_conc,
+            SO4_aero_conc,
+            lwp_col,
+        )
+
         @. ᶜreliq = ifelse(
             cloud_liquid_water_content > FT(0),
             CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
@@ -339,19 +354,16 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
                 u.c.ρ,
                 max(FT(0), cloud_liquid_water_content) /
                 max(eps(FT), cloud_fraction),
-                ml_N_cloud_liquid_droplets(
-                    (cmc,),
-                    dust_aero_conc,
-                    seasalt_aero_conc,
-                    SO4_aero_conc,
-                    lwp_col,
-                ),
+                ᶜN_liquid,
                 FT(0),
                 FT(0),
             ) * m_to_um_factor,
             FT(0),
         )
 
+        # TODO: derive a distribution-integrated P3 ice effective radius and use
+        # `ρn_ice` here; for now the ice effective radius is the constant assumed
+        # value for all microphysics models.
         @. ᶜreice = ifelse(
             cloud_ice_water_content > FT(0),
             CM.CloudDiagnostics.effective_radius_const(cmc.ice) *
@@ -363,6 +375,42 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
     return nothing
 end
 
+"""
+    radiation_cloud_liquid_droplet_number(cloud, microphysics_model, ᶜY, cmc,
+                                          c_dust, c_seasalt, c_SO4, lwp_col)
+
+Return the cloud-droplet number concentration [m⁻³] passed to the Liu & Hallett
+(1997) liquid effective radius in `update_cloud_properties!`, dispatched on the
+microphysics model and the radiation cloud source.
+
+Under 2-moment microphysics with interactive clouds this is the prognostic
+droplet number `ρn_lcl`. For every other combination (1M, 0M, or any model with
+clouds prescribed in radiation) it is the diagnostic aerosol-to-`Nd` relation
+[`ml_N_cloud_liquid_droplets`](@ref).
+"""
+radiation_cloud_liquid_droplet_number(
+    ::InteractiveCloudInRadiation,
+    ::NonEquilibriumMicrophysics2M,
+    ᶜY,
+    cmc,
+    c_dust,
+    c_seasalt,
+    c_SO4,
+    lwp_col,
+) = @. lazy(max(zero(ᶜY.ρ), ᶜY.ρn_lcl))
+
+radiation_cloud_liquid_droplet_number(
+    cloud,
+    microphysics_model,
+    ᶜY,
+    cmc,
+    c_dust,
+    c_seasalt,
+    c_SO4,
+    lwp_col,
+) = @. lazy(
+    ml_N_cloud_liquid_droplets((cmc,), c_dust, c_seasalt, c_SO4, lwp_col),
+)
 
 """
     ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
