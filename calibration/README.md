@@ -18,6 +18,12 @@ To reproduce the results, on the Caltech central cluster run
 
 ```sbatch calibration/experiments/sphere_held_suarez_rhoe_equilmoist/pipeline.sbatch```
 
+## Perfect SCM calibration
+
+A perfect single column model calibration experiment in set up in
+`experiments/perfect_scm`. For more information, see the `README.md` in
+`experiments/perfect_scm`.
+
 ## New Experiments
 
 To set up your own experiment, please follow the [setup guide](https://clima.github.io/ClimaCalibrate.jl/dev/atmos_setup_guide/).

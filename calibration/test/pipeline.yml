@@ -17,10 +17,10 @@ steps:
     command:
       - "echo $$JULIA_DEPOT_PATH"
 
-      - echo "--- Instantiate calibration/test"
-      - "julia --project=calibration/test -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.develop(;path=\".\")'"
-      - "julia --project=calibration/test -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=calibration/test -e 'using Pkg; Pkg.status()'"
+      - echo "--- Instantiate calibration/experiments/perfect_scm"
+      - "julia --project=calibration/experiments/perfect_scm -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.develop(;path=\".\")'"
+      - "julia --project=calibration/experiments/perfect_scm -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=calibration/experiments/perfect_scm -e 'using Pkg; Pkg.status()'"
 
     agents:
       slurm_cpus_per_task: 8
@@ -32,12 +32,11 @@ steps:
 
   - group: "Calibration"
     steps:
-      - label: "Calibration interface unit tests"
-        command: julia --project=calibration/test calibration/test/interface.jl
       - label: "end to end test"
-        command: julia --project=calibration/test calibration/test/e2e_test.jl
+        command: julia --project=calibration/experiments/perfect_scm calibration/experiments/perfect_scm/run_calibration.jl
         agents:
-          slurm_ntasks: 4
+          slurm_ntasks: 1
           slurm_cpus_per_task: 1
           slurm_mem: 32GB
-        artifact_paths: "calibration_end_to_end_test/*"
+          slurm_time: 00:45:00
+        artifact_paths: "perfect_scm_calibration/plots/*"
