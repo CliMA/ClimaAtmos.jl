@@ -1737,8 +1737,6 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
     make_plots_generic(output_paths, vars_lines; summary_files = [file_contour])
 end
 
-Larcform1Plots = Union{Val{:larcform1}, Val{:larcform1_1M}}
-
 # Catch-all for any job whose name begins with "larcform1"
 function make_plots(val::Val{S}, output_paths::Vector{<:AbstractString}) where {S}
     if startswith(String(S), "larcform1")
@@ -1770,7 +1768,7 @@ function meters_to_km(var)
     )
 end
 
-function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
+function make_plots(::Val{:larcform1}, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
 
     short_names_profile_requested = [
