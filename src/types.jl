@@ -158,6 +158,7 @@ struct TimeVaryingInsolation <: AbstractInsolation end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
 struct ExternalTVInsolation <: AbstractInsolation end
+struct Larcform1Insolation <: AbstractInsolation end
 
 """
     AbstractCloudInRadiation
@@ -577,33 +578,7 @@ function PrognosticEDMFX(;
     return PrognosticEDMFX{n_updrafts, prognostic_tke, FT}(area_fraction)
 end
 
-struct DiagnosticEDMFX{N, TKE, FT} <: AbstractEDMF
-    a_half::FT # WARNING: this should never be used outside of `specific`
-end
-DiagnosticEDMFX{N, TKE}(area_fraction::FT) where {N, TKE, FT} =
-    DiagnosticEDMFX{N, TKE, FT}(area_fraction)
-
-"""
-    DiagnosticEDMFX(; n_updrafts = 1, prognostic_tke = false, area_fraction)
-
-Create a DiagnosticEDMFX model with the specified number of updrafts, TKE configuration, and area fraction.
-
-# Arguments
-
-  - `n_updrafts::Int`: Number of updraft subdomains
-  - `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
-  - `area_fraction`: Area fraction at half levels (float type is inferred from this value)
-"""
-function DiagnosticEDMFX(;
-    n_updrafts = 1,
-    prognostic_tke = false,
-    area_fraction::FT,
-) where {FT}
-    return DiagnosticEDMFX{n_updrafts, prognostic_tke, FT}(area_fraction)
-end
-
 n_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
-n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::EDOnlyEDMFX) = 0
 n_mass_flux_subdomains(::Any) = 0
 
@@ -612,7 +587,6 @@ n_prognostic_mass_flux_subdomains(::Any) = 0
 
 use_prognostic_tke(::EDOnlyEDMFX) = true
 use_prognostic_tke(::PrognosticEDMFX{N, TKE}) where {N, TKE} = TKE
-use_prognostic_tke(::DiagnosticEDMFX{N, TKE}) where {N, TKE} = TKE
 use_prognostic_tke(::Any) = false
 
 abstract type AbstractEntrainmentModel end
@@ -637,7 +611,6 @@ Base.broadcastable(x::AbstractMicrophysicsModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
 Base.broadcastable(x::EDOnlyEDMFX) = tuple(x)
 Base.broadcastable(x::PrognosticEDMFX) = tuple(x)
-Base.broadcastable(x::DiagnosticEDMFX) = tuple(x)
 Base.broadcastable(x::AbstractEntrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractDetrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractSGSamplingType) = tuple(x)
@@ -1135,7 +1108,7 @@ Internal testing and calibration components for single-column setups:
 ## AtmosTurbconv
 
   - `edmfx_model`: EDMFXModel()
-  - `turbconv_model`: nothing, PrognosticEDMFX(), DiagnosticEDMFX(), EDOnlyEDMFX()
+  - `turbconv_model`: nothing, PrognosticEDMFX(), EDOnlyEDMFX()
   - `smagorinsky_lilly`: nothing or SmagorinskyLilly()
   - `amd_les`: nothing or AnisotropicMinimumDissipation()
   - `constant_horizontal_diffusion`: nothing or ConstantHorizontalDiffusion()

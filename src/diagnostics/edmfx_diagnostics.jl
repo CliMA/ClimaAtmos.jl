@@ -15,12 +15,6 @@ function compute_arup(state, cache, _, ::PrognosticEDMFX)
     return @. lazy(draft_area(ᶜρaʲ, ᶜρʲ))
 end
 
-function compute_arup(_, cache, _, ::DiagnosticEDMFX)
-    ᶜρaʲ = cache.precomputed.ᶜρaʲs.:1
-    ᶜρʲ = cache.precomputed.ᶜρʲs.:1
-    return @. lazy(draft_area(ᶜρaʲ, ᶜρʲ))
-end
-
 add_diagnostic_variable!(short_name = "arup", units = "",
     long_name = "Updraft Area Fraction",
     comments = "Area fraction of the first updraft",
@@ -35,7 +29,7 @@ compute_rhoaup(state, cache, time) =
 compute_rhoaup(_, _, _, turbconv_model) =
     error_diagnostic_variable("rhoaup", turbconv_model)
 
-compute_rhoaup(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
+compute_rhoaup(_, cache, _, ::PrognosticEDMFX) =
     cache.precomputed.ᶜρʲs.:1
 
 add_diagnostic_variable!(short_name = "rhoaup", units = "kg m^-3",
@@ -51,7 +45,7 @@ compute_waup(state, cache, time) =
     compute_waup(state, cache, time, cache.atmos.turbconv_model)
 compute_waup(_, _, _, turbconv_model) = error_diagnostic_variable("waup", turbconv_model)
 
-compute_waup(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
+compute_waup(_, cache, _, ::PrognosticEDMFX) =
     @. lazy(w_component(WVec(cache.precomputed.ᶜuʲs.:1)))
 
 add_diagnostic_variable!(short_name = "waup", units = "m s^-1",
@@ -67,7 +61,7 @@ compute_taup(state, cache, time) =
     compute_taup(state, cache, time, cache.atmos.turbconv_model)
 compute_taup(_, _, _, turbconv_model) = error_diagnostic_variable("taup", turbconv_model)
 
-compute_taup(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
+compute_taup(_, cache, _, ::PrognosticEDMFX) =
     cache.precomputed.ᶜTʲs.:1
 
 add_diagnostic_variable!(short_name = "taup", units = "K",
@@ -84,7 +78,7 @@ compute_thetaaup(state, cache, time) =
 compute_thetaaup(_, _, _, turbconv_model) =
     error_diagnostic_variable("thetaaup", turbconv_model)
 
-function compute_thetaaup(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX})
+function compute_thetaaup(_, cache, _, ::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = cache.precomputed
     return @. lazy(
@@ -108,7 +102,7 @@ compute_haup(state, cache, time) =
     compute_haup(state, cache, time, cache.atmos.turbconv_model)
 compute_haup(_, _, _, turbconv_model) = error_diagnostic_variable("haup", turbconv_model)
 
-function compute_haup(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX})
+function compute_haup(_, cache, _, ::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     (; ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = cache.precomputed
     return @. lazy(
@@ -136,7 +130,7 @@ compute_husup(_, _, _, _, _) =
                                with a moist model and with EDMFX")
 
 # TODO: use the actual q_tot
-compute_husup(_, cache, _, ::MoistMicrophysics, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
+compute_husup(_, cache, _, ::MoistMicrophysics, ::PrognosticEDMFX) =
     cache.precomputed.ᶜq_tot_nonnegʲs.:1
 
 add_diagnostic_variable!(short_name = "husup", units = "kg kg^-1",
@@ -156,7 +150,7 @@ compute_hurup(_, _, _, _, _) =
                                and with a moist model and with EDMFX")
 
 function compute_hurup(_, cache, _,
-    ::MoistMicrophysics, ::Union{PrognosticEDMFX, DiagnosticEDMFX},
+    ::MoistMicrophysics, ::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     (; ᶜTʲs, ᶜp, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = cache.precomputed
@@ -185,14 +179,11 @@ compute_clwup(_, _, _, _, _) =
                                and with a moist model and with EDMFX")
 
 compute_clwup(_, cache, _,
-    ::EquilibriumMicrophysics0M, ::Union{PrognosticEDMFX, DiagnosticEDMFX},
+    ::EquilibriumMicrophysics0M, ::PrognosticEDMFX,
 ) = cache.precomputed.ᶜq_liqʲs.:1
 
 compute_clwup(state, _, _, ::NonEquilibriumMicrophysics, ::PrognosticEDMFX) =
     (state.c.sgsʲs.:1).q_lcl
-
-compute_clwup(_, cache, _, ::NonEquilibriumMicrophysics, ::DiagnosticEDMFX) =
-    cache.precomputed.ᶜq_lclʲs.:1
 
 add_diagnostic_variable!(
     short_name = "clwup", units = "kg kg^-1",
@@ -234,13 +225,11 @@ compute_cliup(_, _, _, _, _) =
                                with a moist model and with EDMFX")
 
 compute_cliup(_, cache, _,
-    ::EquilibriumMicrophysics0M, ::Union{PrognosticEDMFX, DiagnosticEDMFX},
+    ::EquilibriumMicrophysics0M, ::PrognosticEDMFX,
 ) = cache.precomputed.ᶜq_iceʲs.:1
 
 compute_cliup(state, _, _, ::NonEquilibriumMicrophysics, ::PrognosticEDMFX) =
     (state.c.sgsʲs.:1).q_icl
-compute_cliup(_, cache, _, ::NonEquilibriumMicrophysics, ::DiagnosticEDMFX) =
-    cache.precomputed.ᶜq_iclʲs.:1
 
 add_diagnostic_variable!(short_name = "cliup", units = "kg kg^-1",
     long_name = "Updraft Mass Fraction of Cloud Ice",
@@ -264,8 +253,6 @@ compute_husraup(_, _, _, _, _) =
 compute_husraup(state, _, _,
     ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}, ::PrognosticEDMFX,
 ) = (state.c.sgsʲs.:1).q_rai
-compute_husraup(_, cache, _, ::NonEquilibriumMicrophysics1M, ::DiagnosticEDMFX) =
-    cache.precomputed.ᶜq_raiʲs.:1
 
 add_diagnostic_variable!(short_name = "husraup", units = "kg kg^-1",
     long_name = "Updraft Mass Fraction of Rain",
@@ -308,8 +295,6 @@ compute_hussnup(_, _, _, _, _) =
 compute_hussnup(state, _, _,
     ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}, ::PrognosticEDMFX,
 ) = (state.c.sgsʲs.:1).q_sno
-compute_hussnup(_, cache, _, ::NonEquilibriumMicrophysics1M, ::DiagnosticEDMFX) =
-    cache.precomputed.ᶜq_snoʲs.:1
 
 add_diagnostic_variable!(short_name = "hussnup", units = "kg kg^-1",
     long_name = "Updraft Mass Fraction of Snow",
@@ -339,8 +324,6 @@ function compute_entr(state, cache, _, ::PrognosticEDMFX)
     )
 end
 
-compute_entr(_, cache, _, ::DiagnosticEDMFX) = cache.precomputed.ᶜentrʲs.:1
-
 add_diagnostic_variable!(short_name = "entr", units = "s^-1",
     long_name = "Entrainment rate",
     comments = "Entrainment rate of the first updraft",
@@ -352,7 +335,7 @@ compute_turbentr(state, cache, time) =
 compute_turbentr(_, _, _, turbconv_model) =
     error_diagnostic_variable("turbentr", turbconv_model)
 
-compute_turbentr(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
+compute_turbentr(_, cache, _, ::PrognosticEDMFX) =
     cache.precomputed.ᶜturb_entrʲs.:1
 
 add_diagnostic_variable!(short_name = "turbentr", units = "s^-1",
@@ -406,8 +389,6 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
     )
 end
 
-compute_detr(_, cache, _, ::DiagnosticEDMFX) = cache.precomputed.ᶜdetrʲs.:1
-
 add_diagnostic_variable!(short_name = "detr", units = "s^-1",
     long_name = "Detrainment rate",
     comments = "Detrainment rate of the first updraft",
@@ -437,9 +418,6 @@ function compute_aren(state, cache, _, turbconv_model::PrognosticEDMFX)
     )
     return @. lazy(draft_area(ᶜρa⁰, ᶜρ⁰))
 end
-
-compute_aren(_, cache, _, ::DiagnosticEDMFX) =
-    @. lazy(1 - draft_area(cache.precomputed.ᶜρaʲs.:1, cache.precomputed.ᶜρʲs.:1))
 
 add_diagnostic_variable!(short_name = "aren", units = "",
     long_name = "Environment Area Fraction",
@@ -481,7 +459,7 @@ compute_waen(state, cache, time) =
     compute_waen(state, cache, time, cache.atmos.turbconv_model)
 compute_waen(_, _, _, turbconv_model) = error_diagnostic_variable("waen", turbconv_model)
 
-compute_waen(_, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
+compute_waen(_, cache, _, ::PrognosticEDMFX) =
     @. lazy(w_component(WVec(cache.precomputed.ᶜu⁰)))
 
 add_diagnostic_variable!(short_name = "waen", units = "m s^-1",
@@ -745,7 +723,7 @@ compute_tke(state, cache, time) =
     compute_tke(state, cache, time, cache.atmos.turbconv_model)
 compute_tke(_, _, _, turbconv_model) = error_diagnostic_variable("tke", turbconv_model)
 
-compute_tke(state, _, _, ::Union{EDOnlyEDMFX, PrognosticEDMFX, DiagnosticEDMFX}) =
+compute_tke(state, _, _, ::Union{EDOnlyEDMFX, PrognosticEDMFX}) =
     @. lazy(specific(state.c.ρtke, state.c.ρ))
 
 add_diagnostic_variable!(short_name = "tke", units = "m^2 s^-2",
@@ -759,7 +737,7 @@ add_diagnostic_variable!(short_name = "tke", units = "m^2 s^-2",
 compute_lmixw(state, cache, time) =
     compute_lmixw(state, cache, time, cache.atmos.turbconv_model)
 compute_lmixw(_, _, _, turbconv_model) = error_diagnostic_variable("lmixw", turbconv_model)
-compute_lmixw(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
+compute_lmixw(state, cache, _, ::PrognosticEDMFX) =
     ᶜmixing_length(state, cache, Val(:wall))
 
 add_diagnostic_variable!(short_name = "lmixw", units = "m",
@@ -775,7 +753,7 @@ compute_lmixtke(state, cache, time) =
 compute_lmixtke(_, _, _, turbconv_model) =
     error_diagnostic_variable("lmixtke", turbconv_model)
 
-compute_lmixtke(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
+compute_lmixtke(state, cache, _, ::PrognosticEDMFX) =
     ᶜmixing_length(state, cache, Val(:tke))
 
 add_diagnostic_variable!(short_name = "lmixtke", units = "m",
@@ -790,7 +768,7 @@ compute_lmixb(state, cache, time) =
     compute_lmixb(state, cache, time, cache.atmos.turbconv_model)
 compute_lmixb(_, _, _, turbconv_model) = error_diagnostic_variable("lmixb", turbconv_model)
 
-compute_lmixb(state, cache, _, ::Union{PrognosticEDMFX, DiagnosticEDMFX}) =
+compute_lmixb(state, cache, _, ::PrognosticEDMFX) =
     ᶜmixing_length(state, cache, Val(:buoy))
 
 add_diagnostic_variable!(short_name = "lmixb", units = "m",
@@ -814,7 +792,7 @@ compute_edt(state, _, _, model::DecayWithHeightDiffusion, ::Nothing) =
     ᶜcompute_eddy_diffusivity_coefficient(state.c.ρ, model)
 
 function compute_edt(state, cache, _,
-    ::Nothing, ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX},
+    ::Nothing, ::Union{PrognosticEDMFX, EDOnlyEDMFX},
 )
     turbconv_params = CAP.turbconv_params(cache.params)
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
@@ -857,7 +835,7 @@ function compute_evu(
     cache,
     _,
     ::Nothing,
-    ::Union{PrognosticEDMFX, DiagnosticEDMFX, EDOnlyEDMFX},
+    ::Union{PrognosticEDMFX, EDOnlyEDMFX},
 )
     turbconv_params = CAP.turbconv_params(cache.params)
     ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
@@ -871,4 +849,26 @@ add_diagnostic_variable!(short_name = "evu", units = "m^2 s^-1",
     standard_name = "atmosphere_momentum_diffusivity",
     comments = "Vertical diffusion coefficient for momentum due to parameterized eddies",
     compute = compute_evu,
+)
+
+###
+# Updraft passive gas tracer A (3d)
+###
+compute_q_gas_Aup(state, cache, time) =
+    compute_q_gas_Aup(
+        state, cache, time,
+        cache.atmos.turbconv_model, cache.atmos.chemistry_model,
+    )
+compute_q_gas_Aup(_, _, _, turbconv_model, chemistry_model) =
+    error_diagnostic_variable("q_gas_Aup", (turbconv_model, chemistry_model))
+
+compute_q_gas_Aup(state, _, _, ::PrognosticEDMFX, ::GasPhaseChem) =
+    (state.c.sgsʲs.:1).q_gas_A
+
+add_diagnostic_variable!(
+    short_name = "q_gas_Aup",
+    units = "kg kg^-1",
+    long_name = "Updraft Passive Gas Tracer A Concentration",
+    comments = "Concentration of passive gas tracer A in the first updraft",
+    compute = compute_q_gas_Aup,
 )

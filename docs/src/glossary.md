@@ -33,9 +33,8 @@ These are accessed through the integrator after a run, e.g.
   implicit part is handled by the [Implicit Solver](@ref).
 - **ITime** — the integer time type used for reproducible, exactly representable
   simulation times. See [ITime](@ref).
-- **EDMF** — the Eddy-Diffusivity Mass-Flux turbulence/convection scheme, in
-  [prognostic](@ref "Sub-grid scale equations") and
-  [diagnostic](@ref "Diagnostic EDMF equations") forms.
+- **EDMF** — the Eddy-Diffusivity Mass-Flux turbulence/convection scheme, see
+  [prognostic edmf equations](@ref "Sub-grid scale equations")
 - **Diagnostics** — derived output variables, as opposed to the prognostic state
   `Y`. See [Computing and saving diagnostics](@ref) and the catalog of
   [available diagnostic variables](@ref "Available diagnostic variables").

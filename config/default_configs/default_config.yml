@@ -405,10 +405,13 @@ prescribed_aerosols:
 time_varying_trace_gases:
   help: "Trace gases that vary in time, e.g. [\"CO2\", \"O3\"]. Currently, only \"CO2\" and \"O3\" are supported. All other trace gases set fixed to default values from ClimaParams."
   value: []
+chemistry_model:
+  help: "Chemistry model [`~` (default, no passive tracers), `passive` (enables passive tracer A)]"
+  value: ~
 
 # EDMF configuration
 turbconv:
-  help: "Turbulence convection scheme [`nothing` (default), 'prognostic_edmfx', 'diagnostic_edmfx']"
+  help: "Turbulence convection scheme [`nothing` (default), 'prognostic_edmfx']"
   value: ~
 advection_test:
   help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"

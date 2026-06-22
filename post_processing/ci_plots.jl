@@ -1038,7 +1038,6 @@ AquaplanetPlots = Union{
     Val{:mpi_sphere_aquaplanet_rhoe_equil_clearsky},
     Val{:aquaplanet_equil_allsky_gw_raw},
     Val{:aquaplanet_nonequil_allsky_gw_res_2M},
-    Val{:rcemipii_sphere_diagnostic_edmfx},
     Val{:longrun_aquaplanet_allsky_0M},
     Val{:longrun_aquaplanet_allsky_diagedmf_0M},
     Val{:longrun_aquaplanet_allsky_progedmf_0M},
@@ -1271,19 +1270,6 @@ function make_plots(
     )
 end
 
-
-EDMFBoxPlots = Union{
-    Val{:diagnostic_edmfx_test_box},
-    Val{:diagnostic_edmfx_gabls_box},
-    Val{:diagnostic_edmfx_bomex_box},
-    Val{:diagnostic_edmfx_dycoms_rf01_box},
-    Val{:diagnostic_edmfx_trmm_box_0M},
-    Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
-    Val{:prognostic_edmfx_bomex_box},
-    Val{:rcemipii_box_diagnostic_edmfx},
-    Val{:diagnostic_edmfx_trmm_stretched_box},
-}
-
 EDMFColumnPlots = Union{
     Val{:prognostic_edmfx_adv_test_column},
     Val{:prognostic_edmfx_trmm_column_0M},
@@ -1306,13 +1292,9 @@ EDMFColumnPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_rico_column_2M},
     Val{:prognostic_edmfx_trmm_column},
+    Val{:prognostic_edmfx_bomex_tracerA_column},
 }
 
-DiagEDMFBoxPlotsWithPrecip = Union{
-    Val{:diagnostic_edmfx_dycoms_rf02_box},
-    Val{:diagnostic_edmfx_rico_box},
-    Val{:diagnostic_edmfx_trmm_box},
-}
 """
     plot_edmf_vert_profile!(grid_loc, var_group)
 
@@ -1423,8 +1405,6 @@ end
 
 function make_plots(
     sim_type::Union{
-        EDMFBoxPlots,
-        DiagEDMFBoxPlotsWithPrecip,
         EDMFColumnPlots,
         EDMFColumnPlotsWithPrecip,
     },
@@ -1432,13 +1412,8 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
 
-    # Determine if this is a box or column type
-    is_box = sim_type isa Union{EDMFBoxPlots, DiagEDMFBoxPlotsWithPrecip}
-
     # Determine precipitation names based on type
-    if sim_type isa DiagEDMFBoxPlotsWithPrecip
-        precip_names = ("husra", "hussn", "husraup", "hussnup")
-    elseif sim_type isa EDMFColumnPlotsWithPrecip
+    if sim_type isa EDMFColumnPlotsWithPrecip
         if sim_type isa Val{:prognostic_edmfx_rico_column_2M}
             precip_names = (
                 "husra", "hussn", "husraup", "hussnup",
@@ -1455,8 +1430,13 @@ function make_plots(
         "wa", "waup", "ta", "taup", "hus", "husup", "arup", "tke", "ua",
         "thetaa", "thetaaup", "hur", "hurup", "lmix",
         "cl", "clw", "clwup", "cli", "cliup",
+        "q_gas_A", "q_gas_Aup",
         precip_names...,
     ]
+    short_names = filter(
+        n -> n in ClimaAnalysis.available_vars(simdirs[1]),
+        short_names,
+    )
     reduction_avg = "average"
     reduction_inst = "inst"
 
@@ -1493,12 +1473,7 @@ function make_plots(
                     ),
                 name_tuple,
             )
-            # For box types, slice to a point (x=0, y=0)
-            if is_box
-                return map(var -> slice(var, x = 0.0, y = 0.0), vars)
-            else
-                return vars
-            end
+            return vars
         end
 
     var_groups_z_avg =
@@ -1508,11 +1483,7 @@ function make_plots(
                     get(simdir; short_name, reduction = reduction_avg, period = period_avg),
                 name_tuple,
             )
-            if is_box
-                return map(var -> slice(var, x = 0.0, y = 0.0), vars)
-            else
-                return vars
-            end
+            return vars
         end
 
     var_groups_z = [
@@ -1578,9 +1549,6 @@ function make_plots(
                     reduction = reduction_inst,
                     period = period_inst,
                 )
-                if is_box
-                    var = slice(var, x = 0.0, y = 0.0)
-                end
                 return var
             end
 
@@ -1619,9 +1587,6 @@ function make_plots(
                 reduction = reduction_inst,
                 period = period_inst,
             )
-            if is_box
-                var = slice(var, x = 0.0, y = 0.0)
-            end
             return var
         end
     make_plots_generic(
@@ -1634,10 +1599,10 @@ function make_plots(
     )
 end
 
-EDMFSpherePlots =
-    Union{Val{:diagnostic_edmfx_aquaplanet}, Val{:prognostic_edmfx_aquaplanet}}
-
-function make_plots(::EDMFSpherePlots, output_paths::Vector{<:AbstractString})
+function make_plots(
+    ::Val{:prognostic_edmfx_aquaplanet},
+    output_paths::Vector{<:AbstractString},
+)
     simdirs = SimDir.(output_paths)
 
     short_names =
@@ -1770,4 +1735,149 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
         return rescale_time_to_min(var)
     end
     make_plots_generic(output_paths, vars_lines; summary_files = [file_contour])
+end
+
+Larcform1Plots = Union{Val{:larcform1}, Val{:larcform1_1M}}
+
+# Catch-all for any job whose name begins with "larcform1"
+function make_plots(val::Val{S}, output_paths::Vector{<:AbstractString}) where {S}
+    if startswith(String(S), "larcform1")
+        return make_plots(Val(:larcform1), output_paths)
+    end
+    @warn "No plot found for $val"
+end
+
+function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
+    simdirs = SimDir.(output_paths)
+
+    short_names_profile_requested = [
+        "ta", "thetaa", "pfull", "rhoa", "hus", "hur", "ua", "va", "wa",
+        "cl", "clw", "cli", "rlu", "rld", "husra", "hussn",
+        "arup", "waup", "taup", "thetaaup", "haup", "husup", "hurup",
+        "clwup", "cliup", "husraup", "hussnup",
+        "waen", "taen", "thetaaen", "haen", "husen", "huren", "clwen",
+        "clien", "husraen", "hussnen", "tke",
+        "entr", "detr", "lmix", "bgrad", "strain", "edt", "evu",
+    ]
+    short_names_timeseries_requested = [
+        "rlut", "rlus", "rlds", "evspsbl", "lwp", "clivi", "rsdt", "rlutcs",
+        "rldscs", "pr", "prsn", "hfss", "hfls", "ts", "tas",
+    ] # "sithick"
+
+    available_short_names = Set(String.(keys(simdirs[1].vars)))
+    short_names_2D =
+        filter(sn -> sn in available_short_names, short_names_profile_requested)
+    short_names_1D =
+        filter(sn -> sn in available_short_names, short_names_timeseries_requested)
+    reduction = "average"
+
+    function seconds_to_hours(var)
+        ClimaAnalysis.has_time(var) || return var
+        t_name = ClimaAnalysis.time_name(var)
+        if !haskey(var.dim_attributes, t_name) ||
+           !haskey(var.dim_attributes[t_name], "units")
+            ClimaAnalysis.Var.set_dim_units!(var, t_name, "s")
+        end
+        return ClimaAnalysis.Var.convert_dim_units(
+            var, t_name, "hr"; conversion_function = t -> t / 3600,
+        )
+    end
+
+    function meters_to_km(var)
+        zn = z_dim_name(var)
+        haskey(var.dims, zn) || return var
+        if !haskey(var.dim_attributes, zn) || !haskey(var.dim_attributes[zn], "units")
+            ClimaAnalysis.Var.set_dim_units!(var, zn, "m")
+        end
+        return ClimaAnalysis.Var.convert_dim_units(
+            var, zn, "km"; conversion_function = z -> z / 1000,
+        )
+    end
+
+    vars_2D = if isempty(short_names_2D)
+        []
+    else
+        map(
+            meters_to_km ∘ seconds_to_hours,
+            map_comparison(simdirs, short_names_2D) do simdir, short_name
+                var = get(simdir; short_name, reduction)
+                if haskey(var.dims, "x")
+                    var = slice(var; x = var.dims["x"][1])
+                end
+                if haskey(var.dims, "y")
+                    var = slice(var; y = var.dims["y"][1])
+                end
+                return var
+            end,
+        )
+    end
+
+    vars_1D = if isempty(short_names_1D)
+        []
+    else
+        map(
+            seconds_to_hours,
+            map_comparison(simdirs, short_names_1D) do simdir, short_name
+                var = get(simdir; short_name, reduction)
+                if haskey(var.dims, "x")
+                    var = slice(var; x = var.dims["x"][1])
+                end
+                if haskey(var.dims, "y")
+                    var = slice(var; y = var.dims["y"][1])
+                end
+                return var
+            end,
+        )
+    end
+
+    if !isempty(vars_2D)
+        make_plots_generic(
+            output_paths,
+            vars_2D,
+            time = FIRST_SNAP,
+            MAX_NUM_COLS = 2,
+            output_name = "summary_profiles_initial",
+            more_kwargs = YLINEARSCALE,
+        )
+
+        make_plots_generic(
+            output_paths,
+            vars_2D,
+            time = LAST_SNAP,
+            MAX_NUM_COLS = 2,
+            output_name = "summary_profiles_last",
+            more_kwargs = YLINEARSCALE,
+        )
+
+        make_plots_generic(
+            output_paths,
+            vars_2D,
+            MAX_NUM_COLS = 2,
+            output_name = "summary_timeheight",
+            more_kwargs = YLINEARSCALE,
+        )
+    end
+
+    if !isempty(vars_1D)
+        make_plots_generic(
+            output_paths,
+            vars_1D,
+            MAX_NUM_COLS = 2,
+            output_name = "summary_timeseries",
+        )
+    end
+
+    # Dedicated surface energy budget page (sea-ice / coupled runs)
+    surface_names =
+        ["ts", "hfss", "hfls", "rlds", "rlus", "rlut", "rlutcs", "pr", "prsn", "evspsbl"]
+    vars_surface = filter(v -> short_name(v) in surface_names, vars_1D)
+    if !isempty(vars_surface)
+        make_plots_generic(
+            output_paths,
+            vars_surface,
+            MAX_NUM_COLS = 2,
+            output_name = "summary_surface",
+        )
+    end
+
 end

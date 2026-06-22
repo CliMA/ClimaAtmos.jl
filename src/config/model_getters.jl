@@ -196,9 +196,11 @@ function get_insolation_form(parsed_args; setup_type = nothing)
         GCMDrivenInsolation()
     elseif insolation == "externaldriventv"
         ExternalTVInsolation()
+    elseif insolation == "larcform1"
+        Larcform1Insolation()
     else
         error(
-            """Unknown insolation `$insolation`. Expected: "idealized", "timevarying", "rcemipii", "gcmdriven", or "externaldriventv".""",
+            """Unknown insolation `$insolation`. Expected: "idealized", "timevarying", "rcemipii", "gcmdriven", "externaldriventv", or "larcform1".""",
         )
     end
 end
@@ -594,15 +596,13 @@ function get_turbconv_model(FT, parsed_args, turbconv_params)
     area_fraction = turbconv_params.min_area
     return if turbconv == "prognostic_edmfx"
         PrognosticEDMFX(; n_updrafts, prognostic_tke, area_fraction)
-    elseif turbconv == "diagnostic_edmfx"
-        DiagnosticEDMFX(; n_updrafts, prognostic_tke, area_fraction)
     elseif turbconv == "edonly_edmfx"
         EDOnlyEDMFX()
     elseif isnothing(turbconv) || turbconv == "edmfx"
         nothing
     else
         error(
-            """Unknown turbconv `$turbconv`. Expected: ~, "edmfx", "prognostic_edmfx", "diagnostic_edmfx", or "edonly_edmfx".""",
+            """Unknown turbconv `$turbconv`. Expected: ~, "edmfx", "prognostic_edmfx", or "edonly_edmfx".""",
         )
     end
 end
@@ -868,4 +868,18 @@ function AtmosSurface(
     return AtmosSurface(;
         flux_scheme, temperature, boundary_overrides, surface_albedo,
     )
+end
+
+function AtmosChem(config::AtmosConfig)
+    chem = config.parsed_args["chemistry_model"]
+    chemistry_model = if isnothing(chem)
+        nothing
+    elseif chem == "passive"
+        GasPhaseChem()
+    else
+        error(
+            """Unknown chemistry_model `$chem`. Expected: ~ | "passive".""",
+        )
+    end
+    return AtmosChem(; chemistry_model)
 end

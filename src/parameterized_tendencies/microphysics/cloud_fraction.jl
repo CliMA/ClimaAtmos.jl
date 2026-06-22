@@ -222,7 +222,7 @@ function set_covariance_cache!(Y, p, thermo_params)
     # NOTE: gradients must be precomputed when using compute_gm_mixing_length
     # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
     ᶜmixing_length_field =
-        turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX ?
+        turbconv_model isa PrognosticEDMFX ?
         ᶜmixing_length(Y, p) :
         compute_gm_mixing_length(Y, p)
 
@@ -804,7 +804,7 @@ _get_condensate_means(Y, p, turbconv_model, ::NonEquilibriumMicrophysics) =
 Retrieve grid-mean cloud condensate for EquilibriumMicrophysics0M.
 
 For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq⁰, ᶜq_ice⁰).
-Otherwise (including DiagnosticEDMFX), uses grid-scale precomputed condensate.
+Otherwise, uses grid-scale precomputed condensate.
 
 # Returns
 
@@ -826,14 +826,14 @@ end
 Retrieve grid-mean cloud condensate for NonEquilibriumMicrophysics.
 
 For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq⁰, ᶜq_ice⁰).
-Otherwise (including DiagnosticEDMFX), computes cloud-only condensate from prognostic variables.
+Otherwise, computes cloud-only condensate from prognostic variables.
 
 # Returns
 
 Tuple: `(ᶜq_lcl_mean, ᶜq_icl_mean)` as lazy field expressions.
 """
 function _get_condensate_means_nonequil(Y, p, turbconv_model)
-    if turbconv_model isa PrognosticEDMFX # TODO Shouldn't we do this for DiagnosticEDMFX too?
+    if turbconv_model isa PrognosticEDMFX
         (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
         return ᶜq_liq⁰, ᶜq_ice⁰
     else
@@ -852,10 +852,6 @@ For PrognosticEDMFX:
 
  1. Weights environment cloud diagnostics by environment area fraction
  2. Adds updraft contributions weighted by their respective area fractions
-
-For DiagnosticEDMFX:
-
- 1. Adds updraft contributions (environment area fraction assumed = 1)
 
 Updraft cloud fraction is binary: 1 if updraft contains condensate, 0 otherwise.
 """
@@ -880,13 +876,11 @@ function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
     end
 
     # Add contributions from the updrafts if using EDMF
-    if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
+    if turbconv_model isa PrognosticEDMFX
         n = n_mass_flux_subdomains(turbconv_model)
         (; ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
         for j in 1:n
-            ᶜρaʲ =
-                turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
-                p.precomputed.ᶜρaʲs.:($j)
+            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
 
             @. p.precomputed.ᶜcloud_fraction +=
                 ifelse(
@@ -940,7 +934,7 @@ function set_ml_cloud_fraction!(
 )
     # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
     ᶜmixing_length_lazy =
-        turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX ?
+        turbconv_model isa PrognosticEDMFX ?
         ᶜmixing_length(Y, p) :
         compute_gm_mixing_length(Y, p)
 

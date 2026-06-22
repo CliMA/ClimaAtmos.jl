@@ -36,7 +36,7 @@ A file under `src/parameterized_tendencies/` should not contain orchestration lo
 
 ## Configuration
 
-- Config files use `.yml` and usually encode scenario/family in the filename, e.g. `single_column_*`, `diagnostic_edmfx_*`, `prognostic_edmfx_*`.
+- Config files use `.yml` and usually encode scenario/family in the filename, e.g. `single_column_*`, `prognostic_edmfx_*`.
 - Config wiring is layered: default config loads first, then each repeated `--config_file` overlay is merged in order, with later files winning on conflicts.
 - Common pattern: one numerics file from `config/common_configs/` plus one scenario file from `config/model_configs/` or another config family.
 - YAML can point at parameter TOML via `toml: [toml/... ]`.
@@ -50,7 +50,7 @@ A file under `src/parameterized_tendencies/` should not contain orchestration lo
 | Change area | Test group | Example Buildkite job |
 |:---|:---|:---|
 | Prognostic equations | `dynamics` | `sphere_baroclinic_wave_rhoe` |
-| Microphysics / EDMF | `parameterizations` | `diagnostic_edmfx_*` |
+| Microphysics / EDMF | `parameterizations` | `prognostic_edmfx_*` |
 | Restarts | `restarts` | `restart_*` |
 | Diagnostics | `diagnostics` | any `--diagnostics` job |
 | Config semantics | `infrastructure` | `config.jl` |

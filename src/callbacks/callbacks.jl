@@ -202,7 +202,14 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     @. rrtmgp_model.cos_zenith = (1 + FT(0.3) * (1 - 3 * sind(latitude)^2)) * FT(0.5)
 end
 
-function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
+function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)
+    FT = Spaces.undertype(axes(Y.c))
+    (; rrtmgp_model) = p.radiation
+    rrtmgp_model.cos_zenith .= eps(FT) # polar night; keep μ>0 for RRTMGP
+    rrtmgp_model.toa_flux .= FT(0)
+end
+
+function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     FT = Spaces.undertype(axes(Y.c))
     params = p.params
     insolation_params = CAP.insolation_params(params)

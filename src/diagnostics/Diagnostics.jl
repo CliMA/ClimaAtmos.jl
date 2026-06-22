@@ -44,11 +44,13 @@ import ..DecayWithHeightDiffusion
 # turbconv_model
 import ..EDOnlyEDMFX
 import ..PrognosticEDMFX
-import ..DiagnosticEDMFX
 
 # gravitywave_models
 import ..NonOrographicGravityWave
 import ..OrographicGravityWave
+
+# chemistry_model
+import ..GasPhaseChem
 
 # surface temperature
 import ..SurfaceConditions

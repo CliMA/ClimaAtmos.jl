@@ -52,6 +52,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         sponge = AtmosSponge(config, params),
         surface = AtmosSurface(config, params, FT; setup_type),
         numerics = AtmosNumerics(config, FT),
+        chemistry = AtmosChem(config),
         vertical_diffusion,
         disable_surface_flux_tendency = pa["disable_surface_flux_tendency"],
     )
@@ -172,7 +173,8 @@ function get_setup_type(parsed_args, thermo_params)
             perturb = parsed_args["perturb_initstate"],
             deep_atmosphere = parsed_args["deep_atmosphere"],
         )
-    elseif ic_name in ("Soares", "GATE_III", "DYCOMS_RF01", "DYCOMS_RF02", "TRMM_LBA")
+    elseif ic_name in
+           ("Soares", "GATE_III", "DYCOMS_RF01", "DYCOMS_RF02", "TRMM_LBA", "Larcform1")
         return getproperty(Setups, Symbol(ic_name))(;
             prognostic_tke = parsed_args["prognostic_tke"],
             thermo_params,

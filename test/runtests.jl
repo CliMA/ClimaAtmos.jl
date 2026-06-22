@@ -35,6 +35,7 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
     @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
     @safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
+    @safetestset "Larcform1 setup" begin @time include("larcform1.jl") end
 
     # Config tests
     @safetestset "Model getters" begin @time include("config/model_from_config.jl") end

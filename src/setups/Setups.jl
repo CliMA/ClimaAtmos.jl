@@ -34,9 +34,9 @@ import ..NonEquilibriumMicrophysics2MP3
 import ..NonEquilibriumMicrophysics
 import ..MoistMicrophysics
 import ..PrognosticEDMFX
-import ..DiagnosticEDMFX
 import ..EDOnlyEDMFX
 import ..n_mass_flux_subdomains
+import ..AbstractChemistryModel
 import ..Parameters.ClimaAtmosParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
 
@@ -261,6 +261,7 @@ include("GATE_III.jl")
 include("DYCOMS.jl")
 include("TRMM_LBA.jl")
 include("ISDAC.jl")
+include("Larcform1.jl")
 include("IsothermalProfile.jl")
 include("ConstantBuoyancyFrequencyProfile.jl")
 include("DryDensityCurrentProfile.jl")

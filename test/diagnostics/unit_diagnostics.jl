@@ -62,7 +62,6 @@ The `states` dict maps symbol keys to (Y, p) tuples. Available keys:
   :smag           — SmagorinskyLilly, sphere
   :m0_pedmfx      — 0M + PrognosticEDMFX, column
   :m1_pedmfx      — 1M + PrognosticEDMFX, column
-  :m1_dedmfx      — 1M + DiagnosticEDMFX, column
   :m2_pedmfx      — 2M + PrognosticEDMFX, column
   :vd             — VerticalDiffusion, column
   :dwh            — DecayWithHeightDiffusion, column
@@ -229,20 +228,24 @@ edmfx_model = CA.EDMFXModel(;
     scale_blending_method = CA.SmoothMinimumBlending(),
 )
 pedmfx = CA.PrognosticEDMFX(; area_fraction = tcp.min_area)
-dedmfx = CA.DiagnosticEDMFX(; area_fraction = tcp.min_area)
 
 model_0m_pedmfx = CA.AtmosModel(; microphysics_model = CA.EquilibriumMicrophysics0M(),
     turbconv_model = pedmfx, edmfx_model)
 model_1m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics1M(),
     turbconv_model = pedmfx, edmfx_model)
-model_1m_dedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics1M(),
-    turbconv_model = dedmfx, edmfx_model)
 model_2m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics2M(),
     turbconv_model = pedmfx, edmfx_model)
 (Y_0m_pedmfx, p_0m_pedmfx) = build_state_cache(FT, model_0m_pedmfx; grid = column);
 (Y_1m_pedmfx, p_1m_pedmfx) = build_state_cache(FT, model_1m_pedmfx; grid = column);
-(Y_1m_dedmfx, p_1m_dedmfx) = build_state_cache(FT, model_1m_dedmfx; grid = column);
 (Y_2m_pedmfx, p_2m_pedmfx) = build_state_cache(FT, model_2m_pedmfx; grid = column);
+
+## Chemistry (passive tracer A) + PrognosticEDMFX
+model_chem_pedmfx = CA.AtmosModel(;
+    microphysics_model = CA.EquilibriumMicrophysics0M(),
+    turbconv_model = pedmfx, edmfx_model,
+    chemistry_model = CA.GasPhaseChem(),
+)
+(Y_chem_pedmfx, p_chem_pedmfx) = build_state_cache(FT, model_chem_pedmfx; grid = column);
 
 ## VerticalDiffusion and DecayWithHeightDiffusion (no EDMF)
 vdp = CAP.vert_diff_params(params)
@@ -273,8 +276,8 @@ states = Dict(
     :smag           => (Y_smag,           p_smag),
     :m0_pedmfx      => (Y_0m_pedmfx,      p_0m_pedmfx),
     :m1_pedmfx      => (Y_1m_pedmfx,      p_1m_pedmfx),
-    :m1_dedmfx      => (Y_1m_dedmfx,      p_1m_dedmfx),
     :m2_pedmfx      => (Y_2m_pedmfx,      p_2m_pedmfx),
+    :chem_pedmfx    => (Y_chem_pedmfx,    p_chem_pedmfx),
     :vd             => (Y_vd,             p_vd),
     :dwh            => (Y_dwh,            p_dwh),
     :allsky         => (Y_allsky,         p_allsky),
@@ -356,17 +359,15 @@ VALID_CASES = [
     # ---------------------
     # edmfx_diagnostics.jl
     # ---------------------
-    # Union{PrognosticEDMFX, DiagnosticEDMFX}: single method
+    # PrognosticEDMFX
     cases(("rhoaup", "waup", "taup", "thetaaup", "haup", "husup"), :m0_pedmfx)...,
     cases(("hurup", "entr", "turbentr", "detr", "waen", "tke", "lmixw", "lmixtke", "lmixb"), :m0_pedmfx)...,
-    # PrognosticEDMFX only
     cases(("rhoaen", "taen", "thetaaen", "haen", "husen", "huren"), :m0_pedmfx)...,
-    # PrognosticEDMFX, DiagnosticEDMFX
-    cases(("arup", "aren"), (:m0_pedmfx, :m1_dedmfx))...,
-    # 0M+Union{P,D}, NonEq+PrognosticEDMFX, NonEq+DiagnosticEDMFX
-    cases(("clwup", "cliup"), (:m0_pedmfx, :m1_dedmfx, :m1_pedmfx))...,
-    # Union{1M,2M}+PrognosticEDMFX, 1M+DiagnosticEDMFX
-    cases(("husraup", "hussnup"), (:m1_pedmfx, :m1_dedmfx))...,
+    cases(("arup", "aren"), :m0_pedmfx)...,
+    # 0M+PrognosticEDMFX, NonEq+PrognosticEDMFX
+    cases(("clwup", "cliup"), (:m0_pedmfx, :m1_pedmfx))...,
+    # Union{1M,2M}+PrognosticEDMFX
+    cases(("husraup", "hussnup"), :m1_pedmfx)...,
     # 0M+PrognosticEDMFX, NonEq+PrognosticEDMFX
     cases(("clwen", "clien"), (:m0_pedmfx, :m1_pedmfx))...,
     # 1M+PrognosticEDMFX
@@ -375,6 +376,9 @@ VALID_CASES = [
     cases(("cdncup", "cdncen", "ncraup", "ncraen"), :m2_pedmfx)...,
     # VerticalDiffusion, DecayWithHeightDiffusion, EDMF
     cases(("edt", "evu"), (:vd, :dwh, :m0_pedmfx))...,
+    # GasPhaseChem + PrognosticEDMFX
+    case("q_gas_A",   :chem_pedmfx),
+    case("q_gas_Aup", :chem_pedmfx),
 
     # ---------------------------------------------------------------------------
     # microphysics_diagnostics.jl

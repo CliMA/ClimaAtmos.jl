@@ -128,8 +128,6 @@ TODO: Reduce the number of cached values by computing them on the fly.
 function precomputed_quantities(Y, atmos)
     FT = eltype(Y)
     @assert !(atmos.microphysics_model isa DryModel) ||
-            !(atmos.turbconv_model isa DiagnosticEDMFX)
-    @assert !(atmos.microphysics_model isa DryModel) ||
             !(atmos.turbconv_model isa PrognosticEDMFX)
     @assert isnothing(atmos.turbconv_model) ||
             isnothing(atmos.vertical_diffusion)
@@ -319,32 +317,6 @@ function precomputed_quantities(Y, atmos)
             ᶜq_snoʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
 
-    diagnostic_sgs_quantities =
-        atmos.turbconv_model isa DiagnosticEDMFX ?
-        (;
-            ᶜρaʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
-            ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
-            ᶜKʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜTʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_tot_nonnegʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜρʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜmseʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_totʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
-            ᶠnh_pressure³_buoyʲs = similar(Y.f, NTuple{n, CT3{FT}}),
-            ᶠnh_pressure³_dragʲs = similar(Y.f, NTuple{n, CT3{FT}}),
-            ᶠu³⁰ = similar(Y.f, CT3{FT}),
-            ᶜu⁰ = similar(Y.c, C123{FT}),
-            ᶜK⁰ = similar(Y.c, FT),
-            ρtke_flux = similar(Fields.level(Y.f, half), C3{FT}),
-            precipitation_sgs_quantities...,
-            diagnostic_precipitation_sgs_quantities...,
-        ) : (;)
     smagorinsky_lilly_quantities =
         if atmos.smagorinsky_lilly isa SmagorinskyLilly
             uvw_vec = UVW(FT(0), FT(0), FT(0))
@@ -378,7 +350,6 @@ function precomputed_quantities(Y, atmos)
         sgs_quantities...,
         advective_sgs_quantities...,
         edonly_quantities...,
-        diagnostic_sgs_quantities...,
         sedimentation_quantities...,
         precipitation_quantities...,
         surface_precip_fluxes...,
@@ -665,14 +636,8 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
     end
-    if turbconv_model isa DiagnosticEDMFX
-        set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
-        set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
-        set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
-        set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
-    end
     if turbconv_model isa EDOnlyEDMFX
-        set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
+        set_edonly_precomputed_quantities_env_closures!(Y, p, t)
         # TODO do I need env precipitation/cloud formation here?
     end
 

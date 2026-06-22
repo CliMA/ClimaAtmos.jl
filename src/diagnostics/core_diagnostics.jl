@@ -199,7 +199,6 @@ function compute_lmix(state, cache, _)
     # TODO: consolidate remaining mixing length types
     # (smagorinsky_lilly, dz) into a single function
     if isa(turbconv_model, PrognosticEDMFX) ||
-       isa(turbconv_model, DiagnosticEDMFX) ||
        isa(turbconv_model, EDOnlyEDMFX)
         return ᶜmixing_length(state, cache)
     end
@@ -1123,4 +1122,23 @@ add_diagnostic_variable!(
     long_name = "Environment Correlation of Total Specific Humidity and Temperature",
     units = "1",
     compute = compute_env_q_tot_temperature_correlation,
+)
+
+###
+# Passive gas tracer A (3d)
+###
+compute_q_gas_A(state, cache, time) =
+    compute_q_gas_A(state, cache, time, cache.atmos.chemistry_model)
+compute_q_gas_A(_, _, _, chemistry_model) =
+    error_diagnostic_variable("q_gas_A", chemistry_model)
+
+compute_q_gas_A(state, _, _, ::GasPhaseChem) =
+    @. lazy(specific(state.c.ρq_gas_A, state.c.ρ))
+
+add_diagnostic_variable!(
+    short_name = "q_gas_A",
+    units = "kg kg^-1",
+    long_name = "Passive Gas Tracer A Concentration",
+    comments = "Grid-mean specific concentration of passive gas tracer A",
+    compute = compute_q_gas_A,
 )

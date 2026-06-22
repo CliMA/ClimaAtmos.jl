@@ -279,21 +279,18 @@ draft_sum(f, sgsʲs) = unrolled_sum(f, sgsʲs)
 
 Computes the value of a quantity `ρaχ` in the environment subdomain by subtracting
 the sum of its values in all draft subdomains from the grid-scale value. Available
-for general variables in PrognosticEDMFX and environmental area (ᶜρa⁰) in DiagnosticEDMFX.
+for general variables in PrognosticEDMFX.
 
 This is based on the domain decomposition principle for density-area weighted
 quantities: `GridMean(ρχ) = Env(ρaχ) + Sum(Drafts(ρaχ))`.
 
-The function handles both PrognosticEDMFX and DiagnosticEDMFX models:
-
-  - For PrognosticEDMFX: Uses gs.sgsʲs to access draft subdomain states
-  - For DiagnosticEDMFX: Uses p.precomputed.ᶜρaʲs for draft area-weighted densities
+For PrognosticEDMFX: Uses gs.sgsʲs to access draft subdomain states
 
 Arguments:
 
   - `grid_scale_value`: The `ρa`-weighted grid-scale value of the quantity.
   - `f_draft`: A function that extracts the corresponding value from a draft subdomain state.
-  - `gs`: The grid-scale iteration object, which contains the draft subdomain states `gs.sgsʲs` (for PrognosticEDMFX) from the state `Y.c`, or `ᶜρaʲs` in the cache for DiagnosticEDMFX.
+  - `gs`: The grid-scale iteration object, which contains the draft subdomain states `gs.sgsʲs` (for PrognosticEDMFX) from the state `Y.c`.
   - `turbconv_model`: The turbulence convection model, used to determine how to access draft data.
 """
 function ᶜenv_value(grid_scale_value, f_draft, gs)
@@ -351,7 +348,7 @@ function ᶜspecific_env_value(χ_name, Y, p)
         # Denominator: ρa⁰ = ρ - Σ ρaʲ
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
-    elseif turbconv_model isa DiagnosticEDMFX || turbconv_model isa EDOnlyEDMFX
+    elseif turbconv_model isa EDOnlyEDMFX
         error("Not implemented. You should use grid mean values.")
     end
 
@@ -429,8 +426,7 @@ Arguments:
 - `ρ`: Grid-mean density.
 - `sgsʲs`: Iterable of draft subdomain quantities.
     - For `PrognosticEDMFX`: typically `Y.c.sgsʲs`
-    - For `DiagnosticEDMFX`: typically `p.precomputed.ᶜρaʲs`
-- `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`, or others).
+- `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, or others).
 
 Returns:
 - The area-weighted density of the environment (`ρa⁰`).
@@ -440,9 +436,6 @@ function ρa⁰(ρ, sgsʲs, turbconv_model)
     # ρ - Σ ρaʲ
     if turbconv_model isa PrognosticEDMFX
         return env_value(ρ, sgsʲ -> sgsʲ.ρa, sgsʲs)
-
-    elseif turbconv_model isa DiagnosticEDMFX
-        return env_value(ρ, ᶜρaʲ -> ᶜρaʲ, sgsʲs)
     else
         return ρ
     end
@@ -464,7 +457,7 @@ Arguments:
   - `ᶜρʲs`: Iterable of draft densities.
 
       + Typically `p.precomputed.ᶜρʲs`
-  - `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`, or others).
+  - `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, or others).
 
 Returns:
 
@@ -518,7 +511,7 @@ function ᶜspecific_env_mse(Y, p)
     if turbconv_model isa PrognosticEDMFX
         ρa⁰mse⁰ = ᶜenv_value(ᶜρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Y.c.sgsʲs)
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    elseif turbconv_model isa DiagnosticEDMFX || turbconv_model isa EDOnlyEDMFX
+    elseif turbconv_model isa EDOnlyEDMFX
         error("Not implemented. You should use grid mean values.")
     end
 
