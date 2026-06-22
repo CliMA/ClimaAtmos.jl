@@ -321,12 +321,12 @@ VALID_CASES = [
     # MoistMicrophysics, single path
     cases((
         "hus", "hur", "husv", "hussfc", "evspsbl", "hfls",
-        "clivi", "clvi", "prw", "hurvi", "cape", "mslp"
+        "clivi", "clwvi", "clvi", "prw", "hurvi", "cape", "mslp"
     ), :m0)...,
     # Union{DryModel, MoistMicrophysics}: single method
     cases(("pr", "prra", "prsn"), :dry)...,
     # EquilibriumMicrophysics0M (precomputed cache), NonEquilibriumMicrophysics (state)
-    cases(("clw", "cli", "clwvi", "lwp"), (:m0, :m1))...,
+    cases(("clw", "cli", "lwp", "iwp"), (:m0, :m1))...,
     # DryModel, MoistMicrophysics (different flux computation)
     case("hfss",  (:dry, :m0)),
     # Non-EDMF (Smagorinsky formula), EDMF (mixing-length closure)
@@ -445,7 +445,7 @@ end
 
 @testset "Model dispatch error paths" begin
     for name in ("hus", "hur", "husv", "clw", "cli", "hussfc",
-        "evspsbl", "hfls", "clwvi", "lwp", "clivi", "clvi",
+        "evspsbl", "hfls", "lwp", "iwp", "clivi", "clwvi", "clvi",
         "prw", "hurvi", "husra", "hussn", "rwp",
         "cdnc", "ncra", "utendnogw", "vtendnogw")
         @testset "$name errors on dry model" begin

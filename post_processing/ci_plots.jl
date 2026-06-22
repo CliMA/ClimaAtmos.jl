@@ -1576,7 +1576,7 @@ function make_plots(
 
     # Timeseries line plots for column-integrated variables (no z dimension)
     # This is the final assembling call — merges all summary_files into summary.pdf
-    timeseries_names = ["lwp", "clivi", "rwp", "swp", "pr"]
+    timeseries_names = ["lwp", "iwp", "rwp", "swp", "pr"]
     timeseries_names_avail =
         timeseries_names ∩ collect(keys(simdirs[1].vars))
     vars_timeseries =
@@ -1666,7 +1666,7 @@ function make_plots(
         "rsutcs",
         "clwvi",
         "lwp",
-        "clivi",
+        "iwp",
         "dsevi",
         "clvi",
         "prw",
