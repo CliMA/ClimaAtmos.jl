@@ -2,7 +2,7 @@
     Larcform1
 
 Single-column model setup for the Larcform1 arctic boundary layer case, based on
-Pithan et al. (2016) — SCM intercomparison for the Arctic winter boundary layer.
+[Pithan2016](@cite) — SCM intercomparison for the Arctic winter boundary layer.
 
 Canonical conditions (Pithan 2016, Section 2):
 
