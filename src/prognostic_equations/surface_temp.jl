@@ -33,7 +33,7 @@ function surface_precipitation_tendency!(
 
     # Surface water from precipitation (rain + snow)
     P_liq = p.precomputed.surface_rain_flux
-    P_snow = p.precomputed.surface_snow_flux
+    P_snow = p.precomputed.surface_frozen_precip_flux
     @. Yₜ.sfc.water -= P_liq + P_snow
 end
 

@@ -211,20 +211,30 @@ function enforce_grid_mean_microphysics_constraints!(Y, p, t)
     ρq_cond = p.scratch.ᶜtemp_scalar
     ratio = p.scratch.ᶜtemp_scalar_2
     @. Y.c.ρq_lcl = max(FT(0), Y.c.ρq_lcl)
-    @. Y.c.ρq_icl = max(FT(0), Y.c.ρq_icl)
     @. Y.c.ρq_rai = max(FT(0), Y.c.ρq_rai)
-    @. Y.c.ρq_sno = max(FT(0), Y.c.ρq_sno)
-
-    @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_icl + Y.c.ρq_rai + Y.c.ρq_sno
+    # 1M carries cloud ice `ρq_icl` and snow `ρq_sno`; 2M+P3 carries a single
+    # ice mass `ρq_ice` (no snow). The branch is constant-folded per model type.
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
+        @. Y.c.ρq_ice = max(FT(0), Y.c.ρq_ice)
+        @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_ice + Y.c.ρq_rai
+    else  # NonEquilibriumMicrophysics1M
+        @. Y.c.ρq_icl = max(FT(0), Y.c.ρq_icl)
+        @. Y.c.ρq_sno = max(FT(0), Y.c.ρq_sno)
+        @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_icl + Y.c.ρq_rai + Y.c.ρq_sno
+    end
     @. ratio = ifelse(
         (ρq_cond > ϵ_numerics(FT)) & (Y.c.ρq_tot > ϵ_numerics(FT)),
         min(FT(1), Y.c.ρq_tot / ρq_cond),
         FT(0),
     )
     @. Y.c.ρq_lcl *= ratio
-    @. Y.c.ρq_icl *= ratio
     @. Y.c.ρq_rai *= ratio
-    @. Y.c.ρq_sno *= ratio
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
+        @. Y.c.ρq_ice *= ratio
+    else  # NonEquilibriumMicrophysics1M
+        @. Y.c.ρq_icl *= ratio
+        @. Y.c.ρq_sno *= ratio
+    end
     return nothing
 end
 

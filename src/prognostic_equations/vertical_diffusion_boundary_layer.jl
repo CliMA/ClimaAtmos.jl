@@ -122,7 +122,7 @@ function vertical_diffusion_boundary_layer_tendency!(
 
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         if ρχ_name in (
-            @name(ρq_lcl), @name(ρq_icl), @name(ρq_rai),
+            @name(ρq_lcl), @name(ρq_icl), @name(ρq_ice), @name(ρq_rai),
             @name(ρq_sno), @name(ρn_lcl), @name(ρn_rai)
         )
             @. ᶜK_h_scaled = α_vert_diff_microphysics * ᶜK_h

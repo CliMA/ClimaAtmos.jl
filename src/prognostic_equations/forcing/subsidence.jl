@@ -45,8 +45,8 @@ subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:third_order}) =
     subsidence_tendency!(Yₜ, Y, p, t, subsidence_model::Subsidence)
 
 Applies subsidence tendencies to total energy (`ρe_tot`), total specific humidity
-(`ρq_tot`), and other moisture species (`ρq_lcl`, `ρq_icl`) if a `NonEquilibriumMicrophysics`
-is used.
+(`ρq_tot`), and the cloud condensate species (`ρq_lcl` and `ρq_icl`/`ρq_ice` for 1M/2M)
+if a `NonEquilibriumMicrophysics` is used.
 
 The subsidence velocity profile `w_sub(z)` is obtained from `subsidence_model.prof`.
 This profile is used to construct a face-valued vertical velocity field `ᶠsubsidence³`.
@@ -94,12 +94,23 @@ function subsidence_tendency!(Yₜ, Y, p, t, subsidence::Subsidence)
                 ᶜq_lcl,
                 Val{:first_order}(),
             )
-            ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+            # Grid-mean cloud ice is `ρq_ice` for 2M (no snow) and `ρq_icl` for 1M.
+            ρq_ice = if microphysics_model isa NonEquilibriumMicrophysics2M
+                Y.c.ρq_ice
+            else
+                Y.c.ρq_icl
+            end
+            ρq_iceₜ = if microphysics_model isa NonEquilibriumMicrophysics2M
+                Yₜ.c.ρq_ice
+            else
+                Yₜ.c.ρq_icl
+            end
+            ᶜq_ice = @. lazy(specific(ρq_ice, Y.c.ρ))
             subsidence!(
-                Yₜ.c.ρq_icl,
+                ρq_iceₜ,
                 Y.c.ρ,
                 ᶠsubsidence³,
-                ᶜq_icl,
+                ᶜq_ice,
                 Val{:first_order}(),
             )
         end

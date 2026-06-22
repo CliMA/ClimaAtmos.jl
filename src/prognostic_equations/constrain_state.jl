@@ -116,8 +116,8 @@ function tracer_nonnegativity_constraint!(Y, p, t,
     ᶜρq_tot = Y.c.ρq_tot
 
     tracer_mass_names = (
-        @name(ρq_lcl), @name(ρq_rai), @name(ρq_icl), @name(ρq_sno),
-        @name(ρq_tot),
+        @name(ρq_lcl), @name(ρq_rai), @name(ρq_icl), @name(ρq_ice),
+        @name(ρq_sno), @name(ρq_tot),
     )
 
     for name in tracer_mass_names

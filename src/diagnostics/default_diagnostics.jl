@@ -304,7 +304,10 @@ function default_diagnostics(
     t_start;
     output_writer,
 )
-    precip_diagnostics = ["husra", "hussn", "rwp", "swp", "cdnc", "ncra"]
+    # No snow in 2M+P3, so no `hussn`/`swp` (those are 1M-only diagnostics).
+    # P3 ice diagnostics (`ni`/`qrim`/`frim`/`rhorim`) surface the P3 cold state.
+    precip_diagnostics =
+        ["husra", "rwp", "cdnc", "ncra", "ni", "qrim", "frim", "rhorim"]
     average_func = frequency_averages(duration)
     return [
         _moist_default_diagnostics(duration, start_date, t_start; output_writer)...,

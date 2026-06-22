@@ -60,7 +60,8 @@ Create a microphysics tracer nonnegativity constraint.
 
 Depending on the microphysics model, the constrained tracers include:
 
-  - `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`,
+  - `ρq_lcl`, `ρq_rai`, and the ice mass — `ρq_icl` plus snow `ρq_sno` for 1M,
+    or the single `ρq_ice` for 2M+P3 (which has no snow),
   - If `include_qtot` is true, `q_tot` is also among the constrained tracers.
 
 # Arguments:

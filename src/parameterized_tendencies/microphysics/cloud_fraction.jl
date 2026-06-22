@@ -178,7 +178,11 @@ function compute_∂T_∂θ!(dest, Y, p, thermo_params)
         ᶜq_tot = ᶜq_tot_nonneg
     else
         ᶜq_liq = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
-        ᶜq_ice = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
+            ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        else  # NonEquilibriumMicrophysics1M
+            ᶜq_ice = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+        end
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     end
     ᶜθ_li = @. lazy(
@@ -830,7 +834,7 @@ Otherwise, computes cloud-only condensate from prognostic variables.
 
 # Returns
 
-Tuple: `(ᶜq_lcl_mean, ᶜq_icl_mean)` as lazy field expressions.
+Tuple: `(ᶜq_lcl_mean, ᶜq_ice_mean)` as lazy field expressions.
 """
 function _get_condensate_means_nonequil(Y, p, turbconv_model)
     if turbconv_model isa PrognosticEDMFX
@@ -838,8 +842,12 @@ function _get_condensate_means_nonequil(Y, p, turbconv_model)
         return ᶜq_liq⁰, ᶜq_ice⁰
     else
         ᶜq_lcl_mean = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
-        ᶜq_icl_mean = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
-        return ᶜq_lcl_mean, ᶜq_icl_mean
+        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
+            ᶜq_ice_mean = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        else  # NonEquilibriumMicrophysics1M
+            ᶜq_ice_mean = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+        end
+        return ᶜq_lcl_mean, ᶜq_ice_mean
     end
 end
 

@@ -98,7 +98,7 @@ function implicit_precomputed_quantities(Y, atmos)
         if !(microphysics_model isa DryModel)
             (;
                 surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
-                surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
+                surface_frozen_precip_flux = zeros(axes(Fields.level(Y.f, half))),
                 col_integrated_precip_energy_tendency = zeros(
                     axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
                 ),
@@ -180,7 +180,7 @@ function precomputed_quantities(Y, atmos)
     end
     surface_precip_fluxes = (;
         surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
-        surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
+        surface_frozen_precip_flux = zeros(axes(Fields.level(Y.f, half))),
     )
     sedimentation_quantities =
         atmos.microphysics_model isa NonEquilibriumMicrophysics ?
@@ -212,12 +212,11 @@ function precomputed_quantities(Y, atmos)
         )
     elseif atmos.microphysics_model isa
            NonEquilibriumMicrophysics2M
-        # 2-moment microphysics
+        # 2-moment microphysics (P3 ice; no snow)
         precipitation_quantities = (;
             ᶜwₗ = similar(Y.c, FT),
             ᶜwᵢ = similar(Y.c, FT),
             ᶜwᵣ = similar(Y.c, FT),
-            ᶜwₛ = similar(Y.c, FT),
             ᶜwₙₗ = similar(Y.c, FT),
             ᶜwₙᵣ = similar(Y.c, FT),
             ᶜmp_tendency = similar(Y.c, MP23_NT),
@@ -258,7 +257,6 @@ function precomputed_quantities(Y, atmos)
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₙₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₙᵣʲs = similar(Y.c, NTuple{n, FT}),
         )
@@ -549,8 +547,13 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         else  # NonEquilibriumMicrophysics
             @. ᶜq_liq =
                 max(0, specific(Y.c.ρq_lcl, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
-            @. ᶜq_ice =
-                max(0, specific(Y.c.ρq_icl, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
+            if microphysics_model isa NonEquilibriumMicrophysics2M
+                # P3 has a single ice-mass category `ρq_ice` (no snow).
+                @. ᶜq_ice = max(0, specific(Y.c.ρq_ice, Y.c.ρ))
+            else  # NonEquilibriumMicrophysics1M
+                @. ᶜq_ice =
+                    max(0, specific(Y.c.ρq_icl, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
+            end
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
             @. ᶜq_tot_nonneg =
                 max(ᶜq_liq + ᶜq_ice, specific(Y.c.ρq_tot, Y.c.ρ))

@@ -333,8 +333,11 @@ compute_cli(_, _, _, model) = error_diagnostic_variable("cli", model)
 
 compute_cli(_, cache, _, ::EquilibriumMicrophysics0M) = cache.precomputed.ᶜq_ice
 
-compute_cli(state, _, _, ::NonEquilibriumMicrophysics) =
+compute_cli(state, _, _, ::NonEquilibriumMicrophysics1M) =
     @. lazy(specific(state.c.ρq_icl, state.c.ρ))
+
+compute_cli(state, _, _, ::NonEquilibriumMicrophysics2M) =
+    @. lazy(specific(state.c.ρq_ice, state.c.ρ))
 
 add_diagnostic_variable!(short_name = "cli", units = "kg kg^-1",
     long_name = "Mass Fraction of Cloud Ice",
@@ -346,6 +349,59 @@ add_diagnostic_variable!(short_name = "cli", units = "kg kg^-1",
     in all phases) in the grid cell.
     """,
     compute = compute_cli,
+)
+
+###
+# P3 ice diagnostics (2-moment + P3 only; no CMIP standard names)
+###
+compute_ni(state, cache, time) =
+    compute_ni(state, cache, time, cache.atmos.microphysics_model)
+compute_ni(_, _, _, model) = error_diagnostic_variable("ni", model)
+compute_ni(state, _, _, ::NonEquilibriumMicrophysics2M) =
+    @. lazy(specific(state.c.ρn_ice, state.c.ρ))
+add_diagnostic_variable!(short_name = "ni", units = "kg^-1",
+    long_name = "Ice Number Specific Content",
+    comments = "Number of P3 ice particles per unit mass of air.",
+    compute = compute_ni,
+)
+
+compute_qrim(state, cache, time) =
+    compute_qrim(state, cache, time, cache.atmos.microphysics_model)
+compute_qrim(_, _, _, model) = error_diagnostic_variable("qrim", model)
+compute_qrim(state, _, _, ::NonEquilibriumMicrophysics2M) =
+    @. lazy(specific(state.c.ρq_rim, state.c.ρ))
+add_diagnostic_variable!(short_name = "qrim", units = "kg kg^-1",
+    long_name = "Rime Mass Specific Content",
+    comments = "Mass of rime on P3 ice per unit mass of air.",
+    compute = compute_qrim,
+)
+
+compute_frim(state, cache, time) =
+    compute_frim(state, cache, time, cache.atmos.microphysics_model)
+compute_frim(_, _, _, model) = error_diagnostic_variable("frim", model)
+function compute_frim(state, _, _, ::NonEquilibriumMicrophysics2M)
+    return @. lazy(
+        ifelse(state.c.ρq_ice > 0, state.c.ρq_rim / state.c.ρq_ice, zero(state.c.ρq_ice)),
+    )
+end
+add_diagnostic_variable!(short_name = "frim", units = "",
+    long_name = "Rime Mass Fraction",
+    comments = "Rime mass fraction of P3 ice, `q_rim / q_ice` (0 where there is no ice).",
+    compute = compute_frim,
+)
+
+compute_rhorim(state, cache, time) =
+    compute_rhorim(state, cache, time, cache.atmos.microphysics_model)
+compute_rhorim(_, _, _, model) = error_diagnostic_variable("rhorim", model)
+function compute_rhorim(state, _, _, ::NonEquilibriumMicrophysics2M)
+    return @. lazy(
+        ifelse(state.c.ρb_rim > 0, state.c.ρq_rim / state.c.ρb_rim, zero(state.c.ρb_rim)),
+    )
+end
+add_diagnostic_variable!(short_name = "rhorim", units = "kg m^-3",
+    long_name = "Rime Density",
+    comments = "Bulk density of rime on P3 ice, `q_rim / b_rim` (0 where there is no rime volume).",
+    compute = compute_rhorim,
 )
 
 ###
@@ -538,7 +594,9 @@ compute_pr(state, cache, time) =
 compute_pr(_, _, _, model) = error_diagnostic_variable("pr", model)
 
 compute_pr(_, cache, _, ::Union{DryModel, MoistMicrophysics}) =
-    @. lazy(cache.precomputed.surface_rain_flux + cache.precomputed.surface_snow_flux)
+    @. lazy(
+        cache.precomputed.surface_rain_flux + cache.precomputed.surface_frozen_precip_flux,
+    )
 
 add_diagnostic_variable!(short_name = "pr", units = "kg m^-2 s^-1",
     long_name = "Precipitation",
@@ -566,7 +624,7 @@ compute_prsn(state, cache, time) =
 compute_prsn(_, _, _, model) = error_diagnostic_variable("prsn", model)
 
 compute_prsn(_, cache, _, ::Union{DryModel, MoistMicrophysics}) =
-    cache.precomputed.surface_snow_flux
+    cache.precomputed.surface_frozen_precip_flux
 
 add_diagnostic_variable!(short_name = "prsn", units = "kg m^-2 s^-1",
     long_name = "Snowfall Flux",
@@ -600,9 +658,8 @@ compute_hussn(state, cache, time) =
     compute_hussn(state, cache, time, cache.atmos.microphysics_model)
 compute_hussn(_, _, _, model) = error_diagnostic_variable("hussn", model)
 
-compute_hussn(state, _, _,
-    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},  # TODO: Remove 2M from dispatch
-) = @. lazy(specific(state.c.ρq_sno, state.c.ρ))
+compute_hussn(state, _, _, ::NonEquilibriumMicrophysics1M) =
+    @. lazy(specific(state.c.ρq_sno, state.c.ρ))
 
 add_diagnostic_variable!(short_name = "hussn", units = "kg kg^-1",
     long_name = "Mass Fraction of Snow",
@@ -1067,9 +1124,7 @@ compute_swp(state, cache, time) =
     compute_swp(state, cache, time, cache.atmos.microphysics_model)
 compute_swp(_, _, _, model) = error_diagnostic_variable("swp", model)
 
-function compute_swp(state, cache, _,
-    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
-)
+function compute_swp(state, cache, _, ::NonEquilibriumMicrophysics1M)
     swp = cache.scratch.ᶠtemp_field_level
     Operators.column_integral_definite!(swp, state.c.ρq_sno)
     return swp

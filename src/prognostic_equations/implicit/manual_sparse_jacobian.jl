@@ -76,6 +76,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     condensate_mass_names = (
         @name(c.ρq_lcl),
         @name(c.ρq_icl),
+        @name(c.ρq_ice),
         @name(c.ρq_rai),
         @name(c.ρq_sno),
     )
@@ -98,6 +99,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     sgs_condensate_mass_names = (
         @name(c.sgsʲs.:(1).q_lcl),
         @name(c.sgsʲs.:(1).q_icl),
+        @name(c.sgsʲs.:(1).q_ice),
         @name(c.sgsʲs.:(1).q_rai),
         @name(c.sgsʲs.:(1).q_sno),
     )
@@ -488,6 +490,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         (
             (@name(c.ρq_lcl), e_int_v0, Δcv_l),
             (@name(c.ρq_icl), e_int_s0, Δcv_i),
+            (@name(c.ρq_ice), e_int_s0, Δcv_i),
             (@name(c.ρq_rai), e_int_v0, Δcv_l),
             (@name(c.ρq_sno), e_int_s0, Δcv_i),
         ) : (;)
@@ -522,6 +525,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     tracer_info = (
         (@name(c.ρq_lcl), @name(ᶜwₗ)),
         (@name(c.ρq_icl), @name(ᶜwᵢ)),
+        (@name(c.ρq_ice), @name(ᶜwᵢ)),
         (@name(c.ρq_rai), @name(ᶜwᵣ)),
         (@name(c.ρq_sno), @name(ᶜwₛ)),
         (@name(c.ρn_lcl), @name(ᶜwₙₗ)),
@@ -532,7 +536,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     )
     internal_energy_func(name) =
         (name == @name(c.ρq_lcl) || name == @name(c.ρq_rai)) ? TD.internal_energy_liquid :
-        (name == @name(c.ρq_icl) || name == @name(c.ρq_sno)) ? TD.internal_energy_ice :
+        (name == @name(c.ρq_icl) || name == @name(c.ρq_ice) || name == @name(c.ρq_sno)) ?
+        TD.internal_energy_ice :
         nothing
     if !(p.atmos.microphysics_model isa DryModel) || use_derivative(diffusion_flag)
         ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
@@ -564,8 +569,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
                 p.scratch.ᶠband_matrix_wvec - (I,)
 
-            if ρχₚ_name in
-               (@name(c.ρq_lcl), @name(c.ρq_icl), @name(c.ρq_rai), @name(c.ρq_sno))
+            if ρχₚ_name in (
+                @name(c.ρq_lcl),
+                @name(c.ρq_icl),
+                @name(c.ρq_ice),
+                @name(c.ρq_rai),
+                @name(c.ρq_sno),
+            )
                 ∂ᶜρq_tot_err_∂ᶜρq = matrix[@name(c.ρq_tot), ρχₚ_name]
                 @. ∂ᶜρq_tot_err_∂ᶜρq =
                     p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
@@ -839,6 +849,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 sgs_microphysics_tracers = (
                     (@name(c.sgsʲs.:(1).q_lcl), @name(ᶜwₗʲs.:(1))),
                     (@name(c.sgsʲs.:(1).q_icl), @name(ᶜwᵢʲs.:(1))),
+                    (@name(c.sgsʲs.:(1).q_ice), @name(ᶜwᵢʲs.:(1))),
                     (@name(c.sgsʲs.:(1).q_rai), @name(ᶜwᵣʲs.:(1))),
                     (@name(c.sgsʲs.:(1).q_sno), @name(ᶜwₛʲs.:(1))),
                     (@name(c.sgsʲs.:(1).n_lcl), @name(ᶜwₙₗʲs.:(1))),
@@ -882,6 +893,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     if χʲ_name in (
                         @name(c.sgsʲs.:(1).q_lcl),
                         @name(c.sgsʲs.:(1).q_icl),
+                        @name(c.sgsʲs.:(1).q_ice),
                         @name(c.sgsʲs.:(1).q_rai),
                         @name(c.sgsʲs.:(1).q_sno),
                     )
@@ -911,8 +923,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 }
                     sgs_microphysics_tracers = (
                         (@name(c.sgsʲs.:(1).q_lcl)), (@name(c.sgsʲs.:(1).q_icl)),
-                        (@name(c.sgsʲs.:(1).q_rai)), (@name(c.sgsʲs.:(1).q_sno)),
-                        (@name(c.sgsʲs.:(1).n_lcl)), (@name(c.sgsʲs.:(1).n_rai)),
+                        (@name(c.sgsʲs.:(1).q_ice)), (@name(c.sgsʲs.:(1).q_rai)),
+                        (@name(c.sgsʲs.:(1).q_sno)), (@name(c.sgsʲs.:(1).n_lcl)),
+                        (@name(c.sgsʲs.:(1).n_rai)),
                     )
                     MatrixFields.unrolled_foreach(
                         sgs_microphysics_tracers,
@@ -949,6 +962,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     sgs_microphysics_tracers = (
                         (@name(c.sgsʲs.:(1).q_lcl)),
                         (@name(c.sgsʲs.:(1).q_icl)),
+                        (@name(c.sgsʲs.:(1).q_ice)),
                         (@name(c.sgsʲs.:(1).q_rai)),
                         (@name(c.sgsʲs.:(1).q_sno)),
                     )
@@ -1087,6 +1101,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     microphysics_tracers = (
                         (@name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl), @name(q_lcl)),
                         (@name(c.ρq_icl), @name(c.sgsʲs.:(1).q_icl), @name(q_icl)),
+                        (@name(c.ρq_ice), @name(c.sgsʲs.:(1).q_ice), @name(q_ice)),
                         (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai), @name(q_rai)),
                         (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno), @name(q_sno)),
                         (@name(c.ρn_lcl), @name(c.sgsʲs.:(1).n_lcl), @name(n_lcl)),
