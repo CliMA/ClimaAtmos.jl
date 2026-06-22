@@ -196,9 +196,11 @@ function get_insolation_form(parsed_args; setup_type = nothing)
         GCMDrivenInsolation()
     elseif insolation == "externaldriventv"
         ExternalTVInsolation()
+    elseif insolation == "larcform1"
+        Larcform1Insolation()
     else
         error(
-            """Unknown insolation `$insolation`. Expected: "idealized", "timevarying", "rcemipii", "gcmdriven", or "externaldriventv".""",
+            """Unknown insolation `$insolation`. Expected: "idealized", "timevarying", "rcemipii", "gcmdriven", "externaldriventv", or "larcform1".""",
         )
     end
 end

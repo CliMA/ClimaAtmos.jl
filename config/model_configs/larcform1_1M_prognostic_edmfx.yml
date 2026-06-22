@@ -1,0 +1,138 @@
+# Larcform1 — Arctic winter boundary layer SCM (Pithan et al. 2016)
+# 1-moment microphysics, prognostic EDMFx
+#==========================================================================================#
+# Atmosphere #
+initial_condition: Larcform1
+rayleigh_sponge: true
+
+# Surface #
+prognostic_surface: SlabOceanSST     # placeholder until EisenmanSeaIce is implemented
+surface_setup: DefaultMoninObukhov
+disable_surface_flux_tendency: false
+
+# Numerics
+#==========================================================================================#
+
+# Temporal
+FLOAT_TYPE: Float32
+t_end: 5days
+dt: 30secs
+dt_rad: 60secs
+
+# Spatial #
+config: "column"
+z_max: 9000.0
+z_elem: 90
+z_stretch: true # clw and z-banding both appear very sensitive to this
+dz_bottom: 10.0
+
+# Solver #
+approximate_linear_solve_iters: 2
+ode_algo: ARS222
+
+# Model Components
+#==========================================================================================#
+
+# Parameters #
+toml: [toml/larcform1_1M_prognostic_edmfx.toml]
+
+# Radiation #
+rad: allskywithclear
+insolation: larcform1
+
+# Turbulence and EDMF #
+#vert_diff: DecayWithHeightDiffusion
+turbconv: prognostic_edmfx
+implicit_diffusion: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+hyperdiff: ~
+
+# Clouds #
+cloud_model: quadrature
+microphysics_model: 1M
+
+# Logging and Diagnostics
+#==========================================================================================#
+log_to_file: true
+check_conservation: false
+netcdf_output_at_levels: true
+output_default_diagnostics: false
+
+diagnostics:
+#== Atmospheric State ==#
+  - short_name: [ta, thetaa, pfull, rhoa, hus, hur, ts, tas]
+    period: 1hours
+    reduction_time: average
+#== Winds & Dynamics ==#
+  - short_name: [ua, va, wa]
+    period: 1hours
+    reduction_time: average
+#== Clouds & Condensates ==#
+  - short_name: [cl, clw, cli, lwp, clivi]
+    period: 1hours
+    reduction_time: average
+#== Radiation Fluxes ==#
+  - short_name: [rlu, rld, rlut, rlus, rlds, rsdt, rlutcs, rldscs]
+    period: 1hours
+    reduction_time: average
+#== Precipitation & Evaporation ==#
+  - short_name: [pr, prsn, evspsbl, husra, hussn]
+    period: 1hours
+    reduction_time: average
+#== Surface Heat Fluxes ==#
+  - short_name: [hfss, hfls]
+    period: 1hours
+    reduction_time: average
+#== Convective Updrafts ==#
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, husraup, hussnup]
+    period: 10mins
+    reduction_time: average
+#== Convective Environment ==#
+  - short_name: [waen, taen, thetaaen, haen, husen, huren, clwen, clien, husraen, hussnen, tke]
+    period: 10mins
+    reduction_time: average
+#== EDMF & Turbulence Diagnostics ==#
+  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
+    period: 10mins
+    reduction_time: average
+#== Microphysics Tendencies ==#
+  - short_name: [
+      mp1m_S_phase_change_vap_lcl, mp1m_S_phase_change_vap_icl,
+      mp1m_S_acnv_lcl_rai, mp1m_S_acnv_icl_sno,
+      mp1m_S_accr_lcl_rai, mp1m_S_accr_lcl_sno_cold, mp1m_S_accr_lcl_sno_warm,
+      mp1m_S_accr_melt_lcl_sno,
+      mp1m_S_accr_icl_rai, mp1m_S_accr_freeze_icl_rai, mp1m_S_accr_icl_sno,
+      mp1m_S_accr_rai_sno_cold, mp1m_S_accr_rai_sno_warm, mp1m_S_accr_melt_rai_sno,
+      mp1m_S_phase_change_vap_rai, mp1m_S_phase_change_vap_sno,
+      mp1m_S_melt_icl_lcl, mp1m_S_melt_sno_rai,
+    ]
+    period: 10mins
+  - short_name: [
+      mp1mup_S_phase_change_vap_lcl, mp1mup_S_phase_change_vap_icl,
+      mp1mup_S_acnv_lcl_rai, mp1mup_S_acnv_icl_sno,
+      mp1mup_S_accr_lcl_rai, mp1mup_S_accr_lcl_sno_cold, mp1mup_S_accr_lcl_sno_warm,
+      mp1mup_S_accr_melt_lcl_sno,
+      mp1mup_S_accr_icl_rai, mp1mup_S_accr_freeze_icl_rai, mp1mup_S_accr_icl_sno,
+      mp1mup_S_accr_rai_sno_cold, mp1mup_S_accr_rai_sno_warm, mp1mup_S_accr_melt_rai_sno,
+      mp1mup_S_phase_change_vap_rai, mp1mup_S_phase_change_vap_sno,
+      mp1mup_S_melt_icl_lcl, mp1mup_S_melt_sno_rai,
+    ]
+    period: 10mins
+  - short_name: [
+      mp1men_S_phase_change_vap_lcl, mp1men_S_phase_change_vap_icl,
+      mp1men_S_acnv_lcl_rai, mp1men_S_acnv_icl_sno,
+      mp1men_S_accr_lcl_rai, mp1men_S_accr_lcl_sno_cold, mp1men_S_accr_lcl_sno_warm,
+      mp1men_S_accr_melt_lcl_sno,
+      mp1men_S_accr_icl_rai, mp1men_S_accr_freeze_icl_rai, mp1men_S_accr_icl_sno,
+      mp1men_S_accr_rai_sno_cold, mp1men_S_accr_rai_sno_warm, mp1men_S_accr_melt_rai_sno,
+      mp1men_S_phase_change_vap_rai, mp1men_S_phase_change_vap_sno,
+      mp1men_S_melt_icl_lcl, mp1men_S_melt_sno_rai,
+    ]
+    period: 10mins

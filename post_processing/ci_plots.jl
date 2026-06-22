@@ -1736,3 +1736,148 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
     end
     make_plots_generic(output_paths, vars_lines; summary_files = [file_contour])
 end
+
+Larcform1Plots = Union{Val{:larcform1}, Val{:larcform1_1M}}
+
+# Catch-all for any job whose name begins with "larcform1"
+function make_plots(val::Val{S}, output_paths::Vector{<:AbstractString}) where {S}
+    if startswith(String(S), "larcform1")
+        return make_plots(Val(:larcform1), output_paths)
+    end
+    @warn "No plot found for $val"
+end
+
+function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
+    simdirs = SimDir.(output_paths)
+
+    short_names_profile_requested = [
+        "ta", "thetaa", "pfull", "rhoa", "hus", "hur", "ua", "va", "wa",
+        "cl", "clw", "cli", "rlu", "rld", "husra", "hussn",
+        "arup", "waup", "taup", "thetaaup", "haup", "husup", "hurup",
+        "clwup", "cliup", "husraup", "hussnup",
+        "waen", "taen", "thetaaen", "haen", "husen", "huren", "clwen",
+        "clien", "husraen", "hussnen", "tke",
+        "entr", "detr", "lmix", "bgrad", "strain", "edt", "evu",
+    ]
+    short_names_timeseries_requested = [
+        "rlut", "rlus", "rlds", "evspsbl", "lwp", "clivi", "rsdt", "rlutcs",
+        "rldscs", "pr", "prsn", "hfss", "hfls", "ts", "tas",
+    ] # "sithick"
+
+    available_short_names = Set(String.(keys(simdirs[1].vars)))
+    short_names_2D =
+        filter(sn -> sn in available_short_names, short_names_profile_requested)
+    short_names_1D =
+        filter(sn -> sn in available_short_names, short_names_timeseries_requested)
+    reduction = "average"
+
+    function seconds_to_hours(var)
+        ClimaAnalysis.has_time(var) || return var
+        t_name = ClimaAnalysis.time_name(var)
+        if !haskey(var.dim_attributes, t_name) ||
+           !haskey(var.dim_attributes[t_name], "units")
+            ClimaAnalysis.Var.set_dim_units!(var, t_name, "s")
+        end
+        return ClimaAnalysis.Var.convert_dim_units(
+            var, t_name, "hr"; conversion_function = t -> t / 3600,
+        )
+    end
+
+    function meters_to_km(var)
+        zn = z_dim_name(var)
+        haskey(var.dims, zn) || return var
+        if !haskey(var.dim_attributes, zn) || !haskey(var.dim_attributes[zn], "units")
+            ClimaAnalysis.Var.set_dim_units!(var, zn, "m")
+        end
+        return ClimaAnalysis.Var.convert_dim_units(
+            var, zn, "km"; conversion_function = z -> z / 1000,
+        )
+    end
+
+    vars_2D = if isempty(short_names_2D)
+        []
+    else
+        map(
+            meters_to_km ∘ seconds_to_hours,
+            map_comparison(simdirs, short_names_2D) do simdir, short_name
+                var = get(simdir; short_name, reduction)
+                if haskey(var.dims, "x")
+                    var = slice(var; x = var.dims["x"][1])
+                end
+                if haskey(var.dims, "y")
+                    var = slice(var; y = var.dims["y"][1])
+                end
+                return var
+            end,
+        )
+    end
+
+    vars_1D = if isempty(short_names_1D)
+        []
+    else
+        map(
+            seconds_to_hours,
+            map_comparison(simdirs, short_names_1D) do simdir, short_name
+                var = get(simdir; short_name, reduction)
+                if haskey(var.dims, "x")
+                    var = slice(var; x = var.dims["x"][1])
+                end
+                if haskey(var.dims, "y")
+                    var = slice(var; y = var.dims["y"][1])
+                end
+                return var
+            end,
+        )
+    end
+
+    if !isempty(vars_2D)
+        make_plots_generic(
+            output_paths,
+            vars_2D,
+            time = FIRST_SNAP,
+            MAX_NUM_COLS = 2,
+            output_name = "summary_profiles_initial",
+            more_kwargs = YLINEARSCALE,
+        )
+
+        make_plots_generic(
+            output_paths,
+            vars_2D,
+            time = LAST_SNAP,
+            MAX_NUM_COLS = 2,
+            output_name = "summary_profiles_last",
+            more_kwargs = YLINEARSCALE,
+        )
+
+        make_plots_generic(
+            output_paths,
+            vars_2D,
+            MAX_NUM_COLS = 2,
+            output_name = "summary_timeheight",
+            more_kwargs = YLINEARSCALE,
+        )
+    end
+
+    if !isempty(vars_1D)
+        make_plots_generic(
+            output_paths,
+            vars_1D,
+            MAX_NUM_COLS = 2,
+            output_name = "summary_timeseries",
+        )
+    end
+
+    # Dedicated surface energy budget page (sea-ice / coupled runs)
+    surface_names =
+        ["ts", "hfss", "hfls", "rlds", "rlus", "rlut", "rlutcs", "pr", "prsn", "evspsbl"]
+    vars_surface = filter(v -> short_name(v) in surface_names, vars_1D)
+    if !isempty(vars_surface)
+        make_plots_generic(
+            output_paths,
+            vars_surface,
+            MAX_NUM_COLS = 2,
+            output_name = "summary_surface",
+        )
+    end
+
+end
