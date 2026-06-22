@@ -1747,6 +1747,29 @@ function make_plots(val::Val{S}, output_paths::Vector{<:AbstractString}) where {
     @warn "No plot found for $val"
 end
 
+function seconds_to_hours(var)
+    ClimaAnalysis.has_time(var) || return var
+    t_name = ClimaAnalysis.time_name(var)
+    if !haskey(var.dim_attributes, t_name) ||
+       !haskey(var.dim_attributes[t_name], "units")
+        ClimaAnalysis.Var.set_dim_units!(var, t_name, "s")
+    end
+    return ClimaAnalysis.Var.convert_dim_units(
+        var, t_name, "hr"; conversion_function = t -> t / 3600,
+    )
+end
+
+function meters_to_km(var)
+    zn = z_dim_name(var)
+    haskey(var.dims, zn) || return var
+    if !haskey(var.dim_attributes, zn) || !haskey(var.dim_attributes[zn], "units")
+        ClimaAnalysis.Var.set_dim_units!(var, zn, "m")
+    end
+    return ClimaAnalysis.Var.convert_dim_units(
+        var, zn, "km"; conversion_function = z -> z / 1000,
+    )
+end
+
 function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
 
@@ -1770,29 +1793,6 @@ function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
     short_names_1D =
         filter(sn -> sn in available_short_names, short_names_timeseries_requested)
     reduction = "average"
-
-    function seconds_to_hours(var)
-        ClimaAnalysis.has_time(var) || return var
-        t_name = ClimaAnalysis.time_name(var)
-        if !haskey(var.dim_attributes, t_name) ||
-           !haskey(var.dim_attributes[t_name], "units")
-            ClimaAnalysis.Var.set_dim_units!(var, t_name, "s")
-        end
-        return ClimaAnalysis.Var.convert_dim_units(
-            var, t_name, "hr"; conversion_function = t -> t / 3600,
-        )
-    end
-
-    function meters_to_km(var)
-        zn = z_dim_name(var)
-        haskey(var.dims, zn) || return var
-        if !haskey(var.dim_attributes, zn) || !haskey(var.dim_attributes[zn], "units")
-            ClimaAnalysis.Var.set_dim_units!(var, zn, "m")
-        end
-        return ClimaAnalysis.Var.convert_dim_units(
-            var, zn, "km"; conversion_function = z -> z / 1000,
-        )
-    end
 
     vars_2D = if isempty(short_names_2D)
         []
