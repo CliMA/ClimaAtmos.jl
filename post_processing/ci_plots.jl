@@ -1810,16 +1810,11 @@ function make_plots(::Val{:larcform1}, output_paths::Vector{<:AbstractString})
     else
         map(
             seconds_to_hours,
-            map_comparison(simdirs, short_names_1D) do simdir, short_name
-                var = get(simdir; short_name, reduction)
-                if haskey(var.dims, "x")
-                    var = slice(var; x = var.dims["x"][1])
-                end
-                if haskey(var.dims, "y")
-                    var = slice(var; y = var.dims["y"][1])
-                end
-                return var
-            end,
+            map_comparison(
+                (simdir, short_name) -> get(simdir; short_name, reduction),
+                simdirs,
+                short_names_1D,
+            ),
         )
     end
 
