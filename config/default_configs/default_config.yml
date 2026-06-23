@@ -252,7 +252,7 @@ microphysics_substep_callback:
   help: "Fill the 2M microphysics tendency cache once per step (in a callback) instead of once per RK stage, so the IMEX loop sees a constant substep-averaged explicit forcing. Default: false"
   value: false
 fixed_terminal_velocity:
-  help: "Use fixed terminal velocities for microphysics tracers [`true` (default), `false`]"
+  help: "Use fixed terminal velocities for microphysics tracers [`true` (default), `false`]. Ignored for two-moment microphysics, which always uses diagnostic terminal velocities."
   value: true
 cloud_liquid_formation:
   help: "Cloud liquid formation option for 1M microphysics [`CloudLiquidFormation` (default), ~]"

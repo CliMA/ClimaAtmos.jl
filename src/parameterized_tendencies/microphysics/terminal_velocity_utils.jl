@@ -5,7 +5,9 @@ struct FixedTerminalVelocity{FT} <: AbstractTerminalVelocityMode
     ice::FT
     rain::FT
     snow::FT
-    #TODO fixed-velocity sedimentation of 2M/P3 tracers not implemented
+    # Fixed-velocity sedimentation is not implemented for two-moment / P3
+    # tracers; the AtmosWater constructor warns and falls back to diagnostic
+    # velocities when this mode is requested with two-moment microphysics.
 end
 Base.broadcastable(x::AbstractTerminalVelocityMode) = tuple(x)
 

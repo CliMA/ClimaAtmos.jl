@@ -709,8 +709,20 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
 
     cloud_model = get_cloud_model(pa, params)
 
+    fixed_terminal_velocity = pa["fixed_terminal_velocity"]
+    if fixed_terminal_velocity &&
+       microphysics_model isa NonEquilibriumMicrophysics2M
+        @warn(
+            "fixed_terminal_velocity is not implemented for \
+             NonEquilibriumMicrophysics2M; two-moment / P3 sedimentation uses \
+             diagnostic terminal velocities. Ignoring fixed_terminal_velocity.",
+            maxlog = 1
+        )
+        fixed_terminal_velocity = false
+    end
+
     terminal_velocity_mode =
-        pa["fixed_terminal_velocity"] ?
+        fixed_terminal_velocity ?
         FixedTerminalVelocity{FT}(
             CAP.fixed_cloud_liquid_terminal_velocity(params),
             CAP.fixed_cloud_ice_terminal_velocity(params),
