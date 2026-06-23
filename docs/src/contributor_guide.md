@@ -237,8 +237,8 @@ hooks defined in `.pre-commit-config.yaml`. They run on each `git commit`
 against your staged files and:
 
   - run `JuliaFormatter` from a dedicated, version-pinned environment
-    (`.dev/format/`) so the result matches the
-    [JuliaFormatter CI check](https://github.com/CliMA/ClimaAtmos.jl/blob/main/.github/workflows/julia_formatter.yml)
+    (`.dev/format/`) so the result matches the version used in the
+    [Prek CI check](https://github.com/CliMA/ClimaAtmos.jl/blob/main/.github/workflows/run-prek.yml)
     regardless of which `JuliaFormatter` version is in your base environment, and
   - trim trailing whitespace that `JuliaFormatter` leaves behind (for example in
     comments).
