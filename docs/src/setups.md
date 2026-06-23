@@ -132,8 +132,8 @@ the `initial_condition` config string to your setup constructor:
 ```julia
 if ic_name == "OtherCase1"
     return Setups.OtherCase1()
-elseif ic_name == "OtherCase1"
-    return Setups.OtherCase1()
+elseif ic_name == "OtherCase2"
+    return Setups.OtherCase2()
 elseif ic_name == "MyCase"
     return Setups.MyCase()
 end

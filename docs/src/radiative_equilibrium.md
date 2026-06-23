@@ -1,15 +1,16 @@
-
 # Radiative Equilibrium Example
+
 A suite of concrete examples are provided here as a guidance for running single column Radiative Equilibrium.
 
-
 # Radiative Equilibrium
+
 Radiative equilibrium is a useful framework for analyzing atmospheric temperature profiles with different atmosphere conditions. In radiative equilibrium, we only consider heat exchange from radiation. In this example, we only match the total energy, and assume a fixed relative humidity to get specific humidity.
 
 To run a radiative equilibrium simulation, create a yaml file (or use a default one) and run the following commands in your terminal (after instantiating the necessary packages):
 
 The yaml file should look something like this:
 `mysim.yml`
+
 ```
 rad: "clearsky"
 idealized_h2o: true
@@ -26,6 +27,7 @@ prognostic_surface: true
 ```
 
 Then run the simulation with the following command:
+
 ```
 julia --project=.buildkite .buildkite/ci_driver.jl \
     --config_file path_to_mysim.yml \
@@ -44,7 +46,6 @@ This will bring you into a julia environment where the current state of the simu
 
 ![](assets/sample_-i_outputs.png)
 
-
 Here is a typical vertical temperature profile on the final day of a simulation (the dot is surface temperature):
 
 ![](assets/example_temp_profile.png)
@@ -53,8 +54,8 @@ Note: The surface temperature must also converge before the simulation reaches r
 
 ![](assets/surface_temp_convergence.png)
 
-
 # Greenhouse Gas Concentrations
+
 In `radiation.jl` one can change the concentrations of greenhouse gases in order to test their effects on the atmospheric temperature profile.
 
 To change the ozone concentration multiply the following variable by the desired coefficient:
@@ -64,17 +65,16 @@ center_volume_mixing_ratio_o3 =
                 Fields.field2array(@. FT(pressure2ozone(default_cache.ᶜp))) * desired_coefficient
 ```
 
-
 Here are the equilibrium temperature profiles under different ozone concentrations:
 
 ![](assets/O3_temp_profile.png)
 ![](assets/O3_temp_difference.png)
 
 To change the CO2 concentration, multiply the volume mixing ratio by the desired coefficient:
+
 ```
 volume_mixing_ratio_co2 = input_vmr("carbon_dioxide_GM") * desired_coefficient
 ```
-
 
 Here are the equilibrium temperature profiles under different CO2 concentrations:
 
@@ -83,8 +83,8 @@ Here are the equilibrium temperature profiles under different CO2 concentrations
 
 Similarly, one can change the concentration of any other gases in the atmosphere
 
-
 # Data extraction in Julia
+
 To access the data from hdf5 files one can use the following code to create a var `diagnostics` which stores values from a hdf5 file path:
 
 ```

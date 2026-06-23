@@ -3,22 +3,28 @@
 The state ``Y`` is evolved using a split implicit-explicit (IMEX) timestepping
 scheme, which separates the tendency ``T(Y) = \partial Y/\partial t`` into
 implicit (fast) and explicit (slow) components,
+
 ```math
 T(Y) = T_{imp}(Y) + T_{exp}(Y).
 ```
+
 For an implicit step from time ``t`` to ``t + \Delta t``, we begin with the
 state ``Y_{prev}`` from the explicit step at time ``t`` (which also includes
 information from all previous times before ``t``), and we find a state ``Y``
 that solves the implicit equation
+
 ```math
 Y = Y_{prev} + \Delta t * T_{imp}(Y),
 ```
+
 where ``\Delta t * T_{imp}(Y)`` is a linear approximation of the state change
 due to the implicit tendency between times ``t`` and ``t + \Delta t``. Solving
 this equation amounts to finding a root of the residual function
+
 ```math
 R(Y) = Y_{prev} + \Delta t * T_{imp}(Y) - Y,
 ```
+
 since any state ``Y`` that satisfies ``R(Y) = 0`` is consistent with the linear
 approximation of the implicit state change.
 
@@ -30,26 +36,31 @@ To find the root of ``R(Y)`` using Newton's method, we must specify the
 derivative ``\partial R/\partial Y``. Since ``Y_{prev}`` does not depend on
 ``Y`` (it is only a function of the state at or before time ``t``), this
 derivative is given by
+
 ```math
 R'(Y) = \Delta t * \frac{\partial T_{imp}}{\partial Y} - I.
 ```
+
 For each state ``Y``, Newton's method computes an update ``\Delta Y`` that
 brings ``R(Y)`` closer to 0 by solving the linear equation
+
 ```math
 R'(Y) * \Delta Y = R(Y).
 ```
 
 *Note:* This equation comes from assuming that there is some ``\Delta Y``
 for which ``R(Y - \Delta Y) = 0`` and approximating
+
 ```math
 R(Y - \Delta Y) \approx R(Y) - R'(Y) * \Delta Y.
 ```
 
 After initializing ``Y`` to ``Y[0] = Y_{prev}``, Newton's method executes the
 following steps:
-1. Compute the residual ``R(Y[0])`` and its derivative ``R'(Y[0])``.
-2. Solve ``R'(Y[0]) * \Delta Y[0] = R(Y[0])`` for ``\Delta Y[0]``.
-3. Update ``Y`` to ``Y[1] = Y[0] - \Delta Y[0]``.
+
+ 1. Compute the residual ``R(Y[0])`` and its derivative ``R'(Y[0])``.
+ 2. Solve ``R'(Y[0]) * \Delta Y[0] = R(Y[0])`` for ``\Delta Y[0]``.
+ 3. Update ``Y`` to ``Y[1] = Y[0] - \Delta Y[0]``.
 
 If the number of Newton iterations is limited to 1, this new value of ``Y`` is
 taken to be the solution of the implicit equation. Otherwise, this sequence of
@@ -85,23 +96,29 @@ corresponds to the implicit treatment of some particular physical process.
 Another way to compute the Jacobian is through automatic differentiation. This
 involves replacing all real numbers in the prognostic state with dual numbers of
 the form
+
 ```math
 x^D =
 x + \hat{x}^1 * \varepsilon_1 + \hat{x}^2 * \varepsilon_2 + \ldots +
     \hat{x}^n * \varepsilon_n,
 ```
+
 where
-- ``x`` and ``\hat{x}^i`` are real numbers, and
-- ``\varepsilon_i`` is an infinitesimal number with the property that
-  ``\varepsilon_i * \varepsilon_j = 0``.
+
+  - ``x`` and ``\hat{x}^i`` are real numbers, and
+  - ``\varepsilon_i`` is an infinitesimal number with the property that
+    ``\varepsilon_i * \varepsilon_j = 0``.
 
 Passing the dual number ``x + \hat{x} * \varepsilon`` to any function ``f(x)``
 yields
+
 ```math
 f(x + \hat{x} * \varepsilon) =
 f(x) + \frac{\partial f(x)}{\partial x} * \hat{x} * \varepsilon.
 ```
+
 By extension, passing the dual vector ``X + \hat{X} * \mathcal{E}``, where
+
 ```math
 X =
 \begin{pmatrix}
@@ -126,20 +143,27 @@ X =
     \hat{X}^1_N & \hat{X}^2_N & \ldots & \hat{X}^n_N
 \end{pmatrix},
 ```
+
 to any function ``f(X)`` yields
+
 ```math
 f(X + \hat{X} * \mathcal{E}) =
 f(X) + \frac{\partial f(X)}{\partial X} * \hat{X} * \mathcal{E}.
 ```
+
 If the dual vector is
+
 ```math
 Y^D = Y + P * \mathcal{E},
 ```
+
 passing it to the implicit tendency ``T_{imp}(Y)`` yields the dual tendency
+
 ```math
 T_{imp}^D = T_{imp}(Y^D) =
 T_{imp}(Y) + \frac{\partial T_{imp}(Y)}{\partial Y} * P * \mathcal{E},
 ```
+
 so ``P`` acts as a right preconditioner for ``\partial T_{imp}(Y)/\partial Y``.
 The tendency derivative can be extracted from the ``\varepsilon`` components of
 the dual tendency by inverting the preconditioner, after which a multiplication
@@ -153,6 +177,7 @@ tendency itself. Further generalizing the property of
 ``\varepsilon_i * \varepsilon_j = 0`` to functions of two vectors, passing
 ``A + \hat{A} * \mathcal{E}`` and ``B + \hat{B} * \mathcal{E}`` to any function
 ``f(A, B)`` yields
+
 ```math
 f(A + \hat{A} * \mathcal{E}, B + \hat{B} * \mathcal{E}) =
 f(A, B) +
@@ -161,13 +186,17 @@ f(A, B) +
     \frac{\partial f(A, B)}{\partial B} * \hat{B}
 \right) * \mathcal{E}.
 ```
+
 So, the dual tendency ``T_{imp}^D`` is computed in two steps, first evaluating
 ``p_{imp}(Y^D)`` to get
+
 ```math
 p_{imp}^D =
 p_{imp}(Y) + \frac{\partial p_{imp}(Y)}{\partial Y} * P * \mathcal{E},
 ```
+
 and then evaluating ``T_{imp}(Y^D, p_{imp}^D)`` to get
+
 ```math
 T_{imp}^D =
 T_{imp}(Y, p_{imp}(Y)) +
@@ -177,8 +206,10 @@ T_{imp}(Y, p_{imp}(Y)) +
     \frac{\partial p_{imp}(Y)}{\partial Y}
 \right) * P * \mathcal{E}.
 ```
+
 In other words, the single-argument tendency derivative
 ``\partial T_{imp}(Y)/\partial Y`` is really a shorthand for
+
 ```math
 \frac{\partial T_{imp}(Y)}{\partial Y} =
 \frac{\partial T_{imp}(Y, p_{imp}(Y))}{\partial Y} +
@@ -193,6 +224,7 @@ the tendency matrix. When the number of ``\varepsilon`` components, ``n``, is
 equal to the number of values in each column's state vector, ``N``, this
 involves setting ``P`` to the ``N \times N`` identity matrix, so that the dual
 counterpart of each column's state vector is
+
 ```math
 Y^D = Y + \mathcal{E} =
 \begin{pmatrix}
@@ -202,7 +234,9 @@ Y^D = Y + \mathcal{E} =
     Y_N + \varepsilon_N
 \end{pmatrix}.
 ```
+
 Evaluating ``T_{imp}(Y)`` on this input yields the dual tendency
+
 ```math
 T_{imp}^D = T_{imp}(Y) + \frac{\partial T_{imp}(Y)}{\partial Y} * \mathcal{E} =
 \begin{pmatrix}
@@ -218,6 +252,7 @@ T_{imp}^D = T_{imp}(Y) + \frac{\partial T_{imp}(Y)}{\partial Y} * \mathcal{E} =
     \frac{\partial T_{imp, N}(Y)}{\partial Y_N} * \varepsilon_N
 \end{pmatrix},
 ```
+
 where the entry in the ``i``-th row and ``j``-th column of
 ``\partial T_{imp}(Y)/\partial Y`` is the coefficient of ``\varepsilon_j`` in
 the ``i``-th value of ``T_{imp}^D``.
@@ -327,39 +362,41 @@ padding bands to every Jacobian block.
 If setting `use_auto_jacobian = true` makes a simulation unstable or leads to
 inaccurate results, set `debug_jacobian = true` and compare the different
 approximations of each Jacobian block:
-- When a block differs between two algorithms, check whether the difference
-  is significant (i.e., whether its normalized magnitude exceeds `1/dt`).
-- If the `AutoSparseJacobian` and `ManualSparseJacobian` agree on a block but
-  significantly differ from the `AutoDenseJacobian`:
-  - Add bands that are missing from the sparsity pattern in this block to the
-    `ManualSparseJacobian`, which also adds them to the `AutoSparseJacobian`.
-- If the `AutoSparseJacobian` and `AutoDenseJacobian` agree on a block but
-  significantly differ from the `ManualSparseJacobian`, and if the manual
-  approximation is more accurate than the automatic value:
-  - Determine which tendency term's derivative is responsible for the erroneous
-    automatic value.
-  - If possible, rewrite the tendency term so that it generates a more accurate
-    derivative using dual numbers.
-  - If this is not possible, add a new method for the tendency term that
-    specializes on dual numbers with the tag [`ClimaAtmos.Jacobian`](@ref),
-    overwriting the derivative automatically generated by `ForwardDiff.jl`.
-- Otherwise, if the `AutoSparseJacobian` and `AutoDenseJacobian` significantly
-  differ for a block:
-  - Set `auto_jacobian_padding_bands` to a large number, and check whether this
-    discrepancy between the sparse and dense values disappears.
-  - If padding bands do not resolve the discrepancy:
-    - Add non-padding bands that are missing from this block to the
-      `ManualSparseJacobian`, which also adds them to the `AutoSparseJacobian`.
-  - If padding bands resolve the discrepancy:
-    - Find all differences between the sparsity patterns of the sparse and dense
-      Jacobians in the same row as this block.
-    - If any blocks (or bands within a block) are missing from this block's row
-      of the sparse Jacobian, check whether they have unnormalized magnitudes
-      that are significant in comparison to this block.
-    - Extend the default padding bands of the `AutoSparseJacobian` so they cover
-      every significant unnormalized value that could be affecting this block,
-      and reset `auto_jacobian_padding_bands` to use the default padding bands.
+
+  - When a block differs between two algorithms, check whether the difference
+    is significant (i.e., whether its normalized magnitude exceeds `1/dt`).
+  - If the `AutoSparseJacobian` and `ManualSparseJacobian` agree on a block but
+    significantly differ from the `AutoDenseJacobian`:
+      + Add bands that are missing from the sparsity pattern in this block to the
+        `ManualSparseJacobian`, which also adds them to the `AutoSparseJacobian`.
+  - If the `AutoSparseJacobian` and `AutoDenseJacobian` agree on a block but
+    significantly differ from the `ManualSparseJacobian`, and if the manual
+    approximation is more accurate than the automatic value:
+      + Determine which tendency term's derivative is responsible for the erroneous
+        automatic value.
+      + If possible, rewrite the tendency term so that it generates a more accurate
+        derivative using dual numbers.
+      + If this is not possible, add a new method for the tendency term that
+        specializes on dual numbers with the tag [`ClimaAtmos.Jacobian`](@ref),
+        overwriting the derivative automatically generated by `ForwardDiff.jl`.
+  - Otherwise, if the `AutoSparseJacobian` and `AutoDenseJacobian` significantly
+    differ for a block:
+      + Set `auto_jacobian_padding_bands` to a large number, and check whether this
+        discrepancy between the sparse and dense values disappears.
+      + If padding bands do not resolve the discrepancy:
+          * Add non-padding bands that are missing from this block to the
+            `ManualSparseJacobian`, which also adds them to the `AutoSparseJacobian`.
+      + If padding bands resolve the discrepancy:
+          * Find all differences between the sparsity patterns of the sparse and dense
+            Jacobians in the same row as this block.
+          * If any blocks (or bands within a block) are missing from this block's row
+            of the sparse Jacobian, check whether they have unnormalized magnitudes
+            that are significant in comparison to this block.
+          * Extend the default padding bands of the `AutoSparseJacobian` so they cover
+            every significant unnormalized value that could be affecting this block,
+            and reset `auto_jacobian_padding_bands` to use the default padding bands.
 
 ## See also
-- [Yatunin, D, et al., "The CliMA atmosphere dynamical core: Concepts, numerics, and scaling"](https://doi.org/10.22541/essoar.173940262.23304403/v1), Section 5 and Appendix F
-- [Documentation for ClimaTimeSteppers.jl](https://clima.github.io/ClimaTimeSteppers.jl/dev/algorithm_formulations/ode_solvers/)
+
+  - [Yatunin, D, et al., "The CliMA atmosphere dynamical core: Concepts, numerics, and scaling"](https://doi.org/10.22541/essoar.173940262.23304403/v1), Section 5 and Appendix F
+  - [Documentation for ClimaTimeSteppers.jl](https://clima.github.io/ClimaTimeSteppers.jl/dev/algorithm_formulations/ode_solvers/)

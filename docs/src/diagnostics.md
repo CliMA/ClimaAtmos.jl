@@ -86,7 +86,7 @@ list of diagnostics ready to be passed to the simulation. So, for example
 
 ```julia
 
-model = ClimaAtmos.AtmosModel(..., microphysics_model = ClimaAtmos.DryModel(), ...)
+model = ClimaAtmos.AtmosModel(_, microphysics_model = ClimaAtmos.DryModel(), ...)
 
 diagnostics = ClimaAtmos.default_diagnostics(model)
 # => List of diagnostics that include the ones specified for the DryModel
@@ -192,9 +192,9 @@ You can alternatively provide a `compute!` function.
 ```julia
 function compute!(out, state, cache, time)
     if isnothing(out)
-        return ... # Calculations with the state and the cache
+        return _ # Calculations with the state and the cache
     else
-        out .= ... # Calculations with the state and the cache
+        out .= _ # Calculations with the state and the cache
     end
 end
 ```
