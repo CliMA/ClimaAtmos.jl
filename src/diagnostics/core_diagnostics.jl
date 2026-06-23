@@ -674,17 +674,9 @@ compute_clwvi(state, cache, time) =
     compute_clwvi(state, cache, time, cache.atmos.microphysics_model)
 compute_clwvi(_, _, _, model) = error_diagnostic_variable("clwvi", model)
 
-function compute_clwvi(state, cache, _, ::EquilibriumMicrophysics0M)
+function compute_clwvi(state, cache, _, ::MoistMicrophysics)
     out = cache.scratch.ᶠtemp_field_level
-    (; ᶜq_liq, ᶜq_ice) = cache.precomputed
-    clw = @. lazy(state.c.ρ * (ᶜq_liq + ᶜq_ice))
-    Operators.column_integral_definite!(out, clw)
-    return out
-end
-
-function compute_clwvi(state, cache, _, ::NonEquilibriumMicrophysics)
-    out = cache.scratch.ᶠtemp_field_level
-    clw = @. lazy(state.c.ρq_lcl + state.c.ρq_icl)
+    clw = @. lazy(state.c.ρ * (cache.precomputed.ᶜq_liq + cache.precomputed.ᶜq_ice))
     Operators.column_integral_definite!(out, clw)
     return out
 end
@@ -695,7 +687,7 @@ add_diagnostic_variable!(short_name = "clwvi", units = "kg m^-2",
     comments = """
     Mass of condensed (liquid + ice) water in the column divided by
     the area of the column (not just the cloudy portion).
-    Does not include precipitating hydrometeors.
+    Includes precipitating hydrometeors (rain + snow) for NonEquilibriumMicrophysics.
     """,
     compute = compute_clwvi,
 )
@@ -727,6 +719,35 @@ add_diagnostic_variable!(short_name = "lwp", units = "kg m^-2",
     comments = "The total mass of liquid water in cloud per unit area. \
                 Does not include precipitating hydrometeors.",
     compute = compute_lwp,
+)
+
+###
+# Ice water path (2d)
+###
+compute_iwp(state, cache, time) =
+    compute_iwp(state, cache, time, cache.atmos.microphysics_model)
+compute_iwp(_, _, _, model) = error_diagnostic_variable("iwp", model)
+
+function compute_iwp(state, cache, _, ::EquilibriumMicrophysics0M)
+    out = cache.scratch.ᶠtemp_field_level
+    iw = @. lazy(state.c.ρ * cache.precomputed.ᶜq_ice)
+    Operators.column_integral_definite!(out, iw)
+    return out
+end
+
+function compute_iwp(state, cache, _, ::NonEquilibriumMicrophysics)
+    out = cache.scratch.ᶠtemp_field_level
+    iw = state.c.ρq_icl
+    Operators.column_integral_definite!(out, iw)
+    return out
+end
+
+add_diagnostic_variable!(short_name = "iwp", units = "kg m^-2",
+    long_name = "Ice Water Path",
+    standard_name = "atmosphere_mass_content_of_cloud_ice",
+    comments = "The total mass of ice in cloud per unit area. \
+                Does not include precipitating hydrometeors.",
+    compute = compute_iwp,
 )
 
 ###

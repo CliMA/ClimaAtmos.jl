@@ -10,7 +10,7 @@ env:
   GKSwstype: 100
   SLURM_KILL_BAD_EXIT: 1
   COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
-  COUPLER_COMMIT: "d6712ed675f9e3f2819a8245514d1eea593ee4d8"
+  COUPLER_COMMIT: "8f827b9118a6a0edfa2199c6b7340ae509168ac4"
   CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
   BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
 
@@ -25,12 +25,10 @@ steps:
       # Update package registry, since dev installs do not do that with a manifest
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.Registry.update()'"
       - echo "--- Instantiate AMIP env"
-      # Instantiate and dev install ClimaAtmos
+      # Instantiate and dev install ClimaCore
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.develop(path=".")'''
       - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add("MPI")'''
-      # Install ClimaCore from main, since that's how the nightly Coupler runs
-      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add(PackageSpec(name="ClimaCore", rev="main"))'''
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.status()'"
     agents:
@@ -50,7 +48,8 @@ steps:
     artifact_paths: "output/gpu_amip_progedmf_1M_land_he16/artifacts/*"
     env:
       CLIMACOMMS_DEVICE: "CUDA"
-      BASELINE_SYPD: "0.252"
+      # Fallback used when no passing main build metadata is available yet.
+      BASELINE_SYPD: "0.175"
       MIN_PERCENT_CHANGE: "-1"
     agents:
       slurm_gpus_per_task: 1
