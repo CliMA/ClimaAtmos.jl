@@ -203,7 +203,7 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
 end
 
 function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)
-    FT = eltype(Y.c)
+    FT = Spaces.undertype(axes(Y.c))
     (; rrtmgp_model) = p.radiation
     rrtmgp_model.cos_zenith .= eps(FT) # polar night; keep μ>0 for RRTMGP
     rrtmgp_model.toa_flux .= FT(0)
