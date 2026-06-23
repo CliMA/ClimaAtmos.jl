@@ -830,6 +830,9 @@ function AtmosSurface(
         Setups.surface_condition(setup_type, params)
 
     temperature = if pa["prognostic_surface"] == "SlabOceanSST"
+        if !isnothing(setup_type) && !isnothing(setup_pieces.temperature)
+            @warn "`SlabOceanSST` is active; the surface temperature specified via `surface_condition` in the case setup will be overwritten by the slab ocean's prognostic initialization (see `prognostic_variables.jl`)."
+        end
         SurfaceConditions.SlabOceanTemperature{FT}()
     elseif pa["prognostic_surface"] == "PrescribedSST"
         @something(setup_pieces.temperature, Setups.surface_temperature_model(setup_type))
