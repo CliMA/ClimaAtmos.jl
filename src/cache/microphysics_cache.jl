@@ -939,12 +939,7 @@ function _fill_2m_tendency_cache_edmf!(
     Y, p, mp2m::NonEquilibriumMicrophysics2M, tm::PrognosticEDMFX,
 )
     (; dt) = p
-    # Substep-averaging mode (shared with the grid-mean fill). Routing each
-    # subdomain's BMT call through the mode means a selected SubsteppedAverage /
-    # RosenbrockAverage substeps and applies its saturation-adjustment + positivity
-    # limiter in every subdomain, not only the grid mean. With the substep callback
-    # on, this fill runs once per step, so the cost is `nsub` evaluations per
-    # subdomain per cell, once per step.
+    # Substep-averaging mode (shared with the grid-mean fill), applied per subdomain.
     mode = mp2m.tendency_mode
     thp = CAP.thermodynamics_params(p.params)
     cm1p = CAP.microphysics_1m_params(p.params)
@@ -1043,7 +1038,7 @@ function _fill_2m_tendency_cache_gridmean!(
     Y, p, mp2m::NonEquilibriumMicrophysics2M,
 )
     (; dt) = p
-    (; ᶜT, ᶜmp_tendency, ᶜlogλ) = p.precomputed
+    (; ᶜT, ᶜp, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency, ᶜlogλ) = p.precomputed
     # Access the abstract averaging-mode field once; the broadcast
     # below specializes on the concrete mode (function barrier). The mode carries
     # its own `n_substeps` and increment limiter.
@@ -1052,6 +1047,8 @@ function _fill_2m_tendency_cache_gridmean!(
     # get thermodynamics and microphysics params
     cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
+    acp = CAP.microphysics_cloud_params(p.params).activation
+    pap = p.params.prescribed_aerosol_params
 
     # Get specific quantities (warm rain)
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
@@ -1066,15 +1063,40 @@ function _fill_2m_tendency_cache_gridmean!(
     ᶜb_rim = @. lazy(specific(Y.c.ρb_rim, Y.c.ρ))
 
     # Compute the CloudMicrophysics-averaged (substepped, satadj- and
-    # coupled-sink-limited) microphysics tendency. With `mode.n_substeps == 1`
+    # positivity-floor-limited) microphysics tendency. With `mode.n_substeps == 1`
     # this reduces to a single BMT call plus the mode's limiter; `n_substeps > 1`
     # forward-Eulers the bulk tendency over `dt/n_substeps` substeps (logλ held
     # fixed) and returns the dt-averaged result, which the IMEX loop sees as a
     # constant explicit forcing.
-    # TODO - aerosol activation is not yet wired into the grid-mean path.
     @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
         mode, BMT.Microphysics2Moment(), cm2p, thp, Y.c.ρ, ᶜT, ᶜq_tot,
         ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_ice, ᶜn_ice, ᶜq_rim, ᶜb_rim, ᶜlogλ, dt,
+    )
+
+    # Aerosol activation source for the droplet number, mirroring the EDMF
+    # environment path with grid-mean inputs. The scratch fields are unused here:
+    # the grid-mean fill and the substep callback's `set_p3_logλ!` use none.
+    # TODO - make it part of BMT
+    # TODO - should be included in limiting
+    seasalt_num = p.scratch.ᶜtemp_scalar_3
+    seasalt_mean_radius = p.scratch.ᶜtemp_scalar_4
+    sulfate_num = p.scratch.ᶜtemp_scalar_5
+    if hasproperty(p, :tracers) &&
+       hasproperty(p.tracers, :prescribed_aerosols_field)
+        compute_prescribed_aerosol_properties!(
+            seasalt_num, seasalt_mean_radius, sulfate_num,
+            p.tracers.prescribed_aerosols_field, pap,
+        )
+    else
+        @. seasalt_num = 0
+        @. seasalt_mean_radius = 0
+        @. sulfate_num = 0
+    end
+    ᶜw = @. lazy(w_component(Geometry.WVector(ᶜu)))
+    @. ᶜmp_tendency.dn_lcl_dt += aerosol_activation_sources(
+        acp, seasalt_num, seasalt_mean_radius, sulfate_num, ᶜq_tot_nonneg,
+        ᶜq_lcl + ᶜq_rai, ᶜq_ice, ᶜn_lcl + ᶜn_rai,
+        Y.c.ρ, ᶜw, cm2p, thp, ᶜT, ᶜp, dt, (pap,),
     )
     return nothing
 end
