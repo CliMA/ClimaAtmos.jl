@@ -1,3 +1,7 @@
+"""
+    Test that a warning is emitted when SlabOceanSST is used with a setup that provides
+    a surface_condition temperature.
+"""
 using Test
 using Logging
 import ClimaComms
@@ -5,11 +9,6 @@ ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 
 @testset "SlabOceanSST Warning" begin
-    """
-    Test that a warning is emitted when SlabOceanSST is used with a setup that provides
-    a surface_condition temperature.
-    """
-    
     FT = Float32
     
     @testset "Warning emitted when setup provides surface temperature" begin
@@ -26,9 +25,15 @@ import ClimaAtmos as CA
         
         params = CA.Parameters.ClimaAtmosParameters(FT)
         
-        # Create a setup that has a surface_condition with temperature
-        # We'll use TRMM_LBA as it defines a surface temperature
+        # Create a setup that has a surface_condition with temperature.
+        # TRMM_LBA is chosen because its surface_condition provides a temperature value
+        # (see src/setups/TRMM_LBA.jl). If this changes in the future, this test
+        # may need to be updated to use a different setup that provides a surface temperature.
         setup_type = CA.Setups.TRMM_LBA()
+        
+        # Verify that the setup indeed provides a surface temperature
+        setup_pieces = CA.Setups.surface_condition(setup_type, params)
+        @test !isnothing(setup_pieces.temperature) "TRMM_LBA setup must provide a surface_condition temperature"
         
         # Capture warnings
         log_buffer = IOBuffer()
