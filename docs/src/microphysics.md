@@ -193,8 +193,8 @@ eight applied prognostic tendencies
 ``(\dot q_\mathrm{lcl}, \dot n_\mathrm{lcl}, \dot q_\mathrm{rai}, \dot n_\mathrm{rai}, \dot q_\mathrm{ice}, \dot n_\mathrm{ice}, \dot q_\mathrm{rim}, \dot b_\mathrm{rim})``.
 In the EDMF path the unaveraged entry `BMT.bulk_microphysics_tendencies(BMT.Microphysics2Moment(), ...)`
 is called once per subdomain (updrafts and environment) and the coupled-sink and
-aerosol-activation increments are applied by ClimaAtmos around those calls;
-aerosol activation is not yet wired into the grid-mean path.
+aerosol-activation increments are applied by ClimaAtmos around those calls.
+Aerosol activation is also applied in the grid-mean (non-EDMF) path.
 
 ### The IMEX split is a separate axis
 
@@ -268,8 +268,10 @@ active.
 ## Sedimentation
 
 All microphysics tracers sediment with a bulk (group) sedimentation velocity.
-The sedimentation velocity can be parameterized via CloudMicrophysics.jl or
-specified as a fixed value for each tracer.
+The sedimentation velocity can be parameterized via CloudMicrophysics.jl or, for
+the 1-moment scheme, specified as a fixed value for each tracer. The 2-moment /
+P3 scheme always uses diagnostic terminal velocities (the `fixed_terminal_velocity`
+option does not apply to it).
 
 Sedimentation is done implicitly through a first-order upwinding scheme.
 Because all tracers are part of the working fluid, their sedimentation
@@ -310,6 +312,9 @@ in a physically admissible range.
 Currently, this includes:
 
 - enforcing non-negative condensate masses,
+- for two-moment microphysics, enforcing non-negative warm-rain number
+  concentrations (the P3-frozen ice fields are kept self-consistent by the
+  microphysics scheme rather than clipped field-by-field here),
 - rescaling condensate when the total condensate exceeds total moisture,
 - handling non-positive updraft area fractions by mixing the affected updraft
   state with the environment (EDMF filter),
@@ -403,3 +408,5 @@ To enable ARG to be used locally (i.e., without explicitly identifying cloud bas
 - If the predicted number of activated droplets is less than the existing local cloud droplet number concentration, activation is also suppressed.
 
 This ensures that droplet activation occurs only in physically meaningful regions—typically near cloud base—even though the activation routine can be applied throughout the domain.
+
+The activated droplet number is added as a source to the cloud droplet number tendency in both the EDMF subdomains and the grid-mean (non-EDMF) path, so the prognostic droplet number responds to cloud condensation nuclei in either configuration. When clouds are treated interactively in radiation, that prognostic droplet number `n_lcl` in turn sets the cloud liquid effective radius (via the Liu and Hallett (1997) relation, ``r_\mathrm{eff} \propto N_d^{-1/3}``). Together these close the aerosol indirect (Twomey) effect for two-moment microphysics, from cloud condensation nuclei through droplet number to cloud shortwave albedo.
