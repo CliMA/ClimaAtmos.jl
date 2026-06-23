@@ -80,6 +80,65 @@ function set_precipitation_velocities!(Y, p, _, _)
     @. ᶜwₕhₜ = Geometry.WVector(0)
     return nothing
 end
+
+"""
+    set_p3_logλ!(Y, p, microphysics_model, turbconv_model)
+
+Refresh the cached P3 size-distribution slope(s) `logλ` from the current state
+`Y`: `ᶜlogλ` for the grid-mean path, and `ᶜlogλ⁰` (environment) plus `ᶜlogλʲs`
+(updrafts) for the prognostic-EDMF path. The slope is built from the regularised
+`state_from_prognostic`, matching the state the bulk microphysics tendency path
+constructs internally.
+"""
+set_p3_logλ!(Y, p, _, _) = nothing
+function set_p3_logλ!(
+    Y, p, ::NonEquilibriumMicrophysics2M, turbconv_model::PrognosticEDMFX,
+)
+    (; ᶜlogλ⁰, ᶜlogλʲs) = p.precomputed
+    cm2p = CAP.microphysics_2m_params(p.params)
+    p3_ice = cm2p.ice
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
+    ᶜn_ice⁰ = ᶜspecific_env_value(@name(n_ice), Y, p)
+    ᶜq_rim⁰ = ᶜspecific_env_value(@name(q_rim), Y, p)
+    ᶜb_rim⁰ = ᶜspecific_env_value(@name(b_rim), Y, p)
+    ᶜstate_p3⁰ = @. lazy(
+        CMP3.state_from_prognostic(
+            p3_ice.scheme,
+            max(0, ᶜq_ice⁰), max(0, ᶜn_ice⁰),
+            max(0, ᶜq_rim⁰), max(0, ᶜb_rim⁰),
+        ),
+    )
+    @. ᶜlogλ⁰ = CMP3.get_distribution_logλ(ᶜstate_p3⁰)
+    for j in 1:n
+        ᶜYʲ = Y.c.sgsʲs.:($j)
+        ᶜstate_p3ʲ = @. lazy(
+            CMP3.state_from_prognostic(
+                p3_ice.scheme,
+                max(0, ᶜYʲ.q_ice), max(0, ᶜYʲ.n_ice),
+                max(0, ᶜYʲ.q_rim), max(0, ᶜYʲ.b_rim),
+            ),
+        )
+        @. ᶜlogλʲs.:($$j) = CMP3.get_distribution_logλ(ᶜstate_p3ʲ)
+    end
+    return nothing
+end
+function set_p3_logλ!(Y, p, ::NonEquilibriumMicrophysics2M, _)
+    (; ᶜlogλ) = p.precomputed
+    (; ρq_ice, ρn_ice, ρq_rim, ρb_rim) = Y.c
+    cm2p = CAP.microphysics_2m_params(p.params)
+    p3_ice = cm2p.ice
+    ᶜstate_p3 = @. lazy(
+        CMP3.state_from_prognostic(
+            p3_ice.scheme,
+            max(0, ρq_ice), max(0, ρn_ice), max(0, ρq_rim), max(0, ρb_rim),
+        ),
+    )
+    @. ᶜlogλ = CMP3.get_distribution_logλ(ᶜstate_p3)
+    return nothing
+end
+
 function set_precipitation_velocities!(
     Y,
     p,
@@ -347,8 +406,12 @@ function set_precipitation_velocities!(
     ###
     ### Ice
     ###
+    # Refresh the P3 slopes `ᶜlogλ⁰`/`ᶜlogλʲs` from the current `Y`, then build
+    # each subdomain's / the environment's P3 state via the regularised
+    # `state_from_prognostic` (clamps F_rim/ρ_rim, avoids 0/0 for unrimed ice).
     p3_ice = cm2p.ice
     use_aspect_ratio = true  # TODO: config option
+    set_p3_logλ!(Y, p, microphysics_model, turbconv_model)
     ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
     ᶜn_ice⁰ = ᶜspecific_env_value(@name(n_ice), Y, p)
     ᶜq_rim⁰ = ᶜspecific_env_value(@name(q_rim), Y, p)
@@ -361,7 +424,6 @@ function set_precipitation_velocities!(
             max(0, ᶜq_rim⁰), max(0, ᶜb_rim⁰),
         ),
     )
-    @. ᶜlogλ⁰ = CMP3.get_distribution_logλ(ᶜstate_p3⁰)
     args⁰ = (p3_ice.terminal_velocity, ᶜρ⁰, ᶜstate_p3⁰, ᶜlogλ⁰)
     @. ᶜwnᵢ⁰ = CMP3.ice_terminal_velocity_number_weighted(args⁰...; use_aspect_ratio)
     @. ᶜwᵢ⁰ = CMP3.ice_terminal_velocity_mass_weighted(args⁰...; use_aspect_ratio)
@@ -376,7 +438,6 @@ function set_precipitation_velocities!(
                 max(0, ᶜYʲ.q_rim), max(0, ᶜYʲ.b_rim),
             ),
         )
-        @. ᶜlogλʲs.:($$j) = CMP3.get_distribution_logλ(ᶜstate_p3ʲ)
         @. ᶜwᵢʲs.:($$j) = CMP3.ice_terminal_velocity_mass_weighted(
             p3_ice.terminal_velocity, ᶜρʲs.:($$j), ᶜstate_p3ʲ, ᶜlogλʲs.:($$j);
             use_aspect_ratio,
@@ -493,7 +554,7 @@ function set_precipitation_velocities!(
     return nothing
 end
 function set_precipitation_velocities!(
-    Y, p, ::NonEquilibriumMicrophysics2M, _,
+    Y, p, microphysics_model::NonEquilibriumMicrophysics2M, turbconv_model,
 )
     ## liquid quantities (2M warm rain)
     (; ᶜwₗ, ᶜwᵣ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
@@ -536,15 +597,18 @@ function set_precipitation_velocities!(
     # P3 ice params from unified container
     p3_ice = cm2p.ice
 
-    # Number- and mass weighted ice terminal velocity [m/s]
+    # Refresh the P3 slope `ᶜlogλ` from the current `Y`, then build the P3 state
+    # via the regularised `state_from_prognostic`, which clamps F_rim/ρ_rim and
+    # avoids the raw `ρq_rim/ρb_rim` 0/0 for unrimed ice (`ρb_rim = 0`), whose
+    # NaN `ρ_rim` would otherwise corrupt `logλ` and the velocities.
     (; ᶜlogλ, ᶜwnᵢ) = p.precomputed
+    set_p3_logλ!(Y, p, microphysics_model, turbconv_model)
     use_aspect_ratio = true  # TODO: Make a config option
     ᶜstate_p3 = @. lazy(
         CMP3.state_from_prognostic(p3_ice.scheme,
             max(0, ρq_ice), max(0, ρn_ice), max(0, ρq_rim), max(0, ρb_rim),
         ),
     )
-    @. ᶜlogλ = CMP3.get_distribution_logλ(ᶜstate_p3)
     args = (p3_ice.terminal_velocity, ρ, ᶜstate_p3, ᶜlogλ)
     @. ᶜwnᵢ = CMP3.ice_terminal_velocity_number_weighted(args...; use_aspect_ratio)
     @. ᶜwᵢ = CMP3.ice_terminal_velocity_mass_weighted(args...; use_aspect_ratio)

@@ -462,6 +462,9 @@ function microphysics_substep_callback!(integrator)
     mp = p.atmos.microphysics_model
     tm = p.atmos.turbconv_model
     if mp isa NonEquilibriumMicrophysics2M
+        # Refresh the cached P3 slope `logλ` from the current `Y` before the
+        # tendency fill reads it.
+        set_p3_logλ!(Y, p, mp, tm)
         if tm isa PrognosticEDMFX
             _fill_2m_tendency_cache_edmf!(Y, p, mp, tm)
         else
