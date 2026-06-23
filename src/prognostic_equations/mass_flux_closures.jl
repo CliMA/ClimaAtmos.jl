@@ -194,7 +194,8 @@ Currently, this includes:
 - For prognostic EDMF, handling non-positive updraft area fractions by
   immediately mixing the affected updraft state with the environment.
 - For one- and two-moment microphysics, enforcing non-negative condensate
-  masses.
+  masses, and for two-moment microphysics also non-negative warm-rain number
+  concentrations.
 - When total moisture is positive, rescaling condensate masses so that their
   sum does not exceed total moisture.
 
@@ -204,27 +205,39 @@ available total moisture. Ideally, the need for this correction is minimized
 by the numerical scheme.
 """
 
-# Private helper: clips grid-mean condensate tracers to non-negative values and
-# rescales the condensate sum so it cannot exceed the available total moisture.
+# Private helper: clips grid-mean condensate tracers to non-negative values
+# (and, for 2M, the warm-rain number concentrations ρn_lcl/ρn_rai) and rescales
+# the condensate sum so it cannot exceed the available total moisture.
 function enforce_grid_mean_microphysics_constraints!(Y, p, t)
     FT = eltype(p.params)
     ρq_cond = p.scratch.ᶜtemp_scalar
     ratio = p.scratch.ᶜtemp_scalar_2
     @. Y.c.ρq_lcl = max(FT(0), Y.c.ρq_lcl)
-    @. Y.c.ρq_icl = max(FT(0), Y.c.ρq_icl)
     @. Y.c.ρq_rai = max(FT(0), Y.c.ρq_rai)
-    @. Y.c.ρq_sno = max(FT(0), Y.c.ρq_sno)
-
-    @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_icl + Y.c.ρq_rai + Y.c.ρq_sno
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
+        @. Y.c.ρq_ice = max(FT(0), Y.c.ρq_ice)
+        # Floor the warm-rain number concentrations; ρn_ice is not floored; handled in the P3 scheme.
+        @. Y.c.ρn_lcl = max(FT(0), Y.c.ρn_lcl)
+        @. Y.c.ρn_rai = max(FT(0), Y.c.ρn_rai)
+        @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_ice + Y.c.ρq_rai
+    else  # NonEquilibriumMicrophysics1M
+        @. Y.c.ρq_icl = max(FT(0), Y.c.ρq_icl)
+        @. Y.c.ρq_sno = max(FT(0), Y.c.ρq_sno)
+        @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_icl + Y.c.ρq_rai + Y.c.ρq_sno
+    end
     @. ratio = ifelse(
         (ρq_cond > ϵ_numerics(FT)) & (Y.c.ρq_tot > ϵ_numerics(FT)),
         min(FT(1), Y.c.ρq_tot / ρq_cond),
         FT(0),
     )
     @. Y.c.ρq_lcl *= ratio
-    @. Y.c.ρq_icl *= ratio
     @. Y.c.ρq_rai *= ratio
-    @. Y.c.ρq_sno *= ratio
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
+        @. Y.c.ρq_ice *= ratio
+    else  # NonEquilibriumMicrophysics1M
+        @. Y.c.ρq_icl *= ratio
+        @. Y.c.ρq_sno *= ratio
+    end
     return nothing
 end
 

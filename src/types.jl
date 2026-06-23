@@ -56,7 +56,7 @@ Create a microphysics tracer nonnegativity constraint.
 
 Depending on the microphysics model, the constrained tracers include:
 
-  - `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`,
+  - `ρq_lcl`, `ρq_rai`, `ρq_icl` (1M only), `ρq_sno` (1M only), `ρq_ice` (2M only)
   - If `include_qtot` is true, `q_tot` is also among the constrained tracers.
 
 # Arguments:

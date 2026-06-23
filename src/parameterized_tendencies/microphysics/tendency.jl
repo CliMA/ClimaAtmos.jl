@@ -158,7 +158,7 @@ function microphysics_tendency!(Yₜ, Y, p, t, ::NonEquilibriumMicrophysics2M, _
     @. Yₜ.c.ρn_lcl += Y.c.ρ * ᶜmp_tendency.dn_lcl_dt
     @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜmp_tendency.dq_rai_dt
     @. Yₜ.c.ρn_rai += Y.c.ρ * ᶜmp_tendency.dn_rai_dt
-    @. Yₜ.c.ρq_icl += Y.c.ρ * ᶜmp_tendency.dq_ice_dt
+    @. Yₜ.c.ρq_ice += Y.c.ρ * ᶜmp_tendency.dq_ice_dt
     @. Yₜ.c.ρn_ice += Y.c.ρ * ᶜmp_tendency.dn_ice_dt
     @. Yₜ.c.ρq_rim += Y.c.ρ * ᶜmp_tendency.dq_rim_dt
     @. Yₜ.c.ρb_rim += Y.c.ρ * ᶜmp_tendency.db_rim_dt
@@ -176,7 +176,7 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     @. Yₜ.c.ρn_lcl += ᶜρa⁰ * ᶜmp_tendency⁰.dn_lcl_dt
     @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dq_rai_dt
     @. Yₜ.c.ρn_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dn_rai_dt
-    @. Yₜ.c.ρq_icl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_ice_dt
+    @. Yₜ.c.ρq_ice += ᶜρa⁰ * ᶜmp_tendency⁰.dq_ice_dt
 
     # Contribution from updraft microphysics to grid mean and updraft tendency
     n = n_mass_flux_subdomains(turbconv_model)
@@ -185,12 +185,12 @@ function microphysics_tendency!(Yₜ, Y, p, t,
         @. Yₜ.c.ρn_lcl += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dn_lcl_dt
         @. Yₜ.c.ρq_rai += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_rai_dt
         @. Yₜ.c.ρn_rai += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dn_rai_dt
-        @. Yₜ.c.ρq_icl += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_ice_dt
+        @. Yₜ.c.ρq_ice += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_ice_dt
 
         @. Yₜ.c.sgsʲs.:($$j).q_lcl += ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
         @. Yₜ.c.sgsʲs.:($$j).n_lcl += ᶜmp_tendencyʲs.:($$j).dn_lcl_dt
         @. Yₜ.c.sgsʲs.:($$j).q_rai += ᶜmp_tendencyʲs.:($$j).dq_rai_dt
         @. Yₜ.c.sgsʲs.:($$j).n_rai += ᶜmp_tendencyʲs.:($$j).dn_rai_dt
-        @. Yₜ.c.sgsʲs.:($$j).q_icl += ᶜmp_tendencyʲs.:($$j).dq_ice_dt
+        @. Yₜ.c.sgsʲs.:($$j).q_ice += ᶜmp_tendencyʲs.:($$j).dq_ice_dt
     end
 end
