@@ -200,6 +200,9 @@ dt_save_state_to_disk:
 microphysics_model:
   help: "Microphysics model [`dry` (default), `0M`, `1M`, `2M`, `2MP3`]"
   value: "dry"
+p3_quadrature_order:
+  help: "Quadrature order for the P3 ice size-distribution integrals (2M scheme). GaussLegendre is used for orders [16, 32, 40, 64]; any other value falls back to ChebyshevGauss. [`40` (default)]"
+  value: 40
 divergence_damping_factor:
   help: "Divergence damping factor"
   value: 5.0

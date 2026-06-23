@@ -16,6 +16,7 @@ function ClimaAtmosParameters(config::AtmosConfig)
         config.toml_dict;
         microphysics_model = get_microphysics_model(pa),
         microphysics_1m_options = get_microphysics_1m_options(pa, config.toml_dict),
+        p3_quadrature_order = pa["p3_quadrature_order"],
         has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),

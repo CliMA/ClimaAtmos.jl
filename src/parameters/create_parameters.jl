@@ -11,6 +11,7 @@ import StaticArrays as SA
     ClimaAtmosParameters(FT::AbstractFloat)
     ClimaAtmosParameters(toml_dict; microphysics_model = nothing,
                                     microphysics_1m_options = (;),
+                                    p3_quadrature_order = 40,
                                     has_non_orographic_gw = false,
                                     has_orographic_gw = false)
 
@@ -28,6 +29,7 @@ function ClimaAtmosParameters(
     toml_dict::TD;
     microphysics_model = nothing,
     microphysics_1m_options = (;),
+    p3_quadrature_order::Int = 40,
     has_non_orographic_gw::Bool = false,
     has_orographic_gw::Bool = false,
 ) where {TD <: CP.ParamDict}
@@ -61,7 +63,8 @@ function ClimaAtmosParameters(
     microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
     microphysics_1m_params =
         microphys_1m_parameters(toml_dict; microphysics_1m_options...)
-    microphysics_2m_params = microphys_2m_parameters(toml_dict; quadrature_order = 40)
+    microphysics_2m_params =
+        microphys_2m_parameters(toml_dict; quadrature_order = p3_quadrature_order)
 
     # When a microphysics model is supplied, only keep the parameter sets it
     # actually uses; nullify the rest to save memory.
@@ -132,6 +135,7 @@ function ClimaAtmosParameters(
         prescribed_aerosol_params,
         non_orographic_gravity_wave_params,
         orographic_gravity_wave_params,
+        p3_quadrature_order,
     )
 end
 

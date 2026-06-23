@@ -178,6 +178,8 @@ Base.@kwdef struct ClimaAtmosParameters{
     fixed_cloud_ice_terminal_velocity::FT
     fixed_rain_terminal_velocity::FT
     fixed_snow_terminal_velocity::FT
+    # P3 ice size-distribution quadrature order (2M scheme)
+    p3_quadrature_order::Int
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
