@@ -1,6 +1,5 @@
 module COSPSubcolumns
 
-import ClimaComms
 import ClimaCore: Fields, Quadratures, Spaces
 
 export scops!
@@ -41,7 +40,6 @@ function scops!(
 
     overlap_code = _overlap_code(overlap)
     _scops_fields!(
-        ClimaComms.device(cloud_fraction),
         frac_out,
         cloud_fraction,
         _seed_uint64(random_seed),
@@ -54,7 +52,6 @@ end
 
 
 function _scops_fields!(
-    ::ClimaComms.AbstractCPUDevice,
     frac_out,
     cloud_fraction,
     random_seed,

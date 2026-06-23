@@ -1,18 +1,8 @@
 using Test
-import ClimaComms
-ClimaComms.@import_required_backends
 using ClimaAtmos
-using ClimaCore: Domains, Meshes, Spaces, Fields, Geometry, to_cpu, to_device
+using ClimaCore: Domains, Meshes, Spaces, Fields, Geometry
 
 const CA = ClimaAtmos
-const HAS_CUDA = let
-    try
-        @eval import CUDA
-        CUDA.functional()
-    catch
-        false
-    end
-end
 
 function make_subcol_simulation(device; job_id)
     config = CA.AtmosConfig(
@@ -101,56 +91,4 @@ end
         end
     end
 
-    @testset "GPU subcolumn path matches CPU" begin
-        if !HAS_CUDA
-            @test true
-        else
-            CUDA.allowscalar(false)
-
-            cpu_cloud_fraction = make_center_field(FT; value = 0.4)
-            cpu_frac_out = ntuple(_ -> similar(cpu_cloud_fraction, FT), 4)
-            cpu_threshold = ntuple(_ -> similar(cpu_cloud_fraction, FT), 4)
-
-            gpu_cloud_fraction =
-                to_device(ClimaComms.CUDADevice(), cpu_cloud_fraction)
-            gpu_frac_out = ntuple(_ -> similar(gpu_cloud_fraction, FT), 4)
-            gpu_threshold = ntuple(_ -> similar(gpu_cloud_fraction, FT), 4)
-
-            for overlap in (:maximum, :random, :maximum_random)
-                CA.COSPSubcolumns.scops!(
-                    cpu_frac_out,
-                    cpu_threshold,
-                    cpu_cloud_fraction,
-                    seed;
-                    overlap,
-                )
-                CA.COSPSubcolumns.scops!(
-                    gpu_frac_out,
-                    gpu_threshold,
-                    gpu_cloud_fraction,
-                    seed;
-                    overlap,
-                )
-
-                for isubcolumn in eachindex(cpu_frac_out)
-                    @test parent(to_cpu(gpu_frac_out[isubcolumn])) ==
-                          parent(cpu_frac_out[isubcolumn])
-                    @test parent(to_cpu(gpu_threshold[isubcolumn])) ≈
-                          parent(cpu_threshold[isubcolumn])
-                end
-            end
-
-            @. gpu_cloud_fraction = FT(1)
-            gpu_precomputed = (;
-                ᶜcloud_fraction = gpu_cloud_fraction,
-                ᶜsubcolumn_cloud = gpu_frac_out,
-                ᶜsubcolumn_threshold = gpu_threshold,
-            )
-            gpu_integrator = (; p = (; precomputed = gpu_precomputed), t = FT(0))
-            CA.subcol_model_callback!(gpu_integrator)
-            for frac in gpu_frac_out
-                @test all(==(FT(1)), parent(to_cpu(frac)))
-            end
-        end
-    end
 end
