@@ -17,6 +17,20 @@ function create_physical_constraints_config(job_id = "physical_constraints_test"
     return CA.AtmosConfig(config_dict; job_id)
 end
 
+function create_2m_physical_constraints_config(
+    job_id = "2m_physical_constraints_test",
+)
+    config_dict = Dict(
+        "config" => "column",
+        "initial_condition" => "DecayingProfile",
+        "turbconv" => "prognostic_edmfx",
+        "edmfx_filter" => true,
+        "microphysics_model" => "2M",
+        "output_default_diagnostics" => false,
+    )
+    return CA.AtmosConfig(config_dict; job_id)
+end
+
 function introduce_constant!(field, value)
     FT = eltype(field)
     parent(field) .= FT(value)
@@ -229,5 +243,29 @@ end
         CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
 
         @test Y == ref_Y
+    end
+
+    @testset "2M warm-rain number concentrations are floored at zero" begin
+        config = create_2m_physical_constraints_config(
+            "physical_constraints_2m_numbers",
+        )
+        (; Y, p) = generate_test_simulation(config)
+
+        FT = eltype(Y)
+
+        introduce_constant!(Y.c.ρn_lcl, -1e7)
+        introduce_constant!(Y.c.ρn_rai, -5e6)
+        # The P3-frozen ice number is intentionally not clipped here (the P3
+        # scheme regularizes the ice population coherently); pin that exclusion.
+        introduce_constant!(Y.c.ρn_ice, -1e3)
+
+        @test minimum(parent(Y.c.ρn_lcl)) < FT(0)
+        @test minimum(parent(Y.c.ρn_rai)) < FT(0)
+
+        CA.enforce_physical_constraints!(Y, p, FT(0), p.atmos)
+
+        @test all_geq_zero(Y.c.ρn_lcl)
+        @test all_geq_zero(Y.c.ρn_rai)
+        @test minimum(parent(Y.c.ρn_ice)) < FT(0)
     end
 end
