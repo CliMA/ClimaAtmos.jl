@@ -1,6 +1,6 @@
 
 # Radiative Equilibrium Example
-A suite of concrete examples are provided here as a guidance for running single column Radiative Equilibrium.  
+A suite of concrete examples are provided here as a guidance for running single column Radiative Equilibrium.
 
 
 # Radiative Equilibrium

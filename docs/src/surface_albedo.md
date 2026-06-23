@@ -83,4 +83,3 @@ include("surface_albedo_jin11_plots.jl")
 
 - diffuse albedo (compare with Fig. 4)
 ![](assets/diffuse_albedo_fig4.png)
-

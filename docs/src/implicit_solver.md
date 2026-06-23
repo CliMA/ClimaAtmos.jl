@@ -270,7 +270,7 @@ and ``\partial T_{imp, i}(Y)/\partial Y_b`` do not have similar magnitudes.
 If the derivative with respect to ``Y_b`` is negligibly small compared to the
 derivative with respect to ``Y_a``, then assigning ``Y_b`` the same color as
 ``Y_a`` might not be an issue, since this will amount to replacing the
-derivative ``\partial T_{imp, i}(Y)/\partial Y_a`` in ``T_{imp}^D`` with the sum  
+derivative ``\partial T_{imp, i}(Y)/\partial Y_a`` in ``T_{imp}^D`` with the sum
 ``\partial T_{imp, i}(Y)/\partial Y_a + \partial T_{imp, i}(Y)/\partial Y_b``,
 which should be approximately equal to ``\partial T_{imp, i}(Y)/\partial Y_a``.
 When the derivatives with respect to ``Y_a`` and ``Y_b`` have comparable
