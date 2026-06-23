@@ -360,6 +360,23 @@ function radiation_callback(
     )
 end
 
+function subcol_callback(
+    dt_subcol,
+    dt,
+    t_start,
+    t_end,
+    checkpoint_frequency,
+)
+    return scheduled_callback(
+        subcol_model_callback!,
+        dt_subcol,
+        dt,
+        t_start,
+        t_end,
+        checkpoint_frequency,
+    )
+end
+
 function nogw_callback(
     non_orographic_gravity_wave,
     dt_nogw,
@@ -421,18 +438,28 @@ Creates the tuple of model callbacks for any AtmosModel by calling
   - `t_end`: End time
   - `output_dir`: Output directory
   - `checkpoint_frequency`: Checkpoint frequency
-  - Component-specific frequency overrides (dt_rad, dt_nogw, etc.)
+  - Component-specific frequency overrides (enable_subcol, dt_subcol, dt_rad, dt_nogw, etc.)
 """
-function default_model_callbacks(model::AtmosModel; kwargs...)
+function default_model_callbacks(model::AtmosModel;
+    enable_subcol = false,
+    dt_subcol = "6hours",
+    kwargs...,
+)
     callbacks = ()
-    # Physical constraints callback is registered here rather than at the component
-    # level because the decision depends on both the microphysics model AND the
-    # turbconv model simultaneously — registering from each component independently
-    # would cause double-registration for EDMF + 1M/2M configurations.
-    # Placed before the component callbacks so it fires before any other component
-    # callback that reads cache fields (e.g. radiation)
     if needs_enforce_physical_constraints(model)
         callbacks = (callbacks..., enforce_physical_constraints_callback(kwargs[:dt]))
+    end
+    if enable_subcol
+        callbacks = (
+            callbacks...,
+            subcol_callback(
+                dt_subcol,
+                kwargs[:dt],
+                kwargs[:t_start],
+                kwargs[:t_end],
+                kwargs[:checkpoint_frequency],
+            )...,
+        )
     end
     model_component_names =
         filter(x -> x !== :disable_surface_flux_tendency, propertynames(model))

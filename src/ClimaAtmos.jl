@@ -170,4 +170,10 @@ include(joinpath("config", "yaml_helper.jl"))
 
 include(joinpath("utils", "show.jl"))
 
+
+
+# Added for COSP testing
+include(joinpath("cosp", "subcol.jl"))
+import .COSPSubcolumns
+
 end # module

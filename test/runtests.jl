@@ -112,6 +112,13 @@ if TEST_GROUP in ("era5", "all")
     @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
 end
 
+
+
+# COSP subcolumn test
+@safetestset "COSP subcolumn tests" begin
+    @time include("cosp/subcol_test.jl")
+end
+
 #! format: on
 
 nothing

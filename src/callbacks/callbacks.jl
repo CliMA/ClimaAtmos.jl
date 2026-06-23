@@ -16,6 +16,8 @@ import ClimaUtilities.TimeVaryingInputs: evaluate!
 
 include("callback_helpers.jl")
 
+const SUBCOL_RANDOM_SEED = UInt64(1)
+
 function flux_accumulation!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -120,6 +122,22 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(floor(FT(t) / integrator.p.dt)))
     Fields.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
+    return nothing
+end
+
+NVTX.@annotate function subcol_model_callback!(integrator)
+    (; ᶜcloud_fraction, ᶜsubcolumn_cloud, ᶜsubcolumn_threshold) =
+        integrator.p.precomputed
+
+    COSPSubcolumns.scops!(
+        ᶜsubcolumn_cloud,
+        ᶜsubcolumn_threshold,
+        ᶜcloud_fraction,
+        SUBCOL_RANDOM_SEED,
+    )
+
+    @info "subcol callback" t = integrator.t
+
     return nothing
 end
 
