@@ -51,18 +51,12 @@ end
     get_microphysics_tendency_mode_2m(parsed_args, n_substeps)
 
 Return the 2-moment + P3 bulk-tendency averaging mode for the
-`microphysics_averaging_mode` config string. 2M+P3 has no donor-based matrix, so
-only the explicit `SubsteppedAverage` (selected by `"substepped"`, or by the
-global default `"linearized"`) and the exact-Jacobian `rosenbrock_exact` are
-available; the `"instantaneous"` and donor-based `"rosenbrock"` modes are
-1-moment-only.
+`microphysics_averaging_mode` config string.
 """
 function get_microphysics_tendency_mode_2m(parsed_args, n_substeps)
     BMT = CM.BulkMicrophysicsTendencies
     mode_name = parsed_args["microphysics_averaging_mode"]
     if mode_name == "substepped" || mode_name == "linearized"
-        # `linearized` is the default; for 2M+P3 it maps to the explicit
-        # substep-averaged mode (there is no donor-linearized 2M+P3 scheme).
         BMT.SubsteppedAverage(; n_substeps)
     elseif mode_name == "rosenbrock_exact"
         BMT.rosenbrock_exact(; n_substeps)
