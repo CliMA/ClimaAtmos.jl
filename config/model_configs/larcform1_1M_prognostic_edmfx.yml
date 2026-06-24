@@ -6,7 +6,7 @@ initial_condition: Larcform1
 rayleigh_sponge: true
 
 # Surface #
-prognostic_surface: SlabOceanSST     # placeholder until EisenmanSeaIce is implemented
+prognostic_surface: ConstantSeaIce
 surface_setup: DefaultMoninObukhov
 disable_surface_flux_tendency: false
 

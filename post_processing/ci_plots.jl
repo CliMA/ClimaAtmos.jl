@@ -1846,6 +1846,60 @@ function make_plots(::Val{:larcform1}, output_paths::Vector{<:AbstractString})
         )
     end
 
+    # Microphysics 1M process tendency plots (grid-mean, updraft, environment)
+    mp1m_source_names = [
+        "S_phase_change_vap_lcl",
+        "S_phase_change_vap_icl",
+        "S_acnv_lcl_rai",
+        "S_acnv_icl_sno",
+        "S_accr_lcl_rai",
+        "S_accr_lcl_sno_cold",
+        "S_accr_lcl_sno_warm",
+        "S_accr_melt_lcl_sno",
+        "S_accr_icl_rai",
+        "S_accr_freeze_icl_rai",
+        "S_accr_icl_sno",
+        "S_accr_rai_sno_cold",
+        "S_accr_rai_sno_warm",
+        "S_accr_melt_rai_sno",
+        "S_phase_change_vap_rai",
+        "S_phase_change_vap_sno",
+        "S_melt_icl_lcl",
+        "S_melt_sno_rai",
+    ]
+    mp1m_all_names =
+        vec(["mp1m_", "mp1mup_", "mp1men_"] .* permutedims(mp1m_source_names))
+    mp1m_available = filter(sn -> sn in available_short_names, mp1m_all_names)
+
+    if length(mp1m_available) == length(mp1m_all_names)
+        # Use only current sim — mp1m diagnostics are new, won't exist in older runs
+        mp1m_simdirs = simdirs[1:1]
+        mp1m_output_paths = output_paths[1:1]
+
+        mp1m_vars_zt =
+            map_comparison(mp1m_simdirs, mp1m_all_names) do simdir, sn
+                get(simdir; short_name = sn, reduction = "inst", period = "10m")
+            end
+
+        mp1m_row_groups = [
+            (
+                mp1m_vars_zt[(i - 1) * 3 + 1],
+                mp1m_vars_zt[(i - 1) * 3 + 2],
+                mp1m_vars_zt[(i - 1) * 3 + 3],
+            ) for i in 1:length(mp1m_source_names)
+        ]
+
+        make_plots_generic(
+            mp1m_output_paths,
+            mp1m_row_groups;
+            output_name = "mp1m_timeseries",
+            plot_fn = plot_mp1m_row!,
+            MAX_NUM_COLS = 1,
+            MAX_NUM_ROWS = 3,
+            fig_size = (1500, 900),
+        )
+    end
+
     if !isempty(vars_1D)
         make_plots_generic(
             output_paths,

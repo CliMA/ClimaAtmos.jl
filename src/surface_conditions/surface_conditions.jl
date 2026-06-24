@@ -173,7 +173,10 @@ function surface_state_to_conditions(
     else
         # Assume that the surface is water with saturated air directly
         # above it.
-        q_vap_sat = TD.q_vap_saturation(thermo_params, T_sfc, ρ_sfc, TD.Liquid())
+        q_vap_sat = TD.q_vap_saturation(
+            thermo_params, T_sfc, ρ_sfc,
+            surface_saturation_phase(atmos.surface.temperature),
+        )
         q_vap = ifelsenothing(overrides.q_vap, q_vap_sat)
     end
 
