@@ -39,18 +39,19 @@ end
     # F_surf = a_s · ρ · w*.
     for FT in (Float32, Float64)
         @testset "FT = $FT" begin
-            z_i = ClimaAtmos.edmf_convective_zi(FT)
+            z_i = FT(1000)
             ρ = FT(1.2)
             a_s_max = FT(0.1)
+            c_u = FT(1)
 
             @testset "stable BL (⟨w'b'⟩_s ≤ 0)" begin
                 for bf in FT[-1e-3, 0]
                     for ustar in FT[0.1, 0.5]
                         a_s = ClimaAtmos.surface_mass_flux_coefficient(
-                            bf, z_i, ustar, a_s_max,
+                            bf, z_i, ustar, a_s_max, c_u,
                         )
                         F = ClimaAtmos.surface_mass_flux(
-                            bf, ρ, z_i, ustar, a_s_max,
+                            bf, ρ, z_i, ustar, a_s_max, c_u,
                         )
                         @test a_s == FT(0)
                         @test F == FT(0)
@@ -62,26 +63,26 @@ end
                 bf = FT(1e-2)
                 ustar = FT(1e-6)
                 a_s = ClimaAtmos.surface_mass_flux_coefficient(
-                    bf, z_i, ustar, a_s_max,
+                    bf, z_i, ustar, a_s_max, c_u,
                 )
                 @test a_s ≈ a_s_max rtol = FT(1e-3)
                 # F_surf = a_s · ρ · w* with w* = cbrt(z_i · bf)
                 w_star = cbrt(z_i * bf)
                 F = ClimaAtmos.surface_mass_flux(
-                    bf, ρ, z_i, ustar, a_s_max,
+                    bf, ρ, z_i, ustar, a_s_max, c_u,
                 )
                 @test F ≈ a_s_max * ρ * w_star rtol = FT(1e-3)
             end
 
             @testset "shear-dominated limit (u*³ ≫ w*³)" begin
                 bf = FT(1e-5)   # gives w*³ = z_i · bf = 1e-2
-                ustar = FT(1)   # u*³ = 1, so w*³/(w*³+u*³) ≈ 1e-2
+                ustar = FT(1)   # u*³ = 1, so w*³/(w*³+c_u·u*³) ≈ 1e-2
                 a_s = ClimaAtmos.surface_mass_flux_coefficient(
-                    bf, z_i, ustar, a_s_max,
+                    bf, z_i, ustar, a_s_max, c_u,
                 )
                 @test a_s < FT(0.02) * a_s_max
                 F = ClimaAtmos.surface_mass_flux(
-                    bf, ρ, z_i, ustar, a_s_max,
+                    bf, ρ, z_i, ustar, a_s_max, c_u,
                 )
                 @test F > FT(0)
             end
@@ -90,10 +91,10 @@ end
                 bf = FT(1e-3)
                 ustar = FT(0.3)
                 a_s = ClimaAtmos.surface_mass_flux_coefficient(
-                    bf, z_i, ustar, a_s_max,
+                    bf, z_i, ustar, a_s_max, c_u,
                 )
                 F = ClimaAtmos.surface_mass_flux(
-                    bf, ρ, z_i, ustar, a_s_max,
+                    bf, ρ, z_i, ustar, a_s_max, c_u,
                 )
                 @test a_s isa FT
                 @test F isa FT
@@ -105,10 +106,10 @@ end
                 prev_F = FT(-1)
                 for bf in FT[1e-5, 1e-4, 1e-3, 1e-2]
                     a_s = ClimaAtmos.surface_mass_flux_coefficient(
-                        bf, z_i, ustar, a_s_max,
+                        bf, z_i, ustar, a_s_max, c_u,
                     )
                     F = ClimaAtmos.surface_mass_flux(
-                        bf, ρ, z_i, ustar, a_s_max,
+                        bf, ρ, z_i, ustar, a_s_max, c_u,
                     )
                     @test a_s > prev_a_s
                     @test F > prev_F
@@ -123,7 +124,7 @@ end
                 prev_a_s = FT(2)  # > a_s_max so first iteration passes
                 for ustar in FT[1e-3, 1e-2, 1e-1, 1]
                     a_s = ClimaAtmos.surface_mass_flux_coefficient(
-                        bf, z_i, ustar, a_s_max,
+                        bf, z_i, ustar, a_s_max, c_u,
                     )
                     @test a_s < prev_a_s
                     @test FT(0) ≤ a_s ≤ a_s_max
@@ -135,10 +136,10 @@ end
                 bf = FT(1e-3)
                 ustar = FT(0.3)
                 a_s_1 = ClimaAtmos.surface_mass_flux_coefficient(
-                    bf, z_i, ustar, FT(0.1),
+                    bf, z_i, ustar, FT(0.1), c_u,
                 )
                 a_s_2 = ClimaAtmos.surface_mass_flux_coefficient(
-                    bf, z_i, ustar, FT(0.2),
+                    bf, z_i, ustar, FT(0.2), c_u,
                 )
                 @test a_s_2 ≈ 2 * a_s_1 rtol = FT(1e-6)
             end

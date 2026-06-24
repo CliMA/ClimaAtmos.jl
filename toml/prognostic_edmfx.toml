@@ -4,7 +4,7 @@ value = 40000.0
 [zd_viscous]
 value = 40000.0
 
-[EDMF_surface_area]
+[EDMF_max_surface_area]
 value = 0.1
 
 [EDMF_min_area]

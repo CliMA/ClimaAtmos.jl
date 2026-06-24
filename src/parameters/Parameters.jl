@@ -23,7 +23,7 @@ Base.broadcastable(param_set::ATCP) = tuple(param_set)
 Base.broadcastable(param_set::ASTP) = tuple(param_set)
 
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
-    surface_area::FT
+    max_surface_area::FT
     max_area::FT
     min_area::FT
     tke_ed_coeff::FT
@@ -59,6 +59,14 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_area_limiter_power::FT
     cloud_fraction_steepness_scale::FT
     cloud_fraction_param_vec::VTF3
+    # Augmented-σ floor for `_compute_cloud_fraction`:
+    # σ_S_floor² = (cloud_fraction_eps_rel · q_sat)² + cloud_fraction_sigma_abs².
+    cloud_fraction_eps_rel::FT
+    cloud_fraction_sigma_abs::FT
+    # Surface mass flux closure (`set_edmfx_surface_conditions!`).
+    sfc_mass_flux_ustar_coeff::FT
+    convective_zi::FT
+    sfc_mass_flux_cap_fraction::FT
 end
 
 Base.@kwdef struct SurfaceTemperatureParameters{FT} <: ASTP

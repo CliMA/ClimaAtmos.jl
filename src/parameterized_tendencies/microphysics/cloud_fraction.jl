@@ -432,7 +432,7 @@ dependent logic.
 end
 
 """
-    _compute_cloud_fraction(q_c, sigma_S, q_sat, α)
+    _compute_cloud_fraction(q_c, sigma_S, q_sat, α, ε_rel, σ_abs)
 
 Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
 relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see [`_compute_z`](@ref)) with the
@@ -463,12 +463,7 @@ The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
 `_compute_sgs_moments`) uses the equilibrium `σ_S`, so mass conservation
 `E[max(0, λ + α·S′)] = q_c` is exactly preserved for the microphysics tendencies.
 """
-@inline function _compute_cloud_fraction(q_c, sigma_S, q_sat, α)
-    FT = typeof(sigma_S)
-    # TODO: promote ε_rel, σ_abs to calibrated parameters once values are clear.
-    # ε_rel should increase with resolution
-    ε_rel = FT(0.02)   # residual fractional saturation variability (~ 1 − RH_crit)
-    σ_abs = FT(1e-7)   # absolute floor for numerical robustness as q_sat → 0
+@inline function _compute_cloud_fraction(q_c, sigma_S, q_sat, α, ε_rel, σ_abs)
     σ_S_floor_sq = (ε_rel * q_sat)^2 + σ_abs^2
     σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
     C = q_c / σ_aug
@@ -479,7 +474,7 @@ end
 """
     _compute_cloud_fraction(
         thermo_params, T, ρ, q_tot, q_liq, q_ice,
-        sgs_quad, T′T′, q′q′, corr_Tq, α,
+        sgs_quad, T′T′, q′q′, corr_Tq, α, ε_rel, σ_abs,
     )
 
 Fused production overload: compute the hybrid cloud fraction in a single
@@ -500,13 +495,15 @@ materialized to a Field.
     q′q′,
     corr_Tq,
     α,
+    ε_rel,
+    σ_abs,
 )
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
     q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
     return _compute_cloud_fraction(
-        q_liq + q_ice, moments.sigma_S, q_sat, α,
+        q_liq + q_ice, moments.sigma_S, q_sat, α, ε_rel, σ_abs,
     )
 end
 
@@ -561,6 +558,8 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+    ε_rel = CAP.cloud_fraction_eps_rel(p.params)
+    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
     # ONE quadrature pass → (mu_S, sigma_S, λ_lagrange).
@@ -580,6 +579,8 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
         p.precomputed.ᶜsgs_moments.sigma_S,
         TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
         FT(α),
+        ε_rel,
+        σ_abs,
     )
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
@@ -644,6 +645,8 @@ NVTX.@annotate function set_cloud_fraction!(
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+    ε_rel = CAP.cloud_fraction_eps_rel(p.params)
+    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
@@ -662,6 +665,8 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜq′q′,
         corr_Tq,
         FT(α),
+        ε_rel,
+        σ_abs,
     )
 
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)

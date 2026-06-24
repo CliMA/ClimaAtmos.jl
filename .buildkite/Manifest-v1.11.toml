@@ -441,9 +441,9 @@ weakdeps = ["CUDA"]
 
 [[deps.ClimaParams]]
 deps = ["Dates", "TOML"]
-git-tree-sha1 = "7196fbc2ea333b1966581103ba19b88d376314fb"
+git-tree-sha1 = "137e7e2cae948a1130db4ca4b9c7217b608a9042"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "1.0.17"
+version = "1.1.0"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "StaticArrays"]
