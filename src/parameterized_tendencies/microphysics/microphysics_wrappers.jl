@@ -204,6 +204,18 @@ rain evaporation or snow sublimation against the local `q_v_hat`.
   - `dq_rai_dt`: Rain tendency [kg/kg/s]
   - `dq_sno_dt`: Snow tendency [kg/kg/s]
 """
+# Floor physically-negligible hydrometeor mass to zero before the 1-moment
+# microphysics call. CloudMicrophysics gates its expensive (`pow`-heavy) process
+# rates behind `q > ϵ_numerics(FT)` (≈2e-13). When the SGS-quadrature closure
+# feeds tiny but above-threshold condensate into scattered cells, those branches
+# fire in only a few threads per warp and the GPU serializes the divergent paths,
+# slowing the `set_microphysics_tendency_cache` kernel ~3×. Flooring inputs at
+# `eps(FT)` (≈1e-7 in Float32 — the same scale CloudMicrophysics uses for its 2M
+# mass-activity cutoff `ϵ_numerics_2M_M`) makes those cells take the cheap
+# early-exit. The skipped tendencies are for condensate ~6 orders of magnitude
+# below real cloud water, so the effect is physically negligible.
+@inline _floor_microphysics_mass(q::FT) where {FT} = q < eps(FT) ? zero(FT) : q
+
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
     mp::MP
@@ -224,8 +236,8 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
 end
 # `@noinline` here is the SGS quadrature function barrier. The functor body
 # below (saturation, shape-function partition, plus the heavy
-# `BMT.bulk_microphysics_tendencies(::LinearizedAverage, …)` call with its
-# `nsubs` substep loop and 4×4 linearized operator) gets invoked N² times from
+# `BMT.average_bulk_microphysics_tendencies` call with its `nsubs`
+# substep loop and 4×4 linearized operator) gets invoked N² times from
 # `sum_over_quadrature_points`. Without the barrier those N² copies inline
 # into one giant GPU broadcast kernel, pushing register pressure past the
 # 255-reg hard cap and pinning occupancy at 12.5%. Marking the functor
@@ -246,10 +258,14 @@ end
     q_lcl_hat = max(FT(0), eval.λ * shifted_excess - eval.q_rai)
     q_icl_hat = max(FT(0), (FT(1) - eval.λ) * shifted_excess - eval.q_sno)
 
+    # Floor negligible condensate so CloudMicrophysics takes its cheap early-exit
+    # (see `_floor_microphysics_mass`); this removes the warp divergence that
+    # otherwise slows this kernel ~3×.
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
+        _floor_microphysics_mass(q_lcl_hat), _floor_microphysics_mass(q_icl_hat),
+        _floor_microphysics_mass(eval.q_rai), _floor_microphysics_mass(eval.q_sno),
         eval.dt, eval.nsubs, eval.args...,
     )
 end
@@ -313,10 +329,15 @@ NamedTuple with microphysics source terms:
 @inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
     ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,
 )
+    # Floor negligible condensate so CloudMicrophysics takes its cheap early-exit
+    # (see `_floor_microphysics_mass`).
     local_tendency = BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
         BMT.Microphysics1Moment(), cmp, thp, ρ, T,
-        q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
+        q_tot_nonneg,
+        _floor_microphysics_mass(q_lcl), _floor_microphysics_mass(q_icl),
+        _floor_microphysics_mass(q_rai), _floor_microphysics_mass(q_sno),
+        dt, nsubs,
     )
     return local_tendency
 end
@@ -344,251 +365,6 @@ end
     return integrate_over_sgs(
         evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
     )
-end
-
-# ---------------------------------------------------------------------------
-# Chunked-broadcast 1-moment quadrature path (GPU register ⇄ traffic tuning)
-# ---------------------------------------------------------------------------
-#
-# The fully-fused quadrature broadcast above runs `Microphysics1MEvaluator`
-# N² times per cell inside ONE GPU kernel. That kernel needs 255 registers and
-# spills ~1.4 GB to local memory, pinning occupancy at 12.5 %.
-#
-# The opposite extreme — one broadcast per quadrature point (N² accumulating
-# kernels) — drops the kernel to ~16 registers and 33 % occupancy and kills the
-# spill, but it is no faster: each of the N² kernels re-reads all input fields
-# (≈ N²× DRAM traffic), re-does the RMW on the accumulator, re-builds the
-# per-cell setup, and pays N² launch overheads. The spill saving and the extra
-# traffic cancel almost exactly (measured: −2 % total time).
-#
-# The helpers below run ONE accumulating broadcast over a chunk of G quadrature
-# points. Each chunk kernel does G `BMT.bulk_microphysics_tendencies(::LinearizedAverage, …)`
-# calls per thread, reads the input fields once, and computes the per-cell setup
-# once. The orchestrator uses G = N² (all points in one fused kernel — minimal
-# traffic); the `@noinline` barrier on `_microphysics_point_contrib` keeps that
-# fused kernel's register peak at ~one BMT call so it stays at high occupancy.
-# (The chunk machinery accepts any G, which is how the G-sweep below was run.)
-#
-# Science is unchanged: the same weighted sum of the same per-quadrature-point
-# evaluations, just regrouped across kernels.
-
-# Number of quadrature points evaluated per accumulating broadcast kernel.
-# This is the register/occupancy ⇄ memory-traffic tuning knob (see above).
-# For the default quadrature order N = 3 (N² = 9 points), values that divide 9
-# evenly — 1, 3, 9 — avoid zero-weight padding.
-#
-# Sweep history (amip_progedmf_1m_land_he16, vs baseline SYPD 0.253):
-#   G = 1  → 10 kernels/call, ~16 reg, SYPD 0.254  (≈ baseline; traffic-bound)
-#   G = 3  →  4 kernels/call, spills, SYPD 0.231    (−9 %; bad-of-both-worlds)
-#   G = 9  →  2 kernels/call, 255 reg, SYPD 0.253   (≈ baseline; spill-bound)
-# G = 3 regressed because the unrolled per-point loop overlapped the BMT
-# working sets and spilled. The `@noinline` barrier on
-# `_microphysics_point_contrib` (below) confines/reuses that working set across
-# the G points. With the barrier in place, G = N² (one fused accumulate kernel,
-# minimal traffic) measured ≈ −7.6 % nsys / +3 % SYPD vs baseline — it beats the
-# floor at low registers/high occupancy. So the orchestrator now always fuses
-# all N² points into one chunk (G derived from the quadrature order N, a
-# compile-time type parameter), which is also robust to changing `quadrature_order`
-# without manual re-tuning. The chunked machinery below still accepts any G, but
-# the fused path is what `set_microphysics_quadrature_1m!` uses.
-
-# A compile-time-sized bundle of quadrature points (the abscissa pair and the
-# precomputed weight for each) handed to one chunk kernel as a single broadcast
-# scalar. `tuple(x)` is the ClimaCore broadcast-scalar idiom (see the
-# registrations in `types.jl`); without it `@.` would iterate the struct.
-struct QuadPointChunk{G, FT}
-    χ_i::NTuple{G, FT}
-    χ_j::NTuple{G, FT}
-    w::NTuple{G, FT}
-end
-Base.broadcastable(x::QuadPointChunk) = tuple(x)
-
-# The microphysics scheme (e.g. `BMT.Microphysics1Moment()`) is a scalar
-# configuration argument in the split-quadrature broadcasts below. Mark it as a
-# broadcast scalar so `@.` doesn't treat the empty struct as an iterable and try
-# to `collect` it. The baseline fused `@. microphysics_tendencies_1m(...)` call
-# dodged this because the scheme was constructed *inline* inside `@.` (dotting
-# the constructor); here the scheme arrives as a pre-built variable, which goes
-# through `Base.broadcastable`. Mirrors the SGS/microphysics-model registrations
-# in `types.jl` and `sgs_quadrature.jl`.
-Base.broadcastable(x::BMT.MicrophysicsScheme) = tuple(x)
-
-@inline function _zero_microphysics_tendency_1m(ρ::FT) where {FT}
-    z = zero(FT)
-    return (
-        dq_lcl_dt = z,
-        dq_icl_dt = z,
-        dq_rai_dt = z,
-        dq_sno_dt = z,
-    )
-end
-
-# Per-cell setup shared by every quadrature point in a cell: it depends only
-# on the cell state, not on the quadrature abscissae (χ_i, χ_j). Factored out
-# of `Microphysics1MEvaluator` so a chunk kernel can compute it ONCE and reuse
-# it across all G points in the chunk, instead of rebuilding the transform and
-# recomputing `liquid_fraction` per point. Returns the non-negative
-# precipitation contents, the (fixed) liquid fraction, and the physical-point
-# transform.
-@inline function _microphysics_cell_setup(
-    sgs_quad, thp, ρ, T, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno,
-    T′T′, q′q′, corr_Tq,
-)
-    FT = typeof(ρ)
-    q_lcl_nonneg = max(FT(0), q_lcl)
-    q_icl_nonneg = max(FT(0), q_icl)
-    q_rai_nonneg = max(FT(0), q_rai)
-    q_sno_nonneg = max(FT(0), q_sno)
-
-    # Liquid fraction held fixed across quadrature.
-    λ = TD.liquid_fraction(thp, T, q_lcl_nonneg, q_icl_nonneg)
-
-    # Physical-point transform (host-side `integrate_over_sgs` builds this once
-    # per cell; here it's built once per chunk and reused across the chunk's G
-    # points).
-    σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
-    μ_T_p, μ_q_p = promote(T, q_tot_nonneg)
-    transform = create_physical_transform(
-        sgs_quad.dist, μ_q_p, μ_T_p,
-        oftype(μ_T_p, σ_q), oftype(μ_T_p, σ_T), oftype(μ_T_p, corr),
-        oftype(μ_T_p, sgs_quad.T_min), oftype(μ_T_p, sgs_quad.q_max),
-    )
-    return (; q_rai_nonneg, q_sno_nonneg, λ, transform)
-end
-
-# One quadrature point's BMT contribution, given the pre-built per-cell
-# `setup`. Mirrors the `Microphysics1MEvaluator` functor body exactly, just
-# with the cell-level setup lifted out.
-#
-# `@noinline` is a register-pressure barrier (same role as the one on the
-# `Microphysics1MEvaluator` functor). When a chunk kernel evaluates G > 1
-# points, inlining all G copies lets the compiler overlap their heavy BMT
-# working sets for ILP, spiking the register peak and forcing spills (this is
-# what made G = 3 regress 9 %). Keeping this a separate device function makes
-# the G calls execute sequentially and reuse one working set, so the chunk
-# kernel's register peak tracks a single BMT call regardless of G.
-@noinline function _microphysics_point_contrib(
-    setup, χ_i, χ_j, scheme, cmp, thp, ρ,
-    λ_lagrange, mu_S, α, dt, nsubs, args...,
-)
-    FT = typeof(ρ)
-    (; q_rai_nonneg, q_sno_nonneg, λ, transform) = setup
-    T_hat, q_tot_hat = transform(χ_i, χ_j)
-
-    # Local condensate from the truncated-Gaussian Lagrange-multiplier closure:
-    # centred saturation excess S′_hat = (q_tot_hat − q_sat_hat) − μ_S, local
-    # shifted excess max(0, λ_lagrange + α·S′_hat).
-    q_tot_hat_pos = max(FT(0), q_tot_hat)
-    q_sat_hat = TD.q_vap_saturation(thp, T_hat, ρ)
-    S′_hat = q_tot_hat_pos - q_sat_hat - mu_S
-    shifted_excess = max(FT(0), λ_lagrange + α * S′_hat)
-    q_lcl_hat = max(FT(0), λ * shifted_excess - q_rai_nonneg)
-    q_icl_hat = max(FT(0), (FT(1) - λ) * shifted_excess - q_sno_nonneg)
-
-    # `LinearizedAverage` mode + `nsubs` substep loop, identical to baseline.
-    return BMT.bulk_microphysics_tendencies(
-        BMT.LinearizedAverage(),
-        scheme, cmp, thp, ρ, T_hat, q_tot_hat_pos,
-        q_lcl_hat, q_icl_hat, q_rai_nonneg, q_sno_nonneg,
-        dt, nsubs, args...,
-    )
-end
-
-# Body of one chunk kernel: build the per-cell setup once, then evaluate and
-# weight-accumulate this chunk's G quadrature points into the running tendency
-# `acc`. The `1:G` loop has a compile-time trip count and indexes homogeneous
-# NTuples, so LLVM unrolls it into G straight-line BMT calls. Returns a fresh
-# NamedTuple so the broadcast `@. dest = _accum(dest, ...)` works without
-# RecursiveApply.
-@inline function _accum_microphysics_tendency_1m_chunk(
-    acc, chunk::QuadPointChunk{G}, scheme, sgs_quad, cmp, thp, ρ, T,
-    q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-    λ_lagrange, mu_S, α, dt, nsubs, args...,
-) where {G}
-    setup = _microphysics_cell_setup(
-        sgs_quad, thp, ρ, T, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno,
-        T′T′, q′q′, corr_Tq,
-    )
-    dq_lcl_dt = acc.dq_lcl_dt
-    dq_icl_dt = acc.dq_icl_dt
-    dq_rai_dt = acc.dq_rai_dt
-    dq_sno_dt = acc.dq_sno_dt
-    for k in 1:G
-        contrib = _microphysics_point_contrib(
-            setup, chunk.χ_i[k], chunk.χ_j[k], scheme, cmp, thp, ρ,
-            λ_lagrange, mu_S, α, dt, nsubs, args...,
-        )
-        w = chunk.w[k]
-        dq_lcl_dt += w * contrib.dq_lcl_dt
-        dq_icl_dt += w * contrib.dq_icl_dt
-        dq_rai_dt += w * contrib.dq_rai_dt
-        dq_sno_dt += w * contrib.dq_sno_dt
-    end
-    return (; dq_lcl_dt, dq_icl_dt, dq_rai_dt, dq_sno_dt)
-end
-
-# Build the chunk of G quadrature points starting at flat index `base` (0-based)
-# out of the N² (i,j) grid. The flat index ℓ maps to (i, j) row-major:
-# i = (ℓ-1) ÷ N + 1, j = (ℓ-1) % N + 1. The trailing chunk is padded with
-# zero-weight copies of point 1 when G does not divide N² — those points still
-# run a BMT call but contribute nothing, so a single kernel specialization
-# covers every chunk. Using divisors of N² (1, 3, 9 for N = 3) avoids the
-# padding entirely.
-@inline function _build_quad_chunk(
-    ::Val{G}, base, total, N, χ, weights, inv_pi,
-) where {G}
-    FT = eltype(χ)
-    χ_i = ntuple(Val(G)) do k
-        ℓ = base + k
-        ℓ <= total ? χ[(ℓ - 1) ÷ N + 1] : χ[1]
-    end
-    χ_j = ntuple(Val(G)) do k
-        ℓ = base + k
-        ℓ <= total ? χ[(ℓ - 1) % N + 1] : χ[1]
-    end
-    w = ntuple(Val(G)) do k
-        ℓ = base + k
-        ℓ <= total ?
-        weights[(ℓ - 1) ÷ N + 1] * weights[(ℓ - 1) % N + 1] * inv_pi :
-        zero(FT)
-    end
-    return QuadPointChunk{G, FT}(χ_i, χ_j, w)
-end
-
-# Orchestrator: replaces the fused `@. ᶜmp_tendency = microphysics_tendencies_1m(...)`
-# quadrature call with ONE accumulating broadcast over all N² quadrature points.
-# N is the quadrature order, a compile-time type parameter of `SGSQuadrature`, so
-# the chunk size G = N² is a compile-time constant — the kernel compiles once and
-# automatically tracks `quadrature_order` (no manual re-tuning, no zero-weight
-# padding). The `@noinline` barrier in `_microphysics_point_contrib` keeps the
-# kernel's register peak at ~one BMT call despite the N² unrolled calls.
-# `ᶜmp_tendency` is the destination Field of NamedTuples; the rest mirror the
-# 16-arg `microphysics_tendencies_1m` argument list.
-@inline function set_microphysics_quadrature_1m!(
-    ᶜmp_tendency, scheme, sgs_quad::SGSQuadrature{N}, cmp, thp, ρ_field, T_field,
-    q_tot_field, q_lcl_field, q_icl_field, q_rai_field, q_sno_field,
-    T′T′_field, q′q′_field, corr_Tq, λ_lagrange_field, mu_S_field, α,
-    dt, nsubs, args...,
-) where {N}
-    χ = sgs_quad.a
-    weights = sgs_quad.w
-    FT = eltype(χ)
-    inv_pi = one(FT) / FT(π)
-
-    # All N² points in one chunk (G = N², no padding). The accumulator is seeded
-    # from zero *inside* the broadcast via `_zero_microphysics_tendency_1m`, so
-    # the zeroing fuses into the same kernel — no separate zeroing broadcast or
-    # extra accumulator write.
-    chunk = _build_quad_chunk(Val(N * N), 0, N * N, N, χ, weights, inv_pi)
-    @. ᶜmp_tendency = _accum_microphysics_tendency_1m_chunk(
-        _zero_microphysics_tendency_1m(ρ_field), chunk, scheme, sgs_quad, cmp,
-        thp, ρ_field, T_field, q_tot_field,
-        q_lcl_field, q_icl_field, q_rai_field, q_sno_field,
-        T′T′_field, q′q′_field, corr_Tq,
-        λ_lagrange_field, mu_S_field, α, dt, nsubs,
-        args...,
-    )
-    return nothing
 end
 
 ###

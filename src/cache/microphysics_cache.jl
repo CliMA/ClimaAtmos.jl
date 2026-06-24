@@ -867,9 +867,9 @@ function set_microphysics_tendency_cache!(
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
-        set_microphysics_quadrature_1m!(
-            ᶜmp_tendency, BMT.Microphysics1Moment(), sgs_quad, cmp, thp,
-            Y.c.ρ, ᶜT, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+        @. ᶜmp_tendency = microphysics_tendencies_1m(
+            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
+            ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, ᶜsgs_moments.mu_S, α,
             dt, nsubs_quad,
         )
@@ -921,9 +921,9 @@ function set_microphysics_tendency_cache!(
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
-        set_microphysics_quadrature_1m!(
-            ᶜmp_tendency⁰, BMT.Microphysics1Moment(), sgs_quad, cmp, thp,
-            ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
+            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, ᶜsgs_moments.mu_S, α,
             dt, nsubs_quad,
         )
