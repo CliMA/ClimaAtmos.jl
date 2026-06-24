@@ -90,10 +90,8 @@ import Thermodynamics as TD
     # Surface flux scheme: roughness z0m = 1e-3 m for sea ice (Pithan 2016 Table 3)
     @test surf_cond.flux_scheme.z0m ≈ FT(1e-3) rtol = 1e-6
 
-    # Surface q_vap: liquid saturation at T_surface = 250 K, p_surface = P_0
-    p_v_sat = TD.saturation_vapor_pressure(thermo_params, FT(250), TD.Liquid())
-    ϵ_v = TD.Parameters.R_d(thermo_params) / TD.Parameters.R_v(thermo_params)
-    p_surface = FT(LC.P_0)
-    q_vap_expected = ϵ_v * p_v_sat / (p_surface - p_v_sat * (1 - ϵ_v))
-    @test surf_cond.overrides.q_vap ≈ q_vap_expected rtol = 1e-4  # Float32 precision
+    # Surface pressure override is set; q_vap is intentionally left unset so that
+    # surface saturation tracks the (prognostic) surface temperature each step.
+    @test surf_cond.overrides.p ≈ FT(LC.P_0) rtol = 1e-6
+    @test isnothing(surf_cond.overrides.q_vap)
 end

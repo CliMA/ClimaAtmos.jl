@@ -831,11 +831,13 @@ function AtmosSurface(
 
     temperature = if pa["prognostic_surface"] == "SlabOceanSST"
         SurfaceConditions.SlabOceanTemperature{FT}()
+    elseif pa["prognostic_surface"] == "EisenmanSeaIce"
+        SurfaceConditions.EisenmanIceTemperature{FT}()
     elseif pa["prognostic_surface"] == "PrescribedSST"
         @something(setup_pieces.temperature, Setups.surface_temperature_model(setup_type))
     else
         error(
-            """Uncaught prognostic_surface `$(pa["prognostic_surface"])`. Expected: "PrescribedSST" | "SlabOceanSST".""",
+            """Uncaught prognostic_surface `$(pa["prognostic_surface"])`. Expected: "PrescribedSST" | "SlabOceanSST" | "EisenmanSeaIce".""",
         )
     end
 

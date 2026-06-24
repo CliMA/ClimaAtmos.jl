@@ -82,17 +82,16 @@ end
 
 function surface_condition(::Larcform1, params)
     FT = eltype(params)
-    thermo_params = CAP.thermodynamics_params(params)
     T_surface = FT(250)
     p_surface = FT(APL.Larcform1_constants.P_0)
-    # Surface q_vap consistent with RH-wrt-liquid specification
-    p_v_sat = TD.saturation_vapor_pressure(thermo_params, T_surface, TD.Liquid())
-    ϵ_v = TD.Parameters.R_d(thermo_params) / TD.Parameters.R_v(thermo_params)
-    q_vap = ϵ_v * p_v_sat / (p_surface - p_v_sat * (1 - ϵ_v))
+    # Surface q_vap is intentionally left unset so that surface saturation is
+    # computed from the surface temperature each step rather than pinned to the
+    # 250 K initial value. This matters for prognostic-surface cases (slab ocean,
+    # Eisenman sea ice) where the surface temperature evolves.
     return (;
         flux_scheme = MoninObukhov(; z0 = FT(1e-3)),
         temperature = AnalyticTemperature(Returns(T_surface)),
-        overrides = SurfaceBoundaryOverrides(p = p_surface, q_vap = FT(q_vap)),
+        overrides = SurfaceBoundaryOverrides(p = p_surface),
     )
 end
 

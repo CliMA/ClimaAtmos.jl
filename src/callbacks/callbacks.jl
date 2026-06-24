@@ -28,7 +28,12 @@ function flux_accumulation!(integrator)
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
             FT(Δt)
-        if !(p.atmos.surface.temperature isa SurfaceConditions.SlabOceanTemperature)
+        if !(
+            p.atmos.surface.temperature isa Union{
+                SurfaceConditions.SlabOceanTemperature,
+                SurfaceConditions.EisenmanIceTemperature,
+            }
+        )
             net_energy_flux_sfc[] +=
                 horizontal_integral_at_boundary(ᶠradiation_flux, half) *
                 FT(Δt)

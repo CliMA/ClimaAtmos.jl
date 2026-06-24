@@ -59,6 +59,38 @@ diagnostics.
 end
 
 """
+    EisenmanIceTemperature{FT}()
+
+Prognostic thermodynamic 0-layer sea-ice surface (Semtner 1976; Eisenman &
+Wettlaufer 2009; Zhang et al. 2021), read from `Y.sfc.T`. Carries three
+prognostic fields in `Y.sfc`: the surface temperature `T`, the ice thickness
+`h_ice`, and the ocean mixed-layer temperature `T_ml`. The state is advanced by
+the operator-split callback `eisenman_seaice_step!` (see
+`prognostic_equations/eisenman_seaice.jl`), not by `surface_temp_tendency!`,
+because the freezing/frazil/melt transitions are discontinuous and do not map
+onto a smooth IMEX tendency.
+
+`α_ice`/`α_ocean` are carried for completeness but are unused under zero solar
+insolation (shortwave flux is zero, so albedo does not enter the budget).
+"""
+@kwdef struct EisenmanIceTemperature{FT} <: SurfaceTemperature
+    # --- sea ice ---
+    C0_base::FT = 120       # ice-base heat transfer coefficient [W / m² / K]
+    T_base::FT = 273.16     # ice-base (ocean/ice interface) temperature [K]
+    L_ice::FT = 3e8         # volumetric latent heat of fusion [J / m³]
+    T_freeze::FT = 273.16   # freezing temperature [K]
+    k_ice::FT = 2           # thermal conductivity of ice [W / m / K]
+    α_ice::FT = 0.70        # ice albedo (unused at zero insolation)
+    σ::FT = 5.67e-8         # Stefan-Boltzmann constant [W / m² / K⁴]
+    # --- ocean mixed layer ---
+    h_ml::FT = 1            # ocean mixed-layer depth [m]
+    ρ_ocean::FT = 1020      # mixed-layer density [kg / m³]
+    cp_ocean::FT = 4000     # mixed-layer heat capacity [J / kg / K]
+    α_ocean::FT = 0.1       # ocean albedo (unused at zero insolation)
+    Q_flux::FT = 0          # prescribed ocean Q-flux [W / m²]
+end
+
+"""
     CoupledTemperature(field)
 
 A surface temperature owned by an external driver (the coupler). The driver
@@ -86,6 +118,11 @@ function surface_temperature(::ExternalTemperature, Y, p, t_time)
 end
 
 surface_temperature(::SlabOceanTemperature, Y, p, _) =
+    Fields.field_values(Y.sfc.T)
+
+# Eisenman sea ice: the atmosphere reads the prognostic surface temperature
+# `Y.sfc.T`; the ice/ocean state is advanced by `eisenman_seaice_step!`.
+surface_temperature(::EisenmanIceTemperature, Y, p, _) =
     Fields.field_values(Y.sfc.T)
 
 surface_temperature(t::CoupledTemperature, Y, p, _) =

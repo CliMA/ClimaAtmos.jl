@@ -452,6 +452,23 @@ needs_enforce_physical_constraints(model::AtmosModel) =
 
 default_model_callbacks(component; kwargs...) = ()
 
+# Eisenman sea ice advances its prognostic surface state with an operator-split
+# update applied once per step (the discontinuous freezing/melt transitions do
+# not map onto a smooth tendency). `skip_first` avoids firing at initialization,
+# before the surface-flux cache is populated; `call_at_end` ensures the final
+# step is included even when it does not land on the step counter.
+function default_model_callbacks(surface::AtmosSurface; kwargs...)
+    surface.temperature isa SurfaceConditions.EisenmanIceTemperature || return ()
+    return (
+        call_every_n_steps(
+            eisenman_seaice_step!,
+            1;
+            skip_first = true,
+            call_at_end = true,
+        ),
+    )
+end
+
 function default_model_callbacks(radiation::AtmosRadiation;
     dt_rad = "6hours",
     start_date,

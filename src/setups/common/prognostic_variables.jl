@@ -254,11 +254,27 @@ function surface_prognostic_variables(
     return (; T, water = FT(0))
 end
 
-# Only SlabOceanTemperature carries prognostic surface state, other
-# temperature types omit `sfc` from the FieldVector entirely.
+# Eisenman sea ice carries three prognostic surface fields: the surface
+# temperature `T`, the ice thickness `h_ice`, and the ocean mixed-layer
+# temperature `T_ml`. Larcform1 (Pithan 2016) initial conditions: 250 K surface,
+# 1 m ice, mixed layer at the freezing point. `water` accumulates the surface
+# turbulent water flux, as for the slab.
+function surface_prognostic_variables(
+    local_geometry, ::SurfaceConditions.EisenmanIceTemperature,
+)
+    FT = Geometry.float_type(local_geometry.coordinates)
+    return (; T = FT(250), h_ice = FT(1), T_ml = FT(273.16), water = FT(0))
+end
+
+# Only prognostic surface temperature models carry prognostic surface state,
+# other temperature types omit `sfc` from the FieldVector entirely.
 surface_kwargs(surface_space, ::SurfaceConditions.SurfaceTemperature) = (;)
 function surface_kwargs(
-    surface_space, t::SurfaceConditions.SlabOceanTemperature,
+    surface_space,
+    t::Union{
+        SurfaceConditions.SlabOceanTemperature,
+        SurfaceConditions.EisenmanIceTemperature,
+    },
 )
     sfc_ic(lg) = surface_prognostic_variables(lg, t)
     return (; sfc = sfc_ic.(Fields.local_geometry_field(surface_space)))

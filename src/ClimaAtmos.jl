@@ -77,6 +77,7 @@ include(joinpath("prognostic_equations", "forcing", "subsidence.jl"))
 include(joinpath("prognostic_equations", "forcing", "external_forcing.jl"))
 
 include(joinpath("prognostic_equations", "surface_temp.jl"))
+include(joinpath("prognostic_equations", "eisenman_seaice.jl"))
 
 include(joinpath("parameterized_tendencies", "radiation", "held_suarez.jl"))
 

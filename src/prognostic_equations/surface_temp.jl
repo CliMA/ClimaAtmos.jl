@@ -2,7 +2,7 @@
 ##### Couples the atmospheric model with a slab surface model
 #####
 
-using .SurfaceConditions: SurfaceTemperature, SlabOceanTemperature
+using .SurfaceConditions: SurfaceTemperature, SlabOceanTemperature, EisenmanIceTemperature
 
 """
     surface_precipitation_tendency!(Yₜ, Y, p, t, temperature, microphysics_model)
@@ -61,6 +61,10 @@ Precipitation surface deposition (energy and water) is handled separately by
 explicit tendency paths.
 """
 surface_temp_tendency!(Yₜ, Y, p, t, ::SurfaceTemperature) = nothing
+
+# Eisenman sea ice is advanced by the operator-split callback
+# `eisenman_seaice_step!`, not by a smooth tendency.
+surface_temp_tendency!(Yₜ, Y, p, t, ::EisenmanIceTemperature) = nothing
 
 function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanTemperature)
     FT = eltype(Y)
