@@ -148,6 +148,8 @@ include(joinpath("prognostic_equations", "limited_tendencies.jl"))
 
 include(joinpath("callbacks", "callbacks.jl"))
 
+include(joinpath("cosp", "quickbeam.jl"))
+
 include(joinpath("diagnostics", "Diagnostics.jl"))
 import .Diagnostics as CAD
 import .Diagnostics: DiagnosticsConfig
