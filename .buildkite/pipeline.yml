@@ -218,7 +218,7 @@ steps:
         artifact_paths: "prognostic_edmfx_bomex_tracerA_column/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX), ML cloud"
         retry: *retry_policy
         command: >
@@ -962,7 +962,7 @@ steps:
       #     slurm_gpus: 1
       #     slurm_mem: 20GB
 
-  - group: "Timestep cost" 
+  - group: "Timestep cost"
     steps:
       - label: ":alarm_clock: Timestep cost: Moist baroclinic wave"
         retry: *retry_policy

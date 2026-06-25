@@ -57,6 +57,7 @@ where:
     `p = P_0 exp(-z / H_{Earth})`, where `P_0` is the surface pressure and
     `H_{Earth}` is the scale height of the Earth's atmosphere (assumed to be 7000
     meters).
+
   - `g_1`, `g_2`, and `g_3` are empirical constants.
 
 **References**

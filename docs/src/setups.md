@@ -130,8 +130,13 @@ Add a branch in `get_setup_type` in `src/config/type_getters.jl` that maps
 the `initial_condition` config string to your setup constructor:
 
 ```julia
+if ic_name == "OtherCase1"
+    return Setups.OtherCase1()
+elseif ic_name == "OtherCase2"
+    return Setups.OtherCase2()
 elseif ic_name == "MyCase"
     return Setups.MyCase()
+end
 ```
 
 Then set `initial_condition: "MyCase"` in your YAML config file to use it.
