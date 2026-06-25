@@ -204,18 +204,6 @@ rain evaporation or snow sublimation against the local `q_v_hat`.
   - `dq_rai_dt`: Rain tendency [kg/kg/s]
   - `dq_sno_dt`: Snow tendency [kg/kg/s]
 """
-# Floor physically-negligible hydrometeor mass to zero before the 1-moment
-# microphysics call. CloudMicrophysics gates its expensive (`pow`-heavy) process
-# rates behind `q > ϵ_numerics(FT)` (≈2e-13). When the SGS-quadrature closure
-# feeds tiny but above-threshold condensate into scattered cells, those branches
-# fire in only a few threads per warp and the GPU serializes the divergent paths,
-# slowing the `set_microphysics_tendency_cache` kernel ~3×. Flooring inputs at
-# `eps(FT)` (≈1e-7 in Float32 — the same scale CloudMicrophysics uses for its 2M
-# mass-activity cutoff `ϵ_numerics_2M_M`) makes those cells take the cheap
-# early-exit. The skipped tendencies are for condensate ~6 orders of magnitude
-# below real cloud water, so the effect is physically negligible.
-@inline _floor_microphysics_mass(q::FT) where {FT} = q < eps(FT) ? zero(FT) : q
-
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
     mp::MP
@@ -258,14 +246,10 @@ end
     q_lcl_hat = max(FT(0), eval.λ * shifted_excess - eval.q_rai)
     q_icl_hat = max(FT(0), (FT(1) - eval.λ) * shifted_excess - eval.q_sno)
 
-    # Floor negligible condensate so CloudMicrophysics takes its cheap early-exit
-    # (see `_floor_microphysics_mass`); this removes the warp divergence that
-    # otherwise slows this kernel ~3×.
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        _floor_microphysics_mass(q_lcl_hat), _floor_microphysics_mass(q_icl_hat),
-        _floor_microphysics_mass(eval.q_rai), _floor_microphysics_mass(eval.q_sno),
+        q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
         eval.dt, eval.nsubs, eval.args...,
     )
 end
@@ -329,15 +313,10 @@ NamedTuple with microphysics source terms:
 @inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
     ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,
 )
-    # Floor negligible condensate so CloudMicrophysics takes its cheap early-exit
-    # (see `_floor_microphysics_mass`).
     local_tendency = BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
         BMT.Microphysics1Moment(), cmp, thp, ρ, T,
-        q_tot_nonneg,
-        _floor_microphysics_mass(q_lcl), _floor_microphysics_mass(q_icl),
-        _floor_microphysics_mass(q_rai), _floor_microphysics_mass(q_sno),
-        dt, nsubs,
+        q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
     )
     return local_tendency
 end
