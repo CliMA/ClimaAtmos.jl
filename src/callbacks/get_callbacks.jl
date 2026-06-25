@@ -384,7 +384,7 @@ function enforce_physical_constraints_callback(dt)
 end
 
 function update_chemistry_callback(dt)
-    return call_every_dt(update_chemistry_callback!, dt)
+    return call_every_dt(update_chemistry_callback!, dt, skip_first = true)
 end
 
 function ogw_callback(

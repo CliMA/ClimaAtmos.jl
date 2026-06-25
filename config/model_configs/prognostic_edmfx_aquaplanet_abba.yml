@@ -31,6 +31,8 @@ diagnostics:
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix, passiveA, passiveB, passiveAB, passiveAup, passiveBup, passiveABup]
     reduction_time: average
     period: 1hours
+  - short_name: [passiveA, passiveB, passiveAB, passiveAup, passiveBup, passiveABup, rhoa, wa, ua]
+    period: 1mins
 ode_algo: "ARS222"
 
 
