@@ -113,21 +113,7 @@ function ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰)
 end
 
 """
-    edmf_convective_zi(::Type{FT})
-
-Prescribed convective boundary-layer depth [m] used in the surface
-mass-flux closure (`w*³ = z_i · ⟨w'b'⟩_s`). This is a *separate*
-parameter from `SFP.gustiness_zi` (which sets the gustiness scale in
-the surface-flux closure for grid-mean wind); reusing the same constant
-in both places would couple unrelated calibrations.
-
-TODO: promote to a calibrated TOML parameter, and eventually replace
-with a diagnosed boundary-layer height.
-"""
-@inline edmf_convective_zi(::Type{FT}) where {FT} = FT(1000)
-
-"""
-    surface_mass_flux_coefficient(buoyancy_flux, z_i, ustar, a_s_max)
+    surface_mass_flux_coefficient(buoyancy_flux, z_i, ustar, a_s_max, c_u)
 
 Effective surface area fraction of the convective mass flux entering the
 EDMF updraft,
@@ -137,30 +123,29 @@ EDMF updraft,
 where `w*³ = max(z_i · ⟨w'b'⟩_s, 0)` (`w*` is the Deardorff convective
 velocity scale), `u*` is the friction velocity, and `c_u` is an
 O(1) tuning coefficient setting the relative weight of shear vs.
-buoyancy production in the blend. The factor
-`w*³/(w*³+c_u·u*³)` interpolates smoothly between free convection
-(`a_s → a_s_max`) and shear-only conditions (`a_s → 0`). `a_s_max` is the
-asymptotic plume area fraction in the free-convection limit. Used both
-to set the surface mass flux magnitude (via [`surface_mass_flux`](@ref))
-and to specify the percentile range from which the high-tail buoyant
-scalar values are sampled at the surface.
+buoyancy production in the blend (TOML key:
+`EDMF_sfc_mass_flux_ustar_coeff`). The factor `w*³/(w*³+c_u·u*³)`
+interpolates smoothly between free convection (`a_s → a_s_max`) and
+shear-only conditions (`a_s → 0`). `a_s_max` is the asymptotic plume
+area fraction in the free-convection limit. Used both to set the
+surface mass flux magnitude (via [`surface_mass_flux`](@ref)) and to
+specify the percentile range from which the high-tail buoyant scalar
+values are sampled at the surface.
 """
 @inline function surface_mass_flux_coefficient(
     buoyancy_flux,
     z_i,
     ustar,
     a_s_max,
+    c_u,
 )
     FT = typeof(ustar)
-    # TODO: promote c_u to a calibrated TOML parameter (~O(1)) once
-    # values stabilize.
-    c_u = FT(1)
     w3 = max(z_i * buoyancy_flux, FT(0))
     return a_s_max * w3 / max(eps(FT), w3 + c_u * ustar^3)
 end
 
 """
-    surface_mass_flux(buoyancy_flux, ρ, z_i, ustar, a_s_max)
+    surface_mass_flux(buoyancy_flux, ρ, z_i, ustar, a_s_max, c_u)
 
 Surface EDMF updraft mass flux [kg/m²/s] entering the first cell:
 
@@ -170,10 +155,10 @@ with `a_s` given by [`surface_mass_flux_coefficient`](@ref) and
 `w* = cbrt(max(z_i · ⟨w'b'⟩_s, 0))`. Returns zero in stable boundary
 layers (`⟨w'b'⟩_s ≤ 0`).
 """
-@inline function surface_mass_flux(buoyancy_flux, ρ, z_i, ustar, a_s_max)
+@inline function surface_mass_flux(buoyancy_flux, ρ, z_i, ustar, a_s_max, c_u)
     FT = typeof(ρ)
     w_star = cbrt(max(z_i * buoyancy_flux, FT(0)))
-    a_s = surface_mass_flux_coefficient(buoyancy_flux, z_i, ustar, a_s_max)
+    a_s = surface_mass_flux_coefficient(buoyancy_flux, z_i, ustar, a_s_max, c_u)
     return a_s * ρ * w_star
 end
 

@@ -143,10 +143,16 @@ the surface mass flux magnitude.
     sfc_ρ_flux_scalar,
     turbconv_params,
 )
-    FT = typeof(ρ_int)
-    z_i = edmf_convective_zi(FT)
-    a_s_max = turbconv_params.surface_area
-    a_s = surface_mass_flux_coefficient(sfc_buoyancy_flux, z_i, ustar, a_s_max)
+    z_i = CAP.convective_zi(turbconv_params)
+    a_s_max = CAP.max_surface_area(turbconv_params)
+    c_u = CAP.sfc_mass_flux_ustar_coeff(turbconv_params)
+    a_s = surface_mass_flux_coefficient(
+        sfc_buoyancy_flux,
+        z_i,
+        ustar,
+        a_s_max,
+        c_u,
+    )
     return sgs_scalar_first_interior_bc(
         z_int,
         ρ_int,
@@ -202,14 +208,20 @@ consumed elsewhere by the mse/q_tot tendency.
     turbconv_params,
 )
     FT = typeof(ρʲ_int)
-    # TODO: promote `α_sfc_flux_cap` to a calibrated TOML parameter.
-    α_sfc_flux_cap = FT(0.5)
-    z_i = edmf_convective_zi(FT)
-    a_s_max = turbconv_params.surface_area
+    α_sfc_flux_cap = CAP.sfc_mass_flux_cap_fraction(turbconv_params)
+    z_i = CAP.convective_zi(turbconv_params)
+    a_s_max = CAP.max_surface_area(turbconv_params)
+    c_u = CAP.sfc_mass_flux_ustar_coeff(turbconv_params)
 
     F_pre =
-        surface_mass_flux(sfc_buoyancy_flux, ρʲ_int, z_i, ustar, a_s_max) *
-        entr_upper_area_limiter_factor(
+        surface_mass_flux(
+            sfc_buoyancy_flux,
+            ρʲ_int,
+            z_i,
+            ustar,
+            a_s_max,
+            c_u,
+        ) * entr_upper_area_limiter_factor(
             draft_area(ρaʲ_int, ρʲ_int),
             turbconv_params,
         )

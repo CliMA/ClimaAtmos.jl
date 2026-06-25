@@ -1,4 +1,4 @@
-365
+366
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+366
+- Update to ClimaParams v1.1 (changing threshold_smooth_transition_steepness default value)
+
 365
 - PrognosticEDMFX: replace the prescribed surface-area BC with a
   surface-mass-flux BC.
