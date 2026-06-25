@@ -1,4 +1,4 @@
-364
+365
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+365
+- PrognosticEDMFX: replace the prescribed surface-area BC with a
+  surface-mass-flux BC.
+
 364
 - Change detr_massflux_vertdiv_coeff
 

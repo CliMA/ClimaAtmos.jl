@@ -399,6 +399,16 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
             Fields.field_values(Fields.level(ᶜmass_flux_factor_bot, 1))
         @. ᶜmass_flux_factor_bot_first = FT(0)
 
+        # Surface mass-flux boundary condition. The capped volumetric
+        # mass source rate (`F_sfc / dz`, equivalent to `div(F·ẑ)` at
+        # level 1) is precomputed and consumed here as a constant
+        # a-independent source in the first-cell numerator.
+        mass_flux_source_val = Fields.field_values(
+            Fields.level(p.precomputed.sfc_mass_flux_sourceʲs.:($j), 1),
+        )
+        ᶜnumerator_first = Fields.field_values(Fields.level(ᶜnumerator, 1))
+        @. ᶜnumerator_first += mass_flux_source_val
+
         input = @. lazy(tuple(
             ᶜnumerator,
             ᶜdenominator,
