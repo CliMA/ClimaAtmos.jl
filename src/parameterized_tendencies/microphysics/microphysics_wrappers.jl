@@ -215,7 +215,7 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     # Truncated-Gaussian Lagrange multiplier, μ_S, and liquid fraction
     λ::FT              # liquid fraction (from thermodynamics, held fixed)
     λ_lagrange::FT # Lagrange multiplier for centred S′: λ = z·α·σ_S
-    mu_S::FT       # SGS mean saturation variable μ_S = E[S]
+    mu_S::FT       # linearized SGS mean μ_S = q_tot_mean − q_sat(T_mean, ρ)
     α::FT          # variance fidelity parameter (from sgs_variance_fidelity)
     # Numerical parameters
     dt::FT
@@ -259,7 +259,7 @@ end
     microphysics_tendencies_1m(
         scheme, sgs_quad, cmp, thp, ρ, T, q_tot,
         q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-        λ_lagrange, mu_S, α, dt, nsubs,
+        λ_lagrange, α, dt, nsubs,
     )
 
 Computes time-averaged 1-moment microphysics tendencies.
@@ -269,8 +269,10 @@ used in EDMF updrafts or wherever a grid-mean state is to be evaluated
 directly (single BMT call, no SGS averaging).
 
 The quadrature form integrates over the SGS PDF using the truncated-Gaussian
-Lagrange-multiplier closure (see [`Microphysics1MEvaluator`](@ref)). At each
-quadrature point `(T_hat, q_tot_hat)` the centred saturation excess is
+Lagrange-multiplier closure (see [`Microphysics1MEvaluator`](@ref)). The
+linearized SGS mean `μ_S = q_tot − q_sat(T, ρ)` is computed locally from
+the mean state (no caching required). At each quadrature point
+`(T_hat, q_tot_hat)` the centred saturation excess is
 `S′_hat = (q_tot_hat − q_sat_hat) − μ_S` and the local condensate is
 
     shifted_excess = max(0, λ_lagrange + α·S′_hat)
@@ -296,7 +298,6 @@ sublimation; saturated points drive autoconversion and accretion.
   - `corr_Tq`: Correlation coefficient ρ(T′, q′) from `correlation_Tq(params)`
   - `λ_lagrange`: Lagrange multiplier `z·α·σ_S` from `ᶜsgs_moments`, pre-computed
     to enforce mass conservation `E[max(0, λ_lagrange + α·S′)] = q_c`
-  - `mu_S`: SGS mean saturation variable `E[S]` from `ᶜsgs_moments`
   - `α`: Variance fidelity parameter from `sgs_variance_fidelity`
   - `dt`: Timestep [s]
   - `nsubs`: Number of substeps for tendency averaging
@@ -323,7 +324,7 @@ end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
     scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-    λ_lagrange, mu_S, α, dt, nsubs, args...,
+    λ_lagrange, α, dt, nsubs, args...,
 )
     FT = typeof(ρ)
     # Clamp specific humidities to non-negative.
@@ -334,6 +335,10 @@ end
 
     # Liquid fraction held fixed across quadrature.
     λ = TD.liquid_fraction(thp, T, q_lcl_nonneg, q_icl_nonneg)
+
+    # Linearized SGS mean of S = q_tot − q_sat, computed at the mean state
+    # (same approximation that justifies the truncated-Gaussian closure).
+    mu_S = q_tot_nonneg - TD.q_vap_saturation(thp, T, ρ)
 
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ,

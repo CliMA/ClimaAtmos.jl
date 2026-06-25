@@ -1,4 +1,4 @@
-366
+367
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+367
+- SGS saturation moments: use linearized analytic μ_S and accumulate σ_S²
+  as E[(S − μ_S)²] in one quadrature pass to avoid Float32 catastrophic
+  cancellation when Var[S] ≪ (E[S])².
+
 366
 - Update to ClimaParams v1.1 (changing threshold_smooth_transition_steepness default value)
 
