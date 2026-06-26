@@ -403,6 +403,99 @@ function ogw_callback(
 end
 
 
+function get_callbacks(config, sim_info, atmos, params, Y, p)
+    (; parsed_args, comms_ctx) = config
+    (; dt, output_dir, start_date, t_start, t_end) = sim_info
+
+    callbacks = ()
+
+    # Progress logging
+    if parsed_args["log_progress"]
+        callbacks = (callbacks..., progress_logging_callback(dt, t_start, t_end)...)
+    end
+
+    # NaN checking
+    check_nan_every = parsed_args["check_nan_every"]
+    callbacks = (callbacks..., nan_checking_callback(check_nan_every)...)
+
+    # Graceful exit
+    callbacks = (callbacks..., graceful_exit_callback(output_dir)...)
+
+    # Checkpointing
+    checkpoint_frequency = parse_checkpoint_frequency(parsed_args["dt_save_state_to_disk"])
+    callbacks = (
+        callbacks...,
+        checkpoint_callback(
+            checkpoint_frequency,
+            output_dir,
+            start_date,
+            t_start,
+        )...,
+    )
+
+    # Garbage collection
+    callbacks = (callbacks..., gc_callback(comms_ctx)...)
+
+    # Conservation checking
+    if parsed_args["check_conservation"]
+        callbacks = (callbacks..., conservation_checking_callback()...)
+    end
+
+    # External forcing
+    if parsed_args["external_forcing"] in
+       ["ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal"] &&
+       parsed_args["config"] == "column"
+        callbacks = (callbacks..., scm_external_forcing_callback()...)
+    end
+
+    # Radiation
+    callbacks = (
+        callbacks...,
+        radiation_callback(
+            atmos.radiation_mode,
+            parsed_args["dt_rad"],
+            dt,
+            t_start,
+            t_end,
+            checkpoint_frequency,
+        )...,
+    )
+
+    # Non-orographic gravity wave
+    callbacks = (
+        callbacks...,
+        nogw_callback(
+            atmos.non_orographic_gravity_wave,
+            parsed_args["dt_nogw"],
+            dt,
+            t_start,
+            t_end,
+            checkpoint_frequency,
+        )...,
+    )
+
+    # Orographic gravity wave
+    callbacks = (
+        callbacks...,
+        ogw_callback(
+            atmos.orographic_gravity_wave,
+            parsed_args["dt_ogw"],
+            dt,
+            t_start,
+            t_end,
+            checkpoint_frequency,
+        )...,
+    )
+
+    # Enforce physical constraints filter
+    callbacks = (
+        callbacks...,
+        enforce_physical_constraints_callback(dt),
+    )
+
+    return callbacks
+end
+
 """
     default_model_callbacks(model::AtmosModel; kwargs...)
 
