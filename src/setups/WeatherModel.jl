@@ -35,9 +35,49 @@ function WeatherModel(
     )
 end
 
+# Zero-size isbits stand-in for WeatherModel used only in GPU broadcast closures.
+# Both center_initial_condition and face_initial_condition for WeatherModel ignore
+# `setup` entirely, so any isbits type with the same dispatch suffices.
+struct WeatherModelGPUSafe end
+
 function center_initial_condition(setup::WeatherModel, local_geometry, params)
     FT = eltype(params)
     return physical_state(; T = FT(NaN), p = FT(NaN))
+end
+function center_initial_condition(::WeatherModelGPUSafe, local_geometry, params)
+    FT = eltype(params)
+    return physical_state(; T = FT(NaN), p = FT(NaN))
+end
+function face_initial_condition(::WeatherModelGPUSafe, local_geometry, params)
+    FT = eltype(params)
+    return (; w = FT(0), w_draft = FT(0))
+end
+
+# WeatherModel{String} is non-isbits, so the generic initial_state can't compile
+# GPU kernels for its closures. This override uses WeatherModelGPUSafe (isbits,
+# zero-size) in the closures instead. The dispatch pattern is otherwise identical
+# to the generic initial_state, preserving the same type inference paths.
+# ERA5 data is loaded afterward by overwrite_initial_state!.
+function initial_state(
+    setup::WeatherModel,
+    params,
+    atmos_model,
+    center_space,
+    face_space,
+)
+    gpu_safe = WeatherModelGPUSafe()
+    center_ic(lg) = center_prognostic_variables(
+        center_initial_condition(gpu_safe, lg, params), lg, params, atmos_model,
+    )
+    face_ic(lg) = face_prognostic_variables(
+        face_initial_condition(gpu_safe, lg, params), lg, atmos_model,
+    )
+    surface_space = Fields.level(face_space, Fields.half)
+    return Fields.FieldVector(;
+        c = center_ic.(Fields.local_geometry_field(center_space)),
+        f = face_ic.(Fields.local_geometry_field(face_space)),
+        surface_kwargs(surface_space, atmos_model.surface.temperature)...,
+    )
 end
 
 function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
