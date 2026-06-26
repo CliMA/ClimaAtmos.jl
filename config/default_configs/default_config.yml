@@ -306,6 +306,51 @@ orographic_gravity_wave:
 non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
   value: false
+nogw_beres_source:
+  help: "Use Beres (2004) convective source spectrum for tropical NOGW (requires EDMF) [`false` (default), `true`]"
+  value: false
+beres_Q0_threshold:
+  help: "Minimum convective heating rate to activate Beres source (K/s, ~1 K/day = 1e-5)"
+  value: 1.0e-5
+beres_scale_factor:
+  help: "Dimensionless amplitude scaling for Beres momentum flux (controls total wave flux intensity)"
+  value: 2.0e-6
+beres_sigma_x:
+  help: "Convective cell horizontal half-width (m)"
+  value: 4000.0
+beres_nu_min:
+  help: "Minimum angular frequency for Beres integration (rad/s, period ~120 min)"
+  value: 8.727e-4
+beres_nu_max:
+  help: "Maximum angular frequency for Beres integration (rad/s, period ~10 min)"
+  value: 1.047e-2
+beres_n_nu:
+  help: "Number of quadrature points for Beres frequency integration (must be 4k+1: 5, 9, 13...)"
+  value: 9
+beres_h_heat_min:
+  help: "Minimum heating depth to activate Beres source (m), filters out shallow convection"
+  value: 1000.0
+beres_n_h_avg:
+  help: "Number of h values to average the Beres spectrum over (1 = no averaging; >=3 smooths the resonance peak per Beres 2004 Fig. 4)"
+  value: 1
+beres_delta_h_frac:
+  help: "Fractional half-range for h averaging: h +/- delta_h_frac * h (only used when beres_n_h_avg > 1)"
+  value: 0.1
+beres_z_bot_Q_threshold:
+  help: "Minimum Q_conv to count as the bottom of the Beres convective heating envelope (K/s, ~1 K/day = 1.157e-5)"
+  value: 1.157e-5
+beres_z_bot_floor:
+  help: "Minimum allowed convective envelope bottom (m); excludes PBL-turbulence signal in Q_conv"
+  value: 2000.0
+beres_steady_source:
+  help: "Enable the steady (nu=0) stationary mechanical component of the Beres convective NOGW source, deposited at c~0 [`false` (default), `true`]"
+  value: false
+beres_steady_dc_frac:
+  help: "Steady Beres DC heating weight: Q_t(0)^2 = beres_steady_dc_frac * nu_min (Trap-2 DC-vs-band convention; scales the steady-vs-transient amplitude)"
+  value: 1.0
+beres_L_system:
+  help: "Largest convective-system scale (m) setting k_min=2*pi/L in the even-folded horizontal constant H of the steady Beres source (steady/transient ratio depends on it only logarithmically)"
+  value: 1.0e6
 dt_nogw:
   help: "Time between calling non-orographic gravity wave update"
   value: "1800secs"

@@ -269,6 +269,20 @@ function get_non_orographic_gravity_wave_model(
     ::Type{FT},
 ) where {FT}
     nogw_name = parsed_args["non_orographic_gravity_wave"]
+    @assert nogw_name in (true, false)
+    if nogw_name == false && get(parsed_args, "nogw_beres_source", false)
+        @warn "nogw_beres_source is true but non_orographic_gravity_wave is false; ignoring Beres source"
+    end
+    if get(parsed_args, "nogw_beres_source", false) && nogw_name == true
+        turbconv = get(parsed_args, "turbconv", nothing)
+        if turbconv === nothing || turbconv == "edonly_edmfx"
+            error(
+                "nogw_beres_source requires turbconv to be " *
+                "'diagnostic_edmfx' or 'prognostic_edmfx' " *
+                "(got: $turbconv)",
+            )
+        end
+    end
     return if nogw_name == true
         (;
             source_pressure,
@@ -292,7 +306,51 @@ function get_non_orographic_gravity_wave_model(
             dϕ_n,
             dϕ_s,
         ) = params.non_orographic_gravity_wave_params
-        NonOrographicGravityWave{FT}(;
+
+        # Optionally construct Beres (2004) convective source parameters
+        beres_source = if get(parsed_args, "nogw_beres_source", false)
+            BeresSourceParams{FT}(;
+                Q0_threshold = FT(parsed_args["beres_Q0_threshold"]),
+                beres_scale_factor = FT(parsed_args["beres_scale_factor"]),
+                σ_x = FT(parsed_args["beres_sigma_x"]),
+                ν_min = FT(parsed_args["beres_nu_min"]),
+                ν_max = FT(parsed_args["beres_nu_max"]),
+                n_ν = Int(parsed_args["beres_n_nu"]),
+                h_heat_min = FT(parsed_args["beres_h_heat_min"]),
+                n_h_avg = Int(parsed_args["beres_n_h_avg"]),
+                Δh_frac = FT(parsed_args["beres_delta_h_frac"]),
+                z_bot_Q_threshold = FT(parsed_args["beres_z_bot_Q_threshold"]),
+                z_bot_floor = FT(parsed_args["beres_z_bot_floor"]),
+                beres_steady_source = get(
+                    parsed_args,
+                    "beres_steady_source",
+                    false,
+                ),
+                beres_steady_dc_frac = FT(
+                    get(parsed_args, "beres_steady_dc_frac", 1.0),
+                ),
+                beres_L_system = FT(
+                    get(parsed_args, "beres_L_system", 1.0e6),
+                ),
+            )
+        else
+            nothing
+        end
+
+        # The steady (ν=0) Beres component deposits into the c=0 phase-speed bin.
+        # Require an exact c=0 grid point (cmax/dc integer) so it lands in a bin
+        # the transient spectrum leaves at zero (no double-counting).
+        if !isnothing(beres_source) && beres_source.beres_steady_source
+            ratio = cmax / dc
+            if abs(ratio - round(ratio)) > sqrt(eps(FT))
+                error(
+                    "beres_steady_source requires an exact c=0 phase-speed bin: " *
+                    "cmax/dc must be an integer (got cmax=$cmax, dc=$dc)",
+                )
+            end
+        end
+
+        NonOrographicGravityWave(;
             source_pressure,
             damp_pressure,
             source_height,
@@ -313,6 +371,7 @@ function get_non_orographic_gravity_wave_model(
             ϕ0_s,
             dϕ_n,
             dϕ_s,
+            beres_source,
         )
     else
         nothing

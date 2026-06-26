@@ -194,6 +194,7 @@ scratch = (;
     ᶜtemp_scalar_3 = similar(ᶜz, FT),
     ᶜtemp_scalar_4 = similar(ᶜz, FT),
     ᶜtemp_scalar_5 = similar(ᶜz, FT),
+    ᶜtemp_scalar_6 = similar(ᶜz, FT),
     temp_field_level = similar(Fields.level(ᶜz, 1), FT),
 )
 
@@ -202,6 +203,13 @@ for j in 1:length(lat)
         non_orographic_gravity_wave_param(lat[j], FT)...,
         u_waveforcing_top = similar(Fields.level(ᶜz, 1), FT),
         v_waveforcing_top = similar(Fields.level(ᶜz, 1), FT),
+        gw_beres_active = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
+        gw_Q0 = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
+        gw_h_heat = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
+        gw_u_heat = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
+        gw_v_heat = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
+        gw_N_source = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
+        gw_beres_source = nothing,
     )
     # Create input parameters at each level
     local params_nogw = (; non_orographic_gravity_wave, scratch)

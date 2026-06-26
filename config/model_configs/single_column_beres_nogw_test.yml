@@ -1,0 +1,53 @@
+# Single-column test config for the Beres NOGW column-drag unit test
+# (test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/
+#  test_beres_column_drag.jl).
+#
+# The test does not run the EDMF closure — it fills the gw_* heating fields
+# directly and calls non_orographic_gravity_wave_forcing once. The config only
+# needs to build a column simulation with prognostic EDMF + NOGW + Beres so
+# that the column-mode cache is populated correctly.
+initial_condition: "IsothermalProfile"
+config: "column"
+FLOAT_TYPE: "Float64"
+
+# Tall column so stratospheric wave breaking has room to develop.
+z_max: 50000.0
+z_elem: 50
+z_stretch: false
+hyperdiff: ~
+
+# Build/init only — the test bypasses the integrator and calls the forcing
+# function directly.
+dt: "400secs"
+t_end: "400secs"
+dt_save_state_to_disk: "Inf"
+disable_surface_flux_tendency: true
+
+# Prognostic EDMF — the EDMF mode we use going forward. Needed so the cache
+# has Y.c.sgsʲs populated, even though the test bypasses the EDMF closure.
+turbconv: "prognostic_edmfx"
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+implicit_diffusion: true
+implicit_sgs_advection: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
+implicit_sgs_vertdiff: true
+implicit_sgs_mass_flux: true
+approximate_linear_solve_iters: 2
+ode_algo: "ARS222"
+microphysics_model: "0M"
+
+# NOGW + Beres source.
+non_orographic_gravity_wave: true
+dt_nogw: "400secs"
+nogw_beres_source: true
+
+# Coarse phase-speed grid (nc = 51) for fast compilation in tests.
+toml: [toml/nogw_beres_test.toml]
