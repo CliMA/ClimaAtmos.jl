@@ -143,4 +143,6 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
             @. ᶜχʲₜ -= specific(btt, p.precomputed.ᶜρʲs.:(1))
         end
     end
+
+    sea_salt_emission_tendency!(Yₜ, Y, p, t)
 end
