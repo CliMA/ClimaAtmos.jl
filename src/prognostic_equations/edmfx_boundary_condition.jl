@@ -176,9 +176,9 @@ end
 Volumetric mass source rate `F_sfc / dz_int` [kg/m³/s] at the first
 cell for one EDMF updraft, equivalent to `div(F·ẑ)` at level 1.
 `F_sfc` is the capped surface mass flux with the
-`entr_upper_area_limiter_factor(a)` baked in:
+`upper_area_limiter_factor(a)` baked in:
 
-    F_pre   = surface_mass_flux(...) · entr_upper_area_limiter_factor(a),
+    F_pre   = surface_mass_flux(...) · upper_area_limiter_factor(a),
     F_max_χ = α · sfc_ρ_flux_χ / max(ϵ, χ_buoyant − χ_env)
                                               for χ ∈ {mse, q_tot},
     F_sfc   = max(0, min(F_pre, F_max_mse, F_max_q_tot)).
@@ -221,7 +221,7 @@ consumed elsewhere by the mse/q_tot tendency.
             ustar,
             a_s_max,
             c_u,
-        ) * entr_upper_area_limiter_factor(
+        ) * upper_area_limiter_factor(
             draft_area(ρaʲ_int, ρʲ_int),
             turbconv_params,
         )
@@ -250,7 +250,7 @@ updraft variables this gives a flux-form tendency at the first cell:
     d(val)/dt += mass_flux_source · (val_buoyant − val) / max(ρa, ρ·a_min),
 
 where `mass_flux_source` already includes the env-positivity cap and
-the `entr_upper_area_limiter_factor(a)` that smoothly shuts the source
+the `upper_area_limiter_factor(a)` that smoothly shuts the source
 off as the plume area approaches `a_max`. The `max(ρa, ρ·a_min)` floor
 keeps the divisor finite when the updraft is small.
 

@@ -341,16 +341,37 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         @. ᶠw = Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠdz
 
         # entr and detr
-        ᶜarea_limiter_factor = @. lazy(
-            detr_lower_area_limiter_factor(
+        ᶜlower_limiter_factor = @. lazy(
+            lower_area_limiter_factor(
                 draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
                 turbconv_params,
             ),
         )
+        ᶜupper_limiter_factor = @. lazy(
+            upper_area_limiter_factor(
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                turbconv_params,
+            ),
+        )
+        # Effective mass-flux-divergence detrainment fraction (Lagrangian fraction
+        # of converging mass detrained at this level):
+        #
+        #     detr_coeff = 1 − U · (1 − L · C),
+        #
+        # where U = `upper_area_limiter_factor(a)` (→ 0 as a → a_max),
+        # L = `lower_area_limiter_factor(a)` (→ 0 as a → a_min), and
+        # C = `detr_massflux_vertdiv_coeff`. Endpoint behavior:
+        #   - U = 1 (a ≪ a_max): detr_coeff = L · C — standard regime.
+        #   - U = 0 (a → a_max): detr_coeff = 1 — implicit detrainment soaks up
+        #     100% of the converging mass regardless of C, capping area at a_max
+        #     even when advection alone would push it past.
+        # The recurrence consumes `one_minus_prefactor = 1 − detr_coeff
+        # = U · (1 − L · C)`.
         ᶜone_minus_implicit_detr_prefactor = @. lazy(
             ifelse(
                 ᶜdivᵥ(ᶠleft_bias(Y.c.sgsʲs.:($$j).ρa) * Y.f.sgsʲs.:($$j).u₃) < 0,
-                FT(1) - ᶜarea_limiter_factor * detr_massflux_vertdiv_coeff,
+                ᶜupper_limiter_factor *
+                (FT(1) - ᶜlower_limiter_factor * detr_massflux_vertdiv_coeff),
                 FT(1),
             ),
         )
@@ -373,7 +394,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         @. ᶜexplicit_entr_minus_detr =
             ᶜarea_bounding_entr_detrʲs.:($$j) +
             ᶜentr_vel_scaleʲs.:($$j) * ᶜinterp(ᶠw) -
-            ᶜarea_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
+            ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
 
         @. ᶜnumerator = Y.c.sgsʲs.:($$j).ρa / dtγ
         # Floor at 0.1 / dtγ so (ε − δ) is effectively bounded by 0.9/dtγ,
