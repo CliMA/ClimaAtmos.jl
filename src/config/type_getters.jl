@@ -54,6 +54,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         numerics = AtmosNumerics(config, FT),
         vertical_diffusion,
         disable_surface_flux_tendency = pa["disable_surface_flux_tendency"],
+        interactive_aerosols = Val(Tuple(Symbol.(pa["interactive_aerosols"]))),
     )
     # TODO: Should this go in the AtmosModel constructor?
     @assert !@any_reltype(atmos, (UnionAll, DataType))
@@ -534,7 +535,7 @@ function get_simulation(config::AtmosConfig)
         ode_config = ode_configuration(FT, pa),
         jacobian = jacobian_from_parsed_args(pa),
         debug_jacobian = pa["debug_jacobian"],
-        aerosol_names = Tuple(pa["prescribed_aerosols"]),
+        prescribed_aerosol_names = Tuple(pa["prescribed_aerosols"]),
         time_varying_trace_gases = Tuple(pa["time_varying_trace_gases"]),
         vertical_water_borrowing_species =
         vertical_water_borrowing_species_from_config(config),
