@@ -63,7 +63,7 @@ function calculate_pi_groups(
 end
 
 """
-    entr_upper_area_limiter_factor(a, turbconv_params)
+    upper_area_limiter_factor(a, turbconv_params)
 
 Return a multiplicative limiter for the entrainment rate based on the
 current subdraft area `a`.
@@ -76,11 +76,11 @@ bound `a_max` (preventing the area from being driven above `a_max`):
 The upper bound `a_max` is obtained from `turbconv_params` through
 `CAP.max_area`, and `max_area_limiter_power` from `CAP.max_area_limiter_power`.
 
-This is the entrainment counterpart of [`detr_lower_area_limiter_factor`](@ref),
+This is the entrainment counterpart of [`lower_area_limiter_factor`](@ref),
 which damps detrainment near the lower bound `a_min`. Together they keep
 `a ∈ [a_min, a_max]` without requiring a comparison between `entr` and `detr`.
 """
-@inline function entr_upper_area_limiter_factor(a::FT, turbconv_params) where {FT}
+@inline function upper_area_limiter_factor(a::FT, turbconv_params) where {FT}
     a_max = CAP.max_area(turbconv_params)
     max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
     a_safe = max(eps(FT), a)
@@ -88,7 +88,7 @@ which damps detrainment near the lower bound `a_min`. Together they keep
 end
 
 """
-    detr_lower_area_limiter_factor(a, turbconv_params)
+    lower_area_limiter_factor(a, turbconv_params)
 
 Return a multiplicative limiter for the detrainment rate based on the current
 subdraft area `a`.
@@ -101,11 +101,11 @@ The factor smoothly damps detrainment as the area approaches the lower bound
 The lower bound `a_min` is obtained from `turbconv_params` through
 `CAP.min_area`, and `min_area_limiter_power` from `CAP.min_area_limiter_power`.
 
-This is the detrainment counterpart of [`entr_upper_area_limiter_factor`](@ref),
+This is the detrainment counterpart of [`upper_area_limiter_factor`](@ref),
 which damps entrainment near the upper bound `a_max`. Together they keep
 `a ∈ [a_min, a_max]` without requiring a comparison between `entr` and `detr`.
 """
-@inline function detr_lower_area_limiter_factor(a::FT, turbconv_params) where {FT}
+@inline function lower_area_limiter_factor(a::FT, turbconv_params) where {FT}
     a_min = CAP.min_area(turbconv_params)
     min_area_limiter_power = CAP.min_area_limiter_power(turbconv_params)
     a_safe = max(eps(FT), a)
@@ -266,7 +266,7 @@ function entrainment_velocity_scale(
         entr_param_vec[5] * abs(Π₅) +
         entr_param_vec[6]
 
-    area_limiter_factor = entr_upper_area_limiter_factor(ᶜaʲ, turbconv_params)
+    area_limiter_factor = upper_area_limiter_factor(ᶜaʲ, turbconv_params)
     entr_vel_scale = area_limiter_factor * max(0, pi_sum) / elev_above_sfc
     return max(0, entr_vel_scale)
 end
@@ -298,7 +298,7 @@ function entrainment_velocity_scale(
         return 0
     end
 
-    area_limiter_factor = entr_upper_area_limiter_factor(ᶜaʲ, turbconv_params)
+    area_limiter_factor = upper_area_limiter_factor(ᶜaʲ, turbconv_params)
     entr_vel_scale = area_limiter_factor * entr_vel_scale_param / elev_above_sfc
     return max(0, entr_vel_scale)
 end
@@ -350,7 +350,7 @@ end
 
 Total detrainment rate [1/s] as the sum of the model-specific rate from
 `detrainment_rate` (which internally applies
-[`detr_lower_area_limiter_factor`](@ref) so that detrainment is damped as
+[`lower_area_limiter_factor`](@ref) so that detrainment is damped as
 `a → a_min`) with the negative part of the signed area-bounding rate:
 
     detr = detrainment_rate(...) + max(0, -area_bounding_entr_detr)
@@ -443,7 +443,7 @@ function detrainment_rate(
     detr_massflux_vertdiv_coeff =
         CAP.detr_massflux_vertdiv_coeff(turbconv_params)
 
-    area_limiter_factor = detr_lower_area_limiter_factor(ᶜaʲ, turbconv_params)
+    area_limiter_factor = lower_area_limiter_factor(ᶜaʲ, turbconv_params)
     detr =
         area_limiter_factor *
         (
