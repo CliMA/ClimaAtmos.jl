@@ -1,10 +1,10 @@
 """
     plotter_beres_verification_9panel.jl
 
-Trimmed 3×3 verification plot for the Beres (2004) convective GW source.
+3×3 verification plot for the Beres (2004) convective GW source.
 The figure follows a where / why / what story:
   Row 1 (WHERE): precip, Q₀ map, h_heat map
-  Row 2 (WHY — gating decision): arup + z_top gate, Q_conv/Q_conv_ic envelope
+  Row 2 (WHY — envelope construction): arup + z_top gate, Q_conv/Q_conv_ic envelope
          with z_bot threshold/floor lines, (Q₀, h_heat) activation-gate scatter
   Row 3 (WHAT — source & response): in-cloud heating vs half-sine, u-drag, v-drag
 

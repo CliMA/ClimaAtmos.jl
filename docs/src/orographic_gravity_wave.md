@@ -11,7 +11,7 @@ with $\vec{X} = (X_\lambda, X_\phi)$ representing the sub-grid scale zonal and m
 Throughout this document, an overbar (e.g. ``\overline{\vec{v}}``, ``\overline{\rho}``) denotes a grid-mean, resolved-scale variable in the sense of a Reynolds decomposition, and primes denote the corresponding sub-grid fluctuations. ``\epsilon_0`` denotes a small floating-point regularizer (`eps(FT)` in the code) used to prevent division-by-zero and degenerate clamps; it has no physical meaning.
 
 ## Orographic gravity wave
-The orographic gravity wave drag parameterization follows the methods described in [garner2005](@cite). The momentum drag from sub-grid scale mountains is divided into a non-propagating component and a propagating component. The non-propagating component forces momentum drag within the planetary boundary layer while the propagating component generate a stationary (``c = 0``, zero phase speed) gravity wave which propagates upwards and deposit momentum flux to the layers where it breaks.
+The orographic gravity wave drag parameterization follows the methods described in [garner2005](@cite). The momentum drag from sub-grid scale mountains is divided into a non-propagating component and a propagating component. The non-propagating (blocked/deflected flow) component deposits momentum drag in a low-level layer extending from the planetary boundary layer top up to a reference level ``z_{ref}`` (with pressure weighting that concentrates the drag near the surface), while the propagating component generates a stationary (``c = 0``, zero phase speed) gravity wave which propagates upwards and deposits momentum flux to the layers where it breaks.
 
 ### Planetary Boundary Layer (PBL) top
 There are many ways to determine the PBL top. We implement the following simple criteria to find the PBL top level k as the highest level that satisfies
@@ -39,16 +39,16 @@ where ``h`` is the surface elevation, ``d(\mathbf{x}, \mathbf{x}')`` is the grea
 #### Tensor ``\textbf{T}``
 The tensor ``\textbf{T}``, which contains all relevant information including amplitude, variance, orientation, and anisotropy about topography, is computed as
 ```math
-\textbf{T} = \nabla \chi (\nabla h)^T,
+\textbf{T} = -\nabla \chi (\nabla h)^T,
 ```
-where ``h`` is the earth elevation and ``\chi`` is the velocity potential defined above.
+where ``h`` is the earth elevation and ``\chi`` is the velocity potential defined above. The leading minus reproduces Garner's sign convention so that the resulting drag opposes the low-level flow (cf. the velocity potential in [garner2005](@cite) Eq. 6).
 
 !!! note "Indexing convention used in the code"
     The four tensor components stored in the code are
     ```math
-    t_{ij} \;:=\; \frac{\partial \chi}{\partial x_j}\,\frac{\partial h}{\partial x_i}, \qquad (x_1, x_2) = (x, y),
+    t_{ij} \;:=\; -\frac{\partial \chi}{\partial x_j}\,\frac{\partial h}{\partial x_i}, \qquad (x_1, x_2) = (x, y),
     ```
-    so the stored ``t_{ij}`` equals the ``(j,i)`` entry of ``\nabla\chi(\nabla h)^T``. The transpose ``\langle\textbf{T}\rangle^T`` in the base-flux formula below accounts for this convention; the explicit ``\tau_x``/``\tau_y`` formulas in the next section use the stored components directly.
+    so the stored ``t_{ij}`` equals the ``(j,i)`` entry of ``-\nabla\chi(\nabla h)^T``. The transpose ``\langle\textbf{T}\rangle^T`` in the base-flux formula below accounts for this convention; the explicit ``\tau_x``/``\tau_y`` formulas in the next section use the stored components directly.
 
 #### ``h_{max}``
 ``h_{max}`` represents the effective maximum height of the orographic features within a grid cell relative to the mean surface. Using the 4th moment emphasizes the tallest peaks most relevant for generating gravity waves while still averaging over the subgrid terrain.
@@ -151,7 +151,7 @@ Let ``L_1 = L_0 * \max(0.5, \min(2.0, 1.0 - 2 V_\tau \cdot d^2V_{\tau} / N^2))``
 ```math
 ^c d^2V_{\tau}[k] = \max\!\left(\epsilon_0, \; - \frac{d^2 V}{dz^2}[k] \cdot \frac{\tau}{\max(\epsilon_0, |\tau|)}\right).
 ```
-The saturated velocity ``U_{sat}`` is computed level-by-level via a cumulative column-accumulator (initialized at the source level with the base-flux ``U_{sat}``):
+The saturated velocity ``U_{sat}`` is computed level-by-level via a cumulative column-accumulator (initialized at the lowest level, i.e., the surface cell center, with the base-flux ``U_{sat}``):
 ```math
 U_{sat}[k] = \min\!\left(U_{sat}[k-1], \; \sqrt{\frac{^c \rho}{\rho_0} \frac{^c V_{\pmb{\tau}}^3}{^c N \cdot L_1} }\right),
 ```
@@ -251,7 +251,7 @@ The parameterization splits into an **offline preprocessing** step (Earth topogr
 ```
 Offline (Earth topography only):
   compute_OGW_info
-    ├─ calc_hpoz_latlon         → hmax, hmin   (4th-moment statistic)
+    ├─ calc_hpoz_latlon         → h₀           (raw 4th-moment statistic; rescaled to hmax, hmin in compute_OGW_info)
     ├─ calc_velocity_potential  → χ            (2D Hilbert transform)
     └─ calc_orographic_tensor   → t11, t12, t21, t22
   regrid_OGW_info → SpaceVaryingInput to spectral element

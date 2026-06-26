@@ -124,16 +124,10 @@ steps:
 
       - label: ":wavy_dash: Beres NOGW: single-column heating + drag"
         retry: *retry_policy
-        # CPU device: the heating phase uses parent(...) scalar indexing.
-        env:
-          CLIMACOMMS_DEVICE: "CPU"
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_single_column.jl"
 
       - label: ":wavy_dash: Beres NOGW: sphere full integration"
         retry: *retry_policy
-        # CPU device: per-column array extraction uses scalar indexing.
-        env:
-          CLIMACOMMS_DEVICE: "CPU"
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_sphere_integration.jl"
         agents:
           slurm_mem: 20GB

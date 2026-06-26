@@ -112,9 +112,6 @@ Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
 end
 
 # Physical/tuning parameters for the Beres (2004) convective gravity-wave source.
-# These are the continuous knobs (TOML, name-mapped from the `nogw_beres_*` keys);
-# the structural switches (enable Beres, steady source, envelope mode, latent
-# heating) stay in the YAML config and are carried as Bools on `BeresSourceParams`.
 Base.@kwdef struct BeresSourceParameters{FT} <: AGWP
     Q0_threshold::FT         # K/s, minimum heating rate to activate Beres
     scale_factor::FT         # dimensionless amplitude scaling (folds ρ₀/(Lτ), |Q_t|² weight, tuning)
@@ -127,7 +124,7 @@ Base.@kwdef struct BeresSourceParameters{FT} <: AGWP
     Δh_frac::FT              # fractional half-range for h averaging: h ± Δh_frac·h
     z_bot_Q_threshold::FT    # K/s, min Q_conv to count as envelope bottom (≈ 1 K/day)
     z_bot_floor::FT          # m, minimum allowed z_bot (excludes PBL turbulence in Q_conv)
-    steady_dc_frac::FT       # steady DC heating weight: Q_t(0)² = steady_dc_frac·ν_min (Trap 2)
+    steady_dc_frac::FT       # steady DC heating weight: Q_t(0)² = steady_dc_frac·ν_min
     L_system::FT             # m, largest convective-system scale; sets k_min=2π/L for the steady source
 end
 

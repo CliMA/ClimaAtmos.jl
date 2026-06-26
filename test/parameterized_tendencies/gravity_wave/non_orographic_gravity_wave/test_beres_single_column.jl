@@ -61,8 +61,9 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
 #      i.e. it is ~1/a0 larger than the grid-mean-derived amplitude.
 #   4. Activation still gates on the GRID-MEAN amplitude (thresholds are
 #      calibrated to grid-mean magnitudes).
-#   5. The envelope (z_bot, z_top) is detected from the grid-mean field and
-#      the updraft area fraction, exactly as before the in-cloud fix.
+#   5. The envelope (z_bot, z_top) is moment-matched to the in-cloud heating
+#      Q_conv_ic (centroid z_c + spread σ → half-sine of depth h); the legacy
+#      grid-mean area-threshold detection is deprecated and gated off.
 # ============================================================================
 # Outer testset so Phase A failures do not abort Phase B: a *top-level*
 # @testset throws at its `end` when it contains failures, which would stop the
@@ -296,7 +297,7 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
     # Tests: nonzero drag, max drag location (stratospheric), bounded magnitude,
     # v-forcing near zero (no meridional wind), ā-linearity, steady (ν=0) component.
     # σ_x = 2500 m (Beres 2004 §4 squall-line case) comes from the config's
-    # toml/beres_squall_sigma_x.toml override.
+    # toml/nogw_beres_test.toml override.
     # ============================================================================
     @testset "Beres column drag -- single-column with wind shear" begin
         # Verify Beres is enabled in column mode (requires the column-cache fix)

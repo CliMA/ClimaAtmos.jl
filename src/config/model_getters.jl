@@ -284,7 +284,7 @@ function get_non_orographic_gravity_wave_model(
         end
         # Canonical latent heating (Q_lat = Σ_p L_p R_p) needs explicit per-phase
         # conversion rates (1-moment microphysics) AND per-draft in-cloud state
-        # (PrognosticEDMFX). Fail loud at construction, not at runtime.
+        # (PrognosticEDMFX).
         if get(parsed_args, "nogw_beres_heating_latent", false)
             mp_model = get(parsed_args, "microphysics_model", "dry")
             if mp_model != "1M" || turbconv != "prognostic_edmfx"
@@ -320,10 +320,7 @@ function get_non_orographic_gravity_wave_model(
             dϕ_s,
         ) = params.non_orographic_gravity_wave_params
 
-        # Optionally construct Beres (2004) convective source parameters.
-        # Continuous tuning constants come from TOML (`params.beres_source_params`,
-        # name-mapped from the `nogw_beres_*` keys); only the structural switches
-        # (enable, steady source, envelope mode, latent heating) come from the YAML.
+        # Construct Beres (2004) convective source parameters.
         beres_source = if get(parsed_args, "nogw_beres_source", false)
             bsp = params.beres_source_params
             BeresSourceParams{FT}(;
@@ -340,10 +337,11 @@ function get_non_orographic_gravity_wave_model(
                 z_bot_floor = FT(bsp.z_bot_floor),
                 beres_steady_dc_frac = FT(bsp.steady_dc_frac),
                 beres_L_system = FT(bsp.L_system),
+                # Two deprecation notes:
                 # beres_steady_source defaults true on the struct (no YAML switch); it
-                # is gated implicitly by the phase-speed grid (deposits only with a c=0
+                # is toggled implicitly by the phase-speed grid (deposits only with a c=0
                 # bin, see the warning below). moment_matched is the sole active
-                # envelope mode (legacy area_threshold is deprecated, retained gated).
+                # envelope mode (legacy area_threshold is deprecated but retained).
                 moment_envelope = true,
                 heating_latent = get(
                     parsed_args,

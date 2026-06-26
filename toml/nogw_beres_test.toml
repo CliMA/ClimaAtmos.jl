@@ -1,4 +1,5 @@
-# Coarse phase-speed grid for fast compilation in Beres integration tests.
+# Coarse phase-speed grid for fast compilation in Beres tests, plus the
+# Beres (2004) Section 4 squall-line convective cell half-width.
 # nc = 2*cmax/dc + 1 = 2*100/4 + 1 = 51 bins (vs 376 with defaults).
 [nogw_Bw]
 value = 0.4
@@ -8,3 +9,7 @@ value = 100.0
 
 [nogw_dc]
 value = 4.0
+
+# Squall-line convective cell half-width (sigma_x = 2500 m vs default 4000 m).
+[nogw_beres_sigma_x]
+value = 2500.0

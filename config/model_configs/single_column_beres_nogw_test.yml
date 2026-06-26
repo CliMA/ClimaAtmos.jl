@@ -54,6 +54,6 @@ nogw_beres_source: true
 # diagnostics are enabled.
 nogw_beres_detailed_diagnostics: true
 
-# Coarse phase-speed grid (nc = 51) for fast compilation in tests; sigma_x = 2500 m
-# matches the Beres (2004) Section 4 squall-line case.
-toml: [toml/nogw_beres_test.toml, toml/beres_squall_sigma_x.toml]
+# Coarse phase-speed grid (nc = 51) + squall-line sigma_x = 2500 m for fast
+# compilation in tests.
+toml: [toml/nogw_beres_test.toml]
