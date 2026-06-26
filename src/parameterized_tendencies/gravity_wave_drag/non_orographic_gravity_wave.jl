@@ -144,8 +144,6 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
                 Fields.level(Y.c.ρ, 1),
                 Tuple{FT, FT, FT, FT, FT, FT, FT},
             ),
-            gw_deep_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
-            gw_cb_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
             # Beres launch-level state (ρ, z, u, v, level) — per-column,
             # populated from gw_ztop in compute_tendency!. Kernel uses this
             # in MODE == :beres; AD99 path ignores it.
@@ -252,8 +250,6 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
                 Fields.level(Y.c.ρ, 1),
                 Tuple{FT, FT, FT, FT, FT, FT, FT},
             ),
-            gw_deep_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
-            gw_cb_count = Fields.zeros(FT, axes(Fields.level(Y.c.ρ, 1))),
             # Beres launch-level state (ρ, z, u, v, level) — per-column,
             # populated from gw_ztop in compute_tendency!. Kernel uses this
             # in MODE == :beres; AD99 path ignores it.
@@ -476,8 +472,6 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         gw_Q_conv_ic,
         gw_a_cover,
         gw_reduce_result,
-        gw_deep_count,
-        gw_cb_count,
         gw_c,
         gw_ncval,
         gw_halfsine,
@@ -633,17 +627,17 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
-    # Pass 1: set the convective envelope [z_bot, z_top] and depth h. Two modes:
-    #   area_threshold (default): z_top = highest level with updraft area
-    #     > a_thresh (plume top); z_bot = lowest level above z_bot_floor where
-    #     grid-mean Q_conv > z_bot_Q_threshold (the floor rejects the PBL
-    #     dry-thermal Q_conv signal below ~1 km in the tropics).
-    #   moment_matched: fit a half-sine to the in-cloud heating Q_conv_ic by its
-    #     1st/2nd moments — centroid z_c and spread σ. A half-sine of depth h has
-    #     variance h²·(π²−8)/(4π²), so h = σ/√(that); z_bot = z_c − h/2,
-    #     z_top = z_c + h/2, and Q0 = (π/2)·∫max(Q_ic,0)dz / h. This sits the
-    #     envelope on the actual heating (the area/threshold envelope is often
-    #     narrow and misplaced relative to the in-cloud heating peak).
+    # Pass 1: set the convective envelope [z_bot, z_top] and depth h.
+    #   moment_matched (the only active mode; moment_envelope is hardwired true):
+    #     fit a half-sine to the in-cloud heating Q_conv_ic by its 1st/2nd moments
+    #     — centroid z_c and spread σ. A half-sine of depth h has variance
+    #     h²·(π²−8)/(4π²), so h = σ/√(that); z_bot = z_c − h/2, z_top = z_c + h/2,
+    #     and Q0 = (π/2)·∫max(Q_ic,0)dz / h. This sits the envelope on the actual
+    #     heating.
+    #   area_threshold (DEPRECATED, retained gated `false`): z_top = highest level
+    #     with updraft area > a_thresh (plume top); z_bot = lowest level above
+    #     z_bot_floor where grid-mean Q_conv > z_bot_Q_threshold. It was often
+    #     narrow and misplaced relative to the in-cloud heating peak.
     # Both leave gw_u_heat = z_bot, gw_v_heat = z_top, gw_h_heat = h for Pass 2.
     result_field = gw_reduce_result
     if gw_beres_source.moment_envelope
@@ -707,6 +701,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         @. gw_u_heat = gw_zbot
         @. gw_v_heat = gw_ztop
     else
+        # DEPRECATED: area_threshold envelope path. moment_matched (above) is the
+        # only mode reachable from config (moment_envelope is hardwired true). This
+        # branch is retained for reference / direct struct construction in tests and
+        # is no longer exercised by any production run.
         input1 = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜa_up, ᶜQ_conv)
         reduce_init = (FT(-Inf), FT(Inf), FT(0), FT(0), FT(0), FT(0), FT(0))
         let _a_thresh = FT(1e-3), _Q_thresh = gw_beres_source.z_bot_Q_threshold,
@@ -744,10 +742,6 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # Persist zbot/ztop before gw_u_heat/gw_v_heat get overwritten by mean winds
     @. gw_zbot = gw_u_heat
     @. gw_ztop = gw_v_heat
-
-    # Count callback invocations and deep convection events (z_top > 10km)
-    @. gw_cb_count += FT(1)
-    @. gw_deep_count += ifelse(gw_v_heat > FT(10000), FT(1), FT(0))
 
     # Pass 2: within [z_bot, z_top], compute:
     #   - Q₀ integrals: Σ(Q · Δz) for the grid-mean (gating) and in-cloud
@@ -823,6 +817,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # Spectrum amplitude. In moment_matched mode gw_Q0 was already set from the
     # column moments in Pass 1; in area_threshold mode set it here from the
     # IN-CLOUD heating integral over [z_bot, z_top]: Q₀ = (π/2)·Σ(Q_ic·Δz)/h.
+    # DEPRECATED: this block belongs to the area_threshold path (see above) and is
+    # never taken in production (moment_envelope is hardwired true).
     if !gw_beres_source.moment_envelope
         @. gw_Q0 = result_field.:6
         @. gw_Q0 = ifelse(
@@ -851,6 +847,12 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     )
 
     # --- Native source-shape & launched-spectrum diagnostics (Q2 resolution) ---
+    # These are verification-only outputs (the half-sine source profile and the
+    # launched-spectrum summaries); they do NOT feed the forcing kernel. Skip them
+    # entirely unless detailed (debug/manuscript) diagnostics are requested — a
+    # production GCM run only needs the net drag. The `nogw_halfsine` /
+    # `nogw_launch_flux` / `nogw_c_centroid` diagnostics are gated on the same flag.
+    gw_beres_source.detailed_diagnostics || return
     # Build the launched half-sine Q0·sin(π(z−z_bot)/h) over the heating depth h
     # natively, IN the column where (Q0, z_bot, h) are mutually consistent, so
     # the offline comparison to Q_conv_ic is a single linear remap of one field
@@ -1640,7 +1642,7 @@ Reuses the transient primitives; the only new pieces are:
 setting the steady's frequency band-width relative to one transient bin.
 
 Steady and transient carry orthogonal frequencies, so no double-counting; their ratio
-is `scale_factor`-independent and ≈ O(1) for defaults (see `beres_steady_reference.py`).
+is `scale_factor`-independent and ≈ O(1) for defaults (pinned in `test_beres_steady_source.jl`).
 `U → 0` returns 0 smoothly (guards the `1/U³`).
 """
 @inline function _beres_steady_flux(
@@ -1737,10 +1739,18 @@ function wave_source(
     Q0_sq = Q0^2
 
     # Steady (ν=0) contribution: a ground-stationary wave, so it lands in the c≈0 bin
-    # (kept empty by the transient spectrum, so no double-counting). Zero when the flag
-    # is off.
+    # (kept empty by the transient spectrum, so no double-counting). It deposits only
+    # when (a) the steady source is enabled — true by default, with no YAML switch; the
+    # field exists so internal tools can toggle it at a fixed grid — and (b) an exact
+    # c=0 bin exists. Without a c=0 bin, `clamp` would otherwise point n_zero at a
+    # nonzero edge bin and silently corrupt it, so we zero the steady flux instead
+    # (the graceful no-op that makes the grid the user-facing on/off control).
+    dc = c[2] - c[1]
+    cmax = -c[1]
+    n_zero = clamp(round(Int, cmax / dc) + 1, 1, nc)
+    has_c0_bin = abs(c[n_zero]) < FT(1e-6)
     steady_flux =
-        beres_steady_source ?
+        (beres_steady_source && has_c0_bin) ?
         _beres_steady_flux(
             u_heat,
             N_source,
@@ -1754,9 +1764,6 @@ function wave_source(
             FT(beres_steady_dc_frac),
             ν_min,
         ) : FT(0)
-    dc = c[2] - c[1]
-    cmax = -c[1]
-    n_zero = clamp(round(Int, cmax / dc) + 1, 1, nc)
 
     ntuple(
         n -> begin

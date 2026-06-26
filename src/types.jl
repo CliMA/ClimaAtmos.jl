@@ -426,37 +426,33 @@ abstract type AbstractGravityWave end
 
 Parameters for the Beres (2004) convective gravity wave source spectrum.
 When used as the `beres_source` field in `NonOrographicGravityWave`, the
-Beres convective spectrum is launched *in addition to* the AD background
-spectrum (not as a replacement) in every column whose EDMF convective heating
-exceeds `Q0_threshold` and whose heating layer is deeper than `h_heat_min`.
-There is no latitude gate: the tropical confinement of the source is emergent,
-set by where the EDMF scheme produces deep convective heating.
+Beres convective spectrum is launched in addition to the AD background
+spectrum in every column whose EDMF convective heating exceeds `Q0_threshold` and whose heating layer is deeper than `h_heat_min`.
+There is no latitude gate, and it is set by where the EDMF scheme produces deep convective heating.
 """
 Base.@kwdef struct BeresSourceParams{FT}
-    Q0_threshold::FT      # K/s, minimum heating rate to activate Beres
-    beres_scale_factor::FT # dimensionless; folds the ρ₀/(Lτ) prefactor, the |Q_t|² weight, and empirical tuning into one parameter
-    σ_x::FT              # m, convective cell horizontal half-width
-    ν_min::FT            # 1/s, min frequency (period ~120 min)
-    ν_max::FT            # 1/s, max frequency (period ~10 min)
-    n_ν::Int             # quadrature points (must be 4k+1: 5, 9, 13...)
-    n_h_avg::Int = 1     # number of h values to average over (1 = no averaging)
-    Δh_frac::FT = FT(0.1) # fractional half-range for h averaging: h ± Δh_frac * h
-    h_heat_min::FT = FT(1000.0) # m, minimum heating depth to activate (filters shallow convection)
-    z_bot_Q_threshold::FT = FT(1.157e-5) # K/s, min Q_conv to count as envelope bottom (≈ 1 K/day)
-    z_bot_floor::FT = FT(2000.0) # m, minimum allowed z_bot (excludes PBL turbulence in Q_conv)
-    beres_steady_source::Bool = false # enable the steady (ν=0) stationary mechanical source (deposited at c≈0)
-    beres_steady_dc_frac::FT = FT(1.0) # steady DC heating weight: Q_t(0)² = beres_steady_dc_frac · ν_min (Trap 2 convention)
-    beres_L_system::FT = FT(1.0e6) # m, largest convective-system scale; sets k_min=2π/L in the even-folded H
-    # If true, set [z_bot,z_top]/h/Q0 by moment-matching a half-sine to in-cloud
-    # Q_conv_ic (1st/2nd moments) instead of the area/threshold envelope. Bool
-    # (not Symbol) to keep the struct isbits for the GPU forcing kernel.
-    moment_envelope::Bool = false
-    # If true, source the in-cloud heating from the transport-free
-    # latent-heat sum Q_lat = (1/cp⁽ʲ⁾) Σ_p L_p R_p⁽ʲ⁾ (manuscript eq:edmf_heating) instead of the DSE flux-divergence Q₁. Requires 1-moment
-    # microphysics + PrognosticEDMFX (the per-phase conversion rates and per-draft
-    # condensate state both exist only there); enforced at construction in
-    # get_non_orographic_gravity_wave_model. Bool to keep the struct isbits.
-    heating_latent::Bool = false
+    # --- Main parameters ---
+    Q0_threshold::FT             # K/s, min heating rate to activate Beres
+    beres_scale_factor::FT       # dimensionless efficiency ℰ; knobs for ρ₀/(Lτ) normalization, the |Q_t(ν)|² weight, and tuning
+    σ_x::FT                      # m, convective cell horizontal half-width
+    ν_min::FT                    # 1/s, min wave frequency (period ~120 min)
+    ν_max::FT                    # 1/s, max wave frequency (period ~10 min)
+    n_ν::Int                     # frequency quadrature points (must be 4k+1: 5, 9, 13...)
+    h_heat_min::FT = FT(1000.0)  # m, min heating depth to activate (filters shallow convection)
+    z_bot_floor::FT = FT(2000.0) # m, min allowed z_bot (excludes PBL signal in Q_conv)
+    beres_steady_source::Bool = true # boolean flag for steady (ν=0) stationary component: deposits only if a c≈0 bin exits
+    beres_steady_dc_frac::FT = FT(1.0) # artificial steady DC weight: Q_t(0)² = dc_frac·ν_min
+    beres_L_system::FT = FT(1.0e6)     # m, largest system scale; sets k_min=2π/L in even-folded H; for the steady-state source
+    heating_latent::Bool = false       # source in-cloud heating from latent Q_lat=Σ L_p R_p (1M+PrognosticEDMFX) vs DSE-Q₁
+    detailed_diagnostics::Bool = false # expose nogw_* source-internal extended diagnostics
+
+    # --- h-averaging (resonance smoothing; default off) ---
+    n_h_avg::Int = 1      # number of h values to average over (1 = no averaging)
+    Δh_frac::FT = FT(0.1) # fractional half-range for averaging: h ± Δh_frac·h
+
+    # --- Marked for deletion (dead once the area_threshold envelope path is removed) ---
+    z_bot_Q_threshold::FT = FT(1.157e-5) # K/s, min Q_conv for area-mode z_bot (≈1 K/day); area path only
+    moment_envelope::Bool = true         # envelope-mode select; only `true` reachable (legacy area_threshold gated `false`)
 
     function BeresSourceParams{FT}(args...) where {FT}
         obj = new{FT}(args...)
@@ -492,7 +488,7 @@ Base.@kwdef struct NonOrographicGravityWave{FT, BS} <: AbstractGravityWave
     ϕ0_s::FT
     dϕ_n::FT
     dϕ_s::FT
-    beres_source::BS = nothing  # nothing → AD background only; BeresSourceParams → adds the Beres convective source on top of AD wherever EDMF convects (no latitude gate)
+    beres_source::BS = nothing  # nothing → AD background only; BeresSourceParams → adds the Beres convective source on top of AD wherever EDMF convects
 end
 
 abstract type OrographicGravityWave <: AbstractGravityWave end

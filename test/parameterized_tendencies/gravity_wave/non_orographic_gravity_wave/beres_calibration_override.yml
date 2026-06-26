@@ -1,0 +1,23 @@
+# Override for the Beres alpha calibration scripts (calibrate_beres_alpha*.jl).
+# Stacks LAST on top of:
+#   config/common_configs/numerics_sphere_he16ze63.yml
+#   config/longrun_configs/longrun_aquaplanet_allsky_progedmf_0M.yml
+# Coarse horizontal resolution, 15 days; vertical resolution kept (EDMF realism).
+h_elem: 4
+t_end: "10days"
+dt_save_state_to_disk: "Inf"
+output_default_diagnostics: false
+# Calibration-sweep economy: radiation every 3 h instead of hourly (~3x cheaper
+# on the dominant cost). All members share this, so the alpha comparison is
+# internally consistent; absolute drag differs only mildly from dt_rad=1h.
+dt_rad: "3hours"
+# Coarse phase-speed grid for fast compilation (nc = 51)
+toml: [toml/longrun_aquaplanet_progedmf.toml, toml/nogw_beres_test.toml, toml/beres_calibration_alpha.toml]
+diagnostics:
+  # Time-averaged NOGW forcing: 5 windows of 2 days; postprocess uses the last.
+  - short_name: [utendnogw, vtendnogw]
+    reduction_time: average
+    period: 2days
+  # Instantaneous Beres source state (2D), for activation/coverage statistics.
+  - short_name: [nogw_beres_active, nogw_Q0, nogw_a_cover, nogw_h_heat, nogw_ztop]
+    period: 2days

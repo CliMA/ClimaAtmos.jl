@@ -320,42 +320,39 @@ function get_non_orographic_gravity_wave_model(
             dϕ_s,
         ) = params.non_orographic_gravity_wave_params
 
-        # Optionally construct Beres (2004) convective source parameters
+        # Optionally construct Beres (2004) convective source parameters.
+        # Continuous tuning constants come from TOML (`params.beres_source_params`,
+        # name-mapped from the `nogw_beres_*` keys); only the structural switches
+        # (enable, steady source, envelope mode, latent heating) come from the YAML.
         beres_source = if get(parsed_args, "nogw_beres_source", false)
+            bsp = params.beres_source_params
             BeresSourceParams{FT}(;
-                Q0_threshold = FT(parsed_args["beres_Q0_threshold"]),
-                beres_scale_factor = FT(parsed_args["beres_scale_factor"]),
-                σ_x = FT(parsed_args["beres_sigma_x"]),
-                ν_min = FT(parsed_args["beres_nu_min"]),
-                ν_max = FT(parsed_args["beres_nu_max"]),
-                n_ν = Int(parsed_args["beres_n_nu"]),
-                h_heat_min = FT(parsed_args["beres_h_heat_min"]),
-                n_h_avg = Int(parsed_args["beres_n_h_avg"]),
-                Δh_frac = FT(parsed_args["beres_delta_h_frac"]),
-                z_bot_Q_threshold = FT(parsed_args["beres_z_bot_Q_threshold"]),
-                z_bot_floor = FT(parsed_args["beres_z_bot_floor"]),
-                beres_steady_source = get(
-                    parsed_args,
-                    "beres_steady_source",
-                    false,
-                ),
-                beres_steady_dc_frac = FT(
-                    get(parsed_args, "beres_steady_dc_frac", 1.0),
-                ),
-                beres_L_system = FT(
-                    get(parsed_args, "beres_L_system", 1.0e6),
-                ),
-                moment_envelope = let
-                    m = get(parsed_args, "beres_envelope_mode", "area_threshold")
-                    m in ("area_threshold", "moment_matched") || error(
-                        "beres_envelope_mode must be \"area_threshold\" or " *
-                        "\"moment_matched\", got \"$m\"",
-                    )
-                    m == "moment_matched"
-                end,
+                Q0_threshold = FT(bsp.Q0_threshold),
+                beres_scale_factor = FT(bsp.scale_factor),
+                σ_x = FT(bsp.σ_x),
+                ν_min = FT(bsp.ν_min),
+                ν_max = FT(bsp.ν_max),
+                n_ν = Int(bsp.n_ν),
+                h_heat_min = FT(bsp.h_heat_min),
+                n_h_avg = Int(bsp.n_h_avg),
+                Δh_frac = FT(bsp.Δh_frac),
+                z_bot_Q_threshold = FT(bsp.z_bot_Q_threshold),
+                z_bot_floor = FT(bsp.z_bot_floor),
+                beres_steady_dc_frac = FT(bsp.steady_dc_frac),
+                beres_L_system = FT(bsp.L_system),
+                # beres_steady_source defaults true on the struct (no YAML switch); it
+                # is gated implicitly by the phase-speed grid (deposits only with a c=0
+                # bin, see the warning below). moment_matched is the sole active
+                # envelope mode (legacy area_threshold is deprecated, retained gated).
+                moment_envelope = true,
                 heating_latent = get(
                     parsed_args,
                     "nogw_beres_heating_latent",
+                    false,
+                ),
+                detailed_diagnostics = get(
+                    parsed_args,
+                    "nogw_beres_detailed_diagnostics",
                     false,
                 ),
             )
@@ -363,15 +360,19 @@ function get_non_orographic_gravity_wave_model(
             nothing
         end
 
-        # The steady (ν=0) Beres component deposits into the c=0 phase-speed bin.
-        # Require an exact c=0 grid point (cmax/dc integer) so it lands in a bin
-        # the transient spectrum leaves at zero (no double-counting).
-        if !isnothing(beres_source) && beres_source.beres_steady_source
+        # The steady (ν=0) Beres component is always computed; it deposits into the
+        # c=0 phase-speed bin only when one exists (cmax/dc integer, so it lands in a
+        # bin the transient spectrum leaves at zero, no double-counting). Without a
+        # c=0 bin it gracefully no-ops in the kernel — warn once here so the silent
+        # skip is not a surprise. The default grid (cmax=100, dc=0.8 → 125) has one.
+        if !isnothing(beres_source)
             ratio = cmax / dc
             if abs(ratio - round(ratio)) > sqrt(eps(FT))
-                error(
-                    "beres_steady_source requires an exact c=0 phase-speed bin: " *
-                    "cmax/dc must be an integer (got cmax=$cmax, dc=$dc)",
+                @warn(
+                    "Beres steady (ν=0) source has no exact c=0 phase-speed bin " *
+                    "(cmax/dc = $ratio is not an integer for cmax=$cmax, dc=$dc); " *
+                    "the steady component will be skipped. Set cmax/dc to an integer " *
+                    "(e.g. nogw_cmax/nogw_dc) to enable it."
                 )
             end
         end

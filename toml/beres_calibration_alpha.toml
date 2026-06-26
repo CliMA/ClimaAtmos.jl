@@ -1,0 +1,6 @@
+# Spin-up alpha for the Beres alpha-calibration scripts (calibrate_beres_alpha*.jl).
+# The scripts then sweep alpha on the frozen final state via a ladder that rebuilds
+# BeresSourceParams directly; this only fixes the alpha used during the 10-day
+# spin-up that produces that frozen state. Mid-ladder trajectory value.
+[nogw_beres_scale_factor]
+value = 4.0e-8

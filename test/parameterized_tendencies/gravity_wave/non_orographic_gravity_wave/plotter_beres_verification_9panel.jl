@@ -63,11 +63,10 @@ inst_time = nothing
 if mode == MODE_INST
     if isfinite(T_END_DAYS)
         inst_time = T_END_DAYS * DAY_S
-        n_active = nothing
     else
         _ref_var = load_var_inst(simdir, "arup"; prefer_period = PREFER_PERIOD)
         _ref_times = haskey(_ref_var.dims, "time") ? _ref_var.dims["time"] : nothing
-        inst_time, n_active = find_peak_active_time(simdir; candidate_times = _ref_times)
+        inst_time, _ = find_peak_active_time(simdir; candidate_times = _ref_times)
     end
     snap_kw[:inst_time] = inst_time
 end
@@ -89,11 +88,8 @@ required = [
     "pr",
     "nogw_Q0",
     "nogw_h_heat",
-    "nogw_zbot",
-    "nogw_ztop",
     "nogw_a_cover",
     "arup",
-    "nogw_Q_conv",
     "nogw_Q_conv_ic",
     "utendnogw",
     "vtendnogw",
@@ -104,16 +100,23 @@ isempty(missing_vars) || error(
     "Re-run with these in the diagnostics list (nogw_a_cover and nogw_Q_conv_ic " *
     "are newer than some older Beres runs).",
 )
+# nogw_zbot/nogw_ztop are optional: the envelope band is taken from the native
+# nogw_halfsine support when present (the remap-clean source), and these remapped
+# 2D scalars are only a fallback for older runs that lack the half-sine.
+has_zbot_ztop = ("nogw_zbot" in avail) && ("nogw_ztop" in avail)
 
 pp = PREFER_PERIOD
 pr_var = load_var_for_mode(simdir, "pr", mode; prefer_period = pp)
 Q0_var = load_var_for_mode(simdir, "nogw_Q0", mode; prefer_period = pp)
 h_heat_var = load_var_for_mode(simdir, "nogw_h_heat", mode; prefer_period = pp)
-zbot_var = load_var_for_mode(simdir, "nogw_zbot", mode; prefer_period = pp)
-ztop_var = load_var_for_mode(simdir, "nogw_ztop", mode; prefer_period = pp)
+zbot_var =
+    has_zbot_ztop ?
+    load_var_for_mode(simdir, "nogw_zbot", mode; prefer_period = pp) : nothing
+ztop_var =
+    has_zbot_ztop ?
+    load_var_for_mode(simdir, "nogw_ztop", mode; prefer_period = pp) : nothing
 a_cover_var = load_var_for_mode(simdir, "nogw_a_cover", mode; prefer_period = pp)
 arup_var = load_var_for_mode(simdir, "arup", mode; prefer_period = pp)
-Qconv_var = load_var_for_mode(simdir, "nogw_Q_conv", mode; prefer_period = pp)
 Qconv_ic_var = load_var_for_mode(simdir, "nogw_Q_conv_ic", mode; prefer_period = pp)
 utend_var = load_var_for_mode(simdir, "utendnogw", mode; prefer_period = pp)
 vtend_var = load_var_for_mode(simdir, "vtendnogw", mode; prefer_period = pp)
@@ -139,8 +142,8 @@ println(
 pr_last = get_snapshot(pr_var, mode; snap_kw...)
 Q0_last = get_snapshot(Q0_var, mode; snap_kw...)
 h_heat_last = get_snapshot(h_heat_var, mode; snap_kw...)
-zbot_last = get_snapshot(zbot_var, mode; snap_kw...)
-ztop_last = get_snapshot(ztop_var, mode; snap_kw...)
+zbot_last = has_zbot_ztop ? get_snapshot(zbot_var, mode; snap_kw...) : nothing
+ztop_last = has_zbot_ztop ? get_snapshot(ztop_var, mode; snap_kw...) : nothing
 a_cover_last = get_snapshot(a_cover_var, mode; snap_kw...)
 
 # Beres gating parameters (default_config.yml defaults). The script cannot read
@@ -184,7 +187,7 @@ pr_pos.data .= .-pr_pos.data .* DAY_S
 # Find hotspot columns — rank by Q0 itself so every hotspot is guaranteed
 # Beres-active (positive Q0 and h_heat) for the sine-reference / scatter panels.
 println("Finding convective hotspots among Beres-active columns (ranked by Q0)...")
-hotspots = find_at_percentiles(Q0_masked, hotspot_percentiles)
+hotspots = find_at_percentiles(Q0_masked, hotspot_percentiles; lat_max = lat_max)
 println("Selected hotspots (lon, lat): ", hotspots)
 if !isnothing(single_hotspot)
     idx = findfirst(==(single_hotspot), hotspot_labels)
@@ -200,6 +203,14 @@ end
 
 # Helper: profile at a hotspot using current mode
 _profile(var, lon, lat) = profile_at(var, lon, lat, mode; snap_kw...)
+
+# Plot one mode-aware profile line per hotspot of `var` (x scaled by `xscale`).
+function _plot_hotspot_profiles!(ax, var; xscale = 1.0)
+    for (ih, (lon, lat)) in enumerate(hotspots)
+        z, data = _profile(var, lon, lat)
+        CairoMakie.lines!(ax, data .* xscale, z; color = hotspot_colors[ih])
+    end
+end
 
 # Envelope band [z_bot, z_top] for the EDMF panels. When the native half-sine
 # field is available, take its support (z where nogw_halfsine > 1% of its peak)
@@ -217,6 +228,9 @@ function _envelope_band(lon, lat)
             !isempty(idx) && return (z_hs[minimum(idx)], z_hs[maximum(idx)])
         end
     end
+    # Fallback for older runs without nogw_halfsine: the remapped 2D scalars.
+    # Absent both, signal "no band" with (0, 0) (callers guard on > 0).
+    has_zbot_ztop || return (0.0, 0.0)
     return (
         slice(zbot_last; lon = lon, lat = lat).data[1],
         slice(ztop_last; lon = lon, lat = lat).data[1],
@@ -283,28 +297,24 @@ for (ih, (lon, lat)) in enumerate(hotspots)
 end
 !isempty(hotspots) && CairoMakie.axislegend(ax21; position = :rt, labelsize = 9)
 
-# Panel (2,2): the in-cloud heating with each hotspot's Beres envelope. Plot
-# grid-mean Q_conv (dashed) and in-cloud Q_conv_ic (solid) vs height, and shade
-# the [z_bot, z_top] envelope. z_bot_floor (the lower bound of the moment
-# integration / envelope) is kept; the grid-mean z_bot_Q_threshold line is
-# omitted because in moment_matched mode z_bot = z_c − h/2 from the Q_conv_ic
-# moments, NOT the grid-mean Q_conv crossing — so that reference would mislead.
-# Shared height scale with (2,1) and (3,1): all use (0, z_max_edmf).
+# Panel (2,2): the in-cloud heating Q_conv_ic (the profile whose half-sine
+# amplitude defines Q₀) with each hotspot's Beres envelope shaded. z_bot_floor
+# (the lower bound of the moment integration / envelope) is kept; the grid-mean
+# z_bot_Q_threshold line is omitted because in moment_matched mode z_bot = z_c −
+# h/2 from the Q_conv_ic moments, NOT the grid-mean Q_conv crossing — so that
+# reference would mislead. The grid-mean Q_conv overlay is intentionally dropped:
+# it is the gating field, not the source amplitude, and is no longer emitted as a
+# diagnostic. Shared height scale with (2,1) and (3,1): all use (0, z_max_edmf).
 ax22 = CairoMakie.Axis(fig[2, 2];
-    title = "Heating + envelope: Q_conv (dash) / Q_conv_ic (solid)",
+    title = "In-cloud heating Q_conv_ic + envelope",
     xlabel = "Q (K/s)", ylabel = "Height (m)",
     limits = (nothing, (0, z_max_edmf)),
 )
 CairoMakie.hlines!(ax22, [z_bot_floor]; color = :black, linestyle = :dot,
     label = "z_bot floor")
-let qconv_label_done = false, qic_label_done = false, env_label_done = false
+let qic_label_done = false, env_label_done = false
     for (ih, (lon, lat)) in enumerate(hotspots)
-        z_q, Qconv = _profile(Qconv_var, lon, lat)
         z_qic, Qic = _profile(Qconv_ic_var, lon, lat)
-        lbl_qconv = qconv_label_done ? nothing : "Q_conv (grid-mean)"
-        qconv_label_done = true
-        CairoMakie.lines!(ax22, abs.(Qconv), z_q; color = hotspot_colors[ih],
-            linestyle = :dash, linewidth = 1, alpha = 0.7, label = lbl_qconv)
         lbl_qic = qic_label_done ? nothing : "Q_conv_ic (in-cloud)"
         qic_label_done = true
         CairoMakie.lines!(ax22, abs.(Qic), z_qic; color = hotspot_colors[ih],
@@ -371,7 +381,9 @@ let sin_label_done = false, edmf_label_done = false
     for (ih, (lon, lat)) in enumerate(hotspots)
         h_val = slice(h_heat_last; lon = lon, lat = lat).data[1]
         Q0_val = slice(Q0_last; lon = lon, lat = lat).data[1]
-        z_bot_val = slice(zbot_last; lon = lon, lat = lat).data[1]
+        # z_bot scalar is only needed for the offline (no-halfsine) reconstruction.
+        z_bot_val =
+            has_zbot_ztop ? slice(zbot_last; lon = lon, lat = lat).data[1] : NaN
         println(
             "  Hotspot $(hotspot_labels[ih]) ($(lon), $(lat)): zbot=$z_bot_val, h_val=$h_val, Q0_val=$Q0_val",
         )
@@ -385,7 +397,7 @@ let sin_label_done = false, edmf_label_done = false
             CairoMakie.lines!(ax31, abs.(hs), z_hs;
                 color = hotspot_colors[ih], linestyle = :dash, linewidth = 2,
                 label = lbl_sin)
-        elseif h_val > 1000 && Q0_val > 0
+        elseif has_zbot_ztop && h_val > 1000 && Q0_val > 0
             # Fallback for older runs: reconstruct Q0·sin from the three
             # independently-remapped 2D fields (carries a remap artifact).
             z_ref = range(z_bot_val, z_bot_val + h_val; length = 100)
@@ -413,19 +425,13 @@ ax32 = CairoMakie.Axis(fig[3, 2];
     title = "u-GW Drag (×1e5)", xlabel = "m/s² ×1e5", ylabel = "Height (m)",
     limits = (nothing, (0, z_max_gw)),
 )
-for (ih, (lon, lat)) in enumerate(hotspots)
-    z, data = _profile(utend_var, lon, lat)
-    CairoMakie.lines!(ax32, data .* 1e5, z; color = hotspot_colors[ih])
-end
+_plot_hotspot_profiles!(ax32, utend_var; xscale = 1e5)
 
 ax33 = CairoMakie.Axis(fig[3, 3];
     title = "v-GW Drag (×1e5)", xlabel = "m/s² ×1e5", ylabel = "Height (m)",
     limits = (nothing, (0, z_max_gw)),
 )
-for (ih, (lon, lat)) in enumerate(hotspots)
-    z, data = _profile(vtend_var, lon, lat)
-    CairoMakie.lines!(ax33, data .* 1e5, z; color = hotspot_colors[ih])
-end
+_plot_hotspot_profiles!(ax33, vtend_var; xscale = 1e5)
 
 # --- Save ---
 _base =

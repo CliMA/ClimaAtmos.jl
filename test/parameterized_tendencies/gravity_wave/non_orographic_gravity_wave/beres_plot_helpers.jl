@@ -28,50 +28,37 @@ end
 # --- Variable loading ---
 
 """
-Load a variable preferring "average" reduction, shortest available period.
+    _load_var(simdir, short_name; reduction_order, period_order, prefer_period)
+
+Core variable loader shared by `load_var` (avg) and `load_var_inst` (inst).
+
+  - `reduction_order`: reductions to try in order; the first one the simdir offers
+    is used, falling back to `first(available_reductions)`.
+  - `period_order`: periods to try in order when `prefer_period` is unset/unavailable.
+  - `prefer_period`: if given and available, overrides `period_order` so callers can
+    force every field onto the same temporal grid (avoids mismatch between e.g.
+    hourly Q₀ and daily arup profiles).
 """
-function load_var(simdir, short_name)
+function _load_var(
+    simdir,
+    short_name;
+    reduction_order,
+    period_order,
+    prefer_period = nothing,
+)
     reds = ClimaAnalysis.available_reductions(simdir; short_name)
-    red = "average" in reds ? "average" : first(reds)
-    periods = ClimaAnalysis.available_periods(simdir; short_name, reduction = red)
-    period_order = ["1d", "12h", "1h", "10s", "10d", "30d", "1M"]
-    period = nothing
-    for p in period_order
-        if p in periods
-            period = p
+    red = first(reds)
+    for r in reduction_order
+        if r in reds
+            red = r
             break
         end
     end
-    var =
-        isnothing(period) ? get(simdir; short_name, reduction = red) :
-        get(simdir; short_name, reduction = red, period)
-    ntimes = haskey(var.dims, "time") ? length(var.dims["time"]) : 0
-    trange =
-        ntimes > 0 ? "($(var.dims["time"][1])s – $(var.dims["time"][end])s)" :
-        "(no time dim)"
-    println(
-        "  Loaded $short_name: reduction=$red, period=$period, $ntimes snapshots $trange",
-    )
-    return var
-end
-
-"""
-Load a variable preferring "inst" reduction.
-
-`prefer_period`: if provided (e.g. "1d"), that period is tried first.
-This ensures all fields use the same temporal resolution, avoiding
-mismatch between e.g. hourly Q₀ and daily arup profiles.
-"""
-function load_var_inst(simdir, short_name; prefer_period = nothing)
-    reds = ClimaAnalysis.available_reductions(simdir; short_name)
-    red = "inst" in reds ? "inst" : ("average" in reds ? "average" : first(reds))
     periods = ClimaAnalysis.available_periods(simdir; short_name, reduction = red)
-    period_order = ["1h", "10s", "1d", "12h", "10d", "30d", "1M"]
-    # If a preferred period is specified and available, use it
+    period = nothing
     if !isnothing(prefer_period) && prefer_period in periods
         period = prefer_period
     else
-        period = nothing
         for p in period_order
             if p in periods
                 period = p
@@ -93,10 +80,35 @@ function load_var_inst(simdir, short_name; prefer_period = nothing)
 end
 
 """
-Mode-aware variable loading: avg mode uses load_var, inst mode uses load_var_inst.
+Load a variable preferring the "average" reduction (daily period first).
+See `_load_var` for `prefer_period`.
+"""
+load_var(simdir, short_name; prefer_period = nothing) = _load_var(
+    simdir,
+    short_name;
+    reduction_order = ("average",),
+    period_order = ("1d", "12h", "1h", "10s", "10d", "30d", "1M"),
+    prefer_period,
+)
+
+"""
+Load a variable preferring the "inst" reduction (hourly period first), falling
+back to "average". See `_load_var` for `prefer_period`.
+"""
+load_var_inst(simdir, short_name; prefer_period = nothing) = _load_var(
+    simdir,
+    short_name;
+    reduction_order = ("inst", "average"),
+    period_order = ("1h", "10s", "1d", "12h", "10d", "30d", "1M"),
+    prefer_period,
+)
+
+"""
+Mode-aware variable loading: avg mode uses `load_var`, inst mode uses
+`load_var_inst`. `prefer_period` is honored in both modes.
 """
 function load_var_for_mode(simdir, short_name, mode::PlotMode; prefer_period = nothing)
-    return mode == MODE_AVG ? load_var(simdir, short_name) :
+    return mode == MODE_AVG ? load_var(simdir, short_name; prefer_period) :
            load_var_inst(simdir, short_name; prefer_period)
 end
 
@@ -175,11 +187,6 @@ function profile_at(var, lon, lat, mode::PlotMode; kwargs...)
     return col.dims["z"], col.data
 end
 
-# Convenience: avg-only profile (backward compat for scripts that don't pass mode)
-function profile_at_avg(var, lon, lat; t_end_days = Inf, avg_window_days = 10.0)
-    return profile_at(var, lon, lat, MODE_AVG; t_end_days, avg_window_days)
-end
-
 # --- Peak active timestep finder ---
 
 """
@@ -240,40 +247,13 @@ function find_peak_active_time(
     return best_time, best_count
 end
 
-"""
-    get_common_times(simdir, short_names; mode)
-
-Find the coarsest time grid among a set of variables. Returns the time array
-from the variable with the fewest snapshots (i.e., the bottleneck resolution).
-Use this to restrict `find_peak_active_time` to times where all fields exist.
-"""
-function get_common_times(simdir, short_names; mode::PlotMode = MODE_INST)
-    coarsest_times = nothing
-    coarsest_name = ""
-    for sn in short_names
-        sn in ClimaAnalysis.available_vars(simdir) || continue
-        var = load_var_for_mode(simdir, sn, mode)
-        haskey(var.dims, "time") || continue
-        times = var.dims["time"]
-        if isnothing(coarsest_times) || length(times) < length(coarsest_times)
-            coarsest_times = times
-            coarsest_name = sn
-        end
-    end
-    if !isnothing(coarsest_times)
-        println(
-            "  Coarsest time grid: $coarsest_name with $(length(coarsest_times)) snapshots",
-        )
-    end
-    return coarsest_times
-end
-
-# --- Hotspot finders ---
+# --- Hotspot finder ---
 
 """
-Find the `n` highest-magnitude tropical columns from a 2D field, well-separated (≥10°).
+Pick columns at given percentiles of a 2D field (positive, well-separated),
+restricted to `|lat| < lat_max`.
 """
-function find_hotspots(field_2d, n)
+function find_at_percentiles(field_2d, percentiles; lat_max = 30.0)
     data = field_2d.data
     lats = field_2d.dims["lat"]
     lons = field_2d.dims["lon"]
@@ -281,40 +261,7 @@ function find_hotspots(field_2d, n)
     vals = Float64[]
     coords = Tuple{Float64, Float64}[]
     for (ilat, lat) in enumerate(lats)
-        abs(lat) >= 30 && continue
-        for (ilon, lon) in enumerate(lons)
-            v = data[ilon, ilat]
-            isnan(v) && continue
-            push!(vals, abs(v))
-            push!(coords, (lon, lat))
-        end
-    end
-    perm = sortperm(vals; rev = true)
-
-    selected = Tuple{Float64, Float64}[]
-    for idx in perm
-        lon, lat = coords[idx]
-        too_close = any(s -> abs(s[1] - lon) < 10 && abs(s[2] - lat) < 10, selected)
-        if !too_close
-            push!(selected, (lon, lat))
-        end
-        length(selected) >= n && break
-    end
-    return selected
-end
-
-"""
-Pick columns at given percentiles of a 2D field (tropical, positive, well-separated).
-"""
-function find_at_percentiles(field_2d, percentiles)
-    data = field_2d.data
-    lats = field_2d.dims["lat"]
-    lons = field_2d.dims["lon"]
-
-    vals = Float64[]
-    coords = Tuple{Float64, Float64}[]
-    for (ilat, lat) in enumerate(lats)
-        abs(lat) >= 30 && continue
+        abs(lat) >= lat_max && continue
         for (ilon, lon) in enumerate(lons)
             v = data[ilon, ilat]
             (isnan(v) || v <= 0) && continue
@@ -346,55 +293,6 @@ function find_at_percentiles(field_2d, percentiles)
         end
     end
     return selected
-end
-
-# --- Boundary reconstruction ---
-
-"""
-Reconstruct convective envelope [z_bot, z_top] from arup/waup profiles.
-Mirrors non_orographic_gravity_wave.jl Pass 1 logic.
-"""
-function reconstruct_boundaries(
-    arup_z,
-    arup_data,
-    waup_z,
-    waup_data;
-    a_thresh = 1e-3,
-    verbose = false,
-)
-    w_max = 0.0
-    z_peak = 0.0
-    for (k, w) in enumerate(waup_data)
-        if w > w_max
-            w_max = w
-            z_peak = waup_z[k]
-        end
-    end
-    z_top = -Inf
-    n_above = 0
-    for (k, a) in enumerate(arup_data)
-        if a > a_thresh
-            z_top = max(z_top, arup_z[k])
-            n_above += 1
-        end
-    end
-    z_top = z_top < 0 ? 0.0 : z_top
-    z_bot = z_top > 0 ? max(2 * z_peak - z_top, 3000.0) : 0.0
-    h_heat = max(z_top - z_bot, 0.0)
-    if verbose
-        println("    [reconstruct] n_levels=$(length(arup_data)), n_above_thresh=$n_above")
-        println(
-            "    [reconstruct] arup range: $(minimum(arup_data)) – $(maximum(arup_data))",
-        )
-        println("    [reconstruct] z range: $(minimum(arup_z)) – $(maximum(arup_z))")
-        println(
-            "    [reconstruct] w_max=$(round(w_max, sigdigits=3)) at z_peak=$(round(z_peak, digits=0))m",
-        )
-        println(
-            "    [reconstruct] z_top=$(round(z_top, digits=0))m, z_bot=$(round(z_bot, digits=0))m, h_heat=$(round(h_heat, digits=0))m",
-        )
-    end
-    return z_bot, z_top, h_heat, z_peak
 end
 
 # --- Output filename helper ---

@@ -40,10 +40,24 @@ add_diagnostic_variable!(short_name = "vtendnogw", units = "m s^-2",
 )
 
 ###
-# Beres convective GW diagnostics (2D surface fields)
+# Beres convective GW diagnostics (source-internal verification fields)
 # These dispatch on the BS type parameter: Nothing = no Beres, BeresSourceParams = Beres enabled
-# All 2D Beres diagnostics are gated by beres_active: output 0 when inactive.
+#
+# Every diagnostic below is verification/debug-only — it exposes the convective
+# source internals and is toggled by the Beres `detailed_diagnostics` flag
+# (config `nogw_beres_detailed_diagnostics`).
 ###
+
+# Error unless Beres detailed (verification) diagnostics are enabled.
+# Reached only from the BeresSourceParams methods, so `beres_source` is non-nothing.
+function _require_beres_detailed(short_name, cache)
+    cache.atmos.non_orographic_gravity_wave.beres_source.detailed_diagnostics ||
+        error_diagnostic_variable(
+            "$short_name requires nogw_beres_detailed_diagnostics = true " *
+            "(Beres source-internal diagnostics are verification/debug-only)",
+        )
+    return nothing
+end
 
 # Helper: apply beres_active gate to a 2D field
 function _gated_copy!(out, field, active)
@@ -55,6 +69,9 @@ function _gated_copy!(out, field, active)
         out .= ifelse.(active .> 0, field, eltype(field)(0))
     end
 end
+
+# --- Activation & envelope geometry (2D, gated by beres_active) ---
+# nogw_beres_active, nogw_Q0, nogw_h_heat, nogw_zbot, nogw_ztop
 
 # Beres activation flag
 compute_nogw_beres_active!(out, state, cache, time) = compute_nogw_beres_active!(
@@ -76,6 +93,7 @@ function compute_nogw_beres_active!(
     time,
     ::NonOrographicGravityWave{FT, <:BeresSourceParams},
 ) where {FT}
+    _require_beres_detailed("nogw_beres_active", cache)
     if isnothing(out)
         return copy(cache.non_orographic_gravity_wave.gw_beres_active)
     else
@@ -111,6 +129,7 @@ function compute_nogw_Q0!(
     time,
     ::NonOrographicGravityWave{FT, <:BeresSourceParams},
 ) where {FT}
+    _require_beres_detailed("nogw_Q0", cache)
     (; gw_Q0, gw_beres_active) = cache.non_orographic_gravity_wave
     return _gated_copy!(out, gw_Q0, gw_beres_active)
 end
@@ -143,6 +162,7 @@ function compute_nogw_h_heat!(
     time,
     ::NonOrographicGravityWave{FT, <:BeresSourceParams},
 ) where {FT}
+    _require_beres_detailed("nogw_h_heat", cache)
     (; gw_h_heat, gw_beres_active) = cache.non_orographic_gravity_wave
     return _gated_copy!(out, gw_h_heat, gw_beres_active)
 end
@@ -175,6 +195,7 @@ function compute_nogw_zbot!(
     time,
     ::NonOrographicGravityWave{FT, <:BeresSourceParams},
 ) where {FT}
+    _require_beres_detailed("nogw_zbot", cache)
     (; gw_zbot, gw_beres_active) = cache.non_orographic_gravity_wave
     return _gated_copy!(out, gw_zbot, gw_beres_active)
 end
@@ -207,6 +228,7 @@ function compute_nogw_ztop!(
     time,
     ::NonOrographicGravityWave{FT, <:BeresSourceParams},
 ) where {FT}
+    _require_beres_detailed("nogw_ztop", cache)
     (; gw_ztop, gw_beres_active) = cache.non_orographic_gravity_wave
     return _gated_copy!(out, gw_ztop, gw_beres_active)
 end
@@ -219,7 +241,11 @@ add_diagnostic_variable!(
     compute! = compute_nogw_ztop!,
 )
 
-# 3D convective heating rate (Q_conv) — NOT gated (3D field, beres_active is 2D)
+# --- 3D heating & source-profile fields (NOT gated; 3D, already zero
+# outside the envelope / in inactive columns) ---
+# nogw_Q_conv, nogw_Q_conv_ic, nogw_halfsine
+
+# 3D convective heating rate (Q_conv)
 compute_nogw_Q_conv!(out, state, cache, time) = compute_nogw_Q_conv!(
     out,
     state,
@@ -239,6 +265,7 @@ function compute_nogw_Q_conv!(
     time,
     ::NonOrographicGravityWave{FT, <:BeresSourceParams},
 ) where {FT}
+    _require_beres_detailed("nogw_Q_conv", cache)
     if isnothing(out)
         return copy(cache.non_orographic_gravity_wave.gw_Q_conv)
     else
@@ -254,7 +281,7 @@ add_diagnostic_variable!(
     compute! = compute_nogw_Q_conv!,
 )
 
-# 3D in-cloud convective heating rate (Q_conv_ic) — NOT gated (3D field, beres_active is 2D)
+# 3D in-cloud convective heating rate (Q_conv_ic)
 compute_nogw_Q_conv_ic!(out, state, cache, time) = compute_nogw_Q_conv_ic!(
     out,
     state,
@@ -274,6 +301,7 @@ function compute_nogw_Q_conv_ic!(
     time,
     ::NonOrographicGravityWave{FT, <:BeresSourceParams},
 ) where {FT}
+    _require_beres_detailed("nogw_Q_conv_ic", cache)
     if isnothing(out)
         return copy(cache.non_orographic_gravity_wave.gw_Q_conv_ic)
     else
@@ -289,9 +317,7 @@ add_diagnostic_variable!(
     compute! = compute_nogw_Q_conv_ic!,
 )
 
-# 3D native launched half-sine source profile Q0·sin(π(z−z_bot)/h) — NOT gated
-# (3D field, beres_active is 2D; the profile is already zero outside the
-# envelope and in inactive columns)
+# 3D native launched half-sine source profile Q0·sin(π(z−z_bot)/h)
 compute_nogw_halfsine!(out, state, cache, time) = compute_nogw_halfsine!(
     out,
     state,
@@ -311,6 +337,7 @@ function compute_nogw_halfsine!(
     time,
     ::NonOrographicGravityWave{FT, <:BeresSourceParams},
 ) where {FT}
+    _require_beres_detailed("nogw_halfsine", cache)
     if isnothing(out)
         return copy(cache.non_orographic_gravity_wave.gw_halfsine)
     else
@@ -325,6 +352,9 @@ add_diagnostic_variable!(
     comments = "3D native half-sine source profile Q0*sin(pi*(z-z_bot)/h) over the convective heating depth, computed in-column so it is remap-consistent with nogw_Q_conv_ic (the moment-matched envelope it approximates); zero outside the envelope and in inactive columns",
     compute! = compute_nogw_halfsine!,
 )
+
+# --- Launched-spectrum summaries (2D, gated by beres_active) ---
+# nogw_launch_flux, nogw_c_centroid, nogw_a_cover
 
 # Launched source momentum flux magnitude (2D, gated by beres_active)
 compute_nogw_launch_flux!(out, state, cache, time) = compute_nogw_launch_flux!(
@@ -346,6 +376,7 @@ function compute_nogw_launch_flux!(
     time,
     ::NonOrographicGravityWave{FT, <:BeresSourceParams},
 ) where {FT}
+    _require_beres_detailed("nogw_launch_flux", cache)
     (; gw_launch_flux, gw_beres_active) = cache.non_orographic_gravity_wave
     return _gated_copy!(out, gw_launch_flux, gw_beres_active)
 end
@@ -378,6 +409,7 @@ function compute_nogw_c_centroid!(
     time,
     ::NonOrographicGravityWave{FT, <:BeresSourceParams},
 ) where {FT}
+    _require_beres_detailed("nogw_c_centroid", cache)
     (; gw_c_centroid, gw_beres_active) = cache.non_orographic_gravity_wave
     return _gated_copy!(out, gw_c_centroid, gw_beres_active)
 end
@@ -410,6 +442,7 @@ function compute_nogw_a_cover!(
     time,
     ::NonOrographicGravityWave{FT, <:BeresSourceParams},
 ) where {FT}
+    _require_beres_detailed("nogw_a_cover", cache)
     (; gw_a_cover, gw_beres_active) = cache.non_orographic_gravity_wave
     return _gated_copy!(out, gw_a_cover, gw_beres_active)
 end
@@ -420,41 +453,4 @@ add_diagnostic_variable!(
     units = "1",
     comments = "Mass-weighted envelope-mean updraft area fraction; dilutes the deposited Beres NOGW momentum flux (intermittency analog, zero when inactive)",
     compute! = compute_nogw_a_cover!,
-)
-
-# Deep convection fraction: gw_deep_count / gw_cb_count
-compute_nogw_deep_frac!(out, state, cache, time) = compute_nogw_deep_frac!(
-    out,
-    state,
-    cache,
-    time,
-    cache.atmos.non_orographic_gravity_wave,
-)
-compute_nogw_deep_frac!(_, _, _, _, non_orographic_gravity_wave) =
-    error_diagnostic_variable("nogw_deep_frac", non_orographic_gravity_wave)
-compute_nogw_deep_frac!(_, _, _, _, ::NonOrographicGravityWave{FT, Nothing}) where {FT} =
-    error_diagnostic_variable("nogw_deep_frac requires Beres source enabled")
-
-function compute_nogw_deep_frac!(
-    out,
-    state,
-    cache,
-    time,
-    ::NonOrographicGravityWave{FT, <:BeresSourceParams},
-) where {FT}
-    (; gw_deep_count, gw_cb_count) = cache.non_orographic_gravity_wave
-    frac = @. ifelse(gw_cb_count > FT(0), gw_deep_count / gw_cb_count, FT(0))
-    if isnothing(out)
-        return copy(frac)
-    else
-        out .= frac
-    end
-end
-
-add_diagnostic_variable!(
-    short_name = "nogw_deep_frac",
-    long_name = "NOGW Fraction of Callbacks with Deep Convection (z_top > 10km)",
-    units = "1",
-    comments = "Fraction of Beres callback invocations where z_top exceeded 10 km (cumulative since simulation start)",
-    compute! = compute_nogw_deep_frac!,
 )

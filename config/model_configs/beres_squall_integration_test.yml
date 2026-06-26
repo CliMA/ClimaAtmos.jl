@@ -2,5 +2,4 @@
 # Inherits physics from longrun_aquaplanet_allsky_progedmf_0M.yml
 # but uses a coarse phase-speed grid (nc=51) for fast compilation.
 # sigma_x = 2500 m matches Beres (2004) Section 4 squall-line case.
-toml: [toml/longrun_aquaplanet_progedmf.toml, toml/nogw_beres_test.toml]
-beres_sigma_x: 2500.0
+toml: [toml/longrun_aquaplanet_progedmf.toml, toml/nogw_beres_test.toml, toml/beres_squall_sigma_x.toml]

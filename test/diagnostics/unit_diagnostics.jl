@@ -195,6 +195,7 @@ model_nogw = CA.AtmosModel(; microphysics_model, non_orographic_gravity_wave)
 beres_source = CA.BeresSourceParams{FT}(;
     Q0_threshold = FT(1e-4), beres_scale_factor = FT(1),
     σ_x = FT(12_000), ν_min = FT(8.7e-5), ν_max = FT(1.05e-2), n_ν = 5,
+    detailed_diagnostics = true,  # unlock the nogw_* source-internal diagnostics
 )
 nogw_beres = CA.NonOrographicGravityWave(;
     (f => getfield(nogw_params, f) for f in fieldnames(typeof(nogw_params)))...,
@@ -371,7 +372,8 @@ VALID_CASES = [
     cases(("utendnogw", "vtendnogw"), :nogw)...,
     # Beres source diagnostics (require NonOrographicGravityWave with BeresSourceParams)
     cases(("nogw_beres_active", "nogw_Q0", "nogw_h_heat", "nogw_zbot",
-           "nogw_ztop", "nogw_Q_conv", "nogw_deep_frac"), :nogw_beres)...,
+           "nogw_ztop", "nogw_Q_conv", "nogw_Q_conv_ic", "nogw_c_centroid",
+           "nogw_halfsine", "nogw_launch_flux", "nogw_a_cover"), :nogw_beres)...,
 
     # ---------------------------------------------------------------------------
     # radiation_diagnostics.jl
@@ -484,7 +486,7 @@ end
 
     # Beres diagnostics error on dry model (no NOGW) and on NOGW without Beres source
     for name in ("nogw_beres_active", "nogw_Q0", "nogw_h_heat",
-        "nogw_zbot", "nogw_ztop", "nogw_Q_conv", "nogw_deep_frac")
+        "nogw_zbot", "nogw_ztop", "nogw_Q_conv")
         @testset "$name errors on dry model" begin
             @test_throws Exception compute_diag(getdiag(name), Y_dry, p_dry)
         end

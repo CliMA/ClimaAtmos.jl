@@ -1,11 +1,12 @@
-# Single-column test config for the Beres NOGW column-drag unit test
+# Single-column test config for the Beres NOGW single-column unit test
 # (test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/
-#  test_beres_column_drag.jl).
+#  test_beres_single_column.jl).
 #
-# The test does not run the EDMF closure — it fills the gw_* heating fields
-# directly and calls non_orographic_gravity_wave_forcing once. The config only
-# needs to build a column simulation with prognostic EDMF + NOGW + Beres so
-# that the column-mode cache is populated correctly.
+# Phase A injects a synthetic updraft into the EDMF cache and calls
+# compute_beres_convective_heating!; Phase B fills the gw_* heating fields
+# directly and calls non_orographic_gravity_wave_forcing. The config only needs
+# to build a column simulation with prognostic EDMF + NOGW + Beres so that the
+# column-mode cache is populated correctly.
 initial_condition: "IsothermalProfile"
 config: "column"
 FLOAT_TYPE: "Float64"
@@ -48,6 +49,11 @@ microphysics_model: "0M"
 non_orographic_gravity_wave: true
 dt_nogw: "400secs"
 nogw_beres_source: true
+# Phase A reads the native source-shape diagnostics (gw_halfsine /
+# gw_launch_flux / gw_c_centroid), which are only computed when detailed
+# diagnostics are enabled.
+nogw_beres_detailed_diagnostics: true
 
-# Coarse phase-speed grid (nc = 51) for fast compilation in tests.
-toml: [toml/nogw_beres_test.toml]
+# Coarse phase-speed grid (nc = 51) for fast compilation in tests; sigma_x = 2500 m
+# matches the Beres (2004) Section 4 squall-line case.
+toml: [toml/nogw_beres_test.toml, toml/beres_squall_sigma_x.toml]

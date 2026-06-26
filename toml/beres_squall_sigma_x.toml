@@ -1,0 +1,4 @@
+# Beres (2004) Section 4 squall-line convective cell half-width (sigma_x = 2500 m),
+# used by the column-drag unit test and the sphere squall-line integration test.
+[nogw_beres_sigma_x]
+value = 2500.0
