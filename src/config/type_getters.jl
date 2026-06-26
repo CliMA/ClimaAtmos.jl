@@ -446,6 +446,8 @@ Bundle YAML callback knobs into the NamedTuple expected by
 function callback_kwargs_from_config(config::AtmosConfig)
     pa = config.parsed_args
     return (;
+        enable_subcol = pa["enable_subcol"],
+        dt_subcol = pa["dt_subcol"],
         dt_rad = pa["dt_rad"],
         dt_nogw = pa["dt_nogw"],
         dt_ogw = pa["dt_ogw"],
