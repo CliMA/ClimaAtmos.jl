@@ -3,7 +3,17 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.41.0
+-------
+
+- [#4607](https://github.com/CliMA/ClimaAtmos.jl/pull/4607) ![][badge-💥breaking] Promote hardcoded EDMF, cloud-fraction, and sponge parameters to calibratable parameters, and update to ClimaParams v1.1. Renames break existing TOML overrides and code: the ClimaParams keys `EDMF_surface_area` → `EDMF_max_surface_area` and `alpha_rayleigh_sgs_tracer` → `alpha_rayleigh_tracer`, and the `TurbulenceConvectionParameters` field `surface_area` → `max_surface_area`.
+- [#4608](https://github.com/CliMA/ClimaAtmos.jl/pull/4608) ![][badge-🔥behavioralΔ] SGS saturation moments: use a linearized analytic `μ_S` and accumulate `σ_S²` as `E[(S − μ_S)²]` in a single quadrature pass, avoiding Float32 catastrophic cancellation when `Var[S] ≪ (E[S])²`.
+- [#4600](https://github.com/CliMA/ClimaAtmos.jl/pull/4600) ![][badge-🔥behavioralΔ] Add new prognostic-EDMF column diagnostics and change the default `detr_massflux_vertdiv_coeff`.
+- [#4596](https://github.com/CliMA/ClimaAtmos.jl/pull/4596) ![][badge-🔥behavioralΔ] PrognosticEDMFX: replace the prescribed surface-area boundary condition with a Deardorff surface mass-flux BC (`a_s = a_s_max·w*³/(w*³ + c_u·u*³)`, `F_surf = a_s·ρ·w*`) that drives `ρa`, `mse`, and `q_tot` at the first cell.
+- [#4593](https://github.com/CliMA/ClimaAtmos.jl/pull/4593) ![][badge-✨feature/enhancement] Add an "explicit" Bomex prognostic-EDMF case with a passive tracer A.
 - [#4567](https://github.com/CliMA/ClimaAtmos.jl/pull/4567/) ![][badge-✨feature/enhancement] Create the Larcform1 case (WIP).
+- [#4516](https://github.com/CliMA/ClimaAtmos.jl/pull/4516) ![][badge-✨feature/enhancement] Add a perfect-model single-column (SCM) calibration experiment.
 
 0.40.0
 -------
