@@ -408,7 +408,7 @@ function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date)
 end
 
 insolation_cache(_, _) = (;)
-function insolation_cache(::TimeVaryingInsolation, Y)
+function insolation_cache(::Union{TimeVaryingInsolation, ColumnTimeVaryingInsolation}, Y)
     FT = Spaces.undertype(axes(Y.c))
     return (;
         insolation_tuple = similar(
