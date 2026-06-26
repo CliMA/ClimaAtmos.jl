@@ -1464,10 +1464,10 @@ end
 Launched momentum-flux magnitude for one phase-speed bin `c_n` and one heating depth `h`, obtained by integrating the Beres (2004) spectral density over intrinsic frequency ν ∈ [ν_min, ν_max] with composite Boole's rule (`n_groups` panels of 5 nodes, weights `boole_w`).
 
 Each node's integrand is the product of
-  • horizontal heating spectrum  Q0Gk_sq = Q0²·(σ_x²/2)·exp(−k²σ_x²/2),  k = ν/c_n;
-  • squared vertical half-sine shape  R² = V_hs_sq(m,h)·m²/(N²−ν̂²)²,  m from m² = k²(N²/ν̂²−1);
-  • propagation factor  √(N²−ν̂²)/|ν̂|;  and 
-  • the ν→c jacobian  ν/c_n².
+• horizontal heating spectrum  Q0Gk_sq = Q0²·(σ_x²/2)·exp(−k²σ_x²/2),  k = ν/c_n;
+• squared vertical half-sine shape  R² = V_hs_sq(m,h)·m²/(N²−ν̂²)²,  m from m² = k²(N²/ν̂²−1);
+• propagation factor  √(N²−ν̂²)/|ν̂|;  and
+• the ν→c jacobian  ν/c_n².
 
 Here ν̂ = ν − k·u_heat is the intrinsic frequency. Evanescent/singular nodes
 (|ν̂| < 1e-4·N, |ν̂| ≥ N, or m² ≤ 0) contribute zero.
@@ -1541,7 +1541,7 @@ end
 """
     _beres_steady_horizontal_const(σ_x, L_system)
 
-Horizontal-scale factor `H` of the steady (ν=0) source amplitude (Beres Eq. 32): how strongly a convective cell of width `σ_x` projects onto gravity waves, summed over horizontal scales down to the system size `L_system`. 
+Horizontal-scale factor `H` of the steady (ν=0) source amplitude (Beres Eq. 32): how strongly a convective cell of width `σ_x` projects onto gravity waves, summed over horizontal scales down to the system size `L_system`.
 
 Closed form:
 
@@ -1666,7 +1666,7 @@ function wave_source(
     Q0_sq = Q0^2
 
     # Steady (ν=0) contribution: a ground-stationary wave that lands in the c≈0 bin (kept empty by the transient spectrum, so no double-counting).
-    
+
     # It deposits only when 
     #    (a) the steady source is enabled — true by default, and 
     #    (b) an exact c=0 bin exists. Without a c=0 bin, `clamp` would corrupt a nonzero bin, so we zero the steady flux instead.
