@@ -154,8 +154,11 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         mass_names = (@name(c.ρ), @name(c.sgsʲs.:(1).ρa))
         uₕ_component_names =
             (@name(c.uₕ.components.data.:(1)), @name(c.uₕ.components.data.:(2)))
-        condensate_names =
-            (@name(c.ρq_lcl), @name(c.ρq_icl), @name(c.ρq_rai), @name(c.ρq_sno))
+        condensate_names = (
+            @name(c.ρq_lcl), @name(c.ρq_rai),
+            @name(c.ρq_icl), @name(c.ρq_sno),
+            @name(c.ρq_ice),
+        )
         max_padding_bands = if !isnothing(padding_bands_per_block)
             padding_bands_per_block
         elseif (
