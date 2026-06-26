@@ -1,0 +1,5 @@
+[deps]
+ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+ClimaAnalysis = "29b5916a-a76c-4e73-9657-3c8fd22e65e6"
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"

@@ -141,3 +141,11 @@ git-tree-sha1 = "d11b75df5be566eae42d6a3f2b3f60a381feacf8"
 
 [wxquest_initial_conditions]
 git-tree-sha1 = "85b1e3654fb88f19a715ea6c235e1d66f254d2e6"
+
+[pycles_scm_les_data]
+git-tree-sha1 = "e69ae8066f1fa46324f1e3b7b81d600153f9b122"
+lazy = true
+
+    [[pycles_scm_les_data.download]]
+    sha256 = "659547eac2ed2f94bdecea7616187926bac3561eee9250d0a96b7df2fb06d503"
+    url = "https://caltech.box.com/shared/static/bhatumhupxxmeagwm7g96nontv50g2tv.gz"
