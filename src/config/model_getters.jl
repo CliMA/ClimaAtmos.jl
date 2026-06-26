@@ -636,9 +636,14 @@ function get_detrainment_model(parsed_args)
 end
 
 function get_tracers(parsed_args)
-    aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
+    prescribed_aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
+    interactive_aerosol_names = Tuple(parsed_args["interactive_aerosols"])
     time_varying_trace_gas_names = Tuple(parsed_args["time_varying_trace_gases"])
-    return (; aerosol_names, time_varying_trace_gas_names)
+    return (;
+        prescribed_aerosol_names,
+        interactive_aerosol_names,
+        time_varying_trace_gas_names,
+    )
 end
 
 function check_case_consistency(parsed_args)
