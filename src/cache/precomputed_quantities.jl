@@ -156,14 +156,13 @@ function precomputed_quantities(Y, atmos)
         atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
         atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
-    # `ᶜsgs_moments` caches `(mu_S, sigma_S, λ_lagrange)` — the SGS mean
-    # saturation variable, the standard deviation, and the Lagrange multiplier
-    # used by `Microphysics1MEvaluator`. Allocated only for 1M/2M schemes.
     uses_microphysics_quadrature_moments =
         atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+    # `ᶜsgs_moments` caches `(sigma_S, λ_lagrange)` — the SGS standard
+    # deviation and the Lagrange multiplier used by `Microphysics1MEvaluator`.
+    #  Allocated only for 1M/2M schemes.
     SGSMomentsNT = @NamedTuple{
-        mu_S::FT,
         sigma_S::FT,
         λ_lagrange::FT,
     }
