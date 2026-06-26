@@ -351,6 +351,12 @@ beres_steady_dc_frac:
 beres_L_system:
   help: "Largest convective-system scale (m) setting k_min=2*pi/L in the even-folded horizontal constant H of the steady Beres source (steady/transient ratio depends on it only logarithmically)"
   value: 1.0e6
+beres_envelope_mode:
+  help: "How the Beres heating envelope [z_bot, z_top], depth h, and Q0 are set [`area_threshold` (default; z_top from updraft area > 1e-3, z_bot from grid-mean Q_conv > z_bot_Q_threshold above z_bot_floor) | `moment_matched` (fit a half-sine to in-cloud Q_conv_ic via its 1st/2nd moments: centroid z_c, spread sigma -> h, Q0 = (pi/2)*integral/h)]"
+  value: "area_threshold"
+nogw_beres_heating_latent:
+  help: "Source the Beres in-cloud heating from the canonical transport-free latent-heat sum Q_lat = (1/cp^(j)) sum_p L_p R_p^(j) instead of the DSE flux-divergence Q1. Requires microphysics_model=1M and turbconv=prognostic_edmfx. [`false` (default), `true`]"
+  value: false
 dt_nogw:
   help: "Time between calling non-orographic gravity wave update"
   value: "1800secs"

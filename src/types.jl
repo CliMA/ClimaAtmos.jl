@@ -426,12 +426,15 @@ abstract type AbstractGravityWave end
 
 Parameters for the Beres (2004) convective gravity wave source spectrum.
 When used as the `beres_source` field in `NonOrographicGravityWave`, the
-Beres spectrum replaces the AD Gaussian in tropical columns where EDMF
-convective heating exceeds `Q0_threshold`.
+Beres convective spectrum is launched *in addition to* the AD background
+spectrum (not as a replacement) in every column whose EDMF convective heating
+exceeds `Q0_threshold` and whose heating layer is deeper than `h_heat_min`.
+There is no latitude gate: the tropical confinement of the source is emergent,
+set by where the EDMF scheme produces deep convective heating.
 """
 Base.@kwdef struct BeresSourceParams{FT}
     Q0_threshold::FT      # K/s, minimum heating rate to activate Beres
-    beres_scale_factor::FT # dimensionless; absorbs L⁻² + other prefactors — see docstring
+    beres_scale_factor::FT # dimensionless; folds the ρ₀/(Lτ) prefactor, the |Q_t|² weight, and empirical tuning into one parameter
     σ_x::FT              # m, convective cell horizontal half-width
     ν_min::FT            # 1/s, min frequency (period ~120 min)
     ν_max::FT            # 1/s, max frequency (period ~10 min)
@@ -444,6 +447,16 @@ Base.@kwdef struct BeresSourceParams{FT}
     beres_steady_source::Bool = false # enable the steady (ν=0) stationary mechanical source (deposited at c≈0)
     beres_steady_dc_frac::FT = FT(1.0) # steady DC heating weight: Q_t(0)² = beres_steady_dc_frac · ν_min (Trap 2 convention)
     beres_L_system::FT = FT(1.0e6) # m, largest convective-system scale; sets k_min=2π/L in the even-folded H
+    # If true, set [z_bot,z_top]/h/Q0 by moment-matching a half-sine to in-cloud
+    # Q_conv_ic (1st/2nd moments) instead of the area/threshold envelope. Bool
+    # (not Symbol) to keep the struct isbits for the GPU forcing kernel.
+    moment_envelope::Bool = false
+    # If true, source the in-cloud heating from the transport-free
+    # latent-heat sum Q_lat = (1/cp⁽ʲ⁾) Σ_p L_p R_p⁽ʲ⁾ (manuscript eq:edmf_heating) instead of the DSE flux-divergence Q₁. Requires 1-moment
+    # microphysics + PrognosticEDMFX (the per-phase conversion rates and per-draft
+    # condensate state both exist only there); enforced at construction in
+    # get_non_orographic_gravity_wave_model. Bool to keep the struct isbits.
+    heating_latent::Bool = false
 
     function BeresSourceParams{FT}(args...) where {FT}
         obj = new{FT}(args...)
@@ -479,7 +492,7 @@ Base.@kwdef struct NonOrographicGravityWave{FT, BS} <: AbstractGravityWave
     ϕ0_s::FT
     dϕ_n::FT
     dϕ_s::FT
-    beres_source::BS = nothing  # nothing → AD everywhere; BeresSourceParams → Beres in tropics
+    beres_source::BS = nothing  # nothing → AD background only; BeresSourceParams → adds the Beres convective source on top of AD wherever EDMF convects (no latitude gate)
 end
 
 abstract type OrographicGravityWave <: AbstractGravityWave end

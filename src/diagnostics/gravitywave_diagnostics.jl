@@ -289,6 +289,107 @@ add_diagnostic_variable!(
     compute! = compute_nogw_Q_conv_ic!,
 )
 
+# 3D native launched half-sine source profile Q0·sin(π(z−z_bot)/h) — NOT gated
+# (3D field, beres_active is 2D; the profile is already zero outside the
+# envelope and in inactive columns)
+compute_nogw_halfsine!(out, state, cache, time) = compute_nogw_halfsine!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.non_orographic_gravity_wave,
+)
+compute_nogw_halfsine!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("nogw_halfsine", non_orographic_gravity_wave)
+compute_nogw_halfsine!(_, _, _, _, ::NonOrographicGravityWave{FT, Nothing}) where {FT} =
+    error_diagnostic_variable("nogw_halfsine requires Beres source enabled")
+
+function compute_nogw_halfsine!(
+    out,
+    state,
+    cache,
+    time,
+    ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    if isnothing(out)
+        return copy(cache.non_orographic_gravity_wave.gw_halfsine)
+    else
+        out .= cache.non_orographic_gravity_wave.gw_halfsine
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_halfsine",
+    long_name = "NOGW Beres Launched Half-Sine Source Profile",
+    units = "K s-1",
+    comments = "3D native half-sine source profile Q0*sin(pi*(z-z_bot)/h) over the convective heating depth, computed in-column so it is remap-consistent with nogw_Q_conv_ic (the moment-matched envelope it approximates); zero outside the envelope and in inactive columns",
+    compute! = compute_nogw_halfsine!,
+)
+
+# Launched source momentum flux magnitude (2D, gated by beres_active)
+compute_nogw_launch_flux!(out, state, cache, time) = compute_nogw_launch_flux!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.non_orographic_gravity_wave,
+)
+compute_nogw_launch_flux!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("nogw_launch_flux", non_orographic_gravity_wave)
+compute_nogw_launch_flux!(_, _, _, _, ::NonOrographicGravityWave{FT, Nothing}) where {FT} =
+    error_diagnostic_variable("nogw_launch_flux requires Beres source enabled")
+
+function compute_nogw_launch_flux!(
+    out,
+    state,
+    cache,
+    time,
+    ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    (; gw_launch_flux, gw_beres_active) = cache.non_orographic_gravity_wave
+    return _gated_copy!(out, gw_launch_flux, gw_beres_active)
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_launch_flux",
+    long_name = "NOGW Beres Launched Source Flux Magnitude",
+    units = "Pa",
+    comments = "Total launched Beres source momentum flux magnitude, a_cover * sum_c |B0(c)|, summed over the zonal-direction phase-speed spectrum at the launch level (zero when inactive)",
+    compute! = compute_nogw_launch_flux!,
+)
+
+# Launched-spectrum flux-weighted phase-speed centroid (2D, gated by beres_active)
+compute_nogw_c_centroid!(out, state, cache, time) = compute_nogw_c_centroid!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.non_orographic_gravity_wave,
+)
+compute_nogw_c_centroid!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("nogw_c_centroid", non_orographic_gravity_wave)
+compute_nogw_c_centroid!(_, _, _, _, ::NonOrographicGravityWave{FT, Nothing}) where {FT} =
+    error_diagnostic_variable("nogw_c_centroid requires Beres source enabled")
+
+function compute_nogw_c_centroid!(
+    out,
+    state,
+    cache,
+    time,
+    ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    (; gw_c_centroid, gw_beres_active) = cache.non_orographic_gravity_wave
+    return _gated_copy!(out, gw_c_centroid, gw_beres_active)
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_c_centroid",
+    long_name = "NOGW Beres Launched Spectrum Phase-Speed Centroid",
+    units = "m s-1",
+    comments = "Flux-weighted phase-speed centroid of the launched Beres source spectrum, sum_c c*|B0(c)| / sum_c |B0(c)| in the zonal direction; characterizes the spectral shape for the Beres-c vs Beres-G comparison (zero when inactive)",
+    compute! = compute_nogw_c_centroid!,
+)
+
 # Convective coverage (envelope-mean updraft area fraction, gated by beres_active)
 compute_nogw_a_cover!(out, state, cache, time) = compute_nogw_a_cover!(
     out,

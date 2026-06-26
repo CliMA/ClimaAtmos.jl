@@ -8,6 +8,70 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Operators as Operator
+import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
+
+"""
+    _beres_latent_heating(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+
+Canonical transport-free latent heating for one updraft (manuscript
+`eq:edmf_heating`):
+
+    Q_lat = (1/cp⁽ʲ⁾) Σ_p L_p R_p⁽ʲ⁾   [K/s]
+
+Built from the CloudMicrophysics 1-moment **aggregated** phase-change tendencies
+`dq_{lcl,icl,rai,sno}_dt` (the tested `_aggregate_tendencies`, returned by
+`InstantaneousVerbose`). Relative to a vapor reference the liquid reservoir
+(`lcl + rai`) carries `L_v` and the ice reservoir (`icl + sno`) carries `L_s`;
+within the reservoir sums the same-phase mass transfers (autoconversion,
+like-phase accretion) cancel, and liquid↔ice transfers net to `L_f = L_s − L_v`
+automatically. So
+
+    Q_lat = (1/cp⁽ʲ⁾) [ L_v·(dq_lcl_dt + dq_rai_dt) + L_s·(dq_icl_dt + dq_sno_dt) ]
+
+is algebraically identical to the explicit per-process `Σ_p L_p R_p` form (the
+explicit form is the independent oracle in `test_beres_latent_heating.jl`), but
+cannot suffer a process-selection error: the aggregation is the single tested
+source of truth for which terms enter and with what sign.
+
+`cp⁽ʲ⁾` is the subdomain moist heat capacity `TD.cp_m(thp, q_tot, q_lcl, q_icl)`
+(`main.tex:288`); `L_v = LH_v0`, `L_s = LH_s0` are reference-`T₀` constants
+(matching the manuscript's constant `L_p`). Requires 1-moment microphysics +
+PrognosticEDMFX (gated at construction). `@inline` + scalar args so it composes
+inside a GPU broadcast with the `InstantaneousVerbose` source dead-code-eliminated
+down to the four aggregated tendencies.
+"""
+@inline function _beres_latent_heating(
+    mp,
+    thp,
+    ρ,
+    T,
+    q_tot,
+    q_lcl,
+    q_icl,
+    q_rai,
+    q_sno,
+)
+    src = BMT.bulk_microphysics_tendencies(
+        BMT.InstantaneousVerbose(),
+        BMT.Microphysics1Moment(),
+        mp,
+        thp,
+        ρ,
+        T,
+        q_tot,
+        q_lcl,
+        q_icl,
+        q_rai,
+        q_sno,
+    )
+    Lv = TD.Parameters.LH_v0(thp)
+    Ls = TD.Parameters.LH_s0(thp)
+    cpʲ = TD.cp_m(thp, q_tot, q_lcl, q_icl)
+    return (
+        Lv * (src.dq_lcl_dt + src.dq_rai_dt) +
+        Ls * (src.dq_icl_dt + src.dq_sno_dt)
+    ) / cpʲ
+end
 
 non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
     non_orographic_gravity_wave_cache(Y, atmos.non_orographic_gravity_wave)
@@ -66,6 +130,15 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_ztop = similar(Fields.level(Y.c.ρ, 1)),
             gw_Q_conv = similar(Y.c.ρ),
             gw_Q_conv_ic = similar(Y.c.ρ),
+            # Native half-sine source profile Q0·sin(π(z−z_bot)/h) (3D), and the
+            # launched-spectrum summaries (2D): total launched flux magnitude and
+            # the flux-weighted phase-speed centroid. Emitted as diagnostics so
+            # the half-sine vs Q_conv_ic comparison is a single-field remap
+            # (apples-to-apples), not an offline reconstruction from three
+            # independently-remapped 2D fields (Q0, z_bot, h).
+            gw_halfsine = similar(Y.c.ρ),
+            gw_launch_flux = similar(Fields.level(Y.c.ρ, 1)),
+            gw_c_centroid = similar(Fields.level(Y.c.ρ, 1)),
             gw_a_cover = similar(Fields.level(Y.c.ρ, 1)),
             gw_reduce_result = similar(
                 Fields.level(Y.c.ρ, 1),
@@ -165,6 +238,15 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_ztop = similar(Fields.level(Y.c.ρ, 1)),
             gw_Q_conv = similar(Y.c.ρ),
             gw_Q_conv_ic = similar(Y.c.ρ),
+            # Native half-sine source profile Q0·sin(π(z−z_bot)/h) (3D), and the
+            # launched-spectrum summaries (2D): total launched flux magnitude and
+            # the flux-weighted phase-speed centroid. Emitted as diagnostics so
+            # the half-sine vs Q_conv_ic comparison is a single-field remap
+            # (apples-to-apples), not an offline reconstruction from three
+            # independently-remapped 2D fields (Q0, z_bot, h).
+            gw_halfsine = similar(Y.c.ρ),
+            gw_launch_flux = similar(Fields.level(Y.c.ρ, 1)),
+            gw_c_centroid = similar(Fields.level(Y.c.ρ, 1)),
             gw_a_cover = similar(Fields.level(Y.c.ρ, 1)),
             gw_reduce_result = similar(
                 Fields.level(Y.c.ρ, 1),
@@ -372,6 +454,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         p.non_orographic_gravity_wave.gw_beres_active .= 0
         p.non_orographic_gravity_wave.gw_a_cover .= 0
         p.non_orographic_gravity_wave.gw_Q_conv_ic .= 0
+        p.non_orographic_gravity_wave.gw_halfsine .= 0
+        p.non_orographic_gravity_wave.gw_launch_flux .= 0
+        p.non_orographic_gravity_wave.gw_c_centroid .= 0
         return
     end
 
@@ -393,6 +478,11 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         gw_reduce_result,
         gw_deep_count,
         gw_cb_count,
+        gw_c,
+        gw_ncval,
+        gw_halfsine,
+        gw_launch_flux,
+        gw_c_centroid,
     ) = p.non_orographic_gravity_wave
 
     FT = Spaces.undertype(axes(Y.c))
@@ -493,48 +583,162 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     @. gw_Q_conv_ic =
         ifelse(ᶜρa_sum > eps(FT), gw_Q_conv_ic / ᶜρa_sum, FT(0))
 
+    # Canonical transport-free latent-heating override (manuscript
+    # eq:edmf_heating). When enabled, replace the in-cloud DSE flux-divergence Q₁
+    # just computed in gw_Q_conv_ic with Q_lat = (1/cp⁽ʲ⁾) Σ_p L_p R_p⁽ʲ⁾, the
+    # ρaʲ-weighted in-cloud mean of the per-draft latent heating. The grid-mean
+    # gw_Q_conv (Q₁) above is left untouched — it still drives activation gating
+    # and the z_bot threshold, which are calibrated to grid-mean Q₁ magnitudes.
+    # The heating_latent flag is gated to 1M + PrognosticEDMFX at construction, so
+    # the prognostic condensate fields and ᶜq_tot_nonnegʲs accessed here exist.
+    if gw_beres_source.heating_latent
+        mp = CAP.microphysics_1m_params(p.params)
+        thp = CAP.thermodynamics_params(p.params)
+        ᶜq_tot_nonnegʲs = p.precomputed.ᶜq_tot_nonnegʲs
+        gw_Q_conv_ic .= FT(0)
+        ᶜρa_sum .= FT(0)
+        for j in 1:n_updrafts
+            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+            ᶜρʲ = ᶜρʲs.:($j)
+            ᶜTʲ = ᶜTʲs.:($j)
+            ᶜq_totʲ = ᶜq_tot_nonnegʲs.:($j)
+            ᶜq_lclʲ = Y.c.sgsʲs.:($j).q_lcl
+            ᶜq_iclʲ = Y.c.sgsʲs.:($j).q_icl
+            ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
+            ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
+            @. gw_Q_conv_ic += ifelse(
+                ᶜρʲ > eps(FT),
+                max(ᶜρaʲ, FT(0)) * _beres_latent_heating(
+                    mp,
+                    thp,
+                    ᶜρʲ,
+                    ᶜTʲ,
+                    ᶜq_totʲ,
+                    ᶜq_lclʲ,
+                    ᶜq_iclʲ,
+                    ᶜq_raiʲ,
+                    ᶜq_snoʲ,
+                ),
+                FT(0),
+            )
+            @. ᶜρa_sum += max(ᶜρaʲ, FT(0))
+        end
+        @. gw_Q_conv_ic =
+            ifelse(ᶜρa_sum > eps(FT), gw_Q_conv_ic / ᶜρa_sum, FT(0))
+    end
+
     # Persist Q_conv into cache before scratch field is reused
     @. gw_Q_conv = ᶜQ_conv
 
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
-    # Pass 1: find convective envelope [z_bot, z_top].
-    #   z_top: highest level where updraft area fraction > a_thresh (plume top).
-    #   z_bot: lowest level above z_bot_floor where Q_conv > Q_threshold
-    #          (the floor is essential because EDMF Q_conv has a strong PBL signal below ~1 km in the tropics).
+    # Pass 1: set the convective envelope [z_bot, z_top] and depth h. Two modes:
+    #   area_threshold (default): z_top = highest level with updraft area
+    #     > a_thresh (plume top); z_bot = lowest level above z_bot_floor where
+    #     grid-mean Q_conv > z_bot_Q_threshold (the floor rejects the PBL
+    #     dry-thermal Q_conv signal below ~1 km in the tropics).
+    #   moment_matched: fit a half-sine to the in-cloud heating Q_conv_ic by its
+    #     1st/2nd moments — centroid z_c and spread σ. A half-sine of depth h has
+    #     variance h²·(π²−8)/(4π²), so h = σ/√(that); z_bot = z_c − h/2,
+    #     z_top = z_c + h/2, and Q0 = (π/2)·∫max(Q_ic,0)dz / h. This sits the
+    #     envelope on the actual heating (the area/threshold envelope is often
+    #     narrow and misplaced relative to the in-cloud heating peak).
+    # Both leave gw_u_heat = z_bot, gw_v_heat = z_top, gw_h_heat = h for Pass 2.
     result_field = gw_reduce_result
-    input1 = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜa_up, ᶜQ_conv)
-    reduce_init = (FT(-Inf), FT(Inf), FT(0), FT(0), FT(0), FT(0), FT(0))
-    let _a_thresh = FT(1e-3), _Q_thresh = gw_beres_source.z_bot_Q_threshold,
-        _z_floor = gw_beres_source.z_bot_floor
-
-        Operators.column_reduce!(
-            result_field,
-            input1;
-            init = reduce_init,
-        ) do (z_top_prev, z_bot_prev, _3, _4, _5, _6, _7), (z, a, Q)
-            z_top = ifelse(a > _a_thresh, max(z_top_prev, z), z_top_prev)
-            z_bot = ifelse(
-                (z >= _z_floor) & (Q > _Q_thresh),
-                min(z_bot_prev, z),
-                z_bot_prev,
-            )
-            return (z_top, z_bot, _3, _4, _5, _6, _7)
+    if gw_beres_source.moment_envelope
+        ᶜΔz_m = Fields.Δz_field(axes(Y.c))
+        input1 = Base.Broadcast.broadcasted(tuple, ᶜz, gw_Q_conv_ic, ᶜΔz_m)
+        reduce_init = (FT(0), FT(0), FT(0), FT(0), FT(0), FT(0), FT(0))
+        let _z_floor = gw_beres_source.z_bot_floor, _zero = FT(0)
+            # Accumulate (∫Q⁺dz, ∫z·Q⁺dz, ∫z²·Q⁺dz) over z ≥ z_bot_floor.
+            # NB: capture only Float scalars (_z_floor, _zero) here — referencing
+            # the type `FT` inside the reducer closure makes it non-isbits
+            # (carries `Type{FT}`) and fails GPU compilation. The area-mode
+            # closure below follows the same rule.
+            Operators.column_reduce!(
+                result_field,
+                input1;
+                init = reduce_init,
+            ) do (I0p, I1p, I2p, _4, _5, _6, _7), (z, Q_ic, dz)
+                qpdz = ifelse(z >= _z_floor, max(Q_ic, _zero) * dz, _zero)
+                return (
+                    I0p + qpdz,
+                    I1p + z * qpdz,
+                    I2p + z * z * qpdz,
+                    _4,
+                    _5,
+                    _6,
+                    _7,
+                )
+            end
         end
-    end
+        h_coef = FT(1) / sqrt((FT(π)^2 - FT(8)) / (FT(4) * FT(π)^2))  # ≈ 4.595
+        # z_c (held temporarily in gw_zbot)
+        @. gw_zbot = ifelse(
+            result_field.:1 > eps(FT),
+            result_field.:2 / result_field.:1,
+            FT(0),
+        )
+        # h = h_coef · σ,   σ² = ∫z²Q⁺/∫Q⁺ − z_c²
+        @. gw_h_heat = ifelse(
+            result_field.:1 > eps(FT),
+            h_coef *
+            sqrt(max(result_field.:3 / result_field.:1 - gw_zbot^2, FT(0))),
+            FT(0),
+        )
+        @. gw_ztop = gw_zbot + gw_h_heat / 2              # z_top = z_c + h/2
+        @. gw_zbot = max(gw_zbot - gw_h_heat / 2, FT(0))  # z_bot = z_c − h/2
+        # Clamp z_top to the domain top. The area envelope's z_top is always a
+        # grid level, so the launch-level search (a column reduce that returns
+        # the first level with z ≥ z_top) always finds one. The moment z_top is
+        # unbounded above (a tiny, high-noise column can push it past the top
+        # cell), which would leave source_level = 0 (invalid) and crash. Keep it
+        # grid-bounded and z_bot ≤ z_top.
+        z_dom_top = maximum(ᶜz)
+        @. gw_ztop = min(gw_ztop, z_dom_top)
+        @. gw_zbot = min(gw_zbot, gw_ztop)
+        # Matched-half-sine amplitude Q0 = (π/2)·∫max(Q_ic,0)dz / h
+        @. gw_Q0 = ifelse(
+            (gw_h_heat > eps(FT)) & (result_field.:1 > FT(0)),
+            max(FT(π) / FT(2) * result_field.:1 / gw_h_heat, FT(0)),
+            FT(0),
+        )
+        @. gw_u_heat = gw_zbot
+        @. gw_v_heat = gw_ztop
+    else
+        input1 = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜa_up, ᶜQ_conv)
+        reduce_init = (FT(-Inf), FT(Inf), FT(0), FT(0), FT(0), FT(0), FT(0))
+        let _a_thresh = FT(1e-3), _Q_thresh = gw_beres_source.z_bot_Q_threshold,
+            _z_floor = gw_beres_source.z_bot_floor
 
-    @. gw_v_heat = ifelse(
-        isfinite(result_field.:1) & isfinite(result_field.:2),
-        result_field.:1,
-        FT(0),
-    )
-    @. gw_u_heat = ifelse(
-        isfinite(result_field.:1) & isfinite(result_field.:2),
-        result_field.:2,
-        FT(0),
-    )
-    @. gw_h_heat = max(gw_v_heat - gw_u_heat, FT(0))
+            Operators.column_reduce!(
+                result_field,
+                input1;
+                init = reduce_init,
+            ) do (z_top_prev, z_bot_prev, _3, _4, _5, _6, _7), (z, a, Q)
+                z_top = ifelse(a > _a_thresh, max(z_top_prev, z), z_top_prev)
+                z_bot = ifelse(
+                    (z >= _z_floor) & (Q > _Q_thresh),
+                    min(z_bot_prev, z),
+                    z_bot_prev,
+                )
+                return (z_top, z_bot, _3, _4, _5, _6, _7)
+            end
+        end
+
+        @. gw_v_heat = ifelse(
+            isfinite(result_field.:1) & isfinite(result_field.:2),
+            result_field.:1,
+            FT(0),
+        )
+        @. gw_u_heat = ifelse(
+            isfinite(result_field.:1) & isfinite(result_field.:2),
+            result_field.:2,
+            FT(0),
+        )
+        @. gw_h_heat = max(gw_v_heat - gw_u_heat, FT(0))
+    end
     @. gw_h_heat = ifelse(isnan(gw_h_heat) | isinf(gw_h_heat), FT(0), gw_h_heat)
 
     # Persist zbot/ztop before gw_u_heat/gw_v_heat get overwritten by mean winds
@@ -616,14 +820,17 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         FT(0),
     )
 
-    # Spectrum amplitude from the IN-CLOUD heating:
-    # Q₀ = (π/2) · Σ(Q_ic·Δz) / h, clamped ≥ 0
-    @. gw_Q0 = result_field.:6
-    @. gw_Q0 = ifelse(
-        gw_h_heat > FT(0),
-        max(FT(π) / FT(2) * gw_Q0 / gw_h_heat, FT(0)),
-        FT(0),
-    )
+    # Spectrum amplitude. In moment_matched mode gw_Q0 was already set from the
+    # column moments in Pass 1; in area_threshold mode set it here from the
+    # IN-CLOUD heating integral over [z_bot, z_top]: Q₀ = (π/2)·Σ(Q_ic·Δz)/h.
+    if !gw_beres_source.moment_envelope
+        @. gw_Q0 = result_field.:6
+        @. gw_Q0 = ifelse(
+            gw_h_heat > FT(0),
+            max(FT(π) / FT(2) * gw_Q0 / gw_h_heat, FT(0)),
+            FT(0),
+        )
+    end
     @. gw_Q0 = ifelse(isnan(gw_Q0) | isinf(gw_Q0), FT(0), gw_Q0)
 
     # Set beres_active flag: GRID-MEAN amplitude above threshold AND heating
@@ -642,6 +849,56 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         FT(1),
         FT(0),
     )
+
+    # --- Native source-shape & launched-spectrum diagnostics (Q2 resolution) ---
+    # Build the launched half-sine Q0·sin(π(z−z_bot)/h) over the heating depth h
+    # natively, IN the column where (Q0, z_bot, h) are mutually consistent, so
+    # the offline comparison to Q_conv_ic is a single linear remap of one field
+    # rather than a nonlinear reconstruction from three independently-remapped
+    # 2D fields. Gated by beres_active; zero elsewhere.
+    # Condition must stay in the 3D (column) broadcast space: `&` cannot combine
+    # a pure-2D level-space bool (gw_beres_active>0.5) with a 3D one (ᶜz≥gw_zbot)
+    # — ClimaCore rejects the mixed DataF/VF spaces. So the envelope range (both
+    # operands 3D) is the mask, and the 2D gates fold into the multiplied value:
+    # gw_beres_active (0/1) zeroes inactive columns, and max(h,eps) guards the
+    # divide (h=0 ⇒ inactive ⇒ value already 0).
+    @. gw_halfsine = ifelse(
+        (ᶜz >= gw_zbot) & (ᶜz <= gw_zbot + gw_h_heat),
+        gw_beres_active *
+        gw_Q0 *
+        sin(FT(π) * (ᶜz - gw_zbot) / max(gw_h_heat, eps(FT))),
+        FT(0),
+    )
+
+    # Launched-spectrum summaries from the SAME per-column source state the
+    # forcing kernel uses (ink-independent for Beres): total launched flux
+    # magnitude Σ|B0| (× a_cover deposition factor) and the flux-weighted
+    # phase-speed centroid ⟨c⟩ = Σ c|B0| / Σ|B0|, both in the zonal (gw_u_heat)
+    # direction. Two scalar broadcasts (the spectrum is cheap for inactive
+    # columns and only ~tens of columns are active). `gw_c` (an NTuple) and
+    # `gw_ncval` are captured in the closure body — NOT passed as broadcast
+    # args — because broadcasting a Tuple would zip it element-wise instead of
+    # treating it as a scalar grid.
+    let beres = gw_beres_source, cgrid = gw_c, ncv = gw_ncval
+        flux_mag(active, u_src, Q0, h, N) =
+            _beres_launch_summary(beres, active, cgrid, u_src, Q0, h, N, ncv)[1]
+        centroid(active, u_src, Q0, h, N) = begin
+            (s0, s1) =
+                _beres_launch_summary(beres, active, cgrid, u_src, Q0, h, N, ncv)
+            ifelse(s0 > eps(typeof(s0)), s1 / s0, zero(s0))
+        end
+        @. gw_launch_flux = ifelse(
+            gw_beres_active > FT(0.5),
+            gw_a_cover *
+            flux_mag(gw_beres_active, gw_u_heat, gw_Q0, gw_h_heat, gw_N_source),
+            FT(0),
+        )
+        @. gw_c_centroid = ifelse(
+            gw_beres_active > FT(0.5),
+            centroid(gw_beres_active, gw_u_heat, gw_Q0, gw_h_heat, gw_N_source),
+            FT(0),
+        )
+    end
 end
 
 non_orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
@@ -781,26 +1038,64 @@ function non_orographic_gravity_wave_forcing(
     # for up to 256 gravity wave break data.
     level_end = Spaces.nlevels(axes(ᶜρ))
 
-    # Collect all required fields in a broadcasted object
-    # Beres fields are always included (zero when disabled; kernel dispatches on gw_beres_source type)
-    input_u = @. lazy(
+    # Collect the per-column fields each source mode needs into a broadcasted
+    # tuple. Both modes share the same 7 fields in slots 1–7; slots 8–16 hold the
+    # 9 fields specific to that mode (AD99 source vs. Beres convective source).
+    #
+    # Shared slots 1–7: u/v_kp1, bf_kp1, ρ_k, ρ_kp1, z_kp1, z_k, level.
+    # AD99 slots 8–16: u/v_source, ρ_source, source_level, Bw, Bn, cw, cn, flag,
+    #   source_ampl.
+    # Beres slots 8–16: beres_active, Q0, h, u/v_heat, N_source, beres_source_level,
+    #   beres_ρ_source, beres_u/v_source, a_cover.
+    input_u_ad99 = @. lazy(
         tuple(
             ᶜu_p1,
-            ᶜu_source,
             ᶜbf_p1,
             ᶜρ,
             ᶜρ_p1,
-            ᶜρ_source,
             ᶜz_p1,
             ᶜz,
+            ᶜlevel,
+            ᶜu_source,
+            ᶜρ_source,
             source_level,
             gw_Bw,
             gw_Bn,
             gw_cw,
             gw_cn,
             gw_flag,
-            ᶜlevel,
             gw_source_ampl,
+        ),
+    )
+    input_v_ad99 = @. lazy(
+        tuple(
+            ᶜv_p1,
+            ᶜbf_p1,
+            ᶜρ,
+            ᶜρ_p1,
+            ᶜz_p1,
+            ᶜz,
+            ᶜlevel,
+            ᶜv_source,
+            ᶜρ_source,
+            source_level,
+            gw_Bw,
+            gw_Bn,
+            gw_cw,
+            gw_cn,
+            gw_flag,
+            gw_source_ampl,
+        ),
+    )
+    input_u_beres = @. lazy(
+        tuple(
+            ᶜu_p1,
+            ᶜbf_p1,
+            ᶜρ,
+            ᶜρ_p1,
+            ᶜz_p1,
+            ᶜz,
+            ᶜlevel,
             gw_beres_active,
             gw_Q0,
             gw_h_heat,
@@ -812,24 +1107,15 @@ function non_orographic_gravity_wave_forcing(
             gw_a_cover,
         ),
     )
-    input_v = @. lazy(
+    input_v_beres = @. lazy(
         tuple(
             ᶜv_p1,
-            ᶜv_source,
             ᶜbf_p1,
             ᶜρ,
             ᶜρ_p1,
-            ᶜρ_source,
             ᶜz_p1,
             ᶜz,
-            source_level,
-            gw_Bw,
-            gw_Bn,
-            gw_cw,
-            gw_cn,
-            gw_flag,
             ᶜlevel,
-            gw_source_ampl,
             gw_beres_active,
             gw_Q0,
             gw_h_heat,
@@ -850,12 +1136,12 @@ function non_orographic_gravity_wave_forcing(
     for ink in 1:gw_nk
         # --- AD99 background source (always active) ---
         waveforcing_column_accumulate!(
-            u_waveforcing, mask_u, input_u,
+            u_waveforcing, mask_u, input_u_ad99,
             gw_c, gw_c0, gw_nk, ink, level_end,
             gw_ncval, nothing, Val(:ad99),
         )
         waveforcing_column_accumulate!(
-            v_waveforcing, mask_v, input_v,
+            v_waveforcing, mask_v, input_v_ad99,
             gw_c, gw_c0, gw_nk, ink, level_end,
             gw_ncval, nothing, Val(:ad99),
         )
@@ -870,12 +1156,12 @@ function non_orographic_gravity_wave_forcing(
         # Compile-time eliminated when gw_beres_source === nothing (BS=Nothing)
         if !isnothing(gw_beres_source)
             waveforcing_column_accumulate!(
-                u_waveforcing, mask_u, input_u,
+                u_waveforcing, mask_u, input_u_beres,
                 gw_c, gw_c0, gw_nk, ink, level_end,
                 gw_ncval, gw_beres_source, Val(:beres),
             )
             waveforcing_column_accumulate!(
-                v_waveforcing, mask_v, input_v,
+                v_waveforcing, mask_v, input_v_beres,
                 gw_c, gw_c0, gw_nk, ink, level_end,
                 gw_ncval, gw_beres_source, Val(:beres),
             )
@@ -891,7 +1177,7 @@ function non_orographic_gravity_wave_forcing(
 end
 
 # Post-process u/v waveforcing pair and accumulate into forcing fields.
-# gw_average! overwrites the scratch field that input_u/v alias as ᶜρ_p1,
+# gw_average! overwrites the scratch field that the input tuples alias as ᶜρ_p1,
 # so both column_accumulate! calls must complete BEFORE this is called.
 function postprocess_and_accumulate!(
     u_waveforcing, v_waveforcing,
@@ -966,6 +1252,34 @@ function compute_beres_spectrum(
     ntuple(_ -> typeof(Q0_val)(0), Val(nc))
 end
 
+# Summarize the launched Beres source spectrum for a single column into two
+# scalars: the total launched flux magnitude Σ_n |B0(c_n)| and the phase-speed
+# first moment Σ_n c_n·|B0(c_n)|. Their ratio is the flux-weighted spectral
+# centroid ⟨c⟩. The Beres spectrum is wavenumber-(ink-)independent, so this one
+# evaluation captures the full launched spectrum. GPU-safe: B0 is a stack
+# NTuple (no heap alloc) and `c` is an isbits NTuple passed as a scalar grid.
+@inline function _beres_launch_summary(
+    beres,
+    active,
+    c,
+    u_heat,
+    Q0,
+    h,
+    N,
+    gw_ncval::Val{nc},
+) where {nc}
+    FT1 = typeof(Q0)
+    B0 = compute_beres_spectrum(beres, active, c, u_heat, Q0, h, N, gw_ncval)
+    s0 = FT1(0)
+    s1 = FT1(0)
+    for n in 1:nc
+        b = abs(B0[n])
+        s0 += b
+        s1 += c[n] * b
+    end
+    return (s0, s1)
+end
+
 # Using column_accumulate function, calculate the gravity wave forcing at each point.
 # source_mode::Val{:ad99} or Val{:beres} selects which source spectrum and intermittency to use.
 function waveforcing_column_accumulate!(
@@ -988,42 +1302,53 @@ function waveforcing_column_accumulate!(
         input;
         init = (FT(0.0), mask, FT(NaN), ntuple(i -> FT(NaN), Val(nc))),
         transform = first,
-    ) do (wave_forcing, mask, Bsum_or_NaN, B0_or_NaNs),
-    (
-        u_kp1,
-        u_source,
-        bf_kp1,
-        ρ_k,
-        ρ_kp1,
-        ρ_source,
-        z_kp1,
-        z_k,
-        source_level,
-        Bw,
-        Bn,
-        cw,
-        cn,
-        flag,
-        level,
-        source_ampl,
-        beres_active_val,
-        Q0_val,
-        h_val,
-        u_heat_val,
-        N_val,
-        beres_source_level,
-        beres_ρ_source,
-        beres_u_source,
-        beres_a_cover,
-    )
-
-        # AD99 keeps its fixed source level (pressure-based on sphere, height-based in column). Beres launches at
-        # the top of the convective heating envelope (gw_ztop), populated per column in compute_tendency!.
-        source_level_eff = MODE == :ad99 ? source_level : beres_source_level
-        ρ_source_eff = MODE == :ad99 ? ρ_source : beres_ρ_source
-        u_source_eff = MODE == :ad99 ? u_source : beres_u_source
-
+    ) do (wave_forcing, mask, Bsum_or_NaN, B0_or_NaNs), inp
+        # The input tuple is indexed (not destructured in the signature) because
+        # the two source modes share only slots 1–7; slots 8–16 are mode-specific.
+        # Reading the mode-specific fields under the compile-time `MODE` guard
+        # keeps each specialization's parameter tuple at 16 fields, under the
+        # 4 KiB GPU kernel-parameter limit (sm_60). The union of both modes' fields
+        # (25) overflows it. See the `input_*_ad99` / `input_*_beres` tuples built
+        # in `non_orographic_gravity_wave_forcing`.
+        #
+        # The effective source-level state differs by mode: AD99 keeps its fixed
+        # source level (pressure-based on sphere, height-based in column); Beres
+        # launches at the top of the convective heating envelope (gw_ztop),
+        # populated per column in compute_tendency!.
+        u_kp1 = inp[1]
+        bf_kp1 = inp[2]
+        ρ_k = inp[3]
+        ρ_kp1 = inp[4]
+        z_kp1 = inp[5]
+        z_k = inp[6]
+        level = inp[7]
         FT1 = typeof(u_kp1)
+        # Slots 8–16 are mode-specific (AD99 source fields vs. Beres convective
+        # fields). Each local is assigned exactly ONCE, via a ternary — NOT an
+        # if/else that assigns in both branches. These locals are captured by the
+        # inner `unrolled_reduce` closure, and a variable assigned in more than one
+        # branch is boxed (`Core.Box`, a heap alloc), which is illegal in a GPU
+        # kernel (`gpu_gc_pool_alloc` → InvalidIRError). MODE is a compile-time
+        # constant, so each ternary folds to its live slot; the dead-side index is
+        # never evaluated (and is in-bounds for the other mode's 16-tuple anyway).
+        # Fields the active mode does not use get a type-matched `zero(FT1)` dummy
+        # so the dead spectrum branch below still compiles.
+        u_source_eff = MODE == :ad99 ? inp[8] : inp[15]
+        ρ_source_eff = MODE == :ad99 ? inp[9] : inp[14]
+        source_level_eff = MODE == :ad99 ? inp[10] : inp[13]
+        Bw = MODE == :ad99 ? inp[11] : zero(FT1)
+        Bn = MODE == :ad99 ? inp[12] : zero(FT1)
+        cw = MODE == :ad99 ? inp[13] : zero(FT1)
+        cn = MODE == :ad99 ? inp[14] : zero(FT1)
+        flag = MODE == :ad99 ? inp[15] : zero(FT1)
+        source_ampl = MODE == :ad99 ? inp[16] : zero(FT1)
+        beres_active_val = MODE == :ad99 ? zero(FT1) : inp[8]
+        Q0_val = MODE == :ad99 ? zero(FT1) : inp[9]
+        h_val = MODE == :ad99 ? zero(FT1) : inp[10]
+        u_heat_val = MODE == :ad99 ? zero(FT1) : inp[11]
+        N_val = MODE == :ad99 ? zero(FT1) : inp[12]
+        beres_a_cover = MODE == :ad99 ? zero(FT1) : inp[16]
+
         kwv = 2.0 * π / ((30.0 * (10.0^ink)) * 1.e3) # wave number of gravity waves
         k2 = kwv * kwv
 

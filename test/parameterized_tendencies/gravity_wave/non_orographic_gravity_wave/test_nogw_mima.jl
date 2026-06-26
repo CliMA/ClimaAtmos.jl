@@ -209,7 +209,12 @@ for j in 1:length(lat)
         gw_u_heat = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
         gw_v_heat = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
         gw_N_source = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
+        gw_a_cover = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
         gw_beres_source = nothing,
+        beres_source_ρ_z_u_v_level = similar(
+            Fields.level(ᶜz, 1),
+            Tuple{FT, FT, FT, FT, FT},
+        ),
     )
     # Create input parameters at each level
     local params_nogw = (; non_orographic_gravity_wave, scratch)

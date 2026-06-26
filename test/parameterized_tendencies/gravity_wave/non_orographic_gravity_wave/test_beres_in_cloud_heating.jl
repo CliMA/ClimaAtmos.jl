@@ -202,6 +202,48 @@ import ClimaCore.Geometry as Geometry
         @test rel_dev > 0.1
     end
 
+    @testset "Native source-shape diagnostics (halfsine, launch flux, centroid)" begin
+        # Re-run on the uniform-a0 state so the diagnosed envelope matches the
+        # `zbot`/`ztop`/`h_heat`/`Q0` captured above.
+        @. Y.c.sgsʲs.:(1).ρa =
+            ifelse((ᶜz >= z_lo) & (ᶜz <= z_hi), a0 * ᶜρ, FT(0))
+        CA.compute_beres_convective_heating!(Y, p, ᶜbuoyancy_frequency)
+
+        (; gw_halfsine, gw_launch_flux, gw_c_centroid) =
+            p.non_orographic_gravity_wave
+        hs = Array(Fields.field2array(gw_halfsine))[:, 1]
+        lf = parent(gw_launch_flux)[1]
+        cc = parent(gw_c_centroid)[1]
+
+        # The native half-sine equals Q0·sin(π(z−z_bot)/h) over [z_bot, z_bot+h]
+        # and is zero elsewhere. Compare against an offline reconstruction from
+        # the SAME column's (Q0, z_bot, h) — must agree to round-off (this is the
+        # whole point: in-column, the three are mutually consistent).
+        hs_ref = [
+            (zbot <= z <= zbot + h_heat && h_heat > 0) ?
+            Q0 * sin(FT(π) * (z - zbot) / h_heat) : FT(0) for z in center_z
+        ]
+        @test all(
+            isapprox.(
+                hs,
+                hs_ref;
+                rtol = sqrt(eps(FT)),
+                atol = 10 * eps(FT) * Q0,
+            ),
+        )
+        @test maximum(hs) ≈ Q0 rtol = FT(1e-3)   # half-sine peaks at Q0
+        # zero below the envelope bottom and above the envelope top
+        @test all(hs[center_z .< zbot] .== 0)
+        @test all(hs[center_z .> zbot + h_heat] .== 0)
+
+        # Launched-spectrum summaries: finite, and the active column launches a
+        # positive flux. The centroid is a phase speed within the c-grid range.
+        @test isfinite(lf) && lf > 0
+        @test isfinite(cc)
+        cmax = -p.non_orographic_gravity_wave.gw_c[1]
+        @test -cmax <= cc <= cmax
+    end
+
     @testset "Envelope detection unchanged (grid-mean field + area)" begin
         # z_bot: lowest level above the altitude floor with Qgm > threshold
         cand = findall(

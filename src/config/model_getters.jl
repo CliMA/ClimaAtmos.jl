@@ -278,9 +278,22 @@ function get_non_orographic_gravity_wave_model(
         if turbconv === nothing || turbconv == "edonly_edmfx"
             error(
                 "nogw_beres_source requires turbconv to be " *
-                "'diagnostic_edmfx' or 'prognostic_edmfx' " *
+                "'prognostic_edmfx' " *
                 "(got: $turbconv)",
             )
+        end
+        # Canonical latent heating (Q_lat = Σ_p L_p R_p) needs explicit per-phase
+        # conversion rates (1-moment microphysics) AND per-draft in-cloud state
+        # (PrognosticEDMFX). Fail loud at construction, not at runtime.
+        if get(parsed_args, "nogw_beres_heating_latent", false)
+            mp_model = get(parsed_args, "microphysics_model", "dry")
+            if mp_model != "1M" || turbconv != "prognostic_edmfx"
+                error(
+                    "nogw_beres_heating_latent requires microphysics_model=\"1M\" " *
+                    "and turbconv=\"prognostic_edmfx\" (got microphysics_model=" *
+                    "\"$mp_model\", turbconv=\"$turbconv\")",
+                )
+            end
         end
     end
     return if nogw_name == true
@@ -331,6 +344,19 @@ function get_non_orographic_gravity_wave_model(
                 ),
                 beres_L_system = FT(
                     get(parsed_args, "beres_L_system", 1.0e6),
+                ),
+                moment_envelope = let
+                    m = get(parsed_args, "beres_envelope_mode", "area_threshold")
+                    m in ("area_threshold", "moment_matched") || error(
+                        "beres_envelope_mode must be \"area_threshold\" or " *
+                        "\"moment_matched\", got \"$m\"",
+                    )
+                    m == "moment_matched"
+                end,
+                heating_latent = get(
+                    parsed_args,
+                    "nogw_beres_heating_latent",
+                    false,
                 ),
             )
         else
