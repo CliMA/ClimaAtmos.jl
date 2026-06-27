@@ -12,7 +12,8 @@ import StaticArrays as SA
     ClimaAtmosParameters(toml_dict; microphysics_model = nothing,
                                     microphysics_1m_options = (;),
                                     has_non_orographic_gw = false,
-                                    has_orographic_gw = false)
+                                    has_orographic_gw = false,
+                                    has_beres_source = false)
 
 Construct the parameter set for any ClimaAtmos configuration.
 
@@ -30,6 +31,7 @@ function ClimaAtmosParameters(
     microphysics_1m_options = (;),
     has_non_orographic_gw::Bool = false,
     has_orographic_gw::Bool = false,
+    has_beres_source::Bool = false,
 ) where {TD <: CP.ParamDict}
     FT = CP.float_type(toml_dict)
 
@@ -96,8 +98,12 @@ function ClimaAtmosParameters(
         has_non_orographic_gw ? NonOrographicGravityWaveParameters(toml_dict) : nothing
     orographic_gravity_wave_params =
         has_orographic_gw ? OrographicGravityWaveParameters(toml_dict) : nothing
+    # Beres convective source params load only when the Beres source is enabled
+    beres_source_params =
+        has_beres_source ? BeresSourceParameters(toml_dict) : nothing
     NOGWP = typeof(non_orographic_gravity_wave_params)
     OGWP = typeof(orographic_gravity_wave_params)
+    BSP = typeof(beres_source_params)
 
     parameters =
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
@@ -120,6 +126,7 @@ function ClimaAtmosParameters(
         PAP,
         NOGWP,
         OGWP,
+        BSP,
     }(;
         parameters...,
         thermodynamics_params,
@@ -139,6 +146,7 @@ function ClimaAtmosParameters(
         prescribed_aerosol_params,
         non_orographic_gravity_wave_params,
         orographic_gravity_wave_params,
+        beres_source_params,
     )
 end
 
@@ -456,4 +464,33 @@ function OrographicGravityWaveParameters(
     parameters = merge(parameters, overrides)
     FT = CP.float_type(toml_dict)
     CAP.OrographicGravityWaveParameters{FT}(; parameters...)
+end
+
+
+BeresSourceParameters(
+    ::Type{FT},
+    overrides = NamedTuple(),
+) where {FT <: AbstractFloat} =
+    BeresSourceParameters(CP.create_toml_dict(FT), overrides)
+
+function BeresSourceParameters(toml_dict::CP.ParamDict, overrides = NamedTuple())
+    name_map = (;
+        :nogw_beres_Q0_threshold => :Q0_threshold,
+        :nogw_beres_scale_factor => :scale_factor,
+        :nogw_beres_sigma_x => :σ_x,
+        :nogw_beres_nu_min => :ν_min,
+        :nogw_beres_nu_max => :ν_max,
+        :nogw_beres_n_nu => :n_ν,
+        :nogw_beres_h_heat_min => :h_heat_min,
+        :nogw_beres_n_h_avg => :n_h_avg,
+        :nogw_beres_delta_h_frac => :Δh_frac,
+        :nogw_beres_z_bot_Q_threshold => :z_bot_Q_threshold,
+        :nogw_beres_z_bot_floor => :z_bot_floor,
+        :nogw_beres_steady_dc_frac => :steady_dc_frac,
+        :nogw_beres_L_system => :L_system,
+    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    parameters = merge(parameters, overrides)
+    FT = CP.float_type(toml_dict)
+    CAP.BeresSourceParameters{FT}(; parameters...)
 end
