@@ -852,6 +852,100 @@ add_diagnostic_variable!(short_name = "evu", units = "m^2 s^-1",
 )
 
 ###
+# Horizontal mixing length (3d)
+###
+compute_lmixh(state, cache, time) =
+    compute_lmixh(state, cache, time, cache.atmos.turbconv_model)
+compute_lmixh(_, _, _, turbconv_model) =
+    error_diagnostic_variable("lmixh", turbconv_model)
+
+function compute_lmixh(state, cache, _, ::Union{EDOnlyEDMFX, PrognosticEDMFX})
+    Δx = Spaces.node_horizontal_length_scale(
+        Spaces.horizontal_space(axes(state.c)),
+    )
+    return ᶜmixing_length(
+        state,
+        cache;
+        grid_scale = Δx,
+        buoyancy_gradient = cache.precomputed.ᶜlinear_buoygrad,
+    )
+end
+
+add_diagnostic_variable!(short_name = "lmixh", units = "m",
+    long_name = "Environment Horizontal Mixing Length",
+    comments = "Mixing length with the grid-scale limit set by the horizontal \
+                node spacing rather than the vertical cell thickness",
+    compute = compute_lmixh,
+)
+
+###
+# Horizontal diffusivity of heat (3d)
+###
+compute_edth(state, cache, time) =
+    compute_edth(state, cache, time, cache.atmos.turbconv_model)
+compute_edth(_, _, _, turbconv_model) =
+    error_diagnostic_variable("edth", turbconv_model)
+
+function compute_edth(state, cache, _, ::Union{EDOnlyEDMFX, PrognosticEDMFX})
+    turbconv_params = CAP.turbconv_params(cache.params)
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+    (; params) = cache
+
+    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
+    Δx = Spaces.node_horizontal_length_scale(
+        Spaces.horizontal_space(axes(state.c)),
+    )
+    ᶜmixing_length_field = ᶜmixing_length(
+        state,
+        cache;
+        grid_scale = Δx,
+        buoyancy_gradient = ᶜlinear_buoygrad,
+    )
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
+    ᶜprandtl_nvec =
+        @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
+    return @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+end
+
+add_diagnostic_variable!(short_name = "edth", units = "m^2 s^-1",
+    long_name = "Horizontal Eddy Diffusivity Coefficient for Temperature",
+    comments = "Horizontal diffusion coefficient for scalars in the EDMFX \
+                horizontal SGS diffusive flux",
+    compute = compute_edth,
+)
+
+###
+# Horizontal diffusivity of momentum (3d)
+###
+compute_evuh(state, cache, time) =
+    compute_evuh(state, cache, time, cache.atmos.turbconv_model)
+compute_evuh(_, _, _, turbconv_model) =
+    error_diagnostic_variable("evuh", turbconv_model)
+
+function compute_evuh(state, cache, _, ::Union{EDOnlyEDMFX, PrognosticEDMFX})
+    turbconv_params = CAP.turbconv_params(cache.params)
+    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
+    Δx = Spaces.node_horizontal_length_scale(
+        Spaces.horizontal_space(axes(state.c)),
+    )
+    ᶜmixing_length_field = ᶜmixing_length(
+        state,
+        cache;
+        grid_scale = Δx,
+        buoyancy_gradient = cache.precomputed.ᶜlinear_buoygrad,
+    )
+    return @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
+end
+
+add_diagnostic_variable!(short_name = "evuh", units = "m^2 s^-1",
+    long_name = "Horizontal Eddy Viscosity Coefficient for Momentum",
+    comments = "Horizontal eddy viscosity from the TKE-based closure with the \
+                mixing length limited by the horizontal node spacing; used to \
+                diffuse TKE in the EDMFX horizontal SGS diffusive flux",
+    compute = compute_evuh,
+)
+
+###
 # Updraft passive gas tracer A (3d)
 ###
 compute_q_gas_Aup(state, cache, time) =

@@ -769,6 +769,7 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
         detr_model = get_detrainment_model(pa),
         sgs_mass_flux = pa["edmfx_sgs_mass_flux"],
         sgs_diffusive_flux = pa["edmfx_sgs_diffusive_flux"],
+        sgs_diffusive_flux_horizontal = pa["edmfx_sgs_horizontal_diffusive_flux"],
         nh_pressure = pa["edmfx_nh_pressure"],
         vertical_diffusion = pa["edmfx_vertical_diffusion"],
         filter = pa["edmfx_filter"],
@@ -787,6 +788,15 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
         chd_active ?
         ConstantHorizontalDiffusion{FT}(CAP.constant_horizontal_diffusion_D(params)) :
         nothing
+
+    if pa["edmfx_sgs_horizontal_diffusive_flux"] &&
+       !(isnothing(smagorinsky_lilly) && isnothing(amd_les))
+        error(
+            "`edmfx_sgs_horizontal_diffusive_flux` cannot be combined with \
+             `smagorinsky_lilly` or `amd_les`, which already apply horizontal \
+             SGS diffusion to the same fields",
+        )
+    end
 
     return AtmosTurbconv(;
         edmfx_model,

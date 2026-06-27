@@ -56,6 +56,7 @@ makedocs(;
             "Physics & Parameterizations" => [
                 "Microphysics" => "microphysics.md",
                 "EDMF: Prognostic Equations" => "edmf_equations.md",
+                "EDMF: Horizontal Diffusion" => "edmf_horizontal_diffusion.md",
                 "Gravity Wave Drag" => "gravity_wave.md",
                 "Ocean Surface Albedo" => "surface_albedo.md",
                 "Topography Representation" => "topography.md",

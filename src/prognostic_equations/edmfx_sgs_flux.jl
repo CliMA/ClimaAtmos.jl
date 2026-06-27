@@ -319,3 +319,81 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     return nothing
 end
+
+"""
+    edmfx_sgs_horizontal_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
+
+Apply the grid-mean tendency from the horizontal component of the EDMFX
+environment SGS diffusive flux, using the TKE-based eddy diffusivity with the
+mixing length limited by the horizontal node spacing rather than the vertical
+cell thickness.
+
+Always explicit; applied in the explicit remainder, independently of `diff_mode`.
+"""
+edmfx_sgs_horizontal_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model) =
+    nothing
+
+function edmfx_sgs_horizontal_diffusive_flux_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX},
+)
+    p.atmos.edmfx_model.sgs_diffusive_flux_horizontal isa Val{true} ||
+        return nothing
+    (; params) = p
+    turbconv_params = CAP.turbconv_params(params)
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜh_tot) = p.precomputed
+    ᶜρ = Y.c.ρ
+    ᶜtke = @. lazy(specific(Y.c.ρtke, ᶜρ))
+
+    # Mixing length limited by the horizontal node spacing, with the centered
+    # buoyancy gradient as the stability input
+    Δx = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
+    ᶜmixing_length_h = p.scratch.ᶜtemp_scalar_2
+    ᶜmixing_length_h .= ᶜmixing_length(
+        Y,
+        p;
+        grid_scale = Δx,
+        buoyancy_gradient = ᶜlinear_buoygrad,
+    )
+
+    ᶜK_u_h =
+        @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_h))
+    ᶜprandtl_nvec = @. lazy(
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+    )
+    ᶜK_h_h = p.scratch.ᶜtemp_scalar
+    @. ᶜK_h_h = eddy_diffusivity(ᶜK_u_h, ᶜprandtl_nvec)
+
+    # Total enthalpy
+    @. Yₜ.c.ρe_tot += wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(ᶜh_tot))
+
+    # Total specific humidity, and its effect on the moist air mass
+    if !(p.atmos.microphysics_model isa DryModel)
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, ᶜρ))
+        ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_3
+        @. ᶜρχₜ_diffusion = wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(ᶜq_tot))
+        @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
+        @. Yₜ.c.ρ += ᶜρχₜ_diffusion
+    end
+
+    # Environment SGS tracers (microphysics species and passive tracers)
+    α_diff_tracer = CAP.α_vert_diff_tracer(params)
+    for χ_name in sgs_tracer_names(Y)
+        ρχ_name = get_ρχ_name(χ_name)
+        MatrixFields.has_field(Y.c, ρχ_name) || continue
+        ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+        ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
+        @. ᶜρχₜ += wdivₕ(ᶜρ * ᶜK_h_h * α_diff_tracer * gradₕ(ᶜχ))
+    end
+
+    # Turbulent TKE transport
+    if use_prognostic_tke(turbconv_model)
+        @. Yₜ.c.ρtke += wdivₕ(ᶜρ * ᶜK_u_h * gradₕ(ᶜtke))
+    end
+
+    return nothing
+end

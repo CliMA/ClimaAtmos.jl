@@ -4,6 +4,10 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- [#4657](https://github.com/CliMA/ClimaAtmos.jl/pull/4657) ![][badge-✨feature/enhancement]
+  Add a horizontal component to the EDMFX SGS diffusive flux, enabled by the opt-in
+  `edmfx_sgs_horizontal_diffusive_flux` config option (default `false`), for
+  high-resolution box configurations, with diagnostics `lmixh`, `edth`, and `evuh`.
 - [#4638](https://github.com/CliMA/ClimaAtmos.jl/pull/4638) ![][badge-🔥behavioralΔ] Fix the subsidence top boundary condition: the advective-form subsidence operator now uses the zero-boundary-flux divergence (`ᶜadvdivᵥ`), which is equivalent to a zero-gradient inflow condition `χ = χ_top` above the lid, instead of `Extrapolate` (which copied the cell below into the top cell). Remove the two `external_forcing.jl` blocks that hard-zeroed the accumulated top-cell `ρe_tot`/`ρq_tot` tendencies to mask that defect; GCM/ERA5-driven top-cell tendencies (radiation, nudging, subsidence) are no longer discarded.
 - [#4637](https://github.com/CliMA/ClimaAtmos.jl/pull/4637) ![][badge-🔥behavioralΔ]
   - Fix the spurious mass flux through the model top over sloped terrain-following coordinates: `set_velocity_at_top!` now cancels the contravariant projection of the horizontal wind (`u₃ = -uₕ³/g³³`, mirroring the surface treatment), and the continuity equation uses the same zero-boundary-flux divergence (`ᶜadvdivᵥ`) as the tracers, which also makes the `ρ`-row Jacobian exact.
