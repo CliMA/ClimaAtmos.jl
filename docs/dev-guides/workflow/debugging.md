@@ -95,10 +95,25 @@ For Oceananigans state inspection, the [ClimaCoupler debugging guide](https://cl
 | Float32 simulation diverges where Float64 is fine | A `1.0`/`Inf`/`6^x` literal promoted to Float64, see [type_stability.md §1](../performance/type_stability.md) |
 | NaN appears only on GPU                          | A scalar-indexing fallback that returns garbage (see [clima_comms.md §5](../infrastructure/clima_comms.md)), or a non-`isbits` arg in a kernel (see [gpu_performance.md §8](../performance/gpu_performance.md)) |
 | Result depends on MPI rank count                 | A non-associative reduction or per-rank random state: see [clima_comms.md §2](../infrastructure/clima_comms.md) |
+| `CUDA.KernelException` with no kernel or line     | A deferred device-side throw, often a Float32 `DomainError`: see §7 |
 
 ## 6. Other common pitfalls
 
 - If an operation on ClimaCore `Field`s shows unexpected values in the REPL, check whether the `Field` has a mask. Masked values can appear as NaN or garbage when printed, even though the non-masked data is correct.
+
+## 7. Localizing a deferred GPU `KernelException`
+
+A device-side `throw` (a `DomainError` from `sqrt`/`log`/`x^y` of an out-of-domain argument, a bounds error, a `SingularException`) surfaces on the host as a generic `CUDA.KernelException` with no kernel name and no device line. The exception is deferred: it is detected at the next synchronization, so the host stacktrace names that synchronization point, not the throw, and the line it names often contains no transcendental at all. Localize it without `-g2` (ptxas rejects non-ASCII identifiers in debug info):
+
+1. **Make the throw synchronous.** Set `CUDA_LAUNCH_BLOCKING=1`. The device-side throw then traps at the offending launch, so the host stacktrace narrows from "some later sync" to the launching call.
+2. **Read the named line literally.** A deferred exception is reported at the sync that detects it, not the sync where it occurred. If that line is pure arithmetic (`@. x = (a - b) / c`), the throw is an earlier kernel; the named line is only where a module load or copy ran `check_exceptions`.
+3. **Bisect with synchronization barriers.** Insert `ClimaComms.@sync ClimaComms.device(Y.c) nothing` between candidate sub-calls; it lowers to `CUDA.@sync`, whose `synchronize` calls `check_exceptions`, so the first barrier following the throwing sub-call reports it. Pair each barrier with an `@info` marker and bisect coarse-to-fine (top-level tendency, sub-tendency, then the function's internal sub-calls); the last marker printed before the crash bounds the throwing call.
+4. **Restart from a crash-proximate checkpoint.** Each iteration is then a construct plus a few steps. A crash on the first step from a fixed restart state keeps the test clean: the state is identical, so a cleared crash isolates the cause without trajectory drift.
+5. **Confirm empirically.** Apply a bound (a `max(·, 0)` floor or a `clamp`) at the candidate site and re-run. A persisting crash refutes the candidate; a cleared run confirms it. Code-analysis alone is unreliable for a deferred GPU exception.
+
+Read the `.err` (stderr) for the marker sequence; with `log_to_file` the `output.log` (a `FileLogger`) can buffer and show a stale or partial tail.
+
+A GPU-only `DomainError` that a CPU run steps through is a Float32 rounding artifact: a quantity rounds to the out-of-domain side on GPU and to the valid side on CPU. The fix is a floor or clamp at the quantity, ideally where it is computed.
 
 ## Self-correction
 
