@@ -185,6 +185,40 @@ function column_indefinite_integral(
 end
 
 """
+    ρ_from_profile(thermo_params, p, z, T, θ, q_tot)
+
+Compute air density at pressure `p` and height `z`, given either temperature
+`T(z)` or potential temperature `θ(z)` and, optionally, total specific
+humidity `q_tot(z)`. Exactly one of `T` or `θ` must be provided.
+"""
+ρ_from_profile(thermo_params, p, z, ::Nothing, ::Nothing, _) =
+    error("Either T or θ must be specified")
+ρ_from_profile(thermo_params, p, z, T::FunctionOrSpline, θ::FunctionOrSpline, _) =
+    error("Only one of T and θ can be specified")
+ρ_from_profile(thermo_params, p, z, T::FunctionOrSpline, ::Nothing, ::Nothing) =
+    TD.air_density(thermo_params, oftype(p, T(z)), p)
+function ρ_from_profile(thermo_params, p, z, ::Nothing, θ::FunctionOrSpline, ::Nothing)
+    T_val = TD.air_temperature(thermo_params, TD.pθ_li(), p, oftype(p, θ(z)))
+    return TD.air_density(thermo_params, T_val, p)
+end
+function ρ_from_profile(
+    thermo_params, p, z, T::FunctionOrSpline, ::Nothing, q_tot::FunctionOrSpline,
+)
+    FT = eltype(thermo_params)
+    return TD.air_density(
+        thermo_params, oftype(p, T(z)), p, oftype(p, q_tot(z)), FT(0), FT(0),
+    )
+end
+function ρ_from_profile(
+    thermo_params, p, z, ::Nothing, θ::FunctionOrSpline, q_tot::FunctionOrSpline,
+)
+    FT = eltype(thermo_params)
+    q = oftype(p, q_tot(z))
+    T_val = TD.air_temperature(thermo_params, TD.pθ_li(), p, oftype(p, θ(z)), q)
+    return TD.air_density(thermo_params, T_val, p, q, FT(0), FT(0))
+end
+
+"""
     hydrostatic_pressure_profile(; thermo_params, p_0, [T, θ, q_tot, z_max])
 
 Solves the initial value problem `p'(z) = -g * ρ(z)` for all `z ∈ [0, z_max]`,
@@ -204,29 +238,7 @@ function hydrostatic_pressure_profile(;
     FT = eltype(thermo_params)
     grav = TD.Parameters.grav(thermo_params)
 
-    # Compute air density from (p, z) using either T(z) or θ(z), with optional q_tot(z)
-    function ρ_from_profile(p, z, ::Nothing, ::Nothing, _)
-        error("Either T or θ must be specified")
-    end
-    function ρ_from_profile(p, z, T::FunctionOrSpline, θ::FunctionOrSpline, _)
-        error("Only one of T and θ can be specified")
-    end
-    function ρ_from_profile(p, z, T::FunctionOrSpline, ::Nothing, ::Nothing)
-        TD.air_density(thermo_params, oftype(p, T(z)), p)
-    end
-    function ρ_from_profile(p, z, ::Nothing, θ::FunctionOrSpline, ::Nothing)
-        T_val = TD.air_temperature(thermo_params, TD.pθ_li(), p, oftype(p, θ(z)))
-        TD.air_density(thermo_params, T_val, p)
-    end
-    function ρ_from_profile(p, z, T::FunctionOrSpline, ::Nothing, q_tot::FunctionOrSpline)
-        TD.air_density(thermo_params, oftype(p, T(z)), p, oftype(p, q_tot(z)), FT(0), FT(0))
-    end
-    function ρ_from_profile(p, z, ::Nothing, θ::FunctionOrSpline, q_tot::FunctionOrSpline)
-        q = oftype(p, q_tot(z))
-        T_val = TD.air_temperature(thermo_params, TD.pθ_li(), p, oftype(p, θ(z)), q)
-        TD.air_density(thermo_params, T_val, p, q, FT(0), FT(0))
-    end
-    dp_dz(p, z) = -grav * ρ_from_profile(p, z, T, θ, q_tot)
+    dp_dz(p, z) = -grav * ρ_from_profile(thermo_params, p, z, T, θ, q_tot)
 
     return column_indefinite_integral(dp_dz, p_0, (FT(0), FT(z_max)))
 end
