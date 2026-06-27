@@ -4,6 +4,8 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- [#4657](https://github.com/CliMA/ClimaAtmos.jl/pull/4657) ![][badge-✨feature/enhancement] Add a horizontal component to the EDMFX SGS diffusive flux, enabled by the opt-in `edmfx_sgs_horizontal_diffusive_flux` config option (default `false`), for high-resolution box configurations: scalar and TKE fluxes, the momentum stress `τ = -2 K_u S` with the full strain rate, the corresponding TKE shear production from horizontal gradients, and diagnostics `lmixh`, `edth`, and `evuh`.
+
 0.41.2
 -------
 

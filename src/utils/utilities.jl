@@ -207,6 +207,23 @@ function compute_strain_rate_face_vertical(ᶜu)
 end
 
 """
+    ϵ .= compute_strain_rate_center_horizontal(ᶜu)
+
+Compute the strain rate at cell centers from velocity at cell centers, with horizontal gradients only.
+
+Returns a lazy representation of the strain rate tensor.
+"""
+function compute_strain_rate_center_horizontal(ᶜu)
+    axis_uvw = Geometry.UVWAxis()
+    return @. lazy(
+        (
+            Geometry.project((axis_uvw,), gradₕ(UVW(ᶜu))) +
+            adjoint(Geometry.project((axis_uvw,), gradₕ(UVW(ᶜu))))
+        ) / 2,
+    )
+end
+
+"""
     compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
 
 Compute the full strain rate tensor at cell centers from velocity

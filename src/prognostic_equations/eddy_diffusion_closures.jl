@@ -256,7 +256,7 @@ end
     ustar,
     ᶜz,
     z_sfc,
-    ᶜdz,
+    grid_scale,
     sfc_tke,
     ᶜN²_eff,
     ᶜtke,
@@ -273,7 +273,9 @@ where:
 - `ustar`: Friction velocity [m/s].
 - `ᶜz`: Cell center height [m].
 - `z_sfc`: Surface elevation [m].
-- `ᶜdz`: Cell vertical thickness [m].
+- `grid_scale`: Grid length scale used as the upper bound on the mixing length [m].
+  The vertical cell thickness for vertical diffusion, the horizontal node spacing for
+  horizontal diffusion.
 - `sfc_tke`: TKE near the surface (e.g., first cell center) [m^2/s^2].
 - `ᶜN²_eff`: Effective squared Brunt-Väisälä frequency [1/s^2].
 - `ᶜtke`: Turbulent kinetic energy at cell center [m^2/s^2].
@@ -299,7 +301,7 @@ function mixing_length_lopez_gomez_2020(
     ustar,
     ᶜz,
     z_sfc,
-    ᶜdz,
+    grid_scale,
     sfc_tke,
     ᶜN²_eff,
     ᶜtke,
@@ -400,7 +402,7 @@ function mixing_length_lopez_gomez_2020(
     l_limited_phys_wall = min(l_smin, l_z)
 
     # 2. Impose the grid-scale limit (TODO: replace by volumetric grid scale)
-    l_grid = ᶜdz   # TODO include costant rescaling factor
+    l_grid = grid_scale   # TODO include constant rescaling factor
     l_final = min(l_limited_phys_wall, l_grid)
 
     # Final check: guarantee that the mixing length is at least a small positive
@@ -421,20 +423,23 @@ end
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:buoy}) = ml.buoy
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:l_grid}) = ml.l_grid
 
-function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
+function ᶜmixing_length(
+    Y, p, property::Val{P} = Val{:master}();
+    grid_scale = Fields.Δz_field(axes(Y.c)),
+    buoyancy_gradient = p.precomputed.ᶜlinear_buoygrad,
+) where {P}
     (; params) = p
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜstrain_rate_norm) = p.precomputed
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
-    ᶜdz = Fields.Δz_field(axes(Y.c))
 
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
     sfc_tke = Fields.level(ᶜtke, 1)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
     @. ᶜprandtl_nvec =
-        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+        turbulent_prandtl_number(params, buoyancy_gradient, ᶜstrain_rate_norm)
 
     # Extract sub-parameters before the lazy broadcast to avoid capturing
     # the full ClimaAtmosParameters struct (~4 KiB) in GPU kernel parameters.
@@ -450,9 +455,9 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
             ustar,
             ᶜz,
             z_sfc,
-            ᶜdz,
+            grid_scale,
             sfc_tke,
-            ᶜlinear_buoygrad,
+            buoyancy_gradient,
             ᶜtke,
             obukhov_length,
             ᶜstrain_rate_norm,

@@ -361,3 +361,107 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     return nothing
 end
+
+"""
+    edmfx_sgs_horizontal_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
+
+Apply the grid-mean tendency from the horizontal component of the EDMFX
+environment SGS diffusive flux, using the TKE-based eddy diffusivity with the
+mixing length limited by the horizontal node spacing rather than the vertical
+cell thickness.
+
+Always explicit; applied in the explicit remainder, independently of `diff_mode`.
+"""
+edmfx_sgs_horizontal_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model) =
+    nothing
+
+function edmfx_sgs_horizontal_diffusive_flux_tendency!(
+    Yₜ, Y, p, t, turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX},
+)
+    p.atmos.edmfx_model.sgs_diffusive_flux_horizontal isa Val{true} ||
+        return nothing
+    iscolumn(axes(Y.c)) && return nothing
+    (; params) = p
+    turbconv_params = CAP.turbconv_params(params)
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    ᶜρ = Y.c.ρ
+    ᶜtke = @. lazy(specific(Y.c.ρtke, ᶜρ))
+
+    # Mixing length limited by the horizontal node spacing, with the centered
+    # buoyancy gradient as the stability input
+    Δx = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
+    ᶜmixing_length_h = p.scratch.ᶜtemp_scalar_2
+    ᶜmixing_length_h .= ᶜmixing_length(
+        Y, p; grid_scale = Δx, buoyancy_gradient = ᶜlinear_buoygrad,
+    )
+
+    ᶜK_u_h = p.scratch.ᶜtemp_scalar_4
+    @. ᶜK_u_h = eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_h)
+    ᶜprandtl_nvec =
+        @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
+    ᶜK_h_h = p.scratch.ᶜtemp_scalar
+    @. ᶜK_h_h = eddy_diffusivity(ᶜK_u_h, ᶜprandtl_nvec)
+
+    # Total enthalpy, using the dry-static-energy + water-enthalpy
+    # decomposition; see the matching vertical term in
+    # `edmfx_sgs_diffusive_flux_tendency!`.
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜΦ) = p.core
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+    @. Yₜ.c.ρe_tot += wdivₕ(
+        ᶜρ * ᶜK_h_h *
+        (
+            gradₕ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
+            (TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ) * gradₕ(ᶜq_vap) +
+            (TD.enthalpy_liquid(thermo_params, ᶜT) + ᶜΦ) * gradₕ(ᶜq_liq) +
+            (TD.enthalpy_ice(thermo_params, ᶜT) + ᶜΦ) * gradₕ(ᶜq_ice)
+        ),
+    )
+
+    # Total specific humidity, and its effect on the moist air mass
+    if !(p.atmos.microphysics_model isa DryModel)
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, ᶜρ))
+        ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_3
+        @. ᶜρχₜ_diffusion = wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(ᶜq_tot))
+        @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
+        @. Yₜ.c.ρ += ᶜρχₜ_diffusion
+    end
+
+    # Grid-mean tracers: sedimenting microphysics species are diffused with
+    # α_vert_diff_tracer * K_h, all other tracers with the unscaled K_h,
+    # matching the vertical flux. ρq_tot is handled above, with its moist-air
+    # mass counterpart.
+    α_diff_tracer = CAP.α_vert_diff_tracer(params)
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ρχ_name == @name(ρq_tot) && return
+        α =
+            ρχ_name in gs_sedimenting_tracer_candidates ? α_diff_tracer :
+            one(α_diff_tracer)
+        ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
+        @. ᶜρχₜ += wdivₕ(ᶜρ * ᶜK_h_h * α * gradₕ(ᶜχ))
+    end
+
+    (; ᶜu, ᶠu) = p.precomputed
+
+    # Turbulent TKE transport, and shear production from horizontal gradients;
+    # the production from vertical gradients is applied in the TKE tendency.
+    if use_prognostic_tke(turbconv_model)
+        @. Yₜ.c.ρtke += wdivₕ(ᶜρ * ᶜK_u_h * gradₕ(ᶜtke))
+        ᶜS_h = compute_strain_rate_center_horizontal(ᶜu)
+        @. Yₜ.c.ρtke += 2 * ᶜρ * ᶜK_u_h * norm_sqr(ᶜS_h)
+    end
+
+    # Momentum: horizontal weak divergence of the SGS stress `τ = -2 K_u S`
+    # with the full strain rate. The vertical stress divergence is handled by
+    # the vertical diffusion pathway.
+    ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ)
+    ᶜτ_h = compute_strain_rate_center_full!(p.scratch.ᶜtemp_UVWxUVW, ᶜu, ᶠu)
+    @. ᶜτ_h = -2 * ᶜK_u_h * ᶜτ_h
+    @. Yₜ.c.uₕ -= C12(wdivₕ(ᶜρ * ᶜτ_h) / ᶜρ)
+    ᶠτ_h = compute_strain_rate_face_full!(p.scratch.ᶠtemp_UVWxUVW, ᶜu, ᶠu)
+    @. ᶠτ_h = -2 * ᶠinterp(ᶜK_u_h) * ᶠτ_h
+    @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_h) / ᶠρ)
+
+    return nothing
+end

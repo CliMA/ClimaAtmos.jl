@@ -63,6 +63,7 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
     @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
     @safetestset "Post-Newton implicit-advection correction" begin @time include("prognostic_equations/correct_implicit_advection_tests.jl") end
+    @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
 
