@@ -139,6 +139,7 @@ include(
     ),
 )
 include(joinpath("prognostic_equations", "advection.jl"))
+include(joinpath("prognostic_equations", "acoustic_substepping.jl"))
 
 include(joinpath("cache", "temporary_quantities.jl"))
 include(joinpath("cache", "tracer_cache.jl"))
@@ -160,6 +161,7 @@ include(joinpath("parameters", "create_parameters.jl"))
 include(joinpath("simulation", "grids.jl"))
 include(joinpath("simulation", "restart.jl"))
 include(joinpath("simulation", "integrator.jl"))
+include(joinpath("simulation", "acoustic_multirate.jl"))
 include(joinpath("simulation", "AtmosSimulations.jl"))
 include(joinpath("simulation", "solve.jl"))
 

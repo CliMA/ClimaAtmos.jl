@@ -71,6 +71,18 @@ max_newton_iters_ode:
 ode_algo:
   help: "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, etc.]"
   value: "ARS343"
+acoustic_substeps:
+  help: "Acoustic substepping. `0` (default) disables it and uses `ode_algo` directly. A positive integer wraps `ode_algo` in the acoustic-substepping multirate timestepper with that many sub-steps per outer step. `auto` selects the sub-step count from the horizontal acoustic CFL."
+  value: "0"
+acoustic_substep_vertical:
+  help: "Treatment of the vertical acoustic terms within an acoustic sub-step [`implicit` (default), `explicit`]. `implicit` keeps the vertically-implicit (HEVI) solve so the sub-step is limited only by the horizontal acoustic CFL."
+  value: "implicit"
+acoustic_substep_order:
+  help: "Order of the acoustic-substepping outer scheme [`1`, `2` (default)]."
+  value: 2
+acoustic_substep_damping:
+  help: "Divergence-damping coefficient for acoustic substepping. Suppresses the split-explicit resonance between the frozen slow forcing and the sub-cycled acoustic modes. Too small leaves the resonance, too large over-damps the resolved divergent flow."
+  value: 1.5
 krylov_rtol:
   help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
   value: 0.1

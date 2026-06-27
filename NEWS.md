@@ -4,6 +4,7 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- [#4660](https://github.com/CliMA/ClimaAtmos.jl/pull/4660) ![][badge-✨feature/enhancement] Add an optional horizontal acoustic-substepping timestepping mode (`AcousticMultirate`) that sub-cycles the fast horizontal acoustic terms while the slow dynamics and physics advance with a larger outer step. Disabled by default (`acoustic_substeps: 0`), so the default configuration is unchanged. See `docs/src/acoustic_substepping.md`.
 - [#4653](https://github.com/CliMA/ClimaAtmos.jl/pull/4653) ![][badge-🔥behavioralΔ] Improve the manual implicit Jacobian (the tendencies are unchanged; behavior changes only through the single-Newton-iteration implicit solve).
   - Document that the existing height-form pressure-gradient-force Jacobian blocks are the exact linearization of the Exner-form tendency `cp_d θ_v ∇Π` (stencils unchanged): the thermal-buoyancy and pressure-buoyancy terms cancel via the equation-of-state identity `δρ/ρ = (1-κ_d) δp/p - δθ_v/θ_v`, leaving the acoustic operator `∇δp/ρ` in every column perturbed at fixed density plus a single buoyancy term in the `ρ` column, so sound and gravity waves are both treated fully implicitly.
   - Add the neglected environment feedback `∂χ⁰/∂χʲ = -w·ρaʲ/ρa⁰` to the entrainment-relaxation diagonal, scaling it by `(1 + w·ρaʲ/ρa⁰)` (the exact derivative of the regularized `specific` that diagnoses the environment relaxation target, with `w = sgs_weight_function(ρa⁰/ρ, a_half)`).

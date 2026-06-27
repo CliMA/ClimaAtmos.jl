@@ -272,7 +272,7 @@ function jacobian_from_parsed_args(parsed_args)
 end
 
 function ode_configuration(::Type{FT}, args) where {FT}
-    return ode_configuration(
+    inner_algo = ode_configuration(
         FT,
         args["ode_algo"],
         args["update_jacobian_every"],
@@ -284,6 +284,19 @@ function ode_configuration(::Type{FT}, args) where {FT}
         args["use_newton_rtol"],
         args["newton_rtol"],
         args["jvp_step_adjustment"],
+    )
+    substeps = string(args["acoustic_substeps"])
+    substeps == "0" && return inner_algo
+    vertical =
+        args["acoustic_substep_vertical"] == "explicit" ? ExplicitVertical() :
+        ImplicitVertical()
+    n_sub = substeps == "auto" ? 0 : parse(Int, substeps)
+    return AcousticMultirate(
+        inner_algo,
+        n_sub,
+        vertical,
+        args["acoustic_substep_order"],
+        args["acoustic_substep_damping"],
     )
 end
 
