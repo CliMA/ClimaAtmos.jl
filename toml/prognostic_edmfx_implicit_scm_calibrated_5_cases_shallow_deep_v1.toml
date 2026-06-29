@@ -37,7 +37,7 @@ value = [20.79875221707495, -11.596790112748911, -21.483515589802018, 16.5042908
 [detr_coeff]
 value = 0
 
-[EDMF_surface_area]
+[EDMF_max_surface_area]
 value = 0.07485284402727316
 
 [mixing_length_eddy_viscosity_coefficient]

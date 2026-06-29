@@ -156,9 +156,7 @@ atmos_name_map = (;
     :c_smag => :c_smag,
     :alpha_rayleigh_w => :alpha_rayleigh_w,
     :alpha_rayleigh_uh => :alpha_rayleigh_uh,
-    # TODO: rename external CliMA param `alpha_rayleigh_sgs_tracer` → `alpha_rayleigh_tracer`
-    # in ClimaParams.jl; afterwards both sides of this mapping can be renamed in sync.
-    :alpha_rayleigh_sgs_tracer => :alpha_rayleigh_tracer,
+    :alpha_rayleigh_tracer => :alpha_rayleigh_tracer,
     :astronomical_unit => :astro_unit,
     :held_suarez_T_equator_dry => :T_equator_dry,
     :drag_layer_vertical_extent => :σ_b,
@@ -332,7 +330,7 @@ function TurbulenceConvectionParameters(
         :mixing_length_smin_rm => :smin_rm,
         :entr_coeff => :entr_coeff,
         :detr_coeff => :detr_coeff,
-        :EDMF_surface_area => :surface_area,
+        :EDMF_max_surface_area => :max_surface_area,
         :entr_param_vec => :entr_param_vec,
         :turb_entr_param_vec => :turb_entr_param_vec,
         :entr_mult_limiter_coeff => :entr_mult_limiter_coeff,
@@ -356,6 +354,11 @@ function TurbulenceConvectionParameters(
         :entr_detr_limit_inv_tau => :entr_detr_limit_inv_tau,
         :cloud_fraction_param_vec => :cloud_fraction_param_vec,
         :cloud_fraction_steepness_scale => :cloud_fraction_steepness_scale,
+        :cloud_fraction_eps_rel => :cloud_fraction_eps_rel,
+        :cloud_fraction_sigma_abs => :cloud_fraction_sigma_abs,
+        :EDMF_sfc_mass_flux_ustar_coeff => :sfc_mass_flux_ustar_coeff,
+        :EDMF_convective_zi => :convective_zi,
+        :EDMF_sfc_mass_flux_cap_fraction => :sfc_mass_flux_cap_fraction,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     parameters = merge(parameters, overrides)

@@ -18,7 +18,7 @@ type = "float"
 value = 0
 type = "float"
 
-[EDMF_surface_area]
+[EDMF_max_surface_area]
 value = 0.09964843547415161
 type = "float"
 

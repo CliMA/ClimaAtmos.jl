@@ -129,7 +129,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     set_covariance_cache!(Y, p, thermo_params)
 
     # Final post-Aitken update: one quadrature pass refreshes both CF and the
-    # microphysics SGS moments (μ_S, λ) using the final covariance.
+    # microphysics SGS moments (σ_S, λ_lagrange) using the final covariance.
     set_sgs_moments_and_cloud_fraction!(Y, p)
 
     return nothing
@@ -273,21 +273,24 @@ end
 # inversion for the Lagrange multiplier, so the linear S is used universally.)
 
 """
-    SGSMomentsEvaluator(tps, ρ)
+    SGSVarianceEvaluator(tps, ρ, mu_S)
 
-GPU-safe functor returning `(mu_S = S(ξ), s_sq = S(ξ)²)` at each quadrature
-point, where S = q_tot_hat − q_sat_hat is the linear saturation excess.
-Used by `_sgs_saturation_moments` to compute μ_S = E[S] and σ_S² = Var[S].
+GPU-safe functor returning `(S(ξ) − μ_S)²` at each quadrature point, where
+S = q_tot_hat − q_sat_hat is the linear saturation excess and `μ_S` is the
+linearized SGS mean of S (see [`_sgs_saturation_moments`](@ref)). Used to
+accumulate σ_S² = E[(S − μ_S)²] in one quadrature pass; avoids catastrophic
+cancellation in `E[S²] − (E[S])²` in Float32 when Var[S] ≪ (E[S])².
 """
-struct SGSMomentsEvaluator{TPS, FT}
+struct SGSVarianceEvaluator{TPS, FT}
     tps::TPS
     ρ::FT
+    mu_S::FT
 end
 
-@inline function (eval::SGSMomentsEvaluator)(T_hat, q_tot_hat)
+@inline function (eval::SGSVarianceEvaluator)(T_hat, q_tot_hat)
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     s = q_tot_hat - q_sat_hat
-    return (mu_S = s, s_sq = s^2)
+    return (s - eval.mu_S)^2
 end
 
 
@@ -295,12 +298,21 @@ end
     _sgs_saturation_moments(thp, ρ, T_mean, q_tot_mean,
                             sgs_quad, T′T′, q′q′, corr_Tq)
 
-Compute μ_S = E[S] and σ_S = sqrt(Var[S]) of the linear saturation excess
-S = q_tot − q_sat via a single Gauss-Hermite quadrature pass over the SGS PDF.
+Compute μ_S and σ_S of the linear saturation excess S = q_tot − q_sat over
+the SGS PDF.
 
-The variance is guarded against negative values from quadrature cancellation
-(clipped at zero) and the standard deviation is floored at `ϵ_numerics(FT)`
-so the normalised closure (`C = q_c / (α·σ_S)`) is well-conditioned.
+The mean is set analytically to the linearized value
+
+    μ_S = q_tot_mean − q_sat(T_mean, ρ),
+
+which is exact under the same linearization of `q_sat(T)` that makes S
+Gaussian to begin with: any difference from `E[S]` evaluated by quadrature
+is the q_sat-curvature term that is already discarded in the truncated-
+Gaussian closure. Using this analytic μ_S lets us accumulate σ_S² as
+`E[(S − μ_S)²]` in a single pass.
+
+`σ_S` is floored at `ϵ_numerics(FT)` so the normalised closure
+`C = q_c / (α·σ_S)` stays well-conditioned.
 
 Returns `(; mu_S, sigma_S)`.
 """
@@ -309,14 +321,14 @@ Returns `(; mu_S, sigma_S)`.
     sgs_quad, T′T′, q′q′, corr_Tq,
 )
     FT = typeof(ρ)
+    mu_S = q_tot_mean - TD.q_vap_saturation(thp, T_mean, ρ)
     sgs_quad_eff = isnothing(sgs_quad) ? GridMeanSGS() : sgs_quad
-    evaluator = SGSMomentsEvaluator(thp, ρ)
-    raw = integrate_over_sgs(
+    evaluator = SGSVarianceEvaluator(thp, ρ, mu_S)
+    sigma_S_sq = integrate_over_sgs(
         evaluator, sgs_quad_eff, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq,
     )
-    sigma_S_sq = max(raw.s_sq - raw.mu_S * raw.mu_S, zero(FT))
     return (;
-        mu_S = raw.mu_S,
+        mu_S,
         sigma_S = max(sqrt(sigma_S_sq), ϵ_numerics(FT)),
     )
 end
@@ -326,9 +338,12 @@ end
 # ============================================================================
 #
 # **Physical model**: the subgrid saturation excess S = q_tot − q_sat is
-# assumed Gaussian: S ~ N(μ_S, σ_S²), with σ_S computed by the pre-pass
-# quadrature.  Working with the centred excess S′ = S − μ_S ~ N(0, σ_S²),
-# we seek a Lagrange multiplier λ that enforces mass conservation:
+# assumed Gaussian: S ~ N(μ_S, σ_S²), with μ_S set analytically to the
+# linearized mean μ_S = q_tot_mean − q_sat(T_mean, ρ) (exact under the
+# same linearization that justifies Gaussianity of S) and σ_S accumulated
+# in one pass as E[(S − μ_S)²] (see `_sgs_saturation_moments`).
+# Working with the centred excess S′ = S − μ_S ~ N(0, σ_S²), we seek a
+# Lagrange multiplier λ that enforces mass conservation:
 #
 #     E[max(0, λ + α·S′)] = q_c,                                     (*)
 #
@@ -432,7 +447,7 @@ dependent logic.
 end
 
 """
-    _compute_cloud_fraction(q_c, sigma_S, q_sat, α)
+    _compute_cloud_fraction(q_c, sigma_S, q_sat, α, ε_rel, σ_abs)
 
 Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
 relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see [`_compute_z`](@ref)) with the
@@ -463,12 +478,7 @@ The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
 `_compute_sgs_moments`) uses the equilibrium `σ_S`, so mass conservation
 `E[max(0, λ + α·S′)] = q_c` is exactly preserved for the microphysics tendencies.
 """
-@inline function _compute_cloud_fraction(q_c, sigma_S, q_sat, α)
-    FT = typeof(sigma_S)
-    # TODO: promote ε_rel, σ_abs to calibrated parameters once values are clear.
-    # ε_rel should increase with resolution
-    ε_rel = FT(0.02)   # residual fractional saturation variability (~ 1 − RH_crit)
-    σ_abs = FT(1e-7)   # absolute floor for numerical robustness as q_sat → 0
+@inline function _compute_cloud_fraction(q_c, sigma_S, q_sat, α, ε_rel, σ_abs)
     σ_S_floor_sq = (ε_rel * q_sat)^2 + σ_abs^2
     σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
     C = q_c / σ_aug
@@ -479,7 +489,7 @@ end
 """
     _compute_cloud_fraction(
         thermo_params, T, ρ, q_tot, q_liq, q_ice,
-        sgs_quad, T′T′, q′q′, corr_Tq, α,
+        sgs_quad, T′T′, q′q′, corr_Tq, α, ε_rel, σ_abs,
     )
 
 Fused production overload: compute the hybrid cloud fraction in a single
@@ -500,26 +510,31 @@ materialized to a Field.
     q′q′,
     corr_Tq,
     α,
+    ε_rel,
+    σ_abs,
 )
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
     q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
     return _compute_cloud_fraction(
-        q_liq + q_ice, moments.sigma_S, q_sat, α,
+        q_liq + q_ice, moments.sigma_S, q_sat, α, ε_rel, σ_abs,
     )
 end
 
 """
     _compute_sgs_moments(thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α)
 
-Single quadrature pass returning `(mu_S, sigma_S, λ_lagrange)`:
+Single quadrature pass returning `(sigma_S, λ_lagrange)`:
 
-  - `mu_S       = E[S]`: SGS mean saturation variable.
-  - `sigma_S    = sqrt(Var[S])`: SGS standard deviation, clipped at
+  - `sigma_S    = sqrt(E[(S − μ_S)²])`: SGS standard deviation, clipped at
     `ϵ_numerics(FT)` (see [`_sgs_saturation_moments`](@ref)).
   - `λ_lagrange = z·α·σ_S`: Lagrange multiplier satisfying
     `E[max(0, λ + α·S′)] = q_c`.
+
+The SGS mean `μ_S = q_tot − q_sat(T, ρ)` is analytic under the closure's
+linearization (see [`_sgs_saturation_moments`](@ref)) and is recomputed
+on demand wherever it is needed downstream.
 """
 @inline function _compute_sgs_moments(
     thp, ρ, T, q_tot, q_c,
@@ -531,11 +546,7 @@ Single quadrature pass returning `(mu_S, sigma_S, λ_lagrange)`:
     C = q_c / σ_S_eff
     z = _compute_z(C)
     λ_lagrange = z * σ_S_eff
-    return (;
-        moments.mu_S,
-        moments.sigma_S,
-        λ_lagrange,
-    )
+    return (; moments.sigma_S, λ_lagrange)
 end
 
 """
@@ -544,7 +555,7 @@ end
 Final post-Aitken update. No-op when `ᶜsgs_moments` is not allocated (dry / 0M).
 
 Uses ONE quadrature pass via `_compute_sgs_moments` to fill
-`ᶜsgs_moments = (mu_S, sigma_S, λ_lagrange)`, then computes
+`ᶜsgs_moments = (sigma_S, λ_lagrange)`, then computes
 `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
 [`_compute_cloud_fraction`](@ref)) and applies EDMF updraft weighting.
 """
@@ -561,9 +572,11 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+    ε_rel = CAP.cloud_fraction_eps_rel(p.params)
+    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    # ONE quadrature pass → (mu_S, sigma_S, λ_lagrange).
+    # ONE quadrature pass → (sigma_S, λ_lagrange).
     @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
         thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
         $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
@@ -580,6 +593,8 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
         p.precomputed.ᶜsgs_moments.sigma_S,
         TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
         FT(α),
+        ε_rel,
+        σ_abs,
     )
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
@@ -644,6 +659,8 @@ NVTX.@annotate function set_cloud_fraction!(
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+    ε_rel = CAP.cloud_fraction_eps_rel(p.params)
+    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
@@ -662,6 +679,8 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜq′q′,
         corr_Tq,
         FT(α),
+        ε_rel,
+        σ_abs,
     )
 
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)

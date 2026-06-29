@@ -2,6 +2,319 @@
 ##### EDMFX SGS boundary condition
 #####
 
+
+"""
+    set_edmfx_surface_conditions!(Y, p)
+
+Populate the per-updraft level-1 caches `sfc_mse_buoyantʲs`,
+`sfc_q_tot_buoyantʲs`, and `sfc_mass_flux_sourceʲs` for each EDMF
+updraft. Three separate scalar fields rather than a single NamedTuple-
+typed field, because broadcasting a NamedTuple into a DataLayout at a
+single level hits a GPU-incompatible `convert` path inside
+`knl_copyto!`. No-op unless `turbconv_model isa PrognosticEDMFX`.
+"""
+function set_edmfx_surface_conditions!(Y, p)
+    p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
+    (; params) = p
+    turbconv_params = CAP.turbconv_params(params)
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    (;
+        sfc_mass_flux_sourceʲs,
+        sfc_mse_buoyantʲs,
+        sfc_q_tot_buoyantʲs,
+        ᶜρʲs,
+        ᶜK,
+        ᶜh_tot,
+    ) = p.precomputed
+    (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
+        p.precomputed.sfc_conditions
+
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
+    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+
+    lg_val = Fields.field_values(
+        Fields.local_geometry_field(Fields.level(Y.f, Fields.half)),
+    )
+    bf_val = Fields.field_values(buoyancy_flux)
+    ustar_val = Fields.field_values(ustar)
+    obukhov_val = Fields.field_values(obukhov_length)
+    z_int_val =
+        Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
+    z_sfc_val = Fields.field_values(
+        Fields.level(Fields.coordinate_field(Y.f).z, Fields.half),
+    )
+    ρ_int_val = Fields.field_values(Fields.level(Y.c.ρ, 1))
+    h_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
+    K_int_val = Fields.field_values(Fields.level(ᶜK, 1))
+    q_tot_int_val = Fields.field_values(Fields.level(ᶜq_tot, 1))
+    mse_env_val = Fields.field_values(Fields.level(ᶜmse⁰, 1))
+    q_tot_env_val = Fields.field_values(Fields.level(ᶜq_tot⁰, 1))
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    dz_int_val = Fields.field_values(Fields.level(ᶜdz, 1))
+
+    # Project C3 surface flux vectors onto the surface normal.
+    ρ_flux_h_tot_face_val = Fields.field_values(ρ_flux_h_tot)
+    ρ_flux_q_tot_face_val = Fields.field_values(ρ_flux_q_tot)
+    ρ_flux_h_tot_val =
+        Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar, 1))
+    ρ_flux_q_tot_val =
+        Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar_2, 1))
+    @. ρ_flux_h_tot_val =
+        projected_vector_data(C3, ρ_flux_h_tot_face_val, lg_val)
+    @. ρ_flux_q_tot_val =
+        projected_vector_data(C3, ρ_flux_q_tot_face_val, lg_val)
+
+    for j in 1:n
+        ρʲ_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
+        ρaʲ_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
+        mse_buoyant_val = Fields.field_values(
+            Fields.level(sfc_mse_buoyantʲs.:($j), 1),
+        )
+        q_tot_buoyant_val = Fields.field_values(
+            Fields.level(sfc_q_tot_buoyantʲs.:($j), 1),
+        )
+        mass_flux_source_val = Fields.field_values(
+            Fields.level(sfc_mass_flux_sourceʲs.:($j), 1),
+        )
+
+        # Buoyant-air surface values first, so the mass-flux cap can
+        # consume them. Each broadcast writes a plain scalar DataF.
+        @. mse_buoyant_val = edmfx_sfc_buoyant(
+            bf_val,
+            ρ_int_val,
+            ustar_val,
+            obukhov_val,
+            lg_val,
+            z_int_val - z_sfc_val,
+            h_tot_int_val - K_int_val,
+            ρ_flux_h_tot_val,
+            turbconv_params,
+        )
+        @. q_tot_buoyant_val = edmfx_sfc_buoyant(
+            bf_val,
+            ρ_int_val,
+            ustar_val,
+            obukhov_val,
+            lg_val,
+            z_int_val - z_sfc_val,
+            q_tot_int_val,
+            ρ_flux_q_tot_val,
+            turbconv_params,
+        )
+        @. mass_flux_source_val = edmfx_sfc_mass_flux_source(
+            bf_val,
+            ρʲ_val,
+            ρaʲ_val,
+            ustar_val,
+            dz_int_val,
+            mse_buoyant_val,
+            q_tot_buoyant_val,
+            mse_env_val,
+            q_tot_env_val,
+            ρ_flux_h_tot_val,
+            ρ_flux_q_tot_val,
+            turbconv_params,
+        )
+    end
+    return nothing
+end
+
+"""
+    edmfx_sfc_buoyant(
+        sfc_buoyancy_flux, ρ_int, ustar, obukhov_length, sfc_local_geometry,
+        z_int, scalar_grid, sfc_ρ_flux_scalar, turbconv_params,
+    )
+
+High-tail buoyant-air surface value of a scalar (mse or q_tot) for an
+EDMF updraft, evaluated from [`sgs_scalar_first_interior_bc`](@ref) with
+the percentile fraction set to
+`a_s = surface_mass_flux_coefficient(...)` — the same `a_s` that sets
+the surface mass flux magnitude.
+"""
+@inline function edmfx_sfc_buoyant(
+    sfc_buoyancy_flux,
+    ρ_int,
+    ustar,
+    obukhov_length,
+    sfc_local_geometry,
+    z_int,
+    scalar_grid,
+    sfc_ρ_flux_scalar,
+    turbconv_params,
+)
+    z_i = CAP.convective_zi(turbconv_params)
+    a_s_max = CAP.max_surface_area(turbconv_params)
+    c_u = CAP.sfc_mass_flux_ustar_coeff(turbconv_params)
+    a_s = surface_mass_flux_coefficient(
+        sfc_buoyancy_flux,
+        z_i,
+        ustar,
+        a_s_max,
+        c_u,
+    )
+    return sgs_scalar_first_interior_bc(
+        z_int,
+        ρ_int,
+        a_s,
+        scalar_grid,
+        sfc_buoyancy_flux,
+        sfc_ρ_flux_scalar,
+        ustar,
+        obukhov_length,
+        sfc_local_geometry,
+    )
+end
+
+"""
+    edmfx_sfc_mass_flux_source(
+        sfc_buoyancy_flux, ρʲ_int, ρaʲ_int, ustar, dz_int,
+        mse_buoyant, q_tot_buoyant, mse_env, q_tot_env,
+        sfc_ρ_flux_h_tot, sfc_ρ_flux_q_tot, turbconv_params,
+    )
+
+Volumetric mass source rate `F_sfc / dz_int` [kg/m³/s] at the first
+cell for one EDMF updraft, equivalent to `div(F·ẑ)` at level 1.
+`F_sfc` is the capped surface mass flux with the
+`upper_area_limiter_factor(a)` baked in:
+
+    F_pre   = surface_mass_flux(...) · upper_area_limiter_factor(a),
+    F_max_χ = α · sfc_ρ_flux_χ / max(ϵ, χ_buoyant − χ_env)
+                                              for χ ∈ {mse, q_tot},
+    F_sfc   = max(0, min(F_pre, F_max_mse, F_max_q_tot)).
+
+`α < 1` guarantees the env retains at least `(1−α)` of every surface
+scalar flux. The denominator floor `ϵ = ϵ_numerics(FT)` keeps `F_max`
+finite when the eddy contrast `χ_buoyant − χ_env` vanishes or goes
+negative — in that case `F_max` is huge and effectively non-binding
+through the subsequent `min`.
+
+The buoyant values are passed in (precomputed by
+[`edmfx_sfc_buoyant`](@ref)) so they can be cached separately and
+consumed elsewhere by the mse/q_tot tendency.
+"""
+@inline function edmfx_sfc_mass_flux_source(
+    sfc_buoyancy_flux,
+    ρʲ_int,
+    ρaʲ_int,
+    ustar,
+    dz_int,
+    mse_buoyant,
+    q_tot_buoyant,
+    mse_env,
+    q_tot_env,
+    sfc_ρ_flux_h_tot,
+    sfc_ρ_flux_q_tot,
+    turbconv_params,
+)
+    FT = typeof(ρʲ_int)
+    α_sfc_flux_cap = CAP.sfc_mass_flux_cap_fraction(turbconv_params)
+    z_i = CAP.convective_zi(turbconv_params)
+    a_s_max = CAP.max_surface_area(turbconv_params)
+    c_u = CAP.sfc_mass_flux_ustar_coeff(turbconv_params)
+
+    F_pre =
+        surface_mass_flux(
+            sfc_buoyancy_flux,
+            ρʲ_int,
+            z_i,
+            ustar,
+            a_s_max,
+            c_u,
+        ) * upper_area_limiter_factor(
+            draft_area(ρaʲ_int, ρʲ_int),
+            turbconv_params,
+        )
+    F_max_mse =
+        α_sfc_flux_cap * sfc_ρ_flux_h_tot /
+        max(ϵ_numerics(FT), mse_buoyant - mse_env)
+    F_max_q =
+        α_sfc_flux_cap * sfc_ρ_flux_q_tot /
+        max(ϵ_numerics(FT), q_tot_buoyant - q_tot_env)
+    return max(zero(FT), min(F_pre, F_max_mse, F_max_q)) / dz_int
+end
+
+"""
+    edmfx_boundary_condition_tendency!(Yₜ, Y, p, t, turbconv_model)
+
+Apply the surface mass-flux boundary condition to the EDMFX updraft
+scalar prognostic variables (`mse`, `q_tot`) in the first model cell.
+
+The cached `mass_flux_source` (see [`edmfx_sfc_mass_flux_source`](@ref))
+is the volumetric mass source rate `F_sfc / dz` at the first cell,
+equivalent to `div(F·ẑ)` evaluated at level 1. That mass carries the
+high-tail (buoyant) values `mse_buoyant`, `q_tot_buoyant` from
+[`sgs_scalar_first_interior_bc`](@ref). For the specific (intensive)
+updraft variables this gives a flux-form tendency at the first cell:
+
+    d(val)/dt += mass_flux_source · (val_buoyant − val) / max(ρa, ρ·a_min),
+
+where `mass_flux_source` already includes the env-positivity cap and
+the `upper_area_limiter_factor(a)` that smoothly shuts the source
+off as the plume area approaches `a_max`. The `max(ρa, ρ·a_min)` floor
+keeps the divisor finite when the updraft is small.
+
+The corresponding `ρa` source is injected in the implicit ρa solve
+(`solve_sgs_ρa_implicit_stage_analytic!`).
+
+Note: at the first cell the updraft scalar tendencies receive *two*
+contributions — this surface mass-flux BC and the standard lateral
+entrainment from [`edmfx_entr_detr_tendency!`](@ref). These represent
+distinct physical processes (surface mass injection from the buoyant
+sub-cell tail vs. lateral entrainment from the environment at level 1)
+and are intentionally both retained. The two relaxation targets differ
+(grid-mean + SGS fluctuation vs. environment value), and the manual
+Jacobian carries diagonal entries for both.
+"""
+edmfx_boundary_condition_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+function edmfx_boundary_condition_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    turbconv_model::PrognosticEDMFX,
+)
+    (; params) = p
+    (;
+        ᶜρʲs,
+        sfc_mass_flux_sourceʲs,
+        sfc_mse_buoyantʲs,
+        sfc_q_tot_buoyantʲs,
+    ) = p.precomputed
+    FT = eltype(params)
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    a_min = CAP.min_area(CAP.turbconv_params(params))
+
+    for j in 1:n
+        ρ_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
+        ρa_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
+        mse_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).mse, 1))
+        q_tot_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).q_tot, 1))
+        mseₜ_val = Fields.field_values(Fields.level(Yₜ.c.sgsʲs.:($j).mse, 1))
+        q_totₜ_val = Fields.field_values(Fields.level(Yₜ.c.sgsʲs.:($j).q_tot, 1))
+        mass_flux_source_val = Fields.field_values(
+            Fields.level(sfc_mass_flux_sourceʲs.:($j), 1),
+        )
+        mse_buoyant_val = Fields.field_values(
+            Fields.level(sfc_mse_buoyantʲs.:($j), 1),
+        )
+        q_tot_buoyant_val = Fields.field_values(
+            Fields.level(sfc_q_tot_buoyantʲs.:($j), 1),
+        )
+
+        # `mass_flux_source · (val_buoyant − val) / max(ρa, ρ·a_min)`
+        # The `max(ρa, ρ·a_min)` floor keeps the divisor finite while
+        # the updraft is just starting to grow.
+        @. mseₜ_val +=
+            mass_flux_source_val * (mse_buoyant_val - mse_val) /
+            max(ρa_val, ρ_val * FT(a_min))
+        @. q_totₜ_val +=
+            mass_flux_source_val * (q_tot_buoyant_val - q_tot_val) /
+            max(ρa_val, ρ_val * FT(a_min))
+    end
+    return nothing
+end
+
 """
     sgs_scalar_first_interior_bc(
         ᶜz_int::FT,
@@ -30,7 +343,9 @@ from the upper tail (from percentile `1 - ᶜaʲ_int` to 1) of a Gaussian distri
 of SGS fluctuations.
 
 This boundary condition is applied only when the surface buoyancy flux
-is positive (unstable conditions), indicating surface-driven updrafts. When the surface buoyancy flux is non-positive, the updraft scalar value is set to the grid-mean scalar.
+is positive (unstable conditions), indicating surface-driven updrafts.
+When the surface buoyancy flux is non-positive, the updraft scalar
+value is set to the grid-mean scalar.
 
 Arguments:
 

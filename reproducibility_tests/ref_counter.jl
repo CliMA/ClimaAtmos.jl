@@ -1,4 +1,4 @@
-364
+368
 
 # **README**
 #
@@ -32,6 +32,22 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+368
+- Apply upper-area limiter to the implicit mass-flux-divergence detrainment
+  prefactor so updraft area cannot grow past a_max via advection.
+
+367
+- SGS saturation moments: use linearized analytic μ_S and accumulate σ_S²
+  as E[(S − μ_S)²] in one quadrature pass to avoid Float32 catastrophic
+  cancellation when Var[S] ≪ (E[S])².
+
+366
+- Update to ClimaParams v1.1 (changing threshold_smooth_transition_steepness default value)
+
+365
+- PrognosticEDMFX: replace the prescribed surface-area BC with a
+  surface-mass-flux BC.
+
 364
 - Change detr_massflux_vertdiv_coeff
 

@@ -156,14 +156,13 @@ function precomputed_quantities(Y, atmos)
         atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
         atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
-    # `ᶜsgs_moments` caches `(mu_S, sigma_S, λ_lagrange)` — the SGS mean
-    # saturation variable, the standard deviation, and the Lagrange multiplier
-    # used by `Microphysics1MEvaluator`. Allocated only for 1M/2M schemes.
     uses_microphysics_quadrature_moments =
         atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+    # `ᶜsgs_moments` caches `(sigma_S, λ_lagrange)` — the SGS standard
+    # deviation and the Lagrange multiplier used by `Microphysics1MEvaluator`.
+    #  Allocated only for 1M/2M schemes.
     SGSMomentsNT = @NamedTuple{
-        mu_S::FT,
         sigma_S::FT,
         λ_lagrange::FT,
     }
@@ -295,6 +294,10 @@ function precomputed_quantities(Y, atmos)
             ᶜρ_diffʲs = similar(Y.c, NTuple{n, FT}),
             ᶠu₃_tendencyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             ᶜρa_tendencyʲs = similar(Y.c, NTuple{n, FT}),
+            # Per-updraft surface conditions at level 1.
+            sfc_mass_flux_sourceʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
+            sfc_mse_buoyantʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
+            sfc_q_tot_buoyantʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
             precipitation_sgs_quantities...,
         ) : (;)
 

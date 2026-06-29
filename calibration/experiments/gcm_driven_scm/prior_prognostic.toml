@@ -47,8 +47,8 @@ type = "float"
 prior = "constrained_gaussian(diagnostic_covariance_coeff, 2.1, 1.0, 0, Inf)"
 type = "float"
 
-[EDMF_surface_area]
-prior = "constrained_gaussian(EDMF_surface_area, 0.1, 0.03, 0, Inf)"
+[EDMF_max_surface_area]
+prior = "constrained_gaussian(EDMF_max_surface_area, 0.1, 0.03, 0, Inf)"
 type = "float"
 
 
