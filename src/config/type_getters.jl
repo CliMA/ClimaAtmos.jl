@@ -248,8 +248,7 @@ function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half
     z_top = Fields.level(Fields.coordinate_field(Y.f).z, top_level)
 
-    @info "Approximating steady-state velocity"
-    s = @timed_str begin
+    @timed_log true "Approximating steady-state velocity" begin
         ᶜu = steady_state_velocity.(topo, params, Fields.coordinate_field(Y.c), z_top)
         ᶠu =
             steady_state_velocity.(topo, params, Fields.coordinate_field(Y.f), z_top)
@@ -546,6 +545,7 @@ function get_simulation(config::AtmosConfig)
         diagnostics = diagnostics_config_from_config(config),
         checkpoint_frequency = pa["dt_save_state_to_disk"],
         log_to_file = pa["log_to_file"],
+        verbose = true,  # Config-based runs are always verbose
     )
 
     @info "Simulation info" job_id = sim.job_id output_dir = sim.output_dir
