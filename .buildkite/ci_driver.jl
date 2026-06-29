@@ -54,6 +54,8 @@ if (
     print_jacobian_summary(integrator)
 end
 
+#error()
+
 if sol_res.ret_code == :simulation_crashed
     error(
         "The ClimaAtmos simulation has crashed. See the stack trace for details.",

@@ -872,7 +872,10 @@ end
 
 
 abstract type AbstractChemistryModel end
-struct GasPhaseChem <: AbstractChemistryModel end
+struct GasPhaseChem <: AbstractChemistryModel
+    config_path::Union{String, Nothing}
+end
+GasPhaseChem() = GasPhaseChem(nothing)
 
 """
     AtmosChem

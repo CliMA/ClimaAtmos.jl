@@ -1146,7 +1146,7 @@ add_diagnostic_variable!(
 )
 
 ###
-# Passive gas tracer A (3d)
+# Gas tracer A (3d)
 ###
 compute_q_gas_A(state, cache, time) =
     compute_q_gas_A(state, cache, time, cache.atmos.chemistry_model)
@@ -1159,7 +1159,45 @@ compute_q_gas_A(state, _, _, ::GasPhaseChem) =
 add_diagnostic_variable!(
     short_name = "q_gas_A",
     units = "kg kg^-1",
-    long_name = "Passive Gas Tracer A Concentration",
-    comments = "Grid-mean specific concentration of passive gas tracer A",
+    long_name = "Gas Tracer A Concentration",
+    comments = "Grid-mean specific concentration of gas tracer A",
     compute = compute_q_gas_A,
+)
+
+###
+# Gas tracer B (3d)
+###
+compute_q_gas_B(state, cache, time) =
+    compute_q_gas_B(state, cache, time, cache.atmos.chemistry_model)
+compute_q_gas_B(_, _, _, chemistry_model) =
+    error_diagnostic_variable("q_gas_B", chemistry_model)
+
+compute_q_gas_B(state, _, _, ::GasPhaseChem) =
+    @. lazy(specific(state.c.ρq_gas_B, state.c.ρ))
+
+add_diagnostic_variable!(
+    short_name = "q_gas_B",
+    units = "kg kg^-1",
+    long_name = "Gas Tracer B Concentration",
+    comments = "Grid-mean specific concentration of gas tracer B",
+    compute = compute_q_gas_B,
+)
+
+###
+# Gas tracer AB (3d)
+###
+compute_q_gas_AB(state, cache, time) =
+    compute_q_gas_AB(state, cache, time, cache.atmos.chemistry_model)
+compute_q_gas_AB(_, _, _, chemistry_model) =
+    error_diagnostic_variable("q_gas_AB", chemistry_model)
+
+compute_q_gas_AB(state, _, _, ::GasPhaseChem) =
+    @. lazy(specific(state.c.ρq_gas_AB, state.c.ρ))
+
+add_diagnostic_variable!(
+    short_name = "q_gas_AB",
+    units = "kg kg^-1",
+    long_name = "Gas Tracer AB Concentration",
+    comments = "Grid-mean specific concentration of gas tracer AB",
+    compute = compute_q_gas_AB,
 )

@@ -101,19 +101,23 @@ end
 # Chemistry dispatch
 # ============================================================================
 
-"""
-Grid-scale chemistry tracers, gated on chemistry model.
-"""
+"""Grid-scale chemistry tracers, gated on chemistry model."""
 chemistry_variables(ρ, physical_state, ::Nothing) = (;)
 chemistry_variables(ρ, physical_state, ::AbstractChemistryModel) =
-    (; ρq_gas_A = ρ * physical_state.q_gas_A)
+    (;
+        ρq_gas_A = ρ * physical_state.q_gas_A,
+        ρq_gas_B = ρ * physical_state.q_gas_B,
+        ρq_gas_AB = ρ * physical_state.q_gas_AB,
+    )
 
-"""
-SGS chemistry tracers to include in the updraft NamedTuple.
-"""
+"""SGS chemistry tracers to include in the updraft NamedTuple."""
 chemistry_sgs_variables(physical_state, ::Nothing) = (;)
 chemistry_sgs_variables(physical_state, ::AbstractChemistryModel) =
-    (; q_gas_A = physical_state.q_gas_A)
+    (;
+        q_gas_A = physical_state.q_gas_A,
+        q_gas_B = physical_state.q_gas_B,
+        q_gas_AB = physical_state.q_gas_AB,
+    )
 
 # ============================================================================
 # Turbconv center dispatch
@@ -194,6 +198,7 @@ function turbconv_center_variables(
     local_geometry,
     params,
     turbconv_model::EDOnlyEDMFX,
+    _,
     _,
     _,
 )
