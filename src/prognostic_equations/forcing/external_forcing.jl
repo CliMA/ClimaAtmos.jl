@@ -12,7 +12,7 @@ import Interpolations as Intp
 import Dates
 using Statistics: mean
 import ClimaUtilities.TimeVaryingInputs
-import ClimaUtilities.TimeVaryingInputs: TimeVaryingInput, evaluate!
+import ClimaUtilities.TimeVaryingInputs: LinearInterpolation, TimeVaryingInput, evaluate!
 
 """
     interp_vertical_prof(x, xp, fp)
@@ -794,10 +794,12 @@ function external_forcing_cache(Y, external_forcing::ARMVARANALForcing, params, 
     ᶜinv_τ_wind = similar(Y.c, FT)
     ᶜinv_τ_scalar = similar(Y.c, FT)
 
-    # Surface fields
-    surface_ts = similar(
+    # Surface fields: layout matches ERA5/InterpolatedColumnProfile so the
+    # generic `ExternalTemperature` path consumes `surface_inputs.ts` driven by
+    # `surface_timevaryinginputs.ts`.
+    surface_inputs = similar(
         Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
-        FT,
+        NamedTuple{(:ts,), Tuple{FT}},
     )
 
     (; external_forcing_file) = external_forcing
@@ -840,7 +842,7 @@ function external_forcing_cache(Y, external_forcing::ARMVARANALForcing, params, 
         T_sfc_tvi = TimeVaryingInput(
             T_sfc_time_sim,
             T_sfc_data;
-            method = TimeVaryingInputs.LinearInterpolation(),
+            method = LinearInterpolation(),
         )
 
         # Store height coordinate for omega conversion
@@ -881,7 +883,7 @@ function external_forcing_cache(Y, external_forcing::ARMVARANALForcing, params, 
         ᶜu_nudge,
         ᶜv_nudge,
         ᶜls_subsidence,
-        surface_ts,
+        surface_inputs,
         # Constant fields
         ᶜinv_τ_wind,
         ᶜinv_τ_scalar,
@@ -894,7 +896,7 @@ function external_forcing_cache(Y, external_forcing::ARMVARANALForcing, params, 
         q_interp = interpolators.q_interp,
         u_interp = interpolators.u_interp,
         v_interp = interpolators.v_interp,
-        T_sfc_tvi = interpolators.T_sfc_tvi,
+        surface_timevaryinginputs = (; ts = interpolators.T_sfc_tvi),
         z_sorted = interpolators.z_sorted,
         lev_hPa_sorted = interpolators.lev_hPa_sorted,
     )

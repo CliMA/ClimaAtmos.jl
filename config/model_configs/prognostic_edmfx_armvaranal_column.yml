@@ -18,7 +18,7 @@ edmfx_nh_pressure: true
 edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
-microphysics_model: "0M"
+microphysics_model: "1M"
 config: "column"
 hyperdiff: ~
 z_max: 15e3 # ARM VARANAL data extends to ~16 km (100 hPa).
@@ -26,10 +26,9 @@ z_elem: 45
 z_stretch: true
 dz_bottom: 30
 perturb_initstate: false
-dt: "80secs"
+dt: "120secs"
 dt_rad: "120mins"
 t_end: "4days"
-dt_save_state_to_disk: "1000days"
 ode_algo: "ARS222"
 toml: [toml/prognostic_edmfx_varanal_sgp.toml]
 rad: allskywithclear
@@ -44,7 +43,4 @@ diagnostics:
   - short_name: [entr, detr, lmix, bgrad, strain, edt, evu, turbentr]
     period: 10mins
   - short_name: [rlut, rlutcs, rsut, rsutcs, rsdt, rsds, rsus, rlds, rlus, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv, hfss, hfls, clt]
-    period: 10mins
-  - reduction_time: max
-    short_name: tke
     period: 10mins

@@ -154,23 +154,35 @@ end
 
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
-struct TimeVaryingInsolation <: AbstractInsolation end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
 struct ExternalTVInsolation <: AbstractInsolation end
 struct Larcform1Insolation <: AbstractInsolation end
 
 """
-    ColumnTimeVaryingInsolation{FT}
+    TimeVaryingInsolation(; start_date = nothing, latitude = nothing, longitude = nothing)
 
-Time-varying insolation for single-column models with explicit lat/lon.
-Used when coordinate system doesn't include lat/lon (e.g., ZPoint columns).
+Time-varying insolation.
+
+When `latitude`/`longitude` are `nothing`, lat/lon are taken from the grid for
+`LatLongZPoint` coordinates and fall back to `(0, 0)` for flat-space columns
+(the default global behavior). When provided, the explicit lat/lon are used
+instead — useful for single-column setups whose coordinate system doesn't
+carry lat/lon (e.g. ARM VARANAL).
+
+`start_date` is only used to convert a non-`ITime` simulation time `t` into a
+`DateTime`. It is unused when `t isa ITime`.
 """
-struct ColumnTimeVaryingInsolation{FT} <: AbstractInsolation
-    start_date::Dates.DateTime
-    latitude::FT
-    longitude::FT
+struct TimeVaryingInsolation{SD, LAT, LON} <: AbstractInsolation
+    start_date::SD
+    latitude::LAT
+    longitude::LON
 end
+TimeVaryingInsolation(;
+    start_date = nothing,
+    latitude = nothing,
+    longitude = nothing,
+) = TimeVaryingInsolation(start_date, latitude, longitude)
 
 """
     AbstractCloudInRadiation

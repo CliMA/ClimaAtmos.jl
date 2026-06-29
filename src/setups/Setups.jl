@@ -43,7 +43,7 @@ import Thermodynamics.Parameters.ThermodynamicsParameters
 
 # Model types returned by setup interface methods
 import ..GCMForcing, ..ISDACForcing, ..ARMVARANALForcing
-import ..GCMDrivenInsolation, ..ExternalTVInsolation, ..ColumnTimeVaryingInsolation
+import ..GCMDrivenInsolation, ..ExternalTVInsolation, ..TimeVaryingInsolation
 import ..RCEMIPIIInsolation
 import ..ShipwayHill2012VelocityProfile
 import ..RadiationDYCOMS, ..RadiationTRMM_LBA, ..RadiationISDAC
@@ -51,7 +51,7 @@ import ..SurfaceConditions
 import ..SurfaceConditions:
     MoninObukhov, ExchangeCoefficients, HeatFluxes,
     SurfaceBoundaryOverrides,
-    AnalyticTemperature, ExternalTemperature, ARMVARANALTimeVaryingSST
+    AnalyticTemperature, ExternalTemperature
 
 # ============================================================================
 # Layer 1 interface — implemented by each setup

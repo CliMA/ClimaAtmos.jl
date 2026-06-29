@@ -210,7 +210,9 @@ function surface_condition(setup::ARMVARANAL, params)
             HeatFluxes(; shf, lhf)
         end
         return (;
-            flux_scheme = MoninObukhov(; z0 = FT(0.05), fluxes = prescribed_fluxes),
+            flux_scheme = MoninObukhov(;
+                z0 = FT(0.05), fluxes = prescribed_fluxes, ustar = FT(0.28),
+            ),
             temperature = nothing,
             overrides = nothing,
         )
@@ -226,7 +228,10 @@ end
 external_forcing(setup::ARMVARANAL, ::Type{FT}) where {FT} =
     ARMVARANALForcing{FT}(setup.external_forcing_file)
 
-surface_temperature_model(::ARMVARANAL) = ARMVARANALTimeVaryingSST()
+surface_temperature_model(::ARMVARANAL) = ExternalTemperature()
 
-insolation_model(setup::ARMVARANAL) =
-    ColumnTimeVaryingInsolation(setup.start_date, setup.lat, setup.lon)
+insolation_model(setup::ARMVARANAL) = TimeVaryingInsolation(;
+    start_date = setup.start_date,
+    latitude = setup.lat,
+    longitude = setup.lon,
+)

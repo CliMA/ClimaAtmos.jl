@@ -2,7 +2,7 @@
 value = 0.20
 type = "float"
 
-[EDMF_surface_area]
+[EDMF_max_surface_area]
 value = 0.1
 type = "float"
 
