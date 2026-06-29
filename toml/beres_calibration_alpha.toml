@@ -1,0 +1,23 @@
+# Self-contained TOML override for the Beres alpha-calibration scripts
+# (calibrate_beres_alpha*.jl). LOCAL/untracked — not committed upstream.
+#
+# Pins sigma_x and Bw to their ClimaParams defaults (so the calibration spectrum
+# matches the production long runs) and carries only the spin-up alpha. The
+# phase-speed grid is NO LONGER set here: the override YAML stacks
+# toml/nogw_steady_grid.toml so calibration shares the EXACT production grid
+# (cmax=100, dc=0.8, 251 bins), making the steady c=0-bin contribution transfer.
+
+# Spin-up alpha. The scripts then sweep alpha on the frozen final state via a
+# ladder that rebuilds BeresSourceParams directly; this only fixes the alpha
+# used during the 10-day spin-up that produces that frozen state. Mid-ladder
+# trajectory value.
+[nogw_beres_scale_factor]
+value = 4.0e-8
+
+# AD99 background spectrum width (= ClimaParams default; matches production).
+[nogw_Bw]
+value = 0.4
+
+# Default convective cell half-width (NOT the squall-line 2500 m).
+[nogw_beres_sigma_x]
+value = 4000.0
