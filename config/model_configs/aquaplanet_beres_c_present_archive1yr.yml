@@ -1,0 +1,74 @@
+# Beres-c, present-day, ~1 yr SOURCE ARCHIVE (Group A) -- restart sibling of Sim 1.
+#
+# Restarts from a post-spin-up checkpoint of aquaplanet_beres_c_present_11yr and
+# continues the SAME trajectory for ~1 yr while emitting the heavy 6-hourly 3D
+# Beres source fields. Physics is byte-identical to Sim 1 (same grid / Beres /
+# AD99 / EDMF / radiation); only t_end, the restart seed, and the diagnostics differ.
+#
+# BEFORE RUNNING:
+#   1. Set restart_file to a Sim-1 state HDF5 dumped AFTER spin-up (>= ~60-90 days).
+#   2. Set t_end to (restart checkpoint sim-time) + ~365 days. The example below
+#      assumes a restart from the day-90 checkpoint -> 90 + 365 = 455 days.
+# Run:
+#   julia --project=.buildkite .buildkite/ci_driver.jl \
+#     --config_file config/model_configs/aquaplanet_beres_c_present_archive1yr.yml \
+#     --job_id aquaplanet_beres_c_present_archive1yr
+
+# --- Grid / numerics (identical to Sim 1) ---
+config: sphere
+h_elem: 16
+nh_poly: 3
+z_elem: 63
+z_max: 60000.0
+dz_bottom: 30.0
+hyperdiff: "Hyperdiffusion"
+rayleigh_sponge: true
+viscous_sponge: true
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+
+# --- Time stepping ---
+ode_algo: "ARS222"
+dt: "120secs"
+t_end: "455days"            # (restart sim-time) + ~365 days; edit to match the seed
+dt_save_state_to_disk: "30days"
+# Seed from Sim 1's post-spin-up state. detect_restart_file lets this archive run
+# resume its OWN checkpoints across slurm jobs after the first launch.
+restart_file: "REPLACE_WITH_PATH/aquaplanet_beres_c_present_11yr/output_active/day90.0.hdf5"
+detect_restart_file: true
+
+# --- Physics (identical to Sim 1) ---
+rad: "allskywithclear"
+dt_rad: "1hours"
+surface_setup: "DefaultMoninObukhov"
+turbconv: "prognostic_edmfx"
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+microphysics_model: "0M"
+
+# --- Gravity waves (identical to Sim 1) ---
+non_orographic_gravity_wave: true
+dt_nogw: "400secs"
+nogw_beres_source: true
+nogw_beres_detailed_diagnostics: true   # required for the nogw_* source-internal fields
+toml: [toml/longrun_aquaplanet_progedmf.toml, toml/nogw_steady_grid.toml]
+
+# === Group A -- source archive for the offline Beres-c/Beres-G launch-spectrum comparison ===
+# inst (NOT average): the offline transform is quadratic in Q, so a time-mean
+# profile is wrong by construction. 6-hourly samples the diurnal convective cycle.
+diagnostics:
+  # Master input + background state + online GW tendency (3D profiles).
+  - short_name: [nogw_Q_conv_ic, ua, va, rhoa, utendnogw, vtendnogw]
+    period: 6hours
+    reduction: inst
+  # Source geometry / amplitude / gating (2D source-level fields).
+  - short_name: [nogw_zbot, nogw_ztop, nogw_Q0, nogw_h_heat, nogw_a_cover, nogw_beres_active, nogw_N_source]
+    period: 6hours
+    reduction: inst

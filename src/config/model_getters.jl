@@ -923,6 +923,18 @@ function AtmosSurface(
         )
     end
 
+    # Spatially-uniform SST warming: add a constant offset to the analytic SST
+    # formula. Only meaningful for AnalyticTemperature (PrescribedSST); a no-op
+    # at the default 0.0 so present-day runs are unchanged.
+    sst_offset = FT(pa["sst_uniform_offset"])
+    if sst_offset != 0 && temperature isa SurfaceConditions.AnalyticTemperature
+        inner_T = temperature.f
+        temperature = SurfaceConditions.AnalyticTemperature(
+            (coords, surface_temp_params, t) ->
+                inner_T(coords, surface_temp_params, t) + sst_offset,
+        )
+    end
+
     flux_scheme = if !isnothing(setup_pieces.flux_scheme)
         setup_pieces.flux_scheme
     elseif pa["surface_setup"] == "PrescribedSurface"

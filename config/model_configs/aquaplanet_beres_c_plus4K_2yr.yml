@@ -1,0 +1,70 @@
+# Beres-c, +4K uniform SST, ~2 yr coupled free run (Sim 2 of the Beres-G comparison).
+#
+# Feeds the offline warming comparison only (no QBO). Physics is identical to Sim 1
+# except for a spatially-uniform +4 K SST. The aquaplanet convective climatology is
+# statistically steady, so 2 yr is ample; drop the first few months offline to let
+# the troposphere adjust to the warmer surface. Group A (source archive) only.
+#
+# Self-contained single --config_file run:
+#   julia --project=.buildkite .buildkite/ci_driver.jl \
+#     --config_file config/model_configs/aquaplanet_beres_c_plus4K_2yr.yml \
+#     --job_id aquaplanet_beres_c_plus4K_2yr
+
+# --- Grid / numerics (identical to Sim 1) ---
+config: sphere
+h_elem: 16
+nh_poly: 3
+z_elem: 63
+z_max: 60000.0
+dz_bottom: 30.0
+hyperdiff: "Hyperdiffusion"
+rayleigh_sponge: true
+viscous_sponge: true
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+
+# --- Time stepping ---
+ode_algo: "ARS222"
+dt: "120secs"
+t_end: "730days"            # ~2 years
+dt_save_state_to_disk: "30days"
+detect_restart_file: true
+
+# --- Uniform +4 K SST ---
+# The aquaplanet SST is the analytic zonally_symmetric_temperature formula
+# T_sfc = 271 + 29*exp(-lat^2/(2*26^2)) - 6.5e-3*z (300 K equator, 271 K pole).
+# sst_uniform_offset adds a constant everywhere via AnalyticTemperature wrapping
+# in AtmosSurface (src/config/model_getters.jl).
+sst_uniform_offset: 4.0
+
+# --- Physics (identical to Sim 1) ---
+rad: "allskywithclear"
+dt_rad: "1hours"
+surface_setup: "DefaultMoninObukhov"
+turbconv: "prognostic_edmfx"
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+microphysics_model: "0M"
+
+# --- Gravity waves (identical to Sim 1) ---
+non_orographic_gravity_wave: true
+dt_nogw: "400secs"
+nogw_beres_source: true
+nogw_beres_detailed_diagnostics: true   # required for the nogw_* source-internal fields
+toml: [toml/longrun_aquaplanet_progedmf.toml, toml/nogw_steady_grid.toml]
+
+# === Group A -- source archive (full post-spin-up run; drop early months offline) ===
+diagnostics:
+  - short_name: [nogw_Q_conv_ic, ua, va, rhoa, utendnogw, vtendnogw]
+    period: 6hours
+    reduction: inst
+  - short_name: [nogw_zbot, nogw_ztop, nogw_Q0, nogw_h_heat, nogw_a_cover, nogw_beres_active, nogw_N_source]
+    period: 6hours
+    reduction: inst

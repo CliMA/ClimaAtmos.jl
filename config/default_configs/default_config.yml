@@ -366,6 +366,9 @@ prognostic_tke:
 prognostic_surface:
   help: "Surface temperature model [`PrescribedSST` (default), `SlabOceanSST`]"
   value: "PrescribedSST"
+sst_uniform_offset:
+  help: "Uniform offset (K) added everywhere to a prescribed AnalyticTemperature SST. Used for spatially-uniform SST-warming experiments. No effect for SlabOceanSST/External/Coupled surface temperature. [`0.0` (default)]"
+  value: 0.0
 albedo_model:
   help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`, `CouplerAlbedo`]"
   value: "ConstantAlbedo"

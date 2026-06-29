@@ -454,3 +454,36 @@ add_diagnostic_variable!(
     comments = "Mass-weighted envelope-mean updraft area fraction; dilutes the deposited Beres NOGW momentum flux (intermittency analog, zero when inactive)",
     compute! = compute_nogw_a_cover!,
 )
+
+# Source-level buoyancy frequency N (gated by beres_active)
+compute_nogw_N_source!(out, state, cache, time) = compute_nogw_N_source!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.non_orographic_gravity_wave,
+)
+compute_nogw_N_source!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("nogw_N_source", non_orographic_gravity_wave)
+compute_nogw_N_source!(_, _, _, _, ::NonOrographicGravityWave{FT, Nothing}) where {FT} =
+    error_diagnostic_variable("nogw_N_source requires Beres source enabled")
+
+function compute_nogw_N_source!(
+    out,
+    state,
+    cache,
+    time,
+    ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    _require_beres_detailed("nogw_N_source", cache)
+    (; gw_N_source, gw_beres_active) = cache.non_orographic_gravity_wave
+    return _gated_copy!(out, gw_N_source, gw_beres_active)
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_N_source",
+    long_name = "NOGW Beres Source-Level Buoyancy Frequency",
+    units = "s-1",
+    comments = "Brunt-Vaisala frequency N at the Beres convective source level, the exact value entering the launched source spectrum; archived so the offline Beres-c/Beres-G launch-spectrum comparison uses the online N bit-for-bit (zero when inactive)",
+    compute! = compute_nogw_N_source!,
+)
