@@ -1,0 +1,127 @@
+name: "NOx_N2O5"
+phases:
+  - name: "gas"
+    species:
+      - name: "NO"
+      - name: "O3"
+      - name: "NO2"
+      - name: "O2"
+      - name: "NO3"
+      - name: "N2O5"
+        "diffusion coefficient [m2 s-1]": 1.0e-5
+      - name: "HNO3"
+version: "1.0.0"
+reactions:
+  - B: 0.0
+    A: 1.9e-14
+    name: "NO_O3"
+    "gas phase": "gas"
+    C: -1400.0
+    reactants:
+      - "species name": "NO"
+        coefficient: 1.0
+      - "species name": "O3"
+        coefficient: 1.0
+    products:
+      - "species name": "NO2"
+        coefficient: 1.0
+      - "species name": "O2"
+        coefficient: 1.0
+    D: 300.0
+    E: 0.0
+    type: "ARRHENIUS"
+  - B: 0.0
+    A: 1.4e-13
+    name: "NO2_O3"
+    "gas phase": "gas"
+    C: -2470.0
+    reactants:
+      - "species name": "NO2"
+        coefficient: 1.0
+      - "species name": "O3"
+        coefficient: 1.0
+    products:
+      - "species name": "NO3"
+        coefficient: 1.0
+      - "species name": "O2"
+        coefficient: 1.0
+    D: 300.0
+    E: 0.0
+    type: "ARRHENIUS"
+  - B: 0.0
+    A: 2.6e-11
+    name: "NO3_NO"
+    "gas phase": "gas"
+    C: 380.0
+    reactants:
+      - "species name": "NO3"
+        coefficient: 1.0
+      - "species name": "NO"
+        coefficient: 1.0
+    products:
+      - "species name": "NO2"
+        coefficient: 2.0
+    D: 300.0
+    E: 0.0
+    type: "ARRHENIUS"
+  - kinf_C: 0.0
+    k0_B: -4.1
+    kinf_A: 1.9e-12
+    Fc: 0.35
+    name: "NO2_NO3_M_to_N2O5"
+    N: 1.0
+    reactants:
+      - "species name": "NO2"
+        coefficient: 1.0
+      - "species name": "NO3"
+        coefficient: 1.0
+    k0_C: 0.0
+    "gas phase": "gas"
+    kinf_B: 0.2
+    products:
+      - "species name": "N2O5"
+        coefficient: 1.0
+    type: "TROE"
+    k0_A: 3.6e-30
+  - kinf_C: -11080.0
+    k0_B: -3.5
+    kinf_A: 9.7e14
+    Fc: 0.35
+    name: "N2O5_M_decomposition"
+    N: 1.0
+    reactants:
+      - "species name": "N2O5"
+        coefficient: 1.0
+    k0_C: -11000.0
+    "gas phase": "gas"
+    kinf_B: 0.1
+    products:
+      - "species name": "NO3"
+        coefficient: 1.0
+      - "species name": "NO2"
+        coefficient: 1.0
+    type: "TROE"
+    k0_A: 0.0013
+  - "reaction probability": 0.02
+    name: "N2O5_heterogeneous_uptake"
+    "gas phase": "gas"
+    "gas-phase species": "N2O5"
+    type: "SURFACE"
+    "gas-phase products":
+      - "species name": "HNO3"
+        coefficient: 2.0
+species:
+  - name: "NO"
+    "molecular weight [kg mol-1]": 0.03
+  - name: "O3"
+    "molecular weight [kg mol-1]": 0.048
+  - name: "NO2"
+    "molecular weight [kg mol-1]": 0.046
+  - name: "O2"
+    "molecular weight [kg mol-1]": 0.032
+  - name: "NO3"
+    "molecular weight [kg mol-1]": 0.062
+  - name: "N2O5"
+    "molecular weight [kg mol-1]": 0.108
+  - name: "HNO3"
+    "molecular weight [kg mol-1]": 0.063
