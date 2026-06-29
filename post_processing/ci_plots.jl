@@ -1738,22 +1738,10 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
     make_plots_generic(output_paths, vars_lines; summary_files = [file_contour])
 end
 
-Larcform1Plots = Union{Val{:larcform1}, Val{:larcform1_1M}}
-
-# Catch-all for any job whose name begins with "larcform1".
-# Jobs containing "_1M" dispatch to the larcform1_1M handler (includes mp1m plots);
-# all others dispatch to the base larcform1 handler.
-function make_plots(val::Val{S}, output_paths::Vector{<:AbstractString}) where {S}
-    s = String(S)
-    if startswith(s, "larcform1")
-        if occursin("_1M", s)
-            return make_plots(Val(:larcform1_1M), output_paths)
-        else
-            return make_plots(Val(:larcform1), output_paths)
-        end
-    end
-    @warn "No plot found for $val"
-end
+Larcform1BasePlots = Union{Val{:larcform1}}
+Larcform1_1MPlots =
+    Union{Val{:larcform1_1M}, Val{:larcform1_1M_prognostic_edmfx}}
+Larcform1Plots = Union{Larcform1BasePlots, Larcform1_1MPlots}
 
 function make_plots(sim_type::Larcform1Plots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
@@ -1889,7 +1877,7 @@ function make_plots(sim_type::Larcform1Plots, output_paths::Vector{<:AbstractStr
     end
 
     # Microphysics 1M process tendency plots — only for larcform1_1M
-    if sim_type isa Val{:larcform1_1M}
+    if sim_type isa Larcform1_1MPlots
         mp1m_source_names = [
             "S_phase_change_vap_lcl",
             "S_phase_change_vap_icl",
