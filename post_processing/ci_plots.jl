@@ -1740,15 +1740,22 @@ end
 
 Larcform1Plots = Union{Val{:larcform1}, Val{:larcform1_1M}}
 
-# Catch-all for any job whose name begins with "larcform1"
+# Catch-all for any job whose name begins with "larcform1".
+# Jobs containing "_1M" dispatch to the larcform1_1M handler (includes mp1m plots);
+# all others dispatch to the base larcform1 handler.
 function make_plots(val::Val{S}, output_paths::Vector{<:AbstractString}) where {S}
-    if startswith(String(S), "larcform1")
-        return make_plots(Val(:larcform1), output_paths)
+    s = String(S)
+    if startswith(s, "larcform1")
+        if occursin("_1M", s)
+            return make_plots(Val(:larcform1_1M), output_paths)
+        else
+            return make_plots(Val(:larcform1), output_paths)
+        end
     end
     @warn "No plot found for $val"
 end
 
-function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
+function make_plots(sim_type::Larcform1Plots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
 
     short_names_profile_requested = [
@@ -1859,60 +1866,6 @@ function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
         )
     end
 
-    # Microphysics 1M process tendency plots (grid-mean, updraft, environment)
-    mp1m_source_names = [
-        "S_phase_change_vap_lcl",
-        "S_phase_change_vap_icl",
-        "S_acnv_lcl_rai",
-        "S_acnv_icl_sno",
-        "S_accr_lcl_rai",
-        "S_accr_lcl_sno_cold",
-        "S_accr_lcl_sno_warm",
-        "S_accr_melt_lcl_sno",
-        "S_accr_icl_rai",
-        "S_accr_freeze_icl_rai",
-        "S_accr_icl_sno",
-        "S_accr_rai_sno_cold",
-        "S_accr_rai_sno_warm",
-        "S_accr_melt_rai_sno",
-        "S_phase_change_vap_rai",
-        "S_phase_change_vap_sno",
-        "S_melt_icl_lcl",
-        "S_melt_sno_rai",
-    ]
-    mp1m_all_names =
-        vec(["mp1m_", "mp1mup_", "mp1men_"] .* permutedims(mp1m_source_names))
-    mp1m_available = filter(sn -> sn in available_short_names, mp1m_all_names)
-
-    if length(mp1m_available) == length(mp1m_all_names)
-        # Use only current sim — mp1m diagnostics are new, won't exist in older runs
-        mp1m_simdirs = simdirs[1:1]
-        mp1m_output_paths = output_paths[1:1]
-
-        mp1m_vars_zt =
-            map_comparison(mp1m_simdirs, mp1m_all_names) do simdir, sn
-                get(simdir; short_name = sn, reduction = "inst", period = "10m")
-            end
-
-        mp1m_row_groups = [
-            (
-                mp1m_vars_zt[(i - 1) * 3 + 1],
-                mp1m_vars_zt[(i - 1) * 3 + 2],
-                mp1m_vars_zt[(i - 1) * 3 + 3],
-            ) for i in 1:length(mp1m_source_names)
-        ]
-
-        make_plots_generic(
-            mp1m_output_paths,
-            mp1m_row_groups;
-            output_name = "mp1m_timeseries",
-            plot_fn = plot_mp1m_row!,
-            MAX_NUM_COLS = 1,
-            MAX_NUM_ROWS = 3,
-            fig_size = (1500, 900),
-        )
-    end
-
     if !isempty(vars_1D)
         make_plots_generic(
             output_paths,
@@ -1933,6 +1886,80 @@ function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
             MAX_NUM_COLS = 2,
             output_name = "summary_surface",
         )
+    end
+
+    # Microphysics 1M process tendency plots — only for larcform1_1M
+    if sim_type isa Val{:larcform1_1M}
+        mp1m_source_names = [
+            "S_phase_change_vap_lcl",
+            "S_phase_change_vap_icl",
+            "S_acnv_lcl_rai",
+            "S_acnv_icl_sno",
+            "S_accr_lcl_rai",
+            "S_accr_lcl_sno_cold",
+            "S_accr_lcl_sno_warm",
+            "S_accr_melt_lcl_sno",
+            "S_accr_icl_rai",
+            "S_accr_freeze_icl_rai",
+            "S_accr_icl_sno",
+            "S_accr_rai_sno_cold",
+            "S_accr_rai_sno_warm",
+            "S_accr_melt_rai_sno",
+            "S_phase_change_vap_rai",
+            "S_phase_change_vap_sno",
+            "S_melt_icl_lcl",
+            "S_melt_sno_rai",
+        ]
+        # Keep only source terms whose full (gm, updraft, env) triplet is available
+        mp1m_source_names_avail = filter(mp1m_source_names) do sn
+            all(p * sn in available_short_names for p in ("mp1m_", "mp1mup_", "mp1men_"))
+        end
+        mp1m_all_names = vec(
+            ["mp1m_", "mp1mup_", "mp1men_"] .* permutedims(mp1m_source_names_avail),
+        )
+
+        if !isempty(mp1m_all_names)
+            mp1m_simdirs = simdirs[1:1]
+            mp1m_output_paths = output_paths[1:1]
+            reduction_inst = "inst"
+            available_periods_inst = collect(
+                ClimaAnalysis.available_periods(
+                    mp1m_simdirs[1];
+                    short_name = mp1m_all_names[1],
+                    reduction = reduction_inst,
+                ),
+            )
+            period_inst =
+                available_periods_inst[argmin(CA.time_to_seconds.(available_periods_inst))]
+
+            mp1m_vars_zt =
+                map_comparison(mp1m_simdirs, mp1m_all_names) do simdir, sn
+                    var = get(
+                        simdir;
+                        short_name = sn,
+                        reduction = reduction_inst,
+                        period = period_inst,
+                    )
+                    return var
+                end
+
+            mp1m_row_groups = [
+                (
+                    mp1m_vars_zt[(i - 1) * 3 + 1],
+                    mp1m_vars_zt[(i - 1) * 3 + 2],
+                    mp1m_vars_zt[(i - 1) * 3 + 3],
+                ) for i in 1:length(mp1m_source_names_avail)
+            ]
+            make_plots_generic(
+                mp1m_output_paths,
+                mp1m_row_groups;
+                output_name = "mp1m_timeseries",
+                plot_fn = plot_mp1m_row!,
+                MAX_NUM_COLS = 1,
+                MAX_NUM_ROWS = 3,
+                fig_size = (1500, 900),
+            )
+        end
     end
 
 end
