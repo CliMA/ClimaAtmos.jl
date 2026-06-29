@@ -213,7 +213,7 @@ surface_setup:
   help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
   value: "DefaultExchangeCoefficients"
 initial_condition:
-  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
+  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `ARMVARANAL`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
   value: "DecayingProfile"
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
@@ -325,7 +325,7 @@ check_steady_state:
   help: "Compare steady-state velocity to analytic solution; only available for certain choices of `topography` [`false` (default), `true`]"
   value: false
 external_forcing:
-  help: "External forcing for single column experiments [`nothing` (default), `GCM`, `Reanalysis`, `ReanalysisTimeVarying`, `ReanalysisMonthlyAveragedDiurnal`]"
+  help: "External forcing for single column experiments [`nothing` (default), `GCM`, `ARMVARANAL`, `ISDAC`, `Reanalysis`, `ReanalysisTimeVarying`, `ReanalysisMonthlyAveragedDiurnal`]"
   value: ~
 external_forcing_file:
   help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions. Used for GCM-driven SCM and ISDAC setup [`nothing` (default), `path/to/file`]"

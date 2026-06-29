@@ -136,4 +136,45 @@ function ogw_computed_drag_file_path(; h_elem::Int, context = nothing)
     return joinpath(@clima_artifact(artifact_name, context), filename)
 end
 
+# ARM SGP VARANAL single-column forcing and validation obs (see README_armvaranal.md)
+const ARM_SGP_VARANAL_FORCING_FILENAME = "sgp60varanarucC1.c1.20100901.000000.cdf"
+
+"""
+    arm_sgp_varanal_forcing_file_path(; context = nothing)
+
+Path to the default ARM VARANAL monthly forcing file used by
+`prognostic_edmfx_armvaranal_column.yml` (SGP, September 2010).
+
+Artifact: `arm_sgp_varanal_forcing`.
+"""
+function arm_sgp_varanal_forcing_file_path(; context = nothing)
+    return joinpath(
+        @clima_artifact("arm_sgp_varanal_forcing", context),
+        ARM_SGP_VARANAL_FORCING_FILENAME,
+    )
+end
+
+const _ARM_VARANAL_OBS_PRODUCT_DIRS = Dict(
+    "sonde" => "sgpinterpolatedsondeC1.c1",
+    "beatm" => "sgparmbeatmC1.c1",
+    "cldrad" => "sgparmbecldradC1.c1",
+)
+
+"""
+    arm_sgp_varanal_obs_dir(product; context = nothing)
+
+Root directory for an ARM observation product used in `plot_varanal.jl`.
+
+`product` is one of `"sonde"`, `"beatm"`, or `"cldrad"`.
+
+Artifact: `arm_sgp_varanal_obs` with subdirectories named by ARM product
+(e.g. `sgpinterpolatedsondeC1.c1/`).
+"""
+function arm_sgp_varanal_obs_dir(product::AbstractString; context = nothing)
+    subdir = get(_ARM_VARANAL_OBS_PRODUCT_DIRS, product, nothing)
+    isnothing(subdir) &&
+        error("Unknown ARM VARANAL obs product `$product`")
+    return joinpath(@clima_artifact("arm_sgp_varanal_obs", context), subdir)
+end
+
 end
