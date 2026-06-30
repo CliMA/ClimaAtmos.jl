@@ -59,6 +59,17 @@ diagnostics.
 end
 
 """
+    ConstantSeaIceTemperature{FT}(; T_ice = 250)
+
+Fixed sea-ice surface temperature. No prognostic state; `surface_temperature`
+returns `T_ice` at every step. Surface humidity is saturated over ice
+(`surface_saturation_phase` returns `TD.Ice()`).
+"""
+@kwdef struct ConstantSeaIceTemperature{FT} <: SurfaceTemperature
+    T_ice::FT = 250
+end
+
+"""
     EisenmanIceTemperature{FT}()
 
 Prognostic thermodynamic 0-layer sea-ice surface (Semtner 1976; Eisenman &
@@ -125,5 +136,13 @@ surface_temperature(::SlabOceanTemperature, Y, p, _) =
 surface_temperature(::EisenmanIceTemperature, Y, p, _) =
     Fields.field_values(Y.sfc.T)
 
+surface_temperature(ice::ConstantSeaIceTemperature, _, _, _) = ice.T_ice
+
 surface_temperature(t::CoupledTemperature, Y, p, _) =
     Fields.field_values(t.field)
+
+# Default: surface humidity is saturated over liquid water.
+surface_saturation_phase(::SurfaceTemperature) = TD.Liquid()
+# Sea-ice surfaces: saturate over ice (lower e_sat, sublimation LHF).
+surface_saturation_phase(::ConstantSeaIceTemperature) = TD.Ice()
+surface_saturation_phase(::EisenmanIceTemperature) = TD.Ice()
