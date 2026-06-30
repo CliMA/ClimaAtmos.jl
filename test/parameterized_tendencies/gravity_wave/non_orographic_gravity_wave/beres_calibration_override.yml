@@ -11,6 +11,9 @@ output_default_diagnostics: false
 # on the dominant cost). All members share this, so the alpha comparison is
 # internally consistent; absolute drag differs only mildly from dt_rad=1h.
 dt_rad: "3hours"
+# The Beres source-internal diagnostics below (nogw_beres_active, nogw_Q0, ...)
+# are gated behind this flag.
+nogw_beres_detailed_diagnostics: true
 # Spin-up alpha, default sigma_x, and Bw are in beres_calibration_alpha.toml;
 # the phase-speed grid comes from nogw_steady_grid.toml — the SAME file the
 # production long runs use (cmax=100, dc=0.8, 251 bins) — so the calibrated
