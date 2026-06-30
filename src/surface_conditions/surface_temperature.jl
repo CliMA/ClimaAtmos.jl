@@ -38,7 +38,8 @@ A surface temperature read from a time-varying external input.
 `surface_temperature(::ExternalTemperature, Y, p, t)` evaluates the field
 from `p.external_forcing.surface_inputs.ts` (driven by
 `surface_timevaryinginputs.ts`), so this temperature is only valid when the
-setup populates `external_forcing.surface_inputs` (e.g. `InterpolatedColumnProfile`).
+setup populates `external_forcing.surface_inputs` (e.g. `InterpolatedColumnProfile`,
+`ARMVARANAL`).
 """
 struct ExternalTemperature <: SurfaceTemperature end
 

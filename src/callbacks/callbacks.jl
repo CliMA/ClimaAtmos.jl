@@ -215,7 +215,11 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     insolation_params = CAP.insolation_params(params)
     (; insolation_tuple, rrtmgp_model) = p.radiation
 
-    current_datetime = ClimaUtilities.TimeManager.date(t)
+    current_datetime = if !(t isa ITime) && !isnothing(tvi.start_date)
+        tvi.start_date + Dates.Second(round(Int, t))
+    else
+        ClimaUtilities.TimeManager.date(t)
+    end
 
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     cos_zenith =
@@ -227,15 +231,24 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
 
     # Use Insolation API: insolate_tuple = insolation(datetime, lat, lon, params)
     # Note: μ is already clamped at 0 by Insolation.jl but rrtmgp needs a non-zero μ
-    if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        # Calculate insolation for each grid point
+    if !isnothing(tvi.latitude) && !isnothing(tvi.longitude)
+        # Explicit lat/lon override (e.g. single-column setups whose coordinate
+        # system doesn't carry lat/lon).
+        insolation_tuple .= Ref(
+            Insolation.insolation(
+                current_datetime,
+                tvi.latitude,
+                tvi.longitude,
+                insolation_params,
+            ),
+        )
+    elseif eltype(bottom_coords) <: Geometry.LatLongZPoint
         @. insolation_tuple = Insolation.insolation(
             current_datetime,
             bottom_coords.lat,
             bottom_coords.long,
             insolation_params,
         )
-
     else
         # assume that the latitude and longitude are both 0 for flat space
         insolation_tuple .= Ref(Insolation.insolation(

@@ -24,6 +24,7 @@ import ..compute_kinetic
 import ..gcm_height, ..gcm_driven_profile_tmean, ..gcm_driven_timeseries
 import ..weather_model_data_path
 import ..parse_date
+import ..pressure_to_height
 
 # Model types for dispatch (used by prognostic_variables.jl)
 import ..DryModel
@@ -41,8 +42,8 @@ import ..Parameters.ClimaAtmosParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
 
 # Model types returned by setup interface methods
-import ..GCMForcing, ..ISDACForcing
-import ..GCMDrivenInsolation, ..ExternalTVInsolation
+import ..GCMForcing, ..ISDACForcing, ..ARMVARANALForcing
+import ..GCMDrivenInsolation, ..ExternalTVInsolation, ..TimeVaryingInsolation
 import ..RCEMIPIIInsolation
 import ..ShipwayHill2012VelocityProfile
 import ..RadiationDYCOMS, ..RadiationTRMM_LBA, ..RadiationISDAC
@@ -276,6 +277,7 @@ include("ShipwayHill2012.jl")
 # File-based setups (depend on common/overwrite_from_file.jl)
 include("common/overwrite_from_file.jl")
 include("GCMDriven.jl")
+include("ARMVARANAL.jl")
 include("InterpolatedColumnProfile.jl")
 include("MoistFromFile.jl")
 include("WeatherModel.jl")
