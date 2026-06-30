@@ -126,8 +126,15 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 end
 
 NVTX.@annotate function subcol_model_callback!(integrator)
-    (; ᶜcloud_fraction, ᶜsubcolumn_cloud, ᶜsubcolumn_threshold) =
-        integrator.p.precomputed
+    Y = integrator.u
+    p = integrator.p
+    (;
+        ᶜcloud_fraction,
+        ᶜsubcolumn_cloud,
+        ᶜsubcolumn_threshold,
+        ᶜsubcolumn_precip,
+        ᶜlarge_scale_precipitation_flux,
+    ) = p.precomputed
 
     COSPSubcolumns.scops!(
         ᶜsubcolumn_cloud,
@@ -136,7 +143,128 @@ NVTX.@annotate function subcol_model_callback!(integrator)
         SUBCOL_RANDOM_SEED,
     )
 
+    set_cosp_large_scale_precipitation_flux!(Y, p, p.atmos.microphysics_model)
+    COSPPrecipSubcolumns.prec_scops!(
+        ᶜsubcolumn_precip,
+        ᶜlarge_scale_precipitation_flux,
+        ᶜsubcolumn_cloud,
+    )
+
+    set_cosp_hydrometeor_subcolumns!(Y, p, p.atmos.microphysics_model)
+    set_cosp_reff_np_subcolumns!(Y, p, p.atmos.microphysics_model)
+
     @info "subcol callback" t = integrator.t
+
+    return nothing
+end
+
+function set_cosp_large_scale_precipitation_flux!(
+    Y,
+    p,
+    ::NonEquilibriumMicrophysics1M,
+)
+    (; ᶜlarge_scale_precipitation_flux, ᶜwᵣ, ᶜwₛ) = p.precomputed
+    FT = eltype(Y)
+
+    @. ᶜlarge_scale_precipitation_flux =
+        max(FT(0), -Y.c.ρq_rai * ᶜwᵣ - Y.c.ρq_sno * ᶜwₛ)
+
+    return nothing
+end
+
+function set_cosp_large_scale_precipitation_flux!(Y, p, _)
+    (; ᶜlarge_scale_precipitation_flux) = p.precomputed
+    FT = eltype(Y)
+
+    @. ᶜlarge_scale_precipitation_flux = FT(0)
+
+    return nothing
+end
+
+function set_cosp_hydrometeor_subcolumns!(
+    Y,
+    p,
+    ::NonEquilibriumMicrophysics1M,
+)
+    (;
+        ᶜsubcolumn_cloud,
+        ᶜsubcolumn_precip,
+        ᶜsubcolumn_hydrometeors,
+        ᶜsampled_cloud_fraction,
+        ᶜsampled_precip_fraction,
+    ) = p.precomputed
+
+    ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
+    ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+
+    grid_mean_hydrometeors =
+        (; q_lcl = ᶜq_lcl, q_icl = ᶜq_icl, q_rai = ᶜq_rai, q_sno = ᶜq_sno)
+
+    COSPHydrometeorSubcolumns.slice_hydrometeor_subcolumns!(
+        ᶜsubcolumn_hydrometeors,
+        ᶜsubcolumn_cloud,
+        ᶜsubcolumn_precip,
+        grid_mean_hydrometeors,
+        ᶜsampled_cloud_fraction,
+        ᶜsampled_precip_fraction,
+    )
+
+    return nothing
+end
+
+function set_cosp_hydrometeor_subcolumns!(Y, p, _)
+    (;
+        ᶜsubcolumn_hydrometeors,
+        ᶜsampled_cloud_fraction,
+        ᶜsampled_precip_fraction,
+    ) = p.precomputed
+    FT = eltype(Y)
+
+    @. ᶜsampled_cloud_fraction = FT(0)
+    @. ᶜsampled_precip_fraction = FT(0)
+    for hydrometeor_fields in values(ᶜsubcolumn_hydrometeors)
+        for hydrometeor_field in hydrometeor_fields
+            @. hydrometeor_field = FT(0)
+        end
+    end
+
+    return nothing
+end
+
+function set_cosp_reff_np_subcolumns!(
+    Y,
+    p,
+    ::NonEquilibriumMicrophysics1M,
+)
+    (;
+        ᶜsubcolumn_reff,
+        ᶜsubcolumn_Np,
+        ᶜsubcolumn_hydrometeors,
+    ) = p.precomputed
+
+    COSP1MReffNpDiagnostics.set_1M_reff_np_subcolumns!(
+        ᶜsubcolumn_reff,
+        ᶜsubcolumn_Np,
+        ᶜsubcolumn_hydrometeors,
+        Y.c.ρ,
+    )
+
+    return nothing
+end
+
+function set_cosp_reff_np_subcolumns!(Y, p, _)
+    (; ᶜsubcolumn_reff, ᶜsubcolumn_Np) = p.precomputed
+    FT = eltype(Y)
+
+    for diagnostic_container in (ᶜsubcolumn_reff, ᶜsubcolumn_Np)
+        for diagnostic_fields in values(diagnostic_container)
+            for diagnostic_field in diagnostic_fields
+                @. diagnostic_field = FT(0)
+            end
+        end
+    end
 
     return nothing
 end

@@ -1,6 +1,6 @@
 module COSPSubcolumns
 
-import ClimaCore: Fields, Quadratures, Spaces
+import ClimaCore: Fields, Operators, Quadratures, Spaces
 
 export scops!
 
@@ -12,20 +12,20 @@ const _maximum_random = 3
 Generate cloud subcolumn masks from grid-mean cloud fraction.
 
 Inputs
-- `cloud_fraction`
-- `convective_cloud_fraction` is assumed to be zero
-- `random_seed` is used for random overlap sampling
+
+  - `cloud_fraction`
+  - `convective_cloud_fraction` is assumed to be zero
+  - `random_seed` is used for random overlap sampling
 
 Outputs
-- writes cloud masks in-place into `frac_out`
-- `0`: clear sky
-- `1`: stratiform cloud
-- `2`: convective cloud (not used for now, but reserved for future use)
 
-Overlap assumptions are `:maximum`, `:random`, and `:maximum_random`.
+  - writes cloud masks in-place into `frac_out`
+  - `0`: clear sky
+  - `1`: stratiform cloud
+  - `2`: convective cloud (not used for now, but reserved for future use)
+
+Overlap assumptions are `:maximum`, `:random`, and `:maximum_random`
 """
-
-
 function scops!(
     frac_out::NTuple{N},
     threshold::NTuple{N},
@@ -50,106 +50,94 @@ function scops!(
     return nothing
 end
 
-
 function _scops_fields!(
     frac_out,
     cloud_fraction,
     random_seed,
-    threshold,
+    thresholds,
     overlap_code,
 )
-    nlev = Spaces.nlevels(axes(cloud_fraction))
     nsubcolumns = length(frac_out)
-    field_space = axes(cloud_fraction)
+    out_clear = zero(eltype(frac_out[1]))
+    out_stratiform = one(eltype(frac_out[1]))
+    FT = eltype(cloud_fraction)
+    rand_field = similar(cloud_fraction)
 
-    for column_index in _column_indices(cloud_fraction)
-        column_id = _column_id(field_space, column_index...)
-        cloud_column =
-            Fields.column(cloud_fraction, column_index...)
-        frac_columns =
-            ntuple(i -> Fields.column(frac_out[i], column_index...), nsubcolumns)
-        threshold_columns =
-            ntuple(i -> Fields.column(threshold[i], column_index...), nsubcolumns)
+    for isubcolumn in 1:nsubcolumns
+        _fill_random_field!(rand_field, random_seed, isubcolumn)
 
-        _scops_field_column!(
-            frac_columns,
-            cloud_column,
-            random_seed,
-            threshold_columns,
-            overlap_code,
-            nlev,
-            column_id,
+        box_position = _box_position(FT, isubcolumn, nsubcolumns)
+        subcolumn_frac_out = frac_out[isubcolumn]
+        subcolumn_threshold = thresholds[isubcolumn]
+        input = Base.broadcasted(tuple, cloud_fraction, rand_field)
+
+        Operators.column_accumulate!(
+            subcolumn_threshold,
+            input;
+            init = (; threshold = box_position, previous_cloud = zero(FT)),
+            transform = state -> state.threshold,
+            reverse = true,
+        ) do state, (cloud_fraction_level, random_number)
+            total_cloud = _clamp_fraction(cloud_fraction_level)
+            convective_cloud = zero(total_cloud)
+
+            new_threshold = _new_threshold_from_random(
+                box_position,
+                total_cloud,
+                state.previous_cloud,
+                convective_cloud,
+                state.threshold,
+                random_number,
+                overlap_code,
+            )
+
+            return (; threshold = new_threshold, previous_cloud = total_cloud)
+        end
+
+        @. subcolumn_frac_out = _mask_value(
+            cloud_fraction,
+            subcolumn_threshold,
+            out_clear,
+            out_stratiform,
         )
     end
 
     return nothing
 end
 
-function _scops_field_column!(
-    frac_out,
-    cloud_fraction,
-    random_seed,
-    threshold,
-    overlap_code,
-    nlev,
-    icolumn,
-)
-    nsubcolumns = length(frac_out)
-    out_clear = zero(eltype(frac_out[1]))
-    out_stratiform = one(eltype(frac_out[1]))
+@inline _box_position(::Type{FT}, isubcolumn, nsubcolumns) where {FT} =
+    (FT(isubcolumn) - FT(0.5)) / FT(nsubcolumns)
 
-    @inbounds for ilev in 1:nlev
-        total_cloud =
-            _clamp_fraction(_level_value(cloud_fraction, ilev))
-        previous_total_cloud =
-            ilev == 1 ? zero(total_cloud) :
-            _clamp_fraction(_level_value(cloud_fraction, ilev - 1))
-        convective_cloud = zero(total_cloud)
+function _fill_random_field!(rand_field, random_seed, isubcolumn)
+    nlev = Spaces.nlevels(axes(rand_field))
+    field_space = axes(rand_field)
+    FT = eltype(rand_field)
 
-        for isubcolumn in 1:nsubcolumns
-            FT = typeof(total_cloud)
-            box_position = (FT(isubcolumn) - FT(0.5)) / FT(nsubcolumns)
-            subcolumn_frac_out = frac_out[isubcolumn]
-            subcolumn_threshold = threshold[isubcolumn]
-
-            old_threshold =
-                ilev == 1 ? box_position : _level_value(subcolumn_threshold, ilev - 1)
-
-            new_threshold = _new_threshold(
-                box_position,
-                total_cloud,
-                previous_total_cloud,
-                convective_cloud,
-                old_threshold,
-                random_seed,
-                icolumn,
-                ilev,
-                isubcolumn,
-                overlap_code,
-            )
-
-            _set_level_value!(subcolumn_threshold, ilev, new_threshold)
-
-            mask_value =
-                total_cloud > new_threshold ? out_stratiform : out_clear
-
-            _set_level_value!(subcolumn_frac_out, ilev, mask_value)
+    for column_index in _column_indices(rand_field)
+        column_id = _column_id(field_space, column_index...)
+        rand_column = Fields.column(rand_field, column_index...)
+        @inbounds for ilev in 1:nlev
+            Fields.level(rand_column, ilev)[] =
+                _rand_for_point(
+                    random_seed,
+                    column_id,
+                    nlev - ilev + 1,
+                    isubcolumn,
+                    FT,
+                )
         end
     end
 
     return nothing
 end
 
-function _new_threshold(
+function _new_threshold_from_random(
     box_position,
     total_cloud,
     previous_total_cloud,
     convective_cloud,
     old_threshold,
-    random_seed,
-    ipoint,
-    ilev,
-    isubcolumn,
+    random_number,
     overlap_code,
 )
     in_convective_region = box_position <= convective_cloud
@@ -161,14 +149,7 @@ function _new_threshold(
 
         return in_convective_region ? box_position :
                threshold_min +
-               (one(threshold_min) - threshold_min) *
-               _rand_for_point(
-            random_seed,
-            ipoint,
-            ilev,
-            isubcolumn,
-            typeof(threshold_min),
-        )
+               (one(threshold_min) - threshold_min) * random_number
     else
         common_cloud = min(previous_total_cloud, total_cloud)
         threshold_min = max(convective_cloud, common_cloud)
@@ -178,14 +159,7 @@ function _new_threshold(
         return in_convective_region ? box_position :
                maximally_overlap_stratiform ? old_threshold :
                threshold_min +
-               (one(threshold_min) - threshold_min) *
-               _rand_for_point(
-            random_seed,
-            ipoint,
-            ilev,
-            isubcolumn,
-            typeof(threshold_min),
-        )
+               (one(threshold_min) - threshold_min) * random_number
     end
 end
 
@@ -239,10 +213,14 @@ end
     return i + ni * ((j - 1) + ni * (h - 1))
 end
 
-@inline _level_value(field, ilev) = Fields.level(field, ilev)[]
-@inline _set_level_value!(field, ilev, value) = (Fields.level(field, ilev)[] = value)
-
-
+@inline function _mask_value(
+    total_cloud,
+    threshold,
+    out_clear,
+    out_stratiform,
+)
+    return _clamp_fraction(total_cloud) > threshold ? out_stratiform : out_clear
+end
 
 function _seed_uint64(seed::Integer)
     seed isa Signed && seed < 0 &&
@@ -274,15 +252,13 @@ end
     return FT(_mix_uint64(x) >> 11) * FT(0x1.0p-53)
 end
 
-
-
-
-
 function _check_field_axes(fields, reference, name)
     for field in fields
         axes(field) == axes(reference) ||
             throw(
-                DimensionMismatch("$name field must have the same axes as cloud_fraction"),
+                DimensionMismatch(
+                    "$name field must have the same axes as cloud_fraction",
+                ),
             )
     end
 end

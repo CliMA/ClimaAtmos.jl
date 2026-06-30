@@ -148,8 +148,33 @@ function precomputed_quantities(Y, atmos)
     ᶜcloud_fraction = similar(Y.c, FT)
     @. ᶜcloud_fraction = FT(0)
 
-    ᶜsubcolumn_cloud = ntuple(_ -> similar(Y.c, FT), 4)
-    ᶜsubcolumn_threshold = ntuple(_ -> similar(Y.c, FT), 4)
+    n_cosp_subcolumns = 16
+    ᶜsubcolumn_cloud = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
+    ᶜsubcolumn_threshold = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
+    ᶜsubcolumn_precip = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
+    ᶜsubcolumn_hydrometeors = (;
+        q_lcl = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
+        q_icl = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
+        q_rai = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
+        q_sno = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
+    )
+    ᶜsubcolumn_reff = (;
+        Reff_lcl = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
+        Reff_icl = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
+        Reff_rai = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
+        Reff_sno = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
+    )
+    ᶜsubcolumn_Np = (;
+        Np_lcl = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
+        Np_icl = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
+        Np_rai = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
+        Np_sno = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
+    )
+    ᶜsampled_cloud_fraction = similar(Y.c, FT)
+    ᶜsampled_precip_fraction = similar(Y.c, FT)
+    @. ᶜsampled_cloud_fraction = FT(0)
+    @. ᶜsampled_precip_fraction = FT(0)
+    ᶜlarge_scale_precipitation_flux = similar(Y.c, FT)
 
 
     # SGS covariances for hybrid cloud fraction and microphysics quadrature.
@@ -364,6 +389,13 @@ function precomputed_quantities(Y, atmos)
         ᶜcloud_fraction,
         ᶜsubcolumn_cloud,
         ᶜsubcolumn_threshold,
+        ᶜsubcolumn_precip,
+        ᶜsubcolumn_hydrometeors,
+        ᶜsubcolumn_reff,
+        ᶜsubcolumn_Np,
+        ᶜsampled_cloud_fraction,
+        ᶜsampled_precip_fraction,
+        ᶜlarge_scale_precipitation_flux,
         covariance_quantities...,
         smagorinsky_lilly_quantities...,
         amd_les_quantities...)
