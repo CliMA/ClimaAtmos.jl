@@ -321,6 +321,16 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":genie: Prognostic EDMF: ARM VARANAL SGP column"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_armvaranal_column.yml
+          --job_id prognostic_edmfx_armvaranal_column
+        artifact_paths: "prognostic_edmfx_armvaranal_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":genie: Prognostic EDMF: Time-varying ERA5 reanalysis forcing"
         retry: *retry_policy
         command: >

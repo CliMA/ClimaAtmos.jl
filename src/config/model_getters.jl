@@ -577,9 +577,11 @@ function get_external_forcing_model(
 
     elseif external_forcing == "ISDAC"
         ISDACForcing()
+    elseif external_forcing == "ARMVARANAL"
+        ARMVARANALForcing{FT}(parsed_args["external_forcing_file"])
     else
         error(
-            """Unknown external_forcing `$external_forcing`. Expected: ~, "GCM", "ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal", or "ISDAC".""",
+            """Unknown external_forcing `$external_forcing`. Expected: ~, "GCM", "ARMVARANAL", "ISDAC", "ReanalysisTimeVarying", or "ReanalysisMonthlyAveragedDiurnal".""",
         )
     end
 end

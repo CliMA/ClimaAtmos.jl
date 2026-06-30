@@ -34,7 +34,7 @@ sol_res = CA.solve_atmos!(simulation) # run the simulation
 ```
 
 ## Externally-Driven Single Column Models
-Currently three versions of the externally driven single column model, `GCM` driven, `ReanalysisTimeVarying` driven, and `ReanalysisMonthlyAveragedDiurnal` driven are supported in `ClimaAtmos.jl`. Externally-driven means that the model is initialized and forced with data coming from a different simulation. This differs from setups like, for example, BOMEX or SOARES which have steady forcing and low domain tops (~4km) or functional forcing, respectively. They have been developed specifically for the purpose of model calibration by recreating statistics that are close to either LES, for the `GCM` driven case only, or to observations.
+Currently several externally driven single column setups are supported in `ClimaAtmos.jl`: `GCM` driven, `ReanalysisTimeVarying`, `ReanalysisMonthlyAveragedDiurnal`, and ARM VARANAL. Externally-driven means that the model is initialized and forced with data coming from a different simulation or analysis product. This differs from setups like, for example, BOMEX or SOARES which have steady forcing and low domain tops (~4km) or functional forcing, respectively. They have been developed specifically for the purpose of model calibration by recreating statistics that are close to either LES, for the `GCM` driven case only, or to observations.
 
 ### GCM-Driven Case
 For the `GCM` driven case we can run the experiment using the config file `config/model_configs/prognostic_edmfx_gcmdriven_column.yml` by running:
@@ -52,6 +52,61 @@ cfsite_number : "site23"
 surface_setup: "GCM"
 ```
 Here we must set all of `initial_condition`, `external_forcing` and `surface_setup` to be `GCM` as each component requires information from the external file. The `external_forcing_file` and `cfsite_number` together determine the temperature, specific humidity, and wind as well as horizontal and vertical advection profiles that drive the simulation, and can be set to a local file path as opposed to using the artifact. Radiation and surface temperature are also specified. Here the forcing file, an example of which is stored in the artifact, contains groups for each `cfsite` to drive the simulation. See [Shen et al. 2022](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2021MS002631) for more information.
+
+### ARM VARANAL Case (SGP)
+
+The ARM VARANAL setup drives a single column at the SGP Central Facility with
+time-varying profiles and tendencies from the ARM Variational Analysis product
+(`sgp60varanarucC1.c1`). Forcing includes horizontal advection, large-scale
+subsidence (from `omega`), nudging toward observed T/q/u/v, prescribed surface
+fluxes (LH/SH), and time-varying skin temperature. Monthly files are available
+from the [ARM Data Center](https://adc.arm.gov/discovery/).
+
+```bash
+julia --project=.buildkite .buildkite/ci_driver.jl \
+    --config_file config/model_configs/prognostic_edmfx_armvaranal_column.yml \
+    --job_id scm_varanal
+```
+
+Key config entries (edit `external_forcing_file`, `start_date`, and `t_end` to
+pick a sub-period within the monthly file):
+
+```YAML
+initial_condition: "ARMVARANAL"
+external_forcing: "ARMVARANAL"
+external_forcing_file: artifact"arm_sgp_varanal_forcing"/sgp60varanarucC1.c1.20100901.000000.cdf
+start_date: "20100918"
+t_end: "4days"
+```
+
+Suggested run periods at SGP (interesting regimes):
+
+| Period | File month | `start_date` | `t_end` | Notes |
+|--------|------------|--------------|---------|-------|
+| Sep 18–22, 2010 | `20100901` | `20100918` | `4days` | Default. Clear → convective transition; cold-front passage days 2–3. Good diurnal-cycle test. |
+| Aug 8–10, 2010 | `20100801` | `20100808` | `3days` | Deep convection, single cell/pulse. |
+
+Forcing and obs for CI auto-download (`arm_sgp_varanal_forcing`, `arm_sgp_varanal_obs`).
+Obs comparisons use three ARM products at SGP:
+
+| Product | ARM name | Used for |
+|---------|----------|----------|
+| Interpolated Sonde | `sgpinterpolatedsondeC1.c1` | θ, RH, q, u, v profiles (~3–6 hr) |
+| BEATM | `sgparmbeatmC1.c1` | Surface T, precip, SH/LH |
+| CLDRAD | `sgparmbecldradC1.c1` | Cloud fraction, SW/LW radiation, LWP |
+
+`arm_sgp_varanal_obs_full` (~43 GB, HPC only) is registered but not used by
+ClimaAtmos and will not download automatically.
+
+#### Running outside the CI period
+
+CI covers September 2010 forcing and Sep 18–22 obs. For other periods:
+
+1. **Forcing** — set `external_forcing_file` to the monthly VARANAL `.cdf` for
+   that month.
+2. **Observations** — in `~/.julia/artifacts/Overrides.toml`, point
+   `arm_sgp_varanal_obs` at the full obs directory on disk.
+
 
 ### Reanalysis-Driven Case
 #### Matched ERA5 Trajectory

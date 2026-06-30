@@ -154,11 +154,35 @@ end
 
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
-struct TimeVaryingInsolation <: AbstractInsolation end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
 struct ExternalTVInsolation <: AbstractInsolation end
 struct Larcform1Insolation <: AbstractInsolation end
+
+"""
+    TimeVaryingInsolation(; start_date = nothing, latitude = nothing, longitude = nothing)
+
+Time-varying insolation.
+
+When `latitude`/`longitude` are `nothing`, lat/lon are taken from the grid for
+`LatLongZPoint` coordinates and fall back to `(0, 0)` for flat-space columns
+(the default global behavior). When provided, the explicit lat/lon are used
+instead — useful for single-column setups whose coordinate system doesn't
+carry lat/lon (e.g. ARM VARANAL).
+
+`start_date` is only used to convert a non-`ITime` simulation time `t` into a
+`DateTime`. It is unused when `t isa ITime`.
+"""
+struct TimeVaryingInsolation{SD, LAT, LON} <: AbstractInsolation
+    start_date::SD
+    latitude::LAT
+    longitude::LON
+end
+TimeVaryingInsolation(;
+    start_date = nothing,
+    latitude = nothing,
+    longitude = nothing,
+) = TimeVaryingInsolation(start_date, latitude, longitude)
 
 """
     AbstractCloudInRadiation
@@ -489,6 +513,31 @@ struct ExternalDrivenTVForcing{FT}
 end
 
 struct ISDACForcing end
+
+
+"""
+    ARMVARANALForcing{FT}
+
+Forcing specified by ARM VARANAL format NetCDF file for semi-continuous forcing.
+
+The VARANAL (Variational Analysis) product from ARM provides time-varying
+atmospheric state and forcing tendencies on pressure levels (hPa). Applied
+tendencies include:
+
+  - Horizontal advection of temperature and moisture
+  - Large-scale subsidence (omega, converted to vertical velocity)
+  - Nudging toward observed profiles (T, q, u, v) above a configurable height
+
+Surface temperature is prescribed from the file; surface fluxes are computed
+interactively by the Monin-Obukhov scheme.
+
+Fields:
+
+  - `external_forcing_file`: Path to the ARM VARANAL NetCDF file.
+"""
+struct ARMVARANALForcing{FT}
+    external_forcing_file::String
+end
 
 abstract type AbstractEnvBuoyGradClosure end
 struct BuoyGradMean <: AbstractEnvBuoyGradClosure end

@@ -1287,6 +1287,7 @@ EDMFColumnPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_bomex_mlcloud_column},
     Val{:prognostic_edmfx_bomex_column_sparse_autodiff},
     Val{:prognostic_edmfx_dycoms_rf01_column},
+    Val{:prognostic_edmfx_armvaranal_column},
     Val{:prognostic_edmfx_dycoms_rf02_column},
     Val{:prognostic_edmfx_dycoms_rf02_column_sparse_autodiff},
     Val{:prognostic_edmfx_rico_column},
@@ -1881,3 +1882,6 @@ function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
     end
 
 end
+
+# ARM VARANAL single-column case (model output + sonde observation comparison)
+include(joinpath(@__DIR__, "plot_varanal.jl"))

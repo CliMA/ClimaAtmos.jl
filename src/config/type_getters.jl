@@ -139,6 +139,12 @@ function get_setup_type(parsed_args, thermo_params)
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
+    elseif ic_name == "ARMVARANAL"
+        return Setups.ARMVARANAL(
+            parsed_args["external_forcing_file"];
+            thermo_params,
+            start_date = parsed_args["start_date"],
+        )
     elseif ic_name == "ReanalysisTimeVarying"
         FT = eltype(thermo_params)
         external_forcing_file =
