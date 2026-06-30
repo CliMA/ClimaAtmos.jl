@@ -246,11 +246,14 @@ function surface_prognostic_variables(
 )
     FT = Geometry.float_type(local_geometry.coordinates)
     coord = local_geometry.coordinates
+    #=
     T = if :lat in propertynames(coord)
         FT(271 + 29 * exp(-coord.lat^2 / (2 * 26^2)))
     else
         FT(300)
     end
+    =#
+    T = FT(250)                 # Hack for Larcform1 testing
     return (; T, water = FT(0))
 end
 
