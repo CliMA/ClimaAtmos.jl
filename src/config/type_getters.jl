@@ -19,6 +19,7 @@ function ClimaAtmosParameters(config::AtmosConfig)
         has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),
+        has_beres_source = get(pa, "nogw_beres_source", false) != false,
     )
 end
 

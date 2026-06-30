@@ -122,6 +122,16 @@ steps:
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_single_column.jl"
         artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
 
+      - label: ":wavy_dash: Beres NOGW: single-column heating + drag"
+        retry: *retry_policy
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_single_column.jl"
+
+      - label: ":wavy_dash: Beres NOGW: sphere full integration"
+        retry: *retry_policy
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_sphere_integration.jl"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":wavy_dash: Orographic gravity wave: Base flux calculation unit test"
         retry: *retry_policy
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_baseflux.jl"

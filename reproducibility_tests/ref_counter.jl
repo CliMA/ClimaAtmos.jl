@@ -1,4 +1,4 @@
-368
+369
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+369
+- NOGW: change the default phase-speed grid `nogw_cmax` 99.6 → 100.0 (ClimaParams),
+  so `cmax/dc = 100/0.8 = 125` gives an exact c=0 phase-speed bin. This is required
+  for the Beres convective steady (ν=0) source, which is now always computed and
+  deposits at c≈0 (it was previously an opt-in flag). The grid change shifts the
+  phase-speed bins of every NOGW run (AD99 background included), altering output.
+
 368
 - Apply upper-area limiter to the implicit mass-flux-divergence detrainment
   prefactor so updraft area cannot grow past a_max via advection.
