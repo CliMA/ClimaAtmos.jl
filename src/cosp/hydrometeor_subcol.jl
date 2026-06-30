@@ -52,8 +52,10 @@ Cloud hydrometeors are placed only where the cloud mask is non-clear (`1` or
 `2`). Precipitating hydrometeors are placed only where the precipitation mask is
 non-zero (`1`, `2`, or `3`). In each grid cell, the grid-mean value is divided by
 the sampled mask fraction so that the mean over subcolumns recovers the original
-grid-mean value when the sampled fraction is non-zero. The sampled-fraction
-fields are scratch storage and are overwritten.
+grid-mean value when the sampled fraction is non-zero. When the sampled fraction
+is zero but the grid-mean hydrometeor is positive, the grid-mean value is copied
+to every subcolumn as a conservative fallback. The sampled-fraction fields are
+scratch storage and are overwritten.
 """
 function slice_hydrometeor_subcolumns!(
     subcolumns::NamedTuple,
@@ -141,11 +143,19 @@ end
     mask == one(mask) || mask == 2 * one(mask) || mask == 3 * one(mask)
 
 @inline function _sliced_cloud_value(q, fraction, mask)
-    return _is_cloudy(mask) && fraction > zero(fraction) ? q / fraction : zero(q)
+    return _sliced_mask_value(q, fraction, _is_cloudy(mask))
 end
 
 @inline function _sliced_precip_value(q, fraction, mask)
-    return _is_precipitating(mask) && fraction > zero(fraction) ? q / fraction : zero(q)
+    return _sliced_mask_value(q, fraction, _is_precipitating(mask))
+end
+
+@inline function _sliced_mask_value(q, fraction, is_selected)
+    if fraction > zero(fraction)
+        return is_selected ? q / fraction : zero(q)
+    else
+        return q > zero(q) ? q : zero(q)
+    end
 end
 
 function _check_subcolumn_output_axes(subcolumns, grid_mean, nsubcolumns)

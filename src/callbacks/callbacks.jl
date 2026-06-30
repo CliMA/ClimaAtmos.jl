@@ -153,7 +153,7 @@ NVTX.@annotate function subcol_model_callback!(integrator)
     set_cosp_hydrometeor_subcolumns!(Y, p, p.atmos.microphysics_model)
     set_cosp_reff_np_subcolumns!(Y, p, p.atmos.microphysics_model)
 
-    @info "subcol callback" t = integrator.t
+    @debug "subcol callback" t = integrator.t
 
     return nothing
 end

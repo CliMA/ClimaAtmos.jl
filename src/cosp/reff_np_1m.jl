@@ -7,8 +7,8 @@ const REFF_KEYS = (:Reff_lcl, :Reff_icl, :Reff_rai, :Reff_sno)
 const NP_KEYS = (:Np_lcl, :Np_icl, :Np_rai, :Np_sno)
 
 #####
-##### CloudMicrophysics 1M diagnostic constants
-#####
+##### CloudMicrophysics 1M constants
+##### TODO: use ClimaParams for these constants
 #####
 
 struct ReffNp1MParameters{FT}
@@ -126,7 +126,12 @@ function set_1M_reff_np_subcolumns!(
     axes(rho) == axes(reference) ||
         throw(DimensionMismatch("rho must have matching axes"))
 
-    _check_subcolumn_axes(subcolumn_hydrometeors, HYDROMETEOR_KEYS, reference, nsubcolumns)
+    _check_subcolumn_axes(
+        subcolumn_hydrometeors,
+        HYDROMETEOR_KEYS,
+        reference,
+        nsubcolumns,
+    )
     _check_subcolumn_axes(subcolumn_reff, REFF_KEYS, reference, nsubcolumns)
     _check_subcolumn_axes(subcolumn_Np, NP_KEYS, reference, nsubcolumns)
 

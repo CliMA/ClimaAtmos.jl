@@ -148,7 +148,7 @@ function precomputed_quantities(Y, atmos)
     ᶜcloud_fraction = similar(Y.c, FT)
     @. ᶜcloud_fraction = FT(0)
 
-    n_cosp_subcolumns = 16
+    n_cosp_subcolumns = 256
     ᶜsubcolumn_cloud = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
     ᶜsubcolumn_threshold = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
     ᶜsubcolumn_precip = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)

@@ -59,7 +59,10 @@ make_subcolumn_fields(FT, nsubcolumns, nelems; value = -1) =
 
 function make_hydrometeor_subcolumns(grid_mean, nsubcolumns)
     subcolumn_values =
-        map(field -> ntuple(_ -> similar(field), nsubcolumns), Base.values(grid_mean))
+        map(
+            field -> ntuple(_ -> similar(field), nsubcolumns),
+            Base.values(grid_mean),
+        )
     return NamedTuple{keys(grid_mean)}(subcolumn_values)
 end
 
@@ -505,10 +508,22 @@ end
         @test center_profile(sampled_cloud_fraction) == FT[0.5, 0.5, 0.25]
         @test center_profile(sampled_precip_fraction) == FT[0.5, 0.5, 0]
 
-        @test isapprox(mean_profile(subcolumns.q_lcl), center_profile(grid_mean.q_lcl))
-        @test isapprox(mean_profile(subcolumns.q_icl), center_profile(grid_mean.q_icl))
-        @test isapprox(mean_profile(subcolumns.q_rai), center_profile(grid_mean.q_rai))
-        @test isapprox(mean_profile(subcolumns.q_sno), center_profile(grid_mean.q_sno))
+        @test isapprox(
+            mean_profile(subcolumns.q_lcl),
+            center_profile(grid_mean.q_lcl),
+        )
+        @test isapprox(
+            mean_profile(subcolumns.q_icl),
+            center_profile(grid_mean.q_icl),
+        )
+        @test isapprox(
+            mean_profile(subcolumns.q_rai),
+            center_profile(grid_mean.q_rai),
+        )
+        @test isapprox(
+            mean_profile(subcolumns.q_sno),
+            center_profile(grid_mean.q_sno),
+        )
     end
 
     @testset "hydrometeor slicing handles zero sampled fractions" begin
@@ -534,8 +549,23 @@ end
         @test center_profile(sampled_cloud_fraction) == FT[0, 0]
         @test center_profile(sampled_precip_fraction) == FT[0, 0]
 
+        for field in subcolumns.q_lcl
+            @test center_profile(field) == FT[1, 0]
+        end
+        for field in subcolumns.q_rai
+            @test center_profile(field) == FT[2, 0]
+        end
+
+        @test isapprox(
+            mean_profile(subcolumns.q_lcl),
+            center_profile(grid_mean.q_lcl),
+        )
+        @test isapprox(
+            mean_profile(subcolumns.q_rai),
+            center_profile(grid_mean.q_rai),
+        )
+
         for field_group in values(subcolumns), field in field_group
-            @test all(iszero, parent(field))
             @test all(isfinite, parent(field))
         end
     end
