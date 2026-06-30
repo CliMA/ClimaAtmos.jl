@@ -9,10 +9,12 @@ Helper function for scaling radiation diagnostics.
 """
 geometric_scaling(z, planet_radius) = ((z + planet_radius) / planet_radius)^2
 
+import RRTMGP
+
 """
-    ᶠradiation_field_3d(state, cache, radiation_mode, field_name::Symbol)
-    ᶠradiation_field_toa(state, cache, radiation_mode, field_name::Symbol)
-    ᶠradiation_field_sfc(state, cache, field_name::Symbol)
+    ᶠradiation_field_3d(state, cache, radiation_mode, getter::Function)
+    ᶠradiation_field_toa(state, cache, radiation_mode, getter::Function)
+    ᶠradiation_field_sfc(state, cache, getter::Function)
 
 Compute radiative fluxes as a diagnostic field in 3d, at TOA, or at the surface.
 
@@ -20,30 +22,43 @@ Compute radiative fluxes as a diagnostic field in 3d, at TOA, or at the surface.
 
   - `state, cache`: The model state and cache
   - `radiation_mode`: The RRTMGP radiation mode
-  - `field_name`: Symbol naming the flux field on `cache.radiation.rrtmgp_model`,
-    e.g. `:face_sw_flux_dn`
+  - `getter`: Function getting the flux field on `cache.radiation.rrtmgp_solver`,
+    e.g. `RRTMGP.sw_flux_dn`
 """
-function ᶠradiation_field_3d(state, cache, radiation_mode, field_name::Symbol)
+function ᶠradiation_field_3d(state, cache, radiation_mode, getter::Function)
     (; deep_atmosphere) = radiation_mode
     planet_radius = CAP.planet_radius(cache.params)
     z = Fields.coordinate_field(axes(state.f)).z
-    field = getproperty(cache.radiation.rrtmgp_model, field_name)
-    flux = Fields.array2field(field, axes(state.f))
+    # Flux getters are domain-masked views into the solver's plain (nlev, ncol)
+    # presentation buffers, so `array2field` wraps them directly. Do NOT `copy`
+    # (materializes a full field per call -- a large per-step allocation when many
+    # radiation diagnostics run) or `parent` (un-masks the boundary level).
+    flux = Fields.array2field(getter(cache.radiation.rrtmgp_solver), axes(state.f))
     deep_atmosphere ? lazy.(flux .* geometric_scaling.(z, planet_radius)) : flux
 end
 
-function ᶠradiation_field_sfc(state, cache, field_name::Symbol)
-    field = getproperty(cache.radiation.rrtmgp_model, field_name)
-    Fields.level(Fields.array2field(field, axes(state.f)), half)
+function ᶠradiation_field_sfc(state, cache, getter::Function)
+    # Domain-masked view into the solver's plain presentation buffer; `array2field`
+    # wraps it directly and `Fields.level` takes one level as a view -- no `copy`
+    # (a full-field allocation per call) and no `parent` (un-masks the boundary level).
+    Fields.level(
+        Fields.array2field(getter(cache.radiation.rrtmgp_solver), axes(state.f)),
+        half,
+    )
 end
 
-function ᶠradiation_field_toa(state, cache, radiation_mode, field_name::Symbol)
+function ᶠradiation_field_toa(state, cache, radiation_mode, getter::Function)
     (; deep_atmosphere) = radiation_mode
     nlevels = Spaces.nlevels(axes(state.c))
     z_max = Spaces.z_max(axes(state.f))
     planet_radius = CAP.planet_radius(cache.params)
-    field = getproperty(cache.radiation.rrtmgp_model, field_name)
-    flux = Fields.level(Fields.array2field(field, axes(state.f)), nlevels + half)
+    # Domain-masked view into the solver's plain presentation buffer; `array2field`
+    # wraps it directly and `Fields.level` takes one level as a view -- no `copy`
+    # (a full-field allocation per call) and no `parent` (un-masks the boundary level).
+    flux = Fields.level(
+        Fields.array2field(getter(cache.radiation.rrtmgp_solver), axes(state.f)),
+        nlevels + half,
+    )
     deep_atmosphere ? lazy.(flux .* geometric_scaling.(z_max, planet_radius)) : flux
 end
 
@@ -57,7 +72,7 @@ compute_rsd(state, cache, time) =
 compute_rsd(_, _, _, radiation_mode) = error_diagnostic_variable("rsd", radiation_mode)
 
 compute_rsd(state, cache, _, radiation_mode::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_3d(state, cache, radiation_mode, :face_sw_flux_dn)
+    ᶠradiation_field_3d(state, cache, radiation_mode, RRTMGP.sw_flux_dn)
 
 add_diagnostic_variable!(short_name = "rsd", units = "W m^-2",
     long_name = "Downwelling Shortwave Radiation",
@@ -74,7 +89,7 @@ compute_rsdt(state, cache, time) =
 compute_rsdt(_, _, _, radiation_mode) = error_diagnostic_variable("rsdt", radiation_mode)
 
 compute_rsdt(state, cache, _, radiation_mode::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_toa(state, cache, radiation_mode, :face_sw_flux_dn)
+    ᶠradiation_field_toa(state, cache, radiation_mode, RRTMGP.sw_flux_dn)
 
 add_diagnostic_variable!(short_name = "rsdt", units = "W m^-2",
     long_name = "TOA Incident Shortwave Radiation",
@@ -91,7 +106,7 @@ compute_rsds(state, cache, time) =
 compute_rsds(_, _, _, radiation_mode) = error_diagnostic_variable("rsds", radiation_mode)
 
 compute_rsds(state, cache, _, ::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_sfc(state, cache, :face_sw_flux_dn)
+    ᶠradiation_field_sfc(state, cache, RRTMGP.sw_flux_dn)
 
 add_diagnostic_variable!(short_name = "rsds", units = "W m^-2",
     long_name = "Surface Downwelling Shortwave Radiation",
@@ -108,7 +123,7 @@ compute_rsu(state, cache, time) =
 compute_rsu(_, _, _, radiation_mode) = error_diagnostic_variable("rsu", radiation_mode)
 
 compute_rsu(state, cache, _, radiation_mode::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_3d(state, cache, radiation_mode, :face_sw_flux_up)
+    ᶠradiation_field_3d(state, cache, radiation_mode, RRTMGP.sw_flux_up)
 
 add_diagnostic_variable!(short_name = "rsu", units = "W m^-2",
     long_name = "Upwelling Shortwave Radiation",
@@ -126,7 +141,7 @@ compute_rsut(_, _, _, radiation_mode) =
     error_diagnostic_variable("rsut", radiation_mode)
 
 compute_rsut(state, cache, _, radiation_mode::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_toa(state, cache, radiation_mode, :face_sw_flux_up)
+    ᶠradiation_field_toa(state, cache, radiation_mode, RRTMGP.sw_flux_up)
 
 add_diagnostic_variable!(short_name = "rsut", units = "W m^-2",
     long_name = "TOA Outgoing Shortwave Radiation",
@@ -143,7 +158,7 @@ compute_rsus(state, cache, time) =
 compute_rsus(_, _, _, radiation_mode) = error_diagnostic_variable("rsus", radiation_mode)
 
 compute_rsus(state, cache, _, ::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_sfc(state, cache, :face_sw_flux_up)
+    ᶠradiation_field_sfc(state, cache, RRTMGP.sw_flux_up)
 
 add_diagnostic_variable!(short_name = "rsus", units = "W m^-2",
     long_name = "Surface Upwelling Shortwave Radiation",
@@ -160,7 +175,7 @@ compute_rld(state, cache, time) =
 compute_rld(_, _, _, radiation_mode) = error_diagnostic_variable("rld", radiation_mode)
 
 compute_rld(state, cache, _, radiation_mode::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_3d(state, cache, radiation_mode, :face_lw_flux_dn)
+    ᶠradiation_field_3d(state, cache, radiation_mode, RRTMGP.lw_flux_dn)
 
 add_diagnostic_variable!(short_name = "rld", units = "W m^-2",
     long_name = "Downwelling Longwave Radiation",
@@ -178,7 +193,7 @@ compute_rlds(_, _, _, radiation_mode) =
     error_diagnostic_variable("rlds", radiation_mode)
 
 compute_rlds(state, cache, _, ::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_sfc(state, cache, :face_lw_flux_dn)
+    ᶠradiation_field_sfc(state, cache, RRTMGP.lw_flux_dn)
 
 add_diagnostic_variable!(short_name = "rlds", units = "W m^-2",
     long_name = "Surface Downwelling Longwave Radiation",
@@ -195,7 +210,7 @@ compute_rlu(state, cache, time) =
 compute_rlu(_, _, _, radiation_mode) = error_diagnostic_variable("rlu", radiation_mode)
 
 compute_rlu(state, cache, _, radiation_mode::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_3d(state, cache, radiation_mode, :face_lw_flux_up)
+    ᶠradiation_field_3d(state, cache, radiation_mode, RRTMGP.lw_flux_up)
 
 add_diagnostic_variable!(short_name = "rlu", units = "W m^-2",
     long_name = "Upwelling Longwave Radiation",
@@ -213,7 +228,7 @@ compute_rlut(_, _, _, radiation_mode) =
     error_diagnostic_variable("rlut", radiation_mode)
 
 compute_rlut(state, cache, _, radiation_mode::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_toa(state, cache, radiation_mode, :face_lw_flux_up)
+    ᶠradiation_field_toa(state, cache, radiation_mode, RRTMGP.lw_flux_up)
 
 add_diagnostic_variable!(short_name = "rlut", units = "W m^-2",
     long_name = "TOA Outgoing Longwave Radiation",
@@ -231,7 +246,7 @@ compute_rlus(_, _, _, radiation_mode) =
     error_diagnostic_variable("rlus", radiation_mode)
 
 compute_rlus(state, cache, _, ::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_sfc(state, cache, :face_lw_flux_up)
+    ᶠradiation_field_sfc(state, cache, RRTMGP.lw_flux_up)
 
 add_diagnostic_variable!(short_name = "rlus", units = "W m^-2",
     long_name = "Surface Upwelling Longwave Radiation",
@@ -250,7 +265,7 @@ compute_rsdcs(_, _, _, radiation_mode) =
 
 compute_rsdcs(state, cache, _,
     radiation_mode::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
-) = ᶠradiation_field_3d(state, cache, radiation_mode, :face_clear_sw_flux_dn)
+) = ᶠradiation_field_3d(state, cache, radiation_mode, RRTMGP.clear_sw_flux_dn)
 
 add_diagnostic_variable!(short_name = "rsdcs", units = "W m^-2",
     long_name = "Downwelling Clear-Sky Shortwave Radiation",
@@ -267,8 +282,8 @@ compute_rsdscs(state, cache, time) =
 compute_rsdscs(_, _, _, radiation_mode) =
     error_diagnostic_variable("rsdscs", radiation_mode)
 
-compute_rsdscs(state, cache, _, ::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_sfc(state, cache, :face_clear_sw_flux_dn)
+compute_rsdscs(state, cache, _, ::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics) =
+    ᶠradiation_field_sfc(state, cache, RRTMGP.clear_sw_flux_dn)
 
 add_diagnostic_variable!(short_name = "rsdscs", units = "W m^-2",
     long_name = "Surface Downwelling Clear-Sky Shortwave Radiation",
@@ -287,7 +302,7 @@ compute_rsucs(_, _, _, radiation_mode) =
 
 compute_rsucs(state, cache, _,
     radiation_mode::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
-) = ᶠradiation_field_3d(state, cache, radiation_mode, :face_clear_sw_flux_up)
+) = ᶠradiation_field_3d(state, cache, radiation_mode, RRTMGP.clear_sw_flux_up)
 
 add_diagnostic_variable!(short_name = "rsucs", units = "W m^-2",
     long_name = "Upwelling Clear-Sky Shortwave Radiation",
@@ -304,8 +319,13 @@ compute_rsutcs(state, cache, time) =
 compute_rsutcs(_, _, _, radiation_mode) =
     error_diagnostic_variable("rsutcs", radiation_mode)
 
-compute_rsutcs(state, cache, _, radiation_mode::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_toa(state, cache, radiation_mode, :face_clear_sw_flux_up)
+compute_rsutcs(
+    state,
+    cache,
+    _,
+    radiation_mode::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+) =
+    ᶠradiation_field_toa(state, cache, radiation_mode, RRTMGP.clear_sw_flux_up)
 
 add_diagnostic_variable!(short_name = "rsutcs", units = "W m^-2",
     long_name = "TOA Outgoing Clear-Sky Shortwave Radiation",
@@ -322,8 +342,8 @@ compute_rsuscs(state, cache, time) =
 compute_rsuscs(_, _, _, radiation_mode) =
     error_diagnostic_variable("rsuscs", radiation_mode)
 
-compute_rsuscs(state, cache, _, ::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_sfc(state, cache, :face_clear_sw_flux_up)
+compute_rsuscs(state, cache, _, ::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics) =
+    ᶠradiation_field_sfc(state, cache, RRTMGP.clear_sw_flux_up)
 
 add_diagnostic_variable!(short_name = "rsuscs", units = "W m^-2",
     long_name = "Surface Upwelling Clear-Sky Shortwave Radiation",
@@ -343,7 +363,7 @@ compute_rldcs(_, _, _, radiation_mode) =
 
 compute_rldcs(state, cache, _,
     radiation_mode::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
-) = ᶠradiation_field_3d(state, cache, radiation_mode, :face_clear_lw_flux_dn)
+) = ᶠradiation_field_3d(state, cache, radiation_mode, RRTMGP.clear_lw_flux_dn)
 
 add_diagnostic_variable!(short_name = "rldcs", units = "W m^-2",
     long_name = "Downwelling Clear-Sky Longwave Radiation",
@@ -360,8 +380,8 @@ compute_rldscs(state, cache, time) =
 compute_rldscs(_, _, _, radiation_mode) =
     error_diagnostic_variable("rldscs", radiation_mode)
 
-compute_rldscs(state, cache, _, ::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_sfc(state, cache, :face_clear_lw_flux_dn)
+compute_rldscs(state, cache, _, ::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics) =
+    ᶠradiation_field_sfc(state, cache, RRTMGP.clear_lw_flux_dn)
 
 add_diagnostic_variable!(short_name = "rldscs", units = "W m^-2",
     long_name = "Surface Downwelling Clear-Sky Longwave Radiation",
@@ -379,7 +399,7 @@ compute_rlucs(_, _, _, radiation_mode) = error_diagnostic_variable("rlucs", radi
 
 compute_rlucs(state, cache, _,
     radiation_mode::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
-) = ᶠradiation_field_3d(state, cache, radiation_mode, :face_clear_lw_flux_up)
+) = ᶠradiation_field_3d(state, cache, radiation_mode, RRTMGP.clear_lw_flux_up)
 
 add_diagnostic_variable!(short_name = "rlucs", units = "W m^-2",
     long_name = "Upwelling Clear-Sky Longwave Radiation",
@@ -396,8 +416,13 @@ compute_rlutcs(state, cache, time) =
 compute_rlutcs(_, _, _, radiation_mode) =
     error_diagnostic_variable("rlutcs", radiation_mode)
 
-compute_rlutcs(state, cache, _, radiation_mode::RRTMGPI.AbstractRRTMGPMode) =
-    ᶠradiation_field_toa(state, cache, radiation_mode, :face_clear_lw_flux_up)
+compute_rlutcs(
+    state,
+    cache,
+    _,
+    radiation_mode::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+) =
+    ᶠradiation_field_toa(state, cache, radiation_mode, RRTMGP.clear_lw_flux_up)
 
 add_diagnostic_variable!(short_name = "rlutcs", units = "W m^-2",
     long_name = "TOA Outgoing Clear-Sky Longwave Radiation",
@@ -412,8 +437,8 @@ add_diagnostic_variable!(short_name = "rlutcs", units = "W m^-2",
 ###
 
 # RRTMGP stores effective radii in microns; convert to SI metres.
-function ᶜreff_field(state, cache, field_name::Symbol)
-    field = getproperty(cache.radiation.rrtmgp_model, field_name)
+function ᶜreff_field(state, cache, getter::Function)
+    field = getter(cache.radiation.rrtmgp_solver)
     reff = Fields.array2field(field, axes(state.c))
     return @. lazy(reff / 1_000_000)  # μm -> m
 end
@@ -425,7 +450,7 @@ compute_reffclw(_, _, _, radiation_mode) =
 
 compute_reffclw(state, cache, _,
     ::Union{RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics, RRTMGPI.AllSkyRadiation},
-) = ᶜreff_field(state, cache, :center_cloud_liquid_effective_radius)
+) = ᶜreff_field(state, cache, RRTMGP.cloud_liquid_effective_radius)
 
 add_diagnostic_variable!(short_name = "reffclw", units = "m",
     long_name = "Effective radius for liquid clouds",
@@ -445,7 +470,7 @@ compute_reffcli(_, _, _, radiation_mode) =
 
 compute_reffcli(state, cache, _,
     ::Union{RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics, RRTMGPI.AllSkyRadiation},
-) = ᶜreff_field(state, cache, :center_cloud_ice_effective_radius)
+) = ᶜreff_field(state, cache, RRTMGP.cloud_ice_effective_radius)
 
 add_diagnostic_variable!(short_name = "reffcli", units = "m",
     long_name = "Effective radius for ice clouds",
@@ -460,9 +485,9 @@ add_diagnostic_variable!(short_name = "reffcli", units = "m",
 ###
 
 # Requires aerosol_radiation = true; field is defined on the surface face level.
-function ᶠaod_field(state, cache, field_name::Symbol)
+function ᶠaod_field(state, cache, getter::Function)
     @assert cache.atmos.radiation_mode.aerosol_radiation "aerosol_radiation must be true to enable aerosol optical depth diagnostics"
-    field = getproperty(cache.radiation.rrtmgp_model, field_name)
+    field = getter(cache.radiation.rrtmgp_solver)
     return Fields.array2field(field, axes(Fields.level(state.f, half)))
 end
 
@@ -478,7 +503,7 @@ compute_od550aer(_, _, _, radiation_mode) =
     error_diagnostic_variable("od550aer", radiation_mode)
 
 compute_od550aer(state, cache, _, ::_AerosolRadiationModes) =
-    ᶠaod_field(state, cache, :aod_sw_extinction)
+    ᶠaod_field(state, cache, RRTMGP.aod_sw_extinction)
 
 add_diagnostic_variable!(short_name = "od550aer", units = "",
     long_name = "Ambient Aerosol Optical Thickness at 550nm",
@@ -496,7 +521,7 @@ compute_odsc550aer(_, _, _, radiation_mode) =
     error_diagnostic_variable("odsc550aer", radiation_mode)
 
 compute_odsc550aer(state, cache, _, ::_AerosolRadiationModes) =
-    ᶠaod_field(state, cache, :aod_sw_scattering)
+    ᶠaod_field(state, cache, RRTMGP.aod_sw_scattering)
 
 add_diagnostic_variable!(short_name = "odsc550aer", units = "",
     long_name = "Ambient Scattering Aerosol Optical Thickness at 550nm",
@@ -508,9 +533,9 @@ add_diagnostic_variable!(short_name = "odsc550aer", units = "",
 # SW and LW McICA cloud cover (2d)
 ###
 
-# Maps a (ncol,) array stored in the rrtmgp_model to a surface-level ClimaCore field.
-function ᶜcloud_cover_field(state, cache, field_name::Symbol)
-    field = getproperty(cache.radiation.rrtmgp_model, field_name)
+# Maps a (ncol,) array stored in the rrtmgp_solver to a surface-level ClimaCore field.
+function ᶜcloud_cover_field(state, cache, getter::Function)
+    field = getter(cache.radiation.rrtmgp_solver)
     cloud_cover = Fields.array2field(field, axes(Fields.level(state.f, half)))
     return @. lazy(cloud_cover * 100)
 end
@@ -525,7 +550,7 @@ compute_clt(state, cache, time) =
 compute_clt(_, _, _, radiation_mode) =
     error_diagnostic_variable("clt", radiation_mode)
 compute_clt(state, cache, _, ::_AllSkyModes) =
-    ᶜcloud_cover_field(state, cache, :sw_cloud_cover)
+    ᶜcloud_cover_field(state, cache, RRTMGP.sw_cloud_cover)
 
 add_diagnostic_variable!(short_name = "clt", units = "%",
     long_name = "Total Cloud Cover Percentage",
@@ -539,7 +564,7 @@ compute_cltl(state, cache, time) =
 compute_cltl(_, _, _, radiation_mode) =
     error_diagnostic_variable("cltl", radiation_mode)
 compute_cltl(state, cache, _, ::_AllSkyModes) =
-    ᶜcloud_cover_field(state, cache, :lw_cloud_cover)
+    ᶜcloud_cover_field(state, cache, RRTMGP.lw_cloud_cover)
 
 add_diagnostic_variable!(short_name = "cltl", units = "%",
     long_name = "Total Cloud Cover Percentage",

@@ -184,16 +184,6 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
         detect_restart_file = true,
     )
 
-    if pkgversion(CA.RRTMGP) < v"0.22"
-        # Versions of RRTMGP older than 0.22 have a bug and do not set the
-        # flux_dn_dir, so that face_clear_sw_direct_flux_dn and
-        # face_sw_direct_flux_dn is uninitialized and not deterministic
-        rrtmgp_clear_fix =
-            (:face_clear_sw_direct_flux_dn, :face_sw_direct_flux_dn)
-    else
-        rrtmgp_clear_fix = ()
-    end
-
     local_success &= compare(
         simulation.integrator.u,
         simulation_restarted.integrator.u;
@@ -227,10 +217,19 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
             :ᶠu₃_tendencyʲs,
             :ᶜρa_tendencyʲs,
-            rrtmgp_clear_fix...,
+            # The raw RRTMGP solver contains internal workspaces that are
+            # uninitialized or only partially written by design; its
+            # domain-masked outputs are compared through the public getters
+            # below (see compare_rrtmgp_solver)
+            :rrtmgp_solver,
             # Config-specific
             more_ignore...,
         ]),
+    )
+    local_success &= compare_rrtmgp_solver(
+        simulation.integrator.p,
+        simulation_restarted.integrator.p;
+        name = "integrator.p.radiation.rrtmgp_solver",
     )
 
     # Check re-importing from previous state and advancing one step
@@ -268,8 +267,17 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :ᶜmp_tendency,
             :ᶜT′T′, :ᶜq′q′,
             :rc,
-            rrtmgp_clear_fix...,
+            # The raw RRTMGP solver contains internal workspaces that are
+            # uninitialized or only partially written by design; its
+            # domain-masked outputs are compared through the public getters
+            # below (see compare_rrtmgp_solver)
+            :rrtmgp_solver,
         ]),
+    )
+    local_success &= compare_rrtmgp_solver(
+        simulation.integrator.p,
+        simulation_restarted2.integrator.p;
+        name = "integrator.p.radiation.rrtmgp_solver",
     )
 
     return (

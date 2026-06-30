@@ -179,8 +179,6 @@ Base.@kwdef struct ClimaAtmosParameters{
     # Radiation
     idealized_ocean_albedo::FT
     water_refractive_index::FT
-    optics_lookup_temperature_min::FT
-    optics_lookup_temperature_max::FT
     # Hyperdiffusion
     α_hyperdiff_tracer::FT
     # Vertical diffusion

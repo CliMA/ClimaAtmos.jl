@@ -1,6 +1,7 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaAtmos as CA
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
+import ClimaAtmos.RRTMGP as RRTMGP
 import ClimaCore
 import ClimaCore: DataLayouts, Fields, Geometry, Meshes
 import ClimaCore.Fields: Field, FieldVector, field_values
@@ -195,6 +196,62 @@ end
 function print_maybe(exp, what)
     exp || println(what)
     return exp
+end
+
+"""
+    compare_rrtmgp_solver(p1, p2; name)
+
+Compare the radiation state of two caches through RRTMGP's public flux
+getters.
+
+`compare` cannot walk the raw `RRTMGP.RRTMGPSolver`: it contains internal
+workspaces that are uninitialized or only partially written by design (e.g.
+the per-band flux accumulation buffers, whose `flux_net` is never computed,
+or the shortwave sources, which are skipped for night columns), so their
+contents are not reproducible across two solver instances. The getters
+return the domain-masked flux outputs, which is the same coverage the old
+`RRTMGPModel` views provided.
+"""
+function compare_rrtmgp_solver(p1, p2; name)
+    hasproperty(p1.radiation, :rrtmgp_solver) || return true
+    solver1 = p1.radiation.rrtmgp_solver
+    solver2 = p2.radiation.rrtmgp_solver
+    getters = Function[
+        RRTMGP.lw_flux_up,
+        RRTMGP.lw_flux_dn,
+        RRTMGP.lw_flux_net,
+        RRTMGP.sw_flux_up,
+        RRTMGP.sw_flux_dn,
+        RRTMGP.sw_flux_net,
+        RRTMGP.sw_direct_flux_dn,
+        RRTMGP.net_flux,
+    ]
+    if p1.atmos.radiation_mode isa
+       RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
+        append!(
+            getters,
+            Function[
+                RRTMGP.clear_lw_flux_up,
+                RRTMGP.clear_lw_flux_dn,
+                RRTMGP.clear_lw_flux,
+                RRTMGP.clear_sw_flux_up,
+                RRTMGP.clear_sw_flux_dn,
+                RRTMGP.clear_sw_flux,
+                RRTMGP.clear_sw_direct_flux_dn,
+                RRTMGP.clear_net_flux,
+            ],
+        )
+    end
+    pass = true
+    for getter in getters
+        pass &= _compare(
+            Array(getter(solver1)),
+            Array(getter(solver2));
+            name = "$(name).$(nameof(getter))",
+            ignore = Set(Symbol[]),
+        )
+    end
+    return pass
 end
 
 # Disable all the @info statements that are produced when creating a simulation
