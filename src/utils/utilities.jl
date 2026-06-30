@@ -521,15 +521,32 @@ function prettymemory(b)
 end
 
 """
-    @timed_str expr
-    @timed_str "description" expr
+    @timed_log verbose "message" expr
 
-Returns a string containing `@timed` information.
+Evaluate `expr` and return its value. If `verbose` is true, also `@info` the
+message with elapsed time and allocations appended, e.g.
+`"Building cache (1.2 s, 340.0 MiB)"`. When `verbose` is false the expression is
+evaluated without any logging or timing overhead.
+
+`stats.value` is returned so the macro can wrap the right-hand side of a
+destructuring assignment, e.g. `(Y, t_start, spaces) = @timed_log verbose "..." f()`.
 """
-macro timed_str(ex)
+macro timed_log(verbose, message, ex)
     quote
-        local stats = @timed $(esc(ex))
-        "$(prettytime(stats.time*1e9)) ($(Base.gc_alloc_count(stats.gcstats)) allocations: $(prettymemory(stats.gcstats.allocd)))"
+        if $(esc(verbose))
+            local stats = @timed $(esc(ex))
+            @info string(
+                $(esc(message)),
+                " (",
+                prettytime(stats.time * 1e9),
+                ", ",
+                prettymemory(stats.gcstats.allocd),
+                ")",
+            )
+            stats.value
+        else
+            $(esc(ex))
+        end
     end
 end
 
