@@ -2,6 +2,9 @@ dt_save_state_to_disk: "2days"
 initial_condition: "DryBaroclinicWave"
 t_end: "10days"
 disable_surface_flux_tendency: true
+# Implicit vertical upwind advection of ρe_tot/ρq_tot with a central-only
+# Wfact needs ~3 Newton iterations to converge at large baroclinic-wave dt.
+max_newton_iters_ode: 3
 diagnostics:
   - short_name: [pfull, ua, wa, va, rv, ta, ke]
     period: 1days

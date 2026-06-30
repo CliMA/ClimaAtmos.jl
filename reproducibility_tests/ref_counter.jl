@@ -1,4 +1,4 @@
-369
+370
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+370
+- Move ρe_tot/ρq_tot upwind correction into implicit advection (Wfact unchanged)
+
 369
 - Clamp implicit ρa stage value to `[0, ρ·a_max]` per-cell in the column
   sweep so updraft area cannot exceed a_max when the explicit area

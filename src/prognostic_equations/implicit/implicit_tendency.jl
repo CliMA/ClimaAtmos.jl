@@ -114,17 +114,21 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶠu³, ᶜp, ᶜh_tot, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; energy_q_tot_upwinding) = p.atmos.numerics
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
-    # Central vertical advection of active tracers (e_tot and q_tot)
-    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
+    # Full vertical advection (central + upwind correction) of active tracers
+    # (ρe_tot and ρq_tot). The Wfact linearization uses only the central
+    # operator (see `manual_sparse_jacobian.jl`), so this is "implicit with
+    # incomplete Jacobian".
+    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
     @. Yₜ.c.ρe_tot += vtt
     if !(microphysics_model isa DryModel)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
+        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, energy_q_tot_upwinding)
         @. Yₜ.c.ρq_tot += vtt
     end
 
