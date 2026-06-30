@@ -1,4 +1,4 @@
-368
+369
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+369
+- Clamp implicit ρa stage value to `[0, ρ·a_max]` per-cell in the column
+  sweep so updraft area cannot exceed a_max when the explicit area
+  limiters fail to prevent overshoot.
+
 368
 - Apply upper-area limiter to the implicit mass-flux-divergence detrainment
   prefactor so updraft area cannot grow past a_max via advection.
