@@ -62,207 +62,22 @@ end
     deep_atmosphere::Bool = true
 end
 
-"""
-    abstract type AbstractInterpolation
 
-A method for obtaining cell face pressures/temperatures from cell center
-pressures/temperatures, or vice versa. The available options are `BestFit`,
-`UniformZ`, `UniformP`, `GeometricMean`, and `ArithmeticMean`. `BestFit`
-requires z-coordinates to be provided, while the other options do not. If both
-cell center and cell face values are provided, `NoInterpolation` should be used.
-
-To get cell face values from cell center values, an `AbstractInterpolation` is
-used for interpolation on the interior faces and for extrapolation on the
-boundary faces. To get cell center values from cell face values, it is only used
-for interpolation.
-
-For `BestFit`, we start by assuming that there is some constant lapse rate
-∂T(z)/∂z = L.
-This tells us that, for some constant T₀,
-T(z) = T₀ + L * z.
-Since T(z₁) = T₁ and T(z₂) = T₂, for some z₁ != z₂, we have that
-T₁ = T₀ + L * z₁ and T₂ = T₀ + L * z₂ ==>
-T₂ - T₁ = L * (z₂ - z₁) ==>
-L = (T₂ - T₁) / (z₂ - z₁) ==>
-T₁ = T₀ + (T₂ - T₁) / (z₂ - z₁) * z₁ ==>
-T₀ = (T₁ * z₂ - T₂ * z₁) / (z₂ - z₁) ==>
-T(z) = T₁ + (T₂ - T₁) / (z₂ - z₁) * (z - z₁).
-To get p(z), we do different things depending on whether or not T₁ == T₂ (i.e.,
-whether or not L == 0).
-If T₁ == T₂, we assume hydrostatic equilibrium, so that, for some constant C,
-∂p(z)/∂z = C * p(z).
-This tells us that, for some constant p₀,
-p(z) = p₀ * exp(C * z).
-Since p(z₁) = p₁ and p(z₂) = p₂, we have that
-p₁ = p₀ * exp(C * z₁) and p₂ = p₀ * exp(C * z₂) ==>
-p₂ / p₁ = exp(C * (z₂ - z₁)) ==>
-C = log(p₂ / p₁) / (z₂ - z₁) ==>
-p₁ = p₀ * (p₂ / p₁)^(z₁ / (z₂ - z₁)) ==>
-p₀ = p₁ / (p₂ / p₁)^(z₁ / (z₂ - z₁)) ==>
-p(z) = p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁)).
-If T₁ != T₂, we assume that p and T are governed by an isentropic process, so
-that, for some constants A and B,
-p(z) = A * T(z)^B.
-Since p(z₁) = p₁, p(z₂) = p₂, T(z₁) = T₁, and T(z₂) = T₂, we have that
-p₁ = A * T₁^B and p₂ = A * T₂^B ==>
-p₂ / p₁ = (T₂ / T₁)^B ==>
-B = log(p₂ / p₁) / log(T₂ / T₁) ==>
-p₁ = A * (p₂ / p₁)^(log(T₁) / log(T₂ / T₁)) ==>
-A = p₁ / (p₂ / p₁)^(log(T₁) / log(T₂ / T₁)) ==>
-p(z) = p₁ * (p₂ / p₁)^(log(T(z) / T₁) / log(T₂ / T₁)).
-So, in conclusion, we have that
-T(z) = T₁ + (T₂ - T₁) / (z₂ - z₁) * (z - z₁) and
-p(z) = T₁ == T₂ ?
-p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁)) :
-p₁ * (p₂ / p₁)^(log(T(z) / T₁) / log(T₂ / T₁)).
-
-`UniformZ`, `UniformP`, and `GeometricMean` are all special cases of `BestFit`
-that assume a particular value for z in order to avoid requiring z-coordinates.
-For `UniformZ`, we assume that
-z = (z₁ + z₂) / 2.
-This tells us that
-T(z) = (T₁ + T₂) / 2 and
-p(z) = T₁ == T₂ ?
-sqrt(p₁ * p₂) :
-p₁ * (p₂ / p₁)^(log(T(z) / T₁) / log(T₂ / T₁)).
-For `UniformP`, we assume that T₁ != T₂ and p₁ != p₂, and that
-z = z₁ + (z₂ - z₁) / (T₂ / T₁ - 1) *
-((T₂ / T₁)^(log((1 + p₂ / p₁) / 2) / log(p₂ / p₁)) - 1).
-This tells us that
-T(z) = T₁ * (T₂ / T₁)^(log(p(z) / p₁) / log(p₂ / p₁)) and
-p(z) = (p₁ + p₂) / 2.
-For `GeometricMean`, we assume that
-z = z₁ + (z₂ - z₁) / (sqrt(T₂ / T₁) + 1).
-This tells us that
-T(z) = sqrt(T₁ * T₂) and p(z) = sqrt(p₁ * p₂).
-
-Finally, `ArithmeticMean` is the simplest possible interpolation method:
-T(z) = (T₁ + T₂) / 2 and
-p(z) = (p₁ + p₂) / 2.
-"""
-abstract type AbstractInterpolation end
-struct NoInterpolation <: AbstractInterpolation end
-struct ArithmeticMean <: AbstractInterpolation end
-struct GeometricMean <: AbstractInterpolation end
-struct UniformZ <: AbstractInterpolation end
-struct UniformP <: AbstractInterpolation end
-struct BestFit <: AbstractInterpolation end
-
-"""
-    abstract type AbstractBottomExtrapolation
-
-A method for obtaining the bottom cell face pressure/temperature from the cell
-center pressures/temperatures above it. The available options are
-`SameAsInterpolation`, `UseSurfaceTempAtBottom`, and `HydrostaticBottom`.
-`SameAsInterpolation` uses the interpolation method to extrapolate the bottom
-cell face values, while `UseSurfaceTempAtBottom` and `HydrostaticBottom` provide
-alternative methods. `HydrostaticBottom` requires z-coordinates to be provided,
-while `UseSurfaceTempAtBottom` does not.
-
-For `UseSurfaceTempAtBottom` and `HydrostaticBottom`, we assume that we have a
-dry ideal gas undergoing an isentropic process, so that, for some constant A,
-p(z) = A * T(z)^(cₚ / R).
-Since p(z⁺) = p⁺ and T(z⁺) = T⁺, where z⁺ is the z-coordinate of the first cell
-center above the bottom cell face, we have that
-p⁺ = A * T⁺^(cₚ / R) ==>
-A = p⁺ / T⁺^(cₚ / R) ==>
-p(z) = p⁺ * (T(z) / T⁺)^(cₚ / R).
-
-For `UseSurfaceTempAtBottom`, we assume that the air at the bottom cell face is
-in thermal equilibrium with the surface, whose temperature is Tₛ, so that
-T(z) = Tₛ.
-
-For `HydrostaticBottom`, we assume that the lapse rate in the bottom cell is
-∂T(z)/∂z = g / cₚ.
-This tells us that, for some constant T₀,
-T(z) = T₀ + g / cₚ * z.
-Since T(z⁺) = T⁺, we have that
-T⁺ = T₀ + g / cₚ * z⁺ ==>
-T₀ = T⁺ - g / cₚ * z⁺ ==>
-T(z) = T⁺ + g / cₚ * (z - z⁺).
-"""
-abstract type AbstractBottomExtrapolation end
-struct SameAsInterpolation <: AbstractBottomExtrapolation end
-struct UseSurfaceTempAtBottom <: AbstractBottomExtrapolation end
-struct HydrostaticBottom <: AbstractBottomExtrapolation end
-
-requires_z(::Any) = false
-requires_z(::Union{BestFit, HydrostaticBottom}) = true
-
-uniform_z_p(T, p₁, T₁, p₂, T₂) =
-    T₁ == T₂ ? sqrt(p₁ * p₂) : p₁ * (p₂ / p₁)^(log(T / T₁) / log(T₂ / T₁))
-best_fit_p(T, z, p₁, T₁, z₁, p₂, T₂, z₂) =
-    T₁ == T₂ ? p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁)) :
-    p₁ * (p₂ / p₁)^(log(T / T₁) / log(T₂ / T₁))
-
-function interp!(::ArithmeticMean, p, T, pꜜ, Tꜜ, pꜛ, Tꜛ)
-    @. T = (Tꜜ + Tꜛ) / 2
-    @. p = (pꜜ + pꜛ) / 2
-end
-function interp!(::GeometricMean, p, T, pꜜ, Tꜜ, pꜛ, Tꜛ)
-    @. T = sqrt(Tꜜ * Tꜛ)
-    @. p = sqrt(pꜜ * pꜛ)
-end
-function interp!(::UniformZ, p, T, pꜜ, Tꜜ, pꜛ, Tꜛ)
-    @. T = (Tꜜ + Tꜛ) / 2
-    @. p = uniform_z_p(T, pꜜ, Tꜜ, pꜛ, Tꜛ)
-end
-function interp!(::UniformP, p, T, pꜜ, Tꜜ, pꜛ, Tꜛ)
-    @. p = (pꜜ + pꜛ) / 2
-    @. T = Tꜜ * (Tꜛ / Tꜜ)^(log(p / pꜜ) / log(pꜛ / pꜜ)) # assume that pꜜ != pꜛ
-end
-function interp!(::BestFit, p, T, z, pꜜ, Tꜜ, zꜜ, pꜛ, Tꜛ, zꜛ)
-    @. T = Tꜜ + (Tꜛ - Tꜜ) * (z - zꜜ) / (zꜛ - zꜜ)
-    @. p = best_fit_p(T, z, pꜜ, Tꜜ, zꜜ, pꜛ, Tꜛ, zꜛ)
-end
-
-function extrap!(::ArithmeticMean, p, T, p⁺, T⁺, p⁺⁺, T⁺⁺, Tₛ, params)
-    @. T = (3 * T⁺ - T⁺⁺) / 2
-    @. p = (3 * p⁺ - p⁺⁺) / 2
-end
-function extrap!(::GeometricMean, p, T, p⁺, T⁺, p⁺⁺, T⁺⁺, Tₛ, params)
-    @. T = sqrt(T⁺^3 / T⁺⁺)
-    @. p = sqrt(p⁺^3 / p⁺⁺)
-end
-function extrap!(::UniformZ, p, T, p⁺, T⁺, p⁺⁺, T⁺⁺, Tₛ, params)
-    @. T = (3 * T⁺ - T⁺⁺) / 2
-    @. p = uniform_z_p(T, p⁺, T⁺, p⁺⁺, T⁺⁺)
-end
-function extrap!(::UniformP, p, T, p⁺, T⁺, p⁺⁺, T⁺⁺, Tₛ, params)
-    @. p = (3 * p⁺ - p⁺⁺) / 2
-    @. T = T⁺ * (T⁺⁺ / T⁺)^(log(p / p⁺) / log(p⁺⁺ / p⁺)) # assume that p⁺ != p⁺⁺
-end
-function extrap!(::BestFit, p, T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺, Tₛ, params)
-    @. T = T⁺ + (T⁺⁺ - T⁺) * (z - z⁺) / (z⁺⁺ - z⁺)
-    @. p = best_fit_p(T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺)
-end
-function extrap!(::UseSurfaceTempAtBottom, p, T, p⁺, T⁺, p⁺⁺, T⁺⁺, Tₛ, params)
-    cₚ = RRTMGP.Parameters.cp_d(params)
-    R = RRTMGP.Parameters.R_d(params)
-    @. T = Tₛ
-    @. p = p⁺ * (T / T⁺)^(cₚ / R)
-end
-function extrap!(
-    ::HydrostaticBottom,
-    p,
-    T,
-    z,
-    p⁺,
-    T⁺,
-    z⁺,
-    p⁺⁺,
-    T⁺⁺,
-    z⁺⁺,
-    Tₛ,
-    params,
-)
-    FT = eltype(p)
-    g = FT(RRTMGP.Parameters.grav(params))
-    cₚ = FT(RRTMGP.Parameters.cp_d(params))
-    R = FT(RRTMGP.Parameters.R_d(params))
-    @. T = T⁺ + g / cₚ * (z⁺ - z)
-    @. p = p⁺ * (T / T⁺)^(cₚ / R)
-end
+import RRTMGP:
+    AbstractInterpolation,
+    NoInterpolation,
+    ArithmeticMean,
+    GeometricMean,
+    UniformZ,
+    UniformP,
+    BestFit,
+    AbstractBottomExtrapolation,
+    SameAsInterpolation,
+    UseSurfaceTempAtBottom,
+    HydrostaticBottom,
+    requires_z,
+    interp!,
+    extrap!
 
 struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V, M}
     radiation_mode::R
