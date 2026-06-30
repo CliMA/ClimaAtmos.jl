@@ -558,7 +558,7 @@ function _fig_cloud_profile(
         title = "Model: Cloud Fraction (%)$zoom_tag",
         ylabel = "Height (km)",
     )
-    hm1 = CairoMakie.heatmap!(ax1, t_hrs, z_km, (mi .* 100)';
+    hm1 = CairoMakie.heatmap!(ax1, t_hrs, z_km, mi';
         colormap = :Blues, colorrange = (0, 100))
     CairoMakie.Colorbar(fig[1, 2], hm1; label = "%")
     CairoMakie.ylims!(ax1, ylims)
