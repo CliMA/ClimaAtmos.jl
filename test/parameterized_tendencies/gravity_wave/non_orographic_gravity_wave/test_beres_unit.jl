@@ -985,9 +985,13 @@ end
         # The flag, not the presence of a profile, selects the shape factor: a
         # Beres-G struct with shape_general=false and a gathered profile must
         # produce the EXACT half-sine spectrum (so half_sine runs are unaffected).
-        dc = FT(4.0); cmax = FT(100.0); nc = Int(2 * cmax / dc + 1)
+        dc = FT(4.0)
+        cmax = FT(100.0)
+        nc = Int(2 * cmax / dc + 1)
         c = ntuple(n -> FT((n - 1) * dc - cmax), Val(nc))
-        N_source = FT(0.01); Q0 = FT(8.0 / 86400.0); u_heat = FT(7.0)
+        N_source = FT(0.01)
+        Q0 = FT(8.0 / 86400.0)
+        u_heat = FT(7.0)
         g = _halfsine_profile(FT(2000.0), FT(8000.0), 64, FT)
         beres_off = BeresSourceParams{FT}(;
             Q0_threshold = FT(0), beres_scale_factor = FT(1.0),
@@ -1036,7 +1040,8 @@ end
         _beres_mech_flux(U, N_source, w, sf, weight, σ_x, L_system)
 
     @testset "Gate 5 (scaling): τ_mech ~ ρ0 U w_b²/N functional form" begin
-        U = FT(15.0); w = FT(2.0)
+        U = FT(15.0)
+        w = FT(2.0)
         f0 = mech(U, w)
         # quadratic in w_b
         @test mech(U, FT(2) * w) ≈ FT(4) * f0 rtol = 1e-12
@@ -1070,11 +1075,17 @@ end
     end
 
     @testset "Gate 8: β_tot toggles with mechanical_source; lands at c≈0" begin
-        dc = FT(4.0); cmax = FT(100.0); nc = Int(2 * cmax / dc + 1)
+        dc = FT(4.0)
+        cmax = FT(100.0)
+        nc = Int(2 * cmax / dc + 1)
         c = ntuple(n -> FT((n - 1) * dc - cmax), Val(nc))
         n_zero = clamp(round(Int, cmax / dc) + 1, 1, nc)
         @test c[n_zero] == FT(0)
-        U = FT(15.0); Q0 = FT(5e-5); h = FT(6000.0); w = FT(2.5); z_bot = FT(3000.0)
+        U = FT(15.0)
+        Q0 = FT(5e-5)
+        h = FT(6000.0)
+        w = FT(2.5)
+        z_bot = FT(3000.0)
         g = _halfsine_profile(z_bot, h, 64, FT)
 
         kw = (; Q0_threshold = FT(0), beres_scale_factor = sf, σ_x = σ_x,
@@ -1085,8 +1096,32 @@ end
         beres_mech = BeresSourceParams{FT}(; kw..., beres_mechanical_source = true)
 
         # span (arg after z_bot) = z_top - z_bot = h (profile on [z_bot, z_bot+h]).
-        B_no = _beres_launch_spectrum(c, U, Q0, h, N_source, z_bot, h, g, w, beres_nomech, Val(nc))
-        B_me = _beres_launch_spectrum(c, U, Q0, h, N_source, z_bot, h, g, w, beres_mech, Val(nc))
+        B_no = _beres_launch_spectrum(
+            c,
+            U,
+            Q0,
+            h,
+            N_source,
+            z_bot,
+            h,
+            g,
+            w,
+            beres_nomech,
+            Val(nc),
+        )
+        B_me = _beres_launch_spectrum(
+            c,
+            U,
+            Q0,
+            h,
+            N_source,
+            z_bot,
+            h,
+            g,
+            w,
+            beres_mech,
+            Val(nc),
+        )
 
         # Only the c≈0 bin differs; the difference equals β_mech.
         for n in 1:nc
@@ -1103,7 +1138,20 @@ end
         # doubling mech_weight doubles only the c≈0 increment.
         beres_mech2 = BeresSourceParams{FT}(; kw..., beres_mechanical_source = true,
             beres_mech_weight = FT(2) * mw)
-        B_me2 = _beres_launch_spectrum(c, U, Q0, h, N_source, z_bot, h, g, w, beres_mech2, Val(nc))
-        @test (B_me2[n_zero] - B_no[n_zero]) ≈ FT(2) * (B_me[n_zero] - B_no[n_zero]) rtol = 1e-12
+        B_me2 = _beres_launch_spectrum(
+            c,
+            U,
+            Q0,
+            h,
+            N_source,
+            z_bot,
+            h,
+            g,
+            w,
+            beres_mech2,
+            Val(nc),
+        )
+        @test (B_me2[n_zero] - B_no[n_zero]) ≈ FT(2) * (B_me[n_zero] - B_no[n_zero]) rtol =
+            1e-12
     end
 end

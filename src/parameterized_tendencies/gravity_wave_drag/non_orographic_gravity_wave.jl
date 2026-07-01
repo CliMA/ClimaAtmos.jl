@@ -135,7 +135,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_beres_B0_u = similar(Fields.level(Y.c.ρ, 1), NTuple{nc, FT}),
             gw_beres_B0_v = similar(Fields.level(Y.c.ρ, 1), NTuple{nc, FT}),
             gw_beres_gprofile =
-                similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
+            similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
             gw_w_obstacle = similar(Fields.level(Y.c.ρ, 1)),
             gw_beres_mech_flux = similar(Fields.level(Y.c.ρ, 1)),
         )
@@ -245,7 +245,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_beres_B0_u = similar(Fields.level(Y.c.ρ, 1), NTuple{nc, FT}),
             gw_beres_B0_v = similar(Fields.level(Y.c.ρ, 1), NTuple{nc, FT}),
             gw_beres_gprofile =
-                similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
+            similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
             gw_w_obstacle = similar(Fields.level(Y.c.ρ, 1)),
             gw_beres_mech_flux = similar(Fields.level(Y.c.ρ, 1)),
         )
@@ -1962,10 +1962,11 @@ envelope width the gather sampled on, used by the Beres-G sine transform.
 
 `gprofile` (peak-normalised `NTuple{ng}` on `[z_bot, z_top]`) and the flag
 `beres.beres_shape_general` select the vertical shape factor:
-- `gprofile === nothing` or `shape_general=false` → classical half-sine `V_hs`
-  (with `n_h_avg` resonance averaging), Beres (2004);
-- `shape_general=true` with a profile → Beres-G `|gs(m)|²` (Ext 1), single
-  evaluation (the real profile self-smooths; `n_h_avg` bypassed).
+
+  - `gprofile === nothing` or `shape_general=false` → classical half-sine `V_hs`
+    (with `n_h_avg` resonance averaging), Beres (2004);
+  - `shape_general=true` with a profile → Beres-G `|gs(m)|²` (Ext 1), single
+    evaluation (the real profile self-smooths; `n_h_avg` bypassed).
 
 The `c≈0` bin sums `β_therm` (thermal steady, shape-aware) and, when
 `beres_mechanical_source`, `β_mech` (Ext 3 obstacle term from `w_obstacle`).
