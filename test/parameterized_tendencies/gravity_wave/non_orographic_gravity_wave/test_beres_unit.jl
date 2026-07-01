@@ -31,9 +31,14 @@ const _beres_mech_flux = CA._beres_mech_flux
 const _beres_b0_band = CA._beres_b0_band
 const _beres_peaknorm = CA._beres_peaknorm
 
-# Sample the unit half-sine sin(π(z−z_bot)/h) on [z_bot, z_bot+h] at `ng` points.
-_halfsine_profile(z_bot, h, ng, FT) =
-    ntuple(i -> FT(sin(π * FT(i - 1) / FT(ng - 1))), ng)
+# Unit half-sine sin(π·(i−1)/(ng−1)) sampled at `ng` points, as a CONCRETE
+# NTuple{ng,FT}. `Val{ng}` keeps the length in the type so `_beres_gs` /
+# `_beres_launch_spectrum` dispatch is type-stable and compiles quickly (a runtime
+# `ntuple(f, ng)` returns a non-concrete tuple → type-unstable, pathological
+# compile). Placement onto [z_bot, z_bot+span] is done by `_beres_gs` via its
+# z_bot/span args, so the shape alone lives here.
+_halfsine_profile(::Val{ng}, FT) where {ng} =
+    ntuple(i -> FT(sin(π * FT(i - 1) / FT(ng - 1))), Val(ng))
 
 # NOTE: The wave_source / Beres spectrum computation is EDMF-mode-agnostic.
 # It takes (Q0, h, u_heat, N_source) directly, so these unit tests apply
@@ -919,28 +924,27 @@ end
     h = FT(5000.0)
 
     @testset "Gate 2: O(dz²) convergence of |gs|² to V_hs_sq (half-sine)" begin
+        # `_beres_gs` is a plain loop over a runtime-indexed NTuple, so specializing
+        # it for a large tuple is a slow compile; keep ng modest (≤ 129) — enough
+        # to show the O(dz²) ratio. Note the ng values must be a compile-time
+        # literal tuple (each ng specializes _beres_gs on NTuple{ng}).
         m_test = FT(1.7e-3)               # away from resonance π/h
         Vref = V_hs_sq(m_test, h)
-        prev_err = NaN
-        ratios = Float64[]
-        for ng in (33, 65, 129, 257)
-            g = _halfsine_profile(FT(0), h, ng, FT)
-            approx = _beres_gs(g, FT(0), h, m_test)^2
-            err = abs(approx - Vref) / Vref
-            isnan(prev_err) || push!(ratios, prev_err / err)
-            prev_err = err
-        end
+        e33 = abs(_beres_gs(_halfsine_profile(Val(33), FT), FT(0), h, m_test)^2 - Vref) / Vref
+        e65 = abs(_beres_gs(_halfsine_profile(Val(65), FT), FT(0), h, m_test)^2 - Vref) / Vref
+        e129 = abs(_beres_gs(_halfsine_profile(Val(129), FT), FT(0), h, m_test)^2 - Vref) / Vref
         # Each halving of dz quarters the error (O(dz²) ⇒ ratio → 4).
-        for r in ratios
-            @test 3.5 < r < 4.5
-        end
+        @test 3.5 < e33 / e65 < 4.5
+        @test 3.5 < e65 / e129 < 4.5
     end
 
     @testset "Gate 1 (in-source): sine_transform reduces to half-sine" begin
-        # Feed a finely-sampled half-sine on [0,h]; the full launch spectrum in
-        # sine_transform mode must match the half-sine spectrum to the quadrature
-        # tolerance (the algebraic NORMALIZATION parity is exact, 6.5e-14 offline;
-        # the residual here is purely the O(dz²) profile discretization).
+        # Feed a half-sine on [0,h] at the PRODUCTION resolution (N_BERES_PROFILE);
+        # the full launch spectrum in sine_transform mode must match the half-sine
+        # spectrum to the quadrature tolerance (the algebraic NORMALIZATION parity
+        # is exact, 6.5e-14 offline; the residual here is the O(dz²) profile
+        # discretization at ng=64, ~4e-4). Use the production ng — a large ng would
+        # make specializing `_beres_launch_spectrum` on NTuple{ng} a slow compile.
         dc = FT(4.0)
         cmax = FT(100.0)
         nc = Int(2 * cmax / dc + 1)
@@ -949,8 +953,7 @@ end
         Q0 = FT(10.0 / 86400.0)
         u_heat = FT(0.0)
 
-        ng = 513
-        g = _halfsine_profile(FT(0), h, ng, FT)
+        g = _halfsine_profile(Val(CA.N_BERES_PROFILE), FT)   # = 64 (production)
 
         beres_hs = BeresSourceParams{FT}(;
             Q0_threshold = FT(0), beres_scale_factor = FT(1.0),
@@ -978,7 +981,7 @@ end
         peak = maximum(abs, B_hs)
         maxabs = maximum(abs.(B_g .- B_hs))
         @test peak > 0
-        @test maxabs / peak < 1e-4          # ng=513 → quadrature-limited match
+        @test maxabs / peak < 2e-3          # ng=64 → quadrature-limited match
     end
 
     @testset "shape_general=false with a profile present stays half-sine" begin
@@ -992,7 +995,7 @@ end
         N_source = FT(0.01)
         Q0 = FT(8.0 / 86400.0)
         u_heat = FT(7.0)
-        g = _halfsine_profile(FT(2000.0), FT(8000.0), 64, FT)
+        g = _halfsine_profile(Val(64), FT)
         beres_off = BeresSourceParams{FT}(;
             Q0_threshold = FT(0), beres_scale_factor = FT(1.0),
             σ_x = FT(4000.0), ν_min = FT(2π / (120 * 60)),
@@ -1086,7 +1089,7 @@ end
         h = FT(6000.0)
         w = FT(2.5)
         z_bot = FT(3000.0)
-        g = _halfsine_profile(z_bot, h, 64, FT)
+        g = _halfsine_profile(Val(64), FT)
 
         kw = (; Q0_threshold = FT(0), beres_scale_factor = sf, σ_x = σ_x,
             ν_min = FT(8.727e-4), ν_max = FT(1.047e-2), n_ν = 9,
