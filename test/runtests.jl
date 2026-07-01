@@ -38,6 +38,7 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Larcform1 setup" begin @time include("larcform1.jl") end
 
     # Config tests
+    @safetestset "SlabOcean SST warning" begin @time include("slab_ocean_warning.jl") end
     @safetestset "Model getters" begin @time include("config/model_from_config.jl") end
     @safetestset "AtmosModel Constructor" begin @time include("config/atmos_model_constructor.jl") end
     @safetestset "Presets" begin @time include("presets.jl") end
