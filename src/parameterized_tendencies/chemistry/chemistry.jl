@@ -32,4 +32,14 @@ provided by the ClimaAtmosMusica extension when `Musica` is loaded.
 update_chemistry!(Y, p, t, ::Nothing) = nothing
 update_chemistry!(Y, p, t, ::AbstractChemistryModel) = nothing
 
+"""
+    chemistry_cache(Y, atmos)
+
+Return a named tuple of chemistry runtime objects (e.g. MICM solver and state)
+that should be created once and reused across timesteps. The MUSICA-backed
+implementation is provided by the ClimaAtmosMusica extension.
+"""
+chemistry_cache(_, ::Nothing) = (;)
+chemistry_cache(_, ::AbstractChemistryModel) = (;)
+
 function musica_species_names end

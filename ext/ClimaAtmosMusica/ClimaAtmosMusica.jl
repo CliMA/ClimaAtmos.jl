@@ -4,6 +4,19 @@ import ClimaAtmos
 import Musica
 
 """
+    ClimaAtmos.chemistry_cache(Y, chemistry_model::ClimaAtmos.GasPhaseChem)
+
+Create the MICM solver and its associated state once at cache-build time so
+they are not re-allocated on every chemistry timestep.
+"""
+function ClimaAtmos.chemistry_cache(_, chemistry_model::ClimaAtmos.GasPhaseChem)
+    isnothing(chemistry_model.config_path) && return (;)
+    micm = Musica.MICM(; config_path = chemistry_model.config_path)
+    state = Musica.create_state(micm)
+    return (; micm, state)
+end
+
+"""
     ClimaAtmos.chemistry_tendency!(Yₜ, Y, p, t, ::ClimaAtmos.GasPhaseChem)
 
 No-op in the extension: transport is handled by the auto-discovery machinery.
@@ -35,8 +48,7 @@ function ClimaAtmos.update_chemistry!(
 )
     isnothing(chemistry_model.config_path) && return nothing
 
-    micm = Musica.MICM(; config_path = chemistry_model.config_path) # chemistry model should have a micm
-    state = Musica.create_state(micm)                               # also make the state outside of the solve set
+    (; micm, state) = p.chemistry
     Musica.set_conditions!(state; temperatures=298.15, pressures=101325)
     Musica.set_user_defined_rate_parameters!(
         state,
