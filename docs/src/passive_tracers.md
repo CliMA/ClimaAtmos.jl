@@ -50,7 +50,7 @@ density-weighted counterpart `ρχ` in `Y.c`. For example:
 | `q_lcl` | `ρq_lcl` |
 | `q_rai` | `ρq_rai` |
 | `n_rai` | `ρn_rai` |
-| `A` (user-defined) | `ρA` |
+| `q_gas_A` (user-defined) | `ρq_gas_A` |
 
 This pairing is enforced by `get_ρχ_name(χ_name)` which constructs
 `ρχ` from `χ`.
@@ -76,26 +76,26 @@ reduced vertical diffusion coefficient (`α_vert_diff_microphysics`).
 
 ## Adding a New Passive Tracer
 
-To add a new passive tracer `A` that is transported through the full
+To add a new passive tracer `q_gas_A` that is transported through the full
 grid-scale + SGS system, the only changes needed are:
 
-### Step 1: Add `ρA` to the grid-scale prognostic state
+### Step 1: Add `ρq_gas_A` to the grid-scale prognostic state
 
-In `prognostic_variables.jl`, add `ρA` to the center variables:
+In `prognostic_variables.jl`, add `ρq_gas_A` to the center variables:
 
 ```julia
-ρA = ρ * physical_state.A
+ρq_gas_A = ρ * physical_state.q_gas_A
 ```
 
 This gives automatic grid-scale advection, diffusion, hyperdiffusion,
 and surface flux — all handled by `foreach_gs_tracer`.
 
-### Step 2: Add `A` to the SGS updraft state
+### Step 2: Add `q_gas_A` to the SGS updraft state
 
-In `prognostic_variables.jl`, add `A` to the SGS struct:
+In `prognostic_variables.jl`, add `q_gas_A` to the SGS struct:
 
 ```julia
-sgsʲs = uniform_subdomains((; ρa, mse, q_tot, A = physical_state.A), turbconv_model)
+sgsʲs = uniform_subdomains((; ρa, mse, q_tot, q_gas_A = physical_state.q_gas_A), turbconv_model)
 ```
 
 This gives automatic SGS entrainment, mass flux, diffusive flux,
@@ -104,10 +104,10 @@ all handled by `sgs_tracer_names`.
 
 ### Step 3: Initial condition
 
-Set the initial value of `A` in the setup file (e.g. `Bomex.jl`):
+Set the initial value of `q_gas_A` in the setup file (e.g. `Bomex.jl`):
 
 ```julia
-A = FT(1.0)  # constant initial concentration
+q_gas_A = FT(1.0)  # constant initial concentration
 ```
 
 That's it — no tendency code changes needed.
@@ -126,8 +126,8 @@ Key locations to update:
 
 | Location | What to add |
 |---|---|
-| `condensate_names` / `condensate_mass_names` in `jacobian_cache` | `@name(c.ρA)` |
-| `sgs_condensate_names` / `sgs_condensate_mass_names` in `jacobian_cache` | `@name(c.sgsʲs.:(1).A)` |
+| `condensate_names` / `condensate_mass_names` in `jacobian_cache` | `@name(c.ρq_gas_A)` |
+| `sgs_condensate_names` / `sgs_condensate_mass_names` in `jacobian_cache` | `@name(c.sgsʲs.:(1).q_gas_A)` |
 | SGS vertical diffusion block | Append to `sgs_microphysics_tracers` tuple |
 | SGS entrainment block | Append to `sgs_microphysics_tracers` tuple |
 | Grid-mean + SGS mass flux block | Append to `microphysics_tracers` tuple |

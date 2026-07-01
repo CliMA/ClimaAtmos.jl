@@ -14,6 +14,7 @@ struct AtmosCache{
     ORGW,
     RAD,
     TRAC,
+    CHEM,
     NETFLUXTOA,
     NETFLUXSFC,
     SSV,
@@ -58,6 +59,10 @@ struct AtmosCache{
     orographic_gravity_wave::ORGW
     radiation::RAD
     tracers::TRAC
+
+    """Runtime objects for chemistry (e.g. MICM solver and state); populated by the
+    ClimaAtmosMusica extension when a chemistry model is active."""
+    chemistry::CHEM
 
     """Net energy flux coming through top of atmosphere and surface"""
     net_energy_flux_toa::NETFLUXTOA
@@ -201,6 +206,7 @@ function build_cache(
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
     tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
+    chemistry = chemistry_cache(Y, atmos.chemistry_model)
 
     args = (
         dt,
@@ -218,6 +224,7 @@ function build_cache(
         orographic_gravity_wave,
         radiation,
         tracers,
+        chemistry,
         net_energy_flux_toa,
         net_energy_flux_sfc,
         steady_state_velocity,

@@ -872,3 +872,47 @@ add_diagnostic_variable!(
     comments = "Concentration of passive gas tracer A in the first updraft",
     compute = compute_q_gas_Aup,
 )
+
+###
+# Updraft passive gas tracer B (3d)
+###
+compute_q_gas_Bup(state, cache, time) =
+    compute_q_gas_Bup(
+        state, cache, time,
+        cache.atmos.turbconv_model, cache.atmos.chemistry_model,
+    )
+compute_q_gas_Bup(_, _, _, turbconv_model, chemistry_model) =
+    error_diagnostic_variable("q_gas_Bup", (turbconv_model, chemistry_model))
+
+compute_q_gas_Bup(state, _, _, ::PrognosticEDMFX, ::GasPhaseChem) =
+    (state.c.sgsʲs.:1).q_gas_B
+
+add_diagnostic_variable!(
+    short_name = "q_gas_Bup",
+    units = "kg kg^-1",
+    long_name = "Updraft Passive Gas Tracer B Concentration",
+    comments = "Concentration of passive gas tracer B in the first updraft",
+    compute = compute_q_gas_Bup,
+)
+
+###
+# Updraft passive gas tracer AB (3d)
+###
+compute_q_gas_ABup(state, cache, time) =
+    compute_q_gas_ABup(
+        state, cache, time,
+        cache.atmos.turbconv_model, cache.atmos.chemistry_model,
+    )
+compute_q_gas_ABup(_, _, _, turbconv_model, chemistry_model) =
+    error_diagnostic_variable("q_gas_ABup", (turbconv_model, chemistry_model))
+
+compute_q_gas_ABup(state, _, _, ::PrognosticEDMFX, ::GasPhaseChem) =
+    (state.c.sgsʲs.:1).q_gas_AB
+
+add_diagnostic_variable!(
+    short_name = "q_gas_ABup",
+    units = "kg kg^-1",
+    long_name = "Updraft Passive Gas Tracer AB Concentration",
+    comments = "Concentration of passive gas tracer AB in the first updraft",
+    compute = compute_q_gas_ABup,
+)

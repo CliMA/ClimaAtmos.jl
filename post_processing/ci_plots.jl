@@ -1461,6 +1461,10 @@ function make_plots(
     period_inst =
         available_periods_inst[argmin(CA.time_to_seconds.(available_periods_inst))]
 
+    short_names = filter(
+        n -> n in ClimaAnalysis.available_vars(simdirs[1]),
+        short_names,
+    )
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple

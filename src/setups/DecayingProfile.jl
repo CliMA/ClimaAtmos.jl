@@ -48,5 +48,5 @@ function center_initial_condition(setup::DecayingProfile, local_geometry, params
         T += _temperature_perturbation(local_geometry.coordinates)
     end
 
-    return physical_state(; T, p)
+    return physical_state(; T, p, q_gas_A = FT(0.0), q_gas_B = FT(0.0), q_gas_AB = FT(0.6))
 end
