@@ -95,33 +95,121 @@ export AbstractInterpolation,
     extrap!,
     uniform_z_p
 
-struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V, M}
-    radiation_mode::R
-    interpolation::I
-    bottom_extrapolation::B
-    lookups::L
-    params::P
-    lw_solver::LWS
-    sw_solver::SWS
-    as::AS  # Atmospheric state
-    views::V  # user-friendly views into the solver
-    metric_scaling::M
+"""
+    RRTMGPModel(solver, radiation_mode)
+
+A thin ClimaAtmos-side wrapper over an `RRTMGP.RRTMGPSolver`. RRTMGP owns the
+atmospheric state, boundary conditions, RTE workspaces, lookup tables, and flux
+buffers; this wrapper only adds a `getproperty` that maps ClimaAtmos's historical
+field names (e.g. `center_temperature`, `face_flux`) onto RRTMGP's named getters,
+so the per-step physics that writes inputs and reads fluxes stays unchanged.
+"""
+struct RRTMGPModel{S, M}
+    solver::S           # RRTMGP.RRTMGPSolver — owns state, workspaces, and fluxes
+    radiation_mode::M   # ClimaAtmos AbstractRRTMGPMode (kept for introspection)
 end
 
-# Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
+# Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints.
 Adapt.@adapt_structure RRTMGPModel
 
-function Base.getproperty(model::RRTMGPModel, s::Symbol)
-    if s in fieldnames(typeof(model))
-        return getfield(model, s)
-    else
-        return getproperty(getfield(model, :views), s)
-    end
+# `getproperty` is how the physics code reads and writes the solver's buffers. Each
+# historical field name maps to a writable, domain-sized (boundary-layer-excluded)
+# device array or view returned by an `RRTMGP` getter.
+function Base.getproperty(model::RRTMGPModel, name::Symbol)
+    (name === :solver || name === :radiation_mode) && return getfield(model, name)
+    return _solver_field(getfield(model, :solver), name)
 end
 
-function Base.propertynames(model::RRTMGPModel, private::Bool = false)
-    names = propertynames(getfield(model, :views))
-    return private ? (names..., fieldnames(typeof(model))...) : names
+Base.propertynames(::RRTMGPModel, private::Bool = false) =
+    private ? (:solver, :radiation_mode) : ()
+
+function _solver_field(solver, name::Symbol)
+    # --- net fluxes ---
+    name === :face_flux && return RRTMGP.net_flux(solver)
+    name === :face_clear_flux && return RRTMGP.clear_net_flux(solver)
+    # --- longwave fluxes ---
+    name === :face_lw_flux && return RRTMGP.lw_flux_net(solver)
+    name === :face_lw_flux_up && return RRTMGP.lw_flux_up(solver)
+    name === :face_lw_flux_dn && return RRTMGP.lw_flux_dn(solver)
+    name === :face_clear_lw_flux && return RRTMGP.clear_lw_flux(solver)
+    name === :face_clear_lw_flux_up && return RRTMGP.clear_lw_flux_up(solver)
+    name === :face_clear_lw_flux_dn && return RRTMGP.clear_lw_flux_dn(solver)
+    # --- shortwave fluxes ---
+    name === :face_sw_flux && return RRTMGP.sw_flux_net(solver)
+    name === :face_sw_flux_up && return RRTMGP.sw_flux_up(solver)
+    name === :face_sw_flux_dn && return RRTMGP.sw_flux_dn(solver)
+    name === :face_sw_direct_flux_dn && return RRTMGP.sw_direct_flux_dn(solver)
+    name === :face_clear_sw_flux && return RRTMGP.clear_sw_flux(solver)
+    name === :face_clear_sw_flux_up && return RRTMGP.clear_sw_flux_up(solver)
+    name === :face_clear_sw_flux_dn && return RRTMGP.clear_sw_flux_dn(solver)
+    name === :face_clear_sw_direct_flux_dn &&
+        return RRTMGP.clear_sw_direct_flux_dn(solver)
+    # --- atmospheric state ---
+    name === :center_pressure && return RRTMGP.layer_pressure(solver)
+    name === :center_temperature && return RRTMGP.layer_temperature(solver)
+    name === :center_relative_humidity &&
+        return RRTMGP.layer_relative_humidity(solver)
+    name === :surface_temperature && return RRTMGP.surface_temperature(solver)
+    name === :center_z && return RRTMGP.center_z(solver)
+    name === :face_z && return RRTMGP.face_z(solver)
+    name === :latitude && return RRTMGP.latitude(solver)
+    # --- boundary conditions ---
+    name === :surface_emissivity && return RRTMGP.surface_emissivity(solver)
+    name === :cos_zenith && return RRTMGP.cos_zenith(solver)
+    name === :toa_flux && return RRTMGP.toa_flux(solver)
+    name === :direct_sw_surface_albedo &&
+        return RRTMGP.direct_sw_surface_albedo(solver)
+    name === :diffuse_sw_surface_albedo &&
+        return RRTMGP.diffuse_sw_surface_albedo(solver)
+    name === :top_of_atmosphere_lw_flux_dn &&
+        return RRTMGP.top_of_atmosphere_lw_flux_dn(solver)
+    # --- clouds ---
+    name === :center_cloud_liquid_effective_radius &&
+        return RRTMGP.cloud_liquid_effective_radius(solver)
+    name === :center_cloud_ice_effective_radius &&
+        return RRTMGP.cloud_ice_effective_radius(solver)
+    name === :center_cloud_liquid_water_path &&
+        return RRTMGP.cloud_liquid_water_path(solver)
+    name === :center_cloud_ice_water_path &&
+        return RRTMGP.cloud_ice_water_path(solver)
+    name === :center_cloud_fraction && return RRTMGP.cloud_fraction(solver)
+    name === :sw_cloud_cover && return RRTMGP.sw_cloud_cover(solver)
+    name === :lw_cloud_cover && return RRTMGP.lw_cloud_cover(solver)
+    # --- aerosols ---
+    name === :aod_sw_extinction && return RRTMGP.aod_sw_extinction(solver)
+    name === :aod_sw_scattering && return RRTMGP.aod_sw_scattering(solver)
+    # --- gases and aerosols keyed by chemical/aerosol name (parsed) ---
+    return _named_solver_field(solver, name, String(name))
+end
+
+# Gas VMRs (`[center_]volume_mixing_ratio_<gas>`) and per-aerosol properties
+# (`center_<aero>_column_mass_density`, `center_<aero>_radius`) are keyed by a name
+# that RRTMGP resolves through its own gas/aerosol maps. The cloud effective radii,
+# which also end in `_radius`, are handled by `_solver_field` above and never reach
+# here.
+function _named_solver_field(solver, name::Symbol, s::String)
+    if startswith(s, "center_volume_mixing_ratio_")
+        return RRTMGP.volume_mixing_ratio(
+            solver,
+            s[(ncodeunits("center_volume_mixing_ratio_") + 1):end],
+        )
+    elseif startswith(s, "volume_mixing_ratio_")
+        return RRTMGP.volume_mixing_ratio(
+            solver,
+            s[(ncodeunits("volume_mixing_ratio_") + 1):end],
+        )
+    elseif startswith(s, "center_") && endswith(s, "_column_mass_density")
+        return RRTMGP.aerosol_column_mass_density(
+            solver,
+            s[(ncodeunits("center_") + 1):(end - ncodeunits("_column_mass_density"))],
+        )
+    elseif startswith(s, "center_") && endswith(s, "_radius")
+        return RRTMGP.aerosol_radius(
+            solver,
+            s[(ncodeunits("center_") + 1):(end - ncodeunits("_radius"))],
+        )
+    end
+    error("RRTMGPModel has no field `$name`")
 end
 
 get_radiation_method(m::GrayRadiation) = RRTMGP.GrayRadiation()
@@ -326,76 +414,40 @@ function _RRTMGPModel(
 
     radiation_method = get_radiation_method(radiation_mode)
     (; lookups, lu_kwargs) = RRTMGP.lookup_tables(grid_params, radiation_method)
-    views = []
 
-    t = (views, domain_nlay)
+    # `RRTMGP.RRTMGPSolver` (built at the end) owns the radiative sources, the band
+    # and broadband flux buffers, and the longwave/shortwave RTE workspaces. Here we
+    # build only the boundary conditions and atmospheric state, and seed their inputs
+    # from `dict` via `set_input!` (which fills the physical domain and leaves the
+    # isothermal boundary layer, if any, for RRTMGP to fill internally).
 
-    src_lw = if op isa RRTMGP.Optics.OneScalar
-        RRTMGP.SourceLWNoScat(grid_params; params)
-    else
-        RRTMGP.SourceLW2Str(grid_params; params)
-    end
-    flux_lw = RRTMGP.Fluxes.FluxLW(grid_params)
-    fluxb_lw =
-        radiation_mode isa GrayRadiation ? nothing :
-        RRTMGP.Fluxes.FluxLW(grid_params)
-    set_and_save!(flux_lw.flux_up, "face_lw_flux_up", t...)
-    set_and_save!(flux_lw.flux_dn, "face_lw_flux_dn", t...)
-    set_and_save!(flux_lw.flux_net, "face_lw_flux", t...)
-    if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-        flux_lw2 = RRTMGP.Fluxes.FluxLW(grid_params)
-        set_and_save!(flux_lw2.flux_up, "face_clear_lw_flux_up", t...)
-        set_and_save!(flux_lw2.flux_dn, "face_clear_lw_flux_dn", t...)
-        set_and_save!(flux_lw2.flux_net, "face_clear_lw_flux", t...)
-    end
-
+    # longwave boundary conditions
     sfc_emis = DA{FT}(undef, lu_kwargs.nbnd_lw, ncol)
-    set_and_save!(sfc_emis, "surface_emissivity", t..., dict)
+    set_input!(sfc_emis, "surface_emissivity", domain_nlay, dict)
     name = "top_of_atmosphere_lw_flux_dn"
     if Symbol(name) in keys(dict)
         inc_flux = DA{FT}(undef, ncol)
-        set_and_save!(transpose(inc_flux), name, t..., dict)
+        set_input!(transpose(inc_flux), name, domain_nlay, dict)
     else
         inc_flux = nothing
     end
     bcs_lw = RRTMGP.BCs.LwBCs(sfc_emis, inc_flux)
-    src_sw =
-        op isa RRTMGP.Optics.OneScalar ? nothing :
-        RRTMGP.SourceSW2Str(grid_params)
-    flux_sw = RRTMGP.Fluxes.FluxSW(grid_params)
-    fluxb_sw =
-        radiation_mode isa GrayRadiation ? nothing :
-        RRTMGP.Fluxes.FluxSW(grid_params)
-    set_and_save!(flux_sw.flux_up, "face_sw_flux_up", t...)
-    set_and_save!(flux_sw.flux_dn, "face_sw_flux_dn", t...)
-    set_and_save!(flux_sw.flux_net, "face_sw_flux", t...)
-    set_and_save!(flux_sw.flux_dn_dir, "face_sw_direct_flux_dn", t...)
-    if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-        flux_sw2 = RRTMGP.Fluxes.FluxSW(grid_params)
-        set_and_save!(flux_sw2.flux_up, "face_clear_sw_flux_up", t...)
-        set_and_save!(flux_sw2.flux_dn, "face_clear_sw_flux_dn", t...)
-        set_and_save!(
-            flux_sw2.flux_dn_dir,
-            "face_clear_sw_direct_flux_dn",
-            t...,
-        )
-        set_and_save!(flux_sw2.flux_net, "face_clear_sw_flux", t...)
-    end
 
+    # shortwave boundary conditions
     cos_zenith = DA{FT}(undef, ncol)
-    set_and_save!(cos_zenith, "cos_zenith", t..., dict)
+    set_input!(cos_zenith, "cos_zenith", domain_nlay, dict)
     toa_flux = DA{FT}(undef, ncol)
-    set_and_save!(toa_flux, "toa_flux", t..., dict)
+    set_input!(toa_flux, "toa_flux", domain_nlay, dict)
     sfc_alb_direct = DA{FT}(undef, lu_kwargs.nbnd_sw, ncol)
-    set_and_save!(sfc_alb_direct, "direct_sw_surface_albedo", t..., dict)
+    set_input!(sfc_alb_direct, "direct_sw_surface_albedo", domain_nlay, dict)
     sfc_alb_diffuse = DA{FT}(undef, lu_kwargs.nbnd_sw, ncol)
-    set_and_save!(sfc_alb_diffuse, "diffuse_sw_surface_albedo", t..., dict)
+    set_input!(sfc_alb_diffuse, "diffuse_sw_surface_albedo", domain_nlay, dict)
     name = "top_of_atmosphere_diffuse_sw_flux_dn"
     if Symbol(name) in keys(dict)
         @warn "incoming diffuse shortwave fluxes are not yet implemented \
                in RRTMGP.jl; the value of $name will be ignored"
         inc_flux_diffuse = DA{FT}(undef, ncol, ngpt_sw)
-        set_and_save!(transpose(inc_flux_diffuse), name, t..., dict)
+        set_input!(transpose(inc_flux_diffuse), name, domain_nlay, dict)
     else
         inc_flux_diffuse = nothing
     end
@@ -407,17 +459,12 @@ function _RRTMGPModel(
         sfc_alb_diffuse,
     )
 
-    set_and_save!(similar(flux_lw.flux_net), "face_flux", t...)
-    if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-        set_and_save!(similar(flux_lw2.flux_net), "face_clear_flux", t...)
-    end
-
     if !(:latitude in keys(dict))
         lon = lat = nothing
     else
         lon = DA{FT}(undef, ncol) # TODO: lon required but unused
         lat = DA{FT}(undef, ncol)
-        set_and_save!(lat, "latitude", t..., dict)
+        set_input!(lat, "latitude", domain_nlay, dict)
     end
 
     p_lev = DA{FT}(undef, nlay + 1, ncol)
@@ -428,23 +475,23 @@ function _RRTMGPModel(
     end
     t_lev = DA{FT}(undef, nlay + 1, ncol)
     t_sfc = DA{FT}(undef, ncol)
-    set_and_save!(t_sfc, "surface_temperature", t..., dict)
+    set_input!(t_sfc, "surface_temperature", domain_nlay, dict)
 
     if radiation_mode isa GrayRadiation
         p_lay = DA{FT}(undef, nlay, ncol)
         t_lay = DA{FT}(undef, nlay, ncol)
-        set_and_save!(p_lay, "center_pressure", t..., dict)
-        set_and_save!(t_lay, "center_temperature", t..., dict)
+        set_input!(p_lay, "center_pressure", domain_nlay, dict)
+        set_input!(t_lay, "center_temperature", domain_nlay, dict)
 
         z_lev = DA{FT}(undef, nlay + 1, ncol) # TODO: z_lev required but unused
 
-        # lapse_rate is a constant, so don't use set_and_save! to get it
+        # lapse_rate is a constant, so don't use set_input! to get it
         :lapse_rate in keys(dict) || throw(UndefKeywordError(:lapse_rate))
         α = pop!(dict, :lapse_rate)
         α isa Real || error("lapse_rate must be a Real")
 
         d0 = DA{FT}(undef, ncol)
-        set_and_save!(d0, "optical_thickness_parameter", t..., dict)
+        set_input!(d0, "optical_thickness_parameter", domain_nlay, dict)
         otp = RRTMGP.AtmosphericStates.GrayOpticalThicknessOGorman2008(FT)
         as = RRTMGP.AtmosphericStates.GrayAtmosphericState(
             lat,
@@ -461,9 +508,9 @@ function _RRTMGPModel(
         p_lay = view(layerdata, 2, :, :)
         t_lay = view(layerdata, 3, :, :)
         rh_lay = view(layerdata, 4, :, :)
-        set_and_save!(p_lay, "center_pressure", t..., dict)
-        set_and_save!(t_lay, "center_temperature", t..., dict)
-        set_and_save!(rh_lay, "center_relative_humidity", t..., dict)
+        set_input!(p_lay, "center_pressure", domain_nlay, dict)
+        set_input!(t_lay, "center_temperature", domain_nlay, dict)
+        set_input!(rh_lay, "center_relative_humidity", domain_nlay, dict)
         vmr_str = "volume_mixing_ratio_"
         gas_names = filter(
             gas_name ->
@@ -480,17 +527,17 @@ function _RRTMGPModel(
                 DA{FT}(undef, lu_kwargs.ngas_sw),
             )
             vmr.vmr .= 0 # TODO: do we need this?
-            set_and_save!(vmr.vmr_h2o, "center_$(vmr_str)h2o", t..., dict)
-            set_and_save!(vmr.vmr_o3, "center_$(vmr_str)o3", t..., dict)
+            set_input!(vmr.vmr_h2o, "center_$(vmr_str)h2o", domain_nlay, dict)
+            set_input!(vmr.vmr_o3, "center_$(vmr_str)o3", domain_nlay, dict)
             for gas_name in gas_names
                 gas_view = view(vmr.vmr, lookups.idx_gases_sw[gas_name])
-                set_and_save!(gas_view, "$vmr_str$gas_name", t..., dict)
+                set_input!(gas_view, "$vmr_str$gas_name", domain_nlay, dict)
             end
         else
             vmr = RRTMGP.Vmrs.Vmr(DA{FT}(undef, lu_kwargs.ngas_sw, nlay, ncol))
             for gas_name in ["h2o", "o3", gas_names...]
                 gas_view = view(vmr.vmr, lookups.idx_gases_sw[gas_name], :, :)
-                set_and_save!(gas_view, "center_$vmr_str$gas_name", t..., dict)
+                set_input!(gas_view, "center_$vmr_str$gas_name", domain_nlay, dict)
             end
         end
 
@@ -498,28 +545,43 @@ function _RRTMGPModel(
             cloud_state = nothing
         else
             cld_r_eff_liq = DA{FT}(undef, nlay, ncol)
-            name = "center_cloud_liquid_effective_radius"
-            set_and_save!(cld_r_eff_liq, name, t..., dict)
+            set_input!(
+                cld_r_eff_liq,
+                "center_cloud_liquid_effective_radius",
+                domain_nlay,
+                dict,
+            )
             cld_r_eff_ice = DA{FT}(undef, nlay, ncol)
-            name = "center_cloud_ice_effective_radius"
-            set_and_save!(cld_r_eff_ice, name, t..., dict)
+            set_input!(
+                cld_r_eff_ice,
+                "center_cloud_ice_effective_radius",
+                domain_nlay,
+                dict,
+            )
             cld_path_liq = DA{FT}(undef, nlay, ncol)
-            name = "center_cloud_liquid_water_path"
-            set_and_save!(cld_path_liq, name, t..., dict)
+            set_input!(
+                cld_path_liq,
+                "center_cloud_liquid_water_path",
+                domain_nlay,
+                dict,
+            )
             cld_path_ice = DA{FT}(undef, nlay, ncol)
-            name = "center_cloud_ice_water_path"
-            set_and_save!(cld_path_ice, name, t..., dict)
+            set_input!(
+                cld_path_ice,
+                "center_cloud_ice_water_path",
+                domain_nlay,
+                dict,
+            )
             cld_frac = DA{FT}(undef, nlay, ncol)
-            set_and_save!(cld_frac, "center_cloud_fraction", t..., dict)
+            set_input!(cld_frac, "center_cloud_fraction", domain_nlay, dict)
             cld_mask_lw = DA{Bool}(undef, nlay, ncol)
             cld_mask_sw = DA{Bool}(undef, nlay, ncol)
+            # cloud covers are outputs (computed by the solve); only allocate them
             cld_cover_sw = DA{FT}(undef, ncol)
-            set_and_save!(cld_cover_sw, "sw_cloud_cover", t...)
             cld_cover_lw = DA{FT}(undef, ncol)
-            set_and_save!(cld_cover_lw, "lw_cloud_cover", t...)
             cld_overlap = RRTMGP.AtmosphericStates.MaxRandomOverlap()
 
-            # ice_roughness is a constant, so don't use set_and_save! to get it
+            # ice_roughness is a constant, so don't use set_input! to get it
             if !(:ice_roughness in keys(dict))
                 throw(UndefKeywordError(:ice_roughness))
             end
@@ -547,8 +609,8 @@ function _RRTMGPModel(
             aod_sw_ext = DA{FT}(undef, ncol)
             aod_sw_sca = DA{FT}(undef, ncol)
             aero_mask = DA{Bool}(undef, nlay, ncol)
-            set_and_save!(aod_sw_ext, "aod_sw_extinction", t..., dict)
-            set_and_save!(aod_sw_sca, "aod_sw_scattering", t..., dict)
+            set_input!(aod_sw_ext, "aod_sw_extinction", domain_nlay, dict)
+            set_input!(aod_sw_sca, "aod_sw_scattering", domain_nlay, dict)
 
             n_aerosol_sizes = maximum(values(lookups.idx_aerosize_sw)) # TODO: verify correctness
             n_aerosols = length(lookups.idx_aerosol_sw) # TODO: verify correctness
@@ -575,19 +637,19 @@ function _RRTMGPModel(
             ]
             for (i, name) in enumerate(aerosol_names)
                 if occursin("dust", name) || occursin("ss", name)
-                    set_and_save!(
+                    set_input!(
                         view(aero_size, i, :, :),
                         "center_$(name)_radius",
-                        t...,
+                        domain_nlay,
                         dict,
                     )
                 end
             end
             for (i, name) in enumerate(aerosol_names)
-                set_and_save!(
+                set_input!(
                     view(aero_mass, i, :, :),
                     "center_$(name)_column_mass_density",
-                    t...,
+                    domain_nlay,
                     dict,
                 )
             end
@@ -615,28 +677,13 @@ function _RRTMGPModel(
         )
     end
 
-    sw_solver = RRTMGP.RTE.TwoStreamSWRTE(
-        context,
-        op,
-        src_sw,
-        bcs_sw,
-        fluxb_sw,
-        flux_sw,
-    )
-    lw_solver = RRTMGP.RTE.TwoStreamLWRTE(
-        context,
-        op,
-        src_lw,
-        bcs_lw,
-        fluxb_lw,
-        flux_lw,
-    )
-
     if requires_z(interpolation) || requires_z(bottom_extrapolation)
         z_lay = DA{FT}(undef, nlay, ncol)
-        set_and_save!(z_lay, "center_z", t..., dict)
+        set_input!(z_lay, "center_z", domain_nlay, dict)
         z_lev = DA{FT}(undef, nlay + 1, ncol)
-        set_and_save!(z_lev, "face_z", t..., dict)
+        set_input!(z_lev, "face_z", domain_nlay, dict)
+        center_z = z_lay
+        face_z = z_lev
         if radiation_mode.deep_atmosphere && :planet_radius in keys(dict)
             planet_radius = pop!(dict, :planet_radius)
             # Area ratio appears in denominator of RRTMGP scaling functions,
@@ -645,6 +692,9 @@ function _RRTMGPModel(
             metric_scaling .=
                 inv.(((z_lev .+ planet_radius) ./ planet_radius) .^ (FT(2)))
         end
+    else
+        center_z = nothing
+        face_z = nothing
     end
 
     if length(dict) > 0
@@ -655,18 +705,24 @@ function _RRTMGPModel(
         )
     end
 
-    return RRTMGPModel(
-        radiation_mode,
+    # RRTMGP builds and owns the sources, flux buffers, and RTE workspaces. `op` is
+    # `TwoStream`, so both bands use scattering optics, matching the previous setup.
+    solver = RRTMGP.RRTMGPSolver(
+        grid_params,
+        radiation_method,
+        params,
+        bcs_lw,
+        bcs_sw,
+        as;
+        op_lw = op,
+        op_sw = op,
+        center_z,
+        face_z,
         interpolation,
         bottom_extrapolation,
-        lookups,
-        params,
-        lw_solver,
-        sw_solver,
-        as,
-        NamedTuple(views),
-        metric_scaling,
+        deep_atmosphere_scaling = metric_scaling,
     )
+    return RRTMGPModel(solver, radiation_mode)
 end
 
 # This sets `array .= value`, but it allows `array` to be to be a `CuArray`
@@ -699,197 +755,48 @@ function set_array!(array, value::AbstractArray{<:Real}, symbol)
     end
 end
 
-function set_and_save!(array, name, views, domain_nlay, dict = nothing)
+# Seed an RRTMGP input buffer from `dict[name]`. For `center_`/`face_` fields only
+# the physical domain is written; the isothermal boundary layer (if any) is filled
+# by RRTMGP inside `update_fluxes!`. Mirrors the old `set_and_save!`, minus recording
+# a view (the getters now recover every buffer from the solver).
+function set_input!(array, name, domain_nlay, dict)
     domain_symbol = Symbol(name)
-
-    if isnothing(dict)
-        domain_value = NaN
-    else
-        if !(domain_symbol in keys(dict))
-            throw(UndefKeywordError(domain_symbol))
-        end
-        domain_value = pop!(dict, domain_symbol)
-    end
-
+    domain_symbol in keys(dict) || throw(UndefKeywordError(domain_symbol))
+    domain_value = pop!(dict, domain_symbol)
     if startswith(name, "center_") || startswith(name, "face_")
         domain_range =
-            startswith(name, "center_") ? (1:domain_nlay) :
-            (1:(domain_nlay + 1))
-        domain_view = view(array, domain_range, :)
-        set_array!(domain_view, domain_value, domain_symbol)
-        push!(views, (domain_symbol, domain_view))
+            startswith(name, "center_") ? (1:domain_nlay) : (1:(domain_nlay + 1))
+        set_array!(view(array, domain_range, :), domain_value, domain_symbol)
     else
         set_array!(array, domain_value, domain_symbol)
-        push!(views, (domain_symbol, array))
     end
+    return nothing
 end
 
 """
     update_fluxes!(model, seedval)
 
-Updates the fluxes in the `RRTMGPModel` based on its internal state. Returns the
-net flux at cell faces in the domain, `model.face_flux`. The full set of fluxes
-available in the model after calling this function is
+Run RRTMGP's full radiation update on the wrapped solver — prepare the atmospheric
+state (interpolate levels, add the isothermal boundary layer, clip, compute
+concentrations), solve the longwave and shortwave problems, and combine them into
+the net flux — and return the domain net flux at cell faces (`model.face_flux`).
+`seedval` reseeds RRTMGP's cloud-sampling RNG when the mode requests it. After the
+call these fluxes are available through `getproperty`:
 
   - `face_flux`
   - `face_lw_flux`, `face_lw_flux_dn`, `face_lw_flux_up`
   - `face_sw_flux`, `face_sw_flux_dn`, `face_sw_flux_up`, `face_sw_direct_flux_dn`
-    If `radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics`, the set of
-    available fluxes also includes
+
+If `radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics`, the set of available
+fluxes also includes
+
   - `face_clear_flux`
   - `face_clear_lw_flux`, `face_clear_lw_flux_dn`, `face_clear_lw_flux_up`
   - `face_clear_sw_flux`, `face_clear_sw_flux_dn`, `face_clear_sw_flux_up`,
     `face_clear_sw_direct_flux_dn`
 """
-NVTX.@annotate function update_fluxes!(model, seedval)
-    (; radiation_mode, as, interpolation, bottom_extrapolation, params) = model
-    if (
-        radiation_mode isa AllSkyRadiation ||
-        radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-    )
-        radiation_mode.reset_rng_seed && Random.seed!(seedval)
-    end
-    # The interpolation, boundary-layer, clipping, and concentration steps now
-    # live in RRTMGP; delegate to them (operating in place on `model.as`).
-    p_min = RRTMGP.get_p_min(as, _lw_lookup(model))
-    zs = requires_z(interpolation) || requires_z(bottom_extrapolation)
-    RRTMGP.interpolate_levels!(
-        as,
-        interpolation,
-        bottom_extrapolation,
-        params;
-        center_z = zs ? model.center_z : nothing,
-        face_z = zs ? model.face_z : nothing,
-        isothermal_boundary_layer = radiation_mode.add_isothermal_boundary_layer,
-    )
-    radiation_mode.add_isothermal_boundary_layer &&
-        RRTMGP.add_isothermal_boundary_layer!(as, p_min)
-    RRTMGP.clip!(as, p_min, _idx_h2o(model))
-    RRTMGP.update_concentrations!(
-        as,
-        params,
-        ClimaComms.device(model.sw_solver.context),
-        _idx_h2o(model),
-    )
-    update_lw_fluxes!(model.radiation_mode, model)
-    update_sw_fluxes!(model.radiation_mode, model)
-    update_net_fluxes!(model.radiation_mode, model)
-    return model.face_flux
-end
-
-# The grid-adaptation, clipping, and concentration steps now live in RRTMGP
-# (lifted from this file). These helpers supply the longwave lookup table (for
-# `p_min`) and the H2O gas index (for column dry air and clipping), both of which
-# are `nothing` for gray radiation, which uses no lookup tables.
-_lw_lookup(model) = _lw_lookup(model, model.radiation_mode)
-_lw_lookup(_, ::GrayRadiation) = nothing
-_lw_lookup(model, _) = model.lookups.lookup_lw
-
-_idx_h2o(model) = _idx_h2o(model, model.radiation_mode)
-_idx_h2o(_, ::GrayRadiation) = nothing
-_idx_h2o(model, _) = model.lookups.lookup_lw.idx_h2o
-
-NVTX.@annotate update_lw_fluxes!(::GrayRadiation, model) =
-    RRTMGP.RTESolver.solve_lw!(model.lw_solver, model.as, model.metric_scaling)
-NVTX.@annotate update_lw_fluxes!(::ClearSkyRadiation, model) =
-    RRTMGP.RTESolver.solve_lw!(
-        model.lw_solver,
-        model.as,
-        model.lookups.lookup_lw,
-        nothing,
-        model.lookups.lookup_lw_aero,
-        model.metric_scaling,
-    )
-NVTX.@annotate update_lw_fluxes!(::AllSkyRadiation, model) =
-    RRTMGP.RTESolver.solve_lw!(
-        model.lw_solver,
-        model.as,
-        model.lookups.lookup_lw,
-        model.lookups.lookup_lw_cld,
-        model.lookups.lookup_lw_aero,
-        model.metric_scaling,
-    )
-NVTX.@annotate function update_lw_fluxes!(
-    ::AllSkyRadiationWithClearSkyDiagnostics,
-    model,
-)
-    RRTMGP.RTESolver.solve_lw!(
-        model.lw_solver,
-        model.as,
-        model.lookups.lookup_lw,
-        nothing,
-        model.lookups.lookup_lw_aero,
-        model.metric_scaling,
-    )
-    parent(model.face_clear_lw_flux_up) .= parent(model.face_lw_flux_up)
-    parent(model.face_clear_lw_flux_dn) .= parent(model.face_lw_flux_dn)
-    parent(model.face_clear_lw_flux) .= parent(model.face_lw_flux)
-    RRTMGP.RTESolver.solve_lw!(
-        model.lw_solver,
-        model.as,
-        model.lookups.lookup_lw,
-        model.lookups.lookup_lw_cld,
-        model.lookups.lookup_lw_aero,
-        model.metric_scaling,
-    )
-end
-
-NVTX.@annotate update_sw_fluxes!(::GrayRadiation, model) =
-    RRTMGP.RTESolver.solve_sw!(model.sw_solver, model.as, model.metric_scaling)
-NVTX.@annotate update_sw_fluxes!(::ClearSkyRadiation, model) =
-    RRTMGP.RTESolver.solve_sw!(
-        model.sw_solver,
-        model.as,
-        model.lookups.lookup_sw,
-        nothing,
-        model.lookups.lookup_sw_aero,
-        model.metric_scaling,
-    )
-NVTX.@annotate update_sw_fluxes!(::AllSkyRadiation, model) =
-    RRTMGP.RTESolver.solve_sw!(
-        model.sw_solver,
-        model.as,
-        model.lookups.lookup_sw,
-        model.lookups.lookup_sw_cld,
-        model.lookups.lookup_sw_aero,
-        model.metric_scaling,
-    )
-NVTX.@annotate function update_sw_fluxes!(
-    ::AllSkyRadiationWithClearSkyDiagnostics,
-    model,
-)
-    RRTMGP.RTESolver.solve_sw!(
-        model.sw_solver,
-        model.as,
-        model.lookups.lookup_sw,
-        nothing,
-        model.lookups.lookup_sw_aero,
-        model.metric_scaling,
-    )
-    parent(model.face_clear_sw_flux_up) .= parent(model.face_sw_flux_up)
-    parent(model.face_clear_sw_flux_dn) .= parent(model.face_sw_flux_dn)
-    parent(model.face_clear_sw_direct_flux_dn) .=
-        parent(model.face_sw_direct_flux_dn)
-    parent(model.face_clear_sw_flux) .= parent(model.face_sw_flux)
-    RRTMGP.RTESolver.solve_sw!(
-        model.sw_solver,
-        model.as,
-        model.lookups.lookup_sw,
-        model.lookups.lookup_sw_cld,
-        model.lookups.lookup_sw_aero,
-        model.metric_scaling,
-    )
-end
-
-function update_net_fluxes!(_, model)
-    model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
-
-end
-function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
-    model.face_clear_flux .=
-        model.face_clear_lw_flux .+ model.face_clear_sw_flux
-    model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
-end
+NVTX.@annotate update_fluxes!(model::RRTMGPModel, seedval) =
+    RRTMGP.update_fluxes!(model.solver, seedval)
 
 include("update_inputs.jl")
 end # end module

@@ -209,14 +209,41 @@ model_allsky = CA.AtmosModel(; radiation_mode)
 (Y_allsky, p_allsky) = build_state_cache(FT, model_allsky; grid = column,
     aerosol_names = ("DST01",),
 );
-# Radiation flux arrays are initialized to NaN by set_and_save! (filled only after solver runs).
-# Zero them so diagnostics return finite values when tested outside a time-stepping loop.
+# RRTMGP allocates its flux and cloud-cover buffers with `undef` and fills them only
+# when the solver runs; these diagnostics are exercised without a time step. Zero the
+# output buffers a radiation diagnostic reads, and scrub any NaN from the kwarg-seeded
+# cloud/aerosol inputs, so every diagnostic returns finite values.
 let rrtm = p_allsky.radiation.rrtmgp_model
-    for f in propertynames(rrtm)
+    for f in (
+        :face_flux,
+        :face_lw_flux,
+        :face_lw_flux_up,
+        :face_lw_flux_dn,
+        :face_sw_flux,
+        :face_sw_flux_up,
+        :face_sw_flux_dn,
+        :face_sw_direct_flux_dn,
+        :face_clear_flux,
+        :face_clear_lw_flux,
+        :face_clear_lw_flux_up,
+        :face_clear_lw_flux_dn,
+        :face_clear_sw_flux,
+        :face_clear_sw_flux_up,
+        :face_clear_sw_flux_dn,
+        :face_clear_sw_direct_flux_dn,
+        :sw_cloud_cover,
+        :lw_cloud_cover,
+    )
+        fill!(getproperty(rrtm, f), 0)
+    end
+    for f in (
+        :center_cloud_liquid_effective_radius,
+        :center_cloud_ice_effective_radius,
+        :aod_sw_extinction,
+        :aod_sw_scattering,
+    )
         a = getproperty(rrtm, f)
-        if a isa AbstractArray && any(isnan, a)
-            @. a = ifelse(isnan(a), 0, a)
-        end
+        @. a = ifelse(isnan(a), 0, a)
     end
 end
 
