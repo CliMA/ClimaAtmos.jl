@@ -4,7 +4,6 @@ import ..AbstractCloudInRadiation, ..InteractiveCloudInRadiation
 
 import NCDatasets as NC
 using RRTMGP
-import RRTMGP.AtmosphericStates as AS
 using ClimaCore: DataLayouts, Spaces, Fields
 import Adapt
 import ClimaComms
@@ -75,9 +74,7 @@ import RRTMGP:
     SameAsInterpolation,
     UseSurfaceTempAtBottom,
     HydrostaticBottom,
-    requires_z,
-    interp!,
-    extrap!
+    requires_z
 
 struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V, M}
     radiation_mode::R
@@ -726,152 +723,52 @@ available in the model after calling this function is
     `face_clear_sw_direct_flux_dn`
 """
 NVTX.@annotate function update_fluxes!(model, seedval)
-    (; radiation_mode) = model
+    (; radiation_mode, as, interpolation, bottom_extrapolation, params) = model
     if (
         radiation_mode isa AllSkyRadiation ||
         radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
     )
         radiation_mode.reset_rng_seed && Random.seed!(seedval)
     end
-    update_implied_values!(model)
-    model.radiation_mode.add_isothermal_boundary_layer &&
-        update_boundary_layer!(model)
-    clip_values!(model)
-    # TODO : update_concentrations as part of update_atmospheric_state!
-    update_concentrations!(model.radiation_mode, model)
+    # The interpolation, boundary-layer, clipping, and concentration steps now
+    # live in RRTMGP; delegate to them (operating in place on `model.as`).
+    p_min = RRTMGP.get_p_min(as, _lw_lookup(model))
+    zs = requires_z(interpolation) || requires_z(bottom_extrapolation)
+    RRTMGP.interpolate_levels!(
+        as,
+        interpolation,
+        bottom_extrapolation,
+        params;
+        center_z = zs ? model.center_z : nothing,
+        face_z = zs ? model.face_z : nothing,
+        isothermal_boundary_layer = radiation_mode.add_isothermal_boundary_layer,
+    )
+    radiation_mode.add_isothermal_boundary_layer &&
+        RRTMGP.add_isothermal_boundary_layer!(as, p_min)
+    RRTMGP.clip!(as, p_min, _idx_h2o(model))
+    RRTMGP.update_concentrations!(
+        as,
+        params,
+        ClimaComms.device(model.sw_solver.context),
+        _idx_h2o(model),
+    )
     update_lw_fluxes!(model.radiation_mode, model)
     update_sw_fluxes!(model.radiation_mode, model)
     update_net_fluxes!(model.radiation_mode, model)
     return model.face_flux
 end
 
-get_p_min(model) = get_p_min(model.as, model.lookups)
-get_p_min(as::RRTMGP.AtmosphericStates.GrayAtmosphericState, lookups) =
-    zero(eltype(as.p_lay))
-get_p_min(as::RRTMGP.AtmosphericStates.AtmosphericState, lookups) =
-    lookups.lookup_lw.p_ref_min # TODO: verify correctness
+# The grid-adaptation, clipping, and concentration steps now live in RRTMGP
+# (lifted from this file). These helpers supply the longwave lookup table (for
+# `p_min`) and the H2O gas index (for column dry air and clipping), both of which
+# are `nothing` for gray radiation, which uses no lookup tables.
+_lw_lookup(model) = _lw_lookup(model, model.radiation_mode)
+_lw_lookup(_, ::GrayRadiation) = nothing
+_lw_lookup(model, _) = model.lookups.lookup_lw
 
-function update_implied_values!(model)
-    (; p_lev, t_lev, t_sfc) = model.as
-    p_lay = AS.getview_p_lay(model.as)
-    t_lay = AS.getview_t_lay(model.as)
-    nlay =
-        size(p_lay, 1) - Int(model.radiation_mode.add_isothermal_boundary_layer)
-    if requires_z(model.interpolation) || requires_z(model.bottom_extrapolation)
-        z_lay = parent(model.center_z)
-        z_lev = parent(model.face_z)
-    end
-    mode = model.interpolation
-    outs = requires_z(mode) ? (p_lev, t_lev, z_lev) : (p_lev, t_lev)
-    ins = requires_z(mode) ? (p_lay, t_lay, z_lay) : (p_lay, t_lay)
-    update_views(interp!, mode, outs, ins, (), 2:nlay, 1:(nlay - 1), 2:nlay)
-    others = (t_sfc, model.params)
-    update_views(extrap!, mode, outs, ins, others, nlay + 1, nlay, nlay - 1)
-    mode =
-        model.bottom_extrapolation isa SameAsInterpolation ?
-        model.interpolation : model.bottom_extrapolation
-    outs = requires_z(mode) ? (p_lev, t_lev, z_lev) : (p_lev, t_lev)
-    ins = requires_z(mode) ? (p_lay, t_lay, z_lay) : (p_lay, t_lay)
-    update_views(extrap!, mode, outs, ins, others, 1, 1, 2)
-end
-
-update_views(f, mode, outs, ins, others, out_range, in_range1, in_range2) = f(
-    mode,
-    map(out -> view(out, out_range, :), outs)...,
-    map(in -> view(in, in_range1, :), ins)...,
-    map(in -> view(in, in_range2, :), ins)...,
-    others...,
-)
-
-"""
-    update_boundary_layer!(model)
-
-Adds an isothermal boundary layer above the domain and extension (the pressure at the top of this layer
-is the minimum pressure supported by RRTMGP, while the temperature and volume mixing ratios in this layer
-are the same as in the layer below it)
-"""
-function update_boundary_layer!(model)
-    as = model.as
-    p_min = get_p_min(model)
-    @views AS.getview_p_lay(model.as)[end, :] .=
-        (as.p_lev[end - 1, :] .+ p_min) ./ 2
-    @views as.p_lev[end, :] .= p_min
-    @views AS.getview_t_lay(model.as)[end, :] .= as.t_lev[end - 1, :]
-    @views as.t_lev[end, :] .= as.t_lev[end - 1, :]
-    if !(model.radiation_mode isa GrayRadiation)
-        @views AS.getview_rel_hum(model.as)[end, :] .=
-            AS.getview_rel_hum(model.as)[end - 1, :]
-    end
-    update_boundary_layer_vmr!(model.radiation_mode, as)
-    update_boundary_layer_cloud!(model.radiation_mode, as)
-    update_boundary_layer_aerosol!(model.radiation_mode, as)
-end
-update_boundary_layer_vmr!(::GrayRadiation, as) = nothing
-update_boundary_layer_vmr!(radiation_mode, as) =
-    update_boundary_layer_vmr!(as.vmr)
-function update_boundary_layer_vmr!(vmr::RRTMGP.Vmrs.VmrGM)
-    @views vmr.vmr_h2o[end, :] .= vmr.vmr_h2o[end - 1, :]
-    @views vmr.vmr_o3[end, :] .= vmr.vmr_o3[end - 1, :]
-end
-update_boundary_layer_vmr!(vmr::RRTMGP.Vmrs.Vmr) =
-    @views vmr.vmr[:, end, :] .= vmr.vmr[:, end - 1, :]
-
-update_boundary_layer_cloud!(::Union{GrayRadiation, ClearSkyRadiation}, _) =
-    nothing
-update_boundary_layer_cloud!(
-    ::Union{AllSkyRadiation, AllSkyRadiationWithClearSkyDiagnostics},
-    as,
-) = update_boundary_layer_cloud!(as.cloud_state)
-
-function update_boundary_layer_cloud!(cloud_state)
-    @views cloud_state.cld_r_eff_liq[end, :] .=
-        cloud_state.cld_r_eff_liq[end - 1, :]
-    @views cloud_state.cld_r_eff_ice[end, :] .=
-        cloud_state.cld_r_eff_ice[end - 1, :]
-    @views cloud_state.cld_path_liq[end, :] .=
-        cloud_state.cld_path_liq[end - 1, :]
-    @views cloud_state.cld_path_ice[end, :] .=
-        cloud_state.cld_path_ice[end - 1, :]
-    @views cloud_state.cld_frac[end, :] .= cloud_state.cld_frac[end - 1, :]
-end
-
-update_boundary_layer_aerosol!(::GrayRadiation, _) = nothing
-update_boundary_layer_aerosol!(::AbstractRRTMGPMode, as) =
-    update_boundary_layer_aerosol!(as.aerosol_state)
-update_boundary_layer_aerosol!(::Nothing) = nothing
-function update_boundary_layer_aerosol!(
-    aerosol_state::RRTMGP.AtmosphericStates.AerosolState,
-)
-    @views aerosol_state.aero_size[:, end, :] .=
-        aerosol_state.aero_size[:, end - 1, :]
-    @views aerosol_state.aero_mass[:, end, :] .=
-        aerosol_state.aero_mass[:, end - 1, :]
-end
-
-function clip_values!(model)
-    (; p_lev) = model.as
-    p_lay = AS.getview_p_lay(model.as)
-    if !(model.radiation_mode isa GrayRadiation)
-        (; vmr_h2o) = model.as.vmr
-        @. vmr_h2o = max(vmr_h2o, 0)
-    end
-    p_min = get_p_min(model)
-    @. p_lay = max(p_lay, p_min)
-    @. p_lev = max(p_lev, p_min)
-end
-update_concentrations!(::GrayRadiation, model) = nothing
-
-update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_gas!(
-    ClimaComms.device(model.sw_solver.context),
-    model.as.p_lev,
-    AS.getview_col_dry(model.as),
-    model.params,
-    get_vmr_h2o(model.as.vmr, model.lookups.idx_gases_sw),
-    model.as.lat,
-)
-get_vmr_h2o(vmr::RRTMGP.Vmrs.VmrGM, idx_gases_sw) = vmr.vmr_h2o
-get_vmr_h2o(vmr::RRTMGP.Vmrs.Vmr, idx_gases_sw) =
-    view(vmr.vmr, idx_gases_sw["h2o"], :, :)
+_idx_h2o(model) = _idx_h2o(model, model.radiation_mode)
+_idx_h2o(_, ::GrayRadiation) = nothing
+_idx_h2o(model, _) = model.lookups.lookup_lw.idx_h2o
 
 NVTX.@annotate update_lw_fluxes!(::GrayRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(model.lw_solver, model.as, model.metric_scaling)
