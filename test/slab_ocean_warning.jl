@@ -1,7 +1,5 @@
-"""
-    Test that a warning is emitted when SlabOceanSST is used with a setup that provides
-    a surface_condition temperature.
-"""
+# Test that a warning is emitted when SlabOceanSST is used with a setup that provides
+# a surface_condition temperature.
 using Test
 using Logging
 import ClimaComms
