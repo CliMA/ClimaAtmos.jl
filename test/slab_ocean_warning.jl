@@ -8,7 +8,7 @@ import ClimaAtmos as CA
 
 @testset "SlabOceanSST Warning" begin
     FT = Float32
-    params = CA.Parameters.ClimaAtmosParameters(FT)
+    params = CA.ClimaAtmosParameters(FT)
 
     # Shared config for the two SlabOceanSST testsets below
     config_slab = CA.AtmosConfig(
