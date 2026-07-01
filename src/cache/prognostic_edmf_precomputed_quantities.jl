@@ -51,12 +51,17 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     if p.atmos.microphysics_model isa
        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
         ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
-        ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
         ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
-        ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
         # Compute env thermodynamic state from primitives
         @. ᶜq_liq⁰ = max(0, ᶜq_lcl⁰ + ᶜq_rai⁰)
-        @. ᶜq_ice⁰ = max(0, ᶜq_icl⁰ + ᶜq_sno⁰)
+        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
+            ᶜq_ice⁰_val = ᶜspecific_env_value(@name(q_ice), Y, p)
+            @. ᶜq_ice⁰ = max(0, ᶜq_ice⁰_val)
+        else  # NonEquilibriumMicrophysics1M
+            ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
+            ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
+            @. ᶜq_ice⁰ = max(0, ᶜq_icl⁰ + ᶜq_sno⁰)
+        end
         # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
         @. ᶜq_tot_nonneg⁰ = max(ᶜq_liq⁰ + ᶜq_ice⁰, ᶜq_tot⁰)
         ᶜh⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)  # specific enthalpy
@@ -139,11 +144,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             NonEquilibriumMicrophysics2M,
         }
             ᶜq_lclʲ = Y.c.sgsʲs.:($j).q_lcl
-            ᶜq_iclʲ = Y.c.sgsʲs.:($j).q_icl
             ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
-            ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
             @. ᶜq_liqʲ = max(0, ᶜq_lclʲ + ᶜq_raiʲ)
-            @. ᶜq_iceʲ = max(0, ᶜq_iclʲ + ᶜq_snoʲ)
+            if microphysics_model isa NonEquilibriumMicrophysics2M
+                ᶜq_iceʲ_val = Y.c.sgsʲs.:($j).q_ice
+                @. ᶜq_iceʲ = max(0, ᶜq_iceʲ_val)
+            else  # NonEquilibriumMicrophysics1M
+                ᶜq_iclʲ = Y.c.sgsʲs.:($j).q_icl
+                ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
+                @. ᶜq_iceʲ = max(0, ᶜq_iclʲ + ᶜq_snoʲ)
+            end
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
             @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜq_totʲ)
             ᶜhʲ = @. lazy(ᶜmseʲ - ᶜΦ)

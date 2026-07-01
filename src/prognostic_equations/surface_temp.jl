@@ -31,10 +31,10 @@ function surface_precipitation_tendency!(
     surface_heat_capacity_per_area = ρ_ocean * cp_ocean * depth_ocean
     @. Yₜ.sfc.T -= pet / surface_heat_capacity_per_area
 
-    # Surface water from precipitation (rain + snow)
+    # Surface water from precipitation (rain + frozen precipitation)
     P_liq = p.precomputed.surface_rain_flux
-    P_snow = p.precomputed.surface_snow_flux
-    @. Yₜ.sfc.water -= P_liq + P_snow
+    P_frz_precip = p.precomputed.surface_frozen_precip_flux
+    @. Yₜ.sfc.water -= P_liq + P_frz_precip
 end
 
 """

@@ -103,7 +103,7 @@ end
         # Expected cache variables for 0-moment
         expected_vars = (
             :ᶜmp_tendency, :ᶜρ_dq_tot_dt, :ᶜρ_de_tot_dt,
-            :surface_rain_flux, :surface_snow_flux, :ᶜwₜqₜ, :ᶜwₕhₜ,
+            :surface_rain_flux, :surface_frozen_precip_flux, :ᶜwₜqₜ, :ᶜwₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)
 
@@ -137,7 +137,7 @@ end
         # Expected cache variables for 1-moment
         expected_vars = (
             :ᶜmp_tendency,
-            :surface_rain_flux, :surface_snow_flux,
+            :surface_rain_flux, :surface_frozen_precip_flux,
             :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₜqₜ, :ᶜwₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)
@@ -185,7 +185,7 @@ end
         # Expected cache variables for 2-moment (includes number densities)
         expected_vars = (
             :ᶜmp_tendency,
-            :surface_rain_flux, :surface_snow_flux,
+            :surface_rain_flux, :surface_frozen_precip_flux,
             :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₙₗ, :ᶜwₙᵣ, :ᶜwₜqₜ, :ᶜwₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)
@@ -232,7 +232,7 @@ end
         # Quadrature-specific cache variables
         expected_vars = (
             :ᶜmp_tendency,
-            :surface_rain_flux, :surface_snow_flux,
+            :surface_rain_flux, :surface_frozen_precip_flux,
             :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₜqₜ, :ᶜwₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)

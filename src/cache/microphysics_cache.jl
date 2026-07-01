@@ -5,6 +5,7 @@
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
 import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics.Microphysics2M as CM2
+import CloudMicrophysics.P3Scheme as CMP3
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 import Thermodynamics as TD
@@ -26,10 +27,13 @@ internal_energy_func(
 internal_energy_func(
     ::Union{
         MatrixFields.FieldName{(:q_icl,)},
+        MatrixFields.FieldName{(:q_ice,)},
         MatrixFields.FieldName{(:q_sno,)},
         MatrixFields.FieldName{(:ρq_icl,)},
+        MatrixFields.FieldName{(:ρq_ice,)},
         MatrixFields.FieldName{(:ρq_sno,)},
         MatrixFields.FieldName{(:c, :ρq_icl)},
+        MatrixFields.FieldName{(:c, :ρq_ice)},
         MatrixFields.FieldName{(:c, :ρq_sno)},
     },
 ) = TD.internal_energy_ice
@@ -244,102 +248,14 @@ function set_precipitation_velocities!(
     Y,
     p,
     microphysics_model::NonEquilibriumMicrophysics2M,
-    _,
-)
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
-    (; ᶜΦ) = p.core
-
-    cmc = CAP.microphysics_cloud_params(p.params)
-    cm1p = CAP.microphysics_1m_params(p.params)
-    cm2p = CAP.microphysics_2m_params(p.params)
-    thp = CAP.thermodynamics_params(p.params)
-
-    # compute the precipitation terminal velocity [m/s]
-    # TODO sedimentation of snow is based on the 1M scheme
-    @. ᶜwₙᵣ = getindex(
-        CM2.rain_terminal_velocity(
-            cm2p.warm_rain.seifert_beheng,
-            cmc.Ch2022.rain,
-            max(zero(Y.c.ρ), specific(Y.c.ρq_rai, Y.c.ρ)),
-            Y.c.ρ,
-            max(zero(Y.c.ρ), Y.c.ρn_rai),
-        ),
-        1,
-    )
-    @. ᶜwᵣ = getindex(
-        CM2.rain_terminal_velocity(
-            cm2p.warm_rain.seifert_beheng,
-            cmc.Ch2022.rain,
-            max(zero(Y.c.ρ), specific(Y.c.ρq_rai, Y.c.ρ)),
-            Y.c.ρ,
-            max(zero(Y.c.ρ), Y.c.ρn_rai),
-        ),
-        2,
-    )
-    @. ᶜwₛ = CM1.terminal_velocity(
-        cm1p.precip.snow,
-        cm1p.terminal_velocity.snow,
-        Y.c.ρ,
-        max(zero(Y.c.ρ), specific(Y.c.ρq_sno, Y.c.ρ)),
-    )
-    # compute sedimentation velocity for cloud condensate [m/s]
-    # TODO sedimentation of ice is based on the 1M scheme
-    @. ᶜwₙₗ = getindex(
-        CM2.cloud_terminal_velocity(
-            cm2p.warm_rain.seifert_beheng.pdf_c,
-            cmc.stokes,
-            max(zero(Y.c.ρ), specific(Y.c.ρq_lcl, Y.c.ρ)),
-            Y.c.ρ,
-            max(zero(Y.c.ρ), Y.c.ρn_lcl),
-        ),
-        1,
-    )
-    @. ᶜwₗ = getindex(
-        CM2.cloud_terminal_velocity(
-            cm2p.warm_rain.seifert_beheng.pdf_c,
-            cmc.stokes,
-            max(zero(Y.c.ρ), specific(Y.c.ρq_lcl, Y.c.ρ)),
-            Y.c.ρ,
-            max(zero(Y.c.ρ), Y.c.ρn_lcl),
-        ),
-        2,
-    )
-    @. ᶜwᵢ = CMNe.terminal_velocity(
-        cmc.ice,
-        cmc.Ch2022.small_ice,
-        Y.c.ρ,
-        max(zero(Y.c.ρ), specific(Y.c.ρq_icl, Y.c.ρ)),
-    )
-
-    # compute their contributions to energy and total water advection
-    @. ᶜwₜqₜ =
-        Geometry.WVector(
-            ᶜwₗ * Y.c.ρq_lcl +
-            ᶜwᵢ * Y.c.ρq_icl +
-            ᶜwᵣ * Y.c.ρq_rai +
-            ᶜwₛ * Y.c.ρq_sno,
-        ) / Y.c.ρ
-    @. ᶜwₕhₜ =
-        Geometry.WVector(
-            ᶜwₗ * Y.c.ρq_lcl * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
-            ᶜwᵢ * Y.c.ρq_icl * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
-            ᶜwᵣ * Y.c.ρq_rai * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))) +
-            ᶜwₛ * Y.c.ρq_sno * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu))),
-        ) / Y.c.ρ
-    return nothing
-end
-function set_precipitation_velocities!(
-    Y,
-    p,
-    microphysics_model::NonEquilibriumMicrophysics2M,
     turbconv_model::PrognosticEDMFX,
 )
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwnᵢ, ᶜwᵣ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     (; ᶜΦ) = p.core
-    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs) = p.precomputed
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwnᵢʲs, ᶜwᵣʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs, ᶜlogλʲs) = p.precomputed
+    (; ᶜwnᵢ⁰, ᶜwᵢ⁰, ᶜlogλ⁰) = p.precomputed
     (; ᶜp, ᶜTʲs, ᶜρʲs, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     cmc = CAP.microphysics_cloud_params(p.params)
-    cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
@@ -429,31 +345,68 @@ function set_precipitation_velocities!(
     @. ᶜρwₕhₜ = ᶜρa⁰ * ᶜq_lcl⁰ * ᶜw⁰ * (Iₗ(thp, ᶜT⁰) + ᶜΦ)
 
     ###
-    ### Cloud ice
+    ### Ice
     ###
-    ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
-    # TODO sedimentation of ice is based on the 1M scheme
-    @. ᶜw⁰ = CMNe.terminal_velocity(
-        cmc.ice,
-        cmc.Ch2022.small_ice,
-        ᶜρ⁰,
-        max(zero(Y.c.ρ), ᶜq_icl⁰),
+    p3_ice = cm2p.ice
+    use_aspect_ratio = true  # TODO: config option
+    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
+    ᶜn_ice⁰ = ᶜspecific_env_value(@name(n_ice), Y, p)
+    ᶜq_rim⁰ = ᶜspecific_env_value(@name(q_rim), Y, p)
+    ᶜb_rim⁰ = ᶜspecific_env_value(@name(b_rim), Y, p)
+
+    # Environment P3 state + velocities
+    ᶜstate_p3⁰ = @. lazy(
+        CMP3.state_from_prognostic(p3_ice.scheme,
+            max(0, ᶜq_ice⁰), max(0, ᶜn_ice⁰),
+            max(0, ᶜq_rim⁰), max(0, ᶜb_rim⁰),
+        ),
     )
-    @. ᶜwᵢ = ᶜρa⁰ * ᶜq_icl⁰ * ᶜw⁰
-    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_icl⁰)
+    @. ᶜlogλ⁰ = CMP3.get_distribution_logλ(ᶜstate_p3⁰)
+    args⁰ = (p3_ice.terminal_velocity, ᶜρ⁰, ᶜstate_p3⁰, ᶜlogλ⁰)
+    @. ᶜwnᵢ⁰ = CMP3.ice_terminal_velocity_number_weighted(args⁰...; use_aspect_ratio)
+    @. ᶜwᵢ⁰ = CMP3.ice_terminal_velocity_mass_weighted(args⁰...; use_aspect_ratio)
+
+    # Per-subdomain P3 state + velocities
     for j in 1:n
-        @. ᶜwᵢʲs.:($$j) = CMNe.terminal_velocity(
-            cmc.ice,
-            cmc.Ch2022.small_ice,
-            ᶜρʲs.:($$j),
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_icl),
+        ᶜYʲ = Y.c.sgsʲs.:($j)
+        ᶜstate_p3ʲ = @. lazy(
+            CMP3.state_from_prognostic(
+                p3_ice.scheme,
+                max(0, ᶜYʲ.q_ice), max(0, ᶜYʲ.n_ice),
+                max(0, ᶜYʲ.q_rim), max(0, ᶜYʲ.b_rim),
+            ),
         )
-        @. ᶜwᵢ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_icl * ᶜwᵢʲs.:($$j)
-        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_icl)
+        @. ᶜlogλʲs.:($$j) = CMP3.get_distribution_logλ(ᶜstate_p3ʲ)
+        @. ᶜwᵢʲs.:($$j) = CMP3.ice_terminal_velocity_mass_weighted(
+            p3_ice.terminal_velocity, ᶜρʲs.:($$j), ᶜstate_p3ʲ, ᶜlogλʲs.:($$j);
+            use_aspect_ratio,
+        )
+        @. ᶜwnᵢʲs.:($$j) = CMP3.ice_terminal_velocity_number_weighted(
+            p3_ice.terminal_velocity, ᶜρʲs.:($$j), ᶜstate_p3ʲ, ᶜlogλʲs.:($$j);
+            use_aspect_ratio,
+        )
+    end
+
+    # Grid-mean mass-weighted ice velocity = ρa·q_ice-weighted average
+    @. ᶜwᵢ = ᶜρa⁰ * ᶜq_ice⁰ * ᶜwᵢ⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_ice⁰)
+    for j in 1:n
+        @. ᶜwᵢ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_ice * ᶜwᵢʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_ice)
     end
     @. ᶜwᵢ = ifelse(ᶜρχ > FT(0), ᶜwᵢ / ᶜρχ, FT(0))
+
+    # Grid-mean number-weighted ice velocity = ρa·n_ice-weighted average
+    @. ᶜwnᵢ = ᶜρa⁰ * ᶜn_ice⁰ * ᶜwnᵢ⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜn_ice⁰)
+    for j in 1:n
+        @. ᶜwnᵢ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_ice * ᶜwnᵢʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_ice)
+    end
+    @. ᶜwnᵢ = ifelse(ᶜρχ > FT(0), ᶜwnᵢ / ᶜρχ, FT(0))
+
     # contribution of env cloud ice advection to htot advection
-    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_icl⁰ * ᶜw⁰ * (Iᵢ(thp, ᶜT⁰) + ᶜΦ)
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_ice⁰ * ᶜwᵢ⁰ * (Iᵢ(thp, ᶜT⁰) + ᶜΦ)
 
     ###
     ### Rain (number)
@@ -521,32 +474,6 @@ function set_precipitation_velocities!(
     # contribution of env rain advection to qtot advection
     @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰ * (Iₗ(thp, ᶜT⁰) + ᶜΦ)
 
-    ###
-    ### Snow
-    ####
-    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
-    # TODO sedimentation of snow is based on the 1M scheme
-    @. ᶜw⁰ = CM1.terminal_velocity(
-        cm1p.precip.snow,
-        cm1p.terminal_velocity.snow,
-        ᶜρ⁰,
-        max(zero(Y.c.ρ), ᶜq_sno⁰),
-    )
-    @. ᶜwₛ = ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰
-    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_sno⁰)
-    for j in 1:n
-        @. ᶜwₛʲs.:($$j) = CM1.terminal_velocity(
-            cm1p.precip.snow,
-            cm1p.terminal_velocity.snow,
-            ᶜρʲs.:($$j),
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_sno),
-        )
-        @. ᶜwₛ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno * ᶜwₛʲs.:($$j)
-        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno)
-    end
-    @. ᶜwₛ = ifelse(ᶜρχ > FT(0), ᶜwₛ / ᶜρχ, FT(0))
-    # contribution of env snow advection to htot advection
-    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰ * (Iᵢ(thp, ᶜT⁰) + ᶜΦ)
 
     # Add contributions to energy and total water advection
     # TODO do we need to add kinetic energy of subdomains?
@@ -555,37 +482,30 @@ function set_precipitation_velocities!(
             Y.c.sgsʲs.:($$j).ρa *
             (
                 ᶜwₗʲs.:($$j) * Y.c.sgsʲs.:($$j).q_lcl * (Iₗ(thp, ᶜTʲs.:($$j)) + ᶜΦ) +
-                ᶜwᵢʲs.:($$j) * Y.c.sgsʲs.:($$j).q_icl * (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ) +
                 ᶜwᵣʲs.:($$j) * Y.c.sgsʲs.:($$j).q_rai * (Iₗ(thp, ᶜTʲs.:($$j)) + ᶜΦ) +
-                ᶜwₛʲs.:($$j) * Y.c.sgsʲs.:($$j).q_sno * (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ)
+                ᶜwᵢʲs.:($$j) * Y.c.sgsʲs.:($$j).q_ice * (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ)
             )
     end
     @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
 
-    @. ᶜwₜqₜ =
-        Geometry.WVector(
-            ᶜwₗ * Y.c.ρq_lcl +
-            ᶜwᵢ * Y.c.ρq_icl +
-            ᶜwᵣ * Y.c.ρq_rai +
-            ᶜwₛ * Y.c.ρq_sno,
-        ) / Y.c.ρ
+    @. ᶜwₜqₜ = WVec(ᶜwₗ * Y.c.ρq_lcl + ᶜwᵢ * Y.c.ρq_ice + ᶜwᵣ * Y.c.ρq_rai) / Y.c.ρ
 
     return nothing
 end
 function set_precipitation_velocities!(
-    Y, p, ::NonEquilibriumMicrophysics2MP3, _,
+    Y, p, ::NonEquilibriumMicrophysics2M, _,
 )
     ## liquid quantities (2M warm rain)
-    (; ᶜwₗ, ᶜwᵣ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
+    (; ᶜwₗ, ᶜwᵣ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
 
     (; ρ, ρq_lcl, ρn_lcl, ρq_rai, ρn_rai) = Y.c
-    params_2mp3 = CAP.microphysics_2mp3_params(p.params)
+    cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
     cmc = CAP.microphysics_cloud_params(p.params)
 
     # Access 2M warm rain params from unified container
-    sb = params_2mp3.warm_rain.seifert_beheng
+    sb = cm2p.warm_rain.seifert_beheng
     rtv = cmc.Ch2022.rain  # Rain terminal velocity from cloud_params
 
     # Number- and mass weighted rain terminal velocity [m/s]
@@ -596,7 +516,7 @@ function set_precipitation_velocities!(
             ρ, max(zero(ρ), ρn_rai),
         ),
     )
-    @. ᶜwnᵣ = getindex(ᶜrai_w_terms, 1)
+    @. ᶜwₙᵣ = getindex(ᶜrai_w_terms, 1)
     @. ᶜwᵣ = getindex(ᶜrai_w_terms, 2)
     # Number- and mass weighted cloud liquid terminal velocity [m/s]
     ᶜliq_w_terms = @. lazy(
@@ -606,36 +526,35 @@ function set_precipitation_velocities!(
             ρ, max(zero(ρ), ρn_lcl),
         ),
     )
-    @. ᶜwnₗ = getindex(ᶜliq_w_terms, 1)
+    @. ᶜwₙₗ = getindex(ᶜliq_w_terms, 1)
     @. ᶜwₗ = getindex(ᶜliq_w_terms, 2)
 
     ## Ice quantities
-    (; ρq_icl, ρn_ice, ρq_rim, ρb_rim) = Y.c
+    (; ρq_ice, ρn_ice, ρq_rim, ρb_rim) = Y.c
     (; ᶜwᵢ) = p.precomputed
 
     # P3 ice params from unified container
-    p3_ice = params_2mp3.ice
+    p3_ice = cm2p.ice
 
     # Number- and mass weighted ice terminal velocity [m/s]
-    # Calculate terminal velocities
     (; ᶜlogλ, ᶜwnᵢ) = p.precomputed
     use_aspect_ratio = true  # TODO: Make a config option
-    ᶜF_rim = @. lazy(ρq_rim / ρq_icl)
-    ᶜρ_rim = @. lazy(ρq_rim / ρb_rim)
-    ᶜstate_p3 = @. lazy(CMP3.P3State(p3_ice.scheme,
-        max(0, ρq_icl), max(0, ρn_ice), ᶜF_rim, ᶜρ_rim,
-    ))
+    ᶜstate_p3 = @. lazy(
+        CMP3.state_from_prognostic(p3_ice.scheme,
+            max(0, ρq_ice), max(0, ρn_ice), max(0, ρq_rim), max(0, ρb_rim),
+        ),
+    )
     @. ᶜlogλ = CMP3.get_distribution_logλ(ᶜstate_p3)
     args = (p3_ice.terminal_velocity, ρ, ᶜstate_p3, ᶜlogλ)
     @. ᶜwnᵢ = CMP3.ice_terminal_velocity_number_weighted(args...; use_aspect_ratio)
     @. ᶜwᵢ = CMP3.ice_terminal_velocity_mass_weighted(args...; use_aspect_ratio)
 
     # compute their contributions to energy and total water advection
-    @. ᶜwₜqₜ = Geometry.WVector(ᶜwₗ * ρq_lcl + ᶜwᵢ * ρq_icl + ᶜwᵣ * ρq_rai) / ρ
+    @. ᶜwₜqₜ = Geometry.WVector(ᶜwₗ * ρq_lcl + ᶜwᵢ * ρq_ice + ᶜwᵣ * ρq_rai) / ρ
     @. ᶜwₕhₜ =
         Geometry.WVector(
             ᶜwₗ * ρq_lcl * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
-            ᶜwᵢ * ρq_icl * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
+            ᶜwᵢ * ρq_ice * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
             ᶜwᵣ * ρq_rai * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))),
         ) / ρ
     return nothing
@@ -936,72 +855,6 @@ end
 ### 2-moment + P3 microphysics
 ###
 
-function set_microphysics_tendency_cache!(
-    Y, p, ::NonEquilibriumMicrophysics2M, _,
-)
-    (; dt) = p
-    (; ᶜT, ᶜp, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
-
-    # get thermodynamics and microphysics params
-    cmp = CAP.microphysics_2m_params(p.params)
-    thp = CAP.thermodynamics_params(p.params)
-
-    # Get specific quantities
-    ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
-    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-    ᶜn_lcl = @. lazy(specific(Y.c.ρn_lcl, Y.c.ρ))
-    ᶜn_rai = @. lazy(specific(Y.c.ρn_rai, Y.c.ρ))
-
-    # Grid mean or quadrature sum over the SGS fluctuations
-    # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
-    # TODO - looks like only grid-mean version is implemented now
-    sgs_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    @. ᶜmp_tendency = microphysics_tendencies_quadrature_2m(
-        sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
-        ᶜq_tot_nonneg, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai,
-    )
-    # Apply the limiter
-    apply_2m_tendency_limits!(
-        ᶜmp_tendency, p.atmos.microphysics_tendency_timestepping,
-        ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, dt,
-    )
-    #TODO - implement cold processes via P3
-    @. ᶜmp_tendency.dq_ice_dt = 0
-    @. ᶜmp_tendency.dq_rim_dt = 0
-    @. ᶜmp_tendency.db_rim_dt = 0
-
-    # Aerosol activation based on ARG 2000. Requires prescribed aerosols.
-    # TODO - should be part of BMT
-    # TODO - also only acting on grid mean
-    if hasproperty(p, :tracers) &&
-       hasproperty(p.tracers, :prescribed_aerosols_field)
-
-        # Get aerosol parameters and vertical velocity
-        pap = p.params.prescribed_aerosol_params
-        acp = CAP.microphysics_cloud_params(p.params).activation
-        ᶜw = @. lazy(w_component(Geometry.WVector(ᶜu)))
-
-        # Get prescribed aerosol concentrations
-        seasalt_num = p.scratch.ᶜtemp_scalar
-        seasalt_mean_radius = p.scratch.ᶜtemp_scalar_2
-        sulfate_num = p.scratch.ᶜtemp_scalar_3
-        compute_prescribed_aerosol_properties!(
-            seasalt_num, seasalt_mean_radius, sulfate_num,
-            p.tracers.prescribed_aerosols_field, pap,
-        )
-        # Compute aerosol activation
-        @. ᶜmp_tendency.dn_lcl_dt +=
-            aerosol_activation_sources(
-                acp, seasalt_num, seasalt_mean_radius, sulfate_num,
-                specific(Y.c.ρq_tot, Y.c.ρ),
-                specific(Y.c.ρq_lcl + Y.c.ρq_rai, Y.c.ρ),
-                specific(Y.c.ρq_icl + Y.c.ρq_sno, Y.c.ρ),
-                specific(Y.c.ρn_lcl + Y.c.ρn_rai, Y.c.ρ),
-                Y.c.ρ, ᶜw, cmp, thp, ᶜT, ᶜp, dt, (pap,),
-            )
-    end
-    return nothing
-end
 
 function set_microphysics_tendency_cache!(
     Y, p, ::NonEquilibriumMicrophysics2M, tm::PrognosticEDMFX,
@@ -1017,8 +870,7 @@ function set_microphysics_tendency_cache!(
 
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs) = p.precomputed
-    (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
+    (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs, ᶜlogλʲs, ᶜlogλ⁰) = p.precomputed
 
     # Get prescribed aerosol concentrations
     seasalt_num = p.scratch.ᶜtemp_scalar_3
@@ -1039,24 +891,38 @@ function set_microphysics_tendency_cache!(
     ### Updraft contribution
     for j in 1:n
         # Microphysics
-        compute_2m_precipitation_tendencies!(
-            ᶜmp_tendencyʲs.:($j), ᶜρʲs.:($j), ᶜq_tot_nonnegʲs.:($j),
-            Y.c.sgsʲs.:($j).q_lcl, Y.c.sgsʲs.:($j).n_lcl,
-            Y.c.sgsʲs.:($j).q_rai, Y.c.sgsʲs.:($j).n_rai,
-            ᶜTʲs.:($j), dt, cm2p, thp,
-            p.atmos.microphysics_tendency_timestepping,
+        ᶜ∂mp_∂tʲ = ᶜmp_tendencyʲs.:($j)
+        ᶜYʲ = Y.c.sgsʲs.:($j)
+        @. ᶜ∂mp_∂tʲ = BMT.bulk_microphysics_tendencies(
+            BMT.Microphysics2Moment(), cm2p, thp,
+            ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+            ᶜYʲ.q_lcl, ᶜYʲ.n_lcl, ᶜYʲ.q_rai, ᶜYʲ.n_rai,
+            ᶜYʲ.q_ice, ᶜYʲ.n_ice, ᶜYʲ.q_rim, ᶜYʲ.b_rim,
+            ᶜlogλʲs.:($$j),
         )
-        #ᶜmp_tendencyʲs.:($j).dq_ice_dt = 0
-        #ᶜmp_tendencyʲs.:($j).dq_rim_dt = 0
-        #ᶜmp_tendencyʲs.:($j).db_rim_dt = 0
+        # Coupled-sink limiting on warm-rain pairs, so dn_ice_dt is preserved.
+        ᶜf_liq = @. lazy(
+            coupled_sink_limit_factor(
+                ᶜ∂mp_∂tʲ.dq_lcl_dt, ᶜ∂mp_∂tʲ.dn_lcl_dt, ᶜYʲ.q_lcl, ᶜYʲ.n_lcl, dt,
+            ),
+        )
+        ᶜf_rai = @. lazy(
+            coupled_sink_limit_factor(
+                ᶜ∂mp_∂tʲ.dq_rai_dt, ᶜ∂mp_∂tʲ.dn_rai_dt, ᶜYʲ.q_rai, ᶜYʲ.n_rai, dt,
+            ),
+        )
+        @. ᶜ∂mp_∂tʲ.dq_lcl_dt *= ᶜf_liq
+        @. ᶜ∂mp_∂tʲ.dn_lcl_dt *= ᶜf_liq
+        @. ᶜ∂mp_∂tʲ.dq_rai_dt *= ᶜf_rai
+        @. ᶜ∂mp_∂tʲ.dn_rai_dt *= ᶜf_rai
         # Aerosol activation
         ᶜwʲ = @. lazy(max(0, w_component(Geometry.WVector(ᶜuʲs.:($$j)))))
-        @. ᶜmp_tendencyʲs.:($$j).dn_lcl_dt += aerosol_activation_sources(
+        @. ᶜ∂mp_∂tʲ.dn_lcl_dt += aerosol_activation_sources(
             acp, seasalt_num, seasalt_mean_radius, sulfate_num,
             ᶜq_tot_nonnegʲs.:($$j),
-            Y.c.sgsʲs.:($$j).q_lcl + Y.c.sgsʲs.:($$j).q_rai,
-            Y.c.sgsʲs.:($$j).q_icl,
-            Y.c.sgsʲs.:($$j).n_lcl + Y.c.sgsʲs.:($$j).n_rai,
+            ᶜYʲ.q_lcl + ᶜYʲ.q_rai,
+            ᶜYʲ.q_ice,
+            ᶜYʲ.n_lcl + ᶜYʲ.n_rai,
             ᶜρʲs.:($$j), ᶜwʲ, cm2p, thp, ᶜTʲs.:($$j), ᶜp, dt, (pap,),
         )
     end
@@ -1066,54 +932,66 @@ function set_microphysics_tendency_cache!(
     ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), Y, p)
     ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
-    ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
-    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
+    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
+    ᶜn_ice⁰ = ᶜspecific_env_value(@name(n_ice), Y, p)
+    ᶜq_rim⁰ = ᶜspecific_env_value(@name(q_rim), Y, p)
+    ᶜb_rim⁰ = ᶜspecific_env_value(@name(b_rim), Y, p)
     ᶜρ⁰ = @. lazy(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )
 
     # Environment mean or quadrature sum over the SGS fluctuations
     # TODO - looks like only mean version is implemented now
-    SG_quad = something(p.atmos.sgs_quadrature, GridMeanSGS())
-    @. ᶜmp_tendency⁰ = microphysics_tendencies_quadrature_2m(
-        SG_quad, cm2p, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
+    @. ᶜmp_tendency⁰ = BMT.bulk_microphysics_tendencies(
+        BMT.Microphysics2Moment(), cm2p, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
         ᶜq_lcl⁰, ᶜn_lcl⁰, ᶜq_rai⁰, ᶜn_rai⁰,
+        ᶜq_ice⁰, ᶜn_ice⁰, ᶜq_rim⁰, ᶜb_rim⁰, ᶜlogλ⁰,
     )
-    # Apply the limiter
-    apply_2m_tendency_limits!(
-        ᶜmp_tendency⁰, p.atmos.microphysics_tendency_timestepping,
-        ᶜq_lcl⁰, ᶜn_lcl⁰, ᶜq_rai⁰, ᶜn_rai⁰, dt,
+    ᶜf_liq⁰ = @. lazy(
+        coupled_sink_limit_factor(
+            ᶜmp_tendency⁰.dq_lcl_dt, ᶜmp_tendency⁰.dn_lcl_dt,
+            ᶜq_lcl⁰, ᶜn_lcl⁰, dt,
+        ),
     )
-    #@. ᶜmp_tendency⁰.dq_ice_dt = 0
-    #@. ᶜmp_tendency⁰.dq_sno_dt = 0
+    ᶜf_rai⁰ = @. lazy(
+        coupled_sink_limit_factor(
+            ᶜmp_tendency⁰.dq_rai_dt, ᶜmp_tendency⁰.dn_rai_dt,
+            ᶜq_rai⁰, ᶜn_rai⁰, dt,
+        ),
+    )
+    @. ᶜmp_tendency⁰.dq_lcl_dt *= ᶜf_liq⁰
+    @. ᶜmp_tendency⁰.dn_lcl_dt *= ᶜf_liq⁰
+    @. ᶜmp_tendency⁰.dq_rai_dt *= ᶜf_rai⁰
+    @. ᶜmp_tendency⁰.dn_rai_dt *= ᶜf_rai⁰
     # Aerosol activation
     # TODO - make it part of BMT
     # TODO - should be included in limiting
     ᶜw⁰ = @. lazy(w_component(Geometry.WVector(ᶜu⁰)))
     @. ᶜmp_tendency⁰.dn_lcl_dt += aerosol_activation_sources(
         acp, seasalt_num, seasalt_mean_radius, sulfate_num, ᶜq_tot_nonneg⁰,
-        ᶜq_lcl⁰ + ᶜq_rai⁰, ᶜq_icl⁰ + ᶜq_sno⁰, ᶜn_lcl⁰ + ᶜn_rai⁰,
+        ᶜq_lcl⁰ + ᶜq_rai⁰, ᶜq_ice⁰, ᶜn_lcl⁰ + ᶜn_rai⁰,
         ᶜρ⁰, ᶜw⁰, cm2p, thp, ᶜT⁰, ᶜp, dt, (pap,),
     )
     return nothing
 end
 function set_microphysics_tendency_cache!(
-    Y, p, ::NonEquilibriumMicrophysics2MP3, _,
+    Y, p, ::NonEquilibriumMicrophysics2M, _,
 )
     (; dt) = p
-    (; ᶜT, ᶜmp_tendency, ᶜScoll, ᶜlogλ) = p.precomputed
+    (; ᶜT, ᶜmp_tendency, ᶜlogλ) = p.precomputed
 
     # get thermodynamics and microphysics params
-    params_2mp3 = CAP.microphysics_2mp3_params(p.params)
+    cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
 
     # Get specific quantities (warm rain)
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
     ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
     ᶜn_lcl = @. lazy(specific(Y.c.ρn_lcl, Y.c.ρ))
     ᶜn_rai = @. lazy(specific(Y.c.ρn_rai, Y.c.ρ))
     # Get specific quantities (P3 ice)
-    ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+    ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
     ᶜn_ice = @. lazy(specific(Y.c.ρn_ice, Y.c.ρ))
     ᶜq_rim = @. lazy(specific(Y.c.ρq_rim, Y.c.ρ))
     ᶜb_rim = @. lazy(specific(Y.c.ρb_rim, Y.c.ρ))
@@ -1121,8 +999,9 @@ function set_microphysics_tendency_cache!(
     # Compute microphysics tendency
     # TODO - looks like aerosol activation is missing
     @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(), params_2mp3, thp, Y.c.ρ, ᶜT,
-        ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_icl, ᶜn_ice, ᶜq_rim, ᶜb_rim, ᶜlogλ,
+        BMT.Microphysics2Moment(), cm2p, thp, Y.c.ρ, ᶜT, ᶜq_tot,
+        ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_ice, ᶜn_ice, ᶜq_rim, ᶜb_rim,
+        ᶜlogλ,
     )
     # Apply coupled limiting directly
     ᶜf_liq = @. lazy(
@@ -1139,12 +1018,6 @@ function set_microphysics_tendency_cache!(
     @. ᶜmp_tendency.dn_lcl_dt *= ᶜf_liq
     @. ᶜmp_tendency.dq_rai_dt *= ᶜf_rai
     @. ᶜmp_tendency.dn_rai_dt *= ᶜf_rai
-    # TODO - unify the P3 logic with mp_tendency
-    @. ᶜScoll.dq_rim_dt = ᶜmp_tendency.dq_rim_dt
-    @. ᶜScoll.db_rim_dt = ᶜmp_tendency.db_rim_dt
-    # TODO - snow not used in P3 (ice encompasses all frozen hydrometeors)
-    # Fix the structure of the named tuple
-    @. ᶜmp_tendency.dq_sno_dt = 0
     return nothing
 end
 
@@ -1163,7 +1036,7 @@ function set_precipitation_surface_fluxes!(
 )
     (; ᶜT) = p.precomputed
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
-    (; surface_rain_flux, surface_snow_flux) = p.precomputed
+    (; surface_rain_flux, surface_frozen_precip_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency) = p.precomputed
 
     # update total column energy source for surface energy balance
@@ -1178,15 +1051,11 @@ function set_precipitation_surface_fluxes!(
     ᶜ3d_rain = @. lazy(ifelse(ᶜT >= T_freeze, ᶜρ_dq_tot_dt, FT(0)))
     ᶜ3d_snow = @. lazy(ifelse(ᶜT < T_freeze, ᶜρ_dq_tot_dt, FT(0)))
     Operators.column_integral_definite!(surface_rain_flux, ᶜ3d_rain)
-    Operators.column_integral_definite!(surface_snow_flux, ᶜ3d_snow)
+    Operators.column_integral_definite!(surface_frozen_precip_flux, ᶜ3d_snow)
     return nothing
 end
-function set_precipitation_surface_fluxes!(
-    Y,
-    p,
-    microphysics_model::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
-)
-    (; surface_rain_flux, surface_snow_flux) = p.precomputed
+function set_precipitation_surface_fluxes!(Y, p, ::NonEquilibriumMicrophysics1M)
+    (; surface_rain_flux, surface_frozen_precip_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency) = p.precomputed
     (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ) = p.precomputed
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -1230,17 +1099,41 @@ function set_precipitation_surface_fluxes!(
     )
 
     @. surface_rain_flux = sfc_ρ * (sfc_qᵣ * (-sfc_wᵣ) + sfc_qₗ * (-sfc_wₗ))
-    @. surface_snow_flux = sfc_ρ * (sfc_qₛ * (-sfc_wₛ) + sfc_qᵢ * (-sfc_wᵢ))
+    @. surface_frozen_precip_flux = sfc_ρ * (sfc_qₛ * (-sfc_wₛ) + sfc_qᵢ * (-sfc_wᵢ))
     @. col_integrated_precip_energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
 
     return nothing
 end
 
-function set_precipitation_surface_fluxes!(
-    Y,
-    p,
-    ::NonEquilibriumMicrophysics2MP3,
-)
-    set_precipitation_surface_fluxes!(Y, p, NonEquilibriumMicrophysics2M())
-    # TODO: Figure out what to do for ρn_ice, ρq_rim, ρb_rim
+function set_precipitation_surface_fluxes!(Y, p, ::NonEquilibriumMicrophysics2M)
+    (; surface_rain_flux, surface_frozen_precip_flux) = p.precomputed
+    (; col_integrated_precip_energy_tendency) = p.precomputed
+    (; ᶜwᵣ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ) = p.precomputed
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    sfc_J = Fields.level(ᶠJ, Fields.half)
+    sfc_space = axes(sfc_J)
+
+    # Jacobian-weighted extrapolation from interior to surface, consistent with
+    # the reconstruction of density on cell faces, ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
+    sfc_lev(x) = Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
+    int_J = sfc_lev(ᶜJ)
+    int_ρ = sfc_lev(Y.c.ρ)
+    sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
+
+    # Constant extrapolation to surface, consistent with simple downwinding
+    # Temporary scratch variables are used here until CC.field_values supports <lazy> fields
+    sfc_field(x) = Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
+    ᶜq_rai = @. p.scratch.ᶜtemp_scalar = specific(Y.c.ρq_rai, Y.c.ρ)
+    ᶜq_lcl = @. p.scratch.ᶜtemp_scalar_2 = specific(Y.c.ρq_lcl, Y.c.ρ)
+    ᶜq_ice = @. p.scratch.ᶜtemp_scalar_3 = specific(Y.c.ρq_ice, Y.c.ρ)
+    sfc_qᵣ, sfc_qₗ, sfc_qᵢ = sfc_field(ᶜq_rai), sfc_field(ᶜq_lcl), sfc_field(ᶜq_ice)
+    sfc_wᵣ, sfc_wₗ, sfc_wᵢ = sfc_field(ᶜwᵣ), sfc_field(ᶜwₗ), sfc_field(ᶜwᵢ)
+    sfc_wₕhₜ = sfc_field(ᶜwₕhₜ.components.data.:1)
+
+    @. surface_rain_flux = sfc_ρ * (sfc_qᵣ * (-sfc_wᵣ) + sfc_qₗ * (-sfc_wₗ))
+    @. surface_frozen_precip_flux = sfc_ρ * sfc_qᵢ * (-sfc_wᵢ)
+    @. col_integrated_precip_energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
+
+    return nothing
 end
