@@ -74,7 +74,26 @@ import RRTMGP:
     SameAsInterpolation,
     UseSurfaceTempAtBottom,
     HydrostaticBottom,
-    requires_z
+    requires_z,
+    interp!,
+    extrap!,
+    uniform_z_p
+
+export AbstractInterpolation,
+    NoInterpolation,
+    ArithmeticMean,
+    GeometricMean,
+    UniformZ,
+    UniformP,
+    BestFit,
+    AbstractBottomExtrapolation,
+    SameAsInterpolation,
+    UseSurfaceTempAtBottom,
+    HydrostaticBottom,
+    requires_z,
+    interp!,
+    extrap!,
+    uniform_z_p
 
 struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V, M}
     radiation_mode::R
