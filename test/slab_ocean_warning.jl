@@ -30,7 +30,7 @@ import ClimaAtmos as CA
 
     # Sanity-check the fixture: TRMM_LBA must provide a surface temperature
     setup_pieces = CA.Setups.surface_condition(setup_type, params)
-    @test !isnothing(setup_pieces.temperature) "TRMM_LBA setup must provide a surface_condition temperature"
+    @test !isnothing(setup_pieces.temperature)
 
     @testset "Warning emitted when setup provides surface temperature" begin
         log_buffer = IOBuffer()
