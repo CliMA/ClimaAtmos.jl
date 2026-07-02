@@ -26,7 +26,10 @@ import ClimaAtmos as CA
     # TRMM_LBA is chosen because its surface_condition provides a temperature value
     # (see src/setups/TRMM_LBA.jl). If this changes in the future, this test
     # may need to be updated to use a different setup that provides a surface temperature.
-    setup_type = CA.Setups.TRMM_LBA(; prognostic_tke = false, thermo_params = params.thermodynamics_params)
+    setup_type = CA.Setups.TRMM_LBA(;
+        prognostic_tke = false,
+        thermo_params = params.thermodynamics_params,
+    )
 
     # Sanity-check the fixture: TRMM_LBA must provide a surface temperature
     setup_pieces = CA.Setups.surface_condition(setup_type, params)
