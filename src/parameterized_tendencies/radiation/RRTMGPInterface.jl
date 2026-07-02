@@ -8,7 +8,6 @@ using ClimaCore: DataLayouts, Spaces, Fields
 import Adapt
 import ClimaComms
 using NVTX
-using Random
 # TODO: Move this file to RRTMGP.jl, once the interface has been settled.
 # It will be faster to do interface development in the same repo as experiment
 # development, but, since this is just a user-friendly wrapper for RRTMGP.jl, we
@@ -178,37 +177,40 @@ function _solver_field(solver, name::Symbol)
     # --- aerosols ---
     name === :aod_sw_extinction && return RRTMGP.aod_sw_extinction(solver)
     name === :aod_sw_scattering && return RRTMGP.aod_sw_scattering(solver)
-    # --- gases and aerosols keyed by chemical/aerosol name (parsed) ---
-    return _named_solver_field(solver, name, String(name))
+    # --- gases and aerosols keyed by chemical/aerosol name (Dict-resolved) ---
+    return _named_solver_field(solver, name)
 end
 
-# Gas VMRs (`[center_]volume_mixing_ratio_<gas>`) and per-aerosol properties
-# (`center_<aero>_column_mass_density`, `center_<aero>_radius`) are keyed by a name
-# that RRTMGP resolves through its own gas/aerosol maps. The cloud effective radii,
-# which also end in `_radius`, are handled by `_solver_field` above and never reach
-# here.
-function _named_solver_field(solver, name::Symbol, s::String)
-    if startswith(s, "center_volume_mixing_ratio_")
-        return RRTMGP.volume_mixing_ratio(
-            solver,
-            s[(ncodeunits("center_volume_mixing_ratio_") + 1):end],
-        )
-    elseif startswith(s, "volume_mixing_ratio_")
-        return RRTMGP.volume_mixing_ratio(
-            solver,
-            s[(ncodeunits("volume_mixing_ratio_") + 1):end],
-        )
-    elseif startswith(s, "center_") && endswith(s, "_column_mass_density")
-        return RRTMGP.aerosol_column_mass_density(
-            solver,
-            s[(ncodeunits("center_") + 1):(end - ncodeunits("_column_mass_density"))],
-        )
-    elseif startswith(s, "center_") && endswith(s, "_radius")
-        return RRTMGP.aerosol_radius(
-            solver,
-            s[(ncodeunits("center_") + 1):(end - ncodeunits("_radius"))],
-        )
-    end
+# ClimaAtmos lays the MERRA aerosols into the RRTMGP state arrays in this order (which
+# must match RRTMGP's `AEROSOL_IDX`); RRTMGP resolves the short names to canonical ones.
+const _AEROSOL_SHORT_NAMES = (
+    "dust1", "ss1", "so4", "bcpi", "bcpo", "ocpi", "ocpo",
+    "dust2", "dust3", "dust4", "dust5", "ss2", "ss3", "ss4", "ss5",
+)
+
+# Precomputed maps from ClimaAtmos's historical field-name symbols to the RRTMGP gas or
+# aerosol name, so `getproperty` resolves gas VMRs and per-aerosol properties without
+# allocating (no `String` conversion + slicing) on every access. The cloud effective radii,
+# which also end in `_radius`, are handled by `_solver_field` and never reach here.
+const _GAS_VMR_FIELDS = Dict{Symbol, String}(
+    Symbol(prefix, g) => g for g in RRTMGP.gas_names_sw() for
+    prefix in ("center_volume_mixing_ratio_", "volume_mixing_ratio_")
+)
+const _AEROSOL_MASS_FIELDS = Dict{Symbol, String}(
+    Symbol("center_", a, "_column_mass_density") => a for a in _AEROSOL_SHORT_NAMES
+)
+const _AEROSOL_RADIUS_FIELDS = Dict{Symbol, String}(
+    Symbol("center_", a, "_radius") => a for
+    a in _AEROSOL_SHORT_NAMES if occursin("dust", a) || occursin("ss", a)
+)
+
+function _named_solver_field(solver, name::Symbol)
+    haskey(_GAS_VMR_FIELDS, name) &&
+        return RRTMGP.volume_mixing_ratio(solver, _GAS_VMR_FIELDS[name])
+    haskey(_AEROSOL_MASS_FIELDS, name) &&
+        return RRTMGP.aerosol_column_mass_density(solver, _AEROSOL_MASS_FIELDS[name])
+    haskey(_AEROSOL_RADIUS_FIELDS, name) &&
+        return RRTMGP.aerosol_radius(solver, _AEROSOL_RADIUS_FIELDS[name])
     error("RRTMGPModel has no field `$name`")
 end
 
@@ -413,7 +415,10 @@ function _RRTMGPModel(
     end
 
     radiation_method = get_radiation_method(radiation_mode)
-    (; lookups, lu_kwargs) = RRTMGP.lookup_tables(grid_params, radiation_method)
+    # Build the lookup tables once and hand them to `RRTMGPSolver` below, so it does not
+    # read the (large) NetCDF tables a second time. `lu_kwargs` sizes the input arrays.
+    lookup_data = RRTMGP.lookup_tables(grid_params, radiation_method)
+    (; lookups, lu_kwargs) = lookup_data
 
     # `RRTMGP.RRTMGPSolver` (built at the end) owns the radiative sources, the band
     # and broadband flux buffers, and the longwave/shortwave RTE workspaces. Here we
@@ -618,23 +623,7 @@ function _RRTMGPModel(
             aero_size = DA{FT}(undef, n_aerosol_sizes, nlay, ncol)
             aero_mass = DA{FT}(undef, n_aerosols, nlay, ncol)
 
-            aerosol_names = [
-                "dust1",
-                "ss1",
-                "so4",
-                "bcpi",
-                "bcpo",
-                "ocpi",
-                "ocpo",
-                "dust2",
-                "dust3",
-                "dust4",
-                "dust5",
-                "ss2",
-                "ss3",
-                "ss4",
-                "ss5",
-            ]
+            aerosol_names = _AEROSOL_SHORT_NAMES
             for (i, name) in enumerate(aerosol_names)
                 if occursin("dust", name) || occursin("ss", name)
                     set_input!(
@@ -721,6 +710,7 @@ function _RRTMGPModel(
         interpolation,
         bottom_extrapolation,
         deep_atmosphere_scaling = metric_scaling,
+        lookups = lookup_data,
     )
     return RRTMGPModel(solver, radiation_mode)
 end
