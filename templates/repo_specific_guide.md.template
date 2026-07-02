@@ -1,0 +1,41 @@
+# REPO_NAME: Repo-Specific Guide
+
+<!-- Replace REPO_NAME throughout. This file documents things specific to this
+     package that are NOT covered by the shared DeveloperGuides. -->
+
+## Package overview
+
+<!-- One paragraph: what this package does, its role in the CliMA ecosystem. -->
+
+## Directory map
+
+<!-- Map the package's concrete directories to the architectural layers
+     defined in docs/dev-guides/architecture/architectural_boundaries.md. -->
+
+| Layer | Directory | Description |
+|:---|:---|:---|
+| Solver | `src/solver/` | ... |
+| Physics | `src/parameterized_tendencies/` | ... |
+| Cache | `src/cache/` | ... |
+| Diagnostics | `src/diagnostics/` | ... |
+
+## Key abstractions
+
+<!-- List the 3–5 most important types/modules a new contributor needs to know. -->
+
+## Test groups
+
+<!-- List the CI test groups from test/runtests.jl and what each covers. -->
+
+| Group | What it covers |
+|:---|:---|
+| `unit` | ... |
+| `gpu` | ... |
+
+## Repo-specific conventions
+
+<!-- Anything that deviates from or extends the shared guides. -->
+
+## Self-correction
+
+If this guide is discovered to be stale or missing a pattern, update it.
