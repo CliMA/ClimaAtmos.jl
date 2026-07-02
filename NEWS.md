@@ -4,6 +4,17 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+0.41.1
+-------
+
+- [#4622](https://github.com/CliMA/ClimaAtmos.jl/pull/4622) ![][badge-🔥behavioralΔ] Move the `ρe_tot`/`ρq_tot` upwind correction into the implicit advection tendency (the Wfact Jacobian is unchanged).
+- [#4621](https://github.com/CliMA/ClimaAtmos.jl/pull/4621) ![][badge-🔥behavioralΔ] Clamp the implicit `ρa` stage value to `[0, ρ·a_max]` per-cell in the column sweep for stability, so updraft area cannot exceed `a_max` when the explicit area limiters fail to prevent overshoot.
+- [#4623](https://github.com/CliMA/ClimaAtmos.jl/pull/4623) Hotfix: replace a rational exponent (`^(1 // 4)`) with `sqrt(sqrt(...))` in the Smagorinsky–Lilly stratification correction.
+- [#4618](https://github.com/CliMA/ClimaAtmos.jl/pull/4618) Add a verbose logging option for `AtmosSimulation`.
+- [#4606](https://github.com/CliMA/ClimaAtmos.jl/pull/4606) ![][badge-✨feature/enhancement] Add ARM VARANAL SCM forcing support.
+- [#4615](https://github.com/CliMA/ClimaAtmos.jl/pull/4615) Add microphysics 1M tendency plots for the Larcform1 case.
+- [#4610](https://github.com/CliMA/ClimaAtmos.jl/pull/4610) Add LES comparison plots for EDMF post-processing.
+
 0.41.0
 -------
 
