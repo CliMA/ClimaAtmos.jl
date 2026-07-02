@@ -1,4 +1,4 @@
-370
+371
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+370
+- Update Insolation.jl to v1.2.0
+
 370
 - Move ρe_tot/ρq_tot upwind correction into implicit advection (Wfact unchanged)
 
