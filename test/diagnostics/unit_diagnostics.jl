@@ -209,14 +209,42 @@ model_allsky = CA.AtmosModel(; radiation_mode)
 (Y_allsky, p_allsky) = build_state_cache(FT, model_allsky; grid = column,
     aerosol_names = ("DST01",),
 );
-# Radiation flux arrays are initialized to NaN by set_and_save! (filled only after solver runs).
-# Zero them so diagnostics return finite values when tested outside a time-stepping loop.
+import RRTMGP
+# RRTMGP allocates its flux and cloud-cover buffers with `undef` and fills them only
+# when the solver runs; these diagnostics are exercised without a time step. Zero the
+# output buffers a radiation diagnostic reads, and scrub any NaN from the kwarg-seeded
+# cloud/aerosol inputs, so every diagnostic returns finite values.
 let rrtm = p_allsky.radiation.rrtmgp_model
-    for f in propertynames(rrtm)
-        a = getproperty(rrtm, f)
-        if a isa AbstractArray && any(isnan, a)
-            @. a = ifelse(isnan(a), 0, a)
-        end
+    for getter in (
+        RRTMGP.net_flux,
+        RRTMGP.lw_flux_net,
+        RRTMGP.lw_flux_up,
+        RRTMGP.lw_flux_dn,
+        RRTMGP.sw_flux_net,
+        RRTMGP.sw_flux_up,
+        RRTMGP.sw_flux_dn,
+        RRTMGP.sw_direct_flux_dn,
+        RRTMGP.clear_net_flux,
+        RRTMGP.clear_lw_flux,
+        RRTMGP.clear_lw_flux_up,
+        RRTMGP.clear_lw_flux_dn,
+        RRTMGP.clear_sw_flux,
+        RRTMGP.clear_sw_flux_up,
+        RRTMGP.clear_sw_flux_dn,
+        RRTMGP.clear_sw_direct_flux_dn,
+        RRTMGP.sw_cloud_cover,
+        RRTMGP.lw_cloud_cover,
+    )
+        fill!(getter(rrtm), 0)
+    end
+    for getter in (
+        RRTMGP.cloud_liquid_effective_radius,
+        RRTMGP.cloud_ice_effective_radius,
+        RRTMGP.aod_sw_extinction,
+        RRTMGP.aod_sw_scattering,
+    )
+        a = getter(rrtm)
+        @. a = ifelse(isnan(a), 0, a)
     end
 end
 

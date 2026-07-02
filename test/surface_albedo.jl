@@ -2,6 +2,7 @@ using Test
 using ClimaComms
 import ClimaAtmos
 import Random
+import RRTMGP
 
 Random.seed!(1234)
 
@@ -23,8 +24,8 @@ Random.seed!(1234)
 
         ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
 
-        @test all(p.radiation.rrtmgp_model.direct_sw_surface_albedo .== FT(0.38))
-        @test all(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo .== FT(0.38))
+        @test all(RRTMGP.direct_sw_surface_albedo(p.radiation.rrtmgp_model) .== FT(0.38))
+        @test all(RRTMGP.diffuse_sw_surface_albedo(p.radiation.rrtmgp_model) .== FT(0.38))
     end
 
     @testset "RegressionFunctionAlbedo" begin
@@ -36,8 +37,8 @@ Random.seed!(1234)
         ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
 
         # Verify albedo is initialized (not NaN) - precise values checked in testset below
-        @test !isnan(sum(p.radiation.rrtmgp_model.direct_sw_surface_albedo))
-        @test !isnan(sum(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo))
+        @test !isnan(sum(RRTMGP.direct_sw_surface_albedo(p.radiation.rrtmgp_model)))
+        @test !isnan(sum(RRTMGP.diffuse_sw_surface_albedo(p.radiation.rrtmgp_model)))
     end
 
     @testset "CouplerAlbedo" begin
@@ -48,13 +49,13 @@ Random.seed!(1234)
 
         # At t=0, albedo should be set to NaN
         ClimaAtmos.set_surface_albedo!(u, p, 0.0, p.atmos.surface_albedo)
-        @test all(isnan.(p.radiation.rrtmgp_model.direct_sw_surface_albedo))
-        @test all(isnan.(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo))
+        @test all(isnan.(RRTMGP.direct_sw_surface_albedo(p.radiation.rrtmgp_model)))
+        @test all(isnan.(RRTMGP.diffuse_sw_surface_albedo(p.radiation.rrtmgp_model)))
 
         # At t>0, albedo should remain unchanged
         ClimaAtmos.set_surface_albedo!(u, p, 1.0, p.atmos.surface_albedo)
-        @test all(isnan.(p.radiation.rrtmgp_model.direct_sw_surface_albedo))
-        @test all(isnan.(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo))
+        @test all(isnan.(RRTMGP.direct_sw_surface_albedo(p.radiation.rrtmgp_model)))
+        @test all(isnan.(RRTMGP.diffuse_sw_surface_albedo(p.radiation.rrtmgp_model)))
     end
 end
 

@@ -64,6 +64,8 @@ function RegressionFunctionAlbedo{FT}(;
     return RegressionFunctionAlbedo(n, n0, p, q_clear, q_cloud, wave_slope)
 end
 
+import RRTMGP
+
 """
     set_surface_albedo!(Y, p, t, α_model::ConstantAlbedo)
 
@@ -71,8 +73,8 @@ Set the surface albedo to a constant value.
 """
 function set_surface_albedo!(Y, p, t, α_model::ConstantAlbedo{FT}) where {FT}
 
-    (; direct_sw_surface_albedo, diffuse_sw_surface_albedo) =
-        p.radiation.rrtmgp_model
+    direct_sw_surface_albedo = RRTMGP.direct_sw_surface_albedo(p.radiation.rrtmgp_model)
+    diffuse_sw_surface_albedo = RRTMGP.diffuse_sw_surface_albedo(p.radiation.rrtmgp_model)
 
     @. direct_sw_surface_albedo = α_model.α
     @. diffuse_sw_surface_albedo = α_model.α
@@ -90,8 +92,9 @@ function set_surface_albedo!(
     α_model::RegressionFunctionAlbedo{FT},
 ) where {FT}
 
-    (; direct_sw_surface_albedo, diffuse_sw_surface_albedo, cos_zenith) =
-        p.radiation.rrtmgp_model
+    direct_sw_surface_albedo = RRTMGP.direct_sw_surface_albedo(p.radiation.rrtmgp_model)
+    diffuse_sw_surface_albedo = RRTMGP.diffuse_sw_surface_albedo(p.radiation.rrtmgp_model)
+    cos_zenith = RRTMGP.cos_zenith(p.radiation.rrtmgp_model)
 
     λ = FT(0) # spectral wavelength (not used for now)
     μ = cos_zenith

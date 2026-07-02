@@ -347,7 +347,7 @@ function radiation_model_cache(
 
     cos_zenith = toa_flux = NaN # initialized in callback
 
-    rrtmgp_model = RRTMGPI.RRTMGPModel(
+    rrtmgp_model = RRTMGPI.rrtmgp_solver(
         rrtmgp_params,
         context;
         ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),

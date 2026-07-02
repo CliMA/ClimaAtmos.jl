@@ -73,7 +73,7 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
         # flux_dn_dir, so that face_clear_sw_direct_flux_dn and
         # face_sw_direct_flux_dn is uninitialized and not deterministic
         rrtmgp_clear_fix =
-            (:face_clear_sw_direct_flux_dn, :face_sw_direct_flux_dn)
+            (:face_clear_sw_direct_flux_dn, :face_sw_direct_flux_dn, :flux_dn_dir)
     else
         rrtmgp_clear_fix = ()
     end
