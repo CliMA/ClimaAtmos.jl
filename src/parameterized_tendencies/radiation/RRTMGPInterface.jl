@@ -94,125 +94,12 @@ export AbstractInterpolation,
     extrap!,
     uniform_z_p
 
-"""
-    RRTMGPModel(solver, radiation_mode)
-
-A thin ClimaAtmos-side wrapper over an `RRTMGP.RRTMGPSolver`. RRTMGP owns the
-atmospheric state, boundary conditions, RTE workspaces, lookup tables, and flux
-buffers; this wrapper only adds a `getproperty` that maps ClimaAtmos's historical
-field names (e.g. `center_temperature`, `face_flux`) onto RRTMGP's named getters,
-so the per-step physics that writes inputs and reads fluxes stays unchanged.
-"""
-struct RRTMGPModel{S, M}
-    solver::S           # RRTMGP.RRTMGPSolver — owns state, workspaces, and fluxes
-    radiation_mode::M   # ClimaAtmos AbstractRRTMGPMode (kept for introspection)
-end
-
-# Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints.
-Adapt.@adapt_structure RRTMGPModel
-
-# `getproperty` is how the physics code reads and writes the solver's buffers. Each
-# historical field name maps to a writable, domain-sized (boundary-layer-excluded)
-# device array or view returned by an `RRTMGP` getter.
-function Base.getproperty(model::RRTMGPModel, name::Symbol)
-    (name === :solver || name === :radiation_mode) && return getfield(model, name)
-    return _solver_field(getfield(model, :solver), name)
-end
-
-Base.propertynames(::RRTMGPModel, private::Bool = false) =
-    private ? (:solver, :radiation_mode) : ()
-
-function _solver_field(solver, name::Symbol)
-    # --- net fluxes ---
-    name === :face_flux && return RRTMGP.net_flux(solver)
-    name === :face_clear_flux && return RRTMGP.clear_net_flux(solver)
-    # --- longwave fluxes ---
-    name === :face_lw_flux && return RRTMGP.lw_flux_net(solver)
-    name === :face_lw_flux_up && return RRTMGP.lw_flux_up(solver)
-    name === :face_lw_flux_dn && return RRTMGP.lw_flux_dn(solver)
-    name === :face_clear_lw_flux && return RRTMGP.clear_lw_flux(solver)
-    name === :face_clear_lw_flux_up && return RRTMGP.clear_lw_flux_up(solver)
-    name === :face_clear_lw_flux_dn && return RRTMGP.clear_lw_flux_dn(solver)
-    # --- shortwave fluxes ---
-    name === :face_sw_flux && return RRTMGP.sw_flux_net(solver)
-    name === :face_sw_flux_up && return RRTMGP.sw_flux_up(solver)
-    name === :face_sw_flux_dn && return RRTMGP.sw_flux_dn(solver)
-    name === :face_sw_direct_flux_dn && return RRTMGP.sw_direct_flux_dn(solver)
-    name === :face_clear_sw_flux && return RRTMGP.clear_sw_flux(solver)
-    name === :face_clear_sw_flux_up && return RRTMGP.clear_sw_flux_up(solver)
-    name === :face_clear_sw_flux_dn && return RRTMGP.clear_sw_flux_dn(solver)
-    name === :face_clear_sw_direct_flux_dn &&
-        return RRTMGP.clear_sw_direct_flux_dn(solver)
-    # --- atmospheric state ---
-    name === :center_pressure && return RRTMGP.layer_pressure(solver)
-    name === :center_temperature && return RRTMGP.layer_temperature(solver)
-    name === :center_relative_humidity &&
-        return RRTMGP.layer_relative_humidity(solver)
-    name === :surface_temperature && return RRTMGP.surface_temperature(solver)
-    name === :center_z && return RRTMGP.center_z(solver)
-    name === :face_z && return RRTMGP.face_z(solver)
-    name === :latitude && return RRTMGP.latitude(solver)
-    # --- boundary conditions ---
-    name === :surface_emissivity && return RRTMGP.surface_emissivity(solver)
-    name === :cos_zenith && return RRTMGP.cos_zenith(solver)
-    name === :toa_flux && return RRTMGP.toa_flux(solver)
-    name === :direct_sw_surface_albedo &&
-        return RRTMGP.direct_sw_surface_albedo(solver)
-    name === :diffuse_sw_surface_albedo &&
-        return RRTMGP.diffuse_sw_surface_albedo(solver)
-    name === :top_of_atmosphere_lw_flux_dn &&
-        return RRTMGP.top_of_atmosphere_lw_flux_dn(solver)
-    # --- clouds ---
-    name === :center_cloud_liquid_effective_radius &&
-        return RRTMGP.cloud_liquid_effective_radius(solver)
-    name === :center_cloud_ice_effective_radius &&
-        return RRTMGP.cloud_ice_effective_radius(solver)
-    name === :center_cloud_liquid_water_path &&
-        return RRTMGP.cloud_liquid_water_path(solver)
-    name === :center_cloud_ice_water_path &&
-        return RRTMGP.cloud_ice_water_path(solver)
-    name === :center_cloud_fraction && return RRTMGP.cloud_fraction(solver)
-    name === :sw_cloud_cover && return RRTMGP.sw_cloud_cover(solver)
-    name === :lw_cloud_cover && return RRTMGP.lw_cloud_cover(solver)
-    # --- aerosols ---
-    name === :aod_sw_extinction && return RRTMGP.aod_sw_extinction(solver)
-    name === :aod_sw_scattering && return RRTMGP.aod_sw_scattering(solver)
-    # --- gases and aerosols keyed by chemical/aerosol name (Dict-resolved) ---
-    return _named_solver_field(solver, name)
-end
-
 # ClimaAtmos lays the MERRA aerosols into the RRTMGP state arrays in this order (which
 # must match RRTMGP's `AEROSOL_IDX`); RRTMGP resolves the short names to canonical ones.
 const _AEROSOL_SHORT_NAMES = (
     "dust1", "ss1", "so4", "bcpi", "bcpo", "ocpi", "ocpo",
     "dust2", "dust3", "dust4", "dust5", "ss2", "ss3", "ss4", "ss5",
 )
-
-# Precomputed maps from ClimaAtmos's historical field-name symbols to the RRTMGP gas or
-# aerosol name, so `getproperty` resolves gas VMRs and per-aerosol properties without
-# allocating (no `String` conversion + slicing) on every access. The cloud effective radii,
-# which also end in `_radius`, are handled by `_solver_field` and never reach here.
-const _GAS_VMR_FIELDS = Dict{Symbol, String}(
-    Symbol(prefix, g) => g for g in RRTMGP.gas_names_sw() for
-    prefix in ("center_volume_mixing_ratio_", "volume_mixing_ratio_")
-)
-const _AEROSOL_MASS_FIELDS = Dict{Symbol, String}(
-    Symbol("center_", a, "_column_mass_density") => a for a in _AEROSOL_SHORT_NAMES
-)
-const _AEROSOL_RADIUS_FIELDS = Dict{Symbol, String}(
-    Symbol("center_", a, "_radius") => a for
-    a in _AEROSOL_SHORT_NAMES if occursin("dust", a) || occursin("ss", a)
-)
-
-function _named_solver_field(solver, name::Symbol)
-    haskey(_GAS_VMR_FIELDS, name) &&
-        return RRTMGP.volume_mixing_ratio(solver, _GAS_VMR_FIELDS[name])
-    haskey(_AEROSOL_MASS_FIELDS, name) &&
-        return RRTMGP.aerosol_column_mass_density(solver, _AEROSOL_MASS_FIELDS[name])
-    haskey(_AEROSOL_RADIUS_FIELDS, name) &&
-        return RRTMGP.aerosol_radius(solver, _AEROSOL_RADIUS_FIELDS[name])
-    error("RRTMGPModel has no field `$name`")
-end
 
 get_radiation_method(m::GrayRadiation) = RRTMGP.GrayRadiation()
 get_radiation_method(m::ClearSkyRadiation) =
@@ -226,21 +113,21 @@ get_radiation_method(m::AllSkyRadiationWithClearSkyDiagnostics) =
     )
 
 """
-    RRTMGPModel(params; kwargs...)
+    rrtmgp_solver(params; kwargs...)
 
-A user-friendly interface for `RRTMGP.jl`. Stores an `RRTMGP.RTE.Solver`, along
+A user-friendly interface for `RRTMGP.jl`. Stores an `RRTMGP.RRTMGPSolver`, along
 with all of the data required to use it. Provides easy access to `RRTMGP`'s
-inputs and outputs (e.g., `model.center_temperature` and `model.face_flux`).
+inputs and outputs via RRTMGP getter functions.
 
-After constructing an `RRTMGPModel`, use it as follows:
+After constructing an `RRTMGPSolver`, use it as follows:
 
   - update all the inputs that have changed since it was constructed; e.g.,
-    `model.center_temperature .= field2array(current_center_temperature_field)`
-  - call `update_fluxes!(model)`
+    `RRTMGP.layer_temperature(solver) .= field2array(current_center_temperature_field)`
+  - call `RRTMGP.update_fluxes!(solver)`
   - use the values of any fluxes of interest; e.g.,
-    `field2array(face_flux_field) .= model.face_flux`
+    `field2array(face_flux_field) .= RRTMGP.net_flux(solver)`
 
-The `RRTMGPModel` assumes that pressure and temperature live on cell centers,
+The `rrtmgp_solver` assumes that pressure and temperature live on cell centers,
 and internally interpolates data to cell faces when needed.
 
 Every keyword argument that corresponds to an array of cell center or cell face
@@ -252,7 +139,7 @@ Similarly, every keyword argument that corresponds to an array of values at the
 top/bottom of the atmosphere can be specified as a scalar, or as the full 1D
 array.
 
-# Positional Arguments
+# Arguments
 
   - Artifacts stored in `RRTMGPReferenceData/<file_name>`.
     Should be callable with filenames:
@@ -286,77 +173,77 @@ array.
     represent the volume mixing ratio of each well-mixed gas (i.e., a gas that is
     not water vapor or ozone), instead of using an array that represents a
     spatially varying volume mixing ratio
-  - `center_pressure` and/or `face_pressure`: air pressure in Pa on cell centers
-    and on cell faces (either one or both of these must be specified)
-  - `center_temperature` and/or `face_temperature`: air temperature in K on cell
-    centers and on cell faces (if `center_pressure` is specified, then
+  - `center_pressure` and/or `face_pressure`: air pressure on cell centers
+    and on cell faces [Pa] (either one or both of these must be specified)
+  - `center_temperature` and/or `face_temperature`: air temperature on cell
+    centers and on cell faces [K] (if `center_pressure` is specified, then
     `center_temperature` must also be specified, and, if `face_pressure` is
     specified, then `face_temperature` must also be specified)
-  - `surface_temperature`: temperature of the surface in K (required)
-  - `surface_emissivity`: longwave emissivity of the surface (required)
-  - `top_of_atmosphere_lw_flux_dn`: incoming longwave radiation in W/m^2
+  - `surface_temperature`: temperature of the surface [K] (required)
+  - `surface_emissivity`: longwave emissivity of the surface [-] (required)
+  - `top_of_atmosphere_lw_flux_dn`: incoming longwave radiation [W/m²]
     (assumed to be 0 by default)
-  - `direct_sw_surface_albedo`: direct shortwave albedo of the surface
+  - `direct_sw_surface_albedo`: direct shortwave albedo of the surface [-]
     (required)
-  - `diffuse_sw_surface_albedo`: diffuse shortwave albedo of the surface
+  - `diffuse_sw_surface_albedo`: diffuse shortwave albedo of the surface [-]
     (required)
-  - `cos_zenith`: cosine of the zenith angle of sun in radians (required)
-  - `toa_flux`: irradiance of sun in W/m^2 (required); the incoming
+  - `cos_zenith`: cosine of the zenith angle of sun [radians] (required)
+  - `toa_flux`: irradiance of sun [W/m²] (required); the incoming
     direct shortwave radiation is given by
     `model.toa_flux .* model.cos_zenith`
   - `top_of_atmosphere_diffuse_sw_flux_dn`: incoming diffuse shortwave
-    radiation in W/m^2 (assumed to be 0 by default)
+    radiation [W/m²] (assumed to be 0 by default)
   - arguments only available when `radiation_mode isa GrayRadiation`:
 
       + `lapse_rate`: a scalar value that specifies the lapse rate throughout the
-        atmosphere (required); this is a constant that can't be modified after the
+        atmosphere [K/m] (required); this is a constant that can't be modified after the
         model is constructed
-      + `optical_thickness_parameter`: the longwave optical depth at the surface
+      + `optical_thickness_parameter`: the longwave optical depth at the surface [-]
         (required)
   - arguments only available when `!(radiation_mode isa GrayRadiation)`:
 
       + `center_volume_mixing_ratio_h2o`: volume mixing ratio of water vapor on
-        cell centers (required)
+        cell centers [mol/mol] (required)
 
       + `center_volume_mixing_ratio_o3`: volume mixing ratio of ozone on cell
-        centers (required)
+        centers [mol/mol] (required)
       + arguments only available when `use_global_means_for_well_mixed_gases`:
 
           * `volume_mixing_ratio_<gas_name>` for `gas_name` in `co2`, `n2o`, `co`,
             `ch4`, `o2`, `n2`, `ccl4`, `cfc11`, `cfc12`, `cfc22`, `hfc143a`,
             `hfc125`, `hfc23`, `hfc32`, `hfc134a`, `cf4`, `no2`: a scalar value
             that specifies the volume mixing ratio of each well-mixed gas
-            throughout the atmosphere (required)
+            throughout the atmosphere [mol/mol] (required)
       + arguments only available when `!use_global_means_for_well_mixed_gases`:
 
           * `center_volume_mixing_ratio_<gas_name>` for `gas_name` in `co2`,
             `n2o`, `co`,`ch4`, `o2`, `n2`, `ccl4`, `cfc11`, `cfc12`, `cfc22`,
             `hfc143a`, `hfc125`, `hfc23`, `hfc32`, `hfc134a`, `cf4`, `no2`: volume
-            mixing ratio of each well-mixed gas on cell centers (required)
+            mixing ratio of each well-mixed gas on cell centers [mol/mol] (required)
       + arguments only available when `!(radiation_mode isa ClearSkyRadiation)`:
 
           * `center_cloud_liquid_effective_radius`: effective radius of cloud
-            liquid water in m on cell centers (required)
+            liquid water on cell centers [m] (required)
           * `center_cloud_ice_effective_radius`: effective radius of cloud ice
-            water in m on cell centers (required)
+            water on cell centers [m] (required)
           * `center_cloud_liquid_water_path`: mean path length of cloud liquid
-            water in m on cell centers (required)
-          * `center_cloud_ice_water_path`: mean path length of cloud ice water in
-            m on cell centers (required)
-          * `center_cloud_fraction`: cloud fraction on cell centers (required)
+            water on cell centers [m] (required)
+          * `center_cloud_ice_water_path`: mean path length of cloud ice water on
+            cell centers [m] (required)
+          * `center_cloud_fraction`: cloud fraction on cell centers [-] (required)
           * `ice_roughness`: either 1, 2, or 3, with 3 corresponding to the
-            roughest ice (required); this is a constant that can't be modified after
+            roughest ice [-] (required); this is a constant that can't be modified after
             the model is constructed
-      + `latitude`: latitude in degrees (assumed to be 45 by default); used for
-        computing the concentration of air in molecules/cm^2
+      + `latitude`: latitude [degrees] (assumed to be 45 by default); used for
+        computing the concentration of air in molecules/cm²
   - arguments only available when
     `requires_z(interpolation) || requires_z(bottom_extrapolation)`:
 
-      + `center_z`: z-coordinate in m at cell centers
-      + `face_z`: z-coordinate in m at cell faces
-      + `planet_radius`: planet radius (used to compute metric scaling factor)
+      + `center_z`: z-coordinate at cell centers [m]
+      + `face_z`: z-coordinate at cell faces [m]
+      + `planet_radius`: planet radius [m] (used to compute metric scaling factor)
 """
-RRTMGPModel(
+rrtmgp_solver(
     params::RRTMGP.Parameters.ARP,
     context;
     ncol::Int,
@@ -366,7 +253,7 @@ RRTMGPModel(
     bottom_extrapolation::AbstractBottomExtrapolation = SameAsInterpolation(),
     use_global_means_for_well_mixed_gases::Bool = false,
     kwargs...,
-) = _RRTMGPModel(
+) = _rrtmgp_solver(
     params,
     context,
     radiation_mode;
@@ -378,8 +265,7 @@ RRTMGPModel(
     kwargs...,
 )
 
-# TODO: make this the new interface for the next breaking release.
-function _RRTMGPModel(
+function _rrtmgp_solver(
     params::RRTMGP.Parameters.ARP,
     context,
     radiation_mode::AbstractRRTMGPMode = ClearSkyRadiation();
@@ -522,9 +408,6 @@ function _RRTMGPModel(
                 !(gas_name in ("h2o", "h2o_frgn", "h2o_self", "o3")),
             RRTMGP.gas_names_sw(),
         )
-        # TODO: This gives the wrong types for CUDA 3.4 and above.
-        # gm = use_global_means_for_well_mixed_gases
-        # vmr = RRTMGP.Vmrs.init_vmr(ngas, nlay, ncol, FT, DA; gm)
         if use_global_means_for_well_mixed_gases
             vmr = RRTMGP.Vmrs.VmrGM(
                 DA{FT}(undef, nlay, ncol),
@@ -709,10 +592,10 @@ function _RRTMGPModel(
         face_z,
         interpolation,
         bottom_extrapolation,
-        deep_atmosphere_scaling = metric_scaling,
+        deep_atmosphere_inverse_scaling = metric_scaling,
         lookups = lookup_data,
     )
-    return RRTMGPModel(solver, radiation_mode)
+    return solver
 end
 
 # This sets `array .= value`, but it allows `array` to be to be a `CuArray`
@@ -762,31 +645,6 @@ function set_input!(array, name, domain_nlay, dict)
     end
     return nothing
 end
-
-"""
-    update_fluxes!(model, seedval)
-
-Run RRTMGP's full radiation update on the wrapped solver — prepare the atmospheric
-state (interpolate levels, add the isothermal boundary layer, clip, compute
-concentrations), solve the longwave and shortwave problems, and combine them into
-the net flux — and return the domain net flux at cell faces (`model.face_flux`).
-`seedval` reseeds RRTMGP's cloud-sampling RNG when the mode requests it. After the
-call these fluxes are available through `getproperty`:
-
-  - `face_flux`
-  - `face_lw_flux`, `face_lw_flux_dn`, `face_lw_flux_up`
-  - `face_sw_flux`, `face_sw_flux_dn`, `face_sw_flux_up`, `face_sw_direct_flux_dn`
-
-If `radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics`, the set of available
-fluxes also includes
-
-  - `face_clear_flux`
-  - `face_clear_lw_flux`, `face_clear_lw_flux_dn`, `face_clear_lw_flux_up`
-  - `face_clear_sw_flux`, `face_clear_sw_flux_dn`, `face_clear_sw_flux_up`,
-    `face_clear_sw_direct_flux_dn`
-"""
-NVTX.@annotate update_fluxes!(model::RRTMGPModel, seedval) =
-    RRTMGP.update_fluxes!(model.solver, seedval)
 
 include("update_inputs.jl")
 end # end module

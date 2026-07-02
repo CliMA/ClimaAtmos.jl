@@ -104,6 +104,8 @@ function external_driven_single_column!(integrator)
     evaluate!(ᶜls_subsidence, wa, t)
 end
 
+import RRTMGP
+
 NVTX.@annotate function rrtmgp_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -118,8 +120,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     set_insolation_variables!(Y, p, t, p.atmos.insolation)
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
-    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(floor(FT(t) / integrator.p.dt)))
-    Fields.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
+    RRTMGP.update_fluxes!(rrtmgp_model, UInt32(floor(FT(t) / integrator.p.dt)))
+    Fields.field2array(ᶠradiation_flux) .= RRTMGP.net_flux(rrtmgp_model)
     return nothing
 end
 
@@ -161,14 +163,14 @@ end
 function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     FT = Spaces.undertype(axes(Y.c))
     (; rrtmgp_model) = p.radiation
-    rrtmgp_model.cos_zenith .= cosd(FT(42.05))
-    rrtmgp_model.toa_flux .= FT(551.58)
+    RRTMGP.cos_zenith(rrtmgp_model) .= cosd(FT(42.05))
+    RRTMGP.toa_flux(rrtmgp_model) .= FT(551.58)
 end
 
 function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
     (; rrtmgp_model) = p.radiation
-    rrtmgp_model.cos_zenith .= Fields.field2array(p.external_forcing.cos_zenith)
-    rrtmgp_model.toa_flux .=
+    RRTMGP.cos_zenith(rrtmgp_model) .= Fields.field2array(p.external_forcing.cos_zenith)
+    RRTMGP.toa_flux(rrtmgp_model) .=
         Fields.field2array(p.external_forcing.toa_flux)
 end
 
@@ -183,8 +185,8 @@ function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
     evaluate!(rsdt, rsdt_tv, t)
 
     # set insolation variables from the values within the fields
-    rrtmgp_model.cos_zenith .= Fields.field2array(coszen)
-    rrtmgp_model.toa_flux .= Fields.field2array(rsdt ./ coszen)
+    RRTMGP.cos_zenith(rrtmgp_model) .= Fields.field2array(coszen)
+    RRTMGP.toa_flux(rrtmgp_model) .= Fields.field2array(rsdt ./ coszen)
 end
 
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
@@ -198,15 +200,17 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     (; rrtmgp_model) = p.radiation
     # Approximate annual mean insolation without diurnal cycle
     # Reference: O'Gorman and Schneider (2008), J. Climate, 21, 3815-3832
-    rrtmgp_model.toa_flux .= 680
-    @. rrtmgp_model.cos_zenith = (1 + FT(0.3) * (1 - 3 * sind(latitude)^2)) * FT(0.5)
+    RRTMGP.toa_flux(rrtmgp_model) .= 680
+    cos_zenith = RRTMGP.cos_zenith(rrtmgp_model)
+    @. cos_zenith =
+        (1 + FT(0.3) * (1 - 3 * sind(latitude)^2)) * FT(0.5)
 end
 
 function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)
     FT = Spaces.undertype(axes(Y.c))
     (; rrtmgp_model) = p.radiation
-    rrtmgp_model.cos_zenith .= eps(FT) # polar night; keep μ>0 for RRTMGP
-    rrtmgp_model.toa_flux .= FT(0)
+    RRTMGP.cos_zenith(rrtmgp_model) .= eps(FT) # polar night; keep μ>0 for RRTMGP
+    RRTMGP.toa_flux(rrtmgp_model) .= FT(0)
 end
 
 function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
@@ -223,9 +227,9 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
 
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     cos_zenith =
-        Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
+        Fields.array2field(RRTMGP.cos_zenith(rrtmgp_model), axes(bottom_coords))
     toa_flux = Fields.array2field(
-        rrtmgp_model.toa_flux,
+        RRTMGP.toa_flux(rrtmgp_model),
         axes(bottom_coords),
     )
 

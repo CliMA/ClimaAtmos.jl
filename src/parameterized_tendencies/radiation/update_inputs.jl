@@ -33,6 +33,8 @@ function update_atmospheric_state!(radiation_mode::R, integrator) where {R}
     return nothing
 end
 
+import RRTMGP
+
 """
     update_temperature_pressure!((; u, p, t)::I) where {I}
 
@@ -51,13 +53,14 @@ function update_temperature_pressure!((; u, p, t)::I) where {I}
     model = p.radiation.rrtmgp_model
 
     # update surface temperature
-    sfc_T = Fields.array2field(model.surface_temperature, axes(sfc_conditions.T_sfc))
+    sfc_T =
+        Fields.array2field(RRTMGP.surface_temperature(model), axes(sfc_conditions.T_sfc))
     @. sfc_T = sfc_conditions.T_sfc
 
     # update layer pressure
-    model.center_pressure .= Fields.field2array(p.precomputed.ᶜp)
+    RRTMGP.layer_pressure(model) .= Fields.field2array(p.precomputed.ᶜp)
     # compute layer temperature (clamped to RRTMGP bounds)
-    rrtmgp_ᶜT = Fields.array2field(model.center_temperature, axes(u.c))
+    rrtmgp_ᶜT = Fields.array2field(RRTMGP.layer_temperature(model), axes(u.c))
     # TODO: move this to RRTMGP
     @. rrtmgp_ᶜT = min(max(ᶜT, FT(T_min)), FT(T_max))
     return nothing
@@ -74,9 +77,9 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(thermo_params)
     (; ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    ᶜrh = Fields.array2field(rrtmgp_model.center_relative_humidity, axes(u.c))
+    ᶜrh = Fields.array2field(RRTMGP.layer_relative_humidity(rrtmgp_model), axes(u.c))
     ᶜvmr_h2o = Fields.array2field(
-        rrtmgp_model.center_volume_mixing_ratio_h2o,
+        RRTMGP.volume_mixing_ratio(rrtmgp_model, "h2o"),
         axes(u.c),
     )
     if radiation_mode.idealized_h2o
@@ -143,7 +146,7 @@ function update_volume_mixing_ratios!((; u, p, t)::I) where {I}
         evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, t)
 
         ᶜvmr_o3 = Fields.array2field(
-            rrtmgp_model.center_volume_mixing_ratio_o3,
+            RRTMGP.volume_mixing_ratio(rrtmgp_model, "o3"),
             axes(u.c),
         )
         @. ᶜvmr_o3 = p.tracers.o3
@@ -152,9 +155,9 @@ function update_volume_mixing_ratios!((; u, p, t)::I) where {I}
         evaluate!(p.tracers.co2, p.tracers.prescribed_co2_timevaryinginput, t)
 
         if pkgversion(ClimaUtilities) < v"0.1.21"
-            rrtmgp_model.volume_mixing_ratio_co2 .= p.tracers.co2
+            RRTMGP.volume_mixing_ratio(rrtmgp_model, "co2") .= p.tracers.co2
         else
-            rrtmgp_model.volume_mixing_ratio_co2 .= p.tracers.co2[]
+            RRTMGP.volume_mixing_ratio(rrtmgp_model, "co2") .= p.tracers.co2[]
         end
     end
 
@@ -182,35 +185,35 @@ function update_aerosol_concentrations!((; u, p, t)::I) where {I}
         ᶜΔz = Fields.Δz_field(u.c)
 
         more_dust_aerosols = (
-            (:center_dust1_column_mass_density, :DST01),
-            (:center_dust2_column_mass_density, :DST02),
-            (:center_dust3_column_mass_density, :DST03),
-            (:center_dust4_column_mass_density, :DST04),
-            (:center_dust5_column_mass_density, :DST05),
+            ("dust1", :DST01),
+            ("dust2", :DST02),
+            ("dust3", :DST03),
+            ("dust4", :DST04),
+            ("dust5", :DST05),
         )
 
         more_ssl_aerosols = (
-            (:center_ss1_column_mass_density, :SSLT01),
-            (:center_ss2_column_mass_density, :SSLT02),
-            (:center_ss3_column_mass_density, :SSLT03),
-            (:center_ss4_column_mass_density, :SSLT04),
-            (:center_ss5_column_mass_density, :SSLT05),
+            ("sea_salt1", :SSLT01),
+            ("sea_salt2", :SSLT02),
+            ("sea_salt3", :SSLT03),
+            ("sea_salt4", :SSLT04),
+            ("sea_salt5", :SSLT05),
         )
 
         aerosol_names_pair = [
             more_dust_aerosols...,
             more_ssl_aerosols...,
-            (:center_so4_column_mass_density, :SO4),
-            (:center_bcpi_column_mass_density, :CB2),
-            (:center_bcpo_column_mass_density, :CB1),
-            (:center_ocpi_column_mass_density, :OC2),
-            (:center_ocpo_column_mass_density, :OC1),
+            ("sulfate", :SO4),
+            ("black_carbon_rh", :CB2),
+            ("black_carbon", :CB1),
+            ("organic_carbon_rh", :OC2),
+            ("organic_carbon", :OC1),
         ]
 
         for (rrtmgp_aerosol_name, prescribed_aerosol_name) in aerosol_names_pair
 
             ᶜaero_conc = Fields.array2field(
-                getproperty(rrtmgp_model, rrtmgp_aerosol_name),
+                RRTMGP.aerosol_column_mass_density(rrtmgp_model, rrtmgp_aerosol_name),
                 axes(u.c),
             )
             if prescribed_aerosol_name in
@@ -260,21 +263,21 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
     if !radiation_mode.idealized_clouds
         ᶜΔz = Fields.Δz_field(u.c)
         ᶜlwp = Fields.array2field(
-            rrtmgp_model.center_cloud_liquid_water_path,
+            RRTMGP.cloud_liquid_water_path(rrtmgp_model),
             axes(u.c),
         )
         ᶜiwp = Fields.array2field(
-            rrtmgp_model.center_cloud_ice_water_path,
+            RRTMGP.cloud_ice_water_path(rrtmgp_model),
             axes(u.c),
         )
         ᶜfrac =
-            Fields.array2field(rrtmgp_model.center_cloud_fraction, axes(u.c))
+            Fields.array2field(RRTMGP.cloud_fraction(rrtmgp_model), axes(u.c))
         ᶜreliq = Fields.array2field(
-            rrtmgp_model.center_cloud_liquid_effective_radius,
+            RRTMGP.cloud_liquid_effective_radius(rrtmgp_model),
             axes(u.c),
         )
         ᶜreice = Fields.array2field(
-            rrtmgp_model.center_cloud_ice_effective_radius,
+            RRTMGP.cloud_ice_effective_radius(rrtmgp_model),
             axes(u.c),
         )
         # RRTMGP needs lwp and iwp in g/m^2
@@ -359,7 +362,6 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
             FT(0),
         )
     end
-
     return nothing
 end
 

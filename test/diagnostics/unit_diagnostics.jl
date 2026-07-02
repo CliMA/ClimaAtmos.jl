@@ -209,40 +209,41 @@ model_allsky = CA.AtmosModel(; radiation_mode)
 (Y_allsky, p_allsky) = build_state_cache(FT, model_allsky; grid = column,
     aerosol_names = ("DST01",),
 );
+import RRTMGP
 # RRTMGP allocates its flux and cloud-cover buffers with `undef` and fills them only
 # when the solver runs; these diagnostics are exercised without a time step. Zero the
 # output buffers a radiation diagnostic reads, and scrub any NaN from the kwarg-seeded
 # cloud/aerosol inputs, so every diagnostic returns finite values.
 let rrtm = p_allsky.radiation.rrtmgp_model
-    for f in (
-        :face_flux,
-        :face_lw_flux,
-        :face_lw_flux_up,
-        :face_lw_flux_dn,
-        :face_sw_flux,
-        :face_sw_flux_up,
-        :face_sw_flux_dn,
-        :face_sw_direct_flux_dn,
-        :face_clear_flux,
-        :face_clear_lw_flux,
-        :face_clear_lw_flux_up,
-        :face_clear_lw_flux_dn,
-        :face_clear_sw_flux,
-        :face_clear_sw_flux_up,
-        :face_clear_sw_flux_dn,
-        :face_clear_sw_direct_flux_dn,
-        :sw_cloud_cover,
-        :lw_cloud_cover,
+    for getter in (
+        RRTMGP.net_flux,
+        RRTMGP.lw_flux_net,
+        RRTMGP.lw_flux_up,
+        RRTMGP.lw_flux_dn,
+        RRTMGP.sw_flux_net,
+        RRTMGP.sw_flux_up,
+        RRTMGP.sw_flux_dn,
+        RRTMGP.sw_direct_flux_dn,
+        RRTMGP.clear_net_flux,
+        RRTMGP.clear_lw_flux,
+        RRTMGP.clear_lw_flux_up,
+        RRTMGP.clear_lw_flux_dn,
+        RRTMGP.clear_sw_flux,
+        RRTMGP.clear_sw_flux_up,
+        RRTMGP.clear_sw_flux_dn,
+        RRTMGP.clear_sw_direct_flux_dn,
+        RRTMGP.sw_cloud_cover,
+        RRTMGP.lw_cloud_cover,
     )
-        fill!(getproperty(rrtm, f), 0)
+        fill!(getter(rrtm), 0)
     end
-    for f in (
-        :center_cloud_liquid_effective_radius,
-        :center_cloud_ice_effective_radius,
-        :aod_sw_extinction,
-        :aod_sw_scattering,
+    for getter in (
+        RRTMGP.cloud_liquid_effective_radius,
+        RRTMGP.cloud_ice_effective_radius,
+        RRTMGP.aod_sw_extinction,
+        RRTMGP.aod_sw_scattering,
     )
-        a = getproperty(rrtm, f)
+        a = getter(rrtm)
         @. a = ifelse(isnan(a), 0, a)
     end
 end
