@@ -167,6 +167,7 @@ steps:
 
       - label: ":genie: Prognostic EDMF: Dry convective boundary layer (Soares)"
         retry: *retry_policy
+        key: prognostic_edmfx_soares_column
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
@@ -178,6 +179,7 @@ steps:
 
       - label: ":genie: Prognostic EDMF: Stable nocturnal Arctic boundary layer (GABLS)"
         retry: *retry_policy
+        key: prognostic_edmfx_gabls_column
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
@@ -200,6 +202,7 @@ steps:
 
       - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX)"
         retry: *retry_policy
+        key: prognostic_edmfx_bomex_column
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
@@ -232,6 +235,7 @@ steps:
 
       - label: ":genie: Prognostic EDMF: Nocturnal Sc (DYCOMS-RF01)"
         retry: *retry_policy
+        key: prognostic_edmfx_dycoms_rf01_column
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
@@ -243,6 +247,7 @@ steps:
 
       - label: ":genie: Prognostic EDMF: Reproducibility test for drizzling nocturnal Sc (DYCOMS-RF02)"
         retry: *retry_policy
+        key: prognostic_edmfx_dycoms_rf02_column
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
@@ -259,6 +264,7 @@ steps:
 
       - label: ":genie: Prognostic EDMF: Reproducibility test for precipitating trade wind Cu (RICO)"
         retry: *retry_policy
+        key: prognostic_edmfx_rico_column
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
@@ -285,6 +291,7 @@ steps:
       #
       - label: ":genie: Prognostic EDMF: Reproducibility test for deep tropical convection (TRMM)"
         retry: *retry_policy
+        key: prognostic_edmfx_trmm_column
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
@@ -298,6 +305,36 @@ steps:
         agents:
           slurm_mem: 35GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":chart_with_upwards_trend: SCM intercomparison plots"
+        retry: *retry_policy
+        depends_on:
+          - prognostic_edmfx_soares_column
+          - prognostic_edmfx_gabls_column
+          - prognostic_edmfx_bomex_column
+          - prognostic_edmfx_dycoms_rf01_column
+          - prognostic_edmfx_dycoms_rf02_column
+          - prognostic_edmfx_rico_column
+          - prognostic_edmfx_trmm_column
+        command: |
+          for JOB in \
+            prognostic_edmfx_soares_column \
+            prognostic_edmfx_gabls_column \
+            prognostic_edmfx_bomex_column \
+            prognostic_edmfx_dycoms_rf01_column \
+            prognostic_edmfx_dycoms_rf02_column \
+            prognostic_edmfx_rico_column \
+            prognostic_edmfx_trmm_column; do
+            mkdir -p $$JOB/output_active/nc_files
+            tar xf $$JOB/output_active/nc_files.tar -C $$JOB/output_active/nc_files 2>/dev/null || true
+          done
+          julia --color=yes --project=.buildkite \
+            post_processing/run_all_scm_intercomparisons.jl \
+            --sim_root .
+        artifact_paths: "scm_intercomparison_plots/scm_intercomparison.pdf"
+        agents:
+          slurm_mem: 8GB
+        soft_fail: true
 
       - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM), 0M"
         retry: *retry_policy

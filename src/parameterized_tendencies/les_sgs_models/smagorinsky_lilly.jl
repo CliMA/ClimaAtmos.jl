@@ -41,7 +41,7 @@ function lilly_stratification_correction(Y, p, ᶜS)
     ᶜS_norm = strain_rate_norm(ᶜS, Geometry.WAxis())
 
     ᶜRi = @. lazy(ᶜN² / (ᶜS_norm^2 + eps(FT)))  # Ri = N² / |S|²
-    ᶜfb = @. lazy(ifelse(ᶜRi ≤ 0, FT(1), max(0, 1 - ᶜRi / Pr_t)^(1 // 4)))
+    ᶜfb = @. lazy(ifelse(ᶜRi ≤ 0, FT(1), sqrt(sqrt(max(0, 1 - ᶜRi / Pr_t)))))
 end
 
 """
