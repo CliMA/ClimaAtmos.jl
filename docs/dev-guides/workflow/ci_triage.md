@@ -18,7 +18,7 @@ Path separators (`/` vs `\`), file-mode bits, line endings (`\r\n`), and locale-
 
 Several repos (Thermodynamics, ClimaCore, others) run two extra jobs that catch issues a plain `Pkg.test()` misses:
 
-- **Downgrade**: re-runs tests with the *lowest* compat-allowed version of every dep. Failures here mean a `[compat]` lower bound is too permissive — usually because new code used an API added in a later version. Fix by bumping the relevant lower bound.
+- **Downgrade**: re-runs tests with the *lowest* compat-allowed version of every dep. Failures here mean a `[compat]` lower bound is too permissive, usually because new code used an API added in a later version. Fix by bumping the relevant lower bound.
 - **Invalidations**: compares method-table invalidations against `main`. Failures mean a change in this PR added or strengthened invalidations of upstream code, which slows TTFX for downstream users. The fix is typically to narrow a method signature or remove a type-piratical method.
 
 ## 4. Downstream tests
@@ -27,14 +27,14 @@ Library repos (Thermodynamics, CloudMicrophysics, SurfaceFluxes, ClimaTimeSteppe
 
 ## 5. Float32 promotion
 
-A test that uses Float64 literals (`1.2`, `Inf`, `6^x` with integer base) passes on Float64 CI runs and fails on Float32 ones with a `BroadcastInferenceError` or a `Union{Float32, Float64}`-typed result. See [type_stability.md §1](../performance/type_stability.md). The Float32 path is sometimes exercised only in a separate Buildkite job — check whether your repo's Buildkite pipeline has a `Float32` flavor before assuming GitHub Actions covers it.
+A test that uses Float64 literals (`1.2`, `Inf`, `6^x` with integer base) passes on Float64 CI runs and fails on Float32 ones with a `BroadcastInferenceError` or a `Union{Float32, Float64}`-typed result. See [type_stability.md §1](../performance/type_stability.md). The Float32 path is sometimes exercised only in a separate Buildkite job: check whether your repo's Buildkite pipeline has a `Float32` flavor before assuming GitHub Actions covers it.
 
 ## 6. GPU vs CPU
 
 A test that runs on CPU in GitHub Actions may run on GPU on Buildkite. Common GPU-only failures:
 
 - Scalar indexing on a `CuArray` (`field[i]`): caught by `CUDA.allowscalar(false)` in test setup. See [clima_comms.md §1](../infrastructure/clima_comms.md).
-- `InvalidIRError: unsupported dynamic function invocation`: a closure captured a boxed variable or hit a `Function`-typed field. See [SDP 18](../architecture/software_design_patterns.md).
+- `InvalidIRError: unsupported dynamic function invocation`: a closure captured a boxed variable or hit a `Function`-typed field. See [SDP 18](../code-quality/software_design_patterns.md).
 - Object not `isbits` after `cudaconvert`: a `Vector`/`String`/abstract field reached the kernel boundary. See [gpu_performance.md §8](../performance/gpu_performance.md).
 - `BroadcastInferenceError` only on GPU: a Float64 literal or an inlining-budget overflow that the CPU compiler tolerates but the GPU compiler does not.
 
@@ -50,7 +50,7 @@ Tests that use global reductions or random number streams can pass on 1 rank and
 Allocation tests typically use the warm-up + `@allocated == 0` pattern (see [allocation_debugging.md](../performance/allocation_debugging.md)). If they pass locally but fail on CI:
 
 - The CI runner is colder; check that the test calls the function once before the assertion.
-- A new precompilation entry in your branch may have shifted what the first call allocates — the warm-up captures it, but a sibling test running just before may not have. Add an explicit warm-up inside the test, not at module top level.
+- A new precompilation entry in your branch may have shifted what the first call allocates; the warm-up captures it, but a sibling test running just before may not have. Add an explicit warm-up inside the test, not at module top level.
 
 ## 9. Documentation build failures
 
@@ -61,7 +61,7 @@ The `Documentation` workflow runs `docs/make.jl`. Two recurring failures:
 
 ## 10. Formatter
 
-A formatter failure is almost never about your changes: it's that your local JuliaFormatter major version differs from CI's. Check the JuliaFormatter workflow file under `.github/workflows/` (named `JuliaFormatter.yml` or `julia_formatter.yml` depending on the repo) for the `version:` input and run the matching JuliaFormatter locally before pushing. See [code_style.md §1](../code-quality/code_style.md).
+A formatter failure is almost never about your changes; your local JuliaFormatter major version differs from CI's. See [code_style.md §1](../code-quality/code_style.md) for the version-matching procedure.
 
 ## 11. Aqua
 
@@ -69,7 +69,7 @@ A formatter failure is almost never about your changes: it's that your local Jul
 
 ## 12. Buildkite shared-depot corruption
 
-Buildkite jobs on shared CliMA clusters use a per-pipeline Julia [depot](https://pkgdocs.julialang.org/dev/depots/#Shared-depots-for-distributed-computing) to amortize precompilation across runs. The depot occasionally becomes corrupted — usually after a Julia version bump or an interrupted precompile — and the symptom is a failure in the *initialization* step, not in your code. Telltale messages:
+Buildkite jobs on shared CliMA clusters use a per-pipeline Julia [depot](https://pkgdocs.julialang.org/dev/depots/#Shared-depots-for-distributed-computing) to amortize precompilation across runs. The depot occasionally becomes corrupted, usually after a Julia version bump or an interrupted precompile, and the symptom is a failure in the *initialization* step, not in your code. Telltale messages:
 
 - `Warning: The call to compilecache failed to create a usable precompiled cache file`
 - `ERROR: LoadError: Failed to precompile <package>`

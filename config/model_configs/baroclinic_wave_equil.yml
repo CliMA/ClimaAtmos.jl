@@ -5,6 +5,9 @@ initial_condition: "MoistBaroclinicWave"
 dt: "450secs"
 t_end: "6days"
 disable_surface_flux_tendency: true
+# Implicit vertical upwind advection of ρe_tot/ρq_tot with a central-only
+# Wfact needs ~3 Newton iterations to converge at large baroclinic-wave dt.
+max_newton_iters_ode: 3
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]
     period: 1days

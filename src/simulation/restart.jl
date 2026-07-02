@@ -29,7 +29,7 @@ function get_state_restart(
 end
 
 """
-    handle_restart(restart_file, t_start_original, start_date, model, context)
+    handle_restart(restart_file, t_start_original, start_date, model, context; verbose = false)
 
 Handle restart file loading with validation and logging.
 
@@ -47,7 +47,8 @@ function handle_restart(
     t_start_original,
     start_date,
     model,
-    context,
+    context;
+    verbose = false,
 )
     # Validate t_start before restart (matches get_simulation behavior)
     t_start_seconds = time_to_seconds(t_start_original)
@@ -59,7 +60,10 @@ function handle_restart(
         restart_file, start_date, hash(model), context,
     )
 
-    @info "Restarting simulation from file" restart_file restart_time = string(t_start)
+    if verbose
+        @info "Restarting simulation from file" restart_file restart_time =
+            string(t_start)
+    end
 
     spaces = (; center_space = axes(Y.c), face_space = axes(Y.f))
 

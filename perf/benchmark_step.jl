@@ -70,10 +70,10 @@ else
     # Profile with Julia's built-in profiler
     n_steps = 10
     local e
-    s = CA.@timed_str begin
+    CA.@timed_log true "Ran step! $n_steps times" begin
         e = ClimaComms.elapsed(device) do
             benchmark_step!(integrator, Y₀, n_steps) # run
         end
     end
-    @info "Ran step! $n_steps times in $s, ($(CA.prettytime(e/n_steps*1e9)) per step)"
+    @info "$(CA.prettytime(e / n_steps * 1e9)) per step"
 end

@@ -7,13 +7,14 @@ import ClimaUtilities.TimeManager: ITime
 #####
 
 function get_jacobian(
-    ode_algo, Y, atmos, jacobian::JacobianAlgorithm, debug_jacobian,
+    ode_algo, Y, atmos, jacobian::JacobianAlgorithm, debug_jacobian;
+    verbose = false,
 )
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
-    @info "Jacobian algorithm: $(summary_string(jacobian))"
+    verbose && @info "Jacobian algorithm: $(summary_string(jacobian))"
     jac = Jacobian(jacobian, Y, atmos; verbose = debug_jacobian)
-    if hasproperty(jac.cache, :derivative_flags)
+    if verbose && hasproperty(jac.cache, :derivative_flags)
         flags_str = join(
             ("$k = $(typeof(v).name.name)" for (k, v) in pairs(jac.cache.derivative_flags)),
             ", ",
@@ -83,10 +84,11 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
 end
 
 function args_integrator(Y, p, tspan, ode_algo, callback,
-    jacobian, debug_jacobian, prescribed_flow, dt_integrator,
+    jacobian, debug_jacobian, prescribed_flow, dt_integrator;
+    verbose = false,
 )
     (; atmos) = p
-    s = @timed_str begin
+    @timed_log verbose "Built tendency function" begin
         if isnothing(prescribed_flow)
 
             # This is the default case
@@ -94,7 +96,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             T_imp! = CTS.ODEFunction(
                 implicit_tendency!;
                 jac_prototype = get_jacobian(
-                    ode_algo, Y, atmos, jacobian, debug_jacobian,
+                    ode_algo, Y, atmos, jacobian, debug_jacobian; verbose,
                 ),
                 Wfact = update_jacobian!,
             )

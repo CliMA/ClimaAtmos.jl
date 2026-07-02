@@ -56,7 +56,7 @@ Exception:
 
 ## 2. Avoid `using` / `import` between submodules of the same package
 
-Inside `src/`, do not introduce new `using` or `import` statements that pull names from a *sibling* or *parent* submodule of the same package. This rule does not restrict `using`/`import` of external packages — those are normal Julia idioms.
+Inside `src/`, do not introduce new `using` or `import` statements that pull names from a *sibling* or *parent* submodule of the same package. This rule does not restrict `using`/`import` of external packages; those are normal Julia idioms.
 
 Bad:
 
@@ -125,7 +125,7 @@ In the wrapping case, also define `Adapt.adapt_structure` so the post-adapt obje
 
 ## 8. Prefer immutable structs
 
-Prefer immutable structs for types that are passed into GPU kernels or broadcast expressions. `mutable struct` is acceptable for infrastructure types that are never passed into kernels — for example, grid objects (`ClimaCore.Grids`), topologies, and time-stepping integrators (`ClimaTimeSteppers.TimeStepperIntegrator`).
+Prefer immutable structs for types that are passed into GPU kernels or broadcast expressions. `mutable struct` is acceptable for infrastructure types that are never passed into kernels, for example grid objects (`ClimaCore.Grids`), topologies, and time-stepping integrators (`ClimaTimeSteppers.TimeStepperIntegrator`).
 
 ## 9. Prefer `SVector` or `Tuple` over `Vector` / `Array`
 
@@ -138,7 +138,7 @@ For fixed-size data, use stack-friendly/static representations.
 
 ## 11. Do not use `@assert` within kernels
 
-Use `error("static message")` instead. Do not capture runtime variables in the error string within a kernel — string interpolation allocates and, on GPU, typically fails to compile because the device runtime lacks the full `print_to_string` machinery.
+Use `error("static message")` instead. Do not capture runtime variables in the error string within a kernel: string interpolation allocates and, on GPU, typically fails to compile because the device runtime lacks the full `print_to_string` machinery.
 
 Bad:
 
@@ -181,7 +181,7 @@ end
 Preferred:
 
 ```julia
-# AD-compatible — types inferred from inputs
+# AD-compatible: types inferred from inputs
 @inline function compute(x, y)
     return x^2 + y
 end
@@ -228,31 +228,9 @@ acc = zero(x)
 
 ## 17. Replace data-dependent `if/else` with `ifelse` inside GPU kernels
 
-On SIMT architectures, threads in a warp execute in lockstep. A data-dependent `if/else` serializes the two branches across threads (warp divergence). Use `ifelse(cond, a, b)` to compute branchlessly.
+A data-dependent `if/else` in a GPU kernel causes warp divergence; `ifelse(cond, a, b)` computes branchlessly. Both arguments are always evaluated, so guard mathematically invalid operations (`log`, `sqrt`, division) *before* the `ifelse`, not inside a `begin...end` block inside it.
 
-Note that `ifelse` does not skip the un-taken branch's work: every thread evaluates both `a` and `b` and the result of one is then selected. The benefit is removing the divergent branch predicate, not reducing computation; an expensive branch is paid on every thread regardless.
-
-**Critical**: both arguments to `ifelse` are always evaluated. Guard mathematically invalid operations (`log`, `sqrt`, division) *before* passing them as arguments — never inside a `begin...end` block inside `ifelse`. See [Numerical Robustness §1–2](../performance/numerical_robustness.md) for choosing the right floor (it is not `eps(FT)` in general).
-
-Bad:
-
-```julia
-# Thread divergence; log(x) also evaluates when x ≤ 0
-result = if x > 0
-    log(x) + 1
-else
-    zero(x)
-end
-```
-
-Preferred:
-
-```julia
-# Branchless; safe_x guards log
-safe_x = max(x, eps(eltype(x)))
-log_term = log(safe_x) + one(x)
-result = ifelse(x > zero(x), log_term, zero(x))
-```
+For the full explanation (SIMT semantics, why `ifelse` does not skip work, and the worked `log(x)` example), see [GPU Performance Guide §1](../performance/gpu_performance.md). For the broader branch-avoidance discipline (including evaluating both arms of a physical case split and combining pointwise conditions with `&`/`|` rather than `&&`/`||`), see the [Branchless Code Guide](../performance/branchless_code.md). For choosing the right floor in the pre-guard, see [Numerical Robustness §1–2](../performance/numerical_robustness.md).
 
 ## 18. Prefer functors over closures in broadcast or high-loop contexts
 
@@ -281,9 +259,9 @@ Validation: `@allocated integrate(PhysicsEval(params, state), data)` should be 0
 
 ## 19. Prefer fixed iteration counts in iterative solvers inside GPU kernels
 
-Convergence-based loops (`while err > tol`) cause thread divergence when different threads converge at different rates. Where the physics allows it, prefer a fixed number of iterations so all threads in a warp follow the same execution path.
+Convergence-based loops (`while err > tol`, or `for ...; converged && break; end`) cause thread divergence when different threads converge at different rates: the warp runs until the slowest point finishes, and the early-exit `break` is itself a data-dependent branch. Where the physics allows it, prefer a fixed number of iterations so all threads in a warp follow the same execution path.
 
-This is a performance guideline, not a strict rule. Use judgement: fixed iterations are appropriate when a small count (for example, 2–5 Newton steps) is known to be sufficient for the physical accuracy required.
+Fix the count by *physical adequacy* (e.g. temperature to ~0.1 K, not to `eps(FT)`), and determine it with an offline test that sweeps the full range of conditions a climate run can produce. The canonical example is `Thermodynamics.saturation_adjustment` (a fixed `maxiter = 2` Newton solve, no convergence flag). For the methodology, the offline-test checklist, and the worked example, see the [Branchless Code Guide §4–5](../performance/branchless_code.md).
 
 ## 20. Extract parameters and non-field scalars before `@.` blocks
 
@@ -328,29 +306,7 @@ end
 
 ## 22. Use SafeTestsets.jl to avoid leaky unit tests
 
-When unit testing, prefer `@safetestset` over standard `@testset` with nested `include` to prevent variables and imports from leaking between test files. Model repos with many independent test files (ClimaAtmos, ClimaLand, ClimaCoupler, ClimaTimeSteppers) use `@safetestset`. ClimaCore uses a custom `UnitTest` driver (`test/tabulated_tests.jl`) that achieves the same isolation. Physics-library repos (Thermodynamics, CloudMicrophysics, SurfaceFluxes) use plain `@testset`s; if you add a new test file there, prefer `@safetestset` for new isolation-sensitive tests.
-
-Bad:
-
-```julia
-@testset "MyPackage" begin
-    include("test_module_A.jl")
-    include("test_module_B.jl")
-end
-```
-
-Preferred:
-
-```julia
-using SafeTestsets
-
-@safetestset "Test module A" begin
-    @time include("test_module_A.jl")
-end
-@safetestset "Test module B" begin
-    @time include("test_module_B.jl")
-end
-```
+Prefer `@safetestset` over `@testset` + nested `include` so variables and imports do not leak between test files. See [testing_and_validation.md](../infrastructure/testing_and_validation.md) for the pattern and per-repo conventions.
 
 ## 23. Do not use list comprehensions
 
@@ -368,3 +324,17 @@ x = map(f, (a, b, c))
 # Preferred: input is an SVector → map returns an SVector
 x = map(f, SVector(a, b, c))
 ```
+
+## 24. Limit use of @generated functions
+
+Generated functions are versatile and helpful for debugging, but they have significantly higher compilation latencies than non-generated functions.
+
+To minimize compilation time, only use generated functions when absolutely necessary. This includes the following situations:
+
+- Guaranteeing inlining or unrolling of code, to avoid compilation errors when the compiler fails to perform these optimizations.
+- Dynamically constructing a `String` inside a GPU kernel, which requires runtime allocations.
+- Dynamically constructing a `Symbol` inside a GPU kernel, since `Symbol`s are implemented as interned strings.
+
+## Self-correction
+
+If this guide is discovered to be stale or missing a pattern, update it.
