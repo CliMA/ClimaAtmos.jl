@@ -755,7 +755,7 @@ correctly captures the Gaussian-tail scaling Φ⁻¹(p) ~ −√(−2 ln p)
 for small p, avoiding the extreme underestimate that causes the Newton
 step to diverge.
 """
-@inline function normal_cdf_inv(p::FT) where {FT}
+@inline @fastmath function normal_cdf_inv(p::FT) where {FT}
     p_safe = clamp(p, ϵ_numerics(FT), one(FT) - ϵ_numerics(FT))
     q = min(p_safe, one(FT) - p_safe)   # work in the lower tail
     t = sqrt(-FT(2) * log(q))
@@ -781,7 +781,7 @@ The approximation for z ≥ 0 is
 where `p` is a degree-5 polynomial with the A&S coefficients, and
 `Φ(z) = 1 − Φ(−z)` for z < 0.
 """
-@inline function normal_cdf(z::FT) where {FT}
+@inline @fastmath function normal_cdf(z::FT) where {FT}
     inv_sqrt2pi = one(FT) / sqrt(FT(2) * FT(π))
     z_abs = abs(z)
     t = one(FT) / (one(FT) + FT(0.2316419) * z_abs)

@@ -287,7 +287,7 @@ struct SGSVarianceEvaluator{TPS, FT}
     mu_S::FT
 end
 
-@inline function (eval::SGSVarianceEvaluator)(T_hat, q_tot_hat)
+@inline @fastmath function (eval::SGSVarianceEvaluator)(T_hat, q_tot_hat)
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     s = q_tot_hat - q_sat_hat
     return (s - eval.mu_S)^2
@@ -316,7 +316,7 @@ Gaussian closure. Using this analytic μ_S lets us accumulate σ_S² as
 
 Returns `(; mu_S, sigma_S)`.
 """
-@inline function _sgs_saturation_moments(
+@inline @fastmath function _sgs_saturation_moments(
     thp, ρ, T_mean, q_tot_mean,
     sgs_quad, T′T′, q′q′, corr_Tq,
 )
@@ -429,7 +429,7 @@ for computing it (typically with `σ_eff = α · σ_S` or `σ_eff = σ_aug` for
 the smooth-floored CF formula) so this helper stays free of parameter-
 dependent logic.
 """
-@inline function _compute_z(C)
+@inline @fastmath function _compute_z(C)
     FT = typeof(C)
 
     # 1. Initial guess: Φ(z₀) = tanh(1.35 · C).
@@ -478,7 +478,7 @@ The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
 `_compute_sgs_moments`) uses the equilibrium `σ_S`, so mass conservation
 `E[max(0, λ + α·S′)] = q_c` is exactly preserved for the microphysics tendencies.
 """
-@inline function _compute_cloud_fraction(q_c, sigma_S, q_sat, α, ε_rel, σ_abs)
+@inline @fastmath function _compute_cloud_fraction(q_c, sigma_S, q_sat, α, ε_rel, σ_abs)
     σ_S_floor_sq = (ε_rel * q_sat)^2 + σ_abs^2
     σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
     C = q_c / σ_aug
@@ -650,7 +650,8 @@ NVTX.@annotate function set_cloud_fraction!(
     microphysics_model = p.atmos.microphysics_model
 
     # Get environment density, temperature, and total specific humidity
-    ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+    ᶜρ_env_raw, ᶜT_mean, ᶜq_mean =
+        _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
     # Get condensate means (dispatches on microphysics_model)
     ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
@@ -663,6 +664,13 @@ NVTX.@annotate function set_cloud_fraction!(
     σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
+
+    # For PrognosticEDMFX, `ᶜρ_env_raw` is a lazy `air_density` broadcast.
+    # Materialize it here so its Field arguments (ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰,
+    # ᶜq_liq⁰, ᶜq_ice⁰) don't get fused into the quadrature kernel below,
+    # which otherwise inflates that kernel's argument/type footprint.
+    ᶜρ_env = p.scratch.ᶜtemp_scalar_2
+    @. ᶜρ_env = ᶜρ_env_raw
 
     # Hybrid cloud fraction: the σ_S² quadrature pass is fused into this
     # broadcast kernel, so the moments stay in registers and are never written
