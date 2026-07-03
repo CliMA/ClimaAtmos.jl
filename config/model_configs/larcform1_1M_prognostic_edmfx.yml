@@ -1,12 +1,16 @@
 # Larcform1 — Arctic winter boundary layer SCM (Pithan et al. 2016)
 # 1-moment microphysics, prognostic EDMFx
+
+job_id: larcform1_1M_prognostic_edmfx_base  # Decides file names and output dir if default location is used
+reference_job_id: larcform1                 # Decides ci plotting
+
 #==========================================================================================#
 # Atmosphere #
 initial_condition: Larcform1
-rayleigh_sponge: true
+rayleigh_sponge: false
 
 # Surface #
-prognostic_surface: SlabOceanSST     # placeholder until EisenmanSeaIce is implemented
+prognostic_surface: SlabOceanSST            # overwritten to 250K. Using this for now instead of couping to sea ice model
 surface_setup: DefaultMoninObukhov
 disable_surface_flux_tendency: false
 
@@ -15,15 +19,15 @@ disable_surface_flux_tendency: false
 
 # Temporal
 FLOAT_TYPE: Float32
-t_end: 5days
+t_end: 2days
 dt: 30secs
-dt_rad: 60secs
+dt_rad: 5mins
 
 # Spatial #
 config: "column"
 z_max: 9000.0
 z_elem: 90
-z_stretch: true # clw and z-banding both appear very sensitive to this
+z_stretch: false # clw and z-banding both appear very sensitive to this
 dz_bottom: 10.0
 
 # Solver #
@@ -55,7 +59,7 @@ prognostic_tke: true
 hyperdiff: ~
 
 # Clouds #
-cloud_model: quadrature
+cloud_model: quadrature             # [`grid_scale`, `quadrature` (default), `MLCloud`]"
 microphysics_model: 1M
 
 # Logging and Diagnostics
