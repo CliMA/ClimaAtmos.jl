@@ -172,14 +172,7 @@ include(joinpath("utils", "show.jl"))
 
 
 
-# Added for COSP testing
-include(joinpath("cosp", "subcol.jl"))
-import .COSPSubcolumns
-include(joinpath("cosp", "prec_subcol.jl"))
-import .COSPPrecipSubcolumns
-include(joinpath("cosp", "hydrometeor_subcol.jl"))
-import .COSPHydrometeorSubcolumns
-include(joinpath("cosp", "reff_np_1m.jl"))
-import .COSP1MReffNpDiagnostics
+include(joinpath("cosp", "cosp.jl"))
+import .COSP
 
 end # module

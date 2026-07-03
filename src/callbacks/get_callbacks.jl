@@ -377,6 +377,9 @@ function subcol_callback(
     )
 end
 
+subcol_callback_enabled(model::AtmosModel, dt_subcol) =
+    !isnothing(model.cosp) && time_to_seconds(dt_subcol) != Inf
+
 function nogw_callback(
     non_orographic_gravity_wave,
     dt_nogw,
@@ -438,18 +441,23 @@ Creates the tuple of model callbacks for any AtmosModel by calling
   - `t_end`: End time
   - `output_dir`: Output directory
   - `checkpoint_frequency`: Checkpoint frequency
-  - Component-specific frequency overrides (enable_subcol, dt_subcol, dt_rad, dt_nogw, etc.)
+  - Component-specific frequency overrides (dt_subcol, dt_rad, dt_nogw, etc.)
 """
 function default_model_callbacks(model::AtmosModel;
-    enable_subcol = false,
-    dt_subcol = "6hours",
+    dt_subcol = "Inf",
     kwargs...,
 )
     callbacks = ()
+    # Physical constraints callback is registered here rather than at the component
+    # level because the decision depends on both the microphysics model AND the
+    # turbconv model simultaneously — registering from each component independently
+    # would cause double-registration for EDMF + 1M/2M configurations.
+    # Placed before the component callbacks so it fires before any other component
+    # callback that reads cache fields (e.g. radiation)
     if needs_enforce_physical_constraints(model)
         callbacks = (callbacks..., enforce_physical_constraints_callback(kwargs[:dt]))
     end
-    if enable_subcol
+    if subcol_callback_enabled(model, dt_subcol)
         callbacks = (
             callbacks...,
             subcol_callback(

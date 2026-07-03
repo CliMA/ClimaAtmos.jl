@@ -105,12 +105,9 @@ idealized_h2o:
 dt_rad:
   help: "Time between calling radiation callback for sphere configurations. Only applies to RRTMGP modes, ignored for `held_suarez`, which is applied every stage."
   value: "6hours"
-enable_subcol:
-  help: "Enable the subcolumn cloud overlap callback [`false` (default), `true`]"
-  value: false
 dt_subcol:
-  help: "Time between calling the subcolumn cloud overlap"
-  value: "6hours"
+  help: "Time between calling the subcolumn cloud overlap. Set to `Inf` to disable."
+  value: "Inf"
 idealized_clouds:
   help: "Use idealized clouds in radiation model [`false` (default), `true`]"
   value: false

@@ -883,3 +883,8 @@ function AtmosChem(config::AtmosConfig)
     end
     return AtmosChem(; chemistry_model)
 end
+
+function COSPModel(config::AtmosConfig)
+    time_to_seconds(config.parsed_args["dt_subcol"]) == Inf && return nothing
+    return COSPModel()
+end

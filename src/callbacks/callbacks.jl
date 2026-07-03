@@ -16,8 +16,6 @@ import ClimaUtilities.TimeVaryingInputs: evaluate!
 
 include("callback_helpers.jl")
 
-const SUBCOL_RANDOM_SEED = UInt64(1)
-
 function flux_accumulation!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -136,15 +134,16 @@ NVTX.@annotate function subcol_model_callback!(integrator)
         ᶜlarge_scale_precipitation_flux,
     ) = p.precomputed
 
-    COSPSubcolumns.scops!(
+    COSP.COSPSubcolumns.scops!(
         ᶜsubcolumn_cloud,
         ᶜsubcolumn_threshold,
         ᶜcloud_fraction,
-        SUBCOL_RANDOM_SEED,
+        p.atmos.cosp.random_seed;
+        overlap = p.atmos.cosp.overlap,
     )
 
     set_cosp_large_scale_precipitation_flux!(Y, p, p.atmos.microphysics_model)
-    COSPPrecipSubcolumns.prec_scops!(
+    COSP.COSPPrecipSubcolumns.prec_scops!(
         ᶜsubcolumn_precip,
         ᶜlarge_scale_precipitation_flux,
         ᶜsubcolumn_cloud,
@@ -164,17 +163,17 @@ function set_cosp_large_scale_precipitation_flux!(
     ::NonEquilibriumMicrophysics1M,
 )
     (; ᶜlarge_scale_precipitation_flux, ᶜwᵣ, ᶜwₛ) = p.precomputed
-    FT = eltype(Y)
+    FT = eltype(ᶜlarge_scale_precipitation_flux)
 
     @. ᶜlarge_scale_precipitation_flux =
-        max(FT(0), -Y.c.ρq_rai * ᶜwᵣ - Y.c.ρq_sno * ᶜwₛ)
+        max(FT(0), Y.c.ρq_rai * ᶜwᵣ + Y.c.ρq_sno * ᶜwₛ)
 
     return nothing
 end
 
 function set_cosp_large_scale_precipitation_flux!(Y, p, _)
     (; ᶜlarge_scale_precipitation_flux) = p.precomputed
-    FT = eltype(Y)
+    FT = eltype(ᶜlarge_scale_precipitation_flux)
 
     @. ᶜlarge_scale_precipitation_flux = FT(0)
 
@@ -202,7 +201,7 @@ function set_cosp_hydrometeor_subcolumns!(
     grid_mean_hydrometeors =
         (; q_lcl = ᶜq_lcl, q_icl = ᶜq_icl, q_rai = ᶜq_rai, q_sno = ᶜq_sno)
 
-    COSPHydrometeorSubcolumns.slice_hydrometeor_subcolumns!(
+    COSP.COSPHydrometeorSubcolumns.slice_hydrometeor_subcolumns!(
         ᶜsubcolumn_hydrometeors,
         ᶜsubcolumn_cloud,
         ᶜsubcolumn_precip,
@@ -244,7 +243,7 @@ function set_cosp_reff_np_subcolumns!(
         ᶜsubcolumn_hydrometeors,
     ) = p.precomputed
 
-    COSP1MReffNpDiagnostics.set_1M_reff_np_subcolumns!(
+    COSP.COSP1MReffNpDiagnostics.set_1M_reff_np_subcolumns!(
         ᶜsubcolumn_reff,
         ᶜsubcolumn_Np,
         ᶜsubcolumn_hydrometeors,

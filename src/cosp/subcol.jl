@@ -1,6 +1,6 @@
 module COSPSubcolumns
 
-import ClimaCore: Fields, Operators, Quadratures, Spaces
+import ClimaCore: Fields, Operators
 
 export scops!
 
@@ -109,25 +109,8 @@ end
     (FT(isubcolumn) - FT(0.5)) / FT(nsubcolumns)
 
 function _fill_random_field!(rand_field, random_seed, isubcolumn)
-    nlev = Spaces.nlevels(axes(rand_field))
-    field_space = axes(rand_field)
-    FT = eltype(rand_field)
-
-    for column_index in _column_indices(rand_field)
-        column_id = _column_id(field_space, column_index...)
-        rand_column = Fields.column(rand_field, column_index...)
-        @inbounds for ilev in 1:nlev
-            Fields.level(rand_column, ilev)[] =
-                _rand_for_point(
-                    random_seed,
-                    column_id,
-                    nlev - ilev + 1,
-                    isubcolumn,
-                    FT,
-                )
-        end
-    end
-
+    coords = Fields.coordinate_field(axes(rand_field))
+    @. rand_field = _rand_for_point(random_seed, coords, isubcolumn)
     return nothing
 end
 
@@ -163,56 +146,6 @@ function _new_threshold_from_random(
     end
 end
 
-function _column_indices(field::Fields.Field)
-    space = axes(field)
-    space isa Spaces.FiniteDifferenceSpace && return ((1, 1, 1),)
-
-    horizontal_space = Spaces.horizontal_space(space)
-    quadrature_points =
-        1:Quadratures.degrees_of_freedom(
-            Spaces.quadrature_style(horizontal_space),
-        )
-    slab_indices = Spaces.eachslabindex(horizontal_space)
-
-    return horizontal_space isa Spaces.SpectralElementSpace1D ?
-           Iterators.product(quadrature_points, slab_indices) :
-           Iterators.product(quadrature_points, quadrature_points, slab_indices)
-end
-
-@inline _column_id(::Spaces.FiniteDifferenceSpace, ::Int, ::Int, ::Int) = 1
-
-@inline function _column_id(
-    space::Spaces.ExtrudedFiniteDifferenceSpace,
-    i::Int,
-    h::Int,
-)
-    return _column_id(Spaces.horizontal_space(space), i, h)
-end
-
-@inline function _column_id(
-    space::Spaces.ExtrudedFiniteDifferenceSpace,
-    i::Int,
-    j::Int,
-    h::Int,
-)
-    return _column_id(Spaces.horizontal_space(space), i, j, h)
-end
-
-@inline function _column_id(space::Spaces.SpectralElementSpace1D, i::Int, h::Int)
-    ni = Quadratures.degrees_of_freedom(Spaces.quadrature_style(space))
-    return i + (h - 1) * ni
-end
-
-@inline function _column_id(
-    space::Spaces.SpectralElementSpace2D,
-    i::Int,
-    j::Int,
-    h::Int,
-)
-    ni = Quadratures.degrees_of_freedom(Spaces.quadrature_style(space))
-    return i + ni * ((j - 1) + ni * (h - 1))
-end
-
 @inline function _mask_value(
     total_cloud,
     threshold,
@@ -238,16 +171,34 @@ end
     return xor(x, x >> 31)
 end
 
-@inline function _rand_for_point(
-    random_seed::UInt64,
-    ipoint,
-    ilev,
-    isubcolumn,
-    ::Type{FT},
-) where {FT}
+@generated function _coord_component(coords, ::Val{name}, ::Type{FT}) where {name, FT}
+    return name in fieldnames(coords) ?
+           :(FT(getfield(coords, $(QuoteNode(name))))) :
+           :(zero(FT))
+end
+
+@inline _coord_bits(x::Float64) = reinterpret(UInt64, x)
+@inline _coord_bits(x::Float32) = UInt64(reinterpret(UInt32, x))
+
+@inline function _rand_for_point(random_seed::UInt64, coords, isubcolumn)
+    FT = typeof(coords.z)
+    horizontal_key = _mix_uint64(_coord_bits(_coord_component(coords, Val(:x), FT)))
+    horizontal_key = xor(
+        horizontal_key,
+        _mix_uint64(_coord_bits(_coord_component(coords, Val(:y), FT))),
+    )
+    horizontal_key = xor(
+        horizontal_key,
+        _mix_uint64(_coord_bits(_coord_component(coords, Val(:lat), FT))),
+    )
+    horizontal_key = xor(
+        horizontal_key,
+        _mix_uint64(_coord_bits(_coord_component(coords, Val(:long), FT))),
+    )
+    vertical_key = _coord_bits(coords.z)
     x = random_seed
-    x = xor(x, UInt64(ipoint) * 0x9e3779b97f4a7c15)
-    x = xor(x, UInt64(ilev) * 0xbf58476d1ce4e5b9)
+    x = xor(x, horizontal_key * 0x9e3779b97f4a7c15)
+    x = xor(x, vertical_key * 0xbf58476d1ce4e5b9)
     x = xor(x, UInt64(isubcolumn) * 0x94d049bb133111eb)
     return FT(_mix_uint64(x) >> 11) * FT(0x1.0p-53)
 end
