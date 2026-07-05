@@ -104,6 +104,36 @@ include("../test_helpers.jl")
         ρχ_tendency = parent(getproperty(Yₜ_exp.c, ρχ_name))
         @test maximum(abs, ρχ_tendency .- ρ_advection) <= adv_tol
     end
+
+    # Subsidence (advective form). With descending prescribed
+    # flow (w < 0, inflow through the lid), the top-cell tendency must vanish:
+    # the advective form with zero boundary fluxes on both divergences is
+    # equivalent to a zero-gradient inflow condition χ(above lid) = χ_top.
+    # The pre-fix `Extrapolate` top BC copied the cell below into the top
+    # cell, which is nonzero for any non-constant profile.
+    ᶠlg = Fields.local_geometry_field(Y.f)
+    ᶠsubsidence³ = Base.materialize(
+        @. -FT(0.01) * CA.CT3(CA.unit_basis_vector_data(CA.CT3, ᶠlg))
+    )
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜχ_linear = ᶜz ./ Spaces.z_max(axes(Y.f))
+    ᶜρχₜ = similar(Y.c.ρ)
+    ᶜρχₜ .= 0
+    CA.subsidence!(ᶜρχₜ, Y.c.ρ, ᶠsubsidence³, ᶜχ_linear, Val(:first_order))
+    subsidence_scale = maximum(abs, parent(ᶜρχₜ))
+    @test subsidence_scale > 0  # non-vacuous: interior tendency is active
+    ᶜρχₜ_top = Fields.level(ᶜρχₜ, Spaces.nlevels(axes(Y.c)))
+    @test maximum(abs, parent(ᶜρχₜ_top)) <= 100 * eps(FT) * subsidence_scale
+
+    # With uniform χ, the subsidence tendency must vanish identically at
+    # every level for every reconstruction scheme (q ≡ 1 consistency).
+    ᶜχ_uniform = similar(Y.c.ρ)
+    ᶜχ_uniform .= 1
+    for scheme in (Val(:none), Val(:first_order), Val(:third_order))
+        ᶜρχₜ .= 0
+        CA.subsidence!(ᶜρχₜ, Y.c.ρ, ᶠsubsidence³, ᶜχ_uniform, scheme)
+        @test maximum(abs, parent(ᶜρχₜ)) <= 100 * eps(FT) * subsidence_scale
+    end
 end
 
 @testset "EDMFX SGS mass-flux consistency (T2, T3)" begin
