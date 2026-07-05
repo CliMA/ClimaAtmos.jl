@@ -110,6 +110,7 @@ function edmfx_sgs_mass_flux_tendency!(
                     edmfx_sgsflux_upwinding,
                 )
                 @. Yₜ.c.ρq_tot += vtt
+                @. Yₜ.c.ρ += vtt  # Effect of SGS water flux on (moist) air mass
             end
             # Add the environment fluxes
             ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
@@ -124,6 +125,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 edmfx_sgsflux_upwinding,
             )
             @. Yₜ.c.ρq_tot += vtt
+            @. Yₜ.c.ρ += vtt  # Effect of SGS water flux on (moist) air mass
         end
 
         # Auto-discovered SGS tracer fluxes (microphysics species and any
