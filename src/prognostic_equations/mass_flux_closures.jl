@@ -197,6 +197,10 @@ function edmfx_vertical_diffusion_tendency!(
         )
         ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
 
+        # Face diffusivities use a harmonic mean (reciprocal of interpolated
+        # reciprocal) so the flux collapses at faces bordering quiescent,
+        # strongly stratified air (see edmfx_sgs_diffusive_flux_tendency!).
+        ϵK = eps(FT)
         for j in 1:n
             ᶜρʲ = ᶜρʲs.:($j)
             ᶜmseʲ = Y.c.sgsʲs.:($j).mse
@@ -204,9 +208,9 @@ function edmfx_vertical_diffusion_tendency!(
             # Note: For this and other diffusive tendencies, we should use ρaʲ instead of ρʲ,
             # but it causes stability issues when ρaʲ is small
             @. Yₜ.c.sgsʲs.:($$j).mse -=
-                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
+                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
+                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
         end
 
         if !isempty(sgs_tracer_names(Y))
@@ -229,7 +233,10 @@ function edmfx_vertical_diffusion_tendency!(
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
                 @. ᶜχʲₜ -=
                     ᶜdivᵥ_q(
-                        -(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ)),
+                        -(
+                            ᶠinterp(ᶜρʲ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) *
+                            α * ᶠgradᵥ(ᶜχʲ)
+                        ),
                     ) / ᶜρʲ
             end
         end

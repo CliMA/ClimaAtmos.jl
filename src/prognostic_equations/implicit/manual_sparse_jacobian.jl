@@ -867,16 +867,34 @@ function update_diffusion_jacobian!(
     end
 
     ∂ᶠρχ_dif_flux_∂ᶜχ = ᶠp_grad_matrix
-    @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-        DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
+    # Harmonic-mean face interpolation of K, consistent with the diffusive
+    # tendencies (see edmfx_sgs_diffusive_flux_tendency! and
+    # vertical_diffusion_boundary_layer_tendency!). Smagorinsky tendencies
+    # still use arithmetic interpolation, so their Jacobian does too.
+    ϵK = eps(FT)
+    if is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
+        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
+    else
+        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+            DiagonalMatrixRow(ᶠinterp(ᶜρ) / ᶠinterp(1 / max(ᶜK_h, ϵK))) ⋅
+            ᶠgradᵥ_matrix()
+    end
     @. ᶜdiffusion_h_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
     if (
         MatrixFields.has_field(Y, @name(c.ρtke)) ||
         !isnothing(p.atmos.turbconv_model) ||
         !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
     )
-        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅ ᶠgradᵥ_matrix()
+        if is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
+            @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+                DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅
+                ᶠgradᵥ_matrix()
+        else
+            @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+                DiagonalMatrixRow(ᶠinterp(ᶜρ) / ᶠinterp(1 / max(ᶜK_u, ϵK))) ⋅
+                ᶠgradᵥ_matrix()
+        end
         @. ᶜdiffusion_u_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
     end
 
@@ -1202,11 +1220,16 @@ function update_sgs_diffusion_jacobian!(
     (; ᶜρʲs) = p.precomputed
     (; ᶜdiffusion_h_matrix) = p.scratch
     (; ᶜK_h) = eddy_diffusivities
+    FT = Spaces.undertype(axes(Y.c))
 
     α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
+    # Harmonic-mean face K, consistent with
+    # edmfx_vertical_diffusion_tendency!
+    ϵK = eps(FT)
     @. ᶜdiffusion_h_matrix =
         ᶜadvdivᵥ_matrix() ⋅
-        DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1)) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
+        DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1)) / ᶠinterp(1 / max(ᶜK_h, ϵK))) ⋅
+        ᶠgradᵥ_matrix()
 
     ∂ᶜmseʲ_err_∂ᶜmseʲ =
         matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
