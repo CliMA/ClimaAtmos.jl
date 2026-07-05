@@ -241,10 +241,18 @@ function edmfx_sgs_diffusive_flux_tendency!(
         )
         ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
 
+        # Interpolate eddy diffusivities to cell faces with a harmonic mean
+        # (reciprocal of the interpolated reciprocal). At a face separating a
+        # turbulent layer (large K) from quiescent, strongly stratified air
+        # (K ≈ 0) — e.g., a stratocumulus-capping inversion — the diffusive
+        # flux should nearly vanish. Arithmetic averaging assigns ≈ K/2 to
+        # such a face, producing spurious entrainment; the harmonic mean is
+        # controlled by the smaller of the two adjacent values.
+        ϵK = eps(FT)
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h)
+        @. ᶠρaK_h = ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_h, ϵK))
         ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
-        @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_u)
+        @. ᶠρaK_u = ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_u, ϵK))
 
         # Total enthalpy diffusion
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
