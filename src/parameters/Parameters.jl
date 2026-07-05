@@ -60,7 +60,9 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     cloud_fraction_steepness_scale::FT
     cloud_fraction_param_vec::VTF3
     # Augmented-σ floor for `_compute_cloud_fraction`:
-    # σ_S_floor² = (cloud_fraction_eps_rel · q_sat)² + cloud_fraction_sigma_abs².
+    # σ_S_floor² = (D · cloud_fraction_eps_rel · q_sat)² + cloud_fraction_sigma_abs²,
+    # with D ∈ [0, 1] damping the relative floor as the subdomain mean
+    # saturates (see `_compute_cloud_fraction`).
     cloud_fraction_eps_rel::FT
     cloud_fraction_sigma_abs::FT
     # Surface mass flux closure (`set_edmfx_surface_conditions!`).
