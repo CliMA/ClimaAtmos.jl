@@ -231,7 +231,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
-        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+        (; ᶜbuoygrad_stab, ᶜstrain_rate_norm) = p.precomputed
         # scratch to prevent GPU Kernel parameter memory error
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
         ᶜmixing_length_field .= ᶜmixing_length(Y, p)
@@ -241,7 +241,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
         ᶜprandtl_nvec = @. lazy(
             turbulent_prandtl_number(
                 params,
-                ᶜlinear_buoygrad,
+                ᶜbuoygrad_stab,
                 ᶜstrain_rate_norm,
             ),
         )

@@ -27,14 +27,14 @@ edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model::EDOnlyEDMFX)
     (; params) = p
-    (; ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
+    (; ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜbuoygrad_stab) = p.precomputed
     turbconv_params = CAP.turbconv_params(p.params)
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
     ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
     ᶜmixing_length_field .= ᶜmixing_length(Y, p)
     ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
     ᶜprandtl_nvec = @. lazy(
-        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+        turbulent_prandtl_number(params, ᶜbuoygrad_stab, ᶜstrain_rate_norm),
     )
     ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
 
@@ -51,7 +51,7 @@ function edmfx_tke_tendency!(
     t,
     turbconv_model::PrognosticEDMFX,
 )
-    (; ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
+    (; ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜbuoygrad_stab) = p.precomputed
     turbconv_params = CAP.turbconv_params(p.params)
 
     if use_prognostic_tke(turbconv_model)
@@ -64,7 +64,7 @@ function edmfx_tke_tendency!(
         ᶜprandtl_nvec = @. lazy(
             turbulent_prandtl_number(
                 p.params,
-                ᶜlinear_buoygrad,
+                ᶜbuoygrad_stab,
                 ᶜstrain_rate_norm,
             ),
         )

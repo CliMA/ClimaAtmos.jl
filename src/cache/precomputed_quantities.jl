@@ -149,6 +149,9 @@ function precomputed_quantities(Y, atmos)
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜlinear_buoygrad = similar(Y.c, FT),
+        # Stability-biased buoyancy gradient (max of one-sided estimates);
+        # feeds the mixing-length and Pr_t(Ri) closures near sharp inversions.
+        ᶜbuoygrad_stab = similar(Y.c, FT),
         ᶜstrain_rate_norm = similar(Y.c, FT),
         sfc_conditions = similar(Spaces.level(Y.f, half), SCT),
     )

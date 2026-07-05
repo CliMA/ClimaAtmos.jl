@@ -186,14 +186,14 @@ function edmfx_vertical_diffusion_tendency!(
             bottom = Operators.SetValue(C3(0)),
         )
 
-        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+        (; ᶜbuoygrad_stab, ᶜstrain_rate_norm) = p.precomputed
         ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
         # scratch to prevent GPU Kernel parameter memory error
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
         ᶜmixing_length_field .= ᶜmixing_length(Y, p)
         ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
         ᶜprandtl_nvec = @. lazy(
-            turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+            turbulent_prandtl_number(params, ᶜbuoygrad_stab, ᶜstrain_rate_norm),
         )
         ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
 
