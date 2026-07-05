@@ -442,7 +442,7 @@ edmfx_tracer_upwinding:
   help: "EDMFX tracer upwinding mode [`none`, `first_order` (default)]"
   value: first_order
 edmfx_sgsflux_upwinding:
-  help: "EDMFX SGS mass flux upwinding mode [`none` (default), `first_order`, `vanleer_limiter`, `third_order`]. On DYCOMS RF01 at 50 m resolution, `first_order` is diffusive enough to degrade the stratocumulus deck and `vanleer_limiter` destabilizes the implicit solver; prefer `none` unless 2dz noise is observed."
+  help: "EDMFX SGS mass flux upwinding mode [`none` (default), `first_order`, `third_order`]. Note: the implicit Jacobian assumes `none`; upwinding this difference-form term proved too diffusive (`first_order`) or unstable (`vanleer_limiter`) at stratocumulus tops."
   value: none
 edmfx_sgs_mass_flux:
   help: "If set to true, it switches on EDMFX SGS mass flux.  [`true`, `false` (default)]"
