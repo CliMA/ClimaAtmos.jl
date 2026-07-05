@@ -127,18 +127,24 @@ function edmfx_sgs_mass_flux_tendency!(
         end
 
         # Auto-discovered SGS tracer fluxes (microphysics species and any
-        # user-defined passive tracers)
+        # user-defined passive tracers). Like the mse and q_tot fluxes above,
+        # these are difference-form fluxes ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ), which
+        # vanish identically for uniform χ and are consistent with the SGS
+        # transport of q_tot. The grid-mean advection -∇·(ρ u³ χ) of each
+        # tracer is applied in explicit_vertical_advection_tendency!.
         # Draft fluxes
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
+            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
             for j in 1:n
                 ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                 @. ᶜa_scalar =
-                    ᶜχʲ *
+                    (ᶜχʲ - specific(ᶜρχ, Y.c.ρ)) *
                     draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                 vtt = vertical_transport(
                     ᶜρʲs.:($j),
-                    ᶠu³ʲs.:($j),
+                    ᶠu³_diff,
                     ᶜa_scalar,
                     dt,
                     edmfx_tracer_upwinding,
@@ -148,13 +154,16 @@ function edmfx_sgs_mass_flux_tendency!(
             end
         end
         # Environment fluxes
+        @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
+            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
             ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-            @. ᶜa_scalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
+            @. ᶜa_scalar =
+                (ᶜχ⁰ - specific(ᶜρχ, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
-                ᶠu³⁰,
+                ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
                 edmfx_tracer_upwinding,
