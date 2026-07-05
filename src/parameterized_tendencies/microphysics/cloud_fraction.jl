@@ -82,6 +82,11 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
             ᶜlg,
         )
 
+        # Stability-biased buoyancy gradient for the mixing-length and
+        # Pr_t(Ri) closures (max of one-sided estimates; registers
+        # unresolved inversions that the centered gradient dilutes).
+        set_stability_buoyancy_gradient!(Y, p, thermo_params)
+
         # Cache SGS covariances (no-op for dry/0M/GridScaleCloud configs).
         # For EDMF: gradients are precomputed above.
         # For non-EDMF: gradients are computed inside set_covariance_cache!.
@@ -126,6 +131,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
         ᶜgradᵥ_θ_liq_ice,
         ᶜlg,
     )
+    set_stability_buoyancy_gradient!(Y, p, thermo_params)
     set_covariance_cache!(Y, p, thermo_params)
 
     # Final post-Aitken update: one quadrature pass refreshes both CF and the

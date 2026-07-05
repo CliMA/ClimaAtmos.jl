@@ -97,6 +97,11 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
         p.precomputed.ᶜgradᵥ_θ_liq_ice,
         ᶜlg,
     )
+    # Stability-biased buoyancy gradient (max of one-sided estimates) for
+    # the mixing-length and Pr_t(Ri) closures; see
+    # set_stability_buoyancy_gradient! for rationale.
+    set_stability_buoyancy_gradient!(Y, p, thermo_params)
+    (; ᶜbuoygrad_stab) = p.precomputed
 
     # TODO: move strain rate calculation to separate function
     ᶠu = p.scratch.ᶠtemp_C123
@@ -106,13 +111,13 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_2
     @. ᶜprandtl_nvec =
-        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+        turbulent_prandtl_number(params, ᶜbuoygrad_stab, ᶜstrain_rate_norm)
 
     # Materialize directly into scratch field to avoid lazy heap allocations
     ᶜmixing_length = p.scratch.ᶜtemp_scalar
     @. ᶜmixing_length = smagorinsky_lilly_length(
         CAP.c_smag(params),
-        sqrt(max(ᶜlinear_buoygrad, 0)),   # N_eff
+        sqrt(max(ᶜbuoygrad_stab, 0)),   # N_eff
         ᶜdz,
         ᶜprandtl_nvec,
         ᶜstrain_rate_norm,

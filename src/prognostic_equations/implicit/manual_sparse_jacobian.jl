@@ -603,14 +603,14 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶜK_u = p.precomputed.ᶜνₜ_v
             ᶜK_h = p.precomputed.ᶜD_v
         elseif turbconv_model isa AbstractEDMF
-            (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+            (; ᶜbuoygrad_stab, ᶜstrain_rate_norm) = p.precomputed
             ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
             ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
             ᶜmixing_length_field .= ᶜmixing_length(Y, p)
             ᶜK_u = p.scratch.ᶜtemp_scalar_4
             @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field)
             ᶜprandtl_nvec = @. lazy(
-                turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+                turbulent_prandtl_number(params, ᶜbuoygrad_stab, ᶜstrain_rate_norm),
             )
             ᶜK_h = p.scratch.ᶜtemp_scalar_6
             @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)

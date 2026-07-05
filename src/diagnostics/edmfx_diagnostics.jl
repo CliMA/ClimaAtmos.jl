@@ -795,14 +795,14 @@ function compute_edt(state, cache, _,
     ::Nothing, ::Union{PrognosticEDMFX, EDOnlyEDMFX},
 )
     turbconv_params = CAP.turbconv_params(cache.params)
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+    (; ᶜbuoygrad_stab, ᶜstrain_rate_norm) = cache.precomputed
     (; params) = cache
 
     ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
     ᶜmixing_length_field = ᶜmixing_length(state, cache)
     ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
     ᶜprandtl_nvec =
-        @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
+        @. lazy(turbulent_prandtl_number(params, ᶜbuoygrad_stab, ᶜstrain_rate_norm))
     ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
     return ᶜK_h
 end

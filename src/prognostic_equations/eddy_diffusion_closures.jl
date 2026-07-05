@@ -414,6 +414,63 @@ function mixing_length_lopez_gomez_2020(
     return MixingLength(l_final, l_W, l_TKE, l_N, l_grid)
 end
 
+"""
+    set_stability_buoyancy_gradient!(Y, p, thermo_params)
+
+Fills `p.precomputed.ᶜbuoygrad_stab` with a stability-biased effective
+buoyancy gradient: at each cell center, the buoyancy gradient is evaluated
+twice, with upward- and downward-biased one-sided vertical gradients of
+`θ_li` and `q_tot`, and the more stable (larger) of the two values is kept.
+
+Rationale: centered two-cell gradients average across unresolved, strongly
+stable interfaces such as boundary-layer capping inversions, biasing N²_eff
+low — and hence the stability mixing length `l_N` and turbulent Prandtl
+number toward too much mixing — exactly in the entrainment zone. Taking the
+max of the one-sided estimates lets a single-cell jump register at both
+adjacent cell centers. Away from sharp interfaces, both one-sided gradients
+agree with the centered one, so the correction is inactive.
+
+This field feeds the mixing-length and `Pr_t(Ri)` closures only; the TKE
+buoyancy production keeps the centered `ᶜlinear_buoygrad`, so convective
+production in unstable layers is unaffected.
+"""
+NVTX.@annotate function set_stability_buoyancy_gradient!(Y, p, thermo_params)
+    (; ᶜbuoygrad_stab, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜcloud_fraction) =
+        p.precomputed
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜθ_li = @. lazy(
+        TD.liquid_ice_pottemp(
+            thermo_params,
+            ᶜT,
+            Y.c.ρ,
+            ᶜq_tot_nonneg,
+            ᶜq_liq,
+            ᶜq_ice,
+        ),
+    )
+    # One-sided center gradients: face gradients (ᶠgradᵥ) brought to centers
+    # from the upper (ᶜright_bias) and lower (ᶜleft_bias) adjacent faces.
+    # Domain-boundary faces carry zero gradient (ᶠgradᵥ BCs), so the biased
+    # estimates fall back to neutral there and the max picks the interior side.
+    @. ᶜbuoygrad_stab = max(
+        buoyancy_gradients(
+            BuoyGradMean(), thermo_params, ᶜT, Y.c.ρ,
+            ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜcloud_fraction, C3,
+            ᶜright_bias(ᶠgradᵥ(ᶜq_tot_nonneg)),
+            ᶜright_bias(ᶠgradᵥ(ᶜθ_li)),
+            ᶜlg,
+        ),
+        buoyancy_gradients(
+            BuoyGradMean(), thermo_params, ᶜT, Y.c.ρ,
+            ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜcloud_fraction, C3,
+            ᶜleft_bias(ᶠgradᵥ(ᶜq_tot_nonneg)),
+            ᶜleft_bias(ᶠgradᵥ(ᶜθ_li)),
+            ᶜlg,
+        ),
+    )
+    return nothing
+end
+
 # GPU-safe field access using Val dispatch
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:master}) = ml.master
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:wall}) = ml.wall
@@ -424,7 +481,9 @@ end
 function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     (; params) = p
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    # Stability-biased buoyancy gradient: registers unresolved inversions
+    # (see set_stability_buoyancy_gradient!); feeds l_N and Pr_t(Ri).
+    (; ᶜbuoygrad_stab, ᶜstrain_rate_norm) = p.precomputed
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜdz = Fields.Δz_field(axes(Y.c))
@@ -434,7 +493,7 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
     @. ᶜprandtl_nvec =
-        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+        turbulent_prandtl_number(params, ᶜbuoygrad_stab, ᶜstrain_rate_norm)
 
     # Extract sub-parameters before the lazy broadcast to avoid capturing
     # the full ClimaAtmosParameters struct (~4 KiB) in GPU kernel parameters.
@@ -452,7 +511,7 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
             z_sfc,
             ᶜdz,
             sfc_tke,
-            ᶜlinear_buoygrad,
+            ᶜbuoygrad_stab,
             ᶜtke,
             obukhov_length,
             ᶜstrain_rate_norm,
