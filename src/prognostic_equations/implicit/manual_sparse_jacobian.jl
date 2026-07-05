@@ -1055,12 +1055,35 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
                 end
 
+                # Derivative of the SGS mass-flux convergence with respect to
+                # the flux scalar, consistent with edmfx_sgsflux_upwinding
+                # (see vertical_transport in edmfx_sgs_mass_flux_tendency!).
+                # For upwinded transport the first-order upwind matrix is
+                # used; it is exact for :first_order and the leading-order
+                # approximation for :third_order and :vanleer_limiter.
                 ∂ᶜupdraft_mass_flux_∂ᶜscalar = ᶠbidiagonal_matrix_ct3
-                @. ∂ᶜupdraft_mass_flux_∂ᶜscalar =
-                    DiagonalMatrixRow(
-                        (ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) * (ᶠu³ʲs.:(1) - ᶠu³),
-                    ) ⋅ ᶠinterp_matrix() ⋅
-                    DiagonalMatrixRow(Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1))
+                if p.atmos.numerics.edmfx_sgsflux_upwinding == Val(:none)
+                    @. ∂ᶜupdraft_mass_flux_∂ᶜscalar =
+                        DiagonalMatrixRow(
+                            (ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) * (ᶠu³ʲs.:(1) - ᶠu³),
+                        ) ⋅ ᶠinterp_matrix() ⋅
+                        DiagonalMatrixRow(Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1))
+                else
+                    ᶠset_sgsflux_upwind_matrix_bcs =
+                        Operators.SetBoundaryOperator(;
+                            top = Operators.SetValue(
+                                zero(BidiagonalMatrixRow{CT3{FT}}),
+                            ),
+                            bottom = Operators.SetValue(
+                                zero(BidiagonalMatrixRow{CT3{FT}}),
+                            ),
+                        )
+                    @. ∂ᶜupdraft_mass_flux_∂ᶜscalar =
+                        DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
+                        ᶠset_sgsflux_upwind_matrix_bcs(
+                            ᶠupwind1_matrix(ᶠu³ʲs.:(1) - ᶠu³),
+                        ) ⋅ DiagonalMatrixRow(Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1))
+                end
                 @. p.scratch.ᶜtridiagonal_matrix_scalar =
                     dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar
 
