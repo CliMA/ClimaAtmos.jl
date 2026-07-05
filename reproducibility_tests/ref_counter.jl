@@ -1,4 +1,4 @@
-373
+374
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+374
+- Fix subsidence top BC (zero-gradient inflow at the lid instead of Extrapolate);
+  remove the external-forcing top-cell tendency-zeroing workaround.
+
 373
 - Route enforce_physical_constraints! through ClimaTimeSteppers' new
   `constrain_state!` hook (per-step by default) and drop the separate
