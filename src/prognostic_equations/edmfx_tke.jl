@@ -51,15 +51,10 @@ function edmfx_tke_tendency!(
     t,
     turbconv_model::PrognosticEDMFX,
 )
-    n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶠu³, ᶠu³ʲs, ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
+    (; ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
     turbconv_params = CAP.turbconv_params(p.params)
-    FT = eltype(p.params)
-    thermo_params = CAP.thermodynamics_params(p.params)
 
     if use_prognostic_tke(turbconv_model)
-        (; ᶜρʲs) = p.precomputed
-        ᶠz = Fields.coordinate_field(Y.f).z
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
         ᶜmixing_length_field .= ᶜmixing_length(Y, p)
         ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
@@ -77,37 +72,15 @@ function edmfx_tke_tendency!(
 
         # shear production
         @. Yₜ.c.ρtke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
-        # buoyancy production
+        # Buoyancy production: only the diffusive (intra-subdomain) piece,
+        # -ρ K_h ∂b/∂z, of the Favre-averaged buoyancy flux enters the
+        # isotropic-TKE budget. The coherent (mass-flux) piece
+        # Σ_m ρa^m (w^m - w) b^m powers the inter-subdomain (coherent)
+        # kinetic energy through the buoyancy term of the subdomain momentum
+        # equations, which the prognostic subdomain velocities already carry;
+        # adding it here double-counts buoyancy production and spuriously
+        # inflates K near cloud tops with active drafts.
         @. Yₜ.c.ρtke -= Y.c.ρ * ᶜK_h * ᶜlinear_buoygrad
-        grav = CAP.grav(p.params)
-        for j in 1:n
-            ᶜρaʲ =
-                turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
-                p.precomputed.ᶜρaʲs.:($j)
-            @. Yₜ.c.ρtke -=
-                ᶜρaʲ * adjoint(CT3(ᶜinterp(ᶠu³ʲs.:($$j) - ᶠu³))) *
-                (ᶜρʲs.:($$j) - Y.c.ρ) *
-                ᶜgradᵥ(grav * ᶠz) / ᶜρʲs.:($$j)
-        end
-        # Note: Adding the following tendency breaks bm_aquaplanet_progedmf_dense_autodiff
-        if turbconv_model isa PrognosticEDMFX
-            ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-            (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-            ᶜρ⁰ = @. lazy(
-                TD.air_density(
-                    thermo_params,
-                    ᶜT⁰,
-                    ᶜp,
-                    ᶜq_tot_nonneg⁰,
-                    ᶜq_liq⁰,
-                    ᶜq_ice⁰,
-                ),
-            )
-            @. Yₜ.c.ρtke -=
-                ᶜρa⁰ * adjoint(CT3(ᶜinterp(ᶠu³⁰ - ᶠu³))) *
-                (ᶜρ⁰ - Y.c.ρ) *
-                ᶜgradᵥ(grav * ᶠz) / ᶜρ⁰
-        end
     end
     return nothing
 end
