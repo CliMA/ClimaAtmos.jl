@@ -65,6 +65,11 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     # saturates (see `_compute_cloud_fraction`).
     cloud_fraction_eps_rel::FT
     cloud_fraction_sigma_abs::FT
+    # Interfacial entrainment efficiency A in the interface-aware stability
+    # closure (`set_interface_entrainment_diffusivity!`): w_e = A √κ_iso /
+    # max(Ri_b, 1). A = 0 disables interfacial entrainment (pure effective-
+    # stability closure).
+    interface_entr_efficiency::FT
     # Surface mass flux closure (`set_edmfx_surface_conditions!`).
     sfc_mass_flux_ustar_coeff::FT
     convective_zi::FT

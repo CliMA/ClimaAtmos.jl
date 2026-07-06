@@ -871,14 +871,20 @@ function update_diffusion_jacobian!(
     # tendencies (see edmfx_sgs_diffusive_flux_tendency! and
     # vertical_diffusion_boundary_layer_tendency!). Smagorinsky tendencies
     # still use arithmetic interpolation, so their Jacobian does too.
+    # The additive interfacial entrainment diffusivity ᶠK_entr matches the
+    # EDMF diffusive tendencies; it is zero for configurations that do not
+    # fill it, so including it here is exact for all branches. Like K_h,
+    # it is treated as a frozen coefficient (no ∂K_e/∂state terms).
+    (; ᶠK_entr) = p.precomputed
     ϵK = eps(FT)
     if is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
         @. ∂ᶠρχ_dif_flux_∂ᶜχ =
             DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
     else
         @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-            DiagonalMatrixRow(ᶠinterp(ᶜρ) / ᶠinterp(1 / max(ᶜK_h, ϵK))) ⋅
-            ᶠgradᵥ_matrix()
+            DiagonalMatrixRow(
+                ᶠinterp(ᶜρ) * (1 / ᶠinterp(1 / max(ᶜK_h, ϵK)) + ᶠK_entr),
+            ) ⋅ ᶠgradᵥ_matrix()
     end
     @. ᶜdiffusion_h_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
     if (
@@ -892,8 +898,10 @@ function update_diffusion_jacobian!(
                 ᶠgradᵥ_matrix()
         else
             @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-                DiagonalMatrixRow(ᶠinterp(ᶜρ) / ᶠinterp(1 / max(ᶜK_u, ϵK))) ⋅
-                ᶠgradᵥ_matrix()
+                DiagonalMatrixRow(
+                    ᶠinterp(ᶜρ) *
+                    (1 / ᶠinterp(1 / max(ᶜK_u, ϵK)) + ᶠK_entr),
+                ) ⋅ ᶠgradᵥ_matrix()
         end
         @. ᶜdiffusion_u_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
     end

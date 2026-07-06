@@ -417,22 +417,29 @@ end
 """
     set_stability_buoyancy_gradient!(Y, p, thermo_params)
 
-Fills `p.precomputed.ᶜbuoygrad_stab` with a stability-biased effective
-buoyancy gradient: at each cell center, the buoyancy gradient is evaluated
-twice, with upward- and downward-biased one-sided vertical gradients of
-`θ_li` and `q_tot`, and the more stable (larger) of the two values is kept.
+Fills `p.precomputed.ᶜbuoygrad_stab` with an interface-aware effective
+stability: at each cell center, the buoyancy gradient is evaluated twice, with
+upward- and downward-biased one-sided vertical gradients of `θ_li` and `q_tot`
+(i.e., the exact two-point gradients of the two adjacent faces), each is
+augmented by the unresolved-jump term of [`interface_effective_N²`](@ref)
+(when prognostic TKE is available), and the more stable (larger) of the two
+face values is kept.
 
 Rationale: centered two-cell gradients average across unresolved, strongly
 stable interfaces such as boundary-layer capping inversions, biasing N²_eff
 low — and hence the stability mixing length `l_N` and turbulent Prandtl
-number toward too much mixing — exactly in the entrainment zone. Taking the
-max of the one-sided estimates lets a single-cell jump register at both
-adjacent cell centers. Away from sharp interfaces, both one-sided gradients
-agree with the centered one, so the correction is inactive.
+number toward too much mixing — exactly in the entrainment zone. The one-sided
+evaluation lets a single-cell jump register at both adjacent cell centers, and
+the jump term of `interface_effective_N²` additionally accounts for the limit
+in which the jump is a sheet interface thinner than the grid: eddy excursions
+are then capped by the work against the full jump `Δb`, independent of `Δz`.
+Away from sharp interfaces both one-sided gradients agree with the centered
+one and the jump term is `O((Δz/l_N)²)`, so the correction is inactive.
 
 This field feeds the mixing-length and `Pr_t(Ri)` closures only; the TKE
 buoyancy production keeps the centered `ᶜlinear_buoygrad`, so convective
-production in unstable layers is unaffected.
+production in unstable layers is unaffected. Without prognostic TKE the jump
+term is unavailable and the pure one-sided max is used.
 """
 NVTX.@annotate function set_stability_buoyancy_gradient!(Y, p, thermo_params)
     (; ᶜbuoygrad_stab, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜcloud_fraction) =
@@ -452,7 +459,7 @@ NVTX.@annotate function set_stability_buoyancy_gradient!(Y, p, thermo_params)
     # from the upper (ᶜright_bias) and lower (ᶜleft_bias) adjacent faces.
     # Domain-boundary faces carry zero gradient (ᶠgradᵥ BCs), so the biased
     # estimates fall back to neutral there and the max picks the interior side.
-    @. ᶜbuoygrad_stab = max(
+    ᶜN²_up = @. lazy(
         buoyancy_gradients(
             BuoyGradMean(), thermo_params, ᶜT, Y.c.ρ,
             ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜcloud_fraction, C3,
@@ -460,6 +467,8 @@ NVTX.@annotate function set_stability_buoyancy_gradient!(Y, p, thermo_params)
             ᶜright_bias(ᶠgradᵥ(ᶜθ_li)),
             ᶜlg,
         ),
+    )
+    ᶜN²_dn = @. lazy(
         buoyancy_gradients(
             BuoyGradMean(), thermo_params, ᶜT, Y.c.ρ,
             ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜcloud_fraction, C3,
@@ -468,7 +477,176 @@ NVTX.@annotate function set_stability_buoyancy_gradient!(Y, p, thermo_params)
             ᶜlg,
         ),
     )
+    if MatrixFields.has_field(Y, @name(c.ρtke))
+        # Interface-aware effective stability: each one-sided face gradient is
+        # augmented by the unresolved-jump term of `interface_effective_N²`
+        # before taking the max, so an inversion concentrated at a face limits
+        # eddy excursions through the work against the full jump Δb = N² Δz
+        # rather than the Δz-diluted gradient.
+        turbconv_params = CAP.turbconv_params(p.params)
+        c_b = CAP.static_stab_coeff(turbconv_params)
+        ᶜtke_pos = @. lazy(max(specific(Y.c.ρtke, Y.c.ρ), 0))
+        ᶠΔz = Fields.Δz_field(axes(Y.f))
+        @. ᶜbuoygrad_stab = max(
+            interface_effective_N²(ᶜN²_up, ᶜright_bias(ᶠΔz), ᶜtke_pos, c_b),
+            interface_effective_N²(ᶜN²_dn, ᶜleft_bias(ᶠΔz), ᶜtke_pos, c_b),
+        )
+    else
+        @. ᶜbuoygrad_stab = max(ᶜN²_up, ᶜN²_dn)
+    end
     return nothing
+end
+
+"""
+    interface_effective_N²(N², Δz, κ_iso, c_b)
+
+Interface-aware effective squared buoyancy frequency at a face,
+
+    N²_eff = N² + [(Δb)₊]² / (c_b κ_iso),    Δb = N² Δz,
+
+where `N²` is the two-point face buoyancy gradient, `Δz` the face-adjacent
+grid spacing, `κ_iso` the isotropic TKE, and `c_b` the static-stability
+mixing-length coefficient (`mixing_length_static_stab_coeff`).
+
+The face jump `Δb` is compatible with any subgrid profile between a uniform
+gradient over `Δz` (which centered differencing assumes) and a sheet interface
+at the face. An eddy of energy `κ_iso` crossing a sheet performs work `Δb ℓ`
+over a penetration distance `ℓ`, capping excursions at `ℓ_p = c_b κ_iso / Δb`;
+the jump term makes the buoyancy-limited length `l_N = √(c_b κ_iso)/N_eff`
+interpolate between the standard resolved limit and `ℓ_p`. In smooth regions
+the correction is relatively `O((Δz/l_N)²)` — quadratically small wherever the
+stratification is resolved — so `N²_eff` is a consistent, second-order-accurate
+discretization of the same continuum stability and acts as a smooth interface
+indicator without a mode switch. The positive-part clamp restricts the
+correction to stable jumps, leaving convectively unstable layers untouched.
+"""
+@inline function interface_effective_N²(N², Δz, κ_iso, c_b)
+    FT = typeof(N²)
+    Δb_pos = max(N² * Δz, FT(0))
+    return N² + Δb_pos^2 / (c_b * max(κ_iso, eps(FT)))
+end
+
+"""
+    set_interface_entrainment_diffusivity!(Y, p)
+
+Fills `p.precomputed.ᶠbuoygrad` (face-native moist buoyancy gradient, from
+exact two-point face differences of `θ_li` and `q_tot` with pointwise
+thermodynamic coefficients interpolated to the face) and
+`p.precomputed.ᶠK_entr`, the interfacial entrainment diffusivity
+
+    K_e = γ w_e Δz,   w_e = A √κ_iso / max(Ri_b, 1),   Ri_b = ℓ_e Δb / κ_iso,
+
+with `Δb = (N²_face Δz)₊` the stable face buoyancy jump, `ℓ_e` the
+energy-containing eddy scale (minimum of the wall and TKE-balance mixing-length
+components, which — unlike `l_N` — are not suppressed by the interface itself),
+`A` the interfacial entrainment efficiency (`EDMF_interface_entr_efficiency`),
+and the gate
+
+    γ = jt / (N²_face + jt) ∈ [0, 1),   jt = (Δb)₊² / (c_b κ_iso),
+
+the fraction of the effective stability carried by the unresolved-jump term of
+[`interface_effective_N²`](@ref). The discrete face flux `K_e Δψ/Δz = γ w_e Δψ`
+then represents interfacial entrainment at velocity `w_e` in down-gradient
+form: collapsing the down-gradient diffusivity at a sheet interface (via
+`N²_eff`) is correct for turbulent mixing but leaves finite-velocity
+entrainment unrepresented; `K_e` restores it. `γ → 1` at sheet interfaces and
+vanishes as `(Δz/l_N)²` where the stratification is resolved, so `K_e → 0`
+doubly — through `γ` and through `Δz` — as `Δz → 0`, recovering the standard
+local closure. At coarse `Δz` over a sharp inversion the entrainment flux
+`w_e Δψ` is resolution-independent by construction.
+
+`K_e` is added to the face diffusivities for all scalars and momentum in
+`edmfx_sgs_diffusive_flux_tendency!` (and its Jacobian), keeping energy, water,
+and momentum transport conservative and mutually consistent; the matching TKE
+destruction `−γ w_e Δb` per face is applied in `edmfx_tke_tendency!`. This sink
+is bounded by `A κ_iso^{3/2}/ℓ_e`, a fixed multiple of the dissipation, so `A`
+inherits the classical energetic bounds on entrainment.
+
+No-op (fields remain zero) for non-EDMF configurations or without prognostic
+TKE.
+"""
+NVTX.@annotate function set_interface_entrainment_diffusivity!(Y, p)
+    (
+        p.atmos.turbconv_model isa AbstractEDMF &&
+        MatrixFields.has_field(Y, @name(c.ρtke))
+    ) || return nothing
+    (; ᶠbuoygrad, ᶠK_entr) = p.precomputed
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜcloud_fraction) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    turbconv_params = CAP.turbconv_params(p.params)
+    c_b = CAP.static_stab_coeff(turbconv_params)
+    A_entr = CAP.interface_entr_efficiency(turbconv_params)
+    ᶠlg = Fields.local_geometry_field(Y.f)
+    ᶜθ_li = @. lazy(
+        TD.liquid_ice_pottemp(
+            thermo_params,
+            ᶜT,
+            Y.c.ρ,
+            ᶜq_tot_nonneg,
+            ᶜq_liq,
+            ᶜq_ice,
+        ),
+    )
+    # Face-native moist buoyancy gradient: the vertical differences of the
+    # prognostic state are exactly defined at the face by the two-point
+    # gradient stencil; the pointwise thermodynamic coefficients vary smoothly
+    # and are interpolated.
+    @. ᶠbuoygrad = buoyancy_gradients(
+        BuoyGradMean(), thermo_params,
+        ᶠinterp(ᶜT), ᶠinterp(Y.c.ρ),
+        ᶠinterp(ᶜq_tot_nonneg), ᶠinterp(ᶜq_liq), ᶠinterp(ᶜq_ice),
+        ᶠinterp(ᶜcloud_fraction), C3,
+        ᶠgradᵥ(ᶜq_tot_nonneg),
+        ᶠgradᵥ(ᶜθ_li),
+        ᶠlg,
+    )
+    # Energy-containing eddy scale ℓ_e = min(l_W, l_TKE): the scale of the
+    # eddies that scour the interface. Materialized to scratch to keep the
+    # face broadcast below within GPU kernel-parameter limits.
+    ᶜℓ_e = p.scratch.ᶜtemp_scalar
+    ᶜℓ_e .= ᶜmixing_length(Y, p, Val(:energy_containing))
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    ᶠΔz = Fields.Δz_field(axes(Y.f))
+    # κ_iso is interpolated arithmetically to the face; at an inversion this
+    # mixes the turbulent and quiescent sides (≈ κ_BL/2), an O(1) factor
+    # absorbed by the calibration of c_b and A_entr.
+    @. ᶠK_entr = interface_entrainment_diffusivity(
+        ᶠbuoygrad,
+        ᶠΔz,
+        ᶠinterp(max(ᶜtke, 0)),
+        ᶠinterp(ᶜℓ_e),
+        c_b,
+        A_entr,
+    )
+    return nothing
+end
+
+"""
+    interface_entrainment_diffusivity(N²_face, Δz, κ_iso, ℓ_e, c_b, A)
+
+Pointwise interfacial entrainment diffusivity `K_e = γ w_e Δz`; see
+[`set_interface_entrainment_diffusivity!`](@ref) for the closure. Returns zero
+where the face jump is not stable (`Δb ≤ 0`) or turbulence is absent.
+"""
+@inline function interface_entrainment_diffusivity(
+    N²_face,
+    Δz,
+    κ_iso,
+    ℓ_e,
+    c_b,
+    A,
+)
+    FT = typeof(Δz)
+    κ_safe = max(κ_iso, eps(FT))
+    Δb_pos = max(N²_face * Δz, FT(0))
+    jt = Δb_pos^2 / (c_b * κ_safe)
+    # Gate: fraction of the effective stability carried by the jump term.
+    # jt > 0 implies N²_face > 0, so the denominator is positive where the
+    # gate is active; the ε guard only covers the jt = 0 branch.
+    γ = jt / max(N²_face + jt, eps(FT))
+    Ri_b = ℓ_e * Δb_pos / κ_safe
+    w_e = A * sqrt(κ_safe) / max(Ri_b, FT(1))
+    return γ * w_e * Δz
 end
 
 # GPU-safe field access using Val dispatch
@@ -477,6 +655,13 @@ end
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:tke}) = ml.tke
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:buoy}) = ml.buoy
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:l_grid}) = ml.l_grid
+# Energy-containing eddy scale ℓ_e for the interfacial entrainment closure:
+# the scales of the eddies that scour an interface (wall and TKE-balance),
+# which — unlike l_N — are not suppressed by the interface itself. l_TKE = 0
+# marks absent turbulence (fall back to l_W); l_TKE is huge when net
+# production is non-positive, in which case the min picks l_W.
+@inline get_mixing_length_field(ml::MixingLength, ::Val{:energy_containing}) =
+    ml.tke > 0 ? min(ml.wall, ml.tke) : ml.wall
 
 function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     (; params) = p

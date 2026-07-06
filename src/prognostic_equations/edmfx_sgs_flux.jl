@@ -254,11 +254,21 @@ function edmfx_sgs_diffusive_flux_tendency!(
         # flux should nearly vanish. Arithmetic averaging assigns ≈ K/2 to
         # such a face, producing spurious entrainment; the harmonic mean is
         # controlled by the smaller of the two adjacent values.
+        #
+        # The face-native interfacial entrainment diffusivity K_e (see
+        # `set_interface_entrainment_diffusivity!`) is added uniformly to all
+        # scalar and momentum face diffusivities: it represents finite-velocity
+        # entrainment across unresolved stable jumps, which the collapsed
+        # down-gradient diffusivity alone cannot carry. It is evaluated at the
+        # face and never interpolated.
+        (; ᶠK_entr) = p.precomputed
         ϵK = eps(FT)
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_h = ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_h, ϵK))
+        @. ᶠρaK_h =
+            ᶠinterp(Y.c.ρ) * (1 / ᶠinterp(1 / max(ᶜK_h, ϵK)) + ᶠK_entr)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
-        @. ᶠρaK_u = ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_u, ϵK))
+        @. ᶠρaK_u =
+            ᶠinterp(Y.c.ρ) * (1 / ᶠinterp(1 / max(ᶜK_u, ϵK)) + ᶠK_entr)
 
         # Total enthalpy diffusion, using the dry-static-energy + water-
         # enthalpy decomposition
@@ -358,7 +368,19 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 ρχ_name in gs_sedimenting_tracer_candidates ?
                 α_vert_diff_microphysics : one(α_vert_diff_microphysics)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α * ᶠgradᵥ(ᶜχ)))
+            # α scales only the turbulent-mixing part; interfacial entrainment
+            # (K_e, inside ᶠρaK_h with weight α) crosses the interface at the
+            # same velocity for every scalar, so its full weight is restored:
+            # α ρ (K_h + K_e) + (1 - α) ρ K_e = ρ (α K_h + K_e).
+            # For passive tracers α = 1, giving the full ρ (K_h + K_e).
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
+                -(
+                    (
+                        α * ᶠρaK_h +
+                        (1 - α) * ᶠinterp(Y.c.ρ) * ᶠK_entr
+                    ) * ᶠgradᵥ(ᶜχ)
+                ),
+            )
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
 

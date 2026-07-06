@@ -42,6 +42,14 @@ function edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model::EDOnlyEDMFX)
     @. Yₜ.c.ρtke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
     # buoyancy production
     @. Yₜ.c.ρtke -= Y.c.ρ * ᶜK_h * ᶜlinear_buoygrad
+    # Interfacial-entrainment TKE destruction: the K_e face fluxes (see
+    # set_interface_entrainment_diffusivity!) transport buoyancy across
+    # stable jumps at the eddies' expense, consuming γ w_e Δb = K_e ∂b/∂z
+    # per face. K_e > 0 only where the face jump is stable, so this term is
+    # a pure sink, bounded by A κ_iso^{3/2}/ℓ_e (a fixed multiple of the
+    # dissipation).
+    (; ᶠbuoygrad, ᶠK_entr) = p.precomputed
+    @. Yₜ.c.ρtke -= Y.c.ρ * ᶜinterp(ᶠK_entr * ᶠbuoygrad)
 end
 
 function edmfx_tke_tendency!(
@@ -81,6 +89,14 @@ function edmfx_tke_tendency!(
         # adding it here double-counts buoyancy production and spuriously
         # inflates K near cloud tops with active drafts.
         @. Yₜ.c.ρtke -= Y.c.ρ * ᶜK_h * ᶜlinear_buoygrad
+        # Interfacial-entrainment TKE destruction: the K_e face fluxes (see
+        # set_interface_entrainment_diffusivity!) transport buoyancy across
+        # stable jumps at the eddies' expense, consuming γ w_e Δb = K_e ∂b/∂z
+        # per face. K_e > 0 only where the face jump is stable, so this term
+        # is a pure sink, bounded by A κ_iso^{3/2}/ℓ_e (a fixed multiple of
+        # the dissipation).
+        (; ᶠbuoygrad, ᶠK_entr) = p.precomputed
+        @. Yₜ.c.ρtke -= Y.c.ρ * ᶜinterp(ᶠK_entr * ᶠbuoygrad)
     end
     return nothing
 end

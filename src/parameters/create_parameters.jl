@@ -361,7 +361,18 @@ function TurbulenceConvectionParameters(
         :EDMF_sfc_mass_flux_cap_fraction => :sfc_mass_flux_cap_fraction,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    parameters = merge(parameters, overrides)
+    # Parameters not (yet) registered in ClimaParams: read them from the
+    # merged toml dict when a config toml defines them, otherwise fall back
+    # to an in-code default so configs without the toml remain unaffected.
+    interface_entr_efficiency_pair =
+        haskey(toml_dict.data, "EDMF_interface_entr_efficiency") ?
+        CP.get_parameter_values(
+            toml_dict,
+            (; :EDMF_interface_entr_efficiency => :interface_entr_efficiency),
+            "ClimaAtmos",
+        ) :
+        (; interface_entr_efficiency = CP.float_type(toml_dict)(0))
+    parameters = merge(parameters, interface_entr_efficiency_pair, overrides)
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)

@@ -149,9 +149,16 @@ function precomputed_quantities(Y, atmos)
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜlinear_buoygrad = similar(Y.c, FT),
-        # Stability-biased buoyancy gradient (max of one-sided estimates);
-        # feeds the mixing-length and Pr_t(Ri) closures near sharp inversions.
+        # Interface-aware effective stability (max over adjacent faces of the
+        # face-local N²_eff, including the unresolved-jump term); feeds the
+        # mixing-length and Pr_t(Ri) closures near sharp inversions.
         ᶜbuoygrad_stab = similar(Y.c, FT),
+        # Face-native moist buoyancy gradient (exact two-point differences)
+        # and interfacial entrainment diffusivity K_e = γ w_e Δz; filled by
+        # `set_interface_entrainment_diffusivity!` for EDMF runs with
+        # prognostic TKE, zero otherwise.
+        ᶠbuoygrad = zeros(axes(Y.f)),
+        ᶠK_entr = zeros(axes(Y.f)),
         ᶜstrain_rate_norm = similar(Y.c, FT),
         sfc_conditions = similar(Spaces.level(Y.f, half), SCT),
     )
@@ -669,6 +676,11 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     end
 
     set_covariance_cache_and_cloud_fraction!(Y, p)
+
+    # Interfacial entrainment diffusivity K_e at faces (interface-aware
+    # stability closure). Needs the final cloud fraction and ᶜbuoygrad_stab
+    # from the covariance/cloud-fraction update above.
+    set_interface_entrainment_diffusivity!(Y, p)
 
     # Cache precipitation terminal velocities for grid mean and prognostic EDMF updrafts.
     set_precipitation_velocities!(
