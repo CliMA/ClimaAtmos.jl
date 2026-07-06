@@ -90,17 +90,20 @@ auto_jacobian_padding_bands:
   help: "Target number of bands to add in every block of the sparse Jacobian matrix, eliminating errors from Jacobian entries that lie outside of the default sparsity pattern; when unspecified, each block gets a predetermined number of padding bands based on the typical magnitudes of its entries (only used when `use_auto_jacobian` is `true`)"
   value: ~
 auto_jacobian_scaling:
-  help: "Scaling mode for the dual number seeds of the sparse autodiff Jacobian; `static` rescales each state variable's seed by its typical increment magnitude, so that Jacobian entries outside of the sparsity pattern alias below significance and fewer padding bands are needed (only used when `use_auto_jacobian` is `true`) [`~` (default, unscaled seeds), `static`]"
-  value: ~
+  help: "Scaling mode for the dual number seeds of the sparse autodiff Jacobian; `static` rescales each state variable's seed by its typical increment magnitude, so that Jacobian entries outside of the sparsity pattern alias below significance and fewer padding bands are needed (only used when `use_auto_jacobian` is `true`) [`static` (default), `~` (unscaled seeds)]"
+  value: "static"
 auto_jacobian_padding_mode:
-  help: "How the sparse autodiff Jacobian's coloring mask is padded beyond the stored bands; `manual_rules` applies the hand-maintained padding rules, `exact` pads for exact recovery (every padding rule active in every scaling mode, and at least 4 padding bands on every present block), which eliminates aliasing errors on the stored bands at the cost of more colors, and `measured` derives the mask from a dense-AD measurement of stencil support and increment-weighted magnitudes instead of hand rules; no mode widens the stored bands, so the linear solver always uses the manual structure's truncation (only used when `use_auto_jacobian` is `true`) [`manual_rules` (default), `exact`, `measured`]"
-  value: "manual_rules"
+  help: "How the sparse autodiff Jacobian's coloring mask is padded beyond the stored bands; `measured` (the default) derives the mask from a dense-AD measurement of stencil support and increment-weighted magnitudes with no hand rules, `manual_rules` applies the hand-maintained padding rules, and `constant` pads every present block by a constant number of bands (4, i.e. plus or minus 2 levels) plus every rule in every scaling mode, which removes aliasing on the stored bands up to that fixed width (an assumption, not a measured stencil) at the cost of more colors; no mode widens the stored bands, so the linear solver always uses the manual structure's truncation. Note: a from-rest configuration (with no representative state to measure at t=0) needs `auto_jacobian_runtime_remeasure` to be stable under `measured`. (only used when `use_auto_jacobian` is `true`) [`measured` (default), `manual_rules`, `constant`]"
+  value: "measured"
 auto_jacobian_manual_bands:
-  help: "DEPRECATED: use `auto_jacobian_padding_mode` instead (`true` maps to `manual_rules`, `false` to `exact`); when set, this key wins over `auto_jacobian_padding_mode` with a warning [`~` (default, unset), `true`, `false`]"
+  help: "DEPRECATED: use `auto_jacobian_padding_mode` instead (`true` maps to `manual_rules`, `false` to `constant`); when set, this key wins over `auto_jacobian_padding_mode` with a warning [`~` (default, unset), `true`, `false`]"
   value: ~
 auto_jacobian_runtime_remeasure:
-  help: "Whether to re-measure the `measured` padding mode's coloring mask on a fixed early step schedule and grow it monotonically to what the developed flow reveals, so a from-rest configuration reaches a correct-and-lean mask without a representative measurement state; only valid with `auto_jacobian_padding_mode: measured` (only used when `use_auto_jacobian` is `true`) [`true`, `false` (default)]"
+  help: "Whether to build the `measured` padding mode's coloring mask through the `constant` branch at startup (the transient-safety ceiling), then replace it once at `auto_jacobian_remeasure_switch_step` with the lean measured mask of the developed state and grow it monotonically afterwards, so a from-rest configuration reaches a correct-and-lean mask without a representative measurement state; only valid with `auto_jacobian_padding_mode: measured` (only used when `use_auto_jacobian` is `true`) [`true`, `false` (default)]"
   value: false
+auto_jacobian_remeasure_switch_step:
+  help: "Step after which `auto_jacobian_runtime_remeasure` takes its one measurement at the developed state and replaces the transient-safety `constant` mask with the lean measured mask; pick it past the spin-up transient (the run-specific length is why this is a knob and not auto-detected), since a state that is not yet developed can leave a coupling out of the measured mask (the geometric re-measure schedule after the switch is the safety net); only used with `auto_jacobian_runtime_remeasure: true`"
+  value: 10
 update_jacobian_every:
   help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
   value: "solve"

@@ -2,10 +2,17 @@ import SparseMatrixColorings
 import Random
 
 # Minimum number of padding bands added to every present block when
-# padding_mode = :exact. The measured within-field band deficits (upwind
+# padding_mode = :constant. The measured within-field band deficits (upwind
 # advection stencils that extend past the stored bands) are all covered by 4
 # bands (±2 levels); see the padding rule comments in jacobian_cache.
-const exact_recovery_padding_bands = 4
+const constant_padding_bands = 4
+
+# Default step at which runtime_remeasure switches from the transient-safety
+# :constant mask to the lean measured mask of the developed state (config key
+# auto_jacobian_remeasure_switch_step); see AutoSparseJacobian and
+# validation/PLAN_minimal_from_rest.md. The spin-up length is run-specific, so
+# this is a user knob rather than an auto-detected quantity.
+const default_remeasure_switch_step = 10
 
 # Parameters of the measured padding mode (padding_mode = :measured); see
 # validation/design_measured_coloring.md and measure_block_support_and_magnitude.
@@ -72,24 +79,26 @@ function that maps scalar field names to positive numbers overrides the default
 scales used by `:static`, but keeps the full default padding.
 
 The `padding_mode` selects how the coloring mask is padded beyond the stored
-bands. `:manual_rules` (the default) applies the hand-maintained padding
+bands. `:measured` (the default) derives the mask from a one-time dense-AD
+measurement pass (see [`measure_block_support_and_magnitude`](@ref)): each
+block's coloring bands are its detected stencil support if the block is
+present, plus any absent cross-field block whose increment-weighted magnitude
+`dtγ * max|∂Yₜ| * s_b / s_a` exceeds a threshold for the worst victim in its
+row. This uses no hand rules; it requires a `measurement` context (the atmos
+cache, `dtγ`, and `t`), threaded in from `get_jacobian` and the debug
+comparison path. `:manual_rules` instead applies the hand-maintained padding
 rules: they cover the blocks whose out-of-pattern entries have been measured
 or reasoned to be significant, and they are only applied in the scaling modes
-where those measurements were made. `:exact` instead pads the coloring mask
-for exact recovery: every padding rule is applied in every scaling mode, and
-every block that is present in the sparsity structure gets at least
-`$exact_recovery_padding_bands` padding bands, so that all entries the true
-Jacobian has near the stored bands receive their own colors and the recovered
-entries on the stored bands are exact. This costs additional colors.
-`:measured` derives the mask from a one-time dense-AD measurement pass instead
-of hand-maintained rules (see [`measure_block_support_and_magnitude`](@ref)):
-each block's coloring bands are its detected stencil support if the block is
-present or if an absent cross-field block's increment-weighted magnitude
-`dtγ * max|∂Yₜ| * s_b / s_a` exceeds a threshold for the worst victim in its
-row. This requires a `measurement` context (the atmos cache, `dtγ`, and `t`),
-which is threaded in from `get_jacobian` and the debug comparison path.
-No padding mode changes which entries are stored — the linear solver always
-uses the manual sparsity structure's truncation of the Jacobian.
+where those measurements were made. `:constant` pads every present block by a
+constant number of bands (`$constant_padding_bands`, i.e. ±2 levels) and
+applies every padding rule in every scaling mode. It is not stencil-informed:
+it removes aliasing on the stored bands only up to that fixed width, which is
+an assumption rather than a measured stencil (a true stencil wider than the
+stored bands plus `$constant_padding_bands` would still alias silently). It is
+the robustness ceiling that `runtime_remeasure` uses through the from-rest
+transient, at the cost of more colors. No padding mode changes which entries
+are stored — the linear solver always uses the manual sparsity structure's
+truncation of the Jacobian.
 
 For more information about this algorithm, see [Implicit Solver](@ref).
 """
@@ -99,12 +108,19 @@ struct AutoSparseJacobian{A <: SparseJacobian, P, S} <: SparseJacobian
     seed_scaling::S
     padding_mode::Symbol
     # When true (only meaningful with padding_mode = :measured), the coloring
-    # mask is re-measured on a fixed early step schedule and grown monotonically
-    # to what the developed flow reveals, so a from-rest configuration reaches a
-    # correct-and-lean mask without a representative measurement state. Off by
-    # default, so the static build is unchanged. See
-    # remeasure_and_maybe_rebuild! and validation/design_measured_coloring.md.
+    # mask is built through the :constant branch at t = 0 (the transient-safety
+    # ceiling), then at remeasure_switch_step it is replaced ONCE with the lean
+    # measured mask of the now-developed state and grown monotonically (union)
+    # afterwards, so a from-rest configuration reaches a correct-and-lean mask
+    # without a representative measurement state. Off by default, so the static
+    # build is unchanged. See remeasure_and_maybe_rebuild! and
+    # validation/PLAN_minimal_from_rest.md.
     runtime_remeasure::Bool
+    # Step after which runtime_remeasure takes its ONE measurement at the
+    # developed state and replaces the transient-safety :constant mask with the
+    # lean measured mask (only meaningful with runtime_remeasure = true). The
+    # spin-up length is run-specific, so this is a user knob, not auto-detected.
+    remeasure_switch_step::Int
 end
 
 """
@@ -113,41 +129,58 @@ end
 Construct an [`AutoSparseJacobian`](@ref) that reuses the sparsity structure
 of the given `sparse_jacobian_alg`.
 """
-AutoSparseJacobian(sparse_jacobian_alg) =
-    AutoSparseJacobian(sparse_jacobian_alg, nothing, nothing, :manual_rules, false)
+AutoSparseJacobian(sparse_jacobian_alg) = AutoSparseJacobian(
+    sparse_jacobian_alg,
+    nothing,
+    :static,
+    :measured,
+    false,
+    default_remeasure_switch_step,
+)
 AutoSparseJacobian(sparse_jacobian_alg, padding_bands_per_block) =
     AutoSparseJacobian(
         sparse_jacobian_alg,
         padding_bands_per_block,
-        nothing,
-        :manual_rules,
+        :static,
+        :measured,
         false,
+        default_remeasure_switch_step,
     )
 AutoSparseJacobian(sparse_jacobian_alg, padding_bands_per_block, seed_scaling) =
     AutoSparseJacobian(
         sparse_jacobian_alg,
         padding_bands_per_block,
         seed_scaling,
-        :manual_rules,
+        :measured,
         false,
+        default_remeasure_switch_step,
     )
 
 """
-    AutoSparseJacobian(; approximate_solve_iters = 1, padding_bands_per_block = nothing, seed_scaling = nothing, padding_mode = :manual_rules, runtime_remeasure = false)
+    AutoSparseJacobian(; approximate_solve_iters = 1, padding_bands_per_block = nothing, seed_scaling = :static, padding_mode = :measured, runtime_remeasure = false, remeasure_switch_step = $default_remeasure_switch_step)
 
 Construct an [`AutoSparseJacobian`](@ref) that reuses the sparsity structure
 of an inner [`ManualSparseJacobian`](@ref) built from `approximate_solve_iters`.
+
+When `runtime_remeasure` is set (only with `padding_mode = :measured`), the
+mask is built through the `:constant` branch at construction and replaced once
+with the lean measured mask at `remeasure_switch_step`; see
+[`remeasure_and_maybe_rebuild!`](@ref) and
+`validation/PLAN_minimal_from_rest.md`. Auto-detecting the switch step (e.g.
+when two consecutive fresh measurements agree) is future work; today the step
+is a user knob because the spin-up length is run-specific.
 """
 function AutoSparseJacobian(;
     approximate_solve_iters::Int = 1,
     padding_bands_per_block = nothing,
-    seed_scaling = nothing,
-    padding_mode::Symbol = :manual_rules,
+    seed_scaling = :static,
+    padding_mode::Symbol = :measured,
     runtime_remeasure::Bool = false,
+    remeasure_switch_step::Int = default_remeasure_switch_step,
 )
-    padding_mode in (:manual_rules, :exact, :measured) || error(
+    padding_mode in (:manual_rules, :constant, :measured) || error(
         "Unknown padding_mode :$padding_mode (supported modes are \
-         :manual_rules, :exact, and :measured)",
+         :manual_rules, :constant, and :measured)",
     )
     runtime_remeasure && padding_mode != :measured &&
         error(
@@ -155,12 +188,19 @@ function AutoSparseJacobian(;
              :measured (it re-measures the measured mode's coloring mask on a \
              schedule); got padding_mode = :$padding_mode",
         )
+    runtime_remeasure && remeasure_switch_step < 1 &&
+        error(
+            "remeasure_switch_step must be >= 1 (the step after which \
+             runtime_remeasure switches from the transient-safety :constant mask to \
+             the measured mask); got $remeasure_switch_step",
+        )
     return AutoSparseJacobian(
         ManualSparseJacobian(; approximate_solve_iters),
         padding_bands_per_block,
         seed_scaling,
         padding_mode,
         runtime_remeasure,
+        remeasure_switch_step,
     )
 end
 
@@ -417,7 +457,7 @@ function measure_block_support_and_magnitude(
                 # over them inflates cross-field magnitudes and keeps far more
                 # blocks than a real developed flow needs (measured on the
                 # quiescent trmm t=0 state, that over-keeping pushes the color
-                # count past :exact). Cross-field significance is inherently a
+                # count past :constant). Cross-field significance is inherently a
                 # magnitude property of the actual state; a representative
                 # measurement state or the runtime probe (Rung C) is what makes
                 # it correct on a from-rest configuration.
@@ -499,7 +539,7 @@ function measured_coloring_band_range(
         # as trmm_0M measured at t = 0); that, and the runtime probe (Rung C),
         # are the completing pieces documented in
         # validation/design_measured_coloring.md. A blanket ±2-level floor was
-        # rejected: it exceeds the :exact color count and still does not cover
+        # rejected: it exceeds the :constant color count and still does not cover
         # the state-dependent cross-field couplings, so it is not a substitute.
         return (min(Int(lower_band), support_lo), max(Int(upper_band), support_hi))
     end
@@ -701,40 +741,66 @@ function jacobian_cache(
     # needs a full atmos cache to evaluate the implicit tendency, plus dtγ and
     # t; these are threaded in through the `measurement` keyword (from
     # get_jacobian in production and from the debug comparison path).
+    #
+    # Under runtime_remeasure the t = 0 measurement is SKIPPED: the from-rest
+    # flow is quiescent, so the stability-critical couplings are not yet in the
+    # Jacobian and a t = 0 measurement is misleading. The initial mask is built
+    # through the :constant branch instead (the transient-safety ceiling that
+    # carries the run to the developed switch step), and the lean measured mask
+    # is installed once, at remeasure_switch_step, from the developed state (see
+    # remeasure_and_maybe_rebuild!). The measurement context is still required,
+    # because the runtime probe reuses its dtγ (stored as remeasure_dtγ below).
     block_measurement = nothing
     victim_min_scale = nothing
     if padding_mode == :measured
         isnothing(measurement) && error(
             "padding_mode :measured requires a `measurement` context (the \
-             atmos cache p, dtγ, and t) to run its dense-AD measurement pass; \
-             it is threaded in from get_jacobian and the debug comparison \
-             path. See validation/design_measured_coloring.md.",
+             atmos cache p, dtγ, and t) for its dense-AD measurement pass (at \
+             construction for the static mode, or at the runtime switch step \
+             for runtime_remeasure, which reuses its dtγ); it is threaded in \
+             from get_jacobian and the debug comparison path. See \
+             validation/design_measured_coloring.md.",
         )
-        block_measurement = measure_block_support_and_magnitude(
-            Y,
-            atmos,
-            measurement.p,
-            measurement.dtγ,
-            measurement.t;
-            uₕ_scale,
-            verbose,
-        )
-        # Smallest victim seed scale per row field, taken over the present
-        # blocks in that row (the recovered blocks whose entries a dropped
-        # cross-field coupling could poison). A cross-field block a—b is kept
-        # only if dtγ * max|∂Yₜ| * s_b / s_a exceeds τ for the worst (smallest
-        # s_a) victim in row a; see measured_coloring_band_range.
-        victim_min_scale = Dict{Any, FT}()
-        for (present_row_name, present_column_name) in
-            non_constant_scalar_block_keys
-            s = seed_scale(FT, present_column_name, seed_scaling, uₕ_scale)
-            victim_min_scale[present_row_name] =
-                min(get(victim_min_scale, present_row_name, FT(Inf)), s)
+        if !alg.runtime_remeasure
+            block_measurement = measure_block_support_and_magnitude(
+                Y,
+                atmos,
+                measurement.p,
+                measurement.dtγ,
+                measurement.t;
+                uₕ_scale,
+                verbose,
+            )
+            # Smallest victim seed scale per row field, taken over the present
+            # blocks in that row (the recovered blocks whose entries a dropped
+            # cross-field coupling could poison). A cross-field block a—b is
+            # kept only if dtγ * max|∂Yₜ| * s_b / s_a exceeds τ for the worst
+            # (smallest s_a) victim in row a; see measured_coloring_band_range.
+            victim_min_scale = Dict{Any, FT}()
+            for (present_row_name, present_column_name) in
+                non_constant_scalar_block_keys
+                s = seed_scale(FT, present_column_name, seed_scaling, uₕ_scale)
+                victim_min_scale[present_row_name] =
+                    min(get(victim_min_scale, present_row_name, FT(Inf)), s)
+            end
         end
     end
 
+    # The initial mask uses the :constant branch under runtime_remeasure (see
+    # above) and the algorithm's own padding_mode otherwise. Everything else in
+    # the algorithm (seed scaling, padding bands) is carried over unchanged.
+    initial_build_alg =
+        (padding_mode == :measured && alg.runtime_remeasure) ?
+        AutoSparseJacobian(
+            sparse_jacobian_alg,
+            padding_bands_per_block,
+            seed_scaling,
+            :constant,
+            alg.runtime_remeasure,
+            alg.remeasure_switch_step,
+        ) : alg
     (sparsity_mask, padded_sparsity_mask) = build_sparsity_masks(
-        alg,
+        initial_build_alg,
         Y,
         autodiff_matrix,
         non_constant_scalar_block_keys,
@@ -775,7 +841,11 @@ function jacobian_cache(
         remeasure_frozen = Ref(false),
         remeasure_no_change_count = Ref(0),
         remeasure_step = Ref(0),
-        remeasure_next_step = Ref(1),
+        # First fire is the switch (replace :constant with the measured mask); the
+        # geometric union schedule (2N, 4N, ...) follows. remeasure_switched
+        # flips true after the switch so later fires union instead of replace.
+        remeasure_next_step = Ref(alg.remeasure_switch_step),
+        remeasure_switched = Ref(false),
         remeasure_dtγ = isnothing(measurement) ? nothing : measurement.dtγ,
     )
 end
@@ -871,12 +941,12 @@ function build_sparsity_masks(
         # scalings keep the full padding, since their scales are not
         # guaranteed to satisfy the increment-weighted criterion.
         static_scaling = seed_scaling == :static
-        # With padding_mode = :exact, the mask is padded for exact recovery
-        # instead of relying on the measured rules: every rule below is active
-        # in every scaling mode, and every present block additionally gets at
-        # least exact_recovery_padding_bands bands (applied after the rules).
-        exact_recovery = padding_mode == :exact
-        cross_field_padding_active = !static_scaling || exact_recovery
+        # With padding_mode = :constant, the mask is padded by a constant band
+        # count instead of relying on the measured rules: every rule below is
+        # active in every scaling mode, and every present block additionally
+        # gets at least constant_padding_bands bands (applied after the rules).
+        constant_padding = padding_mode == :constant
+        cross_field_padding_active = !static_scaling || constant_padding
         rule_padding_bands =
             if (
                 cross_field_padding_active &&
@@ -971,7 +1041,7 @@ function build_sparsity_masks(
                 # of the scaling mode.
                 4
             elseif (
-                (static_scaling || exact_recovery) &&
+                (static_scaling || constant_padding) &&
                 block_row_name == @name(c.sgsʲs.:(1).mse) &&
                 block_column_name == @name(c.sgsʲs.:(1).mse) &&
                 block_key in non_constant_scalar_block_keys
@@ -997,12 +1067,12 @@ function build_sparsity_masks(
             end
         max_padding_bands = if !isnothing(padding_bands_per_block)
             padding_bands_per_block
-        elseif exact_recovery && block_key in non_constant_scalar_block_keys
+        elseif constant_padding && block_key in non_constant_scalar_block_keys
             # Every present block gets at least this many padding bands, so
             # that within-field stencil deficits (whose seed scale ratios are
             # 1) cannot alias regardless of which blocks the measured rules
             # cover; see the (uₕ, uₕ) deficit in the unit test logs.
-            max(rule_padding_bands, exact_recovery_padding_bands)
+            max(rule_padding_bands, constant_padding_bands)
         else
             rule_padding_bands
         end
@@ -1419,30 +1489,43 @@ end
 invert_jacobian!(alg::AutoSparseJacobian, cache, ΔY, R) =
     invert_jacobian!(alg.sparse_jacobian_alg, cache, ΔY, R)
 
-# The fixed geometric schedule of steps after which the measured coloring mask
-# is re-measured (runtime_remeasure = true). A from-rest configuration has an
+# After the switch step N (auto_jacobian_remeasure_switch_step), the measured
+# coloring mask keeps being re-measured on a geometric schedule (2N, 4N, ...)
+# as insurance against a coupling that only develops later, up to this multiple
+# of N; a grown-back band there triggers the only unplanned rebuild (typically
+# none, so the mask freezes after two no-change re-measures). The switch itself
+# runs the constant->measured replacement at N. A from-rest configuration has an
 # inactive SGS updraft/turbulence at t = 0, so the couplings that develop by
-# the first steps are not in the Jacobian to measure yet; re-measuring on the
-# good state between these early steps grows the mask before the coupling that
-# would otherwise crash the next step, with a one-step lag and no rollback. See
-# validation/design_measured_coloring.md (Rung C) and the handover.
-const jacobian_remeasure_max_step = 32
+# the first steps are not in the Jacobian to measure yet; the :constant mask
+# carries the run through the transient until the developed switch state is
+# reached. See validation/PLAN_minimal_from_rest.md and the handover.
+const jacobian_remeasure_max_step_factor = 32
 
 """
-    remeasure_and_maybe_rebuild!(jacobian::Jacobian, Y, p, t)
+    remeasure_and_maybe_rebuild!(jacobian::Jacobian, Y, p, t; replace_mask = false)
 
 Re-measure the measured padding mode's coloring mask at the current state `Y`
-and, if the mask grew, rebuild the type-varying autodiff buffers behind the
-cache's `rebuildable` Ref. The mask is grown monotonically (unioned), so colors
-never decrease; after two consecutive re-measures produce no change the mask is
-frozen and further re-measures are skipped. No-op once frozen.
+and rebuild the type-varying autodiff buffers behind the cache's `rebuildable`
+Ref when the mask changes.
+
+With `replace_mask = true` (the one switch, at `remeasure_switch_step`) the
+current mask is the transient-safety `:constant` mask, and it is REPLACED by the
+lean measured mask of the now-developed state, then rebuilt unconditionally.
+This is the one deliberate mask *shrink*; the switch measures the full
+developed-flow support (including the wind advection stencils), so it needs no
+hand rules.
+
+With `replace_mask = false` (every later fire, on the geometric insurance
+schedule) the mask is grown monotonically (unioned), so colors never decrease;
+after two consecutive re-measures produce no change the mask is frozen and
+further re-measures are skipped. No-op once frozen.
 
 This is the runtime-adaptive rung of the measured mode: it lets a from-rest
 configuration reach a correct-and-lean coloring mask without a representative
 (spun-up) measurement state. It detects new coupling structure with high
 probability at the sampled states, not with certainty.
 """
-function remeasure_and_maybe_rebuild!(jacobian, Y, p, t)
+function remeasure_and_maybe_rebuild!(jacobian, Y, p, t; replace_mask = false)
     alg = jacobian.alg
     cache = jacobian.cache
     cache.remeasure_frozen[] && return nothing
@@ -1476,9 +1559,10 @@ function remeasure_and_maybe_rebuild!(jacobian, Y, p, t)
             min(get(victim_min_scale, present_row_name, FT(Inf)), s)
     end
 
-    # Build a fresh candidate mask from the new measurement, then grow the
-    # current mask monotonically (union). sparsity_mask (stored bands) is
-    # state-free and never changes, so only padded_sparsity_mask grows.
+    # Build a fresh measured candidate mask from the new measurement. At the
+    # switch it REPLACES the current (:constant) mask; on later fires it is unioned
+    # into the current mask (monotonic growth). sparsity_mask (stored bands) is
+    # state-free and never changes, so only padded_sparsity_mask moves.
     (_, candidate_padded_mask) = build_sparsity_masks(
         alg,
         Y,
@@ -1490,6 +1574,35 @@ function remeasure_and_maybe_rebuild!(jacobian, Y, p, t)
         verbose = false,
     )
     current_padded_mask = cache.padded_sparsity_mask[]
+
+    if replace_mask
+        # The planned switch: drop the transient-safety :constant mask for the lean
+        # measured mask of the now-developed state. This is the ONE deliberate
+        # mask shrink; the mask is monotonic (union-only) afterwards. Rebuild
+        # unconditionally, since the constant and measured masks differ by design.
+        old_n_colors = cache.rebuildable[].n_colors
+        cache.padded_sparsity_mask[] = candidate_padded_mask
+        cache.remeasure_no_change_count[] = 0
+        precomputed = implicit_precomputed_quantities(Y, atmos)
+        scratch = implicit_temporary_quantities(Y, atmos)
+        cache.rebuildable[] = build_jacobian_dual_buffers(
+            alg,
+            Y,
+            precomputed,
+            scratch,
+            cache.autodiff_matrix,
+            cache.sparsity_mask,
+            candidate_padded_mask;
+            uₕ_scale,
+            verbose = false,
+        )
+        @info "Runtime Jacobian re-measure: switched from the transient-safety \
+               constant mask ($old_n_colors colors) to the measured mask of the \
+               developed state ($(cache.rebuildable[].n_colors) colors) at \
+               step $(cache.remeasure_step[])."
+        return nothing
+    end
+
     union_mask = current_padded_mask .| candidate_padded_mask
 
     if union_mask == current_padded_mask
@@ -1544,14 +1657,22 @@ function jacobian_runtime_remeasure_affect!(integrator)
     cache.remeasure_frozen[] && return nothing
     step = (cache.remeasure_step[] += 1)
     if step == cache.remeasure_next_step[]
+        switch_step = jacobian.alg.remeasure_switch_step
+        # The first fire (at switch_step N) is the constant->measured replacement;
+        # every later fire (2N, 4N, ... up to the max-step factor) is a
+        # union-only insurance re-measure.
+        is_switch = !cache.remeasure_switched[]
+        max_step = jacobian_remeasure_max_step_factor * switch_step
         cache.remeasure_next_step[] =
-            step >= jacobian_remeasure_max_step ? typemax(Int) : 2 * step
+            step >= max_step ? typemax(Int) : 2 * step
         remeasure_and_maybe_rebuild!(
             jacobian,
             integrator.u,
             integrator.p,
-            integrator.t,
+            integrator.t;
+            replace_mask = is_switch,
         )
+        is_switch && (cache.remeasure_switched[] = true)
     end
     return nothing
 end

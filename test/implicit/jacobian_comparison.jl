@@ -258,8 +258,17 @@ end
         manual_blocks,
         rescalings,
     )
-    sparse_alg(; kwargs...) =
-        CA.AutoSparseJacobian(; approximate_solve_iters = 2, kwargs...)
+    # Pin the pre-default-flip behavior (unscaled seeds, manual-rules padding)
+    # as this helper's defaults, so each test variant names exactly the mode it
+    # checks and stays fixed even though the AutoSparseJacobian defaults are now
+    # seed_scaling = :static and padding_mode = :measured.
+    sparse_alg(; seed_scaling = nothing, padding_mode = :manual_rules, kwargs...) =
+        CA.AutoSparseJacobian(;
+            approximate_solve_iters = 2,
+            seed_scaling,
+            padding_mode,
+            kwargs...,
+        )
 
     # Provisional bound on the normalized aliasing error; entries become
     # significant to the implicit solver when this metric approaches 1.
@@ -299,44 +308,44 @@ end
         )
     end
 
-    # Exact-recovery band mode (padding_mode = :exact): every padding rule
+    # Constant-band mode (padding_mode = :constant): every padding rule
     # is active in every scaling mode, and every present block gets at least
     # 4 padding bands, so entries recovered on the stored bands should agree
     # with the dense reference far below the tolerance, at the cost of more
     # colors. Note that this mode does not widen the stored bands: the linear
     # solver still uses the manual structure's truncation of the Jacobian.
-    exact_alg = sparse_alg(; padding_mode = :exact)
-    errors_exact = errors(exact_alg, "exact bands + unscaled")
-    @test errors_exact.max_aliasing_error < tolerance
+    constant_alg = sparse_alg(; padding_mode = :constant)
+    errors_constant = errors(constant_alg, "constant bands + unscaled")
+    @test errors_constant.max_aliasing_error < tolerance
     # No ordering assertion against the default-padding variant: both
     # unscaled variants sit at the dense-comparison floor (~1e-7 on this
     # configuration), and the wider mask re-rolls the coloring, which moves
     # the error within that floor in either direction (measured: 3.2e-7
-    # default vs 6.7e-7 exact in gate run 243282).
-    if errors_exact.max_aliasing_error > tolerance / 2
+    # default vs 6.7e-7 constant in gate run 243282).
+    if errors_constant.max_aliasing_error > tolerance / 2
         report_aliasing_contributors(
-            exact_alg,
+            constant_alg,
             Y,
             p,
-            first(errors_exact.worst_block_keys),
+            first(errors_constant.worst_block_keys),
             dense_blocks,
-            "exact bands + unscaled",
+            "constant bands + unscaled",
         )
     end
-    exact_scaled_alg =
-        sparse_alg(; seed_scaling = :static, padding_mode = :exact)
-    errors_exact_scaled = errors(exact_scaled_alg, "exact bands + scaled")
-    @test errors_exact_scaled.max_aliasing_error < tolerance
-    @test errors_exact_scaled.max_aliasing_error <=
+    constant_scaled_alg =
+        sparse_alg(; seed_scaling = :static, padding_mode = :constant)
+    errors_constant_scaled = errors(constant_scaled_alg, "constant bands + scaled")
+    @test errors_constant_scaled.max_aliasing_error < tolerance
+    @test errors_constant_scaled.max_aliasing_error <=
           errors_scaled.max_aliasing_error
-    if errors_exact_scaled.max_aliasing_error > tolerance / 2
+    if errors_constant_scaled.max_aliasing_error > tolerance / 2
         report_aliasing_contributors(
-            exact_scaled_alg,
+            constant_scaled_alg,
             Y,
             p,
-            first(errors_exact_scaled.worst_block_keys),
+            first(errors_constant_scaled.worst_block_keys),
             dense_blocks,
-            "exact bands + scaled",
+            "constant bands + scaled",
         )
     end
 
@@ -345,10 +354,10 @@ end
     # increment-weighted magnitudes) with no hand-maintained padding rules.
     # Aliasing on the stored bands must stay below the tolerance in both
     # scaling modes. The scaled variant should approach the dense-comparison
-    # floor of the exact variant, since within-field support is captured
+    # floor of the constant variant, since within-field support is captured
     # exactly (its seed scale ratio is 1) and every cross-field coupling whose
     # increment-weighted magnitude exceeds the threshold is kept. The color
-    # count must not exceed the exact variant's, since the measured mask pads
+    # count must not exceed the constant variant's, since the measured mask pads
     # present blocks to their true support (not a blanket floor) and keeps only
     # the significant cross-field blocks.
     measured_alg = sparse_alg(; padding_mode = :measured)
@@ -445,20 +454,20 @@ end
     n_εs_scaled_default = n_εs(sparse_alg(; seed_scaling = :static))
     n_εs_scaled_unpadded =
         n_εs(sparse_alg(; padding_bands_per_block = 0, seed_scaling = :static))
-    n_εs_exact = n_εs(sparse_alg(; padding_mode = :exact))
-    n_εs_exact_scaled =
-        n_εs(sparse_alg(; seed_scaling = :static, padding_mode = :exact))
+    n_εs_constant = n_εs(sparse_alg(; padding_mode = :constant))
+    n_εs_constant_scaled =
+        n_εs(sparse_alg(; seed_scaling = :static, padding_mode = :constant))
     n_εs_measured = n_εs(sparse_alg(; padding_mode = :measured))
     n_εs_measured_scaled =
         n_εs(sparse_alg(; seed_scaling = :static, padding_mode = :measured))
     @info "ε components per dual number: $n_εs_padded with default padding, \
            $n_εs_scaled_default with scaled default padding, \
-           $n_εs_scaled_unpadded without padding, $n_εs_exact with exact \
-           bands (unscaled), $n_εs_exact_scaled with exact bands (scaled), \
+           $n_εs_scaled_unpadded without padding, $n_εs_constant with constant \
+           bands (unscaled), $n_εs_constant_scaled with constant bands (scaled), \
            $n_εs_measured with measured bands (unscaled), \
            $n_εs_measured_scaled with measured bands (scaled)"
     @test n_εs_scaled_unpadded <= n_εs_padded
-    # The measured mask never costs more colors than the exact-recovery mask.
-    @test n_εs_measured <= n_εs_exact
-    @test n_εs_measured_scaled <= n_εs_exact_scaled
+    # The measured mask never costs more colors than the constant-band mask.
+    @test n_εs_measured <= n_εs_constant
+    @test n_εs_measured_scaled <= n_εs_constant_scaled
 end

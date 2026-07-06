@@ -272,8 +272,8 @@ function jacobian_from_parsed_args(parsed_args)
         else
             @warn "auto_jacobian_manual_bands is deprecated; use \
                    auto_jacobian_padding_mode = \"manual_rules\" (for `true`) \
-                   or \"exact\" (for `false`) instead"
-            deprecated_manual_bands ? :manual_rules : :exact
+                   or \"constant\" (for `false`) instead"
+            deprecated_manual_bands ? :manual_rules : :constant
         end
         return AutoSparseJacobian(;
             approximate_solve_iters,
@@ -281,6 +281,7 @@ function jacobian_from_parsed_args(parsed_args)
             seed_scaling = isnothing(scaling_str) ? nothing : Symbol(scaling_str),
             padding_mode,
             runtime_remeasure = parsed_args["auto_jacobian_runtime_remeasure"],
+            remeasure_switch_step = parsed_args["auto_jacobian_remeasure_switch_step"],
         )
     else
         return ManualSparseJacobian(; approximate_solve_iters)
