@@ -107,6 +107,9 @@ auto_jacobian_remeasure_switch_step:
 auto_jacobian_measured_cross_field_threshold:
   help: "Significance threshold tau for the `measured` padding mode: an absent cross-field block a-b is kept in the coloring mask only if its increment-weighted magnitude `dtgamma * max|dYt| * s_b / s_a` exceeds tau for the worst victim in its row. Raising it drops more marginal cross-field couplings, giving a leaner mask (fewer colors) at the cost of more aliasing (the lean-vs-greedy knob); it only affects absent cross-field blocks, so it cannot shrink a mask whose colors come from wide within-field stencils. Only used with `auto_jacobian_padding_mode: measured` (only used when `use_auto_jacobian` is `true`)"
   value: 1.0e-3
+auto_jacobian_measured_support_rtol:
+  help: "Relative within-field support tolerance for the `measured` padding mode: a band of a block joins the coloring mask only if its `|dYt|` exceeds this fraction of the block's peak `|dYt|` at some measured state. Being relative to the block's own magnitude it is dimensionless and timestep-independent, so one value is meaningful across blocks whose entries span many orders (energy row O(1e2), density row O(1e-5)). Raising it trims weak within-field stencil tails, giving a leaner mask (fewer colors); this is the lever for a config whose colors come from wide developed-flow stencils (e.g. trmm_0M), and it bounds the within-field aliasing to about this fraction of the diagonal it would corrupt. Within-field bands have a seed scale ratio of 1, so scaling cannot suppress that aliasing, so raise with care and verify the recovered Jacobian stays accurate. Only used with `auto_jacobian_padding_mode: measured` (only used when `use_auto_jacobian` is `true`)"
+  value: 1.0e-3
 update_jacobian_every:
   help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
   value: "solve"

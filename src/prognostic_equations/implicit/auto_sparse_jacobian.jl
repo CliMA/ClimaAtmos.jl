@@ -22,11 +22,15 @@ const default_remeasure_switch_step = 10
 # order below the unit-test aliasing bound (1e-2) and orders above the
 # ~1e-6-7 dense-comparison noise floor.
 const measured_cross_field_threshold = 1e-3
-# A band of a block counts as "supported" when its increment-weighted
-# magnitude dtγ * |∂Yₜ| exceeds this floor at some measured state. Real
-# stencil entries are O(1e-2-1); anything below this floor is negligible
-# compared to solver significance, so excluding it from the mask is safe.
-const measured_support_floor = 1e-6
+# A band of a block counts as "supported" when its |∂Yₜ| exceeds this fraction
+# of the block's peak |∂Yₜ| at some measured state. Being relative to the
+# block's own magnitude, the test is dimensionless and dtγ-independent, so a
+# single value works across blocks whose entries span many orders (energy row
+# O(1e2), density row O(1e-5)) where an absolute floor would not. Dropping a
+# band this far below the block peak (its diagonal) bounds the within-field
+# aliasing it causes to about this fraction of that diagonal; 1e-3 is an order
+# below the unit-test aliasing bound (1e-2).
+const measured_support_rtol = 1e-3
 # Number of randomly perturbed states (in addition to the base state) whose
 # support is unioned. Perturbations break accidental zeros so that the full
 # stencil support is detected; the union covers state-dependent branches
@@ -131,6 +135,20 @@ struct AutoSparseJacobian{A <: SparseJacobian, P, S} <: SparseJacobian
     # blocks; present-block bands are stored ∪ measured support, so raising τ
     # cannot shrink a mask whose colors come from wide within-field stencils.
     cross_field_threshold::Float64
+    # Relative support tolerance for the measured mode (only used with
+    # padding_mode = :measured): a band of a block counts as supported (and so
+    # joins the coloring mask) only if |∂Yₜ| exceeds this fraction of the
+    # block's peak |∂Yₜ| at some measured state. Being relative to the block's
+    # own magnitude, it is dimensionless and dtγ-independent, so one value is
+    # meaningful across blocks whose entries span many orders (energy row
+    # O(1e2), density row O(1e-5)); an absolute floor is not. Raising it trims
+    # weak WITHIN-FIELD stencil tails (fewer colors), the lever for a mask whose
+    # colors come from wide developed-flow stencils (e.g. trmm_0M); it bounds
+    # the within-field aliasing to about this fraction of the diagonal it would
+    # corrupt. Within-field bands have a seed scale ratio of 1, so scaling
+    # cannot suppress that aliasing — raise with care. Defaults to
+    # measured_support_rtol.
+    support_rtol::Float64
 end
 
 """
@@ -147,6 +165,7 @@ AutoSparseJacobian(sparse_jacobian_alg) = AutoSparseJacobian(
     false,
     default_remeasure_switch_step,
     measured_cross_field_threshold,
+    measured_support_rtol,
 )
 AutoSparseJacobian(sparse_jacobian_alg, padding_bands_per_block) =
     AutoSparseJacobian(
@@ -157,6 +176,7 @@ AutoSparseJacobian(sparse_jacobian_alg, padding_bands_per_block) =
         false,
         default_remeasure_switch_step,
         measured_cross_field_threshold,
+        measured_support_rtol,
     )
 AutoSparseJacobian(sparse_jacobian_alg, padding_bands_per_block, seed_scaling) =
     AutoSparseJacobian(
@@ -167,10 +187,11 @@ AutoSparseJacobian(sparse_jacobian_alg, padding_bands_per_block, seed_scaling) =
         false,
         default_remeasure_switch_step,
         measured_cross_field_threshold,
+        measured_support_rtol,
     )
 
 """
-    AutoSparseJacobian(; approximate_solve_iters = 1, padding_bands_per_block = nothing, seed_scaling = :static, padding_mode = :constant, runtime_remeasure = false, remeasure_switch_step = $default_remeasure_switch_step, cross_field_threshold = $measured_cross_field_threshold)
+    AutoSparseJacobian(; approximate_solve_iters = 1, padding_bands_per_block = nothing, seed_scaling = :static, padding_mode = :constant, runtime_remeasure = false, remeasure_switch_step = $default_remeasure_switch_step, cross_field_threshold = $measured_cross_field_threshold, support_rtol = $measured_support_rtol)
 
 Construct an [`AutoSparseJacobian`](@ref) that reuses the sparsity structure
 of an inner [`ManualSparseJacobian`](@ref) built from `approximate_solve_iters`.
@@ -191,10 +212,15 @@ function AutoSparseJacobian(;
     runtime_remeasure::Bool = false,
     remeasure_switch_step::Int = default_remeasure_switch_step,
     cross_field_threshold::Real = measured_cross_field_threshold,
+    support_rtol::Real = measured_support_rtol,
 )
     cross_field_threshold > 0 || error(
         "cross_field_threshold must be positive (the measured mode's \
          significance threshold τ); got $cross_field_threshold",
+    )
+    support_rtol > 0 || error(
+        "support_rtol must be positive (the measured mode's relative \
+         within-field support tolerance); got $support_rtol",
     )
     padding_mode in (:manual_rules, :constant, :measured) || error(
         "Unknown padding_mode :$padding_mode (supported modes are \
@@ -220,6 +246,7 @@ function AutoSparseJacobian(;
         runtime_remeasure,
         remeasure_switch_step,
         Float64(cross_field_threshold),
+        Float64(support_rtol),
     )
 end
 
@@ -382,7 +409,8 @@ One-time dense-AD measurement pass on the first column, used by the measured
 padding mode. Returns an `n_scalars × n_scalars` matrix of NamedTuples, one per
 block of the scalarized tendency matrix, with fields:
 
-  - `has_support`: whether any band of the block is above the support floor;
+  - `has_support`: whether any band of the block exceeds `support_rtol` of the
+    block's peak magnitude;
   - `support_lower`, `support_upper`: the band index range (column minus row,
     in block-local level indices) of the detected stencil support, unioned
     over the base state and `n_random_states` perturbed states;
@@ -412,7 +440,7 @@ function measure_block_support_and_magnitude(
     verbose = false,
     n_random_states = measured_n_random_states,
     multiplier = measured_perturbation_multiplier,
-    support_floor = measured_support_floor,
+    support_rtol = measured_support_rtol,
     rng_seed = measured_rng_seed,
 )
     FT = eltype(Y)
@@ -457,7 +485,7 @@ function measure_block_support_and_magnitude(
             # The base state is the real, physically valid state, so a failure
             # there is a real problem; a perturbed state may leave the physical
             # domain (e.g. produce a non-finite tendency), in which case the
-            # other states and the support floor still cover the block.
+            # other states and the relative support test still cover the block.
             state_index == 1 && rethrow(err)
             verbose && @warn "Measured padding: skipping perturbed state \
                               $state_index (tendency evaluation failed)"
@@ -467,22 +495,37 @@ function measure_block_support_and_magnitude(
         for ci in 1:n_scalars, ri in 1:n_scalars
             rows = positions[ri]
             cols = positions[ci]
+            # This state's block peak |∂Yₜ|, used to make the support test
+            # relative to the block's own magnitude: a band is significant only
+            # relative to the largest entry it could alias onto (the block's
+            # diagonal, which the peak tracks for the diagonally dominant
+            # present blocks), so the criterion is |∂Yₜ_band| > rtol · peak.
+            # This is dimensionless and dtγ-independent (the dtγ that a
+            # magnitude criterion would carry cancels), so a single rtol is
+            # meaningful across blocks whose entries span many orders (an energy
+            # row is O(1e2), a density row O(1e-5)); an absolute floor is not.
+            block_peak = zero(FT)
             for (a, i) in enumerate(rows), (b, j) in enumerate(cols)
                 v = @inbounds M[i, j, 1]
                 isfinite(v) || continue
-                m = dtγ * abs(v)
-                # Magnitude is taken from the base (representative) state only:
-                # the perturbed states over-activate the flow, so maximizing
-                # over them inflates cross-field magnitudes and keeps far more
-                # blocks than a real developed flow needs (measured on the
-                # quiescent trmm t=0 state, that over-keeping pushes the color
-                # count past :constant). Cross-field significance is inherently a
-                # magnitude property of the actual state; a representative
-                # measurement state or the runtime probe (Rung C) is what makes
-                # it correct on a from-rest configuration.
-                state_index == 1 &&
-                    (magnitude[ri, ci] = max(magnitude[ri, ci], m))
-                if m > support_floor
+                block_peak = max(block_peak, abs(v))
+            end
+            # Magnitude (for the cross-field keep test) is the increment-weighted
+            # block peak on the base (representative) state only: the perturbed
+            # states over-activate the flow, so maximizing over them inflates
+            # cross-field magnitudes and keeps far more blocks than a real
+            # developed flow needs (measured on the quiescent trmm t=0 state,
+            # that over-keeping pushes the color count past :constant).
+            # Cross-field significance is inherently a magnitude property of the
+            # actual state; a representative measurement state or the runtime
+            # probe (Rung C) is what makes it correct on a from-rest config.
+            state_index == 1 && (magnitude[ri, ci] = dtγ * block_peak)
+            block_peak > 0 || continue # zero block: no support
+            band_floor = support_rtol * block_peak
+            for (a, i) in enumerate(rows), (b, j) in enumerate(cols)
+                v = @inbounds M[i, j, 1]
+                isfinite(v) || continue
+                if abs(v) > band_floor
                     band = b - a
                     support_lower[ri, ci] = min(support_lower[ri, ci], band)
                     support_upper[ri, ci] = max(support_upper[ri, ci], band)
@@ -507,7 +550,7 @@ function measure_block_support_and_magnitude(
         @info "Measured padding: dense-AD support/magnitude over $n_states \
                states ($n_random_states perturbed); $n_with_support of \
                $(n_scalars^2) blocks have support above the floor \
-               (dtγ * |∂Yₜ| > $support_floor)"
+               (|∂Yₜ| > $support_rtol * block peak)"
     end
     return block_measurement
 end
@@ -790,6 +833,7 @@ function jacobian_cache(
                 measurement.dtγ,
                 measurement.t;
                 uₕ_scale,
+                support_rtol = alg.support_rtol,
                 verbose,
             )
             # Smallest victim seed scale per row field, taken over the present
@@ -820,6 +864,7 @@ function jacobian_cache(
             alg.runtime_remeasure,
             alg.remeasure_switch_step,
             alg.cross_field_threshold,
+            alg.support_rtol,
         ) : alg
     (sparsity_mask, padded_sparsity_mask) = build_sparsity_masks(
         initial_build_alg,
@@ -1568,6 +1613,7 @@ function remeasure_and_maybe_rebuild!(jacobian, Y, p, t; replace_mask = false)
         dtγ,
         t;
         uₕ_scale,
+        support_rtol = alg.support_rtol,
         verbose = false,
     )
 
