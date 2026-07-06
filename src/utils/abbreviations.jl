@@ -30,7 +30,8 @@ const ᶜinterp = Operators.InterpolateF2C()
 const ᶜdivᵥ = Operators.DivergenceF2C()
 const ᶜgradᵥ = Operators.GradientF2C()
 
-# Tracers do not have advective fluxes through the top and bottom cell faces.
+# Mass and tracers do not have advective fluxes through the top and bottom
+# cell faces.
 const ᶜadvdivᵥ = Operators.DivergenceF2C(
     bottom = Operators.SetValue(CT3(0)),
     top = Operators.SetValue(CT3(0)),
