@@ -22,6 +22,9 @@ walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600)) #=second
 function timed_solve!(integrator)
     device = ClimaComms.device(integrator.u.c)
     comms_ctx = ClimaComms.context(device)
+    jacobian = integrator_jacobian(integrator)
+    # Exclude the precompilation step in solve_atmos! from the counters.
+    isnothing(jacobian) || reset_newton_counters!(jacobian)
     local sol
     walltime = ClimaComms.elapsed(device) do
         sol = CTS.solve!(integrator)
@@ -41,7 +44,39 @@ function timed_solve!(integrator)
     n_steps = (tspan[2] - tspan[1]) / integrator.dt
     wall_time_per_timestep = time_and_units_str(walltime / n_steps)
     @info "wall_time_per_timestep: $wall_time_per_timestep"
+    report_newton_counters(jacobian, n_steps)
     return (sol, walltime)
+end
+
+# The Jacobian wrapper that ClimaTimeSteppers uses for implicit solves, or
+# nothing when the integrator has no implicit tendency or no Jacobian.
+function integrator_jacobian(integrator)
+    f = integrator.sol.prob.f
+    hasproperty(f, Symbol("T_imp!")) || return nothing
+    T_imp! = getproperty(f, Symbol("T_imp!"))
+    isnothing(T_imp!) && return nothing
+    jacobian =
+        hasproperty(T_imp!, :jac_prototype) ? T_imp!.jac_prototype : nothing
+    return jacobian isa Jacobian ? jacobian : nothing
+end
+
+"""
+    report_newton_counters(jacobian, n_steps)
+
+Log the number of Jacobian updates and linear solves per time step. Without a
+Krylov method, each linear solve is one Newton iteration, so together with a
+convergence checker (`use_newton_rtol`) this measures how many iterations each
+Jacobian algorithm actually needs — a Jacobian with more of the exact
+derivatives can converge in fewer iterations than `max_newton_iters_ode`.
+"""
+report_newton_counters(jacobian::Nothing, n_steps) = nothing
+function report_newton_counters(jacobian, n_steps)
+    (; updates, linear_solves) = jacobian.cache.newton_counters
+    updates_per_step = round(updates[] / Float64(n_steps); digits = 3)
+    solves_per_step = round(linear_solves[] / Float64(n_steps); digits = 3)
+    @info "Newton counters: $(updates[]) Jacobian updates \
+           ($updates_per_step per step), $(linear_solves[]) linear solves \
+           ($solves_per_step per step)"
 end
 
 struct AtmosSolveResults{S, RT, WT}

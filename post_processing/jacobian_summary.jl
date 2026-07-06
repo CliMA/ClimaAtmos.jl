@@ -120,8 +120,9 @@ function print_jacobian_summary(integrator)
         jacobian.alg isa CA.AutoSparseJacobian ? jacobian.alg.seed_scaling :
         nothing
     if !isnothing(seed_scaling)
+        uₕ_scale = CA.uₕ_seed_scale(Y)
         seed_scales = Dict(
-            name => CA.seed_scale(FT, name, seed_scaling) for
+            name => CA.seed_scale(FT, name, seed_scaling, uₕ_scale) for
             name in scalar_names
         )
         seed_normalized_rms(block_key) =

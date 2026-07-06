@@ -147,12 +147,14 @@ end
 function report_aliasing_contributors(alg, Y, p, victim_key, dense_blocks, label)
     FT = eltype(Y)
     column_Y = CA.first_column_view(Y)
-    cache = CA.jacobian_cache(alg, column_Y, p.atmos; verbose = false)
+    cache = CA.column_jacobian_cache(alg, Y, p.atmos)
     colors = cache.jacobian_column_colors
     scalar_names = CA.scalar_field_names(column_Y)
     flat_indices = collect(CA.field_vector_index_iterator(column_Y))
     (victim_row_name, victim_column_name) = victim_key
-    victim_scale = CA.seed_scale(FT, victim_column_name, alg.seed_scaling)
+    uₕ_scale = CA.uₕ_seed_scale(Y)
+    victim_scale =
+        CA.seed_scale(FT, victim_column_name, alg.seed_scaling, uₕ_scale)
     contributions = Dict{Any, FT}()
     for (j, (scalar_index, _)) in enumerate(flat_indices)
         scalar_names[scalar_index] == victim_column_name || continue
@@ -164,7 +166,7 @@ function report_aliasing_contributors(alg, Y, p, victim_key, dense_blocks, label
             contributor_block = dense_blocks[(victim_row_name, contributor_name)]
             contribution =
                 maximum(abs, view(contributor_block, :, level2)) *
-                CA.seed_scale(FT, contributor_name, alg.seed_scaling) /
+                CA.seed_scale(FT, contributor_name, alg.seed_scaling, uₕ_scale) /
                 victim_scale
             contributions[contributor_name] =
                 max(get(contributions, contributor_name, zero(FT)), contribution)
@@ -256,7 +258,9 @@ end
     # The current default configuration: unscaled seeds, default padding.
     errors_padded = errors(sparse_alg(), "unscaled + default padding")
     @test errors_padded.max_aliasing_error < tolerance
-    if !(errors_padded.max_aliasing_error < tolerance)
+    # Attribute near-misses as well as failures, so that a variant that
+    # passes with little margin still gets a contributor ranking in the log.
+    if errors_padded.max_aliasing_error > tolerance / 2
         report_aliasing_contributors(
             sparse_alg(),
             Y,
@@ -274,7 +278,7 @@ end
     scaled_alg = sparse_alg(; seed_scaling = :static)
     errors_scaled = errors(scaled_alg, "scaled + default padding")
     @test errors_scaled.max_aliasing_error < tolerance
-    if !(errors_scaled.max_aliasing_error < tolerance)
+    if errors_scaled.max_aliasing_error > tolerance / 2
         report_aliasing_contributors(
             scaled_alg,
             Y,

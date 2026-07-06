@@ -23,9 +23,13 @@ sparsity structure modifies an entry ``∂Yₜ_i/∂Y_a`` that has the same colo
 ``∂Yₜ_i/∂Y_b * s_b / s_a``, which is negligible compared to ``∂Yₜ_i/∂Y_a``
 whenever the increment-weighted criterion used to drop blocks from the sparsity
 structure applies. Entries inside the sparsity structure are unaffected because
-dual number arithmetic is linear in the seeds. Setting `seed_scaling` to a
+dual number arithmetic is linear in the seeds. Since this suppression makes the
+default padding for missing cross-field blocks redundant, `:static` disables
+those padding rules (reducing the number of colors); rules for blocks that are
+present but narrower than their true stencils are kept in every mode, because
+their extra entries have seed scale ratios of 1. Setting `seed_scaling` to a
 function that maps scalar field names to positive numbers overrides the default
-scales used by `:static`.
+scales used by `:static`, but keeps the full default padding.
 
 For more information about this algorithm, see [Implicit Solver](@ref).
 """
@@ -63,24 +67,58 @@ AutoSparseJacobian(;
 )
 
 """
-    seed_scale(::Type{FT}, scalar_name, seed_scaling)
+    uₕ_seed_scale(Y)
+
+Typical increment magnitude of the covariant horizontal wind components,
+derived from the grid of `Y`: a physical wind increment of ~0.05 m/s times the
+horizontal node length scale, which approximates the metric factor that
+converts physical wind components to covariant components (the same idiom
+hyperdiffusion uses to set grid-dependent coefficients). On column spaces the
+horizontal space is a point space whose length scale is 1, so the scale
+reduces to the physical increment, matching the identity metric that covariant
+components have in column models.
+
+The first-column view used by the debug comparison also types as a column
+space, so caches built on column views of a full grid must be given the full
+grid's scale explicitly (see [`column_jacobian_cache`](@ref)) to stay
+consistent with the simulation's Jacobian.
+"""
+function uₕ_seed_scale(Y)
+    FT = eltype(Y)
+    h_space = Spaces.horizontal_space(axes(Y.c))
+    return FT(0.05) * FT(Spaces.node_horizontal_length_scale(h_space))
+end
+
+"""
+    seed_scale(::Type{FT}, scalar_name, seed_scaling, uₕ_scale)
 
 The scale of the dual number seed for the Jacobian column that corresponds to
 the scalar field `scalar_name`, given the `seed_scaling` of an
 [`AutoSparseJacobian`](@ref). When `seed_scaling` is `nothing`, every seed is 1;
 when it is `:static`, the seed is the field's typical increment magnitude from
-[`default_jacobian_seed_scale`](@ref); when it is a function, the seed is
-`FT(seed_scaling(scalar_name))`.
+[`default_jacobian_seed_scale`](@ref), with the geometry-dependent `uₕ_scale`
+(see [`uₕ_seed_scale`](@ref)) used for the covariant horizontal wind
+components; when it is a function, the seed is `FT(seed_scaling(scalar_name))`.
 """
-seed_scale(::Type{FT}, scalar_name, ::Nothing) where {FT} = one(FT)
-seed_scale(::Type{FT}, scalar_name, seed_scaling::Symbol) where {FT} =
-    seed_scaling == :static ? default_jacobian_seed_scale(FT, scalar_name) :
+seed_scale(::Type{FT}, scalar_name, ::Nothing, uₕ_scale) where {FT} = one(FT)
+seed_scale(
+    ::Type{FT},
+    scalar_name,
+    seed_scaling::Symbol,
+    uₕ_scale,
+) where {FT} =
+    seed_scaling == :static ?
+    default_jacobian_seed_scale(FT, scalar_name, uₕ_scale) :
     error("Unknown seed_scaling mode :$seed_scaling (the only mode is :static)")
-seed_scale(::Type{FT}, scalar_name, seed_scaling::F) where {FT, F <: Function} =
-    FT(seed_scaling(scalar_name))
+seed_scale(
+    ::Type{FT},
+    scalar_name,
+    seed_scaling::F,
+    uₕ_scale,
+) where {FT, F <: Function} = FT(seed_scaling(scalar_name))
 
 """
-    default_jacobian_seed_scale(::Type{FT}, scalar_name)
+    default_jacobian_seed_scale(::Type{FT}, scalar_name, uₕ_scale)
 
 Typical magnitude of the change in the scalar field `scalar_name` over an
 implicit stage of the model, used to scale dual number seeds when an
@@ -96,7 +134,7 @@ sparsity structure (their colors are 0, so their seeds are never set), but
 which may allow aliasing errors from new prognostic variables; the seed scales
 are logged when the Jacobian is constructed with `verbose = true`.
 """
-function default_jacobian_seed_scale(::Type{FT}, scalar_name) where {FT}
+function default_jacobian_seed_scale(::Type{FT}, scalar_name, uₕ_scale) where {FT}
     uₕ_component_names =
         (@name(c.uₕ.components.data.:(1)), @name(c.uₕ.components.data.:(2)))
     grid_mean_condensate_names =
@@ -110,10 +148,11 @@ function default_jacobian_seed_scale(::Type{FT}, scalar_name) where {FT}
     return if scalar_name == @name(c.ρ)
         FT(1e-5) # δρ ~ dt * ρₜ, much smaller than δρe_tot / (cᵥ * T)
     elseif scalar_name in uₕ_component_names
-        # δu ~ 0.01-0.1 m/s, times a horizontal metric factor of ~1e4-1e5 m on
-        # global meshes; this covariant component scale is geometry-dependent,
-        # which makes it the least certain entry in this table.
-        FT(1e3)
+        # δu ~ 0.05 m/s, times the grid's horizontal metric factor; this
+        # covariant component scale is geometry-dependent (~1e4-1e5 m on
+        # global meshes, 1 in column models), so it is resolved from the grid
+        # by uₕ_seed_scale instead of being hardcoded here.
+        FT(uₕ_scale)
     elseif scalar_name == @name(c.ρe_tot)
         FT(1e2) # δT ~ 0.03-0.1 K, times ρ * cᵥ ~ 1e3 J/(K * m^3)
     elseif scalar_name == @name(f.u₃.components.data.:(1)) ||
@@ -142,7 +181,26 @@ function default_jacobian_seed_scale(::Type{FT}, scalar_name) where {FT}
     end
 end
 
-function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
+# The first-column view of Y types as a column space, whose horizontal length
+# scale is 1, so the geometry-dependent uₕ seed scale must be resolved from
+# the full grid before slicing; otherwise the debug comparison would measure
+# aliasing with a uₕ seed that differs from the simulation's by the
+# horizontal metric factor.
+column_jacobian_cache(alg::AutoSparseJacobian, Y, atmos) = jacobian_cache(
+    alg,
+    first_column_view(Y),
+    atmos;
+    verbose = false,
+    uₕ_scale = uₕ_seed_scale(Y),
+)
+
+function jacobian_cache(
+    alg::AutoSparseJacobian,
+    Y,
+    atmos;
+    verbose = true,
+    uₕ_scale = uₕ_seed_scale(Y),
+)
     (; sparse_jacobian_alg, padding_bands_per_block, seed_scaling) = alg
 
     FT = eltype(Y)
@@ -233,8 +291,9 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         isempty(matching_parent_keys) && return nothing
         parent_block = tendency_matrix[matching_parent_keys[1]]
         parent_block isa Fields.Field || return nothing
-        # Every band entry must be reinterpretable as a single scalar, since
-        # update_jacobian! writes recovered scalars into it with reinterpret.
+        # Every band entry must contain exactly one FT-sized scalar, since
+        # update_jacobian! writes recovered scalars into it by scaling the
+        # block's unit entry (see autodiff_block_unit_entries).
         sizeof(eltype(eltype(parent_block))) == sizeof(FT) || return nothing
         return parent_block
     end
@@ -250,6 +309,19 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         MatrixFields.FieldMatrixKeys(non_constant_scalar_block_keys),
         unrolled_map(autodiff_block_entry, non_constant_scalar_block_keys),
     )
+
+    # A unit entry for each block of autodiff_matrix, used by update_jacobian!
+    # to convert recovered scalars to the block's entry type with a scalar
+    # multiplication. The scalar `reinterpret` used previously performs padding
+    # reflection (Base.padding) that cannot be compiled for GPU kernels, so
+    # the bitcast is done once here on the CPU instead: every entry type is an
+    # isbits struct with a single FT-sized leaf, so `scalar * unit_entry`
+    # places exactly the bits of `scalar` in that leaf (multiplication by 1
+    # is exact for all values, including NaN, Inf, and signed zero).
+    autodiff_block_unit_entries =
+        unrolled_map(values(autodiff_matrix)) do matrix_field
+            reinterpret(eltype(eltype(matrix_field)), one(FT))
+        end
     if verbose
         @info "Scalar names of Y: $(join(collect(scalar_names), ", "))"
         @info "Scalar block keys of the tendency matrix view: \
@@ -331,9 +403,22 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
             (@name(c.uₕ.components.data.:(1)), @name(c.uₕ.components.data.:(2)))
         condensate_names =
             (@name(c.ρq_lcl), @name(c.ρq_icl), @name(c.ρq_rai), @name(c.ρq_sno))
+        # Padding for missing cross-field blocks is only required with
+        # unscaled seeds: the aliasing it prevents is exactly the kind that
+        # seed scaling suppresses through the increment-weighted criterion, so
+        # with `seed_scaling = :static` these rules return 0 bands and the
+        # coloring needs fewer colors. Rules for blocks that are present but
+        # narrower than their true stencils are kept in every mode, since the
+        # extra entries come from the same field (or a field with the same
+        # seed scale) and no scale ratio can suppress them. Custom function
+        # scalings keep the full padding, since their scales are not
+        # guaranteed to satisfy the increment-weighted criterion.
+        static_scaling = seed_scaling == :static
+        cross_field_padding_active = !static_scaling
         max_padding_bands = if !isnothing(padding_bands_per_block)
             padding_bands_per_block
         elseif (
+            cross_field_padding_active &&
             (
                 block_row_name in uₕ_component_names &&
                 block_column_name in (mass_names..., @name(c.ρtke)) ||
@@ -369,6 +454,7 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
             # these potential errors from off-diagonal blocks should be avoided.
             3
         elseif (
+            cross_field_padding_active &&
             block_row_name == @name(c.sgsʲs.:(1).ρa) &&
             block_column_name == @name(c.ρ) &&
             !(block_key in non_constant_scalar_block_keys) &&
@@ -380,6 +466,7 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
             # error from the ∂ᶜρaʲₜ/∂ᶜρ block should be avoided.
             3
         elseif (
+            cross_field_padding_active &&
             block_row_name == @name(f.u₃.components.data.:(1)) &&
             block_column_name in condensate_names &&
             !(block_key in non_constant_scalar_block_keys) &&
@@ -421,6 +508,28 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
             # suppresses this by ‖δᶜρχ‖ / ‖δᶜρe_tot‖, but the energy diagonal
             # is critical for conservation, so the bands are padded regardless
             # of the scaling mode.
+            4
+        elseif (
+            static_scaling &&
+            block_row_name == @name(c.sgsʲs.:(1).mse) &&
+            block_column_name == @name(c.sgsʲs.:(1).mse) &&
+            block_key in non_constant_scalar_block_keys
+        )
+            # Present block whose true bandwidth exceeds the stored bandwidth:
+            # the upwind advection of mseʲ has derivatives with respect to
+            # mseʲ at nearby levels that extend beyond the stored bands (the
+            # calibration variant measures a self-contribution of order 1
+            # whenever nearby mseʲ columns share a color). These entries come
+            # from the same field, so their seed scale ratio is 1 and no
+            # scaling can suppress them; padding separates the colors of
+            # nearby mseʲ columns instead. Only the reduced-color coloring of
+            # the `:static` mode packs mseʲ columns close enough to collide,
+            # so the bands are only added in that mode — with unscaled seeds
+            # they would perturb the default coloring, whose aliasing
+            # behavior is validated as-is (changing the unscaled mask
+            # reshuffles every color pair and can expose new cross-field
+            # offenders, which is measured and documented in the unit test
+            # logs).
             4
         else
             0
@@ -542,11 +651,13 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
     # proportional to s_b / s_a, which is negligible whenever the
     # increment-weighted criterion for dropping blocks from the sparsity
     # structure applies to the entries outside of that structure.
-    seed_scales =
-        unrolled_map(name -> seed_scale(FT, name, seed_scaling), scalar_names)
+    seed_scales = unrolled_map(
+        name -> seed_scale(FT, name, seed_scaling, uₕ_scale),
+        scalar_names,
+    )
     if verbose && !isnothing(seed_scaling)
         seed_scale_pairs = unrolled_map(
-            name -> name => seed_scale(FT, name, seed_scaling),
+            name -> name => seed_scale(FT, name, seed_scaling, uₕ_scale),
             scalar_names,
         )
         @info "Scaling dual number seeds by typical increment magnitudes: \
@@ -623,7 +734,7 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         (n_rows_in_block, n_columns_in_block, lower_band, upper_band) =
             MatrixFields.band_matrix_info(matrix_field)
         inv_column_seed_scale =
-            inv(seed_scale(FT, block_column_name, seed_scaling))
+            inv(seed_scale(FT, block_column_name, seed_scaling, uₕ_scale))
 
         block_Yₜ_indices =
             Iterators.filter(field_vector_indices) do (scalar_index, _)
@@ -663,6 +774,7 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         matrix,
         tendency_matrix,
         autodiff_matrix,
+        autodiff_block_unit_entries,
         precomputed_dual,
         scratch_dual,
         Y_dual,
@@ -675,6 +787,7 @@ end
 
 function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
     (; matrix, tendency_matrix, autodiff_matrix) = cache
+    (; autodiff_block_unit_entries) = cache
     (; precomputed_dual, scratch_dual, Y_dual, Yₜ_dual) = cache
     (; I_matrix_partitions, band_matrix_row_index_to_colors_map) = cache
 
@@ -698,6 +811,8 @@ function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
             unrolled_map(Fields.field_values, Fields._values(Yₜ_dual))
         matrix_fields_data =
             unrolled_map(Fields.field_values, values(autodiff_matrix))
+        matrix_fields_data_and_units =
+            map(tuple, matrix_fields_data, autodiff_block_unit_entries)
         ClimaComms.@threaded device begin
             # On multithreaded devices, use one thread for each band matrix row.
             # TODO: Modify the map and use one thread for each dual number.
@@ -716,7 +831,10 @@ function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
                 ε_coefficients = ForwardDiff.partials(dual_number)
                 n_εs = length(ε_coefficients)
                 ε_offset = (partition_index - 1) * n_εs
-                unrolled_applyat(block_index, matrix_fields_data) do block_data
+                unrolled_applyat(
+                    block_index,
+                    matrix_fields_data_and_units,
+                ) do (block_data, unit_entry)
                     @inbounds entries_data =
                         point(block_data, level_index, column_index...).entries
                     entries_data[] =
@@ -724,16 +842,16 @@ function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
                             # If the entry has a color in the current partition,
                             # set the entry to the ε coefficient for that color,
                             # unscaled by the seed scale of the block's column
-                            # field, and reinterpreted to the entry type (which
-                            # is a single-scalar-component covector or tensor
-                            # for blocks that use their parent matrix blocks).
+                            # field, and converted to the entry type (which is
+                            # a single-scalar-component covector or tensor for
+                            # blocks that use their parent matrix blocks) by
+                            # scaling the block's unit entry — a bitcast
+                            # through Base.reinterpret is not GPU-compilable.
                             # Otherwise, keep the block's current value.
                             ε_offset < entry_color <= ε_offset + n_εs ?
-                            reinterpret(
-                                typeof(entry),
-                                (@inbounds ε_coefficients[entry_color - ε_offset]) *
-                                inv_column_seed_scale,
-                            ) : entry
+                            (@inbounds ε_coefficients[entry_color - ε_offset]) *
+                            inv_column_seed_scale *
+                            unit_entry : entry
                         end # TODO: Why does unrolled_map break GPU compilation?
                 end
             end

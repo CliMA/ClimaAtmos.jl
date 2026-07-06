@@ -30,9 +30,27 @@ struct Jacobian{A <: JacobianAlgorithm, C}
 end
 function Jacobian(alg, Y, atmos; verbose = false)
     krylov_cache = (; ΔY_krylov = similar(Y), R_krylov = similar(Y))
-    cache = (; jacobian_cache(alg, Y, atmos; verbose)..., krylov_cache...)
+    # Host-side counters of Jacobian updates and linear solves, incremented in
+    # the update_jacobian! and ldiv! entry points that ClimaTimeSteppers
+    # calls. Without a Krylov method, each linear solve is one Newton
+    # iteration, so these measure how many iterations a convergence checker
+    # actually takes (with a Krylov method, ldiv! is instead called once per
+    # preconditioner application).
+    counter_cache =
+        (; newton_counters = (; updates = Ref(0), linear_solves = Ref(0)))
+    cache = (;
+        jacobian_cache(alg, Y, atmos; verbose)...,
+        krylov_cache...,
+        counter_cache...,
+    )
     return Jacobian(alg, cache)
 end
+
+reset_newton_counters!(jacobian::Jacobian) = (
+    jacobian.cache.newton_counters.updates[] = 0;
+    jacobian.cache.newton_counters.linear_solves[] = 0;
+    nothing
+)
 
 # Ignore the verbose flag in jacobian_cache when it is not needed.
 jacobian_cache(alg, Y, atmos; verbose) =
@@ -44,15 +62,20 @@ jacobian_cache(alg, Y, atmos; verbose) =
 Base.zero(jacobian::Jacobian) = jacobian
 
 # ClimaTimeSteppers.jl calls this to set the Jacobian before each linear solve.
-NVTX.@annotate update_jacobian!(jacobian, Y, p, dtγ, t) =
+NVTX.@annotate function update_jacobian!(jacobian, Y, p, dtγ, t)
+    jacobian.cache.newton_counters.updates[] += 1
     update_jacobian!(jacobian.alg, jacobian.cache, Y, p, eltype(Y)(dtγ), t)
+end
 
 # ClimaTimeSteppers.jl calls this to perform each linear solve.
-NVTX.@annotate LinearAlgebra.ldiv!(
+NVTX.@annotate function LinearAlgebra.ldiv!(
     ΔY::Fields.FieldVector,
     jacobian::Jacobian,
     R::Fields.FieldVector,
-) = invert_jacobian!(jacobian.alg, jacobian.cache, ΔY, R)
+)
+    jacobian.cache.newton_counters.linear_solves[] += 1
+    invert_jacobian!(jacobian.alg, jacobian.cache, ΔY, R)
+end
 
 # This is called by Krylov.jl from inside ClimaTimeSteppers.jl. See
 # https://github.com/JuliaSmoothOptimizers/Krylov.jl/issues/605 for a related
@@ -68,12 +91,24 @@ function LinearAlgebra.ldiv!(
     ΔY .= ΔY_krylov
 end
 
+"""
+    column_jacobian_cache(alg, Y, atmos)
+
+A Jacobian cache built on the first-column view of `Y`, used by the debug
+comparison. Algorithms whose caches depend on the grid geometry (which the
+column view loses) should override this to resolve geometry-derived quantities
+from the full grid of `Y` before slicing, so that the column Jacobian stays
+consistent with the simulation's Jacobian.
+"""
+column_jacobian_cache(alg::JacobianAlgorithm, Y, atmos) =
+    jacobian_cache(alg, first_column_view(Y), atmos; verbose = false)
+
 # This defines a standardized format for comparing different types of Jacobians.
 function first_column_block_arrays(alg::SparseJacobian, Y, p, dtγ, t)
     scalar_names = scalar_field_names(Y)
     column_Y = first_column_view(Y)
     column_p = first_column_view(p)
-    column_cache = jacobian_cache(alg, column_Y, p.atmos; verbose = false)
+    column_cache = column_jacobian_cache(alg, Y, p.atmos)
 
     update_jacobian!(alg, column_cache, column_Y, column_p, dtγ, t)
     column_∂R_∂Y = column_cache.matrix
