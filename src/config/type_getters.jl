@@ -266,10 +266,21 @@ function jacobian_from_parsed_args(parsed_args)
         scaling_str in (nothing, "static") || error(
             "Invalid auto_jacobian_scaling: $scaling_str (`~` or `static`)",
         )
+        deprecated_manual_bands = parsed_args["auto_jacobian_manual_bands"]
+        padding_mode = if isnothing(deprecated_manual_bands)
+            Symbol(parsed_args["auto_jacobian_padding_mode"])
+        else
+            @warn "auto_jacobian_manual_bands is deprecated; use \
+                   auto_jacobian_padding_mode = \"manual_rules\" (for `true`) \
+                   or \"exact\" (for `false`) instead"
+            deprecated_manual_bands ? :manual_rules : :exact
+        end
         return AutoSparseJacobian(;
             approximate_solve_iters,
             padding_bands_per_block = parsed_args["auto_jacobian_padding_bands"],
             seed_scaling = isnothing(scaling_str) ? nothing : Symbol(scaling_str),
+            padding_mode,
+            runtime_remeasure = parsed_args["auto_jacobian_runtime_remeasure"],
         )
     else
         return ManualSparseJacobian(; approximate_solve_iters)

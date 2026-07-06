@@ -8,12 +8,12 @@ import ClimaUtilities.TimeManager: ITime
 
 function get_jacobian(
     ode_algo, Y, atmos, jacobian::JacobianAlgorithm, debug_jacobian;
-    verbose = false,
+    verbose = false, measurement = nothing,
 )
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
     verbose && @info "Jacobian algorithm: $(summary_string(jacobian))"
-    jac = Jacobian(jacobian, Y, atmos; verbose = debug_jacobian)
+    jac = Jacobian(jacobian, Y, atmos; verbose = debug_jacobian, measurement)
     if verbose && hasproperty(jac.cache, :derivative_flags)
         flags_str = join(
             ("$k = $(typeof(v).name.name)" for (k, v) in pairs(jac.cache.derivative_flags)),
@@ -88,6 +88,11 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
     verbose = false,
 )
     (; atmos) = p
+    # Context for the measured padding mode's one-time dense-AD measurement
+    # pass (ignored by every other Jacobian algorithm): the atmos cache, the
+    # implicit-stage dtγ (approximated by the full dt, γ = 1, which is
+    # conservative for the aliasing threshold), and the initial time.
+    measurement = (; p, dtγ = eltype(Y)(float(p.dt)), t = tspan[1])
     @timed_log verbose "Built tendency function" begin
         if isnothing(prescribed_flow)
 
@@ -96,7 +101,8 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             T_imp! = CTS.ODEFunction(
                 implicit_tendency!;
                 jac_prototype = get_jacobian(
-                    ode_algo, Y, atmos, jacobian, debug_jacobian; verbose,
+                    ode_algo, Y, atmos, jacobian, debug_jacobian;
+                    verbose, measurement,
                 ),
                 Wfact = update_jacobian!,
             )

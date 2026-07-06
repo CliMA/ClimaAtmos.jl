@@ -383,6 +383,24 @@ function enforce_physical_constraints_callback(dt)
     return call_every_dt(enforce_physical_constraints_callback!, dt)
 end
 
+# Runtime-adaptive re-measure of the measured-mode sparse Jacobian coloring
+# mask (see remeasure_and_maybe_rebuild!). Returns () unless the algorithm opts
+# in with runtime_remeasure = true, so the callback is only wired for those
+# runs; the affect self-guards again at runtime. Fires every step but only acts
+# on a fixed early geometric schedule, so a converged/non-adaptive run is
+# essentially free.
+function auto_jacobian_remeasure_callback(jacobian_alg)
+    (jacobian_alg isa AutoSparseJacobian && jacobian_alg.runtime_remeasure) ||
+        return ()
+    return (
+        call_every_n_steps(
+            jacobian_runtime_remeasure_affect!,
+            1;
+            skip_first = true,
+        ),
+    )
+end
+
 function ogw_callback(
     orographic_gravity_wave,
     dt_ogw,

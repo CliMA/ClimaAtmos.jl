@@ -144,11 +144,21 @@ end
 # (or from a field with the same seed scale) indicates missing bands that
 # require padding or a pattern extension, while a contributor from another
 # field indicates a seed scale ratio that needs adjustment.
-function report_aliasing_contributors(alg, Y, p, victim_key, dense_blocks, label)
+function report_aliasing_contributors(
+    alg,
+    Y,
+    p,
+    victim_key,
+    dense_blocks,
+    label;
+    measurement = nothing,
+)
     FT = eltype(Y)
     column_Y = CA.first_column_view(Y)
-    cache = CA.column_jacobian_cache(alg, Y, p.atmos)
-    colors = cache.jacobian_column_colors
+    cache = CA.column_jacobian_cache(alg, Y, p.atmos; measurement)
+    # The coloring metadata lives behind the cache's `rebuildable` Ref (it is
+    # rebuilt as a unit when the runtime re-measure grows the mask).
+    colors = cache.rebuildable[].jacobian_column_colors
     scalar_names = CA.scalar_field_names(column_Y)
     flat_indices = collect(CA.field_vector_index_iterator(column_Y))
     (victim_row_name, victim_column_name) = victim_key
@@ -289,6 +299,89 @@ end
         )
     end
 
+    # Exact-recovery band mode (padding_mode = :exact): every padding rule
+    # is active in every scaling mode, and every present block gets at least
+    # 4 padding bands, so entries recovered on the stored bands should agree
+    # with the dense reference far below the tolerance, at the cost of more
+    # colors. Note that this mode does not widen the stored bands: the linear
+    # solver still uses the manual structure's truncation of the Jacobian.
+    exact_alg = sparse_alg(; padding_mode = :exact)
+    errors_exact = errors(exact_alg, "exact bands + unscaled")
+    @test errors_exact.max_aliasing_error < tolerance
+    # No ordering assertion against the default-padding variant: both
+    # unscaled variants sit at the dense-comparison floor (~1e-7 on this
+    # configuration), and the wider mask re-rolls the coloring, which moves
+    # the error within that floor in either direction (measured: 3.2e-7
+    # default vs 6.7e-7 exact in gate run 243282).
+    if errors_exact.max_aliasing_error > tolerance / 2
+        report_aliasing_contributors(
+            exact_alg,
+            Y,
+            p,
+            first(errors_exact.worst_block_keys),
+            dense_blocks,
+            "exact bands + unscaled",
+        )
+    end
+    exact_scaled_alg =
+        sparse_alg(; seed_scaling = :static, padding_mode = :exact)
+    errors_exact_scaled = errors(exact_scaled_alg, "exact bands + scaled")
+    @test errors_exact_scaled.max_aliasing_error < tolerance
+    @test errors_exact_scaled.max_aliasing_error <=
+          errors_scaled.max_aliasing_error
+    if errors_exact_scaled.max_aliasing_error > tolerance / 2
+        report_aliasing_contributors(
+            exact_scaled_alg,
+            Y,
+            p,
+            first(errors_exact_scaled.worst_block_keys),
+            dense_blocks,
+            "exact bands + scaled",
+        )
+    end
+
+    # Measured padding mode (padding_mode = :measured): the coloring mask is
+    # derived from a one-time dense-AD measurement pass (stencil support plus
+    # increment-weighted magnitudes) with no hand-maintained padding rules.
+    # Aliasing on the stored bands must stay below the tolerance in both
+    # scaling modes. The scaled variant should approach the dense-comparison
+    # floor of the exact variant, since within-field support is captured
+    # exactly (its seed scale ratio is 1) and every cross-field coupling whose
+    # increment-weighted magnitude exceeds the threshold is kept. The color
+    # count must not exceed the exact variant's, since the measured mask pads
+    # present blocks to their true support (not a blanket floor) and keeps only
+    # the significant cross-field blocks.
+    measured_alg = sparse_alg(; padding_mode = :measured)
+    errors_measured = errors(measured_alg, "measured bands + unscaled")
+    @test errors_measured.max_aliasing_error < tolerance
+    if errors_measured.max_aliasing_error > tolerance / 2
+        report_aliasing_contributors(
+            measured_alg,
+            Y,
+            p,
+            first(errors_measured.worst_block_keys),
+            dense_blocks,
+            "measured bands + unscaled";
+            measurement = (; p, dtγ, t),
+        )
+    end
+    measured_scaled_alg =
+        sparse_alg(; seed_scaling = :static, padding_mode = :measured)
+    errors_measured_scaled =
+        errors(measured_scaled_alg, "measured bands + scaled")
+    @test errors_measured_scaled.max_aliasing_error < tolerance
+    if errors_measured_scaled.max_aliasing_error > tolerance / 2
+        report_aliasing_contributors(
+            measured_scaled_alg,
+            Y,
+            p,
+            first(errors_measured_scaled.worst_block_keys),
+            dense_blocks,
+            "measured bands + scaled";
+            measurement = (; p, dtγ, t),
+        )
+    end
+
     # Calibration reports for the zero-padding variants. The scaled variant
     # is not asserted against the bound: within-field band deficits (e.g.,
     # the upwind-widened ∂/∂u₃ stencils) are invisible to seed scaling by
@@ -334,17 +427,38 @@ end
     # Dropping the padding bands reduces the number of colors, and therefore
     # the number of ε components per dual number (on CPU devices, the number
     # of ε components is the number of colors).
+    measurement = (; p, dtγ, t)
     n_εs(alg) = CA.ForwardDiff.npartials(
         eltype(
             parent(
-                CA.jacobian_cache(alg, Y, p.atmos; verbose = false).Y_dual.c.ρ,
+                CA.jacobian_cache(
+                    alg,
+                    Y,
+                    p.atmos;
+                    verbose = false,
+                    measurement,
+                ).rebuildable[].Y_dual.c.ρ,
             ),
         ),
     )
     n_εs_padded = n_εs(sparse_alg())
+    n_εs_scaled_default = n_εs(sparse_alg(; seed_scaling = :static))
     n_εs_scaled_unpadded =
         n_εs(sparse_alg(; padding_bands_per_block = 0, seed_scaling = :static))
+    n_εs_exact = n_εs(sparse_alg(; padding_mode = :exact))
+    n_εs_exact_scaled =
+        n_εs(sparse_alg(; seed_scaling = :static, padding_mode = :exact))
+    n_εs_measured = n_εs(sparse_alg(; padding_mode = :measured))
+    n_εs_measured_scaled =
+        n_εs(sparse_alg(; seed_scaling = :static, padding_mode = :measured))
     @info "ε components per dual number: $n_εs_padded with default padding, \
-           $n_εs_scaled_unpadded without padding"
+           $n_εs_scaled_default with scaled default padding, \
+           $n_εs_scaled_unpadded without padding, $n_εs_exact with exact \
+           bands (unscaled), $n_εs_exact_scaled with exact bands (scaled), \
+           $n_εs_measured with measured bands (unscaled), \
+           $n_εs_measured_scaled with measured bands (scaled)"
     @test n_εs_scaled_unpadded <= n_εs_padded
+    # The measured mask never costs more colors than the exact-recovery mask.
+    @test n_εs_measured <= n_εs_exact
+    @test n_εs_measured_scaled <= n_εs_exact_scaled
 end

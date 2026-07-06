@@ -28,7 +28,7 @@ struct Jacobian{A <: JacobianAlgorithm, C}
     alg::A
     cache::C
 end
-function Jacobian(alg, Y, atmos; verbose = false)
+function Jacobian(alg, Y, atmos; verbose = false, measurement = nothing)
     krylov_cache = (; ΔY_krylov = similar(Y), R_krylov = similar(Y))
     # Host-side counters of Jacobian updates and linear solves, incremented in
     # the update_jacobian! and ldiv! entry points that ClimaTimeSteppers
@@ -39,7 +39,7 @@ function Jacobian(alg, Y, atmos; verbose = false)
     counter_cache =
         (; newton_counters = (; updates = Ref(0), linear_solves = Ref(0)))
     cache = (;
-        jacobian_cache(alg, Y, atmos; verbose)...,
+        jacobian_cache(alg, Y, atmos; verbose, measurement)...,
         krylov_cache...,
         counter_cache...,
     )
@@ -52,8 +52,9 @@ reset_newton_counters!(jacobian::Jacobian) = (
     nothing
 )
 
-# Ignore the verbose flag in jacobian_cache when it is not needed.
-jacobian_cache(alg, Y, atmos; verbose) =
+# Ignore the verbose flag and measurement context in jacobian_cache when they
+# are not needed (only AutoSparseJacobian's :measured mode uses measurement).
+jacobian_cache(alg, Y, atmos; verbose = false, measurement = nothing) =
     jacobian_cache(alg, Y, atmos)
 
 # ClimaTimeSteppers.jl calls zero(jac_prototype) to initialize the Jacobian, but
@@ -100,7 +101,7 @@ column view loses) should override this to resolve geometry-derived quantities
 from the full grid of `Y` before slicing, so that the column Jacobian stays
 consistent with the simulation's Jacobian.
 """
-column_jacobian_cache(alg::JacobianAlgorithm, Y, atmos) =
+column_jacobian_cache(alg::JacobianAlgorithm, Y, atmos; measurement = nothing) =
     jacobian_cache(alg, first_column_view(Y), atmos; verbose = false)
 
 # This defines a standardized format for comparing different types of Jacobians.
@@ -108,7 +109,12 @@ function first_column_block_arrays(alg::SparseJacobian, Y, p, dtγ, t)
     scalar_names = scalar_field_names(Y)
     column_Y = first_column_view(Y)
     column_p = first_column_view(p)
-    column_cache = column_jacobian_cache(alg, Y, p.atmos)
+    # The measured padding mode needs the atmos cache, dtγ, and t to run its
+    # dense-AD measurement pass; other modes ignore this context. The full Y
+    # and p are passed through unchanged (the measurement reduces them to the
+    # first column itself), matching the per-column coloring mask.
+    column_cache =
+        column_jacobian_cache(alg, Y, p.atmos; measurement = (; p, dtγ, t))
 
     update_jacobian!(alg, column_cache, column_Y, column_p, dtγ, t)
     column_∂R_∂Y = column_cache.matrix

@@ -92,6 +92,15 @@ auto_jacobian_padding_bands:
 auto_jacobian_scaling:
   help: "Scaling mode for the dual number seeds of the sparse autodiff Jacobian; `static` rescales each state variable's seed by its typical increment magnitude, so that Jacobian entries outside of the sparsity pattern alias below significance and fewer padding bands are needed (only used when `use_auto_jacobian` is `true`) [`~` (default, unscaled seeds), `static`]"
   value: ~
+auto_jacobian_padding_mode:
+  help: "How the sparse autodiff Jacobian's coloring mask is padded beyond the stored bands; `manual_rules` applies the hand-maintained padding rules, `exact` pads for exact recovery (every padding rule active in every scaling mode, and at least 4 padding bands on every present block), which eliminates aliasing errors on the stored bands at the cost of more colors, and `measured` derives the mask from a dense-AD measurement of stencil support and increment-weighted magnitudes instead of hand rules; no mode widens the stored bands, so the linear solver always uses the manual structure's truncation (only used when `use_auto_jacobian` is `true`) [`manual_rules` (default), `exact`, `measured`]"
+  value: "manual_rules"
+auto_jacobian_manual_bands:
+  help: "DEPRECATED: use `auto_jacobian_padding_mode` instead (`true` maps to `manual_rules`, `false` to `exact`); when set, this key wins over `auto_jacobian_padding_mode` with a warning [`~` (default, unset), `true`, `false`]"
+  value: ~
+auto_jacobian_runtime_remeasure:
+  help: "Whether to re-measure the `measured` padding mode's coloring mask on a fixed early step schedule and grow it monotonically to what the developed flow reveals, so a from-rest configuration reaches a correct-and-lean mask without a representative measurement state; only valid with `auto_jacobian_padding_mode: measured` (only used when `use_auto_jacobian` is `true`) [`true`, `false` (default)]"
+  value: false
 update_jacobian_every:
   help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
   value: "solve"
