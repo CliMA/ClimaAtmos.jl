@@ -904,13 +904,18 @@ function set_microphysics_tendency_cache!(
     end
 
     ### Environment contribution
-    ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
-    ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
-    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
-    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
-    ᶜρ⁰ = @. lazy(
-        TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
-    )
+    # DIAG(materialize): write the lazy env inputs into scratch fields so the big
+    # quadrature kernel reads them instead of recomputing them inline per point.
+    ᶜρ⁰ = p.scratch.ᶜtemp_scalar
+    ᶜq_lcl⁰ = p.scratch.ᶜtemp_scalar_2
+    ᶜq_icl⁰ = p.scratch.ᶜtemp_scalar_3
+    ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_4
+    ᶜq_sno⁰ = p.scratch.ᶜtemp_scalar_5
+    @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    ᶜq_lcl⁰ .= ᶜspecific_env_value(@name(q_lcl), Y, p)
+    ᶜq_icl⁰ .= ᶜspecific_env_value(@name(q_icl), Y, p)
+    ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
+    ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
     sgs_quad = p.atmos.sgs_quadrature
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
@@ -921,11 +926,16 @@ function set_microphysics_tendency_cache!(
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+        # DIAG(materialize λ, mu_S): quadrature-invariant per-grid-point quantities
+        ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
+        ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
+        @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0.0f0, ᶜq_lcl⁰), max(0.0f0, ᶜq_icl⁰))
+        @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
-            dt, nsubs_quad,
+            dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
         )
     end
 
