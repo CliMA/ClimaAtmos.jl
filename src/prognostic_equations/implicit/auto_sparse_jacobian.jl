@@ -121,6 +121,16 @@ struct AutoSparseJacobian{A <: SparseJacobian, P, S} <: SparseJacobian
     # lean measured mask (only meaningful with runtime_remeasure = true). The
     # spin-up length is run-specific, so this is a user knob, not auto-detected.
     remeasure_switch_step::Int
+    # Significance threshold τ for the measured mode (only used with
+    # padding_mode = :measured): an absent cross-field block a—b is kept in the
+    # coloring mask only if its increment-weighted magnitude
+    # dtγ * max|∂Yₜ| * s_b / s_a exceeds this for the worst victim in its row.
+    # Raising it drops more marginal cross-field couplings (fewer colors, more
+    # aliasing) — the lean-vs-greedy knob. Defaults to
+    # measured_cross_field_threshold. Note: it only affects ABSENT cross-field
+    # blocks; present-block bands are stored ∪ measured support, so raising τ
+    # cannot shrink a mask whose colors come from wide within-field stencils.
+    cross_field_threshold::Float64
 end
 
 """
@@ -133,31 +143,34 @@ AutoSparseJacobian(sparse_jacobian_alg) = AutoSparseJacobian(
     sparse_jacobian_alg,
     nothing,
     :static,
-    :measured,
+    :constant,
     false,
     default_remeasure_switch_step,
+    measured_cross_field_threshold,
 )
 AutoSparseJacobian(sparse_jacobian_alg, padding_bands_per_block) =
     AutoSparseJacobian(
         sparse_jacobian_alg,
         padding_bands_per_block,
         :static,
-        :measured,
+        :constant,
         false,
         default_remeasure_switch_step,
+        measured_cross_field_threshold,
     )
 AutoSparseJacobian(sparse_jacobian_alg, padding_bands_per_block, seed_scaling) =
     AutoSparseJacobian(
         sparse_jacobian_alg,
         padding_bands_per_block,
         seed_scaling,
-        :measured,
+        :constant,
         false,
         default_remeasure_switch_step,
+        measured_cross_field_threshold,
     )
 
 """
-    AutoSparseJacobian(; approximate_solve_iters = 1, padding_bands_per_block = nothing, seed_scaling = :static, padding_mode = :measured, runtime_remeasure = false, remeasure_switch_step = $default_remeasure_switch_step)
+    AutoSparseJacobian(; approximate_solve_iters = 1, padding_bands_per_block = nothing, seed_scaling = :static, padding_mode = :constant, runtime_remeasure = false, remeasure_switch_step = $default_remeasure_switch_step, cross_field_threshold = $measured_cross_field_threshold)
 
 Construct an [`AutoSparseJacobian`](@ref) that reuses the sparsity structure
 of an inner [`ManualSparseJacobian`](@ref) built from `approximate_solve_iters`.
@@ -174,10 +187,15 @@ function AutoSparseJacobian(;
     approximate_solve_iters::Int = 1,
     padding_bands_per_block = nothing,
     seed_scaling = :static,
-    padding_mode::Symbol = :measured,
+    padding_mode::Symbol = :constant,
     runtime_remeasure::Bool = false,
     remeasure_switch_step::Int = default_remeasure_switch_step,
+    cross_field_threshold::Real = measured_cross_field_threshold,
 )
+    cross_field_threshold > 0 || error(
+        "cross_field_threshold must be positive (the measured mode's \
+         significance threshold τ); got $cross_field_threshold",
+    )
     padding_mode in (:manual_rules, :constant, :measured) || error(
         "Unknown padding_mode :$padding_mode (supported modes are \
          :manual_rules, :constant, and :measured)",
@@ -201,6 +219,7 @@ function AutoSparseJacobian(;
         padding_mode,
         runtime_remeasure,
         remeasure_switch_step,
+        Float64(cross_field_threshold),
     )
 end
 
@@ -494,7 +513,7 @@ function measure_block_support_and_magnitude(
 end
 
 """
-    measured_coloring_band_range(block_key, lower_band, upper_band, is_present, meas, s_column, s_victim_min, verbose)
+    measured_coloring_band_range(block_key, lower_band, upper_band, is_present, meas, s_column, s_victim_min, cross_field_threshold, verbose)
 
 The band index range of a block in the coloring mask under the measured
 padding mode, given its stored band range (`lower_band:upper_band`), whether
@@ -505,8 +524,10 @@ no present block). Present blocks include their stored bands, their measured
 support, and the structural within-field floor (within-field / same-increment
 aliasing has a seed scale ratio of 1 and cannot be suppressed by scaling, and
 its width is a state-free property of the discretization); absent cross-field
-blocks are included only when their increment-weighted magnitude exceeds the
-threshold for the worst victim.
+blocks are included only when their increment-weighted magnitude exceeds
+`cross_field_threshold` (the significance threshold τ) for the worst victim.
+Raising `cross_field_threshold` keeps fewer cross-field blocks; it has no
+effect on present blocks, whose bands are stored ∪ measured support.
 """
 function measured_coloring_band_range(
     block_key,
@@ -516,6 +537,7 @@ function measured_coloring_band_range(
     meas,
     s_column,
     s_victim_min,
+    cross_field_threshold,
     verbose,
 )
     FT = typeof(s_column)
@@ -550,14 +572,13 @@ function measured_coloring_band_range(
     keep =
         meas.has_support &&
         !isnothing(s_victim_min) &&
-        meas.magnitude * s_column / s_victim_min >
-        FT(measured_cross_field_threshold)
+        meas.magnitude * s_column / s_victim_min > FT(cross_field_threshold)
     keep || return (1, 0)
     if verbose
         metric = meas.magnitude * s_column / s_victim_min
         @info "Measured mask: cross-field block $block_key kept (metric \
                dtγ * max|∂Yₜ| * s_b / s_a = $metric > \
-               τ = $measured_cross_field_threshold); coloring bands \
+               τ = $cross_field_threshold); coloring bands \
                $support_lo:$support_hi"
     end
     return (support_lo, support_hi)
@@ -798,6 +819,7 @@ function jacobian_cache(
             :constant,
             alg.runtime_remeasure,
             alg.remeasure_switch_step,
+            alg.cross_field_threshold,
         ) : alg
     (sparsity_mask, padded_sparsity_mask) = build_sparsity_masks(
         initial_build_alg,
@@ -868,6 +890,7 @@ function build_sparsity_masks(
     verbose = false,
 )
     (; padding_bands_per_block, seed_scaling, padding_mode) = alg
+    (; cross_field_threshold) = alg
     FT = eltype(Y)
     field_vector_indices = field_vector_index_iterator(Y)
     scalar_names = scalar_field_names(Y)
@@ -1098,6 +1121,7 @@ function build_sparsity_masks(
                     block_measurement[block_row_index, block_column_index],
                     seed_scale(FT, block_column_name, seed_scaling, uₕ_scale),
                     get(victim_min_scale, block_row_name, nothing),
+                    cross_field_threshold,
                     verbose,
                 )
         end
