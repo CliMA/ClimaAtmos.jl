@@ -283,6 +283,7 @@ function jacobian_from_parsed_args(parsed_args)
             runtime_remeasure = parsed_args["auto_jacobian_runtime_remeasure"],
             remeasure_switch_step = parsed_args["auto_jacobian_remeasure_switch_step"],
             cross_field_threshold = parsed_args["auto_jacobian_measured_cross_field_threshold"],
+            support_rtol = parsed_args["auto_jacobian_measured_support_rtol"],
         )
     else
         return ManualSparseJacobian(; approximate_solve_iters)
