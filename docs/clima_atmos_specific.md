@@ -58,10 +58,12 @@ A file under `src/parameterized_tendencies/` should not contain orchestration lo
 ### Running a single test group
 
 ```bash
-julia +1.11 --project=test -e '
-  import Pkg; Pkg.test("ClimaAtmos"; test_args=["parameterizations"])
+TEST_GROUP=parameterizations julia +1.11 --project=test -e '
+  import Pkg; Pkg.test("ClimaAtmos")
 '
 ```
+
+`test/runtests.jl` reads the group from the `TEST_GROUP` environment variable (default `"all"`), not from `test_args`/`ARGS` — passing the group via `test_args` instead leaks into `ARGS` for the whole test process (e.g. `test/restart_utils.jl` parses `ARGS` itself and errors on an unrecognized argument).
 
 ### Test layout
 
