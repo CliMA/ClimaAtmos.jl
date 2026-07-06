@@ -180,7 +180,8 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                 )
 
                 # Verify return type (includes fields and value types)
-                # 2M returns 7 fields: mass and number for cloud/rain, plus ice-related
+                # 2M returns 8 fields: mass and number for cloud/rain, ice-related,
+                # and the aerosol activation tendency
                 @test result isa NamedTuple{
                     (
                         :dq_lcl_dt,
@@ -190,8 +191,9 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                         :dq_ice_dt,
                         :dq_rim_dt,
                         :db_rim_dt,
+                        :dn_lcl_activation_dt,
                     ),
-                    NTuple{7, FT},
+                    NTuple{8, FT},
                 }
 
                 # Verify finite values

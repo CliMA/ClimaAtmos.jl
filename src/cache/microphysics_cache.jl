@@ -5,6 +5,7 @@
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
 import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics.Microphysics2M as CM2
+import CloudMicrophysics.P3Scheme as CMP3
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 import Thermodynamics as TD
@@ -1101,7 +1102,7 @@ function set_microphysics_tendency_cache!(
     Y, p, ::NonEquilibriumMicrophysics2MP3, _,
 )
     (; dt) = p
-    (; ᶜT, ᶜmp_tendency, ᶜScoll, ᶜlogλ) = p.precomputed
+    (; ᶜT, ᶜq_tot_nonneg, ᶜmp_tendency, ᶜScoll, ᶜlogλ) = p.precomputed
 
     # get thermodynamics and microphysics params
     params_2mp3 = CAP.microphysics_2mp3_params(p.params)
@@ -1120,9 +1121,12 @@ function set_microphysics_tendency_cache!(
 
     # Compute microphysics tendency
     # TODO - looks like aerosol activation is missing
-    @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(), params_2mp3, thp, Y.c.ρ, ᶜT,
-        ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_icl, ᶜn_ice, ᶜq_rim, ᶜb_rim, ᶜlogλ,
+    @. ᶜmp_tendency = restrict_to_2m_tendency_fields(
+        BMT.bulk_microphysics_tendencies(
+            BMT.Microphysics2Moment(), params_2mp3, thp, Y.c.ρ, ᶜT,
+            ᶜq_tot_nonneg, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_icl, ᶜn_ice,
+            ᶜq_rim, ᶜb_rim, ᶜlogλ,
+        ),
     )
     # Apply coupled limiting directly
     ᶜf_liq = @. lazy(

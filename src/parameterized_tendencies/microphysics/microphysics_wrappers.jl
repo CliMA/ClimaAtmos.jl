@@ -533,6 +533,21 @@ function aerosol_activation_sources(
 end
 
 """
+    restrict_to_2m_tendency_fields(nt)
+
+Narrow a `BMT.bulk_microphysics_tendencies` result to the 7 tendency fields
+ClimaAtmos caches (`dq_lcl_dt`, `dn_lcl_dt`, `dq_rai_dt`, `dn_rai_dt`,
+`dq_ice_dt`, `dq_rim_dt`, `db_rim_dt`), dropping any additional fields
+(e.g. `dn_ice_dt`, `dn_lcl_activation_dt`) that CloudMicrophysics may add.
+"""
+@inline restrict_to_2m_tendency_fields(nt) = (;
+    dq_lcl_dt = nt.dq_lcl_dt, dn_lcl_dt = nt.dn_lcl_dt,
+    dq_rai_dt = nt.dq_rai_dt, dn_rai_dt = nt.dn_rai_dt,
+    dq_ice_dt = nt.dq_ice_dt, dq_rim_dt = nt.dq_rim_dt,
+    db_rim_dt = nt.db_rim_dt,
+)
+
+"""
     compute_2m_precipitation_tendencies!(mp_tendency, ρ, qₜ, qₗ, nₗ, qᵣ, nᵣ, T, dt, mp, thp)
 
 Compute 2-moment warm rain microphysics tendencies (cloud condensation/evaporation,
@@ -559,8 +574,10 @@ Modifies mp_tendency in-place with limited tendencies.
 function compute_2m_precipitation_tendencies!(
     mp_tendency, ρ, qₜ, qₗ, nₗ, qᵣ, nᵣ, T, dt, mp, thp, timestepping,
 )
-    @. mp_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(), mp, thp, ρ, T, qₜ, qₗ, nₗ, qᵣ, nᵣ,
+    @. mp_tendency = restrict_to_2m_tendency_fields(
+        BMT.bulk_microphysics_tendencies(
+            BMT.Microphysics2Moment(), mp, thp, ρ, T, qₜ, qₗ, nₗ, qᵣ, nᵣ,
+        ),
     )
     apply_2m_tendency_limits!(mp_tendency, timestepping, qₗ, nₗ, qᵣ, nᵣ, dt)
 end
@@ -597,9 +614,11 @@ NamedTuple with tendencies: `dq_lcl_dt`, `dn_lcl_dt`, `dq_rai_dt`, `dn_rai_dt`
     ::GridMeanSGS, cmp, tps, ρ, T, q_tot, q_liq, n_liq, q_rai, n_rai,
 )
     # Direct GridMeanSGS dispatch for 2M: evaluates BMT at grid mean.
-    return BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(), cmp, tps, ρ, T,
-        q_tot, q_liq, n_liq, q_rai, n_rai,
+    return restrict_to_2m_tendency_fields(
+        BMT.bulk_microphysics_tendencies(
+            BMT.Microphysics2Moment(), cmp, tps, ρ, T,
+            q_tot, q_liq, n_liq, q_rai, n_rai,
+        ),
     )
 end
 @inline function microphysics_tendencies_quadrature_2m(
