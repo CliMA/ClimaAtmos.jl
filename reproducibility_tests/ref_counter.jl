@@ -1,4 +1,4 @@
-371
+372
 
 # **README**
 #
@@ -32,7 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
-370
+372
+- Fix top boundary condition so total contravariant flux vanishes at the lid;
+  add SGS mass flux of q_tot to continuity equation; transport SGS tracers in difference form.
+
+371
 - Update Insolation.jl to v1.2.0
 
 370
