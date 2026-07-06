@@ -110,8 +110,9 @@ function callback_from_affect(affect!)
     return nothing
 end
 function atmos_callbacks(cbs)
-    all_cbs = collect(cbs.discrete_callbacks)
-    callback_objs = map(cb -> callback_from_affect(cb.affect!), all_cbs)
+    # cbs could be a tuple (before integrator is initialized)
+    all_cbs = cbs isa CTS.CallbackSet ? cbs.discrete_callbacks : cbs
+    callback_objs = [map(cb -> callback_from_affect(cb.affect!), all_cbs)...]
     filter!(x -> (x isa AtmosCallback), callback_objs)
     return callback_objs
 end
